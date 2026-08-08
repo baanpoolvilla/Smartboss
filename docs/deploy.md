@@ -7,7 +7,7 @@
 
 > **สิ่งที่ผมทดสอบจริงแล้ว**: คำสั่ง build (`pnpm turbo run build` ผ่าน 10/10),
 > ลำดับตั้งฐานข้อมูล, และไวยากรณ์ของสคริปต์ทุกไฟล์ใน `deploy/`
-> **สิ่งที่ยังไม่ได้ทดสอบ**: ขั้นตอนฝั่ง Google Cloud และการรันบน Debian จริง
+> **สิ่งที่ยังไม่ได้ทดสอบ**: ขั้นตอนฝั่ง Google Cloud และการรันบน Ubuntu/Debian จริง
 > เพราะเครื่อง dev ไม่มี Docker และไม่มี VM ให้ลอง — เจออะไรไม่ตรงบอกได้ครับ
 
 ---
@@ -81,7 +81,7 @@ VM ตัวเดียวรันครบทุกอย่าง แบ่�
 |---|---|---|
 | Region | `asia-southeast1` (สิงคโปร์) | ใกล้ไทยที่สุด หน่วงต่ำสุด |
 | Machine type | `e2-medium` (2 vCPU / 4 GB) | **ต่ำกว่านี้ `next build` จะโดน OOM kill** |
-| Boot disk | Debian 12, 50 GB, balanced | 50 GB เผื่อไฟล์แนบและ backup |
+| Boot disk | Ubuntu 24.04 LTS (หรือ Debian 12), 50 GB, balanced | 50 GB เผื่อไฟล์แนบและ backup |
 | Firewall | ติ๊ก allow HTTP + HTTPS | |
 
 `e2-small` (2 GB) ใช้ได้ถ้าเพิ่ม swap ตามข้อ 3 แต่ build จะช้ามาก แนะนำ `e2-medium`
@@ -92,7 +92,7 @@ VM ตัวเดียวรันครบทุกอย่าง แบ่�
 gcloud compute instances create smartboss \
   --zone=asia-southeast1-b \
   --machine-type=e2-medium \
-  --image-family=debian-12 --image-project=debian-cloud \
+  --image-family=ubuntu-2404-lts-amd64 --image-project=ubuntu-os-cloud \
   --boot-disk-size=50GB --boot-disk-type=pd-balanced \
   --tags=http-server,https-server \
   --metadata=enable-oslogin=TRUE
@@ -182,10 +182,16 @@ sudo npm install -g pnpm@11.13.0
 
 # ── Docker ──
 sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/debian/gpg \
+# $ID = debian หรือ ubuntu — อ่านจากเครื่องเอง ไม่ต้องแก้ตามภาพที่เลือก
+# ⚠ ถ้าเขียนตายเป็น debian แล้วเครื่องเป็น Ubuntu จะได้ 404 ตอน apt-get update
+# เพราะ repo ของ Docker แยกกันคนละ path และ codename ก็คนละชุด
+DOCKER_OS=$(. /etc/os-release && echo "$ID")
+DOCKER_CODENAME=$(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+
+curl -fsSL "https://download.docker.com/linux/$DOCKER_OS/gpg" \
   | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
-https://download.docker.com/linux/debian $(. /etc/os-release && echo $VERSION_CODENAME) stable" \
+https://download.docker.com/linux/$DOCKER_OS $DOCKER_CODENAME stable" \
   | sudo tee /etc/apt/sources.list.d/docker.list
 sudo apt-get update
 sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
