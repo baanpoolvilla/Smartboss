@@ -1,0 +1,17 @@
+{
+  "name": "@workforce/device-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "main": "./dist/main.js",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty",
+    "start": "node dist/main.js",
+    "dev": "node dist/main.js"
+  },
+  "dependencies": {
+    "@workforce/config": "workspace:*",
+    "fastify": "^5.2.1"
+  }
+}

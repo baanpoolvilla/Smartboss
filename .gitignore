@@ -1,0 +1,51 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# env — ignore ทุกไฟล์ .env* ยกเว้น template (กันเผลอ commit connection string ของ Neon)
+.env
+.env.*
+!.env.example
+
+# next
+.next/
+out/
+next-env.d.ts
+
+# build
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+
+# uploaded files (dev local storage)
+.uploads/
+
+# prisma
+packages/database/prisma/generated/
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# os / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# test
+coverage/
+
+# สคริปต์ช่วย dev เฉพาะเครื่อง (มี connection string ของเครื่องตัวเอง)
+*.tmp.sh
+
+# ── โค้ดอ้างอิงของระบบเดิม — เป็น git repo ของตัวเองอยู่แล้ว ──
+# ถ้า add เข้ามา git จะเก็บเป็น gitlink (ชี้ SHA เปล่า ๆ) ไม่ใช่ไฟล์จริง
+# clone ที่เครื่องอื่นจะได้โฟลเดอร์ว่าง โดยไม่มี error ให้เห็น
+#   attendance/            → github.com/baanpoolvilla/HR-Tool
+#   แจ้งซ่อมบำรุง_module/    → github.com/katawutntp/changyai
+# ทั้งสองไม่เกี่ยวกับการ build หรือ deploy ของ Smartboss
+attendance/
+แจ้งซ่อมบำรุง_module/

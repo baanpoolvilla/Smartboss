@@ -1,0 +1,150 @@
+"use client";
+
+import { useEffect } from "react";
+import { useDashboardLayoutStore } from "@/modules/report_task/store/dashboard-layout-store";
+import { useReportLayoutStore } from "@/modules/report_task/store/report-layout-store";
+import { useCalendarVisibilityStore } from "@/modules/report_task/store/calendar-visibility-store";
+import { useGoogleCalendarStore } from "@/modules/report_task/store/google-calendar-store";
+import { useEmailNotificationSettingsStore } from "@/modules/report_task/store/email-notification-settings-store";
+import { useWhatsNewStore } from "@/modules/report_task/store/whats-new-store";
+
+import { ServerStoreSync } from "./server-store-sync";
+import { useStickerStore } from "@/modules/report_task/store/sticker-store";
+import { usePenaltySettingsStore } from "@/modules/report_task/store/penalty-settings-store";
+import { useMeetingStore } from "@/modules/report_task/store/meeting-store";
+import { useLeaveStore } from "@/modules/report_task/store/leave-store";
+import { useHolidayStore } from "@/modules/report_task/store/holiday-store";
+import { useLeaveTypeStore } from "@/modules/report_task/store/leave-type-store";
+import { useTemplateStore } from "@/modules/report_task/store/template-store";
+import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
+import { useDepartmentStore } from "@/modules/report_task/store/department-store";
+import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
+import { usePeopleGroupStore } from "@/modules/report_task/store/people-group-store";
+import { useNotificationStore } from "@/modules/report_task/store/notification-store";
+import { useActivityLogStore } from "@/modules/report_task/store/activity-log-store";
+import { useRoutineDayOffStore } from "@/modules/report_task/store/routine-dayoff-store";
+import { useSettingsAccessStore } from "@/modules/report_task/store/settings-access-store";
+
+/**
+ * Two kinds of state get hydrated here:
+ *
+ * - Per-user view preferences (layout, visibility toggles, email prefs, the
+ *   Google/ICS connection cache) still use zustand's `persist` + localStorage
+ *   with `skipHydration` — those stay per-browser on purpose, so they're
+ *   rehydrated the old way below.
+ * - Everything shared across teammates (tasks excluded — see TaskSync) is
+ *   now server-backed via `ServerStoreSync` instead of localStorage — see
+ *   README "Data model" and C4 in the production-readiness audit.
+ */
+export function StoreHydrator() {
+  useEffect(() => {
+    useDashboardLayoutStore.persist.rehydrate();
+    useReportLayoutStore.persist.rehydrate();
+    useCalendarVisibilityStore.persist.rehydrate();
+    useGoogleCalendarStore.persist.rehydrate();
+    useEmailNotificationSettingsStore.persist.rehydrate();
+    useWhatsNewStore.persist.rehydrate();
+  }, []);
+
+  return (
+    <>
+      <ServerStoreSync
+        apiKey="stickers"
+        store={useStickerStore}
+        select={(s) => s.stickers}
+        apply={(s, stickers) => ({ ...s, stickers })}
+      />
+      <ServerStoreSync
+        apiKey="penalty-settings"
+        store={usePenaltySettingsStore}
+        select={(s) => s.defaultPoints}
+        apply={(s, defaultPoints) => ({ ...s, defaultPoints })}
+      />
+      <ServerStoreSync
+        apiKey="meetings"
+        store={useMeetingStore}
+        select={(s) => s.meetings}
+        apply={(s, meetings) => ({ ...s, meetings })}
+      />
+      <ServerStoreSync
+        apiKey="leaves"
+        store={useLeaveStore}
+        select={(s) => s.leaves}
+        apply={(s, leaves) => ({ ...s, leaves })}
+      />
+      <ServerStoreSync
+        apiKey="holidays"
+        store={useHolidayStore}
+        select={(s) => ({ holidays: s.holidays, selectedByUser: s.selectedByUser })}
+        apply={(s, slice) => ({ ...s, ...slice })}
+      />
+      <ServerStoreSync
+        apiKey="leave-types"
+        store={useLeaveTypeStore}
+        select={(s) => s.types}
+        apply={(s, types) => ({ ...s, types })}
+      />
+      <ServerStoreSync
+        apiKey="templates"
+        store={useTemplateStore}
+        select={(s) => s.templates}
+        apply={(s, templates) => ({ ...s, templates })}
+      />
+      <ServerStoreSync
+        apiKey="report-feed"
+        store={useReportFeedStore}
+        select={(s) => ({ topics: s.topics, posts: s.posts, albums: s.albums, hasSeeded: s.hasSeeded })}
+        apply={(s, slice) => ({ ...s, ...slice, loaded: true })}
+      />
+      <ServerStoreSync
+        apiKey="departments"
+        store={useDepartmentStore}
+        select={(s) => s.departments}
+        apply={(s, departments) => ({ ...s, departments })}
+      />
+      <ServerStoreSync
+        apiKey="employees"
+        store={useEmployeeStore}
+        select={(s) => s.employees}
+        apply={(s, employees) => ({ ...s, employees })}
+      />
+      <ServerStoreSync
+        apiKey="people-groups"
+        store={usePeopleGroupStore}
+        select={(s) => s.groups}
+        apply={(s, groups) => ({ ...s, groups })}
+      />
+      <ServerStoreSync
+        apiKey="notifications"
+        store={useNotificationStore}
+        select={(s) => s.notifications}
+        apply={(s, notifications) => ({ ...s, notifications })}
+      />
+      <ServerStoreSync
+        apiKey="activity-log"
+        store={useActivityLogStore}
+        select={(s) => s.entries}
+        apply={(s, entries) => ({ ...s, entries })}
+      />
+      <ServerStoreSync
+        apiKey="routine-dayoff"
+        store={useRoutineDayOffStore}
+        select={(s) => ({
+          companyMonthlyQuota: s.companyMonthlyQuota,
+          useDepartmentOverrides: s.useDepartmentOverrides,
+          departmentQuotas: s.departmentQuotas,
+          pickedDates: s.pickedDates,
+          rules: s.rules,
+          ruleExceptions: s.ruleExceptions,
+        })}
+        apply={(s, slice) => ({ ...s, ...slice })}
+      />
+      <ServerStoreSync
+        apiKey="settings-access"
+        store={useSettingsAccessStore}
+        select={(s) => s.grants}
+        apply={(s, grants) => ({ ...s, grants })}
+      />
+    </>
+  );
+}

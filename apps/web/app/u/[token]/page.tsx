@@ -1,0 +1,108 @@
+import { Home as HomeIcon, Camera, CheckCircle2, LinkIcon } from "lucide-react";
+import { Card } from "@smartboss/ui/components/card";
+import { Button } from "@smartboss/ui/components/button";
+import {
+  getUploadContext,
+  listExternalPhotos,
+} from "@/modules/maintenance/data/external-upload";
+import { uploadExternalAction } from "./actions";
+
+/** จำนวนรูปสูงสุดต่อ 1 ลิงก์ — ค่าเดียวกับ ChangYai */
+const MAX_UPLOADS = 20;
+
+/** หน้าส่งรูปสำหรับช่างภายนอก (ไม่ต้อง login) — port จาก external_work_order_upload_screen.dart */
+export default async function ExternalUploadPage({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}) {
+  const { token } = await params;
+  const ctx = await getUploadContext(token);
+
+  if (!ctx) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-(--bg-soft) p-6">
+        <Card className="max-w-md p-8 text-center">
+          <LinkIcon className="mx-auto mb-4 h-16 w-16 text-(--ink-soft) opacity-40" />
+          <p className="text-base font-medium text-(--ink)">
+            ลิงก์นี้หมดอายุหรือถูกยกเลิกแล้ว
+          </p>
+          <p className="mt-1 text-xs text-(--ink-soft)">
+            กรุณาขอลิงก์ใหม่จากผู้ดูแล
+          </p>
+        </Card>
+      </div>
+    );
+  }
+
+  const photos = await listExternalPhotos(ctx.orgId, ctx.workOrderId);
+  const remaining = Math.max(0, MAX_UPLOADS - photos.length);
+
+  return (
+    <div className="min-h-dvh bg-(--bg-soft) p-5">
+      <div className="mx-auto max-w-[560px]">
+        <h1 className="mb-4 text-center text-base font-semibold text-(--ink)">
+          ส่งรูปงาน
+        </h1>
+
+        <Camera className="mx-auto h-14 w-14" style={{ color: "#0D9488" }} />
+        <h2 className="mt-3 text-center text-xl font-bold text-(--ink)">
+          ส่งรูปให้ผู้ดูแลใบงาน
+        </h2>
+        <p className="mt-2 text-center text-sm text-(--ink-soft)">
+          หน้านี้ใช้ส่งรูปเท่านั้น คุณไม่สามารถเปลี่ยนสถานะหรือแก้ไขใบงานได้
+        </p>
+
+        <Card className="mt-5 p-4">
+          <p className="text-base font-medium text-(--ink)">{ctx.title}</p>
+          <p className="mt-2 inline-flex items-center gap-2 text-sm text-(--ink)">
+            <HomeIcon className="h-4 w-4" /> {ctx.propertyName ?? "-"}
+          </p>
+          <p className="mt-2 text-sm text-(--ink-soft)">
+            ส่งแล้ว {photos.length}/{MAX_UPLOADS} รูป
+          </p>
+        </Card>
+
+        {remaining === 0 ? (
+          <Card className="mt-4 p-5 text-center">
+            <CheckCircle2 className="mx-auto h-10 w-10 text-[#16A34A]" />
+            <p className="mt-2 text-sm text-(--ink)">
+              ส่งรูปครบจำนวนที่กำหนดแล้ว
+            </p>
+          </Card>
+        ) : (
+          <Card className="mt-4 p-5">
+            <form
+              action={uploadExternalAction.bind(null, token)}
+              className="flex flex-col gap-3"
+            >
+              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-(--radius) border border-[#0D9488] py-2.5 text-sm text-[#0F766E]">
+                <Camera className="h-4 w-4" /> ถ่ายรูป
+                <input
+                  type="file"
+                  name="photos"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                />
+              </label>
+              <input
+                type="file"
+                name="photos"
+                multiple
+                accept="image/*"
+                className="text-sm text-(--ink) file:mr-3 file:rounded-(--radius) file:border file:border-(--line) file:bg-(--bg-soft) file:px-3 file:py-1.5 file:text-sm"
+              />
+              <p className="text-xs text-(--ink-soft)">
+                เลือกได้อีกสูงสุด {remaining} รูป
+              </p>
+              <Button type="submit">ส่งรูป</Button>
+            </form>
+          </Card>
+        )}
+
+        <p className="mt-4 text-center text-xs text-(--ink-soft)">© Smartboss</p>
+      </div>
+    </div>
+  );
+}

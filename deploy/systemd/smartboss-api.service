@@ -1,0 +1,36 @@
+[Unit]
+Description=Smartboss workforce API (HR / ลงเวลา / เงินเดือน)
+Documentation=file:///opt/smartboss/docs/deploy.md
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=smartboss
+Group=smartboss
+WorkingDirectory=/opt/smartboss
+EnvironmentFile=/etc/smartboss/smartboss.env
+Environment=SERVICE_NAME=workforce-api
+
+# ผูกกับ 127.0.0.1 (HTTP_HOST ใน env) — API ไม่เปิดสู่อินเทอร์เน็ตเลย
+# นี่คือข้อได้เปรียบของการอยู่ VM เดียว: ตอนวางแผนลง Vercel ต้องเปิด API สู่เน็ต
+# เพราะเว็บอยู่คนละที่ แต่ตอนนี้เว็บเรียกผ่าน loopback ได้
+ExecStart=/usr/bin/node apps/workforce-api/dist/main.js
+
+Restart=always
+RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=smartboss-api
+
+[Install]
+WantedBy=multi-user.target

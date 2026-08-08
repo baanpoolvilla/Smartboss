@@ -1,0 +1,35 @@
+[Unit]
+Description=Smartboss workforce worker (outbox)
+Documentation=file:///opt/smartboss/docs/deploy.md
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=smartboss
+Group=smartboss
+WorkingDirectory=/opt/smartboss
+EnvironmentFile=/etc/smartboss/smartboss.env
+Environment=SERVICE_NAME=workforce-worker
+
+# ไม่มีพอร์ต — อ่านคิว outbox แล้วส่งงานต่อ ถ้าตัวนี้ตาย ระบบยังใช้ได้
+# แต่ของที่รอส่ง (เช่น แจ้งเตือน) จะค้างจนกว่าจะกลับมา
+ExecStart=/usr/bin/node apps/workforce-worker/dist/main.js
+
+Restart=always
+RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=smartboss-worker
+
+[Install]
+WantedBy=multi-user.target

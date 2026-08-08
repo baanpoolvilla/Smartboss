@@ -1,0 +1,459 @@
+/*
+ * ธีมของโมดูลรายงานและงาน — สกัดจาก globals.css ของแอป easyboss-workspace
+ *
+ * ⚠ ไฟล์นี้สร้างด้วยสคริปต์ อย่าแก้มือ — ตอนดึงโค้ดเวอร์ชันใหม่ให้รัน
+ *   python scratchpad/extract-theme.py <workspace>/src/app/globals.css \
+ *          apps/web/modules/report_task/theme.css
+ *
+ * สิ่งที่สคริปต์ทำ:
+ *   1. ตัด @import ของ tailwind ออก — globals.css ของ Smartboss import ให้แล้ว
+ *   2. ลบโทเคนฐาน (--bg/--ink/--line/--radius/--brand-*) เพราะ Smartboss เป็นเจ้าของ
+ *   3. --primary/--ring/--accent เปลี่ยนจาก brand-green มาอิง --module-color
+ *      ⇒ คอมโพเนนต์ shadcn เปลี่ยนสีตามโมดูลที่เปิดอยู่โดยอัตโนมัติ
+ *   4. base layer ที่เดิมยิงใส่ `*` กับ `body` ถูกจำกัดให้อยู่ใน [data-app="report_task"]
+ *
+ * โทเคนของ shadcn ประกาศที่ :root โดยตั้งใจ ไม่ใช่ใน [data-app] เพราะ dialog/dropdown
+ * ของ Base UI portal ออกไปที่ body ซึ่งอยู่นอก div ที่มี data-app
+ */
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  /* SmartBoss CI brand tokens */
+  --brand-green-dark: #1e7830;
+
+  /* categorical chart palette, brand-anchored, validated for CVD + normal-vision separation */
+  --chart-green: #39e05a;
+  --chart-blue: #2a78d6;
+  --chart-orange: #eb6834;
+  --chart-violet: #4a3aa7;
+  --chart-pink: #e87ba4;
+  --chart-amber: #eda100;
+  --chart-red: #e34948;
+  --chart-gray: #9ca3af;
+
+  --background: var(--bg);
+  --foreground: var(--ink);
+  --card: var(--bg);
+  --card-foreground: var(--ink);
+  --popover: var(--bg);
+  --popover-foreground: var(--ink);
+  --primary: var(--module-color);
+  --primary-foreground: var(--ink);
+  --secondary: var(--bg-soft);
+  --secondary-foreground: var(--ink);
+  --muted: var(--bg-soft);
+  --muted-foreground: var(--ink-soft);
+  --accent: var(--module-color-bg);
+  --accent-foreground: var(--app-strong, var(--module-color));
+  --destructive: var(--danger);
+  --border: var(--line);
+  --input: var(--line);
+  --ring: var(--module-color);
+  --chart-1: var(--chart-green);
+  --chart-2: var(--chart-blue);
+  --chart-3: var(--chart-amber);
+  --chart-4: var(--chart-violet);
+  --chart-5: var(--chart-orange);
+  /* Light sidebar (EasyBoss shell): white surface, green active pill */
+  --sidebar: #ffffff;
+  --sidebar-foreground: #374151;
+  --sidebar-muted: #9ca3af;
+  --sidebar-primary: var(--brand-green);
+  --sidebar-primary-foreground: var(--ink);
+  --sidebar-accent: #eef8ec;
+  --sidebar-accent-foreground: var(--brand-green-dark);
+  --sidebar-border: #eef0f3;
+  --sidebar-ring: var(--brand-green);
+}
+
+.dark {
+  --background: #0e0e0e;
+  --foreground: #f4f4f5;
+  --card: #161616;
+  --card-foreground: #f4f4f5;
+  --popover: #161616;
+  --popover-foreground: #f4f4f5;
+  --primary: var(--module-color);
+  --primary-foreground: #0e0e0e;
+  --secondary: #1f1f1f;
+  --secondary-foreground: #f4f4f5;
+  --muted: #1f1f1f;
+  --muted-foreground: #a1a1aa;
+  --accent: var(--module-color-bg);
+  --accent-foreground: var(--app-strong, var(--module-color));
+  --destructive: var(--danger);
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.15);
+  --ring: var(--module-color);
+  --chart-1: var(--chart-green);
+  --chart-2: var(--chart-blue);
+  --chart-3: var(--chart-amber);
+  --chart-4: var(--chart-violet);
+  --chart-5: var(--chart-orange);
+  --sidebar: #0a0a0a;
+  --sidebar-foreground: #f4f4f5;
+  --sidebar-primary: var(--brand-green);
+  --sidebar-primary-foreground: #0e0e0e;
+  --sidebar-accent: #1f1f1f;
+  --sidebar-accent-foreground: #f4f4f5;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-ring: var(--brand-green);
+}
+
+@layer base {
+  /* จำกัดไว้ในโมดูล — ของเดิมใช้ `*` กับ `body` ซึ่งจะไปทับธีมของทุกโมดูล */
+  [data-app="report_task"] * {
+    @apply border-border outline-ring/50;
+  }
+}
+
+/* Practice Mode (src/app/practice) — a gentle "this is what the current
+   mission wants" glow, and a one-shot confetti burst on full completion.
+   Both respect prefers-reduced-motion below. */
+@keyframes practice-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-green) 35%, transparent); }
+  50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--brand-green) 0%, transparent); }
+}
+@keyframes practice-confetti {
+  0% { transform: translate(-50%, -50%) rotate(0deg); opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(var(--rot)); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[practice-pulse_1\.6s_ease-in-out_infinite\],
+  .animate-\[practice-confetti_1\.1s_ease-out_forwards\] {
+    animation: none !important;
+  }
+}
+
+/* FullCalendar brand overrides */
+.ebw-calendar {
+  --fc-border-color: var(--line);
+  --fc-today-bg-color: #f4fbf3;
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: var(--bg-soft);
+  --fc-list-event-hover-bg-color: var(--bg-soft);
+  --fc-small-font-size: 0.75rem;
+}
+.ebw-calendar .fc {
+  font-family: var(--font-sans);
+}
+.ebw-calendar .fc-col-header-cell-cushion {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 10px 4px;
+  text-decoration: none;
+}
+.ebw-calendar .fc-daygrid-day-number {
+  font-size: 0.78rem;
+  padding: 5px 7px;
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+/* Today's date reads as a filled green pill, like a modern calendar. */
+.ebw-calendar .fc-day-today .fc-daygrid-day-number {
+  color: #fff;
+  background: var(--brand-green);
+  font-weight: 700;
+  border-radius: 999px;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  margin: 4px;
+  box-shadow: 0 2px 6px -1px rgba(76, 185, 63, 0.5);
+}
+/* Weekend shading — very subtle. */
+.ebw-calendar .fc-day-sat:not(.fc-day-today),
+.ebw-calendar .fc-day-sun:not(.fc-day-today) {
+  background-color: #fafbfc;
+}
+.ebw-calendar .fc-col-header-cell.fc-day-sun .fc-col-header-cell-cushion {
+  color: #dc2626;
+}
+.ebw-calendar .fc-day-sun:not(.fc-day-today) .fc-daygrid-day-number {
+  color: #dc2626;
+}
+/* Hover a day cell to hint it's clickable (add event). */
+.ebw-calendar .fc-daygrid-day {
+  transition: background-color 0.12s ease;
+}
+.ebw-calendar .fc-daygrid-day:hover {
+  background-color: color-mix(in srgb, var(--brand-green) 6%, transparent);
+}
+/* Pale chip in the event's own color with a solid left accent bar. */
+.ebw-calendar .fc-event {
+  border-radius: 6px;
+  border-style: solid;
+  border-width: 0 0 0 3px;
+  padding: 0;
+  margin: 1px 2px 3px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: filter 0.12s ease;
+}
+.ebw-calendar .fc-event:hover {
+  filter: brightness(0.97);
+}
+/* Holidays are informational, not actionable — fainter than a normal chip
+   by default so they don't compete with tasks/meetings/leave, but not as
+   ghosted as a past event (order matters: the muted rule below must win
+   when a holiday is also in the past). */
+.ebw-calendar .fc-event.ebw-event-holiday {
+  opacity: 0.65;
+}
+/* Past event: same color, just faded — not swapped for an unrelated gray. */
+.ebw-calendar .fc-event.ebw-event-muted {
+  opacity: 0.3;
+}
+.ebw-calendar .fc-daygrid-event-dot {
+  display: none;
+}
+/* Agenda (list) view */
+.ebw-calendar .fc-list {
+  border-radius: 10px;
+  overflow: hidden;
+  border-color: var(--line);
+}
+.ebw-calendar .fc-list-day-cushion {
+  background: var(--bg-soft);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.ebw-calendar .fc-list-event:hover td {
+  background: color-mix(in srgb, var(--brand-green) 6%, transparent);
+}
+.ebw-calendar .fc-list-event-time {
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  width: 96px;
+}
+.ebw-calendar .fc-list-empty {
+  background: transparent;
+  color: var(--ink-soft);
+}
+/* "+N more" link — deliberately neutral (not brand-green) since it's just a
+   "see more" affordance, not a category; every other colored thing on this
+   page is priority/type-coded, so a colored "+more" read as a false category. */
+.ebw-calendar .fc-daygrid-more-link {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  padding: 1px 6px;
+}
+/* "+N more" popover. FullCalendar defaults the popover background to
+   --fc-page-bg-color, which we set transparent — so set an explicit solid
+   surface here or the day grid bleeds through. */
+.fc-popover.fc-more-popover {
+  z-index: 40 !important;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  box-shadow: 0 12px 32px -8px rgba(17, 17, 17, 0.22);
+  overflow: hidden;
+  max-width: 280px;
+}
+.fc-popover.fc-more-popover .fc-popover-header {
+  background: var(--bg-soft);
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.fc-popover.fc-more-popover .fc-popover-close {
+  color: var(--ink-soft);
+  opacity: 0.8;
+}
+.fc-popover.fc-more-popover .fc-popover-body {
+  background: var(--bg);
+  padding: 8px;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.fc-popover.fc-more-popover .fc-daygrid-event {
+  margin: 0;
+}
+.ebw-calendar .fc-timegrid-slot-label-cushion,
+.ebw-calendar .fc-timegrid-axis-cushion {
+  font-size: 0.7rem;
+  color: var(--ink-soft);
+}
+.ebw-calendar .fc-scrollgrid {
+  border-radius: 10px;
+  overflow: hidden;
+}
+.ebw-calendar a {
+  text-decoration: none;
+}
+/* ============================================================
+   Depth & motion — give the whole UI dimension and life so it
+   never reads like a flat old spreadsheet. Applied globally via
+   shadcn data-slots, with reduced-motion respected.
+   ============================================================ */
+
+/* Cards: soft layered resting shadow, lift + green-tinted edge on hover */
+[data-slot="card"] {
+  transition: box-shadow 0.24s ease, transform 0.24s ease, border-color 0.24s ease;
+}
+[data-slot="card"]:hover {
+  box-shadow:
+    0 14px 34px -14px rgba(17, 17, 17, 0.18),
+    0 4px 12px -6px rgba(17, 17, 17, 0.10);
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--brand-green) 32%, var(--line));
+}
+/* Don't lift a card that's mid-drag (dashboard customize) */
+[data-slot="card"]:active {
+  transition-duration: 0.05s;
+}
+
+/* Buttons: springy hover + tactile press */
+[data-slot="button"] {
+  transition:
+    transform 0.14s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.2s ease,
+    background-color 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease;
+}
+[data-slot="button"]:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+[data-slot="button"]:active:not(:disabled) {
+  transform: translateY(0) scale(0.97);
+}
+
+/* Table rows: smooth highlight + subtle inset accent on hover */
+[data-slot="table-row"] {
+  transition: background-color 0.16s ease, box-shadow 0.16s ease;
+}
+[data-slot="table-body"] [data-slot="table-row"]:hover {
+  background-color: var(--bg-soft);
+  box-shadow: inset 3px 0 0 0 var(--brand-green);
+}
+
+/* Inputs / selects / textareas: gentle focus lift */
+[data-slot="input"],
+[data-slot="select-trigger"],
+textarea {
+  transition: box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+/* Avatars pop slightly when their row/card is hovered or on direct hover */
+[data-slot="avatar"] {
+  transition: transform 0.18s ease;
+}
+[data-slot="card"]:hover [data-slot="avatar"],
+[data-slot="avatar"]:hover {
+  transform: scale(1.06);
+}
+
+/* Badges used as interactive chips get a press feel */
+button > [data-slot="badge"] {
+  transition: transform 0.14s ease;
+}
+button:hover > [data-slot="badge"] {
+  transform: translateY(-1px);
+}
+button:active > [data-slot="badge"] {
+  transform: scale(0.95);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="card"],
+  [data-slot="button"],
+  [data-slot="table-row"],
+  [data-slot="avatar"],
+  button > [data-slot="badge"] {
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
+/* Accessibility: a consistent keyboard focus ring across interactive elements.
+   Uses outline (no layout shift) and only shows for keyboard users. */
+@layer base {
+  :where(a, button, [role="button"], input, select, textarea, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
+    outline: 2px solid var(--brand-green);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+}
+
+/* A slim, rounded scrollbar everywhere instead of the chunky OS default —
+   Firefox via `scrollbar-*`, Chrome/Safari/Edge via the `::-webkit-*` pseudo-elements. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--line);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--ink-soft) 45%, var(--line));
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}

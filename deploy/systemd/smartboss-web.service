@@ -1,0 +1,37 @@
+[Unit]
+Description=Smartboss web (Next.js)
+Documentation=file:///opt/smartboss/docs/deploy.md
+# ฐานข้อมูลกับ redis อยู่ใน Docker — รอ docker ขึ้นก่อน ไม่งั้นตอนบูตเครื่อง
+# แอปจะสตาร์ตไปเจอ connection refused แล้ว restart วนอยู่พักหนึ่ง
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=smartboss
+Group=smartboss
+WorkingDirectory=/opt/smartboss/apps/web
+EnvironmentFile=/etc/smartboss/smartboss.env
+
+# -H 127.0.0.1 สำคัญ: ให้เฉพาะ Caddy บนเครื่องเดียวกันต่อได้
+# ถ้าปล่อย default (0.0.0.0) เว็บจะเปิดที่พอร์ต 3000 ตรง ๆ ข้าม HTTPS ได้เลย
+ExecStart=/usr/bin/node node_modules/next/dist/bin/next start -H 127.0.0.1 -p 3000
+
+Restart=always
+RestartSec=5
+# ล้มติดกัน 5 ครั้งใน 60 วิ = มีอะไรผิดจริง หยุดแล้วรอคนดู ดีกว่า restart วนกิน CPU
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=smartboss-web
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,99 @@
+# โครงสร้างพื้นฐานของ Smartboss บน VM เดียว (Google Compute Engine)
+#
+# ที่นี่มีเฉพาะของที่เป็น "บริการสำเร็จรูป" — ฐานข้อมูล, คิว, ที่เก็บไฟล์, ตัวรับ HTTPS
+# ส่วนโปรเซสของแอปทั้ง 4 ตัวรันด้วย systemd ไม่ใช่ Docker (ดู deploy/systemd/)
+# เพราะ build จาก source บนเครื่องเดียวกันอยู่แล้ว การใส่ Docker อีกชั้นเพิ่มแต่ของให้ debug
+#
+#   docker compose -f deploy/docker-compose.yml up -d
+#
+# ⚠ ทุกพอร์ตผูกกับ 127.0.0.1 เท่านั้น — ตัวเดียวที่เปิดสู่อินเทอร์เน็ตคือ caddy (80/443)
+#   ถ้าเผลอเปลี่ยนเป็น "5432:5432" เท่ากับเปิดฐานข้อมูลให้ทั้งโลกสแกนเจอ
+
+name: smartboss
+
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-smartboss}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?ต้องตั้งใน deploy/.env}
+      POSTGRES_DB: ${POSTGRES_DB:-smartboss}
+      # ภาษาไทยเรียงลำดับถูกต้อง และ timestamp ตรงกับที่แอปคาดไว้
+      TZ: Asia/Bangkok
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # ที่ทิ้งไฟล์ dump ให้ pg_dump เขียนจากในคอนเทนเนอร์ได้ตรง ๆ
+      - /var/backups/smartboss:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-smartboss} -d ${POSTGRES_DB:-smartboss}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8
+    restart: unless-stopped
+    # ไม่มี persistence ตั้งใจ — redis ที่นี่ใช้ทำ rate limit อย่างเดียว
+    # ข้อมูลหายแล้วผลคือโควตารีเซ็ต ไม่ใช่ข้อมูลธุรกิจหาย
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ที่เก็บไฟล์แนบ/รูปงานซ่อม/สลิปเงินเดือน
+  #
+  # ทำไมต้องมี ทั้งที่ VM มีดิสก์อยู่แล้ว: workforce-api บังคับว่า production ห้ามใช้
+  # STORAGE_DRIVER=filesystem (packages/workforce/config/src/schema.ts) เพราะ adapter
+  # นั้นไม่มี access control ระดับไฟล์ MinIO พูดภาษา S3 ได้ จึงใช้ตัวเดียวกับที่
+  # โค้ดรองรับอยู่แล้ว และย้ายไป Cloudflare R2 / GCS ทีหลังได้โดยแก้แค่ env
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?ต้องตั้งใน deploy/.env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?ต้องตั้งใน deploy/.env}
+      # เบราว์เซอร์ต้องเปิด presigned URL ได้ ⇒ ลายเซ็นต้องคิดจากโฮสต์สาธารณะ
+      # ไม่ตั้งค่านี้ ลิงก์รูปจะชี้ไป 127.0.0.1 แล้วเปิดไม่ขึ้นทุกเครื่องที่ไม่ใช่ VM
+      MINIO_SERVER_URL: https://${FILES_DOMAIN:?ต้องตั้งใน deploy/.env}
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  # ตัวรับ HTTPS — ขอและต่ออายุใบรับรอง Let's Encrypt ให้เอง ไม่ต้องตั้ง certbot
+  #
+  # network_mode: host เพราะต้องต่อไปหาโปรเซสที่รันด้วย systemd บน 127.0.0.1
+  # ถ้าอยู่ใน network ของ compose คำว่า 127.0.0.1 จะหมายถึงตัวคอนเทนเนอร์เอง
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?ต้องตั้งใน deploy/.env}
+      DEVICE_DOMAIN: ${DEVICE_DOMAIN:?ต้องตั้งใน deploy/.env}
+      FILES_DOMAIN: ${FILES_DOMAIN:?ต้องตั้งใน deploy/.env}
+      ACME_EMAIL: ${ACME_EMAIL:?ต้องตั้งใน deploy/.env}
+
+volumes:
+  pgdata:
+  miniodata:
+  caddydata:
+  caddyconfig:

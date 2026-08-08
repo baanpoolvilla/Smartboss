@@ -1,0 +1,22 @@
+{
+  "name": "@workforce/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "main": "./dist/main.js",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty",
+    "start": "node dist/main.js",
+    "dev": "node dist/main.js"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.1",
+    "@nestjs/core": "^11.0.1",
+    "@workforce/api": "workspace:*",
+    "@workforce/config": "workspace:*",
+    "@workforce/db": "workspace:*",
+    "@workforce/domain": "workspace:*",
+    "reflect-metadata": "^0.2.2"
+  }
+}

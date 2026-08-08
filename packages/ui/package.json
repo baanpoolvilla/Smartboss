@@ -1,0 +1,34 @@
+{
+  "name": "@smartboss/ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./tokens.css": "./tokens.css",
+    "./cn": "./lib/cn.ts",
+    "./components/button": "./components/button.tsx",
+    "./components/input": "./components/input.tsx",
+    "./components/card": "./components/card.tsx",
+    "./components/avatar": "./components/avatar.tsx",
+    "./components/dropdown-menu": "./components/dropdown-menu.tsx"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.24.0",
+    "tailwind-merge": "^3.6.0"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@smartboss/config": "workspace:*",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "^5.7.2"
+  }
+}

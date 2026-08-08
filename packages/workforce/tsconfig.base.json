@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "composite": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "baseUrl": ".",
+    "paths": {
+      "@workforce/attendance-engine": ["attendance-engine/src/index.ts"],
+      "@workforce/payroll-engine": ["payroll-engine/src/index.ts"],
+      "@workforce/config": ["config/src/index.ts"],
+      "@workforce/contracts": ["contracts/src/index.ts"],
+      "@workforce/db": ["db/src/index.ts"],
+      "@workforce/domain": ["domain/src/index.ts"]
+    }
+  }
+}

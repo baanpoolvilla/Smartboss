@@ -1,0 +1,16 @@
+{
+  "extends": "../../packages/workforce/tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "tsBuildInfoFile": "dist/.tsbuildinfo",
+    "paths": {}
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../workforce-api" },
+    { "path": "../../packages/workforce/config" },
+    { "path": "../../packages/workforce/db" },
+    { "path": "../../packages/workforce/domain" }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "extends": "../../packages/workforce/tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "tsBuildInfoFile": "dist/.tsbuildinfo",
+    "paths": {}
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts"],
+  "references": [
+    { "path": "../../packages/workforce/domain" },
+    { "path": "../../packages/workforce/attendance-engine" },
+    { "path": "../../packages/workforce/payroll-engine" },
+    { "path": "../../packages/workforce/config" },
+    { "path": "../../packages/workforce/contracts" },
+    { "path": "../../packages/workforce/db" }
+  ]
+}

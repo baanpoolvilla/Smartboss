@@ -1,0 +1,34 @@
+[Unit]
+Description=Smartboss device gateway (ด่านของเครื่องสแกนลายนิ้วมือ)
+Documentation=file:///opt/smartboss/docs/deploy.md
+After=network-online.target smartboss-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=smartboss
+Group=smartboss
+WorkingDirectory=/opt/smartboss
+EnvironmentFile=/etc/smartboss/smartboss.env
+Environment=SERVICE_NAME=workforce-device-gateway
+
+# ตัวนี้เป็นตัวเดียวที่มีทางออกสู่อินเทอร์เน็ต (ผ่าน Caddy ที่ device.<โดเมน>)
+# ไม่ต่อฐานข้อมูลโดยตั้งใจ — ปล่อยผ่านเฉพาะ 6 path ที่เครื่องต้องใช้ ที่เหลือ 404
+ExecStart=/usr/bin/node apps/workforce-device-gateway/dist/main.js
+
+Restart=always
+RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=smartboss-gateway
+
+[Install]
+WantedBy=multi-user.target

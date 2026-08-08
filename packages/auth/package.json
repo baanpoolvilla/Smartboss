@@ -1,0 +1,42 @@
+{
+  "name": "@smartboss/auth",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts",
+    "./jwt": "./jwt.ts",
+    "./refresh": "./refresh.ts",
+    "./session": "./session.ts",
+    "./guard": "./guard.ts",
+    "./password": "./password.ts",
+    "./ratelimit": "./ratelimit.ts",
+    "./audit": "./audit.ts",
+    "./cookies": "./cookies.ts",
+    "./schema": "./schema.ts",
+    "./permissions": "./permissions.ts"
+  },
+  "scripts": {
+    "test": "node --test --import tsx ./__tests__/jwt.test.ts ./__tests__/permissions.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@smartboss/database": "workspace:*",
+    "argon2": "^0.41.1",
+    "ioredis": "^5.4.2",
+    "jose": "^5.9.6",
+    "server-only": "^0.0.1",
+    "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "next": "^15.0.0 || ^16.0.0"
+  },
+  "devDependencies": {
+    "@smartboss/config": "workspace:*",
+    "@types/node": "^22.10.5",
+    "next": "16.2.10",
+    "react": "19.2.4",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

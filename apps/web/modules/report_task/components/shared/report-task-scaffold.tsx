@@ -1,0 +1,68 @@
+"use client";
+
+import { useEffect } from "react";
+import { usePathname } from "next/navigation";
+
+import { AppScaffold } from "@/components/module/app-scaffold";
+
+import { REPORT_TASK_BASE } from "../../constants";
+import { reportTaskManifest } from "../../manifest";
+import { useIdentityStore } from "../../store/identity-store";
+import { StoreHydrator } from "./store-hydrator";
+import { TaskSync } from "./task-sync";
+import { TourOverlay } from "./tour-overlay";
+
+/**
+ * ครอบทุกหน้าของโมดูลด้วย AppScaffold ตัวเดียวกับ maintenance / hr / admin
+ *
+ * ทำที่ layout ที่เดียวแทนที่จะไปแก้ทั้ง 8 หน้า เพราะทุกหน้าของโมดูลนี้เป็น
+ * หน้าระดับบนสุดเหมือนกันหมด (ไม่มีหน้ารายละเอียดที่ต้องมีปุ่มย้อนกลับ)
+ * ชื่อหัวข้อดึงจาก manifest ตาม pathname จะได้ไม่ต้องเขียนชื่อซ้ำสองที่
+ *
+ * width กว้างกว่าโมดูลอื่นเพราะมีบอร์ด Kanban กับปฏิทินที่ต้องใช้พื้นที่
+ * (ของเดิมใน workspace ก็ใช้ max-w-[1600px])
+ */
+export function ReportTaskScaffold({
+  currentUserId,
+  children,
+}: {
+  /** core.users.id ของคนที่ล็อกอิน — ส่งมาจาก layout ฝั่งเซิร์ฟเวอร์ */
+  currentUserId: string;
+  children: React.ReactNode;
+}) {
+  const pathname = usePathname();
+
+  /*
+   * โมดูลต้นทางออกแบบตอนยังไม่มี auth จึงมีตัวสลับ "ดูในนามของ" ฝั่ง client
+   * ที่นี่ต้องล็อกให้เป็นคนที่ล็อกอินจริง ไม่งั้นงานที่สร้างและคะแนนที่หัก
+   * จะไปเข้าคนอื่น และหน้าสรุปของผู้บริหารจะอ่านไม่ได้เรื่อง
+   */
+  useEffect(() => {
+    useIdentityStore.getState().setViewingAs(currentUserId);
+  }, [currentUserId]);
+
+  // เลือกเมนูที่ path ยาวที่สุดที่ยังเป็นคำนำหน้าของ pathname
+  // ⇒ หน้าลูก (ถ้ามีในอนาคต) ยังได้ชื่อของหมวดตัวเอง ไม่ตกไปใช้ชื่อแดชบอร์ด
+  const match = reportTaskManifest.menus
+    .filter((m) => pathname === m.path || pathname.startsWith(`${m.path}/`))
+    .sort((a, b) => b.path.length - a.path.length)[0];
+
+  const title = match?.label ?? reportTaskManifest.name;
+
+  // กระดาน Kanban จัดการ scroll เอง จึงให้เต็มพื้นที่แทนที่จะจำกัดความกว้าง
+  const isBoard = pathname.startsWith(`${REPORT_TASK_BASE}/tasks`);
+
+  return (
+    <>
+      {/* ตัวเติมข้อมูลให้ store ฝั่ง client — ต้องอยู่ระดับโมดูล ไม่ใช่รายหน้า
+          ไม่งั้นจะโหลดใหม่ทุกครั้งที่เปลี่ยนหน้า */}
+      <StoreHydrator />
+      <TaskSync />
+      <TourOverlay />
+
+      <AppScaffold title={title} width="max-w-[1600px]" fill={isBoard}>
+        {children}
+      </AppScaffold>
+    </>
+  );
+}

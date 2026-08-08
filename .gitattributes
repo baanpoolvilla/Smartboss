@@ -1,0 +1,25 @@
+# เครื่อง dev เป็น Windows แต่ production เป็น Linux — บังคับ LF ให้ชัดเจน
+#
+# ทำไมสำคัญ: สคริปต์ที่มีท้ายบรรทัดเป็น CRLF พอรันบน Linux จะขึ้น
+# `\r: command not found` หรือ `bad interpreter` ซึ่งอ่านแล้วเดาสาเหตุยากมาก
+# systemd unit และ Caddyfile ก็เจอปัญหาเดียวกัน
+
+* text=auto eol=lf
+
+# ไฟล์ที่ต้องเป็น LF เสมอ ไม่ว่าเช็คเอาต์บนอะไร
+*.sh      text eol=lf
+*.service text eol=lf
+Caddyfile text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+*.sql     text eol=lf
+
+# ไฟล์ไบนารี — ห้ามแตะท้ายบรรทัด
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary

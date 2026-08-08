@@ -1,0 +1,113 @@
+:root {
+  /* Base — ธีมขาว */
+  --bg: #ffffff;
+  --bg-soft: #f7f9fc;
+  --ink: #1b2537; /* navy จากโลโก้ Boss */
+  --ink-soft: #64748b;
+  --line: #e5e9f0;
+  --brand-green: #4cb93f; /* green จากโลโก้ Easy */
+  --brand-navy: #1b2537;
+
+  /* Module colors — ใช้ตอนเสียบโมดูลใน Phase ถัดไป */
+  --mod-report: #64748b; /* Report-Task  ขาว-เทา (Slate) */
+  --mod-hr: #3b82f6; /* HR           ขาว-ฟ้า (Blue) */
+  --mod-financial: #8b5cf6; /* Financial    ขาว-ม่วง (Purple) */
+  --mod-maintenance: #0d9488; /* Maintenance ขาว-เขียวอมฟ้า (Teal) */
+  --mod-sale: #ec4899; /* Sale-Admin   ขาว-ชมพู (Magenta) */
+  --mod-marketing: #f97316; /* Marketing    ขาว-ส้ม (Orange) */
+
+  /* Module background tints (การ์ด/ไอคอน) */
+  --mod-report-bg: #f4f6f9;
+  --mod-hr-bg: #eff5ff;
+  --mod-financial-bg: #f4f0ff;
+  --mod-maintenance-bg: #eef8f6;
+  --mod-sale-bg: #fdeff6;
+  --mod-marketing-bg: #fff2e8;
+
+  /* Active module color — Shell จะ set ค่านี้ตามโมดูลที่เปิดอยู่ */
+  --module-color: var(--brand-green);
+  --module-color-bg: #f3fbf1;
+
+  /* Feedback */
+  --danger: #dc2626;
+  --danger-bg: #fef2f2;
+  --danger-line: #fecaca;
+
+  /* Status tone — ใช้กับป้ายสถานะทุกโมดูล เพื่อไม่ต้อง hardcode hex ใน component */
+  --tone-ok: #16a34a;
+  --tone-info: #2563eb;
+  --tone-warn: #ea580c;
+  --tone-danger: #dc2626;
+  --tone-muted: #6b7280;
+
+  /* Radius & shadow */
+  --radius: 12px;
+  --radius-lg: 16px;
+  --shadow-card: 0 1px 2px rgba(27, 37, 55, 0.04),
+    0 4px 16px rgba(27, 37, 55, 0.06);
+  --shadow-pop: 0 8px 28px rgba(27, 37, 55, 0.12);
+}
+
+/**
+ * ธีมของโมดูลบุคคล (HR / ลงเวลา / เงินเดือน) — ขาว-ฟ้า ตามสีประจำโมดูลในข้อ 4 ของ spec
+ * ใช้ค่าจาก --mod-hr เป็นแกน ไม่ประกาศ hex ใหม่นอกไฟล์นี้
+ */
+[data-app="hr"] {
+  --app: var(--mod-hr); /* #3B82F6 */
+  --app-strong: #1d4ed8; /* blue 700 — ตัวอักษร/ไอคอนบนพื้นอ่อน */
+  --app-accent: #2563eb; /* blue 600 — ปุ่มลอย */
+  --app-soft: #dbeafe; /* blue 100 — แถบเมนูที่เลือก */
+  --app-pale: var(--mod-hr-bg); /* #EFF5FF */
+
+  /* ปุ่ม/โฟกัสริงที่อ้าง --brand-green ให้เป็นสีของโมดูลนี้ */
+  --brand-green: var(--mod-hr);
+}
+
+/**
+ * ธีมของโมดูลรายงานและงาน — ขาว-เทา (Slate) ตามสีประจำโมดูลในข้อ 4 ของ spec
+ * ใช้ค่าจาก --mod-report เป็นแกน ไม่ประกาศ hex ใหม่นอกไฟล์นี้
+ *
+ * โมดูลนี้พามาคอมโพเนนต์ shadcn/ui ซึ่งอ่านโทเคนอีกชุดหนึ่ง (--primary/--accent/…)
+ * ชุดนั้นประกาศไว้ที่ modules/report_task/theme.css และชี้กลับมาที่ --module-color
+ * กับ --module-color-bg ด้านล่าง ⇒ ตั้งสีที่เดียวแล้วเปลี่ยนตามทั้งโมดูล
+ */
+[data-app="report_task"] {
+  --app: var(--mod-report); /* #64748B */
+  --app-strong: #475569; /* slate 600 — ตัวอักษร/ไอคอนบนพื้นอ่อน */
+  --app-accent: #64748b; /* slate 500 — ปุ่มลอย */
+  --app-soft: #e2e8f0; /* slate 200 — แถบเมนูที่เลือก */
+  --app-pale: var(--mod-report-bg); /* #F4F6F9 */
+
+  /* ปุ่ม/โฟกัสริงที่อ้าง --brand-green ให้เป็นสีของโมดูลนี้ */
+  --brand-green: var(--mod-report);
+
+  /* shell ตั้ง --module-color ให้อยู่แล้ว ส่วนพื้นอ่อนต้องตั้งเองรายโมดูล */
+  --module-color-bg: var(--mod-report-bg);
+
+  /* มุมโค้งของ shadcn เดิมคือ 0.625rem — คงไว้ให้คอมโพเนนต์ที่ยกมาหน้าตาไม่เพี้ยน */
+  --radius: 0.625rem;
+}
+
+/**
+ * ธีมของโมดูลแจ้งซ่อมบำรุง — ชุดสีเดียวกับ AppTheme.light ของ ChangYai
+ * (Shell ใส่ data-app="<module id>" ให้ตอนอยู่ในโมดูล ธีมจึงไม่รั่วไปหน้าอื่น)
+ */
+[data-app="maintenance"] {
+  --bg: #ffffff;
+  --bg-soft: #f5faf8; /* _scaffoldLight */
+  --ink: #17332f; /* onSurface */
+  --ink-soft: #536a66; /* unselected label */
+  --line: #dce9e6; /* _borderLight */
+
+  --app: #0d9488; /* primaryColor  — Teal 600 */
+  --app-strong: #0f766e; /* secondaryColor — Teal 700 */
+  --app-accent: #14b8a6; /* accentColor   — Teal 500 (FAB) */
+  --app-soft: #ccfbf1; /* softGreen     — Teal 100 (indicator) */
+  --app-pale: #f0fdfa; /* paleGreen     — Teal 50 */
+
+  /* คอมโพเนนต์ที่อ้าง --brand-green (โฟกัสริง/ลิงก์) ให้เป็นเขียวอมฟ้าตามธีมโมดูล */
+  --brand-green: #0d9488;
+
+  /* Card ของ ChangYai ใช้เส้นขอบ ไม่ใช้เงา */
+  --shadow-card: none;
+}

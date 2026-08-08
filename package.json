@@ -1,0 +1,38 @@
+{
+  "name": "smartboss",
+  "private": true,
+  "packageManager": "pnpm@11.13.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "db:generate": "pnpm --filter @smartboss/database db:generate",
+    "db:migrate": "pnpm --filter @smartboss/database db:migrate",
+    "db:deploy": "pnpm --filter @smartboss/database db:deploy",
+    "db:seed": "pnpm --filter @smartboss/database db:seed",
+    "db:studio": "pnpm --filter @smartboss/database db:studio",
+    "test": "turbo run test",
+    "wf:test": "vitest run --config vitest.workforce.config.ts",
+    "wf:migrate": "tsx packages/workforce/db/src/cli/migrate.ts",
+    "wf:seed": "tsx packages/workforce/db/src/cli/seed.ts",
+    "wf:sync": "tsx packages/workforce/db/src/cli/sync-smartboss.ts",
+    "wf:api": "node apps/workforce-api/dist/main.js",
+    "wf:worker": "node apps/workforce-worker/dist/main.js",
+    "wf:gateway": "node apps/workforce-device-gateway/dist/main.js"
+  },
+  "devDependencies": {
+    "@swc/core": "^1.10.7",
+    "@types/node": "^22.10.5",
+    "@vitest/coverage-v8": "^2.1.8",
+    "tsx": "^4.19.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2",
+    "unplugin-swc": "^1.5.1",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,0 +1,39 @@
+@import '@smartboss/ui/tokens.css' layer(base);
+
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/*
+ * โมดูลรายงานและงานพาคอมโพเนนต์ shadcn/ui มาด้วย ซึ่งอ่านโทเคนคนละชุดกับ Smartboss
+ * (--primary / --muted / --border …) ไฟล์นั้นแปลงโทเคนชุดนั้นให้ชี้กลับมาที่ token
+ * ของ Smartboss จึงต้อง import หลัง tokens.css เพื่อให้ค่าที่แปลงแล้วชนะ
+ */
+@import '../modules/report_task/theme.css';
+
+/*
+ * v4 หา source เองจากโฟลเดอร์ของไฟล์ CSS นี้ขึ้นไป แต่ไม่ข้ามออกนอก apps/web
+ * คอมโพเนนต์กลางอยู่คนละแพ็กเกจ ต้องบอกทางเอง ไม่งั้นคลาสที่ใช้เฉพาะที่นั่นจะไม่ถูก generate
+ * (v3 ใช้ content glob ใน tailwind.config.ts ซึ่งถูกลบไปแล้ว)
+ */
+@source '../../../packages/ui/components';
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-plex-thai), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/*
+ * v4 เปลี่ยนสีเส้นขอบ default จาก gray-200 เป็น currentColor
+ * บรรทัดนี้มีมาก่อนอยู่แล้วและยังจำเป็น — ไม่มีแล้วขอบทุกอันจะกลายเป็นสีตัวอักษร
+ */
+* {
+  border-color: var(--line);
+}
