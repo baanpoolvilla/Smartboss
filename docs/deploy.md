@@ -183,7 +183,7 @@ sudo apt-get install -y git curl ca-certificates gnupg postgresql-client
 # ── Node 22 LTS ──
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nodejs
-sudo npm install -g pnpm@11.13.0
+sudo npm install -g pnpm@11.13.1
 
 # ── Docker ──
 sudo install -m 0755 -d /etc/apt/keyrings
