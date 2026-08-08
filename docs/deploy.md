@@ -238,61 +238,34 @@ cd /opt/smartboss
 
 ```bash
 cd /opt/smartboss
-bash deploy/gen-secrets.sh
+sudo bash deploy/init-env.sh   --domain <โดเมนคุณ>   --email  <อีเมลคุณ>   --org    "<ชื่อบริษัทของคุณ>"
 ```
 
-คัดลอกผลที่ได้ไปสองที่
+สคริปต์จะสุ่มความลับทั้งหมดแล้วเขียนไฟล์ให้ครบสองไฟล์พร้อมสิทธิ์ที่ถูกต้อง
 
-**ที่ 1 — `/etc/smartboss/smartboss.env`** (systemd อ่าน)
-
-```bash
-sudo install -d -m 700 /etc/smartboss
-sudo cp deploy/smartboss.env.example /etc/smartboss/smartboss.env
-sudo chmod 600 /etc/smartboss/smartboss.env
-sudo chown root:smartboss /etc/smartboss/smartboss.env
-sudo chmod 640 /etc/smartboss/smartboss.env
-sudo nano /etc/smartboss/smartboss.env
-```
-
-แก้ให้ครบทุกบรรทัดที่มีเครื่องหมาย `⚠` และเปลี่ยน `example.com` เป็นโดเมนจริง
-
-**ที่ 2 — `/opt/smartboss/deploy/.env`** (docker compose อ่าน)
-
-```bash
-sudo -u smartboss nano /opt/smartboss/deploy/.env
-```
-
-```env
-POSTGRES_USER=smartboss
-POSTGRES_DB=smartboss
-POSTGRES_PASSWORD=<จาก gen-secrets>
-MINIO_ROOT_USER=smartboss
-MINIO_ROOT_PASSWORD=<จาก gen-secrets>
-APP_DOMAIN=app.<โดเมน>
-DEVICE_DOMAIN=device.<โดเมน>
-FILES_DOMAIN=files.<โดเมน>
-ACME_EMAIL=<อีเมลคุณ>
-```
-
-### จุดที่พลาดกันบ่อยที่สุด
-
-| ค่า | ต้องเป็นอย่างไร | พลาดแล้วเกิดอะไร |
+| ไฟล์ | ใครอ่าน | สิทธิ์ |
 |---|---|---|
-| `JWT_SECRET` = `AUTH_SMARTBOSS_SECRET` | **ค่าเดียวกันเป๊ะ** | login ได้ แต่ทุกหน้า HR ขึ้น 401 หาสาเหตุยาก |
-| `WORKFORCE_API_BASE` | ต้องลงท้าย `/api/workforce/v1` | ทุกหน้า HR พัง |
-| `S3_ENDPOINT` / `STORAGE_ENDPOINT` | โดเมนสาธารณะ **ไม่ใช่** `127.0.0.1` | อัปโหลดได้ แต่รูปเปิดไม่ขึ้นทุกเครื่อง |
-| `DATABASE_URL` | ต้องมี `?sslmode=disable` | workforce-api start ไม่ขึ้น |
-| `FIELD_ENCRYPTION_KEY` | base64 ของ 32 ไบต์พอดี | start ไม่ขึ้น |
-| `COOKIE_SECURE` | `true` | ถ้า false = cookie session วิ่งแบบไม่บังคับ HTTPS |
+| `/etc/smartboss/smartboss.env` | systemd (ทั้ง 4 บริการ) | `root:smartboss 640` |
+| `/opt/smartboss/deploy/.env` | docker compose | `smartboss 600` |
 
-> **ทำไม `sslmode=disable` ถึงยอมรับได้**: กฎที่บังคับ SSL มีไว้กันข้อมูลวิ่งเปล่า ๆ
-> ข้ามเครือข่าย — ที่นี่ Postgres ผูกกับ `127.0.0.1` ไม่มีเครือข่ายให้ดัก
-> **วันที่ย้าย Postgres ไปคนละเครื่องต้องเปลี่ยนเป็น `sslmode=require` ทันที**
+**ทำไมไม่ให้กรอกมือ**: ค่ามี 30 กว่าตัว และมีคู่ที่ต้องตรงกันเป๊ะ —
+`JWT_SECRET` = `AUTH_SMARTBOSS_SECRET` · รหัส Postgres ต้องไปโผล่ใน `DATABASE_URL`
+ด้วย · คีย์ MinIO ใช้ทั้งชื่อ `S3_*` และ `STORAGE_*` พิมพ์เองพลาดง่ายมาก
+และอาการเวลาพลาดคือ "login ได้แต่ทุกหน้า HR ขึ้น 401" ซึ่งไล่หาสาเหตุยาก
+
+รหัสผ่านของบัญชีผู้ดูแลจะถูกพิมพ์ออกมาครั้งเดียวตอนจบ — **จดไว้**
+
+> สคริปต์จะหยุดทันทีถ้าไฟล์มีอยู่แล้ว กันเผลอสร้างความลับชุดใหม่ทับของเดิม
+> ซึ่งจะทำให้ข้อมูลที่เข้ารหัสไว้อ่านไม่ออกตลอดกาล
 
 ### สำรองความลับออกนอกเครื่อง — ทำเดี๋ยวนี้
 
 `FIELD_ENCRYPTION_KEY` หายเมื่อไหร่ เลขบัตรประชาชนและเลขบัญชีธนาคารที่เข้ารหัสไว้
 **กู้ไม่ได้เลย ไม่มีทางลัด** ก๊อปไปเก็บใน password manager ตอนนี้ อย่ารอ
+
+```bash
+sudo grep FIELD_ENCRYPTION_KEY /etc/smartboss/smartboss.env
+```
 
 ---
 
