@@ -280,16 +280,17 @@ sudo -u smartboss docker compose -f deploy/docker-compose.yml ps
 รอจน `postgres` และ `minio` ขึ้น `healthy` (ราว 30 วินาที) แล้วสร้างถังเก็บไฟล์
 
 ```bash
-docker run --rm --network host --entrypoint sh minio/mc -c '
-  mc alias set local http://127.0.0.1:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" &&
-  mc mb --ignore-existing local/smartboss &&
-  mc anonymous set none local/smartboss &&
-  mc ls local
-'
+sudo bash deploy/init-storage.sh
 ```
 
-`mc anonymous set none` สำคัญ — ถังต้องไม่เปิดอ่านสาธารณะ ทุกไฟล์ต้องเข้าผ่าน
-presigned URL ที่เว็บเซ็นให้เท่านั้น (อายุ 5 นาที)
+สคริปต์รอจน MinIO พร้อม สร้างถัง แล้ว **ปิดการเข้าถึงแบบไม่ล็อกอิน** ให้ชัดเจน —
+ทุกไฟล์ต้องมาพร้อม presigned URL ที่เว็บเซ็นให้ อายุ 5 นาที
+ถ้าเผลอเปิดสาธารณะ ใครเดา key ถูกก็โหลดสลิปเงินเดือนได้
+
+> ⚠ อย่าเขียนเป็น `docker run ... mc -c 'mc alias set ... "$MINIO_ROOT_USER" ...'`
+> ตัวแปรในสตริงนั้นจะถูกขยาย **ข้างในคอนเทนเนอร์** ซึ่งไม่มีค่า กลายเป็นล็อกอิน
+> ด้วยชื่อว่าง แล้วขึ้น error ที่อ่านแล้วไม่รู้สาเหตุ — สคริปต์ส่งผ่าน
+> `MC_HOST_local` จากฝั่งโฮสต์แทน
 
 > ยังไม่ต้องเปิด `caddy` ตอนนี้ — รอถึงข้อ 8 เพราะยังไม่มีอะไรให้มันชี้ไป
 
