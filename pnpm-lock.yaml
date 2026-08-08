@@ -89,6 +89,9 @@ importers:
       '@tanstack/react-table':
         specifier: ^8.21.3
         version: 8.21.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@workforce/domain':
+        specifier: workspace:*
+        version: link:../../packages/workforce/domain
       argon2:
         specifier: ^0.41.1
         version: 0.41.1

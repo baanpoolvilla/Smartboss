@@ -15,6 +15,8 @@ import { prisma } from "@smartboss/database";
 import { ADMIN_PERMS } from "@/modules/admin/permissions";
 import { organizationExists } from "@/modules/admin/data/orgs";
 import { PERFORMANCE_CATEGORIES } from "@/lib/performance";
+import { provisionWorkforceTenant } from "@/lib/workforce-provisioning";
+import { ENABLED_MODULES, ORG_ROLES, ROLE_GRANTS } from "@smartboss/database/defaults";
 
 /** ทุก action ต้องผ่านด่านนี้ก่อน — คืน session ที่มี orgId แน่นอน */
 async function guard(permission: string) {
@@ -510,4 +512,183 @@ export async function savePerformanceSettingsAction(formData: FormData) {
   });
   revalidatePath("/admin/performance");
   revalidatePath("/admin/performance/settings");
+}
+
+/* ═══════════════════════ บริษัทใหม่ (SUPER_ADMIN) ═══════════════════════ */
+
+const createOrgSchema = z.object({
+  name: z.string().min(1, "กรุณากรอกชื่อบริษัท").max(120),
+  slug: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/, "รหัสบริษัทใช้ได้เฉพาะ a-z 0-9 และ - ความยาว 3-40 ตัว"),
+  planCode: z.enum(["FREE", "PRO", "ENTERPRISE"]),
+  adminEmail: z.string().email("อีเมลไม่ถูกต้อง"),
+  adminName: z.string().min(1, "กรุณากรอกชื่อผู้ดูแล").max(120),
+  adminPassword: z.string().min(12, "รหัสผ่านอย่างน้อย 12 ตัวอักษร"),
+});
+
+/**
+ * เปิดบริษัทใหม่ทั้งชุด — SUPER_ADMIN เท่านั้น
+ *
+ * "ชุด" คือทุกอย่างที่บริษัทต้องมีถึงจะใช้งานได้จริงตั้งแต่วันแรก:
+ *   1. core.organizations
+ *   2. บทบาททั้ง 10 + สิทธิ์ตั้งต้นของแต่ละบทบาท   (@smartboss/database/defaults)
+ *   3. โมดูลที่เปิดให้ใช้
+ *   4. tenant ฝั่ง workforce + role ระบบของ tenant นั้น
+ *   5. ผู้ดูแลคนแรกของบริษัท (บทบาท ADMIN)
+ *
+ * ทำไมต้องครบชุดในครั้งเดียว: ถ้าขาดข้อไหนไป ระบบจะไม่พังทันที แต่จะ
+ * "ว่างเปล่าเงียบ ๆ" — เช่นขาดข้อ 4 ทุกหน้าในโมดูลบุคคลจะไม่มีข้อมูลเลย
+ * โดยไม่มี error ให้เห็น เพราะ RLS กรองทิ้ง หาสาเหตุยากมาก
+ *
+ * ข้อ 1-3 และ 5 อยู่ใน transaction เดียวกัน — ล้มกลางทางแล้วไม่เหลือบริษัทครึ่ง ๆ
+ * ข้อ 4 อยู่นอก transaction เพราะต้องสลับ role ของ connection (SET LOCAL ROLE)
+ * ทำในทรานแซกชันเดียวกับ Prisma ปกติไม่ได้ — ถ้าข้อนี้ล้มจะบอกให้ไปกดซ้ำ
+ * ที่หน้ารายชื่อบริษัท (เรียกซ้ำได้ ไม่สร้างซ้ำ)
+ */
+export async function createOrganizationAction(formData: FormData) {
+  const session = await requireOrg();
+  // ตรวจสองชั้น: การเปิดบริษัทใหม่คืออำนาจระดับแพลตฟอร์ม ไม่ใช่ของแอดมินบริษัท
+  if (!isSuperAdmin(session)) throw new Error("เฉพาะผู้ดูแลระบบสูงสุดเท่านั้น");
+  if (!hasPermission(session, ADMIN_PERMS.orgCreate)) {
+    throw new Error("ไม่มีสิทธิ์เปิดบริษัทใหม่");
+  }
+
+  const parsed = createOrgSchema.parse({
+    name: String(formData.get("name") ?? "").trim(),
+    slug: String(formData.get("slug") ?? "").trim().toLowerCase(),
+    planCode: String(formData.get("planCode") ?? "PRO"),
+    adminEmail: String(formData.get("adminEmail") ?? "").trim().toLowerCase(),
+    adminName: String(formData.get("adminName") ?? "").trim(),
+    adminPassword: String(formData.get("adminPassword") ?? ""),
+  });
+
+  // เช็คก่อนเข้า transaction เพื่อให้ได้ข้อความผิดพลาดที่อ่านรู้เรื่อง
+  // (ปล่อยให้ unique constraint ยิงเองจะได้แค่ P2002 ที่ผู้ใช้อ่านไม่ออก)
+  if (await prisma.organization.findUnique({ where: { slug: parsed.slug } })) {
+    throw new Error(`รหัสบริษัท "${parsed.slug}" ถูกใช้แล้ว`);
+  }
+  if (await prisma.user.findUnique({ where: { email: parsed.adminEmail } })) {
+    throw new Error("อีเมลนี้ถูกใช้งานแล้วในระบบ");
+  }
+
+  const passwordHash = await hashPassword(parsed.adminPassword);
+  const permissionIdByCode = new Map(
+    (await prisma.permission.findMany({ select: { id: true, code: true } })).map(
+      (p) => [p.code, p.id]
+    )
+  );
+  const modules = await prisma.module.findMany({
+    where: { code: { in: ENABLED_MODULES } },
+    select: { id: true, code: true },
+  });
+
+  const org = await prisma.$transaction(async (tx) => {
+    const created = await tx.organization.create({
+      data: {
+        slug: parsed.slug,
+        name: parsed.name,
+        planCode: parsed.planCode,
+        isActive: true,
+      },
+    });
+
+    await tx.role.createMany({
+      data: ORG_ROLES.map((r) => ({ ...r, orgId: created.id, isSystem: false })),
+    });
+    const roles = await tx.role.findMany({
+      where: { orgId: created.id },
+      select: { id: true, code: true },
+    });
+    const roleIdByCode = new Map(roles.map((r) => [r.code, r.id]));
+
+    const grants: { roleId: string; permissionId: string }[] = [];
+    for (const [roleCode, codes] of Object.entries(ROLE_GRANTS)) {
+      const roleId = roleIdByCode.get(roleCode);
+      if (!roleId) continue;
+      for (const code of codes) {
+        const permissionId = permissionIdByCode.get(code);
+        // ข้ามสิทธิ์ที่ยังไม่มีในแคตตาล็อก (โมดูลที่ยังไม่ได้ seed) แทนที่จะล้มทั้งชุด
+        if (permissionId) grants.push({ roleId, permissionId });
+      }
+    }
+    await tx.rolePermission.createMany({ data: grants, skipDuplicates: true });
+
+    await tx.orgModule.createMany({
+      data: modules.map((m) => ({
+        orgId: created.id,
+        moduleId: m.id,
+        isEnabled: true,
+      })),
+      skipDuplicates: true,
+    });
+
+    const adminRoleId = roleIdByCode.get("ADMIN");
+    if (!adminRoleId) throw new Error("ไม่พบบทบาท ADMIN ที่เพิ่งสร้าง");
+    await tx.user.create({
+      data: {
+        email: parsed.adminEmail,
+        name: parsed.adminName,
+        passwordHash,
+        orgId: created.id,
+        roles: { create: { roleId: adminRoleId } },
+      },
+    });
+
+    return created;
+  });
+
+  // นอก transaction — ต้องใช้ SET LOCAL ROLE ซึ่งอยู่ร่วมทรานแซกชันข้างบนไม่ได้
+  let workforceNote: string | null = null;
+  try {
+    await provisionWorkforceTenant(org.id, org.slug, org.name, session.userId);
+  } catch (err) {
+    // ไม่ล้มทั้งการสร้างบริษัท — บริษัทใช้โมดูลอื่นได้แล้ว เหลือแต่โมดูลบุคคล
+    console.error("[createOrganization] provision workforce tenant failed:", err);
+    workforceNote = "workforce-tenant-failed";
+  }
+
+  await audit({
+    userId: session.userId,
+    action: "ORG_CREATED",
+    targetId: org.id,
+    detail: {
+      slug: org.slug,
+      name: org.name,
+      planCode: org.planCode,
+      adminEmail: parsed.adminEmail,
+      ...(workforceNote ? { warning: workforceNote } : {}),
+    },
+  });
+
+  revalidatePath("/admin/organizations");
+  redirect(`/admin/organizations?created=${org.slug}${workforceNote ? "&warn=1" : ""}`);
+}
+
+/**
+ * เปิด tenant ฝั่ง workforce ให้บริษัทที่ยังไม่มี — ปุ่มซ่อมสำหรับกรณีข้างบนล้ม
+ * เรียกซ้ำได้ ไม่สร้างซ้ำ
+ */
+export async function repairWorkforceTenantAction(formData: FormData) {
+  const session = await requireOrg();
+  if (!isSuperAdmin(session)) throw new Error("เฉพาะผู้ดูแลระบบสูงสุดเท่านั้น");
+
+  const orgId = String(formData.get("orgId") ?? "");
+  const org = await prisma.organization.findUnique({ where: { id: orgId } });
+  if (!org) throw new Error("ไม่พบบริษัทนี้");
+
+  const result = await provisionWorkforceTenant(
+    org.id,
+    org.slug,
+    org.name,
+    session.userId
+  );
+
+  await audit({
+    userId: session.userId,
+    action: "ORG_WORKFORCE_PROVISIONED",
+    targetId: org.id,
+    detail: { ...result },
+  });
+  revalidatePath("/admin/organizations");
 }

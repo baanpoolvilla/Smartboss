@@ -20,6 +20,15 @@ export const ADMIN_PERMS = {
 
   /** ตั้งเกณฑ์คะแนนของบริษัท (คะแนนตั้งต้น อัตราหัก เกณฑ์เกรด) */
   performanceSettingManage: "core.performance.setting.manage",
+
+  /**
+   * เปิดบริษัทใหม่ในแพลตฟอร์ม — **ระดับแพลตฟอร์ม ไม่ใช่ระดับบริษัท**
+   *
+   * ไม่ได้อยู่ใน CORE_PERMS ที่มอบให้ ADMIN ของทุกบริษัทโดยตั้งใจ
+   * (ดู packages/database/defaults.ts) มิฉะนั้นแอดมินของลูกค้ารายหนึ่ง
+   * จะเปิดบริษัทใหม่ในระบบเราได้ — ตอนนี้จึงมีแต่ SUPER_ADMIN ที่ผ่าน
+   */
+  orgCreate: "core.org.create",
 } as const;
 
 export const ALL_ADMIN_PERMS: string[] = Object.values(ADMIN_PERMS);
@@ -36,4 +45,5 @@ export const ADMIN_PERM_LABELS: Record<string, string> = {
   [ADMIN_PERMS.auditView]: "ดูประวัติการใช้งาน (audit log)",
   [ADMIN_PERMS.performanceView]: "ดูสรุปผลงานรายคนของทั้งบริษัท",
   [ADMIN_PERMS.performanceSettingManage]: "ตั้งเกณฑ์คะแนนผลงานของบริษัท",
+  [ADMIN_PERMS.orgCreate]: "เปิดบริษัทใหม่ในแพลตฟอร์ม (ระดับผู้ให้บริการ)",
 };

@@ -43,6 +43,7 @@
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",
     "@tanstack/react-table": "^8.21.3",
+    "@workforce/domain": "workspace:*",
     "zod": "^4.4.3",
     "zustand": "^5.0.14"
   },

@@ -2,6 +2,15 @@ import { config } from "dotenv";
 import { resolve } from "node:path";
 import { PrismaClient } from "@prisma/client";
 import argon2 from "argon2";
+import {
+  CORE_PERMS,
+  ENABLED_MODULES,
+  HR_PERMS,
+  MAINT_PERMS,
+  ORG_ROLES,
+  PLATFORM_PERMS,
+  ROLE_GRANTS,
+} from "./defaults";
 
 // โหลด .env จาก root ของ monorepo
 config({ path: resolve(process.cwd(), "../../.env") });
@@ -23,27 +32,6 @@ const SYSTEM_ROLE = {
   description: "เข้าถึงได้ทุกส่วนของทุกบริษัท",
 };
 
-/** role ตั้งต้นที่ "โคลนให้แต่ละบริษัท" ตอนเปิดใช้งาน — บริษัทแก้สิทธิ์เองได้ */
-const ORG_ROLES: { code: string; name: string; description: string }[] = [
-  { code: "ADMIN", name: "ผู้ดูแลบริษัท", description: "จัดการผู้ใช้ สิทธิ์ และโมดูลของบริษัท" },
-  { code: "MANAGER", name: "ผู้จัดการ", description: "ดูแลภาพรวมและอนุมัติ" },
-  { code: "HR_OFFICER", name: "เจ้าหน้าที่บุคคล", description: "งานทรัพยากรบุคคลและเงินเดือน" },
-  { code: "ACCOUNTANT", name: "นักบัญชี", description: "งานการเงินและบัญชี" },
-  { code: "SALE_ADMIN", name: "แอดมินฝ่ายขาย", description: "งานขายและลูกค้า" },
-  { code: "MARKETING", name: "การตลาด", description: "งานการตลาด" },
-  { code: "CEO", name: "ซีอีโอ", description: "ผู้บริหารสูงสุด อนุมัติการจัดซื้อ" },
-  { code: "TECHNICIAN", name: "ช่างเทคนิค", description: "งานซ่อมบำรุง" },
-  { code: "CARETAKER", name: "ผู้ดูแลบ้าน", description: "ดูแลทรัพย์สินที่รับผิดชอบ" },
-  { code: "STAFF", name: "พนักงานทั่วไป", description: "สิทธิ์พื้นฐาน" },
-];
-
-/**
- * โมดูลที่เปิดให้บริษัทแรกทันที — เฉพาะตัวที่มีโค้ดจริงในระบบ
- * financial / sale_admin / marketing อยู่ในแคตตาล็อกไว้รอ แต่ยังไม่มีหน้าจอ
- * เปิดไปก็ได้แค่เมนูที่กดแล้วไม่มีอะไร
- */
-const ENABLED_MODULES = ["report_task", "hr", "maintenance"];
-
 const MODULES: { code: string; name: string; color: string; sortOrder: number }[] = [
   { code: "report_task", name: "รายงานและงาน", color: "#64748B", sortOrder: 1 },
   { code: "hr", name: "ระบบบุคคล", color: "#3B82F6", sortOrder: 2 },
@@ -52,84 +40,6 @@ const MODULES: { code: string; name: string; color: string; sortOrder: number }[
   { code: "sale_admin", name: "งานขาย", color: "#EC4899", sortOrder: 5 },
   { code: "marketing", name: "การตลาด", color: "#F97316", sortOrder: 6 },
 ];
-
-/** สิทธิ์ระดับ core (หลังบ้าน /admin) — ไม่ผูกกับโมดูลธุรกิจ moduleId = null */
-const CORE_PERMS = [
-  "core.admin",
-  "core.user.view",
-  "core.user.manage",
-  "core.role.view",
-  "core.role.manage",
-  "core.module.manage",
-  "core.org.manage",
-  "core.audit.view",
-  // คะแนนผลงานรวมข้ามโมดูล — อยู่ระดับ core เพราะกินข้อมูลจากทุกโมดูล
-  "core.performance.view",
-  "core.performance.setting.manage",
-];
-
-const HR_PERMS = [
-  "hr.access",
-  "hr.employee.view",
-  "hr.employee.manage",
-  "hr.salary.view",
-  "hr.salary.manage",
-  "hr.payroll.view",
-  "hr.payroll.manage",
-  "hr.payroll.approve",
-  "hr.setting.manage",
-];
-
-const MAINT_PERMS = [
-  "access",
-  "workorder.view", "workorder.manage", "workorder.complete",
-  "property.view", "property.manage",
-  "asset.view", "asset.manage",
-  "pm.view", "pm.manage",
-  "expense.view", "expense.manage",
-  "contractor.view", "contractor.manage",
-  "po.view", "po.create", "po.approve",
-  "admin",
-].map((s) => `maintenance.${s}`);
-
-/** สิทธิ์ที่ role ของบริษัทได้รับตอน seed — บริษัทปรับเองได้ทีหลังที่ /admin/roles */
-const ROLE_GRANTS: Record<string, string[]> = {
-  ADMIN: [...CORE_PERMS, ...HR_PERMS, ...MAINT_PERMS],
-  CEO: [
-    "core.admin", "core.user.view", "core.role.view", "core.audit.view",
-    // ผู้บริหารเป็นคนกำหนดว่าบริษัทนี้ถือว่าอะไรคือ "ทำงานได้ดี"
-    "core.performance.view", "core.performance.setting.manage",
-    "hr.access", "hr.employee.view", "hr.salary.view", "hr.payroll.view", "hr.payroll.approve",
-    ...MAINT_PERMS.filter((p) => p !== "maintenance.admin"),
-  ],
-  MANAGER: [
-    "core.admin", "core.user.view", "core.user.manage", "core.role.view",
-    // หัวหน้างานดูคะแนนลูกทีมได้ แต่แก้เกณฑ์ไม่ได้ — ไม่งั้นแก้เกณฑ์ให้ทีมตัวเองดูดีได้
-    "core.performance.view",
-    "hr.access", "hr.employee.view", "hr.employee.manage", "hr.payroll.view",
-    "maintenance.access",
-    "maintenance.workorder.view", "maintenance.workorder.manage", "maintenance.workorder.complete",
-    "maintenance.property.view", "maintenance.property.manage",
-    "maintenance.asset.view", "maintenance.asset.manage",
-    "maintenance.pm.view", "maintenance.pm.manage",
-    "maintenance.expense.view", "maintenance.expense.manage",
-    "maintenance.contractor.view", "maintenance.contractor.manage",
-    "maintenance.po.view", "maintenance.po.create",
-  ],
-  // เจ้าหน้าที่บุคคล = ผู้ "จัดทำ" งวดเงินเดือน — ไม่ได้สิทธิ์อนุมัติ
-  // แยกหน้าที่ตามที่ workforce บังคับ: คนเตรียมงวดอนุมัติงวดตัวเองไม่ได้
-  // (ถ้าให้ทั้งสองอย่าง mapSmartbossRoles จะมองว่าเป็นผู้อนุมัติ แล้วจะไม่มีใครจัดทำงวดได้เลย)
-  HR_OFFICER: HR_PERMS.filter((p) => p !== "hr.payroll.approve"),
-  CARETAKER: [
-    "maintenance.access", "maintenance.workorder.view", "maintenance.workorder.manage",
-    "maintenance.property.view", "maintenance.asset.view", "maintenance.asset.manage",
-    "maintenance.pm.view", "maintenance.pm.manage",
-    "maintenance.contractor.view", "maintenance.po.view", "maintenance.expense.view",
-  ],
-  TECHNICIAN: [
-    "maintenance.access", "maintenance.workorder.view", "maintenance.workorder.complete",
-  ],
-};
 
 async function main() {
   console.log("🌱 Seeding Smartboss core data...");
@@ -182,7 +92,9 @@ async function main() {
   console.log(`✔ Org roles: ${ORG_ROLES.length}`);
 
   // ── 5) แคตตาล็อกสิทธิ์ ────────────────────────────────────
-  for (const code of CORE_PERMS) {
+  // PLATFORM_PERMS ลงแคตตาล็อกด้วย แต่ **ไม่มอบให้บทบาทไหน** — SUPER_ADMIN
+  // ผ่านเองอยู่แล้ว การมีในแคตตาล็อกทำให้มอบต่อได้ทีหลังถ้าต้องการ
+  for (const code of [...CORE_PERMS, ...PLATFORM_PERMS]) {
     await prisma.permission.upsert({
       where: { code },
       update: { moduleId: null },
