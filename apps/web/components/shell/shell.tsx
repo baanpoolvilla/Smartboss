@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Bell, LayoutGrid, MoreHorizontal, X } from "lucide-react";
 import { cn } from "@smartboss/ui/cn";
 import { Avatar } from "@smartboss/ui/components/avatar";
@@ -86,6 +86,8 @@ function LauncherFrame({
   unread: number;
   children: React.ReactNode;
 }) {
+  const router = useRouter();
+
   return (
     <div className="flex min-h-dvh flex-col bg-(--bg-soft)">
       <header className="flex h-[60px] shrink-0 items-center justify-between border-b border-(--line) bg-(--bg) px-4 sm:px-6">
@@ -119,7 +121,15 @@ function LauncherFrame({
                 <span className="block text-(--ink-soft)">{user.email}</span>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>โปรไฟล์</DropdownMenuItem>
+              {/*
+                ใช้ onSelect + router.push แทนการเอา <Link> มาซ้อนใน
+                DropdownMenuItem เพราะตัวนั้น render เป็น <button> — <a> ซ้อนใน
+                <button> เป็น HTML ที่ผิด เบราว์เซอร์จะจัดโครงสร้างใหม่เอง
+                แล้ว React hydrate ไม่ตรงกับที่ server ส่งมา
+              */}
+              <DropdownMenuItem onSelect={() => router.push("/account")}>
+                บัญชีของฉัน
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <div className="px-1 py-0.5">
                 <LogoutButton variant="menu" />

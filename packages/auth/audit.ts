@@ -16,6 +16,7 @@ export type AuditAction =
   | "USER_DISABLED"
   | "USER_ROLES_CHANGED"
   | "USER_PASSWORD_RESET"
+  | "USER_PASSWORD_CHANGED"
   | "USER_ORG_MOVED"
   | "ROLE_CREATED"
   | "ROLE_UPDATED"
@@ -50,7 +51,8 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   USER_DISABLED: "ปิดใช้งานผู้ใช้",
   USER_ROLES_CHANGED: "เปลี่ยนบทบาทผู้ใช้",
   USER_ORG_MOVED: "ย้ายผู้ใช้ไปบริษัทอื่น",
-  USER_PASSWORD_RESET: "รีเซ็ตรหัสผ่าน",
+  USER_PASSWORD_RESET: "รีเซ็ตรหัสผ่าน (แอดมินทำให้)",
+  USER_PASSWORD_CHANGED: "เปลี่ยนรหัสผ่านด้วยตัวเอง",
   ROLE_CREATED: "สร้างบทบาท",
   ROLE_UPDATED: "แก้ไขบทบาท",
   ROLE_DELETED: "ลบบทบาท",
