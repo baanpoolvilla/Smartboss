@@ -24,7 +24,15 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # ⚠ ต้องเป็น /var/lib/postgresql **ไม่ใช่** /var/lib/postgresql/data
+      #
+      # Postgres 18 ขึ้นไปเก็บข้อมูลใน /var/lib/postgresql/<major>/docker เพื่อให้
+      # อัปเกรดข้ามเวอร์ชันด้วย pg_upgrade --link ได้โดยไม่ติดขอบเขต mount
+      # ถ้ายัง mount แบบเดิมที่ .../data ตัว image จะ **ปฏิเสธที่จะสตาร์ต**
+      # (ดี — ไม่งั้นจะขึ้นเฉย ๆ แล้วเขียนข้อมูลลงที่ที่ไม่ได้ถูกเก็บ
+      #  พอรีสตาร์ตคอนเทนเนอร์ข้อมูลหายเกลี้ยงโดยไม่มีอะไรเตือน)
+      # อ้างอิง: github.com/docker-library/postgres/pull/1259
+      - pgdata:/var/lib/postgresql
       # ที่ทิ้งไฟล์ dump ให้ pg_dump เขียนจากในคอนเทนเนอร์ได้ตรง ๆ
       - /var/backups/smartboss:/backups
     healthcheck:
