@@ -1,0 +1,13 @@
+# ให้ user smartboss รีสตาร์ตบริการของตัวเองได้โดยไม่ต้องใส่รหัสผ่าน
+#
+#   sudo install -m 440 -o root -g root \
+#     /opt/smartboss/deploy/sudoers.d-smartboss /etc/sudoers.d/smartboss
+#   sudo visudo -c
+#
+# ⚠ บรรทัดล่างต้องตรงกับคำสั่งใน deploy/release.sh **เป๊ะ รวมลำดับชื่อบริการ**
+#   sudoers เทียบคำสั่งแบบตรงตัว สลับที่แล้วจะไม่ match แล้วไปโผล่เป็นช่องถาม
+#   รหัสผ่านที่ค้างรอ input ซึ่งไม่มีวันมา (smartboss เป็น system user ไม่มีรหัสผ่าน)
+#
+# ให้เฉพาะ restart ของ 4 บริการนี้เท่านั้น ไม่ใช่ systemctl ทั้งตัว —
+# ถ้าให้กว้างกว่านี้ บัญชีที่รันแอปจะสั่งหยุด/แก้บริการอะไรก็ได้ในเครื่อง
+smartboss ALL=(root) NOPASSWD: /usr/bin/systemctl restart smartboss-web smartboss-api smartboss-worker smartboss-gateway

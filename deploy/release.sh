@@ -44,10 +44,28 @@ step "build"
 pnpm turbo run build
 
 step "รีสตาร์ตบริการ"
+# -n = ไม่ยอมถามรหัสผ่าน ล้มทันทีแทน
+#
 # ⚠ ลำดับชื่อบริการต้องตรงกับบรรทัดใน /etc/sudoers.d/smartboss เป๊ะ
-# sudoers เทียบคำสั่งแบบตรงตัวรวมลำดับอาร์กิวเมนต์ สลับที่แล้วจะโดนถามรหัสผ่าน
-# แล้วค้างรอ input ที่ไม่มีวันมา (ดู docs/deploy.md ข้อ 8)
-sudo systemctl restart smartboss-web smartboss-api smartboss-worker smartboss-gateway
+# sudoers เทียบคำสั่งแบบตรงตัวรวมลำดับอาร์กิวเมนต์ — ถ้าไม่ match sudo จะถาม
+# รหัสผ่าน แต่ smartboss เป็น system user ที่ไม่มีรหัสผ่าน สคริปต์เลยค้างรอ
+# input ที่ไม่มีวันมา จนกว่าจะกด Ctrl-C (เจอมาแล้วตอนติดตั้งจริง)
+if ! sudo -n systemctl restart smartboss-web smartboss-api smartboss-worker smartboss-gateway; then
+  cat >&2 <<'HINT'
+
+✗ รีสตาร์ตบริการไม่ได้ — ยังไม่ได้ติดตั้งกฎ sudoers
+
+  ติดตั้งด้วยบัญชีที่มีสิทธิ์ sudo (ไม่ใช่ smartboss):
+
+    sudo install -m 440 -o root -g root \
+         /opt/smartboss/deploy/sudoers.d-smartboss /etc/sudoers.d/smartboss
+    sudo visudo -c
+
+  แล้วรัน release.sh ใหม่ — build ที่ทำไปแล้วถูกแคชไว้ ไม่ต้องรอนาน
+
+HINT
+  exit 1
+fi
 
 step "รอให้พร้อมรับงาน"
 for i in $(seq 1 60); do
