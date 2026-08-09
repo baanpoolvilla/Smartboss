@@ -359,14 +359,18 @@ sudo systemctl enable --now smartboss-api smartboss-worker smartboss-gateway sma
 sudo systemctl status smartboss-* --no-pager
 ```
 
-ให้ smartboss รีสตาร์ตบริการเองได้ (สคริปต์ `release.sh` ใช้)
+ให้ smartboss รีสตาร์ตบริการเองได้ (สคริปต์ `release.sh` ใช้) — **ข้ามไม่ได้**
 
 ```bash
-echo 'smartboss ALL=(root) NOPASSWD: /usr/bin/systemctl restart smartboss-web smartboss-api smartboss-worker smartboss-gateway' \
-  | sudo tee /etc/sudoers.d/smartboss
-sudo chmod 440 /etc/sudoers.d/smartboss
+sudo install -m 440 -o root -g root   /opt/smartboss/deploy/sudoers.d-smartboss /etc/sudoers.d/smartboss
 sudo visudo -c
 ```
+
+ใช้ไฟล์ในโปรเจกต์แทนการพิมพ์เอง เพราะบรรทัดในนั้นต้องตรงกับคำสั่งใน `release.sh`
+**เป๊ะ รวมลำดับชื่อบริการ** — sudoers เทียบแบบตรงตัว
+
+ข้ามขั้นนี้แล้ว `release.sh` จะไปค้างที่ช่องถามรหัสผ่านที่ตอบไม่ได้
+(`smartboss` เป็น system user ไม่มีรหัสผ่าน) — ตอนนี้สคริปต์ล้มทันทีพร้อมบอกวิธีแก้แล้ว
 
 เปิด HTTPS
 
