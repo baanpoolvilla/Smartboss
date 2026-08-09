@@ -33,7 +33,17 @@ step "1/6 build เครื่องมือที่ต้องใช้"
 # รอบถัดมาจะข้าม build ทั้งหมดแล้วไปตายที่ wf:sync ด้วย MODULE_NOT_FOUND แทน
 # turbo มีแคชของมันเองที่เช็คจากเนื้อไฟล์จริง แม่นกว่าการเดาจากไฟล์ใดไฟล์หนึ่ง
 # ไม่มีอะไรเปลี่ยน = FULL TURBO จบในไม่กี่วินาที
-pnpm turbo run build --filter=@workforce/db...
+if ! pnpm turbo run build --filter=@workforce/db...; then
+  # build ที่ล้มกลางทางทิ้ง dist/ ไว้ครึ่ง ๆ พร้อม .tsbuildinfo ที่ไม่ตรงกัน
+  # แล้ว tsc จะติดสถานะเสียถาวร ขึ้น TS5055 "would overwrite input file" ทุกรอบ
+  # แม้แก้ต้นเหตุแล้วก็ตาม — พิสูจน์แล้วว่าเอาไฟล์ที่ขาดกลับมาอย่างเดียวไม่พอ
+  #
+  # ไม่ล้างทุกรอบเพราะปกติ turbo แคชให้อยู่แล้ว ล้างเฉพาะตอนล้มจริง
+  echo ""
+  echo "build ล้ม — ล้าง dist ที่ค้างแล้วลองใหม่อีกครั้ง"
+  rm -rf packages/workforce/*/dist
+  pnpm turbo run build --filter=@workforce/db... --force
+fi
 
 step "2/6 สร้าง role ของแอป (ยังไม่ต้องมี schema)"
 sql packages/workforce/db/sql/00-create-role.sql
