@@ -72,6 +72,11 @@ umask 077
 cat > "$ENV_FILE" <<EOF
 # สร้างโดย deploy/init-env.sh เมื่อ $(date '+%F %T')
 # ⚠ ไฟล์นี้คือความลับทั้งหมดของระบบ — สำรองไว้นอกเครื่องด้วย
+#
+# ค่าที่อาจมีช่องว่าง (ชื่อบริษัท ชื่อคน รหัสผ่าน) ใส่เครื่องหมายคำพูดไว้เสมอ
+# เพราะไฟล์นี้ถูกอ่านสองแบบ: systemd อ่านเองได้ทั้งมีและไม่มีคำพูด แต่สคริปต์
+# ใน deploy/ ใช้คำสั่ง . (source) ซึ่งถ้าไม่มีคำพูด shell จะตีความช่องว่างเป็น
+# ตัวคั่นคำสั่ง แล้วขึ้น "command not found" ที่อ่านแล้วงงว่าเกี่ยวอะไรด้วย
 
 DATABASE_URL=postgresql://smartboss:$PG_PASS@127.0.0.1:5432/smartboss?sslmode=disable
 DATABASE_URL_UNPOOLED=postgresql://smartboss:$PG_PASS@127.0.0.1:5432/smartboss?sslmode=disable
@@ -124,11 +129,11 @@ GATEWAY_RATE_LIMIT=120
 DEFAULT_TIME_ZONE=Asia/Bangkok
 DEFAULT_CURRENCY=THB
 
-SEED_ORG_NAME=$ORG_NAME
+SEED_ORG_NAME="$ORG_NAME"
 SEED_ORG_SLUG=$ORG_SLUG
 SEED_ADMIN_EMAIL=$EMAIL
-SEED_ADMIN_NAME=ผู้ดูแลระบบสูงสุด
-SEED_ADMIN_PASSWORD=$ADMIN_PASS
+SEED_ADMIN_NAME="ผู้ดูแลระบบสูงสุด"
+SEED_ADMIN_PASSWORD="$ADMIN_PASS"
 EOF
 
 cat > "$COMPOSE_ENV" <<EOF
