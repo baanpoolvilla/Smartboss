@@ -19,7 +19,9 @@ set -a; . "$ENV_FILE"; set +a
 export DATABASE_URL="${DATABASE_URL_UNPOOLED:-$DATABASE_URL}"
 
 step() { printf '\n\033[1;36m── %s\033[0m\n' "$*"; }
-sql()  { psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$1"; }
+# -P pager=off: ไม่งั้น psql เปิดผลลัพธ์ใน less แล้วสคริปต์ค้างรอคนกด q
+# ทีละตาราง ซึ่งทำให้ข้อความสรุปท้ายสุดถูกกลืนไปด้วย
+sql()  { psql "$DATABASE_URL" -P pager=off -v ON_ERROR_STOP=1 -f "$1"; }
 
 step "1/6 build เครื่องมือที่ต้องใช้"
 # wf:migrate กับ wf:sync เป็น TypeScript ที่ import @workforce/config ซึ่ง package.json
@@ -67,7 +69,7 @@ pnpm db:seed     # role / permission / ผู้ใช้แอดมิน
 pnpm wf:sync     # ปั้น tenant + principal ของ workforce จาก core.organizations/users
 
 step "6/6 ตรวจผล"
-psql "$DATABASE_URL" -f packages/workforce/db/sql/03-verify.sql
+psql "$DATABASE_URL" -P pager=off -f packages/workforce/db/sql/03-verify.sql
 
 cat <<'EOF'
 
