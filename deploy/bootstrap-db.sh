@@ -21,16 +21,29 @@ export DATABASE_URL="${DATABASE_URL_UNPOOLED:-$DATABASE_URL}"
 step() { printf '\n\033[1;36m── %s\033[0m\n' "$*"; }
 sql()  { psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$1"; }
 
-step "1/5 สร้าง role ของแอป (ยังไม่ต้องมี schema)"
+step "1/6 build เครื่องมือที่ต้องใช้"
+# wf:migrate กับ wf:sync เป็น TypeScript ที่ import @workforce/config ซึ่ง package.json
+# ชี้ main ไปที่ dist/index.js — แต่ dist/ ถูก gitignore ไว้ ⇒ เครื่องที่ clone ใหม่
+# จะยังไม่มี แล้วตายด้วย MODULE_NOT_FOUND ที่อ่านแล้วไม่รู้ว่าเกี่ยวอะไรกับฐานข้อมูล
+#
+# build เฉพาะสายที่ต้องใช้ก็พอ ไม่ต้องรอทั้งโปรเจกต์ (turbo แคชให้อยู่แล้ว
+# ตอน build เต็มในขั้นถัดไปจึงไม่เสียเวลาซ้ำ)
+if [ ! -f packages/workforce/config/dist/index.js ]; then
+  pnpm turbo run build --filter=@workforce/db...
+else
+  echo "มี dist อยู่แล้ว ข้าม"
+fi
+
+step "2/6 สร้าง role ของแอป (ยังไม่ต้องมี schema)"
 sql packages/workforce/db/sql/00-create-role.sql
 
-step "2/5 สร้างตาราง"
+step "3/6 สร้างตาราง"
 # Prisma → schema core + maintenance + report_task
 pnpm db:deploy
 # Drizzle → schema workforce
 pnpm wf:migrate
 
-step "3/5 สิทธิ์และฟังก์ชันค้นหา (ต้องหลัง wf:migrate เพราะอ้าง schema workforce)"
+step "4/6 สิทธิ์และฟังก์ชันค้นหา (ต้องหลัง wf:migrate เพราะอ้าง schema workforce)"
 sql packages/workforce/db/sql/01-grant-app-role.sql
 # ข้ามอันนี้ = เครื่องสแกน activate ไม่ได้ ขึ้น 401 ทั้งที่ token ถูก
 sql packages/workforce/db/sql/02-lookup-functions-owner.sql
@@ -38,11 +51,11 @@ sql packages/workforce/db/sql/02-lookup-functions-owner.sql
 # ไฟล์นี้ตรวจเจ้าของฟังก์ชันในตัว ถ้าผิดจะล้มทันทีแทนที่จะเงียบ
 sql packages/workforce/db/sql/04-performance-lookup.sql
 
-step "4/5 ข้อมูลตั้งต้น"
+step "5/6 ข้อมูลตั้งต้น"
 pnpm db:seed     # role / permission / ผู้ใช้แอดมิน
 pnpm wf:sync     # ปั้น tenant + principal ของ workforce จาก core.organizations/users
 
-step "5/5 ตรวจผล"
+step "6/6 ตรวจผล"
 psql "$DATABASE_URL" -f packages/workforce/db/sql/03-verify.sql
 
 cat <<'EOF'

@@ -317,13 +317,14 @@ sudo -u smartboss ENV_FILE=/etc/smartboss/smartboss.env bash deploy/bootstrap-db
 
 | ขั้น | ทำอะไร | ข้ามแล้วเกิดอะไร |
 |---|---|---|
-| 1 | `00-create-role.sql` | RLS ไม่มีผล = บริษัทเห็นข้อมูลกันได้ |
-| 2 | `db:deploy` + `wf:migrate` | ไม่มีตาราง |
-| 3 | `01-grant-app-role.sql` | แอปอ่านตาราง workforce ไม่ได้ |
-| 3 | `02-lookup-functions-owner.sql` | **เครื่องสแกน activate ไม่ได้** ขึ้น 401 ทั้งที่ token ถูก |
-| 3 | `04-performance-lookup.sql` | **หน้าสรุปผลงานไม่แสดงมาสาย/ขาดงานเลย ตลอดกาล โดยไม่มี error** |
-| 4 | `db:seed` + `wf:sync` | ไม่มีผู้ใช้ให้ login |
-| 5 | `03-verify.sql` | ไม่รู้ว่าพัง |
+| 1 | build `@workforce/db` และสายที่มันพึ่ง | `wf:migrate` ตายด้วย `MODULE_NOT_FOUND` — `@workforce/config` ชี้ main ไป `dist/` ที่ถูก gitignore ไว้ เครื่องที่ clone ใหม่จึงยังไม่มี |
+| 2 | `00-create-role.sql` | RLS ไม่มีผล = บริษัทเห็นข้อมูลกันได้ |
+| 3 | `db:deploy` + `wf:migrate` | ไม่มีตาราง |
+| 4 | `01-grant-app-role.sql` | แอปอ่านตาราง workforce ไม่ได้ |
+| 4 | `02-lookup-functions-owner.sql` | **เครื่องสแกน activate ไม่ได้** ขึ้น 401 ทั้งที่ token ถูก |
+| 4 | `04-performance-lookup.sql` | **หน้าสรุปผลงานไม่แสดงมาสาย/ขาดงานเลย ตลอดกาล โดยไม่มี error** |
+| 5 | `db:seed` + `wf:sync` | ไม่มีผู้ใช้ให้ login |
+| 6 | `03-verify.sql` | ไม่รู้ว่าพัง |
 
 `01` และ `02` ต้องรัน **หลัง** `wf:migrate` เสมอ เพราะอ้างถึง schema `workforce`
 ที่ migration เป็นคนสร้าง
