@@ -26,13 +26,14 @@ step "1/6 build เครื่องมือที่ต้องใช้"
 # ชี้ main ไปที่ dist/index.js — แต่ dist/ ถูก gitignore ไว้ ⇒ เครื่องที่ clone ใหม่
 # จะยังไม่มี แล้วตายด้วย MODULE_NOT_FOUND ที่อ่านแล้วไม่รู้ว่าเกี่ยวอะไรกับฐานข้อมูล
 #
-# build เฉพาะสายที่ต้องใช้ก็พอ ไม่ต้องรอทั้งโปรเจกต์ (turbo แคชให้อยู่แล้ว
-# ตอน build เต็มในขั้นถัดไปจึงไม่เสียเวลาซ้ำ)
-if [ ! -f packages/workforce/config/dist/index.js ]; then
-  pnpm turbo run build --filter=@workforce/db...
-else
-  echo "มี dist อยู่แล้ว ข้าม"
-fi
+# build เฉพาะสายที่ต้องใช้ก็พอ ไม่ต้องรอทั้งโปรเจกต์
+#
+# ⚠ เรียกทุกครั้ง ห้ามเขียนเงื่อนไข "ถ้ามี dist แล้วข้าม" — เคยเขียนแบบนั้นโดยเช็ค
+# แค่ config/dist ผลคือรอบที่ build ล้มกลางทาง (domain พัง แต่ config ผ่านไปแล้ว)
+# รอบถัดมาจะข้าม build ทั้งหมดแล้วไปตายที่ wf:sync ด้วย MODULE_NOT_FOUND แทน
+# turbo มีแคชของมันเองที่เช็คจากเนื้อไฟล์จริง แม่นกว่าการเดาจากไฟล์ใดไฟล์หนึ่ง
+# ไม่มีอะไรเปลี่ยน = FULL TURBO จบในไม่กี่วินาที
+pnpm turbo run build --filter=@workforce/db...
 
 step "2/6 สร้าง role ของแอป (ยังไม่ต้องมี schema)"
 sql packages/workforce/db/sql/00-create-role.sql
