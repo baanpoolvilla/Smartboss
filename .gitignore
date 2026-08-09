@@ -47,5 +47,9 @@ coverage/
 #   attendance/            → github.com/baanpoolvilla/HR-Tool
 #   แจ้งซ่อมบำรุง_module/    → github.com/katawutntp/changyai
 # ทั้งสองไม่เกี่ยวกับการ build หรือ deploy ของ Smartboss
-attendance/
-แจ้งซ่อมบำรุง_module/
+# / นำหน้า = ผูกกับรากโปรเจกต์เท่านั้น **ห้ามลืม**
+# ถ้าเขียน attendance/ เฉย ๆ จะไปตรงกับโฟลเดอร์ชื่อ attendance ทุกที่ในโปรเจกต์
+# รวมถึง packages/workforce/domain/src/attendance/ ที่เป็นโค้ดจริง — ผลคือไฟล์
+# หายไปจาก repo เงียบ ๆ แล้วเครื่องที่ clone ใหม่ build ไม่ผ่าน (เจอมาแล้ว)
+/attendance/
+/แจ้งซ่อมบำรุง_module/
