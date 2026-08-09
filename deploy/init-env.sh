@@ -62,7 +62,11 @@ APP_DOMAIN="app.$DOMAIN"
 DEVICE_DOMAIN="device.$DOMAIN"
 FILES_DOMAIN="files.$DOMAIN"
 
-install -d -m 700 /etc/smartboss
+# 750 ไม่ใช่ 700 — user smartboss ต้อง "เดินผ่าน" โฟลเดอร์นี้ได้ถึงจะอ่านไฟล์ข้างในได้
+# ถ้าเป็น 700 เจ้าของ root ไฟล์ข้างในจะเปิดให้กลุ่มอ่านแค่ไหนก็ไม่มีประโยชน์
+# (systemd ไม่เจอปัญหานี้เพราะอ่าน EnvironmentFile ตอนยังเป็น root — แต่สคริปต์
+#  อย่าง bootstrap-db.sh / backup.sh ที่รันในนาม smartboss จะอ่านไม่ได้)
+install -d -o root -g smartboss -m 750 /etc/smartboss
 
 umask 077
 cat > "$ENV_FILE" <<EOF

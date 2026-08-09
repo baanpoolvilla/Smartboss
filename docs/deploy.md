@@ -245,7 +245,8 @@ sudo bash deploy/init-env.sh   --domain <โดเมนคุณ>   --email  <�
 
 | ไฟล์ | ใครอ่าน | สิทธิ์ |
 |---|---|---|
-| `/etc/smartboss/smartboss.env` | systemd (ทั้ง 4 บริการ) | `root:smartboss 640` |
+| `/etc/smartboss/` | โฟลเดอร์ — ต้องให้กลุ่มเดินผ่านได้ | `root:smartboss 750` |
+| `/etc/smartboss/smartboss.env` | systemd (ทั้ง 4 บริการ) + สคริปต์ใน `deploy/` | `root:smartboss 640` |
 | `/opt/smartboss/deploy/.env` | docker compose | `smartboss 600` |
 
 **ทำไมไม่ให้กรอกมือ**: ค่ามี 30 กว่าตัว และมีคู่ที่ต้องตรงกันเป๊ะ —
