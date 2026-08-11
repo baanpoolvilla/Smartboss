@@ -7,7 +7,9 @@ import { AppScaffold } from "@/components/module/app-scaffold";
 
 import { REPORT_TASK_BASE } from "../../constants";
 import { reportTaskManifest } from "../../manifest";
+import { useEmployeeStore } from "../../store/employee-store";
 import { useIdentityStore } from "../../store/identity-store";
+import type { User } from "../../types";
 import { StoreHydrator } from "./store-hydrator";
 import { TaskSync } from "./task-sync";
 import { TourOverlay } from "./tour-overlay";
@@ -23,11 +25,11 @@ import { TourOverlay } from "./tour-overlay";
  * (ของเดิมใน workspace ก็ใช้ max-w-[1600px])
  */
 export function ReportTaskScaffold({
-  currentUserId,
+  currentUser,
   children,
 }: {
-  /** core.users.id ของคนที่ล็อกอิน — ส่งมาจาก layout ฝั่งเซิร์ฟเวอร์ */
-  currentUserId: string;
+  /** ผู้ใช้ที่ล็อกอิน — ประกอบจาก core.users ที่ layout ฝั่งเซิร์ฟเวอร์ */
+  currentUser: User;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -37,9 +39,26 @@ export function ReportTaskScaffold({
    * ที่นี่ต้องล็อกให้เป็นคนที่ล็อกอินจริง ไม่งั้นงานที่สร้างและคะแนนที่หัก
    * จะไปเข้าคนอื่น และหน้าสรุปของผู้บริหารจะอ่านไม่ได้เรื่อง
    */
+  /*
+   * ⚠ ต้องใส่ตัวเองเข้าไปใน "สมุดรายชื่อ" ก่อนสลับตัวตน ห้ามสลับก่อน
+   *
+   * รายชื่อพนักงานเริ่มต้นเป็นข้อมูลสมมติของต้นทาง (usr-01..usr-15) แล้ว
+   * ServerStoreSync ค่อยดึงรายชื่อจริงจาก core.users มาทับทีหลัง (async)
+   * ถ้าสลับตัวตนเป็น UUID จริงทันที จะมีช่วงที่ getUser(uuid) คืน undefined
+   * แล้วคอมโพเนนต์ที่เขียน getUser(...)! ไว้จะพังทั้งหน้า
+   * — dashboard-hero, new-task-dialog, report-composer เขียนแบบนั้นทั้งสามตัว
+   *
+   * เจอบนเซิร์ฟเวอร์จริง: /report-task ขึ้น "This page couldn't load"
+   * ทั้งที่ SSR ตอบ 200 เพราะตอน SSR ตัวตนยังเป็นค่า default ที่หาเจอ
+   * พังตอน useEffect ทำงานหลัง hydrate เท่านั้น curl จึงจับไม่ได้
+   */
   useEffect(() => {
-    useIdentityStore.getState().setViewingAs(currentUserId);
-  }, [currentUserId]);
+    const store = useEmployeeStore.getState();
+    if (!store.employees.some((e) => e.id === currentUser.id)) {
+      store.setEmployees([...store.employees, currentUser]);
+    }
+    useIdentityStore.getState().setViewingAs(currentUser.id);
+  }, [currentUser]);
 
   // เลือกเมนูที่ path ยาวที่สุดที่ยังเป็นคำนำหน้าของ pathname
   // ⇒ หน้าลูก (ถ้ามีในอนาคต) ยังได้ชื่อของหมวดตัวเอง ไม่ตกไปใช้ชื่อแดชบอร์ด
