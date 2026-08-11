@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import { Button } from "@/modules/report_task/components/ui/button";
-import { getUser, getDepartment } from "@/modules/report_task/data/mock";
+import { getUser, getDepartment } from "@/modules/report_task/lib/directory";
 import { formatDate, formatDateTime } from "@/modules/report_task/lib/format";
 import { eventTypeLabels } from "@/modules/report_task/lib/calendar-colors";
 import { Calendar, MapPin, ArrowUpRight, Users as UsersIcon } from "lucide-react";

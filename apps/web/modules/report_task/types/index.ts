@@ -112,6 +112,14 @@ export interface Task {
   /** Per-assignee due-date override for a group task — falls back to
    * `dueDate` for anyone not listed here. Unused on an individual task. */
   assigneeDueDates?: Record<string, string>;
+  /** History of `assigneeDueDates` edits, keyed by assignee id — only the
+   * first-ever date and the latest revision are kept (not every round in
+   * between, unlike the whole-task `revisions` list), since this is a quick
+   * per-person adjustment rather than a formal re-plan. */
+  assigneeDueDateRevisions?: Record<
+    string,
+    { originalDate: string; latestDate: string; revisedBy: string; revisedAt: string }
+  >;
   /** Set the moment status transitions to "done"; cleared if reopened. Lets the missed-deadline sweep judge a *finished* task by when it actually closed, not by "today" (which would eventually brand every old task late). */
   completedAt?: string;
   /** True once this task has gone overdue at least once — sticks even if later docked, resolved, or pushed out, so a flexible task's history isn't lost. */
@@ -128,8 +136,6 @@ export interface Task {
   comments: Comment[];
   revisions: RevisionEntry[];
   reactions: TaskReaction[];
-  /** Parent task id when this is a subtask; undefined/null for top-level tasks. */
-  parentId?: string | null;
   /** Set automatically the moment a task goes overdue (see task-penalty-sweep.ts) — every task docks the same way, no manual/case-by-case path. Individual tasks only — a group task docks per assignee via `penalties` instead. */
   penalty?: TaskPenalty | null;
   /** Per-assignee dock map for a group task (userId -> their own penalty) —

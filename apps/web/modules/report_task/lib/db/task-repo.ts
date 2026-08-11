@@ -33,7 +33,6 @@ function columnsOf(task: Task) {
     taskMode: task.taskMode,
     assignedById: task.assignedById ?? "",
     assigneeIds: task.assigneeIds ?? [],
-    parentId: task.parentId ?? null,
     startDate: task.startDate ?? "",
     dueDate: task.dueDate ?? "",
     completedAt: task.completedAt ?? null,

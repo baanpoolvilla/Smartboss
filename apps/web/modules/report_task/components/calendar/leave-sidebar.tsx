@@ -7,7 +7,7 @@ import { Badge } from "@/modules/report_task/components/ui/badge";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/modules/report_task/components/ui/dropdown-menu";
-import { getUser, getDepartment, departmentIdsOf } from "@/modules/report_task/data/mock";
+import { getUser, getDepartment, departmentIdsOf } from "@/modules/report_task/lib/directory";
 import { useLeaveStore } from "@/modules/report_task/store/leave-store";
 import { useLeaveTypeStore } from "@/modules/report_task/store/leave-type-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";

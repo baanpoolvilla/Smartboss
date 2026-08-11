@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/modules/report_task/components/ui/card";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import { Badge } from "@/modules/report_task/components/ui/badge";
-import { getUser, getDepartment } from "@/modules/report_task/data/mock";
+import { getUser, getDepartment } from "@/modules/report_task/lib/directory";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useMeetingStore } from "@/modules/report_task/store/meeting-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
@@ -13,7 +13,7 @@ import { priorityMeta } from "@/modules/report_task/lib/task-meta";
 import { formatDate, formatDateTime } from "@/modules/report_task/lib/format";
 import { rangeLabel, inRange, inRangeLocal, type ViewRange } from "@/modules/report_task/lib/date-filter";
 import { dueUrgency } from "@/modules/report_task/lib/task-flags";
-import { canManage } from "@/modules/report_task/data/mock";
+import { canManage } from "@/modules/report_task/lib/directory";
 import { canSeeTask, canSeeTaskOnCalendar } from "@/modules/report_task/lib/permissions";
 import { cn } from "@/modules/report_task/lib/utils";
 import { User } from "lucide-react";

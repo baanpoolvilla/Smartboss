@@ -43,7 +43,7 @@ import {
   reporterStatusGroupMeta,
 } from "@/modules/report_task/lib/issue-meta";
 import { POST_TRIAGE_STATUSES, type IssueAttachment, type IssueAudience, type IssueMessage, type IssuePriority, type IssueStatus, type IssueTicket } from "@/modules/report_task/types/issue";
-import { getUser, users, isOwner } from "@/modules/report_task/data/mock";
+import { getUser, users, isOwner } from "@/modules/report_task/lib/directory";
 import { relativeTime, formatDate } from "@/modules/report_task/lib/format";
 import { cn } from "@/modules/report_task/lib/utils";
 

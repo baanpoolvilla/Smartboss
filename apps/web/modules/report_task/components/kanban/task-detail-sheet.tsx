@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -41,7 +41,7 @@ import { todayIso } from "@/modules/report_task/lib/now";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { getUser, getDepartment, users, canManage, isOwner, departmentIdsOf } from "@/modules/report_task/data/mock";
+import { getUser, getDepartment, users, canManage, isOwner, departmentIdsOf } from "@/modules/report_task/lib/directory";
 import { statusMeta, priorityMeta, taskStatusOrder, taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
 import { formatDate, formatDateTime, relativeTime } from "@/modules/report_task/lib/format";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -87,16 +87,12 @@ export function TaskDetailSheet({
   onOpenChange: (open: boolean) => void;
 }) {
   const task = useTaskStore((s) => s.tasks.find((t) => t.id === taskId));
-  // Select the array (stable reference) and derive subtasks with useMemo — a
-  // `.filter` inside the selector returns a new array each render and loops.
-  const allTasks = useTaskStore((s) => s.tasks);
-  const subtasks = useMemo(() => allTasks.filter((t) => t.parentId === taskId), [allTasks, taskId]);
-  const addTask = useTaskStore((s) => s.addTask);
   const moveTask = useTaskStore((s) => s.moveTask);
   const updateTask = useTaskStore((s) => s.updateTask);
   const removeTask = useTaskStore((s) => s.removeTask);
   const setAssignees = useTaskStore((s) => s.setAssignees);
   const reviseDueDate = useTaskStore((s) => s.reviseDueDate);
+  const reviseAssigneeDueDate = useTaskStore((s) => s.reviseAssigneeDueDate);
   const reopenTask = useTaskStore((s) => s.reopenTask);
   const addComment = useTaskStore((s) => s.addComment);
   const removeComment = useTaskStore((s) => s.removeComment);
@@ -113,7 +109,11 @@ export function TaskDetailSheet({
   const [comment, setComment] = useState("");
   const [newChecklistItem, setNewChecklistItem] = useState("");
   const [newChecklistOwnerId, setNewChecklistOwnerId] = useState("");
-  const [newSubtask, setNewSubtask] = useState("");
+  // Per-assignee due-date edits are staged locally and only commit (see
+  // reviseAssigneeDueDate) once the row's confirm button is clicked — picking
+  // a date alone doesn't change anything yet, so a stray click can't silently
+  // revise someone's date and notify them.
+  const [stagedAssigneeDates, setStagedAssigneeDates] = useState<Record<string, string>>({});
   const [revising, setRevising] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [newDate, setNewDate] = useState("");
@@ -141,6 +141,7 @@ export function TaskDetailSheet({
     setDraftTitle(task?.title ?? "");
     setDraftDescription(task?.description ?? "");
     setNewChecklistOwnerId(task?.assigneeIds[0] ?? "");
+    setStagedAssigneeDates({});
   }
 
   if (!task) return null;
@@ -188,37 +189,6 @@ export function TaskDetailSheet({
     onOpenChange(false);
     removeTask(task.id);
     toast.success(`ลบงาน "${task.title}" แล้ว`);
-  }
-
-  function createSubtask() {
-    const title = newSubtask.trim();
-    if (!title || !task) return;
-    const now = new Date().toISOString();
-    addTask({
-      id: `task-${crypto.randomUUID()}`,
-      title,
-      description: "",
-      status: "todo",
-      priority: task.priority,
-      taskMode: task.taskMode,
-      assigneeIds: task.assigneeIds,
-      assignedById: viewingAsUserId,
-      departmentIds: task.departmentIds,
-      startDate: task.startDate,
-      dueDate: task.dueDate,
-      originalDueDate: task.dueDate,
-      attachments: [],
-      comments: [],
-      revisions: [],
-      reactions: [],
-      checklist: [],
-      completedAssigneeIds: [],
-      showChecklistOnCard: false,
-      parentId: task.id,
-      createdAt: now,
-      updatedAt: now,
-    });
-    setNewSubtask("");
   }
 
   function toggleAssignee(userId: string) {
@@ -715,6 +685,8 @@ export function TaskDetailSheet({
                 {task.assigneeIds.map((uid) => {
                   const u = getUser(uid);
                   const effective = task.assigneeDueDates?.[uid] ?? toDateInput(task.dueDate);
+                  const staged = stagedAssigneeDates[uid];
+                  const dirty = staged !== undefined && staged !== effective;
                   return (
                     <div key={uid} className="flex items-center gap-2">
                       <Avatar className="h-5 w-5 shrink-0">
@@ -722,16 +694,55 @@ export function TaskDetailSheet({
                       </Avatar>
                       <span className="text-xs flex-1 truncate">{u?.name}</span>
                       {canEditMain ? (
-                        <DatePickerField
-                          value={effective}
-                          minDate={toDateInput(task.startDate)}
-                          onChange={(v) =>
-                            updateTask(task.id, {
-                              assigneeDueDates: { ...(task.assigneeDueDates ?? {}), [uid]: v },
-                            })
-                          }
-                          className="h-8 text-xs w-36"
-                        />
+                        <>
+                          <DatePickerField
+                            value={staged ?? effective}
+                            minDate={toDateInput(task.startDate)}
+                            onChange={(v) => setStagedAssigneeDates((s) => ({ ...s, [uid]: v }))}
+                            className="h-8 text-xs w-36"
+                          />
+                          {/* Picking a date only stages it — nothing is saved,
+                              logged, or notified to the assignee until this
+                              confirm is clicked, so a stray date pick can't
+                              silently revise + notify someone. */}
+                          {dirty && (
+                            <>
+                              <Button
+                                size="icon-sm"
+                                variant="outline"
+                                className="h-8 w-8 shrink-0 border-[var(--brand-green)] text-[var(--brand-green-dark)] hover:bg-[var(--accent)]"
+                                title="ยืนยันกำหนดส่งใหม่"
+                                aria-label={`ยืนยันกำหนดส่งใหม่ของ ${u?.name}`}
+                                onClick={() => {
+                                  reviseAssigneeDueDate(task.id, uid, staged, viewingAsUserId);
+                                  setStagedAssigneeDates((s) => {
+                                    const next = { ...s };
+                                    delete next[uid];
+                                    return next;
+                                  });
+                                }}
+                              >
+                                <Check className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                size="icon-sm"
+                                variant="ghost"
+                                className="h-8 w-8 shrink-0 text-[var(--ink-soft)] hover:text-[var(--chart-red)]"
+                                title="ยกเลิก"
+                                aria-label={`ยกเลิกการแก้ไขกำหนดส่งของ ${u?.name}`}
+                                onClick={() =>
+                                  setStagedAssigneeDates((s) => {
+                                    const next = { ...s };
+                                    delete next[uid];
+                                    return next;
+                                  })
+                                }
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
+                          )}
+                        </>
                       ) : (
                         <span className="text-xs">{formatDate(effective)}</span>
                       )}
@@ -843,54 +854,6 @@ export function TaskDetailSheet({
 
           <Separator />
 
-          {/* Subtasks */}
-          <div className="space-y-2">
-            <h4 className="text-sm font-semibold flex items-center gap-1.5">
-              <ListTodo className="h-4 w-4" /> งานย่อย
-              {subtasks.length > 0 && (
-                <span className="text-xs font-normal text-[var(--ink-soft)]">
-                  ({subtasks.filter((s) => s.status === "done").length}/{subtasks.length})
-                </span>
-              )}
-            </h4>
-            {subtasks.map((st) => (
-              <div key={st.id} className="flex items-center gap-2 group rounded-md px-1 py-0.5 hover:bg-[var(--bg-soft)]">
-                <button
-                  onClick={() => moveTask(st.id, st.status === "done" ? "todo" : "done")}
-                  className={cn(
-                    "h-4 w-4 rounded-full border flex items-center justify-center shrink-0 transition-colors",
-                    st.status === "done" ? "bg-[var(--brand-green)] border-[var(--brand-green)]" : "border-[var(--line)] hover:border-[var(--brand-green)]"
-                  )}
-                  title={st.status === "done" ? "ทำเครื่องหมายยังไม่เสร็จ" : "ทำเครื่องหมายเสร็จ"}
-                  aria-label={st.status === "done" ? "ทำเครื่องหมายยังไม่เสร็จ" : "ทำเครื่องหมายเสร็จ"}
-                >
-                  {st.status === "done" && <Check className="h-3 w-3 text-white" />}
-                </button>
-                <span className={cn("flex-1 text-sm", st.status === "done" && "line-through text-[var(--ink-soft)]")}>{st.title}</span>
-                <Badge variant="outline" className={cn("text-[9px]", statusMeta[st.status].badgeClass)}>{statusMeta[st.status].label}</Badge>
-                <button
-                  onClick={() => removeTask(st.id)}
-                  className="text-[var(--ink-soft)] hover:text-[var(--chart-red)] opacity-0 group-hover:opacity-100"
-                  aria-label={`ลบงานย่อย ${st.title}`}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ))}
-            <div className="flex items-center gap-2">
-              <Input
-                value={newSubtask}
-                onChange={(e) => setNewSubtask(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && createSubtask()}
-                placeholder="เพิ่มงานย่อย แล้วกด Enter"
-                className="h-8 text-sm"
-              />
-              <Button size="icon-sm" variant="outline" onClick={createSubtask} aria-label="เพิ่มงานย่อย"><Plus className="h-3.5 w-3.5" /></Button>
-            </div>
-          </div>
-
-          <Separator />
-
           {/* Revision tracking */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -920,7 +883,24 @@ export function TaskDetailSheet({
               </div>
             ))}
 
-            {task.revisions.length === 0 && !revising && (
+            {/* Per-assignee due-date edits (see กำหนดส่งแยกรายคน above) — only
+                the first-ever date and the latest revision, not every round
+                in between, since this is a quick per-person nudge rather than
+                a formal re-plan like the whole-task revisions above. */}
+            {Object.entries(task.assigneeDueDateRevisions ?? {}).map(([uid, r]) => (
+              <div key={uid} className="text-sm rounded-lg border border-[var(--line)] px-3 py-2 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">กำหนดส่งของ {getUser(uid)?.name ?? uid}</span>
+                  <span className="text-xs text-[var(--ink-soft)]">{formatDate(r.revisedAt)}</span>
+                </div>
+                <p className="text-xs text-[var(--ink-soft)]">
+                  เดิม {formatDate(r.originalDate)} → ล่าสุด <span className="font-medium text-[var(--ink)]">{formatDate(r.latestDate)}</span>
+                </p>
+                <p className="text-xs text-[var(--ink-soft)] italic">แก้โดย {getUser(r.revisedBy)?.name}</p>
+              </div>
+            ))}
+
+            {task.revisions.length === 0 && Object.keys(task.assigneeDueDateRevisions ?? {}).length === 0 && !revising && (
               <p className="text-xs text-[var(--ink-soft)]">ยังไม่มีการแก้ไขกำหนดส่ง</p>
             )}
 
@@ -1033,12 +1013,24 @@ export function TaskDetailSheet({
 
             {canEditMain && (
               <div className="flex items-center gap-2 px-1 pt-1">
-                <Plus className="h-4 w-4 text-[var(--ink-soft)] shrink-0" />
+                {/* Adding only ever happens on an explicit press — Enter or
+                    the button — never on blur, which used to add whatever was
+                    half-typed the instant focus left the field. */}
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  className="h-7 w-7 shrink-0 text-[var(--ink-soft)] hover:text-[var(--brand-green-dark)]"
+                  title="เพิ่มรายการ"
+                  aria-label="เพิ่มรายการ"
+                  disabled={!newChecklistItem.trim()}
+                  onClick={() => commitChecklistItem(isShared ? newChecklistOwnerId : task.assigneeIds[0]!)}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
                 <Input
                   value={newChecklistItem}
                   onChange={(e) => setNewChecklistItem(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && commitChecklistItem(isShared ? newChecklistOwnerId : task.assigneeIds[0]!)}
-                  onBlur={() => commitChecklistItem(isShared ? newChecklistOwnerId : task.assigneeIds[0]!)}
                   placeholder="เพิ่มรายการ แล้วกด Enter"
                   className="h-8 text-sm border-0 border-b border-[var(--line)] rounded-none px-0 shadow-none focus-visible:ring-0 focus-visible:border-[var(--brand-green)] flex-1"
                 />

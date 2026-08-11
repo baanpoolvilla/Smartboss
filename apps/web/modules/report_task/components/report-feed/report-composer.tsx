@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
-import { getUser, canManage } from "@/modules/report_task/data/mock";
+import { getUser, canManage } from "@/modules/report_task/lib/directory";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useReportFeedStore, type ReportPostImage, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { uploadCompressedImage } from "@/modules/report_task/lib/image-resize";

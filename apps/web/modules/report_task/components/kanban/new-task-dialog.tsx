@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/modules/report_task/components/ui/select";
-import { departmentIdsOf, getDepartment, getUser, users, canManage, isOwner, departments } from "@/modules/report_task/data/mock";
+import { departmentIdsOf, getDepartment, getUser, users, canManage, isOwner, departments } from "@/modules/report_task/lib/directory";
 import { departmentsLabel } from "@/modules/report_task/lib/department-label";
 import { taskPriorityOrder, priorityMeta } from "@/modules/report_task/lib/task-meta";
 import { useLeaveTypeStore } from "@/modules/report_task/store/leave-type-store";

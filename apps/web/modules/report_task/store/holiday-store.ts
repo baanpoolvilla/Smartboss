@@ -1,8 +1,6 @@
 import { create } from "zustand";
-import { calendarEvents } from "@/modules/report_task/data/mock";
+import { thaiHolidayEvents } from "@/modules/report_task/data/thai-holidays";
 import type { CalendarEvent } from "@/modules/report_task/types";
-
-const initialHolidays = calendarEvents.filter((e) => e.type === "holiday");
 
 /** Nager.Date has no Thai data, so Thailand's holidays are seeded locally
  * (id `hol-...`) instead of imported (id `holiday-{code}-...`) — but they're
@@ -75,7 +73,7 @@ export async function importCountryHolidays(countryCode: string, year: number): 
 // store-hydrator.tsx — shared across teammates, not per-browser.
 export const useHolidayStore = create<HolidayStore>()(
   (set, get) => ({
-      holidays: initialHolidays,
+      holidays: thaiHolidayEvents,
       selectedByUser: {},
       addHoliday: (h) => set((s) => ({ holidays: [h, ...s.holidays] })),
       addManyHolidays: (items) => {

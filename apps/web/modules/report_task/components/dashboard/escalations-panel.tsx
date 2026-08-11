@@ -8,7 +8,7 @@ import { useShowMore } from "@/modules/report_task/hooks/use-show-more";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import { Badge } from "@/modules/report_task/components/ui/badge";
 import { Button } from "@/modules/report_task/components/ui/button";
-import { getUser, getDepartment, canManage } from "@/modules/report_task/data/mock";
+import { getUser, getDepartment, canManage } from "@/modules/report_task/lib/directory";
 import { overdueTasks } from "@/modules/report_task/lib/reports";
 import { formatShortDate, daysUntil } from "@/modules/report_task/lib/format";
 import { presetRange } from "@/modules/report_task/lib/date-filter";

@@ -55,7 +55,6 @@ import {
   Rows3,
   Settings2,
   ShoppingCart,
-  Sparkles,
   Star,
   Trash2,
   X,
@@ -154,7 +153,6 @@ export function TopicSidebar({
   const addTopic = useReportFeedStore((s) => s.addTopic);
   const removeTopic = useReportFeedStore((s) => s.removeTopic);
   const updateTopicSettings = useReportFeedStore((s) => s.updateTopicSettings);
-  const seedDemoData = useReportFeedStore((s) => s.seedDemoData);
   const toggleFavoriteTopic = useReportFeedStore((s) => s.toggleFavoriteTopic);
   const toggleHiddenTopic = useReportFeedStore((s) => s.toggleHiddenTopic);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
@@ -682,17 +680,6 @@ export function TopicSidebar({
           <p className="text-xs text-[var(--ink-soft)] px-2.5 py-3">ยังไม่มีหัวข้อ กด + สร้างหัวข้อ เพื่อเริ่มต้น</p>
         )}
       </div>
-
-      <button
-        onClick={() => {
-          seedDemoData();
-          onSelect("topic-demo-dev");
-        }}
-        className="flex items-center gap-1.5 px-3.5 py-3 text-xs text-[var(--ink-soft)] hover:text-[var(--brand-green-dark)] border-t border-[var(--line)]"
-      >
-        <Sparkles className="h-3.5 w-3.5" />
-        โหลดข้อมูลตัวอย่าง
-      </button>
 
       <Dialog open={!!editor} onOpenChange={(open) => !open && setEditor(null)}>
         <DialogContent className="sm:max-w-md p-0 gap-0 max-h-[85vh] flex flex-col overflow-hidden">

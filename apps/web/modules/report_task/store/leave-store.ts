@@ -1,8 +1,5 @@
 import { create } from "zustand";
-import { calendarEvents } from "@/modules/report_task/data/mock";
 import type { CalendarEvent } from "@/modules/report_task/types";
-
-const initialLeaves = calendarEvents.filter((e) => e.type === "leave");
 
 interface LeaveStore {
   leaves: CalendarEvent[];
@@ -15,7 +12,7 @@ interface LeaveStore {
 // Server-synced via ServerStoreSync (apiKey "leaves") in store-hydrator.tsx —
 // shared across teammates, not per-browser.
 export const useLeaveStore = create<LeaveStore>()((set) => ({
-  leaves: initialLeaves,
+  leaves: [],
   addLeave: (leave) => set((s) => ({ leaves: [leave, ...s.leaves] })),
   updateLeave: (id, patch) =>
     set((s) => ({ leaves: s.leaves.map((l) => (l.id === id ? { ...l, ...patch } : l)) })),

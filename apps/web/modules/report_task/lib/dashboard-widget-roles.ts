@@ -1,4 +1,4 @@
-import { canManage, isOwner } from "@/modules/report_task/data/mock";
+import { canManage, isOwner } from "@/modules/report_task/lib/directory";
 import type { WidgetId } from "@/modules/report_task/store/dashboard-layout-store";
 
 /**

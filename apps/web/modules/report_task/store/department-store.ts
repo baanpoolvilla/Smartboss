@@ -1,17 +1,11 @@
 import { create } from "zustand";
 import type { Department } from "@/modules/report_task/types";
 
-// Seed matches the org chart data/mock.ts shipped with before this store
-// existed — first-run default only; once ServerStoreSync's GET resolves,
-// whatever's actually saved server-side wins (see server-store-sync.tsx).
-const defaultDepartments: Department[] = [
-  { id: "dep-eng", name: "วิศวกรรม", color: "var(--chart-blue)", headId: "usr-01" },
-  { id: "dep-design", name: "ดีไซน์", color: "var(--chart-violet)", headId: "usr-04" },
-  { id: "dep-marketing", name: "การตลาด", color: "var(--chart-orange)", headId: "usr-06" },
-  { id: "dep-sales", name: "ฝ่ายขาย", color: "var(--chart-amber)", headId: "usr-08" },
-  { id: "dep-ops", name: "ปฏิบัติการ", color: "var(--chart-green)", headId: "usr-10" },
-  { id: "dep-support", name: "บริการลูกค้า", color: "var(--chart-pink)", headId: "usr-12" },
-];
+// First-run default only, before any department has been created — once
+// ServerStoreSync's GET resolves, whatever's actually saved server-side wins
+// (see server-store-sync.tsx). A brand-new org starts with no departments;
+// they're created from the settings panel.
+const defaultDepartments: Department[] = [];
 
 interface DepartmentStore {
   departments: Department[];

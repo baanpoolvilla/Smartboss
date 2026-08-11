@@ -36,7 +36,7 @@ import {
 import { DueDateBadge } from "@/modules/report_task/components/shared/due-date-badge";
 import { Badge } from "@/modules/report_task/components/ui/badge";
 import { Button } from "@/modules/report_task/components/ui/button";
-import { getUser } from "@/modules/report_task/data/mock";
+import { getUser } from "@/modules/report_task/lib/directory";
 import { statusMeta, priorityMeta, statusIcon, taskStatusOrder, taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
 import { formatShortDate } from "@/modules/report_task/lib/format";
 import { dueUrgency, reactionCounts } from "@/modules/report_task/lib/task-flags";

@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useReportFeedStore, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { getUser } from "@/modules/report_task/data/mock";
+import { getUser } from "@/modules/report_task/lib/directory";
 import { PageHeader } from "@/modules/report_task/components/shared/page-header";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { todayComplianceSummary } from "@/modules/report_task/lib/report-feed-compliance";

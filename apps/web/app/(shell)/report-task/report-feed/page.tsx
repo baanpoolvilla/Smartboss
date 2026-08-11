@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/c
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/modules/report_task/components/ui/sheet";
 import { useReportFeedStore, type ReportPost } from "@/modules/report_task/store/report-feed-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { users } from "@/modules/report_task/data/mock";
+import { users } from "@/modules/report_task/lib/directory";
 import { cn } from "@/modules/report_task/lib/utils";
 import { canEditReportTopic, canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { topicModeOf } from "@/modules/report_task/lib/report-topic-membership";
@@ -143,18 +143,6 @@ function ReportFeedPageInner() {
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
-
-  // First-ever run for this org: populate the demo rooms automatically so the
-  // feed isn't a blank page before anyone's posted real reports. Non-destructive
-  // and one-time — gated on `hasSeeded`, not on post count, so deleting the
-  // demo topics later doesn't bring them back. Waits for `loaded` (the
-  // server's real `hasSeeded` value) so this doesn't seed before that arrives.
-  const feedLoaded = useReportFeedStore((s) => s.loaded);
-  useEffect(() => {
-    if (!feedLoaded) return;
-    const state = useReportFeedStore.getState();
-    if (!state.hasSeeded) state.seedDemoData();
-  }, [feedLoaded]);
 
   // A parent topic (has sub-topics, Teams-style) is an organizing folder
   // only, with nothing of its own to show — it's not selectable by clicking

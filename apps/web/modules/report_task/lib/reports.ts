@@ -1,4 +1,4 @@
-import { departments, tasks, users } from "@/modules/report_task/data/mock";
+import { departments, users } from "@/modules/report_task/lib/directory";
 import { defaultStickers } from "@/modules/report_task/data/stickers";
 import { daysUntil } from "@/modules/report_task/lib/format";
 import type { DepartmentReport, ScoreBreakdown, Sticker, Task, UserReport } from "@/modules/report_task/types";
@@ -86,7 +86,7 @@ function reportMetricsFor(scopedTasks: Task[], stickers: Sticker[]) {
   };
 }
 
-export function buildUserReports(taskList: Task[] = tasks, stickers: Sticker[] = defaultStickers): UserReport[] {
+export function buildUserReports(taskList: Task[], stickers: Sticker[] = defaultStickers): UserReport[] {
   return users.map((u) => ({
     userId: u.id,
     ...reportMetricsFor(
@@ -96,7 +96,7 @@ export function buildUserReports(taskList: Task[] = tasks, stickers: Sticker[] =
   }));
 }
 
-export function buildDepartmentReports(taskList: Task[] = tasks, stickers: Sticker[] = defaultStickers): DepartmentReport[] {
+export function buildDepartmentReports(taskList: Task[], stickers: Sticker[] = defaultStickers): DepartmentReport[] {
   return departments.map((d) => ({
     departmentId: d.id,
     ...reportMetricsFor(
@@ -106,19 +106,19 @@ export function buildDepartmentReports(taskList: Task[] = tasks, stickers: Stick
   }));
 }
 
-export function statusCounts(taskList: Task[] = tasks) {
+export function statusCounts(taskList: Task[]) {
   const counts = { todo: 0, in_progress: 0, done: 0 };
   for (const t of taskList) counts[t.status]++;
   return counts;
 }
 
-export function priorityCounts(taskList: Task[] = tasks) {
+export function priorityCounts(taskList: Task[]) {
   const counts = { critical: 0, high: 0, medium: 0, low: 0 };
   for (const t of taskList) counts[t.priority]++;
   return counts;
 }
 
-export function overallDetailedKpis(taskList: Task[] = tasks, stickers: Sticker[] = defaultStickers) {
+export function overallDetailedKpis(taskList: Task[], stickers: Sticker[] = defaultStickers) {
   const total = taskList.length;
   const completed = taskList.filter((t) => t.status === "done");
   const late = taskList.filter(isLate);
@@ -135,7 +135,7 @@ export function overallDetailedKpis(taskList: Task[] = tasks, stickers: Sticker[
   };
 }
 
-export function overallKpis(taskList: Task[] = tasks) {
+export function overallKpis(taskList: Task[]) {
   const total = taskList.length;
   const completed = taskList.filter((t) => t.status === "done").length;
   const late = taskList.filter(isLate).length;
@@ -149,6 +149,6 @@ export function overallKpis(taskList: Task[] = tasks) {
   };
 }
 
-export function overdueTasks(taskList: Task[] = tasks) {
+export function overdueTasks(taskList: Task[]) {
   return taskList.filter(isLate).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 }

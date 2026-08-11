@@ -16,7 +16,7 @@ import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
-import { departments, getDepartment, getUser, users } from "@/modules/report_task/data/mock";
+import { departments, getDepartment, getUser, users } from "@/modules/report_task/lib/directory";
 import { canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { topicModeOf } from "@/modules/report_task/lib/report-topic-membership";
 import type { ReportTopic } from "@/modules/report_task/store/report-feed-store";

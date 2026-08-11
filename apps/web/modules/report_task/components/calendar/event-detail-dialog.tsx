@@ -28,7 +28,7 @@ import { Label } from "@/modules/report_task/components/ui/label";
 import { Switch } from "@/modules/report_task/components/ui/switch";
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { AttendeePicker } from "@/modules/report_task/components/shared/attendee-picker";
-import { getUser, getDepartment, departmentIdsOf } from "@/modules/report_task/data/mock";
+import { getUser, getDepartment, departmentIdsOf } from "@/modules/report_task/lib/directory";
 import { departmentsLabel } from "@/modules/report_task/lib/department-label";
 import { canEditRecord } from "@/modules/report_task/lib/permissions";
 import { eventTypeLabels } from "@/modules/report_task/lib/calendar-colors";

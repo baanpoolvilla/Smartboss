@@ -31,7 +31,7 @@ import {
   type ReporterStatusGroup,
 } from "@/modules/report_task/lib/issue-meta";
 import { CLOSED_STATUSES, type IssueTicket } from "@/modules/report_task/types/issue";
-import { getUser, isDepartmentHead, isOwner } from "@/modules/report_task/data/mock";
+import { getUser, isDepartmentHead, isOwner } from "@/modules/report_task/lib/directory";
 import { relativeTime } from "@/modules/report_task/lib/format";
 import { cn } from "@/modules/report_task/lib/utils";
 

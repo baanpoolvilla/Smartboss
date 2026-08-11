@@ -9,7 +9,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/modules/report_task/components/ui/dialog";
-import { getUser, canManage } from "@/modules/report_task/data/mock";
+import { getUser, canManage } from "@/modules/report_task/lib/directory";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useMeetingStore } from "@/modules/report_task/store/meeting-store";
 import { useLeaveStore } from "@/modules/report_task/store/leave-store";

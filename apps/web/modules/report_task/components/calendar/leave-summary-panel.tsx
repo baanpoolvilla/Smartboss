@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { getDepartment, users } from "@/modules/report_task/data/mock";
+import { getDepartment, users } from "@/modules/report_task/lib/directory";
 import { useLeaveStore } from "@/modules/report_task/store/leave-store";
 import { useLeaveTypeStore } from "@/modules/report_task/store/leave-type-store";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";

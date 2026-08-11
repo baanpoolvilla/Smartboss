@@ -1,4 +1,4 @@
-import { departments, getDepartment } from "@/modules/report_task/data/mock";
+import { departments, getDepartment } from "@/modules/report_task/lib/directory";
 
 /**
  * Summarize a set of department ids into one short label — e.g. for a

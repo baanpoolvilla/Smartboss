@@ -6,7 +6,7 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Sector, Tooltip } from "recha
 import type { PieSectorDataItem } from "recharts/types/polar/Pie";
 import { Card, CardContent, CardHeader, CardTitle } from "@/modules/report_task/components/ui/card";
 import { DASHBOARD_CARD } from "@/modules/report_task/components/dashboard/dashboard-card-style";
-import { departments, getUser } from "@/modules/report_task/data/mock";
+import { departments, getUser } from "@/modules/report_task/lib/directory";
 import { buildDepartmentReports } from "@/modules/report_task/lib/reports";
 import { chartGray, departmentColorOrder } from "@/modules/report_task/lib/chart-colors";
 import { useHasHover } from "@/modules/report_task/hooks/use-has-hover";

@@ -29,7 +29,7 @@ import { useEventColorStore } from "@/modules/report_task/store/event-color-stor
 import { useCalendarScopeStore } from "@/modules/report_task/store/calendar-scope-store";
 import { chartColors } from "@/modules/report_task/lib/chart-colors";
 import { canEditRecord, canSeeTask, canSeeTaskOnCalendar } from "@/modules/report_task/lib/permissions";
-import { getUser, canManage, isOwner } from "@/modules/report_task/data/mock";
+import { getUser, canManage, isOwner } from "@/modules/report_task/lib/directory";
 import { priorityMeta, priorityColorHex, taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
 import { eventTypeLabels } from "@/modules/report_task/lib/calendar-colors";
 import { leaveIconOf } from "@/modules/report_task/lib/leave-icons";
