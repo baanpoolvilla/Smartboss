@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Label } from "@/modules/report_task/components/ui/label";
@@ -25,13 +25,18 @@ import { canEditReportTopic, canManageReportTopics } from "@/modules/report_task
 import { DRAG_MENTION_TOPIC_MIME } from "@/modules/report_task/components/report-feed/report-post-fields";
 import { useTourStore, tourStepsByPage } from "@/modules/report_task/store/tour-store";
 import { uploadCompressedImage } from "@/modules/report_task/lib/image-resize";
+import { pendingToday } from "@/modules/report_task/lib/report-feed-compliance";
+import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
+import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
 import { cn } from "@/modules/report_task/lib/utils";
 import { toast } from "sonner";
 import {
+  AtSign,
   Bell,
   Briefcase,
   Check,
   ChevronRight,
+  Clock,
   Code2,
   Crown,
   Eye,
@@ -48,7 +53,6 @@ import {
   Plus,
   Rocket,
   Rows3,
-  Search,
   Settings2,
   ShoppingCart,
   Sparkles,
@@ -118,6 +122,10 @@ export function TopicLogo({ topic, size = "h-6 w-6" }: { topic: ReportTopic; siz
 
 /** Selecting this instead of a real topic id switches the main panel to the merged "ภาพรวมทั้งหมด" feed (see report-all-posts-feed.tsx) — a sentinel rather than a real topic since it isn't one. */
 export const ALL_TOPICS_ID = "__all__";
+/** Rooms this viewer hasn't posted to yet today, judged against each room's own cutoffs/required weekdays (same rule report-topic-panels.tsx's "ยังไม่ส่งวันนี้" KPI uses) — see PendingTopicsPanel in page.tsx. */
+export const PENDING_ID = "__pending__";
+/** Every post/reply anywhere this viewer can see that @mentions them, newest first — reuses ReportAllPostsFeed with a pre-filtered post list. */
+export const MENTIONS_ID = "__mentions__";
 
 type Editor = { mode: "create" } | { mode: "edit"; topic: ReportTopic };
 
@@ -302,18 +310,35 @@ export function TopicSidebar({
     visibility: editor?.mode === "edit" ? editor.topic.visibility : undefined,
   };
 
-  const [query, setQuery] = useState("");
-  const visibleTopics = query.trim() ? topics.filter((t) => t.name.toLowerCase().includes(query.trim().toLowerCase())) : topics;
+  const exemptions = useReportComplianceExemptions();
+  // Rooms this viewer personally still owes a report to today (⏰) and posts
+  // anywhere they're @mentioned (@) — the two extra "มุมมองรวม" entries
+  // above the topic tree, same data the room-scoped KPIs elsewhere already
+  // compute, just re-scoped to "for me" instead of "for everyone"/"in this room".
+  const pendingCount = useMemo(
+    () => pendingToday(topics, posts, exemptions).filter((e) => e.userId === viewingAsUserId).length,
+    [topics, posts, exemptions, viewingAsUserId]
+  );
+  // Unread only (not "ever mentioned") — clears once the post's actually
+  // been opened (its own room, or the ที่กล่าวถึงฉัน view itself), same as
+  // any other unread badge in this sidebar.
+  const mentionCount = useMemo(() => {
+    const visibleTopicIds = new Set(topics.map((t) => t.id));
+    return posts.filter(
+      (p) => visibleTopicIds.has(p.topicId) && p.unreadFor.includes(viewingAsUserId) && p.authorId !== viewingAsUserId && postMentionsUser(p, viewingAsUserId)
+    ).length;
+  }, [posts, topics, viewingAsUserId]);
+
   // Favorites are per-viewer (favoritedBy), not a global pin — split into
   // their own section above the rest so the rooms someone cares about most
   // don't get lost scrolling past everything else. Hierarchy only applies
   // within "the rest" — a favorited sub-topic surfaces on its own up top,
   // Teams-style quick access, rather than dragging its parent team along.
-  const favoriteTopics = visibleTopics.filter((t) => t.favoritedBy?.includes(viewingAsUserId));
-  const restTopics = visibleTopics.filter((t) => !t.favoritedBy?.includes(viewingAsUserId));
-  // A sub-topic whose parent didn't make it into `restTopics` (favorited,
-  // filtered out by search, or deleted) has nothing to nest under here, so
-  // it renders as its own top-level row instead of vanishing.
+  const favoriteTopics = topics.filter((t) => t.favoritedBy?.includes(viewingAsUserId));
+  const restTopics = topics.filter((t) => !t.favoritedBy?.includes(viewingAsUserId));
+  // A sub-topic whose parent didn't make it into `restTopics` (favorited or
+  // deleted) has nothing to nest under here, so it renders as its own
+  // top-level row instead of vanishing.
   const topLevelRestTopics = restTopics.filter((t) => isTopLevel(t) || !restTopics.some((p) => p.id === t.parentId));
   // A sub-topic the viewer hid (Teams' "hide channel") stays in the tree —
   // dimmed, see below — rather than disappearing with no way back to it
@@ -421,27 +446,25 @@ export function TopicSidebar({
             <span className="shrink-0 w-3.5" />
           )
         ) : null}
-        <span className="relative shrink-0">
-          {/* Sub-topics don't carry a custom icon/logo — a plain "#" keeps
-              the row to text only, same as the sub-topic create/edit form. */}
-          {depth > 0 ? (
-            <span className="flex h-5 w-5 items-center justify-center text-[var(--ink-soft)] font-semibold" aria-hidden>
-              #
-            </span>
-          ) : (
+        {/* Sub-topics are text-only — no icon, no "#" glyph (read as visual
+            noise once every row in a channel list carried one). The
+            unread/read distinction still comes through via font weight+color
+            just below, so nothing is lost by dropping the marker. */}
+        {depth === 0 && (
+          <span className="relative shrink-0">
             <TopicLogo topic={t} size="h-6 w-6" />
-          )}
-          {/* The explicit "something's new here" signal — same small-dot
-              language as a phone app icon's notification badge, so it reads
-              as unread/read at a glance without parsing text weight or
-              hunting for a number. */}
-          {hasUnread && (
-            <span
-              className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-[var(--brand-green)] ring-2 ring-white"
-              aria-hidden
-            />
-          )}
-        </span>
+            {/* The explicit "something's new here" signal — same small-dot
+                language as a phone app icon's notification badge, so it reads
+                as unread/read at a glance without parsing text weight or
+                hunting for a number. */}
+            {hasUnread && (
+              <span
+                className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-[var(--brand-green)] ring-2 ring-white"
+                aria-hidden
+              />
+            )}
+          </span>
+        )}
         <span
           className={cn(
             "truncate flex-1 leading-none",
@@ -588,20 +611,8 @@ export function TopicSidebar({
         )}
       </div>
 
-      <div className="px-3.5 pt-3.5">
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--ink-soft)]" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="ค้นหาหัวข้อ..."
-            aria-label="ค้นหาหัวข้อ"
-            className="w-full rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] pl-8 pr-2.5 py-1.5 text-xs outline-none focus:border-[var(--brand-green)]/50 focus:bg-white transition-colors"
-          />
-        </div>
-      </div>
-
       <div className="px-2.5 pt-2.5">
+        <p className="px-2.5 pb-1 text-[11px] font-semibold text-[var(--ink-soft)] uppercase tracking-wide">มุมมองรวม</p>
         {/* Not a real topic — a merged read-across-everything view (see
             ReportAllPostsFeed), pinned above the tree since it isn't part
             of the hierarchy it's summarizing. */}
@@ -616,6 +627,43 @@ export function TopicSidebar({
             <Rows3 className="h-3.5 w-3.5" />
           </span>
           ภาพรวมทั้งหมด
+        </button>
+        {/* ที่ฉันต้องส่ง — rooms this viewer personally hasn't posted to yet
+            today (PendingTopicsPanel). ที่กล่าวถึงฉัน — every post/reply
+            anywhere they're @mentioned (ReportAllPostsFeed, pre-filtered). */}
+        <button
+          onClick={() => onSelect(PENDING_ID)}
+          className={cn(
+            "w-full flex items-center gap-2.5 rounded-xl pl-3 pr-2 py-2.5 text-sm text-left transition-colors duration-200",
+            activeId === PENDING_ID ? "bg-[var(--accent)] font-semibold text-[var(--brand-green-dark)]" : "hover:bg-[var(--bg-soft)] text-[var(--ink)]"
+          )}
+        >
+          <span className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-amber-50 text-[var(--chart-amber)]">
+            <Clock className="h-3.5 w-3.5" />
+          </span>
+          <span className="flex-1 truncate">ที่ฉันต้องส่ง</span>
+          {pendingCount > 0 && (
+            <span className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-[var(--chart-red)] text-white text-[10px] font-semibold flex items-center justify-center tabular-nums">
+              {pendingCount}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => onSelect(MENTIONS_ID)}
+          className={cn(
+            "w-full flex items-center gap-2.5 rounded-xl pl-3 pr-2 py-2.5 text-sm text-left transition-colors duration-200",
+            activeId === MENTIONS_ID ? "bg-[var(--accent)] font-semibold text-[var(--brand-green-dark)]" : "hover:bg-[var(--bg-soft)] text-[var(--ink)]"
+          )}
+        >
+          <span className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-blue-50 text-[var(--chart-blue)]">
+            <AtSign className="h-3.5 w-3.5" />
+          </span>
+          <span className="flex-1 truncate">ที่กล่าวถึงฉัน</span>
+          {mentionCount > 0 && (
+            <span className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-[var(--chart-red)] text-white text-[10px] font-semibold flex items-center justify-center tabular-nums">
+              {mentionCount}
+            </span>
+          )}
         </button>
         <div className="my-2 border-t border-[var(--line)]" />
       </div>
@@ -633,9 +681,6 @@ export function TopicSidebar({
         {topics.length === 0 && (
           <p className="text-xs text-[var(--ink-soft)] px-2.5 py-3">ยังไม่มีหัวข้อ กด + สร้างหัวข้อ เพื่อเริ่มต้น</p>
         )}
-        {topics.length > 0 && visibleTopics.length === 0 && (
-          <p className="text-xs text-[var(--ink-soft)] px-2.5 py-3">ไม่พบหัวข้อที่ตรงกับ &quot;{query}&quot;</p>
-        )}
       </div>
 
       <button
@@ -650,199 +695,213 @@ export function TopicSidebar({
       </button>
 
       <Dialog open={!!editor} onOpenChange={(open) => !open && setEditor(null)}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-md p-0 gap-0 max-h-[85vh] flex flex-col overflow-hidden">
+          <DialogHeader className="px-5 pt-5 pb-0">
             <DialogTitle>{editor?.mode === "edit" ? "แก้ไขหัวข้อ" : "สร้างหัวข้อใหม่"}</DialogTitle>
             <DialogDescription>
               {isSubTopic ? "ตั้งชื่อและสีประจำห้อง — แก้ทีหลังได้เสมอ" : "ตั้งชื่อ สี และไอคอน/รูปประจำห้อง — แก้ทีหลังได้เสมอ"}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex flex-col items-center gap-2 py-2">
-            {isSubTopic ? (
-              <span className="flex h-14 w-14 items-center justify-center rounded-full text-2xl font-semibold text-[var(--ink-soft)]" aria-hidden>
-                #
-              </span>
-            ) : (
-              <div className="rounded-full p-1" style={{ boxShadow: `0 0 0 3px color-mix(in srgb, ${color} 20%, transparent)` }}>
-                <TopicLogo topic={previewTopic} size="h-14 w-14" />
-              </div>
-            )}
-            <span className="text-sm font-semibold truncate max-w-full">{previewTopic.name}</span>
-          </div>
-
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs text-[var(--ink-soft)]">ชื่อหัวข้อใหม่</Label>
-              <Input
-                autoFocus
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="เช่น ทีมการเงิน"
-                onKeyDown={(e) => e.key === "Enter" && save()}
-              />
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+            {/* Live preview — the same "logo" every room row/header renders,
+                so what you see here is exactly what shows up once saved. */}
+            <div className="flex flex-col items-center gap-2 py-1">
+              {isSubTopic ? (
+                <span className="flex h-14 w-14 items-center justify-center rounded-full text-2xl font-semibold text-[var(--ink-soft)] bg-[var(--bg-soft)]" aria-hidden>
+                  #
+                </span>
+              ) : (
+                <div className="rounded-full p-1" style={{ boxShadow: `0 0 0 3px color-mix(in srgb, ${color} 20%, transparent)` }}>
+                  <TopicLogo topic={previewTopic} size="h-14 w-14" />
+                </div>
+              )}
+              <span className="text-sm font-semibold truncate max-w-full">{previewTopic.name}</span>
             </div>
 
-            {editor?.mode === "create" ? (
-              <div className="space-y-1.5">
-                <Label className="text-xs text-[var(--ink-soft)]">ประเภทหัวข้อ</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setCreateKind("main")}
-                    className={cn(
-                      "flex flex-col items-center gap-1 rounded-lg border px-2 py-2.5 text-center transition-colors",
-                      createKind === "main" ? "border-[var(--brand-green)] bg-[var(--accent)]" : "border-[var(--line)] hover:bg-[var(--bg-soft)]"
-                    )}
-                  >
-                    <Hash className="h-4 w-4" />
-                    <span className="text-xs font-medium">หัวข้อหลักใหม่</span>
-                  </button>
-                  <button
-                    type="button"
-                    disabled={parentOptions.length === 0}
-                    onClick={() => setCreateKind("sub")}
-                    title={parentOptions.length === 0 ? "ยังไม่มีหัวข้อหลักให้เลือก — สร้างหัวข้อหลักก่อน" : undefined}
-                    className={cn(
-                      "flex flex-col items-center gap-1 rounded-lg border px-2 py-2.5 text-center transition-colors",
-                      parentOptions.length === 0
-                        ? "border-[var(--line)] opacity-40 cursor-not-allowed"
-                        : createKind === "sub"
-                          ? "border-[var(--brand-green)] bg-[var(--accent)]"
-                          : "border-[var(--line)] hover:bg-[var(--bg-soft)]"
-                    )}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                    <span className="text-xs font-medium">หัวข้อย่อยของหัวข้อหลักที่มี</span>
-                  </button>
-                </div>
-                {parentOptions.length === 0 ? (
-                  <p className="text-[11px] text-[var(--ink-soft)]">ยังไม่มีหัวข้อหลักในระบบเลย — สร้างหัวข้อหลักก่อนอันนี้ แล้วค่อยกลับมาสร้างหัวข้อย่อยใต้มันทีหลังได้</p>
-                ) : createKind === "sub" ? (
-                  <Select value={parentId ?? ""} onValueChange={(v) => v && setParentId(v)}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue>{parentId ? topics.find((t) => t.id === parentId)?.name : "เลือกหัวข้อหลัก..."}</SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {parentOptions.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : null}
-              </div>
-            ) : (
-              canPickParent && parentOptions.length > 0 && (
+            {/* ข้อมูลพื้นฐาน */}
+            <div className="rounded-xl border border-[var(--line)] overflow-hidden">
+              <p className="px-3.5 py-2 text-xs font-semibold bg-[var(--bg-soft)] border-b border-[var(--line)]">ข้อมูลพื้นฐาน</p>
+              <div className="p-3.5 space-y-3.5">
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-[var(--ink-soft)]">หัวข้อนี้อยู่ภายใต้หัวข้อหลักไหน?</Label>
-                  <Select value={parentId ?? "none"} onValueChange={(v) => setParentId(!v || v === "none" ? undefined : v)}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue>{parentId ? topics.find((t) => t.id === parentId)?.name : "ไม่มี (หัวข้อนี้เป็นหัวข้อหลักเอง)"}</SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">ไม่มี (หัวข้อนี้เป็นหัวข้อหลักเอง)</SelectItem>
-                      {parentOptions.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label className="text-xs text-[var(--ink-soft)]">ชื่อหัวข้อ</Label>
+                  <Input
+                    autoFocus
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="เช่น ทีมการเงิน"
+                    onKeyDown={(e) => e.key === "Enter" && save()}
+                  />
                 </div>
-              )
-            )}
 
-            <div className="space-y-1.5">
-              <Label className="text-xs text-[var(--ink-soft)]">คำอธิบาย (ถ้ามี)</Label>
-              <Textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="บอกคร่าวๆ ว่าหัวข้อนี้ไว้คุยเรื่องอะไร"
-                rows={2}
-                className="resize-none"
-              />
-            </div>
+                {editor?.mode === "create" ? (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-[var(--ink-soft)]">ประเภทหัวข้อ</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCreateKind("main")}
+                        className={cn(
+                          "flex flex-col items-center gap-1 rounded-lg border px-2 py-2.5 text-center transition-colors",
+                          createKind === "main" ? "border-[var(--brand-green)] bg-[var(--accent)]" : "border-[var(--line)] hover:bg-[var(--bg-soft)]"
+                        )}
+                      >
+                        <Hash className="h-4 w-4" />
+                        <span className="text-xs font-medium">หัวข้อหลักใหม่</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={parentOptions.length === 0}
+                        onClick={() => setCreateKind("sub")}
+                        title={parentOptions.length === 0 ? "ยังไม่มีหัวข้อหลักให้เลือก — สร้างหัวข้อหลักก่อน" : undefined}
+                        className={cn(
+                          "flex flex-col items-center gap-1 rounded-lg border px-2 py-2.5 text-center transition-colors",
+                          parentOptions.length === 0
+                            ? "border-[var(--line)] opacity-40 cursor-not-allowed"
+                            : createKind === "sub"
+                              ? "border-[var(--brand-green)] bg-[var(--accent)]"
+                              : "border-[var(--line)] hover:bg-[var(--bg-soft)]"
+                        )}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                        <span className="text-xs font-medium">หัวข้อย่อยของหัวข้อหลักที่มี</span>
+                      </button>
+                    </div>
+                    {parentOptions.length === 0 ? (
+                      <p className="text-[11px] text-[var(--ink-soft)]">ยังไม่มีหัวข้อหลักในระบบเลย — สร้างหัวข้อหลักก่อนอันนี้ แล้วค่อยกลับมาสร้างหัวข้อย่อยใต้มันทีหลังได้</p>
+                    ) : createKind === "sub" ? (
+                      <Select value={parentId ?? ""} onValueChange={(v) => v && setParentId(v)}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue>{parentId ? topics.find((t) => t.id === parentId)?.name : "เลือกหัวข้อหลัก..."}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {parentOptions.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : null}
+                  </div>
+                ) : (
+                  canPickParent && parentOptions.length > 0 && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-[var(--ink-soft)]">หัวข้อนี้อยู่ภายใต้หัวข้อหลักไหน?</Label>
+                      <Select value={parentId ?? "none"} onValueChange={(v) => setParentId(!v || v === "none" ? undefined : v)}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue>{parentId ? topics.find((t) => t.id === parentId)?.name : "ไม่มี (หัวข้อนี้เป็นหัวข้อหลักเอง)"}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">ไม่มี (หัวข้อนี้เป็นหัวข้อหลักเอง)</SelectItem>
+                          {parentOptions.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )
+                )}
 
-            <div className="space-y-1.5">
-              <Label className="text-xs text-[var(--ink-soft)]">สี</Label>
-              <div className="flex items-center gap-2.5 flex-wrap">
-                {topicColors.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setColor(c)}
-                    aria-label={`เลือกสี ${c}`}
-                    className={cn(
-                      "h-7 w-7 rounded-full flex items-center justify-center shrink-0 transition-transform",
-                      color === c && "scale-110 ring-2 ring-offset-2 ring-[var(--line)]"
-                    )}
-                    style={{ backgroundColor: c }}
-                  >
-                    {color === c && <Check className="h-3.5 w-3.5 text-white" />}
-                  </button>
-                ))}
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-[var(--ink-soft)]">คำอธิบาย (ถ้ามี)</Label>
+                  <Textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="บอกคร่าวๆ ว่าหัวข้อนี้ไว้คุยเรื่องอะไร"
+                    rows={2}
+                    className="resize-none"
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Sub-topics are text-only (Discord/Slack "# channel" style) —
-                no custom icon or logo upload, only a top-level topic gets one. */}
-            {!isSubTopic && (
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs text-[var(--ink-soft)]">ไอคอน</Label>
-                  {logoUrl && (
+            {/* รูปลักษณ์ — สีกับไอคอนอยู่ด้วยกัน เพราะเป็นสิ่งเดียวกันที่เห็นในพรีวิวด้านบน */}
+            <div className="rounded-xl border border-[var(--line)] overflow-hidden">
+              <p className="px-3.5 py-2 text-xs font-semibold bg-[var(--bg-soft)] border-b border-[var(--line)]">รูปลักษณ์</p>
+              <div className="p-3.5 space-y-3.5">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-[var(--ink-soft)]">สี</Label>
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    {topicColors.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setColor(c)}
+                        aria-label={`เลือกสี ${c}`}
+                        className={cn(
+                          "h-7 w-7 rounded-full flex items-center justify-center shrink-0 transition-transform",
+                          color === c && "scale-110 ring-2 ring-offset-2 ring-[var(--line)]"
+                        )}
+                        style={{ backgroundColor: c }}
+                      >
+                        {color === c && <Check className="h-3.5 w-3.5 text-white" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Sub-topics are text-only (Discord/Slack "# channel" style) —
+                    no custom icon or logo upload, only a top-level topic gets one. */}
+                {!isSubTopic && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs text-[var(--ink-soft)]">ไอคอน</Label>
+                      {logoUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setLogoUrl(undefined)}
+                          className="flex items-center gap-1 text-[11px] font-medium text-[var(--ink-soft)] hover:text-[var(--chart-red)]"
+                        >
+                          <X className="h-3 w-3" /> เอารูปที่อัปโหลดออก
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-2 rounded-lg bg-[var(--bg-soft)] p-2">
+                      {iconOptions.map(({ key, icon: Icon }) => {
+                        const selected = !logoUrl && icon === key;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => {
+                              setIcon(key);
+                              setLogoUrl(undefined);
+                            }}
+                            aria-label={`เลือกไอคอน ${key}`}
+                            className={cn("h-8 w-8 rounded-full flex items-center justify-center transition-colors", selected && "ring-2 ring-offset-1 ring-[var(--line)]")}
+                            style={
+                              selected
+                                ? { backgroundColor: `color-mix(in srgb, ${color} 18%, white)`, color }
+                                : { backgroundColor: "white", color: "var(--ink-soft)" }
+                            }
+                          >
+                            <Icon className="h-4 w-4" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => handleLogoFile(e.target.files?.[0])}
+                    />
                     <button
                       type="button"
-                      onClick={() => setLogoUrl(undefined)}
-                      className="flex items-center gap-1 text-[11px] font-medium text-[var(--ink-soft)] hover:text-[var(--chart-red)]"
+                      disabled={uploading}
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex items-center gap-1.5 text-xs font-medium text-[var(--ink-soft)] hover:text-[var(--brand-green-dark)] transition-colors disabled:opacity-50 pt-0.5"
                     >
-                      <X className="h-3 w-3" /> เอารูปที่อัปโหลดออก
+                      <ImagePlus className="h-3.5 w-3.5" />
+                      {uploading ? "กำลังอัปโหลด..." : logoUrl ? "เปลี่ยนรูปโลโก้" : "หรืออัปโหลดรูปเป็นโลโก้ห้อง"}
                     </button>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {iconOptions.map(({ key, icon: Icon }) => {
-                    const selected = !logoUrl && icon === key;
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => {
-                          setIcon(key);
-                          setLogoUrl(undefined);
-                        }}
-                        aria-label={`เลือกไอคอน ${key}`}
-                        className="h-8 w-8 rounded-full flex items-center justify-center transition-colors"
-                        style={
-                          selected
-                            ? { backgroundColor: `color-mix(in srgb, ${color} 18%, white)`, color }
-                            : { backgroundColor: "var(--bg-soft)", color: "var(--ink-soft)" }
-                        }
-                      >
-                        <Icon className="h-4 w-4" />
-                      </button>
-                    );
-                  })}
-                </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => handleLogoFile(e.target.files?.[0])}
-                />
-                <button
-                  type="button"
-                  disabled={uploading}
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center gap-1.5 text-xs font-medium text-[var(--ink-soft)] hover:text-[var(--brand-green-dark)] transition-colors disabled:opacity-50 pt-0.5"
-                >
-                  <ImagePlus className="h-3.5 w-3.5" />
-                  {uploading ? "กำลังอัปโหลด..." : logoUrl ? "เปลี่ยนรูปโลโก้" : "หรืออัปโหลดรูปเป็นโลโก้ห้อง"}
-                </button>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="mx-0 mb-0 px-5 py-3.5 border-t border-[var(--line)] bg-[var(--bg-soft)]">
             <Button variant="outline" onClick={() => setEditor(null)}>
               ยกเลิก
             </Button>

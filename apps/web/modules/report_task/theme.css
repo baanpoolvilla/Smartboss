@@ -65,16 +65,41 @@
 :root {
   /* SmartBoss CI brand tokens */
   --brand-green-dark: #1e7830;
+  --border-strong: #cbd5e1;
 
   /* categorical chart palette, brand-anchored, validated for CVD + normal-vision separation */
-  --chart-green: #39e05a;
   --chart-blue: #2a78d6;
   --chart-orange: #eb6834;
   --chart-violet: #4a3aa7;
   --chart-pink: #e87ba4;
-  --chart-amber: #eda100;
-  --chart-red: #e34948;
-  --chart-gray: #9ca3af;
+
+  /* Status traffic-light — the ONLY colors that mean "state" anywhere in the
+     app (done/on-time, pending/warning, overdue/danger, excluded/neutral).
+     -dark = text-on-tinted-background pairing (e.g. red text on red-50);
+     -light is the extra "finished, but late" shade — a distinct yellow (not
+     literally a lighter green, despite the variable name) so "done late"
+     reads as its own outcome at a glance instead of blending into "done
+     on-time"'s green. Kept pale/lemon rather than a medium gold specifically
+     because a medium yellow (#eab308) sat too close to --chart-amber's
+     orange-yellow (#f59e0b) — as small legend dots the two were barely
+     distinguishable. The lightness gap here does the separating; hue alone
+     wasn't enough.
+     Brand-anchored, not earth-toned — the app's own accent is a bright,
+     saturated --brand-green (#39e05a) on a clean light surface, so these
+     lean the same bright/saturated direction instead of the muddier
+     olive/brick tones an earlier pass landed on. */
+  --chart-green: #22c55e;
+  --chart-green-dark: var(--brand-green);
+  --chart-green-light: #fde047;
+  --chart-amber: #f59e0b;
+  --chart-amber-dark: #b45309;
+  --chart-amber-light: #fcd34d;
+  --chart-red: #ef4444;
+  --chart-red-dark: #b91c1c;
+  --chart-red-light: #fca5a5;
+  --chart-gray: #94a3b8;
+  --chart-gray-dark: #475569;
+  --chart-gray-light: #cbd5e1;
 
   --background: var(--bg);
   --foreground: var(--ink);

@@ -1,43 +1,129 @@
 import { now } from "@/modules/report_task/lib/now";
 import type { Task, TaskPriority } from "@/modules/report_task/types";
 
-export type DatePreset = "today" | "week" | "month" | "custom" | "all";
+// §7.3 of DASHBOARD_REDESIGN_PROMPT.md — 12 presets. "all" isn't in that
+// list but is kept as an extra (unbounded) option since several existing
+// defaults (dashboard-filter-store's initial preset, escalations-panel's
+// "show everything overdue") depend on range=null meaning "no restriction"
+// — dropping it would be a real behavior regression the spec never asked for.
+export type DatePreset =
+  | "today"
+  | "yesterday"
+  | "week_to_date"
+  | "week"
+  | "week_last"
+  | "month_to_date"
+  | "month"
+  | "month_last"
+  | "year_to_date"
+  | "year"
+  | "year_last"
+  | "custom"
+  | "all";
 
 export const datePresetLabels: Record<DatePreset, string> = {
   today: "วันนี้",
+  yesterday: "เมื่อวาน",
+  week_to_date: "สะสมรายสัปดาห์",
   week: "สัปดาห์นี้",
+  week_last: "สัปดาห์ที่แล้ว",
+  month_to_date: "สะสมรายเดือน",
   month: "เดือนนี้",
+  month_last: "เดือนที่แล้ว",
+  year_to_date: "สะสมรายปี",
+  year: "ปีนี้",
+  year_last: "ปีที่แล้ว",
   custom: "กำหนดเอง",
   all: "ทั้งหมด",
 };
 
+/** Groups the dropdown into วันนี้/สัปดาห์/เดือน/ปี/กำหนดเอง sections, widest→narrowest, matching the inverted-pyramid ordering used everywhere else. */
+export const datePresetGroups: { label: string; presets: DatePreset[] }[] = [
+  { label: "", presets: ["all", "today", "yesterday"] },
+  { label: "สัปดาห์", presets: ["week_to_date", "week", "week_last"] },
+  { label: "เดือน", presets: ["month_to_date", "month", "month_last"] },
+  { label: "ปี", presets: ["year_to_date", "year", "year_last"] },
+  { label: "", presets: ["custom"] },
+];
+
+function startOfDay(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+function endOfDay(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+}
+function mondayOf(d: Date) {
+  const day = d.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const from = new Date(d);
+  from.setDate(d.getDate() + diffToMonday);
+  return startOfDay(from);
+}
+
 export function presetRange(preset: DatePreset, customFrom?: string, customTo?: string): { from: Date; to: Date } | null {
   if (preset === "all") return null;
   const anchor = now();
-  if (preset === "today") {
-    // Reset to local midnight — reusing `anchor` as-is left `from` sitting at
-    // right-now's wall-clock time instead of the start of the day, so any
-    // task due "today" (stored as UTC-midnight-of-the-day, see format.ts)
-    // read as due *before* `from` for the rest of the day and got filtered out.
-    const from = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
-    const to = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate(), 23, 59, 59, 999);
-    return { from, to };
+
+  if (preset === "today") return { from: startOfDay(anchor), to: endOfDay(anchor) };
+
+  if (preset === "yesterday") {
+    const y = new Date(anchor);
+    y.setDate(anchor.getDate() - 1);
+    return { from: startOfDay(y), to: endOfDay(y) };
   }
+
+  if (preset === "week_to_date") return { from: mondayOf(anchor), to: endOfDay(anchor) };
+
   if (preset === "week") {
-    const day = anchor.getDay();
-    const diffToMonday = day === 0 ? -6 : 1 - day;
-    const from = new Date(anchor);
-    from.setDate(anchor.getDate() + diffToMonday);
+    const from = mondayOf(anchor);
     const to = new Date(from);
     to.setDate(from.getDate() + 6);
-    to.setHours(23, 59, 59, 999);
-    return { from, to };
+    return { from, to: endOfDay(to) };
   }
+
+  if (preset === "week_last") {
+    const thisMonday = mondayOf(anchor);
+    const from = new Date(thisMonday);
+    from.setDate(thisMonday.getDate() - 7);
+    const to = new Date(thisMonday);
+    to.setDate(thisMonday.getDate() - 1);
+    return { from, to: endOfDay(to) };
+  }
+
+  if (preset === "month_to_date") {
+    const from = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+    return { from, to: endOfDay(anchor) };
+  }
+
   if (preset === "month") {
     const from = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
     const to = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0, 23, 59, 59, 999);
     return { from, to };
   }
+
+  if (preset === "month_last") {
+    const from = new Date(anchor.getFullYear(), anchor.getMonth() - 1, 1);
+    const to = new Date(anchor.getFullYear(), anchor.getMonth(), 0, 23, 59, 59, 999);
+    return { from, to };
+  }
+
+  if (preset === "year_to_date") {
+    const from = new Date(anchor.getFullYear(), 0, 1);
+    return { from, to: endOfDay(anchor) };
+  }
+
+  if (preset === "year") {
+    const from = new Date(anchor.getFullYear(), 0, 1);
+    const to = new Date(anchor.getFullYear(), 11, 31, 23, 59, 59, 999);
+    return { from, to };
+  }
+
+  if (preset === "year_last") {
+    const from = new Date(anchor.getFullYear() - 1, 0, 1);
+    const to = new Date(anchor.getFullYear() - 1, 11, 31, 23, 59, 59, 999);
+    return { from, to };
+  }
+
   // custom
   if (!customFrom || !customTo) return null;
   const from = new Date(customFrom);

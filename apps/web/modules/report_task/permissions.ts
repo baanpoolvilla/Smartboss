@@ -25,6 +25,10 @@ export const REPORT_TASK_PERMS = {
 
   activityView: "report_task.activity.view",
 
+  /** ศูนย์แจ้งปัญหาระบบ — ต้นทางเพิ่มมาในรอบ "issue desk" */
+  issueView: "report_task.issue.view",
+  issueManage: "report_task.issue.manage",
+
   settingManage: "report_task.setting.manage",
 } as const;
 
@@ -40,5 +44,7 @@ export const REPORT_TASK_PERM_LABELS: Record<string, string> = {
   [REPORT_TASK_PERMS.reportSubmit]: "ส่งรายงานประจำวัน",
   [REPORT_TASK_PERMS.reportManage]: "จัดการหัวข้อรายงานและข้อยกเว้น",
   [REPORT_TASK_PERMS.activityView]: "ดูบันทึกกิจกรรมของทั้งบริษัท",
+  [REPORT_TASK_PERMS.issueView]: "แจ้งปัญหาระบบและดูเรื่องของตัวเอง",
+  [REPORT_TASK_PERMS.issueManage]: "รับเรื่องและปิดงานในศูนย์แจ้งปัญหา",
   [REPORT_TASK_PERMS.settingManage]: "ตั้งค่าโมดูล",
 };

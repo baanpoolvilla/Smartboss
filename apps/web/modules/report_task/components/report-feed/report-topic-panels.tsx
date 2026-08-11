@@ -15,7 +15,7 @@ import { AlbumFormDialog } from "@/modules/report_task/components/report-feed/al
 import { users, getUser, getDepartment } from "@/modules/report_task/data/mock";
 import { useReportFeedStore, type ReportPost, type ReportPostImage, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { relativeTime } from "@/modules/report_task/lib/format";
+import { groupByDay, relativeTime } from "@/modules/report_task/lib/format";
 import { ReportImageLightbox } from "@/modules/report_task/components/report-feed/report-image-lightbox";
 import { canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { buildUserComplianceReports, pendingToday } from "@/modules/report_task/lib/report-feed-compliance";
@@ -189,7 +189,7 @@ export function ReportTopicPanels({
   const openAlbumFiles = openAlbumId ? files.filter((f) => f.image.albumId === openAlbumId) : [];
 
   // A room with a posting schedule (cutoffs) gets judged the same way the
-  // Dashboard/reports compliance widgets judge it — ตรงเวลา/สาย/ไม่ส่ง per
+  // Dashboard's compliance widgets judge it — ตรงเวลา/สาย/ไม่ส่ง per
   // member against that schedule, not just a raw post count. Only meaningful
   // once a schedule exists; an open check-in room has no "on time" to
   // measure against, so it falls back to a plain post count instead.
@@ -262,28 +262,38 @@ export function ReportTopicPanels({
         ) : visibleFiles.length === 0 ? (
           <TopicEmptyState icon={Search} title="ไม่มีไฟล์ตรงกับตัวกรอง" description="ลองค้นด้วยคำอื่น หรือเลือก &quot;ทุกคน&quot;" />
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-            {visibleFiles.map((f, i) => (
-              <div key={`${f.image.id}-${i}`} className="relative group">
-                <button onClick={() => setLightbox({ images: visibleFiles.map((ff) => ff.image), index: i })} className="block text-left w-full">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={f.image.url ?? f.image.dataUrl}
-                    alt={f.image.name}
-                    className="w-full h-24 object-cover rounded-lg border border-[var(--line)] group-hover:opacity-90"
-                  />
-                  <p className="text-xs mt-1 truncate">{f.image.name}</p>
-                  <p className="text-[11px] text-[var(--ink-soft)] truncate">
-                    {getUser(f.authorId)?.name} · {relativeTime(f.createdAt)}
-                  </p>
-                </button>
-                <div className="absolute top-1 left-1">
-                  <AlbumPickerButton
-                    topicId={topic.id}
-                    imageName={f.image.name}
-                    albumId={f.image.albumId}
-                    onChange={(albumId) => setImageAlbum(f.postId, f.image.id, albumId)}
-                  />
+          <div className="space-y-4">
+            {groupByDay(visibleFiles, (f) => f.createdAt).map((group) => (
+              <div key={group.key}>
+                <p className="text-[11px] font-bold text-[var(--ink-soft)] mb-2">{group.label}</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+                  {group.items.map((f) => {
+                    const i = visibleFiles.indexOf(f);
+                    return (
+                      <div key={`${f.image.id}-${i}`} className="relative group">
+                        <button onClick={() => setLightbox({ images: visibleFiles.map((ff) => ff.image), index: i })} className="block text-left w-full">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={f.image.url ?? f.image.dataUrl}
+                            alt={f.image.name}
+                            className="w-full h-24 object-cover rounded-lg border border-[var(--line)] group-hover:opacity-90"
+                          />
+                          <p className="text-xs mt-1 truncate">{f.image.name}</p>
+                          <p className="text-[11px] text-[var(--ink-soft)] truncate">
+                            {getUser(f.authorId)?.name} · {relativeTime(f.createdAt)}
+                          </p>
+                        </button>
+                        <div className="absolute top-1 left-1">
+                          <AlbumPickerButton
+                            topicId={topic.id}
+                            imageName={f.image.name}
+                            albumId={f.image.albumId}
+                            onChange={(albumId) => setImageAlbum(f.postId, f.image.id, albumId)}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -552,28 +562,28 @@ export function ReportTopicPanels({
               {stats.complianceRows.map((r) => {
                 const user = getUser(r.id);
                 return (
-                  <div key={r.id} className="flex items-start justify-between gap-2 py-2 border-b last:border-0 border-[var(--line)]">
-                    <Avatar className="h-7 w-7 shrink-0 mt-0.5">
-                      <AvatarFallback className="text-[10px] bg-[var(--accent)] text-[var(--brand-green-dark)]">
-                        {user?.avatar}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="text-sm font-medium truncate min-w-0">{r.name}</span>
-                        <span
-                          className={cn(
-                            "text-xs font-semibold shrink-0 whitespace-nowrap",
-                            r.complianceRate >= 80 ? "text-[var(--brand-green-dark)]" : r.complianceRate >= 50 ? "text-[var(--chart-amber)]" : "text-[var(--chart-red)]"
-                          )}
-                        >
-                          {r.complianceRate}%
-                        </span>
-                      </div>
-                      <Badge variant="secondary" className="text-[10px] font-normal mt-1">
+                  <div key={r.id} className="flex items-center justify-between gap-2 py-1.5 border-b last:border-0 border-[var(--line)]">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Avatar className="h-6 w-6 shrink-0">
+                        <AvatarFallback className="text-[10px] bg-[var(--accent)] text-[var(--brand-green-dark)]">
+                          {user?.avatar}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm font-medium truncate">{r.name}</span>
+                      <Badge variant="secondary" className="text-[10px] font-normal shrink-0 hidden sm:inline-flex">
                         {r.subtitle}
                       </Badge>
-                      <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                    </div>
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      <span
+                        className={cn(
+                          "text-xs font-semibold tabular-nums whitespace-nowrap",
+                          r.complianceRate >= 80 ? "text-[var(--brand-green-dark)]" : r.complianceRate >= 50 ? "text-[var(--chart-amber)]" : "text-[var(--chart-red)]"
+                        )}
+                      >
+                        {r.complianceRate}%
+                      </span>
+                      <div className="flex items-center gap-1 flex-wrap justify-end">
                         <StatChip label="ตรงเวลา" value={r.onTime} tone="green" />
                         {r.late > 0 && <StatChip label="สาย" value={r.late} tone="amber" />}
                         {r.missed > 0 && <StatChip label="ไม่ส่ง" value={r.missed} tone="red" />}
@@ -593,25 +603,21 @@ export function ReportTopicPanels({
         ) : (
           <div>
             {stats.contributors.map(({ user, count }) => (
-              <div key={user.id} className="flex items-start justify-between gap-2 py-2 border-b last:border-0 border-[var(--line)]">
-                <Avatar className="h-6 w-6 shrink-0 mt-0.5">
-                  <AvatarFallback className="text-[10px] bg-[var(--accent)] text-[var(--brand-green-dark)]">
-                    {user.avatar}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="text-sm font-medium truncate min-w-0">{user.name}</span>
-                    <span className={cn("text-xs shrink-0 whitespace-nowrap", count === 0 ? "text-[var(--chart-red)] font-medium" : "text-[var(--ink-soft)]")}>
-                      {count} โพสต์
-                    </span>
-                  </div>
-                  <div className="mt-1">
-                    <Badge variant="secondary" className="text-[10px] font-normal">
-                      {getDepartment(user.departmentId)?.name ?? user.role}
-                    </Badge>
-                  </div>
+              <div key={user.id} className="flex items-center justify-between gap-2 py-1.5 border-b last:border-0 border-[var(--line)]">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Avatar className="h-6 w-6 shrink-0">
+                    <AvatarFallback className="text-[10px] bg-[var(--accent)] text-[var(--brand-green-dark)]">
+                      {user.avatar}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="text-sm font-medium truncate">{user.name}</span>
+                  <Badge variant="secondary" className="text-[10px] font-normal shrink-0 hidden sm:inline-flex">
+                    {getDepartment(user.departmentId)?.name ?? user.role}
+                  </Badge>
                 </div>
+                <span className={cn("text-xs tabular-nums shrink-0 whitespace-nowrap", count === 0 ? "text-[var(--chart-red)] font-medium" : "text-[var(--ink-soft)]")}>
+                  {count} โพสต์
+                </span>
               </div>
             ))}
           </div>

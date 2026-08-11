@@ -48,13 +48,6 @@ export const whatsNewItems: WhatsNewItem[] = [
     tourTarget: "member-count",
   },
   {
-    id: "dashboard-customize",
-    page: "/",
-    title: "ปรับแต่งแดชบอร์ดได้เอง",
-    description: "กด \"ปรับแต่ง\" เพื่อซ่อน/แสดงวิดเจ็ต ปรับความกว้าง หรือจัดเรียงใหม่ตามที่ใช้บ่อย",
-    tourTarget: "dashboard-customize",
-  },
-  {
     id: "dashboard-given-tab",
     page: "/",
     title: "ดูงานที่คุณแจกให้คนอื่น",
@@ -67,13 +60,6 @@ export const whatsNewItems: WhatsNewItem[] = [
     title: "สลับดูงานเป็นตารางได้",
     description: "ข้อมูลชุดเดียวกับบอร์ด แต่แสดงเป็นตาราง กดหัวคอลัมน์เพื่อเรียงลำดับได้",
     tourTarget: "task-view-grid",
-  },
-  {
-    id: "task-select-mode",
-    page: "/tasks",
-    title: "เลือกหลายงานพร้อมกันเพื่อทำทีเดียว",
-    description: "กด \"เลือกหลายรายการ\" แล้วติ๊กเลือกหลายการ์ด จะมีแถบเปลี่ยนสถานะ/ความสำคัญหลายงานพร้อมกันโผล่ขึ้นมา",
-    tourTarget: "task-select-mode-toggle",
   },
   {
     id: "calendar-priority-filter",

@@ -5,7 +5,15 @@ import { getUser } from "@/modules/report_task/data/mock";
 import { lateCutoffFor } from "@/modules/report_task/lib/report-cutoff";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Button } from "@/modules/report_task/components/ui/button";
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/modules/report_task/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/modules/report_task/components/ui/dropdown-menu";
 import { Bookmark, Image as ImageIcon, TriangleAlert, User, X } from "lucide-react";
 
 export interface PostFilters {
@@ -92,13 +100,15 @@ export function PostFilterBar({
           }
         />
         <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
-          <DropdownMenuLabel>กรองตามผู้โพสต์</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          {authorOptions.map((id) => (
-            <DropdownMenuCheckboxItem key={id} checked={filters.authorIds.has(id)} onCheckedChange={() => toggleAuthor(id)}>
-              {getUser(id)?.name ?? id}
-            </DropdownMenuCheckboxItem>
-          ))}
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>กรองตามผู้โพสต์</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {authorOptions.map((id) => (
+              <DropdownMenuCheckboxItem key={id} checked={filters.authorIds.has(id)} onCheckedChange={() => toggleAuthor(id)}>
+                {getUser(id)?.name ?? id}
+              </DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
 

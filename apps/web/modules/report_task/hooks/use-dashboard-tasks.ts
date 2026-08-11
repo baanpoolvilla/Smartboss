@@ -16,13 +16,12 @@ export function useDashboardTasks() {
   const visible = useVisibleTasks();
   const personId = useDashboardFilterStore((s) => s.personId);
   const departmentId = useDashboardFilterStore((s) => s.departmentId);
-  const priority = useDashboardFilterStore((s) => s.priority);
   const preset = useDashboardFilterStore((s) => s.preset);
   const customFrom = useDashboardFilterStore((s) => s.customFrom);
   const customTo = useDashboardFilterStore((s) => s.customTo);
 
   return useMemo(
-    () => filterTasksByDashboard(visible, { personId, departmentId, priority, preset, customFrom, customTo }),
-    [visible, personId, departmentId, priority, preset, customFrom, customTo]
+    () => filterTasksByDashboard(visible, { personId, departmentId, preset, customFrom, customTo }),
+    [visible, personId, departmentId, preset, customFrom, customTo]
   );
 }

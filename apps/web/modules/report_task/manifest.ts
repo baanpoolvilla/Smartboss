@@ -20,6 +20,7 @@ const MENU_PERMISSION: Record<string, string> = {
   [`${REPORT_TASK_BASE}/tasks`]: REPORT_TASK_PERMS.taskView,
   [`${REPORT_TASK_BASE}/calendar`]: REPORT_TASK_PERMS.calendarView,
   [`${REPORT_TASK_BASE}/report-feed`]: REPORT_TASK_PERMS.reportView,
+  [`${REPORT_TASK_BASE}/issue-reports`]: REPORT_TASK_PERMS.issueView,
   [`${REPORT_TASK_BASE}/activity-log`]: REPORT_TASK_PERMS.activityView,
   [`${REPORT_TASK_BASE}/settings`]: REPORT_TASK_PERMS.settingManage,
 };
@@ -38,16 +39,9 @@ export const reportTaskManifest: ModuleManifest = {
   colorBg: "#F4F6F9",
   basePath: REPORT_TASK_BASE,
   icon: "ClipboardList",
-  menus: [
-    ...menus,
-    // สรุปผล/กราฟ ไม่ได้อยู่ใน navItems เดิม (เข้าจากในหน้า Report)
-    // แต่ใน Smartboss เป็นหน้าระดับเดียวกัน จึงใส่เป็นเมนูตรง ๆ
-    {
-      label: "สรุปผล",
-      path: `${REPORT_TASK_BASE}/reports`,
-      permission: REPORT_TASK_PERMS.reportView,
-      icon: "ChartColumn",
-    },
-  ],
+  // เมนู "สรุปผล" (/reports) ถูกตัดออกเมื่อ 2026-08-08 เพราะต้นทางลบหน้านั้นทิ้ง
+  // แล้วย้ายกราฟทั้งหมดไปอยู่บนแดชบอร์ดแทน (commit "Redesign dashboard,
+  // remove legacy reports pages") — ถ้าเหลือไว้จะเป็นเมนูที่กดแล้ว 404
+  menus,
   permissions: ALL_REPORT_TASK_PERMS,
 };

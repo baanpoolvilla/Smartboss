@@ -1,7 +1,6 @@
 "use client";
 
-import { Search, Plus, AlertTriangle } from "lucide-react";
-import { Input } from "@/modules/report_task/components/ui/input";
+import { Plus, AlertTriangle, Building2, Users, Flag, AlarmClockOff } from "lucide-react";
 import { Button } from "@/modules/report_task/components/ui/button";
 import {
   Select,
@@ -16,15 +15,27 @@ import { getDepartment, getUser } from "@/modules/report_task/data/mock";
 import { canSeeTask } from "@/modules/report_task/lib/permissions";
 import { taskPriorityOrder, priorityMeta } from "@/modules/report_task/lib/task-meta";
 import type { TaskPriority } from "@/modules/report_task/types";
+import { FilterField, FILTER_FIELD_LABEL_CLASS, filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
+import { DateRangeSelectField } from "@/modules/report_task/components/shared/date-range-select-field";
 import { cn } from "@/modules/report_task/lib/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NewTaskDialog } from "./new-task-dialog";
 
 const penaltyFilterLabels = {
-  all: "การหักคะแนน: ทั้งหมด",
+  all: "ทั้งหมด",
   overdue: "งานเลยกำหนดทั้งหมด",
   pending: "เลยกำหนด · ยังไม่หัก",
   docked: "ถูกหักคะแนนแล้ว",
+} as const;
+
+const defaultFilters = {
+  assigneeId: "all",
+  departmentId: "all",
+  priority: "all",
+  penalty: "all",
+  preset: "all",
+  customFrom: "",
+  customTo: "",
 } as const;
 
 export function TaskFilters() {
@@ -34,6 +45,13 @@ export function TaskFilters() {
   const allTasks = useTaskStore((s) => s.tasks);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
+
+  const isFiltered =
+    filters.departmentId !== defaultFilters.departmentId ||
+    filters.assigneeId !== defaultFilters.assigneeId ||
+    filters.priority !== defaultFilters.priority ||
+    filters.penalty !== defaultFilters.penalty ||
+    filters.preset !== defaultFilters.preset;
 
   // filters is global store state that outlives the identity switcher — a
   // department/assignee picked while viewing as one person would otherwise
@@ -63,105 +81,128 @@ export function TaskFilters() {
   }, [allTasks, viewingAsUserId]);
 
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-      <div className="relative flex-1 max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--ink-soft)]" />
-        <Input
-          placeholder="ค้นหางาน ผู้รับผิดชอบ หรือรายละเอียด..."
-          className="pl-9 bg-white"
-          value={filters.search}
-          onChange={(e) => setFilters({ search: e.target.value })}
-        />
-      </div>
-
+    <div className="flex flex-wrap items-end gap-2">
       {availableDepartments.length > 1 ? (
-        <Select value={filters.departmentId} onValueChange={(v) => v && setFilters({ departmentId: v })}>
-          <SelectTrigger className="w-full sm:w-[160px] bg-white">
-            <SelectValue placeholder="แผนก">
-              {filters.departmentId === "all" ? "ทุกแผนก" : (getDepartment(filters.departmentId)?.name ?? "แผนก")}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">ทุกแผนก</SelectItem>
-            {availableDepartments.map((d) => (
-              <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <FilterField label="แผนก">
+          <Select value={filters.departmentId} onValueChange={(v) => v && setFilters({ departmentId: v })}>
+            <SelectTrigger className={filterFieldTriggerClass(filters.departmentId !== "all", "min-w-[130px]")}>
+              <Building2 className="h-4 w-4 shrink-0" />
+              <SelectValue placeholder="แผนก">
+                {filters.departmentId === "all" ? "ทุกแผนก" : (getDepartment(filters.departmentId)?.name ?? "แผนก")}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent alignItemWithTrigger={false}>
+              <SelectItem value="all">ทุกแผนก</SelectItem>
+              {availableDepartments.map((d) => (
+                <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FilterField>
       ) : (
         // Nothing to actually pick between — just say which one, no dropdown.
-        <span className="inline-flex items-center h-9 px-3 rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] text-sm text-[var(--ink-soft)] w-full sm:w-[160px] truncate">
-          {availableDepartments[0]?.name ?? "ไม่มีแผนก"}
-        </span>
+        <FilterField label="แผนก">
+          <span className={filterFieldTriggerClass(false, "min-w-[130px] cursor-default")}>
+            <Building2 className="h-4 w-4 shrink-0" />
+            {availableDepartments[0]?.name ?? "ไม่มีแผนก"}
+          </span>
+        </FilterField>
       )}
 
       {availableAssignees.length > 1 ? (
-        <Select value={filters.assigneeId} onValueChange={(v) => v && setFilters({ assigneeId: v })}>
-          <SelectTrigger className="w-full sm:w-[160px] bg-white">
-            <SelectValue placeholder="ผู้รับผิดชอบ">
-              {filters.assigneeId === "all" ? "ทุกคน" : (getUser(filters.assigneeId)?.name ?? "ผู้รับผิดชอบ")}
+        <FilterField label="พนักงาน">
+          <Select value={filters.assigneeId} onValueChange={(v) => v && setFilters({ assigneeId: v })}>
+            <SelectTrigger className={filterFieldTriggerClass(filters.assigneeId !== "all", "min-w-[150px]")}>
+              <Users className="h-4 w-4 shrink-0" />
+              <SelectValue placeholder="ผู้รับผิดชอบ">
+                {filters.assigneeId === "all" ? "ทุกคน" : (getUser(filters.assigneeId)?.name ?? "ผู้รับผิดชอบ")}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent alignItemWithTrigger={false}>
+              <SelectItem value="all">ทุกคน</SelectItem>
+              {availableAssignees.map((u) => (
+                <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FilterField>
+      ) : (
+        <FilterField label="พนักงาน">
+          <span className={filterFieldTriggerClass(false, "min-w-[130px] cursor-default")}>
+            <Users className="h-4 w-4 shrink-0" />
+            {availableAssignees[0]?.id === viewingAsUserId ? "ตัวเอง" : (availableAssignees[0]?.name ?? "ไม่มีผู้รับผิดชอบ")}
+          </span>
+        </FilterField>
+      )}
+
+      <DateRangeSelectField
+        preset={filters.preset}
+        customFrom={filters.customFrom}
+        customTo={filters.customTo}
+        onPresetChange={(preset) => setFilters({ preset })}
+        onCustomRangeChange={(customFrom, customTo) => setFilters({ customFrom, customTo })}
+      />
+
+      <FilterField label="ความสำคัญ">
+        <Select value={filters.priority} onValueChange={(v) => v && setFilters({ priority: v as typeof filters.priority })}>
+          <SelectTrigger className={filterFieldTriggerClass(filters.priority !== "all", "min-w-[130px]")}>
+            <Flag className="h-4 w-4 shrink-0" />
+            <SelectValue placeholder="ความสำคัญ">
+              {filters.priority === "all" ? "ทุกความสำคัญ" : (priorityMeta[filters.priority as TaskPriority]?.label ?? "ความสำคัญ")}
             </SelectValue>
           </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">ทุกคน</SelectItem>
-            {availableAssignees.map((u) => (
-              <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+          <SelectContent alignItemWithTrigger={false}>
+            <SelectItem value="all">ทุกความสำคัญ</SelectItem>
+            {taskPriorityOrder.map((p) => (
+              <SelectItem key={p} value={p}>{priorityMeta[p].label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
-      ) : (
-        <span className="inline-flex items-center h-9 px-3 rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] text-sm text-[var(--ink-soft)] w-full sm:w-[160px] truncate">
-          {availableAssignees[0]?.id === viewingAsUserId ? "ตัวเอง" : (availableAssignees[0]?.name ?? "ไม่มีผู้รับผิดชอบ")}
-        </span>
-      )}
+      </FilterField>
 
-      <Select value={filters.priority} onValueChange={(v) => v && setFilters({ priority: v as typeof filters.priority })}>
-        <SelectTrigger className="w-full sm:w-[140px] bg-white">
-          <SelectValue placeholder="ความสำคัญ">
-            {filters.priority === "all" ? "ทุกความสำคัญ" : (priorityMeta[filters.priority as TaskPriority]?.label ?? "ความสำคัญ")}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">ทุกความสำคัญ</SelectItem>
-          {taskPriorityOrder.map((p) => (
-            <SelectItem key={p} value={p}>{priorityMeta[p].label}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <FilterField label="การหักคะแนน">
+        <Select value={filters.penalty} onValueChange={(v) => v && setFilters({ penalty: v as typeof filters.penalty })}>
+          <SelectTrigger className={filterFieldTriggerClass(filters.penalty !== "all", "min-w-[150px]")}>
+            <AlarmClockOff className="h-4 w-4 shrink-0" />
+            <SelectValue placeholder="การหักคะแนน">{penaltyFilterLabels[filters.penalty]}</SelectValue>
+          </SelectTrigger>
+          <SelectContent alignItemWithTrigger={false}>
+            {(Object.keys(penaltyFilterLabels) as (keyof typeof penaltyFilterLabels)[]).map((k) => (
+              <SelectItem key={k} value={k}>{penaltyFilterLabels[k]}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </FilterField>
 
-      <button
-        onClick={() => setFilters({ penalty: filters.penalty === "overdue" ? "all" : "overdue" })}
-        className={cn(
-          "flex items-center gap-1.5 px-3 py-1.5 h-9 text-xs font-medium rounded-lg border transition-colors shrink-0",
-          filters.penalty === "overdue"
-            ? "bg-red-50 border-red-200 text-[var(--chart-red)]"
-            : "border-[var(--line)] bg-white text-[var(--ink-soft)] hover:text-[var(--ink)]"
+      <div className="flex flex-col gap-1">
+        <span className={FILTER_FIELD_LABEL_CLASS}>&nbsp;</span>
+        <button
+          onClick={() => setFilters({ penalty: filters.penalty === "overdue" ? "all" : "overdue" })}
+          className={cn(
+            filterFieldTriggerClass(filters.penalty === "overdue"),
+            "shrink-0",
+            filters.penalty === "overdue" && "bg-red-50 border-red-200 text-[var(--chart-red)] [&_svg]:text-[var(--chart-red)]"
+          )}
+        >
+          <AlertTriangle className="h-3.5 w-3.5" />
+          เลยกำหนดเท่านั้น
+        </button>
+      </div>
+
+      <div className="ml-auto flex items-end gap-2">
+        {isFiltered && (
+          <Button variant="ghost" size="sm" className="h-8 px-2 text-[var(--ink-soft)]" onClick={resetFilters} aria-label="ล้างตัวกรอง">
+            ✕ ล้างตัวกรอง
+          </Button>
         )}
-      >
-        <AlertTriangle className="h-3.5 w-3.5" />
-        เลยกำหนดเท่านั้น
-      </button>
-
-      <Select value={filters.penalty} onValueChange={(v) => v && setFilters({ penalty: v as typeof filters.penalty })}>
-        <SelectTrigger className="w-full sm:w-[170px] bg-white">
-          <SelectValue placeholder="การหักคะแนน">
-            {penaltyFilterLabels[filters.penalty]}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          {(Object.keys(penaltyFilterLabels) as (keyof typeof penaltyFilterLabels)[]).map((k) => (
-            <SelectItem key={k} value={k}>{penaltyFilterLabels[k]}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Button
-        className="sm:ml-auto bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
-        onClick={() => setNewTaskOpen(true)}
-      >
-        <Plus className="h-4 w-4" />
-        สร้างงานใหม่
-      </Button>
+        <Button
+          className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+          onClick={() => setNewTaskOpen(true)}
+        >
+          <Plus className="h-4 w-4" />
+          สร้างงานใหม่
+        </Button>
+      </div>
 
       <NewTaskDialog open={newTaskOpen} onOpenChange={setNewTaskOpen} />
     </div>

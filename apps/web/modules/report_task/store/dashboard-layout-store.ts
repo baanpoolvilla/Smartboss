@@ -3,25 +3,27 @@ import { persist } from "zustand/middleware";
 
 // Every widget on the Dashboard is customizable — reorder, resize, or hide
 // any of them (see dashboard-grid.tsx / dashboard-customize-bar.tsx). The
-// Executive KPI row and the two big Overview donuts count as one widget
-// each (same granularity as before this list grew) rather than exploding
-// into one entry per card.
+// two big Overview donuts count as one widget each (same granularity as
+// before this list grew) rather than exploding into one entry per card —
+// Task and Report Overview stay two separate cards (each has its own
+// domain-specific labels), only the KPI summary widget merges the two
+// domains into one bar.
 export type WidgetId =
-  | "executiveKpi"
   | "systemKpiSummary"
   | "taskOverview"
   | "reportOverview"
+  | "deptPie"
+  | "reportDeptPie"
   | "overdueTasks"
-  | "pendingReports"
-  | "recentActivity"
-  | "deptBar"
-  | "reportDeptBar"
-  | "leaderboard"
-  | "myTasks"
-  | "deadlines";
+  | "pendingReports";
 
-/** span = how many of the 3 dashboard grid columns the widget occupies. */
-export type WidgetSpan = 1 | 2 | 3;
+/** span = how many of the 2 dashboard grid columns the widget occupies — 1
+ * (half, paired with a sibling of equal importance) or 2 (full width, its
+ * own tier). Kept to just two sizes so every tier reads as either one
+ * full-width headline or two equal-weight cards side by side, ranked
+ * top-to-bottom by importance — not the mismatched 2/3-vs-1/3 split the
+ * 3-column grid used to produce. */
+export type WidgetSpan = 1 | 2;
 
 export interface WidgetConfig {
   id: WidgetId;
@@ -29,19 +31,19 @@ export interface WidgetConfig {
   span: WidgetSpan;
 }
 
+// Four tiers, ranked top-to-bottom by importance: 1) the one headline KPI
+// card (full width, the combined-domain summary), 2) the two domain-level
+// Overview donuts (the detail behind it) at equal width, 3) the two
+// department pies (compare across teams) at equal width, 4) the two
+// row-level detail lists (what to act on, last) at equal width.
 const defaultLayout: WidgetConfig[] = [
-  { id: "executiveKpi", visible: true, span: 3 },
-  { id: "systemKpiSummary", visible: true, span: 3 },
+  { id: "systemKpiSummary", visible: true, span: 2 },
+  { id: "taskOverview", visible: true, span: 1 },
   { id: "reportOverview", visible: true, span: 1 },
-  { id: "taskOverview", visible: true, span: 2 },
+  { id: "deptPie", visible: true, span: 1 },
+  { id: "reportDeptPie", visible: true, span: 1 },
   { id: "overdueTasks", visible: true, span: 1 },
   { id: "pendingReports", visible: true, span: 1 },
-  { id: "recentActivity", visible: true, span: 1 },
-  { id: "deptBar", visible: true, span: 2 },
-  { id: "leaderboard", visible: true, span: 1 },
-  { id: "reportDeptBar", visible: true, span: 2 },
-  { id: "myTasks", visible: true, span: 1 },
-  { id: "deadlines", visible: true, span: 3 },
 ];
 
 interface DashboardLayoutStore {
@@ -80,15 +82,22 @@ export const useDashboardLayoutStore = create<DashboardLayoutStore>()(
       name: "eb-dashboard-layout",
       skipHydration: true,
       // Someone's already-persisted layout may predate a widget that's since
-      // been added (or list one that no longer exists) — keep every entry
-      // this registry still recognizes in its saved order, then append
-      // anything from today's defaults that's missing (e.g. the Executive
-      // KPI/Analytics/Operations/Activity widgets, newly folded back into
-      // this registry so the whole dashboard is customizable again, not
-      // just the department/ranking/personal-task section).
-      version: 2,
+      // been added, renamed, or removed — keep every entry this registry
+      // still recognizes in its saved order, then append anything from
+      // today's defaults that's missing. Bumped to 5 when the grid went from
+      // 3 columns to 2 (equal-width tiers, ranked by importance) — `span: 3`
+      // no longer exists, and with the "ปรับแต่ง" UI gone there's no way for
+      // anyone to fix a stale span themselves, so span is always re-applied
+      // from `defaultLayout` by id below rather than trusting whatever a
+      // pre-redesign layout had saved (order/visibility still carry over).
+      version: 5,
       migrate: (persisted) => {
-        const widgets = (persisted as Partial<DashboardLayoutStore> | undefined)?.widgets ?? [];
+        const rawWidgets = (persisted as Partial<DashboardLayoutStore> | undefined)?.widgets ?? [];
+        const idRenames: Record<string, WidgetId> = { deptBar: "deptPie", reportDeptBar: "reportDeptPie" };
+        const defaultSpanOf = new Map(defaultLayout.map((w) => [w.id, w.span]));
+        const widgets = rawWidgets
+          .map((w) => (w.id in idRenames ? { ...w, id: idRenames[w.id]! } : w))
+          .map((w) => ({ ...w, span: defaultSpanOf.get(w.id) ?? w.span }));
         const known = new Set(defaultLayout.map((w) => w.id));
         const kept = widgets.filter((w) => known.has(w.id));
         const keptIds = new Set(kept.map((w) => w.id));
@@ -100,7 +109,9 @@ export const useDashboardLayoutStore = create<DashboardLayoutStore>()(
         if (!persistedWidgets) return current;
         const knownIds = new Set(persistedWidgets.map((w) => w.id));
         const missing = defaultLayout.filter((w) => !knownIds.has(w.id));
-        return { ...current, widgets: [...persistedWidgets, ...missing] };
+        const defaultSpanOf = new Map(defaultLayout.map((w) => [w.id, w.span]));
+        const widgets = persistedWidgets.map((w) => ({ ...w, span: defaultSpanOf.get(w.id) ?? w.span }));
+        return { ...current, widgets: [...widgets, ...missing] };
       },
     }
   )

@@ -246,7 +246,6 @@ export function CalendarView() {
         editable: false,
         mine: g.ownerUserId === viewingAsUserId,
         description: g.sourceLabel,
-        seriesId: g.seriesId,
       });
     }
     return { workGoogleEvents: work, workGoogleOwnerIds: Array.from(workOwners) };

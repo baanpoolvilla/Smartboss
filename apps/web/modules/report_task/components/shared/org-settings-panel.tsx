@@ -30,7 +30,7 @@ import { toast } from "sonner";
  * (src/app/settings/page.tsx, "permissions" tab, same owner-only gate as
  * SettingsAccessPanel). This is the data every other page's department
  * dropdowns/pickers, task assignment, and Report-room visibility already
- * read through `@/modules/report_task/data/mock`'s `departments`/`users` (a live view over
+ * read through `@/data/mock`'s `departments`/`users` (a live view over
  * these two stores — see mock.ts) — so an edit here takes effect
  * everywhere else in the app, not just in this panel.
  */

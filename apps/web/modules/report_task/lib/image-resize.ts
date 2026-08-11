@@ -25,7 +25,7 @@ function drawToCanvas(file: File, maxWidth: number): Promise<HTMLCanvasElement> 
 
 /**
  * Downscale + re-encode an image client-side, then upload it to
- * /api/report-task/uploads (see H4 in the production-readiness audit — this replaced
+ * /api/uploads (see H4 in the production-readiness audit — this replaced
  * storing the full data URL inline in a store/file). Returns the server path
  * to reference from then on.
  */

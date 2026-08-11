@@ -1,18 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { SlidersHorizontal } from "lucide-react";
-import { DashboardHero } from "@/modules/report_task/components/dashboard/dashboard-hero";
 import { DashboardFilters } from "@/modules/report_task/components/dashboard/dashboard-filters";
 import { DashboardGrid } from "@/modules/report_task/components/dashboard/dashboard-grid";
-import { DashboardCustomizeBar } from "@/modules/report_task/components/dashboard/dashboard-customize-bar";
 import { DashboardSkeleton } from "@/modules/report_task/components/dashboard/dashboard-skeleton";
-import { Button } from "@/modules/report_task/components/ui/button";
+import { ActiveFilterChips } from "@/modules/report_task/components/dashboard/active-filter-chips";
+import { StickyFilterBar } from "@/modules/report_task/components/shared/sticky-filter-bar";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
 
 export default function DashboardPage() {
-  const [editing, setEditing] = useState(false);
   const tasksLoaded = useTaskStore((s) => s.loaded);
   // The Report widgets read report-feed-store directly — wait for its own
   // server-synced load too, so they don't flash empty/zero before
@@ -20,28 +16,21 @@ export default function DashboardPage() {
   const reportFeedLoaded = useReportFeedStore((s) => s.loaded);
   const loaded = tasksLoaded && reportFeedLoaded;
 
+  if (!loaded) {
+    return (
+      <div className="flex flex-col gap-8 pb-8">
+        <DashboardSkeleton />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-8 pb-8">
-      {/* Header — greeting, filters (search/date/scope), customize */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <DashboardHero />
-        {!editing && (
-          <Button data-tour="dashboard-customize" variant="outline" size="sm" onClick={() => setEditing(true)}>
-            <SlidersHorizontal className="h-3.5 w-3.5" />
-            ปรับแต่ง
-          </Button>
-        )}
-      </div>
-
-      {!loaded ? (
-        <DashboardSkeleton />
-      ) : (
-        <>
-          <DashboardFilters />
-          {editing && <DashboardCustomizeBar onDone={() => setEditing(false)} />}
-          <DashboardGrid editing={editing} />
-        </>
-      )}
+      {/* No page title here — the breadcrumb in Topbar already says "หน้าหลัก" */}
+      <StickyFilterBar activeChips={<ActiveFilterChips />}>
+        <DashboardFilters />
+      </StickyFilterBar>
+      <DashboardGrid editing={false} />
     </div>
   );
 }

@@ -8,10 +8,9 @@ import { PageHeader } from "@/modules/report_task/components/shared/page-header"
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { todayComplianceSummary } from "@/modules/report_task/lib/report-feed-compliance";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
-import { chartColors } from "@/modules/report_task/lib/chart-colors";
 import { relativeTime } from "@/modules/report_task/lib/format";
 import { cn } from "@/modules/report_task/lib/utils";
-import { Bookmark, CheckCircle2, Clock, TriangleAlert } from "lucide-react";
+import { Bookmark, Clock, TriangleAlert } from "lucide-react";
 
 /** Top-of-page banner: same `PageHeader` every other top-level page uses
  * (H1/H2 — was its own 32px "Report" title before, drifting from the rest
@@ -24,14 +23,13 @@ import { Bookmark, CheckCircle2, Clock, TriangleAlert } from "lucide-react";
 export function ReportHeader({
   visibleTopics,
   onJumpToPost,
-  onShowOverview,
+  onShowTodayStatus,
 }: {
   visibleTopics: ReportTopic[];
   onJumpToPost: (topicId: string, postId: string) => void;
-  /** A pill click doesn't have a specific room to jump into (it's a
-   * cross-room today snapshot) — lands on ภาพรวมทั้งหมด instead, the closest
-   * existing view to "show me what this number means." */
-  onShowOverview: () => void;
+  /** Which pill was clicked — lands on the actual people behind that number
+   * (see TodayStatusPanel in page.tsx), not a generic merged feed. */
+  onShowTodayStatus: (status: "posted" | "late" | "missing") => void;
 }) {
   const posts = useReportFeedStore((s) => s.posts);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
@@ -51,39 +49,28 @@ export function ReportHeader({
 
   return (
     <PageHeader
-      title="รายงาน · Report"
+      title="รายงาน"
       subtitle="โพสต์อัปเดต พูดคุย แลกเปลี่ยน และสรุปงานในทีม — เหมือนแชนแนลใน Teams"
       action={
-        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
+        <div className="flex items-center gap-1.5 flex-wrap w-full sm:w-auto">
           <CompliancePill
-            icon={CheckCircle2}
-            color="var(--brand-green-dark)"
+            dotColor="var(--brand-green)"
             label="ส่งแล้ววันนี้"
             value={`${summary.postedToday}/${summary.totalTracked}`}
-            onClick={onShowOverview}
+            onClick={() => onShowTodayStatus("posted")}
           />
-          <CompliancePill icon={Clock} color={chartColors.amber} label="ส่งช้า" value={`${summary.lateToday}`} onClick={onShowOverview} />
-          <CompliancePill
-            icon={TriangleAlert}
-            color="var(--chart-red)"
-            label="ยังไม่ส่ง"
-            value={`${summary.missingToday}`}
-            onClick={onShowOverview}
-          />
+          <CompliancePill tone="warn" icon={Clock} label="ส่งช้า" value={`${summary.lateToday}`} onClick={() => onShowTodayStatus("late")} />
+          <CompliancePill tone="bad" icon={TriangleAlert} label="ยังไม่ส่ง" value={`${summary.missingToday}`} onClick={() => onShowTodayStatus("missing")} />
           <Popover>
             <PopoverTrigger
               render={
                 <button
-                  className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--line)] bg-white hover:border-[var(--brand-green)]/40 transition-colors"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[var(--line)] bg-white px-2.5 py-1 text-[11.5px] font-medium hover:bg-[var(--bg-soft)] transition-colors"
                   aria-label={`ข้อความที่บันทึกไว้ (${savedPosts.length})`}
                   title="ข้อความที่บันทึกไว้"
                 >
-                  <Bookmark className="h-4 w-4 text-[var(--brand-green-dark)]" />
-                  {savedPosts.length > 0 && (
-                    <span className="absolute -top-1 -right-1 h-4 min-w-4 px-0.5 rounded-full bg-[var(--brand-green)] text-[10px] font-semibold text-[var(--ink)] flex items-center justify-center tabular-nums">
-                      {savedPosts.length}
-                    </span>
-                  )}
+                  <Bookmark className="h-3.5 w-3.5 text-[var(--brand-green-dark)]" />
+                  <b className="tabular-nums font-bold">{savedPosts.length}</b>
                 </button>
               }
             />
@@ -121,34 +108,42 @@ export function ReportHeader({
   );
 }
 
+const pillToneStyles = {
+  warn: { border: "border-[var(--chart-amber)]/40", bg: "bg-[color-mix(in_srgb,var(--chart-amber)_10%,white)]", text: "text-[var(--chart-amber)]" },
+  bad: { border: "border-[var(--chart-red)]/40", bg: "bg-[color-mix(in_srgb,var(--chart-red)_8%,white)]", text: "text-[var(--chart-red)]" },
+} as const;
+
+/** Single-line chip — dot+label+bold count, same shape as the mockup's `.pill`
+ * (`.pill.warn`/`.pill.bad` for the amber/red variants) — not a boxed KPI
+ * card, which read as much heavier than the header row it sits in. */
 function CompliancePill({
   icon: Icon,
-  color,
+  dotColor,
+  tone,
   label,
   value,
   onClick,
 }: {
-  icon: typeof CheckCircle2;
-  color: string;
+  icon?: typeof Clock;
+  dotColor?: string;
+  tone?: keyof typeof pillToneStyles;
   label: string;
   value: string;
   onClick: () => void;
 }) {
+  const toneStyle = tone ? pillToneStyles[tone] : null;
   return (
     <button
       onClick={onClick}
       className={cn(
-        "flex items-center gap-2 rounded-xl border border-[var(--line)] bg-white px-3 py-2 hover:border-[var(--brand-green)]/40 hover:bg-[var(--bg-soft)] transition-colors text-left"
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] font-medium whitespace-nowrap transition-colors",
+        toneStyle ? cn(toneStyle.border, toneStyle.bg, toneStyle.text) : "border-[var(--line)] bg-white text-[var(--ink)] hover:bg-[var(--bg-soft)]"
       )}
       title={`${label}: ${value} — ดูรายละเอียดใน ภาพรวมทั้งหมด`}
     >
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: `color-mix(in srgb, ${color} 14%, white)` }}>
-        <Icon className="h-3.5 w-3.5" style={{ color }} />
-      </span>
-      <span className="leading-tight">
-        <span className="block text-[13px] font-semibold tabular-nums">{value}</span>
-        <span className="block text-[10px] text-[var(--ink-soft)] whitespace-nowrap">{label}</span>
-      </span>
+      {dotColor && <span className="h-[7px] w-[7px] rounded-full shrink-0" style={{ backgroundColor: dotColor }} aria-hidden />}
+      {Icon && <Icon className="h-3 w-3 shrink-0" />}
+      {label} <b className="tabular-nums font-bold">{value}</b>
     </button>
   );
 }

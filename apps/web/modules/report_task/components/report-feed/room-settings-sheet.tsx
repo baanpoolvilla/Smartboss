@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/modules/report_task/components/ui/sheet";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/modules/report_task/components/ui/dialog";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Label } from "@/modules/report_task/components/ui/label";
 import { Textarea } from "@/modules/report_task/components/ui/textarea";
 import { Switch } from "@/modules/report_task/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
+import { Button } from "@/modules/report_task/components/ui/button";
 import { ReportTopicSettingsPanel } from "@/modules/report_task/components/report-feed/report-topic-settings-dialog";
 import { useReportFeedStore, topicColors, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
@@ -27,11 +28,12 @@ const reminderOptions = [
 /**
  * Room settings, opened straight from the room's own ⚙ (Phase 6) — replaces
  * the old "gear ⚙ → whole-page navigation to /settings, pick this same room
- * again from a dropdown" round trip (G1/G2). Every control still saves
- * instantly on change, same as every other settings surface in this app
- * (ReportTopicSettingsPanel already worked this way) — Phase 0 already fixed
- * the silent-failure-toast-spam that made "did this actually save?" (G5) a
- * real worry, so this doesn't reinvent a separate draft/save/cancel flow.
+ * again from a dropdown" round trip (G1/G2). Everything below except member
+ * management (its own dialog, own explicit actions) and archive (its own
+ * confirm step) batches into a local `draft` and only actually saves on
+ * "บันทึก" — reopening for a different room, or this same one again later,
+ * resets the draft straight from the real topic, which is all "ยกเลิก"
+ * needs to do too (nothing was ever written until Save was clicked).
  */
 export function RoomSettingsSheet({
   open,
@@ -48,7 +50,41 @@ export function RoomSettingsSheet({
   const [templateDraft, setTemplateDraft] = useState("");
   const [archiveConfirm, setArchiveConfirm] = useState(false);
 
-  const requiredWeekdays = topic.requiredWeekdays ?? [];
+  const [draft, setDraft] = useState<ReportTopic>(topic);
+  const [dirtyKeys, setDirtyKeys] = useState<Set<string>>(new Set());
+  // Reopening (or switching to a different room while open) starts from the
+  // real, currently-saved topic — the only two moments a draft should ever
+  // be (re)seeded. Tracked here instead of in an effect: an effect that
+  // calls setState synchronously on mount/update just to mirror a prop
+  // triggers an extra render for no reason — this "adjust state during
+  // render" form (React's own recommended replacement) does the same reset
+  // in the same render pass instead.
+  const [resetKey, setResetKey] = useState<string | null>(open ? topic.id : null);
+  if (open && resetKey !== topic.id) {
+    setResetKey(topic.id);
+    setDraft(topic);
+    setDirtyKeys(new Set());
+  } else if (!open && resetKey !== null) {
+    setResetKey(null);
+  }
+
+  function patchDraft(patch: Partial<ReportTopic>) {
+    setDraft((prev) => ({ ...prev, ...patch }));
+    setDirtyKeys((prev) => new Set([...prev, ...Object.keys(patch)]));
+  }
+
+  function handleSave() {
+    updateTopicSettings(topic.id, draft);
+    setDirtyKeys(new Set());
+    toast.success("บันทึกการตั้งค่าห้องแล้ว");
+  }
+
+  function handleCancel() {
+    setDraft(topic);
+    setDirtyKeys(new Set());
+  }
+
+  const requiredWeekdays = draft.requiredWeekdays ?? [];
   function toggleWeekday(day: number) {
     const isAllDays = requiredWeekdays.length === 0;
     // Starting from "every day" (undefined/empty), the first tap should
@@ -56,30 +92,30 @@ export function RoomSettingsSheet({
     const current = isAllDays ? [0, 1, 2, 3, 4, 5, 6] : requiredWeekdays;
     const next = current.includes(day) ? current.filter((d) => d !== day) : [...current, day].sort();
     if (next.length === 0) return; // never let this collapse to "no day required"
-    updateTopicSettings(topic.id, { requiredWeekdays: next.length === 7 ? undefined : next });
+    patchDraft({ requiredWeekdays: next.length === 7 ? undefined : next });
   }
 
   function addTemplateSection() {
     const heading = templateDraft.trim();
     if (!heading) return;
-    updateTopicSettings(topic.id, { postTemplateSections: [...(topic.postTemplateSections ?? []), { heading }] });
+    patchDraft({ postTemplateSections: [...(draft.postTemplateSections ?? []), { heading }] });
     setTemplateDraft("");
   }
 
   function removeTemplateSection(index: number) {
-    const next = (topic.postTemplateSections ?? []).filter((_, i) => i !== index);
-    updateTopicSettings(topic.id, { postTemplateSections: next.length > 0 ? next : undefined });
+    const next = (draft.postTemplateSections ?? []).filter((_, i) => i !== index);
+    patchDraft({ postTemplateSections: next.length > 0 ? next : undefined });
   }
 
   const myNotifyPreference = topic.notifyPreference?.[viewingAsUserId] ?? "all";
   const isManager = canManage(viewingAsUserId);
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="p-0 w-full sm:max-w-md flex flex-col">
-        <SheetHeader className="px-5 py-3.5 border-b border-[var(--line)]">
-          <SheetTitle className="truncate">ตั้งค่าห้อง &quot;{topic.name}&quot;</SheetTitle>
-        </SheetHeader>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="p-0 gap-0 sm:max-w-md w-full max-h-[85vh] flex flex-col overflow-hidden">
+        <DialogHeader className="px-5 py-3.5 border-b border-[var(--line)]">
+          <DialogTitle className="truncate">ตั้งค่าห้อง &quot;{topic.name}&quot;</DialogTitle>
+        </DialogHeader>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
           {/* ทั่วไป */}
@@ -87,13 +123,13 @@ export function RoomSettingsSheet({
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)]">ทั่วไป</p>
             <div className="space-y-1.5">
               <Label className="text-xs text-[var(--ink-soft)]">ชื่อห้อง</Label>
-              <Input value={topic.name} onChange={(e) => e.target.value.trim() && updateTopicSettings(topic.id, { name: e.target.value })} />
+              <Input value={draft.name} onChange={(e) => patchDraft({ name: e.target.value })} />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs text-[var(--ink-soft)]">คำอธิบาย</Label>
               <Textarea
-                value={topic.description ?? ""}
-                onChange={(e) => updateTopicSettings(topic.id, { description: e.target.value })}
+                value={draft.description ?? ""}
+                onChange={(e) => patchDraft({ description: e.target.value })}
                 rows={2}
                 className="resize-none"
                 placeholder="บอกคร่าวๆ ว่าหัวข้อนี้ไว้คุยเรื่องอะไร"
@@ -106,11 +142,11 @@ export function RoomSettingsSheet({
                   <button
                     key={c}
                     type="button"
-                    onClick={() => updateTopicSettings(topic.id, { color: c })}
+                    onClick={() => patchDraft({ color: c })}
                     aria-label={`เลือกสี ${c}`}
                     className={cn(
                       "h-7 w-7 rounded-full shrink-0 transition-transform",
-                      topic.color === c && "scale-110 ring-2 ring-offset-2 ring-[var(--line)]"
+                      draft.color === c && "scale-110 ring-2 ring-offset-2 ring-[var(--line)]"
                     )}
                     style={{ backgroundColor: c }}
                   />
@@ -128,8 +164,8 @@ export function RoomSettingsSheet({
                 <p className="text-xs text-[var(--ink-soft)]">เหมาะกับห้องประกาศ/นโยบาย — คนอื่นยังอ่านและคอมเมนต์ได้ตามปกติ</p>
               </div>
               <Switch
-                checked={topic.postPermission === "managersOnly"}
-                onCheckedChange={(v) => updateTopicSettings(topic.id, { postPermission: v ? "managersOnly" : "everyone" })}
+                checked={draft.postPermission === "managersOnly"}
+                onCheckedChange={(v) => patchDraft({ postPermission: v ? "managersOnly" : "everyone" })}
               />
             </div>
             <div className="flex items-center justify-between rounded-lg bg-[var(--bg-soft)] px-3 py-2.5">
@@ -138,13 +174,21 @@ export function RoomSettingsSheet({
                 <p className="text-xs text-[var(--ink-soft)]">ความคิดเห็นเดิมยังแสดงอยู่ แค่เพิ่มใหม่ไม่ได้</p>
               </div>
               <Switch
-                checked={!!topic.commentsDisabled}
-                onCheckedChange={(v) => updateTopicSettings(topic.id, { commentsDisabled: v })}
+                checked={!!draft.commentsDisabled}
+                onCheckedChange={(v) => patchDraft({ commentsDisabled: v })}
               />
             </div>
           </section>
 
-          <ReportTopicSettingsPanel topic={topic} hideHeading />
+          {/* สิทธิ์การมองเห็น + กติกาการส่งรายงาน (จำนวนรูป/รอบตัดยอด) — มาจาก
+              ReportTopicSettingsPanel ที่ใช้ร่วมกับหน้า /settings ด้วย จึงคง
+              โครงสร้างภายในไว้ตามเดิม แค่ครอบหัวข้อกลุ่มไว้จากภายนอกให้สอดคล้อง
+              กับหมวดอื่นๆ ใน Sheet นี้ — ส่ง draft + patchDraft ผ่าน onUpdate
+              แทนการเซฟทันที (onUpdate ไม่ระบุ = เซฟทันทีเหมือนเดิมที่ /settings). */}
+          <section className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)]">สิทธิ์การมองเห็น &amp; กติกาการส่งรายงาน</p>
+            <ReportTopicSettingsPanel topic={draft} hideHeading onUpdate={patchDraft} />
+          </section>
 
           {/* กติกา เพิ่มเติม */}
           <section className="space-y-3">
@@ -175,9 +219,9 @@ export function RoomSettingsSheet({
           <section className="space-y-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)]">เทมเพลตโพสต์</p>
             <p className="text-[11px] text-[var(--ink-soft)]">หัวข้อย่อยตั้งต้นที่จะขึ้นให้อัตโนมัติทุกครั้งที่เริ่มโพสต์ใหม่ในห้องนี้</p>
-            {(topic.postTemplateSections ?? []).length > 0 && (
+            {(draft.postTemplateSections ?? []).length > 0 && (
               <div className="space-y-1.5">
-                {topic.postTemplateSections!.map((s, i) => (
+                {draft.postTemplateSections!.map((s, i) => (
                   <div key={i} className="flex items-center gap-2 rounded-lg border border-[var(--line)] px-2.5 py-1.5">
                     <span className="flex-1 text-sm truncate">{s.heading}</span>
                     <button
@@ -217,11 +261,11 @@ export function RoomSettingsSheet({
                 <div className="space-y-1.5">
                   <Label className="text-xs text-[var(--ink-soft)]">เตือนก่อนถึงรอบส่ง (คนที่ยังไม่ส่ง)</Label>
                   <Select
-                    value={String(topic.remindBeforeCutoffMinutes ?? 0)}
-                    onValueChange={(v) => v && updateTopicSettings(topic.id, { remindBeforeCutoffMinutes: Number(v) || undefined })}
+                    value={String(draft.remindBeforeCutoffMinutes ?? 0)}
+                    onValueChange={(v) => v && patchDraft({ remindBeforeCutoffMinutes: Number(v) || undefined })}
                   >
                     <SelectTrigger className="w-full">
-                      <SelectValue>{reminderOptions.find((o) => o.value === String(topic.remindBeforeCutoffMinutes ?? 0))?.label}</SelectValue>
+                      <SelectValue>{reminderOptions.find((o) => o.value === String(draft.remindBeforeCutoffMinutes ?? 0))?.label}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {reminderOptions.map((o) => (
@@ -236,13 +280,14 @@ export function RoomSettingsSheet({
                     <p className="text-xs text-[var(--ink-soft)]">ใครส่งช้า/ไม่ส่งในรอบนั้น</p>
                   </div>
                   <Switch
-                    checked={!!topic.notifyManagerSummary}
-                    onCheckedChange={(v) => updateTopicSettings(topic.id, { notifyManagerSummary: v })}
+                    checked={!!draft.notifyManagerSummary}
+                    onCheckedChange={(v) => patchDraft({ notifyManagerSummary: v })}
                   />
                 </div>
                 <p className="text-[11px] text-[var(--ink-soft)]">บันทึกการตั้งค่าไว้แล้ว — ระบบส่งแจ้งเตือนอัตโนมัติยังอยู่ระหว่างพัฒนา</p>
               </>
             )}
+            {/* ส่วนตัว ไม่กระทบคนอื่น — เซฟทันทีเหมือนเดิม ไม่รวมอยู่ใน draft/บันทึกด้านล่าง */}
             <div className="space-y-1.5">
               <Label className="text-xs text-[var(--ink-soft)]">การแจ้งเตือนของฉันในห้องนี้</Label>
               <Select value={myNotifyPreference} onValueChange={(v) => v && setNotifyPreference(topic.id, viewingAsUserId, v as "all" | "mentions" | "off")}>
@@ -269,11 +314,11 @@ export function RoomSettingsSheet({
                 <p className="text-xs text-[var(--ink-soft)]">รูปเก่ากว่านี้จะไม่แสดงในแท็บไฟล์ (อัลบั้มไม่มีวันหมดอายุ)</p>
               </div>
               <Select
-                value={String(topic.filesRetentionDays ?? 7)}
-                onValueChange={(v) => v && updateTopicSettings(topic.id, { filesRetentionDays: Number(v) === 7 ? undefined : Number(v) })}
+                value={String(draft.filesRetentionDays ?? 7)}
+                onValueChange={(v) => v && patchDraft({ filesRetentionDays: Number(v) === 7 ? undefined : Number(v) })}
               >
                 <SelectTrigger className="w-24 shrink-0">
-                  <SelectValue>{topic.filesRetentionDays ?? 7} วัน</SelectValue>
+                  <SelectValue>{draft.filesRetentionDays ?? 7} วัน</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {[3, 7, 14, 30].map((d) => (
@@ -283,6 +328,9 @@ export function RoomSettingsSheet({
               </Select>
             </div>
 
+            {/* เก็บเข้าคลัง — action ทำงานทันทีพร้อม toast ของตัวเอง เหมือน
+                "ลบหัวข้อ" ไม่รวมอยู่ใน draft/บันทึกด้านล่าง เพื่อไม่ให้การกด
+                "ยกเลิก" ทีหลังไปย้อนสถานะเก็บเข้าคลังที่ยืนยันไปแล้วโดยไม่ตั้งใจ. */}
             <div className="flex items-center justify-between rounded-lg border border-[var(--line)] px-3 py-2.5">
               <div className="min-w-0 pr-3">
                 <p className="text-sm font-medium flex items-center gap-1.5">
@@ -320,7 +368,29 @@ export function RoomSettingsSheet({
             </div>
           </section>
         </div>
-      </SheetContent>
-    </Sheet>
+
+        {/* Save/Cancel bar (Phase 6) — everything above except member
+            management and archive batches here instead of saving as you
+            type, same shape as mockup section E's `.savebar`. */}
+        <div className="shrink-0 flex items-center gap-2.5 px-5 py-3 border-t border-[var(--line)] bg-[var(--bg-soft)]">
+          <p className="text-[11.5px] text-[var(--ink-soft)]">
+            {dirtyKeys.size > 0 ? `มีการเปลี่ยนแปลง ${dirtyKeys.size} รายการที่ยังไม่บันทึก` : "ไม่มีการเปลี่ยนแปลง"}
+          </p>
+          <div className="ml-auto flex items-center gap-2">
+            <Button variant="outline" size="sm" disabled={dirtyKeys.size === 0} onClick={handleCancel}>
+              ยกเลิก
+            </Button>
+            <Button
+              size="sm"
+              disabled={dirtyKeys.size === 0 || !draft.name.trim()}
+              className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+              onClick={handleSave}
+            >
+              บันทึก
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

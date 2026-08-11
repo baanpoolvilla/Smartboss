@@ -14,6 +14,7 @@ import type {
 } from "@/modules/report_task/types";
 import { useDepartmentStore } from "@/modules/report_task/store/department-store";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
+import { deriveCompletedAssigneeIds } from "@/modules/report_task/lib/task-completion";
 
 // Deterministic seeded PRNG so server and client render identical mock data.
 function mulberry32(seed: number) {
@@ -177,11 +178,12 @@ const checklistPool = [
   "แจ้งทีมที่เกี่ยวข้อง",
 ];
 
-function makeChecklist(taskId: string, n: number, allDone: boolean): ChecklistItem[] {
+function makeChecklist(taskId: string, n: number, allDone: boolean, ownerId: string): ChecklistItem[] {
   return pickN(checklistPool, n).map((text, i) => ({
     id: `${taskId}-chk-${i}`,
     text,
     done: allDone || rand() < 0.4,
+    ownerId,
   }));
 }
 
@@ -224,6 +226,13 @@ export const tasks: Task[] = taskTitles.map((title, i) => {
   const extraCount = rand() < 0.3 ? Math.floor(rand() * 2) + 1 : 0;
   const collaborators = pickN(users.filter((u) => u.id !== assignee.id), extraCount).map((u) => u.id);
   const assigneeIds = [assignee.id, ...collaborators];
+  const taskMode: "individual" | "group" = assigneeIds.length > 1 ? "group" : "individual";
+  const checklistCount = rand() < 0.55 ? Math.floor(rand() * 3) + 2 : 0;
+  const checklist =
+    checklistCount > 0
+      ? assigneeIds
+          .flatMap((uid) => makeChecklist(id, Math.max(1, Math.floor(checklistCount / assigneeIds.length)), status === "done", uid))
+      : [];
 
   return {
     id,
@@ -231,6 +240,7 @@ export const tasks: Task[] = taskTitles.map((title, i) => {
     description: `${title} ต้องวางแผน ดำเนินการ และตรวจสอบร่วมกับผู้เกี่ยวข้องก่อนปิดงาน ประสานงานกับฝ่าย${pick(departments).name}ตามความจำเป็น`,
     status,
     priority,
+    taskMode,
     assigneeIds,
     assignedById,
     departmentIds: [...new Set(assigneeIds.map((uid) => users.find((u) => u.id === uid)!.departmentId))],
@@ -241,7 +251,8 @@ export const tasks: Task[] = taskTitles.map((title, i) => {
     comments: makeComments(id, Math.floor(rand() * 4)),
     revisions,
     reactions: makeReactions(id, assignee.id, assignee.departmentId, isOverdue),
-    checklist: rand() < 0.55 ? makeChecklist(id, Math.floor(rand() * 3) + 2, status === "done") : [],
+    checklist,
+    completedAssigneeIds: deriveCompletedAssigneeIds(assigneeIds, checklist),
     showChecklistOnCard: rand() < 0.35,
     createdAt: iso(addDays(start, -2)),
     updatedAt: iso(addDays(today, -Math.floor(rand() * 5))),

@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { TopicSidebar, TopicLogo, ALL_TOPICS_ID } from "@/modules/report_task/components/report-feed/topic-sidebar";
+import { TopicSidebar, TopicLogo, ALL_TOPICS_ID, PENDING_ID, MENTIONS_ID } from "@/modules/report_task/components/report-feed/topic-sidebar";
 import { ReportComposer } from "@/modules/report_task/components/report-feed/report-composer";
 import { ReportFeed } from "@/modules/report_task/components/report-feed/report-feed";
 import { ReportAllPostsFeed } from "@/modules/report_task/components/report-feed/report-all-posts-feed";
@@ -21,7 +21,11 @@ import { canEditReportTopic, canSeeReportTopic } from "@/modules/report_task/lib
 import { topicModeOf } from "@/modules/report_task/lib/report-topic-membership";
 import { RoomMembersDialog } from "@/modules/report_task/components/report-feed/room-members-dialog";
 import { currentCutoff } from "@/modules/report_task/lib/report-cutoff";
-import { BarChart3, FileImage, FolderHeart, ImagePlus, Link2, Lock, Menu, MessageSquareText, Pin, Settings, TriangleAlert, Users, X } from "lucide-react";
+import { pendingToday, todayStatusEntries, type TodayStatusEntry } from "@/modules/report_task/lib/report-feed-compliance";
+import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
+import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
+import { AtSign, BarChart3, Check, CheckCircle2, Clock, FileImage, FolderHeart, Hash, ImagePlus, Link2, Lock, Menu, MessageSquareText, Pin, Settings, TriangleAlert, Users, X } from "lucide-react";
+import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 
 // Beyond this many pinned posts, the rest move into the "+N เพิ่มเติม"
 // popover instead of forcing the bar to scroll horizontally.
@@ -110,6 +114,10 @@ function ReportFeedPageInner() {
   // The ⚙ (Phase 6) opens settings right here now instead of navigating the
   // whole page away to /settings and losing which room/tab you were on (G1).
   const [roomSettingsOpen, setRoomSettingsOpen] = useState(false);
+  // Which header pill (H1) was clicked, if any — overrides the main panel
+  // with TodayStatusPanel below regardless of what's selected in the
+  // sidebar tree. Cleared by selectView() so any real navigation drops it.
+  const [todayStatusFilter, setTodayStatusFilter] = useState<"posted" | "late" | "missing" | null>(null);
   const router = useRouter();
   const pathname = usePathname();
   // Filter bar (1.3) — read once from the URL same as the deep-link params
@@ -162,7 +170,7 @@ function ReportFeedPageInner() {
   // it through as-is rather than falling back, same as any real,
   // currently-selected topic.
   const activeId = (() => {
-    if (selectedId === ALL_TOPICS_ID) return selectedId;
+    if (selectedId === ALL_TOPICS_ID || selectedId === PENDING_ID || selectedId === MENTIONS_ID) return selectedId;
     if (selectedId && visibleTopics.some((t) => t.id === selectedId) && !isParentId(selectedId)) {
       return selectedId;
     }
@@ -173,7 +181,29 @@ function ReportFeedPageInner() {
     return visibleTopics.find((t) => !isParentId(t.id))?.id ?? visibleTopics[0]?.id ?? "";
   })();
   const showAllPosts = activeId === ALL_TOPICS_ID;
+  const showPending = activeId === PENDING_ID;
+  const showMentions = activeId === MENTIONS_ID;
   const activeTopic = useMemo(() => visibleTopics.find((t) => t.id === activeId), [visibleTopics, activeId]);
+  const exemptions = useReportComplianceExemptions();
+  // "ที่ฉันต้องส่ง" — same pendingToday() the sidebar badge counts, filtered
+  // down to just this viewer, for the actual room list underneath the badge.
+  const myPending = useMemo(
+    () => (showPending ? pendingToday(visibleTopics, posts, exemptions).filter((e) => e.userId === viewingAsUserId) : []),
+    [showPending, visibleTopics, posts, exemptions, viewingAsUserId]
+  );
+  // "ที่กล่าวถึงฉัน" — every post anywhere this viewer is @mentioned, fed
+  // into the same ReportAllPostsFeed the merged view already uses.
+  const mentionPosts = useMemo(() => {
+    if (!showMentions) return [];
+    const visibleTopicIds = new Set(visibleTopics.map((t) => t.id));
+    return posts.filter((p) => visibleTopicIds.has(p.topicId) && p.authorId !== viewingAsUserId && postMentionsUser(p, viewingAsUserId));
+  }, [showMentions, visibleTopics, posts, viewingAsUserId]);
+  // Header pills (H1) — who's behind "ส่งแล้ววันนี้/ส่งช้า/ยังไม่ส่ง", not
+  // just the count. Only computed once a pill's actually been clicked.
+  const todayStatus = useMemo(
+    () => (todayStatusFilter ? todayStatusEntries(visibleTopics, posts, exemptions) : []),
+    [todayStatusFilter, visibleTopics, posts, exemptions]
+  );
   const topicPosts = posts
     .filter((p) => p.topicId === activeId)
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
@@ -204,9 +234,19 @@ function ReportFeedPageInner() {
   // (organizing-folder) topic has no posts of its own to mark either way,
   // so this is harmless to run unconditionally on whatever's selected.
   useEffect(() => {
-    if (!activeId || showAllPosts) return;
+    if (!activeId || showAllPosts || showPending || showMentions) return;
     markTopicRead(activeId, viewingAsUserId);
-  }, [activeId, showAllPosts, viewingAsUserId, markTopicRead]);
+  }, [activeId, showAllPosts, showPending, showMentions, viewingAsUserId, markTopicRead]);
+
+  // ที่กล่าวถึงฉัน spans posts across many rooms, so opening it clears
+  // exactly those posts' unread flag (markPostsRead) instead of a whole
+  // room's worth (markTopicRead) — the mention badge (topic-sidebar.tsx)
+  // only ever counted the unread ones to begin with.
+  const markPostsRead = useReportFeedStore((s) => s.markPostsRead);
+  useEffect(() => {
+    if (!showMentions || mentionPosts.length === 0) return;
+    markPostsRead(mentionPosts.map((p) => p.id), viewingAsUserId);
+  }, [showMentions, mentionPosts, viewingAsUserId, markPostsRead]);
 
   useEffect(() => {
     if (!highlightPostId) return;
@@ -258,16 +298,24 @@ function ReportFeedPageInner() {
   const topicMode = activeTopic ? topicModeOf(activeTopic.visibility) : "open";
   const canManageMembers = !!activeTopic && (topicMode === "department" || topicMode === "person") && canEditReportTopic(activeTopic.visibility, viewingAsUserId);
 
+  // Any real navigation (sidebar click, "jump to topic" from a merged view)
+  // drops whatever header-pill filter was active — otherwise picking a room
+  // out of "ยังไม่ส่ง"'s list would still show the pill panel underneath it.
+  function selectView(id: string) {
+    setTodayStatusFilter(null);
+    setSelectedId(id);
+    setActiveTab("posts");
+  }
+
   return (
-    <div className="flex flex-col gap-6 h-full">
+    <div className="flex flex-col gap-6 h-full pt-4 lg:pt-6">
       <ReportHeader
         visibleTopics={visibleTopics}
         onJumpToPost={(topicId, postId) => {
-          setSelectedId(topicId);
-          setActiveTab("posts");
+          selectView(topicId);
           setHighlightPostId(postId);
         }}
-        onShowOverview={() => setSelectedId(ALL_TOPICS_ID)}
+        onShowTodayStatus={setTodayStatusFilter}
       />
 
       {/* Below `lg`, "☰ หัวข้อ" opens the topic tree as a full-screen Sheet
@@ -291,8 +339,7 @@ function ReportFeedPageInner() {
                 activeId={activeId}
                 fillHeight
                 onSelect={(id) => {
-                  setSelectedId(id);
-                  setActiveTab("posts");
+                  selectView(id);
                   setMobileTopicsOpen(false);
                 }}
               />
@@ -301,28 +348,49 @@ function ReportFeedPageInner() {
         </Sheet>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 items-stretch lg:items-start flex-1 min-h-0 lg:min-h-[420px]">
+      {/* items-stretch at every width — lg:items-start previously let the
+          sidebar and the room panel each auto-size to their own content
+          instead of matching the row's height, so a room list long enough
+          would grow the whole page instead of scrolling inside its own
+          `lg:h-full` + overflow-y-auto (both panels already opt into that,
+          it just had nothing to resolve against without a stretched parent). */}
+      <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 items-stretch flex-1 min-h-0 lg:min-h-[420px]">
         <div className="hidden lg:flex lg:shrink-0">
           <TopicSidebar
             topics={visibleTopics}
             activeId={activeId}
-            onSelect={(id) => {
-              setSelectedId(id);
-              setActiveTab("posts");
-            }}
+            onSelect={selectView}
           />
         </div>
 
         <div className="w-full flex-1 min-w-0 flex flex-col min-h-0 lg:h-full">
-          {showAllPosts ? (
+          {todayStatusFilter ? (
+            <div className="flex-1 min-h-0 rounded-2xl border border-[var(--line)] bg-white shadow-sm overflow-hidden flex flex-col">
+              <TodayStatusPanel
+                status={todayStatusFilter}
+                entries={todayStatus.filter((e) => e.status === todayStatusFilter)}
+                onJumpToTopic={selectView}
+              />
+            </div>
+          ) : showAllPosts ? (
+            <div className="flex-1 min-h-0 rounded-2xl border border-[var(--line)] bg-white shadow-sm overflow-hidden flex flex-col">
+              <ReportAllPostsFeed topics={visibleTopics} posts={posts} onJumpToTopic={selectView} />
+            </div>
+          ) : showPending ? (
+            <div className="flex-1 min-h-0 rounded-2xl border border-[var(--line)] bg-white shadow-sm overflow-hidden flex flex-col">
+              <PendingTopicsPanel entries={myPending} onJumpToTopic={selectView} />
+            </div>
+          ) : showMentions ? (
             <div className="flex-1 min-h-0 rounded-2xl border border-[var(--line)] bg-white shadow-sm overflow-hidden flex flex-col">
               <ReportAllPostsFeed
                 topics={visibleTopics}
-                posts={posts}
-                onJumpToTopic={(id) => {
-                  setSelectedId(id);
-                  setActiveTab("posts");
-                }}
+                posts={mentionPosts}
+                title="ที่กล่าวถึงฉัน"
+                description="ทุกโพสต์และความคิดเห็นที่มีคนแท็กคุณ เรียงตามเวลา ล่าสุดอยู่ล่างสุด"
+                icon={AtSign}
+                emptyTitle="ยังไม่มีใครกล่าวถึงคุณ"
+                emptyDescription="โพสต์หรือความคิดเห็นที่แท็กคุณด้วย @ จะขึ้นที่นี่"
+                onJumpToTopic={selectView}
               />
             </div>
           ) : activeTopic ? (
@@ -395,8 +463,8 @@ function ReportFeedPageInner() {
                           if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
                           e.preventDefault();
                           const i = topicTabs.findIndex((x) => x.id === t.id);
-                          const next = topicTabs[(i + (e.key === "ArrowRight" ? 1 : -1) + topicTabs.length) % topicTabs.length];
-                          setActiveTab(next!.id);
+                          const next = topicTabs[(i + (e.key === "ArrowRight" ? 1 : -1) + topicTabs.length) % topicTabs.length]!;
+                          setActiveTab(next.id);
                         }}
                         className={cn(
                           "shrink-0 flex items-center gap-1.5 pb-2 -mb-px border-b-2 text-xs font-medium transition-colors duration-200",
@@ -407,7 +475,9 @@ function ReportFeedPageInner() {
                       >
                         <Icon className="h-3.5 w-3.5" />
                         {t.label}
-                        {count != null && count > 0 && <span className="tabular-nums text-[var(--ink-soft)]">{count}</span>}
+                        {count != null && count > 0 && (
+                          <span className="tabular-nums text-[10px] text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-1.5 py-0.5">{count}</span>
+                        )}
                       </button>
                     );
                   })}
@@ -516,6 +586,143 @@ function ReportFeedPageInner() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** "ที่ฉันต้องส่ง" — a plain room list instead of a post feed (there's
+ * nothing posted yet by definition), one row per room this viewer still owes
+ * a report to today, jumping straight into it on click. */
+function PendingTopicsPanel({
+  entries,
+  onJumpToTopic,
+}: {
+  entries: { topicId: string; topicName: string; topicColor: string }[];
+  onJumpToTopic: (topicId: string) => void;
+}) {
+  return (
+    <div className="flex-1 min-h-0 flex flex-col">
+      <div className="shrink-0 px-5 pt-3.5 pb-2.5 flex items-center gap-2.5 border-b border-[var(--line)]">
+        <span className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-amber-50 text-[var(--chart-amber)]">
+          <Clock className="h-4 w-4" />
+        </span>
+        <div>
+          <h2 className="text-[16px] font-semibold leading-tight">ที่ฉันต้องส่ง</h2>
+          <p className="text-xs text-[var(--ink-soft)] leading-tight">ห้องที่คุณยังไม่ได้โพสต์รายงานวันนี้</p>
+        </div>
+      </div>
+      {entries.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6 bg-[var(--bg-soft)]/40">
+          <div className="h-14 w-14 rounded-full bg-[var(--accent)] flex items-center justify-center">
+            <Check className="h-6 w-6 text-[var(--brand-green-dark)]" />
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm font-semibold">ส่งครบทุกห้องแล้ววันนี้</p>
+            <p className="text-xs text-[var(--ink-soft)]">ไม่มีห้องที่ต้องส่งรายงานเพิ่มแล้ว</p>
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto bg-[var(--bg-soft)]/40 p-5 space-y-2">
+          {entries.map((e) => (
+            <button
+              key={e.topicId}
+              onClick={() => onJumpToTopic(e.topicId)}
+              className="w-full flex items-center gap-3 rounded-xl border border-[var(--line)] bg-white px-4 py-3 text-left hover:border-[var(--brand-green)]/40 hover:bg-[var(--bg-soft)] transition-colors"
+            >
+              <span
+                className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full"
+                style={{ backgroundColor: `color-mix(in srgb, ${e.topicColor} 16%, white)`, color: e.topicColor }}
+              >
+                <Hash className="h-3.5 w-3.5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium truncate">{e.topicName}</p>
+                <p className="text-xs text-[var(--ink-soft)]">ยังไม่ได้ส่งวันนี้</p>
+              </div>
+              <span className="shrink-0 text-xs font-medium text-[var(--brand-green-dark)]">ไปที่ห้องนี้ →</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const todayStatusMeta = {
+  posted: { title: "ส่งแล้ววันนี้", icon: CheckCircle2, iconColor: "var(--brand-green-dark)", iconBg: "bg-[var(--accent)]", empty: "ยังไม่มีใครส่งวันนี้" },
+  late: { title: "ส่งช้าวันนี้", icon: Clock, iconColor: "var(--chart-amber)", iconBg: "bg-amber-50", empty: "วันนี้ยังไม่มีใครส่งช้า" },
+  missing: { title: "ยังไม่ส่งวันนี้", icon: TriangleAlert, iconColor: "var(--chart-red)", iconBg: "bg-red-50", empty: "ส่งครบทุกคนแล้ววันนี้" },
+} as const;
+
+/** Where the header's "ส่งแล้ววันนี้/ส่งช้า/ยังไม่ส่ง" pills (H1) actually
+ * link to — the people behind that number, grouped by room, instead of
+ * dumping the viewer into the unrelated merged feed. */
+function TodayStatusPanel({
+  status,
+  entries,
+  onJumpToTopic,
+}: {
+  status: "posted" | "late" | "missing";
+  entries: TodayStatusEntry[];
+  onJumpToTopic: (topicId: string) => void;
+}) {
+  const meta = todayStatusMeta[status];
+  const Icon = meta.icon;
+  const byTopic = useMemo(() => {
+    const groups = new Map<string, { topicName: string; topicColor: string; rows: TodayStatusEntry[] }>();
+    for (const e of entries) {
+      const g = groups.get(e.topicId) ?? { topicName: e.topicName, topicColor: e.topicColor, rows: [] };
+      g.rows.push(e);
+      groups.set(e.topicId, g);
+    }
+    return [...groups.entries()];
+  }, [entries]);
+
+  return (
+    <div className="flex-1 min-h-0 flex flex-col">
+      <div className={cn("shrink-0 px-5 pt-3.5 pb-2.5 flex items-center gap-2.5 border-b border-[var(--line)]")}>
+        <span className={cn("shrink-0 flex h-8 w-8 items-center justify-center rounded-full", meta.iconBg)} style={{ color: meta.iconColor }}>
+          <Icon className="h-4 w-4" />
+        </span>
+        <div>
+          <h2 className="text-[16px] font-semibold leading-tight">{meta.title}</h2>
+          <p className="text-xs text-[var(--ink-soft)] leading-tight">{entries.length} คน — จากทุกห้องที่มีรอบตัดยอด</p>
+        </div>
+      </div>
+      {entries.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6 bg-[var(--bg-soft)]/40">
+          <div className={cn("h-14 w-14 rounded-full flex items-center justify-center", meta.iconBg)} style={{ color: meta.iconColor }}>
+            <Icon className="h-6 w-6" />
+          </div>
+          <p className="text-sm font-semibold">{meta.empty}</p>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto bg-[var(--bg-soft)]/40 p-5 space-y-4">
+          {byTopic.map(([topicId, group]) => (
+            <div key={topicId} className="rounded-xl border border-[var(--line)] bg-white overflow-hidden">
+              <button
+                onClick={() => onJumpToTopic(topicId)}
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-left border-b border-[var(--line)] bg-[var(--bg-soft)] hover:bg-[var(--accent)] transition-colors"
+              >
+                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: group.topicColor }} aria-hidden />
+                <span className="flex-1 text-xs font-semibold truncate">{group.topicName}</span>
+                <span className="shrink-0 text-[11px] font-medium text-[var(--brand-green-dark)]">ไปที่ห้องนี้ →</span>
+              </button>
+              <div className="divide-y divide-[var(--line)]">
+                {group.rows.map((r) => (
+                  <div key={r.userId} className="flex items-center gap-2.5 px-4 py-2">
+                    <Avatar className="h-6 w-6 shrink-0">
+                      <AvatarFallback className="text-[10px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{r.userAvatar}</AvatarFallback>
+                    </Avatar>
+                    <span className="text-sm font-medium truncate flex-1">{r.userName}</span>
+                    <span className="text-xs text-[var(--ink-soft)] shrink-0">{r.departmentName}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

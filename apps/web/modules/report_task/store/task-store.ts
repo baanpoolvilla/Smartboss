@@ -2,11 +2,13 @@ import { create } from "zustand";
 import { tasks as initialTasks, departmentIdsOf, departments, getUser } from "@/modules/report_task/data/mock";
 import { daysUntil, formatShortDate } from "@/modules/report_task/lib/format";
 import { statusMeta } from "@/modules/report_task/lib/task-meta";
+import type { DatePreset } from "@/modules/report_task/lib/date-filter";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useActivityLogStore } from "@/modules/report_task/store/activity-log-store";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
-import type { Attachment, Task, TaskPriority, TaskStatus } from "@/modules/report_task/types";
+import { deriveCompletedAssigneeIds } from "@/modules/report_task/lib/task-completion";
+import type { Attachment, ChecklistItem, Task, TaskPriority, TaskStatus } from "@/modules/report_task/types";
 
 /**
  * Single choke point for the audit trail — every meaningful task action logs
@@ -57,19 +59,87 @@ function notifyPenaltyChange(task: Task, byUserId: string, message: string) {
   useNotificationStore.getState().notifyMany(recipients, byUserId, message);
 }
 
+/**
+ * Recomputes per-assignee completion from a task's checklist and applies the
+ * same status transition `toggleMyCompletion` used to own directly — an
+ * assignee's part is done once every item they own is checked, and the
+ * task's own status only flips to "done" once every assignee is. Single
+ * choke point so `toggleChecklistItem`/`addChecklistItem`/
+ * `removeChecklistItem`/`toggleAssigneeChecklist` all transition identically
+ * instead of four slightly-different copies of this logic.
+ */
+function applyChecklistDerivedCompletion(t: Task, nextChecklist: ChecklistItem[], actorUserId: string): Task {
+  const nextCompleted = deriveCompletedAssigneeIds(t.assigneeIds, nextChecklist);
+  const prevCompleted = t.completedAssigneeIds ?? [];
+  const allDone = t.assigneeIds.length > 0 && t.assigneeIds.every((id) => nextCompleted.includes(id));
+  const now = new Date().toISOString();
+
+  if (allDone && t.status !== "done") {
+    logActivity(actorUserId, "เสร็จสิ้น (ครบทุกคน)", t.title, t.id, `${t.assigneeIds.length}/${t.assigneeIds.length} คน`);
+    const updated: Task = {
+      ...t,
+      checklist: nextChecklist,
+      completedAssigneeIds: nextCompleted,
+      status: "done",
+      completedAt: now,
+      updatedAt: now,
+    };
+    notifyLateCompletion(updated);
+    return updated;
+  }
+  if (!allDone && t.status === "done") {
+    const name = getUser(actorUserId)?.name ?? "มีคน";
+    logActivity(actorUserId, "เปิดงานกลับ (ยกเลิกเสร็จส่วนตัว)", t.title, t.id, `${name} ยังไม่เสร็จ`);
+    return {
+      ...t,
+      checklist: nextChecklist,
+      completedAssigneeIds: nextCompleted,
+      status: "in_progress",
+      completedAt: undefined,
+      updatedAt: now,
+    };
+  }
+  if (nextCompleted.length !== prevCompleted.length) {
+    logActivity(
+      actorUserId,
+      nextCompleted.length > prevCompleted.length ? "ทำเครื่องหมายเสร็จ (ส่วนตัว)" : "ยกเลิกเครื่องหมายเสร็จ (ส่วนตัว)",
+      t.title,
+      t.id,
+      `${nextCompleted.length}/${t.assigneeIds.length} คน`
+    );
+  }
+  return { ...t, checklist: nextChecklist, completedAssigneeIds: nextCompleted, updatedAt: now };
+}
+
 // Re-exported for callers that only need the constant, not the sweep logic
-// itself (which now runs server-side — see /api/report-task/tasks/sweep).
+// itself (which now runs server-side — see /api/tasks/sweep).
 export { SYSTEM_USER_ID, LATE_PENALTY_POINTS } from "@/modules/report_task/lib/task-penalty-sweep";
 
 export type PenaltyFilter = "all" | "overdue" | "pending" | "docked";
 
+/**
+ * The Task Board's 4 headline cards (TaskBoardKpis), reused as a one-click
+ * drill-down filter — "quick" because it's a second, independent axis from
+ * the filter bar's own fields below, not a replacement for them. Kept out
+ * of `matchesTaskFilters`'s other checks conceptually (still runs through
+ * the same predicate) so the KPI cards themselves can be computed with this
+ * one dimension forced back to "all" — otherwise selecting e.g. "เลยกำหนด"
+ * would collapse all 4 numbers down to the same overdue count instead of
+ * staying a stable set of options to click between.
+ */
+export type QuickView = "all" | "inProgress" | "overdue" | "done";
+
 interface TaskFilters {
-  search: string;
   assigneeId: string | "all";
   departmentId: string | "all";
   priority: TaskPriority | "all";
   /** Filter by missed-deadline docking status. */
   penalty: PenaltyFilter;
+  /** Due-date range — same `DatePreset` set and `presetRange` helper as the Dashboard's date filter. */
+  preset: DatePreset;
+  customFrom: string;
+  customTo: string;
+  quickView: QuickView;
 }
 
 interface TaskStore {
@@ -90,30 +160,34 @@ interface TaskStore {
    * sticker/penalty already on the task is left untouched.
    */
   reopenTask: (taskId: string, newStartDate: string, newDueDate: string, reason: string, revisedBy: string) => void;
-  /**
-   * Per-assignee "my part is done" toggle for a task shared by 2+ people —
-   * the task's own status only flips to "done" once every assignee has
-   * marked themselves done here, and flips back to "in_progress" if anyone
-   * unmarks after the group had completed. A no-op if `userId` isn't
-   * actually one of this task's assignees. Single-assignee tasks still use
-   * `moveTask` directly — this only matters once there's more than one
-   * person whose own completion needs tracking separately.
-   */
-  toggleMyCompletion: (taskId: string, userId: string) => void;
   selectTask: (id: string | null) => void;
   addTask: (task: Task) => void;
   removeTask: (taskId: string) => void;
-  /** Deletes every task created together in one "ทำซ้ำ" (repeat) batch. */
-  removeTaskSeries: (seriesId: string) => void;
   updateTask: (taskId: string, patch: Partial<Task>) => void;
   setAssignees: (taskId: string, assigneeIds: string[]) => void;
   addComment: (taskId: string, message: string, authorId: string) => void;
   removeComment: (taskId: string, commentId: string) => void;
   addAttachment: (taskId: string, attachment: Attachment) => void;
   removeAttachment: (taskId: string, attachmentId: string) => void;
-  addChecklistItem: (taskId: string, text: string) => void;
+  addChecklistItem: (taskId: string, text: string, ownerId: string) => void;
+  /**
+   * Toggles one checklist item and recomputes per-assignee completion from
+   * the resulting checklist — an assignee's part is done once every item
+   * they own is checked, and the task's own status only flips to "done"
+   * once every assignee is (see applyChecklistDerivedCompletion). This is
+   * now the only way completion happens; there's no separate manual
+   * "my part is done" toggle.
+   */
   toggleChecklistItem: (taskId: string, itemId: string) => void;
   removeChecklistItem: (taskId: string, itemId: string) => void;
+  /**
+   * Quick "mark my part done" shortcut (the board card's one-click circle) —
+   * flips every checklist item `userId` owns to the opposite of their
+   * current all-done state in one batch, then runs the same derived
+   * completion as toggling items individually. A no-op if `userId` owns no
+   * items on this task.
+   */
+  toggleAssigneeChecklist: (taskId: string, userId: string) => void;
   addReaction: (taskId: string, stickerId: string, byUserId: string, note?: string) => void;
   removeReaction: (taskId: string, reactionId: string) => void;
   /** Case-by-case missed-deadline dock, applied at a lead's discretion. */
@@ -127,7 +201,16 @@ interface TaskStore {
   overrideAutoPenalty: (taskId: string, byUserId: string, reason: string) => void;
 }
 
-const defaultFilters: TaskFilters = { search: "", assigneeId: "all", departmentId: "all", priority: "all", penalty: "all" };
+const defaultFilters: TaskFilters = {
+  assigneeId: "all",
+  departmentId: "all",
+  priority: "all",
+  penalty: "all",
+  preset: "all",
+  customFrom: "",
+  customTo: "",
+  quickView: "all",
+};
 
 export const useTaskStore = create<TaskStore>((set) => ({
   tasks: initialTasks,
@@ -204,7 +287,11 @@ export const useTaskStore = create<TaskStore>((set) => ({
           // Whoever falsely marked their own part done needs to re-mark it
           // for real this cycle — otherwise the task would silently
           // re-complete itself the instant the last other assignee finishes.
+          // Completion is now derived from the checklist itself, so the
+          // checklist has to be unchecked too, or it would just re-derive
+          // straight back to "done" on the next render.
           completedAssigneeIds: [],
+          checklist: t.checklist.map((c) => ({ ...c, done: false })),
           // A dock from the PREVIOUS deadline miss shouldn't block docking a
           // fresh one if this reopened cycle blows its new deadline too —
           // the old dock is already permanent history in the activity log,
@@ -225,36 +312,6 @@ export const useTaskStore = create<TaskStore>((set) => ({
         };
       }),
     })),
-  toggleMyCompletion: (taskId, userId) =>
-    set((s) => ({
-      tasks: s.tasks.map((t) => {
-        if (t.id !== taskId || !t.assigneeIds.includes(userId)) return t;
-        const wasCompleted = (t.completedAssigneeIds ?? []).includes(userId);
-        const nextCompleted = wasCompleted
-          ? (t.completedAssigneeIds ?? []).filter((id) => id !== userId)
-          : [...(t.completedAssigneeIds ?? []), userId];
-        const allDone = t.assigneeIds.every((id) => nextCompleted.includes(id));
-
-        if (allDone && t.status !== "done") {
-          logActivity(userId, "เสร็จสิ้น (ครบทุกคน)", t.title, t.id, `${t.assigneeIds.length}/${t.assigneeIds.length} คน`);
-          notifyLateCompletion(t);
-          return { ...t, completedAssigneeIds: nextCompleted, status: "done", completedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-        }
-        if (!allDone && t.status === "done") {
-          const name = getUser(userId)?.name ?? "มีคน";
-          logActivity(userId, "เปิดงานกลับ (ยกเลิกเสร็จส่วนตัว)", t.title, t.id, `${name} ยังไม่เสร็จ`);
-          return { ...t, completedAssigneeIds: nextCompleted, status: "in_progress", completedAt: undefined, updatedAt: new Date().toISOString() };
-        }
-        logActivity(
-          userId,
-          wasCompleted ? "ยกเลิกเครื่องหมายเสร็จ (ส่วนตัว)" : "ทำเครื่องหมายเสร็จ (ส่วนตัว)",
-          t.title,
-          t.id,
-          `${nextCompleted.length}/${t.assigneeIds.length} คน`
-        );
-        return { ...t, completedAssigneeIds: nextCompleted, updatedAt: new Date().toISOString() };
-      }),
-    })),
   selectTask: (id) => set({ selectedTaskId: id }),
   addTask: (task) => {
     const assigneeNames = task.assigneeIds.map((id) => getUser(id)?.name).filter(Boolean).join(", ");
@@ -266,15 +323,6 @@ export const useTaskStore = create<TaskStore>((set) => ({
       const t = s.tasks.find((x) => x.id === taskId);
       if (t) logActivity(useIdentityStore.getState().viewingAsUserId, "ลบงาน", t.title, t.id);
       return { tasks: s.tasks.filter((x) => x.id !== taskId) };
-    }),
-  removeTaskSeries: (seriesId) =>
-    set((s) => {
-      const matching = s.tasks.filter((x) => x.seriesId === seriesId);
-      if (matching.length > 0) {
-        const actorId = useIdentityStore.getState().viewingAsUserId;
-        logActivity(actorId, "ลบทั้งชุด", matching[0]!.title, matching[0]!.id, `${matching.length} รายการ`);
-      }
-      return { tasks: s.tasks.filter((x) => x.seriesId !== seriesId) };
     }),
   updateTask: (taskId, patch) =>
     set((s) => ({
@@ -331,38 +379,52 @@ export const useTaskStore = create<TaskStore>((set) => ({
         t.id !== taskId ? t : { ...t, attachments: t.attachments.filter((a) => a.id !== attachmentId) }
       ),
     })),
-  addChecklistItem: (taskId, text) =>
-    set((s) => ({
-      tasks: s.tasks.map((t) =>
-        t.id !== taskId
-          ? t
-          : {
-              ...t,
-              checklist: [
-                ...t.checklist,
-                { id: `${taskId}-chk-${new Date().toISOString().replace(/\D/g, "")}`, text, done: false },
-              ],
-              updatedAt: new Date().toISOString(),
-            }
-      ),
-    })),
+  addChecklistItem: (taskId, text, ownerId) =>
+    set((s) => {
+      const actorId = useIdentityStore.getState().viewingAsUserId;
+      return {
+        tasks: s.tasks.map((t) => {
+          if (t.id !== taskId) return t;
+          const nextChecklist = [
+            ...t.checklist,
+            { id: `${taskId}-chk-${new Date().toISOString().replace(/\D/g, "")}`, text, done: false, ownerId },
+          ];
+          return applyChecklistDerivedCompletion(t, nextChecklist, actorId);
+        }),
+      };
+    }),
   toggleChecklistItem: (taskId, itemId) =>
-    set((s) => ({
-      tasks: s.tasks.map((t) =>
-        t.id !== taskId
-          ? t
-          : {
-              ...t,
-              checklist: t.checklist.map((c) => (c.id === itemId ? { ...c, done: !c.done } : c)),
-              updatedAt: new Date().toISOString(),
-            }
-      ),
-    })),
+    set((s) => {
+      const actorId = useIdentityStore.getState().viewingAsUserId;
+      return {
+        tasks: s.tasks.map((t) => {
+          if (t.id !== taskId) return t;
+          const nextChecklist = t.checklist.map((c) => (c.id === itemId ? { ...c, done: !c.done } : c));
+          return applyChecklistDerivedCompletion(t, nextChecklist, actorId);
+        }),
+      };
+    }),
   removeChecklistItem: (taskId, itemId) =>
+    set((s) => {
+      const actorId = useIdentityStore.getState().viewingAsUserId;
+      return {
+        tasks: s.tasks.map((t) => {
+          if (t.id !== taskId) return t;
+          const nextChecklist = t.checklist.filter((c) => c.id !== itemId);
+          return applyChecklistDerivedCompletion(t, nextChecklist, actorId);
+        }),
+      };
+    }),
+  toggleAssigneeChecklist: (taskId, userId) =>
     set((s) => ({
-      tasks: s.tasks.map((t) =>
-        t.id !== taskId ? t : { ...t, checklist: t.checklist.filter((c) => c.id !== itemId) }
-      ),
+      tasks: s.tasks.map((t) => {
+        if (t.id !== taskId) return t;
+        const mine = t.checklist.filter((c) => c.ownerId === userId);
+        if (mine.length === 0) return t;
+        const allMineDone = mine.every((c) => c.done);
+        const nextChecklist = t.checklist.map((c) => (c.ownerId === userId ? { ...c, done: !allMineDone } : c));
+        return applyChecklistDerivedCompletion(t, nextChecklist, userId);
+      }),
     })),
   addReaction: (taskId, stickerId, byUserId, note) =>
     set((s) => {

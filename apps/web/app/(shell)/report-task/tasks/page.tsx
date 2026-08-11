@@ -12,10 +12,12 @@ import { useTaskStore, type PenaltyFilter } from "@/modules/report_task/store/ta
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canManage } from "@/modules/report_task/data/mock";
 import { canSeeTask } from "@/modules/report_task/lib/permissions";
+import { matchesTaskFilters } from "@/modules/report_task/lib/task-filter";
 import { taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
+import type { DatePreset } from "@/modules/report_task/lib/date-filter";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Skeleton } from "@/modules/report_task/components/ui/skeleton";
-import { PageHeader } from "@/modules/report_task/components/shared/page-header";
+import { StickyFilterBar } from "@/modules/report_task/components/shared/sticky-filter-bar";
 import type { TaskPriority } from "@/modules/report_task/types";
 
 type TaskView = "board" | "grid" | "workload";
@@ -56,16 +58,20 @@ function TasksPageContent() {
   // staying silently filtered until a hard refresh.
   useEffect(() => {
     const dept = searchParams.get("dept");
-    const q = searchParams.get("q");
     const assignee = searchParams.get("assignee");
     const priority = searchParams.get("priority");
     const penalty = searchParams.get("penalty");
+    const preset = searchParams.get("preset");
+    const from = searchParams.get("from");
+    const to = searchParams.get("to");
     const patch: Partial<typeof filters> = {};
     if (dept) patch.departmentId = dept;
-    if (q) patch.search = q;
     if (assignee) patch.assigneeId = assignee;
     if (priority && taskPriorityOrder.includes(priority as TaskPriority)) patch.priority = priority as TaskPriority;
     if (penalty && ["overdue", "pending", "docked"].includes(penalty)) patch.penalty = penalty as PenaltyFilter;
+    if (preset) patch.preset = preset as DatePreset;
+    if (from) patch.customFrom = from;
+    if (to) patch.customTo = to;
     if (Object.keys(patch).length > 0) setFilters(patch);
     return resetFilters;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -77,10 +83,16 @@ function TasksPageContent() {
   useEffect(() => {
     const params = new URLSearchParams();
     if (filters.departmentId !== "all") params.set("dept", filters.departmentId);
-    if (filters.search.trim()) params.set("q", filters.search);
     if (filters.assigneeId !== "all") params.set("assignee", filters.assigneeId);
     if (filters.priority !== "all") params.set("priority", filters.priority);
     if (filters.penalty !== "all") params.set("penalty", filters.penalty);
+    if (filters.preset !== "all") {
+      params.set("preset", filters.preset);
+      if (filters.preset === "custom") {
+        if (filters.customFrom) params.set("from", filters.customFrom);
+        if (filters.customTo) params.set("to", filters.customTo);
+      }
+    }
     if (view !== "board") params.set("view", view);
     const query = params.toString();
     router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
@@ -95,6 +107,16 @@ function TasksPageContent() {
   // Non-heads only ever see their own tasks (see canSeeTask).
   const visibleTasks = useMemo(() => tasks.filter((t) => canSeeTask(t, viewingAsUserId)), [tasks, viewingAsUserId]);
 
+  // The 4 KPI cards react to every filter EXCEPT their own quick-view drill
+  // (see TaskBoardKpis) — otherwise clicking "เลยกำหนด" would collapse all 4
+  // numbers down to the same overdue count instead of staying a stable set
+  // of options to click between, while the board itself (which reads
+  // `filters` straight from the store) still narrows correctly.
+  const kpiTasks = useMemo(
+    () => visibleTasks.filter((t) => matchesTaskFilters(t, { ...filters, quickView: "all" })),
+    [visibleTasks, filters]
+  );
+
   const tabs: { id: TaskView; label: string; icon: typeof LayoutGrid }[] = [
     { id: "board", label: "บอร์ด", icon: LayoutGrid },
     { id: "grid", label: "ตาราง", icon: Table2 },
@@ -103,10 +125,10 @@ function TasksPageContent() {
 
   return (
     <div className="flex flex-col gap-4 lg:gap-6 pb-6">
-      <PageHeader
+      <StickyFilterBar
         title="Task / Kanban Board"
         subtitle={viewSubtitle[view]}
-        action={
+        actions={
           // View switcher — same task data: Board (Kanban) ↔ Grid ↔ Workload
           <div className="inline-flex items-center gap-1 rounded-xl bg-[var(--bg-soft)] p-1 max-w-full overflow-x-auto shrink-0">
             {tabs.map((t) => {
@@ -129,10 +151,11 @@ function TasksPageContent() {
             })}
           </div>
         }
-      />
+      >
+        <TaskFilters />
+      </StickyFilterBar>
 
-      {loaded && view === "board" && <TaskBoardKpis tasks={visibleTasks} />}
-      <TaskFilters />
+      {loaded && view === "board" && <TaskBoardKpis tasks={kpiTasks} />}
       {!loaded ? (
         <BoardSkeleton />
       ) : (
@@ -149,7 +172,7 @@ function TasksPageContent() {
 /** Column-shaped placeholder shown while the file-backed task data loads. */
 function BoardSkeleton() {
   return (
-    <div className="flex gap-4 overflow-hidden">
+    <div className="flex gap-4 overflow-hidden pt-4 lg:pt-6">
       {Array.from({ length: 4 }).map((_, col) => (
         <div key={col} className="flex-1 min-w-[280px] max-w-[400px] flex flex-col gap-2.5">
           <Skeleton className="h-9 w-full rounded-xl" />

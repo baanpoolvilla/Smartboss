@@ -2,12 +2,13 @@
 
 import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/modules/report_task/components/ui/card";
-import { DASHBOARD_CARD, DASHBOARD_LIST_CARD_H, DASHBOARD_LIST_SCROLL } from "@/modules/report_task/components/dashboard/dashboard-card-style";
+import { DASHBOARD_CARD } from "@/modules/report_task/components/dashboard/dashboard-card-style";
+import { ShowMoreToggle } from "@/modules/report_task/components/shared/show-more-toggle";
+import { useShowMore } from "@/modules/report_task/hooks/use-show-more";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import { Badge } from "@/modules/report_task/components/ui/badge";
 import { Button } from "@/modules/report_task/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
-import { getUser, getDepartment, canManage, departments } from "@/modules/report_task/data/mock";
+import { getUser, getDepartment, canManage } from "@/modules/report_task/data/mock";
 import { overdueTasks } from "@/modules/report_task/lib/reports";
 import { formatShortDate, daysUntil } from "@/modules/report_task/lib/format";
 import { presetRange } from "@/modules/report_task/lib/date-filter";
@@ -19,7 +20,9 @@ import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useDashboardFilterStore } from "@/modules/report_task/store/dashboard-filter-store";
 import { TaskDetailSheet } from "@/modules/report_task/components/kanban/task-detail-sheet";
-import { AlertOctagon } from "lucide-react";
+import { StickerConfirmDialog } from "@/modules/report_task/components/shared/sticker-confirm-dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/modules/report_task/components/ui/tooltip";
+import { AlertOctagon, Info } from "lucide-react";
 import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
 
 export function EscalationsPanel() {
@@ -33,13 +36,12 @@ export function EscalationsPanel() {
   const customFrom = useDashboardFilterStore((s) => s.customFrom);
   const customTo = useDashboardFilterStore((s) => s.customTo);
   // Shared with every other dashboard widget now — used to have its own local
-  // department scope here, which could point at a different department than
-  // the "ทุกแผนก" picker up top at the same time. One filter, one source of
-  // truth, same as priority/overdue.
+  // department scope + <Select> here, which could point at a different
+  // department than the "ทุกแผนก" picker up top at the same time. One filter,
+  // one source of truth (read-only badge below, not a second control).
   const departmentId = useDashboardFilterStore((s) => s.departmentId);
-  const setDepartmentId = useDashboardFilterStore((s) => s.setDepartmentId);
-  const priority = useDashboardFilterStore((s) => s.priority);
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
+  const [pendingSticker, setPendingSticker] = useState<{ taskId: string; title: string; recipientName: string } | null>(null);
 
   const scope = useMemo(() => {
     let all = overdueTasks(tasks);
@@ -50,57 +52,51 @@ export function EscalationsPanel() {
         return due >= range.from.getTime() && due <= range.to.getTime();
       });
     }
-    if (priority !== "all") all = all.filter((t) => t.priority === priority);
     if (personId !== "all") return all.filter((t) => t.assigneeIds.includes(personId));
     if (departmentId !== "all") return all.filter((t) => t.departmentIds.includes(departmentId));
     return all;
-  }, [tasks, personId, preset, customFrom, customTo, departmentId, priority]);
+  }, [tasks, personId, preset, customFrom, customTo, departmentId]);
 
   const canPickScope = personId === "all";
   const scopeLabel = departmentId === "all" ? "ทั้งองค์กร" : `ทีม${getDepartment(departmentId)?.name}`;
+  const { visible, remaining, expanded, toggle } = useShowMore(scope, 5);
 
-  function flagAngry(taskId: string, title: string) {
+  function flagAngry(taskId: string, title: string, recipientName: string) {
     if (!angrySticker) return;
-    addReaction(taskId, angrySticker.id, viewingAsUserId);
-    showStickerToast(angrySticker, title);
+    setPendingSticker({ taskId, title, recipientName });
+  }
+
+  function confirmSticker() {
+    if (!pendingSticker || !angrySticker) return;
+    addReaction(pendingSticker.taskId, angrySticker.id, viewingAsUserId);
+    showStickerToast(angrySticker, pendingSticker.title);
+    setPendingSticker(null);
   }
 
   return (
-    <Card className={cn(DASHBOARD_CARD, DASHBOARD_LIST_CARD_H, "border-[var(--chart-red)]/20")}>
+    <Card className={cn(DASHBOARD_CARD, "h-full flex flex-col", "border-[var(--chart-red)]/20")}>
       <CardHeader className="flex-row items-start justify-between">
         <div>
           <CardTitle className="text-base font-semibold flex items-center gap-2">
             <AlertOctagon className="h-4.5 w-4.5 text-[var(--chart-red)]" />
-            งานที่ต้องเร่งติดตาม
+            งานที่เลยกำหนด
             {scope.length > 0 && (
               <span className="text-xs font-normal text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2 py-0.5">
                 {scope.length}
               </span>
             )}
           </CardTitle>
-          <p className="text-xs text-[var(--ink-soft)] mt-0.5">งานที่เลยกำหนดส่งไปแล้วและยังไม่เสร็จ</p>
+          <p className="text-xs text-[var(--ink-soft)] mt-0.5">งานที่ถึงกำหนดส่งแล้วแต่ยังไม่ปิด</p>
         </div>
-        {canPickScope ? (
-          <Select value={departmentId} onValueChange={(v) => v && setDepartmentId(v)}>
-            <SelectTrigger className="w-[150px] h-7 text-[10px] bg-red-50 text-[var(--chart-red)] border-red-200 [&_svg]:text-[var(--chart-red)]">
-              <SelectValue>{scopeLabel}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">ทั้งองค์กร</SelectItem>
-              {departments.map((d) => (
-                <SelectItem key={d.id} value={d.id}>ทีม{d.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : (
-          <Badge variant="outline" className="text-[10px] bg-red-50 text-[var(--chart-red)] border-red-200">{getUser(personId)?.name}</Badge>
-        )}
+        <Badge variant="outline" className="text-[10px] bg-red-50 text-[var(--chart-red)] border-red-200">
+          {canPickScope ? scopeLabel : getUser(personId)?.name}
+        </Badge>
       </CardHeader>
-      <CardContent className={DASHBOARD_LIST_SCROLL}>
+      <CardContent className="flex-1 flex flex-col">
         {scope.length === 0 && (
-          <p className="text-sm text-[var(--ink-soft)] py-6 text-center">ไม่มีงานเลยกำหนด ทุกอย่างเรียบร้อย 🎉</p>
+          <p className="text-sm text-[var(--ink-soft)] py-6 text-center">ไม่มีงานเลยกำหนด ทุกอย่างตามแผน 🎉</p>
         )}
-        {scope.map((t) => {
+        {visible.map((t) => {
           const assignee = getUser(t.assigneeIds[0] ?? "");
           const days = Math.abs(daysUntil(t.dueDate));
           const angryCount = t.reactions.filter((r) => r.stickerId === "angry").length;
@@ -125,7 +121,7 @@ export function EscalationsPanel() {
                 <div className="flex items-start justify-between gap-2">
                   <span className="text-sm font-medium truncate min-w-0">{t.title}</span>
                   <span className="text-xs text-[var(--chart-red)] font-medium shrink-0 whitespace-nowrap">
-                    เลยกำหนด {days} วัน
+                    เกินกำหนด {days} วัน
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 mt-1 flex-wrap">
@@ -134,8 +130,32 @@ export function EscalationsPanel() {
                   </Badge>
                   <span className="text-xs text-[var(--ink-soft)] truncate">
                     {assignee?.name} · {formatShortDate(t.dueDate)}
-                    {angryCount > 0 && <span className="text-[var(--chart-red)]"> · ถูกตักเตือน {angryCount} ครั้ง</span>}
+                    {angryCount > 0 && <span className="text-[var(--chart-red)]"> · ติดตามแล้ว {angryCount} ครั้ง</span>}
                   </span>
+                  {t.taskMode === "group" &&
+                    (() => {
+                      const doneCount = t.completedAssigneeIds?.length ?? 0;
+                      if (doneCount === 0 || doneCount >= t.assigneeIds.length) return null;
+                      return (
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <button onClick={(e) => e.stopPropagation()} className="text-[var(--brand-green-dark)]" aria-label="ดูรายละเอียดผู้ที่เสร็จ/ยังไม่เสร็จ">
+                                <Info className="h-3.5 w-3.5" />
+                              </button>
+                            }
+                          />
+                          <TooltipContent className="text-xs">
+                            <p className="font-medium">{doneCount}/{t.assigneeIds.length} คนเสร็จแล้ว</p>
+                            {t.assigneeIds.map((uid) => (
+                              <p key={uid} className={cn((t.completedAssigneeIds ?? []).includes(uid) ? "text-[var(--brand-green)]" : "opacity-80")}>
+                                {(t.completedAssigneeIds ?? []).includes(uid) ? "✓" : "○"} {getUser(uid)?.name}
+                              </p>
+                            ))}
+                          </TooltipContent>
+                        </Tooltip>
+                      );
+                    })()}
                 </div>
               </div>
               {canManage(viewingAsUserId) && (
@@ -145,7 +165,7 @@ export function EscalationsPanel() {
                   className="shrink-0 border-red-200 text-[var(--chart-red)] hover:bg-red-50 h-7 px-2 text-xs"
                   onClick={(e) => {
                     e.stopPropagation();
-                    flagAngry(t.id, t.title);
+                    flagAngry(t.id, t.title, assignee?.name ?? "ผู้รับผิดชอบ");
                   }}
                 >
                   😡
@@ -154,9 +174,20 @@ export function EscalationsPanel() {
             </div>
           );
         })}
+        <div className="mt-auto pt-2">
+          <ShowMoreToggle expanded={expanded} remaining={remaining} onToggle={toggle} />
+        </div>
       </CardContent>
 
       <TaskDetailSheet taskId={openTaskId} onOpenChange={(open) => !open && setOpenTaskId(null)} />
+      <StickerConfirmDialog
+        open={!!pendingSticker}
+        onOpenChange={(open) => !open && setPendingSticker(null)}
+        sticker={angrySticker ?? null}
+        recipientName={pendingSticker?.recipientName ?? ""}
+        taskTitle={pendingSticker?.title ?? ""}
+        onConfirm={confirmSticker}
+      />
     </Card>
   );
 }

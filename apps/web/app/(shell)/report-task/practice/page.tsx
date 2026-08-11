@@ -59,7 +59,7 @@ export default function PracticePage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 pt-4 lg:pt-6">
       <div className="rounded-2xl border border-dashed border-[var(--brand-green)] bg-[var(--accent)] px-5 py-3.5 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2.5">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-[var(--brand-green-dark)]">

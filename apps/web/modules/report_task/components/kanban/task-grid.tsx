@@ -40,13 +40,12 @@ import { getUser } from "@/modules/report_task/data/mock";
 import { statusMeta, priorityMeta, statusIcon, taskStatusOrder, taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
 import { formatShortDate } from "@/modules/report_task/lib/format";
 import { dueUrgency, reactionCounts } from "@/modules/report_task/lib/task-flags";
-import { canEditRecord, canDockPenalty } from "@/modules/report_task/lib/permissions";
+import { canEditRecord } from "@/modules/report_task/lib/permissions";
 import { cn } from "@/modules/report_task/lib/utils";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
-import { usePenaltySettingsStore } from "@/modules/report_task/store/penalty-settings-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, MessageSquare, Paperclip, ListTodo, ChevronDown, X, AlarmClockOff, CheckCircle2, SearchX } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, MessageSquare, Paperclip, ListTodo, ChevronDown, X, CheckCircle2, SearchX } from "lucide-react";
 import { EmptyState } from "@/modules/report_task/components/shared/empty-state";
 import type { Task, TaskStatus, TaskPriority } from "@/modules/report_task/types";
 import { toast } from "sonner";
@@ -132,9 +131,7 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
   const stickers = useStickerStore((s) => s.stickers);
   const moveTask = useTaskStore((s) => s.moveTask);
   const updateTask = useTaskStore((s) => s.updateTask);
-  const applyPenalty = useTaskStore((s) => s.applyPenalty);
   const resetFilters = useTaskStore((s) => s.resetFilters);
-  const defaultPoints = usePenaltySettingsStore((s) => s.defaultPoints);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
 
   // Selection is a local set of ids, not derived from `tasks` — prune it
@@ -475,25 +472,6 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
     );
     clearSelection();
   }
-  function bulkDock() {
-    // Strict-deadline tasks are docked automatically — skip them here, the
-    // manual dock is only ever a call on a flexible one.
-    const dockable = tasks.filter(
-      (t) =>
-        selected.has(t.id) &&
-        (t.deadlineType ?? "flexible") !== "strict" &&
-        canDockPenalty(t.assignedById, t.departmentIds, viewingAsUserId)
-    );
-    dockable.forEach((t) => applyPenalty(t.id, defaultPoints, viewingAsUserId));
-    const skipped = selCount - dockable.length;
-    toast.error(
-      skipped > 0
-        ? `หัก ${defaultPoints} คะแนน กับ ${dockable.length} งาน (ข้าม ${skipped} งานที่ตรงกำหนดหรือไม่ใช่หัวหน้าแผนก)`
-        : `หัก ${defaultPoints} คะแนน กับ ${selCount} งาน`
-    );
-    clearSelection();
-  }
-
   return (
     <div className="flex flex-col gap-3">
       {/* Toolbar: group-by + summary chips */}
@@ -559,13 +537,6 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-
-            <button
-              onClick={bulkDock}
-              className="inline-flex items-center gap-1 h-8 rounded-lg bg-red-600 text-white px-2.5 text-xs font-semibold hover:bg-red-700"
-            >
-              <AlarmClockOff className="h-3.5 w-3.5" /> หักคะแนน −{defaultPoints}
-            </button>
 
             <button
               onClick={clearSelection}

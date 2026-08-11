@@ -10,6 +10,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     description: "",
     status: "todo",
     priority: "medium",
+    taskMode: "individual",
     assigneeIds: ["usr-02"],
     assignedById: "usr-01",
     departmentIds: ["dep-eng"],
@@ -41,21 +42,12 @@ describe("sweepAutoPenalties", () => {
     expect(result.tasks[0]!.missedDeadlineOnce).toBeFalsy();
   });
 
-  it("flags missedDeadlineOnce for an overdue flexible task without docking", () => {
+  it("docks an overdue task automatically and logs/notifies once", () => {
     const result = sweepAutoPenalties([
-      makeTask({ originalDueDate: daysFromNow(-1), deadlineType: "flexible" }),
+      makeTask({ originalDueDate: daysFromNow(-1) }),
     ]);
     expect(result.changed).toBe(true);
     expect(result.tasks[0]!.missedDeadlineOnce).toBe(true);
-    expect(result.tasks[0]!.penalty).toBeUndefined();
-    expect(result.logs).toHaveLength(0);
-  });
-
-  it("docks a strict overdue task automatically and logs/notifies once", () => {
-    const result = sweepAutoPenalties([
-      makeTask({ originalDueDate: daysFromNow(-1), deadlineType: "strict" }),
-    ]);
-    expect(result.changed).toBe(true);
     expect(result.tasks[0]!.penalty?.points).toBe(LATE_PENALTY_POINTS);
     expect(result.tasks[0]!.penalty?.byUserId).toBe(SYSTEM_USER_ID);
     expect(result.logs).toHaveLength(1);
@@ -63,7 +55,7 @@ describe("sweepAutoPenalties", () => {
   });
 
   it("is idempotent — a second sweep over already-flagged tasks changes nothing", () => {
-    const first = sweepAutoPenalties([makeTask({ originalDueDate: daysFromNow(-1), deadlineType: "strict" })]);
+    const first = sweepAutoPenalties([makeTask({ originalDueDate: daysFromNow(-1) })]);
     const second = sweepAutoPenalties(first.tasks);
     expect(second.changed).toBe(false);
     expect(second.logs).toHaveLength(0);
@@ -96,12 +88,52 @@ describe("sweepAutoPenalties", () => {
     const result = sweepAutoPenalties([
       makeTask({
         originalDueDate: daysFromNow(-1),
-        deadlineType: "strict",
         missedDeadlineOnce: true,
         penalty: { points: 3, byUserId: "usr-01", appliedAt: new Date().toISOString() },
       }),
     ]);
     expect(result.changed).toBe(false);
     expect(result.logs).toHaveLength(0);
+  });
+
+  describe("group tasks", () => {
+    it("only docks the assignee whose own effective due date passed", () => {
+      const result = sweepAutoPenalties([
+        makeTask({
+          taskMode: "group",
+          assigneeIds: ["usr-02", "usr-03"],
+          originalDueDate: daysFromNow(5),
+          assigneeDueDates: { "usr-02": daysFromNow(-1) },
+        }),
+      ]);
+      const t = result.tasks[0]!;
+      expect(t.penalties?.["usr-02"]?.points).toBe(LATE_PENALTY_POINTS);
+      expect(t.penalties?.["usr-03"]).toBeUndefined();
+      expect(result.logs).toHaveLength(1);
+      expect(result.notifications).toHaveLength(1);
+    });
+
+    it("never docks an assignee who already completed their part", () => {
+      const result = sweepAutoPenalties([
+        makeTask({
+          taskMode: "group",
+          assigneeIds: ["usr-02", "usr-03"],
+          originalDueDate: daysFromNow(-1),
+          completedAssigneeIds: ["usr-02"],
+        }),
+      ]);
+      const t = result.tasks[0]!;
+      expect(t.penalties?.["usr-02"]).toBeUndefined();
+      expect(t.penalties?.["usr-03"]?.points).toBe(LATE_PENALTY_POINTS);
+    });
+
+    it("is idempotent per assignee", () => {
+      const first = sweepAutoPenalties([
+        makeTask({ taskMode: "group", assigneeIds: ["usr-02", "usr-03"], originalDueDate: daysFromNow(-1) }),
+      ]);
+      const second = sweepAutoPenalties(first.tasks);
+      expect(second.changed).toBe(false);
+      expect(second.logs).toHaveLength(0);
+    });
   });
 });

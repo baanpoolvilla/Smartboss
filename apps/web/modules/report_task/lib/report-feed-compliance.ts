@@ -35,6 +35,18 @@ function lastCutoffMinutes(topic: ReportTopic): number {
   }, 0);
 }
 
+/** The room's own final cutoff time-of-day, formatted "HH:MM" — for UI that
+ * needs to show a specific room's real cutoff instead of assuming a global
+ * one (rooms configure their own rounds independently, see ReportTopic). */
+export function lastCutoffLabel(topic: ReportTopic): string {
+  const mins = lastCutoffMinutes(topic);
+  const h = Math.floor(mins / 60)
+    .toString()
+    .padStart(2, "0");
+  const m = (mins % 60).toString().padStart(2, "0");
+  return `${h}:${m}`;
+}
+
 function minutesOfDay(iso: string): number {
   const d = new Date(iso);
   return d.getHours() * 60 + d.getMinutes();
@@ -144,8 +156,10 @@ export interface ComplianceRow {
   missed: number;
   /** Days they did post, but none of that day's posts met the room's minimum-photo requirement — a subset flag on top of onTime/late, not a fourth mutually-exclusive bucket. */
   attachmentIssues: number;
-  /** % of trackedDays that got a post at all (on-time + late) — "did they show up." */
+  /** % of trackedDays that got a post at all (on-time + late) — "did they show up," same idea as Task's completionRate. Historically mislabeled "ตรงเวลา" in a few places — that's actually this field, not onTimeRate below. */
   complianceRate: number;
+  /** % of trackedDays posted *before* the room's final cutoff specifically — stricter than complianceRate, which also counts late-but-posted days as a success. */
+  onTimeRate: number;
   /** % of trackedDays posted late — a secondary signal, same shape as the Task report's latePercent. */
   lateRate: number;
 }
@@ -162,6 +176,7 @@ function emptyRow(id: string, name: string, subtitle: string): ComplianceRow {
     missed: 0,
     attachmentIssues: 0,
     complianceRate: 0,
+    onTimeRate: 0,
     lateRate: 0,
   };
 }
@@ -170,6 +185,7 @@ function finalize(row: ComplianceRow): ComplianceRow {
   return {
     ...row,
     complianceRate: row.trackedDays ? Math.round(((row.onTime + row.late) / row.trackedDays) * 100) : 0,
+    onTimeRate: row.trackedDays ? Math.round((row.onTime / row.trackedDays) * 100) : 0,
     lateRate: row.trackedDays ? Math.round((row.late / row.trackedDays) * 100) : 0,
   };
 }
@@ -228,7 +244,10 @@ export function buildDepartmentComplianceReports(
 }
 
 export interface ReportFeedKpis {
+  /** % of tracked days that got a post at all (on-time + late) — "อัตราสำเร็จรายงาน". */
   complianceRate: number;
+  /** % of tracked days posted before the room's final cutoff — "อัตราส่งตรงเวลา", stricter than complianceRate. */
+  onTimeRate: number;
   latePercent: number;
   onTimeCount: number;
   lateCount: number;
@@ -259,6 +278,7 @@ export function overallComplianceKpis(
 
   return {
     complianceRate: trackedDays ? Math.round(((onTime + late) / trackedDays) * 100) : 0,
+    onTimeRate: trackedDays ? Math.round((onTime / trackedDays) * 100) : 0,
     latePercent: trackedDays ? Math.round((late / trackedDays) * 100) : 0,
     onTimeCount: onTime,
     lateCount: late,
@@ -292,6 +312,7 @@ export function complianceKpisForScope(
     }).length;
     return {
       complianceRate: row?.complianceRate ?? 0,
+      onTimeRate: row?.onTimeRate ?? 0,
       latePercent: row?.lateRate ?? 0,
       onTimeCount: row?.onTime ?? 0,
       lateCount: row?.late ?? 0,
@@ -311,6 +332,7 @@ export function complianceKpisForScope(
     }).length;
     return {
       complianceRate: row?.complianceRate ?? 0,
+      onTimeRate: row?.onTimeRate ?? 0,
       latePercent: row?.lateRate ?? 0,
       onTimeCount: row?.onTime ?? 0,
       lateCount: row?.late ?? 0,
@@ -319,6 +341,51 @@ export function complianceKpisForScope(
     };
   }
   return overallComplianceKpis(topics, posts, range, exemptions);
+}
+
+/** Raw per-day-status counts across every tracked room, for `kpi-buckets.ts`'s
+ * §0.1 5-group Report bucket — the one place that needs `pending` and
+ * `exempt` too, which `buildUserComplianceReports` deliberately skips (its
+ * `trackedDays` denominator is only on-time/late/missed). Scoped up front by
+ * person/department, same precedence as `complianceKpisForScope`. */
+export interface ReportStatusCounts {
+  onTime: number;
+  lateDone: number;
+  pending: number;
+  missed: number;
+  exempt: number;
+}
+
+export function reportStatusCountsForScope(
+  topics: ReportTopic[],
+  posts: ReportPost[],
+  range: { from: Date; to: Date } | null,
+  scope: { personId: string; departmentId: string },
+  exemptions?: DateExemptions
+): ReportStatusCounts {
+  const tracked = trackedTopicsOf(topics);
+  const scopedUsers = users.filter((u) => {
+    if (scope.personId !== "all") return u.id === scope.personId;
+    if (scope.departmentId !== "all") return u.departmentId === scope.departmentId;
+    return true;
+  });
+  const counts: ReportStatusCounts = { onTime: 0, lateDone: 0, pending: 0, missed: 0, exempt: 0 };
+  for (const topic of tracked) {
+    const { startStr, endStr } = iterationBounds(topic, range);
+    const days = eachDay(startStr, endStr);
+    for (const u of scopedUsers) {
+      if (!mustReportToTopic(topic.visibility, u.id)) continue;
+      for (const day of days) {
+        const status = dayComplianceStatus(topic, u.id, day, posts, exemptions);
+        if (status === "on-time") counts.onTime += 1;
+        else if (status === "late") counts.lateDone += 1;
+        else if (status === "pending") counts.pending += 1;
+        else if (status === "missed") counts.missed += 1;
+        else counts.exempt += 1;
+      }
+    }
+  }
+  return counts;
 }
 
 export interface MissedReportEntry {
@@ -337,8 +404,7 @@ export interface MissedReportEntry {
  * The most recent "should have posted, didn't" entries across every tracked
  * room — the Operations section's "Pending Reports" list. Only looks at
  * each room's last 3 tracked days (not its whole history) since this is a
- * "what needs attention right now" list, not a full audit trail (that's
- * what the full /reports Report tab is for).
+ * "what needs attention right now" list, not a full audit trail.
  */
 export function recentMissedReports(
   topics: ReportTopic[],
@@ -480,6 +546,57 @@ export function todayComplianceSummary(
   return summary;
 }
 
+export interface TodayStatusEntry {
+  userId: string;
+  userName: string;
+  userAvatar: string;
+  departmentName: string;
+  topicId: string;
+  topicName: string;
+  topicColor: string;
+  status: "posted" | "late" | "missing";
+}
+
+/** Same today-only scope/loop as `todayComplianceSummary`, but returning the
+ * actual per-person rows instead of just totals — what the header pills
+ * (H1) link into (ส่งแล้ววันนี้/ส่งช้า/ยังไม่ส่ง), so clicking one lands on
+ * the people behind that number instead of a generic merged feed. */
+export function todayStatusEntries(
+  topics: ReportTopic[],
+  posts: ReportPost[],
+  exemptions?: DateExemptions
+): TodayStatusEntry[] {
+  const tracked = trackedTopicsOf(topics);
+  const today = todayIso();
+  const entries: TodayStatusEntry[] = [];
+  for (const topic of tracked) {
+    if (today < localDateStr(new Date(topic.createdAt))) continue;
+    if (!isRequiredWeekday(topic, today)) continue;
+    for (const u of users) {
+      if (!mustReportToTopic(topic.visibility, u.id)) continue;
+      if (exemptions && isExemptDate(exemptions, u.id, today)) continue;
+      const base = {
+        userId: u.id,
+        userName: u.name,
+        userAvatar: u.avatar,
+        departmentName: getDepartment(u.departmentId)?.name ?? u.role,
+        topicId: topic.id,
+        topicName: topic.name,
+        topicColor: topic.color,
+      };
+      const dayPosts = postsForDay(topic, u.id, today, posts);
+      if (dayPosts.length === 0) {
+        entries.push({ ...base, status: "missing" });
+        continue;
+      }
+      const lastCutoff = lastCutoffMinutes(topic);
+      const onTime = dayPosts.some((p) => minutesOfDay(p.createdAt) <= lastCutoff);
+      entries.push({ ...base, status: onTime ? "posted" : "late" });
+    }
+  }
+  return entries;
+}
+
 export function pendingToday(topics: ReportTopic[], posts: ReportPost[], exemptions?: DateExemptions): PendingTodayEntry[] {
   const tracked = trackedTopicsOf(topics);
   const today = todayIso();
@@ -503,4 +620,55 @@ export function pendingToday(topics: ReportTopic[], posts: ReportPost[], exempti
     }
   }
   return entries;
+}
+
+export interface ReportBacklogEntry extends PendingTodayEntry {
+  /** "YYYY-MM-DD" the report was/is due. */
+  day: string;
+}
+
+/**
+ * The Dashboard's own version of "who hasn't posted" — unlike `pendingToday`
+ * (always today, used by the /report-feed page itself), this walks every
+ * required day inside `range` so it actually follows the Dashboard's date
+ * filter instead of secretly always showing today regardless of what preset
+ * is selected. Split into two buckets using the same per-day status
+ * (`dayComplianceStatus`) the compliance rows above are built from, so these
+ * counts always agree with them:
+ *  - `pending` — today only, cutoff hasn't passed yet, still postable
+ *  - `missed`  — cutoff already passed (today or any earlier required day in range)
+ * This is the one shared source for both the KPI card's 4 backlog cells
+ * (§2.4) and this list — don't recompute the same thing a second way.
+ */
+export function reportBacklogEntries(
+  topics: ReportTopic[],
+  posts: ReportPost[],
+  range: { from: Date; to: Date } | null,
+  exemptions?: DateExemptions
+): { pending: ReportBacklogEntry[]; missed: ReportBacklogEntry[] } {
+  const tracked = trackedTopicsOf(topics);
+  const pending: ReportBacklogEntry[] = [];
+  const missed: ReportBacklogEntry[] = [];
+  for (const topic of tracked) {
+    const { startStr, endStr } = iterationBounds(topic, range);
+    for (const day of eachDay(startStr, endStr)) {
+      for (const u of users) {
+        if (!mustReportToTopic(topic.visibility, u.id)) continue;
+        const status = dayComplianceStatus(topic, u.id, day, posts, exemptions);
+        if (status !== "pending" && status !== "missed") continue;
+        const entry: ReportBacklogEntry = {
+          userId: u.id,
+          userName: u.name,
+          userAvatar: u.avatar,
+          departmentName: getDepartment(u.departmentId)?.name ?? u.role,
+          topicId: topic.id,
+          topicName: topic.name,
+          topicColor: topic.color,
+          day,
+        };
+        (status === "pending" ? pending : missed).push(entry);
+      }
+    }
+  }
+  return { pending, missed };
 }

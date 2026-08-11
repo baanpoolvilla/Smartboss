@@ -322,7 +322,7 @@ export function ReportCard({
     <div
       id={`report-post-${post.id}`}
       className={cn(
-        "group/post relative rounded-2xl border p-4 shadow-sm transition-colors duration-200",
+        "group/post relative rounded-2xl border p-4 shadow-sm transition-colors duration-[1200ms] ease-out",
         highlighted || flashTargetId === post.id ? "bg-[var(--accent)] border-[var(--brand-green)]/40" : "bg-white border-[var(--line)]",
         // Unread reads as a left accent + a dot under the author's name (see
         // below) instead of a background tint — a background collided with
@@ -429,7 +429,7 @@ export function ReportCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             {post.pinned && <Pin className="h-3.5 w-3.5 text-[var(--brand-green-dark)] shrink-0" />}
-            <p className="text-sm font-semibold truncate">{author?.name}</p>
+            <p className="text-[13px] font-semibold truncate">{author?.name}</p>
             {author?.role && (
               <span className="shrink-0 text-xs font-medium text-[var(--chart-blue)] bg-blue-50 rounded-full px-1.5 py-0.5 truncate max-w-[140px]">
                 {author.role}

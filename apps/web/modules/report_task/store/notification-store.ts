@@ -10,13 +10,18 @@ export interface AppNotification {
   createdAt: string;
   read: boolean;
   meetingId?: string;
+  /** Where clicking this notification should go — a relative in-app path.
+   * Optional so existing callers that don't have anywhere specific to send
+   * someone (or haven't been updated yet) keep rendering as plain, unclickable
+   * rows, same as before this field existed. */
+  link?: string;
 }
 
 interface NotificationStore {
   notifications: AppNotification[];
   notify: (n: Omit<AppNotification, "id" | "createdAt" | "read">) => void;
   /** Tag N people at once, skipping the actor themselves. */
-  notifyMany: (userIds: string[], byUserId: string, message: string, meetingId?: string) => void;
+  notifyMany: (userIds: string[], byUserId: string, message: string, meetingId?: string, link?: string) => void;
   markAllRead: (userId: string) => void;
 }
 
@@ -32,7 +37,7 @@ export const useNotificationStore = create<NotificationStore>()(
             ...s.notifications,
           ],
         })),
-      notifyMany: (userIds, byUserId, message, meetingId) =>
+      notifyMany: (userIds, byUserId, message, meetingId, link) =>
         set((s) => {
           const fresh = userIds
             .filter((id) => id !== byUserId)
@@ -42,6 +47,7 @@ export const useNotificationStore = create<NotificationStore>()(
               byUserId,
               message,
               meetingId,
+              link,
               createdAt: new Date().toISOString(),
               read: false,
             }));

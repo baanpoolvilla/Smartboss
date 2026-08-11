@@ -32,13 +32,6 @@ export interface TourStep {
 const dashboardTourSteps: TourStep[] = [
   {
     page: "/",
-    target: "dashboard-customize",
-    title: "ปรับแต่งแดชบอร์ดได้เอง",
-    description: "กด \"ปรับแต่ง\" เพื่อซ่อน/แสดงวิดเจ็ต ปรับความกว้าง หรือจัดเรียงใหม่ตามที่ใช้บ่อย กด \"เสร็จสิ้น\" เมื่อจัดเสร็จ",
-    demo: { type: "click-and-close", closeTarget: "dashboard-customize-done" },
-  },
-  {
-    page: "/",
     target: "dashboard-given-tab",
     title: "ดูงานที่คุณแจกให้คนอื่น",
     description: "แท็บนี้ในการ์ดงานค้าง โชว์เฉพาะงานที่คุณเป็นคนสร้าง/มอบหมายให้คนอื่น แยกจากงานของตัวเอง",
@@ -53,13 +46,6 @@ const tasksTourSteps: TourStep[] = [
     title: "สลับดูงานเป็นตารางได้",
     description: "ข้อมูลชุดเดียวกับบอร์ด แต่แสดงเป็นตาราง กดหัวคอลัมน์เพื่อเรียงลำดับได้ เหมาะเวลาอยากไล่ดูทีละแถว",
     demo: { type: "toggle-click", revertTarget: "task-view-board" },
-  },
-  {
-    page: "/tasks",
-    target: "task-select-mode-toggle",
-    title: "เลือกหลายงานพร้อมกันเพื่อทำทีเดียว",
-    description: "กด \"เลือกหลายรายการ\" แล้วติ๊กเลือกหลายการ์ด จะมีแถบเปลี่ยนสถานะ/ความสำคัญหลายงานพร้อมกันโผล่ขึ้นมา",
-    demo: { type: "toggle-click" },
   },
 ];
 
@@ -108,15 +94,9 @@ const calendarTourSteps: TourStep[] = [
   },
 ];
 
-const activityLogTourSteps: TourStep[] = [
-  {
-    page: "/activity-log",
-    target: "activity-search",
-    title: "ค้นหากิจกรรมแบบพิมพ์สด",
-    description: "พิมพ์ชื่องาน การกระทำ หรือรายละเอียดในช่องนี้ รายการด้านล่างจะกรองแบบเรียลไทม์ทันทีที่พิมพ์",
-    demo: { type: "click-and-type", intoTarget: "activity-search", text: "แจ้ง", revertTarget: "activity-clear-filters" },
-  },
-];
+// §7.5 of DASHBOARD_REDESIGN_PROMPT.md removed the search box this page's
+// only tour step demoed — nothing left to walk through here.
+const activityLogTourSteps: TourStep[] = [];
 
 const settingsTourSteps: TourStep[] = [
   {

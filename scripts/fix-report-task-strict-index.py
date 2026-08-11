@@ -80,8 +80,6 @@ EXACT = [
      "allowedTypes.includes(rawType) ? rawType : allowedTypes[0]!;"),
 
     ("components/dashboard/escalations-panel.tsx", "getUser(t.assigneeIds[0])", 'getUser(t.assigneeIds[0] ?? "")'),
-    ("components/dashboard/upcoming-deadlines.tsx", "getUser(t.assigneeIds[0])", 'getUser(t.assigneeIds[0] ?? "")'),
-    ("components/dashboard/my-tasks.tsx", "getUser(t.assigneeIds[0])", 'getUser(t.assigneeIds[0] ?? "")'),
     ("components/calendar/people-calendar-list.tsx", "colorPalette[index % colorPalette.length].value",
      "colorPalette[index % colorPalette.length]!.value"),
     ("components/report-feed/topic-sidebar.tsx", "departmentIcon[deptIds[0]]", 'departmentIcon[deptIds[0] ?? ""]'),
@@ -90,12 +88,9 @@ EXACT = [
      "setColor(topicColors[topics.length % topicColors.length]!)"),
 
     ("store/dashboard-layout-store.ts", "next.splice(to, 0, moved);", "next.splice(to, 0, moved!);"),
-    ("store/report-layout-store.ts", "next.splice(to, 0, moved);", "next.splice(to, 0, moved!);"),
     ("store/google-calendar-store.ts", "state.linksByUser[userId] = state.linksByUser[userId].map((l) =>",
      "state.linksByUser[userId] = (state.linksByUser[userId] ?? []).map((l) =>"),
     ("store/holiday-store.ts", 'h.id.split("-")[1] : THAI_SOURCE;', '(h.id.split("-")[1] ?? THAI_SOURCE) : THAI_SOURCE;'),
-    ("store/task-store.ts", "matching[0].title, matching[0].id", "matching[0]!.title, matching[0]!.id"),
-    ("store/report-feed-store.ts", "color: topicColors[0],", "color: topicColors[0]!,"),
     ("store/report-feed-store.ts", "data.color ?? topicColors[s.topics.length % topicColors.length],",
      "data.color ?? topicColors[s.topics.length % topicColors.length]!,"),
 
@@ -111,6 +106,35 @@ EXACT = [
     ("lib/report-feed-compliance.ts", "matches.length === 1 ? matches[0].id : null;", "matches.length === 1 ? matches[0]!.id : null;"),
     ("store/report-feed-store.ts", '{ id: "topic-general-announce", name: "ประกาศทั่วไป", color: topicColors[1],',
      '{ id: "topic-general-announce", name: "ประกาศทั่วไป", color: topicColors[1]!,'),
+
+    # ── เพิ่ม 2026-08-11 ตอนดึงรอบ "Redesign dashboard / issue desk" ──
+    ("components/dashboard/department-pie-chart.tsx",
+     "departmentColorOrder[i % departmentColorOrder.length]",
+     "departmentColorOrder[i % departmentColorOrder.length]!"),
+    ("components/dashboard/department-pie-chart.tsx",
+     "withPercent(r, departmentColorOrder[i])", "withPercent(r, departmentColorOrder[i]!)"),
+    ("components/dashboard/report-feed-department-pie.tsx",
+     "departmentColorOrder[i % departmentColorOrder.length]",
+     "departmentColorOrder[i % departmentColorOrder.length]!"),
+    ("components/dashboard/report-feed-department-pie.tsx",
+     "withPercent(r, departmentColorOrder[i])", "withPercent(r, departmentColorOrder[i]!)"),
+    ("components/shared/chart-tooltip.tsx",
+     "renderRow(payload[0].payload)", "renderRow(payload[0]!.payload)"),
+    ("store/dashboard-layout-store.ts",
+     "{ ...w, id: idRenames[w.id] }", "{ ...w, id: idRenames[w.id]! }"),
+    ("components/kanban/new-task-dialog.tsx",
+     "newChecklistOwnerId || assigneeIds[0]", "newChecklistOwnerId || assigneeIds[0]!"),
+    ("components/kanban/task-detail-sheet.tsx",
+     "const checklistOwnerIds = isShared ? task.assigneeIds : [task.assigneeIds[0]];",
+     "const checklistOwnerIds = isShared ? task.assigneeIds : [task.assigneeIds[0]!];"),
+    ("components/kanban/task-detail-sheet.tsx",
+     "isShared ? newChecklistOwnerId : task.assigneeIds[0])",
+     "isShared ? newChecklistOwnerId : task.assigneeIds[0]!)"),
+    ("components/kanban/task-detail-sheet.tsx",
+     "newChecklistOwnerId || task.assigneeIds[0]}", "newChecklistOwnerId || task.assigneeIds[0]!}"),
+    ("components/kanban/task-detail-sheet.tsx",
+     "getUser(newChecklistOwnerId || task.assigneeIds[0])",
+     "getUser(newChecklistOwnerId || task.assigneeIds[0]!)"),
 ]
 
 # (ไฟล์, regex, ตัวแทน) — ใช้กับที่ซ้ำหลายจุดในไฟล์เดียว
@@ -125,6 +149,11 @@ REGEX = [
     ("components/shared/tour-overlay.tsx", r"dayCells\[endIndex\](?!!)", "dayCells[endIndex]!"),
     ("components/report-feed/report-card.tsx", r"img=\{images\[0\]\}", "img={images[0]!}"),
     ("components/report-feed/report-post-fields.tsx", r"parseInt\(numberedMatch\[1\], 10\)", "parseInt(numberedMatch[1]!, 10)"),
+]
+
+# เหมือน EXACT แต่ไฟล์อยู่ใต้ app/(shell)/report-task แทน modules/
+PAGE_EXACT = [
+    ("report-feed/page.tsx", "% topicTabs.length];", "% topicTabs.length]!;"),
 ]
 
 applied, missing = 0, []
@@ -153,6 +182,20 @@ for rel, pat, rep in REGEX:
     if s2 != s:
         io.open(p, "w", encoding="utf-8").write(s2)
         applied += 1
+
+for rel, old_s, new_s in PAGE_EXACT:
+    p2 = PAGES / rel
+    if not p2.exists():
+        missing.append(f"(pages) {rel} (ไม่มีไฟล์)")
+        continue
+    s = io.open(p2, encoding="utf-8").read()
+    if new_s in s:
+        continue  # แก้ไปแล้ว
+    if old_s not in s:
+        missing.append(f"(pages) {rel}: {old_s[:60]}")
+        continue
+    io.open(p2, "w", encoding="utf-8").write(s.replace(old_s, new_s))
+    applied += 1
 
 # หน้า settings ใช้ currentSections[0] โดยเช็ค length ไปแล้ว
 sp = PAGES / "settings/page.tsx"

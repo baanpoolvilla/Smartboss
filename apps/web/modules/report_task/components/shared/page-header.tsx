@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 import { cn } from "@/modules/report_task/lib/utils";
 
-/** Shared page title block so every top-level page (Dashboard, Tasks, Calendar,
- *  Reports, Settings, ...) reads with the same title/subtitle hierarchy instead
- *  of each page reinventing its own heading size. */
+/** Shared page title block so every top-level page reads with the same
+ *  title/subtitle hierarchy instead of each page reinventing its own
+ *  heading size. */
 export function PageHeader({
   title,
   subtitle,

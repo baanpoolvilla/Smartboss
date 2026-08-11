@@ -24,15 +24,13 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canViewWidget } from "@/modules/report_task/lib/dashboard-widget-roles";
 
 const spanClass: Record<WidgetSpan, string> = {
-  1: "xl:col-span-1",
-  2: "xl:col-span-2",
-  3: "xl:col-span-3",
+  1: "lg:col-span-1",
+  2: "lg:col-span-2",
 };
 
 const spanLabel: Record<WidgetSpan, string> = {
-  1: "1/3",
-  2: "2/3",
-  3: "เต็ม",
+  1: "ครึ่ง",
+  2: "เต็ม",
 };
 
 function SortableWidget({ widget, editing }: { widget: WidgetConfig; editing: boolean }) {
@@ -48,7 +46,7 @@ function SortableWidget({ widget, editing }: { widget: WidgetConfig; editing: bo
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={cn("col-span-1", spanClass[widget.span], isDragging && "opacity-50 z-10")}
+      className={cn("col-span-1 h-full flex flex-col", spanClass[widget.span], isDragging && "opacity-50 z-10")}
     >
       {editing && (
         <div className="flex items-center gap-2 mb-1.5 rounded-lg border border-dashed border-[var(--brand-green)]/40 bg-[var(--accent)] px-2 py-1.5">
@@ -64,7 +62,7 @@ function SortableWidget({ widget, editing }: { widget: WidgetConfig; editing: bo
           <span className="text-xs font-medium truncate">{label}</span>
 
           <div className="ml-auto flex items-center gap-1">
-            {([1, 2, 3] as WidgetSpan[]).map((s) => (
+            {([1, 2] as WidgetSpan[]).map((s) => (
               <button
                 key={s}
                 onClick={() => setSpan(widget.id, s)}
@@ -90,7 +88,7 @@ function SortableWidget({ widget, editing }: { widget: WidgetConfig; editing: bo
           </div>
         </div>
       )}
-      <div className={cn(editing && "pointer-events-none select-none")}>
+      <div className={cn("flex-1 min-h-0", editing && "pointer-events-none select-none")}>
         <Component />
       </div>
     </div>
@@ -109,9 +107,13 @@ export function DashboardGrid({ editing }: { editing: boolean }) {
   // A widget removed from the registry (e.g. "trend") can still be sitting in
   // someone's already-persisted layout from before it was removed — skip it
   // rather than crash on widgetRegistry[w.id] being undefined.
-  const visible = widgets.filter(
-    (w) => w.visible && w.id in widgetRegistry && canViewWidget(w.id, viewingAsUserId)
-  );
+  //
+  // Deliberately NOT filtering on `w.visible` here — the "ปรับแต่ง" button
+  // that let someone toggle a widget off (and the only way to toggle it back
+  // on) has been removed from the Dashboard page. Honoring a stale `false`
+  // from someone's old persisted layout would permanently hide that widget
+  // with no way left in the UI to bring it back.
+  const visible = widgets.filter((w) => w.id in widgetRegistry && canViewWidget(w.id, viewingAsUserId));
 
   function handleDragEnd(e: DragEndEvent) {
     const { active, over } = e;
@@ -123,7 +125,7 @@ export function DashboardGrid({ editing }: { editing: boolean }) {
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={visible.map((w) => w.id)} strategy={rectSortingStrategy}>
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 lg:gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10 items-start">
           {visible.map((w) => (
             <SortableWidget key={w.id} widget={w} editing={editing} />
           ))}

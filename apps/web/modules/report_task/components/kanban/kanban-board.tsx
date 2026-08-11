@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   DndContext,
   DragOverlay,
@@ -16,10 +17,10 @@ import {
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { usePenaltySettingsStore } from "@/modules/report_task/store/penalty-settings-store";
-import { canEditRecord, canSeeTask, canDockPenalty } from "@/modules/report_task/lib/permissions";
+import { canEditRecord, canSeeTask } from "@/modules/report_task/lib/permissions";
+import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import { getUser, getDepartment, users } from "@/modules/report_task/data/mock";
-import { statusMeta, priorityMeta, priorityColorHex, taskStatusOrder, taskPriorityOrder, statusIcon } from "@/modules/report_task/lib/task-meta";
+import { statusMeta, priorityMeta, priorityColorHex, taskPriorityOrder, statusIcon } from "@/modules/report_task/lib/task-meta";
 import { matchesTaskFilters } from "@/modules/report_task/lib/task-filter";
 import { useTaskSheetParam } from "@/modules/report_task/hooks/use-task-sheet-param";
 import { statusColors, chartColors } from "@/modules/report_task/lib/chart-colors";
@@ -36,15 +37,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/modules/report_task/components/ui/select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/modules/report_task/components/ui/dropdown-menu";
-import { Group, CircleDot, Flag, User, Info, SearchX, CheckCircle2, ChevronDown, AlarmClockOff, X, ListChecks } from "lucide-react";
+import { Group, CircleDot, Flag, User, Info, SearchX, AlarmClockOff } from "lucide-react";
 import { EmptyState } from "@/modules/report_task/components/shared/empty-state";
-import { cn } from "@/modules/report_task/lib/utils";
 
 type GroupBy = "status" | "priority" | "assignee";
 
@@ -70,8 +64,7 @@ export function KanbanBoard() {
   const updateTask = useTaskStore((s) => s.updateTask);
   const setAssignees = useTaskStore((s) => s.setAssignees);
   const setFilters = useTaskStore((s) => s.setFilters);
-  const applyPenalty = useTaskStore((s) => s.applyPenalty);
-  const defaultPoints = usePenaltySettingsStore((s) => s.defaultPoints);
+  const resetFilters = useTaskStore((s) => s.resetFilters);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   // A department head sees the whole board; everyone else only sees tasks
   // they're assigned to or created — a coworker's task no longer appears.
@@ -82,9 +75,6 @@ export function KanbanBoard() {
 
   const [groupBy, setGroupBy] = useState<GroupBy>("status");
   const [activeTask, setActiveTask] = useState<Task | null>(null);
-  // Multi-select + bulk actions — same capability the table view already
-  // has, so switching to the board (the default view) doesn't lose it.
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   // Mirrored into the `?task=` URL param (see the hook) so the browser Back
   // button closes the sheet before leaving the page — falls back to the
   // one-shot navigation intent (dashboard chart click) when there's no
@@ -92,6 +82,11 @@ export function KanbanBoard() {
   const { openTaskId, open: setOpenTaskId, close: closeTaskSheet } = useTaskSheetParam(
     useTaskBoardIntentStore.getState().openTaskId
   );
+  // Separate from `?task=` (which opens the detail dialog) — a notification
+  // link should point out which card it's about without forcing the dialog
+  // open, so whoever clicked it can look at the board first and decide
+  // whether to open it themselves.
+  const highlightTaskId = useSearchParams().get("highlight");
 
   const pendingDepartmentId = useTaskBoardIntentStore((s) => s.departmentId);
   const pendingScrollToStatus = useTaskBoardIntentStore((s) => s.scrollToStatus);
@@ -123,6 +118,46 @@ export function KanbanBoard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Landing via ?highlight=<id> (a notification, a deep link from elsewhere)
+  // scrolls that one card into view and tints it the same soft green
+  // ReportCard uses for its own "highlighted" state (see report-card.tsx) —
+  // deliberately separate from `?task=`/openTaskId, which opens the detail
+  // dialog outright. A notification should just point at the card, not force
+  // the dialog open on someone's behalf.
+  //
+  // A plain classList add has nothing to animate against by default — the
+  // inline transition below is what makes the tint fade out instead of
+  // snapping off. The cleanup function un-tints unconditionally (not just
+  // clearing the timer) — without that, clicking a second notification
+  // before the first one's 2.2s ran out left the *previous* card stuck
+  // green forever, since only the timeout (never cleanup) removed it.
+  useEffect(() => {
+    if (!highlightTaskId) return;
+    const el = document.getElementById(`task-card-${highlightTaskId}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    const highlightClasses = ["bg-[var(--accent)]", "border-[var(--brand-green)]/50"];
+    // The card's own base classes (bg-white, border-[var(--line)]) sit at the
+    // same specificity — swap them out instead of layering the tint on top,
+    // same "one or the other" approach report-card.tsx's className ternary
+    // already relies on for its own highlighted state.
+    const baseClasses = ["bg-white", "border-[var(--line)]"];
+    el.style.transitionProperty = "background-color, border-color";
+    el.style.transitionDuration = "1200ms";
+    el.style.transitionTimingFunction = "ease-out";
+    el.classList.remove(...baseClasses);
+    el.classList.add(...highlightClasses);
+    const timeout = setTimeout(() => {
+      el.classList.remove(...highlightClasses);
+      el.classList.add(...baseClasses);
+    }, 2200);
+    return () => {
+      clearTimeout(timeout);
+      el.classList.remove(...highlightClasses);
+      el.classList.add(...baseClasses);
+    };
+  }, [highlightTaskId]);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     // Only Space picks up/drops a card via keyboard — Enter is left free so
@@ -137,15 +172,52 @@ export function KanbanBoard() {
   );
 
   // Columns are generated from the chosen grouping — Planner's "Group by".
+  // groupBy==="status" splits into 4 mutually-exclusive columns, not 3:
+  // "เลยกำหนด" is derived (dueUrgency==="overdue" && status!=="done"), not a
+  // real TaskStatus, and pulls from BOTH "todo" and "in_progress" — every
+  // non-done overdue task lands here regardless of whether anyone's started
+  // it, so the 4 columns always sum to the full filtered total with no task
+  // counted twice. Which of the two it came from still matters though (a
+  // touched-but-late task reads differently from an untouched one), so
+  // KanbanColumn/TaskCard tag each overdue card with its real underlying
+  // status instead of losing that distinction.
   const columns: BoardColumn[] = useMemo(() => {
     if (groupBy === "status") {
-      return taskStatusOrder.map((s) => ({
-        id: s,
-        label: statusMeta[s].label,
-        accent: statusAccent[s],
-        icon: statusIcon[s],
-        tasks: filtered.filter((t) => t.status === s),
-      }));
+      const overdueIds = new Set(
+        filtered.filter((t) => t.status !== "done" && dueUrgency(t) === "overdue").map((t) => t.id)
+      );
+      return [
+        {
+          id: "todo" as const,
+          label: statusMeta.todo.label,
+          accent: chartColors.gray,
+          icon: statusIcon.todo,
+          tasks: filtered.filter((t) => t.status === "todo" && !overdueIds.has(t.id)),
+        },
+        {
+          id: "in_progress" as const,
+          label: statusMeta.in_progress.label,
+          accent: statusAccent.in_progress,
+          icon: statusIcon.in_progress,
+          tasks: filtered.filter((t) => t.status === "in_progress" && !overdueIds.has(t.id)),
+        },
+        {
+          id: "overdue",
+          label: "เลยกำหนด",
+          accent: chartColors.red,
+          icon: AlarmClockOff,
+          tasks: filtered.filter((t) => overdueIds.has(t.id)),
+          derived: true,
+          emptyMessage: "ไม่มีงานเลยกำหนด 🎉",
+        },
+        {
+          id: "done" as const,
+          label: statusMeta.done.label,
+          accent: statusAccent.done,
+          icon: statusIcon.done,
+          tasks: filtered.filter((t) => t.status === "done"),
+        },
+      ];
     }
     if (groupBy === "priority") {
       return taskPriorityOrder.map((p) => ({
@@ -187,6 +259,22 @@ export function KanbanBoard() {
 
     // Dropping into a column means "set this task's grouped attribute to that column".
     if (groupBy === "status") {
+      // "เลยกำหนด" is derived from the due date, not a real status — it fills
+      // itself in and empties itself out as dates pass, so there's nothing
+      // to set by dropping a card there (§5).
+      if (targetColumnId === "overdue") {
+        toast.error("คอลัมน์ \"เลยกำหนด\" คำนวณจากวันครบกำหนดอัตโนมัติ ลากเข้าไม่ได้");
+        return;
+      }
+      // A card sitting in "เลยกำหนด" only has one real drag exit: mark it
+      // done. Dragging it to "รอดำเนินการ"/"กำลังทำ" instead wouldn't do
+      // anything visible — it's still overdue, so it'd just re-derive right
+      // back into "เลยกำหนด" next render. The actual way out of those two is
+      // editing the due date (task detail sheet), not a drag.
+      if (task.status !== "done" && dueUrgency(task) === "overdue" && targetColumnId !== "done") {
+        toast.error("งานนี้เลยกำหนดอยู่ — ลากไปแค่ \"เสร็จสิ้น\" ได้ ถ้าจะย้ายไปคอลัมน์อื่นต้องเลื่อนวันครบกำหนดก่อน");
+        return;
+      }
       if (task.status === targetColumnId) return;
       moveTask(task.id, targetColumnId as TaskStatus);
       toast.success(`ย้าย "${task.title}" ไปยัง ${statusMeta[targetColumnId as TaskStatus].label} แล้ว`);
@@ -224,67 +312,6 @@ export function KanbanBoard() {
   const GroupIcon = groupBy === "status" ? CircleDot : groupBy === "priority" ? Flag : User;
   const sharedCount = useMemo(() => filtered.filter((t) => t.assigneeIds.length > 1).length, [filtered]);
 
-  const selCount = selected.size;
-  // "เลือกหลายรายการ" mode — off by default (a card's checkbox only shows on
-  // hover then), toggled on from the toolbar so it's a real, discoverable
-  // entry point instead of something you have to stumble on by hovering.
-  const [selectMode, setSelectMode] = useState(false);
-  function toggleSelect(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-    // Checking one card off its hover-revealed checkbox (without going
-    // through the toolbar toggle first) is a real way in too — once that's
-    // happened, pin every checkbox visible the same way the toolbar toggle
-    // would, so finishing the selection doesn't mean re-discovering each
-    // card's checkbox by hovering it again one at a time.
-    setSelectMode(true);
-  }
-  function clearSelection() {
-    setSelected(new Set());
-  }
-  function toggleSelectMode() {
-    setSelectMode((v) => {
-      if (v) clearSelection();
-      return !v;
-    });
-  }
-  function bulkStatus(s: TaskStatus) {
-    selected.forEach((id) => moveTask(id, s));
-    toast.success(`เปลี่ยน ${selCount} งาน เป็น "${statusMeta[s].label}"`);
-    clearSelection();
-  }
-  function bulkPriority(p: TaskPriority) {
-    const editable = filtered.filter((t) => selected.has(t.id) && canEditRecord(t.assignedById, t.departmentIds, viewingAsUserId));
-    editable.forEach((t) => updateTask(t.id, { priority: p }));
-    const skipped = selCount - editable.length;
-    toast.success(
-      skipped > 0
-        ? `ตั้งความสำคัญ ${editable.length} งาน เป็น "${priorityMeta[p].label}" (ข้าม ${skipped} งานที่ไม่ใช่ผู้สร้าง)`
-        : `ตั้งความสำคัญ ${selCount} งาน เป็น "${priorityMeta[p].label}"`
-    );
-    clearSelection();
-  }
-  function bulkDock() {
-    const dockable = filtered.filter(
-      (t) =>
-        selected.has(t.id) &&
-        (t.deadlineType ?? "flexible") !== "strict" &&
-        canDockPenalty(t.assignedById, t.departmentIds, viewingAsUserId)
-    );
-    dockable.forEach((t) => applyPenalty(t.id, defaultPoints, viewingAsUserId));
-    const skipped = selCount - dockable.length;
-    toast.error(
-      skipped > 0
-        ? `หัก ${defaultPoints} คะแนน กับ ${dockable.length} งาน (ข้าม ${skipped} งานที่ตรงกำหนดหรือไม่มีสิทธิ์หัก)`
-        : `หัก ${defaultPoints} คะแนน กับ ${selCount} งาน`
-    );
-    clearSelection();
-  }
-
   return (
     <>
       {/* Group by (Planner-style) */}
@@ -314,92 +341,17 @@ export function KanbanBoard() {
             งานที่มีผู้รับผิดชอบหลายคน ({sharedCount} งาน) จะแสดงในคอลัมน์ของทุกคน
           </span>
         )}
-        <button
-          data-tour="task-select-mode-toggle"
-          onClick={toggleSelectMode}
-          className={cn(
-            "ml-auto inline-flex items-center gap-1.5 h-8 rounded-lg px-2.5 text-xs font-medium transition-colors",
-            selectMode
-              ? "bg-[var(--brand-green)] text-[var(--ink)]"
-              : "bg-white ring-1 ring-inset ring-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
-          )}
-        >
-          <ListChecks className="h-3.5 w-3.5" />
-          เลือกหลายรายการ
-        </button>
-        <span className="text-xs text-[var(--ink-soft)]">{filtered.length} งาน</span>
+        <span className="ml-auto text-xs text-[var(--ink-soft)]">{filtered.length} งาน</span>
       </div>
-
-      {/* Bulk-action bar — appears when cards are selected, same actions as the table view */}
-      {selCount > 0 && (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--brand-green)] bg-[color-mix(in_srgb,var(--brand-green)_8%,white)] px-3 py-2 text-sm">
-          <span className="font-medium">เลือก {selCount} งาน</span>
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <button className="inline-flex items-center gap-1 h-8 rounded-lg bg-white ring-1 ring-inset ring-[var(--line)] px-2.5 text-xs font-medium hover:bg-[var(--bg-soft)]">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> เปลี่ยนสถานะ <ChevronDown className="h-3 w-3 opacity-60" />
-                  </button>
-                }
-              />
-              <DropdownMenuContent align="end" className="w-40">
-                {taskStatusOrder.map((s) => {
-                  const Icon = statusIcon[s];
-                  return (
-                    <DropdownMenuItem key={s} onClick={() => bulkStatus(s)}>
-                      <Icon className="h-3.5 w-3.5" /> {statusMeta[s].label}
-                    </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <button className="inline-flex items-center gap-1 h-8 rounded-lg bg-white ring-1 ring-inset ring-[var(--line)] px-2.5 text-xs font-medium hover:bg-[var(--bg-soft)]">
-                    ความสำคัญ <ChevronDown className="h-3 w-3 opacity-60" />
-                  </button>
-                }
-              />
-              <DropdownMenuContent align="end" className="w-36">
-                {taskPriorityOrder.map((p) => (
-                  <DropdownMenuItem key={p} onClick={() => bulkPriority(p)}>
-                    <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: priorityMeta[p].accentColor }} />
-                    {priorityMeta[p].label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <button
-              onClick={bulkDock}
-              className="inline-flex items-center gap-1 h-8 rounded-lg bg-red-600 text-white px-2.5 text-xs font-semibold hover:bg-red-700"
-            >
-              <AlarmClockOff className="h-3.5 w-3.5" /> หักคะแนน −{defaultPoints}
-            </button>
-
-            <button
-              onClick={clearSelection}
-              className="inline-flex items-center gap-1 h-8 rounded-lg text-[var(--ink-soft)] px-2 text-xs hover:bg-white hover:text-[var(--ink)]"
-            >
-              <X className="h-3.5 w-3.5" /> ล้าง
-            </button>
-          </div>
-        </div>
-      )}
 
       {filtered.length === 0 ? (
         <EmptyState
           icon={SearchX}
           title="ไม่พบงานตามตัวกรอง"
-          description="ลองปรับคำค้นหรือตัวกรอง หรือกดล้างเพื่อดูงานทั้งหมด"
+          description="ลองปรับตัวกรอง หรือกดล้างเพื่อดูงานทั้งหมด"
           action={
             <button
-              onClick={() =>
-                setFilters({ search: "", assigneeId: "all", departmentId: "all", priority: "all", penalty: "all" })
-              }
+              onClick={resetFilters}
               className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-green)] text-[var(--ink)] text-xs font-semibold px-3 py-2 hover:bg-[var(--brand-green-dark)] hover:text-white transition-colors"
             >
               ล้างตัวกรอง
@@ -419,10 +371,8 @@ export function KanbanBoard() {
               <KanbanColumn
                 key={column.id}
                 column={column}
+                boardTotal={filtered.length}
                 onOpen={setOpenTaskId}
-                selected={selected}
-                onToggleSelect={toggleSelect}
-                selectMode={selectMode}
               />
             ))}
           </div>

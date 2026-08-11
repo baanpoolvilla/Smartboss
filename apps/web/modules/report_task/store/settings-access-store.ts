@@ -8,7 +8,7 @@ import { create } from "zustand";
  * already have their own department-head scoping; profile is always
  * personal).
  */
-export type GrantableSection = "stickers" | "leaveTypes" | "routineDayoff" | "reportTopics";
+export type GrantableSection = "stickers" | "leaveTypes" | "routineDayoff" | "reportTopics" | "issueDesk";
 
 interface SettingsAccessStore {
   /** userId -> set of company-tab section keys that user has been granted, on top of their normal role. */

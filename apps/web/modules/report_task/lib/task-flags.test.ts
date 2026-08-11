@@ -10,6 +10,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     description: "",
     status: "todo",
     priority: "medium",
+    taskMode: "individual",
     assigneeIds: [],
     assignedById: "usr-01",
     departmentIds: ["dep-eng"],

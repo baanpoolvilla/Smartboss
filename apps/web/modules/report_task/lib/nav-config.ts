@@ -1,4 +1,5 @@
 import {
+  Bug,
   CalendarDays,
   KanbanSquare,
   LayoutDashboard,
@@ -39,6 +40,7 @@ export const navItems: NavItem[] = [
   { href: `${REPORT_TASK_BASE}/tasks`, label: "งาน / Kanban", icon: KanbanSquare, iconName: "KanbanSquare" },
   { href: `${REPORT_TASK_BASE}/calendar`, label: "ปฏิทิน", icon: CalendarDays, iconName: "CalendarDays" },
   { href: `${REPORT_TASK_BASE}/report-feed`, label: "รายงาน", icon: MessageSquareText, iconName: "MessageSquareText" },
+  { href: `${REPORT_TASK_BASE}/issue-reports`, label: "แจ้งปัญหาระบบ", icon: Bug, iconName: "Bug" },
   {
     href: `${REPORT_TASK_BASE}/activity-log`,
     label: "บันทึกกิจกรรม",

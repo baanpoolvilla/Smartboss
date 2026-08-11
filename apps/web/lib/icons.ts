@@ -1,6 +1,8 @@
 import type { LucideIcon } from "lucide-react";
 import {
   Boxes,
+  Bug,
+  Building,
   Building2,
   CalendarClock,
   CalendarDays,
@@ -35,6 +37,8 @@ import {
  */
 const ICONS: Record<string, LucideIcon> = {
   Boxes,
+  Bug,
+  Building,
   Building2,
   CalendarClock,
   CalendarDays,

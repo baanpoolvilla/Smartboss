@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { Button } from "@/modules/report_task/components/ui/button";
-import { Input } from "@/modules/report_task/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -11,27 +10,28 @@ import {
   SelectValue,
 } from "@/modules/report_task/components/ui/select";
 import { getUser, getDepartment, canManage } from "@/modules/report_task/data/mock";
-import { datePresetLabels, type DatePreset } from "@/modules/report_task/lib/date-filter";
-import { taskPriorityOrder, priorityMeta } from "@/modules/report_task/lib/task-meta";
 import { useDashboardFilterStore } from "@/modules/report_task/store/dashboard-filter-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useVisibleTasks } from "@/modules/report_task/hooks/use-visible-tasks";
-import { cn } from "@/modules/report_task/lib/utils";
-import type { TaskPriority } from "@/modules/report_task/types";
-import { Users } from "lucide-react";
+import { FilterField, FILTER_FIELD_LABEL_CLASS, filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
+import { DateRangeSelectField } from "@/modules/report_task/components/shared/date-range-select-field";
+import { Building2, Users } from "lucide-react";
 
-const presets: DatePreset[] = ["all", "today", "week", "month", "custom"];
-
+/**
+ * §7.2 — filter order is department → person → time, matching the
+ * inverted-pyramid ordering used everywhere else on the Dashboard (widest
+ * scope first). Department is never cleared when a person is picked (the
+ * old code did that, which broke the hierarchy) — the two combine instead:
+ * a department + "ทุกคนในแผนก..." reads as "everyone in that department."
+ */
 export function DashboardFilters() {
   const personId = useDashboardFilterStore((s) => s.personId);
   const departmentId = useDashboardFilterStore((s) => s.departmentId);
-  const priority = useDashboardFilterStore((s) => s.priority);
   const preset = useDashboardFilterStore((s) => s.preset);
   const customFrom = useDashboardFilterStore((s) => s.customFrom);
   const customTo = useDashboardFilterStore((s) => s.customTo);
   const setPersonId = useDashboardFilterStore((s) => s.setPersonId);
   const setDepartmentId = useDashboardFilterStore((s) => s.setDepartmentId);
-  const setPriority = useDashboardFilterStore((s) => s.setPriority);
   const setPreset = useDashboardFilterStore((s) => s.setPreset);
   const setCustomRange = useDashboardFilterStore((s) => s.setCustomRange);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
@@ -41,33 +41,32 @@ export function DashboardFilters() {
   // specific coworker.
   const canPickPerson = canManage(viewingAsUserId);
 
-  // Only offer people who actually show up in tasks this viewer can see
-  // (canSeeTask, via useVisibleTasks) — a department head's "ดูข้อมูลของ"
-  // list is their own department, not the whole company.
+  // Only offer people/departments that actually show up in tasks this viewer
+  // can see (canSeeTask, via useVisibleTasks) — a department head's pickers
+  // are their own department, not the whole company.
   const visibleTasks = useVisibleTasks();
   const pickablePeople = useMemo(() => {
     const ids = new Set(visibleTasks.flatMap((t) => t.assigneeIds));
     return [...ids].map((id) => getUser(id)).filter((u): u is NonNullable<typeof u> => !!u);
   }, [visibleTasks]);
-
-  // Same idea as the person picker — only offer departments that actually
-  // show up among tasks this viewer can see, and only while looking at
-  // everyone at once (picking one person already narrows to their department).
   const availableDepartments = useMemo(() => {
     const ids = new Set(visibleTasks.flatMap((t) => t.departmentIds));
     return [...ids].map((id) => getDepartment(id)).filter((d): d is NonNullable<typeof d> => !!d);
   }, [visibleTasks]);
 
+  // §7.2 — once a department is picked, the person list narrows to just that
+  // department's people, and the "everyone" option's label says how many.
+  const peopleInScope = useMemo(
+    () => (departmentId === "all" ? pickablePeople : pickablePeople.filter((u) => u.departmentId === departmentId)),
+    [pickablePeople, departmentId]
+  );
+  const allInDeptLabel =
+    departmentId === "all" ? "ทุกคน" : `ทุกคนในแผนก${getDepartment(departmentId)?.name ?? ""} (${peopleInScope.length} คน)`;
+
   // The store is global and outlives the identity switcher, so whatever was
   // last picked (a specific coworker, "all") would otherwise carry over to
   // the next identity untouched — a manager seeing a stale "all" is harmless,
   // but a non-head seeing a stale "all"/coworker would leak org-wide data.
-  // Re-default on every identity change: "all" if the new identity can pick
-  // people, otherwise locked to themselves. This mutates an external
-  // (Zustand) store, so it has to run as an effect, not during render —
-  // setting store state mid-render is unsafe even though the equivalent
-  // local-useState pattern elsewhere in this file (e.g. escalations-panel)
-  // is fine.
   const lastIdentity = useRef(viewingAsUserId);
   useEffect(() => {
     if (lastIdentity.current !== viewingAsUserId) {
@@ -77,116 +76,97 @@ export function DashboardFilters() {
     }
   }, [viewingAsUserId, canPickPerson, setPersonId, setDepartmentId]);
 
-  // Department only makes sense while looking at everyone at once — clear it
-  // the moment a specific person is picked instead of leaving a stale value
-  // silently applied underneath.
+  // §7.2 — switching department while a specific person is selected: if that
+  // person isn't in the newly-picked department, fall back to "everyone in
+  // this department" instead of silently keeping a now-mismatched person.
+  // Department itself is never cleared here — only this effect's job.
   useEffect(() => {
-    if (personId !== "all" && departmentId !== "all") setDepartmentId("all");
-  }, [personId, departmentId, setDepartmentId]);
+    if (departmentId === "all" || personId === "all") return;
+    if (getUser(personId)?.departmentId !== departmentId) setPersonId("all");
+  }, [departmentId, personId, setPersonId]);
+
+  const deptActive = departmentId !== "all";
+  const personActive = personId !== "all";
+  const presetActive = preset !== "all";
+  const isFiltered = (canPickPerson && (deptActive || personActive)) || presetActive;
+  const clearFilters = () => {
+    if (canPickPerson) {
+      setPersonId("all");
+      setDepartmentId("all");
+    }
+    setPreset("all");
+  };
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[#eef2f7] bg-white p-2.5 shadow-[0_10px_35px_rgba(0,0,0,0.05)]">
-      <div className="flex items-center gap-1.5 pl-1.5">
-        <Users className="h-4 w-4 text-[var(--ink-soft)]" />
-        {canPickPerson ? (
-          <Select value={personId} onValueChange={(v) => v && setPersonId(v)}>
-            <SelectTrigger className="w-[170px] border-none shadow-none bg-transparent">
-              <SelectValue placeholder="ดูข้อมูลของ">
-                {personId === "all" ? "ทุกคน (ภาพรวม)" : (getUser(personId)?.name ?? "ดูข้อมูลของ")}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">ทุกคน (ภาพรวม)</SelectItem>
-              {pickablePeople.map((u) => (
-                <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : (
-          <span className="text-sm font-medium px-2" title="แดชบอร์ดของพนักงานแสดงข้อมูลของตัวเองเท่านั้น">
-            {getUser(viewingAsUserId)?.name}
-          </span>
-        )}
-      </div>
+    <div className="flex flex-wrap items-end gap-2">
+      {canPickPerson && (
+        <>
+          <FilterField label="แผนก">
+            <Select value={departmentId} onValueChange={(v) => v && setDepartmentId(v)}>
+              <SelectTrigger className={filterFieldTriggerClass(deptActive, "min-w-[130px]")}>
+                <Building2 className="h-4 w-4 shrink-0" />
+                <SelectValue placeholder="แผนก">
+                  {departmentId === "all" ? "ทุกแผนก" : (getDepartment(departmentId)?.name ?? "แผนก")}
+                </SelectValue>
+              </SelectTrigger>
+              {/* alignItemWithTrigger off — that mode floats the selected
+                  row exactly over the trigger using the trigger's position
+                  *at open time*; this bar's height changes (the "ปรับแต่ง"
+                  button, active-filter chips) shift the trigger afterward
+                  without the floated clone following, leaving it stuck
+                  overlapping whatever's now above it. Plain bottom-anchored
+                  positioning re-measures every time instead. */}
+              <SelectContent alignItemWithTrigger={false}>
+                <SelectItem value="all">ทุกแผนก</SelectItem>
+                {availableDepartments.map((d) => (
+                  <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FilterField>
 
-      {canPickPerson && personId === "all" && availableDepartments.length > 1 && (
-        <Select value={departmentId} onValueChange={(v) => v && setDepartmentId(v)}>
-          <SelectTrigger className="w-[150px] bg-white">
-            <SelectValue placeholder="แผนก">
-              {departmentId === "all" ? "ทุกแผนก" : (getDepartment(departmentId)?.name ?? "แผนก")}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">ทุกแผนก</SelectItem>
-            {availableDepartments.map((d) => (
-              <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          <FilterField label="พนักงาน">
+            <Select value={personId} onValueChange={(v) => v && setPersonId(v)}>
+              <SelectTrigger className={filterFieldTriggerClass(personActive, "min-w-[150px]")}>
+                <Users className="h-4 w-4 shrink-0" />
+                <SelectValue placeholder="ดูข้อมูลของ">
+                  {personId === "all" ? allInDeptLabel : (getUser(personId)?.name ?? "ดูข้อมูลของ")}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent alignItemWithTrigger={false}>
+                <SelectItem value="all">{allInDeptLabel}</SelectItem>
+                {peopleInScope.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FilterField>
+        </>
       )}
-
-      <div className="h-6 w-px bg-[var(--line)] hidden sm:block" />
-
-      <div className="flex items-center gap-1 bg-[var(--bg-soft)] rounded-lg p-1 max-w-full overflow-x-auto">
-        {presets.map((p) => (
-          <button
-            key={p}
-            onClick={() => setPreset(p)}
-            className={cn(
-              "px-3 py-1.5 text-xs font-medium rounded-md transition-colors shrink-0",
-              preset === p ? "bg-white shadow-sm text-[var(--ink)]" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
-            )}
+      {!canPickPerson && (
+        <div className="flex flex-col gap-1">
+          <span className={FILTER_FIELD_LABEL_CLASS}>พนักงาน</span>
+          <div
+            className={filterFieldTriggerClass(false, "min-w-[130px] cursor-default")}
+            title="แดชบอร์ดของพนักงานแสดงข้อมูลของตัวเองเท่านั้น"
           >
-            {datePresetLabels[p]}
-          </button>
-        ))}
-      </div>
-
-      <Select value={priority} onValueChange={(v) => v && setPriority(v as TaskPriority | "all")}>
-        <SelectTrigger className="w-[140px] bg-white">
-          <SelectValue placeholder="ความสำคัญ">
-            {priority === "all" ? "ทุกความสำคัญ" : priorityMeta[priority as TaskPriority]?.label}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">ทุกความสำคัญ</SelectItem>
-          {taskPriorityOrder.map((p) => (
-            <SelectItem key={p} value={p}>{priorityMeta[p].label}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      {preset === "custom" && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <Input
-            type="date"
-            value={customFrom}
-            onChange={(e) => setCustomRange(e.target.value, customTo)}
-            className="w-[150px] max-w-full"
-          />
-          <span className="text-[var(--ink-soft)] text-sm">ถึง</span>
-          <Input
-            type="date"
-            value={customTo}
-            onChange={(e) => setCustomRange(customFrom, e.target.value)}
-            className="w-[150px] max-w-full"
-          />
+            <Users className="h-4 w-4 shrink-0" />
+            <span>{getUser(viewingAsUserId)?.name}</span>
+          </div>
         </div>
       )}
 
-      {((canPickPerson && personId !== "all") || departmentId !== "all" || priority !== "all" || preset !== "all") && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="ml-auto text-[var(--ink-soft)]"
-          onClick={() => {
-            if (canPickPerson) setPersonId("all");
-            setDepartmentId("all");
-            setPriority("all");
-            setPreset("all");
-          }}
-        >
-          ล้างตัวกรอง
+      <DateRangeSelectField
+        preset={preset}
+        customFrom={customFrom}
+        customTo={customTo}
+        onPresetChange={setPreset}
+        onCustomRangeChange={setCustomRange}
+      />
+
+      {isFiltered && (
+        <Button variant="ghost" size="sm" className="ml-auto h-8 px-2 text-[var(--ink-soft)]" onClick={clearFilters} aria-label="ล้างตัวกรอง">
+          ✕ ล้างตัวกรอง
         </Button>
       )}
     </div>

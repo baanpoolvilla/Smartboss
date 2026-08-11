@@ -12,7 +12,7 @@ export interface ReportPostSection {
 
 export interface ReportPostImage {
   id: string;
-  /** Uploaded image path from /api/report-task/uploads. */
+  /** Uploaded image path from /api/uploads. */
   url?: string;
   /** Legacy inline data-URL image (pre-upload-endpoint / seed demo images) —
    * prefer `url ?? dataUrl` when rendering. */
@@ -238,6 +238,8 @@ interface ReportFeedStore {
    * post in this topic was unread for them) never touches `posts` at all,
    * so this is safe to call every time a room is opened, not just once. */
   markTopicRead: (topicId: string, userId: string) => void;
+  /** Same idea as `markTopicRead`, scoped to an explicit list of post ids instead of a whole room. */
+  markPostsRead: (postIds: string[], userId: string) => void;
   toggleFavoriteTopic: (topicId: string, userId: string) => void;
   toggleHiddenTopic: (topicId: string, userId: string) => void;
   /** Creates a new named album for a room and returns its id. */
@@ -331,18 +333,35 @@ export const useReportFeedStore = create<ReportFeedStore>()(
           topics: s.topics.map((t) => (t.id === id ? { ...t, ...patch } : t)),
         })),
       addPost: (topicId, authorId, data) => {
+        // Anyone @mentioned in the post gets a distinct "tagged you" notice —
+        // same phrasing as the meeting-attendee tag elsewhere — instead of
+        // being lumped into the generic broadcast below with everyone else.
+        // Computed before the post is created so it can also seed the new
+        // post's own `unreadFor` — an @mention should read as unread for the
+        // mentioned person the same way a fresh post in their room does,
+        // not require a separate manual "mark as unread" first (see
+        // markPostsRead, cleared once they actually open ที่กล่าวถึงฉัน).
+        const mentionedUserIds = extractMentionedIds(
+          data.sections.flatMap((s) => s.bullets).join("\n"),
+          "user"
+        ).filter((id) => id !== authorId);
+        // Captured up front (instead of generated inline inside the set()
+        // call below) so a notification can deep-link straight to this exact
+        // post — same ?topic=&post= shape ReportCard's own "copy link" uses.
+        const postId = nextId("post");
+        const link = `/report-feed?topic=${topicId}&post=${postId}`;
         set((s) => ({
           posts: [
             ...s.posts,
             {
-              id: nextId("post"),
+              id: postId,
               topicId,
               authorId,
               createdAt: new Date().toISOString(),
               editedAt: null,
               pinned: false,
               savedBy: [],
-              unreadFor: [],
+              unreadFor: [...mentionedUserIds],
               reactions: {},
               replies: [],
               ...data,
@@ -351,15 +370,8 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         }));
         const topic = get().topics.find((t) => t.id === topicId);
         const actorName = getUser(authorId)?.name ?? "มีคน";
-        // Anyone @mentioned in the post gets a distinct "tagged you" notice —
-        // same phrasing as the meeting-attendee tag elsewhere — instead of
-        // being lumped into the generic broadcast below with everyone else.
-        const mentionedUserIds = extractMentionedIds(
-          data.sections.flatMap((s) => s.bullets).join("\n"),
-          "user"
-        ).filter((id) => id !== authorId);
         if (mentionedUserIds.length > 0) {
-          useNotificationStore.getState().notifyMany(mentionedUserIds, authorId, `${actorName} แท็กคุณในโพสต์ "${data.title}"`);
+          useNotificationStore.getState().notifyMany(mentionedUserIds, authorId, `${actorName} แท็กคุณในโพสต์ "${data.title}"`, undefined, link);
         }
         // Teams-style "new post in a channel" notification — everyone who
         // can see this topic, minus the poster and anyone already tagged
@@ -370,7 +382,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
             .filter((u) => u.id !== authorId && !mentionedUserIds.includes(u.id) && canSeeReportTopic(topic.visibility, u.id))
             .map((u) => u.id);
           if (recipients.length > 0) {
-            useNotificationStore.getState().notifyMany(recipients, authorId, `${actorName} โพสต์ใหม่ใน "${topic.name}": ${data.title}`);
+            useNotificationStore.getState().notifyMany(recipients, authorId, `${actorName} โพสต์ใหม่ใน "${topic.name}": ${data.title}`, undefined, link);
           }
         }
       },
@@ -410,11 +422,18 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         const post = get().posts.find((p) => p.id === postId);
         if (!post || post.authorId === userId) return;
         const actorName = getUser(userId)?.name ?? "มีคน";
-        useNotificationStore
-          .getState()
-          .notify({ userId: post.authorId, byUserId: userId, message: `${actorName} ทำเครื่องหมาย ${emoji} ให้โพสต์ของคุณ "${post.title}"` });
+        useNotificationStore.getState().notify({
+          userId: post.authorId,
+          byUserId: userId,
+          message: `${actorName} ทำเครื่องหมาย ${emoji} ให้โพสต์ของคุณ "${post.title}"`,
+          link: `/report-feed?topic=${post.topicId}&post=${postId}`,
+        });
       },
       addReply: (postId, authorId, body, extra) => {
+        // Captured up front so notifications below can deep-link straight to
+        // this exact reply (?topic=&post=&reply=), same shape ReportCard's
+        // own "copy link on a comment" already produces.
+        const replyId = nextId("reply");
         set((s) => ({
           posts: s.posts.map((p) =>
             p.id === postId
@@ -423,7 +442,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
                   replies: [
                     ...p.replies,
                     {
-                      id: nextId("reply"),
+                      id: replyId,
                       authorId,
                       body,
                       createdAt: new Date().toISOString(),
@@ -443,16 +462,23 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         if (!post) return;
         const actorName = getUser(authorId)?.name ?? "มีคน";
         const preview = body.split("\n")[0]?.slice(0, 60) ?? "";
+        const link = `/report-feed?topic=${post.topicId}&post=${postId}&reply=${replyId}`;
         const quotedAuthorId = extra?.replyToId ? post.replies.find((r) => r.id === extra.replyToId)?.authorId : undefined;
         if (quotedAuthorId && quotedAuthorId !== authorId) {
-          useNotificationStore
-            .getState()
-            .notify({ userId: quotedAuthorId, byUserId: authorId, message: `${actorName} ตอบกลับความคิดเห็นของคุณใน "${post.title}"${preview ? `: ${preview}` : ""}` });
+          useNotificationStore.getState().notify({
+            userId: quotedAuthorId,
+            byUserId: authorId,
+            message: `${actorName} ตอบกลับความคิดเห็นของคุณใน "${post.title}"${preview ? `: ${preview}` : ""}`,
+            link,
+          });
         }
         if (post.authorId !== authorId && post.authorId !== quotedAuthorId) {
-          useNotificationStore
-            .getState()
-            .notify({ userId: post.authorId, byUserId: authorId, message: `${actorName} ตอบกลับโพสต์ของคุณ "${post.title}"${preview ? `: ${preview}` : ""}` });
+          useNotificationStore.getState().notify({
+            userId: post.authorId,
+            byUserId: authorId,
+            message: `${actorName} ตอบกลับโพสต์ของคุณ "${post.title}"${preview ? `: ${preview}` : ""}`,
+            link,
+          });
         }
         // Anyone @mentioned in the reply, same "tagged you" phrasing as a
         // new post — skip whoever already got notified above as the
@@ -462,7 +488,15 @@ export const useReportFeedStore = create<ReportFeedStore>()(
           (id) => id !== authorId && id !== quotedAuthorId && id !== post.authorId
         );
         if (mentionedInReply.length > 0) {
-          useNotificationStore.getState().notifyMany(mentionedInReply, authorId, `${actorName} แท็กคุณในความคิดเห็นของโพสต์ "${post.title}"`);
+          useNotificationStore.getState().notifyMany(mentionedInReply, authorId, `${actorName} แท็กคุณในความคิดเห็นของโพสต์ "${post.title}"`, undefined, link);
+          // Same "reads as unread for whoever got tagged" as a mention in a
+          // fresh post — no separate per-reply unread slot exists, so this
+          // flags the whole post (see addPost's unreadFor seeding above).
+          set((s) => ({
+            posts: s.posts.map((p) =>
+              p.id === postId ? { ...p, unreadFor: [...new Set([...p.unreadFor, ...mentionedInReply])] } : p
+            ),
+          }));
         }
       },
       togglePin: (postId) =>
@@ -494,6 +528,21 @@ export const useReportFeedStore = create<ReportFeedStore>()(
               p.topicId === topicId && p.unreadFor.includes(userId)
                 ? { ...p, unreadFor: p.unreadFor.filter((id) => id !== userId) }
                 : p
+            ),
+          };
+        }),
+      /** Clears `unreadFor` on a specific set of posts for this viewer —
+       * used by ที่กล่าวถึงฉัน (topic-sidebar.tsx's MENTIONS_ID), which spans
+       * posts across many rooms so `markTopicRead`'s whole-room sweep isn't
+       * the right granularity there. */
+      markPostsRead: (postIds, userId) =>
+        set((s) => {
+          const ids = new Set(postIds);
+          const anyUnread = s.posts.some((p) => ids.has(p.id) && p.unreadFor.includes(userId));
+          if (!anyUnread) return s;
+          return {
+            posts: s.posts.map((p) =>
+              ids.has(p.id) && p.unreadFor.includes(userId) ? { ...p, unreadFor: p.unreadFor.filter((id) => id !== userId) } : p
             ),
           };
         }),

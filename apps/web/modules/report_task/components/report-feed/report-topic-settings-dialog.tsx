@@ -49,9 +49,18 @@ const modeOptions: { mode: VisibilityMode; label: string; icon: typeof Globe }[]
   { mode: "manager", label: "หัวหน้า/ผู้บริหาร", icon: Lock },
 ];
 
-/** One room's settings — lives on the settings page (src/app/settings/page.tsx), with a room picker above it since it's per-topic, not company-wide. Also reused inside room-settings-sheet.tsx, which already shows the room name in its own Sheet header — `hideHeading` drops this component's own duplicate "ตั้งค่าห้อง X" line there. */
-export function ReportTopicSettingsPanel({ topic, hideHeading }: { topic: ReportTopic; hideHeading?: boolean }) {
+/** One room's settings — lives on the settings page (src/app/settings/page.tsx), with a room picker above it since it's per-topic, not company-wide (there, every change still saves instantly — `onUpdate` isn't passed). Also reused inside room-settings-sheet.tsx, which batches everything into its own draft/Save-Cancel bar instead — passes `onUpdate` so visibility/min-images/cutoff changes land in that draft rather than the store directly, and `hideHeading` drops this component's own duplicate "ตั้งค่าห้อง X" line there. Member management (RoomMembersDialog below) always saves instantly either way — its own dialog, own explicit add/remove actions, not a form field to batch. */
+export function ReportTopicSettingsPanel({
+  topic,
+  hideHeading,
+  onUpdate,
+}: {
+  topic: ReportTopic;
+  hideHeading?: boolean;
+  onUpdate?: (patch: Partial<ReportTopic>) => void;
+}) {
   const updateTopicSettings = useReportFeedStore((s) => s.updateTopicSettings);
+  const apply = onUpdate ?? ((patch: Partial<ReportTopic>) => updateTopicSettings(topic.id, patch));
   const [newLabel, setNewLabel] = useState("");
   const [newTime, setNewTime] = useState("09:00");
   const [membersDialogOpen, setMembersDialogOpen] = useState(false);
@@ -68,7 +77,7 @@ export function ReportTopicSettingsPanel({ topic, hideHeading }: { topic: Report
   // The owner has no such restriction; every mode/department stays theirs.
   function setMode(next: VisibilityMode) {
     if (!owner && next !== "department") return;
-    updateTopicSettings(topic.id, {
+    apply({
       visibility:
         next === "open"
           ? undefined
@@ -94,7 +103,7 @@ export function ReportTopicSettingsPanel({ topic, hideHeading }: { topic: Report
     // silently lock everyone but the owner out with no way back short of
     // reopening this dialog and re-adding one.
     if (next.length === 0) return;
-    updateTopicSettings(topic.id, {
+    apply({
       visibility: {
         departmentIds: next,
         extraUserIds: topic.visibility?.extraUserIds,
@@ -106,18 +115,18 @@ export function ReportTopicSettingsPanel({ topic, hideHeading }: { topic: Report
   function addCutoff() {
     const label = newLabel.trim();
     if (!label || !newTime) return;
-    updateTopicSettings(topic.id, {
+    apply({
       cutoffs: [...topic.cutoffs, { id: `cutoff-${crypto.randomUUID()}`, label, time: newTime }],
     });
     setNewLabel("");
   }
 
   function removeCutoff(id: string) {
-    updateTopicSettings(topic.id, { cutoffs: topic.cutoffs.filter((c) => c.id !== id) });
+    apply({ cutoffs: topic.cutoffs.filter((c) => c.id !== id) });
   }
 
   function setCutoffMinImages(id: string, value: number | undefined) {
-    updateTopicSettings(topic.id, {
+    apply({
       cutoffs: topic.cutoffs.map((c) => (c.id === id ? { ...c, minImages: value } : c)),
     });
   }
@@ -227,7 +236,7 @@ export function ReportTopicSettingsPanel({ topic, hideHeading }: { topic: Report
                   : "0 = ไม่บังคับแนบรูป"}
             </p>
           </div>
-          <ImageCountStepper value={topic.minImages} onChange={(v) => updateTopicSettings(topic.id, { minImages: v })} />
+          <ImageCountStepper value={topic.minImages} onChange={(v) => apply({ minImages: v })} />
         </div>
 
         <div className="space-y-2">

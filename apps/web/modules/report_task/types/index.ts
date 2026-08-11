@@ -39,9 +39,9 @@ export interface Attachment {
   uploadedBy: string;
   uploadedAt: string;
   /** Uploaded image preview — only set for actual picked images; other file
-   * types are metadata-only. Server path from /api/report-task/uploads. */
+   * types are metadata-only. Server path from /api/uploads. */
   url?: string;
-  /** Legacy inline preview from before uploads went through /api/report-task/uploads —
+  /** Legacy inline preview from before uploads went through /api/uploads —
    * kept so old data (seed/demo tasks) still renders; new attachments use
    * `url` instead. Prefer `url ?? dataUrl` when rendering. */
   dataUrl?: string;
@@ -58,6 +58,11 @@ export interface ChecklistItem {
   id: string;
   text: string;
   done: boolean;
+  /** Who this item belongs to — an individual task's items all share the one
+   * assignee; a group task splits its checklist into one section per person.
+   * Drives `completedAssigneeIds` (see task-completion.ts): an assignee's
+   * part is done once every item they own is checked. */
+  ownerId?: string;
 }
 
 export interface Sticker {
@@ -88,29 +93,27 @@ export interface TaskPenalty {
   reason?: string;
 }
 
-/**
- * Chosen when a task is created:
- * - "strict": the deadline is firm — going overdue docks points automatically, no manual step.
- * - "flexible": a lead decides case by case — dock manually or push the due date out instead.
- */
-export type DeadlineType = "strict" | "flexible";
-
 export interface Task {
   id: string;
   title: string;
   description: string;
   status: TaskStatus;
   priority: TaskPriority;
+  /** Set explicitly at creation, not re-derived from assigneeIds.length later
+   * — a lead could in principle drop a group task down to one remaining
+   * assignee without it silently becoming "individual". */
+  taskMode: "individual" | "group";
   assigneeIds: string[];
   assignedById: string;
   departmentIds: string[];
   startDate: string;
   dueDate: string;
   originalDueDate: string;
+  /** Per-assignee due-date override for a group task — falls back to
+   * `dueDate` for anyone not listed here. Unused on an individual task. */
+  assigneeDueDates?: Record<string, string>;
   /** Set the moment status transitions to "done"; cleared if reopened. Lets the missed-deadline sweep judge a *finished* task by when it actually closed, not by "today" (which would eventually brand every old task late). */
   completedAt?: string;
-  /** Defaults to "flexible" for tasks created before this existed. */
-  deadlineType?: DeadlineType;
   /** True once this task has gone overdue at least once — sticks even if later docked, resolved, or pushed out, so a flexible task's history isn't lost. */
   missedDeadlineOnce?: boolean;
   /** True once this task has been taken out of "เสร็จสิ้น" after being marked done — sticks forever, even once it's properly finished again, as a visible flag against a "mark done to dodge the deadline" pattern. */
@@ -127,10 +130,13 @@ export interface Task {
   reactions: TaskReaction[];
   /** Parent task id when this is a subtask; undefined/null for top-level tasks. */
   parentId?: string | null;
-  /** Shared across every occurrence created from one "ทำซ้ำ" (repeat) batch — lets deleting one occurrence offer "just this one" vs "the whole series". Absent on a one-off task. */
-  seriesId?: string;
-  /** Set when overdue: automatically for a "strict" task, or by a lead's judgement for a "flexible" one. */
+  /** Set automatically the moment a task goes overdue (see task-penalty-sweep.ts) — every task docks the same way, no manual/case-by-case path. Individual tasks only — a group task docks per assignee via `penalties` instead. */
   penalty?: TaskPenalty | null;
+  /** Per-assignee dock map for a group task (userId -> their own penalty) —
+   * each assignee is judged against their own effective due date and only
+   * docked if they personally haven't finished. Individual tasks use the
+   * singular `penalty` field instead, never this. */
+  penalties?: Record<string, TaskPenalty>;
   checklist: ChecklistItem[];
   /** Planner's "show on card" — preview the checklist on the board card. */
   showChecklistOnCard: boolean;
@@ -173,8 +179,6 @@ export interface CalendarEvent {
   editable?: boolean;
   /** Files attached at creation/edit time — meeting only for now. */
   attachments?: Attachment[];
-  /** Shared across every occurrence created from one "ทำซ้ำ" (repeat) batch — meeting only. Lets deleting one occurrence offer "just this one" vs "the whole series". */
-  seriesId?: string;
 }
 
 export interface ActivityItem {

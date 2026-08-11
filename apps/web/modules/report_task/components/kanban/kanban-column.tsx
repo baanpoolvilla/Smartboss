@@ -3,6 +3,8 @@
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { TaskCard } from "./task-card";
+import { ShowMoreToggle } from "@/modules/report_task/components/shared/show-more-toggle";
+import { useShowMore } from "@/modules/report_task/hooks/use-show-more";
 import { cn } from "@/modules/report_task/lib/utils";
 import type { Task } from "@/modules/report_task/types";
 import type { LucideIcon } from "lucide-react";
@@ -13,24 +15,35 @@ export interface BoardColumn {
   accent: string;
   icon?: LucideIcon;
   tasks: Task[];
+  /** Computed from due dates, not a real grouped attribute — can't be a drop target (§5). */
+  derived?: boolean;
+  /** Overrides the generic "ลากงานมาวางที่นี่" empty state — the derived
+   * "เลยกำหนด" column can't accept drops, so that copy would be misleading. */
+  emptyMessage?: string;
 }
+
+const PAGE_SIZE = 10;
 
 export function KanbanColumn({
   column,
+  boardTotal,
   onOpen,
-  selected,
-  onToggleSelect,
-  selectMode,
 }: {
   column: BoardColumn;
+  /** Every task currently on the board (post-filter) — the denominator for this column's "N% ของบอร์ด" bar. */
+  boardTotal: number;
   onOpen: (id: string) => void;
-  selected?: Set<string>;
-  onToggleSelect?: (id: string) => void;
-  selectMode?: boolean;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: column.id });
+  const { setNodeRef, isOver } = useDroppable({ id: column.id, disabled: column.derived });
   const Icon = column.icon;
   const accent = column.accent;
+  const percent = boardTotal > 0 ? Math.round((column.tasks.length / boardTotal) * 100) : 0;
+
+  // §6 — every column caps at 10 cards up front; "ดูเพิ่มเติม" reveals the
+  // rest, "แสดงน้อยลง" collapses back — same two-way toggle as the
+  // Dashboard's capped lists (useShowMore/ShowMoreToggle), not a one-way
+  // "keep clicking to add 10 more" with no way back.
+  const { visible: visibleTasks, remaining, expanded, toggle } = useShowMore(column.tasks, PAGE_SIZE);
 
   return (
     <div
@@ -47,6 +60,8 @@ export function KanbanColumn({
               <Icon className="h-4 w-4" />
             </span>
           )}
+          {/* จุดสี — a second, plainer color cue beyond the icon chip, right against the label. */}
+          <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: accent }} />
           <h3 className="text-sm font-semibold truncate tracking-tight">{column.label}</h3>
 
           <span
@@ -56,33 +71,49 @@ export function KanbanColumn({
             {column.tasks.length}
           </span>
         </div>
-        <div className="h-[3px] rounded-full mt-2.5 -mb-0.5" style={{ backgroundColor: `color-mix(in srgb, ${accent} 35%, transparent)` }} />
+
+        {/* Proportion of the whole (filtered) board this column holds — same
+            accent as the rest of the header, not a fixed decorative tint. */}
+        <div className="mt-2.5">
+          <div className="h-1.5 rounded-full bg-[var(--bg-soft)] overflow-hidden">
+            <div
+              className="h-full rounded-full transition-[width] duration-300"
+              style={{ width: `${percent}%`, backgroundColor: accent }}
+            />
+          </div>
+          <p className="text-[10px] font-medium mt-1" style={{ color: accent }}>
+            {percent}% ของบอร์ด
+          </p>
+        </div>
       </div>
 
       <div
         ref={setNodeRef}
         className={cn(
-          "flex-1 flex flex-col gap-3 p-2.5 rounded-xl min-h-[200px] transition-colors duration-200",
-          isOver ? "bg-[var(--accent)] ring-2 ring-inset ring-[var(--brand-green)]/30" : "bg-[var(--bg-soft)]/50"
+          // §5 — every column shares the exact same surface; columns are
+          // told apart only by the header's dot/icon/count color and this
+          // bar's fill, never by a tinted drop-zone background.
+          "flex-1 flex flex-col gap-3 p-2.5 rounded-xl min-h-[200px] transition-colors duration-200 bg-[var(--bg-soft)]/50",
+          isOver && !column.derived && "bg-[var(--accent)] ring-2 ring-inset ring-[var(--brand-green)]/30"
         )}
       >
-        <SortableContext items={column.tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-          {column.tasks.map((t) => (
+        <SortableContext items={visibleTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+          {visibleTasks.map((t) => (
             <TaskCard
               key={t.id}
               task={t}
               columnId={column.id}
               onOpen={onOpen}
-              selected={selected?.has(t.id)}
-              onToggleSelect={onToggleSelect}
-              selectMode={selectMode}
+              showOriginalStatus={column.derived}
             />
           ))}
         </SortableContext>
 
+        <ShowMoreToggle expanded={expanded} remaining={remaining} onToggle={toggle} />
+
         {column.tasks.length === 0 && (
-          <div className="flex-1 flex items-center justify-center text-xs text-[var(--ink-soft)] border border-dashed border-[var(--line)] rounded-lg py-8">
-            ลากงานมาวางที่นี่
+          <div className="flex-1 flex items-center justify-center text-xs text-[var(--ink-soft)] border border-dashed border-[var(--line)] rounded-lg py-8 text-center px-3">
+            {column.emptyMessage ?? "ลากงานมาวางที่นี่"}
           </div>
         )}
       </div>

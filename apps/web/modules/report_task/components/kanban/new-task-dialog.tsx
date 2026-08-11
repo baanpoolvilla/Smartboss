@@ -39,7 +39,7 @@ import { expandRule, projectedRoutineQuotaTotal, quotaForDepartment, weekdayLabe
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useTemplateStore } from "@/modules/report_task/store/template-store";
-import type { Attachment, CalendarEvent, DeadlineType, LeaveType, Task, TaskPriority } from "@/modules/report_task/types";
+import type { Attachment, CalendarEvent, ChecklistItem, LeaveType, Task, TaskPriority } from "@/modules/report_task/types";
 import { cn } from "@/modules/report_task/lib/utils";
 import { todayIso } from "@/modules/report_task/lib/now";
 import { formatFileSize, formatDate } from "@/modules/report_task/lib/format";
@@ -73,19 +73,17 @@ import {
 import { toast } from "sonner";
 
 type ItemType = "task" | "meeting" | "leave" | "dayoff";
-type RepeatMode = "none" | "daily" | "weekly" | "monthly";
 
 /**
- * Shift a YYYY-MM-DD date by the i-th recurrence interval. Built and
- * mutated entirely via UTC (construction + setUTC*), matching how date-only
- * fields are anchored elsewhere — mixing local setDate() with a UTC read
- * back (toISOString) rolls the result a day off for non-zero UTC offsets.
+ * Shift a YYYY-MM-DD date forward by `days` — used by the "กำหนดส่งไว +N วัน"
+ * quick-pick buttons. Built and mutated entirely via UTC (construction +
+ * setUTC*), matching how date-only fields are anchored elsewhere — mixing
+ * local setDate() with a UTC read back (toISOString) rolls the result a day
+ * off for non-zero UTC offsets.
  */
-function shiftDate(dateStr: string, repeat: RepeatMode, i: number) {
+function shiftDate(dateStr: string, days: number) {
   const d = new Date(`${dateStr.slice(0, 10)}T00:00:00Z`);
-  if (repeat === "daily") d.setUTCDate(d.getUTCDate() + i);
-  else if (repeat === "weekly") d.setUTCDate(d.getUTCDate() + i * 7);
-  else if (repeat === "monthly") d.setUTCMonth(d.getUTCMonth() + i);
+  d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
 
@@ -279,10 +277,21 @@ export function NewTaskDialog({
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [startDate, setStartDate] = useState(initialDate);
   const [dueDate, setDueDate] = useState(initialDate);
-  // Strict = auto-dock the instant it's overdue. Flexible = a lead decides
-  // case by case (dock or push the date out) — the softer, existing default.
-  const [deadlineType, setDeadlineType] = useState<DeadlineType>("flexible");
   const derivedDepartmentIds = departmentIdsOf(assigneeIds);
+
+  // งานเดี่ยว/งานกลุ่ม — explicit, chosen at creation (not re-derived from
+  // assigneeIds.length later). Individual locks the assignee picker to one
+  // person; group allows multi-select.
+  const [taskMode, setTaskMode] = useState<"individual" | "group">("individual");
+  // Every task needs at least one checklist item — an assignee's part is
+  // done once every item they own is checked (see task-completion.ts).
+  const [checklistItems, setChecklistItems] = useState<{ id: string; text: string; ownerId: string }[]>([]);
+  const [newChecklistText, setNewChecklistText] = useState("");
+  const [newChecklistOwnerId, setNewChecklistOwnerId] = useState("");
+  // Group-only, opt-in per-assignee due date override — sparse by design,
+  // only people who diverge from the shared due date get an entry.
+  const [useAssigneeDueDates, setUseAssigneeDueDates] = useState(false);
+  const [assigneeDueDateOverrides, setAssigneeDueDateOverrides] = useState<Record<string, string>>({});
 
   // Meeting fields
   const [meetAttendeeIds, setMeetAttendeeIds] = useState<string[]>([]);
@@ -335,10 +344,6 @@ export function NewTaskDialog({
       routineRuleExceptions,
     ]
   );
-
-  // Recurrence (task + meeting): generate N occurrences at create time.
-  const [repeat, setRepeat] = useState<"none" | "daily" | "weekly" | "monthly">("none");
-  const [repeatCount, setRepeatCount] = useState(4);
 
   // Leave fields
   const [leaveUserId, setLeaveUserId] = useState(viewingAsUserId);
@@ -430,6 +435,7 @@ export function NewTaskDialog({
   const canSubmit = useMemo(() => {
     if (itemType !== "leave" && itemType !== "dayoff" && !title.trim()) return false;
     if (itemType === "task" && assigneeIds.length === 0) return false;
+    if (itemType === "task" && checklistItems.length === 0) return false;
     if (itemType === "task" && dueDate < startDate) return false;
     if (itemType === "meeting" && !meetAllDay && meetEnd <= meetStart) return false;
     if (itemType === "leave") {
@@ -447,6 +453,7 @@ export function NewTaskDialog({
     itemType,
     title,
     assigneeIds,
+    checklistItems,
     dueDate,
     startDate,
     meetAllDay,
@@ -470,7 +477,12 @@ export function NewTaskDialog({
     setPriority("medium");
     setStartDate(initialDate);
     setDueDate(initialDate);
-    setDeadlineType("flexible");
+    setTaskMode("individual");
+    setChecklistItems([]);
+    setNewChecklistText("");
+    setNewChecklistOwnerId("");
+    setUseAssigneeDueDates(false);
+    setAssigneeDueDateOverrides({});
     setMeetAttendeeIds([]);
     setMeetDate(initialDate);
     setMeetStart("10:00");
@@ -490,80 +502,80 @@ export function NewTaskDialog({
     setDayoffRecurring(false);
     setDayoffWeekdays(new Set());
     setDayoffUntil("");
-    setRepeat("none");
-    setRepeatCount(4);
   }
 
   function createTask() {
     const now = new Date().toISOString();
-    const stamp = now.replace(/\D/g, "");
-    const count = repeat === "none" ? 1 : Math.max(2, Math.min(12, repeatCount));
-    const seriesId = count > 1 ? `series-${stamp}` : undefined;
-    for (let i = 0; i < count; i++) {
-      const sd = shiftDate(startDate, repeat, i);
-      const dd = shiftDate(dueDate, repeat, i);
-      const task: Task = {
-        // Not `${stamp}-${i}` — two people creating a task in the same
-        // millisecond (or the first item of two separate recurring batches)
-        // would otherwise collide, and with the file-backed store's
-        // whole-collection write-through, a colliding id means one task
-        // silently overwrites the other.
-        id: `task-${crypto.randomUUID()}`,
-        title: title.trim(),
-        description: description.trim(),
-        status: "todo",
-        priority,
-        assigneeIds,
-        assignedById: viewingAsUserId,
-        departmentIds: derivedDepartmentIds,
-        startDate: new Date(sd).toISOString(),
-        dueDate: new Date(dd).toISOString(),
-        originalDueDate: new Date(dd).toISOString(),
-        deadlineType,
-        seriesId,
-        attachments: [],
-        comments: [],
-        revisions: [],
-        reactions: [],
-        checklist: [],
-        showChecklistOnCard: false,
-        createdAt: now,
-        updatedAt: now,
-      };
-      addTask(task);
-    }
-    toast.success(count > 1 ? `สร้าง ${count} งาน (ทำซ้ำ) เรียบร้อยแล้ว` : "สร้างงานเรียบร้อยแล้ว");
+    const checklist: ChecklistItem[] = checklistItems.map((c) => ({
+      id: `task-chk-${crypto.randomUUID()}`,
+      text: c.text,
+      done: false,
+      ownerId: c.ownerId || assigneeIds[0],
+    }));
+    // Only keep overrides for assignees still picked and whose date actually
+    // diverges from the shared due date — keeps the field sparse.
+    const assigneeDueDates =
+      taskMode === "group"
+        ? Object.fromEntries(
+            Object.entries(assigneeDueDateOverrides).filter(
+              ([uid, d]) => assigneeIds.includes(uid) && d && d !== dueDate
+            )
+          )
+        : {};
+    const task: Task = {
+      // Two people creating a task in the same millisecond would otherwise
+      // collide, and with the file-backed store's whole-collection
+      // write-through, a colliding id means one task silently overwrites
+      // the other.
+      id: `task-${crypto.randomUUID()}`,
+      title: title.trim(),
+      description: description.trim(),
+      status: "todo",
+      priority,
+      taskMode,
+      assigneeIds,
+      assignedById: viewingAsUserId,
+      departmentIds: derivedDepartmentIds,
+      startDate: new Date(startDate).toISOString(),
+      dueDate: new Date(dueDate).toISOString(),
+      originalDueDate: new Date(dueDate).toISOString(),
+      ...(Object.keys(assigneeDueDates).length > 0 ? { assigneeDueDates } : {}),
+      attachments: [],
+      comments: [],
+      revisions: [],
+      reactions: [],
+      checklist,
+      completedAssigneeIds: [],
+      showChecklistOnCard: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    addTask(task);
+    toast.success("สร้างงานเรียบร้อยแล้ว");
   }
 
   async function createMeeting() {
-    const stamp = new Date().toISOString().replace(/\D/g, "");
-    const count = repeat === "none" ? 1 : Math.max(2, Math.min(12, repeatCount));
-    const seriesId = count > 1 ? `series-${stamp}` : undefined;
     const attachments = await buildAttachments(meetFiles, viewingAsUserId);
-    for (let i = 0; i < count; i++) {
-      const md = shiftDate(meetDate, repeat, i);
-      const meeting: CalendarEvent = {
-        id: `meet-${crypto.randomUUID()}`,
-        title: title.trim(),
-        type: "meeting",
-        start: meetAllDay ? md : `${md}T${meetStart}:00`,
-        end: meetAllDay ? md : `${md}T${meetEnd}:00`,
-        allDay: meetAllDay,
-        departmentId: meetDeptIds[0],
-        departmentIds: meetDeptIds,
-        attendeeIds: meetAttendeeIds,
-        createdById: viewingAsUserId,
-        location: meetOnline ? "ออนไลน์ (Teams/Zoom)" : meetLocation.trim() || "ไม่ระบุสถานที่",
-        description: description.trim(),
-        attachments,
-        seriesId,
-      };
-      addMeeting(meeting);
-    }
+    const meeting: CalendarEvent = {
+      id: `meet-${crypto.randomUUID()}`,
+      title: title.trim(),
+      type: "meeting",
+      start: meetAllDay ? meetDate : `${meetDate}T${meetStart}:00`,
+      end: meetAllDay ? meetDate : `${meetDate}T${meetEnd}:00`,
+      allDay: meetAllDay,
+      departmentId: meetDeptIds[0],
+      departmentIds: meetDeptIds,
+      attendeeIds: meetAttendeeIds,
+      createdById: viewingAsUserId,
+      location: meetOnline ? "ออนไลน์ (Teams/Zoom)" : meetLocation.trim() || "ไม่ระบุสถานที่",
+      description: description.trim(),
+      attachments,
+    };
+    addMeeting(meeting);
     if (meetAttendeeIds.length > 0) {
       notifyMany(meetAttendeeIds, viewingAsUserId, `${assignedByUser.name} แท็กคุณในประชุม "${title.trim()}"`);
     }
-    toast.success(count > 1 ? `สร้าง ${count} ประชุม (ทำซ้ำ) เรียบร้อยแล้ว` : "สร้างประชุมเรียบร้อยแล้ว");
+    toast.success("สร้างประชุมเรียบร้อยแล้ว");
   }
 
   function createLeave() {
@@ -642,9 +654,34 @@ export function NewTaskDialog({
   }
 
   function toggleAssignee(userId: string) {
+    if (taskMode === "individual") {
+      setAssigneeIds((prev) => (prev[0] === userId ? [] : [userId]));
+      return;
+    }
     setAssigneeIds((prev) =>
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
     );
+  }
+
+  function changeTaskMode(mode: "individual" | "group") {
+    setTaskMode(mode);
+    if (mode === "individual" && assigneeIds.length > 1) {
+      setAssigneeIds((prev) => prev.slice(0, 1));
+    }
+    setUseAssigneeDueDates(false);
+    setAssigneeDueDateOverrides({});
+  }
+
+  function addChecklistDraft() {
+    const text = newChecklistText.trim();
+    if (!text) return;
+    const ownerId = taskMode === "individual" ? assigneeIds[0] ?? "" : newChecklistOwnerId || assigneeIds[0]!!!! || "";
+    setChecklistItems((prev) => [...prev, { id: `draft-${crypto.randomUUID()}`, text, ownerId }]);
+    setNewChecklistText("");
+  }
+
+  function removeChecklistDraft(id: string) {
+    setChecklistItems((prev) => prev.filter((c) => c.id !== id));
   }
 
   function applyTemplate(id: string) {
@@ -680,6 +717,10 @@ export function NewTaskDialog({
     }
     if (itemType === "task" && assigneeIds.length === 0) {
       toast.error("กรุณาเลือกผู้รับผิดชอบอย่างน้อย 1 คน");
+      return;
+    }
+    if (itemType === "task" && checklistItems.length === 0) {
+      toast.error("กรุณาเพิ่มเช็คลิสต์อย่างน้อย 1 ข้อ");
       return;
     }
     if (itemType === "task" && dueDate < startDate) {
@@ -781,8 +822,46 @@ export function NewTaskDialog({
             </Row>
           )}
 
+          {/* Description (shared) — right under the title, before the rest of the fields */}
+          {itemType !== "dayoff" && (
+            <Row icon={AlignLeft}>
+              <div className="space-y-1">
+                <Label className="text-xs text-[var(--ink-soft)]">
+                  {itemType === "leave" ? "หมายเหตุ" : "รายละเอียด"}
+                </Label>
+                <Textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={itemType === "leave" ? 2 : 3}
+                  placeholder={itemType === "task" ? "ต้องทำอะไรบ้าง?" : itemType === "meeting" ? "วาระการประชุม / บันทึก" : "เหตุผลการลา (ถ้ามี)"}
+                />
+              </div>
+            </Row>
+          )}
+
           {itemType === "task" && (
             <>
+              <Row icon={Users}>
+                <div className="space-y-1">
+                  <Label className="text-xs text-[var(--ink-soft)]">ประเภทงาน</Label>
+                  <div className="inline-flex items-center gap-1 rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-1 w-fit">
+                    {(["individual", "group"] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => changeTaskMode(m)}
+                        className={cn(
+                          "rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors",
+                          taskMode === m ? "bg-white shadow-sm text-[var(--ink)]" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
+                        )}
+                      >
+                        {m === "individual" ? "งานเดี่ยว" : "งานกลุ่ม"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </Row>
+
               <Row icon={Files}>
                 <div className="space-y-1">
                   <Label className="text-xs text-[var(--ink-soft)]">เทมเพลต</Label>
@@ -915,7 +994,7 @@ export function NewTaskDialog({
                     <button
                       key={p.days}
                       type="button"
-                      onClick={() => setDueDate(shiftDate(startDate || todayIso(), "daily", p.days))}
+                      onClick={() => setDueDate(shiftDate(startDate || todayIso(), p.days))}
                       className="rounded-md border border-[var(--line)] px-2 py-0.5 text-[11px] text-[var(--ink-soft)] hover:border-[var(--brand-green)] hover:text-[var(--brand-green-dark)] transition-colors shrink-0"
                     >
                       +{p.label}
@@ -924,37 +1003,92 @@ export function NewTaskDialog({
                 </div>
               </Row>
 
-              <Row icon={AlarmClockOff}>
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-[var(--ink-soft)]">กำหนดส่งนี้ตรงตัวไหม?</Label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setDeadlineType("strict")}
-                      className={cn(
-                        "rounded-lg border px-3 py-2 text-left transition-colors",
-                        deadlineType === "strict"
-                          ? "border-[var(--chart-red)] bg-red-50"
-                          : "border-[var(--line)] hover:bg-[var(--bg-soft)]"
-                      )}
-                    >
-                      <p className="text-xs font-semibold">ตรงกำหนด</p>
-                      <p className="text-[10px] text-[var(--ink-soft)] mt-0.5">เลยกำหนดหักคะแนนทันที</p>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDeadlineType("flexible")}
-                      className={cn(
-                        "rounded-lg border px-3 py-2 text-left transition-colors",
-                        deadlineType === "flexible"
-                          ? "border-[var(--brand-green)] bg-[var(--accent)]"
-                          : "border-[var(--line)] hover:bg-[var(--bg-soft)]"
-                      )}
-                    >
-                      <p className="text-xs font-semibold">ลดหย่อนได้</p>
-                      <p className="text-[10px] text-[var(--ink-soft)] mt-0.5">หักคะแนนหรือเลื่อนวันได้ เป็นกรณีไป</p>
-                    </button>
+              {taskMode === "group" && assigneeIds.length > 0 && (
+                <Row icon={Clock}>
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between rounded-lg bg-[var(--bg-soft)] px-3 py-2.5">
+                      <span className="text-sm">ตั้งวันครบกำหนดแยกรายคน</span>
+                      <Switch checked={useAssigneeDueDates} onCheckedChange={setUseAssigneeDueDates} />
+                    </div>
+                    {useAssigneeDueDates && (
+                      <div className="mt-2 space-y-1.5">
+                        {assigneeIds.map((uid) => {
+                          const u = getUser(uid);
+                          return (
+                            <div key={uid} className="flex items-center gap-2">
+                              <Avatar className="h-5 w-5 shrink-0">
+                                <AvatarFallback className="text-[8px] bg-[var(--bg-soft)]">{u?.avatar}</AvatarFallback>
+                              </Avatar>
+                              <span className="text-xs flex-1 truncate">{u?.name}</span>
+                              <DatePickerField
+                                value={assigneeDueDateOverrides[uid] ?? dueDate}
+                                minDate={startDate || todayIso()}
+                                onChange={(v) => setAssigneeDueDateOverrides((prev) => ({ ...prev, [uid]: v }))}
+                                className="h-8 text-xs w-36"
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
+                </Row>
+              )}
+
+              <Row icon={ListChecks}>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-[var(--ink-soft)]">
+                    เช็คลิสต์ ({checklistItems.length}) <span className="text-[var(--chart-red)]">*ต้องมีอย่างน้อย 1 ข้อ</span>
+                  </Label>
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      value={newChecklistText}
+                      onChange={(e) => setNewChecklistText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addChecklistDraft();
+                        }
+                      }}
+                      placeholder="เพิ่มรายการเช็คลิสต์..."
+                      className="flex-1"
+                    />
+                    {taskMode === "group" && assigneeIds.length > 1 && (
+                      <Select value={newChecklistOwnerId || assigneeIds[0]!} onValueChange={(v) => v && setNewChecklistOwnerId(v)}>
+                        <SelectTrigger className="w-32 shrink-0">
+                          <SelectValue>{getUser(newChecklistOwnerId || assigneeIds[0]!)?.name ?? "ผู้รับผิดชอบ"}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {assigneeIds.map((uid) => (
+                            <SelectItem key={uid} value={uid}>{getUser(uid)?.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    <Button type="button" size="sm" variant="outline" onClick={addChecklistDraft} className="shrink-0">
+                      เพิ่ม
+                    </Button>
+                  </div>
+                  {checklistItems.length > 0 && (
+                    <div className="space-y-1 pt-1">
+                      {checklistItems.map((c) => (
+                        <div key={c.id} className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-white px-2.5 py-1.5 text-xs">
+                          <span className="flex-1 truncate">{c.text}</span>
+                          {taskMode === "group" && (
+                            <span className="text-[10px] text-[var(--ink-soft)] shrink-0">{getUser(c.ownerId)?.name}</span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeChecklistDraft(c.id)}
+                            className="text-[var(--ink-soft)] hover:text-[var(--chart-red)] shrink-0"
+                            aria-label={`ลบ ${c.text}`}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </Row>
             </>
@@ -1098,43 +1232,6 @@ export function NewTaskDialog({
                 </div>
               </Row>
             </>
-          )}
-
-          {/* Recurrence (task + meeting) */}
-          {(itemType === "task" || itemType === "meeting") && (
-            <Row icon={Repeat}>
-              <div className="space-y-1">
-                <Label className="text-xs text-[var(--ink-soft)]">ทำซ้ำ</Label>
-                <div className="flex items-center gap-2">
-                  <Select value={repeat} onValueChange={(v) => v && setRepeat(v as RepeatMode)}>
-                    <SelectTrigger className="flex-1">
-                      <SelectValue>
-                        {repeat === "none" ? "ไม่ทำซ้ำ" : repeat === "daily" ? "รายวัน" : repeat === "weekly" ? "รายสัปดาห์" : "รายเดือน"}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">ไม่ทำซ้ำ</SelectItem>
-                      <SelectItem value="daily">รายวัน</SelectItem>
-                      <SelectItem value="weekly">รายสัปดาห์</SelectItem>
-                      <SelectItem value="monthly">รายเดือน</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {repeat !== "none" && (
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <Input
-                        type="number"
-                        min={2}
-                        max={12}
-                        value={repeatCount}
-                        onChange={(e) => setRepeatCount(Number(e.target.value))}
-                        className="w-16 tabular-nums"
-                      />
-                      <span className="text-xs text-[var(--ink-soft)]">ครั้ง</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </Row>
           )}
 
           {itemType === "leave" && (
@@ -1338,23 +1435,6 @@ export function NewTaskDialog({
                 )}
               </Row>
             </>
-          )}
-
-          {/* Description (shared) */}
-          {itemType !== "dayoff" && (
-            <Row icon={AlignLeft}>
-              <div className="space-y-1">
-                <Label className="text-xs text-[var(--ink-soft)]">
-                  {itemType === "leave" ? "หมายเหตุ" : "รายละเอียด"}
-                </Label>
-                <Textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={itemType === "leave" ? 2 : 3}
-                  placeholder={itemType === "task" ? "ต้องทำอะไรบ้าง?" : itemType === "meeting" ? "วาระการประชุม / บันทึก" : "เหตุผลการลา (ถ้ามี)"}
-                />
-              </div>
-            </Row>
           )}
 
           {itemType === "task" && (

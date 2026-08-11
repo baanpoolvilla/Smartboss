@@ -8,7 +8,7 @@ import type { WidgetId } from "@/modules/report_task/store/dashboard-layout-stor
  * department" chart would render as one populated bar and the rest empty
  * for a head, not a real comparison. Owner-only, not just any manager.
  */
-export const OWNER_ONLY_WIDGETS: WidgetId[] = ["deptBar", "reportDeptBar"];
+export const OWNER_ONLY_WIDGETS: WidgetId[] = ["deptPie", "reportDeptPie"];
 
 /**
  * Cross-person ranking/aggregate — meaningful once you're responsible for
@@ -19,24 +19,21 @@ export const OWNER_ONLY_WIDGETS: WidgetId[] = ["deptBar", "reportDeptBar"];
  * canSeeTask/canSeeReportTopic — a head's ranking only ever includes their
  * own department).
  *
- * "ยังไม่ส่งวันนี้" (pendingReports) and "กิจกรรมล่าสุด" (recentActivity)
- * are here for a different reason than the ranking ones above: both are
- * flat, company-wide, unscoped-by-task-visibility feeds that name specific
- * people and what they did (score penalties, reassignments, sticker flags,
- * who hasn't posted where) — recentActivity reads the exact same
- * useActivityLogStore data as /activity-log's full log, which is already
- * ManagerOnlyGate-only for this reason, so the dashboard widget needs the
- * same gate rather than exposing that feed to every employee by default.
+ * "รายงานที่ยังไม่ส่ง" (pendingReports) is here for a different reason than
+ * the ranking one above: it's a flat, company-wide, unscoped-by-task-
+ * visibility feed that names specific people and what they haven't done,
+ * so it needs the same manager gate as the rest of that kind of feed rather
+ * than being exposed to every employee by default.
  */
-export const MANAGER_ONLY_WIDGETS: WidgetId[] = ["leaderboard", "pendingReports", "systemKpiSummary", "recentActivity"];
+export const MANAGER_ONLY_WIDGETS: WidgetId[] = ["pendingReports", "systemKpiSummary"];
 
 /**
  * Three-tier Dashboard widget visibility: employee < department head <
- * owner/CEO. Personal-scoped widgets (KPI cards, the two Overview donuts,
- * overdue tasks, my tasks, deadlines) are visible to everyone — they already
- * narrow to "what this viewer can see" via the underlying
- * canSeeTask/canSeeReportTopic permission functions, so a regular employee
- * only ever sees their own numbers there without needing a separate gate.
+ * owner/CEO. Personal-scoped widgets (the two Overview donuts, overdue
+ * tasks) are visible to everyone — they already narrow to "what this viewer
+ * can see" via the underlying canSeeTask/canSeeReportTopic permission
+ * functions, so a regular employee only ever sees their own numbers there
+ * without needing a separate gate.
  */
 export function canViewWidget(id: WidgetId, viewingAsUserId: string): boolean {
   if (OWNER_ONLY_WIDGETS.includes(id)) return isOwner(viewingAsUserId);

@@ -10,8 +10,6 @@ interface MeetingStore {
   /** Patch a meeting — used by both drag-reschedule and the edit form. */
   updateMeeting: (id: string, patch: Partial<CalendarEvent>) => void;
   removeMeeting: (id: string) => void;
-  /** Deletes every meeting created together in one "ทำซ้ำ" (repeat) batch. */
-  removeMeetingSeries: (seriesId: string) => void;
 }
 
 // Server-synced via ServerStoreSync (apiKey "meetings") in store-hydrator.tsx
@@ -22,6 +20,4 @@ export const useMeetingStore = create<MeetingStore>()((set) => ({
   updateMeeting: (id, patch) =>
     set((s) => ({ meetings: s.meetings.map((m) => (m.id === id ? { ...m, ...patch } : m)) })),
   removeMeeting: (id) => set((s) => ({ meetings: s.meetings.filter((m) => m.id !== id) })),
-  removeMeetingSeries: (seriesId) =>
-    set((s) => ({ meetings: s.meetings.filter((m) => m.seriesId !== seriesId) })),
 }));

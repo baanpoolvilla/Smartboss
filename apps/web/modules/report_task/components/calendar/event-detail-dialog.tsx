@@ -54,8 +54,6 @@ export function EventDetailDialog({
   const colors = useEventColorStore((s) => s.colors);
   const updateMeeting = useMeetingStore((s) => s.updateMeeting);
   const removeMeeting = useMeetingStore((s) => s.removeMeeting);
-  const removeMeetingSeries = useMeetingStore((s) => s.removeMeetingSeries);
-  const allMeetings = useMeetingStore((s) => s.meetings);
   const updateLeave = useLeaveStore((s) => s.updateLeave);
   const removeLeave = useLeaveStore((s) => s.removeLeave);
   const updateHoliday = useHolidayStore((s) => s.updateHoliday);
@@ -96,22 +94,12 @@ export function EventDetailDialog({
     onOpenChange(open);
   }
 
-  const seriesCount =
-    event?.type === "meeting" && event.seriesId ? allMeetings.filter((m) => m.seriesId === event.seriesId).length : 0;
-
   function confirmDelete() {
     if (!event) return;
     if (event.type === "meeting") removeMeeting(event.id);
     else if (event.type === "leave") removeLeave(event.id);
     else if (event.type === "holiday") removeHoliday(event.id);
     toast.success("ลบรายการแล้ว");
-    close(false);
-  }
-
-  function confirmDeleteSeries() {
-    if (!event || event.type !== "meeting" || !event.seriesId) return;
-    removeMeetingSeries(event.seriesId);
-    toast.success(`ลบประชุมทั้งชุด (${seriesCount} รายการ) แล้ว`);
     close(false);
   }
 
@@ -325,26 +313,16 @@ export function EventDetailDialog({
           <AlertDialogHeader>
             <AlertDialogTitle>ลบรายการนี้?</AlertDialogTitle>
             <AlertDialogDescription>
-              {seriesCount > 0
-                ? `ประชุมนี้เป็นส่วนหนึ่งของประชุมทำซ้ำ (ทั้งชุดมี ${seriesCount} รายการ) — เลือกว่าจะลบแค่รายการนี้หรือทั้งชุด`
-                : <>ลบ &quot;{event.title}&quot; ออกจากปฏิทิน — ย้อนกลับไม่ได้</>}
+              ลบ &quot;{event.title}&quot; ออกจากปฏิทิน — ย้อนกลับไม่ได้
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
-            {seriesCount > 0 && (
-              <AlertDialogAction
-                className="bg-white text-[var(--chart-red)] border border-[var(--chart-red)] hover:bg-red-50"
-                onClick={confirmDeleteSeries}
-              >
-                ลบทั้งชุด ({seriesCount})
-              </AlertDialogAction>
-            )}
             <AlertDialogAction
               className="bg-[var(--chart-red)] hover:bg-red-700 text-white"
               onClick={confirmDelete}
             >
-              {seriesCount > 0 ? "ลบเฉพาะรายการนี้" : "ลบ"}
+              ลบ
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

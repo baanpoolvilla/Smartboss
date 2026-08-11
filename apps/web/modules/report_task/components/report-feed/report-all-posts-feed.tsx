@@ -8,6 +8,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -38,11 +39,24 @@ export function ReportAllPostsFeed({
   topics,
   posts,
   onJumpToTopic,
+  title = "ภาพรวมทั้งหมด",
+  description = "โพสต์จากทุกหัวข้อที่เห็นได้ เรียงตามเวลา ล่าสุดอยู่ล่างสุด",
+  icon: Icon = Rows3,
+  emptyTitle = "ไม่มีโพสต์ในช่วงเวลานี้",
+  emptyDescription = "ลองปรับตัวกรองวันที่ด้านบน หรือเลือก \"ทั้งหมด\"",
 }: {
   /** Already permission-filtered — see useVisibleReportTopics/visibleTopics in the caller. */
   topics: ReportTopic[];
+  /** Already scoped to whatever this view means — the full merged feed for
+   * "ภาพรวมทั้งหมด", or a pre-filtered subset for a view like "ที่กล่าวถึงฉัน"
+   * (see topic-sidebar.tsx's MENTIONS_ID). */
   posts: ReportPost[];
   onJumpToTopic: (topicId: string) => void;
+  title?: string;
+  description?: string;
+  icon?: typeof Rows3;
+  emptyTitle?: string;
+  emptyDescription?: string;
 }) {
   const [preset, setPreset] = useState<Parameters<typeof presetRange>[0]>("all");
   const [customFrom, setCustomFrom] = useState("");
@@ -90,11 +104,11 @@ export function ReportAllPostsFeed({
       <div className="shrink-0 px-5 pt-3.5 pb-2.5 flex items-center gap-2.5 flex-wrap justify-between border-b border-[var(--line)]">
         <div className="flex items-center gap-2.5">
           <span className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--brand-green-dark)]">
-            <Rows3 className="h-4 w-4" />
+            <Icon className="h-4 w-4" />
           </span>
           <div>
-            <h2 className="text-[16px] font-semibold leading-tight">ภาพรวมทั้งหมด</h2>
-            <p className="text-xs text-[var(--ink-soft)] leading-tight">โพสต์จากทุกหัวข้อที่เห็นได้ เรียงตามเวลา ล่าสุดอยู่ล่างสุด</p>
+            <h2 className="text-[16px] font-semibold leading-tight">{title}</h2>
+            <p className="text-xs text-[var(--ink-soft)] leading-tight">{description}</p>
           </div>
         </div>
       </div>
@@ -124,21 +138,23 @@ export function ReportAllPostsFeed({
             }
           />
           <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
-            <DropdownMenuLabel>กรองตามหัวข้อ</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {topicFilter.size > 0 && (
-              <button
-                onClick={() => setTopicFilter(new Set())}
-                className="w-full text-left px-2 py-1.5 text-xs font-medium text-[var(--brand-green-dark)] hover:underline"
-              >
-                ล้างตัวกรอง
-              </button>
-            )}
-            {topics.map((t) => (
-              <DropdownMenuCheckboxItem key={t.id} checked={topicFilter.has(t.id)} onCheckedChange={() => toggleTopicFilter(t.id)}>
-                {breadcrumbOf(t, topicById)}
-              </DropdownMenuCheckboxItem>
-            ))}
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>กรองตามหัวข้อ</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {topicFilter.size > 0 && (
+                <button
+                  onClick={() => setTopicFilter(new Set())}
+                  className="w-full text-left px-2 py-1.5 text-xs font-medium text-[var(--brand-green-dark)] hover:underline"
+                >
+                  ล้างตัวกรอง
+                </button>
+              )}
+              {topics.map((t) => (
+                <DropdownMenuCheckboxItem key={t.id} checked={topicFilter.has(t.id)} onCheckedChange={() => toggleTopicFilter(t.id)}>
+                  {breadcrumbOf(t, topicById)}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -146,11 +162,11 @@ export function ReportAllPostsFeed({
       {items.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6 bg-[var(--bg-soft)]/40">
           <div className="h-14 w-14 rounded-full bg-[var(--accent)] flex items-center justify-center">
-            <Rows3 className="h-6 w-6 text-[var(--brand-green-dark)]" />
+            <Icon className="h-6 w-6 text-[var(--brand-green-dark)]" />
           </div>
           <div className="space-y-1">
-            <p className="text-sm font-semibold">ไม่มีโพสต์ในช่วงเวลานี้</p>
-            <p className="text-xs text-[var(--ink-soft)]">ลองปรับตัวกรองวันที่ด้านบน หรือเลือก &quot;ทั้งหมด&quot;</p>
+            <p className="text-sm font-semibold">{emptyTitle}</p>
+            <p className="text-xs text-[var(--ink-soft)]">{emptyDescription}</p>
           </div>
         </div>
       ) : (

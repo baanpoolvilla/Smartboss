@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canEditRecord, canDockPenalty, canEditReportTopic, canSeeReportTopic } from "@/modules/report_task/lib/permissions";
+import { canEditRecord, canEditReportTopic, canSeeReportTopic, canToggleOwnChecklistItem } from "@/modules/report_task/lib/permissions";
 
 // Fixtures from src/data/mock.ts: usr-01 heads dep-eng, usr-15 is the owner.
 const ENG_HEAD = "usr-01";
@@ -29,21 +29,13 @@ describe("canEditRecord", () => {
   });
 });
 
-describe("canDockPenalty", () => {
-  it("lets the owner dock", () => {
-    expect(canDockPenalty(OTHER_ENG, ["dep-eng"], OWNER)).toBe(true);
+describe("canToggleOwnChecklistItem", () => {
+  it("lets the owner toggle their own item", () => {
+    expect(canToggleOwnChecklistItem({ id: "c1", text: "x", done: false, ownerId: OTHER_ENG }, OTHER_ENG)).toBe(true);
   });
 
-  it("lets whoever assigned the task dock it, even if not a head", () => {
-    expect(canDockPenalty(OTHER_ENG, ["dep-eng"], OTHER_ENG)).toBe(true);
-  });
-
-  it("lets a department head dock a task touching their department", () => {
-    expect(canDockPenalty(OTHER_ENG, ["dep-eng"], ENG_HEAD)).toBe(true);
-  });
-
-  it("blocks an unrelated employee", () => {
-    expect(canDockPenalty(ENG_HEAD, ["dep-eng"], "usr-03")).toBe(false);
+  it("blocks a teammate from toggling someone else's item", () => {
+    expect(canToggleOwnChecklistItem({ id: "c1", text: "x", done: false, ownerId: OTHER_ENG }, ENG_HEAD)).toBe(false);
   });
 });
 

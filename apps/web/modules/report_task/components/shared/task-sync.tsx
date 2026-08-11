@@ -89,7 +89,7 @@ export function TaskSync() {
       void flush(pendingRef.current);
     }
 
-    // Triggers the server-side sweep (/api/report-task/tasks/sweep) and, only if it
+    // Triggers the server-side sweep (/api/tasks/sweep) and, only if it
     // actually changed something, reloads so this tab picks up the applied
     // flags/docks. The sweep computes and writes at most once regardless of
     // how many tabs/clients trigger it around the same time (see H3 in the

@@ -1,4 +1,4 @@
-import { departments } from "@/modules/report_task/data/mock";
+import { departments, getUser } from "@/modules/report_task/data/mock";
 import { daysUntil } from "@/modules/report_task/lib/format";
 import type { Task } from "@/modules/report_task/types";
 
@@ -31,12 +31,12 @@ export interface PenaltySweepResult {
 
 /**
  * Sweep every task: flag `missedDeadlineOnce` the moment it's first overdue
- * (kept forever as history), and for "strict" tasks dock the default points
- * immediately — no lead has to click anything. Safe to call repeatedly; a
- * no-op once everything is already flagged/docked.
+ * (kept forever as history), and dock the default points immediately — every
+ * task is strict, so no lead has to click anything. Safe to call repeatedly;
+ * a no-op once everything is already flagged/docked.
  *
  * Pure — returns what changed instead of writing anywhere, so the caller (the
- * server route at /api/report-task/tasks/sweep) owns persistence and can do it under the
+ * server route at /api/tasks/sweep) owns persistence and can do it under the
  * same optimistic-concurrency guard as any other task write. This used to run
  * independently in every open browser tab (H3 in the production-readiness
  * audit) — racing writes could flap/duplicate a dock. Now there's exactly one
@@ -61,6 +61,44 @@ export function sweepAutoPenalties(tasks: Task[]): PenaltySweepResult {
       return { ...t, missedDeadlineOnce: true };
     }
 
+    if (t.taskMode === "group") {
+      let updated = t;
+      const heads = departments.filter((d) => t.departmentIds.includes(d.id)).map((d) => d.headId);
+      for (const assigneeId of t.assigneeIds) {
+        if ((updated.completedAssigneeIds ?? []).includes(assigneeId)) continue;
+        if (updated.penalties?.[assigneeId]) continue;
+        // Each assignee is judged against THEIR OWN effective due date — a
+        // shared default, unless this person has an override — not just
+        // whether the task as a whole is late.
+        const effectiveDueDate = updated.assigneeDueDates?.[assigneeId] ?? updated.originalDueDate;
+        if (daysUntil(effectiveDueDate) >= 0) continue;
+
+        if (!updated.missedDeadlineOnce) updated = { ...updated, missedDeadlineOnce: true };
+        const penaltyEntry = {
+          points: LATE_PENALTY_POINTS,
+          byUserId: SYSTEM_USER_ID,
+          appliedAt: new Date().toISOString(),
+          reason: "เลยกำหนดส่ง — หักคะแนนอัตโนมัติ",
+        };
+        updated = { ...updated, penalties: { ...updated.penalties, [assigneeId]: penaltyEntry } };
+        const name = getUser(assigneeId)?.name ?? "คนหนึ่ง";
+        logs.push({
+          userId: SYSTEM_USER_ID,
+          action: "หักคะแนนอัตโนมัติ",
+          target: t.title,
+          taskId: t.id,
+          detail: `${name} −${LATE_PENALTY_POINTS} คะแนน · เลยกำหนดส่ง`,
+        });
+        notifications.push({
+          recipients: Array.from(new Set([assigneeId, ...heads])),
+          byUserId: SYSTEM_USER_ID,
+          message: `ระบบหักคะแนนอัตโนมัติ "${t.title}" (ส่วนของคุณ) −${LATE_PENALTY_POINTS} คะแนน (เลยกำหนดส่ง)`,
+        });
+        changed = true;
+      }
+      return updated;
+    }
+
     // Measured against the ORIGINAL due date, not the current (possibly
     // revised) one — pushing a due date out shouldn't quietly erase the fact
     // the original commitment was already blown.
@@ -72,14 +110,14 @@ export function sweepAutoPenalties(tasks: Task[]): PenaltySweepResult {
       updated = { ...updated, missedDeadlineOnce: true };
       changed = true;
     }
-    if ((updated.deadlineType ?? "flexible") === "strict" && !updated.penalty) {
+    if (!updated.penalty) {
       updated = {
         ...updated,
         penalty: {
           points: LATE_PENALTY_POINTS,
           byUserId: SYSTEM_USER_ID,
           appliedAt: new Date().toISOString(),
-          reason: "เลยกำหนดส่ง (ตรงกำหนด) — หักคะแนนอัตโนมัติ",
+          reason: "เลยกำหนดส่ง — หักคะแนนอัตโนมัติ",
         },
       };
       logs.push({
@@ -87,14 +125,14 @@ export function sweepAutoPenalties(tasks: Task[]): PenaltySweepResult {
         action: "หักคะแนนอัตโนมัติ",
         target: t.title,
         taskId: t.id,
-        detail: `−${LATE_PENALTY_POINTS} คะแนน · เลยกำหนดส่ง (ตรงกำหนด)`,
+        detail: `−${LATE_PENALTY_POINTS} คะแนน · เลยกำหนดส่ง`,
       });
       const heads = departments.filter((d) => t.departmentIds.includes(d.id)).map((d) => d.headId);
       const recipients = Array.from(new Set([...t.assigneeIds, ...heads]));
       notifications.push({
         recipients,
         byUserId: SYSTEM_USER_ID,
-        message: `ระบบหักคะแนนอัตโนมัติ "${t.title}" −${LATE_PENALTY_POINTS} คะแนน (เลยกำหนดส่งตรงเวลา)`,
+        message: `ระบบหักคะแนนอัตโนมัติ "${t.title}" −${LATE_PENALTY_POINTS} คะแนน (เลยกำหนดส่ง)`,
       });
       changed = true;
     }

@@ -1,28 +1,30 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import Link from "next/link";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
 import { canManage, isOwner } from "@/modules/report_task/data/mock";
-import { canAccessCompanySection, canEditReportTopic, canSeeReportTopic } from "@/modules/report_task/lib/permissions";
+import { canAccessCompanySection } from "@/modules/report_task/lib/permissions";
 import { useSettingsAccessStore, type GrantableSection } from "@/modules/report_task/store/settings-access-store";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
 import { StickerManagerPanel } from "@/modules/report_task/components/shared/sticker-manager-dialog";
 import { LeaveTypeSettingsPanel } from "@/modules/report_task/components/calendar/leave-type-settings-dialog";
 import { RoutineDayOffSettingsPanel } from "@/modules/report_task/components/calendar/routine-dayoff-settings-dialog";
 import { LeaveSummaryPanel } from "@/modules/report_task/components/calendar/leave-summary-panel";
 import { SettingsAccessPanel } from "@/modules/report_task/components/shared/settings-access-panel";
 import { DepartmentSettingsPanel, EmployeeSettingsPanel } from "@/modules/report_task/components/shared/org-settings-panel";
-import { ReportTopicSettingsPanel } from "@/modules/report_task/components/report-feed/report-topic-settings-dialog";
 import { EmailNotificationSettingsPanel } from "@/modules/report_task/components/shared/email-notification-settings-dialog";
 import { HolidaysPane, GoogleCalendarPane } from "@/modules/report_task/components/calendar/add-calendar-dialog";
 import { PageHeader } from "@/modules/report_task/components/shared/page-header";
+import { IssueDeskConfigPanel } from "@/modules/report_task/components/issue-report/issue-desk-config-panel";
+import { useIssueDeskConfigStore } from "@/modules/report_task/store/issue-desk-config-store";
+import { canManageIssueDeskSettings } from "@/modules/report_task/lib/permissions";
 import { cn } from "@/modules/report_task/lib/utils";
 import { chartColors } from "@/modules/report_task/lib/chart-colors";
 import {
   Bell,
+  Bug,
   Building2,
   CalendarCheck2,
   CalendarDays,
@@ -39,7 +41,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-type SettingsTab = "task" | "calendar" | "report" | "permissions" | "profile";
+type SettingsTab = "task" | "calendar" | "report" | "issueDesk" | "permissions" | "profile";
 
 // Each top-level tab is one real page's admin settings — same page names as
 // the sidebar nav (nav-config.ts) — so "which page does this control?" is
@@ -53,6 +55,7 @@ const tabs: { key: SettingsTab; label: string; icon: LucideIcon; color: string }
   { key: "task", label: "งาน", icon: KanbanSquare, color: chartColors.blue },
   { key: "calendar", label: "ปฏิทิน", icon: CalendarDays, color: chartColors.green },
   { key: "report", label: "ห้อง Report", icon: MessageSquareText, color: chartColors.violet },
+  { key: "issueDesk", label: "แจ้งปัญหา", icon: Bug, color: chartColors.teal },
   { key: "permissions", label: "สิทธิ์การเข้าถึง", icon: ShieldCheck, color: chartColors.red },
   { key: "profile", label: "โปรไฟล์ของฉัน", icon: User, color: chartColors.amber },
 ];
@@ -76,8 +79,9 @@ function SettingsPageInner() {
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const manager = canManage(viewingAsUserId);
   const owner = isOwner(viewingAsUserId);
-  const topics = useReportFeedStore((s) => s.topics);
   const settingsGrants = useSettingsAccessStore((s) => s.grants);
+  const issueDeskConfig = useIssueDeskConfigStore((s) => s.config);
+  const setIssueDeskConfig = useIssueDeskConfigStore((s) => s.setConfig);
   // Owner always sees every page's tab; a delegate (see settings-access-store)
   // sees only the page tab(s) they hold at least one granted section on.
   const hasTaskAccess = owner || canAccessCompanySection("stickers", viewingAsUserId, settingsGrants);
@@ -85,10 +89,12 @@ function SettingsPageInner() {
     owner ||
     canAccessCompanySection("leaveTypes", viewingAsUserId, settingsGrants) ||
     canAccessCompanySection("routineDayoff", viewingAsUserId, settingsGrants);
+  const hasIssueDeskAccess = canManageIssueDeskSettings(viewingAsUserId, settingsGrants);
   const accessByTab: Record<SettingsTab, boolean> = {
     task: hasTaskAccess,
     calendar: hasCalendarAccess,
     report: manager,
+    issueDesk: hasIssueDeskAccess,
     permissions: owner,
     profile: true,
   };
@@ -96,22 +102,20 @@ function SettingsPageInner() {
   const initialTab = (searchParams.get("tab") as SettingsTab | null) ?? "profile";
   const [tab, setTab] = useState<SettingsTab>(accessByTab[initialTab] ? initialTab : "profile");
 
-  const visibleTopics = useMemo(
-    () => topics.filter((t) => canSeeReportTopic(t.visibility, viewingAsUserId)),
-    [topics, viewingAsUserId]
-  );
-  // Company-wide settings (stickers/penalty default, leave types) apply to
-  // every department at once, same reasoning as routine-day-off quotas —
-  // owner-only, not just any department head. A report room, on the other
-  // hand, is narrow enough that a head managing their own team's room makes
-  // sense — but only a room actually scoped to their department, not any
-  // room they merely happen to be able to see.
-  const editableTopics = useMemo(
-    () => visibleTopics.filter((t) => canEditReportTopic(t.visibility, viewingAsUserId)),
-    [visibleTopics, viewingAsUserId]
-  );
-  const [topicId, setTopicId] = useState<string>(() => searchParams.get("topic") ?? editableTopics[0]?.id ?? "");
-  const activeTopic = editableTopics.find((t) => t.id === topicId) ?? editableTopics[0];
+  // `viewingAsUserId` now hydrates from localStorage a tick after mount (see
+  // identity-store.ts's `persist`), so the very first render here still sees
+  // the pre-hydration default identity — `owner` reads false on that render
+  // even for someone who'll turn out to be the owner, silently bumping a
+  // `?tab=issueDesk` link back to "profile" before hydration lands. Once
+  // access to the requested tab actually shows up, jump to it — but only
+  // once, so this doesn't fight a manual tab click made in the meantime.
+  const syncedInitialTabRef = useRef(false);
+  useEffect(() => {
+    if (!syncedInitialTabRef.current && accessByTab[initialTab]) {
+      syncedInitialTabRef.current = true;
+      setTab(initialTab);
+    }
+  });
 
   const visibleTabs = tabs.filter((t) => accessByTab[t.key]);
 
@@ -135,6 +139,7 @@ function SettingsPageInner() {
       ...(owner ? [{ key: "leaveSummary", label: "สรุปวันลาพนักงาน", icon: CalendarDays }] : []),
     ],
     report: [{ key: "reportRoom", label: "ตั้งค่าห้อง", icon: MessageSquareText }],
+    issueDesk: [{ key: "issueDeskConfig", label: "ตั้งค่าแจ้งปัญหา", icon: Bug }],
     permissions: owner
       ? [
           { key: "accessControl", label: "สิทธิ์การตั้งค่า", icon: ShieldCheck },
@@ -169,7 +174,7 @@ function SettingsPageInner() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 pt-4 lg:pt-6">
       <PageHeader title="ตั้งค่า" subtitle="การตั้งค่าทั้งหมดของระบบ รวมไว้ที่เดียว" />
 
       <div className="flex flex-col lg:flex-row gap-6 lg:items-start">
@@ -255,29 +260,25 @@ function SettingsPageInner() {
           )}
 
           {tab === "report" && manager && (
-            <section className="rounded-2xl border border-[var(--line)] bg-white p-5 shadow-sm space-y-4">
-              {editableTopics.length === 0 ? (
-                <p className="text-sm text-[var(--ink-soft)]">
-                  ไม่มีห้องที่คุณแก้ไขได้ — แก้ได้เฉพาะห้องที่จำกัดเฉพาะแผนกของคุณเท่านั้น ห้องอื่นแก้ได้แค่เจ้าของบริษัท
-                </p>
-              ) : (
-                <>
-                  <div className="space-y-1.5">
-                    <p className="text-xs font-medium text-[var(--ink-soft)]">เลือกห้องที่จะตั้งค่า</p>
-                    <Select value={activeTopic?.id ?? ""} onValueChange={(v) => v && setTopicId(v)}>
-                      <SelectTrigger className="w-full sm:w-72">
-                        <SelectValue>{activeTopic?.name ?? "เลือกห้อง"}</SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {editableTopics.map((t) => (
-                          <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {activeTopic && <ReportTopicSettingsPanel topic={activeTopic} />}
-                </>
-              )}
+            <section className="rounded-2xl border border-[var(--line)] bg-white p-5 shadow-sm">
+              {/* Each room's settings live in that room now (⚙ icon, top
+                  right of the room header) instead of duplicated here behind
+                  a room picker — one place per room to edit, not two that
+                  can drift out of sync with each other. */}
+              <p className="text-sm text-[var(--ink)]">ตั้งค่าห้อง Report แต่ละห้องได้จากไอคอน ⚙ ในห้องนั้นๆ โดยตรง</p>
+              <p className="text-xs text-[var(--ink-soft)] mt-1">เข้าห้องที่ต้องการ แล้วกดไอคอนรูปเฟืองมุมขวาบนของห้อง</p>
+              <Link
+                href="/report-feed"
+                className="inline-flex items-center gap-1.5 mt-3 rounded-lg bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white text-sm font-medium px-3.5 py-2 transition-colors"
+              >
+                ไปที่หน้า Report
+              </Link>
+            </section>
+          )}
+
+          {tab === "issueDesk" && hasIssueDeskAccess && (
+            <section className="rounded-2xl border border-[var(--line)] bg-white p-5 shadow-sm">
+              <IssueDeskConfigPanel config={issueDeskConfig} setConfig={setIssueDeskConfig} />
             </section>
           )}
 

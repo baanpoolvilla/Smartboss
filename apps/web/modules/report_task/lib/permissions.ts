@@ -1,7 +1,7 @@
 import { canManage, departments, getUser, isOwner } from "@/modules/report_task/data/mock";
-import { dueUrgency, isSuspiciousRevision } from "@/modules/report_task/lib/task-flags";
+import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import type { GrantableSection } from "@/modules/report_task/store/settings-access-store";
-import type { Task } from "@/modules/report_task/types";
+import type { ChecklistItem, Task } from "@/modules/report_task/types";
 
 /**
  * Who can edit a record's core/main data: whoever created it, the head of
@@ -22,28 +22,11 @@ export function canEditRecord(
 }
 
 /**
- * Docking a missed-deadline penalty is a supervisory call — the head of any
- * department the task touches, the owner, or whoever assigned the task can
- * dock/undock it. (Previously excluded the assigner unless they were also a
- * head/owner; widened on request so the person who actually handed the work
- * out doesn't have to go find a department head to flag a missed deadline.)
- */
-export function canDockPenalty(
-  assignedById: string,
-  recordDepartmentIds: (string | undefined)[],
-  viewingAsUserId: string
-): boolean {
-  if (isOwner(viewingAsUserId)) return true;
-  if (assignedById === viewingAsUserId) return true;
-  const deptIds = new Set(recordDepartmentIds.filter((id): id is string => !!id));
-  return departments.some((d) => d.headId === viewingAsUserId && deptIds.has(d.id));
-}
-
-/**
- * An automatic strict-deadline dock is meant to carry no discretion — unlike
- * a flexible task's manual dock (any department head over it can toggle
- * that), only the company-wide owner can cancel one, and the caller is
- * expected to require a stated reason too, so overriding it leaves a trail.
+ * A missed-deadline dock is meant to carry no discretion — every task docks
+ * automatically the instant it's overdue (see task-penalty-sweep.ts), so
+ * there's no manual "case by case" dock anymore. Only the company-wide owner
+ * can cancel an automatic dock, and the caller is expected to require a
+ * stated reason too, so overriding it leaves a trail.
  */
 export function canOverrideAutoPenalty(viewingAsUserId: string): boolean {
   return isOwner(viewingAsUserId);
@@ -52,21 +35,26 @@ export function canOverrideAutoPenalty(viewingAsUserId: string): boolean {
 /**
  * Whether the missed-deadline penalty status (heading, explanation, chip)
  * should render at all for this viewer. An existing penalty is a fact about
- * the task — everyone who can see the task sees it, dock rights or not,
+ * the task — everyone who can see the task sees it, override rights or not,
  * otherwise the task's own assignee wouldn't know their score took a hit.
- * But an *offer* to dock one (no penalty yet, just overdue or repeatedly
- * pushed out) is a pure action affordance — showing it to someone who can't
- * act on it is a disabled control with nothing behind it, so it stays hidden
- * for them instead.
+ * But an *offer* to (re)dock one (no penalty yet, just overdue — e.g. an
+ * owner already cancelled the automatic one) is a pure action affordance —
+ * showing it to someone who can't act on it is a disabled control with
+ * nothing behind it, so it stays hidden for them instead.
  */
 export function canSeePenaltyStatus(task: Task, viewingAsUserId: string): boolean {
   if (task.penalty) return true;
-  const isStrict = (task.deadlineType ?? "flexible") === "strict";
-  if (isStrict) {
-    return dueUrgency(task) === "overdue" && canOverrideAutoPenalty(viewingAsUserId);
-  }
-  const dockable = dueUrgency(task) === "overdue" || isSuspiciousRevision(task);
-  return dockable && canDockPenalty(task.assignedById, task.departmentIds, viewingAsUserId);
+  return dueUrgency(task) === "overdue" && canOverrideAutoPenalty(viewingAsUserId);
+}
+
+/**
+ * Ticking a checklist item off (not editing its text, not adding/removing
+ * items — that's `canEditRecord` territory, same as the rest of a task's
+ * structure) belongs to whoever owns it. Everyone else on a group task can
+ * still see a teammate's items, just not check them on their behalf.
+ */
+export function canToggleOwnChecklistItem(item: ChecklistItem, viewingAsUserId: string): boolean {
+  return item.ownerId === viewingAsUserId;
 }
 
 /**
@@ -210,6 +198,136 @@ export function canAccessCompanySection(
  */
 export function canManageReportTopics(viewingAsUserId: string, grants: Record<string, GrantableSection[]>): boolean {
   return isOwner(viewingAsUserId) || canAccessCompanySection("reportTopics", viewingAsUserId, grants);
+}
+
+// ---------------------------------------------------------------------------
+// Issue-report / support-desk permissions (ISSUE_REPORT_SYSTEM_SPEC.md §2).
+// Pure functions taking a plain `IssueDeskConfig` shape, same pattern as the
+// report-feed helpers above — never reach into a store from in here.
+// ---------------------------------------------------------------------------
+
+/**
+ * "Agent" = someone on the receiving team's desk — in one of the recipient
+ * departments (e.g. Engineering standing in for IT until a real IT
+ * department exists), or explicitly added as an extra agent despite being in
+ * a different department. Deliberately excludes the owner — the owner is
+ * checked separately everywhere (see each function below) so the permission
+ * matrix's "Agent" and "Owner" columns stay distinguishable in code, matching
+ * the spec's own two-column split.
+ */
+export function isIssueAgent(
+  cfg: { recipientDepartmentIds: string[]; extraAgentUserIds: string[] },
+  userId: string
+): boolean {
+  if (cfg.extraAgentUserIds.includes(userId)) return true;
+  const dept = getUser(userId)?.departmentId;
+  return !!dept && cfg.recipientDepartmentIds.includes(dept);
+}
+
+/**
+ * Whether `userId` can open a ticket at all: the owner, its own reporter, any
+ * Agent (sees the whole shared inbox), or — for a `public_in_org` ticket
+ * (a company-wide outage, say) — anyone, so the same incident doesn't get
+ * reported 20 separate times. `public_in_org` visibility is read-only for a
+ * non-agent viewer; see `canManageIssue` for who can actually act on it.
+ */
+export function canSeeIssue(
+  ticket: { reporterId: string; visibility: "private" | "public_in_org" },
+  cfg: { recipientDepartmentIds: string[]; extraAgentUserIds: string[] },
+  userId: string
+): boolean {
+  if (isOwner(userId)) return true;
+  if (ticket.reporterId === userId) return true;
+  if (isIssueAgent(cfg, userId)) return true;
+  return ticket.visibility === "public_in_org";
+}
+
+/**
+ * A message's `audience` gates it independently of ticket-level visibility —
+ * seeing the ticket doesn't mean seeing every message on it. `"all"` is open
+ * to anyone who can see the ticket (including the reporter); `"staff"` and
+ * `"vendor"` both stay owner/Agent-only in this phase since there's no
+ * separate vendor account yet (see IssueAudience's doc comment).
+ */
+export function canSeeIssueMessage(
+  msg: { audience: "all" | "staff" | "vendor" },
+  ticket: { reporterId: string; visibility: "private" | "public_in_org" },
+  cfg: { recipientDepartmentIds: string[]; extraAgentUserIds: string[] },
+  userId: string
+): boolean {
+  if (!canSeeIssue(ticket, cfg, userId)) return false;
+  if (msg.audience === "all") return true;
+  return isOwner(userId) || isIssueAgent(cfg, userId);
+}
+
+/** Status / priority / assignee / tags / visibility — Agent-and-up territory. */
+export function canManageIssue(
+  cfg: { recipientDepartmentIds: string[]; extraAgentUserIds: string[] },
+  userId: string
+): boolean {
+  return isOwner(userId) || isIssueAgent(cfg, userId);
+}
+
+/**
+ * A ticket can only be escalated once it's actually been triaged — not a
+ * shortcut straight from "new" — so a raw, unlooked-at report never lands on
+ * the vendor's desk (see POST_TRIAGE_STATUSES in lib/issue-meta.ts / the
+ * state machine in the spec). Already-escalated tickets can't be escalated
+ * again.
+ */
+export function canEscalateIssue(
+  ticket: { status: string; escalatedAt: string | null },
+  cfg: { recipientDepartmentIds: string[]; extraAgentUserIds: string[] },
+  userId: string,
+  postTriageStatuses: string[]
+): boolean {
+  if (!canManageIssue(cfg, userId)) return false;
+  return ticket.escalatedAt === null && postTriageStatuses.includes(ticket.status);
+}
+
+/**
+ * The `pending_verify` → `resolved`/reopen call belongs to the reporter — they're
+ * the one who knows whether it's actually fixed. An Agent/owner can also
+ * confirm on the reporter's behalf (someone who moved on, stopped responding),
+ * but the UI must require a reason when they do, per the spec's "แทนได้ พร้อม
+ * เหตุผล" — this function only says *who*, not that a reason was given.
+ */
+export function canConfirmResolution(
+  ticket: { reporterId: string },
+  cfg: { recipientDepartmentIds: string[]; extraAgentUserIds: string[] },
+  userId: string
+): boolean {
+  return ticket.reporterId === userId || isOwner(userId) || isIssueAgent(cfg, userId);
+}
+
+/** Only the reporter can close their own ticket outright (mark it resolved
+ * themselves — e.g. they fixed it on their own end) — nobody else's report. */
+export function canReporterCloseOwnIssue(ticket: { reporterId: string }, userId: string): boolean {
+  return ticket.reporterId === userId;
+}
+
+export function canManageIssueDeskSettings(userId: string, grants: Record<string, GrantableSection[]>): boolean {
+  return isOwner(userId) || canAccessCompanySection("issueDesk", userId, grants);
+}
+
+/**
+ * A narrow, metadata-only visibility for a department head — NOT the same as
+ * `canSeeIssue` (which grants the full thread). A head over the reporter's
+ * department can see this ticket in their "ของทีมฉัน" roll-up (title/status/
+ * age only, see the list page) when the reporter left `shareWithHead` on;
+ * they still can't open the thread, read notes, or manage the ticket in any
+ * way through this — that stays Agent/owner-only. See
+ * ISSUE_DESK_AUDIT_2026-08-08.md §C3 for why this is deliberately thinner
+ * than full ticket access, not a shortcut to it.
+ */
+export function canSeeIssueSummaryAsHead(
+  ticket: { reporterId: string; shareWithHead: boolean },
+  viewingAsUserId: string
+): boolean {
+  if (!ticket.shareWithHead) return false;
+  const reporterDeptId = getUser(ticket.reporterId)?.departmentId;
+  if (!reporterDeptId) return false;
+  return departments.some((d) => d.id === reporterDeptId && d.headId === viewingAsUserId);
 }
 
 export function canEditReportTopic(

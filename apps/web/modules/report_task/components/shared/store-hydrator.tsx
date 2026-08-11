@@ -2,11 +2,11 @@
 
 import { useEffect } from "react";
 import { useDashboardLayoutStore } from "@/modules/report_task/store/dashboard-layout-store";
-import { useReportLayoutStore } from "@/modules/report_task/store/report-layout-store";
 import { useCalendarVisibilityStore } from "@/modules/report_task/store/calendar-visibility-store";
 import { useGoogleCalendarStore } from "@/modules/report_task/store/google-calendar-store";
 import { useEmailNotificationSettingsStore } from "@/modules/report_task/store/email-notification-settings-store";
 import { useWhatsNewStore } from "@/modules/report_task/store/whats-new-store";
+import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 
 import { ServerStoreSync } from "./server-store-sync";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
@@ -17,6 +17,8 @@ import { useHolidayStore } from "@/modules/report_task/store/holiday-store";
 import { useLeaveTypeStore } from "@/modules/report_task/store/leave-type-store";
 import { useTemplateStore } from "@/modules/report_task/store/template-store";
 import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
+import { useIssueReportStore, migrateIssueStoreSlice, extractV1RecipientDepartmentIds } from "@/modules/report_task/store/issue-report-store";
+import { useIssueDeskConfigStore } from "@/modules/report_task/store/issue-desk-config-store";
 import { useDepartmentStore } from "@/modules/report_task/store/department-store";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { usePeopleGroupStore } from "@/modules/report_task/store/people-group-store";
@@ -39,11 +41,11 @@ import { useSettingsAccessStore } from "@/modules/report_task/store/settings-acc
 export function StoreHydrator() {
   useEffect(() => {
     useDashboardLayoutStore.persist.rehydrate();
-    useReportLayoutStore.persist.rehydrate();
     useCalendarVisibilityStore.persist.rehydrate();
     useGoogleCalendarStore.persist.rehydrate();
     useEmailNotificationSettingsStore.persist.rehydrate();
     useWhatsNewStore.persist.rehydrate();
+    useIdentityStore.persist.rehydrate();
   }, []);
 
   return (
@@ -95,6 +97,25 @@ export function StoreHydrator() {
         store={useReportFeedStore}
         select={(s) => ({ topics: s.topics, posts: s.posts, albums: s.albums, hasSeeded: s.hasSeeded })}
         apply={(s, slice) => ({ ...s, ...slice, loaded: true })}
+      />
+      <ServerStoreSync
+        apiKey="issue-reports"
+        store={useIssueReportStore}
+        select={(s) => ({ schemaVersion: s.schemaVersion, tickets: s.tickets })}
+        apply={(s, slice) => {
+          // `slice` may still be the V1 shape (`{ reports, recipientDepartmentIds }`)
+          // on a store that hasn't been touched since before this migration —
+          // migrateIssueStoreSlice is a no-op once schemaVersion is current.
+          const legacyDepts = extractV1RecipientDepartmentIds(slice);
+          if (legacyDepts) useIssueDeskConfigStore.getState().setConfig({ recipientDepartmentIds: legacyDepts });
+          return { ...s, ...migrateIssueStoreSlice(slice) };
+        }}
+      />
+      <ServerStoreSync
+        apiKey="issue-desk-config"
+        store={useIssueDeskConfigStore}
+        select={(s) => s.config}
+        apply={(s, config) => ({ ...s, config })}
       />
       <ServerStoreSync
         apiKey="departments"
