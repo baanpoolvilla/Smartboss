@@ -37,7 +37,7 @@ function looksLikePlainText(bytes: Uint8Array): boolean {
   } catch {
     return false;
   }
-  // eslint-disable-next-line no-control-regex
+
   if (/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(text)) return false; // binary control bytes
   if (/<\s*(script|iframe|object|embed)\b/i.test(text)) return false; // renamed-.html guard
   return true;

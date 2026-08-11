@@ -143,12 +143,16 @@ branch ที่ทิ้งไว้นานเป็นเดือนจะ 
 > ในคอมมิตเดียวได้ ถ้าแยกนานเกินไปจะเสียข้อดีนั้นไปแล้วได้ merge conflict แทน
 > ใช้ branch เป็น "ที่ทำงานชั่วคราวของงานหนึ่งชิ้น" แล้วรีบ merge จะได้ประโยชน์สุด
 
-## `module/report_task` ต่างจากคนอื่น
+## `module/report_task` — Smartboss เป็นเจ้าของเต็มตัวแล้ว
 
-UI ทั้งหมดมาจาก repo [easyboss-workspace](https://github.com/baanpoolvilla/easyboss-workspace)
-**ห้ามแก้ UI ที่นี่** — แก้ที่ต้นทางแล้วดึงมาทับตาม [`docs/report_task_port.md`](report_task_port.md)
+**แก้ได้ทุกอย่างที่นี่ ทั้ง UI และชั้นข้อมูล** — ไม่ต้องไปแก้ที่ repo อื่นแล้ว
 
-ที่นี่เป็นเจ้าของแค่ 3 อย่าง: การผูกเข้า shell · ธีม · **ชั้นข้อมูล**
+เดิมโค้ดชุดนี้พอร์ตมาจาก [easyboss-workspace](https://github.com/baanpoolvilla/easyboss-workspace)
+และมีกฎว่าห้ามแก้ UI ที่นี่เพราะจะถูกเขียนทับตอนดึงเวอร์ชันใหม่
+**ยกเลิกกฎนั้นแล้วเมื่อ 2026-08-11** — ตั้งแต่นี้ไม่ดึงจาก upstream อีก
+
+⚠ ผลที่ตามมา: ถ้าวันหนึ่งอยากดึงของใหม่จาก upstream จะไม่ใช่การ "ทับ" อีกต่อไป
+ต้องไล่ merge ทีละไฟล์ — ดูสิ่งที่ต่างจากต้นทางได้ที่ [`report_task_port.md`](report_task_port.md)
 
 ## deploy
 

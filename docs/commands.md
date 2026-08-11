@@ -186,7 +186,6 @@ gcloud compute ssh smartboss-prod --zone=asia-southeast1-c -- -N -L 5555:127.0.0
 | `pnpm db:migrate` บนเซิร์ฟเวอร์ | สร้าง migration ใหม่บน production — ใช้ `db:deploy` |
 | build ทับตอน server รันอยู่ | `ChunkLoadError` ที่ดูเหมือนโค้ดพัง |
 | commit ไฟล์ `.env` | ความลับหลุด (มี `.gitignore` กันไว้แล้ว อย่าไปแก้) |
-| แก้ UI ใน `modules/report_task/` | เป็นของ repo ต้นทาง ดู `docs/report_task_port.md` |
 
 ---
 

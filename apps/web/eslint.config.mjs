@@ -10,11 +10,6 @@ const config = [
       ".next/**",
       "node_modules/**",
       "next-env.d.ts",
-      // โค้ดที่ยกมาจากแอป easyboss-workspace — ยังไม่ได้ปรับสไตล์ให้ตรงกับที่นี่
-      // ปลดออกเมื่อเขียนชั้นข้อมูลใหม่เสร็จ
-      "modules/report_task/**",
-      "app/(shell)/report-task/**",
-      "app/api/report-task/**",
     ],
   },
   ...(Array.isArray(nextCoreWebVitals) ? nextCoreWebVitals : [nextCoreWebVitals]),
