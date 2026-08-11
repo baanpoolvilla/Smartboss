@@ -2,6 +2,7 @@ import { requireOrg } from "@smartboss/auth";
 
 import { recordPerformanceEvents, type PerformanceEventInput } from "@/lib/performance";
 import { readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
+import { readTasks, writeTasks } from "@/modules/report_task/lib/db/task-repo";
 import { sweepAutoPenalties } from "@/modules/report_task/lib/task-penalty-sweep";
 import type { ActivityItem, Task } from "@/modules/report_task/types";
 import type { AppNotification } from "@/modules/report_task/store/notification-store";
@@ -17,7 +18,6 @@ import type { AppNotification } from "@/modules/report_task/store/notification-s
  */
 export const dynamic = "force-dynamic";
 
-const TASKS_KEY = "tasks";
 const ACTIVITY_KEY = "activity-log";
 const NOTIFICATIONS_KEY = "notifications";
 const MAX_ACTIVITY_ENTRIES = 1000;
@@ -26,8 +26,8 @@ export async function POST() {
   const session = await requireOrg();
   const orgId = session.orgId;
 
-  const { data: tasks, version } = await readStore<Task[]>(orgId, TASKS_KEY);
-  if (!tasks || tasks.length === 0) {
+  const { tasks, version } = await readTasks(orgId);
+  if (tasks.length === 0) {
     return Response.json({ ok: true, changed: false });
   }
 
@@ -36,7 +36,7 @@ export async function POST() {
     return Response.json({ ok: true, changed: false });
   }
 
-  const saved = await writeStore(orgId, TASKS_KEY, result.tasks, version, session.userId);
+  const saved = await writeTasks(orgId, result.tasks, version, session.userId);
   if (!saved.ok) {
     // มีคนเขียนแทรกระหว่างทาง (sweep ซ้อน หรือผู้ใช้แก้งาน) — ข้ามรอบนี้
     // ไม่ต้องแย่งเขียน รอบหน้าจะคำนวณใหม่จากข้อมูลล่าสุดเอง

@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireOrg } from "@smartboss/auth";
 
-import { clearStore, readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
+import { clearTasks, readTasks, writeTasks } from "@/modules/report_task/lib/db/task-repo";
 import { taskListSchema } from "@/modules/report_task/lib/db/task-schema";
 import type { Task } from "@/modules/report_task/types";
 
@@ -16,8 +16,6 @@ import type { Task } from "@/modules/report_task/types";
  * ตรวจรูปร่างข้อมูลด้วย zod ก่อนเขียน (ต้นทางก็ทำ) ส่วน store อื่นยังไม่มี schema
  */
 export const dynamic = "force-dynamic";
-
-const STORE_KEY = "tasks";
 
 // กันไม่ให้ payload บวมเกินจริง (ไฟล์แนบ base64 คือตัวที่ทำให้บวมได้มากสุด)
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
@@ -52,9 +50,8 @@ async function putTasks(request: NextRequest) {
     );
   }
 
-  const result = await writeStore(
+  const result = await writeTasks(
     session.orgId,
-    STORE_KEY,
     parsed.data.tasks,
     parsed.data.expectedVersion,
     session.userId
@@ -70,10 +67,10 @@ async function putTasks(request: NextRequest) {
 
 export async function GET() {
   const session = await requireOrg();
-  const { data, version } = await readStore<Task[]>(session.orgId, STORE_KEY);
+  const { tasks, version } = await readTasks(session.orgId);
   // บริษัทที่ยังไม่เคยบันทึก = ยังไม่มีงาน — คืนอาร์เรย์ว่าง ไม่ใช่ข้อมูลตัวอย่าง
   // (ต้นฉบับ seed ข้อมูลสาธิตให้ ซึ่งใช้กับบริษัทลูกค้าจริงไม่ได้)
-  return Response.json(data ?? [], { headers: { "X-Data-Version": String(version) } });
+  return Response.json(tasks, { headers: { "X-Data-Version": String(version) } });
 }
 
 export async function PUT(request: NextRequest) {
@@ -96,6 +93,6 @@ export async function DELETE(request: NextRequest) {
       { status: 400 }
     );
   }
-  await clearStore(session.orgId, STORE_KEY);
+  await clearTasks(session.orgId);
   return Response.json({ ok: true, count: 0 });
 }

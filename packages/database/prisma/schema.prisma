@@ -55,9 +55,11 @@ model Organization {
   orgModules OrgModule[]
   roles      Role[]
 
-  reportTaskStores   ReportTaskStore[]
-  performanceEvents  PerformanceEvent[]
-  performanceSetting PerformanceSetting?
+  reportTaskStores     ReportTaskStore[]
+  reportTasks          ReportTask[]
+  reportTaskCollection ReportTaskCollection?
+  performanceEvents    PerformanceEvent[]
+  performanceSetting   PerformanceSetting?
 
   @@map("organizations")
   @@schema("core")
@@ -601,6 +603,69 @@ model LineNotificationLog {
   @@index([orgId, createdAt])
   @@map("line_notification_logs")
   @@schema("maintenance")
+}
+
+// ═════════════════════ งานในบอร์ด Kanban ═════════════════════
+//
+// เดิมเก็บทั้งคอลเลกชันเป็นก้อน JSON ก้อนเดียวใน report_task.stores คีย์ "tasks"
+// (ต้นทางเก็บเป็นไฟล์ data/tasks/tasks.json) ⇒ แก้ชื่องานตัวเดียวก็ต้องเขียนทับ
+// ทั้งบริษัท และฝั่งเซิร์ฟเวอร์ query อะไรไม่ได้เลยนอกจากโหลดมาทั้งก้อน
+//
+// ตอนนี้เป็นตารางจริง หนึ่งแถวต่อหนึ่งงาน
+//
+// ⚠ `data` คือ **แหล่งความจริง** ของตัวงานทั้งก้อน ส่วนคอลัมน์อื่นเป็นสำเนา
+// ที่คัดออกมาเพื่อให้ query/เรียง/ทำดัชนีได้ — เขียนจากที่เดียวเสมอ (task-repo.ts)
+// จึงไม่มีทางไม่ตรงกัน เหตุที่ไม่แตกทุกฟิลด์เป็นคอลัมน์: ตัวงานมีโครงสร้างซ้อน
+// อีกสิบกว่าชุด (เช็คลิสต์ คอมเมนต์ ไฟล์แนบ ประวัติแก้ไข รีแอ็กชัน การหักคะแนน)
+// ซึ่งเป็นของ UI ต้นทางที่ปรับรูปร่างได้ตลอด แตกเป็นตารางแล้วต้องตามแก้ทุกครั้ง
+model ReportTask {
+  orgId String @map("org_id")
+  /// id ที่ client สร้าง (task-xxxx) — ไม่ใช่ uuid ของเรา
+  id    String
+  /// เลขที่ให้คนอ่าน T-2569-0001 — เซิร์ฟเวอร์เป็นคนตั้ง client ไม่ต้องรู้
+  code  String
+
+  title        String
+  status       String
+  priority     String
+  taskMode     String   @map("task_mode")
+  assignedById String   @map("assigned_by_id")
+  assigneeIds  String[] @map("assignee_ids")
+  parentId     String?  @map("parent_id")
+  startDate    String   @map("start_date")
+  dueDate      String   @map("due_date")
+  completedAt  String?  @map("completed_at")
+
+  /// ตัวงานทั้งก้อนตามรูปแบบของ UI ต้นทาง
+  data Json
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@id([orgId, id])
+  @@unique([orgId, code])
+  @@index([orgId, status])
+  @@index([orgId, dueDate])
+  @@map("tasks")
+  @@schema("report_task")
+}
+
+/// ตัวนับรุ่นของ "คอลเลกชันงาน" ทั้งบริษัท
+///
+/// client ส่งงานมาทั้งชุดทุกครั้ง (สัญญาเดิมของ UI ต้นทาง) จึงต้องมีเลขรุ่นของ
+/// ทั้งชุดไว้กันสองแท็บเขียนทับกัน — เดิมเลขนี้อยู่ในแถวของ stores
+model ReportTaskCollection {
+  orgId     String   @id @map("org_id")
+  version   Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@map("task_collections")
+  @@schema("report_task")
 }
 
 // ═════════════════════ คะแนนผลงานรายบุคคล (ข้ามโมดูล) ═════════════════════

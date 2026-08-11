@@ -74,6 +74,27 @@ report_task.stores(org_id, key, data jsonb, version, updated_at, updated_by)
 PRIMARY KEY (org_id, key)
 ```
 
+**ยกเว้นงานในบอร์ด** — ตั้งแต่ 2026-08-11 ย้ายออกจาก `stores` ไปเป็นตารางจริงแล้ว
+
+```
+report_task.tasks(org_id, id, code, title, status, priority, task_mode,
+                  assigned_by_id, assignee_ids, parent_id, start_date,
+                  due_date, completed_at, data jsonb, created_at, updated_at)
+PRIMARY KEY (org_id, id) · UNIQUE (org_id, code)
+
+report_task.task_collections(org_id, version, updated_at, updated_by)
+```
+
+สัญญากับ client เหมือนเดิมทุกอย่าง (ส่งงานมาทั้งชุด รับทั้งชุด) — `lib/db/task-repo.ts`
+แปลงเป็น insert/update/delete รายแถวให้ จึงไม่ต้องแตะ UI ต้นทางเลย
+
+`data` คือแหล่งความจริงของตัวงาน ส่วนคอลัมน์อื่นเป็นสำเนาที่คัดออกมาให้ query ได้
+เขียนจากฟังก์ชันเดียว (`columnsOf`) เสมอ จึงไม่มีทางไม่ตรงกัน — ที่ไม่แตกทุกฟิลด์
+เป็นคอลัมน์เพราะตัวงานมีโครงสร้างซ้อนอีกสิบกว่าชุดที่ UI ต้นทางปรับรูปร่างได้ตลอด
+
+`code` (T-2569-0001) เซิร์ฟเวอร์เป็นคนตั้ง ผูกกับ id ของงาน — client ไม่ต้องรู้จัก
+และ zod schema ก็คัดทิ้งอยู่แล้ว **แก้งานแล้วเลขไม่เปลี่ยน · ลบแล้วเลขไม่ถูกใช้ซ้ำ**
+
 ⇒ เพิ่ม store ใหม่ฝั่ง client ไม่ต้องแก้ฐานข้อมูล แค่เติมคีย์ใน
 `lib/db/store-registry.ts` (whitelist กันไม่ให้ client ยิงคีย์มั่ว)
 

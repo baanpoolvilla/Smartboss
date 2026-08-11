@@ -17,7 +17,7 @@ import { prisma } from "@smartboss/database";
  * เกิดพร้อมกัน ไม่มีช่องให้แทรก
  */
 
-export type DocType = "ORG" | "WO" | "PO";
+export type DocType = "ORG" | "WO" | "PO" | "T";
 
 /** ปี พ.ศ. ของตอนนี้ตามเวลาไทย — ใช้เป็นช่วงของการเดินเลข */
 export function currentBuddhistYear(now = new Date()): string {
@@ -69,6 +69,13 @@ export async function nextWorkOrderCode(tx: PrismaTx, orgId: string): Promise<st
   const year = currentBuddhistYear();
   const n = await reserveNumber(tx, orgId, "WO", year);
   return `WO-${year}-${pad(n, 4)}`;
+}
+
+/** เลขที่งานในบอร์ดถัดไป — T-2569-0001 (แยกตามบริษัทและปี พ.ศ.) */
+export async function nextTaskCode(tx: PrismaTx, orgId: string): Promise<string> {
+  const year = currentBuddhistYear();
+  const n = await reserveNumber(tx, orgId, "T", year);
+  return `T-${year}-${pad(n, 4)}`;
 }
 
 /** เลขที่ใบสั่งซื้อถัดไป — PO-2569-0001 (แยกตามบริษัทและปี พ.ศ.) */
