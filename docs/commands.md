@@ -105,13 +105,28 @@ git log --oneline -1                    # เซิร์ฟเวอร์อ�
 git diff --name-only HEAD origin/main | grep -vE "^docs/|^scripts/|\.md$"
 ```
 
-**บรรทัดสุดท้ายว่าง = ไม่ต้อง deploy**
+**ว่าง = จบ ไม่ต้อง deploy**
+
+ถ้ามีชื่อไฟล์โผล่มา **อย่าเพิ่งสรุปว่าต้อง deploy** — ชื่อไฟล์บอกไม่ได้ว่าต่างตรงไหน
+การแก้คอมเมนต์ก็ทำให้ไฟล์ขึ้นมาเหมือนกัน ⇒ เปิดดูเนื้อข้างในต่อ
+
+```bash
+git diff HEAD origin/main -- apps/ packages/
+```
+
+ถ้ามีแต่คอมเมนต์ ก็ไม่ต้อง deploy — build ใหม่ได้ของเหมือนเดิม เสียเวลา 5–10 นาทีเปล่า ๆ
 
 | เปลี่ยนอะไร | deploy ไหม |
 |---|---|
-| โค้ดใน `apps/` `packages/` ที่มีผลต่อการทำงาน | ✅ |
+| โค้ดที่มีผลต่อการทำงานใน `apps/` `packages/` | ✅ |
 | schema / migration | ✅ ต้องลง migration ก่อนด้วย |
-| `docs/` `scripts/` `README` · คอมเมนต์ · lint config | ❌ |
+| `docs/` `scripts/` `README` · คอมเมนต์ | ❌ |
+| **ตั้งค่า lint** | ❌ ตอนนี้ — แต่อ่านช่องข้างล่าง |
+
+> ⚠ **การตั้งค่า lint ไม่มีผลตอนนี้ แต่มีผลตอน deploy ครั้งถัดไป**
+> `next build` ตรวจ lint ด้วย ⇒ การเอาไฟล์ออกจาก `ignores` ทำให้ build
+> ครั้งหน้าล้มได้ ทั้งที่โค้ดไม่ได้เปลี่ยน ⇒ แก้ `eslint.config.mjs` เมื่อไหร่
+> ให้รัน `pnpm lint` ทันที ต้องได้ **0 errors** (warning ไม่ทำให้ล้ม)
 
 > ⚠ `git fetch` โดยไม่มี `sudo -u smartboss` จะล้มด้วย
 > `cannot open '.git/FETCH_HEAD': Permission denied` แล้ว `origin/main` จะเป็นของเก่า
