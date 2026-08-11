@@ -14,6 +14,8 @@
 
 **กฎ**
 - คำสั่งที่ขึ้นต้นด้วย `gcloud` → 🅲 เท่านั้น (🅱 ไม่มีสิทธิ์ จะขึ้น `insufficient authentication scopes`)
+- **ถ้า prompt เป็น `smartboss=#` แปลว่าอยู่ในโปรแกรม psql ไม่ใช่ใน shell** —
+  พิมพ์คำสั่ง Linux ตรงนั้นไม่ได้ ออกด้วย `\q` (backslash ไม่ใช่ `/q`) ก่อน
 - คำสั่งที่แตะไฟล์ใน `/opt/smartboss` → 🅱 และต้องนำหน้าด้วย `sudo -u smartboss`
 - `pnpm dev` / `pnpm build` ตอนพัฒนา → 🅰 เท่านั้น **ห้ามรันบนเซิร์ฟเวอร์เอง** ให้ใช้ `release.sh`
 
@@ -118,9 +120,15 @@ sudo -u smartboss bash -c 'set -a; . /etc/smartboss/smartboss.env; set +a;
 sudo -u smartboss bash -c 'set -a; . /etc/smartboss/smartboss.env; set +a;
   pnpm db:deploy && pnpm wf:migrate'
 
-# 5. build + รีสตาร์ต
+# 5. build + รีสตาร์ต  (release.sh สร้าง Prisma client ใหม่ให้เองแล้ว)
 sudo -u smartboss bash deploy/release.sh
 ```
+
+> **ถ้า build ล้มด้วย `'code' does not exist in type ...`** แปลว่า Prisma client
+> บนเซิร์ฟเวอร์ยังเป็นตัวเก่า ไม่รู้จักคอลัมน์ที่เพิ่งเพิ่ม — สร้างใหม่แล้วลองอีกครั้ง
+> ```bash
+> sudo -u smartboss bash -c 'set -a; . /etc/smartboss/smartboss.env; set +a; pnpm db:generate'
+> ```
 
 **ทำตอนที่มีเวลาดูผล ไม่ใช่ตอนรีบ** — migration ย้อนกลับไม่ได้ ต้องกู้จาก backup
 

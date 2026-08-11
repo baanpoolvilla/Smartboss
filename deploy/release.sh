@@ -24,6 +24,14 @@ step "ติดตั้ง dependency"
 # --frozen-lockfile: ถ้า lockfile ไม่ตรงกับ package.json ให้ล้มดีกว่าแอบอัปเกรดเอง
 pnpm install --frozen-lockfile
 
+step "สร้าง Prisma client ใหม่ให้ตรงกับ schema ที่เพิ่งดึงมา"
+# ⚠ ห้ามตัดขั้นนี้ออก — prisma generate ผูกไว้กับ postinstall ซึ่งจะทำงาน
+# ต่อเมื่อ pnpm install ได้ติดตั้งอะไรจริง ๆ  แต่การแก้ schema ไม่ได้เปลี่ยน
+# dependency ⇒ install เป็น no-op ⇒ client ยังเป็นตัวเก่าที่ไม่รู้จักคอลัมน์ใหม่
+# แล้ว build จะล้มด้วย "Object literal may only specify known properties"
+# ซึ่งอ่านแล้วนึกว่าโค้ดผิด ทั้งที่โค้ดถูก client ต่างหากที่เก่า (เจอมาแล้วตอน deploy จริง)
+pnpm db:generate
+
 step "ตรวจว่ามี migration ค้างไหม"
 set -a; . "$ENV_FILE"; set +a
 export DATABASE_URL="${DATABASE_URL_UNPOOLED:-$DATABASE_URL}"
