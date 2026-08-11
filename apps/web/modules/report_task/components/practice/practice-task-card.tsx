@@ -2,7 +2,7 @@
 
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import { Badge } from "@/modules/report_task/components/ui/badge";
-import { getUser } from "@/modules/report_task/data/mock";
+import { getUser } from "@/modules/report_task/lib/directory";
 import { priorityMeta } from "@/modules/report_task/lib/task-meta";
 import { cn } from "@/modules/report_task/lib/utils";
 import type { PracticeTask } from "@/modules/report_task/store/practice-store";

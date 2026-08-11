@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { users, getUser } from "@/modules/report_task/data/mock";
+import { users, getUser } from "@/modules/report_task/lib/directory";
 import { canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { extractMentionedIds } from "@/modules/report_task/lib/report-feed-rich-text";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
@@ -183,10 +183,7 @@ interface ReportFeedStore {
   topics: ReportTopic[];
   posts: ReportPost[];
   albums: ReportAlbum[];
-  hasSeeded: boolean;
-  /** True once ServerStoreSync's initial GET has resolved — read `hasSeeded`
-   * only after this to avoid seeding demo data before the real server value
-   * has loaded (see report-feed/page.tsx). */
+  /** True once ServerStoreSync's initial GET has resolved. */
   loaded: boolean;
   addTopic: (data: { name: string; color?: string; icon?: string; logoUrl?: string; parentId?: string; description?: string; visibility?: ReportTopicVisibility }) => string;
   removeTopic: (id: string) => void;
@@ -249,40 +246,6 @@ interface ReportFeedStore {
    * just fall back to "not in any album" (see ReportPostImage.albumId) —
    * so nothing about the posts themselves needs to change here. */
   removeAlbum: (id: string) => void;
-  seedDemoData: () => void;
-}
-
-const demoImageBlue: ReportPostImage = {
-  id: "img-demo-blue",
-  dataUrl:
-    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAACMCAIAAAC283GzAAABf0lEQVR4nO3SQQkAIADAQKMaymzmsYRDkIMLsMfGXBuuG88L+JKxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi8QB3Ba5LqDrlcIAAAAASUVORK5CYII=",
-  name: "screenshot-1.png",
-};
-const demoImageRed: ReportPostImage = {
-  id: "img-demo-red",
-  dataUrl:
-    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAACMCAIAAAC283GzAAABfklEQVR4nO3SUQkAIBTAQHO+7IaxhEOQgwuwj609A9et5wV8yVgkjEXCWCSMRcJYJIxFwlgkjEXCWCSMRcJYJIxFwlgkjEXCWCSMRcJYJIxFwlgkjEXCWCSMRcJYJIxFwlgkjEXCWCSMRcJYJIxFwlgkjEXCWCSMRcJYJIxFwlgkjEXCWCSMRcJYJIxFwlgkjEXCWCSMRcJYJIxFwlgkjEXCWCSMRcJYJIxFwlgkjEXCWCSMRcJYJIxFwlgkjEXCWCSMRcJYJIxFwlgkjEXCWCSMRcJYJIxFwlgkjEXCWCSMRcJYJIxFwlgkjEXCWCSMRcJYJIxFwlgkjEXCWCSMRcJYJIxFwlgkjEXCWCSMRcJYJIxFwlgkjEXCWCSMRcJYJIxFwlgkjEXCWCSMRcJYJIxFwlgkjEXCWCSMRcJYJIxFwlgkjEXCWCSMRcJYJIxFwlgkjEXCWCSMRcJYJIxFwlgkjEXCWCSMRcJYJIxF4gAShO/3a8QvEQAAAABJRU5ErkJggg==",
-  name: "screenshot-2.png",
-};
-const demoImageGreen: ReportPostImage = {
-  id: "img-demo-green",
-  dataUrl:
-    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAACMCAIAAAC283GzAAABf0lEQVR4nO3SQQkAIADAQHOaxIjGsoRDkIMLsMfG3AuuG88L+JKxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi8QBRzE2AuwIqtYAAAAASUVORK5CYII=",
-  name: "screenshot-3.png",
-};
-
-function atTime(daysAgo: number, hours: number, minutes: number) {
-  const d = new Date();
-  d.setDate(d.getDate() - daysAgo);
-  d.setHours(hours, minutes, 0, 0);
-  return d.toISOString();
-}
-
-// The renderer only puts a bullet dot on lines with an explicit "• " marker
-// (typed via the composer's bulleted-list button) — this seed data predates
-// that convention, so every line needs the marker baked in to render right.
-function bulletList(items: string[]): string[] {
-  return items.map((t) => `• ${t}`);
 }
 
 // Server-synced via ServerStoreSync (apiKey "report-feed") in
@@ -292,7 +255,6 @@ export const useReportFeedStore = create<ReportFeedStore>()(
       topics: defaultTopics,
       posts: [],
       albums: [],
-      hasSeeded: false,
       loaded: false,
       addTopic: (data) => {
         const id = nextId("topic");
@@ -585,172 +547,5 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         set((s) => ({
           albums: s.albums.filter((a) => a.id !== id),
         })),
-      // Non-destructive: appends one report room per department (matching
-      // the org chart in data/mock.ts) with a post from every single
-      // profile, so every entry in the "viewing as" switcher has data tied
-      // to it. Skips if already seeded once.
-      seedDemoData: () =>
-        set((s) => {
-          if (s.topics.some((t) => t.id === "topic-demo-mk")) return { ...s, hasSeeded: true };
-
-          // Each department gets a parent "team" topic (pure folder — no
-          // cutoffs, can't be posted into directly) plus one child topic
-          // that actually carries the daily cutoffs/minImages and is where
-          // every seed post below lands — the same Teams-style split as
-          // "ทั่วไป" / "ประกาศทั่วไป", applied consistently across every
-          // room instead of leaving them flat. Child inherits the parent's
-          // visibility so access stays identical top-to-bottom.
-          const demoTopics: ReportTopic[] = [
-            { id: "topic-demo-dev2", name: "ทีมพัฒนา (ตัวอย่าง)", color: "var(--chart-blue)", createdAt: atTime(2, 8, 0), minImages: 0, cutoffs: [], visibility: { departmentIds: ["dep-eng"] } },
-            { id: "topic-demo-dev2-daily", name: "เช็คอินประจำวัน", color: "var(--chart-blue)", parentId: "topic-demo-dev2", createdAt: atTime(2, 8, 0), minImages: 0, cutoffs: [{ id: "cutoff-dev2-am", label: "เช้า", time: "09:00" }], visibility: { departmentIds: ["dep-eng"] } },
-            { id: "topic-demo-design2", name: "ทีมดีไซน์ (ตัวอย่าง)", color: "var(--chart-violet)", createdAt: atTime(2, 8, 0), minImages: 0, cutoffs: [], visibility: { departmentIds: ["dep-design"] } },
-            { id: "topic-demo-design2-daily", name: "เช็คอินประจำวัน", color: "var(--chart-violet)", parentId: "topic-demo-design2", createdAt: atTime(2, 8, 0), minImages: 0, cutoffs: [{ id: "cutoff-design2-am", label: "เช้า", time: "09:30" }], visibility: { departmentIds: ["dep-design"] } },
-            { id: "topic-demo-mk", name: "การตลาด (ตัวอย่าง)", color: "var(--chart-orange)", createdAt: atTime(2, 8, 0), minImages: 0, cutoffs: [], visibility: { departmentIds: ["dep-marketing"] } },
-            { id: "topic-demo-mk-daily", name: "เช็คอินประจำวัน", color: "var(--chart-orange)", parentId: "topic-demo-mk", createdAt: atTime(2, 8, 0), minImages: 0, cutoffs: [{ id: "cutoff-mk-am", label: "เช้า", time: "09:00" }], visibility: { departmentIds: ["dep-marketing"] } },
-            { id: "topic-demo-sales", name: "ฝ่ายขาย (ตัวอย่าง)", color: "var(--chart-amber)", createdAt: atTime(2, 8, 0), minImages: 0, cutoffs: [], visibility: { departmentIds: ["dep-sales"] } },
-            { id: "topic-demo-sales-daily", name: "เช็คอินประจำวัน", color: "var(--chart-amber)", parentId: "topic-demo-sales", createdAt: atTime(2, 8, 0), minImages: 0, cutoffs: [{ id: "cutoff-sales-am", label: "เช้า", time: "09:00" }], visibility: { departmentIds: ["dep-sales"] } },
-            { id: "topic-demo-ops", name: "ปฏิบัติการ (ตัวอย่าง)", color: "var(--chart-green)", createdAt: atTime(2, 8, 0), minImages: 0, cutoffs: [], visibility: { departmentIds: ["dep-ops"] } },
-            { id: "topic-demo-ops-daily", name: "เช็คอินประจำวัน", color: "var(--chart-green)", parentId: "topic-demo-ops", createdAt: atTime(2, 8, 0), minImages: 0, cutoffs: [{ id: "cutoff-ops-am", label: "เช้า", time: "09:00" }, { id: "cutoff-ops-pm", label: "บ่าย", time: "14:00" }], visibility: { departmentIds: ["dep-ops"] } },
-            { id: "topic-demo-support", name: "บริการลูกค้า (ตัวอย่าง)", color: "var(--chart-pink)", createdAt: atTime(2, 8, 0), minImages: 0, cutoffs: [], visibility: { departmentIds: ["dep-support"] } },
-            { id: "topic-demo-support-daily", name: "เช็คอินประจำวัน", color: "var(--chart-pink)", parentId: "topic-demo-support", createdAt: atTime(2, 8, 0), minImages: 0, cutoffs: [{ id: "cutoff-support-am", label: "เช้า", time: "10:00" }], visibility: { departmentIds: ["dep-support"] } },
-            { id: "topic-demo-exec", name: "ภาพรวมผู้บริหาร (ตัวอย่าง)", color: "var(--chart-red)", createdAt: atTime(2, 8, 0), minImages: 0, cutoffs: [], visibility: { managerOnly: true } },
-            { id: "topic-demo-exec-summary", name: "สรุปภาพรวม", color: "var(--chart-red)", parentId: "topic-demo-exec", createdAt: atTime(2, 8, 0), minImages: 0, cutoffs: [], visibility: { managerOnly: true } },
-            // Manager-only parent + one child, no cutoff — company policy
-            // announcements aren't a daily check-in, but still follow the
-            // "post only in the sub-topic" hierarchy like every other room.
-            { id: "topic-demo-announce", name: "ประกาศบริษัท (ตัวอย่าง)", color: "var(--chart-blue)", createdAt: atTime(2, 10, 0), minImages: 0, cutoffs: [], visibility: { managerOnly: true } },
-            { id: "topic-demo-announce-policies", name: "นโยบายและประกาศ", color: "var(--chart-blue)", parentId: "topic-demo-announce", createdAt: atTime(2, 10, 0), minImages: 0, cutoffs: [], visibility: { managerOnly: true } },
-          ];
-
-          const base = (overrides: Partial<ReportPost> & { id: string; topicId: string; authorId: string; title: string }): ReportPost => ({
-            createdAt: atTime(0, 9, 0),
-            editedAt: null,
-            sections: [],
-            images: [],
-            pinned: false,
-            savedBy: [],
-            unreadFor: [],
-            reactions: {},
-            replies: [],
-            ...overrides,
-          });
-
-          const demoPosts: ReportPost[] = [
-            // ทีมพัฒนา (dep-eng): usr-01
-            base({
-              id: "post-demo-dev2-01", topicId: "topic-demo-dev2-daily", authorId: "usr-01", createdAt: atTime(0, 8, 10),
-              title: "เช็คอินเช้า",
-              sections: [{ id: "sec-dev2-01", heading: "", bullets: bulletList(["เริ่มงานตามคิว sprint วันนี้"]) }],
-            }),
-            // ทีมดีไซน์ (dep-design): usr-04
-            base({
-              id: "post-demo-design2-01", topicId: "topic-demo-design2-daily", authorId: "usr-04", createdAt: atTime(0, 9, 40),
-              title: "เช็คอินเช้า",
-              sections: [{ id: "sec-design2-01", heading: "", bullets: bulletList(["รีวิว wireframe หน้าใหม่"]) }],
-            }),
-
-            // การตลาด (dep-marketing): usr-06, usr-07
-            base({
-              id: "post-demo-mk-01", topicId: "topic-demo-mk-daily", authorId: "usr-06", createdAt: atTime(0, 8, 0),
-              title: "สรุปแคมเปญ IG สัปดาห์นี้",
-              sections: [{ id: "sec-mk-01", heading: "ผลลัพธ์", bullets: bulletList(["ยอด engagement +18%", "เตรียมคอนเทนต์รอบหน้า"]) }],
-              images: [demoImageBlue], reactions: { "🎉": ["usr-01", "usr-02", "usr-03"] },
-              replies: [{ id: "reply-demo-2", authorId: "usr-07", body: "เยี่ยมมากครับ พี่สุดา", createdAt: atTime(0, 8, 5) }],
-            }),
-            base({
-              // Plain-text check-in — no image required, just a quick note.
-              id: "post-demo-mk-02", topicId: "topic-demo-mk-daily", authorId: "usr-07", createdAt: atTime(0, 18, 5),
-              title: "เช็คอินเย็น — สรุปก่อนเลิกงาน",
-              sections: [{ id: "sec-mk-02", heading: "", bullets: bulletList(["ร่างสคริปต์วิดีโอโปรโมทเสร็จแล้ว พรุ่งนี้ส่งให้ทีมรีวิว"]) }],
-            }),
-            base({
-              // Yesterday's on-time check-in — gives this room the same 2-of-3-
-              // tracked-days coverage every other demo room has, instead of
-              // every marketing post landing on the same day (see the Report
-              // compliance dashboard, which would otherwise read this room as
-              // "missed" every day but today).
-              id: "post-demo-mk-03", topicId: "topic-demo-mk-daily", authorId: "usr-06", createdAt: atTime(1, 8, 30),
-              title: "เช็คอินเช้า — วางแผนแคมเปญวันนี้",
-              sections: [{ id: "sec-mk-03", heading: "", bullets: bulletList(["เตรียมคอนเทนต์ลง IG ช่วงบ่าย"]) }],
-            }),
-
-            // ฝ่ายขาย (dep-sales): usr-08, usr-09
-            base({
-              // Plain-text check-in.
-              id: "post-demo-sales-01", topicId: "topic-demo-sales-daily", authorId: "usr-08", createdAt: atTime(0, 8, 55),
-              title: "เช็คอินเช้า — เริ่มงานแล้ว",
-              sections: [{ id: "sec-sales-01", heading: "", bullets: bulletList(["พร้อมโทรติดตามลูกค้าตามคิวที่วางไว้วันนี้"]) }],
-            }),
-            base({
-              id: "post-demo-sales-02", topicId: "topic-demo-sales-daily", authorId: "usr-09", createdAt: atTime(0, 11, 0),
-              title: "ติดตามลูกค้าใหม่",
-              sections: [{ id: "sec-sales-02", heading: "งานวันนี้", bullets: bulletList(["โทรติดตามลีด 5 ราย", "นัดพรีเซนต์ลูกค้าใหญ่วันศุกร์"]) }],
-              images: [demoImageBlue],
-            }),
-            base({
-              // Yesterday's on-time check-in — same coverage reasoning as marketing above.
-              id: "post-demo-sales-03", topicId: "topic-demo-sales-daily", authorId: "usr-08", createdAt: atTime(1, 8, 40),
-              title: "เช็คอินเช้า — คิวโทรวันนี้",
-              sections: [{ id: "sec-sales-03", heading: "", bullets: bulletList(["จัดคิวโทรลูกค้าเก่า 8 ราย"]) }],
-            }),
-
-            // ปฏิบัติการ (dep-ops): usr-10, usr-11
-            base({
-              // Plain-text check-in.
-              id: "post-demo-ops-01", topicId: "topic-demo-ops-daily", authorId: "usr-10", createdAt: atTime(0, 8, 20),
-              title: "เช็คอินเช้า — เริ่มตรวจสต็อก",
-              sections: [{ id: "sec-ops-01", heading: "", bullets: bulletList(["เริ่มตรวจสต็อกคลังสินค้าตามรอบปกติ"]) }],
-            }),
-            base({
-              id: "post-demo-ops-02", topicId: "topic-demo-ops-daily", authorId: "usr-11", createdAt: atTime(1, 13, 0),
-              title: "วิเคราะห์ต้นทุนการขนส่ง",
-              sections: [{ id: "sec-ops-02", heading: "ปัญหา", bullets: bulletList(["ข้อมูลจากซัพพลายเออร์ยังไม่ครบ", "รอคอนเฟิร์มราคาจากคู่ค้า"]) }],
-              images: [demoImageBlue, demoImageRed], reactions: { "😮": ["usr-10"] },
-            }),
-
-            // บริการลูกค้า (dep-support): usr-12, usr-13
-            base({
-              id: "post-demo-support-01", topicId: "topic-demo-support-daily", authorId: "usr-12", createdAt: atTime(0, 9, 30),
-              title: "สรุปเคสลูกค้าวันนี้",
-              sections: [{ id: "sec-support-01", heading: "สรุป", bullets: bulletList(["ปิดเคส 12 เรื่อง", "คะแนนความพึงพอใจเฉลี่ย 4.6/5"]) }],
-              images: [demoImageBlue],
-            }),
-            base({
-              // Plain-text check-in.
-              id: "post-demo-support-02", topicId: "topic-demo-support-daily", authorId: "usr-13", createdAt: atTime(0, 17, 50),
-              title: "เช็คอินเย็น — สรุปก่อนเลิกงาน",
-              sections: [{ id: "sec-support-02", heading: "", bullets: bulletList(["จัดการเคสค้างหมดแล้ว พรุ่งนี้เริ่มใหม่"]) }],
-            }),
-            base({
-              // Yesterday's on-time check-in — same coverage reasoning as marketing/sales above.
-              id: "post-demo-support-03", topicId: "topic-demo-support-daily", authorId: "usr-12", createdAt: atTime(1, 9, 20),
-              title: "เช็คอินเช้า — เริ่มดูคิวเคสวันนี้",
-              sections: [{ id: "sec-support-03", heading: "", bullets: bulletList(["ไล่คิวเคสค้างจากเมื่อวาน 5 เรื่อง"]) }],
-            }),
-
-            // ภาพรวมผู้บริหาร: usr-15 (CEO)
-            base({
-              id: "post-demo-exec-01", topicId: "topic-demo-exec-summary", authorId: "usr-15", createdAt: atTime(0, 7, 30),
-              title: "สรุปภาพรวมบริษัทประจำสัปดาห์", pinned: true,
-              sections: [{ id: "sec-exec-01", heading: "ไฮไลต์", bullets: bulletList(["ทุกแผนกส่งรีพอตครบตามรอบ", "ยอดขายไตรมาสนี้เป็นไปตามเป้า"]) }],
-              images: [demoImageBlue, demoImageGreen, demoImageRed],
-              reactions: { "👍": ["usr-01", "usr-06", "usr-08", "usr-10", "usr-12"] },
-            }),
-
-            // ประกาศบริษัท — flat, open topic (no cutoff, optional posting).
-            base({
-              id: "post-demo-announce-01", topicId: "topic-demo-announce-policies", authorId: "usr-15", createdAt: atTime(2, 8, 0), pinned: true,
-              title: "เปิดตัวฟีเจอร์ใหม่: จัดกลุ่มหัวข้อรายงาน",
-              sections: [{ id: "sec-announce-01", heading: "", bullets: bulletList(["ตอนนี้สามารถสร้างหัวข้อย่อยใต้หัวข้อหลักได้แล้ว เหมือน Teams", "หัวข้อหลักไว้จัดกลุ่ม ส่วนโพสต์รายงานให้โพสต์ในหัวข้อย่อย"]) }],
-              reactions: { "🎉": ["usr-01", "usr-06", "usr-10"] },
-            }),
-          ];
-
-          return {
-            topics: [...s.topics, ...demoTopics],
-            posts: [...s.posts, ...demoPosts],
-            hasSeeded: true,
-          };
-        }),
   })
 );

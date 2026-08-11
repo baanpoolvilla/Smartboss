@@ -5,7 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/c
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Input } from "@/modules/report_task/components/ui/input";
-import { departments, users } from "@/modules/report_task/data/mock";
+import { departments, users } from "@/modules/report_task/lib/directory";
 import { usePeopleGroupStore } from "@/modules/report_task/store/people-group-store";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Check, ChevronDown, Save, Search, Trash2 } from "lucide-react";

@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/c
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/modules/report_task/components/ui/tooltip";
 import { DueDateBadge } from "@/modules/report_task/components/shared/due-date-badge";
 import { PenaltyChip } from "@/modules/report_task/components/shared/penalty-chip";
-import { getUser, getDepartment, canManage } from "@/modules/report_task/data/mock";
+import { getUser, getDepartment, canManage } from "@/modules/report_task/lib/directory";
 import { priorityMeta, statusMeta } from "@/modules/report_task/lib/task-meta";
 import { isSuspiciousRevision, reactionCounts, reopenCount } from "@/modules/report_task/lib/task-flags";
 import { daysUntil } from "@/modules/report_task/lib/format";

@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import Link from "next/link";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { canManage, isOwner } from "@/modules/report_task/data/mock";
+import { canManage, isOwner } from "@/modules/report_task/lib/directory";
 import { canAccessCompanySection } from "@/modules/report_task/lib/permissions";
 import { useSettingsAccessStore, type GrantableSection } from "@/modules/report_task/store/settings-access-store";
 import { StickerManagerPanel } from "@/modules/report_task/components/shared/sticker-manager-dialog";

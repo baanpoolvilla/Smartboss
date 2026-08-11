@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { Users } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import { EmptyState } from "@/modules/report_task/components/shared/empty-state";
-import { getDepartment, users } from "@/modules/report_task/data/mock";
+import { getDepartment, users } from "@/modules/report_task/lib/directory";
 import { matchesTaskFilters } from "@/modules/report_task/lib/task-filter";
 import { buildUserReports } from "@/modules/report_task/lib/reports";
 import { dueUrgency } from "@/modules/report_task/lib/task-flags";

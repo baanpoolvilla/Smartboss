@@ -67,6 +67,12 @@ export const taskSchema = z.object({
   dueDate: z.string(),
   originalDueDate: z.string(),
   assigneeDueDates: z.record(z.string(), z.string()).optional(),
+  assigneeDueDateRevisions: z
+    .record(
+      z.string(),
+      z.object({ originalDate: z.string(), latestDate: z.string(), revisedBy: z.string(), revisedAt: z.string() })
+    )
+    .optional(),
   completedAt: z.string().optional(),
   missedDeadlineOnce: z.boolean().optional(),
   reopenedOnce: z.boolean().optional(),
@@ -75,7 +81,6 @@ export const taskSchema = z.object({
   comments: z.array(commentSchema),
   revisions: z.array(revisionEntrySchema),
   reactions: z.array(taskReactionSchema),
-  parentId: z.string().nullable().optional(),
   penalty: taskPenaltySchema.nullable().optional(),
   penalties: z.record(z.string(), taskPenaltySchema).optional(),
   checklist: z.array(checklistItemSchema),

@@ -6,7 +6,7 @@ import { Input } from "@/modules/report_task/components/ui/input";
 import { Label } from "@/modules/report_task/components/ui/label";
 import { RoomMembersSummaryCard, RoomMembersDialog } from "@/modules/report_task/components/report-feed/room-members-dialog";
 import { useReportFeedStore, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
-import { departments, getUser, isOwner } from "@/modules/report_task/data/mock";
+import { departments, getUser, isOwner } from "@/modules/report_task/lib/directory";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { topicModeOf } from "@/modules/report_task/lib/report-topic-membership";
 import { cn } from "@/modules/report_task/lib/utils";

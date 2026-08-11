@@ -6,7 +6,7 @@ import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
-import { getDepartment, departments, users } from "@/modules/report_task/data/mock";
+import { getDepartment, departments, users } from "@/modules/report_task/lib/directory";
 import { useSettingsAccessStore, type GrantableSection } from "@/modules/report_task/store/settings-access-store";
 import { toast } from "sonner";
 import { ShieldCheck, Smile, Ticket, CalendarOff, FolderTree, Search } from "lucide-react";

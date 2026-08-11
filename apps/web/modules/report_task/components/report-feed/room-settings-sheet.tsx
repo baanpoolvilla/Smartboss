@@ -11,7 +11,7 @@ import { Button } from "@/modules/report_task/components/ui/button";
 import { ReportTopicSettingsPanel } from "@/modules/report_task/components/report-feed/report-topic-settings-dialog";
 import { useReportFeedStore, topicColors, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { canManage } from "@/modules/report_task/data/mock";
+import { canManage } from "@/modules/report_task/lib/directory";
 import { cn } from "@/modules/report_task/lib/utils";
 import { toast } from "sonner";
 import { Archive, ArchiveRestore, Plus, Trash2 } from "lucide-react";

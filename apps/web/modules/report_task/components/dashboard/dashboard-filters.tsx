@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/modules/report_task/components/ui/select";
-import { getUser, getDepartment, canManage } from "@/modules/report_task/data/mock";
+import { getUser, getDepartment, canManage } from "@/modules/report_task/lib/directory";
 import { useDashboardFilterStore } from "@/modules/report_task/store/dashboard-filter-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useVisibleTasks } from "@/modules/report_task/hooks/use-visible-tasks";

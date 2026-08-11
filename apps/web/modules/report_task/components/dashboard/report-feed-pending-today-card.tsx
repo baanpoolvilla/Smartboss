@@ -29,7 +29,7 @@ import { useNotificationStore } from "@/modules/report_task/store/notification-s
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { presetRange, datePresetLabels } from "@/modules/report_task/lib/date-filter";
 import { localDateStr, todayIso } from "@/modules/report_task/lib/now";
-import { getUser, getDepartment, canManage } from "@/modules/report_task/data/mock";
+import { getUser, getDepartment, canManage } from "@/modules/report_task/lib/directory";
 import { Bell, FileClock } from "lucide-react";
 
 /**

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Input } from "@/modules/report_task/components/ui/input";
-import { departments, getUser } from "@/modules/report_task/data/mock";
+import { departments, getUser } from "@/modules/report_task/lib/directory";
 import { useRoutineDayOffStore } from "@/modules/report_task/store/routine-dayoff-store";
 import { CalendarOff, Wand2, Building2, Users, Save } from "lucide-react";
 import { cn } from "@/modules/report_task/lib/utils";

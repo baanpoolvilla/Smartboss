@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { canManage } from "@/modules/report_task/data/mock";
+import { canManage } from "@/modules/report_task/lib/directory";
 import { EmptyState } from "@/modules/report_task/components/shared/empty-state";
 import { ShieldAlert } from "lucide-react";
 

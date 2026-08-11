@@ -5,7 +5,7 @@ import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
-import { users, departments, getDepartment } from "@/modules/report_task/data/mock";
+import { users, departments, getDepartment } from "@/modules/report_task/lib/directory";
 import { colorPalette } from "@/modules/report_task/store/event-color-store";
 import { useCalendarVisibilityStore } from "@/modules/report_task/store/calendar-visibility-store";
 import { cn } from "@/modules/report_task/lib/utils";

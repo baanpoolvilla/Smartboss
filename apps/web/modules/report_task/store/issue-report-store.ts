@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { getUser, users } from "@/modules/report_task/data/mock";
+import { getUser, users } from "@/modules/report_task/lib/directory";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useActivityLogStore } from "@/modules/report_task/store/activity-log-store";
 import { useIssueDeskConfigStore } from "@/modules/report_task/store/issue-desk-config-store";

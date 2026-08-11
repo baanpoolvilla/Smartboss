@@ -10,7 +10,7 @@ import { TaskGridView } from "@/modules/report_task/components/kanban/task-grid-
 import { WorkloadView } from "@/modules/report_task/components/kanban/workload-view";
 import { useTaskStore, type PenaltyFilter } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { canManage } from "@/modules/report_task/data/mock";
+import { canManage } from "@/modules/report_task/lib/directory";
 import { canSeeTask } from "@/modules/report_task/lib/permissions";
 import { matchesTaskFilters } from "@/modules/report_task/lib/task-filter";
 import { taskPriorityOrder } from "@/modules/report_task/lib/task-meta";

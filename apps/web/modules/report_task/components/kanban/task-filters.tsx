@@ -11,7 +11,7 @@ import {
 } from "@/modules/report_task/components/ui/select";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { getDepartment, getUser } from "@/modules/report_task/data/mock";
+import { getDepartment, getUser } from "@/modules/report_task/lib/directory";
 import { canSeeTask } from "@/modules/report_task/lib/permissions";
 import { taskPriorityOrder, priorityMeta } from "@/modules/report_task/lib/task-meta";
 import type { TaskPriority } from "@/modules/report_task/types";

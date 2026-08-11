@@ -95,7 +95,7 @@ export function StoreHydrator() {
       <ServerStoreSync
         apiKey="report-feed"
         store={useReportFeedStore}
-        select={(s) => ({ topics: s.topics, posts: s.posts, albums: s.albums, hasSeeded: s.hasSeeded })}
+        select={(s) => ({ topics: s.topics, posts: s.posts, albums: s.albums })}
         apply={(s, slice) => ({ ...s, ...slice, loaded: true })}
       />
       <ServerStoreSync

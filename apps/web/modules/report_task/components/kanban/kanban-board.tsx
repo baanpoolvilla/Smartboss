@@ -19,7 +19,7 @@ import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canEditRecord, canSeeTask } from "@/modules/report_task/lib/permissions";
 import { dueUrgency } from "@/modules/report_task/lib/task-flags";
-import { getUser, getDepartment, users } from "@/modules/report_task/data/mock";
+import { getUser, getDepartment, users } from "@/modules/report_task/lib/directory";
 import { statusMeta, priorityMeta, priorityColorHex, taskPriorityOrder, statusIcon } from "@/modules/report_task/lib/task-meta";
 import { matchesTaskFilters } from "@/modules/report_task/lib/task-filter";
 import { useTaskSheetParam } from "@/modules/report_task/hooks/use-task-sheet-param";

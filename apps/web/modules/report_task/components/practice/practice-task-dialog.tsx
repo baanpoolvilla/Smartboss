@@ -6,7 +6,7 @@ import { Button } from "@/modules/report_task/components/ui/button";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
-import { getUser } from "@/modules/report_task/data/mock";
+import { getUser } from "@/modules/report_task/lib/directory";
 import { usePracticeStore, practiceUsers } from "@/modules/report_task/store/practice-store";
 import { usePracticeMissionStore } from "@/modules/report_task/store/practice-mission-store";
 import { statusMeta, priorityMeta } from "@/modules/report_task/lib/task-meta";

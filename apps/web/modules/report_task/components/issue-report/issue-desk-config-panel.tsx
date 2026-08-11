@@ -11,7 +11,7 @@ import { useIssueDeskConfigStore } from "@/modules/report_task/store/issue-desk-
 import { isIssueAgent } from "@/modules/report_task/lib/permissions";
 import { isKnownIssuesBannerActive, issueCategoryMeta } from "@/modules/report_task/lib/issue-meta";
 import { ALL_ISSUE_CATEGORIES } from "@/modules/report_task/types/issue";
-import { departments, users } from "@/modules/report_task/data/mock";
+import { departments, users } from "@/modules/report_task/lib/directory";
 import { cn } from "@/modules/report_task/lib/utils";
 
 /**

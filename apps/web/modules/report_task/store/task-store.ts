@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { tasks as initialTasks, departmentIdsOf, departments, getUser } from "@/modules/report_task/data/mock";
+import { departmentIdsOf, departments, getUser } from "@/modules/report_task/lib/directory";
 import { daysUntil, formatShortDate } from "@/modules/report_task/lib/format";
 import { statusMeta } from "@/modules/report_task/lib/task-meta";
 import type { DatePreset } from "@/modules/report_task/lib/date-filter";
@@ -153,6 +153,13 @@ interface TaskStore {
   moveTask: (taskId: string, status: TaskStatus) => void;
   reviseDueDate: (taskId: string, newDate: string, reason: string, revisedBy: string) => void;
   /**
+   * Adjusts one assignee's own due-date override on a group task (see
+   * `assigneeDueDates`) — logged into `assigneeDueDateRevisions` (first date
+   * + latest, not every round) and notifies that assignee, distinct from
+   * `reviseDueDate` which revises the shared task-level due date.
+   */
+  reviseAssigneeDueDate: (taskId: string, assigneeId: string, newDate: string, revisedBy: string) => void;
+  /**
    * A deliberate "this was marked done but wasn't actually finished"
    * correction — distinct from a normal status change: pulls it out of
    * "เสร็จสิ้น" with a fresh start/due date and a required reason, while the
@@ -213,7 +220,7 @@ const defaultFilters: TaskFilters = {
 };
 
 export const useTaskStore = create<TaskStore>((set) => ({
-  tasks: initialTasks,
+  tasks: [],
   loaded: false,
   filters: defaultFilters,
   selectedTaskId: null,
@@ -265,6 +272,48 @@ export const useTaskStore = create<TaskStore>((set) => ({
             },
           ],
           updatedAt: new Date().toISOString(),
+        };
+      }),
+    })),
+  reviseAssigneeDueDate: (taskId, assigneeId, newDate, revisedBy) =>
+    set((s) => ({
+      tasks: s.tasks.map((t) => {
+        if (t.id !== taskId) return t;
+        const previousEffective = t.assigneeDueDates?.[assigneeId] ?? t.dueDate;
+        if (previousEffective === newDate) return t;
+        const now = new Date().toISOString();
+        const existing = t.assigneeDueDateRevisions?.[assigneeId];
+        const name = getUser(assigneeId)?.name ?? "มีคน";
+        logActivity(
+          revisedBy,
+          "แก้ไขกำหนดส่งรายบุคคล",
+          t.title,
+          t.id,
+          `${name}: ${formatShortDate(previousEffective)} → ${formatShortDate(newDate)}`
+        );
+        if (revisedBy !== assigneeId) {
+          const actorName = getUser(revisedBy)?.name ?? "มีคน";
+          useNotificationStore
+            .getState()
+            .notifyMany(
+              [assigneeId],
+              revisedBy,
+              `${actorName} ปรับกำหนดส่งของคุณในงาน "${t.title}" เป็น ${formatShortDate(newDate)}`
+            );
+        }
+        return {
+          ...t,
+          assigneeDueDates: { ...(t.assigneeDueDates ?? {}), [assigneeId]: newDate },
+          assigneeDueDateRevisions: {
+            ...(t.assigneeDueDateRevisions ?? {}),
+            [assigneeId]: {
+              originalDate: existing?.originalDate ?? previousEffective,
+              latestDate: newDate,
+              revisedBy,
+              revisedAt: now,
+            },
+          },
+          updatedAt: now,
         };
       }),
     })),

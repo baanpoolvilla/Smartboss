@@ -12,7 +12,7 @@ import {
   AlertDialogCancel,
 } from "@/modules/report_task/components/ui/alert-dialog";
 import { AlbumFormDialog } from "@/modules/report_task/components/report-feed/album-form-dialog";
-import { users, getUser, getDepartment } from "@/modules/report_task/data/mock";
+import { users, getUser, getDepartment } from "@/modules/report_task/lib/directory";
 import { useReportFeedStore, type ReportPost, type ReportPostImage, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { groupByDay, relativeTime } from "@/modules/report_task/lib/format";

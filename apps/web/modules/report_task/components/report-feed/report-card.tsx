@@ -14,7 +14,7 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from "@/modules/report_task/components/ui/alert-dialog";
-import { getUser } from "@/modules/report_task/data/mock";
+import { getUser } from "@/modules/report_task/lib/directory";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import {
   useReportFeedStore,

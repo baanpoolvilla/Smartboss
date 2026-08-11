@@ -22,7 +22,7 @@ import { useIssueReportStore } from "@/modules/report_task/store/issue-report-st
 import { useIssueDeskConfigStore } from "@/modules/report_task/store/issue-desk-config-store";
 import { isKnownIssuesBannerActive, issueCategoryMeta, issueImpactMeta, issueSubmitLabel, NON_IMPACT_CATEGORIES } from "@/modules/report_task/lib/issue-meta";
 import { ALL_ISSUE_CATEGORIES, type IssueAttachment, type IssueCategory, type IssueImpact } from "@/modules/report_task/types/issue";
-import { getDepartment, getUser } from "@/modules/report_task/data/mock";
+import { getDepartment, getUser } from "@/modules/report_task/lib/directory";
 import { cn } from "@/modules/report_task/lib/utils";
 
 /** Categories that often touch something private (pay/perf-adjacent access

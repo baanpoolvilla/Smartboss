@@ -1,7 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
-import { getDepartment, getUser, canManage } from "@/modules/report_task/data/mock";
+import { getDepartment, getUser, canManage } from "@/modules/report_task/lib/directory";
 import { useDashboardFilterStore } from "@/modules/report_task/store/dashboard-filter-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 

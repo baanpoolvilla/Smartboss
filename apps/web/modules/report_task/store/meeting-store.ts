@@ -1,8 +1,5 @@
 import { create } from "zustand";
-import { calendarEvents } from "@/modules/report_task/data/mock";
 import type { CalendarEvent } from "@/modules/report_task/types";
-
-const initialMeetings = calendarEvents.filter((e) => e.type === "meeting");
 
 interface MeetingStore {
   meetings: CalendarEvent[];
@@ -15,7 +12,7 @@ interface MeetingStore {
 // Server-synced via ServerStoreSync (apiKey "meetings") in store-hydrator.tsx
 // — shared across teammates, not per-browser.
 export const useMeetingStore = create<MeetingStore>()((set) => ({
-  meetings: initialMeetings,
+  meetings: [],
   addMeeting: (meeting) => set((s) => ({ meetings: [meeting, ...s.meetings] })),
   updateMeeting: (id, patch) =>
     set((s) => ({ meetings: s.meetings.map((m) => (m.id === id ? { ...m, ...patch } : m)) })),

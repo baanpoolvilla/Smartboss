@@ -1,6 +1,6 @@
 import { CornerUpLeft, Link2, Reply as ReplyIcon } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
-import { getUser } from "@/modules/report_task/data/mock";
+import { getUser } from "@/modules/report_task/lib/directory";
 import type { ReportPostImage, ReportPostReply } from "@/modules/report_task/store/report-feed-store";
 import { relativeTime } from "@/modules/report_task/lib/format";
 import { renderRichBulletText } from "@/modules/report_task/lib/report-feed-rich-text";

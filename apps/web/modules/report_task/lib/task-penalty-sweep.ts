@@ -1,4 +1,4 @@
-import { departments, getUser } from "@/modules/report_task/data/mock";
+import { departments, getUser } from "@/modules/report_task/lib/directory";
 import { daysUntil } from "@/modules/report_task/lib/format";
 import type { Task } from "@/modules/report_task/types";
 

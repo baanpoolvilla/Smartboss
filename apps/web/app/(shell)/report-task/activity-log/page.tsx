@@ -15,7 +15,7 @@ import { EmptyState } from "@/modules/report_task/components/shared/empty-state"
 import { StickyFilterBar } from "@/modules/report_task/components/shared/sticky-filter-bar";
 import { useActivityLogStore } from "@/modules/report_task/store/activity-log-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { getUser, users, canManage } from "@/modules/report_task/data/mock";
+import { getUser, users, canManage } from "@/modules/report_task/lib/directory";
 import { relativeTime, formatDateTime } from "@/modules/report_task/lib/format";
 import { SYSTEM_USER_ID } from "@/modules/report_task/store/task-store";
 import { ShieldAlert } from "lucide-react";

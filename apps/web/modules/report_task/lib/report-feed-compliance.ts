@@ -1,4 +1,4 @@
-import { departments, getDepartment, getUser, users } from "@/modules/report_task/data/mock";
+import { departments, getDepartment, getUser, users } from "@/modules/report_task/lib/directory";
 import { mustReportToTopic } from "@/modules/report_task/lib/permissions";
 import { lateCutoffFor } from "@/modules/report_task/lib/report-cutoff";
 import { localDateStr, now, todayIso } from "@/modules/report_task/lib/now";

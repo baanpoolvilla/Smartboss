@@ -13,7 +13,7 @@ import {
 } from "@/modules/report_task/components/ui/dialog";
 import { Textarea } from "@/modules/report_task/components/ui/textarea";
 import { Button } from "@/modules/report_task/components/ui/button";
-import { getUser } from "@/modules/report_task/data/mock";
+import { getUser } from "@/modules/report_task/lib/directory";
 import { formatShortDate } from "@/modules/report_task/lib/format";
 import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import { cn } from "@/modules/report_task/lib/utils";

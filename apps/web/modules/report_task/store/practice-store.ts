@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { users } from "@/modules/report_task/data/mock";
+import { users } from "@/modules/report_task/lib/directory";
 import type { TaskPriority, TaskStatus } from "@/modules/report_task/types";
 
 export interface PracticeComment {

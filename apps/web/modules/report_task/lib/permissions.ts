@@ -1,4 +1,4 @@
-import { canManage, departments, getUser, isOwner } from "@/modules/report_task/data/mock";
+import { canManage, departments, getUser, isOwner } from "@/modules/report_task/lib/directory";
 import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import type { GrantableSection } from "@/modules/report_task/store/settings-access-store";
 import type { ChecklistItem, Task } from "@/modules/report_task/types";

@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type RefObject } from "react";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Input } from "@/modules/report_task/components/ui/input";
-import { departments, users } from "@/modules/report_task/data/mock";
+import { departments, users } from "@/modules/report_task/lib/directory";
 import { useReportFeedStore, type ReportPostImage, type ReportPostSection } from "@/modules/report_task/store/report-feed-store";
 import {
   BULLET_LINE_PREFIX,
