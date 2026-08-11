@@ -71,10 +71,12 @@ export async function POST(request: Request) {
    * putFile เอานามสกุลจากชื่อไฟล์ไปกำหนด Content-Type ตอนเก็บ
    * ถ้าใช้ชื่อเดิม คนอัปโหลดจะเลือก Content-Type ที่ปลายทางเสิร์ฟได้เอง
    */
-  const safeName = `${crypto.randomUUID()}.${meta.ext}`;
   const url = await putFile(
     `${session.orgId}/report-task`,
-    new File([bytes], safeName, { type: sniffed })
+    new File([bytes], `${crypto.randomUUID()}.${meta.ext}`, { type: sniffed }),
+    // ส่งนามสกุลไปตรง ๆ — ตัวเดาของ storage รู้จักแต่รูปภาพ ถ้าไม่บอก
+    // pdf/txt/zip/mp4 จะถูกเก็บเป็น .jpg แล้วเสิร์ฟกลับเป็น image/jpeg
+    { ext: meta.ext }
   );
 
   return Response.json({ url, mime: sniffed, size: bytes.byteLength });

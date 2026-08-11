@@ -83,15 +83,38 @@ function contentTypeFor(key: string): string {
       return "image/webp";
     case "gif":
       return "image/gif";
+    case "pdf":
+      return "application/pdf";
+    case "txt":
+      return "text/plain; charset=utf-8";
+    case "zip":
+      return "application/zip";
+    case "mp4":
+      return "video/mp4";
+    case "webm":
+      return "video/webm";
     default:
       return "image/jpeg";
   }
 }
 
-/** อัปโหลดไฟล์รูป คืน URL (/api/files/<key>) */
-export async function putFile(prefix: string, file: File): Promise<string> {
+/**
+ * อัปโหลดไฟล์ คืน URL (/api/files/<key>)
+ *
+ * `opts.ext` มีไว้ให้ผู้เรียกที่ **ตรวจชนิดไฟล์จากเนื้อไฟล์จริงมาแล้ว** กำหนดนามสกุลเอง
+ * — โดยปริยาย safeExt() รู้จักแต่รูปภาพ (ตอนเขียนมีแต่โมดูลซ่อมบำรุงใช้) อย่างอื่น
+ * ตกเป็น .jpg หมด ซึ่งทำให้ pdf/txt/zip ถูกเสิร์ฟกลับเป็น image/jpeg แล้วเปิดไม่ได้
+ * ⚠ อย่าเอา file.name จาก client มาใส่ตรง ๆ — เท่ากับให้คนอัปโหลดเลือก
+ *   Content-Type ที่ปลายทางจะเสิร์ฟได้เอง
+ */
+export async function putFile(
+  prefix: string,
+  file: File,
+  opts?: { ext?: string }
+): Promise<string> {
   const buf = Buffer.from(await file.arrayBuffer());
-  const key = `${prefix}/${Date.now()}-${randomBytes(8).toString("hex")}.${safeExt(file.name)}`;
+  const ext = opts?.ext ?? safeExt(file.name);
+  const key = `${prefix}/${Date.now()}-${randomBytes(8).toString("hex")}.${ext}`;
 
   if (isRemoteStorage()) {
     await getS3().send(
