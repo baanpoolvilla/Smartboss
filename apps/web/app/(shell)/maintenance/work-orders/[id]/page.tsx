@@ -146,9 +146,11 @@ export default async function WorkOrderDetailPage({
       {/* ─── หัวข้อ + ข้อมูลใบงาน ─── */}
       <Card className="mb-4 p-4 sm:p-5">
         <div className="flex items-start gap-2">
-          <h1 className="flex-1 text-xl font-bold text-(--ink)">
-            {wo.title}
-          </h1>
+          <div className="min-w-0 flex-1">
+            {/* เลขที่ใบงาน — ให้อ่านให้ช่างฟังทางโทรศัพท์ได้ ต่างจาก id ที่เป็น uuid */}
+            <p className="font-mono text-xs text-(--ink-soft)">{wo.code}</p>
+            <h1 className="text-xl font-bold text-(--ink)">{wo.title}</h1>
+          </div>
           <span
             className="shrink-0 rounded-md px-2 py-1 text-xs font-bold"
             style={{

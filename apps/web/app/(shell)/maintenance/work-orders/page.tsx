@@ -70,6 +70,7 @@ export default async function WorkOrdersPage({
     )
     .map((o) => ({
       id: o.id,
+      code: o.code,
       title: o.title,
       description: o.description,
       status: o.status,

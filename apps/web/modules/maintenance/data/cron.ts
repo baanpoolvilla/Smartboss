@@ -1,5 +1,7 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
+
+import { nextWorkOrderCode } from "@/lib/document-code";
 import { fmtThaiDate } from "@/modules/maintenance/lib/format";
 import { notifyUsers, managersAndCaretaker } from "@/modules/maintenance/data/notify";
 import {
@@ -39,20 +41,25 @@ export async function generateWorkOrdersForDuePms(): Promise<{
     });
     if (existing) continue;
 
-    await prisma.workOrder.create({
-      data: {
-        orgId: pm.orgId,
-        propertyId: pm.propertyId,
-        assetId: pm.assetId,
-        assignedTo: pm.assignedTo,
-        title: pm.title,
-        description: `PM: ${pm.title}\nครบกำหนด ${fmtThaiDate(pm.nextDueDate)}`,
-        status: "open",
-        priority: "medium",
-        pmScheduleId: pm.id,
-        ccUserIds: pm.ccUserIds,
-        autoCreated: true,
-      },
+    // ใบงานที่ระบบสร้างเองก็ต้องมีเลขที่เหมือนใบที่คนสร้าง ไม่งั้นช่างอ้างถึงไม่ได้
+    await prisma.$transaction(async (tx) => {
+      const code = await nextWorkOrderCode(tx, pm.orgId);
+      await tx.workOrder.create({
+        data: {
+          orgId: pm.orgId,
+          code,
+          propertyId: pm.propertyId,
+          assetId: pm.assetId,
+          assignedTo: pm.assignedTo,
+          title: pm.title,
+          description: `PM: ${pm.title}\nครบกำหนด ${fmtThaiDate(pm.nextDueDate)}`,
+          status: "open",
+          priority: "medium",
+          pmScheduleId: pm.id,
+          ccUserIds: pm.ccUserIds,
+          autoCreated: true,
+        },
+      });
     });
     created++;
   }

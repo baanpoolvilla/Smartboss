@@ -15,6 +15,7 @@ import { prisma } from "@smartboss/database";
 import { ADMIN_PERMS } from "@/modules/admin/permissions";
 import { organizationExists } from "@/modules/admin/data/orgs";
 import { PERFORMANCE_CATEGORIES } from "@/lib/performance";
+import { nextOrganizationCode } from "@/lib/document-code";
 import { provisionWorkforceTenant } from "@/lib/workforce-provisioning";
 import { ENABLED_MODULES, ORG_ROLES, ROLE_GRANTS } from "@smartboss/database/defaults";
 
@@ -586,6 +587,9 @@ export async function createOrganizationAction(formData: FormData) {
   const org = await prisma.$transaction(async (tx) => {
     const created = await tx.organization.create({
       data: {
+        // รหัส SM0001 จองในทรานแซกชันเดียวกับการสร้างบริษัท —
+        // ถ้าแยกกันแล้วสร้างล้มทีหลัง เลขจะถูกกินไปเปล่า ๆ
+        code: await nextOrganizationCode(tx),
         slug: parsed.slug,
         name: parsed.name,
         planCode: parsed.planCode,

@@ -12,6 +12,7 @@ export async function listAllOrganizations() {
     orderBy: [{ isActive: "desc" }, { name: "asc" }],
     select: {
       id: true,
+      code: true,
       name: true,
       slug: true,
       isActive: true,
@@ -22,6 +23,7 @@ export async function listAllOrganizations() {
 
   return orgs.map((o) => ({
     id: o.id,
+    code: o.code,
     name: o.name,
     slug: o.slug,
     isActive: o.isActive,

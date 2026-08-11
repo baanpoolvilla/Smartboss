@@ -14,6 +14,8 @@ import { Card } from "@smartboss/ui/components/card";
 
 export interface BoardOrder {
   id: string;
+  /** เลขที่ให้คนอ่าน เช่น WO-2569-0001 — ใช้อ้างถึงกันทางโทรศัพท์/LINE */
+  code: string;
   title: string;
   description: string | null;
   status: string;
@@ -101,9 +103,14 @@ function OrderCard({
         }}
       >
         <div className="flex items-start gap-2">
-          <p className="line-clamp-2 flex-1 text-sm font-bold text-(--ink)">
-            {wo.title}
-          </p>
+          <div className="min-w-0 flex-1">
+            <p className="font-mono text-[11px] tracking-tight text-(--ink-soft)">
+              {wo.code}
+            </p>
+            <p className="line-clamp-2 text-sm font-bold text-(--ink)">
+              {wo.title}
+            </p>
+          </div>
           {wo.autoCreated && (
             <span
               className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold"

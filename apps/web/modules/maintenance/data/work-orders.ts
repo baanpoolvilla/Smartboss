@@ -1,6 +1,8 @@
 import "server-only";
 import { prisma, Prisma } from "@smartboss/database";
 
+import { nextWorkOrderCode } from "@/lib/document-code";
+
 export interface WorkOrderFilters {
   status?: string;
   statuses?: string[];
@@ -89,25 +91,35 @@ export interface WorkOrderInput {
   afterPhotoUrls?: string[];
 }
 
+/**
+ * จองเลขที่ใบงานกับสร้างใบงานใน transaction เดียวกัน
+ *
+ * ถ้าแยกกัน แล้วการสร้างล้มทีหลัง เลขจะถูกกินไปเปล่า ๆ เกิดช่องว่าง
+ * (WO-0001 แล้วข้ามไป WO-0003) ซึ่งคนอ่านจะนึกว่าใบงานหาย
+ */
 export function createWorkOrder(orgId: string, data: WorkOrderInput) {
-  return prisma.workOrder.create({
-    data: {
-      orgId,
-      propertyId: data.propertyId,
-      assetId: data.assetId ?? null,
-      assignedTo: data.assignedTo ?? null,
-      createdBy: data.createdBy ?? null,
-      title: data.title,
-      description: data.description ?? null,
-      priority: data.priority ?? "medium",
-      dueDate: data.dueDate ?? null,
-      ccUserIds: data.ccUserIds ?? [],
-      additionalPropertyIds: data.additionalPropertyIds ?? [],
-      pmScheduleId: data.pmScheduleId ?? null,
-      pmScheduleIds: data.pmScheduleIds ?? [],
-      autoCreated: data.autoCreated ?? false,
-      photoUrls: data.photoUrls ?? [],
-    },
+  return prisma.$transaction(async (tx) => {
+    const code = await nextWorkOrderCode(tx, orgId);
+    return tx.workOrder.create({
+      data: {
+        orgId,
+        code,
+        propertyId: data.propertyId,
+        assetId: data.assetId ?? null,
+        assignedTo: data.assignedTo ?? null,
+        createdBy: data.createdBy ?? null,
+        title: data.title,
+        description: data.description ?? null,
+        priority: data.priority ?? "medium",
+        dueDate: data.dueDate ?? null,
+        ccUserIds: data.ccUserIds ?? [],
+        additionalPropertyIds: data.additionalPropertyIds ?? [],
+        pmScheduleId: data.pmScheduleId ?? null,
+        pmScheduleIds: data.pmScheduleIds ?? [],
+        autoCreated: data.autoCreated ?? false,
+        photoUrls: data.photoUrls ?? [],
+      },
+    });
   });
 }
 

@@ -72,11 +72,24 @@ async function main() {
   const orgSlug = (process.env.SEED_ORG_SLUG ?? "main").trim();
   const orgName = (process.env.SEED_ORG_NAME ?? "บริษัทของฉัน").trim();
 
+  // รหัสบริษัทให้คนอ่าน (SM0001) — seed สร้างบริษัทแรกจึงเป็นเลข 1 เสมอ
+  // แล้วตั้งตัวนับให้บริษัทถัดไปที่สร้างจากหน้าเว็บเดินเลขต่อได้ถูก
   const org = await prisma.organization.upsert({
     where: { slug: orgSlug },
     update: { name: orgName, isActive: true },
-    create: { slug: orgSlug, name: orgName, isActive: true, planCode: "PRO" },
+    create: {
+      code: "SM0001",
+      slug: orgSlug,
+      name: orgName,
+      isActive: true,
+      planCode: "PRO",
+    },
   });
+  await prisma.$executeRaw`
+    INSERT INTO core.document_counters (org_id, doc_type, period, next_value)
+    VALUES ('', 'ORG', '-', 2)
+    ON CONFLICT (org_id, doc_type, period) DO NOTHING
+  `;
   console.log(`✔ Organization: ${org.name} (${org.slug})`);
 
   // ── 4) Role ของบริษัท ─────────────────────────────────────

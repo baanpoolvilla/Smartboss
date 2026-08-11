@@ -103,7 +103,8 @@ export default async function OrganizationsPage({
                       )}
                     </p>
                     <p className="mt-0.5 text-xs text-(--ink-soft)">
-                      รหัส {org.slug} · {org.userCount} ผู้ใช้ · แพ็กเกจ{" "}
+                      <span className="font-mono text-(--ink)">{org.code}</span> ·{" "}
+                      {org.slug} · {org.userCount} ผู้ใช้ · แพ็กเกจ{" "}
                       {org.planCode ?? "—"}
                     </p>
 

@@ -21,6 +21,8 @@ import { Card } from "@smartboss/ui/components/card";
 
 export interface BoardPo {
   id: string;
+  /** เลขที่ให้คนอ่าน เช่น PO-2569-0001 */
+  code: string;
   title: string;
   status: string;
   statusLabel: string;
@@ -61,9 +63,12 @@ function PoCard({ po }: { po: BoardPo }) {
     <Link href={`/maintenance/purchase-orders/${po.id}`} className="block">
       <Card className="p-3 transition-colors hover:bg-(--bg-soft)">
         <div className="flex items-start gap-2">
-          <p className="line-clamp-2 flex-1 text-sm font-bold text-(--ink)">
-            {po.title}
-          </p>
+          <div className="min-w-0 flex-1">
+            <p className="font-mono text-[11px] tracking-tight text-(--ink-soft)">
+              {po.code}
+            </p>
+            <p className="line-clamp-2 text-sm font-bold text-(--ink)">{po.title}</p>
+          </div>
           {po.isEmergency && (
             <span
               className="inline-flex shrink-0 items-center gap-1 rounded-lg px-1.5 py-0.5 text-[10px]"

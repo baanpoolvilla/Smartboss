@@ -89,6 +89,7 @@ export default async function PurchaseOrdersPage({
     const meta = poStatusMeta(o.status);
     return {
       id: o.id,
+      code: o.code,
       title: o.title,
       status: o.status,
       statusLabel: meta.label,

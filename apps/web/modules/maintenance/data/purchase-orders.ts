@@ -1,5 +1,7 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
+
+import { nextPurchaseOrderCode } from "@/lib/document-code";
 import { poItemsToJson, type PoItem } from "@/modules/maintenance/lib/po";
 
 export function listPurchaseOrders(orgId: string, filter?: { status?: string }) {
@@ -32,26 +34,31 @@ export interface PoInput {
   poCreatedAt?: Date | null;
 }
 
+/** จองเลขที่กับสร้างใบสั่งซื้อใน transaction เดียว — ดู lib/document-code.ts */
 export function createPurchaseOrder(orgId: string, data: PoInput) {
-  return prisma.purchaseOrder.create({
-    data: {
-      orgId,
-      title: data.title,
-      description: data.description ?? null,
-      propertyId: data.propertyId ?? null,
-      items: poItemsToJson(data.items),
-      totalPrice: data.totalPrice,
-      notes: data.notes ?? null,
-      isSelfPurchase: data.isSelfPurchase ?? false,
-      isEmergencyPurchase: data.isEmergencyPurchase ?? false,
-      emergencyReason: data.emergencyReason ?? null,
-      createdBy: data.createdBy ?? null,
-      prImageUrls: data.prImageUrls ?? [],
-      status: data.status ?? "pending",
-      poAssignedTo: data.poAssignedTo ?? null,
-      poCreatedBy: data.poCreatedBy ?? null,
-      poCreatedAt: data.poCreatedAt ?? null,
-    },
+  return prisma.$transaction(async (tx) => {
+    const code = await nextPurchaseOrderCode(tx, orgId);
+    return tx.purchaseOrder.create({
+      data: {
+        orgId,
+        code,
+        title: data.title,
+        description: data.description ?? null,
+        propertyId: data.propertyId ?? null,
+        items: poItemsToJson(data.items),
+        totalPrice: data.totalPrice,
+        notes: data.notes ?? null,
+        isSelfPurchase: data.isSelfPurchase ?? false,
+        isEmergencyPurchase: data.isEmergencyPurchase ?? false,
+        emergencyReason: data.emergencyReason ?? null,
+        createdBy: data.createdBy ?? null,
+        prImageUrls: data.prImageUrls ?? [],
+        status: data.status ?? "pending",
+        poAssignedTo: data.poAssignedTo ?? null,
+        poCreatedBy: data.poCreatedBy ?? null,
+        poCreatedAt: data.poCreatedAt ?? null,
+      },
+    });
   });
 }
 
