@@ -96,6 +96,27 @@ build ผ่านบนเครื่องตัวเองพิสูจ�
 
 ## 🅱 บนเซิร์ฟเวอร์ — deploy
 
+### ต้อง deploy ไหม — เช็คก่อน
+
+```bash
+cd /opt/smartboss
+sudo -u smartboss git fetch origin      # ต้องมี sudo -u smartboss ไม่งั้น Permission denied
+git log --oneline -1                    # เซิร์ฟเวอร์อยู่ที่ commit ไหน
+git diff --name-only HEAD origin/main | grep -vE "^docs/|^scripts/|\.md$"
+```
+
+**บรรทัดสุดท้ายว่าง = ไม่ต้อง deploy**
+
+| เปลี่ยนอะไร | deploy ไหม |
+|---|---|
+| โค้ดใน `apps/` `packages/` ที่มีผลต่อการทำงาน | ✅ |
+| schema / migration | ✅ ต้องลง migration ก่อนด้วย |
+| `docs/` `scripts/` `README` · คอมเมนต์ · lint config | ❌ |
+
+> ⚠ `git fetch` โดยไม่มี `sudo -u smartboss` จะล้มด้วย
+> `cannot open '.git/FETCH_HEAD': Permission denied` แล้ว `origin/main` จะเป็นของเก่า
+> ⇒ การเทียบได้ผลว่างเปล่าซึ่งดูเหมือน "ไม่มีอะไรใหม่" ทั้งที่จริงมี
+
 ### ปล่อยเวอร์ชันใหม่ (ไม่มี migration)
 
 ```bash
