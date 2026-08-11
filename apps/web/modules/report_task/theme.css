@@ -1,11 +1,10 @@
 /*
- * ธีมของโมดูลรายงานและงาน — สกัดจาก globals.css ของแอป easyboss-workspace
+ * ธีมของโมดูลรายงานและงาน — เดิมสกัดจาก globals.css ของแอป easyboss-workspace
+ * ตอนนี้แก้ที่ไฟล์นี้ได้โดยตรง (ไม่ได้สกัดใหม่จากต้นทางแล้ว)
  *
- * ⚠ ไฟล์นี้สร้างด้วยสคริปต์ อย่าแก้มือ — ตอนดึงโค้ดเวอร์ชันใหม่ให้รัน
- *   python scratchpad/extract-theme.py <workspace>/src/app/globals.css \
- *          apps/web/modules/report_task/theme.css
- *
- * สิ่งที่สคริปต์ทำ:
+ * ⚠ เดิมไฟล์นี้สร้างด้วยสคริปต์และห้ามแก้มือ — ยกเลิกแล้วตั้งแต่ 2026-08-11
+ *   แก้ตรงนี้ได้เลย แต่ควรรู้ก่อนว่าตอนสกัดมาได้ดัดแปลงอะไรจากต้นฉบับไว้บ้าง
+ *   เพราะบางส่วนจงใจต่างจาก workspace เดิม:
  *   1. ตัด @import ของ tailwind ออก — globals.css ของ Smartboss import ให้แล้ว
  *   2. ลบโทเคนฐาน (--bg/--ink/--line/--radius/--brand-*) เพราะ Smartboss เป็นเจ้าของ
  *   3. --primary/--ring/--accent เปลี่ยนจาก brand-green มาอิง --module-color

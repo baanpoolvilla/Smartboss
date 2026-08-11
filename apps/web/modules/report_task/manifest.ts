@@ -5,7 +5,8 @@ import { navItems } from "./lib/nav-config";
 import { ALL_REPORT_TASK_PERMS, REPORT_TASK_PERMS } from "./permissions";
 
 /**
- * โมดูลรายงานและงาน — พอร์ตมาจากแอป easyboss-workspace ที่เคยรันเดี่ยว ๆ
+ * โมดูลรายงานและงาน — เดิมพอร์ตมาจากแอป easyboss-workspace ที่เคยรันเดี่ยว ๆ
+ * ตั้งแต่ 2026-08-11 Smartboss เป็นเจ้าของเต็มตัว แก้ที่นี่ได้ทั้ง UI และชั้นข้อมูล
  *
  * สีมาจาก --mod-report ใน packages/ui/tokens.css (Slate #64748B) ซึ่งจองไว้
  * ตั้งแต่ Phase 1 พร้อมกับการ์ด "เร็ว ๆ นี้" ในหน้า launcher
