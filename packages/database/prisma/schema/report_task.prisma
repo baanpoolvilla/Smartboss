@@ -1,0 +1,96 @@
+// ═══════════════════════════════════════════════════════════════════════
+//  schema "report_task" — โมดูลรายงานและงาน
+//  เจ้าของ: branch module/report_task
+// ═══════════════════════════════════════════════════════════════════════
+
+// ═════════════════════ งานในบอร์ด Kanban ═════════════════════
+//
+// เดิมเก็บทั้งคอลเลกชันเป็นก้อน JSON ก้อนเดียวใน report_task.stores คีย์ "tasks"
+// (ต้นทางเก็บเป็นไฟล์ data/tasks/tasks.json) ⇒ แก้ชื่องานตัวเดียวก็ต้องเขียนทับ
+// ทั้งบริษัท และฝั่งเซิร์ฟเวอร์ query อะไรไม่ได้เลยนอกจากโหลดมาทั้งก้อน
+//
+// ตอนนี้เป็นตารางจริง หนึ่งแถวต่อหนึ่งงาน
+//
+// ⚠ `data` คือ **แหล่งความจริง** ของตัวงานทั้งก้อน ส่วนคอลัมน์อื่นเป็นสำเนา
+// ที่คัดออกมาเพื่อให้ query/เรียง/ทำดัชนีได้ — เขียนจากที่เดียวเสมอ (task-repo.ts)
+// จึงไม่มีทางไม่ตรงกัน เหตุที่ไม่แตกทุกฟิลด์เป็นคอลัมน์: ตัวงานมีโครงสร้างซ้อน
+// อีกสิบกว่าชุด (เช็คลิสต์ คอมเมนต์ ไฟล์แนบ ประวัติแก้ไข รีแอ็กชัน การหักคะแนน)
+// ซึ่งเป็นของ UI ต้นทางที่ปรับรูปร่างได้ตลอด แตกเป็นตารางแล้วต้องตามแก้ทุกครั้ง
+model ReportTask {
+  orgId String @map("org_id")
+  /// id ที่ client สร้าง (task-xxxx) — ไม่ใช่ uuid ของเรา
+  id    String
+  /// เลขที่ให้คนอ่าน T-2569-0001 — เซิร์ฟเวอร์เป็นคนตั้ง client ไม่ต้องรู้
+  code  String
+
+  title        String
+  status       String
+  priority     String
+  taskMode     String   @map("task_mode")
+  assignedById String   @map("assigned_by_id")
+  assigneeIds  String[] @map("assignee_ids")
+  parentId     String?  @map("parent_id")
+  startDate    String   @map("start_date")
+  dueDate      String   @map("due_date")
+  completedAt  String?  @map("completed_at")
+
+  /// ตัวงานทั้งก้อนตามรูปแบบของ UI ต้นทาง
+  data Json
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@id([orgId, id])
+  @@unique([orgId, code])
+  @@index([orgId, status])
+  @@index([orgId, dueDate])
+  @@map("tasks")
+  @@schema("report_task")
+}
+
+/// ตัวนับรุ่นของ "คอลเลกชันงาน" ทั้งบริษัท
+///
+/// client ส่งงานมาทั้งชุดทุกครั้ง (สัญญาเดิมของ UI ต้นทาง) จึงต้องมีเลขรุ่นของ
+/// ทั้งชุดไว้กันสองแท็บเขียนทับกัน — เดิมเลขนี้อยู่ในแถวของ stores
+model ReportTaskCollection {
+  orgId     String   @id @map("org_id")
+  version   Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@map("task_collections")
+  @@schema("report_task")
+}
+
+// ═══════════════════════════ report_task ═══════════════════════════
+// โมดูลรายงานและงาน (พอร์ตจากแอป easyboss-workspace)
+//
+// ฝั่ง client เก็บสถานะที่แชร์กันทั้งทีมไว้ใน zustand store ~15 ตัว แล้วเขียนกลับ
+// ผ่าน endpoint เดียว `/api/report-task/store/{key}` (กับ `/tasks` อีกตัว)
+// ⇒ ฝั่งเซิร์ฟเวอร์จึงเก็บเป็น "ก้อน JSON ต่อคีย์ ต่อบริษัท" ก้อนเดียวจบ
+//
+// ทำไมไม่แตกเป็นตารางต่อ entity: รูปร่างข้อมูลยังเปลี่ยนบ่อยตามการพัฒนาฝั่ง
+// workspace และสัญญาระหว่าง client กับ server คือ "ทั้งก้อน" อยู่แล้ว
+// (โหลดทั้งก้อนตอน mount เขียนทั้งก้อนตอนเปลี่ยน) การแตกตารางตอนนี้จะได้
+// ความซับซ้อนโดยไม่ได้ประโยชน์ — แตกทีหลังได้เมื่อ schema นิ่ง
+//
+// version = optimistic concurrency ป้องกันสองแท็บเขียนทับกัน (client ส่ง
+// expectedVersion มา ไม่ตรงกัน = 409 ให้โหลดใหม่)
+model ReportTaskStore {
+  orgId     String   @map("org_id")
+  key       String
+  data      Json
+  version   Int      @default(1)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by") // ผู้ใช้คนล่าสุดที่เขียน — ไว้ไล่ย้อนตอนข้อมูลเพี้ยน
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@id([orgId, key])
+  @@map("stores")
+  @@schema("report_task")
+}

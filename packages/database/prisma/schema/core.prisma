@@ -1,0 +1,346 @@
+// ═══════════════════════════════════════════════════════════════════════
+//  schema "core" — ของกลางของแพลตฟอร์ม
+//  เจ้าของ: branch module/admin
+//
+//  ⚠ ทุกโมดูลอ้างถึง Organization/User ที่นี่ — แก้ไฟล์นี้ให้ทำบน main
+//    แล้วให้สาขาอื่น rebase ตาม (ดู docs/branches.md)
+// ═══════════════════════════════════════════════════════════════════════
+
+model User {
+  id           String    @id @default(uuid())
+  orgId        String?   @map("org_id") // null = platform-level user (super admin ข้ามทุกบริษัท)
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  name         String
+  avatarUrl    String?   @map("avatar_url")
+  lineUserId   String?   @map("line_user_id") // ผูกกับ LINE เพื่อส่งแจ้งเตือน (ไม่ใช่ login)
+  isActive     Boolean   @default(true) @map("is_active")
+  failedLogins Int       @default(0) @map("failed_logins")
+  lockedUntil  DateTime? @map("locked_until")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  organization      Organization?      @relation(fields: [orgId], references: [id])
+  roles             UserRole[]
+  refreshTokens     RefreshToken[]
+  auditLogs         AuditLog[]
+  performanceEvents PerformanceEvent[]
+
+  @@index([orgId])
+  @@map("users")
+  @@schema("core")
+}
+
+// บริษัทลูกค้า (tenant). ทุกข้อมูลของโมดูลจะผูกกับ org นี้
+model Organization {
+  id        String   @id @default(uuid())
+  /// รหัสบริษัทให้คนอ่าน เช่น SM0001 — ไม่ใช่กุญแจหลัก ใช้แสดงผล/อ้างอิงกับลูกค้า
+  /// id ยังเป็น uuid เหมือนเดิม เพราะ workforce.tenants.id ต้องเท่ากับค่านี้ (RLS พึ่งอยู่)
+  code      String   @unique
+  slug      String   @unique // ตัวระบุสั้น (เผื่อ subdomain) เช่น "acme"
+  name      String
+  isActive  Boolean  @default(true) @map("is_active")
+  planCode  String?  @map("plan_code") // แพ็กเกจ subscription (FREE, PRO, ...) — เก็บเป็น code ไปก่อน
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users      User[]
+  orgModules OrgModule[]
+  roles      Role[]
+
+  reportTaskStores     ReportTaskStore[]
+  reportTasks          ReportTask[]
+  reportTaskCollection ReportTaskCollection?
+  performanceEvents    PerformanceEvent[]
+  performanceSetting   PerformanceSetting?
+
+  @@map("organizations")
+  @@schema("core")
+}
+
+// บริษัทนี้ "เปิดใช้" โมดูลไหนบ้าง = แกนของ subscription per-tenant
+model OrgModule {
+  orgId     String   @map("org_id")
+  moduleId  String   @map("module_id")
+  isEnabled Boolean  @default(true) @map("is_enabled")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  module       Module       @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@id([orgId, moduleId])
+  @@index([moduleId])
+  @@map("org_modules")
+  @@schema("core")
+}
+
+// บทบาท — แยกตามบริษัท (orgId) เพื่อไม่ให้บริษัทหนึ่งแก้สิทธิ์แล้วกระทบอีกบริษัท
+// orgId = null → role กลางของแพลตฟอร์ม (SUPER_ADMIN ฯลฯ) ทุกบริษัทเห็น แต่แก้ไม่ได้
+model Role {
+  id          String  @id @default(uuid())
+  orgId       String? @map("org_id")
+  code        String
+  name        String
+  description String?
+  isSystem    Boolean @default(false) @map("is_system") // true = role กลาง ห้ามแก้/ลบ
+
+  organization Organization?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  users        UserRole[]
+  permissions  RolePermission[]
+
+  @@unique([orgId, code])
+  @@index([orgId])
+  @@map("roles")
+  @@schema("core")
+}
+
+model Permission {
+  id       String  @id @default(uuid())
+  code     String  @unique
+  moduleId String? @map("module_id")
+
+  module Module?          @relation(fields: [moduleId], references: [id])
+  roles  RolePermission[]
+
+  @@map("permissions")
+  @@schema("core")
+}
+
+model RolePermission {
+  roleId       String @map("role_id")
+  permissionId String @map("permission_id")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+  @@schema("core")
+}
+
+model UserRole {
+  userId String @map("user_id")
+  roleId String @map("role_id")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+  @@schema("core")
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  tokenHash  String    @unique @map("token_hash")
+  deviceInfo String?   @map("device_info")
+  expiresAt  DateTime  @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+  @@schema("core")
+}
+
+model Module {
+  id        String  @id @default(uuid())
+  code      String  @unique
+  name      String
+  color     String
+  isEnabled Boolean @default(false) @map("is_enabled") // มีในแคตตาล็อกแพลตฟอร์มไหม
+  sortOrder Int     @default(0) @map("sort_order")
+
+  permissions Permission[]
+  orgModules  OrgModule[]
+
+  @@map("modules")
+  @@schema("core")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?  @map("user_id")
+  module    String   @default("core")
+  action    String
+  targetId  String?  @map("target_id")
+  ip        String?
+  userAgent String?  @map("user_agent")
+  detail    Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@map("audit_logs")
+  @@schema("core")
+}
+
+// ── โมดูลตัวอย่าง (แม่แบบ) ────────────────────────────────
+// ตารางของโมดูลผูกกับ org_id เสมอ = ข้อมูลแยกตามบริษัท (tenant)
+model ExampleItem {
+  id        String   @id @default(uuid())
+  orgId     String   @map("org_id")
+  title     String
+  note      String?
+  status    String   @default("open") // open | done
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([orgId])
+  @@map("example_items")
+  @@schema("core")
+}
+
+// แจ้งเตือนในแอป (ใช้ข้ามโมดูล) — สร้างโดย app logic
+model Notification {
+  id          String    @id @default(uuid())
+  orgId       String?   @map("org_id")
+  userId      String    @map("user_id")
+  title       String
+  body        String?
+  type        String    @default("general")
+  referenceId String?   @map("reference_id")
+  readAt      DateTime? @map("read_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@map("notifications")
+  @@schema("core")
+}
+
+/// ตัวเดินเลขเอกสารให้คนอ่าน (WO-2569-0001 ฯลฯ)
+///
+/// ทำไมต้องมีตาราง ไม่ใช้ MAX(code)+1: สองคนกดสร้างพร้อมกันจะอ่านค่าเดิมทั้งคู่
+/// แล้วได้เลขซ้ำ — ที่นี่จองเลขด้วยคำสั่งเดียว (INSERT .. ON CONFLICT DO UPDATE
+/// .. RETURNING) ซึ่ง Postgres รับประกันว่าอะตอมมิก
+///
+/// ไม่ใช้ SEQUENCE ของ Postgres เพราะต้องแยกเลขตามบริษัทและตามปี ⇒ ต้องสร้าง
+/// sequence ใหม่ทุกครั้งที่มีบริษัทใหม่หรือขึ้นปีใหม่ ซึ่งดูแลยากกว่าตารางนี้มาก
+model DocumentCounter {
+  /// "" = ระดับแพลตฟอร์ม (ใช้กับรหัสบริษัท ที่เดินเลขรวมทั้งระบบ)
+  orgId     String @map("org_id")
+  /// ORG | WO | PO
+  docType   String @map("doc_type")
+  /// ปี พ.ศ. เช่น "2569" — ใช้ "-" เมื่อไม่แยกตามปี
+  period    String
+  /// เลขถัดไปที่จะแจก (ยังไม่ถูกใช้)
+  nextValue Int    @default(1) @map("next_value")
+
+  @@id([orgId, docType, period])
+  @@map("document_counters")
+  @@schema("core")
+}
+
+// ═════════════════════ คะแนนผลงานรายบุคคล (ข้ามโมดูล) ═════════════════════
+// ทุกโมดูลส่ง "เหตุการณ์ที่มีผลต่อคะแนน" มาลงตารางเดียวกัน แล้วหน้าสรุปของ
+// CEO/ผู้จัดการรวมจากที่นี่ที่เดียว — ไม่ต้องไปไล่ถามทีละโมดูล
+//
+// ทำไมเก็บเป็น "เหตุการณ์" ไม่ใช่ "คะแนนสะสม": คะแนนรวมคำนวณใหม่ได้เสมอ
+// และย้อนดูได้ว่ามาจากเรื่องอะไรบ้าง ถ้าเก็บแต่ยอดรวมจะอธิบายที่มาไม่ได้
+// และแก้ย้อนหลังไม่ได้เมื่อกฎเปลี่ยน
+//
+// points: ลบ = หัก, บวก = ได้เพิ่ม (สติกเกอร์ชม / งานเสร็จก่อนกำหนด)
+model PerformanceEvent {
+  id       String  @id @default(uuid())
+  orgId    String  @map("org_id")
+  /**
+   * core.users.id — คนที่ถูกให้/หักคะแนน
+   */
+  userId   String  @map("user_id")
+  /**
+   * โมดูลต้นทาง: report_task | maintenance | workforce
+   */
+  source   String
+  /**
+   * ชนิดเหตุการณ์ เช่น task_late, pm_missed, workorder_overdue, attendance_late
+   */
+  category String
+  points   Decimal @db.Decimal(6, 2)
+
+  occurredAt DateTime @map("occurred_at")
+  /**
+   * อ้างกลับไปที่ต้นเรื่อง เช่น work_order / pm_schedule / task
+   */
+  refType    String?  @map("ref_type")
+  refId      String?  @map("ref_id")
+  note       String?
+  /**
+   * null = ระบบคำนวณเอง, มีค่า = คนกดหักเอง (core.users.id)
+   */
+  createdBy  String?  @map("created_by")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // กันหักซ้ำ — sweep รันทุก 60 วินาที ถ้าไม่มี unique นี้ งานเลยกำหนดใบเดียว
+  // จะโดนหักซ้ำทุกรอบ เหตุการณ์เดียวกันจากต้นเรื่องเดียวกันจึงมีได้แถวเดียว
+  @@unique([orgId, source, category, refType, refId], name: "performance_event_dedupe")
+  @@index([orgId, userId, occurredAt])
+  @@index([orgId, occurredAt])
+  @@map("performance_events")
+  @@schema("core")
+}
+
+// การตั้งค่าระบบคะแนนผลงาน — แยกตามบริษัท
+//
+// ทุกตัวเลขที่ใช้ตัดสินว่า "ผลงานดีหรือไม่ดี" ต้องตั้งได้เอง เพราะแต่ละบริษัท
+// มีมาตรฐานคนละแบบ — บางที่สาย 5 นาทีถือว่าสาย บางที่ให้ผ่อนผัน 30 นาที
+// ไม่มีแถว = ใช้ค่าเริ่มต้นในโค้ด (ดู apps/web/lib/performance.ts)
+model PerformanceSetting {
+  orgId String @id @map("org_id")
+
+  /**
+   * เปิด/ปิดระบบคะแนนทั้งหมดของบริษัทนี้
+   */
+  enabled Boolean @default(true)
+
+  /**
+   * คะแนนตั้งต้นก่อนหัก
+   */
+  baseScore Int @default(100) @map("base_score")
+
+  /**
+   * สายเกินกี่นาทีถึงเริ่มหัก — ต่ำกว่านี้ถือว่าอยู่ในวิสัยปกติ
+   */
+  lateThresholdMinutes Int @default(15) @map("late_threshold_minutes")
+
+  /**
+   * ขาดงานเกินกี่นาทีถึงนับเป็นขาดงาน
+   */
+  absenceThresholdMinutes Int @default(240) @map("absence_threshold_minutes")
+
+  /**
+   * PM เลยกำหนดกี่วันถึงถือว่าปล่อยปละละเลย (เผื่อเวลาให้ทำก่อน)
+   */
+  pmGraceDays Int @default(7) @map("pm_grace_days")
+
+  /**
+   * ย้อนดูผลลงเวลากี่วันในแต่ละรอบ cron
+   */
+  attendanceLookbackDays Int @default(45) @map("attendance_lookback_days")
+
+  /**
+   * คะแนนต่อเหตุการณ์ — { "task_late": -3, ... } ทับค่าเริ่มต้นเฉพาะคีย์ที่ระบุ
+   * เก็บเป็น JSON เพราะชนิดเหตุการณ์เพิ่มได้เรื่อย ๆ ตามโมดูลที่เสียบเข้ามา
+   * ถ้าแตกเป็นคอลัมน์จะต้อง migrate ทุกครั้งที่เพิ่มเหตุการณ์ใหม่
+   */
+  rulePoints Json @default("{}") @map("rule_points")
+
+  /**
+   * เกณฑ์เกรด — { "A": 90, "B": 80, "C": 70, "D": 60 } ต่ำกว่าตัวสุดท้าย = F
+   */
+  gradeThresholds Json @default("{}") @map("grade_thresholds")
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@map("performance_settings")
+  @@schema("core")
+}

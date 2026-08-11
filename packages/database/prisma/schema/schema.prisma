@@ -1,0 +1,17 @@
+// ไฟล์นี้เก็บเฉพาะ generator กับ datasource — โมเดลแยกไปตามโมดูลในโฟลเดอร์เดียวกัน
+// ดู docs/branches.md ว่าใครดูแลไฟล์ไหน
+
+generator client {
+  provider      = "prisma-client-js"
+  // native = เครื่อง dev (Windows) · debian = WSL/Linux · rhel = Vercel serverless (Amazon Linux)
+  binaryTargets = ["native", "debian-openssl-3.0.x", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  // url = pooled endpoint (Neon pooler) — app runtime บน serverless ใช้เส้นนี้
+  url       = env("DATABASE_URL")
+  // directUrl = unpooled endpoint — prisma migrate/studio ใช้เส้นตรง (ชื่อ env ตาม Neon/Vercel integration)
+  directUrl = env("DATABASE_URL_UNPOOLED")
+  schemas   = ["core", "maintenance", "report_task"]
+}

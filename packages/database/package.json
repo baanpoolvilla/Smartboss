@@ -20,7 +20,8 @@
     "typecheck": "tsc --noEmit"
   },
   "prisma": {
-    "seed": "tsx seed.ts"
+    "seed": "tsx seed.ts",
+    "schema": "prisma/schema"
   },
   "dependencies": {
     "@prisma/client": "^6.2.1",
