@@ -569,6 +569,82 @@ sudo -u smartboss bash deploy/release.sh --no-pull
 
 ---
 
+## 11.5 เข้าฐานข้อมูล
+
+Postgres ผูกกับ `127.0.0.1` เท่านั้น **ต่อจากข้างนอกไม่ได้โดยตั้งใจ** — ต้อง ssh เข้าไปก่อน
+
+### วิธีที่ 1 — psql บน VM (เร็วสุด)
+
+```bash
+gcloud compute ssh smartboss-prod --zone=asia-southeast1-c
+sudo bash /opt/smartboss/deploy/psql.sh
+```
+
+สคริปต์อ่านรหัสผ่านจาก `/etc/smartboss/smartboss.env` ให้เอง — ไม่ต้องพิมพ์รหัสลงใน
+คำสั่ง ซึ่งจะไปค้างอยู่ใน `~/.bash_history` แบบไม่เข้ารหัส
+
+```bash
+# รันคำสั่งเดียวแล้วออก
+sudo bash /opt/smartboss/deploy/psql.sh -c "select slug, name from core.organizations;"
+```
+
+### วิธีที่ 2 — Prisma Studio (มีหน้าจอให้คลิก)
+
+บน VM:
+```bash
+cd /opt/smartboss
+sudo -u smartboss bash -c 'set -a; . /etc/smartboss/smartboss.env; set +a; pnpm db:studio'
+```
+
+บนเครื่องคุณ เปิดอุโมงค์มาที่พอร์ต 5555:
+```bash
+gcloud compute ssh smartboss-prod --zone=asia-southeast1-c -- -N -L 5555:127.0.0.1:5555
+```
+แล้วเปิด http://localhost:5555
+
+> Prisma Studio เห็นเฉพาะตารางใน `core` / `maintenance` / `report_task`
+> ตาราง `workforce` ใช้ Drizzle จึงไม่อยู่ในนั้น
+
+### วิธีที่ 3 — ต่อด้วย DBeaver / pgAdmin ผ่านอุโมงค์
+
+```bash
+gcloud compute ssh smartboss-prod --zone=asia-southeast1-c -- -N -L 5432:127.0.0.1:5432
+```
+แล้วตั้งค่าโปรแกรมเป็น `localhost:5432` · user `smartboss` · รหัสจาก
+`sudo grep POSTGRES_PASSWORD /opt/smartboss/deploy/.env`
+
+### ⚠ กับดัก: ตาราง workforce จะว่างเปล่าเสมอ
+
+```sql
+SELECT count(*) FROM workforce.employments;   -- ได้ 0 ทั้งที่มีข้อมูล
+```
+
+ไม่ใช่ไม่มีข้อมูล — ตารางฝั่ง workforce เปิด **FORCE ROW LEVEL SECURITY** ซึ่งบังคับ
+กับเจ้าของตารางด้วย ถ้าไม่บอกว่าดูบริษัทไหน จะถูกกรองทิ้งหมด **โดยไม่มี error**
+
+ต้องตั้ง tenant context ก่อน:
+
+```sql
+BEGIN;
+SET LOCAL ROLE workforce_app;
+SELECT set_config('workforce.tenant_id',
+  (SELECT id::text FROM core.organizations WHERE slug = 'main'), true);
+
+SELECT count(*) FROM workforce.employments;   -- คราวนี้เห็นจริง
+
+ROLLBACK;   -- อ่านอย่างเดียวก็ ROLLBACK ไปเลย ปลอดภัยกว่า
+```
+
+### ⚠ ก่อนแก้ข้อมูลตรง ๆ
+
+**สำรองก่อนเสมอ** — `sudo bash /opt/smartboss/deploy/backup.sh`
+
+การ `UPDATE`/`DELETE` ที่ psql ข้ามตรรกะของแอปทั้งหมด: ไม่มี audit log,
+ไม่มีการตรวจสิทธิ์, ไม่อัปเดต `version` ที่ใช้กันสองแท็บเขียนทับกัน
+และไม่ส่งเหตุการณ์คะแนนผลงาน — ใช้เท่าที่จำเป็นจริง ๆ
+
+---
+
 ## 12. เจอปัญหาแล้วดูตรงไหน
 
 ```bash
