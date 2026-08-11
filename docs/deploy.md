@@ -645,6 +645,160 @@ ROLLBACK;   -- อ่านอย่างเดียวก็ ROLLBACK ไป�
 
 ---
 
+## 11.8 ย้ายโดเมน
+
+ตัวอย่าง: `easyboss.app` → `smartboss.in.th`
+
+### หลักการ — เพิ่มชื่อใหม่ อย่าเพิ่งถอดชื่อเก่า
+
+Caddy รับหลายชื่อต่อหนึ่งบล็อกได้ ⇒ ช่วงเปลี่ยนผ่านให้**ทั้งสองชื่อทำงานพร้อมกัน**
+
+เหตุผลหลักคือ **เครื่องสแกนลายนิ้วมือ** — firmware ฝังชื่อโดเมนไว้ข้างใน
+ถ้าตัดของเก่าทิ้งทันที ทุกเครื่องจะหยุดส่งเวลาเข้า**แบบเงียบ ๆ**
+พนักงานสแกนนิ้วได้เหมือนเดิมแต่เวลาไม่เข้าระบบ กว่าจะรู้ก็ตอนสิ้นเดือน
+
+### ขั้นที่ 1 — ตั้ง DNS ที่ผู้จดทะเบียนโดเมน
+
+เพิ่ม A record 3 ตัว ชี้ไป IP เดิมของ VM (ดูจากข้อ 1)
+
+| Host | Type | Value | TTL |
+|---|---|---|---|
+| `app` | A | `<IP ของ VM>` | 300 |
+| `device` | A | `<IP ของ VM>` | 300 |
+| `files` | A | `<IP ของ VM>` | 300 |
+
+TTL 300 ไว้ก่อน — ตั้งผิดจะแก้ได้เร็ว ค่อยขยับเป็น 3600 ตอนทุกอย่างนิ่งแล้ว
+
+**รอจน DNS กระจายก่อน ห้ามข้ามขั้นนี้เด็ดขาด** — ตรวจจาก Cloud Shell
+
+```bash
+dig +short app.smartboss.in.th device.smartboss.in.th files.smartboss.in.th
+```
+
+ต้องได้ IP ของ VM ครบทั้ง 3 บรรทัด ถ้ายังว่างหรือมาไม่ครบ ให้รอ
+
+> ⚠ **อย่ารีบข้ามไปขั้นที่ 2** — Caddy ขอใบรับรองตอนสตาร์ต ถ้า DNS ยังไม่ชี้มา
+> จะขอล้มซ้ำ ๆ จนโดน Let's Encrypt จำกัด (5 ครั้ง/ชม.) แล้วต้องรอเป็นชั่วโมง
+
+### ขั้นที่ 2 — เพิ่มชื่อใหม่เข้า Caddy
+
+ค่าใน `/opt/smartboss/deploy/.env` รับหลายชื่อคั่นด้วยจุลภาคได้ ไม่ต้องแก้ Caddyfile
+
+```bash
+sudo -u smartboss cp /opt/smartboss/deploy/.env /opt/smartboss/deploy/.env.bak
+sudo -u smartboss nano /opt/smartboss/deploy/.env
+```
+
+แก้ 3 บรรทัดนี้ — **เก็บของเดิมไว้แล้วต่อด้วยจุลภาค**
+
+```env
+APP_DOMAIN=app.easyboss.app, app.smartboss.in.th
+DEVICE_DOMAIN=device.easyboss.app, device.smartboss.in.th
+FILES_DOMAIN=files.easyboss.app, files.smartboss.in.th
+```
+
+รีสตาร์ตเฉพาะ Caddy (ไม่แตะ Postgres/Redis/MinIO)
+
+```bash
+sudo -u smartboss docker compose -f /opt/smartboss/deploy/docker-compose.yml up -d caddy
+sudo -u smartboss docker compose -f /opt/smartboss/deploy/docker-compose.yml logs -f caddy
+```
+
+ดู log จนเห็น `certificate obtained successfully` ครบทั้ง 3 ชื่อใหม่ แล้วกด `Ctrl+C`
+
+ตรวจว่า**ของเก่ายังทำงานอยู่**
+
+```bash
+curl -sI https://app.easyboss.app/login    | head -1
+curl -sI https://app.smartboss.in.th/login | head -1
+```
+
+ต้องได้ `200` ทั้งคู่
+
+### ขั้นที่ 3 — อนุญาตชื่อใหม่ใน CORS
+
+```bash
+sudo cp /etc/smartboss/smartboss.env /etc/smartboss/smartboss.env.bak
+sudo nano /etc/smartboss/smartboss.env
+```
+
+```env
+CORS_ALLOWED_ORIGINS=https://app.easyboss.app,https://app.smartboss.in.th
+```
+
+> คั่นด้วยจุลภาค **ห้ามเว้นวรรค** — ตัวอ่านตัดด้วย `,` แล้ว trim ให้ แต่ช่องว่าง
+> ที่ติดมาจะทำให้เทียบกับ Origin header ที่เบราว์เซอร์ส่งมาไม่ตรง
+
+ยัง **ไม่แก้** `S3_ENDPOINT` กับ `STORAGE_ENDPOINT` ตอนนี้ — เก็บไว้ขั้นที่ 5
+
+```bash
+sudo systemctl restart smartboss-web smartboss-api smartboss-worker smartboss-gateway
+```
+
+### ขั้นที่ 4 — ไล่ flash เครื่องสแกนทีละเครื่อง
+
+แก้โดเมนใน firmware เป็น `device.smartboss.in.th` แล้ว flash
+
+**ทำตอนไหนก็ได้ ไม่มีเส้นตาย** เพราะของเก่ายังทำงานอยู่ — เครื่องที่ flash แล้ว
+กับที่ยังไม่ flash ส่งเข้าที่เดียวกัน ข้อมูลไม่แยกกัน
+
+เช็คว่ายังมีเครื่องยิงเข้าชื่อเก่าอยู่ไหม
+
+```bash
+sudo -u smartboss docker compose -f /opt/smartboss/deploy/docker-compose.yml \
+  exec caddy grep -c easyboss /data/log/device.log
+```
+
+เลขนิ่งลงเรื่อย ๆ จนเหลือ 0 = flash ครบทุกเครื่องแล้ว
+
+### ขั้นที่ 5 — ตัดของเก่า (ทำเมื่อขั้น 4 ครบแล้วเท่านั้น)
+
+**5.1 ย้ายที่เก็บไฟล์ก่อน** — แก้ `/etc/smartboss/smartboss.env`
+
+```env
+S3_ENDPOINT=https://files.smartboss.in.th
+STORAGE_ENDPOINT=https://files.smartboss.in.th
+CORS_ALLOWED_ORIGINS=https://app.smartboss.in.th
+```
+
+```bash
+sudo systemctl restart smartboss-web smartboss-api smartboss-worker smartboss-gateway
+```
+
+เปิดเว็บแล้ว**กดเปิดไฟล์แนบเก่าสักไฟล์** ต้องเปิดได้ปกติ
+(ไฟล์เก่าไม่พัง เพราะฐานข้อมูลเก็บเป็น `/api/files/<key>` ไม่ได้เก็บชื่อโดเมน)
+
+**5.2 ถอดชื่อเก่าออกจาก Caddy** — แก้ `/opt/smartboss/deploy/.env`
+
+```env
+APP_DOMAIN=app.smartboss.in.th
+DEVICE_DOMAIN=device.smartboss.in.th
+FILES_DOMAIN=files.smartboss.in.th
+```
+
+```bash
+sudo -u smartboss docker compose -f /opt/smartboss/deploy/docker-compose.yml up -d caddy
+```
+
+**5.3 ค่อยลบ DNS ของโดเมนเก่า** — ทิ้งไว้สักเดือนก่อน
+เผื่อมีเครื่องที่ลืม flash หรือมีคน bookmark ชื่อเก่าไว้
+
+### สิ่งที่ไม่ต้องทำ
+
+| | ทำไม |
+|---|---|
+| แก้โค้ดใน repo | โดเมนไม่ได้อยู่ในโค้ดเลย อยู่ใน env + DNS เท่านั้น |
+| deploy / build ใหม่ | ไม่มีโค้ดเปลี่ยน แค่รีสตาร์ตก็พอ |
+| ไล่แก้ URL ในฐานข้อมูล | ไฟล์แนบเก็บเป็น path สัมพัทธ์อยู่แล้ว |
+| บอกทีม dev | ทีมทำงานบน `127.0.0.1:3100` ไม่เกี่ยวข้องด้วยเลย |
+
+### สิ่งที่ต้องบอกคนใช้
+
+**ทุกคนจะหลุด login ตอนขั้นที่ 5** — cookie ผูกกับโดเมน ต้องเข้าระบบใหม่
+ไม่มีข้อมูลหาย แต่ควรบอกล่วงหน้า
+
+---
+
 ## 12. เจอปัญหาแล้วดูตรงไหน
 
 ```bash
