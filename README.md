@@ -54,6 +54,10 @@ pnpm dev                        # http://localhost:3000
 
 > 📖 **หัวข้อนี้ครอบคลุมแค่ `apps/web`** — ระบบมีอีก 3 โปรเซสที่ Vercel รันไม่ได้
 > (workforce API / worker / device gateway) และลำดับ bootstrap ฐานข้อมูลมีรายละเอียดที่พลาดแล้วพัง
+> **เริ่มทำงานครั้งแรก อ่าน 2 ไฟล์นี้ก่อน**
+> - **[docs/commands.md](docs/commands.md)** — คำสั่งไหนรันที่ไหน (เครื่องตัวเอง / เซิร์ฟเวอร์ / Cloud Shell)
+> - **[docs/branches.md](docs/branches.md)** — ใครดูแล branch ไหน และของกลางที่ห้ามแก้ในสาขาตัวเอง
+>
 > ขึ้นระบบจริงให้ทำตาม **[docs/deploy.md](docs/deploy.md)** ทั้งฉบับ
 
 ### ตั้งค่า Vercel project
