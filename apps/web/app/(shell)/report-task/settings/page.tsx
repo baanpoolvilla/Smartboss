@@ -10,6 +10,7 @@ import { canAccessCompanySection } from "@/modules/report_task/lib/permissions";
 import { useSettingsAccessStore, type GrantableSection } from "@/modules/report_task/store/settings-access-store";
 import { StickerManagerPanel } from "@/modules/report_task/components/shared/sticker-manager-dialog";
 import { AttachmentSettingsPanel } from "@/modules/report_task/components/shared/attachment-settings-panel";
+import { ProjectTopicSettingsPanel } from "@/modules/report_task/components/shared/project-topic-settings-panel";
 import { LeaveTypeSettingsPanel } from "@/modules/report_task/components/calendar/leave-type-settings-dialog";
 import { RoutineDayOffSettingsPanel } from "@/modules/report_task/components/calendar/routine-dayoff-settings-dialog";
 import { LeaveSummaryPanel } from "@/modules/report_task/components/calendar/leave-summary-panel";
@@ -37,6 +38,7 @@ import {
   Paperclip,
   ShieldCheck,
   Smile,
+  Tag,
   Ticket,
   User,
   Users,
@@ -130,6 +132,7 @@ function SettingsPageInner() {
   const taskGrantableSections: { key: GrantableSection; label: string; icon: LucideIcon }[] = [
     { key: "stickers", label: "สติกเกอร์ & คะแนน", icon: Smile },
     { key: "attachments", label: "ไฟล์แนบ", icon: Paperclip },
+    { key: "projectTopics", label: "หัวข้อโปรเจค", icon: Tag },
   ];
   const calendarGrantableSections: { key: GrantableSection; label: string; icon: LucideIcon }[] = [
     { key: "leaveTypes", label: "ประเภทการลา", icon: Ticket },
@@ -244,6 +247,7 @@ function SettingsPageInner() {
             <section className="rounded-2xl border border-[var(--line)] bg-white p-5 shadow-sm">
               {sectionKey === "stickers" && <StickerManagerPanel />}
               {sectionKey === "attachments" && <AttachmentSettingsPanel />}
+              {sectionKey === "projectTopics" && <ProjectTopicSettingsPanel />}
             </section>
           )}
 

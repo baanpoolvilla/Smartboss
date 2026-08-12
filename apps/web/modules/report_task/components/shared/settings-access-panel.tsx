@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avat
 import { getDepartment, departments, users } from "@/modules/report_task/lib/directory";
 import { useSettingsAccessStore, type GrantableSection } from "@/modules/report_task/store/settings-access-store";
 import { toast } from "sonner";
-import { ShieldCheck, Smile, Ticket, CalendarOff, FolderTree, Search } from "lucide-react";
+import { ShieldCheck, Smile, Ticket, CalendarOff, FolderTree, Search, Tag } from "lucide-react";
 import { cn } from "@/modules/report_task/lib/utils";
 
 const grantableSections: { key: GrantableSection; label: string; icon: typeof Smile }[] = [
@@ -17,6 +17,7 @@ const grantableSections: { key: GrantableSection; label: string; icon: typeof Sm
   { key: "leaveTypes", label: "ประเภทการลา", icon: Ticket },
   { key: "routineDayoff", label: "วันหยุดประจำ", icon: CalendarOff },
   { key: "reportTopics", label: "สร้าง/ลบหัวข้อ Report", icon: FolderTree },
+  { key: "projectTopics", label: "หัวข้อโปรเจค", icon: Tag },
 ];
 
 /**
