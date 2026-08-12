@@ -45,6 +45,11 @@ export const CORE_PERMS = [
   // คะแนนผลงานรวมข้ามโมดูล — อยู่ระดับ core เพราะกินข้อมูลจากทุกโมดูล
   "core.performance.view",
   "core.performance.setting.manage",
+  // แผนก/ตำแหน่ง — ของกลาง ใช้ร่วมกันได้ทุกโมดูล (ดู core.prisma: Department/Position)
+  "core.department.view",
+  "core.department.manage",
+  "core.position.view",
+  "core.position.manage",
 ];
 
 /** สิทธิ์ระดับแพลตฟอร์ม — ไม่มอบให้บทบาทของบริษัทใด SUPER_ADMIN ผ่านเองอยู่แล้ว */
@@ -81,6 +86,7 @@ export const ROLE_GRANTS: Record<string, string[]> = {
     "core.admin", "core.user.view", "core.role.view", "core.audit.view",
     // ผู้บริหารเป็นคนกำหนดว่าบริษัทนี้ถือว่าอะไรคือ "ทำงานได้ดี"
     "core.performance.view", "core.performance.setting.manage",
+    "core.department.view", "core.department.manage", "core.position.view", "core.position.manage",
     "hr.access", "hr.employee.view", "hr.salary.view", "hr.payroll.view", "hr.payroll.approve",
     ...MAINT_PERMS.filter((p) => p !== "maintenance.admin"),
   ],
@@ -88,6 +94,7 @@ export const ROLE_GRANTS: Record<string, string[]> = {
     "core.admin", "core.user.view", "core.user.manage", "core.role.view",
     // หัวหน้างานดูคะแนนลูกทีมได้ แต่แก้เกณฑ์ไม่ได้ — ไม่งั้นแก้เกณฑ์ให้ทีมตัวเองดูดีได้
     "core.performance.view",
+    "core.department.view", "core.position.view",
     "hr.access", "hr.employee.view", "hr.employee.manage", "hr.payroll.view",
     "maintenance.access",
     "maintenance.workorder.view", "maintenance.workorder.manage", "maintenance.workorder.complete",

@@ -24,18 +24,22 @@ export async function loadAuthUser(userId: string): Promise<AuthUser | null> {
           },
         },
       },
+      department: { include: { permissions: { include: { permission: true } } } },
+      position: { include: { permissions: { include: { permission: true } } } },
     },
   });
 
   if (!user || !user.isActive) return null;
 
   const roles = user.roles.map((ur) => ur.role.code);
+  // สิทธิ์รวมจากบทบาท + แผนก + ตำแหน่งที่ user คนนี้สังกัด — คนในแผนก/ตำแหน่ง
+  // เดียวกันได้สิทธิ์ที่แผนก/ตำแหน่งกำหนดเพิ่มจากสิทธิ์ตามบทบาทของตัวเอง
   const permissions = Array.from(
-    new Set(
-      user.roles.flatMap((ur) =>
-        ur.role.permissions.map((rp) => rp.permission.code)
-      )
-    )
+    new Set([
+      ...user.roles.flatMap((ur) => ur.role.permissions.map((rp) => rp.permission.code)),
+      ...(user.department?.permissions.map((dp) => dp.permission.code) ?? []),
+      ...(user.position?.permissions.map((pp) => pp.permission.code) ?? []),
+    ])
   );
 
   return {

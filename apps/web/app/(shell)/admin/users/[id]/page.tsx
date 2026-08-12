@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { Building2, ShieldCheck } from "lucide-react";
 import { requireOrg, hasPermission, isSuperAdmin } from "@smartboss/auth";
@@ -7,6 +8,8 @@ import { ADMIN_PERMS } from "@/modules/admin/permissions";
 import { getOrgUser, getUserAnyOrg } from "@/modules/admin/data/users";
 import { listAllOrganizations } from "@/modules/admin/data/orgs";
 import { listRoles } from "@/modules/admin/data/roles";
+import { listDepartments } from "@/modules/admin/data/departments";
+import { listPositions } from "@/modules/admin/data/positions";
 import {
   Field,
   Pill,
@@ -20,6 +23,7 @@ import {
   moveUserOrgAction,
   resetPasswordAction,
   setUserActiveAction,
+  setUserDepartmentPositionAction,
   setUserRolesAction,
   updateUserAction,
 } from "../../actions";
@@ -55,6 +59,10 @@ export default async function AdminUserDetailPage({
   // บทบาทต้องมาจากบริษัท "ที่ผู้ใช้คนนี้สังกัด" ไม่ใช่บริษัทของคนที่กำลังดู
   const allRoles = user.orgId ? await listRoles(user.orgId) : [];
   const orgRoles = allRoles.filter((r) => !r.isSystem);
+
+  // แผนก/ตำแหน่งก็เช่นกัน — มาจากบริษัทที่ผู้ใช้คนนี้สังกัด
+  const departments = user.orgId ? await listDepartments(user.orgId) : [];
+  const positions = user.orgId ? await listPositions(user.orgId) : [];
 
   const organizations = superAdmin ? await listAllOrganizations() : [];
   const currentOrgName =
@@ -184,6 +192,66 @@ export default async function AdminUserDetailPage({
                 <div className="mt-1">
                   <Button type="submit" size="sm">
                     บันทึกบทบาท
+                  </Button>
+                </div>
+              )}
+            </form>
+          )}
+        </SectionCard>
+
+        {/* ─── แผนก/ตำแหน่ง ─── */}
+        <SectionCard
+          title="แผนก / ตำแหน่ง"
+          description="มีได้อย่างละหนึ่ง — สิทธิ์ที่แผนก/ตำแหน่งกำหนดไว้จะรวมกับสิทธิ์ตามบทบาทของคนนี้"
+        >
+          {departments.length === 0 && positions.length === 0 ? (
+            <p className="text-sm text-(--ink-soft)">
+              ยังไม่มีแผนกหรือตำแหน่งของบริษัท — สร้างได้ที่{" "}
+              <Link href="/admin/departments" className="underline">
+                แผนก
+              </Link>{" "}
+              และ{" "}
+              <Link href="/admin/positions" className="underline">
+                ตำแหน่ง
+              </Link>
+            </p>
+          ) : (
+            <form action={setUserDepartmentPositionAction} className="flex flex-col gap-3">
+              <input type="hidden" name="userId" value={user.id} />
+              <Field label="แผนก">
+                <select
+                  name="departmentId"
+                  defaultValue={user.departmentId ?? ""}
+                  disabled={!canManage}
+                  className={selectClass}
+                >
+                  <option value="">ไม่ระบุ</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="ตำแหน่ง">
+                <select
+                  name="positionId"
+                  defaultValue={user.positionId ?? ""}
+                  disabled={!canManage}
+                  className={selectClass}
+                >
+                  <option value="">ไม่ระบุ</option>
+                  {positions.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              {canManage && (
+                <div>
+                  <Button type="submit" size="sm">
+                    บันทึกแผนก/ตำแหน่ง
                   </Button>
                 </div>
               )}
