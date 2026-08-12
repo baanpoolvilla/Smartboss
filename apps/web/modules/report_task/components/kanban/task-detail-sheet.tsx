@@ -171,14 +171,12 @@ export function TaskDetailSheet({
   const canEditMain = canEditRecord(task.assignedById, task.departmentIds, viewingAsUserId);
   const lockedTitle = "แก้ไขได้เฉพาะผู้สร้างงาน";
   // canEditMain (and canSeeTask/canDockPenalty) fall back to the viewer's own
-  // department-head match once they're no longer the assigner — a non-owner
-  // reassigning "มอบหมายโดย" away from themselves, or removing the last
-  // teammate from their own department, can silently vote themselves out of
-  // a task with no way back short of the owner or the new assignee handing
-  // it back. Only checked for non-owners; the owner can always edit/see it.
+  // department-head match once they're no longer an assignee — a non-owner
+  // removing the last teammate from their own department can silently vote
+  // themselves out of a task with no way back short of the owner or a
+  // remaining assignee handing it back. Only checked for non-owners; the
+  // owner can always edit/see it.
   const owner = isOwner(viewingAsUserId);
-  const reassigningWouldLockMeOut = (nextAssignedById: string) =>
-    !owner && !canEditRecord(nextAssignedById, task.departmentIds, viewingAsUserId);
   const removingAssigneeWouldLockMeOut = (nextAssigneeIds: string[]) =>
     !owner && !canEditRecord(task.assignedById, departmentIdsOf(nextAssigneeIds), viewingAsUserId);
   // "หัวร้อน" is a reprimand, not peer feedback — only the department head
@@ -555,61 +553,20 @@ export function TaskDetailSheet({
             </div>
           </div>
 
-          {/* Assigned by (editable, single) + departments (auto) */}
+          {/* Assigned by (read-only) + departments (auto) */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-lg px-3 py-2">
             <span className="flex items-center gap-1.5">
               มอบหมายโดย
-              {/* Reassigning "created by" changes who canEditRecord/canSeeTask
-                  treat as the owner going forward — letting a plain creator
-                  (not a manager) hand that off arbitrarily could lock them
-                  out of their own task or spoof authorship, so only a
-                  manager gets the picker; a plain creator sees it read-only. */}
-              {canManage(viewingAsUserId) ? (
-                <Popover>
-                  <PopoverTrigger
-                    render={
-                      <button className="flex items-center gap-1.5 rounded-full bg-white border border-[var(--line)] pl-0.5 pr-2 py-0.5 hover:border-[var(--brand-green)]">
-                        <Avatar className="h-5 w-5">
-                          <AvatarFallback className="text-[8px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{assignedBy?.avatar}</AvatarFallback>
-                        </Avatar>
-                        <span className="font-medium text-[var(--ink)]">{assignedBy?.name}</span>
-                      </button>
-                    }
-                  />
-                  <PopoverContent align="start" className="w-60 p-1 max-h-64 overflow-y-auto">
-                    {users.map((u) => {
-                      const locked = u.id !== task.assignedById && reassigningWouldLockMeOut(u.id);
-                      return (
-                      <button
-                        key={u.id}
-                        disabled={locked}
-                        onClick={() => !locked && updateTask(task.id, { assignedById: u.id })}
-                        title={locked ? "เปลี่ยนไม่ได้ — จะทำให้คุณแก้/เห็นงานนี้เองไม่ได้อีก" : undefined}
-                        className={cn(
-                          "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left",
-                          locked ? "opacity-40 cursor-not-allowed" : "hover:bg-[var(--bg-soft)]"
-                        )}
-                      >
-                        <span className={cn("h-4 w-4 rounded-full border flex items-center justify-center shrink-0", u.id === task.assignedById ? "bg-[var(--brand-green)] border-[var(--brand-green)]" : "border-[var(--line)]")}>
-                          {u.id === task.assignedById && <Check className="h-3 w-3 text-white" />}
-                        </span>
-                        <Avatar className="h-6 w-6">
-                          <AvatarFallback className="text-[9px] bg-[var(--bg-soft)]">{u.avatar}</AvatarFallback>
-                        </Avatar>
-                        <span className="flex-1 text-sm truncate">{u.name}</span>
-                      </button>
-                      );
-                    })}
-                  </PopoverContent>
-                </Popover>
-              ) : (
-                <span className="flex items-center gap-1.5 rounded-full bg-white border border-[var(--line)] pl-0.5 pr-2 py-0.5">
-                  <Avatar className="h-5 w-5">
-                    <AvatarFallback className="text-[8px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{assignedBy?.avatar}</AvatarFallback>
-                  </Avatar>
-                  <span className="font-medium text-[var(--ink)]">{assignedBy?.name}</span>
-                </span>
-              )}
+              {/* Who assigned this task is a fixed historical fact, not an
+                  editable field — changing it after the fact would rewrite
+                  who's actually responsible/who has edit rights over the
+                  task (see canEditRecord), so nobody gets a picker here. */}
+              <span className="flex items-center gap-1.5 rounded-full bg-white border border-[var(--line)] pl-0.5 pr-2 py-0.5">
+                <Avatar className="h-5 w-5">
+                  <AvatarFallback className="text-[8px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{assignedBy?.avatar}</AvatarFallback>
+                </Avatar>
+                <span className="font-medium text-[var(--ink)]">{assignedBy?.name}</span>
+              </span>
             </span>
             <span className="flex items-center gap-1.5">
               <Building2 className="h-3.5 w-3.5" />

@@ -338,6 +338,11 @@ export const useTaskStore = create<TaskStore>((set) => ({
       ),
     })),
   // Assignees drive a task's departments, so recompute them together.
+  // taskMode follows the headcount too — 2+ people means it behaves as a
+  // group task (per-person checklist completion, done only once everyone
+  // is), 1 person means it behaves as an individual task (status settable
+  // directly) — so adding/removing assignees is the only control needed,
+  // no separate mode toggle for the user to keep in sync by hand.
   setAssignees: (taskId, assigneeIds) =>
     set((s) => {
       const t = s.tasks.find((x) => x.id === taskId);
@@ -349,7 +354,13 @@ export const useTaskStore = create<TaskStore>((set) => ({
       return {
         tasks: s.tasks.map((x) =>
           x.id === taskId
-            ? { ...x, assigneeIds, departmentIds: departmentIdsOf(assigneeIds), updatedAt: new Date().toISOString() }
+            ? {
+                ...x,
+                assigneeIds,
+                departmentIds: departmentIdsOf(assigneeIds),
+                taskMode: assigneeIds.length > 1 ? "group" : "individual",
+                updatedAt: new Date().toISOString(),
+              }
             : x
         ),
       };
