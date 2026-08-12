@@ -28,11 +28,16 @@ export function KanbanColumn({
   column,
   boardTotal,
   onOpen,
+  onHeaderClick,
 }: {
   column: BoardColumn;
   /** Every task currently on the board (post-filter) — the denominator for this column's "N% ของบอร์ด" bar. */
   boardTotal: number;
   onOpen: (id: string) => void;
+  /** Set only when grouped by assignee — clicking the person's name opens
+   * their tasks broken down by project topic. Absent for status/priority
+   * columns, which don't map to a single person. */
+  onHeaderClick?: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id, disabled: column.derived });
   const Icon = column.icon;
@@ -64,7 +69,18 @@ export function KanbanColumn({
           )}
           {/* จุดสี — a second, plainer color cue beyond the icon chip, right against the label. */}
           <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: accent }} />
-          <h3 className="text-sm font-semibold truncate tracking-tight">{column.label}</h3>
+          {onHeaderClick ? (
+            <button
+              type="button"
+              onClick={onHeaderClick}
+              className="text-sm font-semibold truncate tracking-tight text-left hover:underline underline-offset-2 cursor-pointer"
+              title="ดูงานของคนนี้แยกตามหัวข้อโปรเจค"
+            >
+              {column.label}
+            </button>
+          ) : (
+            <h3 className="text-sm font-semibold truncate tracking-tight">{column.label}</h3>
+          )}
 
           <span
             className="ml-auto text-[11px] font-semibold rounded-full h-5 min-w-5 px-1.5 flex items-center justify-center tabular-nums shrink-0"

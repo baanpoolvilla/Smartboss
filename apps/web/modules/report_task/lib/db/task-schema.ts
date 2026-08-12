@@ -85,6 +85,7 @@ export const taskSchema = z.object({
   penalties: z.record(z.string(), taskPenaltySchema).optional(),
   checklist: z.array(checklistItemSchema),
   showChecklistOnCard: z.boolean(),
+  projectTopicId: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

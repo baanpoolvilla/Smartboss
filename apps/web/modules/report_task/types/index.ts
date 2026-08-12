@@ -11,6 +11,14 @@ export interface Department {
   headId: string;
 }
 
+/** Optional grouping tag for tasks — no permission implications, purely a
+ * label. Not every org uses these; a task with no `projectTopicId` is fine. */
+export interface ProjectTopic {
+  id: string;
+  name: string;
+  color?: string;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -146,6 +154,8 @@ export interface Task {
   checklist: ChecklistItem[];
   /** Planner's "show on card" — preview the checklist on the board card. */
   showChecklistOnCard: boolean;
+  /** Optional grouping tag (see ProjectTopic) — most tasks have none. */
+  projectTopicId?: string;
   createdAt: string;
   updatedAt: string;
 }

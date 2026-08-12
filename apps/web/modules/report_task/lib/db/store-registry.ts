@@ -28,7 +28,7 @@ export const STORE_KEYS = {
   "routine-dayoff": "stores/routine-dayoff.json",
   "settings-access": "stores/settings-access.json",
   stickers: "stores/stickers.json",
-  templates: "stores/templates.json",
+  "project-topics": "stores/project-topics.json",
 } as const;
 
 export type StoreKey = keyof typeof STORE_KEYS;

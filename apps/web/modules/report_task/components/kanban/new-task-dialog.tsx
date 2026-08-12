@@ -38,7 +38,7 @@ import { useRoutineDayOffStore } from "@/modules/report_task/store/routine-dayof
 import { expandRule, projectedRoutineQuotaTotal, quotaForDepartment, weekdayLabelTh, WEEKDAY_SHORT_TH } from "@/modules/report_task/lib/routine-dayoff";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
-import { useTemplateStore } from "@/modules/report_task/store/template-store";
+import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
 import type { Attachment, CalendarEvent, ChecklistItem, LeaveType, Task, TaskPriority } from "@/modules/report_task/types";
 import { cn } from "@/modules/report_task/lib/utils";
 import { todayIso } from "@/modules/report_task/lib/now";
@@ -58,8 +58,7 @@ import {
   ListChecks,
   Check,
   Plane,
-  Files,
-  Save,
+  Tag,
   Repeat,
   AlarmClockOff,
   CalendarSearch,
@@ -233,8 +232,9 @@ export function NewTaskDialog({
   const routineDeptQuotas = useRoutineDayOffStore((s) => s.departmentQuotas);
   const notifyMany = useNotificationStore((s) => s.notifyMany);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
-  const templates = useTemplateStore((s) => s.templates);
-  const addTemplate = useTemplateStore((s) => s.addTemplate);
+  const projectTopics = useProjectTopicStore((s) => s.topics);
+  const addProjectTopic = useProjectTopicStore((s) => s.addTopic);
+  const [selectedTopicId, setSelectedTopicId] = useState<string>("none");
   const leaveTypes = useLeaveTypeStore((s) => s.types);
   const assignedByUser = getUser(viewingAsUserId)!;
   // Scheduling a meeting pulls other people's calendars into it — a
@@ -547,6 +547,7 @@ export function NewTaskDialog({
       checklist,
       completedAssigneeIds: [],
       showChecklistOnCard: false,
+      ...(selectedTopicId !== "none" ? { projectTopicId: selectedTopicId } : {}),
       createdAt: now,
       updatedAt: now,
     };
@@ -684,25 +685,12 @@ export function NewTaskDialog({
     setChecklistItems((prev) => prev.filter((c) => c.id !== id));
   }
 
-  function applyTemplate(id: string) {
-    const t = templates.find((x) => x.id === id);
-    if (!t) return;
-    setTitle(t.title);
-    setDescription(t.description);
-    setPriority(t.priority);
-    toast.success(`ใช้เทมเพลต "${t.name}"`);
-  }
-
-  function saveAsTemplate() {
-    const name = window.prompt("ตั้งชื่อเทมเพลต", title.trim() || "เทมเพลตใหม่");
+  function createProjectTopic() {
+    const name = window.prompt("ตั้งชื่อหัวข้อโปรเจค");
     if (!name?.trim()) return;
-    addTemplate({
-      name: name.trim(),
-      title: title.trim(),
-      description: description.trim(),
-      priority,
-    });
-    toast.success(`บันทึกเทมเพลต "${name.trim()}" แล้ว`);
+    const id = addProjectTopic(name.trim());
+    setSelectedTopicId(id);
+    toast.success(`สร้างหัวข้อโปรเจค "${name.trim()}" แล้ว`);
   }
 
   async function handleSubmit() {
@@ -862,24 +850,32 @@ export function NewTaskDialog({
                 </div>
               </Row>
 
-              <Row icon={Files}>
+              <Row icon={Tag}>
                 <div className="space-y-1">
-                  <Label className="text-xs text-[var(--ink-soft)]">เทมเพลต</Label>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Select value="" onValueChange={(v) => v && applyTemplate(v)}>
-                      <SelectTrigger className="flex-1 min-w-[140px]">
-                        <SelectValue placeholder="เลือกเทมเพลต...">เลือกเทมเพลต...</SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {templates.map((t) => (
-                          <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button type="button" size="sm" variant="outline" onClick={saveAsTemplate} title="บันทึกงานนี้เป็นเทมเพลต" className="shrink-0">
-                      <Save className="h-3.5 w-3.5" /> บันทึกเป็นเทมเพลต
-                    </Button>
-                  </div>
+                  <Label className="text-xs text-[var(--ink-soft)]">หัวข้อโปรเจค</Label>
+                  <Select
+                    value={selectedTopicId}
+                    onValueChange={(v) => {
+                      if (!v) return;
+                      if (v === "__create__") createProjectTopic();
+                      else setSelectedTopicId(v);
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="ไม่ระบุหัวข้อโปรเจค">
+                        {selectedTopicId === "none"
+                          ? "ไม่ระบุหัวข้อโปรเจค"
+                          : (projectTopics.find((t) => t.id === selectedTopicId)?.name ?? "ไม่ระบุหัวข้อโปรเจค")}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">ไม่ระบุหัวข้อโปรเจค</SelectItem>
+                      {projectTopics.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                      ))}
+                      <SelectItem value="__create__">+ สร้างหัวข้อใหม่...</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </Row>
 
