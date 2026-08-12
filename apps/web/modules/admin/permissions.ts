@@ -26,6 +26,9 @@ export const ADMIN_PERMS = {
   /** ตั้งเกณฑ์คะแนนของบริษัท (คะแนนตั้งต้น อัตราหัก เกณฑ์เกรด) */
   performanceSettingManage: "core.performance.setting.manage",
 
+  /** ตั้งค่าความปลอดภัยตอนเข้าสู่ระบบ (ล็อกบัญชี ความยาวรหัสผ่าน อายุ session) */
+  securitySettingManage: "core.security.setting.manage",
+
   /**
    * เปิดบริษัทใหม่ในแพลตฟอร์ม — **ระดับแพลตฟอร์ม ไม่ใช่ระดับบริษัท**
    *

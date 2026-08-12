@@ -62,6 +62,7 @@ model Organization {
   reportTaskCollection ReportTaskCollection?
   performanceEvents    PerformanceEvent[]
   performanceSetting   PerformanceSetting?
+  securitySetting      SecuritySetting?
 
   @@map("organizations")
   @@schema("core")
@@ -415,5 +416,45 @@ model PerformanceSetting {
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@map("performance_settings")
+  @@schema("core")
+}
+
+// การตั้งค่าความปลอดภัยตอนเข้าสู่ระบบ — แยกตามบริษัท
+//
+// เดิมเป็นค่าตายในโค้ด (5 ครั้ง / 15 นาที) ซึ่งใช้ไม่ได้กับทุกที่:
+// สำนักงานที่พนักงานมีคอมของตัวเองอยากได้เข้มกว่านั้น ส่วนโรงงานที่ใช้
+// เครื่องร่วมกันทั้งกะแล้วพิมพ์บนจอสัมผัส ล็อก 15 นาทีเท่ากับหยุดงานทั้งกะ
+//
+// ไม่มีแถว = ใช้ค่าเริ่มต้นในโค้ด (ดู apps/web/lib/security-settings.ts)
+//
+// ⚠ ไม่ได้ครอบคลุมการจำกัดจำนวนครั้งต่อ IP (10 ครั้ง/นาที) — ตัวนั้นทำงาน
+//   ก่อนระบบจะรู้ว่าอีเมลที่ส่งมาเป็นของบริษัทไหน จึงตั้งรายบริษัทไม่ได้
+//   โดยธรรมชาติ และต้องเป็นอย่างนั้นด้วย ไม่งั้นคนยิงสุ่มรหัสจะเลี่ยงได้
+//   ด้วยการส่งอีเมลของบริษัทที่ตั้งค่าหลวมที่สุด
+model SecuritySetting {
+  orgId String @id @map("org_id")
+
+  /**
+   * รหัสผิดกี่ครั้งถึงล็อกบัญชี
+   */
+  maxFailedLogins Int @default(5) @map("max_failed_logins")
+
+  /**
+   * ล็อกนานกี่นาที
+   */
+  lockMinutes Int @default(15) @map("lock_minutes")
+
+  /**
+   * รหัสผ่านต้องยาวอย่างน้อยกี่ตัวอักษร
+   */
+  passwordMinLength Int @default(12) @map("password_min_length")
+
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@map("security_settings")
   @@schema("core")
 }

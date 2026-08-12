@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAuth, hashPassword, verifyPassword, audit } from "@smartboss/auth";
 import { prisma } from "@smartboss/database";
+import { loadSecuritySettings } from "@/lib/security-settings";
 
 /**
  * บัญชีของตัวเอง — ทุกคนที่ล็อกอินได้ใช้หน้านี้ได้ ไม่ต้องมีสิทธิ์อะไรเพิ่ม
@@ -15,25 +16,34 @@ import { prisma } from "@smartboss/database";
  * เครื่องที่เปิดค้างไว้ก็ยึดบัญชีได้ทันที
  */
 
-const changePasswordSchema = z
-  .object({
-    currentPassword: z.string().min(1, "กรุณากรอกรหัสผ่านปัจจุบัน"),
-    newPassword: z.string().min(12, "รหัสผ่านใหม่ต้องยาวอย่างน้อย 12 ตัวอักษร"),
-    confirmPassword: z.string(),
-  })
-  .refine((v) => v.newPassword === v.confirmPassword, {
-    message: "รหัสผ่านใหม่ทั้งสองช่องไม่ตรงกัน",
-    path: ["confirmPassword"],
-  })
-  .refine((v) => v.newPassword !== v.currentPassword, {
-    message: "รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสเดิม",
-    path: ["newPassword"],
-  });
+/**
+ * สร้างตอนใช้งานจริง ไม่ใช่ตอนโหลดไฟล์ — ความยาวขั้นต่ำตั้งได้รายบริษัท
+ * (ดู apps/web/lib/security-settings.ts) จึงรู้ค่าได้ก็ต่อเมื่อรู้ว่าใครเป็นคนขอ
+ */
+function changePasswordSchema(minLength: number) {
+  return z
+    .object({
+      currentPassword: z.string().min(1, "กรุณากรอกรหัสผ่านปัจจุบัน"),
+      newPassword: z
+        .string()
+        .min(minLength, `รหัสผ่านใหม่ต้องยาวอย่างน้อย ${minLength} ตัวอักษร`),
+      confirmPassword: z.string(),
+    })
+    .refine((v) => v.newPassword === v.confirmPassword, {
+      message: "รหัสผ่านใหม่ทั้งสองช่องไม่ตรงกัน",
+      path: ["confirmPassword"],
+    })
+    .refine((v) => v.newPassword !== v.currentPassword, {
+      message: "รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสเดิม",
+      path: ["newPassword"],
+    });
+}
 
 export async function changeOwnPasswordAction(formData: FormData) {
   const session = await requireAuth();
+  const security = await loadSecuritySettings(session.orgId ?? null);
 
-  const parsed = changePasswordSchema.parse({
+  const parsed = changePasswordSchema(security.passwordMinLength).parse({
     currentPassword: String(formData.get("currentPassword") ?? ""),
     newPassword: String(formData.get("newPassword") ?? ""),
     confirmPassword: String(formData.get("confirmPassword") ?? ""),

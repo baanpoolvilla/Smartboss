@@ -13,11 +13,10 @@ import {
   loadAuthUser,
 } from "@smartboss/auth";
 import { clientIp, userAgent, jsonError } from "../_lib";
+import { loadSecuritySettings } from "@/lib/security-settings";
 
 export const runtime = "nodejs";
 
-const MAX_FAILED = 5;
-const LOCK_MINUTES = 15;
 const GENERIC_INVALID = "อีเมลหรือรหัสผ่านไม่ถูกต้อง";
 
 export async function POST(req: NextRequest) {
@@ -56,11 +55,21 @@ export async function POST(req: NextRequest) {
     return jsonError(GENERIC_INVALID, 401);
   }
 
+  // เกณฑ์ล็อกบัญชีตั้งได้รายบริษัท — อ่านหลังรู้ตัวผู้ใช้แล้วเท่านั้น
+  // (ก่อนหน้านี้ยังไม่รู้ว่าอีเมลที่ส่งมาเป็นของบริษัทไหน)
+  const security = await loadSecuritySettings(user.orgId);
+
   // 3) บัญชีถูกล็อก
   if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+    const waitMinutes = Math.ceil(
+      (user.lockedUntil.getTime() - Date.now()) / 60_000
+    );
+    // บอกเวลาที่เหลือไปเลย — ปกปิดไว้ก็ไม่ได้กันอะไรเพิ่ม เพราะคนยิงสุ่มรหัส
+    // รู้อยู่แล้วว่าโดนล็อก แต่คนที่พิมพ์ผิดจริงจะได้ไม่ต้องเดาว่าต้องรอนานแค่ไหน
     return jsonError(
-      "บัญชีถูกล็อกชั่วคราว กรุณาลองใหม่ภายหลัง",
-      423
+      `บัญชีถูกล็อกชั่วคราว กรุณาลองใหม่ในอีก ${waitMinutes} นาที`,
+      423,
+      { retryAfterMinutes: waitMinutes }
     );
   }
 
@@ -68,13 +77,13 @@ export async function POST(req: NextRequest) {
   const valid = await verifyPassword(user.passwordHash, password);
   if (!valid) {
     const failed = user.failedLogins + 1;
-    const shouldLock = failed >= MAX_FAILED;
+    const shouldLock = failed >= security.maxFailedLogins;
     await prisma.user.update({
       where: { id: user.id },
       data: {
         failedLogins: shouldLock ? 0 : failed,
         lockedUntil: shouldLock
-          ? new Date(Date.now() + LOCK_MINUTES * 60_000)
+          ? new Date(Date.now() + security.lockMinutes * 60_000)
           : user.lockedUntil,
       },
     });

@@ -37,6 +37,8 @@ export type AuditAction =
   | "ORG_CREATED"
   | "ORG_WORKFORCE_PROVISIONED"
   | "PERFORMANCE_SETTINGS_UPDATED"
+  | "SECURITY_SETTINGS_UPDATED"
+  | "ACCOUNT_UNLOCKED"
   // ── เงินเดือน ──
   | "PAYROLL_RUN_CREATED"
   | "PAYROLL_RUN_RECALCULATED"
@@ -81,6 +83,8 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   ORG_CREATED: "เปิดบริษัทใหม่",
   ORG_WORKFORCE_PROVISIONED: "เปิดใช้โมดูลบุคคลให้บริษัท",
   PERFORMANCE_SETTINGS_UPDATED: "แก้ไขเกณฑ์คะแนนผลงาน",
+  SECURITY_SETTINGS_UPDATED: "แก้ไขการตั้งค่าความปลอดภัย",
+  ACCOUNT_UNLOCKED: "ปลดล็อกบัญชี",
   PAYROLL_RUN_CREATED: "สร้างรอบจ่ายเงินเดือน",
   PAYROLL_RUN_RECALCULATED: "คำนวณรอบจ่ายใหม่",
   PAYROLL_RUN_APPROVED: "อนุมัติรอบจ่าย",

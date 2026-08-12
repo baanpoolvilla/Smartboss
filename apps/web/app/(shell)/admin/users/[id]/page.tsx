@@ -25,6 +25,7 @@ import {
   setUserActiveAction,
   setUserDepartmentPositionAction,
   setUserRolesAction,
+  unlockUserAction,
   updateUserAction,
 } from "../../actions";
 
@@ -357,6 +358,25 @@ export default async function AdminUserDetailPage({
 
             {/* ─── สถานะ / ลบ ─── */}
             <SectionCard title="สถานะบัญชี">
+              {user.lockedUntil && user.lockedUntil > new Date() && (
+                <div className="mb-3 rounded-md border border-(--warn)/30 bg-(--warn)/5 p-3">
+                  <p className="mb-2 text-xs text-(--ink)">
+                    บัญชีถูกล็อกจากการกรอกรหัสผิดหลายครั้ง — จะปลดเองเมื่อ{" "}
+                    {user.lockedUntil.toLocaleTimeString("th-TH", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      timeZone: "Asia/Bangkok",
+                    })}{" "}
+                    น. หรือกดปลดตอนนี้เลยก็ได้
+                  </p>
+                  <form action={unlockUserAction}>
+                    <input type="hidden" name="userId" value={user.id} />
+                    <Button type="submit" size="sm" variant="outline">
+                      ปลดล็อกบัญชี
+                    </Button>
+                  </form>
+                </div>
+              )}
               <div className="flex flex-wrap items-center gap-2">
                 <form action={setUserActiveAction}>
                   <input type="hidden" name="userId" value={user.id} />

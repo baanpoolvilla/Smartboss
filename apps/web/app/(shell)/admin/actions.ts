@@ -15,6 +15,7 @@ import { prisma } from "@smartboss/database";
 import { ADMIN_PERMS } from "@/modules/admin/permissions";
 import { organizationExists } from "@/modules/admin/data/orgs";
 import { PERFORMANCE_CATEGORIES } from "@/lib/performance";
+import { clampSecuritySetting, loadSecuritySettings } from "@/lib/security-settings";
 import { nextOrganizationCode } from "@/lib/document-code";
 import { provisionWorkforceTenant } from "@/lib/workforce-provisioning";
 import { ENABLED_MODULES, ORG_ROLES, ROLE_GRANTS } from "@smartboss/database/defaults";
@@ -93,16 +94,22 @@ async function assertEditablePosition(orgId: string, positionId: string) {
 
 /* ═══════════════════════ ผู้ใช้งาน ═══════════════════════ */
 
-const createUserSchema = z.object({
-  email: z.string().email("อีเมลไม่ถูกต้อง"),
-  name: z.string().min(1, "กรุณากรอกชื่อ").max(120),
-  password: z.string().min(8, "รหัสผ่านอย่างน้อย 8 ตัวอักษร"),
-  roleId: z.string().min(1, "กรุณาเลือกบทบาท"),
-});
+/** ความยาวขั้นต่ำตั้งได้รายบริษัท ⇒ สร้าง schema ตอนรู้แล้วว่าเป็นบริษัทไหน */
+function createUserSchema(minLength: number) {
+  return z.object({
+    email: z.string().email("อีเมลไม่ถูกต้อง"),
+    name: z.string().min(1, "กรุณากรอกชื่อ").max(120),
+    password: z
+      .string()
+      .min(minLength, `รหัสผ่านอย่างน้อย ${minLength} ตัวอักษร`),
+    roleId: z.string().min(1, "กรุณาเลือกบทบาท"),
+  });
+}
 
 export async function createUserAction(formData: FormData) {
   const session = await guard(ADMIN_PERMS.userManage);
-  const parsed = createUserSchema.parse({
+  const security = await loadSecuritySettings(session.orgId);
+  const parsed = createUserSchema(security.passwordMinLength).parse({
     email: String(formData.get("email") ?? "").trim().toLowerCase(),
     name: String(formData.get("name") ?? "").trim(),
     password: String(formData.get("password") ?? ""),
@@ -271,7 +278,10 @@ export async function resetPasswordAction(formData: FormData) {
   const session = await guard(ADMIN_PERMS.userManage);
   const userId = String(formData.get("userId") ?? "");
   const password = String(formData.get("password") ?? "");
-  if (password.length < 8) throw new Error("รหัสผ่านอย่างน้อย 8 ตัวอักษร");
+  const { passwordMinLength } = await loadSecuritySettings(session.orgId);
+  if (password.length < passwordMinLength) {
+    throw new Error(`รหัสผ่านอย่างน้อย ${passwordMinLength} ตัวอักษร`);
+  }
   await assertManageableUser(session, userId);
 
   await prisma.user.update({
@@ -721,6 +731,82 @@ export async function savePerformanceSettingsAction(formData: FormData) {
   });
   revalidatePath("/admin/performance");
   revalidatePath("/admin/performance/settings");
+}
+
+/* ═══════════════════════ ความปลอดภัยตอนเข้าสู่ระบบ ═══════════════════════ */
+
+/**
+ * ตั้งค่าล็อกบัญชี / ความยาวรหัสผ่าน / อายุ session ของบริษัท
+ *
+ * ค่าที่รับมาถูกบีบเข้าขอบเขตด้วย clampSecuritySetting เสมอ ไม่ใช่แค่พึ่ง
+ * `min`/`max` ในฟอร์ม — คนที่ยิง action ตรง ๆ ข้ามการตรวจฝั่งหน้าจอได้หมด
+ * และค่าอย่าง maxFailedLogins = 0 จะล็อกทุกคนออกจากระบบตั้งแต่ครั้งแรกที่พิมพ์ผิด
+ */
+export async function saveSecuritySettingsAction(formData: FormData) {
+  const session = await guard(ADMIN_PERMS.securitySettingManage);
+  const orgId = await resolveTargetOrgId(session, formData);
+
+  const data = {
+    maxFailedLogins: clampSecuritySetting(
+      "maxFailedLogins",
+      Number(formData.get("maxFailedLogins"))
+    ),
+    lockMinutes: clampSecuritySetting(
+      "lockMinutes",
+      Number(formData.get("lockMinutes"))
+    ),
+    passwordMinLength: clampSecuritySetting(
+      "passwordMinLength",
+      Number(formData.get("passwordMinLength"))
+    ),
+    updatedBy: session.userId,
+  };
+
+  await prisma.securitySetting.upsert({
+    where: { orgId },
+    update: data,
+    create: { orgId, ...data },
+  });
+
+  await audit({
+    userId: session.userId,
+    action: "SECURITY_SETTINGS_UPDATED",
+    targetId: orgId,
+    detail: data,
+  });
+  revalidatePath("/admin/security");
+}
+
+/**
+ * ปลดล็อกบัญชีที่โดนล็อกจากการกรอกรหัสผิด
+ *
+ * มีไว้เพราะทางเลือกอื่นแย่กว่า: รอ 15 นาที (คนทำงานหยุดรอ) หรือให้คนที่
+ * เข้าฐานข้อมูลได้ไปสั่ง UPDATE เอง (ไม่มีบันทึกว่าใครปลดให้ใครเมื่อไหร่)
+ */
+export async function unlockUserAction(formData: FormData) {
+  const session = await guard(ADMIN_PERMS.userManage);
+  const userId = String(formData.get("userId") ?? "");
+  const orgId = await resolveTargetOrgId(session, formData);
+
+  // จำกัดให้ปลดได้เฉพาะคนในบริษัทเดียวกัน — กันแอดมินบริษัทหนึ่งไปยุ่งกับอีกบริษัท
+  const target = await prisma.user.findFirst({
+    where: { id: userId, orgId },
+    select: { id: true, email: true },
+  });
+  if (!target) throw new Error("ไม่พบผู้ใช้รายนี้ในบริษัท");
+
+  await prisma.user.update({
+    where: { id: target.id },
+    data: { failedLogins: 0, lockedUntil: null },
+  });
+
+  await audit({
+    userId: session.userId,
+    action: "ACCOUNT_UNLOCKED",
+    targetId: target.id,
+    detail: { email: target.email },
+  });
+  revalidatePath("/admin/users");
 }
 
 /* ═══════════════════════ บริษัทใหม่ (SUPER_ADMIN) ═══════════════════════ */

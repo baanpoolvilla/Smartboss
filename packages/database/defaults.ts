@@ -45,6 +45,9 @@ export const CORE_PERMS = [
   // คะแนนผลงานรวมข้ามโมดูล — อยู่ระดับ core เพราะกินข้อมูลจากทุกโมดูล
   "core.performance.view",
   "core.performance.setting.manage",
+  // ความปลอดภัยตอน login (ล็อกบัญชีกี่ครั้ง นานเท่าไร) — คนละเรื่องกับสิทธิ์ผู้ใช้
+  // จึงแยก permission ไว้ ให้มอบเฉพาะคนที่ควรแตะนโยบายความปลอดภัยได้จริง
+  "core.security.setting.manage",
   // แผนก/ตำแหน่ง — ของกลาง ใช้ร่วมกันได้ทุกโมดูล (ดู core.prisma: Department/Position)
   "core.department.view",
   "core.department.manage",

@@ -26,6 +26,7 @@ export const adminManifest: ModuleManifest = {
     // เมนูนี้โผล่เฉพาะ SUPER_ADMIN เพราะไม่มีบทบาทไหนถือ core.org.create
     { label: "บริษัททั้งหมด", path: "/admin/organizations", permission: ADMIN_PERMS.orgCreate, icon: "Building" },
     { label: "ผลงานรายคน", path: "/admin/performance", permission: ADMIN_PERMS.performanceView, icon: "ChartColumn" },
+    { label: "ความปลอดภัย", path: "/admin/security", permission: ADMIN_PERMS.securitySettingManage, icon: "ShieldCheck" },
     { label: "ประวัติการใช้งาน", path: "/admin/audit", permission: ADMIN_PERMS.auditView, icon: "History" },
   ],
   permissions: Object.values(ADMIN_PERMS),
