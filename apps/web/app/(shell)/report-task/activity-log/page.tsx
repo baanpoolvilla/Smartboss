@@ -72,7 +72,7 @@ export default function ActivityLogPage() {
 
   return (
     <div className="flex flex-col gap-4 lg:gap-6 pb-6">
-      <StickyFilterBar title="บันทึกกิจกรรม" subtitle="ใครทำอะไร ที่งานไหน เมื่อไหร่ — บันทึกอัตโนมัติทุกครั้งที่มีการเปลี่ยนสถานะ, แก้กำหนดส่ง, เปิดงานใหม่, หัก/ยกเลิกคะแนน, หรือติด/ลบสติกเกอร์">
+      <StickyFilterBar>
         {allowed && (
           <div className="flex flex-wrap items-center gap-2">
             <Select value={userId} onValueChange={(v) => v && setUserId(v)}>

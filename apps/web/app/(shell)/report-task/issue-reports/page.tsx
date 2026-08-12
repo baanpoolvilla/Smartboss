@@ -133,8 +133,6 @@ export default function IssueReportsPage() {
   return (
     <div className="flex flex-col gap-6">
       <StickyFilterBar
-        title="แจ้งปัญหาการใช้งาน"
-        subtitle={isDeskView ? "รายการที่พนักงานแจ้งเข้ามาทั้งหมด — ส่งตรงถึงทีมดูแลระบบภายใน" : "ปัญหาที่คุณเคยแจ้งไว้ — ทีมดูแลระบบจะติดตามและตอบกลับที่นี่"}
         actions={
           <div className="flex items-center gap-2">
             {canConfigure && (

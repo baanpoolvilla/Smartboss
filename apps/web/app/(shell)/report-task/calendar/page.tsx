@@ -18,7 +18,7 @@ function CalendarSkeleton() {
 export default function CalendarPage() {
   return (
     <div className="flex flex-col gap-4 lg:gap-6 pb-6">
-      <StickyFilterBar title="Calendar / Planner" subtitle="แยกเป็น 2 ปฏิทิน — ปฏิทินงาน และปฏิทินวันหยุด/ลา/ประชุม" />
+      <StickyFilterBar />
       <TaskDataGate fallback={<CalendarSkeleton />}>
         <CalendarView />
       </TaskDataGate>
