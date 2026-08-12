@@ -113,6 +113,10 @@ export interface Task {
    * assignee without it silently becoming "individual". */
   taskMode: "individual" | "group";
   assigneeIds: string[];
+  /** Which of `assigneeIds` is the lead on a group task — a label only, no
+   * permission implications (edit rights still come from `assignedById`/
+   * department head, see canEditRecord). Unused on an individual task. */
+  mainAssigneeId?: string;
   assignedById: string;
   departmentIds: string[];
   startDate: string;

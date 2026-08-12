@@ -59,6 +59,7 @@ import {
   ListTodo,
   Loader2,
   Info,
+  Star,
 } from "lucide-react";
 import type { Attachment, Sticker, TaskPriority, TaskStatus } from "@/modules/report_task/types";
 import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
@@ -92,6 +93,7 @@ export function TaskDetailSheet({
   const updateTask = useTaskStore((s) => s.updateTask);
   const removeTask = useTaskStore((s) => s.removeTask);
   const setAssignees = useTaskStore((s) => s.setAssignees);
+  const setMainAssignee = useTaskStore((s) => s.setMainAssignee);
   const reviseDueDate = useTaskStore((s) => s.reviseDueDate);
   const reviseAssigneeDueDate = useTaskStore((s) => s.reviseAssigneeDueDate);
   const addComment = useTaskStore((s) => s.addComment);
@@ -475,6 +477,26 @@ export function TaskDetailSheet({
                             )}
                           </div>
                           <span className="text-xs truncate max-w-[100px]">{a!.name}</span>
+                          {/* Head is a label only — no effect on edit/see rights, just marks
+                              who's the point person on a group task. Only meaningful once
+                              there's more than one assignee to pick among. */}
+                          {isShared && (
+                            canEditMain ? (
+                              <button
+                                onClick={() => setMainAssignee(task.id, a!.id)}
+                                className={cn(
+                                  "shrink-0",
+                                  task.mainAssigneeId === a!.id ? "text-amber-500" : "text-[var(--ink-soft)] opacity-0 group-hover:opacity-100 hover:text-amber-500"
+                                )}
+                                aria-label={task.mainAssigneeId === a!.id ? `${a!.name} เป็นหัวหน้าหลักอยู่แล้ว` : `ตั้ง ${a!.name} เป็นหัวหน้าหลัก`}
+                                title={task.mainAssigneeId === a!.id ? "หัวหน้าหลัก" : "ตั้งเป็นหัวหน้าหลัก"}
+                              >
+                                <Star className="h-3 w-3" fill={task.mainAssigneeId === a!.id ? "currentColor" : "none"} />
+                              </button>
+                            ) : task.mainAssigneeId === a!.id ? (
+                              <Star className="h-3 w-3 text-amber-500 shrink-0" fill="currentColor" aria-label="หัวหน้าหลัก" />
+                            ) : null
+                          )}
                           {/* Read-only here — marking YOUR OWN part done lives in the
                               dedicated "ส่วนของฉัน" field above, not here, so there's
                               one obvious place to do it instead of two. */}

@@ -18,7 +18,7 @@ import type { Task } from "@/modules/report_task/types";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { MessageSquare, Paperclip, History, SmilePlus, SearchCheck, Check, Circle } from "lucide-react";
+import { MessageSquare, Paperclip, History, SmilePlus, SearchCheck, Check, Circle, Star } from "lucide-react";
 import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
 import { StickerConfirmDialog } from "@/modules/report_task/components/shared/sticker-confirm-dialog";
 import type { Sticker } from "@/modules/report_task/types";
@@ -352,7 +352,13 @@ function TaskCardBody({ task, id, onOpen, dragging, lifted, refCb, style, dragPr
             title={
               assignees.length > 1
                 ? `ผู้รับผิดชอบร่วม ${assignees.length} คน: ${assignees
-                    .map((a) => `${a!.name}${isShared && (task.completedAssigneeIds ?? []).includes(a!.id) ? " (เสร็จแล้ว)" : ""}`)
+                    .map((a) => {
+                      const tags = [
+                        task.mainAssigneeId === a!.id && "หัวหน้า",
+                        isShared && (task.completedAssigneeIds ?? []).includes(a!.id) && "เสร็จแล้ว",
+                      ].filter(Boolean);
+                      return tags.length > 0 ? `${a!.name} (${tags.join(", ")})` : a!.name;
+                    })
                     .join(", ")}`
                 : assignees[0]?.name
             }
@@ -373,6 +379,9 @@ function TaskCardBody({ task, id, onOpen, dragging, lifted, refCb, style, dragPr
                     <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-[var(--brand-green)] ring-2 ring-white flex items-center justify-center">
                       <Check className="h-2 w-2 text-white" strokeWidth={3} />
                     </span>
+                  )}
+                  {task.mainAssigneeId === a!.id && (
+                    <Star className="absolute -top-1 -left-1 h-3 w-3 text-amber-500" fill="currentColor" />
                   )}
                 </div>
               );

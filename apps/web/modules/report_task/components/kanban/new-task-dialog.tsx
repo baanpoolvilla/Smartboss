@@ -68,6 +68,7 @@ import {
   FileText,
   X,
   Loader2,
+  Star,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -285,6 +286,8 @@ export function NewTaskDialog({
   // assigneeIds.length later). Individual locks the assignee picker to one
   // person; group allows multi-select.
   const [taskMode, setTaskMode] = useState<"individual" | "group">("individual");
+  // Point person on a group task — display-only label, optional even then.
+  const [mainAssigneeId, setMainAssigneeId] = useState<string>("");
   // Every task needs at least one checklist item — an assignee's part is
   // done once every item they own is checked (see task-completion.ts).
   const [checklistItems, setChecklistItems] = useState<{ id: string; text: string; ownerId: string }[]>([]);
@@ -480,6 +483,7 @@ export function NewTaskDialog({
     setStartDate(initialDate);
     setDueDate(initialDate);
     setTaskMode("individual");
+    setMainAssigneeId("");
     setChecklistItems([]);
     setNewChecklistText("");
     setNewChecklistOwnerId("");
@@ -536,6 +540,7 @@ export function NewTaskDialog({
       priority,
       taskMode,
       assigneeIds,
+      ...(taskMode === "group" && mainAssigneeId && assigneeIds.includes(mainAssigneeId) ? { mainAssigneeId } : {}),
       assignedById: viewingAsUserId,
       departmentIds: derivedDepartmentIds,
       startDate: new Date(startDate).toISOString(),
@@ -1029,6 +1034,30 @@ export function NewTaskDialog({
                   ))}
                 </div>
               </Row>
+
+              {taskMode === "group" && assigneeIds.length > 1 && (() => {
+                const validMainAssigneeId = mainAssigneeId && assigneeIds.includes(mainAssigneeId) ? mainAssigneeId : "";
+                return (
+                  <Row icon={Star}>
+                    <div className="space-y-1.5 flex-1">
+                      <Label className="text-xs text-[var(--ink-soft)]">หัวหน้าหลัก (ไม่บังคับ)</Label>
+                      <Select value={validMainAssigneeId || "none"} onValueChange={(v) => setMainAssigneeId(v === "none" ? "" : v ?? "")}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="ไม่ระบุ">
+                            {validMainAssigneeId ? getUser(validMainAssigneeId)?.name : "ไม่ระบุ"}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">ไม่ระบุ</SelectItem>
+                          {assigneeIds.map((uid) => (
+                            <SelectItem key={uid} value={uid}>{getUser(uid)?.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </Row>
+                );
+              })()}
 
               {taskMode === "group" && assigneeIds.length > 0 && (
                 <Row icon={Clock}>

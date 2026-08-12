@@ -171,6 +171,10 @@ interface TaskStore {
   removeTask: (taskId: string) => void;
   updateTask: (taskId: string, patch: Partial<Task>) => void;
   setAssignees: (taskId: string, assigneeIds: string[]) => void;
+  /** Labels one of the task's current assignees as its lead — display-only,
+   * no effect on edit/see permissions (those come from assignedById/dept
+   * head). No-op if userId isn't actually assigned to the task. */
+  setMainAssignee: (taskId: string, userId: string) => void;
   addComment: (taskId: string, message: string, authorId: string, attachments?: Attachment[]) => void;
   removeComment: (taskId: string, commentId: string) => void;
   addAttachment: (taskId: string, attachment: Attachment) => void;
@@ -359,12 +363,22 @@ export const useTaskStore = create<TaskStore>((set) => ({
                 assigneeIds,
                 departmentIds: departmentIdsOf(assigneeIds),
                 taskMode: assigneeIds.length > 1 ? "group" : "individual",
+                // Dropped assignee can't stay the labeled lead.
+                mainAssigneeId: x.mainAssigneeId && assigneeIds.includes(x.mainAssigneeId) ? x.mainAssigneeId : undefined,
                 updatedAt: new Date().toISOString(),
               }
             : x
         ),
       };
     }),
+  setMainAssignee: (taskId, userId) =>
+    set((s) => ({
+      tasks: s.tasks.map((t) =>
+        t.id === taskId && t.assigneeIds.includes(userId)
+          ? { ...t, mainAssigneeId: userId, updatedAt: new Date().toISOString() }
+          : t
+      ),
+    })),
   addComment: (taskId, message, authorId, attachments) =>
     set((s) => ({
       tasks: s.tasks.map((t) =>

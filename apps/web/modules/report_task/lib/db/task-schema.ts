@@ -62,6 +62,7 @@ export const taskSchema = z.object({
   priority: z.enum(["critical", "high", "medium", "low"]),
   taskMode: z.enum(["individual", "group"]),
   assigneeIds: z.array(z.string()),
+  mainAssigneeId: z.string().optional(),
   assignedById: z.string(),
   departmentIds: z.array(z.string()),
   startDate: z.string(),
