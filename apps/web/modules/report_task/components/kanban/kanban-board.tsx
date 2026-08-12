@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   DndContext,
   DragOverlay,
@@ -27,7 +27,7 @@ import { statusColors, chartColors } from "@/modules/report_task/lib/chart-color
 import { KanbanColumn, type BoardColumn } from "./kanban-column";
 import { TaskCardOverlay } from "./task-card";
 import { TaskDetailSheet } from "./task-detail-sheet";
-import { PersonTopicsDialog } from "./person-topics-dialog";
+import { PersonTopicsBoard } from "./person-topics-board";
 import type { Task, TaskPriority, TaskStatus } from "@/modules/report_task/types";
 import { toast } from "sonner";
 import { useTaskBoardIntentStore } from "@/modules/report_task/store/task-board-intent-store";
@@ -76,9 +76,6 @@ export function KanbanBoard() {
 
   const [groupBy, setGroupBy] = useState<GroupBy>("status");
   const [activeTask, setActiveTask] = useState<Task | null>(null);
-  // Set only when the board is grouped by assignee and someone clicks a
-  // person's column header — see PersonTopicsDialog.
-  const [personTopicsFor, setPersonTopicsFor] = useState<string | null>(null);
   // Mirrored into the `?task=` URL param (see the hook) so the browser Back
   // button closes the sheet before leaving the page — falls back to the
   // one-shot navigation intent (dashboard chart click) when there's no
@@ -86,11 +83,30 @@ export function KanbanBoard() {
   const { openTaskId, open: setOpenTaskId, close: closeTaskSheet } = useTaskSheetParam(
     useTaskBoardIntentStore.getState().openTaskId
   );
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   // Separate from `?task=` (which opens the detail dialog) — a notification
   // link should point out which card it's about without forcing the dialog
   // open, so whoever clicked it can look at the board first and decide
   // whether to open it themselves.
-  const highlightTaskId = useSearchParams().get("highlight");
+  const highlightTaskId = searchParams.get("highlight");
+  // Set only when the board is grouped by assignee and someone clicks a
+  // person's column header — swaps the whole board out for PersonTopicsBoard
+  // (a real page-feeling nav via `?person=`, not a popup: pushed so the
+  // browser Back button returns to the board, same convention as `?task=`).
+  const personBoardId = searchParams.get("person");
+  function openPersonBoard(id: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("person", id);
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+  function closePersonBoard() {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("person");
+    const query = params.toString();
+    router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
+  }
 
   const pendingDepartmentId = useTaskBoardIntentStore((s) => s.departmentId);
   const pendingScrollToStatus = useTaskBoardIntentStore((s) => s.scrollToStatus);
@@ -316,6 +332,15 @@ export function KanbanBoard() {
   const GroupIcon = groupBy === "status" ? CircleDot : groupBy === "priority" ? Flag : User;
   const sharedCount = useMemo(() => filtered.filter((t) => t.assigneeIds.length > 1).length, [filtered]);
 
+  if (personBoardId) {
+    return (
+      <>
+        <PersonTopicsBoard personId={personBoardId} onBack={closePersonBoard} onOpenTask={setOpenTaskId} />
+        <TaskDetailSheet taskId={openTaskId} onOpenChange={(open) => !open && closeTaskSheet()} />
+      </>
+    );
+  }
+
   return (
     <>
       {/* Group by (Planner-style) */}
@@ -377,7 +402,7 @@ export function KanbanBoard() {
                 column={column}
                 boardTotal={filtered.length}
                 onOpen={setOpenTaskId}
-                onHeaderClick={groupBy === "assignee" ? () => setPersonTopicsFor(column.id) : undefined}
+                onHeaderClick={groupBy === "assignee" ? () => openPersonBoard(column.id) : undefined}
               />
             ))}
           </div>
@@ -386,15 +411,6 @@ export function KanbanBoard() {
       )}
 
       <TaskDetailSheet taskId={openTaskId} onOpenChange={(open) => !open && closeTaskSheet()} />
-
-      <PersonTopicsDialog
-        personId={personTopicsFor}
-        onOpenChange={(open) => !open && setPersonTopicsFor(null)}
-        onOpenTask={(taskId) => {
-          setPersonTopicsFor(null);
-          setOpenTaskId(taskId);
-        }}
-      />
     </>
   );
 }
