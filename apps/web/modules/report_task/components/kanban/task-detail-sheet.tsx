@@ -854,23 +854,29 @@ export function TaskDetailSheet({
 
           <Separator />
 
-          {/* Revision tracking */}
+          {/* Revision tracking — the whole-task "แก้ไขกำหนดส่ง" button/form
+              (and its "กำหนดส่งเดิม"/task.revisions history) only apply to a
+              single shared due date, which doesn't make sense once a group
+              task has per-assignee due dates — editing there happens through
+              "กำหนดส่งแยกรายคน" above instead, one person at a time. */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-semibold flex items-center gap-1.5">
                 <History className="h-4 w-4" /> ประวัติการแก้ไขกำหนดส่ง
               </h4>
-              {!revising && canEditMain && (
+              {!isShared && !revising && canEditMain && (
                 <Button size="sm" variant="outline" onClick={() => setRevising(true)}>แก้ไขกำหนดส่ง</Button>
               )}
             </div>
 
-            <div className="text-sm flex items-center justify-between rounded-lg bg-[var(--bg-soft)] px-3 py-2">
-              <span className="text-[var(--ink-soft)]">กำหนดส่งเดิม</span>
-              <span className="font-medium">{formatDate(task.originalDueDate)}</span>
-            </div>
+            {!isShared && (
+              <div className="text-sm flex items-center justify-between rounded-lg bg-[var(--bg-soft)] px-3 py-2">
+                <span className="text-[var(--ink-soft)]">กำหนดส่งเดิม</span>
+                <span className="font-medium">{formatDate(task.originalDueDate)}</span>
+              </div>
+            )}
 
-            {task.revisions.map((r) => (
+            {!isShared && task.revisions.map((r) => (
               <div key={r.revisionNumber} className="text-sm rounded-lg border border-[var(--line)] px-3 py-2 space-y-1">
                 <div className="flex items-center justify-between">
                   <span className="font-medium">รอบแก้ไข #{r.revisionNumber}</span>
@@ -900,11 +906,11 @@ export function TaskDetailSheet({
               </div>
             ))}
 
-            {task.revisions.length === 0 && Object.keys(task.assigneeDueDateRevisions ?? {}).length === 0 && !revising && (
+            {(isShared || task.revisions.length === 0) && Object.keys(task.assigneeDueDateRevisions ?? {}).length === 0 && !revising && (
               <p className="text-xs text-[var(--ink-soft)]">ยังไม่มีการแก้ไขกำหนดส่ง</p>
             )}
 
-            {revising && canEditMain && (
+            {!isShared && revising && canEditMain && (
               <div className="rounded-lg border border-[var(--line)] p-3 space-y-2.5">
                 <div className="space-y-1.5">
                   <Label className="text-xs">กำหนดส่งใหม่</Label>
