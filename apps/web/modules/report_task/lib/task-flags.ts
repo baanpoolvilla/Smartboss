@@ -21,16 +21,6 @@ export function isSuspiciousRevision(task: Task) {
   return task.revisions.length >= 2;
 }
 
-/**
- * How many times this task was specifically "reopened" (marked done too
- * early, then pulled back out) — a subset of `revisions`, tagged at write
- * time in `reopenTask`. Derived instead of a separate counter field so it
- * can never drift from the actual revision history.
- */
-export function reopenCount(task: Task) {
-  return task.revisions.filter((r) => r.reason.startsWith("[เปิดงานใหม่]")).length;
-}
-
 /** Tally a task's sticker reactions by stickerId, e.g. { angry: 2, fire: 1 }. */
 export function reactionCounts(task: Task): Record<string, number> {
   return task.reactions.reduce<Record<string, number>>((acc, r) => {

@@ -11,14 +11,14 @@ import { DueDateBadge } from "@/modules/report_task/components/shared/due-date-b
 import { PenaltyChip } from "@/modules/report_task/components/shared/penalty-chip";
 import { getUser, getDepartment, canManage } from "@/modules/report_task/lib/directory";
 import { priorityMeta, statusMeta } from "@/modules/report_task/lib/task-meta";
-import { isSuspiciousRevision, reactionCounts, reopenCount } from "@/modules/report_task/lib/task-flags";
+import { isSuspiciousRevision, reactionCounts } from "@/modules/report_task/lib/task-flags";
 import { daysUntil } from "@/modules/report_task/lib/format";
 import { cn } from "@/modules/report_task/lib/utils";
 import type { Task } from "@/modules/report_task/types";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { MessageSquare, Paperclip, History, SmilePlus, SearchCheck, RotateCcw, Check, Circle } from "lucide-react";
+import { MessageSquare, Paperclip, History, SmilePlus, SearchCheck, Check, Circle } from "lucide-react";
 import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
 import { StickerConfirmDialog } from "@/modules/report_task/components/shared/sticker-confirm-dialog";
 import type { Sticker } from "@/modules/report_task/types";
@@ -72,7 +72,6 @@ function TaskCardBody({ task, id, onOpen, dragging, lifted, refCb, style, dragPr
           .filter(Boolean)
       : [];
   const suspicious = isSuspiciousRevision(task);
-  const reopens = reopenCount(task);
 
   const reactionTotals = reactionCounts(task);
   const [pendingSticker, setPendingSticker] = useState<Sticker | null>(null);
@@ -133,19 +132,6 @@ function TaskCardBody({ task, id, onOpen, dragging, lifted, refCb, style, dragPr
         </span>
 
         <div className="ml-auto flex items-center gap-1.5">
-          {task.reopenedOnce && (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <span className="flex items-center gap-0.5 h-5 rounded-md px-1 bg-red-50 text-[var(--chart-red)]">
-                    <RotateCcw className="h-3 w-3" />
-                    {reopens > 1 && <span className="text-[10px] font-semibold tabular-nums">{reopens}</span>}
-                  </span>
-                }
-              />
-              <TooltipContent>แก้ไขงาน — งานยังไม่เรียบร้อย ({reopens} ครั้ง)</TooltipContent>
-            </Tooltip>
-          )}
           {suspicious && (
             <Tooltip>
               <TooltipTrigger

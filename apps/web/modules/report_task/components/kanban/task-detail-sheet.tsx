@@ -35,7 +35,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/c
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/modules/report_task/components/ui/tooltip";
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { PenaltyChip } from "@/modules/report_task/components/shared/penalty-chip";
-import { reopenCount } from "@/modules/report_task/lib/task-flags";
 import { canEditRecord, canRemoveReaction, canSeePenaltyStatus, canToggleOwnChecklistItem } from "@/modules/report_task/lib/permissions";
 import { todayIso } from "@/modules/report_task/lib/now";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
@@ -58,7 +57,6 @@ import {
   Plus,
   Trash2,
   ListTodo,
-  RotateCcw,
   Loader2,
 } from "lucide-react";
 import type { Attachment, Sticker, TaskPriority, TaskStatus } from "@/modules/report_task/types";
@@ -95,7 +93,6 @@ export function TaskDetailSheet({
   const setAssignees = useTaskStore((s) => s.setAssignees);
   const reviseDueDate = useTaskStore((s) => s.reviseDueDate);
   const reviseAssigneeDueDate = useTaskStore((s) => s.reviseAssigneeDueDate);
-  const reopenTask = useTaskStore((s) => s.reopenTask);
   const addComment = useTaskStore((s) => s.addComment);
   const removeComment = useTaskStore((s) => s.removeComment);
   const addAttachment = useTaskStore((s) => s.addAttachment);
@@ -126,10 +123,6 @@ export function TaskDetailSheet({
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [newDate, setNewDate] = useState("");
   const [reason, setReason] = useState("");
-  const [reopening, setReopening] = useState(false);
-  const [reopenStart, setReopenStart] = useState("");
-  const [reopenDue, setReopenDue] = useState("");
-  const [reopenReason, setReopenReason] = useState("");
   // Collapsed by default — a task can end up with a large co-assignee list,
   // and rendering every chip would blow up the sheet's height. Reset during
   // render (not an effect) when the task being viewed changes — the standard
@@ -251,24 +244,6 @@ export function TaskDetailSheet({
     setRevising(false);
     setNewDate("");
     setReason("");
-  }
-
-  function openReopen() {
-    if (!task || !canEditMain) return;
-    // Default the new start date to today — the moment work actually
-    // resumes — rather than the task's old (already-past) start date. Still
-    // editable if that's wrong. Due date is left for a deliberate pick.
-    setReopenStart(todayIso());
-    setReopenDue("");
-    setReopenReason("");
-    setReopening(true);
-  }
-
-  function submitReopen() {
-    if (!task || !reopenStart || !reopenDue || !reopenReason.trim() || !canEditMain) return;
-    reopenTask(task.id, new Date(reopenStart).toISOString(), new Date(reopenDue).toISOString(), reopenReason.trim(), viewingAsUserId);
-    toast.error(`เปิดงาน "${task.title}" ใหม่แล้ว — กำหนดส่งเดิมยังอยู่ในประวัติ`);
-    setReopening(false);
   }
 
   function submitComment() {
@@ -468,66 +443,6 @@ export function TaskDetailSheet({
               </Select>
             </div>
           </div>
-
-          {/* Reopen a task that was marked done but wasn't actually finished —
-              a deliberate correction (new dates + required reason), separate
-              from the plain status dropdown above. Creator/head only. */}
-          {task.status === "done" && canEditMain && !reopening && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="w-fit gap-1.5 rounded-full border-red-200 bg-red-50 text-[var(--chart-red)] shadow-sm hover:bg-red-100 hover:border-red-300 hover:shadow"
-              onClick={openReopen}
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              เปิดงานใหม่ — ยังไม่เรียบร้อยจริง
-            </Button>
-          )}
-          {reopening && canEditMain && (
-            <div className="rounded-lg border border-red-200 bg-red-50/40 p-3 space-y-2.5">
-              <p className="text-xs font-medium text-[var(--chart-red)]">เปิดงานใหม่: ตั้งวันเริ่มต้น/กำหนดส่งใหม่ — กำหนดส่งเดิมยังเก็บไว้ในประวัติด้านล่าง และระบบจะปรับความสำคัญเป็น &quot;ด่วนมาก&quot; ให้อัตโนมัติ</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div className="space-y-1">
-                  <Label className="text-xs">วันเริ่มต้นใหม่</Label>
-                  <DatePickerField
-                    value={reopenStart}
-                    minDate={todayIso()}
-                    onChange={(v) => {
-                      setReopenStart(v);
-                      // Same "due can't trail behind a start date that just
-                      // moved past it" rule as new-task-dialog.
-                      if (reopenDue && reopenDue < v) setReopenDue(v);
-                    }}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">กำหนดส่งใหม่</Label>
-                  <DatePickerField value={reopenDue} minDate={reopenStart || todayIso()} onChange={setReopenDue} />
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="reopen-reason" className="text-xs">เหตุผลที่เปิดงานใหม่</Label>
-                <Textarea id="reopen-reason" rows={2} value={reopenReason} onChange={(e) => setReopenReason(e.target.value)} placeholder="เช่น ตรวจแล้วงานยังไม่เรียบร้อยตามที่แจ้ง" />
-              </div>
-              <div className="flex gap-2 justify-end">
-                <Button size="sm" variant="ghost" onClick={() => setReopening(false)}>ยกเลิก</Button>
-                <Button
-                  size="sm"
-                  className="bg-[var(--chart-red)] hover:bg-red-700 text-white"
-                  onClick={submitReopen}
-                  disabled={!reopenStart || !reopenDue || !reopenReason.trim()}
-                >
-                  เปิดงานใหม่
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {task.reopenedOnce && (
-            <p className="text-[11px] text-[var(--chart-red)] flex items-center gap-1">
-              <History className="h-3 w-3" /> แก้ไขงาน — งานยังไม่เรียบร้อย ({reopenCount(task)} ครั้ง)
-            </p>
-          )}
 
           {/* Assignees (add / remove — creator only) */}
           <div className="space-y-1.5">

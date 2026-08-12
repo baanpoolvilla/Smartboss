@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dueUrgency, isSuspiciousRevision, reopenCount, reactionCounts } from "@/modules/report_task/lib/task-flags";
+import { dueUrgency, isSuspiciousRevision, reactionCounts } from "@/modules/report_task/lib/task-flags";
 import type { Task } from "@/modules/report_task/types";
 
 function makeTask(overrides: Partial<Task> = {}): Task {
@@ -62,14 +62,6 @@ describe("isSuspiciousRevision", () => {
   it("does not flag a single revision", () => {
     const revision = { revisionNumber: 1, previousDate: "", newDate: "", reason: "", revisedBy: "", revisedAt: "" };
     expect(isSuspiciousRevision(makeTask({ revisions: [revision] }))).toBe(false);
-  });
-});
-
-describe("reopenCount", () => {
-  it("counts only revisions tagged as a reopen", () => {
-    const reopen = { revisionNumber: 1, previousDate: "", newDate: "", reason: "[เปิดงานใหม่] พลาด", revisedBy: "", revisedAt: "" };
-    const normal = { revisionNumber: 2, previousDate: "", newDate: "", reason: "เลื่อนกำหนด", revisedBy: "", revisedAt: "" };
-    expect(reopenCount(makeTask({ revisions: [reopen, normal, reopen] }))).toBe(2);
   });
 });
 

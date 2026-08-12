@@ -166,7 +166,6 @@ interface TaskStore {
    * original due date and every prior revision stay intact, and any
    * sticker/penalty already on the task is left untouched.
    */
-  reopenTask: (taskId: string, newStartDate: string, newDueDate: string, reason: string, revisedBy: string) => void;
   selectTask: (id: string | null) => void;
   addTask: (task: Task) => void;
   removeTask: (taskId: string) => void;
@@ -241,9 +240,6 @@ export const useTaskStore = create<TaskStore>((set) => ({
         return {
           ...t,
           status,
-          // Leaving "done" for anything else is worth remembering even after
-          // it's redone properly — the flag never clears itself.
-          reopenedOnce: t.status === "done" ? true : t.reopenedOnce,
           // Stamp when it actually closed (cleared if it leaves "done" again)
           // so a later sweep can judge lateness by completion time, not "today".
           completedAt: status === "done" ? new Date().toISOString() : undefined,
@@ -257,9 +253,15 @@ export const useTaskStore = create<TaskStore>((set) => ({
         if (t.id !== taskId) return t;
         const revisionNumber = t.revisions.length + 1;
         logActivity(revisedBy, "แก้ไขกำหนดส่ง", t.title, t.id, `${formatShortDate(t.dueDate)} → ${formatShortDate(newDate)} · ${reason}`);
+        // Revising the due date on a task already marked "เสร็จสิ้น" means it
+        // wasn't actually done — bounce it back to "กำลังทำ" as part of the
+        // same edit instead of a separate "เปิดงานใหม่" step (removed —
+        // this replaces it).
+        const wasDone = t.status === "done";
         return {
           ...t,
           dueDate: newDate,
+          ...(wasDone ? { status: "in_progress" as const, completedAt: undefined } : {}),
           revisions: [
             ...t.revisions,
             {
@@ -314,50 +316,6 @@ export const useTaskStore = create<TaskStore>((set) => ({
             },
           },
           updatedAt: now,
-        };
-      }),
-    })),
-  reopenTask: (taskId, newStartDate, newDueDate, reason, revisedBy) =>
-    set((s) => ({
-      tasks: s.tasks.map((t) => {
-        if (t.id !== taskId) return t;
-        const revisionNumber = t.revisions.length + 1;
-        logActivity(revisedBy, "เปิดงานใหม่", t.title, t.id, reason);
-        return {
-          ...t,
-          status: "todo",
-          // Bumped to critical so it doesn't quietly sit at whatever priority
-          // it had before — a reopened task needs eyes on it right away.
-          priority: "critical",
-          startDate: newStartDate,
-          dueDate: newDueDate,
-          reopenedOnce: true,
-          completedAt: undefined,
-          // Whoever falsely marked their own part done needs to re-mark it
-          // for real this cycle — otherwise the task would silently
-          // re-complete itself the instant the last other assignee finishes.
-          // Completion is now derived from the checklist itself, so the
-          // checklist has to be unchecked too, or it would just re-derive
-          // straight back to "done" on the next render.
-          completedAssigneeIds: [],
-          checklist: t.checklist.map((c) => ({ ...c, done: false })),
-          // A dock from the PREVIOUS deadline miss shouldn't block docking a
-          // fresh one if this reopened cycle blows its new deadline too —
-          // the old dock is already permanent history in the activity log,
-          // so clearing it here just frees the chip up for the next verdict.
-          penalty: null,
-          revisions: [
-            ...t.revisions,
-            {
-              revisionNumber,
-              previousDate: t.dueDate,
-              newDate: newDueDate,
-              reason: `[เปิดงานใหม่] ${reason}`,
-              revisedBy,
-              revisedAt: new Date().toISOString(),
-            },
-          ],
-          updatedAt: new Date().toISOString(),
         };
       }),
     })),
