@@ -235,6 +235,8 @@ export function NewTaskDialog({
   const projectTopics = useProjectTopicStore((s) => s.topics);
   const addProjectTopic = useProjectTopicStore((s) => s.addTopic);
   const [selectedTopicId, setSelectedTopicId] = useState<string>("none");
+  const [creatingTopic, setCreatingTopic] = useState(false);
+  const [newTopicName, setNewTopicName] = useState("");
   const leaveTypes = useLeaveTypeStore((s) => s.types);
   const assignedByUser = getUser(viewingAsUserId)!;
   // Scheduling a meeting pulls other people's calendars into it — a
@@ -685,12 +687,14 @@ export function NewTaskDialog({
     setChecklistItems((prev) => prev.filter((c) => c.id !== id));
   }
 
-  function createProjectTopic() {
-    const name = window.prompt("ตั้งชื่อหัวข้อโปรเจค");
-    if (!name?.trim()) return;
-    const id = addProjectTopic(name.trim());
+  function confirmCreateProjectTopic() {
+    const name = newTopicName.trim();
+    if (!name) return;
+    const id = addProjectTopic(name);
     setSelectedTopicId(id);
-    toast.success(`สร้างหัวข้อโปรเจค "${name.trim()}" แล้ว`);
+    setNewTopicName("");
+    setCreatingTopic(false);
+    toast.success(`สร้างหัวข้อโปรเจค "${name}" แล้ว`);
   }
 
   async function handleSubmit() {
@@ -851,31 +855,58 @@ export function NewTaskDialog({
               </Row>
 
               <Row icon={Tag}>
-                <div className="space-y-1">
+                <div className="space-y-1 flex-1">
                   <Label className="text-xs text-[var(--ink-soft)]">หัวข้อโปรเจค</Label>
-                  <Select
-                    value={selectedTopicId}
-                    onValueChange={(v) => {
-                      if (!v) return;
-                      if (v === "__create__") createProjectTopic();
-                      else setSelectedTopicId(v);
-                    }}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="ไม่ระบุหัวข้อโปรเจค">
-                        {selectedTopicId === "none"
-                          ? "ไม่ระบุหัวข้อโปรเจค"
-                          : (projectTopics.find((t) => t.id === selectedTopicId)?.name ?? "ไม่ระบุหัวข้อโปรเจค")}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">ไม่ระบุหัวข้อโปรเจค</SelectItem>
-                      {projectTopics.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                      ))}
-                      <SelectItem value="__create__">+ สร้างหัวข้อใหม่...</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {creatingTopic ? (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        autoFocus
+                        value={newTopicName}
+                        onChange={(e) => setNewTopicName(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && confirmCreateProjectTopic()}
+                        placeholder="ชื่อหัวข้อโปรเจค"
+                        className="flex-1"
+                      />
+                      <Button type="button" size="sm" disabled={!newTopicName.trim()} onClick={confirmCreateProjectTopic}>
+                        ตกลง
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setCreatingTopic(false);
+                          setNewTopicName("");
+                        }}
+                      >
+                        ยกเลิก
+                      </Button>
+                    </div>
+                  ) : (
+                    <Select
+                      value={selectedTopicId}
+                      onValueChange={(v) => {
+                        if (!v) return;
+                        if (v === "__create__") setCreatingTopic(true);
+                        else setSelectedTopicId(v);
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="ไม่ระบุหัวข้อโปรเจค">
+                          {selectedTopicId === "none"
+                            ? "ไม่ระบุหัวข้อโปรเจค"
+                            : (projectTopics.find((t) => t.id === selectedTopicId)?.name ?? "ไม่ระบุหัวข้อโปรเจค")}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">ไม่ระบุหัวข้อโปรเจค</SelectItem>
+                        {projectTopics.map((t) => (
+                          <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                        ))}
+                        <SelectItem value="__create__">+ สร้างหัวข้อใหม่...</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               </Row>
 

@@ -1022,24 +1022,22 @@ export function TaskDetailSheet({
                 {/* Adding only ever happens on an explicit press — Enter or
                     the button — never on blur, which used to add whatever was
                     half-typed the instant focus left the field. */}
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  className="h-7 w-7 shrink-0 text-[var(--ink-soft)] hover:text-[var(--brand-green-dark)]"
-                  title="เพิ่มรายการ"
-                  aria-label="เพิ่มรายการ"
-                  disabled={!newChecklistItem.trim()}
-                  onClick={() => commitChecklistItem(isShared ? newChecklistOwnerId : task.assigneeIds[0]!)}
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
                 <Input
                   value={newChecklistItem}
                   onChange={(e) => setNewChecklistItem(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && commitChecklistItem(isShared ? newChecklistOwnerId : task.assigneeIds[0]!)}
-                  placeholder="เพิ่มรายการ แล้วกด Enter"
+                  placeholder="เพิ่มรายการ..."
                   className="h-8 text-sm border-0 border-b border-[var(--line)] rounded-none px-0 shadow-none focus-visible:ring-0 focus-visible:border-[var(--brand-green)] flex-1"
                 />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 shrink-0"
+                  disabled={!newChecklistItem.trim()}
+                  onClick={() => commitChecklistItem(isShared ? newChecklistOwnerId : task.assigneeIds[0]!)}
+                >
+                  <Plus className="h-3.5 w-3.5" /> ตกลง
+                </Button>
                 {isShared && (
                   <Select value={newChecklistOwnerId || task.assigneeIds[0]!} onValueChange={(v) => v && setNewChecklistOwnerId(v)}>
                     <SelectTrigger className="w-32 h-8 text-xs shrink-0">
