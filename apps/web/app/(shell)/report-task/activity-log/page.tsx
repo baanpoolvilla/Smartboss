@@ -45,31 +45,6 @@ export default function ActivityLogPage() {
 
   const hasFilters = userId !== "all" || action !== "all";
 
-  // Collapse a burst of adjacent entries that are the same person acting on
-  // the same target in quick succession (e.g. toggling "mark done" on/off
-  // several times in a minute — action alternates each time, so matching on
-  // action too would never catch this) into one row with a "×N" count —
-  // otherwise the flurry buries whatever else happened around it under
-  // repeats of itself. Bounded to a 5-minute window so two genuinely
-  // separate touches on the same task hours apart still show as their own
-  // lines. `entries` is newest-first, so the first (most recent) item in
-  // each run is the one actually shown.
-  const COLLAPSE_WINDOW_MS = 5 * 60 * 1000;
-  const collapsed = useMemo(() => {
-    const groups: { entry: (typeof filtered)[number]; count: number }[] = [];
-    for (const e of filtered) {
-      const last = groups[groups.length - 1];
-      const withinWindow =
-        last && Math.abs(new Date(last.entry.createdAt).getTime() - new Date(e.createdAt).getTime()) <= COLLAPSE_WINDOW_MS;
-      if (last && withinWindow && last.entry.userId === e.userId && last.entry.target === e.target) {
-        last.count += 1;
-      } else {
-        groups.push({ entry: e, count: 1 });
-      }
-    }
-    return groups;
-  }, [filtered]);
-
   return (
     <div className="flex flex-col gap-4 lg:gap-6 pb-6">
       <StickyFilterBar>
@@ -127,7 +102,7 @@ export default function ActivityLogPage() {
             />
           ) : (
             <div className="divide-y divide-[var(--line)] max-h-[70vh] overflow-y-auto">
-              {collapsed.map(({ entry: e, count }) => {
+              {filtered.map((e) => {
                 const isSystem = e.userId === SYSTEM_USER_ID;
                 const user = isSystem ? null : getUser(e.userId);
                 return (
@@ -142,9 +117,6 @@ export default function ActivityLogPage() {
                         <span className="font-medium">{isSystem ? "ระบบ (อัตโนมัติ)" : user?.name ?? "ไม่ทราบ"}</span>{" "}
                         <span className="text-[var(--ink-soft)]">{e.action}</span>{" "}
                         <span className="font-medium">{e.target}</span>
-                        {count > 1 && (
-                          <span className="text-[var(--ink-soft)] font-normal"> ×{count}</span>
-                        )}
                       </p>
                       {e.detail && <p className="text-xs text-[var(--ink-soft)] mt-0.5 truncate">{e.detail}</p>}
                     </div>
