@@ -4,6 +4,7 @@ import { Card } from "@smartboss/ui/components/card";
 import { Button } from "@smartboss/ui/components/button";
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { Field, SectionCard, inputClass } from "@/modules/admin/components/ui";
+import { loadSecuritySettings } from "@/lib/security-settings";
 import { changeOwnPasswordAction, updateOwnProfileAction } from "./actions";
 
 /**
@@ -30,6 +31,9 @@ export default async function AccountPage() {
   });
 
   const roleNames = user.roles.map((r) => r.role.name).join(" · ") || "—";
+
+  // ต้องตรงกับที่ changeOwnPasswordAction ใช้ตรวจจริง (ตั้งได้ที่ /admin/security)
+  const { passwordMinLength } = await loadSecuritySettings(session.orgId ?? null);
 
   return (
     <AppScaffold title="บัญชีของฉัน" width="max-w-2xl" backHref="/">
@@ -85,12 +89,12 @@ export default async function AccountPage() {
                 className={inputClass}
               />
             </Field>
-            <Field label="รหัสผ่านใหม่" hint="อย่างน้อย 12 ตัวอักษร">
+            <Field label="รหัสผ่านใหม่" hint={`อย่างน้อย ${passwordMinLength} ตัวอักษร`}>
               <input
                 type="password"
                 name="newPassword"
                 required
-                minLength={12}
+                minLength={passwordMinLength}
                 autoComplete="new-password"
                 className={inputClass}
               />
@@ -100,7 +104,7 @@ export default async function AccountPage() {
                 type="password"
                 name="confirmPassword"
                 required
-                minLength={12}
+                minLength={passwordMinLength}
                 autoComplete="new-password"
                 className={inputClass}
               />

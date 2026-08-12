@@ -10,6 +10,7 @@ import { listAllOrganizations } from "@/modules/admin/data/orgs";
 import { listRoles } from "@/modules/admin/data/roles";
 import { listDepartments } from "@/modules/admin/data/departments";
 import { listPositions } from "@/modules/admin/data/positions";
+import { loadSecuritySettings } from "@/lib/security-settings";
 import {
   Field,
   Pill,
@@ -64,6 +65,10 @@ export default async function AdminUserDetailPage({
   // แผนก/ตำแหน่งก็เช่นกัน — มาจากบริษัทที่ผู้ใช้คนนี้สังกัด
   const departments = user.orgId ? await listDepartments(user.orgId) : [];
   const positions = user.orgId ? await listPositions(user.orgId) : [];
+
+  // ความยาวรหัสผ่านขั้นต่ำ — ต้องตรงกับที่ resetPasswordAction ใช้ตรวจจริง
+  // (เช็คกับ session.orgId ของคนกด ไม่ใช่บริษัทของเป้าหมาย — ตามที่ action ทำ)
+  const { passwordMinLength } = await loadSecuritySettings(session.orgId);
 
   const organizations = superAdmin ? await listAllOrganizations() : [];
   const currentOrgName =
@@ -338,12 +343,12 @@ export default async function AdminUserDetailPage({
             >
               <form action={resetPasswordAction} className="flex flex-col gap-3">
                 <input type="hidden" name="userId" value={user.id} />
-                <Field label="รหัสผ่านใหม่" hint="อย่างน้อย 8 ตัวอักษร">
+                <Field label="รหัสผ่านใหม่" hint={`อย่างน้อย ${passwordMinLength} ตัวอักษร`}>
                   <input
                     type="password"
                     name="password"
                     required
-                    minLength={8}
+                    minLength={passwordMinLength}
                     autoComplete="new-password"
                     className={inputClass}
                   />

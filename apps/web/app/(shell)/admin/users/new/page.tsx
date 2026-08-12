@@ -7,6 +7,7 @@ import { ADMIN_PERMS } from "@/modules/admin/permissions";
 import { listRoles } from "@/modules/admin/data/roles";
 import { listAllOrganizations } from "@/modules/admin/data/orgs";
 import { Field, inputClass, selectClass } from "@/modules/admin/components/ui";
+import { loadSecuritySettings } from "@/lib/security-settings";
 import { createUserAction } from "../../actions";
 
 export default async function NewUserPage({
@@ -30,6 +31,11 @@ export default async function NewUserPage({
   // role ระบบกำหนดให้ผู้ใช้จากหน้านี้ไม่ได้ — ต้องตั้งจากระดับแพลตฟอร์ม
   const roles = (await listRoles(targetOrgId)).filter((r) => !r.isSystem);
   const targetOrgName = organizations.find((o) => o.id === targetOrgId)?.name ?? null;
+
+  // ความยาวรหัสผ่านขั้นต่ำตั้งได้รายบริษัท (/admin/security) — ต้องตรงกับที่
+  // createUserAction ใช้ตรวจจริง ไม่งั้นฟอร์มยอมให้กรอกสั้นกว่าที่ผ่านจริง
+  // แล้วพังตอนกด submit
+  const { passwordMinLength } = await loadSecuritySettings(targetOrgId);
 
   return (
     <AppScaffold title="เพิ่มผู้ใช้งาน" width="max-w-2xl" backHref="/admin/users">
@@ -88,12 +94,12 @@ export default async function NewUserPage({
             />
           </Field>
 
-          <Field label="รหัสผ่านเริ่มต้น *" hint="อย่างน้อย 8 ตัวอักษร">
+          <Field label="รหัสผ่านเริ่มต้น *" hint={`อย่างน้อย ${passwordMinLength} ตัวอักษร`}>
             <input
               type="password"
               name="password"
               required
-              minLength={8}
+              minLength={passwordMinLength}
               autoComplete="new-password"
               className={inputClass}
             />
