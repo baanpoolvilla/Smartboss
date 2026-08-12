@@ -58,6 +58,7 @@ import {
   Trash2,
   ListTodo,
   Loader2,
+  Info,
 } from "lucide-react";
 import type { Attachment, Sticker, TaskPriority, TaskStatus } from "@/modules/report_task/types";
 import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
@@ -980,6 +981,19 @@ export function TaskDetailSheet({
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-semibold flex items-center gap-1.5">
                 <Paperclip className="h-4 w-4" /> ไฟล์แนบ ({task.attachments.length})
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <button type="button" className="text-[var(--ink-soft)] hover:text-[var(--ink)]" aria-label="เงื่อนไขการแนบไฟล์">
+                        <Info className="h-3.5 w-3.5" />
+                      </button>
+                    }
+                  />
+                  <TooltipContent>
+                    รูปภาพสูงสุด {attachmentSettings.maxImageMB}MB · เอกสารสูงสุด {attachmentSettings.maxFileMB}MB ·
+                    วิดีโอสูงสุด {attachmentSettings.maxVideoMB}MB · แนบได้สูงสุด {attachmentSettings.maxFilesPerTask} ไฟล์ต่องาน
+                  </TooltipContent>
+                </Tooltip>
               </h4>
               <Button size="sm" variant="outline" disabled={taskAttachUploading} onClick={() => taskFileInputRef.current?.click()}>
                 {taskAttachUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} แนบไฟล์
@@ -1133,6 +1147,19 @@ export function TaskDetailSheet({
               >
                 {commentUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
               </Button>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button type="button" className="shrink-0 text-[var(--ink-soft)] hover:text-[var(--ink)]" aria-label="เงื่อนไขการแนบไฟล์">
+                      <Info className="h-3.5 w-3.5" />
+                    </button>
+                  }
+                />
+                <TooltipContent>
+                  รูปภาพสูงสุด {attachmentSettings.maxImageMB}MB · เอกสารสูงสุด {attachmentSettings.maxFileMB}MB ·
+                  วิดีโอสูงสุด {attachmentSettings.maxVideoMB}MB · แนบได้สูงสุด {attachmentSettings.maxFilesPerComment} ไฟล์ต่อความคิดเห็น
+                </TooltipContent>
+              </Tooltip>
               <input
                 ref={commentFileInputRef}
                 type="file"
