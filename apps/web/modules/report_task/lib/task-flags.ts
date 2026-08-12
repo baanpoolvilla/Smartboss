@@ -28,3 +28,20 @@ export function reactionCounts(task: Task): Record<string, number> {
     return acc;
   }, {});
 }
+
+/**
+ * Default reading order for a list of task cards: finished work sinks to the
+ * bottom (it's no longer actionable, so it shouldn't compete for attention
+ * with what's still open), and everything still open reads most-urgent
+ * first — earliest due date leads, which naturally puts overdue tasks (due
+ * date already in the past) ahead of everything else. Doesn't mutate the
+ * input array.
+ */
+export function sortTasksForDisplay(tasks: Task[]): Task[] {
+  return [...tasks].sort((a, b) => {
+    const aDone = a.status === "done" ? 1 : 0;
+    const bDone = b.status === "done" ? 1 : 0;
+    if (aDone !== bDone) return aDone - bDone;
+    return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+  });
+}

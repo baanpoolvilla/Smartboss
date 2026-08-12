@@ -16,7 +16,7 @@ import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canSeeTask } from "@/modules/report_task/lib/permissions";
 import { getUser } from "@/modules/report_task/lib/directory";
-import { dueUrgency } from "@/modules/report_task/lib/task-flags";
+import { dueUrgency, sortTasksForDisplay } from "@/modules/report_task/lib/task-flags";
 import { statusMeta } from "@/modules/report_task/lib/task-meta";
 import { chartColors, statusColors as statusAccent } from "@/modules/report_task/lib/chart-colors";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -85,10 +85,12 @@ export function PersonTopicsBoard({
 
     const named = topics
       .filter((topic) => byTopic.has(topic.id))
-      .map((topic) => ({ id: topic.id, name: topic.name, tasks: byTopic.get(topic.id)! }));
+      .map((topic) => ({ id: topic.id, name: topic.name, tasks: sortTasksForDisplay(byTopic.get(topic.id)!) }));
     const unsorted = byTopic.get(UNSORTED_KEY);
 
-    return unsorted ? [...named, { id: UNSORTED_KEY, name: "ไม่มีหัวข้อ", tasks: unsorted }] : named;
+    return unsorted
+      ? [...named, { id: UNSORTED_KEY, name: "ไม่มีหัวข้อ", tasks: sortTasksForDisplay(unsorted) }]
+      : named;
   }, [personId, allTasks, topics, viewingAsUserId]);
 
   const total = columns.reduce((n, c) => n + c.tasks.length, 0);

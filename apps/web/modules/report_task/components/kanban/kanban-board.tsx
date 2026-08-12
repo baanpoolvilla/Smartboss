@@ -18,7 +18,7 @@ import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canEditRecord, canSeeTask } from "@/modules/report_task/lib/permissions";
-import { dueUrgency } from "@/modules/report_task/lib/task-flags";
+import { dueUrgency, sortTasksForDisplay } from "@/modules/report_task/lib/task-flags";
 import { getUser, getDepartment, users } from "@/modules/report_task/lib/directory";
 import { statusMeta, priorityMeta, priorityColorHex, taskPriorityOrder, statusIcon } from "@/modules/report_task/lib/task-meta";
 import { matchesTaskFilters } from "@/modules/report_task/lib/task-filter";
@@ -212,21 +212,21 @@ export function KanbanBoard() {
           label: statusMeta.todo.label,
           accent: chartColors.gray,
           icon: statusIcon.todo,
-          tasks: filtered.filter((t) => t.status === "todo" && !overdueIds.has(t.id)),
+          tasks: sortTasksForDisplay(filtered.filter((t) => t.status === "todo" && !overdueIds.has(t.id))),
         },
         {
           id: "in_progress" as const,
           label: statusMeta.in_progress.label,
           accent: statusAccent.in_progress,
           icon: statusIcon.in_progress,
-          tasks: filtered.filter((t) => t.status === "in_progress" && !overdueIds.has(t.id)),
+          tasks: sortTasksForDisplay(filtered.filter((t) => t.status === "in_progress" && !overdueIds.has(t.id))),
         },
         {
           id: "overdue",
           label: "เลยกำหนด",
           accent: chartColors.red,
           icon: AlarmClockOff,
-          tasks: filtered.filter((t) => overdueIds.has(t.id)),
+          tasks: sortTasksForDisplay(filtered.filter((t) => overdueIds.has(t.id))),
           derived: true,
           emptyMessage: "ไม่มีงานเลยกำหนด 🎉",
         },
@@ -235,7 +235,7 @@ export function KanbanBoard() {
           label: statusMeta.done.label,
           accent: statusAccent.done,
           icon: statusIcon.done,
-          tasks: filtered.filter((t) => t.status === "done"),
+          tasks: sortTasksForDisplay(filtered.filter((t) => t.status === "done")),
         },
       ];
     }
@@ -244,7 +244,7 @@ export function KanbanBoard() {
         id: p,
         label: priorityMeta[p].label,
         accent: priorityAccent[p],
-        tasks: filtered.filter((t) => t.priority === p),
+        tasks: sortTasksForDisplay(filtered.filter((t) => t.priority === p)),
       }));
     }
     // assignee — only people who actually have tasks in view
@@ -253,7 +253,7 @@ export function KanbanBoard() {
         id: u.id,
         label: u.name,
         accent: chartColors.blue,
-        tasks: filtered.filter((t) => t.assigneeIds.includes(u.id)),
+        tasks: sortTasksForDisplay(filtered.filter((t) => t.assigneeIds.includes(u.id))),
       }))
       .filter((c) => c.tasks.length > 0);
   }, [groupBy, filtered]);
