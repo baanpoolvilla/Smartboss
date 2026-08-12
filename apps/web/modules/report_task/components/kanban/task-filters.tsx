@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, AlertTriangle, Building2, Users, Flag, AlarmClockOff } from "lucide-react";
+import { Plus, AlertTriangle, Building2, Users, Flag } from "lucide-react";
 import { Button } from "@/modules/report_task/components/ui/button";
 import {
   Select,
@@ -20,13 +20,6 @@ import { DateRangeSelectField } from "@/modules/report_task/components/shared/da
 import { cn } from "@/modules/report_task/lib/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NewTaskDialog } from "./new-task-dialog";
-
-const penaltyFilterLabels = {
-  all: "ทั้งหมด",
-  overdue: "งานเลยกำหนดทั้งหมด",
-  pending: "เลยกำหนด · ยังไม่หัก",
-  docked: "ถูกหักคะแนนแล้ว",
-} as const;
 
 const defaultFilters = {
   assigneeId: "all",
@@ -155,20 +148,6 @@ export function TaskFilters() {
             <SelectItem value="all">ทุกความสำคัญ</SelectItem>
             {taskPriorityOrder.map((p) => (
               <SelectItem key={p} value={p}>{priorityMeta[p].label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </FilterField>
-
-      <FilterField label="การหักคะแนน">
-        <Select value={filters.penalty} onValueChange={(v) => v && setFilters({ penalty: v as typeof filters.penalty })}>
-          <SelectTrigger className={filterFieldTriggerClass(filters.penalty !== "all", "min-w-[150px]")}>
-            <AlarmClockOff className="h-4 w-4 shrink-0" />
-            <SelectValue placeholder="การหักคะแนน">{penaltyFilterLabels[filters.penalty]}</SelectValue>
-          </SelectTrigger>
-          <SelectContent alignItemWithTrigger={false}>
-            {(Object.keys(penaltyFilterLabels) as (keyof typeof penaltyFilterLabels)[]).map((k) => (
-              <SelectItem key={k} value={k}>{penaltyFilterLabels[k]}</SelectItem>
             ))}
           </SelectContent>
         </Select>
