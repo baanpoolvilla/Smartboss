@@ -22,12 +22,6 @@ import type { TaskPriority } from "@/modules/report_task/types";
 
 type TaskView = "board" | "grid" | "workload";
 
-const viewSubtitle: Record<TaskView, string> = {
-  board: "ลากงานข้ามคอลัมน์เพื่ออัปเดตสถานะ",
-  grid: "มุมมองตาราง — ข้อมูลชุดเดียวกับบอร์ด กดหัวคอลัมน์เพื่อเรียงลำดับ",
-  workload: "ภาระงานรายคน — ดูใครงานเยอะ ใครเลยกำหนด ได้ในมุมมองเดียว",
-};
-
 export default function TasksPage() {
   return (
     <Suspense fallback={<BoardSkeleton />}>
@@ -126,8 +120,6 @@ function TasksPageContent() {
   return (
     <div className="flex flex-col gap-4 lg:gap-6 pb-6">
       <StickyFilterBar
-        title="Task / Kanban Board"
-        subtitle={viewSubtitle[view]}
         actions={
           // View switcher — same task data: Board (Kanban) ↔ Grid ↔ Workload
           <div className="inline-flex items-center gap-1 rounded-xl bg-[var(--bg-soft)] p-1 max-w-full overflow-x-auto shrink-0">

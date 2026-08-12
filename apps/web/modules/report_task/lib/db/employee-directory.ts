@@ -11,9 +11,12 @@ import { readStore, writeStore } from "./org-store";
  * จะผูกกับคนละคนกับที่ถูกหักในใบแจ้งซ่อม แล้วสรุปรวมไม่ได้
  *
  * แบ่งความเป็นเจ้าของชัดเจน:
- *   - ตัวตน (id, ชื่อ, อีเมล, สิทธิ์ระดับเจ้าของ) → มาจาก core.users เสมอ
- *   - ข้อมูลเฉพาะโมดูล (แผนก, ตำแหน่งที่แสดง, ตัวย่อ) → เก็บใน store คีย์
- *     "employee-profiles" ผูกด้วย core.users.id
+ *   - ตัวตน (id, ชื่อ, อีเมล, สิทธิ์ระดับเจ้าของ, แผนก, ตำแหน่ง) → มาจาก core.users
+ *     เสมอ (แผนก/ตำแหน่งจัดการที่ /admin/departments, /admin/positions,
+ *     /admin/users/{id} — เดิมเป็น jobTitle ข้อความอิสระเก็บแยกที่นี่ ย้ายไป
+ *     core แล้วตั้งแต่มี Department/Position เป็นของกลาง)
+ *   - ข้อมูลเฉพาะโมดูล (ตัวย่อ) → เก็บใน store คีย์ "employee-profiles" ผูกด้วย
+ *     core.users.id
  *
  * ผลคือเพิ่มผู้ใช้ที่ /admin แล้วโผล่ในโมดูลนี้ทันที และปิดผู้ใช้ก็หายไปเอง
  */
@@ -29,11 +32,8 @@ export interface DirectoryUser {
   isOwner?: boolean;
 }
 
-/** ข้อมูลเฉพาะโมดูลที่ผูกกับ core.users.id */
+/** ข้อมูลเฉพาะโมดูลที่ผูกกับ core.users.id — เหลือแค่ตัวย่อ ที่เหลือย้ายไป core แล้ว */
 interface EmployeeProfile {
-  departmentId?: string;
-  /** ตำแหน่งที่แสดงในโมดูลนี้ — ไม่ใช่ role ของระบบสิทธิ์ */
-  jobTitle?: string;
   avatar?: string;
 }
 
@@ -63,7 +63,9 @@ export async function listDirectory(orgId: string): Promise<DirectoryUser[]> {
         id: true,
         name: true,
         email: true,
+        departmentId: true,
         roles: { select: { role: { select: { code: true } } } },
+        position: { select: { name: true } },
       },
       orderBy: { name: "asc" },
     }),
@@ -80,18 +82,19 @@ export async function listDirectory(orgId: string): Promise<DirectoryUser[]> {
       name: u.name,
       email: u.email,
       avatar: p.avatar || initialsOf(u.name),
-      role: p.jobTitle || codes[0] || "พนักงาน",
-      departmentId: p.departmentId ?? "",
+      role: u.position?.name || codes[0] || "พนักงาน",
+      departmentId: u.departmentId ?? "",
       isOwner: codes.some((c) => OWNER_ROLE_CODES.has(c)) || undefined,
     };
   });
 }
 
 /**
- * บันทึกเฉพาะส่วนที่โมดูลเป็นเจ้าของ
+ * บันทึกเฉพาะส่วนที่โมดูลเป็นเจ้าของ (ตัวย่อ)
  *
- * ชื่อ/อีเมล/สิทธิ์เจ้าของ ที่ client ส่งมาจะถูกทิ้ง — แก้ได้ที่ /admin เท่านั้น
- * ไม่งั้นจะมีชื่อคนสองชุดที่ไม่ตรงกัน และแก้ที่นี่แล้ว login ไม่เปลี่ยนตาม
+ * ชื่อ/อีเมล/สิทธิ์เจ้าของ/แผนก/ตำแหน่ง ที่ client ส่งมาจะถูกทิ้ง — แก้ได้ที่
+ * /admin เท่านั้น ไม่งั้นจะมีข้อมูลคนสองชุดที่ไม่ตรงกัน และแก้ที่นี่แล้ว
+ * login ไม่เปลี่ยนตาม
  */
 export async function saveDirectoryProfiles(
   orgId: string,
@@ -108,8 +111,6 @@ export async function saveDirectoryProfiles(
   for (const u of incoming) {
     if (!valid.has(u.id)) continue; // id ที่ไม่ใช่คนในบริษัทนี้ — ทิ้ง
     map[u.id] = {
-      ...(u.departmentId ? { departmentId: u.departmentId } : {}),
-      ...(u.role ? { jobTitle: u.role } : {}),
       ...(u.avatar ? { avatar: u.avatar } : {}),
     };
   }
