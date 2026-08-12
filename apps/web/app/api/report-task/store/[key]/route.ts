@@ -6,11 +6,16 @@ import {
   saveDirectoryProfiles,
   type DirectoryUser,
 } from "@/modules/report_task/lib/db/employee-directory";
+import {
+  listDepartmentsWithOverlay,
+  saveDepartmentOverlay,
+} from "@/modules/report_task/lib/db/departments";
 import { isValidStoreKey, readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
 import {
   listHolidayEvents,
   listLeaveEvents,
 } from "@/modules/report_task/lib/db/workforce-calendar";
+import type { Department } from "@/modules/report_task/types";
 
 /**
  * ที่เก็บสถานะที่แชร์กันทั้งทีมของโมดูลรายงานและงาน (ลา ประชุม วันหยุด ฟีดรายงาน
@@ -41,6 +46,12 @@ function notFound() {
 const DIRECTORY_KEY = "employees";
 
 /*
+ * "departments" ก็เช่นกัน — ชื่อ/การมีอยู่จริงมาจาก core.departments (จัดการที่
+ * /admin/departments) ส่วนสี/หัวหน้าแผนกยังเป็นของโมดูลนี้เอง (ดู lib/db/departments.ts)
+ */
+const DEPARTMENTS_KEY = "departments";
+
+/*
  * การลากับวันหยุดเป็นของโมดูลบุคคล (workforce) — อ่านอย่างเดียวที่นี่
  *
  * เดิมโมดูลนี้เก็บของตัวเอง ทำให้มีข้อมูลการลาสองชุด และเงินเดือนคำนวณจาก
@@ -67,6 +78,11 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ ke
   if (key === DIRECTORY_KEY) {
     const users = await listDirectory(session.orgId);
     return Response.json(users, { headers: { "X-Data-Version": "1" } });
+  }
+
+  if (key === DEPARTMENTS_KEY) {
+    const departments = await listDepartmentsWithOverlay(session.orgId);
+    return Response.json(departments, { headers: { "X-Data-Version": "1" } });
   }
 
   if (WORKFORCE_KEYS.has(key)) {
@@ -122,10 +138,20 @@ async function put(request: NextRequest, key: string) {
   }
 
   if (key === DIRECTORY_KEY) {
-    // เก็บเฉพาะแผนก/ตำแหน่ง/ตัวย่อ — ชื่อกับอีเมลแก้ที่ /admin เท่านั้น
+    // เก็บเฉพาะตัวย่อ — ชื่อ/อีเมล/แผนก/ตำแหน่งแก้ที่ /admin เท่านั้น
     await saveDirectoryProfiles(
       session.orgId,
       (body.data ?? []) as DirectoryUser[],
+      session.userId
+    );
+    return Response.json({ ok: true, version: 1 });
+  }
+
+  if (key === DEPARTMENTS_KEY) {
+    // เก็บเฉพาะสี/หัวหน้าแผนก — ชื่อ/การสร้าง/การลบแผนกแก้ที่ /admin/departments เท่านั้น
+    await saveDepartmentOverlay(
+      session.orgId,
+      (body.data ?? []) as Department[],
       session.userId
     );
     return Response.json({ ok: true, version: 1 });

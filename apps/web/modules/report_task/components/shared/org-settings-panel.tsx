@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -18,10 +19,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useDepartmentStore } from "@/modules/report_task/store/department-store";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { colorPalette } from "@/modules/report_task/store/event-color-store";
-import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
 import type { Department, User } from "@/modules/report_task/types";
-import { Building2, Check, Crown, Plus, Save, Search, Trash2, Users } from "lucide-react";
-import { cn } from "@/modules/report_task/lib/utils";
+import { Building2, Check, Crown, Save, Search, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 
 /**
@@ -38,10 +37,7 @@ export function DepartmentSettingsPanel() {
   const stored = useDepartmentStore((s) => s.departments);
   const setDepartments = useDepartmentStore((s) => s.setDepartments);
   const employees = useEmployeeStore((s) => s.employees);
-  const reportTopics = useReportFeedStore((s) => s.topics);
   const [draft, setDraft] = useState<Department[]>(stored);
-  const [newName, setNewName] = useState("");
-  const [deleteTarget, setDeleteTarget] = useState<Department | null>(null);
   const [search, setSearch] = useState("");
   const filtered = draft.filter((dep) => dep.name.toLowerCase().includes(search.trim().toLowerCase()));
 
@@ -49,45 +45,9 @@ export function DepartmentSettingsPanel() {
     setDraft((d) => d.map((x) => (x.id === id ? { ...x, ...patch } : x)));
   }
 
-  // Checked against the *committed* employees/rooms, not this panel's own
-  // draft — deleting a department is only safe once nobody actually
-  // assigned to it (or scoped Report room) exists anymore.
-  function blockReason(dep: Department): string | null {
-    const memberCount = employees.filter((u) => u.departmentId === dep.id).length;
-    if (memberCount > 0) return `ยังมีพนักงาน ${memberCount} คนอยู่ในแผนกนี้ — ย้ายออกก่อนถึงจะลบได้`;
-    const roomCount = reportTopics.filter((t) => t.visibility?.departmentIds?.includes(dep.id)).length;
-    if (roomCount > 0) return `ยังมีหัวข้อ Report ${roomCount} ห้องผูกกับแผนกนี้อยู่ — แก้ไข/ลบห้องนั้นก่อน`;
-    return null;
-  }
-
-  function requestRemove(dep: Department) {
-    const reason = blockReason(dep);
-    if (reason) {
-      toast.error(reason);
-      return;
-    }
-    setDeleteTarget(dep);
-  }
-
-  function confirmRemove() {
-    if (!deleteTarget) return;
-    setDraft((d) => d.filter((x) => x.id !== deleteTarget.id));
-    setDeleteTarget(null);
-  }
-
-  function add() {
-    const name = newName.trim();
-    if (!name) return;
-    setDraft((d) => [
-      ...d,
-      { id: `dep-${crypto.randomUUID()}`, name, color: colorPalette[d.length % colorPalette.length]!.value, headId: "" },
-    ]);
-    setNewName("");
-  }
-
   function save() {
     setDepartments(draft);
-    toast.success("บันทึกรายชื่อแผนกแล้ว");
+    toast.success("บันทึกสี/หัวหน้าแผนกแล้ว");
   }
 
   return (
@@ -95,10 +55,14 @@ export function DepartmentSettingsPanel() {
       <div>
         <h2 className="text-base font-semibold flex items-center gap-2">
           <Building2 className="h-4 w-4 text-[var(--ink-soft)]" />
-          จัดการแผนก
+          แผนก
         </h2>
         <p className="text-sm text-[var(--ink-soft)] mt-0.5">
-          เพิ่ม แก้ไข หรือลบแผนก — ใช้ร่วมกันทั้งระบบ (มอบหมายงาน, สิทธิ์เห็นห้อง Report, กราฟแยกแผนก ฯลฯ)
+          รายชื่อแผนกจัดการที่{" "}
+          <Link href="/admin/departments" className="underline">
+            หลังบ้าน → แผนก
+          </Link>{" "}
+          (ใช้ร่วมกันทุกโมดูล) — ที่นี่ปรับได้แค่สีกับหัวหน้าแผนกของโมดูลนี้เอง
         </p>
       </div>
 
@@ -113,7 +77,15 @@ export function DepartmentSettingsPanel() {
       </div>
 
       <div className="space-y-2">
-        {filtered.length === 0 && (
+        {draft.length === 0 && (
+          <p className="text-sm text-[var(--ink-soft)] text-center py-4">
+            ยังไม่มีแผนก — สร้างได้ที่{" "}
+            <Link href="/admin/departments" className="underline">
+              หลังบ้าน → แผนก
+            </Link>
+          </p>
+        )}
+        {draft.length > 0 && filtered.length === 0 && (
           <p className="text-sm text-[var(--ink-soft)] text-center py-4">ไม่พบแผนกที่ค้นหา</p>
         )}
         {filtered.map((dep) => {
@@ -136,15 +108,7 @@ export function DepartmentSettingsPanel() {
                     </button>
                   ))}
                 </div>
-                <Input value={dep.name} onChange={(e) => update(dep.id, { name: e.target.value })} className="flex-1" />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => requestRemove(dep)}
-                  aria-label={`ลบแผนก ${dep.name}`}
-                >
-                  <Trash2 className="h-4 w-4 text-[var(--ink-soft)]" />
-                </Button>
+                <span className="flex-1 text-sm font-medium">{dep.name}</span>
               </div>
               <div className="flex items-center gap-2 pl-1">
                 <span className="flex items-center gap-1 text-xs text-[var(--ink-soft)] shrink-0 w-24">
@@ -173,44 +137,11 @@ export function DepartmentSettingsPanel() {
         })}
       </div>
 
-      <div className="flex items-center gap-2 rounded-lg border border-dashed border-[var(--line)] p-2">
-        <Input
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && add()}
-          placeholder="ชื่อแผนกใหม่ เช่น ฝ่ายบัญชี"
-          className="flex-1"
-        />
-        <Button variant="outline" size="icon" onClick={add} aria-label="เพิ่มแผนก">
-          <Plus className="h-4 w-4" />
-        </Button>
-      </div>
-
       <Button onClick={save}>
         <Save className="h-4 w-4" /> บันทึก
       </Button>
-
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>ลบแผนก &quot;{deleteTarget?.name}&quot;?</AlertDialogTitle>
-            <AlertDialogDescription>ย้อนกลับไม่ได้ — ต้องกด &quot;บันทึก&quot; ด้านล่างเพื่อยืนยันจริง</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
-            <AlertDialogAction className="bg-[var(--chart-red)] hover:bg-red-700 text-white" onClick={confirmRemove}>
-              ลบแผนก
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
-}
-
-function initialsOf(name: string): string {
-  const trimmed = name.trim();
-  return trimmed ? trimmed.slice(0, 2) : "??";
 }
 
 /** Sibling panel to DepartmentSettingsPanel — same file, same owner-only Settings section. */
@@ -219,7 +150,6 @@ export function EmployeeSettingsPanel() {
   const setEmployees = useEmployeeStore((s) => s.setEmployees);
   const departments = useDepartmentStore((s) => s.departments);
   const [draft, setDraft] = useState<User[]>(stored);
-  const [newName, setNewName] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
   const [search, setSearch] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
@@ -258,23 +188,6 @@ export function EmployeeSettingsPanel() {
     setDeleteTarget(null);
   }
 
-  function add() {
-    const name = newName.trim();
-    if (!name || departments.length === 0) return;
-    setDraft((d) => [
-      ...d,
-      {
-        id: `usr-${crypto.randomUUID()}`,
-        name,
-        email: "",
-        avatar: initialsOf(name),
-        role: "",
-        departmentId: departments[0]!.id,
-      },
-    ]);
-    setNewName("");
-  }
-
   function save() {
     setEmployees(draft);
     toast.success("บันทึกรายชื่อพนักงานแล้ว");
@@ -288,7 +201,11 @@ export function EmployeeSettingsPanel() {
           จัดการพนักงาน
         </h2>
         <p className="text-sm text-[var(--ink-soft)] mt-0.5">
-          เพิ่ม แก้ไข ลบ หรือย้ายพนักงานข้ามแผนกได้เอง — ตั้ง &quot;เจ้าของบริษัท&quot; ให้เห็น/แก้ได้ทุกอย่างโดยไม่จำกัดแผนก
+          แผนก/ตำแหน่งของแต่ละคนจัดการที่{" "}
+          <Link href="/admin/users" className="underline">
+            หลังบ้าน → ผู้ใช้งาน
+          </Link>{" "}
+          — ตั้ง &quot;เจ้าของบริษัท&quot; ให้เห็น/แก้ได้ทุกอย่างโดยไม่จำกัดแผนก
         </p>
       </div>
 
@@ -341,22 +258,12 @@ export function EmployeeSettingsPanel() {
                 placeholder="อีเมล"
                 className="w-52"
               />
-              <Input
-                value={u.role}
-                onChange={(e) => update(u.id, { role: e.target.value })}
-                placeholder="ตำแหน่ง เช่น หัวหน้าฝ่ายขาย"
-                className="w-48"
-              />
-              <Select value={u.departmentId} onValueChange={(v) => v && update(u.id, { departmentId: v })}>
-                <SelectTrigger className="w-40">
-                  <SelectValue>{departments.find((d) => d.id === u.departmentId)?.name ?? "เลือกแผนก"}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {departments.map((d) => (
-                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <span className="inline-flex items-center rounded-md border border-[var(--line)] bg-[var(--bg-soft)] px-2.5 py-1.5 text-xs text-[var(--ink-soft)]">
+                {u.role || "ไม่ระบุตำแหน่ง"}
+              </span>
+              <span className="inline-flex items-center rounded-md border border-[var(--line)] bg-[var(--bg-soft)] px-2.5 py-1.5 text-xs text-[var(--ink-soft)]">
+                {departments.find((d) => d.id === u.departmentId)?.name ?? "ไม่ระบุแผนก"}
+              </span>
               <label className="flex items-center gap-1.5 text-xs text-[var(--ink-soft)] cursor-pointer">
                 <Checkbox checked={u.isOwner ?? false} onCheckedChange={(v) => update(u.id, { isOwner: v === true })} />
                 เจ้าของบริษัท
@@ -365,23 +272,6 @@ export function EmployeeSettingsPanel() {
           </div>
         ))}
       </div>
-
-      <div className="flex items-center gap-2 rounded-lg border border-dashed border-[var(--line)] p-2">
-        <Input
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && add()}
-          placeholder="ชื่อพนักงานใหม่"
-          className={cn("flex-1", departments.length === 0 && "opacity-50")}
-          disabled={departments.length === 0}
-        />
-        <Button variant="outline" size="icon" onClick={add} aria-label="เพิ่มพนักงาน" disabled={departments.length === 0}>
-          <Plus className="h-4 w-4" />
-        </Button>
-      </div>
-      {departments.length === 0 && (
-        <p className="text-[11px] text-[var(--ink-soft)]">สร้างแผนกอย่างน้อย 1 แผนกก่อน ถึงจะเพิ่มพนักงานได้</p>
-      )}
 
       <Button onClick={save}>
         <Save className="h-4 w-4" /> บันทึก
