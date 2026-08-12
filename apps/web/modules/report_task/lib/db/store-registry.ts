@@ -29,6 +29,7 @@ export const STORE_KEYS = {
   "settings-access": "stores/settings-access.json",
   stickers: "stores/stickers.json",
   "project-topics": "stores/project-topics.json",
+  "attachment-settings": "stores/attachment-settings.json",
 } as const;
 
 export type StoreKey = keyof typeof STORE_KEYS;

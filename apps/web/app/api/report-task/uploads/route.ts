@@ -2,6 +2,11 @@ import { requireOrg } from "@smartboss/auth";
 
 import { putFile } from "@/modules/maintenance/lib/storage";
 import { sniffMime } from "@/modules/report_task/lib/upload-sniff";
+import { readStore } from "@/modules/report_task/lib/db/org-store";
+import {
+  DEFAULT_ATTACHMENT_SETTINGS,
+  type AttachmentSettings,
+} from "@/modules/report_task/store/attachment-settings-store";
 
 /**
  * อัปโหลดไฟล์แนบของโมดูลรายงานและงาน
@@ -28,21 +33,32 @@ export const dynamic = "force-dynamic";
 /**
  * ⚠ ไม่มี image/svg+xml โดยตั้งใจ — SVG แนบ <script> ได้ และที่นี่ไม่มีตัวล้าง
  * อย่าเพิ่มเข้ามาถ้ายังไม่มีตัวล้าง
+ *
+ * ขนาดสูงสุดต่อชนิด **ไม่ได้ตายตัวในนี้อีกต่อไป** — มาจากค่าที่บริษัทตั้งเอง
+ * ที่หน้าตั้งค่า (attachment-settings-store.ts) อ่านสดทุกครั้งที่อัปโหลด
+ * ไม่มีแถว = ใช้ DEFAULT_ATTACHMENT_SETTINGS
  */
-const ALLOWED_TYPES: Record<string, { ext: string; maxBytes: number }> = {
-  "image/jpeg": { ext: "jpg", maxBytes: 8 * 1024 * 1024 },
-  "image/png": { ext: "png", maxBytes: 8 * 1024 * 1024 },
-  "image/webp": { ext: "webp", maxBytes: 8 * 1024 * 1024 },
-  "image/gif": { ext: "gif", maxBytes: 8 * 1024 * 1024 },
-  "application/pdf": { ext: "pdf", maxBytes: 8 * 1024 * 1024 },
-  "text/plain": { ext: "txt", maxBytes: 8 * 1024 * 1024 },
-  "application/zip": { ext: "zip", maxBytes: 8 * 1024 * 1024 },
-  "video/mp4": { ext: "mp4", maxBytes: 25 * 1024 * 1024 },
-  "video/webm": { ext: "webm", maxBytes: 25 * 1024 * 1024 },
+const ALLOWED_TYPES: Record<string, { ext: string; kind: "image" | "file" | "video" }> = {
+  "image/jpeg": { ext: "jpg", kind: "image" },
+  "image/png": { ext: "png", kind: "image" },
+  "image/webp": { ext: "webp", kind: "image" },
+  "image/gif": { ext: "gif", kind: "image" },
+  "application/pdf": { ext: "pdf", kind: "file" },
+  "text/plain": { ext: "txt", kind: "file" },
+  "application/zip": { ext: "zip", kind: "file" },
+  "video/mp4": { ext: "mp4", kind: "video" },
+  "video/webm": { ext: "webm", kind: "video" },
 };
+
+function maxBytesFor(kind: "image" | "file" | "video", settings: AttachmentSettings): number {
+  const mb = kind === "image" ? settings.maxImageMB : kind === "video" ? settings.maxVideoMB : settings.maxFileMB;
+  return mb * 1024 * 1024;
+}
 
 export async function POST(request: Request) {
   const session = await requireOrg();
+  const stored = await readStore<AttachmentSettings>(session.orgId, "attachment-settings");
+  const settings = stored.data ?? DEFAULT_ATTACHMENT_SETTINGS;
 
   const form = await request.formData().catch(() => null);
   const file = form?.get("file");
@@ -54,8 +70,9 @@ export async function POST(request: Request) {
   if (!claimed) {
     return Response.json({ error: "ไม่รองรับชนิดไฟล์นี้" }, { status: 400 });
   }
-  if (file.size > claimed.maxBytes) {
-    const mb = Math.round(claimed.maxBytes / 1024 / 1024);
+  const claimedMaxBytes = maxBytesFor(claimed.kind, settings);
+  if (file.size > claimedMaxBytes) {
+    const mb = Math.round(claimedMaxBytes / 1024 / 1024);
     return Response.json({ error: `ไฟล์ใหญ่เกินไป (จำกัด ${mb}MB)` }, { status: 413 });
   }
 
@@ -64,6 +81,11 @@ export async function POST(request: Request) {
   const meta = sniffed ? ALLOWED_TYPES[sniffed] : null;
   if (!sniffed || !meta) {
     return Response.json({ error: "เนื้อไฟล์ไม่ตรงกับชนิดที่แจ้ง" }, { status: 400 });
+  }
+  const sniffedMaxBytes = maxBytesFor(meta.kind, settings);
+  if (bytes.byteLength > sniffedMaxBytes) {
+    const mb = Math.round(sniffedMaxBytes / 1024 / 1024);
+    return Response.json({ error: `ไฟล์ใหญ่เกินไป (จำกัด ${mb}MB)` }, { status: 413 });
   }
 
   /*

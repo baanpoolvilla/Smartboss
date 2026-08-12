@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -58,12 +58,14 @@ import {
   Plus,
   Trash2,
   ListTodo,
-  AtSign,
   RotateCcw,
+  Loader2,
 } from "lucide-react";
 import type { Attachment, Sticker, TaskPriority, TaskStatus } from "@/modules/report_task/types";
 import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
 import { StickerConfirmDialog } from "@/modules/report_task/components/shared/sticker-confirm-dialog";
+import { uploadTaskAttachment } from "@/modules/report_task/lib/task-attachment-upload";
+import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { toast } from "sonner";
 
 const toDateInput = (iso: string) => iso.slice(0, 10);
@@ -105,8 +107,14 @@ export function TaskDetailSheet({
   const removeReaction = useTaskStore((s) => s.removeReaction);
   const stickers = useStickerStore((s) => s.stickers);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
+  const attachmentSettings = useAttachmentSettingsStore((s) => s.settings);
 
   const [comment, setComment] = useState("");
+  const [commentAttachments, setCommentAttachments] = useState<Attachment[]>([]);
+  const [commentUploading, setCommentUploading] = useState(false);
+  const [taskAttachUploading, setTaskAttachUploading] = useState(false);
+  const taskFileInputRef = useRef<HTMLInputElement>(null);
+  const commentFileInputRef = useRef<HTMLInputElement>(null);
   const [newChecklistItem, setNewChecklistItem] = useState("");
   const [newChecklistOwnerId, setNewChecklistOwnerId] = useState("");
   // Per-assignee due-date edits are staged locally and only commit (see
@@ -208,18 +216,29 @@ export function TaskDetailSheet({
     setNewChecklistItem("");
   }
 
-  function attachMockFile() {
-    if (!task) return;
-    const uid = new Date().toISOString().replace(/\D/g, "");
-    const att: Attachment = {
-      id: `${task.id}-att-${uid}`,
-      name: `เอกสารแนบ-${task.attachments.length + 1}.pdf`,
-      size: "1.2 MB",
-      type: "PDF",
-      uploadedBy: viewingAsUserId,
-      uploadedAt: new Date().toISOString(),
-    };
-    addAttachment(task.id, att);
+  /** Real upload (mirrors the comment-attachment flow below) — replaced the
+   * old mock that just faked a "1.2 MB PDF" without ever touching the server. */
+  async function handleTaskFilesSelected(files: FileList | null) {
+    if (!task || !files || files.length === 0) return;
+    const remaining = attachmentSettings.maxFilesPerTask - task.attachments.length;
+    if (remaining <= 0) {
+      toast.error(`แนบไฟล์ได้สูงสุด ${attachmentSettings.maxFilesPerTask} ไฟล์ต่องาน`);
+      return;
+    }
+    const picked = Array.from(files).slice(0, remaining);
+    if (picked.length < files.length) {
+      toast.error(`แนบได้อีกแค่ ${remaining} ไฟล์ (จำกัด ${attachmentSettings.maxFilesPerTask} ไฟล์ต่องาน)`);
+    }
+    setTaskAttachUploading(true);
+    for (const file of picked) {
+      try {
+        const att = await uploadTaskAttachment(file, viewingAsUserId);
+        addAttachment(task.id, att);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "อัปโหลดไฟล์ไม่สำเร็จ");
+      }
+    }
+    setTaskAttachUploading(false);
   }
 
   function submitRevision() {
@@ -253,9 +272,37 @@ export function TaskDetailSheet({
   }
 
   function submitComment() {
-    if (!comment.trim() || !task) return;
-    addComment(task.id, comment.trim(), viewingAsUserId);
+    if ((!comment.trim() && commentAttachments.length === 0) || !task) return;
+    addComment(task.id, comment.trim(), viewingAsUserId, commentAttachments);
     setComment("");
+    setCommentAttachments([]);
+  }
+
+  async function handleCommentFilesSelected(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const remaining = attachmentSettings.maxFilesPerComment - commentAttachments.length;
+    if (remaining <= 0) {
+      toast.error(`แนบไฟล์ได้สูงสุด ${attachmentSettings.maxFilesPerComment} ไฟล์ต่อความคิดเห็น`);
+      return;
+    }
+    const picked = Array.from(files).slice(0, remaining);
+    if (picked.length < files.length) {
+      toast.error(`แนบได้อีกแค่ ${remaining} ไฟล์ (จำกัด ${attachmentSettings.maxFilesPerComment} ไฟล์ต่อความคิดเห็น)`);
+    }
+    setCommentUploading(true);
+    for (const file of picked) {
+      try {
+        const att = await uploadTaskAttachment(file, viewingAsUserId);
+        setCommentAttachments((prev) => [...prev, att]);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "อัปโหลดไฟล์ไม่สำเร็จ");
+      }
+    }
+    setCommentUploading(false);
+  }
+
+  function removeCommentAttachment(id: string) {
+    setCommentAttachments((prev) => prev.filter((a) => a.id !== id));
   }
 
   function handleReact(sticker: Sticker) {
@@ -1062,9 +1109,19 @@ export function TaskDetailSheet({
               <h4 className="text-sm font-semibold flex items-center gap-1.5">
                 <Paperclip className="h-4 w-4" /> ไฟล์แนบ ({task.attachments.length})
               </h4>
-              <Button size="sm" variant="outline" onClick={attachMockFile}>
-                <Plus className="h-3.5 w-3.5" /> แนบไฟล์
+              <Button size="sm" variant="outline" disabled={taskAttachUploading} onClick={() => taskFileInputRef.current?.click()}>
+                {taskAttachUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} แนบไฟล์
               </Button>
+              <input
+                ref={taskFileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  void handleTaskFilesSelected(e.target.files);
+                  e.target.value = "";
+                }}
+              />
             </div>
             {task.attachments.length === 0 && <p className="text-xs text-[var(--ink-soft)]">ไม่มีไฟล์แนบ</p>}
             {task.attachments.map((a) => {
@@ -1073,11 +1130,23 @@ export function TaskDetailSheet({
               // rather than anyone who can open the task deleting anyone
               // else's file.
               const canRemove = a.uploadedBy === viewingAsUserId || canEditMain;
+              const src = a.url ?? a.dataUrl;
               return (
                 <div key={a.id} className="flex items-center gap-2.5 text-sm rounded-lg border border-[var(--line)] px-3 py-2">
-                  <FileText className="h-4 w-4 text-[var(--ink-soft)] shrink-0" />
+                  {a.type === "รูปภาพ" && src ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={src} alt={a.name} className="h-8 w-8 rounded object-cover shrink-0" />
+                  ) : (
+                    <FileText className="h-4 w-4 text-[var(--ink-soft)] shrink-0" />
+                  )}
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{a.name}</p>
+                    {src ? (
+                      <a href={src} target="_blank" rel="noreferrer" className="truncate font-medium block hover:underline">
+                        {a.name}
+                      </a>
+                    ) : (
+                      <p className="truncate font-medium">{a.name}</p>
+                    )}
                     <p className="text-xs text-[var(--ink-soft)]">{a.type} · {a.size}</p>
                   </div>
                   {canRemove && (
@@ -1120,7 +1189,31 @@ export function TaskDetailSheet({
                       <span className="text-xs font-medium">{mine ? "คุณ" : author?.name}</span>
                       <span className="text-[10px] text-[var(--ink-soft)]">{relativeTime(c.createdAt)}</span>
                     </div>
-                    <p className="text-sm mt-0.5 whitespace-pre-wrap break-words">{renderMentions(c.message)}</p>
+                    {c.message && <p className="text-sm mt-0.5 whitespace-pre-wrap break-words">{renderMentions(c.message)}</p>}
+                    {c.attachments && c.attachments.length > 0 && (
+                      <div className="mt-1.5 space-y-1">
+                        {c.attachments.map((a) => {
+                          const src = a.url ?? a.dataUrl;
+                          return a.type === "รูปภาพ" && src ? (
+                            <a key={a.id} href={src} target="_blank" rel="noreferrer">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={src} alt={a.name} className="max-h-32 rounded-lg border border-[var(--line)]" />
+                            </a>
+                          ) : (
+                            <a
+                              key={a.id}
+                              href={src}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-1.5 text-xs bg-white/60 rounded-md px-2 py-1 hover:underline"
+                            >
+                              <FileText className="h-3.5 w-3.5 shrink-0" />
+                              <span className="truncate">{a.name}</span>
+                            </a>
+                          );
+                        })}
+                      </div>
+                    )}
                     {mine && (
                       <button
                         onClick={() => removeComment(task.id, c.id)}
@@ -1138,49 +1231,62 @@ export function TaskDetailSheet({
             )}
           </div>
 
-          <div className="border-t border-[var(--line)] p-3 flex items-end gap-2 shrink-0 bg-white">
-            <Popover>
-              <PopoverTrigger
-                render={
-                  <Button size="icon" variant="outline" className="shrink-0" title="แท็กบุคคล (@)" aria-label="แท็กบุคคล (@)">
-                    <AtSign className="h-4 w-4" />
-                  </Button>
-                }
-              />
-              <PopoverContent align="start" className="w-56 p-1 max-h-64 overflow-y-auto">
-                <p className="text-[11px] text-[var(--ink-soft)] px-2 pt-1 pb-1.5">แท็กบุคคล</p>
-                {users.map((u) => {
-                  const first = u.name.split(" ")[0];
-                  return (
+          <div className="border-t border-[var(--line)] p-3 flex flex-col gap-2 shrink-0 bg-white">
+            {commentAttachments.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {commentAttachments.map((a) => (
+                  <span key={a.id} className="flex items-center gap-1.5 text-xs bg-[var(--bg-soft)] rounded-md pl-2 pr-1 py-1">
+                    <FileText className="h-3.5 w-3.5 shrink-0 text-[var(--ink-soft)]" />
+                    <span className="truncate max-w-[140px]">{a.name}</span>
                     <button
-                      key={u.id}
-                      onClick={() => setComment((c) => `${c}${c && !c.endsWith(" ") ? " " : ""}@${first} `)}
-                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-[var(--bg-soft)] text-left text-sm"
+                      onClick={() => removeCommentAttachment(a.id)}
+                      className="text-[var(--ink-soft)] hover:text-[var(--chart-red)]"
+                      aria-label={`เอา ${a.name} ออก`}
                     >
-                      <Avatar className="h-6 w-6">
-                        <AvatarFallback className="text-[9px] bg-[var(--bg-soft)]">{u.avatar}</AvatarFallback>
-                      </Avatar>
-                      <span className="flex-1 truncate">{u.name}</span>
+                      <X className="h-3.5 w-3.5" />
                     </button>
-                  );
-                })}
-              </PopoverContent>
-            </Popover>
-            <Textarea
-              placeholder="แสดงความคิดเห็น... พิมพ์ @ เพื่อแท็ก"
-              rows={1}
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              className="min-h-9 resize-none bg-white"
-            />
-            <Button
-              size="icon"
-              className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white shrink-0"
-              onClick={submitComment}
-              aria-label="ส่งความคิดเห็น"
-            >
-              <Send className="h-4 w-4" />
-            </Button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex items-end gap-2">
+              <Button
+                size="icon"
+                variant="outline"
+                className="shrink-0"
+                disabled={commentUploading}
+                onClick={() => commentFileInputRef.current?.click()}
+                title="แนบไฟล์/รูปภาพ"
+                aria-label="แนบไฟล์/รูปภาพ"
+              >
+                {commentUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+              </Button>
+              <input
+                ref={commentFileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  void handleCommentFilesSelected(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+              <Textarea
+                placeholder="แสดงความคิดเห็น..."
+                rows={1}
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                className="min-h-9 resize-none bg-white"
+              />
+              <Button
+                size="icon"
+                className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white shrink-0"
+                onClick={submitComment}
+                aria-label="ส่งความคิดเห็น"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
         </div>

@@ -60,6 +60,7 @@ export interface Comment {
   authorId: string;
   message: string;
   createdAt: string;
+  attachments?: Attachment[];
 }
 
 export interface ChecklistItem {

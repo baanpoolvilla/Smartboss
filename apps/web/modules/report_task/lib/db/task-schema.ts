@@ -29,6 +29,7 @@ const commentSchema = z.object({
   authorId: z.string(),
   message: z.string(),
   createdAt: z.string(),
+  attachments: z.array(attachmentSchema).optional(),
 });
 
 const checklistItemSchema = z.object({

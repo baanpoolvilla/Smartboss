@@ -172,7 +172,7 @@ interface TaskStore {
   removeTask: (taskId: string) => void;
   updateTask: (taskId: string, patch: Partial<Task>) => void;
   setAssignees: (taskId: string, assigneeIds: string[]) => void;
-  addComment: (taskId: string, message: string, authorId: string) => void;
+  addComment: (taskId: string, message: string, authorId: string, attachments?: Attachment[]) => void;
   removeComment: (taskId: string, commentId: string) => void;
   addAttachment: (taskId: string, attachment: Attachment) => void;
   removeAttachment: (taskId: string, attachmentId: string) => void;
@@ -396,7 +396,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
         ),
       };
     }),
-  addComment: (taskId, message, authorId) =>
+  addComment: (taskId, message, authorId, attachments) =>
     set((s) => ({
       tasks: s.tasks.map((t) =>
         t.id !== taskId
@@ -405,7 +405,13 @@ export const useTaskStore = create<TaskStore>((set) => ({
               ...t,
               comments: [
                 ...t.comments,
-                { id: `${taskId}-cmt-${crypto.randomUUID()}`, authorId, message, createdAt: new Date().toISOString() },
+                {
+                  id: `${taskId}-cmt-${crypto.randomUUID()}`,
+                  authorId,
+                  message,
+                  createdAt: new Date().toISOString(),
+                  ...(attachments && attachments.length > 0 ? { attachments } : {}),
+                },
               ],
             }
       ),
