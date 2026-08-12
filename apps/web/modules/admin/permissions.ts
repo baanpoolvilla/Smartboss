@@ -11,6 +11,11 @@ export const ADMIN_PERMS = {
   roleView: "core.role.view",
   roleManage: "core.role.manage",
 
+  departmentView: "core.department.view",
+  departmentManage: "core.department.manage",
+  positionView: "core.position.view",
+  positionManage: "core.position.manage",
+
   moduleManage: "core.module.manage",
   orgManage: "core.org.manage",
   auditView: "core.audit.view",
@@ -40,6 +45,10 @@ export const ADMIN_PERM_LABELS: Record<string, string> = {
   [ADMIN_PERMS.userManage]: "เพิ่ม/แก้ไข/ลบผู้ใช้งาน",
   [ADMIN_PERMS.roleView]: "ดูบทบาทและสิทธิ์",
   [ADMIN_PERMS.roleManage]: "สร้าง/แก้ไขบทบาทและสิทธิ์",
+  [ADMIN_PERMS.departmentView]: "ดูแผนกและสิทธิ์ระดับแผนก",
+  [ADMIN_PERMS.departmentManage]: "สร้าง/แก้ไขแผนกและสิทธิ์ระดับแผนก",
+  [ADMIN_PERMS.positionView]: "ดูตำแหน่งและสิทธิ์ระดับตำแหน่ง",
+  [ADMIN_PERMS.positionManage]: "สร้าง/แก้ไขตำแหน่งและสิทธิ์ระดับตำแหน่ง",
   [ADMIN_PERMS.moduleManage]: "เปิด/ปิดโมดูลของบริษัท",
   [ADMIN_PERMS.orgManage]: "แก้ไขข้อมูลบริษัท",
   [ADMIN_PERMS.auditView]: "ดูประวัติการใช้งาน (audit log)",

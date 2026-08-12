@@ -77,6 +77,20 @@ async function assertAssignableRole(orgId: string, roleId: string) {
   return role;
 }
 
+/** แผนกที่บริษัทนี้ "แก้ได้" ต้องเป็นของบริษัทตัวเอง — ไม่มีแผนกระดับระบบเหมือน role */
+async function assertEditableDepartment(orgId: string, departmentId: string) {
+  const department = await prisma.department.findFirst({ where: { id: departmentId, orgId } });
+  if (!department) throw new Error("ไม่มีสิทธิ์แก้ไขแผนกนี้");
+  return department;
+}
+
+/** ตำแหน่งที่บริษัทนี้ "แก้ได้" ต้องเป็นของบริษัทตัวเอง */
+async function assertEditablePosition(orgId: string, positionId: string) {
+  const position = await prisma.position.findFirst({ where: { id: positionId, orgId } });
+  if (!position) throw new Error("ไม่มีสิทธิ์แก้ไขตำแหน่งนี้");
+  return position;
+}
+
 /* ═══════════════════════ ผู้ใช้งาน ═══════════════════════ */
 
 const createUserSchema = z.object({
@@ -385,6 +399,200 @@ export async function deleteRoleAction(formData: FormData) {
   await prisma.role.delete({ where: { id: roleId } });
   await audit({ userId: session.userId, action: "ROLE_DELETED", targetId: roleId });
   redirect("/admin/roles");
+}
+
+/* ═══════════════════════ แผนก ═══════════════════════ */
+
+export async function createDepartmentAction(formData: FormData) {
+  const session = await guard(ADMIN_PERMS.departmentManage);
+  const name = String(formData.get("name") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  if (!name) throw new Error("กรุณากรอกชื่อแผนก");
+
+  const department = await prisma.department.create({
+    data: { orgId: session.orgId, name, description: description || null },
+  });
+  await audit({
+    userId: session.userId,
+    action: "DEPARTMENT_CREATED",
+    targetId: department.id,
+    detail: { name },
+  });
+  redirect(`/admin/departments/${department.id}`);
+}
+
+export async function updateDepartmentAction(formData: FormData) {
+  const session = await guard(ADMIN_PERMS.departmentManage);
+  const departmentId = String(formData.get("departmentId") ?? "");
+  await assertEditableDepartment(session.orgId, departmentId);
+
+  const name = String(formData.get("name") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  if (!name) throw new Error("กรุณากรอกชื่อแผนก");
+
+  await prisma.department.update({
+    where: { id: departmentId },
+    data: { name, description: description || null },
+  });
+  await audit({ userId: session.userId, action: "DEPARTMENT_UPDATED", targetId: departmentId });
+  revalidatePath(`/admin/departments/${departmentId}`);
+  revalidatePath("/admin/departments");
+}
+
+export async function setDepartmentPermissionsAction(formData: FormData) {
+  const session = await guard(ADMIN_PERMS.departmentManage);
+  const departmentId = String(formData.get("departmentId") ?? "");
+  await assertEditableDepartment(session.orgId, departmentId);
+
+  const permissionIds = formData.getAll("permissionIds").map(String).filter(Boolean);
+  const valid = await prisma.permission.findMany({
+    where: { id: { in: permissionIds } },
+    select: { id: true },
+  });
+
+  await prisma.$transaction([
+    prisma.departmentPermission.deleteMany({ where: { departmentId } }),
+    prisma.departmentPermission.createMany({
+      data: valid.map((p) => ({ departmentId, permissionId: p.id })),
+      skipDuplicates: true,
+    }),
+  ]);
+
+  await audit({
+    userId: session.userId,
+    action: "DEPARTMENT_PERMISSIONS_CHANGED",
+    targetId: departmentId,
+    detail: { count: valid.length },
+  });
+  revalidatePath(`/admin/departments/${departmentId}`);
+  revalidatePath("/admin/departments");
+}
+
+export async function deleteDepartmentAction(formData: FormData) {
+  const session = await guard(ADMIN_PERMS.departmentManage);
+  const departmentId = String(formData.get("departmentId") ?? "");
+  await assertEditableDepartment(session.orgId, departmentId);
+
+  const inUse = await prisma.user.count({ where: { departmentId } });
+  if (inUse > 0) {
+    throw new Error(`ยังมีผู้ใช้ ${inUse} คนอยู่แผนกนี้ — ย้ายคนออกก่อน`);
+  }
+
+  await prisma.department.delete({ where: { id: departmentId } });
+  await audit({ userId: session.userId, action: "DEPARTMENT_DELETED", targetId: departmentId });
+  redirect("/admin/departments");
+}
+
+/* ═══════════════════════ ตำแหน่ง ═══════════════════════ */
+
+export async function createPositionAction(formData: FormData) {
+  const session = await guard(ADMIN_PERMS.positionManage);
+  const name = String(formData.get("name") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  if (!name) throw new Error("กรุณากรอกชื่อตำแหน่ง");
+
+  const position = await prisma.position.create({
+    data: { orgId: session.orgId, name, description: description || null },
+  });
+  await audit({
+    userId: session.userId,
+    action: "POSITION_CREATED",
+    targetId: position.id,
+    detail: { name },
+  });
+  redirect(`/admin/positions/${position.id}`);
+}
+
+export async function updatePositionAction(formData: FormData) {
+  const session = await guard(ADMIN_PERMS.positionManage);
+  const positionId = String(formData.get("positionId") ?? "");
+  await assertEditablePosition(session.orgId, positionId);
+
+  const name = String(formData.get("name") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  if (!name) throw new Error("กรุณากรอกชื่อตำแหน่ง");
+
+  await prisma.position.update({
+    where: { id: positionId },
+    data: { name, description: description || null },
+  });
+  await audit({ userId: session.userId, action: "POSITION_UPDATED", targetId: positionId });
+  revalidatePath(`/admin/positions/${positionId}`);
+  revalidatePath("/admin/positions");
+}
+
+export async function setPositionPermissionsAction(formData: FormData) {
+  const session = await guard(ADMIN_PERMS.positionManage);
+  const positionId = String(formData.get("positionId") ?? "");
+  await assertEditablePosition(session.orgId, positionId);
+
+  const permissionIds = formData.getAll("permissionIds").map(String).filter(Boolean);
+  const valid = await prisma.permission.findMany({
+    where: { id: { in: permissionIds } },
+    select: { id: true },
+  });
+
+  await prisma.$transaction([
+    prisma.positionPermission.deleteMany({ where: { positionId } }),
+    prisma.positionPermission.createMany({
+      data: valid.map((p) => ({ positionId, permissionId: p.id })),
+      skipDuplicates: true,
+    }),
+  ]);
+
+  await audit({
+    userId: session.userId,
+    action: "POSITION_PERMISSIONS_CHANGED",
+    targetId: positionId,
+    detail: { count: valid.length },
+  });
+  revalidatePath(`/admin/positions/${positionId}`);
+  revalidatePath("/admin/positions");
+}
+
+export async function deletePositionAction(formData: FormData) {
+  const session = await guard(ADMIN_PERMS.positionManage);
+  const positionId = String(formData.get("positionId") ?? "");
+  await assertEditablePosition(session.orgId, positionId);
+
+  const inUse = await prisma.user.count({ where: { positionId } });
+  if (inUse > 0) {
+    throw new Error(`ยังมีผู้ใช้ ${inUse} คนถือตำแหน่งนี้อยู่ — ย้ายคนออกก่อน`);
+  }
+
+  await prisma.position.delete({ where: { id: positionId } });
+  await audit({ userId: session.userId, action: "POSITION_DELETED", targetId: positionId });
+  redirect("/admin/positions");
+}
+
+/**
+ * ตั้งแผนก/ตำแหน่ง "ปัจจุบัน" ของผู้ใช้คนเดียว — คนละอย่างกับบทบาท (ถือได้หลายอัน)
+ * แผนก/ตำแหน่งมีได้อย่างละหนึ่งต่อคน ว่าง = เลือก "ไม่ระบุ"
+ */
+export async function setUserDepartmentPositionAction(formData: FormData) {
+  const session = await guard(ADMIN_PERMS.userManage);
+  const userId = String(formData.get("userId") ?? "");
+  const target = await assertManageableUser(session, userId);
+  if (!target.orgId) throw new Error("ผู้ใช้ระดับแพลตฟอร์มไม่มีแผนก/ตำแหน่ง");
+
+  const departmentId = String(formData.get("departmentId") ?? "").trim();
+  const positionId = String(formData.get("positionId") ?? "").trim();
+  if (departmentId) await assertEditableDepartment(target.orgId, departmentId);
+  if (positionId) await assertEditablePosition(target.orgId, positionId);
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { departmentId: departmentId || null, positionId: positionId || null },
+  });
+
+  await audit({
+    userId: session.userId,
+    action: "USER_DEPARTMENT_POSITION_CHANGED",
+    targetId: userId,
+    detail: { departmentId: departmentId || null, positionId: positionId || null },
+  });
+  revalidatePath("/admin/users");
+  revalidatePath(`/admin/users/${userId}`);
 }
 
 /* ═══════════════════════ โมดูล & บริษัท ═══════════════════════ */
