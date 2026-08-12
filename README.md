@@ -1,5 +1,9 @@
 # Smartboss — Phase 1 (App Shell + Login)
 
+> 📋 **Pull code มาแล้วอ่าน [CHANGELOG.md](CHANGELOG.md) ก่อนเริ่มงานทุกครั้ง** — ใครแก้อะไรไป
+> ต้องรัน migration/seed เพิ่มไหม มีอะไรค้างอยู่บ้าง บันทึกไว้ที่นั่นทั้งหมด แก้เสร็จแล้วก็เพิ่ม
+> รายการของตัวเองไว้ด้วย
+
 โครง (shell) ของ Smartboss: ระบบ Login (JWT + Refresh Rotation), RBAC foundation,
 App Shell (Sidebar + Topbar) และหน้า Home ที่แสดง 6 โมดูลสถานะ "เร็ว ๆ นี้"
 **ยังไม่มีฟีเจอร์ภายในโมดูล** — โมดูลจะถูกเสียบผ่าน Module Registry ใน Phase ถัดไป
