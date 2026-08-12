@@ -22,7 +22,7 @@ export interface BoardColumn {
   emptyMessage?: string;
 }
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 6;
 
 export function KanbanColumn({
   column,
@@ -39,10 +39,12 @@ export function KanbanColumn({
   const accent = column.accent;
   const percent = boardTotal > 0 ? Math.round((column.tasks.length / boardTotal) * 100) : 0;
 
-  // §6 — every column caps at 10 cards up front; "ดูเพิ่มเติม" reveals the
-  // rest, "แสดงน้อยลง" collapses back — same two-way toggle as the
-  // Dashboard's capped lists (useShowMore/ShowMoreToggle), not a one-way
-  // "keep clicking to add 10 more" with no way back.
+  // §6 — every column caps at PAGE_SIZE cards up front (same constant for
+  // every column, so all columns stay in sync scrolling-wise before anyone
+  // expands); "ดูเพิ่มเติม" reveals the rest, "แสดงน้อยลง" collapses back —
+  // same two-way toggle as the Dashboard's capped lists
+  // (useShowMore/ShowMoreToggle), not a one-way "keep clicking to add more"
+  // with no way back.
   const { visible: visibleTasks, remaining, expanded, toggle } = useShowMore(column.tasks, PAGE_SIZE);
 
   return (
