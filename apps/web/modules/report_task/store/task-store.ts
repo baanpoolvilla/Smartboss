@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { departmentIdsOf, departments, getUser } from "@/modules/report_task/lib/directory";
 import { daysUntil, formatShortDate } from "@/modules/report_task/lib/format";
-import { statusMeta } from "@/modules/report_task/lib/task-meta";
+import { statusMeta, priorityMeta } from "@/modules/report_task/lib/task-meta";
 import type { DatePreset } from "@/modules/report_task/lib/date-filter";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
@@ -20,6 +20,10 @@ import type { Attachment, ChecklistItem, Task, TaskPriority, TaskStatus } from "
  */
 function logActivity(userId: string, action: string, target: string, taskId: string, detail?: string) {
   useActivityLogStore.getState().log({ userId, action, target, taskId, detail });
+}
+
+function priorityLabel(p: TaskPriority): string {
+  return priorityMeta[p]?.label ?? p;
 }
 
 /**
@@ -170,6 +174,12 @@ interface TaskStore {
   addTask: (task: Task) => void;
   removeTask: (taskId: string) => void;
   updateTask: (taskId: string, patch: Partial<Task>) => void;
+  /** Title/description edit, committed as one logged action (not per
+   * keystroke — the UI stages both in local draft state and only calls this
+   * on explicit save). */
+  saveTaskDetails: (taskId: string, title: string, description: string, actorId: string) => void;
+  setPriority: (taskId: string, priority: TaskPriority, actorId: string) => void;
+  setStartDate: (taskId: string, startDate: string, actorId: string) => void;
   setAssignees: (taskId: string, assigneeIds: string[]) => void;
   /** Labels one of the task's current assignees as its lead — display-only,
    * no effect on edit/see permissions (those come from assignedById/dept
@@ -341,6 +351,41 @@ export const useTaskStore = create<TaskStore>((set) => ({
         t.id === taskId ? { ...t, ...patch, updatedAt: new Date().toISOString() } : t
       ),
     })),
+  saveTaskDetails: (taskId, title, description, actorId) =>
+    set((s) => {
+      const t = s.tasks.find((x) => x.id === taskId);
+      if (t) {
+        const titleChanged = t.title !== title;
+        const descChanged = t.description !== description;
+        const what = [titleChanged && "ชื่องาน", descChanged && "รายละเอียด"].filter(Boolean).join(" + ");
+        if (what) logActivity(actorId, "แก้ไขข้อมูลงาน", title, taskId, `แก้ไข: ${what}`);
+      }
+      return {
+        tasks: s.tasks.map((x) =>
+          x.id === taskId ? { ...x, title, description, updatedAt: new Date().toISOString() } : x
+        ),
+      };
+    }),
+  setPriority: (taskId, priority, actorId) =>
+    set((s) => {
+      const t = s.tasks.find((x) => x.id === taskId);
+      if (t && t.priority !== priority) {
+        logActivity(actorId, "เปลี่ยนความสำคัญ", t.title, t.id, `${priorityLabel(t.priority)} → ${priorityLabel(priority)}`);
+      }
+      return {
+        tasks: s.tasks.map((x) => (x.id === taskId ? { ...x, priority, updatedAt: new Date().toISOString() } : x)),
+      };
+    }),
+  setStartDate: (taskId, startDate, actorId) =>
+    set((s) => {
+      const t = s.tasks.find((x) => x.id === taskId);
+      if (t && t.startDate !== startDate) {
+        logActivity(actorId, "เปลี่ยนวันเริ่มต้น", t.title, t.id, `${formatShortDate(t.startDate)} → ${formatShortDate(startDate)}`);
+      }
+      return {
+        tasks: s.tasks.map((x) => (x.id === taskId ? { ...x, startDate, updatedAt: new Date().toISOString() } : x)),
+      };
+    }),
   // Assignees drive a task's departments, so recompute them together.
   // taskMode follows the headcount too — 2+ people means it behaves as a
   // group task (per-person checklist completion, done only once everyone
@@ -372,13 +417,20 @@ export const useTaskStore = create<TaskStore>((set) => ({
       };
     }),
   setMainAssignee: (taskId, userId) =>
-    set((s) => ({
-      tasks: s.tasks.map((t) =>
-        t.id === taskId && t.assigneeIds.includes(userId)
-          ? { ...t, mainAssigneeId: userId, updatedAt: new Date().toISOString() }
-          : t
-      ),
-    })),
+    set((s) => {
+      const t = s.tasks.find((x) => x.id === taskId);
+      if (t && t.assigneeIds.includes(userId) && t.mainAssigneeId !== userId) {
+        const actorId = useIdentityStore.getState().viewingAsUserId;
+        logActivity(actorId, "ตั้งหัวหน้าหลัก", t.title, t.id, getUser(userId)?.name ?? userId);
+      }
+      return {
+        tasks: s.tasks.map((x) =>
+          x.id === taskId && x.assigneeIds.includes(userId)
+            ? { ...x, mainAssigneeId: userId, updatedAt: new Date().toISOString() }
+            : x
+        ),
+      };
+    }),
   addComment: (taskId, message, authorId, attachments) =>
     set((s) => ({
       tasks: s.tasks.map((t) =>

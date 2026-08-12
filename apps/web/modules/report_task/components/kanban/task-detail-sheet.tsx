@@ -91,6 +91,9 @@ export function TaskDetailSheet({
   const task = useTaskStore((s) => s.tasks.find((t) => t.id === taskId));
   const moveTask = useTaskStore((s) => s.moveTask);
   const updateTask = useTaskStore((s) => s.updateTask);
+  const saveTaskDetails = useTaskStore((s) => s.saveTaskDetails);
+  const setPriority = useTaskStore((s) => s.setPriority);
+  const setStartDate = useTaskStore((s) => s.setStartDate);
   const removeTask = useTaskStore((s) => s.removeTask);
   const setAssignees = useTaskStore((s) => s.setAssignees);
   const setMainAssignee = useTaskStore((s) => s.setMainAssignee);
@@ -153,7 +156,7 @@ export function TaskDetailSheet({
   const mainFieldsDirty = draftTitle !== task.title || draftDescription !== task.description;
   function saveMainFields() {
     if (!task) return;
-    updateTask(task.id, { title: draftTitle.trim() || task.title, description: draftDescription });
+    saveTaskDetails(task.id, draftTitle.trim() || task.title, draftDescription, viewingAsUserId);
     toast.success("บันทึกการแก้ไขแล้ว");
   }
   const assignees = task.assigneeIds.map(getUser).filter(Boolean);
@@ -430,7 +433,7 @@ export function TaskDetailSheet({
               <Label className="text-xs text-[var(--ink-soft)]">ความสำคัญ</Label>
               <Select
                 value={task.priority}
-                onValueChange={(v) => v && updateTask(task.id, { priority: v as TaskPriority })}
+                onValueChange={(v) => v && setPriority(task.id, v as TaskPriority, viewingAsUserId)}
                 disabled={!canEditMain}
               >
                 <SelectTrigger className="w-full" title={!canEditMain ? lockedTitle : undefined}>
@@ -604,7 +607,7 @@ export function TaskDetailSheet({
               {canEditMain ? (
                 <DatePickerField
                   value={toDateInput(task.startDate)}
-                  onChange={(v) => updateTask(task.id, { startDate: new Date(v).toISOString() })}
+                  onChange={(v) => setStartDate(task.id, new Date(v).toISOString(), viewingAsUserId)}
                 />
               ) : (
                 <div className="flex items-center h-9 px-1 text-sm">{formatDate(task.startDate)}</div>
