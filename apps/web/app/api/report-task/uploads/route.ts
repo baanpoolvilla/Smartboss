@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { requireOrg } from "@smartboss/auth";
 
 import { putFile } from "@/modules/maintenance/lib/storage";
@@ -95,7 +97,7 @@ export async function POST(request: Request) {
    */
   const url = await putFile(
     `${session.orgId}/report-task`,
-    new File([bytes], `${crypto.randomUUID()}.${meta.ext}`, { type: sniffed }),
+    new File([bytes], `${randomUUID()}.${meta.ext}`, { type: sniffed }),
     // ส่งนามสกุลไปตรง ๆ — ตัวเดาของ storage รู้จักแต่รูปภาพ ถ้าไม่บอก
     // pdf/txt/zip/mp4 จะถูกเก็บเป็น .jpg แล้วเสิร์ฟกลับเป็น image/jpeg
     { ext: meta.ext }

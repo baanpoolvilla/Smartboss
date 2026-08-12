@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 
 import { readStore, writeStore } from "./org-store";
 
@@ -69,7 +70,7 @@ export async function addIcsLink(
   visible = true
 ): Promise<IcsLink> {
   const map = await readMap(orgId);
-  const id = `ics-${crypto.randomUUID()}`;
+  const id = `ics-${randomUUID()}`;
   const entry: IcsLink = { id, url, label, connectedAt: new Date().toISOString(), target, visible };
   map[userId] = [...(map[userId] ?? []), entry];
   await writeMap(orgId, map);

@@ -956,7 +956,7 @@ export function TaskDetailSheet({
                   disabled={!newChecklistItem.trim()}
                   onClick={() => commitChecklistItem(isShared ? newChecklistOwnerId : task.assigneeIds[0]!)}
                 >
-                  <Plus className="h-3.5 w-3.5" /> ตกลง
+                  <Plus className="h-3.5 w-3.5" /> เพิ่ม
                 </Button>
                 {isShared && (
                   <Select value={newChecklistOwnerId || task.assigneeIds[0]!} onValueChange={(v) => v && setNewChecklistOwnerId(v)}>

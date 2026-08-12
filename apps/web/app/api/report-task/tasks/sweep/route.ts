@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { requireOrg } from "@smartboss/auth";
 
 import { recordPerformanceEvents, type PerformanceEventInput } from "@/lib/performance";
@@ -47,7 +49,7 @@ export async function POST() {
     const { data: existing, version: v } = await readStore<ActivityItem[]>(orgId, ACTIVITY_KEY);
     const fresh: ActivityItem[] = result.logs.map((l) => ({
       ...l,
-      id: `log-${crypto.randomUUID()}`,
+      id: `log-${randomUUID()}`,
       createdAt: new Date().toISOString(),
     }));
     await writeStore(
@@ -66,7 +68,7 @@ export async function POST() {
     );
     const fresh: AppNotification[] = result.notifications.flatMap((n) =>
       n.recipients.map((userId) => ({
-        id: `notif-${crypto.randomUUID()}`,
+        id: `notif-${randomUUID()}`,
         userId,
         byUserId: n.byUserId,
         message: n.message,
