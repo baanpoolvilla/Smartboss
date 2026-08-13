@@ -43,7 +43,7 @@ import type { Attachment, CalendarEvent, ChecklistItem, LeaveType, Task, TaskPri
 import { cn } from "@/modules/report_task/lib/utils";
 import { todayIso } from "@/modules/report_task/lib/now";
 import { formatFileSize, formatDate } from "@/modules/report_task/lib/format";
-import { uploadCompressedImage } from "@/modules/report_task/lib/image-resize";
+import { uploadTaskAttachment } from "@/modules/report_task/lib/task-attachment-upload";
 import {
   Type,
   User,
@@ -163,27 +163,23 @@ function attendeeAvailabilityFor(params: {
 }
 
 /**
- * Turn picked File objects into Attachment records. Images get downscaled
- * and stored inline as a data URL (bounded size, safe for localStorage);
- * everything else is metadata-only — there's no real file storage backend
- * for this app to upload arbitrary binaries to.
+ * Turn picked File objects into real, uploaded Attachment records (same
+ * /api/report-task/uploads path as the task detail sheet's attach flow —
+ * see task-attachment-upload.ts). A single bad file (unsupported type, over
+ * the org's size limit) shouldn't block creating the task/meeting with
+ * everything else that did upload, so failures are toasted individually and
+ * just dropped from the result instead of rejecting the whole batch.
  */
 async function buildAttachments(files: File[], uploadedBy: string): Promise<Attachment[]> {
-  const now = new Date().toISOString();
-  return Promise.all(
-    files.map(async (file) => {
-      const isImage = file.type.startsWith("image/");
-      return {
-        id: `att-${crypto.randomUUID()}`,
-        name: file.name,
-        size: formatFileSize(file.size),
-        type: isImage ? "รูปภาพ" : file.type || "ไฟล์",
-        uploadedBy,
-        uploadedAt: now,
-        url: isImage ? await uploadCompressedImage(file) : undefined,
-      };
-    })
-  );
+  const results: Attachment[] = [];
+  for (const file of files) {
+    try {
+      results.push(await uploadTaskAttachment(file, uploadedBy));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : `แนบไฟล์ "${file.name}" ไม่สำเร็จ`);
+    }
+  }
+  return results;
 }
 
 const typeMeta: Record<ItemType, { label: string; icon: React.ElementType }> = {
@@ -288,6 +284,9 @@ export function NewTaskDialog({
   const [taskMode, setTaskMode] = useState<"individual" | "group">("individual");
   // Point person on a group task — display-only label, optional even then.
   const [mainAssigneeId, setMainAssigneeId] = useState<string>("");
+  // Staged files/images — uploaded for real (see buildAttachments) only once
+  // the task is actually created, same as meetFiles below.
+  const [taskFiles, setTaskFiles] = useState<File[]>([]);
   // Every task needs at least one checklist item — an assignee's part is
   // done once every item they own is checked (see task-completion.ts).
   const [checklistItems, setChecklistItems] = useState<{ id: string; text: string; ownerId: string }[]>([]);
@@ -308,9 +307,9 @@ export function NewTaskDialog({
   const [meetLocation, setMeetLocation] = useState("");
   const [meetOnline, setMeetOnline] = useState(false);
   const [meetAllDay, setMeetAllDay] = useState(false);
-  // Attached files/images — no cap on count; images get compressed to an
-  // inline preview, other file types are tracked as metadata only (same as
-  // task attachments elsewhere — there's no real file storage backend).
+  // Staged files/images — uploaded for real (see buildAttachments) only once
+  // the meeting is actually created, so a cancelled dialog never uploads
+  // anything.
   const [meetFiles, setMeetFiles] = useState<File[]>([]);
 
   // Scheduling-assistant-style availability, one row per attendee — replaces
@@ -484,6 +483,7 @@ export function NewTaskDialog({
     setDueDate(initialDate);
     setTaskMode("individual");
     setMainAssigneeId("");
+    setTaskFiles([]);
     setChecklistItems([]);
     setNewChecklistText("");
     setNewChecklistOwnerId("");
@@ -510,7 +510,8 @@ export function NewTaskDialog({
     setDayoffUntil("");
   }
 
-  function createTask() {
+  async function createTask() {
+    const attachments = await buildAttachments(taskFiles, viewingAsUserId);
     const now = new Date().toISOString();
     const checklist: ChecklistItem[] = checklistItems.map((c) => ({
       id: `task-chk-${crypto.randomUUID()}`,
@@ -547,7 +548,7 @@ export function NewTaskDialog({
       dueDate: new Date(dueDate).toISOString(),
       originalDueDate: new Date(dueDate).toISOString(),
       ...(Object.keys(assigneeDueDates).length > 0 ? { assigneeDueDates } : {}),
-      attachments: [],
+      attachments,
       comments: [],
       revisions: [],
       reactions: [],
@@ -763,7 +764,7 @@ export function NewTaskDialog({
     setSubmitting(true);
     try {
       if (itemType === "meeting") await createMeeting();
-      else if (itemType === "task") createTask();
+      else if (itemType === "task") await createTask();
       else if (itemType === "leave") createLeave();
       else if (dayoffRecurring) createDayoffRecurring();
       else createDayoffOnce();
@@ -1143,6 +1144,58 @@ export function NewTaskDialog({
                           </button>
                         </div>
                       ))}
+                    </div>
+                  )}
+                </div>
+              </Row>
+
+              <Row icon={Paperclip}>
+                <div className="space-y-2">
+                  <Label className="text-xs text-[var(--ink-soft)]">
+                    ไฟล์แนบ / รูปภาพ{taskFiles.length > 0 ? ` (${taskFiles.length})` : ""}
+                  </Label>
+                  <input
+                    id="task-file-input"
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      const picked = Array.from(e.target.files ?? []);
+                      if (picked.length > 0) setTaskFiles((prev) => [...prev, ...picked]);
+                      e.target.value = "";
+                    }}
+                  />
+                  <label
+                    htmlFor="task-file-input"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-[var(--line)] px-3 py-1.5 text-xs text-[var(--ink-soft)] cursor-pointer hover:border-[var(--brand-green)] hover:text-[var(--brand-green-dark)] transition-colors"
+                  >
+                    <Paperclip className="h-3.5 w-3.5" /> แนบไฟล์หรือรูปภาพ
+                  </label>
+
+                  {taskFiles.length > 0 && (
+                    <div className="space-y-1.5">
+                      {taskFiles.map((f, i) => {
+                        const isImage = f.type.startsWith("image/");
+                        return (
+                          <div key={`${f.name}-${i}`} className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-white px-2.5 py-1.5 text-xs">
+                            {isImage ? (
+                              <ImageIcon className="h-3.5 w-3.5 text-[var(--ink-soft)] shrink-0" />
+                            ) : (
+                              <FileText className="h-3.5 w-3.5 text-[var(--ink-soft)] shrink-0" />
+                            )}
+                            <span className="flex-1 truncate">{f.name}</span>
+                            <span className="text-[var(--ink-soft)] shrink-0">{formatFileSize(f.size)}</span>
+                            <button
+                              type="button"
+                              onClick={() => setTaskFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                              className="text-[var(--ink-soft)] hover:text-[var(--chart-red)] shrink-0"
+                              aria-label={`ลบไฟล์ ${f.name}`}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
