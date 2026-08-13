@@ -70,7 +70,7 @@ export async function POST(request: Request) {
 
   const claimed = ALLOWED_TYPES[file.type];
   if (!claimed) {
-    return Response.json({ error: "ไม่รองรับชนิดไฟล์นี้" }, { status: 400 });
+    return Response.json({ error: `ไม่รองรับชนิดไฟล์นี้ (${file.type || "ไม่ทราบชนิด"})` }, { status: 400 });
   }
   const claimedMaxBytes = maxBytesFor(claimed.kind, settings);
   if (file.size > claimedMaxBytes) {
@@ -90,18 +90,26 @@ export async function POST(request: Request) {
     return Response.json({ error: `ไฟล์ใหญ่เกินไป (จำกัด ${mb}MB)` }, { status: 413 });
   }
 
-  /*
-   * ตั้งชื่อใหม่จากชนิดที่ "ตรวจได้จริง" ไม่ใช่ชื่อที่ผู้ใช้ส่งมา
-   * putFile เอานามสกุลจากชื่อไฟล์ไปกำหนด Content-Type ตอนเก็บ
-   * ถ้าใช้ชื่อเดิม คนอัปโหลดจะเลือก Content-Type ที่ปลายทางเสิร์ฟได้เอง
-   */
-  const url = await putFile(
-    `${session.orgId}/report-task`,
-    new File([bytes], `${randomUUID()}.${meta.ext}`, { type: sniffed }),
-    // ส่งนามสกุลไปตรง ๆ — ตัวเดาของ storage รู้จักแต่รูปภาพ ถ้าไม่บอก
-    // pdf/txt/zip/mp4 จะถูกเก็บเป็น .jpg แล้วเสิร์ฟกลับเป็น image/jpeg
-    { ext: meta.ext }
-  );
-
-  return Response.json({ url, mime: sniffed, size: bytes.byteLength });
+  try {
+    /*
+     * ตั้งชื่อใหม่จากชนิดที่ "ตรวจได้จริง" ไม่ใช่ชื่อที่ผู้ใช้ส่งมา
+     * putFile เอานามสกุลจากชื่อไฟล์ไปกำหนด Content-Type ตอนเก็บ
+     * ถ้าใช้ชื่อเดิม คนอัปโหลดจะเลือก Content-Type ที่ปลายทางเสิร์ฟได้เอง
+     */
+    const url = await putFile(
+      `${session.orgId}/report-task`,
+      new File([bytes], `${randomUUID()}.${meta.ext}`, { type: sniffed }),
+      // ส่งนามสกุลไปตรง ๆ — ตัวเดาของ storage รู้จักแต่รูปภาพ ถ้าไม่บอก
+      // pdf/txt/zip/mp4 จะถูกเก็บเป็น .jpg แล้วเสิร์ฟกลับเป็น image/jpeg
+      { ext: meta.ext }
+    );
+    return Response.json({ url, mime: sniffed, size: bytes.byteLength });
+  } catch (err) {
+    // putFile touches S3/disk — the one part of this route that can fail
+    // for reasons outside the request itself (bad credentials, unwritable
+    // disk, bucket down). Log the real cause server-side (journalctl) instead
+    // of letting it surface as a bare, unexplained 500 in the browser.
+    console.error("[uploads] putFile failed", err);
+    return Response.json({ error: "บันทึกไฟล์ไม่สำเร็จ — ลองใหม่อีกครั้ง หรือแจ้งผู้ดูแลระบบ" }, { status: 500 });
+  }
 }
