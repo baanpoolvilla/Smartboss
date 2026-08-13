@@ -20,7 +20,7 @@ import type { Task } from "@/modules/report_task/types";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { MessageSquare, Paperclip, History, SmilePlus, SearchCheck, Check, Circle, Star } from "lucide-react";
+import { MessageSquare, Paperclip, History, SmilePlus, SearchCheck, Check, Circle, Star, Clock } from "lucide-react";
 import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
 import { StickerConfirmDialog } from "@/modules/report_task/components/shared/sticker-confirm-dialog";
 import type { Sticker } from "@/modules/report_task/types";
@@ -139,9 +139,25 @@ function TaskCardBody({ task, id, onOpen, dragging, lifted, refCb, style, dragPr
             done, both stop mattering — swap in an explicit "เสร็จแล้ว" badge
             instead, since that's the one thing worth knowing at a glance. */}
         {isDone ? (
-          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--brand-green)_14%,white)] text-[var(--brand-green-dark)]">
-            <Check className="h-2.5 w-2.5" strokeWidth={3} />
-            เสร็จแล้ว
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--brand-green)_14%,white)] text-[var(--brand-green-dark)]">
+              <Check className="h-2.5 w-2.5" strokeWidth={3} />
+              เสร็จแล้ว
+            </span>
+            {/* Sign-off from the assigner/dept head/CEO — see task-detail-sheet.tsx's own note on this field. */}
+            {!task.reviewedBy && (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-amber-50 text-[var(--chart-amber)]">
+                      <Clock className="h-2.5 w-2.5" />
+                      รอเช็ค
+                    </span>
+                  }
+                />
+                <TooltipContent>ยังไม่มีใครตรวจสอบยืนยันว่างานนี้เสร็จจริง</TooltipContent>
+              </Tooltip>
+            )}
           </span>
         ) : groupedByPriority ? (
           <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-[var(--ink-soft)]">

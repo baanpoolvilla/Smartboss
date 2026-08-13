@@ -151,6 +151,13 @@ export interface Task {
    * here; unmarking one flips it back to "in_progress". A single-assignee
    * task ignores this and moves status directly, same as before. */
   completedAssigneeIds?: string[];
+  /** Sign-off on a "เสร็จสิ้น" task — set once the assigner/dept head/CEO
+   * clicks "ผ่าน" after checking the work. Purely informational (doesn't
+   * gate status, scoring, or anything else) — a task sits "รอเช็ค" until
+   * reviewed. Cleared whenever the task leaves "เสร็จสิ้น" again (reopened),
+   * since whatever was approved no longer reflects the current work. */
+  reviewedBy?: string;
+  reviewedAt?: string;
   attachments: Attachment[];
   comments: Comment[];
   revisions: RevisionEntry[];

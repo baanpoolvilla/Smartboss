@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { departmentIdsOf, departments, getUser } from "@/modules/report_task/lib/directory";
+import { departmentIdsOf, departments, getUser, users } from "@/modules/report_task/lib/directory";
 import { daysUntil, formatShortDate } from "@/modules/report_task/lib/format";
 import { statusMeta, priorityMeta } from "@/modules/report_task/lib/task-meta";
 import type { DatePreset } from "@/modules/report_task/lib/date-filter";
@@ -40,7 +40,12 @@ function notifyLateCompletion(task: Task) {
   const actorId = useIdentityStore.getState().viewingAsUserId;
   const actorName = getUser(actorId)?.name ?? "มีคน";
   const heads = departments.filter((d) => task.departmentIds.includes(d.id)).map((d) => d.headId);
-  const recipients = Array.from(new Set([...heads, task.assignedById]));
+  // CEO/company owner sees this too, not just the assigner/dept head — a
+  // near-deadline or late completion is exactly the kind of thing worth a
+  // second set of eyes on, and the owner can already reopen anything via
+  // reviseDueDate if it turns out not actually done (see its own doc).
+  const owners = users.filter((u) => u.isOwner).map((u) => u.id);
+  const recipients = Array.from(new Set([...heads, task.assignedById, ...owners]));
   const label =
     days < 0 ? `เลยกำหนดส่งไปแล้ว ${Math.abs(days)} วัน` : days === 0 ? "ถึงกำหนดส่งวันนี้พอดี" : `ใกล้ถึงกำหนดส่ง (เหลือ ${days} วัน)`;
   useNotificationStore
@@ -100,6 +105,8 @@ function applyChecklistDerivedCompletion(t: Task, nextChecklist: ChecklistItem[]
       completedAssigneeIds: nextCompleted,
       status: "in_progress",
       completedAt: undefined,
+      reviewedBy: undefined,
+      reviewedAt: undefined,
       updatedAt: now,
     };
   }
@@ -155,6 +162,9 @@ interface TaskStore {
   setFilters: (f: Partial<TaskFilters>) => void;
   resetFilters: () => void;
   moveTask: (taskId: string, status: TaskStatus) => void;
+  /** Sign-off on a "เสร็จสิ้น" task — see the field's own doc in types/index.ts.
+   * No-op if the task isn't currently done (nothing to sign off on). */
+  markReviewed: (taskId: string, actorId: string) => void;
   reviseDueDate: (taskId: string, newDate: string, reason: string, revisedBy: string) => void;
   /**
    * Adjusts one assignee's own due-date override on a group task (see
@@ -270,8 +280,22 @@ export const useTaskStore = create<TaskStore>((set) => ({
           // Stamp when it actually closed (cleared if it leaves "done" again)
           // so a later sweep can judge lateness by completion time, not "today".
           completedAt: status === "done" ? new Date().toISOString() : undefined,
+          // Whatever sign-off existed no longer reflects the current work
+          // once a task leaves "เสร็จสิ้น" — see the field's own doc.
+          ...(status !== "done" ? { reviewedBy: undefined, reviewedAt: undefined } : {}),
           updatedAt: new Date().toISOString(),
         };
+      }),
+    })),
+  markReviewed: (taskId, actorId) =>
+    set((s) => ({
+      tasks: s.tasks.map((t) => {
+        if (t.id !== taskId || t.status !== "done" || t.reviewedBy) return t;
+        logActivity(actorId, "ตรวจสอบแล้วผ่าน", t.title, t.id);
+        useNotificationStore
+          .getState()
+          .notifyMany(t.assigneeIds, actorId, `${getUser(actorId)?.name ?? "หัวหน้า"} ตรวจงาน "${t.title}" แล้วผ่าน`);
+        return { ...t, reviewedBy: actorId, reviewedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
       }),
     })),
   reviseDueDate: (taskId, newDate, reason, revisedBy) =>
@@ -288,7 +312,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
         return {
           ...t,
           dueDate: newDate,
-          ...(wasDone ? { status: "in_progress" as const, completedAt: undefined } : {}),
+          ...(wasDone ? { status: "in_progress" as const, completedAt: undefined, reviewedBy: undefined, reviewedAt: undefined } : {}),
           revisions: [
             ...t.revisions,
             {

@@ -62,6 +62,7 @@ import {
   Loader2,
   Info,
   Star,
+  Clock,
 } from "lucide-react";
 import type { Attachment, Sticker, TaskPriority, TaskStatus } from "@/modules/report_task/types";
 import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
@@ -92,6 +93,7 @@ export function TaskDetailSheet({
 }) {
   const task = useTaskStore((s) => s.tasks.find((t) => t.id === taskId));
   const moveTask = useTaskStore((s) => s.moveTask);
+  const markReviewed = useTaskStore((s) => s.markReviewed);
   const updateTask = useTaskStore((s) => s.updateTask);
   const saveTaskDetails = useTaskStore((s) => s.saveTaskDetails);
   const setPriority = useTaskStore((s) => s.setPriority);
@@ -484,6 +486,39 @@ export function TaskDetailSheet({
               </Select>
             </div>
           </div>
+
+          {/* Sign-off — separate from "สถานะ" itself: a done task still needs
+              someone (the assigner/dept head/CEO — same circle as canEditMain)
+              to glance at it and confirm it's actually finished, not just
+              trust whoever ticked the last checklist box. Purely
+              informational, doesn't affect status/scoring — resets whenever
+              the task leaves "เสร็จสิ้น" (see the field's own doc). */}
+          {task.status === "done" && (
+            <div
+              className={cn(
+                "flex items-center justify-between gap-2 rounded-lg px-3 py-2",
+                task.reviewedBy ? "bg-[var(--accent)]" : "bg-amber-50"
+              )}
+            >
+              <span
+                className="flex items-center gap-1.5 text-xs font-medium"
+                style={{ color: task.reviewedBy ? "var(--brand-green-dark)" : "var(--chart-amber)" }}
+              >
+                {task.reviewedBy ? <Check className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
+                {task.reviewedBy ? `ตรวจแล้วโดย ${getUser(task.reviewedBy)?.name ?? "—"}` : "รอเช็ค"}
+              </span>
+              {!task.reviewedBy && canEditMain && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs border-[var(--brand-green)] text-[var(--brand-green-dark)] hover:bg-[var(--accent)]"
+                  onClick={() => markReviewed(task.id, viewingAsUserId)}
+                >
+                  <Check className="h-3.5 w-3.5" /> ผ่าน
+                </Button>
+              )}
+            </div>
+          )}
 
           {/* Assignees (add / remove — creator only) */}
           <div className="space-y-1.5">

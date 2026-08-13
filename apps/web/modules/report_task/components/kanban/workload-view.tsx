@@ -46,8 +46,6 @@ export function WorkloadView() {
       .sort((a, b) => b.open - a.open || b.overdue - a.overdue);
   }, [tasks, filters, stickers]);
 
-  const maxOpen = Math.max(1, ...rows.map((r) => r.open));
-
   if (rows.length === 0) {
     return <EmptyState icon={Users} title="ไม่พบภาระงานตามตัวกรอง" description="ลองปรับหรือล้างตัวกรองด้านบน" />;
   }
@@ -61,10 +59,17 @@ export function WorkloadView() {
 
       <div className="divide-y divide-[var(--line)]">
         {rows.map((r) => {
-          const barW = (r.open / maxOpen) * 100;
-          // Within the open bar, split todo / in-progress / overdue.
-          const seg = (n: number) => (r.open ? (n / r.open) * 100 : 0);
+          // Full width = every task this person has, not just the still-open
+          // ones — a bar that only ever shows "open" work can never visibly
+          // reach "done", which undersells how much has actually shipped.
+          const seg = (n: number) => (r.total ? (n / r.total) * 100 : 0);
+          const inProgressNotOverdue = r.inProgress - r.overdue > 0 ? r.inProgress - r.overdue : 0;
           const overloaded = r.open >= 6;
+          // scoreFor() (reports.ts) returns 0 whenever nothing's completed
+          // yet — that's "no track record", not "doing badly", so a 0 with
+          // zero completions reads as neutral instead of alarmed red like an
+          // actually-earned low score does.
+          const hasTrackRecord = r.done > 0;
           return (
             <div key={r.user.id} className="flex items-center gap-3 px-5 py-3 hover:bg-[var(--bg-soft)] transition-colors">
               <Avatar className="h-9 w-9 shrink-0">
@@ -77,27 +82,47 @@ export function WorkloadView() {
               </div>
 
               <div className="flex-1 min-w-0">
-                {/* Todo stays neutral gray here on purpose — "overdue" already owns
-                    red in this bar's legend ("แถบแดง = เลยกำหนด"), so a plain
-                    not-started segment can't also be red without the two
-                    becoming indistinguishable. */}
-                <div className="h-2.5 rounded-full bg-[var(--bg-soft)] overflow-hidden flex" style={{ width: `${Math.max(barW, 6)}%`, minWidth: 40 }} title={`เปิดอยู่ ${r.open} งาน`}>
-                  <div className="h-full" style={{ width: `${seg(r.todo)}%`, backgroundColor: "#94a3b8" }} />
-                  <div className="h-full" style={{ width: `${seg(r.inProgress - r.overdue > 0 ? r.inProgress - r.overdue : 0)}%`, backgroundColor: "var(--chart-amber)" }} />
-                  <div className="h-full" style={{ width: `${seg(r.overdue)}%`, backgroundColor: "var(--chart-red)" }} />
+                {/* Each segment carries its own hover title (not just the bar
+                    as a whole) — a thin sliver is still legible on hover even
+                    when it's too narrow to fit a label next to it. */}
+                <div className="h-2.5 rounded-full bg-[var(--bg-soft)] overflow-hidden flex" title={`งานทั้งหมด ${r.total} งาน`}>
+                  {r.todo > 0 && (
+                    <div className="h-full" style={{ width: `${seg(r.todo)}%`, backgroundColor: "#94a3b8" }} title={`รอดำเนินการ ${r.todo} งาน`} />
+                  )}
+                  {inProgressNotOverdue > 0 && (
+                    <div className="h-full" style={{ width: `${seg(inProgressNotOverdue)}%`, backgroundColor: "var(--chart-amber)" }} title={`กำลังทำ ${inProgressNotOverdue} งาน`} />
+                  )}
+                  {r.overdue > 0 && (
+                    <div className="h-full" style={{ width: `${seg(r.overdue)}%`, backgroundColor: "var(--chart-red)" }} title={`เลยกำหนด ${r.overdue} งาน`} />
+                  )}
+                  {r.done > 0 && (
+                    <div className="h-full" style={{ width: `${seg(r.done)}%`, backgroundColor: "var(--brand-green)" }} title={`เสร็จ ${r.done} งาน`} />
+                  )}
                 </div>
                 <div className="flex items-center gap-2.5 mt-1.5 text-[11px] text-[var(--ink-soft)] flex-wrap">
                   <span className={cn("font-medium", overloaded && "text-[var(--chart-amber)]")}>เปิดอยู่ {r.open}</span>
-                  <span>กำลังทำ {r.inProgress}</span>
+                  <span>กำลังทำ {inProgressNotOverdue}</span>
                   {r.overdue > 0 && <span className="text-[var(--chart-red)] font-medium">เลยกำหนด {r.overdue}</span>}
                   <span>เสร็จ {r.done}</span>
                   {overloaded && <span className="text-[10px] rounded-full bg-amber-50 text-[var(--chart-amber)] px-1.5 py-0.5">งานเยอะ</span>}
                 </div>
               </div>
 
-              <span className={cn("shrink-0 text-xs font-semibold tabular-nums rounded-md ring-1 ring-inset px-2 py-1", scoreClass(r.score))} title="คะแนนผลงาน">
-                {r.score}
-              </span>
+              {hasTrackRecord ? (
+                <span
+                  className={cn("shrink-0 text-xs font-semibold tabular-nums rounded-md ring-1 ring-inset px-2 py-1", scoreClass(r.score))}
+                  title={`คะแนนผลงาน — จากงานทั้งหมด ${r.total} งาน (เสร็จ ${r.done}, เลยกำหนด ${r.overdue})`}
+                >
+                  {r.score}
+                </span>
+              ) : (
+                <span
+                  className="shrink-0 text-[11px] font-medium rounded-md ring-1 ring-inset ring-[var(--line)] bg-[var(--bg-soft)] text-[var(--ink-soft)] px-2 py-1 whitespace-nowrap"
+                  title="ยังไม่มีงานที่เสร็จให้คำนวณคะแนน"
+                >
+                  ยังไม่มีข้อมูล
+                </span>
+              )}
             </div>
           );
         })}
