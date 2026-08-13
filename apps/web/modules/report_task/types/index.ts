@@ -104,6 +104,12 @@ export interface TaskPenalty {
 
 export interface Task {
   id: string;
+  /** Human-readable task number, e.g. "T-2569-0001" — assigned once, server-side
+   * only, atomically at creation (see task-repo.ts's writeTasks/nextTaskCode).
+   * Never set by the client; absent until the server round-trip that created
+   * the task confirms it (see task-sync.tsx merging `codes` off the save
+   * response). */
+  code?: string;
   title: string;
   description: string;
   status: TaskStatus;

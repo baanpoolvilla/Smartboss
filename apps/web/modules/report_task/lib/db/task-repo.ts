@@ -52,19 +52,21 @@ export async function readTasks(orgId: string): Promise<TaskCollection> {
       where: { orgId },
       // เรียงตามวันสร้างให้ผลลัพธ์คงที่ — client จัดเรียงเองอีกทีตามคอลัมน์ที่เลือก
       orderBy: { createdAt: "asc" },
-      select: { data: true },
+      select: { data: true, code: true },
     }),
     prisma.reportTaskCollection.findUnique({ where: { orgId } }),
   ]);
 
+  // code มาจากคอลัมน์จริง ไม่ใช่ก้อน data — merge เข้าไปให้ client เห็นเสมอ แม้
+  // ก้อน data เดิม (บันทึกไว้ก่อนมีฟีเจอร์นี้) จะไม่มี field นี้อยู่
   return {
-    tasks: rows.map((r) => r.data as unknown as Task),
+    tasks: rows.map((r) => ({ ...(r.data as unknown as Task), code: r.code })),
     version: meta?.version ?? 0,
   };
 }
 
 export type WriteResult =
-  | { ok: true; version: number; created: number; updated: number; deleted: number }
+  | { ok: true; version: number; created: number; updated: number; deleted: number; codes: Record<string, string> }
   | { ok: false; currentVersion: number };
 
 /**
@@ -97,6 +99,10 @@ export async function writeTasks(
 
     let created = 0;
     let updated = 0;
+    // Returned to the client so a just-created task shows its code
+    // immediately, without waiting for the next full reload (TaskSync's
+    // write-through never re-fetches on a plain success — see task-sync.tsx).
+    const codes: Record<string, string> = {};
 
     for (const task of tasks) {
       const cols = columnsOf(task);
@@ -106,13 +112,16 @@ export async function writeTasks(
           where: { orgId_id: { orgId, id: task.id } },
           data: cols,
         });
+        codes[task.id] = known;
         updated += 1;
       } else {
         // จองเลขในทรานแซกชันเดียวกับการสร้าง — แยกกันแล้วถ้าล้มทีหลัง
         // เลขจะถูกกินไปเปล่า ๆ เกิดช่องว่างที่คนอ่านนึกว่างานหาย
+        const code = await nextTaskCode(tx, orgId);
         await tx.reportTask.create({
-          data: { orgId, id: task.id, code: await nextTaskCode(tx, orgId), ...cols },
+          data: { orgId, id: task.id, code, ...cols },
         });
+        codes[task.id] = code;
         created += 1;
       }
     }
@@ -135,6 +144,7 @@ export async function writeTasks(
       created,
       updated,
       deleted: removed.length,
+      codes,
     };
   });
 }

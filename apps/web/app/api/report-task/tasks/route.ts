@@ -62,7 +62,7 @@ async function putTasks(request: NextRequest) {
       { status: 409 }
     );
   }
-  return Response.json({ ok: true, count: parsed.data.tasks.length, version: result.version });
+  return Response.json({ ok: true, count: parsed.data.tasks.length, version: result.version, codes: result.codes });
 }
 
 export async function GET() {

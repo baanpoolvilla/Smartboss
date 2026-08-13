@@ -40,6 +40,7 @@ import { todayIso } from "@/modules/report_task/lib/now";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
+import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
 import { getUser, getDepartment, users, canManage, isOwner, departmentIdsOf } from "@/modules/report_task/lib/directory";
 import { statusMeta, priorityMeta, taskStatusOrder, taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
 import { formatDate, formatDateTime, relativeTime } from "@/modules/report_task/lib/format";
@@ -111,6 +112,7 @@ export function TaskDetailSheet({
   const stickers = useStickerStore((s) => s.stickers);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const attachmentSettings = useAttachmentSettingsStore((s) => s.settings);
+  const projectTopics = useProjectTopicStore((s) => s.topics);
 
   const [comment, setComment] = useState("");
   const [commentAttachments, setCommentAttachments] = useState<Attachment[]>([]);
@@ -169,6 +171,14 @@ export function TaskDetailSheet({
   const iAmAssignee = task.assigneeIds.includes(viewingAsUserId);
   const completedCount = task.completedAssigneeIds?.length ?? 0;
   const assignedBy = getUser(task.assignedById);
+  // "T-2569-0001 · เดี่ยว/กลุ่ม · <หัวข้อโปรเจค ถ้ามี>" instead of the raw uuid id —
+  // code briefly missing right after creation (before task-sync.tsx's merge
+  // lands) falls back to a dash rather than the id, which meant nothing to
+  // anyone reading it over the phone anyway.
+  const taskTopicName = task.projectTopicId ? projectTopics.find((t) => t.id === task.projectTopicId)?.name : undefined;
+  const taskLabel = [task.code ?? "—", task.taskMode === "group" ? "กลุ่ม" : "เดี่ยว", taskTopicName]
+    .filter(Boolean)
+    .join(" · ");
   const departmentNames = task.departmentIds.map((id) => getDepartment(id)?.name).filter(Boolean);
   // Only the person who assigned/created the task, or a department head over
   // it, can edit its core definition (title, description, priority,
@@ -307,7 +317,7 @@ export function TaskDetailSheet({
             <Badge variant="outline" className={cn("text-[10px]", priorityMeta[task.priority].badgeClass)}>
               {priorityMeta[task.priority].label}
             </Badge>
-            <span className="text-xs text-[var(--ink-soft)]">{task.id}</span>
+            <span className="text-xs text-[var(--ink-soft)]">{taskLabel}</span>
             <Badge variant="secondary" className="text-[10px] ml-auto">
               {canEditMain ? "แก้ไขได้" : `สร้างโดย ${assignedBy?.name ?? "—"}`}
             </Badge>

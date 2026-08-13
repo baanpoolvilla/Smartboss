@@ -56,6 +56,10 @@ const taskPenaltySchema = z.object({
 
 export const taskSchema = z.object({
   id: z.string().min(1),
+  // Server-assigned only (see task-repo.ts) — accepted here just so a
+  // round-tripped client echo doesn't get flagged; never read off the client
+  // to decide what actually gets persisted.
+  code: z.string().optional(),
   title: z.string(),
   description: z.string(),
   status: z.enum(["todo", "in_progress", "done"]),

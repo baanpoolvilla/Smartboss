@@ -77,8 +77,31 @@ export function TaskSync() {
           if (!isUnload) await reloadFromServer();
           return;
         }
-        const data = (await res.json().catch(() => null)) as { version?: number } | null;
+        const data = (await res.json().catch(() => null)) as
+          | { version?: number; codes?: Record<string, string> }
+          | null;
         if (typeof data?.version === "number") versionRef.current = data.version;
+        // A newly-created task has no `code` yet in this tab's own state —
+        // the server only assigns one once the create actually lands (see
+        // task-repo.ts). Merge it in now instead of waiting for the next
+        // full reload, so the task number shows up immediately. Skipped
+        // (setState left untouched) once every code already matches, so
+        // this doesn't loop: applying a real change re-triggers one more
+        // flush that then finds nothing left to merge.
+        if (data?.codes) {
+          const codes = data.codes;
+          const current = useTaskStore.getState().tasks;
+          let changed = false;
+          const next = current.map((t) => {
+            const code = codes[t.id];
+            if (code && t.code !== code) {
+              changed = true;
+              return { ...t, code };
+            }
+            return t;
+          });
+          if (changed) useTaskStore.setState({ tasks: next });
+        }
       } catch {
         toast.error("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ การเปลี่ยนแปลงอาจหายไปเมื่อรีเฟรช", { id: "tasksync-network-error" });
         if (!isUnload) await reloadFromServer();
