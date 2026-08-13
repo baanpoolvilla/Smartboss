@@ -402,17 +402,17 @@ export function TaskDetailSheet({
                   "done" directly on a shared task bypassed that and could
                   leave completedAssigneeIds and status disagreeing (e.g.
                   everyone marked done but the status got forced back to
-                  "กำลังทำ" here, without going through the "เปิดงานใหม่"
-                  correction flow that actually resets who's done). So for a
-                  shared task: "done" isn't a selectable option here, and once
-                  it IS done, the dropdown locks — "เปิดงานใหม่" is the only
-                  sanctioned way out. */}
+                  "กำลังทำ" here without any assignee's completion actually
+                  changing). So for a shared task: "done" isn't a selectable
+                  option here, and once it IS done, the dropdown locks —
+                  revising the due date (see "แก้ไขกำหนดส่ง" further down) is the
+                  only sanctioned way back to "กำลังทำ". */}
               <Select
                 value={task.status}
                 onValueChange={(v) => v && moveTask(task.id, v as TaskStatus)}
                 disabled={isShared && task.status === "done"}
               >
-                <SelectTrigger className="w-full" title={isShared && task.status === "done" ? "งานนี้มีผู้รับผิดชอบหลายคน — กด \"เปิดงานใหม่\" ด้านบนเพื่อแก้ไขแทน" : undefined}>
+                <SelectTrigger className="w-full" title={isShared && task.status === "done" ? "งานนี้มีผู้รับผิดชอบหลายคน — กด \"แก้ไขกำหนดส่ง\" ด้านล่างเพื่อแก้ไขแทน" : undefined}>
                   <SelectValue>
                     <span className="flex items-center gap-2">
                       <span className={cn("h-2 w-2 rounded-full", statusMeta[task.status]?.dot)} />

@@ -684,7 +684,7 @@ export function NewTaskDialog({
   function addChecklistDraft() {
     const text = newChecklistText.trim();
     if (!text) return;
-    const ownerId = taskMode === "individual" ? assigneeIds[0] ?? "" : newChecklistOwnerId || assigneeIds[0]!!!! || "";
+    const ownerId = taskMode === "individual" ? (assigneeIds[0] ?? "") : newChecklistOwnerId || assigneeIds[0] || "";
     setChecklistItems((prev) => [...prev, { id: `draft-${crypto.randomUUID()}`, text, ownerId }]);
     setNewChecklistText("");
   }

@@ -421,12 +421,19 @@ export const useTaskStore = create<TaskStore>((set) => ({
                 assigneeIds,
                 departmentIds: departmentIdsOf(assigneeIds),
                 taskMode: assigneeIds.length > 1 ? "group" : "individual",
+                // Unused on an individual task (see the field's own doc
+                // comment in types/index.ts) — cleared the moment it shrinks
+                // back to one person, not just when that person is dropped,
+                // so a solo task never carries a stray ⭐ from when it used
+                // to be a group.
                 mainAssigneeId:
-                  x.mainAssigneeId && assigneeIds.includes(x.mainAssigneeId)
-                    ? x.mainAssigneeId
-                    : !x.mainAssigneeId && x.assigneeIds.length === 1 && assigneeIds.length > 1 && assigneeIds.includes(x.assigneeIds[0]!)
-                      ? x.assigneeIds[0]
-                      : undefined,
+                  assigneeIds.length <= 1
+                    ? undefined
+                    : x.mainAssigneeId && assigneeIds.includes(x.mainAssigneeId)
+                      ? x.mainAssigneeId
+                      : !x.mainAssigneeId && x.assigneeIds.length === 1 && assigneeIds.includes(x.assigneeIds[0]!)
+                        ? x.assigneeIds[0]
+                        : undefined,
                 updatedAt: new Date().toISOString(),
               }
             : x
