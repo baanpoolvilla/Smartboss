@@ -30,18 +30,23 @@ export function reactionCounts(task: Task): Record<string, number> {
 }
 
 /**
- * Default reading order for a list of task cards: finished work sinks to the
- * bottom (it's no longer actionable, so it shouldn't compete for attention
- * with what's still open), and everything still open reads most-urgent
- * first — earliest due date leads, which naturally puts overdue tasks (due
- * date already in the past) ahead of everything else. Doesn't mutate the
- * input array.
+ * Default reading order for a list of task cards, three tiers: finished work
+ * sinks to the very bottom (it's no longer actionable, so it shouldn't
+ * compete for attention with what's still open); overdue-and-not-done comes
+ * first (the most urgent group, called out as its own tier rather than just
+ * "earliest due date" so it reads as a clear block); everything else follows.
+ * Within a tier, oldest-created leads — whichever's been sitting the longest
+ * surfaces first, so nothing quietly gets buried under newer cards. Doesn't
+ * mutate the input array.
  */
 export function sortTasksForDisplay(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => {
     const aDone = a.status === "done" ? 1 : 0;
     const bDone = b.status === "done" ? 1 : 0;
     if (aDone !== bDone) return aDone - bDone;
-    return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+    const aOverdue = a.status !== "done" && dueUrgency(a) === "overdue" ? 0 : 1;
+    const bOverdue = b.status !== "done" && dueUrgency(b) === "overdue" ? 0 : 1;
+    if (aOverdue !== bOverdue) return aOverdue - bOverdue;
+    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
   });
 }
