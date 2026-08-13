@@ -399,6 +399,19 @@ export const useTaskStore = create<TaskStore>((set) => ({
         const actorId = useIdentityStore.getState().viewingAsUserId;
         const names = assigneeIds.map((id) => getUser(id)?.name).filter(Boolean).join(", ");
         logActivity(actorId, "เปลี่ยนผู้รับผิดชอบ", t.title, t.id, names ? `เป็น ${names}` : "ไม่มีผู้รับผิดชอบ");
+        // Going from a solo task to a group one promotes that original
+        // person to lead by default (they were already "the" owner before
+        // anyone else joined) — only when nobody's been picked yet, so it
+        // never overrides a lead someone already set. Worth its own log line
+        // since it changes something visible (the ⭐ on their avatar) even
+        // though nobody explicitly clicked "ตั้งหัวหน้าหลัก".
+        const autoPromoted =
+          !t.mainAssigneeId && t.assigneeIds.length === 1 && assigneeIds.length > 1 && assigneeIds.includes(t.assigneeIds[0]!)
+            ? t.assigneeIds[0]!
+            : null;
+        if (autoPromoted) {
+          logActivity(actorId, "ตั้งหัวหน้าหลัก", t.title, t.id, `${getUser(autoPromoted)?.name ?? autoPromoted} (อัตโนมัติ — เป็นผู้รับผิดชอบเดิมของงานเดี่ยว)`);
+        }
       }
       return {
         tasks: s.tasks.map((x) =>
@@ -408,8 +421,12 @@ export const useTaskStore = create<TaskStore>((set) => ({
                 assigneeIds,
                 departmentIds: departmentIdsOf(assigneeIds),
                 taskMode: assigneeIds.length > 1 ? "group" : "individual",
-                // Dropped assignee can't stay the labeled lead.
-                mainAssigneeId: x.mainAssigneeId && assigneeIds.includes(x.mainAssigneeId) ? x.mainAssigneeId : undefined,
+                mainAssigneeId:
+                  x.mainAssigneeId && assigneeIds.includes(x.mainAssigneeId)
+                    ? x.mainAssigneeId
+                    : !x.mainAssigneeId && x.assigneeIds.length === 1 && assigneeIds.length > 1 && assigneeIds.includes(x.assigneeIds[0]!)
+                      ? x.assigneeIds[0]
+                      : undefined,
                 updatedAt: new Date().toISOString(),
               }
             : x
