@@ -4,10 +4,25 @@ import { useMemo } from "react";
 import { Users } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import { EmptyState } from "@/modules/report_task/components/shared/empty-state";
+import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { getDepartment, users } from "@/modules/report_task/lib/directory";
 import { matchesTaskFilters } from "@/modules/report_task/lib/task-filter";
 import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
+
+/** One legend/breakdown row shared between the bar's click-to-open popover and its color key. */
+function BarBreakdownRow({ color, label, count, total }: { color: string; label: string; count: number; total: number }) {
+  const pct = total ? Math.round((count / total) * 100) : 0;
+  return (
+    <div className="flex items-center justify-between gap-3 text-xs">
+      <span className="flex items-center gap-1.5 text-[var(--ink-soft)]">
+        <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+        {label}
+      </span>
+      <span className="font-medium tabular-nums">{count} งาน · {pct}%</span>
+    </div>
+  );
+}
 
 /**
  * Workload view (Asana/ClickUp-style): each person's open load at a glance, with
@@ -66,23 +81,43 @@ export function WorkloadView() {
               </div>
 
               <div className="flex-1 min-w-0">
-                {/* Each segment carries its own hover title (not just the bar
-                    as a whole) — a thin sliver is still legible on hover even
-                    when it's too narrow to fit a label next to it. */}
-                <div className="h-2.5 rounded-full bg-[var(--bg-soft)] overflow-hidden flex" title={`งานทั้งหมด ${r.total} งาน`}>
-                  {r.todo > 0 && (
-                    <div className="h-full" style={{ width: `${seg(r.todo)}%`, backgroundColor: "#94a3b8" }} title={`รอดำเนินการ ${r.todo} งาน`} />
-                  )}
-                  {inProgressNotOverdue > 0 && (
-                    <div className="h-full" style={{ width: `${seg(inProgressNotOverdue)}%`, backgroundColor: "var(--chart-amber)" }} title={`กำลังทำ ${inProgressNotOverdue} งาน`} />
-                  )}
-                  {r.overdue > 0 && (
-                    <div className="h-full" style={{ width: `${seg(r.overdue)}%`, backgroundColor: "var(--chart-red)" }} title={`เลยกำหนด ${r.overdue} งาน`} />
-                  )}
-                  {r.done > 0 && (
-                    <div className="h-full" style={{ width: `${seg(r.done)}%`, backgroundColor: "var(--brand-green)" }} title={`เสร็จ ${r.done} งาน`} />
-                  )}
-                </div>
+                {/* Click (not just hover) opens the full breakdown — % of
+                    this person's total, not just a raw count — since hover
+                    alone doesn't work on touch and a native title tooltip
+                    can't show more than one line at a time. */}
+                <Popover>
+                  <PopoverTrigger
+                    render={
+                      <button
+                        type="button"
+                        className="block w-full cursor-pointer"
+                        aria-label={`ดูสัดส่วนงานของ ${r.user.name}`}
+                      >
+                        <div className="h-2.5 rounded-full bg-[var(--bg-soft)] overflow-hidden flex">
+                          {r.todo > 0 && <div className="h-full" style={{ width: `${seg(r.todo)}%`, backgroundColor: "#94a3b8" }} />}
+                          {inProgressNotOverdue > 0 && (
+                            <div className="h-full" style={{ width: `${seg(inProgressNotOverdue)}%`, backgroundColor: "var(--chart-amber)" }} />
+                          )}
+                          {r.overdue > 0 && <div className="h-full" style={{ width: `${seg(r.overdue)}%`, backgroundColor: "var(--chart-red)" }} />}
+                          {r.done > 0 && <div className="h-full" style={{ width: `${seg(r.done)}%`, backgroundColor: "var(--brand-green)" }} />}
+                        </div>
+                      </button>
+                    }
+                  />
+                  <PopoverContent align="start" className="w-56">
+                    <p className="text-xs font-semibold mb-0.5">งานของ {r.user.name}</p>
+                    <div className="space-y-1.5">
+                      <BarBreakdownRow color="#94a3b8" label="รอดำเนินการ" count={r.todo} total={r.total} />
+                      <BarBreakdownRow color="var(--chart-amber)" label="กำลังทำ" count={inProgressNotOverdue} total={r.total} />
+                      <BarBreakdownRow color="var(--chart-red)" label="เลยกำหนด" count={r.overdue} total={r.total} />
+                      <BarBreakdownRow color="var(--brand-green)" label="เสร็จ" count={r.done} total={r.total} />
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-[var(--line)] flex items-center justify-between text-xs font-medium">
+                      <span className="text-[var(--ink-soft)]">รวมทั้งหมด</span>
+                      <span>{r.total} งาน</span>
+                    </div>
+                  </PopoverContent>
+                </Popover>
                 <div className="flex items-center gap-2.5 mt-1.5 text-[11px] text-[var(--ink-soft)] flex-wrap">
                   <span>กำลังทำ {inProgressNotOverdue}</span>
                   {r.overdue > 0 && <span className="text-[var(--chart-red)] font-medium">เลยกำหนด {r.overdue}</span>}
