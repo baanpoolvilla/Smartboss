@@ -523,6 +523,7 @@ export function KanbanBoard() {
                   onOpen={setOpenTaskId}
                   onHeaderClick={groupBy === "assignee" ? () => openPersonBoard(column.id) : undefined}
                   groupedByPriority={groupBy === "priority"}
+                  groupedByStatus={groupBy === "status"}
                 />
               ))}
             </div>

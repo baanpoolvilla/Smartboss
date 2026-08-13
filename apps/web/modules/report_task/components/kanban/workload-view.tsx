@@ -6,31 +6,21 @@ import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avat
 import { EmptyState } from "@/modules/report_task/components/shared/empty-state";
 import { getDepartment, users } from "@/modules/report_task/lib/directory";
 import { matchesTaskFilters } from "@/modules/report_task/lib/task-filter";
-import { buildUserReports } from "@/modules/report_task/lib/reports";
 import { dueUrgency } from "@/modules/report_task/lib/task-flags";
-import { cn } from "@/modules/report_task/lib/utils";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
-import { useStickerStore } from "@/modules/report_task/store/sticker-store";
-
-function scoreClass(score: number) {
-  if (score >= 80) return "bg-green-50 text-[var(--brand-green-dark)] ring-green-200";
-  if (score >= 60) return "bg-amber-50 text-[var(--chart-amber)] ring-amber-200";
-  return "bg-red-50 text-[var(--chart-red)] ring-red-200";
-}
 
 /**
  * Workload view (Asana/ClickUp-style): each person's open load at a glance, with
  * overdue highlighted — so it's obvious who's overloaded or slipping. Read-only,
- * respects the shared filter bar, and reuses the same scoring as reports.
+ * respects the shared filter bar. Volume only (no score) — see the Reports page
+ * for performance scoring; this view is purely "how much is on their plate."
  */
 export function WorkloadView() {
   const tasks = useTaskStore((s) => s.tasks);
   const filters = useTaskStore((s) => s.filters);
-  const stickers = useStickerStore((s) => s.stickers);
 
   const rows = useMemo(() => {
     const filtered = tasks.filter((t) => matchesTaskFilters(t, filters));
-    const reports = buildUserReports(filtered, stickers);
     return users
       .map((u) => {
         const mine = filtered.filter((t) => t.assigneeIds.includes(u.id));
@@ -39,12 +29,11 @@ export function WorkloadView() {
         const overdue = mine.filter((t) => dueUrgency(t) === "overdue").length;
         const done = mine.filter((t) => t.status === "done").length;
         const open = mine.length - done;
-        const report = reports.find((r) => r.userId === u.id);
-        return { user: u, total: mine.length, todo, inProgress, overdue, done, open, score: report?.score ?? 0 };
+        return { user: u, total: mine.length, todo, inProgress, overdue, done, open };
       })
       .filter((r) => r.total > 0)
       .sort((a, b) => b.open - a.open || b.overdue - a.overdue);
-  }, [tasks, filters, stickers]);
+  }, [tasks, filters]);
 
   if (rows.length === 0) {
     return <EmptyState icon={Users} title="ไม่พบภาระงานตามตัวกรอง" description="ลองปรับหรือล้างตัวกรองด้านบน" />;
@@ -65,11 +54,6 @@ export function WorkloadView() {
           const seg = (n: number) => (r.total ? (n / r.total) * 100 : 0);
           const inProgressNotOverdue = r.inProgress - r.overdue > 0 ? r.inProgress - r.overdue : 0;
           const overloaded = r.open >= 6;
-          // scoreFor() (reports.ts) returns 0 whenever nothing's completed
-          // yet — that's "no track record", not "doing badly", so a 0 with
-          // zero completions reads as neutral instead of alarmed red like an
-          // actually-earned low score does.
-          const hasTrackRecord = r.done > 0;
           return (
             <div key={r.user.id} className="flex items-center gap-3 px-5 py-3 hover:bg-[var(--bg-soft)] transition-colors">
               <Avatar className="h-9 w-9 shrink-0">
@@ -100,7 +84,6 @@ export function WorkloadView() {
                   )}
                 </div>
                 <div className="flex items-center gap-2.5 mt-1.5 text-[11px] text-[var(--ink-soft)] flex-wrap">
-                  <span className={cn("font-medium", overloaded && "text-[var(--chart-amber)]")}>เปิดอยู่ {r.open}</span>
                   <span>กำลังทำ {inProgressNotOverdue}</span>
                   {r.overdue > 0 && <span className="text-[var(--chart-red)] font-medium">เลยกำหนด {r.overdue}</span>}
                   <span>เสร็จ {r.done}</span>
@@ -108,21 +91,15 @@ export function WorkloadView() {
                 </div>
               </div>
 
-              {hasTrackRecord ? (
-                <span
-                  className={cn("shrink-0 text-xs font-semibold tabular-nums rounded-md ring-1 ring-inset px-2 py-1", scoreClass(r.score))}
-                  title={`คะแนนผลงาน — จากงานทั้งหมด ${r.total} งาน (เสร็จ ${r.done}, เลยกำหนด ${r.overdue})`}
-                >
-                  {r.score}
-                </span>
-              ) : (
-                <span
-                  className="shrink-0 text-[11px] font-medium rounded-md ring-1 ring-inset ring-[var(--line)] bg-[var(--bg-soft)] text-[var(--ink-soft)] px-2 py-1 whitespace-nowrap"
-                  title="ยังไม่มีงานที่เสร็จให้คำนวณคะแนน"
-                >
-                  ยังไม่มีข้อมูล
-                </span>
-              )}
+              {/* Total task count — replaces the old score badge here, since
+                  this view is about workload volume, not performance
+                  (score/rating still lives on the Reports page). */}
+              <span
+                className="shrink-0 text-xs font-semibold tabular-nums rounded-md ring-1 ring-inset ring-[var(--line)] bg-[var(--bg-soft)] text-[var(--ink)] px-2 py-1"
+                title="งานทั้งหมดของคนนี้"
+              >
+                {r.total} งาน
+              </span>
             </div>
           );
         })}

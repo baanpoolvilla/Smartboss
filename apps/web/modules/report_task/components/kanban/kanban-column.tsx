@@ -31,6 +31,7 @@ export function KanbanColumn({
   onOpen,
   onHeaderClick,
   groupedByPriority,
+  groupedByStatus,
 }: {
   column: BoardColumn;
   /** Every task currently on the board (post-filter) — the denominator for this column's "N% ของบอร์ด" bar. */
@@ -42,6 +43,13 @@ export function KanbanColumn({
   onHeaderClick?: () => void;
   /** Passed straight through to each card — see TaskCard's own doc. */
   groupedByPriority?: boolean;
+  /** A normal (non-derived) status column is, by definition, 100% one status
+   * — every task in "กำลังทำ" already IS "กำลังทำ". Repeating that as a
+   * legend chip under the bar ("● กำลังทำ N") just restated the header
+   * label/count back at itself, so it's hidden here — still shown for the
+   * derived "เลยกำหนด" column (a real mix of todo+in_progress) and for
+   * priority/assignee grouping, where a column can genuinely mix statuses. */
+  groupedByStatus?: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id, disabled: column.derived });
   const Icon = column.icon;
@@ -129,7 +137,7 @@ export function KanbanColumn({
             <p className="text-[10px] font-medium" style={{ color: accent }}>
               {percent}% ของบอร์ด
             </p>
-            {statusCounts
+            {!(groupedByStatus && !column.derived) && statusCounts
               .filter((s) => s.count > 0)
               .map((s) => (
                 <span key={s.status} className="flex items-center gap-1 text-[10px] text-[var(--ink-soft)]">
