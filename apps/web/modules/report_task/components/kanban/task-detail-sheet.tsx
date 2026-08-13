@@ -100,6 +100,7 @@ export function TaskDetailSheet({
   const setMainAssignee = useTaskStore((s) => s.setMainAssignee);
   const reviseDueDate = useTaskStore((s) => s.reviseDueDate);
   const reviseAssigneeDueDate = useTaskStore((s) => s.reviseAssigneeDueDate);
+  const reviseAllAssigneeDueDates = useTaskStore((s) => s.reviseAllAssigneeDueDates);
   const addComment = useTaskStore((s) => s.addComment);
   const removeComment = useTaskStore((s) => s.removeComment);
   const addAttachment = useTaskStore((s) => s.addAttachment);
@@ -131,6 +132,11 @@ export function TaskDetailSheet({
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [newDate, setNewDate] = useState("");
   const [reason, setReason] = useState("");
+  // "แก้ไขทั้งหมด" — set every assignee's due date to the same new value in
+  // one action, distinct from the per-row pickers below (see
+  // reviseAllAssigneeDueDates).
+  const [bulkRevising, setBulkRevising] = useState(false);
+  const [bulkDate, setBulkDate] = useState("");
   // Collapsed by default — a task can end up with a large co-assignee list,
   // and rendering every chip would blow up the sheet's height. Reset during
   // render (not an effect) when the task being viewed changes — the standard
@@ -151,6 +157,8 @@ export function TaskDetailSheet({
     setDraftDescription(task?.description ?? "");
     setNewChecklistOwnerId(task?.assigneeIds[0] ?? "");
     setStagedAssigneeDates({});
+    setBulkRevising(false);
+    setBulkDate("");
   }
 
   if (!task) return null;
@@ -634,82 +642,10 @@ export function TaskDetailSheet({
             </div>
           </div>
 
-          {/* Group task: per-assignee due-date override — falls back to the
-              shared due date above for anyone not listed here. */}
-          {isShared && (
-            <div className="space-y-1.5">
-              <Label className="text-xs text-[var(--ink-soft)]">กำหนดส่งแยกรายคน</Label>
-              <div className="space-y-1">
-                {task.assigneeIds.map((uid) => {
-                  const u = getUser(uid);
-                  const effective = task.assigneeDueDates?.[uid] ?? toDateInput(task.dueDate);
-                  const staged = stagedAssigneeDates[uid];
-                  const dirty = staged !== undefined && staged !== effective;
-                  return (
-                    <div key={uid} className="flex items-center gap-2">
-                      <Avatar className="h-5 w-5 shrink-0">
-                        <AvatarFallback className="text-[9px] bg-[var(--bg-soft)]">{u?.avatar}</AvatarFallback>
-                      </Avatar>
-                      <span className="text-xs flex-1 truncate">{u?.name}</span>
-                      {canEditMain ? (
-                        <>
-                          <DatePickerField
-                            value={staged ?? effective}
-                            minDate={toDateInput(task.startDate)}
-                            onChange={(v) => setStagedAssigneeDates((s) => ({ ...s, [uid]: v }))}
-                            className="h-8 text-xs w-36"
-                          />
-                          {/* Picking a date only stages it — nothing is saved,
-                              logged, or notified to the assignee until this
-                              confirm is clicked, so a stray date pick can't
-                              silently revise + notify someone. */}
-                          {dirty && (
-                            <>
-                              <Button
-                                size="icon-sm"
-                                variant="outline"
-                                className="h-8 w-8 shrink-0 border-[var(--brand-green)] text-[var(--brand-green-dark)] hover:bg-[var(--accent)]"
-                                title="ยืนยันกำหนดส่งใหม่"
-                                aria-label={`ยืนยันกำหนดส่งใหม่ของ ${u?.name}`}
-                                onClick={() => {
-                                  reviseAssigneeDueDate(task.id, uid, staged, viewingAsUserId);
-                                  setStagedAssigneeDates((s) => {
-                                    const next = { ...s };
-                                    delete next[uid];
-                                    return next;
-                                  });
-                                }}
-                              >
-                                <Check className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                size="icon-sm"
-                                variant="ghost"
-                                className="h-8 w-8 shrink-0 text-[var(--ink-soft)] hover:text-[var(--chart-red)]"
-                                title="ยกเลิก"
-                                aria-label={`ยกเลิกการแก้ไขกำหนดส่งของ ${u?.name}`}
-                                onClick={() =>
-                                  setStagedAssigneeDates((s) => {
-                                    const next = { ...s };
-                                    delete next[uid];
-                                    return next;
-                                  })
-                                }
-                              >
-                                <X className="h-3.5 w-3.5" />
-                              </Button>
-                            </>
-                          )}
-                        </>
-                      ) : (
-                        <span className="text-xs">{formatDate(effective)}</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          {/* Group task: per-assignee due dates now live in "ประวัติการแก้ไข
+              กำหนดส่ง" below instead of here — editing and the log of what
+              changed used to sit in two different places on the sheet, which
+              made the log easy to miss right after making an edit. */}
 
           {task.missedDeadlineOnce && (
             <Badge variant="secondary" className="w-fit text-[10px] font-normal bg-red-50 text-[var(--chart-red)] gap-1">
@@ -813,10 +749,11 @@ export function TaskDetailSheet({
           <Separator />
 
           {/* Revision tracking — the whole-task "แก้ไขกำหนดส่ง" button/form
-              (and its "กำหนดส่งเดิม"/task.revisions history) only apply to a
-              single shared due date, which doesn't make sense once a group
-              task has per-assignee due dates — editing there happens through
-              "กำหนดส่งแยกรายคน" above instead, one person at a time. */}
+              only applies to a single shared due date, which doesn't make
+              sense once a group task has per-assignee due dates — editing
+              those happens right below instead, either one person at a time
+              or all at once, in the same place as their own history so
+              there's no separate section to go hunting for. */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-semibold flex items-center gap-1.5">
@@ -825,7 +762,107 @@ export function TaskDetailSheet({
               {!isShared && !revising && canEditMain && (
                 <Button size="sm" variant="outline" onClick={() => setRevising(true)}>แก้ไขกำหนดส่ง</Button>
               )}
+              {isShared && !bulkRevising && canEditMain && (
+                <Button size="sm" variant="outline" onClick={() => { setBulkRevising(true); setBulkDate(toDateInput(task.dueDate)); }}>
+                  แก้ไขทั้งหมด
+                </Button>
+              )}
             </div>
+
+            {isShared && bulkRevising && canEditMain && (
+              <div className="rounded-lg border border-[var(--line)] p-3 space-y-2.5">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">กำหนดส่งใหม่ (ใช้กับทุกคน)</Label>
+                  <DatePickerField value={bulkDate} minDate={toDateInput(task.startDate)} onChange={setBulkDate} />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button size="sm" variant="ghost" onClick={() => setBulkRevising(false)}>ยกเลิก</Button>
+                  <Button
+                    size="sm"
+                    className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+                    disabled={!bulkDate}
+                    onClick={() => {
+                      reviseAllAssigneeDueDates(task.id, bulkDate, viewingAsUserId);
+                      setBulkRevising(false);
+                    }}
+                  >
+                    ใช้กับทุกคน ({task.assigneeIds.length} คน)
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Per-person rows — pick a date only stages it locally; nothing
+                is saved, logged, or notified to the assignee until the
+                confirm is clicked, so a stray date pick can't silently
+                revise + notify someone. */}
+            {isShared && (
+              <div className="space-y-1">
+                {task.assigneeIds.map((uid) => {
+                  const u = getUser(uid);
+                  const effective = task.assigneeDueDates?.[uid] ?? toDateInput(task.dueDate);
+                  const staged = stagedAssigneeDates[uid];
+                  const dirty = staged !== undefined && staged !== effective;
+                  return (
+                    <div key={uid} className="flex items-center gap-2">
+                      <Avatar className="h-5 w-5 shrink-0">
+                        <AvatarFallback className="text-[9px] bg-[var(--bg-soft)]">{u?.avatar}</AvatarFallback>
+                      </Avatar>
+                      <span className="text-xs flex-1 truncate">{u?.name}</span>
+                      {canEditMain ? (
+                        <>
+                          <DatePickerField
+                            value={staged ?? effective}
+                            minDate={toDateInput(task.startDate)}
+                            onChange={(v) => setStagedAssigneeDates((s) => ({ ...s, [uid]: v }))}
+                            className="h-8 text-xs w-36"
+                          />
+                          {dirty && (
+                            <>
+                              <Button
+                                size="icon-sm"
+                                variant="outline"
+                                className="h-8 w-8 shrink-0 border-[var(--brand-green)] text-[var(--brand-green-dark)] hover:bg-[var(--accent)]"
+                                title="ยืนยันกำหนดส่งใหม่"
+                                aria-label={`ยืนยันกำหนดส่งใหม่ของ ${u?.name}`}
+                                onClick={() => {
+                                  reviseAssigneeDueDate(task.id, uid, staged, viewingAsUserId);
+                                  setStagedAssigneeDates((s) => {
+                                    const next = { ...s };
+                                    delete next[uid];
+                                    return next;
+                                  });
+                                }}
+                              >
+                                <Check className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                size="icon-sm"
+                                variant="ghost"
+                                className="h-8 w-8 shrink-0 text-[var(--ink-soft)] hover:text-[var(--chart-red)]"
+                                title="ยกเลิก"
+                                aria-label={`ยกเลิกการแก้ไขกำหนดส่งของ ${u?.name}`}
+                                onClick={() =>
+                                  setStagedAssigneeDates((s) => {
+                                    const next = { ...s };
+                                    delete next[uid];
+                                    return next;
+                                  })
+                                }
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-xs">{formatDate(effective)}</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {!isShared && (
               <div className="text-sm flex items-center justify-between rounded-lg bg-[var(--bg-soft)] px-3 py-2">
@@ -847,10 +884,10 @@ export function TaskDetailSheet({
               </div>
             ))}
 
-            {/* Per-assignee due-date edits (see กำหนดส่งแยกรายคน above) — only
-                the first-ever date and the latest revision, not every round
-                in between, since this is a quick per-person nudge rather than
-                a formal re-plan like the whole-task revisions above. */}
+            {/* Per-assignee due-date edit log — only the first-ever date and
+                the latest revision, not every round in between, since this
+                is a quick per-person nudge rather than a formal re-plan like
+                the whole-task revisions above. */}
             {Object.entries(task.assigneeDueDateRevisions ?? {}).map(([uid, r]) => (
               <div key={uid} className="text-sm rounded-lg border border-[var(--line)] px-3 py-2 space-y-1">
                 <div className="flex items-center justify-between">
@@ -864,7 +901,7 @@ export function TaskDetailSheet({
               </div>
             ))}
 
-            {(isShared || task.revisions.length === 0) && Object.keys(task.assigneeDueDateRevisions ?? {}).length === 0 && !revising && (
+            {(isShared || task.revisions.length === 0) && Object.keys(task.assigneeDueDateRevisions ?? {}).length === 0 && !revising && !bulkRevising && (
               <p className="text-xs text-[var(--ink-soft)]">ยังไม่มีการแก้ไขกำหนดส่ง</p>
             )}
 

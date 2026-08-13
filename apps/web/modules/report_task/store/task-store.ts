@@ -163,6 +163,12 @@ interface TaskStore {
    * `reviseDueDate` which revises the shared task-level due date.
    */
   reviseAssigneeDueDate: (taskId: string, assigneeId: string, newDate: string, revisedBy: string) => void;
+  /** Same revision as reviseAssigneeDueDate, applied to every current
+   * assignee at once with a single log entry instead of one per person —
+   * for the "set everyone to the same date" case rather than adjusting one
+   * person. Assignees already on that date are left untouched (no-op entry,
+   * no spurious revision/notification). */
+  reviseAllAssigneeDueDates: (taskId: string, newDate: string, revisedBy: string) => void;
   /**
    * A deliberate "this was marked done but wasn't actually finished"
    * correction — distinct from a normal status change: pulls it out of
@@ -329,6 +335,44 @@ export const useTaskStore = create<TaskStore>((set) => ({
               revisedAt: now,
             },
           },
+          updatedAt: now,
+        };
+      }),
+    })),
+  reviseAllAssigneeDueDates: (taskId, newDate, revisedBy) =>
+    set((s) => ({
+      tasks: s.tasks.map((t) => {
+        if (t.id !== taskId) return t;
+        const now = new Date().toISOString();
+        const nextDates: Record<string, string> = { ...(t.assigneeDueDates ?? {}) };
+        const nextRevisions: NonNullable<Task["assigneeDueDateRevisions"]> = { ...(t.assigneeDueDateRevisions ?? {}) };
+        const changedIds: string[] = [];
+        for (const uid of t.assigneeIds) {
+          const previousEffective = t.assigneeDueDates?.[uid] ?? t.dueDate;
+          if (previousEffective === newDate) continue;
+          changedIds.push(uid);
+          nextDates[uid] = newDate;
+          const existing = t.assigneeDueDateRevisions?.[uid];
+          nextRevisions[uid] = {
+            originalDate: existing?.originalDate ?? previousEffective,
+            latestDate: newDate,
+            revisedBy,
+            revisedAt: now,
+          };
+        }
+        if (changedIds.length === 0) return t;
+        logActivity(revisedBy, "แก้ไขกำหนดส่งทั้งหมด", t.title, t.id, `ทุกคน (${changedIds.length} คน) → ${formatShortDate(newDate)}`);
+        const recipients = changedIds.filter((uid) => uid !== revisedBy);
+        if (recipients.length > 0) {
+          const actorName = getUser(revisedBy)?.name ?? "มีคน";
+          useNotificationStore
+            .getState()
+            .notifyMany(recipients, revisedBy, `${actorName} ปรับกำหนดส่งของคุณในงาน "${t.title}" เป็น ${formatShortDate(newDate)}`);
+        }
+        return {
+          ...t,
+          assigneeDueDates: nextDates,
+          assigneeDueDateRevisions: nextRevisions,
           updatedAt: now,
         };
       }),

@@ -58,39 +58,39 @@ function maxBytesFor(kind: "image" | "file" | "video", settings: AttachmentSetti
 }
 
 export async function POST(request: Request) {
-  const session = await requireOrg();
-  const stored = await readStore<AttachmentSettings>(session.orgId, "attachment-settings");
-  const settings = stored.data ?? DEFAULT_ATTACHMENT_SETTINGS;
-
-  const form = await request.formData().catch(() => null);
-  const file = form?.get("file");
-  if (!(file instanceof File)) {
-    return Response.json({ error: "ต้องแนบไฟล์" }, { status: 400 });
-  }
-
-  const claimed = ALLOWED_TYPES[file.type];
-  if (!claimed) {
-    return Response.json({ error: `ไม่รองรับชนิดไฟล์นี้ (${file.type || "ไม่ทราบชนิด"})` }, { status: 400 });
-  }
-  const claimedMaxBytes = maxBytesFor(claimed.kind, settings);
-  if (file.size > claimedMaxBytes) {
-    const mb = Math.round(claimedMaxBytes / 1024 / 1024);
-    return Response.json({ error: `ไฟล์ใหญ่เกินไป (จำกัด ${mb}MB)` }, { status: 413 });
-  }
-
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const sniffed = sniffMime(bytes, file.type);
-  const meta = sniffed ? ALLOWED_TYPES[sniffed] : null;
-  if (!sniffed || !meta) {
-    return Response.json({ error: "เนื้อไฟล์ไม่ตรงกับชนิดที่แจ้ง" }, { status: 400 });
-  }
-  const sniffedMaxBytes = maxBytesFor(meta.kind, settings);
-  if (bytes.byteLength > sniffedMaxBytes) {
-    const mb = Math.round(sniffedMaxBytes / 1024 / 1024);
-    return Response.json({ error: `ไฟล์ใหญ่เกินไป (จำกัด ${mb}MB)` }, { status: 413 });
-  }
-
   try {
+    const session = await requireOrg();
+    const stored = await readStore<AttachmentSettings>(session.orgId, "attachment-settings");
+    const settings = stored.data ?? DEFAULT_ATTACHMENT_SETTINGS;
+
+    const form = await request.formData().catch(() => null);
+    const file = form?.get("file");
+    if (!(file instanceof File)) {
+      return Response.json({ error: "ต้องแนบไฟล์" }, { status: 400 });
+    }
+
+    const claimed = ALLOWED_TYPES[file.type];
+    if (!claimed) {
+      return Response.json({ error: `ไม่รองรับชนิดไฟล์นี้ (${file.type || "ไม่ทราบชนิด"})` }, { status: 400 });
+    }
+    const claimedMaxBytes = maxBytesFor(claimed.kind, settings);
+    if (file.size > claimedMaxBytes) {
+      const mb = Math.round(claimedMaxBytes / 1024 / 1024);
+      return Response.json({ error: `ไฟล์ใหญ่เกินไป (จำกัด ${mb}MB)` }, { status: 413 });
+    }
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const sniffed = sniffMime(bytes, file.type);
+    const meta = sniffed ? ALLOWED_TYPES[sniffed] : null;
+    if (!sniffed || !meta) {
+      return Response.json({ error: "เนื้อไฟล์ไม่ตรงกับชนิดที่แจ้ง" }, { status: 400 });
+    }
+    const sniffedMaxBytes = maxBytesFor(meta.kind, settings);
+    if (bytes.byteLength > sniffedMaxBytes) {
+      const mb = Math.round(sniffedMaxBytes / 1024 / 1024);
+      return Response.json({ error: `ไฟล์ใหญ่เกินไป (จำกัด ${mb}MB)` }, { status: 413 });
+    }
+
     /*
      * ตั้งชื่อใหม่จากชนิดที่ "ตรวจได้จริง" ไม่ใช่ชื่อที่ผู้ใช้ส่งมา
      * putFile เอานามสกุลจากชื่อไฟล์ไปกำหนด Content-Type ตอนเก็บ
@@ -105,11 +105,16 @@ export async function POST(request: Request) {
     );
     return Response.json({ url, mime: sniffed, size: bytes.byteLength });
   } catch (err) {
-    // putFile touches S3/disk — the one part of this route that can fail
-    // for reasons outside the request itself (bad credentials, unwritable
-    // disk, bucket down). Log the real cause server-side (journalctl) instead
-    // of letting it surface as a bare, unexplained 500 in the browser.
-    console.error("[uploads] putFile failed", err);
-    return Response.json({ error: "บันทึกไฟล์ไม่สำเร็จ — ลองใหม่อีกครั้ง หรือแจ้งผู้ดูแลระบบ" }, { status: 500 });
+    // Wraps the whole handler, not just putFile — readStore (a Postgres
+    // query) can throw too, and a narrower try/catch would leave that path
+    // as a bare, unexplained 500 again. Log the real cause server-side
+    // (journalctl) AND echo it back in the response — the client already
+    // surfaces `error` as a toast (see task-attachment-upload.ts/
+    // image-resize.ts), so whoever's reporting the bug sees the real reason
+    // immediately instead of a dead end that needs server access to chase
+    // down separately.
+    console.error("[uploads] failed", err);
+    const detail = err instanceof Error ? err.message : String(err);
+    return Response.json({ error: `อัปโหลดไม่สำเร็จ: ${detail}` }, { status: 500 });
   }
 }
