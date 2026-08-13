@@ -24,6 +24,24 @@ commit ที่เพิ่งทำก็ได้ ไม่ต้องเด
 
 ## บันทึก
 
+### 2026-08-13 13:05 — baanpoolvilla (แก้ร่วมกับ Claude)
+**feat:** เพิ่มยืนยันก่อนทำจริงในจุดเสี่ยงกดพลาด + ไอคอน i อธิบายค่าตั้งค่าที่งง
+- ทำอะไร: ผู้ใช้กังวลว่ากดปุ่ม "ยกเลิก/เพิ่ม/ตกลง" หลายหน้าในระบบไม่มีการยืนยันอีกรอบ กดพลาดแล้วไม่รู้ตัว
+  ว่าไปเปลี่ยน/ลบอะไรไป — ไล่ทั้งโมดูล report_task แล้วเพิ่ม popup ยืนยัน (AlertDialog เดิมของระบบ) 8 จุด:
+  สร้างงาน/นัดหมาย/ลา (ยกเลิกตอนกรอกฟอร์มไว้แล้ว), ยกเลิกเชื่อมต่อปฏิทินภายนอก, ลบประเภทการลา, ลบหัวข้อ
+  โปรเจกต์, รีเซ็ต dashboard, สร้างอัลบั้ม/งานฝึก/แจ้งปัญหา (ยกเลิกตอนกรอกไว้แล้ว) — ข้ามจุดเล็กในหน้า
+  รายละเอียดงาน (แก้ไข inline) เพราะข้อมูลจริงยังไม่ถูกบันทึกอยู่แล้ว ใส่ popup เพิ่มจะรบกวนเปล่าๆ
+- เพิ่มไอคอน "i" อธิบาย 3 จุดที่ผู้ใช้บอกว่างงตอนดูครั้งแรก: ตัวเลือกโควตาการลา (ไม่จำกัด/โควตาต่อปี/
+  สะสมรายเดือน), วิธีให้วันลาแบบอิงวันหยุดราชการ, หัวข้อ "ตั้งค่าวันหยุดประจำ" (อธิบายว่าต่างจากการลา
+  ปกติยังไง) — แพทเทิร์นเดียวกับ commit d8dd0d7
+- ไฟล์หลัก: `components/kanban/new-task-dialog.tsx`, `components/calendar/add-calendar-dialog.tsx`,
+  `components/calendar/leave-type-settings-dialog.tsx`, `components/calendar/routine-dayoff-settings-dialog.tsx`,
+  `components/shared/project-topic-settings-panel.tsx`, `components/dashboard/dashboard-customize-bar.tsx`,
+  `components/report-feed/album-form-dialog.tsx`, `components/practice/practice-task-dialog.tsx`,
+  `components/issue-report/issue-report-dialog.tsx`
+- ต้องทำหลัง pull: ไม่มี migration
+- ค้างอยู่ / ต้องระวัง: ไม่มี
+
 ### 2026-08-13 10:34 — baanpoolvilla (แก้ร่วมกับ Claude)
 **fix:** แนบไฟล์ยังพัง (500) — ส่ง error จริงกลับมาเป็น toast + รวมจุดแก้ไข/ดูประวัติกำหนดส่งงานกลุ่ม
 - ทำอะไร: ผู้ใช้ทดสอบสร้างงานพร้อมแนบรูป 2 ไฟล์ — ตอนสร้างขึ้นว่าแนบอยู่ (2) แต่พองานสร้างเสร็จเปิด
