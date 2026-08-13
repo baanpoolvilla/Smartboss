@@ -37,9 +37,14 @@ interface CardBodyProps {
    * tasks have someone actively on them and which are untouched, since the
    * column itself no longer distinguishes the two. */
   showOriginalStatus?: boolean;
+  /** True when the board is grouped by "ความสำคัญ" — the column header
+   * already carries priority then, so the top-left badge switches to status
+   * instead of repeating it (mirrors groupBy==="status", where this same
+   * badge shows priority since status is the one already on the header). */
+  groupedByPriority?: boolean;
 }
 
-function TaskCardBody({ task, id, onOpen, dragging, lifted, refCb, style, dragProps, showOriginalStatus }: CardBodyProps) {
+function TaskCardBody({ task, id, onOpen, dragging, lifted, refCb, style, dragProps, showOriginalStatus, groupedByPriority }: CardBodyProps) {
   const addReaction = useTaskStore((s) => s.addReaction);
   const moveTask = useTaskStore((s) => s.moveTask);
   const toggleAssigneeChecklist = useTaskStore((s) => s.toggleAssigneeChecklist);
@@ -124,27 +129,26 @@ function TaskCardBody({ task, id, onOpen, dragging, lifted, refCb, style, dragPr
       )}
     >
       <div className="flex items-center gap-2 mb-2.5">
-        {/* No colour block/border for priority anymore — the column header
-            already carries whichever dimension the board is grouped by
-            (status, priority, ...), so repeating it in colour here just
-            fought for attention (worst offender: "ปานกลาง" priority and
-            "เสร็จสิ้น" status happened to share the exact same green).
-            Priority survives as a plain dot + label; only "critical" gets an
-            actual colour, everything else stays a neutral gray dot. Once a
-            task is done, priority stops mattering — swap it for an explicit
-            "เสร็จแล้ว" badge in the same spot instead, since that's the one
-            thing worth knowing at a glance now. */}
+        {/* Dot + label badge, colored to match whichever attribute it's
+            showing — priority's own accent (red/amber/green/gray) normally,
+            or status's accent when the board is grouped by priority (see
+            groupedByPriority above), so the column header is never just
+            repeating the exact same value back at itself. Once a task is
+            done, both stop mattering — swap in an explicit "เสร็จแล้ว" badge
+            instead, since that's the one thing worth knowing at a glance. */}
         {isDone ? (
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--brand-green)_14%,white)] text-[var(--brand-green-dark)]">
             <Check className="h-2.5 w-2.5" strokeWidth={3} />
             เสร็จแล้ว
           </span>
+        ) : groupedByPriority ? (
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-[var(--ink-soft)]">
+            <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: statusMeta[task.status].accentColor }} />
+            {statusMeta[task.status].label}
+          </span>
         ) : (
           <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-[var(--ink-soft)]">
-            <span
-              className="h-1.5 w-1.5 rounded-full shrink-0"
-              style={{ backgroundColor: task.priority === "critical" ? priorityMeta.critical.accentColor : priorityMeta.low.accentColor }}
-            />
+            <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: priorityMeta[task.priority].accentColor }} />
             {priorityMeta[task.priority].label}
           </span>
         )}
@@ -430,11 +434,13 @@ export const TaskCard = memo(function TaskCard({
   columnId,
   onOpen,
   showOriginalStatus,
+  groupedByPriority,
 }: {
   task: Task;
   columnId: string;
   onOpen: (id: string) => void;
   showOriginalStatus?: boolean;
+  groupedByPriority?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
@@ -458,11 +464,12 @@ export const TaskCard = memo(function TaskCard({
       style={style}
       dragProps={{ ...attributes, ...listeners }}
       showOriginalStatus={showOriginalStatus}
+      groupedByPriority={groupedByPriority}
     />
   );
 });
 
 /** Rendered inside DragOverlay — a plain visual copy, not a second sortable registration. */
-export function TaskCardOverlay({ task }: { task: Task }) {
-  return <TaskCardBody task={task} lifted />;
+export function TaskCardOverlay({ task, groupedByPriority }: { task: Task; groupedByPriority?: boolean }) {
+  return <TaskCardBody task={task} lifted groupedByPriority={groupedByPriority} />;
 }

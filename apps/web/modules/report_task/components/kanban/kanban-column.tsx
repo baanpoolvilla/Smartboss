@@ -29,6 +29,7 @@ export function KanbanColumn({
   boardTotal,
   onOpen,
   onHeaderClick,
+  groupedByPriority,
 }: {
   column: BoardColumn;
   /** Every task currently on the board (post-filter) — the denominator for this column's "N% ของบอร์ด" bar. */
@@ -38,6 +39,8 @@ export function KanbanColumn({
    * their tasks broken down by project topic. Absent for status/priority
    * columns, which don't map to a single person. */
   onHeaderClick?: () => void;
+  /** Passed straight through to each card — see TaskCard's own doc. */
+  groupedByPriority?: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id, disabled: column.derived });
   const Icon = column.icon;
@@ -123,6 +126,7 @@ export function KanbanColumn({
               columnId={column.id}
               onOpen={onOpen}
               showOriginalStatus={column.derived}
+              groupedByPriority={groupedByPriority}
             />
           ))}
         </SortableContext>

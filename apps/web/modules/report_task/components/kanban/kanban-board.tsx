@@ -403,10 +403,11 @@ export function KanbanBoard() {
                 boardTotal={filtered.length}
                 onOpen={setOpenTaskId}
                 onHeaderClick={groupBy === "assignee" ? () => openPersonBoard(column.id) : undefined}
+                groupedByPriority={groupBy === "priority"}
               />
             ))}
           </div>
-          <DragOverlay>{activeTask ? <TaskCardOverlay task={activeTask} /> : null}</DragOverlay>
+          <DragOverlay>{activeTask ? <TaskCardOverlay task={activeTask} groupedByPriority={groupBy === "priority"} /> : null}</DragOverlay>
         </DndContext>
       )}
 

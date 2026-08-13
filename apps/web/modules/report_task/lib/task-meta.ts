@@ -6,23 +6,26 @@ import { CheckCircle2, CircleDot, type LucideIcon } from "lucide-react";
 // green (done) — the same read-at-a-glance language as the priority colors.
 export const statusMeta: Record<
   TaskStatus,
-  { label: string; dot: string; badgeClass: string; column: string }
+  { label: string; dot: string; accentColor: string; badgeClass: string; column: string }
 > = {
   todo: {
     label: "รอดำเนินการ",
     dot: "bg-[var(--chart-red)]",
+    accentColor: "var(--chart-red)",
     badgeClass: "bg-red-50 text-red-700 border-red-200",
     column: "border-t-[var(--chart-red)]",
   },
   in_progress: {
     label: "กำลังทำ",
     dot: "bg-[var(--chart-amber)]",
+    accentColor: "var(--chart-amber)",
     badgeClass: "bg-amber-50 text-amber-700 border-amber-200",
     column: "border-t-[var(--chart-amber)]",
   },
   done: {
     label: "เสร็จสิ้น",
     dot: "bg-[var(--brand-green)]",
+    accentColor: "var(--brand-green)",
     badgeClass: "bg-green-50 text-green-700 border-green-200",
     column: "border-t-[var(--brand-green)]",
   },
