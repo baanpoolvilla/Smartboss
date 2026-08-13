@@ -586,8 +586,11 @@ export function TaskDetailSheet({
               {/* Who assigned this task is a fixed historical fact, not an
                   editable field — changing it after the fact would rewrite
                   who's actually responsible/who has edit rights over the
-                  task (see canEditRecord), so nobody gets a picker here. */}
-              <span className="flex items-center gap-1.5 rounded-full bg-white border border-[var(--line)] pl-0.5 pr-2 py-0.5">
+                  task (see canEditRecord), so nobody gets a picker here.
+                  Deliberately plain text, not a bordered pill — a pill here
+                  reads as a button and invites clicking something that does
+                  nothing. */}
+              <span className="flex items-center gap-1.5">
                 <Avatar className="h-5 w-5">
                   <AvatarFallback className="text-[8px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{assignedBy?.avatar}</AvatarFallback>
                 </Avatar>
