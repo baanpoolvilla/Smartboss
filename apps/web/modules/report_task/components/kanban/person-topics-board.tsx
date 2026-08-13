@@ -1,15 +1,23 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import {
   DndContext,
   useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { ArrowLeft, FolderKanban, SearchX } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, FolderKanban, SearchX, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/modules/report_task/components/ui/select";
 import { EmptyState } from "@/modules/report_task/components/shared/empty-state";
+import { filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
 import { TaskCard } from "./task-card";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
@@ -93,11 +101,86 @@ export function PersonTopicsBoard({
       : named;
   }, [personId, allTasks, topics, viewingAsUserId]);
 
-  const total = columns.reduce((n, c) => n + c.tasks.length, 0);
+  // Narrows which topic columns render — separate from the main board's
+  // filters (removed from this page entirely, see tasks/page.tsx) since this
+  // one only makes sense once you're already looking at one person's spread
+  // across projects.
+  const [topicFilter, setTopicFilter] = useState<string>("all");
+  // A different person's topic list can (and usually does) not include
+  // whatever topic was picked for the last one — reset during render (not
+  // an effect, per React's guidance for resetting state on a prop change)
+  // rather than silently carrying a filter that no longer matches anything.
+  const [lastPersonId, setLastPersonId] = useState(personId);
+  if (personId !== lastPersonId) {
+    setLastPersonId(personId);
+    setTopicFilter("all");
+  }
+  const visibleColumns = topicFilter === "all" ? columns : columns.filter((c) => c.id === topicFilter);
+  const total = visibleColumns.reduce((n, c) => n + c.tasks.length, 0);
+
+  // One person can easily be on more projects than fit on screen — same
+  // scroll-arrow + click-drag-to-pan treatment as the main board's assignee
+  // view (kanban-board.tsx), unconditional here since every visit to this
+  // page is already "one person, potentially many project columns."
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const panRef = useRef<{ startX: number; startScrollLeft: number; pointerId: number } | null>(null);
+  const [isPanning, setIsPanning] = useState(false);
+
+  function updateScrollState() {
+    const el = scrollerRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }
+
+  useEffect(() => {
+    updateScrollState();
+    const el = scrollerRef.current;
+    if (!el) return;
+    const onScroll = () => updateScrollState();
+    el.addEventListener("scroll", onScroll, { passive: true });
+    const observer = new ResizeObserver(updateScrollState);
+    observer.observe(el);
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      observer.disconnect();
+    };
+  }, [visibleColumns]);
+
+  function scrollBoard(direction: -1 | 1) {
+    scrollerRef.current?.scrollBy({ left: direction * 316, behavior: "smooth" });
+  }
+
+  function handlePanPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('[id^="task-card-"], button, a, input, select, textarea, [role="button"]')) return;
+    const el = scrollerRef.current;
+    if (!el) return;
+    panRef.current = { startX: e.clientX, startScrollLeft: el.scrollLeft, pointerId: e.pointerId };
+    el.setPointerCapture(e.pointerId);
+    setIsPanning(true);
+  }
+
+  function handlePanPointerMove(e: ReactPointerEvent<HTMLDivElement>) {
+    const pan = panRef.current;
+    const el = scrollerRef.current;
+    if (!pan || !el || pan.pointerId !== e.pointerId) return;
+    el.scrollLeft = pan.startScrollLeft - (e.clientX - pan.startX);
+  }
+
+  function endPan(e: ReactPointerEvent<HTMLDivElement>) {
+    if (panRef.current?.pointerId !== e.pointerId) return;
+    scrollerRef.current?.releasePointerCapture(e.pointerId);
+    panRef.current = null;
+    setIsPanning(false);
+  }
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-3 pb-4">
+      <div className="flex items-center flex-wrap gap-x-3 gap-y-2 pb-4">
         <button
           type="button"
           onClick={onBack}
@@ -110,20 +193,85 @@ export function PersonTopicsBoard({
         <Avatar className="h-7 w-7 shrink-0">
           <AvatarFallback className="text-[10px]">{person?.avatar}</AvatarFallback>
         </Avatar>
-        <h2 className="text-sm font-semibold">งานของ {person?.name ?? "—"} แยกตามหัวข้อโปรเจค</h2>
-        <span className="ml-auto text-xs text-[var(--ink-soft)]">{total} งาน</span>
+        <h2 className="text-sm font-semibold truncate min-w-0 shrink">งานของ {person?.name ?? "—"} แยกตามหัวข้อโปรเจค</h2>
+
+        {columns.length > 1 && (
+          <Select value={topicFilter} onValueChange={(v) => v && setTopicFilter(v)}>
+            <SelectTrigger className={filterFieldTriggerClass(topicFilter !== "all", "min-w-[150px] ml-2 shrink-0")}>
+              <FolderKanban className="h-3.5 w-3.5 shrink-0" />
+              <SelectValue>{topicFilter === "all" ? "ทุกหัวข้อโปรเจค" : columns.find((c) => c.id === topicFilter)?.name ?? "ทุกหัวข้อโปรเจค"}</SelectValue>
+            </SelectTrigger>
+            <SelectContent alignItemWithTrigger={false}>
+              <SelectItem value="all">ทุกหัวข้อโปรเจค</SelectItem>
+              {columns.map((c) => (
+                <SelectItem key={c.id} value={c.id}>{c.name} ({c.tasks.length})</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {topicFilter !== "all" && (
+          <button
+            onClick={() => setTopicFilter("all")}
+            className="flex items-center gap-1 text-xs text-[var(--ink-soft)] hover:text-[var(--ink)] shrink-0"
+          >
+            <X className="h-3.5 w-3.5" /> ล้างตัวกรอง
+          </button>
+        )}
+
+        <span className="ml-auto text-xs text-[var(--ink-soft)] shrink-0">{total} งาน</span>
       </div>
 
-      {total === 0 ? (
+      {columns.length === 0 ? (
         <EmptyState
           icon={SearchX}
           title="ไม่มีงานที่มอบหมายอยู่"
           description={`${person?.name ?? "คนนี้"} ยังไม่มีงานที่รับผิดชอบตอนนี้`}
         />
+      ) : total === 0 ? (
+        <EmptyState
+          icon={SearchX}
+          title="ไม่พบงานในหัวข้อนี้"
+          description="ลองเลือกหัวข้อโปรเจคอื่น หรือกดล้างตัวกรองเพื่อดูทุกหัวข้อ"
+        />
       ) : (
         <DndContext id="person-topics-board" sensors={sensors} onDragEnd={noopDragEnd}>
-          <div className="flex-1 flex gap-4 overflow-x-auto pb-4 -mx-1 px-1">
-            {columns.map((column) => {
+          <div className="relative flex-1">
+            {canScrollLeft && (
+              <>
+                <div className="pointer-events-none absolute top-0 left-0 z-10 h-24 w-10 bg-gradient-to-r from-[var(--bg)] to-transparent" />
+                <button
+                  onClick={() => scrollBoard(-1)}
+                  aria-label="เลื่อนไปทางซ้าย"
+                  className="absolute left-1 top-10 z-20 flex h-8 w-8 items-center justify-center rounded-full border border-[var(--line)] bg-white text-[var(--ink-soft)] shadow-md hover:text-[var(--ink)] hover:bg-[var(--bg-soft)] transition-colors"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+              </>
+            )}
+            {canScrollRight && (
+              <>
+                <div className="pointer-events-none absolute top-0 right-0 z-10 h-24 w-10 bg-gradient-to-l from-[var(--bg)] to-transparent" />
+                <button
+                  onClick={() => scrollBoard(1)}
+                  aria-label="เลื่อนไปทางขวา"
+                  className="absolute right-1 top-10 z-20 flex h-8 w-8 items-center justify-center rounded-full border border-[var(--line)] bg-white text-[var(--ink-soft)] shadow-md hover:text-[var(--ink)] hover:bg-[var(--bg-soft)] transition-colors"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </>
+            )}
+            <div
+              ref={scrollerRef}
+              onPointerDown={handlePanPointerDown}
+              onPointerMove={handlePanPointerMove}
+              onPointerUp={endPan}
+              onPointerCancel={endPan}
+              className={cn(
+                "flex gap-4 overflow-x-auto pb-4 -mx-1 px-1",
+                isPanning ? "cursor-grabbing select-none" : "cursor-grab"
+              )}
+            >
+            {visibleColumns.map((column) => {
               const counts = statusBuckets.map((b) => ({
                 ...b,
                 count: column.tasks.filter((t) => bucketOf(t) === b.key).length,
@@ -183,6 +331,7 @@ export function PersonTopicsBoard({
                 </div>
               );
             })}
+            </div>
           </div>
         </DndContext>
       )}

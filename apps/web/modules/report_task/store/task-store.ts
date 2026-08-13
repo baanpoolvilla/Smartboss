@@ -7,7 +7,7 @@ import { useNotificationStore } from "@/modules/report_task/store/notification-s
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useActivityLogStore } from "@/modules/report_task/store/activity-log-store";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
-import { deriveCompletedAssigneeIds } from "@/modules/report_task/lib/task-completion";
+import { deriveCompletedAssigneeIds, isTaskFullyDone } from "@/modules/report_task/lib/task-completion";
 import type { Attachment, ChecklistItem, Task, TaskPriority, TaskStatus } from "@/modules/report_task/types";
 
 /**
@@ -249,6 +249,13 @@ export const useTaskStore = create<TaskStore>((set) => ({
     set((s) => ({
       tasks: s.tasks.map((t) => {
         if (t.id !== taskId || t.status === status) return t;
+        // Hard block — "เสร็จสิ้น" only ever means every assignee's checklist
+        // is actually done. Without this, the drag/dropdown/quick-toggle
+        // shortcuts could set status="done" straight past the checklist,
+        // out of step with the automatic completion path (see
+        // applyChecklistDerivedCompletion). Callers check isTaskFullyDone
+        // themselves first to show a toast; this is the backstop.
+        if (status === "done" && !isTaskFullyDone(t.assigneeIds, t.checklist)) return t;
         if (status === "done") notifyLateCompletion(t);
         logActivity(
           useIdentityStore.getState().viewingAsUserId,

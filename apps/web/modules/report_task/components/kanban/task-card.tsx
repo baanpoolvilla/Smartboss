@@ -12,6 +12,8 @@ import { PenaltyChip } from "@/modules/report_task/components/shared/penalty-chi
 import { getUser, getDepartment, canManage } from "@/modules/report_task/lib/directory";
 import { priorityMeta, statusMeta } from "@/modules/report_task/lib/task-meta";
 import { isSuspiciousRevision, reactionCounts } from "@/modules/report_task/lib/task-flags";
+import { isTaskFullyDone, remainingChecklistCount } from "@/modules/report_task/lib/task-completion";
+import { toast } from "sonner";
 import { daysUntil } from "@/modules/report_task/lib/format";
 import { cn } from "@/modules/report_task/lib/utils";
 import type { Task } from "@/modules/report_task/types";
@@ -187,8 +189,12 @@ function TaskCardBody({ task, id, onOpen, dragging, lifted, refCb, style, dragPr
                     e.stopPropagation();
                     if (isShared) {
                       if (iAmAssignee) toggleAssigneeChecklist(task.id, viewingAsUserId);
+                    } else if (isDone) {
+                      moveTask(task.id, "todo");
+                    } else if (!isTaskFullyDone(task.assigneeIds, task.checklist)) {
+                      toast.error(`ยังติ๊ก checklist ไม่ครบ ${remainingChecklistCount(task.checklist)} ข้อ — ทำให้ครบก่อนถึงจะปิดงานได้`);
                     } else {
-                      moveTask(task.id, isDone ? "todo" : "done");
+                      moveTask(task.id, "done");
                     }
                   }}
                   disabled={isShared && !iAmAssignee}

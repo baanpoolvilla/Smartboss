@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   DndContext,
@@ -19,11 +19,13 @@ import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canEditRecord, canSeeTask } from "@/modules/report_task/lib/permissions";
 import { dueUrgency, sortTasksForDisplay } from "@/modules/report_task/lib/task-flags";
+import { isTaskFullyDone, remainingChecklistCount } from "@/modules/report_task/lib/task-completion";
 import { getUser, getDepartment, users } from "@/modules/report_task/lib/directory";
 import { statusMeta, priorityMeta, priorityColorHex, taskPriorityOrder, statusIcon } from "@/modules/report_task/lib/task-meta";
 import { matchesTaskFilters } from "@/modules/report_task/lib/task-filter";
 import { useTaskSheetParam } from "@/modules/report_task/hooks/use-task-sheet-param";
 import { statusColors, chartColors } from "@/modules/report_task/lib/chart-colors";
+import { cn } from "@/modules/report_task/lib/utils";
 import { KanbanColumn, type BoardColumn } from "./kanban-column";
 import { TaskCardOverlay } from "./task-card";
 import { TaskDetailSheet } from "./task-detail-sheet";
@@ -38,7 +40,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/modules/report_task/components/ui/select";
-import { Group, CircleDot, Flag, User, Info, SearchX, AlarmClockOff } from "lucide-react";
+import { Group, CircleDot, Flag, User, Info, SearchX, AlarmClockOff, ChevronLeft, ChevronRight } from "lucide-react";
 import { EmptyState } from "@/modules/report_task/components/shared/empty-state";
 
 type GroupBy = "status" | "priority" | "assignee";
@@ -258,6 +260,79 @@ export function KanbanBoard() {
       .filter((c) => c.tasks.length > 0);
   }, [groupBy, filtered]);
 
+  // Columns can run wider than the viewport (grouping by assignee especially
+  // — one column per employee) with nothing to hint that more sit off-screen
+  // besides the bare scrollbar. Track scroll position so left/right arrow
+  // buttons can show up only on the side there's actually more to see.
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  function updateScrollState() {
+    const el = scrollerRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }
+
+  useEffect(() => {
+    updateScrollState();
+    const el = scrollerRef.current;
+    if (!el) return;
+    const onScroll = () => updateScrollState();
+    el.addEventListener("scroll", onScroll, { passive: true });
+    const observer = new ResizeObserver(updateScrollState);
+    observer.observe(el);
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      observer.disconnect();
+    };
+    // Column count/widths change with groupBy and the filtered task list —
+    // re-measure whenever either could have changed what's scrollable.
+  }, [columns]);
+
+  function scrollBoard(direction: -1 | 1) {
+    // One column + its gap (basis-[300px] + gap-4) — a full "next column
+    // into view" step rather than an arbitrary pixel jump.
+    scrollerRef.current?.scrollBy({ left: direction * 316, behavior: "smooth" });
+  }
+
+  // Click-and-drag panning on empty board background — assignee grouping
+  // only (that's the view with by far the most columns, one per employee).
+  // Status/priority stay scroll-wheel/button-only since they rarely exceed
+  // 3-4 columns and dnd-kit already owns most of their surface area.
+  // Anything that's an actual card or a real control (button/link/header
+  // click) is left alone for dnd-kit / its own onClick — panning only
+  // starts from a pointerdown that lands on genuinely empty background.
+  const panRef = useRef<{ startX: number; startScrollLeft: number; pointerId: number } | null>(null);
+  const [isPanning, setIsPanning] = useState(false);
+
+  function handlePanPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
+    if (groupBy !== "assignee") return;
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('[id^="task-card-"], button, a, input, select, textarea, [role="button"]')) return;
+    const el = scrollerRef.current;
+    if (!el) return;
+    panRef.current = { startX: e.clientX, startScrollLeft: el.scrollLeft, pointerId: e.pointerId };
+    el.setPointerCapture(e.pointerId);
+    setIsPanning(true);
+  }
+
+  function handlePanPointerMove(e: ReactPointerEvent<HTMLDivElement>) {
+    const pan = panRef.current;
+    const el = scrollerRef.current;
+    if (!pan || !el || pan.pointerId !== e.pointerId) return;
+    el.scrollLeft = pan.startScrollLeft - (e.clientX - pan.startX);
+  }
+
+  function endPan(e: ReactPointerEvent<HTMLDivElement>) {
+    if (panRef.current?.pointerId !== e.pointerId) return;
+    scrollerRef.current?.releasePointerCapture(e.pointerId);
+    panRef.current = null;
+    setIsPanning(false);
+  }
+
   function handleDragStart(e: DragStartEvent) {
     setActiveTask(allTasks.find((t) => t.id === e.active.id) ?? null);
   }
@@ -296,6 +371,10 @@ export function KanbanBoard() {
         return;
       }
       if (task.status === targetColumnId) return;
+      if (targetColumnId === "done" && !isTaskFullyDone(task.assigneeIds, task.checklist)) {
+        toast.error(`"${task.title}" ยังติ๊ก checklist ไม่ครบ ${remainingChecklistCount(task.checklist)} ข้อ — ทำให้ครบก่อนถึงจะปิดงานได้`);
+        return;
+      }
       moveTask(task.id, targetColumnId as TaskStatus);
       toast.success(`ย้าย "${task.title}" ไปยัง ${statusMeta[targetColumnId as TaskStatus].label} แล้ว`);
     } else if (groupBy === "priority") {
@@ -395,17 +474,58 @@ export function KanbanBoard() {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          <div className="flex gap-4 overflow-x-auto pb-4 -mx-1 px-1">
-            {columns.map((column) => (
-              <KanbanColumn
-                key={column.id}
-                column={column}
-                boardTotal={filtered.length}
-                onOpen={setOpenTaskId}
-                onHeaderClick={groupBy === "assignee" ? () => openPersonBoard(column.id) : undefined}
-                groupedByPriority={groupBy === "priority"}
-              />
-            ))}
+          {/* Buttons anchor to a fixed offset near the column headers (~top
+              center of the header card), not a vertical center of the whole
+              scroll area — a column can run to dozens of cards tall, and
+              centering across that would push the button far from the
+              header, off in the middle of someone's card list. */}
+          <div className="relative">
+            {canScrollLeft && (
+              <>
+                <div className="pointer-events-none absolute top-0 left-0 z-10 h-24 w-10 bg-gradient-to-r from-[var(--bg)] to-transparent" />
+                <button
+                  onClick={() => scrollBoard(-1)}
+                  aria-label="เลื่อนบอร์ดไปทางซ้าย"
+                  className="absolute left-1 top-10 z-20 flex h-8 w-8 items-center justify-center rounded-full border border-[var(--line)] bg-white text-[var(--ink-soft)] shadow-md hover:text-[var(--ink)] hover:bg-[var(--bg-soft)] transition-colors"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+              </>
+            )}
+            {canScrollRight && (
+              <>
+                <div className="pointer-events-none absolute top-0 right-0 z-10 h-24 w-10 bg-gradient-to-l from-[var(--bg)] to-transparent" />
+                <button
+                  onClick={() => scrollBoard(1)}
+                  aria-label="เลื่อนบอร์ดไปทางขวา"
+                  className="absolute right-1 top-10 z-20 flex h-8 w-8 items-center justify-center rounded-full border border-[var(--line)] bg-white text-[var(--ink-soft)] shadow-md hover:text-[var(--ink)] hover:bg-[var(--bg-soft)] transition-colors"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </>
+            )}
+            <div
+              ref={scrollerRef}
+              onPointerDown={handlePanPointerDown}
+              onPointerMove={handlePanPointerMove}
+              onPointerUp={endPan}
+              onPointerCancel={endPan}
+              className={cn(
+                "flex gap-4 overflow-x-auto pb-4 -mx-1 px-1",
+                groupBy === "assignee" && (isPanning ? "cursor-grabbing select-none" : "cursor-grab")
+              )}
+            >
+              {columns.map((column) => (
+                <KanbanColumn
+                  key={column.id}
+                  column={column}
+                  boardTotal={filtered.length}
+                  onOpen={setOpenTaskId}
+                  onHeaderClick={groupBy === "assignee" ? () => openPersonBoard(column.id) : undefined}
+                  groupedByPriority={groupBy === "priority"}
+                />
+              ))}
+            </div>
           </div>
           <DragOverlay>{activeTask ? <TaskCardOverlay task={activeTask} groupedByPriority={groupBy === "priority"} /> : null}</DragOverlay>
         </DndContext>

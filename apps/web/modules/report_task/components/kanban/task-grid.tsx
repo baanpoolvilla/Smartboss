@@ -34,18 +34,20 @@ import {
   DropdownMenuTrigger,
 } from "@/modules/report_task/components/ui/dropdown-menu";
 import { DueDateBadge } from "@/modules/report_task/components/shared/due-date-badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/modules/report_task/components/ui/tooltip";
 import { Badge } from "@/modules/report_task/components/ui/badge";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { getUser } from "@/modules/report_task/lib/directory";
 import { statusMeta, priorityMeta, statusIcon, taskStatusOrder, taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
 import { formatShortDate } from "@/modules/report_task/lib/format";
 import { dueUrgency, reactionCounts } from "@/modules/report_task/lib/task-flags";
+import { isTaskFullyDone, remainingChecklistCount } from "@/modules/report_task/lib/task-completion";
 import { canEditRecord } from "@/modules/report_task/lib/permissions";
 import { cn } from "@/modules/report_task/lib/utils";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, MessageSquare, Paperclip, ListTodo, ChevronDown, X, CheckCircle2, SearchX } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, MessageSquare, Paperclip, ListTodo, ChevronDown, X, CheckCircle2, SearchX, Info } from "lucide-react";
 import { EmptyState } from "@/modules/report_task/components/shared/empty-state";
 import type { Task, TaskStatus, TaskPriority } from "@/modules/report_task/types";
 import { toast } from "sonner";
@@ -181,10 +183,26 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
         header: "ผู้รับผิดชอบ",
         accessorFn: (t) => t.assigneeIds.length,
         cell: ({ row }) => {
-          const assignees = row.original.assigneeIds.map(getUser).filter(Boolean);
+          const t = row.original;
+          const assignees = t.assigneeIds.map(getUser).filter(Boolean);
           if (assignees.length === 0) return <span className="text-xs text-[var(--ink-soft)]">—</span>;
+          // Same "hover for the full list" pattern as the board card
+          // (task-card.tsx) — capping the visible stack at 3 avatars is fine
+          // as long as the rest aren't just lost behind a static "+N" badge.
+          const fullList =
+            assignees.length > 1
+              ? `ผู้รับผิดชอบร่วม ${assignees.length} คน: ${assignees
+                  .map((a) => {
+                    const tags = [
+                      t.mainAssigneeId === a!.id && "หัวหน้า",
+                      (t.completedAssigneeIds ?? []).includes(a!.id) && "เสร็จแล้ว",
+                    ].filter(Boolean);
+                    return tags.length > 0 ? `${a!.name} (${tags.join(", ")})` : a!.name;
+                  })
+                  .join(", ")}`
+              : assignees[0]?.name;
           return (
-            <div className="flex items-center -space-x-1.5">
+            <div className="flex items-center -space-x-1.5" title={fullList}>
               {assignees.slice(0, 3).map((a) => (
                 <Avatar key={a!.id} className="h-6 w-6 ring-2 ring-white">
                   <AvatarFallback className="text-[9px] bg-[var(--accent)] text-[var(--brand-green-dark)]">
@@ -204,14 +222,25 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
       {
         id: "progress",
         header: "ความคืบหน้า",
+        // Fraction of checklist items done — real "how much of the work is
+        // finished," same formula for individual and group tasks. Used to
+        // switch to a people-done fraction for groups (coarser: only 0/1 per
+        // person, no in-between) out of worry it'd disagree with "สถานะ" —
+        // that gap is closed now that moveTask refuses "เสร็จสิ้น" until the
+        // checklist is actually complete (see task-completion.ts), so the two
+        // can no longer disagree and checklist-based progress is strictly
+        // more informative. Per-person completion is still surfaced, just as
+        // a hover detail rather than the headline number (see cell below).
         accessorFn: (t) => (t.checklist.length ? t.checklist.filter((c) => c.done).length / t.checklist.length : -1),
         cell: ({ row }) => {
           const t = row.original;
+          const isGroup = t.assigneeIds.length > 1;
           const total = t.checklist.length;
           if (total === 0) return <span className="text-xs text-[var(--line)]">—</span>;
           const done = t.checklist.filter((c) => c.done).length;
           const pct = Math.round((done / total) * 100);
           const complete = done === total;
+          const peopleDone = t.completedAssigneeIds?.length ?? 0;
           return (
             <div className="flex items-center gap-2 min-w-[112px]">
               <div className="h-1.5 flex-1 rounded-full bg-[var(--bg-soft)] overflow-hidden">
@@ -220,7 +249,14 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
                   style={{ width: `${pct}%`, backgroundColor: complete ? "var(--brand-green)" : "var(--chart-amber)" }}
                 />
               </div>
-              <span className="flex items-center gap-0.5 text-[11px] tabular-nums text-[var(--ink-soft)] shrink-0">
+              <span
+                className="flex items-center gap-0.5 text-[11px] tabular-nums text-[var(--ink-soft)] shrink-0"
+                title={
+                  isGroup
+                    ? `${done}/${total} รายการ checklist เสร็จแล้ว · ${peopleDone}/${t.assigneeIds.length} คนเสร็จแล้ว`
+                    : `${done}/${total} รายการ checklist เสร็จแล้ว`
+                }
+              >
                 <ListTodo className="h-3 w-3" />
                 {done}/{total}
               </span>
@@ -265,7 +301,17 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
                 {taskStatusOrder.map((opt) => {
                   const OptIcon = statusIcon[opt];
                   return (
-                    <DropdownMenuItem key={opt} onClick={() => opt !== s && moveTask(t.id, opt)}>
+                    <DropdownMenuItem
+                      key={opt}
+                      onClick={() => {
+                        if (opt === s) return;
+                        if (opt === "done" && !isTaskFullyDone(t.assigneeIds, t.checklist)) {
+                          toast.error(`"${t.title}" ยังติ๊ก checklist ไม่ครบ ${remainingChecklistCount(t.checklist)} ข้อ — ทำให้ครบก่อนถึงจะปิดงานได้`);
+                          return;
+                        }
+                        moveTask(t.id, opt);
+                      }}
+                    >
                       <OptIcon className={cn("h-3.5 w-3.5", opt === s && "text-[var(--brand-green)]")} />
                       {statusMeta[opt].label}
                     </DropdownMenuItem>
@@ -457,6 +503,19 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
     setSelected(new Set());
   }
   function bulkStatus(s: TaskStatus) {
+    if (s === "done") {
+      const selectedTasks = tasks.filter((t) => selected.has(t.id));
+      const ready = selectedTasks.filter((t) => isTaskFullyDone(t.assigneeIds, t.checklist));
+      const skipped = selectedTasks.length - ready.length;
+      ready.forEach((t) => moveTask(t.id, s));
+      toast[skipped > 0 ? "error" : "success"](
+        skipped > 0
+          ? `ปิดงานได้ ${ready.length} งาน — ข้าม ${skipped} งานที่ checklist ยังไม่ครบ`
+          : `เปลี่ยน ${ready.length} งาน เป็น "${statusMeta[s].label}"`
+      );
+      clearSelection();
+      return;
+    }
     selected.forEach((id) => moveTask(id, s));
     toast.success(`เปลี่ยน ${selCount} งาน เป็น "${statusMeta[s].label}"`);
     clearSelection();
@@ -486,6 +545,20 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
             ))}
           </SelectContent>
         </Select>
+
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button type="button" className="text-[var(--ink-soft)] hover:text-[var(--ink)]" aria-label="วิธีเรียงลำดับตาราง">
+                <Info className="h-3.5 w-3.5" />
+              </button>
+            }
+          />
+          <TooltipContent className="max-w-[260px]">
+            คลิกที่หัวคอลัมน์ไหนก็ได้เพื่อเรียงตามคอลัมน์นั้น — ลูกศรขึ้น (↑) = น้อยไปมาก, ลูกศรลง (↓) = มากไปน้อย
+            คลิกซ้ำที่คอลัมน์เดิมเพื่อสลับทิศทาง คลิกครั้งที่ 3 เพื่อยกเลิกการเรียง
+          </TooltipContent>
+        </Tooltip>
 
         <div className="flex items-center gap-2 ml-auto text-[11px]">
           <SummaryChip label="ทั้งหมด" value={summary.total} />
@@ -560,9 +633,18 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
                   {hg.headers.map((header) => {
                     const sortDir = header.column.getIsSorted();
                     const sortable = header.column.getCanSort();
+                    const headerText = typeof header.column.columnDef.header === "string" ? header.column.columnDef.header : "";
+                    const sortTitle = !sortable
+                      ? undefined
+                      : sortDir === "asc"
+                        ? `กำลังเรียงตาม "${headerText}" จากน้อยไปมาก — คลิกเพื่อสลับเป็นมากไปน้อย`
+                        : sortDir === "desc"
+                          ? `กำลังเรียงตาม "${headerText}" จากมากไปน้อย — คลิกเพื่อยกเลิกการเรียง`
+                          : `คลิกเพื่อเรียงตาม "${headerText}"`;
                     return (
                       <TableHead
                         key={header.id}
+                        title={sortTitle}
                         className={cn(
                           "h-11 px-4 bg-[var(--bg-soft)]/70 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-soft)] whitespace-nowrap select-none",
                           sortable && "cursor-pointer hover:text-[var(--ink)] transition-colors"

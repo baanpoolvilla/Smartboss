@@ -43,6 +43,7 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
 import { getUser, getDepartment, users, canManage, isOwner, departmentIdsOf } from "@/modules/report_task/lib/directory";
 import { statusMeta, priorityMeta, taskStatusOrder, taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
+import { isTaskFullyDone, remainingChecklistCount } from "@/modules/report_task/lib/task-completion";
 import { formatDate, formatDateTime, relativeTime } from "@/modules/report_task/lib/format";
 import { cn } from "@/modules/report_task/lib/utils";
 import {
@@ -123,11 +124,14 @@ export function TaskDetailSheet({
   const commentFileInputRef = useRef<HTMLInputElement>(null);
   const [newChecklistItem, setNewChecklistItem] = useState("");
   const [newChecklistOwnerId, setNewChecklistOwnerId] = useState("");
-  // Per-assignee due-date edits are staged locally and only commit (see
-  // reviseAssigneeDueDate) once the row's confirm button is clicked — picking
-  // a date alone doesn't change anything yet, so a stray click can't silently
-  // revise someone's date and notify them.
-  const [stagedAssigneeDates, setStagedAssigneeDates] = useState<Record<string, string>>({});
+  // Per-assignee due-date edit — one person at a time via a "แก้ไขกำหนดส่ง"
+  // button + person picker, not a live date field sitting open on every row
+  // (that duplicated the same date the assignee list up top already shows,
+  // and got noisy fast on a task with several people). Picking a date only
+  // stages it locally; nothing commits until confirmed.
+  const [perPersonRevising, setPerPersonRevising] = useState(false);
+  const [perPersonTargetId, setPerPersonTargetId] = useState("");
+  const [perPersonDate, setPerPersonDate] = useState("");
   const [revising, setRevising] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   // Once set, a group task's "หัวหน้าหลัก" (lead) is meant to stick —
@@ -162,7 +166,9 @@ export function TaskDetailSheet({
     setDraftTitle(task?.title ?? "");
     setDraftDescription(task?.description ?? "");
     setNewChecklistOwnerId(task?.assigneeIds[0] ?? "");
-    setStagedAssigneeDates({});
+    setPerPersonRevising(false);
+    setPerPersonTargetId("");
+    setPerPersonDate("");
     setBulkRevising(false);
     setBulkDate("");
   }
@@ -423,7 +429,14 @@ export function TaskDetailSheet({
                   only sanctioned way back to "กำลังทำ". */}
               <Select
                 value={task.status}
-                onValueChange={(v) => v && moveTask(task.id, v as TaskStatus)}
+                onValueChange={(v) => {
+                  if (!v) return;
+                  if (v === "done" && !isTaskFullyDone(task.assigneeIds, task.checklist)) {
+                    toast.error(`ยังติ๊ก checklist ไม่ครบ ${remainingChecklistCount(task.checklist)} ข้อ — ทำให้ครบก่อนถึงจะปิดงานได้`);
+                    return;
+                  }
+                  moveTask(task.id, v as TaskStatus);
+                }}
                 disabled={isShared && task.status === "done"}
               >
                 <SelectTrigger className="w-full" title={isShared && task.status === "done" ? "งานนี้มีผู้รับผิดชอบหลายคน — กด \"แก้ไขกำหนดส่ง\" ด้านล่างเพื่อแก้ไขแทน" : undefined}>
@@ -775,10 +788,28 @@ export function TaskDetailSheet({
               {!isShared && !revising && canEditMain && (
                 <Button size="sm" variant="outline" onClick={() => setRevising(true)}>แก้ไขกำหนดส่ง</Button>
               )}
-              {isShared && !bulkRevising && canEditMain && (
-                <Button size="sm" variant="outline" onClick={() => { setBulkRevising(true); setBulkDate(toDateInput(task.dueDate)); }}>
-                  แก้ไขทั้งหมด
-                </Button>
+              {isShared && canEditMain && (
+                <div className="flex items-center gap-1.5">
+                  {!perPersonRevising && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setPerPersonRevising(true);
+                        const firstId = task.assigneeIds[0] ?? "";
+                        setPerPersonTargetId(firstId);
+                        setPerPersonDate(toDateInput(task.assigneeDueDates?.[firstId] ?? task.dueDate));
+                      }}
+                    >
+                      แก้ไขกำหนดส่ง
+                    </Button>
+                  )}
+                  {!bulkRevising && (
+                    <Button size="sm" variant="outline" onClick={() => { setBulkRevising(true); setBulkDate(toDateInput(task.dueDate)); }}>
+                      แก้ไขทั้งหมด
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
 
@@ -805,72 +836,65 @@ export function TaskDetailSheet({
               </div>
             )}
 
-            {/* Per-person rows — pick a date only stages it locally; nothing
-                is saved, logged, or notified to the assignee until the
-                confirm is clicked, so a stray date pick can't silently
-                revise + notify someone. */}
+            {/* Pick who, then pick their date — one field at a time instead
+                of a live date picker sitting open on every row, which just
+                repeated the same date the read-only list below already
+                shows and got noisy on a task with several people. */}
+            {isShared && perPersonRevising && canEditMain && (
+              <div className="rounded-lg border border-[var(--line)] p-3 space-y-2.5">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">คน</Label>
+                  <Select value={perPersonTargetId} onValueChange={(v) => {
+                    if (!v) return;
+                    setPerPersonTargetId(v);
+                    setPerPersonDate(toDateInput(task.assigneeDueDates?.[v] ?? task.dueDate));
+                  }}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue>{getUser(perPersonTargetId)?.name ?? "เลือกคน"}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {task.assigneeIds.map((uid) => (
+                        <SelectItem key={uid} value={uid}>{getUser(uid)?.name ?? uid}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">กำหนดส่งใหม่</Label>
+                  <DatePickerField value={perPersonDate} minDate={toDateInput(task.startDate)} onChange={setPerPersonDate} />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button size="sm" variant="ghost" onClick={() => setPerPersonRevising(false)}>ยกเลิก</Button>
+                  <Button
+                    size="sm"
+                    className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+                    disabled={!perPersonTargetId || !perPersonDate}
+                    onClick={() => {
+                      reviseAssigneeDueDate(task.id, perPersonTargetId, perPersonDate, viewingAsUserId);
+                      setPerPersonRevising(false);
+                    }}
+                  >
+                    ยืนยัน
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Read-only per-person list — everyone's current effective due
+                date at a glance, no live editor sitting open on each row
+                (that's what the "แก้ไขกำหนดส่ง" flow above is for now). */}
             {isShared && (
               <div className="space-y-1">
                 {task.assigneeIds.map((uid) => {
                   const u = getUser(uid);
                   const effective = task.assigneeDueDates?.[uid] ?? toDateInput(task.dueDate);
-                  const staged = stagedAssigneeDates[uid];
-                  const dirty = staged !== undefined && staged !== effective;
                   return (
                     <div key={uid} className="flex items-center gap-2">
                       <Avatar className="h-5 w-5 shrink-0">
                         <AvatarFallback className="text-[9px] bg-[var(--bg-soft)]">{u?.avatar}</AvatarFallback>
                       </Avatar>
                       <span className="text-xs flex-1 truncate">{u?.name}</span>
-                      {canEditMain ? (
-                        <>
-                          <DatePickerField
-                            value={staged ?? effective}
-                            minDate={toDateInput(task.startDate)}
-                            onChange={(v) => setStagedAssigneeDates((s) => ({ ...s, [uid]: v }))}
-                            className="h-8 text-xs w-36"
-                          />
-                          {dirty && (
-                            <>
-                              <Button
-                                size="icon-sm"
-                                variant="outline"
-                                className="h-8 w-8 shrink-0 border-[var(--brand-green)] text-[var(--brand-green-dark)] hover:bg-[var(--accent)]"
-                                title="ยืนยันกำหนดส่งใหม่"
-                                aria-label={`ยืนยันกำหนดส่งใหม่ของ ${u?.name}`}
-                                onClick={() => {
-                                  reviseAssigneeDueDate(task.id, uid, staged, viewingAsUserId);
-                                  setStagedAssigneeDates((s) => {
-                                    const next = { ...s };
-                                    delete next[uid];
-                                    return next;
-                                  });
-                                }}
-                              >
-                                <Check className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                size="icon-sm"
-                                variant="ghost"
-                                className="h-8 w-8 shrink-0 text-[var(--ink-soft)] hover:text-[var(--chart-red)]"
-                                title="ยกเลิก"
-                                aria-label={`ยกเลิกการแก้ไขกำหนดส่งของ ${u?.name}`}
-                                onClick={() =>
-                                  setStagedAssigneeDates((s) => {
-                                    const next = { ...s };
-                                    delete next[uid];
-                                    return next;
-                                  })
-                                }
-                              >
-                                <X className="h-3.5 w-3.5" />
-                              </Button>
-                            </>
-                          )}
-                        </>
-                      ) : (
-                        <span className="text-xs">{formatDate(effective)}</span>
-                      )}
+                      <span className="text-xs text-[var(--ink-soft)]">{formatDate(effective)}</span>
                     </div>
                   );
                 })}

@@ -6,7 +6,8 @@ import { TaskCard } from "./task-card";
 import { ShowMoreToggle } from "@/modules/report_task/components/shared/show-more-toggle";
 import { useShowMore } from "@/modules/report_task/hooks/use-show-more";
 import { cn } from "@/modules/report_task/lib/utils";
-import type { Task } from "@/modules/report_task/types";
+import { statusMeta } from "@/modules/report_task/lib/task-meta";
+import type { Task, TaskStatus } from "@/modules/report_task/types";
 import type { LucideIcon } from "lucide-react";
 
 export interface BoardColumn {
@@ -46,6 +47,17 @@ export function KanbanColumn({
   const Icon = column.icon;
   const accent = column.accent;
   const percent = boardTotal > 0 ? Math.round((column.tasks.length / boardTotal) * 100) : 0;
+
+  // A column can mix statuses (every assignee column does; the derived
+  // "เลยกำหนด" column mixes todo+in_progress) — a single-accent-color bar
+  // couldn't say which. Segment it by each task's own status instead so
+  // "what kind of tasks does this person actually have" reads at a glance
+  // without opening a single card.
+  const statusOrder: TaskStatus[] = ["todo", "in_progress", "done"];
+  const statusCounts = statusOrder.map((s) => ({
+    status: s,
+    count: column.tasks.filter((t) => t.status === s).length,
+  }));
 
   // §6 — every column caps at PAGE_SIZE cards up front (same constant for
   // every column, so all columns stay in sync scrolling-wise before anyone
@@ -93,18 +105,39 @@ export function KanbanColumn({
           </span>
         </div>
 
-        {/* Proportion of the whole (filtered) board this column holds — same
-            accent as the rest of the header, not a fixed decorative tint. */}
+        {/* Segmented by each task's own status (รอดำเนินการ/กำลังทำ/เสร็จสิ้น)
+            — tells "what kind of tasks" at a glance, not just "how many"
+            (the plain accent-color version below the segments still gives
+            that as the "N% ของบอร์ด" line). */}
         <div className="mt-2.5">
-          <div className="h-1.5 rounded-full bg-[var(--bg-soft)] overflow-hidden">
-            <div
-              className="h-full rounded-full transition-[width] duration-300"
-              style={{ width: `${percent}%`, backgroundColor: accent }}
-            />
+          {column.tasks.length > 0 ? (
+            <div className="flex h-1.5 rounded-full bg-[var(--bg-soft)] overflow-hidden" title={statusCounts.map((s) => `${statusMeta[s.status].label} ${s.count}`).join(" · ")}>
+              {statusCounts
+                .filter((s) => s.count > 0)
+                .map((s) => (
+                  <div
+                    key={s.status}
+                    className="h-full first:rounded-l-full last:rounded-r-full transition-[width] duration-300"
+                    style={{ width: `${(s.count / column.tasks.length) * 100}%`, backgroundColor: statusMeta[s.status].accentColor }}
+                  />
+                ))}
+            </div>
+          ) : (
+            <div className="h-1.5 rounded-full bg-[var(--bg-soft)]" />
+          )}
+          <div className="flex items-center gap-2.5 mt-1 flex-wrap">
+            <p className="text-[10px] font-medium" style={{ color: accent }}>
+              {percent}% ของบอร์ด
+            </p>
+            {statusCounts
+              .filter((s) => s.count > 0)
+              .map((s) => (
+                <span key={s.status} className="flex items-center gap-1 text-[10px] text-[var(--ink-soft)]">
+                  <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: statusMeta[s.status].accentColor }} />
+                  {statusMeta[s.status].label} {s.count}
+                </span>
+              ))}
           </div>
-          <p className="text-[10px] font-medium mt-1" style={{ color: accent }}>
-            {percent}% ของบอร์ด
-          </p>
         </div>
       </div>
 

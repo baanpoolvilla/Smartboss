@@ -117,37 +117,46 @@ function TasksPageContent() {
     ...(isHead ? [{ id: "workload" as const, label: "ภาระงาน", icon: Users }] : []),
   ];
 
+  // Drilled into one person's own topic board (kanban-board.tsx's
+  // `?person=`) — a focused single-person view, not "the board" itself, so
+  // the tabs/filters/KPI cards up here (which all act on the whole visible
+  // task set, not just this person) don't apply and were just unused clutter
+  // sitting above it. PersonTopicsBoard has its own back button + header.
+  const personBoardId = searchParams.get("person");
+
   return (
     <div className="flex flex-col gap-4 lg:gap-6 pb-6">
-      <StickyFilterBar
-        actions={
-          // View switcher — same task data: Board (Kanban) ↔ Grid ↔ Workload
-          <div className="inline-flex items-center gap-1 rounded-xl bg-[var(--bg-soft)] p-1 max-w-full overflow-x-auto shrink-0">
-            {tabs.map((t) => {
-              const TabIcon = t.icon;
-              const activeTab = view === t.id;
-              return (
-                <button
-                  key={t.id}
-                  data-tour={t.id === "board" ? "task-view-board" : t.id === "grid" ? "task-view-grid" : undefined}
-                  onClick={() => setView(t.id)}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all",
-                    activeTab ? "bg-white text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
-                  )}
-                >
-                  <TabIcon className="h-3.5 w-3.5" />
-                  {t.label}
-                </button>
-              );
-            })}
-          </div>
-        }
-      >
-        <TaskFilters />
-      </StickyFilterBar>
+      {!personBoardId && (
+        <StickyFilterBar
+          actions={
+            // View switcher — same task data: Board (Kanban) ↔ Grid ↔ Workload
+            <div className="inline-flex items-center gap-1 rounded-xl bg-[var(--bg-soft)] p-1 max-w-full overflow-x-auto shrink-0">
+              {tabs.map((t) => {
+                const TabIcon = t.icon;
+                const activeTab = view === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    data-tour={t.id === "board" ? "task-view-board" : t.id === "grid" ? "task-view-grid" : undefined}
+                    onClick={() => setView(t.id)}
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all",
+                      activeTab ? "bg-white text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
+                    )}
+                  >
+                    <TabIcon className="h-3.5 w-3.5" />
+                    {t.label}
+                  </button>
+                );
+              })}
+            </div>
+          }
+        >
+          <TaskFilters />
+        </StickyFilterBar>
+      )}
 
-      {loaded && view === "board" && <TaskBoardKpis tasks={kpiTasks} />}
+      {!personBoardId && loaded && view === "board" && <TaskBoardKpis tasks={kpiTasks} />}
       {!loaded ? (
         <BoardSkeleton />
       ) : (
