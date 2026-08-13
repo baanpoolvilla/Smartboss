@@ -24,6 +24,18 @@ commit ที่เพิ่งทำก็ได้ ไม่ต้องเด
 
 ## บันทึก
 
+### 2026-08-13 13:09 — baanpoolvilla
+**fix:** จัดระยะขอบหน้า/แถบตัวกรองให้ตรงกันทั้งระบบ + ปรับปุ่มฟิลเตอร์ให้สูงเท่ากัน
+- ทำอะไร: แก้ padding ที่ AppScaffold กับแต่ละหน้า (practice, report-feed, settings) เคยประกาศซ้ำกัน
+  (pt-4 lg:pt-6 อยู่ทั้งสองที่) รวบให้เหลือจุดเดียวที่ scaffold แทน ปรับ StickyFilterBar ให้ breakpoint
+  margin ตรงกับ scaffold เป๊ะทุกจุดพัก ไม่งั้นขอบแถบตัวกรองจะเหลื่อมกับกรอบหน้าตอน resize เพิ่ม
+  backdrop-blur ตอน scroll ด้วย และปรับ filterFieldTriggerClass (ปุ่มฟิลเตอร์ทุกหน้าที่ใช้ FilterField
+  ร่วมกัน) ให้สูงคงที่ 36px เส้นขอบเต็ม 1px แทน 0.5px (กันเบลอตอน zoom) เพิ่มเงาบางๆ และ focus ring
+- ไฟล์หลัก: `components/module/app-scaffold.tsx`, `components/shared/sticky-filter-bar.tsx`,
+  `components/shared/filter-field.tsx`, หน้า practice/report-feed/settings
+- ต้องทำหลัง pull: ไม่มี migration
+- ค้างอยู่ / ต้องระวัง: ไม่มี
+
 ### 2026-08-13 13:08 — baanpoolvilla (แก้ร่วมกับ Claude)
 **feat:** จำกัดสิทธิ์เปลี่ยนหัวหน้าหลักของงานกลุ่มเหลือ CEO เท่านั้น + เพิ่มยืนยัน
 - ทำอะไร: ผู้ใช้เห็นว่าหัวหน้าหลัก (ดาว ⭐) ของงานกลุ่มเปลี่ยนได้ง่ายเกินไป — เดิมใครก็ตามที่แก้ไข
