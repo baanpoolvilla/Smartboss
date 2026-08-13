@@ -99,7 +99,7 @@ function TaskCardBody({ task, id, onOpen, dragging, lifted, refCb, style, dragPr
     <div
       id={id}
       ref={refCb}
-      style={{ ...style, borderLeftColor: priorityMeta[task.priority].accentColor }}
+      style={style}
       {...dragProps}
       onClick={() => onOpen?.(task.id)}
       onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
@@ -113,21 +113,24 @@ function TaskCardBody({ task, id, onOpen, dragging, lifted, refCb, style, dragPr
         (dragProps?.onKeyDown as ((e: KeyboardEvent<HTMLDivElement>) => void) | undefined)?.(e);
       }}
       className={cn(
-        "group relative rounded-2xl border border-l-[3px] border-[var(--line)] bg-white p-4 shadow-[0_1px_3px_rgba(16,24,40,0.07),0_1px_2px_rgba(16,24,40,0.04)] transition-all duration-200 touch-none",
+        "group relative rounded-2xl border border-[var(--line)] bg-white p-4 shadow-[0_1px_3px_rgba(16,24,40,0.07),0_1px_2px_rgba(16,24,40,0.04)] transition-all duration-200 touch-none",
         onOpen && "cursor-grab active:cursor-grabbing hover:shadow-[0_12px_28px_-10px_rgba(16,24,40,0.22)] hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--brand-green)_35%,var(--line))]",
         (dragging || lifted) && "rotate-2 scale-[1.03] shadow-xl"
       )}
     >
       <div className="flex items-center gap-2 mb-2.5">
-        {/* Priority as a quiet tinted pill — the left accent already carries the colour */}
-        <span
-          className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md"
-          style={{
-            backgroundColor: `color-mix(in srgb, ${priorityMeta[task.priority].accentColor} 12%, white)`,
-            color: priorityMeta[task.priority].accentColor,
-          }}
-        >
-          <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: priorityMeta[task.priority].accentColor }} />
+        {/* No colour block/border for priority anymore — the column header
+            already carries whichever dimension the board is grouped by
+            (status, priority, ...), so repeating it in colour here just
+            fought for attention (worst offender: "ปานกลาง" priority and
+            "เสร็จสิ้น" status happened to share the exact same green).
+            Priority survives as a plain dot + label; only "critical" gets an
+            actual colour, everything else stays a neutral gray dot. */}
+        <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-[var(--ink-soft)]">
+          <span
+            className="h-1.5 w-1.5 rounded-full shrink-0"
+            style={{ backgroundColor: task.priority === "critical" ? priorityMeta.critical.accentColor : priorityMeta.low.accentColor }}
+          />
           {priorityMeta[task.priority].label}
         </span>
 
