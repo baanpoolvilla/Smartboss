@@ -130,6 +130,12 @@ export function TaskDetailSheet({
   const [stagedAssigneeDates, setStagedAssigneeDates] = useState<Record<string, string>>({});
   const [revising, setRevising] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  // Once set, a group task's "หัวหน้าหลัก" (lead) is meant to stick —
+  // changing it reassigns accountability, not just a label — so re-picking
+  // it is CEO-only (not the wider canEditMain circle that covers the
+  // creator/dept head everywhere else on this sheet) and needs an explicit
+  // confirm instead of a bare click.
+  const [mainAssigneeTarget, setMainAssigneeTarget] = useState<{ id: string; name: string } | null>(null);
   const [newDate, setNewDate] = useState("");
   const [reason, setReason] = useState("");
   // "แก้ไขทั้งหมด" — set every assignee's due date to the same new value in
@@ -500,17 +506,24 @@ export function TaskDetailSheet({
                           <span className="text-xs truncate max-w-[100px]">{a!.name}</span>
                           {/* Head is a label only — no effect on edit/see rights, just marks
                               who's the point person on a group task. Only meaningful once
-                              there's more than one assignee to pick among. */}
+                              there's more than one assignee to pick among. Re-picking it
+                              carries real weight (accountability/scoring follow the lead),
+                              so — unlike every other field on this sheet, gated by the wider
+                              canEditMain (creator/dept head/owner) — this one is CEO-only and
+                              always confirmed, never a bare click. */}
                           {isShared && (
-                            canEditMain ? (
+                            owner ? (
                               <button
-                                onClick={() => setMainAssignee(task.id, a!.id)}
+                                onClick={() => {
+                                  if (task.mainAssigneeId === a!.id) return;
+                                  setMainAssigneeTarget({ id: a!.id, name: a!.name });
+                                }}
                                 className={cn(
                                   "shrink-0",
                                   task.mainAssigneeId === a!.id ? "text-amber-500" : "text-[var(--ink-soft)] opacity-0 group-hover:opacity-100 hover:text-amber-500"
                                 )}
                                 aria-label={task.mainAssigneeId === a!.id ? `${a!.name} เป็นหัวหน้าหลักอยู่แล้ว` : `ตั้ง ${a!.name} เป็นหัวหน้าหลัก`}
-                                title={task.mainAssigneeId === a!.id ? "หัวหน้าหลัก" : "ตั้งเป็นหัวหน้าหลัก"}
+                                title={task.mainAssigneeId === a!.id ? "หัวหน้าหลัก" : "ตั้งเป็นหัวหน้าหลัก (เฉพาะ CEO)"}
                               >
                                 <Star className="h-3 w-3" fill={task.mainAssigneeId === a!.id ? "currentColor" : "none"} />
                               </button>
@@ -1281,6 +1294,30 @@ export function TaskDetailSheet({
               onClick={confirmDelete}
             >
               ลบ
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!mainAssigneeTarget} onOpenChange={(v) => !v && setMainAssigneeTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>เปลี่ยนหัวหน้าหลักเป็น &quot;{mainAssigneeTarget?.name}&quot;?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {task.mainAssigneeId
+                ? "หัวหน้าคนเดิมจะพ้นสถานะหัวหน้าหลักทันที — ความรับผิดชอบของงานนี้จะย้ายไปที่คนใหม่"
+                : "ตั้งเป็นจุดรับผิดชอบหลักของงานนี้"}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (mainAssigneeTarget) setMainAssignee(task.id, mainAssigneeTarget.id);
+                setMainAssigneeTarget(null);
+              }}
+            >
+              ยืนยัน
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
