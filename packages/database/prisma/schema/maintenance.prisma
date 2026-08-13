@@ -83,6 +83,10 @@ model WorkOrder {
   pmScheduleId          String?   @map("pm_schedule_id")
   pmScheduleIds         String[]  @map("pm_schedule_ids")
   autoCreated           Boolean   @default(false) @map("auto_created")
+  /// จบงานแล้วต้องบันทึกค่าใช้จ่ายไหม — ใบงานที่เกิดจาก PM รับค่านี้มาจากแผน PM
+  /// (งานอย่างล้างแอร์ตามรอบที่จ้างเหมารายปีไว้แล้ว ไม่มีค่าใช้จ่ายแยกต่อครั้ง
+  ///  ถ้าบังคับให้กรอกทุกใบ คนจะกรอก 0 ไปเรื่อย ๆ จนตัวเลขรายงานเชื่อไม่ได้)
+  requiresExpense       Boolean   @default(true) @map("requires_expense")
   createdAt             DateTime  @default(now()) @map("created_at")
 
   property       Property                 @relation(fields: [propertyId], references: [id], onDelete: Cascade)
@@ -122,6 +126,11 @@ model WorkOrderExternalPhoto {
   orgId       String   @map("org_id")
   workOrderId String   @map("work_order_id")
   storagePath String   @map("storage_path")
+  /// ข้อความที่ช่างนอกพิมพ์มาพร้อมรูป — ตัดที่ 500 ตัวอักษร ว่างแล้วเก็บเป็น null
+  ///
+  /// ช่างนอกไม่มีบัญชีในระบบ จึงคอมเมนต์ตามปกติไม่ได้ เมื่อก่อนได้แต่ส่งรูปเปล่า ๆ
+  /// มาแล้วต้องโทรถามว่ารูปนี้คืออะไร
+  note        String?
   uploadedAt  DateTime @default(now()) @map("uploaded_at")
 
   workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
@@ -193,6 +202,8 @@ model PmSchedule {
   isActive          Boolean   @default(true) @map("is_active")
   assignedTo        String?   @map("assigned_to")
   ccUserIds         String[]  @map("cc_user_ids")
+  /// แผนนี้มีค่าใช้จ่ายไหม — ใบงานที่ระบบสร้างตามรอบจะรับค่านี้ไปด้วย
+  requiresExpense   Boolean   @default(true) @map("requires_expense")
   createdBy         String?   @map("created_by")
   createdAt         DateTime  @default(now()) @map("created_at")
 
