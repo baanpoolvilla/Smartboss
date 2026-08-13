@@ -296,7 +296,7 @@ function ReportFeedPageInner() {
   }
 
   return (
-    <div className="flex flex-col gap-6 h-full pt-4 lg:pt-6">
+    <div className="flex flex-col gap-6 h-full">
       <ReportHeader
         visibleTopics={visibleTopics}
         onJumpToPost={(topicId, postId) => {

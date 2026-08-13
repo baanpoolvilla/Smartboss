@@ -66,9 +66,9 @@ export function AppScaffold({
         }
       >
         {fill ? (
-          <div className="lg:h-full p-4 sm:p-5">{children}</div>
+          <div className="lg:h-full px-4 py-4 sm:px-6 sm:py-5">{children}</div>
         ) : (
-          <div className={`mx-auto w-full ${width} p-4 sm:p-5`}>{children}</div>
+          <div className={`mx-auto w-full ${width} px-4 py-4 sm:px-6 sm:py-5`}>{children}</div>
         )}
       </div>
 

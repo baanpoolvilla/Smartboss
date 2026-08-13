@@ -180,7 +180,7 @@ function SettingsPageInner() {
   }
 
   return (
-    <div className="flex flex-col gap-6 pt-4 lg:pt-6">
+    <div className="flex flex-col gap-6">
       <PageHeader title="ตั้งค่า" subtitle="การตั้งค่าทั้งหมดของระบบ รวมไว้ที่เดียว" />
 
       <div className="flex flex-col lg:flex-row gap-6 lg:items-start">

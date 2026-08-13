@@ -9,8 +9,12 @@ import type { ReactNode } from "react";
  * offset needed. Never `position: fixed`, which would fall out of `main`'s
  * own layout flow.
  *
- * `-mx-4 lg:-mx-6` + matching `px-4 lg:px-6` makes this full-bleed: `main`
- * itself carries that padding, so without canceling it here the bar would
+ * `-mx-4 sm:-mx-6` + matching `px-4 sm:px-6` makes this full-bleed and must
+ * stay in lockstep with AppScaffold's content padding (`px-4 sm:px-6`) at
+ * every breakpoint — if the two ever drift apart the bar's edge no longer
+ * lines up with the page frame (that mismatch is exactly what we just fixed).
+ * The padded content wrapper carries that padding, so without canceling it
+ * here the bar would
  * be inset like every other card and content scrolling up on either side
  * would show through past its edges instead of being covered. The opaque
  * `bg-[var(--bg-soft)]`, permanent `border-b`, and drop shadow below are
@@ -31,7 +35,7 @@ export function StickyFilterBar({
   activeChips?: ReactNode;
 }) {
   return (
-    <div className="sticky top-0 z-30 -mx-4 lg:-mx-6 px-4 lg:px-6 bg-[var(--bg-soft)] border-b border-[var(--line)] shadow-[0_4px_12px_-6px_rgba(0,0,0,0.15)] py-3 flex flex-col gap-3">
+    <div className="sticky top-0 z-30 -mx-4 px-4 sm:-mx-6 sm:px-6 bg-[var(--bg-soft)]/95 backdrop-blur-sm border-b border-[var(--line)] shadow-[0_4px_12px_-6px_rgba(0,0,0,0.15)] py-3 flex flex-col gap-3">
       {(title || actions) && (
         <div className="flex flex-wrap items-start justify-between gap-3">
           {title && (
