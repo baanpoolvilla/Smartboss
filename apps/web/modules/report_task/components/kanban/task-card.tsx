@@ -115,7 +115,12 @@ function TaskCardBody({ task, id, onOpen, dragging, lifted, refCb, style, dragPr
       className={cn(
         "group relative rounded-2xl border border-[var(--line)] bg-white p-4 shadow-[0_1px_3px_rgba(16,24,40,0.07),0_1px_2px_rgba(16,24,40,0.04)] transition-all duration-200 touch-none",
         onOpen && "cursor-grab active:cursor-grabbing hover:shadow-[0_12px_28px_-10px_rgba(16,24,40,0.22)] hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--brand-green)_35%,var(--line))]",
-        (dragging || lifted) && "rotate-2 scale-[1.03] shadow-xl"
+        (dragging || lifted) && "rotate-2 scale-[1.03] shadow-xl",
+        // A done card should read as "settled" at a glance even sitting next
+        // to open ones in a column that isn't grouped by status (priority,
+        // assignee) — the checkbox + strikethrough alone turned out too
+        // subtle to notice (see below), so the whole card recedes too.
+        isDone && "opacity-70"
       )}
     >
       <div className="flex items-center gap-2 mb-2.5">
@@ -125,14 +130,24 @@ function TaskCardBody({ task, id, onOpen, dragging, lifted, refCb, style, dragPr
             fought for attention (worst offender: "ปานกลาง" priority and
             "เสร็จสิ้น" status happened to share the exact same green).
             Priority survives as a plain dot + label; only "critical" gets an
-            actual colour, everything else stays a neutral gray dot. */}
-        <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-[var(--ink-soft)]">
-          <span
-            className="h-1.5 w-1.5 rounded-full shrink-0"
-            style={{ backgroundColor: task.priority === "critical" ? priorityMeta.critical.accentColor : priorityMeta.low.accentColor }}
-          />
-          {priorityMeta[task.priority].label}
-        </span>
+            actual colour, everything else stays a neutral gray dot. Once a
+            task is done, priority stops mattering — swap it for an explicit
+            "เสร็จแล้ว" badge in the same spot instead, since that's the one
+            thing worth knowing at a glance now. */}
+        {isDone ? (
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--brand-green)_14%,white)] text-[var(--brand-green-dark)]">
+            <Check className="h-2.5 w-2.5" strokeWidth={3} />
+            เสร็จแล้ว
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-[var(--ink-soft)]">
+            <span
+              className="h-1.5 w-1.5 rounded-full shrink-0"
+              style={{ backgroundColor: task.priority === "critical" ? priorityMeta.critical.accentColor : priorityMeta.low.accentColor }}
+            />
+            {priorityMeta[task.priority].label}
+          </span>
+        )}
 
         <div className="ml-auto flex items-center gap-1.5">
           {suspicious && (
@@ -177,7 +192,7 @@ function TaskCardBody({ task, id, onOpen, dragging, lifted, refCb, style, dragPr
                   className={cn(
                     "mt-0.5 h-4.5 w-4.5 rounded-full flex items-center justify-center shrink-0 transition-all",
                     myPartDone
-                      ? "bg-[var(--brand-green)] text-[var(--ink)]"
+                      ? "bg-[var(--brand-green)] text-white"
                       : "text-[var(--line)] hover:text-[var(--brand-green)] hover:scale-110",
                     isShared && !iAmAssignee && "opacity-50 hover:scale-100 cursor-default"
                   )}
