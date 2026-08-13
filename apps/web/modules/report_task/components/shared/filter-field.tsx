@@ -20,11 +20,16 @@ export function filterFieldTriggerClass(active: boolean, widthClass = "") {
   );
 }
 
-/** Label + field wrapper — pass the Select/box as `children`. */
-export function FilterField({ label, children }: { label: string; children: ReactNode }) {
+/** Label + field wrapper — pass the Select/box as `children`. `labelExtra`
+ * renders right after the label (e.g. an info icon for a field whose
+ * options need a one-line explanation). */
+export function FilterField({ label, labelExtra, children }: { label: string; labelExtra?: ReactNode; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className={FILTER_FIELD_LABEL_CLASS}>{label}</span>
+      <span className={cn(FILTER_FIELD_LABEL_CLASS, "flex items-center gap-1")}>
+        {label}
+        {labelExtra}
+      </span>
       {children}
     </div>
   );

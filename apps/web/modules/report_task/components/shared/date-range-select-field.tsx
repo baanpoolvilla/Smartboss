@@ -11,9 +11,10 @@ import {
   SelectValue,
 } from "@/modules/report_task/components/ui/select";
 import { Input } from "@/modules/report_task/components/ui/input";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/modules/report_task/components/ui/tooltip";
 import { FilterField, filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
 import { datePresetLabels, datePresetGroups, type DatePreset } from "@/modules/report_task/lib/date-filter";
-import { CalendarClock } from "lucide-react";
+import { CalendarClock, Info } from "lucide-react";
 
 /**
  * The boxed "ช่วงเวลา" filter field — full 12-preset `DatePreset` dropdown +
@@ -39,7 +40,27 @@ export function DateRangeSelectField({
 }) {
   return (
     <>
-      <FilterField label="ช่วงเวลา">
+      <FilterField
+        label="ช่วงเวลา"
+        labelExtra={
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button type="button" className="text-[var(--ink-soft)] hover:text-[var(--ink)]" aria-label="ความหมายของแต่ละช่วงเวลา">
+                  <Info className="h-3 w-3" />
+                </button>
+              }
+            />
+            <TooltipContent className="max-w-[260px]">
+              <b>สะสมราย(สัปดาห์/เดือน/ปี)</b> = นับตั้งแต่ต้นรอบนั้นถึง<b>วันนี้</b>เท่านั้น (รอบยังไม่จบ)
+              <br />
+              <b>(สัปดาห์/เดือน/ปี)นี้</b> = ทั้งรอบเต็มๆ ตั้งแต่ต้นจนจบ (รวมวันที่ยังไม่ถึงด้วย)
+              <br />
+              <b>(สัปดาห์/เดือน/ปี)ที่แล้ว</b> = รอบก่อนหน้าทั้งรอบ
+            </TooltipContent>
+          </Tooltip>
+        }
+      >
         <Select value={preset} onValueChange={(v) => v && onPresetChange(v as DatePreset)}>
           <SelectTrigger className={filterFieldTriggerClass(preset !== "all", widthClass)}>
             <CalendarClock className="h-4 w-4 shrink-0" />
