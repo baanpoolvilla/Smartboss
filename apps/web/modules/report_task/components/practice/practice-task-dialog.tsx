@@ -2,6 +2,16 @@
 
 import { useState } from "react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/modules/report_task/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/modules/report_task/components/ui/alert-dialog";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
@@ -66,6 +76,16 @@ export function PracticeTaskDialog({
     onOpenChange(false);
   }
 
+  const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
+
+  function requestClose(nextOpen: boolean) {
+    if (!nextOpen && isCreate && title.trim() !== "") {
+      setConfirmDiscardOpen(true);
+      return;
+    }
+    onOpenChange(nextOpen);
+  }
+
   function handleAssign(id: string) {
     if (!task) return;
     setAssignees(task.id, [id]);
@@ -87,7 +107,7 @@ export function PracticeTaskDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={requestClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{isCreate ? "สร้างงานใหม่" : task!.title}</DialogTitle>
@@ -199,11 +219,32 @@ export function PracticeTaskDialog({
 
         {isCreate && (
           <DialogFooter>
-            <Button variant="outline" onClick={() => onOpenChange(false)}>ยกเลิก</Button>
+            <Button variant="outline" onClick={() => requestClose(false)}>ยกเลิก</Button>
             <Button disabled={!title.trim()} onClick={handleCreate}>สร้างงาน</Button>
           </DialogFooter>
         )}
       </DialogContent>
+
+      <AlertDialog open={confirmDiscardOpen} onOpenChange={setConfirmDiscardOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>ทิ้งข้อมูลที่กรอกไว้?</AlertDialogTitle>
+            <AlertDialogDescription>ยังไม่ได้บันทึก ถ้าปิดตอนนี้ข้อมูลที่กรอกไว้จะหายไป</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>กรอกต่อ</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-[var(--chart-red)] hover:bg-red-700 text-white"
+              onClick={() => {
+                setConfirmDiscardOpen(false);
+                onOpenChange(false);
+              }}
+            >
+              ทิ้งข้อมูล
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

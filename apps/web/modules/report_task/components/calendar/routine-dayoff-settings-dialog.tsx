@@ -5,8 +5,9 @@ import { Button } from "@/modules/report_task/components/ui/button";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { departments, getUser } from "@/modules/report_task/lib/directory";
 import { useRoutineDayOffStore } from "@/modules/report_task/store/routine-dayoff-store";
-import { CalendarOff, Wand2, Building2, Users, Save } from "lucide-react";
+import { CalendarOff, Wand2, Building2, Users, Save, Info } from "lucide-react";
 import { cn } from "@/modules/report_task/lib/utils";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/modules/report_task/components/ui/tooltip";
 
 interface Draft {
   companyMonthlyQuota: number;
@@ -35,6 +36,19 @@ export function RoutineDayOffSettingsPanel() {
             <CalendarOff className="h-4 w-4" />
           </span>
           ตั้งค่าวันหยุดประจำ
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button type="button" className="text-[var(--ink-soft)] hover:text-[var(--ink)]" aria-label="วันหยุดประจำต่างจากการลาปกติยังไง">
+                  <Info className="h-3.5 w-3.5" />
+                </button>
+              }
+            />
+            <TooltipContent className="max-w-[260px]">
+              วันหยุดประจำ = วันที่พนักงานเลือกหยุดเองได้ตามโควตาต่อเดือน (เช่น เสาร์สลับ) — แยกจากการลาปกติ (ลาป่วย/ลากิจ ฯลฯ)
+              ซึ่งตั้งค่าแยกที่ &quot;จัดการประเภทการลา&quot;
+            </TooltipContent>
+          </Tooltip>
         </h2>
         <p className="text-sm text-[var(--ink-soft)] mt-1">
           กำหนดว่าพนักงานเลือกวันหยุดของตัวเองได้เดือนละกี่วัน — ถ้าเลือกเกินโควตาจะลงเพิ่มไม่ได้ — แผนกที่เพิ่มเข้าระบบใหม่จะโผล่ในนี้ให้เองอัตโนมัติ

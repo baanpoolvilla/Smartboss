@@ -3,6 +3,16 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/modules/report_task/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/modules/report_task/components/ui/alert-dialog";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
 import { Button } from "@/modules/report_task/components/ui/button";
@@ -295,6 +305,7 @@ export function GoogleCalendarPane() {
   const [newShared, setNewShared] = useState(true);
   const [saving, setSaving] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<ExternalCalendarLink | null>(null);
 
   const links = linksByUser[viewingAsUserId] ?? [];
 
@@ -407,7 +418,7 @@ export function GoogleCalendarPane() {
                     </p>
                   </div>
                   <button
-                    onClick={() => handleRemove(link.id)}
+                    onClick={() => setRemoveTarget(link)}
                     disabled={removingId === link.id}
                     title="ยกเลิกการเชื่อมต่อ"
                     className="text-[var(--chart-red)] hover:opacity-70 disabled:opacity-40 shrink-0"
@@ -426,6 +437,29 @@ export function GoogleCalendarPane() {
           })}
         </div>
       )}
+
+      <AlertDialog open={!!removeTarget} onOpenChange={(v) => !v && setRemoveTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>ยกเลิกการเชื่อมต่อ &quot;{removeTarget?.label}&quot;?</AlertDialogTitle>
+            <AlertDialogDescription>
+              ปฏิทินนี้จะไม่ถูกดึงข้อมูลเข้ามาอีก ถ้าต้องการดูใหม่ต้องเชื่อมต่อลิงก์นี้ซ้ำ
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-[var(--chart-red)] hover:bg-red-700 text-white"
+              onClick={() => {
+                if (removeTarget) handleRemove(removeTarget.id);
+                setRemoveTarget(null);
+              }}
+            >
+              ยกเลิกการเชื่อมต่อ
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <div className="rounded-xl border border-dashed border-[var(--line)] p-5 flex flex-col items-start gap-3">
         <p className="flex items-center gap-1.5 text-sm font-medium">

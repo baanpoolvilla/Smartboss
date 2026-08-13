@@ -1,7 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Badge } from "@/modules/report_task/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/modules/report_task/components/ui/alert-dialog";
 import { useDashboardLayoutStore } from "@/modules/report_task/store/dashboard-layout-store";
 import { widgetRegistry } from "./widget-registry";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -25,6 +36,7 @@ export function DashboardCustomizeBar({ onDone }: DashboardCustomizeBarProps) {
   // pickable toggle or crash on widgetRegistry[w.id].
   const pickable = widgets.filter((w) => w.id in widgetRegistry && canViewWidget(w.id, viewingAsUserId));
   const hidden = pickable.filter((w) => !w.visible);
+  const [confirmResetOpen, setConfirmResetOpen] = useState(false);
 
   return (
     <div className="rounded-xl border border-dashed border-[var(--brand-green)]/50 bg-[var(--accent)]/40 p-3 space-y-2">
@@ -36,7 +48,7 @@ export function DashboardCustomizeBar({ onDone }: DashboardCustomizeBarProps) {
           ลากที่ <span className="font-medium text-[var(--ink)]">⠿</span> เพื่อสลับตำแหน่ง · กด 1/3 · 2/3 · เต็ม เพื่อปรับความกว้าง · กดรูปตาปิดเพื่อซ่อน
         </span>
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={reset}>
+          <Button variant="outline" size="sm" onClick={() => setConfirmResetOpen(true)}>
             <RotateCcw className="h-3.5 w-3.5" /> จัดเรียงใหม่
           </Button>
           <Button
@@ -74,6 +86,29 @@ export function DashboardCustomizeBar({ onDone }: DashboardCustomizeBarProps) {
           <span className="text-[10px] text-[var(--ink-soft)] ml-1">ซ่อนอยู่ {hidden.length} รายการ</span>
         )}
       </div>
+
+      <AlertDialog open={confirmResetOpen} onOpenChange={setConfirmResetOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>จัดเรียงแดชบอร์ดใหม่ทั้งหมด?</AlertDialogTitle>
+            <AlertDialogDescription>
+              ตำแหน่ง ความกว้าง และวิดเจ็ตที่ซ่อนไว้ทั้งหมดจะกลับไปเป็นค่าเริ่มต้น — ย้อนกลับไม่ได้
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-[var(--chart-red)] hover:bg-red-700 text-white"
+              onClick={() => {
+                reset();
+                setConfirmResetOpen(false);
+              }}
+            >
+              จัดเรียงใหม่
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -12,6 +12,16 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/modules/report_task/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/modules/report_task/components/ui/alert-dialog";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Textarea } from "@/modules/report_task/components/ui/textarea";
@@ -73,6 +83,12 @@ export function IssueReportDialog({
   const [submitting, setSubmitting] = useState(false);
   const [shareWithHead, setShareWithHead] = useState(defaultShareWithHead(enabledCategories[0] ?? "bug"));
   const shareWithHeadTouched = useRef(false);
+  const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
+
+  const isDirty =
+    title.trim() !== "" ||
+    description.trim() !== DESCRIPTION_TEMPLATE.trim() ||
+    attachments.length > 0;
 
   const showImpact = !NON_IMPACT_CATEGORIES.includes(category);
   const reporterDept = getDepartment(getUser(viewingAsUserId)?.departmentId ?? "");
@@ -126,14 +142,17 @@ export function IssueReportDialog({
     }
   }
 
+  function requestClose(next: boolean) {
+    if (!next && isDirty) {
+      setConfirmDiscardOpen(true);
+      return;
+    }
+    if (!next) reset();
+    onOpenChange(next);
+  }
+
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) reset();
-        onOpenChange(next);
-      }}
-    >
+    <Dialog open={open} onOpenChange={requestClose}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>แจ้งปัญหาการใช้งาน</DialogTitle>
@@ -252,7 +271,7 @@ export function IssueReportDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>ยกเลิก</Button>
+          <Button variant="outline" onClick={() => requestClose(false)}>ยกเลิก</Button>
           <Button
             disabled={submitting}
             className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
@@ -262,6 +281,30 @@ export function IssueReportDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <AlertDialog open={confirmDiscardOpen} onOpenChange={setConfirmDiscardOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>ทิ้งข้อมูลที่กรอกไว้?</AlertDialogTitle>
+            <AlertDialogDescription>
+              ยังไม่ได้ส่ง ถ้าปิดตอนนี้รายละเอียดปัญหาที่กรอกไว้จะหายไป
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>กรอกต่อ</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-[var(--chart-red)] hover:bg-red-700 text-white"
+              onClick={() => {
+                setConfirmDiscardOpen(false);
+                reset();
+                onOpenChange(false);
+              }}
+            >
+              ทิ้งข้อมูล
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

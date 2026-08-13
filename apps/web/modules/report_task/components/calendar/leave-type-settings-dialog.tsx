@@ -2,6 +2,17 @@
 
 import { createElement, useEffect, useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/modules/report_task/components/ui/alert-dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/modules/report_task/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Input } from "@/modules/report_task/components/ui/input";
@@ -12,7 +23,7 @@ import { countryHolidayGrantResolver } from "@/modules/report_task/lib/holiday-g
 import { leaveIconRegistry, leaveIconNames, leaveIconOf } from "@/modules/report_task/lib/leave-icons";
 import { chartColors } from "@/modules/report_task/lib/chart-colors";
 import { cn } from "@/modules/report_task/lib/utils";
-import { Plus, Trash2, Check, Loader2, ChevronLeft, ChevronRight, Save } from "lucide-react";
+import { Plus, Trash2, Check, Loader2, ChevronLeft, ChevronRight, Save, Info } from "lucide-react";
 import { toast } from "sonner";
 
 interface Country {
@@ -135,7 +146,23 @@ function MonthlyQuotaFields({ t, updateType }: { t: LeaveTypeDef; updateType: (i
   return (
     <div className="rounded-lg bg-[var(--bg-soft)]/70 p-2.5 space-y-2.5">
       <div className={rowCls}>
-        <span className={labelCls}>วิธีให้วันลา</span>
+        <span className={cn(labelCls, "flex items-center gap-1")}>
+          วิธีให้วันลา
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button type="button" className="text-[var(--ink-soft)] hover:text-[var(--ink)]" aria-label="ความหมายของวิธีให้วันลา">
+                  <Info className="h-3 w-3" />
+                </button>
+              }
+            />
+            <TooltipContent className="max-w-[260px]">
+              <b>กำหนดจำนวนวันเอง</b> = พิมพ์จำนวนวันที่ให้ต่อเดือนตายตัวเอง
+              <br />
+              <b>อิงวันหยุดราชการของประเทศ</b> = ระบบนับจำนวนวันหยุดราชการของประเทศที่เลือกในเดือนนั้นๆ แล้วให้เท่ากับจำนวนวันหยุดนั้นโดยอัตโนมัติ (แก้ไขเฉพาะเดือนได้ถ้าต้องการ)
+            </TooltipContent>
+          </Tooltip>
+        </span>
         <Select value={source} onValueChange={(v) => v && updateType(t.id, { monthlySource: v as "fixed" | "country" })}>
           <SelectTrigger className="w-full">
             <SelectValue>{source === "country" ? "อิงวันหยุดราชการของประเทศ" : "กำหนดจำนวนวันเอง"}</SelectValue>
@@ -265,6 +292,7 @@ export function LeaveTypeSettingsPanel() {
   const setTypes = useLeaveTypeStore((s) => s.setTypes);
   const [draft, setDraft] = useState<LeaveTypeDef[]>(storedTypes);
   const [newLabel, setNewLabel] = useState("");
+  const [removeTarget, setRemoveTarget] = useState<LeaveTypeDef | null>(null);
 
   function updateDraft(id: string, patch: Partial<Omit<LeaveTypeDef, "id">>) {
     setDraft((d) => d.map((x) => (x.id === id ? { ...x, ...patch } : x)));
@@ -311,7 +339,7 @@ export function LeaveTypeSettingsPanel() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => removeDraft(t.id)}
+                  onClick={() => setRemoveTarget(t)}
                   disabled={draft.length <= 1}
                   title={draft.length <= 1 ? "ต้องมีอย่างน้อย 1 ประเภท" : "ลบ"}
                   aria-label={`ลบประเภทการลา ${t.label}`}
@@ -334,6 +362,23 @@ export function LeaveTypeSettingsPanel() {
                     ))}
                   </SelectContent>
                 </Select>
+
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <button type="button" className="text-[var(--ink-soft)] hover:text-[var(--ink)] shrink-0" aria-label="ความหมายของแต่ละประเภทโควตา">
+                        <Info className="h-3.5 w-3.5" />
+                      </button>
+                    }
+                  />
+                  <TooltipContent className="max-w-[260px]">
+                    <b>ไม่จำกัด</b> = ลาได้ไม่มีเพดาน ไม่มีการนับโควตา
+                    <br />
+                    <b>โควตาต่อปี</b> = ให้จำนวนวันครั้งเดียวตอนต้นปี ใช้หมดแล้วลาเพิ่มไม่ได้จนขึ้นปีใหม่
+                    <br />
+                    <b>สะสมรายเดือน</b> = ให้วันลาใหม่ทุกเดือนอัตโนมัติ วันที่ไม่ได้ใช้จะสะสมต่อไปจนกว่าจะหมดอายุ (ถ้าตั้งไว้)
+                  </TooltipContent>
+                </Tooltip>
 
                 {t.quotaMode === "annual" && (
                   <Input
@@ -377,6 +422,29 @@ export function LeaveTypeSettingsPanel() {
       <Button onClick={save}>
         <Save className="h-4 w-4" /> บันทึก
       </Button>
+
+      <AlertDialog open={!!removeTarget} onOpenChange={(v) => !v && setRemoveTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>ลบประเภทการลา &quot;{removeTarget?.label}&quot;?</AlertDialogTitle>
+            <AlertDialogDescription>
+              ยังไม่มีผลจนกว่าจะกด &quot;บันทึก&quot; แต่จะหายจากรายการด้านบนทันที
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-[var(--chart-red)] hover:bg-red-700 text-white"
+              onClick={() => {
+                if (removeTarget) removeDraft(removeTarget.id);
+                setRemoveTarget(null);
+              }}
+            >
+              ลบ
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

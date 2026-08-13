@@ -8,6 +8,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/modules/report_task/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/modules/report_task/components/ui/alert-dialog";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Label } from "@/modules/report_task/components/ui/label";
@@ -693,6 +703,30 @@ export function NewTaskDialog({
     setChecklistItems((prev) => prev.filter((c) => c.id !== id));
   }
 
+  // Any of these being filled in means closing the dialog would throw away
+  // real work, so a plain click on "ยกเลิก"/overlay/Esc must be confirmed.
+  const isDirty =
+    title.trim() !== "" ||
+    description.trim() !== "" ||
+    assigneeIds.length > 0 ||
+    checklistItems.length > 0 ||
+    (itemType === "meeting" && meetLocation.trim() !== "");
+
+  const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
+
+  function requestClose(nextOpen: boolean) {
+    if (!nextOpen && isDirty) {
+      setConfirmDiscardOpen(true);
+      return;
+    }
+    onOpenChange(nextOpen);
+  }
+
+  function discardAndClose() {
+    setConfirmDiscardOpen(false);
+    onOpenChange(false);
+  }
+
   function confirmCreateProjectTopic() {
     const name = newTopicName.trim();
     if (!name) return;
@@ -777,7 +811,7 @@ export function NewTaskDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={requestClose}>
       <DialogContent className="sm:max-w-lg max-h-[92vh] overflow-y-auto overflow-x-hidden p-0 gap-0">
         <DialogHeader className="px-5 pt-5 pb-3 space-y-3">
           <DialogTitle>
@@ -1560,7 +1594,7 @@ export function NewTaskDialog({
         </div>
 
         <DialogFooter className="px-5 py-4 border-t border-[var(--line)]">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>ยกเลิก</Button>
+          <Button variant="outline" onClick={() => requestClose(false)} disabled={submitting}>ยกเลิก</Button>
           <Button
             className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
             onClick={handleSubmit}
@@ -1577,6 +1611,26 @@ export function NewTaskDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <AlertDialog open={confirmDiscardOpen} onOpenChange={setConfirmDiscardOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>ทิ้งข้อมูลที่กรอกไว้?</AlertDialogTitle>
+            <AlertDialogDescription>
+              ยังไม่ได้บันทึก ถ้าปิดตอนนี้ข้อมูลที่กรอกไว้ทั้งหมดจะหายไป
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>กรอกต่อ</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-[var(--chart-red)] hover:bg-red-700 text-white"
+              onClick={discardAndClose}
+            >
+              ทิ้งข้อมูล
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

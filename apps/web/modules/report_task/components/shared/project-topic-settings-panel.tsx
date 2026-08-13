@@ -2,6 +2,16 @@
 
 import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/modules/report_task/components/ui/alert-dialog";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
@@ -55,6 +65,7 @@ export function ProjectTopicSettingsPanel() {
   const setTopics = useProjectTopicStore((s) => s.setTopics);
   const [draft, setDraft] = useState<ProjectTopic[]>(storedTopics);
   const [newLabel, setNewLabel] = useState("");
+  const [removeTarget, setRemoveTarget] = useState<ProjectTopic | null>(null);
 
   function updateDraft(id: string, patch: Partial<Omit<ProjectTopic, "id">>) {
     setDraft((d) => d.map((x) => (x.id === id ? { ...x, ...patch } : x)));
@@ -108,7 +119,7 @@ export function ProjectTopicSettingsPanel() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => removeDraft(t.id)}
+              onClick={() => setRemoveTarget(t)}
               title="ลบ"
               aria-label={`ลบหัวข้อโปรเจค ${t.name}`}
             >
@@ -134,6 +145,30 @@ export function ProjectTopicSettingsPanel() {
       <Button onClick={save}>
         <Save className="h-4 w-4" /> บันทึก
       </Button>
+
+      <AlertDialog open={!!removeTarget} onOpenChange={(v) => !v && setRemoveTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>ลบหัวข้อโปรเจค &quot;{removeTarget?.name}&quot;?</AlertDialogTitle>
+            <AlertDialogDescription>
+              งานที่เคยติดหัวข้อนี้จะกลายเป็น &quot;ไม่ระบุหัวข้อโปรเจค&quot; แทน (ไม่ได้ถูกลบไปด้วย) —
+              ยังไม่มีผลจนกว่าจะกด &quot;บันทึก&quot;
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-[var(--chart-red)] hover:bg-red-700 text-white"
+              onClick={() => {
+                if (removeTarget) removeDraft(removeTarget.id);
+                setRemoveTarget(null);
+              }}
+            >
+              ลบ
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
