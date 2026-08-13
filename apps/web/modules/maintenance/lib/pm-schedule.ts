@@ -46,10 +46,33 @@ export function freqMonths(value: string): number | null {
 export function freqWeekDays(value: string): number | null {
   return freq(value).weekDays;
 }
+/**
+ * จำนวนรอบต่อปีสูงสุด = จำนวนช่องที่ยังตกอยู่ในปีเดียวกันนับจากวันตั้งต้น
+ *
+ * ⚠ ปัด **ขึ้น** ไม่ใช่ลง — ทุก 7 เดือนได้ช่องที่เดือน 0 กับ 7 = 2 รอบ ไม่ใช่ 1
+ * ตอนปัดลงจะได้ 1 แล้วโดนเงื่อนไข "> 1" ตัดทิ้ง กลายเป็นเลือกอะไรไม่ได้เลย
+ * (ความถี่แบบสัปดาห์ไม่ใช้ระบบรอบต่อปี จึงคืน 0)
+ */
 export function maxRoundsPerYear(value: string): number {
   const m = freq(value).months;
   if (m == null) return 0;
-  return Math.floor(12 / m);
+  return Math.ceil(12 / m);
+}
+
+/**
+ * ตัวเลือก "ทำกี่รอบต่อปี" ที่ให้ผลต่างจากแบบทำต่อเนื่องจริง ๆ
+ *
+ * ถ้า 12 หารด้วยความถี่ลงตัว (ทุก 3 เดือน → 4 รอบ) การทำครบทุกช่องคือแบบ
+ * ต่อเนื่องอยู่แล้ว จึงตัดตัวเลือกสุดท้ายออกไม่ให้มีสองทางที่ผลเหมือนกัน
+ * แต่ถ้าหารไม่ลงตัว (ทุก 7 เดือน → 25/2, 25/9 แล้ววนกลับ 25/2 ปีหน้า)
+ * รอบสุดท้ายยังต่างจากต่อเนื่อง จึงต้องเลือกได้
+ */
+export function roundsPerYearOptions(value: string): number[] {
+  const m = freq(value).months;
+  if (m == null || m >= 12) return [];
+  const max = maxRoundsPerYear(value);
+  const last = 12 % m === 0 ? max - 1 : max;
+  return Array.from({ length: Math.max(0, last) }, (_, i) => i + 1);
 }
 
 const MS_PER_DAY = 86_400_000;

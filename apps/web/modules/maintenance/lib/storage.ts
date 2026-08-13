@@ -6,6 +6,7 @@ import {
   S3Client,
   PutObjectCommand,
   GetObjectCommand,
+  DeleteObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -155,6 +156,43 @@ export async function getSignedFileUrl(key: string): Promise<string | null> {
     new GetObjectCommand({ Bucket: S3_BUCKET, Key: key }),
     { expiresIn: SIGNED_URL_TTL_SECONDS }
   );
+}
+
+/**
+ * ลบไฟล์ที่ไม่มีใครอ้างถึงแล้ว — รับได้ทั้ง key ล้วนและ URL `/api/files/<key>`
+ *
+ * **ไม่โยน error เมื่อลบไม่ได้** โดยตั้งใจ: ผู้เรียกมักลบไฟล์หลังลบแถวในฐานข้อมูล
+ * สำเร็จแล้ว ถ้าปล่อยให้ล้มตรงนี้ ผู้ใช้จะเห็น error ทั้งที่สิ่งที่เขาสั่ง (ลบคอมเมนต์)
+ * ทำสำเร็จไปแล้ว · ผลเสียของไฟล์ค้างคือเปลืองพื้นที่ ซึ่งเบากว่าการทำให้ผู้ใช้สับสน
+ *
+ * @returns true = ลบแล้ว · false = ลบไม่ได้ (ไฟล์ค้างอยู่ ไม่มีผลกับข้อมูล)
+ */
+export async function deleteFile(urlOrKey: string): Promise<boolean> {
+  const key = urlOrKey.replace(/^\/api\/files\//, "");
+  if (!key || key.includes("..")) return false;
+
+  try {
+    if (isRemoteStorage()) {
+      await getS3().send(
+        new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: key })
+      );
+      return true;
+    }
+    const base = path.resolve(uploadDir());
+    const full = path.resolve(path.join(uploadDir(), key));
+    if (!full.startsWith(base)) return false; // กัน path traversal เหมือน readStoredFile
+    await fs.unlink(full);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** ลบหลายไฟล์ — คืนจำนวนที่ลบสำเร็จ */
+export async function deleteFiles(urlsOrKeys: string[]): Promise<number> {
+  let n = 0;
+  for (const u of urlsOrKeys) if (await deleteFile(u)) n++;
+  return n;
 }
 
 /** อ่านไฟล์จาก local disk (โหมด dev เท่านั้น) */

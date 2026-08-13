@@ -79,6 +79,9 @@ export async function createWorkOrderAction(formData: FormData) {
     pmScheduleId: d.pmScheduleId || null,
     pmScheduleIds,
     photoUrls,
+    // ติ๊ก "ไม่มีค่าใช้จ่าย" ⇒ requiresExpense = false
+    // ⚠ ใบงานที่เกิดจาก PM ใช้ค่าจากแผน PM แทน (ดู modules/maintenance/data/cron.ts)
+    requiresExpense: formData.get("noExpense") !== "1",
   });
 
   // แจ้งเตือนผู้รับผิดชอบ + CC (in-app + LINE)

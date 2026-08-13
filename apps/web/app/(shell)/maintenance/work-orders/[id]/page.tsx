@@ -134,7 +134,11 @@ export default async function WorkOrderDetailPage({
   const overdue =
     wo.dueDate != null && wo.dueDate < new Date() && wo.status !== "completed";
   const isOpenOrRunning = wo.status !== "completed" && wo.status !== "cancelled";
-  const externalUrls = externalPhotos.map((p) => p.storagePath);
+  // ช่างนอกส่งข้อความเปล่าได้ (ไม่มีรูป) แถวแบบนั้น storagePath เป็นค่าว่าง
+  const externalUrls = externalPhotos
+    .map((p) => p.storagePath)
+    .filter((u) => u !== "");
+  const externalNotes = externalPhotos.filter((p) => p.note);
 
   return (
     <AppScaffold
@@ -250,6 +254,14 @@ export default async function WorkOrderDetailPage({
             valueColor="#0D9488"
           />
         )}
+        {!wo.requiresExpense && (
+          <InfoRow
+            icon={<Info className="h-5 w-5" />}
+            label="ค่าใช้จ่าย"
+            value="งานนี้ไม่มีค่าใช้จ่าย — ปิดงานได้โดยไม่ต้องกรอก"
+            valueColor="#0D9488"
+          />
+        )}
       </Card>
 
       {/* ─── ลิงก์ส่งรูปสำหรับช่างภายนอก ─── */}
@@ -274,14 +286,31 @@ export default async function WorkOrderDetailPage({
         </SectionCard>
       )}
 
-      {/* ─── รูปจากช่างภายนอก ─── */}
-      {externalUrls.length > 0 && (
+      {/* ─── รูปและข้อความจากช่างภายนอก ─── */}
+      {(externalUrls.length > 0 || externalNotes.length > 0) && (
         <SectionCard
           className="mb-4"
           icon={<CloudUpload className="h-4 w-4" style={{ color: "#0D9488" }} />}
-          title={`รูปจากช่างภายนอก (${externalUrls.length})`}
+          title={`จากช่างภายนอก (${externalUrls.length} รูป${
+            externalNotes.length > 0 ? ` · ${externalNotes.length} ข้อความ` : ""
+          })`}
         >
-          <PhotoStrip urls={externalUrls} />
+          {externalUrls.length > 0 && <PhotoStrip urls={externalUrls} />}
+          {externalNotes.length > 0 && (
+            <ul className="mt-3 flex flex-col gap-2">
+              {externalNotes.map((n) => (
+                <li
+                  key={n.id}
+                  className="rounded-(--radius) bg-(--bg-soft) p-2.5 text-sm whitespace-pre-wrap text-(--ink)"
+                >
+                  {n.note}
+                  <span className="mt-1 block text-xs text-(--ink-soft)">
+                    {fmtThaiDateTime(n.uploadedAt)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </SectionCard>
       )}
 
@@ -387,6 +416,7 @@ export default async function WorkOrderDetailPage({
                 id={id}
                 action={completeWorkOrderAction}
                 externalPhotoCount={externalUrls.length}
+                requiresExpense={wo.requiresExpense}
               />
             )}
           </>

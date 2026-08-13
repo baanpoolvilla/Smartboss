@@ -11,6 +11,7 @@ import {
   updatePurchaseOrder,
   deletePurchaseOrder,
   addPoComment,
+  deletePoComment,
 } from "@/modules/maintenance/data/purchase-orders";
 import {
   createEquipmentReturn,
@@ -20,7 +21,7 @@ import {
 } from "@/modules/maintenance/data/equipment-returns";
 import { createExpense } from "@/modules/maintenance/data/expenses";
 import { notifyUser } from "@/modules/maintenance/data/notify";
-import { putFile, putFiles } from "@/modules/maintenance/lib/storage";
+import { putFile, putFiles, deleteFiles } from "@/modules/maintenance/lib/storage";
 import {
   poItemsFromJson,
   poItemsToJson,
@@ -311,6 +312,29 @@ export async function addPoCommentAction(poId: string, formData: FormData) {
     content || "📷",
     imageUrl ? [imageUrl] : []
   );
+  revalidatePath(`/maintenance/purchase-orders/${poId}`);
+}
+
+/**
+ * ลบคอมเมนต์ PO พร้อมเก็บกวาดรูปใน storage
+ *
+ * ลบแถวก่อนแล้วค่อยลบไฟล์ — ถ้าลบไฟล์ก่อนแล้วลบแถวล้ม จะเหลือคอมเมนต์ที่มี
+ * รูปเสียค้างอยู่ ซึ่งแย่กว่าไฟล์กำพร้าที่แค่เปลืองพื้นที่
+ */
+export async function deletePoCommentAction(poId: string, formData: FormData) {
+  const s = await requireOrg();
+  if (!hasPermission(s, MAINT_PERMS.poView)) return;
+  const commentId = String(formData.get("commentId") ?? "");
+  if (!commentId) return;
+
+  const images = await deletePoComment(
+    s.orgId,
+    commentId,
+    s.userId,
+    hasPermission(s, MAINT_PERMS.poApprove)
+  );
+  if (images.length > 0) await deleteFiles(images);
+
   revalidatePath(`/maintenance/purchase-orders/${poId}`);
 }
 

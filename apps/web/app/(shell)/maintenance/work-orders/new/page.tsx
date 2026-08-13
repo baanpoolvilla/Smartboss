@@ -143,6 +143,24 @@ export default async function NewWorkOrderPage({
             </select>
           </Field>
 
+          <label className="flex items-start gap-2.5 rounded-(--radius) border border-(--line) p-3">
+            <input
+              type="checkbox"
+              name="noExpense"
+              value="1"
+              className="mt-0.5 h-4 w-4"
+            />
+            <span>
+              <span className="block text-sm font-medium text-(--ink)">
+                งานนี้ไม่มีค่าใช้จ่าย
+              </span>
+              <span className="block text-xs text-(--ink-soft)">
+                เช่น งานที่จ้างเหมารายปีไว้แล้ว — ติ๊กแล้วตอนปิดงานจะไม่ถามค่าใช้จ่าย
+                และไม่ถูกทวงในรายงาน
+              </span>
+            </span>
+          </label>
+
           <Field label="รายละเอียด">
             <textarea
               name="description"

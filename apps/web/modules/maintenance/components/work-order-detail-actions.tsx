@@ -45,15 +45,21 @@ export function StartJobButton({
 /**
  * ยืนยันงานเสร็จ — บังคับกรอกประมาณการค่าใช้จ่าย + แนบรูป
  * (ถ้ามีรูปจากช่างภายนอกแล้ว รูปแนบไม่บังคับ) ตรงกับ _showCompletionDialog เดิม
+ *
+ * `requiresExpense = false` (งานที่จ้างเหมารายปีไว้แล้ว) จะไม่ถามค่าใช้จ่ายเลย
+ * — บังคับกรอกทั้งที่ไม่มีอะไรให้กรอก คนจะใส่ 0 เพื่อให้ผ่าน แล้วรายงานจะเพี้ยน
+ * รูปยังบังคับเหมือนเดิม เพราะเป็นหลักฐานว่าทำจริง คนละเรื่องกับเงิน
  */
 export function CompleteJobButton({
   id,
   action,
   externalPhotoCount,
+  requiresExpense = true,
 }: {
   id: string;
   action: Action;
   externalPhotoCount: number;
+  requiresExpense?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<{ name: string; price: string }[]>([
@@ -61,7 +67,7 @@ export function CompleteJobButton({
   ]);
   const [photoCount, setPhotoCount] = useState(0);
 
-  const hasValidItem = items.some((i) => i.name.trim() !== "");
+  const hasValidItem = !requiresExpense || items.some((i) => i.name.trim() !== "");
   const photoOk = photoCount > 0 || externalPhotoCount > 0;
 
   return (
@@ -103,15 +109,18 @@ export function CompleteJobButton({
           <form id="complete-wo-form" action={action} className="flex flex-col gap-3">
             <input type="hidden" name="id" value={id} />
             <p className="text-sm text-(--ink-soft)">
-              {externalPhotoCount > 0
-                ? "มีรูปจากช่างภายนอกแล้ว กรุณากรอกประมาณการค่าใช้จ่ายก่อนกดยืนยัน"
-                : "กรุณากรอกประมาณการค่าใช้จ่ายและแนบรูปถ่ายก่อนกดยืนยัน"}
+              {!requiresExpense
+                ? "งานนี้ตั้งไว้ว่าไม่มีค่าใช้จ่าย — แนบรูปถ่ายแล้วกดยืนยันได้เลย"
+                : externalPhotoCount > 0
+                  ? "มีรูปจากช่างภายนอกแล้ว กรุณากรอกประมาณการค่าใช้จ่ายก่อนกดยืนยัน"
+                  : "กรุณากรอกประมาณการค่าใช้จ่ายและแนบรูปถ่ายก่อนกดยืนยัน"}
             </p>
-
-            <p className="text-sm font-bold text-(--ink)">
-              ประมาณการค่าใช้จ่าย *
-            </p>
-            {items.map((item, i) => (
+            {requiresExpense && (
+              <p className="text-sm font-bold text-(--ink)">
+                ประมาณการค่าใช้จ่าย *
+              </p>
+            )}
+            {requiresExpense && items.map((item, i) => (
               <div key={i} className="flex items-start gap-2">
                 <input
                   name="itemName"
@@ -154,13 +163,15 @@ export function CompleteJobButton({
                 )}
               </div>
             ))}
-            <button
-              type="button"
-              onClick={() => setItems([...items, { name: "", price: "" }])}
-              className="inline-flex w-fit items-center gap-1 text-sm text-[#0F766E]"
-            >
-              <Plus className="h-4 w-4" /> เพิ่มรายการ
-            </button>
+            {requiresExpense && (
+              <button
+                type="button"
+                onClick={() => setItems([...items, { name: "", price: "" }])}
+                className="inline-flex w-fit items-center gap-1 text-sm text-[#0F766E]"
+              >
+                <Plus className="h-4 w-4" /> เพิ่มรายการ
+              </button>
+            )}
 
             {externalPhotoCount > 0 && (
               <div

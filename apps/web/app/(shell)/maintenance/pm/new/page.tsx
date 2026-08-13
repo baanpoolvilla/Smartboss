@@ -6,7 +6,7 @@ import { listAssets } from "@/modules/maintenance/data/assets";
 import { listOrgUsers } from "@/modules/maintenance/data/users";
 import {
   PM_FREQUENCIES,
-  maxRoundsPerYear,
+  roundsPerYearOptions,
 } from "@/modules/maintenance/lib/pm-schedule";
 import { ROLE_LABEL_TH } from "@/modules/maintenance/lib/roles";
 import { PmForm } from "@/modules/maintenance/components/pm-form";
@@ -51,8 +51,8 @@ export default async function NewPmPage({
           value: f.value,
           label: f.label,
         }))}
-        maxRounds={Object.fromEntries(
-          PM_FREQUENCIES.map((f) => [f.value, maxRoundsPerYear(f.value)])
+        roundOptions={Object.fromEntries(
+          PM_FREQUENCIES.map((f) => [f.value, roundsPerYearOptions(f.value)])
         )}
         defaultPropertyId={sp.propertyId}
         defaultAssetId={sp.assetId}

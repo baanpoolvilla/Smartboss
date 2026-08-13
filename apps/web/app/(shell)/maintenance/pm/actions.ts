@@ -13,7 +13,7 @@ import {
   updatePmSchedule,
 } from "@/modules/maintenance/data/pm";
 import { getAsset } from "@/modules/maintenance/data/assets";
-import { maxRoundsPerYear } from "@/modules/maintenance/lib/pm-schedule";
+import { roundsPerYearOptions } from "@/modules/maintenance/lib/pm-schedule";
 
 function parseDate(s: string): Date {
   return new Date(s + "T00:00:00.000Z");
@@ -67,9 +67,11 @@ export async function createPmAction(formData: FormData) {
   const frequency = d.mode === "limitedCount" ? "monthly" : d.frequency;
 
   if (d.mode === "yearlyRounds") {
-    const max = maxRoundsPerYear(d.frequency);
+    // รับเฉพาะค่าที่อยู่ในลิสต์จริง — ค่าที่ไม่อยู่ในลิสต์แปลว่าฟอร์มกับเซิร์ฟเวอร์
+    // คิดไม่ตรงกัน (หรือมีคนยิงมาเอง) ตกเป็นแบบต่อเนื่องซึ่งเป็นค่าที่ปลอดภัยกว่า
+    const allowed = roundsPerYearOptions(d.frequency);
     const r = Number(d.roundsPerYear);
-    roundsPerYear = max > 1 && Number.isFinite(r) && r >= 1 ? r : null;
+    roundsPerYear = allowed.includes(r) ? r : null;
   } else if (d.mode === "limitedCount") {
     const t = Number(d.totalRounds);
     totalRounds = Number.isFinite(t) && t >= 2 ? t : 6;
@@ -82,6 +84,8 @@ export async function createPmAction(formData: FormData) {
   const base = {
     title: d.title,
     description: d.description ?? null,
+    // ใบงานที่ระบบสร้างตามรอบจะรับค่านี้ไปด้วย (ดู modules/maintenance/data/cron.ts)
+    requiresExpense: formData.get("noExpense") !== "1",
     frequency,
     nextDueDate: due,
     anchorDate: due,
@@ -124,6 +128,7 @@ export async function updatePmAction(formData: FormData) {
   const frequency = String(formData.get("frequency") ?? "").trim();
   const nextDueDate = String(formData.get("nextDueDate") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
+  const assignedTo = String(formData.get("assignedTo") ?? "").trim();
 
   await updatePmSchedule(orgId, id, {
     ...(title ? { title } : {}),
@@ -131,6 +136,10 @@ export async function updatePmAction(formData: FormData) {
     ...(nextDueDate
       ? { nextDueDate: parseDate(nextDueDate), anchorDate: parseDate(nextDueDate) }
       : {}),
+    // ช่องนี้อยู่ในฟอร์มเสมอ ค่าว่าง = ตั้งใจถอนมอบหมาย ไม่ใช่ "ไม่ได้ส่งมา"
+    assignedTo: assignedTo || null,
+    // มีผลกับใบงานที่ระบบสร้างหลังจากนี้เท่านั้น — ใบที่เปิดค้างอยู่เก็บค่าของตัวเองไว้แล้ว
+    requiresExpense: formData.get("noExpense") !== "1",
     description: description || null,
   });
 

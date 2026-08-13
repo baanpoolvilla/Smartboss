@@ -87,6 +87,8 @@ export interface WorkOrderInput {
   pmScheduleId?: string | null;
   pmScheduleIds?: string[];
   autoCreated?: boolean;
+  /** false = งานนี้ไม่มีค่าใช้จ่าย (ไม่ถามตอนปิดงาน ไม่ถูกทวงในรายงาน) */
+  requiresExpense?: boolean;
   photoUrls?: string[];
   afterPhotoUrls?: string[];
 }
@@ -117,6 +119,7 @@ export function createWorkOrder(orgId: string, data: WorkOrderInput) {
         pmScheduleId: data.pmScheduleId ?? null,
         pmScheduleIds: data.pmScheduleIds ?? [],
         autoCreated: data.autoCreated ?? false,
+        requiresExpense: data.requiresExpense ?? true,
         photoUrls: data.photoUrls ?? [],
       },
     });

@@ -5,6 +5,7 @@ import {
   getUploadContext,
   listExternalPhotos,
 } from "@/modules/maintenance/data/external-upload";
+import { ExternalUploadForm } from "@/modules/maintenance/components/external-upload-form";
 import { uploadExternalAction } from "./actions";
 
 /** จำนวนรูปสูงสุดต่อ 1 ลิงก์ — ค่าเดียวกับ ChangYai */
@@ -35,7 +36,10 @@ export default async function ExternalUploadPage({
     );
   }
 
-  const photos = await listExternalPhotos(ctx.orgId, ctx.workOrderId);
+  const rows = await listExternalPhotos(ctx.orgId, ctx.workOrderId);
+  // แถวที่ storagePath ว่างคือข้อความเปล่า ๆ ไม่นับเป็นรูป ไม่งั้นโควตาจะหมดเพราะการพิมพ์
+  const photos = rows.filter((r) => r.storagePath !== "");
+  const notes = rows.filter((r) => r.note);
   const remaining = Math.max(0, MAX_UPLOADS - photos.length);
 
   return (
@@ -72,32 +76,27 @@ export default async function ExternalUploadPage({
           </Card>
         ) : (
           <Card className="mt-4 p-5">
-            <form
+            <ExternalUploadForm
               action={uploadExternalAction.bind(null, token)}
-              className="flex flex-col gap-3"
-            >
-              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-(--radius) border border-[#0D9488] py-2.5 text-sm text-[#0F766E]">
-                <Camera className="h-4 w-4" /> ถ่ายรูป
-                <input
-                  type="file"
-                  name="photos"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                />
-              </label>
-              <input
-                type="file"
-                name="photos"
-                multiple
-                accept="image/*"
-                className="text-sm text-(--ink) file:mr-3 file:rounded-(--radius) file:border file:border-(--line) file:bg-(--bg-soft) file:px-3 file:py-1.5 file:text-sm"
-              />
-              <p className="text-xs text-(--ink-soft)">
-                เลือกได้อีกสูงสุด {remaining} รูป
-              </p>
-              <Button type="submit">ส่งรูป</Button>
-            </form>
+              remaining={remaining}
+            />
+          </Card>
+        )}
+
+        {/* สิ่งที่ส่งไปแล้ว — ให้ช่างเห็นว่าถึงปลายทางจริง จะได้ไม่ส่งซ้ำ */}
+        {notes.length > 0 && (
+          <Card className="mt-4 p-4">
+            <p className="mb-2 text-sm font-medium text-(--ink)">ข้อความที่ส่งไปแล้ว</p>
+            <ul className="flex flex-col gap-2">
+              {notes.map((n) => (
+                <li
+                  key={n.id}
+                  className="rounded-(--radius) bg-(--bg-soft) p-2.5 text-sm whitespace-pre-wrap text-(--ink)"
+                >
+                  {n.note}
+                </li>
+              ))}
+            </ul>
           </Card>
         )}
 

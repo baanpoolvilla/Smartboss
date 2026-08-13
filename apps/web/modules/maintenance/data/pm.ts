@@ -14,6 +14,8 @@ export interface PmInput {
   totalRounds?: number | null;
   assignedTo?: string | null;
   ccUserIds?: string[];
+  /** false = แผนนี้ไม่มีค่าใช้จ่าย — ใบงานที่สร้างตามรอบจะรับค่านี้ไปด้วย */
+  requiresExpense?: boolean;
   createdBy?: string | null;
 }
 
@@ -32,6 +34,7 @@ export function createPmSchedule(orgId: string, data: PmInput) {
       totalRounds: data.totalRounds ?? null,
       assignedTo: data.assignedTo ?? null,
       ccUserIds: data.ccUserIds ?? [],
+      requiresExpense: data.requiresExpense ?? true,
       createdBy: data.createdBy ?? null,
     },
   });
@@ -75,7 +78,14 @@ export async function completePmSchedule(orgId: string, id: string) {
 
   // continuous / yearlyRounds: เลื่อนวันกำหนดถัดไป (ยึด anchor)
   const anchor = pm.anchorDate ?? pm.nextDueDate;
-  const nextDue = nextDueSlot(anchor, pm.frequency, pm.roundsPerYear, now);
+
+  // ⚠ ต้องนับรอบถัดไปจาก "วันกำหนดของรอบที่เพิ่งจบ" ไม่ใช่วันที่กดจบงาน
+  //
+  // ระบบให้สร้างใบงาน PM ล่วงหน้าได้ ⇒ ช่างจบงานก่อนถึงกำหนดได้ 1–7 วัน
+  // ถ้าใช้วันที่กดจบ ช่องเวลาถัดไปที่ "อยู่หลังวันนั้น" ก็ยังเป็นวันกำหนดเดิม
+  // ผลคือ PM ค้างอยู่รอบเดิมตลอด แล้วจะเกิดใบงานซ้ำรอบเดียวกันไปเรื่อย ๆ
+  const after = pm.nextDueDate > now ? pm.nextDueDate : now;
+  const nextDue = nextDueSlot(anchor, pm.frequency, pm.roundsPerYear, after);
   await prisma.pmSchedule.update({
     where: { id: pm.id },
     data: { lastCompletedDate: toDateOnly(now), nextDueDate: toDateOnly(nextDue) },

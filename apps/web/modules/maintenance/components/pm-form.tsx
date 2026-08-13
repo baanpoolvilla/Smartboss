@@ -25,7 +25,7 @@ export function PmForm({
   assets,
   users,
   frequencies,
-  maxRounds,
+  roundOptions,
   defaultPropertyId,
   defaultAssetId,
 }: {
@@ -34,8 +34,11 @@ export function PmForm({
   assets: PmAssetOption[];
   users: PickOption[];
   frequencies: { value: string; label: string }[];
-  /** ความถี่ → จำนวนรอบสูงสุดต่อปี (0 = กำหนดรอบไม่ได้) */
-  maxRounds: Record<string, number>;
+  /**
+   * ความถี่ → ตัวเลือกจำนวนรอบต่อปีที่ให้ผลต่างจากแบบต่อเนื่องจริง ๆ
+   * ลิสต์ว่าง = ความถี่นี้กำหนดรอบต่อปีไม่ได้
+   */
+  roundOptions: Record<string, number[]>;
   defaultPropertyId?: string;
   defaultAssetId?: string;
 }) {
@@ -48,7 +51,7 @@ export function PmForm({
     defaultAssetId ? [defaultAssetId] : []
   );
 
-  const max = maxRounds[frequency] ?? 0;
+  const rounds = roundOptions[frequency] ?? [];
   const assetOptions: PickOption[] = assets.map((a) => ({
     id: a.id,
     label: a.name,
@@ -162,11 +165,17 @@ export function PmForm({
         {mode === "yearlyRounds" && (
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-medium text-(--ink)">
-              จำนวนรอบต่อปี{max > 1 ? ` (สูงสุด ${max})` : ""}
+              จำนวนรอบต่อปี
+              {rounds.length > 0 ? ` (สูงสุด ${rounds[rounds.length - 1]})` : ""}
             </span>
-            {max > 1 ? (
-              <select name="roundsPerYear" defaultValue="2" className={inputClass}>
-                {Array.from({ length: max }, (_, i) => i + 1).map((n) => (
+            {rounds.length > 0 ? (
+              <select
+                name="roundsPerYear"
+                key={frequency}
+                defaultValue={String(rounds.includes(2) ? 2 : rounds[0])}
+                className={inputClass}
+              >
+                {rounds.map((n) => (
                   <option key={n} value={n}>
                     {n} รอบ/ปี
                   </option>
@@ -179,6 +188,24 @@ export function PmForm({
             )}
           </label>
         )}
+
+        <label className="flex items-start gap-2.5 rounded-(--radius) border border-(--line) p-3">
+          <input
+            type="checkbox"
+            name="noExpense"
+            value="1"
+            className="mt-0.5 h-4 w-4"
+          />
+          <span>
+            <span className="block text-sm font-medium text-(--ink)">
+              แผนนี้ไม่มีค่าใช้จ่าย
+            </span>
+            <span className="block text-xs text-(--ink-soft)">
+              เช่น ล้างแอร์ตามรอบที่จ้างเหมารายปีไว้แล้ว — ใบงานที่ระบบสร้างตามรอบ
+              จะไม่ถามค่าใช้จ่ายตอนปิดงาน
+            </span>
+          </span>
+        </label>
 
         {mode === "limitedCount" && (
           <label className="flex flex-col gap-1.5">

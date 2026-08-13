@@ -57,6 +57,9 @@ export async function generateWorkOrdersForDuePms(): Promise<{
           priority: "medium",
           pmScheduleId: pm.id,
           ccUserIds: pm.ccUserIds,
+          // สืบทอดจากแผน PM — งานที่จ้างเหมารายปีไว้แล้วไม่มีค่าใช้จ่ายแยกต่อครั้ง
+          // ถ้าไม่สืบทอด ระบบจะทวงให้บันทึกค่าใช้จ่ายทุกใบจนคนกรอก 0 ไปเรื่อย ๆ
+          requiresExpense: pm.requiresExpense,
           autoCreated: true,
         },
       });
@@ -152,6 +155,9 @@ export async function notifyMissingExpenses(): Promise<{ reminded: number }> {
   const orders = await prisma.workOrder.findMany({
     where: {
       status: "completed",
+      // ใบงานที่ตั้งไว้ว่าไม่มีค่าใช้จ่ายต้องไม่ถูกทวง — ไม่งั้นทวงไปก็ไม่มีอะไรให้กรอก
+      // แล้วคนจะบันทึก 0 บาทเพื่อให้เตือนหาย ซึ่งทำให้รายงานค่าใช้จ่ายเชื่อไม่ได้
+      requiresExpense: true,
       ...(withExpense.length > 0 ? { id: { notIn: withExpense } } : {}),
     },
   });

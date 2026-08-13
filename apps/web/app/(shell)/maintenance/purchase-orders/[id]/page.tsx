@@ -24,6 +24,7 @@ import { fmtThaiDate, fmtThaiDateTime } from "@/modules/maintenance/lib/format";
 import { ROLE_LABEL_TH } from "@/modules/maintenance/lib/roles";
 import { SectionCard } from "@/modules/maintenance/components/ui";
 import { PhotoStrip } from "@/modules/maintenance/components/photos";
+import { CommentDeleteButton } from "@/modules/maintenance/components/comment-delete-button";
 import {
   CommentComposer,
   DeleteButton,
@@ -46,6 +47,7 @@ import {
   selfReceiveAction,
   rejectAction,
   addPoCommentAction,
+  deletePoCommentAction,
   deletePoAction,
 } from "../actions";
 
@@ -380,6 +382,15 @@ export default async function PoDetailPage({
                       <span className="text-[11px] text-(--ink-soft)">
                         {fmtThaiDateTime(c.createdAt)}
                       </span>
+                      {/* เจ้าของความเห็นลบของตัวเองได้ ผู้อนุมัติลบของใครก็ได้
+                          — ฝั่ง action เช็คซ้ำเสมอ ไม่เชื่อการซ่อนปุ่มอย่างเดียว */}
+                      {(c.userId === session.userId || isCeo) && (
+                        <CommentDeleteButton
+                          commentId={c.id}
+                          action={deletePoCommentAction.bind(null, id)}
+                          hasImages={c.imageUrls.length > 0}
+                        />
+                      )}
                     </p>
                     <div className="mt-1 rounded-[8px] bg-(--bg-soft) px-2.5 py-2">
                       {c.content !== "📷" && (

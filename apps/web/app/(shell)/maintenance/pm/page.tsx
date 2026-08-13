@@ -6,7 +6,7 @@ import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { listPmSchedules } from "@/modules/maintenance/data/pm";
 import { listProperties } from "@/modules/maintenance/data/properties";
 import { listAssets } from "@/modules/maintenance/data/assets";
-import { userNameMap } from "@/modules/maintenance/data/users";
+import { listOrgUsers, userNameMap } from "@/modules/maintenance/data/users";
 import { fmtThaiDate, fmtThaiDateTime, toDateInput } from "@/modules/maintenance/lib/format";
 import {
   freqLabel,
@@ -93,8 +93,12 @@ export default async function PmListPage({
     createdByName: s.createdBy ? (names[s.createdBy] ?? null) : null,
     assignedTo: s.assignedTo,
     assignedToName: s.assignedTo ? (names[s.assignedTo] ?? null) : null,
+    requiresExpense: s.requiresExpense,
     hasPendingWorkOrder: pending.has(s.id),
   }));
+
+  // รายชื่อสำหรับกล่องแก้ไข PM (เปลี่ยนผู้รับผิดชอบ)
+  const orgUsers = await listOrgUsers(orgId);
 
   // ผู้ดูแลบ้าน (จัดการ PM ได้แต่แก้ข้อมูลบ้านไม่ได้) มอบงานให้ตัวเองอัตโนมัติ
   const isCaretaker =
@@ -125,6 +129,7 @@ export default async function PmListPage({
           value: f.value,
           label: f.label,
         }))}
+        userOptions={orgUsers.map((u) => ({ id: u.id, label: u.name }))}
       />
     </AppScaffold>
   );

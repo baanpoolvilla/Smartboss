@@ -100,6 +100,7 @@ export interface PmRow {
   createdByName: string | null;
   assignedTo: string | null;
   assignedToName: string | null;
+  requiresExpense: boolean;
   hasPendingWorkOrder: boolean;
 }
 
@@ -145,6 +146,7 @@ export function PmBoard({
   deleteAction,
   updateAction,
   frequencyOptions,
+  userOptions,
 }: {
   schedules: PmRow[];
   canManage: boolean;
@@ -154,6 +156,8 @@ export function PmBoard({
   deleteAction: (formData: FormData) => void | Promise<void>;
   updateAction: (formData: FormData) => void | Promise<void>;
   frequencyOptions: { value: string; label: string }[];
+  /** ผู้ที่มอบหมายงาน PM ให้ได้ — ใช้ในกล่องแก้ไข */
+  userOptions: { id: string; label: string }[];
 }) {
   const [group, setGroup] = useState<string | null>(null);
   const [propertyId, setPropertyId] = useState<string | null>(null);
@@ -651,6 +655,38 @@ export function PmBoard({
                 defaultValue={editing.nextDueInput}
                 className="h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm text-(--ink)"
               />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-(--ink)">ผู้รับผิดชอบ</span>
+              <select
+                name="assignedTo"
+                defaultValue={editing.assignedTo ?? ""}
+                className="h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm text-(--ink)"
+              >
+                <option value="">ยังไม่มอบหมาย</option>
+                {userOptions.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-start gap-2.5 rounded-(--radius) border border-(--line) p-2.5">
+              <input
+                type="checkbox"
+                name="noExpense"
+                value="1"
+                defaultChecked={!editing.requiresExpense}
+                className="mt-0.5 h-4 w-4"
+              />
+              <span>
+                <span className="block text-sm font-medium text-(--ink)">
+                  แผนนี้ไม่มีค่าใช้จ่าย
+                </span>
+                <span className="block text-xs text-(--ink-soft)">
+                  มีผลกับใบงานที่ระบบสร้างหลังจากนี้ ใบที่เปิดค้างอยู่ไม่เปลี่ยนตาม
+                </span>
+              </span>
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-(--ink)">รายละเอียด</span>

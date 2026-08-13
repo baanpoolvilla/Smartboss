@@ -86,6 +86,34 @@ export function listPoComments(orgId: string, poId: string) {
   });
 }
 
+/**
+ * ลบคอมเมนต์ PO — คืนรายการรูปที่ต้องเก็บกวาดใน storage ต่อ
+ *
+ * เจ้าของคอมเมนต์ลบของตัวเองได้ ส่วนคนที่จัดการ PO ได้ลบของใครก็ได้
+ * (คอมเมนต์ที่พิมพ์ผิดหรือแนบรูปผิดใบ ปล่อยไว้แล้วคนอ่านสับสนกว่า)
+ *
+ * ⚠ เช็คสิทธิ์ด้วยเงื่อนไขใน where ไม่ใช่ค่อยมาเทียบทีหลัง — ถ้าเช็คทีหลัง
+ * ต้องอ่านแถวออกมาก่อน ซึ่งเปิดช่องให้ยิง id ข้ามบริษัทเข้ามาดูข้อมูลได้
+ */
+export async function deletePoComment(
+  orgId: string,
+  commentId: string,
+  userId: string,
+  canManageAll: boolean
+): Promise<string[]> {
+  const row = await prisma.purchaseOrderComment.findFirst({
+    where: {
+      id: commentId,
+      orgId,
+      ...(canManageAll ? {} : { userId }),
+    },
+    select: { id: true, imageUrls: true },
+  });
+  if (!row) return [];
+  await prisma.purchaseOrderComment.delete({ where: { id: row.id } });
+  return row.imageUrls;
+}
+
 export function addPoComment(
   orgId: string,
   poId: string,
