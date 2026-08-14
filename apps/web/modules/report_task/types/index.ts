@@ -215,6 +215,8 @@ export interface CalendarEvent {
   attachments?: Attachment[];
   /** To-do only — checked off inline on the calendar chip. */
   done?: boolean;
+  /** To-do only — HH:MM, shown next to the title where there's room for it. */
+  time?: string;
 }
 
 export interface TodoItem {
@@ -225,6 +227,12 @@ export interface TodoItem {
   title: string;
   done: boolean;
   createdAt: string;
+  /** HH:MM — optional, for a "โทรลูกค้าบ่าย 3" kind of to-do. Doesn't turn
+   *  this into a real timed calendar event (still allDay on the grid) —
+   *  just shown as text next to the title. */
+  time?: string;
+  /** Short freeform note — optional, for when the title alone isn't enough. */
+  note?: string;
 }
 
 export interface ActivityItem {

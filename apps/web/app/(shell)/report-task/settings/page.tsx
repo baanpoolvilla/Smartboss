@@ -161,7 +161,13 @@ function SettingsPageInner() {
   };
 
   const currentSections = sectionsByTab[tab];
-  const [sectionKey, setSectionKey] = useState<string>(currentSections[0]?.key ?? "");
+  // A deep link (e.g. "เพิ่มวันหยุดตามประเทศ" from the calendar) can name the
+  // exact section it wants opened via ?section= — falls back to the tab's
+  // first section when absent or when it doesn't belong to this tab.
+  const initialSection = searchParams.get("section");
+  const [sectionKey, setSectionKey] = useState<string>(
+    initialSection && currentSections.some((s) => s.key === initialSection) ? initialSection : currentSections[0]?.key ?? ""
+  );
 
   // Switching top-level tab lands on that tab's first section — adjusted
   // during render (not an effect) per React's guidance for resetting state

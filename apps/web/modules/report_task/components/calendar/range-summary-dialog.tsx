@@ -27,8 +27,8 @@ import { formatDate, formatDateTime } from "@/modules/report_task/lib/format";
 import { nowMs } from "@/modules/report_task/lib/now";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Button } from "@/modules/report_task/components/ui/button";
-import { Users, CalendarDays, Plane, PartyPopper, CalendarOff, ListChecks, ListTodo, CalendarPlus, Check, X } from "lucide-react";
-import type { CalendarEvent } from "@/modules/report_task/types";
+import { Users, CalendarDays, Plane, PartyPopper, CalendarOff, ListChecks, ListTodo, CalendarPlus, Check, X, Trash2 } from "lucide-react";
+import type { CalendarEvent, TodoItem } from "@/modules/report_task/types";
 
 export type SummaryRange = { start: string; end: string }; // end exclusive (YYYY-MM-DD)
 
@@ -55,6 +55,8 @@ export function RangeSummaryDialog({
   onOpenChange,
   onOpenTask,
   onToggleTodo,
+  onEditTodo,
+  onRemoveTodo,
   onAddMeeting,
   onAddSchedule,
   onAddTodo,
@@ -71,6 +73,9 @@ export function RangeSummaryDialog({
   onOpenChange: (open: boolean) => void;
   onOpenTask: (id: string) => void;
   onToggleTodo?: (id: string) => void;
+  /** Clicking a to-do's title (own items only) opens it for editing. */
+  onEditTodo?: (t: TodoItem) => void;
+  onRemoveTodo?: (id: string) => void;
   /** Single-day click only — a multi-day drag has no one date to hang a meeting on. */
   onAddMeeting?: (date: string) => void;
   /** Same idea as `onAddMeeting`, for the schedule tab's "เพิ่มวันลา/วันหยุดประจำ" button. */
@@ -242,27 +247,46 @@ export function RangeSummaryDialog({
             </div>
             <div className="max-h-72 overflow-y-auto space-y-1 mt-1">
               {data.todos.length === 0 && (
-                <p className="text-sm text-[var(--ink-soft)] text-center py-4">ไม่มี To Do ในช่วงนี้</p>
+                <p className="text-sm text-[var(--ink-soft)] text-center py-4">ไม่มีสิ่งที่ต้องทำในช่วงนี้</p>
               )}
               {data.todos.map((t) => {
-                const owner = todoScope === "all" && t.userId !== viewingAsUserId ? getUser(t.userId) : undefined;
+                const mine = t.userId === viewingAsUserId;
+                const owner = todoScope === "all" && !mine ? getUser(t.userId) : undefined;
                 return (
-                  <button
-                    key={t.id}
-                    onClick={() => onToggleTodo?.(t.id)}
-                    className="w-full flex items-center gap-2.5 text-left rounded-lg px-2 py-1.5 hover:bg-[var(--bg-soft)]"
-                  >
-                    <span
-                      className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm border border-[var(--chart-amber)]"
+                  <div key={t.id} className="group flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-[var(--bg-soft)]">
+                    <button
+                      onClick={() => mine && onToggleTodo?.(t.id)}
+                      disabled={!mine}
+                      aria-label={t.done ? "ทำเครื่องหมายว่ายังไม่เสร็จ" : "ทำเครื่องหมายว่าเสร็จแล้ว"}
+                      className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm border border-[var(--chart-amber)] disabled:opacity-50 disabled:cursor-default"
                       style={t.done ? { backgroundColor: "var(--chart-amber)" } : undefined}
                     >
                       {t.done && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />}
+                    </button>
+                    <button
+                      onClick={() => mine && onEditTodo?.(t)}
+                      disabled={!mine}
+                      className="min-w-0 flex-1 text-left disabled:cursor-default"
+                    >
+                      <span className={cn("block truncate text-sm", t.done && "line-through text-[var(--ink-soft)]")}>
+                        {owner ? `${owner.name.split(" ")[0]}: ${t.title}` : t.title}
+                      </span>
+                      {t.note && <span className="block truncate text-xs text-[var(--ink-soft)]">{t.note}</span>}
+                    </button>
+                    <span className="text-[11px] text-[var(--ink-soft)] shrink-0 whitespace-nowrap">
+                      {t.time ? t.time : formatDate(t.date)}
                     </span>
-                    <span className={cn("min-w-0 flex-1 truncate text-sm", t.done && "line-through text-[var(--ink-soft)]")}>
-                      {owner ? `${owner.name.split(" ")[0]}: ${t.title}` : t.title}
-                    </span>
-                    <span className="text-[11px] text-[var(--ink-soft)] shrink-0 whitespace-nowrap">{formatDate(t.date)}</span>
-                  </button>
+                    {mine && (
+                      <button
+                        onClick={() => onRemoveTodo?.(t.id)}
+                        title="ลบ"
+                        aria-label={`ลบ "${t.title}"`}
+                        className="shrink-0 text-[var(--ink-faint)] opacity-0 group-hover:opacity-100 hover:text-[var(--chart-red)] transition-opacity"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -336,7 +360,7 @@ export function RangeSummaryDialog({
             className="w-full"
             onClick={() => onAddTodo(range.start)}
           >
-            <CalendarPlus className="h-4 w-4" /> เพิ่ม To Do
+            <CalendarPlus className="h-4 w-4" /> เพิ่มสิ่งที่ต้องทำ
           </Button>
         )}
 

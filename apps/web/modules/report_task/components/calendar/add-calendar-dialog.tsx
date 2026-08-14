@@ -129,13 +129,13 @@ function RecommendedPane({ onNavigate }: { onNavigate: (s: Section) => void }) {
           <Users className="h-4 w-4" /> ดูปฏิทินของทีม
         </button>
         <Link
-          href="/settings?tab=profile"
+          href="/report-task/settings?tab=profile&section=holidays"
           className="flex items-center gap-2 rounded-lg border border-[var(--line)] hover:border-[var(--brand-green)] text-sm font-medium px-4 py-2.5 w-fit transition-colors"
         >
           <Globe className="h-4 w-4" /> เพิ่มวันหยุดตามประเทศ (ไปที่หน้าตั้งค่า)
         </Link>
         <Link
-          href="/settings?tab=profile"
+          href="/report-task/settings?tab=profile&section=externalCalendar"
           className="flex items-center gap-2 rounded-lg border border-[var(--line)] hover:border-[var(--brand-green)] text-sm font-medium px-4 py-2.5 w-fit transition-colors"
         >
           <CalendarCheck2 className="h-4 w-4" /> เชื่อมต่อปฏิทินภายนอก (ไปที่หน้าตั้งค่า)

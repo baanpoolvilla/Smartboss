@@ -30,7 +30,7 @@ export const eventTypeLabels: Record<CalendarEventType, string> = {
   holiday: "วันหยุด",
   google: "ปฏิทินภายนอก",
   dayoff: "วันหยุดประจำ",
-  todo: "To Do",
+  todo: "สิ่งที่ต้องทำ",
 };
 
 // Leave-type labels/colors/icons are configurable at runtime — see leave-type-store.
