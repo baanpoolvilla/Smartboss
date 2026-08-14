@@ -4,77 +4,50 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Smartboss</title>
-<meta name="description" content="ระบบจัดการงานหน้างานสำหรับธุรกิจไทย — ใบงานซ่อม บำรุงรักษาตามรอบ งานประจำวัน ลงเวลา เงินเดือน รวมอยู่ที่เดียว" />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231b2537'/%3E%3Cpath d='M9 21.5V10.5h4.6c2.2 0 3.6 1.1 3.6 2.9 0 1.2-.6 2-1.6 2.4 1.3.3 2.1 1.3 2.1 2.7 0 2-1.5 3-3.9 3H9Z' fill='%234cb93f'/%3E%3Ccircle cx='22.5' cy='19.5' r='2' fill='%234cb93f'/%3E%3C/svg%3E" />
+<meta name="description" content="เห็นภาพรวมทั้งองค์กรในหน้าเดียว — ใครทำอะไรอยู่ ใครงานล้น ใครส่งงานช้า โดยไม่ต้องเดินไปถามทีละคน" />
+<meta name="theme-color" content="#0b1220" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b1220'/%3E%3Crect x='7' y='16' width='4' height='9' rx='1.4' fill='%234cb93f'/%3E%3Crect x='14' y='11' width='4' height='14' rx='1.4' fill='%2338bdf8'/%3E%3Crect x='21' y='7' width='4' height='18' rx='1.4' fill='%23f59e0b'/%3E%3C/svg%3E" />
 <style>
-/* ══════════════════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════════════════
    Smartboss — หน้าแนะนำระบบ
-   สีทั้งหมดมาจาก packages/ui/tokens.css ของตัวระบบ ไม่ประกาศใหม่
-   ══════════════════════════════════════════════════════════════ */
+
+   ธีมเดียว (navy เข้ม) โดยตั้งใจ ไม่สลับตาม OS — หน้านี้ขายเรื่อง
+   "ห้องควบคุม" การสลับเป็นพื้นขาวทำให้ตัวเลขและกราฟอ่อนแรงลงทันที
+   ⇒ ทุกสีจึงประกาศชัดเจนทั้งหมด ไม่พึ่งพื้นหลังของเบราว์เซอร์
+
+   สีแกนยกมาจาก packages/ui/tokens.css ของตัวระบบ ไม่ประดิษฐ์ใหม่
+   ══════════════════════════════════════════════════════════════════════ */
 :root {
-  --ink:        #1b2537;   /* navy จากโลโก้ Boss */
-  --ink-soft:   #5a6a83;
-  --ink-faint:  #8a97ab;
-  --bg:         #ffffff;
-  --bg-soft:    #f5f7fa;   /* เทาเอียงน้ำเงิน ไม่ใช่เทากลาง */
-  --surface:    #ffffff;
-  --line:       #e2e7ef;
-  --line-soft:  #eef1f6;
-  --brand:      #4cb93f;   /* เขียวจากโลโก้ Easy/Smart */
-  --brand-deep: #3a9630;
-  --mod-report: #64748b;
-  --mod-maint:  #0d9488;
-  --mod-hr:     #3b82f6;
-  --mod-admin:  #8b5cf6;
-  --shadow:     0 1px 2px rgba(27,37,55,.06), 0 8px 24px -12px rgba(27,37,55,.18);
+  --bg:         #0b1220;   /* navy เข้ม — มาจาก --ink #1b2537 หรี่ลง ไม่ใช่ดำกลาง */
+  --bg-2:       #111a2b;
+  --panel:      #131d2fee;
+  --line:       #1f2c45;
+  --line-soft:  #18243a;
+
+  --ink:        #eef3fb;
+  --ink-soft:   #94a6c2;
+  --ink-faint:  #61748f;
+
+  --brand:      #4cb93f;   /* เขียวจากโลโก้ */
+  --brand-lift: #6dd45f;
+
+  /* สีข้อมูล = สถานะงานจริงในระบบ ไม่ใช่สีตกแต่ง */
+  --s-done:     #4cb93f;
+  --s-doing:    #38bdf8;
+  --s-check:    #a78bfa;
+  --s-late:     #f59e0b;
+  --s-over:     #f43f5e;
 
   --sans: "Noto Sans Thai", "IBM Plex Sans Thai", "Sarabun", "Leelawadee UI",
           -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, "JetBrains Mono", "Cascadia Mono", "SF Mono", Consolas, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --ink:        #e8edf5;
-    --ink-soft:   #9dabc2;
-    --ink-faint:  #6f7d94;
-    --bg:         #101725;
-    --bg-soft:    #161f31;
-    --surface:    #182133;
-    --line:       #27324a;
-    --line-soft:  #202a3e;
-    --brand:      #5fcc52;
-    --brand-deep: #7ad86e;
-    --mod-report: #94a3b8;
-    --mod-maint:  #2dd4bf;
-    --mod-hr:     #60a5fa;
-    --mod-admin:  #a78bfa;
-    --shadow:     0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
-  }
-}
-:root[data-theme="dark"] {
-  --ink:        #e8edf5;
-  --ink-soft:   #9dabc2;
-  --ink-faint:  #6f7d94;
-  --bg:         #101725;
-  --bg-soft:    #161f31;
-  --surface:    #182133;
-  --line:       #27324a;
-  --line-soft:  #202a3e;
-  --brand:      #5fcc52;
-  --brand-deep: #7ad86e;
-  --mod-report: #94a3b8;
-  --mod-maint:  #2dd4bf;
-  --mod-hr:     #60a5fa;
-  --mod-admin:  #a78bfa;
-  --shadow:     0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
-}
-
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+  *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 body {
   margin: 0;
@@ -82,203 +55,214 @@ body {
   color: var(--ink);
   font-family: var(--sans);
   font-size: 16px;
-  line-height: 1.75;
+  line-height: 1.72;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
-h1, h2, h3 { text-wrap: balance; margin: 0; line-height: 1.3; font-weight: 800; letter-spacing: -.01em; }
+h1, h2, h3 { margin: 0; line-height: 1.22; font-weight: 800; letter-spacing: -.028em; text-wrap: balance; }
 p { margin: 0; }
 a { color: inherit; }
-:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; border-radius: 4px; }
+:focus-visible { outline: 2px solid var(--brand-lift); outline-offset: 3px; border-radius: 6px; }
+.wrap { width: min(100% - 2.5rem, 1120px); margin-inline: auto; }
 
-.wrap { width: min(100% - 2.5rem, 1080px); margin-inline: auto; }
-
-/* ── รหัสเอกสาร: ตัวชูโรงของงานออกแบบนี้ ────────────────────
-   ระบบเดินเลขให้ทุกอย่าง (WO / T / PO / SM) เพราะคนหน้างานต้อง
-   อ่านเลขให้กันฟังทางโทรศัพท์ eyebrow ของทุกหัวข้อจึงเป็นรหัส
-   ไม่ใช่คำว่า "FEATURES" ลอย ๆ */
-.eyebrow {
-  font-family: var(--mono);
-  font-size: .75rem;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-  display: flex;
-  align-items: center;
-  gap: .6rem;
+/* แสงนวลหลังหัวข้อ — ให้พื้น navy ไม่แบนตาย */
+.glow { position: relative; isolation: isolate; }
+.glow::before {
+  content: ""; position: absolute; inset: -30% -20% auto; height: 620px; z-index: -1;
+  background:
+    radial-gradient(46% 60% at 22% 0%, rgba(76,185,63,.16), transparent 70%),
+    radial-gradient(40% 55% at 78% 8%, rgba(56,189,248,.13), transparent 72%);
+  pointer-events: none;
 }
-.eyebrow::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 
-/* ── แถบบน ─────────────────────────────────────────────── */
+.eyebrow {
+  font-family: var(--mono); font-size: .74rem; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--ink-faint);
+  display: flex; align-items: center; gap: .7rem;
+}
+.eyebrow::before {
+  content: ""; width: 22px; height: 2px; border-radius: 2px;
+  background: var(--brand); flex-shrink: 0;
+}
+
+/* ── แถบบน ─────────────────────────────────────────────────────── */
 .topbar {
-  position: sticky; top: 0; z-index: 20;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: blur(10px);
+  position: sticky; top: 0; z-index: 30;
+  background: rgba(11,18,32,.82);
+  backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--line-soft);
 }
-.topbar .wrap { display: flex; align-items: center; gap: 1rem; height: 62px; }
-.logo { font-weight: 800; font-size: 1.2rem; letter-spacing: -.02em; text-decoration: none; }
+.topbar .wrap { display: flex; align-items: center; gap: 1rem; height: 64px; }
+.logo { font-weight: 800; font-size: 1.22rem; letter-spacing: -.03em; text-decoration: none; color: var(--ink); }
 .logo .a { color: var(--brand); }
-.logo .b { color: var(--ink); }
-.nav { margin-left: auto; display: flex; align-items: center; gap: 1.6rem; }
-.nav a { color: var(--ink-soft); text-decoration: none; font-size: .93rem; }
+.nav { margin-left: auto; display: flex; align-items: center; gap: 1.7rem; }
+.nav a { color: var(--ink-soft); text-decoration: none; font-size: .92rem; transition: color .15s; }
 .nav a:hover { color: var(--ink); }
-@media (max-width: 720px) { .nav .hide-sm { display: none; } }
+@media (max-width: 760px) { .nav .hide-sm { display: none; } }
 
 .btn {
   display: inline-flex; align-items: center; gap: .5rem;
-  padding: .62rem 1.15rem; border-radius: 8px;
+  padding: .66rem 1.2rem; border-radius: 9px;
   font-size: .93rem; font-weight: 700; text-decoration: none;
   border: 1px solid transparent; white-space: nowrap;
-  transition: background-color .15s, border-color .15s, transform .15s;
+  transition: background-color .16s, border-color .16s, transform .12s, box-shadow .16s;
 }
-.btn-solid { background: var(--brand); color: #06210b; }
-.btn-solid:hover { background: var(--brand-deep); }
+.btn-solid {
+  background: var(--brand); color: #04220a;
+  box-shadow: 0 8px 24px -12px rgba(76,185,63,.9);
+}
+.btn-solid:hover { background: var(--brand-lift); }
 .btn-ghost { border-color: var(--line); color: var(--ink); }
-.btn-ghost:hover { border-color: var(--ink-faint); }
+.btn-ghost:hover { border-color: var(--ink-faint); background: rgba(255,255,255,.03); }
 .btn:active { transform: translateY(1px); }
 
-/* ── Hero ──────────────────────────────────────────────── */
-.hero { padding: clamp(3.5rem, 9vw, 6.5rem) 0 clamp(3rem, 7vw, 5rem); }
-.hero .wrap { display: grid; gap: clamp(2.5rem, 6vw, 4rem); grid-template-columns: 1fr; align-items: center; }
-@media (min-width: 940px) { .hero .wrap { grid-template-columns: 1.05fr .95fr; } }
-
-.hero h1 { font-size: clamp(2.1rem, 5.2vw, 3.3rem); letter-spacing: -.025em; }
-.hero h1 .hl {
-  background: linear-gradient(transparent 62%, color-mix(in srgb, var(--brand) 36%, transparent) 62%);
+/* ── Hero ──────────────────────────────────────────────────────── */
+.hero { padding: clamp(3.5rem, 9vw, 6rem) 0 clamp(2.5rem, 6vw, 4rem); }
+.hero .wrap { display: grid; gap: clamp(2.5rem, 5vw, 3.5rem); grid-template-columns: 1fr; align-items: center; }
+@media (min-width: 1000px) { .hero .wrap { grid-template-columns: 1fr 1.02fr; } }
+.hero h1 { font-size: clamp(2.15rem, 5.6vw, 3.55rem); }
+.hero h1 em {
+  font-style: normal; color: var(--brand);
+  text-shadow: 0 0 42px rgba(76,185,63,.35);
 }
-.lede { margin-top: 1.15rem; font-size: clamp(1.03rem, 2vw, 1.16rem); color: var(--ink-soft); max-width: 34em; }
-.hero-cta { margin-top: 2rem; display: flex; flex-wrap: wrap; gap: .75rem; }
-.hero-note { margin-top: 1.1rem; font-size: .85rem; color: var(--ink-faint); }
+.lede { margin-top: 1.2rem; font-size: clamp(1.02rem, 1.9vw, 1.14rem); color: var(--ink-soft); max-width: 33em; }
+.hero-cta { margin-top: 2.1rem; display: flex; flex-wrap: wrap; gap: .8rem; }
+.hero-note {
+  margin-top: 1.3rem; font-size: .84rem; color: var(--ink-faint);
+  display: flex; align-items: center; gap: .5rem;
+}
+.live { width: 7px; height: 7px; border-radius: 999px; background: var(--brand); box-shadow: 0 0 0 4px rgba(76,185,63,.16); }
 
-/* ── ใบงานจำลอง — หัวใจของ hero ──────────────────────────
-   ไม่ใช้ภาพประกอบนามธรรม เพราะสิ่งที่ลูกค้าจำได้คือหน้าตาใบงาน
-   ที่เขาต้องใช้จริงทุกวัน */
-.slip {
-  background: var(--surface);
+/* ── แผงภาระงาน — ตัวเอกของหน้านี้ ──────────────────────────────
+   บอสเปิดระบบมาแล้วเห็นอันนี้ก่อน: ใครจมงาน ใครว่าง ในวินาทีเดียว */
+.panel {
+  background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 14px;
-  box-shadow: var(--shadow);
+  border-radius: 16px;
+  box-shadow: 0 30px 70px -34px rgba(0,0,0,.9);
   overflow: hidden;
 }
-.slip-head {
-  padding: .9rem 1.15rem;
-  border-bottom: 1px solid var(--line-soft);
-  display: flex; align-items: center; gap: .75rem;
-  background: var(--bg-soft);
+.panel-head {
+  padding: .95rem 1.2rem; border-bottom: 1px solid var(--line-soft);
+  display: flex; align-items: center; gap: .7rem; background: rgba(255,255,255,.018);
 }
-.slip-code {
-  font-family: var(--mono); font-size: .85rem; font-weight: 700;
-  color: var(--mod-maint); font-variant-numeric: tabular-nums;
+.panel-head h3 { font-size: .95rem; letter-spacing: -.01em; }
+.panel-head .tag {
+  margin-left: auto; font-family: var(--mono); font-size: .7rem;
+  color: var(--ink-faint); letter-spacing: .08em;
 }
-.pill {
-  margin-left: auto;
-  font-size: .72rem; font-weight: 700; padding: .2rem .6rem; border-radius: 999px;
-  border: 1px solid; letter-spacing: .01em;
-}
-.pill-run { color: #c2410c; border-color: #fdba74; background: #fff7ed; }
-.slip-body { padding: 1.15rem; display: flex; flex-direction: column; gap: .85rem; }
-.slip-title { font-weight: 700; font-size: 1.05rem; }
-.row { display: flex; gap: .75rem; font-size: .9rem; align-items: baseline; }
-.row dt { color: var(--ink-faint); min-width: 5.6rem; flex-shrink: 0; }
-.row dd { margin: 0; color: var(--ink); }
-.slip dl { margin: 0; display: flex; flex-direction: column; gap: .5rem; }
-.slip-foot {
-  border-top: 1px solid var(--line-soft);
-  padding: .8rem 1.15rem;
-  display: flex; align-items: center; gap: .55rem;
-  font-size: .82rem; color: var(--ink-soft);
-  background: var(--bg-soft);
-}
-.dot { width: 7px; height: 7px; border-radius: 999px; background: var(--brand); flex-shrink: 0; }
+.panel-body { padding: 1.15rem 1.2rem 1.3rem; display: flex; flex-direction: column; gap: 1.05rem; }
 
-/* ── บล็อกเนื้อหา ─────────────────────────────────────── */
-section { padding: clamp(3rem, 7vw, 5rem) 0; }
-.band { background: var(--bg-soft); border-block: 1px solid var(--line-soft); }
-.sec-head { max-width: 42em; display: flex; flex-direction: column; gap: .9rem; }
-.sec-head h2 { font-size: clamp(1.5rem, 3.4vw, 2rem); }
+.person { display: grid; grid-template-columns: 1fr auto; gap: .4rem .8rem; }
+.person .who { font-size: .89rem; font-weight: 600; }
+.person .who small { color: var(--ink-faint); font-weight: 400; margin-left: .45rem; }
+.person .num {
+  font-family: var(--mono); font-size: .82rem; color: var(--ink-soft);
+  font-variant-numeric: tabular-nums; align-self: center;
+}
+.bar {
+  grid-column: 1 / -1;
+  display: flex; height: 11px; border-radius: 999px; overflow: hidden;
+  background: rgba(255,255,255,.05);
+}
+.bar i { display: block; height: 100%; transform-origin: left; animation: grow .85s cubic-bezier(.2,.7,.3,1) both; }
+.bar i:nth-child(2) { animation-delay: .06s; }
+.bar i:nth-child(3) { animation-delay: .12s; }
+.bar i:nth-child(4) { animation-delay: .18s; }
+@keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.person:nth-child(2) .bar i { animation-delay: .08s; }
+.person:nth-child(3) .bar i { animation-delay: .16s; }
+.person:nth-child(4) .bar i { animation-delay: .24s; }
+.person:nth-child(5) .bar i { animation-delay: .32s; }
+
+.warn {
+  font-size: .8rem; color: var(--s-over);
+  display: flex; align-items: center; gap: .4rem; grid-column: 1 / -1;
+}
+
+.legend { display: flex; flex-wrap: wrap; gap: .5rem 1.1rem; padding-top: .35rem; border-top: 1px solid var(--line-soft); }
+.legend span { font-size: .76rem; color: var(--ink-soft); display: inline-flex; align-items: center; gap: .4rem; }
+.legend b { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+
+/* ── ส่วนเนื้อหา ─────────────────────────────────────────────── */
+section { padding: clamp(3.2rem, 7vw, 5.5rem) 0; }
+.band { background: var(--bg-2); border-block: 1px solid var(--line-soft); }
+.sec-head { max-width: 40em; display: flex; flex-direction: column; gap: 1rem; }
+.sec-head h2 { font-size: clamp(1.6rem, 3.6vw, 2.25rem); }
 .sec-head p { color: var(--ink-soft); }
 
-/* ── ปัญหาที่ระบบนี้มาแทน ───────────────────────────── */
-.before-after { margin-top: 2.5rem; display: grid; gap: 1.5rem; grid-template-columns: 1fr; }
-@media (min-width: 780px) { .before-after { grid-template-columns: 1fr 1fr; } }
-.ba-col { border: 1px solid var(--line); border-radius: 12px; padding: 1.4rem; background: var(--surface); }
-.ba-col h3 { font-size: .95rem; margin-bottom: .9rem; }
-.ba-col ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: .7rem; }
-.ba-col li { font-size: .93rem; padding-left: 1.5rem; position: relative; color: var(--ink-soft); }
-.ba-col li::before { position: absolute; left: 0; top: 0; font-family: var(--mono); }
-.ba-before li::before { content: "×"; color: #dc2626; font-weight: 700; }
-.ba-after  li::before { content: "✓"; color: var(--brand); font-weight: 700; }
-.ba-after  li { color: var(--ink); }
-
-/* ── โมดูล ────────────────────────────────────────────── */
-.mods { margin-top: 2.5rem; display: grid; gap: 1.1rem; grid-template-columns: 1fr; }
-@media (min-width: 700px) { .mods { grid-template-columns: 1fr 1fr; } }
-.mod {
-  border: 1px solid var(--line); border-radius: 12px; padding: 1.4rem;
-  background: var(--surface);
-  border-top: 3px solid var(--c);
-  display: flex; flex-direction: column; gap: .7rem;
+/* ── สิ่งที่บอสเห็น ─────────────────────────────────────────── */
+.sees { margin-top: 2.6rem; display: grid; gap: 1.1rem; grid-template-columns: 1fr; }
+@media (min-width: 900px) { .sees { grid-template-columns: repeat(3, 1fr); } }
+.see {
+  border: 1px solid var(--line); border-radius: 14px; padding: 1.4rem;
+  background: var(--panel); display: flex; flex-direction: column; gap: .75rem;
+  transition: border-color .18s, transform .18s;
 }
-.mod-top { display: flex; align-items: center; gap: .7rem; }
-.mod-tag {
-  font-family: var(--mono); font-size: .68rem; letter-spacing: .1em;
+.see:hover { border-color: color-mix(in srgb, var(--brand) 45%, var(--line)); transform: translateY(-2px); }
+.see h3 { font-size: 1.03rem; }
+.see p { font-size: .91rem; color: var(--ink-soft); }
+.mini { display: flex; flex-direction: column; gap: .45rem; margin-bottom: .3rem; }
+.mini .m-row { display: flex; align-items: center; gap: .5rem; font-size: .78rem; color: var(--ink-soft); }
+.mini .m-bar { flex: 1; height: 6px; border-radius: 999px; background: rgba(255,255,255,.06); overflow: hidden; }
+.mini .m-bar i { display: block; height: 100%; border-radius: 999px; }
+.mini .m-val { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: .74rem; color: var(--ink-faint); }
+
+.chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+.chip {
+  font-size: .75rem; font-weight: 600; padding: .22rem .6rem; border-radius: 7px;
+  border: 1px solid var(--line); color: var(--ink-soft);
+}
+.chip.on { border-color: color-mix(in srgb, var(--s-check) 55%, transparent); color: var(--s-check); background: color-mix(in srgb, var(--s-check) 12%, transparent); }
+
+/* ── กลไกควบคุม ─────────────────────────────────────────────── */
+.rules { margin-top: 2.6rem; display: grid; gap: 1.6rem 2.6rem; grid-template-columns: 1fr; }
+@media (min-width: 820px) { .rules { grid-template-columns: 1fr 1fr; } }
+.rule { display: flex; gap: 1rem; }
+.rule .n {
+  font-family: var(--mono); font-size: .78rem; font-weight: 700; color: var(--brand);
+  padding-top: .28rem; flex-shrink: 0; letter-spacing: .04em;
+}
+.rule h3 { font-size: 1.02rem; margin-bottom: .45rem; }
+.rule p { font-size: .91rem; color: var(--ink-soft); }
+
+/* ── โมดูลเสริม ─────────────────────────────────────────────── */
+.mods { margin-top: 2.4rem; display: grid; gap: 1rem; grid-template-columns: 1fr; }
+@media (min-width: 780px) { .mods { grid-template-columns: 1fr 1fr; } }
+.mod {
+  border: 1px solid var(--line); border-left: 3px solid var(--c); border-radius: 12px;
+  padding: 1.3rem; background: var(--panel); display: flex; flex-direction: column; gap: .55rem;
+}
+.mod .mod-tag {
+  font-family: var(--mono); font-size: .68rem; letter-spacing: .12em;
   text-transform: uppercase; color: var(--c); font-weight: 700;
 }
-.mod h3 { font-size: 1.08rem; }
-.mod p { font-size: .93rem; color: var(--ink-soft); }
-.mod ul { margin: .2rem 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: .4rem; }
-.mod li {
-  font-size: .78rem; padding: .18rem .55rem; border-radius: 6px;
-  background: color-mix(in srgb, var(--c) 10%, transparent);
-  color: var(--c); font-weight: 600;
-}
-.soon { opacity: .62; }
-.soon .mod-tag::after { content: " · เร็ว ๆ นี้"; }
+.mod h3 { font-size: 1.02rem; }
+.mod p { font-size: .9rem; color: var(--ink-soft); }
 
-/* ── จุดต่าง ──────────────────────────────────────────── */
-.diffs { margin-top: 2.5rem; display: grid; gap: 1.6rem 2.5rem; grid-template-columns: 1fr; }
-@media (min-width: 760px) { .diffs { grid-template-columns: 1fr 1fr; } }
-.diff { display: flex; flex-direction: column; gap: .5rem; }
-.diff h3 { font-size: 1rem; display: flex; align-items: baseline; gap: .55rem; }
-.diff h3 code {
-  font-family: var(--mono); font-size: .72rem; color: var(--ink-faint);
-  font-weight: 500; letter-spacing: .06em;
-}
-.diff p { font-size: .93rem; color: var(--ink-soft); }
-
-/* ── ตัวเลขระบบ ───────────────────────────────────────── */
-.stats { margin-top: 2.5rem; display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; grid-template-columns: 1fr 1fr; }
-@media (min-width: 760px) { .stats { grid-template-columns: repeat(4, 1fr); } }
-.stat { background: var(--surface); padding: 1.3rem 1.1rem; display: flex; flex-direction: column; gap: .3rem; }
-.stat b { font-size: 1.5rem; font-family: var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
-.stat span { font-size: .82rem; color: var(--ink-soft); }
-
-/* ── ปิดท้าย ──────────────────────────────────────────── */
-.cta { text-align: left; }
-.cta .wrap { display: flex; flex-direction: column; gap: 1.4rem; align-items: flex-start; }
-.cta h2 { font-size: clamp(1.6rem, 4vw, 2.2rem); }
-.cta p { color: var(--ink-soft); max-width: 36em; }
-.cta-row { display: flex; flex-wrap: wrap; gap: .75rem; }
+/* ── ปิดท้าย ─────────────────────────────────────────────────── */
+.cta .wrap { display: flex; flex-direction: column; gap: 1.5rem; align-items: flex-start; }
+.cta h2 { font-size: clamp(1.7rem, 4.2vw, 2.4rem); }
+.cta p { color: var(--ink-soft); max-width: 34em; }
+.cta-row { display: flex; flex-wrap: wrap; gap: .8rem; }
 
 footer { border-top: 1px solid var(--line-soft); padding: 2.2rem 0 3rem; }
-footer .wrap { display: flex; flex-wrap: wrap; gap: 1rem 2rem; align-items: center; }
-footer p { font-size: .85rem; color: var(--ink-faint); }
+footer .wrap { display: flex; flex-wrap: wrap; gap: .8rem 2rem; align-items: center; }
+footer p { font-size: .84rem; color: var(--ink-faint); }
 footer .mono { font-family: var(--mono); font-size: .78rem; }
-footer a { color: var(--ink-soft); text-decoration: none; font-size: .85rem; }
-footer a:hover { color: var(--ink); }
 .sp { margin-left: auto; }
-@media (max-width: 620px) { .sp { margin-left: 0; } }
+@media (max-width: 640px) { .sp { margin-left: 0; } }
 </style>
 </head>
 <body>
 
 <header class="topbar">
   <div class="wrap">
-    <a class="logo" href="#top"><span class="a">Smart</span><span class="b">boss</span></a>
+    <a class="logo" href="#top"><span class="a">Smart</span>boss</a>
     <nav class="nav">
+      <a class="hide-sm" href="#sees">บอสเห็นอะไร</a>
+      <a class="hide-sm" href="#rules">ทำไมตัวเลขเชื่อได้</a>
       <a class="hide-sm" href="#modules">โมดูล</a>
-      <a class="hide-sm" href="#why">ทำไมต่าง</a>
-      <a class="hide-sm" href="#contact">ติดต่อ</a>
       <a class="btn btn-solid" href="https://app.smartboss.in.th">เข้าสู่ระบบ</a>
     </nav>
   </div>
@@ -286,223 +270,256 @@ footer a:hover { color: var(--ink); }
 
 <main id="top">
 
-  <!-- ── Hero ─────────────────────────────────────────── -->
-  <div class="hero">
+  <!-- ── Hero ───────────────────────────────────────────────── -->
+  <div class="hero glow">
     <div class="wrap">
       <div>
-        <p class="eyebrow">ระบบจัดการงานหน้างาน</p>
-        <h1 style="margin-top:1.1rem">
-          งานหน้างานทั้งหมด<br /><span class="hl">อยู่ที่เดียว</span> ไม่ต้องไล่หาในแชต
+        <p class="eyebrow">สำหรับผู้บริหารและหัวหน้าทีม</p>
+        <h1 style="margin-top:1.2rem">
+          รู้ว่าทีมกำลังทำอะไรอยู่<br /><em>โดยไม่ต้องเดินไปถาม</em>
         </h1>
         <p class="lede">
-          ใบงานซ่อม บำรุงรักษาตามรอบ งานประจำวัน สั่งซื้ออุปกรณ์
-          ลงเวลา และเงินเดือน — รวมอยู่ในระบบเดียวที่ตั้งค่าได้ตามวิธีทำงานของบริษัทคุณ
+          เปิดมาหน้าเดียวเห็นครบ — ใครถืองานกี่ชิ้น ใครจมงานจนจะไม่ทัน
+          งานไหนค้างมาหลายวันแล้วยังไม่มีใครแตะ
         </p>
         <div class="hero-cta">
-          <a class="btn btn-solid" href="#contact">ขอทดลองใช้</a>
-          <a class="btn btn-ghost" href="#modules">ดูว่าทำอะไรได้บ้าง</a>
+          <a class="btn btn-solid" href="#contact">ขอดูระบบจริง</a>
+          <a class="btn btn-ghost" href="#sees">ดูว่าบอสเห็นอะไรบ้าง</a>
         </div>
-        <p class="hero-note">ใช้งานจริงอยู่แล้วกับธุรกิจบริหารทรัพย์สินหลายหลัง</p>
+        <p class="hero-note"><span class="live" aria-hidden="true"></span> ใช้งานจริงอยู่ทุกวัน ไม่ใช่ระบบสาธิต</p>
       </div>
 
-      <!-- ใบงานจริง ไม่ใช่ภาพประกอบ — เลขที่เอกสารคือสิ่งที่คนหน้างานใช้พูดกัน -->
-      <div class="slip">
-        <div class="slip-head">
-          <span class="slip-code">WO-2569-0184</span>
-          <span class="pill pill-run">กำลังดำเนินการ</span>
+      <!-- แผงภาระงาน: สิ่งแรกที่บอสเห็นตอนเปิดระบบ -->
+      <div class="panel">
+        <div class="panel-head">
+          <h3>ภาระงานทีม</h3>
+          <span class="tag">สัปดาห์นี้</span>
         </div>
-        <div class="slip-body">
-          <p class="slip-title">แอร์ห้องนอนใหญ่ไม่เย็น</p>
-          <dl>
-            <div class="row"><dt>บ้าน</dt><dd>Pool Villa 12</dd></div>
-            <div class="row"><dt>ผู้รับผิดชอบ</dt><dd>ช่างสมชาย</dd></div>
-            <div class="row"><dt>กำหนดเสร็จ</dt><dd>14 ส.ค. 2569</dd></div>
-            <div class="row"><dt>ค่าใช้จ่าย</dt><dd>ไม่มี — อยู่ในสัญญาเหมารายปี</dd></div>
-          </dl>
-        </div>
-        <div class="slip-foot">
-          <span class="dot" aria-hidden="true"></span>
-          แจ้งเตือนเข้า LINE ของช่างและหัวหน้าทันทีที่เปิดใบงาน
+        <div class="panel-body">
+
+          <div class="person">
+            <p class="who">สมชาย <small>ช่างเทคนิค</small></p>
+            <p class="num">12 งาน</p>
+            <div class="bar">
+              <i style="flex:6;background:var(--s-done)"></i>
+              <i style="flex:3;background:var(--s-doing)"></i>
+              <i style="flex:2;background:var(--s-check)"></i>
+              <i style="flex:1;background:var(--s-over)"></i>
+            </div>
+          </div>
+
+          <div class="person">
+            <p class="who">วราภรณ์ <small>ธุรการ</small></p>
+            <p class="num">5 งาน</p>
+            <div class="bar">
+              <i style="flex:4;background:var(--s-done)"></i>
+              <i style="flex:1;background:var(--s-doing)"></i>
+            </div>
+          </div>
+
+          <div class="person">
+            <p class="who">ธนกฤต <small>หัวหน้าช่าง</small></p>
+            <p class="num">19 งาน</p>
+            <div class="bar">
+              <i style="flex:5;background:var(--s-done)"></i>
+              <i style="flex:7;background:var(--s-doing)"></i>
+              <i style="flex:3;background:var(--s-late)"></i>
+              <i style="flex:4;background:var(--s-over)"></i>
+            </div>
+            <p class="warn">งานเกินกำหนด 4 ชิ้น — มากกว่าคนอื่นในทีมสามเท่า</p>
+          </div>
+
+          <div class="person">
+            <p class="who">ปิยะ <small>ช่างไฟ</small></p>
+            <p class="num">7 งาน</p>
+            <div class="bar">
+              <i style="flex:5;background:var(--s-done)"></i>
+              <i style="flex:2;background:var(--s-doing)"></i>
+            </div>
+          </div>
+
+          <div class="legend">
+            <span><b style="background:var(--s-done)"></b>เสร็จแล้ว</span>
+            <span><b style="background:var(--s-doing)"></b>กำลังทำ</span>
+            <span><b style="background:var(--s-check)"></b>รอตรวจ</span>
+            <span><b style="background:var(--s-late)"></b>ใกล้ครบกำหนด</span>
+            <span><b style="background:var(--s-over)"></b>เกินกำหนด</span>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ── ปัญหาที่มาแทน ────────────────────────────────── -->
-  <section class="band" id="problem">
+  <!-- ── บอสเห็นอะไร ────────────────────────────────────────── -->
+  <section id="sees">
     <div class="wrap">
       <div class="sec-head">
-        <p class="eyebrow">ปัญหาที่เจอทุกวัน</p>
-        <h2>งานไม่ได้หาย แต่หาไม่เจอ</h2>
+        <p class="eyebrow">ภาพรวมองค์กร</p>
+        <h2>คำถามที่บอสถามทุกวัน มีคำตอบอยู่ในหน้าเดียว</h2>
         <p>
-          ส่วนใหญ่ไม่ได้ขาดคนทำงาน แต่ขาดที่เก็บงานที่ทุกคนดูที่เดียวกัน
-          พองานกระจายอยู่ในแชตกับกระดาษ เรื่องที่ตกหล่นจะรู้ตอนลูกค้าโทรมาต่อว่า
+          ไม่ต้องรอรายงานสิ้นเดือน ไม่ต้องไล่ถามหัวหน้าแต่ละแผนก
+          ข้อมูลอัปเดตตอนที่คนหน้างานกดในระบบ
         </p>
       </div>
-      <div class="before-after">
-        <div class="ba-col ba-before">
-          <h3>ก่อนใช้</h3>
-          <ul>
-            <li>งานแจ้งในกลุ่ม LINE แล้วเลื่อนหาย ไม่มีใครรู้ว่าใครรับไปแล้ว</li>
-            <li>ใบเสร็จอยู่ในกระเป๋าช่าง กว่าจะรวมยอดได้คือสิ้นเดือน</li>
-            <li>รอบล้างแอร์/เปลี่ยนไส้กรองจำเอาเอง ลืมทีก็เสียของ</li>
-            <li>เวลาเข้าออกจดในสมุด แล้วมานั่งคีย์เข้า Excel</li>
-            <li>อยากรู้ว่าเดือนนี้ซ่อมบ้านไหนไปเท่าไหร่ ต้องไล่ถามทีละคน</li>
-          </ul>
+
+      <div class="sees">
+        <article class="see">
+          <div class="mini">
+            <div class="m-row"><span style="min-width:3.4rem">ฝ่ายช่าง</span>
+              <span class="m-bar"><i style="width:88%;background:var(--s-over)"></i></span>
+              <span class="m-val">88%</span></div>
+            <div class="m-row"><span style="min-width:3.4rem">ธุรการ</span>
+              <span class="m-bar"><i style="width:41%;background:var(--s-doing)"></i></span>
+              <span class="m-val">41%</span></div>
+            <div class="m-row"><span style="min-width:3.4rem">แม่บ้าน</span>
+              <span class="m-bar"><i style="width:63%;background:var(--s-done)"></i></span>
+              <span class="m-val">63%</span></div>
+          </div>
+          <h3>ใครงานล้น ใครยังรับได้</h3>
+          <p>
+            เห็นภาระงานเทียบกันทั้งทีมและทั้งแผนก
+            ก่อนจะมอบงานชิ้นถัดไปให้คนที่จมอยู่แล้ว
+          </p>
+        </article>
+
+        <article class="see">
+          <div class="chips">
+            <span class="chip">ยังไม่เริ่ม</span>
+            <span class="chip">กำลังทำ</span>
+            <span class="chip on">รอตรวจ · 6</span>
+            <span class="chip">ผ่านแล้ว</span>
+          </div>
+          <h3>งานที่ปิดแล้วจริงหรือแค่กดปิด</h3>
+          <p>
+            งานเสร็จต้องผ่านการตรวจก่อนถึงจะปิดจริง
+            บอสจึงเห็นว่ามีกี่ชิ้นที่รอคุณอนุมัติอยู่ตอนนี้
+          </p>
+        </article>
+
+        <article class="see">
+          <div class="mini">
+            <div class="m-row"><span style="min-width:3.4rem">ธนกฤต</span>
+              <span class="m-bar"><i style="width:72%;background:var(--s-late)"></i></span>
+              <span class="m-val">72</span></div>
+            <div class="m-row"><span style="min-width:3.4rem">สมชาย</span>
+              <span class="m-bar"><i style="width:91%;background:var(--s-done)"></i></span>
+              <span class="m-val">91</span></div>
+            <div class="m-row"><span style="min-width:3.4rem">ปิยะ</span>
+              <span class="m-bar"><i style="width:84%;background:var(--s-done)"></i></span>
+              <span class="m-val">84</span></div>
+          </div>
+          <h3>ใครทำงานได้ตามที่ตกลงกัน</h3>
+          <p>
+            คะแนนผลงานคิดจากเหตุการณ์จริง — ส่งงานช้า ไม่ส่งรายงาน มาสาย
+            ตามเกณฑ์ที่บริษัทคุณตั้งเอง
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── ทำไมตัวเลขเชื่อได้ ─────────────────────────────────── -->
+  <section class="band" id="rules">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">กลไกที่อยู่เบื้องหลัง</p>
+        <h2>แดชบอร์ดสวยแค่ไหนก็ไร้ค่า ถ้าข้อมูลข้างในไม่ตรงความจริง</h2>
+        <p>
+          ระบบส่วนใหญ่ล้มเหลวตรงที่คนกรอกข้อมูลตามใจ
+          สี่ข้อนี้คือสิ่งที่ทำให้ตัวเลขบนหน้าจอตรงกับหน้างานจริง
+        </p>
+      </div>
+
+      <div class="rules">
+        <div class="rule">
+          <span class="n">01</span>
+          <div>
+            <h3>ปิดงานเองไม่ได้</h3>
+            <p>
+              คนทำงานกดได้แค่ "เสร็จแล้ว" จากนั้นงานเข้าคิวรอตรวจ
+              หัวหน้าเป็นคนกดผ่าน ตัวเลข "งานเสร็จ" จึงเป็นงานที่ผ่านตาคนแล้วจริง
+            </p>
+          </div>
         </div>
-        <div class="ba-col ba-after">
-          <h3>หลังใช้ Smartboss</h3>
-          <ul>
-            <li>ทุกงานมีเลขที่ มีคนรับผิดชอบ มีสถานะ ดูย้อนหลังได้</li>
-            <li>บันทึกค่าใช้จ่ายพร้อมรูปใบเสร็จตั้งแต่ตอนปิดงาน</li>
-            <li>ถึงรอบบำรุงรักษาระบบเปิดใบงานให้เอง พร้อมเตือนล่วงหน้า</li>
-            <li>สแกนนิ้วเข้าระบบตรง คำนวณ OT และเงินเดือนต่อได้เลย</li>
-            <li>เปิดรายงานดูยอดแยกตามบ้าน ตามประเภท ตามช่วงเวลาได้ทันที</li>
-          </ul>
+
+        <div class="rule">
+          <span class="n">02</span>
+          <div>
+            <h3>เช็คลิสต์ไม่ครบ ปิดไม่ได้</h3>
+            <p>
+              งานที่มีขั้นตอนย่อยต้องติ๊กครบทุกข้อก่อน
+              ไม่ใช่ทำสองในห้าข้อแล้วกดเสร็จเพราะใกล้เลิกงาน
+            </p>
+          </div>
+        </div>
+
+        <div class="rule">
+          <span class="n">03</span>
+          <div>
+            <h3>ทุกการแก้ไขมีบันทึก</h3>
+            <p>
+              ใครเลื่อนกำหนดส่ง ใครเปลี่ยนผู้รับผิดชอบ ใครแก้รายละเอียด
+              บันทึกไว้พร้อมเวลา ย้อนดูได้ ไม่มีการแก้เงียบ ๆ
+            </p>
+          </div>
+        </div>
+
+        <div class="rule">
+          <span class="n">04</span>
+          <div>
+            <h3>เกณฑ์เป็นของบริษัทคุณ</h3>
+            <p>
+              ช้ากี่วันถึงเรียกว่าช้า หักคะแนนเท่าไหร่ ใครมีสิทธิ์กดผ่าน
+              ตั้งเองได้ทั้งหมด ไม่มีกฎที่เราฝังมาให้ตายตัว
+            </p>
+          </div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- ── โมดูล ───────────────────────────────────────── -->
+  <!-- ── โมดูลเสริม ─────────────────────────────────────────── -->
   <section id="modules">
     <div class="wrap">
       <div class="sec-head">
-        <p class="eyebrow">โมดูล</p>
-        <h2>เปิดใช้เฉพาะส่วนที่ต้องการ</h2>
+        <p class="eyebrow">ต่อยอดได้</p>
+        <h2>เริ่มจากงานประจำวัน แล้วค่อยเปิดส่วนอื่นเมื่อพร้อม</h2>
         <p>
-          แต่ละโมดูลทำงานแยกกันได้ เปิดปิดรายบริษัท
-          จ่ายเฉพาะที่ใช้ และเพิ่มทีหลังได้โดยข้อมูลเดิมไม่ต้องย้าย
+          ทุกโมดูลส่งข้อมูลเข้าภาพรวมเดียวกัน
+          เปิดเพิ่มทีหลังได้โดยข้อมูลเดิมไม่ต้องย้าย
         </p>
       </div>
 
       <div class="mods">
-        <article class="mod" style="--c: var(--mod-maint)">
-          <div class="mod-top"><span class="mod-tag">แจ้งซ่อมบำรุง</span></div>
-          <h3>ใบงานซ่อมและงานบำรุงรักษา</h3>
+        <article class="mod" style="--c:#0d9488">
+          <span class="mod-tag">แจ้งซ่อมบำรุง</span>
+          <h3>ใบงานซ่อมและงานตามรอบ</h3>
           <p>
-            เปิดใบงานพร้อมรูปก่อน–หลัง มอบหมายช่าง ติดตามสถานะ
+            เปิดใบงานพร้อมรูปก่อน–หลัง คุมค่าใช้จ่ายรายบ้าน
             ตั้งรอบบำรุงรักษาแล้วให้ระบบเปิดใบงานเองเมื่อถึงกำหนด
           </p>
-          <ul>
-            <li>ใบงาน</li><li>บำรุงรักษาตามรอบ</li><li>สั่งซื้ออุปกรณ์</li>
-            <li>ค่าใช้จ่าย</li><li>ช่างภายนอก</li>
-          </ul>
         </article>
 
-        <article class="mod" style="--c: var(--mod-report)">
-          <div class="mod-top"><span class="mod-tag">งานและรายงาน</span></div>
-          <h3>งานประจำวันและรายงานทีม</h3>
+        <article class="mod" style="--c:#3b82f6">
+          <span class="mod-tag">งานบุคคล</span>
+          <h3>ลงเวลาและเงินเดือน</h3>
           <p>
-            บอร์ดงานแบบลากวาง มอบหมายเป็นรายคนหรือทีม
-            มีขั้นตรวจงานก่อนปิด และดูภาระงานของแต่ละคนได้ในหน้าเดียว
+            รับข้อมูลจากเครื่องสแกนลายนิ้วมือตรง คิด OT ตามกะ
+            ออกสลิปให้พนักงานเปิดดูเองได้
           </p>
-          <ul>
-            <li>บอร์ดงาน</li><li>ปฏิทิน</li><li>รายงานประจำวัน</li>
-            <li>แจ้งปัญหา</li><li>บันทึกกิจกรรม</li>
-          </ul>
-        </article>
-
-        <article class="mod" style="--c: var(--mod-hr)">
-          <div class="mod-top"><span class="mod-tag">งานบุคคล</span></div>
-          <h3>ลงเวลา กะทำงาน และเงินเดือน</h3>
-          <p>
-            รับข้อมูลจากเครื่องสแกนลายนิ้วมือโดยตรง คิด OT ตามกะ
-            ออกสลิปเงินเดือน และให้พนักงานเปิดสลิปของตัวเองได้
-          </p>
-          <ul>
-            <li>เครื่องสแกนนิ้ว</li><li>กะทำงาน</li><li>Timesheet</li>
-            <li>เงินเดือน</li><li>สลิปออนไลน์</li>
-          </ul>
-        </article>
-
-        <article class="mod" style="--c: var(--mod-admin)">
-          <div class="mod-top"><span class="mod-tag">หลังบ้าน</span></div>
-          <h3>ผู้ใช้ สิทธิ์ และการตั้งค่า</h3>
-          <p>
-            กำหนดสิทธิ์ได้ถึงระดับแผนกและตำแหน่ง
-            ดูประวัติการใช้งานย้อนหลังว่าใครแก้อะไรเมื่อไหร่
-          </p>
-          <ul>
-            <li>บทบาทและสิทธิ์</li><li>แผนก/ตำแหน่ง</li>
-            <li>ผลงานรายคน</li><li>ประวัติการใช้งาน</li>
-          </ul>
         </article>
       </div>
     </div>
   </section>
 
-  <!-- ── ทำไมต่าง ───────────────────────────────────── -->
-  <section class="band" id="why">
-    <div class="wrap">
-      <div class="sec-head">
-        <p class="eyebrow">จุดต่าง</p>
-        <h2>สร้างจากหน้างานจริง ไม่ใช่จากตำรา</h2>
-        <p>ทุกข้อข้างล่างมาจากปัญหาที่เจอตอนใช้งานจริง แล้วแก้ให้</p>
-      </div>
-
-      <div class="diffs">
-        <div class="diff">
-          <h3>เลขที่เอกสารที่อ่านให้กันฟังได้ <code>WO-2569-0184</code></h3>
-          <p>
-            ช่างโทรมาถามเรื่องงาน ต้องอ้างเลขได้ในประโยคเดียว
-            ระบบจึงเดินเลขแยกตามบริษัทและปี พ.ศ. ไม่ใช่รหัสสุ่มยาว ๆ ที่อ่านไม่ออก
-          </p>
-        </div>
-        <div class="diff">
-          <h3>แจ้งเตือนเข้า LINE <code>ที่คนเปิดอยู่แล้ว</code></h3>
-          <p>
-            ไม่ต้องบังคับให้ทุกคนลงแอปใหม่แล้วเปิดดูทุกวัน
-            งานใหม่ งานเกินกำหนด และรอบบำรุงรักษาส่งเข้า LINE ของคนที่เกี่ยวข้องโดยตรง
-          </p>
-        </div>
-        <div class="diff">
-          <h3>ช่างนอกส่งรูปได้โดยไม่ต้องมีบัญชี <code>ลิงก์ชั่วคราว</code></h3>
-          <p>
-            ส่งลิงก์ให้ช่างที่จ้างมาเป็นครั้ง ๆ เขาถ่ายรูปและพิมพ์ข้อความส่งกลับได้เลย
-            ลิงก์หมดอายุเอง ไม่ต้องเปิดสิทธิ์เข้าระบบให้คนนอก
-          </p>
-        </div>
-        <div class="diff">
-          <h3>กฎของบริษัทคุณ ไม่ใช่ของเรา <code>ตั้งค่าได้ทุกตัว</code></h3>
-          <p>
-            สายกี่นาทีถึงนับว่าสาย ผ่อนผันรอบบำรุงรักษากี่วัน หักคะแนนเท่าไหร่
-            ล็อกบัญชีหลังกรอกรหัสผิดกี่ครั้ง — ตั้งเองได้ทั้งหมด ไม่มีค่าตายในระบบ
-          </p>
-        </div>
-        <div class="diff">
-          <h3>งานที่ไม่มีค่าใช้จ่ายก็บอกได้ <code>ไม่ต้องกรอก 0</code></h3>
-          <p>
-            งานที่อยู่ในสัญญาเหมารายปีแล้วไม่ต้องบันทึกค่าใช้จ่ายซ้ำ
-            ระบบจะไม่ทวง ตัวเลขในรายงานจึงเป็นยอดจริง ไม่ปนศูนย์ที่ใส่ไปให้พ้น ๆ
-          </p>
-        </div>
-        <div class="diff">
-          <h3>ข้อมูลแต่ละบริษัทแยกขาดจากกัน <code>ตรวจที่ชั้นฐานข้อมูล</code></h3>
-          <p>
-            ไม่ได้กันด้วยเงื่อนไขในโค้ดอย่างเดียว แต่บังคับที่ตัวฐานข้อมูล
-            ต่อให้เขียนโค้ดพลาด ข้อมูลก็ข้ามบริษัทไม่ได้
-          </p>
-        </div>
-      </div>
-
-      <div class="stats">
-        <div class="stat"><b>4</b><span>โมดูลที่ใช้งานได้แล้ว</span></div>
-        <div class="stat"><b>2</b><span>ชั้นสำรองข้อมูลทุกคืน</span></div>
-        <div class="stat"><b>14</b><span>วันที่เก็บข้อมูลสำรองไว้</span></div>
-        <div class="stat"><b>100%</b><span>เชื่อมต่อแบบเข้ารหัส</span></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ── ปิดท้าย ─────────────────────────────────────── -->
-  <section class="cta" id="contact">
+  <!-- ── ปิดท้าย ───────────────────────────────────────────── -->
+  <section class="cta glow" id="contact">
     <div class="wrap">
       <p class="eyebrow">เริ่มต้น</p>
-      <h2>อยากดูว่าเข้ากับงานของคุณไหม</h2>
+      <h2>ขอดูจากข้อมูลจริงของทีมคุณ</h2>
       <p>
-        บอกเราว่าตอนนี้ทีมทำงานกันยังไง เราจะพาดูของจริงในระบบ
-        และบอกตรง ๆ ถ้ามีส่วนไหนยังไม่ตอบโจทย์คุณ
+        เล่าให้ฟังว่าตอนนี้ติดตามงานกันยังไง
+        เราจะพาดูของจริงในระบบ และบอกตรง ๆ ถ้ามีส่วนไหนยังไม่ตอบโจทย์
       </p>
       <div class="cta-row">
         <a class="btn btn-solid" href="mailto:baanpoolvilla02@gmail.com?subject=สนใจทดลองใช้%20Smartboss">ติดต่อขอทดลองใช้</a>
@@ -514,7 +531,7 @@ footer a:hover { color: var(--ink); }
 
 <footer>
   <div class="wrap">
-    <p><span class="logo"><span class="a">Smart</span><span class="b">boss</span></span></p>
+    <p><span class="logo"><span class="a">Smart</span>boss</span></p>
     <p class="mono">smartboss.in.th</p>
     <p class="sp">© 2569 Smartboss</p>
   </div>
