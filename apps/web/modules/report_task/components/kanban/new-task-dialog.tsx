@@ -215,6 +215,8 @@ export function NewTaskDialog({
   defaultType = "task",
   allowedTypes: allowedTypesProp = ["task", "meeting"],
   defaultDate,
+  defaultTitle,
+  onCreated,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -222,6 +224,10 @@ export function NewTaskDialog({
   allowedTypes?: ItemType[];
   /** Pre-fill the date fields (YYYY-MM-DD), e.g. when opened from a calendar day. */
   defaultDate?: string;
+  /** Pre-fill the title field — e.g. "เปิดเป็นงาน" from a report post seeds it with the post's title. */
+  defaultTitle?: string;
+  /** Fires with the new task's id right after a task (not meeting/leave) is created — lets a caller that opened this dialog for a specific purpose (e.g. linking a report post to the task it spawned) follow up without guessing the id. */
+  onCreated?: (taskId: string) => void;
 }) {
   const addTask = useTaskStore((s) => s.addTask);
   const addMeeting = useMeetingStore((s) => s.addMeeting);
@@ -273,7 +279,7 @@ export function NewTaskDialog({
   const itemType: ItemType = allowedTypes.includes(rawType) ? rawType : allowedTypes[0]!;
 
   // Shared
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(defaultTitle ?? "");
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
@@ -571,6 +577,7 @@ export function NewTaskDialog({
     };
     addTask(task);
     toast.success("สร้างงานเรียบร้อยแล้ว");
+    onCreated?.(task.id);
   }
 
   async function createMeeting() {

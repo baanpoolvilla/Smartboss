@@ -10,6 +10,7 @@ import { ReportHeader } from "@/modules/report_task/components/report-feed/repor
 import { RoomSettingsSheet } from "@/modules/report_task/components/report-feed/room-settings-sheet";
 import { ReportTopicPanels, collectFiles, collectLinks, filesCutoffMs } from "@/modules/report_task/components/report-feed/report-topic-panels";
 import { PostFilterBar, filterPosts, emptyPostFilters, postFiltersActiveCount, type PostFilters } from "@/modules/report_task/components/report-feed/post-filter-bar";
+import { TaskDetailSheet } from "@/modules/report_task/components/kanban/task-detail-sheet";
 import { Button, buttonVariants } from "@/modules/report_task/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/modules/report_task/components/ui/sheet";
@@ -24,7 +25,7 @@ import { currentCutoff } from "@/modules/report_task/lib/report-cutoff";
 import { pendingToday, todayStatusEntries, type TodayStatusEntry } from "@/modules/report_task/lib/report-feed-compliance";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
-import { AtSign, BarChart3, Check, CheckCircle2, Clock, FileImage, FolderHeart, Hash, ImagePlus, Link2, Lock, Menu, MessageSquareText, Pin, Settings, TriangleAlert, Users, X } from "lucide-react";
+import { AtSign, BarChart3, Check, CheckCircle2, Clock, FileImage, FolderHeart, Hash, ImagePlus, Link2, ListTree, Lock, Menu, MessageSquareText, Pin, Rows3, Settings, TriangleAlert, Users, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 
 // Beyond this many pinned posts, the rest move into the "+N เพิ่มเติม"
@@ -114,6 +115,14 @@ function ReportFeedPageInner() {
   // The ⚙ (Phase 6) opens settings right here now instead of navigating the
   // whole page away to /settings and losing which room/tab you were on (G1).
   const [roomSettingsOpen, setRoomSettingsOpen] = useState(false);
+  // "เปิดเป็นงาน" (report-card.tsx) opens the Task Board's own detail sheet
+  // right here in place, same local-state pattern as calendar-view.tsx —
+  // no navigation away from whatever room/post the viewer was reading.
+  const [openTaskId, setOpenTaskId] = useState<string | null>(null);
+  // Per-room display mode — "stream" (chat-log order, oldest→newest, day
+  // grouped) vs "threads" (forum order, most-recently-active post first) —
+  // see report-feed.tsx's viewMode prop for what each actually renders.
+  const [feedViewMode, setFeedViewMode] = useState<"stream" | "threads">("stream");
   // Which header pill (H1) was clicked, if any — overrides the main panel
   // with TodayStatusPanel below regardless of what's selected in the
   // sidebar tree. Cleared by selectView() so any real navigation drops it.
@@ -362,7 +371,7 @@ function ReportFeedPageInner() {
             </div>
           ) : showAllPosts ? (
             <div className="flex-1 min-h-0 rounded-2xl border border-[var(--line)] bg-white shadow-sm overflow-hidden flex flex-col">
-              <ReportAllPostsFeed topics={visibleTopics} posts={posts} onJumpToTopic={selectView} />
+              <ReportAllPostsFeed topics={visibleTopics} posts={posts} onJumpToTopic={selectView} onOpenTask={setOpenTaskId} />
             </div>
           ) : showPending ? (
             <div className="flex-1 min-h-0 rounded-2xl border border-[var(--line)] bg-white shadow-sm overflow-hidden flex flex-col">
@@ -379,6 +388,7 @@ function ReportFeedPageInner() {
                 emptyTitle="ยังไม่มีใครกล่าวถึงคุณ"
                 emptyDescription="โพสต์หรือความคิดเห็นที่แท็กคุณด้วย @ จะขึ้นที่นี่"
                 onJumpToTopic={selectView}
+                onOpenTask={setOpenTaskId}
               />
             </div>
           ) : activeTopic ? (
@@ -533,12 +543,42 @@ function ReportFeedPageInner() {
                 {/* Filter bar (1.3) — was the biggest gap in the whole page:
                     the room's own feed had no filtering at all before this. */}
                 {activeTab === "posts" && (
-                  <div className="px-5 py-2 border-t border-[var(--line)]">
+                  <div className="px-5 py-2 border-t border-[var(--line)] flex items-center justify-between gap-2 flex-wrap">
                     <PostFilterBar
                       filters={filters}
                       onChange={setFilters}
                       authorOptions={topicMembers.map((m) => m.id)}
                     />
+                    {/* จัดเรียงโพสต์ในห้องนี้ — "สตรีม" (แชทเรียงเวลา ล่าสุดอยู่ล่าง)
+                        หรือ "กระทู้" (เรียงตามความเคลื่อนไหวล่าสุด เหมือนฟอรัม) */}
+                    <div className="flex items-center gap-1 bg-[var(--bg-soft)] rounded-lg p-1 shrink-0">
+                      <button
+                        onClick={() => setFeedViewMode("stream")}
+                        title="เรียงตามเวลา แบบแชท"
+                        className={cn(
+                          "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors",
+                          feedViewMode === "stream"
+                            ? "bg-white shadow-sm text-[var(--ink)]"
+                            : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
+                        )}
+                      >
+                        <Rows3 className="h-3.5 w-3.5" />
+                        สตรีม
+                      </button>
+                      <button
+                        onClick={() => setFeedViewMode("threads")}
+                        title="เรียงตามความเคลื่อนไหวล่าสุด แบบกระทู้"
+                        className={cn(
+                          "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors",
+                          feedViewMode === "threads"
+                            ? "bg-white shadow-sm text-[var(--ink)]"
+                            : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
+                        )}
+                      >
+                        <ListTree className="h-3.5 w-3.5" />
+                        กระทู้
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -558,6 +598,8 @@ function ReportFeedPageInner() {
                       topicPosts={filteredTopicPosts}
                       highlightPostId={highlightPostId}
                       highlightReplyId={highlightReplyId}
+                      viewMode={feedViewMode}
+                      onOpenTask={setOpenTaskId}
                     />
                   )}
                   <ReportComposer topic={activeTopic} />
@@ -574,6 +616,8 @@ function ReportFeedPageInner() {
           )}
         </div>
       </div>
+
+      <TaskDetailSheet taskId={openTaskId} onOpenChange={(open) => !open && setOpenTaskId(null)} />
     </div>
   );
 }

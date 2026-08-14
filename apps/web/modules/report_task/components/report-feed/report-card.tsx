@@ -14,6 +14,15 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from "@/modules/report_task/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/modules/report_task/components/ui/dialog";
+import { NewTaskDialog } from "@/modules/report_task/components/kanban/new-task-dialog";
 import { getUser } from "@/modules/report_task/lib/directory";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import {
@@ -45,6 +54,8 @@ import {
   Bookmark,
   BookmarkCheck,
   Check,
+  ClipboardList,
+  Copy,
   Eye,
   EyeOff,
   ImagePlus,
@@ -61,6 +72,7 @@ import {
   Quote,
   Reply as ReplyIcon,
   Send,
+  Share2,
   SmilePlus,
   Trash2,
   TriangleAlert,
@@ -78,6 +90,7 @@ export function ReportCard({
   highlighted,
   highlightReplyId,
   topicBadge,
+  onOpenTask,
 }: {
   post: ReportPost;
   topic: ReportTopic;
@@ -88,6 +101,10 @@ export function ReportCard({
    * only ภาพรวมทั้งหมด passes this (V3): inside a single room's own feed the
    * topic is already implicit from the room you're looking at. */
   topicBadge?: { label: string; onClick: () => void };
+  /** "เปิดเป็นงาน" — opens the Task Board's detail sheet in place, for a post
+   * already linked to a task. Absent means the page hosting this card hasn't
+   * wired up a task sheet, so the menu item silently no-ops. */
+  onOpenTask?: (taskId: string) => void;
 }) {
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const toggleReaction = useReportFeedStore((s) => s.toggleReaction);
@@ -97,6 +114,7 @@ export function ReportCard({
   const togglePin = useReportFeedStore((s) => s.togglePin);
   const toggleSave = useReportFeedStore((s) => s.toggleSave);
   const toggleUnread = useReportFeedStore((s) => s.toggleUnread);
+  const setPostLinkedTask = useReportFeedStore((s) => s.setPostLinkedTask);
   const author = getUser(post.authorId);
   const viewer = getUser(viewingAsUserId);
   const isOwn = post.authorId === viewingAsUserId;
@@ -117,6 +135,8 @@ export function ReportCard({
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const [showFull, setShowFull] = useState(false);
   const [editing, setEditing] = useState(false);
   // Collapsed comment box's formatting toolbar (B/I/U/link/highlight) only
@@ -286,9 +306,13 @@ export function ReportCard({
   // With replyId, the link deep-links to that one comment (?reply=) instead
   // of just the post — same idea as Teams' parentMessageId, minus the
   // tenant/team/channel routing this single-tenant app doesn't need.
-  function copyLink(replyId?: string) {
+  function postUrl(replyId?: string) {
     const base = `${window.location.origin}${window.location.pathname}?topic=${topic.id}&post=${post.id}`;
-    const url = replyId ? `${base}&reply=${replyId}` : base;
+    return replyId ? `${base}&reply=${replyId}` : base;
+  }
+
+  function copyLink(replyId?: string) {
+    const url = postUrl(replyId);
     if (!navigator.clipboard) {
       toast.error("คัดลอกลิงก์ไม่สำเร็จ");
     } else {
@@ -298,6 +322,35 @@ export function ReportCard({
         .catch(() => toast.error("คัดลอกลิงก์ไม่สำเร็จ"));
     }
     setMoreOpen(false);
+  }
+
+  // Anyone opening this link needs their own login on this app either way
+  // (it's not a public page) — the point of these buttons is just skipping
+  // "copy link, switch app, paste" for people who already have access,
+  // same as sharing any internal Notion/Confluence page link around.
+  async function sharePost() {
+    setMoreOpen(false);
+    const url = postUrl();
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: post.title || "โพสต์จาก Smartboss", url });
+        return;
+      } catch {
+        // User cancelled the native share sheet, or the browser rejected it
+        // (e.g. no user gesture in its eyes) — fall through to the picker
+        // instead of leaving the click looking like it did nothing.
+      }
+    }
+    setShareOpen(true);
+  }
+
+  function handleOpenAsTask() {
+    setMoreOpen(false);
+    if (post.linkedTaskId) {
+      onOpenTask?.(post.linkedTaskId);
+    } else {
+      setCreateTaskOpen(true);
+    }
   }
 
   function openReplyLightbox(images: ReportPostImage[], index: number) {
@@ -402,6 +455,12 @@ export function ReportCard({
               onClick={() => { toggleSave(post.id, viewingAsUserId); setMoreOpen(false); }}
             />
             <MenuButton icon={Link2} label="คัดลอกลิงก์" onClick={() => copyLink()} />
+            <MenuButton icon={Share2} label="แชร์โพสต์" onClick={sharePost} />
+            <MenuButton
+              icon={ClipboardList}
+              label={post.linkedTaskId ? "เปิดงานที่เชื่อมไว้" : "เปิดเป็นงาน"}
+              onClick={handleOpenAsTask}
+            />
             <MenuButton
               icon={isUnread ? Eye : EyeOff}
               label={isUnread ? "ทำเครื่องหมายว่าอ่านแล้ว" : "ทำเครื่องหมายว่ายังไม่อ่าน"}
@@ -794,6 +853,68 @@ export function ReportCard({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={shareOpen} onOpenChange={setShareOpen}>
+        <DialogContent className="sm:max-w-sm" showCloseButton={false}>
+          <DialogClose render={<Button variant="ghost" size="icon-sm" className="absolute top-2 right-2" />}>
+            <X />
+            <span className="sr-only">Close</span>
+          </DialogClose>
+          <DialogHeader>
+            <DialogTitle>แชร์โพสต์</DialogTitle>
+            <DialogDescription>
+              คนที่เปิดลิงก์นี้ต้องมีบัญชีในระบบอยู่แล้วถึงจะเข้าดูโพสต์ได้ — ไม่ใช่ลิงก์สาธารณะ
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-2">
+            <a
+              href={`https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(postUrl())}`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center justify-center gap-2 rounded-lg border border-[var(--line)] px-3 py-2.5 text-sm font-medium hover:bg-[var(--bg-soft)] transition-colors"
+            >
+              LINE
+            </a>
+            <a
+              href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(postUrl())}`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center justify-center gap-2 rounded-lg border border-[var(--line)] px-3 py-2.5 text-sm font-medium hover:bg-[var(--bg-soft)] transition-colors"
+            >
+              Facebook
+            </a>
+            <a
+              href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(postUrl())}&text=${encodeURIComponent(post.title || "โพสต์จาก Smartboss")}`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center justify-center gap-2 rounded-lg border border-[var(--line)] px-3 py-2.5 text-sm font-medium hover:bg-[var(--bg-soft)] transition-colors"
+            >
+              X (Twitter)
+            </a>
+            <button
+              onClick={() => copyLink()}
+              className="flex items-center justify-center gap-2 rounded-lg border border-[var(--line)] px-3 py-2.5 text-sm font-medium hover:bg-[var(--bg-soft)] transition-colors"
+            >
+              <Copy className="h-4 w-4" /> คัดลอกลิงก์
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {createTaskOpen && (
+        <NewTaskDialog
+          open={createTaskOpen}
+          onOpenChange={setCreateTaskOpen}
+          defaultType="task"
+          allowedTypes={["task"]}
+          defaultTitle={post.title}
+          onCreated={(taskId) => {
+            setPostLinkedTask(post.id, taskId);
+            setCreateTaskOpen(false);
+            onOpenTask?.(taskId);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { Switch } from "@/modules/report_task/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { ReportTopicSettingsPanel } from "@/modules/report_task/components/report-feed/report-topic-settings-dialog";
+import { UNLIMITED_FILES_RETENTION_DAYS } from "@/modules/report_task/components/report-feed/report-topic-panels";
 import { useReportFeedStore, topicColors, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canManage } from "@/modules/report_task/lib/directory";
@@ -311,19 +312,25 @@ export function RoomSettingsSheet({
             <div className="flex items-center justify-between rounded-lg bg-[var(--bg-soft)] px-3 py-2.5">
               <div className="min-w-0 pr-3">
                 <p className="text-sm font-medium">อายุรูปในแท็บ &quot;ไฟล์&quot;</p>
-                <p className="text-xs text-[var(--ink-soft)]">รูปเก่ากว่านี้จะไม่แสดงในแท็บไฟล์ (อัลบั้มไม่มีวันหมดอายุ)</p>
+                <p className="text-xs text-[var(--ink-soft)]">
+                  รูปเก่ากว่านี้จะไม่แสดงในแท็บไฟล์ (อัลบั้มไม่มีวันหมดอายุ) — เลือก &quot;ไม่จำกัด&quot;
+                  ถ้าอยากให้แท็บนี้เป็นคลังเก็บไฟล์ถาวรแบบ SharePoint แทนมุมมองรูปล่าสุด
+                </p>
               </div>
               <Select
                 value={String(draft.filesRetentionDays ?? 7)}
                 onValueChange={(v) => v && patchDraft({ filesRetentionDays: Number(v) === 7 ? undefined : Number(v) })}
               >
-                <SelectTrigger className="w-24 shrink-0">
-                  <SelectValue>{draft.filesRetentionDays ?? 7} วัน</SelectValue>
+                <SelectTrigger className="w-28 shrink-0">
+                  <SelectValue>
+                    {draft.filesRetentionDays === UNLIMITED_FILES_RETENTION_DAYS ? "ไม่จำกัด" : `${draft.filesRetentionDays ?? 7} วัน`}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {[3, 7, 14, 30].map((d) => (
                     <SelectItem key={d} value={String(d)}>{d} วัน</SelectItem>
                   ))}
+                  <SelectItem value={String(UNLIMITED_FILES_RETENTION_DAYS)}>ไม่จำกัด</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -72,6 +72,10 @@ export interface ReportPost extends ReportPostFields {
   /** emoji -> userIds who reacted with it */
   reactions: Record<string, string[]>;
   replies: ReportPostReply[];
+  /** Set once someone opens this post as a Task (see report-card.tsx) — lets
+   * the card show "เปิดงานที่เชื่อมไว้" instead of "สร้างเป็นงาน" the next time,
+   * so a post never spawns two duplicate tasks by accident. */
+  linkedTaskId?: string;
 }
 
 /** A daily submission window (e.g. "เช้า" due 09:00) a room can require reports by. */
@@ -215,6 +219,8 @@ interface ReportFeedStore {
   addPost: (topicId: string, authorId: string, data: ReportPostFields) => void;
   editPost: (postId: string, data: ReportPostFields) => void;
   removePost: (id: string) => void;
+  /** Records which Task a post was opened/converted into (see report-card.tsx's "เปิดเป็นงาน"). */
+  setPostLinkedTask: (postId: string, taskId: string) => void;
   /** Moves an already-posted image in or out of an album after the fact
    * (the "ไฟล์" tab's one-tap save) — searches the post's own images and
    * every reply's images, since the caller only knows the image id, not
@@ -353,6 +359,8 @@ export const useReportFeedStore = create<ReportFeedStore>()(
           posts: s.posts.map((p) => (p.id === postId ? { ...p, ...data, editedAt: new Date().toISOString() } : p)),
         })),
       removePost: (id) => set((s) => ({ posts: s.posts.filter((p) => p.id !== id) })),
+      setPostLinkedTask: (postId, taskId) =>
+        set((s) => ({ posts: s.posts.map((p) => (p.id === postId ? { ...p, linkedTaskId: taskId } : p)) })),
       setImageAlbum: (postId, imageId, albumId) =>
         set((s) => ({
           posts: s.posts.map((p) => {

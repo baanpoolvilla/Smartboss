@@ -39,6 +39,7 @@ export function ReportAllPostsFeed({
   topics,
   posts,
   onJumpToTopic,
+  onOpenTask,
   title = "ภาพรวมทั้งหมด",
   description = "โพสต์จากทุกหัวข้อที่เห็นได้ เรียงตามเวลา ล่าสุดอยู่ล่างสุด",
   icon: Icon = Rows3,
@@ -52,6 +53,7 @@ export function ReportAllPostsFeed({
    * (see topic-sidebar.tsx's MENTIONS_ID). */
   posts: ReportPost[];
   onJumpToTopic: (topicId: string) => void;
+  onOpenTask?: (taskId: string) => void;
   title?: string;
   description?: string;
   icon?: typeof Rows3;
@@ -185,6 +187,7 @@ export function ReportAllPostsFeed({
                     post={p}
                     topic={topic}
                     topicBadge={{ label: breadcrumbOf(topic, topicById), onClick: () => onJumpToTopic(topic.id) }}
+                    onOpenTask={onOpenTask}
                   />
                 );
               })}
