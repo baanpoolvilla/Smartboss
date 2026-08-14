@@ -51,6 +51,11 @@ const URL_PATTERN = /https?:\/\/[^\s<>"']+/g;
 // has no such cutoff. Matches how the user described wanting this to work:
 // short-lived by default, long-lived once explicitly saved.
 export const FILES_TAB_WINDOW_DAYS = 7;
+// A room can opt out of the rolling window entirely (room-settings-sheet.tsx's
+// "ไม่จำกัด" option) for a SharePoint-style "nothing ever disappears" library
+// instead — a plain number rather than Infinity so it still round-trips
+// through JSON in the server-synced store.
+export const UNLIMITED_FILES_RETENTION_DAYS = 36500;
 
 interface FileEntry {
   image: ReportPostImage;

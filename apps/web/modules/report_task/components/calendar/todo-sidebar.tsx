@@ -12,11 +12,13 @@ import { cn } from "@/modules/report_task/lib/utils";
 import { Check, Trash2 } from "lucide-react";
 import type { TodoItem } from "@/modules/report_task/types";
 
-/** Right rail for the To Do calendar tab — same visible range as the grid,
- *  "mine" narrows to the viewer's own items, "all" shows everyone's with an
- *  avatar per row so whose it is is still obvious in a mixed list. Only your
- *  own rows are interactive (toggle/edit/delete) — someone else's is a
- *  read-only peek. */
+/** Right rail for the To Do calendar tab — same visible range as the grid.
+ *  "mine" shows just the viewer's own card. "all" splits into two cards
+ *  (mine, then everyone else's) instead of one merged list, so "what's on
+ *  my plate" doesn't get lost in a pile of other people's items once a
+ *  head/owner switches scope — same split WorkSidebar already uses for
+ *  tasks. Only "mine" rows are interactive (toggle/edit/delete) — someone
+ *  else's is a read-only peek with their avatar for attribution. */
 export function TodoSidebar({ range, scope, onEdit }: { range: ViewRange; scope: "mine" | "all"; onEdit: (t: TodoItem) => void }) {
   const todos = useTodoStore((s) => s.todos);
   const toggleTodo = useTodoStore((s) => s.toggleTodo);
@@ -24,20 +26,19 @@ export function TodoSidebar({ range, scope, onEdit }: { range: ViewRange; scope:
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const hiddenUserIds = useCalendarVisibilityStore((s) => s.hiddenUserIds);
 
-  const visible = todos
-    .filter((t) => inRange(t.date, range))
-    .filter((t) => scope === "mine" ? t.userId === viewingAsUserId : !hiddenUserIds.includes(t.userId))
-    // Not-yet-done first, each half sorted by date — a checked-off item
-    // shouldn't crowd out what's still left to do at the top of the list.
-    .sort((a, b) => Number(a.done) - Number(b.done) || a.date.localeCompare(b.date));
+  const inRangeTodos = todos.filter((t) => inRange(t.date, range));
+  const sortByDone = (a: TodoItem, b: TodoItem) => Number(a.done) - Number(b.done) || a.date.localeCompare(b.date);
+
+  const myTodos = inRangeTodos.filter((t) => t.userId === viewingAsUserId).sort(sortByDone);
+  const otherTodos = inRangeTodos
+    .filter((t) => t.userId !== viewingAsUserId && !hiddenUserIds.includes(t.userId))
+    .sort(sortByDone);
 
   const period = range.viewType === "timeGridDay" ? "วันนี้" : range.viewType === "timeGridWeek" ? "สัปดาห์นี้" : "เดือนนี้";
-  const heading = scope === "mine" ? `สิ่งที่ต้องทำของฉัน${period}` : `สิ่งที่ต้องทำทั้งหมด${period}`;
-  const emptyLabel = scope === "mine" ? "ยังไม่มีสิ่งที่ต้องทำของฉันในช่วงนี้" : "ยังไม่มีสิ่งที่ต้องทำของใครในช่วงนี้";
 
-  function row(t: TodoItem) {
+  function row(t: TodoItem, showOwner: boolean) {
     const mine = t.userId === viewingAsUserId;
-    const owner = scope === "all" && !mine ? getUser(t.userId) : undefined;
+    const owner = showOwner ? getUser(t.userId) : undefined;
     return (
       <div key={t.id} className="group flex items-center gap-2.5 rounded-lg -mx-1 px-1 py-1 hover:bg-[var(--bg-soft)] transition-colors">
         <button
@@ -80,23 +81,36 @@ export function TodoSidebar({ range, scope, onEdit }: { range: ViewRange; scope:
     );
   }
 
+  function card(heading: string, items: TodoItem[], emptyLabel: string, showOwner: boolean) {
+    return (
+      <Card className="border-[var(--line)] shadow-none">
+        <CardHeader>
+          <CardTitle className="text-base font-semibold flex items-center justify-between gap-2">
+            {heading}
+            {items.length > 0 && (
+              <span className="text-xs font-normal text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2 py-0.5">
+                {items.filter((t) => !t.done).length}/{items.length}
+              </span>
+            )}
+          </CardTitle>
+          <p className="text-xs text-[var(--ink-soft)]">{rangeLabel(range)} · คลิกกล่องเพื่อติ๊กเสร็จ · คลิกชื่อเพื่อแก้ไข</p>
+        </CardHeader>
+        <CardContent className="space-y-1.5 max-h-96 overflow-y-auto">
+          {items.length === 0 && <p className="text-sm text-[var(--ink-soft)]">{emptyLabel}</p>}
+          {items.map((t) => row(t, showOwner))}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (scope === "mine") {
+    return card(`สิ่งที่ต้องทำของฉัน${period}`, myTodos, "ยังไม่มีสิ่งที่ต้องทำของฉันในช่วงนี้", false);
+  }
+
   return (
-    <Card className="border-[var(--line)] shadow-none">
-      <CardHeader>
-        <CardTitle className="text-base font-semibold flex items-center justify-between gap-2">
-          {heading}
-          {visible.length > 0 && (
-            <span className="text-xs font-normal text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2 py-0.5">
-              {visible.filter((t) => !t.done).length}/{visible.length}
-            </span>
-          )}
-        </CardTitle>
-        <p className="text-xs text-[var(--ink-soft)]">{rangeLabel(range)} · คลิกกล่องเพื่อติ๊กเสร็จ · คลิกชื่อเพื่อแก้ไข</p>
-      </CardHeader>
-      <CardContent className="space-y-1.5 max-h-96 overflow-y-auto">
-        {visible.length === 0 && <p className="text-sm text-[var(--ink-soft)]">{emptyLabel}</p>}
-        {visible.map(row)}
-      </CardContent>
-    </Card>
+    <>
+      {card(`สิ่งที่ต้องทำของฉัน${period}`, myTodos, "ยังไม่มีสิ่งที่ต้องทำของฉันในช่วงนี้", false)}
+      {card(`สิ่งที่ต้องทำของคนอื่น${period}`, otherTodos, "ยังไม่มีสิ่งที่ต้องทำของใครในช่วงนี้", true)}
+    </>
   );
 }
