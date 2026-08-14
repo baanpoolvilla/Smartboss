@@ -146,6 +146,12 @@ export interface ReportTopic {
   postTemplateSections?: { heading: string }[];
   /** How many days a photo stays in the "ไฟล์" tab's rolling window — undefined = the app-wide default (FILES_TAB_WINDOW_DAYS). */
   filesRetentionDays?: number;
+  /** How this room's posts are laid out — "stream" (chat-log, default) or
+   * "threads" (forum thread list) — a room-wide setting, not a per-viewer
+   * preference: everyone in the room sees the same layout, decided by
+   * whoever can edit the room (see room-settings-sheet.tsx). Undefined =
+   * "stream", same as every room before this setting existed. */
+  feedViewMode?: "stream" | "threads";
   /** Archived rooms drop out of the sidebar tree and topic pickers but keep
    * their data — recoverable (toggle off), unlike `removeTopic`. */
   archived?: boolean;
@@ -208,6 +214,7 @@ interface ReportFeedStore {
       requiredWeekdays?: number[];
       postTemplateSections?: { heading: string }[];
       filesRetentionDays?: number;
+      feedViewMode?: "stream" | "threads";
       archived?: boolean;
       remindBeforeCutoffMinutes?: number;
       notifyManagerSummary?: boolean;

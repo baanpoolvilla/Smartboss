@@ -25,7 +25,7 @@ import { currentCutoff } from "@/modules/report_task/lib/report-cutoff";
 import { pendingToday, todayStatusEntries, type TodayStatusEntry } from "@/modules/report_task/lib/report-feed-compliance";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
-import { AtSign, BarChart3, Check, CheckCircle2, Clock, FileImage, FolderHeart, Hash, ImagePlus, Link2, ListTree, Lock, Menu, MessageSquareText, Pin, Rows3, Settings, TriangleAlert, Users, X } from "lucide-react";
+import { AtSign, BarChart3, Check, CheckCircle2, Clock, FileImage, FolderHeart, Hash, ImagePlus, Link2, ListTree, Lock, Menu, MessageSquareText, Pin, Settings, TriangleAlert, Users, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 
 // Beyond this many pinned posts, the rest move into the "+N เพิ่มเติม"
@@ -119,10 +119,6 @@ function ReportFeedPageInner() {
   // right here in place, same local-state pattern as calendar-view.tsx —
   // no navigation away from whatever room/post the viewer was reading.
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
-  // Per-room display mode — "stream" (chat-log order, oldest→newest, day
-  // grouped) vs "threads" (forum order, most-recently-active post first) —
-  // see report-feed.tsx's viewMode prop for what each actually renders.
-  const [feedViewMode, setFeedViewMode] = useState<"stream" | "threads">("stream");
   // Which header pill (H1) was clicked, if any — overrides the main panel
   // with TodayStatusPanel below regardless of what's selected in the
   // sidebar tree. Cleared by selectView() so any real navigation drops it.
@@ -549,36 +545,16 @@ function ReportFeedPageInner() {
                       onChange={setFilters}
                       authorOptions={topicMembers.map((m) => m.id)}
                     />
-                    {/* จัดเรียงโพสต์ในห้องนี้ — "สตรีม" (แชทเรียงเวลา ล่าสุดอยู่ล่าง)
-                        หรือ "กระทู้" (เรียงตามความเคลื่อนไหวล่าสุด เหมือนฟอรัม) */}
-                    <div className="flex items-center gap-1 bg-[var(--bg-soft)] rounded-lg p-1 shrink-0">
-                      <button
-                        onClick={() => setFeedViewMode("stream")}
-                        title="เรียงตามเวลา แบบแชท"
-                        className={cn(
-                          "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors",
-                          feedViewMode === "stream"
-                            ? "bg-white shadow-sm text-[var(--ink)]"
-                            : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
-                        )}
-                      >
-                        <Rows3 className="h-3.5 w-3.5" />
-                        สตรีม
-                      </button>
-                      <button
-                        onClick={() => setFeedViewMode("threads")}
-                        title="เรียงตามความเคลื่อนไหวล่าสุด แบบกระทู้"
-                        className={cn(
-                          "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors",
-                          feedViewMode === "threads"
-                            ? "bg-white shadow-sm text-[var(--ink)]"
-                            : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
-                        )}
-                      >
+                    {/* รูปแบบห้อง (สตรีม/กระทู้) ตั้งไว้ครั้งเดียวในตั้งค่าห้อง — ไม่ใช่
+                        ปุ่มสลับส่วนตัวอีกต่อไป ทุกคนในห้องเห็นแบบเดียวกัน (see
+                        room-settings-sheet.tsx). โชว์ badge บอกไว้เฉพาะตอนที่ไม่ใช่
+                        ค่าเริ่มต้น "สตรีม" กันงงว่าทำไมโพสต์ไม่เรียงตามเวลา. */}
+                    {activeTopic.feedViewMode === "threads" && (
+                      <span className="flex items-center gap-1.5 text-xs font-medium text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-lg px-2.5 py-1 shrink-0">
                         <ListTree className="h-3.5 w-3.5" />
-                        กระทู้
-                      </button>
-                    </div>
+                        มุมมองห้องนี้: กระทู้
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
@@ -598,7 +574,7 @@ function ReportFeedPageInner() {
                       topicPosts={filteredTopicPosts}
                       highlightPostId={highlightPostId}
                       highlightReplyId={highlightReplyId}
-                      viewMode={feedViewMode}
+                      viewMode={activeTopic.feedViewMode ?? "stream"}
                       onOpenTask={setOpenTaskId}
                     />
                   )}
