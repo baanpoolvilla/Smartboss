@@ -351,7 +351,7 @@ export function LeaveSidebar({
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <>
       <Card className="border-[var(--line)] shadow-none">
         <CardHeader>
           <CardTitle className="text-base font-semibold flex items-center justify-between gap-2">
@@ -599,6 +599,6 @@ export function LeaveSidebar({
           </div>
         </CardContent>
       </Card>
-    </div>
+    </>
   );
 }

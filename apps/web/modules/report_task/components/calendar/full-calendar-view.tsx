@@ -50,6 +50,7 @@ export function FullCalendarView({
   onSelectRange,
   onCreate,
   onToggleTodo,
+  onEditTodo,
   addHint = "คลิกวันเพื่อเพิ่มรายการ",
 }: {
   events: CalendarEvent[];
@@ -73,6 +74,8 @@ export function FullCalendarView({
   /** To-do chips render their own checkbox inline instead of opening the
    *  usual click-through preview — this fires straight from the checkbox. */
   onToggleTodo?: (id: string) => void;
+  /** Clicking a to-do chip's title (not its checkbox) opens it for editing. */
+  onEditTodo?: (id: string) => void;
   addHint?: string;
 }) {
   const calendarRef = useRef<FullCalendar | null>(null);
@@ -179,11 +182,13 @@ export function FullCalendarView({
   }
 
   function handleEventClick(arg: EventClickArg) {
-    // A to-do chip is a self-contained checkbox, not a record with a detail
-    // view — clicking anywhere on it toggles done instead of opening the
-    // usual preview card.
+    // A to-do chip has its own checkbox (see renderEventContent, which stops
+    // propagation on it) — a click that reaches here is the title/body, so
+    // it opens the edit dialog instead of the usual read-only preview card.
+    // Someone else's to-do (visible in "all" scope) is read-only — nothing
+    // to open.
     if (arg.event.extendedProps.type === "todo") {
-      onToggleTodo?.(arg.event.id);
+      if (arg.event.extendedProps.mine !== false) onEditTodo?.(arg.event.id);
       return;
     }
     const found = events.find((e) => e.id === arg.event.id);
@@ -238,11 +243,25 @@ export function FullCalendarView({
 
     if (type === "todo") {
       const done = !!arg.event.extendedProps.done;
+      // Someone else's to-do (only reachable in "all" scope) is read-only —
+      // no checkbox interaction, no pointer cursor, no click-to-edit.
+      const mine = arg.event.extendedProps.mine !== false;
       return (
-        <div className={cn("flex items-center gap-1.5 px-2 py-[3px] overflow-hidden leading-tight cursor-pointer", done && "opacity-60")}>
+        <div className={cn("flex items-center gap-1.5 px-2 py-[3px] overflow-hidden leading-tight", mine && "cursor-pointer", done && "opacity-60")}>
           <span
-            className="flex h-3 w-3 shrink-0 items-center justify-center rounded-sm border"
+            role="checkbox"
+            aria-checked={done}
+            aria-label={done ? "ทำเครื่องหมายว่ายังไม่เสร็จ" : "ทำเครื่องหมายว่าเสร็จแล้ว"}
+            className={cn("flex h-3 w-3 shrink-0 items-center justify-center rounded-sm border", mine && "cursor-pointer")}
             style={done ? { backgroundColor: color, borderColor: color } : { borderColor: color }}
+            onClick={(e) => {
+              // Stops the click from also reaching FullCalendar's own
+              // eventClick handler (which would otherwise open the edit
+              // dialog right on top of the toggle) — see handleEventClick.
+              if (!mine) return;
+              e.stopPropagation();
+              onToggleTodo?.(arg.event.id);
+            }}
           >
             {done && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />}
           </span>
@@ -347,8 +366,10 @@ export function FullCalendarView({
               data-tour={i === 0 ? "calendar-view-month" : i === 1 ? "calendar-view-week" : undefined}
               onClick={() => changeView(opt.key)}
               className={cn(
-                "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
-                view === opt.key ? "bg-white shadow-sm text-[var(--ink)]" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
+                "px-3 py-1.5 text-xs font-semibold rounded-md transition-colors",
+                view === opt.key
+                  ? "bg-[var(--chart-blue)] text-white shadow-sm"
+                  : "text-[var(--ink-soft)] hover:text-[var(--ink)] hover:bg-white/60"
               )}
             >
               {opt.label}

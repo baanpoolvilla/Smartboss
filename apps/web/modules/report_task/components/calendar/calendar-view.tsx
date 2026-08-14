@@ -41,7 +41,7 @@ import { cn } from "@/modules/report_task/lib/utils";
 import { ListChecks, CalendarOff, ListTodo, Plus, Settings2, Globe, User, Users } from "lucide-react";
 import { toast } from "sonner";
 import { now } from "@/modules/report_task/lib/now";
-import type { CalendarEvent, CalendarEventType, TaskPriority } from "@/modules/report_task/types";
+import type { CalendarEvent, CalendarEventType, TaskPriority, TodoItem } from "@/modules/report_task/types";
 
 type CalendarTab = "work" | "schedule" | "todo";
 
@@ -105,6 +105,8 @@ export function CalendarView() {
   const updateLeave = useLeaveStore((s) => s.updateLeave);
   const todos = useTodoStore((s) => s.todos);
   const toggleTodo = useTodoStore((s) => s.toggleTodo);
+  const updateTodo = useTodoStore((s) => s.updateTodo);
+  const removeTodo = useTodoStore((s) => s.removeTodo);
   const allHolidays = useHolidayStore((s) => s.holidays);
   const holidaySelections = useHolidayStore((s) => s.selectedByUser);
   const routinePickedDates = useRoutineDayOffStore((s) => s.pickedDates);
@@ -180,6 +182,14 @@ export function CalendarView() {
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createDate, setCreateDate] = useState<string | undefined>(undefined);
+  // The To Do add/edit dialog has its own tiny state, separate from
+  // createOpen/createDate above (those still drive NewTaskDialog for
+  // meetings/leaves) — `todo` present means "editing this one", absent
+  // means "creating new".
+  const [todoDialogState, setTodoDialogState] = useState<{ date?: string; todo?: TodoItem } | null>(null);
+  function openTodoDialog(target: { date?: string; todo?: TodoItem }) {
+    setTodoDialogState(target);
+  }
   const [addCalendarOpen, setAddCalendarOpen] = useState(false);
   const [addCalendarSection, setAddCalendarSection] = useState<"recommended" | "people">("recommended");
   const [summaryRange, setSummaryRange] = useState<SummaryRange | null>(null);
@@ -427,9 +437,10 @@ export function CalendarView() {
         .map((t) => {
           const mine = t.userId === viewingAsUserId;
           const owner = !mine && todoScope === "all" ? getUser(t.userId)?.name.split(" ")[0] : undefined;
+          const titleWithTime = t.time ? `${t.time} ${t.title}` : t.title;
           return {
             id: `todoevt-${t.id}`,
-            title: owner ? `${owner}: ${t.title}` : t.title,
+            title: owner ? `${owner}: ${titleWithTime}` : titleWithTime,
             type: "todo" as const,
             start: t.date,
             end: t.date,
@@ -437,7 +448,9 @@ export function CalendarView() {
             userId: t.userId,
             mine,
             done: t.done,
-            editable: false,
+            // Only your own is draggable to another day — someone else's
+            // (visible in "all" scope) is read-only.
+            editable: mine,
           };
         }),
     [todos, todoScope, hiddenUserIds, viewingAsUserId]
@@ -574,6 +587,18 @@ export function CalendarView() {
       }
       updateLeave(id, { start, end: end ?? start });
       toast.success("เลื่อนวันลาแล้ว");
+    } else if (type === "todo") {
+      const todoId = id.replace("todoevt-", "");
+      const target = todos.find((t) => t.id === todoId);
+      // editable:false (see todoEvents) already stops someone else's to-do
+      // from being draggable at all — re-checked here as defense-in-depth,
+      // same as every other branch.
+      if (!target || target.userId !== viewingAsUserId) {
+        toast.error("ย้ายสิ่งที่ต้องทำได้เฉพาะของตัวเอง");
+        return false;
+      }
+      updateTodo(todoId, { date: start.slice(0, 10) });
+      toast.success("ย้ายสิ่งที่ต้องทำแล้ว");
     } else if (type === "dayoff") {
       const target = dayoffEvents.find((e) => e.id === id);
       // Only reachable at all when `editable` was true (own + not-past), but
@@ -606,8 +631,8 @@ export function CalendarView() {
   }
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 lg:gap-6">
-      <div className="xl:col-span-3 flex flex-col gap-3">
+    <div className="flex flex-col gap-4 lg:gap-6">
+      <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="inline-flex items-center gap-1.5 rounded-xl bg-[var(--bg-soft)] p-1.5">
             <button
@@ -647,7 +672,7 @@ export function CalendarView() {
               )}
             >
               <ListTodo className="h-4 w-4" />
-              To Do
+              สิ่งที่ต้องทำ
             </button>
           </div>
 
@@ -669,10 +694,10 @@ export function CalendarView() {
             <Button
               size="lg"
               className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
-              onClick={() => openCreate()}
+              onClick={() => (tab === "todo" ? openTodoDialog({}) : openCreate())}
             >
               <Plus className="h-4 w-4" />
-              {tab === "work" ? "สร้างประชุม" : tab === "todo" ? "เพิ่ม To Do" : "เพิ่มวันลา"}
+              {tab === "work" ? "สร้างประชุม" : tab === "todo" ? "เพิ่มสิ่งที่ต้องทำ" : "เพิ่มวันลา"}
             </Button>
           )}
         </div>
@@ -766,7 +791,7 @@ export function CalendarView() {
             <div className="flex items-center gap-1 bg-[var(--bg-soft)] rounded-lg p-1">
               <button
                 onClick={() => setTodoScope("mine")}
-                title="แสดงเฉพาะ To Do ของฉัน"
+                title="แสดงเฉพาะสิ่งที่ต้องทำของฉัน"
                 className={cn(
                   "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer",
                   todoScope === "mine"
@@ -779,7 +804,7 @@ export function CalendarView() {
               </button>
               <button
                 onClick={() => setTodoScope("all")}
-                title="แสดง To Do ของทุกคน"
+                title="แสดงสิ่งที่ต้องทำของทุกคน"
                 className={cn(
                   "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer",
                   todoScope === "all"
@@ -823,7 +848,7 @@ export function CalendarView() {
                 head) since these apply across every department at once. */}
             {isOwner(viewingAsUserId) && (
               <Link
-                href="/settings?tab=calendar"
+                href="/report-task/settings?tab=calendar"
                 className="flex items-center gap-1 text-[11px] text-[var(--ink-soft)] hover:text-[var(--ink)] rounded-md px-1.5 py-0.5 hover:bg-[var(--bg-soft)] transition-colors"
                 title="จัดการประเภทการลา / โควตาวันหยุดประจำ"
               >
@@ -841,16 +866,27 @@ export function CalendarView() {
           onDateClick={handleDateClick}
           onEventDrop={handleEventDrop}
           onSelectRange={setSummaryRange}
-          onCreate={tab === "work" && !canManage(viewingAsUserId) ? undefined : () => openCreate()}
+          onCreate={
+            tab === "todo"
+              ? () => openTodoDialog({})
+              : tab === "work" && !canManage(viewingAsUserId)
+                ? undefined
+                : () => openCreate()
+          }
           onToggleTodo={handleToggleTodo}
+          onEditTodo={(eventId) => {
+            const todoId = eventId.replace("todoevt-", "");
+            const target = todos.find((t) => t.id === todoId);
+            if (target) openTodoDialog({ todo: target, date: target.date });
+          }}
           addHint="คลิกวันเพื่อดูรายการ · ลากคลุมหลายวันเพื่อดูสรุป"
         />
       </div>
-      <div className="xl:col-span-1 flex flex-col gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
         {tab === "work" ? (
           <WorkSidebar range={viewRange} onOpenTask={setOpenTaskId} />
         ) : tab === "todo" ? (
-          <TodoSidebar range={viewRange} scope={todoScope} />
+          <TodoSidebar range={viewRange} scope={todoScope} onEdit={(t) => openTodoDialog({ todo: t, date: t.date })} />
         ) : (
           <LeaveSidebar range={viewRange} holidays={holidays} />
         )}
@@ -875,9 +911,11 @@ export function CalendarView() {
         onOpenChange={(open) => !open && setSummaryRange(null)}
         onOpenTask={setOpenTaskId}
         onToggleTodo={toggleTodo}
+        onEditTodo={(t) => { setSummaryRange(null); openTodoDialog({ todo: t, date: t.date }); }}
+        onRemoveTodo={removeTodo}
         onAddMeeting={canManage(viewingAsUserId) ? openAddFromSummary : undefined}
         onAddSchedule={openAddFromSummary}
-        onAddTodo={openAddFromSummary}
+        onAddTodo={(date) => { setSummaryRange(null); openTodoDialog({ date }); }}
       />
       <TaskDetailSheet taskId={openTaskId} onOpenChange={(open) => !open && setOpenTaskId(null)} />
       {/* Work tab only ever creates meetings here — tasks are created on the
@@ -892,7 +930,12 @@ export function CalendarView() {
         allowedTypes={tab === "schedule" ? ["leave", "dayoff"] : ["meeting"]}
         defaultDate={createDate}
       />
-      <AddTodoDialog open={createOpen && tab === "todo"} onOpenChange={setCreateOpen} defaultDate={createDate} />
+      <AddTodoDialog
+        open={!!todoDialogState}
+        onOpenChange={(open) => !open && setTodoDialogState(null)}
+        defaultDate={todoDialogState?.date}
+        editingTodo={todoDialogState?.todo ?? null}
+      />
     </div>
   );
 }
