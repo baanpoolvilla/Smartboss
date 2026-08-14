@@ -41,12 +41,20 @@
      ต่ำกว่าเกณฑ์อ่านออก จึงห้ามใช้เป็นสีตัวหนังสือบนขาวเด็ดขาด */
   --brand-ink:  #2e8b26;
 
-  /* สีข้อมูล = --tone-* ของระบบ เลือกมาสำหรับพื้นขาวโดยเฉพาะ */
-  --s-done:     #16a34a;
-  --s-doing:    #2563eb;
-  --s-check:    #7c3aed;
-  --s-late:     #ea580c;
-  --s-over:     #dc2626;
+  /* สีสถานะ = ไฟจราจร เขียว → เหลือง → แดง
+     ไล่ตาม "บอสต้องกังวลแค่ไหน" ไม่ใช่ไล่ตามลำดับขั้นตอนงาน
+     ⇒ มองหลอดเดียวก็รู้ว่าคนนี้มีปัญหาหรือไม่ โดยไม่ต้องอ่าน legend
+
+     ทั้งห้าตัวใช้เป็น "พื้น" (หลอด จุด) เท่านั้น — บนพื้นขาวเหลืองกับส้ม
+     ได้ contrast แค่ ~2:1 จะเอาไปเป็นสีตัวหนังสือไม่ได้ ต้องใช้ตัว -ink */
+  --s-done:     #15803d;   /* เสร็จแล้ว — เขียวเข้ม */
+  --s-doing:    #4cb93f;   /* กำลังทำ — เขียวโลโก้ ปกติดี */
+  --s-check:    #eab308;   /* รอตรวจ — เหลือง รอบอสทำอะไรบางอย่าง */
+  --s-late:     #f59e0b;   /* ใกล้ครบกำหนด — ส้ม */
+  --s-over:     #dc2626;   /* เกินกำหนด — แดง */
+
+  /* คู่สำหรับตัวหนังสือบนพื้นขาว */
+  --s-check-ink: #a16207;
 
   --sans: "Noto Sans Thai", "IBM Plex Sans Thai", "Sarabun", "Leelawadee UI",
           -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -81,7 +89,7 @@ a { color: inherit; }
   content: ""; position: absolute; inset: -30% -20% auto; height: 620px; z-index: -1;
   background:
     radial-gradient(48% 62% at 20% 0%, rgba(76,185,63,.10), transparent 70%),
-    radial-gradient(42% 58% at 80% 6%, rgba(37,99,235,.07), transparent 72%);
+    radial-gradient(42% 58% at 80% 6%, rgba(234,179,8,.09), transparent 72%);
   pointer-events: none;
 }
 
@@ -223,7 +231,7 @@ section { padding: clamp(3.2rem, 7vw, 5.5rem) 0; }
   font-size: .75rem; font-weight: 600; padding: .22rem .6rem; border-radius: 7px;
   border: 1px solid var(--line); color: var(--ink-soft);
 }
-.chip.on { border-color: color-mix(in srgb, var(--s-check) 55%, transparent); color: var(--s-check); background: color-mix(in srgb, var(--s-check) 12%, transparent); }
+.chip.on { border-color: color-mix(in srgb, var(--s-check) 62%, transparent); color: var(--s-check-ink); background: color-mix(in srgb, var(--s-check) 16%, transparent); }
 
 /* ── กลไกควบคุม ─────────────────────────────────────────────── */
 .rules { margin-top: 2.6rem; display: grid; gap: 1.6rem 2.6rem; grid-template-columns: 1fr; }
@@ -236,7 +244,10 @@ section { padding: clamp(3.2rem, 7vw, 5.5rem) 0; }
 .rule h3 { font-size: 1.02rem; margin-bottom: .45rem; }
 .rule p { font-size: .91rem; color: var(--ink-soft); }
 
-/* ── โมดูลเสริม ─────────────────────────────────────────────── */
+/* ── โมดูลเสริม ───────────────────────────────────────────────
+   ใช้เทาน้ำเงิน ไม่ใช้เขียว/เหลือง/แดง โดยตั้งใจ — สามสีนั้นถูกจองไว้
+   แปลว่า "สถานะงาน" ทั้งหน้าแล้ว เอามาตกแต่งการ์ดจะทำให้คนอ่านผิด
+   ว่าโมดูลไหนมีปัญหา */
 .mods { margin-top: 2.4rem; display: grid; gap: 1rem; grid-template-columns: 1fr; }
 @media (min-width: 780px) { .mods { grid-template-columns: 1fr 1fr; } }
 .mod {
@@ -501,7 +512,7 @@ footer .mono { font-family: var(--mono); font-size: .78rem; }
       </div>
 
       <div class="mods">
-        <article class="mod" style="--c:#0d9488">
+        <article class="mod" style="--c:#475569">
           <span class="mod-tag">แจ้งซ่อมบำรุง</span>
           <h3>ใบงานซ่อมและงานตามรอบ</h3>
           <p>
@@ -510,7 +521,7 @@ footer .mono { font-family: var(--mono); font-size: .78rem; }
           </p>
         </article>
 
-        <article class="mod" style="--c:#3b82f6">
+        <article class="mod" style="--c:#64748b">
           <span class="mod-tag">งานบุคคล</span>
           <h3>ลงเวลาและเงินเดือน</h3>
           <p>
