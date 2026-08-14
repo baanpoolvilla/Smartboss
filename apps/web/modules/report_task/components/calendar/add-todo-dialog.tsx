@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogClose,
@@ -37,9 +37,25 @@ export function AddTodoDialog({
   const [title, setTitle] = useState("");
   const [date, setDate] = useState(defaultDate ?? todayIso());
 
-  useEffect(() => {
-    if (open) setDate(defaultDate ?? todayIso());
-  }, [open, defaultDate]);
+  /**
+   * ล้างฟอร์มตอนกล่องถูกเปิด — ปรับ state ระหว่าง render ไม่ใช่ใน effect
+   *
+   * แบบเดิมใช้ useEffect ซึ่ง React จะ render ด้วยค่าเก่าไปหนึ่งรอบก่อน
+   * แล้วค่อย render ซ้ำด้วยค่าใหม่ (cascading render — eslint จับได้)
+   * ท่านี้ React ทิ้ง render รอบนั้นทันทีแล้วเริ่มใหม่ด้วยค่าที่ถูก
+   * ผู้ใช้จึงไม่เห็นวันที่เก่ากะพริบตอนเปิดกล่อง
+   *
+   * ล้าง title ด้วย — เดิมล้างเฉพาะตอนกดเพิ่มสำเร็จ ⇒ ปิดกล่องทิ้งกลางคัน
+   * แล้วเปิดใหม่ ข้อความที่พิมพ์ค้างไว้ยังอยู่
+   */
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
+      setDate(defaultDate ?? todayIso());
+      setTitle("");
+    }
+  }
 
   function submit() {
     const trimmed = title.trim();
