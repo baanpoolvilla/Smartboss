@@ -178,7 +178,7 @@ export interface Task {
   updatedAt: string;
 }
 
-export type CalendarEventType = "task" | "leave" | "meeting" | "holiday" | "google" | "dayoff";
+export type CalendarEventType = "task" | "leave" | "meeting" | "holiday" | "google" | "dayoff" | "todo";
 
 /** Leave-type id — configurable at runtime (see leave-type-store). */
 export type LeaveType = string;
@@ -213,6 +213,18 @@ export interface CalendarEvent {
   editable?: boolean;
   /** Files attached at creation/edit time — meeting only for now. */
   attachments?: Attachment[];
+  /** To-do only — checked off inline on the calendar chip. */
+  done?: boolean;
+}
+
+export interface TodoItem {
+  id: string;
+  userId: string;
+  /** YYYY-MM-DD — the date it's bound to on the calendar. */
+  date: string;
+  title: string;
+  done: boolean;
+  createdAt: string;
 }
 
 export interface ActivityItem {

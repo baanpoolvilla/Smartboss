@@ -14,6 +14,8 @@ import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useMeetingStore } from "@/modules/report_task/store/meeting-store";
 import { useLeaveStore } from "@/modules/report_task/store/leave-store";
 import { useHolidayStore } from "@/modules/report_task/store/holiday-store";
+import { useTodoStore } from "@/modules/report_task/store/todo-store";
+import { useCalendarVisibilityStore } from "@/modules/report_task/store/calendar-visibility-store";
 import { useLeaveTypeStore } from "@/modules/report_task/store/leave-type-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useCalendarScopeStore } from "@/modules/report_task/store/calendar-scope-store";
@@ -25,7 +27,7 @@ import { formatDate, formatDateTime } from "@/modules/report_task/lib/format";
 import { nowMs } from "@/modules/report_task/lib/now";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Button } from "@/modules/report_task/components/ui/button";
-import { Users, CalendarDays, Plane, PartyPopper, CalendarOff, ListChecks, CalendarPlus, Check, X } from "lucide-react";
+import { Users, CalendarDays, Plane, PartyPopper, CalendarOff, ListChecks, ListTodo, CalendarPlus, Check, X } from "lucide-react";
 import type { CalendarEvent } from "@/modules/report_task/types";
 
 export type SummaryRange = { start: string; end: string }; // end exclusive (YYYY-MM-DD)
@@ -36,7 +38,7 @@ const inRange = (dateStr: string, start: string, endExclusive: string) => {
 };
 
 function Stat({ label, value, tone = "neutral" }: { label: string; value: number; tone?: "neutral" | "good" | "bad" }) {
-  const c = { neutral: "text-[var(--ink)]", good: "text-[var(--brand-green)]", bad: "text-[var(--chart-red)]" }[tone];
+  const c = { neutral: "text-[var(--ink)]", good: "text-[var(--chart-green)]", bad: "text-[var(--chart-red)]" }[tone];
   return (
     <div className="rounded-lg bg-[var(--bg-soft)] px-3 py-2 text-center">
       <p className={cn("text-xl font-semibold tabular-nums", c)}>{value}</p>
@@ -49,29 +51,39 @@ export function RangeSummaryDialog({
   range,
   tab,
   dayoffs = [],
+  todoScope = "mine",
   onOpenChange,
   onOpenTask,
+  onToggleTodo,
   onAddMeeting,
   onAddSchedule,
+  onAddTodo,
 }: {
   range: SummaryRange | null;
-  tab: "work" | "schedule";
+  tab: "work" | "schedule" | "todo";
   /** Already-expanded routine-day-off events for the visible calendar range
    *  (see calendar-view.tsx's `dayoffEvents`) — reused here instead of
    *  re-reading the store and re-running `expandRule`, since any range this
    *  dialog can show is always a subset of what's currently on screen. */
   dayoffs?: CalendarEvent[];
+  /** Mirrors calendar-view.tsx's own todoScope toggle — "mine" vs "all". */
+  todoScope?: "mine" | "all";
   onOpenChange: (open: boolean) => void;
   onOpenTask: (id: string) => void;
+  onToggleTodo?: (id: string) => void;
   /** Single-day click only — a multi-day drag has no one date to hang a meeting on. */
   onAddMeeting?: (date: string) => void;
   /** Same idea as `onAddMeeting`, for the schedule tab's "เพิ่มวันลา/วันหยุดประจำ" button. */
   onAddSchedule?: (date: string) => void;
+  /** Same idea, for the To Do tab's "เพิ่ม To Do" button. */
+  onAddTodo?: (date: string) => void;
 }) {
   const tasks = useTaskStore((s) => s.tasks);
   const meetings = useMeetingStore((s) => s.meetings);
   const leaves = useLeaveStore((s) => s.leaves);
   const holidays = useHolidayStore((s) => s.holidays);
+  const todos = useTodoStore((s) => s.todos);
+  const hiddenUserIds = useCalendarVisibilityStore((s) => s.hiddenUserIds);
   const leaveTypes = useLeaveTypeStore((s) => s.types);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const taskScope = useCalendarScopeStore((s) => s.scope);
@@ -92,16 +104,21 @@ export function RangeSummaryDialog({
     const rangeLeaves = leaves.filter((l) => inRange(l.start, start, end)).sort((a, b) => a.start.localeCompare(b.start));
     const rangeHolidays = holidays.filter((h) => inRange(h.start, start, end)).sort((a, b) => a.start.localeCompare(b.start));
     const rangeDayoffs = dayoffs.filter((d) => inRange(d.start, start, end)).sort((a, b) => a.start.localeCompare(b.start));
+    const rangeTodos = todos
+      .filter((t) => inRange(t.date, start, end))
+      .filter((t) => (todoScope === "mine" ? t.userId === viewingAsUserId : !hiddenUserIds.includes(t.userId)))
+      .sort((a, b) => Number(a.done) - Number(b.done) || a.date.localeCompare(b.date));
     return {
       tasks: rangeTasks,
       meetings: rangeMeetings,
       leaves: rangeLeaves,
       holidays: rangeHolidays,
       dayoffs: rangeDayoffs,
+      todos: rangeTodos,
       done: rangeTasks.filter((t) => t.status === "done").length,
       overdue: rangeTasks.filter((t) => dueUrgency(t) === "overdue").length,
     };
-  }, [range, tasks, meetings, leaves, holidays, dayoffs, viewingAsUserId, taskScope, canBroadenScope]);
+  }, [range, tasks, meetings, leaves, holidays, dayoffs, todos, todoScope, hiddenUserIds, viewingAsUserId, taskScope, canBroadenScope]);
 
   if (!range || !data) return null;
 
@@ -217,6 +234,39 @@ export function RangeSummaryDialog({
               )}
             </div>
           </>
+        ) : tab === "todo" ? (
+          <>
+            <div className="grid grid-cols-2 gap-2">
+              <Stat label="ทั้งหมด" value={data.todos.length} />
+              <Stat label="เสร็จแล้ว" value={data.todos.filter((t) => t.done).length} tone="good" />
+            </div>
+            <div className="max-h-72 overflow-y-auto space-y-1 mt-1">
+              {data.todos.length === 0 && (
+                <p className="text-sm text-[var(--ink-soft)] text-center py-4">ไม่มี To Do ในช่วงนี้</p>
+              )}
+              {data.todos.map((t) => {
+                const owner = todoScope === "all" && t.userId !== viewingAsUserId ? getUser(t.userId) : undefined;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => onToggleTodo?.(t.id)}
+                    className="w-full flex items-center gap-2.5 text-left rounded-lg px-2 py-1.5 hover:bg-[var(--bg-soft)]"
+                  >
+                    <span
+                      className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm border border-[var(--chart-amber)]"
+                      style={t.done ? { backgroundColor: "var(--chart-amber)" } : undefined}
+                    >
+                      {t.done && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />}
+                    </span>
+                    <span className={cn("min-w-0 flex-1 truncate text-sm", t.done && "line-through text-[var(--ink-soft)]")}>
+                      {owner ? `${owner.name.split(" ")[0]}: ${t.title}` : t.title}
+                    </span>
+                    <span className="text-[11px] text-[var(--ink-soft)] shrink-0 whitespace-nowrap">{formatDate(t.date)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </>
         ) : (
           <>
             <div className="grid grid-cols-3 gap-2">
@@ -280,8 +330,18 @@ export function RangeSummaryDialog({
           </Button>
         )}
 
+        {tab === "todo" && isSingleDay && onAddTodo && (
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => onAddTodo(range.start)}
+          >
+            <CalendarPlus className="h-4 w-4" /> เพิ่ม To Do
+          </Button>
+        )}
+
         <p className="flex items-center gap-1.5 text-[11px] text-[var(--ink-soft)] pt-1">
-          {tab === "work" ? <ListChecks className="h-3 w-3" /> : <CalendarDays className="h-3 w-3" />}
+          {tab === "work" ? <ListChecks className="h-3 w-3" /> : tab === "todo" ? <ListTodo className="h-3 w-3" /> : <CalendarDays className="h-3 w-3" />}
           ลากคลุมหลายวันบนปฏิทินเพื่อดูสรุปช่วงเวลา
         </p>
       </DialogContent>

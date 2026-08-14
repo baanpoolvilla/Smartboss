@@ -218,8 +218,8 @@ function TaskCardBody({ task, id, onOpen, dragging, lifted, refCb, style, dragPr
                   className={cn(
                     "mt-0.5 h-4.5 w-4.5 rounded-full flex items-center justify-center shrink-0 transition-all",
                     myPartDone
-                      ? "bg-[var(--brand-green)] text-white"
-                      : "text-[var(--line)] hover:text-[var(--brand-green)] hover:scale-110",
+                      ? "bg-[var(--chart-green)] text-white"
+                      : "text-[var(--line)] hover:text-[var(--chart-green)] hover:scale-110",
                     isShared && !iAmAssignee && "opacity-50 hover:scale-100 cursor-default"
                   )}
                 >
@@ -273,7 +273,7 @@ function TaskCardBody({ task, id, onOpen, dragging, lifted, refCb, style, dragPr
               <span
                 className={cn(
                   "h-3 w-3 rounded-sm border flex items-center justify-center shrink-0",
-                  c.done ? "bg-[var(--brand-green)] border-[var(--brand-green)]" : "border-[var(--line)]"
+                  c.done ? "bg-[var(--chart-green)] border-[var(--chart-green)]" : "border-[var(--line)]"
                 )}
               >
                 {c.done && <Check className="h-2 w-2 text-white" />}
@@ -420,7 +420,7 @@ function TaskCardBody({ task, id, onOpen, dragging, lifted, refCb, style, dragPr
                     </AvatarFallback>
                   </Avatar>
                   {done && (
-                    <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-[var(--brand-green)] ring-2 ring-white flex items-center justify-center">
+                    <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-[var(--chart-green)] ring-2 ring-white flex items-center justify-center">
                       <Check className="h-2 w-2 text-white" strokeWidth={3} />
                     </span>
                   )}

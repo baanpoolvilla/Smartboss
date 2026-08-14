@@ -148,7 +148,7 @@ export function EscalationsPanel() {
                           <TooltipContent className="text-xs">
                             <p className="font-medium">{doneCount}/{t.assigneeIds.length} คนเสร็จแล้ว</p>
                             {t.assigneeIds.map((uid) => (
-                              <p key={uid} className={cn((t.completedAssigneeIds ?? []).includes(uid) ? "text-[var(--brand-green)]" : "opacity-80")}>
+                              <p key={uid} className={cn((t.completedAssigneeIds ?? []).includes(uid) ? "text-[var(--chart-green)]" : "opacity-80")}>
                                 {(t.completedAssigneeIds ?? []).includes(uid) ? "✓" : "○"} {getUser(uid)?.name}
                               </p>
                             ))}

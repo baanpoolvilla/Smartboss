@@ -18,6 +18,9 @@ export const eventTypeColors: Record<CalendarEventType, string> = {
   // requested/approved "leave" and a company-declared "holiday", since it's
   // neither: self-picked, quota-tracked, and swappable.
   dayoff: chartColors.teal,
+  // Its own hue (amber) — distinct from every other type so a checked-off
+  // to-do reads as "done" the same amber-to-gray way a checklist item does.
+  todo: chartColors.amber,
 };
 
 export const eventTypeLabels: Record<CalendarEventType, string> = {
@@ -27,6 +30,7 @@ export const eventTypeLabels: Record<CalendarEventType, string> = {
   holiday: "วันหยุด",
   google: "ปฏิทินภายนอก",
   dayoff: "วันหยุดประจำ",
+  todo: "To Do",
 };
 
 // Leave-type labels/colors/icons are configurable at runtime — see leave-type-store.

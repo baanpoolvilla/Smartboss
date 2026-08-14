@@ -56,7 +56,7 @@ export function getMemberWorkStatus(
 // an app with no session/activity tracking, so nothing currently resolves
 // to it — it's kept so the color scale reads correctly if that ever changes.
 export const presenceColor: Record<MemberWorkStatus, string> = {
-  working: "var(--brand-green)", // online
+  working: "var(--chart-green)", // online
   meeting: "var(--chart-red)", // busy — Teams itself auto-sets this from your calendar
   leave: "#9ca3af", // offline
   dayoff: "#9ca3af", // offline

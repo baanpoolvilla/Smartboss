@@ -246,7 +246,7 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
               <div className="h-1.5 flex-1 rounded-full bg-[var(--bg-soft)] overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all"
-                  style={{ width: `${pct}%`, backgroundColor: complete ? "var(--brand-green)" : "var(--chart-amber)" }}
+                  style={{ width: `${pct}%`, backgroundColor: complete ? "var(--chart-green)" : "var(--chart-amber)" }}
                 />
               </div>
               <span
@@ -761,7 +761,7 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
 function SummaryChip({ label, value, tone = "neutral" }: { label: string; value: number; tone?: "neutral" | "good" | "bad" }) {
   const valueClass = {
     neutral: "text-[var(--ink)]",
-    good: "text-[var(--brand-green)]",
+    good: "text-[var(--chart-green)]",
     bad: "text-[var(--chart-red)]",
   }[tone];
   return (

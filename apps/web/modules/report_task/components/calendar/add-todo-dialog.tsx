@@ -1,0 +1,90 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/modules/report_task/components/ui/dialog";
+import { Button } from "@/modules/report_task/components/ui/button";
+import { Input } from "@/modules/report_task/components/ui/input";
+import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
+import { useTodoStore } from "@/modules/report_task/store/todo-store";
+import { useIdentityStore } from "@/modules/report_task/store/identity-store";
+import { todayIso } from "@/modules/report_task/lib/now";
+import { X } from "lucide-react";
+
+/**
+ * Deliberately its own small dialog rather than another type bolted onto
+ * NewTaskDialog — a to-do is just a title + a date, none of the
+ * attendees/leave-type/attachment machinery that dialog carries for
+ * meetings/leaves applies here.
+ */
+export function AddTodoDialog({
+  open,
+  onOpenChange,
+  defaultDate,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  defaultDate?: string;
+}) {
+  const addTodo = useTodoStore((s) => s.addTodo);
+  const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
+  const [title, setTitle] = useState("");
+  const [date, setDate] = useState(defaultDate ?? todayIso());
+
+  useEffect(() => {
+    if (open) setDate(defaultDate ?? todayIso());
+  }, [open, defaultDate]);
+
+  function submit() {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    addTodo({
+      id: `todo-${crypto.randomUUID()}`,
+      userId: viewingAsUserId,
+      date,
+      title: trimmed,
+      done: false,
+      createdAt: new Date().toISOString(),
+    });
+    setTitle("");
+    onOpenChange(false);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm" showCloseButton={false}>
+        <DialogClose render={<Button variant="ghost" size="icon-sm" className="absolute top-2 right-2" />}>
+          <X />
+          <span className="sr-only">Close</span>
+        </DialogClose>
+        <DialogHeader>
+          <DialogTitle>เพิ่ม To Do</DialogTitle>
+          <DialogDescription>รายการสั้น ๆ ที่ผูกกับวันที่ — ติ๊กเสร็จได้จากตัวปฏิทินเลย</DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-3">
+          <Input
+            autoFocus
+            placeholder="ต้องทำอะไร…"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") submit();
+            }}
+          />
+          <DatePickerField value={date} onChange={setDate} />
+        </div>
+
+        <Button className="w-full bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white" disabled={!title.trim()} onClick={submit}>
+          เพิ่ม To Do
+        </Button>
+      </DialogContent>
+    </Dialog>
+  );
+}

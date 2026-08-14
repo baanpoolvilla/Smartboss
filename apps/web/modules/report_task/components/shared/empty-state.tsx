@@ -20,7 +20,7 @@ export function EmptyState({
   className?: string;
   tone?: "neutral" | "good";
 }) {
-  const badge = tone === "good" ? "bg-[var(--accent)] text-[var(--brand-green)]" : "bg-[var(--bg-soft)] text-[var(--ink-soft)]";
+  const badge = tone === "good" ? "bg-[var(--accent)] text-[var(--chart-green)]" : "bg-[var(--bg-soft)] text-[var(--ink-soft)]";
   return (
     <div
       className={cn(

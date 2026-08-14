@@ -54,7 +54,7 @@ export function ReportHeader({
       action={
         <div className="flex items-center gap-1.5 flex-wrap w-full sm:w-auto">
           <CompliancePill
-            dotColor="var(--brand-green)"
+            dotColor="var(--chart-green)"
             label="ส่งแล้ววันนี้"
             value={`${summary.postedToday}/${summary.totalTracked}`}
             onClick={() => onShowTodayStatus("posted")}

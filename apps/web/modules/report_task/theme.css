@@ -224,7 +224,7 @@
 /* Today's date reads as a filled green pill, like a modern calendar. */
 .ebw-calendar .fc-day-today .fc-daygrid-day-number {
   color: #fff;
-  background: var(--brand-green);
+  background: var(--chart-green);
   font-weight: 700;
   border-radius: 999px;
   min-width: 1.5rem;
@@ -236,16 +236,34 @@
   margin: 4px;
   box-shadow: 0 2px 6px -1px rgba(76, 185, 63, 0.5);
 }
-/* Weekend shading — very subtle. */
+/* Weekend shading — very subtle, just enough to mark "end of week" without
+   competing with the event chips' own colors. */
 .ebw-calendar .fc-day-sat:not(.fc-day-today),
 .ebw-calendar .fc-day-sun:not(.fc-day-today) {
-  background-color: #fafbfc;
+  background-color: color-mix(in srgb, var(--ink) 1.6%, var(--bg));
+}
+/* Days from the previous/next month fade on two axes (background + number)
+   so it reads as "not this month" at a glance, not just a slightly duller
+   number. Weekend + other-month stacks to one step darker than either alone. */
+.ebw-calendar .fc-day-other:not(.fc-day-today) {
+  background-color: var(--bg-soft);
+}
+.ebw-calendar .fc-day-other.fc-day-sat:not(.fc-day-today),
+.ebw-calendar .fc-day-other.fc-day-sun:not(.fc-day-today) {
+  background-color: color-mix(in srgb, var(--ink) 3%, var(--bg-soft));
+}
+.ebw-calendar .fc-day-other .fc-daygrid-day-number {
+  color: var(--ink-faint, #a5b0c2);
+  font-weight: 500;
 }
 .ebw-calendar .fc-col-header-cell.fc-day-sun .fc-col-header-cell-cushion {
   color: #dc2626;
 }
 .ebw-calendar .fc-day-sun:not(.fc-day-today) .fc-daygrid-day-number {
   color: #dc2626;
+}
+.ebw-calendar .fc-day-other.fc-day-sun:not(.fc-day-today) .fc-daygrid-day-number {
+  color: color-mix(in srgb, #dc2626 45%, var(--ink-faint, #a5b0c2));
 }
 /* Hover a day cell to hint it's clickable (add event). */
 .ebw-calendar .fc-daygrid-day {

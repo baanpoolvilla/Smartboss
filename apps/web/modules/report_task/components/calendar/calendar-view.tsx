@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useMeetingStore } from "@/modules/report_task/store/meeting-store";
 import { useLeaveStore } from "@/modules/report_task/store/leave-store";
+import { useTodoStore } from "@/modules/report_task/store/todo-store";
 import { useHolidayStore, holidaySource, isSourceSelected } from "@/modules/report_task/store/holiday-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useCalendarVisibilityStore } from "@/modules/report_task/store/calendar-visibility-store";
@@ -19,8 +20,10 @@ import { CalendarFilters } from "./calendar-filters";
 import { FullCalendarView, type ViewKey } from "./full-calendar-view";
 import { LeaveSidebar } from "./leave-sidebar";
 import { WorkSidebar } from "./work-sidebar";
+import { TodoSidebar } from "./todo-sidebar";
 import { EventDetailDialog } from "./event-detail-dialog";
 import { AddCalendarDialog } from "./add-calendar-dialog";
+import { AddTodoDialog } from "./add-todo-dialog";
 import { EventPreviewCard } from "./event-preview-card";
 import { RangeSummaryDialog, type SummaryRange } from "./range-summary-dialog";
 import { TaskDetailSheet } from "@/modules/report_task/components/kanban/task-detail-sheet";
@@ -35,12 +38,12 @@ import { eventTypeLabels } from "@/modules/report_task/lib/calendar-colors";
 import { leaveIconOf } from "@/modules/report_task/lib/leave-icons";
 import { useLeaveTypeStore, type LeaveTypeDef } from "@/modules/report_task/store/leave-type-store";
 import { cn } from "@/modules/report_task/lib/utils";
-import { ListChecks, CalendarOff, Plus, Settings2, Globe, User, Users } from "lucide-react";
+import { ListChecks, CalendarOff, ListTodo, Plus, Settings2, Globe, User, Users } from "lucide-react";
 import { toast } from "sonner";
 import { now } from "@/modules/report_task/lib/now";
 import type { CalendarEvent, CalendarEventType, TaskPriority } from "@/modules/report_task/types";
 
-type CalendarTab = "work" | "schedule";
+type CalendarTab = "work" | "schedule" | "todo";
 
 // Work calendar = task deadlines (colored by priority) + meetings.
 // Schedule calendar = leaves (live from store) + holidays (opted-in per
@@ -100,6 +103,8 @@ export function CalendarView() {
   const updateMeeting = useMeetingStore((s) => s.updateMeeting);
   const leaves = useLeaveStore((s) => s.leaves);
   const updateLeave = useLeaveStore((s) => s.updateLeave);
+  const todos = useTodoStore((s) => s.todos);
+  const toggleTodo = useTodoStore((s) => s.toggleTodo);
   const allHolidays = useHolidayStore((s) => s.holidays);
   const holidaySelections = useHolidayStore((s) => s.selectedByUser);
   const routinePickedDates = useRoutineDayOffStore((s) => s.pickedDates);
@@ -138,6 +143,10 @@ export function CalendarView() {
   const [workPriorities, setWorkPriorities] = useState<Set<TaskPriority>>(new Set(taskPriorityOrder));
   const [showMeetings, setShowMeetings] = useState(true);
   const [scheduleActive, setScheduleActive] = useState<Set<CalendarEventType>>(new Set(scheduleTypes));
+  // "ของฉัน" vs "ทั้งหมด" — view-only, everyone can flip it (not gated to
+  // heads/owners like the work tab's scope, since a to-do isn't a
+  // manage-level record) so anyone can peek at the team's list.
+  const [todoScope, setTodoScope] = useState<"mine" | "all">("mine");
   // Empty = everything visible — tracking hidden ids (not active ids) means a
   // newly-added leave type shows up by default instead of needing to be
   // explicitly opted in.
@@ -267,6 +276,10 @@ export function CalendarView() {
   function openAddFromSummary(date: string) {
     setSummaryRange(null);
     openCreate(date);
+  }
+
+  function handleToggleTodo(eventId: string) {
+    toggleTodo(eventId.replace("todoevt-", ""));
   }
 
   function togglePriority(p: TaskPriority) {
@@ -404,6 +417,32 @@ export function CalendarView() {
     return items;
   }, [routinePickedDates, routineRules, routineRuleExceptions, hiddenUserIds, activeRange, viewingAsUserId, todayYmd]);
 
+  // Each to-do renders as a checkable chip on its own date. "all" scope
+  // prefixes someone else's item with their first name so it's still clear
+  // whose it is once the list isn't just the viewer's own anymore.
+  const todoEvents: CalendarEvent[] = useMemo(
+    () =>
+      todos
+        .filter((t) => (todoScope === "mine" ? t.userId === viewingAsUserId : !hiddenUserIds.includes(t.userId)))
+        .map((t) => {
+          const mine = t.userId === viewingAsUserId;
+          const owner = !mine && todoScope === "all" ? getUser(t.userId)?.name.split(" ")[0] : undefined;
+          return {
+            id: `todoevt-${t.id}`,
+            title: owner ? `${owner}: ${t.title}` : t.title,
+            type: "todo" as const,
+            start: t.date,
+            end: t.date,
+            allDay: true,
+            userId: t.userId,
+            mine,
+            done: t.done,
+            editable: false,
+          };
+        }),
+    [todos, todoScope, hiddenUserIds, viewingAsUserId]
+  );
+
   const events = useMemo(() => {
     // Past events just fade — same category color, paler, not a different
     // gray. Keeps the "already happened" cue without losing what it was.
@@ -420,6 +459,9 @@ export function CalendarView() {
         editable: canEditRecord(m.createdById, m.departmentIds ?? [m.departmentId], viewingAsUserId),
       });
       return [...taskEvents, ...(showMeetings ? visibleMeetings.map(markMeeting) : []), ...workGoogleEvents].map(gray);
+    }
+    if (tab === "todo") {
+      return todoEvents.map(gray);
     }
     // Color leaves by type (past ones still gray via `gray`).
     const leaveColorById = new Map(leaveTypes.map((t) => [t.id, t.color]));
@@ -443,6 +485,7 @@ export function CalendarView() {
     visibleLeaves,
     holidays,
     dayoffEvents,
+    todoEvents,
     leaveTypes,
     nowTs,
     todayYmd,
@@ -593,6 +636,19 @@ export function CalendarView() {
               <CalendarOff className="h-4 w-4" />
               วันหยุด · ลา
             </button>
+            <button
+              data-tour="calendar-tab-todo"
+              onClick={() => setTab("todo")}
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all",
+                tab === "todo"
+                  ? "bg-[var(--brand-green)] text-[var(--ink)] shadow-md"
+                  : "bg-white text-[var(--ink-soft)] border border-[var(--line)] hover:text-[var(--ink)]"
+              )}
+            >
+              <ListTodo className="h-4 w-4" />
+              To Do
+            </button>
           </div>
 
           <Button
@@ -616,7 +672,7 @@ export function CalendarView() {
               onClick={() => openCreate()}
             >
               <Plus className="h-4 w-4" />
-              {tab === "work" ? "สร้างประชุม" : "เพิ่มวันลา"}
+              {tab === "work" ? "สร้างประชุม" : tab === "todo" ? "เพิ่ม To Do" : "เพิ่มวันลา"}
             </Button>
           )}
         </div>
@@ -704,6 +760,38 @@ export function CalendarView() {
               </span>
             )}
           </div>
+        ) : tab === "todo" ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-[var(--ink-soft)]">มุมมอง:</span>
+            <div className="flex items-center gap-1 bg-[var(--bg-soft)] rounded-lg p-1">
+              <button
+                onClick={() => setTodoScope("mine")}
+                title="แสดงเฉพาะ To Do ของฉัน"
+                className={cn(
+                  "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer",
+                  todoScope === "mine"
+                    ? "bg-white shadow-sm text-[var(--ink)]"
+                    : "text-[var(--ink-soft)] hover:text-[var(--ink)] hover:bg-white/60"
+                )}
+              >
+                <User className="h-3.5 w-3.5" />
+                ของฉัน
+              </button>
+              <button
+                onClick={() => setTodoScope("all")}
+                title="แสดง To Do ของทุกคน"
+                className={cn(
+                  "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer",
+                  todoScope === "all"
+                    ? "bg-white shadow-sm text-[var(--ink)]"
+                    : "text-[var(--ink-soft)] hover:text-[var(--ink)] hover:bg-white/60"
+                )}
+              >
+                <Users className="h-3.5 w-3.5" />
+                ทั้งหมด
+              </button>
+            </div>
+          </div>
         ) : (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <CalendarFilters types={scheduleTypes} active={scheduleActive} onToggle={toggleSchedule} />
@@ -754,12 +842,15 @@ export function CalendarView() {
           onEventDrop={handleEventDrop}
           onSelectRange={setSummaryRange}
           onCreate={tab === "work" && !canManage(viewingAsUserId) ? undefined : () => openCreate()}
+          onToggleTodo={handleToggleTodo}
           addHint="คลิกวันเพื่อดูรายการ · ลากคลุมหลายวันเพื่อดูสรุป"
         />
       </div>
       <div className="xl:col-span-1 flex flex-col gap-4">
         {tab === "work" ? (
           <WorkSidebar range={viewRange} onOpenTask={setOpenTaskId} />
+        ) : tab === "todo" ? (
+          <TodoSidebar range={viewRange} scope={todoScope} />
         ) : (
           <LeaveSidebar range={viewRange} holidays={holidays} />
         )}
@@ -780,22 +871,28 @@ export function CalendarView() {
         range={summaryRange}
         tab={tab}
         dayoffs={dayoffEvents}
+        todoScope={todoScope}
         onOpenChange={(open) => !open && setSummaryRange(null)}
         onOpenTask={setOpenTaskId}
+        onToggleTodo={toggleTodo}
         onAddMeeting={canManage(viewingAsUserId) ? openAddFromSummary : undefined}
         onAddSchedule={openAddFromSummary}
+        onAddTodo={openAddFromSummary}
       />
       <TaskDetailSheet taskId={openTaskId} onOpenChange={(open) => !open && setOpenTaskId(null)} />
       {/* Work tab only ever creates meetings here — tasks are created on the
-          kanban board and just show up on this calendar already linked. */}
+          kanban board and just show up on this calendar already linked. To
+          do's are their own much smaller dialog below, not another type
+          bolted onto this one. */}
       <NewTaskDialog
         key={`${tab}-${createDate ?? "new"}`}
-        open={createOpen}
+        open={createOpen && tab !== "todo"}
         onOpenChange={setCreateOpen}
         defaultType={tab === "schedule" ? "leave" : "meeting"}
         allowedTypes={tab === "schedule" ? ["leave", "dayoff"] : ["meeting"]}
         defaultDate={createDate}
       />
+      <AddTodoDialog open={createOpen && tab === "todo"} onOpenChange={setCreateOpen} defaultDate={createDate} />
     </div>
   );
 }

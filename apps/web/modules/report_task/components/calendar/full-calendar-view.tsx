@@ -13,7 +13,7 @@ import type { DateSelectArg, DatesSetArg, EventClickArg, EventContentArg, EventD
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { Calendar } from "@/modules/report_task/components/ui/calendar";
-import { ChevronLeft, ChevronRight, ChevronDown, CalendarDays, MousePointerClick, PartyPopper, CalendarOff } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, CalendarDays, MousePointerClick, PartyPopper, CalendarOff, Check } from "lucide-react";
 import { cn } from "@/modules/report_task/lib/utils";
 import { useLeaveTypeStore } from "@/modules/report_task/store/leave-type-store";
 import { leaveIconOf } from "@/modules/report_task/lib/leave-icons";
@@ -49,6 +49,7 @@ export function FullCalendarView({
   onEventDrop,
   onSelectRange,
   onCreate,
+  onToggleTodo,
   addHint = "คลิกวันเพื่อเพิ่มรายการ",
 }: {
   events: CalendarEvent[];
@@ -69,6 +70,9 @@ export function FullCalendarView({
   onEventDrop?: (e: { id: string; type: CalendarEventType; start: string; end: string; allDay: boolean }) => boolean | void;
   onSelectRange?: (r: { start: string; end: string }) => void;
   onCreate?: () => void;
+  /** To-do chips render their own checkbox inline instead of opening the
+   *  usual click-through preview — this fires straight from the checkbox. */
+  onToggleTodo?: (id: string) => void;
   addHint?: string;
 }) {
   const calendarRef = useRef<FullCalendar | null>(null);
@@ -133,7 +137,7 @@ export function FullCalendarView({
             ...(e.type === "holiday" ? ["ebw-event-holiday"] : []),
             ...(e.muted ? ["ebw-event-muted"] : []),
           ],
-          extendedProps: { type: e.type, color, isTask: e.type === "task", muted: !!e.muted, mine: e.mine, leaveType: e.leaveType },
+          extendedProps: { type: e.type, color, isTask: e.type === "task", muted: !!e.muted, mine: e.mine, leaveType: e.leaveType, done: !!e.done },
         };
       }),
     [events, colors]
@@ -175,6 +179,13 @@ export function FullCalendarView({
   }
 
   function handleEventClick(arg: EventClickArg) {
+    // A to-do chip is a self-contained checkbox, not a record with a detail
+    // view — clicking anywhere on it toggles done instead of opening the
+    // usual preview card.
+    if (arg.event.extendedProps.type === "todo") {
+      onToggleTodo?.(arg.event.id);
+      return;
+    }
     const found = events.find((e) => e.id === arg.event.id);
     if (found) onSelectEvent(found, arg.el.getBoundingClientRect());
   }
@@ -224,6 +235,23 @@ export function FullCalendarView({
     const color = (arg.event.extendedProps.color as string) ?? colors[type];
     const leaveType = arg.event.extendedProps.leaveType as string | undefined;
     const mine = arg.event.extendedProps.mine as boolean | undefined;
+
+    if (type === "todo") {
+      const done = !!arg.event.extendedProps.done;
+      return (
+        <div className={cn("flex items-center gap-1.5 px-2 py-[3px] overflow-hidden leading-tight cursor-pointer", done && "opacity-60")}>
+          <span
+            className="flex h-3 w-3 shrink-0 items-center justify-center rounded-sm border"
+            style={done ? { backgroundColor: color, borderColor: color } : { borderColor: color }}
+          >
+            {done && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />}
+          </span>
+          <span className={cn("truncate text-[11px] font-medium", done && "line-through")} style={{ color }}>
+            {arg.event.title}
+          </span>
+        </div>
+      );
+    }
     // Leaves/holidays show a descriptive icon; everything else (including
     // tasks) keeps a plain color dot — priority colors are spread out enough
     // (see priorityColorHex) to tell apart without an icon too. Past events

@@ -38,7 +38,7 @@ export function TaskBoardKpis({ tasks }: { tasks: Task[] }) {
     { key: "all", label: "งานทั้งหมด", value: stats.total, icon: ListTodo, accent: "border-t-[var(--chart-gray)]", iconClass: "bg-slate-50 text-[var(--chart-gray)]" },
     { key: "inProgress", label: "กำลังทำ", value: stats.inProgress, icon: PlayCircle, accent: "border-t-[var(--chart-amber)]", iconClass: "bg-amber-50 text-[var(--chart-amber)]" },
     { key: "overdue", label: "เลยกำหนด", value: stats.overdue, icon: Flag, accent: "border-t-[var(--chart-red)]", iconClass: "bg-red-50 text-[var(--chart-red)]" },
-    { key: "done", label: "สำเร็จทั้งหมด", value: stats.doneAll, icon: CheckCircle2, accent: "border-t-[var(--brand-green)]", iconClass: "bg-green-50 text-[var(--brand-green)]" },
+    { key: "done", label: "สำเร็จทั้งหมด", value: stats.doneAll, icon: CheckCircle2, accent: "border-t-[var(--chart-green)]", iconClass: "bg-green-50 text-[var(--chart-green)]" },
   ];
 
   return (
