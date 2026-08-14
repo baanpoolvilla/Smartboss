@@ -78,7 +78,7 @@ export const reporterStatusGroupMeta: Record<ReporterStatusGroup, { label: strin
   awaiting: { label: "รอรับเรื่อง", dot: "bg-[var(--chart-red)]", className: "bg-red-50 text-[var(--chart-red)] border-red-200" },
   in_progress: { label: "กำลังดำเนินการ", dot: "bg-[var(--chart-amber)]", className: "bg-amber-50 text-[var(--chart-amber)] border-amber-200" },
   needs_you: { label: "รอคุณตอบกลับ", dot: "bg-[var(--chart-blue)]", className: "bg-blue-50 text-[var(--chart-blue)] border-blue-200" },
-  done: { label: "เสร็จแล้ว", dot: "bg-[var(--brand-green)]", className: "bg-green-50 text-[var(--brand-green-dark)] border-green-200" },
+  done: { label: "เสร็จแล้ว", dot: "bg-[var(--chart-green)]", className: "bg-green-50 text-[var(--brand-green-dark)] border-green-200" },
   closed: { label: "ปิดแล้ว", dot: "bg-[var(--ink-soft)]", className: "bg-gray-50 text-[var(--ink-soft)] border-gray-200" },
 };
 

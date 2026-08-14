@@ -99,7 +99,7 @@ export function WorkloadView() {
                             <div className="h-full" style={{ width: `${seg(inProgressNotOverdue)}%`, backgroundColor: "var(--chart-amber)" }} />
                           )}
                           {r.overdue > 0 && <div className="h-full" style={{ width: `${seg(r.overdue)}%`, backgroundColor: "var(--chart-red)" }} />}
-                          {r.done > 0 && <div className="h-full" style={{ width: `${seg(r.done)}%`, backgroundColor: "var(--brand-green)" }} />}
+                          {r.done > 0 && <div className="h-full" style={{ width: `${seg(r.done)}%`, backgroundColor: "var(--chart-green)" }} />}
                         </div>
                       </button>
                     }
@@ -110,7 +110,7 @@ export function WorkloadView() {
                       <BarBreakdownRow color="#94a3b8" label="รอดำเนินการ" count={r.todo} total={r.total} />
                       <BarBreakdownRow color="var(--chart-amber)" label="กำลังทำ" count={inProgressNotOverdue} total={r.total} />
                       <BarBreakdownRow color="var(--chart-red)" label="เลยกำหนด" count={r.overdue} total={r.total} />
-                      <BarBreakdownRow color="var(--brand-green)" label="เสร็จ" count={r.done} total={r.total} />
+                      <BarBreakdownRow color="var(--chart-green)" label="เสร็จ" count={r.done} total={r.total} />
                     </div>
                     <div className="mt-2 pt-2 border-t border-[var(--line)] flex items-center justify-between text-xs font-medium">
                       <span className="text-[var(--ink-soft)]">รวมทั้งหมด</span>

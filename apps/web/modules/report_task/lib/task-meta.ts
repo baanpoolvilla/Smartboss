@@ -24,10 +24,10 @@ export const statusMeta: Record<
   },
   done: {
     label: "เสร็จสิ้น",
-    dot: "bg-[var(--brand-green)]",
-    accentColor: "var(--brand-green)",
+    dot: "bg-[var(--chart-green)]",
+    accentColor: "var(--chart-green)",
     badgeClass: "bg-green-50 text-green-700 border-green-200",
-    column: "border-t-[var(--brand-green)]",
+    column: "border-t-[var(--chart-green)]",
   },
 };
 

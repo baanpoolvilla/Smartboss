@@ -18,6 +18,7 @@ export const STORE_KEYS = {
   "employee-profiles": "stores/employee-profiles.json",
   holidays: "stores/holidays.json",
   leaves: "stores/leaves.json",
+  todos: "stores/todos.json",
   "leave-types": "stores/leave-types.json",
   "issue-reports": "stores/issue-reports.json",
   "issue-desk-config": "stores/issue-desk-config.json",

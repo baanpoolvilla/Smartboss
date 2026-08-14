@@ -546,7 +546,7 @@ export function TaskDetailSheet({
                               <AvatarFallback className="text-[9px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{a!.avatar}</AvatarFallback>
                             </Avatar>
                             {done && (
-                              <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-[var(--brand-green)] ring-2 ring-white flex items-center justify-center">
+                              <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-[var(--chart-green)] ring-2 ring-white flex items-center justify-center">
                                 <Check className="h-1.5 w-1.5 text-white" strokeWidth={4} />
                               </span>
                             )}
@@ -1039,7 +1039,7 @@ export function TaskDetailSheet({
                       disabled={!canToggle}
                       className={cn(
                         "h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors",
-                        c.done ? "bg-[var(--brand-green)] border-[var(--brand-green)]" : "border-[var(--line)]",
+                        c.done ? "bg-[var(--chart-green)] border-[var(--chart-green)]" : "border-[var(--line)]",
                         canToggle ? "hover:border-[var(--brand-green)]" : "opacity-50 cursor-not-allowed"
                       )}
                       title={!canToggle ? "ติ๊กได้เฉพาะเจ้าของรายการนี้" : undefined}

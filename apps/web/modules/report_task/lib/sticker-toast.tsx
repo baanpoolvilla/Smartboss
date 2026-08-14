@@ -12,7 +12,7 @@ export function showStickerToast(sticker: Sticker, taskTitle: string) {
       className={cn(
         "flex items-center gap-3 rounded-xl border-2 px-4 py-3 shadow-lg min-w-[300px] max-w-sm",
         negative && "bg-red-50 border-red-300",
-        positive && "bg-green-50 border-[var(--brand-green)]",
+        positive && "bg-green-50 border-[var(--chart-green)]",
         !negative && !positive && "bg-white border-[var(--line)]"
       )}
     >

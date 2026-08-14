@@ -13,6 +13,7 @@ import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { usePenaltySettingsStore } from "@/modules/report_task/store/penalty-settings-store";
 import { useMeetingStore } from "@/modules/report_task/store/meeting-store";
 import { useLeaveStore } from "@/modules/report_task/store/leave-store";
+import { useTodoStore } from "@/modules/report_task/store/todo-store";
 import { useHolidayStore } from "@/modules/report_task/store/holiday-store";
 import { useLeaveTypeStore } from "@/modules/report_task/store/leave-type-store";
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
@@ -80,6 +81,12 @@ export function StoreHydrator() {
         store={useLeaveStore}
         select={(s) => s.leaves}
         apply={(s, leaves) => ({ ...s, leaves })}
+      />
+      <ServerStoreSync
+        apiKey="todos"
+        store={useTodoStore}
+        select={(s) => s.todos}
+        apply={(s, todos) => ({ ...s, todos })}
       />
       <ServerStoreSync
         apiKey="holidays"

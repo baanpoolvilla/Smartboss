@@ -18,7 +18,7 @@ export function PracticeMissionsPanel({ completed, activeMissionId }: { complete
         </div>
         <div className="h-1.5 rounded-full bg-[var(--bg-soft)] overflow-hidden">
           <div
-            className="h-full rounded-full bg-[var(--brand-green)] transition-[width] duration-500 ease-out"
+            className="h-full rounded-full bg-[var(--chart-green)] transition-[width] duration-500 ease-out"
             style={{ width: `${pct}%` }}
           />
         </div>
@@ -39,7 +39,7 @@ export function PracticeMissionsPanel({ completed, activeMissionId }: { complete
               <span
                 className={cn(
                   "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors",
-                  done ? "bg-[var(--brand-green)] border-[var(--brand-green)]" : "border-[var(--line)]"
+                  done ? "bg-[var(--chart-green)] border-[var(--chart-green)]" : "border-[var(--line)]"
                 )}
               >
                 {done && <Check className="h-2.5 w-2.5 text-white" />}
