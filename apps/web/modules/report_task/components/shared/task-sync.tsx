@@ -127,6 +127,18 @@ export function TaskSync() {
       }
     }
 
+    // Same trigger-only shape as runSweep, for the separate "ใกล้ถึงกำหนด"
+    // reminder sweep (tasks/meetings/report cutoffs) — see
+    // /api/report-task/reminders/sweep. Doesn't touch the task store, so no
+    // reload needed either way.
+    async function runReminderSweep() {
+      try {
+        await fetch("/api/report-task/reminders/sweep", { method: "POST" });
+      } catch {
+        // Offline or server down — next tick tries again.
+      }
+    }
+
     fetch("/api/report-task/tasks")
       .then(async (r) => {
         versionRef.current = Number(r.headers.get("X-Data-Version")) || null;
@@ -145,6 +157,7 @@ export function TaskSync() {
         if (!cancelled) {
           useTaskStore.setState({ loaded: true });
           void runSweep();
+          void runReminderSweep();
         }
       });
 
@@ -152,7 +165,10 @@ export function TaskSync() {
     // flagged as once-overdue) the moment its due date passes, even if
     // nobody touches the app in the meantime.
     const sweepTimer = setInterval(() => {
-      if (loadedRef.current) void runSweep();
+      if (loadedRef.current) {
+        void runSweep();
+        void runReminderSweep();
+      }
     }, 60_000);
 
     // Write-through: save after changes settle. Skips writes until the initial

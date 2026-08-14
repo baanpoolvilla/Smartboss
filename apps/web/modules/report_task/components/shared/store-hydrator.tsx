@@ -28,6 +28,7 @@ import { useActivityLogStore } from "@/modules/report_task/store/activity-log-st
 import { useRoutineDayOffStore } from "@/modules/report_task/store/routine-dayoff-store";
 import { useSettingsAccessStore } from "@/modules/report_task/store/settings-access-store";
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
+import { useReminderSettingsStore } from "@/modules/report_task/store/reminder-settings-store";
 
 /**
  * Two kinds of state get hydrated here:
@@ -67,6 +68,12 @@ export function StoreHydrator() {
       <ServerStoreSync
         apiKey="attachment-settings"
         store={useAttachmentSettingsStore}
+        select={(s) => s.settings}
+        apply={(s, settings) => ({ ...s, settings })}
+      />
+      <ServerStoreSync
+        apiKey="reminder-settings"
+        store={useReminderSettingsStore}
         select={(s) => s.settings}
         apply={(s, settings) => ({ ...s, settings })}
       />

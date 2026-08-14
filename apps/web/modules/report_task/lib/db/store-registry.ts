@@ -31,6 +31,10 @@ export const STORE_KEYS = {
   stickers: "stores/stickers.json",
   "project-topics": "stores/project-topics.json",
   "attachment-settings": "stores/attachment-settings.json",
+  "reminder-settings": "stores/reminder-settings.json",
+  // Plain string[] of dedup keys already fired (see lib/reminder-sweep.ts) —
+  // server-only, no client store reads this directly.
+  "reminder-sent-log": "stores/reminder-sent-log.json",
 } as const;
 
 export type StoreKey = keyof typeof STORE_KEYS;

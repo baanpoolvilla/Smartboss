@@ -17,6 +17,7 @@ import { LeaveSummaryPanel } from "@/modules/report_task/components/calendar/lea
 import { SettingsAccessPanel } from "@/modules/report_task/components/shared/settings-access-panel";
 import { DepartmentSettingsPanel, EmployeeSettingsPanel } from "@/modules/report_task/components/shared/org-settings-panel";
 import { EmailNotificationSettingsPanel } from "@/modules/report_task/components/shared/email-notification-settings-dialog";
+import { DeadlineReminderSettingsPanel } from "@/modules/report_task/components/shared/deadline-reminder-settings-panel";
 import { HolidaysPane, GoogleCalendarPane } from "@/modules/report_task/components/calendar/add-calendar-dialog";
 import { PageHeader } from "@/modules/report_task/components/shared/page-header";
 import { IssueDeskConfigPanel } from "@/modules/report_task/components/issue-report/issue-desk-config-panel";
@@ -45,7 +46,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-type SettingsTab = "task" | "calendar" | "report" | "issueDesk" | "permissions" | "profile";
+type SettingsTab = "task" | "calendar" | "report" | "issueDesk" | "permissions" | "reminders" | "profile";
 
 // Each top-level tab is one real page's admin settings — same page names as
 // the sidebar nav (nav-config.ts) — so "which page does this control?" is
@@ -61,6 +62,7 @@ const tabs: { key: SettingsTab; label: string; icon: LucideIcon; color: string }
   { key: "report", label: "ห้อง Report", icon: MessageSquareText, color: chartColors.violet },
   { key: "issueDesk", label: "แจ้งปัญหา", icon: Bug, color: chartColors.teal },
   { key: "permissions", label: "สิทธิ์การเข้าถึง", icon: ShieldCheck, color: chartColors.red },
+  { key: "reminders", label: "แจ้งเตือนใกล้ถึงกำหนด", icon: Bell, color: chartColors.orange },
   { key: "profile", label: "โปรไฟล์ของฉัน", icon: User, color: chartColors.amber },
 ];
 
@@ -100,6 +102,7 @@ function SettingsPageInner() {
     report: manager,
     issueDesk: hasIssueDeskAccess,
     permissions: owner,
+    reminders: owner,
     profile: true,
   };
 
@@ -153,6 +156,7 @@ function SettingsPageInner() {
           { key: "employees", label: "จัดการพนักงาน", icon: Users },
         ]
       : [],
+    reminders: owner ? [{ key: "deadlineReminders", label: "แจ้งเตือนใกล้ถึงกำหนด", icon: Bell }] : [],
     profile: [
       { key: "email", label: "แจ้งเตือนอีเมล", icon: Bell },
       { key: "holidays", label: "วันหยุดตามประเทศ", icon: Globe },
@@ -282,7 +286,7 @@ function SettingsPageInner() {
               <p className="text-sm text-[var(--ink)]">ตั้งค่าห้อง Report แต่ละห้องได้จากไอคอน ⚙ ในห้องนั้นๆ โดยตรง</p>
               <p className="text-xs text-[var(--ink-soft)] mt-1">เข้าห้องที่ต้องการ แล้วกดไอคอนรูปเฟืองมุมขวาบนของห้อง</p>
               <Link
-                href="/report-feed"
+                href="/report-task/report-feed"
                 className="inline-flex items-center gap-1.5 mt-3 rounded-lg bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white text-sm font-medium px-3.5 py-2 transition-colors"
               >
                 ไปที่หน้า Report
@@ -293,6 +297,12 @@ function SettingsPageInner() {
           {tab === "issueDesk" && hasIssueDeskAccess && (
             <section className="rounded-2xl border border-[var(--line)] bg-white p-5 shadow-sm">
               <IssueDeskConfigPanel config={issueDeskConfig} setConfig={setIssueDeskConfig} />
+            </section>
+          )}
+
+          {tab === "reminders" && owner && (
+            <section className="rounded-2xl border border-[var(--line)] bg-white p-5 shadow-sm">
+              {sectionKey === "deadlineReminders" && <DeadlineReminderSettingsPanel />}
             </section>
           )}
 
