@@ -42,19 +42,16 @@
   --brand-ink:  #2e8b26;
 
   /* สีสถานะ = ไฟจราจร เขียว → เหลือง → แดง
-     ไล่ตาม "บอสต้องกังวลแค่ไหน" ไม่ใช่ไล่ตามลำดับขั้นตอนงาน
-     ⇒ มองหลอดเดียวก็รู้ว่าคนนี้มีปัญหาหรือไม่ โดยไม่ต้องอ่าน legend
+     เหลือสามสถานะพอ — เยอะกว่านี้บอสต้องอ่าน legend ก่อนถึงจะรู้ว่าอันไหนแย่
+     ซึ่งขัดกับจุดประสงค์ของหลอดที่ต้องอ่านออกในวินาทีเดียว
 
-     ทั้งห้าตัวใช้เป็น "พื้น" (หลอด จุด) เท่านั้น — บนพื้นขาวเหลืองกับส้ม
-     ได้ contrast แค่ ~2:1 จะเอาไปเป็นสีตัวหนังสือไม่ได้ ต้องใช้ตัว -ink */
-  --s-done:     #15803d;   /* เสร็จแล้ว — เขียวเข้ม */
-  --s-doing:    #4cb93f;   /* กำลังทำ — เขียวโลโก้ ปกติดี */
-  --s-check:    #eab308;   /* รอตรวจ — เหลือง รอบอสทำอะไรบางอย่าง */
-  --s-late:     #f59e0b;   /* ใกล้ครบกำหนด — ส้ม */
-  --s-over:     #dc2626;   /* เกินกำหนด — แดง */
+     ทั้งสามใช้เป็น "พื้น" (หลอด จุด) เท่านั้น — เหลืองบนพื้นขาวได้ contrast
+     แค่ ~1.9:1 จะเอาไปเป็นสีตัวหนังสือไม่ได้ ต้องใช้ --s-doing-ink */
+  --s-done:     #16a34a;   /* เสร็จแล้ว */
+  --s-doing:    #eab308;   /* กำลังทำ */
+  --s-over:     #dc2626;   /* เกินกำหนด */
 
-  /* คู่สำหรับตัวหนังสือบนพื้นขาว */
-  --s-check-ink: #a16207;
+  --s-doing-ink: #a16207;  /* คู่สำหรับตัวหนังสือบนพื้นขาว (4.92:1) */
 
   --sans: "Noto Sans Thai", "IBM Plex Sans Thai", "Sarabun", "Leelawadee UI",
           -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -231,7 +228,7 @@ section { padding: clamp(3.2rem, 7vw, 5.5rem) 0; }
   font-size: .75rem; font-weight: 600; padding: .22rem .6rem; border-radius: 7px;
   border: 1px solid var(--line); color: var(--ink-soft);
 }
-.chip.on { border-color: color-mix(in srgb, var(--s-check) 62%, transparent); color: var(--s-check-ink); background: color-mix(in srgb, var(--s-check) 16%, transparent); }
+.chip.on { border-color: color-mix(in srgb, var(--s-doing) 62%, transparent); color: var(--s-doing-ink); background: color-mix(in srgb, var(--s-doing) 16%, transparent); }
 
 /* ── กลไกควบคุม ─────────────────────────────────────────────── */
 .rules { margin-top: 2.6rem; display: grid; gap: 1.6rem 2.6rem; grid-template-columns: 1fr; }
@@ -322,9 +319,8 @@ footer .mono { font-family: var(--mono); font-size: .78rem; }
             <p class="who">สมชาย <small>ช่างเทคนิค</small></p>
             <p class="num">12 งาน</p>
             <div class="bar">
-              <i style="flex:6;background:var(--s-done)"></i>
+              <i style="flex:8;background:var(--s-done)"></i>
               <i style="flex:3;background:var(--s-doing)"></i>
-              <i style="flex:2;background:var(--s-check)"></i>
               <i style="flex:1;background:var(--s-over)"></i>
             </div>
           </div>
@@ -343,11 +339,10 @@ footer .mono { font-family: var(--mono); font-size: .78rem; }
             <p class="num">19 งาน</p>
             <div class="bar">
               <i style="flex:5;background:var(--s-done)"></i>
-              <i style="flex:7;background:var(--s-doing)"></i>
-              <i style="flex:3;background:var(--s-late)"></i>
-              <i style="flex:4;background:var(--s-over)"></i>
+              <i style="flex:8;background:var(--s-doing)"></i>
+              <i style="flex:6;background:var(--s-over)"></i>
             </div>
-            <p class="warn">งานเกินกำหนด 4 ชิ้น — มากกว่าคนอื่นในทีมสามเท่า</p>
+            <p class="warn">งานเกินกำหนด 6 ชิ้น — มากกว่าคนอื่นในทีมรวมกัน</p>
           </div>
 
           <div class="person">
@@ -362,8 +357,6 @@ footer .mono { font-family: var(--mono); font-size: .78rem; }
           <div class="legend">
             <span><b style="background:var(--s-done)"></b>เสร็จแล้ว</span>
             <span><b style="background:var(--s-doing)"></b>กำลังทำ</span>
-            <span><b style="background:var(--s-check)"></b>รอตรวจ</span>
-            <span><b style="background:var(--s-late)"></b>ใกล้ครบกำหนด</span>
             <span><b style="background:var(--s-over)"></b>เกินกำหนด</span>
           </div>
         </div>
@@ -390,10 +383,10 @@ footer .mono { font-family: var(--mono); font-size: .78rem; }
               <span class="m-bar"><i style="width:88%;background:var(--s-over)"></i></span>
               <span class="m-val">88%</span></div>
             <div class="m-row"><span style="min-width:3.4rem">ธุรการ</span>
-              <span class="m-bar"><i style="width:41%;background:var(--s-doing)"></i></span>
+              <span class="m-bar"><i style="width:41%;background:var(--s-done)"></i></span>
               <span class="m-val">41%</span></div>
             <div class="m-row"><span style="min-width:3.4rem">แม่บ้าน</span>
-              <span class="m-bar"><i style="width:63%;background:var(--s-done)"></i></span>
+              <span class="m-bar"><i style="width:63%;background:var(--s-doing)"></i></span>
               <span class="m-val">63%</span></div>
           </div>
           <h3>ใครงานล้น ใครยังรับได้</h3>
@@ -420,7 +413,7 @@ footer .mono { font-family: var(--mono); font-size: .78rem; }
         <article class="see">
           <div class="mini">
             <div class="m-row"><span style="min-width:3.4rem">ธนกฤต</span>
-              <span class="m-bar"><i style="width:72%;background:var(--s-late)"></i></span>
+              <span class="m-bar"><i style="width:72%;background:var(--s-doing)"></i></span>
               <span class="m-val">72</span></div>
             <div class="m-row"><span style="min-width:3.4rem">สมชาย</span>
               <span class="m-bar"><i style="width:91%;background:var(--s-done)"></i></span>
