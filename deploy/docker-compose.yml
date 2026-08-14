@@ -92,12 +92,17 @@ services:
     network_mode: host
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # หน้าแนะนำระบบ — เสิร์ฟจากไฟล์ตรง ๆ path ในคอนเทนเนอร์ต้องตรงกับ
+      # root ใน Caddyfile เป๊ะ (Caddy เห็นเฉพาะสิ่งที่ mount เข้ามา)
+      - ./www:/opt/smartboss/deploy/www:ro
       - caddydata:/data
       - caddyconfig:/config
     environment:
       APP_DOMAIN: ${APP_DOMAIN:?ต้องตั้งใน deploy/.env}
       DEVICE_DOMAIN: ${DEVICE_DOMAIN:?ต้องตั้งใน deploy/.env}
       FILES_DOMAIN: ${FILES_DOMAIN:?ต้องตั้งใน deploy/.env}
+      # ไม่มี :? เพราะเว็บแนะนำระบบเป็นของเสริม ไม่ตั้งก็ให้ระบบหลักขึ้นได้ตามปกติ
+      WWW_DOMAIN: ${WWW_DOMAIN:-}
       ACME_EMAIL: ${ACME_EMAIL:?ต้องตั้งใน deploy/.env}
 
 volumes:

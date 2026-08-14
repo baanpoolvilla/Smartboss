@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Smartboss</title>
+<meta name="description" content="ระบบจัดการงานหน้างานสำหรับธุรกิจไทย — ใบงานซ่อม บำรุงรักษาตามรอบ งานประจำวัน ลงเวลา เงินเดือน รวมอยู่ที่เดียว" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231b2537'/%3E%3Cpath d='M9 21.5V10.5h4.6c2.2 0 3.6 1.1 3.6 2.9 0 1.2-.6 2-1.6 2.4 1.3.3 2.1 1.3 2.1 2.7 0 2-1.5 3-3.9 3H9Z' fill='%234cb93f'/%3E%3Ccircle cx='22.5' cy='19.5' r='2' fill='%234cb93f'/%3E%3C/svg%3E" />
+<style>
+/* ══════════════════════════════════════════════════════════════
+   Smartboss — หน้าแนะนำระบบ
+   สีทั้งหมดมาจาก packages/ui/tokens.css ของตัวระบบ ไม่ประกาศใหม่
+   ══════════════════════════════════════════════════════════════ */
+:root {
+  --ink:        #1b2537;   /* navy จากโลโก้ Boss */
+  --ink-soft:   #5a6a83;
+  --ink-faint:  #8a97ab;
+  --bg:         #ffffff;
+  --bg-soft:    #f5f7fa;   /* เทาเอียงน้ำเงิน ไม่ใช่เทากลาง */
+  --surface:    #ffffff;
+  --line:       #e2e7ef;
+  --line-soft:  #eef1f6;
+  --brand:      #4cb93f;   /* เขียวจากโลโก้ Easy/Smart */
+  --brand-deep: #3a9630;
+  --mod-report: #64748b;
+  --mod-maint:  #0d9488;
+  --mod-hr:     #3b82f6;
+  --mod-admin:  #8b5cf6;
+  --shadow:     0 1px 2px rgba(27,37,55,.06), 0 8px 24px -12px rgba(27,37,55,.18);
+
+  --sans: "Noto Sans Thai", "IBM Plex Sans Thai", "Sarabun", "Leelawadee UI",
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "JetBrains Mono", "Cascadia Mono", "SF Mono", Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink:        #e8edf5;
+    --ink-soft:   #9dabc2;
+    --ink-faint:  #6f7d94;
+    --bg:         #101725;
+    --bg-soft:    #161f31;
+    --surface:    #182133;
+    --line:       #27324a;
+    --line-soft:  #202a3e;
+    --brand:      #5fcc52;
+    --brand-deep: #7ad86e;
+    --mod-report: #94a3b8;
+    --mod-maint:  #2dd4bf;
+    --mod-hr:     #60a5fa;
+    --mod-admin:  #a78bfa;
+    --shadow:     0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"] {
+  --ink:        #e8edf5;
+  --ink-soft:   #9dabc2;
+  --ink-faint:  #6f7d94;
+  --bg:         #101725;
+  --bg-soft:    #161f31;
+  --surface:    #182133;
+  --line:       #27324a;
+  --line-soft:  #202a3e;
+  --brand:      #5fcc52;
+  --brand-deep: #7ad86e;
+  --mod-report: #94a3b8;
+  --mod-maint:  #2dd4bf;
+  --mod-hr:     #60a5fa;
+  --mod-admin:  #a78bfa;
+  --shadow:     0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 { text-wrap: balance; margin: 0; line-height: 1.3; font-weight: 800; letter-spacing: -.01em; }
+p { margin: 0; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; border-radius: 4px; }
+
+.wrap { width: min(100% - 2.5rem, 1080px); margin-inline: auto; }
+
+/* ── รหัสเอกสาร: ตัวชูโรงของงานออกแบบนี้ ────────────────────
+   ระบบเดินเลขให้ทุกอย่าง (WO / T / PO / SM) เพราะคนหน้างานต้อง
+   อ่านเลขให้กันฟังทางโทรศัพท์ eyebrow ของทุกหัวข้อจึงเป็นรหัส
+   ไม่ใช่คำว่า "FEATURES" ลอย ๆ */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: .75rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+}
+.eyebrow::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+/* ── แถบบน ─────────────────────────────────────────────── */
+.topbar {
+  position: sticky; top: 0; z-index: 20;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line-soft);
+}
+.topbar .wrap { display: flex; align-items: center; gap: 1rem; height: 62px; }
+.logo { font-weight: 800; font-size: 1.2rem; letter-spacing: -.02em; text-decoration: none; }
+.logo .a { color: var(--brand); }
+.logo .b { color: var(--ink); }
+.nav { margin-left: auto; display: flex; align-items: center; gap: 1.6rem; }
+.nav a { color: var(--ink-soft); text-decoration: none; font-size: .93rem; }
+.nav a:hover { color: var(--ink); }
+@media (max-width: 720px) { .nav .hide-sm { display: none; } }
+
+.btn {
+  display: inline-flex; align-items: center; gap: .5rem;
+  padding: .62rem 1.15rem; border-radius: 8px;
+  font-size: .93rem; font-weight: 700; text-decoration: none;
+  border: 1px solid transparent; white-space: nowrap;
+  transition: background-color .15s, border-color .15s, transform .15s;
+}
+.btn-solid { background: var(--brand); color: #06210b; }
+.btn-solid:hover { background: var(--brand-deep); }
+.btn-ghost { border-color: var(--line); color: var(--ink); }
+.btn-ghost:hover { border-color: var(--ink-faint); }
+.btn:active { transform: translateY(1px); }
+
+/* ── Hero ──────────────────────────────────────────────── */
+.hero { padding: clamp(3.5rem, 9vw, 6.5rem) 0 clamp(3rem, 7vw, 5rem); }
+.hero .wrap { display: grid; gap: clamp(2.5rem, 6vw, 4rem); grid-template-columns: 1fr; align-items: center; }
+@media (min-width: 940px) { .hero .wrap { grid-template-columns: 1.05fr .95fr; } }
+
+.hero h1 { font-size: clamp(2.1rem, 5.2vw, 3.3rem); letter-spacing: -.025em; }
+.hero h1 .hl {
+  background: linear-gradient(transparent 62%, color-mix(in srgb, var(--brand) 36%, transparent) 62%);
+}
+.lede { margin-top: 1.15rem; font-size: clamp(1.03rem, 2vw, 1.16rem); color: var(--ink-soft); max-width: 34em; }
+.hero-cta { margin-top: 2rem; display: flex; flex-wrap: wrap; gap: .75rem; }
+.hero-note { margin-top: 1.1rem; font-size: .85rem; color: var(--ink-faint); }
+
+/* ── ใบงานจำลอง — หัวใจของ hero ──────────────────────────
+   ไม่ใช้ภาพประกอบนามธรรม เพราะสิ่งที่ลูกค้าจำได้คือหน้าตาใบงาน
+   ที่เขาต้องใช้จริงทุกวัน */
+.slip {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.slip-head {
+  padding: .9rem 1.15rem;
+  border-bottom: 1px solid var(--line-soft);
+  display: flex; align-items: center; gap: .75rem;
+  background: var(--bg-soft);
+}
+.slip-code {
+  font-family: var(--mono); font-size: .85rem; font-weight: 700;
+  color: var(--mod-maint); font-variant-numeric: tabular-nums;
+}
+.pill {
+  margin-left: auto;
+  font-size: .72rem; font-weight: 700; padding: .2rem .6rem; border-radius: 999px;
+  border: 1px solid; letter-spacing: .01em;
+}
+.pill-run { color: #c2410c; border-color: #fdba74; background: #fff7ed; }
+.slip-body { padding: 1.15rem; display: flex; flex-direction: column; gap: .85rem; }
+.slip-title { font-weight: 700; font-size: 1.05rem; }
+.row { display: flex; gap: .75rem; font-size: .9rem; align-items: baseline; }
+.row dt { color: var(--ink-faint); min-width: 5.6rem; flex-shrink: 0; }
+.row dd { margin: 0; color: var(--ink); }
+.slip dl { margin: 0; display: flex; flex-direction: column; gap: .5rem; }
+.slip-foot {
+  border-top: 1px solid var(--line-soft);
+  padding: .8rem 1.15rem;
+  display: flex; align-items: center; gap: .55rem;
+  font-size: .82rem; color: var(--ink-soft);
+  background: var(--bg-soft);
+}
+.dot { width: 7px; height: 7px; border-radius: 999px; background: var(--brand); flex-shrink: 0; }
+
+/* ── บล็อกเนื้อหา ─────────────────────────────────────── */
+section { padding: clamp(3rem, 7vw, 5rem) 0; }
+.band { background: var(--bg-soft); border-block: 1px solid var(--line-soft); }
+.sec-head { max-width: 42em; display: flex; flex-direction: column; gap: .9rem; }
+.sec-head h2 { font-size: clamp(1.5rem, 3.4vw, 2rem); }
+.sec-head p { color: var(--ink-soft); }
+
+/* ── ปัญหาที่ระบบนี้มาแทน ───────────────────────────── */
+.before-after { margin-top: 2.5rem; display: grid; gap: 1.5rem; grid-template-columns: 1fr; }
+@media (min-width: 780px) { .before-after { grid-template-columns: 1fr 1fr; } }
+.ba-col { border: 1px solid var(--line); border-radius: 12px; padding: 1.4rem; background: var(--surface); }
+.ba-col h3 { font-size: .95rem; margin-bottom: .9rem; }
+.ba-col ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: .7rem; }
+.ba-col li { font-size: .93rem; padding-left: 1.5rem; position: relative; color: var(--ink-soft); }
+.ba-col li::before { position: absolute; left: 0; top: 0; font-family: var(--mono); }
+.ba-before li::before { content: "×"; color: #dc2626; font-weight: 700; }
+.ba-after  li::before { content: "✓"; color: var(--brand); font-weight: 700; }
+.ba-after  li { color: var(--ink); }
+
+/* ── โมดูล ────────────────────────────────────────────── */
+.mods { margin-top: 2.5rem; display: grid; gap: 1.1rem; grid-template-columns: 1fr; }
+@media (min-width: 700px) { .mods { grid-template-columns: 1fr 1fr; } }
+.mod {
+  border: 1px solid var(--line); border-radius: 12px; padding: 1.4rem;
+  background: var(--surface);
+  border-top: 3px solid var(--c);
+  display: flex; flex-direction: column; gap: .7rem;
+}
+.mod-top { display: flex; align-items: center; gap: .7rem; }
+.mod-tag {
+  font-family: var(--mono); font-size: .68rem; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--c); font-weight: 700;
+}
+.mod h3 { font-size: 1.08rem; }
+.mod p { font-size: .93rem; color: var(--ink-soft); }
+.mod ul { margin: .2rem 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: .4rem; }
+.mod li {
+  font-size: .78rem; padding: .18rem .55rem; border-radius: 6px;
+  background: color-mix(in srgb, var(--c) 10%, transparent);
+  color: var(--c); font-weight: 600;
+}
+.soon { opacity: .62; }
+.soon .mod-tag::after { content: " · เร็ว ๆ นี้"; }
+
+/* ── จุดต่าง ──────────────────────────────────────────── */
+.diffs { margin-top: 2.5rem; display: grid; gap: 1.6rem 2.5rem; grid-template-columns: 1fr; }
+@media (min-width: 760px) { .diffs { grid-template-columns: 1fr 1fr; } }
+.diff { display: flex; flex-direction: column; gap: .5rem; }
+.diff h3 { font-size: 1rem; display: flex; align-items: baseline; gap: .55rem; }
+.diff h3 code {
+  font-family: var(--mono); font-size: .72rem; color: var(--ink-faint);
+  font-weight: 500; letter-spacing: .06em;
+}
+.diff p { font-size: .93rem; color: var(--ink-soft); }
+
+/* ── ตัวเลขระบบ ───────────────────────────────────────── */
+.stats { margin-top: 2.5rem; display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; grid-template-columns: 1fr 1fr; }
+@media (min-width: 760px) { .stats { grid-template-columns: repeat(4, 1fr); } }
+.stat { background: var(--surface); padding: 1.3rem 1.1rem; display: flex; flex-direction: column; gap: .3rem; }
+.stat b { font-size: 1.5rem; font-family: var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.stat span { font-size: .82rem; color: var(--ink-soft); }
+
+/* ── ปิดท้าย ──────────────────────────────────────────── */
+.cta { text-align: left; }
+.cta .wrap { display: flex; flex-direction: column; gap: 1.4rem; align-items: flex-start; }
+.cta h2 { font-size: clamp(1.6rem, 4vw, 2.2rem); }
+.cta p { color: var(--ink-soft); max-width: 36em; }
+.cta-row { display: flex; flex-wrap: wrap; gap: .75rem; }
+
+footer { border-top: 1px solid var(--line-soft); padding: 2.2rem 0 3rem; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 1rem 2rem; align-items: center; }
+footer p { font-size: .85rem; color: var(--ink-faint); }
+footer .mono { font-family: var(--mono); font-size: .78rem; }
+footer a { color: var(--ink-soft); text-decoration: none; font-size: .85rem; }
+footer a:hover { color: var(--ink); }
+.sp { margin-left: auto; }
+@media (max-width: 620px) { .sp { margin-left: 0; } }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap">
+    <a class="logo" href="#top"><span class="a">Smart</span><span class="b">boss</span></a>
+    <nav class="nav">
+      <a class="hide-sm" href="#modules">โมดูล</a>
+      <a class="hide-sm" href="#why">ทำไมต่าง</a>
+      <a class="hide-sm" href="#contact">ติดต่อ</a>
+      <a class="btn btn-solid" href="https://app.smartboss.in.th">เข้าสู่ระบบ</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- ── Hero ─────────────────────────────────────────── -->
+  <div class="hero">
+    <div class="wrap">
+      <div>
+        <p class="eyebrow">ระบบจัดการงานหน้างาน</p>
+        <h1 style="margin-top:1.1rem">
+          งานหน้างานทั้งหมด<br /><span class="hl">อยู่ที่เดียว</span> ไม่ต้องไล่หาในแชต
+        </h1>
+        <p class="lede">
+          ใบงานซ่อม บำรุงรักษาตามรอบ งานประจำวัน สั่งซื้ออุปกรณ์
+          ลงเวลา และเงินเดือน — รวมอยู่ในระบบเดียวที่ตั้งค่าได้ตามวิธีทำงานของบริษัทคุณ
+        </p>
+        <div class="hero-cta">
+          <a class="btn btn-solid" href="#contact">ขอทดลองใช้</a>
+          <a class="btn btn-ghost" href="#modules">ดูว่าทำอะไรได้บ้าง</a>
+        </div>
+        <p class="hero-note">ใช้งานจริงอยู่แล้วกับธุรกิจบริหารทรัพย์สินหลายหลัง</p>
+      </div>
+
+      <!-- ใบงานจริง ไม่ใช่ภาพประกอบ — เลขที่เอกสารคือสิ่งที่คนหน้างานใช้พูดกัน -->
+      <div class="slip">
+        <div class="slip-head">
+          <span class="slip-code">WO-2569-0184</span>
+          <span class="pill pill-run">กำลังดำเนินการ</span>
+        </div>
+        <div class="slip-body">
+          <p class="slip-title">แอร์ห้องนอนใหญ่ไม่เย็น</p>
+          <dl>
+            <div class="row"><dt>บ้าน</dt><dd>Pool Villa 12</dd></div>
+            <div class="row"><dt>ผู้รับผิดชอบ</dt><dd>ช่างสมชาย</dd></div>
+            <div class="row"><dt>กำหนดเสร็จ</dt><dd>14 ส.ค. 2569</dd></div>
+            <div class="row"><dt>ค่าใช้จ่าย</dt><dd>ไม่มี — อยู่ในสัญญาเหมารายปี</dd></div>
+          </dl>
+        </div>
+        <div class="slip-foot">
+          <span class="dot" aria-hidden="true"></span>
+          แจ้งเตือนเข้า LINE ของช่างและหัวหน้าทันทีที่เปิดใบงาน
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ปัญหาที่มาแทน ────────────────────────────────── -->
+  <section class="band" id="problem">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">ปัญหาที่เจอทุกวัน</p>
+        <h2>งานไม่ได้หาย แต่หาไม่เจอ</h2>
+        <p>
+          ส่วนใหญ่ไม่ได้ขาดคนทำงาน แต่ขาดที่เก็บงานที่ทุกคนดูที่เดียวกัน
+          พองานกระจายอยู่ในแชตกับกระดาษ เรื่องที่ตกหล่นจะรู้ตอนลูกค้าโทรมาต่อว่า
+        </p>
+      </div>
+      <div class="before-after">
+        <div class="ba-col ba-before">
+          <h3>ก่อนใช้</h3>
+          <ul>
+            <li>งานแจ้งในกลุ่ม LINE แล้วเลื่อนหาย ไม่มีใครรู้ว่าใครรับไปแล้ว</li>
+            <li>ใบเสร็จอยู่ในกระเป๋าช่าง กว่าจะรวมยอดได้คือสิ้นเดือน</li>
+            <li>รอบล้างแอร์/เปลี่ยนไส้กรองจำเอาเอง ลืมทีก็เสียของ</li>
+            <li>เวลาเข้าออกจดในสมุด แล้วมานั่งคีย์เข้า Excel</li>
+            <li>อยากรู้ว่าเดือนนี้ซ่อมบ้านไหนไปเท่าไหร่ ต้องไล่ถามทีละคน</li>
+          </ul>
+        </div>
+        <div class="ba-col ba-after">
+          <h3>หลังใช้ Smartboss</h3>
+          <ul>
+            <li>ทุกงานมีเลขที่ มีคนรับผิดชอบ มีสถานะ ดูย้อนหลังได้</li>
+            <li>บันทึกค่าใช้จ่ายพร้อมรูปใบเสร็จตั้งแต่ตอนปิดงาน</li>
+            <li>ถึงรอบบำรุงรักษาระบบเปิดใบงานให้เอง พร้อมเตือนล่วงหน้า</li>
+            <li>สแกนนิ้วเข้าระบบตรง คำนวณ OT และเงินเดือนต่อได้เลย</li>
+            <li>เปิดรายงานดูยอดแยกตามบ้าน ตามประเภท ตามช่วงเวลาได้ทันที</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── โมดูล ───────────────────────────────────────── -->
+  <section id="modules">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">โมดูล</p>
+        <h2>เปิดใช้เฉพาะส่วนที่ต้องการ</h2>
+        <p>
+          แต่ละโมดูลทำงานแยกกันได้ เปิดปิดรายบริษัท
+          จ่ายเฉพาะที่ใช้ และเพิ่มทีหลังได้โดยข้อมูลเดิมไม่ต้องย้าย
+        </p>
+      </div>
+
+      <div class="mods">
+        <article class="mod" style="--c: var(--mod-maint)">
+          <div class="mod-top"><span class="mod-tag">แจ้งซ่อมบำรุง</span></div>
+          <h3>ใบงานซ่อมและงานบำรุงรักษา</h3>
+          <p>
+            เปิดใบงานพร้อมรูปก่อน–หลัง มอบหมายช่าง ติดตามสถานะ
+            ตั้งรอบบำรุงรักษาแล้วให้ระบบเปิดใบงานเองเมื่อถึงกำหนด
+          </p>
+          <ul>
+            <li>ใบงาน</li><li>บำรุงรักษาตามรอบ</li><li>สั่งซื้ออุปกรณ์</li>
+            <li>ค่าใช้จ่าย</li><li>ช่างภายนอก</li>
+          </ul>
+        </article>
+
+        <article class="mod" style="--c: var(--mod-report)">
+          <div class="mod-top"><span class="mod-tag">งานและรายงาน</span></div>
+          <h3>งานประจำวันและรายงานทีม</h3>
+          <p>
+            บอร์ดงานแบบลากวาง มอบหมายเป็นรายคนหรือทีม
+            มีขั้นตรวจงานก่อนปิด และดูภาระงานของแต่ละคนได้ในหน้าเดียว
+          </p>
+          <ul>
+            <li>บอร์ดงาน</li><li>ปฏิทิน</li><li>รายงานประจำวัน</li>
+            <li>แจ้งปัญหา</li><li>บันทึกกิจกรรม</li>
+          </ul>
+        </article>
+
+        <article class="mod" style="--c: var(--mod-hr)">
+          <div class="mod-top"><span class="mod-tag">งานบุคคล</span></div>
+          <h3>ลงเวลา กะทำงาน และเงินเดือน</h3>
+          <p>
+            รับข้อมูลจากเครื่องสแกนลายนิ้วมือโดยตรง คิด OT ตามกะ
+            ออกสลิปเงินเดือน และให้พนักงานเปิดสลิปของตัวเองได้
+          </p>
+          <ul>
+            <li>เครื่องสแกนนิ้ว</li><li>กะทำงาน</li><li>Timesheet</li>
+            <li>เงินเดือน</li><li>สลิปออนไลน์</li>
+          </ul>
+        </article>
+
+        <article class="mod" style="--c: var(--mod-admin)">
+          <div class="mod-top"><span class="mod-tag">หลังบ้าน</span></div>
+          <h3>ผู้ใช้ สิทธิ์ และการตั้งค่า</h3>
+          <p>
+            กำหนดสิทธิ์ได้ถึงระดับแผนกและตำแหน่ง
+            ดูประวัติการใช้งานย้อนหลังว่าใครแก้อะไรเมื่อไหร่
+          </p>
+          <ul>
+            <li>บทบาทและสิทธิ์</li><li>แผนก/ตำแหน่ง</li>
+            <li>ผลงานรายคน</li><li>ประวัติการใช้งาน</li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── ทำไมต่าง ───────────────────────────────────── -->
+  <section class="band" id="why">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">จุดต่าง</p>
+        <h2>สร้างจากหน้างานจริง ไม่ใช่จากตำรา</h2>
+        <p>ทุกข้อข้างล่างมาจากปัญหาที่เจอตอนใช้งานจริง แล้วแก้ให้</p>
+      </div>
+
+      <div class="diffs">
+        <div class="diff">
+          <h3>เลขที่เอกสารที่อ่านให้กันฟังได้ <code>WO-2569-0184</code></h3>
+          <p>
+            ช่างโทรมาถามเรื่องงาน ต้องอ้างเลขได้ในประโยคเดียว
+            ระบบจึงเดินเลขแยกตามบริษัทและปี พ.ศ. ไม่ใช่รหัสสุ่มยาว ๆ ที่อ่านไม่ออก
+          </p>
+        </div>
+        <div class="diff">
+          <h3>แจ้งเตือนเข้า LINE <code>ที่คนเปิดอยู่แล้ว</code></h3>
+          <p>
+            ไม่ต้องบังคับให้ทุกคนลงแอปใหม่แล้วเปิดดูทุกวัน
+            งานใหม่ งานเกินกำหนด และรอบบำรุงรักษาส่งเข้า LINE ของคนที่เกี่ยวข้องโดยตรง
+          </p>
+        </div>
+        <div class="diff">
+          <h3>ช่างนอกส่งรูปได้โดยไม่ต้องมีบัญชี <code>ลิงก์ชั่วคราว</code></h3>
+          <p>
+            ส่งลิงก์ให้ช่างที่จ้างมาเป็นครั้ง ๆ เขาถ่ายรูปและพิมพ์ข้อความส่งกลับได้เลย
+            ลิงก์หมดอายุเอง ไม่ต้องเปิดสิทธิ์เข้าระบบให้คนนอก
+          </p>
+        </div>
+        <div class="diff">
+          <h3>กฎของบริษัทคุณ ไม่ใช่ของเรา <code>ตั้งค่าได้ทุกตัว</code></h3>
+          <p>
+            สายกี่นาทีถึงนับว่าสาย ผ่อนผันรอบบำรุงรักษากี่วัน หักคะแนนเท่าไหร่
+            ล็อกบัญชีหลังกรอกรหัสผิดกี่ครั้ง — ตั้งเองได้ทั้งหมด ไม่มีค่าตายในระบบ
+          </p>
+        </div>
+        <div class="diff">
+          <h3>งานที่ไม่มีค่าใช้จ่ายก็บอกได้ <code>ไม่ต้องกรอก 0</code></h3>
+          <p>
+            งานที่อยู่ในสัญญาเหมารายปีแล้วไม่ต้องบันทึกค่าใช้จ่ายซ้ำ
+            ระบบจะไม่ทวง ตัวเลขในรายงานจึงเป็นยอดจริง ไม่ปนศูนย์ที่ใส่ไปให้พ้น ๆ
+          </p>
+        </div>
+        <div class="diff">
+          <h3>ข้อมูลแต่ละบริษัทแยกขาดจากกัน <code>ตรวจที่ชั้นฐานข้อมูล</code></h3>
+          <p>
+            ไม่ได้กันด้วยเงื่อนไขในโค้ดอย่างเดียว แต่บังคับที่ตัวฐานข้อมูล
+            ต่อให้เขียนโค้ดพลาด ข้อมูลก็ข้ามบริษัทไม่ได้
+          </p>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><b>4</b><span>โมดูลที่ใช้งานได้แล้ว</span></div>
+        <div class="stat"><b>2</b><span>ชั้นสำรองข้อมูลทุกคืน</span></div>
+        <div class="stat"><b>14</b><span>วันที่เก็บข้อมูลสำรองไว้</span></div>
+        <div class="stat"><b>100%</b><span>เชื่อมต่อแบบเข้ารหัส</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── ปิดท้าย ─────────────────────────────────────── -->
+  <section class="cta" id="contact">
+    <div class="wrap">
+      <p class="eyebrow">เริ่มต้น</p>
+      <h2>อยากดูว่าเข้ากับงานของคุณไหม</h2>
+      <p>
+        บอกเราว่าตอนนี้ทีมทำงานกันยังไง เราจะพาดูของจริงในระบบ
+        และบอกตรง ๆ ถ้ามีส่วนไหนยังไม่ตอบโจทย์คุณ
+      </p>
+      <div class="cta-row">
+        <a class="btn btn-solid" href="mailto:baanpoolvilla02@gmail.com?subject=สนใจทดลองใช้%20Smartboss">ติดต่อขอทดลองใช้</a>
+        <a class="btn btn-ghost" href="https://app.smartboss.in.th">เข้าสู่ระบบ</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p><span class="logo"><span class="a">Smart</span><span class="b">boss</span></span></p>
+    <p class="mono">smartboss.in.th</p>
+    <p class="sp">© 2569 Smartboss</p>
+  </div>
+</footer>
+
+</body>
+</html>

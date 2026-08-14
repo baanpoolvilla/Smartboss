@@ -17,6 +17,29 @@
 	email {$ACME_EMAIL}
 }
 
+# ── หน้าแนะนำระบบ (เว็บขายของ) ────────────────────────────────────────────
+#
+# HTML ล้วน เสิร์ฟจากไฟล์ตรง ๆ ไม่ผ่าน Next
+# ⇒ ตัวระบบล่มหรือกำลัง build อยู่ หน้านี้ก็ยังขึ้นปกติ และไม่กินแรมเพิ่มเลย
+#
+# ตั้ง WWW_DOMAIN ใน deploy/.env เป็น "smartboss.in.th, www.smartboss.in.th"
+# ถ้าไม่ตั้ง บล็อกนี้จะไม่ทำงาน (Caddy ข้าม site ที่ไม่มีชื่อ)
+{$WWW_DOMAIN} {
+	encode zstd gzip
+	root * /opt/smartboss/deploy/www
+	file_server
+
+	# กันไม่ให้หน้าเก่าค้างในเบราว์เซอร์นานหลังแก้ข้อความ
+	header Cache-Control "public, max-age=300"
+
+	log {
+		output file /data/log/www.log {
+			roll_size 10MB
+			roll_keep 5
+		}
+	}
+}
+
 # ── เว็บ Smartboss ────────────────────────────────────────────────────────
 {$APP_DOMAIN} {
 	encode zstd gzip
