@@ -5,38 +5,46 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Smartboss</title>
 <meta name="description" content="เห็นภาพรวมทั้งองค์กรในหน้าเดียว — ใครทำอะไรอยู่ ใครงานล้น ใครส่งงานช้า โดยไม่ต้องเดินไปถามทีละคน" />
-<meta name="theme-color" content="#0b1220" />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b1220'/%3E%3Crect x='7' y='16' width='4' height='9' rx='1.4' fill='%234cb93f'/%3E%3Crect x='14' y='11' width='4' height='14' rx='1.4' fill='%2338bdf8'/%3E%3Crect x='21' y='7' width='4' height='18' rx='1.4' fill='%23f59e0b'/%3E%3C/svg%3E" />
+<meta name="theme-color" content="#ffffff" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231b2537'/%3E%3Crect x='7' y='16' width='4' height='9' rx='1.4' fill='%234cb93f'/%3E%3Crect x='14' y='11' width='4' height='14' rx='1.4' fill='%232563eb'/%3E%3Crect x='21' y='7' width='4' height='18' rx='1.4' fill='%23ea580c'/%3E%3C/svg%3E" />
 <style>
 /* ══════════════════════════════════════════════════════════════════════
    Smartboss — หน้าแนะนำระบบ
 
-   ธีมเดียว (navy เข้ม) โดยตั้งใจ ไม่สลับตาม OS — หน้านี้ขายเรื่อง
-   "ห้องควบคุม" การสลับเป็นพื้นขาวทำให้ตัวเลขและกราฟอ่อนแรงลงทันที
-   ⇒ ทุกสีจึงประกาศชัดเจนทั้งหมด ไม่พึ่งพื้นหลังของเบราว์เซอร์
+   ธีมเดียว (พื้นขาว) โดยตั้งใจ ไม่สลับตาม OS — ทุกสีประกาศชัดเจนทั้งหมด
+   ไม่พึ่งพื้นหลังของเบราว์เซอร์ หน้าจึงหน้าตาเหมือนกันทุกเครื่อง
 
-   สีแกนยกมาจาก packages/ui/tokens.css ของตัวระบบ ไม่ประดิษฐ์ใหม่
+   สีทั้งชุดยกมาจาก packages/ui/tokens.css ของตัวระบบ ไม่ประดิษฐ์ใหม่
+   โดยเฉพาะสีสถานะที่ใช้ --tone-* ซึ่งเลือกมาให้อ่านออกบนพื้นขาวอยู่แล้ว
+   (สีสว่างแบบที่ใช้บนพื้นเข้มจะจางจนอ่านไม่ออกทันทีเมื่อวางบนขาว)
    ══════════════════════════════════════════════════════════════════════ */
 :root {
-  --bg:         #0b1220;   /* navy เข้ม — มาจาก --ink #1b2537 หรี่ลง ไม่ใช่ดำกลาง */
-  --bg-2:       #111a2b;
-  --panel:      #131d2fee;
-  --line:       #1f2c45;
-  --line-soft:  #18243a;
+  --bg:         #ffffff;
+  --bg-2:       #f7f9fc;   /* --bg-soft ของระบบ — เทาเอียงน้ำเงิน ไม่ใช่เทากลาง */
+  --panel:      #ffffff;
+  --line:       #e5e9f0;   /* --line ของระบบ */
+  --line-soft:  #eef2f7;
+  --track:      #eef1f6;   /* พื้นหลอดกราฟ */
 
-  --ink:        #eef3fb;
-  --ink-soft:   #94a6c2;
-  --ink-faint:  #61748f;
+  --ink:        #1b2537;   /* navy จากโลโก้ Boss */
+  --ink-soft:   #5c6b83;
+  /* #64748b = --ink-soft ของระบบ · contrast 4.76:1 บนขาว
+     เทาที่จางกว่านี้ (เช่น #8a97ab ที่ใช้ตอนพื้นเข้ม) ตกเกณฑ์อ่านออกทันที
+     และตัวหนังสือกลุ่มนี้เป็นตัวเล็กทั้งหมด (eyebrow, ตำแหน่งงาน, footer) */
+  --ink-faint:  #64748b;
 
-  --brand:      #4cb93f;   /* เขียวจากโลโก้ */
-  --brand-lift: #6dd45f;
+  --brand:      #4cb93f;   /* เขียวจากโลโก้ — ใช้เป็น "พื้น" (ปุ่ม แถบ จุด) */
+  --brand-lift: #3fa233;   /* ปุ่มตอนเอาเมาส์วาง */
+  /* เขียวเข้มสำหรับ "ตัวอักษร" บนพื้นขาว — #4cb93f contrast แค่ ~2.6:1
+     ต่ำกว่าเกณฑ์อ่านออก จึงห้ามใช้เป็นสีตัวหนังสือบนขาวเด็ดขาด */
+  --brand-ink:  #2e8b26;
 
-  /* สีข้อมูล = สถานะงานจริงในระบบ ไม่ใช่สีตกแต่ง */
-  --s-done:     #4cb93f;
-  --s-doing:    #38bdf8;
-  --s-check:    #a78bfa;
-  --s-late:     #f59e0b;
-  --s-over:     #f43f5e;
+  /* สีข้อมูล = --tone-* ของระบบ เลือกมาสำหรับพื้นขาวโดยเฉพาะ */
+  --s-done:     #16a34a;
+  --s-doing:    #2563eb;
+  --s-check:    #7c3aed;
+  --s-late:     #ea580c;
+  --s-over:     #dc2626;
 
   --sans: "Noto Sans Thai", "IBM Plex Sans Thai", "Sarabun", "Leelawadee UI",
           -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -65,13 +73,13 @@ a { color: inherit; }
 :focus-visible { outline: 2px solid var(--brand-lift); outline-offset: 3px; border-radius: 6px; }
 .wrap { width: min(100% - 2.5rem, 1120px); margin-inline: auto; }
 
-/* แสงนวลหลังหัวข้อ — ให้พื้น navy ไม่แบนตาย */
+/* แสงนวลจาง ๆ หลังหัวข้อ — ให้พื้นขาวไม่แบนตาย เบามากจนเกือบไม่รู้ตัว */
 .glow { position: relative; isolation: isolate; }
 .glow::before {
   content: ""; position: absolute; inset: -30% -20% auto; height: 620px; z-index: -1;
   background:
-    radial-gradient(46% 60% at 22% 0%, rgba(76,185,63,.16), transparent 70%),
-    radial-gradient(40% 55% at 78% 8%, rgba(56,189,248,.13), transparent 72%);
+    radial-gradient(48% 62% at 20% 0%, rgba(76,185,63,.10), transparent 70%),
+    radial-gradient(42% 58% at 80% 6%, rgba(37,99,235,.07), transparent 72%);
   pointer-events: none;
 }
 
@@ -88,13 +96,13 @@ a { color: inherit; }
 /* ── แถบบน ─────────────────────────────────────────────────────── */
 .topbar {
   position: sticky; top: 0; z-index: 30;
-  background: rgba(11,18,32,.82);
+  background: rgba(255,255,255,.85);
   backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--line-soft);
 }
 .topbar .wrap { display: flex; align-items: center; gap: 1rem; height: 64px; }
 .logo { font-weight: 800; font-size: 1.22rem; letter-spacing: -.03em; text-decoration: none; color: var(--ink); }
-.logo .a { color: var(--brand); }
+.logo .a { color: var(--brand-ink); }
 .nav { margin-left: auto; display: flex; align-items: center; gap: 1.7rem; }
 .nav a { color: var(--ink-soft); text-decoration: none; font-size: .92rem; transition: color .15s; }
 .nav a:hover { color: var(--ink); }
@@ -109,11 +117,11 @@ a { color: inherit; }
 }
 .btn-solid {
   background: var(--brand); color: #04220a;
-  box-shadow: 0 8px 24px -12px rgba(76,185,63,.9);
+  box-shadow: 0 8px 20px -10px rgba(76,185,63,.65);
 }
 .btn-solid:hover { background: var(--brand-lift); }
 .btn-ghost { border-color: var(--line); color: var(--ink); }
-.btn-ghost:hover { border-color: var(--ink-faint); background: rgba(255,255,255,.03); }
+.btn-ghost:hover { border-color: var(--ink-faint); background: var(--bg-2); }
 .btn:active { transform: translateY(1px); }
 
 /* ── Hero ──────────────────────────────────────────────────────── */
@@ -122,8 +130,8 @@ a { color: inherit; }
 @media (min-width: 1000px) { .hero .wrap { grid-template-columns: 1fr 1.02fr; } }
 .hero h1 { font-size: clamp(2.15rem, 5.6vw, 3.55rem); }
 .hero h1 em {
-  font-style: normal; color: var(--brand);
-  text-shadow: 0 0 42px rgba(76,185,63,.35);
+  font-style: normal; color: var(--brand-ink);
+  text-shadow: none;
 }
 .lede { margin-top: 1.2rem; font-size: clamp(1.02rem, 1.9vw, 1.14rem); color: var(--ink-soft); max-width: 33em; }
 .hero-cta { margin-top: 2.1rem; display: flex; flex-wrap: wrap; gap: .8rem; }
@@ -131,7 +139,7 @@ a { color: inherit; }
   margin-top: 1.3rem; font-size: .84rem; color: var(--ink-faint);
   display: flex; align-items: center; gap: .5rem;
 }
-.live { width: 7px; height: 7px; border-radius: 999px; background: var(--brand); box-shadow: 0 0 0 4px rgba(76,185,63,.16); }
+.live { width: 7px; height: 7px; border-radius: 999px; background: var(--brand); box-shadow: 0 0 0 4px rgba(76,185,63,.18); }
 
 /* ── แผงภาระงาน — ตัวเอกของหน้านี้ ──────────────────────────────
    บอสเปิดระบบมาแล้วเห็นอันนี้ก่อน: ใครจมงาน ใครว่าง ในวินาทีเดียว */
@@ -139,12 +147,12 @@ a { color: inherit; }
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 16px;
-  box-shadow: 0 30px 70px -34px rgba(0,0,0,.9);
+  box-shadow: 0 1px 2px rgba(27,37,55,.05), 0 24px 56px -30px rgba(27,37,55,.35);
   overflow: hidden;
 }
 .panel-head {
   padding: .95rem 1.2rem; border-bottom: 1px solid var(--line-soft);
-  display: flex; align-items: center; gap: .7rem; background: rgba(255,255,255,.018);
+  display: flex; align-items: center; gap: .7rem; background: var(--bg-2);
 }
 .panel-head h3 { font-size: .95rem; letter-spacing: -.01em; }
 .panel-head .tag {
@@ -163,7 +171,7 @@ a { color: inherit; }
 .bar {
   grid-column: 1 / -1;
   display: flex; height: 11px; border-radius: 999px; overflow: hidden;
-  background: rgba(255,255,255,.05);
+  background: var(--track);
 }
 .bar i { display: block; height: 100%; transform-origin: left; animation: grow .85s cubic-bezier(.2,.7,.3,1) both; }
 .bar i:nth-child(2) { animation-delay: .06s; }
@@ -204,7 +212,7 @@ section { padding: clamp(3.2rem, 7vw, 5.5rem) 0; }
 .see p { font-size: .91rem; color: var(--ink-soft); }
 .mini { display: flex; flex-direction: column; gap: .45rem; margin-bottom: .3rem; }
 .mini .m-row { display: flex; align-items: center; gap: .5rem; font-size: .78rem; color: var(--ink-soft); }
-.mini .m-bar { flex: 1; height: 6px; border-radius: 999px; background: rgba(255,255,255,.06); overflow: hidden; }
+.mini .m-bar { flex: 1; height: 6px; border-radius: 999px; background: var(--track); overflow: hidden; }
 .mini .m-bar i { display: block; height: 100%; border-radius: 999px; }
 .mini .m-val { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: .74rem; color: var(--ink-faint); }
 
@@ -220,7 +228,7 @@ section { padding: clamp(3.2rem, 7vw, 5.5rem) 0; }
 @media (min-width: 820px) { .rules { grid-template-columns: 1fr 1fr; } }
 .rule { display: flex; gap: 1rem; }
 .rule .n {
-  font-family: var(--mono); font-size: .78rem; font-weight: 700; color: var(--brand);
+  font-family: var(--mono); font-size: .78rem; font-weight: 700; color: var(--brand-ink);
   padding-top: .28rem; flex-shrink: 0; letter-spacing: .04em;
 }
 .rule h3 { font-size: 1.02rem; margin-bottom: .45rem; }
