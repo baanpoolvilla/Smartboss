@@ -309,6 +309,30 @@ export function RoomSettingsSheet({
           {/* ข้อมูล */}
           <section className="space-y-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)]">ข้อมูล</p>
+            {/* รูปแบบห้อง — ทุกคนในห้องเห็นเหมือนกันหมด ไม่ใช่ค่าที่แต่ละคนสลับเอง
+                (ต่างจาก filesRetentionDays ด้านล่างตรงที่นี่เป็นตัวกำหนดว่าห้องนี้
+                "เป็น" อะไร ไม่ใช่แค่ค่าเริ่มต้นที่สลับได้ทีหลัง). */}
+            <div className="flex items-center justify-between rounded-lg bg-[var(--bg-soft)] px-3 py-2.5">
+              <div className="min-w-0 pr-3">
+                <p className="text-sm font-medium">รูปแบบการแสดงโพสต์</p>
+                <p className="text-xs text-[var(--ink-soft)]">
+                  &quot;สตรีม&quot; = แชทเรียงเวลา เห็นเนื้อหาเต็ม · &quot;กระทู้&quot; = ย่อเป็นหัวข้อ
+                  เรียงตามที่เพิ่งมีคนตอบล่าสุด — สมาชิกทุกคนในห้องเห็นแบบเดียวกัน
+                </p>
+              </div>
+              <Select
+                value={draft.feedViewMode ?? "stream"}
+                onValueChange={(v) => v && patchDraft({ feedViewMode: v === "stream" ? undefined : (v as "threads") })}
+              >
+                <SelectTrigger className="w-28 shrink-0">
+                  <SelectValue>{draft.feedViewMode === "threads" ? "กระทู้" : "สตรีม"}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="stream">สตรีม</SelectItem>
+                  <SelectItem value="threads">กระทู้</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="flex items-center justify-between rounded-lg bg-[var(--bg-soft)] px-3 py-2.5">
               <div className="min-w-0 pr-3">
                 <p className="text-sm font-medium">อายุรูปในแท็บ &quot;ไฟล์&quot;</p>
