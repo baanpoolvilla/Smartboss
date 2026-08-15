@@ -5,6 +5,74 @@
 
 ---
 
+## ขั้นที่ 0 — ดึงข้อมูลออกจาก Supabase
+
+> ⚠ โปรเจกต์เป็น **Free plan ⇒ ไม่มี backup อัตโนมัติเลย** (`LAST BACKUP: No backups`)
+> การ dump ครั้งนี้จึงเป็นสำเนาชุดแรกที่มี — **เก็บไฟล์ที่ได้ไว้ให้ดี อย่าลบ**
+
+### 0.1 เอาสายเชื่อมต่อ
+
+Supabase → ปุ่ม **Connect** (บนสุด) → แท็บ **Session pooler** → คัดลอก URI
+
+หน้าตาประมาณนี้
+```
+postgresql://postgres.ytrfgetdrtjrjfhvcqgt:[YOUR-PASSWORD]@aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres
+```
+
+แทน `[YOUR-PASSWORD]` ด้วยรหัสผ่านฐานข้อมูล (Settings → Database → Reset ได้ถ้าจำไม่ได้)
+
+### 0.2 dump เฉพาะข้อมูล — รันบนเซิร์ฟเวอร์เรา 🅱
+
+`pg_dump` ต้องเวอร์ชันตรงกับต้นทาง ⇒ เรียกผ่านคอนเทนเนอร์ Postgres ที่มีอยู่แล้ว
+
+```bash
+cd /opt/smartboss
+read -rsp "วาง connection string ของ Supabase: " SB; echo
+
+sudo -u smartboss docker compose -f deploy/docker-compose.yml exec -T postgres \
+  pg_dump --data-only --no-owner --no-privileges --schema=public "$SB" > /tmp/changyai.sql
+
+ls -lh /tmp/changyai.sql
+```
+
+ไฟล์ต้องมีขนาดมากกว่าศูนย์ ถ้าได้ 0 ไบต์แปลว่าต่อไม่ติด
+
+**คัดลอกเก็บไว้นอกเครื่องด้วยทันที** — นี่คือสำเนาชุดเดียวที่มีของระบบเก่า
+
+### 0.3 โหลดเข้า schema พัก ไม่ใช่ทับของจริง
+
+**ห้ามโหลด dump เข้า `public` ของเราโดยตรง** — ชื่อตารางชนกัน และข้อมูลต้นทางยังไม่มี `org_id` ⇒ จะปนกับของจริงแล้วแยกไม่ออก
+
+```bash
+# สำรองก่อนเสมอ
+sudo bash deploy/backup.sh
+
+# เปลี่ยนชื่อ schema ใน dump จาก public → changyai_raw
+sed -i 's/^SET search_path = public/SET search_path = changyai_raw/; s/\bpublic\./changyai_raw./g' /tmp/changyai.sql
+
+sudo bash deploy/psql.sh -c "CREATE SCHEMA IF NOT EXISTS changyai_raw;"
+sudo bash deploy/psql.sh -f /tmp/changyai.sql
+```
+
+> ⚠ `--data-only` ไม่มีคำสั่ง `CREATE TABLE` ⇒ ต้องมีตารางใน `changyai_raw` ก่อน
+> ทางที่ง่ายกว่าคือ dump อีกชุดแบบ `--schema-only` แล้วโหลดก่อน (ทำ `sed` เหมือนกัน)
+
+### 0.4 แปลงเข้าระบบเรา
+
+```bash
+sudo bash deploy/psql.sh -c "select id, code, name from core.organizations;"
+
+sudo bash deploy/psql.sh \
+  -v org="'<uuid ที่ได้จากคำสั่งข้างบน>'" -v yr="'2568'" \
+  -f deploy/import-changyai.sql
+```
+
+สคริปต์อยู่ใน **transaction เดียว — พังตรงไหนก็ย้อนกลับหมด ไม่มีข้อมูลค้างครึ่ง ๆ**
+
+ถ้า error บอกว่าคอลัมน์ไหนไม่มี ส่งข้อความมา ผมแก้สคริปต์ให้
+
+---
+
 ## ข่าวดี — `id` เป็น UUID ทั้งสองระบบ
 
 ยกไอดีเดิมมาใช้ได้ตรง ๆ ⇒ **ความสัมพันธ์ระหว่างตารางไม่ขาด** ไม่ต้องทำตารางแปลงไอดี
