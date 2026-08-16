@@ -9,10 +9,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/modules/report_task/components/ui/select";
-import { getUser, getDepartment, canManage } from "@/modules/report_task/lib/directory";
+import { getUser, getDepartment, canManage, isOwner, departments, users } from "@/modules/report_task/lib/directory";
 import { useDashboardFilterStore } from "@/modules/report_task/store/dashboard-filter-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { useVisibleTasks } from "@/modules/report_task/hooks/use-visible-tasks";
 import { FilterField, FILTER_FIELD_LABEL_CLASS, filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
 import { DateRangeSelectField } from "@/modules/report_task/components/shared/date-range-select-field";
 import { Building2, Users } from "lucide-react";
@@ -41,18 +40,30 @@ export function DashboardFilters() {
   // specific coworker.
   const canPickPerson = canManage(viewingAsUserId);
 
-  // Only offer people/departments that actually show up in tasks this viewer
-  // can see (canSeeTask, via useVisibleTasks) — a department head's pickers
-  // are their own department, not the whole company.
-  const visibleTasks = useVisibleTasks();
-  const pickablePeople = useMemo(() => {
-    const ids = new Set(visibleTasks.flatMap((t) => t.assigneeIds));
-    return [...ids].map((id) => getUser(id)).filter((u): u is NonNullable<typeof u> => !!u);
-  }, [visibleTasks]);
-  const availableDepartments = useMemo(() => {
-    const ids = new Set(visibleTasks.flatMap((t) => t.departmentIds));
-    return [...ids].map((id) => getDepartment(id)).filter((d): d is NonNullable<typeof d> => !!d);
-  }, [visibleTasks]);
+  // Offer every real person/department the viewer has rights to, not just
+  // whoever already happens to have a task — a freshly-added department with
+  // no tasks yet still needs to show its people so a head can start
+  // assigning to them. Owner sees the whole company; a department head sees
+  // only the department(s) they head (report_task's own headId, separate
+  // from core's DepartmentHead — see Phase 0.2 decision in
+  // PLAN_role_only_department_heads_2.md, report_task stays on its own
+  // identity system for now) — everyone else never reaches this branch at
+  // all (gated by canPickPerson below).
+  const headedDepartmentIds = useMemo(
+    () => new Set(departments.filter((d) => d.headId === viewingAsUserId).map((d) => d.id)),
+    [viewingAsUserId]
+  );
+  const availableDepartments = useMemo(
+    () => (isOwner(viewingAsUserId) ? [...departments] : departments.filter((d) => headedDepartmentIds.has(d.id))),
+    [viewingAsUserId, headedDepartmentIds]
+  );
+  const pickablePeople = useMemo(
+    () =>
+      isOwner(viewingAsUserId)
+        ? [...users]
+        : users.filter((u) => headedDepartmentIds.has(u.departmentId)),
+    [viewingAsUserId, headedDepartmentIds]
+  );
 
   // §7.2 — once a department is picked, the person list narrows to just that
   // department's people, and the "everyone" option's label says how many.
