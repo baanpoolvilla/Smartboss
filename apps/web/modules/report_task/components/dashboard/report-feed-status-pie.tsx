@@ -50,7 +50,7 @@ export function ReportFeedStatusPie() {
       buckets={buckets}
       labels={{
         onTime: "ส่งแล้ว ตรงเวลา",
-        lateDone: "ส่งแล้ว เลยกำหนด",
+        lateDone: "ส่งช้า",
         pending: "ยังไม่ส่ง ในกำหนด",
         overdue: "ขาดส่ง",
         exempt: "ยกเว้น (ลา/หยุด)",
