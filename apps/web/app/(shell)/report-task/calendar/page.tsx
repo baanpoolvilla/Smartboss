@@ -1,6 +1,5 @@
 import { CalendarView } from "@/modules/report_task/components/calendar/calendar-view";
 import { TaskDataGate } from "@/modules/report_task/components/shared/task-data-gate";
-import { StickyFilterBar } from "@/modules/report_task/components/shared/sticky-filter-bar";
 import { Skeleton } from "@/modules/report_task/components/ui/skeleton";
 
 function CalendarSkeleton() {
@@ -18,7 +17,6 @@ function CalendarSkeleton() {
 export default function CalendarPage() {
   return (
     <div className="flex flex-col gap-4 lg:gap-6 pb-6">
-      <StickyFilterBar />
       <TaskDataGate fallback={<CalendarSkeleton />}>
         <CalendarView />
       </TaskDataGate>
