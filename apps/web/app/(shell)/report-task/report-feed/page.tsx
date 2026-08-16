@@ -480,9 +480,16 @@ function ReportFeedPageInner() {
                 {/* Merged into one row (1.4) — was two separate border-t
                     strips (cutoff reminder, then pinned posts) stacked on
                     top of each other, doubling up the header's height for
-                    what's really one "today's context" row. */}
+                    what's really one "today's context" row.
+                    `w-fit` instead of a full-width border-t bar — a bar that
+                    stretches edge-to-edge but only ever has content bunched
+                    at its left end (pinned posts are the rare case, this row
+                    is usually just "รอบส่งวันนี้" + a couple pills) reads as
+                    unbalanced/unfinished. A self-contained rounded chip
+                    cluster sized to its own content doesn't have that empty
+                    right side to begin with. */}
                 {activeTab === "posts" && (requirementParts.length > 0 || pinnedPosts.length > 0) && (
-                  <div className="flex items-center gap-2.5 px-5 py-2 flex-wrap border-t border-[var(--line)] bg-[var(--bg-soft)]/40">
+                  <div className="mx-5 mt-2 flex w-fit max-w-full items-center gap-2.5 flex-wrap rounded-lg border border-[var(--line)] bg-[var(--bg-soft)]/60 px-3 py-1.5">
                     {requirementParts.length > 0 && (
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="flex items-center gap-1 text-[11px] font-medium text-[var(--ink-soft)] shrink-0">
