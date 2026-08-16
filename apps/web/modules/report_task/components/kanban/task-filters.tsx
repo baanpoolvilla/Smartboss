@@ -11,8 +11,7 @@ import {
 } from "@/modules/report_task/components/ui/select";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { getDepartment, getUser } from "@/modules/report_task/lib/directory";
-import { canSeeTask } from "@/modules/report_task/lib/permissions";
+import { getDepartment, getUser, isOwner, departments, users } from "@/modules/report_task/lib/directory";
 import { taskPriorityOrder, priorityMeta } from "@/modules/report_task/lib/task-meta";
 import type { TaskPriority } from "@/modules/report_task/types";
 import { FilterField, FILTER_FIELD_LABEL_CLASS, filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
@@ -35,7 +34,6 @@ export function TaskFilters() {
   const filters = useTaskStore((s) => s.filters);
   const setFilters = useTaskStore((s) => s.setFilters);
   const resetFilters = useTaskStore((s) => s.resetFilters);
-  const allTasks = useTaskStore((s) => s.tasks);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
 
@@ -60,18 +58,32 @@ export function TaskFilters() {
     }
   }, [viewingAsUserId, resetFilters]);
 
-  // Only offer departments/people that actually show up among tasks this
-  // viewer can see (canSeeTask) — picking one outside that set always came
-  // back empty, which read as broken rather than "you don't have access".
+  // Offer every real department/person the viewer has rights to, not just
+  // whoever already happens to have a task assigned — a freshly-added
+  // department or hire with zero tasks yet still needs to be pickable so a
+  // head can start assigning work to them. Owner sees the whole company; a
+  // department head sees only the department(s) they head (report_task's
+  // own headId — see dashboard-filters.tsx for the same pattern).
   const { availableDepartments, availableAssignees } = useMemo(() => {
-    const visible = allTasks.filter((t) => canSeeTask(t, viewingAsUserId));
-    const deptIds = new Set(visible.flatMap((t) => t.departmentIds));
-    const assigneeIds = new Set(visible.flatMap((t) => t.assigneeIds));
+    if (isOwner(viewingAsUserId)) {
+      return { availableDepartments: [...departments], availableAssignees: [...users] };
+    }
+    const headedIds = new Set(departments.filter((d) => d.headId === viewingAsUserId).map((d) => d.id));
+    if (headedIds.size > 0) {
+      return {
+        availableDepartments: departments.filter((d) => headedIds.has(d.id)),
+        availableAssignees: users.filter((u) => headedIds.has(u.departmentId)),
+      };
+    }
+    // Regular staff (not owner, not a department head) — nothing to pick
+    // between, just themselves; renders as the plain-label fallback below.
+    const me = users.find((u) => u.id === viewingAsUserId);
+    const myDept = me?.departmentId ? getDepartment(me.departmentId) : undefined;
     return {
-      availableDepartments: [...deptIds].map((id) => getDepartment(id)).filter((d): d is NonNullable<typeof d> => !!d),
-      availableAssignees: [...assigneeIds].map((id) => getUser(id)).filter((u): u is NonNullable<typeof u> => !!u),
+      availableDepartments: myDept ? [myDept] : [],
+      availableAssignees: me ? [me] : [],
     };
-  }, [allTasks, viewingAsUserId]);
+  }, [viewingAsUserId]);
 
   return (
     <div className="flex flex-wrap items-end gap-2">
