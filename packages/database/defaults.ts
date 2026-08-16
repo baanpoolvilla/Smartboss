@@ -48,11 +48,11 @@ export const CORE_PERMS = [
   // ความปลอดภัยตอน login (ล็อกบัญชีกี่ครั้ง นานเท่าไร) — คนละเรื่องกับสิทธิ์ผู้ใช้
   // จึงแยก permission ไว้ ให้มอบเฉพาะคนที่ควรแตะนโยบายความปลอดภัยได้จริง
   "core.security.setting.manage",
-  // แผนก/ตำแหน่ง — ของกลาง ใช้ร่วมกันได้ทุกโมดูล (ดู core.prisma: Department/Position)
+  // แผนก — ของกลาง ใช้ร่วมกันได้ทุกโมดูล (ดู core.prisma: Department/DepartmentHead)
   "core.department.view",
   "core.department.manage",
-  "core.position.view",
-  "core.position.manage",
+  // เห็นข้อมูลทั้งบริษัท ข้าม data scope ระดับแผนก (ปกติคือ ADMIN/CEO เท่านั้น)
+  "core.data.view_all",
 ];
 
 /** สิทธิ์ระดับแพลตฟอร์ม — ไม่มอบให้บทบาทของบริษัทใด SUPER_ADMIN ผ่านเองอยู่แล้ว */
@@ -89,7 +89,7 @@ export const ROLE_GRANTS: Record<string, string[]> = {
     "core.admin", "core.user.view", "core.role.view", "core.audit.view",
     // ผู้บริหารเป็นคนกำหนดว่าบริษัทนี้ถือว่าอะไรคือ "ทำงานได้ดี"
     "core.performance.view", "core.performance.setting.manage",
-    "core.department.view", "core.department.manage", "core.position.view", "core.position.manage",
+    "core.department.view", "core.department.manage", "core.data.view_all",
     "hr.access", "hr.employee.view", "hr.salary.view", "hr.payroll.view", "hr.payroll.approve",
     ...MAINT_PERMS.filter((p) => p !== "maintenance.admin"),
   ],
@@ -97,7 +97,7 @@ export const ROLE_GRANTS: Record<string, string[]> = {
     "core.admin", "core.user.view", "core.user.manage", "core.role.view",
     // หัวหน้างานดูคะแนนลูกทีมได้ แต่แก้เกณฑ์ไม่ได้ — ไม่งั้นแก้เกณฑ์ให้ทีมตัวเองดูดีได้
     "core.performance.view",
-    "core.department.view", "core.position.view",
+    "core.department.view",
     "hr.access", "hr.employee.view", "hr.employee.manage", "hr.payroll.view",
     "maintenance.access",
     "maintenance.workorder.view", "maintenance.workorder.manage", "maintenance.workorder.complete",

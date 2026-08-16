@@ -17,7 +17,7 @@
     "./permissions": "./permissions.ts"
   },
   "scripts": {
-    "test": "node --test --import tsx ./__tests__/jwt.test.ts ./__tests__/permissions.test.ts",
+    "test": "node --test --import tsx ./__tests__/jwt.test.ts ./__tests__/permissions.test.ts ./__tests__/scope.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -21,19 +21,17 @@ model User {
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
   departmentId String? @map("department_id")
-  positionId   String? @map("position_id")
 
   organization      Organization?      @relation(fields: [orgId], references: [id])
   department        Department?        @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  position          Position?          @relation(fields: [positionId], references: [id], onDelete: SetNull)
   roles             UserRole[]
   refreshTokens     RefreshToken[]
   auditLogs         AuditLog[]
   performanceEvents PerformanceEvent[]
+  headOf            DepartmentHead[]   @relation("DepartmentHeads")
 
   @@index([orgId])
   @@index([departmentId])
-  @@index([positionId])
   @@map("users")
   @@schema("core")
 }
@@ -55,7 +53,6 @@ model Organization {
   orgModules  OrgModule[]
   roles       Role[]
   departments Department[]
-  positions   Position[]
 
   reportTaskStores     ReportTaskStore[]
   reportTasks          ReportTask[]
@@ -109,18 +106,16 @@ model Permission {
   code     String  @unique
   moduleId String? @map("module_id")
 
-  module      Module?                @relation(fields: [moduleId], references: [id])
-  roles       RolePermission[]
-  departments DepartmentPermission[]
-  positions   PositionPermission[]
+  module Module?          @relation(fields: [moduleId], references: [id])
+  roles  RolePermission[]
 
   @@map("permissions")
   @@schema("core")
 }
 
 // แผนก — ของกลาง ใช้ร่วมกันได้ทุกโมดูล (ไม่ใช่ของ report_task คนเดียวอีกต่อไป)
-// กำหนดสิทธิ์ระดับแผนกได้เหมือน Role แต่ผูกกับ "หน่วยงาน" แทน "บทบาท" — คนในแผนก
-// เดียวกันได้สิทธิ์ที่แผนกกำหนดเพิ่มจากสิทธิ์ตาม Role ของตัวเอง (รวมกันตอน login)
+// สิทธิ์การใช้งานระบบมาจาก Role อย่างเดียว — แผนกเป็นแค่ข้อมูลโครงสร้างองค์กร
+// + จุดระบุ "หัวหน้าแผนก" สำหรับขอบเขตการมองเห็นข้อมูล (ดู DepartmentHead)
 model Department {
   id          String   @id @default(uuid())
   orgId       String   @map("org_id")
@@ -129,54 +124,29 @@ model Department {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  organization Organization           @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  organization Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   users        User[]
-  permissions  DepartmentPermission[]
+  heads        DepartmentHead[]
 
   @@index([orgId])
   @@map("departments")
   @@schema("core")
 }
 
-// ตำแหน่ง — ของกลางเช่นเดียวกับ Department แทนที่จะเป็น jobTitle ข้อความอิสระต่อโมดูล
-model Position {
-  id          String   @id @default(uuid())
-  orgId       String   @map("org_id")
-  name        String
-  description String?
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  organization Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  users        User[]
-  permissions  PositionPermission[]
-
-  @@index([orgId])
-  @@map("positions")
-  @@schema("core")
-}
-
-model DepartmentPermission {
-  departmentId String @map("department_id")
-  permissionId String @map("permission_id")
+// หัวหน้าแผนก — many-to-many: แผนกหนึ่งมีหัวหน้าได้ 0..N คน (หัวหน้า/รอง/รักษาการ)
+// ใช้คุม data scope: หัวหน้าเห็น/แก้ข้อมูลของทุกคนในแผนกที่ตัวเองเป็นหัวหน้า
+// ไม่ผูกกับว่าหัวหน้าต้องสังกัดแผนกนั้นเอง (เพื่อรองรับการคุมหลายแผนก) — ไม่มี FK บังคับ membership
+model DepartmentHead {
+  departmentId String   @map("department_id")
+  userId       String   @map("user_id")
+  createdAt    DateTime @default(now()) @map("created_at")
 
   department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  user       User       @relation("DepartmentHeads", fields: [userId], references: [id], onDelete: Cascade)
 
-  @@id([departmentId, permissionId])
-  @@map("department_permissions")
-  @@schema("core")
-}
-
-model PositionPermission {
-  positionId   String @map("position_id")
-  permissionId String @map("permission_id")
-
-  position   Position   @relation(fields: [positionId], references: [id], onDelete: Cascade)
-  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
-
-  @@id([positionId, permissionId])
-  @@map("position_permissions")
+  @@id([departmentId, userId])
+  @@index([userId])
+  @@map("department_heads")
   @@schema("core")
 }
 
@@ -448,7 +418,6 @@ model SecuritySetting {
    * รหัสผ่านต้องยาวอย่างน้อยกี่ตัวอักษร
    */
   passwordMinLength Int @default(12) @map("password_min_length")
-
 
   updatedAt DateTime @updatedAt @map("updated_at")
   updatedBy String?  @map("updated_by")

@@ -85,13 +85,6 @@ async function assertEditableDepartment(orgId: string, departmentId: string) {
   return department;
 }
 
-/** ตำแหน่งที่บริษัทนี้ "แก้ได้" ต้องเป็นของบริษัทตัวเอง */
-async function assertEditablePosition(orgId: string, positionId: string) {
-  const position = await prisma.position.findFirst({ where: { id: positionId, orgId } });
-  if (!position) throw new Error("ไม่มีสิทธิ์แก้ไขตำแหน่งนี้");
-  return position;
-}
-
 /* ═══════════════════════ ผู้ใช้งาน ═══════════════════════ */
 
 /** ความยาวขั้นต่ำตั้งได้รายบริษัท ⇒ สร้าง schema ตอนรู้แล้วว่าเป็นบริษัทไหน */
@@ -312,6 +305,15 @@ export async function deleteUserAction(formData: FormData) {
   if (userId === session.userId) throw new Error("ลบบัญชีตัวเองไม่ได้");
   await assertManageableUser(session, userId);
 
+  // ลบ user ที่เป็นหัวหน้าแผนกอยู่ยังทำได้ (คนอื่นในแผนกไม่ได้หายไปด้วย) แต่
+  // department_heads แถวนั้นจะถูก cascade ทิ้งไปเงียบๆ — เตือนไว้ก่อนลบจริง
+  const headOfCount = await prisma.departmentHead.count({ where: { userId } });
+  if (headOfCount > 0 && String(formData.get("confirmHeadRemoval") ?? "") !== "1") {
+    throw new Error(
+      `คนนี้เป็นหัวหน้าแผนกอยู่ ${headOfCount} แผนก — ลบแล้วแผนกนั้นจะไม่มีหัวหน้า กดยืนยันอีกครั้งเพื่อลบต่อ`
+    );
+  }
+
   await prisma.user.delete({ where: { id: userId } });
   await audit({ userId: session.userId, action: "USER_DELETED", targetId: userId });
   redirect("/admin/users");
@@ -449,33 +451,49 @@ export async function updateDepartmentAction(formData: FormData) {
   revalidatePath("/admin/departments");
 }
 
-export async function setDepartmentPermissionsAction(formData: FormData) {
+/**
+ * ตั้งหัวหน้าแผนก — คุม data scope (เห็น/แก้ข้อมูลของทั้งแผนก) คนละเรื่องกับ
+ * สิทธิ์การใช้เมนู (มาจาก Role อย่างเดียว) แผนกหนึ่งมีหัวหน้าได้หลายคน
+ */
+export async function addDepartmentHeadAction(formData: FormData) {
   const session = await guard(ADMIN_PERMS.departmentManage);
   const departmentId = String(formData.get("departmentId") ?? "");
+  const userId = String(formData.get("userId") ?? "");
   await assertEditableDepartment(session.orgId, departmentId);
 
-  const permissionIds = formData.getAll("permissionIds").map(String).filter(Boolean);
-  const valid = await prisma.permission.findMany({
-    where: { id: { in: permissionIds } },
-    select: { id: true },
-  });
+  const target = await prisma.user.findFirst({ where: { id: userId, orgId: session.orgId } });
+  if (!target) throw new Error("ไม่พบผู้ใช้รายนี้ในบริษัท");
 
-  await prisma.$transaction([
-    prisma.departmentPermission.deleteMany({ where: { departmentId } }),
-    prisma.departmentPermission.createMany({
-      data: valid.map((p) => ({ departmentId, permissionId: p.id })),
-      skipDuplicates: true,
-    }),
-  ]);
+  await prisma.departmentHead.upsert({
+    where: { departmentId_userId: { departmentId, userId } },
+    create: { departmentId, userId },
+    update: {},
+  });
 
   await audit({
     userId: session.userId,
-    action: "DEPARTMENT_PERMISSIONS_CHANGED",
+    action: "DEPARTMENT_HEAD_ADDED",
     targetId: departmentId,
-    detail: { count: valid.length },
+    detail: { userId },
   });
   revalidatePath(`/admin/departments/${departmentId}`);
-  revalidatePath("/admin/departments");
+}
+
+export async function removeDepartmentHeadAction(formData: FormData) {
+  const session = await guard(ADMIN_PERMS.departmentManage);
+  const departmentId = String(formData.get("departmentId") ?? "");
+  const userId = String(formData.get("userId") ?? "");
+  await assertEditableDepartment(session.orgId, departmentId);
+
+  await prisma.departmentHead.deleteMany({ where: { departmentId, userId } });
+
+  await audit({
+    userId: session.userId,
+    action: "DEPARTMENT_HEAD_REMOVED",
+    targetId: departmentId,
+    detail: { userId },
+  });
+  revalidatePath(`/admin/departments/${departmentId}`);
 }
 
 export async function deleteDepartmentAction(formData: FormData) {
@@ -493,113 +511,29 @@ export async function deleteDepartmentAction(formData: FormData) {
   redirect("/admin/departments");
 }
 
-/* ═══════════════════════ ตำแหน่ง ═══════════════════════ */
-
-export async function createPositionAction(formData: FormData) {
-  const session = await guard(ADMIN_PERMS.positionManage);
-  const name = String(formData.get("name") ?? "").trim();
-  const description = String(formData.get("description") ?? "").trim();
-  if (!name) throw new Error("กรุณากรอกชื่อตำแหน่ง");
-
-  const position = await prisma.position.create({
-    data: { orgId: session.orgId, name, description: description || null },
-  });
-  await audit({
-    userId: session.userId,
-    action: "POSITION_CREATED",
-    targetId: position.id,
-    detail: { name },
-  });
-  redirect(`/admin/positions/${position.id}`);
-}
-
-export async function updatePositionAction(formData: FormData) {
-  const session = await guard(ADMIN_PERMS.positionManage);
-  const positionId = String(formData.get("positionId") ?? "");
-  await assertEditablePosition(session.orgId, positionId);
-
-  const name = String(formData.get("name") ?? "").trim();
-  const description = String(formData.get("description") ?? "").trim();
-  if (!name) throw new Error("กรุณากรอกชื่อตำแหน่ง");
-
-  await prisma.position.update({
-    where: { id: positionId },
-    data: { name, description: description || null },
-  });
-  await audit({ userId: session.userId, action: "POSITION_UPDATED", targetId: positionId });
-  revalidatePath(`/admin/positions/${positionId}`);
-  revalidatePath("/admin/positions");
-}
-
-export async function setPositionPermissionsAction(formData: FormData) {
-  const session = await guard(ADMIN_PERMS.positionManage);
-  const positionId = String(formData.get("positionId") ?? "");
-  await assertEditablePosition(session.orgId, positionId);
-
-  const permissionIds = formData.getAll("permissionIds").map(String).filter(Boolean);
-  const valid = await prisma.permission.findMany({
-    where: { id: { in: permissionIds } },
-    select: { id: true },
-  });
-
-  await prisma.$transaction([
-    prisma.positionPermission.deleteMany({ where: { positionId } }),
-    prisma.positionPermission.createMany({
-      data: valid.map((p) => ({ positionId, permissionId: p.id })),
-      skipDuplicates: true,
-    }),
-  ]);
-
-  await audit({
-    userId: session.userId,
-    action: "POSITION_PERMISSIONS_CHANGED",
-    targetId: positionId,
-    detail: { count: valid.length },
-  });
-  revalidatePath(`/admin/positions/${positionId}`);
-  revalidatePath("/admin/positions");
-}
-
-export async function deletePositionAction(formData: FormData) {
-  const session = await guard(ADMIN_PERMS.positionManage);
-  const positionId = String(formData.get("positionId") ?? "");
-  await assertEditablePosition(session.orgId, positionId);
-
-  const inUse = await prisma.user.count({ where: { positionId } });
-  if (inUse > 0) {
-    throw new Error(`ยังมีผู้ใช้ ${inUse} คนถือตำแหน่งนี้อยู่ — ย้ายคนออกก่อน`);
-  }
-
-  await prisma.position.delete({ where: { id: positionId } });
-  await audit({ userId: session.userId, action: "POSITION_DELETED", targetId: positionId });
-  redirect("/admin/positions");
-}
-
 /**
- * ตั้งแผนก/ตำแหน่ง "ปัจจุบัน" ของผู้ใช้คนเดียว — คนละอย่างกับบทบาท (ถือได้หลายอัน)
- * แผนก/ตำแหน่งมีได้อย่างละหนึ่งต่อคน ว่าง = เลือก "ไม่ระบุ"
+ * ตั้งแผนก "ปัจจุบัน" ของผู้ใช้คนเดียว — คนละอย่างกับบทบาท (ถือได้หลายอัน)
+ * แผนกมีได้แค่หนึ่งต่อคน ว่าง = เลือก "ไม่ระบุ"
  */
-export async function setUserDepartmentPositionAction(formData: FormData) {
+export async function setUserDepartmentAction(formData: FormData) {
   const session = await guard(ADMIN_PERMS.userManage);
   const userId = String(formData.get("userId") ?? "");
   const target = await assertManageableUser(session, userId);
-  if (!target.orgId) throw new Error("ผู้ใช้ระดับแพลตฟอร์มไม่มีแผนก/ตำแหน่ง");
+  if (!target.orgId) throw new Error("ผู้ใช้ระดับแพลตฟอร์มไม่มีแผนก");
 
   const departmentId = String(formData.get("departmentId") ?? "").trim();
-  const positionId = String(formData.get("positionId") ?? "").trim();
   if (departmentId) await assertEditableDepartment(target.orgId, departmentId);
-  if (positionId) await assertEditablePosition(target.orgId, positionId);
 
   await prisma.user.update({
     where: { id: userId },
-    data: { departmentId: departmentId || null, positionId: positionId || null },
+    data: { departmentId: departmentId || null },
   });
 
   await audit({
     userId: session.userId,
-    action: "USER_DEPARTMENT_POSITION_CHANGED",
+    action: "USER_DEPARTMENT_CHANGED",
     targetId: userId,
-    detail: { departmentId: departmentId || null, positionId: positionId || null },
+    detail: { departmentId: departmentId || null },
   });
   revalidatePath("/admin/users");
   revalidatePath(`/admin/users/${userId}`);
