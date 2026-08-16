@@ -47,6 +47,7 @@ export default async function AdminRolesPage() {
                   </p>
                 )}
               </div>
+              {r.departmentName && <Pill color="#8B5CF6">{r.departmentName}</Pill>}
               <Pill color="#3B82F6">
                 <Users className="h-3 w-3" /> {r.userCount}
               </Pill>
