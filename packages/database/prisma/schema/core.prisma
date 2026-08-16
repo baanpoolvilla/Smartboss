@@ -91,12 +91,20 @@ model Role {
   description String?
   isSystem    Boolean @default(false) @map("is_system") // true = role กลาง ห้ามแก้/ลบ
 
+  // แผนกที่ role นี้ "เกี่ยวข้องด้วย" — ป้ายบอกกลุ่มเฉยๆ ไม่บังคับ ไม่มีผลต่อ
+  // สิทธิ์ใดๆ (สิทธิ์มาจาก RolePermission ล้วนๆ เหมือนเดิม) role ที่ใช้ข้ามแผนก
+  // ได้ (ADMIN/MANAGER/STAFF/CEO ฯลฯ) ปล่อยว่างไว้ — ใช้แค่จัดกลุ่มแสดงผลใน
+  // หน้า /admin/roles และเป็นทางลัดตั้งหัวหน้าแผนกจากคนที่ถือ role นี้
+  departmentId String? @map("department_id")
+
   organization Organization?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  department   Department?      @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   users        UserRole[]
   permissions  RolePermission[]
 
   @@unique([orgId, code])
   @@index([orgId])
+  @@index([departmentId])
   @@map("roles")
   @@schema("core")
 }
@@ -127,6 +135,7 @@ model Department {
   organization Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   users        User[]
   heads        DepartmentHead[]
+  roles        Role[]
 
   @@index([orgId])
   @@map("departments")

@@ -13,6 +13,7 @@ export async function listRoles(orgId: string) {
     orderBy: [{ isSystem: "desc" }, { name: "asc" }],
     include: {
       permissions: { select: { permissionId: true } },
+      department: { select: { id: true, name: true } },
       _count: { select: { users: true } },
     },
   });
@@ -25,6 +26,8 @@ export async function listRoles(orgId: string) {
     isSystem: r.isSystem,
     userCount: r._count.users,
     permissionCount: r.permissions.length,
+    departmentId: r.departmentId,
+    departmentName: r.department?.name ?? null,
   }));
 }
 
@@ -44,5 +47,24 @@ export async function getRole(orgId: string, roleId: string) {
     description: role.description,
     isSystem: role.isSystem,
     permissionIds: role.permissions.map((p) => p.permissionId),
+    departmentId: role.departmentId,
   };
+}
+
+/**
+ * คนที่ถือ role นี้อยู่ — ใช้ในหน้าแก้ไข role เป็นทางลัดตั้ง/ถอดหัวหน้าแผนก
+ * ที่ role นี้ผูกไว้ (ดู Role.departmentId) โดยไม่ต้องสลับไปหน้าแผนกเอง
+ */
+export async function listRoleHolders(orgId: string, roleId: string) {
+  const holders = await prisma.user.findMany({
+    where: { orgId, roles: { some: { roleId } } },
+    select: { id: true, name: true, email: true, headOf: { select: { departmentId: true } } },
+    orderBy: { name: "asc" },
+  });
+  return holders.map((u) => ({
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    headOfDepartmentIds: u.headOf.map((h) => h.departmentId),
+  }));
 }

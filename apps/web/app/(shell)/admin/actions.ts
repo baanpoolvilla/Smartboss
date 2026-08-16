@@ -358,11 +358,21 @@ export async function updateRoleAction(formData: FormData) {
   const description = String(formData.get("description") ?? "").trim();
   if (!name) throw new Error("กรุณากรอกชื่อบทบาท");
 
+  // แผนกที่ role นี้เกี่ยวข้องด้วย — ไม่บังคับ ไม่มีผลต่อสิทธิ์ใดๆ แค่จัดกลุ่ม/
+  // เป็นทางลัดตั้งหัวหน้าแผนก (ดู addRoleHeadAction ด้านล่าง)
+  const departmentId = String(formData.get("departmentId") ?? "").trim();
+  if (departmentId) await assertEditableDepartment(session.orgId, departmentId);
+
   await prisma.role.update({
     where: { id: roleId },
-    data: { name, description: description || null },
+    data: { name, description: description || null, departmentId: departmentId || null },
   });
-  await audit({ userId: session.userId, action: "ROLE_UPDATED", targetId: roleId });
+  await audit({
+    userId: session.userId,
+    action: "ROLE_UPDATED",
+    targetId: roleId,
+    detail: { departmentId: departmentId || null },
+  });
   revalidatePath(`/admin/roles/${roleId}`);
   revalidatePath("/admin/roles");
 }
@@ -493,6 +503,59 @@ export async function removeDepartmentHeadAction(formData: FormData) {
     targetId: departmentId,
     detail: { userId },
   });
+  revalidatePath(`/admin/departments/${departmentId}`);
+}
+
+/**
+ * ทางลัดตั้ง/ถอดหัวหน้าแผนกจากหน้า "แก้ไขบทบาท" โดยตรง — สำหรับ role ที่ผูก
+ * แผนกไว้แล้ว (Role.departmentId) เลือกจากคนที่ถือ role นี้อยู่ ไม่ต้องสลับ
+ * ไปหน้าแผนกเอง ใช้เกณฑ์สิทธิ์เดียวกับ addDepartmentHeadAction/
+ * removeDepartmentHeadAction (ตั้งหัวหน้าแผนกยังต้องมี departmentManage
+ * เสมอ — role ผูกกับแผนกแค่ไหนก็ไม่ได้ปลดล็อกสิทธิ์นี้ให้) แค่ revalidate
+ * หน้า role เพิ่มด้วยเพราะนั่นคือหน้าที่ผู้ใช้กำลังดูอยู่
+ */
+export async function addRoleHeadAction(formData: FormData) {
+  const session = await guard(ADMIN_PERMS.departmentManage);
+  const roleId = String(formData.get("roleId") ?? "");
+  const departmentId = String(formData.get("departmentId") ?? "");
+  const userId = String(formData.get("userId") ?? "");
+  await assertEditableDepartment(session.orgId, departmentId);
+
+  const target = await prisma.user.findFirst({ where: { id: userId, orgId: session.orgId } });
+  if (!target) throw new Error("ไม่พบผู้ใช้รายนี้ในบริษัท");
+
+  await prisma.departmentHead.upsert({
+    where: { departmentId_userId: { departmentId, userId } },
+    create: { departmentId, userId },
+    update: {},
+  });
+
+  await audit({
+    userId: session.userId,
+    action: "DEPARTMENT_HEAD_ADDED",
+    targetId: departmentId,
+    detail: { userId, viaRoleId: roleId },
+  });
+  revalidatePath(`/admin/roles/${roleId}`);
+  revalidatePath(`/admin/departments/${departmentId}`);
+}
+
+export async function removeRoleHeadAction(formData: FormData) {
+  const session = await guard(ADMIN_PERMS.departmentManage);
+  const roleId = String(formData.get("roleId") ?? "");
+  const departmentId = String(formData.get("departmentId") ?? "");
+  const userId = String(formData.get("userId") ?? "");
+  await assertEditableDepartment(session.orgId, departmentId);
+
+  await prisma.departmentHead.deleteMany({ where: { departmentId, userId } });
+
+  await audit({
+    userId: session.userId,
+    action: "DEPARTMENT_HEAD_REMOVED",
+    targetId: departmentId,
+    detail: { userId, viaRoleId: roleId },
+  });
+  revalidatePath(`/admin/roles/${roleId}`);
   revalidatePath(`/admin/departments/${departmentId}`);
 }
 
