@@ -32,9 +32,20 @@ export interface DirectoryUser {
   isOwner?: boolean;
 }
 
-/** ข้อมูลเฉพาะโมดูลที่ผูกกับ core.users.id — เหลือแค่ตัวย่อ ที่เหลือย้ายไป core แล้ว */
+/**
+ * ข้อมูลเฉพาะโมดูลที่ผูกกับ core.users.id — ตัวย่อ + ข้อยกเว้นสถานะเจ้าของ
+ *
+ * isOwnerOverride: ค่าเริ่มต้นของ "เจ้าของบริษัท" มาจาก role จริง (ADMIN/CEO/
+ * SUPER_ADMIN) เสมอ แต่บางบริษัทอยากยกเว้นเป็นรายคนได้ (เช่น ADMIN ที่ดูแล
+ * แค่เรื่องผู้ใช้/สิทธิ์ ไม่ต้องการเห็นข้อมูลรายงาน/งานข้ามแผนกทั้งบริษัทก็ได้)
+ * — undefined = ตามค่าจาก role ปกติ, true/false = บังคับทับ ไม่สนใจ role
+ * ตั้งได้เฉพาะที่หน้า "จัดการพนักงาน" (owner เท่านั้นที่เข้าถึงได้ ดู
+ * settings/page.tsx sectionsByTab.permissions) ไม่กระทบสิทธิ์เมนู/RBAC จริง
+ * เลย เป็นแค่ scope ภายในโมดูลนี้ (isOwner ที่นี่ ≠ role ที่ /admin)
+ */
 interface EmployeeProfile {
   avatar?: string;
+  isOwnerOverride?: boolean;
 }
 
 type ProfileMap = Record<string, EmployeeProfile>;
@@ -76,6 +87,7 @@ export async function listDirectory(orgId: string): Promise<DirectoryUser[]> {
   return users.map((u) => {
     const p = map[u.id] ?? {};
     const codes = u.roles.map((r) => r.role.code);
+    const roleDerived = codes.some((c) => OWNER_ROLE_CODES.has(c));
     return {
       id: u.id,
       name: u.name,
@@ -83,34 +95,42 @@ export async function listDirectory(orgId: string): Promise<DirectoryUser[]> {
       avatar: p.avatar || initialsOf(u.name),
       role: u.roles[0]?.role.name || "พนักงาน",
       departmentId: u.departmentId ?? "",
-      isOwner: codes.some((c) => OWNER_ROLE_CODES.has(c)) || undefined,
+      isOwner: (p.isOwnerOverride ?? roleDerived) || undefined,
     };
   });
 }
 
 /**
- * บันทึกเฉพาะส่วนที่โมดูลเป็นเจ้าของ (ตัวย่อ)
+ * บันทึกเฉพาะส่วนที่โมดูลเป็นเจ้าของ (ตัวย่อ + ข้อยกเว้นสถานะเจ้าของ)
  *
- * ชื่อ/อีเมล/สิทธิ์เจ้าของ/แผนก/ตำแหน่ง ที่ client ส่งมาจะถูกทิ้ง — แก้ได้ที่
- * /admin เท่านั้น ไม่งั้นจะมีข้อมูลคนสองชุดที่ไม่ตรงกัน และแก้ที่นี่แล้ว
- * login ไม่เปลี่ยนตาม
+ * ชื่อ/อีเมล/แผนก/ตำแหน่ง ที่ client ส่งมาจะถูกทิ้ง — แก้ได้ที่ /admin เท่านั้น
+ * ไม่งั้นจะมีข้อมูลคนสองชุดที่ไม่ตรงกัน และแก้ที่นี่แล้ว login ไม่เปลี่ยนตาม
+ * ส่วน "เจ้าของบริษัท" รับได้ แต่เก็บเป็น **ข้อยกเว้น** ไม่ใช่ค่าเต็ม — เทียบกับ
+ * role จริงของแต่ละคนก่อนเสมอ ถ้าตรงกับที่ role กำหนดอยู่แล้วไม่ต้องเก็บ
+ * (กันไม่ให้ค่าเก่าค้างบัง role ใหม่ตอนมีคนเปลี่ยน role ทีหลังที่ /admin)
  */
 export async function saveDirectoryProfiles(
   orgId: string,
   incoming: DirectoryUser[],
   updatedBy?: string
 ): Promise<void> {
-  const valid = new Set(
-    (
-      await prisma.user.findMany({ where: { orgId }, select: { id: true } })
-    ).map((u) => u.id)
+  const users = await prisma.user.findMany({
+    where: { orgId },
+    select: { id: true, roles: { select: { role: { select: { code: true } } } } },
+  });
+  const roleDerivedById = new Map(
+    users.map((u) => [u.id, u.roles.some((r) => OWNER_ROLE_CODES.has(r.role.code))])
   );
 
   const map: ProfileMap = {};
   for (const u of incoming) {
-    if (!valid.has(u.id)) continue; // id ที่ไม่ใช่คนในบริษัทนี้ — ทิ้ง
+    const roleDerived = roleDerivedById.get(u.id);
+    if (roleDerived === undefined) continue; // id ที่ไม่ใช่คนในบริษัทนี้ — ทิ้ง
+    const isOwnerSent = u.isOwner === true;
     map[u.id] = {
       ...(u.avatar ? { avatar: u.avatar } : {}),
+      // เก็บเฉพาะตอนขัดกับ role จริง — ตรงกันอยู่แล้วไม่ต้องเก็บข้อยกเว้น
+      ...(isOwnerSent !== roleDerived ? { isOwnerOverride: isOwnerSent } : {}),
     };
   }
 
