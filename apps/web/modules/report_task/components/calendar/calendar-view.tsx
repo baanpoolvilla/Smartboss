@@ -16,6 +16,7 @@ import { formatDate } from "@/modules/report_task/lib/format";
 import { Badge } from "@/modules/report_task/components/ui/badge";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
+import { StickyFilterBar } from "@/modules/report_task/components/shared/sticky-filter-bar";
 import { CalendarFilters } from "./calendar-filters";
 import { FullCalendarView, type ViewKey } from "./full-calendar-view";
 import { LeaveSidebar } from "./leave-sidebar";
@@ -632,7 +633,7 @@ export function CalendarView() {
 
   return (
     <div className="flex flex-col gap-4 lg:gap-6">
-      <div className="flex flex-col gap-3">
+      <StickyFilterBar>
         <div className="flex flex-wrap items-center gap-2">
           <div className="inline-flex items-center gap-1.5 rounded-xl bg-[var(--bg-soft)] p-1.5">
             <button
@@ -857,31 +858,31 @@ export function CalendarView() {
             )}
           </div>
         )}
+      </StickyFilterBar>
 
-        <FullCalendarView
-          events={events}
-          onSelectEvent={handleSelect}
-          onRangeChange={setViewRange}
-          onActiveRangeChange={setActiveRange}
-          onDateClick={handleDateClick}
-          onEventDrop={handleEventDrop}
-          onSelectRange={setSummaryRange}
-          onCreate={
-            tab === "todo"
-              ? () => openTodoDialog({})
-              : tab === "work" && !canManage(viewingAsUserId)
-                ? undefined
-                : () => openCreate()
-          }
-          onToggleTodo={handleToggleTodo}
-          onEditTodo={(eventId) => {
-            const todoId = eventId.replace("todoevt-", "");
-            const target = todos.find((t) => t.id === todoId);
-            if (target) openTodoDialog({ todo: target, date: target.date });
-          }}
-          addHint="คลิกวันเพื่อดูรายการ · ลากคลุมหลายวันเพื่อดูสรุป"
-        />
-      </div>
+      <FullCalendarView
+        events={events}
+        onSelectEvent={handleSelect}
+        onRangeChange={setViewRange}
+        onActiveRangeChange={setActiveRange}
+        onDateClick={handleDateClick}
+        onEventDrop={handleEventDrop}
+        onSelectRange={setSummaryRange}
+        onCreate={
+          tab === "todo"
+            ? () => openTodoDialog({})
+            : tab === "work" && !canManage(viewingAsUserId)
+              ? undefined
+              : () => openCreate()
+        }
+        onToggleTodo={handleToggleTodo}
+        onEditTodo={(eventId) => {
+          const todoId = eventId.replace("todoevt-", "");
+          const target = todos.find((t) => t.id === todoId);
+          if (target) openTodoDialog({ todo: target, date: target.date });
+        }}
+        addHint="คลิกวันเพื่อดูรายการ · ลากคลุมหลายวันเพื่อดูสรุป"
+      />
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
         {tab === "work" ? (
           <WorkSidebar range={viewRange} onOpenTask={setOpenTaskId} />
