@@ -11,7 +11,7 @@ import {
 } from "@/modules/report_task/components/ui/select";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { getDepartment, getUser, isOwner, departments, users } from "@/modules/report_task/lib/directory";
+import { getDepartment, getUser, isOwner, scopedDepartments, scopedUsers, users } from "@/modules/report_task/lib/directory";
 import { taskPriorityOrder, priorityMeta } from "@/modules/report_task/lib/task-meta";
 import type { TaskPriority } from "@/modules/report_task/types";
 import { FilterField, FILTER_FIELD_LABEL_CLASS, filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
@@ -63,17 +63,12 @@ export function TaskFilters() {
   // department or hire with zero tasks yet still needs to be pickable so a
   // head can start assigning work to them. Owner sees the whole company; a
   // department head sees only the department(s) they head (report_task's
-  // own headId — see dashboard-filters.tsx for the same pattern).
+  // own headId — see lib/directory.ts's scopedDepartments/scopedUsers,
+  // shared with dashboard-filters.tsx/workload-view.tsx/activity-log).
   const { availableDepartments, availableAssignees } = useMemo(() => {
-    if (isOwner(viewingAsUserId)) {
-      return { availableDepartments: [...departments], availableAssignees: [...users] };
-    }
-    const headedIds = new Set(departments.filter((d) => d.headId === viewingAsUserId).map((d) => d.id));
-    if (headedIds.size > 0) {
-      return {
-        availableDepartments: departments.filter((d) => headedIds.has(d.id)),
-        availableAssignees: users.filter((u) => headedIds.has(u.departmentId)),
-      };
+    const deptScope = scopedDepartments(viewingAsUserId);
+    if (isOwner(viewingAsUserId) || deptScope.length > 0) {
+      return { availableDepartments: deptScope, availableAssignees: scopedUsers(viewingAsUserId) };
     }
     // Regular staff (not owner, not a department head) — nothing to pick
     // between, just themselves; renders as the plain-label fallback below.

@@ -45,15 +45,27 @@ const FIELD_LABELS: Record<string, string> = {
   visibility: "สิทธิ์การมองเห็น",
 };
 
-/** สรุป 1 ช่องที่เปลี่ยน เป็นข้อความอ่านง่าย — ค่าธรรมดา (bool/string/number) โชว์ ก่อน → หลัง ให้เลย ส่วนช่องที่เป็น array/object แค่บอกชื่อช่อง (ดูรายละเอียดยากในบรรทัดเดียว) */
+/**
+ * สรุป 1 ช่องที่เปลี่ยน เป็นข้อความอ่านง่าย — ค่าธรรมดา (bool/string/number/
+ * undefined) โชว์ ก่อน → หลัง ให้เลย ส่วนช่องที่เป็น array/object แค่บอกชื่อช่อง
+ * (ดูรายละเอียดยากในบรรทัดเดียว)
+ *
+ * หลายช่องในชีทนี้ "ค่าเริ่มต้น/ปิด" แทนด้วย undefined ไม่ใช่ false/0/"" (เช่น
+ * เลือก "ปิด" ในตัวเตือนก่อนถึงรอบ หรือเลือกค่าเริ่มต้นของอายุรูป/รูปแบบโพสต์)
+ * — ต้องแสดงเป็น "(ว่าง)" ไม่ใช่ตกไปที่ label เฉยๆ ไม่งั้นบันทึกกิจกรรมจะไม่
+ * บอกอะไรเลยว่าเปลี่ยนจากอะไรไปเป็นอะไร
+ */
 function describeChange(key: string, before: unknown, after: unknown): string {
   const label = FIELD_LABELS[key] ?? key;
-  if (typeof after === "boolean") return `${label}: ${after ? "เปิด" : "ปิด"}`;
-  if (typeof after === "string" || typeof after === "number") {
-    const from = before === undefined || before === null || before === "" ? "(ว่าง)" : String(before);
-    return `${label}: ${from} → ${after}`;
-  }
-  return label;
+  const display = (v: unknown): string | null => {
+    if (typeof v === "boolean") return v ? "เปิด" : "ปิด";
+    if (v === undefined || v === null || v === "") return "(ว่าง)";
+    if (typeof v === "string" || typeof v === "number") return String(v);
+    return null; // array/object — ไม่มีรูปแบบสั้นๆ ที่สื่อความได้
+  };
+  const afterText = display(after);
+  if (afterText === null) return label;
+  return `${label}: ${display(before) ?? "(ว่าง)"} → ${afterText}`;
 }
 
 /**
@@ -182,7 +194,7 @@ export function RoomSettingsSheet({
                   <button
                     key={c}
                     type="button"
-                    onClick={() => patchDraft({ color: c })}
+                    onClick={() => c !== draft.color && patchDraft({ color: c })}
                     aria-label={`เลือกสี ${c}`}
                     className={cn(
                       "h-7 w-7 rounded-full shrink-0 transition-transform",

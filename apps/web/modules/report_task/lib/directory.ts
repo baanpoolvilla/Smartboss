@@ -42,6 +42,29 @@ export function isOwner(userId: string) {
 export function canManage(userId: string) {
   return isDepartmentHead(userId) || isOwner(userId);
 }
+/** Departments this user heads — the "own only" boundary reused by every scoped view below. */
+export function headedDepartmentIds(userId: string): Set<string> {
+  return new Set(departments.filter((d) => d.headId === userId).map((d) => d.id));
+}
+/**
+ * Departments a viewer has rights to see: the owner sees the whole company,
+ * a department head sees only the department(s) they head, everyone else
+ * sees none (dashboard/workload/activity-log gate this view to managers
+ * anyway — the Task Board is the one surface where a regular staffer still
+ * needs *something* pickable, so it layers its own self-only fallback on top
+ * instead of relying on this returning something for them).
+ */
+export function scopedDepartments(userId: string): Department[] {
+  if (isOwner(userId)) return [...departments];
+  const headed = headedDepartmentIds(userId);
+  return departments.filter((d) => headed.has(d.id));
+}
+/** Same scope as {@link scopedDepartments}, but the people inside it. */
+export function scopedUsers(userId: string): User[] {
+  if (isOwner(userId)) return [...users];
+  const headed = headedDepartmentIds(userId);
+  return users.filter((u) => headed.has(u.departmentId));
+}
 export function headOfDepartment(departmentId: string) {
   const dept = departments.find((d) => d.id === departmentId);
   return dept ? dept.headId : users[0]?.id;

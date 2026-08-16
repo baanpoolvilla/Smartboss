@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/modules/report_task/components/ui/select";
-import { getUser, getDepartment, canManage, isOwner, departments, users } from "@/modules/report_task/lib/directory";
+import { getUser, getDepartment, canManage, scopedDepartments, scopedUsers } from "@/modules/report_task/lib/directory";
 import { useDashboardFilterStore } from "@/modules/report_task/store/dashboard-filter-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { FilterField, FILTER_FIELD_LABEL_CLASS, filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
@@ -49,21 +49,8 @@ export function DashboardFilters() {
   // PLAN_role_only_department_heads_2.md, report_task stays on its own
   // identity system for now) — everyone else never reaches this branch at
   // all (gated by canPickPerson below).
-  const headedDepartmentIds = useMemo(
-    () => new Set(departments.filter((d) => d.headId === viewingAsUserId).map((d) => d.id)),
-    [viewingAsUserId]
-  );
-  const availableDepartments = useMemo(
-    () => (isOwner(viewingAsUserId) ? [...departments] : departments.filter((d) => headedDepartmentIds.has(d.id))),
-    [viewingAsUserId, headedDepartmentIds]
-  );
-  const pickablePeople = useMemo(
-    () =>
-      isOwner(viewingAsUserId)
-        ? [...users]
-        : users.filter((u) => headedDepartmentIds.has(u.departmentId)),
-    [viewingAsUserId, headedDepartmentIds]
-  );
+  const availableDepartments = useMemo(() => scopedDepartments(viewingAsUserId), [viewingAsUserId]);
+  const pickablePeople = useMemo(() => scopedUsers(viewingAsUserId), [viewingAsUserId]);
 
   // §7.2 — once a department is picked, the person list narrows to just that
   // department's people, and the "everyone" option's label says how many.
