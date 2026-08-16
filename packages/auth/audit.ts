@@ -85,6 +85,17 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   PAYROLL_RUN_PAID: "ปิดรอบจ่าย (จ่ายแล้ว)",
   PAYROLL_RUN_DELETED: "ลบรอบจ่าย",
   SALARY_CHANGED: "ปรับฐานเงินเดือน",
+
+  // ── legacy (ตัดออกจาก AuditAction แล้ว ไม่มีทางเขียนใหม่อีก) ──
+  // แถวเก่าในฐานข้อมูลก่อน 20260816120000_role_only_department_heads ยังใช้
+  // action code พวกนี้อยู่ — เก็บป้ายไทยไว้ไม่ให้ประวัติเก่าอ่านไม่รู้เรื่อง
+  // (fallback เดิมคือโชว์ code ดิบ) ไม่ต้องเพิ่มกลับเข้า AuditAction union
+  DEPARTMENT_PERMISSIONS_CHANGED: "เปลี่ยนสิทธิ์ของแผนก (เลิกใช้แล้ว)",
+  POSITION_CREATED: "สร้างตำแหน่ง (เลิกใช้แล้ว)",
+  POSITION_UPDATED: "แก้ไขตำแหน่ง (เลิกใช้แล้ว)",
+  POSITION_DELETED: "ลบตำแหน่ง (เลิกใช้แล้ว)",
+  POSITION_PERMISSIONS_CHANGED: "เปลี่ยนสิทธิ์ของตำแหน่ง (เลิกใช้แล้ว)",
+  USER_DEPARTMENT_POSITION_CHANGED: "เปลี่ยนแผนก/ตำแหน่งผู้ใช้ (เลิกใช้แล้ว)",
 };
 
 export interface AuditInput {

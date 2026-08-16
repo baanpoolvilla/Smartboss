@@ -18,6 +18,7 @@ import {
   selectClass,
 } from "@/modules/admin/components/ui";
 import { ConfirmSubmit } from "@/modules/admin/components/confirm-submit";
+import { DeleteUserButton } from "@/modules/admin/components/delete-user-button";
 import {
   deleteUserAction,
   moveUserOrgAction,
@@ -51,25 +52,24 @@ export default async function AdminUserDetailPage({
 
   const superAdmin = isSuperAdmin(session);
 
-  // SUPER_ADMIN เปิดดูผู้ใช้ของบริษัทไหนก็ได้ คนอื่นเห็นเฉพาะบริษัทตัวเอง
-  const user = superAdmin
-    ? await getUserAnyOrg(id)
-    : await getOrgUser(session.orgId, id);
+  // SUPER_ADMIN เปิดดูผู้ใช้ของบริษัทไหนก็ได้ คนอื่นเห็นเฉพาะบริษัทตัวเอง —
+  // ตัวที่ไม่ต้องรอ user (ความยาวรหัสผ่านขั้นต่ำ, รายชื่อบริษัท) ยิงคู่ขนานไปเลย
+  const [user, { passwordMinLength }, organizations] = await Promise.all([
+    superAdmin ? getUserAnyOrg(id) : getOrgUser(session.orgId, id),
+    loadSecuritySettings(session.orgId),
+    superAdmin ? listAllOrganizations() : Promise.resolve([]),
+  ]);
   if (!user) notFound();
 
-  // บทบาทต้องมาจากบริษัท "ที่ผู้ใช้คนนี้สังกัด" ไม่ใช่บริษัทของคนที่กำลังดู
-  const allRoles = user.orgId ? await listRoles(user.orgId) : [];
+  // บทบาท/แผนกต้องมาจากบริษัท "ที่ผู้ใช้คนนี้สังกัด" ไม่ใช่บริษัทของคนที่กำลังดู
+  // ทั้งสามตัวนี้ขึ้นกับ user แล้ว แต่ไม่ได้ขึ้นกับกันเอง ยิงคู่ขนานได้
+  const [allRoles, departments, headOfCount] = await Promise.all([
+    user.orgId ? listRoles(user.orgId) : Promise.resolve([]),
+    user.orgId ? listDepartments(user.orgId) : Promise.resolve([]),
+    countDepartmentsHeadedBy(user.id),
+  ]);
   const orgRoles = allRoles.filter((r) => !r.isSystem);
 
-  // แผนกก็เช่นกัน — มาจากบริษัทที่ผู้ใช้คนนี้สังกัด
-  const departments = user.orgId ? await listDepartments(user.orgId) : [];
-  const headOfCount = await countDepartmentsHeadedBy(user.id);
-
-  // ความยาวรหัสผ่านขั้นต่ำ — ต้องตรงกับที่ resetPasswordAction ใช้ตรวจจริง
-  // (เช็คกับ session.orgId ของคนกด ไม่ใช่บริษัทของเป้าหมาย — ตามที่ action ทำ)
-  const { passwordMinLength } = await loadSecuritySettings(session.orgId);
-
-  const organizations = superAdmin ? await listAllOrganizations() : [];
   const currentOrgName =
     organizations.find((o) => o.id === user.orgId)?.name ?? null;
 
@@ -382,18 +382,7 @@ export default async function AdminUserDetailPage({
 
                 <form action={deleteUserAction} className="flex items-center gap-2">
                   <input type="hidden" name="userId" value={user.id} />
-                  {headOfCount > 0 && <input type="hidden" name="confirmHeadRemoval" value="1" />}
-                  <ConfirmSubmit
-                    message={
-                      headOfCount > 0
-                        ? `"${user.name}" เป็นหัวหน้าแผนกอยู่ ${headOfCount} แผนก — ลบแล้วแผนกนั้นจะไม่มีหัวหน้า ต้องการลบต่อไหม?`
-                        : `ต้องการลบผู้ใช้ "${user.name}" ใช่หรือไม่? ข้อมูลนี้กู้คืนไม่ได้`
-                    }
-                    disabled={isSelf}
-                    variant="danger"
-                  >
-                    ลบผู้ใช้
-                  </ConfirmSubmit>
+                  <DeleteUserButton userName={user.name} headOfCount={headOfCount} disabled={isSelf} />
                 </form>
               </div>
               {isSelf && (

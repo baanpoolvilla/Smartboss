@@ -23,11 +23,14 @@ export default async function DepartmentDetailPage({
   const session = await requireOrg();
   if (!hasPermission(session, ADMIN_PERMS.departmentView)) redirect("/admin");
 
-  const department = await getDepartment(session.orgId, id);
+  // listOrgUsers ไม่ขึ้นกับ department เลย ยิงคู่ขนานไปพร้อมกันได้
+  const [department, users] = await Promise.all([
+    getDepartment(session.orgId, id),
+    listOrgUsers(session.orgId),
+  ]);
   if (!department) notFound();
 
   const canEdit = hasPermission(session, ADMIN_PERMS.departmentManage);
-  const users = await listOrgUsers(session.orgId);
   const headUserIds = new Set(department.heads.map((h) => h.userId));
   const candidateUsers = users.filter((u) => u.isActive && !headUserIds.has(u.id));
 
@@ -63,7 +66,7 @@ export default async function DepartmentDetailPage({
 
         <SectionCard
           title="หัวหน้าแผนก"
-          description="หัวหน้าแผนกเห็น/แก้ข้อมูล (งาน รีพอต ฯลฯ) ของทุกคนในแผนกนี้ได้ — คนละเรื่องกับสิทธิ์เมนูที่มาจากบทบาท แผนกหนึ่งมีหัวหน้าได้หลายคน"
+          description="กำหนดขอบเขตข้อมูล (data scope) ของแผนกนี้ไว้สำหรับโมดูลที่รองรับ — คนละเรื่องกับสิทธิ์เมนูที่มาจากบทบาท แผนกหนึ่งมีหัวหน้าได้หลายคน ปัจจุบันยังไม่มีโมดูลไหนอ่านค่านี้โดยตรง (โมดูลรายงานและงานใช้ตัวตั้งหัวหน้าแผนกของตัวเองแยกต่างหากที่หน้าตั้งค่าโมดูล)"
         >
           {department.heads.length === 0 ? (
             <p className="text-sm text-(--ink-soft)">ยังไม่มีหัวหน้าแผนก</p>
@@ -124,7 +127,7 @@ export default async function DepartmentDetailPage({
               </ConfirmSubmit>
             </form>
             <p className="mt-2 text-xs text-(--ink-soft)">
-              ลบได้เมื่อไม่มีผู้ใช้อยู่แผนกนี้แล้ว
+              ลบได้เมื่อไม่มีผู้ใช้และไม่มีหัวหน้าแผนกอยู่แล้ว
             </p>
           </SectionCard>
         )}

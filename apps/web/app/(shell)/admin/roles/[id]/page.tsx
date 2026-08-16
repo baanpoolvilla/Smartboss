@@ -45,17 +45,22 @@ export default async function RoleDetailPage({
   const session = await requireOrg();
   if (!hasPermission(session, ADMIN_PERMS.roleView)) redirect("/admin");
 
-  const role = await getRole(session.orgId, id);
+  // listPermissionCatalog ไม่ขึ้นกับ role เลย ยิงคู่ขนานไปพร้อมกันได้
+  const [role, groups] = await Promise.all([
+    getRole(session.orgId, id),
+    listPermissionCatalog(),
+  ]);
   if (!role) notFound();
 
   // role ระบบดูได้อย่างเดียว
   const canEdit =
     hasPermission(session, ADMIN_PERMS.roleManage) && !role.isSystem;
-  const groups = await listPermissionCatalog();
-  const departments = role.isSystem ? [] : await listDepartments(session.orgId);
   const canManageDept = hasPermission(session, ADMIN_PERMS.departmentManage);
-  const holders =
-    !role.isSystem && role.departmentId ? await listRoleHolders(session.orgId, role.id) : [];
+  // ทั้งสองขึ้นกับ role แล้ว แต่ไม่ได้ขึ้นกับกันเอง ยิงคู่ขนานได้
+  const [departments, holders] = await Promise.all([
+    role.isSystem ? Promise.resolve([]) : listDepartments(session.orgId),
+    !role.isSystem && role.departmentId ? listRoleHolders(session.orgId, role.id) : Promise.resolve([]),
+  ]);
 
   return (
     <AppScaffold title={role.name} width="max-w-3xl" backHref="/admin/roles">
@@ -131,7 +136,7 @@ export default async function RoleDetailPage({
         {/* ─── ทางลัดตั้งหัวหน้าแผนก (เฉพาะ role ที่ผูกแผนกไว้) ─── */}
         {role.departmentId && (
           <SectionCard
-            title={`หัวหน้าแผนก${departments.find((d) => d.id === role.departmentId)?.name ?? ""}`}
+            title={`หัวหน้าแผนก${role.departmentName ?? ""}`}
             description="ตั้งจากคนที่ถือบทบาทนี้อยู่ — ครั้งเดียว ไม่ผูกถาวรกับบทบาท ถอดบทบาทออกทีหลังไม่กระทบสถานะหัวหน้าแผนกที่ตั้งไปแล้ว"
           >
             {holders.length === 0 ? (
