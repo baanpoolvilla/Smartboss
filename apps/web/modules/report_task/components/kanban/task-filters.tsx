@@ -85,6 +85,31 @@ export function TaskFilters() {
     };
   }, [viewingAsUserId]);
 
+  // Once a department is picked, the person list narrows to just that
+  // department's people — same "department → person" hierarchy as the
+  // Dashboard's filter bar (dashboard-filters.tsx). Without this, picking a
+  // department left the assignee dropdown showing everyone (including people
+  // outside that department), so a department+person combo that could never
+  // match anything silently returned zero tasks instead of narrowing sensibly.
+  const peopleInScope = useMemo(
+    () =>
+      filters.departmentId === "all"
+        ? availableAssignees
+        : availableAssignees.filter((u) => u.departmentId === filters.departmentId),
+    [availableAssignees, filters.departmentId]
+  );
+
+  // Switching department while a specific person is selected: if that person
+  // isn't in the newly-picked department, fall back to "ทุกคน" instead of
+  // silently keeping a now-mismatched assignee filter (same fix as
+  // dashboard-filters.tsx's identical effect).
+  useEffect(() => {
+    if (filters.departmentId === "all" || filters.assigneeId === "all") return;
+    if (getUser(filters.assigneeId)?.departmentId !== filters.departmentId) {
+      setFilters({ assigneeId: "all" });
+    }
+  }, [filters.departmentId, filters.assigneeId, setFilters]);
+
   return (
     <div className="flex flex-wrap items-end gap-2">
       {availableDepartments.length > 1 ? (
@@ -114,7 +139,7 @@ export function TaskFilters() {
         </FilterField>
       )}
 
-      {availableAssignees.length > 1 ? (
+      {peopleInScope.length > 1 ? (
         <FilterField label="พนักงาน">
           <Select value={filters.assigneeId} onValueChange={(v) => v && setFilters({ assigneeId: v })}>
             <SelectTrigger className={filterFieldTriggerClass(filters.assigneeId !== "all", "min-w-[150px]")}>
@@ -125,7 +150,7 @@ export function TaskFilters() {
             </SelectTrigger>
             <SelectContent alignItemWithTrigger={false}>
               <SelectItem value="all">ทุกคน</SelectItem>
-              {availableAssignees.map((u) => (
+              {peopleInScope.map((u) => (
                 <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
               ))}
             </SelectContent>
@@ -135,7 +160,7 @@ export function TaskFilters() {
         <FilterField label="พนักงาน">
           <span className={filterFieldTriggerClass(false, "min-w-[130px] cursor-default")}>
             <Users className="h-4 w-4 shrink-0" />
-            {availableAssignees[0]?.id === viewingAsUserId ? "ตัวเอง" : (availableAssignees[0]?.name ?? "ไม่มีผู้รับผิดชอบ")}
+            {peopleInScope[0]?.id === viewingAsUserId ? "ตัวเอง" : (peopleInScope[0]?.name ?? "ไม่มีผู้รับผิดชอบ")}
           </span>
         </FilterField>
       )}
