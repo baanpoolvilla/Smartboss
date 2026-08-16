@@ -20,19 +20,23 @@ import type { ReactNode } from "react";
  * `bg-[var(--bg-soft)]`, permanent `border-b`, and drop shadow below are
  * what make scrolled-under content read as "a separate layer sliding
  * beneath a bar," not "overlapping the bar with no boundary."
+ *
+ * The filter controls (`children`) sit in their own bordered card instead of
+ * floating loose on the bar's background — one consistent "filters live in
+ * this box" frame across every page. Whether a filter is active is shown by
+ * the field itself tinting green (`filterFieldTriggerClass`), so there's no
+ * separate "กำลังดู: ..." chip row to keep in sync with the field state.
  */
 export function StickyFilterBar({
   title,
   subtitle,
   actions,
   children,
-  activeChips,
 }: {
   title?: ReactNode;
   subtitle?: ReactNode;
   actions?: ReactNode;
   children?: ReactNode;
-  activeChips?: ReactNode;
 }) {
   return (
     <div className="sticky top-0 z-30 -mx-4 px-4 sm:-mx-6 sm:px-6 bg-[var(--bg-soft)]/95 backdrop-blur-sm border-b border-[var(--line)] shadow-[0_4px_12px_-6px_rgba(0,0,0,0.15)] py-3 flex flex-col gap-3">
@@ -47,8 +51,11 @@ export function StickyFilterBar({
           {actions}
         </div>
       )}
-      {children && <div className="max-w-full overflow-x-auto">{children}</div>}
-      {activeChips}
+      {children && (
+        <div className="rounded-xl border border-[var(--line)] bg-white p-2.5 sm:p-3 max-w-full overflow-x-auto">
+          {children}
+        </div>
+      )}
     </div>
   );
 }

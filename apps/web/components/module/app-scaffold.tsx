@@ -17,6 +17,7 @@ export function AppScaffold({
   fab,
   width = "max-w-4xl",
   fill = false,
+  fillMaxWidth = false,
   children,
 }: {
   title: string;
@@ -29,6 +30,14 @@ export function AppScaffold({
   width?: string;
   /** true = เนื้อหาเต็มพื้นที่และจัดการ scroll เอง (กระดาน Kanban) */
   fill?: boolean;
+  /**
+   * true = จำกัด `width` เดียวกับหน้าอื่น ๆ ของโมดูลแม้อยู่โหมด fill (แค่ยังคุม
+   * scroll เองอยู่) — ไว้ให้หน้าที่ปกติกว้างเต็มจอ (เช่น บอร์ด Kanban) เว้นขอบ
+   * ซ้าย/ขวาเท่ากับหน้าอื่นในโมดูลเดียวกันบนจอกว้างเกิน `width`, แทนที่จะกาง
+   * เต็มจอไม่มีขอบ ค่าเริ่มต้น false รักษาพฤติกรรมเดิม (เต็มจอไม่มีขอบ) ของ
+   * หน้าที่ใช้ fill โดยไม่ได้ตั้งใจเทียบขอบกับหน้าอื่น
+   */
+  fillMaxWidth?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -66,7 +75,9 @@ export function AppScaffold({
         }
       >
         {fill ? (
-          <div className="lg:h-full px-4 py-4 sm:px-6 sm:py-5">{children}</div>
+          <div className={fillMaxWidth ? `mx-auto lg:h-full w-full ${width} px-4 py-4 sm:px-6 sm:py-5` : "lg:h-full px-4 py-4 sm:px-6 sm:py-5"}>
+            {children}
+          </div>
         ) : (
           <div className={`mx-auto w-full ${width} px-4 py-4 sm:px-6 sm:py-5`}>{children}</div>
         )}
