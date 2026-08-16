@@ -11,6 +11,7 @@ import {
   MinusCircle,
   Pencil,
   Circle,
+  Crown,
   type LucideIcon,
 } from "lucide-react";
 
@@ -63,6 +64,8 @@ export function activityActionMeta(action: string): ActivityActionMeta {
     return { icon: UserCog, colorClass: "text-[var(--chart-blue)]", bgClass: "bg-blue-50" };
 
   if (a.includes("สติกเกอร์")) return { icon: Sticker, colorClass: "text-[var(--chart-violet)]", bgClass: "bg-violet-50" };
+
+  if (a.includes("เจ้าของบริษัท")) return { icon: Crown, colorClass: "text-[var(--chart-amber)]", bgClass: "bg-amber-50" };
 
   if (a.includes("แก้ไข")) return { icon: Pencil, colorClass: "text-[var(--chart-blue)]", bgClass: "bg-blue-50" };
 

@@ -18,6 +18,8 @@ import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
 import { useDepartmentStore } from "@/modules/report_task/store/department-store";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
+import { useIdentityStore } from "@/modules/report_task/store/identity-store";
+import { useActivityLogStore } from "@/modules/report_task/store/activity-log-store";
 import { colorPalette } from "@/modules/report_task/store/event-color-store";
 import type { Department, User } from "@/modules/report_task/types";
 import { Building2, Check, Crown, Save, Search, Trash2, Users } from "lucide-react";
@@ -149,6 +151,7 @@ export function EmployeeSettingsPanel() {
   const stored = useEmployeeStore((s) => s.employees);
   const setEmployees = useEmployeeStore((s) => s.setEmployees);
   const departments = useDepartmentStore((s) => s.departments);
+  const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const [draft, setDraft] = useState<User[]>(stored);
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
   const [search, setSearch] = useState("");
@@ -189,6 +192,17 @@ export function EmployeeSettingsPanel() {
   }
 
   function save() {
+    // เทียบก่อนเซฟว่ามีใครเปลี่ยนสถานะ "เจ้าของบริษัท" บ้าง — ค่าอื่น (สี/รูปย่อ)
+    // ไม่ log เพราะไม่กระทบสิทธิ์อะไร ส่วนนี้เป็นข้อยกเว้นเดียวที่ควรมีร่องรอย
+    for (const u of draft) {
+      const before = stored.find((s) => s.id === u.id);
+      if (!before || (before.isOwner ?? false) === (u.isOwner ?? false)) continue;
+      useActivityLogStore.getState().log({
+        userId: viewingAsUserId,
+        action: u.isOwner ? "ตั้งเป็นเจ้าของบริษัท" : "ถอดสถานะเจ้าของบริษัท",
+        target: u.name,
+      });
+    }
     setEmployees(draft);
     toast.success("บันทึกรายชื่อพนักงานแล้ว");
   }
