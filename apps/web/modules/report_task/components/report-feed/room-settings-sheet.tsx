@@ -12,6 +12,7 @@ import { ReportTopicSettingsPanel } from "@/modules/report_task/components/repor
 import { UNLIMITED_FILES_RETENTION_DAYS } from "@/modules/report_task/components/report-feed/report-topic-panels";
 import { useReportFeedStore, topicColors, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
+import { useActivityLogStore } from "@/modules/report_task/store/activity-log-store";
 import { canManage } from "@/modules/report_task/lib/directory";
 import { cn } from "@/modules/report_task/lib/utils";
 import { toast } from "sonner";
@@ -76,6 +77,12 @@ export function RoomSettingsSheet({
 
   function handleSave() {
     updateTopicSettings(topic.id, draft);
+    useActivityLogStore.getState().log({
+      userId: viewingAsUserId,
+      action: "แก้ไขห้อง",
+      target: `"${draft.name}"`,
+      detail: `เปลี่ยน ${dirtyKeys.size} รายการ`,
+    });
     setDirtyKeys(new Set());
     toast.success("บันทึกการตั้งค่าห้องแล้ว");
   }
@@ -376,6 +383,11 @@ export function RoomSettingsSheet({
                 onClick={() => {
                   if (topic.archived) {
                     updateTopicSettings(topic.id, { archived: false });
+                    useActivityLogStore.getState().log({
+                      userId: viewingAsUserId,
+                      action: "กู้คืนห้อง",
+                      target: `"${topic.name}"`,
+                    });
                     toast.success(`กู้คืนห้อง "${topic.name}" แล้ว`);
                     return;
                   }
@@ -384,6 +396,11 @@ export function RoomSettingsSheet({
                     return;
                   }
                   updateTopicSettings(topic.id, { archived: true });
+                  useActivityLogStore.getState().log({
+                    userId: viewingAsUserId,
+                    action: "เก็บห้องเข้าคลัง",
+                    target: `"${topic.name}"`,
+                  });
                   setArchiveConfirm(false);
                   toast.success(`เก็บห้อง "${topic.name}" เข้าคลังแล้ว`);
                 }}
