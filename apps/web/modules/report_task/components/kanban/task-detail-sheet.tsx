@@ -208,7 +208,7 @@ export function TaskDetailSheet({
   // checklist, comments, attachments, reactions.
   const canEditMain = canEditRecord(task.assignedById, task.departmentIds, viewingAsUserId);
   const lockedTitle = "แก้ไขได้เฉพาะผู้สร้างงาน";
-  // canEditMain (and canSeeTask/canDockPenalty) fall back to the viewer's own
+  // canEditMain (and canSeeTask) fall back to the viewer's own
   // department-head match once they're no longer an assignee — a non-owner
   // removing the last teammate from their own department can silently vote
   // themselves out of a task with no way back short of the owner or a

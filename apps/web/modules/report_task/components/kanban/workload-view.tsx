@@ -5,10 +5,12 @@ import { Users } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import { EmptyState } from "@/modules/report_task/components/shared/empty-state";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
-import { getDepartment, users } from "@/modules/report_task/lib/directory";
+import { departments, getDepartment, isOwner, users } from "@/modules/report_task/lib/directory";
 import { matchesTaskFilters } from "@/modules/report_task/lib/task-filter";
 import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
+import { useIdentityStore } from "@/modules/report_task/store/identity-store";
+import { useVisibleTasks } from "@/modules/report_task/hooks/use-visible-tasks";
 
 /** One legend/breakdown row shared between the bar's click-to-open popover and its color key. */
 function BarBreakdownRow({ color, label, count, total }: { color: string; label: string; count: number; total: number }) {
@@ -31,12 +33,24 @@ function BarBreakdownRow({ color, label, count, total }: { color: string; label:
  * for performance scoring; this view is purely "how much is on their plate."
  */
 export function WorkloadView() {
-  const tasks = useTaskStore((s) => s.tasks);
+  const tasks = useVisibleTasks();
   const filters = useTaskStore((s) => s.filters);
+  const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
+
+  // Same scope as everywhere else in the board: owner sees the whole
+  // company, a department head sees only the department(s) they head — a
+  // head should never see other departments' people/workload here just
+  // because they can open this tab (see dashboard-filters.tsx for the same
+  // owner/head split).
+  const scopedUsers = useMemo(() => {
+    if (isOwner(viewingAsUserId)) return users;
+    const headedIds = new Set(departments.filter((d) => d.headId === viewingAsUserId).map((d) => d.id));
+    return users.filter((u) => headedIds.has(u.departmentId));
+  }, [viewingAsUserId]);
 
   const rows = useMemo(() => {
     const filtered = tasks.filter((t) => matchesTaskFilters(t, filters));
-    return users
+    return scopedUsers
       .map((u) => {
         const mine = filtered.filter((t) => t.assigneeIds.includes(u.id));
         const todo = mine.filter((t) => t.status === "todo").length;
@@ -48,7 +62,7 @@ export function WorkloadView() {
       })
       .filter((r) => r.total > 0)
       .sort((a, b) => b.open - a.open || b.overdue - a.overdue);
-  }, [tasks, filters]);
+  }, [tasks, filters, scopedUsers]);
 
   if (rows.length === 0) {
     return <EmptyState icon={Users} title="ไม่พบภาระงานตามตัวกรอง" description="ลองปรับหรือล้างตัวกรองด้านบน" />;
