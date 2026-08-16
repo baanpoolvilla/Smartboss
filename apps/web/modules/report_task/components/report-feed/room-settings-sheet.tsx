@@ -27,6 +27,35 @@ const reminderOptions = [
   { value: "60", label: "60 นาทีก่อนถึงรอบ" },
 ];
 
+/** ป้ายไทยของแต่ละช่องที่แก้ได้ในชีทนี้ (รวมช่องที่มาจาก ReportTopicSettingsPanel ด้วย) — ใช้สรุปว่า "แก้อะไรไปบ้าง" ตอน log */
+const FIELD_LABELS: Record<string, string> = {
+  name: "ชื่อห้อง",
+  description: "คำอธิบาย",
+  color: "สี",
+  postPermission: "สิทธิ์การโพสต์",
+  commentsDisabled: "ปิดคอมเมนต์",
+  requiredWeekdays: "วันที่ต้องส่งรายงาน",
+  postTemplateSections: "เทมเพลตโพสต์",
+  remindBeforeCutoffMinutes: "เตือนก่อนถึงรอบส่ง",
+  notifyManagerSummary: "สรุปให้หัวหน้า",
+  feedViewMode: "รูปแบบการแสดงโพสต์",
+  filesRetentionDays: "อายุรูปในแท็บไฟล์",
+  minImages: "จำนวนรูปขั้นต่ำ",
+  cutoffs: "รอบตัดยอด",
+  visibility: "สิทธิ์การมองเห็น",
+};
+
+/** สรุป 1 ช่องที่เปลี่ยน เป็นข้อความอ่านง่าย — ค่าธรรมดา (bool/string/number) โชว์ ก่อน → หลัง ให้เลย ส่วนช่องที่เป็น array/object แค่บอกชื่อช่อง (ดูรายละเอียดยากในบรรทัดเดียว) */
+function describeChange(key: string, before: unknown, after: unknown): string {
+  const label = FIELD_LABELS[key] ?? key;
+  if (typeof after === "boolean") return `${label}: ${after ? "เปิด" : "ปิด"}`;
+  if (typeof after === "string" || typeof after === "number") {
+    const from = before === undefined || before === null || before === "" ? "(ว่าง)" : String(before);
+    return `${label}: ${from} → ${after}`;
+  }
+  return label;
+}
+
 /**
  * Room settings, opened straight from the room's own ⚙ (Phase 6) — replaces
  * the old "gear ⚙ → whole-page navigation to /settings, pick this same room
@@ -77,11 +106,14 @@ export function RoomSettingsSheet({
 
   function handleSave() {
     updateTopicSettings(topic.id, draft);
+    const before = topic as unknown as Record<string, unknown>;
+    const after = draft as unknown as Record<string, unknown>;
+    const changes = [...dirtyKeys].map((key) => describeChange(key, before[key], after[key]));
     useActivityLogStore.getState().log({
       userId: viewingAsUserId,
       action: "แก้ไขห้อง",
       target: `"${draft.name}"`,
-      detail: `เปลี่ยน ${dirtyKeys.size} รายการ`,
+      detail: changes.join(", "),
     });
     setDirtyKeys(new Set());
     toast.success("บันทึกการตั้งค่าห้องแล้ว");
