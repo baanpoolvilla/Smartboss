@@ -226,10 +226,10 @@ export default function ActivityLogPage() {
                           <span className="text-[var(--ink-soft)]">{e.action}</span>{" "}
                           <span className="font-medium">{e.target}</span>
                         </p>
-                        {e.detail && <p className="text-xs text-[var(--ink-soft)] mt-0.5 truncate">{e.detail}</p>}
+                        {e.detail && <p className="text-xs text-[var(--ink-soft)] mt-0.5 truncate" title={e.detail}>{e.detail}</p>}
                       </div>
-                      <span className="text-xs text-[var(--ink-soft)] shrink-0 text-right" title={formatDateTime(e.createdAt)}>
-                        {relativeTime(e.createdAt)}
+                      <span className="text-xs text-[var(--ink-soft)] shrink-0 text-right" title={relativeTime(e.createdAt)}>
+                        {formatDateTime(e.createdAt)}
                       </span>
                     </div>
                   );
