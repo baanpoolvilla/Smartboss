@@ -36,7 +36,10 @@ export type RoleRow = Awaited<ReturnType<typeof listRoles>>[number];
 export async function getRole(orgId: string, roleId: string) {
   const role = await prisma.role.findFirst({
     where: { id: roleId, OR: [{ orgId }, { orgId: null }] },
-    include: { permissions: { select: { permissionId: true } } },
+    include: {
+      permissions: { select: { permissionId: true } },
+      department: { select: { id: true, name: true } },
+    },
   });
   if (!role) return null;
   return {
@@ -48,6 +51,7 @@ export async function getRole(orgId: string, roleId: string) {
     isSystem: role.isSystem,
     permissionIds: role.permissions.map((p) => p.permissionId),
     departmentId: role.departmentId,
+    departmentName: role.department?.name ?? null,
   };
 }
 

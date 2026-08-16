@@ -33,6 +33,24 @@ export async function countDepartmentsHeadedBy(userId: string) {
   return prisma.departmentHead.count({ where: { userId } });
 }
 
+/**
+ * หัวหน้าแผนกที่โมดูล "รายงานและงาน" ตั้งไว้เอง (แยกจาก core.department_heads
+ * ข้างบนโดยสิ้นเชิง) — โมดูลนั้นยังไม่ได้อ่าน core.department_heads เลย มีตัวตั้ง
+ * หัวหน้าแผนกของตัวเองในหน้าตั้งค่าโมดูล ถ้าตั้งไว้คนละคนกับที่นี่ สองระบบจะไม่
+ * ตรงกันโดยไม่มีอะไรเตือน — อ่านตรงจากตาราง `report_task.stores` เอาเฉพาะคีย์
+ * "department-overlay" (รูปแบบเดียวกับที่ apps/web/modules/report_task/lib/db/
+ * departments.ts เขียน) แทนที่จะ import โค้ดของโมดูลนั้นเข้ามา เพื่อไม่ให้ผูก
+ * กันเป็นโมดูล-ต่อ-โมดูล แค่ต้องการอ่านค่าไปเทียบเฉยๆ
+ */
+export async function getReportTaskDepartmentHeadId(orgId: string, departmentId: string): Promise<string | null> {
+  const row = await prisma.reportTaskStore.findUnique({
+    where: { orgId_key: { orgId, key: "department-overlay" } },
+    select: { data: true },
+  });
+  const map = row?.data as Record<string, { headId?: string }> | null;
+  return map?.[departmentId]?.headId || null;
+}
+
 export async function getDepartment(orgId: string, departmentId: string) {
   const department = await prisma.department.findFirst({
     where: { id: departmentId, orgId },

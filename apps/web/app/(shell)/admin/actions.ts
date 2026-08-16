@@ -185,7 +185,11 @@ export async function moveUserOrgAction(formData: FormData) {
   await prisma.$transaction([
     // role ระบบ (SUPER_ADMIN) ไม่ผูกบริษัท จึงคงไว้ ตัดเฉพาะ role ของบริษัทเดิม
     prisma.userRole.deleteMany({ where: { userId, role: { isSystem: false } } }),
-    prisma.user.update({ where: { id: userId }, data: { orgId: targetOrgId } }),
+    // แผนก/สถานะหัวหน้าแผนกเดิมเป็นของบริษัทที่กำลังจะย้ายออกไป — ไม่ล้างจะ
+    // ค้างชี้ไปแผนกของบริษัทเก่า (departmentId) และยังนับเป็นหัวหน้าแผนกที่นั่น
+    // อยู่ (department_heads) ทั้งที่ไม่ได้สังกัดบริษัทนั้นแล้ว
+    prisma.departmentHead.deleteMany({ where: { userId } }),
+    prisma.user.update({ where: { id: userId }, data: { orgId: targetOrgId, departmentId: null } }),
     prisma.userRole.create({ data: { userId, roleId } }),
     prisma.refreshToken.updateMany({
       where: { userId, revokedAt: null },
@@ -467,101 +471,79 @@ export async function updateDepartmentAction(formData: FormData) {
 }
 
 /**
- * ตั้งหัวหน้าแผนก — คุม data scope (เห็น/แก้ข้อมูลของทั้งแผนก) คนละเรื่องกับ
- * สิทธิ์การใช้เมนู (มาจาก Role อย่างเดียว) แผนกหนึ่งมีหัวหน้าได้หลายคน
+ * ตั้ง/ถอดหัวหน้าแผนก — คุม data scope (เห็น/แก้ข้อมูลของทั้งแผนก) คนละเรื่อง
+ * กับสิทธิ์การใช้เมนู (มาจาก Role อย่างเดียว) แผนกหนึ่งมีหัวหน้าได้หลายคน
+ *
+ * ใช้ร่วมกันทั้งจากหน้า "แก้ไขแผนก" ตรงๆ และทางลัดจากหน้า "แก้ไขบทบาท"
+ * (ผ่าน `viaRoleId` — role ที่ผูกแผนกไว้แล้ว, Role.departmentId) สิทธิ์ที่ต้อง
+ * มีเหมือนกันทั้งสองทาง (departmentManage เสมอ — role ผูกกับแผนกแค่ไหนก็ไม่ได้
+ * ปลดล็อกสิทธิ์นี้ให้)
  */
-export async function addDepartmentHeadAction(formData: FormData) {
-  const session = await guard(ADMIN_PERMS.departmentManage);
-  const departmentId = String(formData.get("departmentId") ?? "");
-  const userId = String(formData.get("userId") ?? "");
+async function setDepartmentHead(
+  session: OrgSession,
+  { departmentId, userId, present, viaRoleId }: { departmentId: string; userId: string; present: boolean; viaRoleId?: string }
+) {
   await assertEditableDepartment(session.orgId, departmentId);
 
-  const target = await prisma.user.findFirst({ where: { id: userId, orgId: session.orgId } });
-  if (!target) throw new Error("ไม่พบผู้ใช้รายนี้ในบริษัท");
-
-  await prisma.departmentHead.upsert({
-    where: { departmentId_userId: { departmentId, userId } },
-    create: { departmentId, userId },
-    update: {},
-  });
+  if (present) {
+    const target = await prisma.user.findFirst({ where: { id: userId, orgId: session.orgId } });
+    if (!target) throw new Error("ไม่พบผู้ใช้รายนี้ในบริษัท");
+    await prisma.departmentHead.upsert({
+      where: { departmentId_userId: { departmentId, userId } },
+      create: { departmentId, userId },
+      update: {},
+    });
+  } else {
+    await prisma.departmentHead.deleteMany({ where: { departmentId, userId } });
+  }
 
   await audit({
     userId: session.userId,
-    action: "DEPARTMENT_HEAD_ADDED",
+    action: present ? "DEPARTMENT_HEAD_ADDED" : "DEPARTMENT_HEAD_REMOVED",
     targetId: departmentId,
-    detail: { userId },
+    detail: viaRoleId ? { userId, viaRoleId } : { userId },
   });
   revalidatePath(`/admin/departments/${departmentId}`);
+  if (viaRoleId) revalidatePath(`/admin/roles/${viaRoleId}`);
+}
+
+export async function addDepartmentHeadAction(formData: FormData) {
+  const session = await guard(ADMIN_PERMS.departmentManage);
+  await setDepartmentHead(session, {
+    departmentId: String(formData.get("departmentId") ?? ""),
+    userId: String(formData.get("userId") ?? ""),
+    present: true,
+  });
 }
 
 export async function removeDepartmentHeadAction(formData: FormData) {
   const session = await guard(ADMIN_PERMS.departmentManage);
-  const departmentId = String(formData.get("departmentId") ?? "");
-  const userId = String(formData.get("userId") ?? "");
-  await assertEditableDepartment(session.orgId, departmentId);
-
-  await prisma.departmentHead.deleteMany({ where: { departmentId, userId } });
-
-  await audit({
-    userId: session.userId,
-    action: "DEPARTMENT_HEAD_REMOVED",
-    targetId: departmentId,
-    detail: { userId },
+  await setDepartmentHead(session, {
+    departmentId: String(formData.get("departmentId") ?? ""),
+    userId: String(formData.get("userId") ?? ""),
+    present: false,
   });
-  revalidatePath(`/admin/departments/${departmentId}`);
 }
 
-/**
- * ทางลัดตั้ง/ถอดหัวหน้าแผนกจากหน้า "แก้ไขบทบาท" โดยตรง — สำหรับ role ที่ผูก
- * แผนกไว้แล้ว (Role.departmentId) เลือกจากคนที่ถือ role นี้อยู่ ไม่ต้องสลับ
- * ไปหน้าแผนกเอง ใช้เกณฑ์สิทธิ์เดียวกับ addDepartmentHeadAction/
- * removeDepartmentHeadAction (ตั้งหัวหน้าแผนกยังต้องมี departmentManage
- * เสมอ — role ผูกกับแผนกแค่ไหนก็ไม่ได้ปลดล็อกสิทธิ์นี้ให้) แค่ revalidate
- * หน้า role เพิ่มด้วยเพราะนั่นคือหน้าที่ผู้ใช้กำลังดูอยู่
- */
+/** ทางลัดตั้ง/ถอดหัวหน้าแผนกจากหน้า "แก้ไขบทบาท" โดยตรง — ดู setDepartmentHead */
 export async function addRoleHeadAction(formData: FormData) {
   const session = await guard(ADMIN_PERMS.departmentManage);
-  const roleId = String(formData.get("roleId") ?? "");
-  const departmentId = String(formData.get("departmentId") ?? "");
-  const userId = String(formData.get("userId") ?? "");
-  await assertEditableDepartment(session.orgId, departmentId);
-
-  const target = await prisma.user.findFirst({ where: { id: userId, orgId: session.orgId } });
-  if (!target) throw new Error("ไม่พบผู้ใช้รายนี้ในบริษัท");
-
-  await prisma.departmentHead.upsert({
-    where: { departmentId_userId: { departmentId, userId } },
-    create: { departmentId, userId },
-    update: {},
+  await setDepartmentHead(session, {
+    departmentId: String(formData.get("departmentId") ?? ""),
+    userId: String(formData.get("userId") ?? ""),
+    present: true,
+    viaRoleId: String(formData.get("roleId") ?? ""),
   });
-
-  await audit({
-    userId: session.userId,
-    action: "DEPARTMENT_HEAD_ADDED",
-    targetId: departmentId,
-    detail: { userId, viaRoleId: roleId },
-  });
-  revalidatePath(`/admin/roles/${roleId}`);
-  revalidatePath(`/admin/departments/${departmentId}`);
 }
 
 export async function removeRoleHeadAction(formData: FormData) {
   const session = await guard(ADMIN_PERMS.departmentManage);
-  const roleId = String(formData.get("roleId") ?? "");
-  const departmentId = String(formData.get("departmentId") ?? "");
-  const userId = String(formData.get("userId") ?? "");
-  await assertEditableDepartment(session.orgId, departmentId);
-
-  await prisma.departmentHead.deleteMany({ where: { departmentId, userId } });
-
-  await audit({
-    userId: session.userId,
-    action: "DEPARTMENT_HEAD_REMOVED",
-    targetId: departmentId,
-    detail: { userId, viaRoleId: roleId },
+  await setDepartmentHead(session, {
+    departmentId: String(formData.get("departmentId") ?? ""),
+    userId: String(formData.get("userId") ?? ""),
+    present: false,
+    viaRoleId: String(formData.get("roleId") ?? ""),
   });
-  revalidatePath(`/admin/roles/${roleId}`);
-  revalidatePath(`/admin/departments/${departmentId}`);
 }
 
 export async function deleteDepartmentAction(formData: FormData) {
@@ -572,6 +554,13 @@ export async function deleteDepartmentAction(formData: FormData) {
   const inUse = await prisma.user.count({ where: { departmentId } });
   if (inUse > 0) {
     throw new Error(`ยังมีผู้ใช้ ${inUse} คนอยู่แผนกนี้ — ย้ายคนออกก่อน`);
+  }
+  // แผนกที่ไม่มีสมาชิกแล้วแต่ยังมีคนถูกตั้งเป็นหัวหน้าอยู่ (สังกัดแผนกอื่นก็
+  // ถูกตั้งเป็นหัวหน้าแผนกนี้ได้ — ไม่บังคับว่าหัวหน้าต้องสังกัดแผนกตัวเอง) —
+  // ลบแผนกไปแบบนี้จะพา department_heads แถวนั้น cascade หายไปเงียบๆ
+  const headCount = await prisma.departmentHead.count({ where: { departmentId } });
+  if (headCount > 0) {
+    throw new Error(`ยังมีหัวหน้าแผนก ${headCount} คน — ถอดหัวหน้าออกก่อน`);
   }
 
   await prisma.department.delete({ where: { id: departmentId } });
