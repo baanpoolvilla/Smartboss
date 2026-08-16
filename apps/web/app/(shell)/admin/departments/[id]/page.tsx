@@ -2,26 +2,17 @@ import { redirect, notFound } from "next/navigation";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 import { Button } from "@smartboss/ui/components/button";
 import { AppScaffold } from "@/components/module/app-scaffold";
-import { ADMIN_PERMS, ADMIN_PERM_LABELS } from "@/modules/admin/permissions";
-import { HR_PERM_LABELS } from "@/modules/hr/permissions";
-import { MAINT_PERM_LABELS } from "@/modules/maintenance/permissions";
+import { ADMIN_PERMS } from "@/modules/admin/permissions";
 import { getDepartment } from "@/modules/admin/data/departments";
-import { listPermissionCatalog } from "@/modules/admin/data/permission-catalog";
-import { Field, SectionCard, inputClass } from "@/modules/admin/components/ui";
-import { PermissionMatrix } from "@/modules/admin/components/permission-matrix";
+import { listOrgUsers } from "@/modules/admin/data/users";
+import { Field, SectionCard, inputClass, selectClass, Pill } from "@/modules/admin/components/ui";
 import { ConfirmSubmit } from "@/modules/admin/components/confirm-submit";
 import {
+  addDepartmentHeadAction,
   deleteDepartmentAction,
-  setDepartmentPermissionsAction,
+  removeDepartmentHeadAction,
   updateDepartmentAction,
 } from "../../actions";
-
-/** รวมป้ายไทยของสิทธิ์จากทุกโมดูล */
-const PERM_LABELS: Record<string, string> = {
-  ...ADMIN_PERM_LABELS,
-  ...HR_PERM_LABELS,
-  ...MAINT_PERM_LABELS,
-};
 
 export default async function DepartmentDetailPage({
   params,
@@ -36,7 +27,9 @@ export default async function DepartmentDetailPage({
   if (!department) notFound();
 
   const canEdit = hasPermission(session, ADMIN_PERMS.departmentManage);
-  const groups = await listPermissionCatalog();
+  const users = await listOrgUsers(session.orgId);
+  const headUserIds = new Set(department.heads.map((h) => h.userId));
+  const candidateUsers = users.filter((u) => u.isActive && !headUserIds.has(u.id));
 
   return (
     <AppScaffold title={department.name} width="max-w-3xl" backHref="/admin/departments">
@@ -69,23 +62,54 @@ export default async function DepartmentDetailPage({
         </SectionCard>
 
         <SectionCard
-          title="สิทธิ์การใช้งาน"
-          description="ติ๊กสิทธิ์ที่ต้องการให้คนในแผนกนี้ทำได้ (รวมกับสิทธิ์ตามบทบาทของแต่ละคน)"
+          title="หัวหน้าแผนก"
+          description="หัวหน้าแผนกเห็น/แก้ข้อมูล (งาน รีพอต ฯลฯ) ของทุกคนในแผนกนี้ได้ — คนละเรื่องกับสิทธิ์เมนูที่มาจากบทบาท แผนกหนึ่งมีหัวหน้าได้หลายคน"
         >
-          <form action={setDepartmentPermissionsAction} className="flex flex-col gap-4">
-            <input type="hidden" name="departmentId" value={department.id} />
-            <PermissionMatrix
-              groups={groups}
-              labels={PERM_LABELS}
-              defaultSelected={department.permissionIds}
-              readOnly={!canEdit}
-            />
-            {canEdit && (
-              <div>
-                <Button type="submit">บันทึกสิทธิ์</Button>
+          {department.heads.length === 0 ? (
+            <p className="text-sm text-(--ink-soft)">ยังไม่มีหัวหน้าแผนก</p>
+          ) : (
+            <div className="mb-3 flex flex-wrap gap-2">
+              {department.heads.map((h) => (
+                <Pill key={h.userId} color="#1B2537">
+                  {h.name}
+                  {canEdit && (
+                    <form action={removeDepartmentHeadAction} className="inline">
+                      <input type="hidden" name="departmentId" value={department.id} />
+                      <input type="hidden" name="userId" value={h.userId} />
+                      <button
+                        type="submit"
+                        className="ml-1 text-(--ink-soft) hover:text-(--ink)"
+                        aria-label={`เอา ${h.name} ออกจากหัวหน้าแผนก`}
+                      >
+                        ×
+                      </button>
+                    </form>
+                  )}
+                </Pill>
+              ))}
+            </div>
+          )}
+
+          {canEdit && candidateUsers.length > 0 && (
+            <form action={addDepartmentHeadAction} className="flex items-end gap-2">
+              <input type="hidden" name="departmentId" value={department.id} />
+              <div className="flex-1">
+                <Field label="เพิ่มหัวหน้าแผนก">
+                  <select name="userId" required className={selectClass}>
+                    <option value="">เลือกคนในบริษัท</option>
+                    {candidateUsers.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} ({u.email})
+                      </option>
+                    ))}
+                  </select>
+                </Field>
               </div>
-            )}
-          </form>
+              <Button type="submit" size="sm">
+                เพิ่ม
+              </Button>
+            </form>
+          )}
         </SectionCard>
 
         {canEdit && (

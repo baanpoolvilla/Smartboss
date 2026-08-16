@@ -11,10 +11,10 @@ import { readStore, writeStore } from "./org-store";
  * จะผูกกับคนละคนกับที่ถูกหักในใบแจ้งซ่อม แล้วสรุปรวมไม่ได้
  *
  * แบ่งความเป็นเจ้าของชัดเจน:
- *   - ตัวตน (id, ชื่อ, อีเมล, สิทธิ์ระดับเจ้าของ, แผนก, ตำแหน่ง) → มาจาก core.users
- *     เสมอ (แผนก/ตำแหน่งจัดการที่ /admin/departments, /admin/positions,
- *     /admin/users/{id} — เดิมเป็น jobTitle ข้อความอิสระเก็บแยกที่นี่ ย้ายไป
- *     core แล้วตั้งแต่มี Department/Position เป็นของกลาง)
+ *   - ตัวตน (id, ชื่อ, อีเมล, สิทธิ์ระดับเจ้าของ, แผนก) → มาจาก core.users เสมอ
+ *     (แผนกจัดการที่ /admin/departments, /admin/users/{id} — เดิมเป็น jobTitle
+ *     ข้อความอิสระเก็บแยกที่นี่ ย้ายไป core แล้วตั้งแต่มี Department เป็นของกลาง
+ *     ส่วน "ตำแหน่ง" ถูกตัดออกทั้งระบบ สิทธิ์การใช้งานมาจาก Role อย่างเดียว)
  *   - ข้อมูลเฉพาะโมดูล (ตัวย่อ) → เก็บใน store คีย์ "employee-profiles" ผูกด้วย
  *     core.users.id
  *
@@ -64,8 +64,7 @@ export async function listDirectory(orgId: string): Promise<DirectoryUser[]> {
         name: true,
         email: true,
         departmentId: true,
-        roles: { select: { role: { select: { code: true } } } },
-        position: { select: { name: true } },
+        roles: { select: { role: { select: { code: true, name: true } } } },
       },
       orderBy: { name: "asc" },
     }),
@@ -82,7 +81,7 @@ export async function listDirectory(orgId: string): Promise<DirectoryUser[]> {
       name: u.name,
       email: u.email,
       avatar: p.avatar || initialsOf(u.name),
-      role: u.position?.name || codes[0] || "พนักงาน",
+      role: u.roles[0]?.role.name || "พนักงาน",
       departmentId: u.departmentId ?? "",
       isOwner: codes.some((c) => OWNER_ROLE_CODES.has(c)) || undefined,
     };

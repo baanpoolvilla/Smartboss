@@ -8,8 +8,7 @@ import { ADMIN_PERMS } from "@/modules/admin/permissions";
 import { getOrgUser, getUserAnyOrg } from "@/modules/admin/data/users";
 import { listAllOrganizations } from "@/modules/admin/data/orgs";
 import { listRoles } from "@/modules/admin/data/roles";
-import { listDepartments } from "@/modules/admin/data/departments";
-import { listPositions } from "@/modules/admin/data/positions";
+import { countDepartmentsHeadedBy, listDepartments } from "@/modules/admin/data/departments";
 import { loadSecuritySettings } from "@/lib/security-settings";
 import {
   Field,
@@ -24,7 +23,7 @@ import {
   moveUserOrgAction,
   resetPasswordAction,
   setUserActiveAction,
-  setUserDepartmentPositionAction,
+  setUserDepartmentAction,
   setUserRolesAction,
   unlockUserAction,
   updateUserAction,
@@ -62,9 +61,9 @@ export default async function AdminUserDetailPage({
   const allRoles = user.orgId ? await listRoles(user.orgId) : [];
   const orgRoles = allRoles.filter((r) => !r.isSystem);
 
-  // แผนก/ตำแหน่งก็เช่นกัน — มาจากบริษัทที่ผู้ใช้คนนี้สังกัด
+  // แผนกก็เช่นกัน — มาจากบริษัทที่ผู้ใช้คนนี้สังกัด
   const departments = user.orgId ? await listDepartments(user.orgId) : [];
-  const positions = user.orgId ? await listPositions(user.orgId) : [];
+  const headOfCount = await countDepartmentsHeadedBy(user.id);
 
   // ความยาวรหัสผ่านขั้นต่ำ — ต้องตรงกับที่ resetPasswordAction ใช้ตรวจจริง
   // (เช็คกับ session.orgId ของคนกด ไม่ใช่บริษัทของเป้าหมาย — ตามที่ action ทำ)
@@ -205,24 +204,20 @@ export default async function AdminUserDetailPage({
           )}
         </SectionCard>
 
-        {/* ─── แผนก/ตำแหน่ง ─── */}
+        {/* ─── แผนก ─── */}
         <SectionCard
-          title="แผนก / ตำแหน่ง"
-          description="มีได้อย่างละหนึ่ง — สิทธิ์ที่แผนก/ตำแหน่งกำหนดไว้จะรวมกับสิทธิ์ตามบทบาทของคนนี้"
+          title="แผนก"
+          description="มีได้อย่างละหนึ่ง — เป็นข้อมูลโครงสร้างองค์กร ไม่มีผลต่อสิทธิ์เมนู (สิทธิ์มาจากบทบาทเท่านั้น)"
         >
-          {departments.length === 0 && positions.length === 0 ? (
+          {departments.length === 0 ? (
             <p className="text-sm text-(--ink-soft)">
-              ยังไม่มีแผนกหรือตำแหน่งของบริษัท — สร้างได้ที่{" "}
+              ยังไม่มีแผนกของบริษัท — สร้างได้ที่{" "}
               <Link href="/admin/departments" className="underline">
                 แผนก
-              </Link>{" "}
-              และ{" "}
-              <Link href="/admin/positions" className="underline">
-                ตำแหน่ง
               </Link>
             </p>
           ) : (
-            <form action={setUserDepartmentPositionAction} className="flex flex-col gap-3">
+            <form action={setUserDepartmentAction} className="flex flex-col gap-3">
               <input type="hidden" name="userId" value={user.id} />
               <Field label="แผนก">
                 <select
@@ -239,25 +234,10 @@ export default async function AdminUserDetailPage({
                   ))}
                 </select>
               </Field>
-              <Field label="ตำแหน่ง">
-                <select
-                  name="positionId"
-                  defaultValue={user.positionId ?? ""}
-                  disabled={!canManage}
-                  className={selectClass}
-                >
-                  <option value="">ไม่ระบุ</option>
-                  {positions.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
               {canManage && (
                 <div>
                   <Button type="submit" size="sm">
-                    บันทึกแผนก/ตำแหน่ง
+                    บันทึกแผนก
                   </Button>
                 </div>
               )}
@@ -400,10 +380,15 @@ export default async function AdminUserDetailPage({
                   </Button>
                 </form>
 
-                <form action={deleteUserAction}>
+                <form action={deleteUserAction} className="flex items-center gap-2">
                   <input type="hidden" name="userId" value={user.id} />
+                  {headOfCount > 0 && <input type="hidden" name="confirmHeadRemoval" value="1" />}
                   <ConfirmSubmit
-                    message={`ต้องการลบผู้ใช้ "${user.name}" ใช่หรือไม่? ข้อมูลนี้กู้คืนไม่ได้`}
+                    message={
+                      headOfCount > 0
+                        ? `"${user.name}" เป็นหัวหน้าแผนกอยู่ ${headOfCount} แผนก — ลบแล้วแผนกนั้นจะไม่มีหัวหน้า ต้องการลบต่อไหม?`
+                        : `ต้องการลบผู้ใช้ "${user.name}" ใช่หรือไม่? ข้อมูลนี้กู้คืนไม่ได้`
+                    }
                     disabled={isSelf}
                     variant="danger"
                   >
@@ -414,6 +399,11 @@ export default async function AdminUserDetailPage({
               {isSelf && (
                 <p className="mt-2 text-xs text-(--ink-soft)">
                   ปิดใช้งานหรือลบบัญชีของตัวเองไม่ได้
+                </p>
+              )}
+              {headOfCount > 0 && (
+                <p className="mt-2 text-xs text-(--warn)">
+                  คนนี้เป็นหัวหน้าแผนกอยู่ {headOfCount} แผนก — ลบแล้วแผนกจะไม่มีหัวหน้าจนกว่าจะตั้งใหม่
                 </p>
               )}
             </SectionCard>

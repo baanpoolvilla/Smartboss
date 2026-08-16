@@ -13,12 +13,17 @@ export const ADMIN_PERMS = {
 
   departmentView: "core.department.view",
   departmentManage: "core.department.manage",
-  positionView: "core.position.view",
-  positionManage: "core.position.manage",
 
   moduleManage: "core.module.manage",
   orgManage: "core.org.manage",
   auditView: "core.audit.view",
+
+  /**
+   * เห็น/แก้ข้อมูล (งาน รีพอต ฯลฯ) ของทุกคนในบริษัท ข้าม data scope ระดับ
+   * แผนก — คนละเรื่องกับสิทธิ์ใช้เมนู เป็นสิทธิ์คุม "เห็นข้อมูลของใครบ้าง"
+   * (ปกติคือ ADMIN/CEO; หัวหน้าแผนกเห็นได้แค่แผนกตัวเองผ่าน DepartmentHead)
+   */
+  dataViewAll: "core.data.view_all",
 
   /** ดูสรุปผลงานรายคนข้ามทุกโมดูล — สำหรับผู้บริหาร/หัวหน้า */
   performanceView: "core.performance.view",
@@ -48,14 +53,13 @@ export const ADMIN_PERM_LABELS: Record<string, string> = {
   [ADMIN_PERMS.userManage]: "เพิ่ม/แก้ไข/ลบผู้ใช้งาน",
   [ADMIN_PERMS.roleView]: "ดูบทบาทและสิทธิ์",
   [ADMIN_PERMS.roleManage]: "สร้าง/แก้ไขบทบาทและสิทธิ์",
-  [ADMIN_PERMS.departmentView]: "ดูแผนกและสิทธิ์ระดับแผนก",
-  [ADMIN_PERMS.departmentManage]: "สร้าง/แก้ไขแผนกและสิทธิ์ระดับแผนก",
-  [ADMIN_PERMS.positionView]: "ดูตำแหน่งและสิทธิ์ระดับตำแหน่ง",
-  [ADMIN_PERMS.positionManage]: "สร้าง/แก้ไขตำแหน่งและสิทธิ์ระดับตำแหน่ง",
+  [ADMIN_PERMS.departmentView]: "ดูแผนกและหัวหน้าแผนก",
+  [ADMIN_PERMS.departmentManage]: "สร้าง/แก้ไขแผนกและกำหนดหัวหน้าแผนก",
   [ADMIN_PERMS.moduleManage]: "เปิด/ปิดโมดูลของบริษัท",
   [ADMIN_PERMS.orgManage]: "แก้ไขข้อมูลบริษัท",
   [ADMIN_PERMS.auditView]: "ดูประวัติการใช้งาน (audit log)",
   [ADMIN_PERMS.performanceView]: "ดูสรุปผลงานรายคนของทั้งบริษัท",
   [ADMIN_PERMS.performanceSettingManage]: "ตั้งเกณฑ์คะแนนผลงานของบริษัท",
+  [ADMIN_PERMS.dataViewAll]: "เห็นข้อมูลทั้งบริษัท (ข้ามขอบเขตแผนก)",
   [ADMIN_PERMS.orgCreate]: "เปิดบริษัทใหม่ในแพลตฟอร์ม (ระดับผู้ให้บริการ)",
 };

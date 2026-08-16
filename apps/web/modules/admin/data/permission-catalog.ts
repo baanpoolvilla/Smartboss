@@ -3,8 +3,8 @@ import { prisma } from "@smartboss/database";
 
 /**
  * แคตตาล็อกสิทธิ์ทั้งหมด จัดกลุ่มตามโมดูล (moduleId = null → กลุ่ม core)
- * ใช้ร่วมกันโดย Role / Department / Position — ทั้งสามกำหนดสิทธิ์ได้จาก
- * แคตตาล็อกเดียวกัน ไม่มีระบบ permission code แยกของตัวเอง
+ * ใช้โดย Role เท่านั้น — สิทธิ์การใช้งานระบบมาจาก Role ทางเดียว (แผนกเป็นแค่
+ * ข้อมูลโครงสร้างองค์กร ไม่มีตารางสิทธิ์ของตัวเองแล้ว)
  */
 export async function listPermissionCatalog() {
   const perms = await prisma.permission.findMany({

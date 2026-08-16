@@ -22,8 +22,8 @@ export default async function AdminDepartmentsPage() {
       fab={canManage ? <Fab href="/admin/departments/new" label="สร้างแผนก" /> : null}
     >
       <p className="mb-4 text-sm text-(--ink-soft)">
-        แผนกเป็นของกลาง ใช้ร่วมกันได้ทุกโมดูล — กำหนดสิทธิ์ระดับแผนกได้เหมือนบทบาท
-        คนในแผนกจะได้สิทธิ์นี้เพิ่มจากบทบาทของตัวเอง
+        แผนกเป็นของกลาง ใช้ร่วมกันได้ทุกโมดูล — สิทธิ์การใช้งานมาจากบทบาทของแต่ละคน
+        เท่านั้น ส่วนหัวหน้าแผนกเห็น/แก้ข้อมูลของทุกคนในแผนกที่ตัวเองดูแลได้
       </p>
 
       {departments.length === 0 ? (
@@ -44,7 +44,9 @@ export default async function AdminDepartmentsPage() {
                 <Pill color="#3B82F6">
                   <Users className="h-3 w-3" /> {d.userCount}
                 </Pill>
-                <Pill color="#0D9488">{d.permissionCount} สิทธิ์</Pill>
+                <Pill color="#0D9488">
+                  {d.headCount > 0 ? `หัวหน้า ${d.headCount} คน` : "ยังไม่มีหัวหน้า"}
+                </Pill>
                 <ChevronRight className="h-4 w-4 shrink-0 text-(--ink-soft)" />
               </Card>
             </Link>
