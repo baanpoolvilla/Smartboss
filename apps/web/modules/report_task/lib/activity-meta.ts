@@ -44,7 +44,7 @@ export function activityActionMeta(action: string): ActivityActionMeta {
   if (a.includes("ยกเลิกการหักคะแนน")) return { icon: RotateCcw, colorClass: "text-[var(--chart-amber)]", bgClass: "bg-amber-50" };
   if (a.includes("หักคะแนน")) return { icon: MinusCircle, colorClass: "text-[var(--chart-red)]", bgClass: "bg-red-50" };
 
-  if (a.includes("เปิดงานกลับ") || a.includes("เปิดตั๋วกลับ") || a.includes("ยกเลิกเครื่องหมายเสร็จ"))
+  if (a.includes("เปิดงานกลับ") || a.includes("เปิดตั๋วกลับ") || a.includes("ยกเลิกเครื่องหมายเสร็จ") || a.includes("กู้คืน"))
     return { icon: RotateCcw, colorClass: "text-[var(--chart-amber)]", bgClass: "bg-amber-50" };
 
   if (a.includes("เสร็จ") || a.includes("ยืนยันว่าตั๋วแก้ไขแล้ว"))
