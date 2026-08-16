@@ -113,6 +113,10 @@ export async function createUserAction(formData: FormData) {
   const targetOrgId = await resolveTargetOrgId(session, formData);
   await assertAssignableRole(targetOrgId, parsed.roleId);
 
+  // แผนกเลือกได้ตอนสร้างเลย ไม่บังคับ — ว่าง = ยังไม่สังกัดแผนกไหน ไปตั้งทีหลังได้
+  const departmentId = String(formData.get("departmentId") ?? "").trim();
+  if (departmentId) await assertEditableDepartment(targetOrgId, departmentId);
+
   const existing = await prisma.user.findUnique({ where: { email: parsed.email } });
   if (existing) throw new Error("อีเมลนี้ถูกใช้งานแล้ว");
 
@@ -122,6 +126,7 @@ export async function createUserAction(formData: FormData) {
       name: parsed.name,
       passwordHash: await hashPassword(parsed.password),
       orgId: targetOrgId,
+      departmentId: departmentId || null,
       roles: { create: { roleId: parsed.roleId } },
     },
   });
@@ -130,7 +135,7 @@ export async function createUserAction(formData: FormData) {
     userId: session.userId,
     action: "USER_CREATED",
     targetId: user.id,
-    detail: { email: user.email, orgId: targetOrgId },
+    detail: { email: user.email, orgId: targetOrgId, departmentId: departmentId || null },
   });
   revalidatePath("/admin/users");
 }

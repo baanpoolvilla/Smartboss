@@ -5,6 +5,7 @@ import { Button } from "@smartboss/ui/components/button";
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { ADMIN_PERMS } from "@/modules/admin/permissions";
 import { listRoles } from "@/modules/admin/data/roles";
+import { listDepartments } from "@/modules/admin/data/departments";
 import { listAllOrganizations } from "@/modules/admin/data/orgs";
 import { Field, inputClass, selectClass } from "@/modules/admin/components/ui";
 import { loadSecuritySettings } from "@/lib/security-settings";
@@ -30,6 +31,7 @@ export default async function NewUserPage({
 
   // role ระบบกำหนดให้ผู้ใช้จากหน้านี้ไม่ได้ — ต้องตั้งจากระดับแพลตฟอร์ม
   const roles = (await listRoles(targetOrgId)).filter((r) => !r.isSystem);
+  const departments = await listDepartments(targetOrgId);
   const targetOrgName = organizations.find((o) => o.id === targetOrgId)?.name ?? null;
 
   // ความยาวรหัสผ่านขั้นต่ำตั้งได้รายบริษัท (/admin/security) — ต้องตรงกับที่
@@ -113,6 +115,17 @@ export default async function NewUserPage({
               {roles.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.name} ({r.code})
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="แผนก" hint="ไม่บังคับ — เลือกทีหลังได้ที่หน้าโปรไฟล์ผู้ใช้">
+            <select name="departmentId" defaultValue="" className={selectClass}>
+              <option value="">ไม่ระบุ</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
                 </option>
               ))}
             </select>
