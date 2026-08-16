@@ -168,7 +168,7 @@ export function StatusOverviewDonut({
                       trigger={hasHover ? "hover" : "click"}
                       content={
                         <ChartTooltip<Slice>
-                          renderRow={(s) => ({ color: s.color, title: s.label, lines: [`${s.value} ${unitLabel} · ${s.percent}%`] })}
+                          renderRow={(s) => ({ color: s.color, title: s.label, lines: [`${s.value} ${unitLabel} (${s.percent}%)`] })}
                         />
                       }
                       wrapperStyle={{ zIndex: 50, outline: "none" }}
@@ -243,7 +243,7 @@ export function StatusOverviewDonut({
                 <div className="w-full flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 -mx-2 bg-[var(--bg-soft)]">
                   <span className="text-sm font-semibold text-[var(--ink)]">{centerLabel}</span>
                   <span className="text-sm font-semibold text-[var(--ink)] tabular-nums shrink-0 whitespace-nowrap">
-                    {buckets.onTime + buckets.lateDone} · {buckets.successRate}%
+                    {buckets.onTime + buckets.lateDone} {unitLabel} ({buckets.successRate}%)
                   </span>
                 </div>
                 {withPercent.map((s) => (
@@ -261,7 +261,7 @@ export function StatusOverviewDonut({
                       <span className={cn("truncate", s.value === 0 ? "text-[var(--ink-soft)]" : "text-[var(--ink)]")}>{s.label}</span>
                     </div>
                     <span className="text-[var(--ink-soft)] tabular-nums shrink-0 whitespace-nowrap">
-                      {s.value} · {s.percent}%
+                      {s.value} {unitLabel} <span className="text-[var(--ink)] font-medium">({s.percent}%)</span>
                     </span>
                   </button>
                 ))}
