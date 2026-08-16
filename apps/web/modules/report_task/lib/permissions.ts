@@ -80,8 +80,8 @@ export function canRemoveReaction(
  * touching a department they head — NOT every task in the company. (This
  * used to just check isDepartmentHead() and skip the department match
  * entirely, so any head could see every other department's tasks even
- * though canEditRecord/canDockPenalty already correctly scoped them out of
- * editing those same tasks — visibility and edit rights now agree.)
+ * though canEditRecord already correctly scoped them out of editing those
+ * same tasks — visibility and edit rights now agree.)
  * Everyone else only sees tasks they're on. Applied everywhere a task list
  * renders (board, table, workload, search) — the calendar uses the stricter
  * canSeeTaskOnCalendar below instead.
@@ -101,10 +101,12 @@ export function canSeeTask(
  * Owner/department-head broad visibility (see everything company-wide, or
  * everything touching a department they head) makes sense on the board where
  * you're managing a department's work, but floods a personal calendar with
- * every task everyone else has, whether or not the viewer is involved. Same
- * rule for every role: only tasks the viewer is assigned to, or personally
- * assigned to someone else — a head/owner's calendar shows exactly what a
- * regular employee's already does.
+ * every task everyone else has, whether or not the viewer is involved. This
+ * function's own default is the same rule for every role: only tasks the
+ * viewer is assigned to, or personally assigned to someone else. A manager
+ * can still opt into the wider canSeeTask scope for their calendar via the
+ * "mine"/"all" toggle in calendar-scope-store.ts — that's a deliberate
+ * per-viewer choice made at the call site, not something this function does.
  */
 export function canSeeTaskOnCalendar(
   task: Pick<Task, "assigneeIds" | "assignedById">,

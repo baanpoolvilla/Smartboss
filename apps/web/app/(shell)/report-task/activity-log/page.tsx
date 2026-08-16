@@ -18,7 +18,7 @@ import { DateRangeSelectField } from "@/modules/report_task/components/shared/da
 import { DaySeparator } from "@/modules/report_task/components/report-feed/report-day-separator";
 import { useActivityLogStore } from "@/modules/report_task/store/activity-log-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { getUser, getDepartment, users, canManage } from "@/modules/report_task/lib/directory";
+import { getUser, getDepartment, users, departments, canManage, isOwner } from "@/modules/report_task/lib/directory";
 import { relativeTime, formatDateTime, groupByDay } from "@/modules/report_task/lib/format";
 import { presetRange, type DatePreset } from "@/modules/report_task/lib/date-filter";
 import { activityActionMeta } from "@/modules/report_task/lib/activity-meta";
@@ -36,31 +36,46 @@ export default function ActivityLogPage() {
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const allowed = canManage(viewingAsUserId);
 
+  // A lead only ever audits "what did my department's people do" — same
+  // scope as every other view in the app (dashboard/board/calendar), not
+  // company-wide like the owner gets. System (auto-penalty) entries have no
+  // actor department to check, so a head never sees those here — safer to
+  // hide than to guess which department they belong to.
+  const headedDeptIds = useMemo(
+    () => new Set(departments.filter((d) => d.headId === viewingAsUserId).map((d) => d.id)),
+    [viewingAsUserId]
+  );
+  const scopedEntries = useMemo(() => {
+    if (isOwner(viewingAsUserId)) return entries;
+    return entries.filter((e) => {
+      if (e.userId === SYSTEM_USER_ID) return false;
+      const dept = getUser(e.userId)?.departmentId;
+      return !!dept && headedDeptIds.has(dept);
+    });
+  }, [entries, viewingAsUserId, headedDeptIds]);
+
   // Only actions that have actually happened, not every possible one — an
   // empty log shouldn't show a dropdown full of options that filter to nothing.
-  const actionOptions = useMemo(() => Array.from(new Set(entries.map((e) => e.action))), [entries]);
+  const actionOptions = useMemo(() => Array.from(new Set(scopedEntries.map((e) => e.action))), [scopedEntries]);
   const actorOptions = useMemo(() => {
-    const ids = new Set(entries.map((e) => e.userId));
+    const ids = new Set(scopedEntries.map((e) => e.userId));
     return users.filter((u) => ids.has(u.id));
-  }, [entries]);
+  }, [scopedEntries]);
 
   // A row's department is whoever *did* the thing (their departmentId) —
-  // not the task's own department — since a lead using this page is
-  // auditing "what did my department's people do", the same reason this
-  // page is canManage-gated in the first place. System (auto-penalty)
-  // entries have no actor department, so they only ever show under "ทุกแผนก".
+  // not the task's own department — matches the scope above.
   const departmentOptions = useMemo(() => {
     const ids = new Set(
-      entries
+      scopedEntries
         .map((e) => (e.userId === SYSTEM_USER_ID ? undefined : getUser(e.userId)?.departmentId))
         .filter((id): id is string => !!id)
     );
     return [...ids].map((id) => getDepartment(id)).filter((d): d is NonNullable<typeof d> => !!d);
-  }, [entries]);
+  }, [scopedEntries]);
 
   const filtered = useMemo(() => {
     const range = presetRange(preset, customFrom, customTo);
-    return entries.filter((e) => {
+    return scopedEntries.filter((e) => {
       if (departmentId !== "all") {
         if (e.userId === SYSTEM_USER_ID) return false;
         if (getUser(e.userId)?.departmentId !== departmentId) return false;
@@ -73,7 +88,7 @@ export default function ActivityLogPage() {
       }
       return true;
     });
-  }, [entries, departmentId, userId, action, preset, customFrom, customTo]);
+  }, [scopedEntries, departmentId, userId, action, preset, customFrom, customTo]);
 
   const hasFilters = departmentId !== "all" || userId !== "all" || action !== "all" || preset !== "all";
 
@@ -190,8 +205,8 @@ export default function ActivityLogPage() {
         <div className="rounded-xl border border-[var(--line)] bg-white overflow-hidden">
           <EmptyState
             icon={ScrollText}
-            title={entries.length === 0 ? "ยังไม่มีบันทึกกิจกรรม" : "ไม่พบรายการที่ตรงกับตัวกรอง"}
-            description={entries.length === 0 ? "พอมีการเปลี่ยนสถานะงาน, แก้กำหนดส่ง, หักคะแนน ฯลฯ จะบันทึกไว้ที่นี่โดยอัตโนมัติ" : undefined}
+            title={scopedEntries.length === 0 ? "ยังไม่มีบันทึกกิจกรรม" : "ไม่พบรายการที่ตรงกับตัวกรอง"}
+            description={scopedEntries.length === 0 ? "พอมีการเปลี่ยนสถานะงาน, แก้กำหนดส่ง, หักคะแนน ฯลฯ จะบันทึกไว้ที่นี่โดยอัตโนมัติ" : undefined}
             className="border-0"
           />
         </div>
