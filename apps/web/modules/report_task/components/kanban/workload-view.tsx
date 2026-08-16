@@ -5,7 +5,7 @@ import { Users } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import { EmptyState } from "@/modules/report_task/components/shared/empty-state";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
-import { departments, getDepartment, isOwner, users } from "@/modules/report_task/lib/directory";
+import { getDepartment, scopedUsers } from "@/modules/report_task/lib/directory";
 import { matchesTaskFilters } from "@/modules/report_task/lib/task-filter";
 import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
@@ -40,17 +40,12 @@ export function WorkloadView() {
   // Same scope as everywhere else in the board: owner sees the whole
   // company, a department head sees only the department(s) they head — a
   // head should never see other departments' people/workload here just
-  // because they can open this tab (see dashboard-filters.tsx for the same
-  // owner/head split).
-  const scopedUsers = useMemo(() => {
-    if (isOwner(viewingAsUserId)) return users;
-    const headedIds = new Set(departments.filter((d) => d.headId === viewingAsUserId).map((d) => d.id));
-    return users.filter((u) => headedIds.has(u.departmentId));
-  }, [viewingAsUserId]);
+  // because they can open this tab (see lib/directory.ts's scopedUsers).
+  const usersInScope = useMemo(() => scopedUsers(viewingAsUserId), [viewingAsUserId]);
 
   const rows = useMemo(() => {
     const filtered = tasks.filter((t) => matchesTaskFilters(t, filters));
-    return scopedUsers
+    return usersInScope
       .map((u) => {
         const mine = filtered.filter((t) => t.assigneeIds.includes(u.id));
         const todo = mine.filter((t) => t.status === "todo").length;
@@ -62,7 +57,7 @@ export function WorkloadView() {
       })
       .filter((r) => r.total > 0)
       .sort((a, b) => b.open - a.open || b.overdue - a.overdue);
-  }, [tasks, filters, scopedUsers]);
+  }, [tasks, filters, usersInScope]);
 
   if (rows.length === 0) {
     return <EmptyState icon={Users} title="ไม่พบภาระงานตามตัวกรอง" description="ลองปรับหรือล้างตัวกรองด้านบน" />;

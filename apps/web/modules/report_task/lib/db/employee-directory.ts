@@ -93,11 +93,28 @@ export async function listDirectory(orgId: string): Promise<DirectoryUser[]> {
       name: u.name,
       email: u.email,
       avatar: p.avatar || initialsOf(u.name),
-      role: u.roles[0]?.role.name || "พนักงาน",
+      role: primaryRoleOf(u.roles)?.role.name || "พนักงาน",
       departmentId: u.departmentId ?? "",
       isOwner: (p.isOwnerOverride ?? roleDerived) || undefined,
     };
   });
+}
+
+/**
+ * เลือก role "หลัก" ของคนที่ถือหลาย role มาแสดงเป็นตำแหน่งในรายชื่อ
+ *
+ * `UserRole` ไม่มีคอลัมน์ลำดับ (คีย์หลักคือ [userId, roleId]) และ query ไม่ได้
+ * ใส่ orderBy ไว้ ผลคือ `roles[0]` ที่นี่จะไม่คงที่ — สลับไปมาระหว่างคำขอ/คนละ
+ * deploy โดยไม่มีข้อมูลเปลี่ยนเลยก็ได้ ถ้าคนคนนึงถือมากกว่า 1 role ให้ role
+ * ระดับเจ้าของ (ตาม OWNER_ROLE_CODES เดียวกับที่ใช้ตัดสิน isOwner ด้านบน) ขึ้น
+ * ก่อนเสมอ ที่เหลือเรียงตามชื่อ role ให้อย่างน้อยผลลัพธ์คงที่ทุกครั้ง
+ */
+function primaryRoleOf(roles: { role: { code: string; name: string } }[]) {
+  return [...roles].sort((a, b) => {
+    const aOwner = OWNER_ROLE_CODES.has(a.role.code) ? 0 : 1;
+    const bOwner = OWNER_ROLE_CODES.has(b.role.code) ? 0 : 1;
+    return aOwner !== bOwner ? aOwner - bOwner : a.role.name.localeCompare(b.role.name);
+  })[0];
 }
 
 /**

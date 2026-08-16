@@ -18,7 +18,7 @@ import { DateRangeSelectField } from "@/modules/report_task/components/shared/da
 import { DaySeparator } from "@/modules/report_task/components/report-feed/report-day-separator";
 import { useActivityLogStore } from "@/modules/report_task/store/activity-log-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { getUser, getDepartment, users, departments, canManage, isOwner } from "@/modules/report_task/lib/directory";
+import { getUser, getDepartment, users, canManage, isOwner, headedDepartmentIds } from "@/modules/report_task/lib/directory";
 import { relativeTime, formatDateTime, groupByDay } from "@/modules/report_task/lib/format";
 import { presetRange, type DatePreset } from "@/modules/report_task/lib/date-filter";
 import { activityActionMeta } from "@/modules/report_task/lib/activity-meta";
@@ -41,10 +41,7 @@ export default function ActivityLogPage() {
   // company-wide like the owner gets. System (auto-penalty) entries have no
   // actor department to check, so a head never sees those here — safer to
   // hide than to guess which department they belong to.
-  const headedDeptIds = useMemo(
-    () => new Set(departments.filter((d) => d.headId === viewingAsUserId).map((d) => d.id)),
-    [viewingAsUserId]
-  );
+  const headedDeptIds = useMemo(() => headedDepartmentIds(viewingAsUserId), [viewingAsUserId]);
   const scopedEntries = useMemo(() => {
     if (isOwner(viewingAsUserId)) return entries;
     return entries.filter((e) => {
@@ -161,7 +158,7 @@ export default function ActivityLogPage() {
                   {actorOptions.map((u) => (
                     <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
                   ))}
-                  {entries.some((e) => e.userId === SYSTEM_USER_ID) && (
+                  {scopedEntries.some((e) => e.userId === SYSTEM_USER_ID) && (
                     <SelectItem value={SYSTEM_USER_ID}>ระบบ (อัตโนมัติ)</SelectItem>
                   )}
                 </SelectContent>
