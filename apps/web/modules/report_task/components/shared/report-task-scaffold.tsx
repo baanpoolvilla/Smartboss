@@ -79,7 +79,7 @@ export function ReportTaskScaffold({
       <TaskSync />
       <TourOverlay />
 
-      <AppScaffold title={title} width="max-w-[1600px]" fill={isBoard}>
+      <AppScaffold title={title} width="max-w-[1600px]" fill={isBoard} fillMaxWidth={isBoard}>
         {children}
       </AppScaffold>
     </>
