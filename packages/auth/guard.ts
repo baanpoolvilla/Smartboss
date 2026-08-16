@@ -42,6 +42,15 @@ export function hasRole(session: Session, role: string): boolean {
   return session.roles.includes(role);
 }
 
+/**
+ * true = ข้าม data scope ระดับแผนกได้ทั้งหมด (เห็น/แก้ข้อมูลทุกคนในบริษัท)
+ * SUPER_ADMIN ข้ามได้เสมอ เหมือน permission อื่น — data scope ไม่ได้อยู่ใน
+ * SUPER_ADMIN_DENIED_PERMISSIONS จึงไม่มีข้อยกเว้นเพิ่มจากเกณฑ์ hasPermission ปกติ
+ */
+export function canViewAll(session: Session): boolean {
+  return isSuperAdmin(session) || hasPermission(session, "core.data.view_all");
+}
+
 /** ใช้ใน Server Component: ไม่มีสิทธิ์ → เด้งไปหน้าแรก */
 export async function requirePermission(permission: string): Promise<Session> {
   const session = await requireAuth();

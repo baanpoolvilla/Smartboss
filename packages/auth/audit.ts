@@ -25,12 +25,9 @@ export type AuditAction =
   | "DEPARTMENT_CREATED"
   | "DEPARTMENT_UPDATED"
   | "DEPARTMENT_DELETED"
-  | "DEPARTMENT_PERMISSIONS_CHANGED"
-  | "POSITION_CREATED"
-  | "POSITION_UPDATED"
-  | "POSITION_DELETED"
-  | "POSITION_PERMISSIONS_CHANGED"
-  | "USER_DEPARTMENT_POSITION_CHANGED"
+  | "DEPARTMENT_HEAD_ADDED"
+  | "DEPARTMENT_HEAD_REMOVED"
+  | "USER_DEPARTMENT_CHANGED"
   | "MODULE_ENABLED"
   | "MODULE_DISABLED"
   | "ORG_UPDATED"
@@ -71,12 +68,9 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   DEPARTMENT_CREATED: "สร้างแผนก",
   DEPARTMENT_UPDATED: "แก้ไขแผนก",
   DEPARTMENT_DELETED: "ลบแผนก",
-  DEPARTMENT_PERMISSIONS_CHANGED: "เปลี่ยนสิทธิ์ของแผนก",
-  POSITION_CREATED: "สร้างตำแหน่ง",
-  POSITION_UPDATED: "แก้ไขตำแหน่ง",
-  POSITION_DELETED: "ลบตำแหน่ง",
-  POSITION_PERMISSIONS_CHANGED: "เปลี่ยนสิทธิ์ของตำแหน่ง",
-  USER_DEPARTMENT_POSITION_CHANGED: "เปลี่ยนแผนก/ตำแหน่งผู้ใช้",
+  DEPARTMENT_HEAD_ADDED: "เพิ่มหัวหน้าแผนก",
+  DEPARTMENT_HEAD_REMOVED: "เอาหัวหน้าแผนกออก",
+  USER_DEPARTMENT_CHANGED: "เปลี่ยนแผนกผู้ใช้",
   MODULE_ENABLED: "เปิดใช้โมดูล",
   MODULE_DISABLED: "ปิดใช้โมดูล",
   ORG_UPDATED: "แก้ไขข้อมูลบริษัท",
