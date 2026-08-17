@@ -5,6 +5,7 @@ import { Avatar } from "@smartboss/ui/components/avatar";
 import { cn } from "@smartboss/ui/cn";
 import type { ChatMessageDTO, ChatUser } from "../types";
 import { formatFileSize, formatMessageTime } from "../lib/format";
+import { avatarColorFor } from "../lib/avatar-color";
 
 function AttachmentView({ a }: { a: ChatMessageDTO["attachments"][number] }) {
   if (a.kind === "image") {
@@ -70,7 +71,17 @@ export function MessageThread({
           <div key={m.id} className={cn("group flex items-end gap-2", mine && "flex-row-reverse")}>
             {!mine && (
               <div className="w-7 shrink-0">
-                {showAuthor && <Avatar name={author?.name ?? "?"} src={author?.avatarUrl} className="h-7 w-7 text-[10px]" />}
+                {showAuthor && (
+                  <Avatar
+                    name={author?.name ?? "?"}
+                    src={author?.avatarUrl}
+                    className="h-7 w-7 text-[10px] font-semibold"
+                    style={(() => {
+                      const c = avatarColorFor(m.authorId);
+                      return { backgroundColor: c.bg, color: c.text };
+                    })()}
+                  />
+                )}
               </div>
             )}
             <div className={cn("flex max-w-[70%] flex-col", mine && "items-end")}>
