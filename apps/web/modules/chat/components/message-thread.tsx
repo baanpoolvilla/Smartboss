@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Avatar } from "@smartboss/ui/components/avatar";
 import { cn } from "@smartboss/ui/cn";
 import type { ChatMessageDTO, ChatUser } from "../types";
 import { formatFileSize, formatMessageTime } from "../lib/format";
+import { ChatAvatar } from "./chat-avatar";
 
 function AttachmentView({ a }: { a: ChatMessageDTO["attachments"][number] }) {
   if (a.kind === "image") {
@@ -70,7 +70,9 @@ export function MessageThread({
           <div key={m.id} className={cn("group flex items-end gap-2", mine && "flex-row-reverse")}>
             {!mine && (
               <div className="w-7 shrink-0">
-                {showAuthor && <Avatar name={author?.name ?? "?"} src={author?.avatarUrl} className="h-7 w-7 text-[10px]" />}
+                {showAuthor && (
+                  <ChatAvatar name={author?.name ?? "?"} src={author?.avatarUrl} colorKey={m.authorId} className="h-7 w-7" />
+                )}
               </div>
             )}
             <div className={cn("flex max-w-[70%] flex-col", mine && "items-end")}>
