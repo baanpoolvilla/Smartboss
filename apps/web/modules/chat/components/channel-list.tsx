@@ -1,10 +1,12 @@
 "use client";
 
-import { Avatar } from "@smartboss/ui/components/avatar";
 import { cn } from "@smartboss/ui/cn";
 import type { ChatChannelSummary, ChatUser } from "../types";
 import { formatMessageTime } from "../lib/format";
-import { avatarColorFor } from "../lib/avatar-color";
+import { ChatAvatar } from "./chat-avatar";
+
+/** ห้องรวมทั้งบริษัทใช้สีแบรนด์คงที่เสมอ (ดูเหตุผลใน ChatAvatar) */
+const ORG_COLOR = { bg: "#DCFCE7", text: "#15803D" };
 
 function channelLabel(channel: ChatChannelSummary, currentUserId: string, usersById: Map<string, ChatUser>): string {
   if (channel.type === "org") return channel.name ?? "ห้องรวมทั้งบริษัท";
@@ -52,10 +54,6 @@ export function ChannelList({
           const isOrg = c.type === "org";
           const otherId = isDm ? c.memberIds.find((id) => id !== currentUserId) : undefined;
           const avatarUser = otherId ? usersById.get(otherId) : undefined;
-          // ห้อง org เป็น "ทุกคน" ไม่ใช่ของใครคนเดียว — ให้สีแบรนด์คงที่แยกจาก
-          // DM/กลุ่มที่แต่ละอันมีสีของตัวเองตามคน/ตามห้อง กันสับสนว่าห้องไหน
-          // เป็นห้องรวม
-          const color = isOrg ? null : avatarColorFor(otherId ?? c.id);
           const active = activeChannelId === c.id;
           const unread = c.unreadCount > 0;
 
@@ -79,11 +77,12 @@ export function ChannelList({
                 active ? "bg-[var(--brand-green)]/12" : "hover:bg-[var(--bg-soft)]"
               )}
             >
-              <Avatar
+              <ChatAvatar
                 name={label}
                 src={avatarUser?.avatarUrl}
-                className="h-10 w-10 shrink-0 text-[13px] font-semibold"
-                style={color ? { backgroundColor: color.bg, color: color.text } : undefined}
+                colorKey={otherId ?? c.id}
+                color={isOrg ? ORG_COLOR : undefined}
+                className="h-10 w-10"
               />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">

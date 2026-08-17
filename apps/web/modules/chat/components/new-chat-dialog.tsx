@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Avatar } from "@smartboss/ui/components/avatar";
 import { cn } from "@smartboss/ui/cn";
 import type { ChatUser } from "../types";
+import { ChatAvatar } from "./chat-avatar";
 
 /**
  * โมดัลเบา ๆ ไม่ได้ดึงไลบรารี dialog มาใช้ (โมดูลนี้ยังไม่มี Dialog ของตัวเอง
@@ -77,7 +77,7 @@ export function NewChatDialog({
                     onChange={() => toggleSelected(u.id)}
                     className="h-4 w-4 shrink-0"
                   />
-                  <Avatar name={u.name} src={u.avatarUrl} className="h-8 w-8 text-[10px]" />
+                  <ChatAvatar name={u.name} src={u.avatarUrl} colorKey={u.id} className="h-8 w-8" />
                   <span className="truncate text-sm text-[var(--ink)]">{u.name}</span>
                 </label>
               ))}
