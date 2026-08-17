@@ -1,6 +1,7 @@
 import { resolvePermission } from "@smartboss/auth/permissions";
 
 import { adminManifest } from "@/modules/admin/manifest";
+import { chatManifest } from "@/modules/chat/manifest";
 import { exampleManifest } from "@/modules/example/manifest";
 import { hrManifest } from "@/modules/hr/manifest";
 import { maintenanceManifest } from "@/modules/maintenance/manifest";
@@ -42,6 +43,8 @@ export const moduleRegistry: ModuleManifest[] = [
   hrManifest,
   // พอร์ตมาจากแอป easyboss-workspace ที่เคยรันเดี่ยว ๆ
   reportTaskManifest,
+  // MVP แชทองค์กร — ปิดใช้งานทุกบริษัทโดยดีฟอลต์ เปิดทีละบริษัทได้ที่ /admin/modules
+  chatManifest,
 ];
 
 export interface VisibleModulesInput {
