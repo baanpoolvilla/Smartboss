@@ -1,0 +1,104 @@
+// ═══════════════════════════════════════════════════════════════════════
+//  schema "chat" — แชทองค์กร (MVP: ข้อความ + รูป/ไฟล์แนบ, ไม่มี websocket)
+//
+//  ต่างจาก report_task.stores (ก้อน JSON เดียวต่อบริษัท) โดยตั้งใจ — แชทมีแนวโน้ม
+//  มีข้อความหลักพันแถวต่อบริษัท ต้องแบ่งหน้า/query เป็นแถวจริงตั้งแต่แรก ไม่ใช่โหลด
+//  ทั้งก้อนทุกครั้ง ตารางต่อ entity แบบเดียวกับ ReportTask (report_task.prisma)
+// ═══════════════════════════════════════════════════════════════════════
+
+/// ห้องแชท — DM (2 คน), กลุ่ม, หรือห้องรวมทั้งบริษัท (type="org", สร้างครั้งเดียวต่อบริษัท)
+model ChatChannel {
+  orgId String @map("org_id")
+  id    String @id @default(uuid())
+
+  /// "dm" | "group" | "org"
+  type        String
+  /// ไม่มีค่าสำหรับ DM — ฝั่ง client ต่อชื่อจากสมาชิกเอง
+  name        String?
+  createdById String   @map("created_by_id")
+  archived    Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  organization Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  members      ChatChannelMember[]
+  messages     ChatMessage[]
+  readStates   ChatReadState[]
+
+  @@index([orgId, type])
+  @@map("channels")
+  @@schema("chat")
+}
+
+/// สมาชิกของห้อง "dm"/"group" เท่านั้น — ห้อง "org" ไม่มีแถวในตารางนี้เลย
+/// (ดูคอมเมนต์ยาวใน ChatReadState ว่าทำไม) คุมแค่ "ใครเข้าห้องนี้ได้บ้าง" ล้วน ๆ
+/// ไม่ปนกับสถานะอ่าน/ยังไม่อ่านอีกต่อไป (ย้ายไป ChatReadState)
+model ChatChannelMember {
+  channelId String @map("channel_id")
+  userId    String @map("user_id")
+  /// สำเนา orgId ไว้ query ตรง ๆ โดยไม่ต้อง join channel (เช่น "ห้องทั้งหมดของคนนี้")
+  orgId String @map("org_id")
+
+  joinedAt DateTime @default(now()) @map("joined_at")
+  muted    Boolean  @default(false)
+
+  channel ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@id([channelId, userId])
+  @@index([orgId, userId])
+  @@map("channel_members")
+  @@schema("chat")
+}
+
+/// สถานะ "อ่านถึงข้อความไหนแล้ว" ต่อคนต่อห้อง — แยกออกจาก ChatChannelMember โดย
+/// ตั้งใจ เพราะห้อง org (ทุกคนในบริษัทเข้าได้โดยปริยาย) ไม่มีแถว membership เลย
+/// ถ้ายังผูก lastReadAt ไว้กับ membership เหมือนเดิม จะต้อง insert
+/// ChatChannelMember ให้พนักงานทุกคนตอนสร้างห้อง org — ห้องเดียวแต่เขียนเป็น
+/// พันแถวโดยไม่จำเป็น (พนักงานเยอะ = แพงขึ้นเรื่อย ๆ ทั้งที่ไม่มีใครอ่านเลยก็ได้)
+///
+/// ที่นี่แถวเกิดแบบ lazy (upsert) เฉพาะตอน user เปิดห้องนั้นจริง ๆ ครั้งแรก —
+/// ห้อง org ที่ไม่มีใครเปิดอ่านเลยไม่มีแถวในตารางนี้แม้แต่แถวเดียว ใช้ตารางเดียว
+/// กับทุกประเภทห้อง (org/dm/group) ไม่แยกลอจิกตามประเภท
+model ChatReadState {
+  channelId String @map("channel_id")
+  userId    String @map("user_id")
+  orgId     String @map("org_id")
+
+  /// เทียบกับ ChatMessage.seq (ไม่ใช่ createdAt — ดูเหตุผลที่ ChatMessage.seq)
+  lastReadSeq BigInt?   @map("last_read_seq")
+  lastReadAt  DateTime? @map("last_read_at")
+
+  channel ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@id([channelId, userId])
+  @@index([orgId, userId])
+  @@map("read_states")
+  @@schema("chat")
+}
+
+/// ข้อความในห้อง — เนื้อความ + ไฟล์แนบ (มาจาก /api/chat/uploads ซึ่งใช้ putFile
+/// ตัวเดียวกับที่ report_task ใช้อัปโหลดรูป — ไม่มีระบบเก็บไฟล์ใหม่)
+model ChatMessage {
+  orgId     String @map("org_id")
+  id        String @id @default(uuid())
+  /// ตัวนับเรียงแทรกจริง ใช้เป็น cursor ตอนโพลข้อความใหม่ (?after=<seq>) —
+  /// createdAt เทียบ ">" ไม่ได้ปลอดภัยพอ (สองข้อความ insert ใน millisecond
+  /// เดียวกันชนกันได้ ทำให้โพลรอบถัดมาข้ามหรือได้ซ้ำ) ส่วน id เป็น uuid สุ่ม
+  /// เรียงลำดับไม่ได้เลย seq เป็น bigserial การันตี monotonic + unique ต่อการ
+  /// insert เป๊ะ ๆ และ index แคบกว่า timestamp ด้วย
+  seq       BigInt @default(autoincrement())
+  channelId String @map("channel_id")
+  authorId  String @map("author_id")
+
+  body String?
+  /// [{ url, name, mime, size, kind }] — kind: "image" | "file"
+  attachments Json      @default("[]")
+  deletedAt   DateTime? @map("deleted_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  channel ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([channelId, seq])
+  @@index([orgId])
+  @@map("messages")
+  @@schema("chat")
+}

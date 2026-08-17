@@ -139,11 +139,23 @@ async function main() {
     create: { code: "example", name: "โมดูลตัวอย่าง", color: "#4CB93F", isEnabled: false, sortOrder: 99 },
   });
   moduleIdByCode.set("example", exampleModule.id);
+
+  // โมดูลแชท (MVP ข้อความ+รูป/ไฟล์แนบ) — เช่นเดียวกับโมดูลตัวอย่าง: อยู่ในแคตตาล็อก
+  // แต่ **ไม่เปิดใช้** ให้บริษัทไหนโดยอัตโนมัติ (ไม่อยู่ใน ENABLED_MODULES) เปิดทีละ
+  // บริษัทได้ที่ /admin/modules เพื่อทดสอบก่อนปล่อยใช้จริงทั้งระบบ
+  const chatModule = await prisma.module.upsert({
+    where: { code: "chat" },
+    update: { name: "แชท", color: "#22C55E", isEnabled: false, sortOrder: 7 },
+    create: { code: "chat", name: "แชท", color: "#22C55E", isEnabled: false, sortOrder: 7 },
+  });
+  moduleIdByCode.set("chat", chatModule.id);
+
   await registerModulePerms("example", ["example.view", "example.manage"]);
   await registerModulePerms("maintenance", MAINT_PERMS);
   await registerModulePerms("hr", HR_PERMS);
+  await registerModulePerms("chat", ["chat.access", "chat.manage"]);
   console.log(
-    `✔ Permissions: ${CORE_PERMS.length} core + ${HR_PERMS.length} hr + ${MAINT_PERMS.length} maintenance`
+    `✔ Permissions: ${CORE_PERMS.length} core + ${HR_PERMS.length} hr + ${MAINT_PERMS.length} maintenance + 2 chat`
   );
 
   // ── 6) เปิดโมดูลที่มีโค้ดจริงให้บริษัทนี้ ───────────────────

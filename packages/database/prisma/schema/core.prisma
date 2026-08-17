@@ -61,6 +61,8 @@ model Organization {
   performanceSetting   PerformanceSetting?
   securitySetting      SecuritySetting?
 
+  chatChannels ChatChannel[]
+
   @@map("organizations")
   @@schema("core")
 }
