@@ -30,7 +30,7 @@ export function TaskStatusPie() {
       buckets={buckets}
       labels={{
         onTime: "เสร็จ ตรงเวลา",
-        lateDone: "เสร็จช้า",
+        lateDone: "เสร็จช้าแต่เลยกำหนด",
         pending: "ยังไม่เสร็จ ในกำหนด",
         overdue: "ยังไม่เสร็จ เลยกำหนด",
         exempt: "ยกเว้น",

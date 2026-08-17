@@ -241,7 +241,7 @@ export function ReportFeedDepartmentPie() {
                     <span className="text-[var(--ink)] truncate">{d.department}</span>
                   </div>
                   <span className="text-[var(--ink-soft)] tabular-nums shrink-0 whitespace-nowrap">
-                    {d.onTime} · {d.percent}%
+                    {d.onTime} ครั้ง ({d.percent}%)
                   </span>
                 </button>
               ))}

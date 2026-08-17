@@ -35,9 +35,14 @@ export function reactionCounts(task: Task): Record<string, number> {
  * compete for attention with what's still open); overdue-and-not-done comes
  * first (the most urgent group, called out as its own tier rather than just
  * "earliest due date" so it reads as a clear block); everything else follows.
- * Within a tier, oldest-created leads — whichever's been sitting the longest
- * surfaces first, so nothing quietly gets buried under newer cards. Doesn't
- * mutate the input array.
+ * Within the "done" tier, cards still waiting on sign-off ("รอเช็ค" — see
+ * task-detail-sheet.tsx's markReviewed) lead the un-reviewed ones sink below
+ * once someone hits "ผ่าน" — otherwise clicking "ผ่าน" only swaps a badge for
+ * nothing and the card stays wherever createdAt happened to place it, which
+ * reads as the sign-off feature not doing anything. Within any other tier,
+ * oldest-created leads — whichever's been sitting the longest surfaces
+ * first, so nothing quietly gets buried under newer cards. Doesn't mutate
+ * the input array.
  */
 export function sortTasksForDisplay(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => {
@@ -47,6 +52,11 @@ export function sortTasksForDisplay(tasks: Task[]): Task[] {
     const aOverdue = a.status !== "done" && dueUrgency(a) === "overdue" ? 0 : 1;
     const bOverdue = b.status !== "done" && dueUrgency(b) === "overdue" ? 0 : 1;
     if (aOverdue !== bOverdue) return aOverdue - bOverdue;
+    if (aDone === 1) {
+      const aReviewed = a.reviewedBy ? 1 : 0;
+      const bReviewed = b.reviewedBy ? 1 : 0;
+      if (aReviewed !== bReviewed) return aReviewed - bReviewed;
+    }
     return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
   });
 }

@@ -125,7 +125,7 @@ function TasksPageContent() {
   const personBoardId = searchParams.get("person");
 
   return (
-    <div className="flex flex-col gap-4 lg:gap-6 pb-6">
+    <div className="flex flex-col gap-4 lg:h-full lg:min-h-0 lg:gap-6 lg:overflow-y-auto pb-6">
       {!personBoardId && (
         <StickyFilterBar
           actions={
