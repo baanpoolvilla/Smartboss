@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { LayoutGrid, Table2, Users } from "lucide-react";
 import { TaskFilters } from "@/modules/report_task/components/kanban/task-filters";
 import { TaskBoardKpis } from "@/modules/report_task/components/kanban/task-board-kpis";
-import { KanbanBoard } from "@/modules/report_task/components/kanban/kanban-board";
+import { KanbanBoard, type GroupBy } from "@/modules/report_task/components/kanban/kanban-board";
 import { TaskGridView } from "@/modules/report_task/components/kanban/task-grid-view";
 import { WorkloadView } from "@/modules/report_task/components/kanban/workload-view";
 import { useTaskStore, type PenaltyFilter } from "@/modules/report_task/store/task-store";
@@ -38,6 +38,10 @@ function TasksPageContent() {
     const v = searchParams.get("view");
     return v === "grid" || v === "workload" ? v : "board";
   });
+  // จัดกลุ่มตามอยู่ในแถบตัวกรองด้านบน (TaskFilters) แต่ค่าจริงใช้เฉพาะบอร์ด
+  // Kanban เท่านั้น — ยกมาไว้ที่นี่ (แทนที่จะเป็น state ในตัว KanbanBoard เอง)
+  // เพราะทั้งสอง component เป็น sibling กัน ต้องมีที่เก็บ state ร่วม
+  const [groupBy, setGroupBy] = useState<GroupBy>("status");
   const tasks = useTaskStore((s) => s.tasks);
   const loaded = useTaskStore((s) => s.loaded);
   const filters = useTaskStore((s) => s.filters);
@@ -152,7 +156,7 @@ function TasksPageContent() {
             </div>
           }
         >
-          <TaskFilters />
+          <TaskFilters groupBy={view === "board" ? groupBy : undefined} onGroupByChange={setGroupBy} />
         </StickyFilterBar>
       )}
 
@@ -161,7 +165,7 @@ function TasksPageContent() {
         <BoardSkeleton />
       ) : (
         <>
-          {view === "board" && <KanbanBoard />}
+          {view === "board" && <KanbanBoard groupBy={groupBy} />}
           {view === "grid" && <TaskGridView />}
           {view === "workload" && <WorkloadView />}
         </>

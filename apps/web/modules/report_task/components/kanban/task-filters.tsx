@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, AlertTriangle, Building2, Users, Flag } from "lucide-react";
+import { Plus, AlertTriangle, Building2, Users, Flag, CircleDot, User as UserIcon, Group } from "lucide-react";
 import { Button } from "@/modules/report_task/components/ui/button";
 import {
   Select,
@@ -19,6 +19,13 @@ import { DateRangeSelectField } from "@/modules/report_task/components/shared/da
 import { cn } from "@/modules/report_task/lib/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NewTaskDialog } from "./new-task-dialog";
+import { groupByLabels, type GroupBy } from "./kanban-board";
+
+const groupByIcon: Record<GroupBy, typeof CircleDot> = {
+  status: CircleDot,
+  priority: Flag,
+  assignee: UserIcon,
+};
 
 const defaultFilters = {
   assigneeId: "all",
@@ -30,7 +37,14 @@ const defaultFilters = {
   customTo: "",
 } as const;
 
-export function TaskFilters() {
+export function TaskFilters({
+  groupBy,
+  onGroupByChange,
+}: {
+  /** ตัวเลือก "จัดกลุ่มตาม" ของบอร์ด Kanban — ไม่ส่งมา (มุมมองตาราง/ภาระงาน) แล้วช่องนี้จะไม่โชว์เลย */
+  groupBy?: GroupBy;
+  onGroupByChange?: (g: GroupBy) => void;
+}) {
   const filters = useTaskStore((s) => s.filters);
   const setFilters = useTaskStore((s) => s.setFilters);
   const resetFilters = useTaskStore((s) => s.resetFilters);
@@ -184,6 +198,30 @@ export function TaskFilters() {
           </SelectContent>
         </Select>
       </FilterField>
+
+      {groupBy && onGroupByChange && (
+        <FilterField label="จัดกลุ่มตาม">
+          <Select value={groupBy} onValueChange={(v) => v && onGroupByChange(v as GroupBy)}>
+            <SelectTrigger className={filterFieldTriggerClass(false, "min-w-[150px]")}>
+              <Group className="h-4 w-4 shrink-0" />
+              <SelectValue placeholder="จัดกลุ่มตาม">{groupByLabels[groupBy]}</SelectValue>
+            </SelectTrigger>
+            <SelectContent alignItemWithTrigger={false}>
+              {(["status", "priority", "assignee"] as GroupBy[]).map((g) => {
+                const Icon = groupByIcon[g];
+                return (
+                  <SelectItem key={g} value={g}>
+                    <span className="flex items-center gap-1.5">
+                      <Icon className="h-3.5 w-3.5 text-[var(--ink-soft)]" />
+                      {groupByLabels[g]}
+                    </span>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </FilterField>
+      )}
 
       <div className="flex flex-col gap-1">
         <span className={FILTER_FIELD_LABEL_CLASS}>&nbsp;</span>

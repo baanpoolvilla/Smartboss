@@ -33,19 +33,12 @@ import { PersonTopicsBoard } from "./person-topics-board";
 import type { Task, TaskPriority, TaskStatus } from "@/modules/report_task/types";
 import { toast } from "sonner";
 import { useTaskBoardIntentStore } from "@/modules/report_task/store/task-board-intent-store";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/modules/report_task/components/ui/select";
-import { Group, CircleDot, Flag, User, Info, SearchX, AlarmClockOff, ChevronLeft, ChevronRight } from "lucide-react";
+import { Info, SearchX, AlarmClockOff, ChevronLeft, ChevronRight } from "lucide-react";
 import { EmptyState } from "@/modules/report_task/components/shared/empty-state";
 
-type GroupBy = "status" | "priority" | "assignee";
+export type GroupBy = "status" | "priority" | "assignee";
 
-const groupByLabels: Record<GroupBy, string> = {
+export const groupByLabels: Record<GroupBy, string> = {
   status: "สถานะ",
   priority: "ความสำคัญ",
   assignee: "ผู้รับผิดชอบ",
@@ -60,7 +53,7 @@ const dragKeyboardCodes: KeyboardCodes = {
   end: ["Space"],
 };
 
-export function KanbanBoard() {
+export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   const storeTasks = useTaskStore((s) => s.tasks);
   const filters = useTaskStore((s) => s.filters);
   const moveTask = useTaskStore((s) => s.moveTask);
@@ -76,7 +69,6 @@ export function KanbanBoard() {
     [storeTasks, viewingAsUserId]
   );
 
-  const [groupBy, setGroupBy] = useState<GroupBy>("status");
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   // Mirrored into the `?task=` URL param (see the hook) so the browser Back
   // button closes the sheet before leaving the page — falls back to the
@@ -408,7 +400,6 @@ export function KanbanBoard() {
     }
   }
 
-  const GroupIcon = groupBy === "status" ? CircleDot : groupBy === "priority" ? Flag : User;
   const sharedCount = useMemo(() => filtered.filter((t) => t.assigneeIds.length > 1).length, [filtered]);
 
   if (personBoardId) {
@@ -422,25 +413,9 @@ export function KanbanBoard() {
 
   return (
     <>
-      {/* Group by (Planner-style) */}
+      {/* จัดกลุ่มตามอยู่ในแถบตัวกรองด้านบนแล้ว (TaskFilters) — เหลือแค่บริบท
+          ที่ผูกกับตัวเลือกนั้นโดยตรง: หมายเหตุตอนจัดกลุ่มตามคน + ยอดรวม */}
       <div className="flex items-center gap-2">
-        <Group className="h-4 w-4 text-[var(--ink-soft)]" />
-        <span className="text-xs text-[var(--ink-soft)]">จัดกลุ่มตาม:</span>
-        <Select value={groupBy} onValueChange={(v) => v && setGroupBy(v as GroupBy)}>
-          <SelectTrigger className="w-[160px] bg-white">
-            <SelectValue>
-              <span className="flex items-center gap-1.5">
-                <GroupIcon className="h-3.5 w-3.5 text-[var(--ink-soft)]" />
-                {groupByLabels[groupBy]}
-              </span>
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {(["status", "priority", "assignee"] as GroupBy[]).map((g) => (
-              <SelectItem key={g} value={g}>{groupByLabels[g]}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
         {/* Grouping by person shows a shared task under each assignee, so the
             column counts add up to more than the task total — say so. */}
         {groupBy === "assignee" && sharedCount > 0 && (
