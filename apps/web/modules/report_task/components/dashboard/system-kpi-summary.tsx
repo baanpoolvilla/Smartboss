@@ -15,7 +15,7 @@ import { useVisibleReportTopics } from "@/modules/report_task/hooks/use-visible-
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
 import { useDashboardFilterStore } from "@/modules/report_task/store/dashboard-filter-store";
-import { ArrowUp, ArrowDown, Minus, Gauge, AlertTriangle } from "lucide-react";
+import { ArrowUp, ArrowDown, Minus, Gauge, AlertTriangle, ListChecks, MessageSquareText } from "lucide-react";
 import { cn } from "@/modules/report_task/lib/utils";
 
 function TrendText({ trend, higherIsGood }: { trend: Trend | null; higherIsGood: boolean }) {
@@ -36,12 +36,21 @@ function TrendText({ trend, higherIsGood }: { trend: Trend | null; higherIsGood:
   );
 }
 
-/** Task/Report share one consistent color each across the whole chart —
- * distinct from the 4 status colors (green/amber/red) used elsewhere on the
- * Dashboard, so "which series is this bar" never gets confused with "which
- * status is this bar." */
-const TASK_COLOR = "var(--brand-green-dark)";
-const REPORT_COLOR = "var(--chart-violet)";
+/** Task/Report share one consistent color each across the whole chart — the
+ * legend pill, both bars, the tooltip dots, and the detail rows below all
+ * read off these same two constants, so the pairing never drifts out of sync
+ * as the component grows. Distinct from the 4 status colors (green/amber/red)
+ * used elsewhere on the Dashboard, so "which series is this bar" never gets
+ * confused with "which status is this bar." Raw hex (not the CSS vars these
+ * used to point at) — the vars land on muted, low-chroma tones that read as
+ * near-identical dark blobs at bar-chart scale; these two are a validated
+ * high-chroma pair instead (`validate_palette.js` — CVD ΔE 30.6, normal-vision
+ * ΔE 40.6, both well past the 8/15 floors) so the two series stay obviously
+ * different colors, not just technically-distinguishable ones. */
+const TASK_COLOR = "#16a34a";
+const REPORT_COLOR = "#7c3aed";
+const TASK_TINT = `color-mix(in srgb, ${TASK_COLOR} 12%, var(--bg))`;
+const REPORT_TINT = `color-mix(in srgb, ${REPORT_COLOR} 12%, var(--bg))`;
 
 interface KpiGroup {
   key: "onTime" | "lateDone" | "pending" | "overdue";
@@ -80,9 +89,13 @@ function GroupedBarTooltip({ active, payload }: { active?: boolean; payload?: { 
 }
 
 /** Small count label rendered above each bar — recharts passes x/y/width of
- * the bar itself, this just centers a number just above it. */
+ * the bar itself, this just centers a number just above it. Renders "0" too
+ * (checking `value == null` rather than truthiness) — a silently blank label
+ * above a flat bar reads as "this group forgot its count," not "the count is
+ * zero," which is exactly the gap that made the Report side of this chart
+ * look broken instead of just genuinely empty. */
 function BarValueLabel({ x, y, width, value }: RechartsLabelProps) {
-  if (x === undefined || y === undefined || width === undefined || !value) return null;
+  if (x === undefined || y === undefined || width === undefined || value == null) return null;
   const nx = Number(x);
   const ny = Number(y);
   const nw = Number(width);
@@ -100,9 +113,12 @@ function BarValueLabel({ x, y, width, value }: RechartsLabelProps) {
  * เดิมตอบไม่ได้ในแวบแรกคือ "Task กับ Report ใครแย่กว่ากัน" ต้องคลิกเข้าไปดู
  * ก่อนถึงจะรู้ แท่งคู่เห็นตรงๆ ในแวบเดียวว่าฝั่งไหนสูง/ต่ำกว่าโดยไม่ต้องคลิก
  *
- * ตัวเลขนับ+เปอร์เซ็นต์อยู่ 3 ที่โดยตั้งใจ ไม่ซ้ำซ้อน: บนหัวแท่ง (นับดิบ),
- * tooltip ตอน hover (นับ+% ของแต่ละฝั่ง), และแถวรายละเอียดด้านล่างกราฟ (นับ+%
- * ครบทั้ง 4 กลุ่ม x 2 ฝั่ง อ่านได้โดยไม่ต้อง hover เลยถ้าต้องดูรวดเดียวจบ)
+ * ตัวเลขนับ+เปอร์เซ็นต์อยู่ 2 ที่โดยตั้งใจ ไม่ซ้ำซ้อน: บนหัวแท่ง (นับดิบ) และ
+ * tooltip ตอน hover (นับ+% ของแต่ละฝั่ง) — เดิมเคยมีแถวรายละเอียดครบทั้ง 4 กลุ่ม
+ * x 2 ฝั่งอยู่ใต้กราฟด้วย แต่นั่นซ้ำกับสิ่งที่โดนัท "ภาพรวมงาน (Task)"/"ภาพรวม
+ * รายงาน (Report)" ด้านล่างของแดชบอร์ดแสดงอยู่แล้วทั้งคู่ (คนละที่ ตัวเลขเดียวกัน
+ * เป๊ะ) จึงตัดออก เหลือให้การ์ดนี้ทำหน้าที่เฉพาะที่โดนัทสองใบทำไม่ได้: ตัวเลข
+ * สำเร็จรวมเดียว/ระดับ/เทรนด์ และเทียบ Task vs Report คู่กันในมุมเดียว
  */
 export function SystemKpiSummary() {
   const allTasks = useVisibleTasks();
@@ -151,7 +167,7 @@ export function SystemKpiSummary() {
       },
       {
         key: "lateDone",
-        label: "เสร็จช้า",
+        label: "เสร็จช้าแต่เลยกำหนด",
         task: taskBuckets.lateDone,
         taskPercent: taskBuckets.lateRate,
         report: reportBuckets.lateDone,
@@ -221,14 +237,22 @@ export function SystemKpiSummary() {
                 {data.tier.label}
               </span>
               <TrendText trend={data.successTrend} higherIsGood={true} />
-              <span className="ml-auto flex items-center gap-3 text-[12px] text-[var(--ink-soft)]">
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: TASK_COLOR }} />
-                  งาน {data.taskBuckets.total} งาน
+              {/* Pill badges, not bare dots — same "colored chip names the
+                  series" pattern the department pie's header badge uses, so
+                  the two Dashboard cards read as one consistent system
+                  instead of each card inventing its own legend style. */}
+              <span className="ml-auto flex items-center gap-2">
+                <span
+                  className="flex items-center gap-1.5 text-[11px] font-semibold rounded-full px-2.5 py-1"
+                  style={{ backgroundColor: TASK_TINT, color: TASK_COLOR }}
+                >
+                  <ListChecks className="h-3 w-3" /> งาน {data.taskBuckets.total} งาน
                 </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: REPORT_COLOR }} />
-                  รายงาน {data.reportBuckets.total} ครั้ง
+                <span
+                  className="flex items-center gap-1.5 text-[11px] font-semibold rounded-full px-2.5 py-1"
+                  style={{ backgroundColor: REPORT_TINT, color: REPORT_COLOR }}
+                >
+                  <MessageSquareText className="h-3 w-3" /> รายงาน {data.reportBuckets.total} ครั้ง
                 </span>
               </span>
             </div>
@@ -255,23 +279,6 @@ export function SystemKpiSummary() {
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
-            </div>
-
-            {/* แถวรายละเอียด — นับ+% ครบทั้ง 4 กลุ่ม x 2 ฝั่ง อ่านตรงๆ ได้โดยไม่ต้อง hover */}
-            <div className="flex flex-col gap-1">
-              {data.groups.map((g) => (
-                <div
-                  key={g.key}
-                  className="flex items-center justify-between gap-2 text-[12.5px] rounded-lg px-2 py-1.5 -mx-2 hover:bg-[var(--bg-soft)] transition-colors"
-                >
-                  <span className="text-[var(--ink)] min-w-0 flex-1">{g.label}</span>
-                  <span className="text-[var(--ink-soft)] tabular-nums whitespace-nowrap">
-                    งาน {g.task} งาน <span className="text-[var(--ink)] font-medium">({g.taskPercent}%)</span>
-                    <span className="mx-2 text-[var(--line)]">·</span>
-                    รายงาน {g.report} ครั้ง <span className="text-[var(--ink)] font-medium">({g.reportPercent}%)</span>
-                  </span>
-                </div>
-              ))}
             </div>
 
             {data.worst.count > 0 && (

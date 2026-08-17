@@ -214,7 +214,7 @@ export function DepartmentPieChart() {
                     <span className="text-[var(--ink)] truncate">{d.department}</span>
                   </div>
                   <span className="text-[var(--ink-soft)] tabular-nums shrink-0 whitespace-nowrap">
-                    {d.completedTasks} · {d.percent}%
+                    {d.completedTasks} งาน ({d.percent}%)
                   </span>
                 </button>
               ))}
