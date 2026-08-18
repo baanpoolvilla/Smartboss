@@ -13,7 +13,7 @@ import { cn, pickDaily } from "@/modules/report_task/lib/utils";
 import { periodTrend } from "@/modules/report_task/lib/dashboard-trend";
 import { TrendText, tierFor } from "@/modules/report_task/components/shared/trend-badge";
 import type { RankedPerson } from "@/modules/report_task/lib/ranked-people";
-import { ArrowUpRight, Lightbulb, AlertTriangle } from "lucide-react";
+import { Lightbulb, AlertTriangle } from "lucide-react";
 
 /** Same templated, rule-based (not AI-generated) next-step copy as the KPI
  * card's own "ตัวปัญหาหลัก" — generic enough to read naturally for either
@@ -74,8 +74,6 @@ export function StatusOverviewDonut({
   centerLabel,
   totalLabel,
   emptyMessage,
-  onSegmentClick,
-  onDetail,
   topPersonByBucket,
   prevSuccessRate,
   peopleByBucket,
@@ -95,9 +93,6 @@ export function StatusOverviewDonut({
   /** e.g. "68 งาน" / "90 ครั้ง" — the footer's "ทั้งหมด/ต้องส่ง {totalLabel}". */
   totalLabel: string;
   emptyMessage: string;
-  onSegmentClick: (key: string) => void;
-  /** Omit when there's nowhere useful to send "ดูรายละเอียด" — hides the footer link instead of linking somewhere confusing. */
-  onDetail?: () => void;
   /** Whoever contributes the most to the overdue/pending bucket, so
    * "ตัวปัญหาหลัก" can name specific people instead of just a bucket total —
    * every entry tied for the top count (not just one), sorted, computed by
@@ -271,24 +266,6 @@ export function StatusOverviewDonut({
                     <span className="text-[11px] text-[var(--ink-soft)] leading-snug mt-1 line-clamp-2 text-center max-w-[85%]">
                       {selected.label}
                     </span>
-                    <span
-                      role="link"
-                      tabIndex={0}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onSegmentClick(selected.key);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          onSegmentClick(selected.key);
-                        }
-                      }}
-                      className="mt-1 inline-flex items-center gap-0.5 text-[11px] font-medium text-[var(--brand-green-dark)] hover:underline"
-                    >
-                      ดูรายละเอียด <ArrowUpRight className="h-3 w-3" />
-                    </span>
                   </button>
                 ) : (
                   <Popover>
@@ -425,16 +402,11 @@ export function StatusOverviewDonut({
               </div>
             )}
 
-            <div className="flex items-center justify-between gap-3 pt-4 border-t border-[var(--line)]">
+            <div className="pt-4 border-t border-[var(--line)]">
               {/* The ตรงเวลา/ส่งช้า rates used to repeat here too — already
                   on screen via the center-% popover above, so this just
                   says what the count is. */}
               <p className="text-[13px] text-[var(--ink-soft)]">ทั้งหมด {totalLabel}</p>
-              {onDetail && (
-                <button onClick={onDetail} className="flex items-center gap-1 text-[13px] font-semibold text-[var(--brand-green-dark)] hover:underline shrink-0">
-                  ดูรายละเอียด <ArrowUpRight className="h-3.5 w-3.5" />
-                </button>
-              )}
             </div>
           </>
         )}
