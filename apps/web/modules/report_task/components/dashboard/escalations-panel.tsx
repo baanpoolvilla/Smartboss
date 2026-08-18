@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/modules/report_task/components/ui/card";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/modules/report_task/components/ui/card";
 import { DASHBOARD_CARD } from "@/modules/report_task/components/dashboard/dashboard-card-style";
 import { ShowMoreToggle } from "@/modules/report_task/components/shared/show-more-toggle";
 import { useShowMore } from "@/modules/report_task/hooks/use-show-more";
@@ -75,22 +75,27 @@ export function EscalationsPanel() {
 
   return (
     <Card className={cn(DASHBOARD_CARD, "h-full flex flex-col", "border-[var(--chart-red)]/20")}>
-      <CardHeader className="flex-row items-start justify-between">
-        <div>
-          <CardTitle className="text-base font-semibold flex items-center gap-2">
-            <AlertOctagon className="h-4.5 w-4.5 text-[var(--chart-red)]" />
-            งานที่เลยกำหนด
-            {scope.length > 0 && (
-              <span className="text-xs font-normal text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2 py-0.5">
-                {scope.length}
-              </span>
-            )}
-          </CardTitle>
-          <p className="text-xs text-[var(--ink-soft)] mt-0.5">งานที่ถึงกำหนดส่งแล้วแต่ยังไม่ปิด</p>
-        </div>
-        <Badge variant="outline" className="text-[10px] bg-red-50 text-[var(--chart-red)] border-red-200">
-          {canPickScope ? scopeLabel : getUser(personId)?.name}
-        </Badge>
+      <CardHeader>
+        <CardTitle className="text-base font-semibold flex items-center gap-2">
+          <AlertOctagon className="h-4.5 w-4.5 text-[var(--chart-red)]" />
+          งานที่เลยกำหนด
+          {scope.length > 0 && (
+            <span className="text-xs font-normal text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2 py-0.5">
+              {scope.length}
+            </span>
+          )}
+        </CardTitle>
+        {/* CardHeader lays out as a CSS grid, not flex — a plain sibling div
+            here would just stack as a second grid row (left-aligned, under
+            the title) instead of sitting beside it. CardAction's
+            data-slot="card-action" is what triggers CardHeader's own
+            grid-cols-[1fr_auto]/row-span-2 rules to actually pin this to
+            the top-right corner. */}
+        <CardAction>
+          <Badge variant="outline" className="text-[10px] bg-red-50 text-[var(--chart-red)] border-red-200">
+            {canPickScope ? scopeLabel : getUser(personId)?.name}
+          </Badge>
+        </CardAction>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col">
         {scope.length === 0 && (
