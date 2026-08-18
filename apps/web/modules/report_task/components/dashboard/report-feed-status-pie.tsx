@@ -17,20 +17,18 @@ import { presetRange } from "@/modules/report_task/lib/date-filter";
 import { MessageSquareText } from "lucide-react";
 import { StatusOverviewDonut } from "./status-overview-donut";
 
-/** Whoever has the most reports in the given bucket among the users in
- * scope — named, for "ตัวปัญหาหลัก" to point at a specific person instead of
- * just a bucket total. */
-function topPersonOf(
+/** Everyone tied for the most reports in the given bucket among the users
+ * in scope — named, for "ตัวปัญหาหลัก" to point at whoever's actually behind
+ * the bucket instead of just a total. Usually one person; more than one
+ * only when they're genuinely tied. */
+function topPeopleOf(
   byUser: Map<string, { onTime: number; lateDone: number; pending: number; missed: number; exempt: number }>,
   ids: Set<string>,
   field: "missed" | "pending"
-): { name: string; count: number } | undefined {
-  const top = [...ids]
-    .map((id) => ({ id, count: byUser.get(id)?.[field] ?? 0 }))
-    .filter((r) => r.count > 0)
-    .sort((a, b) => b.count - a.count)[0];
-  if (!top) return undefined;
-  return { name: getUser(top.id)?.name ?? top.id, count: top.count };
+): { name: string; count: number }[] {
+  const ranked = [...ids].map((id) => ({ id, count: byUser.get(id)?.[field] ?? 0 })).filter((r) => r.count > 0).sort((a, b) => b.count - a.count);
+  const topCount = ranked[0]?.count;
+  return ranked.filter((r) => r.count === topCount).map((r) => ({ name: getUser(r.id)?.name ?? r.id, count: r.count }));
 }
 
 /** "ภาพรวมรายงาน (Report)" — the Analytics section's right twin of Task
@@ -86,8 +84,8 @@ export function ReportFeedStatusPie() {
       onSegmentClick={goToDetail}
       onDetail={goToDetail}
       topPersonByBucket={{
-        overdue: topPersonOf(byUser, inScope, "missed"),
-        pending: topPersonOf(byUser, inScope, "pending"),
+        overdue: topPeopleOf(byUser, inScope, "missed"),
+        pending: topPeopleOf(byUser, inScope, "pending"),
       }}
     />
   );

@@ -8,12 +8,13 @@ import { useTaskBoardIntentStore } from "@/modules/report_task/store/task-board-
 import { KanbanSquare } from "lucide-react";
 import { StatusOverviewDonut } from "./status-overview-donut";
 
-/** Whoever has the most tasks in `map` — named, for "ตัวปัญหาหลัก" to point
- * at a specific person instead of just a bucket total. */
-function topPersonOf(map: Map<string, number>): { name: string; count: number } | undefined {
-  const top = [...map.entries()].sort((a, b) => b[1] - a[1])[0];
-  if (!top) return undefined;
-  return { name: getUser(top[0])?.name ?? top[0], count: top[1] };
+/** Everyone tied for the most tasks in `map` — named, for "ตัวปัญหาหลัก" to
+ * point at whoever's actually behind the bucket instead of just a total.
+ * Usually one person; more than one only when they're genuinely tied. */
+function topPeopleOf(map: Map<string, number>): { name: string; count: number }[] {
+  const ranked = [...map.entries()].sort((a, b) => b[1] - a[1]);
+  const topCount = ranked[0]?.[1];
+  return ranked.filter(([, count]) => count === topCount).map(([id, count]) => ({ name: getUser(id)?.name ?? id, count }));
 }
 
 /** "ภาพรวมงาน (Task)" — the Analytics section's left twin (§2.6; Report
@@ -50,7 +51,7 @@ export function TaskStatusPie() {
       totalLabel={`${buckets.total} งาน`}
       emptyMessage="ยังไม่มีงานในช่วงเวลานี้"
       onSegmentClick={goToStatus}
-      topPersonByBucket={{ overdue: topPersonOf(byAssignee.overdue), pending: topPersonOf(byAssignee.pending) }}
+      topPersonByBucket={{ overdue: topPeopleOf(byAssignee.overdue), pending: topPeopleOf(byAssignee.pending) }}
     />
   );
 }
