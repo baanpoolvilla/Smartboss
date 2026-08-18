@@ -260,10 +260,10 @@ export function SystemKpiSummary() {
     // kept as separate task/report counts per group (not merged into one
     // combined number) since the whole point of this redesign is comparing
     // the two sides directly instead of hiding the split behind a click.
-    // Ordered ไม่เสร็จ ก่อน เสร็จ (ซ้าย→ขวา) ให้ตรงกับเส้นแบ่งกลางที่คั่นระหว่าง
-    // "เลยกำหนด/ยังไม่เสร็จในกำหนด" (ฝั่งไม่เสร็จ) กับ "เสร็จช้า/ตรงเวลา" (ฝั่งเสร็จ) —
+    // Ordered เสร็จ ก่อน ไม่เสร็จ (ซ้าย→ขวา) ให้ตรงกับเส้นแบ่งกลางที่คั่นระหว่าง
+    // "เสร็จช้า/ตรงเวลา" (ฝั่งเสร็จ) กับ "เลยกำหนด/ยังไม่เสร็จในกำหนด" (ฝั่งไม่เสร็จ) —
     // ตำแหน่งนี้ผูกกับ index 1/2 ด้านล่างที่ใช้วางเส้นแบ่งกลาง ถ้าสลับลำดับต้องย้ายเส้นตาม
-    const groups: KpiGroup[] = (["overdue", "pending", "lateDone", "onTime"] as const).map((key) => ({
+    const groups: KpiGroup[] = (["lateDone", "onTime", "overdue", "pending"] as const).map((key) => ({
       key,
       label: { overdue: "เลยกำหนด", pending: "ยังไม่เสร็จ ในกำหนด", lateDone: "เสร็จช้าแต่เลยกำหนด", onTime: "ตรงเวลา" }[key],
       task: taskBuckets[key],
@@ -301,7 +301,11 @@ export function SystemKpiSummary() {
   }
 
   return (
-    <Card className={`${DASHBOARD_CARD_STATIC}`}>
+    // overflow-visible overrides the base Card's overflow-hidden (there for
+    // rounding image corners, irrelevant here) — without it, a person
+    // tooltip on a near-full-height bar gets clipped by the card's own
+    // rounded edge instead of floating above it.
+    <Card className={cn(DASHBOARD_CARD_STATIC, "overflow-visible")}>
       <CardHeader>
         <CardTitle className="text-base font-semibold flex items-center gap-2">
           <Gauge className="h-4.5 w-4.5 text-[var(--ink-soft)]" />
@@ -345,14 +349,14 @@ export function SystemKpiSummary() {
               </span>
             </div>
 
-            {/* กราฟแท่งเทียบคู่ — แบ่งครึ่งซ้าย "ยังไม่เสร็จ" (เลยกำหนด/ยังไม่เสร็จในกำหนด)
-                กับครึ่งขวา "เสร็จ" (เสร็จช้า/ตรงเวลา) ด้วยเส้นประกลาง ให้เห็นสัดส่วนงาน
-                ค้าง vs งานจบแล้วในแวบเดียว ไม่ต้องอ่านทีละแท่ง — แต่ละแท่งแตกเป็นปล่องรายคน
+            {/* กราฟแท่งเทียบคู่ — แบ่งครึ่งซ้าย "เสร็จ" (เสร็จช้า/ตรงเวลา) กับครึ่งขวา
+                "ยังไม่เสร็จ" (เลยกำหนด/ยังไม่เสร็จในกำหนด) ด้วยเส้นประกลาง ให้เห็นสัดส่วนงาน
+                จบแล้ว vs ค้างในแวบเดียว ไม่ต้องอ่านทีละแท่ง — แต่ละแท่งแตกเป็นปล่องรายคน
                 แทนสีทึบก้อนเดียว (hand-rolled แทน recharts เพราะจำนวนปล่อง/คนต่อแท่งไม่คงที่
                 recharts' stacked Bar ต้องรู้ dataKey ตายตัวล่วงหน้า ใช้ไม่ได้กับ shape แบบนี้) */}
             <div className="flex text-[11px] font-medium text-[var(--ink-soft)] px-2">
-              <span className="flex-1 text-center">ยังไม่เสร็จ</span>
               <span className="flex-1 text-center">เสร็จ</span>
+              <span className="flex-1 text-center">ยังไม่เสร็จ</span>
             </div>
             <div className="relative">
               <div className="pointer-events-none absolute inset-y-0 left-1/2 border-l border-dashed border-[var(--line)]" />
