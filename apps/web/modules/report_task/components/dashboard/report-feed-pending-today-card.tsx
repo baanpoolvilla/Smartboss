@@ -172,7 +172,7 @@ export function ReportFeedPendingTodayCard() {
               </div>
             ))}
             <ShowMoreToggle expanded={missedShowMore.expanded} remaining={missedShowMore.remaining} onToggle={missedShowMore.toggle} />
-            <p className="text-[11px] text-[var(--ink-soft)] mt-2 px-1">เลยกำหนดแล้วไม่ได้ส่ง ถือว่าขาดส่งถาวร คะแนนถูกตัดไปแล้วและแก้ไขย้อนหลังไม่ได้</p>
+            <p className="text-[11px] text-[var(--ink-soft)] mt-2 px-1">เลยกำหนดแล้ว ถูกตัดคะแนน แต่ยังสามารถส่งได้</p>
           </div>
         )}
       </CardContent>
