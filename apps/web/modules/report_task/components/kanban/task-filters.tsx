@@ -127,11 +127,11 @@ export function TaskFilters({
             <SelectTrigger className={filterFieldTriggerClass(filters.departmentId !== "all", "min-w-[130px]")}>
               <Building2 className="h-4 w-4 shrink-0" />
               <SelectValue placeholder="แผนก">
-                {filters.departmentId === "all" ? "ทุกแผนก" : (getDepartment(filters.departmentId)?.name ?? "แผนก")}
+                {filters.departmentId === "all" ? "ทั้งบริษัท" : (getDepartment(filters.departmentId)?.name ?? "แผนก")}
               </SelectValue>
             </SelectTrigger>
             <SelectContent alignItemWithTrigger={false}>
-              <SelectItem value="all">ทุกแผนก</SelectItem>
+              <SelectItem value="all">ทั้งบริษัท</SelectItem>
               {availableDepartments.map((d) => (
                 <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
               ))}

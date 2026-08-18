@@ -104,7 +104,7 @@ export function DashboardFilters() {
               <SelectTrigger className={filterFieldTriggerClass(deptActive, "min-w-[130px]")}>
                 <Building2 className="h-4 w-4 shrink-0" />
                 <SelectValue placeholder="แผนก">
-                  {departmentId === "all" ? "ทุกแผนก" : (getDepartment(departmentId)?.name ?? "แผนก")}
+                  {departmentId === "all" ? "ทั้งบริษัท" : (getDepartment(departmentId)?.name ?? "แผนก")}
                 </SelectValue>
               </SelectTrigger>
               {/* alignItemWithTrigger off — that mode floats the selected
@@ -115,7 +115,7 @@ export function DashboardFilters() {
                   overlapping whatever's now above it. Plain bottom-anchored
                   positioning re-measures every time instead. */}
               <SelectContent alignItemWithTrigger={false}>
-                <SelectItem value="all">ทุกแผนก</SelectItem>
+                <SelectItem value="all">ทั้งบริษัท</SelectItem>
                 {availableDepartments.map((d) => (
                   <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
                 ))}

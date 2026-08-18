@@ -5,8 +5,6 @@ import { TaskStatusPie } from "./task-status-pie";
 import { ReportFeedStatusPie } from "./report-feed-status-pie";
 import { EscalationsPanel } from "./escalations-panel";
 import { ReportFeedPendingTodayCard } from "./report-feed-pending-today-card";
-import { DepartmentPieChart } from "./department-pie-chart";
-import { ReportFeedDepartmentPie } from "./report-feed-department-pie";
 
 // Every widget on the Dashboard lives in this one registry, so all of it can
 // be reordered/resized/hidden via "ปรับแต่ง". Task and Report Overview stay
@@ -18,8 +16,6 @@ export const widgetRegistry: Record<WidgetId, { label: string; Component: Compon
   systemKpiSummary: { label: "KPI รวมของระบบ (Task + Report)", Component: SystemKpiSummary },
   taskOverview: { label: "ภาพรวมงาน (โดนัท)", Component: TaskStatusPie },
   reportOverview: { label: "ภาพรวม Report (โดนัท)", Component: ReportFeedStatusPie },
-  deptPie: { label: "ผลงานแยกตามแผนก", Component: DepartmentPieChart },
-  reportDeptPie: { label: "การส่งรายงานแยกตามแผนก", Component: ReportFeedDepartmentPie },
   overdueTasks: { label: "งานที่เลยกำหนด", Component: EscalationsPanel },
   pendingReports: { label: "รายงานที่ยังไม่ส่ง", Component: ReportFeedPendingTodayCard },
 };
