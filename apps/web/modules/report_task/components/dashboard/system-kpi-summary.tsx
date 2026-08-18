@@ -158,7 +158,13 @@ function StatusBar({
   activePersonId: string;
   onPick: (id: string) => void;
 }) {
-  const heightPct = max ? Math.min(100, (total / max) * 100) : 0;
+  // sqrt, not linear — a straight total/max scale crushes every smaller bar
+  // once one group runs way ahead of the rest (e.g. 28 vs 1/4/5/8), to the
+  // point the small ones read as flat slivers even though the number above
+  // them is right there. sqrt keeps the tallest bar at 100% and the
+  // ordering intact, but pulls the small bars up to something actually
+  // visible instead of near-zero.
+  const heightPct = max && total > 0 ? Math.min(100, Math.sqrt(total / max) * 100) : 0;
   return (
     <div className="flex h-full w-8 flex-col items-center justify-end">
       <span className="mb-1 text-[11px] font-bold tabular-nums text-[var(--ink)]">{total}</span>

@@ -208,8 +208,14 @@ export function StatusOverviewDonut({
                       data={slices}
                       dataKey="value"
                       nameKey="label"
-                      innerRadius={70}
-                      outerRadius={102}
+                      // Percent, not pixels — a fixed 102px outerRadius (sized
+                      // for the @sm:220px box) has a 204px diameter that
+                      // overflows the 180px mobile box and gets clipped by
+                      // the SVG's own edge, showing up as notches/gaps around
+                      // the ring. Percent radii scale off the box's own
+                      // min(width,height) at every size instead.
+                      innerRadius="64%"
+                      outerRadius="92%"
                       paddingAngle={2}
                       cornerRadius={5}
                       stroke="#ffffff"
