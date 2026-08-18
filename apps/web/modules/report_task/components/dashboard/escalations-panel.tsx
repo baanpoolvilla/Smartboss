@@ -12,7 +12,7 @@ import { getUser, getDepartment, canManage } from "@/modules/report_task/lib/dir
 import { overdueTasks } from "@/modules/report_task/lib/reports";
 import { formatShortDate, daysUntil } from "@/modules/report_task/lib/format";
 import { presetRange } from "@/modules/report_task/lib/date-filter";
-import { priorityMeta } from "@/modules/report_task/lib/task-meta";
+import { priorityMeta, statusMeta } from "@/modules/report_task/lib/task-meta";
 import { cn } from "@/modules/report_task/lib/utils";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useVisibleTasks } from "@/modules/report_task/hooks/use-visible-tasks";
@@ -127,6 +127,9 @@ export function EscalationsPanel() {
                 <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                   <Badge variant="outline" className={cn("text-[10px]", priorityMeta[t.priority].badgeClass)}>
                     {priorityMeta[t.priority].label}
+                  </Badge>
+                  <Badge variant="outline" className={cn("text-[10px]", statusMeta[t.status].badgeClass)}>
+                    {statusMeta[t.status].label}
                   </Badge>
                   <span className="text-xs text-[var(--ink-soft)] truncate">
                     {assignee?.name} · {formatShortDate(t.dueDate)}

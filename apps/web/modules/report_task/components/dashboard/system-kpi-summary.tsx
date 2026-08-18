@@ -15,7 +15,7 @@ import { useVisibleReportTopics } from "@/modules/report_task/hooks/use-visible-
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
 import { useDashboardFilterStore } from "@/modules/report_task/store/dashboard-filter-store";
-import { ArrowUp, ArrowDown, Minus, Gauge, AlertTriangle, ListChecks, MessageSquareText } from "lucide-react";
+import { ArrowUp, ArrowDown, Minus, Gauge, Lightbulb, ListChecks, MessageSquareText } from "lucide-react";
 import { cn } from "@/modules/report_task/lib/utils";
 
 function TrendText({ trend, higherIsGood }: { trend: Trend | null; higherIsGood: boolean }) {
@@ -109,6 +109,15 @@ const REPORT_BUCKET_FIELD: Record<KpiBucketKey, keyof ReportStatusCounts> = {
   lateDone: "lateDone",
   pending: "pending",
   overdue: "missed",
+};
+
+/** One templated next-step per issue type — plain copy, not AI-generated,
+ * same "rule-based, not a black box" decision as the rest of this card. */
+const ISSUE_SUGGESTION: Record<string, string> = {
+  taskOverdue: "ตรวจสอบว่าใครดูแลงานเหล่านี้อยู่ แล้วพิจารณาจัดลำดับความสำคัญหรือมอบหมายใหม่",
+  reportOverdue: "ส่งข้อความเตือนคนที่เกี่ยวข้อง ก่อนกลายเป็นค้างสะสมหลายวัน",
+  taskPending: "ติดตามความคืบหน้าก่อนถึงกำหนด ป้องกันไม่ให้เลื่อนไปเป็นเลยกำหนด",
+  reportPending: "เตือนล่วงหน้าก่อนถึงเวลาปิดรอบ เพื่อลดโอกาสขาดส่ง",
 };
 
 /**
@@ -272,14 +281,20 @@ export function SystemKpiSummary() {
       reportPeople: reportPeopleFor(key),
     }));
 
-    // §2.4's "ตัวปัญหาหลัก" — whichever of Task-overdue/Report-overdue is
-    // bigger, as a share of everything still stuck (pending+overdue
-    // combined). Not shown at all once there's nothing stuck.
-    const worst =
-      taskBuckets.overdue >= reportBuckets.overdue
-        ? { label: "งานเลยกำหนด", count: taskBuckets.overdue }
-        : { label: "รายงานขาดส่ง", count: reportBuckets.overdue };
-    const worstPercent = stuck ? Math.round((worst.count / stuck) * 100) : 0;
+    // §2.4's "ตัวปัญหาหลัก" — เดิมเลือกโชว์แค่ตัวที่แย่สุดตัวเดียว (Task-overdue
+    // หรือ Report-overdue อันไหนมากกว่า) ตอนนี้โชว์ทุกก้อนที่ยังค้างอยู่จริง
+    // (>0) แยกเป็นบรรทัด — งาน/รายงาน x เลยกำหนด/ยังไม่เสร็จ รวม 4 ก้อน —
+    // เรียงจากมากไปน้อยเพื่อยังคงเห็นตัวที่หนักสุดอยู่บนสุด. % คิดจาก
+    // ส่วนแบ่งของ `stuck` เดียวกันทุกบรรทัด ไม่ใช่คิดแยกฐานต่อบรรทัด.
+    const issues = [
+      { key: "taskOverdue", label: "งานเลยกำหนด", count: taskBuckets.overdue },
+      { key: "reportOverdue", label: "รายงานขาดส่ง", count: reportBuckets.overdue },
+      { key: "taskPending", label: "งานยังไม่เสร็จ (ในกำหนด)", count: taskBuckets.pending },
+      { key: "reportPending", label: "รายงานยังไม่ส่ง (ในกำหนด)", count: reportBuckets.pending },
+    ]
+      .filter((i) => i.count > 0)
+      .map((i) => ({ ...i, percent: stuck ? Math.round((i.count / stuck) * 100) : 0, suggestion: ISSUE_SUGGESTION[i.key] }))
+      .sort((a, b) => b.count - a.count);
 
     return {
       taskBuckets,
@@ -290,8 +305,7 @@ export function SystemKpiSummary() {
       total: combined.total,
       tier: tierFor(combined.successRate),
       successTrend: trend(combined.successRate, prevCombined?.successRate ?? null),
-      worst,
-      worstPercent,
+      issues,
     };
   }, [allTasks, topics, posts, personId, departmentId, preset, customFrom, customTo, exemptions]);
 
@@ -393,13 +407,20 @@ export function SystemKpiSummary() {
               ))}
             </div>
 
-            {data.worst.count > 0 && (
-              <div className="w-full flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2">
-                <AlertTriangle className="h-4 w-4 text-[var(--chart-red-dark)] shrink-0 mt-0.5" />
-                <p className="text-[12px] text-[var(--chart-red-dark)]">
-                  <span className="font-semibold">ตัวปัญหาหลัก:</span> {data.worst.label} {data.worst.count} ครั้ง ({data.worstPercent}%
-                  ของงานค้างทั้งหมด)
-                </p>
+            {data.issues.length > 0 && (
+              <div className="w-full flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2">
+                <Lightbulb className="h-4 w-4 text-[var(--chart-amber-dark)] shrink-0 mt-0.5" />
+                <div className="flex flex-col gap-2.5 text-[12px] text-[var(--ink)] w-full">
+                  <span className="font-semibold text-[var(--chart-amber-dark)]">ตัวปัญหาหลัก</span>
+                  {data.issues.map((issue) => (
+                    <div key={issue.key}>
+                      <p className="font-medium">
+                        {issue.label}: {issue.count} ครั้ง ({issue.percent}% ของงานค้างทั้งหมด)
+                      </p>
+                      {issue.suggestion && <p className="text-[var(--ink-soft)] mt-0.5">💡 {issue.suggestion}</p>}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </>
