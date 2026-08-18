@@ -1,15 +1,15 @@
 "use client";
 
 import { useMemo } from "react";
-import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import type { Props as RechartsLabelProps } from "recharts/types/component/Label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/modules/report_task/components/ui/card";
 import { DASHBOARD_CARD_STATIC } from "@/modules/report_task/components/dashboard/dashboard-card-style";
-import { taskKpiBuckets, reportKpiBuckets } from "@/modules/report_task/lib/kpi-buckets";
+import { taskKpiBuckets, taskBucketsByAssignee, reportKpiBuckets, type KpiBucketKey } from "@/modules/report_task/lib/kpi-buckets";
 import { combineKpiBuckets } from "@/modules/report_task/lib/combine-kpi-buckets";
 import { previousPeriodRange, periodTrend, type Trend } from "@/modules/report_task/lib/dashboard-trend";
 import { filterTasksByDashboard, presetRange } from "@/modules/report_task/lib/date-filter";
 import { localDateStr } from "@/modules/report_task/lib/now";
+import { getUser } from "@/modules/report_task/lib/directory";
+import { reportStatusCountsByUser, scopedUserIds, type ReportStatusCounts } from "@/modules/report_task/lib/report-feed-compliance";
 import { useVisibleTasks } from "@/modules/report_task/hooks/use-visible-tasks";
 import { useVisibleReportTopics } from "@/modules/report_task/hooks/use-visible-report-topics";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
@@ -41,24 +41,41 @@ function TrendText({ trend, higherIsGood }: { trend: Trend | null; higherIsGood:
  * read off these same two constants, so the pairing never drifts out of sync
  * as the component grows. Distinct from the 4 status colors (green/amber/red)
  * used elsewhere on the Dashboard, so "which series is this bar" never gets
- * confused with "which status is this bar." Raw hex (not the CSS vars these
- * used to point at) — the vars land on muted, low-chroma tones that read as
- * near-identical dark blobs at bar-chart scale; these two are a validated
- * high-chroma pair instead (`validate_palette.js` — CVD ΔE 30.6, normal-vision
- * ΔE 40.6, both well past the 8/15 floors) so the two series stay obviously
- * different colors, not just technically-distinguishable ones. */
-const TASK_COLOR = "#16a34a";
-const REPORT_COLOR = "#7c3aed";
+ * confused with "which status is this bar" — a green bar here does NOT mean
+ * "good," so it deliberately avoids status-green. Pulled straight from
+ * theme.css's existing categorical chart palette (`--chart-blue`/
+ * `--chart-violet`, the same hues `departmentColorOrder` already cycles
+ * through for the department pies) rather than new hex, so this chart reads
+ * as the same visual language as the rest of the Dashboard instead of
+ * introducing its own. Both cool-toned and close in saturation on purpose —
+ * a calmer pairing than the loud green/purple this replaced. */
+const TASK_COLOR = "#2a78d6";
+const REPORT_COLOR = "#4a3aa7";
 const TASK_TINT = `color-mix(in srgb, ${TASK_COLOR} 12%, var(--bg))`;
 const REPORT_TINT = `color-mix(in srgb, ${REPORT_COLOR} 12%, var(--bg))`;
 
+/** Fixed plot height (px) the hand-rolled bars scale against — replaces
+ * recharts' auto-scaled YAxis, which this chart no longer has. */
+const CHART_HEIGHT = 190;
+
+/** A bar's segments cap at this many named people — beyond that the tail
+ * folds into one "อื่นๆ" segment, same MAX_SLICES-then-fold pattern
+ * DepartmentPieChart uses so a busy bar doesn't turn into a hairline mess. */
+const MAX_SEGMENTS = 5;
+
+interface PersonSeg {
+  id: string;
+  name: string;
+  count: number;
+}
+
 interface KpiGroup {
-  key: "onTime" | "lateDone" | "pending" | "overdue";
+  key: KpiBucketKey;
   label: string;
   task: number;
-  taskPercent: number;
   report: number;
-  reportPercent: number;
+  taskPeople: PersonSeg[];
+  reportPeople: PersonSeg[];
 }
 
 /** §2.5 tiering, reused for both the badge and its color — same >=80/>=50
@@ -70,39 +87,106 @@ function tierFor(successRate: number): { label: string; color: string; bg: strin
   return { label: "วิกฤต", color: "var(--chart-red-dark)", bg: "bg-red-50" };
 }
 
-function GroupedBarTooltip({ active, payload }: { active?: boolean; payload?: { payload: KpiGroup }[] }) {
-  if (!active || !payload?.length) return null;
-  const g = payload[0]!.payload;
-  return (
-    <div className="rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-[13px] shadow-[0_8px_24px_-8px_rgba(17,17,17,0.22)] max-w-[220px]">
-      <p className="font-semibold text-[var(--ink)]">{g.label}</p>
-      <p className="flex items-center gap-1.5 text-[var(--ink-soft)]">
-        <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: TASK_COLOR }} />
-        งาน {g.task} งาน ({g.taskPercent}%)
-      </p>
-      <p className="flex items-center gap-1.5 text-[var(--ink-soft)]">
-        <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: REPORT_COLOR }} />
-        รายงาน {g.report} ครั้ง ({g.reportPercent}%)
-      </p>
-    </div>
-  );
+/** `counts` (personId -> count) into the segment list one bar draws, sorted
+ * biggest-first so the tallest, most-identifiable segment lands at the
+ * bottom of the stack. Beyond `MAX_SEGMENTS` people the remainder folds into
+ * one un-clickable "อื่นๆ" segment (no single person it could filter to). */
+function topPeople(counts: Map<string, number>): PersonSeg[] {
+  const entries = [...counts.entries()]
+    .filter(([, n]) => n > 0)
+    .map(([id, n]) => ({ id, name: getUser(id)?.name ?? id, count: n }))
+    .sort((a, b) => b.count - a.count);
+  if (entries.length <= MAX_SEGMENTS + 1) return entries;
+  const rest = entries.slice(MAX_SEGMENTS);
+  return [...entries.slice(0, MAX_SEGMENTS), { id: "other", name: "อื่นๆ", count: rest.reduce((s, e) => s + e.count, 0) }];
 }
 
-/** Small count label rendered above each bar — recharts passes x/y/width of
- * the bar itself, this just centers a number just above it. Renders "0" too
- * (checking `value == null` rather than truthiness) — a silently blank label
- * above a flat bar reads as "this group forgot its count," not "the count is
- * zero," which is exactly the gap that made the Report side of this chart
- * look broken instead of just genuinely empty. */
-function BarValueLabel({ x, y, width, value }: RechartsLabelProps) {
-  if (x === undefined || y === undefined || width === undefined || value == null) return null;
-  const nx = Number(x);
-  const ny = Number(y);
-  const nw = Number(width);
+/** Maps a report's 5-way status key onto the 4-group vocabulary this chart
+ * (and Task's KpiBucketKey) uses — Report calls the "still open past its
+ * deadline" bucket `missed`, Task calls it `overdue`; same meaning. */
+const REPORT_BUCKET_FIELD: Record<KpiBucketKey, keyof ReportStatusCounts> = {
+  onTime: "onTime",
+  lateDone: "lateDone",
+  pending: "pending",
+  overdue: "missed",
+};
+
+/**
+ * One bar (either the "งาน" or "รายงาน" side of a group) split into one
+ * segment per person, tallest at the bottom. Hover reveals a name+count
+ * tooltip (`group/seg`, pure CSS — no position tracking needed since the
+ * tooltip is anchored inside the segment it belongs to); clicking a segment
+ * toggles that person as the Dashboard's person filter, same
+ * click-to-filter/click-again-to-clear pattern as DepartmentPieChart. The
+ * folded "อื่นๆ" segment isn't one real person, so it's inert — hoverable for
+ * its combined count, but not clickable.
+ */
+function StatusBar({
+  color,
+  total,
+  max,
+  people,
+  seriesLabel,
+  activePersonId,
+  onPick,
+}: {
+  color: string;
+  total: number;
+  max: number;
+  people: PersonSeg[];
+  seriesLabel: string;
+  activePersonId: string;
+  onPick: (id: string) => void;
+}) {
+  const heightPct = max ? Math.min(100, (total / max) * 100) : 0;
   return (
-    <text x={nx + nw / 2} y={ny - 5} textAnchor="middle" fontSize={11} fontWeight={700} fill="var(--ink)">
-      {value}
-    </text>
+    <div className="flex h-full w-8 flex-col items-center justify-end">
+      <span className="mb-1 text-[11px] font-bold tabular-nums text-[var(--ink)]">{total}</span>
+      <div className="flex w-full flex-col-reverse" style={{ height: `${heightPct}%` }}>
+        {people.length === 0 ? (
+          <div className="w-full flex-1 rounded-t-[5px]" style={{ backgroundColor: `color-mix(in srgb, ${color} 15%, var(--bg))` }} />
+        ) : (
+          people.map((p, i) => {
+            const isOther = p.id === "other";
+            const isActive = activePersonId === p.id;
+            const isTop = i === people.length - 1;
+            // Real, opaque shades (color-mix toward white), not opacity —
+            // opacity fades toward whatever sits behind the bar, which
+            // washed out the validated task/report hues against the white
+            // card. "อื่นๆ" mixes toward --chart-gray instead of continuing
+            // the rank ramp, so it reads as "not a real person" rather than
+            // just the palest segment.
+            const mixPct = isOther ? 45 : Math.max(40, 100 - i * 15);
+            const mixTarget = isOther ? "var(--chart-gray)" : "#ffffff";
+            const segColor = `color-mix(in srgb, ${color} ${mixPct}%, ${mixTarget})`;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                disabled={isOther}
+                onClick={() => onPick(p.id)}
+                aria-pressed={isActive}
+                aria-label={`${p.name} — ${p.count} ${seriesLabel}${isActive ? " (กำลังกรองอยู่ คลิกเพื่อยกเลิก)" : ""}`}
+                className={cn(
+                  "group/seg relative w-full flex-1 border-t border-white/70 first:border-t-0",
+                  isTop && "rounded-t-[5px]",
+                  isOther ? "cursor-default" : "cursor-pointer hover:brightness-90"
+                )}
+                style={{ backgroundColor: segColor, flexGrow: p.count, flexBasis: 0 }}
+              >
+                {isActive && <span className="pointer-events-none absolute inset-0 ring-2 ring-inset ring-white" />}
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1.5 hidden w-max -translate-x-1/2 rounded-lg border border-[var(--line)] bg-white px-2.5 py-1.5 text-left text-[12px] shadow-[0_8px_24px_-8px_rgba(17,17,17,0.22)] group-hover/seg:block">
+                  <span className="block font-semibold text-[var(--ink)]">{p.name}</span>
+                  <span className="text-[var(--ink-soft)]">
+                    {seriesLabel} {p.count} รายการ
+                  </span>
+                </span>
+              </button>
+            );
+          })
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -129,6 +213,7 @@ export function SystemKpiSummary() {
   const preset = useDashboardFilterStore((s) => s.preset);
   const customFrom = useDashboardFilterStore((s) => s.customFrom);
   const customTo = useDashboardFilterStore((s) => s.customTo);
+  const setPersonId = useDashboardFilterStore((s) => s.setPersonId);
   const exemptions = useReportComplianceExemptions();
 
   const data = useMemo(() => {
@@ -139,7 +224,8 @@ export function SystemKpiSummary() {
     const taskCohort = (opts: { preset: typeof preset; customFrom: string; customTo: string }) =>
       filterTasksByDashboard(allTasks, { personId, departmentId, ...opts });
 
-    const taskBuckets = taskKpiBuckets(taskCohort({ preset, customFrom, customTo }));
+    const currentTasks = taskCohort({ preset, customFrom, customTo });
+    const taskBuckets = taskKpiBuckets(currentTasks);
     const prevTaskBuckets = prevRange
       ? taskKpiBuckets(taskCohort({ preset: "custom", customFrom: localDateStr(prevRange.from), customTo: localDateStr(prevRange.to) }))
       : null;
@@ -152,44 +238,39 @@ export function SystemKpiSummary() {
     const trend = (curr: number, prev: number | null) => (prev === null ? null : periodTrend(curr, prev));
 
     const stuck = taskBuckets.overdue + reportBuckets.overdue + taskBuckets.pending + reportBuckets.pending;
+
+    // Per-person breakdown behind each bar — who actually makes up "5 งาน
+    // เลยกำหนด" — scoped the same way the totals above already are (a
+    // department/person filter narrows `currentTasks`/the report side alike)
+    // so a segment's count always matches what that filter would show.
+    const taskByAssignee = taskBucketsByAssignee(currentTasks);
+    const reportByUserAll = reportStatusCountsByUser(topics, posts, currentRange, exemptions);
+    const inScope = scopedUserIds(scope);
+    function reportPeopleFor(key: KpiBucketKey): PersonSeg[] {
+      const field = REPORT_BUCKET_FIELD[key];
+      const counts = new Map<string, number>();
+      for (const id of inScope) {
+        const n = reportByUserAll.get(id)?.[field] ?? 0;
+        if (n > 0) counts.set(id, n);
+      }
+      return topPeople(counts);
+    }
+
     // 4 groups, same split as the Task/Report Overview donuts below (§0.1) —
     // kept as separate task/report counts per group (not merged into one
     // combined number) since the whole point of this redesign is comparing
     // the two sides directly instead of hiding the split behind a click.
-    const groups: KpiGroup[] = [
-      {
-        key: "onTime",
-        label: "ตรงเวลา",
-        task: taskBuckets.onTime,
-        taskPercent: taskBuckets.onTimeRate,
-        report: reportBuckets.onTime,
-        reportPercent: reportBuckets.onTimeRate,
-      },
-      {
-        key: "lateDone",
-        label: "เสร็จช้าแต่เลยกำหนด",
-        task: taskBuckets.lateDone,
-        taskPercent: taskBuckets.lateRate,
-        report: reportBuckets.lateDone,
-        reportPercent: reportBuckets.lateRate,
-      },
-      {
-        key: "pending",
-        label: "ยังไม่เสร็จ ในกำหนด",
-        task: taskBuckets.pending,
-        taskPercent: taskBuckets.total ? Math.round((taskBuckets.pending / taskBuckets.total) * 100) : 0,
-        report: reportBuckets.pending,
-        reportPercent: reportBuckets.total ? Math.round((reportBuckets.pending / reportBuckets.total) * 100) : 0,
-      },
-      {
-        key: "overdue",
-        label: "ยังไม่เสร็จ เลยกำหนด",
-        task: taskBuckets.overdue,
-        taskPercent: taskBuckets.overdueRate,
-        report: reportBuckets.overdue,
-        reportPercent: reportBuckets.overdueRate,
-      },
-    ];
+    // Ordered ไม่เสร็จ ก่อน เสร็จ (ซ้าย→ขวา) ให้ตรงกับเส้นแบ่งกลางที่คั่นระหว่าง
+    // "เลยกำหนด/ยังไม่เสร็จในกำหนด" (ฝั่งไม่เสร็จ) กับ "เสร็จช้า/ตรงเวลา" (ฝั่งเสร็จ) —
+    // ตำแหน่งนี้ผูกกับ index 1/2 ด้านล่างที่ใช้วางเส้นแบ่งกลาง ถ้าสลับลำดับต้องย้ายเส้นตาม
+    const groups: KpiGroup[] = (["overdue", "pending", "lateDone", "onTime"] as const).map((key) => ({
+      key,
+      label: { overdue: "เลยกำหนด", pending: "ยังไม่เสร็จ ในกำหนด", lateDone: "เสร็จช้าแต่เลยกำหนด", onTime: "ตรงเวลา" }[key],
+      task: taskBuckets[key],
+      report: reportBuckets[key],
+      taskPeople: topPeople(taskByAssignee[key]),
+      reportPeople: reportPeopleFor(key),
+    }));
 
     // §2.4's "ตัวปัญหาหลัก" — whichever of Task-overdue/Report-overdue is
     // bigger, as a share of everything still stuck (pending+overdue
@@ -205,6 +286,7 @@ export function SystemKpiSummary() {
       reportBuckets,
       combined,
       groups,
+      maxBar: Math.max(1, ...groups.flatMap((g) => [g.task, g.report])),
       total: combined.total,
       tier: tierFor(combined.successRate),
       successTrend: trend(combined.successRate, prevCombined?.successRate ?? null),
@@ -212,6 +294,11 @@ export function SystemKpiSummary() {
       worstPercent,
     };
   }, [allTasks, topics, posts, personId, departmentId, preset, customFrom, customTo, exemptions]);
+
+  function pickPerson(id: string) {
+    if (id === "other") return;
+    setPersonId(personId === id ? "all" : id);
+  }
 
   return (
     <Card className={`${DASHBOARD_CARD_STATIC}`}>
@@ -221,7 +308,8 @@ export function SystemKpiSummary() {
           KPI รวมของระบบ (Task + Report)
         </CardTitle>
         <p className="text-[13px] text-[var(--ink-soft)] mt-0.5">
-          แหล่งความจริงเดียวของทั้งงานและ Report — เทียบสองฝั่งตรงๆ ให้เห็นว่าตอนนี้บริษัทกำลังไปทางไหน
+          แหล่งความจริงเดียวของทั้งงานและ Report — เทียบสองฝั่งตรงๆ ให้เห็นว่าตอนนี้บริษัทกำลังไปทางไหน · แต่ละแท่งแยกเป็นปล่องรายคน
+          ชี้เพื่อดูชื่อ คลิกเพื่อกรองทั้งแดชบอร์ดเฉพาะคนนั้น (คลิกซ้ำเพื่อยกเลิก)
         </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-4 @container">
@@ -257,28 +345,48 @@ export function SystemKpiSummary() {
               </span>
             </div>
 
-            {/* กราฟแท่งเทียบคู่ */}
-            <div className="h-[220px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data.groups} margin={{ top: 20, right: 8, left: 8, bottom: 0 }} barGap={4}>
-                  <CartesianGrid vertical={false} stroke="var(--line)" />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fontSize: 11, fill: "var(--ink-soft)" }}
-                    tickLine={false}
-                    axisLine={{ stroke: "var(--line)" }}
-                    interval={0}
-                  />
-                  <YAxis hide />
-                  <Tooltip content={<GroupedBarTooltip />} cursor={{ fill: "var(--bg-soft)" }} />
-                  <Bar dataKey="task" name="งาน" fill={TASK_COLOR} radius={[5, 5, 0, 0]} maxBarSize={34}>
-                    <LabelList dataKey="task" content={BarValueLabel} />
-                  </Bar>
-                  <Bar dataKey="report" name="รายงาน" fill={REPORT_COLOR} radius={[5, 5, 0, 0]} maxBarSize={34}>
-                    <LabelList dataKey="report" content={BarValueLabel} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            {/* กราฟแท่งเทียบคู่ — แบ่งครึ่งซ้าย "ยังไม่เสร็จ" (เลยกำหนด/ยังไม่เสร็จในกำหนด)
+                กับครึ่งขวา "เสร็จ" (เสร็จช้า/ตรงเวลา) ด้วยเส้นประกลาง ให้เห็นสัดส่วนงาน
+                ค้าง vs งานจบแล้วในแวบเดียว ไม่ต้องอ่านทีละแท่ง — แต่ละแท่งแตกเป็นปล่องรายคน
+                แทนสีทึบก้อนเดียว (hand-rolled แทน recharts เพราะจำนวนปล่อง/คนต่อแท่งไม่คงที่
+                recharts' stacked Bar ต้องรู้ dataKey ตายตัวล่วงหน้า ใช้ไม่ได้กับ shape แบบนี้) */}
+            <div className="flex text-[11px] font-medium text-[var(--ink-soft)] px-2">
+              <span className="flex-1 text-center">ยังไม่เสร็จ</span>
+              <span className="flex-1 text-center">เสร็จ</span>
+            </div>
+            <div className="relative">
+              <div className="pointer-events-none absolute inset-y-0 left-1/2 border-l border-dashed border-[var(--line)]" />
+              <div className="flex items-stretch pt-6" style={{ height: CHART_HEIGHT + 24 }}>
+                {data.groups.map((g) => (
+                  <div key={g.key} className="flex h-full flex-1 items-end justify-center gap-1.5">
+                    <StatusBar
+                      color={TASK_COLOR}
+                      total={g.task}
+                      max={data.maxBar}
+                      people={g.taskPeople}
+                      seriesLabel="งาน"
+                      activePersonId={personId}
+                      onPick={pickPerson}
+                    />
+                    <StatusBar
+                      color={REPORT_COLOR}
+                      total={g.report}
+                      max={data.maxBar}
+                      people={g.reportPeople}
+                      seriesLabel="รายงาน"
+                      activePersonId={personId}
+                      onPick={pickPerson}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex px-1">
+              {data.groups.map((g) => (
+                <div key={g.key} className="flex-1 text-center text-[11px] leading-tight text-[var(--ink-soft)]">
+                  {g.label}
+                </div>
+              ))}
             </div>
 
             {data.worst.count > 0 && (
