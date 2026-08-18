@@ -12,8 +12,6 @@ export type WidgetId =
   | "systemKpiSummary"
   | "taskOverview"
   | "reportOverview"
-  | "deptPie"
-  | "reportDeptPie"
   | "overdueTasks"
   | "pendingReports";
 
@@ -31,17 +29,14 @@ export interface WidgetConfig {
   span: WidgetSpan;
 }
 
-// Four tiers, ranked top-to-bottom by importance: 1) the one headline KPI
+// Three tiers, ranked top-to-bottom by importance: 1) the one headline KPI
 // card (full width, the combined-domain summary), 2) the two domain-level
 // Overview donuts (the detail behind it) at equal width, 3) the two
-// department pies (compare across teams) at equal width, 4) the two
 // row-level detail lists (what to act on, last) at equal width.
 const defaultLayout: WidgetConfig[] = [
   { id: "systemKpiSummary", visible: true, span: 2 },
   { id: "taskOverview", visible: true, span: 1 },
   { id: "reportOverview", visible: true, span: 1 },
-  { id: "deptPie", visible: true, span: 1 },
-  { id: "reportDeptPie", visible: true, span: 1 },
   { id: "overdueTasks", visible: true, span: 1 },
   { id: "pendingReports", visible: true, span: 1 },
 ];
@@ -90,16 +85,23 @@ export const useDashboardLayoutStore = create<DashboardLayoutStore>()(
       // anyone to fix a stale span themselves, so span is always re-applied
       // from `defaultLayout` by id below rather than trusting whatever a
       // pre-redesign layout had saved (order/visibility still carry over).
-      version: 5,
+      // Bumped to 6 when deptPie/reportDeptPie were removed entirely — forces
+      // `migrate` to re-run once even for someone already on v5, so those two
+      // stale ids get pruned from their saved layout instead of sitting there
+      // unused forever (`merge`, which runs on every load regardless of
+      // version, doesn't prune unknown ids — only `migrate` does).
+      version: 6,
       migrate: (persisted) => {
         const rawWidgets = (persisted as Partial<DashboardLayoutStore> | undefined)?.widgets ?? [];
-        const idRenames: Record<string, WidgetId> = { deptBar: "deptPie", reportDeptBar: "reportDeptPie" };
         const defaultSpanOf = new Map(defaultLayout.map((w) => [w.id, w.span]));
-        const widgets = rawWidgets
-          .map((w) => (w.id in idRenames ? { ...w, id: idRenames[w.id]! } : w))
-          .map((w) => ({ ...w, span: defaultSpanOf.get(w.id) ?? w.span }));
         const known = new Set(defaultLayout.map((w) => w.id));
-        const kept = widgets.filter((w) => known.has(w.id));
+        // Anything not in `known` — an ancient id (deptBar/reportDeptBar) or
+        // a since-removed widget (deptPie/reportDeptPie) — gets dropped by
+        // the `known.has` filter below rather than renamed; there's nothing
+        // left worth renaming *to* once the widget itself is gone.
+        const kept = rawWidgets
+          .filter((w) => known.has(w.id))
+          .map((w) => ({ ...w, span: defaultSpanOf.get(w.id) ?? w.span }));
         const keptIds = new Set(kept.map((w) => w.id));
         const missing = defaultLayout.filter((w) => !keptIds.has(w.id));
         return { widgets: [...kept, ...missing] };

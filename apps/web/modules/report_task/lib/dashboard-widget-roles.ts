@@ -1,14 +1,5 @@
-import { canManage, isOwner } from "@/modules/report_task/lib/directory";
+import { canManage } from "@/modules/report_task/lib/directory";
 import type { WidgetId } from "@/modules/report_task/store/dashboard-layout-store";
-
-/**
- * Cross-department comparison only means something company-wide — a
- * department head's own data scope (canSeeTask/canSeeReportTopic) never
- * includes another department's tasks or posts, so a "compare every
- * department" chart would render as one populated bar and the rest empty
- * for a head, not a real comparison. Owner-only, not just any manager.
- */
-export const OWNER_ONLY_WIDGETS: WidgetId[] = ["deptPie", "reportDeptPie"];
 
 /**
  * Cross-person ranking/aggregate — meaningful once you're responsible for
@@ -28,15 +19,14 @@ export const OWNER_ONLY_WIDGETS: WidgetId[] = ["deptPie", "reportDeptPie"];
 export const MANAGER_ONLY_WIDGETS: WidgetId[] = ["pendingReports", "systemKpiSummary"];
 
 /**
- * Three-tier Dashboard widget visibility: employee < department head <
- * owner/CEO. Personal-scoped widgets (the two Overview donuts, overdue
+ * Two-tier Dashboard widget visibility: employee < manager (department head
+ * or owner). Personal-scoped widgets (the two Overview donuts, overdue
  * tasks) are visible to everyone — they already narrow to "what this viewer
  * can see" via the underlying canSeeTask/canSeeReportTopic permission
  * functions, so a regular employee only ever sees their own numbers there
  * without needing a separate gate.
  */
 export function canViewWidget(id: WidgetId, viewingAsUserId: string): boolean {
-  if (OWNER_ONLY_WIDGETS.includes(id)) return isOwner(viewingAsUserId);
   if (MANAGER_ONLY_WIDGETS.includes(id)) return canManage(viewingAsUserId);
   return true;
 }
