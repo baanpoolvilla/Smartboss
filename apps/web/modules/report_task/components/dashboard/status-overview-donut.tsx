@@ -10,6 +10,8 @@ import { ChartTooltip } from "@/modules/report_task/components/shared/chart-tool
 import type { KpiBuckets } from "@/modules/report_task/lib/kpi-buckets";
 import { useHasHover } from "@/modules/report_task/hooks/use-has-hover";
 import { cn, pickDaily } from "@/modules/report_task/lib/utils";
+import { periodTrend } from "@/modules/report_task/lib/dashboard-trend";
+import { TrendText, tierFor } from "@/modules/report_task/components/shared/trend-badge";
 import { ArrowUpRight, Lightbulb, AlertTriangle } from "lucide-react";
 
 /** Same templated, rule-based (not AI-generated) next-step copy as the KPI
@@ -72,6 +74,7 @@ export function StatusOverviewDonut({
   onSegmentClick,
   onDetail,
   topPersonByBucket,
+  prevSuccessRate,
 }: {
   title: string;
   subtitle: string;
@@ -97,6 +100,11 @@ export function StatusOverviewDonut({
    * the caller (TaskStatusPie/ReportFeedStatusPie) since they're the ones
    * with access to per-assignee data, not this shared shell. */
   topPersonByBucket?: Partial<Record<"overdue" | "pending", { name: string; count: number }[]>>;
+  /** Same successRate from the previous period, for the tier+trend row —
+   * null/omitted when there's nothing to compare against (unbounded "ทั้งหมด"
+   * preset, or the previous period had zero total). Computed by the caller
+   * since it needs the previous period's own bucket, not just this one. */
+  prevSuccessRate?: number | null;
 }) {
   // "ยกเว้น" (leave/holiday-exempt) isn't shown here — mixed in with the
   // on-time/late/pending/overdue spectrum it reads as a 5th outcome on equal
@@ -155,6 +163,12 @@ export function StatusOverviewDonut({
   const [showAllPeople, setShowAllPeople] = useState(false);
   const shownPeople = showAllPeople ? people : people.slice(0, 1);
 
+  // Same tier+trend row as the KPI card's own header — a rate-based badge,
+  // so it only applies here (not on the two count-based backlog cards,
+  // which have no natural 0-100 scale to tier against).
+  const tier = tierFor(buckets.successRate);
+  const trend = prevSuccessRate != null ? periodTrend(buckets.successRate, prevSuccessRate) : null;
+
   return (
     <Card className={`${DASHBOARD_CARD} h-full`}>
       <CardHeader>
@@ -163,6 +177,14 @@ export function StatusOverviewDonut({
           {title}
         </CardTitle>
         <p className="text-[13px] text-[var(--ink-soft)]">{subtitle}</p>
+        {buckets.total > 0 && (
+          <div className="flex items-center gap-2 mt-1">
+            <span className={cn("text-[11px] font-medium px-2 py-0.5 rounded-full", tier.bg)} style={{ color: tier.color }}>
+              {tier.label}
+            </span>
+            <TrendText trend={trend} higherIsGood={true} />
+          </div>
+        )}
       </CardHeader>
       <CardContent className="flex flex-col gap-5 @container">
         {buckets.total === 0 ? (

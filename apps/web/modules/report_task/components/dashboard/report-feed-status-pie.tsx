@@ -14,6 +14,7 @@ import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-r
 import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
 import { useDashboardFilterStore } from "@/modules/report_task/store/dashboard-filter-store";
 import { presetRange } from "@/modules/report_task/lib/date-filter";
+import { previousPeriodRange } from "@/modules/report_task/lib/dashboard-trend";
 import { MessageSquareText } from "lucide-react";
 import { StatusOverviewDonut } from "./status-overview-donut";
 
@@ -49,6 +50,11 @@ export function ReportFeedStatusPie() {
   const hasTrackedRooms = trackedTopicsOf(topics).length > 0;
   const byUser = reportStatusCountsByUser(topics, posts, range, exemptions);
   const inScope = scopedUserIds({ personId, departmentId });
+
+  // Same previous-period comparison as the KPI card's own successRate trend
+  // — null (no comparison shown) for the unbounded "ทั้งหมด" preset.
+  const prevRange = previousPeriodRange(preset, customFrom, customTo);
+  const prevSuccessRate = prevRange ? reportKpiBuckets(topics, posts, prevRange, { personId, departmentId }, exemptions).successRate : null;
 
   // Only a department scope maps to a single room's stats tab unambiguously
   // — a person can belong to several tracked rooms, so personId scope (and
@@ -87,6 +93,7 @@ export function ReportFeedStatusPie() {
         overdue: topPeopleOf(byUser, inScope, "missed"),
         pending: topPeopleOf(byUser, inScope, "pending"),
       }}
+      prevSuccessRate={prevSuccessRate}
     />
   );
 }
