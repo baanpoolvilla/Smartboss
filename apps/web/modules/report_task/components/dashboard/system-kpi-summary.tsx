@@ -115,30 +115,33 @@ const REPORT_BUCKET_FIELD: Record<KpiBucketKey, keyof ReportStatusCounts> = {
  * AI-generated, same "rule-based, not a black box" decision as the rest of
  * this card. Deliberately NOT personalized — "ตัวปัญหาหลัก" above already
  * names whoever's involved (possibly several tied people), so this stays a
- * general next step instead of repeating one name. Each variant is a
- * concrete action to take (not a soft question/reflection) — "ไอเดีย" for
- * how to actually resolve it. Rotated daily via `pickDaily` so it doesn't
- * read as the exact same static sentence on every single visit. */
+ * general next step instead of repeating one name. Grounded in actual
+ * workload-management/deadline-compliance practice (capacity-aware
+ * reassignment, weekly backlog reviews, visible/shared tracking, reminders
+ * that state *why* the deadline matters, asking what's actually blocking
+ * someone instead of just re-nagging) — not generic-sounding filler.
+ * Rotated daily via `pickDaily` so it doesn't read as the exact same
+ * static sentence on every single visit. */
 const ISSUE_TIPS: Record<string, readonly string[]> = {
   taskOverdue: [
-    "มอบหมายงานให้คนอื่นช่วยแบ่งเบา หรือตกลงกำหนดส่งใหม่ที่ทำได้จริง",
-    "ส่งข้อความเตือนพร้อมระบุวันที่ต้องเสร็จให้ชัดเจน",
-    "ลดจำนวนงานใหม่ที่มอบหมายเพิ่มในสัปดาห์นี้ ให้เคลียร์ของค้างก่อน",
+    "มอบหมายต่อให้คนที่มีคิวว่างและทักษะตรงกับงานนั้นจริงๆ ไม่ใช่ใครก็ได้ที่ว่าง",
+    "ทบทวนงานค้างเป็นประจำทุกสัปดาห์ ดูว่าอะไรติดขัดก่อนจะกองสะสมนานขึ้น",
+    "จัดลำดับใหม่ตามผลกระทบจริง ไม่ใช่แค่ตัวที่ค้างนานสุดต้องมาก่อนเสมอ",
   ],
   reportOverdue: [
-    "ส่งข้อความเตือนพร้อมกำหนดเวลาส่งใหม่ที่ชัดเจน",
-    "เช็คว่าห้องนั้นขาดข้อมูล/อุปกรณ์อะไร แล้วช่วยจัดหาให้",
-    "โทรหรือคุยตรงๆ แทนข้อความ ถ้าเตือนผ่านแชทหลายครั้งแล้วไม่คืบหน้า",
+    "ส่งเตือนพร้อมลิงก์ส่งตรงและเหตุผลว่าทำไมรายงานนี้สำคัญ ไม่ใช่แค่เตือนเฉยๆ",
+    "เปลี่ยนจากเตือนแบบส่วนตัวเป็นให้ทั้งทีมเห็น ความโปร่งใสมักช่วยเพิ่มความรับผิดชอบ",
+    "ถามตรงๆ ว่าติดขัดตรงไหน บางทีปัญหาจริงไม่ใช่แค่ลืมส่ง",
   ],
   taskPending: [
-    "ตั้งเตือนล่วงหน้า 1-2 วันก่อนถึงกำหนด ผ่านแชทหรือปฏิทิน",
-    "เช็คว่าติดขัดอะไรอยู่ แล้วช่วยเคลียร์อุปสรรคนั้นก่อนถึงเส้นตาย",
-    "แบ่งงานเป็นขั้นย่อยพร้อมกำหนดเช็คพอยต์ระหว่างทาง",
+    "ให้เพื่อนร่วมทีมช่วยเช็คความคืบหน้ากันเอง ไม่ต้องรอหัวหน้าถามอย่างเดียว",
+    "ใช้บอร์ดที่ทุกคนเห็นร่วมกัน งานที่มองเห็นได้ทั่วทีมมักถูกดูแลดีกว่า",
+    "เตือนก่อนถึงกำหนดพร้อมบอกว่าทำไมงานนี้สำคัญ ไม่ใช่แค่แจ้งวันที่เฉยๆ",
   ],
   reportPending: [
-    "ส่งข้อความเตือนก่อนรอบปิดสัก 1-2 ชั่วโมง พร้อมบอกเวลาปิดรอบที่ชัดเจน",
+    "เตือนใกล้เวลาปิดรอบพร้อมลิงก์ส่งตรง ลดขั้นตอนที่ทำให้ลืม",
+    "แจ้งเงื่อนไข/ผลที่ตามมาให้ชัดตั้งแต่ต้น จะได้ไม่ต้องเดาว่าสำคัญแค่ไหน",
     "แชร์ตัวอย่างรายงานที่เคยส่งผ่าน ให้มีต้นแบบเริ่มต้นได้เร็วขึ้น",
-    "ตั้งระบบเตือนอัตโนมัติก่อนถึงรอบปิด แทนการเตือนมือทุกครั้ง",
   ],
 };
 function issueSuggestion(key: string): string {
