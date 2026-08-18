@@ -10,7 +10,15 @@ import { ChartTooltip } from "@/modules/report_task/components/shared/chart-tool
 import type { KpiBuckets } from "@/modules/report_task/lib/kpi-buckets";
 import { useHasHover } from "@/modules/report_task/hooks/use-has-hover";
 import { cn } from "@/modules/report_task/lib/utils";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Lightbulb } from "lucide-react";
+
+/** Same templated, rule-based (not AI-generated) next-step copy as the KPI
+ * card's own "ตัวปัญหาหลัก" — generic enough to read naturally for either
+ * domain (งาน/รายงาน) since this component is shared by both. */
+const ISSUE_SUGGESTION = {
+  overdue: "ตรวจสอบว่าใครดูแลอยู่ แล้วพิจารณาจัดลำดับความสำคัญหรือส่งข้อความเตือน",
+  pending: "ติดตามความคืบหน้าก่อนถึงกำหนด ป้องกันไม่ให้เลื่อนไปเป็นเลยกำหนด",
+} as const;
 
 interface Slice {
   key: string;
@@ -107,6 +115,20 @@ export function StatusOverviewDonut({
   }, [hasHover, selectedKey]);
 
   const selected = selectedKey ? slices.find((s) => s.key === selectedKey) ?? null : null;
+
+  // Same "every stuck category, not just the worst one" shape as the KPI
+  // card's own ตัวปัญหาหลัก (§ system-kpi-summary.tsx) — here scoped to this
+  // one donut's own domain instead of combining Task+Report.
+  const stuck = buckets.overdue + buckets.pending;
+  const issues = (
+    [
+      { key: "overdue" as const, label: labels.overdue, count: buckets.overdue },
+      { key: "pending" as const, label: labels.pending, count: buckets.pending },
+    ] satisfies { key: keyof typeof ISSUE_SUGGESTION; label: string; count: number }[]
+  )
+    .filter((i) => i.count > 0)
+    .map((i) => ({ ...i, percent: stuck ? Math.round((i.count / stuck) * 100) : 0, suggestion: ISSUE_SUGGESTION[i.key] }))
+    .sort((a, b) => b.count - a.count);
 
   return (
     <Card className={`${DASHBOARD_CARD} h-full`}>
@@ -267,6 +289,23 @@ export function StatusOverviewDonut({
                 ))}
               </div>
             </div>
+
+            {issues.length > 0 && (
+              <div className="w-full flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2">
+                <Lightbulb className="h-4 w-4 text-[var(--chart-amber-dark)] shrink-0 mt-0.5" />
+                <div className="flex flex-col gap-2.5 text-[12px] text-[var(--ink)] w-full">
+                  <span className="font-semibold text-[var(--chart-amber-dark)]">ตัวปัญหาหลัก</span>
+                  {issues.map((issue) => (
+                    <div key={issue.key}>
+                      <p className="font-medium">
+                        {issue.label}: {issue.count} {unitLabel} ({issue.percent}% ของที่ค้างทั้งหมด)
+                      </p>
+                      <p className="text-[var(--ink-soft)] mt-0.5">💡 {issue.suggestion}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center justify-between gap-3 pt-4 border-t border-[var(--line)]">
               {/* The ตรงเวลา/ส่งช้า rates used to repeat here too — already
