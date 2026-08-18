@@ -29,6 +29,17 @@ export const users: User[] = liveArrayProxy(() => useEmployeeStore.getState().em
 export function getUser(id: string) {
   return users.find((u) => u.id === id);
 }
+/**
+ * Name to show for a person id, even when they no longer resolve — e.g. an
+ * account deactivated at /admin drops out of `users` immediately (see
+ * employee-directory.ts's `isActive: true` filter) while old tasks/reports
+ * still reference their id, so a plain `getUser(id)?.name ?? id` leaks the
+ * raw database UUID into the UI. Every display site should call this
+ * instead of inventing its own `?? id` fallback.
+ */
+export function displayName(id: string): string {
+  return getUser(id)?.name ?? "พนักงานที่ปิดการใช้งานแล้ว";
+}
 export function getDepartment(id: string) {
   return departments.find((d) => d.id === id);
 }

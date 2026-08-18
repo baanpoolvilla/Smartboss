@@ -1,4 +1,4 @@
-import { getUser } from "@/modules/report_task/lib/directory";
+import { displayName } from "@/modules/report_task/lib/directory";
 
 const MAX_SHOWN = 6;
 
@@ -18,7 +18,7 @@ export interface RankedPerson {
 export function rankedPeople(counts: Map<string, number>): RankedPerson[] {
   const entries = [...counts.entries()]
     .filter(([, n]) => n > 0)
-    .map(([id, n]) => ({ name: getUser(id)?.name ?? id, count: n }))
+    .map(([id, n]) => ({ name: displayName(id), count: n }))
     .sort((a, b) => b.count - a.count);
   if (entries.length <= MAX_SHOWN + 1) return entries;
   const rest = entries.slice(MAX_SHOWN);

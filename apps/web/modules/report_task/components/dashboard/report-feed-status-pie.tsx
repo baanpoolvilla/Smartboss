@@ -8,7 +8,7 @@ import {
   reportStatusCountsByUser,
   scopedUserIds,
 } from "@/modules/report_task/lib/report-feed-compliance";
-import { getUser } from "@/modules/report_task/lib/directory";
+import { displayName } from "@/modules/report_task/lib/directory";
 import { useVisibleReportTopics } from "@/modules/report_task/hooks/use-visible-report-topics";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
@@ -39,7 +39,7 @@ function countsFor(byUser: Map<string, UserCounts>, ids: Set<string>, field: key
 function topPeopleOf(byUser: Map<string, UserCounts>, ids: Set<string>, field: "missed" | "pending"): { name: string; count: number }[] {
   const ranked = [...ids].map((id) => ({ id, count: byUser.get(id)?.[field] ?? 0 })).filter((r) => r.count > 0).sort((a, b) => b.count - a.count);
   const topCount = ranked[0]?.count;
-  return ranked.filter((r) => r.count === topCount).map((r) => ({ name: getUser(r.id)?.name ?? r.id, count: r.count }));
+  return ranked.filter((r) => r.count === topCount).map((r) => ({ name: displayName(r.id), count: r.count }));
 }
 
 /** "ภาพรวมรายงาน (Report)" — the Analytics section's right twin of Task
