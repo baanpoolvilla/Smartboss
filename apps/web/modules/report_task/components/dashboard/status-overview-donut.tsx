@@ -17,19 +17,21 @@ import { ArrowUpRight, Lightbulb, AlertTriangle } from "lucide-react";
  * domain (งาน/รายงาน) since this component is shared by both. Deliberately
  * NOT personalized — "ตัวปัญหาหลัก" above already names whoever's involved,
  * so this line stays a general next step rather than repeating one name
- * when several people can be tied there at once. A few variants per key,
- * rotated by `pickDaily` — same one sentence every single visit read as
- * dead/decorative text; rotating it daily makes it read as an actual tip. */
+ * when several people can be tied there at once. Each variant is a concrete
+ * action to take (not a soft question/reflection) — "ไอเดีย" for how to
+ * actually resolve it. Rotated by `pickDaily` — same one sentence every
+ * single visit read as dead/decorative text; rotating it daily makes it
+ * read as an actual, still-useful idea instead of filler. */
 const ISSUE_TIPS = {
   overdue: [
-    "ตรวจสอบว่าใครดูแลอยู่ แล้วพิจารณาจัดลำดับความสำคัญหรือส่งข้อความเตือน",
-    "ลองแบ่งงานให้คนที่มีคิวว่างกว่า จะได้ไม่กองสะสมอยู่ที่คนเดิม",
-    "ส่งข้อความเช็คอินสั้นๆ ก่อนที่จะเลยกำหนดนานขึ้นเรื่อยๆ",
+    "มอบหมายงานให้คนอื่นช่วยแบ่งเบา หรือตกลงกำหนดส่งใหม่ที่ทำได้จริง",
+    "ส่งข้อความเตือนพร้อมระบุวันที่ต้องเสร็จให้ชัดเจน",
+    "ลดจำนวนงานใหม่ที่มอบหมายเพิ่มในสัปดาห์นี้ ให้เคลียร์ของค้างก่อน",
   ],
   pending: [
-    "ติดตามความคืบหน้าก่อนถึงกำหนด ป้องกันไม่ให้เลื่อนไปเป็นเลยกำหนด",
-    "เตือนล่วงหน้า 1-2 วันก่อนถึงกำหนด ช่วยลดโอกาสเลื่อนได้มาก",
-    "เช็คว่ามีอะไรติดขัดไหม บางทีแค่รอคำตอบจากอีกฝ่ายก็ทำให้ค้าง",
+    "ตั้งเตือนล่วงหน้า 1-2 วันก่อนถึงกำหนด ผ่านแชทหรือปฏิทิน",
+    "เช็คว่าติดขัดอะไรอยู่ แล้วช่วยเคลียร์อุปสรรคนั้นก่อนถึงเส้นตาย",
+    "แบ่งงานเป็นขั้นย่อยพร้อมกำหนดเช็คพอยต์ระหว่างทาง",
   ],
 } as const;
 function issueSuggestion(key: "overdue" | "pending"): string {
@@ -347,7 +349,7 @@ export function StatusOverviewDonut({
                 <div className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2">
                   <Lightbulb className="h-4 w-4 text-[var(--chart-amber-dark)] shrink-0 mt-0.5" />
                   <p className="text-[12px] text-[var(--ink)]">
-                    <span className="font-semibold text-[var(--chart-amber-dark)]">เคล็ดลับ:</span>{" "}
+                    <span className="font-semibold text-[var(--chart-amber-dark)]">ไอเดีย:</span>{" "}
                     <span className="text-[var(--ink-soft)]">{issueSuggestion(mainIssue.key)}</span>
                   </p>
                 </div>
