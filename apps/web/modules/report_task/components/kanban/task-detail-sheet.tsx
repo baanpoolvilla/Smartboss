@@ -41,7 +41,7 @@ import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
-import { getUser, getDepartment, users, canManage, isOwner, departmentIdsOf } from "@/modules/report_task/lib/directory";
+import { getUser, displayName, getDepartment, users, canManage, isOwner, departmentIdsOf } from "@/modules/report_task/lib/directory";
 import { statusMeta, priorityMeta, taskStatusOrder, taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
 import { isTaskFullyDone, remainingChecklistCount } from "@/modules/report_task/lib/task-completion";
 import { formatDate, formatDateTime, relativeTime } from "@/modules/report_task/lib/format";
@@ -742,7 +742,7 @@ export function TaskDetailSheet({
                 <div className="space-y-1">
                   {Object.entries(task.penalties ?? {}).map(([uid, p]) => (
                     <div key={uid} className="flex items-center justify-between text-xs rounded-lg bg-[var(--bg-soft)] px-3 py-1.5">
-                      <span className="font-medium">{getUser(uid)?.name ?? uid}</span>
+                      <span className="font-medium">{displayName(uid)}</span>
                       <span className="text-[var(--chart-red)] font-semibold">−{Math.abs(p.points)} คะแนน</span>
                     </div>
                   ))}
@@ -889,7 +889,7 @@ export function TaskDetailSheet({
                     </SelectTrigger>
                     <SelectContent>
                       {task.assigneeIds.map((uid) => (
-                        <SelectItem key={uid} value={uid}>{getUser(uid)?.name ?? uid}</SelectItem>
+                        <SelectItem key={uid} value={uid}>{displayName(uid)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -963,7 +963,7 @@ export function TaskDetailSheet({
             {Object.entries(task.assigneeDueDateRevisions ?? {}).map(([uid, r]) => (
               <div key={uid} className="text-sm rounded-lg border border-[var(--line)] px-3 py-2 space-y-1">
                 <div className="flex items-center justify-between">
-                  <span className="font-medium">กำหนดส่งของ {getUser(uid)?.name ?? uid}</span>
+                  <span className="font-medium">กำหนดส่งของ {displayName(uid)}</span>
                   <span className="text-xs text-[var(--ink-soft)]">{formatDate(r.revisedAt)}</span>
                 </div>
                 <p className="text-xs text-[var(--ink-soft)]">

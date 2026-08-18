@@ -9,7 +9,7 @@ import { previousPeriodRange, periodTrend } from "@/modules/report_task/lib/dash
 import { TrendText, tierFor } from "@/modules/report_task/components/shared/trend-badge";
 import { filterTasksByDashboard, presetRange } from "@/modules/report_task/lib/date-filter";
 import { localDateStr } from "@/modules/report_task/lib/now";
-import { getUser } from "@/modules/report_task/lib/directory";
+import { displayName } from "@/modules/report_task/lib/directory";
 import { reportStatusCountsByUser, scopedUserIds, type ReportStatusCounts } from "@/modules/report_task/lib/report-feed-compliance";
 import { useVisibleTasks } from "@/modules/report_task/hooks/use-visible-tasks";
 import { useVisibleReportTopics } from "@/modules/report_task/hooks/use-visible-report-topics";
@@ -68,7 +68,7 @@ interface KpiGroup {
 function topPeople(counts: Map<string, number>): PersonSeg[] {
   const entries = [...counts.entries()]
     .filter(([, n]) => n > 0)
-    .map(([id, n]) => ({ id, name: getUser(id)?.name ?? id, count: n }))
+    .map(([id, n]) => ({ id, name: displayName(id), count: n }))
     .sort((a, b) => b.count - a.count);
   if (entries.length <= MAX_SEGMENTS + 1) return entries;
   const rest = entries.slice(MAX_SEGMENTS);
@@ -128,7 +128,7 @@ function issueSuggestion(key: string): string {
 function topPeopleOf(map: Map<string, number>): { name: string; count: number }[] {
   const ranked = [...map.entries()].sort((a, b) => b[1] - a[1]);
   const topCount = ranked[0]?.[1];
-  return ranked.filter(([, count]) => count === topCount).map(([id, count]) => ({ name: getUser(id)?.name ?? id, count }));
+  return ranked.filter(([, count]) => count === topCount).map(([id, count]) => ({ name: displayName(id), count }));
 }
 
 /**

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { taskKpiBuckets, taskBucketsByAssignee } from "@/modules/report_task/lib/kpi-buckets";
-import { getUser } from "@/modules/report_task/lib/directory";
+import { displayName } from "@/modules/report_task/lib/directory";
 import { useDashboardTasks } from "@/modules/report_task/hooks/use-dashboard-tasks";
 import { useVisibleTasks } from "@/modules/report_task/hooks/use-visible-tasks";
 import { useTaskBoardIntentStore } from "@/modules/report_task/store/task-board-intent-store";
@@ -20,7 +20,7 @@ import { StatusOverviewDonut } from "./status-overview-donut";
 function topPeopleOf(map: Map<string, number>): { name: string; count: number }[] {
   const ranked = [...map.entries()].sort((a, b) => b[1] - a[1]);
   const topCount = ranked[0]?.[1];
-  return ranked.filter(([, count]) => count === topCount).map(([id, count]) => ({ name: getUser(id)?.name ?? id, count }));
+  return ranked.filter(([, count]) => count === topCount).map(([id, count]) => ({ name: displayName(id), count }));
 }
 
 /** "ภาพรวมงาน (Task)" — the Analytics section's left twin (§2.6; Report

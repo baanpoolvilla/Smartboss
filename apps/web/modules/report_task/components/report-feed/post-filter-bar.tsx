@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
-import { getUser } from "@/modules/report_task/lib/directory";
+import { displayName } from "@/modules/report_task/lib/directory";
 import { lateCutoffFor } from "@/modules/report_task/lib/report-cutoff";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Button } from "@/modules/report_task/components/ui/button";
@@ -105,7 +105,7 @@ export function PostFilterBar({
             <DropdownMenuSeparator />
             {authorOptions.map((id) => (
               <DropdownMenuCheckboxItem key={id} checked={filters.authorIds.has(id)} onCheckedChange={() => toggleAuthor(id)}>
-                {getUser(id)?.name ?? id}
+                {displayName(id)}
               </DropdownMenuCheckboxItem>
             ))}
           </DropdownMenuGroup>
