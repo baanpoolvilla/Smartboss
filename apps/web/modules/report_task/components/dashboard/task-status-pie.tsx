@@ -10,6 +10,7 @@ import { useDashboardFilterStore } from "@/modules/report_task/store/dashboard-f
 import { filterTasksByDashboard } from "@/modules/report_task/lib/date-filter";
 import { previousPeriodRange } from "@/modules/report_task/lib/dashboard-trend";
 import { localDateStr } from "@/modules/report_task/lib/now";
+import { rankedPeople } from "@/modules/report_task/lib/ranked-people";
 import { KanbanSquare } from "lucide-react";
 import { StatusOverviewDonut } from "./status-overview-donut";
 
@@ -79,6 +80,12 @@ export function TaskStatusPie() {
       onSegmentClick={goToStatus}
       topPersonByBucket={{ overdue: topPeopleOf(byAssignee.overdue), pending: topPeopleOf(byAssignee.pending) }}
       prevSuccessRate={prevSuccessRate}
+      peopleByBucket={{
+        onTime: rankedPeople(byAssignee.onTime),
+        lateDone: rankedPeople(byAssignee.lateDone),
+        pending: rankedPeople(byAssignee.pending),
+        overdue: rankedPeople(byAssignee.overdue),
+      }}
     />
   );
 }

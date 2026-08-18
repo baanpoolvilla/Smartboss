@@ -12,6 +12,7 @@ import { useHasHover } from "@/modules/report_task/hooks/use-has-hover";
 import { cn, pickDaily } from "@/modules/report_task/lib/utils";
 import { periodTrend } from "@/modules/report_task/lib/dashboard-trend";
 import { TrendText, tierFor } from "@/modules/report_task/components/shared/trend-badge";
+import type { RankedPerson } from "@/modules/report_task/lib/ranked-people";
 import { ArrowUpRight, Lightbulb, AlertTriangle } from "lucide-react";
 
 /** Same templated, rule-based (not AI-generated) next-step copy as the KPI
@@ -75,6 +76,7 @@ export function StatusOverviewDonut({
   onDetail,
   topPersonByBucket,
   prevSuccessRate,
+  peopleByBucket,
 }: {
   title: string;
   subtitle: string;
@@ -105,6 +107,12 @@ export function StatusOverviewDonut({
    * preset, or the previous period had zero total). Computed by the caller
    * since it needs the previous period's own bucket, not just this one. */
   prevSuccessRate?: number | null;
+  /** Full ranked (biggest-first, folded beyond a cap) person list for each
+   * of the 4 slices — swapped in for the legend when that slice is clicked,
+   * so drilling into "ยังไม่เสร็จ เลยกำหนด" shows *who*, not just the % again.
+   * Colored with the clicked slice's own color, never a fixed color, so
+   * green stays green and red stays red regardless of which slice it is. */
+  peopleByBucket?: Partial<Record<"onTime" | "lateDone" | "pending" | "overdue", RankedPerson[]>>;
 }) {
   // "ยกเว้น" (leave/holiday-exempt) isn't shown here — mixed in with the
   // on-time/late/pending/overdue spectrum it reads as a 5th outcome on equal
@@ -305,35 +313,72 @@ export function StatusOverviewDonut({
               </div>
 
               <div className="flex-1 w-full space-y-1.5 min-w-0">
-                {/* Subtotal of the two green rows below (onTime+lateDone) —
-                    same number as the donut's center %, spelled out here too
-                    since a legend that lists every individual status but not
-                    the headline one it sums to reads incomplete. */}
-                <div className="w-full flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 -mx-2 bg-[var(--bg-soft)]">
-                  <span className="text-sm font-semibold text-[var(--ink)]">{centerLabel}</span>
-                  <span className="text-sm font-semibold text-[var(--ink)] tabular-nums shrink-0 whitespace-nowrap">
-                    {buckets.onTime + buckets.lateDone} {unitLabel} ({buckets.successRate}%)
-                  </span>
-                </div>
-                {withPercent.map((s) => (
-                  <button
-                    key={s.key}
-                    onClick={() => selectSegment(s.key)}
-                    disabled={s.value === 0}
-                    className={cn(
-                      "w-full flex items-center justify-between text-sm gap-2 rounded-lg px-2 py-1.5 -mx-2 hover:enabled:bg-[var(--bg-soft)] transition-colors text-left disabled:cursor-default",
-                      selectedKey && selectedKey !== s.key && "opacity-40"
-                    )}
-                  >
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", s.value === 0 && "opacity-30")} style={{ backgroundColor: s.color }} />
-                      <span className={cn("truncate", s.value === 0 ? "text-[var(--ink-soft)]" : "text-[var(--ink)]")}>{s.label}</span>
+                {selected && peopleByBucket?.[selected.key as keyof typeof peopleByBucket]?.length ? (
+                  // Drilled in AND per-person data exists for this slice —
+                  // swap the legend out entirely for who's actually behind
+                  // it, ranked biggest-first, colored to match the clicked
+                  // slice only (no leftover red/amber/green from the other
+                  // 3 slices sitting around dimmed).
+                  <div className="flex flex-col gap-2">
+                    <p className="text-[11px] font-semibold text-[var(--ink-soft)] uppercase tracking-wide px-1">
+                      {selected.label} — เรียงมากไปน้อย
+                    </p>
+                    {(() => {
+                      const people = peopleByBucket[selected.key as keyof typeof peopleByBucket]!;
+                      const max = people[0]?.count || 1;
+                      return people.map((p, i) => (
+                        <div key={p.name} className="flex items-center gap-2 px-1">
+                          <span className="text-[11px] font-semibold text-[var(--ink-soft)] w-4 text-right shrink-0">{i + 1}.</span>
+                          <span className="text-[12.5px] text-[var(--ink)] w-20 truncate shrink-0">{p.name}</span>
+                          <div className="flex-1 h-2.5 rounded-full bg-[var(--bg-soft)] overflow-hidden">
+                            <div className="h-full rounded-full" style={{ width: `${(p.count / max) * 100}%`, backgroundColor: selected.color }} />
+                          </div>
+                          <span className="text-[11.5px] font-semibold w-14 text-right tabular-nums shrink-0" style={{ color: selected.color }}>
+                            {p.count} {unitLabel}
+                          </span>
+                        </div>
+                      ));
+                    })()}
+                    <button
+                      onClick={() => setSelectedKey(null)}
+                      className="self-start text-[11.5px] font-semibold text-[var(--ink-soft)] hover:text-[var(--ink)] hover:underline px-1 mt-1"
+                    >
+                      ‹ กลับไปดูภาพรวม
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {/* Subtotal of the two green rows below (onTime+lateDone) —
+                        same number as the donut's center %, spelled out here too
+                        since a legend that lists every individual status but not
+                        the headline one it sums to reads incomplete. */}
+                    <div className="w-full flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 -mx-2 bg-[var(--bg-soft)]">
+                      <span className="text-sm font-semibold text-[var(--ink)]">{centerLabel}</span>
+                      <span className="text-sm font-semibold text-[var(--ink)] tabular-nums shrink-0 whitespace-nowrap">
+                        {buckets.onTime + buckets.lateDone} {unitLabel} ({buckets.successRate}%)
+                      </span>
                     </div>
-                    <span className="text-[var(--ink-soft)] tabular-nums shrink-0 whitespace-nowrap">
-                      {s.value} {unitLabel} <span className="text-[var(--ink)] font-medium">({s.percent}%)</span>
-                    </span>
-                  </button>
-                ))}
+                    {withPercent.map((s) => (
+                      <button
+                        key={s.key}
+                        onClick={() => selectSegment(s.key)}
+                        disabled={s.value === 0}
+                        className={cn(
+                          "w-full flex items-center justify-between text-sm gap-2 rounded-lg px-2 py-1.5 -mx-2 hover:enabled:bg-[var(--bg-soft)] transition-colors text-left disabled:cursor-default",
+                          selectedKey && selectedKey !== s.key && "opacity-40"
+                        )}
+                      >
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", s.value === 0 && "opacity-30")} style={{ backgroundColor: s.color }} />
+                          <span className={cn("truncate", s.value === 0 ? "text-[var(--ink-soft)]" : "text-[var(--ink)]")}>{s.label}</span>
+                        </div>
+                        <span className="text-[var(--ink-soft)] tabular-nums shrink-0 whitespace-nowrap">
+                          {s.value} {unitLabel} <span className="text-[var(--ink)] font-medium">({s.percent}%)</span>
+                        </span>
+                      </button>
+                    ))}
+                  </>
+                )}
               </div>
             </div>
 
