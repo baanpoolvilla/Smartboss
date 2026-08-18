@@ -115,29 +115,30 @@ const REPORT_BUCKET_FIELD: Record<KpiBucketKey, keyof ReportStatusCounts> = {
  * AI-generated, same "rule-based, not a black box" decision as the rest of
  * this card. Deliberately NOT personalized — "ตัวปัญหาหลัก" above already
  * names whoever's involved (possibly several tied people), so this stays a
- * general next step instead of repeating one name. Rotated daily via
- * `pickDaily` so it doesn't read as the exact same static sentence on
- * every single visit. */
+ * general next step instead of repeating one name. Each variant is a
+ * concrete action to take (not a soft question/reflection) — "ไอเดีย" for
+ * how to actually resolve it. Rotated daily via `pickDaily` so it doesn't
+ * read as the exact same static sentence on every single visit. */
 const ISSUE_TIPS: Record<string, readonly string[]> = {
   taskOverdue: [
-    "ตรวจสอบว่าใครดูแลงานเหล่านี้อยู่ แล้วพิจารณาจัดลำดับความสำคัญหรือมอบหมายใหม่",
-    "ลองแบ่งงานให้คนที่มีคิวว่างกว่า จะได้ไม่กองสะสมอยู่ที่คนเดิม",
-    "ส่งข้อความเช็คอินสั้นๆ ก่อนที่จะเลยกำหนดนานขึ้นเรื่อยๆ",
+    "มอบหมายงานให้คนอื่นช่วยแบ่งเบา หรือตกลงกำหนดส่งใหม่ที่ทำได้จริง",
+    "ส่งข้อความเตือนพร้อมระบุวันที่ต้องเสร็จให้ชัดเจน",
+    "ลดจำนวนงานใหม่ที่มอบหมายเพิ่มในสัปดาห์นี้ ให้เคลียร์ของค้างก่อน",
   ],
   reportOverdue: [
-    "ส่งข้อความเตือนคนที่เกี่ยวข้อง ก่อนกลายเป็นค้างสะสมหลายวัน",
-    "เช็คว่าห้องนั้นมีอุปสรรคอะไรอยู่ไหม บางทีแค่ยังไม่มีข้อมูลให้ส่ง",
-    "ลองถามตรงๆ ว่าต้องการให้ช่วยอะไรถึงจะส่งได้ทัน",
+    "ส่งข้อความเตือนพร้อมกำหนดเวลาส่งใหม่ที่ชัดเจน",
+    "เช็คว่าห้องนั้นขาดข้อมูล/อุปกรณ์อะไร แล้วช่วยจัดหาให้",
+    "โทรหรือคุยตรงๆ แทนข้อความ ถ้าเตือนผ่านแชทหลายครั้งแล้วไม่คืบหน้า",
   ],
   taskPending: [
-    "ติดตามความคืบหน้าก่อนถึงกำหนด ป้องกันไม่ให้เลื่อนไปเป็นเลยกำหนด",
-    "เตือนล่วงหน้า 1-2 วันก่อนถึงกำหนด ช่วยลดโอกาสเลื่อนได้มาก",
-    "เช็คว่ามีอะไรติดขัดไหม บางทีแค่รอคำตอบจากอีกฝ่ายก็ทำให้ค้าง",
+    "ตั้งเตือนล่วงหน้า 1-2 วันก่อนถึงกำหนด ผ่านแชทหรือปฏิทิน",
+    "เช็คว่าติดขัดอะไรอยู่ แล้วช่วยเคลียร์อุปสรรคนั้นก่อนถึงเส้นตาย",
+    "แบ่งงานเป็นขั้นย่อยพร้อมกำหนดเช็คพอยต์ระหว่างทาง",
   ],
   reportPending: [
-    "เตือนล่วงหน้าก่อนถึงเวลาปิดรอบ เพื่อลดโอกาสขาดส่ง",
-    "ส่งข้อความเตือนก่อนรอบปิดสัก 1-2 ชั่วโมง ช่วยเตือนความจำได้ดี",
-    "เช็คว่ามีตัวอย่างรายงานให้ดูไหม บางทีแค่ไม่รู้จะเริ่มยังไงก็ทำให้ช้า",
+    "ส่งข้อความเตือนก่อนรอบปิดสัก 1-2 ชั่วโมง พร้อมบอกเวลาปิดรอบที่ชัดเจน",
+    "แชร์ตัวอย่างรายงานที่เคยส่งผ่าน ให้มีต้นแบบเริ่มต้นได้เร็วขึ้น",
+    "ตั้งระบบเตือนอัตโนมัติก่อนถึงรอบปิด แทนการเตือนมือทุกครั้ง",
   ],
 };
 function issueSuggestion(key: string): string {
@@ -486,7 +487,7 @@ export function SystemKpiSummary() {
                 <div className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2">
                   <Lightbulb className="h-4 w-4 text-[var(--chart-amber-dark)] shrink-0 mt-0.5" />
                   <p className="text-[12px] text-[var(--ink)]">
-                    <span className="font-semibold text-[var(--chart-amber-dark)]">เคล็ดลับ:</span>{" "}
+                    <span className="font-semibold text-[var(--chart-amber-dark)]">ไอเดีย:</span>{" "}
                     <span className="text-[var(--ink-soft)]">{issueSuggestion(data.mainIssue.key)}</span>
                   </p>
                 </div>
