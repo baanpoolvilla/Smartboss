@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/modules/report_task/components/ui/card";
 import { DASHBOARD_CARD_STATIC } from "@/modules/report_task/components/dashboard/dashboard-card-style";
 import { taskKpiBuckets, taskBucketsByAssignee, reportKpiBuckets, type KpiBucketKey } from "@/modules/report_task/lib/kpi-buckets";
@@ -15,8 +15,8 @@ import { useVisibleReportTopics } from "@/modules/report_task/hooks/use-visible-
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
 import { useDashboardFilterStore } from "@/modules/report_task/store/dashboard-filter-store";
-import { ArrowUp, ArrowDown, Minus, Gauge, Lightbulb, ListChecks, MessageSquareText } from "lucide-react";
-import { cn } from "@/modules/report_task/lib/utils";
+import { ArrowUp, ArrowDown, Minus, Gauge, Lightbulb, AlertTriangle, ListChecks, MessageSquareText } from "lucide-react";
+import { cn, pickDaily } from "@/modules/report_task/lib/utils";
 
 function TrendText({ trend, higherIsGood }: { trend: Trend | null; higherIsGood: boolean }) {
   if (!trend || trend.direction === "flat" || trend.percent === null) {
@@ -111,14 +111,47 @@ const REPORT_BUCKET_FIELD: Record<KpiBucketKey, keyof ReportStatusCounts> = {
   overdue: "missed",
 };
 
-/** One templated next-step per issue type — plain copy, not AI-generated,
- * same "rule-based, not a black box" decision as the rest of this card. */
-const ISSUE_SUGGESTION: Record<string, string> = {
-  taskOverdue: "ตรวจสอบว่าใครดูแลงานเหล่านี้อยู่ แล้วพิจารณาจัดลำดับความสำคัญหรือมอบหมายใหม่",
-  reportOverdue: "ส่งข้อความเตือนคนที่เกี่ยวข้อง ก่อนกลายเป็นค้างสะสมหลายวัน",
-  taskPending: "ติดตามความคืบหน้าก่อนถึงกำหนด ป้องกันไม่ให้เลื่อนไปเป็นเลยกำหนด",
-  reportPending: "เตือนล่วงหน้าก่อนถึงเวลาปิดรอบ เพื่อลดโอกาสขาดส่ง",
+/** A few templated next-step variants per issue type — plain copy, not
+ * AI-generated, same "rule-based, not a black box" decision as the rest of
+ * this card. Deliberately NOT personalized — "ตัวปัญหาหลัก" above already
+ * names whoever's involved (possibly several tied people), so this stays a
+ * general next step instead of repeating one name. Rotated daily via
+ * `pickDaily` so it doesn't read as the exact same static sentence on
+ * every single visit. */
+const ISSUE_TIPS: Record<string, readonly string[]> = {
+  taskOverdue: [
+    "ตรวจสอบว่าใครดูแลงานเหล่านี้อยู่ แล้วพิจารณาจัดลำดับความสำคัญหรือมอบหมายใหม่",
+    "ลองแบ่งงานให้คนที่มีคิวว่างกว่า จะได้ไม่กองสะสมอยู่ที่คนเดิม",
+    "ส่งข้อความเช็คอินสั้นๆ ก่อนที่จะเลยกำหนดนานขึ้นเรื่อยๆ",
+  ],
+  reportOverdue: [
+    "ส่งข้อความเตือนคนที่เกี่ยวข้อง ก่อนกลายเป็นค้างสะสมหลายวัน",
+    "เช็คว่าห้องนั้นมีอุปสรรคอะไรอยู่ไหม บางทีแค่ยังไม่มีข้อมูลให้ส่ง",
+    "ลองถามตรงๆ ว่าต้องการให้ช่วยอะไรถึงจะส่งได้ทัน",
+  ],
+  taskPending: [
+    "ติดตามความคืบหน้าก่อนถึงกำหนด ป้องกันไม่ให้เลื่อนไปเป็นเลยกำหนด",
+    "เตือนล่วงหน้า 1-2 วันก่อนถึงกำหนด ช่วยลดโอกาสเลื่อนได้มาก",
+    "เช็คว่ามีอะไรติดขัดไหม บางทีแค่รอคำตอบจากอีกฝ่ายก็ทำให้ค้าง",
+  ],
+  reportPending: [
+    "เตือนล่วงหน้าก่อนถึงเวลาปิดรอบ เพื่อลดโอกาสขาดส่ง",
+    "ส่งข้อความเตือนก่อนรอบปิดสัก 1-2 ชั่วโมง ช่วยเตือนความจำได้ดี",
+    "เช็คว่ามีตัวอย่างรายงานให้ดูไหม บางทีแค่ไม่รู้จะเริ่มยังไงก็ทำให้ช้า",
+  ],
 };
+function issueSuggestion(key: string): string {
+  return pickDaily(ISSUE_TIPS[key] ?? ISSUE_TIPS.taskOverdue!);
+}
+
+/** Everyone tied for the most in `map` — named, same helper shape as the
+ * two Overview donuts use for their own "ตัวปัญหาหลัก". Usually one person;
+ * more than one only when they're genuinely tied. */
+function topPeopleOf(map: Map<string, number>): { name: string; count: number }[] {
+  const ranked = [...map.entries()].sort((a, b) => b[1] - a[1]);
+  const topCount = ranked[0]?.[1];
+  return ranked.filter(([, count]) => count === topCount).map(([id, count]) => ({ name: getUser(id)?.name ?? id, count }));
+}
 
 /**
  * One bar (either the "งาน" or "รายงาน" side of a group) split into one
@@ -214,6 +247,9 @@ function StatusBar({
  * สำเร็จรวมเดียว/ระดับ/เทรนด์ และเทียบ Task vs Report คู่กันในมุมเดียว
  */
 export function SystemKpiSummary() {
+  // Only relevant when `data.mainIssue.people` has more than one entry (a
+  // real tie for who's behind it) — see the "+N เพิ่มเติม" toggle below.
+  const [showAllIssuePeople, setShowAllIssuePeople] = useState(false);
   const allTasks = useVisibleTasks();
   const topics = useVisibleReportTopics();
   const posts = useReportFeedStore((s) => s.posts);
@@ -245,8 +281,6 @@ export function SystemKpiSummary() {
     const combined = combineKpiBuckets(taskBuckets, reportBuckets);
     const prevCombined = prevTaskBuckets && prevReportBuckets ? combineKpiBuckets(prevTaskBuckets, prevReportBuckets) : null;
     const trend = (curr: number, prev: number | null) => (prev === null ? null : periodTrend(curr, prev));
-
-    const stuck = taskBuckets.overdue + reportBuckets.overdue + taskBuckets.pending + reportBuckets.pending;
 
     // Per-person breakdown behind each bar — who actually makes up "5 งาน
     // เลยกำหนด" — scoped the same way the totals above already are (a
@@ -281,20 +315,31 @@ export function SystemKpiSummary() {
       reportPeople: reportPeopleFor(key),
     }));
 
-    // §2.4's "ตัวปัญหาหลัก" — เดิมเลือกโชว์แค่ตัวที่แย่สุดตัวเดียว (Task-overdue
-    // หรือ Report-overdue อันไหนมากกว่า) ตอนนี้โชว์ทุกก้อนที่ยังค้างอยู่จริง
-    // (>0) แยกเป็นบรรทัด — งาน/รายงาน x เลยกำหนด/ยังไม่เสร็จ รวม 4 ก้อน —
-    // เรียงจากมากไปน้อยเพื่อยังคงเห็นตัวที่หนักสุดอยู่บนสุด. % คิดจาก
-    // ส่วนแบ่งของ `stuck` เดียวกันทุกบรรทัด ไม่ใช่คิดแยกฐานต่อบรรทัด.
-    const issues = [
-      { key: "taskOverdue", label: "งานเลยกำหนด", count: taskBuckets.overdue },
-      { key: "reportOverdue", label: "รายงานขาดส่ง", count: reportBuckets.overdue },
-      { key: "taskPending", label: "งานยังไม่เสร็จ (ในกำหนด)", count: taskBuckets.pending },
-      { key: "reportPending", label: "รายงานยังไม่ส่ง (ในกำหนด)", count: reportBuckets.pending },
+    // §2.4's "ตัวปัญหาหลัก" — เลือกก้อนที่หนักสุดก้อนเดียว (ไม่ใช่ทุกก้อนที่ค้าง)
+    // พร้อมชื่อทุกคนที่ทำให้เกิดก้อนนั้นมากที่สุด (ปกติคนเดียว มากกว่านั้นเมื่อ
+    // เท่ากันจริงเท่านั้น) — เหมือนกับที่สองโดนัท Overview ด้านล่างทำ.
+    const reportPersonCounts = (field: "missed" | "pending") => {
+      const m = new Map<string, number>();
+      for (const id of inScope) {
+        const n = reportByUserAll.get(id)?.[field] ?? 0;
+        if (n > 0) m.set(id, n);
+      }
+      return m;
+    };
+    const rankedIssues = [
+      { key: "taskOverdue", label: "งานเลยกำหนด", count: taskBuckets.overdue, people: topPeopleOf(taskByAssignee.overdue) },
+      { key: "reportOverdue", label: "รายงานขาดส่ง", count: reportBuckets.overdue, people: topPeopleOf(reportPersonCounts("missed")) },
+      { key: "taskPending", label: "งานยังไม่เสร็จ (ในกำหนด)", count: taskBuckets.pending, people: topPeopleOf(taskByAssignee.pending) },
+      {
+        key: "reportPending",
+        label: "รายงานยังไม่ส่ง (ในกำหนด)",
+        count: reportBuckets.pending,
+        people: topPeopleOf(reportPersonCounts("pending")),
+      },
     ]
       .filter((i) => i.count > 0)
-      .map((i) => ({ ...i, percent: stuck ? Math.round((i.count / stuck) * 100) : 0, suggestion: ISSUE_SUGGESTION[i.key] }))
       .sort((a, b) => b.count - a.count);
+    const mainIssue = rankedIssues[0];
 
     return {
       taskBuckets,
@@ -305,7 +350,7 @@ export function SystemKpiSummary() {
       total: combined.total,
       tier: tierFor(combined.successRate),
       successTrend: trend(combined.successRate, prevCombined?.successRate ?? null),
-      issues,
+      mainIssue,
     };
   }, [allTasks, topics, posts, personId, departmentId, preset, customFrom, customTo, exemptions]);
 
@@ -407,19 +452,43 @@ export function SystemKpiSummary() {
               ))}
             </div>
 
-            {data.issues.length > 0 && (
-              <div className="w-full flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2">
-                <Lightbulb className="h-4 w-4 text-[var(--chart-amber-dark)] shrink-0 mt-0.5" />
-                <div className="flex flex-col gap-2.5 text-[12px] text-[var(--ink)] w-full">
-                  <span className="font-semibold text-[var(--chart-amber-dark)]">ตัวปัญหาหลัก</span>
-                  {data.issues.map((issue) => (
-                    <div key={issue.key}>
-                      <p className="font-medium">
-                        {issue.label}: {issue.count} ครั้ง ({issue.percent}% ของงานค้างทั้งหมด)
-                      </p>
-                      {issue.suggestion && <p className="text-[var(--ink-soft)] mt-0.5">💡 {issue.suggestion}</p>}
-                    </div>
-                  ))}
+            {data.mainIssue && (
+              <div className="w-full flex flex-col gap-2">
+                <div className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2">
+                  <AlertTriangle className="h-4 w-4 text-[var(--chart-red-dark)] shrink-0 mt-0.5" />
+                  <div className="text-[12px] text-[var(--ink)] flex-1">
+                    <p>
+                      <span className="font-semibold text-[var(--chart-red-dark)]">ตัวปัญหาหลัก:</span> {data.mainIssue.label}
+                      {data.mainIssue.people.length > 0 ? (
+                        <>
+                          {" — "}
+                          {(showAllIssuePeople ? data.mainIssue.people : data.mainIssue.people.slice(0, 1)).map((p, i) => (
+                            <span key={p.name}>
+                              {i > 0 && ", "}
+                              <span className="font-medium">{p.name}</span> ({p.count} รายการ)
+                            </span>
+                          ))}
+                        </>
+                      ) : (
+                        <> {data.mainIssue.count} ครั้ง</>
+                      )}
+                    </p>
+                    {data.mainIssue.people.length > 1 && (
+                      <button
+                        onClick={() => setShowAllIssuePeople((v) => !v)}
+                        className="mt-1 text-[11.5px] font-semibold text-[var(--brand-green-dark)] hover:underline"
+                      >
+                        {showAllIssuePeople ? "ย่อกลับ" : `+${data.mainIssue.people.length - 1} เพิ่มเติม (จำนวนเท่ากัน)`}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2">
+                  <Lightbulb className="h-4 w-4 text-[var(--chart-amber-dark)] shrink-0 mt-0.5" />
+                  <p className="text-[12px] text-[var(--ink)]">
+                    <span className="font-semibold text-[var(--chart-amber-dark)]">เคล็ดลับ:</span>{" "}
+                    <span className="text-[var(--ink-soft)]">{issueSuggestion(data.mainIssue.key)}</span>
+                  </p>
                 </div>
               </div>
             )}

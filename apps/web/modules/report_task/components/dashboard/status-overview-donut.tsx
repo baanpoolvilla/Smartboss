@@ -9,8 +9,32 @@ import { DASHBOARD_CARD } from "@/modules/report_task/components/dashboard/dashb
 import { ChartTooltip } from "@/modules/report_task/components/shared/chart-tooltip";
 import type { KpiBuckets } from "@/modules/report_task/lib/kpi-buckets";
 import { useHasHover } from "@/modules/report_task/hooks/use-has-hover";
-import { cn } from "@/modules/report_task/lib/utils";
-import { ArrowUpRight } from "lucide-react";
+import { cn, pickDaily } from "@/modules/report_task/lib/utils";
+import { ArrowUpRight, Lightbulb, AlertTriangle } from "lucide-react";
+
+/** Same templated, rule-based (not AI-generated) next-step copy as the KPI
+ * card's own "ตัวปัญหาหลัก" — generic enough to read naturally for either
+ * domain (งาน/รายงาน) since this component is shared by both. Deliberately
+ * NOT personalized — "ตัวปัญหาหลัก" above already names whoever's involved,
+ * so this line stays a general next step rather than repeating one name
+ * when several people can be tied there at once. A few variants per key,
+ * rotated by `pickDaily` — same one sentence every single visit read as
+ * dead/decorative text; rotating it daily makes it read as an actual tip. */
+const ISSUE_TIPS = {
+  overdue: [
+    "ตรวจสอบว่าใครดูแลอยู่ แล้วพิจารณาจัดลำดับความสำคัญหรือส่งข้อความเตือน",
+    "ลองแบ่งงานให้คนที่มีคิวว่างกว่า จะได้ไม่กองสะสมอยู่ที่คนเดิม",
+    "ส่งข้อความเช็คอินสั้นๆ ก่อนที่จะเลยกำหนดนานขึ้นเรื่อยๆ",
+  ],
+  pending: [
+    "ติดตามความคืบหน้าก่อนถึงกำหนด ป้องกันไม่ให้เลื่อนไปเป็นเลยกำหนด",
+    "เตือนล่วงหน้า 1-2 วันก่อนถึงกำหนด ช่วยลดโอกาสเลื่อนได้มาก",
+    "เช็คว่ามีอะไรติดขัดไหม บางทีแค่รอคำตอบจากอีกฝ่ายก็ทำให้ค้าง",
+  ],
+} as const;
+function issueSuggestion(key: "overdue" | "pending"): string {
+  return pickDaily(ISSUE_TIPS[key]);
+}
 
 interface Slice {
   key: string;
@@ -45,6 +69,7 @@ export function StatusOverviewDonut({
   emptyMessage,
   onSegmentClick,
   onDetail,
+  topPersonByBucket,
 }: {
   title: string;
   subtitle: string;
@@ -64,6 +89,12 @@ export function StatusOverviewDonut({
   onSegmentClick: (key: string) => void;
   /** Omit when there's nowhere useful to send "ดูรายละเอียด" — hides the footer link instead of linking somewhere confusing. */
   onDetail?: () => void;
+  /** Whoever contributes the most to the overdue/pending bucket, so
+   * "ตัวปัญหาหลัก" can name specific people instead of just a bucket total —
+   * every entry tied for the top count (not just one), sorted, computed by
+   * the caller (TaskStatusPie/ReportFeedStatusPie) since they're the ones
+   * with access to per-assignee data, not this shared shell. */
+  topPersonByBucket?: Partial<Record<"overdue" | "pending", { name: string; count: number }[]>>;
 }) {
   // "ยกเว้น" (leave/holiday-exempt) isn't shown here — mixed in with the
   // on-time/late/pending/overdue spectrum it reads as a 5th outcome on equal
@@ -107,6 +138,20 @@ export function StatusOverviewDonut({
   }, [hasHover, selectedKey]);
 
   const selected = selectedKey ? slices.find((s) => s.key === selectedKey) ?? null : null;
+
+  // "ตัวปัญหาหลัก" — one category (whichever of overdue/pending is bigger),
+  // scoped to this one donut's own domain. When several people are tied for
+  // the most in that category, all of them are named, not just one — the
+  // "+N เพิ่มเติม" toggle expands the name list, not a second category.
+  const mainIssue: { key: "overdue" | "pending"; label: string; count: number } | undefined = [
+    { key: "overdue" as const, label: labels.overdue, count: buckets.overdue },
+    { key: "pending" as const, label: labels.pending, count: buckets.pending },
+  ]
+    .filter((i) => i.count > 0)
+    .sort((a, b) => b.count - a.count)[0];
+  const people = mainIssue ? (topPersonByBucket?.[mainIssue.key] ?? []) : [];
+  const [showAllPeople, setShowAllPeople] = useState(false);
+  const shownPeople = showAllPeople ? people : people.slice(0, 1);
 
   return (
     <Card className={`${DASHBOARD_CARD} h-full`}>
@@ -267,6 +312,47 @@ export function StatusOverviewDonut({
                 ))}
               </div>
             </div>
+
+            {mainIssue && (
+              <div className="w-full flex flex-col gap-2">
+                <div className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2">
+                  <AlertTriangle className="h-4 w-4 text-[var(--chart-red-dark)] shrink-0 mt-0.5" />
+                  <div className="text-[12px] text-[var(--ink)] flex-1">
+                    <p>
+                      <span className="font-semibold text-[var(--chart-red-dark)]">ตัวปัญหาหลัก:</span> {mainIssue.label}
+                      {shownPeople.length > 0 ? (
+                        <>
+                          {" — "}
+                          {shownPeople.map((p, i) => (
+                            <span key={p.name}>
+                              {i > 0 && ", "}
+                              <span className="font-medium">{p.name}</span> ({p.count} {unitLabel})
+                            </span>
+                          ))}
+                        </>
+                      ) : (
+                        <> {mainIssue.count} {unitLabel}</>
+                      )}
+                    </p>
+                    {people.length > 1 && (
+                      <button
+                        onClick={() => setShowAllPeople((v) => !v)}
+                        className="mt-1 text-[11.5px] font-semibold text-[var(--brand-green-dark)] hover:underline"
+                      >
+                        {showAllPeople ? "ย่อกลับ" : `+${people.length - 1} เพิ่มเติม (จำนวนเท่ากัน)`}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2">
+                  <Lightbulb className="h-4 w-4 text-[var(--chart-amber-dark)] shrink-0 mt-0.5" />
+                  <p className="text-[12px] text-[var(--ink)]">
+                    <span className="font-semibold text-[var(--chart-amber-dark)]">เคล็ดลับ:</span>{" "}
+                    <span className="text-[var(--ink-soft)]">{issueSuggestion(mainIssue.key)}</span>
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center justify-between gap-3 pt-4 border-t border-[var(--line)]">
               {/* The ตรงเวลา/ส่งช้า rates used to repeat here too — already
