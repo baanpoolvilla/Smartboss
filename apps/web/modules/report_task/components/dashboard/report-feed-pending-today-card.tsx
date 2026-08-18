@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/modules/report_task/components/ui/card";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/modules/report_task/components/ui/card";
 import { DASHBOARD_CARD } from "@/modules/report_task/components/dashboard/dashboard-card-style";
 import { ShowMoreToggle } from "@/modules/report_task/components/shared/show-more-toggle";
 import { useShowMore } from "@/modules/report_task/hooks/use-show-more";
@@ -27,7 +27,7 @@ import { useReportFeedStore } from "@/modules/report_task/store/report-feed-stor
 import { useDashboardFilterStore } from "@/modules/report_task/store/dashboard-filter-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { presetRange, datePresetLabels } from "@/modules/report_task/lib/date-filter";
+import { presetRange } from "@/modules/report_task/lib/date-filter";
 import { localDateStr, todayIso } from "@/modules/report_task/lib/now";
 import { getUser, getDepartment, canManage } from "@/modules/report_task/lib/directory";
 import { Bell, FileClock } from "lucide-react";
@@ -85,12 +85,8 @@ export function ReportFeedPendingTodayCard() {
   const missedShowMore = useShowMore(missedByUser, 5);
 
   const total = pending.length + missed.length;
-  const scopeLabel = [datePresetLabels[preset], personId !== "all" ? getUser(personId)?.name : departmentId !== "all" ? getDepartment(departmentId)?.name : null]
-    .filter(Boolean)
-    .join(" · ");
   // Same scope-badge pattern as EscalationsPanel ("งานที่เลยกำหนด") — a
-  // colored pill in the header naming who this card is scoped to, instead
-  // of burying it in the plain-text subtitle alongside the date range.
+  // colored pill in the header naming who this card is scoped to.
   const canPickScope = personId === "all";
   const scopeBadgeLabel = departmentId === "all" ? "ทั้งองค์กร" : `ทีม${getDepartment(departmentId)?.name}`;
 
@@ -107,22 +103,25 @@ export function ReportFeedPendingTodayCard() {
 
   return (
     <Card className={cn(DASHBOARD_CARD, "h-full flex flex-col", "border-[var(--chart-amber)]/20")}>
-      <CardHeader className="flex-row items-start justify-between">
-        <div>
-          <CardTitle className="text-base font-semibold flex items-center gap-2">
-            <FileClock className="h-4.5 w-4.5 text-[var(--chart-amber)]" />
-            {rangeHasToday ? "รายงานที่ยังไม่ส่ง" : "รายงานขาดส่ง"}
-            {total > 0 && (
-              <span className="text-xs font-normal text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2 py-0.5">
-                {total}
-              </span>
-            )}
-          </CardTitle>
-          <p className="text-xs text-[var(--ink-soft)] mt-0.5">ช่วง: {scopeLabel}</p>
-        </div>
-        <Badge variant="outline" className="text-[10px] bg-amber-50 text-[var(--chart-amber)] border-amber-200">
-          {canPickScope ? scopeBadgeLabel : getUser(personId)?.name}
-        </Badge>
+      <CardHeader>
+        <CardTitle className="text-base font-semibold flex items-center gap-2">
+          <FileClock className="h-4.5 w-4.5 text-[var(--chart-amber)]" />
+          {rangeHasToday ? "รายงานที่ยังไม่ส่ง" : "รายงานขาดส่ง"}
+          {total > 0 && (
+            <span className="text-xs font-normal text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2 py-0.5">
+              {total}
+            </span>
+          )}
+        </CardTitle>
+        {/* See EscalationsPanel's own CardAction comment — CardHeader is a
+            grid, not flex; CardAction's data-slot is what actually pins
+            this to the top-right corner instead of stacking as a second
+            row under the title. */}
+        <CardAction>
+          <Badge variant="outline" className="text-[10px] bg-amber-50 text-[var(--chart-amber)] border-amber-200">
+            {canPickScope ? scopeBadgeLabel : getUser(personId)?.name}
+          </Badge>
+        </CardAction>
       </CardHeader>
       <CardContent className="flex-1">
         {total === 0 && (
@@ -173,7 +172,7 @@ export function ReportFeedPendingTodayCard() {
               </div>
             ))}
             <ShowMoreToggle expanded={missedShowMore.expanded} remaining={missedShowMore.remaining} onToggle={missedShowMore.toggle} />
-            <p className="text-[11px] text-[var(--ink-soft)] mt-2 px-1">ขาดส่งย้อนแก้ไม่ได้ — บันทึกในคะแนนแล้ว</p>
+            <p className="text-[11px] text-[var(--ink-soft)] mt-2 px-1">เลยกำหนดแล้วไม่ได้ส่ง ถือว่าขาดส่งถาวร คะแนนถูกตัดไปแล้วและแก้ไขย้อนหลังไม่ได้</p>
           </div>
         )}
       </CardContent>
