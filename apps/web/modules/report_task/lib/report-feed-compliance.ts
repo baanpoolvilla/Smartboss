@@ -356,25 +356,25 @@ export interface ReportStatusCounts {
   exempt: number;
 }
 
-export function reportStatusCountsForScope(
+/** Same 5-way split as `ReportStatusCounts`, one row per user — the per-person
+ * breakdown `reportStatusCountsForScope` sums into a single total. Kept as
+ * the one place that walks every tracked topic × day × user so the scoped
+ * total and the per-person breakdown can never drift apart. */
+export function reportStatusCountsByUser(
   topics: ReportTopic[],
   posts: ReportPost[],
   range: { from: Date; to: Date } | null,
-  scope: { personId: string; departmentId: string },
   exemptions?: DateExemptions
-): ReportStatusCounts {
+): Map<string, ReportStatusCounts> {
   const tracked = trackedTopicsOf(topics);
-  const scopedUsers = users.filter((u) => {
-    if (scope.personId !== "all") return u.id === scope.personId;
-    if (scope.departmentId !== "all") return u.departmentId === scope.departmentId;
-    return true;
-  });
-  const counts: ReportStatusCounts = { onTime: 0, lateDone: 0, pending: 0, missed: 0, exempt: 0 };
+  const out = new Map<string, ReportStatusCounts>();
+  for (const u of users) out.set(u.id, { onTime: 0, lateDone: 0, pending: 0, missed: 0, exempt: 0 });
   for (const topic of tracked) {
     const { startStr, endStr } = iterationBounds(topic, range);
     const days = eachDay(startStr, endStr);
-    for (const u of scopedUsers) {
+    for (const u of users) {
       if (!mustReportToTopic(topic.visibility, u.id)) continue;
+      const counts = out.get(u.id)!;
       for (const day of days) {
         const status = dayComplianceStatus(topic, u.id, day, posts, exemptions);
         if (status === "on-time") counts.onTime += 1;
@@ -384,6 +384,39 @@ export function reportStatusCountsForScope(
         else counts.exempt += 1;
       }
     }
+  }
+  return out;
+}
+
+export function scopedUserIds(scope: { personId: string; departmentId: string }): Set<string> {
+  return new Set(
+    users
+      .filter((u) => {
+        if (scope.personId !== "all") return u.id === scope.personId;
+        if (scope.departmentId !== "all") return u.departmentId === scope.departmentId;
+        return true;
+      })
+      .map((u) => u.id)
+  );
+}
+
+export function reportStatusCountsForScope(
+  topics: ReportTopic[],
+  posts: ReportPost[],
+  range: { from: Date; to: Date } | null,
+  scope: { personId: string; departmentId: string },
+  exemptions?: DateExemptions
+): ReportStatusCounts {
+  const byUser = reportStatusCountsByUser(topics, posts, range, exemptions);
+  const ids = scopedUserIds(scope);
+  const counts: ReportStatusCounts = { onTime: 0, lateDone: 0, pending: 0, missed: 0, exempt: 0 };
+  for (const [id, c] of byUser) {
+    if (!ids.has(id)) continue;
+    counts.onTime += c.onTime;
+    counts.lateDone += c.lateDone;
+    counts.pending += c.pending;
+    counts.missed += c.missed;
+    counts.exempt += c.exempt;
   }
   return counts;
 }

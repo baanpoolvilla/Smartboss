@@ -57,6 +57,20 @@ function finalize(onTime: number, lateDone: number, pending: number, overdue: nu
   };
 }
 
+export type KpiBucketKey = "onTime" | "lateDone" | "pending" | "overdue";
+
+/** Single source of truth for which of the 4 groups one task falls into —
+ * shared by `taskKpiBuckets` (aggregate count) and `taskBucketsByAssignee`
+ * (per-person breakdown) so the two can never disagree on where a task
+ * lands. */
+export function taskBucketOf(t: Task): KpiBucketKey {
+  if (t.status === "done") {
+    const late = t.completedAt ? new Date(t.completedAt).getTime() > new Date(t.dueDate).getTime() : false;
+    return late ? "lateDone" : "onTime";
+  }
+  return isLate(t) ? "overdue" : "pending";
+}
+
 /**
  * Task's 5-group bucket. Group 5 (ยกเว้น/ยกเลิก) is always 0 — nothing in the
  * Task schema can mark a task cancelled/excluded from KPI today (no
@@ -71,17 +85,34 @@ export function taskKpiBuckets(tasks: Task[]): KpiBuckets {
   let pending = 0;
   let overdue = 0;
   for (const t of tasks) {
-    if (t.status === "done") {
-      const late = t.completedAt ? new Date(t.completedAt).getTime() > new Date(t.dueDate).getTime() : false;
-      if (late) lateDone += 1;
-      else onTime += 1;
-    } else if (isLate(t)) {
-      overdue += 1;
-    } else {
-      pending += 1;
-    }
+    const bucket = taskBucketOf(t);
+    if (bucket === "onTime") onTime += 1;
+    else if (bucket === "lateDone") lateDone += 1;
+    else if (bucket === "overdue") overdue += 1;
+    else pending += 1;
   }
   return finalize(onTime, lateDone, pending, overdue, 0);
+}
+
+/** Same 4 groups as `taskKpiBuckets`, but split by assignee instead of
+ * summed — one count per person per group. A group task counts once for
+ * *each* of its assignees (not split fractionally) since the task's single
+ * status/dueDate is shared by the whole group, same simplification
+ * `taskKpiBuckets` already makes by not modeling per-assignee completion. */
+export function taskBucketsByAssignee(tasks: Task[]): Record<KpiBucketKey, Map<string, number>> {
+  const out: Record<KpiBucketKey, Map<string, number>> = {
+    onTime: new Map(),
+    lateDone: new Map(),
+    pending: new Map(),
+    overdue: new Map(),
+  };
+  for (const t of tasks) {
+    const bucket = taskBucketOf(t);
+    for (const assigneeId of t.assigneeIds) {
+      out[bucket].set(assigneeId, (out[bucket].get(assigneeId) ?? 0) + 1);
+    }
+  }
+  return out;
 }
 
 /** Report's 5-group bucket — built on `reportStatusCountsForScope`, which
