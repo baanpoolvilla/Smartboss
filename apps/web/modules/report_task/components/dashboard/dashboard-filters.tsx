@@ -103,7 +103,11 @@ export function DashboardFilters() {
             <Select value={departmentId} onValueChange={(v) => v && setDepartmentId(v)}>
               <SelectTrigger className={filterFieldTriggerClass(deptActive, "min-w-[130px]")}>
                 <Building2 className="h-4 w-4 shrink-0" />
-                <SelectValue placeholder="แผนก">
+                {/* max-w + truncate — SelectTrigger sizes to its content
+                    (w-fit) with no width cap of its own, so a long
+                    department name would otherwise stretch the whole pill
+                    wide instead of clipping with "…". */}
+                <SelectValue placeholder="แผนก" className="max-w-[140px] truncate">
                   {departmentId === "all" ? "ทั้งบริษัท" : (getDepartment(departmentId)?.name ?? "แผนก")}
                 </SelectValue>
               </SelectTrigger>
@@ -127,7 +131,11 @@ export function DashboardFilters() {
             <Select value={personId} onValueChange={(v) => v && setPersonId(v)}>
               <SelectTrigger className={filterFieldTriggerClass(personActive, "min-w-[150px]")}>
                 <Users className="h-4 w-4 shrink-0" />
-                <SelectValue placeholder="ดูข้อมูลของ">
+                {/* max-w + truncate — allInDeptLabel ("ทุกคนในแผนก...(N คน)")
+                    can run long once a department has a real name + count,
+                    and SelectTrigger's own w-fit sizing has no cap that
+                    would otherwise clip it. */}
+                <SelectValue placeholder="ดูข้อมูลของ" className="max-w-[160px] truncate">
                   {personId === "all" ? allInDeptLabel : (getUser(personId)?.name ?? "ดูข้อมูลของ")}
                 </SelectValue>
               </SelectTrigger>
@@ -149,7 +157,7 @@ export function DashboardFilters() {
             title="แดชบอร์ดของพนักงานแสดงข้อมูลของตัวเองเท่านั้น"
           >
             <Users className="h-4 w-4 shrink-0" />
-            <span>{getUser(viewingAsUserId)?.name}</span>
+            <span className="max-w-[160px] truncate">{getUser(viewingAsUserId)?.name}</span>
           </div>
         </div>
       )}
