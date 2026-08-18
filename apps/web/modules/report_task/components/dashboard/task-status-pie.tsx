@@ -1,11 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { taskKpiBuckets, taskBucketsByAssignee } from "@/modules/report_task/lib/kpi-buckets";
 import { displayName } from "@/modules/report_task/lib/directory";
 import { useDashboardTasks } from "@/modules/report_task/hooks/use-dashboard-tasks";
 import { useVisibleTasks } from "@/modules/report_task/hooks/use-visible-tasks";
-import { useTaskBoardIntentStore } from "@/modules/report_task/store/task-board-intent-store";
 import { useDashboardFilterStore } from "@/modules/report_task/store/dashboard-filter-store";
 import { filterTasksByDashboard } from "@/modules/report_task/lib/date-filter";
 import { previousPeriodRange } from "@/modules/report_task/lib/dashboard-trend";
@@ -28,8 +26,6 @@ function topPeopleOf(map: Map<string, number>): { name: string; count: number }[
 export function TaskStatusPie() {
   const tasks = useDashboardTasks();
   const allTasks = useVisibleTasks();
-  const router = useRouter();
-  const setScrollToStatus = useTaskBoardIntentStore((s) => s.setScrollToStatus);
   const personId = useDashboardFilterStore((s) => s.personId);
   const departmentId = useDashboardFilterStore((s) => s.departmentId);
   const preset = useDashboardFilterStore((s) => s.preset);
@@ -54,16 +50,10 @@ export function TaskStatusPie() {
       ).successRate
     : null;
 
-  function goToStatus(key: string) {
-    if (key === "onTime" || key === "lateDone") setScrollToStatus("done");
-    else setScrollToStatus("todo");
-    router.push("/tasks");
-  }
-
   return (
     <StatusOverviewDonut
       title="ภาพรวมงาน (Task)"
-      subtitle="สถานะงานทั้งหมด · คลิกเพื่อดูคอลัมน์นั้นในบอร์ดงาน"
+      subtitle="สถานะงานทั้งหมด · คลิกที่วงกลมเพื่อดูอันดับรายคน"
       icon={<KanbanSquare className="h-4.5 w-4.5 text-[var(--ink-soft)]" />}
       buckets={buckets}
       labels={{
@@ -77,7 +67,6 @@ export function TaskStatusPie() {
       centerLabel="สำเร็จ"
       totalLabel={`${buckets.total} งาน`}
       emptyMessage="ยังไม่มีงานในช่วงเวลานี้"
-      onSegmentClick={goToStatus}
       topPersonByBucket={{ overdue: topPeopleOf(byAssignee.overdue), pending: topPeopleOf(byAssignee.pending) }}
       prevSuccessRate={prevSuccessRate}
       peopleByBucket={{
