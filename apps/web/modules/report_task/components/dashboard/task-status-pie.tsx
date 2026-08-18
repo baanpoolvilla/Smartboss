@@ -65,7 +65,7 @@ export function TaskStatusPie() {
       }}
       unitLabel="งาน"
       centerLabel="สำเร็จ"
-      totalLabel={`${buckets.total} งาน`}
+      totalLabel={`${buckets.total} งานที่ต้องทำ`}
       emptyMessage="ยังไม่มีงานในช่วงเวลานี้"
       topPersonByBucket={{ overdue: topPeopleOf(byAssignee.overdue), pending: topPeopleOf(byAssignee.pending) }}
       prevSuccessRate={prevSuccessRate}

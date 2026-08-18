@@ -387,17 +387,28 @@ export function SystemKpiSummary() {
             </div>
 
             {/* กราฟแท่งเทียบคู่ — แบ่งครึ่งซ้าย "เสร็จ" (เสร็จช้า/ตรงเวลา) กับครึ่งขวา
-                "ยังไม่เสร็จ" (เลยกำหนด/ยังไม่เสร็จในกำหนด) ด้วยเส้นประกลาง ให้เห็นสัดส่วนงาน
-                จบแล้ว vs ค้างในแวบเดียว ไม่ต้องอ่านทีละแท่ง — แต่ละแท่งแตกเป็นปล่องรายคน
+                "ยังไม่เสร็จ" (เลยกำหนด/ยังไม่เสร็จในกำหนด) ให้เห็นสัดส่วนงาน
+                จบแล้ว vs ค้างในแวบเดียว ไม่ต้องอ่านทีละแท่ง — พื้นหลังโทนเขียว/แดงอ่อนคั่นครึ่ง
+                ให้เห็นชัดโดยไม่ต้องอ่านป้ายกำกับก่อน แต่ละแท่งแตกเป็นปล่องรายคน
                 แทนสีทึบก้อนเดียว (hand-rolled แทน recharts เพราะจำนวนปล่อง/คนต่อแท่งไม่คงที่
                 recharts' stacked Bar ต้องรู้ dataKey ตายตัวล่วงหน้า ใช้ไม่ได้กับ shape แบบนี้) */}
-            <div className="flex text-[11px] font-medium text-[var(--ink-soft)] px-2">
-              <span className="flex-1 text-center">เสร็จ</span>
-              <span className="flex-1 text-center">ยังไม่เสร็จ</span>
+            <div className="flex items-center px-2">
+              <span className="flex flex-1 items-center justify-center gap-1.5 text-[13px] font-semibold" style={{ color: "var(--brand-green-dark)" }}>
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: "var(--brand-green-dark)" }} />
+                เสร็จ
+                <span className="tabular-nums font-bold">{data.groups[0]!.task + data.groups[0]!.report + data.groups[1]!.task + data.groups[1]!.report}</span>
+              </span>
+              <span className="flex flex-1 items-center justify-center gap-1.5 text-[13px] font-semibold" style={{ color: "var(--chart-red-dark)" }}>
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: "var(--chart-red-dark)" }} />
+                ยังไม่เสร็จ
+                <span className="tabular-nums font-bold">{data.groups[2]!.task + data.groups[2]!.report + data.groups[3]!.task + data.groups[3]!.report}</span>
+              </span>
             </div>
             <div className="relative">
+              <div className="pointer-events-none absolute inset-0 left-0 w-1/2 rounded-l-xl bg-green-50/70" />
+              <div className="pointer-events-none absolute inset-0 left-1/2 w-1/2 rounded-r-xl bg-red-50/70" />
               <div className="pointer-events-none absolute inset-y-0 left-1/2 border-l border-dashed border-[var(--line)]" />
-              <div className="flex items-stretch pt-6" style={{ height: CHART_HEIGHT + 24 }}>
+              <div className="relative flex items-stretch pt-6" style={{ height: CHART_HEIGHT + 24 }}>
                 {data.groups.map((g) => (
                   <div key={g.key} className="flex h-full flex-1 items-end justify-center gap-1.5">
                     <StatusBar
