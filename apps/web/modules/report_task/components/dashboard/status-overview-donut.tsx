@@ -14,11 +14,19 @@ import { ArrowUpRight, Lightbulb } from "lucide-react";
 
 /** Same templated, rule-based (not AI-generated) next-step copy as the KPI
  * card's own "ตัวปัญหาหลัก" — generic enough to read naturally for either
- * domain (งาน/รายงาน) since this component is shared by both. */
-const ISSUE_SUGGESTION = {
-  overdue: "ตรวจสอบว่าใครดูแลอยู่ แล้วพิจารณาจัดลำดับความสำคัญหรือส่งข้อความเตือน",
-  pending: "ติดตามความคืบหน้าก่อนถึงกำหนด ป้องกันไม่ให้เลื่อนไปเป็นเลยกำหนด",
-} as const;
+ * domain (งาน/รายงาน) since this component is shared by both. Names the
+ * specific person behind the bucket when one's known (`topPersonByBucket`),
+ * falls back to the generic phrasing otherwise. */
+function issueSuggestion(key: "overdue" | "pending", personName?: string): string {
+  if (key === "overdue") {
+    return personName
+      ? `ตรวจสอบงานของ ${personName} แล้วพิจารณาจัดลำดับความสำคัญหรือส่งข้อความเตือน`
+      : "ตรวจสอบว่าใครดูแลอยู่ แล้วพิจารณาจัดลำดับความสำคัญหรือส่งข้อความเตือน";
+  }
+  return personName
+    ? `ติดตามความคืบหน้าของ ${personName} ก่อนถึงกำหนด ป้องกันไม่ให้เลื่อนไปเป็นเลยกำหนด`
+    : "ติดตามความคืบหน้าก่อนถึงกำหนด ป้องกันไม่ให้เลื่อนไปเป็นเลยกำหนด";
+}
 
 interface Slice {
   key: string;
@@ -53,6 +61,7 @@ export function StatusOverviewDonut({
   emptyMessage,
   onSegmentClick,
   onDetail,
+  topPersonByBucket,
 }: {
   title: string;
   subtitle: string;
@@ -72,6 +81,11 @@ export function StatusOverviewDonut({
   onSegmentClick: (key: string) => void;
   /** Omit when there's nowhere useful to send "ดูรายละเอียด" — hides the footer link instead of linking somewhere confusing. */
   onDetail?: () => void;
+  /** Whoever contributes the most to the overdue/pending bucket, so
+   * "ตัวปัญหาหลัก" can name a specific person instead of just a bucket total
+   * — computed by the caller (TaskStatusPie/ReportFeedStatusPie) since they're
+   * the ones with access to per-assignee data, not this shared shell. */
+  topPersonByBucket?: Partial<Record<"overdue" | "pending", { name: string; count: number }>>;
 }) {
   // "ยกเว้น" (leave/holiday-exempt) isn't shown here — mixed in with the
   // on-time/late/pending/overdue spectrum it reads as a 5th outcome on equal
@@ -116,19 +130,18 @@ export function StatusOverviewDonut({
 
   const selected = selectedKey ? slices.find((s) => s.key === selectedKey) ?? null : null;
 
-  // Same "every stuck category, not just the worst one" shape as the KPI
-  // card's own ตัวปัญหาหลัก (§ system-kpi-summary.tsx) — here scoped to this
-  // one donut's own domain instead of combining Task+Report.
+  // "ตัวปัญหาหลัก" — singular, unlike the KPI card's own version which lists
+  // every stuck category. Here it's just whichever of overdue/pending is
+  // bigger, scoped to this one donut's own domain.
   const stuck = buckets.overdue + buckets.pending;
-  const issues = (
-    [
-      { key: "overdue" as const, label: labels.overdue, count: buckets.overdue },
-      { key: "pending" as const, label: labels.pending, count: buckets.pending },
-    ] satisfies { key: keyof typeof ISSUE_SUGGESTION; label: string; count: number }[]
-  )
+  const mainIssue: { key: "overdue" | "pending"; label: string; count: number } | undefined = [
+    { key: "overdue" as const, label: labels.overdue, count: buckets.overdue },
+    { key: "pending" as const, label: labels.pending, count: buckets.pending },
+  ]
     .filter((i) => i.count > 0)
-    .map((i) => ({ ...i, percent: stuck ? Math.round((i.count / stuck) * 100) : 0, suggestion: ISSUE_SUGGESTION[i.key] }))
-    .sort((a, b) => b.count - a.count);
+    .sort((a, b) => b.count - a.count)[0];
+  const mainIssuePercent = mainIssue && stuck ? Math.round((mainIssue.count / stuck) * 100) : 0;
+  const mainIssuePerson = mainIssue ? topPersonByBucket?.[mainIssue.key] : undefined;
 
   return (
     <Card className={`${DASHBOARD_CARD} h-full`}>
@@ -290,19 +303,20 @@ export function StatusOverviewDonut({
               </div>
             </div>
 
-            {issues.length > 0 && (
+            {mainIssue && (
               <div className="w-full flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2">
                 <Lightbulb className="h-4 w-4 text-[var(--chart-amber-dark)] shrink-0 mt-0.5" />
-                <div className="flex flex-col gap-2.5 text-[12px] text-[var(--ink)] w-full">
-                  <span className="font-semibold text-[var(--chart-amber-dark)]">ตัวปัญหาหลัก</span>
-                  {issues.map((issue) => (
-                    <div key={issue.key}>
-                      <p className="font-medium">
-                        {issue.label}: {issue.count} {unitLabel} ({issue.percent}% ของที่ค้างทั้งหมด)
-                      </p>
-                      <p className="text-[var(--ink-soft)] mt-0.5">💡 {issue.suggestion}</p>
-                    </div>
-                  ))}
+                <div className="text-[12px] text-[var(--ink)] w-full">
+                  <p className="font-medium">
+                    <span className="font-semibold text-[var(--chart-amber-dark)]">ตัวปัญหาหลัก:</span> {mainIssue.label} {mainIssue.count}{" "}
+                    {unitLabel} ({mainIssuePercent}% ของที่ค้างทั้งหมด)
+                  </p>
+                  {mainIssuePerson && (
+                    <p className="text-[var(--ink)] mt-0.5">
+                      👤 มากสุดจาก: <span className="font-medium">{mainIssuePerson.name}</span> ({mainIssuePerson.count} {unitLabel})
+                    </p>
+                  )}
+                  <p className="text-[var(--ink-soft)] mt-0.5">💡 {issueSuggestion(mainIssue.key, mainIssuePerson?.name)}</p>
                 </div>
               </div>
             )}
