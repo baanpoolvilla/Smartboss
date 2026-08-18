@@ -12,6 +12,8 @@ import { getUser, getDepartment, canManage } from "@/modules/report_task/lib/dir
 import { overdueTasks } from "@/modules/report_task/lib/reports";
 import { formatShortDate, daysUntil } from "@/modules/report_task/lib/format";
 import { presetRange } from "@/modules/report_task/lib/date-filter";
+import { previousPeriodRange, periodTrend } from "@/modules/report_task/lib/dashboard-trend";
+import { TrendText } from "@/modules/report_task/components/shared/trend-badge";
 import { priorityMeta, statusMeta } from "@/modules/report_task/lib/task-meta";
 import { cn } from "@/modules/report_task/lib/utils";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
@@ -57,6 +59,22 @@ export function EscalationsPanel() {
     return all;
   }, [tasks, personId, preset, customFrom, customTo, departmentId]);
 
+  // Same previous-period comparison as the KPI card's own trend — "more
+  // overdue than last period" reads as worse, not better, so higherIsGood
+  // is false here (unlike a success-rate trend). null (no comparison shown)
+  // for the unbounded "ทั้งหมด" preset.
+  const trend = useMemo(() => {
+    const prevRange = previousPeriodRange(preset, customFrom, customTo);
+    if (!prevRange) return null;
+    let prevAll = overdueTasks(tasks).filter((t) => {
+      const due = new Date(t.dueDate).getTime();
+      return due >= prevRange.from.getTime() && due <= prevRange.to.getTime();
+    });
+    if (personId !== "all") prevAll = prevAll.filter((t) => t.assigneeIds.includes(personId));
+    else if (departmentId !== "all") prevAll = prevAll.filter((t) => t.departmentIds.includes(departmentId));
+    return periodTrend(scope.length, prevAll.length);
+  }, [tasks, personId, preset, customFrom, customTo, departmentId, scope.length]);
+
   const canPickScope = personId === "all";
   const scopeLabel = departmentId === "all" ? "ทั้งองค์กร" : `ทีม${getDepartment(departmentId)?.name}`;
   const { visible, remaining, expanded, toggle } = useShowMore(scope, 5);
@@ -85,6 +103,11 @@ export function EscalationsPanel() {
             </span>
           )}
         </CardTitle>
+        {trend && (
+          <div className="mt-1">
+            <TrendText trend={trend} higherIsGood={false} />
+          </div>
+        )}
         {/* CardHeader lays out as a CSS grid, not flex — a plain sibling div
             here would just stack as a second grid row (left-aligned, under
             the title) instead of sitting beside it. CardAction's

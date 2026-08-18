@@ -14,18 +14,29 @@ import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-r
 import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
 import { useDashboardFilterStore } from "@/modules/report_task/store/dashboard-filter-store";
 import { presetRange } from "@/modules/report_task/lib/date-filter";
+import { previousPeriodRange } from "@/modules/report_task/lib/dashboard-trend";
+import { rankedPeople } from "@/modules/report_task/lib/ranked-people";
 import { MessageSquareText } from "lucide-react";
 import { StatusOverviewDonut } from "./status-overview-donut";
+
+type UserCounts = { onTime: number; lateDone: number; pending: number; missed: number; exempt: number };
+
+/** `byUser[id][field]` for everyone in `ids`, as the personId->count map
+ * `topPeopleOf`/`rankedPeople` both expect. */
+function countsFor(byUser: Map<string, UserCounts>, ids: Set<string>, field: keyof UserCounts): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const id of ids) {
+    const n = byUser.get(id)?.[field] ?? 0;
+    if (n > 0) m.set(id, n);
+  }
+  return m;
+}
 
 /** Everyone tied for the most reports in the given bucket among the users
  * in scope — named, for "ตัวปัญหาหลัก" to point at whoever's actually behind
  * the bucket instead of just a total. Usually one person; more than one
  * only when they're genuinely tied. */
-function topPeopleOf(
-  byUser: Map<string, { onTime: number; lateDone: number; pending: number; missed: number; exempt: number }>,
-  ids: Set<string>,
-  field: "missed" | "pending"
-): { name: string; count: number }[] {
+function topPeopleOf(byUser: Map<string, UserCounts>, ids: Set<string>, field: "missed" | "pending"): { name: string; count: number }[] {
   const ranked = [...ids].map((id) => ({ id, count: byUser.get(id)?.[field] ?? 0 })).filter((r) => r.count > 0).sort((a, b) => b.count - a.count);
   const topCount = ranked[0]?.count;
   return ranked.filter((r) => r.count === topCount).map((r) => ({ name: getUser(r.id)?.name ?? r.id, count: r.count }));
@@ -49,6 +60,11 @@ export function ReportFeedStatusPie() {
   const hasTrackedRooms = trackedTopicsOf(topics).length > 0;
   const byUser = reportStatusCountsByUser(topics, posts, range, exemptions);
   const inScope = scopedUserIds({ personId, departmentId });
+
+  // Same previous-period comparison as the KPI card's own successRate trend
+  // — null (no comparison shown) for the unbounded "ทั้งหมด" preset.
+  const prevRange = previousPeriodRange(preset, customFrom, customTo);
+  const prevSuccessRate = prevRange ? reportKpiBuckets(topics, posts, prevRange, { personId, departmentId }, exemptions).successRate : null;
 
   // Only a department scope maps to a single room's stats tab unambiguously
   // — a person can belong to several tracked rooms, so personId scope (and
@@ -86,6 +102,13 @@ export function ReportFeedStatusPie() {
       topPersonByBucket={{
         overdue: topPeopleOf(byUser, inScope, "missed"),
         pending: topPeopleOf(byUser, inScope, "pending"),
+      }}
+      prevSuccessRate={prevSuccessRate}
+      peopleByBucket={{
+        onTime: rankedPeople(countsFor(byUser, inScope, "onTime")),
+        lateDone: rankedPeople(countsFor(byUser, inScope, "lateDone")),
+        pending: rankedPeople(countsFor(byUser, inScope, "pending")),
+        overdue: rankedPeople(countsFor(byUser, inScope, "missed")),
       }}
     />
   );

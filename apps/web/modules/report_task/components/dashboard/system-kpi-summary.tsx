@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/modules/report_task/
 import { DASHBOARD_CARD_STATIC } from "@/modules/report_task/components/dashboard/dashboard-card-style";
 import { taskKpiBuckets, taskBucketsByAssignee, reportKpiBuckets, type KpiBucketKey } from "@/modules/report_task/lib/kpi-buckets";
 import { combineKpiBuckets } from "@/modules/report_task/lib/combine-kpi-buckets";
-import { previousPeriodRange, periodTrend, type Trend } from "@/modules/report_task/lib/dashboard-trend";
+import { previousPeriodRange, periodTrend } from "@/modules/report_task/lib/dashboard-trend";
+import { TrendText, tierFor } from "@/modules/report_task/components/shared/trend-badge";
 import { filterTasksByDashboard, presetRange } from "@/modules/report_task/lib/date-filter";
 import { localDateStr } from "@/modules/report_task/lib/now";
 import { getUser } from "@/modules/report_task/lib/directory";
@@ -15,26 +16,8 @@ import { useVisibleReportTopics } from "@/modules/report_task/hooks/use-visible-
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
 import { useDashboardFilterStore } from "@/modules/report_task/store/dashboard-filter-store";
-import { ArrowUp, ArrowDown, Minus, Gauge, Lightbulb, AlertTriangle, ListChecks, MessageSquareText } from "lucide-react";
+import { Gauge, Lightbulb, AlertTriangle, ListChecks, MessageSquareText } from "lucide-react";
 import { cn, pickDaily } from "@/modules/report_task/lib/utils";
-
-function TrendText({ trend, higherIsGood }: { trend: Trend | null; higherIsGood: boolean }) {
-  if (!trend || trend.direction === "flat" || trend.percent === null) {
-    return (
-      <span className="inline-flex items-center gap-0.5 text-[11px] text-[var(--ink-soft)]">
-        <Minus className="h-2.5 w-2.5" /> คงที่
-      </span>
-    );
-  }
-  const rose = trend.direction === "up";
-  const good = rose === higherIsGood;
-  return (
-    <span className={cn("inline-flex items-center gap-0.5 text-[11px] font-medium", good ? "text-[var(--brand-green-dark)]" : "text-[var(--chart-red)]")}>
-      {rose ? <ArrowUp className="h-2.5 w-2.5" /> : <ArrowDown className="h-2.5 w-2.5" />}
-      {good ? "ดีขึ้น" : "แย่ลง"} {Math.abs(trend.percent)}% จากช่วงก่อนหน้า
-    </span>
-  );
-}
 
 /** Task/Report share one consistent color each across the whole chart — the
  * legend pill, both bars, the tooltip dots, and the detail rows below all
@@ -76,15 +59,6 @@ interface KpiGroup {
   report: number;
   taskPeople: PersonSeg[];
   reportPeople: PersonSeg[];
-}
-
-/** §2.5 tiering, reused for both the badge and its color — same >=80/>=50
- * thresholds the old "สุขภาพ" gauge used, driven directly by the combined
- * successRate instead of a separate averaged score. */
-function tierFor(successRate: number): { label: string; color: string; bg: string } {
-  if (successRate >= 80) return { label: "ดีเยี่ยม", color: "var(--brand-green-dark)", bg: "bg-green-50" };
-  if (successRate >= 50) return { label: "ต้องระวัง", color: "var(--chart-amber-dark)", bg: "bg-amber-50" };
-  return { label: "วิกฤต", color: "var(--chart-red-dark)", bg: "bg-red-50" };
 }
 
 /** `counts` (personId -> count) into the segment list one bar draws, sorted

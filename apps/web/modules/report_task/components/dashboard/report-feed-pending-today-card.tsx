@@ -28,6 +28,8 @@ import { useDashboardFilterStore } from "@/modules/report_task/store/dashboard-f
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { presetRange } from "@/modules/report_task/lib/date-filter";
+import { previousPeriodRange, periodTrend } from "@/modules/report_task/lib/dashboard-trend";
+import { TrendText } from "@/modules/report_task/components/shared/trend-badge";
 import { localDateStr, todayIso } from "@/modules/report_task/lib/now";
 import { getUser, getDepartment, canManage } from "@/modules/report_task/lib/directory";
 import { Bell, FileClock } from "lucide-react";
@@ -85,6 +87,25 @@ export function ReportFeedPendingTodayCard() {
   const missedShowMore = useShowMore(missedByUser, 5);
 
   const total = pending.length + missed.length;
+
+  // Same previous-period comparison as EscalationsPanel's own trend — "more
+  // pending/missed than last period" reads as worse, not better, so
+  // higherIsGood is false. null (no comparison shown) for the unbounded
+  // "ทั้งหมด" preset.
+  const trend = useMemo(() => {
+    const prevRange = previousPeriodRange(preset, customFrom, customTo);
+    if (!prevRange) return null;
+    const prevAll = reportBacklogEntries(topics, posts, prevRange, exemptions);
+    const scoped = (list: ReportBacklogEntry[]) =>
+      list.filter((e) => {
+        if (personId !== "all") return e.userId === personId;
+        if (departmentId !== "all") return getUser(e.userId)?.departmentId === departmentId;
+        return true;
+      });
+    const prevTotal = scoped(prevAll.pending).length + scoped(prevAll.missed).length;
+    return periodTrend(total, prevTotal);
+  }, [topics, posts, preset, customFrom, customTo, exemptions, personId, departmentId, total]);
+
   // Same scope-badge pattern as EscalationsPanel ("งานที่เลยกำหนด") — a
   // colored pill in the header naming who this card is scoped to.
   const canPickScope = personId === "all";
@@ -113,6 +134,11 @@ export function ReportFeedPendingTodayCard() {
             </span>
           )}
         </CardTitle>
+        {trend && (
+          <div className="mt-1">
+            <TrendText trend={trend} higherIsGood={false} />
+          </div>
+        )}
         {/* See EscalationsPanel's own CardAction comment — CardHeader is a
             grid, not flex; CardAction's data-slot is what actually pins
             this to the top-right corner instead of stacking as a second
