@@ -125,7 +125,7 @@ export function DashboardGrid({ editing }: { editing: boolean }) {
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={visible.map((w) => w.id)} strategy={rectSortingStrategy}>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-10 items-start">
           {visible.map((w) => (
             <SortableWidget key={w.id} widget={w} editing={editing} />
           ))}

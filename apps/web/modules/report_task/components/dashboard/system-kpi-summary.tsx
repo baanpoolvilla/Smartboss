@@ -404,7 +404,13 @@ export function SystemKpiSummary() {
                 <span className="tabular-nums font-bold">{data.groups[2]!.task + data.groups[2]!.report + data.groups[3]!.task + data.groups[3]!.report}</span>
               </span>
             </div>
-            <div className="relative">
+            {/* overflow-x-auto — each of the 8 bars has a fixed 32px width
+                (see StatusBar) that can't flex-shrink below its content, so
+                on the narrowest phones the row scrolls within the card
+                instead of getting clipped by the Card's own overflow-hidden.
+                Flex items already refuse to shrink under their own content
+                size by default, so no extra min-width is needed here. */}
+            <div className="relative overflow-x-auto">
               <div className="pointer-events-none absolute inset-0 left-0 w-1/2 rounded-l-xl bg-green-50/70" />
               <div className="pointer-events-none absolute inset-0 left-1/2 w-1/2 rounded-r-xl bg-red-50/70" />
               <div className="pointer-events-none absolute inset-y-0 left-1/2 border-l border-dashed border-[var(--line)]" />
