@@ -17,21 +17,23 @@ import { ArrowUpRight, Lightbulb, AlertTriangle } from "lucide-react";
  * domain (งาน/รายงาน) since this component is shared by both. Deliberately
  * NOT personalized — "ตัวปัญหาหลัก" above already names whoever's involved,
  * so this line stays a general next step rather than repeating one name
- * when several people can be tied there at once. Each variant is a concrete
- * action to take (not a soft question/reflection) — "ไอเดีย" for how to
- * actually resolve it. Rotated by `pickDaily` — same one sentence every
- * single visit read as dead/decorative text; rotating it daily makes it
- * read as an actual, still-useful idea instead of filler. */
+ * when several people can be tied there at once. Grounded in actual
+ * workload-management/deadline-compliance practice (capacity-aware
+ * reassignment, weekly backlog reviews, visible/shared tracking, reminders
+ * that state *why* the deadline matters) instead of generic-sounding filler
+ * — see the research this list was built from, linked in the PR. Rotated
+ * by `pickDaily` so it doesn't read as the exact same static sentence on
+ * every single visit. */
 const ISSUE_TIPS = {
   overdue: [
-    "มอบหมายงานให้คนอื่นช่วยแบ่งเบา หรือตกลงกำหนดส่งใหม่ที่ทำได้จริง",
-    "ส่งข้อความเตือนพร้อมระบุวันที่ต้องเสร็จให้ชัดเจน",
-    "ลดจำนวนงานใหม่ที่มอบหมายเพิ่มในสัปดาห์นี้ ให้เคลียร์ของค้างก่อน",
+    "มอบหมายต่อให้คนที่มีคิวว่างและทักษะตรงกับงานนั้นจริงๆ ไม่ใช่ใครก็ได้ที่ว่าง",
+    "ทบทวนงานค้างเป็นประจำทุกสัปดาห์ ดูว่าอะไรติดขัดก่อนจะกองสะสมนานขึ้น",
+    "จัดลำดับใหม่ตามผลกระทบจริง ไม่ใช่แค่ตัวที่ค้างนานสุดต้องมาก่อนเสมอ",
   ],
   pending: [
-    "ตั้งเตือนล่วงหน้า 1-2 วันก่อนถึงกำหนด ผ่านแชทหรือปฏิทิน",
-    "เช็คว่าติดขัดอะไรอยู่ แล้วช่วยเคลียร์อุปสรรคนั้นก่อนถึงเส้นตาย",
-    "แบ่งงานเป็นขั้นย่อยพร้อมกำหนดเช็คพอยต์ระหว่างทาง",
+    "ใช้บอร์ดที่ทุกคนเห็นร่วมกัน งานที่มองเห็นได้ทั่วทีมมักถูกดูแลดีกว่า",
+    "ให้เพื่อนร่วมทีมช่วยเช็คความคืบหน้ากันเอง ไม่ต้องรอหัวหน้าถามอย่างเดียว",
+    "เตือนก่อนถึงกำหนดพร้อมบอกว่าทำไมงานนี้สำคัญ ไม่ใช่แค่แจ้งวันที่เฉยๆ",
   ],
 } as const;
 function issueSuggestion(key: "overdue" | "pending"): string {
