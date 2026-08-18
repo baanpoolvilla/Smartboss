@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Card, CardContent } from "@/modules/report_task/components/ui/card";
+import { Card } from "@/modules/report_task/components/ui/card";
 import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import { useTaskStore, type QuickView } from "@/modules/report_task/store/task-store";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -43,38 +43,36 @@ export function TaskBoardKpis({ tasks }: { tasks: Task[] }) {
 
   return (
     // แผ่นเดียว ไม่ใช่การ์ดแยก 4 ใบ — ประหยัดพื้นที่แนวตั้งกว่ามาก โดยเฉพาะจอมือถือ
-    // ที่ 4 การ์ดแยกกันกินพื้นที่เกินจำเป็น เส้นแบ่งระหว่างช่องใช้ลูกเล่น
-    // gap-px + พื้นหลังสีเส้น (--line) แทนการเซ็ต border ทีละด้าน เพราะต้อง
-    // ทำงานถูกทั้ง 2 คอลัมน์ (มือถือ) และ 4 คอลัมน์ (จอกว้าง) โดยไม่ต้องคำนวณ
-    // ว่าช่องไหนอยู่ขอบขวา/ขอบล่างเอง
-    <Card className="border-[var(--line)] shadow-sm">
-      <CardContent className="grid grid-cols-2 gap-px overflow-hidden rounded-[calc(var(--radius)-1px)] bg-[var(--line)] p-0 sm:grid-cols-4">
-        {cards.map((c) => {
-          // "งานทั้งหมด" is the resting/no-filter state — quickView defaults to
-          // "all", so highlighting it here would make it look permanently
-          // "selected" even when nothing's actually drilled down.
-          const active = c.key !== "all" && quickView === c.key;
-          return (
-            <button
-              key={c.key}
-              type="button"
-              onClick={() => toggle(c.key)}
-              className={cn(
-                "flex items-center gap-2 bg-[var(--bg)] px-3 py-2 text-left transition-colors hover:bg-[var(--bg-soft)]",
-                active && "bg-[var(--accent)]"
-              )}
-            >
-              <div className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-md", c.iconClass)}>
-                <c.icon className="h-3.5 w-3.5" />
-              </div>
-              <div className="min-w-0 leading-tight">
-                <p className="text-[15px] font-semibold tabular-nums leading-none">{c.value}</p>
-                <p className="mt-1 truncate text-[10.5px] text-[var(--ink-soft)]">{c.label}</p>
-              </div>
-            </button>
-          );
-        })}
-      </CardContent>
+    // ที่ 4 การ์ดแยกกันกินพื้นที่เกินจำเป็น เส้นแบ่งใช้ divide-x/divide-y ปกติของ
+    // Tailwind (ไม่ใช่ลูกเล่น gap-px+background แบบเดิมที่อาจมีปัญหา) — บนจอ
+    // มือถือ (2 คอลัมน์) จะมีเส้นเกินมาเส้นเดียวที่หัวแถวที่ 2 เพราะ divide-x ไม่รู้
+    // จักขอบเขตแถวของ grid แต่เป็นแค่เรื่องความสวยงามเล็กน้อย ไม่กระทบการใช้งาน
+    <Card className="grid grid-cols-2 gap-0 divide-x divide-y divide-[var(--line)] overflow-hidden border-[var(--line)] p-0 shadow-sm sm:grid-cols-4 sm:divide-y-0">
+      {cards.map((c) => {
+        // "งานทั้งหมด" is the resting/no-filter state — quickView defaults to
+        // "all", so highlighting it here would make it look permanently
+        // "selected" even when nothing's actually drilled down.
+        const active = c.key !== "all" && quickView === c.key;
+        return (
+          <button
+            key={c.key}
+            type="button"
+            onClick={() => toggle(c.key)}
+            className={cn(
+              "flex items-center gap-2 border-[var(--line)] bg-[var(--bg)] px-3 py-2.5 text-left transition-colors hover:bg-[var(--bg-soft)]",
+              active && "bg-[var(--accent)]"
+            )}
+          >
+            <div className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-md", c.iconClass)}>
+              <c.icon className="h-3.5 w-3.5" />
+            </div>
+            <div className="min-w-0 leading-tight">
+              <p className="text-[15px] font-semibold tabular-nums leading-none text-[var(--ink)]">{c.value}</p>
+              <p className="mt-1 truncate text-[10.5px] text-[var(--ink-soft)]">{c.label}</p>
+            </div>
+          </button>
+        );
+      })}
     </Card>
   );
 }
