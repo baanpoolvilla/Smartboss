@@ -88,6 +88,11 @@ export function ReportFeedPendingTodayCard() {
   const scopeLabel = [datePresetLabels[preset], personId !== "all" ? getUser(personId)?.name : departmentId !== "all" ? getDepartment(departmentId)?.name : null]
     .filter(Boolean)
     .join(" · ");
+  // Same scope-badge pattern as EscalationsPanel ("งานที่เลยกำหนด") — a
+  // colored pill in the header naming who this card is scoped to, instead
+  // of burying it in the plain-text subtitle alongside the date range.
+  const canPickScope = personId === "all";
+  const scopeBadgeLabel = departmentId === "all" ? "ทั้งองค์กร" : `ทีม${getDepartment(departmentId)?.name}`;
 
   function confirmNudge() {
     if (!pendingNudge) return;
@@ -101,20 +106,23 @@ export function ReportFeedPendingTodayCard() {
   }
 
   return (
-    <Card className={cn(DASHBOARD_CARD, "h-full flex flex-col")}>
-      <CardHeader>
-        <CardTitle className="text-base font-semibold flex items-center justify-between gap-2">
-          <span className="flex items-center gap-2">
+    <Card className={cn(DASHBOARD_CARD, "h-full flex flex-col", "border-[var(--chart-amber)]/20")}>
+      <CardHeader className="flex-row items-start justify-between">
+        <div>
+          <CardTitle className="text-base font-semibold flex items-center gap-2">
             <FileClock className="h-4.5 w-4.5 text-[var(--chart-amber)]" />
             {rangeHasToday ? "รายงานที่ยังไม่ส่ง" : "รายงานขาดส่ง"}
-          </span>
-          {total > 0 && (
-            <span className="text-xs font-normal text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2 py-0.5">
-              {total}
-            </span>
-          )}
-        </CardTitle>
-        <p className="text-xs text-[var(--ink-soft)]">ช่วง: {scopeLabel}</p>
+            {total > 0 && (
+              <span className="text-xs font-normal text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2 py-0.5">
+                {total}
+              </span>
+            )}
+          </CardTitle>
+          <p className="text-xs text-[var(--ink-soft)] mt-0.5">ช่วง: {scopeLabel}</p>
+        </div>
+        <Badge variant="outline" className="text-[10px] bg-amber-50 text-[var(--chart-amber)] border-amber-200">
+          {canPickScope ? scopeBadgeLabel : getUser(personId)?.name}
+        </Badge>
       </CardHeader>
       <CardContent className="flex-1">
         {total === 0 && (
