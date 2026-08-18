@@ -10,7 +10,7 @@ import { ChartTooltip } from "@/modules/report_task/components/shared/chart-tool
 import type { KpiBuckets } from "@/modules/report_task/lib/kpi-buckets";
 import { useHasHover } from "@/modules/report_task/hooks/use-has-hover";
 import { cn } from "@/modules/report_task/lib/utils";
-import { ArrowUpRight, Lightbulb } from "lucide-react";
+import { ArrowUpRight, Lightbulb, AlertTriangle } from "lucide-react";
 
 /** Same templated, rule-based (not AI-generated) next-step copy as the KPI
  * card's own "ตัวปัญหาหลัก" — generic enough to read naturally for either
@@ -133,14 +133,12 @@ export function StatusOverviewDonut({
   // "ตัวปัญหาหลัก" — singular, unlike the KPI card's own version which lists
   // every stuck category. Here it's just whichever of overdue/pending is
   // bigger, scoped to this one donut's own domain.
-  const stuck = buckets.overdue + buckets.pending;
   const mainIssue: { key: "overdue" | "pending"; label: string; count: number } | undefined = [
     { key: "overdue" as const, label: labels.overdue, count: buckets.overdue },
     { key: "pending" as const, label: labels.pending, count: buckets.pending },
   ]
     .filter((i) => i.count > 0)
     .sort((a, b) => b.count - a.count)[0];
-  const mainIssuePercent = mainIssue && stuck ? Math.round((mainIssue.count / stuck) * 100) : 0;
   const mainIssuePerson = mainIssue ? topPersonByBucket?.[mainIssue.key] : undefined;
 
   return (
@@ -304,19 +302,24 @@ export function StatusOverviewDonut({
             </div>
 
             {mainIssue && (
-              <div className="w-full flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2">
-                <Lightbulb className="h-4 w-4 text-[var(--chart-amber-dark)] shrink-0 mt-0.5" />
-                <div className="text-[12px] text-[var(--ink)] w-full">
-                  <p className="font-medium">
-                    <span className="font-semibold text-[var(--chart-amber-dark)]">ตัวปัญหาหลัก:</span> {mainIssue.label} {mainIssue.count}{" "}
-                    {unitLabel} ({mainIssuePercent}% ของที่ค้างทั้งหมด)
+              <div className="w-full flex flex-col gap-2">
+                <div className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2">
+                  <AlertTriangle className="h-4 w-4 text-[var(--chart-red-dark)] shrink-0 mt-0.5" />
+                  <p className="text-[12px] text-[var(--ink)]">
+                    <span className="font-semibold text-[var(--chart-red-dark)]">ตัวปัญหาหลัก:</span> {mainIssue.label}
+                    {mainIssuePerson ? (
+                      <>
+                        {" — "}
+                        <span className="font-medium">{mainIssuePerson.name}</span> ({mainIssuePerson.count} {unitLabel})
+                      </>
+                    ) : (
+                      <> {mainIssue.count} {unitLabel}</>
+                    )}
                   </p>
-                  {mainIssuePerson && (
-                    <p className="text-[var(--ink)] mt-0.5">
-                      👤 มากสุดจาก: <span className="font-medium">{mainIssuePerson.name}</span> ({mainIssuePerson.count} {unitLabel})
-                    </p>
-                  )}
-                  <p className="text-[var(--ink-soft)] mt-0.5">💡 {issueSuggestion(mainIssue.key, mainIssuePerson?.name)}</p>
+                </div>
+                <div className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2">
+                  <Lightbulb className="h-4 w-4 text-[var(--chart-amber-dark)] shrink-0 mt-0.5" />
+                  <p className="text-[12px] text-[var(--ink-soft)]">{issueSuggestion(mainIssue.key, mainIssuePerson?.name)}</p>
                 </div>
               </div>
             )}
