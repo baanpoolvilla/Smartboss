@@ -24,6 +24,25 @@ commit ที่เพิ่งทำก็ได้ ไม่ต้องเด
 
 ## บันทึก
 
+### 2026-08-19 15:02 — baanpoolvilla (แก้ร่วมกับ Claude)
+**feat:** AI Insight — รีดีไซน์ 4 KPI cards + แก้ label กำกวม pending/overdue
+- ทำอะไร: การ์ด AI Insight เดิมโชว์สถิติ 4 ช่องแบบกล่องใหญ่ 2x2 (~120px โล่ง)
+  เปลี่ยนเป็นแถวเดียว 4 การ์ดกะทัดรัดในกรอบเดียวตาม §13.3 ของ
+  `docs/ai-insight-v2-spec.md` — ตัวเลขใหญ่ซ้ายบน + ไอคอนวงกลมขวาบน + label
+  ใต้ตัวเลข + ปุ่ม "ดูรายละเอียด" เต็มกว้างท้ายการ์ด (กดแล้วเปิดแท็บภาพรวม
+  บริษัท + กางส่วนรายละเอียดที่มีอยู่แล้ว) จอ <640px ยุบเป็น 2x2 เหมือนเดิม
+  · ทำให้ 4 ตัวเลขนี้ deterministic (คำนวณฝั่งเซิร์ฟเวอร์จาก aggregate ที่มี
+  อยู่แล้ว ไม่ให้ AI แต่ง label เอง) เพราะ label ต้องแม่นทุกรอบ — แก้ความ
+  กำกวม "งานยังไม่เสร็จ" ที่เดิมใช้ทั้ง pending กับ overdue คู่กันแยกไม่ออก
+  เป็น "ยังไม่เสร็จ · ในกำหนด" กับ "ยังไม่เสร็จ · เลยกำหนด" · เพิ่มโทนสีที่ 4
+  "blue" สำหรับ "รายงานยังไม่ส่ง" (เพิ่ม `--chart-blue-dark` ใน theme.css)
+- ไฟล์หลัก: `apps/web/modules/report_task/lib/ai-insight/{types,aggregate,
+  openai-client}.ts`, `.../components/dashboard/ai-insight-card.tsx`,
+  `theme.css`, `docs/ai-insight-v2-spec.md`
+- ต้องทำหลัง pull: ไม่มี migration
+- ค้างอยู่ / ต้องระวัง: ยังไม่ได้ deploy ขึ้น production (เพื่อนยังใช้เครื่อง
+  `smartboss-prod` อยู่) ของเดิมที่ deploy ไปยังใช้งานได้ปกติไม่พัง
+
 ### 2026-08-19 14:22 — baanpoolvilla (แก้ร่วมกับ Claude)
 **feat:** AI Insight เฟส C ของ v2 — ทะเบียนติดตามผลคำแนะนำ (Recommendation → Outcome)
 - ทำอะไร: ต่อจากเฟส A (วิเคราะห์แยกแผนก) + เฟส B (เทรนด์ย้อนหลังหลายรอบ) ตาม
