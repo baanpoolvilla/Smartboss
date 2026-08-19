@@ -1,7 +1,7 @@
 import "server-only";
 
 import { metricValueOf, type AiInsightAggregate } from "./aggregate";
-import type { AiInsightAction, AiInsightLedgerRecord, InsightMetricKey, RecoStatus } from "./types";
+import type { AiInsightAction, AiInsightDeptNote, AiInsightLedgerRecord, AiInsightPersonNote, InsightMetricKey, RecoStatus } from "./types";
 
 /** Company subjectKey is a fixed sentinel — there's only ever one company. */
 export const COMPANY_SUBJECT_KEY = "__company__";
@@ -48,6 +48,34 @@ export function resolveActions(agg: AiInsightAggregate, actions: Partial<AiInsig
 
     if (metricValueOf(agg, subjectType, subjectKey, metricKey) == null) continue;
     out.push({ subjectType, subjectKey, subjectName, metricKey, detail, severity });
+  }
+  return out;
+}
+
+/** §6.2 of docs/ai-insight-v2-spec.md — "ทั้ง actions และ personNotes/deptNotes
+ * เจาะ target ที่วัดได้เป๊ะ" — personNotes/deptNotes carry a `metricKey` too
+ * (see types.ts), so they feed the ledger the same way `actions` do, just
+ * without a model-given severity (there's no signal for it at that
+ * granularity, so every note-derived entry defaults to "mid"). Same
+ * silent-drop-on-mismatch behavior as `resolveActions`. */
+export function resolveNoteActions(
+  agg: AiInsightAggregate,
+  personNotes: AiInsightPersonNote[],
+  deptNotes: AiInsightDeptNote[]
+): AiInsightAction[] {
+  const out: AiInsightAction[] = [];
+  for (const n of personNotes) {
+    if (!n?.name || !n.metricKey || n.metricKey === "success_rate") continue; // person has no rate, only counts
+    if (!agg.personMetricsAll.has(n.name)) continue; // model invented a person name — drop it
+    if (metricValueOf(agg, "person", n.name, n.metricKey) == null) continue;
+    out.push({ subjectType: "person", subjectKey: n.name, subjectName: n.name, metricKey: n.metricKey, detail: n.priority, severity: "mid" });
+  }
+  for (const n of deptNotes) {
+    if (!n?.name || !n.metricKey) continue;
+    const dept = agg.departmentsAll.find((d) => d.name === n.name);
+    if (!dept) continue; // model invented a department name — drop it
+    if (metricValueOf(agg, "department", dept.departmentId, n.metricKey) == null) continue;
+    out.push({ subjectType: "department", subjectKey: dept.departmentId, subjectName: dept.name, metricKey: n.metricKey, detail: n.note, severity: "mid" });
   }
   return out;
 }

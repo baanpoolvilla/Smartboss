@@ -5,8 +5,8 @@ import { getOrgPlan, planAtLeast, AI_INSIGHT_MONTHLY_LIMIT, type PlanCode } from
 import { buildAiInsightAggregate } from "./aggregate";
 import { callOpenAiInsight } from "./openai-client";
 import { EMPTY_HISTORY, appendSnapshot, computeTrend, snapshotFromAggregate, type AiInsightHistory } from "./history";
-import { reconcile } from "./ledger";
-import type { AiInsightState } from "./types";
+import { reconcile, resolveNoteActions } from "./ledger";
+import type { AiInsightLedgerRecord, AiInsightState } from "./types";
 
 /** Server-only key — deliberately NOT in store-registry.ts's STORE_KEYS, so
  * the generic `/api/report-task/store/[key]` route can never read or write
@@ -19,9 +19,12 @@ const SETTINGS_KEY = "ai-insight-settings";
 /** Same server-only reasoning as RESULT_KEY — a client that could write its
  * own history could fake an "improving" trend that never happened. */
 const HISTORY_KEY = "ai-insight-history";
-// The recommendation ledger lives inside AiInsightState.ledger (persisted
-// under RESULT_KEY above), not a separate store key — same server-only
-// enforcement, no extra read/write round-trip needed.
+/** Same server-only reasoning as RESULT_KEY — a client that could write its
+ * own ledger could fake "improved"/"resolved" outcomes that never happened.
+ * Kept as its own key (per docs/ai-insight-v2-spec.md §14 phase C step 3)
+ * rather than folded into RESULT_KEY, so it round-trips independently of
+ * the rest of the cached result. */
+const LEDGER_KEY = "ai-insight-ledger";
 
 interface AiInsightSettings {
   enabled: boolean;
@@ -62,9 +65,10 @@ export interface AiInsightStatus {
 export async function getAiInsightStatus(orgId: string): Promise<AiInsightStatus> {
   const plan = await getOrgPlan(orgId);
   const unlocked = planAtLeast(plan, "PRO");
-  const [settingsRow, resultRow] = await Promise.all([
+  const [settingsRow, resultRow, ledgerRow] = await Promise.all([
     readStore<AiInsightSettings>(orgId, SETTINGS_KEY),
     readStore<AiInsightState>(orgId, RESULT_KEY),
+    readStore<AiInsightLedgerRecord[]>(orgId, LEDGER_KEY),
   ]);
   const enabled = settingsRow.data?.enabled ?? true; // default on for a Pro+ org that's never touched the switch
   // `?? []`/`?? 0`/`?? null` cover a state saved before these fields
@@ -79,6 +83,9 @@ export async function getAiInsightStatus(orgId: string): Promise<AiInsightStatus
         combinedSuccessRate: resultRow.data.combinedSuccessRate ?? 0,
         companyTrend: resultRow.data.companyTrend ?? null,
         previous: resultRow.data.previous ?? null,
+        // One-time migration fallback for a result saved when the ledger
+        // still lived inside RESULT_KEY — `ledgerRow.data` below is
+        // authoritative once LEDGER_KEY has ever been written.
         ledger: resultRow.data.ledger ?? [],
         result: resultRow.data.result
           ? {
@@ -89,6 +96,7 @@ export async function getAiInsightStatus(orgId: string): Promise<AiInsightStatus
           : null,
       }
     : emptyState();
+  if (ledgerRow.data) state = { ...state, ledger: ledgerRow.data };
   // Usage resets the moment we notice the calendar month rolled over — no
   // cron needed, this is checked on every status read.
   if (state.usage.month !== currentMonth()) state = { ...state, usage: emptyState().usage };
@@ -123,7 +131,12 @@ export async function runAiInsightAnalysis(orgId: string): Promise<AnalyzeOutcom
   const { result, inputTokens, outputTokens, estCostUsd } = await callOpenAiInsight(aggregate, { companyTrend, departments, people });
 
   const now = new Date().toISOString();
-  const ledger = reconcile(status.state.ledger, aggregate, result.actions, now);
+  // §6.2 of docs/ai-insight-v2-spec.md — personNotes/deptNotes are just as
+  // measurable as `actions`, so they feed the same ledger, not just the
+  // 3 company-wide picks. `result.actions` itself is left untouched (still
+  // shown as-is under the "ภาพรวมบริษัท" tab's action list).
+  const noteActions = resolveNoteActions(aggregate, result.personNotes, result.deptNotes);
+  const ledger = reconcile(status.state.ledger, aggregate, [...result.actions, ...noteActions], now);
 
   // This round's own numbers become "previous" for whatever round runs
   // after this one — captured from the state we just read, before it's
@@ -159,6 +172,7 @@ export async function runAiInsightAnalysis(orgId: string): Promise<AnalyzeOutcom
   await Promise.all([
     writeStore(orgId, RESULT_KEY, nextState, null),
     writeStore(orgId, HISTORY_KEY, appendSnapshot(history, snapshotFromAggregate(aggregate)), null),
+    writeStore(orgId, LEDGER_KEY, ledger, null),
   ]);
 
   return { ok: true, status: { ...status, usage: nextState.usage, quotaRemaining: Math.max(0, status.monthlyLimit - nextState.usage.count), state: nextState } };

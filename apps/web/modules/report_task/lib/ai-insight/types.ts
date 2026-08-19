@@ -8,18 +8,22 @@ export interface AiInsightStat {
 
 /** One flagged person's own prioritized read — "here's everything open for
  * THIS person, and what to fix first" — distinct from `actions` (company-
- * wide picks, at most 3, not necessarily one per person). */
+ * wide picks, at most 3, not necessarily one per person). `metricKey` is
+ * what the ledger re-measures next round (see ledger.ts's resolveNoteActions)
+ * — same "must pick from the real enum" reasoning as `AiInsightAction`. */
 export interface AiInsightPersonNote {
   name: string;
+  metricKey: InsightMetricKey;
   /** What to fix first for this person specifically, and why — 1 sentence. */
   priority: string;
 }
 
 /** One flagged department's own prioritized read — pairs with
  * `AiInsightDeptBreakdown` (same `name`) the way `personNotes` pairs with
- * `AiInsightPersonBreakdown`. */
+ * `AiInsightPersonBreakdown`. Same `metricKey` reasoning as AiInsightPersonNote. */
 export interface AiInsightDeptNote {
   name: string;
+  metricKey: InsightMetricKey;
   note: string;
 }
 
