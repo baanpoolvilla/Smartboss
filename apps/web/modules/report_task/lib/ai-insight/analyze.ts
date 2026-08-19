@@ -6,6 +6,9 @@ import { buildAiInsightAggregate } from "./aggregate";
 import { callOpenAiInsight } from "./openai-client";
 import { EMPTY_HISTORY, appendSnapshot, computeTrend, snapshotFromAggregate, type AiInsightHistory } from "./history";
 import { reconcile, resolveNoteActions } from "./ledger";
+import { detectRootCauses } from "./analyzers/root-cause";
+import { computeForecast } from "./analyzers/forecast";
+import { detectRisks } from "./analyzers/risk";
 import type { AiInsightLedgerRecord, AiInsightState } from "./types";
 
 /** Server-only key — deliberately NOT in store-registry.ts's STORE_KEYS, so
@@ -46,6 +49,9 @@ function emptyState(): AiInsightState {
     companyTrend: null,
     previous: null,
     ledger: [],
+    rootCauses: [],
+    forecast: null,
+    risks: [],
     usage: { month: currentMonth(), count: 0, inputTokens: 0, outputTokens: 0, estCostUsd: 0 },
   };
 }
@@ -87,6 +93,9 @@ export async function getAiInsightStatus(orgId: string): Promise<AiInsightStatus
         // still lived inside RESULT_KEY — `ledgerRow.data` below is
         // authoritative once LEDGER_KEY has ever been written.
         ledger: resultRow.data.ledger ?? [],
+        rootCauses: resultRow.data.rootCauses ?? [],
+        forecast: resultRow.data.forecast ?? null,
+        risks: resultRow.data.risks ?? [],
         result: resultRow.data.result
           ? {
               ...resultRow.data.result,
@@ -128,7 +137,14 @@ export async function runAiInsightAnalysis(orgId: string): Promise<AnalyzeOutcom
   const departments = aggregate.departments.map((d) => ({ ...d, trend: computeTrend(history, `dept:${d.departmentId}`, "rate") }));
   const people = aggregate.people.map((p) => ({ ...p, trend: computeTrend(history, `person:${p.name}`, "count") }));
 
-  const { result, inputTokens, outputTokens, estCostUsd } = await callOpenAiInsight(aggregate, { companyTrend, departments, people });
+  // §16 analyzers — all pure/deterministic (no OpenAI call), fed into the
+  // prompt as context below so the model reasons from real detected
+  // patterns instead of re-deriving them from raw counts itself.
+  const rootCauses = detectRootCauses(aggregate);
+  const forecast = computeForecast(aggregate, history);
+  const risks = detectRisks(aggregate, new Date());
+
+  const { result, inputTokens, outputTokens, estCostUsd } = await callOpenAiInsight(aggregate, { companyTrend, departments, people, rootCauses, forecast, risks });
 
   const now = new Date().toISOString();
   // §6.2 of docs/ai-insight-v2-spec.md — personNotes/deptNotes are just as
@@ -161,6 +177,9 @@ export async function runAiInsightAnalysis(orgId: string): Promise<AnalyzeOutcom
     companyTrend,
     previous,
     ledger,
+    rootCauses,
+    forecast,
+    risks,
     usage: {
       month: currentMonth(),
       count: status.usage.count + 1,

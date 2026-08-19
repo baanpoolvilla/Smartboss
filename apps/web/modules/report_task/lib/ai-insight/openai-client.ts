@@ -1,17 +1,21 @@
 import "server-only";
 import OpenAI from "openai";
 import { buildFixedStats, type AiInsightAggregate, type DeptBreakdown, type PersonBreakdown } from "./aggregate";
-import type { AiInsightAction, AiInsightResult } from "./types";
+import type { AiInsightAction, AiInsightForecast, AiInsightResult, RiskItem, RootCause } from "./types";
 import type { Trend } from "./history";
 import { resolveActions } from "./ledger";
 
-/** Trend context computed server-side (see analyze.ts) — passed in
- * alongside the aggregate so the prompt can say "แผนก IT: 45% (แย่ลง 3 รอบ
- * ติด)" instead of the model guessing direction from a single snapshot. */
+/** Trend + §16 analyzer context, all computed server-side (see analyze.ts)
+ * — passed in alongside the aggregate so the prompt reasons from real
+ * detected patterns/projections instead of re-deriving (or guessing) them
+ * from raw counts itself. */
 export interface TrendContext {
   companyTrend: Trend | null;
   departments: (DeptBreakdown & { trend: Trend | null })[];
   people: (PersonBreakdown & { trend: Trend | null })[];
+  rootCauses: RootCause[];
+  forecast: AiInsightForecast;
+  risks: RiskItem[];
 }
 
 function trendPhrase(trend: Trend | null, kind: "rate" | "count"): string {
@@ -65,6 +69,32 @@ function buildPrompt(agg: AiInsightAggregate, trends: TrendContext): string {
     const issues = d.topIssues.map((it) => `${it.label} ${it.count}`).join(", ") || "ไม่มีปัญหาเด่น";
     lines.push(`- ${d.name} (${d.headcount} คน): success rate ${d.successRate}%${trendPhrase(d.trend, "rate")}, ค้างรวม ${d.openTotal} รายการ — ${issues}`);
   }
+
+  if (trends.rootCauses.length > 0) {
+    lines.push("");
+    lines.push("สาเหตุรากที่คำนวณไว้ให้แล้ว (deterministic — ใช้ headline/evidence นี้ตรงๆ ห้ามคิดสาเหตุเอง):");
+    for (const c of trends.rootCauses) {
+      lines.push(`- [${c.severity}] ${c.headline}`);
+    }
+  }
+
+  lines.push("");
+  lines.push(
+    `พยากรณ์ (คำนวณไว้ให้แล้ว): ถ้าไม่แก้อะไรเลย อัตราสำเร็จใน 2 สัปดาห์ข้างหน้าจะประมาณ ${trends.forecast.doNothingRate}% ` +
+      `(ทิศทางตอนนี้: ${trends.forecast.direction === "up" ? "ดีขึ้น" : trends.forecast.direction === "down" ? "แย่ลง" : "คงที่"}), ` +
+      `ถ้าแก้ปัญหาอันดับ 1 ได้จะขึ้นเป็น ${trends.forecast.ifPlanRate}%` +
+      (trends.forecast.clearByDays != null ? ` และงานค้างทั้งหมดจะหมดใน ~${trends.forecast.clearByDays} วันถ้าอัตราการเคลียร์เท่าเดิม` : "") +
+      (trends.forecast.confidence === "low" ? " (ความเชื่อมั่นต่ำ — ข้อมูลย้อนหลังยังน้อย)" : "")
+  );
+
+  if (trends.risks.length > 0) {
+    lines.push("");
+    lines.push("ใกล้เลยกำหนดใน 48 ชม. ข้างหน้า (ยังไม่เลยกำหนดตอนนี้ แต่จะเป็นเร็วๆ นี้ถ้าไม่รีบ):");
+    for (const r of trends.risks.slice(0, 5)) {
+      lines.push(`- [${r.kind === "task" ? "งาน" : "รายงาน"}] ${r.name}: ${r.count} รายการ, เหลือ ${r.dueInDays} วัน`);
+    }
+  }
+
   return lines.join("\n");
 }
 
@@ -74,8 +104,9 @@ const SYSTEM_PROMPT = `คุณเป็นผู้ช่วยวิเคร
 - ห้ามเปิดด้วยการท่องข้อมูลพื้นฐาน (จำนวนพนักงาน, จำนวนงาน/รายงานทั้งหมด) เพราะมันโชว์อยู่บนแดชบอร์ดแล้ว ไม่ใช่สิ่งที่ต้องใช้ AI มาบอกซ้ำ
 - เปิดด้วยสิ่งที่ "ผิดปกติ/น่าสนใจ" ที่สุดตรงๆ (เช่น อัตราสำเร็จร่วงหนักเพราะจุดเดียว, คนคนเดียวเป็นต้นเหตุครึ่งนึงของปัญหาทั้งหมด)
 - ต้องมีประโยค "ถ้าแก้ [ปัญหาอันดับ 1] ได้ อัตราสำเร็จจะขึ้นเป็นประมาณ [ตัวเลขที่คำนวณมาให้]%" เสมอเมื่อมีตัวเลขนี้ในข้อมูล — นี่คือใจความสำคัญที่สุด ให้ความรู้สึกว่า "แก้จุดเดียวได้ผลเยอะ" ไม่ใช่แค่รายงานปัญหา
+- ถ้ามี "สาเหตุรากที่คำนวณไว้ให้แล้ว" ในข้อมูล ให้เปิดประโยคแรกด้วยสาเหตุราก severity สูงสุดนั้น (ใช้ headline ที่ให้มาเป็นฐาน ปรับสำนวนให้ลื่นได้แต่ห้ามเปลี่ยนตัวเลข/ชื่อ) แทนที่จะพูดถึงแค่ผลลัพธ์ปลายทาง — ให้ความรู้สึกว่า "รู้ว่าทำไมถึงเกิด" ไม่ใช่แค่ "รู้ว่าเกิดอะไร"
 - ถ้าอัตราสำเร็จรวมมีวงเล็บบอกเทรนด์ (ดีขึ้น/แย่ลง กี่จุด จากรอบก่อนๆ) ให้พูดถึงทิศทางนั้นด้วยถ้าเข้ากับเนื้อความได้ เช่น "ดีขึ้นต่อเนื่อง 3 รอบ" — ไม่ใช่แค่บอกตัวเลข ณ ตอนนี้เฉยๆ
-- ห้ามยาวเกิน 3 ประโยค ห่อตัวเลขสำคัญด้วย **
+- ห้ามยาวเกิน 4 ประโยค ห่อตัวเลขสำคัญด้วย **
 
 กฎการเขียน actions (ต้อง "วัดผลได้" เพราะระบบจะติดตามว่าคำแนะนำนี้ทำสำเร็จรึยังในรอบถัดไป):
 - แต่ละข้อต้องระบุ subjectType เป็นหนึ่งใน "company" | "department" | "person" เท่านั้น
@@ -83,6 +114,7 @@ const SYSTEM_PROMPT = `คุณเป็นผู้ช่วยวิเคร
 - ต้องระบุ metricKey เป็นหนึ่งใน "overdue_tasks" | "pending_tasks" | "late_tasks" | "missed_reports" | "pending_reports" | "late_reports" | "open_total" | "success_rate" เท่านั้น — เลือกตัวที่ตรงกับปัญหาที่พูดถึงจริงๆ ห้ามเดา
 - ห้ามใช้ metricKey "success_rate" กับ subjectType "person" (คนไม่มีอัตรา มีแต่จำนวนค้าง)
 - สูงสุด 3 ข้อ เรียงตามความสำคัญ
+- ใส่ approach เป็น array ของ 2-4 ขั้นตอนที่ทำได้จริง เจาะจงตามข้อมูล (ไม่ generic เช่น "ทำงานให้เร็วขึ้น") ถ้าเรื่องนั้นชัดเจนในตัวอยู่แล้วไม่ต้องมีขั้นตอนก็ข้ามได้ (ไม่บังคับ)
 
 กฎการเขียน personNotes (สำคัญเท่ากัน — นี่คือส่วนที่ต้องเจาะรายคน, ต้อง "วัดผลได้" เหมือน actions):
 - เขียน 1 บรรทัดต่อ 1 คนที่อยู่ในรายชื่อ "รายคน" ด้านล่าง (ห้ามข้าม ห้ามเพิ่มคนที่ไม่มีในรายชื่อ)
@@ -90,19 +122,21 @@ const SYSTEM_PROMPT = `คุณเป็นผู้ช่วยวิเคร
 - ต้องบอกว่าสำหรับคนนี้ควรแก้ "อะไรก่อน" (ถ้ามีหลายรายการ ให้จัดลำดับเอง ไม่ใช่แค่ท่องจำนวนรวม) พร้อมเหตุผลสั้นๆ ว่าทำไมอันนั้นก่อน (เช่น กระทบคะแนนมากสุด/ค้างนานสุด/เป็นสาเหตุหลักของปัญหาบริษัท)
 - ห้ามยาวเกิน 1 ประโยคสั้นๆ ต่อคน
 - **ห้ามเขียนประโยคซ้ำกันแม้แต่ตัวเดียวระหว่าง 2 คนขึ้นไป แม้จะมีปัญหาประเภทเดียวกัน** — ต้องใส่ตัวเลข/รายละเอียดเฉพาะของคนนั้น (เช่น จำนวนที่ค้าง, สัดส่วนเทียบทั้งบริษัท) ให้ต่างกันจริง ไม่ใช่แค่เปลี่ยนชื่อแล้วก็อปประโยคเดิม — ถ้าตรวจแล้วมีคนไหนประโยคซ้ำกับคนอื่นแม้แค่บางส่วน ให้เขียนใหม่ก่อนตอบ
+- approach ไม่บังคับ (เหมือน actions) แต่ถ้าใส่ต้อง 2-4 ขั้นตอนเจาะจงคนนั้นจริงๆ
 
 กฎการเขียน deptNotes (เหมือน personNotes แต่ระดับแผนก):
 - เขียน 1 ประโยคต่อ 1 แผนกที่อยู่ในรายชื่อ "รายแผนก" ด้านล่าง เท่านั้น (ห้ามข้าม ห้ามเพิ่มแผนกที่ไม่มีในรายชื่อ, ชื่อแผนกต้องตรงกับที่ให้มาเป๊ะ)
 - ต้องระบุ metricKey เหมือน personNotes แต่แผนกใช้ "success_rate" ได้ด้วย (เพิ่มจากรายการของคน)
 - บอกว่าแผนกนี้ควรโฟกัสอะไรก่อน + เพราะอะไร (อ้างตัวเลข/คนที่เป็นสาเหตุหลักถ้ามี)
 - ห้ามซ้ำประโยคข้ามแผนก (กฎเดียวกับ personNotes)
+- approach ไม่บังคับ เหมือน personNotes
 
 ตอบกลับเป็น JSON เท่านั้น ตามรูปแบบนี้เป๊ะๆ (ไม่ต้องมี "stats" — ตัวเลข KPI 4 ช่องบนสุดคำนวณฝั่งเซิร์ฟเวอร์เอง ไม่ได้มาจากคุณ):
 {
   "insightText": "ตามกฎด้านบน",
-  "actions": [ { "subjectType": "company|department|person", "subjectName": "ตามกฎด้านบน", "metricKey": "ตามกฎด้านบน", "detail": "คำแนะนำสั้นๆ เจาะจงตามข้อมูลจริง บอกผลลัพธ์ที่จะได้ถ้าทำ ไม่ใช่แค่สั่งให้ทำ", "severity": "high|mid|good" }, ... สูงสุด 3 ข้อ เรียงตามความสำคัญ ],
-  "personNotes": [ { "name": "ชื่อคนตรงกับในรายชื่อ \"รายคน\" เป๊ะ", "metricKey": "ตามกฎด้านบน", "priority": "ตามกฎด้านบน" }, ... ครบทุกคนในรายชื่อ \"รายคน\" ],
-  "deptNotes": [ { "name": "ชื่อแผนกตรงกับในรายชื่อ \"รายแผนก\" เป๊ะ", "metricKey": "ตามกฎด้านบน", "note": "ตามกฎด้านบน" }, ... ครบทุกแผนกในรายชื่อ \"รายแผนก\" ]
+  "actions": [ { "subjectType": "company|department|person", "subjectName": "ตามกฎด้านบน", "metricKey": "ตามกฎด้านบน", "detail": "คำแนะนำสั้นๆ เจาะจงตามข้อมูลจริง บอกผลลัพธ์ที่จะได้ถ้าทำ ไม่ใช่แค่สั่งให้ทำ", "severity": "high|mid|good", "approach": ["ขั้นตอนที่ 1 (ไม่บังคับ)", "ขั้นตอนที่ 2"] }, ... สูงสุด 3 ข้อ เรียงตามความสำคัญ ],
+  "personNotes": [ { "name": "ชื่อคนตรงกับในรายชื่อ \"รายคน\" เป๊ะ", "metricKey": "ตามกฎด้านบน", "priority": "ตามกฎด้านบน", "approach": ["ไม่บังคับ"] }, ... ครบทุกคนในรายชื่อ \"รายคน\" ],
+  "deptNotes": [ { "name": "ชื่อแผนกตรงกับในรายชื่อ \"รายแผนก\" เป๊ะ", "metricKey": "ตามกฎด้านบน", "note": "ตามกฎด้านบน", "approach": ["ไม่บังคับ"] }, ... ครบทุกแผนกในรายชื่อ \"รายแผนก\" ]
 }
 
 ห้ามแต่งชื่อคนหรือตัวเลขที่ไม่มีในข้อมูลที่ให้มา ถ้าข้อมูลไม่มีปัญหาเลย ให้ actions ว่างเปล่า, personNotes ว่างเปล่า, deptNotes ว่างเปล่า พร้อม insightText ที่ชื่นชมทีมงาน`;

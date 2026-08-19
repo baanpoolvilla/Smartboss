@@ -19,6 +19,10 @@ export interface AiInsightPersonNote {
   metricKey: InsightMetricKey;
   /** What to fix first for this person specifically, and why — 1 sentence. */
   priority: string;
+  /** §15.2 of docs/ai-insight-v2-spec.md — 2–4 concrete steps, optional (a
+   * short note doesn't always need a how-to). Same field/reasoning as
+   * `AiInsightAction.approach`. */
+  approach?: string[];
 }
 
 /** One flagged department's own prioritized read — pairs with
@@ -28,6 +32,7 @@ export interface AiInsightDeptNote {
   name: string;
   metricKey: InsightMetricKey;
   note: string;
+  approach?: string[];
 }
 
 /** Closed enum of "things a recommendation can be about," shared by the
@@ -72,6 +77,12 @@ export interface AiInsightAction {
   metricKey: InsightMetricKey;
   detail: string;
   severity: "high" | "mid" | "good";
+  /** §15 of docs/ai-insight-v2-spec.md — 2–4 concrete "ทำยังไง" steps behind
+   * the one-line `detail`, so a manager clicking in gets an actual how-to
+   * instead of being told "what's wrong" a second time in more words.
+   * Optional — the model isn't forced to invent steps for something already
+   * self-explanatory (e.g. "เคลียร์งานค้าง"). */
+  approach?: string[];
 }
 
 export interface AiInsightResult {
@@ -147,6 +158,48 @@ export interface AiInsightLedgerRecord {
   trail: { at: string; value: number }[];
 }
 
+/** §16.1 of docs/ai-insight-v2-spec.md — 4 deterministic pattern checks
+ * (lib/ai-insight/analyzers/root-cause.ts), never an LLM guess: is a single
+ * report topic the real problem (not the people), is one person a single
+ * point of failure, is the workload just badly spread, is one department
+ * carrying the company's whole backlog. */
+export type RootCauseKind = "systemic-topic" | "concentration" | "workload-imbalance" | "bottleneck-unit";
+
+export interface RootCause {
+  kind: RootCauseKind;
+  severity: "high" | "mid";
+  /** Numbers/names behind `headline` — kept structured (not just baked into
+   * the sentence) so the prompt and the UI can both reference the same
+   * evidence without re-parsing text. */
+  evidence: Record<string, number | string | string[]>;
+  /** Already a complete, readable sentence — computed here, not phrased by
+   * the model (see root-cause.ts's own comment on why numbers stay
+   * deterministic throughout this feature). */
+  headline: string;
+}
+
+/** §16.2 — "if nothing changes" vs "if the #1 issue gets fixed", computed
+ * from real closure velocity across history rounds, not asked of the model.
+ * `confidence: "low"` (and `clearByDays: null`) until ≥2 history rounds
+ * exist — before that there's nothing to measure a trend from. */
+export interface AiInsightForecast {
+  doNothingRate: number;
+  ifPlanRate: number;
+  clearByDays: number | null;
+  direction: "up" | "down" | "flat";
+  confidence: "low" | "mid";
+}
+
+/** §16.3 — "still on time today, but about to flip to overdue" within the
+ * next 48h; the early-warning counterpart to `detail`/`flagged` (which is
+ * already-overdue). */
+export interface RiskItem {
+  name: string;
+  kind: "task" | "report";
+  count: number;
+  dueInDays: number;
+}
+
 export interface AiInsightUsageMonth {
   month: string; // "2026-08"
   count: number;
@@ -184,5 +237,12 @@ export interface AiInsightState {
    * see AiInsightLedgerRecord. Empty on state saved before this field
    * existed (fallback `?? []`, same as `detail`/`people`/`departments`). */
   ledger: AiInsightLedgerRecord[];
+  /** §16 analyzer output — deterministic, computed alongside the aggregate,
+   * fed into the prompt as context (never asked of the model). Empty/null
+   * on a result saved before these fields existed (fallback in analyze.ts,
+   * same pattern as `ledger`/`departments`). */
+  rootCauses: RootCause[];
+  forecast: AiInsightForecast | null;
+  risks: RiskItem[];
   usage: AiInsightUsageMonth;
 }

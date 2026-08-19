@@ -50,7 +50,7 @@ function countMetricsOf(
  * live dashboard's own numbers (which still come from the original
  * client-side functions and are unaffected by this file).
  */
-function mustReportToTopicServer(visibility: ReportTopic["visibility"], user: DirectoryUser): boolean {
+export function mustReportToTopicServer(visibility: ReportTopic["visibility"], user: DirectoryUser): boolean {
   if (user.isOwner) return false;
   if (visibility?.exemptUserIds?.includes(user.id)) return false;
   if (!visibility || (!visibility.managerOnly && !visibility.departmentIds?.length && !visibility.userIds?.length)) return true;
@@ -378,6 +378,16 @@ export interface AiInsightAggregate {
    * (not the capped `people`/`flagged` lists), so it's a real count, not
    * "however many named people fit in the top-N shown to the prompt". */
   urgentPeopleCount: number;
+  /** Raw ingredients this aggregate was built from — exposed so the §16
+   * analyzers (lib/ai-insight/analyzers/*.ts) can run their own bounded
+   * queries (e.g. "who's missing THIS specific report topic") without a
+   * second DB round-trip. `AiInsightAggregate` is never persisted/serialized
+   * as-is (only the capped fields that go into `AiInsightState` are), so
+   * carrying the full raw lists here costs nothing extra. */
+  tasks: Task[];
+  topics: ReportTopic[];
+  posts: ReportPost[];
+  directory: DirectoryUser[];
 }
 
 /**
@@ -512,6 +522,10 @@ export async function buildAiInsightAggregate(orgId: string): Promise<AiInsightA
     companyMetrics,
     personMetricsAll,
     urgentPeopleCount,
+    tasks: tasks as Task[],
+    topics,
+    posts,
+    directory,
   };
 }
 

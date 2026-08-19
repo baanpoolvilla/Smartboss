@@ -465,3 +465,22 @@ backward-compat: actions เก่าใน state เดิมต้องไม
 ```
 รัน typecheck + build ทั้ง workspace, ตรวจว่า state v1 เก่าโหลดการ์ดได้ไม่ crash, และยืนยันว่า ai-insight-history + ai-insight-ledger PUT จาก client route /api/report-task/store/[key] ไม่ได้ (ไม่อยู่ใน STORE_KEYS)
 ```
+
+---
+
+## 15. Remediation approach — สถานะ: ทำแล้ว
+
+`AiInsightAction`/`AiInsightPersonNote`/`AiInsightDeptNote` เพิ่ม `approach?: string[]` (2–4 ขั้นตอนเจาะจง ไม่บังคับ) — SYSTEM_PROMPT ขอให้ AI ใส่เมื่อมีขั้นตอนจริงที่ควรบอก, ไม่ generic. UI: ปุ่ม "💡 แนวทางที่ AI แนะนำ ▾" ใต้ทุก action/personNote/deptNote ที่มี approach, ย่ออยู่โดย default (`ApproachToggle` ใน ai-insight-card.tsx). ยังไม่ทำ: hook แจ้งเตือน (§15.4) — รอมี notification infra จริง
+
+## 16–17. Analyzer 3 ตัว + prompt เชื่อมข้อมูล — สถานะ: ทำแล้ว (logic), ไม่ได้ทำ (UI "wow")
+
+`lib/ai-insight/analyzers/{root-cause,forecast,risk}.ts` — pure deterministic, ไม่เรียก OpenAI:
+- `detectRootCauses(agg)`: 4 แบบตาม §16.1 (systemic-topic, concentration ≥40%, workload-imbalance ≥3×median, bottleneck-unit ≥50%), cap 3 เรียง severity
+- `computeForecast(agg, history)`: closure velocity จาก history, doNothingRate extrapolate 14 วัน, clearByDays, confidence low ถ้า history <2 รอบ
+- `detectRisks(agg, now)`: task ใกล้เลยกำหนดใน 48 ชม. + report topic ที่ยัง "pending" วันนี้ (ประมาณจากสถานะวันนี้ ไม่ได้คำนวณ cutoff วันถัดไปของแต่ละหัวข้อใหม่ทั้งหมดตามตัวอักษร §16.3 เป๊ะ — ยอมรับ trade-off นี้เพื่อความง่าย/เสี่ยงบั๊กน้อยกว่า)
+
+ผลลัพธ์ทั้ง 3 เก็บใน `AiInsightState.rootCauses/forecast/risks`, ป้อนเข้า `buildPrompt` (openai-client.ts) ให้ insightText อ้างสาเหตุรากจริง ไม่ใช่แค่ผลลัพธ์ปลายทาง — แสดงใน UI เป็นบล็อก "สาเหตุที่พบ" / "พยากรณ์" / "ใกล้เลยกำหนดใน 48 ชม." ในแท็บภาพรวมบริษัท (การ์ด/ลิสต์แบบเดิม ไม่ใช่ hero + bottom-sheet ตาม §18)
+
+## 18–19. Mobile "wow" UI (hero, compact summary, bottom-sheet) — สถานะ: ยังไม่ทำ
+
+**เจตนา ไม่ใช่พลาด** — เลื่อนไว้ก่อนเพราะ: (1) เป็นงานออกแบบ UI ใหญ่/subjective ที่ควรวนดูรูปจริงกับผู้ใช้เป็นรอบๆ เหมือนที่ทำกับ KPI cards (§13.3) มากกว่าทำทีเดียวแบบเดา, (2) โค้ดจุดใกล้เคียง (`task-board-kpis.tsx`) มีคอมเมนต์เตือนไว้ชัดว่าเคยพัง production 3 รอบตอน redesign การ์ดสรุปแบบรวมชิ้นใหญ่ๆ, (3) ต้องมี mobile shell/bottom-sheet component ใหม่ทั้งกระบวน ทดสอบจริงบนมือถือไม่ได้ในสภาพแวดล้อมนี้ ทำเฟส D/E/F ที่เหลือ (mockup wow-mobile.html, wow-reco.html, compact-summary.html, BottomSheet component) เป็นรอบถัดไปเมื่อพร้อมทำ round ออกแบบ+รีวิวรูปจริง

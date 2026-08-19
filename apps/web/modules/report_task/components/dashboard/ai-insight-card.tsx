@@ -17,6 +17,10 @@ import type {
   AiInsightDeptBreakdown,
   AiInsightTrend,
   AiInsightLedgerRecord,
+  AiInsightForecast,
+  RootCause,
+  RootCauseKind,
+  RiskItem,
   InsightMetricKey,
   RecoStatus,
 } from "@/modules/report_task/lib/ai-insight/types";
@@ -40,9 +44,19 @@ interface StatusResponse {
     companyTrend: AiInsightTrend | null;
     previous: { combinedSuccessRate: number; personTotals: Record<string, number> } | null;
     ledger: AiInsightLedgerRecord[];
+    rootCauses: RootCause[];
+    forecast: AiInsightForecast | null;
+    risks: RiskItem[];
     usage: AiInsightUsageMonth;
   };
 }
+
+const ROOT_CAUSE_LABEL: Record<RootCauseKind, string> = {
+  "systemic-topic": "ปัญหาที่หัวข้อ",
+  concentration: "จุดเดียวกระทบเยอะ",
+  "workload-imbalance": "งานกระจุกที่คน",
+  "bottleneck-unit": "คอขวดที่แผนก",
+};
 
 const METRIC_LABEL: Record<InsightMetricKey, string> = {
   overdue_tasks: "งานเลยกำหนด",
@@ -93,6 +107,28 @@ function CollapsibleList<T>({
         <button type="button" onClick={() => setExpanded(false)} className="text-left text-[11px] font-semibold text-[var(--ink-faint)] hover:underline">
           ย่อ ▴
         </button>
+      )}
+    </div>
+  );
+}
+
+/** §15.3 of docs/ai-insight-v2-spec.md — collapsed by default so a short
+ * one-line recommendation doesn't turn into a wall of text; the concrete
+ * "ทำยังไง" steps are one click away for whoever actually wants them. */
+function ApproachToggle({ approach }: { approach?: string[] }) {
+  const [open, setOpen] = useState(false);
+  if (!approach || approach.length === 0) return null;
+  return (
+    <div className="mt-1">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="text-left text-[10.5px] font-semibold text-[var(--chart-violet)] hover:underline">
+        {open ? "ซ่อนแนวทาง ▴" : "💡 แนวทางที่ AI แนะนำ ▾"}
+      </button>
+      {open && (
+        <ol className="mt-1 list-decimal space-y-0.5 pl-4 text-[11px] text-[var(--ink-soft)]">
+          {approach.map((step, i) => (
+            <li key={i}>{step}</li>
+          ))}
+        </ol>
       )}
     </div>
   );
@@ -524,9 +560,12 @@ export function AiInsightCard() {
                       </div>
                     )}
                     {note && (
-                      <p className="mt-1.5 text-[11.5px] text-[var(--ink)] flex items-start gap-1">
-                        <span className="text-[var(--chart-violet)] font-bold shrink-0">→</span> {note.note}
-                      </p>
+                      <>
+                        <p className="mt-1.5 text-[11.5px] text-[var(--ink)] flex items-start gap-1">
+                          <span className="text-[var(--chart-violet)] font-bold shrink-0">→</span> {note.note}
+                        </p>
+                        <ApproachToggle approach={note.approach} />
+                      </>
                     )}
                   </div>
                 );
@@ -565,9 +604,12 @@ export function AiInsightCard() {
                     ))}
                   </div>
                   {note && (
-                    <p className="mt-1.5 text-[11.5px] text-[var(--ink)] flex items-start gap-1">
-                      <span className="text-[var(--chart-violet)] font-bold shrink-0">→</span> {note.priority}
-                    </p>
+                    <>
+                      <p className="mt-1.5 text-[11.5px] text-[var(--ink)] flex items-start gap-1">
+                        <span className="text-[var(--chart-violet)] font-bold shrink-0">→</span> {note.priority}
+                      </p>
+                      <ApproachToggle approach={note.approach} />
+                    </>
                   )}
                 </div>
               );
@@ -575,15 +617,70 @@ export function AiInsightCard() {
           </div>
         )}
 
+        {/* §16 analyzer output — deterministic, computed alongside the
+            aggregate (see aggregate.ts's analyzers/), never asked of the
+            model. "ทำไมถึงเกิด" before "ควรทำอะไรต่อ" (actions, below). */}
+        {result && tab === "company" && status.state.rootCauses.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <p className="text-[10.5px] font-bold uppercase tracking-wide text-[var(--ink-faint)]">สาเหตุที่พบ</p>
+            {status.state.rootCauses.map((c, i) => (
+              <div key={i} className="flex items-start gap-2 rounded-lg border border-[var(--line)] px-2.5 py-2">
+                <span className={cn("text-[10px] font-semibold rounded-full px-2 py-0.5 shrink-0 mt-0.5", c.severity === "high" ? SEVERITY_CLASS.high : SEVERITY_CLASS.mid)}>
+                  {ROOT_CAUSE_LABEL[c.kind]}
+                </span>
+                <span className="text-[12px] text-[var(--ink)] flex-1">{c.headline}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {result && tab === "company" && status.state.forecast && (
+          <div className="rounded-lg border border-[var(--line)] px-2.5 py-2 text-[11.5px] text-[var(--ink)]">
+            <span className="font-semibold text-[var(--chart-violet)]">พยากรณ์: </span>
+            ถ้าไม่แก้อะไรเลย อีก 2 สัปดาห์อัตราสำเร็จจะอยู่ที่ราว <b className="tabular-nums">{status.state.forecast.doNothingRate}%</b>, ถ้าแก้ปัญหาอันดับ 1 ได้จะขึ้นเป็น{" "}
+            <b className="tabular-nums">{status.state.forecast.ifPlanRate}%</b>
+            {status.state.forecast.clearByDays != null && (
+              <>
+                {" "}
+                · เคลียร์งานค้างหมดใน ~<b className="tabular-nums">{status.state.forecast.clearByDays}</b> วันถ้าอัตราเท่าเดิม
+              </>
+            )}
+            {status.state.forecast.confidence === "low" && <span className="text-[var(--ink-faint)]"> (ข้อมูลย้อนหลังยังน้อย ความเชื่อมั่นต่ำ)</span>}
+          </div>
+        )}
+
+        {result && tab === "company" && status.state.risks.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <p className="text-[10.5px] font-bold uppercase tracking-wide text-[var(--ink-faint)]">ใกล้เลยกำหนดใน 48 ชม.</p>
+            <CollapsibleList
+              items={status.state.risks}
+              keyOf={(r) => `${r.kind}-${r.name}`}
+              renderItem={(r) => (
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[12px]">
+                  <span className="truncate text-[var(--ink)]">
+                    {r.kind === "task" ? "📋" : "📝"} {r.name}
+                  </span>
+                  <span className="shrink-0 text-[10.5px] text-[var(--ink-faint)] tabular-nums">
+                    {r.count > 1 ? `${r.count} รายการ · ` : ""}เหลือ {r.dueInDays} วัน
+                  </span>
+                </div>
+              )}
+            />
+          </div>
+        )}
+
         {result && tab === "company" && result.actions.length > 0 && (
           <div className="flex flex-col gap-1.5">
             <p className="text-[10.5px] font-bold uppercase tracking-wide text-[var(--ink-faint)]">สรุปสิ่งที่ควรทำก่อนระดับบริษัท</p>
             {result.actions.map((a, i) => (
-              <div key={i} className="flex items-start gap-2 rounded-lg border border-[var(--line)] px-2.5 py-2">
-                <span className={cn("text-[10px] font-semibold rounded-full px-2 py-0.5 shrink-0 mt-0.5", SEVERITY_CLASS[a.severity])}>
-                  {a.subjectName} · {METRIC_LABEL[a.metricKey]}
-                </span>
-                <span className="text-[12px] text-[var(--ink)] flex-1">{a.detail}</span>
+              <div key={i} className="rounded-lg border border-[var(--line)] px-2.5 py-2">
+                <div className="flex items-start gap-2">
+                  <span className={cn("text-[10px] font-semibold rounded-full px-2 py-0.5 shrink-0 mt-0.5", SEVERITY_CLASS[a.severity])}>
+                    {a.subjectName} · {METRIC_LABEL[a.metricKey]}
+                  </span>
+                  <span className="text-[12px] text-[var(--ink)] flex-1">{a.detail}</span>
+                </div>
+                <ApproachToggle approach={a.approach} />
               </div>
             ))}
           </div>

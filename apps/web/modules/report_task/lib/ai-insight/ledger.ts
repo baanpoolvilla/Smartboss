@@ -47,7 +47,8 @@ export function resolveActions(agg: AiInsightAggregate, actions: Partial<AiInsig
     }
 
     if (metricValueOf(agg, subjectType, subjectKey, metricKey) == null) continue;
-    out.push({ subjectType, subjectKey, subjectName, metricKey, detail, severity });
+    const approach = Array.isArray(a.approach) ? a.approach.filter((s): s is string => typeof s === "string") : undefined;
+    out.push({ subjectType, subjectKey, subjectName, metricKey, detail, severity, ...(approach?.length ? { approach } : {}) });
   }
   return out;
 }
