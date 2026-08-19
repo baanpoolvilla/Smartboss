@@ -47,7 +47,10 @@ export function TaskBoardKpis({ tasks }: { tasks: Task[] }) {
     // ล่าสุด) ทุกรอบผ่าน tsc/eslint/build สะอาดแต่พังจริงบนโปรดักชันแบบเดา
     // สาเหตุไม่ออก (sandbox นี้ไม่มี DB ให้รันแอปเต็มรูปแบบไล่ debug ได้) —
     // เลิกเสี่ยงรอบที่ 4 แล้วกลับมาใช้โครงสร้างนี้ที่พิสูจน์แล้วว่าเสถียรจริง
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+    // ยังคง 4 การ์ดแยกกันเป๊ะเหมือนเดิม (ไม่แตะโครงสร้างที่เคยพัง) — เปลี่ยน
+    // แค่ตัว container จาก grid (ซึ่ง wrap เป็น 2×2 บนจอแคบ) เป็น flex row
+    // เดียวที่เลื่อนแนวนอนแทน ตามฟีดแบ็กว่า 2×2 กินพื้นที่แนวตั้งเปลืองไป
+    <div className="flex gap-2 overflow-x-auto">
       {cards.map((c) => {
         // "งานทั้งหมด" is the resting/no-filter state — quickView defaults to
         // "all", so highlighting it here would make it look permanently
@@ -66,7 +69,7 @@ export function TaskBoardKpis({ tasks }: { tasks: Task[] }) {
               }
             }}
             className={cn(
-              "cursor-pointer border-[var(--line)] shadow-sm transition-colors hover:bg-[var(--bg-soft)]",
+              "min-w-[150px] shrink-0 flex-1 cursor-pointer border-[var(--line)] shadow-sm transition-colors hover:bg-[var(--bg-soft)]",
               active && "ring-2 ring-inset ring-[var(--brand-green)]"
             )}
           >
