@@ -7,7 +7,7 @@ import { Button } from "@/modules/report_task/components/ui/button";
 import { DASHBOARD_CARD } from "@/modules/report_task/components/dashboard/dashboard-card-style";
 import { useAiInsightSettingsStore } from "@/modules/report_task/store/ai-insight-settings-store";
 import { cn } from "@/modules/report_task/lib/utils";
-import { Sparkles, Lock, Loader2 } from "lucide-react";
+import { Sparkles, Lock, Loader2, AlertOctagon, Clock, TrendingUp } from "lucide-react";
 import type { AiInsightResult, AiInsightUsageMonth } from "@/modules/report_task/lib/ai-insight/types";
 import type { PlanCode } from "@/modules/report_task/lib/plan";
 
@@ -25,6 +25,16 @@ const TONE_CLASS: Record<"red" | "amber" | "green", string> = {
   red: "text-[var(--chart-red-dark)]",
   amber: "text-[var(--chart-amber-dark)]",
   green: "text-[var(--brand-green-dark)]",
+};
+const TONE_ICON_BG: Record<"red" | "amber" | "green", string> = {
+  red: "bg-red-50 text-[var(--chart-red-dark)]",
+  amber: "bg-amber-50 text-[var(--chart-amber-dark)]",
+  green: "bg-green-50 text-[var(--brand-green-dark)]",
+};
+const TONE_ICON: Record<"red" | "amber" | "green", typeof AlertOctagon> = {
+  red: AlertOctagon,
+  amber: Clock,
+  green: TrendingUp,
 };
 const SEVERITY_CLASS: Record<"high" | "mid" | "good", string> = {
   high: "bg-red-50 text-[var(--chart-red-dark)]",
@@ -236,12 +246,18 @@ export function AiInsightCard() {
 
         {result && result.stats.length > 0 && (
           <div className="grid grid-cols-2 @sm:grid-cols-4 gap-2">
-            {result.stats.map((s, i) => (
-              <div key={i} className="rounded-xl border border-[var(--line)] p-2.5 text-center shadow-sm">
-                <div className={cn("text-lg font-bold tabular-nums", TONE_CLASS[s.tone])}>{s.count}</div>
-                <div className="text-[10.5px] text-[var(--ink-soft)] leading-tight">{s.label}</div>
-              </div>
-            ))}
+            {result.stats.map((s, i) => {
+              const Icon = TONE_ICON[s.tone];
+              return (
+                <div key={i} className="flex flex-col items-center gap-1.5 rounded-xl border border-[var(--line)] p-3 text-center shadow-sm">
+                  <span className={cn("flex h-7 w-7 items-center justify-center rounded-full", TONE_ICON_BG[s.tone])}>
+                    <Icon className="h-3.5 w-3.5" />
+                  </span>
+                  <div className={cn("text-lg font-bold tabular-nums leading-none", TONE_CLASS[s.tone])}>{s.count}</div>
+                  <div className="text-[10.5px] text-[var(--ink-soft)] leading-tight">{s.label}</div>
+                </div>
+              );
+            })}
           </div>
         )}
 

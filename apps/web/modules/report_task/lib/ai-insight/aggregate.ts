@@ -122,6 +122,16 @@ export interface AiInsightAggregate {
    * biggest-impact first. */
   flagged: FlaggedGroup[];
   headcount: number;
+  /** Combined task+report success rate right now. */
+  combinedSuccessRate: number;
+  /** What the combined rate would become if the single biggest flagged
+   * group (flagged[0]) were fully resolved — computed here, not left to the
+   * model to estimate, so the "ถ้าแก้ปัญหานี้ อัตราจะขึ้นเป็น Y%" line in the
+   * prompt is an actual number instead of an LLM guess. This is the same
+   * shape of claim the reference mockup's "ถ้าปิด Opportunity A, C, F ได้...
+   * ถึง Target 102%" makes — a concrete payoff for fixing the top issue,
+   * not a restatement of totals already visible elsewhere on the dashboard. */
+  projectedSuccessRate: number | null;
 }
 
 /**
@@ -188,6 +198,23 @@ export async function buildAiInsightAggregate(orgId: string): Promise<AiInsightA
   }
   flagged.sort((a, b) => b.count - a.count);
 
+  // Combined (task+report) success rate right now, and the projected rate
+  // if the single biggest flagged group vanished entirely — e.g. flagged[0]
+  // is "รายงานขาดส่ง 28 รายการ": resolving all 28 moves them from
+  // missed→onTime, which doesn't change the total, only the numerator.
+  const combinedTotal = taskBuckets.total + reportBuckets.total;
+  const combinedDone = taskBuckets.onTime + taskBuckets.lateDone + reportBuckets.onTime + reportBuckets.lateDone;
+  const combinedSuccessRate = combinedTotal ? Math.round((combinedDone / combinedTotal) * 100) : 0;
+  // Only "still open" buckets (overdue/pending/missed) move the needle if
+  // resolved — lateDone items are already counted in combinedDone, so
+  // "fixing" one doesn't change the success rate (it'd change onTimeRate
+  // instead), and including it here would double-count.
+  const topOpenIssue = flagged.find((g) => g.key !== "lateDone");
+  const projectedSuccessRate =
+    topOpenIssue && combinedTotal
+      ? Math.min(100, Math.round(((combinedDone + topOpenIssue.count) / combinedTotal) * 100))
+      : null;
+
   return {
     task: taskBuckets,
     report: reportBuckets,
@@ -195,5 +222,7 @@ export async function buildAiInsightAggregate(orgId: string): Promise<AiInsightA
     totalReport: reportBuckets.total,
     flagged,
     headcount: directory.length,
+    combinedSuccessRate,
+    projectedSuccessRate,
   };
 }
