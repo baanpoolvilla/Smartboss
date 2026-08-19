@@ -24,6 +24,30 @@ commit ที่เพิ่งทำก็ได้ ไม่ต้องเด
 
 ## บันทึก
 
+### 2026-08-19 16:15 — baanpoolvilla (แก้ร่วมกับ Claude)
+**feat:** AI Insight — remediation approach + 3 analyzer (root-cause/forecast/risk)
+- ทำอะไร: ทำตาม §15 + §16/§17 ของ `docs/ai-insight-v2-spec.md` (ภาค 2 —
+  AI Insight Pro) ยกเว้น UI มือถือแบบ hero+bottom-sheet (§18-19) ที่ตั้งใจ
+  เลื่อนไว้รอบหน้า (งานออกแบบใหญ่ ควรวนดูรูปจริงกับผู้ใช้เป็นรอบๆ +
+  `task-board-kpis.tsx` มีคอมเมนต์เตือนไว้ว่าเคยพัง production 3 รอบตอน
+  redesign การ์ดสรุปแบบรวมชิ้นใหญ่มาแล้ว)
+  · เพิ่ม `approach?: string[]` ใน action/personNote/deptNote (2-4 ขั้นตอน
+  เจาะจง ไม่บังคับ) มีปุ่ม "💡 แนวทางที่ AI แนะนำ" ย่ออยู่โดย default
+  · เพิ่ม `lib/ai-insight/analyzers/{root-cause,forecast,risk}.ts` — pure
+  deterministic ไม่เรียก OpenAI: หาสาเหตุราก 4 แบบ (หัวข้อรายงานเป็นปัญหา
+  ระบบ/คนเดียวกระทบเยอะ/งานกระจุกคนเดียว/แผนกคอขวด), พยากรณ์จาก closure
+  velocity ของ history จริง, หา task/รายงานที่ใกล้เลยกำหนดใน 48 ชม.
+  ผลลัพธ์ป้อนเข้า prompt ให้ insightText อ้างสาเหตุรากจริงแทนที่จะพูดแค่
+  ผลลัพธ์ปลายทาง แสดงเป็นบล็อกใหม่ในแท็บภาพรวมบริษัท
+- ไฟล์หลัก: `apps/web/modules/report_task/lib/ai-insight/{types,aggregate,
+  analyze,ledger,openai-client}.ts`, `lib/ai-insight/analyzers/*.ts` (ใหม่),
+  `components/dashboard/ai-insight-card.tsx`, `docs/ai-insight-v2-spec.md`
+- ต้องทำหลัง pull: ไม่มี migration — field ใหม่มี fallback ให้ state เก่า
+- ค้างอยู่ / ต้องระวัง: ยังไม่ได้ deploy (รอเครื่อง smartboss-prod ว่าง);
+  `detectRisks` ประมาณเดดไลน์รายงานจากสถานะวันนี้ ไม่ได้คำนวณ cutoff ใหม่
+  ทั้งหมดตามตัวอักษรสเปกเป๊ะ (trade-off เพื่อความง่าย/บั๊กน้อยกว่า); UI มือถือ
+  "wow" (§18-19) ยังไม่ทำ
+
 ### 2026-08-19 15:02 — baanpoolvilla (แก้ร่วมกับ Claude)
 **feat:** AI Insight — รีดีไซน์ 4 KPI cards + แก้ label กำกวม pending/overdue
 - ทำอะไร: การ์ด AI Insight เดิมโชว์สถิติ 4 ช่องแบบกล่องใหญ่ 2x2 (~120px โล่ง)
