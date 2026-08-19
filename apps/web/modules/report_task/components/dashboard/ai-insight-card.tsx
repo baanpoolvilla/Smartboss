@@ -7,8 +7,8 @@ import { Button } from "@/modules/report_task/components/ui/button";
 import { DASHBOARD_CARD } from "@/modules/report_task/components/dashboard/dashboard-card-style";
 import { useAiInsightSettingsStore } from "@/modules/report_task/store/ai-insight-settings-store";
 import { cn } from "@/modules/report_task/lib/utils";
-import { Sparkles, Lock, Loader2, AlertOctagon, Clock, TrendingUp } from "lucide-react";
-import type { AiInsightResult, AiInsightUsageMonth } from "@/modules/report_task/lib/ai-insight/types";
+import { Sparkles, Lock, Loader2, AlertOctagon, Clock, TrendingUp, ChevronDown } from "lucide-react";
+import type { AiInsightResult, AiInsightUsageMonth, AiInsightDetailGroup } from "@/modules/report_task/lib/ai-insight/types";
 import type { PlanCode } from "@/modules/report_task/lib/plan";
 
 interface StatusResponse {
@@ -18,7 +18,7 @@ interface StatusResponse {
   monthlyLimit: number;
   usage: AiInsightUsageMonth;
   quotaRemaining: number;
-  state: { generatedAt: string | null; result: AiInsightResult | null; usage: AiInsightUsageMonth };
+  state: { generatedAt: string | null; result: AiInsightResult | null; detail: AiInsightDetailGroup[]; usage: AiInsightUsageMonth };
 }
 
 const TONE_CLASS: Record<"red" | "amber" | "green", string> = {
@@ -73,6 +73,7 @@ export function AiInsightCard() {
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showDetail, setShowDetail] = useState(false);
   const autoTriedRef = useRef(false);
 
   const loadStatus = useCallback(async () => {
@@ -269,6 +270,57 @@ export function AiInsightCard() {
                 <span className="text-[12px] text-[var(--ink)] flex-1">{a.detail}</span>
               </div>
             ))}
+          </div>
+        )}
+
+        {result && status.state.detail.length > 0 && (
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowDetail((v) => !v)}
+              className="flex items-center gap-1 text-[11.5px] font-semibold text-[var(--chart-violet)] hover:underline"
+            >
+              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showDetail && "rotate-180")} />
+              {showDetail ? "ซ่อนรายละเอียด" : "ดูรายละเอียดทั้งหมด"}
+            </button>
+            {showDetail && (
+              <div className="mt-2 flex flex-col gap-2.5 rounded-xl border border-[var(--line)] bg-[var(--bg-soft)] p-3">
+                {status.state.detail.map((g, i) => {
+                  const max = g.people[0]?.count || 1;
+                  return (
+                    <div key={i} className="flex flex-col gap-1">
+                      <div className="flex items-center justify-between text-[11.5px]">
+                        <span className="font-semibold text-[var(--ink)]">
+                          <span className={cn("mr-1.5 rounded-full px-1.5 py-0.5 text-[9.5px] font-bold", g.domain === "task" ? "bg-[color-mix(in_srgb,var(--chart-blue)_14%,white)] text-[var(--chart-blue)]" : "bg-[color-mix(in_srgb,var(--chart-violet)_14%,white)] text-[var(--chart-violet)]")}>
+                            {g.domain === "task" ? "งาน" : "รายงาน"}
+                          </span>
+                          {g.label}
+                        </span>
+                        <span className="font-bold text-[var(--ink)] tabular-nums">{g.count} รายการ</span>
+                      </div>
+                      {g.people.length > 0 ? (
+                        <div className="flex flex-col gap-1">
+                          {g.people.map((p, j) => (
+                            <div key={j} className="flex items-center gap-2">
+                              <span className="w-24 shrink-0 truncate text-[11px] text-[var(--ink-soft)]">{p.name}</span>
+                              <div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--bg)]">
+                                <div
+                                  className="h-full rounded-full"
+                                  style={{ width: `${(p.count / max) * 100}%`, background: "linear-gradient(90deg, var(--chart-violet), var(--chart-blue))" }}
+                                />
+                              </div>
+                              <span className="w-6 shrink-0 text-right text-[11px] font-semibold tabular-nums text-[var(--ink)]">{p.count}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-[var(--ink-faint)]">ไม่ระบุตัวบุคคล</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 

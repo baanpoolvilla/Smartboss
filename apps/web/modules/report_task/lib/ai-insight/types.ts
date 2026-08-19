@@ -18,6 +18,18 @@ export interface AiInsightResult {
   actions: AiInsightAction[];
 }
 
+/** One real, deterministic breakdown bucket (from lib/ai-insight/aggregate.ts,
+ * NOT written by the model) — the "ดูรายละเอียด" data behind the card. Kept
+ * separate from `AiInsightResult` above so a click always shows the actual
+ * data the AI reasoned from, not the AI's own paraphrased stats/labels
+ * (which have no guaranteed 1:1 mapping back to a specific bucket). */
+export interface AiInsightDetailGroup {
+  domain: "task" | "report";
+  label: string;
+  count: number;
+  people: { name: string; count: number }[];
+}
+
 export interface AiInsightUsageMonth {
   month: string; // "2026-08"
   count: number;
@@ -33,5 +45,7 @@ export interface AiInsightUsageMonth {
 export interface AiInsightState {
   generatedAt: string | null;
   result: AiInsightResult | null;
+  /** Full real breakdown behind this round's result — see AiInsightDetailGroup. */
+  detail: AiInsightDetailGroup[];
   usage: AiInsightUsageMonth;
 }

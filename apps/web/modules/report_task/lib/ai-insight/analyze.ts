@@ -25,7 +25,7 @@ function currentMonth(): string {
 }
 
 function emptyState(): AiInsightState {
-  return { generatedAt: null, result: null, usage: { month: currentMonth(), count: 0, inputTokens: 0, outputTokens: 0, estCostUsd: 0 } };
+  return { generatedAt: null, result: null, detail: [], usage: { month: currentMonth(), count: 0, inputTokens: 0, outputTokens: 0, estCostUsd: 0 } };
 }
 
 export interface AiInsightStatus {
@@ -48,7 +48,9 @@ export async function getAiInsightStatus(orgId: string): Promise<AiInsightStatus
     readStore<AiInsightState>(orgId, RESULT_KEY),
   ]);
   const enabled = settingsRow.data?.enabled ?? true; // default on for a Pro+ org that's never touched the switch
-  let state = resultRow.data ?? emptyState();
+  // `?? []` covers a state saved before `detail` existed (older cached
+  // result) — falls back gracefully instead of the card crashing on it.
+  let state = resultRow.data ? { ...resultRow.data, detail: resultRow.data.detail ?? [] } : emptyState();
   // Usage resets the moment we notice the calendar month rolled over — no
   // cron needed, this is checked on every status read.
   if (state.usage.month !== currentMonth()) state = { ...state, usage: emptyState().usage };
@@ -76,6 +78,7 @@ export async function runAiInsightAnalysis(orgId: string): Promise<AnalyzeOutcom
   const nextState: AiInsightState = {
     generatedAt: new Date().toISOString(),
     result,
+    detail: aggregate.flagged.map((g) => ({ domain: g.domain, label: g.label, count: g.count, people: g.people })),
     usage: {
       month: currentMonth(),
       count: status.usage.count + 1,
