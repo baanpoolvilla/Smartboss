@@ -181,7 +181,7 @@ export function ReportFeedPendingTodayCard() {
         {missed.length > 0 && (
           <div>
             <p className="text-[11px] font-semibold text-[var(--chart-red)] uppercase tracking-wide px-1 pt-1 pb-1.5">
-              {rangeHasToday ? "ประวัติที่เลยกำหนดในช่วงนี้" : "รายงานที่เลยกำหนด"} ({missed.length})
+              {rangeHasToday ? "ประวัติเลยกำหนด" : "รายงานที่เลยกำหนด"} ({missed.length})
             </p>
             {missedShowMore.visible.map((row) => (
               <div
