@@ -68,6 +68,10 @@
 
   /* categorical chart palette, brand-anchored, validated for CVD + normal-vision separation */
   --chart-blue: #2a78d6;
+  /* text-on-tinted-background pairing for --chart-blue, same -dark
+     convention as the traffic-light trio below (e.g. AI Insight's
+     neutral-informational "รายงานยังไม่ส่ง" KPI tile). */
+  --chart-blue-dark: #1d4ed8;
   --chart-orange: #eb6834;
   --chart-violet: #4a3aa7;
   --chart-pink: #e87ba4;

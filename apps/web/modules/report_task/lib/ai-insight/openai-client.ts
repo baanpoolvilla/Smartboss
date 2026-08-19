@@ -1,6 +1,6 @@
 import "server-only";
 import OpenAI from "openai";
-import type { AiInsightAggregate, DeptBreakdown, PersonBreakdown } from "./aggregate";
+import { buildFixedStats, type AiInsightAggregate, type DeptBreakdown, type PersonBreakdown } from "./aggregate";
 import type { AiInsightAction, AiInsightResult } from "./types";
 import type { Trend } from "./history";
 import { resolveActions } from "./ledger";
@@ -97,16 +97,15 @@ const SYSTEM_PROMPT = `คุณเป็นผู้ช่วยวิเคร
 - บอกว่าแผนกนี้ควรโฟกัสอะไรก่อน + เพราะอะไร (อ้างตัวเลข/คนที่เป็นสาเหตุหลักถ้ามี)
 - ห้ามซ้ำประโยคข้ามแผนก (กฎเดียวกับ personNotes)
 
-ตอบกลับเป็น JSON เท่านั้น ตามรูปแบบนี้เป๊ะๆ:
+ตอบกลับเป็น JSON เท่านั้น ตามรูปแบบนี้เป๊ะๆ (ไม่ต้องมี "stats" — ตัวเลข KPI 4 ช่องบนสุดคำนวณฝั่งเซิร์ฟเวอร์เอง ไม่ได้มาจากคุณ):
 {
   "insightText": "ตามกฎด้านบน",
-  "stats": [ { "label": "คนควรคุยด่วน", "count": 3, "tone": "red" }, ... อีก 3 ตัวรวมเป็น 4 ตัว โทน red/amber/green ตามความรุนแรง ],
   "actions": [ { "subjectType": "company|department|person", "subjectName": "ตามกฎด้านบน", "metricKey": "ตามกฎด้านบน", "detail": "คำแนะนำสั้นๆ เจาะจงตามข้อมูลจริง บอกผลลัพธ์ที่จะได้ถ้าทำ ไม่ใช่แค่สั่งให้ทำ", "severity": "high|mid|good" }, ... สูงสุด 3 ข้อ เรียงตามความสำคัญ ],
   "personNotes": [ { "name": "ชื่อคนตรงกับในรายชื่อ \"รายคน\" เป๊ะ", "metricKey": "ตามกฎด้านบน", "priority": "ตามกฎด้านบน" }, ... ครบทุกคนในรายชื่อ \"รายคน\" ],
   "deptNotes": [ { "name": "ชื่อแผนกตรงกับในรายชื่อ \"รายแผนก\" เป๊ะ", "metricKey": "ตามกฎด้านบน", "note": "ตามกฎด้านบน" }, ... ครบทุกแผนกในรายชื่อ \"รายแผนก\" ]
 }
 
-ห้ามแต่งชื่อคนหรือตัวเลขที่ไม่มีในข้อมูลที่ให้มา ถ้าข้อมูลไม่มีปัญหาเลย ให้ stats เป็นศูนย์ทั้งหมด, actions ว่างเปล่า, personNotes ว่างเปล่า, deptNotes ว่างเปล่า พร้อม insightText ที่ชื่นชมทีมงาน`;
+ห้ามแต่งชื่อคนหรือตัวเลขที่ไม่มีในข้อมูลที่ให้มา ถ้าข้อมูลไม่มีปัญหาเลย ให้ actions ว่างเปล่า, personNotes ว่างเปล่า, deptNotes ว่างเปล่า พร้อม insightText ที่ชื่นชมทีมงาน`;
 
 export async function callOpenAiInsight(
   agg: AiInsightAggregate,
@@ -126,7 +125,7 @@ export async function callOpenAiInsight(
   const raw = completion.choices[0]?.message?.content;
   if (!raw) throw new Error("OpenAI ไม่ตอบข้อความกลับมา");
   const parsed = JSON.parse(raw) as Partial<AiInsightResult>;
-  if (!parsed.insightText || !Array.isArray(parsed.stats) || !Array.isArray(parsed.actions)) {
+  if (!parsed.insightText || !Array.isArray(parsed.actions)) {
     throw new Error("รูปแบบผลลัพธ์จาก AI ไม่ตรงตามที่กำหนด");
   }
 
@@ -142,7 +141,10 @@ export async function callOpenAiInsight(
   return {
     result: {
       insightText: parsed.insightText,
-      stats: parsed.stats as AiInsightResult["stats"],
+      // Deterministic, not model output — see buildFixedStats's own comment
+      // on why (label wording has to be exact, and the counts are already
+      // computed numbers with nothing for an LLM call to add).
+      stats: buildFixedStats(agg),
       actions,
       personNotes: Array.isArray(parsed.personNotes) ? (parsed.personNotes as AiInsightResult["personNotes"]) : [],
       deptNotes: Array.isArray(parsed.deptNotes) ? (parsed.deptNotes as AiInsightResult["deptNotes"]) : [],

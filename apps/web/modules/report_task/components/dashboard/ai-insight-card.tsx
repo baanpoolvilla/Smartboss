@@ -8,7 +8,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/modules/report_task/c
 import { DASHBOARD_CARD } from "@/modules/report_task/components/dashboard/dashboard-card-style";
 import { useAiInsightSettingsStore } from "@/modules/report_task/store/ai-insight-settings-store";
 import { cn } from "@/modules/report_task/lib/utils";
-import { Sparkles, Lock, Loader2, AlertOctagon, Clock, TrendingUp, ChevronDown, ArrowUp, ArrowDown, Info } from "lucide-react";
+import { Sparkles, Lock, Loader2, AlertOctagon, Clock, TrendingUp, ChevronDown, ArrowUp, ArrowDown, Info, Send } from "lucide-react";
 import type {
   AiInsightResult,
   AiInsightUsageMonth,
@@ -155,20 +155,23 @@ function successRateStatus(rate: number): { label: string; className: string } {
   return { label: "ดี", className: "bg-green-50 text-[var(--brand-green-dark)]" };
 }
 
-const TONE_CLASS: Record<"red" | "amber" | "green", string> = {
+const TONE_CLASS: Record<"red" | "amber" | "green" | "blue", string> = {
   red: "text-[var(--chart-red-dark)]",
   amber: "text-[var(--chart-amber-dark)]",
   green: "text-[var(--brand-green-dark)]",
+  blue: "text-[var(--chart-blue-dark)]",
 };
-const TONE_ICON_BG: Record<"red" | "amber" | "green", string> = {
+const TONE_ICON_BG: Record<"red" | "amber" | "green" | "blue", string> = {
   red: "bg-red-50 text-[var(--chart-red-dark)]",
   amber: "bg-amber-50 text-[var(--chart-amber-dark)]",
   green: "bg-green-50 text-[var(--brand-green-dark)]",
+  blue: "bg-blue-50 text-[var(--chart-blue-dark)]",
 };
-const TONE_ICON: Record<"red" | "amber" | "green", typeof AlertOctagon> = {
+const TONE_ICON: Record<"red" | "amber" | "green" | "blue", typeof AlertOctagon> = {
   red: AlertOctagon,
   amber: Clock,
   green: TrendingUp,
+  blue: Send,
 };
 const SEVERITY_CLASS: Record<"high" | "mid" | "good", string> = {
   high: "bg-red-50 text-[var(--chart-red-dark)]",
@@ -410,20 +413,41 @@ export function AiInsightCard() {
       <CardContent className="flex flex-col gap-3 pt-3">
         {error && <p className="text-[12px] text-[var(--chart-red-dark)]">{error}</p>}
 
+        {/* §13.3 of docs/ai-insight-v2-spec.md — one bordered container,
+            4 compact cards in a row (2×2 under 640px). Each card: big number
+            top-left, tone icon in a circle top-right, label below, and a
+            full-width outlined "ดูรายละเอียด" button that jumps to the
+            existing "ดูรายละเอียดทั้งหมด" breakdown further down the card
+            (deterministic — `stats` itself is server-computed, see
+            aggregate.ts's buildFixedStats, not model output). */}
         {result && result.stats.length > 0 && (
-          <div className="grid grid-cols-2 @sm:grid-cols-4 gap-2">
-            {result.stats.map((s, i) => {
-              const Icon = TONE_ICON[s.tone];
-              return (
-                <div key={i} className="flex flex-col items-center gap-1.5 rounded-xl border border-[var(--line)] p-3 text-center shadow-sm">
-                  <span className={cn("flex h-7 w-7 items-center justify-center rounded-full", TONE_ICON_BG[s.tone])}>
-                    <Icon className="h-3.5 w-3.5" />
-                  </span>
-                  <div className={cn("text-lg font-bold tabular-nums leading-none", TONE_CLASS[s.tone])}>{s.count}</div>
-                  <div className="text-[10.5px] text-[var(--ink-soft)] leading-tight">{s.label}</div>
-                </div>
-              );
-            })}
+          <div className="rounded-2xl border border-[var(--line)] p-2">
+            <div className="grid grid-cols-2 @sm:grid-cols-4 gap-2">
+              {result.stats.map((s, i) => {
+                const Icon = TONE_ICON[s.tone];
+                return (
+                  <div key={i} className="flex flex-col rounded-xl bg-[var(--bg-soft)] p-2.5">
+                    <div className="flex items-start justify-between gap-1">
+                      <span className={cn("text-xl font-bold tabular-nums leading-none", TONE_CLASS[s.tone])}>{s.count}</span>
+                      <span className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-full", TONE_ICON_BG[s.tone])}>
+                        <Icon className="h-3 w-3" />
+                      </span>
+                    </div>
+                    <div className="mt-1.5 text-[10.5px] leading-tight text-[var(--ink-soft)]">{s.label}</div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTab("company");
+                        setShowDetail(true);
+                      }}
+                      className="mt-2 w-full rounded-lg border border-[var(--line)] py-1 text-[10.5px] font-semibold text-[var(--ink-soft)] transition-colors hover:border-[var(--chart-violet)] hover:text-[var(--chart-violet)]"
+                    >
+                      ดูรายละเอียด
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 

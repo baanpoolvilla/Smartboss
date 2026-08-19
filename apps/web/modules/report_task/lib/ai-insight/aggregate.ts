@@ -14,7 +14,7 @@ import {
 } from "@/modules/report_task/lib/report-feed-compliance";
 import type { Task } from "@/modules/report_task/types";
 import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
-import type { InsightMetricKey, RecoSubjectType } from "./types";
+import type { AiInsightStat, InsightMetricKey, RecoSubjectType } from "./types";
 
 /** The 7 "count" metrics, all built the same way from a task/report bucket
  * pair — shared by company/department/person so the three levels can never
@@ -373,6 +373,11 @@ export interface AiInsightAggregate {
   /** Every person, uncapped — same "ledger must keep re-measuring" reasoning
    * as `departmentsAll`. */
   personMetricsAll: Map<string, Record<Exclude<InsightMetricKey, "success_rate">, number>>;
+  /** Headcount with an overdue task or a missed report right now — "คนควรคุย
+   * ด่วน" on the KPI tiles. Computed from the uncapped `personMetricsAll`
+   * (not the capped `people`/`flagged` lists), so it's a real count, not
+   * "however many named people fit in the top-N shown to the prompt". */
+  urgentPeopleCount: number;
 }
 
 /**
@@ -489,6 +494,8 @@ export async function buildAiInsightAggregate(orgId: string): Promise<AiInsightA
     ),
     success_rate: combinedSuccessRate,
   };
+  const personMetricsAll = personMetricsAllOf(directory, byAssignee, reportByUser);
+  const urgentPeopleCount = [...personMetricsAll.values()].filter((m) => m.overdue_tasks > 0 || m.missed_reports > 0).length;
 
   return {
     task: taskBuckets,
@@ -503,6 +510,22 @@ export async function buildAiInsightAggregate(orgId: string): Promise<AiInsightA
     departments: allDepartments.slice(0, MAX_DEPTS),
     departmentsAll: allDepartments,
     companyMetrics,
-    personMetricsAll: personMetricsAllOf(directory, byAssignee, reportByUser),
+    personMetricsAll,
+    urgentPeopleCount,
   };
+}
+
+/** §13.3 of docs/ai-insight-v2-spec.md — the 4 KPI tiles at the top of the
+ * card. Deterministic (built here from the aggregate, not asked of the
+ * model) for two reasons: the labels must disambiguate `pending` vs
+ * `overdue` exactly (a free-text model pick can't be trusted to always
+ * phrase it this way), and the underlying counts are already computed
+ * numbers — there's nothing here an LLM call would add. */
+export function buildFixedStats(agg: AiInsightAggregate): AiInsightStat[] {
+  return [
+    { label: "คนควรคุยด่วน", count: agg.urgentPeopleCount, tone: "red" },
+    { label: "ยังไม่เสร็จ · ในกำหนด", count: agg.companyMetrics.pending_tasks, tone: "amber" },
+    { label: "ยังไม่เสร็จ · เลยกำหนด", count: agg.companyMetrics.overdue_tasks, tone: "red" },
+    { label: "รายงานยังไม่ส่ง", count: agg.companyMetrics.pending_reports + agg.companyMetrics.missed_reports, tone: "blue" },
+  ];
 }

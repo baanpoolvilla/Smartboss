@@ -3,7 +3,10 @@
 export interface AiInsightStat {
   label: string;
   count: number;
-  tone: "red" | "amber" | "green";
+  /** "blue" added for a metric that's neither good nor a severity escalation
+   * (e.g. "รายงานยังไม่ส่ง") — a 4th neutral-informational tone alongside the
+   * red/amber/green severity scale. */
+  tone: "red" | "amber" | "green" | "blue";
 }
 
 /** One flagged person's own prioritized read — "here's everything open for
