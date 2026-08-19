@@ -256,6 +256,7 @@ export function AiInsightCard() {
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showDetail, setShowDetail] = useState(false);
+  const [showKpis, setShowKpis] = useState(true);
   const [tab, setTab] = useState<"company" | "dept" | "person" | "reco">("company");
   const autoTriedRef = useRef(false);
 
@@ -457,41 +458,53 @@ export function AiInsightCard() {
             (deterministic — `stats` itself is server-computed, see
             aggregate.ts's buildFixedStats, not model output). */}
         {result && result.stats.length > 0 && (
-          <div className="overflow-visible rounded-2xl border border-[var(--line)] p-2">
-            <div className="grid grid-cols-2 @sm:grid-cols-4 gap-2">
-              {result.stats.map((s, i) => {
-                const Icon = TONE_ICON[s.tone];
-                return (
-                  <div key={i} className="flex flex-col overflow-visible rounded-xl bg-[var(--bg-soft)] p-2.5 pt-3">
-                    {/* items-center (not items-start) — the badge circle is a
-                        fixed h-6 box, but the number's own line-box (large
-                        font, leading-none) can render taller/shorter than 24px
-                        depending on the font's metrics; items-start pinned
-                        both to the row's top edge and let the badge's circle
-                        get visually cut by the number's line-box on some
-                        fonts/zoom levels. Centering keeps the badge a full,
-                        uncut circle regardless. */}
-                    <div className="flex items-center justify-between gap-1">
-                      <span className={cn("text-xl font-bold tabular-nums leading-none", TONE_CLASS[s.tone])}>{s.count}</span>
-                      <span className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-full", TONE_ICON_BG[s.tone])}>
-                        <Icon className="h-3 w-3" />
-                      </span>
-                    </div>
-                    <div className="mt-1.5 text-[10.5px] leading-tight text-[var(--ink-soft)]">{s.label}</div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTab("company");
-                        setShowDetail(true);
-                      }}
-                      className="mt-2 w-full rounded-lg border border-[var(--line)] py-1 text-[10.5px] font-semibold text-[var(--ink-soft)] transition-colors hover:border-[var(--chart-violet)] hover:text-[var(--chart-violet)]"
-                    >
-                      ดูรายละเอียด
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+          <div className="flex flex-col gap-1.5">
+            <button
+              type="button"
+              onClick={() => setShowKpis((v) => !v)}
+              className="flex items-center gap-1 self-start text-[11.5px] font-semibold text-[var(--chart-violet)] hover:underline"
+            >
+              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showKpis && "rotate-180")} />
+              {showKpis ? "ซ่อน KPI" : "แสดง KPI"}
+            </button>
+            {showKpis && (
+              <div className="overflow-visible rounded-2xl border border-[var(--line)] p-2">
+                <div className="grid grid-cols-2 @sm:grid-cols-4 gap-2">
+                  {result.stats.map((s, i) => {
+                    const Icon = TONE_ICON[s.tone];
+                    return (
+                      <div key={i} className="flex flex-col overflow-visible rounded-xl bg-[var(--bg-soft)] p-2.5 pt-3">
+                        {/* items-center (not items-start) — the badge circle is a
+                            fixed h-6 box, but the number's own line-box (large
+                            font, leading-none) can render taller/shorter than 24px
+                            depending on the font's metrics; items-start pinned
+                            both to the row's top edge and let the badge's circle
+                            get visually cut by the number's line-box on some
+                            fonts/zoom levels. Centering keeps the badge a full,
+                            uncut circle regardless. */}
+                        <div className="flex items-center justify-between gap-1">
+                          <span className={cn("text-xl font-bold tabular-nums leading-none", TONE_CLASS[s.tone])}>{s.count}</span>
+                          <span className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-full", TONE_ICON_BG[s.tone])}>
+                            <Icon className="h-3 w-3" />
+                          </span>
+                        </div>
+                        <div className="mt-1.5 text-[10.5px] leading-tight text-[var(--ink-soft)]">{s.label}</div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTab("company");
+                            setShowDetail(true);
+                          }}
+                          className="mt-2 w-full rounded-lg border border-[var(--line)] py-1 text-[10.5px] font-semibold text-[var(--ink-soft)] transition-colors hover:border-[var(--chart-violet)] hover:text-[var(--chart-violet)]"
+                        >
+                          ดูรายละเอียด
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -526,25 +539,79 @@ export function AiInsightCard() {
             {status.state.departments.length === 0 ? (
               <p className="text-[12px] text-[var(--ink-faint)] text-center py-6">ไม่มีแผนกที่มีปัญหาค้างอยู่ในรอบนี้</p>
             ) : (
-              status.state.departments.map((d) => {
-                const note = result.deptNotes.find((n) => n.name === d.name);
-                const status_ = successRateStatus(d.successRate);
-                return (
-                  <div key={d.departmentId} className="rounded-xl border border-[var(--line)] p-2.5">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[12.5px] font-semibold text-[var(--ink)]">{d.name}</span>
-                        <span className="text-[10px] text-[var(--ink-faint)]">{d.headcount} คน</span>
+              <CollapsibleList
+                items={status.state.departments}
+                keyOf={(d) => d.departmentId}
+                renderItem={(d) => {
+                  const note = result.deptNotes.find((n) => n.name === d.name);
+                  const status_ = successRateStatus(d.successRate);
+                  return (
+                    <div className="rounded-xl border border-[var(--line)] p-2.5">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[12.5px] font-semibold text-[var(--ink)]">{d.name}</span>
+                          <span className="text-[10px] text-[var(--ink-faint)]">{d.headcount} คน</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className={cn("text-[10px] font-semibold rounded-full px-2 py-0.5", status_.className)}>{status_.label}</span>
+                          <span className="text-[13px] font-bold tabular-nums text-[var(--ink)]">{d.successRate}%</span>
+                          <TrendBadge trend={d.trend} goodDir="up" suffix="pp" />
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className={cn("text-[10px] font-semibold rounded-full px-2 py-0.5", status_.className)}>{status_.label}</span>
-                        <span className="text-[13px] font-bold tabular-nums text-[var(--ink)]">{d.successRate}%</span>
-                        <TrendBadge trend={d.trend} goodDir="up" suffix="pp" />
-                      </div>
+                      {d.topIssues.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {d.topIssues.map((it, k) => (
+                            <span
+                              key={k}
+                              className={cn(
+                                "text-[10px] font-medium rounded-full px-2 py-0.5",
+                                it.domain === "task"
+                                  ? "bg-[color-mix(in_srgb,var(--chart-blue)_10%,white)] text-[var(--chart-blue)]"
+                                  : "bg-[color-mix(in_srgb,var(--chart-violet)_10%,white)] text-[var(--chart-violet)]"
+                              )}
+                            >
+                              {it.label} {it.count}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {note && (
+                        <>
+                          <p className="mt-1.5 text-[11.5px] text-[var(--ink)] flex items-start gap-1">
+                            <span className="text-[var(--chart-violet)] font-bold shrink-0">→</span> {note.note}
+                          </p>
+                          <ApproachToggle approach={note.approach} />
+                        </>
+                      )}
                     </div>
-                    {d.topIssues.length > 0 && (
+                  );
+                }}
+              />
+            )}
+          </div>
+        )}
+
+        {result && tab === "person" && (
+          <div className="flex flex-col gap-2">
+            {status.state.people.length === 0 ? (
+              <p className="text-[12px] text-[var(--ink-faint)] text-center py-6">ไม่มีใครมีปัญหาค้างอยู่ในรอบนี้</p>
+            ) : (
+              <CollapsibleList
+                items={status.state.people}
+                keyOf={(p) => p.name}
+                renderItem={(p) => {
+                  const note = result.personNotes.find((n) => n.name === p.name);
+                  return (
+                    <div className="rounded-xl border border-[var(--line)] p-2.5">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-[12.5px] font-semibold text-[var(--ink)]">{p.name}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[12px] font-bold tabular-nums text-[var(--ink)]">{p.total} รายการ</span>
+                          {p.trend ? <TrendBadge trend={p.trend} goodDir="down" suffix="%" /> : <span className="text-[10px] text-[var(--ink-faint)]">รอบแรก</span>}
+                        </div>
+                      </div>
                       <div className="mt-1 flex flex-wrap gap-1">
-                        {d.topIssues.map((it, k) => (
+                        {p.items.map((it, k) => (
                           <span
                             key={k}
                             className={cn(
@@ -558,62 +625,19 @@ export function AiInsightCard() {
                           </span>
                         ))}
                       </div>
-                    )}
-                    {note && (
-                      <>
-                        <p className="mt-1.5 text-[11.5px] text-[var(--ink)] flex items-start gap-1">
-                          <span className="text-[var(--chart-violet)] font-bold shrink-0">→</span> {note.note}
-                        </p>
-                        <ApproachToggle approach={note.approach} />
-                      </>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        )}
-
-        {result && tab === "person" && (
-          <div className="flex flex-col gap-2">
-            {status.state.people.length === 0 && <p className="text-[12px] text-[var(--ink-faint)] text-center py-6">ไม่มีใครมีปัญหาค้างอยู่ในรอบนี้</p>}
-            {status.state.people.map((p) => {
-              const note = result.personNotes.find((n) => n.name === p.name);
-              return (
-                <div key={p.name} className="rounded-xl border border-[var(--line)] p-2.5">
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <span className="text-[12.5px] font-semibold text-[var(--ink)]">{p.name}</span>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[12px] font-bold tabular-nums text-[var(--ink)]">{p.total} รายการ</span>
-                      {p.trend ? <TrendBadge trend={p.trend} goodDir="down" suffix="%" /> : <span className="text-[10px] text-[var(--ink-faint)]">รอบแรก</span>}
+                      {note && (
+                        <>
+                          <p className="mt-1.5 text-[11.5px] text-[var(--ink)] flex items-start gap-1">
+                            <span className="text-[var(--chart-violet)] font-bold shrink-0">→</span> {note.priority}
+                          </p>
+                          <ApproachToggle approach={note.approach} />
+                        </>
+                      )}
                     </div>
-                  </div>
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {p.items.map((it, k) => (
-                      <span
-                        key={k}
-                        className={cn(
-                          "text-[10px] font-medium rounded-full px-2 py-0.5",
-                          it.domain === "task"
-                            ? "bg-[color-mix(in_srgb,var(--chart-blue)_10%,white)] text-[var(--chart-blue)]"
-                            : "bg-[color-mix(in_srgb,var(--chart-violet)_10%,white)] text-[var(--chart-violet)]"
-                        )}
-                      >
-                        {it.label} {it.count}
-                      </span>
-                    ))}
-                  </div>
-                  {note && (
-                    <>
-                      <p className="mt-1.5 text-[11.5px] text-[var(--ink)] flex items-start gap-1">
-                        <span className="text-[var(--chart-violet)] font-bold shrink-0">→</span> {note.priority}
-                      </p>
-                      <ApproachToggle approach={note.approach} />
-                    </>
-                  )}
-                </div>
-              );
-            })}
+                  );
+                }}
+              />
+            )}
           </div>
         )}
 
