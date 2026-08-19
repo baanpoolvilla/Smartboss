@@ -6,6 +6,7 @@ import { HrPage } from "@/modules/hr/components/hr-page";
 import { HR_PERMS } from "@/modules/hr/permissions";
 import { wfFetch, type Employment, type Paged } from "@/modules/hr/lib/api";
 import {
+  ApiProblem,
   DataTable,
   EmptyState,
   StatusBadge,
@@ -16,9 +17,9 @@ import { employmentTypeLabel, formatDate } from "@/modules/hr/lib/labels";
 export default async function EmployeesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; imported?: string }>;
 }) {
-  const { status } = await searchParams;
+  const { status, imported } = await searchParams;
   const session = await requireOrg();
   const canManage = hasPermission(session, HR_PERMS.employeeManage);
 
@@ -27,6 +28,16 @@ export default async function EmployeesPage({
       title="พนักงาน"
       permission={HR_PERMS.employeeView}
       fab={canManage ? <Fab href="/hr/employees/new" label="เพิ่มพนักงาน" /> : null}
+      actions={
+        canManage ? (
+          <Link
+            href="/hr/employees/import"
+            className="text-sm text-(--app-strong) hover:underline"
+          >
+            นำเข้าจากผู้ใช้
+          </Link>
+        ) : null
+      }
       load={async () => {
         const data = await wfFetch<Paged<Employment>>("/employments");
         const all = data.items;
@@ -36,6 +47,12 @@ export default async function EmployeesPage({
 
         return (
           <>
+            {imported !== undefined && (
+              <div className="mb-3">
+                <ApiProblem heading={`นำเข้าพนักงานแล้ว ${imported} คน`} />
+              </div>
+            )}
+
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <Link
                 href="/hr/employees"
@@ -73,7 +90,22 @@ export default async function EmployeesPage({
             </div>
 
             {rows.length === 0 ? (
-              <EmptyState>ไม่พบพนักงาน</EmptyState>
+              <EmptyState>
+                {all.length === 0 && canManage ? (
+                  <>
+                    ยังไม่มีพนักงานในทะเบียน —{" "}
+                    <Link
+                      href="/hr/employees/import"
+                      className="text-(--app-strong) hover:underline"
+                    >
+                      นำเข้าจากผู้ใช้ที่มีอยู่แล้ว
+                    </Link>{" "}
+                    หรือเพิ่มทีละคน
+                  </>
+                ) : (
+                  "ไม่พบพนักงาน"
+                )}
+              </EmptyState>
             ) : (
               <DataTable
                 head={["รหัส", "ชื่อ-นามสกุล", "ประเภทจ้าง", "วันเริ่มงาน", "สถานะ", ""]}
