@@ -421,13 +421,21 @@ export function AiInsightCard() {
             (deterministic — `stats` itself is server-computed, see
             aggregate.ts's buildFixedStats, not model output). */}
         {result && result.stats.length > 0 && (
-          <div className="rounded-2xl border border-[var(--line)] p-2">
+          <div className="overflow-visible rounded-2xl border border-[var(--line)] p-2">
             <div className="grid grid-cols-2 @sm:grid-cols-4 gap-2">
               {result.stats.map((s, i) => {
                 const Icon = TONE_ICON[s.tone];
                 return (
-                  <div key={i} className="flex flex-col rounded-xl bg-[var(--bg-soft)] p-2.5">
-                    <div className="flex items-start justify-between gap-1">
+                  <div key={i} className="flex flex-col overflow-visible rounded-xl bg-[var(--bg-soft)] p-2.5 pt-3">
+                    {/* items-center (not items-start) — the badge circle is a
+                        fixed h-6 box, but the number's own line-box (large
+                        font, leading-none) can render taller/shorter than 24px
+                        depending on the font's metrics; items-start pinned
+                        both to the row's top edge and let the badge's circle
+                        get visually cut by the number's line-box on some
+                        fonts/zoom levels. Centering keeps the badge a full,
+                        uncut circle regardless. */}
+                    <div className="flex items-center justify-between gap-1">
                       <span className={cn("text-xl font-bold tabular-nums leading-none", TONE_CLASS[s.tone])}>{s.count}</span>
                       <span className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-full", TONE_ICON_BG[s.tone])}>
                         <Icon className="h-3 w-3" />
