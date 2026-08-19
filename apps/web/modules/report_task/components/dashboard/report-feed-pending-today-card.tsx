@@ -127,7 +127,7 @@ export function ReportFeedPendingTodayCard() {
       <CardHeader>
         <CardTitle className="text-base font-semibold flex items-center gap-2">
           <FileClock className="h-4.5 w-4.5 text-[var(--chart-amber)]" />
-          {rangeHasToday ? "รายงานที่ยังไม่ส่ง" : "รายงานขาดส่ง"}
+          {rangeHasToday ? "รายงานที่ยังไม่ส่ง" : "รายงานที่เลยกำหนด"}
           {total > 0 && (
             <span className="text-xs font-normal text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2 py-0.5">
               {total}
@@ -158,7 +158,7 @@ export function ReportFeedPendingTodayCard() {
           <div className="mb-3">
             <div className="flex items-center justify-between px-1 pt-1 pb-1.5">
               <p className="text-[11px] font-semibold text-[var(--chart-amber)] uppercase tracking-wide">
-                {pending.length} คน ยังไม่เช็คอินวันนี้
+                {pending.length} คน ยังไม่ส่งวันนี้
               </p>
             </div>
             {pendingShowMore.visible.map((e) => {
@@ -181,7 +181,7 @@ export function ReportFeedPendingTodayCard() {
         {missed.length > 0 && (
           <div>
             <p className="text-[11px] font-semibold text-[var(--chart-red)] uppercase tracking-wide px-1 pt-1 pb-1.5">
-              {rangeHasToday ? `ขาดส่งในช่วง (ประวัติ)` : "รายงานขาดส่ง"} ({missed.length})
+              {rangeHasToday ? "ประวัติที่เลยกำหนดในช่วงนี้" : "รายงานที่เลยกำหนด"} ({missed.length})
             </p>
             {missedShowMore.visible.map((row) => (
               <div
@@ -193,7 +193,7 @@ export function ReportFeedPendingTodayCard() {
                 </Avatar>
                 <span className="text-sm font-medium truncate min-w-0 flex-1">{row.userName}</span>
                 <Badge variant="outline" className="text-[10px] bg-red-50 text-[var(--chart-red)] border-red-200 shrink-0">
-                  ขาด {row.count} ครั้ง
+                  เลยกำหนด {row.count} ครั้ง
                 </Badge>
               </div>
             ))}

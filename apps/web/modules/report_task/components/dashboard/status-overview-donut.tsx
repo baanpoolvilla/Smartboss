@@ -9,39 +9,12 @@ import { DASHBOARD_CARD } from "@/modules/report_task/components/dashboard/dashb
 import { ChartTooltip } from "@/modules/report_task/components/shared/chart-tooltip";
 import type { KpiBuckets } from "@/modules/report_task/lib/kpi-buckets";
 import { useHasHover } from "@/modules/report_task/hooks/use-has-hover";
-import { cn, pickDaily } from "@/modules/report_task/lib/utils";
+import { cn } from "@/modules/report_task/lib/utils";
 import { periodTrend } from "@/modules/report_task/lib/dashboard-trend";
 import { TrendText, tierFor } from "@/modules/report_task/components/shared/trend-badge";
 import type { RankedPerson } from "@/modules/report_task/lib/ranked-people";
+import { issueSuggestion, type IssueTipKey } from "@/modules/report_task/lib/issue-tips";
 import { Lightbulb, AlertTriangle } from "lucide-react";
-
-/** Same templated, rule-based (not AI-generated) next-step copy as the KPI
- * card's own "ตัวปัญหาหลัก" — generic enough to read naturally for either
- * domain (งาน/รายงาน) since this component is shared by both. Deliberately
- * NOT personalized — "ตัวปัญหาหลัก" above already names whoever's involved,
- * so this line stays a general next step rather than repeating one name
- * when several people can be tied there at once. Grounded in actual
- * workload-management/deadline-compliance practice (capacity-aware
- * reassignment, weekly backlog reviews, visible/shared tracking, reminders
- * that state *why* the deadline matters) instead of generic-sounding filler
- * — see the research this list was built from, linked in the PR. Rotated
- * by `pickDaily` so it doesn't read as the exact same static sentence on
- * every single visit. */
-const ISSUE_TIPS = {
-  overdue: [
-    "มอบหมายต่อให้คนที่มีคิวว่างและทักษะตรงกับงานนั้นจริงๆ ไม่ใช่ใครก็ได้ที่ว่าง",
-    "ทบทวนงานค้างเป็นประจำทุกสัปดาห์ ดูว่าอะไรติดขัดก่อนจะกองสะสมนานขึ้น",
-    "จัดลำดับใหม่ตามผลกระทบจริง ไม่ใช่แค่ตัวที่ค้างนานสุดต้องมาก่อนเสมอ",
-  ],
-  pending: [
-    "ใช้บอร์ดที่ทุกคนเห็นร่วมกัน งานที่มองเห็นได้ทั่วทีมมักถูกดูแลดีกว่า",
-    "ให้เพื่อนร่วมทีมช่วยเช็คความคืบหน้ากันเอง ไม่ต้องรอหัวหน้าถามอย่างเดียว",
-    "เตือนก่อนถึงกำหนดพร้อมบอกว่าทำไมงานนี้สำคัญ ไม่ใช่แค่แจ้งวันที่เฉยๆ",
-  ],
-} as const;
-function issueSuggestion(key: "overdue" | "pending"): string {
-  return pickDaily(ISSUE_TIPS[key]);
-}
 
 interface Slice {
   key: string;
@@ -68,6 +41,7 @@ export function StatusOverviewDonut({
   title,
   subtitle,
   icon,
+  domain,
   buckets,
   labels,
   unitLabel,
@@ -81,6 +55,11 @@ export function StatusOverviewDonut({
   title: string;
   subtitle: string;
   icon: ReactNode;
+  /** Which "คำแนะนำ" copy set this donut's overdue/pending tip draws from —
+   * งาน is about reassigning/reprioritizing work, รายงาน is about submitting
+   * reports, so the two need genuinely different advice, not one generic
+   * pair reused for both (see lib/issue-tips.ts). */
+  domain: "task" | "report";
   buckets: KpiBuckets;
   labels: { onTime: string; lateDone: string; pending: string; overdue: string; exempt: string };
   /** e.g. "งาน" / "ครั้ง" — the count noun used in the pie tooltip's first
@@ -167,6 +146,17 @@ export function StatusOverviewDonut({
   const people = mainIssue ? (topPersonByBucket?.[mainIssue.key] ?? []) : [];
   const [showAllPeople, setShowAllPeople] = useState(false);
   const shownPeople = showAllPeople ? people : people.slice(0, 1);
+  // Domain-qualified so the tip is actually written for งาน vs รายงาน
+  // (reassigning work reads oddly under the Report donut, and vice versa).
+  const issueTipKey: IssueTipKey | null = mainIssue
+    ? domain === "task"
+      ? mainIssue.key === "overdue"
+        ? "taskOverdue"
+        : "taskPending"
+      : mainIssue.key === "overdue"
+        ? "reportOverdue"
+        : "reportPending"
+    : null;
 
   // Same tier+trend row as the KPI card's own header — a rate-based badge,
   // so it only applies here (not on the two count-based backlog cards,
@@ -373,7 +363,7 @@ export function StatusOverviewDonut({
                   <AlertTriangle className="h-4 w-4 text-[var(--chart-red-dark)] shrink-0 mt-0.5" />
                   <div className="text-[12px] text-[var(--ink)] flex-1">
                     <p>
-                      <span className="font-semibold text-[var(--chart-red-dark)]">ตัวปัญหาหลัก:</span> {mainIssue.label}
+                      <span className="font-semibold text-[var(--chart-red-dark)]">ปัญหาหลัก:</span> {mainIssue.label}
                       {shownPeople.length > 0 ? (
                         <>
                           {" — "}
@@ -393,7 +383,7 @@ export function StatusOverviewDonut({
                         onClick={() => setShowAllPeople((v) => !v)}
                         className="mt-1 text-[11.5px] font-semibold text-[var(--brand-green-dark)] hover:underline"
                       >
-                        {showAllPeople ? "ย่อกลับ" : `+${people.length - 1} เพิ่มเติม (จำนวนเท่ากัน)`}
+                        {showAllPeople ? "ย่อกลับ" : `+${people.length - 1} คน`}
                       </button>
                     )}
                   </div>
@@ -401,8 +391,8 @@ export function StatusOverviewDonut({
                 <div className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2">
                   <Lightbulb className="h-4 w-4 text-[var(--chart-amber-dark)] shrink-0 mt-0.5" />
                   <p className="text-[12px] text-[var(--ink)]">
-                    <span className="font-semibold text-[var(--chart-amber-dark)]">ไอเดีย:</span>{" "}
-                    <span className="text-[var(--ink-soft)]">{issueSuggestion(mainIssue.key)}</span>
+                    <span className="font-semibold text-[var(--chart-amber-dark)]">คำแนะนำ:</span>{" "}
+                    <span className="text-[var(--ink-soft)]">{issueSuggestion(issueTipKey!)}</span>
                   </p>
                 </div>
               </div>

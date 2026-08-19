@@ -14,7 +14,7 @@ import { useDashboardFilterStore } from "@/modules/report_task/store/dashboard-f
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { FilterField, FILTER_FIELD_LABEL_CLASS, filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
 import { DateRangeSelectField } from "@/modules/report_task/components/shared/date-range-select-field";
-import { Building2, Users } from "lucide-react";
+import { Building2, Users, X } from "lucide-react";
 
 /**
  * §7.2 — filter order is department → person → time, matching the
@@ -171,8 +171,8 @@ export function DashboardFilters() {
       />
 
       {isFiltered && (
-        <Button variant="ghost" size="sm" className="ml-auto h-8 px-2 text-[var(--ink-soft)]" onClick={clearFilters} aria-label="ล้างตัวกรอง">
-          ✕ ล้างตัวกรอง
+        <Button variant="ghost" size="sm" className="ml-auto h-8 px-2 gap-1 text-[var(--ink-soft)]" onClick={clearFilters} aria-label="ล้างตัวกรอง">
+          <X className="h-3.5 w-3.5" /> ล้างตัวกรอง
         </Button>
       )}
     </div>

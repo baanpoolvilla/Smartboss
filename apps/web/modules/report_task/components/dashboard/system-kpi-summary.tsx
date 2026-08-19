@@ -16,8 +16,10 @@ import { useVisibleReportTopics } from "@/modules/report_task/hooks/use-visible-
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
 import { useDashboardFilterStore } from "@/modules/report_task/store/dashboard-filter-store";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/modules/report_task/components/ui/tooltip";
+import { issueSuggestion, type IssueTipKey } from "@/modules/report_task/lib/issue-tips";
 import { Gauge, Lightbulb, AlertTriangle, ListChecks, MessageSquareText } from "lucide-react";
-import { cn, pickDaily } from "@/modules/report_task/lib/utils";
+import { cn } from "@/modules/report_task/lib/utils";
 
 /** Task/Report share one consistent color each across the whole chart — the
  * legend pill, both bars, the tooltip dots, and the detail rows below all
@@ -72,7 +74,10 @@ function topPeople(counts: Map<string, number>): PersonSeg[] {
     .sort((a, b) => b.count - a.count);
   if (entries.length <= MAX_SEGMENTS + 1) return entries;
   const rest = entries.slice(MAX_SEGMENTS);
-  return [...entries.slice(0, MAX_SEGMENTS), { id: "other", name: "อื่นๆ", count: rest.reduce((s, e) => s + e.count, 0) }];
+  return [
+    ...entries.slice(0, MAX_SEGMENTS),
+    { id: "other", name: `อีก ${rest.length} คนที่เหลือ`, count: rest.reduce((s, e) => s + e.count, 0) },
+  ];
 }
 
 /** Maps a report's 5-way status key onto the 4-group vocabulary this chart
@@ -85,42 +90,6 @@ const REPORT_BUCKET_FIELD: Record<KpiBucketKey, keyof ReportStatusCounts> = {
   overdue: "missed",
 };
 
-/** A few templated next-step variants per issue type — plain copy, not
- * AI-generated, same "rule-based, not a black box" decision as the rest of
- * this card. Deliberately NOT personalized — "ตัวปัญหาหลัก" above already
- * names whoever's involved (possibly several tied people), so this stays a
- * general next step instead of repeating one name. Grounded in actual
- * workload-management/deadline-compliance practice (capacity-aware
- * reassignment, weekly backlog reviews, visible/shared tracking, reminders
- * that state *why* the deadline matters, asking what's actually blocking
- * someone instead of just re-nagging) — not generic-sounding filler.
- * Rotated daily via `pickDaily` so it doesn't read as the exact same
- * static sentence on every single visit. */
-const ISSUE_TIPS: Record<string, readonly string[]> = {
-  taskOverdue: [
-    "มอบหมายต่อให้คนที่มีคิวว่างและทักษะตรงกับงานนั้นจริงๆ ไม่ใช่ใครก็ได้ที่ว่าง",
-    "ทบทวนงานค้างเป็นประจำทุกสัปดาห์ ดูว่าอะไรติดขัดก่อนจะกองสะสมนานขึ้น",
-    "จัดลำดับใหม่ตามผลกระทบจริง ไม่ใช่แค่ตัวที่ค้างนานสุดต้องมาก่อนเสมอ",
-  ],
-  reportOverdue: [
-    "ส่งเตือนพร้อมลิงก์ส่งตรงและเหตุผลว่าทำไมรายงานนี้สำคัญ ไม่ใช่แค่เตือนเฉยๆ",
-    "เปลี่ยนจากเตือนแบบส่วนตัวเป็นให้ทั้งทีมเห็น ความโปร่งใสมักช่วยเพิ่มความรับผิดชอบ",
-    "ถามตรงๆ ว่าติดขัดตรงไหน บางทีปัญหาจริงไม่ใช่แค่ลืมส่ง",
-  ],
-  taskPending: [
-    "ให้เพื่อนร่วมทีมช่วยเช็คความคืบหน้ากันเอง ไม่ต้องรอหัวหน้าถามอย่างเดียว",
-    "ใช้บอร์ดที่ทุกคนเห็นร่วมกัน งานที่มองเห็นได้ทั่วทีมมักถูกดูแลดีกว่า",
-    "เตือนก่อนถึงกำหนดพร้อมบอกว่าทำไมงานนี้สำคัญ ไม่ใช่แค่แจ้งวันที่เฉยๆ",
-  ],
-  reportPending: [
-    "เตือนใกล้เวลาปิดรอบพร้อมลิงก์ส่งตรง ลดขั้นตอนที่ทำให้ลืม",
-    "แจ้งเงื่อนไข/ผลที่ตามมาให้ชัดตั้งแต่ต้น จะได้ไม่ต้องเดาว่าสำคัญแค่ไหน",
-    "แชร์ตัวอย่างรายงานที่เคยส่งผ่าน ให้มีต้นแบบเริ่มต้นได้เร็วขึ้น",
-  ],
-};
-function issueSuggestion(key: string): string {
-  return pickDaily(ISSUE_TIPS[key] ?? ISSUE_TIPS.taskOverdue!);
-}
 
 /** Everyone tied for the most in `map` — named, same helper shape as the
  * two Overview donuts use for their own "ตัวปัญหาหลัก". Usually one person;
@@ -134,12 +103,18 @@ function topPeopleOf(map: Map<string, number>): { name: string; count: number }[
 /**
  * One bar (either the "งาน" or "รายงาน" side of a group) split into one
  * segment per person, tallest at the bottom. Hover reveals a name+count
- * tooltip (`group/seg`, pure CSS — no position tracking needed since the
- * tooltip is anchored inside the segment it belongs to); clicking a segment
- * toggles that person as the Dashboard's person filter, same
- * click-to-filter/click-again-to-clear pattern as DepartmentPieChart. The
- * folded "อื่นๆ" segment isn't one real person, so it's inert — hoverable for
- * its combined count, but not clickable.
+ * tooltip via the shared base-ui Tooltip (same primitive as every other
+ * tooltip on the Dashboard) instead of a hand-rolled CSS one — segments are
+ * only ~32px wide and packed tightly side by side, so a tooltip anchored
+ * with fixed CSS offsets used to spill onto neighboring bars near the edges;
+ * the shared Tooltip's Portal+Positioner measures real space and flips/clamps
+ * on its own. Clicking a segment toggles that person as the Dashboard's
+ * person filter, same click-to-filter/click-again-to-clear pattern as
+ * DepartmentPieChart. The folded "อีก N คนที่เหลือ" segment isn't one real
+ * person, so it's inert — hoverable for its combined count, but not
+ * clickable; naming it with the folded headcount (not just "อื่นๆ") so the
+ * tooltip is self-explanatory without needing the top-5 cutoff explained
+ * elsewhere.
  */
 function StatusBar({
   color,
@@ -186,28 +161,35 @@ function StatusBar({
             const mixTarget = isOther ? "var(--chart-gray)" : "#ffffff";
             const segColor = `color-mix(in srgb, ${color} ${mixPct}%, ${mixTarget})`;
             return (
-              <button
-                key={p.id}
-                type="button"
-                disabled={isOther}
-                onClick={() => onPick(p.id)}
-                aria-pressed={isActive}
-                aria-label={`${p.name} — ${p.count} ${seriesLabel}${isActive ? " (กำลังกรองอยู่ คลิกเพื่อยกเลิก)" : ""}`}
-                className={cn(
-                  "group/seg relative w-full flex-1 border-t border-white/70 first:border-t-0",
-                  isTop && "rounded-t-[5px]",
-                  isOther ? "cursor-default" : "cursor-pointer hover:brightness-90"
-                )}
-                style={{ backgroundColor: segColor, flexGrow: p.count, flexBasis: 0 }}
-              >
-                {isActive && <span className="pointer-events-none absolute inset-0 ring-2 ring-inset ring-white" />}
-                <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1.5 hidden w-max -translate-x-1/2 rounded-lg border border-[var(--line)] bg-white px-2.5 py-1.5 text-left text-[12px] shadow-[0_8px_24px_-8px_rgba(17,17,17,0.22)] group-hover/seg:block">
-                  <span className="block font-semibold text-[var(--ink)]">{p.name}</span>
-                  <span className="text-[var(--ink-soft)]">
-                    {seriesLabel} {p.count} รายการ
+              <Tooltip key={p.id}>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      disabled={isOther}
+                      onClick={() => onPick(p.id)}
+                      aria-pressed={isActive}
+                      aria-label={`${p.name} — ${p.count} ${seriesLabel}${isActive ? " (กำลังกรองอยู่ คลิกเพื่อยกเลิก)" : ""}`}
+                      className={cn(
+                        "relative w-full flex-1 border-t border-white/70 first:border-t-0",
+                        isTop && "rounded-t-[5px]",
+                        isOther ? "cursor-default" : "cursor-pointer hover:brightness-90"
+                      )}
+                      style={{ backgroundColor: segColor, flexGrow: p.count, flexBasis: 0 }}
+                    >
+                      {isActive && <span className="pointer-events-none absolute inset-0 ring-2 ring-inset ring-white" />}
+                    </button>
+                  }
+                />
+                <TooltipContent side="top">
+                  <span className="flex flex-col gap-0.5">
+                    <span className="font-semibold">{p.name}</span>
+                    <span className="opacity-80">
+                      {seriesLabel} {p.count} รายการ
+                    </span>
                   </span>
-                </span>
-              </button>
+                </TooltipContent>
+              </Tooltip>
             );
           })
         )}
@@ -292,7 +274,7 @@ export function SystemKpiSummary() {
     // ตำแหน่งนี้ผูกกับ index 1/2 ด้านล่างที่ใช้วางเส้นแบ่งกลาง ถ้าสลับลำดับต้องย้ายเส้นตาม
     const groups: KpiGroup[] = (["lateDone", "onTime", "overdue", "pending"] as const).map((key) => ({
       key,
-      label: { overdue: "เลยกำหนด", pending: "ยังไม่เสร็จ ในกำหนด", lateDone: "เสร็จช้าแต่เลยกำหนด", onTime: "ตรงเวลา" }[key],
+      label: { overdue: "ยังไม่เสร็จ เลยกำหนด", pending: "ยังไม่เสร็จ ในกำหนด", lateDone: "เสร็จช้าแต่เลยกำหนด", onTime: "เสร็จ ตรงเวลา" }[key],
       task: taskBuckets[key],
       report: reportBuckets[key],
       taskPeople: topPeople(taskByAssignee[key]),
@@ -310,12 +292,12 @@ export function SystemKpiSummary() {
       }
       return m;
     };
-    const rankedIssues = [
-      { key: "taskOverdue", label: "งานเลยกำหนด", count: taskBuckets.overdue, people: topPeopleOf(taskByAssignee.overdue) },
-      { key: "reportOverdue", label: "รายงานขาดส่ง", count: reportBuckets.overdue, people: topPeopleOf(reportPersonCounts("missed")) },
-      { key: "taskPending", label: "งานยังไม่เสร็จ (ในกำหนด)", count: taskBuckets.pending, people: topPeopleOf(taskByAssignee.pending) },
+    const rankedIssues: { key: IssueTipKey; label: string; count: number; people: { name: string; count: number }[] }[] = [
+      { key: "taskOverdue" as const, label: "งานเลยกำหนด", count: taskBuckets.overdue, people: topPeopleOf(taskByAssignee.overdue) },
+      { key: "reportOverdue" as const, label: "รายงานขาดส่ง", count: reportBuckets.overdue, people: topPeopleOf(reportPersonCounts("missed")) },
+      { key: "taskPending" as const, label: "งานยังไม่เสร็จ (ในกำหนด)", count: taskBuckets.pending, people: topPeopleOf(taskByAssignee.pending) },
       {
-        key: "reportPending",
+        key: "reportPending" as const,
         label: "รายงานยังไม่ส่ง (ในกำหนด)",
         count: reportBuckets.pending,
         people: topPeopleOf(reportPersonCounts("pending")),
@@ -355,8 +337,8 @@ export function SystemKpiSummary() {
           KPI รวมของระบบ (Task + Report)
         </CardTitle>
         <p className="text-[13px] text-[var(--ink-soft)] mt-0.5">
-          แหล่งความจริงเดียวของทั้งงานและ Report — เทียบสองฝั่งตรงๆ ให้เห็นว่าตอนนี้บริษัทกำลังไปทางไหน · แต่ละแท่งแยกเป็นปล่องรายคน
-          ชี้เพื่อดูชื่อ คลิกเพื่อกรองทั้งแดชบอร์ดเฉพาะคนนั้น (คลิกซ้ำเพื่อยกเลิก)
+          เทียบงานกับรายงานในช่วงเวลาเดียวกัน ให้เห็นว่าตอนนี้บริษัทไปทางไหน · แต่ละแท่งแบ่งเป็นสัดส่วนรายคน
+          ชี้เพื่อดูชื่อ คลิกเพื่อกรองแดชบอร์ดเฉพาะคนนั้น (คลิกซ้ำเพื่อยกเลิก)
         </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-4 @container">
@@ -459,7 +441,7 @@ export function SystemKpiSummary() {
                   <AlertTriangle className="h-4 w-4 text-[var(--chart-red-dark)] shrink-0 mt-0.5" />
                   <div className="text-[12px] text-[var(--ink)] flex-1">
                     <p>
-                      <span className="font-semibold text-[var(--chart-red-dark)]">ตัวปัญหาหลัก:</span> {data.mainIssue.label}
+                      <span className="font-semibold text-[var(--chart-red-dark)]">ปัญหาหลัก:</span> {data.mainIssue.label}
                       {data.mainIssue.people.length > 0 ? (
                         <>
                           {" — "}
@@ -479,7 +461,7 @@ export function SystemKpiSummary() {
                         onClick={() => setShowAllIssuePeople((v) => !v)}
                         className="mt-1 text-[11.5px] font-semibold text-[var(--brand-green-dark)] hover:underline"
                       >
-                        {showAllIssuePeople ? "ย่อกลับ" : `+${data.mainIssue.people.length - 1} เพิ่มเติม (จำนวนเท่ากัน)`}
+                        {showAllIssuePeople ? "ย่อกลับ" : `+${data.mainIssue.people.length - 1} คน`}
                       </button>
                     )}
                   </div>
@@ -487,7 +469,7 @@ export function SystemKpiSummary() {
                 <div className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2">
                   <Lightbulb className="h-4 w-4 text-[var(--chart-amber-dark)] shrink-0 mt-0.5" />
                   <p className="text-[12px] text-[var(--ink)]">
-                    <span className="font-semibold text-[var(--chart-amber-dark)]">ไอเดีย:</span>{" "}
+                    <span className="font-semibold text-[var(--chart-amber-dark)]">คำแนะนำ:</span>{" "}
                     <span className="text-[var(--ink-soft)]">{issueSuggestion(data.mainIssue.key)}</span>
                   </p>
                 </div>

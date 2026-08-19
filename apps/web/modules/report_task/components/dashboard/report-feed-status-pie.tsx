@@ -68,12 +68,13 @@ export function ReportFeedStatusPie() {
       title="ภาพรวมรายงาน (Report)"
       subtitle="การส่งรายงาน · คลิกที่วงกลมเพื่อดูอันดับรายคน"
       icon={<MessageSquareText className="h-4.5 w-4.5 text-[var(--ink-soft)]" />}
+      domain="report"
       buckets={buckets}
       labels={{
         onTime: "ส่งแล้ว ตรงเวลา",
-        lateDone: "ส่งช้า",
+        lateDone: "ส่งช้าแต่เลยกำหนด",
         pending: "ยังไม่ส่ง ในกำหนด",
-        overdue: "ขาดส่ง",
+        overdue: "ยังไม่ส่ง เลยกำหนด",
         exempt: "ยกเว้น (ลา/หยุด)",
       }}
       unitLabel="ครั้ง"

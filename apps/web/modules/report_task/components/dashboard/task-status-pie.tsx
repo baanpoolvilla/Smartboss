@@ -55,6 +55,7 @@ export function TaskStatusPie() {
       title="ภาพรวมงาน (Task)"
       subtitle="สถานะงานทั้งหมด · คลิกที่วงกลมเพื่อดูอันดับรายคน"
       icon={<KanbanSquare className="h-4.5 w-4.5 text-[var(--ink-soft)]" />}
+      domain="task"
       buckets={buckets}
       labels={{
         onTime: "เสร็จ ตรงเวลา",
