@@ -4,6 +4,15 @@
     "rootDir": "src",
     "outDir": "dist",
     "tsBuildInfoFile": "dist/.tsbuildinfo",
+    // baseUrl ของ tsconfig.base.json ชี้ที่ packages/workforce/ ⇒ ชื่อโมดูลเปล่า ๆ
+    // ถูกค้นจากที่นั่นก่อน · @types/node มี `import ... from "domain"` (โมดูล domain
+    // ของ Node) ซึ่งไปตรงกับ **โฟลเดอร์ของแพ็กเกจนี้เอง** แล้วลาก dist/index.d.ts
+    // เข้ามาเป็น input ⇒ tsc ปฏิเสธที่จะเขียนทับ (TS5055) ทุกครั้งที่ dist มีอยู่แล้ว
+    // = build แรกหลัง clone ผ่าน ครั้งที่สองเป็นต้นไปพังเสมอ (พังจริงตอน deploy มาแล้ว)
+    //
+    // ตั้งทับให้ชี้ที่โฟลเดอร์ตัวเอง ชื่อ "domain" จึงไม่ไปตรงกับอะไรอีก
+    // แพ็กเกจนี้ import แต่ path สัมพัทธ์กับ built-in ของ Node จึงไม่ต้องพึ่ง baseUrl เดิม
+    "baseUrl": ".",
     "paths": {}
   },
   "include": ["src/**/*.ts"],
