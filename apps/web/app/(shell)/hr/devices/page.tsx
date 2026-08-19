@@ -13,6 +13,7 @@ import {
   DataTable,
   EmptyState,
   Field,
+  NotProvisioned,
   Pill,
   SectionCard,
   StatusBadge,
@@ -40,6 +41,11 @@ export default async function DevicesPage() {
           wfTry<Paged<Company>>("/companies"),
         ]);
         const companyId = companies?.items[0]?.id;
+
+        // companies = null คือไม่มีสิทธิ์อ่าน ไม่ใช่ยังไม่ถูกตั้งต้น — คนละเรื่องกัน
+        if (companies !== null && companyId === undefined) {
+          return <NotProvisioned what="ลงทะเบียนเครื่องสแกน" />;
+        }
 
         return (
           <>

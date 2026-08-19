@@ -39,6 +39,11 @@ export {
   type Permission,
 } from './authz/permissions';
 export { SYSTEM_ROLE_PERMISSIONS, SYSTEM_ROLES, type SystemRole } from './authz/roles';
+export {
+  mapSmartbossRoles,
+  SMARTBOSS_PERMISSION,
+  type RoleMappingInput,
+} from './authz/smartboss-mapping';
 
 export {
   actorDisplay,

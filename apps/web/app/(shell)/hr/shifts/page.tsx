@@ -6,6 +6,7 @@ import {
   DataTable,
   EmptyState,
   Field,
+  NotProvisioned,
   Pill,
   SectionCard,
   StatusBadge,
@@ -64,11 +65,12 @@ export default async function ShiftsPage() {
       load={async () => {
         const companies = await wfFetch<Paged<Company>>("/companies");
         const companyId = companies.items[0]?.id;
+        if (companyId === undefined) {
+          return <NotProvisioned what="ตั้งกะทำงาน" />;
+        }
 
         const [shifts, policies] = await Promise.all([
-          wfTry<Paged<Shift>>(
-            companyId ? `/shifts?company_id=${companyId}` : "/shifts"
-          ),
+          wfTry<Paged<Shift>>(`/shifts?company_id=${companyId}`),
           wfTry<Paged<WorkPolicy>>("/work-policies"),
         ]);
 
@@ -113,64 +115,62 @@ export default async function ShiftsPage() {
               )}
             </SectionCard>
 
-            {companyId && (
-              <SectionCard
-                title="เพิ่มกะทำงาน"
-                description="กะข้ามคืนให้ติ๊ก &quot;ข้ามคืน&quot; แล้วเวลาออกจะตีความเป็นวันถัดไป"
+            <SectionCard
+              title="เพิ่มกะทำงาน"
+              description="กะข้ามคืนให้ติ๊ก &quot;ข้ามคืน&quot; แล้วเวลาออกจะตีความเป็นวันถัดไป"
+            >
+              <form
+                action={createShiftAction}
+                className="grid grid-cols-1 gap-3 sm:grid-cols-3"
               >
-                <form
-                  action={createShiftAction}
-                  className="grid grid-cols-1 gap-3 sm:grid-cols-3"
-                >
-                  <input type="hidden" name="company_id" value={companyId} />
-                  <Field label="รหัสกะ *">
+                <input type="hidden" name="company_id" value={companyId} />
+                <Field label="รหัสกะ *">
+                  <input
+                    name="code"
+                    required
+                    maxLength={32}
+                    placeholder="DAY"
+                    className={`${inputClass} font-mono uppercase`}
+                  />
+                </Field>
+                <Field label="ชื่อกะ *">
+                  <input
+                    name="name"
+                    required
+                    maxLength={120}
+                    placeholder="กะกลางวัน"
+                    className={inputClass}
+                  />
+                </Field>
+                <div />
+                <Field label="เวลาเข้า *">
+                  <input type="time" name="start" required className={inputClass} />
+                </Field>
+                <Field label="เวลาออก *">
+                  <input type="time" name="end" required className={inputClass} />
+                </Field>
+                <div className="flex flex-col justify-end gap-2 pb-1 text-sm">
+                  <label className="flex items-center gap-2">
                     <input
-                      name="code"
-                      required
-                      maxLength={32}
-                      placeholder="DAY"
-                      className={`${inputClass} font-mono uppercase`}
+                      type="checkbox"
+                      name="crosses_midnight"
+                      value="1"
+                      className="h-4 w-4"
                     />
-                  </Field>
-                  <Field label="ชื่อกะ *">
-                    <input
-                      name="name"
-                      required
-                      maxLength={120}
-                      placeholder="กะกลางวัน"
-                      className={inputClass}
-                    />
-                  </Field>
-                  <div />
-                  <Field label="เวลาเข้า *">
-                    <input type="time" name="start" required className={inputClass} />
-                  </Field>
-                  <Field label="เวลาออก *">
-                    <input type="time" name="end" required className={inputClass} />
-                  </Field>
-                  <div className="flex flex-col justify-end gap-2 pb-1 text-sm">
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        name="crosses_midnight"
-                        value="1"
-                        className="h-4 w-4"
-                      />
-                      ข้ามคืน
-                    </label>
-                    <label className="flex items-center gap-2">
-                      <input type="checkbox" name="rest_day" value="1" className="h-4 w-4" />
-                      เป็นวันหยุด
-                    </label>
-                  </div>
-                  <div className="sm:col-span-3">
-                    <Button type="submit" className="sm:w-40">
-                      เพิ่มกะ
-                    </Button>
-                  </div>
-                </form>
-              </SectionCard>
-            )}
+                    ข้ามคืน
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" name="rest_day" value="1" className="h-4 w-4" />
+                    เป็นวันหยุด
+                  </label>
+                </div>
+                <div className="sm:col-span-3">
+                  <Button type="submit" className="sm:w-40">
+                    เพิ่มกะ
+                  </Button>
+                </div>
+              </form>
+            </SectionCard>
 
             <SectionCard
               title="นโยบายการทำงาน"
