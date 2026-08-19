@@ -4,10 +4,11 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader } from "@/modules/report_task/components/ui/card";
 import { Switch } from "@/modules/report_task/components/ui/switch";
 import { Button } from "@/modules/report_task/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/modules/report_task/components/ui/tooltip";
 import { DASHBOARD_CARD } from "@/modules/report_task/components/dashboard/dashboard-card-style";
 import { useAiInsightSettingsStore } from "@/modules/report_task/store/ai-insight-settings-store";
 import { cn } from "@/modules/report_task/lib/utils";
-import { Sparkles, Lock, Loader2, AlertOctagon, Clock, TrendingUp, ChevronDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Sparkles, Lock, Loader2, AlertOctagon, Clock, TrendingUp, ChevronDown, ArrowUp, ArrowDown, Info } from "lucide-react";
 import type {
   AiInsightResult,
   AiInsightUsageMonth,
@@ -80,9 +81,18 @@ function formatGeneratedAt(iso: string): string {
   return d.toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
+/** How old the cached result needs to be before "ออโต้" mode refreshes it on
+ * someone's next visit — there's no real server cron behind this (see
+ * ai-insight-settings-store.ts), so "roughly once a day" is approximated as
+ * "stale past 20h" checked whenever anyone has the dashboard open, same
+ * piggyback pattern as the deadline-reminder sweep. */
+const STALE_MS = 20 * 60 * 60 * 1000;
+
 export function AiInsightCard() {
   const enabled = useAiInsightSettingsStore((s) => s.settings.enabled);
   const setEnabled = useAiInsightSettingsStore((s) => s.setEnabled);
+  const autoMode = useAiInsightSettingsStore((s) => s.settings.autoMode);
+  const setAutoMode = useAiInsightSettingsStore((s) => s.setAutoMode);
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -124,19 +134,22 @@ export function AiInsightCard() {
     void loadStatus();
   }, [loadStatus]);
 
-  // First-ever visit for an org that has AI Insight unlocked+on but has
-  // never run an analysis yet — run one automatically so the card isn't
-  // just an empty "click to analyze" the very first time anyone sees it.
-  // Never auto-retries after that; a stale/missing result past this point
-  // needs an explicit "วิเคราะห์ใหม่" click (still bounded by quota either way).
+  // "ออโต้" mode: refresh once per visit if there's no result yet, or the
+  // cached one is past STALE_MS — "manual" mode never auto-triggers, only
+  // the "วิเคราะห์ใหม่" button does (still bounded by quota either way).
+  // Runs at most once per mount (autoTriedRef), not on a timer — see
+  // STALE_MS's own comment on why this approximates "daily" rather than
+  // guaranteeing it.
   useEffect(() => {
     if (autoTriedRef.current || !status) return;
-    if (status.unlocked && status.enabled && !status.state.result && status.quotaRemaining > 0) {
+    if (!status.unlocked || !status.enabled || autoMode !== "auto" || status.quotaRemaining <= 0) return;
+    const stale = !status.state.generatedAt || Date.now() - new Date(status.state.generatedAt).getTime() > STALE_MS;
+    if (stale) {
       autoTriedRef.current = true;
       // eslint-disable-next-line react-hooks/set-state-in-effect
       void runAnalysis();
     }
-  }, [status, runAnalysis]);
+  }, [status, autoMode, runAnalysis]);
 
   if (!status) {
     return (
@@ -426,10 +439,50 @@ export function AiInsightCard() {
             <span className="text-[11px] text-[var(--ink-faint)]">
               ใช้ไปแล้ว {status.usage.count}/{status.monthlyLimit} ครั้งเดือนนี้
             </span>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button type="button" className="text-[var(--ink-faint)] hover:text-[var(--ink-soft)]" aria-label="วิเคราะห์แบบไหนเปลืองโควตายังไง">
+                    <Info className="h-3 w-3" />
+                  </button>
+                }
+              />
+              <TooltipContent className="max-w-[260px]">
+                <b>ออโต้</b> — วิเคราะห์ใหม่เองเมื่อผลเก่าเกิน 20 ชม. แล้วมีคนเปิดหน้านี้ (ยังไม่ใช่ตั้งเวลาแม่นยำระดับนาทีทุกวัน) กินโควตาเหมือนกดเอง 1 ครั้งต่อรอบ
+                <br />
+                <b>ทำเอง</b> — ไม่มีการวิเคราะห์อัตโนมัติเลย ต้องกด &quot;วิเคราะห์ใหม่&quot; ทุกครั้งที่ต้องการผลใหม่
+                <br />
+                แพ็กเกจ <b>{status.plan}</b> ของบริษัทนี้วิเคราะห์ได้ {status.monthlyLimit} ครั้ง/เดือน ไม่ว่าจะเป็นออโต้หรือกดเอง
+              </TooltipContent>
+            </Tooltip>
           </div>
-          <Button size="sm" variant="outline" disabled={analyzing || status.quotaRemaining <= 0} onClick={() => void runAnalysis()} className="h-7 text-xs">
-            {analyzing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : status.quotaRemaining <= 0 ? "ใช้ครบโควตาแล้ว" : "วิเคราะห์ใหม่"}
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <div className="flex rounded-lg border border-[var(--line)] p-0.5 text-[10.5px] font-semibold">
+              <button
+                type="button"
+                onClick={() => setAutoMode("auto")}
+                className={cn(
+                  "rounded-md px-2 py-1 transition-colors",
+                  autoMode === "auto" ? "bg-[var(--chart-violet)] text-white" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
+                )}
+              >
+                ออโต้
+              </button>
+              <button
+                type="button"
+                onClick={() => setAutoMode("manual")}
+                className={cn(
+                  "rounded-md px-2 py-1 transition-colors",
+                  autoMode === "manual" ? "bg-[var(--chart-violet)] text-white" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
+                )}
+              >
+                ทำเอง
+              </button>
+            </div>
+            <Button size="sm" variant="outline" disabled={analyzing || status.quotaRemaining <= 0} onClick={() => void runAnalysis()} className="h-7 text-xs">
+              {analyzing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : status.quotaRemaining <= 0 ? "ใช้ครบโควตาแล้ว" : "วิเคราะห์ใหม่"}
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>
