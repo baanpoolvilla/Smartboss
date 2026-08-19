@@ -469,11 +469,14 @@ export function AiInsightCard() {
             </button>
             {showKpis && (
               <div className="overflow-visible rounded-2xl border border-[var(--line)] p-2">
-                <div className="grid grid-cols-2 @sm:grid-cols-4 gap-2">
+                {/* Always one row, never 2×2 — narrow screens scroll
+                    horizontally instead of wrapping (same fix as the Kanban
+                    board's own KPI strip, see task-board-kpis.tsx). */}
+                <div className="flex gap-2 overflow-x-auto">
                   {result.stats.map((s, i) => {
                     const Icon = TONE_ICON[s.tone];
                     return (
-                      <div key={i} className="flex flex-col overflow-visible rounded-xl bg-[var(--bg-soft)] p-2.5 pt-3">
+                      <div key={i} className="flex min-w-[150px] flex-1 shrink-0 flex-col overflow-visible rounded-xl bg-[var(--bg-soft)] p-2.5 pt-3">
                         {/* items-center (not items-start) — the badge circle is a
                             fixed h-6 box, but the number's own line-box (large
                             font, leading-none) can render taller/shorter than 24px
