@@ -21,11 +21,20 @@ export interface AiInsightPersonNote {
   priority: string;
 }
 
+/** One flagged department's own prioritized read — pairs with
+ * `AiInsightDeptBreakdown` (same `name`) the way `personNotes` pairs with
+ * `AiInsightPersonBreakdown`. */
+export interface AiInsightDeptNote {
+  name: string;
+  note: string;
+}
+
 export interface AiInsightResult {
   insightText: string;
   stats: AiInsightStat[];
   actions: AiInsightAction[];
   personNotes: AiInsightPersonNote[];
+  deptNotes: AiInsightDeptNote[];
 }
 
 /** One real, deterministic breakdown bucket (from lib/ai-insight/aggregate.ts,
@@ -49,6 +58,21 @@ export interface AiInsightPersonBreakdown {
   items: { domain: "task" | "report"; label: string; count: number }[];
 }
 
+/** One department, deterministic (server-computed, see aggregate.ts's
+ * `DeptBreakdown` — this is its client-facing twin, same duplication
+ * pattern as PersonBreakdown/AiInsightPersonBreakdown: aggregate.ts is
+ * "server-only" and can't be imported into this client-safe module). */
+export interface AiInsightDeptBreakdown {
+  departmentId: string;
+  name: string;
+  headcount: number;
+  successRate: number;
+  /** overdue+pending+missed summed across every member — how much is
+   * still open for this department right now. */
+  openTotal: number;
+  topIssues: { domain: "task" | "report"; label: string; count: number }[];
+}
+
 export interface AiInsightUsageMonth {
   month: string; // "2026-08"
   count: number;
@@ -68,6 +92,8 @@ export interface AiInsightState {
   detail: AiInsightDetailGroup[];
   /** Per-person combined breakdown, pairs with `result.personNotes`. */
   people: AiInsightPersonBreakdown[];
+  /** Per-department breakdown, pairs with `result.deptNotes`. */
+  departments: AiInsightDeptBreakdown[];
   /** This round's combined success rate — computed, not AI-written, kept as
    * its own field (not parsed back out of insightText) so the trend badge
    * and next round's "vs last time" comparison have a reliable number. */

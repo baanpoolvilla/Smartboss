@@ -30,6 +30,7 @@ function emptyState(): AiInsightState {
     result: null,
     detail: [],
     people: [],
+    departments: [],
     combinedSuccessRate: 0,
     previous: null,
     usage: { month: currentMonth(), count: 0, inputTokens: 0, outputTokens: 0, estCostUsd: 0 },
@@ -64,9 +65,16 @@ export async function getAiInsightStatus(orgId: string): Promise<AiInsightStatus
         ...resultRow.data,
         detail: resultRow.data.detail ?? [],
         people: resultRow.data.people ?? [],
+        departments: resultRow.data.departments ?? [],
         combinedSuccessRate: resultRow.data.combinedSuccessRate ?? 0,
         previous: resultRow.data.previous ?? null,
-        result: resultRow.data.result ? { ...resultRow.data.result, personNotes: resultRow.data.result.personNotes ?? [] } : null,
+        result: resultRow.data.result
+          ? {
+              ...resultRow.data.result,
+              personNotes: resultRow.data.result.personNotes ?? [],
+              deptNotes: resultRow.data.result.deptNotes ?? [],
+            }
+          : null,
       }
     : emptyState();
   // Usage resets the moment we notice the calendar month rolled over — no
@@ -110,6 +118,7 @@ export async function runAiInsightAnalysis(orgId: string): Promise<AnalyzeOutcom
     result,
     detail: aggregate.flagged.map((g) => ({ domain: g.domain, label: g.label, count: g.count, people: g.people })),
     people: aggregate.people,
+    departments: aggregate.departments,
     combinedSuccessRate: aggregate.combinedSuccessRate,
     previous,
     usage: {

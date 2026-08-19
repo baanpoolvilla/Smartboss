@@ -14,6 +14,7 @@ import type {
   AiInsightUsageMonth,
   AiInsightDetailGroup,
   AiInsightPersonBreakdown,
+  AiInsightDeptBreakdown,
 } from "@/modules/report_task/lib/ai-insight/types";
 import type { PlanCode } from "@/modules/report_task/lib/plan";
 
@@ -29,10 +30,20 @@ interface StatusResponse {
     result: AiInsightResult | null;
     detail: AiInsightDetailGroup[];
     people: AiInsightPersonBreakdown[];
+    departments: AiInsightDeptBreakdown[];
     combinedSuccessRate: number;
     previous: { combinedSuccessRate: number; personTotals: Record<string, number> } | null;
     usage: AiInsightUsageMonth;
   };
+}
+
+/** §13.2 of docs/ai-insight-v2-spec.md — one fixed threshold set, reused for
+ * every success-rate badge on the card (company/dept), so "วิกฤต" always
+ * means the same range everywhere instead of each spot inventing its own. */
+function successRateStatus(rate: number): { label: string; className: string } {
+  if (rate < 30) return { label: "วิกฤต", className: "bg-red-50 text-[var(--chart-red-dark)]" };
+  if (rate <= 70) return { label: "เฝ้าระวัง", className: "bg-amber-50 text-[var(--chart-amber-dark)]" };
+  return { label: "ดี", className: "bg-green-50 text-[var(--brand-green-dark)]" };
 }
 
 const TONE_CLASS: Record<"red" | "amber" | "green", string> = {
@@ -97,6 +108,7 @@ export function AiInsightCard() {
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showDetail, setShowDetail] = useState(false);
+  const [tab, setTab] = useState<"company" | "dept" | "person">("company");
   const autoTriedRef = useRef(false);
 
   const loadStatus = useCallback(async () => {
@@ -309,9 +321,83 @@ export function AiInsightCard() {
           </div>
         )}
 
-        {result && status.state.people.length > 0 && (
+        {result && (
+          <div className="flex items-center gap-1 border-b border-[var(--line)]">
+            {(
+              [
+                ["company", "ภาพรวมบริษัท", null],
+                ["dept", "รายแผนก", status.state.departments.length],
+                ["person", "รายคน", status.state.people.length],
+              ] as const
+            ).map(([key, label, count]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setTab(key)}
+                className={cn(
+                  "px-2.5 py-2 text-[12px] font-semibold border-b-2 -mb-px transition-colors",
+                  tab === key ? "border-[var(--chart-violet)] text-[var(--chart-violet)]" : "border-transparent text-[var(--ink-soft)] hover:text-[var(--ink)]"
+                )}
+              >
+                {label}
+                {count != null && <span className="ml-1 text-[10px] text-[var(--ink-faint)]">{count}</span>}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {result && tab === "dept" && (
           <div className="flex flex-col gap-2">
-            <p className="text-[10.5px] font-bold uppercase tracking-wide text-[var(--ink-faint)]">ลงลึกรายคน — ใครค้างอะไร ควรแก้อะไรก่อน</p>
+            {status.state.departments.length === 0 ? (
+              <p className="text-[12px] text-[var(--ink-faint)] text-center py-6">ไม่มีแผนกที่มีปัญหาค้างอยู่ในรอบนี้</p>
+            ) : (
+              status.state.departments.map((d) => {
+                const note = result.deptNotes.find((n) => n.name === d.name);
+                const status_ = successRateStatus(d.successRate);
+                return (
+                  <div key={d.departmentId} className="rounded-xl border border-[var(--line)] p-2.5">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[12.5px] font-semibold text-[var(--ink)]">{d.name}</span>
+                        <span className="text-[10px] text-[var(--ink-faint)]">{d.headcount} คน</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className={cn("text-[10px] font-semibold rounded-full px-2 py-0.5", status_.className)}>{status_.label}</span>
+                        <span className="text-[13px] font-bold tabular-nums text-[var(--ink)]">{d.successRate}%</span>
+                      </div>
+                    </div>
+                    {d.topIssues.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {d.topIssues.map((it, k) => (
+                          <span
+                            key={k}
+                            className={cn(
+                              "text-[10px] font-medium rounded-full px-2 py-0.5",
+                              it.domain === "task"
+                                ? "bg-[color-mix(in_srgb,var(--chart-blue)_10%,white)] text-[var(--chart-blue)]"
+                                : "bg-[color-mix(in_srgb,var(--chart-violet)_10%,white)] text-[var(--chart-violet)]"
+                            )}
+                          >
+                            {it.label} {it.count}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {note && (
+                      <p className="mt-1.5 text-[11.5px] text-[var(--ink)] flex items-start gap-1">
+                        <span className="text-[var(--chart-violet)] font-bold shrink-0">→</span> {note.note}
+                      </p>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+
+        {result && tab === "person" && (
+          <div className="flex flex-col gap-2">
+            {status.state.people.length === 0 && <p className="text-[12px] text-[var(--ink-faint)] text-center py-6">ไม่มีใครมีปัญหาค้างอยู่ในรอบนี้</p>}
             {status.state.people.map((p) => {
               const note = result.personNotes.find((n) => n.name === p.name);
               const prevTotal = status.state.previous?.personTotals[p.name];
@@ -362,7 +448,7 @@ export function AiInsightCard() {
           </div>
         )}
 
-        {result && result.actions.length > 0 && (
+        {result && tab === "company" && result.actions.length > 0 && (
           <div className="flex flex-col gap-1.5">
             <p className="text-[10.5px] font-bold uppercase tracking-wide text-[var(--ink-faint)]">สรุปสิ่งที่ควรทำก่อนระดับบริษัท</p>
             {result.actions.map((a, i) => (
@@ -374,7 +460,7 @@ export function AiInsightCard() {
           </div>
         )}
 
-        {result && status.state.detail.length > 0 && (
+        {result && tab === "company" && status.state.detail.length > 0 && (
           <div>
             <button
               type="button"

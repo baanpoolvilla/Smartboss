@@ -42,6 +42,12 @@ function buildPrompt(agg: AiInsightAggregate): string {
     const items = p.items.map((it) => `${it.label} ${it.count}`).join(", ");
     lines.push(`- ${p.name}: รวม ${p.total} รายการ — ${items}`);
   }
+  lines.push("");
+  lines.push("รายแผนก — success rate และปัญหาเด่นของแต่ละแผนก (ใช้เขียน deptNotes):");
+  for (const d of agg.departments) {
+    const issues = d.topIssues.map((it) => `${it.label} ${it.count}`).join(", ") || "ไม่มีปัญหาเด่น";
+    lines.push(`- ${d.name} (${d.headcount} คน): success rate ${d.successRate}%, ค้างรวม ${d.openTotal} รายการ — ${issues}`);
+  }
   return lines.join("\n");
 }
 
@@ -59,15 +65,21 @@ const SYSTEM_PROMPT = `คุณเป็นผู้ช่วยวิเคร
 - ห้ามยาวเกิน 1 ประโยคสั้นๆ ต่อคน
 - **ห้ามเขียนประโยคซ้ำกันแม้แต่ตัวเดียวระหว่าง 2 คนขึ้นไป แม้จะมีปัญหาประเภทเดียวกัน** — ต้องใส่ตัวเลข/รายละเอียดเฉพาะของคนนั้น (เช่น จำนวนที่ค้าง, สัดส่วนเทียบทั้งบริษัท) ให้ต่างกันจริง ไม่ใช่แค่เปลี่ยนชื่อแล้วก็อปประโยคเดิม — ถ้าตรวจแล้วมีคนไหนประโยคซ้ำกับคนอื่นแม้แค่บางส่วน ให้เขียนใหม่ก่อนตอบ
 
+กฎการเขียน deptNotes (เหมือน personNotes แต่ระดับแผนก):
+- เขียน 1 ประโยคต่อ 1 แผนกที่อยู่ในรายชื่อ "รายแผนก" ด้านล่าง เท่านั้น (ห้ามข้าม ห้ามเพิ่มแผนกที่ไม่มีในรายชื่อ, ชื่อแผนกต้องตรงกับที่ให้มาเป๊ะ)
+- บอกว่าแผนกนี้ควรโฟกัสอะไรก่อน + เพราะอะไร (อ้างตัวเลข/คนที่เป็นสาเหตุหลักถ้ามี)
+- ห้ามซ้ำประโยคข้ามแผนก (กฎเดียวกับ personNotes)
+
 ตอบกลับเป็น JSON เท่านั้น ตามรูปแบบนี้เป๊ะๆ:
 {
   "insightText": "ตามกฎด้านบน",
   "stats": [ { "label": "คนควรคุยด่วน", "count": 3, "tone": "red" }, ... อีก 3 ตัวรวมเป็น 4 ตัว โทน red/amber/green ตามความรุนแรง ],
   "actions": [ { "who": "ชื่อคนหรือแผนก", "detail": "คำแนะนำสั้นๆ เจาะจงตามข้อมูลจริง บอกผลลัพธ์ที่จะได้ถ้าทำ ไม่ใช่แค่สั่งให้ทำ", "severity": "high|mid|good" }, ... สูงสุด 3 ข้อ เรียงตามความสำคัญ ],
-  "personNotes": [ { "name": "ชื่อคนตรงกับในรายชื่อ \"รายคน\" เป๊ะ", "priority": "ตามกฎด้านบน" }, ... ครบทุกคนในรายชื่อ \"รายคน\" ]
+  "personNotes": [ { "name": "ชื่อคนตรงกับในรายชื่อ \"รายคน\" เป๊ะ", "priority": "ตามกฎด้านบน" }, ... ครบทุกคนในรายชื่อ \"รายคน\" ],
+  "deptNotes": [ { "name": "ชื่อแผนกตรงกับในรายชื่อ \"รายแผนก\" เป๊ะ", "note": "ตามกฎด้านบน" }, ... ครบทุกแผนกในรายชื่อ \"รายแผนก\" ]
 }
 
-ห้ามแต่งชื่อคนหรือตัวเลขที่ไม่มีในข้อมูลที่ให้มา ถ้าข้อมูลไม่มีปัญหาเลย ให้ stats เป็นศูนย์ทั้งหมด, actions ว่างเปล่า, personNotes ว่างเปล่า พร้อม insightText ที่ชื่นชมทีมงาน`;
+ห้ามแต่งชื่อคนหรือตัวเลขที่ไม่มีในข้อมูลที่ให้มา ถ้าข้อมูลไม่มีปัญหาเลย ให้ stats เป็นศูนย์ทั้งหมด, actions ว่างเปล่า, personNotes ว่างเปล่า, deptNotes ว่างเปล่า พร้อม insightText ที่ชื่นชมทีมงาน`;
 
 export async function callOpenAiInsight(agg: AiInsightAggregate): Promise<{ result: AiInsightResult; inputTokens: number; outputTokens: number; estCostUsd: number }> {
   const prompt = buildPrompt(agg);
@@ -98,6 +110,7 @@ export async function callOpenAiInsight(agg: AiInsightAggregate): Promise<{ resu
       stats: parsed.stats as AiInsightResult["stats"],
       actions: parsed.actions as AiInsightResult["actions"],
       personNotes: Array.isArray(parsed.personNotes) ? (parsed.personNotes as AiInsightResult["personNotes"]) : [],
+      deptNotes: Array.isArray(parsed.deptNotes) ? (parsed.deptNotes as AiInsightResult["deptNotes"]) : [],
     },
     inputTokens,
     outputTokens,

@@ -3,6 +3,7 @@ import "server-only";
 import { readTasks } from "@/modules/report_task/lib/db/task-repo";
 import { readStore } from "@/modules/report_task/lib/db/org-store";
 import { listDirectory, type DirectoryUser } from "@/modules/report_task/lib/db/employee-directory";
+import { listDepartmentsWithOverlay } from "@/modules/report_task/lib/db/departments";
 import { taskKpiBuckets, taskBucketsByAssignee, type KpiBuckets, type KpiBucketKey } from "@/modules/report_task/lib/kpi-buckets";
 import {
   trackedTopicsOf,
@@ -151,6 +152,108 @@ function personBreakdownOf(flagged: FlaggedGroup[]): PersonBreakdown[] {
     .map((row) => ({ ...row, items: row.items.sort((a, b) => b.count - a.count) }));
 }
 
+export interface DeptTopIssue {
+  domain: "task" | "report";
+  label: string;
+  count: number;
+}
+
+export interface DeptBreakdown {
+  departmentId: string;
+  name: string;
+  headcount: number;
+  successRate: number;
+  openTotal: number;
+  topIssues: DeptTopIssue[];
+}
+
+const MAX_DEPTS = 6;
+/** Synthetic bucket for anyone with no `departmentId` set — still worth
+ * surfacing (their numbers don't just vanish) rather than silently
+ * dropping them from every department-level number. */
+const UNASSIGNED_DEPT_ID = "__unassigned__";
+
+/** Same idea as `personBreakdownOf`, one level up — group by department
+ * instead of by person. Reuses the exact same per-person bucket maps
+ * (`byAssignee`, `reportByUser`) the person-level breakdown already built,
+ * so a department's numbers are guaranteed to be the sum of its own
+ * members' numbers — no separate query, no chance of drifting apart. */
+function departmentBreakdownOf(
+  directory: DirectoryUser[],
+  deptNameOf: Map<string, string>,
+  byAssignee: Record<KpiBucketKey, Map<string, number>>,
+  reportByUser: Map<string, ReportStatusCounts>
+): DeptBreakdown[] {
+  // Owners aren't held to normal task/report obligations (see
+  // mustReportToTopicServer) — folding them into a department's rate would
+  // skew it against members who actually carry the workload.
+  const membersByDept = new Map<string, DirectoryUser[]>();
+  for (const u of directory) {
+    if (u.isOwner) continue;
+    const deptId = u.departmentId || UNASSIGNED_DEPT_ID;
+    const list = membersByDept.get(deptId);
+    if (list) list.push(u);
+    else membersByDept.set(deptId, [u]);
+  }
+
+  const taskLabels: Record<"overdue" | "pending" | "lateDone", string> = {
+    overdue: "งานเลยกำหนด",
+    pending: "งานยังไม่เสร็จ (ในกำหนด)",
+    lateDone: "งานเสร็จช้ากว่ากำหนด",
+  };
+  const reportLabels: Record<"missed" | "pending" | "lateDone", string> = {
+    missed: "รายงานขาดส่ง",
+    pending: "รายงานยังไม่ส่ง (ในกำหนด)",
+    lateDone: "รายงานส่งช้ากว่ากำหนด",
+  };
+
+  const rows: DeptBreakdown[] = [];
+  for (const [deptId, members] of membersByDept) {
+    let tOnTime = 0, tLateDone = 0, tPending = 0, tOverdue = 0;
+    let rOnTime = 0, rLateDone = 0, rPending = 0, rMissed = 0;
+    for (const m of members) {
+      tOnTime += byAssignee.onTime.get(m.id) ?? 0;
+      tLateDone += byAssignee.lateDone.get(m.id) ?? 0;
+      tPending += byAssignee.pending.get(m.id) ?? 0;
+      tOverdue += byAssignee.overdue.get(m.id) ?? 0;
+      const rc = reportByUser.get(m.id);
+      if (rc) {
+        rOnTime += rc.onTime;
+        rLateDone += rc.lateDone;
+        rPending += rc.pending;
+        rMissed += rc.missed;
+      }
+    }
+    const total = tOnTime + tLateDone + tPending + tOverdue + rOnTime + rLateDone + rPending + rMissed;
+    const done = tOnTime + tLateDone + rOnTime + rLateDone;
+    const successRate = total ? Math.round((done / total) * 100) : 0;
+    const openTotal = tPending + tOverdue + rPending + rMissed;
+
+    const topIssues: DeptTopIssue[] = [
+      tOverdue > 0 ? { domain: "task" as const, label: taskLabels.overdue, count: tOverdue } : null,
+      tPending > 0 ? { domain: "task" as const, label: taskLabels.pending, count: tPending } : null,
+      tLateDone > 0 ? { domain: "task" as const, label: taskLabels.lateDone, count: tLateDone } : null,
+      rMissed > 0 ? { domain: "report" as const, label: reportLabels.missed, count: rMissed } : null,
+      rPending > 0 ? { domain: "report" as const, label: reportLabels.pending, count: rPending } : null,
+      rLateDone > 0 ? { domain: "report" as const, label: reportLabels.lateDone, count: rLateDone } : null,
+    ]
+      .filter((x): x is DeptTopIssue => x !== null)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3);
+
+    rows.push({
+      departmentId: deptId,
+      name: deptId === UNASSIGNED_DEPT_ID ? "ไม่ระบุแผนก" : (deptNameOf.get(deptId) ?? deptId),
+      headcount: members.length,
+      successRate,
+      openTotal,
+      topIssues,
+    });
+  }
+
+  return rows.sort((a, b) => b.openTotal - a.openTotal).slice(0, MAX_DEPTS);
+}
+
 export interface AiInsightAggregate {
   task: KpiBuckets;
   report: KpiBuckets;
@@ -175,6 +278,8 @@ export interface AiInsightAggregate {
    * open items across every bucket) instead of scattered per-bucket
    * mentions — what a per-person deep-dive is built from. */
   people: PersonBreakdown[];
+  /** Worst-first, capped at MAX_DEPTS — same flat-cost reasoning as `people`. */
+  departments: DeptBreakdown[];
 }
 
 /**
@@ -188,15 +293,17 @@ export interface AiInsightAggregate {
  * cost roughly constant regardless of company size (see AI-Insight report).
  */
 export async function buildAiInsightAggregate(orgId: string): Promise<AiInsightAggregate> {
-  const [{ tasks }, reportFeed, directory] = await Promise.all([
+  const [{ tasks }, reportFeed, directory, departmentRows] = await Promise.all([
     readTasks(orgId),
     readStore<{ topics?: ReportTopic[]; posts?: ReportPost[] }>(orgId, "report-feed"),
     listDirectory(orgId),
+    listDepartmentsWithOverlay(orgId),
   ]);
 
   const topics = reportFeed.data?.topics ?? [];
   const posts = reportFeed.data?.posts ?? [];
   const nameOf = new Map(directory.map((u) => [u.id, u.name] as const));
+  const deptNameOf = new Map(departmentRows.map((d) => [d.id, d.name] as const));
 
   const taskBuckets = taskKpiBuckets(tasks as Task[]);
   const byAssignee = taskBucketsByAssignee(tasks as Task[]);
@@ -268,5 +375,6 @@ export async function buildAiInsightAggregate(orgId: string): Promise<AiInsightA
     combinedSuccessRate,
     projectedSuccessRate,
     people: personBreakdownOf(flagged),
+    departments: departmentBreakdownOf(directory, deptNameOf, byAssignee, reportByUser),
   };
 }
