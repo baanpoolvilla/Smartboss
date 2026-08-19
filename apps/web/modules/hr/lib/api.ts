@@ -148,6 +148,16 @@ export interface Employment {
   time_zone: string;
 }
 
+export interface Person {
+  id: string;
+  first_name: string;
+  last_name: string;
+  preferred_name: string;
+  display_name: string;
+  email: string | null;
+  status: string;
+}
+
 export interface Company {
   id: string;
   code: string;

@@ -4,7 +4,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 import { HR_PERMS } from "@/modules/hr/permissions";
-import { wfFetch, WorkforceError, WorkforceUnavailableError } from "@/modules/hr/lib/api";
+import {
+  wfFetch,
+  WorkforceError,
+  WorkforceUnavailableError,
+  type Paged,
+  type Person,
+} from "@/modules/hr/lib/api";
 
 /**
  * Server action ของโมดูลบุคคล — ทุกตัวยิงต่อไปที่ workforce API
@@ -176,6 +182,146 @@ export async function createEmployeeAction(formData: FormData) {
 
   revalidatePath("/hr/employees");
   redirect(`/hr/employees/${employmentId}`);
+}
+
+/**
+ * นำเข้าพนักงานหลายคนจากบัญชีผู้ใช้ของ Smartboss ในครั้งเดียว
+ *
+ * ── ทำไมไม่แปลง core.users → พนักงาน ให้อัตโนมัติตอน sync ──
+ * ทะเบียนจ้างงานต้องมีวันเริ่มงาน รหัสพนักงาน และประเภทการจ้าง ซึ่ง `core.users`
+ * ไม่มีสักตัว โดยเฉพาะ **วันเริ่มงาน** ที่เข้าไปคำนวณลงเวลา/เงินเดือน/สิทธิ์ลาโดยตรง
+ * เดาให้แล้วผิด = ตัวเลขผิดทั้งระบบโดยไม่มีใครรู้ตัว · และไม่ใช่ทุกบัญชีจะเป็นพนักงาน
+ * (บัญชี IT/ผู้ดูแลระบบล็อกอินได้แต่ไม่ได้อยู่ในทะเบียนจ้างงาน)
+ * ⇒ ให้คนเลือกและกรอกเอง แต่ไม่ต้องพิมพ์ชื่อ/อีเมลซ้ำ
+ *
+ * ── ทำไมต้องหา person เดิมด้วยอีเมลก่อนสร้างใหม่ ──
+ * ขั้นตอนเป็นสองคำสั่ง (สร้าง person แล้วค่อยผูก employment) ถ้า employment ล้ม
+ * กลางทาง person จะค้างอยู่แล้ว การกดซ้ำจะสร้าง person ซ้ำอีกใบ — ใช้อีเมลเป็น
+ * ตัวจับคู่เพราะเป็นค่าเดียวที่ทั้งสองระบบมีและไม่ซ้ำ (ตัวเดียวกับที่ provisionPrincipal ใช้)
+ *
+ * ล้มทีละแถว ไม่ล้มทั้งชุด — คนที่สำเร็จต้องไม่ถูก rollback เพราะเพื่อนกรอกรหัสซ้ำ
+ */
+export async function importEmployeesAction(formData: FormData) {
+  await guard(HR_PERMS.employeeManage);
+
+  const companyId = String(formData.get("company_id") ?? "");
+  if (!companyId) throw new Error("ยังไม่มีบริษัทในระบบบุคคล");
+
+  const picked = formData.getAll("pick").map(String).filter(Boolean);
+  if (picked.length === 0) throw new Error("ยังไม่ได้เลือกใครเลย");
+
+  const field = (name: string, userId: string) =>
+    String(formData.get(`${name}.${userId}`) ?? "").trim();
+
+  // อีเมล → person ที่มีอยู่แล้ว ใช้ซ้ำแทนการสร้างใบใหม่
+  let personByEmail = new Map<string, string>();
+  try {
+    const people = await wfFetch<Paged<Person>>("/people");
+    personByEmail = new Map(
+      people.items
+        .filter((row) => row.email !== null && row.email !== "")
+        .map((row) => [row.email!.toLowerCase(), row.id])
+    );
+  } catch {
+    // อ่านไม่ได้ = ถือว่ายังไม่มีใคร แล้วปล่อยให้ API ฝั่งโน้นตัดสินเอง
+  }
+
+  let created = 0;
+  const failures: string[] = [];
+
+  for (const userId of picked) {
+    const label = field("label", userId) || field("first_name", userId) || userId.slice(0, 8);
+    const firstName = field("first_name", userId);
+    const lastName = field("last_name", userId);
+    const email = field("email", userId).toLowerCase();
+    const employeeCode = field("employee_code", userId);
+    const hiredOn = field("hired_on", userId);
+    const employmentType = field("employment_type", userId) || "MONTHLY";
+    const amount = field("amount", userId);
+
+    if (!firstName || !lastName) {
+      failures.push(`${label}: ยังไม่ได้กรอกชื่อ-นามสกุล`);
+      continue;
+    }
+    if (!employeeCode) {
+      failures.push(`${label}: ยังไม่ได้กรอกรหัสพนักงาน`);
+      continue;
+    }
+    if (!hiredOn) {
+      failures.push(`${label}: ยังไม่ได้ระบุวันเริ่มงาน`);
+      continue;
+    }
+
+    try {
+      let personId = email === "" ? undefined : personByEmail.get(email);
+      if (personId === undefined) {
+        const person = await wfFetch<{ id: string }>("/people", {
+          method: "POST",
+          body: {
+            first_name: firstName,
+            last_name: lastName,
+            preferred_name: field("preferred_name", userId),
+            email: email === "" ? null : email,
+          },
+        });
+        personId = person.id;
+        if (email !== "") personByEmail.set(email, personId);
+      }
+
+      const employment = await wfFetch<{ id: string }>("/employments", {
+        method: "POST",
+        body: {
+          company_id: companyId,
+          person_id: personId,
+          employee_code: employeeCode,
+          employment_type: employmentType,
+          hired_on: hiredOn,
+          time_zone: "Asia/Bangkok",
+        },
+      });
+      created += 1;
+
+      // ตั้งฐานค่าจ้างให้เลยถ้ากรอกมา — ใช้สิทธิ์คนละตัว (hr.salary.manage)
+      // คนที่นำเข้าพนักงานได้อาจตั้งเงินเดือนไม่ได้ ซึ่งถูกต้องตามการแยกหน้าที่
+      // ⇒ ล้มตรงนี้ต้องไม่ทำให้ดูเหมือนนำเข้าไม่สำเร็จ (พนักงานถูกสร้างไปแล้วจริง)
+      if (amount !== "") {
+        try {
+          await wfFetch("/compensation-rates", {
+            method: "POST",
+            body: {
+              employment_id: employment.id,
+              pay_basis: employmentType,
+              amount,
+              currency: "THB",
+              effective_from: hiredOn,
+              note: "ตั้งจาก Smartboss ตอนนำเข้าพนักงาน",
+            },
+          });
+        } catch {
+          failures.push(`${label}: สร้างพนักงานสำเร็จ แต่ตั้งฐานค่าจ้างไม่ได้ (ไปตั้งที่หน้ารายละเอียด)`);
+        }
+      }
+    } catch (error) {
+      failures.push(`${label}: ${toMessage(error)}`);
+    }
+  }
+
+  revalidatePath("/hr/employees");
+  revalidatePath("/hr/employees/import");
+  revalidatePath("/hr");
+
+  // เก็บรายละเอียดไว้ไม่เกิน 3 บรรทัด — URL ยาวเกินจะโดนตัดกลางทาง
+  const detail = failures.slice(0, 3).join(" · ");
+  const params = new URLSearchParams({ ok: String(created) });
+  if (failures.length > 0) {
+    params.set("fail", String(failures.length));
+    if (detail) params.set("msg", detail);
+  }
+  redirect(
+    failures.length === 0
+      ? `/hr/employees?imported=${created}`
+      : `/hr/employees/import?${params.toString()}`
+  );
 }
 
 export async function addCompensationRateAction(formData: FormData) {
