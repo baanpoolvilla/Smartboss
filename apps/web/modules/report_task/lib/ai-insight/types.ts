@@ -6,12 +6,6 @@ export interface AiInsightStat {
   tone: "red" | "amber" | "green";
 }
 
-export interface AiInsightAction {
-  who: string;
-  detail: string;
-  severity: "high" | "mid" | "good";
-}
-
 /** One flagged person's own prioritized read — "here's everything open for
  * THIS person, and what to fix first" — distinct from `actions` (company-
  * wide picks, at most 3, not necessarily one per person). */
@@ -29,6 +23,21 @@ export interface AiInsightDeptNote {
   note: string;
 }
 
+/** Closed enum of "things a recommendation can be about," shared by the
+ * structured `AiInsightAction` below and the recommendation ledger
+ * (`lib/ai-insight/ledger.ts`) — the model picks from this list, it never
+ * invents a metric name, so a baseline↔latest comparison always measures
+ * the exact same thing both times. */
+export type InsightMetricKey =
+  | "overdue_tasks"
+  | "pending_tasks"
+  | "late_tasks"
+  | "missed_reports"
+  | "pending_reports"
+  | "late_reports"
+  | "open_total"
+  | "success_rate";
+
 /** Server-computed (`lib/ai-insight/history.ts`'s `computeTrend`), never
  * left to the model to estimate — see that file's own comment on why.
  * `change` is a percentage-*point* delta for a "rate" subject (company/
@@ -38,6 +47,24 @@ export interface AiInsightDeptNote {
 export interface AiInsightTrend {
   dir: "up" | "down" | "flat";
   change: number;
+}
+
+export type RecoSubjectType = "person" | "department" | "company";
+
+/** A company-wide pick, structured so it's measurable — "subjectName" +
+ * "metricKey" together identify *what number to check again next round*
+ * (resolved to `subjectKey` server-side, see ledger.ts's resolveActions),
+ * instead of v1's free-text `{who, detail}` that had no way to verify
+ * whether a recommendation actually worked. */
+export interface AiInsightAction {
+  subjectType: RecoSubjectType;
+  /** Resolved server-side — "__company__" for the company, a departmentId,
+   * or a person's name (see ledger.ts's known person-name limitation). */
+  subjectKey: string;
+  subjectName: string;
+  metricKey: InsightMetricKey;
+  detail: string;
+  severity: "high" | "mid" | "good";
 }
 
 export interface AiInsightResult {
@@ -91,6 +118,28 @@ export interface AiInsightDeptBreakdown {
   trend: AiInsightTrend | null;
 }
 
+export type RecoStatus = "open" | "improved" | "resolved" | "regressed";
+
+/** One recommendation, tracked from the round it was first given through
+ * every round after — the "did this actually work?" record. Client-facing
+ * twin of ledger.ts's `RecommendationRecord` (server-only, same duplication
+ * pattern as the Dept/Person breakdown split above). */
+export interface AiInsightLedgerRecord {
+  id: string;
+  subjectType: RecoSubjectType;
+  subjectKey: string;
+  subjectName: string;
+  metricKey: InsightMetricKey;
+  detail: string;
+  severity: "high" | "mid" | "good";
+  issuedAt: string;
+  baseline: number;
+  latestValue: number;
+  checkedAt: string;
+  status: RecoStatus;
+  trail: { at: string; value: number }[];
+}
+
 export interface AiInsightUsageMonth {
   month: string; // "2026-08"
   count: number;
@@ -124,5 +173,9 @@ export interface AiInsightState {
    * so the round after this one can show a delta. Null on the very first
    * round ever run (nothing to compare against yet). */
   previous: { combinedSuccessRate: number; personTotals: Record<string, number> } | null;
+  /** Every recommendation ever given, tracked through to its outcome —
+   * see AiInsightLedgerRecord. Empty on state saved before this field
+   * existed (fallback `?? []`, same as `detail`/`people`/`departments`). */
+  ledger: AiInsightLedgerRecord[];
   usage: AiInsightUsageMonth;
 }

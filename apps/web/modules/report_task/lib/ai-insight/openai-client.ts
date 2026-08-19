@@ -1,8 +1,9 @@
 import "server-only";
 import OpenAI from "openai";
 import type { AiInsightAggregate, DeptBreakdown, PersonBreakdown } from "./aggregate";
-import type { AiInsightResult } from "./types";
+import type { AiInsightAction, AiInsightResult } from "./types";
 import type { Trend } from "./history";
+import { resolveActions } from "./ledger";
 
 /** Trend context computed server-side (see analyze.ts) — passed in
  * alongside the aggregate so the prompt can say "แผนก IT: 45% (แย่ลง 3 รอบ
@@ -76,6 +77,13 @@ const SYSTEM_PROMPT = `คุณเป็นผู้ช่วยวิเคร
 - ถ้าอัตราสำเร็จรวมมีวงเล็บบอกเทรนด์ (ดีขึ้น/แย่ลง กี่จุด จากรอบก่อนๆ) ให้พูดถึงทิศทางนั้นด้วยถ้าเข้ากับเนื้อความได้ เช่น "ดีขึ้นต่อเนื่อง 3 รอบ" — ไม่ใช่แค่บอกตัวเลข ณ ตอนนี้เฉยๆ
 - ห้ามยาวเกิน 3 ประโยค ห่อตัวเลขสำคัญด้วย **
 
+กฎการเขียน actions (ต้อง "วัดผลได้" เพราะระบบจะติดตามว่าคำแนะนำนี้ทำสำเร็จรึยังในรอบถัดไป):
+- แต่ละข้อต้องระบุ subjectType เป็นหนึ่งใน "company" | "department" | "person" เท่านั้น
+- ถ้า subjectType เป็น "department" ต้องตั้ง subjectName ตรงกับชื่อแผนกในรายชื่อ "รายแผนก" เป๊ะ, ถ้าเป็น "person" ต้องตรงกับชื่อในรายชื่อ "รายคน" เป๊ะ, ถ้าเป็น "company" ใส่ subjectName เป็น "บริษัท"
+- ต้องระบุ metricKey เป็นหนึ่งใน "overdue_tasks" | "pending_tasks" | "late_tasks" | "missed_reports" | "pending_reports" | "late_reports" | "open_total" | "success_rate" เท่านั้น — เลือกตัวที่ตรงกับปัญหาที่พูดถึงจริงๆ ห้ามเดา
+- ห้ามใช้ metricKey "success_rate" กับ subjectType "person" (คนไม่มีอัตรา มีแต่จำนวนค้าง)
+- สูงสุด 3 ข้อ เรียงตามความสำคัญ
+
 กฎการเขียน personNotes (สำคัญเท่ากัน — นี่คือส่วนที่ต้องเจาะรายคน):
 - เขียน 1 บรรทัดต่อ 1 คนที่อยู่ในรายชื่อ "รายคน" ด้านล่าง (ห้ามข้าม ห้ามเพิ่มคนที่ไม่มีในรายชื่อ)
 - ต้องบอกว่าสำหรับคนนี้ควรแก้ "อะไรก่อน" (ถ้ามีหลายรายการ ให้จัดลำดับเอง ไม่ใช่แค่ท่องจำนวนรวม) พร้อมเหตุผลสั้นๆ ว่าทำไมอันนั้นก่อน (เช่น กระทบคะแนนมากสุด/ค้างนานสุด/เป็นสาเหตุหลักของปัญหาบริษัท)
@@ -91,7 +99,7 @@ const SYSTEM_PROMPT = `คุณเป็นผู้ช่วยวิเคร
 {
   "insightText": "ตามกฎด้านบน",
   "stats": [ { "label": "คนควรคุยด่วน", "count": 3, "tone": "red" }, ... อีก 3 ตัวรวมเป็น 4 ตัว โทน red/amber/green ตามความรุนแรง ],
-  "actions": [ { "who": "ชื่อคนหรือแผนก", "detail": "คำแนะนำสั้นๆ เจาะจงตามข้อมูลจริง บอกผลลัพธ์ที่จะได้ถ้าทำ ไม่ใช่แค่สั่งให้ทำ", "severity": "high|mid|good" }, ... สูงสุด 3 ข้อ เรียงตามความสำคัญ ],
+  "actions": [ { "subjectType": "company|department|person", "subjectName": "ตามกฎด้านบน", "metricKey": "ตามกฎด้านบน", "detail": "คำแนะนำสั้นๆ เจาะจงตามข้อมูลจริง บอกผลลัพธ์ที่จะได้ถ้าทำ ไม่ใช่แค่สั่งให้ทำ", "severity": "high|mid|good" }, ... สูงสุด 3 ข้อ เรียงตามความสำคัญ ],
   "personNotes": [ { "name": "ชื่อคนตรงกับในรายชื่อ \"รายคน\" เป๊ะ", "priority": "ตามกฎด้านบน" }, ... ครบทุกคนในรายชื่อ \"รายคน\" ],
   "deptNotes": [ { "name": "ชื่อแผนกตรงกับในรายชื่อ \"รายแผนก\" เป๊ะ", "note": "ตามกฎด้านบน" }, ... ครบทุกแผนกในรายชื่อ \"รายแผนก\" ]
 }
@@ -124,11 +132,16 @@ export async function callOpenAiInsight(
   const outputTokens = completion.usage?.completion_tokens ?? 0;
   const estCostUsd = (inputTokens / 1_000_000) * PRICE_PER_1M_INPUT_USD + (outputTokens / 1_000_000) * PRICE_PER_1M_OUTPUT_USD;
 
+  // Resolved here (not left as the model's raw {subjectType, subjectName}
+  // pairs) so a bad/invented name never reaches the ledger — anything that
+  // doesn't match a real department/person is silently dropped.
+  const actions = resolveActions(agg, Array.isArray(parsed.actions) ? (parsed.actions as Partial<AiInsightAction>[]) : []);
+
   return {
     result: {
       insightText: parsed.insightText,
       stats: parsed.stats as AiInsightResult["stats"],
-      actions: parsed.actions as AiInsightResult["actions"],
+      actions,
       personNotes: Array.isArray(parsed.personNotes) ? (parsed.personNotes as AiInsightResult["personNotes"]) : [],
       deptNotes: Array.isArray(parsed.deptNotes) ? (parsed.deptNotes as AiInsightResult["deptNotes"]) : [],
     },

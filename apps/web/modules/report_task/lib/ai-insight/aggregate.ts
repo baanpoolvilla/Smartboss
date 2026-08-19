@@ -14,6 +14,27 @@ import {
 } from "@/modules/report_task/lib/report-feed-compliance";
 import type { Task } from "@/modules/report_task/types";
 import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
+import type { InsightMetricKey, RecoSubjectType } from "./types";
+
+/** The 7 "count" metrics, all built the same way from a task/report bucket
+ * pair — shared by company/department/person so the three levels can never
+ * disagree on what e.g. "overdue_tasks" means. `success_rate` is handled
+ * separately per-caller since person subjects don't support it (see
+ * metricValueOf). */
+function countMetricsOf(
+  t: { overdue: number; pending: number; lateDone: number },
+  r: { missed: number; pending: number; lateDone: number }
+): Record<Exclude<InsightMetricKey, "success_rate">, number> {
+  return {
+    overdue_tasks: t.overdue,
+    pending_tasks: t.pending,
+    late_tasks: t.lateDone,
+    missed_reports: r.missed,
+    pending_reports: r.pending,
+    late_reports: r.lateDone,
+    open_total: t.overdue + t.pending + r.missed + r.pending,
+  };
+}
 
 /**
  * Server-side twin of `reportStatusCountsByUser` — that function (and
@@ -123,6 +144,30 @@ export interface PersonBreakdown {
   name: string;
   total: number;
   items: PersonBreakdownItem[];
+  /** Same numbers as `items`, keyed by metric instead of by display label —
+   * what `metricValueOf` reads for this person. Deliberately built from the
+   * exact same capped `items` (not a fresh uncapped query) so the ledger
+   * always tracks the same number the card displays — a ledger baseline
+   * that silently disagreed with what's on screen would be more confusing
+   * than the rare edge case this trades away (someone who ranks in the
+   * overall top 6 but, for one specific bucket, outside that bucket's own
+   * top 8 — see MAX_PEOPLE_PER_GROUP). */
+  metrics: Partial<Record<Exclude<InsightMetricKey, "success_rate">, number>>;
+}
+
+/** `FlaggedGroup.key`/`.domain` → the metric enum, computed once here
+ * instead of via fragile display-label string matching. */
+function metricKeyOf(domain: "task" | "report", key: KpiBucketKey | "missed"): Exclude<InsightMetricKey, "success_rate"> | null {
+  if (domain === "task") {
+    if (key === "overdue") return "overdue_tasks";
+    if (key === "pending") return "pending_tasks";
+    if (key === "lateDone") return "late_tasks";
+    return null; // "missed" never occurs for task
+  }
+  if (key === "missed") return "missed_reports";
+  if (key === "pending") return "pending_reports";
+  if (key === "lateDone") return "late_reports";
+  return null; // "overdue" never occurs for report (report's field is "missed")
 }
 
 const MAX_PEOPLE_OVERALL = 6;
@@ -136,15 +181,20 @@ const MAX_PEOPLE_OVERALL = 6;
 function personBreakdownOf(flagged: FlaggedGroup[]): PersonBreakdown[] {
   const byName = new Map<string, PersonBreakdown>();
   for (const g of flagged) {
+    const metricKey = metricKeyOf(g.domain, g.key);
     for (const p of g.people) {
       let row = byName.get(p.name);
       if (!row) {
-        row = { name: p.name, total: 0, items: [] };
+        row = { name: p.name, total: 0, items: [], metrics: {} };
         byName.set(p.name, row);
       }
       row.total += p.count;
       row.items.push({ domain: g.domain, label: g.label, count: p.count });
+      if (metricKey) row.metrics[metricKey] = (row.metrics[metricKey] ?? 0) + p.count;
     }
+  }
+  for (const row of byName.values()) {
+    row.metrics.open_total = (row.metrics.overdue_tasks ?? 0) + (row.metrics.pending_tasks ?? 0) + (row.metrics.missed_reports ?? 0) + (row.metrics.pending_reports ?? 0);
   }
   return [...byName.values()]
     .sort((a, b) => b.total - a.total)
@@ -165,6 +215,11 @@ export interface DeptBreakdown {
   successRate: number;
   openTotal: number;
   topIssues: DeptTopIssue[];
+  /** What `metricValueOf` reads for this department — unlike person's
+   * `metrics`, this is the exact uncapped sum (departments aren't capped
+   * the way per-bucket people are), and includes `success_rate` (person's
+   * doesn't — see PersonBreakdown.metrics). */
+  metrics: Record<InsightMetricKey, number>;
 }
 
 const MAX_DEPTS = 6;
@@ -248,10 +303,39 @@ function departmentBreakdownOf(
       successRate,
       openTotal,
       topIssues,
+      metrics: { ...countMetricsOf({ overdue: tOverdue, pending: tPending, lateDone: tLateDone }, { missed: rMissed, pending: rPending, lateDone: rLateDone }), success_rate: successRate },
     });
   }
 
-  return rows.sort((a, b) => b.openTotal - a.openTotal).slice(0, MAX_DEPTS);
+  // Sorted worst-first, but NOT capped here — capping happens where this is
+  // used for display/prompt (buildAiInsightAggregate's `departments`). The
+  // full list stays available internally (`departmentsAll`) so a ledger
+  // record for a department that has since improved out of the worst-N can
+  // still be re-measured every round instead of going stale the moment it
+  // drops off the "worst offenders" list.
+  return rows.sort((a, b) => b.openTotal - a.openTotal);
+}
+
+/** Uncapped per-person metrics, straight from `byAssignee`/`reportByUser`
+ * (every person, not just whoever made the capped `flagged` lists) — same
+ * "ledger must be able to re-measure someone who's improved off the
+ * worst-offenders list" reasoning as `departmentBreakdownOf` no longer
+ * capping internally. Keyed by name, same accepted limitation as
+ * PersonBreakdown (see its own comment on name-based keying). */
+function personMetricsAllOf(
+  directory: DirectoryUser[],
+  byAssignee: Record<KpiBucketKey, Map<string, number>>,
+  reportByUser: Map<string, ReportStatusCounts>
+): Map<string, Record<Exclude<InsightMetricKey, "success_rate">, number>> {
+  const out = new Map<string, Record<Exclude<InsightMetricKey, "success_rate">, number>>();
+  for (const u of directory) {
+    if (u.isOwner) continue;
+    const t = { overdue: byAssignee.overdue.get(u.id) ?? 0, pending: byAssignee.pending.get(u.id) ?? 0, lateDone: byAssignee.lateDone.get(u.id) ?? 0 };
+    const rc = reportByUser.get(u.id);
+    const r = { missed: rc?.missed ?? 0, pending: rc?.pending ?? 0, lateDone: rc?.lateDone ?? 0 };
+    out.set(u.name, countMetricsOf(t, r));
+  }
+  return out;
 }
 
 export interface AiInsightAggregate {
@@ -280,6 +364,38 @@ export interface AiInsightAggregate {
   people: PersonBreakdown[];
   /** Worst-first, capped at MAX_DEPTS — same flat-cost reasoning as `people`. */
   departments: DeptBreakdown[];
+  /** Every department, uncapped, worst-first — internal only (not sent to
+   * the prompt), so `metricValueOf` can re-measure a department the ledger
+   * is tracking even after it's improved out of the capped `departments`. */
+  departmentsAll: DeptBreakdown[];
+  /** What `metricValueOf` reads for subjectType "company". */
+  companyMetrics: Record<InsightMetricKey, number>;
+  /** Every person, uncapped — same "ledger must keep re-measuring" reasoning
+   * as `departmentsAll`. */
+  personMetricsAll: Map<string, Record<Exclude<InsightMetricKey, "success_rate">, number>>;
+}
+
+/**
+ * Looks up one metric's current value for one subject — the single source
+ * of truth both the recommendation ledger's reconciliation (`ledger.ts`)
+ * and action-resolution (validating what the model picked) read from, so
+ * "what a baseline meant" and "what we're comparing it to next round" can
+ * never drift apart. Returns null for an unknown subject (department
+ * deleted, person no longer flagged) or an unsupported subject/metric pair
+ * (person + success_rate) — callers treat null as "skip, don't throw" per
+ * the spec's edge-case handling, not as a crash.
+ */
+export function metricValueOf(agg: AiInsightAggregate, subjectType: RecoSubjectType, subjectKey: string, metricKey: InsightMetricKey): number | null {
+  if (subjectType === "company") return agg.companyMetrics[metricKey] ?? null;
+  if (subjectType === "department") {
+    const d = agg.departmentsAll.find((d) => d.departmentId === subjectKey);
+    return d ? (d.metrics[metricKey] ?? null) : null;
+  }
+  if (subjectType === "person") {
+    if (metricKey === "success_rate") return null; // unsupported — person has no rate, only counts
+    return agg.personMetricsAll.get(subjectKey)?.[metricKey] ?? null;
+  }
+  return null;
 }
 
 /**
@@ -365,6 +481,15 @@ export async function buildAiInsightAggregate(orgId: string): Promise<AiInsightA
       ? Math.min(100, Math.round(((combinedDone + topOpenIssue.count) / combinedTotal) * 100))
       : null;
 
+  const allDepartments = departmentBreakdownOf(directory, deptNameOf, byAssignee, reportByUser);
+  const companyMetrics: Record<InsightMetricKey, number> = {
+    ...countMetricsOf(
+      { overdue: taskBuckets.overdue, pending: taskBuckets.pending, lateDone: taskBuckets.lateDone },
+      { missed: reportBuckets.overdue, pending: reportBuckets.pending, lateDone: reportBuckets.lateDone }
+    ),
+    success_rate: combinedSuccessRate,
+  };
+
   return {
     task: taskBuckets,
     report: reportBuckets,
@@ -375,6 +500,9 @@ export async function buildAiInsightAggregate(orgId: string): Promise<AiInsightA
     combinedSuccessRate,
     projectedSuccessRate,
     people: personBreakdownOf(flagged),
-    departments: departmentBreakdownOf(directory, deptNameOf, byAssignee, reportByUser),
+    departments: allDepartments.slice(0, MAX_DEPTS),
+    departmentsAll: allDepartments,
+    companyMetrics,
+    personMetricsAll: personMetricsAllOf(directory, byAssignee, reportByUser),
   };
 }

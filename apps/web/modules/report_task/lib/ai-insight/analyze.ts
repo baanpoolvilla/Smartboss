@@ -5,6 +5,7 @@ import { getOrgPlan, planAtLeast, AI_INSIGHT_MONTHLY_LIMIT, type PlanCode } from
 import { buildAiInsightAggregate } from "./aggregate";
 import { callOpenAiInsight } from "./openai-client";
 import { EMPTY_HISTORY, appendSnapshot, computeTrend, snapshotFromAggregate, type AiInsightHistory } from "./history";
+import { reconcile } from "./ledger";
 import type { AiInsightState } from "./types";
 
 /** Server-only key — deliberately NOT in store-registry.ts's STORE_KEYS, so
@@ -18,6 +19,9 @@ const SETTINGS_KEY = "ai-insight-settings";
 /** Same server-only reasoning as RESULT_KEY — a client that could write its
  * own history could fake an "improving" trend that never happened. */
 const HISTORY_KEY = "ai-insight-history";
+// The recommendation ledger lives inside AiInsightState.ledger (persisted
+// under RESULT_KEY above), not a separate store key — same server-only
+// enforcement, no extra read/write round-trip needed.
 
 interface AiInsightSettings {
   enabled: boolean;
@@ -38,6 +42,7 @@ function emptyState(): AiInsightState {
     combinedSuccessRate: 0,
     companyTrend: null,
     previous: null,
+    ledger: [],
     usage: { month: currentMonth(), count: 0, inputTokens: 0, outputTokens: 0, estCostUsd: 0 },
   };
 }
@@ -74,6 +79,7 @@ export async function getAiInsightStatus(orgId: string): Promise<AiInsightStatus
         combinedSuccessRate: resultRow.data.combinedSuccessRate ?? 0,
         companyTrend: resultRow.data.companyTrend ?? null,
         previous: resultRow.data.previous ?? null,
+        ledger: resultRow.data.ledger ?? [],
         result: resultRow.data.result
           ? {
               ...resultRow.data.result,
@@ -116,6 +122,9 @@ export async function runAiInsightAnalysis(orgId: string): Promise<AnalyzeOutcom
 
   const { result, inputTokens, outputTokens, estCostUsd } = await callOpenAiInsight(aggregate, { companyTrend, departments, people });
 
+  const now = new Date().toISOString();
+  const ledger = reconcile(status.state.ledger, aggregate, result.actions, now);
+
   // This round's own numbers become "previous" for whatever round runs
   // after this one — captured from the state we just read, before it's
   // overwritten below, so the very first round ever run naturally has
@@ -130,7 +139,7 @@ export async function runAiInsightAnalysis(orgId: string): Promise<AnalyzeOutcom
       : null;
 
   const nextState: AiInsightState = {
-    generatedAt: new Date().toISOString(),
+    generatedAt: now,
     result,
     detail: aggregate.flagged.map((g) => ({ domain: g.domain, label: g.label, count: g.count, people: g.people })),
     people,
@@ -138,6 +147,7 @@ export async function runAiInsightAnalysis(orgId: string): Promise<AnalyzeOutcom
     combinedSuccessRate: aggregate.combinedSuccessRate,
     companyTrend,
     previous,
+    ledger,
     usage: {
       month: currentMonth(),
       count: status.usage.count + 1,

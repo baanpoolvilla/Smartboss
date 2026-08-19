@@ -16,8 +16,12 @@ import type {
   AiInsightPersonBreakdown,
   AiInsightDeptBreakdown,
   AiInsightTrend,
+  AiInsightLedgerRecord,
+  InsightMetricKey,
+  RecoStatus,
 } from "@/modules/report_task/lib/ai-insight/types";
 import type { PlanCode } from "@/modules/report_task/lib/plan";
+import type { ReactNode } from "react";
 
 interface StatusResponse {
   plan: PlanCode;
@@ -35,8 +39,86 @@ interface StatusResponse {
     combinedSuccessRate: number;
     companyTrend: AiInsightTrend | null;
     previous: { combinedSuccessRate: number; personTotals: Record<string, number> } | null;
+    ledger: AiInsightLedgerRecord[];
     usage: AiInsightUsageMonth;
   };
+}
+
+const METRIC_LABEL: Record<InsightMetricKey, string> = {
+  overdue_tasks: "งานเลยกำหนด",
+  pending_tasks: "งานยังไม่เสร็จ",
+  late_tasks: "งานเสร็จช้า",
+  missed_reports: "รายงานขาดส่ง",
+  pending_reports: "รายงานยังไม่ส่ง",
+  late_reports: "รายงานส่งช้า",
+  open_total: "ค้างรวม",
+  success_rate: "อัตราสำเร็จ",
+};
+
+const RECO_STATUS_META: Record<RecoStatus, { label: string; emoji: string; className: string }> = {
+  open: { label: "กำลังติดตาม", emoji: "➡️", className: "bg-[var(--bg-soft)] text-[var(--ink-soft)]" },
+  improved: { label: "ดีขึ้น", emoji: "📈", className: "bg-green-50 text-[var(--brand-green-dark)]" },
+  resolved: { label: "แก้สำเร็จ", emoji: "✅", className: "bg-green-50 text-[var(--brand-green-dark)]" },
+  regressed: { label: "แย่ลง", emoji: "⚠️", className: "bg-red-50 text-[var(--chart-red-dark)]" },
+};
+
+/** §13.5 of docs/ai-insight-v2-spec.md — shows the first `initialCount` items
+ * plus a "ดูเพิ่มอีก N รายการ ▾ / ย่อ ▴" toggle, so a long ledger doesn't
+ * dominate the card by default. */
+function CollapsibleList<T>({
+  items,
+  keyOf,
+  renderItem,
+  initialCount = 3,
+}: {
+  items: T[];
+  keyOf: (item: T) => string;
+  renderItem: (item: T) => ReactNode;
+  initialCount?: number;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? items : items.slice(0, initialCount);
+  const hiddenCount = items.length - visible.length;
+  return (
+    <div className="flex flex-col gap-1.5">
+      {visible.map((item) => (
+        <div key={keyOf(item)}>{renderItem(item)}</div>
+      ))}
+      {hiddenCount > 0 && (
+        <button type="button" onClick={() => setExpanded(true)} className="text-left text-[11px] font-semibold text-[var(--chart-violet)] hover:underline">
+          ดูเพิ่มอีก {hiddenCount} รายการ ▾
+        </button>
+      )}
+      {expanded && items.length > initialCount && (
+        <button type="button" onClick={() => setExpanded(false)} className="text-left text-[11px] font-semibold text-[var(--ink-faint)] hover:underline">
+          ย่อ ▴
+        </button>
+      )}
+    </div>
+  );
+}
+
+function LedgerRow({ r }: { r: AiInsightLedgerRecord }) {
+  const meta = RECO_STATUS_META[r.status];
+  const delta = r.latestValue - r.baseline;
+  return (
+    <div className="rounded-xl border border-[var(--line)] p-2.5">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className={cn("text-[10px] font-semibold rounded-full px-2 py-0.5 shrink-0", SEVERITY_CLASS[r.severity])}>{r.subjectName}</span>
+          <span className="truncate text-[11px] text-[var(--ink-faint)]">{METRIC_LABEL[r.metricKey]}</span>
+        </div>
+        <span className={cn("text-[10px] font-semibold rounded-full px-2 py-0.5 shrink-0", meta.className)}>
+          {meta.emoji} {meta.label}
+        </span>
+      </div>
+      <p className="mt-1 text-[12px] text-[var(--ink)]">{r.detail}</p>
+      <p className="mt-1 text-[11px] text-[var(--ink-faint)] tabular-nums">
+        {r.baseline} → {r.latestValue} ({delta > 0 ? "+" : ""}
+        {delta})
+      </p>
+    </div>
+  );
 }
 
 /** §13.1 of docs/ai-insight-v2-spec.md — "↑ ดีขึ้น X%" (green) / "↓ แย่ลง X%"
@@ -135,7 +217,7 @@ export function AiInsightCard() {
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showDetail, setShowDetail] = useState(false);
-  const [tab, setTab] = useState<"company" | "dept" | "person">("company");
+  const [tab, setTab] = useState<"company" | "dept" | "person" | "reco">("company");
   const autoTriedRef = useRef(false);
 
   const loadStatus = useCallback(async () => {
@@ -352,6 +434,7 @@ export function AiInsightCard() {
                 ["company", "ภาพรวมบริษัท", null],
                 ["dept", "รายแผนก", status.state.departments.length],
                 ["person", "รายคน", status.state.people.length],
+                ["reco", "ผลของคำแนะนำ", status.state.ledger.length],
               ] as const
             ).map(([key, label, count]) => (
               <button
@@ -465,10 +548,45 @@ export function AiInsightCard() {
             <p className="text-[10.5px] font-bold uppercase tracking-wide text-[var(--ink-faint)]">สรุปสิ่งที่ควรทำก่อนระดับบริษัท</p>
             {result.actions.map((a, i) => (
               <div key={i} className="flex items-start gap-2 rounded-lg border border-[var(--line)] px-2.5 py-2">
-                <span className={cn("text-[10px] font-semibold rounded-full px-2 py-0.5 shrink-0 mt-0.5", SEVERITY_CLASS[a.severity])}>{a.who}</span>
+                <span className={cn("text-[10px] font-semibold rounded-full px-2 py-0.5 shrink-0 mt-0.5", SEVERITY_CLASS[a.severity])}>
+                  {a.subjectName} · {METRIC_LABEL[a.metricKey]}
+                </span>
                 <span className="text-[12px] text-[var(--ink)] flex-1">{a.detail}</span>
               </div>
             ))}
+          </div>
+        )}
+
+        {result && tab === "reco" && (
+          <div className="flex flex-col gap-3">
+            {status.state.ledger.length === 0 ? (
+              <p className="text-[12px] text-[var(--ink-faint)] text-center py-6">
+                ยังไม่มีคำแนะนำที่ติดตามผล — จะเริ่มเก็บหลังวิเคราะห์รอบถัดไปที่ AI ให้คำแนะนำ
+              </p>
+            ) : (
+              <>
+                {status.state.ledger.filter((r) => r.status !== "resolved").length > 0 && (
+                  <div className="flex flex-col gap-1.5">
+                    <p className="text-[10.5px] font-bold uppercase tracking-wide text-[var(--ink-faint)]">กำลังติดตาม</p>
+                    <CollapsibleList
+                      items={status.state.ledger.filter((r) => r.status !== "resolved")}
+                      keyOf={(r) => r.id}
+                      renderItem={(r) => <LedgerRow r={r} />}
+                    />
+                  </div>
+                )}
+                {status.state.ledger.filter((r) => r.status === "resolved").length > 0 && (
+                  <div className="flex flex-col gap-1.5">
+                    <p className="text-[10.5px] font-bold uppercase tracking-wide text-[var(--ink-faint)]">แก้สำเร็จแล้ว</p>
+                    <CollapsibleList
+                      items={status.state.ledger.filter((r) => r.status === "resolved")}
+                      keyOf={(r) => r.id}
+                      renderItem={(r) => <LedgerRow r={r} />}
+                    />
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
 
