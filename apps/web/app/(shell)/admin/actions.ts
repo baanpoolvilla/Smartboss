@@ -17,7 +17,12 @@ import { organizationExists } from "@/modules/admin/data/orgs";
 import { PERFORMANCE_CATEGORIES } from "@/lib/performance";
 import { clampSecuritySetting, loadSecuritySettings } from "@/lib/security-settings";
 import { nextOrganizationCode } from "@/lib/document-code";
-import { provisionWorkforceTenant } from "@/lib/workforce-provisioning";
+import {
+  provisionWorkforceTenant,
+  setWorkforcePrincipalStatus,
+  syncWorkforceCompanyName,
+  syncWorkforcePrincipal,
+} from "@/lib/workforce-provisioning";
 import { ENABLED_MODULES, ORG_ROLES, ROLE_GRANTS } from "@smartboss/database/defaults";
 
 /** ทุก action ต้องผ่านด่านนี้ก่อน — คืน session ที่มี orgId แน่นอน */
@@ -99,6 +104,63 @@ function createUserSchema(minLength: number) {
   });
 }
 
+/* ═════════════════ เชื่อมผู้ใช้ไปยังโมดูลบุคคล (workforce) ═════════════════ */
+
+/**
+ * ดันข้อมูลผู้ใช้หนึ่งคนไปให้ workforce รู้จัก
+ *
+ * ต้องเรียกทุกครั้งที่ตัวตนหรือสิทธิ์เปลี่ยน (สร้าง เปลี่ยนบทบาท ย้ายบริษัท
+ * เปิด/ปิดบัญชี) เพราะ workforce เก็บสิทธิ์ของตัวเองแยกและ **ไม่ auto-provision**
+ * ผู้ใช้ที่ยังไม่ถูก sync จะโดนปฏิเสธทุกหน้าในโมดูลบุคคล
+ *
+ * ตั้งใจไม่ให้ล้มทั้ง action: การเพิ่มผู้ใช้ต้องสำเร็จแม้โมดูลบุคคลยังไม่ถูกติดตั้ง
+ * (ยังไม่ได้รัน wf:migrate) — ที่หน้ารายชื่อบริษัทมีปุ่มซ่อมให้กดตามทีหลัง
+ */
+async function syncUserToWorkforce(userId: string, actorId: string): Promise<void> {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        orgId: true,
+        name: true,
+        email: true,
+        isActive: true,
+        roles: {
+          select: {
+            role: {
+              select: {
+                code: true,
+                permissions: { select: { permission: { select: { code: true } } } },
+              },
+            },
+          },
+        },
+      },
+    });
+    // ผู้ใช้ระดับแพลตฟอร์ม (orgId = null) ไม่มี tenant ให้ผูก — ข้ามไปโดยตั้งใจ
+    if (!user?.orgId) return;
+
+    await syncWorkforcePrincipal({
+      orgId: user.orgId,
+      userId: user.id,
+      displayName: user.name,
+      email: user.email,
+      roleCodes: user.roles.map((r) => r.role.code),
+      permissionCodes: user.roles.flatMap((r) =>
+        r.role.permissions.map((p) => p.permission.code)
+      ),
+      actorId,
+    });
+
+    // ตั้งสถานะทุกครั้ง ไม่ใช่เฉพาะตอนปิด — ไม่งั้นการเปิดบัญชีคืนจะไม่คืนสิทธิ์
+    // ฝั่งโมดูลบุคคล คนนั้นจะยังเข้าไม่ได้ทั้งที่หน้าจอบอกว่าเปิดใช้งานแล้ว
+    await setWorkforcePrincipalStatus(user.orgId, user.id, user.isActive, actorId);
+  } catch (err) {
+    console.error("[workforce] sync principal failed:", userId, err);
+  }
+}
+
 export async function createUserAction(formData: FormData) {
   const session = await guard(ADMIN_PERMS.userManage);
   const security = await loadSecuritySettings(session.orgId);
@@ -131,6 +193,8 @@ export async function createUserAction(formData: FormData) {
     },
   });
 
+  await syncUserToWorkforce(user.id, session.userId);
+
   await audit({
     userId: session.userId,
     action: "USER_CREATED",
@@ -153,6 +217,8 @@ export async function updateUserAction(formData: FormData) {
     where: { id: userId },
     data: { name, lineUserId: lineUserId || null },
   });
+
+  await syncUserToWorkforce(userId, session.userId);
 
   await audit({ userId: session.userId, action: "USER_UPDATED", targetId: userId });
   revalidatePath("/admin/users");
@@ -197,6 +263,17 @@ export async function moveUserOrgAction(formData: FormData) {
     }),
   ]);
 
+  // ตัดสิทธิ์ที่บริษัทเดิมก่อน แล้วค่อยเปิดที่บริษัทใหม่ — ถ้าไม่ปิดของเดิม
+  // principal ที่บริษัทเก่ายังใช้งานได้ต่อทั้งที่ผู้ใช้ย้ายออกไปแล้ว
+  if (target.orgId) {
+    try {
+      await setWorkforcePrincipalStatus(target.orgId, userId, false, session.userId);
+    } catch (err) {
+      console.error("[workforce] disable principal in old org failed:", userId, err);
+    }
+  }
+  await syncUserToWorkforce(userId, session.userId);
+
   await audit({
     userId: session.userId,
     action: "USER_ORG_MOVED",
@@ -235,6 +312,10 @@ export async function setUserRolesAction(formData: FormData) {
     }),
   ]);
 
+  // บทบาทฝั่ง workforce มาจากสิทธิ์ชุดนี้ — ไม่ sync ต่อ การถอนสิทธิ์จะมีผลแค่
+  // ใน Smartboss ส่วนโมดูลบุคคลยังให้สิทธิ์เดิมจนกว่าจะมีคนไปรัน wf:sync เอง
+  await syncUserToWorkforce(userId, session.userId);
+
   await audit({
     userId: session.userId,
     action: "USER_ROLES_CHANGED",
@@ -267,6 +348,10 @@ export async function setUserActiveAction(formData: FormData) {
       data: { revokedAt: new Date() },
     });
   }
+
+  // ตัด refresh token อย่างเดียวไม่พอ — access token ที่ยังไม่หมดอายุยิง
+  // workforce API ได้ตรง ๆ จึงต้องปิดที่ principal ด้วย
+  await syncUserToWorkforce(userId, session.userId);
 
   await audit({
     userId: session.userId,
@@ -321,6 +406,21 @@ export async function deleteUserAction(formData: FormData) {
     throw new Error(
       `คนนี้เป็นหัวหน้าแผนกอยู่ ${headOfCount} แผนก — ลบแล้วแผนกนั้นจะไม่มีหัวหน้า กดยืนยันอีกครั้งเพื่อลบต่อ`
     );
+  }
+
+  // ปิด principal ก่อนลบ — ลบแถวใน core.users แล้วจะหา orgId ไม่เจออีก และ
+  // principal ที่ค้างอยู่จะยังรับ token เดิมได้จนหมดอายุ
+  // (ไม่ลบ principal ทิ้ง เพราะ audit/ผลลงเวลาเก่ายังอ้างถึงอยู่)
+  const doomed = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { orgId: true },
+  });
+  if (doomed?.orgId) {
+    try {
+      await setWorkforcePrincipalStatus(doomed.orgId, userId, false, session.userId);
+    } catch (err) {
+      console.error("[workforce] disable principal before delete failed:", userId, err);
+    }
   }
 
   await prisma.user.delete({ where: { id: userId } });
@@ -631,6 +731,14 @@ export async function updateOrganizationAction(formData: FormData) {
     where: { id: session.orgId },
     data: { name },
   });
+
+  // 1 บริษัท = 1 นิติบุคคลฝั่ง workforce ชื่อจึงต้องเป็นค่าเดียวกันเสมอ
+  try {
+    await syncWorkforceCompanyName(session.orgId, name, session.userId);
+  } catch (err) {
+    console.error("[workforce] sync company name failed:", session.orgId, err);
+  }
+
   await audit({
     userId: session.userId,
     action: "ORG_UPDATED",
@@ -914,7 +1022,7 @@ export async function createOrganizationAction(formData: FormData) {
 
     const adminRoleId = roleIdByCode.get("ADMIN");
     if (!adminRoleId) throw new Error("ไม่พบบทบาท ADMIN ที่เพิ่งสร้าง");
-    await tx.user.create({
+    const admin = await tx.user.create({
       data: {
         email: parsed.adminEmail,
         name: parsed.adminName,
@@ -924,13 +1032,22 @@ export async function createOrganizationAction(formData: FormData) {
       },
     });
 
-    return created;
+    return { ...created, adminUserId: admin.id };
   });
 
   // นอก transaction — ต้องใช้ SET LOCAL ROLE ซึ่งอยู่ร่วมทรานแซกชันข้างบนไม่ได้
   let workforceNote: string | null = null;
   try {
-    await provisionWorkforceTenant(org.id, org.slug, org.name, session.userId);
+    // ส่ง org.code (SM0001) เป็นรหัสนิติบุคคล ไม่ใช่ slug — เป็นรหัสที่ลูกค้าเห็น
+    await provisionWorkforceTenant(
+      org.id,
+      org.slug,
+      org.name,
+      session.userId,
+      org.code
+    );
+    // ผู้ดูแลคนแรกต้องเข้าโมดูลบุคคลได้ทันทีวันแรก ไม่ต้องรอใครไปรัน wf:sync
+    await syncUserToWorkforce(org.adminUserId, session.userId);
   } catch (err) {
     // ไม่ล้มทั้งการสร้างบริษัท — บริษัทใช้โมดูลอื่นได้แล้ว เหลือแต่โมดูลบุคคล
     console.error("[createOrganization] provision workforce tenant failed:", err);
@@ -970,14 +1087,25 @@ export async function repairWorkforceTenantAction(formData: FormData) {
     org.id,
     org.slug,
     org.name,
-    session.userId
+    session.userId,
+    org.code
   );
+
+  // ซ่อมให้ครบชุด: บริษัทที่เปิดไว้ก่อนหน้านี้มีแต่ tenant ผู้ใช้ทุกคนจึงยังไม่มี
+  // principal และเข้าโมดูลบุคคลไม่ได้ — ปุ่มนี้ต้องแก้ให้จบในครั้งเดียว
+  const members = await prisma.user.findMany({
+    where: { orgId: org.id },
+    select: { id: true },
+  });
+  for (const member of members) {
+    await syncUserToWorkforce(member.id, session.userId);
+  }
 
   await audit({
     userId: session.userId,
     action: "ORG_WORKFORCE_PROVISIONED",
     targetId: org.id,
-    detail: { ...result },
+    detail: { ...result, principalsSynced: members.length },
   });
   revalidatePath("/admin/organizations");
 }

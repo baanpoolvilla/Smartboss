@@ -86,39 +86,14 @@ export async function payrollTransitionAction(formData: FormData) {
   revalidatePath("/hr/payroll");
 }
 
-/* ═══════════════════ บริษัท (ตั้งต้นระบบ) ═══════════════════ */
-
-/**
- * สร้าง company ตัวแรกของ tenant
+/*
+ * createCompanyAction ถูกถอดออกแล้ว — นิติบุคคลถูกสร้างให้อัตโนมัติตอนเปิดบริษัท
+ * ใน Smartboss (apps/web/lib/workforce-provisioning.ts) เพราะเป็นข้อมูลชุดเดียวกับ
+ * core.organizations การให้ผู้ใช้กรอกซ้ำทำให้สองที่ไม่ตรงกันได้โดยไม่มีใครรู้
  *
- * workforce แยก tenant (บริษัทลูกค้าใน Smartboss) ออกจาก company (นิติบุคคลที่จ้างงาน)
- * เพราะลูกค้าหนึ่งรายอาจมีหลายนิติบุคคล — ทุกอย่างที่เหลือ (พนักงาน/กะ/งวด) ต้องมี company ก่อน
+ * นิติบุคคลตัวที่ 2 ขึ้นไป (ลูกค้าที่มีหลายบริษัทจดทะเบียน) ยังสร้างได้ผ่าน
+ * workforce API ตามเดิม — ยังไม่มีหน้าจอให้ เพราะยังไม่มีลูกค้าที่ใช้
  */
-export async function createCompanyAction(formData: FormData) {
-  await guard(HR_PERMS.settingManage);
-  const code = String(formData.get("code") ?? "").trim().toUpperCase();
-  const legalName = String(formData.get("legal_name") ?? "").trim();
-  const displayName = String(formData.get("display_name") ?? "").trim();
-
-  if (!code) throw new Error("กรุณากรอกรหัสบริษัท");
-  if (!legalName || !displayName) throw new Error("กรุณากรอกชื่อบริษัท");
-
-  try {
-    await wfFetch("/companies", {
-      method: "POST",
-      body: {
-        code,
-        legal_name: legalName,
-        display_name: displayName,
-        time_zone: "Asia/Bangkok",
-        currency: "THB",
-      },
-    });
-  } catch (error) {
-    throw new Error(toMessage(error));
-  }
-  revalidatePath("/hr", "layout");
-}
 
 /* ═══════════════════ พนักงาน ═══════════════════ */
 

@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestDatabase, type TestDatabase } from '../testing/harness';
 import { withTenant } from '../client';
-import { principalRoleAssignments, principals, roles, tenants } from '../schema';
+import { companies, principalRoleAssignments, principals, roles, tenants } from '../schema';
 import { mapSmartbossRoles, provisionPrincipal, provisionTenant } from './smartboss';
 
 describe('mapSmartbossRoles', () => {
@@ -88,12 +88,53 @@ describe('provisioning จาก Smartboss', () => {
 
     expect(result.created).toBe(true);
     expect(result.roleIds.size).toBeGreaterThan(0);
+    expect(result.companyCreated).toBe(true);
+    expect(result.companyId).toMatch(/^[0-9a-f-]{36}$/);
 
     const rows = await withTenant(database.db, orgId, (tx) =>
       tx.select({ id: tenants.id, name: tenants.name }).from(tenants).where(eq(tenants.id, orgId)),
     );
     expect(rows).toHaveLength(1);
     expect(rows[0]?.name).toBe('บริษัทตัวอย่าง');
+  });
+
+  it('สร้างนิติบุคคลตั้งต้นให้ด้วย — ผู้ใช้ต้องไม่ต้องมากรอกชื่อบริษัทซ้ำ', async () => {
+    // ทุกอย่างในโมดูลบุคคล (พนักงาน กะ งวด เครื่องสแกน) ต้องมี company_id
+    // ถ้า provision แล้วยังไม่มี company หน้า /hr จะเด้งฟอร์มให้กรอกชื่อบริษัท
+    // ซ้ำกับที่กรอกไปแล้วตอนเปิดบริษัทใน Smartboss
+    const rows = await withTenant(database.db, orgId, (tx) =>
+      tx
+        .select({
+          id: companies.id,
+          code: companies.code,
+          legalName: companies.legalName,
+          displayName: companies.displayName,
+        })
+        .from(companies)
+        .where(eq(companies.tenantId, orgId)),
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.legalName).toBe('บริษัทตัวอย่าง');
+    expect(rows[0]?.displayName).toBe('บริษัทตัวอย่าง');
+    // ไม่ได้ส่ง companyCode มา จึงถอยไปใช้ code ของ tenant
+    expect(rows[0]?.code).toBe('demo-org');
+  });
+
+  it('companyCode ที่ส่งมาชนะ code ของ tenant', async () => {
+    const otherOrgId = randomUUID();
+    const result = await provisionTenant(database.db, {
+      tenantId: otherOrgId,
+      code: 'acme',
+      companyCode: 'SM0002',
+      name: 'บริษัททดสอบ ACME',
+    });
+
+    expect(result.companyCreated).toBe(true);
+    const rows = await withTenant(database.db, otherOrgId, (tx) =>
+      tx.select({ code: companies.code }).from(companies).where(eq(companies.id, result.companyId)),
+    );
+    expect(rows[0]?.code).toBe('SM0002');
   });
 
   it('เรียกซ้ำไม่สร้างซ้ำ', async () => {
@@ -103,6 +144,12 @@ describe('provisioning จาก Smartboss', () => {
       name: 'บริษัทตัวอย่าง',
     });
     expect(again.created).toBe(false);
+    expect(again.companyCreated).toBe(false);
+
+    const companyRows = await withTenant(database.db, orgId, (tx) =>
+      tx.select({ id: companies.id }).from(companies).where(eq(companies.tenantId, orgId)),
+    );
+    expect(companyRows).toHaveLength(1);
 
     const roleRows = await withTenant(database.db, orgId, (tx) =>
       tx.select({ id: roles.id }).from(roles),

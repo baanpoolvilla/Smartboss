@@ -34,11 +34,12 @@ async function main(): Promise<void> {
   });
 
   try {
-    const orgs = await reader.query<{ id: string; slug: string; name: string }>(
-      `SELECT id, slug, name FROM core.organizations WHERE is_active = true ORDER BY created_at`,
+    const orgs = await reader.query<{ id: string; slug: string; code: string; name: string }>(
+      `SELECT id, slug, code, name FROM core.organizations WHERE is_active = true ORDER BY created_at`,
     );
 
     let tenantsCreated = 0;
+    let companiesCreated = 0;
     let principalsCreated = 0;
     let rolesGranted = 0;
 
@@ -82,11 +83,14 @@ async function main(): Promise<void> {
       const tenant = await provisionTenant(handle.db, {
         tenantId: org.id,
         code: org.slug,
+        companyCode: org.code,
         name: org.name,
       });
       if (tenant.created) tenantsCreated += 1;
+      if (tenant.companyCreated) companiesCreated += 1;
       console.log(
-        `tenant ${org.slug} ${tenant.created ? 'created' : 'exists'} — role ${tenant.roleIds.size}`,
+        `tenant ${org.slug} ${tenant.created ? 'created' : 'exists'} — role ${tenant.roleIds.size}` +
+          ` · company ${org.code} ${tenant.companyCreated ? 'created' : 'exists'}`,
       );
 
       for (const user of users.rows) {
@@ -111,7 +115,8 @@ async function main(): Promise<void> {
 
     if (!dryRun) {
       console.log(
-        `done — tenant ใหม่ ${tenantsCreated}, principal ใหม่ ${principalsCreated}, role ที่เพิ่ม ${rolesGranted}`,
+        `done — tenant ใหม่ ${tenantsCreated}, นิติบุคคลใหม่ ${companiesCreated},` +
+          ` principal ใหม่ ${principalsCreated}, role ที่เพิ่ม ${rolesGranted}`,
       );
     }
   } finally {

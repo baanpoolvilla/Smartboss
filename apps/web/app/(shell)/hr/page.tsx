@@ -3,7 +3,6 @@ import { ChevronRight } from "lucide-react";
 import { Card } from "@smartboss/ui/components/card";
 import { HrPage } from "@/modules/hr/components/hr-page";
 import { HR_PERMS } from "@/modules/hr/permissions";
-import { Button } from "@smartboss/ui/components/button";
 import {
   wfTry,
   type AttendanceSummary,
@@ -15,63 +14,12 @@ import {
 import {
   DataTable,
   EmptyState,
-  Field,
-  SectionCard,
+  NotProvisioned,
   StatCard,
   StatusBadge,
   Td,
-  inputClass,
 } from "@/modules/hr/components/ui";
-import { createCompanyAction } from "./actions";
 import { formatMinutes, runTypeLabel } from "@/modules/hr/lib/labels";
-
-/** ยังไม่มี company ในระบบ — พาผู้ใช้ตั้งต้นให้จบในหน้าเดียว */
-function SetupCompany() {
-  return (
-    <SectionCard
-      title="ตั้งต้นระบบบุคคล"
-      description="ยังไม่มีนิติบุคคลในระบบ — สร้างก่อนถึงจะเพิ่มพนักงาน กะทำงาน และงวดจ่ายได้"
-    >
-      <form
-        action={createCompanyAction}
-        className="grid grid-cols-1 gap-3 sm:grid-cols-3"
-      >
-        <Field label="รหัสบริษัท *" hint="ตัวพิมพ์ใหญ่">
-          <input
-            name="code"
-            required
-            maxLength={32}
-            placeholder="MAIN"
-            className={`${inputClass} font-mono uppercase`}
-          />
-        </Field>
-        <Field label="ชื่อจดทะเบียน *">
-          <input
-            name="legal_name"
-            required
-            maxLength={200}
-            placeholder="บริษัท ตัวอย่าง จำกัด"
-            className={inputClass}
-          />
-        </Field>
-        <Field label="ชื่อที่ใช้แสดง *">
-          <input
-            name="display_name"
-            required
-            maxLength={120}
-            placeholder="ตัวอย่าง"
-            className={inputClass}
-          />
-        </Field>
-        <div className="sm:col-span-3">
-          <Button type="submit" className="sm:w-40">
-            สร้างบริษัท
-          </Button>
-        </div>
-      </form>
-    </SectionCard>
-  );
-}
 
 /** ช่วงวันย้อนหลัง N วันในรูปแบบ ISO date */
 function rangeForDays(days: number): { from: string; to: string } {
@@ -103,9 +51,9 @@ export default async function HrOverviewPage({
         wfTry<Paged<Company>>("/companies"),
       ]);
 
-      // ยังไม่มี company = ระบบยังตั้งต้นไม่เสร็จ ทำอะไรต่อไม่ได้เลย
+      // ยังไม่มี company = บริษัทนี้ยังถูก provision ไม่ครบ ทำอะไรต่อไม่ได้เลย
       if (companies !== null && companies.items.length === 0) {
-        return <SetupCompany />;
+        return <NotProvisioned what="ดูภาพรวมระบบบุคคล" />;
       }
 
       const active = (employments?.items ?? []).filter((e) => e.status === "ACTIVE");
