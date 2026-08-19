@@ -25,7 +25,15 @@ function currentMonth(): string {
 }
 
 function emptyState(): AiInsightState {
-  return { generatedAt: null, result: null, detail: [], usage: { month: currentMonth(), count: 0, inputTokens: 0, outputTokens: 0, estCostUsd: 0 } };
+  return {
+    generatedAt: null,
+    result: null,
+    detail: [],
+    people: [],
+    combinedSuccessRate: 0,
+    previous: null,
+    usage: { month: currentMonth(), count: 0, inputTokens: 0, outputTokens: 0, estCostUsd: 0 },
+  };
 }
 
 export interface AiInsightStatus {
@@ -48,9 +56,19 @@ export async function getAiInsightStatus(orgId: string): Promise<AiInsightStatus
     readStore<AiInsightState>(orgId, RESULT_KEY),
   ]);
   const enabled = settingsRow.data?.enabled ?? true; // default on for a Pro+ org that's never touched the switch
-  // `?? []` covers a state saved before `detail` existed (older cached
-  // result) — falls back gracefully instead of the card crashing on it.
-  let state = resultRow.data ? { ...resultRow.data, detail: resultRow.data.detail ?? [] } : emptyState();
+  // `?? []`/`?? 0`/`?? null` cover a state saved before these fields
+  // existed (older cached result) — falls back gracefully instead of the
+  // card crashing on it.
+  let state = resultRow.data
+    ? {
+        ...resultRow.data,
+        detail: resultRow.data.detail ?? [],
+        people: resultRow.data.people ?? [],
+        combinedSuccessRate: resultRow.data.combinedSuccessRate ?? 0,
+        previous: resultRow.data.previous ?? null,
+        result: resultRow.data.result ? { ...resultRow.data.result, personNotes: resultRow.data.result.personNotes ?? [] } : null,
+      }
+    : emptyState();
   // Usage resets the moment we notice the calendar month rolled over — no
   // cron needed, this is checked on every status read.
   if (state.usage.month !== currentMonth()) state = { ...state, usage: emptyState().usage };
@@ -75,10 +93,25 @@ export async function runAiInsightAnalysis(orgId: string): Promise<AnalyzeOutcom
   const aggregate = await buildAiInsightAggregate(orgId);
   const { result, inputTokens, outputTokens, estCostUsd } = await callOpenAiInsight(aggregate);
 
+  // This round's own numbers become "previous" for whatever round runs
+  // after this one — captured from the state we just read, before it's
+  // overwritten below, so the very first round ever run naturally has
+  // `previous: null` (nothing to compare against yet).
+  const previous =
+    status.state.generatedAt != null
+      ? {
+          combinedSuccessRate: status.state.combinedSuccessRate,
+          personTotals: Object.fromEntries(status.state.people.map((p) => [p.name, p.total])),
+        }
+      : null;
+
   const nextState: AiInsightState = {
     generatedAt: new Date().toISOString(),
     result,
     detail: aggregate.flagged.map((g) => ({ domain: g.domain, label: g.label, count: g.count, people: g.people })),
+    people: aggregate.people,
+    combinedSuccessRate: aggregate.combinedSuccessRate,
+    previous,
     usage: {
       month: currentMonth(),
       count: status.usage.count + 1,

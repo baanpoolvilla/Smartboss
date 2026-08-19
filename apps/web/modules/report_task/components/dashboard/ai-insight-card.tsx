@@ -7,8 +7,13 @@ import { Button } from "@/modules/report_task/components/ui/button";
 import { DASHBOARD_CARD } from "@/modules/report_task/components/dashboard/dashboard-card-style";
 import { useAiInsightSettingsStore } from "@/modules/report_task/store/ai-insight-settings-store";
 import { cn } from "@/modules/report_task/lib/utils";
-import { Sparkles, Lock, Loader2, AlertOctagon, Clock, TrendingUp, ChevronDown } from "lucide-react";
-import type { AiInsightResult, AiInsightUsageMonth, AiInsightDetailGroup } from "@/modules/report_task/lib/ai-insight/types";
+import { Sparkles, Lock, Loader2, AlertOctagon, Clock, TrendingUp, ChevronDown, ArrowUp, ArrowDown } from "lucide-react";
+import type {
+  AiInsightResult,
+  AiInsightUsageMonth,
+  AiInsightDetailGroup,
+  AiInsightPersonBreakdown,
+} from "@/modules/report_task/lib/ai-insight/types";
 import type { PlanCode } from "@/modules/report_task/lib/plan";
 
 interface StatusResponse {
@@ -18,7 +23,15 @@ interface StatusResponse {
   monthlyLimit: number;
   usage: AiInsightUsageMonth;
   quotaRemaining: number;
-  state: { generatedAt: string | null; result: AiInsightResult | null; detail: AiInsightDetailGroup[]; usage: AiInsightUsageMonth };
+  state: {
+    generatedAt: string | null;
+    result: AiInsightResult | null;
+    detail: AiInsightDetailGroup[];
+    people: AiInsightPersonBreakdown[];
+    combinedSuccessRate: number;
+    previous: { combinedSuccessRate: number; personTotals: Record<string, number> } | null;
+    usage: AiInsightUsageMonth;
+  };
 }
 
 const TONE_CLASS: Record<"red" | "amber" | "green", string> = {
@@ -236,7 +249,28 @@ export function AiInsightCard() {
                 {analyzing ? "กำลังวิเคราะห์ข้อมูลทั้งหมด..." : "ยังไม่เคยวิเคราะห์ — กด \"วิเคราะห์ตอนนี้\" เพื่อเริ่ม"}
               </p>
             )}
-            {status.state.generatedAt && <p className="text-[10.5px] text-[var(--ink-faint)] mt-1">อัปเดตล่าสุด {formatGeneratedAt(status.state.generatedAt)}</p>}
+            {status.state.generatedAt && (
+              <p className="text-[10.5px] text-[var(--ink-faint)] mt-1 flex items-center gap-1.5 flex-wrap">
+                อัปเดตล่าสุด {formatGeneratedAt(status.state.generatedAt)}
+                {status.state.previous && (
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-0.5 font-semibold",
+                      status.state.combinedSuccessRate >= status.state.previous.combinedSuccessRate
+                        ? "text-[var(--brand-green-dark)]"
+                        : "text-[var(--chart-red-dark)]"
+                    )}
+                  >
+                    {status.state.combinedSuccessRate >= status.state.previous.combinedSuccessRate ? (
+                      <ArrowUp className="h-2.5 w-2.5" />
+                    ) : (
+                      <ArrowDown className="h-2.5 w-2.5" />
+                    )}
+                    {Math.abs(status.state.combinedSuccessRate - status.state.previous.combinedSuccessRate)}% จากรอบก่อน
+                  </span>
+                )}
+              </p>
+            )}
           </div>
           {headerSwitch}
         </div>
@@ -262,8 +296,62 @@ export function AiInsightCard() {
           </div>
         )}
 
+        {result && status.state.people.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <p className="text-[10.5px] font-bold uppercase tracking-wide text-[var(--ink-faint)]">ลงลึกรายคน — ใครค้างอะไร ควรแก้อะไรก่อน</p>
+            {status.state.people.map((p) => {
+              const note = result.personNotes.find((n) => n.name === p.name);
+              const prevTotal = status.state.previous?.personTotals[p.name];
+              const delta = prevTotal != null ? p.total - prevTotal : null;
+              return (
+                <div key={p.name} className="rounded-xl border border-[var(--line)] p-2.5">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="text-[12.5px] font-semibold text-[var(--ink)]">{p.name}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[12px] font-bold tabular-nums text-[var(--ink)]">{p.total} รายการ</span>
+                      {delta != null && delta !== 0 && (
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-0.5 text-[10px] font-semibold",
+                            delta > 0 ? "text-[var(--chart-red-dark)]" : "text-[var(--brand-green-dark)]"
+                          )}
+                        >
+                          {delta > 0 ? <ArrowUp className="h-2.5 w-2.5" /> : <ArrowDown className="h-2.5 w-2.5" />}
+                          {Math.abs(delta)} จากรอบก่อน
+                        </span>
+                      )}
+                      {prevTotal == null && <span className="text-[10px] text-[var(--ink-faint)]">รอบแรก</span>}
+                    </div>
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {p.items.map((it, k) => (
+                      <span
+                        key={k}
+                        className={cn(
+                          "text-[10px] font-medium rounded-full px-2 py-0.5",
+                          it.domain === "task"
+                            ? "bg-[color-mix(in_srgb,var(--chart-blue)_10%,white)] text-[var(--chart-blue)]"
+                            : "bg-[color-mix(in_srgb,var(--chart-violet)_10%,white)] text-[var(--chart-violet)]"
+                        )}
+                      >
+                        {it.label} {it.count}
+                      </span>
+                    ))}
+                  </div>
+                  {note && (
+                    <p className="mt-1.5 text-[11.5px] text-[var(--ink)] flex items-start gap-1">
+                      <span className="text-[var(--chart-violet)] font-bold shrink-0">→</span> {note.priority}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {result && result.actions.length > 0 && (
           <div className="flex flex-col gap-1.5">
+            <p className="text-[10.5px] font-bold uppercase tracking-wide text-[var(--ink-faint)]">สรุปสิ่งที่ควรทำก่อนระดับบริษัท</p>
             {result.actions.map((a, i) => (
               <div key={i} className="flex items-start gap-2 rounded-lg border border-[var(--line)] px-2.5 py-2">
                 <span className={cn("text-[10px] font-semibold rounded-full px-2 py-0.5 shrink-0 mt-0.5", SEVERITY_CLASS[a.severity])}>{a.who}</span>

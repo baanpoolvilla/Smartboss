@@ -36,6 +36,12 @@ function buildPrompt(agg: AiInsightAggregate): string {
     const people = g.people.map((p) => `${p.name} (${p.count})`).join(", ") || "ไม่ระบุตัวบุคคล";
     lines.push(`- [${g.domain === "task" ? "งาน" : "รายงาน"}] ${g.label}: รวม ${g.count} รายการ — ${people}`);
   }
+  lines.push("");
+  lines.push("รายคน — ทุกอย่างที่ค้างของแต่ละคนรวมกันเป็นแถวเดียว (ใช้เขียน personNotes):");
+  for (const p of agg.people) {
+    const items = p.items.map((it) => `${it.label} ${it.count}`).join(", ");
+    lines.push(`- ${p.name}: รวม ${p.total} รายการ — ${items}`);
+  }
   return lines.join("\n");
 }
 
@@ -47,14 +53,21 @@ const SYSTEM_PROMPT = `คุณเป็นผู้ช่วยวิเคร
 - ต้องมีประโยค "ถ้าแก้ [ปัญหาอันดับ 1] ได้ อัตราสำเร็จจะขึ้นเป็นประมาณ [ตัวเลขที่คำนวณมาให้]%" เสมอเมื่อมีตัวเลขนี้ในข้อมูล — นี่คือใจความสำคัญที่สุด ให้ความรู้สึกว่า "แก้จุดเดียวได้ผลเยอะ" ไม่ใช่แค่รายงานปัญหา
 - ห้ามยาวเกิน 3 ประโยค ห่อตัวเลขสำคัญด้วย **
 
+กฎการเขียน personNotes (สำคัญเท่ากัน — นี่คือส่วนที่ต้องเจาะรายคน):
+- เขียน 1 บรรทัดต่อ 1 คนที่อยู่ในรายชื่อ "รายคน" ด้านล่าง (ห้ามข้าม ห้ามเพิ่มคนที่ไม่มีในรายชื่อ)
+- ต้องบอกว่าสำหรับคนนี้ควรแก้ "อะไรก่อน" (ถ้ามีหลายรายการ ให้จัดลำดับเอง ไม่ใช่แค่ท่องจำนวนรวม) พร้อมเหตุผลสั้นๆ ว่าทำไมอันนั้นก่อน (เช่น กระทบคะแนนมากสุด/ค้างนานสุด/เป็นสาเหตุหลักของปัญหาบริษัท)
+- ห้ามยาวเกิน 1 ประโยคสั้นๆ ต่อคน
+- **ห้ามเขียนประโยคซ้ำกันแม้แต่ตัวเดียวระหว่าง 2 คนขึ้นไป แม้จะมีปัญหาประเภทเดียวกัน** — ต้องใส่ตัวเลข/รายละเอียดเฉพาะของคนนั้น (เช่น จำนวนที่ค้าง, สัดส่วนเทียบทั้งบริษัท) ให้ต่างกันจริง ไม่ใช่แค่เปลี่ยนชื่อแล้วก็อปประโยคเดิม — ถ้าตรวจแล้วมีคนไหนประโยคซ้ำกับคนอื่นแม้แค่บางส่วน ให้เขียนใหม่ก่อนตอบ
+
 ตอบกลับเป็น JSON เท่านั้น ตามรูปแบบนี้เป๊ะๆ:
 {
   "insightText": "ตามกฎด้านบน",
   "stats": [ { "label": "คนควรคุยด่วน", "count": 3, "tone": "red" }, ... อีก 3 ตัวรวมเป็น 4 ตัว โทน red/amber/green ตามความรุนแรง ],
-  "actions": [ { "who": "ชื่อคนหรือแผนก", "detail": "คำแนะนำสั้นๆ เจาะจงตามข้อมูลจริง บอกผลลัพธ์ที่จะได้ถ้าทำ ไม่ใช่แค่สั่งให้ทำ", "severity": "high|mid|good" }, ... สูงสุด 3 ข้อ เรียงตามความสำคัญ ]
+  "actions": [ { "who": "ชื่อคนหรือแผนก", "detail": "คำแนะนำสั้นๆ เจาะจงตามข้อมูลจริง บอกผลลัพธ์ที่จะได้ถ้าทำ ไม่ใช่แค่สั่งให้ทำ", "severity": "high|mid|good" }, ... สูงสุด 3 ข้อ เรียงตามความสำคัญ ],
+  "personNotes": [ { "name": "ชื่อคนตรงกับในรายชื่อ \"รายคน\" เป๊ะ", "priority": "ตามกฎด้านบน" }, ... ครบทุกคนในรายชื่อ \"รายคน\" ]
 }
 
-ห้ามแต่งชื่อคนหรือตัวเลขที่ไม่มีในข้อมูลที่ให้มา ถ้าข้อมูลไม่มีปัญหาเลย ให้ stats เป็นศูนย์ทั้งหมดและ actions ว่างเปล่า พร้อม insightText ที่ชื่นชมทีมงาน`;
+ห้ามแต่งชื่อคนหรือตัวเลขที่ไม่มีในข้อมูลที่ให้มา ถ้าข้อมูลไม่มีปัญหาเลย ให้ stats เป็นศูนย์ทั้งหมด, actions ว่างเปล่า, personNotes ว่างเปล่า พร้อม insightText ที่ชื่นชมทีมงาน`;
 
 export async function callOpenAiInsight(agg: AiInsightAggregate): Promise<{ result: AiInsightResult; inputTokens: number; outputTokens: number; estCostUsd: number }> {
   const prompt = buildPrompt(agg);
@@ -80,7 +93,12 @@ export async function callOpenAiInsight(agg: AiInsightAggregate): Promise<{ resu
   const estCostUsd = (inputTokens / 1_000_000) * PRICE_PER_1M_INPUT_USD + (outputTokens / 1_000_000) * PRICE_PER_1M_OUTPUT_USD;
 
   return {
-    result: { insightText: parsed.insightText, stats: parsed.stats as AiInsightResult["stats"], actions: parsed.actions as AiInsightResult["actions"] },
+    result: {
+      insightText: parsed.insightText,
+      stats: parsed.stats as AiInsightResult["stats"],
+      actions: parsed.actions as AiInsightResult["actions"],
+      personNotes: Array.isArray(parsed.personNotes) ? (parsed.personNotes as AiInsightResult["personNotes"]) : [],
+    },
     inputTokens,
     outputTokens,
     estCostUsd,

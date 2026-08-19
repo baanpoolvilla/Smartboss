@@ -112,6 +112,45 @@ function topPeopleOf(byId: Map<string, number>, nameOf: Map<string, string>): Fl
     .map(([id, count]) => ({ name: nameOf.get(id) ?? id, count }));
 }
 
+export interface PersonBreakdownItem {
+  domain: "task" | "report";
+  label: string;
+  count: number;
+}
+
+export interface PersonBreakdown {
+  name: string;
+  total: number;
+  items: PersonBreakdownItem[];
+}
+
+const MAX_PEOPLE_OVERALL = 6;
+
+/** Same `flagged` data, re-sliced *by person* instead of by bucket — one row
+ * per flagged person with everything wrong for them combined (not spread
+ * across separate bucket lists), so a prompt/UI can say "Katawut has 10
+ * things open, here's the breakdown" instead of "Katawut appears in bucket A
+ * with 7, and separately in bucket C with 3." Capped to the worst
+ * `MAX_PEOPLE_OVERALL` overall — same flat-cost reasoning as `MAX_PEOPLE_PER_GROUP`. */
+function personBreakdownOf(flagged: FlaggedGroup[]): PersonBreakdown[] {
+  const byName = new Map<string, PersonBreakdown>();
+  for (const g of flagged) {
+    for (const p of g.people) {
+      let row = byName.get(p.name);
+      if (!row) {
+        row = { name: p.name, total: 0, items: [] };
+        byName.set(p.name, row);
+      }
+      row.total += p.count;
+      row.items.push({ domain: g.domain, label: g.label, count: p.count });
+    }
+  }
+  return [...byName.values()]
+    .sort((a, b) => b.total - a.total)
+    .slice(0, MAX_PEOPLE_OVERALL)
+    .map((row) => ({ ...row, items: row.items.sort((a, b) => b.count - a.count) }));
+}
+
 export interface AiInsightAggregate {
   task: KpiBuckets;
   report: KpiBuckets;
@@ -132,6 +171,10 @@ export interface AiInsightAggregate {
    * ถึง Target 102%" makes — a concrete payoff for fixing the top issue,
    * not a restatement of totals already visible elsewhere on the dashboard. */
   projectedSuccessRate: number | null;
+  /** Every flagged person, re-sliced so each has ONE combined row (all their
+   * open items across every bucket) instead of scattered per-bucket
+   * mentions — what a per-person deep-dive is built from. */
+  people: PersonBreakdown[];
 }
 
 /**
@@ -224,5 +267,6 @@ export async function buildAiInsightAggregate(orgId: string): Promise<AiInsightA
     headcount: directory.length,
     combinedSuccessRate,
     projectedSuccessRate,
+    people: personBreakdownOf(flagged),
   };
 }
