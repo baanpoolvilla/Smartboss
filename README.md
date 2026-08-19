@@ -84,6 +84,7 @@ pnpm dev                        # http://localhost:3000
 | `COOKIE_SECURE` | `true` |
 | `CRON_SECRET` | สุ่ม — Vercel Cron จะแนบเป็น Bearer token ให้เอง ไม่ตั้ง = cron ตอบ 503 |
 | `S3_*` | bucket ของไฟล์แนบ (ดูหัวข้อถัดไป) |
+| `OPENAI_API_KEY` | คีย์เดียวของบริษัทเรา ใช้โดยฟีเจอร์ "AI Insight" ในแดชบอร์ด report_task (ดู CHANGELOG 2026-08-19) — ไม่ตั้ง = ปุ่มวิเคราะห์ error |
 
 > ถ้าเชื่อม Neon ผ่าน Vercel Marketplace ตัว `DATABASE_URL` + `DATABASE_URL_UNPOOLED` จะถูก inject ให้อัตโนมัติ
 
