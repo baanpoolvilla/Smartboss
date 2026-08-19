@@ -645,19 +645,44 @@ export function AiInsightCard() {
         )}
 
         {/* §16 analyzer output — deterministic, computed alongside the
-            aggregate (see aggregate.ts's analyzers/), never asked of the
-            model. "ทำไมถึงเกิด" before "ควรทำอะไรต่อ" (actions, below). */}
-        {result && tab === "company" && status.state.rootCauses.length > 0 && (
-          <div className="flex flex-col gap-1.5">
-            <p className="text-[10.5px] font-bold uppercase tracking-wide text-[var(--ink-faint)]">สาเหตุที่พบ</p>
-            {status.state.rootCauses.map((c, i) => (
-              <div key={i} className="flex items-start gap-2 rounded-lg border border-[var(--line)] px-2.5 py-2">
-                <span className={cn("text-[10px] font-semibold rounded-full px-2 py-0.5 shrink-0 mt-0.5", c.severity === "high" ? SEVERITY_CLASS.high : SEVERITY_CLASS.mid)}>
-                  {ROOT_CAUSE_LABEL[c.kind]}
-                </span>
-                <span className="text-[12px] text-[var(--ink)] flex-1">{c.headline}</span>
+            aggregate (see aggregate.ts's analyzers/). Merged with actions
+            below into one card ("ทำไมถึงเกิด" then "ควรทำอะไรต่อ") instead of
+            two separately-bordered sections — both were reading as the same
+            "here's what's wrong" content twice, just from two angles. */}
+        {result && tab === "company" && (status.state.rootCauses.length > 0 || result.actions.length > 0) && (
+          <div className="flex flex-col gap-2.5 rounded-xl border border-[var(--line)] p-2.5">
+            {status.state.rootCauses.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <p className="text-[10.5px] font-bold uppercase tracking-wide text-[var(--ink-faint)]">สาเหตุที่พบ</p>
+                {status.state.rootCauses.map((c, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <span className={cn("text-[10px] font-semibold rounded-full px-2 py-0.5 shrink-0 mt-0.5", c.severity === "high" ? SEVERITY_CLASS.high : SEVERITY_CLASS.mid)}>
+                      {ROOT_CAUSE_LABEL[c.kind]}
+                    </span>
+                    <span className="text-[12px] text-[var(--ink)] flex-1">{c.headline}</span>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
+
+            {status.state.rootCauses.length > 0 && result.actions.length > 0 && <div className="border-t border-[var(--line)]" />}
+
+            {result.actions.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <p className="text-[10.5px] font-bold uppercase tracking-wide text-[var(--ink-faint)]">ควรทำอะไรต่อ</p>
+                {result.actions.map((a, i) => (
+                  <div key={i}>
+                    <div className="flex items-start gap-2">
+                      <span className={cn("text-[10px] font-semibold rounded-full px-2 py-0.5 shrink-0 mt-0.5", SEVERITY_CLASS[a.severity])}>
+                        {a.subjectName} · {METRIC_LABEL[a.metricKey]}
+                      </span>
+                      <span className="text-[12px] text-[var(--ink)] flex-1">{a.detail}</span>
+                    </div>
+                    <ApproachToggle approach={a.approach} />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -693,23 +718,6 @@ export function AiInsightCard() {
                 </div>
               )}
             />
-          </div>
-        )}
-
-        {result && tab === "company" && result.actions.length > 0 && (
-          <div className="flex flex-col gap-1.5">
-            <p className="text-[10.5px] font-bold uppercase tracking-wide text-[var(--ink-faint)]">สรุปสิ่งที่ควรทำก่อนระดับบริษัท</p>
-            {result.actions.map((a, i) => (
-              <div key={i} className="rounded-lg border border-[var(--line)] px-2.5 py-2">
-                <div className="flex items-start gap-2">
-                  <span className={cn("text-[10px] font-semibold rounded-full px-2 py-0.5 shrink-0 mt-0.5", SEVERITY_CLASS[a.severity])}>
-                    {a.subjectName} · {METRIC_LABEL[a.metricKey]}
-                  </span>
-                  <span className="text-[12px] text-[var(--ink)] flex-1">{a.detail}</span>
-                </div>
-                <ApproachToggle approach={a.approach} />
-              </div>
-            ))}
           </div>
         )}
 
