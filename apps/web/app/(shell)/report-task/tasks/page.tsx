@@ -129,7 +129,7 @@ function TasksPageContent() {
   const personBoardId = searchParams.get("person");
 
   return (
-    <div className="flex flex-col gap-4 lg:h-full lg:min-h-0 lg:gap-6 lg:overflow-y-auto pb-6">
+    <div className="flex flex-col gap-4 lg:h-full lg:min-h-0 lg:gap-4 pb-6 lg:pb-4">
       {!personBoardId && (
         <StickyFilterBar
           actions={
@@ -163,12 +163,20 @@ function TasksPageContent() {
       {!personBoardId && loaded && view === "board" && <TaskBoardKpis tasks={kpiTasks} />}
       {!loaded ? (
         <BoardSkeleton />
+      ) : view === "board" ? (
+        // Board (and its person-drill-down) manage their own scroll — the
+        // filter bar + KPI tiles above stay put instead of scrolling away
+        // with the cards, and only the board's own area (columns
+        // horizontally, each column's card list vertically) scrolls. See
+        // kanban-board.tsx's own comment on why.
+        <div className="flex min-h-0 flex-1 flex-col lg:overflow-hidden">
+          <KanbanBoard groupBy={groupBy} />
+        </div>
       ) : (
-        <>
-          {view === "board" && <KanbanBoard groupBy={groupBy} />}
+        <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
           {view === "grid" && <TaskGridView />}
           {view === "workload" && <WorkloadView />}
-        </>
+        </div>
       )}
     </div>
   );

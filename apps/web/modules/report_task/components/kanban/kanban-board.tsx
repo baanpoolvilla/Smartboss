@@ -412,10 +412,10 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   }
 
   return (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col">
       {/* จัดกลุ่มตามอยู่ในแถบตัวกรองด้านบนแล้ว (TaskFilters) — เหลือแค่บริบท
           ที่ผูกกับตัวเลือกนั้นโดยตรง: หมายเหตุตอนจัดกลุ่มตามคน + ยอดรวม */}
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2 pb-2">
         {/* Grouping by person shows a shared task under each assignee, so the
             column counts add up to more than the task total — say so. */}
         {groupBy === "assignee" && sharedCount > 0 && (
@@ -454,7 +454,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
               scroll area — a column can run to dozens of cards tall, and
               centering across that would push the button far from the
               header, off in the middle of someone's card list. */}
-          <div className="relative">
+          <div className="relative min-h-0 flex-1">
             {canScrollLeft && (
               <>
                 <div className="pointer-events-none absolute top-0 left-0 z-10 h-24 w-10 bg-gradient-to-r from-[var(--bg)] to-transparent" />
@@ -479,6 +479,11 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
                 </button>
               </>
             )}
+            {/* h-full — each column stretches to fill this row's height
+                (KanbanColumn's own root has h-full min-h-0) and scrolls its
+                OWN card list internally instead of growing the row past the
+                viewport; overflow-x is the only scroll this row itself
+                needs (too many columns to fit side by side). */}
             <div
               ref={scrollerRef}
               onPointerDown={handlePanPointerDown}
@@ -486,7 +491,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
               onPointerUp={endPan}
               onPointerCancel={endPan}
               className={cn(
-                "flex gap-4 overflow-x-auto pb-4 -mx-1 px-1",
+                "flex h-full items-stretch gap-4 overflow-x-auto pb-1 -mx-1 px-1",
                 groupBy === "assignee" && (isPanning ? "cursor-grabbing select-none" : "cursor-grab")
               )}
             >
@@ -508,6 +513,6 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
       )}
 
       <TaskDetailSheet taskId={openTaskId} onOpenChange={(open) => !open && closeTaskSheet()} />
-    </>
+    </div>
   );
 }

@@ -78,9 +78,9 @@ export function KanbanColumn({
   return (
     <div
       id={`kanban-col-${column.id}`}
-      className="flex flex-col flex-1 basis-[300px] min-w-[280px] max-w-[400px] shrink-0 transition-shadow duration-500"
+      className="flex h-full min-h-0 flex-1 basis-[300px] min-w-[280px] max-w-[400px] shrink-0 flex-col transition-shadow duration-500"
     >
-      <div className="rounded-xl bg-white border border-[var(--line)] shadow-[0_1px_2px_rgba(16,24,40,0.04)] px-3.5 py-3 mb-3">
+      <div className="shrink-0 rounded-xl bg-white border border-[var(--line)] shadow-[0_1px_2px_rgba(16,24,40,0.04)] px-3.5 py-3 mb-3">
         <div className="flex items-center gap-2.5">
           {Icon && (
             <span
@@ -155,7 +155,11 @@ export function KanbanColumn({
           // §5 — every column shares the exact same surface; columns are
           // told apart only by the header's dot/icon/count color and this
           // bar's fill, never by a tinted drop-zone background.
-          "flex-1 flex flex-col gap-3 p-2.5 rounded-xl min-h-[200px] transition-colors duration-200 bg-[var(--bg-soft)]/50",
+          // min-h-0 is the classic flex-child-with-overflow fix — without it
+          // this column keeps growing to fit every card instead of scrolling
+          // its own list within the board's fixed row height (see
+          // kanban-board.tsx's scroller comment).
+          "flex-1 flex flex-col gap-3 p-2.5 rounded-xl min-h-[200px] lg:min-h-0 lg:overflow-y-auto transition-colors duration-200 bg-[var(--bg-soft)]/50",
           isOver && !column.derived && "bg-[var(--accent)] ring-2 ring-inset ring-[var(--brand-green)]/30"
         )}
       >
