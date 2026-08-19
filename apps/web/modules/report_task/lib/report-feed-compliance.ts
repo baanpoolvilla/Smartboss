@@ -62,8 +62,8 @@ function postsForDay(topic: ReportTopic, userId: string, day: string, posts: Rep
   return posts.filter((p) => p.topicId === topic.id && p.authorId === userId && localDateStr(new Date(p.createdAt)) === day);
 }
 
-/** Inclusive list of "YYYY-MM-DD" strings from `startStr` to `endStr` — capped defensively so a bad range can't spin forever. */
-function eachDay(startStr: string, endStr: string): string[] {
+/** Inclusive list of "YYYY-MM-DD" strings from `startStr` to `endStr` — capped defensively so a bad range can't spin forever. Exported for lib/ai-insight/aggregate.ts, which needs the same day-walking logic server-side against a real DirectoryUser[] instead of the client-only `users`/`departments` this file's own per-viewer functions (reportStatusCountsByUser, mustReportToTopic, ...) read from lib/directory.ts. */
+export function eachDay(startStr: string, endStr: string): string[] {
   if (startStr > endStr) return [];
   const out: string[] = [];
   const cursor = new Date(`${startStr}T00:00:00`);
@@ -83,7 +83,7 @@ export type ComplianceStatus = "on-time" | "late" | "missed" | "pending" | "exem
  * finished yet can't be judged "missed" (see `dayComplianceStatus`'s
  * "pending" case).
  */
-function iterationBounds(topic: ReportTopic, range: { from: Date; to: Date } | null) {
+export function iterationBounds(topic: ReportTopic, range: { from: Date; to: Date } | null) {
   const roomStart = localDateStr(new Date(topic.createdAt));
   const todayStr = todayIso();
   const startStr = range ? (localDateStr(range.from) > roomStart ? localDateStr(range.from) : roomStart) : roomStart;
@@ -110,7 +110,7 @@ function isRequiredWeekday(topic: ReportTopic, day: string): boolean {
   return topic.requiredWeekdays.includes(new Date(`${day}T00:00:00`).getDay());
 }
 
-function dayComplianceStatus(
+export function dayComplianceStatus(
   topic: ReportTopic,
   userId: string,
   day: string,

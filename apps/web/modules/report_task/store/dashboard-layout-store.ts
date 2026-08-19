@@ -10,6 +10,7 @@ import { persist } from "zustand/middleware";
 // domains into one bar.
 export type WidgetId =
   | "systemKpiSummary"
+  | "aiInsight"
   | "taskOverview"
   | "reportOverview"
   | "overdueTasks"
@@ -35,6 +36,7 @@ export interface WidgetConfig {
 // row-level detail lists (what to act on, last) at equal width.
 const defaultLayout: WidgetConfig[] = [
   { id: "systemKpiSummary", visible: true, span: 2 },
+  { id: "aiInsight", visible: true, span: 2 },
   { id: "taskOverview", visible: true, span: 1 },
   { id: "reportOverview", visible: true, span: 1 },
   { id: "overdueTasks", visible: true, span: 1 },
@@ -90,7 +92,12 @@ export const useDashboardLayoutStore = create<DashboardLayoutStore>()(
       // stale ids get pruned from their saved layout instead of sitting there
       // unused forever (`merge`, which runs on every load regardless of
       // version, doesn't prune unknown ids — only `migrate` does).
-      version: 6,
+      // Bumped to 7 when "aiInsight" was added — an existing persisted
+      // layout just gets it appended at the end (both migrate and merge
+      // append missing ids in default order, not re-inserted at its
+      // default position after systemKpiSummary); acceptable since it's a
+      // brand-new widget, not a reordering of existing ones.
+      version: 7,
       migrate: (persisted) => {
         const rawWidgets = (persisted as Partial<DashboardLayoutStore> | undefined)?.widgets ?? [];
         const defaultSpanOf = new Map(defaultLayout.map((w) => [w.id, w.span]));

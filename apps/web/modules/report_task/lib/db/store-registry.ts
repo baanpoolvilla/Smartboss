@@ -32,6 +32,10 @@ export const STORE_KEYS = {
   "project-topics": "stores/project-topics.json",
   "attachment-settings": "stores/attachment-settings.json",
   "reminder-settings": "stores/reminder-settings.json",
+  // Only the on/off switch lives here — the AI's own output + usage/quota
+  // counter is server-only ("ai-insight-result", not in this whitelist) so
+  // a client PUT here can never forge a result or reset the usage counter.
+  "ai-insight-settings": "stores/ai-insight-settings.json",
   // Plain string[] of dedup keys already fired (see lib/reminder-sweep.ts) —
   // server-only, no client store reads this directly.
   "reminder-sent-log": "stores/reminder-sent-log.json",

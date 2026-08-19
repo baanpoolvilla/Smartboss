@@ -16,7 +16,7 @@ import type { WidgetId } from "@/modules/report_task/store/dashboard-layout-stor
  * so it needs the same manager gate as the rest of that kind of feed rather
  * than being exposed to every employee by default.
  */
-export const MANAGER_ONLY_WIDGETS: WidgetId[] = ["pendingReports", "systemKpiSummary"];
+export const MANAGER_ONLY_WIDGETS: WidgetId[] = ["pendingReports", "systemKpiSummary", "aiInsight"];
 
 /**
  * Two-tier Dashboard widget visibility: employee < manager (department head
