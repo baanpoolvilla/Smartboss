@@ -538,8 +538,8 @@ export async function buildAiInsightAggregate(orgId: string): Promise<AiInsightA
 export function buildFixedStats(agg: AiInsightAggregate): AiInsightStat[] {
   return [
     { label: "คนควรคุยด่วน", count: agg.urgentPeopleCount, tone: "red" },
-    { label: "ยังไม่เสร็จ · ในกำหนด", count: agg.companyMetrics.pending_tasks, tone: "amber" },
-    { label: "ยังไม่เสร็จ · เลยกำหนด", count: agg.companyMetrics.overdue_tasks, tone: "red" },
+    { label: "งานยังไม่เสร็จ", count: agg.companyMetrics.pending_tasks, tone: "amber" },
+    { label: "งานเลยกำหนด", count: agg.companyMetrics.overdue_tasks, tone: "red" },
     { label: "รายงานยังไม่ส่ง", count: agg.companyMetrics.pending_reports + agg.companyMetrics.missed_reports, tone: "blue" },
   ];
 }
