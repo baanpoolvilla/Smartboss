@@ -15,6 +15,7 @@ import type {
   AiInsightDetailGroup,
   AiInsightPersonBreakdown,
   AiInsightDeptBreakdown,
+  AiInsightTrend,
 } from "@/modules/report_task/lib/ai-insight/types";
 import type { PlanCode } from "@/modules/report_task/lib/plan";
 
@@ -32,9 +33,35 @@ interface StatusResponse {
     people: AiInsightPersonBreakdown[];
     departments: AiInsightDeptBreakdown[];
     combinedSuccessRate: number;
+    companyTrend: AiInsightTrend | null;
     previous: { combinedSuccessRate: number; personTotals: Record<string, number> } | null;
     usage: AiInsightUsageMonth;
   };
+}
+
+/** §13.1 of docs/ai-insight-v2-spec.md — "↑ ดีขึ้น X%" (green) / "↓ แย่ลง X%"
+ * (red) / "→ เท่าเดิม" (gray), text only, no sparkline. `goodDir` is which
+ * raw direction ("up" for a rate like success rate, "down" for a count like
+ * a person's open total) actually reads as improvement for this subject —
+ * the badge's color follows that, not the raw direction. */
+function TrendBadge({ trend, goodDir, suffix }: { trend: AiInsightTrend | null; goodDir: "up" | "down"; suffix: string }) {
+  if (!trend) return null;
+  if (trend.dir === "flat") {
+    return <span className="inline-flex items-center gap-0.5 text-[10.5px] font-semibold text-[var(--ink-faint)]">→ เท่าเดิม</span>;
+  }
+  const good = trend.dir === goodDir;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-0.5 text-[10.5px] font-semibold",
+        good ? "text-[var(--brand-green-dark)]" : "text-[var(--chart-red-dark)]"
+      )}
+    >
+      {trend.dir === "up" ? <ArrowUp className="h-2.5 w-2.5" /> : <ArrowDown className="h-2.5 w-2.5" />}
+      {good ? "ดีขึ้น" : "แย่ลง"} {Math.abs(trend.change)}
+      {suffix}
+    </span>
+  );
 }
 
 /** §13.2 of docs/ai-insight-v2-spec.md — one fixed threshold set, reused for
@@ -274,27 +301,24 @@ export function AiInsightCard() {
                 {analyzing ? "กำลังวิเคราะห์ข้อมูลทั้งหมด..." : "ยังไม่เคยวิเคราะห์ — กด \"วิเคราะห์ตอนนี้\" เพื่อเริ่ม"}
               </p>
             )}
-            {status.state.generatedAt && (
-              <p className="text-[10.5px] text-[var(--ink-faint)] mt-1 flex items-center gap-1.5 flex-wrap">
-                อัปเดตล่าสุด {formatGeneratedAt(status.state.generatedAt)}
-                {status.state.previous && (
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-0.5 font-semibold",
-                      status.state.combinedSuccessRate >= status.state.previous.combinedSuccessRate
-                        ? "text-[var(--brand-green-dark)]"
-                        : "text-[var(--chart-red-dark)]"
-                    )}
-                  >
-                    {status.state.combinedSuccessRate >= status.state.previous.combinedSuccessRate ? (
-                      <ArrowUp className="h-2.5 w-2.5" />
-                    ) : (
-                      <ArrowDown className="h-2.5 w-2.5" />
-                    )}
-                    {Math.abs(status.state.combinedSuccessRate - status.state.previous.combinedSuccessRate)}% จากรอบก่อน
-                  </span>
+            {result && (
+              <p className="text-[11.5px] mt-1 flex items-center gap-1.5 flex-wrap">
+                <span className="font-bold tabular-nums text-[var(--ink)]">{status.state.combinedSuccessRate}% สำเร็จรวม</span>
+                <span className={cn("text-[10px] font-semibold rounded-full px-1.5 py-0.5", successRateStatus(status.state.combinedSuccessRate).className)}>
+                  {successRateStatus(status.state.combinedSuccessRate).label}
+                </span>
+                {status.state.companyTrend ? (
+                  <>
+                    <TrendBadge trend={status.state.companyTrend} goodDir="up" suffix="%" />
+                    <span className="text-[var(--ink-faint)]">จากช่วงก่อนหน้า</span>
+                  </>
+                ) : (
+                  <span className="text-[var(--ink-faint)]">ยังไม่มีข้อมูลพอเทียบเทรนด์ (ต้องวิเคราะห์อีก 1-2 รอบ)</span>
                 )}
               </p>
+            )}
+            {status.state.generatedAt && (
+              <p className="text-[10.5px] text-[var(--ink-faint)] mt-0.5">อัปเดตล่าสุด {formatGeneratedAt(status.state.generatedAt)}</p>
             )}
           </div>
           {headerSwitch}
@@ -364,6 +388,7 @@ export function AiInsightCard() {
                       <div className="flex items-center gap-1.5">
                         <span className={cn("text-[10px] font-semibold rounded-full px-2 py-0.5", status_.className)}>{status_.label}</span>
                         <span className="text-[13px] font-bold tabular-nums text-[var(--ink)]">{d.successRate}%</span>
+                        <TrendBadge trend={d.trend} goodDir="up" suffix="pp" />
                       </div>
                     </div>
                     {d.topIssues.length > 0 && (
@@ -400,26 +425,13 @@ export function AiInsightCard() {
             {status.state.people.length === 0 && <p className="text-[12px] text-[var(--ink-faint)] text-center py-6">ไม่มีใครมีปัญหาค้างอยู่ในรอบนี้</p>}
             {status.state.people.map((p) => {
               const note = result.personNotes.find((n) => n.name === p.name);
-              const prevTotal = status.state.previous?.personTotals[p.name];
-              const delta = prevTotal != null ? p.total - prevTotal : null;
               return (
                 <div key={p.name} className="rounded-xl border border-[var(--line)] p-2.5">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <span className="text-[12.5px] font-semibold text-[var(--ink)]">{p.name}</span>
                     <div className="flex items-center gap-1.5">
                       <span className="text-[12px] font-bold tabular-nums text-[var(--ink)]">{p.total} รายการ</span>
-                      {delta != null && delta !== 0 && (
-                        <span
-                          className={cn(
-                            "inline-flex items-center gap-0.5 text-[10px] font-semibold",
-                            delta > 0 ? "text-[var(--chart-red-dark)]" : "text-[var(--brand-green-dark)]"
-                          )}
-                        >
-                          {delta > 0 ? <ArrowUp className="h-2.5 w-2.5" /> : <ArrowDown className="h-2.5 w-2.5" />}
-                          {Math.abs(delta)} จากรอบก่อน
-                        </span>
-                      )}
-                      {prevTotal == null && <span className="text-[10px] text-[var(--ink-faint)]">รอบแรก</span>}
+                      {p.trend ? <TrendBadge trend={p.trend} goodDir="down" suffix="%" /> : <span className="text-[10px] text-[var(--ink-faint)]">รอบแรก</span>}
                     </div>
                   </div>
                   <div className="mt-1 flex flex-wrap gap-1">

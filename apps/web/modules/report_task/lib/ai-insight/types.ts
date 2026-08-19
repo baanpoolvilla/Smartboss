@@ -29,6 +29,17 @@ export interface AiInsightDeptNote {
   note: string;
 }
 
+/** Server-computed (`lib/ai-insight/history.ts`'s `computeTrend`), never
+ * left to the model to estimate — see that file's own comment on why.
+ * `change` is a percentage-*point* delta for a "rate" subject (company/
+ * department) or a relative percent change for a "count" subject (person's
+ * openTotal) — which one applies depends on which subject this trend is
+ * attached to, not tagged on the value itself. */
+export interface AiInsightTrend {
+  dir: "up" | "down" | "flat";
+  change: number;
+}
+
 export interface AiInsightResult {
   insightText: string;
   stats: AiInsightStat[];
@@ -56,6 +67,10 @@ export interface AiInsightPersonBreakdown {
   name: string;
   total: number;
   items: { domain: "task" | "report"; label: string; count: number }[];
+  /** Null until ≥2 rounds of history exist for this person (see
+   * computeTrend) — "lower openTotal is better" for this one, unlike the
+   * rate-based trends below. */
+  trend: AiInsightTrend | null;
 }
 
 /** One department, deterministic (server-computed, see aggregate.ts's
@@ -71,6 +86,9 @@ export interface AiInsightDeptBreakdown {
    * still open for this department right now. */
   openTotal: number;
   topIssues: { domain: "task" | "report"; label: string; count: number }[];
+  /** Null until ≥2 rounds of history exist for this department — "higher
+   * successRate is better" for this one. */
+  trend: AiInsightTrend | null;
 }
 
 export interface AiInsightUsageMonth {
@@ -98,6 +116,9 @@ export interface AiInsightState {
    * its own field (not parsed back out of insightText) so the trend badge
    * and next round's "vs last time" comparison have a reliable number. */
   combinedSuccessRate: number;
+  /** Company-wide trend from history (≥3 rounds), "higher is better" —
+   * distinct from `previous` below, which is only a single-round delta. */
+  companyTrend: AiInsightTrend | null;
   /** Snapshot taken from *this* round's own numbers right before they're
    * overwritten by the *next* round — i.e. always "what it was last time",
    * so the round after this one can show a delta. Null on the very first

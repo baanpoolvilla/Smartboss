@@ -1,7 +1,23 @@
 import "server-only";
 import OpenAI from "openai";
-import type { AiInsightAggregate } from "./aggregate";
+import type { AiInsightAggregate, DeptBreakdown, PersonBreakdown } from "./aggregate";
 import type { AiInsightResult } from "./types";
+import type { Trend } from "./history";
+
+/** Trend context computed server-side (see analyze.ts) — passed in
+ * alongside the aggregate so the prompt can say "แผนก IT: 45% (แย่ลง 3 รอบ
+ * ติด)" instead of the model guessing direction from a single snapshot. */
+export interface TrendContext {
+  companyTrend: Trend | null;
+  departments: (DeptBreakdown & { trend: Trend | null })[];
+  people: (PersonBreakdown & { trend: Trend | null })[];
+}
+
+function trendPhrase(trend: Trend | null, kind: "rate" | "count"): string {
+  if (!trend || trend.dir === "flat") return "";
+  const verb = trend.dir === "up" ? (kind === "rate" ? "ดีขึ้น" : "เพิ่มขึ้น") : kind === "rate" ? "แย่ลง" : "ลดลง";
+  return ` (${verb} ${Math.abs(trend.change)}${kind === "rate" ? "จุด" : "%"} จากรอบก่อนๆ)`;
+}
 
 /** One shared key for the whole platform — every org's analysis runs
  * through this same OpenAI account, billed centrally to us, not per-org
@@ -21,9 +37,9 @@ function client(): OpenAI {
   return new OpenAI({ apiKey });
 }
 
-function buildPrompt(agg: AiInsightAggregate): string {
+function buildPrompt(agg: AiInsightAggregate, trends: TrendContext): string {
   const lines: string[] = [];
-  lines.push(`อัตราสำเร็จรวม (งาน+รายงาน) ตอนนี้ = ${agg.combinedSuccessRate}%`);
+  lines.push(`อัตราสำเร็จรวม (งาน+รายงาน) ตอนนี้ = ${agg.combinedSuccessRate}%${trendPhrase(trends.companyTrend, "rate")}`);
   if (agg.projectedSuccessRate != null) {
     lines.push(`ถ้าแก้ปัญหาอันดับ 1 ด้านล่างได้หมด อัตราสำเร็จรวมจะขึ้นเป็น ${agg.projectedSuccessRate}% (คำนวณไว้ให้แล้ว ใช้ตัวเลขนี้ตรงๆ ห้ามคำนวณเอง)`);
   }
@@ -38,15 +54,15 @@ function buildPrompt(agg: AiInsightAggregate): string {
   }
   lines.push("");
   lines.push("รายคน — ทุกอย่างที่ค้างของแต่ละคนรวมกันเป็นแถวเดียว (ใช้เขียน personNotes):");
-  for (const p of agg.people) {
+  for (const p of trends.people) {
     const items = p.items.map((it) => `${it.label} ${it.count}`).join(", ");
-    lines.push(`- ${p.name}: รวม ${p.total} รายการ — ${items}`);
+    lines.push(`- ${p.name}: รวม ${p.total} รายการ${trendPhrase(p.trend, "count")} — ${items}`);
   }
   lines.push("");
   lines.push("รายแผนก — success rate และปัญหาเด่นของแต่ละแผนก (ใช้เขียน deptNotes):");
-  for (const d of agg.departments) {
+  for (const d of trends.departments) {
     const issues = d.topIssues.map((it) => `${it.label} ${it.count}`).join(", ") || "ไม่มีปัญหาเด่น";
-    lines.push(`- ${d.name} (${d.headcount} คน): success rate ${d.successRate}%, ค้างรวม ${d.openTotal} รายการ — ${issues}`);
+    lines.push(`- ${d.name} (${d.headcount} คน): success rate ${d.successRate}%${trendPhrase(d.trend, "rate")}, ค้างรวม ${d.openTotal} รายการ — ${issues}`);
   }
   return lines.join("\n");
 }
@@ -57,6 +73,7 @@ const SYSTEM_PROMPT = `คุณเป็นผู้ช่วยวิเคร
 - ห้ามเปิดด้วยการท่องข้อมูลพื้นฐาน (จำนวนพนักงาน, จำนวนงาน/รายงานทั้งหมด) เพราะมันโชว์อยู่บนแดชบอร์ดแล้ว ไม่ใช่สิ่งที่ต้องใช้ AI มาบอกซ้ำ
 - เปิดด้วยสิ่งที่ "ผิดปกติ/น่าสนใจ" ที่สุดตรงๆ (เช่น อัตราสำเร็จร่วงหนักเพราะจุดเดียว, คนคนเดียวเป็นต้นเหตุครึ่งนึงของปัญหาทั้งหมด)
 - ต้องมีประโยค "ถ้าแก้ [ปัญหาอันดับ 1] ได้ อัตราสำเร็จจะขึ้นเป็นประมาณ [ตัวเลขที่คำนวณมาให้]%" เสมอเมื่อมีตัวเลขนี้ในข้อมูล — นี่คือใจความสำคัญที่สุด ให้ความรู้สึกว่า "แก้จุดเดียวได้ผลเยอะ" ไม่ใช่แค่รายงานปัญหา
+- ถ้าอัตราสำเร็จรวมมีวงเล็บบอกเทรนด์ (ดีขึ้น/แย่ลง กี่จุด จากรอบก่อนๆ) ให้พูดถึงทิศทางนั้นด้วยถ้าเข้ากับเนื้อความได้ เช่น "ดีขึ้นต่อเนื่อง 3 รอบ" — ไม่ใช่แค่บอกตัวเลข ณ ตอนนี้เฉยๆ
 - ห้ามยาวเกิน 3 ประโยค ห่อตัวเลขสำคัญด้วย **
 
 กฎการเขียน personNotes (สำคัญเท่ากัน — นี่คือส่วนที่ต้องเจาะรายคน):
@@ -81,8 +98,11 @@ const SYSTEM_PROMPT = `คุณเป็นผู้ช่วยวิเคร
 
 ห้ามแต่งชื่อคนหรือตัวเลขที่ไม่มีในข้อมูลที่ให้มา ถ้าข้อมูลไม่มีปัญหาเลย ให้ stats เป็นศูนย์ทั้งหมด, actions ว่างเปล่า, personNotes ว่างเปล่า, deptNotes ว่างเปล่า พร้อม insightText ที่ชื่นชมทีมงาน`;
 
-export async function callOpenAiInsight(agg: AiInsightAggregate): Promise<{ result: AiInsightResult; inputTokens: number; outputTokens: number; estCostUsd: number }> {
-  const prompt = buildPrompt(agg);
+export async function callOpenAiInsight(
+  agg: AiInsightAggregate,
+  trends: TrendContext
+): Promise<{ result: AiInsightResult; inputTokens: number; outputTokens: number; estCostUsd: number }> {
+  const prompt = buildPrompt(agg, trends);
   const completion = await client().chat.completions.create({
     model: MODEL,
     response_format: { type: "json_object" },

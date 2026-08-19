@@ -4,6 +4,7 @@ import { readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
 import { getOrgPlan, planAtLeast, AI_INSIGHT_MONTHLY_LIMIT, type PlanCode } from "@/modules/report_task/lib/plan";
 import { buildAiInsightAggregate } from "./aggregate";
 import { callOpenAiInsight } from "./openai-client";
+import { EMPTY_HISTORY, appendSnapshot, computeTrend, snapshotFromAggregate, type AiInsightHistory } from "./history";
 import type { AiInsightState } from "./types";
 
 /** Server-only key — deliberately NOT in store-registry.ts's STORE_KEYS, so
@@ -14,6 +15,9 @@ import type { AiInsightState } from "./types";
  * inject fake "AI" narrative text that reads as a real analysis. */
 const RESULT_KEY = "ai-insight-result";
 const SETTINGS_KEY = "ai-insight-settings";
+/** Same server-only reasoning as RESULT_KEY — a client that could write its
+ * own history could fake an "improving" trend that never happened. */
+const HISTORY_KEY = "ai-insight-history";
 
 interface AiInsightSettings {
   enabled: boolean;
@@ -32,6 +36,7 @@ function emptyState(): AiInsightState {
     people: [],
     departments: [],
     combinedSuccessRate: 0,
+    companyTrend: null,
     previous: null,
     usage: { month: currentMonth(), count: 0, inputTokens: 0, outputTokens: 0, estCostUsd: 0 },
   };
@@ -64,9 +69,10 @@ export async function getAiInsightStatus(orgId: string): Promise<AiInsightStatus
     ? {
         ...resultRow.data,
         detail: resultRow.data.detail ?? [],
-        people: resultRow.data.people ?? [],
-        departments: resultRow.data.departments ?? [],
+        people: (resultRow.data.people ?? []).map((p) => ({ ...p, trend: p.trend ?? null })),
+        departments: (resultRow.data.departments ?? []).map((d) => ({ ...d, trend: d.trend ?? null })),
         combinedSuccessRate: resultRow.data.combinedSuccessRate ?? 0,
+        companyTrend: resultRow.data.companyTrend ?? null,
         previous: resultRow.data.previous ?? null,
         result: resultRow.data.result
           ? {
@@ -98,13 +104,23 @@ export async function runAiInsightAnalysis(orgId: string): Promise<AnalyzeOutcom
   if (!status.enabled) return { ok: false, reason: "disabled" };
   if (status.quotaRemaining <= 0) return { ok: false, reason: "quota" };
 
-  const aggregate = await buildAiInsightAggregate(orgId);
-  const { result, inputTokens, outputTokens, estCostUsd } = await callOpenAiInsight(aggregate);
+  const [aggregate, historyRow] = await Promise.all([buildAiInsightAggregate(orgId), readStore<AiInsightHistory>(orgId, HISTORY_KEY)]);
+  const history = historyRow.data ?? EMPTY_HISTORY;
+
+  // Trends computed from history *before* this round's snapshot is
+  // appended — i.e. "how did we get to today," not "today vs today." Null
+  // until there are ≥2 prior data points (see computeTrend).
+  const companyTrend = computeTrend(history, "company", "rate");
+  const departments = aggregate.departments.map((d) => ({ ...d, trend: computeTrend(history, `dept:${d.departmentId}`, "rate") }));
+  const people = aggregate.people.map((p) => ({ ...p, trend: computeTrend(history, `person:${p.name}`, "count") }));
+
+  const { result, inputTokens, outputTokens, estCostUsd } = await callOpenAiInsight(aggregate, { companyTrend, departments, people });
 
   // This round's own numbers become "previous" for whatever round runs
   // after this one — captured from the state we just read, before it's
   // overwritten below, so the very first round ever run naturally has
-  // `previous: null` (nothing to compare against yet).
+  // `previous: null` (nothing to compare against yet). Kept alongside the
+  // new history-based trend for backward-compat (see AiInsightState.previous).
   const previous =
     status.state.generatedAt != null
       ? {
@@ -117,9 +133,10 @@ export async function runAiInsightAnalysis(orgId: string): Promise<AnalyzeOutcom
     generatedAt: new Date().toISOString(),
     result,
     detail: aggregate.flagged.map((g) => ({ domain: g.domain, label: g.label, count: g.count, people: g.people })),
-    people: aggregate.people,
-    departments: aggregate.departments,
+    people,
+    departments,
     combinedSuccessRate: aggregate.combinedSuccessRate,
+    companyTrend,
     previous,
     usage: {
       month: currentMonth(),
@@ -129,7 +146,10 @@ export async function runAiInsightAnalysis(orgId: string): Promise<AnalyzeOutcom
       estCostUsd: status.usage.estCostUsd + estCostUsd,
     },
   };
-  await writeStore(orgId, RESULT_KEY, nextState, null);
+  await Promise.all([
+    writeStore(orgId, RESULT_KEY, nextState, null),
+    writeStore(orgId, HISTORY_KEY, appendSnapshot(history, snapshotFromAggregate(aggregate)), null),
+  ]);
 
   return { ok: true, status: { ...status, usage: nextState.usage, quotaRemaining: Math.max(0, status.monthlyLimit - nextState.usage.count), state: nextState } };
 }
