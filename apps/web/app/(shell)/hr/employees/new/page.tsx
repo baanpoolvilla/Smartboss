@@ -3,7 +3,7 @@ import { Button } from "@smartboss/ui/components/button";
 import { HrPage } from "@/modules/hr/components/hr-page";
 import { HR_PERMS } from "@/modules/hr/permissions";
 import { wfFetch, type Company, type Paged } from "@/modules/hr/lib/api";
-import { ApiProblem, Field, inputClass, selectClass } from "@/modules/hr/components/ui";
+import { Field, NotProvisioned, inputClass, selectClass } from "@/modules/hr/components/ui";
 import { createEmployeeAction } from "../../actions";
 
 export default async function NewEmployeePage() {
@@ -17,14 +17,7 @@ export default async function NewEmployeePage() {
         const companies = await wfFetch<Paged<Company>>("/companies");
         const company = companies.items[0];
 
-        if (!company) {
-          return (
-            <ApiProblem
-              heading="ยังไม่มีบริษัทในระบบ workforce"
-              detail="ต้องสร้างบริษัท (company) ก่อนถึงจะเพิ่มพนักงานได้ — สร้างผ่าน POST /companies"
-            />
-          );
-        }
+        if (!company) return <NotProvisioned what="เพิ่มพนักงาน" />;
 
         const today = new Date().toISOString().slice(0, 10);
 

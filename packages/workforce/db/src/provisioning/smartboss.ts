@@ -1,8 +1,8 @@
 import { eq } from 'drizzle-orm';
-import { SYSTEM_ROLES, uuidv7, type SystemRole } from '@workforce/domain';
+import { uuidv7, type SystemRole } from '@workforce/domain';
 import type { Db } from '../client';
 import { withTenant } from '../client';
-import { people, principalRoleAssignments, principals, roles, tenants } from '../schema';
+import { companies, people, principalRoleAssignments, principals, roles, tenants } from '../schema';
 import { seedSystemRoles } from '../seed/system-roles';
 
 /**
@@ -21,6 +21,8 @@ export interface ProvisionTenantInput {
   tenantId: string;
   /** = Organization.slug */
   code: string;
+  /** รหัสนิติบุคคลตั้งต้น — ปกติใช้ Organization.code (เช่น SM0001) ไม่ใช่ slug */
+  companyCode?: string;
   name: string;
   timeZone?: string;
   currency?: string;
@@ -29,6 +31,9 @@ export interface ProvisionTenantInput {
 export interface ProvisionTenantResult {
   created: boolean;
   roleIds: Map<SystemRole, string>;
+  /** id ของนิติบุคคลตั้งต้น — มีเสมอหลังเรียกฟังก์ชันนี้ */
+  companyId: string;
+  companyCreated: boolean;
 }
 
 export async function provisionTenant(
@@ -55,7 +60,41 @@ export async function provisionTenant(
 
     // seedSystemRoles เรียกซ้ำได้ — ใช้ role เดิมถ้ามีอยู่แล้ว
     const roleIds = await seedSystemRoles(tx, input.tenantId);
-    return { created, roleIds };
+
+    /*
+     * นิติบุคคลตั้งต้น — 1 บริษัทใน Smartboss = 1 company ที่นี่
+     *
+     * workforce แยก tenant (ลูกค้า) ออกจาก company (นิติบุคคลที่จ้างงาน) เพราะ
+     * โครงสร้างรองรับลูกค้าที่มีหลายนิติบุคคล แต่ทุกอย่างที่เหลือ (พนักงาน กะ งวด
+     * เครื่องสแกน) ต้องมี company ก่อนถึงจะสร้างได้ ถ้าไม่สร้างให้ตรงนี้ ผู้ใช้ที่เพิ่ง
+     * เปิดบริษัทจะเจอฟอร์ม "ตั้งต้นระบบบุคคล" ให้กรอกชื่อบริษัทซ้ำกับที่กรอกไปแล้ว
+     * ตอนสมัคร — ข้อมูลชุดเดียวกันแต่ถามสองรอบ และไม่มีอะไรการันตีว่าจะตรงกัน
+     *
+     * นิติบุคคลที่ 2 ขึ้นไปยังเพิ่มได้ผ่าน POST /companies ตามเดิม
+     */
+    const existingCompany = await tx
+      .select({ id: companies.id })
+      .from(companies)
+      .where(eq(companies.tenantId, input.tenantId))
+      .limit(1);
+
+    let companyId = existingCompany[0]?.id;
+    let companyCreated = false;
+    if (companyId === undefined) {
+      companyId = uuidv7();
+      await tx.insert(companies).values({
+        id: companyId,
+        tenantId: input.tenantId,
+        code: input.companyCode ?? input.code,
+        legalName: input.name,
+        displayName: input.name,
+        timeZone: input.timeZone ?? 'Asia/Bangkok',
+        currency: input.currency ?? 'THB',
+      });
+      companyCreated = true;
+    }
+
+    return { created, roleIds, companyId, companyCreated };
   });
 }
 
@@ -154,76 +193,13 @@ export async function provisionPrincipal(
   });
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   แปลงสิทธิ์ของ Smartboss → role ของ workforce
-   ══════════════════════════════════════════════════════════════════ */
-
-/** สิทธิ์ฝั่ง Smartboss ที่เกี่ยวข้อง (ตรงกับ modules/hr/permissions.ts และ modules/admin) */
-export const SMARTBOSS_PERMISSION = {
-  adminAccess: 'core.admin',
-  employeeView: 'hr.employee.view',
-  employeeManage: 'hr.employee.manage',
-  salaryView: 'hr.salary.view',
-  salaryManage: 'hr.salary.manage',
-  payrollView: 'hr.payroll.view',
-  payrollManage: 'hr.payroll.manage',
-  payrollApprove: 'hr.payroll.approve',
-  settingManage: 'hr.setting.manage',
-} as const;
-
-export interface RoleMappingInput {
-  /** role code ของ Smartboss เช่น SUPER_ADMIN, HR_OFFICER */
-  roles: readonly string[];
-  /** permission code ที่ผู้ใช้มี */
-  permissions: readonly string[];
-}
-
-/**
- * เลือก role ของ workforce จากสิทธิ์ที่ผู้ใช้มีใน Smartboss
- *
- * กฎแยกหน้าที่ (HANDOFF §4): PAYROLL_PREPARER กับ PAYROLL_APPROVER ต้องไม่ใช่คนเดียวกัน
- * คนที่อนุมัติได้จะได้ APPROVER อย่างเดียว ไม่ได้ PREPARER ติดมาด้วย
- * — บังคับที่ระดับสิทธิ์ ไม่ใช่แค่ซ่อนปุ่มบนหน้าจอ
+/*
+ * mapSmartbossRoles ย้ายไปอยู่ที่ @workforce/domain แล้ว เพราะฝั่งเว็บของ Smartboss
+ * ต้องใช้ตัวเดียวกันตอนสร้าง/แก้ผู้ใช้ แต่ import @workforce/db ไม่ได้ (ลาก drizzle+pg)
+ * — re-export ไว้ที่นี่เพื่อไม่ให้ผู้เรียกเดิม (CLI, เทสต์) ต้องแก้
  */
-export function mapSmartbossRoles(input: RoleMappingInput): SystemRole[] {
-  const perms = new Set(input.permissions);
-  const roleCodes = new Set(input.roles.map((code) => code.toUpperCase()));
-  const granted = new Set<SystemRole>();
-
-  const has = (permission: string): boolean => perms.has(permission);
-
-  // ผู้ดูแลระบบ/ผู้ดูแลบริษัท → ผู้ดูแลองค์กรของ workforce
-  if (roleCodes.has('SUPER_ADMIN') || roleCodes.has('ADMIN')) {
-    granted.add('TENANT_ADMIN');
-  }
-
-  if (roleCodes.has('MANAGER')) granted.add('SUPERVISOR');
-
-  if (has(SMARTBOSS_PERMISSION.employeeManage) || roleCodes.has('HR_OFFICER')) {
-    granted.add('HR_OFFICER');
-  }
-
-  // ── เงินเดือน: อนุมัติได้ = APPROVER เท่านั้น ห้ามได้ PREPARER ด้วย ──
-  if (has(SMARTBOSS_PERMISSION.payrollApprove)) {
-    granted.add('PAYROLL_APPROVER');
-  } else if (
-    has(SMARTBOSS_PERMISSION.payrollManage) ||
-    has(SMARTBOSS_PERMISSION.salaryManage)
-  ) {
-    granted.add('PAYROLL_PREPARER');
-  }
-
-  if (has(SMARTBOSS_PERMISSION.settingManage)) {
-    granted.add('HR_OFFICER');
-    // หน้า /hr/devices ของ Smartboss เปิดให้คนที่มี hr.setting.manage
-    // แต่สิทธิ์เครื่องสแกนอยู่ที่ DEVICE_TECHNICIAN — ถ้าไม่ให้ด้วย
-    // ปุ่มบนหน้าจอจะกดแล้ว 403 ทุกครั้ง (ลงทะเบียนเครื่อง/ออกโทเคน/ผูกลายนิ้วมือ)
-    granted.add('DEVICE_TECHNICIAN');
-  }
-
-  // ทุกคนที่เข้าถึงระบบได้ อย่างน้อยต้องเป็นพนักงาน (ดูสลิป/ลงเวลาของตัวเอง)
-  granted.add('EMPLOYEE');
-
-  // เรียงตามลำดับใน SYSTEM_ROLES เพื่อให้ผลลัพธ์คงที่ เทียบใน test ได้
-  return SYSTEM_ROLES.filter((role) => granted.has(role));
-}
+export {
+  mapSmartbossRoles,
+  SMARTBOSS_PERMISSION,
+  type RoleMappingInput,
+} from '@workforce/domain';

@@ -24,6 +24,39 @@ commit ที่เพิ่งทำก็ได้ ไม่ต้องเด
 
 ## บันทึก
 
+### 2026-08-19 11:40 — baanpoolvilla (แก้ร่วมกับ Claude)
+**fix:** โมดูลบุคคล — สร้างนิติบุคคล + ผู้ใช้ฝั่ง workforce ให้อัตโนมัติ เลิกให้ผู้ใช้กรอกเอง
+- ทำอะไร: เข้า `/hr` ครั้งแรกเคยเจอฟอร์ม "ตั้งต้นระบบบุคคล" ให้กรอกชื่อบริษัทซ้ำกับที่กรอกไปแล้ว
+  ตอนเปิดบริษัท เพราะ `provisionWorkforceTenant()` และ `wf:sync` สร้างให้แค่ tenant + role
+  ไม่เคยสร้าง company — แต่ทุกอย่างที่เหลือ (พนักงาน/กะ/งวด/เครื่องสแกน) ต้องมี `company_id` เสมอ
+  เปลี่ยนเป็น **1 บริษัทใน Smartboss = 1 นิติบุคคลฝั่ง workforce อัตโนมัติ** (ทุกหน้าใน UI ใช้
+  `companies[0]` อยู่แล้ว ดีไซน์หลายนิติบุคคลไม่เคยถูกใช้จริง) รหัสใช้ `Organization.code` ไม่ใช่ slug
+  · แก้พ่วงอีกสามเรื่องที่เจอระหว่างไล่: (1) `createUserAction` ไม่เคยสร้าง principal ⇒ ผู้ใช้ใหม่
+  โดน 401 ทุกหน้าจนกว่าจะมีคนไปรัน `wf:sync` เอง เพิ่ม `syncUserToWorkforce()` เรียกจาก
+  create/update/setRoles/setActive/moveOrg/delete และปุ่มซ่อม **การถอนสิทธิ์มีผลจริงแล้ว**
+  (2) 401 เคยขึ้น "เซสชันหมดอายุ" ทุกกรณี คนที่ยังไม่ถูก provision เลยวนล็อกอินซ้ำโดยไม่รู้สาเหตุ
+  (3) `/hr/shifts`, `/devices`, `/timesheets` เคยซ่อนฟอร์มเงียบ ๆ เมื่อไม่มี company
+  · เพิ่ม `scripts/device-sim.mjs` จำลองเครื่องสแกนนิ้ว (Ed25519) ใช้เทสลงเวลาโดยยังไม่มีเครื่องจริง
+- ไฟล์/branch หลัก: `feat/hr-company-and-principal-autoprovision` —
+  `apps/web/lib/workforce-provisioning.ts`, `apps/web/app/(shell)/admin/actions.ts`,
+  `apps/web/app/(shell)/hr/`, `apps/web/modules/hr/components/`,
+  `packages/workforce/db/src/provisioning/smartboss.ts`,
+  `packages/workforce/domain/src/authz/smartboss-mapping.ts` (ย้าย `mapSmartbossRoles` มาที่นี่
+  เพราะฝั่งเว็บต้องใช้ตัวเดียวกันโดยไม่ลาก drizzle+pg เข้ามา — `@workforce/db` re-export ไว้แล้ว)
+- ต้องทำหลัง pull: **ไม่มี Prisma migration** — แต่ต้องรัน **`pnpm wf:sync`** หนึ่งครั้งเพื่อ backfill
+  บริษัทที่เปิดไว้ก่อนหน้านี้ (เรียกซ้ำได้ ไม่เขียนทับของเดิม) หรือกดปุ่ม "เปิดใช้โมดูลบุคคล" ที่
+  `/admin/organizations` ทีละบริษัทก็ได้ · ถ้าไม่รัน บริษัทเก่าจะยังเจอหน้า "ยังตั้งต้นไม่เสร็จ"
+- ค้างอยู่ / ต้องระวัง: **ยังไม่ได้เปิดหน้า `/hr` ผ่านเบราว์เซอร์จริง** — ทดสอบด้วย 357 เทสต์ผ่าน,
+  `tsc`/`eslint`/`next build` สะอาด, ยิง workforce API จริงด้วย curl ครบทุกขั้น และทดสอบ SQL
+  ฝั่งเว็บกับ DB จริงแบบ rollback แล้ว · บริษัทที่เคยกดสร้าง company เองไว้ (demo org = `MAIN /
+  ตัวอย่าง`) ชื่อจะไม่ตรงกับชื่อ org และ sync **ไม่เขียนทับของเดิม** — จะตรงกันเมื่อแก้ชื่อบริษัท
+  ที่ `/admin/organization` ครั้งถัดไป · `LEGACY_INGEST_KEY` ที่ใช้เทสด้วย Postman **ห้ามตั้งบน
+  production** (ตั้งแล้ว = เปิดช่องยิงลงเวลาด้วย header key อย่างเดียว ไม่ต้องเซ็น) ·
+  workforce API ใช้เวลา ~65 วินาทีกว่าจะ bind พอร์ตบนเครื่อง dev ที่โค้ดอยู่บน `/mnt/d`
+  และ `bufferLogs: true` ทำให้ไม่มี log ระหว่างนั้น — ไม่ใช่ค้าง · `.env.local.example` ของ
+  workforce-api บอกให้ก๊อปเป็น `.env.local` แต่โค้ดโหลดไฟล์ชื่อ `.env` (ยังไม่ได้แก้)
+
+
 ### 2026-08-19 10:32 — baanpoolvilla (แก้ร่วมกับ Claude)
 **feat:** เพิ่ม AI Insight — วิเคราะห์แนวโน้มงาน/รายงานด้วย OpenAI (การ์ดใหม่บนแดชบอร์ด)
 - ทำอะไร: การ์ดใหม่บนแดชบอร์ด `/report-task` — ให้ AI (OpenAI gpt-4o-mini, คีย์เดียวของบริษัทเรา
