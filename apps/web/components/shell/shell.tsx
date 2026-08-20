@@ -236,6 +236,7 @@ function RailItem({ menu, active }: { menu: ModuleMenuItem; active: boolean }) {
     >
       <Icon name={menu.icon} className="h-5 w-5 shrink-0" />
       <span className="truncate">{menu.label}</span>
+      {menu.badge}
     </Link>
   );
 }

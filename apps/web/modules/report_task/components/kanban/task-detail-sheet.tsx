@@ -94,6 +94,7 @@ export function TaskDetailSheet({
   const task = useTaskStore((s) => s.tasks.find((t) => t.id === taskId));
   const moveTask = useTaskStore((s) => s.moveTask);
   const markReviewed = useTaskStore((s) => s.markReviewed);
+  const rejectReview = useTaskStore((s) => s.rejectReview);
   const updateTask = useTaskStore((s) => s.updateTask);
   const saveTaskDetails = useTaskStore((s) => s.saveTaskDetails);
   const setPriority = useTaskStore((s) => s.setPriority);
@@ -144,6 +145,14 @@ export function TaskDetailSheet({
   const [mainAssigneeTarget, setMainAssigneeTarget] = useState<{ id: string; name: string } | null>(null);
   const [newDate, setNewDate] = useState("");
   const [reason, setReason] = useState("");
+  // "ไม่ผ่าน" — the review's rejection form (see rejectReview): a new due
+  // date (same DatePickerField as "แก้ไขกำหนดส่ง") plus a required reason.
+  // Separate state from the plain revise-due-date form above (newDate/reason)
+  // since this one only appears inline on the sign-off row, not the
+  // revision-history section, and starts blank rather than pre-filled.
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectDate, setRejectDate] = useState("");
+  const [rejectReason, setRejectReason] = useState("");
   // "แก้ไขทั้งหมด" — set every assignee's due date to the same new value in
   // one action, distinct from the per-row pickers below (see
   // reviseAllAssigneeDueDates).
@@ -280,6 +289,15 @@ export function TaskDetailSheet({
     setRevising(false);
     setNewDate("");
     setReason("");
+  }
+
+  function submitReject() {
+    // Same re-check-at-submit reasoning as submitRevision above.
+    if (!task || !canEditMain || !rejectDate || !rejectReason.trim()) return;
+    rejectReview(task.id, new Date(rejectDate).toISOString(), rejectReason.trim(), viewingAsUserId);
+    setRejecting(false);
+    setRejectDate("");
+    setRejectReason("");
   }
 
   function submitComment() {
@@ -494,28 +512,75 @@ export function TaskDetailSheet({
               informational, doesn't affect status/scoring — resets whenever
               the task leaves "เสร็จสิ้น" (see the field's own doc). */}
           {task.status === "done" && (
-            <div
-              className={cn(
-                "flex items-center justify-between gap-2 rounded-lg px-3 py-2",
-                task.reviewedBy ? "bg-[var(--accent)]" : "bg-amber-50"
-              )}
-            >
-              <span
-                className="flex items-center gap-1.5 text-xs font-medium"
-                style={{ color: task.reviewedBy ? "var(--brand-green-dark)" : "var(--chart-amber)" }}
+            <div className="space-y-2">
+              <div
+                className={cn(
+                  "flex items-center justify-between gap-2 rounded-lg px-3 py-2",
+                  // "รอเช็ค" used to share amber with "กำลังทำ"'s status color,
+                  // which reads as the same signal at a glance even though
+                  // they mean different things (a workflow stage vs. someone
+                  // waiting on sign-off) — violet isn't used anywhere else on
+                  // this sheet, so it now reads as its own distinct state.
+                  task.reviewedBy ? "bg-[var(--accent)]" : "bg-[color-mix(in_srgb,var(--chart-violet)_10%,white)]"
+                )}
               >
-                {task.reviewedBy ? <Check className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
-                {task.reviewedBy ? `ตรวจแล้วโดย ${getUser(task.reviewedBy)?.name ?? "—"}` : "รอเช็ค"}
-              </span>
-              {!task.reviewedBy && canEditMain && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-xs border-[var(--brand-green)] text-[var(--brand-green-dark)] hover:bg-[var(--accent)]"
-                  onClick={() => markReviewed(task.id, viewingAsUserId)}
+                <span
+                  className="flex items-center gap-1.5 text-xs font-medium"
+                  style={{ color: task.reviewedBy ? "var(--brand-green-dark)" : "var(--chart-violet)" }}
                 >
-                  <Check className="h-3.5 w-3.5" /> ผ่าน
-                </Button>
+                  {task.reviewedBy ? <Check className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
+                  {task.reviewedBy ? `ตรวจแล้วโดย ${getUser(task.reviewedBy)?.name ?? "—"}` : "รอเช็ค"}
+                </span>
+                {!task.reviewedBy && canEditMain && !rejecting && (
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs border-[var(--chart-red)] text-[var(--chart-red-dark)] hover:bg-red-50"
+                      onClick={() => setRejecting(true)}
+                    >
+                      <X className="h-3.5 w-3.5" /> ไม่ผ่าน
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs border-[var(--brand-green)] text-[var(--brand-green-dark)] hover:bg-[var(--accent)]"
+                      onClick={() => markReviewed(task.id, viewingAsUserId)}
+                    >
+                      <Check className="h-3.5 w-3.5" /> ผ่าน
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {!task.reviewedBy && canEditMain && rejecting && (
+                <div className="rounded-lg border border-[var(--line)] p-2.5 space-y-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">กำหนดส่งใหม่</Label>
+                    <DatePickerField value={rejectDate} minDate={todayIso()} onChange={setRejectDate} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="reject-reason" className="text-xs">เหตุผลที่ไม่ผ่าน</Label>
+                    <Textarea
+                      id="reject-reason"
+                      rows={2}
+                      value={rejectReason}
+                      onChange={(e) => setRejectReason(e.target.value)}
+                      placeholder="เช่น ข้อมูลยังไม่ครบ ต้องแก้ตรงไหนก่อนส่งใหม่?"
+                    />
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button size="sm" variant="ghost" onClick={() => { setRejecting(false); setRejectDate(""); setRejectReason(""); }}>ยกเลิก</Button>
+                    <Button
+                      size="sm"
+                      className="bg-[var(--chart-red)] hover:bg-[var(--chart-red-dark)] text-white"
+                      onClick={submitReject}
+                      disabled={!rejectDate || !rejectReason.trim()}
+                    >
+                      ยืนยันไม่ผ่าน
+                    </Button>
+                  </div>
+                </div>
               )}
             </div>
           )}

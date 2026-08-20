@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { resolvePermission } from "@smartboss/auth/permissions";
 
 import { adminManifest } from "@/modules/admin/manifest";
@@ -12,6 +13,18 @@ export interface ModuleMenuItem {
   path: string;
   permission: string; // เมนูแสดงเมื่อ user มี permission นี้
   icon?: string; // ชื่อ icon จาก lucide-react
+  /**
+   * Discord-style unread pill rendered at the end of this menu's row in
+   * `Shell`'s rail nav (see components/shell/shell.tsx's RailItem) — optional
+   * live client component slot, e.g. report_task's "งาน / Kanban" entry uses
+   * it to show a count of tasks waiting on someone's sign-off. Built once
+   * here (a plain React element referencing a "use client" component), not
+   * per-request data — the element itself is static, but once it hydrates on
+   * the client it's a fully live component subscribing to whatever client
+   * state it wants, same as any other Client Component. Most modules leave
+   * this unset; Shell renders nothing when it's absent.
+   */
+  badge?: ReactNode;
 }
 
 export interface ModuleManifest {

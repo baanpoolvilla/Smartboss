@@ -180,12 +180,19 @@ interface TaskStore {
    * no spurious revision/notification). */
   reviseAllAssigneeDueDates: (taskId: string, newDate: string, revisedBy: string) => void;
   /**
-   * A deliberate "this was marked done but wasn't actually finished"
-   * correction — distinct from a normal status change: pulls it out of
-   * "เสร็จสิ้น" with a fresh start/due date and a required reason, while the
-   * original due date and every prior revision stay intact, and any
-   * sticker/penalty already on the task is left untouched.
+   * The "ไม่ผ่าน" counterpart to markReviewed — a deliberate "this was marked
+   * done but wasn't actually finished" correction, distinct from a normal
+   * status change: pulls the task out of "เสร็จสิ้น" back to "กำลังทำ", sets
+   * `dueDate` to `newDate` (picked via the same DatePickerField as
+   * reviseDueDate, not a day-count offset — a real calendar pick reads
+   * clearer than mental math on "how many days"), and requires `reason` so
+   * the assignee knows what to fix, not just that it bounced. Recorded as a
+   * normal revision (see RevisionEntry) so it shows up in the same
+   * "ประวัติการแก้ไขกำหนดส่ง" list as any other date change, and any
+   * sticker/penalty already on the task is left untouched. No-op if the task
+   * isn't currently done or is already reviewed (nothing to reject).
    */
+  rejectReview: (taskId: string, newDate: string, reason: string, actorId: string) => void;
   selectTask: (id: string | null) => void;
   addTask: (task: Task) => void;
   removeTask: (taskId: string) => void;
@@ -296,6 +303,41 @@ export const useTaskStore = create<TaskStore>((set) => ({
           .getState()
           .notifyMany(t.assigneeIds, actorId, `${getUser(actorId)?.name ?? "หัวหน้า"} ตรวจงาน "${t.title}" แล้วผ่าน`);
         return { ...t, reviewedBy: actorId, reviewedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      }),
+    })),
+  rejectReview: (taskId, newDate, reason, actorId) =>
+    set((s) => ({
+      tasks: s.tasks.map((t) => {
+        if (t.id !== taskId || t.status !== "done" || t.reviewedBy) return t;
+        const previousDate = t.dueDate;
+        const revisionNumber = t.revisions.length + 1;
+        logActivity(
+          actorId,
+          "ตรวจสอบแล้วไม่ผ่าน",
+          t.title,
+          t.id,
+          `${formatShortDate(previousDate)} → ${formatShortDate(newDate)} · ${reason}`
+        );
+        useNotificationStore
+          .getState()
+          .notifyMany(
+            t.assigneeIds,
+            actorId,
+            `${getUser(actorId)?.name ?? "หัวหน้า"} ตรวจงาน "${t.title}" แล้วไม่ผ่าน — ${reason} (เลื่อนกำหนดเป็น ${formatShortDate(newDate)})`
+          );
+        return {
+          ...t,
+          status: "in_progress" as const,
+          completedAt: undefined,
+          dueDate: newDate,
+          reviewedBy: undefined,
+          reviewedAt: undefined,
+          revisions: [
+            ...t.revisions,
+            { revisionNumber, previousDate, newDate, reason, revisedBy: actorId, revisedAt: new Date().toISOString() },
+          ],
+          updatedAt: new Date().toISOString(),
+        };
       }),
     })),
   reviseDueDate: (taskId, newDate, reason, revisedBy) =>

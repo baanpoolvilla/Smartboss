@@ -149,7 +149,10 @@ function TaskCardBody({ task, id, onOpen, dragging, lifted, refCb, style, dragPr
               <Tooltip>
                 <TooltipTrigger
                   render={
-                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-amber-50 text-[var(--chart-amber)]">
+                    // Violet, not amber — amber is already "กำลังทำ"'s status
+                    // color, and this badge means something different (sign-off
+                    // pending, not a workflow stage); matches task-detail-sheet.tsx's own fix.
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--chart-violet)_10%,white)] text-[var(--chart-violet)]">
                       <Clock className="h-2.5 w-2.5" />
                       รอเช็ค
                     </span>
