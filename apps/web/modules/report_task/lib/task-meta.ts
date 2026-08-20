@@ -2,18 +2,19 @@ import type { TaskPriority, TaskStatus } from "@/modules/report_task/types";
 import { chartColors } from "@/modules/report_task/lib/chart-colors";
 import { CheckCircle2, CircleDot, type LucideIcon } from "lucide-react";
 
-// Traffic-light progression: red (hasn't moved yet) → yellow (in motion) →
-// green (done) — the same read-at-a-glance language as the priority colors.
+// Progression: gray (hasn't moved yet, not itself a problem) → yellow (in
+// motion) → green (done) — red is reserved for an actual overdue flag
+// (see DueDateBadge), not just "not started yet".
 export const statusMeta: Record<
   TaskStatus,
   { label: string; dot: string; accentColor: string; badgeClass: string; column: string }
 > = {
   todo: {
     label: "รอดำเนินการ",
-    dot: "bg-[var(--chart-red)]",
-    accentColor: "var(--chart-red)",
-    badgeClass: "bg-red-50 text-red-700 border-red-200",
-    column: "border-t-[var(--chart-red)]",
+    dot: "bg-[var(--chart-gray)]",
+    accentColor: "var(--chart-gray)",
+    badgeClass: "bg-slate-100 text-slate-600 border-slate-200",
+    column: "border-t-[var(--chart-gray)]",
   },
   in_progress: {
     label: "กำลังทำ",

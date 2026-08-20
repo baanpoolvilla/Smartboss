@@ -35,7 +35,7 @@ export const chartColors = {
 // Mirrors statusMeta's traffic-light mapping (task-meta.ts) for renderers
 // (Recharts) that need a raw hex value instead of a Tailwind class.
 export const statusColors = {
-  todo: chartColors.red,
+  todo: chartColors.gray,
   in_progress: chartColors.amber,
   done: chartColors.green,
 } as const;
