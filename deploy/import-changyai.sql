@@ -17,10 +17,18 @@
 BEGIN;
 
 -- ── ด่านตรวจก่อนแตะข้อมูล ────────────────────────────────────────────
+--
+-- ⚠ psql ไม่แทนค่า :org ข้างใน DO $$ ... $$ — ข้อความใน dollar-quote ถูกส่ง
+--   ให้เซิร์ฟเวอร์ดิบ ๆ psql ไม่แตะเลย ⇒ ต้องพักค่าไว้ในตารางชั่วคราวก่อน
+--   แล้วให้ DO อ่านจากตารางนั้นแทน (statement ธรรมดาใช้ :org ได้ตามปกติ)
+CREATE TEMP TABLE _cfg AS SELECT :org::text AS org;
+
 DO $$
+DECLARE v_org text;
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM core.organizations WHERE id = :org) THEN
-    RAISE EXCEPTION 'ไม่พบบริษัทปลายทาง % — ตรวจ core.organizations ก่อน', :org;
+  SELECT org INTO v_org FROM _cfg;
+  IF NOT EXISTS (SELECT 1 FROM core.organizations WHERE id = v_org) THEN
+    RAISE EXCEPTION 'ไม่พบบริษัทปลายทาง % — ตรวจ core.organizations ก่อน', v_org;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'changyai_raw') THEN
     RAISE EXCEPTION 'ยังไม่ได้โหลด dump เข้า schema changyai_raw';
