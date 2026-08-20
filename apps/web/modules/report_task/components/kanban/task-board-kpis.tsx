@@ -2,11 +2,10 @@
 
 import { useMemo } from "react";
 import { Card, CardContent } from "@/modules/report_task/components/ui/card";
-import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import { useTaskStore, type QuickView } from "@/modules/report_task/store/task-store";
 import { cn } from "@/modules/report_task/lib/utils";
 import type { Task } from "@/modules/report_task/types";
-import { ListTodo, PlayCircle, CheckCircle2, Flag } from "lucide-react";
+import { ListTodo, PlayCircle, CheckCircle2 } from "lucide-react";
 
 /**
  * Quick at-a-glance stats for the board currently open — scoped to whatever
@@ -24,7 +23,6 @@ export function TaskBoardKpis({ tasks }: { tasks: Task[] }) {
     () => ({
       total: tasks.length,
       inProgress: tasks.filter((t) => t.status === "in_progress").length,
-      overdue: tasks.filter((t) => dueUrgency(t) === "overdue" && t.status !== "done").length,
       doneAll: tasks.filter((t) => t.status === "done").length,
     }),
     [tasks]
@@ -37,7 +35,6 @@ export function TaskBoardKpis({ tasks }: { tasks: Task[] }) {
   const cards: { key: QuickView; label: string; value: number; icon: typeof ListTodo; iconClass: string }[] = [
     { key: "all", label: "งานทั้งหมด", value: stats.total, icon: ListTodo, iconClass: "bg-slate-50 text-[var(--chart-gray)]" },
     { key: "inProgress", label: "กำลังทำ", value: stats.inProgress, icon: PlayCircle, iconClass: "bg-amber-50 text-[var(--chart-amber)]" },
-    { key: "overdue", label: "เลยกำหนด", value: stats.overdue, icon: Flag, iconClass: "bg-red-50 text-[var(--chart-red)]" },
     { key: "done", label: "สำเร็จทั้งหมด", value: stats.doneAll, icon: CheckCircle2, iconClass: "bg-green-100 text-[var(--brand-green-dark)]" },
   ];
 
