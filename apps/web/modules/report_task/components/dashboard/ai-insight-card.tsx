@@ -156,12 +156,26 @@ export function AiInsightCard() {
       </CardHeader>
 
       <CardContent className="pt-3">
+        {/* Filled gradient (not just an outlined row) so this reads as the
+            card's one real call-to-action, not a footer link — the count
+            of concrete fixes below it is the hook: the headline above
+            deliberately stays company-level/nameless (see SYSTEM_PROMPT's
+            no-names rule), so "N ข้อควรแก้" is what pulls someone in to
+            actually see who/what by name. */}
         <button
           type="button"
           onClick={() => router.push(`${REPORT_TASK_BASE}/ai-insight`)}
-          className="flex w-full items-center justify-between gap-2 rounded-xl border border-[var(--line)] px-3 py-2.5 text-[12.5px] font-semibold text-[var(--ink-soft)] transition-colors hover:border-[var(--chart-violet)] hover:text-[var(--chart-violet)]"
+          className="flex w-full items-center justify-between gap-2 rounded-xl px-3.5 py-3 text-[12.5px] font-semibold text-white transition-transform hover:scale-[1.01] active:scale-[0.99]"
+          style={{ background: "linear-gradient(135deg, var(--chart-violet), var(--chart-blue))", boxShadow: "0 6px 16px -6px rgba(74,58,167,0.45)" }}
         >
-          ดูรายละเอียดทั้งหมด · KPI, สาเหตุ, คำแนะนำ, พยากรณ์
+          <span className="flex flex-col items-start gap-0.5 text-left">
+            <span>
+              {result && result.actions.length > 0
+                ? `ดูว่าควรแก้อะไรก่อน · ${result.actions.length} ข้อแนะนำ`
+                : "ดูรายละเอียดทั้งหมด"}
+            </span>
+            <span className="text-[10.5px] font-normal text-white/80">รายชื่อ สาเหตุ คำแนะนำ และพยากรณ์แบบเจาะจง</span>
+          </span>
           <ChevronRight className="h-4 w-4 shrink-0" />
         </button>
       </CardContent>
