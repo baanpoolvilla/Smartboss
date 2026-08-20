@@ -4,6 +4,7 @@ import type { LucideIcon } from "lucide-react";
 import { MODULE_CARDS } from "@/lib/modules";
 import { iconByName } from "@/lib/icons";
 import { loadShellNav } from "@/lib/nav";
+import { AppTileReviewBadge } from "@/modules/report_task/components/shared/app-tile-review-badge";
 
 interface AppTile {
   code: string;
@@ -96,8 +97,8 @@ function AppIcon({ tile }: { tile: AppTile }) {
       <span
         className={
           href
-            ? "flex h-[68px] w-[68px] items-center justify-center rounded-[22px] shadow-(--shadow-card) ring-1 ring-black/[0.04] transition-transform duration-150 group-hover:-translate-y-0.5 group-active:scale-95 sm:h-[76px] sm:w-[76px]"
-            : "flex h-[68px] w-[68px] items-center justify-center rounded-[22px] bg-(--bg) ring-1 ring-(--line) sm:h-[76px] sm:w-[76px]"
+            ? "relative flex h-[68px] w-[68px] items-center justify-center rounded-[22px] shadow-(--shadow-card) ring-1 ring-black/[0.04] transition-transform duration-150 group-hover:-translate-y-0.5 group-active:scale-95 sm:h-[76px] sm:w-[76px]"
+            : "relative flex h-[68px] w-[68px] items-center justify-center rounded-[22px] bg-(--bg) ring-1 ring-(--line) sm:h-[76px] sm:w-[76px]"
         }
         style={href ? { backgroundColor: tile.colorBg } : undefined}
       >
@@ -108,6 +109,7 @@ function AppIcon({ tile }: { tile: AppTile }) {
             opacity: href ? 1 : 0.4,
           }}
         />
+        {href && tile.code === "report_task" && <AppTileReviewBadge />}
       </span>
 
       <span
