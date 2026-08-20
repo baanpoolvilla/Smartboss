@@ -153,7 +153,7 @@ export interface Task {
   completedAssigneeIds?: string[];
   /** Sign-off on a "เสร็จสิ้น" task — set once the assigner/dept head/CEO
    * clicks "ผ่าน" after checking the work. Purely informational (doesn't
-   * gate status, scoring, or anything else) — a task sits "รอเช็ค" until
+   * gate status, scoring, or anything else) — a task sits "รอตรวจสอบ" until
    * reviewed. Cleared whenever the task leaves "เสร็จสิ้น" again (reopened),
    * since whatever was approved no longer reflects the current work. */
   reviewedBy?: string;

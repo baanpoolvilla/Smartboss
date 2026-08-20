@@ -516,20 +516,20 @@ export function TaskDetailSheet({
               <div
                 className={cn(
                   "flex items-center justify-between gap-2 rounded-lg px-3 py-2",
-                  // "รอเช็ค" used to share amber with "กำลังทำ"'s status color,
-                  // which reads as the same signal at a glance even though
-                  // they mean different things (a workflow stage vs. someone
-                  // waiting on sign-off) — violet isn't used anywhere else on
-                  // this sheet, so it now reads as its own distinct state.
-                  task.reviewedBy ? "bg-[var(--accent)]" : "bg-[color-mix(in_srgb,var(--chart-violet)_10%,white)]"
+                  // Light green while waiting on sign-off, darker green once
+                  // reviewed — same "รอตรวจสอบ → เสร็จสิ้น" two-tone as the
+                  // board's own "รอตรวจสอบ" column and the card's badge
+                  // (task-card.tsx), so this reads as the same state everywhere
+                  // instead of inventing its own color language on this sheet.
+                  task.reviewedBy ? "bg-[var(--accent)]" : "bg-[color-mix(in_srgb,var(--chart-green)_10%,white)]"
                 )}
               >
                 <span
                   className="flex items-center gap-1.5 text-xs font-medium"
-                  style={{ color: task.reviewedBy ? "var(--brand-green-dark)" : "var(--chart-violet)" }}
+                  style={{ color: task.reviewedBy ? "var(--brand-green-dark)" : "var(--chart-green)" }}
                 >
                   {task.reviewedBy ? <Check className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
-                  {task.reviewedBy ? `ตรวจแล้วโดย ${getUser(task.reviewedBy)?.name ?? "—"}` : "รอเช็ค"}
+                  {task.reviewedBy ? `ตรวจแล้วโดย ${getUser(task.reviewedBy)?.name ?? "—"}` : "รอตรวจสอบ"}
                 </span>
                 {!task.reviewedBy && canEditMain && !rejecting && (
                   <div className="flex items-center gap-1.5">

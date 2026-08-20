@@ -122,32 +122,44 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority }: C
             or status's accent when the board is grouped by priority (see
             groupedByPriority above), so the column header is never just
             repeating the exact same value back at itself. Once a task is
-            done, both stop mattering — swap in an explicit "เสร็จแล้ว" badge
-            instead, since that's the one thing worth knowing at a glance. */}
+            done, both stop mattering — swap in one status badge instead
+            (never two stacked — a done-but-unreviewed card used to show
+            "เสร็จแล้ว" + a separate "รอเช็ค" chip side by side, which just
+            reread as "is this done or not?"): light green "รอตรวจสอบ" while
+            it waits on sign-off (see rejectReview/markReviewed in
+            task-store.ts — same review the "รอตรวจสอบ" board column tracks),
+            switching to the darker "เสร็จสิ้น" only once someone's actually
+            checked it. */}
         {isDone ? (
-          <span className="inline-flex items-center gap-1.5">
-            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--brand-green)_14%,white)] text-[var(--brand-green-dark)]">
+          task.reviewedBy ? (
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-[color-mix(in_srgb,var(--brand-green)_14%,white)] text-[var(--brand-green-dark)]">
               <Check className="h-2.5 w-2.5" strokeWidth={3} />
-              เสร็จแล้ว
+              เสร็จสิ้น
             </span>
-            {/* Sign-off from the assigner/dept head/CEO — see task-detail-sheet.tsx's own note on this field. */}
-            {!task.reviewedBy && (
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    // Violet, not amber — amber is already "กำลังทำ"'s status
-                    // color, and this badge means something different (sign-off
-                    // pending, not a workflow stage); matches task-detail-sheet.tsx's own fix.
-                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--chart-violet)_10%,white)] text-[var(--chart-violet)]">
-                      <Clock className="h-2.5 w-2.5" />
-                      รอเช็ค
+          ) : (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  // Two even halves in one pill instead of a single "รอตรวจสอบ"
+                  // label — "เสร็จ" (the part that's actually true already,
+                  // muted) and "รอตรวจสอบ" (what's still pending, full color)
+                  // read as one continuous progress pill rather than a flat
+                  // status word.
+                  <span className="inline-flex items-stretch text-[10px] font-semibold rounded-full overflow-hidden ring-1 ring-inset ring-[color-mix(in_srgb,var(--chart-green)_30%,white)]">
+                    <span className="flex-1 flex items-center justify-center gap-1 px-2 py-0.5 bg-[color-mix(in_srgb,var(--chart-green)_10%,white)] text-[var(--chart-green)] opacity-70">
+                      <Check className="h-2.5 w-2.5" strokeWidth={3} />
+                      เสร็จ
                     </span>
-                  }
-                />
-                <TooltipContent>ยังไม่มีใครตรวจสอบยืนยันว่างานนี้เสร็จจริง</TooltipContent>
-              </Tooltip>
-            )}
-          </span>
+                    <span className="flex-1 flex items-center justify-center gap-1 px-2 py-0.5 bg-[color-mix(in_srgb,var(--chart-green)_20%,white)] text-[var(--chart-green)]">
+                      <Clock className="h-2.5 w-2.5" />
+                      รอตรวจสอบ
+                    </span>
+                  </span>
+                }
+              />
+              <TooltipContent>ส่งงานแล้ว รอหัวหน้าตรวจสอบยืนยันว่าเสร็จจริง</TooltipContent>
+            </Tooltip>
+          )
         ) : groupedByPriority ? (
           <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-[var(--ink-soft)]">
             <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: statusMeta[task.status].accentColor }} />

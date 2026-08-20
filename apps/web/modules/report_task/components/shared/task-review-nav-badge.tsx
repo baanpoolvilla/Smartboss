@@ -9,7 +9,7 @@ import { canEditRecord } from "@/modules/report_task/lib/permissions";
  * Discord-style unread pill for the "งาน / Kanban" rail item (see
  * module-registry.ts's `ModuleMenuItem.badge` and shell.tsx's RailItem) —
  * counts tasks sitting in "เสร็จสิ้น" with nobody's sign-off yet
- * (`!task.reviewedBy`, same condition task-detail-sheet.tsx's "รอเช็ค" chip
+ * (`!task.reviewedBy`, same condition task-detail-sheet.tsx's "รอตรวจสอบ" chip
  * uses), scoped to whoever can actually clear it: the owner, whoever
  * assigned the task, or that task's department head — the same
  * `canEditRecord` circle the "ผ่าน"/"ไม่ผ่าน" buttons themselves are gated

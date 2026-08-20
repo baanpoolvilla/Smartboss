@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canSeeTask } from "@/modules/report_task/lib/permissions";
-import { dueUrgency, sortTasksForDisplay } from "@/modules/report_task/lib/task-flags";
+import { sortTasksForDisplay } from "@/modules/report_task/lib/task-flags";
 import { getDepartment, users } from "@/modules/report_task/lib/directory";
 import { statusMeta, priorityMeta, priorityColorHex, taskPriorityOrder, statusIcon } from "@/modules/report_task/lib/task-meta";
 import { matchesTaskFilters } from "@/modules/report_task/lib/task-filter";
@@ -17,7 +17,7 @@ import { TaskDetailSheet } from "./task-detail-sheet";
 import { PersonTopicsBoard } from "./person-topics-board";
 import { toast } from "sonner";
 import { useTaskBoardIntentStore } from "@/modules/report_task/store/task-board-intent-store";
-import { Info, SearchX, AlarmClockOff, ChevronLeft, ChevronRight } from "lucide-react";
+import { Info, SearchX, AlarmClockOff, Hourglass, ChevronLeft, ChevronRight } from "lucide-react";
 import { EmptyState } from "@/modules/report_task/components/shared/empty-state";
 
 export type GroupBy = "status" | "priority" | "assignee";
@@ -153,26 +153,22 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
 
   // Columns are generated from the chosen grouping — Planner's "Group by".
   // groupBy==="status" splits into 4 mutually-exclusive columns, not 3:
-  // "เลยกำหนด" is derived (dueUrgency==="overdue" && status!=="done"), not a
-  // real TaskStatus, and pulls from BOTH "todo" and "in_progress" — every
-  // non-done overdue task lands here regardless of whether anyone's started
-  // it, so the 4 columns always sum to the full filtered total with no task
-  // counted twice. Which of the two it came from still matters though (a
-  // touched-but-late task reads differently from an untouched one), so
-  // KanbanColumn/TaskCard tag each overdue card with its real underlying
-  // status instead of losing that distinction.
+  // "รอตรวจสอบ" is derived (status==="done" && !reviewedBy), not a real
+  // TaskStatus — every "done" task starts here and only reaches "เสร็จสิ้น"
+  // once someone signs off (see markReviewed/rejectReview), so the 4 columns
+  // always sum to the full filtered total with no task counted twice.
+  // Lateness (formerly its own "เลยกำหนด" column) is no longer a column at
+  // all — a late task just stays in "รอดำเนินการ"/"กำลังทำ", flagged red on
+  // its own card via DueDateBadge instead.
   const columns: BoardColumn[] = useMemo(() => {
     if (groupBy === "status") {
-      const overdueIds = new Set(
-        filtered.filter((t) => t.status !== "done" && dueUrgency(t) === "overdue").map((t) => t.id)
-      );
-      // "เลยกำหนดเท่านั้น" already narrows `filtered` down to overdue tasks
-      // only — under that filter, "รอดำเนินการ"/"กำลังทำ"/"เสร็จสิ้น" aren't
-      // just usually empty here, they're GUARANTEED empty (every task left in
-      // `filtered` is, by definition, todo/in_progress AND overdue, so it
-      // lands in the "เลยกำหนด" bucket every time). Showing 3 permanently-dead
-      // columns next to the one that matters is pure clutter — collapse to a
-      // single column instead of rendering columns that can never hold anything.
+      // "เลยกำหนดเท่านั้น" narrows `filtered` down to overdue-and-not-done
+      // tasks only — showing this against the normal 4-column split would
+      // leave "รอตรวจสอบ"/"เสร็จสิ้น" permanently empty (a done task is never
+      // "overdue" — see dueUrgency) and split the rest thin. Collapse to one
+      // flat list instead. Lateness itself still shows per-card (see
+      // DueDateBadge) regardless of which column a task sits in — this filter
+      // only decides which cards make the cut, not a 5th column of its own.
       if (filters.penalty === "overdue") {
         return [
           {
@@ -186,36 +182,42 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
           },
         ];
       }
+      // No dedicated "เลยกำหนด" column anymore — a late task just stays put
+      // in "รอดำเนินการ"/"กำลังทำ" (still flagged red on its own card via
+      // DueDateBadge). The 3rd column now tracks review instead: a "done"
+      // task waits here until the assigner/dept head/CEO signs off (see
+      // markReviewed/rejectReview in task-store.ts) — "เสร็จสิ้น" itself is
+      // reserved for work that's actually been checked, not just submitted.
       return [
         {
           id: "todo" as const,
           label: statusMeta.todo.label,
           accent: chartColors.gray,
           icon: statusIcon.todo,
-          tasks: sortTasksForDisplay(filtered.filter((t) => t.status === "todo" && !overdueIds.has(t.id))),
+          tasks: sortTasksForDisplay(filtered.filter((t) => t.status === "todo")),
         },
         {
           id: "in_progress" as const,
           label: statusMeta.in_progress.label,
           accent: statusAccent.in_progress,
           icon: statusIcon.in_progress,
-          tasks: sortTasksForDisplay(filtered.filter((t) => t.status === "in_progress" && !overdueIds.has(t.id))),
+          tasks: sortTasksForDisplay(filtered.filter((t) => t.status === "in_progress")),
         },
         {
-          id: "overdue",
-          label: "เลยกำหนด",
-          accent: chartColors.red,
-          icon: AlarmClockOff,
-          tasks: sortTasksForDisplay(filtered.filter((t) => overdueIds.has(t.id))),
+          id: "review",
+          label: "รอตรวจสอบ",
+          accent: chartColors.green,
+          icon: Hourglass,
+          tasks: sortTasksForDisplay(filtered.filter((t) => t.status === "done" && !t.reviewedBy)),
           derived: true,
-          emptyMessage: "ไม่มีงานเลยกำหนด 🎉",
+          emptyMessage: "ไม่มีงานรอตรวจสอบ 🎉",
         },
         {
           id: "done" as const,
           label: statusMeta.done.label,
           accent: statusAccent.done,
           icon: statusIcon.done,
-          tasks: sortTasksForDisplay(filtered.filter((t) => t.status === "done")),
+          tasks: sortTasksForDisplay(filtered.filter((t) => t.status === "done" && !!t.reviewedBy)),
         },
       ];
     }

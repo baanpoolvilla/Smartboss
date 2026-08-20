@@ -36,7 +36,7 @@ export function reactionCounts(task: Task): Record<string, number> {
  * compete for attention with what's still open); overdue-and-not-done comes
  * first (the most urgent group, called out as its own tier rather than just
  * "earliest due date" so it reads as a clear block); everything else follows.
- * Within the "done" tier, cards still waiting on sign-off ("รอเช็ค" — see
+ * Within the "done" tier, cards still waiting on sign-off ("รอตรวจสอบ" — see
  * task-detail-sheet.tsx's markReviewed) lead the un-reviewed ones sink below
  * once someone hits "ผ่าน" — otherwise clicking "ผ่าน" only swaps a badge for
  * nothing and the card stays wherever createdAt happened to place it, which
