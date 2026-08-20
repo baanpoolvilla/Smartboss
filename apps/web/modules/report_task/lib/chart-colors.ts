@@ -9,6 +9,12 @@ export const chartColors = {
   green: "#22c55e",
   greenDark: "#39e05a", // = --brand-green, mirrored as hex for Recharts fill/stroke
   greenLight: "#fde047", // "done late" — a pale yellow, kept light so it doesn't blend into --chart-amber (see globals.css)
+  // "รอตรวจสอบ" vs "เสร็จสิ้น" need to read as clearly different states at a
+  // glance (one still needs a sign-off, the other is actually finished) — a
+  // pale/deep pair reads that distinction better than two columns sharing
+  // the exact same mid-tone green.
+  greenPale: "#86efac", // "รอตรวจสอบ" — done but not yet reviewed
+  greenDeep: "#1e7830", // = --brand-green-dark — "เสร็จสิ้น", reviewed & signed off
   amber: "#f59e0b",
   amberDark: "#b45309",
   amberLight: "#fcd34d",

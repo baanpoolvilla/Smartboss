@@ -206,7 +206,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
         {
           id: "review",
           label: "รอตรวจสอบ",
-          accent: chartColors.green,
+          accent: chartColors.greenPale,
           icon: Hourglass,
           tasks: sortTasksForDisplay(filtered.filter((t) => t.status === "done" && !t.reviewedBy)),
           derived: true,
@@ -215,7 +215,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
         {
           id: "done" as const,
           label: statusMeta.done.label,
-          accent: statusAccent.done,
+          accent: chartColors.greenDeep,
           icon: statusIcon.done,
           tasks: sortTasksForDisplay(filtered.filter((t) => t.status === "done" && !!t.reviewedBy)),
         },
