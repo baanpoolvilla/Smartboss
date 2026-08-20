@@ -34,18 +34,72 @@ END $$;
 -- ⚠ ทำไมต้องมีตารางจับคู่ ไม่ insert ตรง ๆ
 --    1. ผู้ใช้บางคนในระบบเก่าอาจไม่มีอีเมล — ถ้าข้ามไป ใบงานของคนนั้น
 --       จะไม่มีผู้รับผิดชอบ เพราะ id ที่อ้างถึงไม่มีอยู่ในระบบใหม่
---    2. บางอีเมลอาจซ้ำกับคนที่มีบัญชีในระบบใหม่อยู่แล้ว (เช่นตัวเจ้าของเอง)
---       ⇒ ต้องชี้ไปที่บัญชีเดิม ไม่ใช่สร้างซ้ำหรือข้ามทิ้ง
+--    2. คนเดียวกันใช้คนละอีเมลในสองระบบ (ChangYai ใช้ line_<id>@changyai.app
+--       ส่วน Smartboss ใช้อีเมลบริษัท) ⇒ เทียบอีเมลตรง ๆ จับคู่ไม่ได้เลย
 --
 --    ตารางนี้แปลง "ไอดีเก่า → ไอดีที่ใช้จริง" แล้วทุกตารางข้างล่างอ้างผ่านมัน
 CREATE TABLE changyai_raw._user_map (old_id text PRIMARY KEY, new_id text NOT NULL);
 
--- 1.1 คนที่อีเมลตรงกับบัญชีที่มีอยู่แล้ว → ชี้ไปบัญชีเดิม ไม่สร้างใหม่
+-- ── 1.0 คู่ที่เจ้าของจับด้วยตาเอง ────────────────────────────────────
+--
+-- ชื่อในสองระบบไม่มีอะไรตรงกันเลย (ChangYai ใช้ชื่อเล่น/ชื่อ LINE เช่น "Skys 💖"
+-- ส่วน Smartboss ใช้ชื่อจริง) ⇒ ต้องให้คนจับคู่ ระบบเดาเองไม่ได้
+--
+-- จับคู่ผ่านอีเมล ไม่ใช่ไอดี เพราะอีเมลอ่านออกและตรวจทานได้ด้วยตา
+CREATE TEMP TABLE _pairs (cy_email text, sb_email text);
+INSERT INTO _pairs VALUES
+  ('line_u8cdb7c98d93fed1812d82be973d866cc@changyai.app', 'chayanun@baanpoolvilla.com'),   -- Skys 💖
+  ('line_u842f7f46929bad44bf6f3483f4f0d27e@changyai.app', 'kenika@baanpoolvilla.com'),     -- BELL
+  ('line_u211c85db2aeb61dba4fe6e424b3618a0@changyai.app', 'pacharapol@baanpoolvilla.com'), -- Guy^_^
+  ('line_u342002ea3f3f58161ae4547dee04f97e@changyai.app', 'somporn@baanpoolvilla.com'),    -- KATAI 🐰
+  ('line_U5089b5659b63d44de621295b32331a4b@changyai.app', 'thanonchai@baanpoolvilla.com'), -- Ossy Maru
+  ('line_uc5c4eb7fcebd4884e5acc239843f7cc7@changyai.app', 'kanthita@baanpoolvilla.com'),   -- aui
+  ('line_U2a3d8125e26ad0c4db813c9deee12645@changyai.app', 'soravee@baanpoolvilla.com'),    -- B E E
+  ('line_u5de79f6ba7e3e62a8c0740e6302d0258@changyai.app', 'waratta@baanpoolvilla.com'),    -- Nok
+  ('line_U99a23ca2ce03ae70b0ef385ce0c62f9b@changyai.app', 'sujita@baanpoolvilla.com'),     -- Asu.Kp
+  ('line_u22e53dbc3fc3adb72acf8e09540056df@changyai.app', 'kanitha@baanpoolvilla.com'),    -- #แม่เชี่ยกะกัสกัส#
+  ('line_u4e77aad4b7544accac00e98d2c3dbbeb@changyai.app', 'thunchanok@baanpoolvilla.com'), -- nam..
+  ('line_uca9c56001893ce575beede088dd75703@changyai.app', 'katawut@baanpoolvilla.com');    -- กีม (เจ้าของ)
+-- ยังไม่มีคู่ (จะถูกสร้างเป็นบัญชีใหม่ในข้อ 1.2):
+--   line_u2478714860d425a1f1ec0fd6da61ba27  Ad/Baan Pool Villa 🏖
+--   line_U08bf5527ed4598ce433d91230d155506  ช. โก๊ะ
+
+INSERT INTO changyai_raw._user_map (old_id, new_id)
+SELECT u.id::text, sb.id
+FROM _pairs p
+JOIN changyai_raw.users u ON lower(btrim(u.email)) = lower(p.cy_email)
+JOIN core.users sb        ON lower(btrim(sb.email)) = lower(p.sb_email);
+
+-- ⚠ ด่านตรวจ — คู่ไหนจับไม่ติดต้องรู้ทันที ไม่ใช่ปล่อยให้เงียบ
+--
+-- ไอดี LINE 32 ตัวอักษรถูกอ่านมาจากหน้าจอ พิมพ์ผิดตัวเดียวก็ไม่ match
+-- ถ้าไม่เช็ค คนคนนั้นจะถูกสร้างเป็นบัญชีใหม่แทนที่จะรวมกับบัญชีเดิม
+-- แล้วงานของเขาจะไปอยู่ใต้ชื่อที่ไม่มีใครรู้จัก ซึ่งกว่าจะรู้ตัวก็สายแล้ว
+DO $$
+DECLARE bad text;
+BEGIN
+  SELECT string_agg(format('%s → %s (%s)', p.cy_email, p.sb_email,
+           CASE WHEN NOT EXISTS (SELECT 1 FROM changyai_raw.users u
+                                  WHERE lower(btrim(u.email)) = lower(p.cy_email))
+                THEN 'ไม่พบฝั่ง ChangYai' ELSE 'ไม่พบฝั่ง Smartboss' END), E'\n  ')
+    INTO bad
+  FROM _pairs p
+  WHERE NOT EXISTS (
+    SELECT 1 FROM changyai_raw.users u JOIN core.users sb ON TRUE
+    WHERE lower(btrim(u.email)) = lower(p.cy_email)
+      AND lower(btrim(sb.email)) = lower(p.sb_email));
+  IF bad IS NOT NULL THEN
+    RAISE EXCEPTION E'จับคู่ผู้ใช้ไม่ติด:\n  %', bad;
+  END IF;
+END $$;
+
+-- ── 1.1 ที่เหลือ ถ้าอีเมลตรงกันพอดีก็ชี้ไปบัญชีเดิม ─────────────────
 INSERT INTO changyai_raw._user_map (old_id, new_id)
 SELECT u.id::text, e.id
 FROM changyai_raw.users u
 JOIN core.users e ON lower(btrim(e.email)) = lower(btrim(u.email))
-WHERE u.email IS NOT NULL AND btrim(u.email) <> '';
+WHERE u.email IS NOT NULL AND btrim(u.email) <> ''
+  AND NOT EXISTS (SELECT 1 FROM changyai_raw._user_map m WHERE m.old_id = u.id::text);
 
 -- 1.2 ที่เหลือ → สร้างบัญชีใหม่ โดยใช้ไอดีเดิม
 --
@@ -232,9 +286,10 @@ INSERT INTO core.document_counters (org_id, doc_type, period, next_value)
 SELECT :org, 'PO', :yr, COUNT(*) + 1 FROM maintenance.purchase_orders WHERE org_id = :org
 ON CONFLICT (org_id, doc_type, period) DO UPDATE SET next_value = EXCLUDED.next_value;
 
--- ═══ 15. รายชื่อไว้จับคู่ว่าใครคือใคร ═══════════════════════════════
+-- ═══ 15. คนที่ยังไม่ได้จับคู่ — ถูกสร้างเป็นบัญชีใหม่ ═══════════════════════════════
 --
--- เจ้าของจะมาไล่จับคู่ทีหลังว่าบัญชีไหนคือใครในทีมปัจจุบัน
+-- 12 คนที่จับคู่ไว้แล้วในข้อ 1.0 งานเขาไปอยู่ใต้บัญชี Smartboss เดิมแล้ว
+-- วิวนี้เหลือเฉพาะคนที่ยังไม่มีคู่ ⇒ ถูกสร้างเป็นบัญชีใหม่ที่ยังล็อกอินไม่ได้
 -- เก็บเป็นวิวถาวรไว้ให้เปิดดูได้เรื่อย ๆ ไม่ต้องจำคำสั่ง
 --
 -- เรียงตามปริมาณงานจากมากไปน้อย — คนที่มีงานเยอะคือคนที่ต้องจับคู่ให้ถูกก่อน
