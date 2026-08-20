@@ -11,6 +11,8 @@ import {
 } from "@/modules/report_task/components/ui/select";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
+import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
+import { useDepartmentStore } from "@/modules/report_task/store/department-store";
 import { getDepartment, getUser, isOwner, scopedDepartments, scopedUsers, users } from "@/modules/report_task/lib/directory";
 import { taskPriorityOrder, priorityMeta } from "@/modules/report_task/lib/task-meta";
 import type { TaskPriority } from "@/modules/report_task/types";
@@ -79,6 +81,21 @@ export function TaskFilters({
   // department head sees only the department(s) they head (report_task's
   // own headId — see lib/directory.ts's scopedDepartments/scopedUsers,
   // shared with dashboard-filters.tsx/workload-view.tsx/activity-log).
+  //
+  // scopedDepartments/scopedUsers/isOwner read `users`/`departments`
+  // (lib/directory.ts) through a plain JS Proxy over the Zustand stores, not
+  // a reactive selector — React has no way to know that data changed, so a
+  // useMemo keyed on `[viewingAsUserId]` alone caches whatever the FIRST
+  // render saw and never recomputes once the real employee/department list
+  // arrives async right after mount (see report-task-scaffold.tsx: the
+  // viewer starts out with just a placeholder record, empty departmentId,
+  // before ServerStoreSync fills in the real one). That's why this used to
+  // read "ไม่มีแผนก / ตัวเอง" until navigating away and back forced a fresh
+  // mount. Subscribing to both stores here (even though their values aren't
+  // read directly below — the directory helpers read them internally) gives
+  // React a real reason to re-run this memo the moment the data lands.
+  const employeesForFilters = useEmployeeStore((s) => s.employees);
+  const departmentsForFilters = useDepartmentStore((s) => s.departments);
   const { availableDepartments, availableAssignees } = useMemo(() => {
     const deptScope = scopedDepartments(viewingAsUserId);
     if (isOwner(viewingAsUserId) || deptScope.length > 0) {
@@ -92,7 +109,13 @@ export function TaskFilters({
       availableDepartments: myDept ? [myDept] : [],
       availableAssignees: me ? [me] : [],
     };
-  }, [viewingAsUserId]);
+    // employeesForFilters/departmentsForFilters aren't read directly in this
+    // body — they're read internally by scopedDepartments/scopedUsers/
+    // isOwner via the module-level `users`/`departments` proxy (see the
+    // comment above). The lint rule can't see through that, but the deps are
+    // real: dropping them reintroduces the "ไม่มีแผนก/ตัวเอง" staleness bug.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewingAsUserId, employeesForFilters, departmentsForFilters]);
 
   // Once a department is picked, the person list narrows to just that
   // department's people — same "department → person" hierarchy as the

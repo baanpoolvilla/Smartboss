@@ -10,7 +10,9 @@ import { matchesTaskFilters } from "@/modules/report_task/lib/task-filter";
 import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
+import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { useVisibleTasks } from "@/modules/report_task/hooks/use-visible-tasks";
+import { useDepartmentStore } from "@/modules/report_task/store/department-store";
 import { cn } from "@/modules/report_task/lib/utils";
 
 /** One legend/breakdown row shared between the bar's click-to-open popover and its color key. */
@@ -42,7 +44,19 @@ export function WorkloadView() {
   // company, a department head sees only the department(s) they head — a
   // head should never see other departments' people/workload here just
   // because they can open this tab (see lib/directory.ts's scopedUsers).
-  const usersInScope = useMemo(() => scopedUsers(viewingAsUserId), [viewingAsUserId]);
+  //
+  // scopedUsers reads `users`/`departments` through a plain JS Proxy over
+  // these two stores, not a reactive selector — subscribing here is what
+  // makes this recompute once the real employee/department list lands async
+  // right after mount, instead of getting stuck on the placeholder-record
+  // first render forever (same fix as task-filters.tsx/dashboard-filters.tsx).
+  const employeesForScope = useEmployeeStore((s) => s.employees);
+  const departmentsForScope = useDepartmentStore((s) => s.departments);
+  const usersInScope = useMemo(
+    () => scopedUsers(viewingAsUserId),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- employeesForScope/departmentsForScope are read internally by scopedUsers via the module-level proxy, not directly here; dropping them reintroduces the staleness bug.
+    [viewingAsUserId, employeesForScope, departmentsForScope]
+  );
 
   const rows = useMemo(() => {
     const filtered = tasks.filter((t) => matchesTaskFilters(t, filters));

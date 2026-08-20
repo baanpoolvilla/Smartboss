@@ -12,6 +12,8 @@ import {
 import { getUser, getDepartment, canManage, scopedDepartments, scopedUsers } from "@/modules/report_task/lib/directory";
 import { useDashboardFilterStore } from "@/modules/report_task/store/dashboard-filter-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
+import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
+import { useDepartmentStore } from "@/modules/report_task/store/department-store";
 import { FilterField, FILTER_FIELD_LABEL_CLASS, filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
 import { DateRangeSelectField } from "@/modules/report_task/components/shared/date-range-select-field";
 import { Building2, Users, X } from "lucide-react";
@@ -34,6 +36,15 @@ export function DashboardFilters() {
   const setPreset = useDashboardFilterStore((s) => s.setPreset);
   const setCustomRange = useDashboardFilterStore((s) => s.setCustomRange);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
+  // canManage/scopedDepartments/scopedUsers all read `users`/`departments`
+  // (lib/directory.ts) through a plain JS Proxy over these two stores, not a
+  // reactive selector — subscribing here is what actually makes this
+  // component re-render (and canManage/the memos below recompute) once the
+  // real employee/department list lands async right after mount, instead of
+  // being stuck on whatever the placeholder-record first render saw (same
+  // fix as task-filters.tsx's own copy of this exact bug).
+  const employeesForFilters = useEmployeeStore((s) => s.employees);
+  const departmentsForFilters = useDepartmentStore((s) => s.departments);
   // Org-wide performance data (everyone's tasks/scores) is manager-eyes-only,
   // especially now the score ties to real bonuses — a regular employee can
   // only ever look at their own dashboard, not switch to "everyone" or a
@@ -49,8 +60,21 @@ export function DashboardFilters() {
   // PLAN_role_only_department_heads_2.md, report_task stays on its own
   // identity system for now) — everyone else never reaches this branch at
   // all (gated by canPickPerson below).
-  const availableDepartments = useMemo(() => scopedDepartments(viewingAsUserId), [viewingAsUserId]);
-  const pickablePeople = useMemo(() => scopedUsers(viewingAsUserId), [viewingAsUserId]);
+  // employeesForFilters/departmentsForFilters aren't read directly in either
+  // body — they're read internally by scopedDepartments/scopedUsers via the
+  // module-level `users`/`departments` proxy (see the comment above). The
+  // lint rule can't see through that, but the deps are real: dropping them
+  // reintroduces the department-filter staleness bug.
+  const availableDepartments = useMemo(
+    () => scopedDepartments(viewingAsUserId),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [viewingAsUserId, employeesForFilters, departmentsForFilters]
+  );
+  const pickablePeople = useMemo(
+    () => scopedUsers(viewingAsUserId),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [viewingAsUserId, employeesForFilters, departmentsForFilters]
+  );
 
   // §7.2 — once a department is picked, the person list narrows to just that
   // department's people, and the "everyone" option's label says how many.
