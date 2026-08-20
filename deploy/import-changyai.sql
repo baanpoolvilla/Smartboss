@@ -148,6 +148,22 @@ CREATE FUNCTION changyai_raw.uids(p uuid[]) RETURNS text[] LANGUAGE sql STABLE A
   FROM unnest(COALESCE(p, '{}')) AS x
 $$;
 
+/**
+ * jsonb → text[] อย่างปลอดภัย
+ *
+ * ChangYai เก็บอาเรย์รูปสองแบบปนกัน — บางคอลัมน์เป็น text[] จริง
+ * (pr_image_urls) บางคอลัมน์เป็น jsonb (receipt_image_urls, image_urls)
+ * cast ตรง ๆ จาก jsonb ไป text[] ไม่ได้ ต้องคลี่ทีละสมาชิก
+ *
+ * เช็ค jsonb_typeof ก่อนเสมอ — ถ้าเจอ null หรือ object (ไม่ใช่อาเรย์)
+ * jsonb_array_elements_text จะโยน error แล้วล้มทั้ง transaction
+ */
+CREATE FUNCTION changyai_raw.jarr(p jsonb) RETURNS text[] LANGUAGE sql IMMUTABLE AS $$
+  SELECT CASE WHEN jsonb_typeof(p) = 'array'
+              THEN ARRAY(SELECT jsonb_array_elements_text(p))
+              ELSE '{}'::text[] END
+$$;
+
 -- ═══ 2. หมวดหมู่บ้าน ═════════════════════════════════════════════════
 INSERT INTO maintenance.property_categories (id, org_id, prefix, display_name, created_at)
 SELECT gen_random_uuid()::text, :org, c.prefix, c.display_name, COALESCE(c.created_at, now())
@@ -230,7 +246,7 @@ SELECT o.id::text, :org,
        'PO-' || :yr || '-' || lpad(row_number() OVER (ORDER BY o.created_at, o.id)::text, 4, '0'),
        o.property_id::text, changyai_raw.uid(o.created_by), changyai_raw.uid(o.po_assigned_to),
        o.title, o.status, COALESCE(o.items, '[]'::jsonb), COALESCE(o.total_price, 0),
-       COALESCE(o.receipt_image_urls::text[], '{}'), COALESCE(o.pr_image_urls::text[], '{}'),
+       changyai_raw.jarr(o.receipt_image_urls), COALESCE(o.pr_image_urls::text[], '{}'),
        COALESCE(o.is_self_purchase, FALSE), COALESCE(o.is_emergency_purchase, FALSE),
        o.emergency_reason, changyai_raw.uid(o.po_created_by), o.po_created_at,
        changyai_raw.uid(o.ordered_by), o.ordered_at, changyai_raw.uid(o.received_by), o.received_at,
@@ -255,7 +271,7 @@ INSERT INTO maintenance.equipment_returns
    status, image_urls, resolution_note, resolved_by, resolved_at, created_at, updated_at)
 SELECT r.id::text, :org, r.purchase_order_id::text, r.property_id::text, changyai_raw.uid(r.created_by),
        r.item_name, COALESCE(r.qty, 1), r.problem_type, r.reason, COALESCE(r.status, 'pending'),
-       COALESCE(r.image_urls::text[], '{}'), r.resolution_note,
+       changyai_raw.jarr(r.image_urls), r.resolution_note,
        changyai_raw.uid(r.resolved_by), r.resolved_at, COALESCE(r.created_at, now()), now()
 FROM changyai_raw.equipment_returns r;
 
