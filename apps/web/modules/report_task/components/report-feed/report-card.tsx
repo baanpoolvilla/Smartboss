@@ -44,6 +44,8 @@ import {
 } from "@/modules/report_task/lib/report-feed-rich-text";
 import { uploadCompressedImage } from "@/modules/report_task/lib/image-resize";
 import { ReportPostFields, newSection, type DraftSection } from "@/modules/report_task/components/report-feed/report-post-fields";
+import { useReportTagStore } from "@/modules/report_task/store/report-tag-store";
+import { ReportTagChip } from "@/modules/report_task/components/report-feed/report-tag-chip";
 import { ReportImageLightbox } from "@/modules/report_task/components/report-feed/report-image-lightbox";
 import { ReportReply } from "@/modules/report_task/components/report-feed/report-reply";
 import { LinkInsertPopover } from "@/modules/report_task/components/report-feed/link-insert-popover";
@@ -115,6 +117,8 @@ export function ReportCard({
   const toggleSave = useReportFeedStore((s) => s.toggleSave);
   const toggleUnread = useReportFeedStore((s) => s.toggleUnread);
   const setPostLinkedTask = useReportFeedStore((s) => s.setPostLinkedTask);
+  const allTags = useReportTagStore((s) => s.tags);
+  const postTags = allTags.filter((t) => post.tagIds.includes(t.id));
   const author = getUser(post.authorId);
   const viewer = getUser(viewingAsUserId);
   const isOwn = post.authorId === viewingAsUserId;
@@ -300,7 +304,7 @@ export function ReportCard({
       });
       return { ...sec, bullets };
     });
-    editPost(post.id, { title: post.title, sections, images: post.images });
+    editPost(post.id, { title: post.title, sections, images: post.images, tagIds: post.tagIds });
   }
 
   // With replyId, the link deep-links to that one comment (?reply=) instead
@@ -513,6 +517,13 @@ export function ReportCard({
             )}
           </div>
           <p className="text-[16px] font-semibold mt-1 leading-snug">{post.title}</p>
+          {postTags.length > 0 && (
+            <div className="flex items-center gap-1 flex-wrap mt-1.5">
+              {postTags.map((t) => (
+                <ReportTagChip key={t.id} tag={t} />
+              ))}
+            </div>
+          )}
           {lateCutoff ? (
             <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
               <span className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200">
@@ -1042,7 +1053,7 @@ function EditPostForm({
   post: ReportPost;
   topic: ReportTopic;
   onCancel: () => void;
-  onSave: (data: { title: string; sections: ReturnType<typeof buildSections>; images: ReportPostImage[] }) => void;
+  onSave: (data: { title: string; sections: ReturnType<typeof buildSections>; images: ReportPostImage[]; tagIds: string[] }) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState(post.title);
@@ -1052,6 +1063,7 @@ function EditPostForm({
       : [newSection()]
   );
   const [images, setImages] = useState<ReportPostImage[]>(post.images);
+  const [tagIds, setTagIds] = useState<string[]>(post.tagIds);
   const [busy, setBusy] = useState(false);
 
   const minImagesRequired = minImagesNow(topic);
@@ -1083,6 +1095,7 @@ function EditPostForm({
       title: title.trim(),
       sections: buildSections(sections),
       images,
+      tagIds,
     });
   }
 
@@ -1102,6 +1115,8 @@ function EditPostForm({
         onSectionsChange={setSections}
         images={images}
         onImagesChange={setImages}
+        tagIds={tagIds}
+        onTagIdsChange={setTagIds}
         minImages={minImagesRequired}
         fileInputRef={fileInputRef}
         busy={busy}

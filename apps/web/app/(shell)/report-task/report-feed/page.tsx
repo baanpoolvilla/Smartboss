@@ -15,6 +15,7 @@ import { Button, buttonVariants } from "@/modules/report_task/components/ui/butt
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/modules/report_task/components/ui/sheet";
 import { useReportFeedStore, type ReportPost } from "@/modules/report_task/store/report-feed-store";
+import { useReportTagStore } from "@/modules/report_task/store/report-tag-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { users } from "@/modules/report_task/lib/directory";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -80,6 +81,7 @@ export default function ReportFeedPage() {
 function ReportFeedPageInner() {
   const topics = useReportFeedStore((s) => s.topics);
   const posts = useReportFeedStore((s) => s.posts);
+  const reportTags = useReportTagStore((s) => s.tags);
   const togglePin = useReportFeedStore((s) => s.togglePin);
   const updateTopicSettings = useReportFeedStore((s) => s.updateTopicSettings);
   const markTopicRead = useReportFeedStore((s) => s.markTopicRead);
@@ -129,6 +131,7 @@ function ReportFeedPageInner() {
   // above, then kept in sync both ways via the effect below.
   const [filters, setFilters] = useState<PostFilters>(() => ({
     authorIds: new Set((searchParams.get("author") ?? "").split(",").filter(Boolean)),
+    tagIds: new Set((searchParams.get("tag") ?? "").split(",").filter(Boolean)),
     lateOnly: searchParams.get("late") === "1",
     unreadOnly: searchParams.get("unread") === "1",
     hasImageOnly: searchParams.get("image") === "1",
@@ -141,6 +144,7 @@ function ReportFeedPageInner() {
       else params.delete(key);
     };
     set("author", filters.authorIds.size > 0 ? [...filters.authorIds].join(",") : null);
+    set("tag", filters.tagIds.size > 0 ? [...filters.tagIds].join(",") : null);
     set("late", filters.lateOnly ? "1" : null);
     set("unread", filters.unreadOnly ? "1" : null);
     set("image", filters.hasImageOnly ? "1" : null);
@@ -551,6 +555,7 @@ function ReportFeedPageInner() {
                       filters={filters}
                       onChange={setFilters}
                       authorOptions={topicMembers.map((m) => m.id)}
+                      tagOptions={reportTags}
                     />
                     {/* รูปแบบห้อง (สตรีม/กระทู้) ตั้งไว้ครั้งเดียวในตั้งค่าห้อง — ไม่ใช่
                         ปุ่มสลับส่วนตัวอีกต่อไป ทุกคนในห้องเห็นแบบเดียวกัน (see

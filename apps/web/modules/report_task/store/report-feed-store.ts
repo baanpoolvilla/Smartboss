@@ -58,6 +58,13 @@ export interface ReportPostFields {
   title: string;
   sections: ReportPostSection[];
   images: ReportPostImage[];
+  /** Which curated ReportTag ids this post is filed under — see
+   * report-tag-store.ts. A post can carry more than one (e.g. "ด่วน" +
+   * "งานลูกค้า A"), unlike topicId which is single-select. Empty array, not
+   * undefined, when untagged — every ReportPost has always had `[]`-shaped
+   * array fields (images, replies, ...) rather than optional ones, so
+   * `.some()`/`.length` callers never need an `?? []` guard. */
+  tagIds: string[];
 }
 
 export interface ReportPost extends ReportPostFields {

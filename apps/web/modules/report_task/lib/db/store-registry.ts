@@ -30,6 +30,7 @@ export const STORE_KEYS = {
   "settings-access": "stores/settings-access.json",
   stickers: "stores/stickers.json",
   "project-topics": "stores/project-topics.json",
+  "report-tags": "stores/report-tags.json",
   "attachment-settings": "stores/attachment-settings.json",
   "reminder-settings": "stores/reminder-settings.json",
   // Only the on/off switch lives here — the AI's own output ("ai-insight-

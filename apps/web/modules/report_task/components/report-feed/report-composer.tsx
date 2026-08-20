@@ -29,12 +29,14 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   const [title, setTitle] = useState("");
   const [sections, setSections] = useState<DraftSection[]>(() => initialSections(topic));
   const [images, setImages] = useState<ReportPostImage[]>([]);
+  const [tagIds, setTagIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
   function reset() {
     setTitle("");
     setSections(initialSections(topic));
     setImages([]);
+    setTagIds([]);
     setExpanded(false);
   }
 
@@ -88,6 +90,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
       title: title.trim(),
       sections: cleanSections,
       images,
+      tagIds,
     });
     reset();
   }
@@ -144,6 +147,8 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
           onSectionsChange={setSections}
           images={images}
           onImagesChange={setImages}
+          tagIds={tagIds}
+          onTagIdsChange={setTagIds}
           minImages={minImagesRequired}
           fileInputRef={fileInputRef}
           busy={busy}

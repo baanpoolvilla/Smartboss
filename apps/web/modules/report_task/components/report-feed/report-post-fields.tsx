@@ -19,6 +19,7 @@ import {
 } from "@/modules/report_task/lib/report-feed-rich-text";
 import { cn } from "@/modules/report_task/lib/utils";
 import { AlbumPickerButton } from "@/modules/report_task/components/report-feed/album-picker-button";
+import { TagPickerButton } from "@/modules/report_task/components/report-feed/tag-picker-button";
 import { Bold, Building2, Code, Hash, ImagePlus, Italic, List, ListOrdered, Minus, Plus, Square, Table, Trash2, TriangleAlert, Underline, User, X } from "lucide-react";
 import { LinkInsertPopover } from "@/modules/report_task/components/report-feed/link-insert-popover";
 
@@ -77,6 +78,8 @@ export function ReportPostFields({
   onSectionsChange,
   images,
   onImagesChange,
+  tagIds,
+  onTagIdsChange,
   minImages,
   fileInputRef,
   busy,
@@ -90,6 +93,9 @@ export function ReportPostFields({
   onSectionsChange: (v: DraftSection[]) => void;
   images: ReportPostImage[];
   onImagesChange: (v: ReportPostImage[]) => void;
+  /** Curated ReportTag ids attached to this post — see TagPickerButton. */
+  tagIds: string[];
+  onTagIdsChange: (v: string[]) => void;
   /** Minimum photos required before this post can be submitted (0 = not required). */
   minImages: number;
   fileInputRef: RefObject<HTMLInputElement | null>;
@@ -541,6 +547,8 @@ export function ReportPostFields({
         onChange={(e) => onTitleChange(e.target.value)}
         className="font-medium"
       />
+
+      <TagPickerButton tagIds={tagIds} onChange={onTagIdsChange} />
 
       <div className="space-y-3">
         {/* react-hooks/refs (React Compiler's ref-in-render check) flags this

@@ -18,6 +18,7 @@ import { useHolidayStore } from "@/modules/report_task/store/holiday-store";
 import { useLeaveTypeStore } from "@/modules/report_task/store/leave-type-store";
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
 import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
+import { useReportTagStore } from "@/modules/report_task/store/report-tag-store";
 import { useIssueReportStore, migrateIssueStoreSlice, extractV1RecipientDepartmentIds } from "@/modules/report_task/store/issue-report-store";
 import { useIssueDeskConfigStore } from "@/modules/report_task/store/issue-desk-config-store";
 import { useDepartmentStore } from "@/modules/report_task/store/department-store";
@@ -125,6 +126,12 @@ export function StoreHydrator() {
         store={useReportFeedStore}
         select={(s) => ({ topics: s.topics, posts: s.posts, albums: s.albums })}
         apply={(s, slice) => ({ ...s, ...slice, loaded: true })}
+      />
+      <ServerStoreSync
+        apiKey="report-tags"
+        store={useReportTagStore}
+        select={(s) => s.tags}
+        apply={(s, tags) => ({ ...s, tags })}
       />
       <ServerStoreSync
         apiKey="issue-reports"
