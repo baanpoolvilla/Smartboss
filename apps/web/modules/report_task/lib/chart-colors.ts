@@ -13,10 +13,14 @@ export const chartColors = {
   // glance (one still needs a sign-off, the other is actually finished) — a
   // pale/deep pair reads that distinction better than two columns sharing
   // the exact same mid-tone green.
-  greenPale: "#77DD77", // "รอตรวจสอบ" — done but not yet reviewed ("Pastel Green")
-  greenDeep: "#4CBB17", // "เสร็จสิ้น", reviewed & signed off ("Kelly Green") —
-  // picked by name/swatch, not the muddy near-black #1e7830
-  // (= --brand-green-dark) tried first, which read as unattractive
+  // Same hue as the app's one existing green (#22c55e, used everywhere
+  // else already) instead of a different named green pulled in from
+  // outside — just two points on that one color's own light/dark range,
+  // so the pair reads as "the app's green, lighter vs. fuller" rather
+  // than two unrelated greens competing (every prior attempt: a muddy
+  // near-black #1e7830, then an unrelated "Pastel/Kelly Green" pair).
+  greenPale: "#a7e8bf", // "รอตรวจสอบ" — #22c55e mixed 40% with white
+  greenDeep: "#22c55e", // "เสร็จสิ้น" — the app's actual --chart-green, full strength
   amber: "#f59e0b",
   amberDark: "#b45309",
   amberLight: "#fcd34d",
