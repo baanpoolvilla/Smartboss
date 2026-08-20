@@ -115,7 +115,7 @@ SELECT
   :org,
   COALESCE(NULLIF(lower(btrim(u.email)), ''),
            'imported-' || left(u.id::text, 8) || '@changyai.invalid'),
-  COALESCE(NULLIF(btrim(u.name), ''), 'ยังไม่ระบุชื่อ ' || left(u.id::text, 8)),
+  COALESCE(NULLIF(btrim(u.full_name), ''), 'ยังไม่ระบุชื่อ ' || left(u.id::text, 8)),
   'IMPORTED-NO-LOGIN',
   u.line_user_id,
   TRUE,
@@ -164,9 +164,9 @@ FROM changyai_raw.assets a;
 INSERT INTO maintenance.contractors
   (id, org_id, name, phone, specialty, company_name, zone, rating, is_active, notes,
    price, category, created_at)
-SELECT c.id::text, :org, c.name, c.phone, c.specialty, c.company, c.zone,
+SELECT c.id::text, :org, c.name, c.phone, c.specialty, c.company_name, c.zone,
        c.rating, COALESCE(c.is_active, TRUE), c.notes,
-       c.price, c.price_category, COALESCE(c.created_at, now())
+       c.price, c.category, COALESCE(c.created_at, now())
 FROM changyai_raw.contractors c;
 
 -- ═══ 6. แผนบำรุงรักษา ════════════════════════════════════════════════
@@ -245,7 +245,7 @@ FROM changyai_raw.purchase_order_comments c;
 INSERT INTO maintenance.equipment_returns
   (id, org_id, purchase_order_id, property_id, created_by, item_name, qty, problem_type, reason,
    status, image_urls, resolution_note, resolved_by, resolved_at, created_at, updated_at)
-SELECT r.id::text, :org, r.purchase_order_id::text, r.property_id::text, changyai_raw.uid(r.reported_by),
+SELECT r.id::text, :org, r.purchase_order_id::text, r.property_id::text, changyai_raw.uid(r.created_by),
        r.item_name, COALESCE(r.qty, 1), r.problem_type, r.reason, COALESCE(r.status, 'pending'),
        COALESCE(r.image_urls::text[], '{}'), r.resolution_note,
        changyai_raw.uid(r.resolved_by), r.resolved_at, COALESCE(r.created_at, now()), now()
@@ -260,7 +260,7 @@ INSERT INTO maintenance.expenses
    is_no_expense, expense_date, created_at)
 SELECT e.id::text, :org, e.work_order_id::text, e.pm_schedule_id::text,
        e.purchase_order_id::text, e.property_id::text, changyai_raw.uid(e.created_by),
-       COALESCE(e.description, e.title), COALESCE(e.amount, 0), e.category, e.receipt_url,
+       e.description, COALESCE(e.amount, 0), e.category, e.receipt_url,
        COALESCE(e.billable_to_partner, FALSE), e.cost_type, e.paid_by,
        COALESCE(e.is_no_expense, FALSE), e.expense_date, COALESCE(e.created_at, now())
 FROM changyai_raw.expenses e;

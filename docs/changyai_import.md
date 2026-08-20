@@ -39,7 +39,49 @@ ls -lh /tmp/changyai.sql
 
 **คัดลอกเก็บไว้นอกเครื่องด้วยทันที** — นี่คือสำเนาชุดเดียวที่มีของระบบเก่า
 
-### 0.3 โหลดเข้า schema พัก ไม่ใช่ทับของจริง
+### 0.3 โหลดเข้า schema พัก — เอาเฉพาะตาราง
+
+**ห้ามโหลด dump เข้า `public` ของเราโดยตรง** — ชื่อตารางชนกัน
+และข้อมูลต้นทางยังไม่มี `org_id` ⇒ จะปนกับของจริงแล้วแยกไม่ออก
+
+```bash
+sudo bash deploy/backup.sh
+
+cp /tmp/changyai-schema.sql /tmp/s.sql
+cp /tmp/changyai.sql        /tmp/d.sql
+
+# โครงตาราง — ไม่มีข้อมูลปน แทนที่ได้กว้าง
+sed -i 's/public\./changyai_raw./g' /tmp/s.sql
+
+# ข้อมูล — แตะเฉพาะหัวบรรทัด COPY กับ setval เท่านั้น
+sed -i "s/^COPY public\./COPY changyai_raw./; s/^SELECT pg_catalog\.setval('public\./SELECT pg_catalog.setval('changyai_raw./" /tmp/d.sql
+```
+
+> ⚠ อย่าแทนที่ `public.` ทั้งไฟล์ของไฟล์ข้อมูล — ถ้ามีข้อความไหน
+> ในข้อมูลลงท้ายว่า "public." จะถูกแก้ไปด้วยแบบเงียบ ๆ
+
+**โหลดเฉพาะ CREATE TABLE ทิ้ง FK/policy/trigger/grant ทั้งหมด**
+
+ตารางหลัก  8 ตัวของ ChangYai มี FK ชี้ไป `auth.users` ของ Supabase
+โหลดโครงสร้างทั้งก้อนจะล้มเป็นลูกโซ่ (เจอจริง: สร้างได้แค่ 10/18 ตาราง)
+
+```bash
+awk '/^CREATE (TABLE|TYPE) /{p=1} p{print} /^\);?$/{if(p){print ""; p=0}}' /tmp/s.sql > /tmp/tables.sql
+grep -c "^CREATE TABLE" /tmp/tables.sql    # ต้องได้ 18
+
+sudo bash deploy/psql.sh -c "
+  CREATE SCHEMA IF NOT EXISTS extensions;
+  CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\" SCHEMA extensions;"
+
+sudo bash deploy/psql.sh -c "DROP SCHEMA IF EXISTS changyai_raw CASCADE; CREATE SCHEMA changyai_raw;"
+sudo bash deploy/psql.sh -f /tmp/tables.sql
+sudo bash deploy/psql.sh -f /tmp/d.sql
+```
+
+`uuid_generate_v4()` ถูกใช้ใน DEFAULT ของคอลัมน์ ⇒ ยังต้องมี schema `extensions`
+ไม่มี FK ในตารางพัก ⇒ ลำดับการโหลดไม่สำคัญ
+
+ ไม่ใช่ทับของจริง
 
 **ห้ามโหลด dump เข้า `public` ของเราโดยตรง** — ชื่อตารางชนกัน และข้อมูลต้นทางยังไม่มี `org_id` ⇒ จะปนกับของจริงแล้วแยกไม่ออก
 
