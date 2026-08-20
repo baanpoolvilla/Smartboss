@@ -28,7 +28,6 @@ import {
 export default function AiInsightDetailPage() {
   const router = useRouter();
   const { enabled, autoMode, setAutoMode, status, analyzing, error, runAnalysis } = useAiInsight();
-  const [showDetail, setShowDetail] = useState(false);
   const [showKpis, setShowKpis] = useState(true);
   const [tab, setTab] = useState<"company" | "dept" | "person" | "reco">("company");
 
@@ -145,10 +144,7 @@ export default function AiInsightDetailPage() {
                           <div className="mt-1.5 text-[10.5px] leading-tight text-[var(--ink-soft)]">{s.label}</div>
                           <button
                             type="button"
-                            onClick={() => {
-                              setTab("company");
-                              setShowDetail(true);
-                            }}
+                            onClick={() => setTab("company")}
                             className="mt-2 w-full rounded-lg border border-[var(--line)] py-1 text-[10.5px] font-semibold text-[var(--ink-soft)] transition-colors hover:border-[var(--chart-violet)] hover:text-[var(--chart-violet)]"
                           >
                             ดูรายละเอียด
@@ -396,57 +392,6 @@ export default function AiInsightDetailPage() {
                     </div>
                   )}
                 </>
-              )}
-            </div>
-          )}
-
-          {result && tab === "company" && status.state.detail.length > 0 && (
-            <div>
-              <button
-                type="button"
-                onClick={() => setShowDetail((v) => !v)}
-                className="flex items-center gap-1 text-[11.5px] font-semibold text-[var(--chart-violet)] hover:underline"
-              >
-                <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showDetail && "rotate-180")} />
-                {showDetail ? "ซ่อนรายละเอียด" : "ดูรายละเอียดทั้งหมด"}
-              </button>
-              {showDetail && (
-                <div className="mt-2 flex flex-col gap-2.5 rounded-xl border border-[var(--line)] bg-[var(--bg-soft)] p-3">
-                  {status.state.detail.map((g, i) => {
-                    const max = g.people[0]?.count || 1;
-                    return (
-                      <div key={i} className="flex flex-col gap-1">
-                        <div className="flex items-center justify-between text-[11.5px]">
-                          <span className="font-semibold text-[var(--ink)]">
-                            <span className={cn("mr-1.5 rounded-full px-1.5 py-0.5 text-[9.5px] font-bold", g.domain === "task" ? "bg-[color-mix(in_srgb,var(--chart-blue)_14%,white)] text-[var(--chart-blue)]" : "bg-[color-mix(in_srgb,var(--chart-violet)_14%,white)] text-[var(--chart-violet)]")}>
-                              {g.domain === "task" ? "งาน" : "รายงาน"}
-                            </span>
-                            {g.label}
-                          </span>
-                          <span className="font-bold text-[var(--ink)] tabular-nums">{g.count} รายการ</span>
-                        </div>
-                        {g.people.length > 0 ? (
-                          <div className="flex flex-col gap-1">
-                            {g.people.map((p, j) => (
-                              <div key={j} className="flex items-center gap-2">
-                                <span className="w-24 shrink-0 truncate text-[11px] text-[var(--ink-soft)]">{p.name}</span>
-                                <div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--bg)]">
-                                  <div
-                                    className="h-full rounded-full"
-                                    style={{ width: `${(p.count / max) * 100}%`, background: "linear-gradient(90deg, var(--chart-violet), var(--chart-blue))" }}
-                                  />
-                                </div>
-                                <span className="w-6 shrink-0 text-right text-[11px] font-semibold tabular-nums text-[var(--ink)]">{p.count}</span>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-[11px] text-[var(--ink-faint)]">ไม่ระบุตัวบุคคล</p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
               )}
             </div>
           )}
