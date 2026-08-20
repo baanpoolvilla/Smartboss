@@ -13,6 +13,7 @@ import type { User } from "../../types";
 import { StoreHydrator } from "./store-hydrator";
 import { TaskSync } from "./task-sync";
 import { TourOverlay } from "./tour-overlay";
+import { Toaster } from "../ui/sonner";
 
 /**
  * ครอบทุกหน้าของโมดูลด้วย AppScaffold ตัวเดียวกับ maintenance / hr / admin
@@ -78,6 +79,10 @@ export function ReportTaskScaffold({
       <StoreHydrator />
       <TaskSync />
       <TourOverlay />
+      {/* ตัวแสดงผล toast.success/error/... ที่เรียกกันทั่วทั้งโมดูล — เดิมไม่มี
+          <Toaster /> วางไว้ที่ไหนเลยสักหน้า เรียก toast(...) แล้วเงียบไปเฉยๆ
+          ไม่มีอะไรขึ้นบนจอ */}
+      <Toaster position="top-center" />
 
       <AppScaffold title={title} width="max-w-[1600px]" fill={isBoard} fillMaxWidth={isBoard}>
         {children}
