@@ -11,6 +11,7 @@ import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useVisibleTasks } from "@/modules/report_task/hooks/use-visible-tasks";
+import { cn } from "@/modules/report_task/lib/utils";
 
 /** One legend/breakdown row shared between the bar's click-to-open popover and its color key. */
 function BarBreakdownRow({ color, label, count, total }: { color: string; label: string; count: number; total: number }) {
@@ -127,10 +128,27 @@ export function WorkloadView() {
                     </div>
                   </PopoverContent>
                 </Popover>
+                {/* Same 4 categories, same colored dots, as the click-to-open
+                    breakdown popover above — this row used to only show 3
+                    (no "รอดำเนินการ"), reading as a different, incomplete
+                    summary of the exact same bar sitting right above it. */}
                 <div className="flex items-center gap-2.5 mt-1.5 text-[11px] text-[var(--ink-soft)] flex-wrap">
-                  <span>กำลังทำ {inProgressNotOverdue}</span>
-                  {r.overdue > 0 && <span className="text-[var(--chart-red)] font-medium">เลยกำหนด {r.overdue}</span>}
-                  <span>เสร็จ {r.done}</span>
+                  <span className="flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: "#94a3b8" }} />
+                    รอดำเนินการ {r.todo}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: "var(--chart-amber)" }} />
+                    กำลังทำ {inProgressNotOverdue}
+                  </span>
+                  <span className={cn("flex items-center gap-1", r.overdue > 0 && "text-[var(--chart-red)] font-medium")}>
+                    <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: "var(--chart-red)" }} />
+                    เลยกำหนด {r.overdue}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: "var(--chart-green)" }} />
+                    เสร็จ {r.done}
+                  </span>
                   {overloaded && <span className="text-[10px] rounded-full bg-amber-50 text-[var(--chart-amber)] px-1.5 py-0.5">งานเยอะ</span>}
                 </div>
               </div>
