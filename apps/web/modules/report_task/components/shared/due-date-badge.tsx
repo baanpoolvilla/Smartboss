@@ -16,10 +16,15 @@ export function DueDateBadge({ task, className }: { task: Task; className?: stri
   const date = formatShortDate(task.dueDate);
 
   if (urgency === "normal") {
+    // "กำหนดส่ง" spelled out here, unlike the soon/overdue chips below — those
+    // already read as a due date from their red/amber coloring and lateness
+    // tail alone, but a plain-styled date (esp. on a "เสร็จสิ้น" card, where
+    // there's no other date on the card to contrast it against) is otherwise
+    // ambiguous about which date it even is.
     return (
       <span className={cn("inline-flex items-center gap-1 text-[11px] text-[var(--ink-soft)] whitespace-nowrap", className)}>
         <CalendarDays className="h-3 w-3" />
-        {date}
+        กำหนดส่ง {date}
       </span>
     );
   }

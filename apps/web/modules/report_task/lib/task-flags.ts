@@ -1,5 +1,6 @@
 import type { Task } from "@/modules/report_task/types";
 import { daysUntil } from "@/modules/report_task/lib/format";
+import { taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
 
 export type DueUrgency = "overdue" | "soon" | "normal";
 
@@ -40,9 +41,11 @@ export function reactionCounts(task: Task): Record<string, number> {
  * once someone hits "ผ่าน" — otherwise clicking "ผ่าน" only swaps a badge for
  * nothing and the card stays wherever createdAt happened to place it, which
  * reads as the sign-off feature not doing anything. Within any other tier,
- * oldest-created leads — whichever's been sitting the longest surfaces
- * first, so nothing quietly gets buried under newer cards. Doesn't mutate
- * the input array.
+ * highest priority (ด่วนมาก first) leads, then soonest due date, so the
+ * card that most needs attention next sits at the top instead of just
+ * whichever was created first — createdAt only breaks a remaining tie (same
+ * priority, same due date) for stable ordering. Doesn't mutate the input
+ * array.
  */
 export function sortTasksForDisplay(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => {
@@ -57,6 +60,12 @@ export function sortTasksForDisplay(tasks: Task[]): Task[] {
       const bReviewed = b.reviewedBy ? 1 : 0;
       if (aReviewed !== bReviewed) return aReviewed - bReviewed;
     }
+    const aPriority = taskPriorityOrder.indexOf(a.priority);
+    const bPriority = taskPriorityOrder.indexOf(b.priority);
+    if (aPriority !== bPriority) return aPriority - bPriority;
+    const aDue = new Date(a.dueDate).getTime();
+    const bDue = new Date(b.dueDate).getTime();
+    if (aDue !== bDue) return aDue - bDue;
     return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
   });
 }
