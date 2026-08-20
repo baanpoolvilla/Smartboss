@@ -45,6 +45,10 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority }: C
   const stickers = useStickerStore((s) => s.stickers);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const isDone = task.status === "done";
+  // Strikethrough specifically means "confirmed finished" — a done-but-
+  // unreviewed card ("รอตรวจสอบ") still needs someone to actually check it,
+  // so crossing the title out already read as more final than it really is.
+  const isReviewedDone = isDone && !!task.reviewedBy;
   // A group task tracks each assignee's own completion, derived from their
   // own checklist items — the card's status only follows once everyone's
   // marked done (see task-completion.ts). The quick-toggle circle below
@@ -245,7 +249,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority }: C
           </Tooltip>
         )}
         <div className="min-w-0 flex-1">
-          <p className={cn("text-[13px] font-semibold leading-snug line-clamp-2 text-[var(--ink)]", isDone && "line-through text-[var(--ink-soft)] font-medium")}>
+          <p className={cn("text-[13px] font-semibold leading-snug line-clamp-2 text-[var(--ink)]", isDone && "text-[var(--ink-soft)] font-medium", isReviewedDone && "line-through")}>
             {task.title}
           </p>
           {isShared && (

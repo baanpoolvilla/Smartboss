@@ -83,6 +83,13 @@ export const taskSchema = z.object({
   missedDeadlineOnce: z.boolean().optional(),
   reopenedOnce: z.boolean().optional(),
   completedAssigneeIds: z.array(z.string()).optional(),
+  // Missing here meant zod's default "strip unknown keys" behavior silently
+  // dropped the "ผ่าน" sign-off on every save — the client showed it
+  // immediately (optimistic store update) but a refresh re-fetched the
+  // server copy, which never had it. Not a DB issue: `data` is a JSON blob,
+  // this schema is the only thing standing between the client payload and it.
+  reviewedBy: z.string().optional(),
+  reviewedAt: z.string().optional(),
   attachments: z.array(attachmentSchema),
   comments: z.array(commentSchema),
   revisions: z.array(revisionEntrySchema),
