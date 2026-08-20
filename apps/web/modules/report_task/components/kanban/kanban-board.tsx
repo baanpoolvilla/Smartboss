@@ -2,35 +2,19 @@
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import {
-  DndContext,
-  DragOverlay,
-  KeyboardSensor,
-  PointerSensor,
-  closestCorners,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragStartEvent,
-  type KeyboardCodes,
-} from "@dnd-kit/core";
-import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { canEditRecord, canSeeTask } from "@/modules/report_task/lib/permissions";
+import { canSeeTask } from "@/modules/report_task/lib/permissions";
 import { dueUrgency, sortTasksForDisplay } from "@/modules/report_task/lib/task-flags";
-import { isTaskFullyDone, remainingChecklistCount } from "@/modules/report_task/lib/task-completion";
-import { getUser, getDepartment, users } from "@/modules/report_task/lib/directory";
+import { getDepartment, users } from "@/modules/report_task/lib/directory";
 import { statusMeta, priorityMeta, priorityColorHex, taskPriorityOrder, statusIcon } from "@/modules/report_task/lib/task-meta";
 import { matchesTaskFilters } from "@/modules/report_task/lib/task-filter";
 import { useTaskSheetParam } from "@/modules/report_task/hooks/use-task-sheet-param";
 import { statusColors, chartColors } from "@/modules/report_task/lib/chart-colors";
 import { cn } from "@/modules/report_task/lib/utils";
 import { KanbanColumn, type BoardColumn } from "./kanban-column";
-import { TaskCardOverlay } from "./task-card";
 import { TaskDetailSheet } from "./task-detail-sheet";
 import { PersonTopicsBoard } from "./person-topics-board";
-import type { Task, TaskPriority, TaskStatus } from "@/modules/report_task/types";
 import { toast } from "sonner";
 import { useTaskBoardIntentStore } from "@/modules/report_task/store/task-board-intent-store";
 import { Info, SearchX, AlarmClockOff, ChevronLeft, ChevronRight } from "lucide-react";
@@ -47,18 +31,9 @@ export const groupByLabels: Record<GroupBy, string> = {
 const statusAccent = statusColors;
 const priorityAccent = priorityColorHex;
 
-const dragKeyboardCodes: KeyboardCodes = {
-  start: ["Space"],
-  cancel: ["Escape"],
-  end: ["Space"],
-};
-
 export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   const storeTasks = useTaskStore((s) => s.tasks);
   const filters = useTaskStore((s) => s.filters);
-  const moveTask = useTaskStore((s) => s.moveTask);
-  const updateTask = useTaskStore((s) => s.updateTask);
-  const setAssignees = useTaskStore((s) => s.setAssignees);
   const setFilters = useTaskStore((s) => s.setFilters);
   const resetFilters = useTaskStore((s) => s.resetFilters);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
@@ -69,7 +44,6 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
     [storeTasks, viewingAsUserId]
   );
 
-  const [activeTask, setActiveTask] = useState<Task | null>(null);
   // Mirrored into the `?task=` URL param (see the hook) so the browser Back
   // button closes the sheet before leaving the page — falls back to the
   // one-shot navigation intent (dashboard chart click) when there's no
@@ -171,14 +145,6 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
       el.classList.add(...baseClasses);
     };
   }, [highlightTaskId]);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    // Only Space picks up/drops a card via keyboard — Enter is left free so
-    // a focused card can be opened (see TaskCard's onKeyDown) instead of
-    // starting a drag.
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates, keyboardCodes: dragKeyboardCodes })
-  );
 
   const filtered = useMemo(
     () => allTasks.filter((t) => matchesTaskFilters(t, filters)),
@@ -312,10 +278,9 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   // Click-and-drag panning on empty board background — assignee grouping
   // only (that's the view with by far the most columns, one per employee).
   // Status/priority stay scroll-wheel/button-only since they rarely exceed
-  // 3-4 columns and dnd-kit already owns most of their surface area.
-  // Anything that's an actual card or a real control (button/link/header
-  // click) is left alone for dnd-kit / its own onClick — panning only
-  // starts from a pointerdown that lands on genuinely empty background.
+  // 3-4 columns. Anything that's an actual card or a real control
+  // (button/link/header click) is left alone for its own onClick — panning
+  // only starts from a pointerdown that lands on genuinely empty background.
   const panRef = useRef<{ startX: number; startScrollLeft: number; pointerId: number } | null>(null);
   const [isPanning, setIsPanning] = useState(false);
 
@@ -343,81 +308,6 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
     scrollerRef.current?.releasePointerCapture(e.pointerId);
     panRef.current = null;
     setIsPanning(false);
-  }
-
-  function handleDragStart(e: DragStartEvent) {
-    setActiveTask(allTasks.find((t) => t.id === e.active.id) ?? null);
-  }
-
-  function handleDragEnd(e: DragEndEvent) {
-    const { active, over } = e;
-    setActiveTask(null);
-    if (!over) return;
-
-    const task = allTasks.find((t) => t.id === active.id);
-    if (!task) return;
-
-    const columnIds = columns.map((c) => c.id);
-    const overIsColumn = columnIds.includes(String(over.id));
-    const targetColumnId = overIsColumn
-      ? String(over.id)
-      : (over.data.current?.columnId as string | undefined);
-    if (!targetColumnId) return;
-
-    // Dropping into a column means "set this task's grouped attribute to that column".
-    if (groupBy === "status") {
-      // "เลยกำหนด" is derived from the due date, not a real status — it fills
-      // itself in and empties itself out as dates pass, so there's nothing
-      // to set by dropping a card there (§5).
-      if (targetColumnId === "overdue") {
-        toast.error("คอลัมน์ \"เลยกำหนด\" คำนวณจากวันครบกำหนดอัตโนมัติ ลากเข้าไม่ได้");
-        return;
-      }
-      // A card sitting in "เลยกำหนด" only has one real drag exit: mark it
-      // done. Dragging it to "รอดำเนินการ"/"กำลังทำ" instead wouldn't do
-      // anything visible — it's still overdue, so it'd just re-derive right
-      // back into "เลยกำหนด" next render. The actual way out of those two is
-      // editing the due date (task detail sheet), not a drag.
-      if (task.status !== "done" && dueUrgency(task) === "overdue" && targetColumnId !== "done") {
-        toast.error("งานนี้เลยกำหนดอยู่ — ลากไปแค่ \"เสร็จสิ้น\" ได้ ถ้าจะย้ายไปคอลัมน์อื่นต้องเลื่อนวันครบกำหนดก่อน");
-        return;
-      }
-      if (task.status === targetColumnId) return;
-      if (targetColumnId === "done" && !isTaskFullyDone(task.assigneeIds, task.checklist)) {
-        toast.error(`"${task.title}" ยังติ๊ก checklist ไม่ครบ ${remainingChecklistCount(task.checklist)} ข้อ — ทำให้ครบก่อนถึงจะปิดงานได้`);
-        return;
-      }
-      moveTask(task.id, targetColumnId as TaskStatus);
-      toast.success(`ย้าย "${task.title}" ไปยัง ${statusMeta[targetColumnId as TaskStatus].label} แล้ว`);
-    } else if (groupBy === "priority") {
-      if (task.priority === targetColumnId) return;
-      if (!canEditRecord(task.assignedById, task.departmentIds, viewingAsUserId)) {
-        toast.error(`แก้ไขความสำคัญได้เฉพาะผู้สร้างงานหรือหัวหน้าแผนก "${task.title}"`);
-        return;
-      }
-      updateTask(task.id, { priority: targetColumnId as TaskPriority });
-      toast.success(`เปลี่ยนความสำคัญ "${task.title}" เป็น ${priorityMeta[targetColumnId as TaskPriority].label}`);
-    } else {
-      // A task with several assignees shows in each of their columns, so dragging
-      // swaps only the column it was dragged FROM for the target — the other
-      // assignees stay put instead of being wiped.
-      const sourceColumnId = active.data.current?.columnId as string | undefined;
-      if (task.assigneeIds.includes(targetColumnId)) return;
-      if (!canEditRecord(task.assignedById, task.departmentIds, viewingAsUserId)) {
-        toast.error(`แก้ไขผู้รับผิดชอบได้เฉพาะผู้สร้างงานหรือหัวหน้าแผนก "${task.title}"`);
-        return;
-      }
-      const next = sourceColumnId
-        ? task.assigneeIds.map((id) => (id === sourceColumnId ? targetColumnId : id))
-        : [targetColumnId];
-      setAssignees(task.id, next);
-      const others = next.length - 1;
-      toast.success(
-        others > 0
-          ? `ย้าย "${task.title}" ให้ ${getUser(targetColumnId)?.name} (ยังมีผู้รับผิดชอบร่วมอีก ${others} คน)`
-          : `มอบหมาย "${task.title}" ให้ ${getUser(targetColumnId)?.name}`
-      );
-    }
   }
 
   const sharedCount = useMemo(() => filtered.filter((t) => t.assigneeIds.length > 1).length, [filtered]);
@@ -462,13 +352,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
           }
         />
       ) : (
-        <DndContext
-          id="kanban-board"
-          sensors={sensors}
-          collisionDetection={closestCorners}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-        >
+        <>
           {/* Buttons anchor to a fixed offset near the column headers (~top
               center of the header card), not a vertical center of the whole
               scroll area — a column can run to dozens of cards tall, and
@@ -528,8 +412,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
               ))}
             </div>
           </div>
-          <DragOverlay>{activeTask ? <TaskCardOverlay task={activeTask} groupedByPriority={groupBy === "priority"} /> : null}</DragOverlay>
-        </DndContext>
+        </>
       )}
 
       <TaskDetailSheet taskId={openTaskId} onOpenChange={(open) => !open && closeTaskSheet()} />

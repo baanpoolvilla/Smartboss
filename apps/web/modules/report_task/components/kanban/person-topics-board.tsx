@@ -1,12 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import {
-  DndContext,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { ArrowLeft, ChevronLeft, ChevronRight, FolderKanban, SearchX, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import {
@@ -72,11 +66,6 @@ export function PersonTopicsBoard({
   const topics = useProjectTopicStore((s) => s.topics);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const person = getUser(personId);
-  // No drag-and-drop here (nothing to reorder into) — an empty sensor list
-  // just gives TaskCard's useSortable a context to mount in without ever
-  // actually activating a drag.
-  const sensors = useSensors();
-  function noopDragEnd(_e: DragEndEvent) {}
 
   const columns = useMemo(() => {
     const mine = allTasks
@@ -234,7 +223,7 @@ export function PersonTopicsBoard({
           description="ลองเลือกหัวข้อโปรเจคอื่น หรือกดล้างตัวกรองเพื่อดูทุกหัวข้อ"
         />
       ) : (
-        <DndContext id="person-topics-board" sensors={sensors} onDragEnd={noopDragEnd}>
+        <>
           <div className="relative flex-1">
             {canScrollLeft && (
               <>
@@ -322,18 +311,16 @@ export function PersonTopicsBoard({
                       "flex-1 flex flex-col gap-3 p-2.5 rounded-xl min-h-[200px] bg-[var(--bg-soft)]/50"
                     )}
                   >
-                    <SortableContext items={column.tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-                      {column.tasks.map((t) => (
-                        <TaskCard key={t.id} task={t} columnId={column.id} onOpen={onOpenTask} />
-                      ))}
-                    </SortableContext>
+                    {column.tasks.map((t) => (
+                      <TaskCard key={t.id} task={t} onOpen={onOpenTask} />
+                    ))}
                   </div>
                 </div>
               );
             })}
             </div>
           </div>
-        </DndContext>
+        </>
       )}
     </div>
   );

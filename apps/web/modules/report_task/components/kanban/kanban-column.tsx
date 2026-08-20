@@ -1,11 +1,8 @@
 "use client";
 
-import { useDroppable } from "@dnd-kit/core";
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { TaskCard } from "./task-card";
 import { ShowMoreToggle } from "@/modules/report_task/components/shared/show-more-toggle";
 import { useShowMore } from "@/modules/report_task/hooks/use-show-more";
-import { cn } from "@/modules/report_task/lib/utils";
 import { statusMeta } from "@/modules/report_task/lib/task-meta";
 import type { Task, TaskStatus } from "@/modules/report_task/types";
 import type { LucideIcon } from "lucide-react";
@@ -16,10 +13,11 @@ export interface BoardColumn {
   accent: string;
   icon?: LucideIcon;
   tasks: Task[];
-  /** Computed from due dates, not a real grouped attribute — can't be a drop target (§5). */
+  /** Computed from due dates, not a real grouped attribute — a task never
+   * "belongs" to this column directly, it just currently qualifies. */
   derived?: boolean;
-  /** Overrides the generic "ลากงานมาวางที่นี่" empty state — the derived
-   * "เลยกำหนด" column can't accept drops, so that copy would be misleading. */
+  /** Overrides the generic empty-column message — the derived "เลยกำหนด"
+   * column gets its own celebratory copy instead. */
   emptyMessage?: string;
 }
 
@@ -51,7 +49,6 @@ export function KanbanColumn({
    * priority/assignee grouping, where a column can genuinely mix statuses. */
   groupedByStatus?: boolean;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: column.id, disabled: column.derived });
   const Icon = column.icon;
   const accent = column.accent;
   const percent = boardTotal > 0 ? Math.round((column.tasks.length / boardTotal) * 100) : 0;
@@ -150,37 +147,29 @@ export function KanbanColumn({
       </div>
 
       <div
-        ref={setNodeRef}
-        className={cn(
-          // §5 — every column shares the exact same surface; columns are
-          // told apart only by the header's dot/icon/count color and this
-          // bar's fill, never by a tinted drop-zone background.
-          // min-h-0 is the classic flex-child-with-overflow fix — without it
-          // this column keeps growing to fit every card instead of scrolling
-          // its own list within the board's fixed row height (see
-          // kanban-board.tsx's scroller comment).
-          "flex-1 flex flex-col gap-3 p-2.5 rounded-xl min-h-[200px] lg:min-h-0 lg:overflow-y-auto transition-colors duration-200 bg-[var(--bg-soft)]/50",
-          isOver && !column.derived && "bg-[var(--accent)] ring-2 ring-inset ring-[var(--brand-green)]/30"
-        )}
+        // Every column shares the exact same surface; columns are told
+        // apart only by the header's dot/icon/count color and this bar's
+        // fill. min-h-0 is the classic flex-child-with-overflow fix —
+        // without it this column keeps growing to fit every card instead of
+        // scrolling its own list within the board's fixed row height (see
+        // kanban-board.tsx's scroller comment).
+        className="flex-1 flex flex-col gap-3 p-2.5 rounded-xl min-h-[200px] lg:min-h-0 lg:overflow-y-auto transition-colors duration-200 bg-[var(--bg-soft)]/50"
       >
-        <SortableContext items={visibleTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-          {visibleTasks.map((t) => (
-            <TaskCard
-              key={t.id}
-              task={t}
-              columnId={column.id}
-              onOpen={onOpen}
-              showOriginalStatus={column.derived}
-              groupedByPriority={groupedByPriority}
-            />
-          ))}
-        </SortableContext>
+        {visibleTasks.map((t) => (
+          <TaskCard
+            key={t.id}
+            task={t}
+            onOpen={onOpen}
+            showOriginalStatus={column.derived}
+            groupedByPriority={groupedByPriority}
+          />
+        ))}
 
         <ShowMoreToggle expanded={expanded} remaining={remaining} onToggle={toggle} />
 
         {column.tasks.length === 0 && (
           <div className="flex-1 flex items-center justify-center text-xs text-[var(--ink-soft)] border border-dashed border-[var(--line)] rounded-lg py-8 text-center px-3">
-            {column.emptyMessage ?? "ลากงานมาวางที่นี่"}
+            {column.emptyMessage ?? "ยังไม่มีงานในสถานะนี้"}
           </div>
         )}
       </div>

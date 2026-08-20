@@ -1,8 +1,6 @@
 "use client";
 
-import { memo, useState, type CSSProperties, type KeyboardEvent } from "react";
-import { useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { memo, useState, type KeyboardEvent } from "react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import { Progress } from "@/modules/report_task/components/ui/progress";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
@@ -27,13 +25,7 @@ import type { Sticker } from "@/modules/report_task/types";
 
 interface CardBodyProps {
   task: Task;
-  id?: string;
   onOpen?: (id: string) => void;
-  dragging?: boolean;
-  lifted?: boolean;
-  refCb?: (el: HTMLDivElement | null) => void;
-  style?: CSSProperties;
-  dragProps?: Record<string, unknown>;
   /** True inside the derived "เลยกำหนด" column — tags the card with its real
    * underlying status (รอดำเนินการ/กำลังทำ) so it's still clear which late
    * tasks have someone actively on them and which are untouched, since the
@@ -46,7 +38,7 @@ interface CardBodyProps {
   groupedByPriority?: boolean;
 }
 
-function TaskCardBody({ task, id, onOpen, dragging, lifted, refCb, style, dragProps, showOriginalStatus, groupedByPriority }: CardBodyProps) {
+function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority }: CardBodyProps) {
   const addReaction = useTaskStore((s) => s.addReaction);
   const moveTask = useTaskStore((s) => s.moveTask);
   const toggleAssigneeChecklist = useTaskStore((s) => s.toggleAssigneeChecklist);
@@ -104,25 +96,19 @@ function TaskCardBody({ task, id, onOpen, dragging, lifted, refCb, style, dragPr
   return (
     <>
     <div
-      id={id}
-      ref={refCb}
-      style={style}
-      {...dragProps}
+      id={`task-card-${task.id}`}
+      role={onOpen ? "button" : undefined}
+      tabIndex={onOpen ? 0 : undefined}
       onClick={() => onOpen?.(task.id)}
       onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
-        // Enter opens the task detail (Space is reserved by dnd-kit's
-        // KeyboardSensor to pick up/drop the card while dragging).
         if (e.key === "Enter") {
           e.preventDefault();
           onOpen?.(task.id);
-          return;
         }
-        (dragProps?.onKeyDown as ((e: KeyboardEvent<HTMLDivElement>) => void) | undefined)?.(e);
       }}
       className={cn(
-        "group relative rounded-2xl border border-[var(--line)] bg-white p-4 shadow-[0_1px_3px_rgba(16,24,40,0.07),0_1px_2px_rgba(16,24,40,0.04)] transition-all duration-200 touch-none",
-        onOpen && "cursor-grab active:cursor-grabbing hover:shadow-[0_12px_28px_-10px_rgba(16,24,40,0.22)] hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--brand-green)_35%,var(--line))]",
-        (dragging || lifted) && "rotate-2 scale-[1.03] shadow-xl",
+        "group relative rounded-2xl border border-[var(--line)] bg-white p-4 shadow-[0_1px_3px_rgba(16,24,40,0.07),0_1px_2px_rgba(16,24,40,0.04)] transition-all duration-200",
+        onOpen && "cursor-pointer hover:shadow-[0_12px_28px_-10px_rgba(16,24,40,0.22)] hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--brand-green)_35%,var(--line))]",
         // A done card should read as "settled" at a glance even sitting next
         // to open ones in a column that isn't grouped by status (priority,
         // assignee) — the checkbox + strikethrough alone turned out too
@@ -456,45 +442,14 @@ function TaskCardBody({ task, id, onOpen, dragging, lifted, refCb, style, dragPr
 
 export const TaskCard = memo(function TaskCard({
   task,
-  columnId,
   onOpen,
   showOriginalStatus,
   groupedByPriority,
 }: {
   task: Task;
-  columnId: string;
   onOpen: (id: string) => void;
   showOriginalStatus?: boolean;
   groupedByPriority?: boolean;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: task.id,
-    // Dropping onto a card resolves to that card's column.
-    data: { columnId },
-  });
-
-  const style: CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  return (
-    <TaskCardBody
-      task={task}
-      id={`task-card-${task.id}`}
-      onOpen={onOpen}
-      dragging={isDragging}
-      refCb={setNodeRef}
-      style={style}
-      dragProps={{ ...attributes, ...listeners }}
-      showOriginalStatus={showOriginalStatus}
-      groupedByPriority={groupedByPriority}
-    />
-  );
+  return <TaskCardBody task={task} onOpen={onOpen} showOriginalStatus={showOriginalStatus} groupedByPriority={groupedByPriority} />;
 });
-
-/** Rendered inside DragOverlay — a plain visual copy, not a second sortable registration. */
-export function TaskCardOverlay({ task, groupedByPriority }: { task: Task; groupedByPriority?: boolean }) {
-  return <TaskCardBody task={task} lifted groupedByPriority={groupedByPriority} />;
-}
