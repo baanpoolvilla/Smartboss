@@ -81,8 +81,9 @@ export function ReportTaskScaffold({
       <TourOverlay />
       {/* ตัวแสดงผล toast.success/error/... ที่เรียกกันทั่วทั้งโมดูล — เดิมไม่มี
           <Toaster /> วางไว้ที่ไหนเลยสักหน้า เรียก toast(...) แล้วเงียบไปเฉยๆ
-          ไม่มีอะไรขึ้นบนจอ */}
-      <Toaster position="top-center" />
+          ไม่มีอะไรขึ้นบนจอ. closeButton — กดปิดข้อความได้เอง ไม่ต้องรอหมดเวลา
+          (สำคัญกับ error ที่มีเนื้อหายาวอย่าง "ยังติ๊ก checklist ไม่ครบ...") */}
+      <Toaster position="top-center" closeButton />
 
       <AppScaffold title={title} width="max-w-[1600px]" fill={isBoard} fillMaxWidth={isBoard}>
         {children}
