@@ -56,7 +56,7 @@ export function WorkloadView() {
         return { user: u, total: mine.length, todo, inProgress, overdue, done, open };
       })
       .filter((r) => r.total > 0)
-      .sort((a, b) => b.open - a.open || b.overdue - a.overdue);
+      .sort((a, b) => b.total - a.total || b.open - a.open || b.overdue - a.overdue);
   }, [tasks, filters, usersInScope]);
 
   if (rows.length === 0) {
@@ -67,7 +67,7 @@ export function WorkloadView() {
     <div className="rounded-xl border border-[var(--line)] bg-white overflow-hidden shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
       <div className="px-5 py-3.5 border-b border-[var(--line)]">
         <h3 className="font-semibold text-sm">ภาระงานรายคน</h3>
-        <p className="text-xs text-[var(--ink-soft)] mt-0.5">เรียงตามงานที่ยังเปิดอยู่ · แถบแดง = เลยกำหนด</p>
+        <p className="text-xs text-[var(--ink-soft)] mt-0.5">เรียงตามจำนวนงานทั้งหมดมากไปน้อย · แถบแดง = เลยกำหนด</p>
       </div>
 
       <div className="divide-y divide-[var(--line)]">
