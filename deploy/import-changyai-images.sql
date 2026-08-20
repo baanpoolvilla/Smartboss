@@ -13,17 +13,21 @@ BEGIN;
 
 -- ตัดหัว URL ของ Supabase ทิ้งแล้วใส่ของเราแทน
 --
---   https://xxx.supabase.co/storage/v1/object/public/<bucket>/a/b.jpg
---                                                            └──┬──┘
---   /api/files/maintenance/imported/a/b.jpg  ←────────────────────┘
+--   https://xxx.supabase.co/storage/v1/object/public/photos/a/b.jpg
+--                                                     └─────┬─────┘
+--   /api/files/maintenance/imported/photos/a/b.jpg  ←───────┘
 --
--- regex ตัดถึง /public/<bucket>/ — ครอบทั้งแบบ public และ sign
+-- ⚠ เก็บชื่อ bucket ไว้ในเส้นทางด้วย — ChangYai มี 3 ถัง (asset-images,
+--   photos, po-receipts) ถ้าตัดชื่อถังทิ้งแล้วเทรวมกัน ไฟล์คนละถังที่บังเอิญ
+--   ชื่อซ้ำกันจะทับกันเงียบ ๆ แล้วรูปผิดใบไปโผล่ในงานผิดใบ
+--
+-- regex ตัดถึง /public/ เท่านั้น ครอบทั้งแบบ public และ sign
 CREATE OR REPLACE FUNCTION pg_temp.fix_url(u text) RETURNS text LANGUAGE sql IMMUTABLE AS $$
   SELECT CASE
     WHEN u IS NULL OR u = '' THEN u
     WHEN u NOT LIKE '%supabase%' THEN u          -- แก้ไปแล้วหรือเป็น path ของเราอยู่แล้ว
     ELSE '/api/files/maintenance/imported/' ||
-         regexp_replace(u, '^.*/storage/v1/object/(public|sign)/[^/]+/', '')
+         regexp_replace(u, '^.*/storage/v1/object/(public|sign)/', '')
   END
 $$;
 
@@ -58,8 +62,11 @@ UPDATE maintenance.equipment_returns
  WHERE org_id = :org AND array_to_string(image_urls, ',') LIKE '%supabase%';
 
 -- รูปจากช่างนอกเก็บเป็น path ล้วนอยู่แล้ว เติมแค่ส่วนหน้า
+-- รูปช่างนอกเก็บเป็น path ล้วนไม่มีชื่อถัง ⇒ ต้องเติมเอง
+-- ChangYai อัปโหลดผ่าน bucket "photos" (ดู register_external_work_order_photo)
+-- ⚠ ถ้าเปิดรูปช่างนอกไม่ขึ้นหลัง import ให้มาตรวจบรรทัดนี้เป็นอันดับแรก
 UPDATE maintenance.work_order_external_photos
-   SET storage_path = 'maintenance/imported/' || storage_path
+   SET storage_path = 'maintenance/imported/photos/' || storage_path
  WHERE org_id = :org AND storage_path <> '' AND storage_path NOT LIKE 'maintenance/%';
 
 \echo ''
