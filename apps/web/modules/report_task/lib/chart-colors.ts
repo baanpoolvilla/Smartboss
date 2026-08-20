@@ -13,8 +13,10 @@ export const chartColors = {
   // glance (one still needs a sign-off, the other is actually finished) — a
   // pale/deep pair reads that distinction better than two columns sharing
   // the exact same mid-tone green.
-  greenPale: "#86efac", // "รอตรวจสอบ" — done but not yet reviewed
-  greenDeep: "#1e7830", // = --brand-green-dark — "เสร็จสิ้น", reviewed & signed off
+  greenPale: "#77DD77", // "รอตรวจสอบ" — done but not yet reviewed ("Pastel Green")
+  greenDeep: "#4CBB17", // "เสร็จสิ้น", reviewed & signed off ("Kelly Green") —
+  // picked by name/swatch, not the muddy near-black #1e7830
+  // (= --brand-green-dark) tried first, which read as unattractive
   amber: "#f59e0b",
   amberDark: "#b45309",
   amberLight: "#fcd34d",
