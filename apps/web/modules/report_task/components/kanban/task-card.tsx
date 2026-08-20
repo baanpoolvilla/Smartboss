@@ -140,18 +140,21 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority }: C
             <Tooltip>
               <TooltipTrigger
                 render={
-                  // Two even halves in one pill instead of a single "รอตรวจสอบ"
+                  // Two halves in one pill instead of a single "รอตรวจสอบ"
                   // label — "เสร็จ" (the part that's actually true already,
                   // muted) and "รอตรวจสอบ" (what's still pending, full color)
                   // read as one continuous progress pill rather than a flat
-                  // status word.
-                  <span className="inline-flex items-stretch text-[10px] font-semibold rounded-full overflow-hidden ring-1 ring-inset ring-[color-mix(in_srgb,var(--chart-green)_30%,white)]">
-                    <span className="flex-1 flex items-center justify-center gap-1 px-2 py-0.5 bg-[color-mix(in_srgb,var(--chart-green)_10%,white)] text-[var(--chart-green)] opacity-70">
-                      <Check className="h-2.5 w-2.5" strokeWidth={3} />
+                  // status word. Sized to content (not a forced 50/50 split)
+                  // with nowrap on both halves — an even split at this card
+                  // width squeezed "รอตรวจสอบ" onto two lines, which read as
+                  // broken/blurry rather than a clean pill.
+                  <span className="inline-flex items-stretch text-[10px] font-semibold rounded-full overflow-hidden ring-1 ring-inset ring-[color-mix(in_srgb,var(--chart-green)_30%,white)] whitespace-nowrap">
+                    <span className="flex items-center gap-1 px-2.5 py-1 bg-[color-mix(in_srgb,var(--chart-green)_10%,white)] text-[var(--chart-green)] opacity-70">
+                      <Check className="h-2.5 w-2.5 shrink-0" strokeWidth={3} />
                       เสร็จ
                     </span>
-                    <span className="flex-1 flex items-center justify-center gap-1 px-2 py-0.5 bg-[color-mix(in_srgb,var(--chart-green)_20%,white)] text-[var(--chart-green)]">
-                      <Clock className="h-2.5 w-2.5" />
+                    <span className="flex items-center gap-1 px-2.5 py-1 bg-[color-mix(in_srgb,var(--chart-green)_20%,white)] text-[var(--chart-green)]">
+                      <Clock className="h-2.5 w-2.5 shrink-0" />
                       รอตรวจสอบ
                     </span>
                   </span>
