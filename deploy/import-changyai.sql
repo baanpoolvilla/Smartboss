@@ -27,27 +27,64 @@ BEGIN
   END IF;
 END $$;
 
--- ═══ 1. ผู้ใช้ ═══════════════════════════════════════════════════════
+-- ═══ 1. ผู้ใช้ + ตารางจับคู่ไอดี ═══════════════════════════════════
 --
 -- ต้องมาก่อนทุกตาราง เพราะ assigned_to / created_by ชี้มาที่นี่
 --
--- ⚠ รหัสผ่านย้ายมาไม่ได้ (Supabase Auth คนละวิธีเข้ารหัส) ⇒ ใส่ hash ที่
---   ไม่มีทางตรงกับรหัสไหนเลย แล้วให้แอดมินกด "ตั้งรหัสผ่านใหม่" ให้ทีละคน
---   ปลอดภัยกว่าตั้งรหัสกลางเหมือนกันทุกคนซึ่งกลายเป็นช่องโหว่ทันที
+-- ⚠ ทำไมต้องมีตารางจับคู่ ไม่ insert ตรง ๆ
+--    1. ผู้ใช้บางคนในระบบเก่าอาจไม่มีอีเมล — ถ้าข้ามไป ใบงานของคนนั้น
+--       จะไม่มีผู้รับผิดชอบ เพราะ id ที่อ้างถึงไม่มีอยู่ในระบบใหม่
+--    2. บางอีเมลอาจซ้ำกับคนที่มีบัญชีในระบบใหม่อยู่แล้ว (เช่นตัวเจ้าของเอง)
+--       ⇒ ต้องชี้ไปที่บัญชีเดิม ไม่ใช่สร้างซ้ำหรือข้ามทิ้ง
+--
+--    ตารางนี้แปลง "ไอดีเก่า → ไอดีที่ใช้จริง" แล้วทุกตารางข้างล่างอ้างผ่านมัน
+CREATE TABLE changyai_raw._user_map (old_id text PRIMARY KEY, new_id text NOT NULL);
+
+-- 1.1 คนที่อีเมลตรงกับบัญชีที่มีอยู่แล้ว → ชี้ไปบัญชีเดิม ไม่สร้างใหม่
+INSERT INTO changyai_raw._user_map (old_id, new_id)
+SELECT u.id::text, e.id
+FROM changyai_raw.users u
+JOIN core.users e ON lower(btrim(e.email)) = lower(btrim(u.email))
+WHERE u.email IS NOT NULL AND btrim(u.email) <> '';
+
+-- 1.2 ที่เหลือ → สร้างบัญชีใหม่ โดยใช้ไอดีเดิม
+--
+-- ไม่มีอีเมลก็ยังย้ายมา — ใส่อีเมลชั่วคราวที่ส่งจริงไม่ได้ (.invalid สงวนไว้
+-- ตาม RFC 2606 จึงไม่มีทางไปชนโดเมนของใคร) เจ้าของค่อยมาแก้ทีหลัง
+--
+-- รหัสผ่านย้ายมาไม่ได้ (Supabase Auth คนละวิธีเข้ารหัส) ⇒ ใส่ค่าที่ไม่ใช่
+-- รูปแบบ hash ที่ถูกต้องเลย ⇒ verify ไม่มีทางผ่าน ต่อให้เดารหัสถูกก็เข้าไม่ได้
+-- ปลอดภัยกว่าตั้งรหัสกลางเหมือนกันทุกคนซึ่งกลายเป็นช่องโหว่ทันที
 INSERT INTO core.users (id, org_id, email, name, password_hash, line_user_id, is_active, created_at, updated_at)
 SELECT
   u.id::text,
   :org,
-  lower(btrim(u.email)),
-  COALESCE(NULLIF(btrim(u.name), ''), split_part(u.email, '@', 1)),
-  '$argon2id$v=19$m=1,t=1,p=1$aW1wb3J0ZWQ$aW1wb3J0ZWQtbm8tbG9naW4',  -- ล็อกอินไม่ได้จนกว่าจะตั้งรหัสใหม่
+  COALESCE(NULLIF(lower(btrim(u.email)), ''),
+           'imported-' || left(u.id::text, 8) || '@changyai.invalid'),
+  COALESCE(NULLIF(btrim(u.name), ''), 'ยังไม่ระบุชื่อ ' || left(u.id::text, 8)),
+  'IMPORTED-NO-LOGIN',
   u.line_user_id,
   TRUE,
   COALESCE(u.created_at, now()),
   now()
 FROM changyai_raw.users u
-WHERE u.email IS NOT NULL AND btrim(u.email) <> ''
-ON CONFLICT (email) DO NOTHING;   -- อีเมลซ้ำกับผู้ใช้เดิมในระบบ = ข้าม ไม่ทับของเดิม
+WHERE NOT EXISTS (SELECT 1 FROM changyai_raw._user_map m WHERE m.old_id = u.id::text);
+
+INSERT INTO changyai_raw._user_map (old_id, new_id)
+SELECT u.id::text, u.id::text
+FROM changyai_raw.users u
+WHERE NOT EXISTS (SELECT 1 FROM changyai_raw._user_map m WHERE m.old_id = u.id::text);
+
+-- ตัวช่วยให้ทุก INSERT ข้างล่างอ่านง่าย — คืน null เมื่อไม่มีคู่ (ค่าเดิมว่างอยู่แล้ว)
+CREATE FUNCTION changyai_raw.uid(p uuid) RETURNS text LANGUAGE sql STABLE AS $$
+  SELECT new_id FROM changyai_raw._user_map WHERE old_id = p::text
+$$;
+
+-- แปลงอาเรย์ผู้ใช้ (cc_user_ids) ทีละช่อง
+CREATE FUNCTION changyai_raw.uids(p uuid[]) RETURNS text[] LANGUAGE sql STABLE AS $$
+  SELECT COALESCE(array_agg(changyai_raw.uid(x)) FILTER (WHERE changyai_raw.uid(x) IS NOT NULL), '{}')
+  FROM unnest(COALESCE(p, '{}')) AS x
+$$;
 
 -- ═══ 2. หมวดหมู่บ้าน ═════════════════════════════════════════════════
 INSERT INTO maintenance.property_categories (id, org_id, prefix, display_name, created_at)
@@ -59,7 +96,7 @@ ON CONFLICT DO NOTHING;
 INSERT INTO maintenance.properties
   (id, org_id, name, address, owner_name, owner_contact, notes, caretaker_id, created_at)
 SELECT p.id::text, :org, p.name, p.address, p.owner_name, p.owner_contact, p.notes,
-       p.caretaker_id::text, COALESCE(p.created_at, now())
+       changyai_raw.uid(p.caretaker_id), COALESCE(p.created_at, now())
 FROM changyai_raw.properties p;
 
 -- ═══ 4. อุปกรณ์ ══════════════════════════════════════════════════════
@@ -71,9 +108,11 @@ FROM changyai_raw.assets a;
 
 -- ═══ 5. ผู้รับเหมา ═══════════════════════════════════════════════════
 INSERT INTO maintenance.contractors
-  (id, org_id, name, phone, specialty, company, zone, rating, is_active, notes, created_at)
+  (id, org_id, name, phone, specialty, company_name, zone, rating, is_active, notes,
+   price, category, created_at)
 SELECT c.id::text, :org, c.name, c.phone, c.specialty, c.company, c.zone,
-       c.rating, COALESCE(c.is_active, TRUE), c.notes, COALESCE(c.created_at, now())
+       c.rating, COALESCE(c.is_active, TRUE), c.notes,
+       c.price, c.price_category, COALESCE(c.created_at, now())
 FROM changyai_raw.contractors c;
 
 -- ═══ 6. แผนบำรุงรักษา ════════════════════════════════════════════════
@@ -85,9 +124,9 @@ SELECT s.id::text, :org, s.property_id::text, s.asset_id::text, s.title, s.descr
        s.frequency, s.next_due_date, s.anchor_date,
        s.rounds_per_year, s.total_rounds, COALESCE(s.rounds_done, 0),
        COALESCE(s.awaiting_schedule, FALSE), s.last_completed_date,
-       COALESCE(s.is_active, TRUE), s.assigned_to::text,
-       COALESCE(s.cc_user_ids::text[], '{}'), COALESCE(s.requires_expense, TRUE),
-       s.created_by::text, COALESCE(s.created_at, now())
+       COALESCE(s.is_active, TRUE), changyai_raw.uid(s.assigned_to),
+       changyai_raw.uids(s.cc_user_ids), COALESCE(s.requires_expense, TRUE),
+       changyai_raw.uid(s.created_by), COALESCE(s.created_at, now())
 FROM changyai_raw.pm_schedules s;
 
 -- ═══ 7. ใบงาน ════════════════════════════════════════════════════════
@@ -101,11 +140,11 @@ INSERT INTO maintenance.work_orders
    auto_created, requires_expense, created_at)
 SELECT w.id::text, :org,
        'WO-' || :yr || '-' || lpad(row_number() OVER (ORDER BY w.created_at, w.id)::text, 4, '0'),
-       w.property_id::text, w.asset_id::text, w.assigned_to::text, w.created_by::text,
+       w.property_id::text, w.asset_id::text, changyai_raw.uid(w.assigned_to), changyai_raw.uid(w.created_by),
        w.title, w.description, w.status, COALESCE(w.priority, 'medium'),
        w.due_date, w.completed_at, w.completion_notes,
        COALESCE(w.photo_urls::text[], '{}'), COALESCE(w.after_photo_urls::text[], '{}'),
-       COALESCE(w.cc_user_ids::text[], '{}'), COALESCE(w.additional_property_ids::text[], '{}'),
+       changyai_raw.uids(w.cc_user_ids), COALESCE(w.additional_property_ids::text[], '{}'),
        w.pm_schedule_id::text, COALESCE(w.pm_schedule_ids::text[], '{}'),
        COALESCE(w.auto_created, FALSE), COALESCE(w.requires_expense, TRUE),
        COALESCE(w.created_at, now())
@@ -113,9 +152,9 @@ FROM changyai_raw.work_orders w;
 
 -- ═══ 8. คอมเมนต์ใบงาน ════════════════════════════════════════════════
 INSERT INTO maintenance.work_order_comments
-  (id, org_id, work_order_id, user_id, content, image_urls, created_at)
-SELECT c.id::text, :org, c.work_order_id::text, c.user_id::text,
-       COALESCE(c.content, ''), COALESCE(c.image_urls::text[], '{}'),
+  (id, org_id, work_order_id, user_id, content, image_url, created_at)
+SELECT c.id::text, :org, c.work_order_id::text, changyai_raw.uid(c.user_id),
+       COALESCE(c.content, ''), c.image_url,
        COALESCE(c.created_at, now())
 FROM changyai_raw.work_order_comments c;
 
@@ -127,12 +166,12 @@ INSERT INTO maintenance.purchase_orders
    received_by, received_at, created_at)
 SELECT o.id::text, :org,
        'PO-' || :yr || '-' || lpad(row_number() OVER (ORDER BY o.created_at, o.id)::text, 4, '0'),
-       o.property_id::text, o.created_by::text, o.po_assigned_to::text,
+       o.property_id::text, changyai_raw.uid(o.created_by), changyai_raw.uid(o.po_assigned_to),
        o.title, o.status, COALESCE(o.items, '[]'::jsonb), COALESCE(o.total_price, 0),
        COALESCE(o.receipt_image_urls::text[], '{}'), COALESCE(o.pr_image_urls::text[], '{}'),
        COALESCE(o.is_self_purchase, FALSE), COALESCE(o.is_emergency_purchase, FALSE),
-       o.emergency_reason, o.po_created_by::text, o.po_created_at,
-       o.ordered_by::text, o.ordered_at, o.received_by::text, o.received_at,
+       o.emergency_reason, changyai_raw.uid(o.po_created_by), o.po_created_at,
+       changyai_raw.uid(o.ordered_by), o.ordered_at, changyai_raw.uid(o.received_by), o.received_at,
        COALESCE(o.created_at, now())
 FROM changyai_raw.purchase_orders o;
 
@@ -141,7 +180,7 @@ FROM changyai_raw.purchase_orders o;
 -- ต้นทางเก็บรูปเดี่ยว (image_url) ของเราเก็บเป็นอาเรย์ ⇒ ห่อเป็นอาเรย์ 1 ช่อง
 INSERT INTO maintenance.purchase_order_comments
   (id, org_id, purchase_order_id, user_id, content, image_urls, created_at)
-SELECT c.id::text, :org, c.purchase_order_id::text, c.user_id::text,
+SELECT c.id::text, :org, c.purchase_order_id::text, changyai_raw.uid(c.user_id),
        COALESCE(c.content, ''),
        CASE WHEN c.image_url IS NULL OR c.image_url = '' THEN '{}'::text[]
             ELSE ARRAY[c.image_url] END,
@@ -150,12 +189,12 @@ FROM changyai_raw.purchase_order_comments c;
 
 -- ═══ 11. คืนของ ══════════════════════════════════════════════════════
 INSERT INTO maintenance.equipment_returns
-  (id, org_id, purchase_order_id, property_id, reported_by, item_name, quantity, reason,
-   status, image_urls, resolution_notes, resolved_by, resolved_at, created_at)
-SELECT r.id::text, :org, r.purchase_order_id::text, r.property_id::text, r.reported_by::text,
-       r.item_name, COALESCE(r.quantity, 1), r.reason, COALESCE(r.status, 'pending'),
-       COALESCE(r.image_urls::text[], '{}'), r.resolution_notes,
-       r.resolved_by::text, r.resolved_at, COALESCE(r.created_at, now())
+  (id, org_id, purchase_order_id, property_id, created_by, item_name, qty, problem_type, reason,
+   status, image_urls, resolution_note, resolved_by, resolved_at, created_at, updated_at)
+SELECT r.id::text, :org, r.purchase_order_id::text, r.property_id::text, changyai_raw.uid(r.reported_by),
+       r.item_name, COALESCE(r.qty, 1), r.problem_type, r.reason, COALESCE(r.status, 'pending'),
+       COALESCE(r.image_urls::text[], '{}'), r.resolution_note,
+       changyai_raw.uid(r.resolved_by), r.resolved_at, COALESCE(r.created_at, now()), now()
 FROM changyai_raw.equipment_returns r;
 
 -- ═══ 12. ค่าใช้จ่าย ══════════════════════════════════════════════════
@@ -163,11 +202,11 @@ FROM changyai_raw.equipment_returns r;
 -- ท้ายสุด เพราะชี้ไปเกือบทุกตารางข้างบน
 INSERT INTO maintenance.expenses
   (id, org_id, work_order_id, pm_schedule_id, purchase_order_id, property_id, created_by,
-   title, amount, category, receipt_url, billable_to_partner, cost_type, paid_by,
+   description, amount, category, receipt_url, billable_to_partner, cost_type, paid_by,
    is_no_expense, expense_date, created_at)
 SELECT e.id::text, :org, e.work_order_id::text, e.pm_schedule_id::text,
-       e.purchase_order_id::text, e.property_id::text, e.created_by::text,
-       e.title, COALESCE(e.amount, 0), e.category, e.receipt_url,
+       e.purchase_order_id::text, e.property_id::text, changyai_raw.uid(e.created_by),
+       COALESCE(e.description, e.title), COALESCE(e.amount, 0), e.category, e.receipt_url,
        COALESCE(e.billable_to_partner, FALSE), e.cost_type, e.paid_by,
        COALESCE(e.is_no_expense, FALSE), e.expense_date, COALESCE(e.created_at, now())
 FROM changyai_raw.expenses e;
@@ -193,6 +232,26 @@ INSERT INTO core.document_counters (org_id, doc_type, period, next_value)
 SELECT :org, 'PO', :yr, COUNT(*) + 1 FROM maintenance.purchase_orders WHERE org_id = :org
 ON CONFLICT (org_id, doc_type, period) DO UPDATE SET next_value = EXCLUDED.next_value;
 
+-- ═══ 15. รายชื่อไว้จับคู่ว่าใครคือใคร ═══════════════════════════════
+--
+-- เจ้าของจะมาไล่จับคู่ทีหลังว่าบัญชีไหนคือใครในทีมปัจจุบัน
+-- เก็บเป็นวิวถาวรไว้ให้เปิดดูได้เรื่อย ๆ ไม่ต้องจำคำสั่ง
+--
+-- เรียงตามปริมาณงานจากมากไปน้อย — คนที่มีงานเยอะคือคนที่ต้องจับคู่ให้ถูกก่อน
+CREATE OR REPLACE VIEW maintenance.v_imported_users AS
+SELECT u.id,
+       u.name  AS ชื่อในระบบเก่า,
+       u.email AS อีเมล,
+       u.line_user_id AS line_id,
+       (SELECT count(*) FROM maintenance.work_orders w WHERE w.assigned_to = u.id) AS ใบงานที่รับผิดชอบ,
+       (SELECT count(*) FROM maintenance.work_orders w WHERE w.created_by  = u.id) AS ใบงานที่เปิดเอง,
+       (SELECT count(*) FROM maintenance.pm_schedules s WHERE s.assigned_to = u.id) AS แผน_pm,
+       (u.email LIKE '%@changyai.invalid')  AS ต้องใส่อีเมลจริง,
+       (u.password_hash = 'IMPORTED-NO-LOGIN') AS ยังตั้งรหัสผ่านไม่ได้
+FROM core.users u
+WHERE u.password_hash = 'IMPORTED-NO-LOGIN'
+ORDER BY 5 DESC, 6 DESC;
+
 -- ═══ สรุปผล ══════════════════════════════════════════════════════════
 \echo ''
 \echo '── จำนวนแถวที่เข้ามา ──'
@@ -210,5 +269,6 @@ COMMIT;
 \echo 'เสร็จแล้ว — ขั้นต่อไป:'
 \echo '  1. ตรวจตาม docs/changyai_import.md หัวข้อ "ตรวจหลัง import"'
 \echo '  2. ย้ายไฟล์รูปจาก Supabase Storage เข้า MinIO แล้วแก้ URL'
-\echo '  3. ตั้งรหัสผ่านให้ผู้ใช้ทีละคนที่ /admin/users (ตอนนี้ยังล็อกอินไม่ได้)'
+\echo '  3. จับคู่ว่าใครคือใคร:  select * from maintenance.v_imported_users;'
+\echo '     แล้วแก้ชื่อ/อีเมล และตั้งรหัสผ่านให้ทีละคนที่ /admin/users'
 \echo '  4. เมื่อมั่นใจแล้วค่อย: DROP SCHEMA changyai_raw CASCADE;'
