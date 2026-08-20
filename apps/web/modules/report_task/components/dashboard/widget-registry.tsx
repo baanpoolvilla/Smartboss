@@ -4,6 +4,7 @@ import { SystemKpiSummary } from "./system-kpi-summary";
 import { AiInsightCard } from "./ai-insight-card";
 import { TaskStatusPie } from "./task-status-pie";
 import { ReportFeedStatusPie } from "./report-feed-status-pie";
+import { EscalationsPanel } from "./escalations-panel";
 import { ReportFeedPendingTodayCard } from "./report-feed-pending-today-card";
 
 // Every widget on the Dashboard lives in this one registry, so all of it can
@@ -17,5 +18,6 @@ export const widgetRegistry: Record<WidgetId, { label: string; Component: Compon
   aiInsight: { label: "AI Insight", Component: AiInsightCard },
   taskOverview: { label: "ภาพรวมงาน (โดนัท)", Component: TaskStatusPie },
   reportOverview: { label: "ภาพรวม Report (โดนัท)", Component: ReportFeedStatusPie },
+  overdueTasks: { label: "งานที่เลยกำหนด", Component: EscalationsPanel },
   pendingReports: { label: "รายงานที่ยังไม่ส่ง", Component: ReportFeedPendingTodayCard },
 };

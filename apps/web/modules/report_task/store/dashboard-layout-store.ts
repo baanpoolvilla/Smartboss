@@ -13,6 +13,7 @@ export type WidgetId =
   | "aiInsight"
   | "taskOverview"
   | "reportOverview"
+  | "overdueTasks"
   | "pendingReports";
 
 /** span = how many of the 2 dashboard grid columns the widget occupies — 1
@@ -38,6 +39,7 @@ const defaultLayout: WidgetConfig[] = [
   { id: "aiInsight", visible: true, span: 2 },
   { id: "taskOverview", visible: true, span: 1 },
   { id: "reportOverview", visible: true, span: 1 },
+  { id: "overdueTasks", visible: true, span: 1 },
   { id: "pendingReports", visible: true, span: 1 },
 ];
 
@@ -95,9 +97,7 @@ export const useDashboardLayoutStore = create<DashboardLayoutStore>()(
       // append missing ids in default order, not re-inserted at its
       // default position after systemKpiSummary); acceptable since it's a
       // brand-new widget, not a reordering of existing ones.
-      // Bumped to 8 when "overdueTasks" (EscalationsPanel) was removed
-      // entirely — same prune-on-migrate treatment as deptPie/reportDeptPie.
-      version: 8,
+      version: 7,
       migrate: (persisted) => {
         const rawWidgets = (persisted as Partial<DashboardLayoutStore> | undefined)?.widgets ?? [];
         const defaultSpanOf = new Map(defaultLayout.map((w) => [w.id, w.span]));

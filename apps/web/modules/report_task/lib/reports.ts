@@ -148,3 +148,7 @@ export function overallKpis(taskList: Task[]) {
     completionRate: total ? Math.round((completed / total) * 100) : 0,
   };
 }
+
+export function overdueTasks(taskList: Task[]) {
+  return taskList.filter(isLate).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+}
