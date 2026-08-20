@@ -14,7 +14,7 @@ import { formatShortDate, daysUntil } from "@/modules/report_task/lib/format";
 import { presetRange } from "@/modules/report_task/lib/date-filter";
 import { previousPeriodRange, periodTrend } from "@/modules/report_task/lib/dashboard-trend";
 import { TrendText } from "@/modules/report_task/components/shared/trend-badge";
-import { priorityMeta, statusMeta } from "@/modules/report_task/lib/task-meta";
+import { statusMeta } from "@/modules/report_task/lib/task-meta";
 import { cn } from "@/modules/report_task/lib/utils";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useVisibleTasks } from "@/modules/report_task/hooks/use-visible-tasks";
@@ -153,9 +153,6 @@ export function EscalationsPanel() {
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                  <Badge variant="outline" className={cn("text-[10px]", priorityMeta[t.priority].badgeClass)}>
-                    {priorityMeta[t.priority].label}
-                  </Badge>
                   <Badge variant="outline" className={cn("text-[10px]", statusMeta[t.status].badgeClass)}>
                     {statusMeta[t.status].label}
                   </Badge>
