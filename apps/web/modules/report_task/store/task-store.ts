@@ -330,6 +330,18 @@ export const useTaskStore = create<TaskStore>((set) => ({
           status: "in_progress" as const,
           completedAt: undefined,
           dueDate: newDate,
+          // task-penalty-sweep.ts judges "overdue" against `originalDueDate`,
+          // not the current one, on purpose — so someone can't dodge a still-
+          // pending miss by nudging the date forward. That guard backfires
+          // here: if the assignee genuinely hit the original deadline
+          // (`!missedDeadlineOnce`) and review just happened to land after it
+          // had passed, reopening the task would make the next sweep see it
+          // as newly overdue against a deadline they already met, and dock
+          // them for a review delay that was never theirs. Only reset it in
+          // that case — a task that had ALREADY blown its original deadline
+          // keeps that date, same as reviseDueDate, so real lateness stays on
+          // the record instead of being quietly erased by a rejection.
+          ...(t.missedDeadlineOnce ? {} : { originalDueDate: newDate }),
           reviewedBy: undefined,
           reviewedAt: undefined,
           revisions: [
