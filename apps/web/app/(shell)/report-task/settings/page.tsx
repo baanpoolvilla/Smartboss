@@ -15,6 +15,7 @@ import { LeaveTypeSettingsPanel } from "@/modules/report_task/components/calenda
 import { RoutineDayOffSettingsPanel } from "@/modules/report_task/components/calendar/routine-dayoff-settings-dialog";
 import { LeaveSummaryPanel } from "@/modules/report_task/components/calendar/leave-summary-panel";
 import { SettingsAccessPanel } from "@/modules/report_task/components/shared/settings-access-panel";
+import { PermissionGuidePanel } from "@/modules/report_task/components/shared/permission-guide-panel";
 import { DepartmentSettingsPanel, EmployeeSettingsPanel } from "@/modules/report_task/components/shared/org-settings-panel";
 import { EmailNotificationSettingsPanel } from "@/modules/report_task/components/shared/email-notification-settings-dialog";
 import { DeadlineReminderSettingsPanel } from "@/modules/report_task/components/shared/deadline-reminder-settings-panel";
@@ -151,6 +152,7 @@ function SettingsPageInner() {
     issueDesk: [{ key: "issueDeskConfig", label: "ตั้งค่าแจ้งปัญหา", icon: Bug }],
     permissions: owner
       ? [
+          { key: "guide", label: "ใครเห็น/ทำอะไรได้บ้าง", icon: ShieldCheck },
           { key: "accessControl", label: "สิทธิ์การตั้งค่า", icon: ShieldCheck },
           { key: "departments", label: "จัดการแผนก", icon: Building2 },
           { key: "employees", label: "จัดการพนักงาน", icon: Users },
@@ -271,6 +273,7 @@ function SettingsPageInner() {
 
           {tab === "permissions" && owner && (
             <section className="rounded-2xl border border-[var(--line)] bg-white p-5 shadow-sm">
+              {sectionKey === "guide" && <PermissionGuidePanel />}
               {sectionKey === "accessControl" && <SettingsAccessPanel />}
               {sectionKey === "departments" && <DepartmentSettingsPanel />}
               {sectionKey === "employees" && <EmployeeSettingsPanel />}
