@@ -97,6 +97,70 @@ sudo bash deploy/psql.sh -c "select * from maintenance.v_imported_users;"
 
 ---
 
+## ขั้นที่ 0.6 — รูปภาพ ⚠ **ไม่มากับ pg_dump**
+
+`pg_dump` ดึงเฉพาะฐานข้อมูล · รูปอยู่ใน **Supabase Storage** ซึ่งเป็นที่เก็บไฟล์คนละระบบ
+ในฐานข้อมูลมีแค่ URL ที่ชี้ไปหาไฟล์ ⇒ **ย้ายแต่ฐานข้อมูล = รูปทุกใบพังทันทีที่ปิดโปรเจกต์เดิม**
+
+ทั้งสองฝั่งพูด S3 ได้ จึงก๊อปตรงเข้า MinIO ของเราได้เลย ไม่ต้องดาวน์โหลดลงเครื่องก่อน
+
+### 0.6.1 เอากุญแจ S3 ของ Supabase
+
+Supabase → **Project Settings → Storage → S3 Connection** → **New access key**
+
+จดไว้ 3 ค่า: `endpoint` · `access key id` · `secret access key`
+(endpoint หน้าตาแบบ `https://ytrfgetdrtjrjfhvcqgt.supabase.co/storage/v1/s3`, region `ap-southeast-2`)
+
+### 0.6.2 ก๊อปไฟล์เข้า MinIO — รันบนเซิร์ฟเวอร์ 🅱
+
+```bash
+cd /opt/smartboss
+set -a; . /etc/smartboss/smartboss.env; set +a     # เอาคีย์ MinIO ของเราออกมา
+
+sudo -u smartboss docker run --rm -it --network host \
+  -e RCLONE_CONFIG_SB_TYPE=s3 -e RCLONE_CONFIG_SB_PROVIDER=Other \
+  -e RCLONE_CONFIG_SB_ENDPOINT="https://ytrfgetdrtjrjfhvcqgt.supabase.co/storage/v1/s3" \
+  -e RCLONE_CONFIG_SB_REGION=ap-southeast-2 \
+  -e RCLONE_CONFIG_SB_ACCESS_KEY_ID="<access key ของ Supabase>" \
+  -e RCLONE_CONFIG_SB_SECRET_ACCESS_KEY="<secret ของ Supabase>" \
+  -e RCLONE_CONFIG_MN_TYPE=s3 -e RCLONE_CONFIG_MN_PROVIDER=Minio \
+  -e RCLONE_CONFIG_MN_ENDPOINT="http://127.0.0.1:9000" \
+  -e RCLONE_CONFIG_MN_ACCESS_KEY_ID="$S3_ACCESS_KEY_ID" \
+  -e RCLONE_CONFIG_MN_SECRET_ACCESS_KEY="$S3_SECRET_ACCESS_KEY" \
+  rclone/rclone copy -P SB:<ชื่อ bucket เดิม> MN:smartboss/maintenance/imported
+```
+
+`<ชื่อ bucket เดิม>` ดูได้ที่ Supabase → Storage (น่าจะชื่อ `work-order-photos` หรือคล้ายกัน)
+
+> ทำไมวางไว้ใต้ `maintenance/imported/` — **ให้ path เดิมของ Supabase คงรูปเดิมทั้งหมด**
+> พอ key ตรงกัน การแก้ URL ในฐานข้อมูลจึงเป็นแค่การเปลี่ยนส่วนหน้า ไม่ต้องไล่จับคู่ทีละไฟล์
+
+### 0.6.3 แก้ URL ในฐานข้อมูล
+
+Supabase เก็บเป็น URL เต็ม `https://xxx.supabase.co/storage/v1/object/public/<bucket>/<path>`
+ของเราเก็บเป็น path สัมพัทธ์ `/api/files/<key>` ⇒ ตัดส่วนหน้าทิ้งแล้วใส่ของเราแทน
+
+```bash
+sudo bash deploy/psql.sh -v org="'<uuid บริษัท>'" -f deploy/import-changyai-images.sql
+```
+
+### 0.6.4 ตรวจ
+
+```bash
+# ต้องได้ 0 ทุกบรรทัด = ไม่เหลือ URL ที่ยังชี้ไป Supabase
+sudo bash deploy/psql.sh -c "
+select 'assets'   t, count(*) from maintenance.assets   where image_url   like '%supabase%'
+union all select 'expenses', count(*) from maintenance.expenses where receipt_url like '%supabase%'
+union all select 'work_orders', count(*) from maintenance.work_orders
+  where array_to_string(photo_urls,',') like '%supabase%';"
+```
+
+แล้ว**เปิดเว็บกดดูรูปจริงสักใบ** — ผ่านตรงนี้ถึงจะถือว่าย้ายรูปสำเร็จ
+
+> ⚠ **อย่าเพิ่งลบโปรเจกต์ Supabase จนกว่าจะเปิดรูปได้จริง** เป็นที่เดียวที่ยังมีไฟล์ต้นฉบับ
+
+---
+
 ## ข่าวดี — `id` เป็น UUID ทั้งสองระบบ
 
 ยกไอดีเดิมมาใช้ได้ตรง ๆ ⇒ **ความสัมพันธ์ระหว่างตารางไม่ขาด** ไม่ต้องทำตารางแปลงไอดี
