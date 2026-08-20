@@ -158,7 +158,7 @@ export function EscalationsPanel() {
                   </Badge>
                   <span className="text-xs text-[var(--ink-soft)] truncate">
                     {assignee?.name} · {formatShortDate(t.dueDate)}
-                    {angryCount > 0 && <span className="text-[var(--chart-red)]"> · ติดตามแล้ว {angryCount} ครั้ง</span>}
+                    {angryCount > 0 && <span className="text-[var(--chart-red)]"> · ตักเตือนแล้ว {angryCount} ครั้ง</span>}
                   </span>
                   {t.taskMode === "group" &&
                     (() => {
