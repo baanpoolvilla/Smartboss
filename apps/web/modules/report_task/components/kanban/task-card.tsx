@@ -157,7 +157,12 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority }: C
                       <Check className="h-2.5 w-2.5 shrink-0" strokeWidth={3} />
                       เสร็จ
                     </span>
-                    <span className="flex items-center gap-1 px-2.5 py-1 bg-[color-mix(in_srgb,var(--chart-green)_20%,white)] text-[var(--chart-green)]">
+                    {/* Solid fill, not another pale tint — this half is the
+                        one that's actually still pending (see comment
+                        above), so it needs to read as "full color" the way
+                        the label already implied instead of nearly
+                        matching "เสร็จ"'s own muted half. */}
+                    <span className="flex items-center gap-1 px-2.5 py-1 bg-[var(--chart-green)] text-white">
                       <Clock className="h-2.5 w-2.5 shrink-0" />
                       รอตรวจสอบ
                     </span>
