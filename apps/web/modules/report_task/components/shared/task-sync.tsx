@@ -173,11 +173,22 @@ export function TaskSync() {
 
     // Write-through: save after changes settle. Skips writes until the initial
     // load has completed so we never overwrite the file with seed data.
+    // Fires on the next tick (0ms), not the original 500ms debounce — that
+    // longer window was sized for drag-and-drop generating a burst of
+    // position updates per drag (now removed from the board entirely, see
+    // kanban-board.tsx). Every mutation left is a single discrete click
+    // (status dropdown, ผ่าน/ไม่ผ่าน, checklist toggle, reaction, ...), so
+    // there's no real burst left to coalesce — only React's own state-update
+    // batching within one click handler, which a 0ms setTimeout still
+    // collapses into a single write. Anything longer just widens the "click
+    // ผ่าน then immediately hit refresh" window where the change hadn't
+    // reached the server yet and a reload silently reverts it back to
+    // whatever's on disk — that's strictly worse than one extra PUT.
     const unsub = useTaskStore.subscribe((state, prev) => {
       if (!loadedRef.current || state.tasks === prev.tasks) return;
       if (timerRef.current) clearTimeout(timerRef.current);
       pendingRef.current = state.tasks;
-      timerRef.current = setTimeout(flushPending, 500);
+      timerRef.current = setTimeout(flushPending, 0);
     });
 
     // Tab close / hard refresh — the component won't get a chance to unmount
