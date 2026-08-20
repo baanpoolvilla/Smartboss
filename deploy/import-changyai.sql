@@ -241,7 +241,7 @@ INSERT INTO maintenance.purchase_orders
   (id, org_id, code, property_id, created_by, po_assigned_to, title, status, items,
    total_price, receipt_image_urls, pr_image_urls, is_self_purchase, is_emergency_purchase,
    emergency_reason, po_created_by, po_created_at, ordered_by, ordered_at,
-   received_by, received_at, created_at)
+   received_by, received_at, created_at, updated_at)
 SELECT o.id::text, :org,
        'PO-' || :yr || '-' || lpad(row_number() OVER (ORDER BY o.created_at, o.id)::text, 4, '0'),
        o.property_id::text, changyai_raw.uid(o.created_by), changyai_raw.uid(o.po_assigned_to),
@@ -250,7 +250,10 @@ SELECT o.id::text, :org,
        COALESCE(o.is_self_purchase, FALSE), COALESCE(o.is_emergency_purchase, FALSE),
        o.emergency_reason, changyai_raw.uid(o.po_created_by), o.po_created_at,
        changyai_raw.uid(o.ordered_by), o.ordered_at, changyai_raw.uid(o.received_by), o.received_at,
-       COALESCE(o.created_at, now())
+       COALESCE(o.created_at, now()),
+       -- updated_at ของเราเป็น NOT NULL — Prisma @updatedAt เติมให้เองตอนเขียนผ่าน ORM
+       -- แต่ SQL ดิบไม่มีใครเติม ⇒ ยกค่าเดิมมา ไม่มีก็ใช้ created_at
+       COALESCE(o.updated_at, o.created_at, now())
 FROM changyai_raw.purchase_orders o;
 
 -- ═══ 10. คอมเมนต์ใบสั่งซื้อ ══════════════════════════════════════════
