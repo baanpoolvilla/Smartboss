@@ -4,6 +4,8 @@ import { TaskCard } from "./task-card";
 import { ShowMoreToggle } from "@/modules/report_task/components/shared/show-more-toggle";
 import { useShowMore } from "@/modules/report_task/hooks/use-show-more";
 import { statusMeta } from "@/modules/report_task/lib/task-meta";
+import { dueUrgency } from "@/modules/report_task/lib/task-flags";
+import { chartColors } from "@/modules/report_task/lib/chart-colors";
 import type { Task, TaskStatus } from "@/modules/report_task/types";
 import type { LucideIcon } from "lucide-react";
 
@@ -44,9 +46,10 @@ export function KanbanColumn({
   /** A normal (non-derived) status column is, by definition, 100% one status
    * — every task in "กำลังทำ" already IS "กำลังทำ". Repeating that as a
    * legend chip under the bar ("● กำลังทำ N") just restated the header
-   * label/count back at itself, so it's hidden here — still shown for the
-   * derived "เลยกำหนด" column (a real mix of todo+in_progress) and for
-   * priority/assignee grouping, where a column can genuinely mix statuses. */
+   * label/count back at itself, so the by-status split is skipped here in
+   * favor of an on-time/overdue split instead (see isPlainStatusColumn) —
+   * still shown for the derived "รอตรวจสอบ" column and for priority/assignee
+   * grouping, where a column can genuinely mix statuses. */
   groupedByStatus?: boolean;
 }) {
   const Icon = column.icon;
@@ -54,15 +57,27 @@ export function KanbanColumn({
   const percent = boardTotal > 0 ? Math.round((column.tasks.length / boardTotal) * 100) : 0;
 
   // A column can mix statuses (every assignee column does; the derived
-  // "เลยกำหนด" column mixes todo+in_progress) — a single-accent-color bar
-  // couldn't say which. Segment it by each task's own status instead so
-  // "what kind of tasks does this person actually have" reads at a glance
-  // without opening a single card.
+  // "รอตรวจสอบ" column is always 100% "done" though, so this stays flat
+  // there) — a single-accent-color bar couldn't say which. Segment it by
+  // each task's own status instead so "what kind of tasks does this person
+  // actually have" reads at a glance without opening a single card.
   const statusOrder: TaskStatus[] = ["todo", "in_progress", "done"];
   const statusCounts = statusOrder.map((s) => ({
     status: s,
     count: column.tasks.filter((t) => t.status === s).length,
   }));
+
+  // "รอดำเนินการ"/"กำลังทำ" no longer have a separate "เลยกำหนด" column to
+  // drain into — a late task just stays here. The plain status-segmented bar
+  // above is a no-op for these two (100% one status, by definition), so they
+  // get their own split instead: on-time in the column's own accent, late in
+  // the same red DueDateBadge already uses on the card itself, so a column
+  // full of red reads as "everything in here is late" at a glance.
+  const isPlainStatusColumn = groupedByStatus && !column.derived;
+  const overdueCount = isPlainStatusColumn
+    ? column.tasks.filter((t) => t.status !== "done" && dueUrgency(t) === "overdue").length
+    : 0;
+  const onTimeCount = column.tasks.length - overdueCount;
 
   // §6 — every column caps at PAGE_SIZE cards up front (same constant for
   // every column, so all columns stay in sync scrolling-wise before anyone
@@ -110,12 +125,33 @@ export function KanbanColumn({
           </span>
         </div>
 
-        {/* Segmented by each task's own status (รอดำเนินการ/กำลังทำ/เสร็จสิ้น)
-            — tells "what kind of tasks" at a glance, not just "how many"
-            (the plain accent-color version below the segments still gives
-            that as the "N% ของบอร์ด" line). */}
+        {/* "รอดำเนินการ"/"กำลังทำ" segment on-time-vs-late (their own accent +
+            red) since a plain status split would just be 100% one color;
+            every other column keeps the by-status split (see statusCounts'
+            own doc). Either way, the legend line underneath always spells out
+            the actual counts — a color-only bar can't be read precisely. */}
         <div className="mt-2.5">
-          {column.tasks.length > 0 ? (
+          {column.tasks.length === 0 ? (
+            <div className="h-1.5 rounded-full bg-[var(--bg-soft)]" />
+          ) : isPlainStatusColumn ? (
+            <div
+              className="flex h-1.5 rounded-full bg-[var(--bg-soft)] overflow-hidden"
+              title={overdueCount > 0 ? `${column.label} ${onTimeCount} · เลยกำหนด ${overdueCount}` : `${column.label} ${onTimeCount}`}
+            >
+              {onTimeCount > 0 && (
+                <div
+                  className="h-full first:rounded-l-full last:rounded-r-full transition-[width] duration-300"
+                  style={{ width: `${(onTimeCount / column.tasks.length) * 100}%`, backgroundColor: accent }}
+                />
+              )}
+              {overdueCount > 0 && (
+                <div
+                  className="h-full first:rounded-l-full last:rounded-r-full transition-[width] duration-300"
+                  style={{ width: `${(overdueCount / column.tasks.length) * 100}%`, backgroundColor: chartColors.red }}
+                />
+              )}
+            </div>
+          ) : (
             <div className="flex h-1.5 rounded-full bg-[var(--bg-soft)] overflow-hidden" title={statusCounts.map((s) => `${statusMeta[s.status].label} ${s.count}`).join(" · ")}>
               {statusCounts
                 .filter((s) => s.count > 0)
@@ -127,21 +163,38 @@ export function KanbanColumn({
                   />
                 ))}
             </div>
-          ) : (
-            <div className="h-1.5 rounded-full bg-[var(--bg-soft)]" />
           )}
           <div className="flex items-center gap-2.5 mt-1 flex-wrap">
             <p className="text-[10px] font-medium" style={{ color: accent }}>
               {percent}% ของบอร์ด
             </p>
-            {!(groupedByStatus && !column.derived) && statusCounts
-              .filter((s) => s.count > 0)
-              .map((s) => (
-                <span key={s.status} className="flex items-center gap-1 text-[10px] text-[var(--ink-soft)]">
-                  <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: statusMeta[s.status].accentColor }} />
-                  {statusMeta[s.status].label} {s.count}
-                </span>
-              ))}
+            {isPlainStatusColumn ? (
+              // Only worth spelling out once the bar is actually split —
+              // with no overdue tasks this column is 100% one color/status
+              // already, and repeating "{label} {count}" here would just
+              // restate the header's own name/count badge back at itself.
+              overdueCount > 0 && (
+                <>
+                  <span className="flex items-center gap-1 text-[10px] text-[var(--ink-soft)]">
+                    <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: accent }} />
+                    {column.label} {onTimeCount}
+                  </span>
+                  <span className="flex items-center gap-1 text-[10px] font-medium" style={{ color: chartColors.red }}>
+                    <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: chartColors.red }} />
+                    เลยกำหนด {overdueCount}
+                  </span>
+                </>
+              )
+            ) : (
+              statusCounts
+                .filter((s) => s.count > 0)
+                .map((s) => (
+                  <span key={s.status} className="flex items-center gap-1 text-[10px] text-[var(--ink-soft)]">
+                    <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: statusMeta[s.status].accentColor }} />
+                    {statusMeta[s.status].label} {s.count}
+                  </span>
+                ))
+            )}
           </div>
         </div>
       </div>
