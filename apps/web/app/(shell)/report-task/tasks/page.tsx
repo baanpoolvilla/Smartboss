@@ -160,7 +160,11 @@ function TasksPageContent() {
         </StickyFilterBar>
       )}
 
-      {!personBoardId && loaded && view === "board" && <TaskBoardKpis tasks={kpiTasks} />}
+      {/* Hidden under "เลยกำหนดเท่านั้น" — every number here would just
+          restate the same overdue count (or 0 for "สำเร็จทั้งหมด") once the
+          board itself is already narrowed to nothing but overdue tasks, see
+          kanban-board.tsx's matching column collapse for the same filter. */}
+      {!personBoardId && loaded && view === "board" && filters.penalty !== "overdue" && <TaskBoardKpis tasks={kpiTasks} />}
       {!loaded ? (
         <BoardSkeleton />
       ) : view === "board" ? (

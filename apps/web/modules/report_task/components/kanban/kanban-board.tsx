@@ -200,6 +200,26 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
       const overdueIds = new Set(
         filtered.filter((t) => t.status !== "done" && dueUrgency(t) === "overdue").map((t) => t.id)
       );
+      // "เลยกำหนดเท่านั้น" already narrows `filtered` down to overdue tasks
+      // only — under that filter, "รอดำเนินการ"/"กำลังทำ"/"เสร็จสิ้น" aren't
+      // just usually empty here, they're GUARANTEED empty (every task left in
+      // `filtered` is, by definition, todo/in_progress AND overdue, so it
+      // lands in the "เลยกำหนด" bucket every time). Showing 3 permanently-dead
+      // columns next to the one that matters is pure clutter — collapse to a
+      // single column instead of rendering columns that can never hold anything.
+      if (filters.penalty === "overdue") {
+        return [
+          {
+            id: "overdue",
+            label: "เลยกำหนด",
+            accent: chartColors.red,
+            icon: AlarmClockOff,
+            tasks: sortTasksForDisplay(filtered),
+            derived: true,
+            emptyMessage: "ไม่มีงานเลยกำหนด 🎉",
+          },
+        ];
+      }
       return [
         {
           id: "todo" as const,
@@ -250,7 +270,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
         tasks: sortTasksForDisplay(filtered.filter((t) => t.assigneeIds.includes(u.id))),
       }))
       .filter((c) => c.tasks.length > 0);
-  }, [groupBy, filtered]);
+  }, [groupBy, filtered, filters.penalty]);
 
   // Columns can run wider than the viewport (grouping by assignee especially
   // — one column per employee) with nothing to hint that more sit off-screen
