@@ -81,7 +81,19 @@ export function KanbanColumn({
   // get their own split instead: on-time in the column's own accent, late in
   // the same red DueDateBadge already uses on the card itself, so a column
   // full of red reads as "everything in here is late" at a glance.
-  const isPlainStatusColumn = groupedByStatus && !column.derived;
+  //
+  // The derived "รอตรวจสอบ" column is also single-status underneath (every
+  // task in it is literally task.status === "done", just further filtered by
+  // !reviewedBy) but used to fall through to the by-status segmented bar
+  // below anyway since it's `derived` — which rendered 100% statusMeta.done's
+  // own dark green, ignoring the column's own pale-green accent entirely. Its
+  // overdueCount is always 0 (a done task is never overdue), so routing it
+  // through this same on-time/overdue branch just paints it as one flat bar
+  // in its own accent — no on-time/overdue split needed, same effect. The
+  // other derived column ("เลยกำหนดเท่านั้น"'s single flat list) stays out of
+  // this on purpose — that one's tasks really are overdue, so it should keep
+  // showing red, not silently repaint pale-green.
+  const isPlainStatusColumn = groupedByStatus && (!column.derived || column.id === "review");
   const overdueCount = isPlainStatusColumn
     ? column.tasks.filter((t) => t.status !== "done" && dueUrgency(t) === "overdue").length
     : 0;

@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState, type KeyboardEvent } from "react";
+import { memo, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import { Progress } from "@/modules/report_task/components/ui/progress";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
@@ -54,6 +54,10 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
   // unreviewed card ("รอตรวจสอบ") still needs someone to actually check it,
   // so crossing the title out already read as more final than it really is.
   const isReviewedDone = isDone && !!task.reviewedBy;
+  // Same "รอตรวจสอบ" state the pill above renders for — reused to recolor
+  // this card's own checklist-progress bar (below) to the same greenPale so
+  // it doesn't clash with the pill sitting right above it.
+  const isPendingReview = isDone && !task.reviewedBy;
   // A group task tracks each assignee's own completion, derived from their
   // own checklist items — the card's status only follows once everyone's
   // marked done (see task-completion.ts). The quick-toggle circle below
@@ -282,9 +286,17 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
           across a busy column. */}
       {visibleChecklist.length > 0 && (
         <div className="mt-2 flex items-center gap-2">
+          {/* --primary is scoped via inline style, not a global theme edit —
+              only this bar (only on a "รอตรวจสอบ" card) picks up greenPale,
+              every other Progress bar in the app keeps the normal brand
+              color. Overriding via a CSS custom property (rather than a
+              className) is what lets it reach the indicator, which is nested
+              inside the shared Progress component and only ever reads
+              var(--primary). */}
           <Progress
             value={(doneChecklist / visibleChecklist.length) * 100}
             className="flex-1"
+            style={isPendingReview ? ({ "--primary": chartColors.greenPale } as CSSProperties) : undefined}
           />
           <span className="text-[10px] font-medium tabular-nums text-[var(--ink)] shrink-0">
             {doneChecklist}/{visibleChecklist.length}
