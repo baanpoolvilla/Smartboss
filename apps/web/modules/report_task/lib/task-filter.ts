@@ -32,8 +32,12 @@ export function matchesTaskFilters(task: Task, filters: TaskFilterState): boolea
   }
   if (filters.quickView !== "all") {
     if (filters.quickView === "inProgress" && task.status !== "in_progress") return false;
-    if (filters.quickView === "overdue" && dueUrgency(task) !== "overdue") return false;
-    if (filters.quickView === "done" && task.status !== "done") return false;
+    // "รอตรวจสอบ"/"สำเร็จทั้งหมด" split the same way as the Kanban board's own
+    // review/done columns — a done task that hasn't been signed off yet is
+    // "รอตรวจสอบ", not "สำเร็จ" (see markReviewed/rejectReview) — so the two
+    // quick-views stay mutually exclusive instead of double-counting it.
+    if (filters.quickView === "review" && !(task.status === "done" && !task.reviewedBy)) return false;
+    if (filters.quickView === "done" && !(task.status === "done" && !!task.reviewedBy)) return false;
   }
   return true;
 }

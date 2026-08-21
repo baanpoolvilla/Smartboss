@@ -55,6 +55,14 @@ export function KanbanColumn({
   const Icon = column.icon;
   const accent = column.accent;
   const percent = boardTotal > 0 ? Math.round((column.tasks.length / boardTotal) * 100) : 0;
+  // The header's icon chip/count/% text used to just be `accent` itself —
+  // fine for a saturated color like the amber/red/gray accents, but the
+  // derived "รอตรวจสอบ" column's accent (chartColors.greenPale, a pale
+  // sage) is barely visible as text on its own pale-tint background. Darken
+  // it for text specifically so every column stays legible regardless of
+  // how light its own accent is, while the background tint and the little
+  // dot (still solid `accent`) keep the light/dark cue between columns.
+  const textAccent = `color-mix(in srgb, ${accent} 55%, black)`;
 
   // A column can mix statuses (every assignee column does; the derived
   // "รอตรวจสอบ" column is always 100% "done" though, so this stays flat
@@ -97,7 +105,7 @@ export function KanbanColumn({
           {Icon && (
             <span
               className="h-7 w-7 rounded-lg flex items-center justify-center shrink-0"
-              style={{ backgroundColor: `color-mix(in srgb, ${accent} 14%, white)`, color: accent }}
+              style={{ backgroundColor: `color-mix(in srgb, ${accent} 14%, white)`, color: textAccent }}
             >
               <Icon className="h-4 w-4" />
             </span>
@@ -119,7 +127,7 @@ export function KanbanColumn({
 
           <span
             className="ml-auto text-[11px] font-semibold rounded-full h-5 min-w-5 px-1.5 flex items-center justify-center tabular-nums shrink-0"
-            style={{ backgroundColor: `color-mix(in srgb, ${accent} 12%, white)`, color: accent }}
+            style={{ backgroundColor: `color-mix(in srgb, ${accent} 12%, white)`, color: textAccent }}
           >
             {column.tasks.length}
           </span>
@@ -165,7 +173,7 @@ export function KanbanColumn({
             </div>
           )}
           <div className="flex items-center gap-2.5 mt-1 flex-wrap">
-            <p className="text-[10px] font-medium" style={{ color: accent }}>
+            <p className="text-[10px] font-medium" style={{ color: textAccent }}>
               {percent}% ของบอร์ด
             </p>
             {isPlainStatusColumn ? (

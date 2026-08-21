@@ -134,11 +134,11 @@ export type PenaltyFilter = "all" | "overdue" | "pending" | "docked";
  * the filter bar's own fields below, not a replacement for them. Kept out
  * of `matchesTaskFilters`'s other checks conceptually (still runs through
  * the same predicate) so the KPI cards themselves can be computed with this
- * one dimension forced back to "all" — otherwise selecting e.g. "เลยกำหนด"
- * would collapse all 4 numbers down to the same overdue count instead of
+ * one dimension forced back to "all" — otherwise selecting e.g. "รอตรวจสอบ"
+ * would collapse all 4 numbers down to the same review count instead of
  * staying a stable set of options to click between.
  */
-export type QuickView = "all" | "inProgress" | "overdue" | "done";
+export type QuickView = "all" | "inProgress" | "review" | "done";
 
 interface TaskFilters {
   assigneeId: string | "all";

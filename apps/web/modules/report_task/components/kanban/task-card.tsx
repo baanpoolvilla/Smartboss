@@ -339,11 +339,16 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority }: C
       {/* Divider keeps the meta row visually separate from the body */}
       <div className="mt-3.5 pt-3 border-t border-[var(--line)]/60 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2.5 text-[var(--ink-soft)] min-w-0">
-          {showOriginalStatus && (
+          {/* Only meaningful for a task still todo/in_progress — showOriginalStatus
+              is also true for the derived "รอตรวจสอบ" column, where every task's
+              real status is "done" and this tag would just mislabel it. Solid
+              fill (not a pale tint) so it reads at a glance instead of blending
+              into the meta row like the rest of the muted icon-row text. */}
+          {showOriginalStatus && task.status !== "done" && (
             <span
               className={cn(
-                "inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded-md whitespace-nowrap",
-                task.status === "in_progress" ? "bg-amber-50 text-[var(--chart-amber)]" : "bg-slate-100 text-[var(--chart-gray)]"
+                "inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-md whitespace-nowrap text-white",
+                task.status === "in_progress" ? "bg-[var(--chart-amber)]" : "bg-[var(--chart-gray)]"
               )}
             >
               {task.status === "in_progress" ? statusMeta.in_progress.label : statusMeta.todo.label}

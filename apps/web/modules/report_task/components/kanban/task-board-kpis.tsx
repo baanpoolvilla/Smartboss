@@ -2,11 +2,10 @@
 
 import { useMemo } from "react";
 import { Card, CardContent } from "@/modules/report_task/components/ui/card";
-import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import { useTaskStore, type QuickView } from "@/modules/report_task/store/task-store";
 import { cn } from "@/modules/report_task/lib/utils";
 import type { Task } from "@/modules/report_task/types";
-import { ListTodo, PlayCircle, CheckCircle2, Flag } from "lucide-react";
+import { ListTodo, PlayCircle, CheckCircle2, Hourglass } from "lucide-react";
 
 /**
  * Quick at-a-glance stats for the board currently open — scoped to whatever
@@ -20,12 +19,21 @@ export function TaskBoardKpis({ tasks }: { tasks: Task[] }) {
   const quickView = useTaskStore((s) => s.filters.quickView);
   const setFilters = useTaskStore((s) => s.setFilters);
 
+  // These 4 no longer overlap — a task is in exactly one of
+  // todo/in_progress/review/reviewed-done at a time (same split as the
+  // Kanban board's own status columns), so "กำลังทำ" + "รอตรวจสอบ" +
+  // "สำเร็จทั้งหมด" + the unlisted "รอดำเนินการ" always add up to "งานทั้งหมด".
+  // "เลยกำหนด" used to sit here as a 4th card, but lateness is a property of
+  // a todo/in_progress task, not a status of its own — it double-counted
+  // against "กำลังทำ" (an overdue in-progress task showed up in both), which
+  // made the 4 numbers look broken since they read like a breakdown of the
+  // total. It's still visible per-card (DueDateBadge) and via the "เลยกำหนดเท่านั้น" filter.
   const stats = useMemo(
     () => ({
       total: tasks.length,
       inProgress: tasks.filter((t) => t.status === "in_progress").length,
-      overdue: tasks.filter((t) => dueUrgency(t) === "overdue" && t.status !== "done").length,
-      doneAll: tasks.filter((t) => t.status === "done").length,
+      review: tasks.filter((t) => t.status === "done" && !t.reviewedBy).length,
+      doneAll: tasks.filter((t) => t.status === "done" && !!t.reviewedBy).length,
     }),
     [tasks]
   );
@@ -37,7 +45,7 @@ export function TaskBoardKpis({ tasks }: { tasks: Task[] }) {
   const cards: { key: QuickView; label: string; value: number; icon: typeof ListTodo; iconClass: string }[] = [
     { key: "all", label: "งานทั้งหมด", value: stats.total, icon: ListTodo, iconClass: "bg-slate-50 text-[var(--chart-gray)]" },
     { key: "inProgress", label: "กำลังทำ", value: stats.inProgress, icon: PlayCircle, iconClass: "bg-amber-50 text-[var(--chart-amber)]" },
-    { key: "overdue", label: "เลยกำหนด", value: stats.overdue, icon: Flag, iconClass: "bg-red-50 text-[var(--chart-red)]" },
+    { key: "review", label: "รอตรวจสอบ", value: stats.review, icon: Hourglass, iconClass: "bg-green-50 text-[var(--chart-green)]" },
     { key: "done", label: "สำเร็จทั้งหมด", value: stats.doneAll, icon: CheckCircle2, iconClass: "bg-green-100 text-[var(--brand-green-dark)]" },
   ];
 
