@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Home as HomeIcon,
@@ -11,6 +11,12 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { Card } from "@smartboss/ui/components/card";
+import {
+  AUTO_GROUP_KEY,
+  groupByPriority,
+  priorityLabel,
+  type PriorityGroup,
+} from "@/modules/maintenance/lib/priority";
 
 export interface BoardOrder {
   id: string;
@@ -39,12 +45,22 @@ const M = {
   grey: "#9E9E9E",
 };
 
-const PRIORITY: Record<string, { label: string; color: string }> = {
-  urgent: { label: "เร่งด่วน", color: M.red },
-  high: { label: "สูง", color: M.orange },
-  medium: { label: "ปานกลาง", color: M.blue },
-  low: { label: "ต่ำ", color: M.grey },
+/** สีของแต่ละความเร่งด่วน — label กับลำดับมาจาก lib/priority.ts */
+const PRIORITY_COLOR: Record<string, string> = {
+  urgent: M.red,
+  high: M.orange,
+  medium: M.blue,
+  low: M.grey,
 };
+
+function priorityColor(p: string): string {
+  return PRIORITY_COLOR[p] ?? M.blue;
+}
+
+/** สีของหัวกลุ่ม — งานอัตโนมัติใช้สีของโมดูล ไม่ใช่แดง/ส้มที่แปลว่าเร่งด่วน */
+function groupColor(key: string): string {
+  return key === AUTO_GROUP_KEY ? "#0D9488" : priorityColor(key);
+}
 
 /** หมวดบ้านจากชื่อ เช่น "BS-M4" → "BS-M" (ตรงกับ _getPropertyGroup เดิม) */
 export function propertyGroup(name: string): string {
@@ -56,18 +72,37 @@ export function propertyGroup(name: string): string {
 }
 
 function PriorityBadge({ priority }: { priority: string }) {
-  const p = PRIORITY[priority] ?? PRIORITY.medium!;
+  const color = priorityColor(priority);
   return (
     <span
-      className="shrink-0 rounded px-2 py-0.5 text-[11px]"
+      className="shrink-0 rounded px-2 py-0.5 text-[11px] font-bold"
       style={{
-        color: p.color,
-        backgroundColor: `${p.color}1a`,
-        border: `1px solid ${p.color}4d`,
+        color,
+        backgroundColor: `${color}1a`,
+        border: `1px solid ${color}4d`,
       }}
     >
-      {p.label}
+      {priorityLabel(priority)}
     </span>
+  );
+}
+
+/** หัวกลุ่มบาง ๆ คั่นระหว่างระดับความเร่งด่วน */
+function GroupHeader({ group }: { group: PriorityGroup<BoardOrder> }) {
+  const color = groupColor(group.key);
+  return (
+    <div className="flex items-center gap-1.5 px-1 pt-1">
+      <span
+        className="h-2 w-2 shrink-0 rounded-full"
+        style={{ backgroundColor: color }}
+        aria-hidden
+      />
+      <span className="text-[11px] font-bold tracking-wide" style={{ color }}>
+        {group.label}
+      </span>
+      <span className="text-[11px] text-(--ink-soft)">{group.orders.length}</span>
+      <span className="ml-1 h-px flex-1 bg-(--line)" />
+    </div>
   );
 }
 
@@ -111,15 +146,20 @@ function OrderCard({
               {wo.title}
             </p>
           </div>
-          {wo.autoCreated && (
+          {/*
+            งานอัตโนมัติไม่แสดงความเร่งด่วน — cron ใส่ medium ให้ทุกใบโดยไม่มีใคร
+            ประเมิน ป้าย "ปานกลาง" จึงเป็นข้อมูลลวง งานพวกนี้ถึงกำหนดก็ต้องทำอยู่แล้ว
+          */}
+          {wo.autoCreated ? (
             <span
               className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold"
               style={{ color: "var(--app)", backgroundColor: "#0D94881f" }}
             >
               <RefreshCw className="h-2.5 w-2.5" /> อัตโนมัติ
             </span>
+          ) : (
+            <PriorityBadge priority={wo.priority} />
           )}
-          <PriorityBadge priority={wo.priority} />
         </div>
 
         <div className="mt-1 flex items-center gap-3 text-xs text-(--ink-soft)">
@@ -190,17 +230,71 @@ export function WorkOrderFilteredList({
   );
 }
 
+/**
+ * byPriority = จัดกลุ่มตามความเร่งด่วน
+ *
+ * เปิดเฉพาะสองคอลัมน์แรกที่ยังต้องลงมือทำ — งานที่ปิดไปแล้วหรือรอแค่ลงตัวเลข
+ * ค่าใช้จ่าย ความเร่งด่วนหมดความหมาย เรียงใหม่ก่อนเก่ามีประโยชน์กว่า
+ */
 const COLUMNS = [
-  { key: "open", title: "ยังไม่ทำ", short: "🔴 ยังไม่ทำ", color: M.red },
-  { key: "in_progress", title: "กำลังทำ", short: "🟡 กำลังทำ", color: M.orange },
+  { key: "open", title: "ยังไม่ทำ", short: "🔴 ยังไม่ทำ", color: M.red, byPriority: true },
+  { key: "in_progress", title: "กำลังทำ", short: "🟡 กำลังทำ", color: M.orange, byPriority: true },
   {
     key: "no_expense",
     title: "ยังไม่บันทึกค่าใช้จ่าย",
     short: "🟠 ยังไม่บันทึก",
     color: M.deepOrange,
+    byPriority: false,
   },
-  { key: "done", title: "เสร็จแล้ว", short: "✅ เสร็จแล้ว", color: M.green },
+  { key: "done", title: "เสร็จแล้ว", short: "✅ เสร็จแล้ว", color: M.green, byPriority: false },
 ] as const;
+
+/** รายการการ์ดในคอลัมน์เดียว — จัดกลุ่มหรือไม่ก็ได้ */
+function ColumnList({
+  orders,
+  propertyNames,
+  creatorNames,
+  byPriority,
+  gap,
+  emptyClass,
+}: {
+  orders: BoardOrder[];
+  propertyNames: Record<string, string>;
+  creatorNames: Record<string, string>;
+  byPriority: boolean;
+  gap: string;
+  emptyClass: string;
+}) {
+  if (orders.length === 0) {
+    return <p className={emptyClass}>ไม่มีใบงาน</p>;
+  }
+
+  const card = (wo: BoardOrder) => (
+    <OrderCard
+      key={wo.id}
+      wo={wo}
+      propertyName={propertyNames[wo.propertyId] ?? ""}
+      creatorName={wo.createdBy ? creatorNames[wo.createdBy] : undefined}
+    />
+  );
+
+  const groups = byPriority ? groupByPriority(orders) : [];
+  // กลุ่มเดียวไม่ต้องขึ้นหัวกลุ่ม — หัวข้อที่คลุมทั้งคอลัมน์ไม่ได้บอกอะไรเพิ่ม
+  if (groups.length <= 1) {
+    return <div className={`flex flex-col ${gap}`}>{orders.map(card)}</div>;
+  }
+
+  return (
+    <div className={`flex flex-col ${gap}`}>
+      {groups.map((g) => (
+        <Fragment key={g.key}>
+          <GroupHeader group={g} />
+          {g.orders.map(card)}
+        </Fragment>
+      ))}
+    </div>
+  );
+}
 
 function ColumnIcon({ col, color }: { col: string; color: string }) {
   if (col === "open") return <FiberNew color={color} />;
@@ -389,21 +483,15 @@ export function WorkOrderBoard({
             </button>
           ))}
         </div>
-        <div className="flex flex-col gap-3 p-3">
-          {buckets[COLUMNS[tab]!.key]!.length === 0 ? (
-            <p className="py-10 text-center text-sm text-(--ink-soft)">
-              ไม่มีใบงาน
-            </p>
-          ) : (
-            buckets[COLUMNS[tab]!.key]!.map((wo) => (
-              <OrderCard
-                key={wo.id}
-                wo={wo}
-                propertyName={propertyNames[wo.propertyId] ?? ""}
-                creatorName={wo.createdBy ? creatorNames[wo.createdBy] : undefined}
-              />
-            ))
-          )}
+        <div className="p-3">
+          <ColumnList
+            orders={buckets[COLUMNS[tab]!.key]!}
+            propertyNames={propertyNames}
+            creatorNames={creatorNames}
+            byPriority={COLUMNS[tab]!.byPriority}
+            gap="gap-3"
+            emptyClass="py-10 text-center text-sm text-(--ink-soft)"
+          />
         </div>
       </div>
 
@@ -439,24 +527,14 @@ export function WorkOrderBoard({
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-2.5">
-              {buckets[c.key]!.length === 0 ? (
-                <p className="px-2 py-8 text-center text-sm text-[#B0BEC5]">
-                  ไม่มีใบงาน
-                </p>
-              ) : (
-                <div className="flex flex-col gap-2.5">
-                  {buckets[c.key]!.map((wo) => (
-                    <OrderCard
-                      key={wo.id}
-                      wo={wo}
-                      propertyName={propertyNames[wo.propertyId] ?? ""}
-                      creatorName={
-                        wo.createdBy ? creatorNames[wo.createdBy] : undefined
-                      }
-                    />
-                  ))}
-                </div>
-              )}
+              <ColumnList
+                orders={buckets[c.key]!}
+                propertyNames={propertyNames}
+                creatorNames={creatorNames}
+                byPriority={c.byPriority}
+                gap="gap-2.5"
+                emptyClass="px-2 py-8 text-center text-sm text-[#B0BEC5]"
+              />
             </div>
           </div>
         ))}
