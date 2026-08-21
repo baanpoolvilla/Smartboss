@@ -29,10 +29,12 @@ import {
 } from "@/modules/report_task/components/ui/select";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/modules/report_task/components/ui/dropdown-menu";
+import { useIsMobile } from "@/modules/report_task/hooks/use-is-mobile";
 import { DueDateBadge } from "@/modules/report_task/components/shared/due-date-badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/modules/report_task/components/ui/tooltip";
 import { Badge } from "@/modules/report_task/components/ui/badge";
@@ -47,7 +49,7 @@ import { cn } from "@/modules/report_task/lib/utils";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, MessageSquare, Paperclip, ListTodo, ChevronDown, X, CheckCircle2, SearchX, Info } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, MessageSquare, Paperclip, ListTodo, ChevronDown, X, CheckCircle2, SearchX, Info, SlidersHorizontal } from "lucide-react";
 import { EmptyState } from "@/modules/report_task/components/shared/empty-state";
 import type { Task, TaskStatus, TaskPriority } from "@/modules/report_task/types";
 import { toast } from "sonner";
@@ -143,6 +145,12 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
   const [sorting, setSorting] = useState<SortingState>([{ id: "dueDate", desc: false }]);
   const [groupBy, setGroupBy] = useState<GroupBy>("none");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const isMobile = useIsMobile();
+  // <640px only — the 9-column table collapses into a compact list instead
+  // (see the render below); these control that list, not the desktop table.
+  const [mobileFields, setMobileFields] = useState({ status: true, priority: true, due: true });
+  const MOBILE_PAGE_SIZE = 15;
+  const [mobileShowCount, setMobileShowCount] = useState(MOBILE_PAGE_SIZE);
   const stickers = useStickerStore((s) => s.stickers);
   const moveTask = useTaskStore((s) => s.moveTask);
   const updateTask = useTaskStore((s) => s.updateTask);
@@ -559,10 +567,12 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
           </SelectContent>
         </Select>
 
+        {/* Column sort explainer — meaningless on the mobile list (no
+            clickable column headers there), desktop table only. */}
         <Tooltip>
           <TooltipTrigger
             render={
-              <button type="button" className="text-[var(--ink-soft)] hover:text-[var(--ink)]" aria-label="วิธีเรียงลำดับตาราง">
+              <button type="button" className="hidden sm:inline-flex text-[var(--ink-soft)] hover:text-[var(--ink)]" aria-label="วิธีเรียงลำดับตาราง">
                 <Info className="h-3.5 w-3.5" />
               </button>
             }
@@ -578,6 +588,42 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
           <SummaryChip label="เสร็จ" value={summary.done} tone="good" />
           <SummaryChip label="เลยกำหนด" value={summary.overdue} tone="bad" />
           {summary.docked > 0 && <SummaryChip label="ถูกหัก" value={summary.docked} tone="bad" />}
+
+          {/* <640px only — the mobile list's line 2 shows สถานะ/ความสำคัญ/
+              กำหนดส่ง by default; this toggles which of those actually show,
+              since a compact row has less room than a full table column. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <button
+                  type="button"
+                  className="sm:hidden inline-flex items-center gap-1 h-8 rounded-lg bg-white ring-1 ring-inset ring-[var(--line)] px-2.5 text-xs font-medium hover:bg-[var(--bg-soft)]"
+                >
+                  <SlidersHorizontal className="h-3.5 w-3.5" /> ฟิลด์ที่แสดง
+                </button>
+              }
+            />
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuCheckboxItem
+                checked={mobileFields.status}
+                onCheckedChange={(v) => setMobileFields((f) => ({ ...f, status: !!v }))}
+              >
+                สถานะ
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={mobileFields.priority}
+                onCheckedChange={(v) => setMobileFields((f) => ({ ...f, priority: !!v }))}
+              >
+                ความสำคัญ
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={mobileFields.due}
+                onCheckedChange={(v) => setMobileFields((f) => ({ ...f, due: !!v }))}
+              >
+                กำหนดส่ง
+              </DropdownMenuCheckboxItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -634,6 +680,11 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
         </div>
       )}
 
+      {/* ≥640px: the real 9-column table, unchanged. <640px renders the
+          compact list below instead — a 9-column table squeezed into a phone
+          width is unusable even with the sticky title column, so mobile gets
+          a genuinely different structure rather than a squeezed-down table. */}
+      {!isMobile && (
       <div className="rounded-xl border border-[var(--line)] bg-white overflow-hidden shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
         <div className="overflow-x-auto">
           <Table>
@@ -773,6 +824,112 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
           </div>
         )}
       </div>
+      )}
+
+      {/* <640px: compact list — line 1 is title + avatar, line 2 is
+          สถานะ/ความสำคัญ/กำหนดส่ง (per "ฟิลด์ที่แสดง" above), same tap-to-open
+          as the desktop table's rows. No checkboxes/bulk-actions here — those
+          stay desktop-only, a phone-width row has no room for them and a
+          management bulk-select isn't a phone-first action anyway. */}
+      {isMobile && (
+        <div className="rounded-xl border border-[var(--line)] bg-white overflow-hidden shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+          {rows.length === 0 ? (
+            <EmptyState
+              icon={SearchX}
+              title="ไม่พบงานตามตัวกรอง"
+              description="ลองปรับหรือล้างตัวกรองด้านบน"
+              className="border-0"
+              action={
+                <Button variant="outline" size="sm" onClick={resetFilters}>
+                  ล้างตัวกรองทั้งหมด
+                </Button>
+              }
+            />
+          ) : (
+            <>
+              {rows.slice(0, mobileShowCount).map((row, i) => {
+                const t = row.original;
+                const assignees = t.assigneeIds.map(getUser).filter(Boolean);
+                let groupHeader: React.ReactNode = null;
+                if (groupBy !== "none") {
+                  const value = groupValue(row);
+                  const visibleSlice = rows.slice(0, mobileShowCount);
+                  const prevValue = i > 0 ? groupValue(visibleSlice[i - 1]!) : undefined;
+                  if (value !== prevValue) {
+                    const count = rows.filter((r) => groupValue(r) === value).length;
+                    groupHeader = (
+                      <div className="flex items-center gap-2 border-b border-[var(--line)] bg-[var(--bg-soft)] px-4 py-2 text-sm font-semibold">
+                        {groupLabel(value)}
+                        <Badge variant="outline" className="text-[11px] text-[var(--ink-soft)] bg-white border-[var(--line)]">
+                          {count}
+                        </Badge>
+                      </div>
+                    );
+                  }
+                }
+                return (
+                  <div key={row.id}>
+                    {groupHeader}
+                    <button
+                      type="button"
+                      onClick={() => onOpen(t.id)}
+                      className="flex w-full flex-col gap-1 border-b border-[var(--line)] px-4 py-3 text-left last:border-b-0 hover:bg-[var(--bg-soft)]"
+                    >
+                      <div className="flex items-center gap-2">
+                        <p className={cn("min-w-0 flex-1 truncate text-sm font-medium", t.status === "done" && "line-through text-[var(--ink-soft)]")}>
+                          {t.title}
+                        </p>
+                        {assignees.length > 0 && (
+                          <div className="flex items-center -space-x-1.5 shrink-0">
+                            {assignees.slice(0, 3).map((a) => (
+                              <Avatar key={a!.id} className="h-6 w-6 ring-2 ring-white">
+                                <AvatarFallback className="text-[9px] bg-[var(--accent)] text-[var(--brand-green-dark)]">
+                                  {a!.avatar}
+                                </AvatarFallback>
+                              </Avatar>
+                            ))}
+                            {assignees.length > 3 && (
+                              <span className="h-6 w-6 rounded-full ring-2 ring-white bg-[var(--bg-soft)] text-[9px] text-[var(--ink-soft)] flex items-center justify-center">
+                                +{assignees.length - 3}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {mobileFields.status && (
+                          <span className={cn("inline-flex items-center rounded-md border px-1.5 h-5 text-[10px] font-medium whitespace-nowrap", statusMeta[t.status].badgeClass)}>
+                            {statusMeta[t.status].label}
+                          </span>
+                        )}
+                        {mobileFields.priority && (
+                          <span className={cn("inline-flex items-center gap-1 rounded-md border px-1.5 h-5 text-[10px] font-medium whitespace-nowrap", priorityMeta[t.priority].badgeClass)}>
+                            <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: priorityMeta[t.priority].accentColor }} />
+                            {priorityMeta[t.priority].label}
+                          </span>
+                        )}
+                        {mobileFields.due && <DueDateBadge task={t} className="text-[10px]" />}
+                      </div>
+                    </button>
+                  </div>
+                );
+              })}
+              {mobileShowCount < rows.length && (
+                <div className="flex justify-center border-t border-[var(--line)] p-3">
+                  <button
+                    type="button"
+                    onClick={() => setMobileShowCount((n) => n + MOBILE_PAGE_SIZE)}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-white px-3.5 py-1.5 text-xs font-medium text-[var(--ink)] shadow-sm hover:bg-[var(--bg-soft)]"
+                  >
+                    แสดงเพิ่มเติม {rows.length - mobileShowCount} รายการ
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
