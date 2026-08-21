@@ -36,9 +36,13 @@ interface CardBodyProps {
    * instead of repeating it (mirrors groupBy==="status", where this same
    * badge shows priority since status is the one already on the header). */
   groupedByPriority?: boolean;
+  /** Whether a done task should fade to look "settled" next to open ones —
+   * only meaningful in a column that actually mixes statuses. Defaults to
+   * true (the old always-fade behavior) since most callers pass it. */
+  dimWhenDone?: boolean;
 }
 
-function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority }: CardBodyProps) {
+function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dimWhenDone = true }: CardBodyProps) {
   const addReaction = useTaskStore((s) => s.addReaction);
   const moveTask = useTaskStore((s) => s.moveTask);
   const toggleAssigneeChecklist = useTaskStore((s) => s.toggleAssigneeChecklist);
@@ -117,7 +121,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority }: C
         // to open ones in a column that isn't grouped by status (priority,
         // assignee) — the checkbox + strikethrough alone turned out too
         // subtle to notice (see below), so the whole card recedes too.
-        isDone && "opacity-70"
+        isDone && dimWhenDone && "opacity-70"
       )}
     >
       <div className="flex items-center gap-2 mb-2.5">
@@ -203,7 +207,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority }: C
             </Tooltip>
           )}
           {task.revisions.length > 0 && !suspicious && (
-            <span className="flex items-center gap-0.5 text-[10px] text-[var(--ink)]">
+            <span className="flex items-center gap-0.5 text-[10px] font-medium text-[var(--ink)]">
               <History className="h-3 w-3" />
               {task.revisions.length}
             </span>
@@ -277,7 +281,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority }: C
             value={(doneChecklist / visibleChecklist.length) * 100}
             className="flex-1"
           />
-          <span className="text-[10px] tabular-nums text-[var(--ink)] shrink-0">
+          <span className="text-[10px] font-medium tabular-nums text-[var(--ink)] shrink-0">
             {doneChecklist}/{visibleChecklist.length}
           </span>
         </div>
@@ -301,13 +305,13 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority }: C
                   and next to the solid-colored badges above, so it read as
                   faded rather than "just secondary detail". A finished item
                   still fades + strikes through — that one's meant to recede. */}
-              <span className={cn("text-[10px] truncate", c.done ? "line-through text-[var(--ink-soft)]" : "text-[var(--ink)]")}>
+              <span className={cn("text-[10px] font-medium truncate", c.done ? "line-through text-[var(--ink-soft)] font-normal" : "text-[var(--ink)]")}>
                 {c.text}
               </span>
             </div>
           ))}
           {visibleChecklist.length > 4 && (
-            <p className="text-[10px] text-[var(--ink)] pl-4.5">+{visibleChecklist.length - 4} รายการ</p>
+            <p className="text-[10px] font-medium text-[var(--ink)] pl-4.5">+{visibleChecklist.length - 4} รายการ</p>
           )}
         </div>
       )}
@@ -372,12 +376,12 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority }: C
             </span>
           )}
           {task.comments.length > 0 && (
-            <span className="flex items-center gap-0.5 text-[11px]" title="ความคิดเห็น">
+            <span className="flex items-center gap-0.5 text-[11px] font-medium" title="ความคิดเห็น">
               <MessageSquare className="h-3.5 w-3.5" /> {task.comments.length}
             </span>
           )}
           {task.attachments.length > 0 && (
-            <span className="flex items-center gap-0.5 text-[11px]" title="ไฟล์แนบ">
+            <span className="flex items-center gap-0.5 text-[11px] font-medium" title="ไฟล์แนบ">
               <Paperclip className="h-3.5 w-3.5" /> {task.attachments.length}
             </span>
           )}
@@ -484,11 +488,21 @@ export const TaskCard = memo(function TaskCard({
   onOpen,
   showOriginalStatus,
   groupedByPriority,
+  dimWhenDone,
 }: {
   task: Task;
   onOpen: (id: string) => void;
   showOriginalStatus?: boolean;
   groupedByPriority?: boolean;
+  dimWhenDone?: boolean;
 }) {
-  return <TaskCardBody task={task} onOpen={onOpen} showOriginalStatus={showOriginalStatus} groupedByPriority={groupedByPriority} />;
+  return (
+    <TaskCardBody
+      task={task}
+      onOpen={onOpen}
+      showOriginalStatus={showOriginalStatus}
+      groupedByPriority={groupedByPriority}
+      dimWhenDone={dimWhenDone}
+    />
+  );
 });

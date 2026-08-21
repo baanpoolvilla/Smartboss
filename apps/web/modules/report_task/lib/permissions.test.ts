@@ -37,6 +37,10 @@ describe("canToggleOwnChecklistItem", () => {
   it("blocks a teammate from toggling someone else's item", () => {
     expect(canToggleOwnChecklistItem({ id: "c1", text: "x", done: false, ownerId: OTHER_ENG }, ENG_HEAD)).toBe(false);
   });
+
+  it("lets the company-wide owner (CEO) toggle anyone's item", () => {
+    expect(canToggleOwnChecklistItem({ id: "c1", text: "x", done: false, ownerId: OTHER_ENG }, OWNER)).toBe(true);
+  });
 });
 
 describe("canEditReportTopic", () => {

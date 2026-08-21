@@ -223,6 +223,14 @@ export function KanbanColumn({
             onOpen={onOpen}
             showOriginalStatus={column.derived}
             groupedByPriority={groupedByPriority}
+            // A done card fades so it visually "settles" next to open ones —
+            // only meaningful where a column actually mixes statuses
+            // (priority/assignee grouping). In the status-grouped board every
+            // column is one status already (a "รอตรวจสอบ"/"เสร็จสิ้น" column is
+            // 100% done by definition), so fading there just washes out the
+            // whole column for no comparative benefit — every other contrast
+            // fix on the card would fight this opacity for nothing.
+            dimWhenDone={!groupedByStatus}
           />
         ))}
 

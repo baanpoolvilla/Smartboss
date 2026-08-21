@@ -50,11 +50,14 @@ export function canSeePenaltyStatus(task: Task, viewingAsUserId: string): boolea
 /**
  * Ticking a checklist item off (not editing its text, not adding/removing
  * items — that's `canEditRecord` territory, same as the rest of a task's
- * structure) belongs to whoever owns it. Everyone else on a group task can
- * still see a teammate's items, just not check them on their behalf.
+ * structure) belongs to whoever owns it, plus the company-wide owner (CEO) —
+ * who can already see and edit every task anyway, and needs to be able to
+ * verify/correct a checklist directly instead of only nagging the owner to
+ * tick it themselves. Everyone else on a group task can still see a
+ * teammate's items, just not check them on their behalf.
  */
 export function canToggleOwnChecklistItem(item: ChecklistItem, viewingAsUserId: string): boolean {
-  return item.ownerId === viewingAsUserId;
+  return item.ownerId === viewingAsUserId || isOwner(viewingAsUserId);
 }
 
 /**
