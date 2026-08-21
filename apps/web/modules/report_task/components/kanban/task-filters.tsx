@@ -306,13 +306,28 @@ export function TaskFilters({
         </div>
       )}
 
+      {/* Dropdown, not chips, even inside the sheet — a company with many
+          employees turns a chip list into a scroll of dozens of pills (see
+          "แผนก" above, which stays chips since a department count realistically
+          never gets that large). A native <select> here still beats that. */}
       {peopleInScope.length > 1 ? (
-        <ChipSelect
-          label="พนักงาน"
-          value={filters.assigneeId}
-          onChange={(v) => setFilters({ assigneeId: v })}
-          options={[{ value: "all", label: "ทุกคน" }, ...peopleInScope.map((u) => ({ value: u.id, label: u.name }))]}
-        />
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[11px] font-medium text-[var(--ink-soft)] px-0.5">พนักงาน</span>
+          <Select value={filters.assigneeId} onValueChange={(v) => v && setFilters({ assigneeId: v })}>
+            <SelectTrigger className={filterFieldTriggerClass(filters.assigneeId !== "all", "w-full !h-11")}>
+              <Users className="h-4 w-4 shrink-0" />
+              <SelectValue placeholder="ผู้รับผิดชอบ">
+                {filters.assigneeId === "all" ? "ทุกคน" : (getUser(filters.assigneeId)?.name ?? "ผู้รับผิดชอบ")}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent alignItemWithTrigger={false}>
+              <SelectItem value="all">ทุกคน</SelectItem>
+              {peopleInScope.map((u) => (
+                <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       ) : (
         <div className="flex flex-col gap-1.5">
           <span className="text-[11px] font-medium text-[var(--ink-soft)] px-0.5">พนักงาน</span>
