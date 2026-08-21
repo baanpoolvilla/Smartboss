@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, AlertTriangle, Building2, Users, Flag, CircleDot, User as UserIcon, Group } from "lucide-react";
+import { Plus, AlertTriangle, Building2, Users, Flag, CircleDot, User as UserIcon, Group, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/modules/report_task/components/ui/button";
 import {
   Select,
@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/modules/report_task/components/ui/select";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/modules/report_task/components/ui/sheet";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
@@ -52,6 +53,9 @@ export function TaskFilters({
   const resetFilters = useTaskStore((s) => s.resetFilters);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
+  // Mobile-only (<640px) — the 5 fields below collapse into this one button,
+  // opened as a bottom sheet, instead of the full row (see the render below).
+  const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
 
   const isFiltered =
     filters.departmentId !== defaultFilters.departmentId ||
@@ -59,6 +63,16 @@ export function TaskFilters({
     filters.priority !== defaultFilters.priority ||
     filters.penalty !== defaultFilters.penalty ||
     filters.preset !== defaultFilters.preset;
+
+  // Same 5 fields isFiltered already checks, just counted instead of
+  // collapsed to a bool — feeds the "ตัวกรอง (N)" badge on the mobile button.
+  const activeFilterCount = [
+    filters.departmentId !== defaultFilters.departmentId,
+    filters.assigneeId !== defaultFilters.assigneeId,
+    filters.priority !== defaultFilters.priority,
+    filters.penalty !== defaultFilters.penalty,
+    filters.preset !== defaultFilters.preset,
+  ].filter(Boolean).length;
 
   // filters is global store state that outlives the identity switcher — a
   // department/assignee picked while viewing as one person would otherwise
@@ -142,8 +156,13 @@ export function TaskFilters({
     }
   }, [filters.departmentId, filters.assigneeId, setFilters]);
 
-  return (
-    <div className="flex flex-wrap items-end gap-2">
+  // The 5 fields + "เลยกำหนดเท่านั้น" toggle — rendered once for the normal
+  // desktop/tablet row (≥640px) and again, stacked, inside the mobile bottom
+  // sheet (<640px, see the return below). Same fields, same state, just two
+  // different containers around them — kept as one JSX value instead of two
+  // copies so the two layouts can never drift out of sync with each other.
+  const fieldsNode = (
+    <>
       {availableDepartments.length > 1 ? (
         <FilterField label="แผนก">
           <Select value={filters.departmentId} onValueChange={(v) => v && setFilters({ departmentId: v })}>
@@ -260,15 +279,45 @@ export function TaskFilters({
           เลยกำหนดเท่านั้น
         </button>
       </div>
+    </>
+  );
 
-      <div className="ml-auto flex items-end gap-2">
-        {isFiltered && (
-          <Button variant="ghost" size="sm" className="h-8 px-2 text-[var(--ink-soft)]" onClick={resetFilters} aria-label="ล้างตัวกรอง">
-            ✕ ล้างตัวกรอง
+  return (
+    <>
+      {/* ≥640px: full row, unchanged from before. */}
+      <div className="hidden sm:flex flex-wrap items-end gap-2">
+        {fieldsNode}
+        <div className="ml-auto flex items-end gap-2">
+          {isFiltered && (
+            <Button variant="ghost" size="sm" className="h-8 px-2 text-[var(--ink-soft)]" onClick={resetFilters} aria-label="ล้างตัวกรอง">
+              ✕ ล้างตัวกรอง
+            </Button>
+          )}
+          <Button
+            className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+            onClick={() => setNewTaskOpen(true)}
+          >
+            <Plus className="h-4 w-4" />
+            สร้างงานใหม่
           </Button>
-        )}
+        </div>
+      </div>
+
+      {/* <640px: the 5 fields collapse into one button that opens a bottom
+          sheet, freeing up vertical space so the header doesn't eat most of
+          a phone screen before a single task card is visible. */}
+      <div className="flex sm:hidden items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setMobileSheetOpen(true)}
+          className={cn(filterFieldTriggerClass(activeFilterCount > 0), "!h-10")}
+        >
+          <SlidersHorizontal className="h-4 w-4 shrink-0" />
+          ตัวกรอง
+          {activeFilterCount > 0 && <span className="tabular-nums">({activeFilterCount})</span>}
+        </button>
         <Button
-          className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+          className="ml-auto bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
           onClick={() => setNewTaskOpen(true)}
         >
           <Plus className="h-4 w-4" />
@@ -276,7 +325,29 @@ export function TaskFilters({
         </Button>
       </div>
 
+      <Sheet open={mobileSheetOpen} onOpenChange={setMobileSheetOpen}>
+        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
+          <SheetHeader>
+            <SheetTitle>ตัวกรอง</SheetTitle>
+          </SheetHeader>
+          <div className="flex flex-col gap-3 px-4 [&_[data-slot=select-trigger]]:w-full [&_[data-slot=select-trigger]]:!h-11 [&>div>button]:w-full [&>div>button]:!h-11 [&>div>span]:w-full [&>div>span]:!h-11">
+            {fieldsNode}
+          </div>
+          <SheetFooter className="flex-row gap-2">
+            <Button variant="outline" className="flex-1 h-11" onClick={resetFilters} disabled={!isFiltered}>
+              ล้างตัวกรอง
+            </Button>
+            <Button
+              className="flex-1 h-11 bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+              onClick={() => setMobileSheetOpen(false)}
+            >
+              ใช้ตัวกรอง
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
       <NewTaskDialog open={newTaskOpen} onOpenChange={setNewTaskOpen} />
-    </div>
+    </>
   );
 }
