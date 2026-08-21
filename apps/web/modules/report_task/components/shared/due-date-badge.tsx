@@ -22,7 +22,7 @@ export function DueDateBadge({ task, className }: { task: Task; className?: stri
     // there's no other date on the card to contrast it against) is otherwise
     // ambiguous about which date it even is.
     return (
-      <span className={cn("inline-flex items-center gap-1 text-[11px] text-[var(--ink-soft)] whitespace-nowrap", className)}>
+      <span className={cn("inline-flex items-center gap-1 text-[11px] text-[var(--ink)] whitespace-nowrap", className)}>
         <CalendarDays className="h-3 w-3" />
         กำหนดส่ง {date}
       </span>

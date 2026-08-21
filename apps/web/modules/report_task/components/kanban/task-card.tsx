@@ -145,15 +145,20 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority }: C
               <TooltipTrigger
                 render={
                   // Two halves in one pill instead of a single "รอตรวจสอบ"
-                  // label — "เสร็จ" (the part that's actually true already,
-                  // muted) and "รอตรวจสอบ" (what's still pending, full color)
-                  // read as one continuous progress pill rather than a flat
-                  // status word. Sized to content (not a forced 50/50 split)
-                  // with nowrap on both halves — an even split at this card
-                  // width squeezed "รอตรวจสอบ" onto two lines, which read as
-                  // broken/blurry rather than a clean pill.
+                  // label — "เสร็จ" (the part that's actually true already)
+                  // and "รอตรวจสอบ" (what's still pending) read as one
+                  // continuous progress pill rather than a flat status word.
+                  // Both halves keep full-strength text (no opacity fade) —
+                  // dimming "เสร็จ" used to read as "faded/broken" next to
+                  // every other solid-colored badge on the board (priority
+                  // dots, due-date chips); the light-vs-solid *background*
+                  // pair already tells "done" from "still pending" without
+                  // needing a see-through label too. Sized to content (not a
+                  // forced 50/50 split) with nowrap on both halves — an even
+                  // split at this card width squeezed "รอตรวจสอบ" onto two
+                  // lines, which read as broken/blurry rather than a clean pill.
                   <span className="inline-flex items-stretch text-[10px] font-semibold rounded-full overflow-hidden ring-1 ring-inset ring-[color-mix(in_srgb,var(--chart-green)_30%,white)] whitespace-nowrap">
-                    <span className="flex items-center gap-1 px-2.5 py-1 bg-[color-mix(in_srgb,var(--chart-green)_10%,white)] text-[var(--chart-green)] opacity-70">
+                    <span className="flex items-center gap-1 px-2.5 py-1 bg-[color-mix(in_srgb,var(--chart-green)_10%,white)] text-[var(--chart-green)]">
                       <Check className="h-2.5 w-2.5 shrink-0" strokeWidth={3} />
                       เสร็จ
                     </span>
@@ -173,12 +178,12 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority }: C
             </Tooltip>
           )
         ) : groupedByPriority ? (
-          <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-[var(--ink-soft)]">
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-[var(--ink)]">
             <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: statusMeta[task.status].accentColor }} />
             {statusMeta[task.status].label}
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-[var(--ink-soft)]">
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-[var(--ink)]">
             <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: priorityMeta[task.priority].accentColor }} />
             {priorityMeta[task.priority].label}
           </span>
@@ -198,7 +203,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority }: C
             </Tooltip>
           )}
           {task.revisions.length > 0 && !suspicious && (
-            <span className="flex items-center gap-0.5 text-[10px] text-[var(--ink-soft)]">
+            <span className="flex items-center gap-0.5 text-[10px] text-[var(--ink)]">
               <History className="h-3 w-3" />
               {task.revisions.length}
             </span>
@@ -258,7 +263,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority }: C
             {task.title}
           </p>
           {isShared && (
-            <p className="text-[10px] text-[var(--ink-soft)] mt-0.5">{completedCount}/{task.assigneeIds.length} คนเสร็จแล้ว</p>
+            <p className="text-[10px] text-[var(--ink)] mt-0.5">{completedCount}/{task.assigneeIds.length} คนเสร็จแล้ว</p>
           )}
         </div>
       </div>
@@ -272,7 +277,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority }: C
             value={(doneChecklist / visibleChecklist.length) * 100}
             className="flex-1"
           />
-          <span className="text-[10px] tabular-nums text-[var(--ink-soft)] shrink-0">
+          <span className="text-[10px] tabular-nums text-[var(--ink)] shrink-0">
             {doneChecklist}/{visibleChecklist.length}
           </span>
         </div>
@@ -291,13 +296,18 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority }: C
               >
                 {c.done && <Check className="h-2 w-2 text-white" />}
               </span>
-              <span className={cn("text-[10px] truncate", c.done ? "line-through text-[var(--ink-soft)]" : "text-[var(--ink-soft)]")}>
+              {/* Still-open items read at full ink strength — the same
+                  var(--ink-soft) used to sit under the title's near-black text
+                  and next to the solid-colored badges above, so it read as
+                  faded rather than "just secondary detail". A finished item
+                  still fades + strikes through — that one's meant to recede. */}
+              <span className={cn("text-[10px] truncate", c.done ? "line-through text-[var(--ink-soft)]" : "text-[var(--ink)]")}>
                 {c.text}
               </span>
             </div>
           ))}
           {visibleChecklist.length > 4 && (
-            <p className="text-[10px] text-[var(--ink-soft)] pl-4.5">+{visibleChecklist.length - 4} รายการ</p>
+            <p className="text-[10px] text-[var(--ink)] pl-4.5">+{visibleChecklist.length - 4} รายการ</p>
           )}
         </div>
       )}
@@ -338,7 +348,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority }: C
 
       {/* Divider keeps the meta row visually separate from the body */}
       <div className="mt-3.5 pt-3 border-t border-[var(--line)]/60 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2.5 text-[var(--ink-soft)] min-w-0">
+        <div className="flex items-center gap-2.5 text-[var(--ink)] min-w-0">
           {/* Only meaningful for a task still todo/in_progress — showOriginalStatus
               is also true for the derived "รอตรวจสอบ" column, where every task's
               real status is "done" and this tag would just mislabel it. Solid
