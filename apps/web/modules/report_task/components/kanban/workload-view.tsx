@@ -14,6 +14,8 @@ import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { useVisibleTasks } from "@/modules/report_task/hooks/use-visible-tasks";
 import { useDepartmentStore } from "@/modules/report_task/store/department-store";
 import { cn } from "@/modules/report_task/lib/utils";
+import { useShowMore } from "@/modules/report_task/hooks/use-show-more";
+import { ShowMoreToggle } from "@/modules/report_task/components/shared/show-more-toggle";
 
 /** One legend/breakdown row shared between the bar's click-to-open popover and its color key. */
 function BarBreakdownRow({ color, label, count, total }: { color: string; label: string; count: number; total: number }) {
@@ -74,6 +76,14 @@ export function WorkloadView() {
       .sort((a, b) => b.total - a.total || b.open - a.open || b.overdue - a.overdue);
   }, [tasks, filters, usersInScope]);
 
+  // This list used to render every person unconditionally — fine for a
+  // small team, but with dozens of people it just kept scrolling past the
+  // fold with nothing to stop it. Capped like every other list in this app
+  // (useShowMore/ShowMoreToggle — the Kanban board's own columns,
+  // Dashboard's capped lists) instead: fills the page up front, "แสดงเพิ่มเติม"
+  // reveals the rest, "แสดงน้อยลง" collapses back.
+  const { visible: visibleRows, remaining, expanded, toggle } = useShowMore(rows, 10);
+
   if (rows.length === 0) {
     return <EmptyState icon={Users} title="ไม่พบภาระงานตามตัวกรอง" description="ลองปรับหรือล้างตัวกรองด้านบน" />;
   }
@@ -86,7 +96,7 @@ export function WorkloadView() {
       </div>
 
       <div className="divide-y divide-[var(--line)]">
-        {rows.map((r) => {
+        {visibleRows.map((r) => {
           // Full width = every task this person has, not just the still-open
           // ones — a bar that only ever shows "open" work can never visibly
           // reach "done", which undersells how much has actually shipped.
@@ -204,6 +214,12 @@ export function WorkloadView() {
           );
         })}
       </div>
+
+      {(expanded || remaining > 0) && (
+        <div className="border-t border-[var(--line)] px-5 py-3">
+          <ShowMoreToggle expanded={expanded} remaining={remaining} onToggle={toggle} />
+        </div>
+      )}
     </div>
   );
 }

@@ -35,6 +35,8 @@ import {
   DropdownMenuTrigger,
 } from "@/modules/report_task/components/ui/dropdown-menu";
 import { useIsMobile } from "@/modules/report_task/hooks/use-is-mobile";
+import { useShowMore } from "@/modules/report_task/hooks/use-show-more";
+import { ShowMoreToggle } from "@/modules/report_task/components/shared/show-more-toggle";
 import { DueDateBadge } from "@/modules/report_task/components/shared/due-date-badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/modules/report_task/components/ui/tooltip";
 import { Badge } from "@/modules/report_task/components/ui/badge";
@@ -42,14 +44,14 @@ import { Button } from "@/modules/report_task/components/ui/button";
 import { getUser } from "@/modules/report_task/lib/directory";
 import { statusMeta, priorityMeta, statusIcon, taskStatusOrder, taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
 import { formatShortDate } from "@/modules/report_task/lib/format";
-import { dueUrgency, reactionCounts } from "@/modules/report_task/lib/task-flags";
+import { dueUrgency, reactionCounts, sortTasksForDisplay } from "@/modules/report_task/lib/task-flags";
 import { isTaskFullyDone, remainingChecklistCount } from "@/modules/report_task/lib/task-completion";
 import { canEditRecord } from "@/modules/report_task/lib/permissions";
 import { cn } from "@/modules/report_task/lib/utils";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, MessageSquare, Paperclip, ListTodo, ChevronDown, X, CheckCircle2, SearchX, Info, SlidersHorizontal } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, MessageSquare, Paperclip, ListTodo, ChevronDown, X, CheckCircle2, SearchX, Info, SlidersHorizontal } from "lucide-react";
 import { EmptyState } from "@/modules/report_task/components/shared/empty-state";
 import type { Task, TaskStatus, TaskPriority } from "@/modules/report_task/types";
 import { toast } from "sonner";
@@ -142,7 +144,12 @@ const GridRow = memo(
  * progress column and a summary footer for scanning many tasks at once.
  */
 export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string) => void }) {
-  const [sorting, setSorting] = useState<SortingState>([{ id: "dueDate", desc: false }]);
+  // Empty — no single column is "actively sorted" by default, so the table
+  // keeps `defaultOrderedTasks`'s own combined order (priority, then due
+  // date within it) below instead of TanStack re-sorting by one lone column.
+  // Clicking a column header still overrides this with a plain single-column
+  // sort, same as before.
+  const [sorting, setSorting] = useState<SortingState>([]);
   const [groupBy, setGroupBy] = useState<GroupBy>("none");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const isMobile = useIsMobile();
@@ -459,8 +466,15 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
     [stickers, moveTask, updateTask, viewingAsUserId]
   );
 
+  // Default row order (before any column header is clicked): the same
+  // combined priority-then-due-date ordering the Kanban board's cards use
+  // (sortTasksForDisplay) — a plain "กำหนดส่ง ascending" default buried
+  // ด่วนมาก tasks anywhere their due date happened to fall, instead of near
+  // the top regardless of date.
+  const defaultOrderedTasks = useMemo(() => sortTasksForDisplay(tasks), [tasks]);
+
   const table = useReactTable({
-    data: tasks,
+    data: defaultOrderedTasks,
     columns,
     state: { sorting },
     onSortingChange: setSorting,
@@ -492,17 +506,13 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
   // Manual pagination (not TanStack's getPaginationRowModel) — it would
   // paginate before the manual grouping above runs, splitting a group's rows
   // across pages in whatever order the raw row model happens to produce.
-  const PAGE_SIZE = 25;
-  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
-  const [pageIndex, setPageIndex] = useState(0);
-  const safePageIndex = Math.min(pageIndex, pageCount - 1);
-  // Snap back to a valid page once a filter/search shrinks the result set
-  // below the page the user was on — otherwise they'd land on a blank page
-  // that looks like an empty-state bug rather than "there's no page 4 anymore".
-  useEffect(() => {
-    if (pageIndex > pageCount - 1) setPageIndex(pageCount - 1);
-  }, [pageIndex, pageCount]);
-  const pagedRows = rows.slice(safePageIndex * PAGE_SIZE, (safePageIndex + 1) * PAGE_SIZE);
+  // "แสดงเพิ่มเติม" (same pattern as the Kanban board's own columns and the
+  // Dashboard's capped lists — useShowMore/ShowMoreToggle) instead of a
+  // page-1/2/3 pager — fills the page with rows up front, then reveals the
+  // rest on demand with a way back ("แสดงน้อยลง"), rather than forcing a
+  // click through numbered pages to see more.
+  const GRID_PAGE_SIZE = 25;
+  const { visible: pagedRows, remaining: gridRemaining, expanded: gridExpanded, toggle: toggleGridExpanded } = useShowMore(rows, GRID_PAGE_SIZE);
 
   // Multi-select + bulk actions (ClickUp-style).
   const visibleIds = rows.map((r) => r.original.id);
@@ -796,31 +806,9 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
             </TableBody>
           </Table>
         </div>
-        {pageCount > 1 && (
-          <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-[var(--line)] text-xs text-[var(--ink-soft)]">
-            <span>
-              หน้า {safePageIndex + 1} จาก {pageCount} · {rows.length} งาน
-            </span>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="outline"
-                size="icon-sm"
-                onClick={() => setPageIndex((p) => Math.max(0, p - 1))}
-                disabled={safePageIndex === 0}
-                aria-label="หน้าก่อนหน้า"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon-sm"
-                onClick={() => setPageIndex((p) => Math.min(pageCount - 1, p + 1))}
-                disabled={safePageIndex >= pageCount - 1}
-                aria-label="หน้าถัดไป"
-              >
-                <ChevronRight className="h-3.5 w-3.5" />
-              </Button>
-            </div>
+        {(gridExpanded || gridRemaining > 0) && (
+          <div className="border-t border-[var(--line)] px-4 py-2.5">
+            <ShowMoreToggle expanded={gridExpanded} remaining={gridRemaining} onToggle={toggleGridExpanded} />
           </div>
         )}
       </div>
