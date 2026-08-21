@@ -380,16 +380,6 @@ export default async function WorkOrderDetailPage({
               ? `สั่งซื้ออุปกรณ์สำหรับงานนี้ (${linkedPos.length})`
               : "สั่งซื้ออุปกรณ์สำหรับงานนี้"
           }
-          action={
-            canOpenPoHere ? (
-              <Link
-                href={`/maintenance/purchase-orders/new?workOrderId=${id}`}
-                className="inline-flex items-center gap-1 text-sm font-medium text-[#0F766E] hover:underline"
-              >
-                <ShoppingCart className="h-3.5 w-3.5" /> เปิด PR / PO
-              </Link>
-            ) : null
-          }
         >
           {!canSeePo ? (
             <p className="text-sm text-(--ink-soft)">
@@ -449,6 +439,21 @@ export default async function WorkOrderDetailPage({
                 );
               })}
             </ul>
+          )}
+
+          {/* ปุ่มเต็มความกว้าง ใช้ภาษาเดียวกับปุ่มดำเนินการอื่นบนหน้านี้
+              (h-11 พื้นทึบ) — ลิงก์ตัวเล็กบนหัวการ์ด คนมองไม่เห็นว่ากดได้ */}
+          {canOpenPoHere && (
+            <Link
+              href={`/maintenance/purchase-orders/new?workOrderId=${id}`}
+              className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-(--radius) text-sm font-medium text-white hover:brightness-95"
+              style={{ backgroundColor: "#0F766E" }}
+            >
+              <ShoppingCart className="h-4 w-4" />
+              {linkedPos.length > 0
+                ? "เปิด PR / PO เพิ่มสำหรับงานนี้"
+                : "เปิด PR / PO สำหรับงานนี้"}
+            </Link>
           )}
         </SectionCard>
       )}
