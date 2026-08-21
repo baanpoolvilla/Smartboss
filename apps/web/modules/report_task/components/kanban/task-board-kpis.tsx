@@ -1,37 +1,40 @@
 "use client";
 
 import { useMemo } from "react";
-import { Card, CardContent } from "@/modules/report_task/components/ui/card";
+import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import { useTaskStore, type QuickView } from "@/modules/report_task/store/task-store";
 import { cn } from "@/modules/report_task/lib/utils";
 import type { Task } from "@/modules/report_task/types";
-import { ListTodo, PlayCircle, CheckCircle2, Hourglass } from "lucide-react";
+import { ListTodo, CircleDot, PlayCircle, AlarmClockOff, Hourglass, CheckCircle2 } from "lucide-react";
 
 /**
  * Quick at-a-glance stats for the board currently open — scoped to whatever
  * `tasks` the caller passes in (already run through `matchesTaskFilters`
- * minus `quickView`, so the 4 numbers track every *other* active filter but
- * don't collapse onto each other once one card is clicked — see task-store's
- * `QuickView` doc comment). Each card doubles as a one-click drill-down
+ * minus `quickView`, so the numbers track every *other* active filter but
+ * don't collapse onto each other once one chip is clicked — see task-store's
+ * `QuickView` doc comment). Each chip doubles as a one-click drill-down
  * filter for the board underneath (toggle off by clicking it again).
+ *
+ * Small pill chips in one wrapping row, not the old 4 big `<Card>` boxes —
+ * but still one independent element per chip (a plain `flex flex-wrap`, no
+ * shared background/divider trick). Worth noting: 3 earlier attempts to
+ * merge these into a single unified panel (gap-px+shared-bg, divide-x/y, an
+ * earlier flex-chip-row) all passed build clean but broke on production for
+ * reasons that were never pinned down (no DB in this sandbox to reproduce
+ * against) — every one of those got reverted back to separate boxes. This
+ * keeps that same "separate element per stat" shape, just restyled smaller;
+ * verify on the real deployment before trusting it further.
  */
 export function TaskBoardKpis({ tasks }: { tasks: Task[] }) {
   const quickView = useTaskStore((s) => s.filters.quickView);
   const setFilters = useTaskStore((s) => s.setFilters);
 
-  // These 4 no longer overlap — a task is in exactly one of
-  // todo/in_progress/review/reviewed-done at a time (same split as the
-  // Kanban board's own status columns), so "กำลังทำ" + "รอตรวจสอบ" +
-  // "สำเร็จทั้งหมด" + the unlisted "รอดำเนินการ" always add up to "งานทั้งหมด".
-  // "เลยกำหนด" used to sit here as a 4th card, but lateness is a property of
-  // a todo/in_progress task, not a status of its own — it double-counted
-  // against "กำลังทำ" (an overdue in-progress task showed up in both), which
-  // made the 4 numbers look broken since they read like a breakdown of the
-  // total. It's still visible per-card (DueDateBadge) and via the "เลยกำหนดเท่านั้น" filter.
   const stats = useMemo(
     () => ({
       total: tasks.length,
+      todo: tasks.filter((t) => t.status === "todo").length,
       inProgress: tasks.filter((t) => t.status === "in_progress").length,
+      overdue: tasks.filter((t) => t.status !== "done" && dueUrgency(t) === "overdue").length,
       review: tasks.filter((t) => t.status === "done" && !t.reviewedBy).length,
       doneAll: tasks.filter((t) => t.status === "done" && !!t.reviewedBy).length,
     }),
@@ -42,55 +45,38 @@ export function TaskBoardKpis({ tasks }: { tasks: Task[] }) {
     setFilters({ quickView: quickView === key ? "all" : key });
   }
 
-  const cards: { key: QuickView; label: string; value: number; icon: typeof ListTodo; iconClass: string }[] = [
-    { key: "all", label: "งานทั้งหมด", value: stats.total, icon: ListTodo, iconClass: "bg-slate-50 text-[var(--chart-gray)]" },
+  const chips: { key: QuickView; label: string; value: number; icon: typeof ListTodo; iconClass: string }[] = [
+    { key: "all", label: "ทั้งหมด", value: stats.total, icon: ListTodo, iconClass: "bg-slate-50 text-[var(--chart-gray)]" },
+    { key: "todo", label: "รอดำเนินการ", value: stats.todo, icon: CircleDot, iconClass: "bg-slate-50 text-[var(--chart-gray)]" },
     { key: "inProgress", label: "กำลังทำ", value: stats.inProgress, icon: PlayCircle, iconClass: "bg-amber-50 text-[var(--chart-amber)]" },
+    { key: "overdue", label: "เลยกำหนด", value: stats.overdue, icon: AlarmClockOff, iconClass: "bg-red-50 text-[var(--chart-red)]" },
     { key: "review", label: "รอตรวจสอบ", value: stats.review, icon: Hourglass, iconClass: "bg-green-50 text-[var(--chart-green)]" },
-    { key: "done", label: "สำเร็จทั้งหมด", value: stats.doneAll, icon: CheckCircle2, iconClass: "bg-green-100 text-[var(--brand-green-dark)]" },
+    { key: "done", label: "เสร็จสิ้น", value: stats.doneAll, icon: CheckCircle2, iconClass: "bg-green-100 text-[var(--brand-green-dark)]" },
   ];
 
   return (
-    // การ์ดแยก 4 ใบเหมือนของเดิมที่เคยใช้งานได้จริงมาตลอด — เคยลองรวมเป็นแผ่น
-    // เดียว 3 รอบแล้ว (gap-px+background, divide-x/divide-y, flex chip row
-    // ล่าสุด) ทุกรอบผ่าน tsc/eslint/build สะอาดแต่พังจริงบนโปรดักชันแบบเดา
-    // สาเหตุไม่ออก (sandbox นี้ไม่มี DB ให้รันแอปเต็มรูปแบบไล่ debug ได้) —
-    // เลิกเสี่ยงรอบที่ 4 แล้วกลับมาใช้โครงสร้างนี้ที่พิสูจน์แล้วว่าเสถียรจริง
-    // ยังคง 4 การ์ดแยกกันเป๊ะเหมือนเดิม (ไม่แตะโครงสร้างที่เคยพัง) — เปลี่ยน
-    // แค่ตัว container จาก grid (ซึ่ง wrap เป็น 2×2 บนจอแคบ) เป็น flex row
-    // เดียวที่เลื่อนแนวนอนแทน ตามฟีดแบ็กว่า 2×2 กินพื้นที่แนวตั้งเปลืองไป
-    <div className="flex gap-2 overflow-x-auto">
-      {cards.map((c) => {
-        // "งานทั้งหมด" is the resting/no-filter state — quickView defaults to
+    <div className="flex flex-wrap items-center gap-2">
+      {chips.map((c) => {
+        // "ทั้งหมด" is the resting/no-filter state — quickView defaults to
         // "all", so highlighting it here would make it look permanently
         // "selected" even when nothing's actually drilled down.
         const active = c.key !== "all" && quickView === c.key;
         return (
-          <Card
+          <button
             key={c.key}
-            role="button"
-            tabIndex={0}
+            type="button"
             onClick={() => toggle(c.key)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                toggle(c.key);
-              }
-            }}
             className={cn(
-              "min-w-[150px] shrink-0 flex-1 cursor-pointer border-[var(--line)] shadow-sm transition-colors hover:bg-[var(--bg-soft)]",
+              "inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[var(--line)] bg-white py-1 pl-1 pr-2.5 transition-colors hover:bg-[var(--bg-soft)]",
               active && "ring-2 ring-inset ring-[var(--brand-green)]"
             )}
           >
-            <CardContent className="flex items-center gap-2 px-3 py-2">
-              <div className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-md", c.iconClass)}>
-                <c.icon className="h-3.5 w-3.5" />
-              </div>
-              <div className="min-w-0 leading-tight">
-                <p className="text-[15px] font-semibold tabular-nums leading-none">{c.value}</p>
-                <p className="mt-1 truncate text-[10.5px] text-[var(--ink-soft)]">{c.label}</p>
-              </div>
-            </CardContent>
-          </Card>
+            <span className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full", c.iconClass)}>
+              <c.icon className="h-3 w-3" />
+            </span>
+            <span className="text-[11px] text-[var(--ink-soft)]">{c.label}</span>
+            <span className="text-[13px] font-bold tabular-nums text-[var(--ink)]">{c.value}</span>
+          </button>
         );
       })}
     </div>

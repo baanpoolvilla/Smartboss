@@ -129,16 +129,21 @@ export { SYSTEM_USER_ID, LATE_PENALTY_POINTS } from "@/modules/report_task/lib/t
 export type PenaltyFilter = "all" | "overdue" | "pending" | "docked";
 
 /**
- * The Task Board's 4 headline cards (TaskBoardKpis), reused as a one-click
+ * The Task Board's headline chips (TaskBoardKpis), reused as a one-click
  * drill-down filter — "quick" because it's a second, independent axis from
  * the filter bar's own fields below, not a replacement for them. Kept out
  * of `matchesTaskFilters`'s other checks conceptually (still runs through
- * the same predicate) so the KPI cards themselves can be computed with this
+ * the same predicate) so the KPI chips themselves can be computed with this
  * one dimension forced back to "all" — otherwise selecting e.g. "รอตรวจสอบ"
- * would collapse all 4 numbers down to the same review count instead of
+ * would collapse every chip down to the same review count instead of
  * staying a stable set of options to click between.
+ * "overdue" deliberately overlaps "todo"/"inProgress" (lateness is a
+ * property of a not-done task, not a status of its own) — that's fine for a
+ * filter chip (clicking it narrows the board same as any other filter), it
+ * only became a problem back when these were drawn as 4 big cards that read
+ * like a breakdown that had to sum to the total.
  */
-export type QuickView = "all" | "inProgress" | "review" | "done";
+export type QuickView = "all" | "todo" | "inProgress" | "overdue" | "review" | "done";
 
 interface TaskFilters {
   assigneeId: string | "all";

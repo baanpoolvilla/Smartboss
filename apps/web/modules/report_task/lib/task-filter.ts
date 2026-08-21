@@ -31,7 +31,9 @@ export function matchesTaskFilters(task: Task, filters: TaskFilterState): boolea
     if (due < range.from.getTime() || due > range.to.getTime()) return false;
   }
   if (filters.quickView !== "all") {
+    if (filters.quickView === "todo" && task.status !== "todo") return false;
     if (filters.quickView === "inProgress" && task.status !== "in_progress") return false;
+    if (filters.quickView === "overdue" && !(task.status !== "done" && dueUrgency(task) === "overdue")) return false;
     // "รอตรวจสอบ"/"สำเร็จทั้งหมด" split the same way as the Kanban board's own
     // review/done columns — a done task that hasn't been signed off yet is
     // "รอตรวจสอบ", not "สำเร็จ" (see markReviewed/rejectReview) — so the two
