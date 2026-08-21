@@ -263,7 +263,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
           </Tooltip>
         )}
         <div className="min-w-0 flex-1">
-          <p className={cn("text-[13px] font-semibold leading-snug line-clamp-2 text-[var(--ink)]", isDone && "text-[var(--ink-soft)] font-medium", isReviewedDone && "line-through")}>
+          <p className={cn("text-[13px] font-semibold leading-snug line-clamp-2 text-[var(--ink)]", isDone && "font-medium", isReviewedDone && "line-through")}>
             {task.title}
           </p>
           {isShared && (
