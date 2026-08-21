@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import {
+  ClipboardList,
   Home as HomeIcon,
   UserCog,
   AlertTriangle,
@@ -18,6 +20,7 @@ import {
   listPoComments,
 } from "@/modules/maintenance/data/purchase-orders";
 import { getProperty } from "@/modules/maintenance/data/properties";
+import { getWorkOrder } from "@/modules/maintenance/data/work-orders";
 import { listOrgUsers, userNameMap } from "@/modules/maintenance/data/users";
 import { poItemsFromJson, poStatusMeta } from "@/modules/maintenance/lib/po";
 import { fmtThaiDate, fmtThaiDateTime } from "@/modules/maintenance/lib/format";
@@ -89,10 +92,16 @@ export default async function PoDetailPage({
   const po = await getPurchaseOrder(orgId, id);
   if (!po) notFound();
 
-  const [property, comments, users] = await Promise.all([
+  // ใบงานต้นทาง — ดึงเฉพาะคนที่มีสิทธิ์ดูใบงาน คนที่ดูได้แค่ PR/PO ไม่ควรเห็น
+  // หัวข้องานของใบงานที่ตัวเองเข้าไม่ถึงอยู่ดี
+  const canSeeWo = hasPermission(session, MAINT_PERMS.workorderView);
+  const [property, comments, users, sourceWo] = await Promise.all([
     po.propertyId ? getProperty(orgId, po.propertyId) : Promise.resolve(null),
     listPoComments(orgId, id),
     listOrgUsers(orgId),
+    po.workOrderId && canSeeWo
+      ? getWorkOrder(orgId, po.workOrderId)
+      : Promise.resolve(null),
   ]);
   const names = await userNameMap(orgId, [
     po.createdBy,
@@ -170,6 +179,18 @@ export default async function PoDetailPage({
         {property && (
           <p className="mt-2 inline-flex items-center gap-1 text-sm text-(--ink-soft)">
             <HomeIcon className="h-3.5 w-3.5" /> {property.name}
+          </p>
+        )}
+        {sourceWo && (
+          <p className="mt-1.5">
+            <Link
+              href={`/maintenance/work-orders/${sourceWo.id}`}
+              className="inline-flex items-center gap-1 text-sm font-medium hover:underline"
+              style={{ color: "#0F766E" }}
+            >
+              <ClipboardList className="h-3.5 w-3.5 shrink-0" />
+              จากใบงาน {sourceWo.code} · {sourceWo.title}
+            </Link>
           </p>
         )}
         {po.poAssignedTo && (

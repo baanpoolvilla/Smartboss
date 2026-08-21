@@ -15,6 +15,14 @@ export function getPurchaseOrder(orgId: string, id: string) {
   return prisma.purchaseOrder.findFirst({ where: { orgId, id } });
 }
 
+/** PR/PO ทุกใบที่เปิดจากใบงานนี้ — เรียงใบเก่าขึ้นก่อนให้อ่านเป็นลำดับเหตุการณ์ */
+export function listPurchaseOrdersForWorkOrder(orgId: string, workOrderId: string) {
+  return prisma.purchaseOrder.findMany({
+    where: { orgId, workOrderId },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
 export interface PoInput {
   title: string;
   description?: string | null;
@@ -24,6 +32,8 @@ export interface PoInput {
   notes?: string | null;
   isSelfPurchase?: boolean;
   isEmergencyPurchase?: boolean;
+  /** ใบงานต้นทาง — ผู้เรียกต้องตรวจก่อนแล้วว่า id นี้เป็นใบงานของบริษัทเดียวกันจริง */
+  workOrderId?: string | null;
   emergencyReason?: string | null;
   createdBy?: string | null;
   prImageUrls?: string[];
@@ -45,6 +55,7 @@ export function createPurchaseOrder(orgId: string, data: PoInput) {
         title: data.title,
         description: data.description ?? null,
         propertyId: data.propertyId ?? null,
+        workOrderId: data.workOrderId ?? null,
         items: poItemsToJson(data.items),
         totalPrice: data.totalPrice,
         notes: data.notes ?? null,

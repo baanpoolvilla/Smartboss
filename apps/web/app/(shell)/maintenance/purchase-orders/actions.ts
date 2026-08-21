@@ -20,6 +20,7 @@ import {
   deleteEquipmentReturn,
 } from "@/modules/maintenance/data/equipment-returns";
 import { createExpense } from "@/modules/maintenance/data/expenses";
+import { getWorkOrder } from "@/modules/maintenance/data/work-orders";
 import { notifyUser } from "@/modules/maintenance/data/notify";
 import { putFile, putFiles, deleteFiles } from "@/modules/maintenance/lib/storage";
 import {
@@ -69,6 +70,26 @@ export async function createPoAction(formData: FormData) {
   if (!parsed.success) return;
   const d = parsed.data;
 
+  /**
+   * ใบงานต้นทาง — ต้องอ่านจากฐานข้อมูลก่อน ห้ามเชื่อค่าที่ส่งมาจากฟอร์ม
+   *
+   * getWorkOrder กรองด้วย orgId อยู่แล้ว ⇒ ยิง id ของบริษัทอื่นเข้ามาจะได้ null
+   * แล้วกลายเป็น PR/PO ที่ไม่ผูกกับใบงาน ไม่ใช่ PR/PO ที่ผูกข้ามบริษัท
+   *
+   * ⚠ ต้องเช็ค row-level ซ้ำที่นี่ด้วย ไม่ใช่เช็คแค่ตอน render หน้าเปิดฟอร์ม —
+   * ฟอร์มถูกยิงตรงได้ ช่างที่เห็นเฉพาะงานตัวเองจึงไม่ควรผูก PR เข้าใบงานคนอื่น
+   * (เกณฑ์เดียวกับหน้ารายละเอียดใบงาน)
+   */
+  const woId = String(formData.get("workOrderId") ?? "");
+  const wo = woId ? await getWorkOrder(s.orgId, woId) : null;
+  const linkedWo =
+    wo &&
+    (hasPermission(s, MAINT_PERMS.workorderManage) ||
+      wo.assignedTo === s.userId ||
+      wo.createdBy === s.userId)
+      ? wo
+      : null;
+
   const isEmergency = formData.get("isEmergency") === "1";
   const wantsPo = formData.get("openAsPo") === "1";
   const canOpenPo = hasPermission(s, MAINT_PERMS.poApprove);
@@ -86,7 +107,9 @@ export async function createPoAction(formData: FormData) {
   await createPurchaseOrder(s.orgId, {
     title: d.title,
     description: d.description ?? null,
-    propertyId: d.propertyId || null,
+    // เปิดจากใบงาน = ใช้บ้านของใบงานนั้นเสมอ ไม่ให้เลือกใหม่ให้ขัดกัน
+    propertyId: linkedWo ? linkedWo.propertyId : d.propertyId || null,
+    workOrderId: linkedWo?.id ?? null,
     items,
     totalPrice: isEmergency ? poItemsTotal(items) : 0,
     notes: d.notes ?? null,
@@ -101,6 +124,11 @@ export async function createPoAction(formData: FormData) {
   });
 
   revalidatePath("/maintenance/purchase-orders");
+  if (linkedWo) {
+    // กลับไปที่ใบงานที่กดมา ไม่ใช่บอร์ด PR/PO — คนกดยังทำงานใบนั้นค้างอยู่
+    revalidatePath(`/maintenance/work-orders/${linkedWo.id}`);
+    redirect(`/maintenance/work-orders/${linkedWo.id}`);
+  }
   redirect("/maintenance/purchase-orders");
 }
 
@@ -112,9 +140,21 @@ async function ceoOnly() {
   return s;
 }
 
+/**
+ * ลงค่าใช้จ่ายของใบสั่งซื้อ
+ *
+ * ถ้า PO ใบนี้เปิดมาจากใบงาน ค่าใช้จ่ายต้องผูกกับใบงานนั้นด้วย — ไม่งั้นเงินที่จ่าย
+ * ไปกับงานหนึ่งจะไม่โผล่ในต้นทุนของงานนั้น และใบงานจะค้างอยู่คอลัมน์
+ * "ยังไม่บันทึกค่าใช้จ่าย" ทั้งที่จ่ายไปแล้วผ่าน PO
+ */
 async function poExpense(
   orgId: string,
-  po: { id: string; propertyId: string | null; title: string },
+  po: {
+    id: string;
+    propertyId: string | null;
+    title: string;
+    workOrderId: string | null;
+  },
   amount: number,
   userId: string | null,
   suffix = ""
@@ -123,6 +163,7 @@ async function poExpense(
   await createExpense(orgId, {
     propertyId: po.propertyId,
     purchaseOrderId: po.id,
+    workOrderId: po.workOrderId,
     amount,
     description: `สั่งซื้ออุปกรณ์${suffix ? " " + suffix : ""}: ${po.title}`,
     category: "material",
@@ -130,6 +171,10 @@ async function poExpense(
     paidBy: "company",
     createdBy: userId,
   });
+  if (po.workOrderId) {
+    revalidatePath(`/maintenance/work-orders/${po.workOrderId}`);
+    revalidatePath("/maintenance/work-orders");
+  }
 }
 
 /** CEO อนุมัติ PR ปกติ → approved + มอบ PO ให้คนไปซื้อ */

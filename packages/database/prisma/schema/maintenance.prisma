@@ -94,6 +94,7 @@ model WorkOrder {
   comments       WorkOrderComment[]
   externalPhotos WorkOrderExternalPhoto[]
   uploadLinks    WorkOrderUploadLink[]
+  purchaseOrders PurchaseOrder[]
 
   @@unique([orgId, code])
   @@index([orgId])
@@ -269,6 +270,11 @@ model PurchaseOrder {
   title               String
   description         String?
   propertyId          String?   @map("property_id")
+  /// ใบงานต้นทาง — ตั้งเมื่อกด "เปิด PR/PO" จากหน้าใบงาน (null = เปิดลอย ๆ ตามเดิม)
+  ///
+  /// onDelete: SetNull ไม่ใช่ Cascade — PR/PO เป็นเอกสารการเงินที่มีเลขที่เดินไว้แล้ว
+  /// ลบใบงานทิ้งแล้วให้ใบสั่งซื้อหายตามไปด้วยคือทำบัญชีหาย
+  workOrderId         String?   @map("work_order_id")
   createdBy           String?   @map("created_by")
   poAssignedTo        String?   @map("po_assigned_to")
   status              String    @default("pending") // pending|approved|ordered|received|cancelled
@@ -291,12 +297,14 @@ model PurchaseOrder {
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
 
-  comments PurchaseOrderComment[]
-  returns  EquipmentReturn[]
+  comments  PurchaseOrderComment[]
+  returns   EquipmentReturn[]
+  workOrder WorkOrder?            @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
 
   @@unique([orgId, code])
   @@index([orgId])
   @@index([status])
+  @@index([workOrderId])
   @@map("purchase_orders")
   @@schema("maintenance")
 }

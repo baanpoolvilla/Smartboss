@@ -16,6 +16,7 @@ import {
   Package,
   CalendarDays,
   User,
+  ClipboardList,
 } from "lucide-react";
 import { Card } from "@smartboss/ui/components/card";
 
@@ -32,6 +33,8 @@ export interface BoardPo {
   totalPrice: number;
   assigneeName: string | null;
   isEmergency: boolean;
+  /** เลขที่ใบงานต้นทาง ถ้าเปิดมาจากใบงาน (null = เปิดลอย ๆ) */
+  workOrderCode: string | null;
   /** เฟสล่าสุด: label / ผู้ทำ / วันที่ */
   phase: { label: string; who: string; when: string; color: string };
 }
@@ -92,6 +95,14 @@ function PoCard({ po }: { po: BoardPo }) {
         {po.propertyName && (
           <p className="mt-1 inline-flex items-center gap-1 text-xs text-(--ink-soft)">
             <HomeIcon className="h-3 w-3" /> {po.propertyName}
+          </p>
+        )}
+        {po.workOrderCode && (
+          <p
+            className="mt-1 inline-flex items-center gap-1 text-xs font-medium"
+            style={{ color: "#0F766E" }}
+          >
+            <ClipboardList className="h-3 w-3" /> {po.workOrderCode}
           </p>
         )}
         {po.itemCount > 0 && (

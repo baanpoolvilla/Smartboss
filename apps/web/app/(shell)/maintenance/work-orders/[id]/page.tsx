@@ -17,6 +17,8 @@ import {
   MessageSquare,
   ReceiptText,
   UserCircle2,
+  RefreshCw,
+  ShoppingCart,
 } from "lucide-react";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 import { Card } from "@smartboss/ui/components/card";
@@ -29,12 +31,15 @@ import { listProperties } from "@/modules/maintenance/data/properties";
 import { getAsset } from "@/modules/maintenance/data/assets";
 import { userNameMap } from "@/modules/maintenance/data/users";
 import { listExpenses } from "@/modules/maintenance/data/expenses";
+import { listPurchaseOrdersForWorkOrder } from "@/modules/maintenance/data/purchase-orders";
+import { poItemsFromJson, poStatusMeta } from "@/modules/maintenance/lib/po";
 import { getPmScheduleIdForAsset } from "@/modules/maintenance/data/pm";
 import {
   getActiveUploadLink,
   listExternalPhotos,
 } from "@/modules/maintenance/data/external-upload";
 import { fmtThaiDate, fmtThaiDateTime } from "@/modules/maintenance/lib/format";
+import { priorityLabel } from "@/modules/maintenance/lib/priority";
 import { InfoRow, SectionCard } from "@/modules/maintenance/components/ui";
 import { PhotoStrip } from "@/modules/maintenance/components/photos";
 import {
@@ -66,12 +71,12 @@ const STATUS_LABEL: Record<string, string> = {
   completed: "เสร็จแล้ว",
   cancelled: "ยกเลิก",
 };
-/** หน้ารายละเอียดใช้คำว่า "ปกติ" กับ medium (ต่างจากหน้ารายการ) — คงตามเดิม */
-const PRIORITY_DETAIL: Record<string, { label: string; color: string }> = {
-  urgent: { label: "เร่งด่วน", color: "#DC2626" },
-  high: { label: "สูง", color: "#EA580C" },
-  medium: { label: "ปกติ", color: "#2563EB" },
-  low: { label: "ต่ำ", color: "#6B7280" },
+/** สีของแต่ละความเร่งด่วนบนหน้านี้ — label มาจาก lib/priority.ts ให้ตรงกับบอร์ด */
+const PRIORITY_COLOR: Record<string, string> = {
+  urgent: "#DC2626",
+  high: "#EA580C",
+  medium: "#2563EB",
+  low: "#6B7280",
 };
 
 export default async function WorkOrderDetailPage({
@@ -97,16 +102,23 @@ export default async function WorkOrderDetailPage({
     canManage ||
     (hasPermission(session, MAINT_PERMS.workorderComplete) && isOwnJob);
   const canExpense = hasPermission(session, MAINT_PERMS.expenseManage);
+  const canSeePo = hasPermission(session, MAINT_PERMS.poView);
+  const canCreatePo = hasPermission(session, MAINT_PERMS.poCreate);
+  // ใบงานที่ยกเลิกไปแล้วไม่ควรเปิดใบสั่งซื้อเพิ่ม
+  const canOpenPoHere = canCreatePo && wo.status !== "cancelled";
   const isSuperAdmin = hasPermission(session, MAINT_PERMS.admin);
   const isTechnicianOnly = !canManage;
 
-  const [properties, asset, comments, expenses, externalPhotos] =
+  const [properties, asset, comments, expenses, externalPhotos, linkedPos] =
     await Promise.all([
       listProperties(orgId),
       wo.assetId ? getAsset(orgId, wo.assetId) : Promise.resolve(null),
       listWorkOrderComments(orgId, id),
       listExpenses(orgId, { workOrderId: id }),
       listExternalPhotos(orgId, id),
+      canSeePo
+        ? listPurchaseOrdersForWorkOrder(orgId, id)
+        : Promise.resolve([]),
     ]);
 
   const propNames: Record<string, string> = Object.fromEntries(
@@ -130,7 +142,10 @@ export default async function WorkOrderDetailPage({
       ? await getPmScheduleIdForAsset(orgId, wo.assetId)
       : null;
 
-  const pr = PRIORITY_DETAIL[wo.priority] ?? PRIORITY_DETAIL.medium!;
+  const pr = {
+    label: priorityLabel(wo.priority),
+    color: PRIORITY_COLOR[wo.priority] ?? "#2563EB",
+  };
   const overdue =
     wo.dueDate != null && wo.dueDate < new Date() && wo.status !== "completed";
   const isOpenOrRunning = wo.status !== "completed" && wo.status !== "cancelled";
@@ -155,15 +170,30 @@ export default async function WorkOrderDetailPage({
             <p className="font-mono text-xs text-(--ink-soft)">{wo.code}</p>
             <h1 className="text-xl font-bold text-(--ink)">{wo.title}</h1>
           </div>
+          {/* งานอัตโนมัติไม่แสดงความเร่งด่วน — ดูเหตุผลใน components/work-order-board.tsx */}
           <span
-            className="shrink-0 rounded-md px-2 py-1 text-xs font-bold"
-            style={{
-              color: pr.color,
-              backgroundColor: `${pr.color}1a`,
-              border: `1px solid ${pr.color}4d`,
-            }}
+            className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-bold"
+            style={
+              wo.autoCreated
+                ? {
+                    color: "#0D9488",
+                    backgroundColor: "#0D94881a",
+                    border: "1px solid #0D94884d",
+                  }
+                : {
+                    color: pr.color,
+                    backgroundColor: `${pr.color}1a`,
+                    border: `1px solid ${pr.color}4d`,
+                  }
+            }
           >
-            {pr.label}
+            {wo.autoCreated ? (
+              <>
+                <RefreshCw className="h-3 w-3" /> อัตโนมัติจาก PM
+              </>
+            ) : (
+              pr.label
+            )}
           </span>
         </div>
 
@@ -211,11 +241,14 @@ export default async function WorkOrderDetailPage({
             value={wo.ccUserIds.map((u) => names[u] ?? "-").join(", ")}
           />
         )}
-        <InfoRow
-          icon={<Flag className="h-5 w-5" />}
-          label="ความเร่งด่วน"
-          value={pr.label}
-        />
+        {!wo.autoCreated && (
+          <InfoRow
+            icon={<Flag className="h-5 w-5" />}
+            label="ความเร่งด่วน"
+            value={pr.label}
+            valueColor={pr.color}
+          />
+        )}
         <InfoRow
           icon={<CalendarDays className="h-5 w-5" />}
           label="สร้างเมื่อ"
@@ -332,6 +365,91 @@ export default async function WorkOrderDetailPage({
           <p className="whitespace-pre-wrap text-sm text-(--ink)">
             {wo.description}
           </p>
+        </SectionCard>
+      )}
+
+      {/* ─── สั่งซื้ออุปกรณ์สำหรับงานนี้ ─── */}
+      {/* บทบาทแก้ได้รายบริษัท จึงมีสิทธิ์เปิด PR แต่ไม่มีสิทธิ์ดูรายการ PR ได้จริง
+          — แยกสองเงื่อนไขไว้ ไม่ผูกปุ่ม "เปิด PR/PO" ไว้กับสิทธิ์ดู */}
+      {(canOpenPoHere || (canSeePo && linkedPos.length > 0)) && (
+        <SectionCard
+          className="mb-4"
+          icon={<ShoppingCart className="h-4 w-4 text-[#0F766E]" />}
+          title={
+            canSeePo
+              ? `สั่งซื้ออุปกรณ์สำหรับงานนี้ (${linkedPos.length})`
+              : "สั่งซื้ออุปกรณ์สำหรับงานนี้"
+          }
+          action={
+            canOpenPoHere ? (
+              <Link
+                href={`/maintenance/purchase-orders/new?workOrderId=${id}`}
+                className="inline-flex items-center gap-1 text-sm font-medium text-[#0F766E] hover:underline"
+              >
+                <ShoppingCart className="h-3.5 w-3.5" /> เปิด PR / PO
+              </Link>
+            ) : null
+          }
+        >
+          {!canSeePo ? (
+            <p className="text-sm text-(--ink-soft)">
+              เปิด PR/PO จากตรงนี้แล้วระบบจะผูกกลับมาที่ใบงานนี้ให้เอง
+            </p>
+          ) : linkedPos.length === 0 ? (
+            <p className="text-sm text-(--ink-soft)">
+              ยังไม่มีใบสั่งซื้อของงานนี้ — เปิด PR/PO จากตรงนี้แล้วระบบจะผูกกลับมาที่
+              ใบงานนี้ให้เอง และค่าใช้จ่ายจะถูกบันทึกเข้างานนี้ตอนซื้อจริง
+            </p>
+          ) : (
+            <ul className="flex flex-col">
+              {linkedPos.map((po, i) => {
+                const m = poStatusMeta(po.status);
+                const count = poItemsFromJson(po.items).length;
+                return (
+                  <li
+                    key={po.id}
+                    className={
+                      i < linkedPos.length - 1
+                        ? "border-b border-(--line)"
+                        : undefined
+                    }
+                  >
+                    <Link
+                      href={`/maintenance/purchase-orders/${po.id}`}
+                      className="-mx-2 flex items-start gap-2 rounded-(--radius) px-2 py-2.5 hover:bg-(--bg-soft)"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="font-mono text-[11px] text-(--ink-soft)">
+                          {po.code}
+                        </p>
+                        <p className="truncate text-sm font-medium text-(--ink)">
+                          {po.title}
+                        </p>
+                        <p className="text-xs text-(--ink-soft)">
+                          {count} รายการ
+                          {Number(po.totalPrice) > 0
+                            ? ` • ฿${Number(po.totalPrice).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                            : ""}
+                          {" • "}
+                          {fmtThaiDate(po.createdAt)}
+                        </p>
+                      </div>
+                      <span
+                        className="shrink-0 rounded-full px-2 py-0.5 text-[11px]"
+                        style={{
+                          color: m.color,
+                          backgroundColor: `${m.color}1a`,
+                          border: `1px solid ${m.color}4d`,
+                        }}
+                      >
+                        {m.label}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </SectionCard>
       )}
 

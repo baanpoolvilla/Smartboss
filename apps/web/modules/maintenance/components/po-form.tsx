@@ -10,6 +10,7 @@ import {
   Images,
   Send,
   AlertTriangle,
+  ClipboardList,
 } from "lucide-react";
 import { Card } from "@smartboss/ui/components/card";
 import { Input } from "@smartboss/ui/components/input";
@@ -18,20 +19,34 @@ import type { PickOption } from "./multi-picker";
 const inputClass =
   "h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm text-(--ink) focus-visible:border-(--brand-green) focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-(--brand-green)/30";
 
+/** ใบงานต้นทาง เมื่อเปิด PR/PO มาจากหน้าใบงาน */
+export interface LinkedWorkOrder {
+  id: string;
+  code: string;
+  title: string;
+  propertyName: string;
+}
+
 /**
  * ฟอร์มเปิด PR / PO — port ตรงจาก purchase_order_form_screen.dart
  * role สูง (อนุมัติ PO ได้) จะเห็นสวิตช์ "เปิด PR" / "เปิด PO เลย"
+ *
+ * workOrder != null = เปิดมาจากใบงาน ⇒ ล็อกบ้านตามใบงานนั้น ไม่ให้เลือกใหม่
+ * (PR ที่ผูกใบงาน BS-M4 แต่ระบุบ้าน PT-BT2 คือข้อมูลที่ขัดกันเอง แล้วรายงาน
+ *  ต้นทุนรายบ้านจะเชื่อไม่ได้)
  */
 export function PoForm({
   action,
   properties,
   users,
   canOpenPo,
+  workOrder,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   properties: PickOption[];
   users: PickOption[];
   canOpenPo: boolean;
+  workOrder?: LinkedWorkOrder | null;
 }) {
   const [openAsPo, setOpenAsPo] = useState(canOpenPo);
   const [isEmergency, setEmergency] = useState(false);
@@ -53,6 +68,33 @@ export function PoForm({
         <form action={action} className="flex flex-col gap-4">
           <input type="hidden" name="openAsPo" value={openAsPo ? "1" : "0"} />
           <input type="hidden" name="isEmergency" value={isEmergency ? "1" : "0"} />
+          {workOrder && (
+            <input type="hidden" name="workOrderId" value={workOrder.id} />
+          )}
+
+          {workOrder && (
+            <div
+              className="flex items-start gap-2 rounded-[12px] border p-3 text-sm"
+              style={{ backgroundColor: "#ECFDF5", borderColor: "#A7F3D0" }}
+            >
+              <ClipboardList
+                className="mt-0.5 h-4 w-4 shrink-0"
+                style={{ color: "#0F766E" }}
+              />
+              <div className="min-w-0">
+                <p className="font-bold" style={{ color: "#0F766E" }}>
+                  เปิดจากใบงาน {workOrder.code}
+                </p>
+                <p className="truncate text-(--ink)">{workOrder.title}</p>
+                <p className="text-xs text-(--ink-soft)">
+                  {workOrder.propertyName
+                    ? `บ้าน ${workOrder.propertyName} — `
+                    : ""}
+                  ค่าใช้จ่ายที่เกิดขึ้นจะถูกบันทึกเข้าใบงานนี้ให้อัตโนมัติ
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* ─── สลับ PR / PO (เฉพาะ role สูง) ─── */}
           {canOpenPo && (
@@ -102,6 +144,13 @@ export function PoForm({
               name="title"
               required
               maxLength={200}
+              /* ตัดที่ 200 ให้ตรงกับ zod max(200) ฝั่ง action — ถ้าเกิน action จะ
+                 return เงียบ ๆ ไม่มีอะไรขึ้นบนจอ ซึ่งหาสาเหตุยากมาก */
+              defaultValue={
+                workOrder
+                  ? `อุปกรณ์สำหรับ: ${workOrder.title}`.slice(0, 200)
+                  : ""
+              }
               placeholder="เช่น สั่งซื้ออุปกรณ์ซ่อมแอร์"
             />
           </label>
@@ -122,19 +171,21 @@ export function PoForm({
             </label>
           )}
 
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-(--ink)">
-              บ้าน / ทรัพย์สิน
-            </span>
-            <select name="propertyId" defaultValue="" className={inputClass}>
-              <option value="">— ไม่ระบุ —</option>
-              {properties.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          {!workOrder && (
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-(--ink)">
+                บ้าน / ทรัพย์สิน
+              </span>
+              <select name="propertyId" defaultValue="" className={inputClass}>
+                <option value="">— ไม่ระบุ —</option>
+                {properties.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-medium text-(--ink)">รายละเอียด</span>

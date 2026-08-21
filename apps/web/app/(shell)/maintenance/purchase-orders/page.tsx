@@ -10,6 +10,7 @@ import {
 } from "@/modules/maintenance/data/equipment-returns";
 import { listProperties } from "@/modules/maintenance/data/properties";
 import { userNameMap } from "@/modules/maintenance/data/users";
+import { workOrderCodeMap } from "@/modules/maintenance/data/work-orders";
 import { poItemsFromJson, poStatusMeta } from "@/modules/maintenance/lib/po";
 import { fmtThaiDate } from "@/modules/maintenance/lib/format";
 import {
@@ -43,15 +44,21 @@ export default async function PurchaseOrdersPage({
   const propNames: Record<string, string> = Object.fromEntries(
     properties.map((p) => [p.id, p.name])
   );
-  const names = await userNameMap(orgId, [
-    ...orders.flatMap((o) => [
-      o.createdBy,
-      o.poAssignedTo,
-      o.poCreatedBy,
-      o.orderedBy,
-      o.receivedBy,
+  const [names, woCodes] = await Promise.all([
+    userNameMap(orgId, [
+      ...orders.flatMap((o) => [
+        o.createdBy,
+        o.poAssignedTo,
+        o.poCreatedBy,
+        o.orderedBy,
+        o.receivedBy,
+      ]),
+      ...returns.map((r) => r.createdBy),
     ]),
-    ...returns.map((r) => r.createdBy),
+    workOrderCodeMap(
+      orgId,
+      orders.map((o) => o.workOrderId)
+    ),
   ]);
 
   /** เฟสล่าสุดที่ผ่านมาแล้ว (ตรงกับ _CurrentPhase เดิม) */
@@ -99,6 +106,7 @@ export default async function PurchaseOrdersPage({
       totalPrice: Number(o.totalPrice),
       assigneeName: o.poAssignedTo ? (names[o.poAssignedTo] ?? null) : null,
       isEmergency: o.isEmergencyPurchase,
+      workOrderCode: o.workOrderId ? (woCodes[o.workOrderId]?.code ?? null) : null,
       phase: phaseOf(o),
     };
   });

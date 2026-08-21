@@ -62,6 +62,22 @@ export function getWorkOrder(orgId: string, id: string) {
   return prisma.workOrder.findFirst({ where: { orgId, id } });
 }
 
+/** id → "WO-2569-0001 · หัวข้องาน" สำหรับแสดงใบงานต้นทางบนหน้า PR/PO */
+export async function workOrderCodeMap(
+  orgId: string,
+  ids: (string | null | undefined)[]
+): Promise<Record<string, { code: string; title: string }>> {
+  const want = Array.from(new Set(ids.filter((x): x is string => !!x)));
+  if (want.length === 0) return {};
+  const rows = await prisma.workOrder.findMany({
+    where: { orgId, id: { in: want } },
+    select: { id: true, code: true, title: true },
+  });
+  return Object.fromEntries(
+    rows.map((r) => [r.id, { code: r.code, title: r.title }])
+  );
+}
+
 /** set ของ workOrderId ที่มีค่าใช้จ่ายแล้ว (ใช้แยกคอลัมน์ "ยังไม่บันทึกค่าใช้จ่าย") */
 export async function workOrderIdsWithExpenses(
   orgId: string
