@@ -94,14 +94,33 @@ export function WorkloadView() {
           const inProgressNotOverdue = r.inProgress - r.overdue > 0 ? r.inProgress - r.overdue : 0;
           const overloaded = r.open >= 6;
           return (
-            <div key={r.user.id} className="flex items-center gap-3 px-5 py-3 hover:bg-[var(--bg-soft)] transition-colors">
-              <Avatar className="h-9 w-9 shrink-0">
-                <AvatarFallback className="text-[10px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{r.user.avatar}</AvatarFallback>
-              </Avatar>
+            // <640px: stacks into 2 lines (avatar+name+total, then the bar +
+            // legend) instead of squeezing a fixed w-40 name column, the bar,
+            // and the total badge all onto one row. ≥640px is the original
+            // single row — `sm:contents` makes the avatar+name wrapper (and
+            // the mobile-only total badge inside it) disappear from layout
+            // there, so its children fall back into the row exactly as
+            // before instead of nesting an extra box.
+            <div key={r.user.id} className="flex flex-col gap-2 px-5 py-3 hover:bg-[var(--bg-soft)] transition-colors sm:flex-row sm:items-center sm:gap-3">
+              <div className="flex items-center gap-3 sm:contents">
+                <Avatar className="h-9 w-9 shrink-0">
+                  <AvatarFallback className="text-[10px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{r.user.avatar}</AvatarFallback>
+                </Avatar>
 
-              <div className="w-40 shrink-0 min-w-0">
-                <p className="text-sm font-medium truncate">{r.user.name}</p>
-                <p className="text-[11px] text-[var(--ink-soft)] truncate">{getDepartment(r.user.departmentId)?.name}</p>
+                <div className="w-40 shrink-0 min-w-0">
+                  <p className="text-sm font-medium truncate">{r.user.name}</p>
+                  <p className="text-[11px] text-[var(--ink-soft)] truncate">{getDepartment(r.user.departmentId)?.name}</p>
+                </div>
+
+                {/* Mobile-only — same total badge as the desktop one at the
+                    end of the row (below), just pulled up onto line 1 here
+                    since mobile's line order is avatar/name/total, then bar. */}
+                <span
+                  className="ml-auto shrink-0 text-xs font-semibold tabular-nums rounded-md ring-1 ring-inset ring-[var(--line)] bg-[var(--bg-soft)] text-[var(--ink)] px-2 py-1 sm:hidden"
+                  title="งานทั้งหมดของคนนี้"
+                >
+                  {r.total} งาน
+                </span>
               </div>
 
               <div className="flex-1 min-w-0">
@@ -117,7 +136,7 @@ export function WorkloadView() {
                         className="block w-full cursor-pointer"
                         aria-label={`ดูสัดส่วนงานของ ${r.user.name}`}
                       >
-                        <div className="h-2.5 rounded-full bg-[var(--bg-soft)] overflow-hidden flex">
+                        <div className="h-2 sm:h-2.5 rounded-full bg-[var(--bg-soft)] overflow-hidden flex">
                           {r.todo > 0 && <div className="h-full" style={{ width: `${seg(r.todo)}%`, backgroundColor: "#94a3b8" }} />}
                           {inProgressNotOverdue > 0 && (
                             <div className="h-full" style={{ width: `${seg(inProgressNotOverdue)}%`, backgroundColor: "var(--chart-amber)" }} />
@@ -146,7 +165,11 @@ export function WorkloadView() {
                     breakdown popover above — this row used to only show 3
                     (no "รอดำเนินการ"), reading as a different, incomplete
                     summary of the exact same bar sitting right above it. */}
-                <div className="flex items-center gap-2.5 mt-1.5 text-[11px] text-[var(--ink-soft)] flex-wrap">
+                {/* Single line on mobile (per spec) — scrolls horizontally
+                    rather than wrapping to 2 lines under the bar, which read
+                    cramped at 4 legend items + an occasional "งานเยอะ" badge
+                    on a narrow phone. ≥640px keeps the original wrapping row. */}
+                <div className="flex items-center gap-2.5 mt-1.5 text-[11px] text-[var(--ink-soft)] overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:whitespace-normal">
                   <span className="flex items-center gap-1">
                     <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: "#94a3b8" }} />
                     รอดำเนินการ {r.todo}
@@ -169,9 +192,10 @@ export function WorkloadView() {
 
               {/* Total task count — replaces the old score badge here, since
                   this view is about workload volume, not performance
-                  (score/rating still lives on the Reports page). */}
+                  (score/rating still lives on the Reports page). Hidden on
+                  mobile since the copy above (line 1) already shows it. */}
               <span
-                className="shrink-0 text-xs font-semibold tabular-nums rounded-md ring-1 ring-inset ring-[var(--line)] bg-[var(--bg-soft)] text-[var(--ink)] px-2 py-1"
+                className="hidden shrink-0 text-xs font-semibold tabular-nums rounded-md ring-1 ring-inset ring-[var(--line)] bg-[var(--bg-soft)] text-[var(--ink)] px-2 py-1 sm:inline-block"
                 title="งานทั้งหมดของคนนี้"
               >
                 {r.total} งาน
