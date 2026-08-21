@@ -58,8 +58,12 @@ export function TaskBoardKpis({ tasks }: { tasks: Task[] }) {
     // <640px: one horizontally-scrolling row (scrollbar hidden, native
     // touch-swipe) instead of wrapping to a 2nd/3rd line — wrapping is what
     // was pushing the header tall enough to push the first card below the
-    // fold on a phone. ≥640px keeps the original wrapping row.
-    <div className="flex flex-nowrap items-center gap-2 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [-webkit-overflow-scrolling:touch] sm:flex-wrap sm:overflow-visible">
+    // fold on a phone. The right-edge fade is the only hint there's more to
+    // scroll to (no visible scrollbar) — ≥640px keeps the original wrapping
+    // row with no mask.
+    <div
+      className="flex flex-nowrap items-center gap-2 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [-webkit-overflow-scrolling:touch] [mask-image:linear-gradient(90deg,black_92%,transparent)] [-webkit-mask-image:linear-gradient(90deg,black_92%,transparent)] sm:flex-wrap sm:overflow-visible sm:[mask-image:none] sm:[-webkit-mask-image:none]"
+    >
       {chips.map((c) => {
         // "ทั้งหมด" is the resting/no-filter state — quickView defaults to
         // "all", so highlighting it here would make it look permanently
