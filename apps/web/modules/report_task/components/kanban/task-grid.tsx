@@ -96,7 +96,10 @@ const GridRow = memo(
           }}
         >
           <TableCell
-            className="pl-4 pr-0 w-10"
+            className={cn(
+              "pl-4 pr-0 w-10 sticky left-0 z-10",
+              isSelected ? "bg-[color-mix(in_srgb,var(--brand-green)_8%,white)]" : "bg-white"
+            )}
             onClick={(e) => {
               e.stopPropagation();
               onToggleSelect(rowId);
@@ -105,7 +108,17 @@ const GridRow = memo(
             <Checkbox checked={isSelected} aria-label="เลือกงานนี้" />
           </TableCell>
           {row.getVisibleCells().map((cell) => (
-            <TableCell key={cell.id} className="px-4 py-3 whitespace-nowrap">
+            <TableCell
+              key={cell.id}
+              className={cn(
+                "px-4 py-3 whitespace-nowrap",
+                // Matches the sticky title header above — same column stays
+                // frozen at the same left offset (40px, the checkbox
+                // column's own width) as the row scrolls horizontally.
+                cell.column.id === "title" &&
+                  cn("sticky left-10 z-10", isSelected ? "bg-[color-mix(in_srgb,var(--brand-green)_8%,white)]" : "bg-white")
+              )}
+            >
               {flexRender(cell.column.columnDef.cell, cell.getContext())}
             </TableCell>
           ))}
@@ -627,7 +640,7 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
             <TableHeader>
               {table.getHeaderGroups().map((hg) => (
                 <TableRow key={hg.id} className="border-b border-[var(--line)] hover:bg-transparent">
-                  <TableHead className="h-11 w-10 pl-4 pr-0 bg-[var(--bg-soft)]/70">
+                  <TableHead className="h-11 w-10 pl-4 pr-0 sticky left-0 z-20 bg-[var(--bg-soft)]">
                     <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="เลือกทั้งหมด" />
                   </TableHead>
                   {hg.headers.map((header) => {
@@ -647,7 +660,13 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
                         title={sortTitle}
                         className={cn(
                           "h-11 px-4 bg-[var(--bg-soft)]/70 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-soft)] whitespace-nowrap select-none",
-                          sortable && "cursor-pointer hover:text-[var(--ink)] transition-colors"
+                          sortable && "cursor-pointer hover:text-[var(--ink)] transition-colors",
+                          // "ชื่องาน" stays frozen in place while the other 8
+                          // columns scroll underneath it — the table's 9
+                          // columns run wider than the viewport, and without
+                          // this, scrolling right to see e.g. priority/status
+                          // loses all context for which row you're even on.
+                          header.column.id === "title" && "sticky left-10 z-20 bg-[var(--bg-soft)]"
                         )}
                         onClick={header.column.getToggleSortingHandler()}
                       >
