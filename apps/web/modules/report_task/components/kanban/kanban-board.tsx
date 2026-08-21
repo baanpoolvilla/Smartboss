@@ -247,11 +247,6 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
-  // <640px only — which full-width column is currently snapped into view,
-  // for the mobile pager's dots/label (see the render below). Meaningless on
-  // ≥640px where several columns sit side by side, but harmless to keep
-  // updating since the pager itself is hidden there.
-  const [mobileColumnIndex, setMobileColumnIndex] = useState(0);
   const prefersReducedMotionRef = useRef(false);
 
   useEffect(() => {
@@ -267,22 +262,19 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
     if (!el) return;
     setCanScrollLeft(el.scrollLeft > 4);
     setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
-    if (el.clientWidth > 0) {
-      setMobileColumnIndex(Math.round(el.scrollLeft / el.clientWidth));
-    }
   }
 
-  // Mobile pager's ‹/› — jumps to a specific full-width column by index
-  // (scrollBoard below, used by the desktop chevrons, moves by a fixed pixel
-  // step instead since several columns are visible there at once).
-  function goToMobileColumn(index: number) {
+  // <640px only — the single floating "›" hint button. Each column is
+  // exactly one viewport wide there, so `clientWidth * 0.92` (not the full
+  // width) lands just past the snap point of the next column instead of
+  // relying on an exact 100% jump the browser's own scroll-snap then nudges
+  // the rest of the way. No pager/dots by design — a lone arrow that fades
+  // out at the last column reads as "swipe for more", a row of ‹›+dots that
+  // jump on tap reads as a whole extra thing to learn.
+  function scrollMobileNext() {
     const el = scrollerRef.current;
-    const target = el?.children[index] as HTMLElement | undefined;
-    target?.scrollIntoView({
-      behavior: prefersReducedMotionRef.current ? "auto" : "smooth",
-      inline: "center",
-      block: "nearest",
-    });
+    if (!el) return;
+    el.scrollBy({ left: el.clientWidth * 0.92, behavior: prefersReducedMotionRef.current ? "auto" : "smooth" });
   }
 
   useEffect(() => {
@@ -385,53 +377,31 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
         />
       ) : (
         <>
-          {/* <640px only — replaces the desktop hover-chevrons below (hidden
-              on mobile, see their own `hidden sm:block`/`sm:flex`) since a
-              44px overlay button floating on top of a full-width card reads
-              worse than a dedicated pager row above the board. */}
-          <div className="flex sm:hidden items-center justify-between gap-2 pb-2">
-            <button
-              type="button"
-              aria-label="คอลัมน์ก่อนหน้า"
-              disabled={mobileColumnIndex <= 0}
-              onClick={() => goToMobileColumn(mobileColumnIndex - 1)}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--line)] bg-white text-[var(--ink-soft)] disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </button>
-            <div className="flex min-w-0 flex-col items-center gap-1">
-              <span className="max-w-[65vw] truncate text-sm font-semibold text-[var(--ink)]">
-                {columns[mobileColumnIndex]?.label}
-              </span>
-              <div className="flex items-center gap-1.5">
-                {columns.map((c, i) => (
-                  <span
-                    key={c.id}
-                    className={cn(
-                      "h-1.5 w-1.5 shrink-0 rounded-full transition-colors",
-                      i === mobileColumnIndex ? "bg-[var(--brand-green)]" : "bg-[var(--line)]"
-                    )}
-                  />
-                ))}
-              </div>
-            </div>
-            <button
-              type="button"
-              aria-label="คอลัมน์ถัดไป"
-              disabled={mobileColumnIndex >= columns.length - 1}
-              onClick={() => goToMobileColumn(mobileColumnIndex + 1)}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--line)] bg-white text-[var(--ink-soft)] disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </button>
-          </div>
-
           {/* Buttons anchor to a fixed offset near the column headers (~top
               center of the header card), not a vertical center of the whole
               scroll area — a column can run to dozens of cards tall, and
               centering across that would push the button far from the
               header, off in the middle of someone's card list. */}
           <div className="relative min-h-0 flex-1">
+            {/* <640px only — a single floating "›" hint, not a ‹›+dots pager
+                (a pager reads as a whole extra control to learn; a lone
+                arrow that fades out at the last column reads as "swipe for
+                more", closer to how the rest of the phone already behaves).
+                Swiping the board directly works regardless of this button. */}
+            <button
+              type="button"
+              onClick={scrollMobileNext}
+              aria-label="ดูคอลัมน์ถัดไป"
+              tabIndex={canScrollRight ? 0 : -1}
+              className={cn(
+                "sm:hidden absolute right-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white text-[var(--ink-soft)] shadow-[0_4px_14px_rgba(0,0,0,0.18)] transition-opacity duration-300",
+                canScrollRight && "motion-safe:animate-bounce",
+                canScrollRight ? "opacity-100" : "opacity-0 pointer-events-none"
+              )}
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+
             {canScrollLeft && (
               <div className="hidden sm:block">
                 <div className="pointer-events-none absolute top-0 left-0 z-10 h-24 w-10 bg-gradient-to-r from-[var(--bg)] to-transparent" />

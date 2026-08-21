@@ -3,6 +3,7 @@
 import { TaskCard } from "./task-card";
 import { ShowMoreToggle } from "@/modules/report_task/components/shared/show-more-toggle";
 import { useShowMore } from "@/modules/report_task/hooks/use-show-more";
+import { useIsMobile } from "@/modules/report_task/hooks/use-is-mobile";
 import { statusMeta } from "@/modules/report_task/lib/task-meta";
 import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import { chartColors } from "@/modules/report_task/lib/chart-colors";
@@ -24,6 +25,10 @@ export interface BoardColumn {
 }
 
 const PAGE_SIZE = 6;
+// <640px shows fewer cards up front — a full-width column already fills the
+// screen with just a few, so 6 was several screens of scrolling before
+// "แสดงเพิ่มเติม" ever showed up.
+const MOBILE_PAGE_SIZE = 3;
 
 export function KanbanColumn({
   column,
@@ -105,7 +110,8 @@ export function KanbanColumn({
   // same two-way toggle as the Dashboard's capped lists
   // (useShowMore/ShowMoreToggle), not a one-way "keep clicking to add more"
   // with no way back.
-  const { visible: visibleTasks, remaining, expanded, toggle } = useShowMore(column.tasks, PAGE_SIZE);
+  const isMobile = useIsMobile();
+  const { visible: visibleTasks, remaining, expanded, toggle } = useShowMore(column.tasks, isMobile ? MOBILE_PAGE_SIZE : PAGE_SIZE);
 
   return (
     <div
