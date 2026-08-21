@@ -19,6 +19,9 @@ import { taskPriorityOrder, priorityMeta } from "@/modules/report_task/lib/task-
 import type { TaskPriority } from "@/modules/report_task/types";
 import { FilterField, FILTER_FIELD_LABEL_CLASS, filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
 import { DateRangeSelectField } from "@/modules/report_task/components/shared/date-range-select-field";
+import { ChipSelect } from "@/modules/report_task/components/shared/chip-select";
+import { Input } from "@/modules/report_task/components/ui/input";
+import { datePresetGroups, datePresetLabels, type DatePreset } from "@/modules/report_task/lib/date-filter";
 import { cn } from "@/modules/report_task/lib/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NewTaskDialog } from "./new-task-dialog";
@@ -282,6 +285,106 @@ export function TaskFilters({
     </>
   );
 
+  // Mobile bottom-sheet version of the same 5 fields — tap chips instead of
+  // native `<select>` (which pops a full-screen OS picker on a phone, ugly
+  // next to the rest of the sheet). Kept as its own block rather than reused
+  // inside `fieldsNode` since the two controls render completely differently
+  // (dropdown vs. chip row), not just different sizing.
+  const mobileFieldsNode = (
+    <>
+      {availableDepartments.length > 1 ? (
+        <ChipSelect
+          label="แผนก"
+          value={filters.departmentId}
+          onChange={(v) => setFilters({ departmentId: v })}
+          options={[{ value: "all", label: "ทั้งบริษัท" }, ...availableDepartments.map((d) => ({ value: d.id, label: d.name }))]}
+        />
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[11px] font-medium text-[var(--ink-soft)] px-0.5">แผนก</span>
+          <span className="text-sm text-[var(--ink-soft)] px-0.5">{availableDepartments[0]?.name ?? "ไม่มีแผนก"}</span>
+        </div>
+      )}
+
+      {peopleInScope.length > 1 ? (
+        <ChipSelect
+          label="พนักงาน"
+          value={filters.assigneeId}
+          onChange={(v) => setFilters({ assigneeId: v })}
+          options={[{ value: "all", label: "ทุกคน" }, ...peopleInScope.map((u) => ({ value: u.id, label: u.name }))]}
+        />
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[11px] font-medium text-[var(--ink-soft)] px-0.5">พนักงาน</span>
+          <span className="text-sm text-[var(--ink-soft)] px-0.5">
+            {peopleInScope[0]?.id === viewingAsUserId ? "ตัวเอง" : (peopleInScope[0]?.name ?? "ไม่มีผู้รับผิดชอบ")}
+          </span>
+        </div>
+      )}
+
+      {/* Same 12 presets as the desktop dropdown, grouped under the same
+          วันนี้/สัปดาห์/เดือน/ปี/กำหนดเอง section labels instead of one flat
+          list of 12 chips. */}
+      <div className="flex flex-col gap-2.5">
+        <span className="text-[11px] font-medium text-[var(--ink-soft)] px-0.5">ช่วงเวลา</span>
+        {datePresetGroups.map((group, i) => (
+          <ChipSelect
+            key={i}
+            label={group.label || undefined}
+            value={filters.preset}
+            onChange={(v: DatePreset) => setFilters({ preset: v })}
+            options={group.presets.map((p) => ({ value: p, label: datePresetLabels[p] }))}
+          />
+        ))}
+        {filters.preset === "custom" && (
+          <div className="flex items-center gap-2">
+            <Input
+              type="date"
+              lang="en-GB"
+              value={filters.customFrom}
+              onChange={(e) => setFilters({ customFrom: e.target.value })}
+              className="h-11 flex-1"
+            />
+            <span className="text-[var(--ink-soft)] text-sm">ถึง</span>
+            <Input
+              type="date"
+              lang="en-GB"
+              value={filters.customTo}
+              onChange={(e) => setFilters({ customTo: e.target.value })}
+              className="h-11 flex-1"
+            />
+          </div>
+        )}
+      </div>
+
+      <ChipSelect
+        label="ความสำคัญ"
+        value={filters.priority}
+        onChange={(v) => setFilters({ priority: v })}
+        options={[{ value: "all", label: "ทุกความสำคัญ" }, ...taskPriorityOrder.map((p) => ({ value: p, label: priorityMeta[p].label }))]}
+      />
+
+      {groupBy && onGroupByChange && (
+        <ChipSelect
+          label="จัดกลุ่มตาม"
+          value={groupBy}
+          onChange={(v) => onGroupByChange(v)}
+          options={(["status", "priority", "assignee"] as GroupBy[]).map((g) => ({ value: g, label: groupByLabels[g] }))}
+        />
+      )}
+
+      <ChipSelect
+        label="เลยกำหนด"
+        value={filters.penalty === "overdue" ? "overdue" : "all"}
+        onChange={(v) => setFilters({ penalty: v === "overdue" ? "overdue" : "all" })}
+        options={[
+          { value: "all", label: "ทุกงาน" },
+          { value: "overdue", label: "เลยกำหนดเท่านั้น" },
+        ]}
+      />
+    </>
+  );
+
   return (
     <>
       {/* ≥640px: full row, unchanged from before. */}
@@ -327,18 +430,22 @@ export function TaskFilters({
 
       <Sheet open={mobileSheetOpen} onOpenChange={setMobileSheetOpen}>
         <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
-          <SheetHeader>
+          <SheetHeader className="flex-row items-center justify-between gap-2 pb-2">
             <SheetTitle>ตัวกรอง</SheetTitle>
+            {isFiltered && (
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="text-sm font-medium text-[var(--brand-green-dark)] underline-offset-2 hover:underline"
+              >
+                ล้างตัวกรอง
+              </button>
+            )}
           </SheetHeader>
-          <div className="flex flex-col gap-3 px-4 [&_[data-slot=select-trigger]]:w-full [&_[data-slot=select-trigger]]:!h-11 [&>div>button]:w-full [&>div>button]:!h-11 [&>div>span]:w-full [&>div>span]:!h-11">
-            {fieldsNode}
-          </div>
-          <SheetFooter className="flex-row gap-2">
-            <Button variant="outline" className="flex-1 h-11" onClick={resetFilters} disabled={!isFiltered}>
-              ล้างตัวกรอง
-            </Button>
+          <div className="flex flex-col gap-4 px-4">{mobileFieldsNode}</div>
+          <SheetFooter>
             <Button
-              className="flex-1 h-11 bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+              className="h-[46px] w-full bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
               onClick={() => setMobileSheetOpen(false)}
             >
               ใช้ตัวกรอง
