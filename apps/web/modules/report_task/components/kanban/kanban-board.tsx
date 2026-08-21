@@ -247,12 +247,42 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  // <640px only — which full-width column is currently snapped into view,
+  // for the mobile pager's dots/label (see the render below). Meaningless on
+  // ≥640px where several columns sit side by side, but harmless to keep
+  // updating since the pager itself is hidden there.
+  const [mobileColumnIndex, setMobileColumnIndex] = useState(0);
+  const prefersReducedMotionRef = useRef(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    prefersReducedMotionRef.current = mq.matches;
+    const onChange = () => { prefersReducedMotionRef.current = mq.matches; };
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
 
   function updateScrollState() {
     const el = scrollerRef.current;
     if (!el) return;
     setCanScrollLeft(el.scrollLeft > 4);
     setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+    if (el.clientWidth > 0) {
+      setMobileColumnIndex(Math.round(el.scrollLeft / el.clientWidth));
+    }
+  }
+
+  // Mobile pager's ‹/› — jumps to a specific full-width column by index
+  // (scrollBoard below, used by the desktop chevrons, moves by a fixed pixel
+  // step instead since several columns are visible there at once).
+  function goToMobileColumn(index: number) {
+    const el = scrollerRef.current;
+    const target = el?.children[index] as HTMLElement | undefined;
+    target?.scrollIntoView({
+      behavior: prefersReducedMotionRef.current ? "auto" : "smooth",
+      inline: "center",
+      block: "nearest",
+    });
   }
 
   useEffect(() => {
@@ -355,6 +385,47 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
         />
       ) : (
         <>
+          {/* <640px only — replaces the desktop hover-chevrons below (hidden
+              on mobile, see their own `hidden sm:block`/`sm:flex`) since a
+              44px overlay button floating on top of a full-width card reads
+              worse than a dedicated pager row above the board. */}
+          <div className="flex sm:hidden items-center justify-between gap-2 pb-2">
+            <button
+              type="button"
+              aria-label="คอลัมน์ก่อนหน้า"
+              disabled={mobileColumnIndex <= 0}
+              onClick={() => goToMobileColumn(mobileColumnIndex - 1)}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--line)] bg-white text-[var(--ink-soft)] disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <div className="flex min-w-0 flex-col items-center gap-1">
+              <span className="max-w-[65vw] truncate text-sm font-semibold text-[var(--ink)]">
+                {columns[mobileColumnIndex]?.label}
+              </span>
+              <div className="flex items-center gap-1.5">
+                {columns.map((c, i) => (
+                  <span
+                    key={c.id}
+                    className={cn(
+                      "h-1.5 w-1.5 shrink-0 rounded-full transition-colors",
+                      i === mobileColumnIndex ? "bg-[var(--brand-green)]" : "bg-[var(--line)]"
+                    )}
+                  />
+                ))}
+              </div>
+            </div>
+            <button
+              type="button"
+              aria-label="คอลัมน์ถัดไป"
+              disabled={mobileColumnIndex >= columns.length - 1}
+              onClick={() => goToMobileColumn(mobileColumnIndex + 1)}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--line)] bg-white text-[var(--ink-soft)] disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </div>
+
           {/* Buttons anchor to a fixed offset near the column headers (~top
               center of the header card), not a vertical center of the whole
               scroll area — a column can run to dozens of cards tall, and
@@ -362,7 +433,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
               header, off in the middle of someone's card list. */}
           <div className="relative min-h-0 flex-1">
             {canScrollLeft && (
-              <>
+              <div className="hidden sm:block">
                 <div className="pointer-events-none absolute top-0 left-0 z-10 h-24 w-10 bg-gradient-to-r from-[var(--bg)] to-transparent" />
                 <button
                   onClick={() => scrollBoard(-1)}
@@ -371,10 +442,10 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </button>
-              </>
+              </div>
             )}
             {canScrollRight && (
-              <>
+              <div className="hidden sm:block">
                 <div className="pointer-events-none absolute top-0 right-0 z-10 h-24 w-10 bg-gradient-to-l from-[var(--bg)] to-transparent" />
                 <button
                   onClick={() => scrollBoard(1)}
@@ -383,13 +454,16 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
                 >
                   <ChevronRight className="h-4 w-4" />
                 </button>
-              </>
+              </div>
             )}
             {/* h-full — each column stretches to fill this row's height
                 (KanbanColumn's own root has h-full min-h-0) and scrolls its
                 OWN card list internally instead of growing the row past the
                 viewport; overflow-x is the only scroll this row itself
-                needs (too many columns to fit side by side). */}
+                needs (too many columns to fit side by side). snap-x here
+                only bites on mobile — each KanbanColumn's own snap-center is
+                already gated to <640px (sm:snap-none), so this scroller's
+                snap-mandatory has nothing to snap to at sm: and up. */}
             <div
               ref={scrollerRef}
               onPointerDown={handlePanPointerDown}
@@ -397,7 +471,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
               onPointerUp={endPan}
               onPointerCancel={endPan}
               className={cn(
-                "flex h-full items-stretch gap-4 overflow-x-auto pb-1 -mx-1 px-1",
+                "flex h-full items-stretch gap-4 overflow-x-auto pb-1 -mx-1 px-1 snap-x snap-mandatory sm:snap-none",
                 groupBy === "assignee" && (isPanning ? "cursor-grabbing select-none" : "cursor-grab")
               )}
             >

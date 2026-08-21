@@ -110,7 +110,11 @@ export function KanbanColumn({
   return (
     <div
       id={`kanban-col-${column.id}`}
-      className="flex h-full min-h-0 flex-1 basis-[300px] min-w-[280px] max-w-[400px] shrink-0 flex-col transition-shadow duration-500"
+      // <640px: one column fills the whole viewport width and snaps into
+      // place on swipe (see KanbanBoard's `snap-x snap-mandatory` scroller +
+      // its own pager buttons) — ≥640px reverts to the original fixed-width
+      // lane sitting side-by-side with the others.
+      className="flex h-full min-h-0 flex-1 basis-full min-w-full max-w-full sm:basis-[300px] sm:min-w-[280px] sm:max-w-[400px] shrink-0 flex-col snap-center sm:snap-none transition-shadow duration-500"
     >
       <div className="shrink-0 rounded-xl bg-white border border-[var(--line)] shadow-[0_1px_2px_rgba(16,24,40,0.04)] px-3.5 py-3 mb-3">
         <div className="flex items-center gap-2.5">
