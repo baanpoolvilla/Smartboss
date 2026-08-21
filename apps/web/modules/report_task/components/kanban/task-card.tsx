@@ -9,6 +9,7 @@ import { DueDateBadge } from "@/modules/report_task/components/shared/due-date-b
 import { PenaltyChip } from "@/modules/report_task/components/shared/penalty-chip";
 import { getUser, getDepartment, canManage } from "@/modules/report_task/lib/directory";
 import { priorityMeta, statusMeta } from "@/modules/report_task/lib/task-meta";
+import { chartColors } from "@/modules/report_task/lib/chart-colors";
 import { isSuspiciousRevision, reactionCounts } from "@/modules/report_task/lib/task-flags";
 import { isTaskFullyDone, remainingChecklistCount } from "@/modules/report_task/lib/task-completion";
 import { toast } from "sonner";
@@ -166,12 +167,16 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
                       <Check className="h-2.5 w-2.5 shrink-0" strokeWidth={3} />
                       เสร็จ
                     </span>
-                    {/* Solid fill, not another pale tint — this half is the
-                        one that's actually still pending (see comment
-                        above), so it needs to read as "full color" the way
-                        the label already implied instead of nearly
-                        matching "เสร็จ"'s own muted half. */}
-                    <span className="flex items-center gap-1 px-2.5 py-1 bg-[var(--chart-green)] text-white">
+                    {/* Same greenPale as the "รอตรวจสอบ" column's own dot/bar
+                        (chartColors.greenPale) — was the column's own full
+                        chart-green before, which didn't match its column at
+                        all. Text is a darkened mix of that same pale green
+                        (not white) — white-on-pale-green fails contrast, the
+                        darker text is what keeps it legible. */}
+                    <span
+                      className="flex items-center gap-1 px-2.5 py-1"
+                      style={{ backgroundColor: chartColors.greenPale, color: `color-mix(in srgb, ${chartColors.greenPale} 45%, black)` }}
+                    >
                       <Clock className="h-2.5 w-2.5 shrink-0" />
                       รอตรวจสอบ
                     </span>
