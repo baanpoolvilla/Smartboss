@@ -372,9 +372,14 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
         </div>
       )}
 
-      {/* Divider keeps the meta row visually separate from the body */}
-      <div className="mt-3.5 pt-3 border-t border-[var(--line)]/60 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2.5 text-[var(--ink)] min-w-0">
+      {/* Divider keeps the meta row visually separate from the body. <640px:
+          the two clusters below (date/status/penalty/counts, then the
+          sticker button + avatar stack) stack into their own rows instead of
+          fighting for one line — squeezed onto one row on a narrow phone
+          card, the avatar stack used to get pushed right past the card's own
+          rounded corner. ≥640px is unchanged (single row, space-between). */}
+      <div className="mt-3.5 pt-3 border-t border-[var(--line)]/60 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-2.5 text-[var(--ink)] min-w-0">
           {/* Only meaningful for a task still todo/in_progress — showOriginalStatus
               is also true for the derived "รอตรวจสอบ" column, where every task's
               real status is "done" and this tag would just mislabel it. Solid
@@ -409,7 +414,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center justify-end gap-1.5 shrink-0">
           {onOpen && (
             <Popover>
               <PopoverTrigger
