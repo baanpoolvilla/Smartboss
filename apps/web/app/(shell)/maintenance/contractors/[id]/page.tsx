@@ -5,12 +5,16 @@ import { Card } from "@smartboss/ui/components/card";
 import { Button } from "@smartboss/ui/components/button";
 import { Input } from "@smartboss/ui/components/input";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
-import { getContractor, listContractorHistory } from "@/modules/maintenance/data/contractors";
-import { selectClass, Field } from "@/modules/maintenance/components/ui";
 import {
-  CONTACT_CATEGORIES,
-  CONTACT_ZONES,
-} from "@/modules/maintenance/lib/contacts";
+  getContractor,
+  listContractorHistory,
+  contractorOptions,
+} from "@/modules/maintenance/data/contractors";
+import {
+  selectClass,
+  Field,
+  ComboInput,
+} from "@/modules/maintenance/components/ui";
 import { fmtThaiDate } from "@/modules/maintenance/lib/format";
 import { formatBaht } from "@/modules/maintenance/lib/expense";
 import { updateContractorAction, deleteContractorAction, addHistoryAction } from "../actions";
@@ -38,7 +42,13 @@ export default async function ContractorDetailPage({
   const contractor = await getContractor(orgId, id);
   if (!contractor) notFound();
   const canManage = hasPermission(session, MAINT_PERMS.contractorManage);
-  const history = await listContractorHistory(orgId, id);
+  const [history, options] = await Promise.all([
+    listContractorHistory(orgId, id),
+    // ตัวเลือกหมวด/โซนของบริษัทนี้ ดึงเฉพาะตอนที่แก้ไขได้จริง
+    canManage
+      ? contractorOptions(orgId)
+      : Promise.resolve({ categories: [], zones: [] }),
+  ]);
 
   return (
     <AppScaffold
@@ -90,22 +100,20 @@ export default async function ContractorDetailPage({
                 <Input name="email" defaultValue={contractor.email ?? ""} placeholder="ช่องทางติดต่ออื่นๆ" />
                 <Input name="specialty" defaultValue={contractor.specialty ?? ""} placeholder="คุณสมบัติ" />
                 <Input name="companyName" defaultValue={contractor.companyName ?? ""} placeholder="บริษัท" />
-                <select name="zone" defaultValue={contractor.zone ?? ""} className={selectClass}>
-                  <option value="">ไม่ระบุ</option>
-                  {CONTACT_ZONES.map((z) => (
-                    <option key={z} value={z}>
-                      {z}
-                    </option>
-                  ))}
-                </select>
-                <select name="category" defaultValue={contractor.category ?? ""} className={selectClass}>
-                  <option value="">เลือกหมวดหมู่</option>
-                  {CONTACT_CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
+                <ComboInput
+                  name="zone"
+                  listId="edit-contact-zones"
+                  options={options.zones}
+                  defaultValue={contractor.zone ?? ""}
+                  placeholder="โซน / พื้นที่ (พิมพ์ใหม่ได้)"
+                />
+                <ComboInput
+                  name="category"
+                  listId="edit-contact-categories"
+                  options={options.categories}
+                  defaultValue={contractor.category ?? ""}
+                  placeholder="หมวดหมู่ (พิมพ์ใหม่ได้)"
+                />
                 <Input name="price" inputMode="decimal" defaultValue={contractor.price != null ? String(contractor.price) : ""} placeholder="ราคา/ค่าบริการ" />
               </div>
               <Field label="เรตติ้ง">

@@ -1,6 +1,8 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
 
+import { facetsOf, UNSET } from "@/modules/maintenance/lib/contacts";
+
 export interface ContractorInput {
   name: string;
   phone?: string | null;
@@ -24,6 +26,26 @@ export function listContractors(orgId: string, activeOnly = false) {
 
 export function getContractor(orgId: string, id: string) {
   return prisma.contractor.findFirst({ where: { orgId, id } });
+}
+
+/**
+ * หมวดหมู่และโซนที่บริษัทนี้ใช้อยู่จริง — ตัวเลือกในฟอร์มมาจากที่นี่
+ *
+ * ไม่ใช่รายการตายตัวในโค้ด เพราะแต่ละบริษัทแบ่งหมวดและแบ่งพื้นที่ไม่เหมือนกัน
+ * (ดู lib/contacts.ts) เรียงตามที่ใช้บ่อยไปน้อย
+ */
+export async function contractorOptions(
+  orgId: string
+): Promise<{ categories: string[]; zones: string[] }> {
+  const rows = await prisma.contractor.findMany({
+    where: { orgId },
+    select: { category: true, zone: true },
+  });
+  const pick = (get: (r: (typeof rows)[number]) => string | null) =>
+    facetsOf(rows, get)
+      .filter((f) => f.value !== UNSET)
+      .map((f) => f.value);
+  return { categories: pick((r) => r.category), zones: pick((r) => r.zone) };
 }
 
 export function createContractor(orgId: string, data: ContractorInput) {

@@ -36,6 +36,51 @@ export function Field({
   );
 }
 
+/**
+ * ช่องกรอกที่มีตัวเลือกให้เลือก แต่พิมพ์ค่าใหม่ได้ด้วย (input + datalist)
+ *
+ * ใช้แทน select กับค่าที่ไม่ใช่ค่าคงที่ของระบบ เช่น หมวดหมู่/โซนของ Contact —
+ * แต่ละบริษัทแบ่งไม่เหมือนกัน ตัวเลือกที่เห็นคือค่าที่บริษัทนั้นเคยใช้จริง
+ * พิมพ์ค่าใหม่เข้าไปก็จะกลายเป็นตัวเลือกให้คนถัดไปเอง
+ *
+ * ⚠ listId ต้องไม่ซ้ำกันในหน้าเดียว — datalist ผูกกันด้วย id ถ้าซ้ำ ช่องหลังจะ
+ * ได้ตัวเลือกของช่องแรกไปแสดง โดยไม่มี error อะไรให้เห็น
+ */
+export function ComboInput({
+  name,
+  listId,
+  options,
+  placeholder,
+  defaultValue,
+  required,
+}: {
+  name: string;
+  listId: string;
+  options: string[];
+  placeholder: string;
+  defaultValue?: string;
+  required?: boolean;
+}) {
+  return (
+    <>
+      <input
+        name={name}
+        list={listId}
+        required={required}
+        maxLength={100}
+        defaultValue={defaultValue}
+        placeholder={placeholder}
+        className={selectClass}
+      />
+      <datalist id={listId}>
+        {options.map((o) => (
+          <option key={o} value={o} />
+        ))}
+      </datalist>
+    </>
+  );
+}
+
 /** แถวข้อมูล ไอคอน + label กว้างคงที่ + ค่า (ตรงกับ _infoRow เดิม) */
 export function InfoRow({
   icon,
