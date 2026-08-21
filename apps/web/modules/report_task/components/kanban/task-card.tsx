@@ -249,10 +249,15 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
                   className={cn(
                     "mt-0.5 h-4.5 w-4.5 rounded-full flex items-center justify-center shrink-0 transition-all",
                     myPartDone
-                      ? "bg-[var(--chart-green)] text-white"
+                      ? !isPendingReview && "bg-[var(--chart-green)] text-white"
                       : "text-[var(--line)] hover:text-[var(--chart-green)] hover:scale-110",
                     isShared && !iAmAssignee && "opacity-50 hover:scale-100 cursor-default"
                   )}
+                  style={
+                    myPartDone && isPendingReview
+                      ? { backgroundColor: chartColors.greenPale, color: `color-mix(in srgb, ${chartColors.greenPale} 45%, black)` }
+                      : undefined
+                  }
                 >
                   {myPartDone ? <Check className="h-3 w-3" /> : <Circle className="h-4 w-4" />}
                 </button>
