@@ -505,7 +505,10 @@ export function TaskFilters({
 
       <Sheet open={mobileSheetOpen} onOpenChange={setMobileSheetOpen}>
         <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
-          <SheetHeader className="flex-row items-center justify-between gap-2 pb-2">
+          {/* pr-11 — clears the Sheet's own absolute close button (top-3
+              right-3, size-7), which otherwise sits right on top of
+              "ล้างตัวกรอง" since both are right-aligned in this row. */}
+          <SheetHeader className="flex-row items-center justify-between gap-2 pb-2 pr-11">
             <SheetTitle>ตัวกรอง</SheetTitle>
             {isFiltered && (
               <button
