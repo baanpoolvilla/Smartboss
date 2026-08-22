@@ -818,42 +818,41 @@ export function CalendarView() {
           </Button>
         </div>
 
-        {/* <640px: one single row instead of the old tabs row + action row —
-            no more separate "เพิ่มปฏิทิน" globe button here (desktop-only
-            now, mobile has no other way in but that's the tradeoff for not
-            burning a whole slot on a rarely-used action) and the filter
-            button is folded down to icon + "กรอง" so tabs + filter + create
-            all fit on one line instead of stacking to 2 rows. */}
-        <div className="flex sm:hidden items-center gap-1.5">
-          <div className="flex min-w-0 flex-1 items-center gap-1 rounded-xl bg-[var(--bg-soft)] p-1">
-            <button
-              data-tour="calendar-tab-work"
-              onClick={() => setTab("work")}
-              className={cn(
-                "flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-2 text-[12.5px] font-semibold whitespace-nowrap transition-all",
-                tab === "work" ? "bg-[var(--brand-green)] text-[var(--ink)] shadow-md" : "bg-white text-[var(--ink-soft)] border border-[var(--line)]"
-              )}
-            >
-              <ListChecks className="h-3.5 w-3.5 shrink-0" />
-              งาน
-            </button>
-            <button
-              data-tour="calendar-tab-schedule"
-              onClick={() => setTab("schedule")}
-              className={cn(
-                "flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-2 text-[12.5px] font-semibold whitespace-nowrap transition-all",
-                tab === "schedule" ? "bg-[var(--brand-green)] text-[var(--ink)] shadow-md" : "bg-white text-[var(--ink-soft)] border border-[var(--line)]"
-              )}
-            >
-              <CalendarOff className="h-3.5 w-3.5 shrink-0" />
-              หยุด
-            </button>
-          </div>
+        {/* <640px: tabs on their own row, filter + create below — cramming
+            all 4 into one row (tried first) left everything touching edge
+            to edge with the create button clipped on real phone widths.
+            Still 2 rows like the original, just without the "เพิ่มปฏิทิน"
+            globe button (desktop-only now) so there's room to breathe. */}
+        <div className="flex sm:hidden items-center gap-1.5 rounded-xl bg-[var(--bg-soft)] p-1.5">
+          <button
+            data-tour="calendar-tab-work"
+            onClick={() => setTab("work")}
+            className={cn(
+              "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition-all",
+              tab === "work" ? "bg-[var(--brand-green)] text-[var(--ink)] shadow-md" : "bg-white text-[var(--ink-soft)] border border-[var(--line)]"
+            )}
+          >
+            <ListChecks className="h-3.5 w-3.5" />
+            งาน
+          </button>
+          <button
+            data-tour="calendar-tab-schedule"
+            onClick={() => setTab("schedule")}
+            className={cn(
+              "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition-all",
+              tab === "schedule" ? "bg-[var(--brand-green)] text-[var(--ink)] shadow-md" : "bg-white text-[var(--ink-soft)] border border-[var(--line)]"
+            )}
+          >
+            <CalendarOff className="h-3.5 w-3.5" />
+            หยุด
+          </button>
+        </div>
 
+        <div className="flex sm:hidden items-center gap-2">
           <button
             type="button"
             onClick={() => setMobileSheetOpen(true)}
-            className={cn(filterFieldTriggerClass(mobileActiveFilterCount > 0), "!h-10 shrink-0 !px-2.5")}
+            className={cn(filterFieldTriggerClass(mobileActiveFilterCount > 0), "!h-10")}
           >
             <SlidersHorizontal className="h-4 w-4 shrink-0" />
             กรอง
@@ -861,7 +860,7 @@ export function CalendarView() {
           </button>
 
           <Button
-            className="shrink-0 bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+            className="ml-auto bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
             onClick={() => (tab === "work" ? openTodoDialog({}) : openCreate())}
           >
             <Plus className="h-4 w-4" />
