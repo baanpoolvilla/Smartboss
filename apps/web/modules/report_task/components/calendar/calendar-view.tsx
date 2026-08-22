@@ -818,60 +818,50 @@ export function CalendarView() {
           </Button>
         </div>
 
-        {/* <640px: tabs scroll horizontally instead of wrapping (this row
-            alone is 3 buttons wide), then one action row below with the
-            filter button folded in next to "เพิ่มปฏิทิน"/create instead of
-            sitting alone on its own line. */}
-        <div className="flex sm:hidden items-center gap-1.5 overflow-x-auto rounded-xl bg-[var(--bg-soft)] p-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <button
-            data-tour="calendar-tab-work"
-            onClick={() => setTab("work")}
-            className={cn(
-              "flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition-all",
-              tab === "work" ? "bg-[var(--brand-green)] text-[var(--ink)] shadow-md" : "bg-white text-[var(--ink-soft)] border border-[var(--line)]"
-            )}
-          >
-            <ListChecks className="h-3.5 w-3.5" />
-            งาน
-          </button>
-          <button
-            data-tour="calendar-tab-schedule"
-            onClick={() => setTab("schedule")}
-            className={cn(
-              "flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition-all",
-              tab === "schedule" ? "bg-[var(--brand-green)] text-[var(--ink)] shadow-md" : "bg-white text-[var(--ink-soft)] border border-[var(--line)]"
-            )}
-          >
-            <CalendarOff className="h-3.5 w-3.5" />
-            วันหยุด · ลา
-          </button>
-        </div>
-
-        <div className="flex sm:hidden items-center gap-2">
-          <button
-            type="button"
-            aria-label="เพิ่มปฏิทิน"
-            onClick={() => {
-              setAddCalendarSection("recommended");
-              setAddCalendarOpen(true);
-            }}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--line)] bg-white text-[var(--ink-soft)]"
-          >
-            <Globe className="h-4 w-4" />
-          </button>
+        {/* <640px: one single row instead of the old tabs row + action row —
+            no more separate "เพิ่มปฏิทิน" globe button here (desktop-only
+            now, mobile has no other way in but that's the tradeoff for not
+            burning a whole slot on a rarely-used action) and the filter
+            button is folded down to icon + "กรอง" so tabs + filter + create
+            all fit on one line instead of stacking to 2 rows. */}
+        <div className="flex sm:hidden items-center gap-1.5">
+          <div className="flex min-w-0 flex-1 items-center gap-1 rounded-xl bg-[var(--bg-soft)] p-1">
+            <button
+              data-tour="calendar-tab-work"
+              onClick={() => setTab("work")}
+              className={cn(
+                "flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-2 text-[12.5px] font-semibold whitespace-nowrap transition-all",
+                tab === "work" ? "bg-[var(--brand-green)] text-[var(--ink)] shadow-md" : "bg-white text-[var(--ink-soft)] border border-[var(--line)]"
+              )}
+            >
+              <ListChecks className="h-3.5 w-3.5 shrink-0" />
+              งาน
+            </button>
+            <button
+              data-tour="calendar-tab-schedule"
+              onClick={() => setTab("schedule")}
+              className={cn(
+                "flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-2 text-[12.5px] font-semibold whitespace-nowrap transition-all",
+                tab === "schedule" ? "bg-[var(--brand-green)] text-[var(--ink)] shadow-md" : "bg-white text-[var(--ink-soft)] border border-[var(--line)]"
+              )}
+            >
+              <CalendarOff className="h-3.5 w-3.5 shrink-0" />
+              หยุด
+            </button>
+          </div>
 
           <button
             type="button"
             onClick={() => setMobileSheetOpen(true)}
-            className={cn(filterFieldTriggerClass(mobileActiveFilterCount > 0), "!h-10")}
+            className={cn(filterFieldTriggerClass(mobileActiveFilterCount > 0), "!h-10 shrink-0 !px-2.5")}
           >
             <SlidersHorizontal className="h-4 w-4 shrink-0" />
-            ตัวกรอง
+            กรอง
             {mobileActiveFilterCount > 0 && <span className="tabular-nums">({mobileActiveFilterCount})</span>}
           </button>
 
           <Button
-            className="ml-auto bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+            className="shrink-0 bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
             onClick={() => (tab === "work" ? openTodoDialog({}) : openCreate())}
           >
             <Plus className="h-4 w-4" />
@@ -1066,30 +1056,22 @@ export function CalendarView() {
 
         {/* Read-only recap of what's actually applied, without opening the
             sheet — the button above only ever says "how many" via its badge. */}
+        {/* One compact line instead of a label row + a separate chip row —
+            just enough to recap what's active without eating two more rows
+            of vertical space above the calendar. */}
         {mobileActiveFilterSummary.length > 0 && (
-          <div className="flex sm:hidden items-center gap-2">
-            <span className="shrink-0 text-xs text-[var(--ink-soft)]">
-              มี {mobileActiveFilterSummary.length} ตัวกรองที่ใช้อยู่
+          <div className="flex sm:hidden items-center gap-2 rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] px-2.5 py-1.5 text-[11px]">
+            <SlidersHorizontal className="h-3 w-3 shrink-0 text-[var(--ink-soft)]" />
+            <span className="min-w-0 flex-1 truncate font-medium text-[var(--ink)]">
+              {mobileActiveFilterSummary.join(", ")}
             </span>
             <button
               type="button"
               onClick={clearMobileFilters}
-              className="shrink-0 text-xs font-medium text-[var(--brand-green-dark)] underline-offset-2 hover:underline"
+              className="shrink-0 font-medium text-[var(--brand-green-dark)] underline-offset-2 hover:underline"
             >
-              ล้างตัวกรอง
+              ล้าง
             </button>
-          </div>
-        )}
-        {mobileActiveFilterSummary.length > 0 && (
-          <div className="flex sm:hidden gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {mobileActiveFilterSummary.map((chip) => (
-              <span
-                key={chip}
-                className="shrink-0 rounded-full border border-[var(--brand-green-dark)]/25 bg-[color-mix(in_srgb,var(--brand-green)_14%,white)] px-2.5 py-1 text-[11px] font-medium text-[var(--brand-green-dark)]"
-              >
-                {chip}
-              </span>
-            ))}
           </div>
         )}
 

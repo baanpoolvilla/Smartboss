@@ -450,9 +450,14 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           locale={thGregorianLocale}
           // Fixed height (computed above from the actual viewport) so busy vs
           // empty months stay the same size — the page height never changes
-          // on navigation, so it can't bounce the scroll.
-          height={calendarHeight}
-          expandRows
+          // on navigation, so it can't bounce the scroll. Narrow-viewport
+          // month view is the one exception: stretching rows to fill
+          // whatever's left of the screen made mostly-empty months look
+          // unbalanced (huge gaps under a couple of dots) — "auto" sizes
+          // rows to their natural (compact, roughly square) height instead,
+          // matching how Google/Apple's mobile month view reads.
+          height={isNarrowViewport && view === "dayGridMonth" ? "auto" : calendarHeight}
+          expandRows={!(isNarrowViewport && view === "dayGridMonth")}
           // Show exactly 5 or 6 rows depending on the actual month, not
           // always padded to 6 — combined with expandRows + the fixed total
           // height above, a 5-row month gets taller rows and a 6-row month
@@ -476,7 +481,11 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           // instead of FullCalendar's own bare popover — one consistent
           // summary UI per day, not two different-looking ones.
           moreLinkClick={(arg) => onDateClick?.(localYmd(arg.date))}
-          moreLinkText={(n) => `อีก ${n} รายการ`}
+          // Narrow month-view cells only fit a dot or two before "+N" kicks
+          // in — the full "อีก N รายการ" sentence doesn't fit next to them,
+          // so it collapses to a bare "+N" chip there (desktop/week/day keep
+          // the full sentence, same as always).
+          moreLinkText={(n) => (isNarrowViewport && view === "dayGridMonth" ? `+${n}` : `อีก ${n} รายการ`)}
           firstDay={0}
           initialDate={todayIso()}
           datesSet={handleDatesSet}
