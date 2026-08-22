@@ -843,96 +843,105 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
       </div>
       )}
 
-      {/* <640px: compact list — line 1 is title + avatar, line 2 is
-          สถานะ/ความสำคัญ/กำหนดส่ง (per "ฟิลด์ที่แสดง" above), same tap-to-open
-          as the desktop table's rows. No checkboxes/bulk-actions here — those
-          stay desktop-only, a phone-width row has no room for them and a
-          management bulk-select isn't a phone-first action anyway. */}
+      {/* <640px: compact CARDS, not a divided list — line 1 is title +
+          avatar, line 2 is สถานะ/ความสำคัญ/กำหนดส่ง (per "ฟิลด์ที่แสดง" above),
+          same tap-to-open as the desktop table's rows. Each row gets its own
+          rounded card with a real gap to the next one instead of a shared
+          border-b divider — a continuous list of hairline-separated rows
+          reads as one dense block; a gap between cards reads as separate,
+          scannable items, same idea as the Kanban board's own cards. No
+          checkboxes/bulk-actions here — those stay desktop-only, a
+          phone-width row has no room for them and a management bulk-select
+          isn't a phone-first action anyway. */}
       {isMobile && (
-        <div className="rounded-xl border border-[var(--line)] bg-white overflow-hidden shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+        <div>
           {rows.length === 0 ? (
-            <EmptyState
-              icon={SearchX}
-              title="ไม่พบงานตามตัวกรอง"
-              description="ลองปรับหรือล้างตัวกรองด้านบน"
-              className="border-0"
-              action={
-                <Button variant="outline" size="sm" onClick={resetFilters}>
-                  ล้างตัวกรองทั้งหมด
-                </Button>
-              }
-            />
+            <div className="rounded-xl border border-[var(--line)] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+              <EmptyState
+                icon={SearchX}
+                title="ไม่พบงานตามตัวกรอง"
+                description="ลองปรับหรือล้างตัวกรองด้านบน"
+                className="border-0"
+                action={
+                  <Button variant="outline" size="sm" onClick={resetFilters}>
+                    ล้างตัวกรองทั้งหมด
+                  </Button>
+                }
+              />
+            </div>
           ) : (
             <>
-              {rows.slice(0, mobileShowCount).map((row, i) => {
-                const t = row.original;
-                const assignees = t.assigneeIds.map(getUser).filter(Boolean);
-                let groupHeader: React.ReactNode = null;
-                if (groupBy !== "none") {
-                  const value = groupValue(row);
-                  const visibleSlice = rows.slice(0, mobileShowCount);
-                  const prevValue = i > 0 ? groupValue(visibleSlice[i - 1]!) : undefined;
-                  if (value !== prevValue) {
-                    const count = rows.filter((r) => groupValue(r) === value).length;
-                    groupHeader = (
-                      <div className="flex items-center gap-2 border-b border-[var(--line)] bg-[var(--bg-soft)] px-4 py-2 text-sm font-semibold">
-                        {groupLabel(value)}
-                        <Badge variant="outline" className="text-[11px] text-[var(--ink-soft)] bg-white border-[var(--line)]">
-                          {count}
-                        </Badge>
-                      </div>
-                    );
+              <div className="flex flex-col gap-2">
+                {rows.slice(0, mobileShowCount).map((row, i) => {
+                  const t = row.original;
+                  const assignees = t.assigneeIds.map(getUser).filter(Boolean);
+                  let groupHeader: React.ReactNode = null;
+                  if (groupBy !== "none") {
+                    const value = groupValue(row);
+                    const visibleSlice = rows.slice(0, mobileShowCount);
+                    const prevValue = i > 0 ? groupValue(visibleSlice[i - 1]!) : undefined;
+                    if (value !== prevValue) {
+                      const count = rows.filter((r) => groupValue(r) === value).length;
+                      groupHeader = (
+                        <div className={cn("flex items-center gap-2 px-1 pb-1 text-sm font-semibold", i > 0 && "pt-2")}>
+                          {groupLabel(value)}
+                          <Badge variant="outline" className="text-[11px] text-[var(--ink-soft)] bg-white border-[var(--line)]">
+                            {count}
+                          </Badge>
+                        </div>
+                      );
+                    }
                   }
-                }
-                return (
-                  <div key={row.id}>
-                    {groupHeader}
-                    <button
-                      type="button"
-                      onClick={() => onOpen(t.id)}
-                      className="flex w-full flex-col gap-1 border-b border-[var(--line)] px-4 py-3 text-left last:border-b-0 hover:bg-[var(--bg-soft)]"
-                    >
-                      <div className="flex items-center gap-2">
-                        <p className={cn("min-w-0 flex-1 truncate text-sm font-medium", t.status === "done" && "line-through text-[var(--ink-soft)]")}>
-                          {t.title}
-                        </p>
-                        {assignees.length > 0 && (
-                          <div className="flex items-center -space-x-1.5 shrink-0">
-                            {assignees.slice(0, 3).map((a) => (
-                              <Avatar key={a!.id} className="h-6 w-6 ring-2 ring-white">
-                                <AvatarFallback className="text-[9px] bg-[var(--accent)] text-[var(--brand-green-dark)]">
-                                  {a!.avatar}
-                                </AvatarFallback>
-                              </Avatar>
-                            ))}
-                            {assignees.length > 3 && (
-                              <span className="h-6 w-6 rounded-full ring-2 ring-white bg-[var(--bg-soft)] text-[9px] text-[var(--ink-soft)] flex items-center justify-center">
-                                +{assignees.length - 3}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {mobileFields.status && (
-                          <span className={cn("inline-flex items-center rounded-md border px-1.5 h-5 text-[10px] font-medium whitespace-nowrap", statusMeta[t.status].badgeClass)}>
-                            {statusMeta[t.status].label}
-                          </span>
-                        )}
-                        {mobileFields.priority && (
-                          <span className={cn("inline-flex items-center gap-1 rounded-md border px-1.5 h-5 text-[10px] font-medium whitespace-nowrap", priorityMeta[t.priority].badgeClass)}>
-                            <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: priorityMeta[t.priority].accentColor }} />
-                            {priorityMeta[t.priority].label}
-                          </span>
-                        )}
-                        {mobileFields.due && <DueDateBadge task={t} className="text-[10px]" />}
-                      </div>
-                    </button>
-                  </div>
-                );
-              })}
+                  return (
+                    <div key={row.id}>
+                      {groupHeader}
+                      <button
+                        type="button"
+                        onClick={() => onOpen(t.id)}
+                        className="flex w-full flex-col gap-2 rounded-xl border border-[var(--line)] bg-white p-3.5 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)] hover:bg-[var(--bg-soft)]"
+                      >
+                        <div className="flex items-center gap-2">
+                          <p className={cn("min-w-0 flex-1 truncate text-sm font-medium", t.status === "done" && "line-through text-[var(--ink-soft)]")}>
+                            {t.title}
+                          </p>
+                          {assignees.length > 0 && (
+                            <div className="flex items-center -space-x-1.5 shrink-0">
+                              {assignees.slice(0, 3).map((a) => (
+                                <Avatar key={a!.id} className="h-6 w-6 ring-2 ring-white">
+                                  <AvatarFallback className="text-[9px] bg-[var(--accent)] text-[var(--brand-green-dark)]">
+                                    {a!.avatar}
+                                  </AvatarFallback>
+                                </Avatar>
+                              ))}
+                              {assignees.length > 3 && (
+                                <span className="h-6 w-6 rounded-full ring-2 ring-white bg-[var(--bg-soft)] text-[9px] text-[var(--ink-soft)] flex items-center justify-center">
+                                  +{assignees.length - 3}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {mobileFields.status && (
+                            <span className={cn("inline-flex items-center rounded-md border px-1.5 h-5 text-[10px] font-medium whitespace-nowrap", statusMeta[t.status].badgeClass)}>
+                              {statusMeta[t.status].label}
+                            </span>
+                          )}
+                          {mobileFields.priority && (
+                            <span className={cn("inline-flex items-center gap-1 rounded-md border px-1.5 h-5 text-[10px] font-medium whitespace-nowrap", priorityMeta[t.priority].badgeClass)}>
+                              <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: priorityMeta[t.priority].accentColor }} />
+                              {priorityMeta[t.priority].label}
+                            </span>
+                          )}
+                          {mobileFields.due && <DueDateBadge task={t} className="text-[10px]" />}
+                        </div>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
               {mobileShowCount < rows.length && (
-                <div className="flex justify-center border-t border-[var(--line)] p-3">
+                <div className="flex justify-center pt-3">
                   <button
                     type="button"
                     onClick={() => setMobileShowCount((n) => n + MOBILE_PAGE_SIZE)}
