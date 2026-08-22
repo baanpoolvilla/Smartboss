@@ -485,17 +485,30 @@ export function TaskFilters({
           sheet, freeing up vertical space so the header doesn't eat most of
           a phone screen before a single task card is visible. */}
       <div className="flex sm:hidden items-center gap-2">
+        {/* Same green circular count badge as the Dashboard's full-width
+            filter button (that one has no second control to share the row
+            with, so it can go full-width — this one still shares the row
+            with "สร้างงานใหม่", just restyled to read as the same family). */}
         <button
           type="button"
           onClick={() => setMobileSheetOpen(true)}
-          className={cn(filterFieldTriggerClass(activeFilterCount > 0), "!h-10")}
+          className={cn(
+            "flex h-[42px] items-center gap-2 rounded-2xl border px-3.5 text-sm font-medium transition-colors",
+            activeFilterCount > 0
+              ? "border-[var(--brand-green-dark)]/30 bg-[color-mix(in_srgb,var(--brand-green)_22%,white)] text-[var(--ink)]"
+              : "border-[var(--line)] bg-white text-[var(--ink)] hover:bg-[var(--bg-soft)]"
+          )}
         >
-          <SlidersHorizontal className="h-4 w-4 shrink-0" />
+          <SlidersHorizontal className={cn("h-4 w-4 shrink-0", activeFilterCount > 0 ? "text-[var(--brand-green-dark)]" : "text-[var(--ink-soft)]")} />
           ตัวกรอง
-          {activeFilterCount > 0 && <span className="tabular-nums">({activeFilterCount})</span>}
+          {activeFilterCount > 0 && (
+            <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[var(--brand-green-dark)] px-1 text-[10.5px] font-semibold text-white tabular-nums">
+              {activeFilterCount}
+            </span>
+          )}
         </button>
         <Button
-          className="ml-auto bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+          className="ml-auto h-[42px] rounded-2xl bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
           onClick={() => setNewTaskOpen(true)}
         >
           <Plus className="h-4 w-4" />
