@@ -429,22 +429,31 @@ export function TaskFilters({
         </Select>
       )}
 
-      <Select
-        value={filters.penalty === "overdue" ? "overdue" : "all"}
-        onValueChange={(v) => v && setFilters({ penalty: v === "overdue" ? "overdue" : "all" })}
+      {/* Plain toggle, not a dropdown — same as the desktop pill (there's
+          only ever "on" or "off", nothing to actually pick between), tap
+          switches it directly instead of opening a 2-item list to choose
+          from. */}
+      <button
+        type="button"
+        onClick={() => setFilters({ penalty: filters.penalty === "overdue" ? "all" : "overdue" })}
+        className={mobileFieldRowTriggerClass(filters.penalty === "overdue")}
       >
-        <SelectTrigger className={mobileFieldRowTriggerClass(filters.penalty === "overdue")}>
-          <MobileFieldIcon icon={AlertTriangle} active={filters.penalty === "overdue"} />
-          <span className="text-[13.5px] font-medium text-[var(--ink)]">เลยกำหนด</span>
-          <MobileFieldValue active={filters.penalty === "overdue"}>
-            {filters.penalty === "overdue" ? "เลยกำหนดเท่านั้น" : "ทุกงาน"}
-          </MobileFieldValue>
-        </SelectTrigger>
-        <SelectContent alignItemWithTrigger={false}>
-          <SelectItem value="all">ทุกงาน</SelectItem>
-          <SelectItem value="overdue">เลยกำหนดเท่านั้น</SelectItem>
-        </SelectContent>
-      </Select>
+        <MobileFieldIcon icon={AlertTriangle} active={filters.penalty === "overdue"} />
+        <span className="text-[13.5px] font-medium text-[var(--ink)]">เลยกำหนดเท่านั้น</span>
+        <span
+          className={cn(
+            "ml-auto flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors",
+            filters.penalty === "overdue" ? "bg-[var(--brand-green-dark)]" : "bg-[var(--line)]"
+          )}
+        >
+          <span
+            className={cn(
+              "h-4 w-4 rounded-full bg-white shadow transition-transform",
+              filters.penalty === "overdue" && "translate-x-4"
+            )}
+          />
+        </span>
+      </button>
     </>
   );
 
