@@ -564,8 +564,11 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
   }
   return (
     <div className="flex flex-col gap-3">
-      {/* Toolbar: group-by + summary chips */}
-      <div className="flex flex-wrap items-center gap-3">
+      {/* Toolbar: group-by + summary chips — ≥640px, unchanged. <640px gets
+          its own stacked layout below instead of squeezing into this same
+          wrapping row (a 180px group-by select + 3-4 pills + a button never
+          fit one line on a phone, so it just wrapped awkwardly). */}
+      <div className="hidden sm:flex flex-wrap items-center gap-3">
         <Select value={groupBy} onValueChange={(v) => v && setGroupBy(v as GroupBy)}>
           <SelectTrigger className="w-[180px] bg-white h-9">
             <SelectValue>{groupByLabels[groupBy]}</SelectValue>
@@ -582,7 +585,7 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
         <Tooltip>
           <TooltipTrigger
             render={
-              <button type="button" className="hidden sm:inline-flex text-[var(--ink-soft)] hover:text-[var(--ink)]" aria-label="วิธีเรียงลำดับตาราง">
+              <button type="button" className="inline-flex text-[var(--ink-soft)] hover:text-[var(--ink)]" aria-label="วิธีเรียงลำดับตาราง">
                 <Info className="h-3.5 w-3.5" />
               </button>
             }
@@ -598,18 +601,44 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
           <SummaryChip label="เสร็จ" value={summary.done} tone="good" />
           <SummaryChip label="เลยกำหนด" value={summary.overdue} tone="bad" />
           {summary.docked > 0 && <SummaryChip label="ถูกหัก" value={summary.docked} tone="bad" />}
+        </div>
+      </div>
 
-          {/* <640px only — the mobile list's line 2 shows สถานะ/ความสำคัญ/
-              กำหนดส่ง by default; this toggles which of those actually show,
-              since a compact row has less room than a full table column. */}
+      {/* <640px: group-by gets its own full-width row, then a compact stat
+          row (number-over-label boxes, not label+value pills — reads faster
+          at a glance and all 4 fit one line without wrapping) with the
+          "ฟิลด์ที่แสดง" toggle as a matching icon-only box at the end instead
+          of a separate full button. */}
+      <div className="flex flex-col gap-2 sm:hidden">
+        <Select value={groupBy} onValueChange={(v) => v && setGroupBy(v as GroupBy)}>
+          <SelectTrigger className="w-full bg-white h-9">
+            <SelectValue>{groupByLabels[groupBy]}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {(Object.keys(groupByLabels) as GroupBy[]).map((g) => (
+              <SelectItem key={g} value={g}>{groupByLabels[g]}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <div className="flex items-stretch gap-1.5">
+          <MobileStatBox label="ทั้งหมด" value={summary.total} />
+          <MobileStatBox label="เสร็จ" value={summary.done} tone="good" />
+          <MobileStatBox label="เลยกำหนด" value={summary.overdue} tone="bad" />
+          {summary.docked > 0 && <MobileStatBox label="ถูกหัก" value={summary.docked} tone="bad" />}
+
+          {/* The mobile list's line 2 shows สถานะ/ความสำคัญ/กำหนดส่ง by
+              default; this toggles which of those actually show, since a
+              compact row has less room than a full table column. */}
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
                 <button
                   type="button"
-                  className="sm:hidden inline-flex items-center gap-1 h-8 rounded-lg bg-white ring-1 ring-inset ring-[var(--line)] px-2.5 text-xs font-medium hover:bg-[var(--bg-soft)]"
+                  aria-label="ฟิลด์ที่แสดง"
+                  className="flex h-11 w-9 shrink-0 items-center justify-center rounded-lg bg-white ring-1 ring-inset ring-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
                 >
-                  <SlidersHorizontal className="h-3.5 w-3.5" /> ฟิลด์ที่แสดง
+                  <SlidersHorizontal className="h-3.5 w-3.5" />
                 </button>
               }
             />
@@ -933,5 +962,23 @@ function SummaryChip({ label, value, tone = "neutral" }: { label: string; value:
       <span className="text-[var(--ink-soft)]">{label}</span>
       <span className={cn("font-semibold tabular-nums", valueClass)}>{value}</span>
     </span>
+  );
+}
+
+/** <640px only — the number-over-label stat box next to the mobile list's
+ * group-by row. Number-first (not "label value" like SummaryChip) reads
+ * faster at a glance, and 4 of these side by side at this size still fit
+ * one row without wrapping, unlike SummaryChip's wider label+value pills. */
+function MobileStatBox({ label, value, tone = "neutral" }: { label: string; value: number; tone?: "neutral" | "good" | "bad" }) {
+  const valueClass = {
+    neutral: "text-[var(--ink)]",
+    good: "text-[var(--chart-green)]",
+    bad: "text-[var(--chart-red)]",
+  }[tone];
+  return (
+    <div className="flex h-11 flex-1 flex-col items-center justify-center rounded-lg bg-white ring-1 ring-inset ring-[var(--line)] px-1">
+      <span className={cn("text-sm font-semibold leading-none tabular-nums", valueClass)}>{value}</span>
+      <span className="mt-0.5 text-[9.5px] leading-none text-[var(--ink-soft)] whitespace-nowrap">{label}</span>
+    </div>
   );
 }
