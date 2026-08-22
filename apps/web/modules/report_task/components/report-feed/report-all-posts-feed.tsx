@@ -13,10 +13,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/modules/report_task/components/ui/dropdown-menu";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/modules/report_task/components/ui/sheet";
+import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
+import { Button } from "@/modules/report_task/components/ui/button";
+import { filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
+import { cn } from "@/modules/report_task/lib/utils";
 import { presetRange } from "@/modules/report_task/lib/date-filter";
 import { groupByDay } from "@/modules/report_task/lib/format";
 import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
-import { Rows3, Tag } from "lucide-react";
+import { Rows3, Tag, SlidersHorizontal } from "lucide-react";
 
 /** "ทีมพัฒนา › เช็คอินประจำวัน" — a sub-topic's name alone was ambiguous once
  * several teams reuse the same channel name (V3). Top-level topics have no
@@ -67,6 +72,10 @@ export function ReportAllPostsFeed({
   // Empty = "ทุกหัวข้อ" (no filter applied), same convention as every other
   // multi-select filter in the app (V6).
   const [topicFilter, setTopicFilter] = useState<Set<string>>(new Set());
+  // <640px only — the strip below collapses into one button that opens a
+  // bottom sheet, same pattern as the Kanban board's TaskFilters.
+  const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
+  const activeFilterCount = (preset !== "all" ? 1 : 0) + (topicFilter.size > 0 ? 1 : 0);
 
   const topicById = useMemo(() => new Map(topics.map((t) => [t.id, t])), [topics]);
   const items = posts
@@ -116,8 +125,11 @@ export function ReportAllPostsFeed({
       </div>
 
       {/* Its own strip under the room header, not crammed into it (V2) —
-          a card-inside-a-card was two header rows stacked on top of each other. */}
-      <div className="shrink-0 px-5 py-2.5 flex items-center gap-2.5 flex-wrap bg-[var(--bg-soft)] border-b border-[var(--line)]">
+          a card-inside-a-card was two header rows stacked on top of each other.
+          ≥640px: unchanged. <640px gets its own button + bottom sheet below
+          instead — a 5-preset segmented control plus a topic dropdown never
+          fit one line on a phone and just wrapped onto 2-3 rows. */}
+      <div className="hidden sm:flex shrink-0 px-5 py-2.5 items-center gap-2.5 flex-wrap bg-[var(--bg-soft)] border-b border-[var(--line)]">
         <DatePresetPicker
           variant="inline"
           preset={preset}
@@ -160,6 +172,76 @@ export function ReportAllPostsFeed({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      <div className="flex sm:hidden shrink-0 px-5 py-2.5 bg-[var(--bg-soft)] border-b border-[var(--line)]">
+        <button
+          type="button"
+          onClick={() => setMobileSheetOpen(true)}
+          className={cn(filterFieldTriggerClass(activeFilterCount > 0), "!h-10")}
+        >
+          <SlidersHorizontal className="h-4 w-4 shrink-0" />
+          ตัวกรอง
+          {activeFilterCount > 0 && <span className="tabular-nums">({activeFilterCount})</span>}
+        </button>
+      </div>
+
+      <Sheet open={mobileSheetOpen} onOpenChange={setMobileSheetOpen}>
+        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
+          <SheetHeader className="flex-row items-center justify-between gap-2 pb-2 pr-11">
+            <SheetTitle>ตัวกรอง</SheetTitle>
+            {activeFilterCount > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPreset("all");
+                  setTopicFilter(new Set());
+                }}
+                className="text-sm font-medium text-[var(--brand-green-dark)] underline-offset-2 hover:underline"
+              >
+                ล้างตัวกรอง
+              </button>
+            )}
+          </SheetHeader>
+          <div className="flex flex-col gap-4 px-4">
+            <div>
+              <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">ช่วงเวลา</p>
+              <DatePresetPicker
+                variant="inline"
+                preset={preset}
+                customFrom={customFrom}
+                customTo={customTo}
+                onPresetChange={setPreset}
+                onCustomRangeChange={(from, to) => {
+                  setCustomFrom(from);
+                  setCustomTo(to);
+                }}
+              />
+            </div>
+            <div>
+              <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">หัวข้อ</p>
+              <div className="flex flex-col gap-0.5">
+                {topics.map((t) => (
+                  <label
+                    key={t.id}
+                    className="flex items-center gap-3 rounded-xl px-2.5 py-2.5 text-sm hover:bg-[var(--bg-soft)]"
+                  >
+                    <Checkbox checked={topicFilter.has(t.id)} onCheckedChange={() => toggleTopicFilter(t.id)} />
+                    {breadcrumbOf(t, topicById)}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+          <SheetFooter>
+            <Button
+              className="h-[46px] w-full bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+              onClick={() => setMobileSheetOpen(false)}
+            >
+              แสดง {items.length} โพสต์
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
 
       {items.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6 bg-[var(--bg-soft)]/40">
