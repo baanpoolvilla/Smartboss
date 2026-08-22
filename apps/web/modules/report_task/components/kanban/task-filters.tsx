@@ -1,23 +1,36 @@
 "use client";
 
-import { Plus, AlertTriangle, Building2, Users, Flag, CircleDot, User as UserIcon, Group, SlidersHorizontal } from "lucide-react";
+import { Plus, AlertTriangle, Building2, Users, Flag, CircleDot, User as UserIcon, Group, SlidersHorizontal, CalendarDays } from "lucide-react";
 import { Button } from "@/modules/report_task/components/ui/button";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/modules/report_task/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/modules/report_task/components/ui/sheet";
+import { Input } from "@/modules/report_task/components/ui/input";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { useDepartmentStore } from "@/modules/report_task/store/department-store";
 import { getDepartment, getUser, isOwner, scopedDepartments, scopedUsers, users } from "@/modules/report_task/lib/directory";
 import { taskPriorityOrder, priorityMeta } from "@/modules/report_task/lib/task-meta";
+import { datePresetGroups, datePresetLabels } from "@/modules/report_task/lib/date-filter";
 import type { TaskPriority } from "@/modules/report_task/types";
-import { FilterField, FILTER_FIELD_LABEL_CLASS, filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
+import {
+  FilterField,
+  FILTER_FIELD_LABEL_CLASS,
+  filterFieldTriggerClass,
+  mobileFieldRowTriggerClass,
+  MobileFieldIcon,
+  MobileFieldValue,
+  QuickFilterChip,
+} from "@/modules/report_task/components/shared/filter-field";
 import { DateRangeSelectField } from "@/modules/report_task/components/shared/date-range-select-field";
 import { cn } from "@/modules/report_task/lib/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -43,10 +56,14 @@ const defaultFilters = {
 export function TaskFilters({
   groupBy,
   onGroupByChange,
+  resultCount,
 }: {
   /** ตัวเลือก "จัดกลุ่มตาม" ของบอร์ด Kanban — ไม่ส่งมา (มุมมองตาราง/ภาระงาน) แล้วช่องนี้จะไม่โชว์เลย */
   groupBy?: GroupBy;
   onGroupByChange?: (g: GroupBy) => void;
+  /** จำนวนงานที่ตรงตัวกรองปัจจุบัน — ขึ้นบนปุ่มท้าย bottom sheet ("แสดง N งาน")
+   * แทน "ใช้ตัวกรอง" เฉยๆ ไม่ส่งมาก็ยัง fallback เป็นข้อความเดิมได้ */
+  resultCount?: number;
 }) {
   const filters = useTaskStore((s) => s.filters);
   const setFilters = useTaskStore((s) => s.setFilters);
@@ -73,6 +90,14 @@ export function TaskFilters({
     filters.penalty !== defaultFilters.penalty,
     filters.preset !== defaultFilters.preset,
   ].filter(Boolean).length;
+
+  // One-tap shortcuts in the mobile sheet — each just sets/clears one of the
+  // same real filter fields above (no separate state), for the handful of
+  // filters used often enough to deserve a tap ahead of opening its own row.
+  const quickMineActive = filters.assigneeId === viewingAsUserId;
+  const quickTodayActive = filters.preset === "today";
+  const quickOverdueActive = filters.penalty === "overdue";
+  const quickCriticalActive = filters.priority === "critical";
 
   // filters is global store state that outlives the identity switcher — a
   // department/assignee picked while viewing as one person would otherwise
@@ -282,139 +307,156 @@ export function TaskFilters({
     </>
   );
 
-  // Mobile bottom-sheet version of the same 5 fields — full-width dropdowns
-  // stacked one per row instead of the desktop row's fixed-width pills. Kept
-  // as its own block rather than reused inside `fieldsNode` since the sizing
-  // (w-full !h-11 vs. min-w-[…] !h-9) differs throughout.
+  // Mobile bottom-sheet version of the same 5 fields — one full-width row
+  // each (icon box + label + value, trigger's own chevron on the far right)
+  // instead of the desktop row's fixed-width pills stacked awkwardly. Kept
+  // as its own block rather than reused inside `fieldsNode` since the shape
+  // (row vs. label-above-pill) differs, not just sizing.
   const mobileFieldsNode = (
     <>
       {availableDepartments.length > 1 ? (
-        <div className="flex flex-col gap-1.5">
-          <span className="text-[11px] font-medium text-[var(--ink-soft)] px-0.5">แผนก</span>
-          <Select value={filters.departmentId} onValueChange={(v) => v && setFilters({ departmentId: v })}>
-            <SelectTrigger className={filterFieldTriggerClass(filters.departmentId !== "all", "w-full !h-11")}>
-              <Building2 className="h-4 w-4 shrink-0" />
-              <SelectValue placeholder="แผนก">
-                {filters.departmentId === "all" ? "ทั้งบริษัท" : (getDepartment(filters.departmentId)?.name ?? "แผนก")}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent alignItemWithTrigger={false}>
-              <SelectItem value="all">ทั้งบริษัท</SelectItem>
-              {availableDepartments.map((d) => (
-                <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <Select value={filters.departmentId} onValueChange={(v) => v && setFilters({ departmentId: v })}>
+          <SelectTrigger className={mobileFieldRowTriggerClass(filters.departmentId !== "all")}>
+            <MobileFieldIcon icon={Building2} active={filters.departmentId !== "all"} />
+            <span className="text-[13.5px] font-medium text-[var(--ink)]">แผนก</span>
+            <MobileFieldValue active={filters.departmentId !== "all"}>
+              {filters.departmentId === "all" ? "ทุกแผนก" : (getDepartment(filters.departmentId)?.name ?? "แผนก")}
+            </MobileFieldValue>
+          </SelectTrigger>
+          <SelectContent alignItemWithTrigger={false}>
+            <SelectItem value="all">ทั้งบริษัท</SelectItem>
+            {availableDepartments.map((d) => (
+              <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       ) : (
-        <div className="flex flex-col gap-1.5">
-          <span className="text-[11px] font-medium text-[var(--ink-soft)] px-0.5">แผนก</span>
-          <span className="text-sm text-[var(--ink-soft)] px-0.5">{availableDepartments[0]?.name ?? "ไม่มีแผนก"}</span>
+        <div className={cn(mobileFieldRowTriggerClass(false), "cursor-default")}>
+          <MobileFieldIcon icon={Building2} active={false} />
+          <span className="text-[13.5px] font-medium text-[var(--ink)]">แผนก</span>
+          <MobileFieldValue active={false}>{availableDepartments[0]?.name ?? "ไม่มีแผนก"}</MobileFieldValue>
         </div>
       )}
 
       {peopleInScope.length > 1 ? (
-        <div className="flex flex-col gap-1.5">
-          <span className="text-[11px] font-medium text-[var(--ink-soft)] px-0.5">พนักงาน</span>
-          <Select value={filters.assigneeId} onValueChange={(v) => v && setFilters({ assigneeId: v })}>
-            <SelectTrigger className={filterFieldTriggerClass(filters.assigneeId !== "all", "w-full !h-11")}>
-              <Users className="h-4 w-4 shrink-0" />
-              <SelectValue placeholder="ผู้รับผิดชอบ">
-                {filters.assigneeId === "all" ? "ทุกคน" : (getUser(filters.assigneeId)?.name ?? "ผู้รับผิดชอบ")}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent alignItemWithTrigger={false}>
-              <SelectItem value="all">ทุกคน</SelectItem>
-              {peopleInScope.map((u) => (
-                <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-1.5">
-          <span className="text-[11px] font-medium text-[var(--ink-soft)] px-0.5">พนักงาน</span>
-          <span className="text-sm text-[var(--ink-soft)] px-0.5">
-            {peopleInScope[0]?.id === viewingAsUserId ? "ตัวเอง" : (peopleInScope[0]?.name ?? "ไม่มีผู้รับผิดชอบ")}
-          </span>
-        </div>
-      )}
-
-      <DateRangeSelectField
-        preset={filters.preset}
-        customFrom={filters.customFrom}
-        customTo={filters.customTo}
-        onPresetChange={(preset) => setFilters({ preset })}
-        onCustomRangeChange={(customFrom, customTo) => setFilters({ customFrom, customTo })}
-        widthClass="w-full !h-11"
-      />
-
-      <div className="flex flex-col gap-1.5">
-        <span className="text-[11px] font-medium text-[var(--ink-soft)] px-0.5">ความสำคัญ</span>
-        <Select value={filters.priority} onValueChange={(v) => v && setFilters({ priority: v as typeof filters.priority })}>
-          <SelectTrigger className={filterFieldTriggerClass(filters.priority !== "all", "w-full !h-11")}>
-            <Flag className="h-4 w-4 shrink-0" />
-            <SelectValue placeholder="ความสำคัญ">
-              {filters.priority === "all" ? "ทุกความสำคัญ" : (priorityMeta[filters.priority as TaskPriority]?.label ?? "ความสำคัญ")}
-            </SelectValue>
+        <Select value={filters.assigneeId} onValueChange={(v) => v && setFilters({ assigneeId: v })}>
+          <SelectTrigger className={mobileFieldRowTriggerClass(filters.assigneeId !== "all")}>
+            <MobileFieldIcon icon={Users} active={filters.assigneeId !== "all"} />
+            <span className="text-[13.5px] font-medium text-[var(--ink)]">ผู้รับผิดชอบ</span>
+            <MobileFieldValue active={filters.assigneeId !== "all"}>
+              {filters.assigneeId === "all" ? "ทุกคน" : (getUser(filters.assigneeId)?.name ?? "ผู้รับผิดชอบ")}
+            </MobileFieldValue>
           </SelectTrigger>
           <SelectContent alignItemWithTrigger={false}>
-            <SelectItem value="all">ทุกความสำคัญ</SelectItem>
-            {taskPriorityOrder.map((p) => (
-              <SelectItem key={p} value={p}>{priorityMeta[p].label}</SelectItem>
+            <SelectItem value="all">ทุกคน</SelectItem>
+            {peopleInScope.map((u) => (
+              <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
-      </div>
-
-      {groupBy && onGroupByChange && (
-        <div className="flex flex-col gap-1.5">
-          <span className="text-[11px] font-medium text-[var(--ink-soft)] px-0.5">จัดกลุ่มตาม</span>
-          <Select value={groupBy} onValueChange={(v) => v && onGroupByChange(v as GroupBy)}>
-            <SelectTrigger className={filterFieldTriggerClass(false, "w-full !h-11")}>
-              <Group className="h-4 w-4 shrink-0" />
-              <SelectValue placeholder="จัดกลุ่มตาม">{groupByLabels[groupBy]}</SelectValue>
-            </SelectTrigger>
-            <SelectContent alignItemWithTrigger={false}>
-              {(["status", "priority", "assignee"] as GroupBy[]).map((g) => {
-                const Icon = groupByIcon[g];
-                return (
-                  <SelectItem key={g} value={g}>
-                    <span className="flex items-center gap-1.5">
-                      <Icon className="h-3.5 w-3.5 text-[var(--ink-soft)]" />
-                      {groupByLabels[g]}
-                    </span>
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
+      ) : (
+        <div className={cn(mobileFieldRowTriggerClass(false), "cursor-default")}>
+          <MobileFieldIcon icon={Users} active={false} />
+          <span className="text-[13.5px] font-medium text-[var(--ink)]">ผู้รับผิดชอบ</span>
+          <MobileFieldValue active={false}>
+            {peopleInScope[0]?.id === viewingAsUserId ? "ตัวเอง" : (peopleInScope[0]?.name ?? "ไม่มีผู้รับผิดชอบ")}
+          </MobileFieldValue>
         </div>
       )}
 
-      <div className="flex flex-col gap-1.5">
-        <span className="text-[11px] font-medium text-[var(--ink-soft)] px-0.5">เลยกำหนด</span>
-        <Select
-          value={filters.penalty === "overdue" ? "overdue" : "all"}
-          onValueChange={(v) => v && setFilters({ penalty: v === "overdue" ? "overdue" : "all" })}
-        >
-          <SelectTrigger
-            className={cn(
-              filterFieldTriggerClass(filters.penalty === "overdue", "w-full !h-11"),
-              filters.penalty === "overdue" && "bg-red-50 border-red-200 text-[var(--chart-red)] [&_svg]:text-[var(--chart-red)]"
-            )}
-          >
-            <AlertTriangle className="h-4 w-4 shrink-0" />
-            <SelectValue placeholder="เลยกำหนด">
-              {filters.penalty === "overdue" ? "เลยกำหนดเท่านั้น" : "ทุกงาน"}
-            </SelectValue>
+      <Select value={filters.preset} onValueChange={(v) => v && setFilters({ preset: v as typeof filters.preset })}>
+        <SelectTrigger className={mobileFieldRowTriggerClass(filters.preset !== "all")}>
+          <MobileFieldIcon icon={CalendarDays} active={filters.preset !== "all"} />
+          <span className="text-[13.5px] font-medium text-[var(--ink)]">ช่วงเวลา</span>
+          <MobileFieldValue active={filters.preset !== "all"}>{datePresetLabels[filters.preset]}</MobileFieldValue>
+        </SelectTrigger>
+        <SelectContent alignItemWithTrigger={false}>
+          {datePresetGroups.map((group, i) => (
+            <SelectGroup key={i}>
+              {group.label && <SelectLabel>{group.label}</SelectLabel>}
+              {group.presets.map((p) => (
+                <SelectItem key={p} value={p}>{datePresetLabels[p]}</SelectItem>
+              ))}
+              {i < datePresetGroups.length - 1 && <SelectSeparator />}
+            </SelectGroup>
+          ))}
+        </SelectContent>
+      </Select>
+      {filters.preset === "custom" && (
+        <div className="flex items-center gap-2 px-0.5">
+          <Input
+            type="date"
+            lang="en-GB"
+            value={filters.customFrom}
+            onChange={(e) => setFilters({ customFrom: e.target.value })}
+            className="h-11 flex-1"
+          />
+          <span className="text-[var(--ink-soft)] text-sm">ถึง</span>
+          <Input
+            type="date"
+            lang="en-GB"
+            value={filters.customTo}
+            onChange={(e) => setFilters({ customTo: e.target.value })}
+            className="h-11 flex-1"
+          />
+        </div>
+      )}
+
+      <Select value={filters.priority} onValueChange={(v) => v && setFilters({ priority: v as typeof filters.priority })}>
+        <SelectTrigger className={mobileFieldRowTriggerClass(filters.priority !== "all")}>
+          <MobileFieldIcon icon={Flag} active={filters.priority !== "all"} />
+          <span className="text-[13.5px] font-medium text-[var(--ink)]">ความสำคัญ</span>
+          <MobileFieldValue active={filters.priority !== "all"}>
+            {filters.priority === "all" ? "ทุกความสำคัญ" : (priorityMeta[filters.priority as TaskPriority]?.label ?? "ความสำคัญ")}
+          </MobileFieldValue>
+        </SelectTrigger>
+        <SelectContent alignItemWithTrigger={false}>
+          <SelectItem value="all">ทุกความสำคัญ</SelectItem>
+          {taskPriorityOrder.map((p) => (
+            <SelectItem key={p} value={p}>{priorityMeta[p].label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {groupBy && onGroupByChange && (
+        <Select value={groupBy} onValueChange={(v) => v && onGroupByChange(v as GroupBy)}>
+          <SelectTrigger className={mobileFieldRowTriggerClass(false)}>
+            <MobileFieldIcon icon={Group} active={false} />
+            <span className="text-[13.5px] font-medium text-[var(--ink)]">จัดกลุ่มตาม</span>
+            <MobileFieldValue active={false}>{groupByLabels[groupBy]}</MobileFieldValue>
           </SelectTrigger>
           <SelectContent alignItemWithTrigger={false}>
-            <SelectItem value="all">ทุกงาน</SelectItem>
-            <SelectItem value="overdue">เลยกำหนดเท่านั้น</SelectItem>
+            {(["status", "priority", "assignee"] as GroupBy[]).map((g) => {
+              const Icon = groupByIcon[g];
+              return (
+                <SelectItem key={g} value={g}>
+                  <span className="flex items-center gap-1.5">
+                    <Icon className="h-3.5 w-3.5 text-[var(--ink-soft)]" />
+                    {groupByLabels[g]}
+                  </span>
+                </SelectItem>
+              );
+            })}
           </SelectContent>
         </Select>
-      </div>
+      )}
+
+      <Select
+        value={filters.penalty === "overdue" ? "overdue" : "all"}
+        onValueChange={(v) => v && setFilters({ penalty: v === "overdue" ? "overdue" : "all" })}
+      >
+        <SelectTrigger className={mobileFieldRowTriggerClass(filters.penalty === "overdue")}>
+          <MobileFieldIcon icon={AlertTriangle} active={filters.penalty === "overdue"} />
+          <span className="text-[13.5px] font-medium text-[var(--ink)]">เลยกำหนด</span>
+          <MobileFieldValue active={filters.penalty === "overdue"}>
+            {filters.penalty === "overdue" ? "เลยกำหนดเท่านั้น" : "ทุกงาน"}
+          </MobileFieldValue>
+        </SelectTrigger>
+        <SelectContent alignItemWithTrigger={false}>
+          <SelectItem value="all">ทุกงาน</SelectItem>
+          <SelectItem value="overdue">เลยกำหนดเท่านั้น</SelectItem>
+        </SelectContent>
+      </Select>
     </>
   );
 
@@ -475,13 +517,23 @@ export function TaskFilters({
               </button>
             )}
           </SheetHeader>
-          <div className="flex flex-col gap-4 px-4">{mobileFieldsNode}</div>
+          <div className="px-4">
+            <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">ตัวกรองด่วน</p>
+            <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <QuickFilterChip icon={UserIcon} label="งานของฉัน" active={quickMineActive} onClick={() => setFilters({ assigneeId: quickMineActive ? "all" : viewingAsUserId })} />
+              <QuickFilterChip icon={CalendarDays} label="วันนี้" active={quickTodayActive} onClick={() => setFilters({ preset: quickTodayActive ? "all" : "today" })} />
+              <QuickFilterChip icon={AlertTriangle} label="เลยกำหนด" warn active={quickOverdueActive} onClick={() => setFilters({ penalty: quickOverdueActive ? "all" : "overdue" })} />
+              <QuickFilterChip icon={Flag} label="ด่วนมาก" active={quickCriticalActive} onClick={() => setFilters({ priority: quickCriticalActive ? "all" : "critical" })} />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2 px-4 pt-4">{mobileFieldsNode}</div>
           <SheetFooter>
             <Button
               className="h-[46px] w-full bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
               onClick={() => setMobileSheetOpen(false)}
             >
-              ใช้ตัวกรอง
+              {resultCount === undefined ? "ใช้ตัวกรอง" : `แสดง ${resultCount} งาน`}
             </Button>
           </SheetFooter>
         </SheetContent>

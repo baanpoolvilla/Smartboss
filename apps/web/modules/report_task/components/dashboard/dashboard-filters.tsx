@@ -9,16 +9,33 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/modules/report_task/components/ui/select";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/modules/report_task/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetFooter,
+} from "@/modules/report_task/components/ui/sheet";
+import { SelectGroup, SelectLabel, SelectSeparator } from "@/modules/report_task/components/ui/select";
 import { getUser, getDepartment, canManage, scopedDepartments, scopedUsers } from "@/modules/report_task/lib/directory";
 import { useDashboardFilterStore } from "@/modules/report_task/store/dashboard-filter-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { useDepartmentStore } from "@/modules/report_task/store/department-store";
-import { FilterField, FILTER_FIELD_LABEL_CLASS, filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
+import {
+  FilterField,
+  FILTER_FIELD_LABEL_CLASS,
+  filterFieldTriggerClass,
+  mobileFieldRowTriggerClass,
+  MobileFieldIcon,
+  MobileFieldValue,
+  QuickFilterChip,
+} from "@/modules/report_task/components/shared/filter-field";
 import { DateRangeSelectField } from "@/modules/report_task/components/shared/date-range-select-field";
+import { Input } from "@/modules/report_task/components/ui/input";
+import { datePresetGroups, datePresetLabels } from "@/modules/report_task/lib/date-filter";
 import { cn } from "@/modules/report_task/lib/utils";
-import { Building2, Users, SlidersHorizontal, X } from "lucide-react";
+import { Building2, Users, User as UserIcon, CalendarDays, SlidersHorizontal, X } from "lucide-react";
 
 /**
  * §7.2 — filter order is department → person → time, matching the
@@ -114,6 +131,11 @@ export function DashboardFilters() {
   const presetActive = preset !== "all";
   const isFiltered = (canPickPerson && (deptActive || personActive)) || presetActive;
   const activeFilterCount = [canPickPerson && deptActive, canPickPerson && personActive, presetActive].filter(Boolean).length;
+
+  // One-tap shortcuts in the mobile sheet — same real fields as the rows
+  // below, just the two most common picks ahead of opening a whole dropdown.
+  const quickMineActive = canPickPerson && personId === viewingAsUserId;
+  const quickTodayActive = preset === "today";
   const clearFilters = () => {
     if (canPickPerson) {
       setPersonId("all");
@@ -236,60 +258,85 @@ export function DashboardFilters() {
             </button>
           )}
         </SheetHeader>
-        <div className="flex flex-col gap-4 px-4">
+
+        {canPickPerson && (
+          <div className="px-4">
+            <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">ตัวกรองด่วน</p>
+            <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <QuickFilterChip icon={UserIcon} label="ของฉัน" active={quickMineActive} onClick={() => setPersonId(quickMineActive ? "all" : viewingAsUserId)} />
+              <QuickFilterChip icon={CalendarDays} label="วันนี้" active={quickTodayActive} onClick={() => setPreset(quickTodayActive ? "all" : "today")} />
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-2 px-4 pt-4">
           {canPickPerson ? (
             <>
-              <div className="flex flex-col gap-1.5">
-                <span className="text-[11px] font-medium text-[var(--ink-soft)] px-0.5">แผนก</span>
-                <Select value={departmentId} onValueChange={(v) => v && setDepartmentId(v)}>
-                  <SelectTrigger className={filterFieldTriggerClass(deptActive, "w-full !h-11")}>
-                    <Building2 className="h-4 w-4 shrink-0" />
-                    <SelectValue placeholder="แผนก">
-                      {departmentId === "all" ? "ทั้งบริษัท" : (getDepartment(departmentId)?.name ?? "แผนก")}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent alignItemWithTrigger={false}>
-                    <SelectItem value="all">ทั้งบริษัท</SelectItem>
-                    {availableDepartments.map((d) => (
-                      <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <Select value={departmentId} onValueChange={(v) => v && setDepartmentId(v)}>
+                <SelectTrigger className={mobileFieldRowTriggerClass(deptActive)}>
+                  <MobileFieldIcon icon={Building2} active={deptActive} />
+                  <span className="text-[13.5px] font-medium text-[var(--ink)]">แผนก</span>
+                  <MobileFieldValue active={deptActive}>
+                    {departmentId === "all" ? "ทั้งบริษัท" : (getDepartment(departmentId)?.name ?? "แผนก")}
+                  </MobileFieldValue>
+                </SelectTrigger>
+                <SelectContent alignItemWithTrigger={false}>
+                  <SelectItem value="all">ทั้งบริษัท</SelectItem>
+                  {availableDepartments.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-              <div className="flex flex-col gap-1.5">
-                <span className="text-[11px] font-medium text-[var(--ink-soft)] px-0.5">พนักงาน</span>
-                <Select value={personId} onValueChange={(v) => v && setPersonId(v)}>
-                  <SelectTrigger className={filterFieldTriggerClass(personActive, "w-full !h-11")}>
-                    <Users className="h-4 w-4 shrink-0" />
-                    <SelectValue placeholder="ดูข้อมูลของ">
-                      {personId === "all" ? allInDeptLabel : (getUser(personId)?.name ?? "ดูข้อมูลของ")}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent alignItemWithTrigger={false}>
-                    <SelectItem value="all">{allInDeptLabel}</SelectItem>
-                    {peopleInScope.map((u) => (
-                      <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <Select value={personId} onValueChange={(v) => v && setPersonId(v)}>
+                <SelectTrigger className={mobileFieldRowTriggerClass(personActive)}>
+                  <MobileFieldIcon icon={Users} active={personActive} />
+                  <span className="text-[13.5px] font-medium text-[var(--ink)]">พนักงาน</span>
+                  <MobileFieldValue active={personActive}>
+                    {personId === "all" ? allInDeptLabel : (getUser(personId)?.name ?? "ดูข้อมูลของ")}
+                  </MobileFieldValue>
+                </SelectTrigger>
+                <SelectContent alignItemWithTrigger={false}>
+                  <SelectItem value="all">{allInDeptLabel}</SelectItem>
+                  {peopleInScope.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </>
           ) : (
-            <div className="flex flex-col gap-1.5">
-              <span className="text-[11px] font-medium text-[var(--ink-soft)] px-0.5">พนักงาน</span>
-              <span className="text-sm text-[var(--ink-soft)] px-0.5">{getUser(viewingAsUserId)?.name}</span>
+            <div className={cn(mobileFieldRowTriggerClass(false), "cursor-default")}>
+              <MobileFieldIcon icon={Users} active={false} />
+              <span className="text-[13.5px] font-medium text-[var(--ink)]">พนักงาน</span>
+              <MobileFieldValue active={false}>{getUser(viewingAsUserId)?.name}</MobileFieldValue>
             </div>
           )}
 
-          <DateRangeSelectField
-            preset={preset}
-            customFrom={customFrom}
-            customTo={customTo}
-            onPresetChange={setPreset}
-            onCustomRangeChange={setCustomRange}
-            widthClass="w-full !h-11"
-          />
+          <Select value={preset} onValueChange={(v) => v && setPreset(v as typeof preset)}>
+            <SelectTrigger className={mobileFieldRowTriggerClass(presetActive)}>
+              <MobileFieldIcon icon={CalendarDays} active={presetActive} />
+              <span className="text-[13.5px] font-medium text-[var(--ink)]">ช่วงเวลา</span>
+              <MobileFieldValue active={presetActive}>{datePresetLabels[preset]}</MobileFieldValue>
+            </SelectTrigger>
+            <SelectContent alignItemWithTrigger={false}>
+              {datePresetGroups.map((group, i) => (
+                <SelectGroup key={i}>
+                  {group.label && <SelectLabel>{group.label}</SelectLabel>}
+                  {group.presets.map((p) => (
+                    <SelectItem key={p} value={p}>{datePresetLabels[p]}</SelectItem>
+                  ))}
+                  {i < datePresetGroups.length - 1 && <SelectSeparator />}
+                </SelectGroup>
+              ))}
+            </SelectContent>
+          </Select>
+          {preset === "custom" && (
+            <div className="flex items-center gap-2 px-0.5">
+              <Input type="date" lang="en-GB" value={customFrom} onChange={(e) => setCustomRange(e.target.value, customTo)} className="h-11 flex-1" />
+              <span className="text-[var(--ink-soft)] text-sm">ถึง</span>
+              <Input type="date" lang="en-GB" value={customTo} onChange={(e) => setCustomRange(customFrom, e.target.value)} className="h-11 flex-1" />
+            </div>
+          )}
         </div>
         <SheetFooter>
           <Button

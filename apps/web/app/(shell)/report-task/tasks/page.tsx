@@ -115,6 +115,14 @@ function TasksPageContent() {
     [visibleTasks, filters]
   );
 
+  // Feeds the mobile filter sheet's "แสดง N งาน" button — same filters the
+  // board itself narrows by (unlike kpiTasks above, which drops the quick-view
+  // drill so the 4 KPI numbers stay a stable set of options).
+  const filteredTaskCount = useMemo(
+    () => visibleTasks.filter((t) => matchesTaskFilters(t, filters)).length,
+    [visibleTasks, filters]
+  );
+
   const tabs: { id: TaskView; label: string; icon: typeof LayoutGrid }[] = [
     { id: "board", label: "บอร์ด", icon: LayoutGrid },
     { id: "grid", label: "ตาราง", icon: Table2 },
@@ -156,7 +164,7 @@ function TasksPageContent() {
             </div>
           }
         >
-          <TaskFilters groupBy={view === "board" ? groupBy : undefined} onGroupByChange={setGroupBy} />
+          <TaskFilters groupBy={view === "board" ? groupBy : undefined} onGroupByChange={setGroupBy} resultCount={filteredTaskCount} />
         </StickyFilterBar>
       )}
 
