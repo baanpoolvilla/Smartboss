@@ -35,7 +35,7 @@ import { DateRangeSelectField } from "@/modules/report_task/components/shared/da
 import { Input } from "@/modules/report_task/components/ui/input";
 import { datePresetGroups, datePresetLabels } from "@/modules/report_task/lib/date-filter";
 import { cn } from "@/modules/report_task/lib/utils";
-import { Building2, Users, User as UserIcon, CalendarDays, SlidersHorizontal, X } from "lucide-react";
+import { Building2, Users, User as UserIcon, CalendarDays, SlidersHorizontal, ChevronRight, X } from "lucide-react";
 
 /**
  * §7.2 — filter order is department → person → time, matching the
@@ -232,17 +232,31 @@ export function DashboardFilters() {
       )}
     </div>
 
-    <div className="flex sm:hidden items-center gap-2">
-      <button
-        type="button"
-        onClick={() => setMobileSheetOpen(true)}
-        className={cn(filterFieldTriggerClass(activeFilterCount > 0), "!h-10")}
-      >
-        <SlidersHorizontal className="h-4 w-4 shrink-0" />
-        ตัวกรอง
-        {activeFilterCount > 0 && <span className="tabular-nums">({activeFilterCount})</span>}
-      </button>
-    </div>
+    {/* Full-width, not just the small pill the desktop bar uses — a lone
+        small button here left a big empty strip of nothing next to it
+        (Dashboard has no second action like the Task Board's "สร้างงานใหม่"
+        to share the row with). Filling the row itself, with its own count
+        badge + trailing chevron, reads as a real entry point instead of
+        stranded next to dead space. */}
+    <button
+      type="button"
+      onClick={() => setMobileSheetOpen(true)}
+      className={cn(
+        "flex sm:hidden w-full items-center gap-2.5 rounded-2xl border px-4 h-12 text-left transition-colors",
+        activeFilterCount > 0
+          ? "border-[var(--brand-green-dark)]/30 bg-[color-mix(in_srgb,var(--brand-green)_14%,white)]"
+          : "border-[var(--line)] bg-white hover:bg-[var(--bg-soft)]"
+      )}
+    >
+      <SlidersHorizontal className={cn("h-4 w-4 shrink-0", activeFilterCount > 0 ? "text-[var(--brand-green-dark)]" : "text-[var(--ink-soft)]")} />
+      <span className="text-sm font-medium text-[var(--ink)]">ตัวกรอง</span>
+      {activeFilterCount > 0 && (
+        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--brand-green-dark)] px-1.5 text-[11px] font-semibold text-white tabular-nums">
+          {activeFilterCount}
+        </span>
+      )}
+      <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-[var(--ink-faint)]" />
+    </button>
 
     <Sheet open={mobileSheetOpen} onOpenChange={setMobileSheetOpen}>
       <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
