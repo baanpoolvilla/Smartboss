@@ -19,9 +19,6 @@ import { taskPriorityOrder, priorityMeta } from "@/modules/report_task/lib/task-
 import type { TaskPriority } from "@/modules/report_task/types";
 import { FilterField, FILTER_FIELD_LABEL_CLASS, filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
 import { DateRangeSelectField } from "@/modules/report_task/components/shared/date-range-select-field";
-import { ChipSelect } from "@/modules/report_task/components/shared/chip-select";
-import { Input } from "@/modules/report_task/components/ui/input";
-import { datePresetGroups, datePresetLabels, type DatePreset } from "@/modules/report_task/lib/date-filter";
 import { cn } from "@/modules/report_task/lib/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NewTaskDialog } from "./new-task-dialog";
@@ -285,20 +282,30 @@ export function TaskFilters({
     </>
   );
 
-  // Mobile bottom-sheet version of the same 5 fields — tap chips instead of
-  // native `<select>` (which pops a full-screen OS picker on a phone, ugly
-  // next to the rest of the sheet). Kept as its own block rather than reused
-  // inside `fieldsNode` since the two controls render completely differently
-  // (dropdown vs. chip row), not just different sizing.
+  // Mobile bottom-sheet version of the same 5 fields — full-width dropdowns
+  // stacked one per row instead of the desktop row's fixed-width pills. Kept
+  // as its own block rather than reused inside `fieldsNode` since the sizing
+  // (w-full !h-11 vs. min-w-[…] !h-9) differs throughout.
   const mobileFieldsNode = (
     <>
       {availableDepartments.length > 1 ? (
-        <ChipSelect
-          label="แผนก"
-          value={filters.departmentId}
-          onChange={(v) => setFilters({ departmentId: v })}
-          options={[{ value: "all", label: "ทั้งบริษัท" }, ...availableDepartments.map((d) => ({ value: d.id, label: d.name }))]}
-        />
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[11px] font-medium text-[var(--ink-soft)] px-0.5">แผนก</span>
+          <Select value={filters.departmentId} onValueChange={(v) => v && setFilters({ departmentId: v })}>
+            <SelectTrigger className={filterFieldTriggerClass(filters.departmentId !== "all", "w-full !h-11")}>
+              <Building2 className="h-4 w-4 shrink-0" />
+              <SelectValue placeholder="แผนก">
+                {filters.departmentId === "all" ? "ทั้งบริษัท" : (getDepartment(filters.departmentId)?.name ?? "แผนก")}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent alignItemWithTrigger={false}>
+              <SelectItem value="all">ทั้งบริษัท</SelectItem>
+              {availableDepartments.map((d) => (
+                <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       ) : (
         <div className="flex flex-col gap-1.5">
           <span className="text-[11px] font-medium text-[var(--ink-soft)] px-0.5">แผนก</span>
@@ -306,10 +313,6 @@ export function TaskFilters({
         </div>
       )}
 
-      {/* Dropdown, not chips, even inside the sheet — a company with many
-          employees turns a chip list into a scroll of dozens of pills (see
-          "แผนก" above, which stays chips since a department count realistically
-          never gets that large). A native <select> here still beats that. */}
       {peopleInScope.length > 1 ? (
         <div className="flex flex-col gap-1.5">
           <span className="text-[11px] font-medium text-[var(--ink-soft)] px-0.5">พนักงาน</span>
@@ -337,66 +340,76 @@ export function TaskFilters({
         </div>
       )}
 
-      {/* Same 12 presets as the desktop dropdown, grouped under the same
-          วันนี้/สัปดาห์/เดือน/ปี/กำหนดเอง section labels instead of one flat
-          list of 12 chips. */}
-      <div className="flex flex-col gap-2.5">
-        <span className="text-[11px] font-medium text-[var(--ink-soft)] px-0.5">ช่วงเวลา</span>
-        {datePresetGroups.map((group, i) => (
-          <ChipSelect
-            key={i}
-            label={group.label || undefined}
-            value={filters.preset}
-            onChange={(v: DatePreset) => setFilters({ preset: v })}
-            options={group.presets.map((p) => ({ value: p, label: datePresetLabels[p] }))}
-          />
-        ))}
-        {filters.preset === "custom" && (
-          <div className="flex items-center gap-2">
-            <Input
-              type="date"
-              lang="en-GB"
-              value={filters.customFrom}
-              onChange={(e) => setFilters({ customFrom: e.target.value })}
-              className="h-11 flex-1"
-            />
-            <span className="text-[var(--ink-soft)] text-sm">ถึง</span>
-            <Input
-              type="date"
-              lang="en-GB"
-              value={filters.customTo}
-              onChange={(e) => setFilters({ customTo: e.target.value })}
-              className="h-11 flex-1"
-            />
-          </div>
-        )}
+      <DateRangeSelectField
+        preset={filters.preset}
+        customFrom={filters.customFrom}
+        customTo={filters.customTo}
+        onPresetChange={(preset) => setFilters({ preset })}
+        onCustomRangeChange={(customFrom, customTo) => setFilters({ customFrom, customTo })}
+        widthClass="w-full !h-11"
+      />
+
+      <div className="flex flex-col gap-1.5">
+        <span className="text-[11px] font-medium text-[var(--ink-soft)] px-0.5">ความสำคัญ</span>
+        <Select value={filters.priority} onValueChange={(v) => v && setFilters({ priority: v as typeof filters.priority })}>
+          <SelectTrigger className={filterFieldTriggerClass(filters.priority !== "all", "w-full !h-11")}>
+            <Flag className="h-4 w-4 shrink-0" />
+            <SelectValue placeholder="ความสำคัญ">
+              {filters.priority === "all" ? "ทุกความสำคัญ" : (priorityMeta[filters.priority as TaskPriority]?.label ?? "ความสำคัญ")}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent alignItemWithTrigger={false}>
+            <SelectItem value="all">ทุกความสำคัญ</SelectItem>
+            {taskPriorityOrder.map((p) => (
+              <SelectItem key={p} value={p}>{priorityMeta[p].label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      <ChipSelect
-        label="ความสำคัญ"
-        value={filters.priority}
-        onChange={(v) => setFilters({ priority: v })}
-        options={[{ value: "all", label: "ทุกความสำคัญ" }, ...taskPriorityOrder.map((p) => ({ value: p, label: priorityMeta[p].label }))]}
-      />
-
       {groupBy && onGroupByChange && (
-        <ChipSelect
-          label="จัดกลุ่มตาม"
-          value={groupBy}
-          onChange={(v) => onGroupByChange(v)}
-          options={(["status", "priority", "assignee"] as GroupBy[]).map((g) => ({ value: g, label: groupByLabels[g] }))}
-        />
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[11px] font-medium text-[var(--ink-soft)] px-0.5">จัดกลุ่มตาม</span>
+          <Select value={groupBy} onValueChange={(v) => v && onGroupByChange(v as GroupBy)}>
+            <SelectTrigger className={filterFieldTriggerClass(false, "w-full !h-11")}>
+              <Group className="h-4 w-4 shrink-0" />
+              <SelectValue placeholder="จัดกลุ่มตาม">{groupByLabels[groupBy]}</SelectValue>
+            </SelectTrigger>
+            <SelectContent alignItemWithTrigger={false}>
+              {(["status", "priority", "assignee"] as GroupBy[]).map((g) => {
+                const Icon = groupByIcon[g];
+                return (
+                  <SelectItem key={g} value={g}>
+                    <span className="flex items-center gap-1.5">
+                      <Icon className="h-3.5 w-3.5 text-[var(--ink-soft)]" />
+                      {groupByLabels[g]}
+                    </span>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </div>
       )}
 
-      <ChipSelect
-        label="เลยกำหนด"
-        value={filters.penalty === "overdue" ? "overdue" : "all"}
-        onChange={(v) => setFilters({ penalty: v === "overdue" ? "overdue" : "all" })}
-        options={[
-          { value: "all", label: "ทุกงาน" },
-          { value: "overdue", label: "เลยกำหนดเท่านั้น" },
-        ]}
-      />
+      <div className="flex flex-col gap-1.5">
+        <span className="text-[11px] font-medium text-[var(--ink-soft)] px-0.5">เลยกำหนด</span>
+        <Select
+          value={filters.penalty === "overdue" ? "overdue" : "all"}
+          onValueChange={(v) => v && setFilters({ penalty: v === "overdue" ? "overdue" : "all" })}
+        >
+          <SelectTrigger className={filterFieldTriggerClass(filters.penalty === "overdue", "w-full !h-11")}>
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <SelectValue placeholder="เลยกำหนด">
+              {filters.penalty === "overdue" ? "เลยกำหนดเท่านั้น" : "ทุกงาน"}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent alignItemWithTrigger={false}>
+            <SelectItem value="all">ทุกงาน</SelectItem>
+            <SelectItem value="overdue">เลยกำหนดเท่านั้น</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
     </>
   );
 
