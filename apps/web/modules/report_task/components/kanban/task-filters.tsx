@@ -398,7 +398,12 @@ export function TaskFilters({
           value={filters.penalty === "overdue" ? "overdue" : "all"}
           onValueChange={(v) => v && setFilters({ penalty: v === "overdue" ? "overdue" : "all" })}
         >
-          <SelectTrigger className={filterFieldTriggerClass(filters.penalty === "overdue", "w-full !h-11")}>
+          <SelectTrigger
+            className={cn(
+              filterFieldTriggerClass(filters.penalty === "overdue", "w-full !h-11"),
+              filters.penalty === "overdue" && "bg-red-50 border-red-200 text-[var(--chart-red)] [&_svg]:text-[var(--chart-red)]"
+            )}
+          >
             <AlertTriangle className="h-4 w-4 shrink-0" />
             <SelectValue placeholder="เลยกำหนด">
               {filters.penalty === "overdue" ? "เลยกำหนดเท่านั้น" : "ทุกงาน"}
