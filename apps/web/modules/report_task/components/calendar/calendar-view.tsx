@@ -50,6 +50,18 @@ import type { CalendarEvent, CalendarEventType, TaskPriority, TodoItem } from "@
 
 type CalendarTab = "work" | "schedule" | "todo";
 
+/** Mobile filter sheet's "วันที่" quick-jump — a navigation shortcut, not a
+ * real data filter (see the `dateJump` state's own comment). */
+type DateJump = "all" | "today" | "tomorrow" | "week" | "month" | "custom";
+const dateJumpLabels: Record<DateJump, string> = {
+  all: "ทั้งหมด",
+  today: "วันนี้",
+  tomorrow: "พรุ่งนี้",
+  week: "สัปดาห์นี้",
+  month: "เดือนนี้",
+  custom: "กำหนดช่วงวันที่",
+};
+
 // Work calendar = task deadlines (colored by priority) + meetings.
 // Schedule calendar = leaves (live from store) + holidays (opted-in per
 // country, see holiday-store) + routine days off.
@@ -174,7 +186,7 @@ export function CalendarView() {
   // the calendar to a date/view), not a real filter like the fields above
   // (nothing here narrows which events show). Shared across all 3 tabs since
   // it's the same calendar underneath regardless of which data tab is active.
-  const [dateJump, setDateJump] = useState<"all" | "today" | "tomorrow" | "week" | "month" | "custom">("all");
+  const [dateJump, setDateJump] = useState<DateJump>("all");
   const [customJumpDate, setCustomJumpDate] = useState("");
   const fullCalendarRef = useRef<FullCalendarViewHandle>(null);
   function applyDateJump(next: typeof dateJump, customDate?: string) {
@@ -319,6 +331,49 @@ export function CalendarView() {
       (hiddenLeaveTypeIds.size > 0 ? 1 : 0)
     );
   }, [tab, dateJump, canBroadenScope, taskScope, workPriorities, showMeetings, workGoogleOwnerIds, hiddenUserIds, todoScope, scheduleActive, hiddenLeaveTypeIds]);
+
+  // Read-only summary chips under the mobile filter button — the badge
+  // count above says "how many", this says "which ones", without opening
+  // the sheet just to check. One "ล้างตัวกรอง" clears all of them at once;
+  // no per-chip × here (same call as the Kanban/Dashboard filter sheets —
+  // the field itself already shows its own active state via color once
+  // opened, an X per chip here would just be a second way to do the same
+  // "ล้างตัวกรอง" click).
+  const mobileActiveFilterSummary = useMemo(() => {
+    const chips: string[] = [];
+    if (dateJump !== "all") chips.push(`วันที่: ${dateJumpLabels[dateJump]}`);
+    if (tab === "work") {
+      if (canBroadenScope && taskScope !== "mine") chips.push("มุมมอง: ทั้งหมด");
+      if (workPriorities.size !== taskPriorityOrder.length) {
+        chips.push(`ความสำคัญ: ${taskPriorityOrder.filter((p) => workPriorities.has(p)).map((p) => priorityMeta[p].label).join(", ") || "ไม่มี"}`);
+      }
+      if (!showMeetings) chips.push("ซ่อนประชุม");
+      if (workGoogleOwnerIds.some((id) => hiddenUserIds.includes(id))) chips.push("ซ่อนปฏิทินภายนอกบางส่วน");
+    } else if (tab === "todo") {
+      if (todoScope !== "mine") chips.push("มุมมอง: ทั้งหมด");
+    } else {
+      if (scheduleActive.size !== scheduleTypes.length) {
+        chips.push(`ประเภท: ${scheduleTypes.filter((t) => scheduleActive.has(t)).map((t) => eventTypeLabels[t]).join(", ") || "ไม่มี"}`);
+      }
+      if (hiddenLeaveTypeIds.size > 0) chips.push("ซ่อนประเภทลาบางส่วน");
+    }
+    return chips;
+  }, [tab, dateJump, canBroadenScope, taskScope, workPriorities, showMeetings, workGoogleOwnerIds, hiddenUserIds, todoScope, scheduleActive, hiddenLeaveTypeIds]);
+
+  function clearMobileFilters() {
+    setDateJump("all");
+    setCustomJumpDate("");
+    if (tab === "work") {
+      setTaskScope("mine");
+      setWorkPriorities(new Set(taskPriorityOrder));
+      setShowMeetings(true);
+    } else if (tab === "todo") {
+      setTodoScope("mine");
+    } else {
+      setScheduleActive(new Set(scheduleTypes));
+      setHiddenLeaveTypeIds(new Set());
+    }
+  }
 
   function openCreate(date?: string) {
     setCreateDate(date);
@@ -927,6 +982,35 @@ export function CalendarView() {
           </button>
         </div>
 
+        {/* Read-only recap of what's actually applied, without opening the
+            sheet — the button above only ever says "how many" via its badge. */}
+        {mobileActiveFilterSummary.length > 0 && (
+          <div className="flex sm:hidden items-center gap-2">
+            <span className="shrink-0 text-xs text-[var(--ink-soft)]">
+              มี {mobileActiveFilterSummary.length} ตัวกรองที่ใช้อยู่
+            </span>
+            <button
+              type="button"
+              onClick={clearMobileFilters}
+              className="shrink-0 text-xs font-medium text-[var(--brand-green-dark)] underline-offset-2 hover:underline"
+            >
+              ล้างตัวกรอง
+            </button>
+          </div>
+        )}
+        {mobileActiveFilterSummary.length > 0 && (
+          <div className="flex sm:hidden gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {mobileActiveFilterSummary.map((chip) => (
+              <span
+                key={chip}
+                className="shrink-0 rounded-full border border-[var(--brand-green-dark)]/25 bg-[color-mix(in_srgb,var(--brand-green)_14%,white)] px-2.5 py-1 text-[11px] font-medium text-[var(--brand-green-dark)]"
+              >
+                {chip}
+              </span>
+            ))}
+          </div>
+        )}
+
         <Sheet open={mobileSheetOpen} onOpenChange={setMobileSheetOpen}>
           <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
             <SheetHeader className="flex-row items-center justify-between gap-2 pb-2 pr-11">
@@ -934,20 +1018,7 @@ export function CalendarView() {
               {mobileActiveFilterCount > 0 && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setDateJump("all");
-                    setCustomJumpDate("");
-                    if (tab === "work") {
-                      setTaskScope("mine");
-                      setWorkPriorities(new Set(taskPriorityOrder));
-                      setShowMeetings(true);
-                    } else if (tab === "todo") {
-                      setTodoScope("mine");
-                    } else {
-                      setScheduleActive(new Set(scheduleTypes));
-                      setHiddenLeaveTypeIds(new Set());
-                    }
-                  }}
+                  onClick={clearMobileFilters}
                   className="text-sm font-medium text-[var(--brand-green-dark)] underline-offset-2 hover:underline"
                 >
                   ล้างตัวกรอง
