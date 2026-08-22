@@ -43,12 +43,12 @@ import { eventTypeLabels } from "@/modules/report_task/lib/calendar-colors";
 import { leaveIconOf } from "@/modules/report_task/lib/leave-icons";
 import { useLeaveTypeStore, type LeaveTypeDef } from "@/modules/report_task/store/leave-type-store";
 import { cn } from "@/modules/report_task/lib/utils";
-import { ListChecks, CalendarOff, ListTodo, Plus, Settings2, Globe, User, Users, SlidersHorizontal } from "lucide-react";
+import { ListChecks, CalendarOff, Plus, Settings2, Globe, User, Users, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { now } from "@/modules/report_task/lib/now";
 import type { CalendarEvent, CalendarEventType, TaskPriority, TodoItem } from "@/modules/report_task/types";
 
-type CalendarTab = "work" | "schedule" | "todo";
+type CalendarTab = "work" | "schedule";
 
 /** Mobile filter sheet's "วันที่" quick-jump — a navigation shortcut, not a
  * real data filter (see the `dateJump` state's own comment). */
@@ -161,11 +161,12 @@ export function CalendarView() {
   const [tab, setTab] = useState<CalendarTab>("work");
   const [workPriorities, setWorkPriorities] = useState<Set<TaskPriority>>(new Set(taskPriorityOrder));
   const [showMeetings, setShowMeetings] = useState(true);
-  // Off by default — the งาน tab's whole point is "task deadlines + meetings
-  // at a glance"; to-dos are personal/day-to-day noise on top of that unless
-  // someone explicitly asks to see them overlaid too (same events, same
-  // todoScope, as the dedicated สิ่งที่ต้องทำ tab — just merged into this view).
-  const [showTodosInWork, setShowTodosInWork] = useState(false);
+  // On by default — สิ่งที่ต้องทำ no longer has its own tab (merged into งาน
+  // per feedback: 3 tabs read as 2 unrelated things when to-dos are really
+  // just another kind of "what's on my plate today"), so this is now the
+  // only place to see them at all. The switch stays (not just always-on) so
+  // someone who wants a quieter งาน view can still hide the overlay.
+  const [showTodosInWork, setShowTodosInWork] = useState(true);
   const [scheduleActive, setScheduleActive] = useState<Set<CalendarEventType>>(new Set(scheduleTypes));
   // "ของฉัน" vs "ทั้งหมด" — view-only, everyone can flip it (not gated to
   // heads/owners like the work tab's scope, since a to-do isn't a
@@ -326,17 +327,19 @@ export function CalendarView() {
         (canBroadenScope && taskScope !== "mine" ? 1 : 0) +
         (workPriorities.size !== taskPriorityOrder.length ? 1 : 0) +
         (showMeetings ? 0 : 1) +
-        (showTodosInWork ? 1 : 0) +
+        // On by default now (see showTodosInWork's own comment) — turning it
+        // *off* is the deviation from default, not on.
+        (showTodosInWork ? 0 : 1) +
+        (showTodosInWork && todoScope !== "mine" ? 1 : 0) +
         (workGoogleOwnerIds.some((id) => hiddenUserIds.includes(id)) ? 1 : 0)
       );
     }
-    if (tab === "todo") return dateJumpCount + (todoScope !== "mine" ? 1 : 0);
     return (
       dateJumpCount +
       (scheduleActive.size !== scheduleTypes.length ? 1 : 0) +
       (hiddenLeaveTypeIds.size > 0 ? 1 : 0)
     );
-  }, [tab, dateJump, canBroadenScope, taskScope, workPriorities, showMeetings, showTodosInWork, workGoogleOwnerIds, hiddenUserIds, todoScope, scheduleActive, hiddenLeaveTypeIds]);
+  }, [tab, dateJump, canBroadenScope, taskScope, workPriorities, showMeetings, showTodosInWork, todoScope, workGoogleOwnerIds, hiddenUserIds, scheduleActive, hiddenLeaveTypeIds]);
 
   // Read-only summary chips under the mobile filter button — the badge
   // count above says "how many", this says "which ones", without opening
@@ -354,10 +357,9 @@ export function CalendarView() {
         chips.push(`ความสำคัญ: ${taskPriorityOrder.filter((p) => workPriorities.has(p)).map((p) => priorityMeta[p].label).join(", ") || "ไม่มี"}`);
       }
       if (!showMeetings) chips.push("ซ่อนประชุม");
-      if (showTodosInWork) chips.push("แสดงสิ่งที่ต้องทำ");
+      if (!showTodosInWork) chips.push("ซ่อนสิ่งที่ต้องทำ");
+      if (showTodosInWork && todoScope !== "mine") chips.push("มุมมองสิ่งที่ต้องทำ: ทั้งหมด");
       if (workGoogleOwnerIds.some((id) => hiddenUserIds.includes(id))) chips.push("ซ่อนปฏิทินภายนอกบางส่วน");
-    } else if (tab === "todo") {
-      if (todoScope !== "mine") chips.push("มุมมอง: ทั้งหมด");
     } else {
       if (scheduleActive.size !== scheduleTypes.length) {
         chips.push(`ประเภท: ${scheduleTypes.filter((t) => scheduleActive.has(t)).map((t) => eventTypeLabels[t]).join(", ") || "ไม่มี"}`);
@@ -365,7 +367,7 @@ export function CalendarView() {
       if (hiddenLeaveTypeIds.size > 0) chips.push("ซ่อนประเภทลาบางส่วน");
     }
     return chips;
-  }, [tab, dateJump, canBroadenScope, taskScope, workPriorities, showMeetings, showTodosInWork, workGoogleOwnerIds, hiddenUserIds, todoScope, scheduleActive, hiddenLeaveTypeIds]);
+  }, [tab, dateJump, canBroadenScope, taskScope, workPriorities, showMeetings, showTodosInWork, todoScope, workGoogleOwnerIds, hiddenUserIds, scheduleActive, hiddenLeaveTypeIds]);
 
   function clearMobileFilters() {
     setDateJump("all");
@@ -374,8 +376,7 @@ export function CalendarView() {
       setTaskScope("mine");
       setWorkPriorities(new Set(taskPriorityOrder));
       setShowMeetings(true);
-      setShowTodosInWork(false);
-    } else if (tab === "todo") {
+      setShowTodosInWork(true);
       setTodoScope("mine");
     } else {
       setScheduleActive(new Set(scheduleTypes));
@@ -591,9 +592,6 @@ export function CalendarView() {
         ...(showTodosInWork ? todoEvents : []),
       ].map(gray);
     }
-    if (tab === "todo") {
-      return todoEvents.map(gray);
-    }
     // Color leaves by type (past ones still gray via `gray`).
     const leaveColorById = new Map(leaveTypes.map((t) => [t.id, t.color]));
     const coloredLeaves = visibleLeaves.map((l) => ({
@@ -785,19 +783,6 @@ export function CalendarView() {
               <CalendarOff className="h-4 w-4" />
               วันหยุด · ลา
             </button>
-            <button
-              data-tour="calendar-tab-todo"
-              onClick={() => setTab("todo")}
-              className={cn(
-                "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all",
-                tab === "todo"
-                  ? "bg-[var(--brand-green)] text-[var(--ink)] shadow-md"
-                  : "bg-white text-[var(--ink-soft)] border border-[var(--line)] hover:text-[var(--ink)]"
-              )}
-            >
-              <ListTodo className="h-4 w-4" />
-              สิ่งที่ต้องทำ
-            </button>
           </div>
 
           <Button
@@ -818,10 +803,10 @@ export function CalendarView() {
             <Button
               size="lg"
               className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
-              onClick={() => (tab === "todo" ? openTodoDialog({}) : openCreate())}
+              onClick={() => openCreate()}
             >
               <Plus className="h-4 w-4" />
-              {tab === "work" ? "สร้างประชุม" : tab === "todo" ? "เพิ่มสิ่งที่ต้องทำ" : "เพิ่มวันลา"}
+              {tab === "work" ? "สร้างประชุม" : "เพิ่มวันลา"}
             </Button>
           )}
         </div>
@@ -853,17 +838,6 @@ export function CalendarView() {
             <CalendarOff className="h-3.5 w-3.5" />
             วันหยุด · ลา
           </button>
-          <button
-            data-tour="calendar-tab-todo"
-            onClick={() => setTab("todo")}
-            className={cn(
-              "flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition-all",
-              tab === "todo" ? "bg-[var(--brand-green)] text-[var(--ink)] shadow-md" : "bg-white text-[var(--ink-soft)] border border-[var(--line)]"
-            )}
-          >
-            <ListTodo className="h-3.5 w-3.5" />
-            สิ่งที่ต้องทำ
-          </button>
         </div>
 
         <div className="flex sm:hidden items-center gap-2">
@@ -892,10 +866,10 @@ export function CalendarView() {
           {(tab !== "work" || canManage(viewingAsUserId)) && (
             <Button
               className="ml-auto bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
-              onClick={() => (tab === "todo" ? openTodoDialog({}) : openCreate())}
+              onClick={() => openCreate()}
             >
               <Plus className="h-4 w-4" />
-              {tab === "work" ? "สร้างประชุม" : tab === "todo" ? "เพิ่มสิ่งที่ต้องทำ" : "เพิ่มวันลา"}
+              {tab === "work" ? "สร้างประชุม" : "เพิ่มวันลา"}
             </Button>
           )}
         </div>
@@ -1002,38 +976,44 @@ export function CalendarView() {
                 จุดกลวง = งานของคนอื่น
               </span>
             )}
-          </div>
-        ) : tab === "todo" ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-[var(--ink-soft)]">มุมมอง:</span>
-            <div className="flex items-center gap-1 bg-[var(--bg-soft)] rounded-lg p-1">
-              <button
-                onClick={() => setTodoScope("mine")}
-                title="แสดงเฉพาะสิ่งที่ต้องทำของฉัน"
-                className={cn(
-                  "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer",
-                  todoScope === "mine"
-                    ? "bg-white shadow-sm text-[var(--ink)]"
-                    : "text-[var(--ink-soft)] hover:text-[var(--ink)] hover:bg-white/60"
-                )}
-              >
-                <User className="h-3.5 w-3.5" />
-                ของฉัน
-              </button>
-              <button
-                onClick={() => setTodoScope("all")}
-                title="แสดงสิ่งที่ต้องทำของทุกคน"
-                className={cn(
-                  "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer",
-                  todoScope === "all"
-                    ? "bg-white shadow-sm text-[var(--ink)]"
-                    : "text-[var(--ink-soft)] hover:text-[var(--ink)] hover:bg-white/60"
-                )}
-              >
-                <Users className="h-3.5 w-3.5" />
-                ทั้งหมด
-              </button>
-            </div>
+            {/* สิ่งที่ต้องทำ has no manager-only gate of its own (unlike the
+                task scope above) — open to everyone, same as when it lived
+                in its own tab, just relocated here now that the toggle above
+                controls whether it's on screen at all. */}
+            {showTodosInWork && (
+              <>
+                <span className="h-4 w-px bg-[var(--line)] mx-1" />
+                <span className="text-xs text-[var(--ink-soft)]">มุมมองสิ่งที่ต้องทำ:</span>
+                <div className="flex items-center gap-1 bg-[var(--bg-soft)] rounded-lg p-1">
+                  <button
+                    onClick={() => setTodoScope("mine")}
+                    title="แสดงเฉพาะสิ่งที่ต้องทำของฉัน"
+                    className={cn(
+                      "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer",
+                      todoScope === "mine"
+                        ? "bg-white shadow-sm text-[var(--ink)]"
+                        : "text-[var(--ink-soft)] hover:text-[var(--ink)] hover:bg-white/60"
+                    )}
+                  >
+                    <User className="h-3.5 w-3.5" />
+                    ของฉัน
+                  </button>
+                  <button
+                    onClick={() => setTodoScope("all")}
+                    title="แสดงสิ่งที่ต้องทำของทุกคน"
+                    className={cn(
+                      "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer",
+                      todoScope === "all"
+                        ? "bg-white shadow-sm text-[var(--ink)]"
+                        : "text-[var(--ink-soft)] hover:text-[var(--ink)] hover:bg-white/60"
+                    )}
+                  >
+                    <Users className="h-3.5 w-3.5" />
+                    ทั้งหมด
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -1205,33 +1185,37 @@ export function CalendarView() {
                       })}
                     </div>
                   </div>
-                </>
-              )}
 
-              {tab === "todo" && (
-                <div>
-                  <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">มุมมอง</p>
-                  <div className="flex items-center gap-1 bg-[var(--bg-soft)] rounded-xl p-1">
-                    <button
-                      onClick={() => setTodoScope("mine")}
-                      className={cn(
-                        "flex flex-1 items-center justify-center gap-1.5 px-2.5 py-2.5 text-sm font-medium rounded-lg transition-colors",
-                        todoScope === "mine" ? "bg-white shadow-sm text-[var(--ink)]" : "text-[var(--ink-soft)]"
-                      )}
-                    >
-                      <User className="h-4 w-4" /> ของฉัน
-                    </button>
-                    <button
-                      onClick={() => setTodoScope("all")}
-                      className={cn(
-                        "flex flex-1 items-center justify-center gap-1.5 px-2.5 py-2.5 text-sm font-medium rounded-lg transition-colors",
-                        todoScope === "all" ? "bg-white shadow-sm text-[var(--ink)]" : "text-[var(--ink-soft)]"
-                      )}
-                    >
-                      <Users className="h-4 w-4" /> ทั้งหมด
-                    </button>
-                  </div>
-                </div>
+                  {/* สิ่งที่ต้องทำ has no manager-only gate of its own (unlike
+                      the task scope above) — open to everyone, same as when
+                      it lived in its own tab. Only shown once the switch
+                      above actually turns the overlay on. */}
+                  {showTodosInWork && (
+                    <div>
+                      <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">มุมมองสิ่งที่ต้องทำ</p>
+                      <div className="flex items-center gap-1 bg-[var(--bg-soft)] rounded-xl p-1">
+                        <button
+                          onClick={() => setTodoScope("mine")}
+                          className={cn(
+                            "flex flex-1 items-center justify-center gap-1.5 px-2.5 py-2.5 text-sm font-medium rounded-lg transition-colors",
+                            todoScope === "mine" ? "bg-white shadow-sm text-[var(--ink)]" : "text-[var(--ink-soft)]"
+                          )}
+                        >
+                          <User className="h-4 w-4" /> ของฉัน
+                        </button>
+                        <button
+                          onClick={() => setTodoScope("all")}
+                          className={cn(
+                            "flex flex-1 items-center justify-center gap-1.5 px-2.5 py-2.5 text-sm font-medium rounded-lg transition-colors",
+                            todoScope === "all" ? "bg-white shadow-sm text-[var(--ink)]" : "text-[var(--ink-soft)]"
+                          )}
+                        >
+                          <Users className="h-4 w-4" /> ทั้งหมด
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
               {tab === "schedule" && (
@@ -1338,13 +1322,7 @@ export function CalendarView() {
         onDateClick={handleDateClick}
         onEventDrop={handleEventDrop}
         onSelectRange={setSummaryRange}
-        onCreate={
-          tab === "todo"
-            ? () => openTodoDialog({})
-            : tab === "work" && !canManage(viewingAsUserId)
-              ? undefined
-              : () => openCreate()
-        }
+        onCreate={tab === "work" && !canManage(viewingAsUserId) ? undefined : () => openCreate()}
         onToggleTodo={handleToggleTodo}
         onEditTodo={(eventId) => {
           const todoId = eventId.replace("todoevt-", "");
@@ -1355,9 +1333,20 @@ export function CalendarView() {
       />
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
         {tab === "work" ? (
-          <WorkSidebar range={viewRange} onOpenTask={setOpenTaskId} />
-        ) : tab === "todo" ? (
-          <TodoSidebar range={viewRange} scope={todoScope} onEdit={(t) => openTodoDialog({ todo: t, date: t.date })} />
+          <>
+            <WorkSidebar range={viewRange} onOpenTask={setOpenTaskId} />
+            {/* Same overlay toggle as the calendar grid itself — สิ่งที่ต้องทำ
+                no longer has its own tab, so its own sidebar card only shows
+                up here alongside the work one, not as a full replacement. */}
+            {showTodosInWork && (
+              <TodoSidebar
+                range={viewRange}
+                scope={todoScope}
+                onEdit={(t) => openTodoDialog({ todo: t, date: t.date })}
+                onAdd={() => openTodoDialog({})}
+              />
+            )}
+          </>
         ) : (
           <LeaveSidebar range={viewRange} holidays={holidays} />
         )}
@@ -1395,7 +1384,7 @@ export function CalendarView() {
           bolted onto this one. */}
       <NewTaskDialog
         key={`${tab}-${createDate ?? "new"}`}
-        open={createOpen && tab !== "todo"}
+        open={createOpen}
         onOpenChange={setCreateOpen}
         defaultType={tab === "schedule" ? "leave" : "meeting"}
         allowedTypes={tab === "schedule" ? ["leave", "dayoff"] : ["meeting"]}

@@ -9,7 +9,8 @@ import { useCalendarVisibilityStore } from "@/modules/report_task/store/calendar
 import { formatDate } from "@/modules/report_task/lib/format";
 import { rangeLabel, inRange, type ViewRange } from "@/modules/report_task/lib/date-filter";
 import { cn } from "@/modules/report_task/lib/utils";
-import { Check, Trash2 } from "lucide-react";
+import { Button } from "@/modules/report_task/components/ui/button";
+import { Check, Plus, Trash2 } from "lucide-react";
 import type { TodoItem } from "@/modules/report_task/types";
 
 /** Right rail for the To Do calendar tab — same visible range as the grid.
@@ -19,7 +20,20 @@ import type { TodoItem } from "@/modules/report_task/types";
  *  head/owner switches scope — same split WorkSidebar already uses for
  *  tasks. Only "mine" rows are interactive (toggle/edit/delete) — someone
  *  else's is a read-only peek with their avatar for attribution. */
-export function TodoSidebar({ range, scope, onEdit }: { range: ViewRange; scope: "mine" | "all"; onEdit: (t: TodoItem) => void }) {
+export function TodoSidebar({
+  range,
+  scope,
+  onEdit,
+  onAdd,
+}: {
+  range: ViewRange;
+  scope: "mine" | "all";
+  onEdit: (t: TodoItem) => void;
+  /** Now that สิ่งที่ต้องทำ has no dedicated tab/top-bar create button of its
+   * own (merged into งาน — see calendar-view.tsx), this card is the one
+   * reliable place to start a new item, so it gets its own quick-add. */
+  onAdd?: () => void;
+}) {
   const todos = useTodoStore((s) => s.todos);
   const toggleTodo = useTodoStore((s) => s.toggleTodo);
   const removeTodo = useTodoStore((s) => s.removeTodo);
@@ -81,16 +95,23 @@ export function TodoSidebar({ range, scope, onEdit }: { range: ViewRange; scope:
     );
   }
 
-  function card(heading: string, items: TodoItem[], emptyLabel: string, showOwner: boolean) {
+  function card(heading: string, items: TodoItem[], emptyLabel: string, showOwner: boolean, showAdd: boolean) {
     return (
       <Card className="border-[var(--line)] shadow-none">
         <CardHeader>
           <CardTitle className="text-base font-semibold flex items-center justify-between gap-2">
-            {heading}
-            {items.length > 0 && (
-              <span className="text-xs font-normal text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2 py-0.5">
-                {items.filter((t) => !t.done).length}/{items.length}
-              </span>
+            <span className="flex items-center gap-2">
+              {heading}
+              {items.length > 0 && (
+                <span className="text-xs font-normal text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2 py-0.5">
+                  {items.filter((t) => !t.done).length}/{items.length}
+                </span>
+              )}
+            </span>
+            {showAdd && onAdd && (
+              <Button size="sm" variant="ghost" className="h-7 gap-1 px-2 text-xs" onClick={onAdd}>
+                <Plus className="h-3.5 w-3.5" /> เพิ่ม
+              </Button>
             )}
           </CardTitle>
           <p className="text-xs text-[var(--ink-soft)]">{rangeLabel(range)} · คลิกกล่องเพื่อติ๊กเสร็จ · คลิกชื่อเพื่อแก้ไข</p>
@@ -104,13 +125,13 @@ export function TodoSidebar({ range, scope, onEdit }: { range: ViewRange; scope:
   }
 
   if (scope === "mine") {
-    return card(`สิ่งที่ต้องทำของฉัน${period}`, myTodos, "ยังไม่มีสิ่งที่ต้องทำของฉันในช่วงนี้", false);
+    return card(`สิ่งที่ต้องทำของฉัน${period}`, myTodos, "ยังไม่มีสิ่งที่ต้องทำของฉันในช่วงนี้", false, true);
   }
 
   return (
     <>
-      {card(`สิ่งที่ต้องทำของฉัน${period}`, myTodos, "ยังไม่มีสิ่งที่ต้องทำของฉันในช่วงนี้", false)}
-      {card(`สิ่งที่ต้องทำของคนอื่น${period}`, otherTodos, "ยังไม่มีสิ่งที่ต้องทำของใครในช่วงนี้", true)}
+      {card(`สิ่งที่ต้องทำของฉัน${period}`, myTodos, "ยังไม่มีสิ่งที่ต้องทำของฉันในช่วงนี้", false, true)}
+      {card(`สิ่งที่ต้องทำของคนอื่น${period}`, otherTodos, "ยังไม่มีสิ่งที่ต้องทำของใครในช่วงนี้", true, false)}
     </>
   );
 }
