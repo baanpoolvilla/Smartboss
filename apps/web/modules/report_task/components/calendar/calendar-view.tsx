@@ -13,11 +13,14 @@ import { useGoogleCalendarStore } from "@/modules/report_task/store/google-calen
 import { useRoutineDayOffStore } from "@/modules/report_task/store/routine-dayoff-store";
 import { expandRule, quotaForDepartment, naturalOccurrenceFor } from "@/modules/report_task/lib/routine-dayoff";
 import { formatDate } from "@/modules/report_task/lib/format";
+import { Badge } from "@/modules/report_task/components/ui/badge";
 import { Button } from "@/modules/report_task/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { StickyFilterBar } from "@/modules/report_task/components/shared/sticky-filter-bar";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/modules/report_task/components/ui/sheet";
 import { Switch } from "@/modules/report_task/components/ui/switch";
 import { filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
+import { CalendarFilters } from "./calendar-filters";
 import { FullCalendarView, type ViewKey, type FullCalendarViewHandle } from "./full-calendar-view";
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { LeaveSidebar } from "./leave-sidebar";
@@ -38,7 +41,7 @@ import { getUser, canManage, isOwner } from "@/modules/report_task/lib/directory
 import { priorityMeta, priorityColorHex, taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
 import { eventTypeLabels } from "@/modules/report_task/lib/calendar-colors";
 import { leaveIconOf } from "@/modules/report_task/lib/leave-icons";
-import { useLeaveTypeStore } from "@/modules/report_task/store/leave-type-store";
+import { useLeaveTypeStore, type LeaveTypeDef } from "@/modules/report_task/store/leave-type-store";
 import { cn } from "@/modules/report_task/lib/utils";
 import { ListChecks, CalendarOff, ListTodo, Plus, Settings2, Globe, User, Users, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
@@ -87,6 +90,27 @@ function nextDayIso(dateStr: string) {
   const d = new Date(`${dateStr}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + 1);
   return d.toISOString().slice(0, 10);
+}
+
+// Beyond this many leave types, the rest move into the "+N เพิ่มเติม" popover
+// instead of wrapping the filter row onto extra lines.
+const LEAVE_TYPE_CHIP_LIMIT = 4;
+
+function leaveTypeChip(lt: LeaveTypeDef, hiddenIds: Set<string>, onToggle: (id: string) => void) {
+  const Icon = leaveIconOf(lt.icon);
+  const isActive = !hiddenIds.has(lt.id);
+  return (
+    <button key={lt.id} onClick={() => onToggle(lt.id)} title={isActive ? "คลิกเพื่อซ่อน" : "คลิกเพื่อแสดง"}>
+      <Badge
+        variant="outline"
+        className={cn("gap-1.5 cursor-pointer select-none transition-opacity", !isActive && "opacity-40")}
+        style={{ borderColor: lt.color, color: lt.color }}
+      >
+        <Icon className="h-3 w-3" style={{ color: lt.color }} />
+        {lt.label}
+      </Badge>
+    </button>
+  );
 }
 
 export function CalendarView() {
@@ -391,6 +415,27 @@ export function CalendarView() {
     });
   }
 
+
+  // One legend chip per person who has a connected calendar feeding this
+  // tab — clicking it reuses the same "who's shown" toggle as everything
+  // else (tasks/meetings/leaves), so there's a single show/hide switch per
+  // person instead of a separate one just for their external calendar.
+  function googleOwnerChip(ownerId: string) {
+    const hidden = hiddenUserIds.includes(ownerId);
+    const label = getUser(ownerId)?.name ?? "ปฏิทินภายนอก";
+    return (
+      <button key={ownerId} onClick={() => toggleUserVisible(ownerId)} title={hidden ? "คลิกเพื่อแสดง" : "คลิกเพื่อซ่อน"}>
+        <Badge
+          variant="outline"
+          className={cn("gap-1.5 cursor-pointer select-none transition-opacity", hidden && "opacity-40")}
+          style={{ borderColor: colors.google, color: colors.google }}
+        >
+          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: colors.google }} />
+          {label} ({eventTypeLabels.google})
+        </Badge>
+      </button>
+    );
+  }
 
   // Task deadlines derived live from the store (reschedule → moves on calendar),
   // filtered by the selected priorities and colored by priority. Completed tasks
@@ -841,40 +886,168 @@ export function CalendarView() {
           )}
         </div>
 
-        {/* ≥640px: same collapsed button, inline instead of stacked — a
-            filter *bar* (department/status-style rows of badges) reads fine
-            on the Task Board where every field is independent, but here it
-            was up to 4 priority chips + a scope toggle + a meetings toggle +
-            N Google-owner chips *for one tab alone*, sprawling across the
-            header. Same sheet as mobile opens on click; "ตัวกรองที่ใช้" recaps
-            what's on without opening it, "ล้างตัวกรอง" clears in one click. */}
-        <div className="hidden sm:flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setMobileSheetOpen(true)}
-            className={filterFieldTriggerClass(mobileActiveFilterCount > 0)}
-          >
-            <SlidersHorizontal className="h-4 w-4 shrink-0" />
-            ตัวกรอง
-            {mobileActiveFilterCount > 0 && <span className="tabular-nums">({mobileActiveFilterCount})</span>}
-          </button>
-          {mobileActiveFilterSummary.length > 0 && (
-            <span className="text-xs text-[var(--ink-soft)] truncate">
-              <span className="font-medium text-[var(--ink)]">ตัวกรองที่ใช้ ({mobileActiveFilterSummary.length}):</span>{" "}
-              {mobileActiveFilterSummary.join(" • ")}
-            </span>
-          )}
-          {mobileActiveFilterCount > 0 && (
-            <button
-              type="button"
-              onClick={clearMobileFilters}
-              className="shrink-0 text-xs font-medium text-[var(--brand-green-dark)] underline-offset-2 hover:underline"
-            >
-              ล้างตัวกรอง
+        {/* ≥640px: unchanged. <640px gets a button + bottom sheet below
+            instead — this row's badges (up to 4 priority chips + a scope
+            toggle + a meetings toggle + N Google-owner chips on the work
+            tab alone) never fit one line on a phone and just wrapped across
+            2-3 rows. */}
+        <div className="hidden sm:block">
+        {tab === "work" ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {canBroadenScope && (
+              <>
+                <span className="text-xs text-[var(--ink-soft)]">มุมมอง:</span>
+                <div className="flex items-center gap-1 bg-[var(--bg-soft)] rounded-lg p-1">
+                  <button
+                    data-tour="calendar-scope-mine"
+                    onClick={() => setTaskScope("mine")}
+                    title="แสดงเฉพาะงานที่ฉันรับหรือมอบหมาย"
+                    className={cn(
+                      "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer",
+                      taskScope === "mine"
+                        ? "bg-white shadow-sm text-[var(--ink)]"
+                        : "text-[var(--ink-soft)] hover:text-[var(--ink)] hover:bg-white/60"
+                    )}
+                  >
+                    <User className="h-3.5 w-3.5" />
+                    งานของฉัน
+                  </button>
+                  <button
+                    data-tour="calendar-scope-all"
+                    onClick={() => setTaskScope("all")}
+                    title="แสดงงานทั้งหมดที่มีสิทธิ์เห็น (ทั้งแผนก/บริษัท)"
+                    className={cn(
+                      "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer",
+                      taskScope === "all"
+                        ? "bg-white shadow-sm text-[var(--ink)]"
+                        : "text-[var(--ink-soft)] hover:text-[var(--ink)] hover:bg-white/60"
+                    )}
+                  >
+                    <Users className="h-3.5 w-3.5" />
+                    ทั้งหมด
+                  </button>
+                </div>
+                <span className="h-4 w-px bg-[var(--line)] mx-1" />
+              </>
+            )}
+            <span className="text-xs text-[var(--ink-soft)] mr-0.5">ความสำคัญ (คลิกเพื่อกรอง):</span>
+            {taskPriorityOrder.map((p, i) => {
+              const isActive = workPriorities.has(p);
+              return (
+                <button
+                  key={p}
+                  data-tour={i === 0 ? "calendar-priority-filter" : undefined}
+                  onClick={() => togglePriority(p)}
+                  title={isActive ? "คลิกเพื่อซ่อน" : "คลิกเพื่อแสดง"}
+                  aria-label={`${priorityMeta[p].label} — ${isActive ? "คลิกเพื่อซ่อน" : "คลิกเพื่อแสดง"}`}
+                >
+                  <Badge
+                    variant="outline"
+                    className={cn("gap-1.5 cursor-pointer select-none transition-opacity", !isActive && "opacity-40")}
+                    style={{ borderColor: priorityColorHex[p], color: priorityColorHex[p] }}
+                  >
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: priorityColorHex[p] }} />
+                    {priorityMeta[p].label}
+                  </Badge>
+                </button>
+              );
+            })}
+            <span className="h-4 w-px bg-[var(--line)] mx-1" />
+            <button data-tour="calendar-meetings-toggle" onClick={() => setShowMeetings((v) => !v)} title={showMeetings ? "คลิกเพื่อซ่อน" : "คลิกเพื่อแสดง"}>
+              <Badge
+                variant="outline"
+                className={cn("gap-1.5 cursor-pointer select-none transition-opacity", !showMeetings && "opacity-40")}
+                style={{ borderColor: colors.meeting, color: colors.meeting }}
+              >
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: colors.meeting }} />
+                {eventTypeLabels.meeting}
+              </Badge>
             </button>
-          )}
+            {workGoogleOwnerIds.map(googleOwnerChip)}
+            <span className="flex items-center gap-1.5 text-[11px] text-[var(--ink-soft)] ml-1 opacity-60">
+              <span className="h-2 w-2 rounded-full bg-[var(--chart-red)]" />
+              ผ่านไปแล้ว = สีจางลง
+            </span>
+            {canManage(viewingAsUserId) && (
+              <span className="flex items-center gap-1.5 text-[11px] text-[var(--ink-soft)] opacity-60">
+                <span className="h-2 w-2 rounded-full border-[1.5px] border-[var(--chart-red)]" />
+                จุดกลวง = งานของคนอื่น
+              </span>
+            )}
+          </div>
+        ) : tab === "todo" ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-[var(--ink-soft)]">มุมมอง:</span>
+            <div className="flex items-center gap-1 bg-[var(--bg-soft)] rounded-lg p-1">
+              <button
+                onClick={() => setTodoScope("mine")}
+                title="แสดงเฉพาะสิ่งที่ต้องทำของฉัน"
+                className={cn(
+                  "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer",
+                  todoScope === "mine"
+                    ? "bg-white shadow-sm text-[var(--ink)]"
+                    : "text-[var(--ink-soft)] hover:text-[var(--ink)] hover:bg-white/60"
+                )}
+              >
+                <User className="h-3.5 w-3.5" />
+                ของฉัน
+              </button>
+              <button
+                onClick={() => setTodoScope("all")}
+                title="แสดงสิ่งที่ต้องทำของทุกคน"
+                className={cn(
+                  "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer",
+                  todoScope === "all"
+                    ? "bg-white shadow-sm text-[var(--ink)]"
+                    : "text-[var(--ink-soft)] hover:text-[var(--ink)] hover:bg-white/60"
+                )}
+              >
+                <Users className="h-3.5 w-3.5" />
+                ทั้งหมด
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <CalendarFilters types={scheduleTypes} active={scheduleActive} onToggle={toggleSchedule} />
+            <span className="h-4 w-px bg-[var(--line)]" />
+            <span className="text-xs text-[var(--ink-soft)]">ประเภทลา:</span>
+            {leaveTypes.slice(0, LEAVE_TYPE_CHIP_LIMIT).map((lt) => leaveTypeChip(lt, hiddenLeaveTypeIds, toggleLeaveType))}
+            {leaveTypes.length > LEAVE_TYPE_CHIP_LIMIT && (
+              <Popover>
+                <PopoverTrigger
+                  render={
+                    <button
+                      className="flex items-center gap-1 text-[11px] font-medium text-[var(--ink-soft)] hover:text-[var(--ink)] rounded-full border border-[var(--line)] px-2 py-0.5 hover:bg-[var(--bg-soft)] transition-colors"
+                      title="ประเภทลาเพิ่มเติม"
+                    >
+                      +{leaveTypes.length - LEAVE_TYPE_CHIP_LIMIT} เพิ่มเติม
+                    </button>
+                  }
+                />
+                <PopoverContent align="start" className="w-auto p-2">
+                  <div className="flex flex-col gap-1.5">
+                    {leaveTypes.slice(LEAVE_TYPE_CHIP_LIMIT).map((lt) => leaveTypeChip(lt, hiddenLeaveTypeIds, toggleLeaveType))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
+            {/* Leave types + routine day-off quotas moved to /settings
+                (บริษัท) — company-wide config, same place as sticker/penalty
+                settings. Owner-only there now (not just any department
+                head) since these apply across every department at once. */}
+            {isOwner(viewingAsUserId) && (
+              <Link
+                href="/report-task/settings?tab=calendar"
+                className="flex items-center gap-1 text-[11px] text-[var(--ink-soft)] hover:text-[var(--ink)] rounded-md px-1.5 py-0.5 hover:bg-[var(--bg-soft)] transition-colors"
+                title="จัดการประเภทการลา / โควตาวันหยุดประจำ"
+              >
+                <Settings2 className="h-3 w-3" /> ตั้งค่า
+              </Link>
+            )}
+          </div>
+        )}
         </div>
-
 
         {/* Read-only recap of what's actually applied, without opening the
             sheet — the button above only ever says "how many" via its badge. */}
