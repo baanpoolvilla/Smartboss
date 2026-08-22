@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { cn } from "@/modules/report_task/lib/utils";
 
 /**
  * §7.1 — the page title + filter bar + any active-filter chips stick under
@@ -32,11 +33,19 @@ export function StickyFilterBar({
   subtitle,
   actions,
   children,
+  mobileCompact,
 }: {
   title?: ReactNode;
   subtitle?: ReactNode;
   actions?: ReactNode;
   children?: ReactNode;
+  /** <640px only — hugs the filter card to its content's width instead of
+   * stretching full-bleed. A page whose mobile row is a single lone button
+   * (Dashboard's "ตัวกรอง", nothing next to it) reads as an oversized empty
+   * box at full width; a page whose row already fills edge-to-edge on its
+   * own (the Task Board's filter + "สร้างงานใหม่" pair) doesn't need this
+   * and should leave it off. */
+  mobileCompact?: boolean;
 }) {
   return (
     <div className="sticky top-0 z-30 -mx-4 px-4 sm:-mx-6 sm:px-6 bg-[var(--bg-soft)]/95 backdrop-blur-sm border-b border-[var(--line)] shadow-[0_4px_12px_-6px_rgba(0,0,0,0.15)] py-3 flex flex-col gap-3">
@@ -52,7 +61,12 @@ export function StickyFilterBar({
         </div>
       )}
       {children && (
-        <div className="rounded-xl border border-[var(--line)] bg-white p-2.5 sm:p-3 max-w-full overflow-x-auto">
+        <div
+          className={cn(
+            "rounded-xl border border-[var(--line)] bg-white p-2.5 sm:p-3 max-w-full overflow-x-auto",
+            mobileCompact && "w-fit sm:w-full"
+          )}
+        >
           {children}
         </div>
       )}

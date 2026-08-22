@@ -26,7 +26,7 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-col gap-8 pb-8">
       {/* No page title here — the breadcrumb in Topbar already says "หน้าหลัก" */}
-      <StickyFilterBar>
+      <StickyFilterBar mobileCompact>
         <DashboardFilters />
       </StickyFilterBar>
       <DashboardGrid editing={false} />
