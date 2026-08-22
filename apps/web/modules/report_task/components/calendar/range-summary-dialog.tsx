@@ -57,18 +57,18 @@ export function RangeSummaryDialog({
   onToggleTodo,
   onEditTodo,
   onRemoveTodo,
-  onAddMeeting,
+  showTodos = true,
   onAddSchedule,
   onAddTodo,
 }: {
   range: SummaryRange | null;
-  tab: "work" | "schedule" | "todo";
+  tab: "work" | "schedule";
   /** Already-expanded routine-day-off events for the visible calendar range
    *  (see calendar-view.tsx's `dayoffEvents`) — reused here instead of
    *  re-reading the store and re-running `expandRule`, since any range this
    *  dialog can show is always a subset of what's currently on screen. */
   dayoffs?: CalendarEvent[];
-  /** Mirrors calendar-view.tsx's own todoScope toggle — "mine" vs "all". */
+  /** Mirrors calendar-view.tsx's own effective todoScope — "mine" vs "all". */
   todoScope?: "mine" | "all";
   onOpenChange: (open: boolean) => void;
   onOpenTask: (id: string) => void;
@@ -76,11 +76,13 @@ export function RangeSummaryDialog({
   /** Clicking a to-do's title (own items only) opens it for editing. */
   onEditTodo?: (t: TodoItem) => void;
   onRemoveTodo?: (id: string) => void;
-  /** Single-day click only — a multi-day drag has no one date to hang a meeting on. */
-  onAddMeeting?: (date: string) => void;
-  /** Same idea as `onAddMeeting`, for the schedule tab's "เพิ่มวันลา/วันหยุดประจำ" button. */
+  /** Mirrors calendar-view.tsx's showTodosInWork overlay switch — hides the
+   *  to-do section from the work-tab summary when the user turned it off. */
+  showTodos?: boolean;
+  /** Same idea, for the schedule tab's "เพิ่มวันลา/วันหยุดประจำ" button. */
   onAddSchedule?: (date: string) => void;
-  /** Same idea, for the To Do tab's "เพิ่ม To Do" button. */
+  /** Same idea, for the work tab's "เพิ่มสิ่งที่ต้องทำ" button — this is now
+   *  the only way to add anything (task/meeting/to-do) from this dialog. */
   onAddTodo?: (date: string) => void;
 }) {
   const tasks = useTaskStore((s) => s.tasks);
@@ -162,7 +164,7 @@ export function RangeSummaryDialog({
             </div>
 
             <div className="max-h-72 overflow-y-auto space-y-3 mt-1">
-              {data.tasks.length === 0 && data.meetings.length === 0 && (
+              {data.tasks.length === 0 && data.meetings.length === 0 && (!showTodos || data.todos.length === 0) && (
                 <p className="text-sm text-[var(--ink-soft)] text-center py-4">ไม่มีงาน/ประชุมในช่วงนี้</p>
               )}
 
@@ -237,58 +239,54 @@ export function RangeSummaryDialog({
                   })}
                 </div>
               )}
-            </div>
-          </>
-        ) : tab === "todo" ? (
-          <>
-            <div className="grid grid-cols-2 gap-2">
-              <Stat label="ทั้งหมด" value={data.todos.length} />
-              <Stat label="เสร็จแล้ว" value={data.todos.filter((t) => t.done).length} tone="good" />
-            </div>
-            <div className="max-h-72 overflow-y-auto space-y-1 mt-1">
-              {data.todos.length === 0 && (
-                <p className="text-sm text-[var(--ink-soft)] text-center py-4">ไม่มีสิ่งที่ต้องทำในช่วงนี้</p>
+
+              {showTodos && data.todos.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium text-[var(--ink-soft)] px-2 flex items-center gap-1">
+                    <ListTodo className="h-3 w-3" /> สิ่งที่ต้องทำ ({data.todos.length})
+                  </p>
+                  {data.todos.map((t) => {
+                    const mine = t.userId === viewingAsUserId;
+                    const owner = todoScope === "all" && !mine ? getUser(t.userId) : undefined;
+                    return (
+                      <div key={t.id} className="group flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-[var(--bg-soft)]">
+                        <button
+                          onClick={() => mine && onToggleTodo?.(t.id)}
+                          disabled={!mine}
+                          aria-label={t.done ? "ทำเครื่องหมายว่ายังไม่เสร็จ" : "ทำเครื่องหมายว่าเสร็จแล้ว"}
+                          className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm border border-[var(--chart-amber)] disabled:opacity-50 disabled:cursor-default"
+                          style={t.done ? { backgroundColor: "var(--chart-amber)" } : undefined}
+                        >
+                          {t.done && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />}
+                        </button>
+                        <button
+                          onClick={() => mine && onEditTodo?.(t)}
+                          disabled={!mine}
+                          className="min-w-0 flex-1 text-left disabled:cursor-default"
+                        >
+                          <span className={cn("block truncate text-sm", t.done && "line-through text-[var(--ink-soft)]")}>
+                            {owner ? `${owner.name.split(" ")[0]}: ${t.title}` : t.title}
+                          </span>
+                          {t.note && <span className="block truncate text-xs text-[var(--ink-soft)]">{t.note}</span>}
+                        </button>
+                        <span className="text-[11px] text-[var(--ink-soft)] shrink-0 whitespace-nowrap">
+                          {t.time ? t.time : formatDate(t.date)}
+                        </span>
+                        {mine && (
+                          <button
+                            onClick={() => onRemoveTodo?.(t.id)}
+                            title="ลบ"
+                            aria-label={`ลบ "${t.title}"`}
+                            className="shrink-0 text-[var(--ink-faint)] opacity-0 group-hover:opacity-100 hover:text-[var(--chart-red)] transition-opacity"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               )}
-              {data.todos.map((t) => {
-                const mine = t.userId === viewingAsUserId;
-                const owner = todoScope === "all" && !mine ? getUser(t.userId) : undefined;
-                return (
-                  <div key={t.id} className="group flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-[var(--bg-soft)]">
-                    <button
-                      onClick={() => mine && onToggleTodo?.(t.id)}
-                      disabled={!mine}
-                      aria-label={t.done ? "ทำเครื่องหมายว่ายังไม่เสร็จ" : "ทำเครื่องหมายว่าเสร็จแล้ว"}
-                      className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm border border-[var(--chart-amber)] disabled:opacity-50 disabled:cursor-default"
-                      style={t.done ? { backgroundColor: "var(--chart-amber)" } : undefined}
-                    >
-                      {t.done && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />}
-                    </button>
-                    <button
-                      onClick={() => mine && onEditTodo?.(t)}
-                      disabled={!mine}
-                      className="min-w-0 flex-1 text-left disabled:cursor-default"
-                    >
-                      <span className={cn("block truncate text-sm", t.done && "line-through text-[var(--ink-soft)]")}>
-                        {owner ? `${owner.name.split(" ")[0]}: ${t.title}` : t.title}
-                      </span>
-                      {t.note && <span className="block truncate text-xs text-[var(--ink-soft)]">{t.note}</span>}
-                    </button>
-                    <span className="text-[11px] text-[var(--ink-soft)] shrink-0 whitespace-nowrap">
-                      {t.time ? t.time : formatDate(t.date)}
-                    </span>
-                    {mine && (
-                      <button
-                        onClick={() => onRemoveTodo?.(t.id)}
-                        title="ลบ"
-                        aria-label={`ลบ "${t.title}"`}
-                        className="shrink-0 text-[var(--ink-faint)] opacity-0 group-hover:opacity-100 hover:text-[var(--chart-red)] transition-opacity"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
             </div>
           </>
         ) : (
@@ -334,13 +332,13 @@ export function RangeSummaryDialog({
           </>
         )}
 
-        {tab === "work" && isSingleDay && onAddMeeting && (
+        {tab === "work" && isSingleDay && onAddTodo && (
           <Button
             variant="outline"
             className="w-full"
-            onClick={() => onAddMeeting(range.start)}
+            onClick={() => onAddTodo(range.start)}
           >
-            <CalendarPlus className="h-4 w-4" /> สร้างประชุม
+            <CalendarPlus className="h-4 w-4" /> เพิ่มสิ่งที่ต้องทำ / สร้างประชุม
           </Button>
         )}
 
@@ -354,18 +352,8 @@ export function RangeSummaryDialog({
           </Button>
         )}
 
-        {tab === "todo" && isSingleDay && onAddTodo && (
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => onAddTodo(range.start)}
-          >
-            <CalendarPlus className="h-4 w-4" /> เพิ่มสิ่งที่ต้องทำ
-          </Button>
-        )}
-
         <p className="flex items-center gap-1.5 text-[11px] text-[var(--ink-soft)] pt-1">
-          {tab === "work" ? <ListChecks className="h-3 w-3" /> : tab === "todo" ? <ListTodo className="h-3 w-3" /> : <CalendarDays className="h-3 w-3" />}
+          {tab === "work" ? <ListChecks className="h-3 w-3" /> : <CalendarDays className="h-3 w-3" />}
           ลากคลุมหลายวันบนปฏิทินเพื่อดูสรุปช่วงเวลา
         </p>
       </DialogContent>

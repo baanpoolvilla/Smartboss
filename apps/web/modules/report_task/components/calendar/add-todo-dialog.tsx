@@ -12,22 +12,20 @@ import {
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Textarea } from "@/modules/report_task/components/ui/textarea";
+import { Switch } from "@/modules/report_task/components/ui/switch";
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
+import { AttendeePicker } from "@/modules/report_task/components/shared/attendee-picker";
 import { useTodoStore } from "@/modules/report_task/store/todo-store";
+import { useMeetingStore } from "@/modules/report_task/store/meeting-store";
+import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { todayIso } from "@/modules/report_task/lib/now";
 import { cn } from "@/modules/report_task/lib/utils";
+import { canManage, departmentIdsOf } from "@/modules/report_task/lib/directory";
 import { X, Trash2 } from "lucide-react";
-import type { TodoItem } from "@/modules/report_task/types";
+import { toast } from "sonner";
+import type { CalendarEvent, TodoItem } from "@/modules/report_task/types";
 
-/**
- * Deliberately its own small dialog rather than another type bolted onto
- * NewTaskDialog — a to-do is just a title + a date, none of the
- * attendees/leave-type/attachment machinery that dialog carries for
- * meetings/leaves applies here. Doubles as the edit dialog — passing
- * `editingTodo` switches title/button copy and adds a delete action;
- * omitting it is the plain "create new" flow.
- */
 export function AddTodoDialog({
   open,
   onOpenChange,
@@ -42,18 +40,20 @@ export function AddTodoDialog({
   const addTodo = useTodoStore((s) => s.addTodo);
   const updateTodo = useTodoStore((s) => s.updateTodo);
   const removeTodo = useTodoStore((s) => s.removeTodo);
+  const addMeeting = useMeetingStore((s) => s.addMeeting);
+  const notifyMany = useNotificationStore((s) => s.notifyMany);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
+  const canCreateMeeting = canManage(viewingAsUserId);
+
   const [title, setTitle] = useState("");
   const [date, setDate] = useState(defaultDate ?? todayIso());
   const [time, setTime] = useState("");
   const [note, setNote] = useState("");
+  const [isMeeting, setIsMeeting] = useState(false);
+  const [meetAttendeeIds, setMeetAttendeeIds] = useState<string[]>([]);
+  const [meetStart, setMeetStart] = useState("10:00");
+  const [meetEnd, setMeetEnd] = useState("11:00");
 
-  /**
-   * ล้างฟอร์ม/เติมค่าที่แก้ไขตอนกล่องถูกเปิด — ปรับ state ระหว่าง render
-   * ไม่ใช่ใน effect (แบบเดิมใช้ useEffect ทำให้ React render ด้วยค่าเก่าไปหนึ่ง
-   * รอบก่อนแล้วค่อย render ซ้ำ — ท่านี้ React ทิ้ง render รอบนั้นทันทีแล้ว
-   * เริ่มใหม่ด้วยค่าที่ถูก ผู้ใช้จึงไม่เห็นค่าเก่ากะพริบตอนเปิดกล่อง)
-   */
   const [wasOpen, setWasOpen] = useState(open);
   if (open !== wasOpen) {
     setWasOpen(open);
@@ -62,6 +62,10 @@ export function AddTodoDialog({
       setDate(editingTodo?.date ?? defaultDate ?? todayIso());
       setTime(editingTodo?.time ?? "");
       setNote(editingTodo?.note ?? "");
+      setIsMeeting(false);
+      setMeetAttendeeIds([]);
+      setMeetStart("10:00");
+      setMeetEnd("11:00");
     }
   }
 
@@ -69,6 +73,31 @@ export function AddTodoDialog({
     const trimmed = title.trim();
     if (!trimmed) return;
     const trimmedNote = note.trim();
+
+    if (isMeeting && canCreateMeeting) {
+      const meetDeptIds = departmentIdsOf(meetAttendeeIds);
+      const meeting: CalendarEvent = {
+        id: `meet-${crypto.randomUUID()}`,
+        title: trimmed,
+        type: "meeting",
+        start: `${date}T${meetStart}:00`,
+        end: `${date}T${meetEnd}:00`,
+        allDay: false,
+        departmentId: meetDeptIds[0],
+        departmentIds: meetDeptIds,
+        attendeeIds: meetAttendeeIds,
+        createdById: viewingAsUserId,
+        description: trimmedNote || undefined,
+      };
+      addMeeting(meeting);
+      if (meetAttendeeIds.length > 0) {
+        notifyMany(meetAttendeeIds, viewingAsUserId, `แท็กคุณในประชุม "${trimmed}"`);
+      }
+      toast.success("สร้างประชุมเรียบร้อยแล้ว");
+      onOpenChange(false);
+      return;
+    }
+
     if (editingTodo) {
       updateTodo(editingTodo.id, { title: trimmed, date, time: time || undefined, note: trimmedNote || undefined });
     } else {
@@ -100,30 +129,47 @@ export function AddTodoDialog({
           <span className="sr-only">Close</span>
         </DialogClose>
         <DialogHeader>
-          <DialogTitle>{editingTodo ? "แก้ไขสิ่งที่ต้องทำ" : "เพิ่มสิ่งที่ต้องทำ"}</DialogTitle>
-          <DialogDescription>รายการสั้น ๆ ที่ผูกกับวันที่ — ติ๊กเสร็จหรือลากย้ายวันได้จากตัวปฏิทินเลย</DialogDescription>
+          <DialogTitle>{editingTodo ? "แก้ไขสิ่งที่ต้องทำ" : isMeeting ? "สร้างประชุม" : "เพิ่มสิ่งที่ต้องทำ"}</DialogTitle>
+          <DialogDescription>
+            {isMeeting
+              ? "นัดประชุมพร้อมเลือกผู้เข้าร่วมได้จากที่นี่เลย"
+              : "รายการสั้น ๆ ที่ผูกกับวันที่ — ติ๊กเสร็จหรือลากย้ายวันได้จากตัวปฏิทินเลย"}
+          </DialogDescription>
         </DialogHeader>
-
         <div className="flex flex-col gap-3">
           <Input
             autoFocus
-            placeholder="ต้องทำอะไร…"
+            placeholder={isMeeting ? "หัวข้อประชุม…" : "ต้องทำอะไร…"}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") submit();
+              if (e.key === "Enter" && !isMeeting) submit();
             }}
           />
-          <div className="flex gap-2">
-            <DatePickerField value={date} onChange={setDate} className="flex-1" />
-            <Input
-              type="time"
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
-              className="w-[110px] shrink-0"
-              aria-label="เวลา (ไม่บังคับ)"
-            />
-          </div>
+
+          {!editingTodo && canCreateMeeting && (
+            <label className="flex items-center justify-between gap-2 rounded-lg border border-[var(--line)] px-3 py-2 cursor-pointer">
+              <span className="text-sm font-medium">เป็นการประชุม</span>
+              <Switch checked={isMeeting} onCheckedChange={setIsMeeting} />
+            </label>
+          )}
+
+          {isMeeting ? (
+            <>
+              <div className="flex gap-2">
+                <DatePickerField value={date} onChange={setDate} className="flex-1" />
+                <Input type="time" value={meetStart} onChange={(e) => setMeetStart(e.target.value)} className="w-[100px] shrink-0" aria-label="เวลาเริ่ม" />
+                <Input type="time" value={meetEnd} onChange={(e) => setMeetEnd(e.target.value)} className="w-[100px] shrink-0" aria-label="เวลาสิ้นสุด" />
+              </div>
+              <AttendeePicker value={meetAttendeeIds} onChange={setMeetAttendeeIds} placeholder="เลือกแผนก/ผู้เข้าร่วม..." />
+            </>
+          ) : (
+            <div className="flex gap-2">
+              <DatePickerField value={date} onChange={setDate} className="flex-1" />
+              <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-[110px] shrink-0" aria-label="เวลา (ไม่บังคับ)" />
+            </div>
+          )}
+
           <Textarea
             placeholder="รายละเอียดเพิ่มเติม (ไม่บังคับ)…"
             value={note}
@@ -132,7 +178,6 @@ export function AddTodoDialog({
             className="resize-none"
           />
         </div>
-
         <div className="flex gap-2">
           {editingTodo && (
             <Button
@@ -144,11 +189,14 @@ export function AddTodoDialog({
             </Button>
           )}
           <Button
-            className={cn("bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white", editingTodo ? "flex-1" : "w-full")}
-            disabled={!title.trim()}
+            className={cn(
+              "bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white",
+              editingTodo ? "flex-1" : "w-full"
+            )}
+            disabled={!title.trim() || (isMeeting && meetEnd <= meetStart)}
             onClick={submit}
           >
-            {editingTodo ? "บันทึก" : "เพิ่มสิ่งที่ต้องทำ"}
+            {editingTodo ? "บันทึก" : isMeeting ? "สร้างประชุม" : "เพิ่มสิ่งที่ต้องทำ"}
           </Button>
         </div>
       </DialogContent>

@@ -805,19 +805,17 @@ export function CalendarView() {
           >
             <Globe className="h-3.5 w-3.5" /> เพิ่มปฏิทิน
           </Button>
-          {/* Scheduling a meeting is a manage-level action (see NewTaskDialog) —
-              on the work tab, hide the button entirely rather than opening a
-              dialog with no allowed type left to pick. */}
-          {(tab !== "work" || canManage(viewingAsUserId)) && (
-            <Button
-              size="lg"
-              className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
-              onClick={() => openCreate()}
-            >
-              <Plus className="h-4 w-4" />
-              {tab === "work" ? "สร้างประชุม" : "เพิ่มวันลา"}
-            </Button>
-          )}
+          {/* งาน no longer has a separate "สร้างประชุม" button — "เพิ่มสิ่งที่
+              ต้องทำ" is the one create entry point, with a "เป็นการประชุม"
+              switch inside for managers (see AddTodoDialog). */}
+          <Button
+            size="lg"
+            className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+            onClick={() => (tab === "work" ? openTodoDialog({}) : openCreate())}
+          >
+            <Plus className="h-4 w-4" />
+            {tab === "work" ? "เพิ่มสิ่งที่ต้องทำ" : "เพิ่มวันลา"}
+          </Button>
         </div>
 
         {/* <640px: tabs scroll horizontally instead of wrapping (this row
@@ -872,15 +870,13 @@ export function CalendarView() {
             {mobileActiveFilterCount > 0 && <span className="tabular-nums">({mobileActiveFilterCount})</span>}
           </button>
 
-          {(tab !== "work" || canManage(viewingAsUserId)) && (
-            <Button
-              className="ml-auto bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
-              onClick={() => openCreate()}
-            >
-              <Plus className="h-4 w-4" />
-              {tab === "work" ? "สร้างประชุม" : "เพิ่มวันลา"}
-            </Button>
-          )}
+          <Button
+            className="ml-auto bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+            onClick={() => (tab === "work" ? openTodoDialog({}) : openCreate())}
+          >
+            <Plus className="h-4 w-4" />
+            {tab === "work" ? "เพิ่มสิ่งที่ต้องทำ" : "เพิ่มวันลา"}
+          </Button>
         </div>
 
         {/* ≥640px: unchanged. <640px gets a button + bottom sheet below
@@ -1333,7 +1329,7 @@ export function CalendarView() {
         onDateClick={handleDateClick}
         onEventDrop={handleEventDrop}
         onSelectRange={setSummaryRange}
-        onCreate={tab === "work" && !canManage(viewingAsUserId) ? undefined : () => openCreate()}
+        onCreate={tab === "work" ? () => openTodoDialog({}) : () => openCreate()}
         onToggleTodo={handleToggleTodo}
         onEditTodo={(eventId) => {
           const todoId = eventId.replace("todoevt-", "");
@@ -1384,21 +1380,19 @@ export function CalendarView() {
         onToggleTodo={toggleTodo}
         onEditTodo={(t) => { setSummaryRange(null); openTodoDialog({ todo: t, date: t.date }); }}
         onRemoveTodo={removeTodo}
-        onAddMeeting={canManage(viewingAsUserId) ? openAddFromSummary : undefined}
+        showTodos={showTodosInWork}
         onAddSchedule={openAddFromSummary}
         onAddTodo={(date) => { setSummaryRange(null); openTodoDialog({ date }); }}
       />
       <TaskDetailSheet taskId={openTaskId} onOpenChange={(open) => !open && setOpenTaskId(null)} />
-      {/* Work tab only ever creates meetings here — tasks are created on the
-          kanban board and just show up on this calendar already linked. To
-          do's are their own much smaller dialog below, not another type
-          bolted onto this one. */}
+      {/* Only ever opened from the schedule tab now — meeting creation moved
+          into AddTodoDialog's "เป็นการประชุม" switch below, alongside to-dos. */}
       <NewTaskDialog
         key={`${tab}-${createDate ?? "new"}`}
         open={createOpen}
         onOpenChange={setCreateOpen}
-        defaultType={tab === "schedule" ? "leave" : "meeting"}
-        allowedTypes={tab === "schedule" ? ["leave", "dayoff"] : ["meeting"]}
+        defaultType="leave"
+        allowedTypes={["leave", "dayoff"]}
         defaultDate={createDate}
       />
       <AddTodoDialog
