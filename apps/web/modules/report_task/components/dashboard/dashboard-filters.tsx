@@ -279,7 +279,7 @@ export function DashboardFilters() {
         {canPickPerson && (
           <div className="px-4">
             <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">ตัวกรองด่วน</p>
-            <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex gap-2.5 overflow-x-auto pb-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <QuickFilterChip icon={UserIcon} label="ของฉัน" active={quickMineActive} onClick={() => setPersonId(quickMineActive ? "all" : viewingAsUserId)} />
               <QuickFilterChip icon={CalendarDays} label="วันนี้" active={quickTodayActive} onClick={() => setPreset(quickTodayActive ? "all" : "today")} />
             </div>

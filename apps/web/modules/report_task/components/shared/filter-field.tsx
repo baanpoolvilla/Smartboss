@@ -112,7 +112,7 @@ export function QuickFilterChip({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-[12.5px] font-medium transition-colors",
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2.5 text-[13px] font-medium transition-colors",
         !active && "border-[var(--line)] bg-white text-[var(--ink)] [&_svg]:text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]",
         active &&
           !warn &&
