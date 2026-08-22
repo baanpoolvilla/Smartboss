@@ -21,7 +21,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/mod
 import { Switch } from "@/modules/report_task/components/ui/switch";
 import { filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
 import { CalendarFilters } from "./calendar-filters";
-import { FullCalendarView, type ViewKey } from "./full-calendar-view";
+import { FullCalendarView, type ViewKey, type FullCalendarViewHandle } from "./full-calendar-view";
+import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { LeaveSidebar } from "./leave-sidebar";
 import { WorkSidebar } from "./work-sidebar";
 import { TodoSidebar } from "./todo-sidebar";
@@ -169,6 +170,25 @@ export function CalendarView() {
   // a bottom sheet (same pattern as the Kanban board's TaskFilters), instead
   // of the row's badges wrapping across 2-3 lines on a phone.
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
+  // "วันที่" quick-jump in the mobile sheet — a navigation shortcut (moves
+  // the calendar to a date/view), not a real filter like the fields above
+  // (nothing here narrows which events show). Shared across all 3 tabs since
+  // it's the same calendar underneath regardless of which data tab is active.
+  const [dateJump, setDateJump] = useState<"all" | "today" | "tomorrow" | "week" | "month" | "custom">("all");
+  const [customJumpDate, setCustomJumpDate] = useState("");
+  const fullCalendarRef = useRef<FullCalendarViewHandle>(null);
+  function applyDateJump(next: typeof dateJump, customDate?: string) {
+    setDateJump(next);
+    const today = now();
+    if (next === "today") fullCalendarRef.current?.jumpToDate(today, "timeGridDay");
+    else if (next === "tomorrow") {
+      const d = new Date(today);
+      d.setDate(d.getDate() + 1);
+      fullCalendarRef.current?.jumpToDate(d, "timeGridDay");
+    } else if (next === "week") fullCalendarRef.current?.jumpToDate(today, "timeGridWeek");
+    else if (next === "month") fullCalendarRef.current?.jumpToDate(today, "dayGridMonth");
+    else if (next === "custom" && customDate) fullCalendarRef.current?.jumpToDate(new Date(`${customDate}T00:00:00`), "timeGridDay");
+  }
   // The exact visible range of whichever FullCalendar view is active, so the
   // sidebars can show "today" / "this week" / "this month" instead of always
   // defaulting to the month containing `viewDate`.
@@ -282,20 +302,23 @@ export function CalendarView() {
   // CURRENT tab's fields differ from their "show everything" default,
   // not every field that merely exists (an untouched tab should read as 0).
   const mobileActiveFilterCount = useMemo(() => {
+    const dateJumpCount = dateJump !== "all" ? 1 : 0;
     if (tab === "work") {
       return (
+        dateJumpCount +
         (canBroadenScope && taskScope !== "mine" ? 1 : 0) +
         (workPriorities.size !== taskPriorityOrder.length ? 1 : 0) +
         (showMeetings ? 0 : 1) +
         (workGoogleOwnerIds.some((id) => hiddenUserIds.includes(id)) ? 1 : 0)
       );
     }
-    if (tab === "todo") return todoScope !== "mine" ? 1 : 0;
+    if (tab === "todo") return dateJumpCount + (todoScope !== "mine" ? 1 : 0);
     return (
+      dateJumpCount +
       (scheduleActive.size !== scheduleTypes.length ? 1 : 0) +
       (hiddenLeaveTypeIds.size > 0 ? 1 : 0)
     );
-  }, [tab, canBroadenScope, taskScope, workPriorities, showMeetings, workGoogleOwnerIds, hiddenUserIds, todoScope, scheduleActive, hiddenLeaveTypeIds]);
+  }, [tab, dateJump, canBroadenScope, taskScope, workPriorities, showMeetings, workGoogleOwnerIds, hiddenUserIds, todoScope, scheduleActive, hiddenLeaveTypeIds]);
 
   function openCreate(date?: string) {
     setCreateDate(date);
@@ -912,6 +935,8 @@ export function CalendarView() {
                 <button
                   type="button"
                   onClick={() => {
+                    setDateJump("all");
+                    setCustomJumpDate("");
                     if (tab === "work") {
                       setTaskScope("mine");
                       setWorkPriorities(new Set(taskPriorityOrder));
@@ -1075,6 +1100,48 @@ export function CalendarView() {
                   </div>
                 </>
               )}
+
+              {/* Navigation shortcut, not a real filter — jumps the calendar
+                  underneath to a date/view. Same for every tab since it's
+                  the same calendar regardless of which data tab is active. */}
+              <div>
+                <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">วันที่</p>
+                <div className="flex flex-col rounded-xl border border-[var(--line)] divide-y divide-[var(--line)]">
+                  {(
+                    [
+                      { key: "all", label: "ทั้งหมด" },
+                      { key: "today", label: "วันนี้" },
+                      { key: "tomorrow", label: "พรุ่งนี้" },
+                      { key: "week", label: "สัปดาห์นี้" },
+                      { key: "month", label: "เดือนนี้" },
+                      { key: "custom", label: "กำหนดช่วงวันที่" },
+                    ] as const
+                  ).map((opt) => (
+                    <label key={opt.key} className="flex items-center gap-3 px-3 py-2.5 text-sm text-[var(--ink)]">
+                      <input
+                        type="radio"
+                        name="calendar-date-jump"
+                        checked={dateJump === opt.key}
+                        onChange={() => applyDateJump(opt.key, customJumpDate)}
+                        className="h-4 w-4 accent-[var(--brand-green-dark)]"
+                      />
+                      {opt.label}
+                    </label>
+                  ))}
+                  {dateJump === "custom" && (
+                    <div className="px-3 py-2.5">
+                      <DatePickerField
+                        value={customJumpDate}
+                        onChange={(v) => {
+                          setCustomJumpDate(v);
+                          applyDateJump("custom", v);
+                        }}
+                        className="w-full"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             <SheetFooter>
@@ -1090,6 +1157,7 @@ export function CalendarView() {
       </StickyFilterBar>
 
       <FullCalendarView
+        ref={fullCalendarRef}
         events={events}
         onSelectEvent={handleSelect}
         onRangeChange={setViewRange}

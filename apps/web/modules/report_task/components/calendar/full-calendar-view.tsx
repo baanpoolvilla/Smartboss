@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
@@ -39,20 +39,14 @@ const PICKER_END = new Date(2036, 11, 31);
 const INITIAL_DATE = now();
 const initialTitle = INITIAL_DATE.toLocaleDateString("th-TH-u-ca-gregory", { month: "long", year: "numeric" });
 
-export function FullCalendarView({
-  events,
-  onSelectEvent,
-  onViewDateChange,
-  onRangeChange,
-  onActiveRangeChange,
-  onDateClick,
-  onEventDrop,
-  onSelectRange,
-  onCreate,
-  onToggleTodo,
-  onEditTodo,
-  addHint = "คลิกวันเพื่อเพิ่มรายการ",
-}: {
+/** Imperative handle so a parent (e.g. the mobile filter sheet's "วันที่"
+ * quick-jump list) can navigate the calendar from outside — the view/date
+ * are otherwise fully internal state with no prop to control them. */
+export interface FullCalendarViewHandle {
+  jumpToDate: (date: Date, view?: ViewKey) => void;
+}
+
+interface FullCalendarViewProps {
   events: CalendarEvent[];
   onSelectEvent: (event: CalendarEvent, anchorRect: DOMRect) => void;
   onViewDateChange?: (date: Date) => void;
@@ -77,7 +71,22 @@ export function FullCalendarView({
   /** Clicking a to-do chip's title (not its checkbox) opens it for editing. */
   onEditTodo?: (id: string) => void;
   addHint?: string;
-}) {
+}
+
+export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarViewProps>(function FullCalendarView({
+  events,
+  onSelectEvent,
+  onViewDateChange,
+  onRangeChange,
+  onActiveRangeChange,
+  onDateClick,
+  onEventDrop,
+  onSelectRange,
+  onCreate,
+  onToggleTodo,
+  onEditTodo,
+  addHint = "คลิกวันเพื่อเพิ่มรายการ",
+}, ref) {
   const calendarRef = useRef<FullCalendar | null>(null);
   const [view, setView] = useState<ViewKey>("dayGridMonth");
   const [title, setTitle] = useState(initialTitle);
@@ -180,6 +189,13 @@ export function FullCalendarView({
     preserveScroll(() => calendarRef.current?.getApi().changeView(v));
     setView(v);
   }
+
+  useImperativeHandle(ref, () => ({
+    jumpToDate: (date, view) => {
+      if (view) changeView(view);
+      jumpToDate(date);
+    },
+  }));
 
   function handleEventClick(arg: EventClickArg) {
     // A to-do chip has its own checkbox (see renderEventContent, which stops
@@ -428,4 +444,4 @@ export function FullCalendarView({
       </p>
     </div>
   );
-}
+});
