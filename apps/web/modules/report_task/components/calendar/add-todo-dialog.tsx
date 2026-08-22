@@ -53,6 +53,8 @@ export function AddTodoDialog({
   const [meetAttendeeIds, setMeetAttendeeIds] = useState<string[]>([]);
   const [meetStart, setMeetStart] = useState("10:00");
   const [meetEnd, setMeetEnd] = useState("11:00");
+  const [meetLocation, setMeetLocation] = useState("");
+  const [meetOnline, setMeetOnline] = useState(false);
 
   const [wasOpen, setWasOpen] = useState(open);
   if (open !== wasOpen) {
@@ -66,6 +68,8 @@ export function AddTodoDialog({
       setMeetAttendeeIds([]);
       setMeetStart("10:00");
       setMeetEnd("11:00");
+      setMeetLocation("");
+      setMeetOnline(false);
     }
   }
 
@@ -87,6 +91,7 @@ export function AddTodoDialog({
         departmentIds: meetDeptIds,
         attendeeIds: meetAttendeeIds,
         createdById: viewingAsUserId,
+        location: meetOnline ? "ออนไลน์ (Teams/Zoom)" : meetLocation.trim() || "ไม่ระบุสถานที่",
         description: trimmedNote || undefined,
       };
       addMeeting(meeting);
@@ -162,6 +167,19 @@ export function AddTodoDialog({
                 <Input type="time" value={meetEnd} onChange={(e) => setMeetEnd(e.target.value)} className="w-[100px] shrink-0" aria-label="เวลาสิ้นสุด" />
               </div>
               <AttendeePicker value={meetAttendeeIds} onChange={setMeetAttendeeIds} placeholder="เลือกแผนก/ผู้เข้าร่วม..." />
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="สถานที่ประชุม…"
+                  value={meetLocation}
+                  onChange={(e) => setMeetLocation(e.target.value)}
+                  disabled={meetOnline}
+                  className="flex-1"
+                />
+                <label className="flex shrink-0 items-center gap-1.5 text-xs text-[var(--ink-soft)] cursor-pointer">
+                  <Switch checked={meetOnline} onCheckedChange={setMeetOnline} />
+                  ออนไลน์
+                </label>
+              </div>
             </>
           ) : (
             <div className="flex gap-2">
