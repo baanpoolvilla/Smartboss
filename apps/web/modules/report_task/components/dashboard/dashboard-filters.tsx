@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/modules/report_task/components/ui/button";
 import {
   Select,
@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/modules/report_task/components/ui/select";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/modules/report_task/components/ui/sheet";
 import { getUser, getDepartment, canManage, scopedDepartments, scopedUsers } from "@/modules/report_task/lib/directory";
 import { useDashboardFilterStore } from "@/modules/report_task/store/dashboard-filter-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
@@ -16,7 +17,8 @@ import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { useDepartmentStore } from "@/modules/report_task/store/department-store";
 import { FilterField, FILTER_FIELD_LABEL_CLASS, filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
 import { DateRangeSelectField } from "@/modules/report_task/components/shared/date-range-select-field";
-import { Building2, Users, X } from "lucide-react";
+import { cn } from "@/modules/report_task/lib/utils";
+import { Building2, Users, SlidersHorizontal, X } from "lucide-react";
 
 /**
  * §7.2 — filter order is department → person → time, matching the
@@ -111,6 +113,7 @@ export function DashboardFilters() {
   const personActive = personId !== "all";
   const presetActive = preset !== "all";
   const isFiltered = (canPickPerson && (deptActive || personActive)) || presetActive;
+  const activeFilterCount = [canPickPerson && deptActive, canPickPerson && personActive, presetActive].filter(Boolean).length;
   const clearFilters = () => {
     if (canPickPerson) {
       setPersonId("all");
@@ -119,8 +122,14 @@ export function DashboardFilters() {
     setPreset("all");
   };
 
+  // <640px only — the 3 fields collapse into one button that opens a bottom
+  // sheet (same pattern as the Kanban board's TaskFilters), instead of the
+  // desktop row's pills wrapping awkwardly onto their own uneven lines.
+  const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
+
   return (
-    <div className="flex flex-wrap items-end gap-2">
+    <>
+    <div className="hidden sm:flex flex-wrap items-end gap-2">
       {canPickPerson && (
         <>
           <FilterField label="แผนก">
@@ -200,5 +209,98 @@ export function DashboardFilters() {
         </Button>
       )}
     </div>
+
+    <div className="flex sm:hidden items-center gap-2">
+      <button
+        type="button"
+        onClick={() => setMobileSheetOpen(true)}
+        className={cn(filterFieldTriggerClass(activeFilterCount > 0), "!h-10")}
+      >
+        <SlidersHorizontal className="h-4 w-4 shrink-0" />
+        ตัวกรอง
+        {activeFilterCount > 0 && <span className="tabular-nums">({activeFilterCount})</span>}
+      </button>
+    </div>
+
+    <Sheet open={mobileSheetOpen} onOpenChange={setMobileSheetOpen}>
+      <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
+        <SheetHeader className="flex-row items-center justify-between gap-2 pb-2">
+          <SheetTitle>ตัวกรอง</SheetTitle>
+          {isFiltered && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="text-sm font-medium text-[var(--brand-green-dark)] underline-offset-2 hover:underline"
+            >
+              ล้างตัวกรอง
+            </button>
+          )}
+        </SheetHeader>
+        <div className="flex flex-col gap-4 px-4">
+          {canPickPerson ? (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[11px] font-medium text-[var(--ink-soft)] px-0.5">แผนก</span>
+                <Select value={departmentId} onValueChange={(v) => v && setDepartmentId(v)}>
+                  <SelectTrigger className={filterFieldTriggerClass(deptActive, "w-full !h-11")}>
+                    <Building2 className="h-4 w-4 shrink-0" />
+                    <SelectValue placeholder="แผนก">
+                      {departmentId === "all" ? "ทั้งบริษัท" : (getDepartment(departmentId)?.name ?? "แผนก")}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent alignItemWithTrigger={false}>
+                    <SelectItem value="all">ทั้งบริษัท</SelectItem>
+                    {availableDepartments.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[11px] font-medium text-[var(--ink-soft)] px-0.5">พนักงาน</span>
+                <Select value={personId} onValueChange={(v) => v && setPersonId(v)}>
+                  <SelectTrigger className={filterFieldTriggerClass(personActive, "w-full !h-11")}>
+                    <Users className="h-4 w-4 shrink-0" />
+                    <SelectValue placeholder="ดูข้อมูลของ">
+                      {personId === "all" ? allInDeptLabel : (getUser(personId)?.name ?? "ดูข้อมูลของ")}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent alignItemWithTrigger={false}>
+                    <SelectItem value="all">{allInDeptLabel}</SelectItem>
+                    {peopleInScope.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[11px] font-medium text-[var(--ink-soft)] px-0.5">พนักงาน</span>
+              <span className="text-sm text-[var(--ink-soft)] px-0.5">{getUser(viewingAsUserId)?.name}</span>
+            </div>
+          )}
+
+          <DateRangeSelectField
+            preset={preset}
+            customFrom={customFrom}
+            customTo={customTo}
+            onPresetChange={setPreset}
+            onCustomRangeChange={setCustomRange}
+            widthClass="w-full !h-11"
+          />
+        </div>
+        <SheetFooter>
+          <Button
+            className="h-[46px] w-full bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+            onClick={() => setMobileSheetOpen(false)}
+          >
+            ใช้ตัวกรอง
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
+    </>
   );
 }
