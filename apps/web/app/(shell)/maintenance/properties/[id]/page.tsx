@@ -14,6 +14,7 @@ import { Button } from "@smartboss/ui/components/button";
 import { Input } from "@smartboss/ui/components/input";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { getProperty } from "@/modules/maintenance/data/properties";
+import { categoryNameById } from "@/modules/maintenance/data/categories";
 import { listAssets, lastMaintenanceDates } from "@/modules/maintenance/data/assets";
 import { userNameMap } from "@/modules/maintenance/data/users";
 import { createAssetAction } from "../../assets/actions";
@@ -51,9 +52,12 @@ export default async function PropertyDetailPage({
   const canManageAsset = hasPermission(session, MAINT_PERMS.assetManage);
 
   const assets = await listAssets(orgId, id);
-  const [caretakerNames, lastMaint] = await Promise.all([
+  const [caretakerNames, lastMaint, categoryNames] = await Promise.all([
     userNameMap(orgId, [property.caretakerId]),
     lastMaintenanceDates(orgId, assets.map((a) => a.id)),
+    property.categoryId
+      ? categoryNameById(orgId)
+      : Promise.resolve({} as Record<string, string>),
   ]);
 
   return (
@@ -83,6 +87,14 @@ export default async function PropertyDetailPage({
       {/* ข้อมูลบ้าน */}
       <Card className="mb-4 p-5">
         <h2 className="mb-2 text-sm font-semibold text-(--ink)">ข้อมูลบ้าน</h2>
+        <InfoRow
+          label="หมวดหมู่"
+          value={
+            property.categoryId
+              ? (categoryNames[property.categoryId] ?? "-")
+              : "ยังไม่จัดหมวด"
+          }
+        />
         <InfoRow
           label="ผู้จัดการบ้าน"
           value={property.caretakerId ? caretakerNames[property.caretakerId] ?? "-" : "ไม่มี"}

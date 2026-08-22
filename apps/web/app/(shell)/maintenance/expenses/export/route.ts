@@ -49,11 +49,19 @@ export async function GET(req: NextRequest) {
     pms.map((p) => [p.id, p.title])
   );
 
+  /*
+   * cat = id ของหมวด (เดิมเป็น prefix ของชื่อบ้าน)
+   *
+   * ต้องกรองด้วยเกณฑ์เดียวกับหน้าค่าใช้จ่ายเป๊ะ ๆ ไม่งั้นตัวเลขในไฟล์ที่ export
+   * ออกไปจะไม่ตรงกับที่เห็นบนจอ ซึ่งเป็นข้อมูลที่เอาไปทำบัญชีต่อ
+   */
+  const propCat: Record<string, string | null> = Object.fromEntries(
+    properties.map((p) => [p.id, p.categoryId])
+  );
   const filtered = cat
-    ? expenses.filter((e) => {
-        const name = e.propertyId ? (propNames[e.propertyId] ?? "") : "";
-        return name.toUpperCase().startsWith(cat.toUpperCase());
-      })
+    ? expenses.filter((e) =>
+        e.propertyId ? propCat[e.propertyId] === cat : false
+      )
     : expenses;
 
   const propName = (pid: string) =>

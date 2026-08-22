@@ -12,14 +12,20 @@ model Property {
   ownerContact String?  @map("owner_contact")
   notes        String?
   caretakerId  String?  @map("caretaker_id") // core.users.id
-  category     String?
+  /// หมวดหมู่ที่ "คนเลือกเอง" — null = ยังไม่จัดหมวด
+  ///
+  /// ก่อนหน้านี้หมวดถูกเดาจากคำนำหน้าชื่อบ้าน (BS-M4 → BS-M) ซึ่งบังคับให้ต้อง
+  /// ตั้งชื่อบ้านตามรหัสตลอดไป และย้ายบ้านข้ามหมวดไม่ได้เลยนอกจากเปลี่ยนชื่อบ้าน
+  categoryId   String?  @map("category_id")
   createdAt    DateTime @default(now()) @map("created_at")
 
+  category    PropertyCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   assets      Asset[]
   workOrders  WorkOrder[]
   pmSchedules PmSchedule[]
 
   @@index([orgId])
+  @@index([categoryId])
   @@map("properties")
   @@schema("maintenance")
 }
@@ -27,11 +33,20 @@ model Property {
 model PropertyCategory {
   id          String   @id @default(uuid())
   orgId       String   @map("org_id")
-  prefix      String
+  /// คำนำหน้าชื่อบ้านที่หมวดนี้เคยถูกเดามาจาก (BS-M, PT-BT) — เก็บไว้เป็นที่มา
+  /// เท่านั้น ไม่ได้ใช้ตัดสินอะไรแล้ว หมวดที่สร้างเองทีหลังจะเป็น null
+  ///
+  /// nullable ได้เพราะ Postgres ยอมให้ค่า null ซ้ำกันในดัชนี unique
+  /// ⇒ สร้างหมวดใหม่กี่หมวดก็ได้โดยไม่ต้องคิดชื่อ prefix ปลอมมาใส่
+  prefix      String?
   displayName String   @map("display_name")
+  sortOrder   Int      @default(0) @map("sort_order")
   createdAt   DateTime @default(now()) @map("created_at")
 
+  properties Property[]
+
   @@unique([orgId, prefix])
+  @@index([orgId])
   @@map("property_categories")
   @@schema("maintenance")
 }

@@ -4,7 +4,10 @@ import { requireOrg, hasPermission } from "@smartboss/auth";
 import { prisma } from "@smartboss/database";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { listPmSchedules } from "@/modules/maintenance/data/pm";
-import { listProperties } from "@/modules/maintenance/data/properties";
+import {
+  listProperties,
+  propertyCategoryMap,
+} from "@/modules/maintenance/data/properties";
 import { listAssets } from "@/modules/maintenance/data/assets";
 import { listOrgUsers, userNameMap } from "@/modules/maintenance/data/users";
 import { fmtThaiDate, fmtThaiDateTime, toDateInput } from "@/modules/maintenance/lib/format";
@@ -48,10 +51,11 @@ export default async function PmListPage({
   const canManage = hasPermission(session, MAINT_PERMS.pmManage);
   const { propertyId } = await searchParams;
 
-  const [schedules, properties, assets] = await Promise.all([
+  const [schedules, properties, assets, propCats] = await Promise.all([
     listPmSchedules(orgId, { propertyId }),
     listProperties(orgId),
     listAssets(orgId),
+    propertyCategoryMap(orgId),
   ]);
 
   const propNames: Record<string, string> = Object.fromEntries(
@@ -82,6 +86,7 @@ export default async function PmListPage({
     description: s.description,
     propertyId: s.propertyId,
     propertyName: propNames[s.propertyId] ?? "",
+    categoryName: propCats[s.propertyId] ?? null,
     assetId: s.assetId,
     assetName: s.assetId ? (assetNames[s.assetId] ?? null) : null,
     frequencyLabel: freqLabel(s.frequency),

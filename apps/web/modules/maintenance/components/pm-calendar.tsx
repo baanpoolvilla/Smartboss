@@ -24,7 +24,7 @@ import {
 import { Card } from "@smartboss/ui/components/card";
 import { Button } from "@smartboss/ui/components/button";
 import { Modal } from "./dialog";
-import { propertyGroup } from "./work-order-board";
+import { NO_CATEGORY } from "./work-order-board";
 import {
   groupByDueDate,
   monthGrid,
@@ -82,6 +82,8 @@ export interface PmRow {
   description: string | null;
   propertyId: string;
   propertyName: string;
+  /** ชื่อหมวดที่บ้านหลังนี้ถูกจัดไว้ · null = ยังไม่จัดหมวด */
+  categoryName: string | null;
   assetId: string | null;
   assetName: string | null;
   frequencyLabel: string;
@@ -179,15 +181,21 @@ export function PmCalendar({
     for (const s of schedules) {
       if (seen.has(s.propertyId)) continue;
       seen.add(s.propertyId);
-      const g = propertyGroup(s.propertyName);
+      const g = s.categoryName ?? NO_CATEGORY;
       const arr = map.get(g) ?? [];
       arr.push({ id: s.propertyId, name: s.propertyName });
       map.set(g, arr);
     }
     for (const arr of map.values())
       arr.sort((a, b) => a.name.localeCompare(b.name));
+    // "ยังไม่จัดหมวด" ไปท้ายสุดเสมอ — มันไม่ใช่หมวดจริง
+    const keys = Array.from(map.keys()).sort((a, b) => {
+      if (a === NO_CATEGORY) return 1;
+      if (b === NO_CATEGORY) return -1;
+      return a.localeCompare(b, "th");
+    });
     return {
-      groups: Array.from(map.keys()).sort(),
+      groups: keys,
       propertiesInGroup: group ? (map.get(group) ?? []) : [],
     };
   }, [schedules, group]);
@@ -195,7 +203,7 @@ export function PmCalendar({
   const visible = useMemo(() => {
     if (propertyId) return schedules.filter((s) => s.propertyId === propertyId);
     if (!group) return schedules;
-    return schedules.filter((s) => propertyGroup(s.propertyName) === group);
+    return schedules.filter((s) => (s.categoryName ?? NO_CATEGORY) === group);
   }, [schedules, group, propertyId]);
 
   const byDate = useMemo(() => groupByDueDate(visible), [visible]);

@@ -62,14 +62,8 @@ function groupColor(key: string): string {
   return key === AUTO_GROUP_KEY ? "#0D9488" : priorityColor(key);
 }
 
-/** หมวดบ้านจากชื่อ เช่น "BS-M4" → "BS-M" (ตรงกับ _getPropertyGroup เดิม) */
-export function propertyGroup(name: string): string {
-  const m = /^([A-Za-z]+-[A-Za-z]+)/.exec(name);
-  if (m) return m[1]!.toUpperCase();
-  const fb = /^(.+?)\d+$/.exec(name);
-  if (fb) return fb[1]!.toUpperCase();
-  return name.toUpperCase();
-}
+/** ป้ายของกลุ่มบ้านที่ยังไม่ถูกจัดหมวด — ต้องตรงกับหน้ารายชื่อบ้าน */
+export const NO_CATEGORY = "ยังไม่จัดหมวด";
 
 function PriorityBadge({ priority }: { priority: string }) {
   const color = priorityColor(priority);
@@ -348,10 +342,18 @@ function FilterChip({
 export function WorkOrderBoard({
   orders,
   propertyNames,
+  propertyCategories,
   creatorNames,
 }: {
   orders: BoardOrder[];
   propertyNames: Record<string, string>;
+  /**
+   * propertyId → ชื่อหมวดที่ถูกจัดไว้ · ไม่มีคีย์ = ยังไม่จัดหมวด
+   *
+   * เดิมหมวดถูกเดาจากชื่อบ้าน (BS-M4 → BS-M) ตรงนี้เอง ⇒ ย้ายบ้านข้ามหมวดที่หน้า
+   * "บ้าน" แล้วชิปกรองบนบอร์ดยังบอกหมวดเดิมอยู่ ตอนนี้อ่านจากที่เดียวกันทั้งระบบ
+   */
+  propertyCategories: Record<string, string>;
   creatorNames: Record<string, string>;
 }) {
   const [group, setGroup] = useState<string | null>(null);
@@ -370,16 +372,22 @@ export function WorkOrderBoard({
       .sort((a, b) => a[1].localeCompare(b[1]));
     const map = new Map<string, [string, string][]>();
     for (const e of entries) {
-      const g = propertyGroup(e[1]);
+      const g = propertyCategories[e[0]] ?? NO_CATEGORY;
       const list = map.get(g) ?? [];
       list.push(e);
       map.set(g, list);
     }
+    // "ยังไม่จัดหมวด" ไปท้ายสุดเสมอ ไม่ปนไปตามลำดับตัวอักษร — มันไม่ใช่หมวดจริง
+    const keys = Array.from(map.keys()).sort((a, b) => {
+      if (a === NO_CATEGORY) return 1;
+      if (b === NO_CATEGORY) return -1;
+      return a.localeCompare(b, "th");
+    });
     return {
-      groups: Array.from(map.keys()).sort(),
+      groups: keys,
       housesInGroup: group ? (map.get(group) ?? []) : [],
     };
-  }, [orders, propertyNames, group]);
+  }, [orders, propertyNames, propertyCategories, group]);
 
   const visible = useMemo(() => {
     if (houseId) {
@@ -389,12 +397,11 @@ export function WorkOrderBoard({
     }
     if (!group) return orders;
     return orders.filter((w) =>
-      [w.propertyId, ...w.additionalPropertyIds].some((id) => {
-        const name = propertyNames[id];
-        return name ? propertyGroup(name) === group : false;
-      })
+      [w.propertyId, ...w.additionalPropertyIds].some(
+        (id) => (propertyCategories[id] ?? NO_CATEGORY) === group
+      )
     );
-  }, [orders, group, houseId, propertyNames]);
+  }, [orders, group, houseId, propertyCategories]);
 
   const buckets: Record<string, BoardOrder[]> = {
     open: visible.filter((w) => w.status === "open"),

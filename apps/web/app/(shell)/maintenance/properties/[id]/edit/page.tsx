@@ -4,6 +4,7 @@ import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { PropertyForm } from "@/modules/maintenance/components/property-form";
 import { listOrgUsers } from "@/modules/maintenance/data/users";
 import { getProperty } from "@/modules/maintenance/data/properties";
+import { listCategories } from "@/modules/maintenance/data/categories";
 import { updatePropertyAction } from "../../actions";
 import { AppScaffold } from "@/modules/maintenance/components/app-scaffold";
 
@@ -17,9 +18,10 @@ export default async function EditPropertyPage({
   if (!hasPermission(session, MAINT_PERMS.propertyManage)) {
     redirect("/maintenance/properties");
   }
-  const [property, caretakers] = await Promise.all([
+  const [property, caretakers, categories] = await Promise.all([
     getProperty(session.orgId, id),
     listOrgUsers(session.orgId),
+    listCategories(session.orgId),
   ]);
   if (!property) notFound();
 
@@ -34,6 +36,7 @@ export default async function EditPropertyPage({
       <PropertyForm
         action={action}
         caretakers={caretakers}
+        categories={categories}
         submitLabel="บันทึก"
         defaults={{
           name: property.name,
@@ -42,6 +45,7 @@ export default async function EditPropertyPage({
           ownerName: property.ownerName,
           ownerContact: property.ownerContact,
           notes: property.notes,
+          categoryId: property.categoryId,
         }}
       />
     </AppScaffold>

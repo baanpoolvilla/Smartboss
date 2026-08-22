@@ -8,7 +8,27 @@ export interface PropertyInput {
   ownerName?: string | null;
   ownerContact?: string | null;
   notes?: string | null;
-  category?: string | null;
+  /** null = ยังไม่จัดหมวด (ไม่ใช่ "หมวดอื่นๆ") */
+  categoryId?: string | null;
+}
+
+/**
+ * คืน categoryId ก็ต่อเมื่อเป็นหมวดของบริษัทนี้จริง ไม่งั้นคืน null
+ *
+ * ⚠ พึ่ง FK อย่างเดียวไม่พอ — FK บังคับแค่ว่า "หมวดนี้มีอยู่จริง" ไม่ได้บังคับว่า
+ * เป็นหมวดของบริษัทเดียวกัน ยิง id หมวดของบริษัทอื่นเข้ามาจะผ่านฉลุย
+ * แล้วชื่อหมวดของอีกบริษัทจะไปโผล่บนหน้าจอเรา
+ */
+async function ownedCategoryId(
+  orgId: string,
+  categoryId: string | null | undefined
+): Promise<string | null> {
+  if (!categoryId) return null;
+  const owned = await prisma.propertyCategory.findFirst({
+    where: { orgId, id: categoryId },
+    select: { id: true },
+  });
+  return owned ? owned.id : null;
 }
 
 export function listProperties(orgId: string) {
@@ -22,7 +42,8 @@ export function getProperty(orgId: string, id: string) {
   return prisma.property.findFirst({ where: { orgId, id } });
 }
 
-export function createProperty(orgId: string, data: PropertyInput) {
+export async function createProperty(orgId: string, data: PropertyInput) {
+  const categoryId = await ownedCategoryId(orgId, data.categoryId);
   return prisma.property.create({
     data: {
       orgId,
@@ -32,7 +53,7 @@ export function createProperty(orgId: string, data: PropertyInput) {
       ownerName: data.ownerName ?? null,
       ownerContact: data.ownerContact ?? null,
       notes: data.notes ?? null,
-      category: data.category ?? null,
+      categoryId,
     },
   });
 }
@@ -42,6 +63,7 @@ export async function updateProperty(
   id: string,
   data: PropertyInput
 ) {
+  const categoryId = await ownedCategoryId(orgId, data.categoryId);
   await prisma.property.updateMany({
     where: { orgId, id },
     data: {
@@ -51,8 +73,22 @@ export async function updateProperty(
       ownerName: data.ownerName ?? null,
       ownerContact: data.ownerContact ?? null,
       notes: data.notes ?? null,
-      category: data.category ?? null,
+      categoryId,
     },
+  });
+}
+
+/** ย้ายบ้านเข้าหมวด — null = เอาออกจากหมวด */
+export async function setPropertyCategory(
+  orgId: string,
+  id: string,
+  categoryId: string | null
+) {
+  // ส่ง id ที่ไม่ใช่ของบริษัทนี้มา = ถือว่าเอาออกจากหมวด ไม่ใช่ผูกข้ามบริษัท
+  const safe = await ownedCategoryId(orgId, categoryId);
+  await prisma.property.updateMany({
+    where: { orgId, id },
+    data: { categoryId: safe },
   });
 }
 
@@ -61,15 +97,24 @@ export async function deleteProperty(orgId: string, id: string) {
 }
 
 /**
- * แยก "หมวดหมู่" จากคำนำหน้าชื่อบ้าน — port ตรงจาก properties_list_screen.dart
- * เช่น "BS-A1" -> "BS-A"
+ * propertyId → ชื่อหมวดที่ถูกจัดไว้ · undefined = ยังไม่จัดหมวด
+ *
+ * ใช้ตัวนี้แทนการเดาจากชื่อบ้าน — ทุกหน้าที่จัดกลุ่มบ้าน (รายชื่อบ้าน · บอร์ดใบงาน ·
+ * ปฏิทิน PM · แดชบอร์ด · ค่าใช้จ่าย) ต้องอ่านจากที่เดียวกัน ไม่งั้นย้ายบ้านข้ามหมวด
+ * แล้วแต่ละหน้าจะบอกไม่ตรงกัน
  */
-export function categoryPrefix(name: string): string {
-  const m = name.match(/^([A-Za-z]+-[A-Za-z]+)/);
-  if (m && m[1]) return m[1];
-  const f = name.match(/^(.+?)\d+$/);
-  if (f && f[1]) return f[1];
-  return "อื่นๆ";
+export async function propertyCategoryMap(
+  orgId: string
+): Promise<Record<string, string>> {
+  const rows = await prisma.property.findMany({
+    where: { orgId, categoryId: { not: null } },
+    select: { id: true, category: { select: { displayName: true } } },
+  });
+  return Object.fromEntries(
+    rows
+      .filter((r) => r.category)
+      .map((r) => [r.id, r.category!.displayName])
+  );
 }
 
 /** นับใบงานค้าง (open/in_progress) ต่อบ้าน — ใช้ทำสถานะจุดสี */

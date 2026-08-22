@@ -27,16 +27,20 @@ export interface PropertyDefaults {
   ownerName?: string | null;
   ownerContact?: string | null;
   notes?: string | null;
+  categoryId?: string | null;
 }
 
 export function PropertyForm({
   action,
   caretakers,
+  categories,
   defaults,
   submitLabel,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   caretakers: { id: string; name: string }[];
+  /** หมวดที่บริษัทนี้สร้างไว้ — ว่างได้ (ยังไม่เคยสร้างหมวดเลย) */
+  categories: { id: string; displayName: string }[];
   defaults?: PropertyDefaults;
   submitLabel: string;
 }) {
@@ -46,6 +50,26 @@ export function PropertyForm({
       <form action={action} className="flex flex-col gap-4">
         <Field label="ชื่อบ้าน *">
           <Input name="name" defaultValue={d.name ?? ""} required maxLength={200} />
+        </Field>
+
+        <Field label="หมวดหมู่">
+          <select
+            name="categoryId"
+            defaultValue={d.categoryId ?? ""}
+            className={selectClass}
+          >
+            <option value="">— ยังไม่จัดหมวด —</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.displayName}
+              </option>
+            ))}
+          </select>
+          {categories.length === 0 && (
+            <span className="text-xs text-(--ink-soft)">
+              ยังไม่มีหมวดหมู่ — สร้างได้ที่หน้ารายชื่อบ้าน
+            </span>
+          )}
         </Field>
 
         <Field label="ผู้จัดการบ้าน">

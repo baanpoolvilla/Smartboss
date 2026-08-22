@@ -10,7 +10,7 @@ import { listProperties } from "@/modules/maintenance/data/properties";
 import { listWorkOrders } from "@/modules/maintenance/data/work-orders";
 import { listActivePmSchedules } from "@/modules/maintenance/data/pm";
 import { listPurchaseOrders } from "@/modules/maintenance/data/purchase-orders";
-import { getCategoryNames } from "@/modules/maintenance/data/categories";
+import { listCategories } from "@/modules/maintenance/data/categories";
 import { userNameMap } from "@/modules/maintenance/data/users";
 import {
   formatBaht,
@@ -51,7 +51,7 @@ export default async function ExpensesReportPage({
       listWorkOrders(orgId),
       listActivePmSchedules(orgId),
       listPurchaseOrders(orgId),
-      getCategoryNames(orgId),
+      listCategories(orgId),
     ]);
 
   const propNames: Record<string, string> = Object.fromEntries(
@@ -71,12 +71,17 @@ export default async function ExpensesReportPage({
     expenses.map((e) => e.createdBy)
   );
 
-  // filter by category (property name startsWith prefix)
+  /*
+   * กรองตามหมวดที่ถูกจัดไว้ที่หน้า "บ้าน" — เดิมเทียบด้วย name.startsWith(prefix)
+   * ซึ่งพังทันทีที่บ้านถูกย้ายข้ามหมวดโดยไม่เปลี่ยนชื่อ
+   */
+  const propCat: Record<string, string | null> = Object.fromEntries(
+    properties.map((p) => [p.id, p.categoryId])
+  );
   const filtered = cat
-    ? expenses.filter((e) => {
-        const name = e.propertyId ? propNames[e.propertyId] ?? "" : "";
-        return name.toUpperCase().startsWith(cat.toUpperCase());
-      })
+    ? expenses.filter((e) =>
+        e.propertyId ? propCat[e.propertyId] === cat : false
+      )
     : expenses;
 
   // group by property
@@ -163,7 +168,7 @@ export default async function ExpensesReportPage({
       </div>
 
       {/* Category filter */}
-      {Object.keys(categories).length > 0 && (
+      {categories.length > 0 && (
         <div className="mb-3 flex flex-wrap justify-center gap-2">
           <Link href={`/maintenance/expenses?year=${year}&month=${month}`}>
             <span
@@ -173,13 +178,13 @@ export default async function ExpensesReportPage({
               ทั้งหมด
             </span>
           </Link>
-          {Object.entries(categories).map(([prefix, name]) => (
-            <Link key={prefix} href={`/maintenance/expenses?year=${year}&month=${month}&cat=${encodeURIComponent(prefix)}`}>
+          {categories.map((c) => (
+            <Link key={c.id} href={`/maintenance/expenses?year=${year}&month=${month}&cat=${encodeURIComponent(c.id)}`}>
               <span
                 className="rounded-full border px-3 py-1 text-xs"
-                style={cat === prefix ? { color: "#0D9488", borderColor: "#0D9488", backgroundColor: "#ECFDF7" } : { color: "var(--ink-soft)", borderColor: "var(--line)" }}
+                style={cat === c.id ? { color: "#0D9488", borderColor: "#0D9488", backgroundColor: "#ECFDF7" } : { color: "var(--ink-soft)", borderColor: "var(--line)" }}
               >
-                {name}
+                {c.displayName}
               </span>
             </Link>
           ))}

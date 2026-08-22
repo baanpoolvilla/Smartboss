@@ -19,8 +19,10 @@ import {
   recentWorkOrders,
 } from "@/modules/maintenance/data/dashboard";
 import { listExpensesForMonth } from "@/modules/maintenance/data/expenses";
-import { listProperties, categoryPrefix } from "@/modules/maintenance/data/properties";
-import { getCategoryNames } from "@/modules/maintenance/data/categories";
+import {
+  listProperties,
+  propertyCategoryMap,
+} from "@/modules/maintenance/data/properties";
 import {
   ExpenseDonut,
   type DonutCategory,
@@ -93,13 +95,13 @@ export default async function MaintenanceDashboardPage() {
   const orgId = session.orgId;
 
   const now = new Date();
-  const [stats, noExpense, recent, properties, categoryNames, monthExpenses] =
+  const [stats, noExpense, recent, properties, propCats, monthExpenses] =
     await Promise.all([
       dashboardStats(orgId),
       noExpenseWorkOrderCount(orgId),
       recentWorkOrders(orgId, 5),
       listProperties(orgId),
-      getCategoryNames(orgId),
+      propertyCategoryMap(orgId),
       listExpensesForMonth(orgId, now.getFullYear(), now.getMonth() + 1),
     ]);
 
@@ -115,14 +117,15 @@ export default async function MaintenanceDashboardPage() {
     byProperty.set(pid, (byProperty.get(pid) ?? 0) + Number(e.amount));
   }
 
-  // จัดกลุ่มเป็นหมวดตาม prefix ของชื่อบ้าน
+  // จัดกลุ่มตามหมวดที่ถูกจัดไว้ที่หน้า "บ้าน" — ไม่เดาจากชื่อบ้านอีกต่อไป
   const catMap = new Map<string, DonutCategory>();
   for (const [pid, value] of byProperty) {
     const name = propNames[pid] ?? pid;
-    const prefix = pid === "unknown" ? "อื่นๆ" : categoryPrefix(name);
-    const c = catMap.get(prefix) ?? {
-      key: prefix,
-      label: categoryNames[prefix.toUpperCase()] ?? prefix,
+    const label =
+      pid === "unknown" ? "ไม่ระบุบ้าน" : (propCats[pid] ?? "ยังไม่จัดหมวด");
+    const c = catMap.get(label) ?? {
+      key: label,
+      label,
       items: [],
     };
     c.items.push({
@@ -130,7 +133,7 @@ export default async function MaintenanceDashboardPage() {
       label: pid === "unknown" ? "ไม่ระบุบ้าน" : name,
       value,
     });
-    catMap.set(prefix, c);
+    catMap.set(label, c);
   }
   const categories = Array.from(catMap.values()).sort(
     (a, b) =>

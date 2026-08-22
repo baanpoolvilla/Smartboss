@@ -6,7 +6,10 @@ import {
   listWorkOrders,
   workOrderIdsWithExpenses,
 } from "@/modules/maintenance/data/work-orders";
-import { listProperties } from "@/modules/maintenance/data/properties";
+import {
+  listProperties,
+  propertyCategoryMap,
+} from "@/modules/maintenance/data/properties";
 import { userNameMap } from "@/modules/maintenance/data/users";
 import { fmtThaiDate } from "@/modules/maintenance/lib/format";
 import { EmptyState } from "@/modules/maintenance/components/ui";
@@ -42,7 +45,7 @@ export default async function WorkOrdersPage({
   const seeAll = hasPermission(session, MAINT_PERMS.workorderManage);
   const canCreate = hasPermission(session, MAINT_PERMS.workorderManage);
 
-  const [orders, properties, expenseSet] = await Promise.all([
+  const [orders, properties, expenseSet, propCats] = await Promise.all([
     listWorkOrders(orgId, {
       propertyId,
       priority: filter === "urgent" ? "urgent" : undefined,
@@ -52,6 +55,7 @@ export default async function WorkOrdersPage({
     }),
     listProperties(orgId),
     workOrderIdsWithExpenses(orgId),
+    propertyCategoryMap(orgId),
   ]);
 
   const propNames: Record<string, string> = Object.fromEntries(
@@ -118,6 +122,7 @@ export default async function WorkOrdersPage({
         <WorkOrderBoard
           orders={rows}
           propertyNames={propNames}
+          propertyCategories={propCats}
           creatorNames={creatorNames}
         />
       )}
