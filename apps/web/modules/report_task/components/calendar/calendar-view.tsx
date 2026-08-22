@@ -17,6 +17,9 @@ import { Badge } from "@/modules/report_task/components/ui/badge";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { StickyFilterBar } from "@/modules/report_task/components/shared/sticky-filter-bar";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/modules/report_task/components/ui/sheet";
+import { Switch } from "@/modules/report_task/components/ui/switch";
+import { filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
 import { CalendarFilters } from "./calendar-filters";
 import { FullCalendarView, type ViewKey } from "./full-calendar-view";
 import { LeaveSidebar } from "./leave-sidebar";
@@ -39,7 +42,7 @@ import { eventTypeLabels } from "@/modules/report_task/lib/calendar-colors";
 import { leaveIconOf } from "@/modules/report_task/lib/leave-icons";
 import { useLeaveTypeStore, type LeaveTypeDef } from "@/modules/report_task/store/leave-type-store";
 import { cn } from "@/modules/report_task/lib/utils";
-import { ListChecks, CalendarOff, ListTodo, Plus, Settings2, Globe, User, Users } from "lucide-react";
+import { ListChecks, CalendarOff, ListTodo, Plus, Settings2, Globe, User, Users, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { now } from "@/modules/report_task/lib/now";
 import type { CalendarEvent, CalendarEventType, TaskPriority, TodoItem } from "@/modules/report_task/types";
@@ -162,6 +165,10 @@ export function CalendarView() {
       return next;
     });
   }
+  // <640px only — each tab's filter row collapses into one button that opens
+  // a bottom sheet (same pattern as the Kanban board's TaskFilters), instead
+  // of the row's badges wrapping across 2-3 lines on a phone.
+  const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
   // The exact visible range of whichever FullCalendar view is active, so the
   // sidebars can show "today" / "this week" / "this month" instead of always
   // defaulting to the month containing `viewDate`.
@@ -270,6 +277,25 @@ export function CalendarView() {
     }
     return { workGoogleEvents: work, workGoogleOwnerIds: Array.from(workOwners) };
   }, [googleEvents, hiddenUserIds, viewingAsUserId]);
+
+  // Feeds the mobile filter button's "(N)" badge — counts how many of the
+  // CURRENT tab's fields differ from their "show everything" default,
+  // not every field that merely exists (an untouched tab should read as 0).
+  const mobileActiveFilterCount = useMemo(() => {
+    if (tab === "work") {
+      return (
+        (canBroadenScope && taskScope !== "mine" ? 1 : 0) +
+        (workPriorities.size !== taskPriorityOrder.length ? 1 : 0) +
+        (showMeetings ? 0 : 1) +
+        (workGoogleOwnerIds.some((id) => hiddenUserIds.includes(id)) ? 1 : 0)
+      );
+    }
+    if (tab === "todo") return todoScope !== "mine" ? 1 : 0;
+    return (
+      (scheduleActive.size !== scheduleTypes.length ? 1 : 0) +
+      (hiddenLeaveTypeIds.size > 0 ? 1 : 0)
+    );
+  }, [tab, canBroadenScope, taskScope, workPriorities, showMeetings, workGoogleOwnerIds, hiddenUserIds, todoScope, scheduleActive, hiddenLeaveTypeIds]);
 
   function openCreate(date?: string) {
     setCreateDate(date);
@@ -703,6 +729,12 @@ export function CalendarView() {
           )}
         </div>
 
+        {/* ≥640px: unchanged. <640px gets a button + bottom sheet below
+            instead — this row's badges (up to 4 priority chips + a scope
+            toggle + a meetings toggle + N Google-owner chips on the work
+            tab alone) never fit one line on a phone and just wrapped across
+            2-3 rows. */}
+        <div className="hidden sm:block">
         {tab === "work" ? (
           <div className="flex flex-wrap items-center gap-2">
             {canBroadenScope && (
@@ -858,6 +890,203 @@ export function CalendarView() {
             )}
           </div>
         )}
+        </div>
+
+        <div className="flex sm:hidden items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setMobileSheetOpen(true)}
+            className={cn(filterFieldTriggerClass(mobileActiveFilterCount > 0), "!h-10")}
+          >
+            <SlidersHorizontal className="h-4 w-4 shrink-0" />
+            ตัวกรอง
+            {mobileActiveFilterCount > 0 && <span className="tabular-nums">({mobileActiveFilterCount})</span>}
+          </button>
+        </div>
+
+        <Sheet open={mobileSheetOpen} onOpenChange={setMobileSheetOpen}>
+          <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
+            <SheetHeader className="flex-row items-center justify-between gap-2 pb-2 pr-11">
+              <SheetTitle>ตัวกรอง</SheetTitle>
+              {mobileActiveFilterCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (tab === "work") {
+                      setTaskScope("mine");
+                      setWorkPriorities(new Set(taskPriorityOrder));
+                      setShowMeetings(true);
+                    } else if (tab === "todo") {
+                      setTodoScope("mine");
+                    } else {
+                      setScheduleActive(new Set(scheduleTypes));
+                      setHiddenLeaveTypeIds(new Set());
+                    }
+                  }}
+                  className="text-sm font-medium text-[var(--brand-green-dark)] underline-offset-2 hover:underline"
+                >
+                  ล้างตัวกรอง
+                </button>
+              )}
+            </SheetHeader>
+
+            <div className="flex flex-col gap-4 px-4">
+              {tab === "work" && (
+                <>
+                  {canBroadenScope && (
+                    <div>
+                      <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">มุมมอง</p>
+                      <div className="flex items-center gap-1 bg-[var(--bg-soft)] rounded-xl p-1">
+                        <button
+                          onClick={() => setTaskScope("mine")}
+                          className={cn(
+                            "flex flex-1 items-center justify-center gap-1.5 px-2.5 py-2.5 text-sm font-medium rounded-lg transition-colors",
+                            taskScope === "mine" ? "bg-white shadow-sm text-[var(--ink)]" : "text-[var(--ink-soft)]"
+                          )}
+                        >
+                          <User className="h-4 w-4" /> งานของฉัน
+                        </button>
+                        <button
+                          onClick={() => setTaskScope("all")}
+                          className={cn(
+                            "flex flex-1 items-center justify-center gap-1.5 px-2.5 py-2.5 text-sm font-medium rounded-lg transition-colors",
+                            taskScope === "all" ? "bg-white shadow-sm text-[var(--ink)]" : "text-[var(--ink-soft)]"
+                          )}
+                        >
+                          <Users className="h-4 w-4" /> ทั้งหมด
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">ความสำคัญ (แตะเพื่อกรอง)</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {taskPriorityOrder.map((p) => {
+                        const isActive = workPriorities.has(p);
+                        return (
+                          <button
+                            key={p}
+                            onClick={() => togglePriority(p)}
+                            className={cn(
+                              "flex items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium",
+                              isActive ? "border-current" : "border-[var(--line)] text-[var(--ink-soft)] opacity-60"
+                            )}
+                            style={isActive ? { borderColor: priorityColorHex[p], color: priorityColorHex[p] } : undefined}
+                          >
+                            <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: priorityColorHex[p] }} />
+                            {priorityMeta[p].label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">แสดงในปฏิทิน</p>
+                    <div className="flex flex-col rounded-xl border border-[var(--line)] divide-y divide-[var(--line)]">
+                      <label className="flex items-center justify-between gap-2 px-3 py-2.5">
+                        <span className="flex items-center gap-2 text-sm">
+                          <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: colors.meeting }} />
+                          {eventTypeLabels.meeting}
+                        </span>
+                        <Switch checked={showMeetings} onCheckedChange={setShowMeetings} />
+                      </label>
+                      {workGoogleOwnerIds.map((ownerId) => {
+                        const hidden = hiddenUserIds.includes(ownerId);
+                        const label = getUser(ownerId)?.name ?? "ปฏิทินภายนอก";
+                        return (
+                          <label key={ownerId} className="flex items-center justify-between gap-2 px-3 py-2.5">
+                            <span className="flex items-center gap-2 text-sm">
+                              <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: colors.google }} />
+                              {label} ({eventTypeLabels.google})
+                            </span>
+                            <Switch checked={!hidden} onCheckedChange={() => toggleUserVisible(ownerId)} />
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {tab === "todo" && (
+                <div>
+                  <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">มุมมอง</p>
+                  <div className="flex items-center gap-1 bg-[var(--bg-soft)] rounded-xl p-1">
+                    <button
+                      onClick={() => setTodoScope("mine")}
+                      className={cn(
+                        "flex flex-1 items-center justify-center gap-1.5 px-2.5 py-2.5 text-sm font-medium rounded-lg transition-colors",
+                        todoScope === "mine" ? "bg-white shadow-sm text-[var(--ink)]" : "text-[var(--ink-soft)]"
+                      )}
+                    >
+                      <User className="h-4 w-4" /> ของฉัน
+                    </button>
+                    <button
+                      onClick={() => setTodoScope("all")}
+                      className={cn(
+                        "flex flex-1 items-center justify-center gap-1.5 px-2.5 py-2.5 text-sm font-medium rounded-lg transition-colors",
+                        todoScope === "all" ? "bg-white shadow-sm text-[var(--ink)]" : "text-[var(--ink-soft)]"
+                      )}
+                    >
+                      <Users className="h-4 w-4" /> ทั้งหมด
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {tab === "schedule" && (
+                <>
+                  <div>
+                    <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">ประเภท</p>
+                    <div className="flex flex-col rounded-xl border border-[var(--line)] divide-y divide-[var(--line)]">
+                      {scheduleTypes.map((t) => {
+                        const color = t === "leave" ? "var(--ink-soft)" : colors[t];
+                        return (
+                          <label key={t} className="flex items-center justify-between gap-2 px-3 py-2.5">
+                            <span className="flex items-center gap-2 text-sm">
+                              <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                              {eventTypeLabels[t]}
+                            </span>
+                            <Switch checked={scheduleActive.has(t)} onCheckedChange={() => toggleSchedule(t)} />
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">ประเภทลา</p>
+                    <div className="flex flex-col rounded-xl border border-[var(--line)] divide-y divide-[var(--line)]">
+                      {leaveTypes.map((lt) => {
+                        const Icon = leaveIconOf(lt.icon);
+                        return (
+                          <label key={lt.id} className="flex items-center justify-between gap-2 px-3 py-2.5">
+                            <span className="flex items-center gap-2 text-sm">
+                              <Icon className="h-4 w-4" style={{ color: lt.color }} />
+                              {lt.label}
+                            </span>
+                            <Switch checked={!hiddenLeaveTypeIds.has(lt.id)} onCheckedChange={() => toggleLeaveType(lt.id)} />
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <SheetFooter>
+              <Button
+                className="h-[46px] w-full bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+                onClick={() => setMobileSheetOpen(false)}
+              >
+                ใช้ตัวกรอง
+              </Button>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
       </StickyFilterBar>
 
       <FullCalendarView
