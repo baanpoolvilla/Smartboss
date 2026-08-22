@@ -14,6 +14,8 @@ import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { useVisibleTasks } from "@/modules/report_task/hooks/use-visible-tasks";
 import { useDepartmentStore } from "@/modules/report_task/store/department-store";
 import { cn } from "@/modules/report_task/lib/utils";
+import { useShowMore } from "@/modules/report_task/hooks/use-show-more";
+import { ShowMoreToggle } from "@/modules/report_task/components/shared/show-more-toggle";
 
 /** One legend/breakdown row shared between the bar's click-to-open popover and its color key. */
 function BarBreakdownRow({ color, label, count, total }: { color: string; label: string; count: number; total: number }) {
@@ -74,6 +76,8 @@ export function WorkloadView() {
       .sort((a, b) => b.total - a.total || b.open - a.open || b.overdue - a.overdue);
   }, [tasks, filters, usersInScope]);
 
+  const { visible: visibleRows, remaining, expanded, toggle } = useShowMore(rows, 10);
+
   if (rows.length === 0) {
     return <EmptyState icon={Users} title="ไม่พบภาระงานตามตัวกรอง" description="ลองปรับหรือล้างตัวกรองด้านบน" />;
   }
@@ -85,8 +89,8 @@ export function WorkloadView() {
         <p className="text-xs text-[var(--ink-soft)] mt-0.5">เรียงตามจำนวนงานทั้งหมดมากไปน้อย · แถบแดง = เลยกำหนด</p>
       </div>
 
-      <div className="divide-y divide-[var(--line)] max-h-[640px] overflow-y-auto">
-        {rows.map((r) => {
+      <div className="divide-y divide-[var(--line)]">
+        {visibleRows.map((r) => {
           // Full width = every task this person has, not just the still-open
           // ones — a bar that only ever shows "open" work can never visibly
           // reach "done", which undersells how much has actually shipped.
@@ -204,6 +208,12 @@ export function WorkloadView() {
           );
         })}
       </div>
+
+      {(expanded || remaining > 0) && (
+        <div className="border-t border-[var(--line)] px-5 py-3">
+          <ShowMoreToggle expanded={expanded} remaining={remaining} onToggle={toggle} />
+        </div>
+      )}
     </div>
   );
 }
