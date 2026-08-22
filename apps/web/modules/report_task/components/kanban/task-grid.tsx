@@ -511,7 +511,7 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
   // page-1/2/3 pager — fills the page with rows up front, then reveals the
   // rest on demand with a way back ("แสดงน้อยลง"), rather than forcing a
   // click through numbered pages to see more.
-  const GRID_PAGE_SIZE = 25;
+  const GRID_PAGE_SIZE = 10;
   const { visible: pagedRows, remaining: gridRemaining, expanded: gridExpanded, toggle: toggleGridExpanded } = useShowMore(rows, GRID_PAGE_SIZE);
 
   // Multi-select + bulk actions (ClickUp-style).
