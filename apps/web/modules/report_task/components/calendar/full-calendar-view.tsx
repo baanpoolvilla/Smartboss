@@ -103,14 +103,22 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
   // just recomputes that fixed number from the real layout instead of
   // guessing one constant that never matches every screen size.
   const [calendarHeight, setCalendarHeight] = useState(720);
+  // <640px only — a 7-column month grid leaves each day cell too narrow for
+  // a real event pill (icon + text) to read as anything but "•t…"; every
+  // mobile calendar app (Google/Apple included) solves this the same way —
+  // dots only in the month grid, tap a day to see what's actually on it
+  // (already wired up here via onDateClick's day-summary popup). Desktop
+  // keeps the full pill unchanged.
+  const [isNarrowViewport, setIsNarrowViewport] = useState(false);
   useEffect(() => {
-    function computeHeight() {
+    function computeLayout() {
       const top = wrapperRef.current?.getBoundingClientRect().top ?? 0;
       setCalendarHeight(Math.max(520, Math.round(window.innerHeight - top - 24)));
+      setIsNarrowViewport(window.innerWidth < 640);
     }
-    computeHeight();
-    window.addEventListener("resize", computeHeight);
-    return () => window.removeEventListener("resize", computeHeight);
+    computeLayout();
+    window.addEventListener("resize", computeLayout);
+    return () => window.removeEventListener("resize", computeLayout);
   }, []);
   const colors = useEventColorStore((s) => s.colors);
   const leaveTypes = useLeaveTypeStore((s) => s.types);
@@ -276,6 +284,25 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
     const color = (arg.event.extendedProps.color as string) ?? colors[type];
     const leaveType = arg.event.extendedProps.leaveType as string | undefined;
     const mine = arg.event.extendedProps.mine as boolean | undefined;
+
+    // Dot-only on a narrow month grid (see isNarrowViewport's own comment) —
+    // week/day views keep the full pill regardless of width since their
+    // cells run tall, not narrow, so there's real room for the text there.
+    if (isNarrowViewport && view === "dayGridMonth") {
+      const done = type === "todo" && !!arg.event.extendedProps.done;
+      return (
+        <div className="flex items-center justify-center py-0.5" title={arg.event.title}>
+          <span
+            className={cn("h-[7px] w-[7px] rounded-full shrink-0", done && "opacity-50")}
+            style={
+              mine === false
+                ? { backgroundColor: "transparent", border: `1.5px solid ${color}` }
+                : { backgroundColor: color }
+            }
+          />
+        </div>
+      );
+    }
 
     if (type === "todo") {
       const done = !!arg.event.extendedProps.done;

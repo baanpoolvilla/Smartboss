@@ -170,8 +170,15 @@ export function CalendarView() {
   const [scheduleActive, setScheduleActive] = useState<Set<CalendarEventType>>(new Set(scheduleTypes));
   // "ของฉัน" vs "ทั้งหมด" — view-only, everyone can flip it (not gated to
   // heads/owners like the work tab's scope, since a to-do isn't a
-  // manage-level record) so anyone can peek at the team's list.
+  // manage-level record) so anyone can peek at the team's list. Only its OWN
+  // control for someone who has no task-scope toggle at all (a regular
+  // employee — canBroadenScope false); a head/owner instead drives to-dos
+  // off the SAME "มุมมอง" toggle as tasks/meetings (see effectiveTodoScope)
+  // — two side-by-side "ของฉัน/ทั้งหมด" pairs read as duplicates of the same
+  // control, not two different things, so they collapse into one for anyone
+  // who'd otherwise see both.
   const [todoScope, setTodoScope] = useState<"mine" | "all">("mine");
+  const effectiveTodoScope = canBroadenScope ? taskScope : todoScope;
   // Empty = everything visible — tracking hidden ids (not active ids) means a
   // newly-added leave type shows up by default instead of needing to be
   // explicitly opted in.
@@ -330,7 +337,9 @@ export function CalendarView() {
         // On by default now (see showTodosInWork's own comment) — turning it
         // *off* is the deviation from default, not on.
         (showTodosInWork ? 0 : 1) +
-        (showTodosInWork && todoScope !== "mine" ? 1 : 0) +
+        // Not double-counted against taskScope above — canBroadenScope rides
+        // that one instead of having its own (see effectiveTodoScope).
+        (showTodosInWork && !canBroadenScope && todoScope !== "mine" ? 1 : 0) +
         (workGoogleOwnerIds.some((id) => hiddenUserIds.includes(id)) ? 1 : 0)
       );
     }
@@ -358,7 +367,7 @@ export function CalendarView() {
       }
       if (!showMeetings) chips.push("ซ่อนประชุม");
       if (!showTodosInWork) chips.push("ซ่อนสิ่งที่ต้องทำ");
-      if (showTodosInWork && todoScope !== "mine") chips.push("มุมมองสิ่งที่ต้องทำ: ทั้งหมด");
+      if (showTodosInWork && !canBroadenScope && todoScope !== "mine") chips.push("มุมมองสิ่งที่ต้องทำ: ทั้งหมด");
       if (workGoogleOwnerIds.some((id) => hiddenUserIds.includes(id))) chips.push("ซ่อนปฏิทินภายนอกบางส่วน");
     } else {
       if (scheduleActive.size !== scheduleTypes.length) {
@@ -547,10 +556,10 @@ export function CalendarView() {
   const todoEvents: CalendarEvent[] = useMemo(
     () =>
       todos
-        .filter((t) => (todoScope === "mine" ? t.userId === viewingAsUserId : !hiddenUserIds.includes(t.userId)))
+        .filter((t) => (effectiveTodoScope === "mine" ? t.userId === viewingAsUserId : !hiddenUserIds.includes(t.userId)))
         .map((t) => {
           const mine = t.userId === viewingAsUserId;
-          const owner = !mine && todoScope === "all" ? getUser(t.userId)?.name.split(" ")[0] : undefined;
+          const owner = !mine && effectiveTodoScope === "all" ? getUser(t.userId)?.name.split(" ")[0] : undefined;
           const titleWithTime = t.time ? `${t.time} ${t.title}` : t.title;
           return {
             id: `todoevt-${t.id}`,
@@ -567,7 +576,7 @@ export function CalendarView() {
             editable: mine,
           };
         }),
-    [todos, todoScope, hiddenUserIds, viewingAsUserId]
+    [todos, effectiveTodoScope, hiddenUserIds, viewingAsUserId]
   );
 
   const events = useMemo(() => {
@@ -976,11 +985,13 @@ export function CalendarView() {
                 จุดกลวง = งานของคนอื่น
               </span>
             )}
-            {/* สิ่งที่ต้องทำ has no manager-only gate of its own (unlike the
-                task scope above) — open to everyone, same as when it lived
-                in its own tab, just relocated here now that the toggle above
-                controls whether it's on screen at all. */}
-            {showTodosInWork && (
+            {/* Only its own toggle for someone with no task-scope control at
+                all (canBroadenScope false) — a head/owner already has "มุมมอง"
+                above, and having a second near-identical "ของฉัน/ทั้งหมด" pair
+                right next to it read as a confusing duplicate, not two
+                different things, so effectiveTodoScope just rides the task
+                one instead for them (see its own comment). */}
+            {showTodosInWork && !canBroadenScope && (
               <>
                 <span className="h-4 w-px bg-[var(--line)] mx-1" />
                 <span className="text-xs text-[var(--ink-soft)]">มุมมองสิ่งที่ต้องทำ:</span>
@@ -1186,11 +1197,11 @@ export function CalendarView() {
                     </div>
                   </div>
 
-                  {/* สิ่งที่ต้องทำ has no manager-only gate of its own (unlike
-                      the task scope above) — open to everyone, same as when
-                      it lived in its own tab. Only shown once the switch
-                      above actually turns the overlay on. */}
-                  {showTodosInWork && (
+                  {/* Only its own toggle when there's no task-scope "มุมมอง"
+                      already above to share with (see effectiveTodoScope's
+                      comment) — a head/owner drives both from that one
+                      instead of a confusing second "ของฉัน/ทั้งหมด" pair. */}
+                  {showTodosInWork && !canBroadenScope && (
                     <div>
                       <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">มุมมองสิ่งที่ต้องทำ</p>
                       <div className="flex items-center gap-1 bg-[var(--bg-soft)] rounded-xl p-1">
@@ -1341,7 +1352,7 @@ export function CalendarView() {
             {showTodosInWork && (
               <TodoSidebar
                 range={viewRange}
-                scope={todoScope}
+                scope={effectiveTodoScope}
                 onEdit={(t) => openTodoDialog({ todo: t, date: t.date })}
                 onAdd={() => openTodoDialog({})}
               />
@@ -1367,7 +1378,7 @@ export function CalendarView() {
         range={summaryRange}
         tab={tab}
         dayoffs={dayoffEvents}
-        todoScope={todoScope}
+        todoScope={effectiveTodoScope}
         onOpenChange={(open) => !open && setSummaryRange(null)}
         onOpenTask={setOpenTaskId}
         onToggleTodo={toggleTodo}
