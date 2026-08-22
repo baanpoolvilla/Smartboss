@@ -88,10 +88,30 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
   addHint = "คลิกวันเพื่อเพิ่มรายการ",
 }, ref) {
   const calendarRef = useRef<FullCalendar | null>(null);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
   const [view, setView] = useState<ViewKey>("dayGridMonth");
   const [title, setTitle] = useState(initialTitle);
   const [currentDate, setCurrentDate] = useState<Date>(INITIAL_DATE);
   const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Fills whatever room is actually below the calendar's own position instead
+  // of a flat 720px — on a typical desktop window that flat value pushed the
+  // grid's bottom rows below the fold, forcing a scroll just to see this
+  // month at all. Still a *fixed* number once computed (not "auto"), for the
+  // same reason as before: a 5-row vs 6-row month can't be allowed to change
+  // the page's height and bounce the scroll position on navigation — this
+  // just recomputes that fixed number from the real layout instead of
+  // guessing one constant that never matches every screen size.
+  const [calendarHeight, setCalendarHeight] = useState(720);
+  useEffect(() => {
+    function computeHeight() {
+      const top = wrapperRef.current?.getBoundingClientRect().top ?? 0;
+      setCalendarHeight(Math.max(520, Math.round(window.innerHeight - top - 24)));
+    }
+    computeHeight();
+    window.addEventListener("resize", computeHeight);
+    return () => window.removeEventListener("resize", computeHeight);
+  }, []);
   const colors = useEventColorStore((s) => s.colors);
   const leaveTypes = useLeaveTypeStore((s) => s.types);
   const leaveIconById = useMemo(
@@ -394,16 +414,17 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
         </div>
       </div>
 
-      <div className="ebw-calendar">
+      <div className="ebw-calendar" ref={wrapperRef}>
         <FullCalendar
           ref={calendarRef}
           plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
           initialView="dayGridMonth"
           headerToolbar={false}
           locale={thGregorianLocale}
-          // Fixed height so busy vs empty months stay the same size — the page
-          // height never changes on navigation, so it can't bounce the scroll.
-          height={720}
+          // Fixed height (computed above from the actual viewport) so busy vs
+          // empty months stay the same size — the page height never changes
+          // on navigation, so it can't bounce the scroll.
+          height={calendarHeight}
           expandRows
           // Show exactly 5 or 6 rows depending on the actual month, not
           // always padded to 6 — combined with expandRows + the fixed total
