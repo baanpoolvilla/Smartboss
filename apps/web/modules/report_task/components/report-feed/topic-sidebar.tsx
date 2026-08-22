@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/modules/report_task/components/ui/textarea";
 import { useReportFeedStore, topicColors, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
+import { useTodoStore } from "@/modules/report_task/store/todo-store";
 import { useSettingsAccessStore } from "@/modules/report_task/store/settings-access-store";
 import { canEditReportTopic, canManageReportTopics } from "@/modules/report_task/lib/permissions";
 import { DRAG_MENTION_TOPIC_MIME } from "@/modules/report_task/components/report-feed/report-post-fields";
@@ -45,6 +46,7 @@ import {
   Hash,
   Headset,
   ImagePlus,
+  ListTodo,
   Megaphone,
   MessageSquare,
   MoreHorizontal,
@@ -125,6 +127,11 @@ export const ALL_TOPICS_ID = "__all__";
 export const PENDING_ID = "__pending__";
 /** Every post/reply anywhere this viewer can see that @mentions them, newest first — reuses ReportAllPostsFeed with a pre-filtered post list. */
 export const MENTIONS_ID = "__mentions__";
+/** The viewer's own personal to-do list (see calendar's สิ่งที่ต้องทำ tab) —
+ * same underlying data, surfaced here too since Report is where people
+ * already check in daily and a to-do easily gets forgotten sitting only on
+ * the Calendar page. */
+export const TODOS_ID = "__todos__";
 
 type Editor = { mode: "create" } | { mode: "edit"; topic: ReportTopic };
 
@@ -307,6 +314,14 @@ export function TopicSidebar({
     cutoffs: [],
     visibility: editor?.mode === "edit" ? editor.topic.visibility : undefined,
   };
+
+  // Not-done count only (not every to-do ever created) — same "how many
+  // still need attention" reading as pendingCount/mentionCount just above.
+  const todos = useTodoStore((s) => s.todos);
+  const todoCount = useMemo(
+    () => todos.filter((t) => t.userId === viewingAsUserId && !t.done).length,
+    [todos, viewingAsUserId]
+  );
 
   const exemptions = useReportComplianceExemptions();
   // Rooms this viewer personally still owes a report to today (⏰) and posts
@@ -660,6 +675,23 @@ export function TopicSidebar({
           {mentionCount > 0 && (
             <span className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-[var(--chart-red)] text-white text-[10px] font-semibold flex items-center justify-center tabular-nums">
               {mentionCount}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => onSelect(TODOS_ID)}
+          className={cn(
+            "w-full flex items-center gap-2.5 rounded-xl pl-3 pr-2 py-2.5 text-sm text-left transition-colors duration-200",
+            activeId === TODOS_ID ? "bg-[var(--accent)] font-semibold text-[var(--brand-green-dark)]" : "hover:bg-[var(--bg-soft)] text-[var(--ink)]"
+          )}
+        >
+          <span className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-orange-50 text-[var(--chart-amber)]">
+            <ListTodo className="h-3.5 w-3.5" />
+          </span>
+          <span className="flex-1 truncate">สิ่งที่ต้องทำ</span>
+          {todoCount > 0 && (
+            <span className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-[var(--chart-amber)] text-white text-[10px] font-semibold flex items-center justify-center tabular-nums">
+              {todoCount}
             </span>
           )}
         </button>
