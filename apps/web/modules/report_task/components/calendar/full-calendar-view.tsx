@@ -475,7 +475,14 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           eventContent={renderEventContent}
           // Cells share one height; show as many events as fit and only surface
           // "+more" when they actually overflow the cell (not a fixed count).
-          dayMaxEvents={true}
+          // That auto-fit math needs a *fixed* cell height to know when it's
+          // full — under "auto" height (narrow month view, see above) there's
+          // no fixed height to measure against, so `true` here silently fell
+          // back to "show everything", piling 15+ stacked dots straight down
+          // through the rows below instead of capping at a couple + "+N".
+          // A narrow viewport gets an explicit small cap instead (2 for the
+          // cramped month-grid cells, a little more elsewhere).
+          dayMaxEvents={isNarrowViewport ? (view === "dayGridMonth" ? 2 : 3) : true}
           eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
           // "+N more" opens the same day popup as clicking the date itself
           // instead of FullCalendar's own bare popover — one consistent
