@@ -32,7 +32,7 @@ import {
   QuickFilterChip,
 } from "@/modules/report_task/components/shared/filter-field";
 import { DateRangeSelectField } from "@/modules/report_task/components/shared/date-range-select-field";
-import { Input } from "@/modules/report_task/components/ui/input";
+import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { datePresetGroups, datePresetLabels } from "@/modules/report_task/lib/date-filter";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Building2, Users, User as UserIcon, CalendarDays, SlidersHorizontal, ChevronRight, X } from "lucide-react";
@@ -349,9 +349,9 @@ export function DashboardFilters() {
           </Select>
           {preset === "custom" && (
             <div className="flex items-center gap-2 px-0.5">
-              <Input type="date" lang="en-GB" value={customFrom} onChange={(e) => setCustomRange(e.target.value, customTo)} className="h-11 flex-1" />
+              <DatePickerField value={customFrom} onChange={(v) => setCustomRange(v, customTo)} className="h-11 flex-1" />
               <span className="text-[var(--ink-soft)] text-sm">ถึง</span>
-              <Input type="date" lang="en-GB" value={customTo} onChange={(e) => setCustomRange(customFrom, e.target.value)} className="h-11 flex-1" />
+              <DatePickerField value={customTo} onChange={(v) => setCustomRange(customFrom, v)} minDate={customFrom} className="h-11 flex-1" />
             </div>
           )}
         </div>

@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/modules/report_task/components/ui/select";
-import { Input } from "@/modules/report_task/components/ui/input";
+import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/modules/report_task/components/ui/tooltip";
 import { FilterField, filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
 import { datePresetLabels, datePresetGroups, type DatePreset } from "@/modules/report_task/lib/date-filter";
@@ -81,26 +81,16 @@ export function DateRangeSelectField({
       </FilterField>
 
       {preset === "custom" && (
-        <div className="flex items-end gap-2 flex-wrap">
-          {/* `lang="en-GB"` only changes how the native picker *displays* the
-              date (dd/mm/yyyy instead of the browser-default en-US
-              mm/dd/yyyy) — the underlying value stays the same ISO
-              "yyyy-mm-dd" string either way. */}
-          <Input
-            type="date"
-            lang="en-GB"
-            value={customFrom}
-            onChange={(e) => onCustomRangeChange(e.target.value, customTo)}
-            className="w-[150px] max-w-full"
-          />
-          <span className="text-[var(--ink-soft)] text-sm pb-2">ถึง</span>
-          <Input
-            type="date"
-            lang="en-GB"
-            value={customTo}
-            onChange={(e) => onCustomRangeChange(customFrom, e.target.value)}
-            className="w-[150px] max-w-full"
-          />
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* DatePickerField, not a native <input type="date"> — the native
+              picker's displayed format follows the OS/browser locale
+              (mm/dd/yyyy on plenty of Windows setups regardless of a `lang`
+              hint), so two people on the same filter could read the same
+              stored date differently. This always renders วัน/เดือน/ปี
+              (Thai, dd MMM yyyy), matching every other date shown in the app. */}
+          <DatePickerField value={customFrom} onChange={(v) => onCustomRangeChange(v, customTo)} className="w-[150px] max-w-full" />
+          <span className="text-[var(--ink-soft)] text-sm">ถึง</span>
+          <DatePickerField value={customTo} onChange={(v) => onCustomRangeChange(customFrom, v)} minDate={customFrom} className="w-[150px] max-w-full" />
         </div>
       )}
     </>

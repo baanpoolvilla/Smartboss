@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from "@/modules/report_task/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/modules/report_task/components/ui/sheet";
-import { Input } from "@/modules/report_task/components/ui/input";
+import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
@@ -384,21 +384,9 @@ export function TaskFilters({
       </Select>
       {filters.preset === "custom" && (
         <div className="flex items-center gap-2 px-0.5">
-          <Input
-            type="date"
-            lang="en-GB"
-            value={filters.customFrom}
-            onChange={(e) => setFilters({ customFrom: e.target.value })}
-            className="h-11 flex-1"
-          />
+          <DatePickerField value={filters.customFrom} onChange={(v) => setFilters({ customFrom: v })} className="h-11 flex-1" />
           <span className="text-[var(--ink-soft)] text-sm">ถึง</span>
-          <Input
-            type="date"
-            lang="en-GB"
-            value={filters.customTo}
-            onChange={(e) => setFilters({ customTo: e.target.value })}
-            className="h-11 flex-1"
-          />
+          <DatePickerField value={filters.customTo} onChange={(v) => setFilters({ customTo: v })} minDate={filters.customFrom} className="h-11 flex-1" />
         </div>
       )}
 
