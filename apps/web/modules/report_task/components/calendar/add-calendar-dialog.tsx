@@ -42,6 +42,15 @@ import {
 import { toast } from "sonner";
 import type { CalendarEvent } from "@/modules/report_task/types";
 
+/** dd/mm/yyyy, local calendar day — `connectedAt` is a real timestamp (not a
+ * date-only UTC-midnight field), so this reads local getters like the rest
+ * of the app's real-timestamp formatting (dayLabelFor/groupByDay in
+ * lib/format.ts), not lib/format.ts's UTC-forced `formatDate`. */
+function formatLocalDMY(d: Date) {
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
+
 interface Country {
   countryCode: string;
   name: string;
@@ -413,7 +422,7 @@ export function GoogleCalendarPane() {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">{link.label}</p>
                     <p className="text-[11px] text-[var(--ink-soft)]">
-                      ตั้งแต่ {new Date(link.connectedAt).toLocaleDateString("th-TH-u-ca-gregory", { day: "numeric", month: "short", year: "numeric" })}
+                      ตั้งแต่ {formatLocalDMY(new Date(link.connectedAt))}
                       {lastSyncedAt && ` · ซิงค์ล่าสุด ${new Date(lastSyncedAt).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}`}
                     </p>
                   </div>

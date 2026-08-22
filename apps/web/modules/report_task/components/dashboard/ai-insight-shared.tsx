@@ -229,5 +229,7 @@ export function InsightText({ text }: { text: string }) {
 
 export function formatGeneratedAt(iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  const time = d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+  return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)} ${time}`;
 }

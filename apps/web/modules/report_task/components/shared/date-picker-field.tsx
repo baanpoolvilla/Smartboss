@@ -17,15 +17,19 @@ const toYMD = (d: Date) =>
  * date-only fields (dueDate etc., anchored to UTC midnight) — using it here
  * on a local-midnight Date rolls the displayed day back for positive UTC
  * offsets (e.g. Bangkok), which is the "picked 25th, shows 24th" bug.
+ *
+ * Numeric dd/mm/yyyy — same fixed format as every other date in report_task
+ * (lib/format.ts's formatDate), not a spelled-out Thai month.
  */
 function formatLocal(d: Date) {
-  return d.toLocaleDateString("th-TH-u-ca-gregory", { day: "numeric", month: "short", year: "numeric" });
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
 
 const PICKER_START = new Date(2024, 0, 1);
 const PICKER_END = new Date(2036, 11, 31);
 
-/** Thai วัน/เดือน/ปี date field — replaces the native <input type="date"> whose
+/** dd/mm/yyyy date field — replaces the native <input type="date"> whose
  *  display format follows the OS locale (mm/dd/yyyy). Value is a YYYY-MM-DD string. */
 export function DatePickerField({
   value,
