@@ -161,6 +161,11 @@ export function CalendarView() {
   const [tab, setTab] = useState<CalendarTab>("work");
   const [workPriorities, setWorkPriorities] = useState<Set<TaskPriority>>(new Set(taskPriorityOrder));
   const [showMeetings, setShowMeetings] = useState(true);
+  // Off by default — the งาน tab's whole point is "task deadlines + meetings
+  // at a glance"; to-dos are personal/day-to-day noise on top of that unless
+  // someone explicitly asks to see them overlaid too (same events, same
+  // todoScope, as the dedicated สิ่งที่ต้องทำ tab — just merged into this view).
+  const [showTodosInWork, setShowTodosInWork] = useState(false);
   const [scheduleActive, setScheduleActive] = useState<Set<CalendarEventType>>(new Set(scheduleTypes));
   // "ของฉัน" vs "ทั้งหมด" — view-only, everyone can flip it (not gated to
   // heads/owners like the work tab's scope, since a to-do isn't a
@@ -321,6 +326,7 @@ export function CalendarView() {
         (canBroadenScope && taskScope !== "mine" ? 1 : 0) +
         (workPriorities.size !== taskPriorityOrder.length ? 1 : 0) +
         (showMeetings ? 0 : 1) +
+        (showTodosInWork ? 1 : 0) +
         (workGoogleOwnerIds.some((id) => hiddenUserIds.includes(id)) ? 1 : 0)
       );
     }
@@ -330,7 +336,7 @@ export function CalendarView() {
       (scheduleActive.size !== scheduleTypes.length ? 1 : 0) +
       (hiddenLeaveTypeIds.size > 0 ? 1 : 0)
     );
-  }, [tab, dateJump, canBroadenScope, taskScope, workPriorities, showMeetings, workGoogleOwnerIds, hiddenUserIds, todoScope, scheduleActive, hiddenLeaveTypeIds]);
+  }, [tab, dateJump, canBroadenScope, taskScope, workPriorities, showMeetings, showTodosInWork, workGoogleOwnerIds, hiddenUserIds, todoScope, scheduleActive, hiddenLeaveTypeIds]);
 
   // Read-only summary chips under the mobile filter button — the badge
   // count above says "how many", this says "which ones", without opening
@@ -348,6 +354,7 @@ export function CalendarView() {
         chips.push(`ความสำคัญ: ${taskPriorityOrder.filter((p) => workPriorities.has(p)).map((p) => priorityMeta[p].label).join(", ") || "ไม่มี"}`);
       }
       if (!showMeetings) chips.push("ซ่อนประชุม");
+      if (showTodosInWork) chips.push("แสดงสิ่งที่ต้องทำ");
       if (workGoogleOwnerIds.some((id) => hiddenUserIds.includes(id))) chips.push("ซ่อนปฏิทินภายนอกบางส่วน");
     } else if (tab === "todo") {
       if (todoScope !== "mine") chips.push("มุมมอง: ทั้งหมด");
@@ -358,7 +365,7 @@ export function CalendarView() {
       if (hiddenLeaveTypeIds.size > 0) chips.push("ซ่อนประเภทลาบางส่วน");
     }
     return chips;
-  }, [tab, dateJump, canBroadenScope, taskScope, workPriorities, showMeetings, workGoogleOwnerIds, hiddenUserIds, todoScope, scheduleActive, hiddenLeaveTypeIds]);
+  }, [tab, dateJump, canBroadenScope, taskScope, workPriorities, showMeetings, showTodosInWork, workGoogleOwnerIds, hiddenUserIds, todoScope, scheduleActive, hiddenLeaveTypeIds]);
 
   function clearMobileFilters() {
     setDateJump("all");
@@ -367,6 +374,7 @@ export function CalendarView() {
       setTaskScope("mine");
       setWorkPriorities(new Set(taskPriorityOrder));
       setShowMeetings(true);
+      setShowTodosInWork(false);
     } else if (tab === "todo") {
       setTodoScope("mine");
     } else {
@@ -576,7 +584,12 @@ export function CalendarView() {
         // instead, same as a meeting that does have a creator.
         editable: canEditRecord(m.createdById, m.departmentIds ?? [m.departmentId], viewingAsUserId),
       });
-      return [...taskEvents, ...(showMeetings ? visibleMeetings.map(markMeeting) : []), ...workGoogleEvents].map(gray);
+      return [
+        ...taskEvents,
+        ...(showMeetings ? visibleMeetings.map(markMeeting) : []),
+        ...workGoogleEvents,
+        ...(showTodosInWork ? todoEvents : []),
+      ].map(gray);
     }
     if (tab === "todo") {
       return todoEvents.map(gray);
@@ -597,6 +610,7 @@ export function CalendarView() {
     tab,
     taskEvents,
     showMeetings,
+    showTodosInWork,
     scheduleActive,
     hiddenLeaveTypeIds,
     visibleMeetings,
@@ -963,6 +977,20 @@ export function CalendarView() {
                 {eventTypeLabels.meeting}
               </Badge>
             </button>
+            {/* Off by default (see showTodosInWork's own comment) — a
+                one-click way to overlay สิ่งที่ต้องทำ onto the same view as
+                task deadlines + meetings, instead of only ever living in its
+                own separate tab. */}
+            <button onClick={() => setShowTodosInWork((v) => !v)} title={showTodosInWork ? "คลิกเพื่อซ่อน" : "คลิกเพื่อแสดง"}>
+              <Badge
+                variant="outline"
+                className={cn("gap-1.5 cursor-pointer select-none transition-opacity", !showTodosInWork && "opacity-40")}
+                style={{ borderColor: chartColors.amber, color: chartColors.amber }}
+              >
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: chartColors.amber }} />
+                {eventTypeLabels.todo}
+              </Badge>
+            </button>
             {workGoogleOwnerIds.map(googleOwnerChip)}
             <span className="flex items-center gap-1.5 text-[11px] text-[var(--ink-soft)] ml-1 opacity-60">
               <span className="h-2 w-2 rounded-full bg-[var(--chart-red)]" />
@@ -1154,6 +1182,13 @@ export function CalendarView() {
                           {eventTypeLabels.meeting}
                         </span>
                         <Switch checked={showMeetings} onCheckedChange={setShowMeetings} />
+                      </label>
+                      <label className="flex items-center justify-between gap-2 px-3 py-2.5">
+                        <span className="flex items-center gap-2 text-sm">
+                          <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: chartColors.amber }} />
+                          {eventTypeLabels.todo}
+                        </span>
+                        <Switch checked={showTodosInWork} onCheckedChange={setShowTodosInWork} />
                       </label>
                       {workGoogleOwnerIds.map((ownerId) => {
                         const hidden = hiddenUserIds.includes(ownerId);
