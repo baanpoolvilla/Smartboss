@@ -13,7 +13,11 @@ import {
   pmMode,
   PM_FREQUENCIES,
 } from "@/modules/maintenance/lib/pm-schedule";
-import { PmBoard, type PmRow } from "@/modules/maintenance/components/pm-board";
+import {
+  PmCalendar,
+  type PmRow,
+} from "@/modules/maintenance/components/pm-calendar";
+import { isoOf } from "@/modules/maintenance/lib/pm-calendar";
 import {
   AppScaffold,
   AppBarLink,
@@ -100,13 +104,25 @@ export default async function PmListPage({
   // รายชื่อสำหรับกล่องแก้ไข PM (เปลี่ยนผู้รับผิดชอบ)
   const orgUsers = await listOrgUsers(orgId);
 
+  /**
+   * "วันนี้" คิดจากฝั่ง server เพื่อให้ปฏิทินไฮไลต์วันเดียวกับที่ daysUntilDue ใช้คิด
+   * ถ้าปล่อยให้ client เรียก new Date() เอง จะได้คนละวันตอน hydrate และช่อง
+   * "วันนี้" อาจไม่ตรงกับป้าย "ครบกำหนดวันนี้" บนการ์ด
+   */
+  const nowLocal = new Date();
+  const todayIso = isoOf(
+    nowLocal.getFullYear(),
+    nowLocal.getMonth(),
+    nowLocal.getDate()
+  );
+
   // ผู้ดูแลบ้าน (จัดการ PM ได้แต่แก้ข้อมูลบ้านไม่ได้) มอบงานให้ตัวเองอัตโนมัติ
   const isCaretaker =
     canManage && !hasPermission(session, MAINT_PERMS.propertyManage);
 
   return (
     <AppScaffold
-      title="PM Dashboard"
+      title="ปฏิทิน PM"
       width="max-w-[1100px]"
       actions={
         <AppBarLink
@@ -118,9 +134,10 @@ export default async function PmListPage({
       }
       fab={canManage ? <Fab href="/maintenance/pm/new" label="เพิ่ม PM" /> : null}
     >
-      <PmBoard
+      <PmCalendar
         schedules={rows}
         canManage={canManage}
+        todayIso={todayIso}
         selfIdForAssign={isCaretaker ? session.userId : null}
         scheduleNextAction={scheduleNextAction}
         deleteAction={deletePmAction}
