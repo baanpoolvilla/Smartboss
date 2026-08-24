@@ -237,37 +237,18 @@
   color: var(--ink-soft);
   text-decoration: none;
 }
-/* Today's date reads as a filled green pill, like a modern calendar. A
-   plain day number's total height is ~25px (0.78rem text + 5px top/bottom
-   padding) — this pill used to add height:24px + margin:4px on *every*
-   side (32px total), a few px taller than every other cell in the same
-   row. That pushed just today's event row down slightly, throwing off
-   the otherwise-level row of dots across the week (looked like the row
-   "leaned" — reported as a meeting dot sitting crooked). Dropping the
-   bottom margin brings it back in line with its neighbors. */
+/* Today's date used to be a filled green pill — went through several
+   rounds chasing "the pill is a different height than a plain number, so
+   this row's dots don't line up with everyone else's" before landing here:
+   drop the pill/badge shape entirely and just recolor the plain number.
+   Same box model (padding, not height/margin) as every other day, so its
+   row can never be taller than its neighbors again — no dot-row
+   compensation needed anywhere else in the codebase now either. Bold +
+   brand green is still "just enough to notice" without the bigger shape
+   reading as heavy-handed ("ให้สีเดียวแบบนิดหน่อยพอให้รู้พอ"). */
 .ebw-calendar .fc-day-today .fc-daygrid-day-number {
-  color: #fff;
-  background: var(--chart-green);
+  color: var(--brand-green-dark);
   font-weight: 700;
-  border-radius: 999px;
-  /* Was 1.5rem (24px) — visibly bigger than the ~13px plain-number text
-     next to it on other days, reported as "ใหญ่เกินไป". 1.15rem still
-     reads clearly as a filled pill without dominating the row. */
-  min-width: 1.15rem;
-  height: 1.15rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 4px;
-  /* Bottom margin stays at 0 — any larger and this pill grows taller than
-     a plain day number again, reintroducing the shared-row-height mismatch
-     that misaligned the whole week's dot rows (see this rule's own history).
-     The "today's dot row sits closer to its number than everyone else's"
-     gap is compensated at the content level instead — see
-     renderDayCellContent's dot-row margin-top for `ymd === todayIso()` in
-     full-calendar-view.tsx — so the shared row height itself never changes. */
-  margin: 4px 4px 0;
-  box-shadow: 0 2px 6px -1px rgba(76, 185, 63, 0.5);
 }
 /* Weekend shading — very subtle, just enough to mark "end of week" without
    competing with the event chips' own colors. */

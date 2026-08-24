@@ -11,6 +11,7 @@ import { useTodoStore } from "@/modules/report_task/store/todo-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useCalendarVisibilityStore } from "@/modules/report_task/store/calendar-visibility-store";
 import { useCalendarScopeStore } from "@/modules/report_task/store/calendar-scope-store";
+import { useEventColorStore } from "@/modules/report_task/store/event-color-store";
 import { priorityMeta } from "@/modules/report_task/lib/task-meta";
 import { formatDate, formatDateTime } from "@/modules/report_task/lib/format";
 import { rangeLabel, inRange, inRangeLocal, type ViewRange } from "@/modules/report_task/lib/date-filter";
@@ -19,7 +20,7 @@ import { canManage } from "@/modules/report_task/lib/directory";
 import { canSeeTask, canSeeTaskOnCalendar } from "@/modules/report_task/lib/permissions";
 import { cn } from "@/modules/report_task/lib/utils";
 import { User, Check, Plus } from "lucide-react";
-import type { Task, TodoItem } from "@/modules/report_task/types";
+import type { CalendarEvent, Task, TodoItem } from "@/modules/report_task/types";
 
 /** Right rail for the work calendar: the visible range's tasks (by due date) + meetings. */
 export function WorkSidebar({
@@ -45,6 +46,7 @@ export function WorkSidebar({
   const hiddenUserIds = useCalendarVisibilityStore((s) => s.hiddenUserIds);
   const taskScope = useCalendarScopeStore((s) => s.scope);
   const canBroadenScope = canManage(viewingAsUserId);
+  const colors = useEventColorStore((s) => s.colors);
 
   const monthTasks = tasks
     .filter(
@@ -67,6 +69,13 @@ export function WorkSidebar({
     .filter((t) => t.userId === viewingAsUserId && inRange(t.date, range))
     .sort((a, b) => Number(a.done) - Number(b.done) || a.date.localeCompare(b.date));
 
+  // Mine = attending or created it — same "what's actually mine" scoping as
+  // myTasks below, now that meetings merge into the same list instead of
+  // their own separate card.
+  const myMeetings = monthMeetings.filter(
+    (m) => (m.attendeeIds ?? []).includes(viewingAsUserId) || m.createdById === viewingAsUserId
+  );
+
   // Assignee-only — was assignee-OR-assigner ("a task I handed to someone
   // else is just as much mine as one handed to me"), reversed on explicit
   // feedback: this card should read as "what's actually on my plate",
@@ -74,26 +83,30 @@ export function WorkSidebar({
   // themselves ("งานที่เราแอดเค้าไปไม่เอามา เอาแค่งานที่เค้าแอดเราพอแล้ว").
   const myTasks = monthTasks.filter((t) => t.assigneeIds.includes(viewingAsUserId));
 
-  // Merged, date-sorted personal list — งานที่ฉันรับ and สิ่งที่ต้องทำ read as
-  // one "what's on my plate" list now instead of two separate cards (asked
-  // for explicitly: "สิ่งที่ต้องทำ จะเอาเข้ามาอยู่ด้วย ในงานที่ฉันรับ").
-  type PersonalItem = { date: string } & ({ kind: "task"; task: Task } | { kind: "todo"; todo: TodoItem });
+  // Merged, date-sorted personal list — งาน/ประชุม/สิ่งที่ต้องทำ all read as
+  // one "what's on my plate" list now instead of separate cards (asked for
+  // explicitly: "เอารวมกันเลยเป็นงานที่ฉันได้รับ").
+  type PersonalItem = { date: string } & (
+    | { kind: "task"; task: Task }
+    | { kind: "todo"; todo: TodoItem }
+    | { kind: "meeting"; meeting: CalendarEvent }
+  );
   const myItems: PersonalItem[] = [
     ...myTasks.map((t): PersonalItem => ({ kind: "task", date: t.dueDate, task: t })),
     ...myTodos.map((t): PersonalItem => ({ kind: "todo", date: t.date, todo: t })),
+    ...myMeetings.map((m): PersonalItem => ({ kind: "meeting", date: m.start, meeting: m })),
   ].sort((a, b) => a.date.localeCompare(b.date));
 
   const period = range.viewType === "timeGridDay" ? "วันนี้" : range.viewType === "timeGridWeek" ? "สัปดาห์นี้" : "เดือนนี้";
-  const meetingHeading = range.viewType === "timeGridDay" ? "ประชุมวันนี้" : range.viewType === "timeGridWeek" ? "ประชุมสัปดาห์นี้" : "ประชุมในเดือนนี้";
-  const myHeading = range.viewType === "timeGridDay" ? "งานที่ฉันรับวันนี้" : range.viewType === "timeGridWeek" ? "งานที่ฉันรับสัปดาห์นี้" : "งานที่ฉันรับเดือนนี้";
+  const myHeading = range.viewType === "timeGridDay" ? "งานที่ฉันได้รับวันนี้" : range.viewType === "timeGridWeek" ? "งานที่ฉันได้รับสัปดาห์นี้" : "งานที่ฉันได้รับเดือนนี้";
   const emptyTasksLabel = range.viewType === "timeGridDay" ? "ไม่มีงานครบกำหนดวันนี้" : range.viewType === "timeGridWeek" ? "ไม่มีงานครบกำหนดสัปดาห์นี้" : "ไม่มีงานครบกำหนดในเดือนนี้";
-  const emptyMeetingsLabel = range.viewType === "timeGridDay" ? "ไม่มีประชุมวันนี้" : range.viewType === "timeGridWeek" ? "ไม่มีประชุมสัปดาห์นี้" : "ไม่มีประชุมในเดือนนี้";
-  const emptyMyTasksLabel = range.viewType === "timeGridDay" ? "ไม่มีงานหรือสิ่งที่ต้องทำวันนี้" : range.viewType === "timeGridWeek" ? "ไม่มีงานหรือสิ่งที่ต้องทำสัปดาห์นี้" : "ไม่มีงานหรือสิ่งที่ต้องทำเดือนนี้";
+  const emptyMyTasksLabel = range.viewType === "timeGridDay" ? "ไม่มีงาน ประชุม หรือสิ่งที่ต้องทำวันนี้" : range.viewType === "timeGridWeek" ? "ไม่มีงาน ประชุม หรือสิ่งที่ต้องทำสัปดาห์นี้" : "ไม่มีงาน ประชุม หรือสิ่งที่ต้องทำเดือนนี้";
 
-  // One row style for "this is my personal task list" wherever it's shown —
-  // urgency-colored dot (deadline pressure matters more than priority once
-  // it's just your own short list) — and a separate one for a mixed crowd of
-  // everyone's tasks, where priority + whose avatar it is reads faster.
+  // Dot color now follows type (งาน/ประชุม/สิ่งที่ต้องทำ) instead of urgency —
+  // asked for explicitly: "สี จุดข้างหน้าตามรูปแบบเลย งาน ประชุม สิ่งที่
+  // ต้องทำ" — same colors as the calendar grid's own dots (colors.task/
+  // meeting/todo). Urgency stays as a text label next to the date instead
+  // of stealing the dot's color.
   function renderPersonalRow(t: Task) {
     const urgency = dueUrgency(t);
     return (
@@ -102,15 +115,7 @@ export function WorkSidebar({
         onClick={() => onOpenTask(t.id)}
         className="w-full flex items-center gap-2.5 text-left rounded-lg -mx-1 px-1 py-1 hover:bg-[var(--bg-soft)] transition-colors"
       >
-        <span
-          className={cn(
-            "h-2 w-2 rounded-full shrink-0",
-            urgency === "overdue" ? "bg-[var(--chart-red)]" : urgency === "soon" ? "bg-[var(--chart-amber)]" : "bg-[var(--line)]"
-          )}
-          role="img"
-          aria-label={`กำหนดส่ง: ${urgency === "overdue" ? "เลยกำหนดแล้ว" : urgency === "soon" ? "ใกล้ถึงกำหนด" : "ยังไม่ถึงกำหนด"}`}
-          title={urgency === "overdue" ? "เลยกำหนดแล้ว" : urgency === "soon" ? "ใกล้ถึงกำหนด" : "ยังไม่ถึงกำหนด"}
-        />
+        <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: colors.task }} role="img" aria-label="งาน" />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium truncate">{t.title}</p>
           <p className="text-xs text-[var(--ink-soft)] flex items-center gap-1">
@@ -134,7 +139,7 @@ export function WorkSidebar({
           onClick={() => onToggleTodo(t.id)}
           aria-label={t.done ? "ทำเครื่องหมายว่ายังไม่เสร็จ" : "ทำเครื่องหมายว่าเสร็จแล้ว"}
           className="flex h-2 w-2 shrink-0 items-center justify-center rounded-full"
-          style={{ backgroundColor: "var(--chart-amber)" }}
+          style={{ backgroundColor: colors.todo }}
         >
           {t.done && <Check className="h-1.5 w-1.5 text-white" strokeWidth={4} />}
         </button>
@@ -145,6 +150,44 @@ export function WorkSidebar({
             {t.time && ` · ${t.time}`}
           </p>
         </button>
+      </div>
+    );
+  }
+
+  function renderMeetingRow(m: CalendarEvent) {
+    const attendees = (m.attendeeIds ?? []).map(getUser).filter(Boolean);
+    const dept = !attendees.length && m.departmentId ? getDepartment(m.departmentId) : undefined;
+    return (
+      <div key={m.id} className="flex items-start gap-2.5 rounded-lg -mx-1 px-1 py-1">
+        <span className="h-2 w-2 rounded-full shrink-0 mt-1.5" style={{ backgroundColor: colors.meeting }} role="img" aria-label="ประชุม" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-sm font-medium truncate" title={m.title}>{m.title}</span>
+            <span className="text-xs text-[var(--ink-soft)] shrink-0 whitespace-nowrap">
+              {m.allDay ? formatDate(m.start) : formatDateTime(m.start).replace(":", ".")}
+            </span>
+          </div>
+          {(attendees.length > 0 || dept) && (
+            <div className="flex items-center gap-1.5 mt-1">
+              {attendees.length > 0 ? (
+                <div className="flex items-center -space-x-1.5">
+                  {attendees.slice(0, 4).map((a) => (
+                    <Avatar key={a!.id} className="h-5 w-5 ring-2 ring-white" title={a!.name}>
+                      <AvatarFallback className="text-[8px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{a!.avatar}</AvatarFallback>
+                    </Avatar>
+                  ))}
+                  {attendees.length > 4 && (
+                    <span className="h-5 w-5 rounded-full ring-2 ring-white bg-[var(--bg-soft)] text-[8px] text-[var(--ink-soft)] flex items-center justify-center">
+                      +{attendees.length - 4}
+                    </span>
+                  )}
+                </div>
+              ) : dept ? (
+                <Badge variant="secondary" className="text-[10px] font-normal">{dept.name}</Badge>
+              ) : null}
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -178,12 +221,10 @@ export function WorkSidebar({
 
   return (
     <>
-      {/* งานที่ฉันรับ — always first now, right after the calendar grid
-          (asked for explicitly: "ให้ไปอยู่อันแรกแทนต่อจากปฏิทิน"), for
-          everyone regardless of scope. Used to only appear here for anyone
-          without a broadened-scope toggle at all, with a head/owner's own
-          copy of it relegated to a 3rd card below the crowd view — swapped
-          so "what's on my plate" leads every time. */}
+      {/* งานที่ฉันได้รับ — งาน/ประชุม/สิ่งที่ต้องทำ all merged into one
+          date-sorted list now (asked for explicitly: "เอารวมกันเลยเป็นงานที่
+          ฉันได้รับ"), always first right after the calendar grid, for
+          everyone regardless of scope. */}
       <Card className="border-[var(--line)] shadow-none">
         <CardHeader>
           <CardTitle className="text-base font-semibold flex items-center justify-between gap-2">
@@ -199,64 +240,18 @@ export function WorkSidebar({
               <Plus className="h-3.5 w-3.5" /> เพิ่ม
             </Button>
           </CardTitle>
-          <p className="text-xs text-[var(--ink-soft)]">
-            {rangeLabel(range)} · จุดสี = ความเร่งด่วนของกำหนดส่ง (แดง = เลยกำหนด, เหลือง = ใกล้ถึงกำหนด) · อำพัน = สิ่งที่ต้องทำ
+          <p className="text-xs text-[var(--ink-soft)] flex items-center gap-1.5 flex-wrap">
+            {rangeLabel(range)} ·
+            <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: colors.task }} />งาน</span>
+            <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: colors.meeting }} />ประชุม</span>
+            <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: colors.todo }} />สิ่งที่ต้องทำ</span>
           </p>
         </CardHeader>
         <CardContent className="space-y-2.5 max-h-80 overflow-y-auto">
           {myItems.length === 0 && <p className="text-sm text-[var(--ink-soft)]">{emptyMyTasksLabel}</p>}
-          {myItems.map((item) => (item.kind === "task" ? renderPersonalRow(item.task) : renderTodoRow(item.todo)))}
-        </CardContent>
-      </Card>
-
-      <Card className="border-[var(--line)] shadow-none">
-        <CardHeader>
-          <CardTitle className="text-base font-semibold flex items-center justify-between gap-2">
-            {meetingHeading}
-            {monthMeetings.length > 0 && (
-              <span className="text-xs font-normal text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2 py-0.5">
-                {monthMeetings.length}
-              </span>
-            )}
-          </CardTitle>
-          <p className="text-xs text-[var(--ink-soft)]">{rangeLabel(range)}</p>
-        </CardHeader>
-        <CardContent className="space-y-3 max-h-64 overflow-y-auto">
-          {monthMeetings.length === 0 && <p className="text-sm text-[var(--ink-soft)]">{emptyMeetingsLabel}</p>}
-          {monthMeetings.map((m) => {
-            const attendees = (m.attendeeIds ?? []).map(getUser).filter(Boolean);
-            const dept = !attendees.length && m.departmentId ? getDepartment(m.departmentId) : undefined;
-            return (
-              <div key={m.id} className="text-sm space-y-1">
-                <div className="flex items-start justify-between gap-2">
-                  <span className="font-medium truncate min-w-0" title={m.title}>{m.title}</span>
-                  <span className="text-xs text-[var(--ink-soft)] shrink-0 whitespace-nowrap">
-                    {m.allDay ? formatDate(m.start) : formatDateTime(m.start).replace(":", ".")}
-                  </span>
-                </div>
-                {(attendees.length > 0 || dept) && (
-                  <div className="flex items-center gap-1.5">
-                    {attendees.length > 0 ? (
-                      <div className="flex items-center -space-x-1.5">
-                        {attendees.slice(0, 4).map((a) => (
-                          <Avatar key={a!.id} className="h-5 w-5 ring-2 ring-white" title={a!.name}>
-                            <AvatarFallback className="text-[8px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{a!.avatar}</AvatarFallback>
-                          </Avatar>
-                        ))}
-                        {attendees.length > 4 && (
-                          <span className="h-5 w-5 rounded-full ring-2 ring-white bg-[var(--bg-soft)] text-[8px] text-[var(--ink-soft)] flex items-center justify-center">
-                            +{attendees.length - 4}
-                          </span>
-                        )}
-                      </div>
-                    ) : dept ? (
-                      <Badge variant="secondary" className="text-[10px] font-normal">{dept.name}</Badge>
-                    ) : null}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          {myItems.map((item) =>
+            item.kind === "task" ? renderPersonalRow(item.task) : item.kind === "todo" ? renderTodoRow(item.todo) : renderMeetingRow(item.meeting)
+          )}
         </CardContent>
       </Card>
 

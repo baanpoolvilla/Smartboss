@@ -374,20 +374,10 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
         <div className="flex flex-col items-center w-full">
           {numberRow}
           {items.length > 0 && (
-            <div
-              className={cn(
-                "flex flex-wrap items-center justify-center gap-0.5 px-0.5 pb-0.5",
-                // Today's number is a fixed-height pill with no bottom
-                // margin (kept at 0 to avoid growing this row taller than
-                // its neighbors — see that rule's own comment) — a plain
-                // number's own padding gives everyone else a small gap
-                // before their dots that today's (now-smaller, 1.15rem)
-                // pill doesn't quite have on its own, so a little is added
-                // back here, at the content level, where it can't affect
-                // the shared row height.
-                ymd === todayIso() && "mt-[1px]"
-              )}
-            >
+            // Today's number is plain-text-styled now, same box model as
+            // every other day (see that CSS rule's own history) — no more
+            // per-day margin compensation needed here at all.
+            <div className="flex flex-wrap items-center justify-center gap-0.5 px-0.5 pb-0.5">
               {items.slice(0, DOT_CAP).map((e) => (
                 <span
                   key={e.id}
@@ -600,20 +590,19 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           initialView="dayGridMonth"
           headerToolbar={false}
           locale={thGregorianLocale}
-          // Fixed height (computed above from the actual viewport) so busy vs
-          // empty months stay the same size — the page height never changes
-          // on navigation, so it can't bounce the scroll. Used to switch to
-          // "auto" + no expandRows on a narrow viewport (compact rows,
-          // Google/Apple mobile style) specifically to avoid stretching a
-          // light month into big gaps under a couple of dots — reversed on
-          // direct feedback: a phone screen was instead left with dead empty
-          // space below a short grid ("อยากให้แสดงเต็มหน้าจอ ... เห็นวันที่
-          // ครบเลย") having the whole month visible with no scroll, filling
-          // the actual available height, mattered more than avoiding uneven
-          // row heights on a light month. Same fixed-height/expandRows now on
-          // every viewport.
-          height={calendarHeight}
-          expandRows
+          // Fixed height (computed above from the actual viewport) on wide
+          // screens so busy vs empty months stay the same size and the page
+          // can't bounce the scroll on navigation. Narrow month view went
+          // through both extremes — "auto" + no expandRows (compact, but a
+          // phone was left scrolling to see the last row), then forcing
+          // full-height expandRows to fix that (but rows then stretched
+          // with mostly-dead space under a couple of dots, "เปลืองพื้นที่...
+          // ใช้ครึ่งเดียวเอง") — settling on "auto" without expandRows:
+          // compact rows sized to their real content, which on a normal
+          // month is short enough to need no scroll anyway, without
+          // artificially inflating light rows to fill the screen.
+          height={isNarrowViewport && view === "dayGridMonth" ? "auto" : calendarHeight}
+          expandRows={!(isNarrowViewport && view === "dayGridMonth")}
           // Show exactly 5 or 6 rows depending on the actual month, not
           // always padded to 6 — combined with expandRows + the fixed total
           // height above, a 5-row month gets taller rows and a 6-row month

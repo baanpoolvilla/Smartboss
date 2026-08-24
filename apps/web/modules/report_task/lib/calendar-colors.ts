@@ -2,8 +2,13 @@ import type { CalendarEventType } from "@/modules/report_task/types";
 import { chartColors } from "@/modules/report_task/lib/chart-colors";
 
 export const eventTypeColors: Record<CalendarEventType, string> = {
-  task: chartColors.blue,
-  meeting: chartColors.violet,
+  // task/meeting/todo get their own standalone hex here (not chartColors.
+  // blue/violet/amber, which also drive unrelated department/chart colors
+  // elsewhere) — punchier versions asked for explicitly ("ปรับสี... ให้
+  // ชัดเจนมากกว่านี้"), chartColors.violet in particular read as a dark,
+  // muted navy at dot size rather than a clearly "purple" meeting marker.
+  task: "#2563eb",
+  meeting: "#7c3aed",
   leave: chartColors.pink,
   // Neutral gray rather than a hue of its own — holidays aren't actionable
   // like a task/meeting/leave, so they shouldn't compete for attention on
