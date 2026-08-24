@@ -566,6 +566,16 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           dayCellContent={renderDayCellContent}
           editable
           eventDurationEditable={false}
+          // "auto" (the default) renders a multi-day event as one continuous
+          // bar spanning across day columns — fine for the wide pill view,
+          // but a dot has no meaningful "spanning" shape: centered inside
+          // that wide bar, it lands at the visual midpoint between the start
+          // and end day instead of sitting in either day's column, reading
+          // as randomly crooked/off-grid. "list-item" gives every day its
+          // own independent segment instead (no cross-column bar), which is
+          // what a plain per-day dot needs — narrow month view only, since
+          // the wide pill view's spanning bar is the whole point there.
+          eventDisplay={isNarrowViewport && view === "dayGridMonth" ? "list-item" : "auto"}
           eventContent={renderEventContent}
           // Cells share one height; show as many events as fit and only surface
           // "+more" when they actually overflow the cell (not a fixed count).
