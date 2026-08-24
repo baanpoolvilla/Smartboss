@@ -269,10 +269,14 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
       (e) => e.type === "holiday" && ymd >= e.start.slice(0, 10) && ymd < e.end.slice(0, 10)
     );
     return (
-      <div className="flex items-baseline gap-1 min-w-0 overflow-hidden">
-        <a className="fc-daygrid-day-number">{arg.dayNumberText}</a>
+      <div className="flex items-baseline gap-1 min-w-0 w-full overflow-hidden">
+        <a className="fc-daygrid-day-number shrink-0">{arg.dayNumberText}</a>
         {holiday && (
-          <span className="italic text-[10px] font-medium truncate" style={{ color: colors.holiday }}>
+          // Flex items default to min-width:auto (their content's own width),
+          // which blocks truncate from ever kicking in and let a long title
+          // like "วันแม่แห่งชาติ (วันเฉลิม...)" spill straight out of the cell —
+          // min-w-0 + flex-1 forces it to actually shrink to the ellipsis.
+          <span className="italic text-[10px] font-medium truncate min-w-0 flex-1" style={{ color: colors.holiday }}>
             {holiday.title}
           </span>
         )}
