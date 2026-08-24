@@ -274,12 +274,7 @@ export function WorkSidebar({
               <Plus className="h-3.5 w-3.5" /> เพิ่ม
             </Button>
           </CardTitle>
-          <p className="text-xs text-[var(--ink-soft)] flex items-center gap-1.5 flex-wrap">
-            {rangeLabel(range)} ·
-            <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: colors.task }} />งาน</span>
-            <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: colors.meeting }} />ประชุม</span>
-            <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: colors.todo }} />สิ่งที่ต้องทำ</span>
-          </p>
+          <p className="text-xs text-[var(--ink-soft)]">{rangeLabel(range)}</p>
         </CardHeader>
         <CardContent className="space-y-2.5 max-h-80 overflow-y-auto">
           {myItems.length === 0 && <p className="text-sm text-[var(--ink-soft)]">{emptyMyTasksLabel}</p>}
@@ -305,11 +300,7 @@ export function WorkSidebar({
               </span>
             )}
           </CardTitle>
-          <p className="text-xs text-[var(--ink-soft)] flex items-center gap-1.5 flex-wrap">
-            {rangeLabel(range)} ·
-            <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: colors.task }} />งาน</span>
-            <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: colors.todo }} />สิ่งที่ต้องทำ</span>
-          </p>
+          <p className="text-xs text-[var(--ink-soft)]">{rangeLabel(range)}</p>
         </CardHeader>
         <CardContent className="space-y-2.5 max-h-64 overflow-y-auto">
           {crowdItems.length === 0 && <p className="text-sm text-[var(--ink-soft)]">{emptyTasksLabel}</p>}
