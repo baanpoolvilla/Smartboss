@@ -207,6 +207,18 @@
   --fc-list-event-hover-bg-color: var(--bg-soft);
   --fc-small-font-size: 0.75rem;
 }
+/* The month grid's own internal scroller (kicks in when the computed
+   calendarHeight is a hair short of what 6 rows actually need) showed the
+   global thin scrollbar as a visible bar running down the right edge of
+   the grid — asked to not have it there. Hides it visually only; the
+   scroller itself still scrolls fine via touch/wheel/keyboard, so no
+   content is lost if it's ever a few px short. */
+.ebw-calendar .fc-scroller {
+  scrollbar-width: none;
+}
+.ebw-calendar .fc-scroller::-webkit-scrollbar {
+  display: none;
+}
 .ebw-calendar .fc {
   font-family: var(--font-sans);
 }
@@ -238,12 +250,15 @@
   background: var(--chart-green);
   font-weight: 700;
   border-radius: 999px;
-  min-width: 1.5rem;
-  height: 1.5rem;
+  /* Was 1.5rem (24px) — visibly bigger than the ~13px plain-number text
+     next to it on other days, reported as "ใหญ่เกินไป". 1.15rem still
+     reads clearly as a filled pill without dominating the row. */
+  min-width: 1.15rem;
+  height: 1.15rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0 5px;
+  padding: 0 4px;
   /* Bottom margin stays at 0 — any larger and this pill grows taller than
      a plain day number again, reintroducing the shared-row-height mismatch
      that misaligned the whole week's dot rows (see this rule's own history).

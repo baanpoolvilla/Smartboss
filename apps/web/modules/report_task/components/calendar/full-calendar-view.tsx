@@ -381,10 +381,11 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
                 // margin (kept at 0 to avoid growing this row taller than
                 // its neighbors — see that rule's own comment) — a plain
                 // number's own padding gives everyone else a small gap
-                // before their dots that today's pill doesn't have on its
-                // own, so it's added back here, at the content level, where
-                // it can't affect the shared row height.
-                ymd === todayIso() && "mt-[3px]"
+                // before their dots that today's (now-smaller, 1.15rem)
+                // pill doesn't quite have on its own, so a little is added
+                // back here, at the content level, where it can't affect
+                // the shared row height.
+                ymd === todayIso() && "mt-[1px]"
               )}
             >
               {items.slice(0, DOT_CAP).map((e) => (
