@@ -9,7 +9,7 @@ import interactionPlugin from "@fullcalendar/interaction";
 import thLocale from "@fullcalendar/core/locales/th";
 import { th as thDateFns } from "date-fns/locale";
 import type { DateClickArg } from "@fullcalendar/interaction";
-import type { DateSelectArg, DatesSetArg, EventClickArg, EventContentArg, EventDropArg, EventInput, DayCellMountArg } from "@fullcalendar/core";
+import type { DateSelectArg, DatesSetArg, EventClickArg, EventContentArg, EventDropArg, EventInput, DayCellMountArg, DayCellContentArg } from "@fullcalendar/core";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { Calendar } from "@/modules/report_task/components/ui/calendar";
@@ -154,7 +154,14 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
 
   const fcEvents: EventInput[] = useMemo(
     () =>
-      events.map((e) => {
+      events
+        // Month view shows a holiday's name inline next to the day number
+        // itself (see renderDayCellContent) instead of as one more event —
+        // keeping it in here too would show it twice. Week/day/list views
+        // have no per-cell day number to attach it to, so it stays a normal
+        // (unstyled-chip, italic-text) event there — see renderEventContent.
+        .filter((e) => !(e.type === "holiday" && view === "dayGridMonth"))
+        .map((e) => {
         const color = e.colorHint ?? colors[e.type];
         return {
           id: e.id,
@@ -180,7 +187,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           extendedProps: { type: e.type, color, isTask: e.type === "task", muted: !!e.muted, mine: e.mine, leaveType: e.leaveType, done: !!e.done },
         };
       }),
-    [events, colors]
+    [events, colors, view]
   );
 
   // Read title + current month straight from the datesSet arg — reliable even on
@@ -248,6 +255,29 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
   // would roll the date a day off for non-zero UTC offsets.
   function localYmd(date: Date) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  }
+
+  /** Month view only — replaces the plain day-number cell with the number
+   *  plus, if a holiday falls on this date, its name in italic right next to
+   *  it (asked for explicitly: "ติดกับเลขวันที่" — attached to the date
+   *  number, not on its own line below like a normal event). Keeps the
+   *  `fc-daygrid-day-number` class on the number itself so every existing
+   *  today/weekend/other-month CSS rule (theme.css) still applies unchanged. */
+  function renderDayCellContent(arg: DayCellContentArg) {
+    const ymd = localYmd(arg.date);
+    const holiday = events.find(
+      (e) => e.type === "holiday" && ymd >= e.start.slice(0, 10) && ymd < e.end.slice(0, 10)
+    );
+    return (
+      <div className="flex items-baseline gap-1 min-w-0 overflow-hidden">
+        <a className="fc-daygrid-day-number">{arg.dayNumberText}</a>
+        {holiday && (
+          <span className="italic text-[10px] font-medium truncate" style={{ color: colors.holiday }}>
+            {holiday.title}
+          </span>
+        )}
+      </div>
+    );
   }
 
   /** Tags today's cell so the product tour has a stable, always-findable spot to spotlight before demoing a drag-select — everything else about a day cell's identity shifts with the calendar page/view. */
@@ -481,6 +511,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           selectable
           select={handleSelectRange}
           dayCellDidMount={handleDayCellDidMount}
+          dayCellContent={renderDayCellContent}
           editable
           eventDurationEditable={false}
           eventContent={renderEventContent}
