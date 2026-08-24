@@ -298,7 +298,17 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
     // as a native hover tooltip for anyone who wants it.
     const shortTitle = holiday?.title.split(" (")[0];
     return (
-      <div className="flex items-baseline gap-1 min-w-0 w-full overflow-hidden">
+      // No-holiday days (the common case) center the number — event dots
+      // below are centered in their own cell (justify-center in
+      // renderEventContent), so a left-aligned number (flex's default
+      // start-alignment, with nothing else in the row to push against)
+      // sat visibly left of its own dot underneath it. That mismatch read
+      // as the whole dot "leaning" out from under its date every time,
+      // even though the dot itself was correctly centered — this was the
+      // real cause behind the reported crookedness, not the dot's own
+      // sizing/margin (verified fine via DevTools). A holiday day keeps the
+      // number left-anchored so the italic title reads naturally after it.
+      <div className={cn("flex items-baseline gap-1 min-w-0 w-full overflow-hidden", !holiday && "justify-center")}>
         {holiday &&
           (isNarrowViewport ? (
             <span
