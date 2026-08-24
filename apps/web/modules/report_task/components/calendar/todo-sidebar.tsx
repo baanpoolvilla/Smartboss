@@ -25,6 +25,7 @@ export function TodoSidebar({
   scope,
   onEdit,
   onAdd,
+  hideMine = false,
 }: {
   range: ViewRange;
   scope: "mine" | "all";
@@ -33,6 +34,11 @@ export function TodoSidebar({
    * own (merged into งาน — see calendar-view.tsx), this card is the one
    * reliable place to start a new item, so it gets its own quick-add. */
   onAdd?: () => void;
+  /** The viewer's own to-dos now live inside WorkSidebar's "งานที่ฉันรับ"
+   *  card instead (merged in, per feedback) — this card keeps only the
+   *  "everyone else's" half when true, instead of showing the viewer's own
+   *  list twice in two different places. */
+  hideMine?: boolean;
 }) {
   const todos = useTodoStore((s) => s.todos);
   const toggleTodo = useTodoStore((s) => s.toggleTodo);
@@ -125,12 +131,12 @@ export function TodoSidebar({
   }
 
   if (scope === "mine") {
-    return card(`สิ่งที่ต้องทำของฉัน${period}`, myTodos, "ยังไม่มีสิ่งที่ต้องทำของฉันในช่วงนี้", false, true);
+    return hideMine ? null : card(`สิ่งที่ต้องทำของฉัน${period}`, myTodos, "ยังไม่มีสิ่งที่ต้องทำของฉันในช่วงนี้", false, true);
   }
 
   return (
     <>
-      {card(`สิ่งที่ต้องทำของฉัน${period}`, myTodos, "ยังไม่มีสิ่งที่ต้องทำของฉันในช่วงนี้", false, true)}
+      {!hideMine && card(`สิ่งที่ต้องทำของฉัน${period}`, myTodos, "ยังไม่มีสิ่งที่ต้องทำของฉันในช่วงนี้", false, true)}
       {card(`สิ่งที่ต้องทำของคนอื่น${period}`, otherTodos, "ยังไม่มีสิ่งที่ต้องทำของใครในช่วงนี้", true, false)}
     </>
   );

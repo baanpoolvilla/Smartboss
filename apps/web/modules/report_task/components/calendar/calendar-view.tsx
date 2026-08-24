@@ -1273,16 +1273,26 @@ export function CalendarView() {
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
             {tab === "work" ? (
               <>
-                <WorkSidebar range={viewRange} onOpenTask={setOpenTaskId} />
+                <WorkSidebar
+                  range={viewRange}
+                  onOpenTask={setOpenTaskId}
+                  onToggleTodo={toggleTodo}
+                  onEditTodo={(t) => openTodoDialog({ todo: t, date: t.date })}
+                  onAddTodo={() => openTodoDialog({})}
+                />
                 {/* Same overlay toggle as the calendar grid itself — สิ่งที่ต้องทำ
                     no longer has its own tab, so its own sidebar card only shows
-                    up here alongside the work one, not as a full replacement. */}
+                    up here alongside the work one, not as a full replacement.
+                    hideMine: the viewer's own to-dos are merged into
+                    WorkSidebar's "งานที่ฉันรับ" card above now — this stays
+                    only for the "everyone else's" half when scope is "all". */}
                 {showTodosInWork && (
                   <TodoSidebar
                     range={viewRange}
                     scope={effectiveTodoScope}
                     onEdit={(t) => openTodoDialog({ todo: t, date: t.date })}
                     onAdd={() => openTodoDialog({})}
+                    hideMine
                   />
                 )}
               </>
