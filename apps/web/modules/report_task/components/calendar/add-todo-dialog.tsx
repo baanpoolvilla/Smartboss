@@ -13,6 +13,13 @@ import { Button } from "@/modules/report_task/components/ui/button";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Textarea } from "@/modules/report_task/components/ui/textarea";
 import { Switch } from "@/modules/report_task/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/modules/report_task/components/ui/select";
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { AttendeePicker } from "@/modules/report_task/components/shared/attendee-picker";
 import { useTodoStore } from "@/modules/report_task/store/todo-store";
@@ -22,9 +29,19 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { todayIso } from "@/modules/report_task/lib/now";
 import { cn } from "@/modules/report_task/lib/utils";
 import { canManage, departmentIdsOf } from "@/modules/report_task/lib/directory";
-import { X, Trash2 } from "lucide-react";
+import { X, Trash2, Bell } from "lucide-react";
 import { toast } from "sonner";
 import type { CalendarEvent, TodoItem } from "@/modules/report_task/types";
+
+const REMINDER_OPTIONS = [
+  { value: "0", label: "ไม่แจ้งเตือน", minutes: 0 },
+  { value: "15", label: "15 นาทีก่อน", minutes: 15 },
+  { value: "30", label: "30 นาทีก่อน", minutes: 30 },
+  { value: "60", label: "1 ชั่วโมงก่อน", minutes: 60 },
+  { value: "180", label: "3 ชั่วโมงก่อน", minutes: 180 },
+  { value: "1440", label: "1 วันก่อน", minutes: 1440 },
+  { value: "4320", label: "3 วันก่อน", minutes: 4320 },
+] as const;
 
 export function AddTodoDialog({
   open,
@@ -55,6 +72,7 @@ export function AddTodoDialog({
   const [meetEnd, setMeetEnd] = useState("11:00");
   const [meetLocation, setMeetLocation] = useState("");
   const [meetOnline, setMeetOnline] = useState(false);
+  const [reminderMinutes, setReminderMinutes] = useState(0);
 
   const [wasOpen, setWasOpen] = useState(open);
   if (open !== wasOpen) {
@@ -70,6 +88,7 @@ export function AddTodoDialog({
       setMeetEnd("11:00");
       setMeetLocation("");
       setMeetOnline(false);
+      setReminderMinutes(editingTodo?.reminderMinutes ?? 0);
     }
   }
 
@@ -93,6 +112,7 @@ export function AddTodoDialog({
         createdById: viewingAsUserId,
         location: meetOnline ? "ออนไลน์ (Teams/Zoom)" : meetLocation.trim() || "ไม่ระบุสถานที่",
         description: trimmedNote || undefined,
+        reminderMinutes: reminderMinutes || undefined,
       };
       addMeeting(meeting);
       if (meetAttendeeIds.length > 0) {
@@ -104,7 +124,13 @@ export function AddTodoDialog({
     }
 
     if (editingTodo) {
-      updateTodo(editingTodo.id, { title: trimmed, date, time: time || undefined, note: trimmedNote || undefined });
+      updateTodo(editingTodo.id, {
+        title: trimmed,
+        date,
+        time: time || undefined,
+        note: trimmedNote || undefined,
+        reminderMinutes: reminderMinutes || undefined,
+      });
     } else {
       addTodo({
         id: `todo-${crypto.randomUUID()}`,
@@ -115,6 +141,7 @@ export function AddTodoDialog({
         createdAt: new Date().toISOString(),
         time: time || undefined,
         note: trimmedNote || undefined,
+        reminderMinutes: reminderMinutes || undefined,
       });
     }
     onOpenChange(false);
@@ -187,6 +214,27 @@ export function AddTodoDialog({
               <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-[110px] shrink-0" aria-label="เวลา (ไม่บังคับ)" />
             </div>
           )}
+
+          <div className="flex items-center gap-2">
+            <Bell className="h-4 w-4 shrink-0 text-[var(--ink-soft)]" />
+            <Select
+              value={String(reminderMinutes)}
+              onValueChange={(v) => v && setReminderMinutes(Number(v))}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue>
+                  {REMINDER_OPTIONS.find((o) => o.minutes === reminderMinutes)?.label ?? "ไม่แจ้งเตือน"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {REMINDER_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           <Textarea
             placeholder="รายละเอียดเพิ่มเติม (ไม่บังคับ)…"

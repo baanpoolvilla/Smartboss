@@ -217,6 +217,11 @@ export interface CalendarEvent {
   done?: boolean;
   /** To-do only — HH:MM, shown next to the title where there's room for it. */
   time?: string;
+  /** Minutes before `start` (meeting) to remind — set at creation, overrides
+   *  the company-wide `MeetingReminderSettings.leadMinutes` for this one
+   *  event, same "room override, company default" relationship as
+   *  `ReportTopic.remindBeforeCutoffMinutes`. Unset = no per-item reminder. */
+  reminderMinutes?: number;
 }
 
 export interface TodoItem {
@@ -233,6 +238,10 @@ export interface TodoItem {
   time?: string;
   /** Short freeform note — optional, for when the title alone isn't enough. */
   note?: string;
+  /** Minutes before `date`+`time` (midnight if no `time`) to remind — set at
+   *  creation. Unset = no reminder; a to-do isn't swept by the company-wide
+   *  task reminder settings the way an assigned `Task` is. */
+  reminderMinutes?: number;
 }
 
 export interface ActivityItem {

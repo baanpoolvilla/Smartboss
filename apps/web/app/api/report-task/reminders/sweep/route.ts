@@ -8,7 +8,7 @@ import { computeReminders } from "@/modules/report_task/lib/reminder-sweep";
 import { defaultReminderSettings, type ReminderSettings } from "@/modules/report_task/store/reminder-settings-store";
 import type { ReportAlbum, ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import type { AppNotification } from "@/modules/report_task/store/notification-store";
-import type { CalendarEvent } from "@/modules/report_task/types";
+import type { CalendarEvent, TodoItem } from "@/modules/report_task/types";
 
 /**
  * แจ้งเตือน "ใกล้ถึงกำหนด" (งาน/ประชุม/รอบส่งรีพอต) — คนละงานกับ
@@ -26,6 +26,7 @@ const SETTINGS_KEY = "reminder-settings";
 const SENT_LOG_KEY = "reminder-sent-log";
 const NOTIFICATIONS_KEY = "notifications";
 const MEETINGS_KEY = "meetings";
+const TODOS_KEY = "todos";
 const REPORT_FEED_KEY = "report-feed";
 // Dedup keys accumulate roughly one per (task × lead-day) and (person × room
 // × day × lead) — capped so a company running this for years doesn't grow
@@ -38,10 +39,11 @@ export async function POST() {
   const session = await requireOrg();
   const orgId = session.orgId;
 
-  const [{ data: settingsRaw }, { tasks }, { data: meetings }, { data: reportFeed }] = await Promise.all([
+  const [{ data: settingsRaw }, { tasks }, { data: meetings }, { data: todos }, { data: reportFeed }] = await Promise.all([
     readStore<ReminderSettings>(orgId, SETTINGS_KEY),
     readTasks(orgId),
     readStore<CalendarEvent[]>(orgId, MEETINGS_KEY),
+    readStore<TodoItem[]>(orgId, TODOS_KEY),
     readStore<{ topics: ReportTopic[]; posts: ReportPost[]; albums: ReportAlbum[] }>(orgId, REPORT_FEED_KEY),
   ]);
   const settings = settingsRaw ?? defaultReminderSettings;
@@ -52,6 +54,7 @@ export async function POST() {
   const result = computeReminders({
     tasks,
     meetings: meetings ?? [],
+    todos: todos ?? [],
     topics: reportFeed?.topics ?? [],
     posts: reportFeed?.posts ?? [],
     settings,

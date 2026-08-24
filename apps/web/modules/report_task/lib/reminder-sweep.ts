@@ -5,7 +5,7 @@ import { pendingToday } from "@/modules/report_task/lib/report-feed-compliance";
 import { SYSTEM_USER_ID } from "@/modules/report_task/lib/task-penalty-sweep";
 import type { ReminderSettings } from "@/modules/report_task/store/reminder-settings-store";
 import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
-import type { CalendarEvent, Task } from "@/modules/report_task/types";
+import type { CalendarEvent, Task, TodoItem } from "@/modules/report_task/types";
 
 export interface ReminderNotification {
   recipients: string[];
@@ -51,12 +51,13 @@ function lastCutoffMinutesOf(cutoffs: ReportTopic["cutoffs"]): number {
 export function computeReminders(input: {
   tasks: Task[];
   meetings: CalendarEvent[];
+  todos: TodoItem[];
   topics: ReportTopic[];
   posts: ReportPost[];
   settings: ReminderSettings;
   alreadySent: Set<string>;
 }): ReminderSweepResult {
-  const { tasks, meetings, topics, posts, settings, alreadySent } = input;
+  const { tasks, meetings, todos, topics, posts, settings, alreadySent } = input;
   const notifications: ReminderNotification[] = [];
   const newSentKeys: string[] = [];
 
@@ -91,12 +92,16 @@ export function computeReminders(input: {
   }
 
   // ---- Meetings: N minutes before start ----
-  if (settings.meeting.enabled && settings.meeting.leadMinutes.length > 0) {
+  if (settings.meeting.enabled) {
     const nowMs = now().getTime();
     for (const m of meetings) {
       const minutesUntil = (new Date(m.start).getTime() - nowMs) / 60_000;
       if (minutesUntil < 0) continue; // already started
-      for (const lead of settings.meeting.leadMinutes) {
+      // A meeting's own `reminderMinutes` (set at creation) wins over the
+      // company-wide default — same "room override, company default"
+      // relationship as `ReportTopic.remindBeforeCutoffMinutes` below.
+      const leadOptions = m.reminderMinutes != null ? [m.reminderMinutes] : settings.meeting.leadMinutes;
+      for (const lead of leadOptions) {
         if (minutesUntil > lead) continue;
         const key = `meeting:${m.id}:${lead}`;
         if (alreadySent.has(key)) continue;
@@ -116,6 +121,28 @@ export function computeReminders(input: {
           link: "/report-task/calendar",
         });
       }
+    }
+  }
+
+  // ---- To-dos: N minutes before date+time, opt-in per item ----
+  // Unlike tasks/meetings there's no company-wide default here — a to-do
+  // only reminds if `reminderMinutes` was set when it was created.
+  {
+    const nowMs = now().getTime();
+    for (const td of todos) {
+      if (td.done || td.reminderMinutes == null) continue;
+      const dueMs = new Date(`${td.date}T${td.time || "00:00"}:00`).getTime();
+      const minutesUntil = (dueMs - nowMs) / 60_000;
+      if (minutesUntil < 0 || minutesUntil > td.reminderMinutes) continue;
+      const key = `todo:${td.id}:${td.reminderMinutes}`;
+      if (alreadySent.has(key)) continue;
+      newSentKeys.push(key);
+      notifications.push({
+        recipients: [td.userId],
+        byUserId: SYSTEM_USER_ID,
+        message: `สิ่งที่ต้องทำ "${td.title}" ใกล้ถึงเวลาแล้ว`,
+        link: "/report-task/calendar",
+      });
     }
   }
 
