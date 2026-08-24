@@ -309,18 +309,6 @@
   box-shadow: none;
   opacity: 0.85;
 }
-/* Narrow month view's dot-only events (renderEventContent's narrow branch) —
-   strip the shared .fc-event chip (pale background + left border-bar, both
-   set as inline style per-event, hence !important) so the tiny dot doesn't
-   sit inside a lumpy oval pill. Tight margin so several dots for one day
-   stack as a compact column instead of each carrying the chip's normal
-   event-to-event gap. */
-.ebw-calendar .fc-event.ebw-event-dot {
-  background-color: transparent !important;
-  border: none !important;
-  box-shadow: none;
-  margin: 0 0 1px;
-}
 /* Past event: same color, just faded — not swapped for an unrelated gray. */
 .ebw-calendar .fc-event.ebw-event-muted {
   opacity: 0.3;

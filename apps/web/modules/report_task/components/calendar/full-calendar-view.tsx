@@ -171,8 +171,13 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
         // more event in the cell body — keeping it in here too would show it
         // twice. Week/day/list views have no per-cell day number to attach
         // it to, so it stays a normal (unstyled, italic-text) event there —
-        // see renderEventContent.
-        .filter((e) => !(e.type === "holiday" && view === "dayGridMonth"))
+        // see renderEventContent. Narrow month view drops every event, not
+        // just holidays — renderDayCellContent renders the whole day's
+        // items itself as one flex-wrap row of dots directly under the
+        // number (matching the maintenance module's PM calendar reference
+        // design), instead of FullCalendar's own one-event-per-row stack —
+        // keeping them in fcEvents too would render each one twice.
+        .filter((e) => !(view === "dayGridMonth" && (e.type === "holiday" || isNarrowViewport)))
         .map((e) => {
         const color = e.colorHint ?? colors[e.type];
         return {
@@ -195,12 +200,6 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           classNames: [
             ...(e.type === "holiday" ? ["ebw-event-holiday"] : []),
             ...(e.muted ? ["ebw-event-muted"] : []),
-            // Narrow month view renders every event as a plain dot (see
-            // renderEventContent) — but without this, each dot still sits
-            // inside the shared .fc-event chip (pale background + left
-            // border-bar), which on a cell this small reads as a lumpy oval
-            // around the dot rather than a clean dot on its own.
-            ...(isNarrowViewport && view === "dayGridMonth" ? ["ebw-event-dot"] : []),
           ],
           extendedProps: { type: e.type, color, isTask: e.type === "task", muted: !!e.muted, mine: e.mine, leaveType: e.leaveType, done: !!e.done },
         };
@@ -297,7 +296,8 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
     // it's shrunk, so show just the short name here and keep the full title
     // as a native hover tooltip for anyone who wants it.
     const shortTitle = holiday?.title.split(" (")[0];
-    return (
+
+    const numberRow = (
       // No-holiday days (the common case) center the number — event dots
       // below are centered in their own cell (justify-center in
       // renderEventContent), so a left-aligned number (flex's default
@@ -330,6 +330,49 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
         <a className="fc-daygrid-day-number shrink-0">{arg.dayNumberText}</a>
       </div>
     );
+
+    // Narrow month view only — every one of the day's items (dropped from
+    // fcEvents for this exact case, see its own comment) as one flex-wrap
+    // row of small dots directly under the number, capped with an inline
+    // "+N" once there's more than fit. Matches the maintenance module's PM
+    // calendar mobile layout (apps/web/modules/maintenance/components/
+    // pm-calendar.tsx) instead of FullCalendar's own one-event-per-row
+    // stack, which is what actually made a multi-day item's dot land off
+    // the day's own column in the first place (list-item mode didn't fully
+    // fix that) — a manually laid-out row sidesteps the whole class of
+    // "which day column does this segment belong to" bug entirely.
+    if (isNarrowViewport && view === "dayGridMonth") {
+      const DOT_CAP = 4;
+      const items = events.filter((e) => {
+        if (e.type === "holiday") return false;
+        const start = e.start.slice(0, 10);
+        const endRaw = e.end ? e.end.slice(0, 10) : start;
+        const end = endRaw > start ? endRaw : start;
+        return end === start ? ymd === start : ymd >= start && ymd < end;
+      });
+      return (
+        <div className="flex flex-col items-center w-full">
+          {numberRow}
+          {items.length > 0 && (
+            <div className="flex flex-wrap items-center justify-center gap-0.5 px-0.5 pb-0.5">
+              {items.slice(0, DOT_CAP).map((e) => (
+                <span
+                  key={e.id}
+                  title={e.title}
+                  className={cn("h-1.5 w-1.5 rounded-full shrink-0", e.done && "opacity-50")}
+                  style={{ backgroundColor: e.colorHint ?? colors[e.type] }}
+                />
+              ))}
+              {items.length > DOT_CAP && (
+                <span className="text-[9px] leading-none text-[var(--ink-soft)]">+{items.length - DOT_CAP}</span>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    return numberRow;
   }
 
   /** Tags today's cell so the product tour has a stable, always-findable spot to spotlight before demoing a drag-select — everything else about a day cell's identity shifts with the calendar page/view. */
@@ -367,26 +410,12 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
     const leaveType = arg.event.extendedProps.leaveType as string | undefined;
     const mine = arg.event.extendedProps.mine as boolean | undefined;
 
-    // Dot-only on a narrow month grid (see isNarrowViewport's own comment) —
-    // week/day views keep the full pill regardless of width since their
-    // cells run tall, not narrow, so there's real room for the text there.
-    if (isNarrowViewport && view === "dayGridMonth") {
-      const done = type === "todo" && !!arg.event.extendedProps.done;
-      // Every dot is solid/filled now, regardless of type or whose it is —
-      // the hollow-ring "someone else's" variant read as a half-empty/
-      // broken circle rather than a deliberate distinction (asked for
-      // explicitly: "วงกลมไม่เต็ม อยากได้แบบเต็มๆ" — not a partial ring,
-      // want it fully filled).
-      return (
-        <div className="flex items-center justify-center py-0.5" title={arg.event.title}>
-          <span
-            className={cn("h-[7px] w-[7px] rounded-full shrink-0", done && "opacity-50")}
-            style={{ backgroundColor: color }}
-          />
-        </div>
-      );
-    }
-
+    // Narrow month view never reaches this function at all — every one of
+    // its events is dropped from fcEvents (see that filter's own comment)
+    // in favor of renderDayCellContent drawing the whole day's dots itself
+    // in one flex-wrap row, PM-calendar-style. This function only ever
+    // renders the wide pill (or narrow week/day, which still gets it too —
+    // those views run tall, not narrow, so there's real room for it there).
     if (type === "todo") {
       const done = !!arg.event.extendedProps.done;
       // Someone else's to-do (only reachable in "all" scope) is read-only —
