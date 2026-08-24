@@ -92,8 +92,16 @@ export function AddCalendarDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl p-0 h-[85dvh] sm:h-[75vh] max-h-[600px] overflow-hidden" showCloseButton>
-        <div className="flex flex-col sm:flex-row h-full min-h-0">
+      {/* Mobile (no sm: prefix) was a fixed h-[85dvh] — a short filtered list
+          (e.g. one department, 2 people) still forced the same near-full-
+          screen card, leaving a huge dead blank area below the last row.
+          max-h instead of h lets the card shrink to its actual content on a
+          phone, only growing up to the same ceiling once there's enough
+          content to need it. Desktop (sm:) keeps its original fixed height —
+          not reported as an issue there, and RecommendedPane's short landing
+          copy reads better in a taller card at that width. */}
+      <DialogContent className="sm:max-w-3xl p-0 max-h-[85dvh] sm:h-[75vh] sm:max-h-[600px] overflow-hidden" showCloseButton>
+        <div className="flex flex-col sm:flex-row max-h-[85dvh] sm:h-full min-h-0">
           <div className="w-full sm:w-52 shrink-0 border-b sm:border-b-0 sm:border-r border-[var(--line)] bg-[var(--bg-soft)]/60 p-2 sm:p-4 flex flex-row sm:flex-col gap-1 overflow-x-auto sm:overflow-y-auto min-h-0">
             <h3 className="hidden sm:block text-sm font-semibold px-2 pb-2">เพิ่มปฏิทิน</h3>
             {navItems.map((n) => (
