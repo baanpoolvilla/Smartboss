@@ -15,6 +15,7 @@ import { useMeetingStore } from "@/modules/report_task/store/meeting-store";
 import { useLeaveStore } from "@/modules/report_task/store/leave-store";
 import { useTodoStore } from "@/modules/report_task/store/todo-store";
 import { useHolidayStore } from "@/modules/report_task/store/holiday-store";
+import { thaiHolidayEvents } from "@/modules/report_task/data/thai-holidays";
 import { useLeaveTypeStore } from "@/modules/report_task/store/leave-type-store";
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
 import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
@@ -107,7 +108,17 @@ export function StoreHydrator() {
         apiKey="holidays"
         store={useHolidayStore}
         select={(s) => ({ holidays: s.holidays, selectedByUser: s.selectedByUser })}
-        apply={(s, slice) => ({ ...s, ...slice })}
+        // The server row is whatever was last saved — if it predates a fixed
+        // Thai holiday being added to thai-holidays.ts (e.g. the 2026 dates),
+        // it silently overwrites the code's up-to-date seed with a stale,
+        // narrower list and the country's holidays just stop appearing.
+        // Union any built-in event missing by id back in on every load
+        // instead of trusting the server row alone.
+        apply={(s, slice) => {
+          const existingIds = new Set(slice.holidays.map((h) => h.id));
+          const missingBuiltIns = thaiHolidayEvents.filter((h) => !existingIds.has(h.id));
+          return { ...s, ...slice, holidays: [...slice.holidays, ...missingBuiltIns] };
+        }}
       />
       <ServerStoreSync
         apiKey="leave-types"
