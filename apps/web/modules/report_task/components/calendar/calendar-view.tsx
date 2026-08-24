@@ -23,6 +23,7 @@ import { filterFieldTriggerClass } from "@/modules/report_task/components/shared
 import { CalendarFilters } from "./calendar-filters";
 import { FullCalendarView, type ViewKey, type FullCalendarViewHandle } from "./full-calendar-view";
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
+import { CalendarRail } from "./calendar-rail";
 import { LeaveSidebar } from "./leave-sidebar";
 import { WorkSidebar } from "./work-sidebar";
 import { TodoSidebar } from "./todo-sidebar";
@@ -757,7 +758,9 @@ export function CalendarView() {
   }
 
   return (
-    <div className="flex flex-col gap-4 lg:gap-6">
+    <div className="flex items-start gap-5">
+      <CalendarRail />
+      <div className="flex-1 min-w-0 flex flex-col gap-4 lg:gap-6">
       <StickyFilterBar>
         {/* ≥640px: unchanged, one wrapping row (tabs + add-calendar + create).
             <640px gets its own 2-row layout below instead — tabs alone here
@@ -794,10 +797,25 @@ export function CalendarView() {
             </button>
           </div>
 
+          {/* "คนในองค์กร" no longer needs its own desktop button — it's the
+              always-visible CalendarRail on the left now (≥lg). Still opened
+              from here on <lg (rail hidden, no room for it yet), which is why
+              this stays instead of dropping the shortcut entirely. */}
           <Button
             variant="outline"
             size="sm"
-            className="ml-auto text-[var(--ink-soft)]"
+            className={cn("ml-auto lg:hidden text-[var(--ink-soft)]", hiddenUserIds.length > 0 && "border-[var(--brand-green-dark)] text-[var(--brand-green-dark)]")}
+            onClick={() => {
+              setAddCalendarSection("people");
+              setAddCalendarOpen(true);
+            }}
+          >
+            <Users className="h-3.5 w-3.5" /> คนในองค์กร
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-[var(--ink-soft)] lg:ml-auto"
             onClick={() => {
               setAddCalendarSection("recommended");
               setAddCalendarOpen(true);
@@ -849,6 +867,19 @@ export function CalendarView() {
         </div>
 
         <div className="flex sm:hidden items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setAddCalendarSection("people");
+              setAddCalendarOpen(true);
+            }}
+            className={cn(filterFieldTriggerClass(hiddenUserIds.length > 0), "!h-10 !w-10 !px-0 justify-center shrink-0")}
+            aria-label="คนในองค์กร"
+            title="คนในองค์กร"
+          >
+            <Users className="h-4 w-4 shrink-0" />
+          </button>
+
           <button
             type="button"
             onClick={() => setMobileSheetOpen(true)}
@@ -1382,6 +1413,7 @@ export function CalendarView() {
         defaultDate={todoDialogState?.date}
         editingTodo={todoDialogState?.todo ?? null}
       />
+      </div>
     </div>
   );
 }

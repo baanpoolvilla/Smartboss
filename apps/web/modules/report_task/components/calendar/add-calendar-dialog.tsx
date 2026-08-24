@@ -92,16 +92,16 @@ export function AddCalendarDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl p-0 h-[75vh] max-h-[600px] overflow-hidden" showCloseButton>
-        <div className="flex h-full min-h-0">
-          <div className="w-52 shrink-0 border-r border-[var(--line)] bg-[var(--bg-soft)]/60 p-4 flex flex-col gap-1 overflow-y-auto min-h-0">
-            <h3 className="text-sm font-semibold px-2 pb-2">เพิ่มปฏิทิน</h3>
+      <DialogContent className="sm:max-w-3xl p-0 h-[85dvh] sm:h-[75vh] max-h-[600px] overflow-hidden" showCloseButton>
+        <div className="flex flex-col sm:flex-row h-full min-h-0">
+          <div className="w-full sm:w-52 shrink-0 border-b sm:border-b-0 sm:border-r border-[var(--line)] bg-[var(--bg-soft)]/60 p-2 sm:p-4 flex flex-row sm:flex-col gap-1 overflow-x-auto sm:overflow-y-auto min-h-0">
+            <h3 className="hidden sm:block text-sm font-semibold px-2 pb-2">เพิ่มปฏิทิน</h3>
             {navItems.map((n) => (
               <button
                 key={n.key}
                 onClick={() => setSection(n.key)}
                 className={cn(
-                  "flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-left transition-colors",
+                  "flex shrink-0 items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-left transition-colors",
                   section === n.key
                     ? "bg-[var(--brand-green)] text-[var(--ink)] font-medium"
                     : "text-[var(--ink)] hover:bg-white"
@@ -113,7 +113,7 @@ export function AddCalendarDialog({
             ))}
           </div>
 
-          <div className="flex-1 min-w-0 min-h-0 overflow-y-auto p-6">
+          <div className="flex-1 min-w-0 min-h-0 overflow-y-auto p-4 sm:p-6">
             {section === "recommended" && <RecommendedPane onNavigate={setSection} />}
             {section === "people" && <PeopleCalendarList />}
           </div>
