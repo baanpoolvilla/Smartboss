@@ -68,7 +68,16 @@ export function PeopleCalendarList({ singleColumn = false }: { singleColumn?: bo
               {departmentId === "all" ? "ทุกแผนก" : (getDepartment(departmentId)?.name ?? "แผนก")}
             </SelectValue>
           </SelectTrigger>
-          <SelectContent>
+          {/* alignItemWithTrigger (the Select default) aligns the currently
+              selected row exactly over the trigger — its positioning math
+              needs real room to measure against, and inside this dialog on a
+              short mobile viewport it was instead visibly shoving the whole
+              dialog sideways off-screen when opened (screenshot: cut off
+              past the right edge), snapping back once closed. A plain
+              anchor-below-trigger dropdown doesn't need that measurement at
+              all — this filter doesn't benefit from the aligned-item style
+              anyway (it's not a many-item native-select stand-in). */}
+          <SelectContent alignItemWithTrigger={false}>
             <SelectItem value="all">ทุกแผนก</SelectItem>
             {departments.map((d) => (
               <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
