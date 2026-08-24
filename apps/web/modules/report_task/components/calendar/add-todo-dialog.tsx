@@ -179,6 +179,14 @@ export function AddTodoDialog({
             }}
           />
 
+          <Textarea
+            placeholder="รายละเอียดเพิ่มเติม (ไม่บังคับ)…"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={2}
+            className="resize-none"
+          />
+
           {!editingTodo && canCreateMeeting && (
             <label className="flex items-center justify-between gap-2 rounded-lg border border-[var(--line)] px-3 py-2 cursor-pointer">
               <span className="text-sm font-medium">เป็นการประชุม</span>
@@ -235,14 +243,6 @@ export function AddTodoDialog({
               </SelectContent>
             </Select>
           </div>
-
-          <Textarea
-            placeholder="รายละเอียดเพิ่มเติม (ไม่บังคับ)…"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            rows={2}
-            className="resize-none"
-          />
         </div>
         <div className="flex gap-2">
           {editingTodo && (
