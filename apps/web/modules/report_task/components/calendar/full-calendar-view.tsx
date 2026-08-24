@@ -209,12 +209,14 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           classNames: [
             ...(e.type === "holiday" ? ["ebw-event-holiday"] : []),
             ...(e.muted ? ["ebw-event-muted"] : []),
-            // Desktop month view — plain colored text + its own dot (already
-            // drawn in renderEventContent), no pale chip background/left
-            // border around it, matching the maintenance module's PM
-            // calendar reference (plain rows + "+N รายการ", not filled
-            // pills). Narrow view is unaffected — it never reaches fcEvents
-            // for month view at all (see the filter above).
+            // Desktop month view — pale colored chip + its own leading dot
+            // (drawn in renderEventContent), matching the maintenance
+            // module's PM calendar reference design (pale `${color}1a`
+            // fill), plus the dot PM's own rows don't have. Narrow view is
+            // unaffected — it never reaches fcEvents for month view at all
+            // (see the filter above). Class name kept as-is even though the
+            // chip's no longer "plain" — just the wider row-separation
+            // margin now (see theme.css).
             ...(view === "dayGridMonth" && !isNarrowViewport ? ["ebw-event-plain"] : []),
           ],
           extendedProps: { type: e.type, color, isTask: e.type === "task", muted: !!e.muted, mine: e.mine, leaveType: e.leaveType, done: !!e.done },
@@ -644,11 +646,11 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           // instead of FullCalendar's own bare popover — one consistent
           // summary UI per day, not two different-looking ones.
           moreLinkClick={(arg) => onDateClick?.(localYmd(arg.date))}
-          // Narrow month-view cells only fit a dot or two before "+N" kicks
-          // in — the full "อีก N รายการ" sentence doesn't fit next to them,
-          // so it collapses to a bare "+N" chip there (desktop/week/day keep
-          // the full sentence, same as always).
-          moreLinkText={(n) => (isNarrowViewport && view === "dayGridMonth" ? `+${n}` : `อีก ${n} รายการ`)}
+          // "+N รายการ" everywhere now — matches the maintenance module's PM
+          // calendar reference exactly (asked for explicitly, pointing at
+          // /maintenance/pm's own "+15 รายการ" overflow badge) instead of
+          // spelling it out as "อีก N รายการ" on wide screens.
+          moreLinkText={(n) => `+${n} รายการ`}
           firstDay={0}
           initialDate={todayIso()}
           datesSet={handleDatesSet}

@@ -312,19 +312,15 @@
   box-shadow: none;
   opacity: 0.85;
 }
-/* Desktop month view — plain colored text row (dot + title, drawn in
-   renderEventContent) with no pale chip background/left border, matching
-   the maintenance module's PM calendar reference design. Same !important
-   reasoning as the holiday rule above (FullCalendar sets background/border
-   as inline style per-event). Without the chip's own background/border to
-   mark where one row ends and the next begins, the base rule's tight
-   1px/3px top/bottom margin read as one run-on block instead of separate
-   items ("มองแบบนี้เหมือนงานเดียวเลย แต่จริงๆ 3 งาน") — even, wider vertical
-   margin gives each row visible breathing room of its own. */
+/* Desktop month view — pale colored chip (dot + title, drawn in
+   renderEventContent), matching the maintenance module's PM calendar
+   reference design (rows there keep a `${color}1a` fill, not plain text —
+   ours additionally keeps the leading dot PM doesn't have, per explicit
+   feedback: "ใส่พื้นหลังสีอ่อนแบบ PM...จะยังมีจุดสีนำหน้าเพิ่มด้วย"). Base
+   .fc-event rule already gives the pale background + left accent bar; just
+   the wider bottom margin here, kept from the plain-text era so each row
+   still reads as its own item rather than a run-on block. */
 .ebw-calendar .fc-event.ebw-event-plain {
-  background-color: transparent !important;
-  border: none !important;
-  box-shadow: none;
   margin: 1px 2px 6px !important;
 }
 /* Past event: same color, just faded — not swapped for an unrelated gray. */
