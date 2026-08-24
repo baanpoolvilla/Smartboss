@@ -13,8 +13,8 @@ import { PeopleCalendarList } from "./people-calendar-list";
 export function CalendarRail() {
   return (
     <aside className="hidden lg:flex w-64 shrink-0 flex-col">
-      <div className="rounded-xl border border-[var(--line)] bg-white p-4 max-h-[720px] overflow-y-auto">
-        <PeopleCalendarList />
+      <div className="rounded-xl border border-[var(--line)] bg-white p-4">
+        <PeopleCalendarList singleColumn />
       </div>
     </aside>
   );

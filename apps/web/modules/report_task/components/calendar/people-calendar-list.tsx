@@ -19,7 +19,7 @@ function colorFor(index: number) {
 }
 
 /** Outlook-style "People's calendars" — toggle whose tasks/meetings/leave show. */
-export function PeopleCalendarList() {
+export function PeopleCalendarList({ singleColumn = false }: { singleColumn?: boolean }) {
   const hiddenUserIds = useCalendarVisibilityStore((s) => s.hiddenUserIds);
   const toggle = useCalendarVisibilityStore((s) => s.toggle);
   const showAll = useCalendarVisibilityStore((s) => s.showAll);
@@ -80,7 +80,7 @@ export function PeopleCalendarList() {
       {filtered.length === 0 ? (
         <p className="text-sm text-[var(--ink-soft)] py-4 text-center">ไม่พบคนที่ตรงกับตัวกรอง</p>
       ) : (
-        <div className="columns-2 gap-x-6 max-w-2xl">
+        <div className={singleColumn ? "flex flex-col" : "columns-2 gap-x-6 max-w-2xl"}>
           {visiblePeople.map((u) => {
             const visible = !hiddenUserIds.includes(u.id);
             const color = colorFor(users.indexOf(u));
