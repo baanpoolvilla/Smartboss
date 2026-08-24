@@ -372,20 +372,16 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
     // cells run tall, not narrow, so there's real room for the text there.
     if (isNarrowViewport && view === "dayGridMonth") {
       const done = type === "todo" && !!arg.event.extendedProps.done;
-      // Task dots stay flat/solid regardless of whose task it is — since
-      // color no longer encodes priority either (see taskEvents' colorHint),
-      // a task is meant to read as just "one color, always" now, no
-      // filled-vs-hollow mine/theirs distinction layered on top of it.
-      const hollow = mine === false && type !== "task";
+      // Every dot is solid/filled now, regardless of type or whose it is —
+      // the hollow-ring "someone else's" variant read as a half-empty/
+      // broken circle rather than a deliberate distinction (asked for
+      // explicitly: "วงกลมไม่เต็ม อยากได้แบบเต็มๆ" — not a partial ring,
+      // want it fully filled).
       return (
         <div className="flex items-center justify-center py-0.5" title={arg.event.title}>
           <span
             className={cn("h-[7px] w-[7px] rounded-full shrink-0", done && "opacity-50")}
-            style={
-              hollow
-                ? { backgroundColor: "transparent", border: `1.5px solid ${color}` }
-                : { backgroundColor: color }
-            }
+            style={{ backgroundColor: color }}
           />
         </div>
       );
@@ -434,14 +430,12 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
         </div>
       );
     }
-    // Leaves show a descriptive icon; everything else keeps a plain color
-    // dot. Past events fade via the .ebw-event-muted CSS opacity rule (same
-    // color, just paler) rather than switching color here. Filled dot =
-    // assigned to the viewer, hollow = someone else's — only meaningful for
-    // a head, who now sees a mix of their own and their team's items on the
-    // same calendar. Tasks are the one exception: always solid, regardless
-    // of whose — task color is meant to read as flat/uniform now (see
-    // taskEvents' colorHint), not layered with a second mine/theirs signal.
+    // Leaves show a descriptive icon; everything else keeps a plain, always-
+    // solid color dot — the previous filled-vs-hollow-ring "mine vs theirs"
+    // distinction read as a half-empty/broken circle rather than a
+    // deliberate signal (same "วงกลมไม่เต็ม อยากได้แบบเต็มๆ" feedback as the
+    // narrow-view dot above). Past events fade via the .ebw-event-muted CSS
+    // opacity rule (same color, just paler) instead.
     const Icon =
       type === "dayoff"
           ? CalendarOff
@@ -453,14 +447,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
         {Icon ? (
           <Icon className="h-3 w-3 shrink-0" style={{ color }} />
         ) : (
-          <span
-            className="h-1.5 w-1.5 rounded-full shrink-0"
-            style={
-              mine === false && type !== "task"
-                ? { backgroundColor: "transparent", border: `1.5px solid ${color}` }
-                : { backgroundColor: color }
-            }
-          />
+          <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
         )}
         {!arg.event.allDay && (
           <span className="text-[10px] font-semibold tabular-nums opacity-75 shrink-0" style={{ color }}>{arg.timeText.replace(":", ".")}</span>
