@@ -270,15 +270,24 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
     const holiday = events.find(
       (e) => e.type === "holiday" && ymd >= e.start.slice(0, 10) && ymd < e.end.slice(0, 10)
     );
+    // Several titles carry a parenthetical official long-form after the
+    // everyday name (e.g. "วันแม่แห่งชาติ (วันเฉลิมพระชนมพรรษา...)") — that
+    // full string never fits legibly next to a date number no matter how far
+    // it's shrunk, so show just the short name here and keep the full title
+    // as a native hover tooltip for anyone who wants it.
+    const shortTitle = holiday?.title.split(" (")[0];
     return (
       <div className="flex items-baseline gap-1 min-w-0 w-full overflow-hidden">
         {holiday && (
           // Flex items default to min-width:auto (their content's own width),
-          // which blocks truncate from ever kicking in and let a long title
-          // like "วันแม่แห่งชาติ (วันเฉลิม...)" spill straight out of the cell —
-          // min-w-0 + flex-1 forces it to actually shrink to the ellipsis.
-          <span className="italic text-[9px] font-normal opacity-60 truncate min-w-0 flex-1 text-[var(--ink-faint)]">
-            {holiday.title}
+          // which blocks truncate from ever kicking in — min-w-0 + flex-1
+          // forces it to actually shrink to the ellipsis instead of spilling
+          // out of the cell.
+          <span
+            title={holiday.title}
+            className="italic text-[9px] font-normal opacity-60 truncate min-w-0 flex-1 text-[var(--ink-faint)]"
+          >
+            {shortTitle}
           </span>
         )}
         <a className="fc-daygrid-day-number shrink-0">{arg.dayNumberText}</a>
