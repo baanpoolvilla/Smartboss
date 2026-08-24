@@ -123,7 +123,16 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
       // to reach the last row(s). Subtract it explicitly on the same
       // breakpoint the shell uses.
       const bottomNavHeight = window.innerWidth < 1024 ? 68 : 0;
-      setCalendarHeight(Math.max(520, Math.round(window.innerHeight - top - 24 - bottomNavHeight)));
+      // Was a 520px floor — on a genuinely short phone (e.g. a 667px-tall
+      // iPhone SE/8, vs. a 956px-tall iPhone 16) the real available space
+      // after the header/toolbar/bottom-nav is well under that, so the
+      // floor forced the calendar taller than the viewport could actually
+      // hold, pushing it into a page scroll instead of fitting the screen —
+      // exactly the "some sizes fine, some don't fit" inconsistency this was
+      // supposed to avoid. Dropped to a much lower safety net that only
+      // kicks in for extreme cases, so it actually follows real device
+      // height instead of overriding it past a point.
+      setCalendarHeight(Math.max(360, Math.round(window.innerHeight - top - 24 - bottomNavHeight)));
       setIsNarrowViewport(window.innerWidth < 640);
     }
     computeLayout();
