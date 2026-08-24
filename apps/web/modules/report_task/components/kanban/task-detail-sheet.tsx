@@ -63,6 +63,7 @@ import {
   Info,
   Star,
   Clock,
+  ChevronDown,
 } from "lucide-react";
 import type { Attachment, Sticker, TaskPriority, TaskStatus } from "@/modules/report_task/types";
 import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
@@ -121,6 +122,13 @@ export function TaskDetailSheet({
 
   const [comment, setComment] = useState("");
   const [commentAttachments, setCommentAttachments] = useState<Attachment[]>([]);
+  // <md only — the comment rail is a permanent side column on desktop
+  // ("always visible, not buried" per its own comment below), but on mobile
+  // it stacks full-width below everything else and pushed the whole sheet
+  // into a long scroll even for a single comment. Collapsed by default there;
+  // the count next to "ความคิดเห็น" is still shown un-collapsed so there's a
+  // visible cue a conversation exists without forcing it open.
+  const [mobileCommentsOpen, setMobileCommentsOpen] = useState(false);
   const [commentUploading, setCommentUploading] = useState(false);
   const [taskAttachUploading, setTaskAttachUploading] = useState(false);
   const taskFileInputRef = useRef<HTMLInputElement>(null);
@@ -1266,12 +1274,28 @@ export function TaskDetailSheet({
           </p>
         </div>
 
-        {/* Chat rail — comments, always visible, not buried at the bottom of a long scroll */}
+        {/* Chat rail — comments, always visible on desktop (side column, not
+            buried at the bottom of a long scroll). Mobile stacks it below
+            everything else instead, where "always visible" meant every
+            sheet opened into a long scroll even for a single comment —
+            collapsed by default there, toggled by the header itself. */}
         <div className="w-full md:w-[320px] shrink-0 border-t md:border-t-0 md:border-l border-[var(--line)] flex flex-col overflow-hidden min-h-0 bg-[var(--bg-soft)]/30">
-          <div className="px-4 py-3 border-b border-[var(--line)] shrink-0">
-            <h4 className="text-sm font-semibold">ความคิดเห็น ({task.comments.length})</h4>
-          </div>
-          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0">
+          <button
+            type="button"
+            onClick={() => setMobileCommentsOpen((v) => !v)}
+            className="flex items-center justify-between gap-2 px-4 py-3 border-b border-[var(--line)] shrink-0 text-left md:pointer-events-none md:cursor-default"
+          >
+            <span className="flex items-center gap-1.5">
+              <h4 className="text-sm font-semibold">ความคิดเห็น ({task.comments.length})</h4>
+              {/* Cue that a conversation exists while collapsed — the count
+                  alone reads as static text, easy to skim past. */}
+              {task.comments.length > 0 && !mobileCommentsOpen && (
+                <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand-green)] md:hidden" />
+              )}
+            </span>
+            <ChevronDown className={cn("h-4 w-4 text-[var(--ink-soft)] shrink-0 transition-transform md:hidden", mobileCommentsOpen && "rotate-180")} />
+          </button>
+          <div className={cn("flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0", mobileCommentsOpen ? "block" : "hidden md:block")}>
             {task.comments.map((c) => {
               const author = getUser(c.authorId);
               const mine = c.authorId === viewingAsUserId;
@@ -1329,7 +1353,7 @@ export function TaskDetailSheet({
             )}
           </div>
 
-          <div className="border-t border-[var(--line)] p-3 flex flex-col gap-2 shrink-0 bg-white">
+          <div className={cn("border-t border-[var(--line)] p-3 flex-col gap-2 shrink-0 bg-white", mobileCommentsOpen ? "flex" : "hidden md:flex")}>
             {commentAttachments.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {commentAttachments.map((a) => (
