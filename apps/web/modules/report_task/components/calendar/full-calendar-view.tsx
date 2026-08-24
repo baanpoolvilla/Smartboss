@@ -458,8 +458,12 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
             role="checkbox"
             aria-checked={done}
             aria-label={done ? "ทำเครื่องหมายว่ายังไม่เสร็จ" : "ทำเครื่องหมายว่าเสร็จแล้ว"}
-            className={cn("flex h-3 w-3 shrink-0 items-center justify-center rounded-sm border", mine && "cursor-pointer")}
-            style={done ? { backgroundColor: color, borderColor: color } : { borderColor: color }}
+            // Filled round dot, same as every other type — a hollow square
+            // outline read as "no marker at all" next to the other types'
+            // solid dots on desktop (mobile's own dot-row already always
+            // draws it filled). Still fully clickable to toggle done.
+            className={cn("flex h-3 w-3 shrink-0 items-center justify-center rounded-full border", mine && "cursor-pointer")}
+            style={{ backgroundColor: color, borderColor: color }}
             onClick={(e) => {
               // Stops the click from also reaching FullCalendar's own
               // eventClick handler (which would otherwise open the edit
