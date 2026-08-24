@@ -80,7 +80,17 @@ export function PeopleCalendarList({ singleColumn = false }: { singleColumn?: bo
       {filtered.length === 0 ? (
         <p className="text-sm text-[var(--ink-soft)] py-4 text-center">ไม่พบคนที่ตรงกับตัวกรอง</p>
       ) : (
-        <div className={singleColumn ? "flex flex-col" : "columns-2 gap-x-6 max-w-2xl"}>
+        <div
+          className={
+            singleColumn
+              ? "flex flex-col"
+              // Two columns need real width to keep names from truncating to
+              // "A." — only try it once the viewport's actually wide enough
+              // (this component also renders full-width inside the mobile
+              // "เพิ่มปฏิทิน" sheet, which is exactly as narrow as a phone).
+              : "columns-1 sm:columns-2 gap-x-6 max-w-2xl"
+          }
+        >
           {visiblePeople.map((u) => {
             const visible = !hiddenUserIds.includes(u.id);
             const color = colorFor(users.indexOf(u));
