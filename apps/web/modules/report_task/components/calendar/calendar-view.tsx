@@ -758,9 +758,7 @@ export function CalendarView() {
   }
 
   return (
-    <div className="flex items-start gap-5">
-      <CalendarRail />
-      <div className="flex-1 min-w-0 flex flex-col gap-4 lg:gap-6">
+    <div className="flex flex-col gap-4 lg:gap-6">
       <StickyFilterBar>
         {/* ≥640px: unchanged, one wrapping row (tabs + add-calendar + create).
             <640px gets its own 2-row layout below instead — tabs alone here
@@ -1332,43 +1330,48 @@ export function CalendarView() {
         </Sheet>
       </StickyFilterBar>
 
-      <FullCalendarView
-        ref={fullCalendarRef}
-        events={events}
-        onSelectEvent={handleSelect}
-        onRangeChange={setViewRange}
-        onActiveRangeChange={setActiveRange}
-        onDateClick={handleDateClick}
-        onEventDrop={handleEventDrop}
-        onSelectRange={setSummaryRange}
-        onCreate={tab === "work" ? () => openTodoDialog({}) : () => openCreate()}
-        onToggleTodo={handleToggleTodo}
-        onEditTodo={(eventId) => {
-          const todoId = eventId.replace("todoevt-", "");
-          const target = todos.find((t) => t.id === todoId);
-          if (target) openTodoDialog({ todo: target, date: target.date });
-        }}
-        addHint="คลิกวันเพื่อดูรายการ · ลากคลุมหลายวันเพื่อดูสรุป"
-      />
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
-        {tab === "work" ? (
-          <>
-            <WorkSidebar range={viewRange} onOpenTask={setOpenTaskId} />
-            {/* Same overlay toggle as the calendar grid itself — สิ่งที่ต้องทำ
-                no longer has its own tab, so its own sidebar card only shows
-                up here alongside the work one, not as a full replacement. */}
-            {showTodosInWork && (
-              <TodoSidebar
-                range={viewRange}
-                scope={effectiveTodoScope}
-                onEdit={(t) => openTodoDialog({ todo: t, date: t.date })}
-                onAdd={() => openTodoDialog({})}
-              />
+      <div className="flex items-start gap-5">
+        <CalendarRail />
+        <div className="flex-1 min-w-0 flex flex-col gap-4 lg:gap-6">
+          <FullCalendarView
+            ref={fullCalendarRef}
+            events={events}
+            onSelectEvent={handleSelect}
+            onRangeChange={setViewRange}
+            onActiveRangeChange={setActiveRange}
+            onDateClick={handleDateClick}
+            onEventDrop={handleEventDrop}
+            onSelectRange={setSummaryRange}
+            onCreate={tab === "work" ? () => openTodoDialog({}) : () => openCreate()}
+            onToggleTodo={handleToggleTodo}
+            onEditTodo={(eventId) => {
+              const todoId = eventId.replace("todoevt-", "");
+              const target = todos.find((t) => t.id === todoId);
+              if (target) openTodoDialog({ todo: target, date: target.date });
+            }}
+            addHint="คลิกวันเพื่อดูรายการ · ลากคลุมหลายวันเพื่อดูสรุป"
+          />
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
+            {tab === "work" ? (
+              <>
+                <WorkSidebar range={viewRange} onOpenTask={setOpenTaskId} />
+                {/* Same overlay toggle as the calendar grid itself — สิ่งที่ต้องทำ
+                    no longer has its own tab, so its own sidebar card only shows
+                    up here alongside the work one, not as a full replacement. */}
+                {showTodosInWork && (
+                  <TodoSidebar
+                    range={viewRange}
+                    scope={effectiveTodoScope}
+                    onEdit={(t) => openTodoDialog({ todo: t, date: t.date })}
+                    onAdd={() => openTodoDialog({})}
+                  />
+                )}
+              </>
+            ) : (
+              <LeaveSidebar range={viewRange} holidays={holidays} />
             )}
-          </>
-        ) : (
-          <LeaveSidebar range={viewRange} holidays={holidays} />
-        )}
+          </div>
+        </div>
       </div>
 
       {previewEvent && (
@@ -1413,7 +1416,6 @@ export function CalendarView() {
         defaultDate={todoDialogState?.date}
         editingTodo={todoDialogState?.todo ?? null}
       />
-      </div>
     </div>
   );
 }
