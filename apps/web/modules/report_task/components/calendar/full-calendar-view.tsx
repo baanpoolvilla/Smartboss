@@ -343,6 +343,10 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
     // "which day column does this segment belong to" bug entirely.
     if (isNarrowViewport && view === "dayGridMonth") {
       const DOT_CAP = 4;
+      // Light days read better as actual text (still glance-able, and worth
+      // the extra height) — only crowds out into a dot row once there's
+      // enough going on that lines wouldn't fit legibly anyway.
+      const TEXT_THRESHOLD = 3;
       const items = events.filter((e) => {
         if (e.type === "holiday") return false;
         const start = e.start.slice(0, 10);
@@ -353,21 +357,43 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
       return (
         <div className="flex flex-col items-center w-full">
           {numberRow}
-          {items.length > 0 && (
-            <div className="flex flex-wrap items-center justify-center gap-0.5 px-0.5 pb-0.5">
-              {items.slice(0, DOT_CAP).map((e) => (
-                <span
-                  key={e.id}
-                  title={e.title}
-                  className={cn("h-1.5 w-1.5 rounded-full shrink-0", e.done && "opacity-50")}
-                  style={{ backgroundColor: e.colorHint ?? colors[e.type] }}
-                />
-              ))}
-              {items.length > DOT_CAP && (
-                <span className="text-[9px] leading-none text-[var(--ink-soft)]">+{items.length - DOT_CAP}</span>
-              )}
-            </div>
-          )}
+          {items.length > 0 &&
+            (items.length <= TEXT_THRESHOLD ? (
+              <div className="flex flex-col w-full gap-px px-0.5 pb-0.5">
+                {items.map((e) => {
+                  const c = e.colorHint ?? colors[e.type];
+                  // Local naive datetime strings (no "Z"/offset) throughout
+                  // this app — slicing the ISO string avoids the timezone
+                  // round-trip a `new Date(...)` parse would otherwise need.
+                  const timeLabel = !e.allDay && e.start.includes("T") ? e.start.slice(11, 16) : null;
+                  return (
+                    <span
+                      key={e.id}
+                      title={e.title}
+                      className={cn("truncate text-left text-[8px] font-medium leading-tight", e.done && "opacity-50 line-through")}
+                      style={{ color: c }}
+                    >
+                      {timeLabel && `${timeLabel} `}
+                      {e.title}
+                    </span>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center justify-center gap-0.5 px-0.5 pb-0.5">
+                {items.slice(0, DOT_CAP).map((e) => (
+                  <span
+                    key={e.id}
+                    title={e.title}
+                    className={cn("h-1.5 w-1.5 rounded-full shrink-0", e.done && "opacity-50")}
+                    style={{ backgroundColor: e.colorHint ?? colors[e.type] }}
+                  />
+                ))}
+                {items.length > DOT_CAP && (
+                  <span className="text-[9px] leading-none text-[var(--ink-soft)]">+{items.length - DOT_CAP}</span>
+                )}
+              </div>
+            ))}
         </div>
       );
     }
