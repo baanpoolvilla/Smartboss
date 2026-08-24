@@ -53,12 +53,18 @@ export function DatePickerField({
         render={
           <button
             className={cn(
-              "flex items-center gap-2 w-full h-9 rounded-lg border border-[var(--line)] bg-white px-3 text-sm text-left hover:border-[var(--brand-green)] transition-colors",
+              // min-w-0: a flex item's default min-width is its content's own
+              // width, which blocks it from ever shrinking below that no
+              // matter how little room is left — next to two fixed-width time
+              // inputs in a narrow dialog (see add-todo-dialog.tsx's meeting
+              // row) that pushed the whole row past the dialog's own edge
+              // instead of the date text just truncating.
+              "flex min-w-0 items-center gap-2 w-full h-9 rounded-lg border border-[var(--line)] bg-white px-3 text-sm text-left hover:border-[var(--brand-green)] transition-colors",
               className
             )}
           >
             <CalendarDays className="h-4 w-4 text-[var(--ink-soft)] shrink-0" />
-            <span className={cn(!date && "text-[var(--ink-soft)]")}>
+            <span className={cn("truncate", !date && "text-[var(--ink-soft)]")}>
               {date ? formatLocal(date) : "เลือกวันที่"}
             </span>
           </button>

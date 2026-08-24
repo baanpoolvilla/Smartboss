@@ -63,7 +63,17 @@ function SelectContent({
   sideOffset = 4,
   align = "center",
   alignOffset = 0,
-  alignItemWithTrigger = true,
+  // Was `true` — aligns the currently-selected row exactly over the trigger
+  // (native-<select>-style), which needs real room to measure against and a
+  // stable scroll position to align into. Inside a Dialog on a page that
+  // scrolls normally (every mobile page in this app) it instead scrolled the
+  // whole page — or on a short/height-constrained Dialog, shoved the dialog
+  // itself sideways off-screen — every time the popup opened, snapping back
+  // on close. None of this app's selects are long enough to need
+  // native-<select> alignment precision anyway; a plain anchor-below-trigger
+  // dropdown (Base UI's default when this is off) doesn't need that
+  // measurement at all.
+  alignItemWithTrigger = false,
   ...props
 }: SelectPrimitive.Popup.Props &
   Pick<
