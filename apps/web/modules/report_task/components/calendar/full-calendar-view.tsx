@@ -370,11 +370,16 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
                     <span
                       key={e.id}
                       title={e.title}
-                      className={cn("truncate text-left text-[8px] font-medium leading-tight", e.done && "opacity-50 line-through")}
-                      style={{ color: c }}
+                      className={cn("flex items-center gap-[3px] min-w-0", e.done && "opacity-50")}
                     >
-                      {timeLabel && `${timeLabel} `}
-                      {e.title}
+                      <span className="h-[4px] w-[4px] rounded-full shrink-0" style={{ backgroundColor: c }} />
+                      <span
+                        className={cn("truncate text-left text-[8px] font-medium leading-tight", e.done && "line-through")}
+                        style={{ color: c }}
+                      >
+                        {timeLabel && `${timeLabel} `}
+                        {e.title}
+                      </span>
                     </span>
                   );
                 })}
