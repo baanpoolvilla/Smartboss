@@ -45,13 +45,12 @@ export function WorkSidebar({ range, onOpenTask }: { range: ViewRange; onOpenTas
     )
     .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
 
-  // Both directions now that the calendar itself is scoped to canSeeTaskOnCalendar
-  // (assignee OR assigner) — a task this viewer handed to someone else is just as
-  // much "theirs" here as one handed to them, so this card covers both instead of
-  // only the assignee half.
-  const myTasks = monthTasks.filter(
-    (t) => t.assigneeIds.includes(viewingAsUserId) || t.assignedById === viewingAsUserId
-  );
+  // Assignee-only — was assignee-OR-assigner ("a task I handed to someone
+  // else is just as much mine as one handed to me"), reversed on explicit
+  // feedback: this card should read as "what's actually on my plate",
+  // not include tasks the viewer created/assigned but doesn't have to do
+  // themselves ("งานที่เราแอดเค้าไปไม่เอามา เอาแค่งานที่เค้าแอดเราพอแล้ว").
+  const myTasks = monthTasks.filter((t) => t.assigneeIds.includes(viewingAsUserId));
 
   // Whether the top card is currently showing the same personal set as the
   // (conditionally rendered) bottom card — true for everyone without a scope
@@ -68,14 +67,14 @@ export function WorkSidebar({ range, onOpenTask }: { range: ViewRange; onOpenTas
   // cards silently showing the same list with no explanation.
   const period = range.viewType === "timeGridDay" ? "วันนี้" : range.viewType === "timeGridWeek" ? "สัปดาห์นี้" : "เดือนนี้";
   const meetingHeading = range.viewType === "timeGridDay" ? "ประชุมวันนี้" : range.viewType === "timeGridWeek" ? "ประชุมสัปดาห์นี้" : "ประชุมในเดือนนี้";
-  const myHeading = range.viewType === "timeGridDay" ? "งานที่ฉันรับ/มอบหมายวันนี้" : range.viewType === "timeGridWeek" ? "งานที่ฉันรับ/มอบหมายสัปดาห์นี้" : "งานที่ฉันรับ/มอบหมายเดือนนี้";
+  const myHeading = range.viewType === "timeGridDay" ? "งานที่ฉันรับวันนี้" : range.viewType === "timeGridWeek" ? "งานที่ฉันรับสัปดาห์นี้" : "งานที่ฉันรับเดือนนี้";
   // Same underlying data deserves the exact same heading text, not just the
   // same row style — reuse myHeading verbatim instead of a different phrasing
   // ("งานของฉันเดือนนี้") that happened to mean the same thing.
   const heading = isPersonalView ? myHeading : `งานทั้งหมด${period}`;
   const emptyTasksLabel = range.viewType === "timeGridDay" ? "ไม่มีงานครบกำหนดวันนี้" : range.viewType === "timeGridWeek" ? "ไม่มีงานครบกำหนดสัปดาห์นี้" : "ไม่มีงานครบกำหนดในเดือนนี้";
   const emptyMeetingsLabel = range.viewType === "timeGridDay" ? "ไม่มีประชุมวันนี้" : range.viewType === "timeGridWeek" ? "ไม่มีประชุมสัปดาห์นี้" : "ไม่มีประชุมในเดือนนี้";
-  const emptyMyTasksLabel = range.viewType === "timeGridDay" ? "ไม่มีงานที่ฉันรับ/มอบหมายวันนี้" : range.viewType === "timeGridWeek" ? "ไม่มีงานที่ฉันรับ/มอบหมายสัปดาห์นี้" : "ไม่มีงานที่ฉันรับ/มอบหมายเดือนนี้";
+  const emptyMyTasksLabel = range.viewType === "timeGridDay" ? "ไม่มีงานที่ฉันรับวันนี้" : range.viewType === "timeGridWeek" ? "ไม่มีงานที่ฉันรับสัปดาห์นี้" : "ไม่มีงานที่ฉันรับเดือนนี้";
 
   // One row style for "this is my personal task list" wherever it's shown —
   // urgency-colored dot (deadline pressure matters more than priority once
