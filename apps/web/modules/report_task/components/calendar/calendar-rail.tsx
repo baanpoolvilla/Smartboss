@@ -13,7 +13,9 @@ import { PeopleCalendarList } from "./people-calendar-list";
 export function CalendarRail() {
   return (
     <aside className="hidden lg:flex w-64 shrink-0 flex-col">
-      <div className="rounded-xl border border-[var(--line)] bg-white p-4">
+      {/* Capped to the viewport height so expanding "ดูเพิ่มเติม" on a big
+          org scrolls inside this box instead of stretching the whole page. */}
+      <div className="rounded-xl border border-[var(--line)] bg-white p-4 max-h-[calc(100vh-140px)] overflow-y-auto">
         <PeopleCalendarList singleColumn />
       </div>
     </aside>
