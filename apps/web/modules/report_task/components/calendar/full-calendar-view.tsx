@@ -155,17 +155,14 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
   const fcEvents: EventInput[] = useMemo(
     () =>
       events
-        // Month view shows a holiday's name inline next to the day number
-        // itself (see renderDayCellContent) instead of as one more event —
-        // keeping it in here too would show it twice. Only on a wide-enough
-        // viewport, though — a mobile column is barely wider than the day
-        // number itself, nowhere near enough room for a title next to it (it
-        // just overflowed into neighboring cells), so narrow keeps the old
-        // dot-only rendering instead (see renderEventContent's narrow branch).
-        // Week/day/list views have no per-cell day number to attach it to
-        // either, so it stays a normal (unstyled-chip, italic-text) event
-        // there too — see renderEventContent.
-        .filter((e) => !(e.type === "holiday" && view === "dayGridMonth" && !isNarrowViewport))
+        // Month view shows a holiday right in front of the day number itself
+        // (see renderDayCellContent — a small dot on a narrow/mobile column,
+        // the short title in italic once there's room) instead of as one
+        // more event in the cell body — keeping it in here too would show it
+        // twice. Week/day/list views have no per-cell day number to attach
+        // it to, so it stays a normal (unstyled, italic-text) event there —
+        // see renderEventContent.
+        .filter((e) => !(e.type === "holiday" && view === "dayGridMonth"))
         .map((e) => {
         const color = e.colorHint ?? colors[e.type];
         return {
@@ -192,7 +189,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           extendedProps: { type: e.type, color, isTask: e.type === "task", muted: !!e.muted, mine: e.mine, leaveType: e.leaveType, done: !!e.done },
         };
       }),
-    [events, colors, view, isNarrowViewport]
+    [events, colors, view]
   );
 
   // Read title + current month straight from the datesSet arg — reliable even on
@@ -263,23 +260,21 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
   }
 
   /** Month view only — replaces the plain day-number cell with, if a holiday
-   *  falls on this date, its name in italic right BEFORE the number (asked
-   *  for explicitly: "ให้แสดงไว้หน้าวันที่" — in front of the date, not
-   *  after), kept deliberately faint/neutral rather than the holiday
-   *  category color — "ไม่ต้องเด่น ให้ดูรู้พอ" (subtle, just enough to
-   *  notice), not competing with the date number or real events. Keeps the
-   *  `fc-daygrid-day-number` class on the number itself so every existing
-   *  today/weekend/other-month CSS rule (theme.css) still applies unchanged. */
+   *  falls on this date, a marker right BEFORE the number (asked for
+   *  explicitly: "ให้แสดงไว้หน้าวันที่" — in front of the date, not after) —
+   *  a small dot on a narrow/mobile column (no room for text there without
+   *  overflowing into neighboring cells — that was the previous bug), the
+   *  short title in italic once there's actually space for it. Both kept
+   *  deliberately faint/neutral rather than the holiday category color —
+   *  "ไม่ต้องเด่น ให้ดูรู้พอ" (subtle, just enough to notice), not competing
+   *  with the date number or real events. Keeps the `fc-daygrid-day-number`
+   *  class on the number itself so every existing today/weekend/other-month
+   *  CSS rule (theme.css) still applies unchanged. */
   function renderDayCellContent(arg: DayCellContentArg) {
     const ymd = localYmd(arg.date);
-    // A mobile column is barely wider than the day number itself — showing a
-    // title next to it there overflowed straight into neighboring cells
-    // (screenshot: the diagonal red-circled overlap). Narrow keeps the plain
-    // number; its holiday still shows as a dot in the event area instead
-    // (fcEvents keeps holiday events in on narrow — see its own comment).
-    const holiday = isNarrowViewport
-      ? undefined
-      : events.find((e) => e.type === "holiday" && ymd >= e.start.slice(0, 10) && ymd < e.end.slice(0, 10));
+    const holiday = events.find(
+      (e) => e.type === "holiday" && ymd >= e.start.slice(0, 10) && ymd < e.end.slice(0, 10)
+    );
     // Several titles carry a parenthetical official long-form after the
     // everyday name (e.g. "วันแม่แห่งชาติ (วันเฉลิมพระชนมพรรษา...)") — that
     // full string never fits legibly next to a date number no matter how far
@@ -288,23 +283,24 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
     const shortTitle = holiday?.title.split(" (")[0];
     return (
       <div className="flex items-baseline gap-1 min-w-0 w-full overflow-hidden">
-        {holiday && (
-          // Flex items default to min-width:auto (their content's own width),
-          // which blocks truncate from ever kicking in — min-w-0 + flex-1
-          // forces it to actually shrink to the ellipsis instead of spilling
-          // out of the cell.
-          <span
-            title={holiday.title}
-            // --ink-faint (already the palest text token, used for
-            // other-month day numbers) stacked with opacity-60 on top faded
-            // it to near-invisible — one muted step is enough; use
-            // --ink-soft alone instead, same "quiet but legible" weight the
-            // rest of the app uses for secondary text.
-            className="italic text-[10px] font-normal truncate min-w-0 flex-1 text-[var(--ink-soft)]"
-          >
-            {shortTitle}
-          </span>
-        )}
+        {holiday &&
+          (isNarrowViewport ? (
+            <span
+              title={holiday.title}
+              className="h-[5px] w-[5px] rounded-full shrink-0 bg-[var(--ink-soft)]"
+            />
+          ) : (
+            // Flex items default to min-width:auto (their content's own
+            // width), which blocks truncate from ever kicking in — min-w-0 +
+            // flex-1 forces it to actually shrink to the ellipsis instead of
+            // spilling out of the cell.
+            <span
+              title={holiday.title}
+              className="italic text-[10px] font-normal truncate min-w-0 flex-1 text-[var(--ink-soft)]"
+            >
+              {shortTitle}
+            </span>
+          ))}
         <a className="fc-daygrid-day-number shrink-0">{arg.dayNumberText}</a>
       </div>
     );
