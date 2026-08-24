@@ -12,7 +12,6 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useCalendarVisibilityStore } from "@/modules/report_task/store/calendar-visibility-store";
 import { useCalendarScopeStore } from "@/modules/report_task/store/calendar-scope-store";
 import { useEventColorStore } from "@/modules/report_task/store/event-color-store";
-import { priorityMeta } from "@/modules/report_task/lib/task-meta";
 import { formatDate, formatDateTime } from "@/modules/report_task/lib/format";
 import { rangeLabel, inRange, inRangeLocal, type ViewRange } from "@/modules/report_task/lib/date-filter";
 import { dueUrgency } from "@/modules/report_task/lib/task-flags";
@@ -68,6 +67,13 @@ export function WorkSidebar({
   const myTodos = todos
     .filter((t) => t.userId === viewingAsUserId && inRange(t.date, range))
     .sort((a, b) => Number(a.done) - Number(b.done) || a.date.localeCompare(b.date));
+
+  // Everyone else's to-dos in range — folded into the crowd card below so it
+  // reads as "everything happening this month", not just tasks (asked for
+  // explicitly: "งานทั้งเดือนนี้ให้มีสิ่งที่ต้องทำของคนอื่นเข้ามา รวมกันเลย").
+  const otherTodos = todos
+    .filter((t) => t.userId !== viewingAsUserId && inRange(t.date, range) && !hiddenUserIds.includes(t.userId))
+    .sort((a, b) => a.date.localeCompare(b.date));
 
   // Mine = attending or created it — same "what's actually mine" scoping as
   // myTasks below, now that meetings merge into the same list instead of
@@ -192,6 +198,9 @@ export function WorkSidebar({
     );
   }
 
+  // Dot color follows type now (งาน/สิ่งที่ต้องทำ), same scheme as the
+  // personal card above — was priority-colored, which no longer matches
+  // once to-dos (which have no priority) sit in the same list.
   function renderCrowdRow(t: Task) {
     const assignee = t.assigneeIds[0] ? getUser(t.assigneeIds[0]) : undefined;
     return (
@@ -200,12 +209,7 @@ export function WorkSidebar({
         onClick={() => onOpenTask(t.id)}
         className="w-full flex items-center gap-2.5 text-left rounded-lg -mx-1 px-1 py-1 hover:bg-[var(--bg-soft)] transition-colors"
       >
-        <span
-          className="h-2 w-2 rounded-full shrink-0"
-          style={{ backgroundColor: priorityMeta[t.priority].accentColor }}
-          role="img"
-          aria-label={`ความสำคัญ: ${priorityMeta[t.priority].label}`}
-        />
+        <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: colors.task }} role="img" aria-label="งาน" />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium truncate">{t.title}</p>
           <p className="text-xs text-[var(--ink-soft)]">{formatDate(t.dueDate)}</p>
@@ -218,6 +222,36 @@ export function WorkSidebar({
       </button>
     );
   }
+
+  function renderCrowdTodoRow(t: TodoItem) {
+    const owner = getUser(t.userId);
+    return (
+      <div key={t.id} className="w-full flex items-center gap-2.5 rounded-lg -mx-1 px-1 py-1">
+        <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: colors.todo }} role="img" aria-label="สิ่งที่ต้องทำ" />
+        <div className="min-w-0 flex-1">
+          <p className={cn("text-sm font-medium truncate", t.done && "line-through text-[var(--ink-soft)]")}>{t.title}</p>
+          <p className="text-xs text-[var(--ink-soft)]">
+            {formatDate(t.date)}
+            {t.time && ` · ${t.time}`}
+          </p>
+        </div>
+        {owner && (
+          <Avatar className="h-6 w-6 shrink-0" title={owner.name}>
+            <AvatarFallback className="text-[9px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{owner.avatar}</AvatarFallback>
+          </Avatar>
+        )}
+      </div>
+    );
+  }
+
+  // Merged, date-sorted crowd list — งาน + สิ่งที่ต้องทำของคนอื่น all read as
+  // one "everything this month" list now (asked for explicitly: "รวมกันเลย"),
+  // instead of the card only ever showing tasks.
+  type CrowdItem = { date: string } & ({ kind: "task"; task: Task } | { kind: "todo"; todo: TodoItem });
+  const crowdItems: CrowdItem[] = [
+    ...monthTasks.map((t): CrowdItem => ({ kind: "task", date: t.dueDate, task: t })),
+    ...otherTodos.map((t): CrowdItem => ({ kind: "todo", date: t.date, todo: t })),
+  ].sort((a, b) => a.date.localeCompare(b.date));
 
   return (
     <>
@@ -265,17 +299,21 @@ export function WorkSidebar({
         <CardHeader>
           <CardTitle className="text-base font-semibold flex items-center justify-between gap-2">
             <span>{`งานทั้งหมด${period}`}</span>
-            {monthTasks.length > 0 && (
+            {crowdItems.length > 0 && (
               <span className="text-xs font-normal text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2 py-0.5">
-                {monthTasks.length} งาน
+                {crowdItems.length} รายการ
               </span>
             )}
           </CardTitle>
-          <p className="text-xs text-[var(--ink-soft)]">{rangeLabel(range)}</p>
+          <p className="text-xs text-[var(--ink-soft)] flex items-center gap-1.5 flex-wrap">
+            {rangeLabel(range)} ·
+            <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: colors.task }} />งาน</span>
+            <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: colors.todo }} />สิ่งที่ต้องทำ</span>
+          </p>
         </CardHeader>
         <CardContent className="space-y-2.5 max-h-64 overflow-y-auto">
-          {monthTasks.length === 0 && <p className="text-sm text-[var(--ink-soft)]">{emptyTasksLabel}</p>}
-          {monthTasks.map((t) => renderCrowdRow(t))}
+          {crowdItems.length === 0 && <p className="text-sm text-[var(--ink-soft)]">{emptyTasksLabel}</p>}
+          {crowdItems.map((item) => (item.kind === "task" ? renderCrowdRow(item.task) : renderCrowdTodoRow(item.todo)))}
         </CardContent>
       </Card>
       )}
