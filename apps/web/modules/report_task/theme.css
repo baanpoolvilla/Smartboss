@@ -244,14 +244,14 @@
   align-items: center;
   justify-content: center;
   padding: 0 5px;
-  /* Dropping the bottom margin entirely (an earlier fix) also left the pill
-     sitting flush against whatever renders right after it — the mobile dot
-     row for today then sat visibly closer to its number than every other
-     day's dot row sits to its own plain number, reported as "จุดขึ้นไปข้าง
-     บน...ไม่เท่ากับวันอื่น". 2px isn't quite the ~5px a plain number's own
-     padding gives, but close enough to read as the same rhythm without
-     reintroducing the original several-px-taller-row misalignment. */
-  margin: 4px 4px 2px;
+  /* Bottom margin stays at 0 — any larger and this pill grows taller than
+     a plain day number again, reintroducing the shared-row-height mismatch
+     that misaligned the whole week's dot rows (see this rule's own history).
+     The "today's dot row sits closer to its number than everyone else's"
+     gap is compensated at the content level instead — see
+     renderDayCellContent's dot-row margin-top for `ymd === todayIso()` in
+     full-calendar-view.tsx — so the shared row height itself never changes. */
+  margin: 4px 4px 0;
   box-shadow: 0 2px 6px -1px rgba(76, 185, 63, 0.5);
 }
 /* Weekend shading — very subtle, just enough to mark "end of week" without

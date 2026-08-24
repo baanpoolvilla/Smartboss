@@ -365,7 +365,19 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
         <div className="flex flex-col items-center w-full">
           {numberRow}
           {items.length > 0 && (
-            <div className="flex flex-wrap items-center justify-center gap-0.5 px-0.5 pb-0.5">
+            <div
+              className={cn(
+                "flex flex-wrap items-center justify-center gap-0.5 px-0.5 pb-0.5",
+                // Today's number is a fixed-height pill with no bottom
+                // margin (kept at 0 to avoid growing this row taller than
+                // its neighbors — see that rule's own comment) — a plain
+                // number's own padding gives everyone else a small gap
+                // before their dots that today's pill doesn't have on its
+                // own, so it's added back here, at the content level, where
+                // it can't affect the shared row height.
+                ymd === todayIso() && "mt-[3px]"
+              )}
+            >
               {items.slice(0, DOT_CAP).map((e) => (
                 <span
                   key={e.id}
