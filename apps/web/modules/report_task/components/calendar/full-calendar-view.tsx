@@ -13,7 +13,7 @@ import type { DateSelectArg, DatesSetArg, EventClickArg, EventContentArg, EventD
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { Calendar } from "@/modules/report_task/components/ui/calendar";
-import { ChevronLeft, ChevronRight, ChevronDown, CalendarDays, MousePointerClick, PartyPopper, CalendarOff, Check } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, CalendarDays, MousePointerClick, CalendarOff, Check } from "lucide-react";
 import { cn } from "@/modules/report_task/lib/utils";
 import { useLeaveTypeStore } from "@/modules/report_task/store/leave-type-store";
 import { leaveIconOf } from "@/modules/report_task/lib/leave-icons";
@@ -334,17 +334,28 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
         </div>
       );
     }
-    // Leaves/holidays show a descriptive icon; everything else (including
-    // tasks) keeps a plain color dot — priority colors are spread out enough
+    // Holidays sit right under the date number as plain italic text — no
+    // chip background/icon/dot — reading as a label on the date itself
+    // (Google-Calendar style) rather than one more colored event pill
+    // competing with tasks/meetings/leave.
+    if (type === "holiday") {
+      return (
+        <div className="px-2 py-[1px] overflow-hidden leading-tight">
+          <span className="truncate text-[11px] italic font-medium" style={{ color }}>
+            {arg.event.title}
+          </span>
+        </div>
+      );
+    }
+    // Leaves show a descriptive icon; everything else (including tasks)
+    // keeps a plain color dot — priority colors are spread out enough
     // (see priorityColorHex) to tell apart without an icon too. Past events
     // fade via the .ebw-event-muted CSS opacity rule (same color, just paler)
     // rather than switching color here. Filled dot = assigned to the viewer,
     // hollow = someone else's — only meaningful for a head, who now sees a
     // mix of their own and their team's items on the same calendar.
     const Icon =
-      type === "holiday"
-        ? PartyPopper
-        : type === "dayoff"
+      type === "dayoff"
           ? CalendarOff
           : type === "leave" && leaveType
             ? leaveIconOf(leaveIconById[leaveType])

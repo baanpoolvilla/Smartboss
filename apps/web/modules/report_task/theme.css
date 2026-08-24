@@ -290,12 +290,17 @@
 .ebw-calendar .fc-event:hover {
   filter: brightness(0.97);
 }
-/* Holidays are informational, not actionable — fainter than a normal chip
-   by default so they don't compete with tasks/meetings/leave, but not as
-   ghosted as a past event (order matters: the muted rule below must win
-   when a holiday is also in the past). */
+/* Holidays read as plain italic text on the date, not a colored chip —
+   strip the shared .fc-event pill/bar (both set as inline style by
+   FullCalendar per-event, hence !important) so only the italic label from
+   renderEventContent shows. Informational, not actionable, so still a touch
+   fainter than a normal chip — but not as ghosted as a past event (order
+   matters: the muted rule below must win when a holiday is also in the past). */
 .ebw-calendar .fc-event.ebw-event-holiday {
-  opacity: 0.65;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none;
+  opacity: 0.85;
 }
 /* Past event: same color, just faded — not swapped for an unrelated gray. */
 .ebw-calendar .fc-event.ebw-event-muted {
