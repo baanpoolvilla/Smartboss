@@ -244,7 +244,14 @@
   align-items: center;
   justify-content: center;
   padding: 0 5px;
-  margin: 4px 4px 0;
+  /* Dropping the bottom margin entirely (an earlier fix) also left the pill
+     sitting flush against whatever renders right after it — the mobile dot
+     row for today then sat visibly closer to its number than every other
+     day's dot row sits to its own plain number, reported as "จุดขึ้นไปข้าง
+     บน...ไม่เท่ากับวันอื่น". 2px isn't quite the ~5px a plain number's own
+     padding gives, but close enough to read as the same rhythm without
+     reintroducing the original several-px-taller-row misalignment. */
+  margin: 4px 4px 2px;
   box-shadow: 0 2px 6px -1px rgba(76, 185, 63, 0.5);
 }
 /* Weekend shading — very subtle, just enough to mark "end of week" without
