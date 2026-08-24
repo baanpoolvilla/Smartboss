@@ -10,6 +10,7 @@ import {
   ClipboardCheck,
   Truck,
   Package,
+  PackageCheck,
   Info,
 } from "lucide-react";
 import { requireOrg, hasPermission, isSuperAdmin } from "@smartboss/auth";
@@ -106,6 +107,7 @@ export default async function PoDetailPage({
   const names = await userNameMap(orgId, [
     po.createdBy,
     po.poAssignedTo,
+    po.receiverAssignedTo,
     po.poCreatedBy,
     po.orderedBy,
     po.receivedBy,
@@ -114,8 +116,12 @@ export default async function PoDetailPage({
 
   const isCeo = hasPermission(session, MAINT_PERMS.poApprove);
   const isAdmin = isSuperAdmin(session);
+  // ต้องรวมผู้รับของที่ถูกมอบหมายด้วย ไม่งั้นเขาจะไม่เห็นปุ่ม "รับของ"
+  // (ฝั่ง action เช็คซ้ำด้วยเกณฑ์เดียวกัน — ดู assertCanProcess)
   const isAssignedUser =
-    po.poAssignedTo === session.userId || po.createdBy === session.userId;
+    po.poAssignedTo === session.userId ||
+    po.createdBy === session.userId ||
+    po.receiverAssignedTo === session.userId;
 
   const meta = poStatusMeta(po.status);
   const items = poItemsFromJson(po.items);
@@ -200,6 +206,15 @@ export default async function PoDetailPage({
           >
             <UserCog className="h-3.5 w-3.5" /> ผู้รับ PO:{" "}
             {names[po.poAssignedTo] ?? "-"}
+          </p>
+        )}
+        {po.receiverAssignedTo && (
+          <p
+            className="mt-1.5 inline-flex items-center gap-1 text-sm"
+            style={{ color: "#0F766E" }}
+          >
+            <PackageCheck className="h-3.5 w-3.5" /> ผู้รับของ:{" "}
+            {names[po.receiverAssignedTo] ?? "-"}
           </p>
         )}
         {po.description && (
@@ -362,13 +377,31 @@ export default async function PoDetailPage({
         {po.status === "approved" &&
           !po.isSelfPurchase &&
           (isCeo || isAssignedUser) && (
-            <ConfirmOrderButton id={id} items={items} action={confirmOrderAction} />
+            <ConfirmOrderButton
+              id={id}
+              items={items}
+              action={confirmOrderAction}
+              defaultReceiverId={po.receiverAssignedTo ?? po.poAssignedTo}
+              users={users.map((u) => ({
+                id: u.id,
+                label: u.name,
+                sub: ROLE_LABEL_TH(u.roleCodes),
+              }))}
+            />
           )}
 
         {po.status === "ordered" &&
           !po.isSelfPurchase &&
           (isCeo || isAssignedUser) && (
-            <ReceiveButton id={id} action={receiveAction} />
+            <ReceiveButton
+              id={id}
+              action={receiveAction}
+              receiverName={
+                po.receiverAssignedTo
+                  ? (names[po.receiverAssignedTo] ?? null)
+                  : null
+              }
+            />
           )}
 
         {po.isSelfPurchase && po.status === "ordered" && (

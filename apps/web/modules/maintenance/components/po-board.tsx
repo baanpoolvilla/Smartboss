@@ -17,6 +17,7 @@ import {
   CalendarDays,
   User,
   ClipboardList,
+  PackageCheck,
 } from "lucide-react";
 import { Card } from "@smartboss/ui/components/card";
 
@@ -32,6 +33,8 @@ export interface BoardPo {
   itemCount: number;
   totalPrice: number;
   assigneeName: string | null;
+  /** คนที่ถูกมอบหมายให้รับของ (ตั้งตอนกดดำเนินการซื้อ) */
+  receiverName: string | null;
   isEmergency: boolean;
   /** เลขที่ใบงานต้นทาง ถ้าเปิดมาจากใบงาน (null = เปิดลอย ๆ) */
   workOrderCode: string | null;
@@ -112,7 +115,15 @@ function PoCard({ po }: { po: BoardPo }) {
         )}
         {po.assigneeName && (
           <p className="mt-1 inline-flex items-center gap-1 text-xs" style={{ color: "#1D4ED8" }}>
-            <UserCog className="h-3 w-3" /> มอบหมาย: {po.assigneeName}
+            <UserCog className="h-3 w-3" /> ผู้ซื้อ: {po.assigneeName}
+          </p>
+        )}
+        {po.receiverName && (
+          <p
+            className="mt-1 inline-flex items-center gap-1 text-xs"
+            style={{ color: "#0F766E" }}
+          >
+            <PackageCheck className="h-3 w-3" /> ผู้รับของ: {po.receiverName}
           </p>
         )}
 

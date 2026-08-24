@@ -105,6 +105,9 @@ export default async function PurchaseOrdersPage({
       itemCount: poItemsFromJson(o.items).length,
       totalPrice: Number(o.totalPrice),
       assigneeName: o.poAssignedTo ? (names[o.poAssignedTo] ?? null) : null,
+      receiverName: o.receiverAssignedTo
+        ? (names[o.receiverAssignedTo] ?? null)
+        : null,
       isEmergency: o.isEmergencyPurchase,
       workOrderCode: o.workOrderId ? (woCodes[o.workOrderId]?.code ?? null) : null,
       phase: phaseOf(o),

@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { prisma } from "@smartboss/database";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireOrg, hasPermission, isSuperAdmin } from "@smartboss/auth";
@@ -132,6 +133,24 @@ export async function createPoAction(formData: FormData) {
   redirect("/maintenance/purchase-orders");
 }
 
+/**
+ * คืน userId ก็ต่อเมื่อเป็นคนในบริษัทนี้จริง ไม่งั้นคืน null
+ *
+ * ค่ามาจาก <select> ในฟอร์ม ซึ่งแก้ค่าใน DevTools ได้ — ถ้าไม่ตรวจ จะผูก
+ * "ผู้รับของ" เป็น id ของคนในบริษัทอื่นได้ แล้วชื่อคนนอกจะไปโผล่บนใบสั่งซื้อเรา
+ */
+async function orgUserId(
+  orgId: string,
+  userId: string | null | undefined
+): Promise<string | null> {
+  if (!userId) return null;
+  const found = await prisma.user.findFirst({
+    where: { orgId, id: userId, isActive: true },
+    select: { id: true },
+  });
+  return found ? found.id : null;
+}
+
 async function ceoOnly() {
   const s = await requireOrg();
   if (!hasPermission(s, MAINT_PERMS.poApprove)) {
@@ -229,12 +248,25 @@ export async function rejectAction(formData: FormData) {
   redirect("/maintenance/purchase-orders");
 }
 
+/**
+ * ใครแตะใบนี้ได้บ้าง — CEO · คนเปิด PR · คนที่ถูกมอบให้ไปซื้อ · **คนที่ถูกมอบให้ไปรับของ**
+ *
+ * ⚠ ขาด receiverAssignedTo ไม่ได้ ไม่งั้นคนที่เราเพิ่งมอบหมายให้ไปรับของ
+ * จะกดปุ่ม "รับของ" ไม่ได้ — ฟีเจอร์มอบหมายผู้รับจะกลายเป็นแค่ป้ายที่ไม่มีผล
+ */
 async function assertCanProcess(
-  po: { poAssignedTo: string | null; createdBy: string | null },
+  po: {
+    poAssignedTo: string | null;
+    createdBy: string | null;
+    receiverAssignedTo: string | null;
+  },
   s: { userId: string }
 ) {
   const session = await requireOrg();
-  const assigned = po.poAssignedTo === s.userId || po.createdBy === s.userId;
+  const assigned =
+    po.poAssignedTo === s.userId ||
+    po.createdBy === s.userId ||
+    po.receiverAssignedTo === s.userId;
   if (!hasPermission(session, MAINT_PERMS.poApprove) && !assigned) {
     throw new Error("ไม่มีสิทธิ์ดำเนินการกับรายการนี้");
   }
@@ -264,6 +296,15 @@ export async function confirmOrderAction(formData: FormData) {
     formData.getAll("receiptImages").filter((f): f is File => f instanceof File)
   );
 
+  /*
+   * ผู้รับของ — คนซื้อกับคนรับของมักคนละคน (สั่งของออนไลน์แล้วให้คนเฝ้าออฟฟิศเซ็นรับ)
+   * ไม่ระบุ = ปล่อยว่าง ใครที่มีสิทธิ์อยู่แล้วก็กดรับได้เหมือนเดิม
+   */
+  const receiver = await orgUserId(
+    s.orgId,
+    String(formData.get("receiverAssignedTo") ?? "") || null
+  );
+
   await updatePurchaseOrder(s.orgId, id, {
     status: "ordered",
     items: poItemsToJson(items),
@@ -271,10 +312,24 @@ export async function confirmOrderAction(formData: FormData) {
     ...(urls.length > 0
       ? { receiptImageUrl: urls[0], receiptImageUrls: [...po.receiptImageUrls, ...urls] }
       : {}),
+    receiverAssignedTo: receiver,
     orderedBy: s.userId,
     orderedAt: new Date(),
   });
   await poExpense(s.orgId, po, total, s.userId);
+
+  // แจ้งคนรับของ เว้นแต่เขาคือคนกดสั่งซื้อเอง (จะได้ไม่เตือนตัวเอง)
+  if (receiver && receiver !== s.userId) {
+    await notifyUser(s.orgId, receiver, {
+      title: `📦 คุณเป็นผู้รับของ: ${po.title}`,
+      body: "เมื่อของมาถึงแล้ว กดยืนยันรับของในระบบ",
+      type: "purchase_order",
+      referenceId: id,
+      line: `📦 คุณถูกมอบหมายให้รับของ: ${po.title}
+กดยืนยันรับของในระบบ Smartboss เมื่อของมาถึง`,
+    });
+  }
+
   revalidatePath(`/maintenance/purchase-orders/${id}`);
   redirect("/maintenance/purchase-orders");
 }

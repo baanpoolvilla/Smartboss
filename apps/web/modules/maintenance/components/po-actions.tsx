@@ -256,14 +256,22 @@ export function ApproveEmergencyButton({
   );
 }
 
-/** [3] ยืนยันดำเนินการซื้อ: ราคา + รูป */
+/** [3] ยืนยันดำเนินการซื้อ: ราคา + รูป + มอบหมายผู้รับของ */
 export function ConfirmOrderButton({
   id,
   items,
+  users,
+  defaultReceiverId,
   action,
 }: {
   id: string;
   items: PoItemView[];
+  users: PickOption[];
+  /**
+   * ตั้งต้นเป็นคนที่ถูกมอบให้ไปซื้อ — เคสที่พบบ่อยที่สุดคือคนเดียวกันไปซื้อและรับเอง
+   * ส่วนเคสที่ต่างคน (สั่งออนไลน์ให้คนเฝ้าออฟฟิศเซ็นรับ) แค่เปลี่ยนใน dropdown
+   */
+  defaultReceiverId?: string | null;
   action: Action;
 }) {
   const [open, setOpen] = useState(false);
@@ -294,6 +302,29 @@ export function ConfirmOrderButton({
               กรอกจำนวนและราคาของที่ซื้อ แล้วแนบรูปใบสั่งซื้อ (ถ้ามี)
             </p>
             <PricingRows items={items} />
+
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-(--ink)">
+                มอบหมายผู้รับของ
+              </span>
+              <select
+                name="receiverAssignedTo"
+                defaultValue={defaultReceiverId ?? ""}
+                className="h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm text-(--ink)"
+              >
+                <option value="">— ยังไม่ระบุ —</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.sub ? `${u.label} (${u.sub})` : u.label}
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs text-(--ink-soft)">
+                คนซื้อกับคนรับของไม่จำเป็นต้องเป็นคนเดียวกัน — คนที่เลือกไว้จะได้รับ
+                แจ้งเตือน และกดปุ่ม &ldquo;รับของ&rdquo; ได้
+              </span>
+            </label>
+
             <ImagePickerRow />
           </form>
         </Modal>
@@ -303,7 +334,16 @@ export function ConfirmOrderButton({
 }
 
 /** [4] รับของ: แนบรูปใบเสร็จ */
-export function ReceiveButton({ id, action }: { id: string; action: Action }) {
+export function ReceiveButton({
+  id,
+  receiverName,
+  action,
+}: {
+  id: string;
+  /** ชื่อคนที่ถูกมอบหมายให้รับของ (ถ้ามี) — แสดงกันคนอื่นกดรับแทนโดยไม่ตั้งใจ */
+  receiverName?: string | null;
+  action: Action;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -332,6 +372,14 @@ export function ReceiveButton({ id, action }: { id: string; action: Action }) {
         >
           <form id="receive-form" action={action} className="flex flex-col gap-4">
             <input type="hidden" name="id" value={id} />
+            {receiverName && (
+              <p
+                className="rounded-(--radius) px-3 py-2 text-[13px]"
+                style={{ backgroundColor: "#EFF6FF", color: "#1D4ED8" }}
+              >
+                มอบหมายให้ <b>{receiverName}</b> เป็นผู้รับของ
+              </p>
+            )}
             <p className="text-xs text-(--ink-soft)">
               แนบรูปใบเสร็จหรือรูปสินค้าที่รับมา (ถ้ามี)
             </p>

@@ -302,6 +302,12 @@ model PurchaseOrder {
   isEmergencyPurchase Boolean   @default(false) @map("is_emergency_purchase")
   emergencyReason     String?   @map("emergency_reason")
   prImageUrls         String[]  @map("pr_image_urls")
+  /// คนที่ถูกมอบหมายให้ "ไปรับของ" — ตั้งตอนกดยืนยันดำเนินการซื้อ
+  ///
+  /// คนละเรื่องกับ receivedBy ข้างล่าง: อันนั้นบันทึกว่า *ใครกดรับจริง* หลังจากรับมาแล้ว
+  /// ส่วนอันนี้คือ *ใครควรไปรับ* ซึ่งรู้ล่วงหน้าตั้งแต่ตอนสั่งซื้อ และมักไม่ใช่คนเดียว
+  /// กับ poAssignedTo (คนไปซื้อ) เช่น สั่งของออนไลน์แล้วให้คนเฝ้าออฟฟิศเซ็นรับ
+  receiverAssignedTo  String?   @map("receiver_assigned_to")
   // ผู้ทำ + เวลา ของแต่ละสเต็ปใน PR→PO flow (migration 058/060 เดิม)
   poCreatedBy         String?   @map("po_created_by")
   poCreatedAt         DateTime? @map("po_created_at")
