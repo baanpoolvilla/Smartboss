@@ -195,11 +195,17 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           classNames: [
             ...(e.type === "holiday" ? ["ebw-event-holiday"] : []),
             ...(e.muted ? ["ebw-event-muted"] : []),
+            // Narrow month view renders every event as a plain dot (see
+            // renderEventContent) — but without this, each dot still sits
+            // inside the shared .fc-event chip (pale background + left
+            // border-bar), which on a cell this small reads as a lumpy oval
+            // around the dot rather than a clean dot on its own.
+            ...(isNarrowViewport && view === "dayGridMonth" ? ["ebw-event-dot"] : []),
           ],
           extendedProps: { type: e.type, color, isTask: e.type === "task", muted: !!e.muted, mine: e.mine, leaveType: e.leaveType, done: !!e.done },
         };
       }),
-    [events, colors, view]
+    [events, colors, view, isNarrowViewport]
   );
 
   // Read title + current month straight from the datesSet arg — reliable even on
