@@ -113,7 +113,17 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
   useEffect(() => {
     function computeLayout() {
       const top = wrapperRef.current?.getBoundingClientRect().top ?? 0;
-      setCalendarHeight(Math.max(520, Math.round(window.innerHeight - top - 24)));
+      // Below lg (1024px) the app shell's own bottom tab bar is `fixed
+      // inset-x-0 bottom-0 h-[68px]` (see shell.tsx's ModuleBottomNav) —
+      // outside normal flow, so it doesn't show up in any bounding-rect
+      // measurement here. The page reserves room for it via `pb-[68px]` on
+      // the content wrapper instead, which this calc didn't know about:
+      // sizing the calendar to the *full* remaining viewport left that 68px
+      // of padding hanging past the bottom of the screen, forcing a scroll
+      // to reach the last row(s). Subtract it explicitly on the same
+      // breakpoint the shell uses.
+      const bottomNavHeight = window.innerWidth < 1024 ? 68 : 0;
+      setCalendarHeight(Math.max(520, Math.round(window.innerHeight - top - 24 - bottomNavHeight)));
       setIsNarrowViewport(window.innerWidth < 640);
     }
     computeLayout();
