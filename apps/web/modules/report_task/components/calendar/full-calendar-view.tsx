@@ -362,12 +362,17 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
     // cells run tall, not narrow, so there's real room for the text there.
     if (isNarrowViewport && view === "dayGridMonth") {
       const done = type === "todo" && !!arg.event.extendedProps.done;
+      // Task dots stay flat/solid regardless of whose task it is — since
+      // color no longer encodes priority either (see taskEvents' colorHint),
+      // a task is meant to read as just "one color, always" now, no
+      // filled-vs-hollow mine/theirs distinction layered on top of it.
+      const hollow = mine === false && type !== "task";
       return (
         <div className="flex items-center justify-center py-0.5" title={arg.event.title}>
           <span
             className={cn("h-[7px] w-[7px] rounded-full shrink-0", done && "opacity-50")}
             style={
-              mine === false
+              hollow
                 ? { backgroundColor: "transparent", border: `1.5px solid ${color}` }
                 : { backgroundColor: color }
             }
@@ -419,13 +424,14 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
         </div>
       );
     }
-    // Leaves show a descriptive icon; everything else (including tasks)
-    // keeps a plain color dot — priority colors are spread out enough
-    // (see priorityColorHex) to tell apart without an icon too. Past events
-    // fade via the .ebw-event-muted CSS opacity rule (same color, just paler)
-    // rather than switching color here. Filled dot = assigned to the viewer,
-    // hollow = someone else's — only meaningful for a head, who now sees a
-    // mix of their own and their team's items on the same calendar.
+    // Leaves show a descriptive icon; everything else keeps a plain color
+    // dot. Past events fade via the .ebw-event-muted CSS opacity rule (same
+    // color, just paler) rather than switching color here. Filled dot =
+    // assigned to the viewer, hollow = someone else's — only meaningful for
+    // a head, who now sees a mix of their own and their team's items on the
+    // same calendar. Tasks are the one exception: always solid, regardless
+    // of whose — task color is meant to read as flat/uniform now (see
+    // taskEvents' colorHint), not layered with a second mine/theirs signal.
     const Icon =
       type === "dayoff"
           ? CalendarOff
@@ -440,7 +446,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           <span
             className="h-1.5 w-1.5 rounded-full shrink-0"
             style={
-              mine === false
+              mine === false && type !== "task"
                 ? { backgroundColor: "transparent", border: `1.5px solid ${color}` }
                 : { backgroundColor: color }
             }
