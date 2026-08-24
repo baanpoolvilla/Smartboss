@@ -517,14 +517,18 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           locale={thGregorianLocale}
           // Fixed height (computed above from the actual viewport) so busy vs
           // empty months stay the same size — the page height never changes
-          // on navigation, so it can't bounce the scroll. Narrow-viewport
-          // month view is the one exception: stretching rows to fill
-          // whatever's left of the screen made mostly-empty months look
-          // unbalanced (huge gaps under a couple of dots) — "auto" sizes
-          // rows to their natural (compact, roughly square) height instead,
-          // matching how Google/Apple's mobile month view reads.
-          height={isNarrowViewport && view === "dayGridMonth" ? "auto" : calendarHeight}
-          expandRows={!(isNarrowViewport && view === "dayGridMonth")}
+          // on navigation, so it can't bounce the scroll. Used to switch to
+          // "auto" + no expandRows on a narrow viewport (compact rows,
+          // Google/Apple mobile style) specifically to avoid stretching a
+          // light month into big gaps under a couple of dots — reversed on
+          // direct feedback: a phone screen was instead left with dead empty
+          // space below a short grid ("อยากให้แสดงเต็มหน้าจอ ... เห็นวันที่
+          // ครบเลย") having the whole month visible with no scroll, filling
+          // the actual available height, mattered more than avoiding uneven
+          // row heights on a light month. Same fixed-height/expandRows now on
+          // every viewport.
+          height={calendarHeight}
+          expandRows
           // Show exactly 5 or 6 rows depending on the actual month, not
           // always padded to 6 — combined with expandRows + the fixed total
           // height above, a 5-row month gets taller rows and a 6-row month
