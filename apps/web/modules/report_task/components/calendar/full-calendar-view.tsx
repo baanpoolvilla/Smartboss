@@ -157,10 +157,15 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
       events
         // Month view shows a holiday's name inline next to the day number
         // itself (see renderDayCellContent) instead of as one more event —
-        // keeping it in here too would show it twice. Week/day/list views
-        // have no per-cell day number to attach it to, so it stays a normal
-        // (unstyled-chip, italic-text) event there — see renderEventContent.
-        .filter((e) => !(e.type === "holiday" && view === "dayGridMonth"))
+        // keeping it in here too would show it twice. Only on a wide-enough
+        // viewport, though — a mobile column is barely wider than the day
+        // number itself, nowhere near enough room for a title next to it (it
+        // just overflowed into neighboring cells), so narrow keeps the old
+        // dot-only rendering instead (see renderEventContent's narrow branch).
+        // Week/day/list views have no per-cell day number to attach it to
+        // either, so it stays a normal (unstyled-chip, italic-text) event
+        // there too — see renderEventContent.
+        .filter((e) => !(e.type === "holiday" && view === "dayGridMonth" && !isNarrowViewport))
         .map((e) => {
         const color = e.colorHint ?? colors[e.type];
         return {
@@ -187,7 +192,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           extendedProps: { type: e.type, color, isTask: e.type === "task", muted: !!e.muted, mine: e.mine, leaveType: e.leaveType, done: !!e.done },
         };
       }),
-    [events, colors, view]
+    [events, colors, view, isNarrowViewport]
   );
 
   // Read title + current month straight from the datesSet arg — reliable even on
@@ -267,9 +272,14 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
    *  today/weekend/other-month CSS rule (theme.css) still applies unchanged. */
   function renderDayCellContent(arg: DayCellContentArg) {
     const ymd = localYmd(arg.date);
-    const holiday = events.find(
-      (e) => e.type === "holiday" && ymd >= e.start.slice(0, 10) && ymd < e.end.slice(0, 10)
-    );
+    // A mobile column is barely wider than the day number itself — showing a
+    // title next to it there overflowed straight into neighboring cells
+    // (screenshot: the diagonal red-circled overlap). Narrow keeps the plain
+    // number; its holiday still shows as a dot in the event area instead
+    // (fcEvents keeps holiday events in on narrow — see its own comment).
+    const holiday = isNarrowViewport
+      ? undefined
+      : events.find((e) => e.type === "holiday" && ymd >= e.start.slice(0, 10) && ymd < e.end.slice(0, 10));
     // Several titles carry a parenthetical official long-form after the
     // everyday name (e.g. "วันแม่แห่งชาติ (วันเฉลิมพระชนมพรรษา...)") — that
     // full string never fits legibly next to a date number no matter how far
