@@ -285,7 +285,12 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           // out of the cell.
           <span
             title={holiday.title}
-            className="italic text-[9px] font-normal opacity-60 truncate min-w-0 flex-1 text-[var(--ink-faint)]"
+            // --ink-faint (already the palest text token, used for
+            // other-month day numbers) stacked with opacity-60 on top faded
+            // it to near-invisible — one muted step is enough; use
+            // --ink-soft alone instead, same "quiet but legible" weight the
+            // rest of the app uses for secondary text.
+            className="italic text-[10px] font-normal truncate min-w-0 flex-1 text-[var(--ink-soft)]"
           >
             {shortTitle}
           </span>
