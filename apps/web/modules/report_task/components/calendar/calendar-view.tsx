@@ -43,7 +43,7 @@ import { eventTypeLabels } from "@/modules/report_task/lib/calendar-colors";
 import { leaveIconOf } from "@/modules/report_task/lib/leave-icons";
 import { useLeaveTypeStore, type LeaveTypeDef } from "@/modules/report_task/store/leave-type-store";
 import { cn } from "@/modules/report_task/lib/utils";
-import { ListChecks, CalendarOff, Plus, Settings2, Globe, User, Users, SlidersHorizontal } from "lucide-react";
+import { ListChecks, CalendarOff, Plus, Settings2, User, Users, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { now } from "@/modules/report_task/lib/now";
 import type { CalendarEvent, CalendarEventType, TodoItem } from "@/modules/report_task/types";
@@ -778,23 +778,12 @@ export function CalendarView() {
           >
             <Users className="h-3.5 w-3.5" /> คนในองค์กร
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-[var(--ink-soft)] lg:ml-auto"
-            onClick={() => {
-              setAddCalendarSection("recommended");
-              setAddCalendarOpen(true);
-            }}
-          >
-            <Globe className="h-3.5 w-3.5" /> เพิ่มปฏิทิน
-          </Button>
           {/* งาน no longer has a separate "สร้างประชุม" button — "เพิ่มสิ่งที่
               ต้องทำ" is the one create entry point, with a "เป็นการประชุม"
               switch inside for managers (see AddTodoDialog). */}
           <Button
             size="lg"
-            className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+            className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white lg:ml-auto"
             onClick={() => (tab === "work" ? openTodoDialog({}) : openCreate())}
           >
             <Plus className="h-4 w-4" />
