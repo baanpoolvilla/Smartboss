@@ -52,13 +52,6 @@ const tasksTourSteps: TourStep[] = [
 const calendarTourSteps: TourStep[] = [
   {
     page: "/calendar",
-    target: "calendar-priority-filter",
-    title: "กรองงานตามความสำคัญ",
-    description: "คลิกป้ายความสำคัญ (สูง/กลาง/ต่ำ) เหนือปฏิทิน เพื่อซ่อนหรือแสดงเฉพาะงานระดับนั้นบนปฏิทิน คลิกซ้ำเพื่อแสดงกลับ",
-    demo: { type: "toggle-click" },
-  },
-  {
-    page: "/calendar",
     target: "calendar-meetings-toggle",
     title: "ซ่อน/แสดงประชุมบนปฏิทิน",
     description: "คลิกป้าย \"ประชุม\" เพื่อซ่อนนัดประชุมทั้งหมดออกจากปฏิทินชั่วคราว ดูเฉพาะงานอย่างเดียวได้ คลิกซ้ำเพื่อแสดงกลับ",

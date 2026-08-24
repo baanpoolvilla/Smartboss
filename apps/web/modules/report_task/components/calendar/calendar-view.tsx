@@ -39,7 +39,6 @@ import { useCalendarScopeStore } from "@/modules/report_task/store/calendar-scop
 import { chartColors } from "@/modules/report_task/lib/chart-colors";
 import { canEditRecord, canSeeTask, canSeeTaskOnCalendar } from "@/modules/report_task/lib/permissions";
 import { getUser, canManage, isOwner } from "@/modules/report_task/lib/directory";
-import { priorityMeta, priorityColorHex, taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
 import { eventTypeLabels } from "@/modules/report_task/lib/calendar-colors";
 import { leaveIconOf } from "@/modules/report_task/lib/leave-icons";
 import { useLeaveTypeStore, type LeaveTypeDef } from "@/modules/report_task/store/leave-type-store";
@@ -47,7 +46,7 @@ import { cn } from "@/modules/report_task/lib/utils";
 import { ListChecks, CalendarOff, Plus, Settings2, Globe, User, Users, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { now } from "@/modules/report_task/lib/now";
-import type { CalendarEvent, CalendarEventType, TaskPriority, TodoItem } from "@/modules/report_task/types";
+import type { CalendarEvent, CalendarEventType, TodoItem } from "@/modules/report_task/types";
 
 type CalendarTab = "work" | "schedule";
 
@@ -63,7 +62,7 @@ const dateJumpLabels: Record<DateJump, string> = {
   custom: "กำหนดช่วงวันที่",
 };
 
-// Work calendar = task deadlines (colored by priority) + meetings.
+// Work calendar = task deadlines (flat task-type color) + meetings.
 // Schedule calendar = leaves (live from store) + holidays (opted-in per
 // country, see holiday-store) + routine days off.
 const scheduleTypes: CalendarEventType[] = ["leave", "dayoff", "holiday"];
@@ -160,7 +159,10 @@ export function CalendarView() {
     [allHolidays, holidaySelections, viewingAsUserId]
   );
   const [tab, setTab] = useState<CalendarTab>("work");
-  const [workPriorities, setWorkPriorities] = useState<Set<TaskPriority>>(new Set(taskPriorityOrder));
+  // Color now encodes type only (task/meeting/สิ่งที่ต้องทำ), not priority —
+  // priority filtering by chip is gone with it, replaced by the same
+  // show/hide-by-type toggle every other work-tab item already has.
+  const [showTasksInWork, setShowTasksInWork] = useState(true);
   const [showMeetings, setShowMeetings] = useState(true);
   // On by default — สิ่งที่ต้องทำ no longer has its own tab (merged into งาน
   // per feedback: 3 tabs read as 2 unrelated things when to-dos are really
@@ -333,7 +335,7 @@ export function CalendarView() {
       return (
         dateJumpCount +
         (canBroadenScope && taskScope !== "mine" ? 1 : 0) +
-        (workPriorities.size !== taskPriorityOrder.length ? 1 : 0) +
+        (showTasksInWork ? 0 : 1) +
         (showMeetings ? 0 : 1) +
         // On by default now (see showTodosInWork's own comment) — turning it
         // *off* is the deviation from default, not on.
@@ -349,7 +351,7 @@ export function CalendarView() {
       (scheduleActive.size !== scheduleTypes.length ? 1 : 0) +
       (hiddenLeaveTypeIds.size > 0 ? 1 : 0)
     );
-  }, [tab, dateJump, canBroadenScope, taskScope, workPriorities, showMeetings, showTodosInWork, todoScope, workGoogleOwnerIds, hiddenUserIds, scheduleActive, hiddenLeaveTypeIds]);
+  }, [tab, dateJump, canBroadenScope, taskScope, showTasksInWork, showMeetings, showTodosInWork, todoScope, workGoogleOwnerIds, hiddenUserIds, scheduleActive, hiddenLeaveTypeIds]);
 
   // Read-only summary chips under the mobile filter button — the badge
   // count above says "how many", this says "which ones", without opening
@@ -363,9 +365,7 @@ export function CalendarView() {
     if (dateJump !== "all") chips.push(`วันที่: ${dateJumpLabels[dateJump]}`);
     if (tab === "work") {
       if (canBroadenScope && taskScope !== "mine") chips.push("มุมมอง: ทั้งหมด");
-      if (workPriorities.size !== taskPriorityOrder.length) {
-        chips.push(`ความสำคัญ: ${taskPriorityOrder.filter((p) => workPriorities.has(p)).map((p) => priorityMeta[p].label).join(", ") || "ไม่มี"}`);
-      }
+      if (!showTasksInWork) chips.push("ซ่อนงาน");
       if (!showMeetings) chips.push("ซ่อนประชุม");
       if (!showTodosInWork) chips.push("ซ่อนสิ่งที่ต้องทำ");
       if (showTodosInWork && !canBroadenScope && todoScope !== "mine") chips.push("มุมมองสิ่งที่ต้องทำ: ทั้งหมด");
@@ -377,14 +377,14 @@ export function CalendarView() {
       if (hiddenLeaveTypeIds.size > 0) chips.push("ซ่อนประเภทลาบางส่วน");
     }
     return chips;
-  }, [tab, dateJump, canBroadenScope, taskScope, workPriorities, showMeetings, showTodosInWork, todoScope, workGoogleOwnerIds, hiddenUserIds, scheduleActive, hiddenLeaveTypeIds]);
+  }, [tab, dateJump, canBroadenScope, taskScope, showTasksInWork, showMeetings, showTodosInWork, todoScope, workGoogleOwnerIds, hiddenUserIds, scheduleActive, hiddenLeaveTypeIds]);
 
   function clearMobileFilters() {
     setDateJump("all");
     setCustomJumpDate("");
     if (tab === "work") {
       setTaskScope("mine");
-      setWorkPriorities(new Set(taskPriorityOrder));
+      setShowTasksInWork(true);
       setShowMeetings(true);
       setShowTodosInWork(true);
       setTodoScope("mine");
@@ -414,15 +414,6 @@ export function CalendarView() {
 
   function handleToggleTodo(eventId: string) {
     toggleTodo(eventId.replace("todoevt-", ""));
-  }
-
-  function togglePriority(p: TaskPriority) {
-    setWorkPriorities((prev) => {
-      const next = new Set(prev);
-      if (next.has(p)) next.delete(p);
-      else next.add(p);
-      return next;
-    });
   }
 
   function toggleSchedule(type: CalendarEventType) {
@@ -456,16 +447,17 @@ export function CalendarView() {
     );
   }
 
-  // Task deadlines derived live from the store (reschedule → moves on calendar),
-  // filtered by the selected priorities and colored by priority. Completed tasks
-  // drop off the calendar — they're done until reopened.
+  // Task deadlines derived live from the store (reschedule → moves on calendar).
+  // Completed tasks drop off the calendar — they're done until reopened. Color
+  // is the flat "task" type color for every priority now — priority filtering
+  // moved to the plain show/hide toggle (showTasksInWork) instead of a
+  // per-priority chip row.
   const taskEvents: CalendarEvent[] = useMemo(
     () =>
       tasks
         .filter(
           (t) =>
             t.status !== "done" &&
-            workPriorities.has(t.priority) &&
             t.assigneeIds.some((id) => !hiddenUserIds.includes(id)) &&
             (taskScope === "all" && canBroadenScope
               ? canSeeTask(t, viewingAsUserId)
@@ -482,11 +474,11 @@ export function CalendarView() {
           departmentId: t.departmentIds[0],
           taskId: t.id,
           createdById: t.assignedById,
-          colorHint: priorityColorHex[t.priority],
+          colorHint: colors.task,
           mine: t.assigneeIds.includes(viewingAsUserId),
           editable: canEditRecord(t.assignedById, t.departmentIds, viewingAsUserId),
         })),
-    [tasks, workPriorities, hiddenUserIds, viewingAsUserId, taskScope, canBroadenScope]
+    [tasks, hiddenUserIds, viewingAsUserId, taskScope, canBroadenScope, colors.task]
   );
 
   // A meeting with no attendee list can't be attributed to anyone in
@@ -596,7 +588,7 @@ export function CalendarView() {
         editable: canEditRecord(m.createdById, m.departmentIds ?? [m.departmentId], viewingAsUserId),
       });
       return [
-        ...taskEvents,
+        ...(showTasksInWork ? taskEvents : []),
         ...(showMeetings ? visibleMeetings.map(markMeeting) : []),
         ...workGoogleEvents,
         ...(showTodosInWork ? todoEvents : []),
@@ -617,6 +609,7 @@ export function CalendarView() {
   }, [
     tab,
     taskEvents,
+    showTasksInWork,
     showMeetings,
     showTodosInWork,
     scheduleActive,
@@ -898,10 +891,9 @@ export function CalendarView() {
         </div>
 
         {/* ≥640px: unchanged. <640px gets a button + bottom sheet below
-            instead — this row's badges (up to 4 priority chips + a scope
-            toggle + a meetings toggle + N Google-owner chips on the work
-            tab alone) never fit one line on a phone and just wrapped across
-            2-3 rows. */}
+            instead — this row's badges (a scope toggle + task/meeting/todo
+            type toggles + N Google-owner chips on the work tab alone) never
+            fit one line on a phone and just wrapped across 2-3 rows. */}
         <div className="hidden sm:block">
         {tab === "work" ? (
           <div className="flex flex-wrap items-center gap-2">
@@ -941,29 +933,17 @@ export function CalendarView() {
                 <span className="h-4 w-px bg-[var(--line)] mx-1" />
               </>
             )}
-            <span className="text-xs text-[var(--ink-soft)] mr-0.5">ความสำคัญ (คลิกเพื่อกรอง):</span>
-            {taskPriorityOrder.map((p, i) => {
-              const isActive = workPriorities.has(p);
-              return (
-                <button
-                  key={p}
-                  data-tour={i === 0 ? "calendar-priority-filter" : undefined}
-                  onClick={() => togglePriority(p)}
-                  title={isActive ? "คลิกเพื่อซ่อน" : "คลิกเพื่อแสดง"}
-                  aria-label={`${priorityMeta[p].label} — ${isActive ? "คลิกเพื่อซ่อน" : "คลิกเพื่อแสดง"}`}
-                >
-                  <Badge
-                    variant="outline"
-                    className={cn("gap-1.5 cursor-pointer select-none transition-opacity", !isActive && "opacity-40")}
-                    style={{ borderColor: priorityColorHex[p], color: priorityColorHex[p] }}
-                  >
-                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: priorityColorHex[p] }} />
-                    {priorityMeta[p].label}
-                  </Badge>
-                </button>
-              );
-            })}
-            <span className="h-4 w-px bg-[var(--line)] mx-1" />
+            <span className="text-xs text-[var(--ink-soft)] mr-0.5">แสดง:</span>
+            <button onClick={() => setShowTasksInWork((v) => !v)} title={showTasksInWork ? "คลิกเพื่อซ่อน" : "คลิกเพื่อแสดง"}>
+              <Badge
+                variant="outline"
+                className={cn("gap-1.5 cursor-pointer select-none transition-opacity", !showTasksInWork && "opacity-40")}
+                style={{ borderColor: colors.task, color: colors.task }}
+              >
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: colors.task }} />
+                {eventTypeLabels.task}
+              </Badge>
+            </button>
             <button data-tour="calendar-meetings-toggle" onClick={() => setShowMeetings((v) => !v)} title={showMeetings ? "คลิกเพื่อซ่อน" : "คลิกเพื่อแสดง"}>
               <Badge
                 variant="outline"
@@ -1148,31 +1128,15 @@ export function CalendarView() {
                   )}
 
                   <div>
-                    <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">ความสำคัญ (แตะเพื่อกรอง)</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {taskPriorityOrder.map((p) => {
-                        const isActive = workPriorities.has(p);
-                        return (
-                          <button
-                            key={p}
-                            onClick={() => togglePriority(p)}
-                            className={cn(
-                              "flex items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium",
-                              isActive ? "border-current" : "border-[var(--line)] text-[var(--ink-soft)] opacity-60"
-                            )}
-                            style={isActive ? { borderColor: priorityColorHex[p], color: priorityColorHex[p] } : undefined}
-                          >
-                            <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: priorityColorHex[p] }} />
-                            {priorityMeta[p].label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div>
                     <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">แสดงในปฏิทิน</p>
                     <div className="flex flex-col rounded-xl border border-[var(--line)] divide-y divide-[var(--line)]">
+                      <label className="flex items-center justify-between gap-2 px-3 py-2.5">
+                        <span className="flex items-center gap-2 text-sm">
+                          <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: colors.task }} />
+                          {eventTypeLabels.task}
+                        </span>
+                        <Switch checked={showTasksInWork} onCheckedChange={setShowTasksInWork} />
+                      </label>
                       <label className="flex items-center justify-between gap-2 px-3 py-2.5">
                         <span className="flex items-center gap-2 text-sm">
                           <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: colors.meeting }} />

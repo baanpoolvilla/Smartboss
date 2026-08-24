@@ -62,13 +62,6 @@ export const whatsNewItems: WhatsNewItem[] = [
     tourTarget: "task-view-grid",
   },
   {
-    id: "calendar-priority-filter",
-    page: "/calendar",
-    title: "กรองงานตามความสำคัญ",
-    description: "คลิกป้ายความสำคัญ (สูง/กลาง/ต่ำ) เหนือปฏิทิน เพื่อซ่อนหรือแสดงเฉพาะงานระดับนั้น",
-    tourTarget: "calendar-priority-filter",
-  },
-  {
     id: "calendar-meetings-toggle",
     page: "/calendar",
     title: "ซ่อน/แสดงประชุมบนปฏิทิน",
