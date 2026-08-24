@@ -353,31 +353,6 @@ export function CalendarView() {
     );
   }, [tab, dateJump, canBroadenScope, taskScope, showTasksInWork, showMeetings, showTodosInWork, todoScope, workGoogleOwnerIds, hiddenUserIds, scheduleActive, hiddenLeaveTypeIds]);
 
-  // Read-only summary chips under the mobile filter button — the badge
-  // count above says "how many", this says "which ones", without opening
-  // the sheet just to check. One "ล้างตัวกรอง" clears all of them at once;
-  // no per-chip × here (same call as the Kanban/Dashboard filter sheets —
-  // the field itself already shows its own active state via color once
-  // opened, an X per chip here would just be a second way to do the same
-  // "ล้างตัวกรอง" click).
-  const mobileActiveFilterSummary = useMemo(() => {
-    const chips: string[] = [];
-    if (dateJump !== "all") chips.push(`วันที่: ${dateJumpLabels[dateJump]}`);
-    if (tab === "work") {
-      if (canBroadenScope && taskScope !== "mine") chips.push("มุมมอง: ทั้งหมด");
-      if (!showTasksInWork) chips.push("ซ่อนงาน");
-      if (!showMeetings) chips.push("ซ่อนประชุม");
-      if (!showTodosInWork) chips.push("ซ่อนสิ่งที่ต้องทำ");
-      if (showTodosInWork && !canBroadenScope && todoScope !== "mine") chips.push("มุมมองสิ่งที่ต้องทำ: ทั้งหมด");
-      if (workGoogleOwnerIds.some((id) => hiddenUserIds.includes(id))) chips.push("ซ่อนปฏิทินภายนอกบางส่วน");
-    } else {
-      if (scheduleActive.size !== scheduleTypes.length) {
-        chips.push(`ประเภท: ${scheduleTypes.filter((t) => scheduleActive.has(t)).map((t) => eventTypeLabels[t]).join(", ") || "ไม่มี"}`);
-      }
-      if (hiddenLeaveTypeIds.size > 0) chips.push("ซ่อนประเภทลาบางส่วน");
-    }
-    return chips;
-  }, [tab, dateJump, canBroadenScope, taskScope, showTasksInWork, showMeetings, showTodosInWork, todoScope, workGoogleOwnerIds, hiddenUserIds, scheduleActive, hiddenLeaveTypeIds]);
 
   function clearMobileFilters() {
     setDateJump("all");
@@ -1062,26 +1037,6 @@ export function CalendarView() {
         )}
         </div>
 
-        {/* Read-only recap of what's actually applied, without opening the
-            sheet — the button above only ever says "how many" via its badge. */}
-        {/* One compact line instead of a label row + a separate chip row —
-            just enough to recap what's active without eating two more rows
-            of vertical space above the calendar. */}
-        {mobileActiveFilterSummary.length > 0 && (
-          <div className="flex sm:hidden items-center gap-2 rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] px-2.5 py-1.5 text-[11px]">
-            <SlidersHorizontal className="h-3 w-3 shrink-0 text-[var(--ink-soft)]" />
-            <span className="min-w-0 flex-1 truncate font-medium text-[var(--ink)]">
-              {mobileActiveFilterSummary.join(", ")}
-            </span>
-            <button
-              type="button"
-              onClick={clearMobileFilters}
-              className="shrink-0 font-medium text-[var(--brand-green-dark)] underline-offset-2 hover:underline"
-            >
-              ล้าง
-            </button>
-          </div>
-        )}
 
         <Sheet open={mobileSheetOpen} onOpenChange={setMobileSheetOpen}>
           <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
