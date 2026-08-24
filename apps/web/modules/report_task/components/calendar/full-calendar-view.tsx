@@ -257,10 +257,12 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
   }
 
-  /** Month view only — replaces the plain day-number cell with the number
-   *  plus, if a holiday falls on this date, its name in italic right next to
-   *  it (asked for explicitly: "ติดกับเลขวันที่" — attached to the date
-   *  number, not on its own line below like a normal event). Keeps the
+  /** Month view only — replaces the plain day-number cell with, if a holiday
+   *  falls on this date, its name in italic right BEFORE the number (asked
+   *  for explicitly: "ให้แสดงไว้หน้าวันที่" — in front of the date, not
+   *  after), kept deliberately faint/neutral rather than the holiday
+   *  category color — "ไม่ต้องเด่น ให้ดูรู้พอ" (subtle, just enough to
+   *  notice), not competing with the date number or real events. Keeps the
    *  `fc-daygrid-day-number` class on the number itself so every existing
    *  today/weekend/other-month CSS rule (theme.css) still applies unchanged. */
   function renderDayCellContent(arg: DayCellContentArg) {
@@ -270,16 +272,16 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
     );
     return (
       <div className="flex items-baseline gap-1 min-w-0 w-full overflow-hidden">
-        <a className="fc-daygrid-day-number shrink-0">{arg.dayNumberText}</a>
         {holiday && (
           // Flex items default to min-width:auto (their content's own width),
           // which blocks truncate from ever kicking in and let a long title
           // like "วันแม่แห่งชาติ (วันเฉลิม...)" spill straight out of the cell —
           // min-w-0 + flex-1 forces it to actually shrink to the ellipsis.
-          <span className="italic text-[10px] font-medium truncate min-w-0 flex-1" style={{ color: colors.holiday }}>
+          <span className="italic text-[9px] font-normal opacity-60 truncate min-w-0 flex-1 text-[var(--ink-faint)]">
             {holiday.title}
           </span>
         )}
+        <a className="fc-daygrid-day-number shrink-0">{arg.dayNumberText}</a>
       </div>
     );
   }
