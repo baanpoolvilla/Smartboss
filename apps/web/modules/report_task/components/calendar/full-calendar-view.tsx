@@ -655,12 +655,21 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
         />
       </div>
 
-      <p className="flex items-center gap-1.5 text-xs text-[var(--ink-soft)] mt-3 pt-3 border-t border-[var(--line)]">
+      {/* Keyboard-shortcut hints are dead weight on a touch device with no
+          keyboard — wrapped across several lines on a narrow phone, this was
+          most of what read as "wasted space" below the grid itself (asked
+          for explicitly: "เอาแค่ที่กรอบให้พอ...มันเปลืองมาก"). Desktop keeps
+          the full line unchanged. */}
+      <p className="hidden sm:flex items-center gap-1.5 text-xs text-[var(--ink-soft)] mt-3 pt-3 border-t border-[var(--line)]">
         <MousePointerClick className="h-3.5 w-3.5" />
         {addHint} · คีย์ลัด: <kbd className="rounded border border-[var(--line)] bg-[var(--bg-soft)] px-1">C</kbd> สร้าง ·{" "}
         <kbd className="rounded border border-[var(--line)] bg-[var(--bg-soft)] px-1">T</kbd> วันนี้ ·{" "}
         <kbd className="rounded border border-[var(--line)] bg-[var(--bg-soft)] px-1">←→</kbd> เลื่อน ·{" "}
         <kbd className="rounded border border-[var(--line)] bg-[var(--bg-soft)] px-1">1–4</kbd> มุมมอง
+      </p>
+      <p className="flex sm:hidden items-center gap-1.5 text-[11px] text-[var(--ink-soft)] mt-2 pt-2 border-t border-[var(--line)]">
+        <MousePointerClick className="h-3 w-3 shrink-0" />
+        {addHint}
       </p>
     </div>
   );
