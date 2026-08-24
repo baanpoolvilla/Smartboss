@@ -309,6 +309,16 @@
   box-shadow: none;
   opacity: 0.85;
 }
+/* Desktop month view — plain colored text row (dot + title, drawn in
+   renderEventContent) with no pale chip background/left border, matching
+   the maintenance module's PM calendar reference design. Same !important
+   reasoning as the holiday rule above (FullCalendar sets background/border
+   as inline style per-event). */
+.ebw-calendar .fc-event.ebw-event-plain {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none;
+}
 /* Past event: same color, just faded — not swapped for an unrelated gray. */
 .ebw-calendar .fc-event.ebw-event-muted {
   opacity: 0.3;
