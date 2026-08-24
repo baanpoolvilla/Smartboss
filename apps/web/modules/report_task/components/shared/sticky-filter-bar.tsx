@@ -39,7 +39,11 @@ export function StickyFilterBar({
   children?: ReactNode;
 }) {
   return (
-    <div className="sticky top-0 z-30 -mx-4 px-4 sm:-mx-6 sm:px-6 bg-[var(--bg-soft)]/95 backdrop-blur-sm border-b border-[var(--line)] shadow-[0_4px_12px_-6px_rgba(0,0,0,0.15)] py-3 flex flex-col gap-3">
+    // -mt-4 sm:-mt-5 cancels AppScaffold's own top padding (py-4 sm:py-5),
+    // same full-bleed trick as -mx-4/-mx-6 already does horizontally —
+    // without it this bar sits a visible 16-20px below the app header
+    // instead of flush against it (screenshot: an empty gap above the tabs).
+    <div className="sticky top-0 z-30 -mx-4 px-4 -mt-4 sm:-mx-6 sm:px-6 sm:-mt-5 bg-[var(--bg-soft)]/95 backdrop-blur-sm border-b border-[var(--line)] shadow-[0_4px_12px_-6px_rgba(0,0,0,0.15)] py-3 flex flex-col gap-3">
       {(title || actions) && (
         <div className="flex flex-wrap items-start justify-between gap-3">
           {title && (
