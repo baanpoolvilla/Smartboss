@@ -668,6 +668,90 @@ export async function deleteHolidayAction(formData: FormData) {
   revalidatePath("/hr/holidays");
 }
 
+/**
+ * ลงวันหยุดของพนักงานหนึ่งคน ทั้งเดือนในครั้งเดียว
+ *
+ * ── ทำไมต้องส่งทั้งเดือน ไม่ใช่เฉพาะวันที่หยุด ──
+ * roster เป็นตัวทับ recurring pattern รายวัน (resolveShiftId ดู roster ก่อน)
+ * ถ้าส่งเฉพาะวันหยุด การ "ยกเลิกวันหยุด" จะทำไม่ได้ เพราะแถวเดิมยังค้างอยู่
+ * ⇒ ให้ตารางเดือนนั้นเป็นแหล่งความจริงทั้งเดือนไปเลย วันไหนไม่หยุดก็ใส่กะปกติ
+ *
+ * ── ทำไมต้องสร้าง roster ใบใหม่ทุกครั้ง ──
+ * bulkUpsertAssignments ปฏิเสธตารางที่ publish แล้ว (แก้เงียบ ๆ ไม่ได้ตามเจตนา)
+ * การแก้จึงต้องเป็นใบใหม่เสมอ — publishRoster ล้างแถวของวันเดียวกันจากใบเก่าให้
+ */
+export interface DaysOffState {
+  ok?: boolean;
+  offDays?: number;
+  error?: string;
+}
+
+export async function setEmployeeDaysOffAction(
+  _prev: DaysOffState,
+  formData: FormData,
+): Promise<DaysOffState> {
+  try {
+    await guard(HR_PERMS.settingManage);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "ไม่มีสิทธิ์ดำเนินการนี้" };
+  }
+
+  const companyId = String(formData.get("company_id") ?? "");
+  const employmentId = String(formData.get("employment_id") ?? "");
+  const month = String(formData.get("month") ?? "");
+  const workShiftId = String(formData.get("work_shift_id") ?? "");
+  const restShiftId = String(formData.get("rest_shift_id") ?? "");
+  const offDays = formData.getAll("off").map(String);
+
+  if (!companyId) return { error: "ยังไม่มีบริษัทในระบบ workforce" };
+  if (!employmentId) return { error: "กรุณาเลือกพนักงาน" };
+  if (!/^\d{4}-\d{2}$/.test(month)) return { error: "เดือนไม่ถูกต้อง" };
+  if (!workShiftId) return { error: "กรุณาเลือกกะสำหรับวันทำงาน" };
+  if (!restShiftId) return { error: "ต้องมีกะประเภทวันหยุดก่อน — สร้างที่หน้า “กะทำงาน”" };
+
+  const [year, mon] = month.split("-").map(Number);
+  const daysInMonth = new Date(Date.UTC(year!, mon!, 0)).getUTCDate();
+  const startsOn = `${month}-01`;
+  const endsOn = `${month}-${String(daysInMonth).padStart(2, "0")}`;
+  const offSet = new Set(offDays);
+
+  const assignments = Array.from({ length: daysInMonth }, (_, i) => {
+    const date = `${month}-${String(i + 1).padStart(2, "0")}`;
+    return {
+      employment_id: employmentId,
+      work_date: date,
+      shift_id: offSet.has(date) ? restShiftId : workShiftId,
+      note: offSet.has(date) ? "วันหยุดของพนักงาน" : "",
+    };
+  });
+
+  try {
+    const roster = await wfFetch<{ id: string }>("/roster-periods", {
+      method: "POST",
+      body: {
+        company_id: companyId,
+        // ใส่เวลาไว้ในชื่อเพื่อให้ไล่ย้อนได้ว่าใบไหนมาทีหลัง — มีหลายใบต่อเดือนแน่นอน
+        name: `วันหยุด ${month} · ${new Date().toISOString().slice(11, 19)}`,
+        starts_on: startsOn,
+        ends_on: endsOn,
+      },
+    });
+
+    await wfFetch(`/roster-periods/${roster.id}/shift-assignments:bulk-upsert`, {
+      method: "POST",
+      body: { assignments },
+    });
+
+    // ยังไม่ publish = ยังไม่มีผลกับการคำนวณเลย ขั้นนี้ข้ามไม่ได้
+    await wfFetch(`/roster-periods/${roster.id}/publish`, { method: "POST" });
+  } catch (error) {
+    return { error: toMessage(error) };
+  }
+
+  revalidatePath("/hr/holidays");
+  return { ok: true, offDays: offDays.length };
+}
+
 /* ═══════════════════ งวด timesheet ═══════════════════ */
 
 export async function createTimesheetPeriodAction(formData: FormData) {

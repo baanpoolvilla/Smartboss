@@ -13,7 +13,7 @@ import {
   uuidv7,
   type Clock,
 } from '@workforce/domain';
-import { and, asc, desc, eq, gte, isNull, lte } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, isNull, lte, ne } from 'drizzle-orm';
 import { UnitOfWork } from '../infrastructure/unit-of-work';
 import { RequestContextService } from '../shared/request-context';
 import { CLOCK } from '../shared/tokens';
@@ -445,6 +445,40 @@ export class SchedulingService {
       if (roster.status === 'PUBLISHED') throw AppError.conflict('roster is already published');
 
       const now = this.clock.now();
+
+      /*
+       * ล้างตารางเก่าของวันเดียวกันก่อน — ตารางที่ประกาศแล้วแก้ไม่ได้ การแก้กะ
+       * ของวันที่ประกาศไปแล้วจึงต้องทำผ่านตารางใบใหม่เสมอ ถ้าไม่ล้างของเดิม
+       * (employment, work_date) หนึ่งคู่จะมีแถว PUBLISHED สองแถว แล้ว
+       * resolveShiftId ที่ใช้ .limit(1) โดยไม่มี ORDER BY จะหยิบแบบไม่แน่นอน
+       * ⇒ ผลลงเวลาวันเดียวกันอาจคิดคนละกะในการคำนวณสองครั้งติดกัน
+       */
+      const drafts = await uow.tx
+        .select({
+          employmentId: schema.shiftAssignments.employmentId,
+          workDate: schema.shiftAssignments.workDate,
+        })
+        .from(schema.shiftAssignments)
+        .where(
+          and(
+            eq(schema.shiftAssignments.rosterPeriodId, rosterPeriodId),
+            eq(schema.shiftAssignments.status, 'DRAFT'),
+          ),
+        );
+
+      for (const draft of drafts) {
+        await uow.tx
+          .delete(schema.shiftAssignments)
+          .where(
+            and(
+              eq(schema.shiftAssignments.employmentId, draft.employmentId),
+              eq(schema.shiftAssignments.workDate, draft.workDate),
+              eq(schema.shiftAssignments.status, 'PUBLISHED'),
+              ne(schema.shiftAssignments.rosterPeriodId, rosterPeriodId),
+            ),
+          );
+      }
+
       const published = await uow.tx
         .update(schema.shiftAssignments)
         .set({ status: 'PUBLISHED' })

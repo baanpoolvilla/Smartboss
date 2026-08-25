@@ -6,6 +6,7 @@ import {
   wfFetch,
   wfTry,
   type Company,
+  type Employment,
   type HolidayCalendar,
   type HolidayDate,
   type Paged,
@@ -20,6 +21,7 @@ import {
 } from "@/modules/hr/components/ui";
 import { deleteHolidayAction } from "../actions";
 import { AddHolidayForm } from "./add-holiday-form";
+import { EmployeeDaysOff } from "./employee-days-off";
 
 const MONTH_NAMES = [
   "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
@@ -88,12 +90,15 @@ function MonthGrid({
 export default async function HolidaysPage({
   searchParams,
 }: {
-  searchParams: Promise<{ year?: string }>;
+  searchParams: Promise<{ year?: string; emp?: string; month?: string }>;
 }) {
   const sp = await searchParams;
   const thisYear = new Date().getFullYear();
   const year =
     Number(sp.year) >= 2000 && Number(sp.year) <= 2100 ? Number(sp.year) : thisYear;
+  const month = /^\d{4}-\d{2}$/.test(sp.month ?? "")
+    ? sp.month!
+    : new Date().toISOString().slice(0, 7);
 
   return (
     <HrPage
@@ -104,9 +109,42 @@ export default async function HolidaysPage({
         const companyId = companies.items[0]?.id;
         if (companyId === undefined) return <NotProvisioned what="ตั้งวันหยุด" />;
 
-        const calendars = await wfTry<Paged<HolidayCalendar>>(
-          `/holiday-calendars?company_id=${companyId}&from=${year}-01-01&to=${year}-12-31`,
-        );
+        const daysInMonth = new Date(
+          Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0),
+        ).getUTCDate();
+        const monthFrom = `${month}-01`;
+        const monthTo = `${month}-${String(daysInMonth).padStart(2, "0")}`;
+
+        const [calendars, employments, shifts] = await Promise.all([
+          wfTry<Paged<HolidayCalendar>>(
+            `/holiday-calendars?company_id=${companyId}&from=${year}-01-01&to=${year}-12-31`,
+          ),
+          wfTry<Paged<Employment>>("/employments"),
+          wfTry<Paged<{ id: string; name: string; code: string; rest_day: boolean }>>(
+            `/shifts?company_id=${companyId}`,
+          ),
+        ]);
+
+        const people = (employments?.items ?? []).filter((e) => e.terminated_on === null);
+        const selectedEmp =
+          people.find((e) => e.id === sp.emp)?.id ?? people[0]?.id ?? null;
+
+        // กะที่ติ๊ก "เป็นวันหยุด" คือตัวที่ใช้ทับวันที่พนักงานขอหยุด
+        const restShiftId = (shifts?.items ?? []).find((sh) => sh.rest_day)?.id ?? null;
+        const workShifts = (shifts?.items ?? [])
+          .filter((sh) => !sh.rest_day)
+          .map((sh) => ({ id: sh.id, label: `${sh.code} · ${sh.name}` }));
+
+        // วันที่ถูกลงไว้แล้วในเดือนนี้ — เอามาติ๊กไว้ให้ตรงกับของจริง
+        const assigned =
+          selectedEmp === null
+            ? null
+            : await wfTry<{ items: { work_date: string; shift_id: string | null }[] }>(
+                `/shift-assignments?from=${monthFrom}&to=${monthTo}&employment_id=${selectedEmp}`,
+              );
+        const initialOff = (assigned?.items ?? [])
+          .filter((a) => a.shift_id !== null && a.shift_id === restShiftId)
+          .map((a) => a.work_date);
 
         const dates = (calendars?.items ?? []).flatMap((c) => c.dates);
         const byDate = new Map(dates.map((d) => [d.holiday_date, d]));
@@ -117,8 +155,57 @@ export default async function HolidaysPage({
         return (
           <div className="flex flex-col gap-4">
             <SectionCard
-              title="เพิ่มวันหยุด"
-              description="มีผลกับพนักงานทุกคนในบริษัท — วันหยุดจะไม่ถูกนับเป็นขาดงาน"
+              title="วันหยุดของพนักงานรายคน"
+              description="คลิกวันที่จะหยุด — ตารางนี้ทับตารางประจำสัปดาห์เฉพาะเดือนที่บันทึก"
+            >
+              <form method="GET" className="mb-4 flex flex-wrap items-end gap-2">
+                <input type="hidden" name="year" value={year} />
+                <label className="flex min-w-56 flex-col gap-1">
+                  <span className="text-xs font-medium text-(--ink-soft)">พนักงาน</span>
+                  <select
+                    name="emp"
+                    defaultValue={selectedEmp ?? ""}
+                    className="h-11 rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm"
+                  >
+                    {people.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.employee_code} · {e.full_name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-(--ink-soft)">เดือน</span>
+                  <input
+                    type="month"
+                    name="month"
+                    defaultValue={month}
+                    className="h-11 rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm"
+                  />
+                </label>
+                <Button type="submit" variant="outline">
+                  แสดง
+                </Button>
+              </form>
+
+              {selectedEmp === null ? (
+                <EmptyState>ยังไม่มีพนักงานในระบบ</EmptyState>
+              ) : (
+                <EmployeeDaysOff
+                  key={`${selectedEmp}-${month}`}
+                  companyId={companyId}
+                  employmentId={selectedEmp}
+                  month={month}
+                  initialOff={initialOff}
+                  workShifts={workShifts}
+                  restShiftId={restShiftId}
+                />
+              )}
+            </SectionCard>
+
+            <SectionCard
+              title="วันหยุดบริษัท (ทุกคนหยุดพร้อมกัน)"
+              description="ใช้เฉพาะวันที่ทั้งบริษัทหยุดเหมือนกัน เช่นวันหยุดราชการ — ถ้าไม่มีก็ไม่ต้องลง"
             >
               <AddHolidayForm companyId={companyId} defaultDate={`${year}-01-01`} />
             </SectionCard>
