@@ -179,6 +179,24 @@ export interface Device {
   has_active_credential: boolean;
 }
 
+/**
+ * เหตุที่ทำให้วันนั้นคำนวณผลลงเวลาไม่ได้หรือได้ไม่ครบ
+ *
+ * blocking = true คือคำนวณต่อไม่ได้จริง ๆ ไม่ใช่แค่เตือน
+ * เช่น NO_SHIFT_ASSIGNED — มีการสแกนแต่ไม่รู้ว่าวันนั้นควรเข้ากี่โมง
+ * จึงบอกไม่ได้ว่าสายหรือไม่
+ */
+export interface AttendanceException {
+  id: string;
+  employment_id: string;
+  work_date: string;
+  code: string;
+  blocking: boolean;
+  detail: string | null;
+  status: "OPEN" | "RESOLVED" | "WAIVED";
+  created_at: string;
+}
+
 /** ลายนิ้วมือหนึ่งนิ้วที่ผูก slot บนเครื่องหนึ่งเครื่องเข้ากับสัญญาจ้างหนึ่งใบ */
 export interface BiometricEnrollment {
   id: string;
