@@ -286,6 +286,19 @@
 .ebw-calendar .fc-daygrid-day:hover {
   background-color: color-mix(in srgb, var(--brand-green) 6%, transparent);
 }
+/* Narrow month view (< 640px, matching FullCalendarView's isNarrowViewport
+   threshold) sizes each row to "auto" — its real content height (a number +
+   a row of dots) — which is basically fixed regardless of how narrow the
+   phone is. So a cell's *width* shrinks with the viewport but its height
+   doesn't, and the narrower the phone the more each cell stretches into a
+   tall, unbalanced rectangle instead of shrinking on both axes together.
+   Capping the frame to a square keeps every cell's proportions consistent
+   across phone widths — it shrinks as a whole, not just sideways. */
+@media (max-width: 639.98px) {
+  .ebw-calendar .fc-daygrid-day-frame {
+    aspect-ratio: 1 / 1;
+  }
+}
 /* Pale chip in the event's own color with a solid left accent bar. Only the
    right corners round — rounding the left ones too curves the caps of the
    left border itself (the only border side that exists here) into a small
