@@ -26,7 +26,6 @@ import { DatePickerField } from "@/modules/report_task/components/shared/date-pi
 import { CalendarRail } from "./calendar-rail";
 import { LeaveSidebar } from "./leave-sidebar";
 import { WorkSidebar } from "./work-sidebar";
-import { TodoSidebar } from "./todo-sidebar";
 import { EventDetailDialog } from "./event-detail-dialog";
 import { AddCalendarDialog } from "./add-calendar-dialog";
 import { AddTodoDialog } from "./add-todo-dialog";
@@ -1271,6 +1270,11 @@ export function CalendarView() {
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
             {tab === "work" ? (
               <>
+                {/* TodoSidebar (everyone else's to-dos, its own card) used to
+                    render here too — now redundant since WorkSidebar's
+                    "งานทั้งหมดเดือนนี้" card already folds otherTodos in
+                    (see that card's own comment), so it was just showing the
+                    same to-dos twice on the page. */}
                 <WorkSidebar
                   range={viewRange}
                   onOpenTask={setOpenTaskId}
@@ -1278,21 +1282,6 @@ export function CalendarView() {
                   onEditTodo={(t) => openTodoDialog({ todo: t, date: t.date })}
                   onAddTodo={() => openTodoDialog({})}
                 />
-                {/* Same overlay toggle as the calendar grid itself — สิ่งที่ต้องทำ
-                    no longer has its own tab, so its own sidebar card only shows
-                    up here alongside the work one, not as a full replacement.
-                    hideMine: the viewer's own to-dos are merged into
-                    WorkSidebar's "งานที่ฉันรับ" card above now — this stays
-                    only for the "everyone else's" half when scope is "all". */}
-                {showTodosInWork && (
-                  <TodoSidebar
-                    range={viewRange}
-                    scope={effectiveTodoScope}
-                    onEdit={(t) => openTodoDialog({ todo: t, date: t.date })}
-                    onAdd={() => openTodoDialog({})}
-                    hideMine
-                  />
-                )}
               </>
             ) : (
               <LeaveSidebar range={viewRange} holidays={holidays} />
