@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import {
@@ -16,19 +16,40 @@ import {
 import { ReportImageLightbox } from "@/modules/report_task/components/report-feed/report-image-lightbox";
 import { useReportFeedStore, type ReportPost, type ReportPostImage, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { getUser } from "@/modules/report_task/lib/directory";
+import { getUser, departments, users as directoryUsers } from "@/modules/report_task/lib/directory";
 import { groupByDay } from "@/modules/report_task/lib/format";
-import { renderRichBulletText } from "@/modules/report_task/lib/report-feed-rich-text";
+import {
+  htmlEditorToBulletsText,
+  renderRichBulletText,
+  type MentionType,
+} from "@/modules/report_task/lib/report-feed-rich-text";
+import { uploadCompressedImage } from "@/modules/report_task/lib/image-resize";
+import { DRAG_MENTION_TOPIC_MIME } from "@/modules/report_task/components/report-feed/report-post-fields";
 import { cn } from "@/modules/report_task/lib/utils";
-import { Check, Pencil, Plus, SmilePlus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { Building2, Check, Hash, ImagePlus, Pencil, Plus, Send, SmilePlus, Trash2, User, X } from "lucide-react";
 
 const reactionEmojis = ["👍", "❤️", "🎉", "😂", "😮", "😢"];
+// A wider set than the 6-emoji reaction bar — this one's for *writing*, not
+// reacting, so it leans on the same common picks any chat app's picker opens
+// with rather than trying to be a full emoji keyboard.
+const composerEmojis = [
+  "👍", "👎", "❤️", "🔥", "🎉", "😂", "😮", "😢", "😡", "🙏",
+  "👏", "🤔", "😴", "🥳", "😅", "🚀", "✅", "❌", "⭐", "💯",
+];
 const NEAR_BOTTOM_PX = 120;
 // Consecutive messages from the same author within this window collapse
 // into one visual group (Discord's own cutoff) — avatar/name/timestamp only
 // on the first line, so a burst of quick replies doesn't repeat the same
 // header five times in a row.
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
+
+interface MentionItem {
+  type: MentionType;
+  id: string;
+  label: string;
+  sublabel?: string;
+}
 
 /** One flat chat line — a top-level post or one of its replies, indistinguishable
  * from each other once flattened (true Discord has no "post vs comment" split,
@@ -95,15 +116,165 @@ export function OpenchatFeed({
   const deleteReplyAction = useReportFeedStore((s) => s.deleteReply);
   const toggleReaction = useReportFeedStore((s) => s.toggleReaction);
   const toggleReplyReaction = useReportFeedStore((s) => s.toggleReplyReaction);
+  const topics = useReportFeedStore((s) => s.topics);
 
   const messages = toMessages(topicPosts);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
+  const [composerImages, setComposerImages] = useState<ReportPostImage[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [lightbox, setLightbox] = useState<{ images: ReportPostImage[]; index: number } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ postId: string; replyId?: string } | null>(null);
   const [editing, setEditing] = useState<{ id: string; body: string } | null>(null);
   const [openReactionFor, setOpenReactionFor] = useState<string | null>(null);
+
+  // @mention — same marker format (`@[label](type:id)`, see
+  // report-feed-rich-text.tsx) and trigger/insert mechanics as the main post
+  // composer's rich-text editor (report-post-fields.tsx), just scoped down
+  // to one flat composer instead of one per section.
+  const mentionCandidates = useMemo<MentionItem[]>(
+    () => [
+      ...directoryUsers.map((u): MentionItem => ({ type: "user", id: u.id, label: u.name, sublabel: u.role })),
+      ...topics.map((t): MentionItem => ({ type: "topic", id: t.id, label: t.name, sublabel: "ห้อง Report" })),
+      ...departments.map((d): MentionItem => ({ type: "dept", id: d.id, label: d.name, sublabel: "แผนก" })),
+    ],
+    [topics]
+  );
+  const [mentionMenu, setMentionMenu] = useState<{ query: string; rect: DOMRect; containerTop: number; containerBottom: number; index: number } | null>(null);
+
+  function mentionMatches(query: string): MentionItem[] {
+    const q = query.trim().toLowerCase();
+    const all = q ? mentionCandidates.filter((m) => m.label.toLowerCase().includes(q)) : mentionCandidates;
+    return all.slice(0, 8);
+  }
+
+  function nearestScrollableBounds(el: HTMLElement): { top: number; bottom: number } {
+    let node: HTMLElement | null = el.parentElement;
+    while (node) {
+      const overflowY = window.getComputedStyle(node).overflowY;
+      if (overflowY === "auto" || overflowY === "scroll") {
+        const r = node.getBoundingClientRect();
+        return { top: r.top, bottom: r.bottom };
+      }
+      node = node.parentElement;
+    }
+    return { top: 0, bottom: window.innerHeight };
+  }
+
+  function detectMentionTrigger(el: HTMLElement): { query: string; rect: DOMRect; containerTop: number; containerBottom: number } | null {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !sel.isCollapsed || !el.contains(sel.getRangeAt(0).startContainer)) return null;
+    const range = sel.getRangeAt(0);
+    const node = range.startContainer;
+    if (node.nodeType !== Node.TEXT_NODE) return null;
+    const before = (node.textContent ?? "").slice(0, range.startOffset);
+    const match = before.match(/(?:^|\s)@([^\s@]*)$/);
+    if (!match) return null;
+    const caretRange = range.cloneRange();
+    const rect = caretRange.getClientRects()[0] ?? caretRange.getBoundingClientRect();
+    const bounds = nearestScrollableBounds(el);
+    return { query: match[1]!, rect, containerTop: bounds.top, containerBottom: bounds.bottom };
+  }
+
+  function syncMentionMenu(el: HTMLElement) {
+    const trigger = detectMentionTrigger(el);
+    setMentionMenu(trigger ? { query: trigger.query, rect: trigger.rect, containerTop: trigger.containerTop, containerBottom: trigger.containerBottom, index: 0 } : null);
+  }
+
+  function makeMentionChip(item: MentionItem): HTMLSpanElement {
+    const chip = document.createElement("span");
+    chip.className = "mention-chip inline-flex items-center rounded bg-[var(--accent)] text-[var(--brand-green-dark)] px-1 font-medium";
+    chip.contentEditable = "false";
+    chip.setAttribute("data-mention-type", item.type);
+    chip.setAttribute("data-mention-id", item.id);
+    chip.textContent = `@${item.label}`;
+    return chip;
+  }
+
+  function insertMention(item: MentionItem) {
+    const el = editorRef.current;
+    const sel = window.getSelection();
+    if (!el || !sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    const node = range.startContainer;
+    if (node.nodeType !== Node.TEXT_NODE) return;
+    const nodeText = node.textContent ?? "";
+    const before = nodeText.slice(0, range.startOffset);
+    const atIndex = before.lastIndexOf("@");
+    if (atIndex === -1) return;
+    const afterCaret = nodeText.slice(range.startOffset);
+    const parent = node.parentNode;
+    if (!parent) return;
+
+    const chip = makeMentionChip(item);
+    const afterNode = document.createTextNode(afterCaret);
+    const spaceNode = document.createTextNode(" ");
+    parent.replaceChild(afterNode, node);
+    parent.insertBefore(document.createTextNode(nodeText.slice(0, atIndex)), afterNode);
+    parent.insertBefore(chip, afterNode);
+    parent.insertBefore(spaceNode, afterNode);
+
+    const newRange = document.createRange();
+    newRange.setStart(spaceNode, spaceNode.length);
+    newRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(newRange);
+
+    setMentionMenu(null);
+    setText(htmlEditorToBulletsText(el));
+  }
+
+  function handleComposerDragOver(e: DragEvent<HTMLDivElement>) {
+    if (!e.dataTransfer.types.includes(DRAG_MENTION_TOPIC_MIME)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  }
+
+  function handleComposerDrop(e: DragEvent<HTMLDivElement>) {
+    const raw = e.dataTransfer.getData(DRAG_MENTION_TOPIC_MIME);
+    if (!raw) return;
+    e.preventDefault();
+    const el = editorRef.current;
+    if (!el) return;
+    try {
+      const parsed = JSON.parse(raw) as { id: string; name: string };
+      el.focus();
+      insertMention({ type: "topic", id: parsed.id, label: parsed.name });
+    } catch {
+      // Malformed drag payload — ignore, nothing to insert.
+    }
+  }
+
+  function insertEmoji(emoji: string) {
+    const el = editorRef.current;
+    if (!el) return;
+    el.focus();
+    document.execCommand("insertText", false, emoji);
+    setText(htmlEditorToBulletsText(el));
+    setEmojiOpen(false);
+  }
+
+  async function handleComposerFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    const next: ReportPostImage[] = [];
+    try {
+      for (const file of Array.from(files).slice(0, 6 - composerImages.length)) {
+        const url = await uploadCompressedImage(file);
+        next.push({ id: `img-${crypto.randomUUID()}`, url, name: file.name });
+      }
+    } catch {
+      toast.error("แนบรูปไม่สำเร็จบางไฟล์ — ลองใหม่อีกครั้ง");
+    } finally {
+      if (next.length > 0) setComposerImages((prev) => [...prev, ...next]);
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -123,11 +294,50 @@ export function OpenchatFeed({
 
   function send() {
     const trimmed = text.trim();
-    if (!trimmed || sending) return;
+    if ((!trimmed && composerImages.length === 0) || sending) return;
     setSending(true);
-    addPost(topic.id, viewingAsUserId, { title: trimmed, sections: [], images: [], tagIds: [] });
+    addPost(topic.id, viewingAsUserId, {
+      title: trimmed,
+      sections: [],
+      images: composerImages.length > 0 ? composerImages : [],
+      tagIds: [],
+    });
     setText("");
+    setComposerImages([]);
+    if (editorRef.current) editorRef.current.innerHTML = "";
     setSending(false);
+  }
+
+  function handleComposerKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if (mentionMenu) {
+      const matches = mentionMatches(mentionMenu.query);
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setMentionMenu({ ...mentionMenu, index: matches.length === 0 ? 0 : (mentionMenu.index + 1) % matches.length });
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setMentionMenu({ ...mentionMenu, index: matches.length === 0 ? 0 : (mentionMenu.index - 1 + matches.length) % matches.length });
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        const picked = matches[mentionMenu.index];
+        if (picked) insertMention(picked);
+        else setMentionMenu(null);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setMentionMenu(null);
+        return;
+      }
+    }
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (!uploading) send();
+    }
   }
 
   function toggleMessageReaction(m: OpenchatMessage, emoji: string) {
@@ -256,20 +466,32 @@ export function OpenchatFeed({
                             <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                               {activeReactions.map(({ emoji, users }) => {
                                 const mine = users.includes(viewingAsUserId);
+                                const names = users.map((uid) => getUser(uid)?.name ?? "ไม่ทราบชื่อ");
                                 return (
-                                  <button
-                                    key={emoji}
-                                    onClick={() => toggleMessageReaction(m, emoji)}
-                                    className={cn(
-                                      "flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] border transition-colors",
-                                      mine
-                                        ? "bg-[var(--accent)] border-[var(--brand-green)]/40 text-[var(--brand-green-dark)]"
-                                        : "bg-[var(--bg-soft)] border-[var(--line)] text-[var(--ink-soft)]"
-                                    )}
-                                  >
-                                    <span>{emoji}</span>
-                                    <span className="tabular-nums">{users.length}</span>
-                                  </button>
+                                  // group/reaction + a hidden-until-hover tooltip — Discord's own
+                                  // "who reacted" popup, minus the reaction list on the left (this
+                                  // chip already *is* one emoji's list, no need to pick it again).
+                                  <div key={emoji} className="relative group/reaction">
+                                    <button
+                                      onClick={() => toggleMessageReaction(m, emoji)}
+                                      className={cn(
+                                        "flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] border transition-colors",
+                                        mine
+                                          ? "bg-[var(--accent)] border-[var(--brand-green)]/40 text-[var(--brand-green-dark)]"
+                                          : "bg-[var(--bg-soft)] border-[var(--line)] text-[var(--ink-soft)]"
+                                      )}
+                                    >
+                                      <span>{emoji}</span>
+                                      <span className="tabular-nums">{users.length}</span>
+                                    </button>
+                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/reaction:block z-20 pointer-events-none">
+                                      <div className="rounded-lg bg-[var(--ink)] text-white text-[11px] px-2.5 py-1.5 shadow-lg whitespace-nowrap max-w-56">
+                                        <p className="font-semibold mb-0.5">{emoji} ทำเครื่องหมายโดย</p>
+                                        <p className="text-white/80 truncate">{names.join(", ")}</p>
+                                      </div>
+                                      <div className="h-2 w-2 bg-[var(--ink)] rotate-45 mx-auto -mt-1" />
+                                    </div>
+                                  </div>
                                 );
                               })}
                             </div>
@@ -362,24 +584,142 @@ export function OpenchatFeed({
       {/* Single persistent composer for the whole channel — not one per
           message like Thread's reply box, matching Discord's own bottom bar.
           Light theme now (see file-level note below), only the *layout*
-          (one bar, flat stream) is what's meant to read as Discord. */}
+          (one bar, flat stream) is what's meant to read as Discord. @mention,
+          image attach, and an emoji picker round it out to match — the same
+          three the reference screenshot's composer toolbar showed. */}
       <div className="px-4 pb-4 pt-1 bg-[var(--bg)]">
-        <div className="flex items-center gap-3 rounded-xl px-3 py-2.5 bg-[var(--bg-soft)] border border-[var(--line)]">
-          <button className="h-6 w-6 flex items-center justify-center rounded-full shrink-0 bg-[var(--brand-green)] text-[var(--ink)]" aria-label="แนบไฟล์">
-            <Plus className="h-4 w-4" />
-          </button>
+        {composerImages.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 px-1 pb-2">
+            {composerImages.map((img) => (
+              <div key={img.id} className="relative h-14 w-14 rounded-md overflow-hidden border border-[var(--line)]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={img.url ?? img.dataUrl} alt={img.name} className="h-full w-full object-cover" />
+                <button
+                  onClick={() => setComposerImages((prev) => prev.filter((i) => i.id !== img.id))}
+                  className="absolute top-0 right-0 h-4 w-4 flex items-center justify-center bg-black/60 text-white rounded-bl-md"
+                  aria-label={`ลบรูป ${img.name}`}
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="relative flex items-end gap-2 rounded-xl px-3 py-2 bg-[var(--bg-soft)] border border-[var(--line)] focus-within:border-[var(--brand-green)]/50 transition-colors">
           <input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send();
-              }
-            }}
-            placeholder={`พิมพ์ข้อความไปที่ #${topic.name}`}
-            className="flex-1 min-w-0 bg-transparent text-sm outline-none text-[var(--ink)] placeholder:text-[var(--ink-faint)]"
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => handleComposerFiles(e.target.files)}
           />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading || composerImages.length >= 6}
+            className="h-7 w-7 shrink-0 flex items-center justify-center rounded-full bg-[var(--brand-green)] text-[var(--ink)] disabled:opacity-40 mb-0.5"
+            aria-label="แนบรูป"
+          >
+            {uploading ? <ImagePlus className="h-4 w-4 animate-pulse" /> : <Plus className="h-4 w-4" />}
+          </button>
+          <div
+            ref={(el) => {
+              editorRef.current = el;
+              if (el && el.innerHTML === "" && text !== "") el.innerHTML = text;
+            }}
+            contentEditable
+            role="textbox"
+            aria-label="พิมพ์ข้อความ"
+            aria-multiline="true"
+            suppressContentEditableWarning
+            data-placeholder={`พิมพ์ข้อความไปที่ #${topic.name} — พิมพ์ @ เพื่อแท็ก`}
+            onInput={(e) => {
+              setText(htmlEditorToBulletsText(e.currentTarget));
+              syncMentionMenu(e.currentTarget);
+            }}
+            onKeyUp={(e) => syncMentionMenu(e.currentTarget)}
+            onKeyDown={handleComposerKeyDown}
+            onDragOver={handleComposerDragOver}
+            onDrop={handleComposerDrop}
+            className="flex-1 min-w-0 max-h-32 overflow-y-auto bg-transparent text-sm outline-none py-1 text-[var(--ink)] empty:before:content-[attr(data-placeholder)] empty:before:text-[var(--ink-faint)]"
+          />
+          <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+            <PopoverTrigger
+              render={
+                <button
+                  className="h-7 w-7 shrink-0 flex items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-white mb-0.5"
+                  aria-label="แทรกอีโมจิ"
+                >
+                  <SmilePlus className="h-4 w-4" />
+                </button>
+              }
+            />
+            <PopoverContent className="w-64 p-2 grid grid-cols-8 gap-0.5" align="end">
+              {composerEmojis.map((emoji) => (
+                <button
+                  key={emoji}
+                  onClick={() => insertEmoji(emoji)}
+                  className="h-7 w-7 flex items-center justify-center rounded-md text-base hover:bg-[var(--bg-soft)] transition-transform hover:scale-110"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </PopoverContent>
+          </Popover>
+          <button
+            onClick={send}
+            disabled={uploading || (!text.trim() && composerImages.length === 0)}
+            aria-label="ส่งข้อความ"
+            className="h-7 w-7 shrink-0 flex items-center justify-center rounded-full bg-[var(--brand-green)] text-[var(--ink)] disabled:bg-white disabled:text-[var(--ink-faint)] transition-colors mb-0.5"
+          >
+            <Send className="h-3.5 w-3.5" />
+          </button>
+
+          {mentionMenu &&
+            (() => {
+              const matches = mentionMatches(mentionMenu.query);
+              const spaceBelow = mentionMenu.containerBottom - mentionMenu.rect.bottom - 8;
+              const spaceAbove = mentionMenu.rect.top - mentionMenu.containerTop - 8;
+              const openAbove = spaceBelow < 160 && spaceAbove > spaceBelow;
+              const maxHeight = Math.max(120, Math.min(224, openAbove ? spaceAbove : spaceBelow));
+              return (
+                <div
+                  style={{
+                    position: "fixed",
+                    left: mentionMenu.rect.left,
+                    maxHeight,
+                    ...(openAbove
+                      ? { bottom: window.innerHeight - mentionMenu.rect.top + 4 }
+                      : { top: mentionMenu.rect.bottom + 4 }),
+                  }}
+                  className="z-50 w-64 rounded-lg border border-[var(--line)] bg-white shadow-lg py-1 overflow-y-auto"
+                >
+                  {matches.length === 0 ? (
+                    <p className="px-3 py-2 text-xs text-[var(--ink-soft)]">ไม่พบที่ตรงกับ &quot;{mentionMenu.query}&quot;</p>
+                  ) : (
+                    matches.map((item, i) => {
+                      const Icon = item.type === "user" ? User : item.type === "topic" ? Hash : Building2;
+                      return (
+                        <button
+                          key={`${item.type}-${item.id}`}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => insertMention(item)}
+                          className={cn(
+                            "w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-sm",
+                            i === mentionMenu.index ? "bg-[var(--bg-soft)]" : "hover:bg-[var(--bg-soft)]"
+                          )}
+                        >
+                          <Icon className="h-3.5 w-3.5 shrink-0 text-[var(--ink-soft)]" />
+                          <span className="truncate flex-1">{item.label}</span>
+                          {item.sublabel && <span className="text-[11px] text-[var(--ink-soft)] shrink-0">{item.sublabel}</span>}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              );
+            })()}
         </div>
       </div>
     </div>
