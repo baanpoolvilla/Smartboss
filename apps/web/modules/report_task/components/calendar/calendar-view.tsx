@@ -845,12 +845,21 @@ export function CalendarView() {
             {mobileActiveFilterCount > 0 && <span className="tabular-nums">({mobileActiveFilterCount})</span>}
           </button>
 
+          {/* min-w-0 + truncate: the row above already has a fixed-width
+              icon button and a "กรอง (N)" pill ahead of this one — Button's
+              own `whitespace-nowrap` means its label can't wrap, so on the
+              narrowest phones (~360-400px) the full "เพิ่มสิ่งที่ต้องทำ" text
+              forced this row past the viewport width, which then dragged the
+              whole header (and the calendar grid sizing off of it) into a
+              horizontal scroll instead of actually shrinking. Truncating
+              with an ellipsis here keeps the row — and everything measured
+              against it — inside the real viewport at any width. */}
           <Button
-            className="ml-auto bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+            className="ml-auto min-w-0 max-w-[46%] bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
             onClick={() => (tab === "work" ? openTodoDialog({}) : openCreate())}
           >
-            <Plus className="h-4 w-4" />
-            {tab === "work" ? "เพิ่มสิ่งที่ต้องทำ" : "เพิ่มวันลา"}
+            <Plus className="h-4 w-4 shrink-0" />
+            <span className="truncate">{tab === "work" ? "เพิ่มสิ่งที่ต้องทำ" : "เพิ่มวันลา"}</span>
           </Button>
         </div>
 

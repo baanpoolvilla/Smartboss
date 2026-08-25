@@ -452,12 +452,14 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
             role="checkbox"
             aria-checked={done}
             aria-label={done ? "ทำเครื่องหมายว่ายังไม่เสร็จ" : "ทำเครื่องหมายว่าเสร็จแล้ว"}
-            // Filled round dot, same as every other type — a hollow square
-            // outline read as "no marker at all" next to the other types'
-            // solid dots on desktop (mobile's own dot-row already always
-            // draws it filled). Still fully clickable to toggle done.
-            className={cn("flex h-3 w-3 shrink-0 items-center justify-center rounded-full border", mine && "cursor-pointer")}
-            style={{ backgroundColor: color, borderColor: color }}
+            // Filled round dot, same size AND same plain-fill styling as
+            // every other type's leading dot (h-1.5 w-1.5, no border) — at
+            // 6px a same-color border added around the fill just blurred the
+            // edge into a soft halo, reading as a bigger/fuzzier dot next to
+            // the other types' crisp ones even though the box itself was the
+            // same size. Still fully clickable to toggle done.
+            className={cn("flex h-1.5 w-1.5 shrink-0 items-center justify-center rounded-full", mine && "cursor-pointer")}
+            style={{ backgroundColor: color }}
             onClick={(e) => {
               // Stops the click from also reaching FullCalendar's own
               // eventClick handler (which would otherwise open the edit
@@ -467,7 +469,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
               onToggleTodo?.(arg.event.id);
             }}
           >
-            {done && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />}
+            {done && <Check className="h-1 w-1 text-white" strokeWidth={4} />}
           </span>
           <span className={cn("truncate text-[11px] font-medium", done && "line-through")} style={{ color }}>
             {arg.event.title}
