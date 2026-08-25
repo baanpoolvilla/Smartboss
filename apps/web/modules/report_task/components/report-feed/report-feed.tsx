@@ -82,7 +82,7 @@ export function ReportFeed({
 
   return (
     <div className="relative flex-1 flex flex-col min-h-0">
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto bg-[var(--bg-soft)]/40 px-5 py-5 space-y-5 scroll-pt-4">
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto bg-white scroll-pt-4">
         {topicPosts.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center gap-3 text-center px-6">
             <div
@@ -98,7 +98,7 @@ export function ReportFeed({
           </div>
         ) : isStream ? (
           groupByDay(topicPosts, (p) => p.createdAt).map((group) => (
-            <div key={group.key} className="space-y-5">
+            <div key={group.key}>
               <DaySeparator label={group.label} />
               {group.items.map((p) => (
                 <ReportCard key={p.id} post={p} topic={topic} highlighted={p.id === highlightPostId} highlightReplyId={highlightReplyId} onOpenTask={onOpenTask} />

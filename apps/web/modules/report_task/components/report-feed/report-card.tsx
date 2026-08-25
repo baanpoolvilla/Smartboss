@@ -389,22 +389,15 @@ export function ReportCard({
   return (
     <div
       id={`report-post-${post.id}`}
-      data-slot="card"
       className={cn(
-        // data-slot="card" opts this hand-rolled post card into the same
-        // hover shadow/lift/border-tint every real <Card> in the app already
-        // gets (see theme.css's [data-slot="card"] rules) — without it this
-        // was the one card shape in the whole app that stayed flat on
-        // hover, reading as plainer/less finished next to everything else.
-        // p-5 (was p-4) for a touch more breathing room per element.
-        "group/post relative rounded-2xl border p-5 shadow-sm transition-colors duration-[1200ms] ease-out",
-        // /70 at rest (not the resting default in most cards, which stays
-        // solid) — a whole feed of these stacked was reading as one boxed
-        // card after another rather than a flowing conversation ("ควรดูเป็น
-        // feed ที่ลื่นไหลมากกว่ากล่องสี่เหลี่ยมแข็งๆ"); [data-slot="card"]'s
-        // hover rule still lands on the full-strength line + shadow/lift, so
-        // the frame still reads clearly the moment it's actually relevant.
-        highlighted || flashTargetId === post.id ? "bg-[var(--accent)] border-[var(--brand-green)]/40" : "bg-white border-[var(--line)]/70",
+        // Real Teams doesn't box each post in its own card — posts sit
+        // edge-to-edge in a flat list, separated by a single hairline
+        // divider, with just a background tint on hover. The previous
+        // rounded-2xl/border/shadow-per-post treatment read as a stack of
+        // separate boxes rather than one continuous feed once a room had
+        // more than a couple of posts.
+        "group/post relative px-5 py-4 border-b border-[var(--line)]/70 transition-colors duration-200",
+        highlighted || flashTargetId === post.id ? "bg-[var(--accent)]" : "bg-white hover:bg-[var(--bg-soft)]/60",
         // Unread reads as a left accent + a dot under the author's name (see
         // below) instead of a background tint — a background collided with
         // `highlighted`'s bg-accent (both fighting for the same visual slot).
@@ -642,16 +635,24 @@ export function ReportCard({
           where Teams' own link sits (after the last reply, not in place of
           them). Getting this backwards (hiding replies too) was the first
           pass at this — a real Teams screenshot showing replies rendered
-          in full caught it. */}
+          in full caught it.
+
+          The whole divider+link row only renders once there's something to
+          show (a reply, an open composer, or the disabled-comments notice) —
+          a post with zero comments already has a reply affordance in the
+          hover toolbar's 💬 icon, so repeating an always-on divider+link
+          under every single quiet post just piled up dead chrome on a busy
+          room with lots of short posts. */}
+      {(post.replies.length > 0 || threadOpen || topic.commentsDisabled) && (
       <div className="space-y-3 pt-3 mt-3 border-t border-[var(--line)]/60">
           {post.replies.length > 0 && (
             <>
-              {post.replies.length > RECENT_REPLY_COUNT && !repliesExpanded && (
+              {post.replies.length > RECENT_REPLY_COUNT && (
                 <button
-                  onClick={() => setRepliesExpanded(true)}
+                  onClick={() => setRepliesExpanded((v) => !v)}
                   className="text-xs font-medium text-[var(--brand-green-dark)] hover:underline"
                 >
-                  ดูความคิดเห็นก่อนหน้า {post.replies.length - RECENT_REPLY_COUNT} รายการ
+                  {repliesExpanded ? "ย่อความคิดเห็น" : `ดูความคิดเห็นก่อนหน้า ${post.replies.length - RECENT_REPLY_COUNT} รายการ`}
                 </button>
               )}
               <div className="divide-y divide-[var(--line)]/60">
@@ -885,6 +886,7 @@ export function ReportCard({
           </>
           )}
         </div>
+      )}
 
         {replyLightbox && (
           <ReportImageLightbox

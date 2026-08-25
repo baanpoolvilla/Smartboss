@@ -24,6 +24,11 @@ import { Check, Pencil, Plus, SmilePlus, Trash2 } from "lucide-react";
 
 const reactionEmojis = ["👍", "❤️", "🎉", "😂", "😮", "😢"];
 const NEAR_BOTTOM_PX = 120;
+// Consecutive messages from the same author within this window collapse
+// into one visual group (Discord's own cutoff) — avatar/name/timestamp only
+// on the first line, so a burst of quick replies doesn't repeat the same
+// header five times in a row.
+const GROUP_WINDOW_MS = 5 * 60 * 1000;
 
 /** One flat chat line — a top-level post or one of its replies, indistinguishable
  * from each other once flattened (true Discord has no "post vs comment" split,
@@ -170,24 +175,44 @@ export function OpenchatFeed({
                 {group.label}
                 <span className="flex-1 h-px bg-[var(--line)]" />
               </div>
-              {group.items.map((m) => {
+              {group.items.map((m, i) => {
                 const author = getUser(m.authorId);
                 const isOwn = m.authorId === viewingAsUserId;
                 const activeReactions = reactionEmojis.map((emoji) => ({ emoji, users: m.reactions?.[emoji] ?? [] })).filter((r) => r.users.length > 0);
                 const isEditing = editing?.id === m.id;
+                const prev = group.items[i - 1];
+                const grouped =
+                  !!prev &&
+                  prev.authorId === m.authorId &&
+                  new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime() < GROUP_WINDOW_MS;
                 return (
-                  <div key={m.id} className="group/msg relative flex gap-3 px-5 py-1.5 hover:bg-[var(--bg-soft)]">
-                    <Avatar className="h-9 w-9 shrink-0 mt-0.5">
-                      <AvatarFallback className="text-[11px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{author?.avatar}</AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-[13.5px] font-semibold text-[var(--ink)]">{author?.name ?? "ไม่ทราบชื่อ"}</span>
-                        <span className="text-[10.5px] text-[var(--ink-faint)]">
+                  <div key={m.id} className={cn("group/msg relative flex gap-3 px-5 hover:bg-[var(--bg-soft)]", grouped ? "py-0.5" : "py-1.5")}>
+                    {grouped ? (
+                      // Empty avatar-width gutter — on hover shows the message's
+                      // own time, same slot Discord uses for a grouped line.
+                      <div className="w-9 shrink-0 flex items-start justify-center">
+                        <span className="hidden group-hover/msg:block text-[9.5px] text-[var(--ink-faint)] mt-1 tabular-nums">
                           {new Date(m.createdAt).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}
-                          {m.editedAt && " · แก้ไขแล้ว"}
                         </span>
                       </div>
+                    ) : (
+                      <Avatar className="h-9 w-9 shrink-0 mt-0.5">
+                        <AvatarFallback className="text-[11px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{author?.avatar}</AvatarFallback>
+                      </Avatar>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      {!grouped && (
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-[13.5px] font-semibold text-[var(--ink)]">{author?.name ?? "ไม่ทราบชื่อ"}</span>
+                          <span className="text-[10.5px] text-[var(--ink-faint)]">
+                            {new Date(m.createdAt).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}
+                            {m.editedAt && " · แก้ไขแล้ว"}
+                          </span>
+                        </div>
+                      )}
+                      {grouped && m.editedAt && !isEditing && (
+                        <span className="text-[10px] text-[var(--ink-faint)]">แก้ไขแล้ว</span>
+                      )}
                       {isEditing ? (
                         <div className="mt-1 space-y-1.5">
                           <textarea
