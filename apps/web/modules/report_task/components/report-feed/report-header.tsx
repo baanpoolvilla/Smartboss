@@ -57,15 +57,12 @@ export function ReportHeader({
 
   return (
     <PageHeader
-      title={
-        roomLabel ? (
-          <>
-            รายงาน <span className="text-[var(--ink-soft)] font-normal">· {roomLabel}</span>
-          </>
-        ) : (
-          "รายงาน"
-        )
-      }
+      // The room name alone once one's open (no "รายงาน ·" prefix — asked
+      // for explicitly: the module name added nothing a room/channel title
+      // didn't already say on its own, same as Teams never prefixing a
+      // channel name with "Teams ·"). Falls back to "รายงาน" only on the
+      // merged views that aren't really "in" a room (ภาพรวมทั้งหมด etc.).
+      title={roomLabel ?? "รายงาน"}
       subtitle="โพสต์อัปเดต พูดคุย แลกเปลี่ยน และสรุปงานในทีม — เหมือนแชนแนลใน Teams"
       action={
         <div className="flex items-center gap-1.5 flex-wrap w-full sm:w-auto">

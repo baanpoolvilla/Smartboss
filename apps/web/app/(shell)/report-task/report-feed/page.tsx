@@ -354,7 +354,7 @@ function ReportFeedPageInner() {
         </Button>
         <Sheet open={mobileTopicsOpen} onOpenChange={setMobileTopicsOpen}>
           <SheetContent side="left" className="p-0 w-[85vw] max-w-sm flex flex-col">
-            <SheetHeader className="px-4 py-3 border-b border-[var(--line)]">
+            <SheetHeader className="px-4 py-3 border-b border-[var(--line)]/60">
               <SheetTitle>หัวข้อทั้งหมด</SheetTitle>
             </SheetHeader>
             <div className="flex-1 min-h-0">
@@ -394,7 +394,7 @@ function ReportFeedPageInner() {
 
         <div className="w-full flex-1 min-w-0 flex flex-col min-h-0 lg:h-full">
           {todayStatusFilter ? (
-            <div className="flex-1 min-h-0 rounded-2xl border border-[var(--line)] bg-white shadow-sm overflow-hidden flex flex-col">
+            <div className="flex-1 min-h-0 rounded-2xl border border-[var(--line)] bg-white overflow-hidden flex flex-col">
               <TodayStatusPanel
                 status={todayStatusFilter}
                 entries={todayStatus.filter((e) => e.status === todayStatusFilter)}
@@ -402,15 +402,15 @@ function ReportFeedPageInner() {
               />
             </div>
           ) : showAllPosts ? (
-            <div className="flex-1 min-h-0 rounded-2xl border border-[var(--line)] bg-white shadow-sm overflow-hidden flex flex-col">
+            <div className="flex-1 min-h-0 rounded-2xl border border-[var(--line)] bg-white overflow-hidden flex flex-col">
               <ReportAllPostsFeed topics={visibleTopics} posts={posts} onJumpToTopic={selectView} onOpenTask={setOpenTaskId} />
             </div>
           ) : showPending ? (
-            <div className="flex-1 min-h-0 rounded-2xl border border-[var(--line)] bg-white shadow-sm overflow-hidden flex flex-col">
+            <div className="flex-1 min-h-0 rounded-2xl border border-[var(--line)] bg-white overflow-hidden flex flex-col">
               <PendingTopicsPanel entries={myPending} onJumpToTopic={selectView} />
             </div>
           ) : showMentions ? (
-            <div className="flex-1 min-h-0 rounded-2xl border border-[var(--line)] bg-white shadow-sm overflow-hidden flex flex-col">
+            <div className="flex-1 min-h-0 rounded-2xl border border-[var(--line)] bg-white overflow-hidden flex flex-col">
               <ReportAllPostsFeed
                 topics={visibleTopics}
                 posts={mentionPosts}
@@ -424,11 +424,11 @@ function ReportFeedPageInner() {
               />
             </div>
           ) : showTodos ? (
-            <div className="flex-1 min-h-0 rounded-2xl border border-[var(--line)] bg-white shadow-sm overflow-hidden flex flex-col">
+            <div className="flex-1 min-h-0 rounded-2xl border border-[var(--line)] bg-white overflow-hidden flex flex-col">
               <TodoPanel />
             </div>
           ) : activeTopic ? (
-            <div className="flex-1 min-h-0 rounded-2xl border border-[var(--line)] bg-white shadow-sm overflow-hidden flex flex-col">
+            <div className="flex-1 min-h-0 rounded-2xl border border-[var(--line)] bg-white overflow-hidden flex flex-col">
               <div className="shrink-0">
                 {/* Row 1 — identity: logo/name/description on the left,
                     member count + settings gear on the right (R1/R4: two
@@ -614,7 +614,7 @@ function ReportFeedPageInner() {
                 {/* Filter bar (1.3) — was the biggest gap in the whole page:
                     the room's own feed had no filtering at all before this. */}
                 {activeTab === "posts" && (
-                  <div className="px-5 py-2 border-t border-[var(--line)] flex items-center justify-between gap-2 flex-wrap">
+                  <div className="px-5 py-2 border-t border-[var(--line)]/60 flex items-center justify-between gap-2 flex-wrap">
                     <PostFilterBar
                       filters={filters}
                       onChange={setFilters}
@@ -660,7 +660,7 @@ function ReportFeedPageInner() {
               )}
             </div>
           ) : (
-            <div className="flex-1 rounded-2xl border border-[var(--line)] bg-white shadow-sm flex flex-col items-center justify-center gap-2 text-[var(--ink-soft)]">
+            <div className="flex-1 rounded-2xl border border-[var(--line)] bg-white flex flex-col items-center justify-center gap-2 text-[var(--ink-soft)]">
               <MessageSquareText className="h-8 w-8" />
               <p className="text-sm">ยังไม่มีหัวข้อ — กด + ทางซ้ายเพื่อเริ่มต้น</p>
             </div>
@@ -685,7 +685,7 @@ function PendingTopicsPanel({
 }) {
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <div className="shrink-0 px-5 pt-3.5 pb-2.5 flex items-center gap-2.5 border-b border-[var(--line)]">
+      <div className="shrink-0 px-5 pt-3.5 pb-2.5 flex items-center gap-2.5 border-b border-[var(--line)]/60">
         <span className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-amber-50 text-[var(--chart-amber)]">
           <Clock className="h-4 w-4" />
         </span>
@@ -751,7 +751,7 @@ function TodoPanel() {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <div className="shrink-0 px-5 pt-3.5 pb-2.5 flex items-center gap-2.5 justify-between border-b border-[var(--line)]">
+      <div className="shrink-0 px-5 pt-3.5 pb-2.5 flex items-center gap-2.5 justify-between border-b border-[var(--line)]/60">
         <div className="flex items-center gap-2.5">
           <span className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-orange-50 text-[var(--chart-amber)]">
             <ListTodo className="h-4 w-4" />
@@ -864,7 +864,7 @@ function TodayStatusPanel({
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <div className={cn("shrink-0 px-5 pt-3.5 pb-2.5 flex items-center gap-2.5 border-b border-[var(--line)]")}>
+      <div className={cn("shrink-0 px-5 pt-3.5 pb-2.5 flex items-center gap-2.5 border-b border-[var(--line)]/60")}>
         <span className={cn("shrink-0 flex h-8 w-8 items-center justify-center rounded-full", meta.iconBg)} style={{ color: meta.iconColor }}>
           <Icon className="h-4 w-4" />
         </span>

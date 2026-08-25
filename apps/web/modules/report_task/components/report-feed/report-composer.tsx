@@ -46,7 +46,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   const canPost = topic.postPermission !== "managersOnly" || canManage(viewingAsUserId);
   if (!canPost) {
     return (
-      <div className="shrink-0 border-t border-[var(--line)] bg-[var(--bg-soft)]/60 px-5 py-3.5 flex items-center gap-2 text-sm text-[var(--ink-soft)]">
+      <div className="shrink-0 border-t border-[var(--line)]/60 bg-[var(--bg-soft)]/60 px-5 py-3.5 flex items-center gap-2 text-sm text-[var(--ink-soft)]">
         <Lock className="h-4 w-4 shrink-0" />
         เฉพาะผู้ดูแลโพสต์ในหัวข้อนี้ได้
       </div>
@@ -97,7 +97,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
 
   if (!expanded) {
     return (
-      <div className="shrink-0 border-t border-[var(--line)] bg-white px-5 py-3.5">
+      <div className="shrink-0 border-t border-[var(--line)]/60 bg-white px-5 py-3.5">
         <button
           data-tour="composer-trigger"
           onClick={() => setExpanded(true)}
@@ -114,7 +114,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
 
   return (
     <div
-      className="shrink-0 border-t border-[var(--line)] bg-white overflow-hidden"
+      className="shrink-0 border-t border-[var(--line)]/60 bg-white overflow-hidden"
       // P4 — Ctrl/⌘+Enter submits from anywhere in the composer (title,
       // section bullets, ...), same shortcut as the reply box's plain Enter.
       onKeyDown={(e) => {
@@ -156,7 +156,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
         />
       </div>
 
-      <div className="flex items-center justify-end gap-2.5 px-5 py-3 mt-1 border-t border-[var(--line)] bg-[var(--bg-soft)]/40">
+      <div className="flex items-center justify-end gap-2.5 px-5 py-3 mt-1 border-t border-[var(--line)]/60 bg-[var(--bg-soft)]/40">
         {/* P3 — why the button's disabled, not just that it is. */}
         {!busy && (!title.trim() || missingRequiredImage) && (
           <p className="text-xs text-[var(--ink-soft)] mr-auto">

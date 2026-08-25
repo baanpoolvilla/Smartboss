@@ -398,7 +398,13 @@ export function ReportCard({
         // hover, reading as plainer/less finished next to everything else.
         // p-5 (was p-4) for a touch more breathing room per element.
         "group/post relative rounded-2xl border p-5 shadow-sm transition-colors duration-[1200ms] ease-out",
-        highlighted || flashTargetId === post.id ? "bg-[var(--accent)] border-[var(--brand-green)]/40" : "bg-white border-[var(--line)]",
+        // /70 at rest (not the resting default in most cards, which stays
+        // solid) — a whole feed of these stacked was reading as one boxed
+        // card after another rather than a flowing conversation ("ควรดูเป็น
+        // feed ที่ลื่นไหลมากกว่ากล่องสี่เหลี่ยมแข็งๆ"); [data-slot="card"]'s
+        // hover rule still lands on the full-strength line + shadow/lift, so
+        // the frame still reads clearly the moment it's actually relevant.
+        highlighted || flashTargetId === post.id ? "bg-[var(--accent)] border-[var(--brand-green)]/40" : "bg-white border-[var(--line)]/70",
         // Unread reads as a left accent + a dot under the author's name (see
         // below) instead of a background tint — a background collided with
         // `highlighted`'s bg-accent (both fighting for the same visual slot).
@@ -637,7 +643,7 @@ export function ReportCard({
           them). Getting this backwards (hiding replies too) was the first
           pass at this — a real Teams screenshot showing replies rendered
           in full caught it. */}
-      <div className="space-y-3 pt-3 mt-3 border-t border-[var(--line)]">
+      <div className="space-y-3 pt-3 mt-3 border-t border-[var(--line)]/60">
           {post.replies.length > 0 && (
             <>
               {post.replies.length > RECENT_REPLY_COUNT && !repliesExpanded && (
@@ -648,7 +654,7 @@ export function ReportCard({
                   ดูความคิดเห็นก่อนหน้า {post.replies.length - RECENT_REPLY_COUNT} รายการ
                 </button>
               )}
-              <div className="divide-y divide-[var(--line)]">
+              <div className="divide-y divide-[var(--line)]/60">
                 {(repliesExpanded ? post.replies : post.replies.slice(-RECENT_REPLY_COUNT)).map((r) => (
                   <ReportReply
                     key={r.id}

@@ -629,16 +629,29 @@ export function TopicSidebar({
   return (
     <div
       className={cn(
-        "w-full lg:w-[280px] lg:h-full lg:shrink-0 rounded-2xl border border-[var(--line)] bg-white shadow-sm flex flex-col min-h-0 overflow-hidden",
+        // Border only, no shadow — sitting right next to the room panel
+        // (also border-only now, see page.tsx), a border+shadow combo on
+        // both read as two competing "this is a boxed thing" signals side
+        // by side instead of one calm, flat line between them.
+        "w-full lg:w-[280px] lg:h-full lg:shrink-0 rounded-2xl border border-[var(--line)] bg-white flex flex-col min-h-0 overflow-hidden",
         fillHeight ? "h-full border-none rounded-none shadow-none" : "h-64"
       )}
     >
-      <div className="flex items-center justify-between gap-2 px-4 py-4 border-b border-[var(--line)]">
+      {/* Header separated by spacing (extra bottom padding) instead of a
+          border-b now — one less hard rule stacking on top of the section
+          divider just below it and the card's own outer border, all three
+          of which used to draw in the same tight space. */}
+      <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-2">
         <p className="text-[15px] font-semibold">หัวข้อทั้งหมด</p>
         {canManageTopics && (
           <Button
             size="sm"
-            className="h-8 gap-1 rounded-full bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white px-3.5 text-xs transition-transform active:scale-[0.99]"
+            variant="outline"
+            // Outline instead of a solid fill — a filled button read as
+            // heavier/more opaque than the rest of this now-lighter panel
+            // ("ปุ่มไม่ต้องใหญ่หรือทึบเกินไป"); still unmistakably the
+            // primary action here via the brand-colored border/text.
+            className="h-8 gap-1 rounded-full border-[var(--brand-green)]/50 text-[var(--brand-green-dark)] hover:bg-[var(--accent)] hover:border-[var(--brand-green)] px-3.5 text-xs transition-transform active:scale-[0.99]"
             onClick={() => openCreate()}
           >
             <Plus className="h-3.5 w-3.5" />
@@ -647,7 +660,7 @@ export function TopicSidebar({
         )}
       </div>
 
-      <div className="px-2.5 pt-2.5">
+      <div className="px-2.5 pt-1">
         <p className="px-2.5 pb-1 text-[11px] font-semibold text-[var(--ink-soft)] uppercase tracking-wide">มุมมองรวม</p>
         {/* Not a real topic — a merged read-across-everything view (see
             ReportAllPostsFeed), pinned above the tree since it isn't part
@@ -718,7 +731,12 @@ export function TopicSidebar({
             </span>
           )}
         </button>
-        <div className="my-2 border-t border-[var(--line)]" />
+        {/* Spacing instead of a full-contrast rule — a hairline this close
+            to the section above and the one below it read as one more hard
+            line in a panel already asked to feel less boxed-in. Still a
+            border, just faint enough to read as a gap between sections
+            rather than a divider. */}
+        <div className="my-3 border-t border-[var(--line)]/50" />
       </div>
 
       <div className="flex-1 overflow-y-auto px-2.5 pb-2.5 space-y-1">
@@ -726,7 +744,12 @@ export function TopicSidebar({
           <>
             <p className="px-2.5 pt-1 pb-1 text-[11px] font-semibold text-[var(--ink-soft)] uppercase tracking-wide">รายการโปรด</p>
             {favoriteTopics.map((t) => renderTopicRow(t))}
-            <div className="my-2 border-t border-[var(--line)]" />
+            {/* Spacing instead of a full-contrast rule — a hairline this close
+            to the section above and the one below it read as one more hard
+            line in a panel already asked to feel less boxed-in. Still a
+            border, just faint enough to read as a gap between sections
+            rather than a divider. */}
+        <div className="my-3 border-t border-[var(--line)]/50" />
           </>
         )}
         {topLevelRestTopics.map(renderTopicBranch)}
