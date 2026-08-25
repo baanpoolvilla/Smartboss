@@ -5,8 +5,10 @@ import { HR_PERMS } from "@/modules/hr/permissions";
 import {
   wfFetch,
   wfTry,
+  type BiometricEnrollment,
   type Company,
   type Device,
+  type Employment,
   type Paged,
 } from "@/modules/hr/lib/api";
 import {
@@ -21,8 +23,28 @@ import {
   inputClass,
 } from "@/modules/hr/components/ui";
 import { deviceTypeLabel, formatDateTime } from "@/modules/hr/lib/labels";
-import { createDeviceAction, revokeDeviceAction } from "../actions";
+import {
+  createDeviceAction,
+  deleteEnrollmentsAction,
+  revokeDeviceAction,
+} from "../actions";
 import { IssueTokenButton } from "./issue-token-button";
+import { EnrollFingerprintForm } from "./enroll-fingerprint-form";
+
+const FINGER_LABEL: Record<string, string> = {
+  RIGHT_THUMB: "นิ้วโป้งขวา",
+  RIGHT_INDEX: "นิ้วชี้ขวา",
+  RIGHT_MIDDLE: "นิ้วกลางขวา",
+  LEFT_THUMB: "นิ้วโป้งซ้าย",
+  LEFT_INDEX: "นิ้วชี้ซ้าย",
+  LEFT_MIDDLE: "นิ้วกลางซ้าย",
+};
+
+const ENROLL_STATUS: Record<string, { label: string; tone: string }> = {
+  PENDING: { label: "รอวางนิ้วที่เครื่อง", tone: "var(--tone-warn)" },
+  ACTIVE: { label: "ใช้งานได้", tone: "var(--tone-ok)" },
+  DELETED: { label: "ลบแล้ว", tone: "var(--tone-muted)" },
+};
 
 export default async function DevicesPage() {
   const session = await requireOrg();
@@ -33,9 +55,13 @@ export default async function DevicesPage() {
       title="เครื่องสแกน"
       permission={HR_PERMS.settingManage}
       load={async () => {
-        const [devices, companies] = await Promise.all([
+        const [devices, companies, employments, enrollments] = await Promise.all([
           wfFetch<Paged<Device>>("/devices"),
           wfTry<Paged<Company>>("/companies"),
+          // wfTry: คนที่ดูเครื่องได้อาจไม่มีสิทธิ์อ่านทะเบียนพนักงาน
+          // ปล่อยให้ 403 ล้มทั้งหน้าจะทำให้เข้าหน้าเครื่องสแกนไม่ได้เลย
+          wfTry<Paged<Employment>>("/employments"),
+          wfTry<Paged<BiometricEnrollment>>("/biometric-enrollments"),
         ]);
         const companyId = companies?.items[0]?.id;
 
@@ -43,6 +69,27 @@ export default async function DevicesPage() {
         if (companies !== null && companyId === undefined) {
           return <NotProvisioned what="ลงทะเบียนเครื่องสแกน" />;
         }
+
+        // สั่ง enroll ได้เฉพาะเครื่องที่ activate แล้ว — ฝั่ง API ปฏิเสธด้วย 409
+        // ถ้าเครื่องยังไม่ ACTIVE จึงไม่มีประโยชน์ที่จะให้เลือก
+        const enrollableDevices = devices.items.filter((d) => d.status === "ACTIVE");
+        const activeEmployments = (employments?.items ?? []).filter(
+          (e) => e.terminated_on === null,
+        );
+        const liveEnrollments = (enrollments?.items ?? []).filter(
+          (en) => en.status !== "DELETED",
+        );
+
+        // เดา slot ถัดไปให้ เพื่อไม่ให้ชนของเดิม (API ตอบ 409 ถ้า slot ซ้ำบนเครื่องเดียวกัน)
+        const nextSlot =
+          liveEnrollments.length === 0
+            ? 1
+            : Math.max(...liveEnrollments.map((en) => en.template_slot)) + 1;
+
+        const employmentName = new Map(
+          activeEmployments.map((e) => [e.id, `${e.employee_code} · ${e.full_name}`]),
+        );
+        const deviceCode = new Map(devices.items.map((d) => [d.id, d.device_code]));
 
         return (
           <>
@@ -138,6 +185,78 @@ export default async function DevicesPage() {
                 </tr>
               ))}
             </DataTable>
+            )}
+
+            {canManage && (
+              <SectionCard
+                title="ผูกลายนิ้วมือกับพนักงาน"
+                description="จนกว่า slot จะถูกผูก การสแกนจะถูกบันทึกแต่ไม่มีเจ้าของ และผลลงเวลาจะขึ้นว่าขาดงาน"
+                className="mt-6"
+              >
+                <EnrollFingerprintForm
+                  employments={activeEmployments.map((e) => ({
+                    id: e.id,
+                    label: `${e.employee_code} · ${e.full_name}`,
+                  }))}
+                  devices={enrollableDevices.map((d) => ({
+                    id: d.id,
+                    label: `${d.device_code}${d.name ? ` · ${d.name}` : ""}`,
+                  }))}
+                  nextSlot={nextSlot}
+                />
+
+                {liveEnrollments.length > 0 && (
+                  <div className="mt-4">
+                    <DataTable
+                      head={["พนักงาน", "เครื่อง", "Slot", "นิ้ว", "สถานะ", "ลงทะเบียนเมื่อ", "ลบ"]}
+                    >
+                      {liveEnrollments.map((en) => {
+                        const status = ENROLL_STATUS[en.status] ?? {
+                          label: en.status,
+                          tone: "var(--tone-muted)",
+                        };
+                        return (
+                          <tr key={en.id} className="hover:bg-(--bg-soft)">
+                            <Td className="font-medium">
+                              {employmentName.get(en.employment_id) ?? "—"}
+                            </Td>
+                            <Td className="font-mono text-xs">
+                              {deviceCode.get(en.device_id) ?? "—"}
+                            </Td>
+                            <Td className="font-mono">{en.template_slot}</Td>
+                            <Td>
+                              {en.finger_position
+                                ? (FINGER_LABEL[en.finger_position] ?? en.finger_position)
+                                : "—"}
+                            </Td>
+                            <Td>
+                              <Pill tone={status.tone}>{status.label}</Pill>
+                            </Td>
+                            <Td>{formatDateTime(en.enrolled_at)}</Td>
+                            <Td>
+                              <form action={deleteEnrollmentsAction}>
+                                <input
+                                  type="hidden"
+                                  name="employmentId"
+                                  value={en.employment_id}
+                                />
+                                <Button type="submit" size="sm" variant="danger">
+                                  ลบทุกเครื่อง
+                                </Button>
+                              </form>
+                            </Td>
+                          </tr>
+                        );
+                      })}
+                    </DataTable>
+                    <p className="mt-2 text-xs text-(--ink-soft)">
+                      workforce ลบลายนิ้วมือเป็นรายคนเสมอ ไม่ลบทีละเครื่อง —
+                      การเหลือนิ้วค้างอยู่เครื่องใดเครื่องหนึ่งหลังคนลาออก
+                      คือช่องให้ลงเวลาแทนกันได้
+                    </p>
+                  </div>
+                )}
+              </SectionCard>
             )}
           </>
         );

@@ -179,6 +179,22 @@ export interface Device {
   has_active_credential: boolean;
 }
 
+/** ลายนิ้วมือหนึ่งนิ้วที่ผูก slot บนเครื่องหนึ่งเครื่องเข้ากับสัญญาจ้างหนึ่งใบ */
+export interface BiometricEnrollment {
+  id: string;
+  employment_id: string;
+  device_id: string;
+  template_slot: number;
+  template_version: number;
+  quality: number | null;
+  finger_position: string | null;
+  /** PENDING = สั่งไปแล้วแต่เครื่องยังไม่ ack — ยังผูกการสแกนกับใครไม่ได้ */
+  status: "PENDING" | "ACTIVE" | "DELETED";
+  enrolled_at: string | null;
+  deleted_at: string | null;
+  created_at: string;
+}
+
 export interface PayrollRun {
   id: string;
   period_id: string;

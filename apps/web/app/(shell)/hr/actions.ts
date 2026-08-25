@@ -495,6 +495,83 @@ export async function issueDeviceTokenAction(
   }
 }
 
+/**
+ * ผลของการสั่งลงทะเบียนลายนิ้วมือ
+ *
+ * ต้องคืนเป็นค่า ไม่ใช่ throw — คำสั่งนี้ "สั่งแล้วยังไม่จบ" ผู้ใช้ต้องเดินไป
+ * วางนิ้วที่เครื่องต่อ ถ้าไม่บอกบนหน้าจอว่าสั่งสำเร็จและต้องทำอะไรต่อ
+ * จะไม่มีทางรู้เลยว่ากดติดหรือไม่ (เหมือนปัญหาปุ่มออกโทเคนเดิม)
+ */
+export interface EnrollState {
+  ok?: boolean;
+  slot?: number;
+  error?: string;
+}
+
+export async function requestEnrollmentAction(
+  _prev: EnrollState,
+  formData: FormData,
+): Promise<EnrollState> {
+  try {
+    await guard(HR_PERMS.settingManage);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "ไม่มีสิทธิ์ดำเนินการนี้" };
+  }
+
+  const employmentId = String(formData.get("employment_id") ?? "");
+  const deviceId = String(formData.get("device_id") ?? "");
+  const slot = Number(formData.get("template_slot"));
+
+  if (!employmentId) return { error: "กรุณาเลือกพนักงาน" };
+  if (!deviceId) return { error: "กรุณาเลือกเครื่องสแกน" };
+  if (!Number.isInteger(slot) || slot < 0 || slot > 65_535) {
+    return { error: "หมายเลข slot ต้องเป็นจำนวนเต็ม 0-65535" };
+  }
+
+  try {
+    await wfFetch("/biometric-enrollments", {
+      method: "POST",
+      body: {
+        employment_id: employmentId,
+        device_id: deviceId,
+        template_slot: slot,
+        finger_position: orNull(formData.get("finger_position")),
+        ttl_seconds: 600,
+      },
+    });
+  } catch (error) {
+    return { error: toMessage(error) };
+  }
+
+  revalidatePath("/hr/devices");
+  return { ok: true, slot };
+}
+
+/**
+ * ลบลายนิ้วมือของพนักงานออกจากทุกเครื่อง
+ *
+ * workforce ไม่มี endpoint ลบทีละ enrollment — ลบเป็นรายคนเสมอ (spec §6.2)
+ * เพราะการปล่อยให้เหลือนิ้วค้างอยู่เครื่องใดเครื่องหนึ่งหลังคนลาออก
+ * คือช่องให้ลงเวลาแทนกันได้
+ */
+export async function deleteEnrollmentsAction(formData: FormData) {
+  await guard(HR_PERMS.settingManage);
+  const employmentId = String(formData.get("employmentId") ?? "");
+  const reason =
+    String(formData.get("reason") ?? "").trim() || "ลบจากหน้าเครื่องสแกนของ Smartboss";
+  if (!employmentId) throw new Error("ไม่พบพนักงาน");
+
+  try {
+    await wfFetch(`/employments/${employmentId}/biometric-enrollments:delete`, {
+      method: "POST",
+      body: { reason },
+    });
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+  revalidatePath("/hr/devices");
+}
+
 export async function revokeDeviceAction(formData: FormData) {
   await guard(HR_PERMS.settingManage);
   const deviceId = String(formData.get("deviceId") ?? "");
