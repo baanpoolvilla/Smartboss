@@ -456,17 +456,43 @@ export async function createDeviceAction(formData: FormData) {
   revalidatePath("/hr/devices");
 }
 
-export async function issueDeviceTokenAction(formData: FormData) {
-  await guard(HR_PERMS.settingManage);
+/**
+ * ผลของการออกโทเคนผูกเครื่อง
+ *
+ * ต้องส่ง token กลับไปแสดงบนหน้าจอ ไม่ใช่ throw/void แบบ action ตัวอื่น —
+ * เพราะ **เซิร์ฟเวอร์เก็บแค่ hash** (`hashActivationToken`) ค่าจริงมีอยู่ครั้งเดียว
+ * ตอนตอบกลับ ถ้าไม่แสดงตรงนี้ก็ไม่มีทางรู้ค่าอีกเลย ต้องออกใบใหม่
+ */
+export interface IssueTokenState {
+  token?: string;
+  expiresAt?: string;
+  error?: string;
+}
+
+export async function issueDeviceTokenAction(
+  _prev: IssueTokenState,
+  formData: FormData,
+): Promise<IssueTokenState> {
+  try {
+    await guard(HR_PERMS.settingManage);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "ไม่มีสิทธิ์ดำเนินการนี้" };
+  }
+
   const deviceId = String(formData.get("deviceId") ?? "");
-  if (!deviceId) throw new Error("ไม่พบเครื่อง");
+  if (!deviceId) return { error: "ไม่พบเครื่อง" };
 
   try {
-    await wfFetch(`/devices/${deviceId}/activation-tokens`, { method: "POST" });
+    const result = await wfFetch<{ activation_token: string; expires_at: string }>(
+      `/devices/${deviceId}/activation-tokens`,
+      { method: "POST" },
+    );
+    // ไม่ revalidate — ไม่มีคอลัมน์ไหนบนตารางเปลี่ยนจนกว่าเครื่องจะ activate สำเร็จ
+    // และการ refresh จะล้าง token ที่เพิ่งแสดงทิ้งไปทั้งที่ผู้ใช้ยังไม่ได้คัดลอก
+    return { token: result.activation_token, expiresAt: result.expires_at };
   } catch (error) {
-    throw new Error(toMessage(error));
+    return { error: toMessage(error) };
   }
-  revalidatePath("/hr/devices");
 }
 
 export async function revokeDeviceAction(formData: FormData) {

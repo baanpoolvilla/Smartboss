@@ -21,11 +21,8 @@ import {
   inputClass,
 } from "@/modules/hr/components/ui";
 import { deviceTypeLabel, formatDateTime } from "@/modules/hr/lib/labels";
-import {
-  createDeviceAction,
-  issueDeviceTokenAction,
-  revokeDeviceAction,
-} from "../actions";
+import { createDeviceAction, revokeDeviceAction } from "../actions";
+import { IssueTokenButton } from "./issue-token-button";
 
 export default async function DevicesPage() {
   const session = await requireOrg();
@@ -126,12 +123,7 @@ export default async function DevicesPage() {
                   {canManage && (
                     <Td>
                       <div className="flex flex-wrap items-center gap-2">
-                        <form action={issueDeviceTokenAction}>
-                          <input type="hidden" name="deviceId" value={device.id} />
-                          <Button type="submit" size="sm" variant="outline">
-                            ออกโทเคนผูกเครื่อง
-                          </Button>
-                        </form>
+                        <IssueTokenButton deviceId={device.id} />
                         {device.has_active_credential && (
                           <form action={revokeDeviceAction}>
                             <input type="hidden" name="deviceId" value={device.id} />
