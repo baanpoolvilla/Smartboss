@@ -69,8 +69,15 @@ export function ReportTaskScaffold({
 
   const title = match?.label ?? reportTaskManifest.name;
 
-  // กระดาน Kanban จัดการ scroll เอง จึงให้เต็มพื้นที่แทนที่จะจำกัดความกว้าง
+  // กระดาน Kanban กับหน้ารายงาน (topic sidebar + feed สองแผงเลื่อนแยกกันเอง
+  // ข้างใน) จัดการ scroll ของตัวเองทั้งคู่ — ถ้าไม่ตั้ง fill ไว้ ตัวห่อของ
+  // AppScaffold จะไม่มีความสูงที่แน่นอนให้ `h-full`/`min-h-0` ข้างในอิง จึง
+  // ยุบเหลือแค่ความสูงเนื้อหาแล้วดันให้ทั้งหน้าเว็บเลื่อนแทน — เจอจริงที่หน้า
+  // รายงาน: แทนที่แผงหัวข้อ/ฟีดโพสต์จะเลื่อนอยู่ในกรอบตัวเอง กลับกลายเป็น
+  // ทั้งหน้าเลื่อนยาวเป็นพรืด ("มีเยอะๆเลื่อนหาตายเลย")
   const isBoard = pathname.startsWith(`${REPORT_TASK_BASE}/tasks`);
+  const isReportFeed = pathname.startsWith(`${REPORT_TASK_BASE}/report-feed`);
+  const selfScrolling = isBoard || isReportFeed;
 
   return (
     <>
@@ -85,7 +92,7 @@ export function ReportTaskScaffold({
           (สำคัญกับ error ที่มีเนื้อหายาวอย่าง "ยังติ๊ก checklist ไม่ครบ...") */}
       <Toaster position="top-center" closeButton />
 
-      <AppScaffold title={title} width="max-w-[1600px]" fill={isBoard} fillMaxWidth={isBoard}>
+      <AppScaffold title={title} width="max-w-[1600px]" fill={selfScrolling} fillMaxWidth={selfScrolling}>
         {children}
       </AppScaffold>
     </>
