@@ -316,17 +316,17 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
     const shortTitle = holiday?.title.split(" (")[0];
 
     const numberRow = (
-      // No-holiday days (the common case) center the number — event dots
-      // below are centered in their own cell (justify-center in
-      // renderEventContent), so a left-aligned number (flex's default
-      // start-alignment, with nothing else in the row to push against)
-      // sat visibly left of its own dot underneath it. That mismatch read
-      // as the whole dot "leaning" out from under its date every time,
-      // even though the dot itself was correctly centered — this was the
-      // real cause behind the reported crookedness, not the dot's own
-      // sizing/margin (verified fine via DevTools). A holiday day keeps the
-      // number left-anchored so the italic title reads naturally after it.
-      <div className={cn("flex items-baseline gap-1 min-w-0 w-full overflow-hidden", !holiday && "justify-center")}>
+      // Right-aligned always, on every day — a holiday used to sit
+      // left-anchored while every other day centered (so the number visibly
+      // jumped sideways cell to cell depending on whether that day happened
+      // to be a holiday). Anchoring to the end edge instead — the common
+      // calendar-app convention (Google/Apple both put the date number top-
+      // right of its cell) — gives every day the same fixed position
+      // regardless of what else is in the row: a holiday's flex-1 italic
+      // title already fills the leftover space and pushes the number to the
+      // end on its own, and a plain day with nothing else in the row is
+      // pushed there by justify-end, so both land in the exact same spot.
+      <div className="flex items-baseline justify-end gap-1 min-w-0 w-full overflow-hidden">
         {holiday &&
           (isNarrowViewport ? (
             <span
@@ -378,7 +378,13 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           {items.length > 0 && (
             // Today's number is plain-text-styled now, same box model as
             // every other day (see that CSS rule's own history) — no more
-            // per-day margin compensation needed here at all.
+            // per-day margin compensation needed here at all. Centered, not
+            // pinned to the same right edge as the date number above — tried
+            // that, but a single dot alone in the corner read as "leaning"
+            // off to the side rather than sitting under its date ("เหมือน
+            // เอียงๆไปขวา"). Centered grows outward symmetrically from the
+            // middle instead as more dots are added, which reads balanced
+            // whether there's one dot or four.
             <div className="flex flex-wrap items-center justify-center gap-0.5 px-0.5 pb-0.5">
               {items.slice(0, DOT_CAP).map((e) => (
                 <span
