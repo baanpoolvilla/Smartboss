@@ -524,6 +524,75 @@ export async function setRecurringPatternAction(
   return { ok: true };
 }
 
+/**
+ * สั่งคำนวณผลลงเวลาใหม่
+ *
+ * การสแกนถูกเก็บเป็น raw_time_events ทันที แต่ไม่กลายเป็น attendance_results เอง —
+ * ต้องมีคนสั่งคำนวณ ระบบถึงจะเอาไปเทียบกับกะแล้วสรุปว่าสาย/ขาด/OT กี่นาที
+ * หน้า "ผลลงเวลา" อ่านจากตารางผลลัพธ์ ไม่ได้อ่าน raw event ⇒ ถ้าไม่เคยสั่งคำนวณ
+ * จะขึ้น 0 ทุกช่องทั้งที่สแกนติดแล้ว ซึ่งอ่านแล้วนึกว่าเครื่องไม่ส่งข้อมูล
+ *
+ * API คำนวณทีละคน จึงต้องวนเองเมื่อเลือก "ทุกคน"
+ */
+export interface RecalcState {
+  ok?: boolean;
+  people?: number;
+  failed?: number;
+  error?: string;
+}
+
+export async function recalculateAttendanceAction(
+  _prev: RecalcState,
+  formData: FormData,
+): Promise<RecalcState> {
+  try {
+    await guard(HR_PERMS.employeeView);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "ไม่มีสิทธิ์ดำเนินการนี้" };
+  }
+
+  const target = String(formData.get("employment_id") ?? "");
+  const from = String(formData.get("from") ?? "");
+  const to = String(formData.get("to") ?? "");
+  if (!from || !to) return { error: "ไม่พบช่วงวันที่" };
+
+  let ids: string[];
+  if (target === "ALL") {
+    try {
+      const list = await wfFetch<Paged<{ id: string; terminated_on: string | null }>>(
+        "/employments",
+      );
+      ids = list.items.filter((e) => e.terminated_on === null).map((e) => e.id);
+    } catch (error) {
+      return { error: toMessage(error) };
+    }
+    if (ids.length === 0) return { error: "ยังไม่มีพนักงานในระบบ" };
+  } else {
+    if (!target) return { error: "กรุณาเลือกพนักงาน" };
+    ids = [target];
+  }
+
+  // ล้มทีละคน ไม่ล้มทั้งชุด — คนที่คำนวณสำเร็จต้องไม่ถูกทิ้งเพราะเพื่อนข้อมูลไม่ครบ
+  let failed = 0;
+  for (const employmentId of ids) {
+    try {
+      await wfFetch("/attendance-results:recalculate", {
+        method: "POST",
+        body: { employment_id: employmentId, from, to },
+      });
+    } catch {
+      failed += 1;
+    }
+  }
+
+  if (failed === ids.length) {
+    return { error: "คำนวณไม่สำเร็จสักคน — ตรวจว่าผูกกะให้พนักงานแล้วหรือยัง" };
+  }
+
+  revalidatePath("/hr/attendance");
+  return { ok: true, people: ids.length - failed, failed };
+}
+
 /* ═══════════════════ งวด timesheet ═══════════════════ */
 
 export async function createTimesheetPeriodAction(formData: FormData) {

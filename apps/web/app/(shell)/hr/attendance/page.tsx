@@ -15,6 +15,7 @@ import {
   Td,
 } from "@/modules/hr/components/ui";
 import { formatMinutes } from "@/modules/hr/lib/labels";
+import { RecalculateForm } from "./recalculate-form";
 
 function rangeForDays(days: number): { from: string; to: string } {
   const today = new Date();
@@ -53,8 +54,14 @@ export default async function AttendancePage({
 
         const t = summary.totals;
 
+        const activePeople = (employments?.items ?? [])
+          .filter((e) => e.terminated_on === null)
+          .map((e) => ({ id: e.id, label: `${e.employee_code} · ${e.full_name}` }));
+
         return (
           <>
+            <RecalculateForm people={activePeople} from={from} to={to} />
+
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <span className="text-xs text-(--ink-soft)">ช่วงเวลา:</span>
               {[7, 30, 90].map((d) => (
