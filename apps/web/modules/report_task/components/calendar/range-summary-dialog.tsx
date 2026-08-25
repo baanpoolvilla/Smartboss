@@ -156,11 +156,19 @@ export function RangeSummaryDialog({
 
         {tab === "work" ? (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {/* Task/meeting stats only — a day with only to-dos (a separate
+                category, not counted here) used to show all four tiles at a
+                flat 0 right above a list that clearly had items in it, which
+                read as broken rather than "just none of these two kinds".
+                Adding a 5th tile for to-dos when that section is showing
+                keeps the header honest about everything actually listed
+                below it. */}
+            <div className={cn("grid grid-cols-2 gap-2", showTodos ? "sm:grid-cols-5" : "sm:grid-cols-4")}>
               <Stat label="งานครบกำหนด" value={data.tasks.length} />
               <Stat label="เสร็จสิ้น" value={data.done} tone="good" />
               <Stat label="เลยกำหนด" value={data.overdue} tone="bad" />
               <Stat label="ประชุม" value={data.meetings.length} />
+              {showTodos && <Stat label="สิ่งที่ต้องทำ" value={data.todos.length} />}
             </div>
 
             <div className="max-h-72 overflow-y-auto space-y-3 mt-1">
