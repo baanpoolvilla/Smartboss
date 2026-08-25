@@ -37,20 +37,19 @@ export function CalendarRail() {
 
   return (
     <aside className="hidden lg:flex w-64 shrink-0 flex-col">
-      {/* A collapsed people list (most orgs) is way shorter than the
-          calendar next to it — capping with max-height alone let this box
-          shrink-wrap to that short content, so the two side-by-side cards
-          ended at very different heights and read as unbalanced. Setting an
-          explicit height (not just a cap) instead keeps this box the same
-          height as the calendar regardless of how many people are showing;
-          overflow-y still scrolls internally on the rare org big enough to
-          actually exceed it. */}
+      {/* Explicit height (not just a max-height cap) keeps this box the same
+          height as the calendar next to it regardless of how many people
+          are showing, and alwaysExpanded skips PeopleCalendarList's own
+          8-person collapse — together the box fills its full height with
+          real names instead of stopping at 8 and leaving the rest of a
+          tall box empty ("แสดงให้เต็มก่อนสิ"). overflow-y still scrolls
+          internally on the rare org too big to fit at all. */}
       <div
         ref={boxRef}
         className="rounded-xl border border-[var(--line)] bg-white p-4 overflow-y-auto"
         style={{ height: boxHeight }}
       >
-        <PeopleCalendarList singleColumn />
+        <PeopleCalendarList singleColumn alwaysExpanded />
       </div>
     </aside>
   );

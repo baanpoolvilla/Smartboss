@@ -19,7 +19,16 @@ function colorFor(index: number) {
 }
 
 /** Outlook-style "People's calendars" — toggle whose tasks/meetings/leave show. */
-export function PeopleCalendarList({ singleColumn = false }: { singleColumn?: boolean }) {
+export function PeopleCalendarList({
+  singleColumn = false,
+  // CalendarRail's box now has a real fixed height (matching the calendar
+  // next to it) with its own overflow-y:auto — collapsing at a flat 8
+  // regardless of that meant most orgs left a big dead gap under "ดูเพิ่มเติม"
+  // even though the box had plenty of room left ("แสดงให้เต็มก่อนสิ"). This
+  // shows the full list by default instead and leans on the box's own
+  // scroll for the rare org too big to fit — no fixed count involved.
+  alwaysExpanded = false,
+}: { singleColumn?: boolean; alwaysExpanded?: boolean }) {
   const hiddenUserIds = useCalendarVisibilityStore((s) => s.hiddenUserIds);
   const toggle = useCalendarVisibilityStore((s) => s.toggle);
   const showAll = useCalendarVisibilityStore((s) => s.showAll);
@@ -40,7 +49,8 @@ export function PeopleCalendarList({ singleColumn = false }: { singleColumn?: bo
   // Filtering narrows the list on its own — collapsing an already-filtered
   // result would just hide matches, so only collapse the unfiltered browse view.
   const filterActive = search.trim() !== "" || departmentId !== "all";
-  const visiblePeople = filterActive || expanded ? filtered : filtered.slice(0, COLLAPSED_COUNT);
+  const visiblePeople =
+    alwaysExpanded || filterActive || expanded ? filtered : filtered.slice(0, COLLAPSED_COUNT);
   const hiddenCount = filtered.length - visiblePeople.length;
   const allHidden = hiddenUserIds.length >= users.length;
 
@@ -112,7 +122,7 @@ export function PeopleCalendarList({ singleColumn = false }: { singleColumn?: bo
           })}
         </div>
       )}
-      {!filterActive && users.length > COLLAPSED_COUNT && (
+      {!alwaysExpanded && !filterActive && users.length > COLLAPSED_COUNT && (
         <button
           onClick={() => setExpanded((v) => !v)}
           className="flex items-center gap-1 mt-2 px-1.5 py-1 text-[11px] font-medium text-[var(--ink-soft)] hover:text-[var(--brand-green-dark)]"
