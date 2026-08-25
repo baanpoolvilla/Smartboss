@@ -396,7 +396,12 @@ export function ReportCard({
         // rounded-2xl/border/shadow-per-post treatment read as a stack of
         // separate boxes rather than one continuous feed once a room had
         // more than a couple of posts.
-        "group/post relative px-5 py-4 border-b border-[var(--line)]/70 transition-colors duration-200",
+        // py-6 (was py-4) — a real Teams screenshot circled the gap between
+        // one post's own "Reply in thread" link and the next post's header:
+        // noticeably more breathing room than between a post and its own
+        // replies, so separate posts read as distinct instead of running
+        // together into one confusing block ("แต่ละหัวข้อ...ไม่ดูงง").
+        "group/post relative px-5 py-6 border-b border-[var(--line)]/70 transition-colors duration-200",
         highlighted || flashTargetId === post.id ? "bg-[var(--accent)]" : "bg-white hover:bg-[var(--bg-soft)]/60",
         // Unread reads as a left accent + a dot under the author's name (see
         // below) instead of a background tint — a background collided with

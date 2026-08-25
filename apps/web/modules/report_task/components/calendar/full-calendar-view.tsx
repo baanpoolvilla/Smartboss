@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type CSSProperties } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
@@ -96,16 +96,6 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
   const [title, setTitle] = useState(initialTitle);
   const [currentDate, setCurrentDate] = useState<Date>(INITIAL_DATE);
   const [pickerOpen, setPickerOpen] = useState(false);
-  // How many week-rows the month grid is actually showing right now — 5 or 6
-  // depending on the month (fixedWeekCount stays false, see its own comment
-  // below), read straight off datesSet's activeStart/activeEnd instead of
-  // hardcoding 6. Feeds monthRowHeightPx just below: expandRows alone only
-  // grows a *short* row to fill leftover space, it doesn't shrink a *busy*
-  // row back down to match — so a quiet week (no events, just a date number)
-  // rendered visibly shorter than a busy one even with expandRows on. An
-  // explicit min-height, the same fixed number on every row, forces them
-  // level regardless of how much each one's own content needs.
-  const [monthRowCount, setMonthRowCount] = useState(6);
 
   // Fills whatever room is actually below the calendar's own position instead
   // of a flat 720px — on a typical desktop window that flat value pushed the
@@ -293,10 +283,6 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
     onViewDateChange?.(arg.view.currentStart);
     onRangeChange?.({ start: arg.view.currentStart, end: arg.view.currentEnd, viewType: arg.view.type as ViewKey });
     onActiveRangeChange?.({ start: arg.view.activeStart, end: arg.view.activeEnd });
-    if (arg.view.type === "dayGridMonth") {
-      const days = Math.round((arg.view.activeEnd.getTime() - arg.view.activeStart.getTime()) / 86400000);
-      setMonthRowCount(days / 7);
-    }
   }
 
   // Navigating months makes the grid re-render across several async frames,
@@ -591,7 +577,11 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
     <div
       ref={cardRef}
       className="rounded-xl border border-[var(--line)] bg-white p-3 sm:p-4 lg:flex lg:flex-col"
-      style={isDesktop ? { height: cardHeight } : undefined}
+      // Month view's own card no longer pins to cardHeight — it needs to
+      // grow with its (now uncapped) content instead of clipping it, and let
+      // the page scroll past whatever doesn't fit, same as the reference.
+      // Week/day/list keep the fixed dashboard-card height as before.
+      style={isDesktop && view !== "dayGridMonth" ? { height: cardHeight } : undefined}
     >
       <div ref={toolbarRef} className="flex flex-wrap items-center gap-3 pb-3 mb-3 lg:pb-2 lg:mb-2 lg:shrink-0 border-b border-[var(--line)]">
         <div className="flex items-center gap-1">
@@ -661,19 +651,16 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
         </div>
       </div>
 
-      {/* lg:overflow-hidden — a hard backstop on top of the fix above: if a
-          genuinely tiny window ever left too little room for dayMaxEvents'
-          worth of chips to fit a row's fair share, this clips rather than
-          letting the grid grow past gridHeight, so "stays exactly the same
-          size" holds even in that edge case, not just the common one. */}
+      {/* Month view no longer clips to a fixed dashboard-card height — asked
+          for explicitly, pointing at a reference calendar where every day
+          shows its full list of entries with no "+N รายการ" popup to click
+          through, and the page itself scrolls once there's more than fits
+          (see height/expandRows/dayMaxEvents below). Week/day/list views are
+          unaffected — they keep the fixed calendarHeight + clip they always
+          had, since they were never the ones capping content behind a link. */}
       <div
-        className="ebw-calendar lg:flex-1 lg:min-h-0 lg:overflow-hidden"
+        className={cn("ebw-calendar lg:flex-1 lg:min-h-0", view !== "dayGridMonth" && "lg:overflow-hidden")}
         ref={wrapperRef}
-        style={
-          !(isNarrowViewport && view === "dayGridMonth")
-            ? ({ "--ebw-row-height": `${(isDesktop ? (gridHeight ?? calendarHeight) : calendarHeight) / monthRowCount}px` } as CSSProperties)
-            : undefined
-        }
       >
         <FullCalendar
           ref={calendarRef}
@@ -681,28 +668,17 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           initialView="dayGridMonth"
           headerToolbar={false}
           locale={thGregorianLocale}
-          // Fixed height (computed above from the actual viewport) on wide
-          // screens so busy vs empty months stay the same size and the page
-          // can't bounce the scroll on navigation. Narrow month view went
-          // through both extremes — "auto" + no expandRows (compact, but a
-          // phone was left scrolling to see the last row), then forcing
-          // full-height expandRows to fix that (but rows then stretched
-          // with mostly-dead space under a couple of dots, "เปลืองพื้นที่...
-          // ใช้ครึ่งเดียวเอง") — settling on "auto" without expandRows:
-          // compact rows sized to their real content, which on a normal
-          // month is short enough to need no scroll anyway, without
-          // artificially inflating light rows to fill the screen.
-          // Desktop (≥1024px) uses gridHeight — the wrapper's own measured
-          // pixel height (it fills the lg:flex-1 space left over after the
-          // toolbar/hint text inside the card's fixed cardHeight) — instead
-          // of calendarHeight, and specifically not the string "100%" (see
-          // gridHeight's own comment for why that broke row equalization).
-          height={isNarrowViewport && view === "dayGridMonth" ? "auto" : isDesktop ? (gridHeight ?? calendarHeight) : calendarHeight}
-          expandRows={!(isNarrowViewport && view === "dayGridMonth")}
+          // Month view: "auto" + no expandRows — every row sized to its own
+          // real content (a busy week taller than a quiet one, same as the
+          // reference), with the page scrolling past whatever doesn't fit the
+          // screen instead of a fixed card clipping/capping it. Week/day/list
+          // keep the old fixed-height dashboard-card treatment (gridHeight on
+          // desktop, calendarHeight elsewhere) — those never had the "+N
+          // รายการ" popup this was about in the first place.
+          height={view === "dayGridMonth" ? "auto" : isDesktop ? (gridHeight ?? calendarHeight) : calendarHeight}
+          expandRows={view !== "dayGridMonth"}
           // Show exactly 5 or 6 rows depending on the actual month, not
-          // always padded to 6 — combined with expandRows + the fixed total
-          // height above, a 5-row month gets taller rows and a 6-row month
-          // gets narrower ones, instead of every month eating a wasted 6th row.
+          // always padded to 6 — a 5-row month doesn't waste a blank 6th row.
           fixedWeekCount={false}
           events={fcEvents}
           eventClick={handleEventClick}
@@ -731,14 +707,14 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           // same pale-chip treatment.
           eventDisplay={view === "dayGridMonth" ? (isNarrowViewport ? "list-item" : "block") : "auto"}
           eventContent={renderEventContent}
-          // Month view: a fixed cap of 2 events per day, then "+N รายการ" —
-          // asked for explicitly to match a reference mockup where every day
-          // reads the same way regardless of row height, rather than `true`'s
-          // auto-fit (which let a taller 5-week month's rows show 3-4 events
-          // on one day and 2 on another, an inconsistent count day to day).
-          // Week/day/list keep auto-fit — those don't stack multiple events
-          // per cell the same way, so a fixed cap doesn't apply there.
-          dayMaxEvents={view === "dayGridMonth" ? 2 : isNarrowViewport ? 3 : true}
+          // Desktop month view: no cap at all now — asked for explicitly,
+          // pointing at a reference calendar where every day shows its full
+          // list with nothing hidden behind a "+N รายการ" click (see the
+          // wrapper's own comment above for the matching height/expandRows
+          // change that lets rows actually grow to fit). Narrow mobile month
+          // keeps its cap of 3 — a phone screen has nowhere to grow into, and
+          // week/day/list keep their own auto-fit, unrelated to this.
+          dayMaxEvents={view === "dayGridMonth" ? (isNarrowViewport ? 3 : false) : isNarrowViewport ? 3 : true}
           eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
           // "+N more" opens the same day popup as clicking the date itself
           // instead of FullCalendar's own bare popover — one consistent
