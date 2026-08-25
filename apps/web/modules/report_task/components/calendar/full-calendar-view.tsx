@@ -89,6 +89,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
 }, ref) {
   const calendarRef = useRef<FullCalendar | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
   const [view, setView] = useState<ViewKey>("dayGridMonth");
   const [title, setTitle] = useState(initialTitle);
   const [currentDate, setCurrentDate] = useState<Date>(INITIAL_DATE);
@@ -110,6 +111,13 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
   // (already wired up here via onDateClick's day-summary popup). Desktop
   // keeps the full pill unchanged.
   const [isNarrowViewport, setIsNarrowViewport] = useState(false);
+  // ≥1024px (lg) only — CalendarRail (the "คนในองค์กร" card) shows up at the
+  // exact same breakpoint. This card's *own* outer height gets pinned to
+  // match it there (see cardHeight below) so the two cards start and end on
+  // the same Y, dashboard-style, instead of the calendar's card shrink-
+  // wrapping to its grid and ending well short of the rail's height.
+  const [isDesktop, setIsDesktop] = useState(false);
+  const [cardHeight, setCardHeight] = useState<number>();
   useEffect(() => {
     function computeLayout() {
       const top = wrapperRef.current?.getBoundingClientRect().top ?? 0;
@@ -138,6 +146,17 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
       // same 32px here too.
       setCalendarHeight(Math.max(360, Math.round(window.innerHeight - top - 32 - bottomNavHeight)));
       setIsNarrowViewport(window.innerWidth < 640);
+
+      const desktop = window.innerWidth >= 1024;
+      setIsDesktop(desktop);
+      if (desktop) {
+        // Same top-based formula and 32px bottom margin CalendarRail uses
+        // for its own box — matching the exact same math (not just "close")
+        // is what actually guarantees the two cards land on the same
+        // bottom edge instead of merely being similar heights.
+        const cardTop = cardRef.current?.getBoundingClientRect().top ?? 0;
+        setCardHeight(Math.max(360, Math.round(window.innerHeight - cardTop - 32)));
+      }
     }
     computeLayout();
     window.addEventListener("resize", computeLayout);
@@ -528,8 +547,12 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
   }
 
   return (
-    <div className="rounded-xl border border-[var(--line)] bg-white p-3 sm:p-4">
-      <div className="flex flex-wrap items-center gap-3 pb-3 mb-3 border-b border-[var(--line)]">
+    <div
+      ref={cardRef}
+      className="rounded-xl border border-[var(--line)] bg-white p-3 sm:p-4 lg:flex lg:flex-col"
+      style={isDesktop ? { height: cardHeight } : undefined}
+    >
+      <div className="flex flex-wrap items-center gap-3 pb-3 mb-3 lg:pb-2 lg:mb-2 lg:shrink-0 border-b border-[var(--line)]">
         <div className="flex items-center gap-1">
           <Button
             variant="outline"
@@ -597,7 +620,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
         </div>
       </div>
 
-      <div className="ebw-calendar" ref={wrapperRef}>
+      <div className="ebw-calendar lg:flex-1 lg:min-h-0" ref={wrapperRef}>
         <FullCalendar
           ref={calendarRef}
           plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
@@ -615,7 +638,13 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           // compact rows sized to their real content, which on a normal
           // month is short enough to need no scroll anyway, without
           // artificially inflating light rows to fill the screen.
-          height={isNarrowViewport && view === "dayGridMonth" ? "auto" : calendarHeight}
+          // Desktop (≥1024px) uses "100%" instead of the calendarHeight
+          // pixel number — it fills the lg:flex-1 wrapper above, which
+          // itself is sized by the card's own fixed cardHeight, so rows
+          // redistribute (expandRows below) to exactly whatever's left
+          // after the toolbar/hint text, matching the rail's height instead
+          // of the two drifting apart by however tall those happen to be.
+          height={isNarrowViewport && view === "dayGridMonth" ? "auto" : isDesktop ? "100%" : calendarHeight}
           expandRows={!(isNarrowViewport && view === "dayGridMonth")}
           // Show exactly 5 or 6 rows depending on the actual month, not
           // always padded to 6 — combined with expandRows + the fixed total
@@ -680,7 +709,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           most of what read as "wasted space" below the grid itself (asked
           for explicitly: "เอาแค่ที่กรอบให้พอ...มันเปลืองมาก"). Desktop keeps
           the full line unchanged. */}
-      <p className="hidden sm:flex items-center gap-1.5 text-xs text-[var(--ink-soft)] mt-3 pt-3 border-t border-[var(--line)]">
+      <p className="hidden sm:flex items-center gap-1.5 text-xs text-[var(--ink-soft)] mt-3 pt-3 lg:mt-2 lg:pt-2 lg:shrink-0 border-t border-[var(--line)]">
         <MousePointerClick className="h-3.5 w-3.5" />
         {addHint} · คีย์ลัด: <kbd className="rounded border border-[var(--line)] bg-[var(--bg-soft)] px-1">C</kbd> สร้าง ·{" "}
         <kbd className="rounded border border-[var(--line)] bg-[var(--bg-soft)] px-1">T</kbd> วันนี้ ·{" "}
