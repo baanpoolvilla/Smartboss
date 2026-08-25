@@ -593,6 +593,81 @@ export async function recalculateAttendanceAction(
   return { ok: true, people: ids.length - failed, failed };
 }
 
+/* ═══════════════════ วันหยุด ═══════════════════ */
+
+/**
+ * เพิ่มวันหยุด — สร้างปฏิทินให้อัตโนมัติถ้ายังไม่มี
+ *
+ * ผู้ใช้ไม่ควรต้องรู้จักคำว่า "ปฏิทินวันหยุด" ก่อนจะลงวันหยุดได้สักวัน
+ * ทุกบริษัทใช้ใบเดียว (findHoliday จับคู่ด้วย company_id ไม่สนว่าปฏิทินไหน)
+ * การให้เลือกปฏิทินจึงเป็นตัวเลือกที่ไม่มีความหมายกับผู้ใช้
+ */
+export interface HolidayState {
+  ok?: boolean;
+  added?: string;
+  error?: string;
+}
+
+export async function addHolidayAction(
+  _prev: HolidayState,
+  formData: FormData,
+): Promise<HolidayState> {
+  try {
+    await guard(HR_PERMS.settingManage);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "ไม่มีสิทธิ์ดำเนินการนี้" };
+  }
+
+  const companyId = String(formData.get("company_id") ?? "");
+  const date = String(formData.get("holiday_date") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  if (!companyId) return { error: "ยังไม่มีบริษัทในระบบ workforce" };
+  if (!date) return { error: "กรุณาเลือกวันที่" };
+  if (!name) return { error: "กรุณาตั้งชื่อวันหยุด" };
+
+  try {
+    const existing = await wfFetch<Paged<{ id: string; company_id: string }>>(
+      `/holiday-calendars?company_id=${companyId}`,
+    );
+    let calendarId = existing.items[0]?.id;
+
+    if (calendarId === undefined) {
+      const created = await wfFetch<{ id: string }>("/holiday-calendars", {
+        method: "POST",
+        body: { company_id: companyId, code: "MAIN", name: "วันหยุดบริษัท" },
+      });
+      calendarId = created.id;
+    }
+
+    await wfFetch(`/holiday-calendars/${calendarId}/dates`, {
+      method: "POST",
+      body: {
+        dates: [
+          { holiday_date: date, name, paid: formData.get("paid") !== "0" },
+        ],
+      },
+    });
+  } catch (error) {
+    return { error: toMessage(error) };
+  }
+
+  revalidatePath("/hr/holidays");
+  return { ok: true, added: date };
+}
+
+export async function deleteHolidayAction(formData: FormData) {
+  await guard(HR_PERMS.settingManage);
+  const id = String(formData.get("holidayDateId") ?? "");
+  if (!id) throw new Error("ไม่พบวันหยุด");
+
+  try {
+    await wfFetch(`/holiday-dates/${id}/delete`, { method: "POST" });
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+  revalidatePath("/hr/holidays");
+}
+
 /* ═══════════════════ งวด timesheet ═══════════════════ */
 
 export async function createTimesheetPeriodAction(formData: FormData) {

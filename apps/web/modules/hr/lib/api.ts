@@ -180,6 +180,28 @@ export interface Device {
 }
 
 /**
+ * ปฏิทินวันหยุดของบริษัท
+ *
+ * ผูกที่ระดับบริษัท ไม่ใช่รายคน — findHoliday() จับคู่ด้วย company_id
+ * ⇒ ลงวันหยุดหนึ่งครั้งมีผลกับพนักงานทุกคนในบริษัทนั้น
+ */
+export interface HolidayCalendar {
+  id: string;
+  company_id: string;
+  code: string;
+  name: string;
+  dates: HolidayDate[];
+}
+
+export interface HolidayDate {
+  id: string;
+  holiday_date: string;
+  name: string;
+  /** true = วันหยุดมีค่าจ้าง (ตั้งต้น) · false = หยุดแต่ไม่จ่าย */
+  paid: boolean;
+}
+
+/**
  * เหตุที่ทำให้วันนั้นคำนวณผลลงเวลาไม่ได้หรือได้ไม่ครบ
  *
  * blocking = true คือคำนวณต่อไม่ได้จริง ๆ ไม่ใช่แค่เตือน

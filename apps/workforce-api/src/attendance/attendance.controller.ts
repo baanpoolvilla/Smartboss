@@ -131,6 +131,38 @@ export class SchedulingController {
     return this.service.publishRoster(requireUuid(rosterId, 'rosterId'));
   }
 
+  @Get('holiday-calendars')
+  @RequirePermissions('workforce.scheduling.read')
+  async listCalendars(
+    @Query('company_id') companyId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ): Promise<{ items: Record<string, unknown>[] }> {
+    return this.service.listHolidayCalendars({
+      ...(companyId === undefined ? {} : { companyId: requireUuid(companyId, 'company_id') }),
+      ...(from === undefined ? {} : { from }),
+      ...(to === undefined ? {} : { to }),
+    });
+  }
+
+  /**
+   * ลบวันหยุดหนึ่งวัน — ใช้ POST ไม่ใช่ DELETE เพราะต้องผ่าน @Idempotent()
+   * ซึ่งอ่าน Idempotency-Key แบบเดียวกับ mutation ตัวอื่น
+   *
+   * path เป็น /delete ไม่ใช่ :delete แบบ biometric-enrollments เพราะที่นี่
+   * suffix ต่อท้าย **พารามิเตอร์** ไม่ใช่ต่อท้าย segment คงที่ — ติดกันแล้ว
+   * router จะอ่านชื่อพารามิเตอร์เป็น "holidayDateId:delete"
+   */
+  @Post('holiday-dates/:holidayDateId/delete')
+  @HttpCode(200)
+  @RequirePermissions('workforce.scheduling.manage')
+  @Idempotent()
+  async deleteHolidayDate(
+    @Param('holidayDateId') holidayDateId: string,
+  ): Promise<{ deleted: number }> {
+    return this.service.deleteHolidayDate(requireUuid(holidayDateId, 'holidayDateId'));
+  }
+
   @Post('holiday-calendars')
   @HttpCode(201)
   @RequirePermissions('workforce.scheduling.manage')

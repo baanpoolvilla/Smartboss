@@ -486,6 +486,89 @@ export class SchedulingService {
     });
   }
 
+  /**
+   * ปฏิทินวันหยุดของบริษัท พร้อมวันหยุดในช่วงที่ขอ
+   *
+   * เดิมมีแต่ POST — ลงวันหยุดไปแล้วไม่มีทางดูว่าลงอะไรไว้บ้าง จึงลงซ้ำได้
+   * โดยไม่รู้ตัว และตรวจไม่ได้ว่าทำไมวันนั้นถึงไม่ถูกนับเป็นขาดงาน
+   *
+   * วันหยุดผูกที่ระดับบริษัท (findHoliday จับคู่ด้วย company_id) ⇒ มีผลกับทุกคน
+   */
+  async listHolidayCalendars(query: {
+    companyId?: string;
+    from?: string;
+    to?: string;
+  }): Promise<{ items: Record<string, unknown>[] }> {
+    return this.uow.run(async (uow) => {
+      const calendars = await uow.tx
+        .select()
+        .from(schema.holidayCalendars)
+        .where(
+          query.companyId === undefined
+            ? undefined
+            : eq(schema.holidayCalendars.companyId, query.companyId),
+        )
+        .orderBy(asc(schema.holidayCalendars.code));
+
+      const items: Record<string, unknown>[] = [];
+      for (const calendar of calendars) {
+        const filters = [eq(schema.holidayDates.calendarId, calendar.id)];
+        if (query.from !== undefined) {
+          filters.push(gte(schema.holidayDates.holidayDate, query.from));
+        }
+        if (query.to !== undefined) {
+          filters.push(lte(schema.holidayDates.holidayDate, query.to));
+        }
+
+        const dates = await uow.tx
+          .select()
+          .from(schema.holidayDates)
+          .where(and(...filters))
+          .orderBy(asc(schema.holidayDates.holidayDate));
+
+        items.push({
+          id: calendar.id,
+          company_id: calendar.companyId,
+          code: calendar.code,
+          name: calendar.name,
+          dates: dates.map((entry) => ({
+            id: entry.id,
+            holiday_date: entry.holidayDate,
+            name: entry.name,
+            paid: entry.paid,
+          })),
+        });
+      }
+      return { items };
+    });
+  }
+
+  /** ลบวันหยุดหนึ่งวัน — ลงผิดวันแล้วต้องแก้ได้ ไม่งั้นค้างอยู่ตลอดไป */
+  async deleteHolidayDate(holidayDateId: string): Promise<{ deleted: number }> {
+    return this.uow.run(async (uow) => {
+      const rows = await uow.tx
+        .select()
+        .from(schema.holidayDates)
+        .where(eq(schema.holidayDates.id, holidayDateId))
+        .limit(1);
+      const row = rows[0];
+      if (row === undefined) throw AppError.notFound('holiday date');
+
+      await uow.tx.delete(schema.holidayDates).where(eq(schema.holidayDates.id, holidayDateId));
+
+      await uow.audit({
+        action: 'scheduling.holiday-date.delete',
+        resourceType: 'holiday_date',
+        resourceId: holidayDateId,
+        outcome: 'SUCCESS',
+        before: { holiday_date: row.holidayDate, name: row.name },
+      });
+
+      // ผลลงเวลาที่คำนวณไปแล้วยังถือว่าวันนั้นเป็นวันหยุดอยู่ จนกว่าจะสั่งคำนวณใหม่
+      return { deleted: 1 };
+    });
+  }
+
   async createHolidayCalendar(input: {
     company_id: string;
     code: string;
