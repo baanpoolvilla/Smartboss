@@ -20,27 +20,35 @@ export function CalendarRail() {
   // though it was just clipped by the browser edge. Measuring this box's
   // own top, same approach FullCalendarView already uses for its height, so
   // the cap always matches how much room is actually left on screen.
-  const [maxHeight, setMaxHeight] = useState<number>();
+  const [boxHeight, setBoxHeight] = useState<number>();
   useEffect(() => {
-    function computeMaxHeight() {
+    function computeBoxHeight() {
       const top = boxRef.current?.getBoundingClientRect().top ?? 0;
       // 16px landed the box's own bottom edge flush against the viewport
       // edge — technically not overflowing anymore, but with zero breathing
       // room it still read as cramped/uncomfortable ("ให้เหลือเว้นไว้สักนิด").
       // A bit more slack below settles it clearly inside the fold.
-      setMaxHeight(Math.max(240, Math.round(window.innerHeight - top - 32)));
+      setBoxHeight(Math.max(240, Math.round(window.innerHeight - top - 32)));
     }
-    computeMaxHeight();
-    window.addEventListener("resize", computeMaxHeight);
-    return () => window.removeEventListener("resize", computeMaxHeight);
+    computeBoxHeight();
+    window.addEventListener("resize", computeBoxHeight);
+    return () => window.removeEventListener("resize", computeBoxHeight);
   }, []);
 
   return (
     <aside className="hidden lg:flex w-64 shrink-0 flex-col">
+      {/* A collapsed people list (most orgs) is way shorter than the
+          calendar next to it — capping with max-height alone let this box
+          shrink-wrap to that short content, so the two side-by-side cards
+          ended at very different heights and read as unbalanced. Setting an
+          explicit height (not just a cap) instead keeps this box the same
+          height as the calendar regardless of how many people are showing;
+          overflow-y still scrolls internally on the rare org big enough to
+          actually exceed it. */}
       <div
         ref={boxRef}
         className="rounded-xl border border-[var(--line)] bg-white p-4 overflow-y-auto"
-        style={{ maxHeight }}
+        style={{ height: boxHeight }}
       >
         <PeopleCalendarList singleColumn />
       </div>

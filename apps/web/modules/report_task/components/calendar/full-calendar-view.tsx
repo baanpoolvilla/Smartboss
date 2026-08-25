@@ -132,7 +132,11 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
       // supposed to avoid. Dropped to a much lower safety net that only
       // kicks in for extreme cases, so it actually follows real device
       // height instead of overriding it past a point.
-      setCalendarHeight(Math.max(360, Math.round(window.innerHeight - top - 24 - bottomNavHeight)));
+      // 24px left the calendar's own bottom edge flush against the browser/
+      // taskbar edge with no breathing room — same "ไม่ติดพื้นล่าง...เว้นไว้
+      // สักนิด" feedback as the rail's own bottom margin got, so it gets the
+      // same 32px here too.
+      setCalendarHeight(Math.max(360, Math.round(window.innerHeight - top - 32 - bottomNavHeight)));
       setIsNarrowViewport(window.innerWidth < 640);
     }
     computeLayout();
