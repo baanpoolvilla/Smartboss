@@ -24,12 +24,20 @@ export function ReportHeader({
   visibleTopics,
   onJumpToPost,
   onShowTodayStatus,
+  roomLabel,
 }: {
   visibleTopics: ReportTopic[];
   onJumpToPost: (topicId: string, postId: string) => void;
   /** Which pill was clicked — lands on the actual people behind that number
    * (see TodayStatusPanel in page.tsx), not a generic merged feed. */
   onShowTodayStatus: (status: "posted" | "late" | "missing") => void;
+  /** Name of the room/view currently open (a real topic's name, or one of
+   * the pinned merged views like "ภาพรวมทั้งหมด") — the title used to read
+   * a flat "รายงาน" no matter which room you were actually in, which on
+   * desktop (mobile at least had it in the "☰ หัวข้อ — ชื่อห้อง" button
+   * label) left no way to tell what page you were looking at from the
+   * header alone. undefined/null on first load before anything's picked. */
+  roomLabel?: string | null;
 }) {
   const posts = useReportFeedStore((s) => s.posts);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
@@ -49,7 +57,15 @@ export function ReportHeader({
 
   return (
     <PageHeader
-      title="รายงาน"
+      title={
+        roomLabel ? (
+          <>
+            รายงาน <span className="text-[var(--ink-soft)] font-normal">· {roomLabel}</span>
+          </>
+        ) : (
+          "รายงาน"
+        )
+      }
       subtitle="โพสต์อัปเดต พูดคุย แลกเปลี่ยน และสรุปงานในทีม — เหมือนแชนแนลใน Teams"
       action={
         <div className="flex items-center gap-1.5 flex-wrap w-full sm:w-auto">

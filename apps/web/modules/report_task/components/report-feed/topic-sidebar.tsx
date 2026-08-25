@@ -146,6 +146,7 @@ export function TopicSidebar({
   activeId,
   onSelect,
   fillHeight,
+  onOpenSettings,
 }: {
   /** Pre-filtered to what this viewer can see — see canSeeReportTopic in the parent page. */
   topics: ReportTopic[];
@@ -155,6 +156,12 @@ export function TopicSidebar({
    * split — for reuse inside the mobile topics Sheet (3.5.5), which already
    * gives it a definite height of its own to fill. */
   fillHeight?: boolean;
+  /** Opens the *full* room settings sheet (feedViewMode, post permissions,
+   * cutoffs, reminders, ...) for a topic straight from its row menu here —
+   * previously the only way in was the ⚙ icon next to the room title,
+   * which meant opening the room first. This menu's own "แก้ไขหัวข้อ" item
+   * is a lighter dialog (name/color/icon only), kept as-is alongside this. */
+  onOpenSettings?: (id: string) => void;
 }) {
   const posts = useReportFeedStore((s) => s.posts);
   const addTopic = useReportFeedStore((s) => s.addTopic);
@@ -188,6 +195,10 @@ export function TopicSidebar({
   // picker only appears once "หัวข้อย่อย" is chosen. Forced to "หัวข้อหลัก"
   // when there's nothing eligible to nest under yet.
   const [createKind, setCreateKind] = useState<"main" | "sub">("main");
+  // Create-only, same as createKind — chosen once here and never surfaced
+  // again as an editable field for this room afterward (see room-settings-
+  // sheet.tsx and feedViewMode's own comment on ReportTopic).
+  const [feedViewMode, setFeedViewMode] = useState<"stream" | "threads">("stream");
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Collapsed = chevron pointing right, hiding the sub-topics — every
@@ -216,6 +227,7 @@ export function TopicSidebar({
     setParentId(defaultParentId);
     setDescription("");
     setCreateKind(defaultParentId ? "sub" : "main");
+    setFeedViewMode("stream");
   }
 
   function openEdit(t: ReportTopic) {
@@ -273,6 +285,11 @@ export function TopicSidebar({
         parentId: effectiveParentId,
         description: trimmedDescription,
         visibility: parentVisibility,
+        // "stream" is the undefined-equivalent default (see feedViewMode's
+        // own comment) — stored as undefined here too so a newly-created
+        // Openchat room looks identical to any pre-existing stream room,
+        // not a different value that happens to mean the same thing.
+        feedViewMode: feedViewMode === "stream" ? undefined : "threads",
       });
       setEditor(null);
       onSelect(id);
@@ -566,6 +583,12 @@ export function TopicSidebar({
                   แก้ไขหัวข้อ
                 </DropdownMenuItem>
               )}
+              {canEditReportTopic(t.visibility, viewingAsUserId) && onOpenSettings && (
+                <DropdownMenuItem onClick={() => onOpenSettings(t.id)}>
+                  <Settings2 className="h-3.5 w-3.5" />
+                  ตั้งค่าห้อง
+                </DropdownMenuItem>
+              )}
               {depth > 0 && (
                 <DropdownMenuItem onClick={() => toggleHiddenTopic(t.id, viewingAsUserId)}>
                   {hiddenForMe ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
@@ -832,6 +855,50 @@ export function TopicSidebar({
                 </div>
               </div>
             </div>
+
+            {/* รูปแบบห้อง — create-only, matches the "Room Mode Picker" mockup:
+                chosen once here, then locked (see feedViewMode's own comment
+                on ReportTopic and room-settings-sheet.tsx). Rooms from before
+                FEED_VIEW_MODE_LOCK_CUTOFF never went through this and stay
+                editable in settings, so this section only exists in create mode. */}
+            {editor?.mode === "create" && (
+              <div className="rounded-xl border border-[var(--line)] overflow-hidden">
+                <p className="px-3.5 py-2 text-xs font-semibold bg-[var(--bg-soft)] border-b border-[var(--line)]">รูปแบบห้อง</p>
+                <div className="p-3.5 space-y-2.5">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFeedViewMode("threads")}
+                      className={cn(
+                        "flex flex-col gap-1 rounded-lg border px-3 py-2.5 text-left transition-colors",
+                        feedViewMode === "threads" ? "border-[var(--brand-green)] bg-[var(--accent)]" : "border-[var(--line)] hover:bg-[var(--bg-soft)]"
+                      )}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <span className="text-xs font-semibold">Thread</span>
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[var(--bg-soft)] text-[var(--ink-soft)]">Microsoft Teams</span>
+                      </span>
+                      <span className="text-[11px] text-[var(--ink-soft)] leading-snug">แต่ละหัวข้อยุบเป็นแถวเดียว เรียงตามความเคลื่อนไหวล่าสุด</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFeedViewMode("stream")}
+                      className={cn(
+                        "flex flex-col gap-1 rounded-lg border px-3 py-2.5 text-left transition-colors",
+                        feedViewMode === "stream" ? "border-[var(--brand-green)] bg-[var(--accent)]" : "border-[var(--line)] hover:bg-[var(--bg-soft)]"
+                      )}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <span className="text-xs font-semibold">Openchat</span>
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[var(--bg-soft)] text-[var(--ink-soft)]">Discord</span>
+                      </span>
+                      <span className="text-[11px] text-[var(--ink-soft)] leading-snug">ข้อความไหลต่อเนื่องเรียงเวลา เหมือนแชทกลุ่มทั่วไป</span>
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-[var(--ink-soft)]">🔒 เลือกแล้วแก้ไม่ได้ — เปลี่ยนได้เฉพาะห้องที่สร้างไว้ก่อนหน้านี้</p>
+                </div>
+              </div>
+            )}
 
             {/* รูปลักษณ์ — สีกับไอคอนอยู่ด้วยกัน เพราะเป็นสิ่งเดียวกันที่เห็นในพรีวิวด้านบน */}
             <div className="rounded-xl border border-[var(--line)] overflow-hidden">

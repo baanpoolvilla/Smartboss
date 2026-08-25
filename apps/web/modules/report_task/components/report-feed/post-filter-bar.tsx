@@ -102,6 +102,17 @@ export function PostFilterBar({
 
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
+      {/* Each chip already shows its own count/highlight, but on a narrow
+          row that wraps to 2-3 lines the ones further along could scroll out
+          of view — this small badge up front is the one thing always visible
+          that says "N ตัวกรองกำลังทำงานอยู่" at a glance, same idea as the
+          "(N)" badge report-all-posts-feed.tsx's own filter trigger already
+          shows ("กรอง(N) ให้ชัดเจนในหน้าการ์ด"). */}
+      {activeCount > 0 && (
+        <span className="flex items-center gap-1 rounded-full bg-[var(--brand-green-dark)] px-2 py-1 text-[11px] font-semibold text-white tabular-nums shrink-0">
+          กรองอยู่ {activeCount}
+        </span>
+      )}
       <DropdownMenu>
         <DropdownMenuTrigger
           render={

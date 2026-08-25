@@ -4,6 +4,14 @@ import { canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { extractMentionedIds } from "@/modules/report_task/lib/report-feed-rich-text";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 
+/** Rooms created at/after this pick their `feedViewMode` once in the
+ * create-room dialog and can't change it afterward (see that field's own
+ * comment); rooms from before stay fully editable in room-settings-sheet.tsx
+ * — an explicit cutoff instead of a boolean flag so it needs no migration
+ * of existing data, and reads directly off `createdAt`, which every topic
+ * already has. */
+export const FEED_VIEW_MODE_LOCK_CUTOFF = "2026-08-25T00:00:00.000Z";
+
 export interface ReportPostSection {
   id: string;
   heading: string;
@@ -153,11 +161,15 @@ export interface ReportTopic {
   postTemplateSections?: { heading: string }[];
   /** How many days a photo stays in the "ไฟล์" tab's rolling window — undefined = the app-wide default (FILES_TAB_WINDOW_DAYS). */
   filesRetentionDays?: number;
-  /** How this room's posts are laid out — "stream" (chat-log, default) or
-   * "threads" (forum thread list) — a room-wide setting, not a per-viewer
-   * preference: everyone in the room sees the same layout, decided by
-   * whoever can edit the room (see room-settings-sheet.tsx). Undefined =
-   * "stream", same as every room before this setting existed. */
+  /** How this room's posts are laid out — "stream" ("Openchat", chat-log,
+   * default) or "threads" ("Thread", forum thread list) — a room-wide
+   * setting, not a per-viewer preference: everyone in the room sees the
+   * same layout. For a room created before FEED_VIEW_MODE_LOCK_CUTOFF this
+   * is still editable anytime from room-settings-sheet.tsx (grandfathered —
+   * see that file's own comment); for a room created at/after it, this was
+   * chosen once in the create-room dialog (topic-sidebar.tsx) and the
+   * settings sheet only displays it read-only. Undefined = "stream", same
+   * as every room before this setting existed. */
   feedViewMode?: "stream" | "threads";
   /** Archived rooms drop out of the sidebar tree and topic pickers but keep
    * their data — recoverable (toggle off), unlike `removeTopic`. */
@@ -202,7 +214,16 @@ interface ReportFeedStore {
   albums: ReportAlbum[];
   /** True once ServerStoreSync's initial GET has resolved. */
   loaded: boolean;
-  addTopic: (data: { name: string; color?: string; icon?: string; logoUrl?: string; parentId?: string; description?: string; visibility?: ReportTopicVisibility }) => string;
+  addTopic: (data: {
+    name: string;
+    color?: string;
+    icon?: string;
+    logoUrl?: string;
+    parentId?: string;
+    description?: string;
+    visibility?: ReportTopicVisibility;
+    feedViewMode?: "stream" | "threads";
+  }) => string;
   removeTopic: (id: string) => void;
   updateTopicSettings: (
     id: string,
@@ -290,6 +311,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
               parentId: data.parentId,
               description: data.description,
               visibility: data.visibility,
+              feedViewMode: data.feedViewMode,
               createdAt: new Date().toISOString(),
               minImages: 0,
               cutoffs: [],

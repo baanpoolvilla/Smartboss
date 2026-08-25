@@ -10,13 +10,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/modules/report_task/components/ui/button";
 import { ReportTopicSettingsPanel } from "@/modules/report_task/components/report-feed/report-topic-settings-dialog";
 import { UNLIMITED_FILES_RETENTION_DAYS } from "@/modules/report_task/components/report-feed/report-topic-panels";
-import { useReportFeedStore, topicColors, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
+import { useReportFeedStore, topicColors, FEED_VIEW_MODE_LOCK_CUTOFF, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useActivityLogStore } from "@/modules/report_task/store/activity-log-store";
 import { canManage } from "@/modules/report_task/lib/directory";
 import { cn } from "@/modules/report_task/lib/utils";
 import { toast } from "sonner";
-import { Archive, ArchiveRestore, Plus, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Lock, Plus, Trash2 } from "lucide-react";
 
 const weekdayLabels = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 
@@ -365,24 +365,35 @@ export function RoomSettingsSheet({
                 "เป็น" อะไร ไม่ใช่แค่ค่าเริ่มต้นที่สลับได้ทีหลัง). */}
             <div className="flex items-center justify-between rounded-lg bg-[var(--bg-soft)] px-3 py-2.5">
               <div className="min-w-0 pr-3">
-                <p className="text-sm font-medium">รูปแบบการแสดงโพสต์</p>
+                <p className="text-sm font-medium">รูปแบบห้อง</p>
                 <p className="text-xs text-[var(--ink-soft)]">
-                  &quot;สตรีม&quot; = แชทเรียงเวลา เห็นเนื้อหาเต็ม · &quot;กระทู้&quot; = ย่อเป็นหัวข้อ
+                  &quot;Openchat&quot; = แชทเรียงเวลา เห็นเนื้อหาเต็ม · &quot;Thread&quot; = ย่อเป็นหัวข้อ
                   เรียงตามที่เพิ่งมีคนตอบล่าสุด — สมาชิกทุกคนในห้องเห็นแบบเดียวกัน
                 </p>
               </div>
-              <Select
-                value={draft.feedViewMode ?? "stream"}
-                onValueChange={(v) => v && patchDraft({ feedViewMode: v === "stream" ? undefined : (v as "threads") })}
-              >
-                <SelectTrigger className="w-28 shrink-0">
-                  <SelectValue>{draft.feedViewMode === "threads" ? "กระทู้" : "สตรีม"}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="stream">สตรีม</SelectItem>
-                  <SelectItem value="threads">กระทู้</SelectItem>
-                </SelectContent>
-              </Select>
+              {/* Locked (read-only) for a room created via the create-dialog's
+                  one-time picker — see FEED_VIEW_MODE_LOCK_CUTOFF's own
+                  comment. A room from before that still gets the live Select,
+                  exactly as it always has, so nothing changes for it. */}
+              {topic.createdAt >= FEED_VIEW_MODE_LOCK_CUTOFF ? (
+                <span className="flex items-center gap-1.5 shrink-0 rounded-lg bg-[var(--bg)] border border-[var(--line)] px-2.5 py-1.5 text-xs font-medium text-[var(--ink-soft)]">
+                  <Lock className="h-3 w-3" />
+                  {draft.feedViewMode === "threads" ? "Thread" : "Openchat"}
+                </span>
+              ) : (
+                <Select
+                  value={draft.feedViewMode ?? "stream"}
+                  onValueChange={(v) => v && patchDraft({ feedViewMode: v === "stream" ? undefined : (v as "threads") })}
+                >
+                  <SelectTrigger className="w-32 shrink-0">
+                    <SelectValue>{draft.feedViewMode === "threads" ? "Thread" : "Openchat"}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="stream">Openchat</SelectItem>
+                    <SelectItem value="threads">Thread</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             </div>
             <div className="flex items-center justify-between rounded-lg bg-[var(--bg-soft)] px-3 py-2.5">
               <div className="min-w-0 pr-3">

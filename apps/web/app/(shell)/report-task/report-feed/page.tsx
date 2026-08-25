@@ -186,6 +186,18 @@ function ReportFeedPageInner() {
   const showMentions = activeId === MENTIONS_ID;
   const showTodos = activeId === TODOS_ID;
   const activeTopic = useMemo(() => visibleTopics.find((t) => t.id === activeId), [visibleTopics, activeId]);
+  // Same labels the sidebar itself uses for these entries (topic-sidebar.tsx)
+  // — the header should never invent its own name for a view the sidebar
+  // already names something specific.
+  const roomLabel = showAllPosts
+    ? "ภาพรวมทั้งหมด"
+    : showPending
+      ? "ที่ฉันต้องส่ง"
+      : showMentions
+        ? "ที่กล่าวถึงฉัน"
+        : showTodos
+          ? "สิ่งที่ต้องทำ"
+          : (activeTopic?.name ?? null);
   const exemptions = useReportComplianceExemptions();
   // "ที่ฉันต้องส่ง" — same pendingToday() the sidebar badge counts, filtered
   // down to just this viewer, for the actual room list underneath the badge.
@@ -309,6 +321,14 @@ function ReportFeedPageInner() {
     setActiveTab("posts");
   }
 
+  // Opens the full settings sheet for a topic straight from its sidebar row
+  // menu — switches the active room to it first (the sheet reads `activeTopic`,
+  // not an id of its own) then opens the same sheet the ⚙ icon uses.
+  function openTopicSettings(id: string) {
+    selectView(id);
+    setRoomSettingsOpen(true);
+  }
+
   return (
     <div className="flex flex-col gap-6 h-full">
       <ReportHeader
@@ -318,6 +338,7 @@ function ReportFeedPageInner() {
           setHighlightPostId(postId);
         }}
         onShowTodayStatus={setTodayStatusFilter}
+        roomLabel={roomLabel}
       />
 
       {/* Below `lg`, "☰ หัวข้อ" opens the topic tree as a full-screen Sheet
@@ -344,6 +365,10 @@ function ReportFeedPageInner() {
                   selectView(id);
                   setMobileTopicsOpen(false);
                 }}
+                onOpenSettings={(id) => {
+                  openTopicSettings(id);
+                  setMobileTopicsOpen(false);
+                }}
               />
             </div>
           </SheetContent>
@@ -362,6 +387,7 @@ function ReportFeedPageInner() {
             topics={visibleTopics}
             activeId={activeId}
             onSelect={selectView}
+            onOpenSettings={openTopicSettings}
           />
         </div>
 
@@ -573,7 +599,7 @@ function ReportFeedPageInner() {
                     {activeTopic.feedViewMode === "threads" && (
                       <span className="flex items-center gap-1.5 text-xs font-medium text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-lg px-2.5 py-1 shrink-0">
                         <ListTree className="h-3.5 w-3.5" />
-                        มุมมองห้องนี้: กระทู้
+                        มุมมองห้องนี้: Thread
                       </span>
                     )}
                   </div>
