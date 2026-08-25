@@ -587,7 +587,20 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
         </div>
       </div>
 
-      <div className="ebw-calendar" ref={wrapperRef}>
+      {/* Narrow month view's grid now shrinks to genuinely square cells (see
+          theme.css's aspect-ratio fix), so at real phone heights it no
+          longer fills the screen the way the old tall/auto rows did — the
+          next section below (WorkSidebar's task list) started peeking a
+          sliver of itself into view right under the grid, which read as a
+          broken cut-off card rather than "scroll for more". Reserving the
+          same full remaining-viewport height here that the grid used to
+          fill on its own keeps that next section fully off-screen until an
+          actual scroll, same as opening the page always showed before. */}
+      <div
+        className="ebw-calendar"
+        ref={wrapperRef}
+        style={isNarrowViewport && view === "dayGridMonth" ? { minHeight: calendarHeight } : undefined}
+      >
         <FullCalendar
           ref={calendarRef}
           plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
