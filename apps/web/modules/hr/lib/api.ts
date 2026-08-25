@@ -130,8 +130,52 @@ export interface Me {
   tenant_id: string;
   subject: string;
   display_name: string;
+  /** null = บัญชีนี้ยังไม่ถูกผูกกับทะเบียนจ้างงาน — ขอลาให้ตัวเองไม่ได้ */
+  employment_id: string | null;
   permissions: string[];
   roles: { code: string; company_id: string | null }[];
+}
+
+export interface LeaveType {
+  id: string;
+  code: string;
+  name: string;
+  paid: boolean;
+  unit: "DAY" | "HALF_DAY" | "HOUR";
+}
+
+/**
+ * รายการวันหยุดของทีมสำหรับปฏิทินรวม
+ *
+ * เปิดให้ทุกคนที่เข้าระบบเห็น แต่ **ไม่มีเหตุผลและประเภทการลา** —
+ * "ลาป่วย" กับเหตุผลเป็นข้อมูลส่วนตัวที่เพื่อนร่วมงานไม่ต้องรู้
+ */
+export interface LeaveCalendarEntry {
+  id: string;
+  employment_id: string;
+  display_name: string;
+  employee_code: string;
+  starts_on: string;
+  ends_on: string;
+  status: "PENDING" | "APPROVED";
+}
+
+/**
+ * คำขอลาหนึ่งใบ
+ *
+ * เฉพาะใบที่ APPROVED เท่านั้นที่เข้าการคำนวณผลลงเวลา
+ * (attendance.service เรียก approvedMinutesByDate) ⇒ ใบที่ยังรออนุมัติ
+ * ยังถูกนับเป็นขาดงานอยู่ ต้องบอกให้ชัดบนหน้าจอ
+ */
+export interface LeaveRequest {
+  id: string;
+  employment_id: string;
+  leave_type_id: string;
+  starts_on: string;
+  ends_on: string;
+  total_minutes: number;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
+  reason: string | null;
 }
 
 export interface Employment {

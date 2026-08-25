@@ -752,6 +752,126 @@ export async function setEmployeeDaysOffAction(
   return { ok: true, offDays: offDays.length };
 }
 
+/* ═══════════════════ วันลา / วันหยุดของพนักงาน ═══════════════════ */
+
+/**
+ * พนักงานขอลาเอง
+ *
+ * ใช้ระบบ leave ของ workforce ไม่ใช่ปฏิทินของโมดูล PM — เพราะ **เฉพาะใบที่
+ * APPROVED เท่านั้นที่เข้าการคำนวณผลลงเวลา** (attendance.service เรียก
+ * approvedMinutesByDate) ปฏิทินของ PM เก็บใน ReportTaskStore คนละที่
+ * และไม่มีผลกับเงินเดือน/ผลลงเวลาเลย
+ *
+ * ไม่ต้องมี hr.* permission — role EMPLOYEE ของ workforce มี
+ * workforce.leave.request ติดตัวทุกคนอยู่แล้ว และ API ตรวจซ้ำเองอีกชั้น
+ */
+export interface LeaveState {
+  ok?: boolean;
+  days?: number;
+  error?: string;
+}
+
+export async function submitLeaveAction(
+  _prev: LeaveState,
+  formData: FormData,
+): Promise<LeaveState> {
+  await requireOrg();
+
+  const employmentId = String(formData.get("employment_id") ?? "");
+  const leaveTypeId = String(formData.get("leave_type_id") ?? "");
+  const dates = formData.getAll("day").map(String).sort();
+  const reason = String(formData.get("reason") ?? "").trim();
+
+  if (!employmentId) {
+    return { error: "บัญชีนี้ยังไม่ถูกผูกกับทะเบียนพนักงาน — แจ้งฝ่ายบุคคล" };
+  }
+  if (!leaveTypeId) return { error: "กรุณาเลือกประเภทการลา" };
+  if (dates.length === 0) return { error: "คลิกเลือกวันที่จะหยุดก่อน" };
+
+  /*
+   * ส่งทีละใบต่อหนึ่งวัน ไม่รวบเป็นช่วงเดียว — วันที่เลือกอาจไม่ติดกัน
+   * (เช่นหยุดจันทร์กับศุกร์) ถ้ารวบเป็น starts_on..ends_on จะกินวันกลางไปด้วย
+   */
+  let failed = 0;
+  for (const day of dates) {
+    try {
+      await wfFetch("/leave-requests", {
+        method: "POST",
+        body: {
+          employment_id: employmentId,
+          leave_type_id: leaveTypeId,
+          starts_on: day,
+          ends_on: day,
+          total_minutes: 480,
+          reason,
+        },
+      });
+    } catch {
+      failed += 1;
+    }
+  }
+
+  if (failed === dates.length) {
+    return { error: "ส่งคำขอไม่สำเร็จ — อาจขอวันเดิมไปแล้ว หรือโควตาไม่พอ" };
+  }
+
+  revalidatePath("/hr/leave");
+  return { ok: true, days: dates.length - failed };
+}
+
+/** อนุมัติ/ไม่อนุมัติคำขอลา — ต้องมี workforce.leave.approve (SUPERVISOR ขึ้นไป) */
+export async function decideLeaveAction(formData: FormData) {
+  await requireOrg();
+  const id = String(formData.get("requestId") ?? "");
+  const outcome = String(formData.get("outcome") ?? "");
+  if (!id) throw new Error("ไม่พบคำขอ");
+  if (outcome !== "APPROVED" && outcome !== "REJECTED") throw new Error("ผลไม่ถูกต้อง");
+
+  try {
+    await wfFetch(`/leave-requests/${id}/decide`, {
+      method: "POST",
+      body: {
+        outcome,
+        reason:
+          String(formData.get("reason") ?? "").trim() ||
+          (outcome === "APPROVED" ? "อนุมัติจากปฏิทินวันหยุด" : "ไม่อนุมัติ"),
+      },
+    });
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+  revalidatePath("/hr/leave");
+}
+
+/** ประเภทการลา — ต้องมีอย่างน้อยหนึ่งอันก่อนพนักงานจะขอลาได้ */
+export async function createLeaveTypeAction(formData: FormData) {
+  await guard(HR_PERMS.settingManage);
+  const companyId = String(formData.get("company_id") ?? "");
+  const code = String(formData.get("code") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim();
+  if (!companyId) throw new Error("ยังไม่มีบริษัทในระบบ workforce");
+  if (!code || !name) throw new Error("กรุณากรอกรหัสและชื่อประเภทการลา");
+
+  try {
+    await wfFetch("/leave-types", {
+      method: "POST",
+      body: {
+        company_id: companyId,
+        code,
+        name,
+        paid: formData.get("paid") !== "0",
+        unit: "DAY",
+        quota_minutes_per_year: Number(formData.get("quota_days") ?? 0) * 480,
+        // ไม่บังคับแจ้งล่วงหน้า/แนบเอกสารในเวอร์ชันแรก — เพิ่มทีหลังได้ที่ API เดิม
+        effective_from: new Date().toISOString().slice(0, 10),
+      },
+    });
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+  revalidatePath("/hr/leave");
+}
+
 /* ═══════════════════ งวด timesheet ═══════════════════ */
 
 export async function createTimesheetPeriodAction(formData: FormData) {

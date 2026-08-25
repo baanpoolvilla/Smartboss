@@ -676,6 +676,25 @@ export const OPERATIONAL_ROUTES: readonly Omit<RouteDefinition, 'response'>[] = 
     successStatus: 200,
   },
   {
+    operationId: 'listLeaveTypes_get',
+    method: 'get',
+    path: '/leave-types',
+    summary: 'GET /leave-types',
+    tag: 'workflow',
+    // ทุกคนต้องอ่านได้เพื่อเลือกประเภทตอนขอลา ไม่มีอะไรเป็นความลับ
+    permissions: [] as Permission[],
+  },
+  {
+    operationId: 'leaveCalendar_get',
+    method: 'get',
+    path: '/leave-calendar',
+    summary: 'GET /leave-calendar',
+    tag: 'workflow',
+    // เปล่า = ขอแค่ยืนยันตัวตนแล้ว ทั้งทีมต้องเห็นว่าใครหยุดวันไหน
+    // (เหตุผลกับประเภทการลาไม่ถูกส่งออกมา)
+    permissions: [] as Permission[],
+  },
+  {
     operationId: 'leaveRequests_get',
     method: 'get',
     path: '/leave-requests',

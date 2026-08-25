@@ -58,6 +58,36 @@ export class LeaveController {
     );
   }
 
+  /**
+   * ประเภทการลา — ทุกคนต้องอ่านได้เพื่อเลือกตอนขอลา
+   * ไม่มีอะไรเป็นความลับในนี้ (ชื่อ/รหัส/ได้ค่าจ้างหรือไม่)
+   */
+  @Get('leave-types')
+  @RequirePermissions()
+  async listLeaveTypes(
+    @Query('company_id') companyId?: string,
+  ): Promise<{ items: Record<string, unknown>[] }> {
+    return this.service.listTypes(
+      companyId === undefined ? undefined : requireUuid(companyId, 'company_id'),
+    );
+  }
+
+  /**
+   * ปฏิทินวันหยุดรวมของทีม — เปิดให้ทุกคนที่เข้าระบบได้
+   *
+   * @RequirePermissions() เปล่า = ขอแค่เป็น principal ที่ยืนยันตัวตนแล้ว
+   * เพราะทั้งทีมต้องเห็นว่าใครหยุดวันไหนถึงจะวางแผนงานได้ ส่วนเหตุผล
+   * และประเภทการลาไม่ถูกส่งออกมา (ดู leave.service listCalendar)
+   */
+  @Get('leave-calendar')
+  @RequirePermissions()
+  async leaveCalendar(
+    @Query('from') from: string,
+    @Query('to') to: string,
+  ): Promise<{ items: Record<string, unknown>[] }> {
+    return this.service.listCalendar({ from, to });
+  }
+
   @Get('leave-requests')
   @RequirePermissions('workforce.leave.manage')
   async listLeaveRequests(

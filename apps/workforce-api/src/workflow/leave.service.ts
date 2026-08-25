@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { schema, type Tx } from '@workforce/db';
 import { AppError, LocalDate, uuidv7, type Clock } from '@workforce/domain';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { UnitOfWork } from '../infrastructure/unit-of-work';
 import { RequestContextService } from '../shared/request-context';
 import { CLOCK } from '../shared/tokens';
@@ -480,6 +480,94 @@ export class LeaveService {
    *
    * คืนเฉพาะสิ่งที่ปฏิทินต้องใช้ ไม่มีเหตุผลการลาหรือไฟล์แนบ (เป็นข้อมูลส่วนตัว)
    */
+  /**
+   * ประเภทการลาที่ใช้ได้
+   *
+   * เดิมมีแต่ POST — สร้างประเภทการลาไปแล้วไม่มีทางอ่านกลับ พนักงานจึงเลือก
+   * ประเภทตอนขอลาไม่ได้เลย ซึ่งเท่ากับระบบลาใช้งานจริงไม่ได้ทั้งระบบ
+   */
+  async listTypes(companyId?: string): Promise<{ items: Record<string, unknown>[] }> {
+    return this.uow.run(async (uow) => {
+      const rows = await uow.tx
+        .select()
+        .from(schema.leaveTypes)
+        .where(companyId === undefined ? undefined : eq(schema.leaveTypes.companyId, companyId))
+        .limit(200);
+
+      return {
+        items: rows.map((row) => ({
+          id: row.id,
+          company_id: row.companyId,
+          code: row.code,
+          name: row.name,
+          paid: row.paid,
+          unit: row.unit,
+          quota_minutes_per_year: row.quotaMinutesPerYear,
+        })),
+      };
+    });
+  }
+
+  /**
+   * ปฏิทินวันหยุดรวมของทีม — ใครหยุดวันไหนบ้าง
+   *
+   * แยกจาก listRequests เพราะสิทธิ์คนละชั้น: listRequests ต้องมี
+   * workforce.leave.manage ซึ่ง role EMPLOYEE ไม่มี ⇒ พนักงานจะมองไม่เห็น
+   * แม้แต่วันหยุดของตัวเอง แต่ทั้งทีมต้องเห็นว่าใครหยุดวันไหนถึงจะวางแผนงานได้
+   *
+   * ⚠ คืนเฉพาะ ชื่อ + ช่วงวัน + สถานะ — **ไม่คืนเหตุผลและประเภทการลา**
+   * เพราะ "ลาป่วย" กับเหตุผลเป็นข้อมูลสุขภาพ/ส่วนตัวที่เพื่อนร่วมงานไม่ต้องรู้
+   * คนที่ต้องเห็นรายละเอียดคือผู้อนุมัติ ซึ่งใช้ listRequests อยู่แล้ว
+   */
+  async listCalendar(query: { from: string; to: string }): Promise<{
+    items: Record<string, unknown>[];
+  }> {
+    return this.uow.run(async (uow) => {
+      const rows = await uow.tx
+        .select({
+          id: schema.leaveRequests.id,
+          employmentId: schema.leaveRequests.employmentId,
+          startsOn: schema.leaveRequests.startsOn,
+          endsOn: schema.leaveRequests.endsOn,
+          status: schema.leaveRequests.status,
+          employeeCode: schema.employments.employeeCode,
+          firstName: schema.people.firstName,
+          lastName: schema.people.lastName,
+          preferredName: schema.people.preferredName,
+        })
+        .from(schema.leaveRequests)
+        .innerJoin(
+          schema.employments,
+          eq(schema.employments.id, schema.leaveRequests.employmentId),
+        )
+        .innerJoin(schema.people, eq(schema.people.id, schema.employments.personId))
+        .where(
+          and(
+            // ทับซ้อนช่วง ไม่ใช่อยู่ในช่วงทั้งก้อน — การลาคร่อมเดือนต้องขึ้นทั้งสองเดือน
+            sql`${schema.leaveRequests.startsOn} <= ${query.to}`,
+            sql`${schema.leaveRequests.endsOn} >= ${query.from}`,
+            inArray(schema.leaveRequests.status, ['PENDING', 'APPROVED']),
+          ),
+        )
+        .limit(1000);
+
+      return {
+        items: rows.map((row) => ({
+          id: row.id,
+          employment_id: row.employmentId,
+          display_name:
+            row.preferredName.trim() === ''
+              ? `${row.firstName} ${row.lastName}`.trim()
+              : row.preferredName,
+          employee_code: row.employeeCode,
+          starts_on: row.startsOn,
+          ends_on: row.endsOn,
+          status: row.status,
+        })),
+      };
+    });
+  }
+
   async listRequests(query: {
     companyId?: string;
     employmentId?: string;
