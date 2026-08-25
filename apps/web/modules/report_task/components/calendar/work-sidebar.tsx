@@ -13,6 +13,7 @@ import { useCalendarVisibilityStore } from "@/modules/report_task/store/calendar
 import { useCalendarScopeStore } from "@/modules/report_task/store/calendar-scope-store";
 import { useEventColorStore } from "@/modules/report_task/store/event-color-store";
 import { formatDate, formatDateTime } from "@/modules/report_task/lib/format";
+import { todayIso } from "@/modules/report_task/lib/now";
 import { rangeLabel, inRange, inRangeLocal, type ViewRange } from "@/modules/report_task/lib/date-filter";
 import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import { canManage } from "@/modules/report_task/lib/directory";
@@ -64,15 +65,25 @@ export function WorkSidebar({
     )
     .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
 
+  // A to-do already done and dated before today is finished business — same
+  // "not done" gate monthTasks applies below, just checked per-item instead
+  // of by status since to-dos don't have one. A past, still-*unfinished*
+  // to-do stays visible on purpose: that's the one that actually needs
+  // attention, same reasoning as an overdue task staying on the board.
+  const todayYmd = todayIso();
+  const notStaleDone = (t: TodoItem) => !(t.done && t.date < todayYmd);
+
   const myTodos = todos
-    .filter((t) => t.userId === viewingAsUserId && inRange(t.date, range))
+    .filter((t) => t.userId === viewingAsUserId && inRange(t.date, range) && notStaleDone(t))
     .sort((a, b) => Number(a.done) - Number(b.done) || a.date.localeCompare(b.date));
 
   // Everyone else's to-dos in range — folded into the crowd card below so it
   // reads as "everything happening this month", not just tasks (asked for
   // explicitly: "งานทั้งเดือนนี้ให้มีสิ่งที่ต้องทำของคนอื่นเข้ามา รวมกันเลย").
   const otherTodos = todos
-    .filter((t) => t.userId !== viewingAsUserId && inRange(t.date, range) && !hiddenUserIds.includes(t.userId))
+    .filter(
+      (t) => t.userId !== viewingAsUserId && inRange(t.date, range) && !hiddenUserIds.includes(t.userId) && notStaleDone(t)
+    )
     .sort((a, b) => a.date.localeCompare(b.date));
 
   // Mine = attending or created it — same "what's actually mine" scoping as

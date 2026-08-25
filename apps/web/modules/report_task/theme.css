@@ -233,7 +233,11 @@
 }
 .ebw-calendar .fc-daygrid-day-number {
   font-size: 0.78rem;
-  padding: 5px 7px;
+  /* Less padding on the right than the left — now that the number is
+     right-anchored (justify-end on its row), the old symmetric 7px read as
+     a visible gap before the cell's own right edge/border. Left side keeps
+     its padding for breathing room against a holiday's title text. */
+  padding: 5px 3px 5px 7px;
   color: var(--ink-soft);
   text-decoration: none;
 }
