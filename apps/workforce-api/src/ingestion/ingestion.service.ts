@@ -14,7 +14,7 @@ import {
   type EventIntent,
   type TimeEventEnvelope,
 } from '@workforce/domain';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { DeviceRepository } from '../devices/device.repository';
 import { UnitOfWork } from '../infrastructure/unit-of-work';
 import { APP_CONFIG, CLOCK, DATABASE_HANDLE } from '../shared/tokens';
@@ -22,6 +22,8 @@ import { APP_CONFIG, CLOCK, DATABASE_HANDLE } from '../shared/tokens';
 interface EventOutcome {
   status: 'ACCEPTED' | 'DUPLICATE' | 'QUARANTINED';
   sequence: number;
+  /** null = slot ยังไม่ถูกผูกกับใคร — เครื่องเอาไปขึ้นจอเป็นคำเตือน */
+  employmentId: string | null;
 }
 
 @Injectable()
@@ -78,6 +80,19 @@ export class IngestionService {
       // เครื่องจึงลบออกจากคิวได้ ไม่ส่งวนซ้ำไม่รู้จบ
       const ackedSequence = outcomes.length > 0 ? Math.max(...sequences) : null;
 
+      // ชื่อคนที่เพิ่งสแกน ส่งกลับให้เครื่องขึ้นจอ — query เดียวต่อ batch ไม่ใช่ต่อ event
+      const nameByEmployment = await this.resolveDisplayNames(
+        uow.tx,
+        outcomes.map((outcome) => outcome.employmentId),
+      );
+      const resolved = outcomes.map((outcome) => ({
+        sequence: outcome.sequence,
+        display_name:
+          outcome.employmentId === null
+            ? null
+            : (nameByEmployment.get(outcome.employmentId) ?? null),
+      }));
+
       await uow.tx.insert(schema.deviceIngestBatches).values({
         id: batchRowId,
         tenantId: device.tenantId,
@@ -129,8 +144,54 @@ export class IngestionService {
         acked_sequence: ackedSequence,
         server_time: receivedAt.toISOString(),
         clock_drift_ms: drift.driftMs,
+        resolved,
       };
     });
+  }
+
+  /**
+   * employment_id → ชื่อที่เอาไปขึ้นจอเครื่อง
+   *
+   * ใช้ preferred_name ก่อนถ้ามี เพราะจอ 16 ตัวอักษรใส่ชื่อเต็มไม่ลง
+   * และชื่อเล่นคือสิ่งที่คนหน้าเครื่องจำตัวเองได้เร็วที่สุด
+   *
+   * ⚠ ตกกลับไปใช้ employee_code เมื่อชื่อมีอักขระนอก ASCII —
+   * จอ HD44780 บนเครื่องมีแต่ชุดอักขระ ASCII ชื่อไทยจะกลายเป็นขยะอ่านไม่ออก
+   * ซึ่งแย่กว่าเห็นรหัสพนักงาน เพราะคนหน้าเครื่องยืนยันตัวเองไม่ได้เลย
+   * ถ้าเปลี่ยนไปใช้จอที่รองรับไทยเมื่อไหร่ ให้ลบเงื่อนไขนี้ที่เดียวจบ
+   */
+  private async resolveDisplayNames(
+    tx: Tx,
+    employmentIds: (string | null)[],
+  ): Promise<Map<string, string>> {
+    const ids = [...new Set(employmentIds.filter((id): id is string => id !== null))];
+    if (ids.length === 0) return new Map();
+
+    const rows = await tx
+      .select({
+        employmentId: schema.employments.id,
+        employeeCode: schema.employments.employeeCode,
+        firstName: schema.people.firstName,
+        preferredName: schema.people.preferredName,
+      })
+      .from(schema.employments)
+      .innerJoin(schema.people, eq(schema.employments.personId, schema.people.id))
+      .where(inArray(schema.employments.id, ids));
+
+    const isDisplayable = (value: string): boolean =>
+      value.trim() !== '' && /^[ -~]+$/.test(value);
+
+    return new Map(
+      rows.map((row) => {
+        const preferred = row.preferredName.trim();
+        const name = isDisplayable(preferred)
+          ? preferred
+          : isDisplayable(row.firstName)
+            ? row.firstName
+            : row.employeeCode;
+        return [row.employmentId, name];
+      }),
+    );
   }
 
   private async ingestOne(
@@ -203,7 +264,9 @@ export class IngestionService {
       .onConflictDoNothing()
       .returning({ id: schema.rawTimeEvents.id });
 
-    if (inserted.length > 0) return { status: 'ACCEPTED', sequence: event.sequence };
+    if (inserted.length > 0) {
+      return { status: 'ACCEPTED', sequence: event.sequence, employmentId };
+    }
 
     // ชนกับของเดิม — ต้องแยกว่าเป็น retry ที่ปลอดภัย หรือของใหม่ที่อ้าง sequence ซ้ำ
     const existingRows = await tx
@@ -223,7 +286,7 @@ export class IngestionService {
     const existing = existingRows[0];
     if (existing !== undefined && safeCompare(Buffer.from(existing.payloadHash), payloadHash)) {
       // retry ของ batch เดิม — ตอบสำเร็จแบบ idempotent (spec §6.1)
-      return { status: 'DUPLICATE', sequence: event.sequence };
+      return { status: 'DUPLICATE', sequence: event.sequence, employmentId };
     }
 
     await tx.insert(schema.rawTimeEventQuarantine).values({
@@ -246,7 +309,7 @@ export class IngestionService {
     this.logger.warn(
       `quarantined event from device ${device.deviceId} sequence ${String(event.sequence)}`,
     );
-    return { status: 'QUARANTINED', sequence: event.sequence };
+    return { status: 'QUARANTINED', sequence: event.sequence, employmentId };
   }
 
   async recordHeartbeat(

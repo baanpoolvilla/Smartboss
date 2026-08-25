@@ -1,7 +1,13 @@
 import { Button } from "@smartboss/ui/components/button";
 import { HrPage } from "@/modules/hr/components/hr-page";
 import { HR_PERMS } from "@/modules/hr/permissions";
-import { wfFetch, wfTry, type Company, type Paged } from "@/modules/hr/lib/api";
+import {
+  wfFetch,
+  wfTry,
+  type Company,
+  type Employment,
+  type Paged,
+} from "@/modules/hr/lib/api";
 import {
   DataTable,
   EmptyState,
@@ -13,7 +19,8 @@ import {
   Td,
   inputClass,
 } from "@/modules/hr/components/ui";
-import { createShiftAction } from "../actions";
+import { createShiftAction, createWorkPolicyAction } from "../actions";
+import { AssignShiftForm } from "./assign-shift-form";
 
 interface Shift {
   id: string;
@@ -51,10 +58,11 @@ function minutesToClock(minutes: number | null): string {
   return day > 0 ? `${hour}:${minute} (+${day})` : `${hour}:${minute}`;
 }
 
+/** ต้องตรงกับ late_mode ใน createWorkPolicySchema — STRICT | GRACE | FLEX */
 const LATE_MODE: Record<string, string> = {
-  GRACE_THEN_FULL: "ผ่อนผันแล้วนับเต็ม",
-  GRACE_THEN_EXCESS: "ผ่อนผันแล้วนับส่วนเกิน",
   STRICT: "นับทันที",
+  GRACE: "ผ่อนผัน",
+  FLEX: "เข้าได้ยืดหยุ่น",
 };
 
 export default async function ShiftsPage() {
@@ -69,10 +77,20 @@ export default async function ShiftsPage() {
           return <NotProvisioned what="ตั้งกะทำงาน" />;
         }
 
-        const [shifts, policies] = await Promise.all([
+        const [shifts, policies, employments] = await Promise.all([
           wfTry<Paged<Shift>>(`/shifts?company_id=${companyId}`),
           wfTry<Paged<WorkPolicy>>("/work-policies"),
+          wfTry<Paged<Employment>>("/employments"),
         ]);
+
+        const today = new Date().toISOString().slice(0, 10);
+        const shiftOptions = (shifts?.items ?? []).map((s) => ({
+          id: s.id,
+          label: s.rest_day
+            ? `${s.name} (วันหยุด)`
+            : `${s.name} ${minutesToClock(s.start_minutes)}-${minutesToClock(s.end_minutes)}`,
+          restDay: s.rest_day,
+        }));
 
         return (
           <div className="flex flex-col gap-4">
@@ -142,7 +160,19 @@ export default async function ShiftsPage() {
                     className={inputClass}
                   />
                 </Field>
-                <div />
+                <Field label="นโยบาย" hint="เกณฑ์ผ่อนผันการมาสาย">
+                  <select name="work_policy_id" defaultValue="" className={inputClass}>
+                    <option value="">— ไม่ผูก (สายนาทีเดียวก็นับ) —</option>
+                    {(policies?.items ?? []).map((policy) => (
+                      <option key={policy.id} value={policy.id}>
+                        {policy.name}
+                        {policy.late_mode === "GRACE"
+                          ? ` · ผ่อนผัน ${policy.grace_minutes} น.`
+                          : ` · ${LATE_MODE[policy.late_mode] ?? policy.late_mode}`}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
                 <Field label="เวลาเข้า *">
                   <input type="time" name="start" required className={inputClass} />
                 </Field>
@@ -199,6 +229,119 @@ export default async function ShiftsPage() {
                   ))}
                 </DataTable>
               )}
+            </SectionCard>
+
+            <SectionCard
+              title="เพิ่มนโยบายการทำงาน"
+              description="กำหนดว่าสายได้กี่นาทีก่อนจะถูกนับว่าสาย แล้วเอาไปผูกกับกะ"
+            >
+              <form
+                action={createWorkPolicyAction}
+                className="grid grid-cols-1 gap-3 sm:grid-cols-3"
+              >
+                <input type="hidden" name="company_id" value={companyId} />
+                <Field label="รหัสนโยบาย *">
+                  <input
+                    name="code"
+                    required
+                    maxLength={32}
+                    placeholder="STD"
+                    className={`${inputClass} font-mono uppercase`}
+                  />
+                </Field>
+                <Field label="ชื่อนโยบาย *">
+                  <input
+                    name="name"
+                    required
+                    maxLength={120}
+                    placeholder="พนักงานทั่วไป"
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="เริ่มใช้ตั้งแต่ *">
+                  <input
+                    type="date"
+                    name="effective_from"
+                    required
+                    defaultValue={today}
+                    className={inputClass}
+                  />
+                </Field>
+
+                <Field label="วิธีคิดสาย *">
+                  <select name="late_mode" defaultValue="GRACE" className={inputClass}>
+                    <option value="GRACE">ผ่อนผัน — สายได้ตามจำนวนนาทีที่กำหนด</option>
+                    <option value="STRICT">นับทันที — สายนาทีเดียวก็นับ</option>
+                    <option value="FLEX">ยืดหยุ่น — เข้าได้ 07:00-10:00 ขอให้ครบ 8 ชม.</option>
+                  </select>
+                </Field>
+                <Field label="สายได้กี่นาที" hint="0-240 · ใช้เมื่อเลือก &quot;ผ่อนผัน&quot;">
+                  <input
+                    type="number"
+                    name="grace_minutes"
+                    min={0}
+                    max={240}
+                    defaultValue={15}
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="เกินเวลาผ่อนผันแล้ว">
+                  <select
+                    name="grace_deduction"
+                    defaultValue="EXCESS_OVER_GRACE"
+                    className={inputClass}
+                  >
+                    <option value="EXCESS_OVER_GRACE">นับเฉพาะส่วนที่เกิน</option>
+                    <option value="FULL_FROM_SCHEDULED">นับตั้งแต่เวลาเข้างาน</option>
+                  </select>
+                </Field>
+
+                <Field label="ออกก่อนได้กี่นาที" hint="0-240">
+                  <input
+                    type="number"
+                    name="early_out_tolerance_minutes"
+                    min={0}
+                    max={240}
+                    defaultValue={0}
+                    className={inputClass}
+                  />
+                </Field>
+                <div className="flex items-end pb-3 text-sm">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      name="ot_requires_approval"
+                      value="1"
+                      defaultChecked
+                      className="h-4 w-4"
+                    />
+                    OT ต้องอนุมัติก่อน
+                  </label>
+                </div>
+                <div className="flex items-end">
+                  <Button type="submit" className="sm:w-40">
+                    เพิ่มนโยบาย
+                  </Button>
+                </div>
+              </form>
+              <p className="mt-3 text-xs text-(--ink-soft)">
+                &ldquo;นับเฉพาะส่วนที่เกิน&rdquo; กับ &ldquo;นับตั้งแต่เวลาเข้างาน&rdquo;
+                ต่างกันเป็นเงินจริง — ผ่อนผัน 15 นาทีแล้วมาสาย 20 นาที
+                แบบแรกนับสาย 5 นาที แบบหลังนับ 20 นาที
+              </p>
+            </SectionCard>
+
+            <SectionCard
+              title="ผูกกะกับพนักงาน"
+              description="ระบบใช้ตารางนี้เทียบว่าใครควรเข้ากี่โมง — ไม่ผูกก็คิดสาย/ขาดไม่ได้"
+            >
+              <AssignShiftForm
+                employments={(employments?.items ?? [])
+                  .filter((e) => e.terminated_on === null)
+                  .map((e) => ({ id: e.id, label: `${e.employee_code} · ${e.full_name}` }))}
+                shifts={shiftOptions}
+                today={today}
+              />
             </SectionCard>
           </div>
         );

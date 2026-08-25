@@ -398,12 +398,130 @@ export async function createShiftAction(formData: FormData) {
         end,
         crosses_midnight: formData.get("crosses_midnight") === "1",
         rest_day: formData.get("rest_day") === "1",
+        // ไม่ผูกนโยบาย = ไม่มีเกณฑ์ผ่อนผัน ⇒ สายนาทีเดียวก็นับสาย
+        work_policy_id: orNull(formData.get("work_policy_id")),
       },
     });
   } catch (error) {
     throw new Error(toMessage(error));
   }
   revalidatePath("/hr/shifts");
+}
+
+/**
+ * นโยบายการทำงาน — เกณฑ์ว่า "สายได้กี่นาที" ก่อนจะถูกนับว่าสาย
+ *
+ * late_mode 3 แบบต่างกันเป็นเงินจริง:
+ *   STRICT = สายนาทีเดียวก็นับ
+ *   GRACE  = ผ่อนผัน grace_minutes แรก (บังคับว่าต้อง > 0)
+ *   FLEX   = เข้าได้ในช่วง flex_start-flex_end ขอให้ทำครบตามชั่วโมงที่กำหนด
+ */
+export async function createWorkPolicyAction(formData: FormData) {
+  await guard(HR_PERMS.settingManage);
+  const companyId = String(formData.get("company_id") ?? "");
+  const code = String(formData.get("code") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim();
+  const lateMode = String(formData.get("late_mode") ?? "GRACE");
+  const graceMinutes = Number(formData.get("grace_minutes") ?? 0);
+  const effectiveFrom = String(formData.get("effective_from") ?? "");
+
+  if (!companyId) throw new Error("ยังไม่มีบริษัทในระบบ workforce");
+  if (!code || !name) throw new Error("กรุณากรอกรหัสและชื่อนโยบาย");
+  if (!effectiveFrom) throw new Error("กรุณาระบุวันที่เริ่มใช้");
+  if (!Number.isInteger(graceMinutes) || graceMinutes < 0 || graceMinutes > 240) {
+    throw new Error("เวลาผ่อนผันต้องเป็น 0-240 นาที");
+  }
+  // ดักตั้งแต่ที่นี่แทนปล่อยไปโดน 422 — ข้อความของ API เป็นอังกฤษและอ่านยากกว่า
+  if (lateMode === "GRACE" && graceMinutes === 0) {
+    throw new Error("เลือก \"ผ่อนผัน\" แล้วต้องกำหนดเวลาผ่อนผันมากกว่า 0 นาที");
+  }
+
+  try {
+    await wfFetch("/work-policies", {
+      method: "POST",
+      body: {
+        company_id: companyId,
+        code,
+        name,
+        late_mode: lateMode,
+        grace_minutes: graceMinutes,
+        grace_deduction: String(formData.get("grace_deduction") ?? "EXCESS_OVER_GRACE"),
+        early_out_tolerance_minutes: Number(
+          formData.get("early_out_tolerance_minutes") ?? 0,
+        ),
+        ot_requires_approval: formData.get("ot_requires_approval") === "1",
+        effective_from: effectiveFrom,
+      },
+    });
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+  revalidatePath("/hr/shifts");
+}
+
+/**
+ * ผูกกะกับพนักงานรายวันจันทร์-อาทิตย์
+ *
+ * ไม่ต้องสร้าง roster ก่อน — ตอนคำนวณผลลงเวลา ระบบอ่านตารางนี้ตรง ๆ
+ * ตาม employment + วันที่ (attendance.repository.ts) ตั้งแล้วมีผลทันที
+ *
+ * คืนเป็นค่าไม่ throw เพราะฟอร์มมี 7 ช่อง ถ้าเด้ง error page ผู้ใช้ต้องกรอกใหม่หมด
+ */
+export interface PatternState {
+  ok?: boolean;
+  error?: string;
+}
+
+const WEEKDAY_FIELDS = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+] as const;
+
+export async function setRecurringPatternAction(
+  _prev: PatternState,
+  formData: FormData,
+): Promise<PatternState> {
+  try {
+    await guard(HR_PERMS.settingManage);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "ไม่มีสิทธิ์ดำเนินการนี้" };
+  }
+
+  const employmentId = String(formData.get("employment_id") ?? "");
+  const effectiveFrom = String(formData.get("effective_from") ?? "");
+  if (!employmentId) return { error: "กรุณาเลือกพนักงาน" };
+  if (!effectiveFrom) return { error: "กรุณาระบุวันที่เริ่มใช้" };
+
+  const days = Object.fromEntries(
+    WEEKDAY_FIELDS.map((day) => [`${day}_shift_id`, orNull(formData.get(day))]),
+  );
+  if (Object.values(days).every((value) => value === null)) {
+    return { error: "ต้องเลือกกะอย่างน้อยหนึ่งวัน ไม่งั้นเท่ากับไม่ได้ตั้งอะไรเลย" };
+  }
+
+  try {
+    await wfFetch("/recurring-work-patterns", {
+      method: "POST",
+      body: {
+        employment_id: employmentId,
+        ...days,
+        effective_from: effectiveFrom,
+        effective_to: null,
+        // ปิดตารางเดิมของคนนี้ให้อัตโนมัติ ไม่งั้นสองใบทับกันแล้วผลคำนวณกำกวม
+        supersede_current: true,
+      },
+    });
+  } catch (error) {
+    return { error: toMessage(error) };
+  }
+
+  revalidatePath("/hr/shifts");
+  return { ok: true };
 }
 
 /* ═══════════════════ งวด timesheet ═══════════════════ */

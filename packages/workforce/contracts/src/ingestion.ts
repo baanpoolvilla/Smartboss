@@ -44,6 +44,22 @@ export const deviceBatchSchema = z.object({
   events: z.array(deviceTimeEventSchema).min(1).max(500),
 });
 
+/**
+ * ชื่อคนที่เพิ่งสแกน ส่งกลับให้เครื่องขึ้นจอ
+ *
+ * เดิมเครื่องรู้แค่หมายเลข slot ของตัวเอง จอจึงขึ้นได้แค่ "ID:1" ซึ่งคนหน้าเครื่อง
+ * ยืนยันไม่ได้ว่าระบบจับเป็นตัวเองจริงไหม
+ *
+ * ⚠ นี่คือการยอมให้ชื่อพนักงานออกไปอยู่ที่ตัวเครื่อง — ตัดสินใจไว้แล้วว่ารับได้
+ * เพราะชื่อไม่ใช่ biometric template และคนที่ยืนหน้าเครื่องก็เห็นหน้ากันอยู่แล้ว
+ * แต่ **ส่งเฉพาะคนที่เพิ่งสแกนใน batch นี้** ห้ามทำเป็น endpoint แจกรายชื่อทั้งบริษัท
+ */
+export const resolvedScanSchema = z.object({
+  sequence: z.number().int(),
+  /** null = slot นั้นยังไม่ถูกผูกกับใคร — เครื่องต้องเตือน ไม่ใช่ขึ้นว่าบันทึกแล้วเฉย ๆ */
+  display_name: z.string().nullable(),
+});
+
 export const ingestResultSchema = z.object({
   batch_id: uuidSchema,
   accepted: z.number().int(),
@@ -53,6 +69,8 @@ export const ingestResultSchema = z.object({
   acked_sequence: z.number().int().nullable(),
   server_time: isoDateTimeSchema,
   clock_drift_ms: z.number().int(),
+  /** เรียงตาม sequence เดียวกับที่เครื่องส่งมา */
+  resolved: z.array(resolvedScanSchema).default([]),
 });
 
 export const heartbeatSchema = z.object({
