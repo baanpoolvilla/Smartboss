@@ -118,6 +118,26 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
   // wrapping to its grid and ending well short of the rail's height.
   const [isDesktop, setIsDesktop] = useState(false);
   const [cardHeight, setCardHeight] = useState<number>();
+  // Passing FullCalendar's height as the string "100%" (to fill the
+  // lg:flex-1 wrapper below) turned out to skip its liquid/expandRows row-
+  // equalization — rows fell back to sizing by their own content instead,
+  // so a busy week's rows stretched tall while a quiet week's stayed short
+  // ("มันปรับตามงานในช่องมันก็จะดันอีกช่องบีบให้เล็ก") instead of every week
+  // getting an equal share of the card. expandRows only reliably equalizes
+  // when height is an actual pixel number, so this measures the wrapper's
+  // own rendered height (via ResizeObserver, since it's sized by flex not a
+  // number we compute ourselves) and feeds that back in as one.
+  const [gridHeight, setGridHeight] = useState<number>();
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      const height = entries[0]?.contentRect.height;
+      if (height) setGridHeight(Math.round(height));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
   useEffect(() => {
     function computeLayout() {
       const top = wrapperRef.current?.getBoundingClientRect().top ?? 0;
@@ -638,13 +658,12 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           // compact rows sized to their real content, which on a normal
           // month is short enough to need no scroll anyway, without
           // artificially inflating light rows to fill the screen.
-          // Desktop (≥1024px) uses "100%" instead of the calendarHeight
-          // pixel number — it fills the lg:flex-1 wrapper above, which
-          // itself is sized by the card's own fixed cardHeight, so rows
-          // redistribute (expandRows below) to exactly whatever's left
-          // after the toolbar/hint text, matching the rail's height instead
-          // of the two drifting apart by however tall those happen to be.
-          height={isNarrowViewport && view === "dayGridMonth" ? "auto" : isDesktop ? "100%" : calendarHeight}
+          // Desktop (≥1024px) uses gridHeight — the wrapper's own measured
+          // pixel height (it fills the lg:flex-1 space left over after the
+          // toolbar/hint text inside the card's fixed cardHeight) — instead
+          // of calendarHeight, and specifically not the string "100%" (see
+          // gridHeight's own comment for why that broke row equalization).
+          height={isNarrowViewport && view === "dayGridMonth" ? "auto" : isDesktop ? (gridHeight ?? calendarHeight) : calendarHeight}
           expandRows={!(isNarrowViewport && view === "dayGridMonth")}
           // Show exactly 5 or 6 rows depending on the actual month, not
           // always padded to 6 — combined with expandRows + the fixed total
