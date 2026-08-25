@@ -1,10 +1,15 @@
-import { CornerUpLeft, Link2, Reply as ReplyIcon } from "lucide-react";
+import { useState } from "react";
+import { Check, CornerUpLeft, Link2, Pencil, Reply as ReplyIcon, SmilePlus, Trash2 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { Button } from "@/modules/report_task/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { getUser } from "@/modules/report_task/lib/directory";
 import type { ReportPostImage, ReportPostReply } from "@/modules/report_task/store/report-feed-store";
 import { relativeTime } from "@/modules/report_task/lib/format";
 import { renderRichBulletText } from "@/modules/report_task/lib/report-feed-rich-text";
 import { cn } from "@/modules/report_task/lib/utils";
+
+const reactionEmojis = ["👍", "❤️", "🎉", "😂", "😮", "😢"];
 
 /** Trims a quoted reply's body down to one short line for the reference shown above a reply that answers it. */
 function quotePreview(body: string): string {
@@ -18,10 +23,14 @@ export function ReportReply({
   allReplies,
   postQuote,
   flashed,
+  isOwn,
   onOpenLightbox,
   onReplyTo,
   onJumpToQuote,
   onCopyLink,
+  onToggleReaction,
+  onEdit,
+  onDelete,
 }: {
   reply: ReportPostReply;
   /** Full reply list for this post — used to resolve/show the quoted reply when `reply.replyToId` is set. */
@@ -30,12 +39,18 @@ export function ReportReply({
   postQuote: { id: string; authorId: string; body: string };
   /** True for a brief moment right after someone jumps here via a quote click — drives the highlight flash. */
   flashed?: boolean;
+  /** Only the reply's own author gets edit/delete — same "yours only" gate the post itself already applies. */
+  isOwn?: boolean;
   onOpenLightbox: (images: ReportPostImage[], index: number) => void;
   onReplyTo: (reply: ReportPostReply) => void;
   /** Scrolls to and flashes whatever `id` (a reply id, or the post id) this reply is quoting. */
   onJumpToQuote: (id: string) => void;
   /** Copies a deep link to this specific reply (?reply=), same idea as "copy link" on the post but pointed at one comment. */
   onCopyLink: () => void;
+  /** Reacting to one specific comment, same as the post's own reaction row — Teams lets you do this per-message, not just per-post. */
+  onToggleReaction: (emoji: string) => void;
+  onEdit: (body: string) => void;
+  onDelete: () => void;
 }) {
   const author = getUser(reply.authorId);
   const quoted = reply.replyToId
@@ -44,6 +59,20 @@ export function ReportReply({
       : allReplies.find((r) => r.id === reply.replyToId)
     : undefined;
   const quotedAuthor = quoted ? getUser(quoted.authorId) : undefined;
+
+  const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editBody, setEditBody] = useState(reply.body);
+  const activeReactions = reactionEmojis
+    .map((emoji) => ({ emoji, users: reply.reactions?.[emoji] ?? [] }))
+    .filter((r) => r.users.length > 0);
+
+  function saveEdit() {
+    const trimmed = editBody.trim();
+    if (!trimmed) return;
+    onEdit(trimmed);
+    setEditing(false);
+  }
 
   return (
     <div
@@ -61,8 +90,39 @@ export function ReportReply({
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs font-medium">
             {author?.name} <span className="font-normal text-[var(--ink-soft)]">· {relativeTime(reply.createdAt)}</span>
+            {reply.editedAt && <span className="font-normal text-[var(--ink-soft)]"> · แก้ไขแล้ว</span>}
           </p>
           <span className="shrink-0 flex items-center gap-2 opacity-0 group-hover/reply:opacity-100 focus-within:opacity-100 transition-opacity">
+            <Popover open={reactionPickerOpen} onOpenChange={setReactionPickerOpen}>
+              <PopoverTrigger
+                render={
+                  <button
+                    className="flex items-center gap-1 text-[11px] font-medium text-[var(--ink-soft)] hover:text-[var(--brand-green-dark)]"
+                    aria-label={`ทำเครื่องหมายความคิดเห็นของ ${author?.name ?? "ผู้ใช้"}`}
+                    title="ทำเครื่องหมาย"
+                  >
+                    <SmilePlus className="h-3 w-3" />
+                  </button>
+                }
+              />
+              <PopoverContent className="w-auto p-1 flex gap-0.5" align="end">
+                {reactionEmojis.map((emoji) => (
+                  <button
+                    key={emoji}
+                    onClick={() => {
+                      onToggleReaction(emoji);
+                      setReactionPickerOpen(false);
+                    }}
+                    className={cn(
+                      "h-7 w-7 flex items-center justify-center rounded-md text-sm hover:bg-[var(--bg-soft)] transition-transform hover:scale-110",
+                      (reply.reactions?.[emoji] ?? []).length > 0 && "bg-[var(--accent)]"
+                    )}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </PopoverContent>
+            </Popover>
             <button
               onClick={onCopyLink}
               className="flex items-center gap-1 text-[11px] font-medium text-[var(--ink-soft)] hover:text-[var(--brand-green-dark)]"
@@ -79,6 +139,29 @@ export function ReportReply({
               <ReplyIcon className="h-3 w-3" />
               ตอบกลับ
             </button>
+            {isOwn && (
+              <>
+                <button
+                  onClick={() => {
+                    setEditBody(reply.body);
+                    setEditing(true);
+                  }}
+                  className="flex items-center gap-1 text-[11px] font-medium text-[var(--ink-soft)] hover:text-[var(--brand-green-dark)]"
+                  aria-label="แก้ไขความคิดเห็น"
+                  title="แก้ไข"
+                >
+                  <Pencil className="h-3 w-3" />
+                </button>
+                <button
+                  onClick={onDelete}
+                  className="flex items-center gap-1 text-[11px] font-medium text-[var(--ink-soft)] hover:text-[var(--chart-red)]"
+                  aria-label="ลบความคิดเห็น"
+                  title="ลบ"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </>
+            )}
           </span>
         </div>
         {quoted && (
@@ -94,21 +177,66 @@ export function ReportReply({
             </span>
           </button>
         )}
-        {reply.body && <p className="text-sm mt-0.5">{renderRichBulletText(reply.body)}</p>}
-        {!!reply.images?.length && (
-          <div className="flex flex-wrap gap-1.5 mt-1.5">
-            {reply.images.map((img, i) => (
-              <button
-                key={img.id}
-                onClick={() => onOpenLightbox(reply.images!, i)}
-                className="rounded-md border border-[var(--line)] overflow-hidden hover:opacity-90 transition-opacity"
-                aria-label={`ดูรูป ${img.name} เต็มจอ`}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={img.url ?? img.dataUrl} alt={img.name} className="h-16 w-16 object-cover" />
-              </button>
-            ))}
+        {editing ? (
+          <div className="mt-1 space-y-1.5">
+            <textarea
+              autoFocus
+              value={editBody}
+              onChange={(e) => setEditBody(e.target.value)}
+              rows={2}
+              className="w-full resize-none rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--brand-green)]/50"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  saveEdit();
+                } else if (e.key === "Escape") {
+                  setEditing(false);
+                }
+              }}
+            />
+            <div className="flex items-center gap-1.5">
+              <Button size="sm" className="h-6 text-xs px-2" disabled={!editBody.trim()} onClick={saveEdit}>
+                <Check className="h-3 w-3" />
+                บันทึก
+              </Button>
+              <Button size="sm" variant="ghost" className="h-6 text-xs px-2" onClick={() => setEditing(false)}>
+                ยกเลิก
+              </Button>
+            </div>
           </div>
+        ) : (
+          <>
+            {reply.body && <p className="text-sm mt-0.5">{renderRichBulletText(reply.body)}</p>}
+            {!!reply.images?.length && (
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {reply.images.map((img, i) => (
+                  <button
+                    key={img.id}
+                    onClick={() => onOpenLightbox(reply.images!, i)}
+                    className="rounded-md border border-[var(--line)] overflow-hidden hover:opacity-90 transition-opacity"
+                    aria-label={`ดูรูป ${img.name} เต็มจอ`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={img.url ?? img.dataUrl} alt={img.name} className="h-16 w-16 object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
+            {activeReactions.length > 0 && (
+              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                {activeReactions.map(({ emoji, users }) => (
+                  <button
+                    key={emoji}
+                    onClick={() => onToggleReaction(emoji)}
+                    className="flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] border border-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] transition-colors"
+                  >
+                    <span>{emoji}</span>
+                    <span className="tabular-nums">{users.length}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

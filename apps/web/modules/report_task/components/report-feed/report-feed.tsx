@@ -43,7 +43,14 @@ function ThreadRow({ post, onToggle }: { post: ReportPost; onToggle: () => void 
   return (
     <button
       onClick={onToggle}
-      className="w-full flex items-start gap-3 rounded-xl border border-[var(--line)] bg-[var(--bg)] px-4 py-3 text-left transition-colors hover:border-[var(--brand-green)]/30 hover:bg-[var(--bg-soft)]/60"
+      data-slot="card"
+      // Same data-slot="card" fix as ReportCard's own polish pass — this
+      // collapsed row is a real button, not a <Card>, so it never got the
+      // app-wide hover shadow/lift either and read just as flat next to it.
+      // bg-[var(--bg-soft)]/60 on hover fought with that new shadow (both
+      // trying to signal "hovered"), so hover now leans on the shadow/lift
+      // alone, same as every other card.
+      className="w-full flex items-start gap-3 rounded-xl border border-[var(--line)] bg-[var(--bg)] px-4 py-3.5 text-left shadow-sm transition-colors"
     >
       <span className="h-8 w-8 rounded-full bg-[var(--accent)] text-[var(--brand-green-dark)] text-[10px] font-semibold flex items-center justify-center shrink-0">
         {author?.avatar ?? "?"}

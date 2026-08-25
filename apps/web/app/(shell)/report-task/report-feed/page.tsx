@@ -9,6 +9,7 @@ import { formatDate } from "@/modules/report_task/lib/format";
 import type { TodoItem } from "@/modules/report_task/types";
 import { ReportComposer } from "@/modules/report_task/components/report-feed/report-composer";
 import { ReportFeed } from "@/modules/report_task/components/report-feed/report-feed";
+import { OpenchatFeed } from "@/modules/report_task/components/report-feed/openchat-feed";
 import { ReportAllPostsFeed } from "@/modules/report_task/components/report-feed/report-all-posts-feed";
 import { ReportHeader } from "@/modules/report_task/components/report-feed/report-header";
 import { RoomSettingsSheet } from "@/modules/report_task/components/report-feed/room-settings-sheet";
@@ -18,7 +19,7 @@ import { TaskDetailSheet } from "@/modules/report_task/components/kanban/task-de
 import { Button, buttonVariants } from "@/modules/report_task/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/modules/report_task/components/ui/sheet";
-import { useReportFeedStore, type ReportPost } from "@/modules/report_task/store/report-feed-store";
+import { useReportFeedStore, isOpenchatTopic, type ReportPost } from "@/modules/report_task/store/report-feed-store";
 import { useReportTagStore } from "@/modules/report_task/store/report-tag-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { users } from "@/modules/report_task/lib/directory";
@@ -30,7 +31,7 @@ import { currentCutoff } from "@/modules/report_task/lib/report-cutoff";
 import { pendingToday, todayStatusEntries, type TodayStatusEntry } from "@/modules/report_task/lib/report-feed-compliance";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
-import { AtSign, BarChart3, Check, CheckCircle2, Clock, FileImage, FolderHeart, Hash, ImagePlus, Link2, ListTodo, ListTree, Lock, Menu, MessageSquareText, Pin, Plus, Settings, Trash2, TriangleAlert, Users, X } from "lucide-react";
+import { AtSign, BarChart3, Check, CheckCircle2, ChevronDown, Clock, FileImage, FolderHeart, Hash, ImagePlus, Link2, ListTodo, Lock, Menu, MessageSquareText, Pin, Plus, Settings, Trash2, TriangleAlert, Users, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 
 // Beyond this many pinned posts, the rest move into the "+N เพิ่มเติม"
@@ -464,6 +465,34 @@ function ReportFeedPageInner() {
                     updateTopicSettings={updateTopicSettings}
                     canManage={canManageMembers}
                   />
+                  {/* Room mode pill — moved up here from the filter row below
+                      (R1, next to the member count/gear it's most related
+                      to). Visible to everyone (it's informational — same as
+                      before), but only clickable into room settings for
+                      whoever can actually edit them; a viewer without that
+                      right gets the plain label so hovering doesn't imply a
+                      control that isn't there for them. Still just a label
+                      either way, not a real <select> — the mode itself is
+                      locked for any room created after
+                      FEED_VIEW_MODE_LOCK_CUTOFF (see room-settings-sheet.tsx),
+                      so a dropdown look would promise something it can't do. */}
+                  {(() => {
+                    const modeLabel = activeTopic.feedViewMode === "threads" ? "Thread" : "Openchat";
+                    const canEdit = canEditReportTopic(activeTopic.visibility, viewingAsUserId);
+                    return canEdit ? (
+                      <button
+                        onClick={() => setRoomSettingsOpen(true)}
+                        className="flex items-center gap-1 text-xs font-medium text-[var(--ink-soft)] bg-[var(--bg-soft)] hover:bg-[var(--accent)] hover:text-[var(--brand-green-dark)] rounded-full px-2.5 py-1 shrink-0 transition-colors"
+                      >
+                        มุมมอง: {modeLabel}
+                        <ChevronDown className="h-3 w-3" />
+                      </button>
+                    ) : (
+                      <span className="flex items-center gap-1 text-xs font-medium text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2.5 py-1 shrink-0">
+                        มุมมอง: {modeLabel}
+                      </span>
+                    );
+                  })()}
                   {canEditReportTopic(activeTopic.visibility, viewingAsUserId) && (
                     <button
                       onClick={() => setRoomSettingsOpen(true)}
@@ -592,16 +621,6 @@ function ReportFeedPageInner() {
                       authorOptions={topicMembers.map((m) => m.id)}
                       tagOptions={reportTags}
                     />
-                    {/* รูปแบบห้อง (สตรีม/กระทู้) ตั้งไว้ครั้งเดียวในตั้งค่าห้อง — ไม่ใช่
-                        ปุ่มสลับส่วนตัวอีกต่อไป ทุกคนในห้องเห็นแบบเดียวกัน (see
-                        room-settings-sheet.tsx). โชว์ badge บอกไว้เฉพาะตอนที่ไม่ใช่
-                        ค่าเริ่มต้น "สตรีม" กันงงว่าทำไมโพสต์ไม่เรียงตามเวลา. */}
-                    {activeTopic.feedViewMode === "threads" && (
-                      <span className="flex items-center gap-1.5 text-xs font-medium text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-lg px-2.5 py-1 shrink-0">
-                        <ListTree className="h-3.5 w-3.5" />
-                        มุมมองห้องนี้: Thread
-                      </span>
-                    )}
                   </div>
                 )}
               </div>
@@ -615,17 +634,26 @@ function ReportFeedPageInner() {
                         ล้างตัวกรอง
                       </Button>
                     </div>
+                  ) : isOpenchatTopic(activeTopic) ? (
+                    /* Openchat rooms carry their own composer built into the
+                       flat message stream (Discord's single bottom bar) —
+                       ReportComposer's title/sections/images form doesn't
+                       apply here at all, so it's skipped entirely, not just
+                       hidden. */
+                    <OpenchatFeed topic={activeTopic} topicPosts={filteredTopicPosts} onOpenTask={setOpenTaskId} />
                   ) : (
-                    <ReportFeed
-                      topic={activeTopic}
-                      topicPosts={filteredTopicPosts}
-                      highlightPostId={highlightPostId}
-                      highlightReplyId={highlightReplyId}
-                      viewMode={activeTopic.feedViewMode ?? "stream"}
-                      onOpenTask={setOpenTaskId}
-                    />
+                    <>
+                      <ReportFeed
+                        topic={activeTopic}
+                        topicPosts={filteredTopicPosts}
+                        highlightPostId={highlightPostId}
+                        highlightReplyId={highlightReplyId}
+                        viewMode={activeTopic.feedViewMode ?? "stream"}
+                        onOpenTask={setOpenTaskId}
+                      />
+                      <ReportComposer topic={activeTopic} />
+                    </>
                   )}
-                  <ReportComposer topic={activeTopic} />
                 </>
               ) : (
                 <ReportTopicPanels tab={activeTab} topic={activeTopic} topicPosts={topicPosts} />

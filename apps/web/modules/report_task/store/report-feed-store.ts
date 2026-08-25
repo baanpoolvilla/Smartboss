@@ -53,6 +53,13 @@ export interface ReportPostReply {
   authorId: string;
   body: string;
   createdAt: string;
+  /** Set once the reply's own text/images have been changed after posting —
+   * same "· แก้ไขแล้ว" tag the post itself already carries (editedAt), just
+   * one level down. Undefined/null = never edited. */
+  editedAt?: string | null;
+  /** emoji -> userIds who reacted with it, same shape as ReportPost.reactions
+   * — Teams lets you react to an individual reply, not just the post itself. */
+  reactions?: Record<string, string[]>;
   images?: ReportPostImage[];
   /** A quick "flag this reply" color tint (e.g. red = urgent) — not per-character text highlighting, just a whole-reply marker. */
   highlightColor?: string;
@@ -186,6 +193,16 @@ export interface ReportTopic {
   notifyPreference?: Record<string, "all" | "mentions" | "off">;
 }
 
+/** True for a room whose one-time create-dialog pick actually landed on
+ * "Openchat" (see FEED_VIEW_MODE_LOCK_CUTOFF) — a room from before that
+ * cutoff defaulting to `feedViewMode: undefined` is just an ordinary
+ * grandfathered "stream" room, not a deliberate Discord-style pick, so it
+ * keeps the original ReportCard rendering instead of switching to
+ * OpenchatFeed underneath it. */
+export function isOpenchatTopic(topic: Pick<ReportTopic, "feedViewMode" | "createdAt">): boolean {
+  return topic.feedViewMode !== "threads" && topic.createdAt >= FEED_VIEW_MODE_LOCK_CUTOFF;
+}
+
 export const topicColors = [
   "var(--chart-blue)",
   "var(--chart-violet)",
@@ -268,6 +285,13 @@ interface ReportFeedStore {
     body: string,
     extra?: { images?: ReportPostImage[]; highlightColor?: string; replyToId?: string }
   ) => void;
+  /** Edits an existing reply's own text/images in place (own replies only —
+   * gated in the UI, same as editPost) and stamps editedAt. */
+  editReply: (postId: string, replyId: string, data: { body: string; images?: ReportPostImage[] }) => void;
+  /** Removes a reply outright — its own replyToId quotes still resolve to
+   * "ความคิดเห็นที่ถูกลบ" (see report-reply.tsx), same as a deleted quoted post. */
+  deleteReply: (postId: string, replyId: string) => void;
+  toggleReplyReaction: (postId: string, replyId: string, emoji: string, userId: string) => void;
   togglePin: (postId: string) => void;
   toggleSave: (postId: string, userId: string) => void;
   toggleUnread: (postId: string, userId: string) => void;
@@ -504,6 +528,56 @@ export const useReportFeedStore = create<ReportFeedStore>()(
             ),
           }));
         }
+      },
+      editReply: (postId, replyId, data) =>
+        set((s) => ({
+          posts: s.posts.map((p) =>
+            p.id !== postId
+              ? p
+              : {
+                  ...p,
+                  replies: p.replies.map((r) =>
+                    r.id === replyId ? { ...r, body: data.body, images: data.images, editedAt: new Date().toISOString() } : r
+                  ),
+                }
+          ),
+        })),
+      deleteReply: (postId, replyId) =>
+        set((s) => ({
+          posts: s.posts.map((p) =>
+            p.id !== postId ? p : { ...p, replies: p.replies.filter((r) => r.id !== replyId) }
+          ),
+        })),
+      toggleReplyReaction: (postId, replyId, emoji, userId) => {
+        let added = false;
+        set((s) => ({
+          posts: s.posts.map((p) => {
+            if (p.id !== postId) return p;
+            return {
+              ...p,
+              replies: p.replies.map((r) => {
+                if (r.id !== replyId) return r;
+                const current = r.reactions?.[emoji] ?? [];
+                added = !current.includes(userId);
+                const next = added ? [...current, userId] : current.filter((id) => id !== userId);
+                return { ...r, reactions: { ...r.reactions, [emoji]: next } };
+              }),
+            };
+          }),
+        }));
+        // Same "notify on add only, never for reacting to your own" rule as
+        // toggleReaction on the post itself.
+        if (!added) return;
+        const post = get().posts.find((p) => p.id === postId);
+        const reply = post?.replies.find((r) => r.id === replyId);
+        if (!post || !reply || reply.authorId === userId) return;
+        const actorName = getUser(userId)?.name ?? "มีคน";
+        useNotificationStore.getState().notify({
+          userId: reply.authorId,
+          byUserId: userId,
+          message: `${actorName} ทำเครื่องหมาย ${emoji} ให้ความคิดเห็นของคุณใน "${post.title}"`,
+          link: `/report-feed?topic=${post.topicId}&post=${postId}&reply=${replyId}`,
+        });
       },
       togglePin: (postId) =>
         set((s) => ({

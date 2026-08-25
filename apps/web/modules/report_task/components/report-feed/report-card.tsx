@@ -111,6 +111,9 @@ export function ReportCard({
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const toggleReaction = useReportFeedStore((s) => s.toggleReaction);
   const addReply = useReportFeedStore((s) => s.addReply);
+  const editReplyAction = useReportFeedStore((s) => s.editReply);
+  const deleteReplyAction = useReportFeedStore((s) => s.deleteReply);
+  const toggleReplyReaction = useReportFeedStore((s) => s.toggleReplyReaction);
   const removePost = useReportFeedStore((s) => s.removePost);
   const editPost = useReportFeedStore((s) => s.editPost);
   const togglePin = useReportFeedStore((s) => s.togglePin);
@@ -127,8 +130,6 @@ export function ReportCard({
   const lateCutoff = lateCutoffFor(post.createdAt, topic.cutoffs);
   const onTimeCutoff = !lateCutoff ? onTimeCutoffFor(post.createdAt, topic.cutoffs) : null;
 
-  // The comment box sits under every post at all times now — no click-to-reveal
-  // step first. The toolbar's reply icon just focuses it instead of toggling it.
   const [replyText, setReplyText] = useState("");
   const [replyImages, setReplyImages] = useState<ReportPostImage[]>([]);
   const [replyHighlight, setReplyHighlight] = useState<string | undefined>(undefined);
@@ -137,6 +138,7 @@ export function ReportCard({
   const replyEditorRef = useRef<HTMLDivElement>(null);
   const replyFileInputRef = useRef<HTMLInputElement>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deleteReplyTarget, setDeleteReplyTarget] = useState<string | null>(null);
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -149,6 +151,12 @@ export function ReportCard({
   const [replyFocused, setReplyFocused] = useState(false);
   const RECENT_REPLY_COUNT = 3;
   const [repliesExpanded, setRepliesExpanded] = useState(false);
+  // Teams-style "Reply in thread" — replies + the compose box used to render
+  // unconditionally under every single post (a permanently-open text box on
+  // a room with 50 posts read as a wall of empty input fields, not a chat
+  // feed). Collapsed by default now; opens on the reply icon, the reply-
+  // count link, or a deep link into a specific reply (see the effects below).
+  const [threadOpen, setThreadOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [replyLightbox, setReplyLightbox] = useState<{ images: ReportPostImage[]; index: number } | null>(null);
   // Which reply the box is currently answering, if any — shows a quoted
@@ -215,7 +223,8 @@ export function ReportCard({
   function startReplyTo(reply: ReportPostReply) {
     setReplyingTo(reply);
     setQuoteKind("reply");
-    replyEditorRef.current?.focus();
+    setThreadOpen(true);
+    requestAnimationFrame(() => replyEditorRef.current?.focus());
   }
 
   // Lets a reply quote the original post itself, not just another reply —
@@ -229,7 +238,8 @@ export function ReportCard({
       createdAt: post.createdAt,
     });
     setQuoteKind("quote");
-    replyEditorRef.current?.focus();
+    setThreadOpen(true);
+    requestAnimationFrame(() => replyEditorRef.current?.focus());
     setMoreOpen(false);
   }
 
@@ -250,6 +260,7 @@ export function ReportCard({
   useEffect(() => {
     if (!highlightReplyId || repliesExpanded) return;
     if (!post.replies.some((r) => r.id === highlightReplyId)) return;
+    setThreadOpen(true);
     const recentIds = new Set(post.replies.slice(-RECENT_REPLY_COUNT).map((r) => r.id));
     if (recentIds.has(highlightReplyId)) return;
     const timer = setTimeout(() => setRepliesExpanded(true), 0);
@@ -378,8 +389,15 @@ export function ReportCard({
   return (
     <div
       id={`report-post-${post.id}`}
+      data-slot="card"
       className={cn(
-        "group/post relative rounded-2xl border p-4 shadow-sm transition-colors duration-[1200ms] ease-out",
+        // data-slot="card" opts this hand-rolled post card into the same
+        // hover shadow/lift/border-tint every real <Card> in the app already
+        // gets (see theme.css's [data-slot="card"] rules) — without it this
+        // was the one card shape in the whole app that stayed flat on
+        // hover, reading as plainer/less finished next to everything else.
+        // p-5 (was p-4) for a touch more breathing room per element.
+        "group/post relative rounded-2xl border p-5 shadow-sm transition-colors duration-[1200ms] ease-out",
         highlighted || flashTargetId === post.id ? "bg-[var(--accent)] border-[var(--brand-green)]/40" : "bg-white border-[var(--line)]",
         // Unread reads as a left accent + a dot under the author's name (see
         // below) instead of a background tint — a background collided with
@@ -427,7 +445,10 @@ export function ReportCard({
           </PopoverContent>
         </Popover>
         <button
-          onClick={() => replyEditorRef.current?.focus()}
+          onClick={() => {
+            setThreadOpen(true);
+            requestAnimationFrame(() => replyEditorRef.current?.focus());
+          }}
           className="h-7 w-7 flex items-center justify-center rounded-md text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
           aria-label="ตอบกลับในเธรด"
         >
@@ -586,7 +607,7 @@ export function ReportCard({
         />
       )}
 
-      {(activeReactions.length > 0 || post.replies.length > 0) && (
+      {activeReactions.length > 0 && (
         <div className="pl-14 flex items-center gap-1.5 pt-3 flex-wrap">
           {activeReactions.map(({ emoji, users }) => {
             const active = users.includes(viewingAsUserId);
@@ -606,17 +627,16 @@ export function ReportCard({
               </button>
             );
           })}
-          {post.replies.length > 0 && (
-            <button
-              onClick={() => replyEditorRef.current?.focus()}
-              className="text-xs font-medium text-[var(--brand-green-dark)] hover:underline px-1"
-            >
-              {post.replies.length} การตอบกลับ
-            </button>
-          )}
         </div>
       )}
 
+      {/* Existing replies stay visible inline (Teams shows them straight
+          under the post, same as it always has) — only the *compose box*
+          for adding a new one hides behind "ตอบกลับในเธรด" below, matching
+          where Teams' own link sits (after the last reply, not in place of
+          them). Getting this backwards (hiding replies too) was the first
+          pass at this — a real Teams screenshot showing replies rendered
+          in full caught it. */}
       <div className="space-y-3 pt-3 mt-3 border-t border-[var(--line)]">
           {post.replies.length > 0 && (
             <>
@@ -636,10 +656,14 @@ export function ReportCard({
                     allReplies={post.replies}
                     postQuote={{ id: post.id, authorId: post.authorId, body: post.title }}
                     flashed={flashTargetId === r.id}
+                    isOwn={r.authorId === viewingAsUserId}
                     onOpenLightbox={openReplyLightbox}
                     onReplyTo={startReplyTo}
                     onJumpToQuote={jumpToQuote}
                     onCopyLink={() => copyLink(r.id)}
+                    onToggleReaction={(emoji) => toggleReplyReaction(post.id, r.id, emoji, viewingAsUserId)}
+                    onEdit={(body) => editReplyAction(post.id, r.id, { body, images: r.images })}
+                    onDelete={() => setDeleteReplyTarget(r.id)}
                   />
                 ))}
               </div>
@@ -652,6 +676,21 @@ export function ReportCard({
               <Lock className="h-3 w-3 shrink-0" />
               ห้องนี้ปิดการแสดงความคิดเห็น
             </p>
+          ) : !threadOpen ? (
+            /* Teams-style — the link sits after the last reply (or alone,
+               with none yet), not up by the reactions row, and is the only
+               thing standing between a quiet post and a compose box for
+               every single one of them. */
+            <button
+              onClick={() => {
+                setThreadOpen(true);
+                requestAnimationFrame(() => replyEditorRef.current?.focus());
+              }}
+              className="flex items-center gap-1.5 text-xs font-medium text-[var(--brand-green-dark)] hover:underline"
+            >
+              <MessageCircle className="h-3.5 w-3.5" />
+              ตอบกลับในเธรด
+            </button>
           ) : (
           <>
             {replyingTo && (
@@ -860,6 +899,27 @@ export function ReportCard({
             <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
             <AlertDialogAction className="bg-[var(--chart-red)] hover:bg-red-700 text-white" onClick={() => removePost(post.id)}>
               ลบโพสต์
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!deleteReplyTarget} onOpenChange={(open) => !open && setDeleteReplyTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>ลบความคิดเห็นนี้?</AlertDialogTitle>
+            <AlertDialogDescription>ลบแล้วย้อนกลับไม่ได้</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-[var(--chart-red)] hover:bg-red-700 text-white"
+              onClick={() => {
+                if (deleteReplyTarget) deleteReplyAction(post.id, deleteReplyTarget);
+                setDeleteReplyTarget(null);
+              }}
+            >
+              ลบความคิดเห็น
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
