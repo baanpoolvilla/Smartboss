@@ -629,7 +629,13 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           // own independent segment instead (no cross-column bar), which is
           // what a plain per-day dot needs — narrow month view only, since
           // the wide pill view's spanning bar is the whole point there.
-          eventDisplay={isNarrowViewport && view === "dayGridMonth" ? "list-item" : "auto"}
+          // "auto" defaults to "list-item" (dot only, no pale pill) for any
+          // event with a specific time and "block" (pale pill) for all-day
+          // ones — so on desktop a timed meeting/task lost its pill while an
+          // all-day to-do kept it, the exact inconsistency this screens for.
+          // Force "block" everywhere on desktop month so every type gets the
+          // same pale-chip treatment.
+          eventDisplay={view === "dayGridMonth" ? (isNarrowViewport ? "list-item" : "block") : "auto"}
           eventContent={renderEventContent}
           // Cells share one height; show as many events as fit and only surface
           // "+more" when they actually overflow the cell (not a fixed count).

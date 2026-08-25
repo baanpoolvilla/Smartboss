@@ -286,9 +286,14 @@
 .ebw-calendar .fc-daygrid-day:hover {
   background-color: color-mix(in srgb, var(--brand-green) 6%, transparent);
 }
-/* Pale chip in the event's own color with a solid left accent bar. */
+/* Pale chip in the event's own color with a solid left accent bar. Only the
+   right corners round — rounding the left ones too curves the caps of the
+   left border itself (the only border side that exists here) into a small
+   "(" shape next to the leading dot, and that curve's apparent size swings
+   with each chip's height (single line vs a wrapped/taller one), reading as
+   an inconsistent stray mark rather than a straight accent bar. */
 .ebw-calendar .fc-event {
-  border-radius: 6px;
+  border-radius: 0 6px 6px 0;
   border-style: solid;
   border-width: 0 0 0 3px;
   padding: 0;
