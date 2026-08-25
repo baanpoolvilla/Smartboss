@@ -4,9 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { ReportCard } from "@/modules/report_task/components/report-feed/report-card";
 import { DaySeparator } from "@/modules/report_task/components/report-feed/report-day-separator";
 import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
-import { groupByDay, relativeTime } from "@/modules/report_task/lib/format";
-import { getUser } from "@/modules/report_task/lib/directory";
-import { ArrowDown, ChevronDown, ImageIcon, MessageCircle, MessageSquareText } from "lucide-react";
+import { groupByDay } from "@/modules/report_task/lib/format";
+import { ArrowDown, MessageSquareText } from "lucide-react";
 
 const NEAR_BOTTOM_PX = 120;
 
@@ -18,67 +17,6 @@ function lastActivityOf(post: ReportPost): string {
   let latest = post.createdAt;
   for (const r of post.replies) if (r.createdAt > latest) latest = r.createdAt;
   return latest;
-}
-
-/** A one-line preview of what a post actually says — first non-empty
- * bullet across its sections, falling back to "แนบรูป N รูป" for an
- * image-only check-in with no text at all. */
-function snippetOf(post: ReportPost): string {
-  for (const section of post.sections) {
-    const bullet = section.bullets.find((b) => b.trim().length > 0);
-    if (bullet) return bullet;
-  }
-  if (post.images.length > 0) return `แนบรูป ${post.images.length} รูป`;
-  return "";
-}
-
-/** One collapsed row in "threads" mode — a forum thread-list line (title,
- * author, snippet, reply count, last-activity time) rather than the full
- * card, so scanning a busy room means reading a list of topics instead of
- * scrolling past every message body. Clicking it expands into the real
- * `ReportCard` (post + all replies) in place. */
-function ThreadRow({ post, onToggle }: { post: ReportPost; onToggle: () => void }) {
-  const author = getUser(post.authorId);
-  const replyCount = post.replies.length;
-  return (
-    <button
-      onClick={onToggle}
-      data-slot="card"
-      // Same data-slot="card" fix as ReportCard's own polish pass — this
-      // collapsed row is a real button, not a <Card>, so it never got the
-      // app-wide hover shadow/lift either and read just as flat next to it.
-      // bg-[var(--bg-soft)]/60 on hover fought with that new shadow (both
-      // trying to signal "hovered"), so hover now leans on the shadow/lift
-      // alone, same as every other card.
-      className="w-full flex items-start gap-3 rounded-xl border border-[var(--line)] bg-[var(--bg)] px-4 py-3.5 text-left shadow-sm transition-colors"
-    >
-      <span className="h-8 w-8 rounded-full bg-[var(--accent)] text-[var(--brand-green-dark)] text-[10px] font-semibold flex items-center justify-center shrink-0">
-        {author?.avatar ?? "?"}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-2">
-          <span className="text-sm font-semibold truncate">{post.title}</span>
-          {post.pinned && <span className="shrink-0 text-[10px] font-medium text-[var(--brand-green-dark)] bg-[var(--accent)] rounded-full px-1.5 py-0.5">ปักหมุด</span>}
-        </span>
-        <span className="block text-xs text-[var(--ink-soft)] truncate mt-0.5">
-          {author?.name ?? "ไม่ทราบชื่อ"}{snippetOf(post) && ` — ${snippetOf(post)}`}
-        </span>
-      </span>
-      <span className="shrink-0 flex flex-col items-end gap-1 text-[11px] text-[var(--ink-faint)]">
-        <span>{relativeTime(lastActivityOf(post))}</span>
-        {replyCount > 0 ? (
-          <span className="flex items-center gap-1 text-[var(--ink-soft)] font-medium">
-            <MessageCircle className="h-3 w-3" /> {replyCount}
-          </span>
-        ) : post.images.length > 0 ? (
-          <span className="flex items-center gap-1">
-            <ImageIcon className="h-3 w-3" /> {post.images.length}
-          </span>
-        ) : null}
-      </span>
-      <ChevronDown className="h-4 w-4 text-[var(--ink-faint)] shrink-0 mt-0.5" />
-    </button>
-  );
 }
 
 /** Scrollable post timeline for the active topic — Teams-style: jumps to the newest post on topic switch or when already at the bottom, otherwise surfaces a "jump to latest" affordance instead of yanking scroll position around. */
@@ -104,28 +42,6 @@ export function ReportFeed({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const isStream = viewMode === "stream";
-  // "threads" mode's collapsed-row expand state — one thread open at a
-  // time, cleared on topic switch so a different room never opens already
-  // showing yesterday's expanded thread.
-  const [expandedThreadId, setExpandedThreadId] = useState<string | null>(null);
-  // Adjusted during render (React's own guidance for resetting state on a
-  // prop change) rather than in an effect — same pattern as add-todo-dialog.tsx.
-  const [lastTopicId, setLastTopicId] = useState(topic.id);
-  if (topic.id !== lastTopicId) {
-    setLastTopicId(topic.id);
-    setExpandedThreadId(null);
-  }
-  // A "copy link"/highlight deep-link into a specific post should open it
-  // even when the room happens to be in "threads" mode — otherwise the link
-  // would silently land on a collapsed row instead of the post it pointed at.
-  // Keyed on both inputs (not just highlightPostId) so switching into
-  // "threads" mode with an already-set highlight still expands it.
-  const highlightKey = `${isStream}:${highlightPostId}`;
-  const [lastHighlightKey, setLastHighlightKey] = useState(highlightKey);
-  if (highlightKey !== lastHighlightKey) {
-    setLastHighlightKey(highlightKey);
-    if (!isStream && highlightPostId) setExpandedThreadId(highlightPostId);
-  }
 
   useEffect(() => {
     if (!isStream) return;
@@ -190,23 +106,20 @@ export function ReportFeed({
             </div>
           ))
         ) : (
+          // Thread mode used to yumup every post but the one just clicked
+          // into a one-line forum row (ThreadRow), one at a time — a real
+          // Teams screenshot compared against ours made clear that's not
+          // what "Thread" is actually supposed to look like: every post
+          // stays a full card, same as stream, just recent-activity-first
+          // instead of chronological, with its own "ตอบกลับในเธรด" toggle
+          // per card (see ReportCard) instead of a whole-post collapse/
+          // expand. ThreadRow itself is now unused (kept below for whatever
+          // still imports its exported pieces, if anything does).
           [...topicPosts]
             .sort((a, b) => lastActivityOf(b).localeCompare(lastActivityOf(a)))
-            .map((p) =>
-              p.id === expandedThreadId ? (
-                <div key={p.id} className="space-y-1.5">
-                  <ReportCard post={p} topic={topic} highlighted={p.id === highlightPostId} highlightReplyId={highlightReplyId} onOpenTask={onOpenTask} />
-                  <button
-                    onClick={() => setExpandedThreadId(null)}
-                    className="text-xs text-[var(--ink-soft)] hover:text-[var(--ink)] px-1"
-                  >
-                    ↑ ย่อกลับเป็นหัวข้อ
-                  </button>
-                </div>
-              ) : (
-                <ThreadRow key={p.id} post={p} onToggle={() => setExpandedThreadId(p.id)} />
-              )
-            )
+            .map((p) => (
+              <ReportCard key={p.id} post={p} topic={topic} highlighted={p.id === highlightPostId} highlightReplyId={highlightReplyId} onOpenTask={onOpenTask} />
+            ))
         )}
       </div>
 

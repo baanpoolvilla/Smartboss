@@ -73,21 +73,6 @@ function toMessages(posts: ReportPost[]): OpenchatMessage[] {
   return out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
-/** Discord's own dark palette, hardcoded on purpose — this is meant to read
- * as a distinctly different room *identity* from Thread's light Teams-toned
- * cards (that's the whole point of offering the two as different picks at
- * room creation), not something that should follow the app's own light
- * theme tokens. */
-const D = {
-  bg: "#313338",
-  bgSoft: "#2b2d31",
-  ink: "#f2f3f5",
-  inkSoft: "#949ba4",
-  inkFaint: "#6d6f78",
-  line: "#3f4147",
-  accent: "#5865f2",
-};
-
 export function OpenchatFeed({
   topic,
   topicPosts,
@@ -99,7 +84,6 @@ export function OpenchatFeed({
 }) {
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const addPost = useReportFeedStore((s) => s.addPost);
-  const addReply = useReportFeedStore((s) => s.addReply);
   const removePost = useReportFeedStore((s) => s.removePost);
   const editPost = useReportFeedStore((s) => s.editPost);
   const editReplyAction = useReportFeedStore((s) => s.editReply);
@@ -171,22 +155,20 @@ export function OpenchatFeed({
   const dayGroups = groupByDay(messages, (m) => m.createdAt);
 
   return (
-    <div className="relative flex-1 flex flex-col min-h-0 rounded-b-2xl overflow-hidden" style={{ backgroundColor: D.bg }}>
+    <div className="relative flex-1 flex flex-col min-h-0 rounded-b-2xl overflow-hidden bg-[var(--bg)]">
       <div ref={scrollRef} className="flex-1 overflow-y-auto py-3">
         {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center gap-2 text-center px-6" style={{ color: D.inkSoft }}>
-            <p className="text-sm font-semibold" style={{ color: D.ink }}>
-              ยินดีต้อนรับสู่ #{topic.name}
-            </p>
+          <div className="h-full flex flex-col items-center justify-center gap-2 text-center px-6 text-[var(--ink-soft)]">
+            <p className="text-sm font-semibold text-[var(--ink)]">ยินดีต้อนรับสู่ #{topic.name}</p>
             <p className="text-xs">พิมพ์ข้อความแรกด้านล่างเพื่อเริ่มคุยกันได้เลย</p>
           </div>
         ) : (
           dayGroups.map((group) => (
             <div key={group.key}>
-              <div className="flex items-center gap-3 px-5 py-2 text-[11px]" style={{ color: D.inkSoft }}>
-                <span className="flex-1 h-px" style={{ backgroundColor: D.line }} />
+              <div className="flex items-center gap-3 px-5 py-2 text-[11px] text-[var(--ink-soft)]">
+                <span className="flex-1 h-px bg-[var(--line)]" />
                 {group.label}
-                <span className="flex-1 h-px" style={{ backgroundColor: D.line }} />
+                <span className="flex-1 h-px bg-[var(--line)]" />
               </div>
               {group.items.map((m) => {
                 const author = getUser(m.authorId);
@@ -194,14 +176,14 @@ export function OpenchatFeed({
                 const activeReactions = reactionEmojis.map((emoji) => ({ emoji, users: m.reactions?.[emoji] ?? [] })).filter((r) => r.users.length > 0);
                 const isEditing = editing?.id === m.id;
                 return (
-                  <div key={m.id} className="group/msg relative flex gap-3 px-5 py-1.5 hover:bg-black/10">
+                  <div key={m.id} className="group/msg relative flex gap-3 px-5 py-1.5 hover:bg-[var(--bg-soft)]">
                     <Avatar className="h-9 w-9 shrink-0 mt-0.5">
-                      <AvatarFallback className="text-[11px] bg-[#404249] text-[#dbdee1]">{author?.avatar}</AvatarFallback>
+                      <AvatarFallback className="text-[11px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{author?.avatar}</AvatarFallback>
                     </Avatar>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline gap-2">
-                        <span className="text-[13.5px] font-semibold" style={{ color: D.ink }}>{author?.name ?? "ไม่ทราบชื่อ"}</span>
-                        <span className="text-[10.5px]" style={{ color: D.inkFaint }}>
+                        <span className="text-[13.5px] font-semibold text-[var(--ink)]">{author?.name ?? "ไม่ทราบชื่อ"}</span>
+                        <span className="text-[10.5px] text-[var(--ink-faint)]">
                           {new Date(m.createdAt).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}
                           {m.editedAt && " · แก้ไขแล้ว"}
                         </span>
@@ -213,8 +195,7 @@ export function OpenchatFeed({
                             value={editing.body}
                             onChange={(e) => setEditing({ id: m.id, body: e.target.value })}
                             rows={2}
-                            className="w-full resize-none rounded-md px-2 py-1.5 text-sm outline-none"
-                            style={{ backgroundColor: D.bgSoft, color: D.ink, border: `1px solid ${D.line}` }}
+                            className="w-full resize-none rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--brand-green)]/50"
                             onKeyDown={(e) => {
                               if (e.key === "Enter" && !e.shiftKey) {
                                 e.preventDefault();
@@ -222,8 +203,8 @@ export function OpenchatFeed({
                               } else if (e.key === "Escape") setEditing(null);
                             }}
                           />
-                          <div className="flex items-center gap-2 text-[11px]" style={{ color: D.inkSoft }}>
-                            <button onClick={saveEdit} className="flex items-center gap-1 font-semibold" style={{ color: D.accent }}>
+                          <div className="flex items-center gap-2 text-[11px] text-[var(--ink-soft)]">
+                            <button onClick={saveEdit} className="flex items-center gap-1 font-semibold text-[var(--brand-green-dark)]">
                               <Check className="h-3 w-3" /> บันทึก
                             </button>
                             <button onClick={() => setEditing(null)} className="hover:underline">ยกเลิก</button>
@@ -231,19 +212,14 @@ export function OpenchatFeed({
                         </div>
                       ) : (
                         <>
-                          {m.body && (
-                            <p className="text-[13.5px] leading-snug mt-0.5" style={{ color: "#dbdee1" }}>
-                              {renderRichBulletText(m.body)}
-                            </p>
-                          )}
+                          {m.body && <p className="text-[13.5px] leading-snug mt-0.5 text-[var(--ink)]">{renderRichBulletText(m.body)}</p>}
                           {!!m.images?.length && (
                             <div className="flex flex-wrap gap-1.5 mt-1.5">
                               {m.images.map((img, i) => (
                                 <button
                                   key={img.id}
                                   onClick={() => setLightbox({ images: m.images!, index: i })}
-                                  className="rounded-md overflow-hidden hover:opacity-90 transition-opacity"
-                                  style={{ border: `1px solid ${D.line}` }}
+                                  className="rounded-md overflow-hidden border border-[var(--line)] hover:opacity-90 transition-opacity"
                                 >
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
                                   <img src={img.url ?? img.dataUrl} alt={img.name} className="h-32 w-32 object-cover" />
@@ -259,12 +235,12 @@ export function OpenchatFeed({
                                   <button
                                     key={emoji}
                                     onClick={() => toggleMessageReaction(m, emoji)}
-                                    className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition-colors"
-                                    style={
+                                    className={cn(
+                                      "flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] border transition-colors",
                                       mine
-                                        ? { backgroundColor: "rgba(88,101,242,.15)", border: `1px solid ${D.accent}`, color: "#c9cdfb" }
-                                        : { backgroundColor: D.bgSoft, border: `1px solid ${D.line}`, color: D.inkSoft }
-                                    }
+                                        ? "bg-[var(--accent)] border-[var(--brand-green)]/40 text-[var(--brand-green-dark)]"
+                                        : "bg-[var(--bg-soft)] border-[var(--line)] text-[var(--ink-soft)]"
+                                    )}
                                   >
                                     <span>{emoji}</span>
                                     <span className="tabular-nums">{users.length}</span>
@@ -279,16 +255,12 @@ export function OpenchatFeed({
 
                     {/* Hover action row — floats top-right of the message, Discord-style, instead of a persistent row eating space on every line. */}
                     {!isEditing && (
-                      <div
-                        className="absolute right-4 -top-2 hidden group-hover/msg:flex items-center gap-0.5 rounded-md p-0.5 shadow-lg"
-                        style={{ backgroundColor: D.bgSoft, border: `1px solid ${D.line}` }}
-                      >
+                      <div className="absolute right-4 -top-2 hidden group-hover/msg:flex items-center gap-0.5 rounded-md p-0.5 border border-[var(--line)] bg-[var(--bg)] shadow-md">
                         <Popover open={openReactionFor === m.id} onOpenChange={(open) => setOpenReactionFor(open ? m.id : null)}>
                           <PopoverTrigger
                             render={
                               <button
-                                className="h-7 w-7 flex items-center justify-center rounded hover:bg-white/10"
-                                style={{ color: D.inkSoft }}
+                                className="h-7 w-7 flex items-center justify-center rounded text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
                                 aria-label="ทำเครื่องหมาย"
                               >
                                 <SmilePlus className="h-3.5 w-3.5" />
@@ -314,16 +286,14 @@ export function OpenchatFeed({
                           <>
                             <button
                               onClick={() => setEditing({ id: m.id, body: m.body })}
-                              className="h-7 w-7 flex items-center justify-center rounded hover:bg-white/10"
-                              style={{ color: D.inkSoft }}
+                              className="h-7 w-7 flex items-center justify-center rounded text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
                               aria-label="แก้ไขข้อความ"
                             >
                               <Pencil className="h-3.5 w-3.5" />
                             </button>
                             <button
                               onClick={() => setDeleteTarget(m.kind === "post" ? { postId: m.postId } : { postId: m.postId, replyId: m.id })}
-                              className="h-7 w-7 flex items-center justify-center rounded hover:bg-white/10"
-                              style={{ color: "#f23f42" }}
+                              className="h-7 w-7 flex items-center justify-center rounded text-[var(--ink-soft)] hover:bg-red-50 hover:text-[var(--chart-red)]"
                               aria-label="ลบข้อความ"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
@@ -365,10 +335,12 @@ export function OpenchatFeed({
       </AlertDialog>
 
       {/* Single persistent composer for the whole channel — not one per
-          message like Thread's reply box, matching Discord's own bottom bar. */}
-      <div className="px-4 pb-4 pt-1" style={{ backgroundColor: D.bg }}>
-        <div className="flex items-center gap-3 rounded-xl px-3 py-2.5" style={{ backgroundColor: D.bgSoft }}>
-          <button className="h-6 w-6 flex items-center justify-center rounded-full shrink-0" style={{ backgroundColor: D.inkFaint, color: D.bg }} aria-label="แนบไฟล์">
+          message like Thread's reply box, matching Discord's own bottom bar.
+          Light theme now (see file-level note below), only the *layout*
+          (one bar, flat stream) is what's meant to read as Discord. */}
+      <div className="px-4 pb-4 pt-1 bg-[var(--bg)]">
+        <div className="flex items-center gap-3 rounded-xl px-3 py-2.5 bg-[var(--bg-soft)] border border-[var(--line)]">
+          <button className="h-6 w-6 flex items-center justify-center rounded-full shrink-0 bg-[var(--brand-green)] text-[var(--ink)]" aria-label="แนบไฟล์">
             <Plus className="h-4 w-4" />
           </button>
           <input
@@ -381,8 +353,7 @@ export function OpenchatFeed({
               }
             }}
             placeholder={`พิมพ์ข้อความไปที่ #${topic.name}`}
-            className="flex-1 min-w-0 bg-transparent text-sm outline-none"
-            style={{ color: D.ink }}
+            className="flex-1 min-w-0 bg-transparent text-sm outline-none text-[var(--ink)] placeholder:text-[var(--ink-faint)]"
           />
         </div>
       </div>

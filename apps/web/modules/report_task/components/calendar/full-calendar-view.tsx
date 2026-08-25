@@ -90,6 +90,8 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
   const calendarRef = useRef<FullCalendar | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
+  const hintRef = useRef<HTMLParagraphElement | null>(null);
   const [view, setView] = useState<ViewKey>("dayGridMonth");
   const [title, setTitle] = useState(initialTitle);
   const [currentDate, setCurrentDate] = useState<Date>(INITIAL_DATE);
@@ -124,20 +126,21 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
   // so a busy week's rows stretched tall while a quiet week's stayed short
   // ("มันปรับตามงานในช่องมันก็จะดันอีกช่องบีบให้เล็ก") instead of every week
   // getting an equal share of the card. expandRows only reliably equalizes
-  // when height is an actual pixel number, so this measures the wrapper's
-  // own rendered height (via ResizeObserver, since it's sized by flex not a
-  // number we compute ourselves) and feeds that back in as one.
+  // when height is an actual pixel number.
+  //
+  // The first fix here measured the wrapper's own *rendered* height via
+  // ResizeObserver and fed that back in as the number — which sounds right,
+  // but is circular: a busy month needing more room to fit dayMaxEvents'
+  // worth of chips grows the wrapper, the observer picks that up, feeds a
+  // taller number back to FullCalendar, which settles taller still — so the
+  // whole card visibly grew and shrank between a quiet and a busy month
+  // ("ตารางมันหดเข้าออกเวลามีงานเยอะ...อยากให้คงที่ไว้ตลอด") even though
+  // cardHeight above is supposed to be fixed. Computed here instead, purely
+  // from cardHeight minus the toolbar/hint rows' own measured heights — both
+  // recomputed only on window resize (same as cardHeight), never in response
+  // to the grid's own content, so nothing the calendar renders can feed back
+  // into how tall it's told to be.
   const [gridHeight, setGridHeight] = useState<number>();
-  useEffect(() => {
-    const el = wrapperRef.current;
-    if (!el) return;
-    const observer = new ResizeObserver((entries) => {
-      const height = entries[0]?.contentRect.height;
-      if (height) setGridHeight(Math.round(height));
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
   useEffect(() => {
     function computeLayout() {
       const top = wrapperRef.current?.getBoundingClientRect().top ?? 0;
@@ -175,7 +178,11 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
         // is what actually guarantees the two cards land on the same
         // bottom edge instead of merely being similar heights.
         const cardTop = cardRef.current?.getBoundingClientRect().top ?? 0;
-        setCardHeight(Math.max(360, Math.round(window.innerHeight - cardTop - 32)));
+        const desktopCardHeight = Math.max(360, Math.round(window.innerHeight - cardTop - 32));
+        setCardHeight(desktopCardHeight);
+        const toolbarHeight = toolbarRef.current?.getBoundingClientRect().height ?? 0;
+        const hintHeight = hintRef.current?.getBoundingClientRect().height ?? 0;
+        setGridHeight(Math.max(240, Math.round(desktopCardHeight - toolbarHeight - hintHeight)));
       }
     }
     computeLayout();
@@ -572,7 +579,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
       className="rounded-xl border border-[var(--line)] bg-white p-3 sm:p-4 lg:flex lg:flex-col"
       style={isDesktop ? { height: cardHeight } : undefined}
     >
-      <div className="flex flex-wrap items-center gap-3 pb-3 mb-3 lg:pb-2 lg:mb-2 lg:shrink-0 border-b border-[var(--line)]">
+      <div ref={toolbarRef} className="flex flex-wrap items-center gap-3 pb-3 mb-3 lg:pb-2 lg:mb-2 lg:shrink-0 border-b border-[var(--line)]">
         <div className="flex items-center gap-1">
           <Button
             variant="outline"
@@ -640,7 +647,12 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
         </div>
       </div>
 
-      <div className="ebw-calendar lg:flex-1 lg:min-h-0" ref={wrapperRef}>
+      {/* lg:overflow-hidden — a hard backstop on top of the fix above: if a
+          genuinely tiny window ever left too little room for dayMaxEvents'
+          worth of chips to fit a row's fair share, this clips rather than
+          letting the grid grow past gridHeight, so "stays exactly the same
+          size" holds even in that edge case, not just the common one. */}
+      <div className="ebw-calendar lg:flex-1 lg:min-h-0 lg:overflow-hidden" ref={wrapperRef}>
         <FullCalendar
           ref={calendarRef}
           plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
@@ -726,7 +738,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           most of what read as "wasted space" below the grid itself (asked
           for explicitly: "เอาแค่ที่กรอบให้พอ...มันเปลืองมาก"). Desktop keeps
           the full line unchanged. */}
-      <p className="hidden sm:flex items-center gap-1.5 text-xs text-[var(--ink-soft)] mt-3 pt-3 lg:mt-2 lg:pt-2 lg:shrink-0 border-t border-[var(--line)]">
+      <p ref={hintRef} className="hidden sm:flex items-center gap-1.5 text-xs text-[var(--ink-soft)] mt-3 pt-3 lg:mt-2 lg:pt-2 lg:shrink-0 border-t border-[var(--line)]">
         <MousePointerClick className="h-3.5 w-3.5" />
         {addHint} · คีย์ลัด: <kbd className="rounded border border-[var(--line)] bg-[var(--bg-soft)] px-1">C</kbd> สร้าง ·{" "}
         <kbd className="rounded border border-[var(--line)] bg-[var(--bg-soft)] px-1">T</kbd> วันนี้ ·{" "}
