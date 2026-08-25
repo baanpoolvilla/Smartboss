@@ -9,7 +9,7 @@ import { useReportFeedStore, type ReportPostImage, type ReportTopic } from "@/mo
 import { uploadCompressedImage } from "@/modules/report_task/lib/image-resize";
 import { currentCutoff, minImagesNow } from "@/modules/report_task/lib/report-cutoff";
 import { ReportPostFields, newSection, type DraftSection } from "@/modules/report_task/components/report-feed/report-post-fields";
-import { Clock, Lock, Send } from "lucide-react";
+import { Clock, Lock, Send, SquarePen } from "lucide-react";
 import { toast } from "sonner";
 
 // A room's own starter sections (Phase 6 "เทมเพลตโพสต์") pre-fill a brand-new
@@ -96,17 +96,18 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   }
 
   if (!expanded) {
+    // Compact pill trigger — Teams' own "Post in channel" button is a small
+    // left-aligned pill, not a full-width bar — just the shape/format here,
+    // colored with our own brand-green token rather than Teams' purple.
     return (
-      <div className="shrink-0 border-t border-[var(--line)]/60 bg-white px-5 py-3.5">
+      <div className="shrink-0 border-t border-[var(--line)]/60 bg-white px-5 py-3">
         <button
           data-tour="composer-trigger"
           onClick={() => setExpanded(true)}
-          className="w-full flex items-center gap-3 rounded-full border border-[var(--line)] bg-[var(--bg-soft)] px-4 py-2.5 text-left text-[15px] text-[var(--ink-soft)] hover:border-[var(--brand-green)]/40 hover:bg-white transition-colors duration-200"
+          className="inline-flex items-center gap-2 rounded-lg bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] hover:text-white text-[var(--ink)] text-sm font-semibold px-4 py-2 transition-colors"
         >
-          <Avatar className="h-8 w-8 shrink-0">
-            <AvatarFallback className="text-[10px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{viewer.avatar}</AvatarFallback>
-          </Avatar>
-          เริ่มการสนทนาใหม่ใน &quot;{topic.name}&quot;...
+          <SquarePen className="h-4 w-4" />
+          โพสต์ในหัวข้อนี้
         </button>
       </div>
     );

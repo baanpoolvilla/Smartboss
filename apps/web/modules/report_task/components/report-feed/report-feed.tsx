@@ -9,50 +9,36 @@ import { ArrowDown, MessageSquareText } from "lucide-react";
 
 const NEAR_BOTTOM_PX = 120;
 
-/** Latest thing that happened on a post — itself or its newest reply — used
- * to sort "threads" mode by recent activity instead of by when the thread
- * was first opened (a week-old post with a reply five minutes ago belongs
- * near the top, same as a forum's "recently active" ordering). */
-function lastActivityOf(post: ReportPost): string {
-  let latest = post.createdAt;
-  for (const r of post.replies) if (r.createdAt > latest) latest = r.createdAt;
-  return latest;
-}
-
-/** Scrollable post timeline for the active topic — Teams-style: jumps to the newest post on topic switch or when already at the bottom, otherwise surfaces a "jump to latest" affordance instead of yanking scroll position around. */
+/** Scrollable post timeline for the active topic — Teams-style: chronological,
+ * oldest at the top and new posts pushed in at the bottom (never reordered by
+ * reply activity — a post you're actively replying to must stay put, not jump
+ * to the top and yank everyone's scroll position around). Jumps to the newest
+ * post on topic switch or when already at the bottom, otherwise surfaces a
+ * "jump to latest" affordance instead of forcing the scroll position. */
 export function ReportFeed({
   topic,
   topicPosts,
   highlightPostId,
   highlightReplyId,
-  viewMode = "stream",
   onOpenTask,
 }: {
   topic: ReportTopic;
   topicPosts: ReportPost[];
   highlightPostId: string | null;
   highlightReplyId?: string | null;
-  /** "stream" (default) = chat-log order, oldest→newest, day-grouped, auto-
-   *  scrolls to the newest post. "threads" = forum order, most-recently-
-   *  active post first, no day grouping/auto-scroll — for scanning a busy
-   *  room by what's currently being discussed rather than by clock time. */
-  viewMode?: "stream" | "threads";
   onOpenTask?: (taskId: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
-  const isStream = viewMode === "stream";
 
   useEffect(() => {
-    if (!isStream) return;
     const el = scrollRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [topic.id, isStream]);
+  }, [topic.id]);
 
   const prevCount = useRef(topicPosts.length);
   useEffect(() => {
-    if (!isStream) return;
     const el = scrollRef.current;
     if (!el) return;
     const grew = topicPosts.length > prevCount.current;
@@ -64,7 +50,7 @@ export function ReportFeed({
     } else {
       setShowJumpToLatest(true);
     }
-  }, [topicPosts.length, isStream]);
+  }, [topicPosts.length]);
 
   function handleScroll() {
     const el = scrollRef.current;
@@ -96,7 +82,7 @@ export function ReportFeed({
               <p className="text-xs text-[var(--ink-soft)]">เริ่มการสนทนาแรกได้เลยจากช่องด้านล่าง</p>
             </div>
           </div>
-        ) : isStream ? (
+        ) : (
           groupByDay(topicPosts, (p) => p.createdAt).map((group) => (
             <div key={group.key}>
               <DaySeparator label={group.label} />
@@ -105,25 +91,10 @@ export function ReportFeed({
               ))}
             </div>
           ))
-        ) : (
-          // Thread mode used to yumup every post but the one just clicked
-          // into a one-line forum row (ThreadRow), one at a time — a real
-          // Teams screenshot compared against ours made clear that's not
-          // what "Thread" is actually supposed to look like: every post
-          // stays a full card, same as stream, just recent-activity-first
-          // instead of chronological, with its own "ตอบกลับในเธรด" toggle
-          // per card (see ReportCard) instead of a whole-post collapse/
-          // expand. ThreadRow itself is now unused (kept below for whatever
-          // still imports its exported pieces, if anything does).
-          [...topicPosts]
-            .sort((a, b) => lastActivityOf(b).localeCompare(lastActivityOf(a)))
-            .map((p) => (
-              <ReportCard key={p.id} post={p} topic={topic} highlighted={p.id === highlightPostId} highlightReplyId={highlightReplyId} onOpenTask={onOpenTask} />
-            ))
         )}
       </div>
 
-      {isStream && showJumpToLatest && (
+      {showJumpToLatest && (
         <button
           onClick={jumpToLatest}
           className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 rounded-full bg-[var(--ink)] text-white text-xs font-medium px-3 py-1.5 shadow-lg hover:opacity-90"

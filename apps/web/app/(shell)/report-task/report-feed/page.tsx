@@ -648,7 +648,6 @@ function ReportFeedPageInner() {
                         topicPosts={filteredTopicPosts}
                         highlightPostId={highlightPostId}
                         highlightReplyId={highlightReplyId}
-                        viewMode={activeTopic.feedViewMode ?? "stream"}
                         onOpenTask={setOpenTaskId}
                       />
                       <ReportComposer topic={activeTopic} />
