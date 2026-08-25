@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type CSSProperties } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
@@ -96,6 +96,16 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
   const [title, setTitle] = useState(initialTitle);
   const [currentDate, setCurrentDate] = useState<Date>(INITIAL_DATE);
   const [pickerOpen, setPickerOpen] = useState(false);
+  // How many week-rows the month grid is actually showing right now — 5 or 6
+  // depending on the month (fixedWeekCount stays false, see its own comment
+  // below), read straight off datesSet's activeStart/activeEnd instead of
+  // hardcoding 6. Feeds monthRowHeightPx just below: expandRows alone only
+  // grows a *short* row to fill leftover space, it doesn't shrink a *busy*
+  // row back down to match — so a quiet week (no events, just a date number)
+  // rendered visibly shorter than a busy one even with expandRows on. An
+  // explicit min-height, the same fixed number on every row, forces them
+  // level regardless of how much each one's own content needs.
+  const [monthRowCount, setMonthRowCount] = useState(6);
 
   // Fills whatever room is actually below the calendar's own position instead
   // of a flat 720px — on a typical desktop window that flat value pushed the
@@ -283,6 +293,10 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
     onViewDateChange?.(arg.view.currentStart);
     onRangeChange?.({ start: arg.view.currentStart, end: arg.view.currentEnd, viewType: arg.view.type as ViewKey });
     onActiveRangeChange?.({ start: arg.view.activeStart, end: arg.view.activeEnd });
+    if (arg.view.type === "dayGridMonth") {
+      const days = Math.round((arg.view.activeEnd.getTime() - arg.view.activeStart.getTime()) / 86400000);
+      setMonthRowCount(days / 7);
+    }
   }
 
   // Navigating months makes the grid re-render across several async frames,
@@ -652,7 +666,15 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           worth of chips to fit a row's fair share, this clips rather than
           letting the grid grow past gridHeight, so "stays exactly the same
           size" holds even in that edge case, not just the common one. */}
-      <div className="ebw-calendar lg:flex-1 lg:min-h-0 lg:overflow-hidden" ref={wrapperRef}>
+      <div
+        className="ebw-calendar lg:flex-1 lg:min-h-0 lg:overflow-hidden"
+        ref={wrapperRef}
+        style={
+          !(isNarrowViewport && view === "dayGridMonth")
+            ? ({ "--ebw-row-height": `${(isDesktop ? (gridHeight ?? calendarHeight) : calendarHeight) / monthRowCount}px` } as CSSProperties)
+            : undefined
+        }
+      >
         <FullCalendar
           ref={calendarRef}
           plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}

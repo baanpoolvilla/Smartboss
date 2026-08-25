@@ -163,7 +163,11 @@ function ReportFeedPageInner() {
   // its sidebar row (see topic-sidebar.tsx), so landing on one here only
   // happens via a stale/deep-linked id. Redirect to its first sub-topic
   // instead of rendering an empty folder view.
-  const isParentId = (id: string) => visibleTopics.some((t) => t.parentId === id);
+  const isParentId = (id: string) => {
+    const topic = visibleTopics.find((t) => t.id === id);
+    if (topic?.allowDirectPost) return false;
+    return visibleTopics.some((t) => t.parentId === id);
+  };
 
   // Falls back to the first (non-folder) topic once the persisted store
   // rehydrates (topics start empty on the very first client render) —

@@ -283,6 +283,17 @@
 .ebw-calendar .fc-day-other.fc-day-sun:not(.fc-day-today) .fc-daygrid-day-number {
   color: color-mix(in srgb, #dc2626 45%, var(--ink-faint, #a5b0c2));
 }
+/* expandRows alone only grows a short/empty week row to fill leftover
+   space — it doesn't shrink a busy row back down, so a quiet week (just a
+   date number, no events) rendered visibly shorter than a week with a
+   couple of event chips even with expandRows on ("มันเท่ากันทุกตารางไหม").
+   --ebw-row-height (full-calendar-view.tsx: total grid height ÷ however
+   many week-rows the month actually has) forces every row to the exact
+   same floor regardless of its own content — falls back to "auto" when
+   unset (narrow-mobile month view, which deliberately stays content-sized). */
+.ebw-calendar .fc-daygrid-day-frame {
+  min-height: var(--ebw-row-height, auto);
+}
 /* Hover a day cell to hint it's clickable (add event). */
 .ebw-calendar .fc-daygrid-day {
   transition: background-color 0.12s ease;

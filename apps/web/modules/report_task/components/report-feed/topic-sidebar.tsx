@@ -199,6 +199,11 @@ export function TopicSidebar({
   // again as an editable field for this room afterward (see room-settings-
   // sheet.tsx and feedViewMode's own comment on ReportTopic).
   const [feedViewMode, setFeedViewMode] = useState<"stream" | "threads">("stream");
+  // Only matters once this topic actually has sub-topics (see
+  // `allowDirectPost` on ReportTopic) — editable anytime, unlike createKind/
+  // feedViewMode, since it doesn't affect data shape, just whether the row
+  // stays clickable once a child gets added.
+  const [allowDirectPost, setAllowDirectPost] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Collapsed = chevron pointing right, hiding the sub-topics — every
@@ -228,6 +233,7 @@ export function TopicSidebar({
     setDescription("");
     setCreateKind(defaultParentId ? "sub" : "main");
     setFeedViewMode("stream");
+    setAllowDirectPost(false);
   }
 
   function openEdit(t: ReportTopic) {
@@ -238,6 +244,7 @@ export function TopicSidebar({
     setLogoUrl(t.logoUrl);
     setParentId(t.parentId);
     setDescription(t.description ?? "");
+    setAllowDirectPost(t.allowDirectPost ?? false);
   }
 
   async function handleLogoFile(file: File | undefined) {
@@ -267,7 +274,17 @@ export function TopicSidebar({
     const effectiveIcon = effectiveParentId ? undefined : icon;
     const effectiveLogoUrl = effectiveParentId ? undefined : logoUrl;
     if (editor?.mode === "edit") {
-      updateTopicSettings(editor.topic.id, { name: trimmed, color, icon: effectiveIcon, logoUrl: effectiveLogoUrl, parentId: effectiveParentId, description: trimmedDescription });
+      updateTopicSettings(editor.topic.id, {
+        name: trimmed,
+        color,
+        icon: effectiveIcon,
+        logoUrl: effectiveLogoUrl,
+        parentId: effectiveParentId,
+        description: trimmedDescription,
+        // Only meaningful for a top-level topic — harmless to save either
+        // way on a sub-topic, since it can never have children of its own.
+        allowDirectPost: effectiveParentId ? undefined : allowDirectPost,
+      });
       setEditor(null);
     } else {
       // A sub-topic starts scoped the same as its parent (e.g. "ฝ่ายขาย"
@@ -290,6 +307,7 @@ export function TopicSidebar({
         // Openchat room looks identical to any pre-existing stream room,
         // not a different value that happens to mean the same thing.
         feedViewMode: feedViewMode === "stream" ? undefined : "threads",
+        allowDirectPost: createKind === "main" ? allowDirectPost : undefined,
       });
       setEditor(null);
       onSelect(id);
@@ -379,6 +397,11 @@ export function TopicSidebar({
   function renderTopicRow(t: ReportTopic, opts?: { depth?: number; hasChildren?: boolean }) {
     const depth = opts?.depth ?? 0;
     const hasChildren = opts?.hasChildren ?? false;
+    // A parent normally becomes an organizing folder only, once it has
+    // children — but that's opt-out per-topic now (see `allowDirectPost` on
+    // ReportTopic), for the rooms where the parent itself is still somewhere
+    // to post, not just a category label over its children.
+    const canOpenDirectly = !hasChildren || !!t.allowDirectPost;
     const hiddenForMe = depth > 0 && (t.hiddenBy?.includes(viewingAsUserId) ?? false);
     const collapsed = collapsedTopicIds.has(t.id);
     const topicPosts = posts.filter((p) => p.topicId === t.id);
@@ -443,13 +466,13 @@ export function TopicSidebar({
         // its row just expands/collapses the sub-topic list underneath, same
         // as the chevron button. It has nothing of its own to "open" anymore
         // (see report-topic-children-panel.tsx, now settings-only).
-        onClick={() => (depth === 0 && hasChildren ? toggleCollapsed(t.id) : onSelect(t.id))}
+        onClick={() => (depth === 0 && !canOpenDirectly ? toggleCollapsed(t.id) : onSelect(t.id))}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            if (depth === 0 && hasChildren) toggleCollapsed(t.id);
+            if (depth === 0 && !canOpenDirectly) toggleCollapsed(t.id);
             else onSelect(t.id);
           }
         }}
@@ -527,9 +550,10 @@ export function TopicSidebar({
           </button>
         )}
         {/* A parent (has sub-topics) is an organizing folder, not somewhere
-            to browse/post — favoriting only makes sense on an actual leaf
-            room, whether that's a standalone topic or a sub-topic. */}
-        {!hasChildren && (
+            to browse/post — favoriting only makes sense on a room you can
+            actually open, whether that's a leaf topic, a sub-topic, or a
+            parent with allowDirectPost on. */}
+        {canOpenDirectly && (
           <button
             data-tour="topic-star"
             onClick={(e) => {
@@ -901,7 +925,7 @@ export function TopicSidebar({
                         <span className="text-xs font-semibold">Thread</span>
                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[var(--bg-soft)] text-[var(--ink-soft)]">Microsoft Teams</span>
                       </span>
-                      <span className="text-[11px] text-[var(--ink-soft)] leading-snug">แต่ละหัวข้อยุบเป็นแถวเดียว เรียงตามความเคลื่อนไหวล่าสุด</span>
+                      <span className="text-[11px] text-[var(--ink-soft)] leading-snug">แต่ละโพสต์เป็นการ์ดเต็ม พร้อมตอบกลับในเธรดใต้โพสต์</span>
                     </button>
                     <button
                       type="button"
@@ -921,6 +945,29 @@ export function TopicSidebar({
                   <p className="text-[11px] text-[var(--ink-soft)]">🔒 เลือกแล้วแก้ไม่ได้ — เปลี่ยนได้เฉพาะห้องที่สร้างไว้ก่อนหน้านี้</p>
                 </div>
               </div>
+            )}
+
+            {/* A top-level topic normally becomes an organizing folder only
+                (no posting of its own) once it has sub-topics — this opts it
+                out, per-topic, for the ones where the parent itself should
+                stay open too. Doesn't apply to sub-topics (can't have
+                children) and is editable anytime, unlike the two locked
+                create-only pickers above. */}
+            {!isSubTopic && (
+              <label className="flex items-start gap-2.5 rounded-xl border border-[var(--line)] px-3.5 py-3 cursor-pointer hover:bg-[var(--bg-soft)] transition-colors">
+                <input
+                  type="checkbox"
+                  checked={allowDirectPost}
+                  onChange={(e) => setAllowDirectPost(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--brand-green)]"
+                />
+                <span>
+                  <span className="block text-xs font-semibold">โพสต์ในหัวข้อหลักนี้เองได้ด้วย</span>
+                  <span className="block text-[11px] text-[var(--ink-soft)] leading-snug mt-0.5">
+                    ปกติแล้วพอหัวข้อนี้มีหัวข้อย่อย มันจะกลายเป็นแค่ป้ายจัดกลุ่ม กดโพสต์ไม่ได้ — ติ๊กนี้ไว้ถ้าอยากให้ยังโพสต์ในหัวข้อหลักได้เองด้วย แม้จะมีหัวข้อย่อยแล้วก็ตาม
+                  </span>
+                </span>
+              </label>
             )}
 
             {/* รูปลักษณ์ — สีกับไอคอนอยู่ด้วยกัน เพราะเป็นสิ่งเดียวกันที่เห็นในพรีวิวด้านบน */}

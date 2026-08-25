@@ -150,6 +150,14 @@ export interface ReportTopic {
   favoritedBy?: string[];
   /** Id of the top-level topic this one nests under, Teams-style (team > channel) — undefined means this is itself a top-level topic. Only one level deep: a topic that already has children can't also be a child. */
   parentId?: string;
+  /** A top-level topic with sub-topics normally becomes an organizing folder
+   * only — not clickable/postable on its own (see topic-sidebar.tsx) — since
+   * that's what most "team"-style groupings are for. Flip this on to keep it
+   * postable in its own right even after it has children, for the rooms
+   * where the parent itself is also a real place to talk, not just a
+   * category label. No effect on a topic with no children (already postable
+   * either way) or on a sub-topic (can't have children of its own). */
+  allowDirectPost?: boolean;
   /** User ids who've hidden this sub-topic from their own sidebar tree — Teams' "hide channel", per-viewer like `favoritedBy`. Still reachable through its parent's channel list (see report-topic-children-panel.tsx) to toggle back on; only affects the tree render, not visibility/access. */
   hiddenBy?: string[];
   /** Optional one-line blurb — "what this room is about", shown under its name in the header. Teams calls this a team/channel description; purely informational, no effect on permissions or behavior. */
@@ -240,6 +248,7 @@ interface ReportFeedStore {
     description?: string;
     visibility?: ReportTopicVisibility;
     feedViewMode?: "stream" | "threads";
+    allowDirectPost?: boolean;
   }) => string;
   removeTopic: (id: string) => void;
   updateTopicSettings: (
@@ -263,6 +272,7 @@ interface ReportFeedStore {
       archived?: boolean;
       remindBeforeCutoffMinutes?: number;
       notifyManagerSummary?: boolean;
+      allowDirectPost?: boolean;
     }
   ) => void;
   /** Per-viewer notification preference for one room — same "map keyed by
@@ -336,6 +346,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
               description: data.description,
               visibility: data.visibility,
               feedViewMode: data.feedViewMode,
+              allowDirectPost: data.allowDirectPost,
               createdAt: new Date().toISOString(),
               minImages: 0,
               cutoffs: [],
