@@ -201,6 +201,56 @@ export interface ReportTopic {
   notifyPreference?: Record<string, "all" | "mentions" | "off">;
 }
 
+/**
+ * Repairs a `report-feed` slice coming off the server before it reaches the
+ * store.
+ *
+ * Every array field on ReportPost/ReportTopic is declared non-optional on
+ * purpose (see ReportPostFields' own comment) so call sites can write
+ * `post.tagIds.includes(...)` with no `?? []` guard — roughly forty of them
+ * do. That contract holds for anything this store writes itself, but the
+ * server row is just whatever JSON was last PUT to the `report-feed` key,
+ * and a writer outside this file can leave a field out entirely: the demo
+ * seeding script (scripts/seed-report-task-demo.ts) built its post rows
+ * without `tagIds`, which took the whole รายงาน page down with "Cannot read
+ * properties of undefined (reading 'includes')" thrown from ReportCard's tag
+ * lookup — one bad row is enough, since it crashes during render and the
+ * route's error boundary replaces the entire page.
+ *
+ * Normalizing on the way in fixes every such call site at once and, unlike
+ * patching them one by one, also repairs rows already sitting in the
+ * database. Field-by-field rather than a blanket cast — a missing array must
+ * become `[]`, and an existing one must be left exactly as it is.
+ */
+export function normalizeReportFeedSlice(slice: {
+  topics?: ReportTopic[];
+  posts?: ReportPost[];
+  albums?: ReportAlbum[];
+}): { topics: ReportTopic[]; posts: ReportPost[]; albums: ReportAlbum[] } {
+  return {
+    topics: (slice.topics ?? []).map((t) => ({
+      ...t,
+      minImages: t.minImages ?? 0,
+      cutoffs: t.cutoffs ?? [],
+    })),
+    posts: (slice.posts ?? []).map((p) => ({
+      ...p,
+      sections: p.sections ?? [],
+      images: p.images ?? [],
+      tagIds: p.tagIds ?? [],
+      savedBy: p.savedBy ?? [],
+      unreadFor: p.unreadFor ?? [],
+      reactions: p.reactions ?? {},
+      replies: (p.replies ?? []).map((r) => ({
+        ...r,
+        images: r.images ?? [],
+        reactions: r.reactions ?? {},
+      })),
+    })),
+    albums: slice.albums ?? [],
+  };
+}
+
 /** True for a room whose one-time create-dialog pick actually landed on
  * "Openchat" (see FEED_VIEW_MODE_LOCK_CUTOFF) — a room from before that
  * cutoff defaulting to `feedViewMode: undefined` is just an ordinary

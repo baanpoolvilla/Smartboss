@@ -354,6 +354,10 @@ async function main() {
     title: string;
     sections: never[];
     images: never[];
+    // ต้องมีเสมอ แม้จะว่าง — ฝั่งหน้าเว็บอ่าน post.tagIds.includes(...) ตรง ๆ
+    // (ReportPostFields ประกาศเป็น array ไม่ optional) การ seed โดยไม่ใส่ฟิลด์นี้
+    // ทำให้หน้ารายงานพังทั้งหน้าด้วย "Cannot read properties of undefined"
+    tagIds: never[];
   };
 
   // ห้องสร้างเมื่อ 5 วันก่อน ให้มีที่ว่างพอสำหรับประวัติย้อนหลัง 4 วัน + วันนี้
@@ -376,6 +380,7 @@ async function main() {
       title: `${TEST_PREFIX}รายงานประจำวัน`,
       sections: [],
       images: [],
+      tagIds: [],
     };
   }
 

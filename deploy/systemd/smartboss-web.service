@@ -13,6 +13,12 @@ User=smartboss
 Group=smartboss
 WorkingDirectory=/opt/smartboss/apps/web
 EnvironmentFile=/etc/smartboss/smartboss.env
+# โซนเวลาของโปรเซส Next — ต้องตรงกับของผู้ใช้ ไม่งั้น HTML ที่ render ฝั่ง
+# เซิร์ฟเวอร์ (VM เป็น UTC) กับที่ React render ซ้ำฝั่งเบราว์เซอร์ (+07:00) จะได้
+# ข้อความคนละอย่างทุกจุดที่คิดจากเวลา เช่น "ส่งช้า/ตรงเวลา" ที่ใช้ getHours()
+# ตรง ๆ หรือวันที่ในฟีด → React ขึ้น hydration mismatch (error #418) และตัวเลข
+# รอบส่งของวันนี้ก็ผิดไปช่วงหนึ่งด้วย ไม่ใช่แค่เรื่องการแสดงผล
+Environment=TZ=Asia/Bangkok
 
 # -H 127.0.0.1 สำคัญ: ให้เฉพาะ Caddy บนเครื่องเดียวกันต่อได้
 # ถ้าปล่อย default (0.0.0.0) เว็บจะเปิดที่พอร์ต 3000 ตรง ๆ ข้าม HTTPS ได้เลย

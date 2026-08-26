@@ -18,7 +18,7 @@ import { useHolidayStore } from "@/modules/report_task/store/holiday-store";
 import { thaiHolidayEvents } from "@/modules/report_task/data/thai-holidays";
 import { useLeaveTypeStore } from "@/modules/report_task/store/leave-type-store";
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
-import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
+import { useReportFeedStore, normalizeReportFeedSlice } from "@/modules/report_task/store/report-feed-store";
 import { useReportTagStore } from "@/modules/report_task/store/report-tag-store";
 import { useIssueReportStore, migrateIssueStoreSlice, extractV1RecipientDepartmentIds } from "@/modules/report_task/store/issue-report-store";
 import { useIssueDeskConfigStore } from "@/modules/report_task/store/issue-desk-config-store";
@@ -136,7 +136,12 @@ export function StoreHydrator() {
         apiKey="report-feed"
         store={useReportFeedStore}
         select={(s) => ({ topics: s.topics, posts: s.posts, albums: s.albums })}
-        apply={(s, slice) => ({ ...s, ...slice, loaded: true })}
+        // Normalized, not spread straight in — a row written by something
+        // other than this store (the demo seeding script, an older build) can
+        // be missing an array field that every reader treats as always
+        // present, and one such row crashes the whole รายงาน page during
+        // render. See normalizeReportFeedSlice for the full reasoning.
+        apply={(s, slice) => ({ ...s, ...normalizeReportFeedSlice(slice), loaded: true })}
       />
       <ServerStoreSync
         apiKey="report-tags"
