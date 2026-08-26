@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, CornerUpLeft, Link2, Pencil, Reply as ReplyIcon, SmilePlus, Trash2 } from "lucide-react";
+import { Check, CornerUpLeft, Link2, MoreHorizontal, Pencil, Reply as ReplyIcon, SmilePlus, Trash2 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
@@ -61,6 +61,7 @@ export function ReportReply({
   const quotedAuthor = quoted ? getUser(quoted.authorId) : undefined;
 
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
+  const [touchMenuOpen, setTouchMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editBody, setEditBody] = useState(reply.body);
   const activeReactions = reactionEmojis
@@ -97,7 +98,16 @@ export function ReportReply({
             {author?.name} <span className="font-normal text-[var(--ink-soft)]">· <TimeAgo date={reply.createdAt} /></span>
             {reply.editedAt && <span className="font-normal text-[var(--ink-soft)]"> · แก้ไขแล้ว</span>}
           </p>
-          <span className="shrink-0 flex items-center gap-2 opacity-0 group-hover/reply:opacity-100 focus-within:opacity-100 transition-opacity">
+          {/* Mouse/hover only now — on touch this row had no
+              [@media(hover:none)] fallback at all, so it stayed opacity-0
+              *and unreachable* forever, while still reserving its own
+              layout width (opacity doesn't remove an element from flow).
+              That's what squeezed the name column into wrapping onto two
+              lines and reading as oversized ("ใหญ่มากเด่นมาก") — the row
+              wasn't actually bigger, the name just had nowhere to go.
+              hidden (not opacity-0) on touch removes it from layout
+              entirely; the single "⋯" below replaces it there. */}
+          <span className="hidden shrink-0 items-center gap-2 opacity-0 transition-opacity [@media(hover:hover)]:flex [@media(hover:hover)]:group-hover/reply:opacity-100 [@media(hover:hover)]:focus-within:opacity-100">
             <Popover open={reactionPickerOpen} onOpenChange={setReactionPickerOpen}>
               <PopoverTrigger
                 render={
@@ -171,6 +181,88 @@ export function ReportReply({
                 </button>
               </>
             )}
+          </span>
+
+          {/* Touch's single quiet "⋯" — same fix as the post-level toolbar
+              and Openchat's per-message row already got, and the only thing
+              that actually makes reacting/replying/editing a comment
+              reachable on a touch device at all (the hover row above has no
+              touch fallback on purpose now — see its own comment). */}
+          <span className="hidden shrink-0 [@media(hover:none)]:block">
+            <Popover open={touchMenuOpen} onOpenChange={setTouchMenuOpen}>
+              <PopoverTrigger
+                render={
+                  <button className="h-6 w-6 flex items-center justify-center rounded text-[var(--ink-faint)]" aria-label="ตัวเลือกความคิดเห็น">
+                    <MoreHorizontal className="h-3.5 w-3.5" />
+                  </button>
+                }
+              />
+              <PopoverContent className="w-auto p-1 flex flex-col min-w-40" align="end">
+                <div className="flex flex-row gap-0.5 p-0.5">
+                  {reactionEmojis.map((emoji) => (
+                    <button
+                      key={emoji}
+                      onClick={() => {
+                        onToggleReaction(emoji);
+                        setTouchMenuOpen(false);
+                      }}
+                      className={cn(
+                        "h-8 w-8 flex items-center justify-center rounded-md text-base hover:bg-[var(--bg-soft)]",
+                        (reply.reactions?.[emoji] ?? []).length > 0 && "bg-[var(--accent)]"
+                      )}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+                <div className="h-px bg-[var(--line)] mx-1 my-0.5" />
+                <button
+                  onClick={() => {
+                    setTouchMenuOpen(false);
+                    onReplyTo(reply);
+                  }}
+                  className="flex items-center gap-2 rounded-md px-2.5 py-2 text-sm text-left hover:bg-[var(--bg-soft)]"
+                >
+                  <ReplyIcon className="h-3.5 w-3.5 text-[var(--ink-soft)]" />
+                  ตอบกลับ
+                </button>
+                <button
+                  onClick={() => {
+                    setTouchMenuOpen(false);
+                    onCopyLink();
+                  }}
+                  className="flex items-center gap-2 rounded-md px-2.5 py-2 text-sm text-left hover:bg-[var(--bg-soft)]"
+                >
+                  <Link2 className="h-3.5 w-3.5 text-[var(--ink-soft)]" />
+                  คัดลอกลิงก์
+                </button>
+                {isOwn && (
+                  <>
+                    <button
+                      onClick={() => {
+                        setTouchMenuOpen(false);
+                        setEditBody(reply.body);
+                        setEditing(true);
+                      }}
+                      className="flex items-center gap-2 rounded-md px-2.5 py-2 text-sm text-left hover:bg-[var(--bg-soft)]"
+                    >
+                      <Pencil className="h-3.5 w-3.5 text-[var(--ink-soft)]" />
+                      แก้ไข
+                    </button>
+                    <button
+                      onClick={() => {
+                        setTouchMenuOpen(false);
+                        onDelete();
+                      }}
+                      className="flex items-center gap-2 rounded-md px-2.5 py-2 text-sm text-left text-[var(--chart-red)] hover:bg-red-50"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      ลบ
+                    </button>
+                  </>
+                )}
+              </PopoverContent>
+            </Popover>
           </span>
         </div>
         {quoted && (
