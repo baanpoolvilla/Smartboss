@@ -24,6 +24,7 @@ import {
 } from "@/modules/report_task/components/ui/dialog";
 import { NewTaskDialog } from "@/modules/report_task/components/kanban/new-task-dialog";
 import { getUser, users as directoryUsers, departments } from "@/modules/report_task/lib/directory";
+import { canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import {
   useReportFeedStore,
@@ -192,12 +193,21 @@ export function ReportCard({
   // detection logic as those two, just scoped to people/departments — this
   // component only has the one topic it's rendering into, not the full topic
   // list a room mention would need to search across.
+  //
+  // Users are filtered to who can actually see *this* room (same rule the
+  // member-count button and RoomMembersDialog use) — the first version
+  // listed the whole company directory regardless of room, which meant you
+  // could @tag someone with no access to the conversation at all ("ต้อง
+  // แสดงเฉพาะคนที่อยู่ในห้องนั้นไหม"). Departments stay unfiltered — a dept
+  // mention is a notify-this-group action, not scoped to room membership.
   const replyMentionCandidates = useMemo<ReplyMentionItem[]>(
     () => [
-      ...directoryUsers.map((u): ReplyMentionItem => ({ type: "user", id: u.id, label: u.name, sublabel: u.role })),
+      ...directoryUsers
+        .filter((u) => canSeeReportTopic(topic.visibility, u.id))
+        .map((u): ReplyMentionItem => ({ type: "user", id: u.id, label: u.name, sublabel: u.role })),
       ...departments.map((d): ReplyMentionItem => ({ type: "dept", id: d.id, label: d.name, sublabel: "แผนก" })),
     ],
-    []
+    [topic.visibility]
   );
   const [replyMentionMenu, setReplyMentionMenu] = useState<{ query: string; rect: DOMRect; containerTop: number; containerBottom: number; index: number } | null>(null);
 

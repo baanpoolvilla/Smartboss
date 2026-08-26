@@ -17,6 +17,7 @@ import { ReportImageLightbox } from "@/modules/report_task/components/report-fee
 import { useReportFeedStore, type ReportPost, type ReportPostImage, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { getUser, departments, users as directoryUsers } from "@/modules/report_task/lib/directory";
+import { canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { groupByDay } from "@/modules/report_task/lib/format";
 import {
   htmlEditorToBulletsText,
@@ -136,13 +137,19 @@ export function OpenchatFeed({
   // report-feed-rich-text.tsx) and trigger/insert mechanics as the main post
   // composer's rich-text editor (report-post-fields.tsx), just scoped down
   // to one flat composer instead of one per section.
+  //
+  // Users filtered to who can actually see *this* room, same rule the member
+  // count/RoomMembersDialog use — otherwise this listed the whole company
+  // directory regardless of room ("ต้องแสดงเฉพาะคนที่อยู่ในห้องนั้นไหม").
   const mentionCandidates = useMemo<MentionItem[]>(
     () => [
-      ...directoryUsers.map((u): MentionItem => ({ type: "user", id: u.id, label: u.name, sublabel: u.role })),
+      ...directoryUsers
+        .filter((u) => canSeeReportTopic(topic.visibility, u.id))
+        .map((u): MentionItem => ({ type: "user", id: u.id, label: u.name, sublabel: u.role })),
       ...topics.map((t): MentionItem => ({ type: "topic", id: t.id, label: t.name, sublabel: "ห้อง Report" })),
       ...departments.map((d): MentionItem => ({ type: "dept", id: d.id, label: d.name, sublabel: "แผนก" })),
     ],
-    [topics]
+    [topics, topic.visibility]
   );
   const [mentionMenu, setMentionMenu] = useState<{ query: string; rect: DOMRect; containerTop: number; containerBottom: number; index: number } | null>(null);
 

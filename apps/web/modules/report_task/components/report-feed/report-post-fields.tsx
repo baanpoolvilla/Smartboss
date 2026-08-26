@@ -5,6 +5,7 @@ import { Button } from "@/modules/report_task/components/ui/button";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { departments, users } from "@/modules/report_task/lib/directory";
 import { useReportFeedStore, type ReportPostImage, type ReportPostSection } from "@/modules/report_task/store/report-feed-store";
+import { canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import {
   BULLET_LINE_PREFIX,
   BULLET_MARKER,
@@ -119,13 +120,22 @@ export function ReportPostFields({
   // Dragging a room straight from the sidebar and dropping it here (see
   // handleMentionDrop) inserts the same chip without the "@" round-trip.
   const topics = useReportFeedStore((s) => s.topics);
+  // People filtered to who can actually see the room this post is going
+  // into — same rule the member count/RoomMembersDialog use elsewhere,
+  // otherwise this listed the whole company directory regardless of which
+  // room was open ("ต้องแสดงเฉพาะคนที่อยู่ในห้องนั้นไหม"). Room mentions
+  // (tagging a whole other topic) and department mentions stay unfiltered —
+  // neither is scoped to who's already in this one room.
+  const targetTopicVisibility = topics.find((t) => t.id === topicId)?.visibility;
   const mentionCandidates = useMemo<MentionItem[]>(
     () => [
-      ...users.map((u): MentionItem => ({ type: "user", id: u.id, label: u.name, sublabel: u.role })),
+      ...users
+        .filter((u) => canSeeReportTopic(targetTopicVisibility, u.id))
+        .map((u): MentionItem => ({ type: "user", id: u.id, label: u.name, sublabel: u.role })),
       ...topics.map((t): MentionItem => ({ type: "topic", id: t.id, label: t.name, sublabel: "ห้อง Report" })),
       ...departments.map((d): MentionItem => ({ type: "dept", id: d.id, label: d.name, sublabel: "แผนก" })),
     ],
-    [topics]
+    [topics, targetTopicVisibility]
   );
   const [mentionMenu, setMentionMenu] = useState<{ sectionId: string; query: string; rect: DOMRect; containerTop: number; containerBottom: number; index: number } | null>(null);
 
