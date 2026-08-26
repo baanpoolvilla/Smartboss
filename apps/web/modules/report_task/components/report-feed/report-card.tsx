@@ -802,13 +802,14 @@ export function ReportCard({
           pass at this — a real Teams screenshot showing replies rendered
           in full caught it.
 
-          The whole divider+link row only renders once there's something to
-          show (a reply, an open composer, or the disabled-comments notice) —
-          a post with zero comments already has a reply affordance in the
-          hover toolbar's 💬 icon, so repeating an always-on divider+link
-          under every single quiet post just piled up dead chrome on a busy
-          room with lots of short posts. */}
-      {(post.replies.length > 0 || threadOpen || topic.commentsDisabled) && (
+          The divider+link row itself always renders now, even on a post
+          with zero comments — a real Teams screenshot showed "Reply in
+          thread" under every single post, quiet ones included, not just
+          ones already talked about. Previously gated on having a reply (or
+          an open composer) already, on the idea that the hover toolbar's 💬
+          icon was affordance enough on a quiet post — asked for explicitly
+          after that read as *missing* the invite to reply, not as
+          intentionally quiet. */}
       <div className="space-y-3 pt-3 mt-3 border-t border-[var(--line)]">
           {/* The comments sat at the same indent, on the same white, in the
               same text size as the post itself, separated by the same faint
@@ -1149,7 +1150,6 @@ export function ReportCard({
           </>
           )}
         </div>
-      )}
 
         {replyLightbox && (
           <ReportImageLightbox
