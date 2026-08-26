@@ -500,9 +500,18 @@ export function OpenchatFeed({
                       )}
                     </div>
 
-                    {/* Hover action row — floats top-right of the message, Discord-style, instead of a persistent row eating space on every line. */}
+                    {/* Hover action row — floats top-right of the message, Discord-style, instead of a persistent row eating space on every line.
+                        Forced visible (not just on `group-hover/msg`) while its own reaction popover is open — the popup renders through a
+                        portal, floating below-right of this row rather than overlapping it, so the mouse crosses dead space to reach an emoji
+                        and left the hover zone along the way; `group-hover` then hid this row (and the popover's own anchor with it), which is
+                        what made a click land on nothing and need repeating ("กดอีโมจิยากมาก...ต้องกดย้ำๆ"). */}
                     {!isEditing && (
-                      <div className="absolute right-4 -top-2 hidden group-hover/msg:flex items-center gap-0.5 rounded-md p-0.5 border border-[var(--line)] bg-[var(--bg)] shadow-md">
+                      <div
+                        className={cn(
+                          "absolute right-4 -top-2 items-center gap-0.5 rounded-md p-0.5 border border-[var(--line)] bg-[var(--bg)] shadow-md",
+                          openReactionFor === m.id ? "flex" : "hidden group-hover/msg:flex"
+                        )}
+                      >
                         <Popover open={openReactionFor === m.id} onOpenChange={(open) => setOpenReactionFor(open ? m.id : null)}>
                           <PopoverTrigger
                             render={
