@@ -606,7 +606,14 @@ function ReportFeedPageInner() {
                     getting shoved onto its own orphan row below (which just
                     looked like disconnected clutter, "งง...จัดให้มันดีๆสิ"). */}
                 <div className="px-5 flex items-center gap-2 border-b border-[var(--line)]">
-                <div role="tablist" aria-label="ส่วนของหัวข้อ" className="flex flex-1 min-w-0 items-center gap-4 overflow-x-auto">
+                {/* gap-3 + icon-only labels below sm — 5 tabs with full text
+                    labels never fit a phone width without horizontal scroll,
+                    and that scroll itself was the complaint ("ไม่อยากมีให้
+                    เลื่อนไปมา...อยากให้จบเลย"). Icon + count alone is compact
+                    enough that all 5 fit alongside the filter button with
+                    nothing left to scroll; the label comes back at sm and up
+                    where there's room for it. */}
+                <div role="tablist" aria-label="ส่วนของหัวข้อ" className="flex flex-1 min-w-0 items-center gap-3 sm:gap-4">
                   {topicTabs.map((t) => {
                     const Icon = t.icon;
                     const active = activeTab === t.id;
@@ -625,6 +632,7 @@ function ReportFeedPageInner() {
                           const next = topicTabs[(i + (e.key === "ArrowRight" ? 1 : -1) + topicTabs.length) % topicTabs.length]!;
                           setActiveTab(next.id);
                         }}
+                        title={t.label}
                         className={cn(
                           "shrink-0 flex items-center gap-1.5 pb-2 -mb-px border-b-2 text-xs font-medium transition-colors duration-200",
                           active
@@ -633,7 +641,7 @@ function ReportFeedPageInner() {
                         )}
                       >
                         <Icon className="h-3.5 w-3.5" />
-                        {t.label}
+                        <span className="hidden sm:inline">{t.label}</span>
                         {count != null && count > 0 && (
                           <span className="tabular-nums text-[10px] text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-1.5 py-0.5">{count}</span>
                         )}
