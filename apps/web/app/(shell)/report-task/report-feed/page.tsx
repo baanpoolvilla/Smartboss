@@ -711,17 +711,14 @@ function ReportFeedPageInner() {
                     that page's ("ให้เหมือนหน้าอื่นๆสิ"). */}
                 <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
                   <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl lg:hidden">
-                    <SheetHeader className="flex-row items-center justify-between gap-2 pb-2 pr-11">
+                    {/* No "ล้างตัวกรอง" up here next to the ✕ close button —
+                        the two sat close enough together that people read
+                        the X itself as the clear-filter action
+                        ("คนเข้าใจผิดคิดว่าล้างตัวกรองให้กดกากบาท"). The chip
+                        row below already ends with its own "ล้างตัวกรอง (N)"
+                        button, so this was a redundant second copy anyway. */}
+                    <SheetHeader className="pb-2 pr-11">
                       <SheetTitle>ตัวกรอง</SheetTitle>
-                      {postFiltersActiveCount(filters) > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setFilters(emptyPostFilters)}
-                          className="text-sm font-medium text-[var(--brand-green-dark)] underline-offset-2 hover:underline"
-                        >
-                          ล้างตัวกรอง
-                        </button>
-                      )}
                     </SheetHeader>
                     <div className="px-4 pb-4">
                       <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">แสดงเฉพาะ</p>
