@@ -336,7 +336,13 @@ function ReportFeedPageInner() {
     return activeTopic.cutoffs.map((c) => {
       const required = c.minImages ?? activeTopic.minImages;
       return {
-        text: `${c.label} ${c.time}${required > 0 ? ` (แนบรูป ≥${required})` : ""}`,
+        // Was one run-on string ("t 13:00 → 14:00 (แนบรูป ≥1)") — label and
+        // time weren't visually separated at all, so a room whose label
+        // itself happens to contain a dash or a time-looking string
+        // ("ดูยาก งง") read as one indecipherable blob. "ตัดยอด"/"น." and a
+        // full "รูป" spell out what each number actually means instead of
+        // asking the reader to infer it from bare digits.
+        text: `${c.label} · ตัดยอด ${c.time} น.${required > 0 ? ` · แนบรูป ≥${required} รูป` : ""}`,
         active: active?.id === c.id,
       };
     });
@@ -489,19 +495,6 @@ function ReportFeedPageInner() {
                       just Close) whenever canManage is false or the mode has
                       no per-person list to edit, so a regular employee can
                       look but has no controls to change anything. */}
-                  {/* Plain text, not a button — the clickable "+1 hidden in a
-                      hover title" version read as cryptic and unclear what it
-                      even was ("ดูแล้วงง"). This is just information (what
-                      does this room require to post), so it reads as
-                      information: every round spelled out plainly, nothing
-                      truncated behind a count or a hover. Changing the rounds
-                      themselves is the ⚙ gear's job, not this label's. */}
-                  {requirementParts.length > 0 && (
-                    <span className="shrink-0 flex items-center gap-1 rounded-full bg-[var(--bg-soft)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--ink-soft)]">
-                      {activeTopic.minImages > 0 ? <ImagePlus className="h-3 w-3 shrink-0" /> : <TriangleAlert className="h-3 w-3 shrink-0" />}
-                      {requirementParts.map((r) => r.text).join(" · ")}
-                    </span>
-                  )}
                   <button
                     data-tour="member-count"
                     onClick={() => setMembersDialogOpen(true)}
@@ -570,6 +563,33 @@ function ReportFeedPageInner() {
                   )}
                   <RoomSettingsSheet open={roomSettingsOpen} onOpenChange={setRoomSettingsOpen} topic={activeTopic} />
                 </div>
+
+                {/* Row 1.5 — submission-round info, on its own wrapping row
+                    instead of squeezed into Row 1's single non-wrapping line
+                    with the member count/mode pill/gear. A room with 2+
+                    rounds (or just a long custom round label) had nowhere to
+                    go there but to overflow or get clipped — plain text, not
+                    a button (the old "+1 hidden behind a hover" version read
+                    as cryptic, "ดูแล้วงง"), one pill per round so a run-on
+                    string of every round's text isn't one indecipherable
+                    blob either ("ดูยาก งง"). Changing the rounds themselves
+                    is the ⚙ gear's job, not this row's. */}
+                {requirementParts.length > 0 && (
+                  <div className="px-5 pb-2 flex flex-wrap items-center gap-1">
+                    {requirementParts.map((r, i) => (
+                      <span
+                        key={i}
+                        className={cn(
+                          "flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium",
+                          r.active ? "bg-[var(--accent)] text-[var(--brand-green-dark)]" : "bg-[var(--bg-soft)] text-[var(--ink-soft)]"
+                        )}
+                      >
+                        {activeTopic.minImages > 0 ? <ImagePlus className="h-3 w-3 shrink-0" /> : <TriangleAlert className="h-3 w-3 shrink-0" />}
+                        {r.text}
+                      </span>
+                    ))}
+                  </div>
+                )}
 
                 {/* Row 2 — tabs, full-width so the underline (`border-b` on
                     the container, `-mb-px` per tab) actually connects to a
