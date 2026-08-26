@@ -294,6 +294,28 @@
 .ebw-calendar .fc-daygrid-day-frame {
   min-height: var(--ebw-row-height, auto);
 }
+/* Month view only (the all-day strip in week/day view uses the same
+   .fc-daygrid-day-frame class — pinning *that* to a month row's height blew
+   the all-day row up to a third of the screen). `height`, not just
+   `min-height`: min-height alone sets a floor, so a day holding two chips +
+   the "+N รายการ" link still grew past its share and pushed the grid taller
+   than the fixed height it was given — which is what put the internal
+   scroller in there and left the last week-row clipped off the bottom
+   ("เลื่อนขึ้นลง scroll ได้ มันแปลกๆ"). Fixed height + overflow:hidden means
+   a cell's contents can never change the grid's size, so every row is
+   exactly equal and the whole month always fits. */
+.ebw-calendar .fc-dayGridMonth-view .fc-daygrid-day-frame {
+  height: var(--ebw-row-height, auto);
+  overflow: hidden;
+}
+/* With the rows now sized to fit exactly, the month grid's own scroller has
+   nothing left to scroll — turning it off outright removes the last way the
+   grid could be scrolled away from its own top (a wheel over the calendar
+   used to nudge it), instead of only hiding the scrollbar. Week/day/list
+   views keep their scrollers, which they genuinely need. */
+.ebw-calendar .fc-dayGridMonth-view .fc-scroller {
+  overflow: hidden !important;
+}
 /* Hover a day cell to hint it's clickable (add event). */
 .ebw-calendar .fc-daygrid-day {
   transition: background-color 0.12s ease;

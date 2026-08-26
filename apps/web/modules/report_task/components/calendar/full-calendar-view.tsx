@@ -148,6 +148,21 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
   // to the grid's own content, so nothing the calendar renders can feed back
   // into how tall it's told to be.
   const [gridHeight, setGridHeight] = useState<number>();
+  // The month grid isn't only week-rows: FullCalendar draws a weekday header
+  // row (อาทิตย์…เสาร์) above them, inside the same box it was handed. The row
+  // height below used to be (total height ÷ row count) with that header
+  // unaccounted for, so the rows always added up to *more* than the space
+  // available — the grid overflowed its own fixed height, which is what put
+  // an internal scroller in there and cut the last week-row off the bottom.
+  // Measured from the DOM rather than hard-coded, since the header's height
+  // follows its font/padding and would silently drift out of sync with a
+  // constant. It only changes with the stylesheet, never with event content,
+  // so this can't feed the grid's own size back into itself.
+  const [headerHeight, setHeaderHeight] = useState(0);
+  function measureHeader() {
+    const h = wrapperRef.current?.querySelector(".fc-col-header")?.getBoundingClientRect().height;
+    if (h) setHeaderHeight((prev) => (Math.abs(prev - h) > 0.5 ? h : prev));
+  }
   useEffect(() => {
     function computeLayout() {
       const top = wrapperRef.current?.getBoundingClientRect().top ?? 0;
@@ -187,14 +202,50 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
         const cardTop = cardRef.current?.getBoundingClientRect().top ?? 0;
         const desktopCardHeight = Math.max(360, Math.round(window.innerHeight - cardTop - 32));
         setCardHeight(desktopCardHeight);
-        const toolbarHeight = toolbarRef.current?.getBoundingClientRect().height ?? 0;
-        const hintHeight = hintRef.current?.getBoundingClientRect().height ?? 0;
-        setGridHeight(Math.max(240, Math.round(desktopCardHeight - toolbarHeight - hintHeight)));
+        // The grid gets what's left of the card *after everything else in it*
+        // — and "everything else" is more than the two rows' own boxes: the
+        // card's own padding and border, plus the margins between the rows,
+        // which getBoundingClientRect() doesn't include. Leaving those out
+        // (the previous version subtracted only the two rects) told
+        // FullCalendar it had ~40px more room than the card actually has, so
+        // the grid overflowed and the wrapper's overflow-hidden shaved the
+        // bottom off the last week-row.
+        const outer = (el: HTMLElement | null, ...props: ("marginTop" | "marginBottom")[]) => {
+          if (!el) return 0;
+          const cs = getComputedStyle(el);
+          return el.getBoundingClientRect().height + props.reduce((n, k) => n + (parseFloat(cs[k]) || 0), 0);
+        };
+        const cardChrome = (() => {
+          const el = cardRef.current;
+          if (!el) return 0;
+          const cs = getComputedStyle(el);
+          return ["paddingTop", "paddingBottom", "borderTopWidth", "borderBottomWidth"].reduce(
+            (n, k) => n + (parseFloat(cs[k as "paddingTop"]) || 0),
+            0
+          );
+        })();
+        const toolbarHeight = outer(toolbarRef.current, "marginBottom");
+        const hintHeight = outer(hintRef.current, "marginTop");
+        setGridHeight(Math.max(240, Math.floor(desktopCardHeight - cardChrome - toolbarHeight - hintHeight)));
       }
     }
     computeLayout();
-    window.addEventListener("resize", computeLayout);
-    return () => window.removeEventListener("resize", computeLayout);
+    // One frame later the calendar has actually rendered, so the header row
+    // is measurable (it isn't on the first synchronous pass).
+    const raf = requestAnimationFrame(() => {
+      computeLayout();
+      measureHeader();
+    });
+    function onResize() {
+      computeLayout();
+      measureHeader();
+    }
+    window.addEventListener("resize", onResize);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", onResize);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const colors = useEventColorStore((s) => s.colors);
   const leaveTypes = useLeaveTypeStore((s) => s.types);
@@ -294,6 +345,9 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
       const days = Math.round((arg.view.activeEnd.getTime() - arg.view.activeStart.getTime()) / 86400000);
       setMonthRowCount(days / 7);
     }
+    // Switching views tears down and rebuilds the header row — re-measure so
+    // the row height stays right after a week→month round trip.
+    requestAnimationFrame(measureHeader);
   }
 
   // Navigating months makes the grid re-render across several async frames,
@@ -584,6 +638,30 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
     );
   }
 
+  // ── Month grid sizing ────────────────────────────────────────────────
+  // One number drives the whole month view, recomputed only from the window
+  // size (never from what's *in* the cells), so the grid is the same size on
+  // a quiet month and a busy one, and shrinks/grows as one piece when the
+  // window is resized.
+  const monthGridHeight = isDesktop ? (gridHeight ?? calendarHeight) : calendarHeight;
+  // …split evenly across however many week-rows this month actually has, after
+  // the weekday header takes its cut. The 64px floor is a safety net for a
+  // freak-small window; below that the rows would be unreadable anyway.
+  // The -1 per row (and -2 overall) is slack for the table's own row borders,
+  // which aren't part of any measurement above: without it the rows add up to
+  // a couple of pixels *more* than the box, and "a couple of pixels more" is
+  // all it takes for the scroller to come back.
+  const monthRowHeight = Math.max(64, Math.floor((monthGridHeight - headerHeight - 2) / monthRowCount) - 1);
+  // The fixed-row treatment is a month-view thing. Week/day/list keep their own
+  // native sizing — the CSS var used to be set for those too, which pinned the
+  // week view's all-day strip to a full month-row's height.
+  const usesFixedRows = view === "dayGridMonth" && !isNarrowViewport;
+  // Two chips + "+N รายการ" need roughly 100px under the date number. On a
+  // short window (or a 6-row month) where a row can't hold that, showing one
+  // chip and rolling the rest into the link is what keeps every row equal —
+  // the alternative is chips overflowing their cell and the grid growing again.
+  const monthMaxEvents = monthRowHeight >= 104 ? 2 : 1;
+
   return (
     <div
       ref={cardRef}
@@ -669,11 +747,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
       <div
         className="ebw-calendar lg:flex-1 lg:min-h-0 lg:overflow-hidden"
         ref={wrapperRef}
-        style={
-          !(isNarrowViewport && view === "dayGridMonth")
-            ? ({ "--ebw-row-height": `${(isDesktop ? (gridHeight ?? calendarHeight) : calendarHeight) / monthRowCount}px` } as CSSProperties)
-            : undefined
-        }
+        style={usesFixedRows ? ({ "--ebw-row-height": `${monthRowHeight}px` } as CSSProperties) : undefined}
       >
         <FullCalendar
           ref={calendarRef}
@@ -689,7 +763,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           // artificially inflating light rows to fill the screen. Desktop
           // (≥1024px) uses gridHeight — the wrapper's own measured pixel
           // height — instead of calendarHeight.
-          height={isNarrowViewport && view === "dayGridMonth" ? "auto" : isDesktop ? (gridHeight ?? calendarHeight) : calendarHeight}
+          height={isNarrowViewport && view === "dayGridMonth" ? "auto" : monthGridHeight}
           expandRows={!(isNarrowViewport && view === "dayGridMonth")}
           // Show exactly 5 or 6 rows depending on the actual month, not
           // always padded to 6 — combined with expandRows + the fixed total
@@ -723,7 +797,8 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           // same pale-chip treatment.
           eventDisplay={view === "dayGridMonth" ? (isNarrowViewport ? "list-item" : "block") : "auto"}
           eventContent={renderEventContent}
-          // Month view: a fixed cap of 2 events per day, then "+N รายการ" —
+          // Month view: a fixed cap (2 per day, or 1 when a row is too short to
+          // hold two chips plus the link — see monthMaxEvents), then "+N รายการ" —
           // every day reads the same way regardless of row height, rather
           // than `true`'s auto-fit (which let a taller 5-week month's rows
           // show 3-4 events on one day and 2 on another). Tried removing this
@@ -731,7 +806,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           // dozen+ entries ballooned that row far past the others, so it's
           // back. Week/day/list keep auto-fit — those don't stack multiple
           // events per cell the same way, so a fixed cap doesn't apply there.
-          dayMaxEvents={view === "dayGridMonth" ? 2 : isNarrowViewport ? 3 : true}
+          dayMaxEvents={view === "dayGridMonth" ? monthMaxEvents : isNarrowViewport ? 3 : true}
           eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
           // "+N more" opens the same day popup as clicking the date itself
           // instead of FullCalendar's own bare popover — one consistent
