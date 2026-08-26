@@ -644,28 +644,38 @@ function ReportFeedPageInner() {
                       more of a 375-414px screen than the tabs themselves
                       ("พอจอแคบ...เนื้อหามันเกินความกว้างจอ") — collapsed to
                       one "ตัวกรอง" button + bottom sheet instead, same
-                      pattern ภาพรวมทั้งหมด already uses for its own filters. */}
-                  {activeTab === "posts" && (
-                    <>
-                      <div className="hidden sm:block sm:ml-auto shrink-0 py-1.5">
-                        <PostFilterBar
-                          filters={filters}
-                          onChange={setFilters}
-                          authorOptions={topicMembers.map((m) => m.id)}
-                          tagOptions={reportTags}
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setMobileFilterOpen(true)}
-                        className={cn(filterFieldTriggerClass(postFiltersActiveCount(filters) > 0), "sm:hidden ml-auto my-1.5 !h-8")}
-                      >
-                        <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
-                        ตัวกรอง
-                        {postFiltersActiveCount(filters) > 0 && <span className="tabular-nums">({postFiltersActiveCount(filters)})</span>}
-                      </button>
-                    </>
-                  )}
+                      pattern ภาพรวมทั้งหมด already uses for its own filters.
+
+                      invisible, not unmounted, on every other tab — this row
+                      only makes sense for "โพสต์" (ไฟล์/อัลบั้ม/ลิงก์/สถิติ
+                      aren't filtered by it), but removing it outright shrank
+                      the tab row's height on those tabs, so switching tabs
+                      visibly shifted the whole content border up and down
+                      ("กดโพสแล้วขยับไปอันอื่น...ขอบมันขยับ"). Keeping the
+                      same box (just hidden) holds the row's height steady
+                      either way. */}
+                  <div className={cn("hidden sm:block sm:ml-auto shrink-0 py-1.5", activeTab !== "posts" && "invisible")}>
+                    <PostFilterBar
+                      filters={filters}
+                      onChange={setFilters}
+                      authorOptions={topicMembers.map((m) => m.id)}
+                      tagOptions={reportTags}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => activeTab === "posts" && setMobileFilterOpen(true)}
+                    tabIndex={activeTab === "posts" ? 0 : -1}
+                    className={cn(
+                      filterFieldTriggerClass(postFiltersActiveCount(filters) > 0),
+                      "sm:hidden ml-auto my-1.5 !h-8",
+                      activeTab !== "posts" && "invisible"
+                    )}
+                  >
+                    <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+                    ตัวกรอง
+                    {postFiltersActiveCount(filters) > 0 && <span className="tabular-nums">({postFiltersActiveCount(filters)})</span>}
+                  </button>
                 </div>
 
                 <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
