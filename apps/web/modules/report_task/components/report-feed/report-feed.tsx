@@ -92,7 +92,14 @@ export function ReportFeed({
           // one — same idea as the card itself: the bigger gap is the bigger
           // division, so a day boundary never reads the same as a post boundary.
           groupByDay(topicPosts, (p) => p.createdAt).map((group) => (
-            <div key={group.key} className="space-y-3">
+            // Capped and centred, not full-bleed. A room panel is ~1100px
+            // wide on a desktop, and a post is usually a title and two or
+            // three lines — stretched across the whole panel that reads as a
+            // few words stranded in a big empty box, and the eye has to travel
+            // the full width to find the next line. ~860px is the usual
+            // comfortable measure for reading, and it makes the empty space
+            // land as deliberate margin instead of as an unfinished layout.
+            <div key={group.key} className="mx-auto w-full max-w-[860px] space-y-3">
               <DaySeparator label={group.label} />
               {group.items.map((p) => (
                 <ReportCard key={p.id} post={p} topic={topic} highlighted={p.id === highlightPostId} highlightReplyId={highlightReplyId} onOpenTask={onOpenTask} />

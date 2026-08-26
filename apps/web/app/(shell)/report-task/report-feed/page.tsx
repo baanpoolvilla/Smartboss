@@ -11,7 +11,7 @@ import { ReportComposer } from "@/modules/report_task/components/report-feed/rep
 import { ReportFeed } from "@/modules/report_task/components/report-feed/report-feed";
 import { OpenchatFeed } from "@/modules/report_task/components/report-feed/openchat-feed";
 import { ReportAllPostsFeed } from "@/modules/report_task/components/report-feed/report-all-posts-feed";
-import { ReportHeader } from "@/modules/report_task/components/report-feed/report-header";
+import { ReportComplianceBar } from "@/modules/report_task/components/report-feed/report-header";
 import { RoomSettingsSheet } from "@/modules/report_task/components/report-feed/room-settings-sheet";
 import { ReportTopicPanels, collectFiles, collectLinks, filesCutoffMs } from "@/modules/report_task/components/report-feed/report-topic-panels";
 import { PostFilterBar, filterPosts, emptyPostFilters, postFiltersActiveCount, type PostFilters } from "@/modules/report_task/components/report-feed/post-filter-bar";
@@ -244,18 +244,6 @@ function ReportFeedPageInner() {
   const showMentions = activeId === MENTIONS_ID;
   const showTodos = activeId === TODOS_ID;
   const activeTopic = useMemo(() => visibleTopics.find((t) => t.id === activeId), [visibleTopics, activeId]);
-  // Same labels the sidebar itself uses for these entries (topic-sidebar.tsx)
-  // — the header should never invent its own name for a view the sidebar
-  // already names something specific.
-  const roomLabel = showAllPosts
-    ? "ภาพรวมทั้งหมด"
-    : showPending
-      ? "ที่ฉันต้องส่ง"
-      : showMentions
-        ? "ที่กล่าวถึงฉัน"
-        : showTodos
-          ? "สิ่งที่ต้องทำ"
-          : (activeTopic?.name ?? null);
   const exemptions = useReportComplianceExemptions();
   // "ที่ฉันต้องส่ง" — same pendingToday() the sidebar badge counts, filtered
   // down to just this viewer, for the actual room list underneath the badge.
@@ -388,19 +376,12 @@ function ReportFeedPageInner() {
   }
 
   return (
-    // gap-4, not gap-6 — every row of chrome above the feed is height the
-    // posts don't get, and this page is for reading posts.
+    // No more top banner above the columns (used to be a full-width
+    // PageHeader row with the room name + these same pills) — the sidebar
+    // and room panel now start right under the page's own top bar, and the
+    // pills moved into the sidebar header (headerExtra below), which is the
+    // one thing that's always on screen no matter which room is open.
     <div className="flex flex-col gap-4 h-full">
-      <ReportHeader
-        visibleTopics={visibleTopics}
-        onJumpToPost={(topicId, postId) => {
-          selectView(topicId);
-          setHighlightPostId(postId);
-        }}
-        onShowTodayStatus={setTodayStatusFilter}
-        roomLabel={roomLabel}
-      />
-
       {/* Below `lg`, "☰ หัวข้อ" opens the topic tree as a full-screen Sheet
           instead of squeezing it into a fixed h-64 block above the feed with
           its own internal scroll (3.5.5) — the `lg:flex` sidebar right below
@@ -552,6 +533,18 @@ function ReportFeedPageInner() {
                       </span>
                     );
                   })()}
+                  {/* Today's compliance pills, minimal — icon/dot + bare
+                      number, no border or label, right next to the gear it's
+                      grouped with here ("แถวหัวห้อง ข้างเกียร์ แบบมินิมอล"). */}
+                  <ReportComplianceBar
+                    variant="mini"
+                    visibleTopics={visibleTopics}
+                    onJumpToPost={(topicId, postId) => {
+                      selectView(topicId);
+                      setHighlightPostId(postId);
+                    }}
+                    onShowTodayStatus={setTodayStatusFilter}
+                  />
                   {canEditReportTopic(activeTopic.visibility, viewingAsUserId) && (
                     <button
                       onClick={() => setRoomSettingsOpen(true)}
