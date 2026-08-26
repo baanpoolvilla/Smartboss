@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
@@ -23,7 +23,7 @@ import {
   DialogDescription,
 } from "@/modules/report_task/components/ui/dialog";
 import { NewTaskDialog } from "@/modules/report_task/components/kanban/new-task-dialog";
-import { getUser } from "@/modules/report_task/lib/directory";
+import { getUser, users as directoryUsers, departments } from "@/modules/report_task/lib/directory";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import {
   useReportFeedStore,
@@ -40,6 +40,7 @@ import {
   CHECKLIST_UNCHECKED,
   htmlEditorToBulletsText,
   renderSectionBullets,
+  type MentionType,
 } from "@/modules/report_task/lib/report-feed-rich-text";
 import { uploadCompressedImage } from "@/modules/report_task/lib/image-resize";
 import { ReportPostFields, newSection, type DraftSection } from "@/modules/report_task/components/report-feed/report-post-fields";
@@ -55,6 +56,7 @@ import {
   Bold,
   Bookmark,
   BookmarkCheck,
+  Building2,
   Check,
   ClipboardList,
   Copy,
@@ -79,12 +81,57 @@ import {
   Trash2,
   TriangleAlert,
   Underline,
+  User,
   X,
 } from "lucide-react";
 
 const reactionEmojis = ["👍", "❤️", "🎉", "😂", "😮", "😢"];
 const LONG_POST_BULLET_THRESHOLD = 8;
 const MAX_VISIBLE_IMAGES = 5;
+
+interface ReplyMentionItem {
+  type: MentionType;
+  id: string;
+  label: string;
+  sublabel?: string;
+}
+
+/** Walks up from `el` to find the nearest scrolling ancestor's viewport
+ * bounds — the mention menu opens above or below the caret depending on
+ * which direction actually has room within *that* box, not the window
+ * (this editor sits inside a card inside a scrollable feed). Same helper
+ * as openchat-feed.tsx's, duplicated rather than shared since each
+ * composer's mention wiring is already its own local, self-contained block. */
+function nearestScrollableBounds(el: HTMLElement): { top: number; bottom: number } {
+  let node: HTMLElement | null = el.parentElement;
+  while (node) {
+    const overflowY = window.getComputedStyle(node).overflowY;
+    if (overflowY === "auto" || overflowY === "scroll") {
+      const r = node.getBoundingClientRect();
+      return { top: r.top, bottom: r.bottom };
+    }
+    node = node.parentElement;
+  }
+  return { top: 0, bottom: window.innerHeight };
+}
+
+/** Looks for `@query` immediately before the caret in the current text node
+ * and returns its position — null when the caret isn't inside `el`, isn't in
+ * a text node, or there's no unfinished `@word` right before it. */
+function detectMentionTrigger(el: HTMLElement): { query: string; rect: DOMRect; containerTop: number; containerBottom: number } | null {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || !sel.isCollapsed || !el.contains(sel.getRangeAt(0).startContainer)) return null;
+  const range = sel.getRangeAt(0);
+  const node = range.startContainer;
+  if (node.nodeType !== Node.TEXT_NODE) return null;
+  const before = (node.textContent ?? "").slice(0, range.startOffset);
+  const match = before.match(/(?:^|\s)@([^\s@]*)$/);
+  if (!match) return null;
+  const caretRange = range.cloneRange();
+  const rect = caretRange.getClientRects()[0] ?? caretRange.getBoundingClientRect();
+  const bounds = nearestScrollableBounds(el);
+  return { query: match[1]!, rect, containerTop: bounds.top, containerBottom: bounds.bottom };
+}
 
 export function ReportCard({
   post,
@@ -137,6 +184,72 @@ export function ReportCard({
   const [replyColorPickerOpen, setReplyColorPickerOpen] = useState(false);
   const replyEditorRef = useRef<HTMLDivElement>(null);
   const replyFileInputRef = useRef<HTMLInputElement>(null);
+  // @mention in the reply box — this composer never got the trigger/insert
+  // mechanics the main post composer and Openchat's flat composer both have
+  // (report-post-fields.tsx, openchat-feed.tsx), so typing "@" here did
+  // nothing at all in Thread mode ("แบบ thread ไม่เห็น@และขึ้นเลย"). Same
+  // marker format (`@[label](type:id)`, see report-feed-rich-text.tsx) and
+  // detection logic as those two, just scoped to people/departments — this
+  // component only has the one topic it's rendering into, not the full topic
+  // list a room mention would need to search across.
+  const replyMentionCandidates = useMemo<ReplyMentionItem[]>(
+    () => [
+      ...directoryUsers.map((u): ReplyMentionItem => ({ type: "user", id: u.id, label: u.name, sublabel: u.role })),
+      ...departments.map((d): ReplyMentionItem => ({ type: "dept", id: d.id, label: d.name, sublabel: "แผนก" })),
+    ],
+    []
+  );
+  const [replyMentionMenu, setReplyMentionMenu] = useState<{ query: string; rect: DOMRect; containerTop: number; containerBottom: number; index: number } | null>(null);
+
+  function replyMentionMatches(query: string): ReplyMentionItem[] {
+    const q = query.trim().toLowerCase();
+    const all = q ? replyMentionCandidates.filter((m) => m.label.toLowerCase().includes(q)) : replyMentionCandidates;
+    return all.slice(0, 8);
+  }
+
+  function syncReplyMentionMenu(el: HTMLElement) {
+    const trigger = detectMentionTrigger(el);
+    setReplyMentionMenu(trigger ? { ...trigger, index: 0 } : null);
+  }
+
+  function insertReplyMention(item: ReplyMentionItem) {
+    const el = replyEditorRef.current;
+    const sel = window.getSelection();
+    if (!el || !sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    const node = range.startContainer;
+    if (node.nodeType !== Node.TEXT_NODE) return;
+    const nodeText = node.textContent ?? "";
+    const before = nodeText.slice(0, range.startOffset);
+    const atIndex = before.lastIndexOf("@");
+    if (atIndex === -1) return;
+    const afterCaret = nodeText.slice(range.startOffset);
+    const parent = node.parentNode;
+    if (!parent) return;
+
+    const chip = document.createElement("span");
+    chip.className = "mention-chip inline-flex items-center rounded bg-[var(--accent)] text-[var(--brand-green-dark)] px-1 font-medium";
+    chip.contentEditable = "false";
+    chip.setAttribute("data-mention-type", item.type);
+    chip.setAttribute("data-mention-id", item.id);
+    chip.textContent = `@${item.label}`;
+
+    const afterNode = document.createTextNode(afterCaret);
+    const spaceNode = document.createTextNode(" ");
+    parent.replaceChild(afterNode, node);
+    parent.insertBefore(document.createTextNode(nodeText.slice(0, atIndex)), afterNode);
+    parent.insertBefore(chip, afterNode);
+    parent.insertBefore(spaceNode, afterNode);
+
+    const newRange = document.createRange();
+    newRange.setStart(spaceNode, spaceNode.length);
+    newRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(newRange);
+
+    setReplyMentionMenu(null);
+    setReplyText(htmlEditorToBulletsText(el));
+  }
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleteReplyTarget, setDeleteReplyTarget] = useState<string | null>(null);
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
@@ -466,7 +579,13 @@ export function ReportCard({
               </button>
             }
           />
-          <PopoverContent className="w-auto p-1.5 flex items-center gap-0.5">
+          {/* flex-row explicitly — PopoverContent's own base classes default to
+              flex-col, and twMerge only drops a class when the override
+              actually names its replacement, so without this the row of
+              emoji rendered as an unclickable-looking vertical stack instead
+              ("ไม่เห็นกดได้เลยอีโมจิอะไรแบบนี้"). Same fix applied everywhere
+              else this same base component is used for a horizontal row. */}
+          <PopoverContent className="w-auto p-1.5 flex flex-row items-center gap-0.5">
             {reactionEmojis.map((emoji) => (
               <button
                 key={emoji}
@@ -831,18 +950,95 @@ export function ReportCard({
                 aria-label="พิมพ์ความคิดเห็น"
                 aria-multiline="true"
                 suppressContentEditableWarning
-                data-placeholder="พิมพ์ข้อความ..."
-                onInput={(e) => setReplyText(htmlEditorToBulletsText(e.currentTarget))}
+                data-placeholder="พิมพ์ข้อความ... — พิมพ์ @ เพื่อแท็ก"
+                onInput={(e) => {
+                  setReplyText(htmlEditorToBulletsText(e.currentTarget));
+                  syncReplyMentionMenu(e.currentTarget);
+                }}
+                onKeyUp={(e) => syncReplyMentionMenu(e.currentTarget)}
                 onFocus={() => setReplyFocused(true)}
-                onBlur={() => setReplyFocused(false)}
+                onBlur={() => {
+                  setReplyFocused(false);
+                  setReplyMentionMenu(null);
+                }}
                 className="flex-1 min-w-0 bg-transparent text-sm outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-[var(--ink-soft)]"
                 onKeyDown={(e) => {
+                  if (replyMentionMenu) {
+                    const matches = replyMentionMatches(replyMentionMenu.query);
+                    if (e.key === "ArrowDown") {
+                      e.preventDefault();
+                      setReplyMentionMenu({ ...replyMentionMenu, index: matches.length === 0 ? 0 : (replyMentionMenu.index + 1) % matches.length });
+                      return;
+                    }
+                    if (e.key === "ArrowUp") {
+                      e.preventDefault();
+                      setReplyMentionMenu({ ...replyMentionMenu, index: matches.length === 0 ? 0 : (replyMentionMenu.index - 1 + matches.length) % matches.length });
+                      return;
+                    }
+                    if (e.key === "Enter" || e.key === "Tab") {
+                      e.preventDefault();
+                      const picked = matches[replyMentionMenu.index];
+                      if (picked) insertReplyMention(picked);
+                      else setReplyMentionMenu(null);
+                      return;
+                    }
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      setReplyMentionMenu(null);
+                      return;
+                    }
+                  }
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
                     if (!replyUploading) submitReply();
                   }
                 }}
               />
+              {replyMentionMenu &&
+                (() => {
+                  const matches = replyMentionMatches(replyMentionMenu.query);
+                  const spaceBelow = replyMentionMenu.containerBottom - replyMentionMenu.rect.bottom - 8;
+                  const spaceAbove = replyMentionMenu.rect.top - replyMentionMenu.containerTop - 8;
+                  const openAbove = spaceBelow < 160 && spaceAbove > spaceBelow;
+                  const maxHeight = Math.max(120, Math.min(224, openAbove ? spaceAbove : spaceBelow));
+                  return (
+                    <div
+                      style={{
+                        position: "fixed",
+                        left: replyMentionMenu.rect.left,
+                        maxHeight,
+                        ...(openAbove
+                          ? { bottom: window.innerHeight - replyMentionMenu.rect.top + 4 }
+                          : { top: replyMentionMenu.rect.bottom + 4 }),
+                      }}
+                      className="z-50 w-64 rounded-lg border border-[var(--line)] bg-white shadow-lg py-1 overflow-y-auto"
+                    >
+                      {matches.length === 0 ? (
+                        <p className="px-3 py-2 text-xs text-[var(--ink-soft)]">ไม่พบที่ตรงกับ &quot;{replyMentionMenu.query}&quot;</p>
+                      ) : (
+                        matches.map((item, i) => {
+                          const Icon = item.type === "user" ? User : Building2;
+                          return (
+                            <button
+                              key={`${item.type}-${item.id}`}
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => insertReplyMention(item)}
+                              className={cn(
+                                "w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-sm",
+                                i === replyMentionMenu.index ? "bg-[var(--bg-soft)]" : "hover:bg-[var(--bg-soft)]"
+                              )}
+                            >
+                              <Icon className="h-3.5 w-3.5 shrink-0 text-[var(--ink-soft)]" />
+                              <span className="truncate flex-1">{item.label}</span>
+                              {item.sublabel && <span className="text-[11px] text-[var(--ink-soft)] shrink-0">{item.sublabel}</span>}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  );
+                })()}
               {/* Collapsed at rest — [avatar] [input] 📎 ➤ — the formatting
                   toolbar only earns its space once you're actually typing. */}
               {(replyFocused || replyColorPickerOpen) && (
@@ -913,7 +1109,7 @@ export function ReportCard({
                       </button>
                     }
                   />
-                  <PopoverContent className="w-auto p-1.5 flex items-center gap-1">
+                  <PopoverContent className="w-auto p-1.5 flex flex-row items-center gap-1">
                     <button
                       onClick={() => {
                         setReplyHighlight(undefined);

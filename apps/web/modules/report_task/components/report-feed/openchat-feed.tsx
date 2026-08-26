@@ -514,7 +514,12 @@ export function OpenchatFeed({
                               </button>
                             }
                           />
-                          <PopoverContent className="w-auto p-1 flex gap-0.5" align="end">
+                          {/* flex-row explicitly — PopoverContent's base classes
+                              default to flex-col, and twMerge only drops a class
+                              when the override names its replacement, so without
+                              this the emoji row rendered as an unclickable-looking
+                              vertical stack ("ไม่เห็นกดได้เลยอีโมจิ"). */}
+                          <PopoverContent className="w-auto p-1 flex flex-row gap-0.5" align="end">
                             {reactionEmojis.map((emoji) => (
                               <button
                                 key={emoji}
