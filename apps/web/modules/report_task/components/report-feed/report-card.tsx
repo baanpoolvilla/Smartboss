@@ -285,6 +285,11 @@ export function ReportCard({
   const [deleteReplyTarget, setDeleteReplyTarget] = useState<string | null>(null);
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  // Touch's combined react/reply/edit/more menu — separate from moreOpen
+  // (the hover toolbar's own "..." submenu) since the two triggers are
+  // mutually exclusive by media query and would otherwise fight over the
+  // same open/close state.
+  const [touchMenuOpen, setTouchMenuOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const [showFull, setShowFull] = useState(false);
@@ -532,6 +537,46 @@ export function ReportCard({
     setReplyLightbox({ images, index });
   }
 
+  // Shared between the hover toolbar's "..." submenu and the touch-only
+  // combined menu — same items either way, just a different close callback
+  // per trigger (setMoreOpen vs setTouchMenuOpen).
+  function postMenuItems(close: () => void) {
+    return (
+      <>
+        <MenuButton icon={ReplyIcon} label="อ้างอิงโพสต์นี้" onClick={quotePost} />
+        <MenuButton icon={post.pinned ? PinOff : Pin} label={post.pinned ? "เลิกปักหมุด" : "ปักหมุดโพสต์นี้"} onClick={() => { togglePin(post.id); close(); }} />
+        <MenuButton
+          icon={isSaved ? BookmarkCheck : Bookmark}
+          label={isSaved ? "เลิกบันทึก" : "บันทึกข้อความนี้"}
+          onClick={() => { toggleSave(post.id, viewingAsUserId); close(); }}
+        />
+        <MenuButton icon={Link2} label="คัดลอกลิงก์" onClick={() => copyLink()} />
+        <MenuButton icon={Share2} label="แชร์โพสต์" onClick={sharePost} />
+        <MenuButton
+          icon={ClipboardList}
+          label={post.linkedTaskId ? "เปิดงานที่เชื่อมไว้" : "เปิดเป็นงาน"}
+          onClick={handleOpenAsTask}
+        />
+        <MenuButton
+          icon={isUnread ? Eye : EyeOff}
+          label={isUnread ? "ทำเครื่องหมายว่าอ่านแล้ว" : "ทำเครื่องหมายว่ายังไม่อ่าน"}
+          onClick={() => { toggleUnread(post.id, viewingAsUserId); close(); }}
+        />
+        {isOwn && (
+          <MenuButton
+            icon={Trash2}
+            label="ลบโพสต์"
+            destructive
+            onClick={() => {
+              close();
+              setConfirmDeleteOpen(true);
+            }}
+          />
+        )}
+      </>
+    );
+  }
+
   if (editing) {
     return (
       <EditPostForm
@@ -591,15 +636,18 @@ export function ReportCard({
     >
       {/* Teams-style floating hover toolbar — anchored inside this post's own
           top edge (not offset above it) so it never reads as belonging to
-          the post above it. */}
+          the post above it. Mouse/hover only now — touch gets its own
+          single quiet "⋯" below instead of this whole 4-icon row
+          permanently visible on every post, which read as too prominent and
+          cluttered once several posts sat close together
+          ("เด่นและลกมาก" — same complaint, same fix as Openchat's own
+          message-action row got). */}
       <div
         className={cn(
           "absolute top-2 right-3 z-10 flex items-center gap-0.5 rounded-lg border border-[var(--line)] bg-white shadow-sm p-0.5 opacity-0 pointer-events-none transition-opacity",
-          "group-hover/post:opacity-100 group-hover/post:pointer-events-auto",
-          // No hover on touch (C4) — opacity-0 would otherwise need a tap
-          // that does nothing (just reveals the toolbar) before the real tap.
-          "[@media(hover:none)]:opacity-100 [@media(hover:none)]:pointer-events-auto",
-          (reactionPickerOpen || moreOpen) && "opacity-100 pointer-events-auto"
+          "[@media(hover:hover)]:group-hover/post:opacity-100 [@media(hover:hover)]:group-hover/post:pointer-events-auto",
+          "[@media(hover:none)]:!hidden",
+          (reactionPickerOpen || moreOpen) && "[@media(hover:hover)]:opacity-100 [@media(hover:hover)]:pointer-events-auto"
         )}
       >
         <Popover open={reactionPickerOpen} onOpenChange={setReactionPickerOpen}>
@@ -662,36 +710,58 @@ export function ReportCard({
             }
           />
           <PopoverContent className="w-auto p-1 flex flex-col min-w-40">
-            <MenuButton icon={ReplyIcon} label="อ้างอิงโพสต์นี้" onClick={quotePost} />
-            <MenuButton icon={post.pinned ? PinOff : Pin} label={post.pinned ? "เลิกปักหมุด" : "ปักหมุดโพสต์นี้"} onClick={() => { togglePin(post.id); setMoreOpen(false); }} />
+            {postMenuItems(() => setMoreOpen(false))}
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      {/* Touch's single quiet "⋯" — nothing shows next to a post until
+          tapped, same fix as Openchat's own per-message row got (all of
+          react/reply/edit/more collapsed into one tap-to-reveal menu instead
+          of a permanently-visible bordered 4-icon row next to every single
+          post, "เด่นและลกมาก"). Only rendered under [@media(hover:none)], so
+          a mouse user never sees a redundant second trigger next to the
+          hover toolbar above. */}
+      <div className="absolute top-2 right-3 z-10 hidden [@media(hover:none)]:block">
+        <Popover open={touchMenuOpen} onOpenChange={setTouchMenuOpen}>
+          <PopoverTrigger
+            render={
+              <button className="h-7 w-7 flex items-center justify-center rounded-md text-[var(--ink-faint)]" aria-label="ตัวเลือกโพสต์">
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+            }
+          />
+          <PopoverContent className="w-auto p-1 flex flex-col min-w-44" align="end">
+            <div className="flex flex-row gap-0.5 p-0.5">
+              {reactionEmojis.map((emoji) => (
+                <button
+                  key={emoji}
+                  onClick={() => {
+                    toggleReaction(post.id, emoji, viewingAsUserId);
+                    setTouchMenuOpen(false);
+                  }}
+                  className={cn(
+                    "h-8 w-8 flex items-center justify-center rounded-md text-base hover:bg-[var(--bg-soft)]",
+                    (post.reactions[emoji] ?? []).includes(viewingAsUserId) && "bg-[var(--accent)]"
+                  )}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+            <div className="h-px bg-[var(--line)] mx-1 my-0.5" />
             <MenuButton
-              icon={isSaved ? BookmarkCheck : Bookmark}
-              label={isSaved ? "เลิกบันทึก" : "บันทึกข้อความนี้"}
-              onClick={() => { toggleSave(post.id, viewingAsUserId); setMoreOpen(false); }}
+              icon={MessageCircle}
+              label="ตอบกลับในเธรด"
+              onClick={() => {
+                setTouchMenuOpen(false);
+                setThreadOpen(true);
+                requestAnimationFrame(() => replyEditorRef.current?.focus());
+              }}
             />
-            <MenuButton icon={Link2} label="คัดลอกลิงก์" onClick={() => copyLink()} />
-            <MenuButton icon={Share2} label="แชร์โพสต์" onClick={sharePost} />
-            <MenuButton
-              icon={ClipboardList}
-              label={post.linkedTaskId ? "เปิดงานที่เชื่อมไว้" : "เปิดเป็นงาน"}
-              onClick={handleOpenAsTask}
-            />
-            <MenuButton
-              icon={isUnread ? Eye : EyeOff}
-              label={isUnread ? "ทำเครื่องหมายว่าอ่านแล้ว" : "ทำเครื่องหมายว่ายังไม่อ่าน"}
-              onClick={() => { toggleUnread(post.id, viewingAsUserId); setMoreOpen(false); }}
-            />
-            {isOwn && (
-              <MenuButton
-                icon={Trash2}
-                label="ลบโพสต์"
-                destructive
-                onClick={() => {
-                  setMoreOpen(false);
-                  setConfirmDeleteOpen(true);
-                }}
-              />
-            )}
+            {isOwn && <MenuButton icon={Pencil} label="แก้ไขโพสต์" onClick={() => { setTouchMenuOpen(false); setEditing(true); }} />}
+            <div className="h-px bg-[var(--line)] mx-1 my-0.5" />
+            {postMenuItems(() => setTouchMenuOpen(false))}
           </PopoverContent>
         </Popover>
       </div>
