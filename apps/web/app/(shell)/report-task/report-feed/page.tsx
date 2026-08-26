@@ -31,7 +31,7 @@ import { currentCutoff } from "@/modules/report_task/lib/report-cutoff";
 import { pendingToday, todayStatusEntries, type TodayStatusEntry } from "@/modules/report_task/lib/report-feed-compliance";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
-import { AtSign, BarChart3, Check, CheckCircle2, ChevronDown, Clock, FileImage, FolderHeart, Hash, ImagePlus, Link2, ListTodo, Lock, Menu, MessageSquareText, Pin, Plus, Settings, Trash2, TriangleAlert, Users, X } from "lucide-react";
+import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronDown, Clock, FileImage, FolderHeart, Hash, ImagePlus, Link2, ListTodo, Lock, Menu, MessageSquareText, Pin, Plus, Settings, Trash2, TriangleAlert, Users, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 
 // Beyond this many pinned posts, the rest move into the "+N เพิ่มเติม"
@@ -439,6 +439,7 @@ function ReportFeedPageInner() {
                 status={todayStatusFilter}
                 entries={todayStatus.filter((e) => e.status === todayStatusFilter)}
                 onJumpToTopic={selectView}
+                onClose={() => setTodayStatusFilter(null)}
               />
             </div>
           ) : showAllPosts ? (
@@ -896,10 +897,17 @@ function TodayStatusPanel({
   status,
   entries,
   onJumpToTopic,
+  onClose,
 }: {
   status: "posted" | "late" | "missing";
   entries: TodayStatusEntry[];
   onJumpToTopic: (topicId: string) => void;
+  /** This panel replaces the room panel entirely (it's a cross-room view, not
+   * "in" any one topic), but nothing in the sidebar changes to show it —
+   * without this, the only way out was clicking a sidebar row and hoping
+   * it'd stick, which read as broken navigation ("กดเข้าไปแล้วไม่มีให้กด
+   * ย้อนกลับ"). */
+  onClose: () => void;
 }) {
   const meta = todayStatusMeta[status];
   const Icon = meta.icon;
@@ -915,7 +923,15 @@ function TodayStatusPanel({
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <div className={cn("shrink-0 px-5 pt-3.5 pb-2.5 flex items-center gap-2.5 border-b border-[var(--line)]/60")}>
+      <div className={cn("shrink-0 px-3 pt-3.5 pb-2.5 flex items-center gap-2.5 border-b border-[var(--line)]/60")}>
+        <button
+          onClick={onClose}
+          aria-label="ย้อนกลับ"
+          title="ย้อนกลับ"
+          className="shrink-0 h-8 w-8 flex items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)] transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
         <span className={cn("shrink-0 flex h-8 w-8 items-center justify-center rounded-full", meta.iconBg)} style={{ color: meta.iconColor }}>
           <Icon className="h-4 w-4" />
         </span>
