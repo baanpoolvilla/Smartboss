@@ -89,15 +89,24 @@ export function StoreHydrator() {
         // DeadlineReminderSettingsPanel reads `settings.todo.enabled`
         // unconditionally. A plain `{ ...s, settings }` would hand it
         // `undefined` and crash the whole panel on render.
-        apply={(s, settings) => ({
-          ...s,
-          settings: {
-            task: { ...defaultReminderSettings.task, ...settings?.task },
-            meeting: { ...defaultReminderSettings.meeting, ...settings?.meeting },
-            report: { ...defaultReminderSettings.report, ...settings?.report },
-            todo: { ...defaultReminderSettings.todo, ...settings?.todo },
-          },
-        })}
+        apply={(s, settings) => {
+          // task.leadDays (whole days) → task.leadMinutes — a row saved
+          // before tasks could have a due *time* only ever had day-count
+          // points; ×1440 keeps every existing company's reminder points
+          // firing at the exact same moments they always did, rather than
+          // silently resetting to the default on the next load.
+          const rawTask = settings?.task as (Partial<import("@/modules/report_task/store/reminder-settings-store").TaskReminderSettings> & { leadDays?: number[] }) | undefined;
+          const migratedLeadMinutes = rawTask?.leadMinutes ?? rawTask?.leadDays?.map((d) => d * 1440);
+          return {
+            ...s,
+            settings: {
+              task: { ...defaultReminderSettings.task, ...rawTask, ...(migratedLeadMinutes ? { leadMinutes: migratedLeadMinutes } : {}) },
+              meeting: { ...defaultReminderSettings.meeting, ...settings?.meeting },
+              report: { ...defaultReminderSettings.report, ...settings?.report },
+              todo: { ...defaultReminderSettings.todo, ...settings?.todo },
+            },
+          };
+        }}
       />
       <ServerStoreSync
         apiKey="meetings"

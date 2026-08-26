@@ -2,8 +2,14 @@ import { create } from "zustand";
 
 export interface TaskReminderSettings {
   enabled: boolean;
-  /** Days before `dueDate` to notify — e.g. [3, 1] fires once 3 days out, once more 1 day out. Empty = never, even if enabled. */
-  leadDays: number[];
+  /** Minutes before the task's due moment (`dueDate`'s day + `dueTime`,
+   * defaulting to 23:59 when a task has no `dueTime` set) to notify — e.g.
+   * [4320, 1440] fires once 3 days out, once more 1 day out. Empty = never,
+   * even if enabled. Was day-only (`leadDays`) — a task's due date used to
+   * have no time-of-day at all, so "X hours before" had no actual moment to
+   * count down to. Still perfectly fine to only ever add whole-day points
+   * (1440-minute multiples) if that's all a given task needs. */
+  leadMinutes: number[];
   notifyAssignee: boolean;
   notifyAssigner: boolean;
   notifyDeptHead: boolean;
@@ -48,7 +54,7 @@ export interface ReminderSettings {
 }
 
 export const defaultReminderSettings: ReminderSettings = {
-  task: { enabled: true, leadDays: [3, 1], notifyAssignee: true, notifyAssigner: false, notifyDeptHead: false },
+  task: { enabled: true, leadMinutes: [4320, 1440], notifyAssignee: true, notifyAssigner: false, notifyDeptHead: false },
   meeting: { enabled: true, leadMinutes: [15], notifyAttendees: true },
   report: { enabled: true, leadMinutes: [30], notifyPending: true, notifyManagerSummary: false },
   todo: { enabled: true, defaultLeadMinutes: 0 },

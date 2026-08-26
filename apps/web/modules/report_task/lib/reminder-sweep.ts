@@ -1,6 +1,5 @@
 import { departments } from "@/modules/report_task/lib/directory";
-import { daysUntil } from "@/modules/report_task/lib/format";
-import { now, todayIso } from "@/modules/report_task/lib/now";
+import { calendarDateOf, now, todayIso } from "@/modules/report_task/lib/now";
 import { pendingToday } from "@/modules/report_task/lib/report-feed-compliance";
 import { SYSTEM_USER_ID } from "@/modules/report_task/lib/task-penalty-sweep";
 import type { ReminderSettings } from "@/modules/report_task/store/reminder-settings-store";
@@ -61,14 +60,16 @@ export function computeReminders(input: {
   const notifications: ReminderNotification[] = [];
   const newSentKeys: string[] = [];
 
-  // ---- Tasks: N days before dueDate ----
-  if (settings.task.enabled && settings.task.leadDays.length > 0) {
+  // ---- Tasks: N minutes before the due moment (dueDate's day + dueTime, 23:59 if unset) ----
+  if (settings.task.enabled && settings.task.leadMinutes.length > 0) {
+    const nowMs = now().getTime();
     for (const t of tasks) {
       if (t.status === "done") continue;
-      const remaining = daysUntil(t.dueDate);
-      if (remaining < 0) continue; // already overdue — that's task-penalty-sweep's job, not this one
-      for (const lead of settings.task.leadDays) {
-        if (remaining > lead) continue;
+      const dueMs = new Date(`${calendarDateOf(t.dueDate)}T${t.dueTime || "23:59"}:00`).getTime();
+      const minutesUntil = (dueMs - nowMs) / 60_000;
+      if (minutesUntil < 0) continue; // already overdue — that's task-penalty-sweep's job, not this one
+      for (const lead of settings.task.leadMinutes) {
+        if (minutesUntil > lead) continue;
         const key = `task:${t.id}:${lead}`;
         if (alreadySent.has(key)) continue;
         const recipients = new Set<string>();
@@ -81,10 +82,15 @@ export function computeReminders(input: {
         }
         newSentKeys.push(key);
         if (recipients.size === 0) continue;
+        // Whole days read as "3 วัน", not "4320 นาที" — anything shorter than
+        // a day falls back to the same ชม./นาที phrasing the meeting
+        // reminder above already uses, since it's the same kind of lead time.
+        const remainingLabel =
+          minutesUntil < 1 ? "ตอนนี้" : minutesUntil % 1440 === 0 ? `อีก ${minutesUntil / 1440} วัน` : minutesUntil >= 60 ? `อีก ${Math.round(minutesUntil / 60)} ชม.` : `อีก ${Math.round(minutesUntil)} นาที`;
         notifications.push({
           recipients: [...recipients],
           byUserId: SYSTEM_USER_ID,
-          message: `งาน "${t.title}" ใกล้ถึงกำหนดส่งใน${remaining === 0 ? "วันนี้" : `อีก ${remaining} วัน`}`,
+          message: `งาน "${t.title}" ใกล้ถึงกำหนดส่ง${minutesUntil < 1 ? "" : `ใน${remainingLabel}`}`,
           link: `/report-task/tasks?task=${t.id}`,
         });
       }

@@ -128,6 +128,13 @@ export interface Task {
   startDate: string;
   dueDate: string;
   originalDueDate: string;
+  /** "HH:mm" — optional. Every existing due-date consumer (overdue checks,
+   * badges, penalty sweep) only ever cared about the calendar *day*, so this
+   * doesn't touch any of that — it exists purely so a lead-time reminder can
+   * be expressed in hours/minutes, not just whole days, which needs an
+   * actual moment to count down to, not just a date. Unset = treated as
+   * 23:59 (end of that day) wherever a due *moment* is needed. */
+  dueTime?: string;
   /** Per-assignee due-date override for a group task — falls back to
    * `dueDate` for anyone not listed here. Unused on an individual task. */
   assigneeDueDates?: Record<string, string>;

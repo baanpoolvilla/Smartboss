@@ -292,6 +292,7 @@ export function NewTaskDialog({
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [startDate, setStartDate] = useState(initialDate);
   const [dueDate, setDueDate] = useState(initialDate);
+  const [dueTime, setDueTime] = useState("");
   const derivedDepartmentIds = departmentIdsOf(assigneeIds);
 
   // งานเดี่ยว/งานกลุ่ม — explicit, chosen at creation (not re-derived from
@@ -563,6 +564,7 @@ export function NewTaskDialog({
       startDate: new Date(startDate).toISOString(),
       dueDate: new Date(dueDate).toISOString(),
       originalDueDate: new Date(dueDate).toISOString(),
+      ...(dueTime ? { dueTime } : {}),
       ...(Object.keys(assigneeDueDates).length > 0 ? { assigneeDueDates } : {}),
       attachments,
       comments: [],
@@ -1054,7 +1056,21 @@ export function NewTaskDialog({
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs text-[var(--ink-soft)]">กำหนดส่ง</Label>
-                    <DatePickerField value={dueDate} minDate={startDate || todayIso()} onChange={setDueDate} />
+                    <div className="flex gap-1.5">
+                      <DatePickerField value={dueDate} minDate={startDate || todayIso()} onChange={setDueDate} className="flex-1" />
+                      {/* Optional — unset means "แจ้งเตือนก่อนกำหนด" (Settings ▸
+                          แจ้งเตือน) can only count whole days, since there's no
+                          actual moment to count hours/minutes back from
+                          without this. */}
+                      <Input
+                        type="time"
+                        value={dueTime}
+                        onChange={(e) => setDueTime(e.target.value)}
+                        className="w-[110px] shrink-0"
+                        aria-label="เวลากำหนดส่ง (ไม่บังคับ)"
+                        title="เวลากำหนดส่ง (ไม่บังคับ) — ใส่ไว้ถ้าอยากตั้งแจ้งเตือนล่วงหน้าเป็นชั่วโมง/นาทีได้"
+                      />
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 mt-2 flex-wrap">

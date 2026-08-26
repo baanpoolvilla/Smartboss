@@ -73,6 +73,95 @@ function LeadPointsEditor({
   );
 }
 
+const LEAD_UNITS = [
+  { key: "days", label: "วัน", minutesPer: 1440 },
+  { key: "hours", label: "ชม.", minutesPer: 60 },
+  { key: "minutes", label: "นาที", minutesPer: 1 },
+] as const;
+
+/** Formats a stored minute count back into whichever of วัน/ชม./นาที divides
+ * it evenly, biggest unit first — a point actually added as "3 วัน" should
+ * still read "3 วันก่อนกำหนด" later, not "4320 นาทีก่อนกำหนด". Falls back to
+ * minutes for a value that doesn't land on a clean day/hour boundary (only
+ * possible if it was added as an hour/minute point to begin with). */
+function formatLeadMinutes(totalMinutes: number): string {
+  for (const u of LEAD_UNITS) {
+    if (totalMinutes % u.minutesPer === 0) return `${totalMinutes / u.minutesPer} ${u.label}`;
+  }
+  return `${totalMinutes} นาที`;
+}
+
+/** Task-only variant of LeadPointsEditor — a task's due date can have no
+ * time-of-day at all (dueTime unset), which used to mean "X days before" was
+ * the only lead time that made sense. Now that a task can optionally carry a
+ * due *time*, this lets a new point be entered in วัน, ชม., or นาที instead
+ * of forcing everything into days ("ไม่เอาฟีคแบบวันสิ เอาแบบอาจจะเป็น ชม.
+ * ก็ได้") — everything is still stored as one flat list of minutes
+ * underneath, same as meeting/report already do, just editable in whatever
+ * unit reads clearest for that point. */
+function MixedUnitLeadPointsEditor({ values, onChange }: { values: number[]; onChange: (next: number[]) => void }) {
+  const [draft, setDraft] = useState("");
+  const [unit, setUnit] = useState<(typeof LEAD_UNITS)[number]["key"]>("days");
+
+  function commitDraft() {
+    const n = Math.round(Number(draft));
+    setDraft("");
+    if (!Number.isFinite(n) || n <= 0) return;
+    const minutesPer = LEAD_UNITS.find((u) => u.key === unit)!.minutesPer;
+    const totalMinutes = n * minutesPer;
+    if (totalMinutes > 30 * 1440 || values.includes(totalMinutes)) return;
+    onChange([...values, totalMinutes].sort((a, b) => b - a));
+  }
+
+  function remove(v: number) {
+    onChange(values.filter((x) => x !== v));
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 pl-[46px]">
+      {values.length === 0 && <span className="text-xs text-[var(--ink-faint)]">ยังไม่มีจุดแจ้งเตือน</span>}
+      {values.map((v) => (
+        <span
+          key={v}
+          className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] px-2.5 py-1 text-xs font-semibold"
+        >
+          {formatLeadMinutes(v)}ก่อนกำหนด
+          <button onClick={() => remove(v)} aria-label={`ลบจุดแจ้งเตือน ${formatLeadMinutes(v)}ก่อนกำหนด`} className="text-[var(--ink-faint)] hover:text-[var(--chart-red)]">
+            <X className="h-3 w-3" />
+          </button>
+        </span>
+      ))}
+      <span className="flex items-center gap-1 rounded-lg border border-dashed border-[var(--line-strong)] pl-2 pr-1 py-0.5">
+        <Input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value.replace(/[^0-9]/g, ""))}
+          onKeyDown={(e) => e.key === "Enter" && commitDraft()}
+          placeholder="0"
+          className="h-6 w-10 border-0 px-0 text-center text-xs shadow-none focus-visible:ring-0"
+        />
+        <Select value={unit} onValueChange={(v) => setUnit(v as typeof unit)}>
+          <SelectTrigger className="h-6 w-16 border-0 px-1 text-xs shadow-none">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {LEAD_UNITS.map((u) => (
+              <SelectItem key={u.key} value={u.key}>{u.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <span className="text-xs text-[var(--ink-soft)] pr-1">ก่อนกำหนด</span>
+        <button
+          onClick={commitDraft}
+          aria-label="เพิ่มจุดแจ้งเตือน"
+          className="h-5 w-5 rounded-md flex items-center justify-center text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)]"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      </span>
+    </div>
+  );
+}
+
 function RecipientPill({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
   return (
     <button
@@ -130,16 +219,16 @@ export function DeadlineReminderSettingsPanel() {
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold">งาน (Task)</p>
-            <p className="text-[11px] text-[var(--ink-soft)]">แจ้งก่อนถึงกำหนดส่ง</p>
+            <p className="text-[11px] text-[var(--ink-soft)]">
+              แจ้งก่อนถึงกำหนดส่ง — งานที่ตั้งเวลากำหนดส่งไว้ (ไม่ใช่แค่วันที่) เลือกเป็นชั่วโมง/นาทีก่อนได้ด้วย
+            </p>
           </div>
           <Switch checked={settings.task.enabled} onCheckedChange={(v) => setTaskSettings({ enabled: v })} />
         </div>
         <div className={cn("px-4 pb-3.5 space-y-2.5", !settings.task.enabled && "opacity-50 pointer-events-none")}>
-          <LeadPointsEditor
-            values={settings.task.leadDays}
-            unit="วันก่อนกำหนด"
-            max={30}
-            onChange={(leadDays) => setTaskSettings({ leadDays })}
+          <MixedUnitLeadPointsEditor
+            values={settings.task.leadMinutes}
+            onChange={(leadMinutes) => setTaskSettings({ leadMinutes })}
           />
           <div className="flex flex-wrap items-center gap-2 pl-[46px]">
             <span className="text-[11px] text-[var(--ink-faint)]">แจ้งใคร:</span>
