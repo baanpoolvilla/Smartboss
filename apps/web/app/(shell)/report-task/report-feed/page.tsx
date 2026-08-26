@@ -489,28 +489,19 @@ function ReportFeedPageInner() {
                       just Close) whenever canManage is false or the mode has
                       no per-person list to edit, so a regular employee can
                       look but has no controls to change anything. */}
-                  {/* The round in force right now, as one chip. Full rules
-                      (every round, its time, its photo minimum) are one click
-                      away in room settings, and the title attribute carries
-                      them on hover — the chip answers "what am I on the hook
-                      for at this moment", which is the only part of it that
-                      belongs on screen while reading. */}
-                  {requirementParts.length > 0 && (() => {
-                    const round = requirementParts.find((r) => r.active) ?? requirementParts[0]!;
-                    return (
-                      <button
-                        onClick={() => setRoomSettingsOpen(true)}
-                        title={`รอบส่งของห้องนี้ — ${requirementParts.map((r) => r.text).join(" · ")}`}
-                        className="shrink-0 flex items-center gap-1 rounded-full border border-[var(--line)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--ink-soft)] hover:text-[var(--ink)] hover:bg-[var(--bg-soft)] transition-colors"
-                      >
-                        {activeTopic.minImages > 0 ? <ImagePlus className="h-3 w-3" /> : <TriangleAlert className="h-3 w-3" />}
-                        {round.text}
-                        {requirementParts.length > 1 && (
-                          <span className="text-[var(--ink-faint,#a5b0c2)]">+{requirementParts.length - 1}</span>
-                        )}
-                      </button>
-                    );
-                  })()}
+                  {/* Plain text, not a button — the clickable "+1 hidden in a
+                      hover title" version read as cryptic and unclear what it
+                      even was ("ดูแล้วงง"). This is just information (what
+                      does this room require to post), so it reads as
+                      information: every round spelled out plainly, nothing
+                      truncated behind a count or a hover. Changing the rounds
+                      themselves is the ⚙ gear's job, not this label's. */}
+                  {requirementParts.length > 0 && (
+                    <span className="shrink-0 flex items-center gap-1 rounded-full bg-[var(--bg-soft)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--ink-soft)]">
+                      {activeTopic.minImages > 0 ? <ImagePlus className="h-3 w-3 shrink-0" /> : <TriangleAlert className="h-3 w-3 shrink-0" />}
+                      {requirementParts.map((r) => r.text).join(" · ")}
+                    </span>
+                  )}
                   <button
                     data-tour="member-count"
                     onClick={() => setMembersDialogOpen(true)}
