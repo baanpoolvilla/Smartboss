@@ -601,11 +601,17 @@ export function OpenchatFeed({
                         <Popover open={openActionsFor === m.id} onOpenChange={(open) => setOpenActionsFor(open ? m.id : null)}>
                           <PopoverTrigger
                             render={
+                              // Plain and quiet, not a bordered/shadowed button —
+                              // this sits next to *every* message permanently on
+                              // touch, so a chip-looking control there read as too
+                              // loud for what it is ("เล็กๆแบบให้รู้พอ ไม่เอาเด่น").
+                              // Bigger tap target than it looks (h-7 w-7) via
+                              // padding, not a visible box.
                               <button
-                                className="h-7 w-7 flex items-center justify-center rounded-md border border-[var(--line)] bg-[var(--bg)] shadow-sm text-[var(--ink-soft)]"
+                                className="h-7 w-7 flex items-center justify-center rounded-md text-[var(--ink-faint)]"
                                 aria-label="ตัวเลือกข้อความ"
                               >
-                                <MoreHorizontal className="h-3.5 w-3.5" />
+                                <MoreHorizontal className="h-4 w-4" />
                               </button>
                             }
                           />
