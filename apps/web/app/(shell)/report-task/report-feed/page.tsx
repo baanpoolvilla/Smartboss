@@ -2,11 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { TopicSidebar, TopicLogo, ALL_TOPICS_ID, PENDING_ID, MENTIONS_ID, TODOS_ID } from "@/modules/report_task/components/report-feed/topic-sidebar";
-import { AddTodoDialog } from "@/modules/report_task/components/calendar/add-todo-dialog";
-import { useTodoStore } from "@/modules/report_task/store/todo-store";
-import { formatDate } from "@/modules/report_task/lib/format";
-import type { TodoItem } from "@/modules/report_task/types";
+import { TopicSidebar, TopicLogo, ALL_TOPICS_ID, PENDING_ID, MENTIONS_ID } from "@/modules/report_task/components/report-feed/topic-sidebar";
 import { ReportComposer } from "@/modules/report_task/components/report-feed/report-composer";
 import { ReportFeed } from "@/modules/report_task/components/report-feed/report-feed";
 import { OpenchatFeed } from "@/modules/report_task/components/report-feed/openchat-feed";
@@ -32,7 +28,7 @@ import { currentCutoff } from "@/modules/report_task/lib/report-cutoff";
 import { pendingToday, todayStatusEntries, type TodayStatusEntry } from "@/modules/report_task/lib/report-feed-compliance";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
-import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronDown, Clock, FileImage, FolderHeart, Hash, ImagePlus, Link2, ListTodo, Lock, Menu, MessageSquareText, Pin, Plus, Settings, SlidersHorizontal, Trash2, TriangleAlert, Users, X } from "lucide-react";
+import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronDown, Clock, FileImage, FolderHeart, Hash, ImagePlus, Link2, Lock, Menu, MessageSquareText, Pin, Settings, SlidersHorizontal, TriangleAlert, Users, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 
 // Beyond this many pinned posts, the rest move into the "+N เพิ่มเติม"
@@ -231,7 +227,7 @@ function ReportFeedPageInner() {
   // it through as-is rather than falling back, same as any real,
   // currently-selected topic.
   const activeId = (() => {
-    if (selectedId === ALL_TOPICS_ID || selectedId === PENDING_ID || selectedId === MENTIONS_ID || selectedId === TODOS_ID) return selectedId;
+    if (selectedId === ALL_TOPICS_ID || selectedId === PENDING_ID || selectedId === MENTIONS_ID) return selectedId;
     if (selectedId && visibleTopics.some((t) => t.id === selectedId) && !isParentId(selectedId)) {
       return selectedId;
     }
@@ -244,7 +240,6 @@ function ReportFeedPageInner() {
   const showAllPosts = activeId === ALL_TOPICS_ID;
   const showPending = activeId === PENDING_ID;
   const showMentions = activeId === MENTIONS_ID;
-  const showTodos = activeId === TODOS_ID;
   const activeTopic = useMemo(() => visibleTopics.find((t) => t.id === activeId), [visibleTopics, activeId]);
   const exemptions = useReportComplianceExemptions();
   // "ที่ฉันต้องส่ง" — same pendingToday() the sidebar badge counts, filtered
@@ -296,9 +291,9 @@ function ReportFeedPageInner() {
   // (organizing-folder) topic has no posts of its own to mark either way,
   // so this is harmless to run unconditionally on whatever's selected.
   useEffect(() => {
-    if (!activeId || showAllPosts || showPending || showMentions || showTodos) return;
+    if (!activeId || showAllPosts || showPending || showMentions) return;
     markTopicRead(activeId, viewingAsUserId);
-  }, [activeId, showAllPosts, showPending, showMentions, showTodos, viewingAsUserId, markTopicRead]);
+  }, [activeId, showAllPosts, showPending, showMentions, viewingAsUserId, markTopicRead]);
 
   // ที่กล่าวถึงฉัน spans posts across many rooms, so opening it clears
   // exactly those posts' unread flag (markPostsRead) instead of a whole
@@ -471,10 +466,6 @@ function ReportFeedPageInner() {
                 onJumpToTopic={selectView}
                 onOpenTask={setOpenTaskId}
               />
-            </div>
-          ) : showTodos ? (
-            <div className="flex-1 min-h-0 rounded-2xl border border-[var(--line)] bg-white overflow-hidden flex flex-col">
-              <TodoPanel />
             </div>
           ) : activeTopic ? (
             <div className="flex-1 min-h-0 rounded-2xl border border-[var(--line)] bg-white overflow-hidden flex flex-col">
@@ -850,107 +841,6 @@ function PendingTopicsPanel({
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-/** The viewer's own สิ่งที่ต้องทำ (see calendar's dedicated tab for the same
- * data) — surfaced here too since Report is where people already check in
- * daily, unlike Calendar which someone might only open to look at meetings.
- * Read/write on the same `todo-store`, so ticking one off here or on the
- * calendar tab shows up in both places immediately. */
-function TodoPanel() {
-  const todos = useTodoStore((s) => s.todos);
-  const toggleTodo = useTodoStore((s) => s.toggleTodo);
-  const removeTodo = useTodoStore((s) => s.removeTodo);
-  const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingTodo, setEditingTodo] = useState<TodoItem | null>(null);
-
-  const myTodos = todos
-    .filter((t) => t.userId === viewingAsUserId)
-    .sort((a, b) => Number(a.done) - Number(b.done) || a.date.localeCompare(b.date));
-  const openCount = myTodos.filter((t) => !t.done).length;
-
-  return (
-    <div className="flex-1 min-h-0 flex flex-col">
-      <div className="shrink-0 px-5 pt-3.5 pb-2.5 flex items-center gap-2.5 justify-between border-b border-[var(--line)]/60">
-        <div className="flex items-center gap-2.5">
-          <span className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-orange-50 text-[var(--chart-amber)]">
-            <ListTodo className="h-4 w-4" />
-          </span>
-          <div>
-            <h2 className="text-[16px] font-semibold leading-tight">สิ่งที่ต้องทำ</h2>
-            <p className="text-xs text-[var(--ink-soft)] leading-tight">
-              {myTodos.length === 0 ? "รายการของคุณ" : `เหลือ ${openCount}/${myTodos.length} รายการ`}
-            </p>
-          </div>
-        </div>
-        <Button
-          size="sm"
-          className="h-8 gap-1 rounded-full bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white px-3.5 text-xs"
-          onClick={() => {
-            setEditingTodo(null);
-            setDialogOpen(true);
-          }}
-        >
-          <Plus className="h-3.5 w-3.5" />
-          เพิ่ม
-        </Button>
-      </div>
-
-      {myTodos.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6 bg-[var(--bg-soft)]/40">
-          <div className="h-14 w-14 rounded-full bg-orange-50 flex items-center justify-center">
-            <ListTodo className="h-6 w-6 text-[var(--chart-amber)]" />
-          </div>
-          <div className="space-y-1">
-            <p className="text-sm font-semibold">ยังไม่มีสิ่งที่ต้องทำ</p>
-            <p className="text-xs text-[var(--ink-soft)]">กด &quot;เพิ่ม&quot; ด้านบนเพื่อเริ่มบันทึกรายการแรก</p>
-          </div>
-        </div>
-      ) : (
-        <div className="flex-1 overflow-y-auto bg-[var(--bg-soft)]/40 p-5 space-y-2">
-          {myTodos.map((t) => (
-            <div
-              key={t.id}
-              className="group flex items-center gap-3 rounded-xl border border-[var(--line)] bg-white px-4 py-3 hover:border-[var(--brand-green)]/40 transition-colors"
-            >
-              <button
-                onClick={() => toggleTodo(t.id)}
-                aria-label={t.done ? "ทำเครื่องหมายว่ายังไม่เสร็จ" : "ทำเครื่องหมายว่าเสร็จแล้ว"}
-                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-[var(--chart-amber)]"
-                style={t.done ? { backgroundColor: "var(--chart-amber)" } : undefined}
-              >
-                {t.done && <Check className="h-3 w-3 text-white" strokeWidth={3} />}
-              </button>
-              <button
-                onClick={() => {
-                  setEditingTodo(t);
-                  setDialogOpen(true);
-                }}
-                className="min-w-0 flex-1 text-left"
-              >
-                <p className={cn("text-sm font-medium truncate", t.done && "line-through text-[var(--ink-soft)]")}>{t.title}</p>
-                <p className="text-xs text-[var(--ink-soft)]">
-                  {formatDate(t.date)}
-                  {t.time && ` · ${t.time}`}
-                </p>
-              </button>
-              <button
-                onClick={() => removeTodo(t.id)}
-                title="ลบ"
-                aria-label={`ลบ "${t.title}"`}
-                className="shrink-0 text-[var(--ink-faint)] opacity-0 group-hover:opacity-100 hover:text-[var(--chart-red)] transition-opacity"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <AddTodoDialog open={dialogOpen} onOpenChange={setDialogOpen} editingTodo={editingTodo} />
     </div>
   );
 }
