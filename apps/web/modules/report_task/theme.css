@@ -316,6 +316,34 @@
 .ebw-calendar .fc-dayGridMonth-view .fc-scroller {
   overflow: hidden !important;
 }
+/* Dense month rows (.ebw-dense, set by full-calendar-view.tsx when a week-row
+   works out shorter than ~104px — a 6-row month on a laptop, typically).
+   The cap stays at two events per day everywhere; this is what makes two of
+   them plus the "+N รายการ" link actually fit in a short row, instead of
+   dropping the cap to one and having the same day look different from one
+   window size to the next. Trims ~18px of pure padding/margin per cell —
+   nothing about the text itself gets smaller than it needs to be to read. */
+.ebw-calendar.ebw-dense .fc-dayGridMonth-view .fc-daygrid-day-number {
+  padding: 2px 3px 2px 7px;
+  font-size: 0.72rem;
+}
+.ebw-calendar.ebw-dense .fc-dayGridMonth-view .fc-event {
+  margin: 0 2px 2px !important;
+}
+/* The chip's inner row is rendered by renderEventContent with its own
+   Tailwind padding (py-[3px]) — overridden here on the vertical axis only, so
+   the horizontal padding that keeps text off the accent bar is untouched. */
+.ebw-calendar.ebw-dense .fc-dayGridMonth-view .fc-event > * {
+  padding-top: 1px !important;
+  padding-bottom: 1px !important;
+}
+.ebw-calendar.ebw-dense .fc-dayGridMonth-view .fc-daygrid-more-link {
+  padding: 0 6px;
+  font-size: 0.66rem;
+}
+.ebw-calendar.ebw-dense .fc-dayGridMonth-view .fc-daygrid-day-bottom {
+  margin-top: 0;
+}
 /* Hover a day cell to hint it's clickable (add event). */
 .ebw-calendar .fc-daygrid-day {
   transition: background-color 0.12s ease;

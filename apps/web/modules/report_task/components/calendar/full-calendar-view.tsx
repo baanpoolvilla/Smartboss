@@ -656,11 +656,18 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
   // native sizing — the CSS var used to be set for those too, which pinned the
   // week view's all-day strip to a full month-row's height.
   const usesFixedRows = view === "dayGridMonth" && !isNarrowViewport;
-  // Two chips + "+N รายการ" need roughly 100px under the date number. On a
-  // short window (or a 6-row month) where a row can't hold that, showing one
-  // chip and rolling the rest into the link is what keeps every row equal —
-  // the alternative is chips overflowing their cell and the grid growing again.
-  const monthMaxEvents = monthRowHeight >= 104 ? 2 : 1;
+  // Two chips then "+N รายการ", always — asked for explicitly, and it's the
+  // right call: a cap that silently drops to one on a shorter window means the
+  // same day reads differently depending on the window size, which is the
+  // inconsistency all of this is trying to get rid of.
+  //
+  // At default sizing two chips + the link need ~100px under the date number,
+  // and a 6-row month on a laptop gives a row about 90. Rather than cut to one
+  // chip, the row gets a dense treatment below that threshold: tighter chip
+  // padding/margins, a slightly smaller date number and "+N" link. Two chips
+  // still fit, they're just a touch more compact — the same trade every
+  // calendar app makes on a short window.
+  const monthRowsAreDense = usesFixedRows && monthRowHeight < 104;
 
   return (
     <div
@@ -745,7 +752,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           that row balloon far past the others, so back to capped + equal
           rows + "+N รายการ". */}
       <div
-        className="ebw-calendar lg:flex-1 lg:min-h-0 lg:overflow-hidden"
+        className={cn("ebw-calendar lg:flex-1 lg:min-h-0 lg:overflow-hidden", monthRowsAreDense && "ebw-dense")}
         ref={wrapperRef}
         style={usesFixedRows ? ({ "--ebw-row-height": `${monthRowHeight}px` } as CSSProperties) : undefined}
       >
@@ -797,8 +804,9 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           // same pale-chip treatment.
           eventDisplay={view === "dayGridMonth" ? (isNarrowViewport ? "list-item" : "block") : "auto"}
           eventContent={renderEventContent}
-          // Month view: a fixed cap (2 per day, or 1 when a row is too short to
-          // hold two chips plus the link — see monthMaxEvents), then "+N รายการ" —
+          // Month view: a fixed cap of 2 per day, then "+N รายการ" — the cap
+          // never changes with window size (a short row goes dense instead, see
+          // monthRowsAreDense), so a day reads the same way everywhere —
           // every day reads the same way regardless of row height, rather
           // than `true`'s auto-fit (which let a taller 5-week month's rows
           // show 3-4 events on one day and 2 on another). Tried removing this
@@ -806,7 +814,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           // dozen+ entries ballooned that row far past the others, so it's
           // back. Week/day/list keep auto-fit — those don't stack multiple
           // events per cell the same way, so a fixed cap doesn't apply there.
-          dayMaxEvents={view === "dayGridMonth" ? monthMaxEvents : isNarrowViewport ? 3 : true}
+          dayMaxEvents={view === "dayGridMonth" ? 2 : isNarrowViewport ? 3 : true}
           eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
           // "+N more" opens the same day popup as clicking the date itself
           // instead of FullCalendar's own bare popover — one consistent
