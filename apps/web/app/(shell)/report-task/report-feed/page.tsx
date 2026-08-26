@@ -15,6 +15,7 @@ import { ReportComplianceBar } from "@/modules/report_task/components/report-fee
 import { RoomSettingsSheet } from "@/modules/report_task/components/report-feed/room-settings-sheet";
 import { ReportTopicPanels, collectFiles, collectLinks, filesCutoffMs } from "@/modules/report_task/components/report-feed/report-topic-panels";
 import { PostFilterBar, filterPosts, emptyPostFilters, postFiltersActiveCount, type PostFilters } from "@/modules/report_task/components/report-feed/post-filter-bar";
+import { filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
 import { TaskDetailSheet } from "@/modules/report_task/components/kanban/task-detail-sheet";
 import { Button, buttonVariants } from "@/modules/report_task/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
@@ -31,7 +32,7 @@ import { currentCutoff } from "@/modules/report_task/lib/report-cutoff";
 import { pendingToday, todayStatusEntries, type TodayStatusEntry } from "@/modules/report_task/lib/report-feed-compliance";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
-import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronDown, Clock, FileImage, FolderHeart, Hash, ImagePlus, Link2, ListTodo, Lock, Menu, MessageSquareText, Pin, Plus, Settings, Trash2, TriangleAlert, Users, X } from "lucide-react";
+import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronDown, Clock, FileImage, FolderHeart, Hash, ImagePlus, Link2, ListTodo, Lock, Menu, MessageSquareText, Pin, Plus, Settings, SlidersHorizontal, Trash2, TriangleAlert, Users, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 
 // Beyond this many pinned posts, the rest move into the "+N เพิ่มเติม"
@@ -172,6 +173,7 @@ function ReportFeedPageInner() {
   // squeezed inline block with its own internal scroll (3.5.5) — the desktop
   // sidebar (TopicSidebar, still rendered as-is at `lg:`) is unaffected.
   const [mobileTopicsOpen, setMobileTopicsOpen] = useState(false);
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   // The ⚙ (Phase 6) opens settings right here now instead of navigating the
   // whole page away to /settings and losing which room/tab you were on (G1).
   const [roomSettingsOpen, setRoomSettingsOpen] = useState(false);
@@ -651,9 +653,51 @@ function ReportFeedPageInner() {
                       together they pushed the posts under a wall of controls.
                       Tabs and filters both answer "which posts am I looking
                       at", so one row holds them: what section, then what
-                      subset of it. */}
+                      subset of it.
+
+                      Below sm: every chip wrapped onto the tab row used
+                      more of a 375-414px screen than the tabs themselves
+                      ("พอจอแคบ...เนื้อหามันเกินความกว้างจอ") — collapsed to
+                      one "ตัวกรอง" button + bottom sheet instead, same
+                      pattern ภาพรวมทั้งหมด already uses for its own filters. */}
                   {activeTab === "posts" && (
-                    <div className="w-full sm:w-auto sm:ml-auto shrink-0 py-1.5">
+                    <>
+                      <div className="hidden sm:block sm:ml-auto shrink-0 py-1.5">
+                        <PostFilterBar
+                          filters={filters}
+                          onChange={setFilters}
+                          authorOptions={topicMembers.map((m) => m.id)}
+                          tagOptions={reportTags}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setMobileFilterOpen(true)}
+                        className={cn(filterFieldTriggerClass(postFiltersActiveCount(filters) > 0), "sm:hidden ml-auto my-1.5 !h-8")}
+                      >
+                        <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+                        ตัวกรอง
+                        {postFiltersActiveCount(filters) > 0 && <span className="tabular-nums">({postFiltersActiveCount(filters)})</span>}
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
+                  <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl sm:hidden">
+                    <SheetHeader className="flex-row items-center justify-between gap-2 pb-2 pr-11">
+                      <SheetTitle>ตัวกรอง</SheetTitle>
+                      {postFiltersActiveCount(filters) > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setFilters(emptyPostFilters)}
+                          className="text-sm font-medium text-[var(--brand-green-dark)] underline-offset-2 hover:underline"
+                        >
+                          ล้างตัวกรอง
+                        </button>
+                      )}
+                    </SheetHeader>
+                    <div className="px-4 pb-2">
                       <PostFilterBar
                         filters={filters}
                         onChange={setFilters}
@@ -661,8 +705,8 @@ function ReportFeedPageInner() {
                         tagOptions={reportTags}
                       />
                     </div>
-                  )}
-                </div>
+                  </SheetContent>
+                </Sheet>
 
                 {/* Pinned posts only. The "รอบส่งวันนี้" chips that used to
                     share this strip moved up into the room's identity row as a
