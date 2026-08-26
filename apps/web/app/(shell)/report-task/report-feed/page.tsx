@@ -388,7 +388,9 @@ function ReportFeedPageInner() {
   }
 
   return (
-    <div className="flex flex-col gap-6 h-full">
+    // gap-4, not gap-6 — every row of chrome above the feed is height the
+    // posts don't get, and this page is for reading posts.
+    <div className="flex flex-col gap-4 h-full">
       <ReportHeader
         visibleTopics={visibleTopics}
         onJumpToPost={(topicId, postId) => {
@@ -491,7 +493,7 @@ function ReportFeedPageInner() {
                     member count + settings gear on the right (R1/R4: two
                     fixed rows instead of everything wrapping together with
                     the tabs into whatever fits). */}
-                <div className="px-5 pt-3.5 pb-2.5 flex items-start gap-2.5">
+                <div className="px-5 pt-3 pb-2 flex items-center gap-2.5">
                   <TopicLogo topic={activeTopic} size="h-8 w-8" />
                   <div className="min-w-0 flex-1">
                     <h2 className="text-[16px] font-semibold truncate">{activeTopic.name}</h2>
@@ -671,7 +673,7 @@ function ReportFeedPageInner() {
                 {/* Filter bar (1.3) — was the biggest gap in the whole page:
                     the room's own feed had no filtering at all before this. */}
                 {activeTab === "posts" && (
-                  <div className="px-5 py-2 border-t border-[var(--line)]/60 flex items-center justify-between gap-2 flex-wrap">
+                  <div className="px-5 py-1.5 flex items-center justify-between gap-2 flex-wrap">
                     <PostFilterBar
                       filters={filters}
                       onChange={setFilters}

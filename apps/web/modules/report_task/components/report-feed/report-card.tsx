@@ -660,18 +660,39 @@ export function ReportCard({
           under every single quiet post just piled up dead chrome on a busy
           room with lots of short posts. */}
       {(post.replies.length > 0 || threadOpen || topic.commentsDisabled) && (
-      <div className="space-y-3 pt-3 mt-3 border-t border-[var(--line)]/60">
+      <div className="space-y-3 pt-3 mt-3 border-t border-[var(--line)]">
+          {/* The comments sat at the same indent, on the same white, in the
+              same text size as the post itself, separated by the same faint
+              hairlines — so a post with replies read as one undifferentiated
+              column of names and short lines ("ในส่วนนี้มันยังดูยากมาก...งง
+              มาก"), with no way to see where the post stopped and the
+              conversation about it started.
+
+              Three things fix that here, and they only work together: the
+              whole thread is indented and hangs off a vertical line (the
+              universal "these belong to the thing above" cue — Teams, Slack
+              and every mail client draw some version of it), it sits on a
+              tinted panel so it reads as a different surface from the post,
+              and it's introduced by a count so you know how much is there
+              before reading a single row. Inside it, replies are separated by
+              spacing rather than more hairlines — one boundary style per
+              level, otherwise every line competes with every other line. */}
           {post.replies.length > 0 && (
-            <>
-              {post.replies.length > RECENT_REPLY_COUNT && (
-                <button
-                  onClick={() => setRepliesExpanded((v) => !v)}
-                  className="text-xs font-medium text-[var(--brand-green-dark)] hover:underline"
-                >
-                  {repliesExpanded ? "ย่อความคิดเห็น" : `ดูความคิดเห็นก่อนหน้า ${post.replies.length - RECENT_REPLY_COUNT} รายการ`}
-                </button>
-              )}
-              <div className="divide-y divide-[var(--line)]/60">
+            <div className="ml-1 border-l-2 border-[var(--line)] pl-3 sm:pl-4">
+              <div className="flex items-center gap-2 pb-1.5">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-soft)]">
+                  {post.replies.length} ความคิดเห็น
+                </p>
+                {post.replies.length > RECENT_REPLY_COUNT && (
+                  <button
+                    onClick={() => setRepliesExpanded((v) => !v)}
+                    className="text-[11px] font-medium text-[var(--brand-green-dark)] hover:underline"
+                  >
+                    {repliesExpanded ? "ย่อลง" : `ดูก่อนหน้าอีก ${post.replies.length - RECENT_REPLY_COUNT}`}
+                  </button>
+                )}
+              </div>
+              <div className="space-y-1 rounded-lg bg-[var(--bg-soft)]/60 px-2.5 py-1.5">
                 {(repliesExpanded ? post.replies : post.replies.slice(-RECENT_REPLY_COUNT)).map((r) => (
                   <ReportReply
                     key={r.id}
@@ -690,7 +711,7 @@ export function ReportCard({
                   />
                 ))}
               </div>
-            </>
+            </div>
           )}
 
           {/* ปิดคอมเมนต์ (Phase 6) — existing replies above stay visible (read-only history), just no way to add a new one. */}

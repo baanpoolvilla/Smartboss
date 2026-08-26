@@ -78,8 +78,13 @@ export function ReportReply({
     <div
       id={`report-reply-${reply.id}`}
       className={cn(
-        "group/reply flex items-start gap-2.5 py-3 rounded-lg transition-colors duration-500",
-        flashed && "bg-[var(--accent)]"
+        // Sits inside the thread panel now (see report-card.tsx), so it gets a
+        // white hover surface to pick itself out of that panel instead of
+        // relying on a divider above and below it. Tighter vertical padding
+        // too: a reply is a smaller unit than a post and should read that way,
+        // which is half of what tells the two apart at a glance.
+        "group/reply flex items-start gap-2.5 px-2 py-2 rounded-lg transition-colors duration-500",
+        flashed ? "bg-[var(--accent)]" : "hover:bg-white"
       )}
       style={reply.highlightColor ? { borderLeft: `3px solid ${reply.highlightColor}`, paddingLeft: "9px" } : undefined}
     >

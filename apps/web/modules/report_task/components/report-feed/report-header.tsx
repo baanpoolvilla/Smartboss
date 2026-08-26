@@ -63,7 +63,12 @@ export function ReportHeader({
       // channel name with "Teams ·"). Falls back to "รายงาน" only on the
       // merged views that aren't really "in" a room (ภาพรวมทั้งหมด etc.).
       title={roomLabel ?? "รายงาน"}
-      subtitle="โพสต์อัปเดต พูดคุย แลกเปลี่ยน และสรุปงานในทีม — เหมือนแชนแนลใน Teams"
+      // The tagline is an onboarding line: it says the same sentence above
+      // every room, forever, and costs a full row of height on a page whose
+      // whole job is showing posts. Keep it where it still teaches something
+      // — the landing state before a room is open — and drop it once you're
+      // reading a specific room, which is where the height actually matters.
+      subtitle={roomLabel ? undefined : "โพสต์อัปเดต พูดคุย แลกเปลี่ยน และสรุปงานในทีม — เหมือนแชนแนลใน Teams"}
       action={
         <div className="flex items-center gap-1.5 flex-wrap w-full sm:w-auto">
           <CompliancePill
