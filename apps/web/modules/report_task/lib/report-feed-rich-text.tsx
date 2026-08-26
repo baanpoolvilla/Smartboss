@@ -97,7 +97,7 @@ function collectLines(el: HTMLElement): string[] {
   const lines: string[] = [];
   let current = "";
 
-  function walk(node: Node, flags: FormatFlags) {
+  function walk(node: Node, flags: FormatFlags, isRoot = false) {
     if (node.nodeType === Node.TEXT_NODE) {
       const text = node.textContent ?? "";
       if (text) current += text.trim() ? applyFormatMarkers(text, flags) : text;
@@ -134,6 +134,36 @@ function collectLines(el: HTMLElement): string[] {
         return;
       }
     }
+    // Typing here never produces DIV/P/LI — Enter is caught and manually
+    // turned into a plain <br> by every composer's own keydown handler. But
+    // pasting multi-line content (another chat, a doc, a spreadsheet) is the
+    // browser's own paste normalization, never ours to intercept, and Chrome
+    // wraps *each pasted line* in its own <div> (or <li>/<p> for a pasted
+    // list) instead of joining them with <br>. Recursing into one of these
+    // through the generic branch below — the only thing this function used
+    // to do — ran every pasted line into the last one with no separator at
+    // all, which is what turned a pasted list into one garbled row instead
+    // of several. Treating a block's end as a line break, same as <br>,
+    // fixes that; guarded to skip the outer contentEditable root itself,
+    // which is a <div> too but isn't a "line" of its own.
+    if (!isRoot && (elNode.tagName === "DIV" || elNode.tagName === "P" || elNode.tagName === "LI")) {
+      // A pasted <li> carries no visible marker of its own (that's the
+      // parent <ul>/<ol>'s job) — stamp "• " back on so the list survives
+      // the round trip as *something* recognizable rather than becoming
+      // indistinguishable plain lines.
+      const isListItem = elNode.tagName === "LI" && !current.trim();
+      if (isListItem) current += BULLET_MARKER;
+      const nextFlags: FormatFlags = {
+        bold: flags.bold || false,
+        italic: flags.italic || false,
+        underline: flags.underline || false,
+        code: flags.code || false,
+      };
+      for (const child of Array.from(elNode.childNodes)) walk(child, nextFlags);
+      lines.push(current);
+      current = "";
+      return;
+    }
     const nextFlags: FormatFlags = {
       bold: flags.bold || elNode.tagName === "B" || elNode.tagName === "STRONG",
       italic: flags.italic || elNode.tagName === "I" || elNode.tagName === "EM",
@@ -143,7 +173,7 @@ function collectLines(el: HTMLElement): string[] {
     for (const child of Array.from(elNode.childNodes)) walk(child, nextFlags);
   }
 
-  walk(el, { bold: false, italic: false, underline: false, code: false });
+  walk(el, { bold: false, italic: false, underline: false, code: false }, true);
   lines.push(current);
   return lines;
 }
