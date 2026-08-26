@@ -28,7 +28,7 @@ import { currentCutoff } from "@/modules/report_task/lib/report-cutoff";
 import { pendingToday, todayStatusEntries, type TodayStatusEntry } from "@/modules/report_task/lib/report-feed-compliance";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
-import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, Clock, FileImage, FolderHeart, Hash, ImagePlus, Link2, Lock, Menu, MessageSquareText, Pin, Settings, SlidersHorizontal, TriangleAlert, Users, X } from "lucide-react";
+import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronRight, Clock, FileImage, FolderHeart, Hash, ImagePlus, Link2, Lock, Menu, MessageSquareText, Pin, Settings, SlidersHorizontal, TriangleAlert, Users, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 
 // Beyond this many pinned posts, the rest move into the "+N เพิ่มเติม"
@@ -390,10 +390,21 @@ function ReportFeedPageInner() {
           its own internal scroll (3.5.5) — the `lg:flex` sidebar right below
           is completely untouched at desktop widths. */}
       <div className="lg:hidden">
-        <Button variant="outline" onClick={() => setMobileTopicsOpen(true)} className="w-full justify-start gap-2">
-          <Menu className="h-4 w-4" />
+        {/* Was plain outline text with no hint that tapping it does anything
+            — asked explicitly for the top bar to signal what's tappable
+            ("แถบบนให้รู้ด้วยว่ากดได้อะไร"). A tinted fill (like every other
+            actionable control on this page) plus a trailing chevron — the
+            same "opens something" cue a native picker/accordion uses —
+            reads as a control to tap, not a label to read. */}
+        <Button
+          variant="outline"
+          onClick={() => setMobileTopicsOpen(true)}
+          className="w-full justify-start gap-2 bg-[var(--bg-soft)] border-[var(--line)] hover:bg-[var(--accent)]"
+        >
+          <Menu className="h-4 w-4 shrink-0" />
           หัวข้อ
           {activeTopic && <span className="text-[var(--ink-soft)] font-normal truncate">— {activeTopic.name}</span>}
+          <ChevronRight className="h-4 w-4 shrink-0 ml-auto text-[var(--ink-soft)]" />
         </Button>
         <Sheet open={mobileTopicsOpen} onOpenChange={setMobileTopicsOpen}>
           <SheetContent side="left" className="p-0 w-[85vw] max-w-sm flex flex-col">
@@ -588,15 +599,14 @@ function ReportFeedPageInner() {
                 {/* Row 2 — tabs, full-width so the underline (`border-b` on
                     the container, `-mb-px` per tab) actually connects to a
                     real line instead of floating (R2), with counts (R5) and
-                    proper tab semantics (R6). flex-wrap here (with the
-                    filter bar's own wrapper going full-width below sm) — the
-                    filter bar was a fixed shrink-0 block riding this same
-                    non-wrapping row, so on a narrow phone tabs + every filter
-                    chip together needed more width than the screen had, and
-                    the excess just got clipped by the card's own
-                    overflow-hidden with no way to reach it at all. */}
-                <div className="px-5 flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-[var(--line)]">
-                <div role="tablist" aria-label="ส่วนของหัวข้อ" className="flex items-center gap-4 overflow-x-auto">
+                    proper tab semantics (R6). The tablist itself is
+                    `flex-1 min-w-0` with its own overflow-x-auto — tabs
+                    scroll on a narrow phone rather than wrapping, so the
+                    "ตัวกรอง" button stays pinned on the same line instead of
+                    getting shoved onto its own orphan row below (which just
+                    looked like disconnected clutter, "งง...จัดให้มันดีๆสิ"). */}
+                <div className="px-5 flex items-center gap-2 border-b border-[var(--line)]">
+                <div role="tablist" aria-label="ส่วนของหัวข้อ" className="flex flex-1 min-w-0 items-center gap-4 overflow-x-auto">
                   {topicTabs.map((t) => {
                     const Icon = t.icon;
                     const active = activeTab === t.id;
@@ -668,7 +678,7 @@ function ReportFeedPageInner() {
                     tabIndex={activeTab === "posts" ? 0 : -1}
                     className={cn(
                       filterFieldTriggerClass(postFiltersActiveCount(filters) > 0),
-                      "sm:hidden ml-auto my-1.5 !h-8",
+                      "sm:hidden ml-auto my-1.5 !h-8 shrink-0",
                       activeTab !== "posts" && "invisible"
                     )}
                   >
