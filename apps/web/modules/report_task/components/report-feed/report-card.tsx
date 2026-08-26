@@ -390,25 +390,33 @@ export function ReportCard({
     <div
       id={`report-post-${post.id}`}
       className={cn(
-        // Real Teams doesn't box each post in its own card — posts sit
-        // edge-to-edge in a flat list, separated by a single hairline
-        // divider, with just a background tint on hover. The previous
-        // rounded-2xl/border/shadow-per-post treatment read as a stack of
-        // separate boxes rather than one continuous feed once a room had
-        // more than a couple of posts.
-        // py-6 (was py-4) — a real Teams screenshot circled the gap between
-        // one post's own "Reply in thread" link and the next post's header:
-        // noticeably more breathing room than between a post and its own
-        // replies, so separate posts read as distinct instead of running
-        // together into one confusing block ("แต่ละหัวข้อ...ไม่ดูงง").
-        // Plain --line at low opacity read as almost nothing between posts
-        // ("ตัวคั่นระหว่างโพสมองยากมาก") — mixed with --ink-soft here so the
-        // line itself is visibly darker instead of relying on opacity alone.
-        "group/post relative px-5 py-6 border-b border-[color-mix(in_srgb,var(--line),var(--ink-soft)_35%)] transition-colors duration-200",
-        highlighted || flashTargetId === post.id ? "bg-[var(--accent)]" : "bg-white hover:bg-[var(--bg-soft)]/60",
+        // Each post is its own card on the feed's tinted background, which is
+        // what Teams actually does and — more to the point — what finally
+        // answered "ตัวคั่นระหว่างโพสมองยากมาก งงมาก".
+        //
+        // This went the other way twice before: posts as flat edge-to-edge
+        // rows separated by a hairline, then the same rows with a deliberately
+        // darkened hairline. Both kept failing for the same reason, which is
+        // worth writing down so nobody flattens them a third time. A single
+        // line is the weakest boundary a layout has, and these posts don't
+        // give it any help: they're wildly uneven in height (one line of text,
+        // or a title plus tags plus an image plus a reply thread), so the eye
+        // can't fall back on a regular rhythm to tell "new post" from "more of
+        // the same post". Darkening the line only makes a faint boundary
+        // slightly less faint — it doesn't change what the boundary has to do.
+        //
+        // A card closes the shape on all four sides, so where one post ends is
+        // never in question no matter how tall or short it is. The gap between
+        // cards comes from the feed's own spacing (see report-feed.tsx), which
+        // is also what separates a post from its own replies *inside* the card
+        // — the two now read at clearly different levels instead of competing.
+        "group/post relative rounded-xl border border-[var(--line)] px-5 py-4 shadow-[0_1px_2px_rgba(17,17,17,0.04)] transition-colors duration-200",
+        highlighted || flashTargetId === post.id ? "bg-[var(--accent)]" : "bg-white hover:border-[color-mix(in_srgb,var(--line),var(--ink-soft)_45%)]",
         // Unread reads as a left accent + a dot under the author's name (see
         // below) instead of a background tint — a background collided with
         // `highlighted`'s bg-accent (both fighting for the same visual slot).
+        // Unread keeps its left accent — on a card it reads as a colored edge
+        // on the card itself, which is stronger than it was on a flat row.
         isUnread && "border-l-[3px] border-l-[var(--chart-blue)]"
       )}
     >

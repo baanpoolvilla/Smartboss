@@ -68,7 +68,12 @@ export function ReportFeed({
 
   return (
     <div className="relative flex-1 flex flex-col min-h-0">
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto bg-white scroll-pt-4">
+      {/* Tinted background, not white — it's what makes each post's white card
+          read as a separate object instead of a rectangle drawn on the same
+          sheet it sits on. The card treatment and this tint only work as a
+          pair; whitening this again brings back the "มองยาก" problem even with
+          the borders still on the cards. */}
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto bg-[var(--bg-soft)]/50 px-4 py-4 space-y-4 scroll-pt-4">
         {topicPosts.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center gap-3 text-center px-6">
             <div
@@ -83,8 +88,11 @@ export function ReportFeed({
             </div>
           </div>
         ) : (
+          // space-y-4 between day groups, space-y-3 between the cards inside
+          // one — same idea as the card itself: the bigger gap is the bigger
+          // division, so a day boundary never reads the same as a post boundary.
           groupByDay(topicPosts, (p) => p.createdAt).map((group) => (
-            <div key={group.key}>
+            <div key={group.key} className="space-y-3">
               <DaySeparator label={group.label} />
               {group.items.map((p) => (
                 <ReportCard key={p.id} post={p} topic={topic} highlighted={p.id === highlightPostId} highlightReplyId={highlightReplyId} onOpenTask={onOpenTask} />

@@ -121,9 +121,15 @@ export function ReportHeader({
   );
 }
 
+/* Quieter than they were: the tinted fill and colored border together made
+   three small status chips compete with the room title next to them, on a page
+   whose job is reading posts. The color now lives in the icon/dot and the
+   count alone — enough to spot "ยังไม่ส่ง 4" at a glance, without the whole
+   chip glowing. They stay clickable and keep their meaning; they just stop
+   shouting. */
 const pillToneStyles = {
-  warn: { border: "border-[var(--chart-amber)]/40", bg: "bg-[color-mix(in_srgb,var(--chart-amber)_10%,white)]", text: "text-[var(--chart-amber)]" },
-  bad: { border: "border-[var(--chart-red)]/40", bg: "bg-[color-mix(in_srgb,var(--chart-red)_8%,white)]", text: "text-[var(--chart-red)]" },
+  warn: { border: "border-[var(--line)]", bg: "bg-white", text: "text-[var(--chart-amber)]" },
+  bad: { border: "border-[var(--line)]", bg: "bg-white", text: "text-[var(--chart-red)]" },
 } as const;
 
 /** Single-line chip — dot+label+bold count, same shape as the mockup's `.pill`
@@ -150,7 +156,8 @@ function CompliancePill({
       onClick={onClick}
       className={cn(
         "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] font-medium whitespace-nowrap transition-colors",
-        toneStyle ? cn(toneStyle.border, toneStyle.bg, toneStyle.text) : "border-[var(--line)] bg-white text-[var(--ink)] hover:bg-[var(--bg-soft)]"
+        "hover:bg-[var(--bg-soft)]",
+        toneStyle ? cn(toneStyle.border, toneStyle.bg, toneStyle.text) : "border-[var(--line)] bg-white text-[var(--ink)]"
       )}
       title={`${label}: ${value} — ดูรายละเอียดใน ภาพรวมทั้งหมด`}
     >
