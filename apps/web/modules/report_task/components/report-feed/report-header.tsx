@@ -8,9 +8,9 @@ import { PageHeader } from "@/modules/report_task/components/shared/page-header"
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { todayComplianceSummary } from "@/modules/report_task/lib/report-feed-compliance";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
-import { relativeTime } from "@/modules/report_task/lib/format";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Bookmark, Clock, TriangleAlert } from "lucide-react";
+import { TimeAgo } from "@/modules/report_task/components/shared/time-ago";
 
 /** Top-of-page banner: same `PageHeader` every other top-level page uses
  * (H1/H2 — was its own 32px "Report" title before, drifting from the rest
@@ -105,7 +105,7 @@ export function ReportHeader({
                         className="w-full text-left px-3.5 py-2.5 hover:bg-[var(--bg-soft)] transition-colors"
                       >
                         <p className="text-xs text-[var(--ink-soft)] truncate">
-                          {topic?.name ?? "หัวข้อที่ลบไปแล้ว"} · {author?.name} · {relativeTime(p.createdAt)}
+                          {topic?.name ?? "หัวข้อที่ลบไปแล้ว"} · {author?.name} · <TimeAgo date={p.createdAt} />
                         </p>
                         <p className="text-sm font-medium truncate">{p.title}</p>
                       </button>

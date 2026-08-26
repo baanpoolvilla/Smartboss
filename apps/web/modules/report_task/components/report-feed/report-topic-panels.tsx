@@ -15,7 +15,7 @@ import { AlbumFormDialog } from "@/modules/report_task/components/report-feed/al
 import { users, getUser, getDepartment } from "@/modules/report_task/lib/directory";
 import { useReportFeedStore, type ReportPost, type ReportPostImage, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { groupByDay, relativeTime } from "@/modules/report_task/lib/format";
+import { groupByDay } from "@/modules/report_task/lib/format";
 import { ReportImageLightbox } from "@/modules/report_task/components/report-feed/report-image-lightbox";
 import { canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { buildUserComplianceReports, pendingToday } from "@/modules/report_task/lib/report-feed-compliance";
@@ -29,6 +29,7 @@ import { Input } from "@/modules/report_task/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
 import { AlbumPickerButton } from "@/modules/report_task/components/report-feed/album-picker-button";
 import { TopicEmptyState } from "@/modules/report_task/components/report-feed/topic-empty-state";
+import { TimeAgo } from "@/modules/report_task/components/shared/time-ago";
 import {
   ArrowLeft,
   FileImage,
@@ -285,7 +286,7 @@ export function ReportTopicPanels({
                           />
                           <p className="text-xs mt-1 truncate">{f.image.name}</p>
                           <p className="text-[11px] text-[var(--ink-soft)] truncate">
-                            {getUser(f.authorId)?.name} · {relativeTime(f.createdAt)}
+                            {getUser(f.authorId)?.name} · <TimeAgo date={f.createdAt} />
                           </p>
                         </button>
                         <div className="absolute top-1 left-1">
@@ -364,7 +365,7 @@ export function ReportTopicPanels({
                     className="w-full h-24 object-cover rounded-lg border border-[var(--line)] group-hover:opacity-90"
                   />
                   <p className="text-xs mt-1 truncate">{f.image.name}</p>
-                  <p className="text-[11px] text-[var(--ink-soft)] truncate">{f.postTitle} · {relativeTime(f.createdAt)}</p>
+                  <p className="text-[11px] text-[var(--ink-soft)] truncate">{f.postTitle} · <TimeAgo date={f.createdAt} /></p>
                 </button>
               ))}
             </div>
@@ -501,7 +502,7 @@ export function ReportTopicPanels({
                     {l.url}
                   </a>
                   <button onClick={() => scrollToPost(l.postId)} className="block text-[11px] text-[var(--ink-soft)] hover:underline mt-0.5">
-                    จาก &quot;{l.postTitle}&quot; · {relativeTime(l.createdAt)}
+                    จาก &quot;{l.postTitle}&quot; · <TimeAgo date={l.createdAt} />
                   </button>
                 </div>
               </div>

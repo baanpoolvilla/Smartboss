@@ -44,7 +44,7 @@ import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-
 import { getUser, displayName, getDepartment, users, canManage, isOwner, departmentIdsOf } from "@/modules/report_task/lib/directory";
 import { statusMeta, priorityMeta, taskStatusOrder, taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
 import { isTaskFullyDone, remainingChecklistCount } from "@/modules/report_task/lib/task-completion";
-import { formatDate, formatDateTime, relativeTime } from "@/modules/report_task/lib/format";
+import { formatDate, formatDateTime } from "@/modules/report_task/lib/format";
 import { cn } from "@/modules/report_task/lib/utils";
 import {
   Calendar,
@@ -71,6 +71,7 @@ import { StickerConfirmDialog } from "@/modules/report_task/components/shared/st
 import { uploadTaskAttachment } from "@/modules/report_task/lib/task-attachment-upload";
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { toast } from "sonner";
+import { TimeAgo } from "@/modules/report_task/components/shared/time-ago";
 
 const toDateInput = (iso: string) => iso.slice(0, 10);
 
@@ -861,7 +862,7 @@ export function TaskDetailSheet({
                           <span className="font-medium">{by?.name}</span>{" "}
                           <span className="text-[var(--ink-soft)]">ติด{sticker?.label ?? "สติกเกอร์"}</span>
                         </p>
-                        <p className="text-[10px] text-[var(--ink-soft)]">{relativeTime(r.createdAt)}</p>
+                        <TimeAgo date={r.createdAt} className="text-[10px] text-[var(--ink-soft)] block" />
                       </div>
                       {sticker && sticker.points !== 0 && (
                         <span className={cn("text-xs font-semibold tabular-nums", sticker.points < 0 ? "text-[var(--chart-red)]" : "text-[var(--brand-green-dark)]")}>
@@ -1270,7 +1271,7 @@ export function TaskDetailSheet({
           </div>
 
           <p className="text-[10px] text-[var(--ink-soft)] pt-1">
-            สร้างเมื่อ {formatDateTime(task.createdAt)} · อัปเดต {relativeTime(task.updatedAt)}
+            สร้างเมื่อ {formatDateTime(task.createdAt)} · อัปเดต <TimeAgo date={task.updatedAt} />
           </p>
         </div>
 
@@ -1309,7 +1310,7 @@ export function TaskDetailSheet({
                   <div className={cn("min-w-0 max-w-[78%] rounded-lg px-3 py-2", mine ? "bg-[var(--accent)]" : "bg-white")}>
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-medium">{mine ? "คุณ" : author?.name}</span>
-                      <span className="text-[10px] text-[var(--ink-soft)]">{relativeTime(c.createdAt)}</span>
+                      <TimeAgo date={c.createdAt} className="text-[10px] text-[var(--ink-soft)]" />
                     </div>
                     {c.message && <p className="text-sm mt-0.5 whitespace-pre-wrap break-words">{renderMentions(c.message)}</p>}
                     {c.attachments && c.attachments.length > 0 && (

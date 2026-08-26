@@ -33,7 +33,6 @@ import {
   type ReportPostReply,
   type ReportTopic,
 } from "@/modules/report_task/store/report-feed-store";
-import { relativeTime } from "@/modules/report_task/lib/format";
 import { lateCutoffFor, minImagesNow, onTimeCutoffFor } from "@/modules/report_task/lib/report-cutoff";
 import {
   bulletsTextToHtml,
@@ -51,6 +50,7 @@ import { ReportReply } from "@/modules/report_task/components/report-feed/report
 import { LinkInsertPopover } from "@/modules/report_task/components/report-feed/link-insert-popover";
 import { cn } from "@/modules/report_task/lib/utils";
 import { toast } from "sonner";
+import { TimeAgo } from "@/modules/report_task/components/shared/time-ago";
 import {
   Bold,
   Bookmark,
@@ -523,7 +523,7 @@ export function ReportCard({
                 {author.role}
               </span>
             )}
-            <span className="text-xs text-[var(--ink-soft)] shrink-0">{relativeTime(post.createdAt)}</span>
+            <TimeAgo date={post.createdAt} className="text-xs text-[var(--ink-soft)] shrink-0" />
             {post.editedAt && <span className="text-xs text-[var(--ink-soft)] shrink-0">· แก้ไขแล้ว</span>}
             {isUnread && (
               <span className="flex items-center gap-1 text-[11px] font-medium text-[var(--chart-blue)] shrink-0">

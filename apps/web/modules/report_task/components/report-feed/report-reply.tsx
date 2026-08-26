@@ -5,9 +5,9 @@ import { Button } from "@/modules/report_task/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { getUser } from "@/modules/report_task/lib/directory";
 import type { ReportPostImage, ReportPostReply } from "@/modules/report_task/store/report-feed-store";
-import { relativeTime } from "@/modules/report_task/lib/format";
 import { renderRichBulletText } from "@/modules/report_task/lib/report-feed-rich-text";
 import { cn } from "@/modules/report_task/lib/utils";
+import { TimeAgo } from "@/modules/report_task/components/shared/time-ago";
 
 const reactionEmojis = ["👍", "❤️", "🎉", "😂", "😮", "😢"];
 
@@ -89,7 +89,7 @@ export function ReportReply({
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs font-medium">
-            {author?.name} <span className="font-normal text-[var(--ink-soft)]">· {relativeTime(reply.createdAt)}</span>
+            {author?.name} <span className="font-normal text-[var(--ink-soft)]">· <TimeAgo date={reply.createdAt} /></span>
             {reply.editedAt && <span className="font-normal text-[var(--ink-soft)]"> · แก้ไขแล้ว</span>}
           </p>
           <span className="shrink-0 flex items-center gap-2 opacity-0 group-hover/reply:opacity-100 focus-within:opacity-100 transition-opacity">
