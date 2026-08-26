@@ -246,11 +246,27 @@ export function ReportCard({
   // A quoted reference always points somewhere inside this same post (either
   // the post itself or one of its own replies), so this can stay a plain
   // local scroll — no cross-post lookup or page-level routing needed.
+  //
+  // The target can be one of the older replies folded away behind "ดูก่อน
+  // หน้าอีก N" (only the last RECENT_REPLY_COUNT render by default) — clicking
+  // a quote that points at one of those used to scroll to nothing, silently,
+  // since the element isn't in the DOM yet. Expand first when that's the
+  // case, then scroll on the next tick once React's had a chance to render it.
   function jumpToQuote(id: string) {
-    const elId = id === post.id ? `report-post-${post.id}` : `report-reply-${id}`;
-    document.getElementById(elId)?.scrollIntoView({ behavior: "smooth", block: "center" });
-    setFlashTargetId(id);
-    setTimeout(() => setFlashTargetId((cur) => (cur === id ? null : cur)), 2000);
+    const recentIds = new Set(post.replies.slice(-RECENT_REPLY_COUNT).map((r) => r.id));
+    const needsExpand = id !== post.id && !recentIds.has(id) && !repliesExpanded;
+    if (needsExpand) setRepliesExpanded(true);
+    const scroll = () => {
+      const elId = id === post.id ? `report-post-${post.id}` : `report-reply-${id}`;
+      document.getElementById(elId)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setFlashTargetId(id);
+      setTimeout(() => setFlashTargetId((cur) => (cur === id ? null : cur)), 2000);
+    };
+    if (needsExpand) {
+      setTimeout(scroll, 0);
+    } else {
+      scroll();
+    }
   }
 
   // A deep link to an older reply that's currently folded away (see C6
