@@ -15,6 +15,7 @@ import {
 } from "@/modules/report_task/components/ui/alert-dialog";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
+import { Switch } from "@/modules/report_task/components/ui/switch";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { useHolidayStore, THAI_SOURCE, isSourceSelected } from "@/modules/report_task/store/holiday-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
@@ -176,6 +177,12 @@ export function HolidaysPane() {
   const [countries, setCountries] = useState<Country[]>([]);
   const [loadFailed, setLoadFailed] = useState(false);
   const [filter, setFilter] = useState("");
+  // The full country list (~100 rows) used to render every time this pane
+  // opened, active ones buried among every other country in the world —
+  // asked for explicitly: only the ones actually turned on should show, with
+  // a toggle to turn them back off, and "add another one" tucked behind its
+  // own button instead of always being on screen.
+  const [addOpen, setAddOpen] = useState(false);
   // Set (not a single code) so picking two countries before the first
   // request resolves doesn't have the first one's `finally` clear the
   // second one's still-in-flight loading indicator.
@@ -194,6 +201,7 @@ export function HolidaysPane() {
   const isChecked = (code: string) => isSourceSelected(selectedByUser, viewingAsUserId, code);
   const filtered = countries.filter((c) => c.name.toLowerCase().includes(filter.toLowerCase()));
   const showThailand = THAILAND.name.toLowerCase().includes(filter.toLowerCase());
+  const activeCountries = [THAILAND, ...countries].filter((c) => isChecked(c.countryCode));
 
   async function toggleCountry(c: Country, checked: boolean) {
     if (!checked) {
@@ -251,60 +259,96 @@ export function HolidaysPane() {
       <p className="text-xs text-[var(--ink-soft)] mt-1 mb-3">
         เพิ่มวันหยุดราชการหลักของแต่ละประเทศเข้าไปใน<strong>ปฏิทินของคุณเอง</strong> — แต่ละคนเลือกได้อิสระ ไม่กระทบปฏิทินคนอื่น (ข้อมูลประเทศอื่นจาก date.nager.at)
       </p>
-      <div className="flex items-center gap-3 mb-3 flex-wrap">
-        <div className="relative max-w-sm flex-1 min-w-[160px]">
-          <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--ink-soft)]" />
-          <Input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="ค้นหาประเทศ" className="pl-8" />
+
+      {/* Only the countries actually turned on — a toggle to turn each back
+          off, right here, instead of having to dig through every country in
+          the world to find the one row you already checked. */}
+      {activeCountries.length > 0 && (
+        <div className="space-y-0.5 mb-4">
+          {activeCountries.map((c) => (
+            <div key={c.countryCode} className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1.5 hover:bg-[var(--bg-soft)] text-sm">
+              <span className="font-medium">{c.name}</span>
+              {pending.has(c.countryCode) ? (
+                <Loader2 className="h-4 w-4 animate-spin shrink-0 text-[var(--ink-soft)]" />
+              ) : (
+                <Switch
+                  size="sm"
+                  checked={isChecked(c.countryCode)}
+                  onCheckedChange={(checked) => toggleCountry(c, !!checked)}
+                  aria-label={`เปิด/ปิดวันหยุดของ ${c.name}`}
+                />
+              )}
+            </div>
+          ))}
         </div>
-        <label className="flex items-center gap-1.5 text-xs text-[var(--ink-soft)] shrink-0">
-          ปีที่นำเข้า:
-          <Input
-            type="number"
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
-            className="w-24 h-9"
-          />
-        </label>
-      </div>
-      <p className="text-[11px] text-[var(--ink-soft)] mb-3">
-        ติ๊กจะดึงวันหยุดของปี {year} มาใส่ — ถ้าอยากได้ปีอื่นด้วย เปลี่ยนปีแล้วติ๊กใหม่อีกครั้ง (ไม่ทับของเดิม)
-      </p>
-      {showThailand && (
-        <>
-          <label className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-[var(--bg-soft)] cursor-pointer text-sm w-fit font-medium">
-            <Checkbox
-              checked={isChecked(THAI_SOURCE)}
-              onCheckedChange={(checked) => toggleCountry(THAILAND, !!checked)}
-              aria-label={`เพิ่มวันหยุดของ ${THAILAND.name}`}
-            />
-            <span>{THAILAND.name}</span>
-          </label>
-          <div className="h-px bg-[var(--line)] my-2" />
-        </>
       )}
-      {loadFailed && <p className="text-sm text-[var(--chart-red)]">โหลดรายชื่อประเทศไม่สำเร็จ ลองใหม่อีกครั้ง</p>}
-      {!loadFailed && countries.length === 0 && (
-        <p className="text-sm text-[var(--ink-soft)] flex items-center gap-1.5"><Loader2 className="h-3.5 w-3.5 animate-spin" /> กำลังโหลดรายชื่อประเทศ...</p>
-      )}
-      {/* columns-2 (not grid-cols-2) so the list flows down one column before
-          starting the next, matching a normal alphabetical read order —
-          a row-major grid would zigzag consecutive names across columns. */}
-      <div className="columns-2 gap-x-4 max-w-2xl">
-        {filtered.map((c) => (
-          <label key={c.countryCode} className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-[var(--bg-soft)] cursor-pointer text-sm break-inside-avoid">
-            {pending.has(c.countryCode) ? (
-              <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-            ) : (
-              <Checkbox
-                checked={isChecked(c.countryCode)}
-                onCheckedChange={(checked) => toggleCountry(c, !!checked)}
-                aria-label={`เพิ่มวันหยุดของ ${c.name}`}
+
+      {!addOpen ? (
+        <button
+          type="button"
+          onClick={() => setAddOpen(true)}
+          className="flex items-center gap-1.5 text-sm font-medium text-[var(--brand-green-dark)] hover:underline"
+        >
+          <Plus className="h-3.5 w-3.5" /> เพิ่มประเทศอื่น
+        </button>
+      ) : (
+        <div className="rounded-lg border border-[var(--line)] p-3">
+          <div className="flex items-center gap-3 mb-3 flex-wrap">
+            <div className="relative max-w-sm flex-1 min-w-[160px]">
+              <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--ink-soft)]" />
+              <Input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="ค้นหาประเทศ" className="pl-8" />
+            </div>
+            <label className="flex items-center gap-1.5 text-xs text-[var(--ink-soft)] shrink-0">
+              ปีที่นำเข้า:
+              <Input
+                type="number"
+                value={year}
+                onChange={(e) => setYear(e.target.value)}
+                className="w-24 h-9"
               />
-            )}
-            <span className="truncate">{c.name}</span>
-          </label>
-        ))}
-      </div>
+            </label>
+          </div>
+          <p className="text-[11px] text-[var(--ink-soft)] mb-3">
+            ติ๊กจะดึงวันหยุดของปี {year} มาใส่ — ถ้าอยากได้ปีอื่นด้วย เปลี่ยนปีแล้วติ๊กใหม่อีกครั้ง (ไม่ทับของเดิม)
+          </p>
+          {showThailand && (
+            <>
+              <label className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-[var(--bg-soft)] cursor-pointer text-sm w-fit font-medium">
+                <Checkbox
+                  checked={isChecked(THAI_SOURCE)}
+                  onCheckedChange={(checked) => toggleCountry(THAILAND, !!checked)}
+                  aria-label={`เพิ่มวันหยุดของ ${THAILAND.name}`}
+                />
+                <span>{THAILAND.name}</span>
+              </label>
+              <div className="h-px bg-[var(--line)] my-2" />
+            </>
+          )}
+          {loadFailed && <p className="text-sm text-[var(--chart-red)]">โหลดรายชื่อประเทศไม่สำเร็จ ลองใหม่อีกครั้ง</p>}
+          {!loadFailed && countries.length === 0 && (
+            <p className="text-sm text-[var(--ink-soft)] flex items-center gap-1.5"><Loader2 className="h-3.5 w-3.5 animate-spin" /> กำลังโหลดรายชื่อประเทศ...</p>
+          )}
+          {/* columns-2 (not grid-cols-2) so the list flows down one column before
+              starting the next, matching a normal alphabetical read order —
+              a row-major grid would zigzag consecutive names across columns. */}
+          <div className="columns-2 gap-x-4 max-w-2xl">
+            {filtered.map((c) => (
+              <label key={c.countryCode} className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-[var(--bg-soft)] cursor-pointer text-sm break-inside-avoid">
+                {pending.has(c.countryCode) ? (
+                  <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                ) : (
+                  <Checkbox
+                    checked={isChecked(c.countryCode)}
+                    onCheckedChange={(checked) => toggleCountry(c, !!checked)}
+                    aria-label={`เพิ่มวันหยุดของ ${c.name}`}
+                  />
+                )}
+                <span className="truncate">{c.name}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
