@@ -35,6 +35,7 @@ import {
   type ReportTopic,
 } from "@/modules/report_task/store/report-feed-store";
 import { lateCutoffFor, minImagesNow, onTimeCutoffFor } from "@/modules/report_task/lib/report-cutoff";
+import { localDateStr } from "@/modules/report_task/lib/now";
 import {
   bulletsTextToHtml,
   CHECKLIST_CHECKED,
@@ -177,6 +178,25 @@ export function ReportCard({
   const isUnread = post.unreadFor.includes(viewingAsUserId);
   const lateCutoff = lateCutoffFor(post.createdAt, topic.cutoffs);
   const onTimeCutoff = !lateCutoff ? onTimeCutoffFor(post.createdAt, topic.cutoffs) : null;
+  const allPosts = useReportFeedStore((s) => s.posts);
+  // Once you're past a cutoff, *every* post you make that day gets flagged
+  // "ส่งช้า" — technically true of each one, but posting twice just repeated
+  // the same fact back and read as if something new had gone wrong each
+  // time ("จะแสดงแค่ส่งช้าอันเดียวสิ...โพสอีกมันก็เด้งขึ้นว่าโพสช้าอีกอัน").
+  // Only the earliest post by this author, in this room, under this same
+  // round, on this same day actually shows the badge — later ones already
+  // said it once.
+  const isFirstLateOfRound =
+    !lateCutoff ||
+    !allPosts.some(
+      (p) =>
+        p.id !== post.id &&
+        p.topicId === post.topicId &&
+        p.authorId === post.authorId &&
+        localDateStr(new Date(p.createdAt)) === localDateStr(new Date(post.createdAt)) &&
+        lateCutoffFor(p.createdAt, topic.cutoffs)?.id === lateCutoff.id &&
+        new Date(p.createdAt).getTime() < new Date(post.createdAt).getTime()
+    );
 
   const [replyText, setReplyText] = useState("");
   const [replyImages, setReplyImages] = useState<ReportPostImage[]>([]);
@@ -719,26 +739,24 @@ export function ReportCard({
               ))}
             </div>
           )}
-          {lateCutoff ? (
+          {lateCutoff && isFirstLateOfRound ? (
             <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
               <span className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200">
                 <TriangleAlert className="h-2.5 w-2.5" />
                 ส่งช้า (เลยรอบ {lateCutoff.label} {lateCutoff.time})
               </span>
             </div>
-          ) : (
-            onTimeCutoff && (
-              // The positive counterpart to "ส่งช้า" (C10) — without it, a
-              // room with a schedule only ever showed a warning badge, never
-              // confirmation that a post actually met it.
-              <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
-                <span className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-[var(--accent)] text-[var(--brand-green-dark)] border border-[var(--brand-green)]/20">
-                  <Check className="h-2.5 w-2.5" />
-                  ตรงเวลา · รอบ{onTimeCutoff.label}
-                </span>
-              </div>
-            )
-          )}
+          ) : !lateCutoff && onTimeCutoff ? (
+            // The positive counterpart to "ส่งช้า" (C10) — without it, a
+            // room with a schedule only ever showed a warning badge, never
+            // confirmation that a post actually met it.
+            <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+              <span className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-[var(--accent)] text-[var(--brand-green-dark)] border border-[var(--brand-green)]/20">
+                <Check className="h-2.5 w-2.5" />
+                ตรงเวลา · รอบ{onTimeCutoff.label}
+              </span>
+            </div>
+          ) : null}
         </div>
       </div>
 
