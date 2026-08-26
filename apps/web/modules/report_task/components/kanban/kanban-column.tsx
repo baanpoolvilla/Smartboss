@@ -235,8 +235,16 @@ export function KanbanColumn({
         // fill. min-h-0 is the classic flex-child-with-overflow fix —
         // without it this column keeps growing to fit every card instead of
         // scrolling its own list within the board's fixed row height (see
-        // kanban-board.tsx's scroller comment).
-        className="flex-1 flex flex-col gap-3 p-2.5 rounded-xl min-h-[200px] lg:min-h-0 lg:overflow-y-auto transition-colors duration-200 bg-[var(--bg-soft)]/50"
+        // kanban-board.tsx's scroller comment). Used to only apply at lg:,
+        // same gap every self-scrolling piece of this board had below that
+        // — the column had no bounded height of its own on mobile to scroll
+        // within, so a tall column's cards had nowhere to go but rely on
+        // whatever ambient page scroll existed above it, which is almost
+        // certainly what was behind cards losing their scroll position when
+        // paging between columns ("กดเลื่อนไปแล้ว...ไม่เอาอยู่ตำแหน่งเดิม").
+        // Unconditional now, matching every other level of this board's
+        // scroll chain (AppScaffold, tasks/page.tsx, KanbanBoard's own row).
+        className="flex-1 flex min-h-0 flex-col gap-3 p-2.5 rounded-xl overflow-y-auto transition-colors duration-200 bg-[var(--bg-soft)]/50"
       >
         {visibleTasks.map((t) => (
           <TaskCard
