@@ -825,7 +825,15 @@ export function TopicSidebar({
 
                 {editor?.mode === "create" ? (
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-[var(--ink-soft)]">ประเภทหัวข้อ</Label>
+                    {/* Was "ประเภทหัวข้อ" + "หัวข้อย่อยของหัวข้อหลักที่มี" — a label
+                        that reads as a generic category picker, paired with an
+                        option long enough to need a second read to parse
+                        ("อ่านละ งงๆ"). Renamed to what each button actually
+                        does — a standalone room, or one nested under a room
+                        that already exists — with a one-line caption under
+                        each so the choice never depends on remembering what
+                        "หัวข้อย่อย" means elsewhere in the app. */}
+                    <Label className="text-xs text-[var(--ink-soft)]">สร้างห้องแบบไหน</Label>
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
@@ -836,7 +844,7 @@ export function TopicSidebar({
                         )}
                       >
                         <Hash className="h-4 w-4" />
-                        <span className="text-xs font-medium">หัวข้อหลักใหม่</span>
+                        <span className="text-xs font-medium">ห้องใหม่แยกอิสระ</span>
                       </button>
                       <button
                         type="button"
@@ -853,7 +861,7 @@ export function TopicSidebar({
                         )}
                       >
                         <ChevronRight className="h-4 w-4" />
-                        <span className="text-xs font-medium">หัวข้อย่อยของหัวข้อหลักที่มี</span>
+                        <span className="text-xs font-medium">ห้องย่อยในห้องเดิม</span>
                       </button>
                     </div>
                     {parentOptions.length === 0 ? (
