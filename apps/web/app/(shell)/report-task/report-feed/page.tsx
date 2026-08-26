@@ -480,8 +480,15 @@ function ReportFeedPageInner() {
                 {/* Row 1 — identity: logo/name/description on the left,
                     member count + settings gear on the right (R1/R4: two
                     fixed rows instead of everything wrapping together with
-                    the tabs into whatever fits). */}
-                <div className="px-5 pt-3 pb-2 flex items-center gap-2.5">
+                    the tabs into whatever fits). flex-wrap (not a strict
+                    single line) — member count + mode pill + mini compliance
+                    bar + gear all have their own minimum width that doesn't
+                    shrink, and on a narrow phone (~375-414px) that add up to
+                    more than the screen has even with the name truncated to
+                    nothing; without a wrap the rest just ran off-screen with
+                    no way to reach it ("มุมมอง: Thread" was literally
+                    unreachable, cut off past the right edge). */}
+                <div className="px-5 pt-3 pb-2 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
                   <TopicLogo topic={activeTopic} size="h-8 w-8" />
                   <div className="min-w-0 flex-1">
                     <h2 className="text-[16px] font-semibold truncate">{activeTopic.name}</h2>
@@ -594,8 +601,14 @@ function ReportFeedPageInner() {
                 {/* Row 2 — tabs, full-width so the underline (`border-b` on
                     the container, `-mb-px` per tab) actually connects to a
                     real line instead of floating (R2), with counts (R5) and
-                    proper tab semantics (R6). */}
-                <div className="px-5 flex items-center gap-4 border-b border-[var(--line)]">
+                    proper tab semantics (R6). flex-wrap here (with the
+                    filter bar's own wrapper going full-width below sm) — the
+                    filter bar was a fixed shrink-0 block riding this same
+                    non-wrapping row, so on a narrow phone tabs + every filter
+                    chip together needed more width than the screen had, and
+                    the excess just got clipped by the card's own
+                    overflow-hidden with no way to reach it at all. */}
+                <div className="px-5 flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-[var(--line)]">
                 <div role="tablist" aria-label="ส่วนของหัวข้อ" className="flex items-center gap-4 overflow-x-auto">
                   {topicTabs.map((t) => {
                     const Icon = t.icon;
@@ -640,7 +653,7 @@ function ReportFeedPageInner() {
                       at", so one row holds them: what section, then what
                       subset of it. */}
                   {activeTab === "posts" && (
-                    <div className="ml-auto shrink-0 py-1.5">
+                    <div className="w-full sm:w-auto sm:ml-auto shrink-0 py-1.5">
                       <PostFilterBar
                         filters={filters}
                         onChange={setFilters}
