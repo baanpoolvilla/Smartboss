@@ -28,7 +28,7 @@ import { currentCutoff } from "@/modules/report_task/lib/report-cutoff";
 import { pendingToday, todayStatusEntries, type TodayStatusEntry } from "@/modules/report_task/lib/report-feed-compliance";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
-import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronDown, Clock, FileImage, FolderHeart, Hash, ImagePlus, Link2, Lock, Menu, MessageSquareText, Pin, Settings, SlidersHorizontal, TriangleAlert, Users, X } from "lucide-react";
+import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, Clock, FileImage, FolderHeart, Hash, ImagePlus, Link2, Lock, Menu, MessageSquareText, Pin, Settings, SlidersHorizontal, TriangleAlert, Users, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 
 // Beyond this many pinned posts, the rest move into the "+N เพิ่มเติม"
@@ -518,23 +518,17 @@ function ReportFeedPageInner() {
                       before), but only clickable into room settings for
                       whoever can actually edit them; a viewer without that
                       right gets the plain label so hovering doesn't imply a
-                      control that isn't there for them. Still just a label
-                      either way, not a real <select> — the mode itself is
-                      locked for any room created after
-                      FEED_VIEW_MODE_LOCK_CUTOFF (see room-settings-sheet.tsx),
-                      so a dropdown look would promise something it can't do. */}
+                      control that isn't there for them. Plain text now for
+                      everyone, editor included — clicking it to jump into
+                      room settings was one more way into settings besides
+                      the ⚙ gear, and that's the one and only door in
+                      ("บอกทุกตัวให้กดตั้งค่าได้ที่ฟันเฟืองเท่านั้น"). Not a
+                      real <select> either way — the mode itself is locked
+                      for any room created after FEED_VIEW_MODE_LOCK_CUTOFF
+                      (see room-settings-sheet.tsx). */}
                   {(() => {
                     const modeLabel = activeTopic.feedViewMode === "threads" ? "Thread" : "Openchat";
-                    const canEdit = canEditReportTopic(activeTopic.visibility, viewingAsUserId);
-                    return canEdit ? (
-                      <button
-                        onClick={() => setRoomSettingsOpen(true)}
-                        className="flex items-center gap-1 text-xs font-medium text-[var(--ink-soft)] bg-[var(--bg-soft)] hover:bg-[var(--accent)] hover:text-[var(--brand-green-dark)] rounded-full px-2.5 py-1 shrink-0 transition-colors"
-                      >
-                        มุมมอง: {modeLabel}
-                        <ChevronDown className="h-3 w-3" />
-                      </button>
-                    ) : (
+                    return (
                       <span className="flex items-center gap-1 text-xs font-medium text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2.5 py-1 shrink-0">
                         มุมมอง: {modeLabel}
                       </span>
