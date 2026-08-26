@@ -401,7 +401,10 @@ export function ReportCard({
         // noticeably more breathing room than between a post and its own
         // replies, so separate posts read as distinct instead of running
         // together into one confusing block ("แต่ละหัวข้อ...ไม่ดูงง").
-        "group/post relative px-5 py-6 border-b border-[var(--line)]/70 transition-colors duration-200",
+        // Plain --line at low opacity read as almost nothing between posts
+        // ("ตัวคั่นระหว่างโพสมองยากมาก") — mixed with --ink-soft here so the
+        // line itself is visibly darker instead of relying on opacity alone.
+        "group/post relative px-5 py-6 border-b border-[color-mix(in_srgb,var(--line),var(--ink-soft)_35%)] transition-colors duration-200",
         highlighted || flashTargetId === post.id ? "bg-[var(--accent)]" : "bg-white hover:bg-[var(--bg-soft)]/60",
         // Unread reads as a left accent + a dot under the author's name (see
         // below) instead of a background tint — a background collided with
