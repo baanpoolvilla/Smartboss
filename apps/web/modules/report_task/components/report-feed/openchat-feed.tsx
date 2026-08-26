@@ -519,11 +519,16 @@ export function OpenchatFeed({
                         Forced visible (not just on `group-hover/msg`) while its own reaction popover is open — the popup renders through a
                         portal, floating below-right of this row rather than overlapping it, so the mouse crosses dead space to reach an emoji
                         and left the hover zone along the way; `group-hover` then hid this row (and the popover's own anchor with it), which is
-                        what made a click land on nothing and need repeating ("กดอีโมจิยากมาก...ต้องกดย้ำๆ"). */}
+                        what made a click land on nothing and need repeating ("กดอีโมจิยากมาก...ต้องกดย้ำๆ").
+
+                        [@media(hover:none)] always shows it too — a touch device has no hover state at all, so `group-hover/msg` alone left
+                        this permanently hidden with no way to reach it on mobile ("มันไม่มีให้กด emoji หรอ ใน แบบ mobile"). Same fallback
+                        report-card.tsx's own hover toolbar already uses. */}
                     {!isEditing && (
                       <div
                         className={cn(
                           "absolute right-4 -top-2 items-center gap-0.5 rounded-md p-0.5 border border-[var(--line)] bg-[var(--bg)] shadow-md",
+                          "[@media(hover:none)]:flex",
                           openReactionFor === m.id ? "flex" : "hidden group-hover/msg:flex"
                         )}
                       >

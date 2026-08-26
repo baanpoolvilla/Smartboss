@@ -169,7 +169,11 @@ function ModuleFrame({
       <ModuleRail module={module} pathname={pathname} />
 
       {/* จอใหญ่: คอลัมน์สูงเท่าจอ ให้ body ของแต่ละหน้าเลื่อนเอง (เหมือน Scaffold)
-          มือถือ: เลื่อนทั้งหน้า + เว้นที่ด้านล่างให้ bottom nav */}
+          มือถือ: เลื่อนทั้งหน้า + เว้นที่ด้านล่างให้ bottom nav — ทุกหน้าใน
+          แอปพึ่งพฤติกรรมนี้ (70+ หน้า) ยกเว้นสองหน้าที่ประกาศตัวเองว่าจัดการ
+          scroll เอง (AppScaffold's `fill`) ซึ่งแก้ให้ล็อกที่ตัวมันเองแทน ไม่ใช่
+          ที่นี่ — เปลี่ยนตรงนี้ตรงๆ จะกระทบทุกหน้าที่ยังไม่ได้ตรวจว่ามี scroll
+          chain ของตัวเองรองรับมือถือหรือเปล่า */}
       <div className="flex min-w-0 flex-1 flex-col pb-[68px] lg:h-dvh lg:overflow-hidden lg:pb-0">
         {children}
       </div>

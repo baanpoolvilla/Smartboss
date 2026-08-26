@@ -40,47 +40,68 @@ export function AppScaffold({
   fillMaxWidth?: boolean;
   children: React.ReactNode;
 }) {
-  return (
-    <>
-      <header className="sticky top-0 z-30 shrink-0 border-b border-(--line) bg-(--bg)">
-        <div className="flex h-[60px] items-center gap-1 px-2 sm:px-3">
-          <div className="flex min-w-[44px] flex-1 items-center justify-start sm:min-w-[110px]">
-            {backHref && (
-              <Link
-                href={backHref}
-                className="rounded-full p-2 text-(--app-strong) transition-colors hover:bg-(--bg-soft)"
-                aria-label="ย้อนกลับ"
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </Link>
-            )}
-          </div>
-
-          <h1 className="truncate px-1 text-center text-lg font-bold text-(--ink) sm:text-xl">
-            {title}
-          </h1>
-
-          <div className="flex min-w-[44px] flex-1 items-center justify-end gap-0.5 sm:min-w-[110px]">
-            {actions}
-            <AppBarActions />
-          </div>
+  const header = (
+    <header className="shrink-0 border-b border-(--line) bg-(--bg)">
+      <div className="flex h-[60px] items-center gap-1 px-2 sm:px-3">
+        <div className="flex min-w-[44px] flex-1 items-center justify-start sm:min-w-[110px]">
+          {backHref && (
+            <Link
+              href={backHref}
+              className="rounded-full p-2 text-(--app-strong) transition-colors hover:bg-(--bg-soft)"
+              aria-label="ย้อนกลับ"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+          )}
         </div>
-      </header>
 
-      <div
-        className={
-          fill
-            ? "min-w-0 lg:min-h-0 lg:flex-1 lg:overflow-hidden"
-            : "min-w-0 lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
-        }
-      >
-        {fill ? (
-          <div className={fillMaxWidth ? `mx-auto lg:h-full w-full ${width} px-4 py-4 sm:px-6 sm:py-5` : "lg:h-full px-4 py-4 sm:px-6 sm:py-5"}>
+        <h1 className="truncate px-1 text-center text-lg font-bold text-(--ink) sm:text-xl">
+          {title}
+        </h1>
+
+        <div className="flex min-w-[44px] flex-1 items-center justify-end gap-0.5 sm:min-w-[110px]">
+          {actions}
+          <AppBarActions />
+        </div>
+      </div>
+    </header>
+  );
+
+  if (fill) {
+    // Self-contained on mobile — `fixed inset-0` sizes this to the real
+    // viewport regardless of any ancestor's height, instead of relying on
+    // Shell's own wrapper being height-bounded (it only is at `lg:` —
+    // changing that would ripple into every other page in the app, most of
+    // which have never been checked for their own mobile scroll chain).
+    // Without this, a fill page (Kanban board, รายงาน feed) had no bounded
+    // height to hand its own internal `overflow-y-auto` panels below `lg:`,
+    // so the *whole page* — AppBar and bottom nav included — scrolled as one
+    // long document instead of just the content in between
+    // ("มีเยอะๆเลื่อนหาตายเลย" / "ล็อคอยู่หน้านั้นแต่แบบสกอขึ้นลงได้").
+    // `lg:static` hands control straight back to Shell's own `lg:h-dvh` at
+    // desktop width, unchanged from before.
+    return (
+      <div className="fixed inset-0 z-0 flex flex-col pb-[68px] lg:static lg:z-auto lg:min-h-0 lg:flex-1 lg:pb-0">
+        {header}
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <div className={fillMaxWidth ? `mx-auto h-full w-full ${width} px-4 py-4 sm:px-6 sm:py-5` : "h-full px-4 py-4 sm:px-6 sm:py-5"}>
             {children}
           </div>
-        ) : (
-          <div className={`mx-auto w-full ${width} px-4 py-4 sm:px-6 sm:py-5`}>{children}</div>
-        )}
+        </div>
+        {fab}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {/* sticky, not shrink-0 — this branch stays exactly as it always has
+          (natural whole-page scroll below `lg:`, own scroll region above
+          it), untouched by the `fill` fix above. */}
+      <div className="sticky top-0 z-30">{header}</div>
+
+      <div className="min-w-0 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+        <div className={`mx-auto w-full ${width} px-4 py-4 sm:px-6 sm:py-5`}>{children}</div>
       </div>
 
       {fab}
