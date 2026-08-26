@@ -426,8 +426,17 @@ export function ReportCard({
         // cards comes from the feed's own spacing (see report-feed.tsx), which
         // is also what separates a post from its own replies *inside* the card
         // — the two now read at clearly different levels instead of competing.
-        "group/post relative rounded-xl border border-[var(--line)] px-5 py-4 shadow-[0_1px_2px_rgba(17,17,17,0.04)] transition-colors duration-200",
-        highlighted || flashTargetId === post.id ? "bg-[var(--accent)]" : "bg-white hover:border-[color-mix(in_srgb,var(--line),var(--ink-soft)_45%)]",
+        // Radius, border, shadow and hover are lifted verbatim from
+        // kanban/task-card.tsx — the app already has a card, and a second
+        // one with its own corner radius and its own shadow would read as a
+        // different product bolted on. The one thing not copied is that
+        // card's `-translate-y-0.5` lift: a board of tiles can pop under the
+        // cursor, but a reading feed where the pointer crosses posts on the
+        // way to a scrollbar would twitch the whole column.
+        "group/post relative rounded-2xl border border-[var(--line)] px-5 py-4 shadow-[0_1px_3px_rgba(16,24,40,0.07),0_1px_2px_rgba(16,24,40,0.04)] transition-all duration-200",
+        highlighted || flashTargetId === post.id
+          ? "bg-[var(--accent)]"
+          : "bg-white hover:shadow-[0_10px_24px_-12px_rgba(16,24,40,0.20)] hover:border-[color-mix(in_srgb,var(--brand-green)_35%,var(--line))]",
         // Unread reads as a left accent + a dot under the author's name (see
         // below) instead of a background tint — a background collided with
         // `highlighted`'s bg-accent (both fighting for the same visual slot).
@@ -537,38 +546,43 @@ export function ReportCard({
         </Popover>
       </div>
 
-      <div className="flex items-start gap-5">
-        <Avatar className="h-9 w-9 shrink-0">
-          <AvatarFallback className="text-xs bg-[var(--accent)] text-[var(--brand-green-dark)]">{author?.avatar}</AvatarFallback>
+      {/* Identity reads as two lines — who on top, where-and-when under it —
+          instead of one row that ran name, role, time, "แก้ไขแล้ว", unread and
+          the room name together and truncated whichever lost the race. The
+          avatar is a rounded square, the same shape the room icons and status
+          tiles use elsewhere in the module, so a person reads as a person and
+          not as one more round chip in a row of round chips. */}
+      <div className="flex items-start gap-3.5">
+        <Avatar className="h-9 w-9 shrink-0 rounded-xl after:rounded-xl">
+          <AvatarFallback className="rounded-xl text-xs font-semibold bg-[var(--accent)] text-[var(--brand-green-dark)]">{author?.avatar}</AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            {post.pinned && <Pin className="h-3.5 w-3.5 text-[var(--brand-green-dark)] shrink-0" />}
-            <p className="text-[13px] font-semibold truncate">{author?.name}</p>
-            {author?.role && (
-              <span className="shrink-0 text-xs font-medium text-[var(--chart-blue)] bg-blue-50 rounded-full px-1.5 py-0.5 truncate max-w-[140px]">
-                {author.role}
-              </span>
-            )}
-            <TimeAgo date={post.createdAt} className="text-xs text-[var(--ink-soft)] shrink-0" />
-            {post.editedAt && <span className="text-xs text-[var(--ink-soft)] shrink-0">· แก้ไขแล้ว</span>}
-            {isUnread && (
-              <span className="flex items-center gap-1 text-[11px] font-medium text-[var(--chart-blue)] shrink-0">
-                <span className="h-1.5 w-1.5 rounded-full bg-[var(--chart-blue)]" aria-hidden />
-                ยังไม่อ่าน
-              </span>
-            )}
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                {post.pinned && <Pin className="h-3.5 w-3.5 text-[var(--brand-green-dark)] shrink-0" />}
+                <p className="text-[13.5px] font-semibold truncate">{author?.name}</p>
+                {isUnread && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--chart-blue)] shrink-0" aria-label="ยังไม่อ่าน" />
+                )}
+              </div>
+              <p className="flex items-center gap-1 text-[11.5px] text-[var(--ink-soft)] truncate">
+                {author?.role && <span className="truncate">{author.role} ·</span>}
+                <TimeAgo date={post.createdAt} />
+                {post.editedAt && <span>· แก้ไขแล้ว</span>}
+              </p>
+            </div>
             {topicBadge && (
               <button
                 onClick={topicBadge.onClick}
                 title={`ไปที่หัวข้อ "${topicBadge.label}"`}
-                className="ml-auto shrink-0 truncate max-w-[220px] rounded-full bg-[var(--bg-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--ink-soft)] hover:text-[var(--brand-green-dark)] hover:bg-[var(--accent)] transition-colors"
+                className="shrink-0 truncate max-w-[200px] rounded-full bg-[var(--bg-soft)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--ink-soft)] hover:text-[var(--brand-green-dark)] hover:bg-[var(--accent)] transition-colors"
               >
                 {topicBadge.label}
               </button>
             )}
           </div>
-          <p className="text-[16px] font-semibold mt-1 leading-snug">{post.title}</p>
+          <p className="text-[16px] font-semibold mt-2 leading-snug">{post.title}</p>
           {postTags.length > 0 && (
             <div className="flex items-center gap-1 flex-wrap mt-1.5">
               {postTags.map((t) => (
