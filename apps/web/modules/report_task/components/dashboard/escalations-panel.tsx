@@ -124,7 +124,13 @@ export function EscalationsPanel() {
         {scope.length === 0 && (
           <p className="text-sm text-[var(--ink-soft)] py-6 text-center">ไม่มีงานเลยกำหนด ทุกอย่างตามแผน 🎉</p>
         )}
-        {visible.map((t) => {
+        {/* max-h + its own scroll once "แสดงเพิ่มเติม" is expanded — the list
+            used to just grow with every extra row, pushing the whole
+            dashboard page down instead of staying put ("กดเพิ่มเติม...ยาว
+            ลงไปเลยไม่สวย"). Capped tall enough that the un-expanded 5 rows
+            never need it themselves. */}
+        <div className={cn(expanded && scope.length > 5 && "max-h-[420px] overflow-y-auto -mx-1 px-1")}>
+          {visible.map((t) => {
           const assignee = getUser(t.assigneeIds[0] ?? "");
           const days = Math.abs(daysUntil(t.dueDate));
           const angryCount = t.reactions.filter((r) => r.stickerId === "angry").length;
@@ -202,6 +208,7 @@ export function EscalationsPanel() {
             </div>
           );
         })}
+        </div>
         <div className="mt-auto pt-2">
           <ShowMoreToggle expanded={expanded} remaining={remaining} onToggle={toggle} />
         </div>
