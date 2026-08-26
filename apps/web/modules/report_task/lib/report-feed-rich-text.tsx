@@ -117,6 +117,23 @@ function collectLines(el: HTMLElement): string[] {
       if (mType && mId) current += mentionMarker(mType as MentionType, mId, label);
       return;
     }
+    // Dragging a browser tab (or pasting a rich link from a doc/chat app)
+    // inserts a real <a href> — the browser's own default paste behavior,
+    // never touched here since nothing calls preventDefault on paste. Falling
+    // through to the generic branch below would recurse into its text and
+    // keep only the *label* ("1,900+ n8n Automations... - Google Drive"),
+    // silently dropping the href — which is exactly what made a pasted link
+    // render as inert text instead of something clickable. Keeping the href
+    // itself as a bare URL here is what renderRichBulletText's own
+    // bare-http(s) rule already knows how to linkify, so this needs no
+    // special marker of its own.
+    if (elNode.tagName === "A") {
+      const href = elNode.getAttribute("href");
+      if (href) {
+        current += href;
+        return;
+      }
+    }
     const nextFlags: FormatFlags = {
       bold: flags.bold || elNode.tagName === "B" || elNode.tagName === "STRONG",
       italic: flags.italic || elNode.tagName === "I" || elNode.tagName === "EM",
