@@ -46,7 +46,21 @@ export async function POST() {
     readStore<TodoItem[]>(orgId, TODOS_KEY),
     readStore<{ topics: ReportTopic[]; posts: ReportPost[]; albums: ReportAlbum[] }>(orgId, REPORT_FEED_KEY),
   ]);
-  const settings = settingsRaw ?? defaultReminderSettings;
+  // Merged field-by-field, not a plain `?? default` — a row saved before
+  // `task.leadMinutes`/`todo` existed on ReminderSettings only has the old
+  // shape (`task.leadDays`, no `todo` key at all), and computeReminders reads
+  // `settings.task.leadMinutes.length`/`settings.todo.enabled` unconditionally.
+  // That combination 500'd this route on every org still on old data — the
+  // client store already migrates the same way (store-hydrator.tsx), this
+  // route just never went through it since it reads the DB directly.
+  const rawTask = settingsRaw?.task as (Partial<ReminderSettings["task"]> & { leadDays?: number[] }) | undefined;
+  const migratedLeadMinutes = rawTask?.leadMinutes ?? rawTask?.leadDays?.map((d) => d * 1440);
+  const settings: ReminderSettings = {
+    task: { ...defaultReminderSettings.task, ...rawTask, ...(migratedLeadMinutes ? { leadMinutes: migratedLeadMinutes } : {}) },
+    meeting: { ...defaultReminderSettings.meeting, ...settingsRaw?.meeting },
+    report: { ...defaultReminderSettings.report, ...settingsRaw?.report },
+    todo: { ...defaultReminderSettings.todo, ...settingsRaw?.todo },
+  };
 
   const { data: sentLog, version: sentVersion } = await readStore<string[]>(orgId, SENT_LOG_KEY);
   const alreadySent = new Set(sentLog ?? []);
