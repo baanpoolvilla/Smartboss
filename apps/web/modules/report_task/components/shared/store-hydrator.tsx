@@ -30,7 +30,7 @@ import { useActivityLogStore } from "@/modules/report_task/store/activity-log-st
 import { useRoutineDayOffStore } from "@/modules/report_task/store/routine-dayoff-store";
 import { useSettingsAccessStore } from "@/modules/report_task/store/settings-access-store";
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
-import { useReminderSettingsStore } from "@/modules/report_task/store/reminder-settings-store";
+import { useReminderSettingsStore, defaultReminderSettings } from "@/modules/report_task/store/reminder-settings-store";
 import { useAiInsightSettingsStore } from "@/modules/report_task/store/ai-insight-settings-store";
 
 /**
@@ -84,7 +84,20 @@ export function StoreHydrator() {
         apiKey="reminder-settings"
         store={useReminderSettingsStore}
         select={(s) => s.settings}
-        apply={(s, settings) => ({ ...s, settings })}
+        // Merged field-by-field, not spread straight in — a row saved before
+        // `todo` existed on ReminderSettings has no such key at all, and
+        // DeadlineReminderSettingsPanel reads `settings.todo.enabled`
+        // unconditionally. A plain `{ ...s, settings }` would hand it
+        // `undefined` and crash the whole panel on render.
+        apply={(s, settings) => ({
+          ...s,
+          settings: {
+            task: { ...defaultReminderSettings.task, ...settings?.task },
+            meeting: { ...defaultReminderSettings.meeting, ...settings?.meeting },
+            report: { ...defaultReminderSettings.report, ...settings?.report },
+            todo: { ...defaultReminderSettings.todo, ...settings?.todo },
+          },
+        })}
       />
       <ServerStoreSync
         apiKey="meetings"

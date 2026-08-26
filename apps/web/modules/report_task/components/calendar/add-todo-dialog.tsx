@@ -26,6 +26,7 @@ import { useTodoStore } from "@/modules/report_task/store/todo-store";
 import { useMeetingStore } from "@/modules/report_task/store/meeting-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
+import { useReminderSettingsStore } from "@/modules/report_task/store/reminder-settings-store";
 import { todayIso } from "@/modules/report_task/lib/now";
 import { cn } from "@/modules/report_task/lib/utils";
 import { canManage, departmentIdsOf } from "@/modules/report_task/lib/directory";
@@ -33,7 +34,11 @@ import { X, Trash2, Bell } from "lucide-react";
 import { toast } from "sonner";
 import type { CalendarEvent, TodoItem } from "@/modules/report_task/types";
 
-const REMINDER_OPTIONS = [
+// Exported so DeadlineReminderSettingsPanel's "สิ่งที่ต้องทำ" default picker
+// offers the exact same choices this dialog's own per-item picker does —
+// the company default is just what pre-fills the field below, so the two
+// pickers having different options would be its own confusing surprise.
+export const REMINDER_OPTIONS = [
   { value: "0", label: "ไม่แจ้งเตือน", minutes: 0 },
   { value: "15", label: "15 นาทีก่อน", minutes: 15 },
   { value: "30", label: "30 นาทีก่อน", minutes: 30 },
@@ -61,6 +66,7 @@ export function AddTodoDialog({
   const notifyMany = useNotificationStore((s) => s.notifyMany);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const canCreateMeeting = canManage(viewingAsUserId);
+  const todoReminderDefault = useReminderSettingsStore((s) => s.settings.todo);
 
   const [title, setTitle] = useState("");
   const [date, setDate] = useState(defaultDate ?? todayIso());
@@ -88,7 +94,12 @@ export function AddTodoDialog({
       setMeetEnd("11:00");
       setMeetLocation("");
       setMeetOnline(false);
-      setReminderMinutes(editingTodo?.reminderMinutes ?? 0);
+      // A brand-new to-do pre-fills from the company default set in
+      // settings (แจ้งเตือนใกล้ถึงกำหนด ▸ สิ่งที่ต้องทำ) instead of always
+      // landing on "ไม่แจ้งเตือน" — still just a starting point, changeable
+      // right here same as before, and editing an existing item keeps
+      // showing whatever that item was actually saved with.
+      setReminderMinutes(editingTodo?.reminderMinutes ?? (todoReminderDefault.enabled ? todoReminderDefault.defaultLeadMinutes : 0));
     }
   }
 

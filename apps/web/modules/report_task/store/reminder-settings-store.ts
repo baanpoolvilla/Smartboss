@@ -29,16 +29,29 @@ export interface ReportReminderSettings {
   notifyManagerSummary: boolean;
 }
 
+export interface TodoReminderSettings {
+  enabled: boolean;
+  /** A to-do is personal (only its own owner ever sees it), so there's no
+   * "notify who" question the way task/meeting/report have — and it only
+   * ever fires once, not a swept list of lead points. This is just what
+   * AddTodoDialog pre-selects for a *new* to-do's own `reminderMinutes`;
+   * each one still keeps its own value and can be changed or turned off
+   * right there, same as always. */
+  defaultLeadMinutes: number;
+}
+
 export interface ReminderSettings {
   task: TaskReminderSettings;
   meeting: MeetingReminderSettings;
   report: ReportReminderSettings;
+  todo: TodoReminderSettings;
 }
 
 export const defaultReminderSettings: ReminderSettings = {
   task: { enabled: true, leadDays: [3, 1], notifyAssignee: true, notifyAssigner: false, notifyDeptHead: false },
   meeting: { enabled: true, leadMinutes: [15], notifyAttendees: true },
   report: { enabled: true, leadMinutes: [30], notifyPending: true, notifyManagerSummary: false },
+  todo: { enabled: true, defaultLeadMinutes: 0 },
 };
 
 interface ReminderSettingsStore {
@@ -46,6 +59,7 @@ interface ReminderSettingsStore {
   setTaskSettings: (patch: Partial<TaskReminderSettings>) => void;
   setMeetingSettings: (patch: Partial<MeetingReminderSettings>) => void;
   setReportSettings: (patch: Partial<ReportReminderSettings>) => void;
+  setTodoSettings: (patch: Partial<TodoReminderSettings>) => void;
 }
 
 // Server-synced via ServerStoreSync (apiKey "reminder-settings") in
@@ -55,4 +69,5 @@ export const useReminderSettingsStore = create<ReminderSettingsStore>()((set) =>
   setTaskSettings: (patch) => set((s) => ({ settings: { ...s.settings, task: { ...s.settings.task, ...patch } } })),
   setMeetingSettings: (patch) => set((s) => ({ settings: { ...s.settings, meeting: { ...s.settings.meeting, ...patch } } })),
   setReportSettings: (patch) => set((s) => ({ settings: { ...s.settings, report: { ...s.settings.report, ...patch } } })),
+  setTodoSettings: (patch) => set((s) => ({ settings: { ...s.settings, todo: { ...s.settings.todo, ...patch } } })),
 }));

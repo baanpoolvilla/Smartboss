@@ -42,7 +42,7 @@ import { eventTypeLabels } from "@/modules/report_task/lib/calendar-colors";
 import { leaveIconOf } from "@/modules/report_task/lib/leave-icons";
 import { useLeaveTypeStore, type LeaveTypeDef } from "@/modules/report_task/store/leave-type-store";
 import { cn } from "@/modules/report_task/lib/utils";
-import { ListChecks, CalendarOff, Plus, Settings2, User, Users, SlidersHorizontal } from "lucide-react";
+import { Bell, ListChecks, CalendarOff, Plus, Settings2, User, Users, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { now } from "@/modules/report_task/lib/now";
 import type { CalendarEvent, CalendarEventType, TodoItem } from "@/modules/report_task/types";
@@ -1028,6 +1028,20 @@ export function CalendarView() {
                 title="จัดการประเภทการลา / โควตาวันหยุดประจำ"
               >
                 <Settings2 className="h-3 w-3" /> ตั้งค่า
+              </Link>
+            )}
+            {/* Shortcut into the existing งาน/ประชุม/รีพอต/สิ่งที่ต้องทำ
+                reminder-lead-time settings — asked for explicitly from
+                *here*, on the calendar page, rather than only being
+                reachable by already knowing it lives under Settings ▸
+                แจ้งเตือน. Same panel, just a second door into it. */}
+            {isOwner(viewingAsUserId) && (
+              <Link
+                href="/report-task/settings?tab=reminders&section=deadlineReminders"
+                className="flex items-center gap-1 text-[11px] text-[var(--ink-soft)] hover:text-[var(--ink)] rounded-md px-1.5 py-0.5 hover:bg-[var(--bg-soft)] transition-colors"
+                title="ตั้งค่าการแจ้งเตือนล่วงหน้า — งาน/ประชุม/รีพอต/สิ่งที่ต้องทำ"
+              >
+                <Bell className="h-3 w-3" /> แจ้งเตือน
               </Link>
             )}
           </div>

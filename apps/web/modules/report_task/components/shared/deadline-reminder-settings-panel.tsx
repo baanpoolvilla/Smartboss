@@ -4,9 +4,11 @@ import { useState } from "react";
 import { Switch } from "@/modules/report_task/components/ui/switch";
 import { Badge } from "@/modules/report_task/components/ui/badge";
 import { Input } from "@/modules/report_task/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
 import { useReminderSettingsStore } from "@/modules/report_task/store/reminder-settings-store";
+import { REMINDER_OPTIONS } from "@/modules/report_task/components/calendar/add-todo-dialog";
 import { cn } from "@/modules/report_task/lib/utils";
-import { Bell, ClipboardList, FileText, Plus, Users, X } from "lucide-react";
+import { Bell, CheckSquare, ClipboardList, FileText, Plus, Users, X } from "lucide-react";
 
 /** One removable "N วัน/นาทีก่อนกำหนด" chip + an inline "+ เพิ่มจุดแจ้งเตือน"
  *  field — shared by all three reminder types below, just with a different
@@ -98,6 +100,7 @@ export function DeadlineReminderSettingsPanel() {
   const setTaskSettings = useReminderSettingsStore((s) => s.setTaskSettings);
   const setMeetingSettings = useReminderSettingsStore((s) => s.setMeetingSettings);
   const setReportSettings = useReminderSettingsStore((s) => s.setReportSettings);
+  const setTodoSettings = useReminderSettingsStore((s) => s.setTodoSettings);
 
   function toggleRecipient(setFn: (patch: Record<string, boolean>) => void, key: string, current: boolean) {
     setFn({ [key]: !current });
@@ -196,6 +199,43 @@ export function DeadlineReminderSettingsPanel() {
           <div className="flex flex-wrap items-center gap-2 pl-[46px]">
             <span className="text-[11px] text-[var(--ink-faint)]">แจ้งใคร:</span>
             <RecipientPill active={settings.meeting.notifyAttendees} label="ผู้เข้าร่วมทุกคน" onClick={() => toggleRecipient(setMeetingSettings, "notifyAttendees", settings.meeting.notifyAttendees)} />
+          </div>
+        </div>
+      </div>
+
+      {/* สิ่งที่ต้องทำ — personal, so no "แจ้งใคร" row (always just the
+          owner) and no multi-point list (a to-do only ever fires once). This
+          is only the *default* a new to-do's own reminder field pre-fills
+          with in AddTodoDialog — each one still keeps its own value and can
+          be changed or turned off right there, exactly as before. */}
+      <div className="rounded-xl border border-[var(--line)] overflow-hidden">
+        <div className="flex items-center gap-3 px-4 py-3">
+          <span className="h-8.5 w-8.5 rounded-lg flex items-center justify-center bg-amber-50 text-amber-600 shrink-0">
+            <CheckSquare className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">สิ่งที่ต้องทำ (Personal to-do)</p>
+            <p className="text-[11px] text-[var(--ink-soft)]">ค่าเริ่มต้นตอนสร้างสิ่งที่ต้องทำใหม่ — แต่ละอันยังปรับเองทีหลังได้เสมอ</p>
+          </div>
+          <Switch checked={settings.todo.enabled} onCheckedChange={(v) => setTodoSettings({ enabled: v })} />
+        </div>
+        <div className={cn("px-4 pb-3.5", !settings.todo.enabled && "opacity-50 pointer-events-none")}>
+          <div className="pl-[46px]">
+            <Select
+              value={String(settings.todo.defaultLeadMinutes)}
+              onValueChange={(v) => setTodoSettings({ defaultLeadMinutes: Number(v) })}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue>
+                  {REMINDER_OPTIONS.find((o) => o.minutes === settings.todo.defaultLeadMinutes)?.label ?? "ไม่แจ้งเตือน"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {REMINDER_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={String(o.minutes)}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </div>
