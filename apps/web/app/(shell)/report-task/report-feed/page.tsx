@@ -72,14 +72,67 @@ const topicTabs: { id: TopicTab; label: string; icon: typeof MessageSquareText }
   { id: "stats", label: "สถิติ", icon: BarChart3 },
 ];
 
-// useSearchParams() (for the "copy link" ?topic=&post= deep link) requires a
-// Suspense boundary around anything that calls it, or `next build` fails to
-// prerender this route entirely.
+/**
+ * This page renders on the client only — deliberately, and it's worth
+ * spelling out why, because it's the opposite of what the rest of the app does.
+ *
+ * Everything on this page comes from zustand stores that are filled in from
+ * `/api/report-task/store/*` after mount (see ServerStoreSync). The server has
+ * none of that: it renders the stores' built-in seed data — the "ประกาศทั่วไป"
+ * placeholder room, zero posts — which the real data replaces a few hundred
+ * milliseconds later. So the server-rendered HTML was never anything a viewer
+ * was meant to see; it was a placeholder that had to be thrown away.
+ *
+ * Two things came out of that. The visible one: the page flashed a room that
+ * isn't the room you asked for before settling. The subtle one: React hydrates
+ * by re-rendering the same tree in the browser and comparing, and any text on
+ * this page that resolves differently there — anything read off the clock,
+ * anything derived from an id restored out of localStorage — makes the two
+ * copies disagree. React then reports a hydration mismatch (minified error
+ * #418), throws the server's HTML away and re-renders the whole tree. That
+ * fired on nearly every load of this page in production, and left an error in
+ * the console that looked alarming while the page itself worked fine.
+ *
+ * Gating on `mounted` makes the server and the first browser render produce
+ * the exact same thing — the skeleton below — so there is nothing to disagree
+ * about, and the real UI renders once, in the browser, with the real data
+ * already on its way. It removes the whole class of problem rather than the
+ * one instance of it, which is the right trade here precisely because the
+ * server render had no value to lose: no SEO (the page is behind a login), no
+ * meaningful first paint (it showed the wrong room). A page whose server
+ * output is real content should never do this.
+ *
+ * The Suspense boundary stays: useSearchParams() (the "copy link"
+ * ?topic=&post= deep link) requires one around anything that calls it, or
+ * `next build` fails to prerender this route at all.
+ */
 export default function ReportFeedPage() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  if (!mounted) return <ReportFeedSkeleton />;
+
   return (
     <Suspense fallback={null}>
       <ReportFeedPageInner />
     </Suspense>
+  );
+}
+
+/** Placeholder with the same bones as the real layout (header, topic rail,
+ *  room panel) so the switch to real content doesn't jump the page around. */
+function ReportFeedSkeleton() {
+  return (
+    <div className="flex flex-col gap-6 h-full animate-pulse" aria-hidden>
+      <div className="space-y-2">
+        <div className="h-7 w-56 rounded-lg bg-[var(--bg-soft)]" />
+        <div className="h-4 w-96 max-w-full rounded bg-[var(--bg-soft)]" />
+      </div>
+      <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 flex-1 min-h-0">
+        <div className="hidden lg:block w-64 shrink-0 rounded-2xl border border-[var(--line)] bg-white" />
+        <div className="flex-1 rounded-2xl border border-[var(--line)] bg-white" />
+      </div>
+    </div>
   );
 }
 
