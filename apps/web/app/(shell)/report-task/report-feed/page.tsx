@@ -489,6 +489,28 @@ function ReportFeedPageInner() {
                       just Close) whenever canManage is false or the mode has
                       no per-person list to edit, so a regular employee can
                       look but has no controls to change anything. */}
+                  {/* The round in force right now, as one chip. Full rules
+                      (every round, its time, its photo minimum) are one click
+                      away in room settings, and the title attribute carries
+                      them on hover — the chip answers "what am I on the hook
+                      for at this moment", which is the only part of it that
+                      belongs on screen while reading. */}
+                  {requirementParts.length > 0 && (() => {
+                    const round = requirementParts.find((r) => r.active) ?? requirementParts[0]!;
+                    return (
+                      <button
+                        onClick={() => setRoomSettingsOpen(true)}
+                        title={`รอบส่งของห้องนี้ — ${requirementParts.map((r) => r.text).join(" · ")}`}
+                        className="shrink-0 flex items-center gap-1 rounded-full border border-[var(--line)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--ink-soft)] hover:text-[var(--ink)] hover:bg-[var(--bg-soft)] transition-colors"
+                      >
+                        {activeTopic.minImages > 0 ? <ImagePlus className="h-3 w-3" /> : <TriangleAlert className="h-3 w-3" />}
+                        {round.text}
+                        {requirementParts.length > 1 && (
+                          <span className="text-[var(--ink-faint,#a5b0c2)]">+{requirementParts.length - 1}</span>
+                        )}
+                      </button>
+                    );
+                  })()}
                   <button
                     data-tour="member-count"
                     onClick={() => setMembersDialogOpen(true)}
@@ -562,7 +584,8 @@ function ReportFeedPageInner() {
                     the container, `-mb-px` per tab) actually connects to a
                     real line instead of floating (R2), with counts (R5) and
                     proper tab semantics (R6). */}
-                <div role="tablist" aria-label="ส่วนของหัวข้อ" className="px-5 flex items-center gap-4 border-b border-[var(--line)] overflow-x-auto">
+                <div className="px-5 flex items-center gap-4 border-b border-[var(--line)]">
+                <div role="tablist" aria-label="ส่วนของหัวข้อ" className="flex items-center gap-4 overflow-x-auto">
                   {topicTabs.map((t) => {
                     const Icon = t.icon;
                     const active = activeTab === t.id;
@@ -597,45 +620,37 @@ function ReportFeedPageInner() {
                     );
                   })}
                 </div>
+                  {/* The filter bar rides the tab row instead of taking a
+                      strip of its own. Four stacked bands of chrome —
+                      identity, tabs, รอบส่ง, filters — was most of what read
+                      as "รกมาก": each band was individually reasonable and
+                      together they pushed the posts under a wall of controls.
+                      Tabs and filters both answer "which posts am I looking
+                      at", so one row holds them: what section, then what
+                      subset of it. */}
+                  {activeTab === "posts" && (
+                    <div className="ml-auto shrink-0 py-1.5">
+                      <PostFilterBar
+                        filters={filters}
+                        onChange={setFilters}
+                        authorOptions={topicMembers.map((m) => m.id)}
+                        tagOptions={reportTags}
+                      />
+                    </div>
+                  )}
+                </div>
 
-                {/* Merged into one row (1.4) — was two separate border-t
-                    strips (cutoff reminder, then pinned posts) stacked on
-                    top of each other, doubling up the header's height for
-                    what's really one "today's context" row.
-                    `w-fit` instead of a full-width border-t bar — a bar that
-                    stretches edge-to-edge but only ever has content bunched
-                    at its left end (pinned posts are the rare case, this row
-                    is usually just "รอบส่งวันนี้" + a couple pills) reads as
-                    unbalanced/unfinished. A self-contained rounded chip
-                    cluster sized to its own content doesn't have that empty
-                    right side to begin with. */}
-                {activeTab === "posts" && (requirementParts.length > 0 || pinnedPosts.length > 0) && (
+                {/* Pinned posts only. The "รอบส่งวันนี้" chips that used to
+                    share this strip moved up into the room's identity row as a
+                    single chip showing the round in force right now — every
+                    round spelled out, always on screen, was reference material
+                    holding a whole band of height hostage: you need it when
+                    you're about to post, not on every scroll past someone
+                    else's report. Pinned posts stay here because they are
+                    content, not settings — and they're rare, so this row is
+                    usually not rendered at all. */}
+                {activeTab === "posts" && pinnedPosts.length > 0 && (
                   <div className="mx-5 mt-2 flex w-fit max-w-full items-center gap-2.5 flex-wrap rounded-lg border border-[var(--line)] bg-[var(--bg-soft)]/60 px-3 py-1.5">
-                    {requirementParts.length > 0 && (
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="flex items-center gap-1 text-[11px] font-medium text-[var(--ink-soft)] shrink-0">
-                          {activeTopic.minImages > 0 ? <ImagePlus className="h-3 w-3" /> : <TriangleAlert className="h-3 w-3" />}
-                          รอบส่งวันนี้
-                        </span>
-                        {requirementParts.map((part, i) => (
-                          <button
-                            key={i}
-                            onClick={() => setRoomSettingsOpen(true)}
-                            className={cn(
-                              "text-[11px] font-medium rounded-full px-2.5 py-1 transition-colors",
-                              part.active
-                                ? "bg-[var(--brand-green)] text-[var(--ink)]"
-                                : "bg-white border border-[var(--line)] text-[var(--ink-soft)] hover:border-[var(--brand-green)]/40 hover:text-[var(--ink)]"
-                            )}
-                          >
-                            {part.text}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {requirementParts.length > 0 && pinnedPosts.length > 0 && (
-                      <div className="h-4 w-px bg-[var(--line)] shrink-0" />
-                    )}
                     {pinnedPosts.length > 0 && (
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <Pin className="h-3 w-3 shrink-0 text-[var(--brand-green-dark)]" />
@@ -664,18 +679,6 @@ function ReportFeedPageInner() {
                   </div>
                 )}
 
-                {/* Filter bar (1.3) — was the biggest gap in the whole page:
-                    the room's own feed had no filtering at all before this. */}
-                {activeTab === "posts" && (
-                  <div className="px-5 py-1.5 flex items-center justify-between gap-2 flex-wrap">
-                    <PostFilterBar
-                      filters={filters}
-                      onChange={setFilters}
-                      authorOptions={topicMembers.map((m) => m.id)}
-                      tagOptions={reportTags}
-                    />
-                  </div>
-                )}
               </div>
 
               {activeTab === "posts" ? (
