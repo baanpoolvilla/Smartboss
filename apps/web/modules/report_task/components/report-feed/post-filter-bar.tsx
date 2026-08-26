@@ -76,6 +76,7 @@ export function PostFilterBar({
   onChange,
   authorOptions,
   tagOptions,
+  size = "sm",
 }: {
   filters: PostFilters;
   onChange: (next: PostFilters) => void;
@@ -83,8 +84,16 @@ export function PostFilterBar({
   authorOptions: string[];
   /** The full curated tag list (see report-tag-store.ts) — org-wide, not scoped per room, since tags are a shared vocabulary rather than something each room accrues on its own. */
   tagOptions: ReportTag[];
+  /** "lg" — bigger touch targets for the mobile filter sheet, where the same
+   * tiny desktop-row chips (h-7-ish, text-xs) sat in a lot of empty space
+   * and read as an unfinished, "ยังงงๆ" mobile adaptation rather than a
+   * screen actually designed for a thumb. Default stays exactly as it was
+   * for every existing (desktop-row) caller. */
+  size?: "sm" | "lg";
 }) {
   const activeCount = postFiltersActiveCount(filters);
+  const chipSize = size === "lg" ? "gap-2 px-3.5 py-2.5 text-sm" : "gap-1.5 px-2.5 py-1 text-xs";
+  const iconSize = size === "lg" ? "h-4 w-4" : "h-3 w-3";
 
   function toggleAuthor(id: string) {
     const next = new Set(filters.authorIds);
@@ -101,7 +110,7 @@ export function PostFilterBar({
   }
 
   return (
-    <div className="flex items-center gap-1.5 flex-wrap">
+    <div className={cn("flex items-center flex-wrap", size === "lg" ? "gap-2" : "gap-1.5")}>
       {/* Each chip already shows its own count/highlight, but on a narrow
           row that wraps to 2-3 lines the ones further along could scroll out
           of view — this small badge up front is the one thing always visible
@@ -118,13 +127,14 @@ export function PostFilterBar({
           render={
             <button
               className={cn(
-                "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                "flex items-center rounded-full border font-medium transition-colors",
+                chipSize,
                 filters.authorIds.size > 0
                   ? "border-[var(--brand-green)]/40 bg-[var(--accent)] text-[var(--brand-green-dark)]"
                   : "border-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
               )}
             >
-              <User className="h-3 w-3" />
+              <User className={iconSize} />
               {filters.authorIds.size === 0 ? "ทุกคน" : `${filters.authorIds.size} คน`}
             </button>
           }
@@ -148,13 +158,14 @@ export function PostFilterBar({
             render={
               <button
                 className={cn(
-                  "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                  "flex items-center rounded-full border font-medium transition-colors",
+                  chipSize,
                   filters.tagIds.size > 0
                     ? "border-[var(--brand-green)]/40 bg-[var(--accent)] text-[var(--brand-green-dark)]"
                     : "border-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
                 )}
               >
-                <TagIcon className="h-3 w-3" />
+                <TagIcon className={iconSize} />
                 {filters.tagIds.size === 0 ? "ทุกแท็ก" : `${filters.tagIds.size} แท็ก`}
               </button>
             }
@@ -176,29 +187,42 @@ export function PostFilterBar({
         label="ส่งช้า"
         active={filters.lateOnly}
         onClick={() => onChange({ ...filters, lateOnly: !filters.lateOnly })}
+        chipSize={chipSize}
+        iconSize={iconSize}
       />
       <FilterChip
         icon={() => <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />}
         label="ยังไม่อ่าน"
         active={filters.unreadOnly}
         onClick={() => onChange({ ...filters, unreadOnly: !filters.unreadOnly })}
+        chipSize={chipSize}
+        iconSize={iconSize}
       />
       <FilterChip
         icon={ImageIcon}
         label="มีรูป"
         active={filters.hasImageOnly}
         onClick={() => onChange({ ...filters, hasImageOnly: !filters.hasImageOnly })}
+        chipSize={chipSize}
+        iconSize={iconSize}
       />
       <FilterChip
         icon={Bookmark}
         label="บันทึกไว้"
         active={filters.savedOnly}
         onClick={() => onChange({ ...filters, savedOnly: !filters.savedOnly })}
+        chipSize={chipSize}
+        iconSize={iconSize}
       />
 
       {activeCount > 0 && (
-        <Button variant="ghost" size="sm" className="h-7 text-xs text-[var(--ink-soft)]" onClick={() => onChange(emptyPostFilters)}>
-          <X className="h-3 w-3" />
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn("text-[var(--ink-soft)]", size === "lg" ? "h-9 text-sm" : "h-7 text-xs")}
+          onClick={() => onChange(emptyPostFilters)}
+        >
+          <X className={iconSize} />
           ล้างตัวกรอง ({activeCount})
         </Button>
       )}
@@ -211,23 +235,28 @@ function FilterChip({
   label,
   active,
   onClick,
+  chipSize,
+  iconSize,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   active: boolean;
   onClick: () => void;
+  chipSize: string;
+  iconSize: string;
 }) {
   return (
     <button
       onClick={onClick}
       className={cn(
-        "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+        "flex items-center rounded-full border font-medium transition-colors",
+        chipSize,
         active
           ? "border-[var(--brand-green)]/40 bg-[var(--accent)] text-[var(--brand-green-dark)]"
           : "border-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
       )}
     >
-      <Icon className="h-3 w-3" />
+      <Icon className={iconSize} />
       {label}
     </button>
   );

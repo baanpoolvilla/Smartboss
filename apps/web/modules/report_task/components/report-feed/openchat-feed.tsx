@@ -28,7 +28,7 @@ import { uploadCompressedImage } from "@/modules/report_task/lib/image-resize";
 import { DRAG_MENTION_TOPIC_MIME } from "@/modules/report_task/components/report-feed/report-post-fields";
 import { cn } from "@/modules/report_task/lib/utils";
 import { toast } from "sonner";
-import { Building2, Check, Hash, ImagePlus, Pencil, Plus, Send, SmilePlus, Trash2, User, X } from "lucide-react";
+import { Building2, Check, Hash, ImagePlus, MoreHorizontal, Pencil, Plus, Send, SmilePlus, Trash2, User, X } from "lucide-react";
 
 const reactionEmojis = ["👍", "❤️", "🎉", "😂", "😮", "😢"];
 // A wider set than the 6-emoji reaction bar — this one's for *writing*, not
@@ -132,6 +132,11 @@ export function OpenchatFeed({
   const [deleteTarget, setDeleteTarget] = useState<{ postId: string; replyId?: string } | null>(null);
   const [editing, setEditing] = useState<{ id: string; body: string } | null>(null);
   const [openReactionFor, setOpenReactionFor] = useState<string | null>(null);
+  // Touch's "⋯" menu — a separate id from openReactionFor since tapping "⋯"
+  // opens a small action list (react/edit/delete stacked), not the reaction
+  // popover directly; picking "ทำเครื่องหมาย" from that list is what opens
+  // openReactionFor afterwards.
+  const [openActionsFor, setOpenActionsFor] = useState<string | null>(null);
 
   // @mention — same marker format (`@[label](type:id)`, see
   // report-feed-rich-text.tsx) and trigger/insert mechanics as the main post
@@ -521,15 +526,16 @@ export function OpenchatFeed({
                         and left the hover zone along the way; `group-hover` then hid this row (and the popover's own anchor with it), which is
                         what made a click land on nothing and need repeating ("กดอีโมจิยากมาก...ต้องกดย้ำๆ").
 
-                        [@media(hover:none)] always shows it too — a touch device has no hover state at all, so `group-hover/msg` alone left
-                        this permanently hidden with no way to reach it on mobile ("มันไม่มีให้กด emoji หรอ ใน แบบ mobile"). Same fallback
-                        report-card.tsx's own hover toolbar already uses. */}
+                        Touch gets a different fix, not the same one — a device with no hover at all showing this whole 3-icon row
+                        permanently on *every single message* read as a wall of icon clutter next to every short line ("ลกมาก"), especially
+                        once several short posts sit close together. Touch instead gets one compact "⋯" further down, tap-to-reveal the same
+                        actions in a small menu — closer to how a real chat app (Telegram, Messenger) handles this on mobile than copying the
+                        hover row verbatim. */}
                     {!isEditing && (
                       <div
                         className={cn(
-                          "absolute right-4 -top-2 items-center gap-0.5 rounded-md p-0.5 border border-[var(--line)] bg-[var(--bg)] shadow-md",
-                          "[@media(hover:none)]:flex",
-                          openReactionFor === m.id ? "flex" : "hidden group-hover/msg:flex"
+                          "absolute right-4 -top-2 hidden items-center gap-0.5 rounded-md p-0.5 border border-[var(--line)] bg-[var(--bg)] shadow-md [@media(hover:none)]:!hidden",
+                          openReactionFor === m.id ? "flex" : "group-hover/msg:flex"
                         )}
                       >
                         <Popover open={openReactionFor === m.id} onOpenChange={(open) => setOpenReactionFor(open ? m.id : null)}>
@@ -581,6 +587,70 @@ export function OpenchatFeed({
                             </button>
                           </>
                         )}
+                      </div>
+                    )}
+
+                    {/* Touch-only "⋯" — nothing shows next to a message until
+                        tapped, same as tapping-and-holding would on a real chat
+                        app ("ถ้าไม่เอาไปกดค้างไว้จะไม่เห็นอะไร...ง่ายกว่าไหม").
+                        Only rendered at all under [@media(hover:none)], so a
+                        mouse user never sees a redundant second trigger next
+                        to the hover row above. */}
+                    {!isEditing && (
+                      <div className="absolute right-4 -top-2 hidden [@media(hover:none)]:block">
+                        <Popover open={openActionsFor === m.id} onOpenChange={(open) => setOpenActionsFor(open ? m.id : null)}>
+                          <PopoverTrigger
+                            render={
+                              <button
+                                className="h-7 w-7 flex items-center justify-center rounded-md border border-[var(--line)] bg-[var(--bg)] shadow-sm text-[var(--ink-soft)]"
+                                aria-label="ตัวเลือกข้อความ"
+                              >
+                                <MoreHorizontal className="h-3.5 w-3.5" />
+                              </button>
+                            }
+                          />
+                          <PopoverContent className="w-auto p-1 flex flex-col gap-0.5" align="end">
+                            <div className="flex flex-row gap-0.5 p-0.5">
+                              {reactionEmojis.map((emoji) => (
+                                <button
+                                  key={emoji}
+                                  onClick={() => {
+                                    toggleMessageReaction(m, emoji);
+                                    setOpenActionsFor(null);
+                                  }}
+                                  className="h-8 w-8 flex items-center justify-center rounded-md text-base hover:bg-[var(--bg-soft)]"
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                            {isOwn && (
+                              <>
+                                <div className="h-px bg-[var(--line)] mx-1" />
+                                <button
+                                  onClick={() => {
+                                    setEditing({ id: m.id, body: m.body });
+                                    setOpenActionsFor(null);
+                                  }}
+                                  className="flex items-center gap-2 rounded-md px-2.5 py-2 text-sm text-left hover:bg-[var(--bg-soft)]"
+                                >
+                                  <Pencil className="h-3.5 w-3.5 text-[var(--ink-soft)]" />
+                                  แก้ไขข้อความ
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setDeleteTarget(m.kind === "post" ? { postId: m.postId } : { postId: m.postId, replyId: m.id });
+                                    setOpenActionsFor(null);
+                                  }}
+                                  className="flex items-center gap-2 rounded-md px-2.5 py-2 text-sm text-left text-[var(--chart-red)] hover:bg-red-50"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                  ลบข้อความ
+                                </button>
+                              </>
+                            )}
+                          </PopoverContent>
+                        </Popover>
                       </div>
                     )}
                   </div>

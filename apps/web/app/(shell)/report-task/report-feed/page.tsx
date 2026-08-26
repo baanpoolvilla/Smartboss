@@ -606,14 +606,21 @@ function ReportFeedPageInner() {
                     getting shoved onto its own orphan row below (which just
                     looked like disconnected clutter, "งง...จัดให้มันดีๆสิ"). */}
                 <div className="px-5 flex items-center gap-2 border-b border-[var(--line)]">
-                {/* gap-3 + icon-only labels below sm — 5 tabs with full text
-                    labels never fit a phone width without horizontal scroll,
-                    and that scroll itself was the complaint ("ไม่อยากมีให้
-                    เลื่อนไปมา...อยากให้จบเลย"). Icon + count alone is compact
-                    enough that all 5 fit alongside the filter button with
-                    nothing left to scroll; the label comes back at sm and up
-                    where there's room for it. */}
-                <div role="tablist" aria-label="ส่วนของหัวข้อ" className="flex flex-1 min-w-0 items-center gap-3 sm:gap-4">
+                {/* gap-3 + icon-only labels below lg — same breakpoint the
+                    rest of this page switches on (sidebar hides, mobile
+                    topic button shows below lg). Using sm here instead left
+                    a dead zone between 640-1024px where the room panel was
+                    already in its narrow single-column layout but this row
+                    still tried to render full labels + the full filter bar,
+                    colliding ("ย่อแล้วมันชนกัน"). 5 tabs with full text
+                    labels never fit that narrow a column without horizontal
+                    scroll, and that scroll itself was the complaint
+                    ("ไม่อยากมีให้เลื่อนไปมา...อยากให้จบเลย"). Icon + count
+                    alone is compact enough that all 5 fit alongside the
+                    filter button with nothing left to scroll; the label
+                    comes back at lg and up where the sidebar's own width has
+                    already made room for it. */}
+                <div role="tablist" aria-label="ส่วนของหัวข้อ" className="flex flex-1 min-w-0 items-center gap-3 lg:gap-4">
                   {topicTabs.map((t) => {
                     const Icon = t.icon;
                     const active = activeTab === t.id;
@@ -641,7 +648,7 @@ function ReportFeedPageInner() {
                         )}
                       >
                         <Icon className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">{t.label}</span>
+                        <span className="hidden lg:inline">{t.label}</span>
                         {count != null && count > 0 && (
                           <span className="tabular-nums text-[10px] text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-1.5 py-0.5">{count}</span>
                         )}
@@ -672,7 +679,7 @@ function ReportFeedPageInner() {
                       ("กดโพสแล้วขยับไปอันอื่น...ขอบมันขยับ"). Keeping the
                       same box (just hidden) holds the row's height steady
                       either way. */}
-                  <div className={cn("hidden sm:block sm:ml-auto shrink-0 py-1.5", activeTab !== "posts" && "invisible")}>
+                  <div className={cn("hidden lg:block lg:ml-auto shrink-0 py-1.5", activeTab !== "posts" && "invisible")}>
                     <PostFilterBar
                       filters={filters}
                       onChange={setFilters}
@@ -686,7 +693,7 @@ function ReportFeedPageInner() {
                     tabIndex={activeTab === "posts" ? 0 : -1}
                     className={cn(
                       filterFieldTriggerClass(postFiltersActiveCount(filters) > 0),
-                      "sm:hidden ml-auto my-1.5 !h-8 shrink-0",
+                      "lg:hidden ml-auto my-1.5 !h-8 shrink-0",
                       activeTab !== "posts" && "invisible"
                     )}
                   >
@@ -703,7 +710,7 @@ function ReportFeedPageInner() {
                     bare, which read as a different, rougher pattern than
                     that page's ("ให้เหมือนหน้าอื่นๆสิ"). */}
                 <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
-                  <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl sm:hidden">
+                  <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl lg:hidden">
                     <SheetHeader className="flex-row items-center justify-between gap-2 pb-2 pr-11">
                       <SheetTitle>ตัวกรอง</SheetTitle>
                       {postFiltersActiveCount(filters) > 0 && (
@@ -723,6 +730,7 @@ function ReportFeedPageInner() {
                         onChange={setFilters}
                         authorOptions={topicMembers.map((m) => m.id)}
                         tagOptions={reportTags}
+                        size="lg"
                       />
                     </div>
                     <SheetFooter>

@@ -41,6 +41,7 @@ import {
   CHECKLIST_CHECKED,
   CHECKLIST_UNCHECKED,
   htmlEditorToBulletsText,
+  renderRichBulletText,
   renderSectionBullets,
   type MentionType,
 } from "@/modules/report_task/lib/report-feed-rich-text";
@@ -731,7 +732,16 @@ export function ReportCard({
               </button>
             )}
           </div>
-          <p className="text-[16px] font-semibold mt-2 leading-snug">{post.title}</p>
+          {/* renderRichBulletText, not raw {post.title} — an Openchat-style
+              post has no sections, so its whole message (bold/links/
+              mentions the composer wrote as marker text) lives entirely in
+              `title`. Rendering it raw meant none of that ever actually
+              rendered: a pasted URL stayed plain unlinked text with no
+              break-all, which is exactly what overflowed the card on a long
+              unbroken link ("มันล้นการ์ด") — this is the one and only place
+              a flat Openchat post's body gets shown, so it's also the only
+              place that formatting could ever have applied. */}
+          <p className="text-[16px] font-semibold mt-2 leading-snug break-words">{renderRichBulletText(post.title)}</p>
           {postTags.length > 0 && (
             <div className="flex items-center gap-1 flex-wrap mt-1.5">
               {postTags.map((t) => (
@@ -1304,8 +1314,8 @@ function PostImageCollage({
 }) {
   if (images.length === 1) {
     return (
-      <div className="rounded-lg border border-[var(--line)] overflow-hidden max-w-md">
-        <PostImageThumb img={images[0]!} onClick={() => onOpen(0)} className="h-[230px] w-full" />
+      <div className="rounded-lg border border-[var(--line)] overflow-hidden">
+        <PostImageThumb img={images[0]!} onClick={() => onOpen(0)} className="w-full" fitToImage />
       </div>
     );
   }
@@ -1356,14 +1366,28 @@ function PostImageThumb({
   img,
   onClick,
   className,
+  fitToImage,
 }: {
   img: ReportPostImage;
   onClick: () => void;
   className?: string;
+  /** For the single-image case only — a fixed h-230 box with object-contain
+   * used to letterbox a wide image (e.g. a landscape screenshot) with blank
+   * bg-soft bars on the sides, which read as the image having shrunk
+   * ("หดเข้าไปทำไม") rather than as intentional "not cropped". Sizing the
+   * box to the image's own aspect ratio instead fills the full card width
+   * with no cropping *and* no dead space — there's nothing left to letterbox. */
+  fitToImage?: boolean;
 }) {
   const [wide, setWide] = useState(false);
+  const [ratio, setRatio] = useState<number | null>(null);
   return (
-    <button onClick={onClick} className={cn("relative block hover:opacity-90 transition-opacity", wide && "bg-[var(--bg-soft)]", className)} aria-label={`ดูรูป ${img.name} เต็มจอ`}>
+    <button
+      onClick={onClick}
+      className={cn("relative block hover:opacity-90 transition-opacity", !fitToImage && wide && "bg-[var(--bg-soft)]", className)}
+      style={fitToImage && ratio ? { aspectRatio: ratio, height: "auto", maxHeight: "60vh" } : undefined}
+      aria-label={`ดูรูป ${img.name} เต็มจอ`}
+    >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={img.url ?? img.dataUrl}
@@ -1371,8 +1395,9 @@ function PostImageThumb({
         onLoad={(e) => {
           const el = e.currentTarget;
           if (el.naturalWidth / el.naturalHeight > 1.6) setWide(true);
+          if (fitToImage) setRatio(el.naturalWidth / el.naturalHeight);
         }}
-        className={cn("h-full w-full", wide ? "object-contain" : "object-cover")}
+        className={cn("h-full w-full", !fitToImage && wide ? "object-contain" : "object-cover")}
       />
     </button>
   );

@@ -137,7 +137,7 @@ function TasksPageContent() {
   const personBoardId = searchParams.get("person");
 
   return (
-    <div className="flex flex-col gap-4 lg:h-full lg:min-h-0 lg:gap-4 pb-6 lg:pb-4">
+    <div className="flex h-full min-h-0 flex-col gap-4 pb-6 lg:pb-4">
       {!personBoardId && (
         <StickyFilterBar
           actions={
@@ -185,11 +185,11 @@ function TasksPageContent() {
         // with the cards, and only the board's own area (columns
         // horizontally, each column's card list vertically) scrolls. See
         // kanban-board.tsx's own comment on why.
-        <div className="flex min-h-0 flex-1 flex-col lg:overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <KanbanBoard groupBy={groupBy} />
         </div>
       ) : (
-        <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto">
           {view === "grid" && <TaskGridView />}
           {view === "workload" && <WorkloadView />}
         </div>
