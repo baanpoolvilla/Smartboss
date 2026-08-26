@@ -447,7 +447,15 @@ export function OpenchatFeed({
                         </div>
                       ) : (
                         <>
-                          {m.body && <p className="text-[13.5px] leading-snug mt-0.5 text-[var(--ink)]">{renderRichBulletText(m.body)}</p>}
+                          {/* whitespace-pre-wrap — m.body has real "\n"s from
+                              Shift+Enter, but renderRichBulletText only turns
+                              inline markers into nodes, never splits on
+                              newlines; without this the default
+                              white-space:normal collapsed every line break
+                              into a space. */}
+                          {m.body && (
+                            <p className="text-[13.5px] leading-snug mt-0.5 text-[var(--ink)] whitespace-pre-wrap">{renderRichBulletText(m.body)}</p>
+                          )}
                           {!!m.images?.length && (
                             <div className="flex flex-wrap gap-1.5 mt-1.5">
                               {m.images.map((img, i) => (

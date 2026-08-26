@@ -215,7 +215,13 @@ export function ReportReply({
           </div>
         ) : (
           <>
-            {reply.body && <p className="text-sm mt-0.5">{renderRichBulletText(reply.body)}</p>}
+            {/* whitespace-pre-wrap — reply.body is one flat string with real "\n"s
+                (Shift+Enter in the reply box), but renderRichBulletText only
+                turns *inline* markers into nodes, it never splits on newlines.
+                Without this the browser's default white-space:normal collapsed
+                every line break into a space, so a two-line comment always
+                rendered as one line ("พิม test shift+enter 111 แต่แสดงแถวเดียวกัน"). */}
+            {reply.body && <p className="text-sm mt-0.5 whitespace-pre-wrap">{renderRichBulletText(reply.body)}</p>}
             {!!reply.images?.length && (
               <div className="flex flex-wrap gap-1.5 mt-1.5">
                 {reply.images.map((img, i) => (

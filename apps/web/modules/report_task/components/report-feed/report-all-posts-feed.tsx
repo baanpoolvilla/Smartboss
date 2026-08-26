@@ -259,7 +259,7 @@ export function ReportAllPostsFeed({
           className="flex-1 overflow-y-auto bg-[var(--bg-soft)]/40 px-5 py-5 space-y-5 scroll-pt-4"
         >
           {groupByDay(items, (p) => p.createdAt).map((group) => (
-            <div key={group.key} className="mx-auto w-full max-w-[860px] space-y-5">
+            <div key={group.key} className="space-y-5">
               <DaySeparator label={group.label} />
               {group.items.map((p) => {
                 const topic = topicById.get(p.topicId)!;
