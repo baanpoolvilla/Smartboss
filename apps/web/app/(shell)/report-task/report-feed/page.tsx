@@ -15,7 +15,7 @@ import { filterFieldTriggerClass } from "@/modules/report_task/components/shared
 import { TaskDetailSheet } from "@/modules/report_task/components/kanban/task-detail-sheet";
 import { Button, buttonVariants } from "@/modules/report_task/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/modules/report_task/components/ui/sheet";
+import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/modules/report_task/components/ui/sheet";
 import { useReportFeedStore, isOpenchatTopic, type ReportPost } from "@/modules/report_task/store/report-feed-store";
 import { useReportTagStore } from "@/modules/report_task/store/report-tag-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
@@ -688,6 +688,12 @@ function ReportFeedPageInner() {
                   </button>
                 </div>
 
+                {/* Same bottom-sheet shell ReportAllPostsFeed's own mobile
+                    filter uses (labeled header + "ล้างตัวกรอง", a footer
+                    confirm button showing the live result count) — this one
+                    used to just drop PostFilterBar's compact chip row in
+                    bare, which read as a different, rougher pattern than
+                    that page's ("ให้เหมือนหน้าอื่นๆสิ"). */}
                 <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
                   <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl sm:hidden">
                     <SheetHeader className="flex-row items-center justify-between gap-2 pb-2 pr-11">
@@ -702,7 +708,8 @@ function ReportFeedPageInner() {
                         </button>
                       )}
                     </SheetHeader>
-                    <div className="px-4 pb-2">
+                    <div className="px-4 pb-4">
+                      <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">แสดงเฉพาะ</p>
                       <PostFilterBar
                         filters={filters}
                         onChange={setFilters}
@@ -710,6 +717,14 @@ function ReportFeedPageInner() {
                         tagOptions={reportTags}
                       />
                     </div>
+                    <SheetFooter>
+                      <Button
+                        className="h-[46px] w-full bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+                        onClick={() => setMobileFilterOpen(false)}
+                      >
+                        แสดง {filteredTopicPosts.length} โพสต์
+                      </Button>
+                    </SheetFooter>
                   </SheetContent>
                 </Sheet>
 
