@@ -102,7 +102,7 @@ export default async function ShiftsPage() {
                 <EmptyState>ยังไม่มีกะทำงาน</EmptyState>
               ) : (
                 <DataTable
-                  head={["รหัส", "ชื่อกะ", "เข้า", "ออก", "พัก", "ประเภท", "สถานะ"]}
+                  head={["ชื่อกะ", "เข้า", "ออก", "พัก", "ประเภท", "สถานะ"]}
                 >
                   {shifts.items.map((shift) => {
                     const breakMinutes = shift.breaks.reduce(
@@ -111,7 +111,6 @@ export default async function ShiftsPage() {
                     );
                     return (
                       <tr key={shift.id} className="hover:bg-(--bg-soft)">
-                        <Td className="font-mono text-xs">{shift.code}</Td>
                         <Td className="font-medium">{shift.name}</Td>
                         <Td>{minutesToClock(shift.start_minutes)}</Td>
                         <Td>{minutesToClock(shift.end_minutes)}</Td>
@@ -142,15 +141,6 @@ export default async function ShiftsPage() {
                 className="grid grid-cols-1 gap-3 sm:grid-cols-3"
               >
                 <input type="hidden" name="company_id" value={companyId} />
-                <Field label="รหัสกะ *">
-                  <input
-                    name="code"
-                    required
-                    maxLength={32}
-                    placeholder="DAY"
-                    className={`${inputClass} font-mono uppercase`}
-                  />
-                </Field>
                 <Field label="ชื่อกะ *">
                   <input
                     name="name"
@@ -210,11 +200,10 @@ export default async function ShiftsPage() {
                 <p className="text-sm text-(--ink-soft)">ยังไม่มีนโยบาย</p>
               ) : (
                 <DataTable
-                  head={["รหัส", "ชื่อ", "วิธีคิดสาย", "ผ่อนผัน", "OT ต้องอนุมัติ"]}
+                  head={["ชื่อ", "วิธีคิดสาย", "ผ่อนผัน", "OT ต้องอนุมัติ"]}
                 >
                   {policies.items.map((policy) => (
                     <tr key={policy.id} className="hover:bg-(--bg-soft)">
-                      <Td className="font-mono text-xs">{policy.code}</Td>
                       <Td className="font-medium">{policy.name}</Td>
                       <Td>{LATE_MODE[policy.late_mode] ?? policy.late_mode}</Td>
                       <Td align="right">{policy.grace_minutes} น.</Td>
@@ -240,15 +229,6 @@ export default async function ShiftsPage() {
                 className="grid grid-cols-1 gap-3 sm:grid-cols-3"
               >
                 <input type="hidden" name="company_id" value={companyId} />
-                <Field label="รหัสนโยบาย *">
-                  <input
-                    name="code"
-                    required
-                    maxLength={32}
-                    placeholder="STD"
-                    className={`${inputClass} font-mono uppercase`}
-                  />
-                </Field>
                 <Field label="ชื่อนโยบาย *">
                   <input
                     name="name"

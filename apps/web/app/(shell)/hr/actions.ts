@@ -26,6 +26,26 @@ async function guard(permission: string) {
   return session;
 }
 
+/**
+ * ตั้งรหัสให้อัตโนมัติ
+ *
+ * API บังคับว่าต้องมี `code` ทุกรายการ แต่ผู้ใช้ไม่ควรต้องคิดรหัสเอง —
+ * ชื่อภาษาไทยแปลงเป็นรหัสไม่ได้ตรง ๆ (จะได้ตัวอักษรที่อ่านไม่ออก) และการ
+ * ให้คิดเองทุกครั้งคือการโยนงานของระบบไปให้คน แล้วยังเสี่ยงกรอกซ้ำจนโดน 409
+ *
+ * รหัสพวกนี้ไม่มีใครต้องพิมพ์หรือจำ ต่างจากรหัสเครื่องสแกนที่ต้องตรงกับ
+ * สติกเกอร์บนตัวเครื่องจริง — ตัวนั้นยังให้กรอกเองอยู่
+ */
+function nextCode(prefix: string, existing: readonly { code?: string }[]): string {
+  const used = new Set(existing.map((item) => (item.code ?? "").toUpperCase()));
+  for (let n = 1; n <= 999; n += 1) {
+    const code = `${prefix}${String(n).padStart(2, "0")}`;
+    if (!used.has(code)) return code;
+  }
+  // เต็ม 999 แล้วจริง ๆ (ไม่น่าเกิด) — กันไม่ให้คืนรหัสซ้ำเงียบ ๆ
+  return `${prefix}${Date.now().toString(36).toUpperCase().slice(-4)}`;
+}
+
 /** แปลง error ของ workforce เป็นข้อความไทยที่อ่านรู้เรื่อง */
 function toMessage(error: unknown): string {
   if (error instanceof WorkforceUnavailableError) {
@@ -378,26 +398,31 @@ export async function terminateEmploymentAction(formData: FormData) {
 export async function createShiftAction(formData: FormData) {
   await guard(HR_PERMS.settingManage);
   const companyId = String(formData.get("company_id") ?? "");
-  const code = String(formData.get("code") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
   const start = String(formData.get("start") ?? "");
   const end = String(formData.get("end") ?? "");
+  const restDay = formData.get("rest_day") === "1";
 
   if (!companyId) throw new Error("ยังไม่มีบริษัทในระบบ workforce");
-  if (!code || !name) throw new Error("กรุณากรอกรหัสและชื่อกะ");
+  if (!name) throw new Error("กรุณากรอกชื่อกะ");
   if (!start || !end) throw new Error("กรุณาระบุเวลาเข้า-ออก");
 
   try {
+    const existing = await wfFetch<Paged<{ code: string }>>(
+      `/shifts?company_id=${companyId}`,
+    );
     await wfFetch("/shifts", {
       method: "POST",
       body: {
         company_id: companyId,
-        code,
+        // แยกคำนำหน้าให้กะวันหยุด — หน้าลงวันหยุดต้องหยิบกะประเภทนี้ไปใช้
+        // เห็น OFF01 แล้วรู้ทันทีว่าคือใบไหน ต่างจาก SHIFT03 ที่ต้องเปิดดู
+        code: nextCode(restDay ? "OFF" : "SHIFT", existing.items),
         name,
         start,
         end,
         crosses_midnight: formData.get("crosses_midnight") === "1",
-        rest_day: formData.get("rest_day") === "1",
+        rest_day: restDay,
         // ไม่ผูกนโยบาย = ไม่มีเกณฑ์ผ่อนผัน ⇒ สายนาทีเดียวก็นับสาย
         work_policy_id: orNull(formData.get("work_policy_id")),
       },
@@ -419,14 +444,13 @@ export async function createShiftAction(formData: FormData) {
 export async function createWorkPolicyAction(formData: FormData) {
   await guard(HR_PERMS.settingManage);
   const companyId = String(formData.get("company_id") ?? "");
-  const code = String(formData.get("code") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
   const lateMode = String(formData.get("late_mode") ?? "GRACE");
   const graceMinutes = Number(formData.get("grace_minutes") ?? 0);
   const effectiveFrom = String(formData.get("effective_from") ?? "");
 
   if (!companyId) throw new Error("ยังไม่มีบริษัทในระบบ workforce");
-  if (!code || !name) throw new Error("กรุณากรอกรหัสและชื่อนโยบาย");
+  if (!name) throw new Error("กรุณากรอกชื่อนโยบาย");
   if (!effectiveFrom) throw new Error("กรุณาระบุวันที่เริ่มใช้");
   if (!Number.isInteger(graceMinutes) || graceMinutes < 0 || graceMinutes > 240) {
     throw new Error("เวลาผ่อนผันต้องเป็น 0-240 นาที");
@@ -437,11 +461,12 @@ export async function createWorkPolicyAction(formData: FormData) {
   }
 
   try {
+    const existing = await wfFetch<Paged<{ code: string }>>("/work-policies");
     await wfFetch("/work-policies", {
       method: "POST",
       body: {
         company_id: companyId,
-        code,
+        code: nextCode("POLICY", existing.items),
         name,
         late_mode: lateMode,
         grace_minutes: graceMinutes,
@@ -847,17 +872,17 @@ export async function decideLeaveAction(formData: FormData) {
 export async function createLeaveTypeAction(formData: FormData) {
   await guard(HR_PERMS.settingManage);
   const companyId = String(formData.get("company_id") ?? "");
-  const code = String(formData.get("code") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
   if (!companyId) throw new Error("ยังไม่มีบริษัทในระบบ workforce");
-  if (!code || !name) throw new Error("กรุณากรอกรหัสและชื่อประเภทการลา");
+  if (!name) throw new Error("กรุณากรอกชื่อประเภทการลา");
 
   try {
+    const existing = await wfFetch<Paged<{ code: string }>>("/leave-types");
     await wfFetch("/leave-types", {
       method: "POST",
       body: {
         company_id: companyId,
-        code,
+        code: nextCode("LEAVE", existing.items),
         name,
         paid: formData.get("paid") !== "0",
         unit: "DAY",

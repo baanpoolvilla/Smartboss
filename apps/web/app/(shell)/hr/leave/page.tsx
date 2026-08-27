@@ -211,25 +211,16 @@ export default async function LeavePage({
                   <div className="mb-3 flex flex-wrap gap-1.5">
                     {(types?.items ?? []).map((t) => (
                       <Pill key={t.id} tone={t.paid ? "var(--tone-ok)" : "var(--tone-muted)"}>
-                        {t.code} · {t.name}
+                        {t.name}
                       </Pill>
                     ))}
                   </div>
                 )}
                 <form
                   action={createLeaveTypeAction}
-                  className="grid grid-cols-1 gap-3 sm:grid-cols-4"
+                  className="grid grid-cols-1 gap-3 sm:grid-cols-3"
                 >
                   <input type="hidden" name="company_id" value={companyId} />
-                  <Field label="รหัส *">
-                    <input
-                      name="code"
-                      required
-                      maxLength={32}
-                      placeholder="ANNUAL"
-                      className={`${inputClass} font-mono uppercase`}
-                    />
-                  </Field>
                   <Field label="ชื่อ *">
                     <input
                       name="name"
