@@ -24,7 +24,11 @@ import {
   inputClass,
 } from "@/modules/hr/components/ui";
 import { createLeaveTypeAction, decideLeaveAction } from "../actions";
-import { LeaveCalendar, type DayEntry } from "./leave-calendar";
+import {
+  LeaveCalendar,
+  type DayEntry,
+  type PersonLegend,
+} from "./leave-calendar";
 
 const THAI_MONTH = [
   "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
@@ -104,12 +108,23 @@ export default async function LeavePage({
           for (const date of datesBetween(entry.starts_on, entry.ends_on)) {
             if (date < from || date > to) continue;
             (entriesByDate[date] ??= []).push({
+              employmentId: entry.employment_id,
               name: entry.display_name,
               status: entry.status,
               mine: entry.employment_id === me.employment_id,
             });
           }
         }
+
+        // รายชื่อในแถบซ้าย — เอาจากคนที่มีวันหยุดเดือนนี้ เรียงตามชื่อให้หาเจอง่าย
+        const legend: PersonLegend[] = [
+          ...new Map(
+            (calendar?.items ?? []).map((e) => [
+              e.employment_id,
+              { id: e.employment_id, name: e.display_name },
+            ]),
+          ).values(),
+        ].sort((a, b) => a.name.localeCompare(b.name, "th"));
 
         const pending = requests?.items ?? [];
         const [y, m] = month.split("-").map(Number);
@@ -118,7 +133,7 @@ export default async function LeavePage({
           <div className="flex flex-col gap-4">
             <SectionCard
               title={`${THAI_MONTH[m! - 1]} ${y! + 543}`}
-              description="คลิกวันที่จะหยุดแล้วกดขอ — เขียว = อนุมัติแล้ว · ส้ม = รออนุมัติ"
+              description="คลิกวันที่จะหยุดแล้วกดขอ — แต่ละคนมีสีประจำตัว · แถบจางมีจุดนำหน้า = รออนุมัติ"
               action={
                 <div className="flex gap-1">
                   <Link href={`/hr/leave?month=${shiftMonth(month, -1)}`}>
@@ -133,12 +148,14 @@ export default async function LeavePage({
               <LeaveCalendar
                 key={month}
                 month={month}
+                today={new Date().toISOString().slice(0, 10)}
                 employmentId={me.employment_id}
                 leaveTypes={(types?.items ?? []).map((t) => ({
                   id: t.id,
                   label: `${t.name}${t.paid ? "" : " (ไม่ได้ค่าจ้าง)"}`,
                 }))}
                 entriesByDate={entriesByDate}
+                people={legend}
               />
             </SectionCard>
 
