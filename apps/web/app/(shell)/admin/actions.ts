@@ -23,7 +23,12 @@ import {
   syncWorkforceCompanyName,
   syncWorkforcePrincipal,
 } from "@/lib/workforce-provisioning";
-import { ENABLED_MODULES, ORG_ROLES, ROLE_GRANTS } from "@smartboss/database/defaults";
+import {
+  BASELINE_PERMS,
+  ENABLED_MODULES,
+  ORG_ROLES,
+  ROLE_GRANTS,
+} from "@smartboss/database/defaults";
 
 /** ทุก action ต้องผ่านด่านนี้ก่อน — คืน session ที่มี orgId แน่นอน */
 async function guard(permission: string) {
@@ -449,6 +454,19 @@ export async function createRoleAction(formData: FormData) {
   const role = await prisma.role.create({
     data: { orgId: session.orgId, code, name, description: description || null },
   });
+
+  // บทบาทที่สร้างใหม่ได้ชุดพื้นฐานติดตัวไปเลย — กติกาของระบบคือทุกคนเข้าถึงได้
+  // ทุกโมดูล ต่างกันที่สิทธิ์การใช้งานข้างใน ถ้าเริ่มจากศูนย์ คนที่ถูกย้ายมาถือ
+  // บทบาทใหม่จะล็อกอินเข้ามาเจอหน้าเปล่าจนกว่าแอดมินจะไล่ติ๊กเอง
+  const baseline = await prisma.permission.findMany({
+    where: { code: { in: BASELINE_PERMS } },
+    select: { id: true },
+  });
+  await prisma.rolePermission.createMany({
+    data: baseline.map((p) => ({ roleId: role.id, permissionId: p.id })),
+    skipDuplicates: true,
+  });
+
   await audit({
     userId: session.userId,
     action: "ROLE_CREATED",

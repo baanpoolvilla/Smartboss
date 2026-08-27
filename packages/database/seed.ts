@@ -3,12 +3,14 @@ import { resolve } from "node:path";
 import { PrismaClient } from "@prisma/client";
 import argon2 from "argon2";
 import {
+  CHAT_PERMS,
   CORE_PERMS,
   ENABLED_MODULES,
   HR_PERMS,
   MAINT_PERMS,
   ORG_ROLES,
   PLATFORM_PERMS,
+  REPORT_TASK_PERMS,
   ROLE_GRANTS,
 } from "./defaults";
 
@@ -153,9 +155,13 @@ async function main() {
   await registerModulePerms("example", ["example.view", "example.manage"]);
   await registerModulePerms("maintenance", MAINT_PERMS);
   await registerModulePerms("hr", HR_PERMS);
-  await registerModulePerms("chat", ["chat.access", "chat.manage"]);
+  await registerModulePerms("chat", CHAT_PERMS);
+  // รายงานและงานเคยตกหล่นจากแคตตาล็อก ทำให้ /admin/roles ไม่มีสิทธิ์กลุ่มนี้ให้ติ๊กเลย
+  await registerModulePerms("report_task", REPORT_TASK_PERMS);
   console.log(
-    `✔ Permissions: ${CORE_PERMS.length} core + ${HR_PERMS.length} hr + ${MAINT_PERMS.length} maintenance + 2 chat`
+    `✔ Permissions: ${CORE_PERMS.length} core + ${HR_PERMS.length} hr + ` +
+      `${MAINT_PERMS.length} maintenance + ${REPORT_TASK_PERMS.length} report_task + ` +
+      `${CHAT_PERMS.length} chat`
   );
 
   // ── 6) เปิดโมดูลที่มีโค้ดจริงให้บริษัทนี้ ───────────────────
