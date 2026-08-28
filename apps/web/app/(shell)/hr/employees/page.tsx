@@ -4,7 +4,8 @@ import { requireOrg, hasPermission } from "@smartboss/auth";
 import { Fab } from "@/components/module/app-scaffold";
 import { HrPage } from "@/modules/hr/components/hr-page";
 import { HR_PERMS } from "@/modules/hr/permissions";
-import { wfFetch, type Employment, type Paged } from "@/modules/hr/lib/api";
+import { wfFetch, wfTry, type Employment, type Paged, type Person } from "@/modules/hr/lib/api";
+import { listOrgUsers } from "@/modules/admin/data/users";
 import {
   ApiProblem,
   DataTable,
@@ -39,11 +40,34 @@ export default async function EmployeesPage({
         ) : null
       }
       load={async () => {
-        const data = await wfFetch<Paged<Employment>>("/employments");
+        const [data, people, users] = await Promise.all([
+          wfFetch<Paged<Employment>>("/employments"),
+          wfTry<Paged<Person>>("/people"),
+          canManage ? listOrgUsers(session.orgId) : Promise.resolve([]),
+        ]);
         const all = data.items;
         const rows = status ? all.filter((e) => e.status === status) : all;
 
         const statuses = Array.from(new Set(all.map((e) => e.status))).sort();
+
+        /*
+         * ทะเบียนพนักงานกับบัญชีผู้ใช้เป็นคนละชุดโดยตั้งใจ (บัญชี IT/ผู้ดูแล
+         * ล็อกอินได้แต่ไม่ได้อยู่ในทะเบียนจ้างงาน) แต่เดิมไม่มีอะไรบอกเลยว่า
+         * ยังมีคนตกค้าง — มีผู้ใช้ 14 คนแต่ทะเบียนมี 2 คน ก็ดูเหมือนปกติ
+         * แล้วผลลงเวลาของอีก 12 คนจะหายไปเงียบ ๆ โดยไม่มีใครรู้
+         *
+         * จับคู่ด้วยอีเมล — ค่าเดียวที่ทั้งสองระบบมีและไม่ซ้ำ (ตัวเดียวกับที่
+         * importEmployeesAction ใช้)
+         */
+        const employedPersonIds = new Set(all.map((e) => e.person_id));
+        const registeredEmails = new Set(
+          (people?.items ?? [])
+            .filter((row) => row.email !== null && employedPersonIds.has(row.id))
+            .map((row) => row.email!.toLowerCase()),
+        );
+        const missing = users.filter(
+          (u) => u.isActive && !registeredEmails.has(u.email.toLowerCase()),
+        ).length;
 
         return (
           <>
@@ -51,6 +75,26 @@ export default async function EmployeesPage({
               <div className="mb-3">
                 <ApiProblem heading={`นำเข้าพนักงานแล้ว ${imported} คน`} />
               </div>
+            )}
+
+            {missing > 0 && (
+              <Link
+                href="/hr/employees/import"
+                className="mb-3 flex items-center justify-between gap-3 rounded-(--radius) border border-(--app) bg-(--app-pale) p-3 transition-colors hover:bg-(--app-soft)"
+              >
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-(--ink)">
+                    มีผู้ใช้อีก {missing} คนที่ยังไม่อยู่ในทะเบียนพนักงาน
+                  </span>
+                  <span className="mt-0.5 block text-xs text-(--ink-soft)">
+                    คนที่ไม่อยู่ในทะเบียนจะลงเวลาและรับเงินเดือนไม่ได้ —
+                    นำเข้าได้เลย ระบบเติมชื่อกับอีเมลให้แล้ว
+                  </span>
+                </span>
+                <span className="shrink-0 text-sm font-medium text-(--app-strong)">
+                  นำเข้า →
+                </span>
+              </Link>
             )}
 
             <div className="mb-3 flex flex-wrap items-center gap-2">
