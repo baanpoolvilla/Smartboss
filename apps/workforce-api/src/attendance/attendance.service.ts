@@ -64,6 +64,90 @@ export class AttendanceService {
     );
   }
 
+  /**
+   * กระดานลงเวลาของทีมสำหรับวันหนึ่ง — ใครมาถึงกี่โมง สายไหม
+   *
+   * อยู่ในโมดูล attendance ไม่ใช่ devices เพราะต้องใช้ resolveShiftId กับ
+   * resolveWorkPolicy เพื่อบอกว่า "สาย" — ตัวเลขเวลาเปล่า ๆ ไม่มีความหมาย
+   * ถ้าไม่รู้ว่าวันนั้นคนนั้นควรเข้ากี่โมง
+   *
+   * ⚠ เปิดให้ทุกคนที่ยืนยันตัวตนแล้วเรียกได้ จึงคืนเฉพาะ ชื่อ + เวลา + สถานะ
+   * ไม่คืนคะแนนแมตช์ slot หรือแถวที่จับคู่กับคนไม่ได้ — นั่นเป็นข้อมูลไว้ตรวจ
+   * ปัญหาของผู้ดูแล ไม่ใช่ของเพื่อนร่วมงาน
+   *
+   * ต่างจาก attendance_results ตรงที่ **ไม่ต้องรอสั่งคำนวณ** — อ่านจากการสแกน
+   * สด ๆ เพื่อให้เห็นทันทีว่าใครมาถึงแล้ว
+   */
+  async listTimeEventBoard(workDate: string): Promise<{
+    items: Record<string, unknown>[];
+  }> {
+    return this.uow.run(async (uow) => {
+      const rows = await this.repository.listBoardScans(uow.tx, workDate);
+
+      const items: Record<string, unknown>[] = [];
+      for (const row of rows) {
+        const { shiftId } = await this.repository.resolveShiftId(
+          uow.tx,
+          row.employmentId,
+          workDate,
+        );
+        const shift =
+          shiftId === null
+            ? undefined
+            : await this.repository.findShiftWithBreaks(uow.tx, shiftId);
+        const policy = await this.repository.resolveWorkPolicy(
+          uow.tx,
+          row.companyId,
+          workDate,
+        );
+
+        // นาทีจากเที่ยงคืนของเวลาที่สแกนครั้งแรก เทียบกับเวลาเข้างานตามกะ
+        const local = new Date(row.firstAt);
+        const parts = new Intl.DateTimeFormat('en-GB', {
+          timeZone: row.timeZone,
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        }).formatToParts(local);
+        const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? '0');
+        const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? '0');
+        const arrivedMinutes = hour * 60 + minute;
+
+        let status: 'ON_TIME' | 'LATE' | 'REST_DAY' | 'NO_SHIFT' = 'NO_SHIFT';
+        let lateMinutes = 0;
+
+        if (shift === undefined) {
+          status = 'NO_SHIFT';
+        } else if (shift.shift.restDay) {
+          status = 'REST_DAY';
+        } else {
+          const grace = policy?.lateMode === 'GRACE' ? (policy.graceMinutes ?? 0) : 0;
+          const over = arrivedMinutes - shift.shift.startMinutes - grace;
+          if (over > 0) {
+            status = 'LATE';
+            lateMinutes = over;
+          } else {
+            status = 'ON_TIME';
+          }
+        }
+
+        items.push({
+          employment_id: row.employmentId,
+          display_name: row.displayName,
+          employee_code: row.employeeCode,
+          first_scan_at: row.firstAt,
+          last_scan_at: row.lastAt,
+          scan_count: row.scanCount,
+          scheduled_start_minutes: shift?.shift.startMinutes ?? null,
+          status,
+          late_minutes: lateMinutes,
+        });
+      }
+
+      return { items: items.sort((a, b) => String(a['first_scan_at']).localeCompare(String(b['first_scan_at']))) };
+    });
+  }
+
   async recalculateRange(
     employmentId: string,
     from: string,

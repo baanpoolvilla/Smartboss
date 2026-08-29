@@ -72,7 +72,7 @@ export const OPERATIONAL_ROUTES: readonly Omit<RouteDefinition, 'response'>[] = 
     method: 'get',
     path: '/time-event-board',
     summary: 'GET /time-event-board',
-    tag: 'devices',
+    tag: 'attendance',
     // เปล่า = ขอแค่ยืนยันตัวตนแล้ว ทั้งทีมเห็นว่าใครมาถึงกี่โมง
     permissions: [] as Permission[],
   },

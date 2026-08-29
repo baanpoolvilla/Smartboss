@@ -85,16 +85,20 @@ export default async function AttendancePage({
           wfTry<{ items: AttendanceException[] }>(
             `/attendance-exceptions?from=${from}&to=${to}&status=OPEN`,
           ),
-          // ทุกคนเรียกได้ — ชื่อ+เวลา+เครื่อง เท่านั้น
+          // ทุกคนเรียกได้ — ชื่อ + เวลา + สถานะสาย/ปกติ
           wfTry<{
             items: {
-              id: string;
               employment_id: string;
               display_name: string;
-              captured_at: string;
-              device_code: string | null;
+              employee_code: string;
+              first_scan_at: string;
+              last_scan_at: string;
+              scan_count: number;
+              scheduled_start_minutes: number | null;
+              status: "ON_TIME" | "LATE" | "REST_DAY" | "NO_SHIFT";
+              late_minutes: number;
             }[];
-          }>(`/time-event-board?from=${today}&to=${today}`),
+          }>(`/time-event-board?date=${today}`),
           // รายละเอียดสำหรับผู้ดูแล (คะแนน/slot/แถวที่จับคู่ไม่ได้)
           wfTry<{ items: RawTimeEvent[] }>(
             `/raw-time-events?from=${from}&to=${to}&limit=300`,
@@ -117,24 +121,17 @@ export default async function AttendancePage({
         const canSeeResults = summary !== null;
         const t = summary?.totals;
 
-        /** เวลาเข้างานครั้งแรกของแต่ละคนวันนี้ — คนหนึ่งคนสแกนหลายครั้งต่อวัน */
-        const firstToday = new Map<string, { name: string; at: string; device: string | null }>();
-        for (const e of [...(board?.items ?? [])].reverse()) {
-          firstToday.set(e.employment_id, {
-            name: e.display_name,
-            at: e.captured_at,
-            device: e.device_code,
-          });
-        }
-        const arrivals = [...firstToday.values()].sort((a, b) =>
-          a.at.localeCompare(b.at),
-        );
+        const arrivals = board?.items ?? [];
         const clock = (iso: string) =>
           new Date(iso).toLocaleTimeString("th-TH", {
             hour: "2-digit",
             minute: "2-digit",
             timeZone: "Asia/Bangkok",
           });
+        /** 480 → "08:00" — เวลาเข้างานตามกะเก็บเป็นนาทีจากเที่ยงคืน */
+        const fromMinutes = (m: number) =>
+          `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+        const lateCount = arrivals.filter((a) => a.status === "LATE").length;
 
         const activePeople = (employments?.items ?? [])
           .filter((e) => e.terminated_on === null)
@@ -166,28 +163,62 @@ export default async function AttendancePage({
         return (
           <>
             <SectionCard
-              title={`ใครมาแล้วบ้างวันนี้ · ${arrivals.length} คน`}
-              description="เวลาที่สแกนนิ้วครั้งแรกของวัน — ดูอย่างเดียว แก้ไขไม่ได้"
+              title={`การลงเวลาวันนี้ · ${arrivals.length} คน`}
+              description={
+                lateCount > 0
+                  ? `มาสาย ${lateCount} คน — เทียบกับเวลาเข้างานตามกะและเวลาผ่อนผันของบริษัท`
+                  : "เทียบกับเวลาเข้างานตามกะและเวลาผ่อนผันของบริษัท"
+              }
               className="mb-4"
             >
               {arrivals.length === 0 ? (
                 <EmptyState>วันนี้ยังไม่มีใครสแกน</EmptyState>
               ) : (
-                <div className="flex flex-wrap gap-2">
+                <DataTable
+                  head={["พนักงาน", "เข้างาน", "สแกนล่าสุด", "ตามกะ", "สถานะ"]}
+                >
                   {arrivals.map((a) => (
-                    <span
-                      key={a.name + a.at}
-                      className="flex items-center gap-2 rounded-(--radius) border border-(--line) bg-(--bg-soft) px-3 py-1.5 text-sm"
-                      title={a.device ? `เครื่อง ${a.device}` : undefined}
-                    >
-                      <span className="font-medium">{a.name}</span>
-                      <span className="font-mono text-xs text-(--ink-soft)">
-                        {clock(a.at)}
-                      </span>
-                    </span>
+                    <tr key={a.employment_id} className="hover:bg-(--bg-soft)">
+                      <Td>
+                        <span className="font-medium">{a.display_name}</span>
+                        <span className="ml-2 font-mono text-xs text-(--ink-soft)">
+                          {a.employee_code}
+                        </span>
+                      </Td>
+                      <Td className="font-mono">{clock(a.first_scan_at)}</Td>
+                      <Td className="font-mono text-(--ink-soft)">
+                        {a.scan_count > 1 ? clock(a.last_scan_at) : "—"}
+                        {a.scan_count > 2 && (
+                          <span className="ml-1 text-xs">({a.scan_count} ครั้ง)</span>
+                        )}
+                      </Td>
+                      <Td className="font-mono text-(--ink-soft)">
+                        {a.scheduled_start_minutes === null
+                          ? "—"
+                          : fromMinutes(a.scheduled_start_minutes)}
+                      </Td>
+                      <Td>
+                        {a.status === "LATE" ? (
+                          <Pill tone="var(--tone-warn)">
+                            สาย {formatMinutes(a.late_minutes)}
+                          </Pill>
+                        ) : a.status === "ON_TIME" ? (
+                          <Pill tone="var(--tone-ok)">ปกติ</Pill>
+                        ) : a.status === "REST_DAY" ? (
+                          <Pill tone="var(--tone-info)">วันหยุด</Pill>
+                        ) : (
+                          <Pill tone="var(--tone-muted)">ยังไม่ผูกกะ</Pill>
+                        )}
+                      </Td>
+                    </tr>
                   ))}
-                </div>
+                </DataTable>
               )}
+              <p className="mt-3 text-xs text-(--ink-soft)">
+                อ่านจากการสแกนสด ๆ ไม่ต้องรอสั่งคำนวณ — ตัวเลขสรุปรายเดือนและ OT
+                ยังต้องกดคำนวณตามเดิม · &ldquo;ยังไม่ผูกกะ&rdquo; แปลว่าระบบไม่รู้ว่าคนนั้น
+                ควรเข้ากี่โมง จึงบอกไม่ได้ว่าสายหรือไม่
+              </p>
             </SectionCard>
 
             {canSeeResults && (

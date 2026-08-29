@@ -76,19 +76,6 @@ export class DeviceController {
    * ใช้สิทธิ์เดียวกับผลลงเวลาของทั้งบริษัท ไม่ใช่สิทธิ์เครื่องสแกน เพราะนี่คือ
    * ข้อมูลการมาทำงานของคน ไม่ใช่สถานะฮาร์ดแวร์
    */
-  /**
-   * กระดานลงเวลาของทีม — เปิดให้ทุกคนที่เข้าระบบได้
-   * คืนเฉพาะชื่อ+เวลา+เครื่อง (ดู listTimeEventBoard)
-   */
-  @Get('time-event-board')
-  @RequirePermissions()
-  async listTimeEventBoard(
-    @Query('from') from: string,
-    @Query('to') to: string,
-  ): Promise<{ items: Record<string, unknown>[] }> {
-    return this.service.listTimeEventBoard({ from, to });
-  }
-
   @Get('raw-time-events')
   @RequirePermissions('workforce.attendance.read.all')
   async listRawTimeEvents(

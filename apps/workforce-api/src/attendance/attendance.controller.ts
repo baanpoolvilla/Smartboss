@@ -190,6 +190,20 @@ export class AttendanceController {
   constructor(private readonly service: AttendanceService) {}
 
   /** สรุปสถิติสำหรับหน้า dashboard */
+  /**
+   * กระดานลงเวลาของทีมสำหรับวันหนึ่ง — เปิดให้ทุกคนที่เข้าระบบได้
+   *
+   * @RequirePermissions() เปล่า เพราะทั้งทีมควรเห็นว่าใครมาถึงแล้วบ้าง
+   * คืนเฉพาะ ชื่อ + เวลา + สถานะสาย/ปกติ (ดู listTimeEventBoard)
+   */
+  @Get('time-event-board')
+  @RequirePermissions()
+  async timeEventBoard(
+    @Query('date') date: string,
+  ): Promise<{ items: Record<string, unknown>[] }> {
+    return this.service.listTimeEventBoard(date);
+  }
+
   @Get('attendance-summary')
   @RequirePermissions('workforce.attendance.read.all')
   async summary(

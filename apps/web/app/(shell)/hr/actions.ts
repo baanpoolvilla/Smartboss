@@ -46,6 +46,30 @@ function nextCode(prefix: string, existing: readonly { code?: string }[]): strin
   return `${prefix}${Date.now().toString(36).toUpperCase().slice(-4)}`;
 }
 
+/**
+ * แปลข้อความ error ของระบบลาเป็นทางแก้ที่ทำตามได้
+ *
+ * ข้อความดิบเป็นอังกฤษและบอกแค่ "อะไรผิด" ไม่บอก "ต้องทำอะไรต่อ" —
+ * ผู้ใช้เห็น "insufficient leave balance" แล้วไปต่อไม่ถูก ทั้งที่ทางแก้คือ
+ * ให้ฝ่ายบุคคลสร้างประเภทการลาชุดใหม่
+ */
+function leaveErrorMessage(raw: string): string {
+  if (raw.includes("insufficient leave balance")) {
+    return (
+      "ประเภทการลานี้ถูกตั้งให้ต้องตัดโควตาคงเหลือ แต่ยังไม่มีใครได้รับโควตา " +
+      "⇒ ขอไม่ผ่านทุกใบ — ให้ฝ่ายบุคคลกด “สร้างชุดมาตรฐาน” ที่หน้านี้ " +
+      "แล้วเลือกประเภทที่สร้างใหม่แทน"
+    );
+  }
+  if (raw.includes("monthly quota exceeded")) {
+    return "เดือนนี้ใช้สิทธิ์ครบแล้ว — เลือกวันในเดือนถัดไป หรือใช้ประเภทการลาอื่น";
+  }
+  if (raw.includes("days of notice")) {
+    return "ประเภทการลานี้ต้องแจ้งล่วงหน้า — เลือกวันที่ไกลกว่านี้";
+  }
+  return raw;
+}
+
 /** แปลง error ของ workforce เป็นข้อความไทยที่อ่านรู้เรื่อง */
 function toMessage(error: unknown): string {
   if (error instanceof WorkforceUnavailableError) {
@@ -834,7 +858,7 @@ export async function submitLeaveAction(
       });
     } catch (error) {
       failed += 1;
-      lastError = toMessage(error);
+      lastError = leaveErrorMessage(toMessage(error));
     }
   }
 

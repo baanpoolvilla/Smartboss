@@ -5,6 +5,82 @@ import { and, asc, desc, eq, gte, isNull, lte, or, sql, type SQL } from 'drizzle
 @Injectable()
 export class AttendanceRepository {
   /** นโยบายที่มีผล ณ วันที่ระบุ — point-in-time เสมอ (ADR-0012) */
+  /**
+   * การสแกนของวันหนึ่ง สรุปเป็นคนละแถว — ครั้งแรก/ครั้งล่าสุด/จำนวนครั้ง
+   *
+   * คนหนึ่งคนสแกนหลายครั้งต่อวัน (เข้า/ออก/พัก) กระดานต้องการแถวเดียวต่อคน
+   * จึงรวบที่ฐานข้อมูลแทนดึงมาทั้งหมดแล้วยุบในแอป
+   *
+   * เอาเฉพาะแถวที่จับคู่กับพนักงานได้ — slot ที่ยังไม่ผูกกับใครไม่มีประโยชน์
+   * กับกระดานทีม (ผู้ดูแลดูได้จากรายการสแกนดิบ)
+   */
+  async listBoardScans(
+    tx: Tx,
+    workDate: string,
+  ): Promise<
+    {
+      employmentId: string;
+      companyId: string;
+      timeZone: string;
+      displayName: string;
+      employeeCode: string;
+      firstAt: string;
+      lastAt: string;
+      scanCount: number;
+    }[]
+  > {
+    const rows = await tx
+      .select({
+        employmentId: schema.rawTimeEvents.employmentId,
+        companyId: schema.rawTimeEvents.companyId,
+        timeZone: schema.rawTimeEvents.timeZone,
+        employeeCode: schema.employments.employeeCode,
+        firstName: schema.people.firstName,
+        lastName: schema.people.lastName,
+        preferredName: schema.people.preferredName,
+        firstAt: sql<string>`min(${schema.rawTimeEvents.capturedAt})`,
+        lastAt: sql<string>`max(${schema.rawTimeEvents.capturedAt})`,
+        scanCount: sql<number>`count(*)::int`,
+      })
+      .from(schema.rawTimeEvents)
+      .innerJoin(
+        schema.employments,
+        eq(schema.employments.id, schema.rawTimeEvents.employmentId),
+      )
+      .innerJoin(schema.people, eq(schema.people.id, schema.employments.personId))
+      .where(
+        and(
+          sql`${schema.rawTimeEvents.capturedAt} >= ${`${workDate}T00:00:00Z`}`,
+          sql`${schema.rawTimeEvents.capturedAt} <= ${`${workDate}T23:59:59Z`}`,
+          sql`${schema.rawTimeEvents.employmentId} is not null`,
+        ),
+      )
+      .groupBy(
+        schema.rawTimeEvents.employmentId,
+        schema.rawTimeEvents.companyId,
+        schema.rawTimeEvents.timeZone,
+        schema.employments.employeeCode,
+        schema.people.firstName,
+        schema.people.lastName,
+        schema.people.preferredName,
+      );
+
+    return rows.map((row) => {
+      const preferred = (row.preferredName ?? '').trim();
+      return {
+        employmentId: row.employmentId!,
+        companyId: row.companyId,
+        timeZone: row.timeZone,
+        displayName:
+          preferred === '' ? `${row.firstName} ${row.lastName ?? ''}`.trim() : preferred,
+        employeeCode: row.employeeCode,
+        firstAt: new Date(row.firstAt).toISOString(),
+        lastAt: new Date(row.lastAt).toISOString(),
+        scanCount: row.scanCount,
+      };
+    });
+  }
+
   async resolveWorkPolicy(
     tx: Tx,
     companyId: string,
