@@ -428,7 +428,15 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
     // full string never fits legibly next to a date number no matter how far
     // it's shrunk, so show just the short name here and keep the full title
     // as a native hover tooltip for anyone who wants it.
-    const shortTitle = holiday?.title.split(" (")[0];
+    // CSS truncate alone left a long name (e.g. "วันอาสาฬหบูชา") spilling
+    // past its own day cell into the next one on an ordinary desktop week —
+    // seven month columns just don't leave enough width for it to ever
+    // shrink to. Hard-capping the character count here guarantees it never
+    // happens regardless of how narrow a given layout's columns turn out,
+    // on top of (not instead of) the CSS truncate below.
+    const rawShortTitle = holiday?.title.split(" (")[0];
+    const shortTitle =
+      rawShortTitle && rawShortTitle.length > 8 ? `${rawShortTitle.slice(0, 8)}…` : rawShortTitle;
 
     const numberRow = (
       // Right-aligned always, on every day — a holiday used to sit

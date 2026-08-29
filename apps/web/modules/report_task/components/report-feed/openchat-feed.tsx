@@ -408,7 +408,14 @@ export function OpenchatFeed({
                   prev.authorId === m.authorId &&
                   new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime() < GROUP_WINDOW_MS;
                 return (
-                  <div key={m.id} className={cn("group/msg relative flex gap-3 px-5 hover:bg-[var(--bg-soft)]", grouped ? "py-0.5" : "py-1.5")}>
+                  // py-0.5 read as "everything's one continuous block" once
+                  // someone sent 3+ messages in a row — barely 4px separated
+                  // two lines of their own text from each other, the same gap
+                  // a two-line paragraph's own line-height already has. py-1.5
+                  // (still well short of a new sender's py-1.5+avatar+name
+                  // header) keeps the "same person, still talking" cue while
+                  // making each message in the run its own visible line.
+                  <div key={m.id} className={cn("group/msg relative flex gap-3 px-5 hover:bg-[var(--bg-soft)]", grouped ? "py-1" : "py-1.5")}>
                     {grouped ? (
                       // Empty avatar-width gutter — on hover shows the message's
                       // own time, same slot Discord uses for a grouped line.

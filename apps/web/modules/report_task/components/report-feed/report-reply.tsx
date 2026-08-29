@@ -84,12 +84,12 @@ export function ReportReply({
         // relying on a divider above and below it. Tighter vertical padding
         // too: a reply is a smaller unit than a post and should read that way,
         // which is half of what tells the two apart at a glance.
-        "group/reply flex items-start gap-2.5 px-2 py-2 rounded-lg transition-colors duration-500",
+        "group/reply flex items-start gap-2 px-1.5 py-1.5 rounded-lg transition-colors duration-500",
         flashed ? "bg-[var(--accent)]" : "hover:bg-white"
       )}
       style={reply.highlightColor ? { borderLeft: `3px solid ${reply.highlightColor}`, paddingLeft: "9px" } : undefined}
     >
-      <Avatar className="h-7 w-7 shrink-0">
+      <Avatar className="h-6 w-6 shrink-0">
         <AvatarFallback className="text-[10px] bg-[var(--bg-soft)]">{author?.avatar}</AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1">
