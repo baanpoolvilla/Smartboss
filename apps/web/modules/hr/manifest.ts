@@ -29,6 +29,12 @@ export const hrManifest: ModuleManifest = {
     // ปฏิทินวันหยุดเปิดให้ทุกคนที่เข้าโมดูลได้ — พนักงานต้องขอลาเองและเห็นของเพื่อน
     { label: "ปฏิทินวันหยุด", path: "/hr/leave", permission: HR_PERMS.access, icon: "CalendarDays" },
     { label: "ตั้งวันหยุด (HR)", path: "/hr/holidays", permission: HR_PERMS.settingManage, icon: "CalendarCog" },
+    /*
+     * ผลงานรายคนย้ายมาจากหลังบ้าน — เป็นเรื่องของ HR ไม่ใช่ของผู้ดูแลระบบ
+     * ใช้สิทธิ์ core.performance.view ตามเดิม (เมนูรับสิทธิ์ข้ามโมดูลได้)
+     * ⇒ กำหนดที่ /admin/roles ว่าให้ผู้จัดการ/CEO เห็น ไม่ต้องเพิ่ม permission ใหม่
+     */
+    { label: "ผลงานรายคน", path: "/hr/performance", permission: "core.performance.view", icon: "ChartColumn" },
     { label: "เงินเดือน", path: "/hr/payroll", permission: HR_PERMS.payrollView, icon: "Wallet" },
     // ชุดกฎ (อัตราประกันสังคม/ภาษี) อยู่ใต้ payroll controller ของ workforce และ
     // ต้องการ workforce.payroll.read/prepare — ไม่ใช่ settings.manage

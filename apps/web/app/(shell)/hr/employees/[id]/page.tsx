@@ -38,7 +38,6 @@ import {
   terminateEmploymentAction,
 } from "../../actions";
 import { AssignShiftForm } from "../../shifts/assign-shift-form";
-import { EmployeeDaysOff } from "../../holidays/employee-days-off";
 import { EnrollFingerprintForm } from "../../devices/enroll-fingerprint-form";
 import { buildScorecards } from "@/lib/performance";
 
@@ -76,16 +75,10 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 
 export default async function EmployeeDetailPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ month?: string }>;
 }) {
   const { id } = await params;
-  const sp = await searchParams;
-  const month = /^\d{4}-\d{2}$/.test(sp.month ?? "")
-    ? sp.month!
-    : new Date().toISOString().slice(0, 7);
   const session = await requireOrg();
   const canManage = hasPermission(session, HR_PERMS.employeeManage);
   const canManageSalary = hasPermission(session, HR_PERMS.salaryManage);
@@ -105,12 +98,6 @@ export default async function EmployeeDetailPage({
           throw error;
         }
 
-        const daysInMonth = new Date(
-          Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0),
-        ).getUTCDate();
-        const monthFrom = `${month}-01`;
-        const monthTo = `${month}-${String(daysInMonth).padStart(2, "0")}`;
-
         /*
          * รวมทุกอย่างของคนนี้ไว้หน้าเดียว — เดิมกระจายอยู่ 4 หน้า (ค่าจ้างที่นี่,
          * ตารางกะที่ /hr/shifts, วันหยุดที่ /hr/holidays, ลายนิ้วมือที่ /hr/devices)
@@ -119,7 +106,7 @@ export default async function EmployeeDetailPage({
          * ทุกตัวเป็น wfTry — คนที่ดูทะเบียนพนักงานได้อาจไม่มีสิทธิ์ดูค่าจ้าง
          * หรือจัดการกะ ไม่ควรให้ 403 ตัวเดียวล้มทั้งหน้า
          */
-        const [rates, companies, shifts, devices, enrollments, people, assigned] =
+        const [rates, companies, shifts, devices, enrollments, people] =
           await Promise.all([
             // อัตราค่าจ้างเป็นข้อมูลอ่อนไหว — คนที่ไม่มีสิทธิ์จะได้ null
             wfTry<Paged<CompensationRate>>(`/compensation-rates?employment_id=${id}`),
@@ -130,20 +117,10 @@ export default async function EmployeeDetailPage({
             wfTry<Paged<Device>>("/devices"),
             wfTry<Paged<BiometricEnrollment>>(`/biometric-enrollments?employment_id=${id}`),
             wfTry<Paged<Person>>("/people"),
-            wfTry<{ items: { work_date: string; shift_id: string | null }[] }>(
-              `/shift-assignments?from=${monthFrom}&to=${monthTo}&employment_id=${id}`,
-            ),
           ]);
 
         const companyId = companies?.items[0]?.id;
         const shiftItems = shifts?.items ?? [];
-        const restShiftId = shiftItems.find((sh) => sh.rest_day)?.id ?? null;
-        const workShifts = shiftItems
-          .filter((sh) => !sh.rest_day)
-          .map((sh) => ({ id: sh.id, label: `${sh.code} · ${sh.name}` }));
-        const initialOff = (assigned?.items ?? [])
-          .filter((a) => a.shift_id !== null && a.shift_id === restShiftId)
-          .map((a) => a.work_date);
 
         const liveEnrollments = (enrollments?.items ?? []).filter(
           (en) => en.status !== "DELETED",
@@ -350,36 +327,6 @@ export default async function EmployeeDetailPage({
                 <p className="text-sm text-(--ink-soft)">ไม่มีสิทธิ์แก้ตารางกะ</p>
               )}
             </SectionCard>
-
-            {canManage && companyId !== undefined && (
-              <SectionCard
-                title="วันหยุดของคนนี้"
-                description="คลิกวันที่จะหยุด — ทับตารางประจำสัปดาห์เฉพาะเดือนที่บันทึก"
-                action={
-                  <form method="GET" className="flex items-end gap-2">
-                    <input
-                      type="month"
-                      name="month"
-                      defaultValue={month}
-                      className="h-9 rounded-(--radius) border border-(--line) bg-(--bg) px-2 text-xs"
-                    />
-                    <Button type="submit" size="sm" variant="outline">
-                      แสดง
-                    </Button>
-                  </form>
-                }
-              >
-                <EmployeeDaysOff
-                  key={month}
-                  companyId={companyId}
-                  employmentId={id}
-                  month={month}
-                  initialOff={initialOff}
-                  workShifts={workShifts}
-                  restShiftId={restShiftId}
-                />
-              </SectionCard>
-            )}
 
             <SectionCard
               title="ลายนิ้วมือ"
