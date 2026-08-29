@@ -24,6 +24,8 @@ export const adminManifest: ModuleManifest = {
     { label: "ข้อมูลบริษัท", path: "/admin/organization", permission: ADMIN_PERMS.orgManage, icon: "Building2" },
     // เมนูนี้โผล่เฉพาะ SUPER_ADMIN เพราะไม่มีบทบาทไหนถือ core.org.create
     { label: "บริษัททั้งหมด", path: "/admin/organizations", permission: ADMIN_PERMS.orgCreate, icon: "Building" },
+    // เมนูนี้โผล่เฉพาะ SUPER_ADMIN เช่นกัน — รวมตั๋วแจ้งปัญหาจากทุกบริษัทมาไว้ที่เดียว
+    { label: "แจ้งปัญหาระบบ (ทุกบริษัท)", path: "/admin/issue-reports", permission: ADMIN_PERMS.orgCreate, icon: "LifeBuoy" },
     { label: "ผลงานรายคน", path: "/admin/performance", permission: ADMIN_PERMS.performanceView, icon: "ChartColumn" },
     { label: "ความปลอดภัย", path: "/admin/security", permission: ADMIN_PERMS.securitySettingManage, icon: "ShieldCheck" },
     { label: "ประวัติการใช้งาน", path: "/admin/audit", permission: ADMIN_PERMS.auditView, icon: "History" },
