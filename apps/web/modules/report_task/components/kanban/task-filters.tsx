@@ -269,7 +269,12 @@ export function TaskFilters({
       {groupBy && onGroupByChange && (
         <FilterField label="จัดกลุ่มตาม">
           <Select value={groupBy} onValueChange={(v) => v && onGroupByChange(v as GroupBy)}>
-            <SelectTrigger className={filterFieldTriggerClass(false, "min-w-[150px]")}>
+            {/* "สถานะ" is the resting default (matches the board's own
+                columns) — picking anything else counts as an active choice,
+                same as every other field here, so it should highlight the
+                same way. Hardcoded `false` before meant this one never lit
+                up green no matter what was picked ("เลือกแล้วทำไมไม่เขียว"). */}
+            <SelectTrigger className={filterFieldTriggerClass(groupBy !== "status", "min-w-[150px]")}>
               <Group className="h-4 w-4 shrink-0" />
               <SelectValue placeholder="จัดกลุ่มตาม">{groupByLabels[groupBy]}</SelectValue>
             </SelectTrigger>
@@ -413,10 +418,10 @@ export function TaskFilters({
 
       {groupBy && onGroupByChange && (
         <Select value={groupBy} onValueChange={(v) => v && onGroupByChange(v as GroupBy)}>
-          <SelectTrigger className={mobileFieldRowTriggerClass(false)}>
-            <MobileFieldIcon icon={Group} active={false} />
+          <SelectTrigger className={mobileFieldRowTriggerClass(groupBy !== "status")}>
+            <MobileFieldIcon icon={Group} active={groupBy !== "status"} />
             <span className="text-[13.5px] font-medium text-[var(--ink)]">จัดกลุ่มตาม</span>
-            <MobileFieldValue active={false}>{groupByLabels[groupBy]}</MobileFieldValue>
+            <MobileFieldValue active={groupBy !== "status"}>{groupByLabels[groupBy]}</MobileFieldValue>
           </SelectTrigger>
           <SelectContent alignItemWithTrigger={false}>
             {(["status", "priority", "assignee"] as GroupBy[]).map((g) => {
