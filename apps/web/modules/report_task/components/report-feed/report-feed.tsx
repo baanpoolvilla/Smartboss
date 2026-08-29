@@ -104,8 +104,8 @@ export function ReportFeed({
             {groupByDay(topicPosts, (p) => p.createdAt).map((group) => (
               <div key={group.key}>
                 <DaySeparator label={reportDayLabel(group.label)} />
-                {group.items.map((p) => (
-                  <ReportCard key={p.id} post={p} topic={topic} highlighted={p.id === highlightPostId} highlightReplyId={highlightReplyId} onOpenTask={onOpenTask} />
+                {group.items.map((p, i) => (
+                  <ReportCard key={p.id} post={p} topic={topic} highlighted={p.id === highlightPostId} highlightReplyId={highlightReplyId} onOpenTask={onOpenTask} zebra={i % 2 === 1} />
                 ))}
               </div>
             ))}

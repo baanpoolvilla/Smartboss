@@ -265,7 +265,7 @@ export function ReportAllPostsFeed({
             {groupByDay(items, (p) => p.createdAt).map((group) => (
               <div key={group.key}>
                 <DaySeparator label={reportDayLabel(group.label)} />
-                {group.items.map((p) => {
+                {group.items.map((p, i) => {
                   const topic = topicById.get(p.topicId)!;
                   return (
                     <ReportCard
@@ -274,6 +274,7 @@ export function ReportAllPostsFeed({
                       topic={topic}
                       topicBadge={{ label: breadcrumbOf(topic, topicById), onClick: () => onJumpToTopic(topic.id) }}
                       onOpenTask={onOpenTask}
+                      zebra={i % 2 === 1}
                     />
                   );
                 })}

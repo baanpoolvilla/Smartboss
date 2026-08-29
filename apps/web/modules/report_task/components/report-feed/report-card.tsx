@@ -143,6 +143,7 @@ export function ReportCard({
   highlightReplyId,
   topicBadge,
   onOpenTask,
+  zebra,
 }: {
   post: ReportPost;
   topic: ReportTopic;
@@ -157,6 +158,11 @@ export function ReportCard({
    * already linked to a task. Absent means the page hosting this card hasn't
    * wired up a task sheet, so the menu item silently no-ops. */
   onOpenTask?: (taskId: string) => void;
+  /** Every other post gets a faint tint (see the wrapper's own comment on
+   * why a plain hairline alone kept failing here). Caller's choice, not
+   * computed from post data, so it stays a stable alternation regardless of
+   * which posts get filtered in/out. */
+  zebra?: boolean;
 }) {
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const toggleReaction = useReportFeedStore((s) => s.toggleReaction);
@@ -595,17 +601,22 @@ export function ReportCard({
     <div
       id={`report-post-${post.id}`}
       className={cn(
-        // Round 2, explicit instruction: back to a flat single-surface feed
-        // — no card border/radius/shadow. Worth being honest that flat
-        // hairline-divided rows were tried twice before this and reverted
-        // for a real reason (see git history — "ตัวคั่นระหว่างโพสมองยากมาก
-        // งงมาก", posts vary wildly in height so a single line was a weak
-        // boundary). This round leans harder on the two things that weren't
-        // tried before to compensate: a visible divider on *every* post
-        // (not just some) plus a hover background people can feel as they
-        // scan down the column, rather than relying on the line alone.
-        "group/post relative px-5 py-4 border-b border-[var(--line)] transition-colors duration-150",
-        highlighted || flashTargetId === post.id ? "bg-[var(--accent)]" : "hover:bg-[var(--bg-soft)]",
+        // No card border/radius/shadow — but a plain hairline alone as the
+        // only thing separating posts has now been tried and reverted for
+        // the exact same complaint three times over ("ตัวคั่นระหว่างโพสมอง
+        // ยากมาก งงมาก" / "พวกโพสติดกันเกินไป งงมาก"): posts vary wildly in
+        // height (some are one line, some carry a reply thread), so a
+        // single 1px line at the bottom reads as part of whichever post is
+        // above it, not a boundary you notice while scanning. Zebra tinting
+        // (below) is the one real fix that doesn't mean bringing a card back
+        // — every other post gets a faint fill, so the eye catches "new
+        // post" from the color change alone, before it even reads names.
+        "group/post relative px-5 py-5 sm:py-6 border-b border-[color-mix(in_srgb,var(--line)_65%,var(--ink-soft))] transition-colors duration-150",
+        highlighted || flashTargetId === post.id
+          ? "bg-[var(--accent)]"
+          : zebra
+            ? "bg-[var(--bg-soft)]/50 hover:bg-[var(--bg-soft)]"
+            : "hover:bg-[var(--bg-soft)]",
         // Unread keeps its left accent — was a card-edge highlight before,
         // now the same idea against a flat row.
         isUnread && "border-l-[3px] border-l-[var(--chart-blue)]"
