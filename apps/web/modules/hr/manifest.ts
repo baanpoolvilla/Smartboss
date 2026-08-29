@@ -20,6 +20,9 @@ export const hrManifest: ModuleManifest = {
   menus: [
     { label: "ภาพรวม", path: "/hr", permission: HR_PERMS.access, icon: "LayoutDashboard" },
     { label: "พนักงาน", path: "/hr/employees", permission: HR_PERMS.employeeView, icon: "Users" },
+    // แยกจาก "ผลลงเวลา" ชัดเจน — อันนี้คือข้อมูลดิบที่เครื่องส่งมา
+    // อีกอันคือผลที่คำนวณแล้ว คนละเรื่องและใช้ตอนคนละสถานการณ์
+    { label: "การลงเวลา", path: "/hr/time-events", permission: HR_PERMS.employeeView, icon: "Fingerprint" },
     { label: "ผลลงเวลา", path: "/hr/attendance", permission: HR_PERMS.employeeView, icon: "CalendarClock" },
     { label: "Timesheet", path: "/hr/timesheets", permission: HR_PERMS.employeeView, icon: "ClipboardList" },
     { label: "กะทำงาน", path: "/hr/shifts", permission: HR_PERMS.settingManage, icon: "Clock" },

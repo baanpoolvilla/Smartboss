@@ -22,6 +22,81 @@ export interface ActivationTokenLookup {
 export class DeviceRepository {
   // --- devices ---
 
+  /**
+   * รายการสแกนดิบพร้อมชื่อคนและรหัสเครื่อง
+   *
+   * left join กับ employments/people เพราะ employment_id เป็น null ได้ —
+   * slot ที่ยังไม่ผูกกับใครก็ยังถูกบันทึกเป็นหลักฐาน (spec §3.3 C9) และนั่นคือ
+   * แถวที่ต้องมองเห็นที่สุด ถ้า inner join จะหายไปพอดีกับกรณีที่ต้องแก้
+   */
+  async listRawTimeEvents(
+    tx: Tx,
+    query: { from: string; to: string; employmentId?: string; limit: number },
+  ): Promise<Record<string, unknown>[]> {
+    const filters: SQL[] = [
+      sql`${schema.rawTimeEvents.capturedAt} >= ${`${query.from}T00:00:00Z`}`,
+      sql`${schema.rawTimeEvents.capturedAt} <= ${`${query.to}T23:59:59Z`}`,
+    ];
+    if (query.employmentId !== undefined) {
+      filters.push(eq(schema.rawTimeEvents.employmentId, query.employmentId));
+    }
+
+    const rows = await tx
+      .select({
+        id: schema.rawTimeEvents.id,
+        employmentId: schema.rawTimeEvents.employmentId,
+        capturedAt: schema.rawTimeEvents.capturedAt,
+        receivedAt: schema.rawTimeEvents.receivedAt,
+        sourceType: schema.rawTimeEvents.sourceType,
+        eventIntent: schema.rawTimeEvents.eventIntent,
+        status: schema.rawTimeEvents.status,
+        evidence: schema.rawTimeEvents.evidence,
+        deviceCode: schema.devices.deviceCode,
+        deviceName: schema.devices.name,
+        employeeCode: schema.employments.employeeCode,
+        firstName: schema.people.firstName,
+        lastName: schema.people.lastName,
+        preferredName: schema.people.preferredName,
+      })
+      .from(schema.rawTimeEvents)
+      .leftJoin(schema.devices, eq(schema.devices.id, schema.rawTimeEvents.sourceId))
+      .leftJoin(
+        schema.employments,
+        eq(schema.employments.id, schema.rawTimeEvents.employmentId),
+      )
+      .leftJoin(schema.people, eq(schema.people.id, schema.employments.personId))
+      .where(and(...filters))
+      .orderBy(desc(schema.rawTimeEvents.capturedAt))
+      .limit(query.limit);
+
+    return rows.map((row) => {
+      const evidence = (row.evidence ?? {}) as Record<string, unknown>;
+      const preferred = (row.preferredName ?? '').trim();
+      return {
+        id: row.id,
+        employment_id: row.employmentId,
+        display_name:
+          row.firstName === null
+            ? null
+            : preferred === ''
+              ? `${row.firstName} ${row.lastName ?? ''}`.trim()
+              : preferred,
+        employee_code: row.employeeCode,
+        captured_at: row.capturedAt.toISOString(),
+        received_at: row.receivedAt.toISOString(),
+        source_type: row.sourceType,
+        device_code: row.deviceCode,
+        device_name: row.deviceName,
+        event_intent: row.eventIntent,
+        status: row.status,
+        template_slot: evidence['template_slot'] ?? null,
+        // false = สแกนติดแต่ไม่รู้ว่าใคร → ไม่กลายเป็นเวลาทำงานของใครเลย
+        slot_resolved: evidence['slot_resolved'] === true,
+        match_score: evidence['match_score'] ?? null,
+      };
+    });
+  }
+
   async insertDevice(
     tx: Tx,
     values: typeof schema.devices.$inferInsert,
@@ -355,4 +430,5 @@ function toBuffer(value: unknown): Buffer {
     return value.startsWith('\\x') ? Buffer.from(value.slice(2), 'hex') : Buffer.from(value, 'utf8');
   }
   throw new TypeError('expected bytea value');
+
 }

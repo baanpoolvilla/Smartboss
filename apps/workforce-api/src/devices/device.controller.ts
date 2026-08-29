@@ -70,6 +70,31 @@ export class DeviceController {
     return this.service.revokeDevice(requireUuid(deviceId, 'deviceId'), body.reason);
   }
 
+  /**
+   * รายการสแกนดิบ — ใครแตะเครื่องเมื่อไหร่
+   *
+   * ใช้สิทธิ์เดียวกับผลลงเวลาของทั้งบริษัท ไม่ใช่สิทธิ์เครื่องสแกน เพราะนี่คือ
+   * ข้อมูลการมาทำงานของคน ไม่ใช่สถานะฮาร์ดแวร์
+   */
+  @Get('raw-time-events')
+  @RequirePermissions('workforce.attendance.read.all')
+  async listRawTimeEvents(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('employment_id') employmentId?: string,
+    @Query('limit') limit?: string,
+  ): Promise<{ items: Record<string, unknown>[] }> {
+    const parsed = Number(limit ?? 200);
+    return this.service.listRawTimeEvents({
+      from,
+      to,
+      ...(employmentId === undefined
+        ? {}
+        : { employmentId: requireUuid(employmentId, 'employment_id') }),
+      limit: Number.isInteger(parsed) && parsed > 0 && parsed <= 500 ? parsed : 200,
+    });
+  }
+
   @Get('biometric-enrollments')
   @RequirePermissions('workforce.devices.read')
   async listEnrollments(

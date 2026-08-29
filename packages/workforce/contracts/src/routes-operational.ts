@@ -68,6 +68,14 @@ export const OPERATIONAL_ROUTES: readonly Omit<RouteDefinition, 'response'>[] = 
     successStatus: 200,
   },
   {
+    operationId: 'listRawTimeEvents_get',
+    method: 'get',
+    path: '/raw-time-events',
+    summary: 'GET /raw-time-events',
+    tag: 'devices',
+    permissions: ['workforce.attendance.read.all'] as Permission[],
+  },
+  {
     operationId: 'listCalendars_get',
     method: 'get',
     path: '/holiday-calendars',

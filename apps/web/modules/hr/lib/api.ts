@@ -224,6 +224,30 @@ export interface Device {
 }
 
 /**
+ * การสแกนหนึ่งครั้งตามที่เครื่องส่งมา ยังไม่ผ่านการคำนวณ
+ *
+ * เก็บทุกครั้งแม้จับคู่กับพนักงานไม่ได้ (spec §3.3 C9 — ระบบเดิมสร้าง log
+ * ให้ 'Unknown' ซึ่งทำให้ข้อมูลเพี้ยน) ⇒ `employment_id` เป็น null ได้
+ */
+export interface RawTimeEvent {
+  id: string;
+  employment_id: string | null;
+  display_name: string | null;
+  employee_code: string | null;
+  captured_at: string;
+  received_at: string;
+  source_type: string;
+  device_code: string | null;
+  device_name: string | null;
+  event_intent: string;
+  status: string;
+  template_slot: number | null;
+  /** false = สแกนติดแต่ระบบไม่รู้ว่าใคร — จะไม่กลายเป็นเวลาทำงานของใครเลย */
+  slot_resolved: boolean;
+  match_score: number | null;
+}
+
+/**
  * ปฏิทินวันหยุดของบริษัท
  *
  * ผูกที่ระดับบริษัท ไม่ใช่รายคน — findHoliday() จับคู่ด้วย company_id

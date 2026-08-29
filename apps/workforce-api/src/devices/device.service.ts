@@ -19,6 +19,29 @@ export class DeviceService {
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
+  /**
+   * รายการสแกนดิบ — ใครแตะเครื่องเมื่อไหร่ ที่เครื่องไหน
+   *
+   * ไม่มี endpoint นี้มาก่อน: การสแกนถูกเก็บครบทุกครั้งแต่ไม่มีทางเปิดดูเลย
+   * เห็นได้แค่ผลที่คำนวณแล้ว ซึ่งไม่ช่วยตอนเครื่องมีปัญหา — พนักงานบอกว่า
+   * "สแกนแล้ว" แต่ผลลงเวลาไม่ขึ้น จะแยกไม่ออกว่าเครื่องไม่ส่ง หรือส่งแล้ว
+   * แต่ยังไม่ได้สั่งคำนวณ หรือ slot ไม่ได้ผูกกับใคร
+   *
+   * ส่ง slot_resolved มาด้วยเสมอ เพราะนั่นคือคำตอบของกรณีที่สามและเป็น
+   * สาเหตุที่พบบ่อยที่สุด
+   */
+  async listRawTimeEvents(query: {
+    from: string;
+    to: string;
+    employmentId?: string;
+    limit: number;
+  }): Promise<{ items: Record<string, unknown>[] }> {
+    return this.uow.run(async (uow) => {
+      const rows = await this.repository.listRawTimeEvents(uow.tx, query);
+      return { items: rows };
+    });
+  }
+
   async createDevice(input: CreateDeviceInput): Promise<Device> {
     return this.uow.run(async (uow) => {
       const row = await this.repository.insertDevice(uow.tx, {
