@@ -824,7 +824,13 @@ export function ReportCard({
             <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
               <span className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200">
                 <TriangleAlert className="h-2.5 w-2.5" />
-                ส่งช้า (เลยรอบ {lateCutoff.label} {lateCutoff.time})
+                {/* "ส่งช้า (เลยรอบ t 14:00)" read as cryptic shorthand, and a
+                    short/placeholder round label ("t", "00") made it worse —
+                    "ส่งเกินกำหนด · กำหนด 14:00" states the actual fact
+                    plainly, with the round's name only when it's long enough
+                    to actually mean something (same rule the room-header
+                    metadata row uses). */}
+                ส่งเกินกำหนด{lateCutoff.label.trim().length > 2 ? ` (${lateCutoff.label.trim()})` : ""} · กำหนด {lateCutoff.time}
               </span>
             </div>
           ) : !lateCutoff && onTimeCutoff ? (

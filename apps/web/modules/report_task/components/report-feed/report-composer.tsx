@@ -96,18 +96,26 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   }
 
   if (!expanded) {
-    // Compact pill trigger — Teams' own "Post in channel" button is a small
-    // left-aligned pill, not a full-width bar — just the shape/format here,
-    // colored with our own brand-green token rather than Teams' purple.
+    // A full-width, input-styled bar now, not a solid-green button off on
+    // its own at the left — a colored CTA button reads as "an action to
+    // take", when what's actually sitting here is the entry point to the
+    // room's whole conversation ("ปุ่ม 'โพสต์ในหัวข้อนี้' ดูหลุดจาก
+    // Layout"). Shaped like the real (collapsed) text field it's standing
+    // in for, so it reads as "click here to type" the way an empty input
+    // does anywhere else, with the brand color kept just on the leading
+    // icon and the send affordance — not painted across the whole bar.
     return (
       <div className="shrink-0 border-t border-[var(--line)]/60 bg-white px-5 py-3">
         <button
           data-tour="composer-trigger"
           onClick={() => setExpanded(true)}
-          className="inline-flex items-center gap-2 rounded-lg bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] hover:text-white text-[var(--ink)] text-sm font-semibold px-4 py-2 transition-colors"
+          className="flex w-full items-center gap-2.5 rounded-full border border-[var(--line)] bg-white pl-2 pr-3 py-2 text-left transition-colors hover:border-[var(--brand-green)]/50 hover:bg-[var(--bg-soft)]"
         >
-          <SquarePen className="h-4 w-4" />
-          โพสต์ในหัวข้อนี้
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--brand-green-dark)]">
+            <SquarePen className="h-3.5 w-3.5" />
+          </span>
+          <span className="flex-1 text-sm text-[var(--ink-soft)]">เขียนรายงานหรือข้อความ...</span>
+          <Send className="h-4 w-4 shrink-0 text-[var(--ink-faint)]" />
         </button>
       </div>
     );
