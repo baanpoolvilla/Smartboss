@@ -137,6 +137,8 @@ export function CalendarView() {
   const colors = useEventColorStore((s) => s.colors);
   const hiddenUserIds = useCalendarVisibilityStore((s) => s.hiddenUserIds);
   const toggleUserVisible = useCalendarVisibilityStore((s) => s.toggle);
+  const hiddenGoogleOwnerIds = useCalendarVisibilityStore((s) => s.hiddenGoogleOwnerIds);
+  const toggleGoogleOwner = useCalendarVisibilityStore((s) => s.toggleGoogleOwner);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const taskScope = useCalendarScopeStore((s) => s.scope);
   const setTaskScope = useCalendarScopeStore((s) => s.setScope);
@@ -295,9 +297,13 @@ export function CalendarView() {
 
   // Connected external calendars only ever feed the work tab now — syncing
   // one into วันลา/วันหยุด (auto-detecting routine days off from it) was
-  // removed, so there's nothing left to route by target. Same "who's shown"
-  // list as tasks/meetings/leaves governs visibility here too, since a
-  // connected calendar is just another thing that person owns.
+  // removed, so there's nothing left to route by target. Visibility is its
+  // own hiddenGoogleOwnerIds flag now, not hiddenUserIds — hiding a
+  // connected calendar used to also hide that person's regular
+  // tasks/meetings/leave (and vice versa), which was surprising for both
+  // your own calendar (toggling it off went dark on your own tasks too) and
+  // a colleague's (hiding their regular items also dropped their imported
+  // calendar) — two independently useful toggles, not one.
   const { workGoogleEvents, workGoogleOwnerIds } = useMemo(() => {
     const work: CalendarEvent[] = [];
     const workOwners = new Set<string>();
@@ -308,7 +314,7 @@ export function CalendarView() {
       // gate has to happen here.
       if (!g.shared && g.ownerUserId !== viewingAsUserId) continue;
       workOwners.add(g.ownerUserId);
-      if (hiddenUserIds.includes(g.ownerUserId)) continue;
+      if (hiddenGoogleOwnerIds.includes(g.ownerUserId)) continue;
       work.push({
         id: g.id,
         title: g.title,
@@ -323,7 +329,7 @@ export function CalendarView() {
       });
     }
     return { workGoogleEvents: work, workGoogleOwnerIds: Array.from(workOwners) };
-  }, [googleEvents, hiddenUserIds, viewingAsUserId]);
+  }, [googleEvents, hiddenGoogleOwnerIds, viewingAsUserId]);
 
   // Feeds the mobile filter button's "(N)" badge — counts how many of the
   // CURRENT tab's fields differ from their "show everything" default,
@@ -342,7 +348,7 @@ export function CalendarView() {
         // Not double-counted against taskScope above — canBroadenScope rides
         // that one instead of having its own (see effectiveTodoScope).
         (showTodosInWork && !canBroadenScope && todoScope !== "mine" ? 1 : 0) +
-        (workGoogleOwnerIds.some((id) => hiddenUserIds.includes(id)) ? 1 : 0)
+        (workGoogleOwnerIds.some((id) => hiddenGoogleOwnerIds.includes(id)) ? 1 : 0)
       );
     }
     return (
@@ -350,7 +356,7 @@ export function CalendarView() {
       (scheduleActive.size !== scheduleTypes.length ? 1 : 0) +
       (hiddenLeaveTypeIds.size > 0 ? 1 : 0)
     );
-  }, [tab, dateJump, canBroadenScope, taskScope, showTasksInWork, showMeetings, showTodosInWork, todoScope, workGoogleOwnerIds, hiddenUserIds, scheduleActive, hiddenLeaveTypeIds]);
+  }, [tab, dateJump, canBroadenScope, taskScope, showTasksInWork, showMeetings, showTodosInWork, todoScope, workGoogleOwnerIds, hiddenGoogleOwnerIds, scheduleActive, hiddenLeaveTypeIds]);
 
 
   function clearMobileFilters() {
@@ -401,14 +407,14 @@ export function CalendarView() {
 
 
   // One legend chip per person who has a connected calendar feeding this
-  // tab — clicking it reuses the same "who's shown" toggle as everything
-  // else (tasks/meetings/leaves), so there's a single show/hide switch per
-  // person instead of a separate one just for their external calendar.
+  // tab — its own toggle (hiddenGoogleOwnerIds), independent from that
+  // person's regular tasks/meetings/leave visibility. See
+  // calendar-visibility-store's own comment on hiddenGoogleOwnerIds for why.
   function googleOwnerChip(ownerId: string) {
-    const hidden = hiddenUserIds.includes(ownerId);
+    const hidden = hiddenGoogleOwnerIds.includes(ownerId);
     const label = getUser(ownerId)?.name ?? "ปฏิทินภายนอก";
     return (
-      <button key={ownerId} onClick={() => toggleUserVisible(ownerId)} title={hidden ? "คลิกเพื่อแสดง" : "คลิกเพื่อซ่อน"}>
+      <button key={ownerId} onClick={() => toggleGoogleOwner(ownerId)} title={hidden ? "คลิกเพื่อแสดง" : "คลิกเพื่อซ่อน"}>
         <Badge
           variant="outline"
           className={cn("gap-1.5 cursor-pointer select-none transition-opacity", hidden && "opacity-40")}
@@ -1118,7 +1124,7 @@ export function CalendarView() {
                         <Switch checked={showTodosInWork} onCheckedChange={setShowTodosInWork} />
                       </label>
                       {workGoogleOwnerIds.map((ownerId) => {
-                        const hidden = hiddenUserIds.includes(ownerId);
+                        const hidden = hiddenGoogleOwnerIds.includes(ownerId);
                         const label = getUser(ownerId)?.name ?? "ปฏิทินภายนอก";
                         return (
                           <label key={ownerId} className="flex items-center justify-between gap-2 px-3 py-2.5">
@@ -1126,7 +1132,7 @@ export function CalendarView() {
                               <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: colors.google }} />
                               {label} ({eventTypeLabels.google})
                             </span>
-                            <Switch checked={!hidden} onCheckedChange={() => toggleUserVisible(ownerId)} />
+                            <Switch checked={!hidden} onCheckedChange={() => toggleGoogleOwner(ownerId)} />
                           </label>
                         );
                       })}
