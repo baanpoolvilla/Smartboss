@@ -60,30 +60,6 @@ function pinnedChip(p: ReportPost, onUnpin: (id: string) => void) {
   );
 }
 
-/** Always an open input on desktop — this only ever renders inside the
- * `hidden lg:flex` desktop row (see its call site), so there's no mobile
- * case to collapse for here (mobile gets its own icon-triggered search
- * separately). A hidden search reachable only by first noticing and
- * clicking a small magnifier icon is exactly the "ซ่อนไว้เป็น icon" the
- * brief flags as a problem — an always-visible input needs no discovery
- * step. Same height as PostFilterButton so the two sit level on the tab row. */
-function CompactSearchField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  return (
-    <div className="relative shrink-0">
-      <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--ink-soft)]" />
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") onChange("");
-        }}
-        placeholder="ค้นหาในหัวข้อนี้..."
-        className="h-[34px] w-[220px] rounded-lg border border-[var(--line)] bg-white pl-8 pr-2 text-sm outline-none focus:border-[var(--brand-green)]/50"
-      />
-    </div>
-  );
-}
-
 type TopicTab = "posts" | "files" | "album" | "links" | "stats";
 const topicTabs: { id: TopicTab; label: string; icon: typeof MessageSquareText }[] = [
   { id: "posts", label: "โพสต์", icon: MessageSquareText },
@@ -249,11 +225,7 @@ function ReportFeedPageInner() {
   // its sidebar row (see topic-sidebar.tsx), so landing on one here only
   // happens via a stale/deep-linked id. Redirect to its first sub-topic
   // instead of rendering an empty folder view.
-  const isParentId = (id: string) => {
-    const topic = visibleTopics.find((t) => t.id === id);
-    if (topic?.allowDirectPost) return false;
-    return visibleTopics.some((t) => t.parentId === id);
-  };
+  const isParentId = (id: string) => visibleTopics.some((t) => t.parentId === id);
 
   // Falls back to the first (non-folder) topic once the persisted store
   // rehydrates (topics start empty on the very first client render) —
@@ -759,7 +731,6 @@ function ReportFeedPageInner() {
                       row's height/the content border under it — same reason
                       the old PostFilterBar block did this. */}
                   <div className={cn("hidden lg:flex items-center gap-2 my-1.5", activeTab !== "posts" && "invisible")}>
-                    <CompactSearchField value={searchQuery} onChange={setSearchQuery} />
                     <PostFilterButton
                       filters={filters}
                       onChange={setFilters}
