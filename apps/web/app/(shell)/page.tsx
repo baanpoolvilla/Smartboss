@@ -5,6 +5,7 @@ import { MODULE_CARDS } from "@/lib/modules";
 import { iconByName } from "@/lib/icons";
 import { loadShellNav } from "@/lib/nav";
 import { AppTileReviewBadge } from "@/modules/report_task/components/shared/app-tile-review-badge";
+import { IssueReportAppTile } from "@/modules/report_task/components/issue-report/issue-report-app-tile";
 
 interface AppTile {
   code: string;
@@ -77,6 +78,7 @@ export default async function HomePage() {
         {tiles.map((tile) => (
           <AppIcon key={tile.code} tile={tile} />
         ))}
+        <IssueReportAppTile />
       </div>
 
       {visible.size === 0 && (
