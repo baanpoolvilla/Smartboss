@@ -10,7 +10,7 @@ import { ReportAllPostsFeed } from "@/modules/report_task/components/report-feed
 import { ReportComplianceBar } from "@/modules/report_task/components/report-feed/report-header";
 import { RoomSettingsSheet } from "@/modules/report_task/components/report-feed/room-settings-sheet";
 import { ReportTopicPanels, collectFiles, collectLinks, filesCutoffMs } from "@/modules/report_task/components/report-feed/report-topic-panels";
-import { PostFilterBar, filterPosts, emptyPostFilters, postFiltersActiveCount, type PostFilters } from "@/modules/report_task/components/report-feed/post-filter-bar";
+import { PostFilterBar, PostFilterButton, ActiveFilterChips, filterPosts, emptyPostFilters, postFiltersActiveCount, type PostFilters } from "@/modules/report_task/components/report-feed/post-filter-bar";
 import { filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
 import { TaskDetailSheet } from "@/modules/report_task/components/kanban/task-detail-sheet";
 import { Button, buttonVariants } from "@/modules/report_task/components/ui/button";
@@ -28,7 +28,7 @@ import { currentCutoff } from "@/modules/report_task/lib/report-cutoff";
 import { pendingToday, todayStatusEntries, type TodayStatusEntry } from "@/modules/report_task/lib/report-feed-compliance";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
-import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronRight, Clock, FileImage, FolderHeart, Hash, ImagePlus, Link2, Lock, Menu, MessageSquareText, Pin, Settings, SlidersHorizontal, TriangleAlert, Users, X } from "lucide-react";
+import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronRight, Clock, FileImage, FolderHeart, Hash, ImagePlus, Link2, Lock, Menu, MessageSquareText, Pin, Search, Settings, SlidersHorizontal, TriangleAlert, Users, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 
 // Beyond this many pinned posts, the rest move into the "+N เพิ่มเติม"
@@ -57,6 +57,47 @@ function pinnedChip(p: ReportPost, onUnpin: (id: string) => void) {
         <X className="h-2.5 w-2.5" />
       </button>
     </span>
+  );
+}
+
+/** Icon-only until clicked, then a compact input (~200px) — a search box
+ * pinned open at full width all the time was one more permanent strip of
+ * chrome in a header that's supposed to read as calm, and this is a filter
+ * most people reach for occasionally, not every visit. Same height as
+ * PostFilterButton so the two sit level on the tab row. */
+function CompactSearchField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [expanded, setExpanded] = useState(value.length > 0);
+  if (!expanded) {
+    return (
+      <button
+        onClick={() => setExpanded(true)}
+        aria-label="ค้นหาในหัวข้อ"
+        className="flex h-[34px] w-[34px] items-center justify-center rounded-lg border border-[var(--line)] bg-white text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] transition-colors shrink-0"
+      >
+        <Search className="h-3.5 w-3.5" />
+      </button>
+    );
+  }
+  return (
+    <div className="relative shrink-0">
+      <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--ink-soft)]" />
+      <input
+        autoFocus
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={() => {
+          if (!value) setExpanded(false);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            onChange("");
+            setExpanded(false);
+          }
+        }}
+        placeholder="ค้นหาในหัวข้อ"
+        className="h-[34px] w-[200px] rounded-lg border border-[var(--line)] bg-white pl-8 pr-2 text-sm outline-none focus:border-[var(--brand-green)]/50"
+      />
+    </div>
   );
 }
 
@@ -188,6 +229,11 @@ function ReportFeedPageInner() {
   const [todayStatusFilter, setTodayStatusFilter] = useState<"posted" | "late" | "missing" | null>(null);
   const router = useRouter();
   const pathname = usePathname();
+  // Desktop-header search (new — not part of PostFilters/filterPosts, and
+  // not persisted to the URL like the real filters are). A quick client-side
+  // title match, additive on top of whatever filterPosts already returns —
+  // doesn't touch any existing filter's behavior.
+  const [searchQuery, setSearchQuery] = useState("");
   // Filter bar (1.3) — read once from the URL same as the deep-link params
   // above, then kept in sync both ways via the effect below.
   const [filters, setFilters] = useState<PostFilters>(() => ({
@@ -272,9 +318,9 @@ function ReportFeedPageInner() {
   const pinnedPosts = topicPosts.filter((p) => p.pinned);
   // Filter bar (1.3) only narrows the main feed — tab counts/pinned strip
   // above still reflect the room's real totals, not "what's visible right now".
-  const filteredTopicPosts = activeTopic
-    ? filterPosts(topicPosts, filters, { topicOf: () => activeTopic, viewingAsUserId })
-    : topicPosts;
+  const filteredTopicPosts = (
+    activeTopic ? filterPosts(topicPosts, filters, { topicOf: () => activeTopic, viewingAsUserId }) : topicPosts
+  ).filter((p) => !searchQuery.trim() || p.title.toLowerCase().includes(searchQuery.trim().toLowerCase()));
 
   // R5 — a count per tab, so it's obvious there's something to look at
   // before clicking in blind. Same source data each tab's own panel already
@@ -608,20 +654,15 @@ function ReportFeedPageInner() {
                     blob either ("ดูยาก งง"). Changing the rounds themselves
                     is the ⚙ gear's job, not this row's. */}
                 {requirementParts.length > 0 && (
-                  // A single scrolling line below sm instead of wrapping —
-                  // 2+ rounds' pills wrapping onto their own extra line was
-                  // one more band stacked into an already-tall mobile header;
-                  // horizontal scroll keeps it to the one line every other
-                  // screen size already gets it in for free.
-                  <div className="px-5 pb-2 flex items-center gap-1 overflow-x-auto sm:flex-wrap sm:overflow-visible">
+                  // Plain inline text now, not a row of pills — "เริ่ม 13:00
+                  // น. · แนบรูป ≥1 รูป" reads as metadata about the room, not
+                  // controls, so it shouldn't look like more buttons stacked
+                  // under the real ones in row 1. The currently-active round
+                  // still stands out (accent color + medium weight) without
+                  // needing its own colored background to do it.
+                  <div className="px-5 pb-2 flex items-center gap-4 overflow-x-auto text-xs text-[var(--ink-soft)]">
                     {requirementParts.map((r, i) => (
-                      <span
-                        key={i}
-                        className={cn(
-                          "flex items-center gap-1 shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium",
-                          r.active ? "bg-[var(--accent)] text-[var(--brand-green-dark)]" : "bg-[var(--bg-soft)] text-[var(--ink-soft)]"
-                        )}
-                      >
+                      <span key={i} className={cn("flex items-center gap-1 shrink-0", r.active && "text-[var(--brand-green-dark)] font-medium")}>
                         {activeTopic.minImages > 0 ? <ImagePlus className="h-3 w-3 shrink-0" /> : <TriangleAlert className="h-3 w-3 shrink-0" />}
                         {r.text}
                       </span>
@@ -629,7 +670,7 @@ function ReportFeedPageInner() {
                   </div>
                 )}
 
-                {/* Row 2 — tabs, full-width so the underline (`border-b` on
+                {/* Row 3 — tabs, full-width so the underline (`border-b` on
                     the container, `-mb-px` per tab) actually connects to a
                     real line instead of floating (R2), with counts (R5) and
                     proper tab semantics (R6). The tablist itself is
@@ -638,7 +679,7 @@ function ReportFeedPageInner() {
                     "ตัวกรอง" button stays pinned on the same line instead of
                     getting shoved onto its own orphan row below (which just
                     looked like disconnected clutter, "งง...จัดให้มันดีๆสิ"). */}
-                <div className="px-5 flex flex-col lg:gap-1.5 border-b border-[var(--line)]">
+                <div className="px-5 flex items-center gap-2 border-b border-[var(--line)]">
                 {/* gap-3 + icon-only labels below lg — same breakpoint the
                     rest of this page switches on (sidebar hides, mobile
                     topic button shows below lg). Using sm here instead left
@@ -654,17 +695,13 @@ function ReportFeedPageInner() {
                     comes back at lg and up where the sidebar's own width has
                     already made room for it.
 
-                    At lg+, tabs get a row to themselves now — full labels
-                    ("สถิติ" etc.) plus a 6-chip filter bar plus a "+N
-                    เพิ่มเติม" popover all crammed onto one line left no
-                    slack at ordinary desktop widths (~1600-1700px), so the
-                    last tab and the first filter chip visibly ran into each
-                    other ("ตัวกรองกับแท็บชนกันเป็นแถวเดียว ดูรก"). The
-                    filter bar moves to its own row underneath instead of
-                    sharing this one — same fix ภาพรวมทั้งหมด's own filters
-                    already use, just at a wider breakpoint since this row
-                    has 5 real tabs (not fewer) fighting it for space. */}
-                <div className="flex items-center gap-2">
+                    Search + one compact "ตัวกรอง N ▾" button now sit right
+                    on this same row (right-aligned) instead of a 6-chip
+                    PostFilterBar needing a row of its own — that's what was
+                    actually colliding with the tabs before, not the filter
+                    concept itself. A single button plus a click-to-expand
+                    search box is narrow enough to share the line at ordinary
+                    desktop widths with room to spare. */}
                 <div role="tablist" aria-label="ส่วนของหัวข้อ" className="flex flex-1 min-w-0 items-center gap-3 lg:gap-4">
                   {topicTabs.map((t) => {
                     const Icon = t.icon;
@@ -701,6 +738,20 @@ function ReportFeedPageInner() {
                     );
                   })}
                 </div>
+                  {/* Desktop: compact search + the single filter button,
+                      right-aligned on the tab row. invisible (not unmounted)
+                      on every other tab so switching tabs never shifts this
+                      row's height/the content border under it — same reason
+                      the old PostFilterBar block did this. */}
+                  <div className={cn("hidden lg:flex items-center gap-2 my-1.5", activeTab !== "posts" && "invisible")}>
+                    <CompactSearchField value={searchQuery} onChange={setSearchQuery} />
+                    <PostFilterButton
+                      filters={filters}
+                      onChange={setFilters}
+                      authorOptions={topicMembers.map((m) => m.id)}
+                      tagOptions={reportTags}
+                    />
+                  </div>
                   <button
                     type="button"
                     onClick={() => activeTab === "posts" && setMobileFilterOpen(true)}
@@ -717,20 +768,16 @@ function ReportFeedPageInner() {
                   </button>
                 </div>
 
-                  {/* Its own row now, right-aligned, instead of riding the
-                      tab row — see this container's own comment above for
-                      why. invisible (not unmounted) on every other tab so
-                      switching tabs never shifts the row's height/the
-                      content border under it. */}
-                  <div className={cn("hidden lg:flex lg:justify-end pb-2", activeTab !== "posts" && "invisible")}>
-                    <PostFilterBar
-                      filters={filters}
-                      onChange={setFilters}
-                      authorOptions={topicMembers.map((m) => m.id)}
-                      tagOptions={reportTags}
-                    />
+                {/* Active-filter chips — only when something's actually
+                    filtered, right under the tab row, desktop only (mobile's
+                    "ตัวกรอง (N)" button + the sheet's own "ล้างตัวกรอง"
+                    already cover this there). Quick way to drop one filter
+                    without reopening the popover. */}
+                {activeTab === "posts" && postFiltersActiveCount(filters) > 0 && (
+                  <div className="hidden lg:flex px-5 pt-2">
+                    <ActiveFilterChips filters={filters} onChange={setFilters} authorOptions={topicMembers.map((m) => m.id)} />
                   </div>
-                </div>
+                )}
 
                 {/* Same bottom-sheet shell ReportAllPostsFeed's own mobile
                     filter uses (labeled header + "ล้างตัวกรอง", a footer

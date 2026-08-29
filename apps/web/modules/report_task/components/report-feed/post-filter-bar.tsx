@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import type { ReportTag } from "@/modules/report_task/store/report-tag-store";
 import { displayName } from "@/modules/report_task/lib/directory";
 import { lateCutoffFor } from "@/modules/report_task/lib/report-cutoff";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Button } from "@/modules/report_task/components/ui/button";
+import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -17,7 +19,7 @@ import {
 } from "@/modules/report_task/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { TagMultiSelectList } from "@/modules/report_task/components/report-feed/report-tag-multiselect";
-import { Bookmark, Image as ImageIcon, Tag as TagIcon, TriangleAlert, User, X } from "lucide-react";
+import { Bookmark, ChevronDown, Image as ImageIcon, ListFilter, Tag as TagIcon, TriangleAlert, User, X } from "lucide-react";
 
 export interface PostFilters {
   authorIds: Set<string>;
@@ -226,6 +228,172 @@ export function PostFilterBar({
           ล้างตัวกรอง ({activeCount})
         </Button>
       )}
+    </div>
+  );
+}
+
+/** Compact "ตัวกรอง N ▾" trigger + popover — same filters/onChange contract
+ * as PostFilterBar above (no filtering logic duplicated, just a different
+ * shell around it), for the desktop header row. Six always-visible pills
+ * ("ทุกคน ทุกแท็ก ส่งช้า ยังไม่อ่าน มีรูป บันทึกไว้") ran into the tab row
+ * next to it and dominated the header before any post was even on screen —
+ * one button that opens a real popover with labeled sections reads as far
+ * calmer, same idea Linear/Notion use for a room with more than 2-3 filter
+ * dimensions. PostFilterBar itself is untouched and still backs the mobile
+ * bottom sheet, which already has room for a full chip row. */
+export function PostFilterButton({
+  filters,
+  onChange,
+  authorOptions,
+  tagOptions,
+}: {
+  filters: PostFilters;
+  onChange: (next: PostFilters) => void;
+  authorOptions: string[];
+  tagOptions: ReportTag[];
+}) {
+  const activeCount = postFiltersActiveCount(filters);
+  const [open, setOpen] = useState(false);
+
+  function toggleAuthor(id: string) {
+    const next = new Set(filters.authorIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onChange({ ...filters, authorIds: next });
+  }
+
+  function toggleTag(id: string) {
+    const next = new Set(filters.tagIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onChange({ ...filters, tagIds: next });
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={
+          <button
+            className={cn(
+              "flex h-[34px] items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors shrink-0",
+              activeCount > 0
+                ? "border-[var(--brand-green)]/40 bg-[var(--accent)] text-[var(--brand-green-dark)]"
+                : "border-[var(--line)] bg-white text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+            )}
+          >
+            <ListFilter className="h-3.5 w-3.5" />
+            ตัวกรอง
+            {activeCount > 0 && <span className="tabular-nums">{activeCount}</span>}
+            <ChevronDown className="h-3 w-3" />
+          </button>
+        }
+      />
+      <PopoverContent align="end" className="w-[320px] max-h-[70vh] overflow-y-auto p-0">
+        <div className="p-3 space-y-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)] mb-1.5">ผู้โพสต์</p>
+            <div className="max-h-32 overflow-y-auto space-y-0.5">
+              {authorOptions.map((id) => (
+                <label key={id} className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-[var(--bg-soft)] cursor-pointer text-sm">
+                  <Checkbox checked={filters.authorIds.has(id)} onCheckedChange={() => toggleAuthor(id)} />
+                  {displayName(id)}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)] mb-1.5">สถานะ</p>
+            <div className="space-y-0.5">
+              <label className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-[var(--bg-soft)] cursor-pointer text-sm">
+                <Checkbox checked={filters.lateOnly} onCheckedChange={() => onChange({ ...filters, lateOnly: !filters.lateOnly })} />
+                <TriangleAlert className="h-3.5 w-3.5 text-[var(--ink-soft)]" /> ส่งช้า
+              </label>
+              <label className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-[var(--bg-soft)] cursor-pointer text-sm">
+                <Checkbox checked={filters.unreadOnly} onCheckedChange={() => onChange({ ...filters, unreadOnly: !filters.unreadOnly })} />
+                <span className="h-2 w-2 rounded-full bg-[var(--ink-soft)]" /> ยังไม่อ่าน
+              </label>
+              <label className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-[var(--bg-soft)] cursor-pointer text-sm">
+                <Checkbox checked={filters.hasImageOnly} onCheckedChange={() => onChange({ ...filters, hasImageOnly: !filters.hasImageOnly })} />
+                <ImageIcon className="h-3.5 w-3.5 text-[var(--ink-soft)]" /> มีรูป
+              </label>
+              <label className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-[var(--bg-soft)] cursor-pointer text-sm">
+                <Checkbox checked={filters.savedOnly} onCheckedChange={() => onChange({ ...filters, savedOnly: !filters.savedOnly })} />
+                <Bookmark className="h-3.5 w-3.5 text-[var(--ink-soft)]" /> บันทึกไว้
+              </label>
+            </div>
+          </div>
+
+          {tagOptions.length > 0 && (
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)] mb-1.5">แท็ก</p>
+              <TagMultiSelectList tags={tagOptions} selectedIds={[...filters.tagIds]} onToggle={toggleTag} />
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between gap-2 border-t border-[var(--line)] px-3 py-2">
+          <Button variant="ghost" size="sm" className="text-xs text-[var(--ink-soft)]" disabled={activeCount === 0} onClick={() => onChange(emptyPostFilters)}>
+            ล้างทั้งหมด
+          </Button>
+          <Button size="sm" className="text-xs" onClick={() => setOpen(false)}>
+            ใช้ตัวกรอง
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** Small × chips under the tab row — only rendered once at least one filter
+ * is active (see PostFilterButton above for where they're set), so a quiet
+ * room never shows an empty strip. Same underlying filters/onChange, just a
+ * quick way to drop one filter (or all of them) without reopening the
+ * popover. */
+export function ActiveFilterChips({
+  filters,
+  onChange,
+  authorOptions,
+}: {
+  filters: PostFilters;
+  onChange: (next: PostFilters) => void;
+  authorOptions: string[];
+}) {
+  const activeCount = postFiltersActiveCount(filters);
+  if (activeCount === 0) return null;
+
+  const chips: { key: string; label: string; onRemove: () => void }[] = [];
+  if (filters.authorIds.size > 0) {
+    chips.push({
+      key: "authors",
+      label: filters.authorIds.size === 1 ? displayName([...filters.authorIds][0]!) : `ผู้โพสต์ ${filters.authorIds.size} คน`,
+      onRemove: () => onChange({ ...filters, authorIds: new Set() }),
+    });
+  }
+  if (filters.tagIds.size > 0) {
+    chips.push({ key: "tags", label: `${filters.tagIds.size} แท็ก`, onRemove: () => onChange({ ...filters, tagIds: new Set() }) });
+  }
+  if (filters.lateOnly) chips.push({ key: "late", label: "ส่งช้า", onRemove: () => onChange({ ...filters, lateOnly: false }) });
+  if (filters.unreadOnly) chips.push({ key: "unread", label: "ยังไม่อ่าน", onRemove: () => onChange({ ...filters, unreadOnly: false }) });
+  if (filters.hasImageOnly) chips.push({ key: "image", label: "มีรูป", onRemove: () => onChange({ ...filters, hasImageOnly: false }) });
+  if (filters.savedOnly) chips.push({ key: "saved", label: "บันทึกไว้", onRemove: () => onChange({ ...filters, savedOnly: false }) });
+
+  return (
+    <div className="flex items-center flex-wrap gap-1.5">
+      {chips.map((c) => (
+        <span
+          key={c.key}
+          className="flex items-center gap-1 h-[26px] rounded-md bg-[var(--bg-soft)] pl-2 pr-1 text-[11px] font-medium text-[var(--ink-soft)]"
+        >
+          {c.label}
+          <button onClick={c.onRemove} aria-label={`ลบตัวกรอง ${c.label}`} className="h-4 w-4 flex items-center justify-center rounded-full hover:bg-white hover:text-[var(--ink)]">
+            <X className="h-2.5 w-2.5" />
+          </button>
+        </span>
+      ))}
+      <button onClick={() => onChange(emptyPostFilters)} className="h-[26px] px-1.5 text-[11px] font-medium text-[var(--brand-green-dark)] hover:underline">
+        ล้างทั้งหมด
+      </button>
     </div>
   );
 }
