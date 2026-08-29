@@ -751,6 +751,9 @@ export function TopicSidebar({
         <div className="my-3 border-t border-[var(--line)]/50" />
           </>
         )}
+        {topLevelRestTopics.length > 0 && (
+          <p className="px-2.5 pt-1 pb-1 text-[11px] font-semibold text-[var(--ink-soft)] uppercase tracking-wide">หัวข้อของฉัน</p>
+        )}
         {topLevelRestTopics.map(renderTopicBranch)}
 
         {topics.length === 0 && (

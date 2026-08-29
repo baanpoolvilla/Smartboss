@@ -539,16 +539,19 @@ function ReportFeedPageInner() {
                     unreachable, cut off past the right edge). */}
                 <div className="px-5 pt-3 pb-2 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
                   <TopicLogo topic={activeTopic} size="h-8 w-8" />
-                  <div className="min-w-0 flex-1">
-                    <h2 className="text-[16px] font-semibold truncate">{activeTopic.name}</h2>
-                    {/* Hidden below sm — secondary info that used to force a
-                        whole extra wrapped line into row 1 on a narrow phone,
-                        which together with the mode pill/compliance bar/round
-                        row below it stacked into the header eating close to a
-                        third of the screen before any actual post came into
-                        view ("วงมันเปลืองพื้นที่ไป 1/3 ของหน้าจอ"). */}
+                  {/* Name + description share one line now (not stacked) —
+                      matches the reference layout ("# test1
+                      รายงานประจำวันของทีม") and keeps row 1 to its single
+                      line even with a description present. Still hidden
+                      below sm: on a narrow phone this pair plus the mode
+                      pill/compliance bar/round row below it stacked into the
+                      header eating close to a third of the screen before any
+                      actual post came into view
+                      ("วงมันเปลืองพื้นที่ไป 1/3 ของหน้าจอ"). */}
+                  <div className="min-w-0 flex-1 flex items-baseline gap-2">
+                    <h2 className="text-[16px] font-semibold truncate shrink-0 max-w-[60%]">{activeTopic.name}</h2>
                     {activeTopic.description && (
-                      <p className="hidden sm:block text-xs text-[var(--ink-soft)] truncate">{activeTopic.description}</p>
+                      <p className="hidden sm:block text-xs text-[var(--ink-soft)] truncate min-w-0">{activeTopic.description}</p>
                     )}
                   </div>
                   {/* Anyone can open this to browse who's in the room — same
