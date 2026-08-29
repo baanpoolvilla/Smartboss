@@ -1041,7 +1041,20 @@ export function ReportCard({
             )}
 
             <div
-              className="flex items-center gap-1 rounded-full border bg-white pl-1 pr-1 py-1 focus-within:border-[var(--brand-green)]/50 transition-colors"
+              className={cn(
+                "flex items-center gap-1 border bg-white pl-1 pr-1 py-1 focus-within:border-[var(--brand-green)]/50 transition-colors",
+                // Collapsed at rest ("[avatar] [input] 📎 ➤") stays a plain
+                // capsule, but expanding it to also fit bold/italic/
+                // underline/link/highlight inline (see below) left no room
+                // for the text itself on a narrow phone — the input got
+                // squeezed down to a handful of px and its placeholder
+                // wrapped one character per line. flex-wrap plus a real
+                // min-width on the input (below) lets the toolbar spill onto
+                // its own second line there instead of stealing the input's
+                // width; rounded-2xl (not rounded-full) is what actually
+                // looks right once this row can be two lines tall.
+                replyFocused || replyColorPickerOpen ? "flex-wrap rounded-2xl" : "rounded-full"
+              )}
               style={replyHighlight ? { borderColor: replyHighlight } : { borderColor: "var(--line)" }}
             >
               <Avatar className="h-6 w-6 shrink-0">
@@ -1070,7 +1083,7 @@ export function ReportCard({
                   setReplyFocused(false);
                   setReplyMentionMenu(null);
                 }}
-                className="flex-1 min-w-0 bg-transparent text-sm outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-[var(--ink-soft)]"
+                className="flex-1 min-w-[100px] bg-transparent text-sm outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-[var(--ink-soft)]"
                 onKeyDown={(e) => {
                   if (replyMentionMenu) {
                     const matches = replyMentionMatches(replyMentionMenu.query);
