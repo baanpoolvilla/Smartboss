@@ -136,7 +136,7 @@ export function IssueReportDialog({
       });
       reset();
       onOpenChange(false);
-      router.push(`/issue-reports/${ticket.id}`);
+      router.push(`/report-task/issue-reports/${ticket.id}`);
     } finally {
       setSubmitting(false);
     }

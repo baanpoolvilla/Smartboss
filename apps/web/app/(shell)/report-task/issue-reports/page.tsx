@@ -214,21 +214,21 @@ export default function IssueReportsPage() {
               </TableHeader>
               <TableBody>
                 {sorted.map((t) => (
-                  <TicketRow key={t.id} ticket={t} viewingAsUserId={viewingAsUserId} config={config} onClick={() => router.push(`/issue-reports/${t.id}`)} />
+                  <TicketRow key={t.id} ticket={t} viewingAsUserId={viewingAsUserId} config={config} onClick={() => router.push(`/report-task/issue-reports/${t.id}`)} />
                 ))}
               </TableBody>
             </Table>
           </div>
           <div className="md:hidden flex flex-col gap-2">
             {sorted.map((t) => (
-              <TicketCard key={t.id} ticket={t} viewingAsUserId={viewingAsUserId} config={config} onClick={() => router.push(`/issue-reports/${t.id}`)} />
+              <TicketCard key={t.id} ticket={t} viewingAsUserId={viewingAsUserId} config={config} onClick={() => router.push(`/report-task/issue-reports/${t.id}`)} />
             ))}
           </div>
         </>
       ) : (
         <div className="flex flex-col gap-2">
           {sorted.map((t) => (
-            <TicketCard key={t.id} ticket={t} viewingAsUserId={viewingAsUserId} config={config} onClick={() => router.push(`/issue-reports/${t.id}`)} />
+            <TicketCard key={t.id} ticket={t} viewingAsUserId={viewingAsUserId} config={config} onClick={() => router.push(`/report-task/issue-reports/${t.id}`)} />
           ))}
         </div>
       )}

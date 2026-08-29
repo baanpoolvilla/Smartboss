@@ -52,7 +52,7 @@ function agents(): string[] {
 
 function notifyTicket(ticket: IssueTicket, userId: string, byUserId: string, message: string) {
   if (userId === byUserId) return;
-  useNotificationStore.getState().notify({ userId, byUserId, message, link: `/issue-reports/${ticket.id}` });
+  useNotificationStore.getState().notify({ userId, byUserId, message, link: `/report-task/issue-reports/${ticket.id}` });
 }
 
 function logTicketActivity(ticket: IssueTicket, byUserId: string, action: string, detail?: string) {
@@ -157,7 +157,7 @@ export const useIssueReportStore = create<IssueReportStore>()((set, get) => ({
     const reporterName = getUser(input.reporterId)?.name ?? "พนักงาน";
     useNotificationStore
       .getState()
-      .notifyMany(agents(), input.reporterId, `${reporterName} แจ้งปัญหาใหม่ (${ticket.code}): ${ticket.title}`, undefined, `/issue-reports/${ticket.id}`);
+      .notifyMany(agents(), input.reporterId, `${reporterName} แจ้งปัญหาใหม่ (${ticket.code}): ${ticket.title}`, undefined, `/report-task/issue-reports/${ticket.id}`);
     logTicketActivity(ticket, input.reporterId, "แจ้งปัญหาใหม่", issueStatusMeta[ticket.status].label);
 
     return ticket;
@@ -197,7 +197,7 @@ export const useIssueReportStore = create<IssueReportStore>()((set, get) => ({
         // Reporter replied — tell whoever's actually on the hook, not the
         // whole desk, so this doesn't turn into a group-chat notification.
         if (t.assigneeId) notifyTicket(t, t.assigneeId, authorId, `ผู้แจ้งตอบกลับตั๋ว ${t.code}: ${t.title}`);
-        else useNotificationStore.getState().notifyMany(agents(), authorId, `ผู้แจ้งตอบกลับตั๋ว ${t.code}: ${t.title}`, undefined, `/issue-reports/${t.id}`);
+        else useNotificationStore.getState().notifyMany(agents(), authorId, `ผู้แจ้งตอบกลับตั๋ว ${t.code}: ${t.title}`, undefined, `/report-task/issue-reports/${t.id}`);
       } else {
         notifyTicket(t, t.reporterId, authorId, `มีการตอบกลับใหม่ในตั๋ว ${t.code}: ${t.title}`);
       }

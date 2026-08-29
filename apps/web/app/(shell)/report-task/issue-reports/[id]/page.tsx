@@ -515,7 +515,7 @@ function TicketSidePanel({
         {ticket.duplicateOfId && (
           <div className="flex items-center gap-1 text-[var(--brand-green-dark)]">
             <ExternalLink className="h-3 w-3" />
-            <a href={`/issue-reports/${ticket.duplicateOfId}`} className="hover:underline">
+            <a href={`/report-task/issue-reports/${ticket.duplicateOfId}`} className="hover:underline">
               ซ้ำกับ {allTickets.find((t) => t.id === ticket.duplicateOfId)?.code ?? "-"}
             </a>
           </div>
