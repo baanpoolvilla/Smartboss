@@ -688,7 +688,8 @@ export function ReportCard({
             requestAnimationFrame(() => replyEditorRef.current?.focus());
           }}
           className="h-7 w-7 flex items-center justify-center rounded-md text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
-          aria-label="ตอบกลับในเธรด"
+          aria-label="ตอบกลับ"
+          title="ตอบกลับ"
         >
           <MessageCircle className="h-4 w-4" />
         </button>
@@ -752,7 +753,7 @@ export function ReportCard({
             <div className="h-px bg-[var(--line)] mx-1 my-0.5" />
             <MenuButton
               icon={MessageCircle}
-              label="ตอบกลับในเธรด"
+              label="ตอบกลับ"
               onClick={() => {
                 setTouchMenuOpen(false);
                 setThreadOpen(true);
@@ -991,7 +992,7 @@ export function ReportCard({
               className="flex items-center gap-1.5 text-xs font-medium text-[var(--brand-green-dark)] hover:underline"
             >
               <MessageCircle className="h-3.5 w-3.5" />
-              ตอบกลับในเธรด
+              ตอบกลับ
             </button>
           ) : (
           <>
@@ -1072,7 +1073,7 @@ export function ReportCard({
                 aria-label="พิมพ์ความคิดเห็น"
                 aria-multiline="true"
                 suppressContentEditableWarning
-                data-placeholder="พิมพ์ข้อความ... — พิมพ์ @ เพื่อแท็ก"
+                data-placeholder="เขียนคำตอบ..."
                 onInput={(e) => {
                   setReplyText(htmlEditorToBulletsText(e.currentTarget));
                   syncReplyMentionMenu(e.currentTarget);

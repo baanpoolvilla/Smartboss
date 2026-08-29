@@ -56,17 +56,28 @@ export function ReportComplianceBar({
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [posts, visibleTopics, viewingAsUserId]);
 
+  // Priority order when space is tight (mini, in the room header row): a
+  // bare icon+number ("0/4 ⏰0 ⚠4") made people guess what each number even
+  // was — showing the real word back, but only for the single most severe
+  // non-zero status plus the always-relevant "sent" count, instead of all
+  // three competing pills at once ("ไม่ต้องแสดงทุก Metric พร้อมกันถ้าไม่จำเป็น").
+  const miniSecondary: "missing" | "late" | null = mini ? (summary.missingToday > 0 ? "missing" : summary.lateToday > 0 ? "late" : null) : null;
+
   return (
-    <div className={cn("flex items-center", mini ? "gap-0.5" : "gap-1.5 flex-wrap")}>
+    <div className={cn("flex items-center", mini ? "gap-1" : "gap-1.5 flex-wrap")}>
       <CompliancePill
         mini={mini}
         dotColor="var(--chart-green)"
-        label="ส่งแล้ววันนี้"
+        label="ส่งแล้ว"
         value={`${summary.postedToday}/${summary.totalTracked}`}
         onClick={() => onShowTodayStatus("posted")}
       />
-      <CompliancePill mini={mini} tone="warn" icon={Clock} label="ส่งช้า" value={`${summary.lateToday}`} onClick={() => onShowTodayStatus("late")} />
-      <CompliancePill mini={mini} tone="bad" icon={TriangleAlert} label="ยังไม่ส่ง" value={`${summary.missingToday}`} onClick={() => onShowTodayStatus("missing")} />
+      {(!mini || miniSecondary === "late") && (
+        <CompliancePill mini={mini} tone="warn" icon={Clock} label="ส่งช้า" value={`${summary.lateToday}`} onClick={() => onShowTodayStatus("late")} />
+      )}
+      {(!mini || miniSecondary === "missing") && (
+        <CompliancePill mini={mini} tone="bad" icon={TriangleAlert} label="ยังไม่ส่ง" value={`${summary.missingToday}`} onClick={() => onShowTodayStatus("missing")} />
+      )}
       <Popover>
         <PopoverTrigger
           render={
@@ -161,13 +172,13 @@ function CompliancePill({
         onClick={onClick}
         title={title}
         className={cn(
-          "inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-xs tabular-nums transition-colors hover:bg-[var(--bg-soft)]",
+          "inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-xs whitespace-nowrap transition-colors hover:bg-[var(--bg-soft)]",
           toneStyle ? toneStyle.text : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
         )}
       >
         {dotColor && <span className="h-[6px] w-[6px] rounded-full shrink-0" style={{ backgroundColor: dotColor }} aria-hidden />}
         {Icon && <Icon className="h-3 w-3 shrink-0" />}
-        <b className="font-semibold">{value}</b>
+        {label} <b className="font-semibold tabular-nums">{value}</b>
       </button>
     );
   }
