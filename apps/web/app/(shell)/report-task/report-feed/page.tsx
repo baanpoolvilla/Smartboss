@@ -126,8 +126,13 @@ function ReportFeedSkeleton() {
         <div className="h-4 w-96 max-w-full rounded bg-[var(--bg-soft)]" />
       </div>
       <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 flex-1 min-h-0">
-        <div className="hidden lg:block w-64 shrink-0 rounded-2xl border border-[var(--line)] bg-white" />
-        <div className="flex-1 rounded-2xl border border-[var(--line)] bg-white" />
+        {/* Matches the real layout's now-flat panels (no border/rounded/
+            white-card) — this skeleton is what actually renders for the
+            first moment of every page load, so leaving the old bordered-card
+            look here would flash the "gรอบซ้อนกัน" look right back on every
+            visit even after the real content underneath was already fixed. */}
+        <div className="hidden lg:block w-64 shrink-0 bg-[color-mix(in_srgb,var(--bg-soft)_55%,white)]" />
+        <div className="flex-1 bg-white" />
       </div>
     </div>
   );
@@ -813,7 +818,7 @@ function ReportFeedPageInner() {
               {activeTab === "posts" ? (
                 <>
                   {filteredTopicPosts.length === 0 && postFiltersActiveCount(filters) > 0 ? (
-                    <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center px-6 bg-[var(--bg-soft)]/40">
+                    <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center px-6 bg-[var(--bg-soft)]">
                       <p className="text-sm font-semibold">ไม่มีโพสต์ตรงกับตัวกรอง</p>
                       <Button variant="outline" size="sm" onClick={() => setFilters(emptyPostFilters)}>
                         ล้างตัวกรอง
@@ -844,7 +849,7 @@ function ReportFeedPageInner() {
               )}
             </div>
           ) : (
-            <div className="flex-1 rounded-2xl border border-[var(--line)] bg-white flex flex-col items-center justify-center gap-2 text-[var(--ink-soft)]">
+            <div className="flex-1 bg-white flex flex-col items-center justify-center gap-2 text-[var(--ink-soft)]">
               <MessageSquareText className="h-8 w-8" />
               <p className="text-sm">ยังไม่มีหัวข้อ — กด + ทางซ้ายเพื่อเริ่มต้น</p>
             </div>
@@ -879,7 +884,7 @@ function PendingTopicsPanel({
         </div>
       </div>
       {entries.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6 bg-[var(--bg-soft)]/40">
+        <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6 bg-[var(--bg-soft)]">
           <div className="h-14 w-14 rounded-full bg-[var(--accent)] flex items-center justify-center">
             <Check className="h-6 w-6 text-[var(--brand-green-dark)]" />
           </div>
@@ -889,7 +894,7 @@ function PendingTopicsPanel({
           </div>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto bg-[var(--bg-soft)]/40 p-5 space-y-2">
+        <div className="flex-1 overflow-y-auto bg-[var(--bg-soft)] p-5 space-y-2">
           {entries.map((e) => (
             <button
               key={e.topicId}
@@ -972,14 +977,14 @@ function TodayStatusPanel({
         </div>
       </div>
       {entries.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6 bg-[var(--bg-soft)]/40">
+        <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6 bg-[var(--bg-soft)]">
           <div className={cn("h-14 w-14 rounded-full flex items-center justify-center", meta.iconBg)} style={{ color: meta.iconColor }}>
             <Icon className="h-6 w-6" />
           </div>
           <p className="text-sm font-semibold">{meta.empty}</p>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto bg-[var(--bg-soft)]/40 p-5 space-y-4">
+        <div className="flex-1 overflow-y-auto bg-[var(--bg-soft)] p-5 space-y-4">
           {byTopic.map(([topicId, group]) => (
             <div key={topicId} className="rounded-xl border border-[var(--line)] bg-white overflow-hidden">
               <button
