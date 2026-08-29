@@ -11,7 +11,7 @@ import { PeopleCalendarList } from "./people-calendar-list";
  * stays a single icon button opening the same list in a sheet (see
  * calendar-view.tsx) instead of a permanent rail — there isn't room for one.
  */
-export function CalendarRail() {
+export function CalendarRail({ showCountryHolidays = false }: { showCountryHolidays?: boolean }) {
   const boxRef = useRef<HTMLDivElement | null>(null);
   // A fixed "100vh - 140px" guess didn't match this page's actual header
   // height (top bar + filter row + legend, which varies by tab/org) — on a
@@ -49,7 +49,7 @@ export function CalendarRail() {
         className="rounded-xl border border-[var(--line)] bg-white p-4 overflow-y-auto"
         style={{ height: boxHeight }}
       >
-        <PeopleCalendarList singleColumn alwaysExpanded />
+        <PeopleCalendarList singleColumn alwaysExpanded showCountryHolidays={showCountryHolidays} />
       </div>
     </aside>
   );

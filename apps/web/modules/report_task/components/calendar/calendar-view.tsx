@@ -1261,7 +1261,7 @@ export function CalendarView() {
       </StickyFilterBar>
 
       <div className="flex items-start gap-5">
-        <CalendarRail />
+        <CalendarRail showCountryHolidays={tab === "schedule"} />
         <div className="flex-1 min-w-0 flex flex-col gap-4 lg:gap-6">
           <FullCalendarView
             ref={fullCalendarRef}
