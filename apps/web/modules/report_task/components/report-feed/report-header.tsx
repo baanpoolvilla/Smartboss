@@ -167,18 +167,25 @@ function CompliancePill({
   const title = `${label}: ${value} — ดูรายละเอียดใน ภาพรวมทั้งหมด`;
 
   if (mini) {
+    // Two-line stat now (label on top, bold colored number below) instead
+    // of one run-on line — matches the reference header's own "ส่งแล้ว /
+    // 0/4 คน" stacked stat treatment, and reads as a real number to notice
+    // rather than one more inline label crowding the row.
     return (
       <button
         onClick={onClick}
         title={title}
         className={cn(
-          "inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-xs whitespace-nowrap transition-colors hover:bg-[var(--bg-soft)]",
+          "flex shrink-0 flex-col items-end rounded-md px-1.5 py-0.5 leading-tight transition-colors hover:bg-[var(--bg-soft)]",
           toneStyle ? toneStyle.text : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
         )}
       >
-        {dotColor && <span className="h-[6px] w-[6px] rounded-full shrink-0" style={{ backgroundColor: dotColor }} aria-hidden />}
-        {Icon && <Icon className="h-3 w-3 shrink-0" />}
-        {label} <b className="font-semibold tabular-nums">{value}</b>
+        <span className="flex items-center gap-1 text-[10px]">
+          {dotColor && <span className="h-[6px] w-[6px] rounded-full shrink-0" style={{ backgroundColor: dotColor }} aria-hidden />}
+          {Icon && <Icon className="h-2.5 w-2.5 shrink-0" />}
+          {label}
+        </span>
+        <b className="text-[13px] font-semibold tabular-nums">{value}</b>
       </button>
     );
   }

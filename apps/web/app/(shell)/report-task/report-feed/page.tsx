@@ -609,10 +609,13 @@ function ReportFeedPageInner() {
                       </span>
                     );
                   })()}
-                  {/* Today's compliance pills, minimal — icon/dot + bare
-                      number, no border or label, right next to the gear it's
-                      grouped with here ("แถวหัวห้อง ข้างเกียร์ แบบมินิมอล"). */}
-                  <div className="hidden sm:contents">
+                  {/* Today's compliance stats — pushed to the row's own far
+                      right (ml-auto carries the gear after it along too)
+                      instead of sitting packed right after the mode pill, so
+                      it reads as its own distinct "here's what matters right
+                      now" block in the corner rather than one more chip in a
+                      row of chips ("แถวหัวห้อง มุมขวา แยกเด่นออกมา"). */}
+                  <div className="hidden sm:flex items-center gap-1 ml-auto">
                     <ReportComplianceBar
                       variant="mini"
                       visibleTopics={visibleTopics}
