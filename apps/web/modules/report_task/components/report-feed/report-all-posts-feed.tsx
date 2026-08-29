@@ -257,25 +257,27 @@ export function ReportAllPostsFeed({
       ) : (
         <div
           ref={scrollRef}
-          className="flex-1 overflow-y-auto bg-[#F4F6F8] px-5 py-5 space-y-5 scroll-pt-4"
+          className="flex-1 overflow-y-auto bg-white py-3 scroll-pt-4"
         >
-          {groupByDay(items, (p) => p.createdAt).map((group) => (
-            <div key={group.key} className="space-y-5">
-              <DaySeparator label={reportDayLabel(group.label)} />
-              {group.items.map((p) => {
-                const topic = topicById.get(p.topicId)!;
-                return (
-                  <ReportCard
-                    key={p.id}
-                    post={p}
-                    topic={topic}
-                    topicBadge={{ label: breadcrumbOf(topic, topicById), onClick: () => onJumpToTopic(topic.id) }}
-                    onOpenTask={onOpenTask}
-                  />
-                );
-              })}
-            </div>
-          ))}
+          <div className="max-w-[960px] mx-auto space-y-6">
+            {groupByDay(items, (p) => p.createdAt).map((group) => (
+              <div key={group.key}>
+                <DaySeparator label={reportDayLabel(group.label)} />
+                {group.items.map((p) => {
+                  const topic = topicById.get(p.topicId)!;
+                  return (
+                    <ReportCard
+                      key={p.id}
+                      post={p}
+                      topic={topic}
+                      topicBadge={{ label: breadcrumbOf(topic, topicById), onClick: () => onJumpToTopic(topic.id) }}
+                      onOpenTask={onOpenTask}
+                    />
+                  );
+                })}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

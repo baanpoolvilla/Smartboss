@@ -69,12 +69,11 @@ export function ReportFeed({
 
   return (
     <div className="relative flex-1 flex flex-col min-h-0">
-      {/* Tinted background, not white — it's what makes each post's white card
-          read as a separate object instead of a rectangle drawn on the same
-          sheet it sits on. The card treatment and this tint only work as a
-          pair; whitening this again brings back the "มองยาก" problem even with
-          the borders still on the cards. */}
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto bg-[#F4F6F8] px-4 py-4 space-y-5 scroll-pt-4">
+      {/* Round 2, explicit instruction: single flat surface (white), not the
+          tinted background a stack of white cards needed for contrast —
+          there's nothing to contrast against anymore (see ReportCard's own
+          comment on why that's a real trade-off, not a free change). */}
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto bg-white py-2 scroll-pt-4">
         {topicPosts.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center gap-3 text-center px-6">
             <div
@@ -89,22 +88,24 @@ export function ReportFeed({
             </div>
           </div>
         ) : (
-          // space-y-5 between day groups, space-y-4 between the cards inside
-          // one — same idea as the card itself: the bigger gap is the bigger
-          // division, so a day boundary never reads the same as a post
-          // boundary. Bumped from 4/3 — 12px between cards still read as
-          // "packed together" even with each one boxed on its own.
-          groupByDay(topicPosts, (p) => p.createdAt).map((group) => (
-            // Full width, not capped — tried a centred ~860px reading measure
-            // here first, but that just left dead margin on either side of
-            // every card on a wide screen ("ใช้พื้นที่ข้างๆให้เต็มได้ไหม").
-            <div key={group.key} className="space-y-4">
-              <DaySeparator label={reportDayLabel(group.label)} />
-              {group.items.map((p) => (
-                <ReportCard key={p.id} post={p} topic={topic} highlighted={p.id === highlightPostId} highlightReplyId={highlightReplyId} onOpenTask={onOpenTask} />
-              ))}
-            </div>
-          ))
+          // Reading width capped (explicit override — a centred ~860-960px
+          // measure was tried and dropped once before per real feedback
+          // wanting the sides used fully, see git history
+          // "ใช้พื้นที่ข้างๆให้เต็มได้ไหม" — this round asks for the cap
+          // back anyway). space-y-6 between day groups only now; individual
+          // posts inside one lean on their own border-b + padding for
+          // rhythm instead of an extra gap on top of that, so density goes
+          // up the way §15/16 ask for.
+          <div className="max-w-[960px] mx-auto space-y-6">
+            {groupByDay(topicPosts, (p) => p.createdAt).map((group) => (
+              <div key={group.key}>
+                <DaySeparator label={reportDayLabel(group.label)} />
+                {group.items.map((p) => (
+                  <ReportCard key={p.id} post={p} topic={topic} highlighted={p.id === highlightPostId} highlightReplyId={highlightReplyId} onOpenTask={onOpenTask} />
+                ))}
+              </div>
+            ))}
+          </div>
         )}
       </div>
 

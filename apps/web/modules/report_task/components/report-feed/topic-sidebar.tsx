@@ -109,12 +109,15 @@ export function TopicLogo({ topic, size = "h-6 w-6" }: { topic: ReportTopic; siz
       : topic.visibility?.managerOnly
         ? Crown
         : Hash;
+  // Round 2, explicit instruction: neutral by default — every topic's own
+  // arbitrary color (pink/purple/orange/teal/red, picked just to tell rooms
+  // apart) painted a different-colored icon per room with no actual meaning
+  // behind which room got which color. Color is reserved for states that
+  // mean something now (selected = primary, via the row's own accent —
+  // see renderTopicRow — not this icon).
   return (
-    <span
-      className={cn("relative shrink-0 rounded-full flex items-center justify-center", size)}
-      style={{ backgroundColor: `color-mix(in srgb, ${topic.color} 16%, white)` }}
-    >
-      <Icon className="h-3.5 w-3.5" style={{ color: topic.color }} />
+    <span className={cn("relative shrink-0 rounded-full flex items-center justify-center bg-[var(--bg-soft)]", size)}>
+      <Icon className="h-3.5 w-3.5 text-[var(--ink-soft)]" />
     </span>
   );
 }

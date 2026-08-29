@@ -28,7 +28,7 @@ import { currentCutoff } from "@/modules/report_task/lib/report-cutoff";
 import { pendingToday, todayStatusEntries, type TodayStatusEntry } from "@/modules/report_task/lib/report-feed-compliance";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
-import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronRight, Clock, FileImage, FolderHeart, Hash, ImagePlus, Link2, Lock, Menu, MessageSquareText, Pin, Search, Settings, SlidersHorizontal, TriangleAlert, Users, X } from "lucide-react";
+import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronDown, Clock, FileImage, FolderHeart, Hash, Link2, Lock, Menu, MessageSquareText, Pin, Search, Settings, SlidersHorizontal, TriangleAlert, Users, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 
 // Beyond this many pinned posts, the rest move into the "+N เพิ่มเติม"
@@ -359,14 +359,34 @@ function ReportFeedPageInner() {
   const requirementParts = useMemo(() => {
     if (!activeTopic) return [];
     if (activeTopic.cutoffs.length === 0) {
-      return activeTopic.minImages > 0 ? [{ text: `ต้องแนบรูปอย่างน้อย ${activeTopic.minImages} รูปทุกโพสต์`, active: false }] : [];
+      return activeTopic.minImages > 0 ? [{ text: `แนบอย่างน้อย ${activeTopic.minImages} รูปทุกโพสต์`, active: false }] : [];
+    }
+    const active = currentCutoff(activeTopic.cutoffs);
+    const requiredOf = (c: { minImages?: number }) => c.minImages ?? activeTopic.minImages;
+    // Two rounds with the same photo requirement and no real (non-placeholder)
+    // labels read naturally as one deadline window ("กำหนดส่ง 13:00–14:00
+    // น."), which is what §7's own example assumes — but that's an accurate
+    // simplification only for exactly this common shape. More rounds,
+    // differing requirements, or rounds someone actually named stay spelled
+    // out individually below instead, since collapsing those into a range
+    // would misstate what's actually required.
+    const allSameRequirement = activeTopic.cutoffs.every((c) => requiredOf(c) === requiredOf(activeTopic.cutoffs[0]!));
+    const anyRealLabel = activeTopic.cutoffs.some((c) => c.label.trim().length > 2);
+    if (activeTopic.cutoffs.length === 2 && allSameRequirement && !anyRealLabel) {
+      const [a, b] = activeTopic.cutoffs;
+      const required = requiredOf(a!);
+      return [
+        {
+          text: `กำหนดส่ง ${a!.time}–${b!.time} น.${required > 0 ? ` · แนบอย่างน้อย ${required} รูป` : ""}`,
+          active: !!active,
+        },
+      ];
     }
     // Per-round overrides can make some rounds require a different photo
     // count — spell each one out, and mark whichever round "now" falls into
     // so posting-right-now context is obvious without doing clock math.
-    const active = currentCutoff(activeTopic.cutoffs);
     return activeTopic.cutoffs.map((c) => {
-      const required = c.minImages ?? activeTopic.minImages;
+      const required = requiredOf(c);
       // A round label of a couple characters or less ("t", "00") is almost
       // always leftover placeholder text from setting the round up, not a
       // real name like "รอบเช้า" — showing it as a stray fragment right
@@ -374,7 +394,7 @@ function ReportFeedPageInner() {
       // ("มันเยอะไปมันรก"). Real, longer labels still show.
       const label = c.label.trim().length > 2 ? c.label.trim() : null;
       return {
-        text: `${label ? `${label} ` : ""}${c.time} น.${required > 0 ? ` · แนบรูป ≥${required} รูป` : ""}`,
+        text: `${label ? `${label} ` : ""}กำหนดส่ง ${c.time} น.${required > 0 ? ` · แนบอย่างน้อย ${required} รูป` : ""}`,
         active: active?.id === c.id,
       };
     });
@@ -428,18 +448,20 @@ function ReportFeedPageInner() {
         {/* Was plain outline text with no hint that tapping it does anything
             — asked explicitly for the top bar to signal what's tappable
             ("แถบบนให้รู้ด้วยว่ากดได้อะไร"). A tinted fill (like every other
-            actionable control on this page) plus a trailing chevron — the
-            same "opens something" cue a native picker/accordion uses —
-            reads as a control to tap, not a label to read. */}
+            actionable control on this page) plus a trailing chevron. Leads
+            with the actual room name now (not the generic word "หัวข้อ"),
+            and the chevron points down, not right — a right-pointing chevron
+            reads as "go to a new screen" (like the deep-link ones on other
+            rows), when this is really a selector that opens in place, the
+            same cue a native picker/dropdown uses (§10). */}
         <Button
           variant="outline"
           onClick={() => setMobileTopicsOpen(true)}
           className="w-full justify-start gap-2 bg-[var(--bg-soft)] border-[var(--line)] hover:bg-[var(--accent)]"
         >
           <Menu className="h-4 w-4 shrink-0" />
-          หัวข้อ
-          {activeTopic && <span className="text-[var(--ink-soft)] font-normal truncate">— {activeTopic.name}</span>}
-          <ChevronRight className="h-4 w-4 shrink-0 ml-auto text-[var(--ink-soft)]" />
+          <span className="truncate">{activeTopic ? activeTopic.name : "หัวข้อ"}</span>
+          <ChevronDown className="h-4 w-4 shrink-0 ml-auto text-[var(--ink-soft)]" />
         </Button>
         <Sheet open={mobileTopicsOpen} onOpenChange={setMobileTopicsOpen}>
           <SheetContent side="left" className="p-0 w-[85vw] max-w-sm flex flex-col">
@@ -591,24 +613,11 @@ function ReportFeedPageInner() {
                       real <select> either way — the mode itself is locked
                       for any room created after FEED_VIEW_MODE_LOCK_CUTOFF
                       (see room-settings-sheet.tsx). */}
-                  {/* Both hidden below sm — informational, not controls (the
-                      mode is set once in room settings; the compliance count
-                      repeats what the "ที่ฉันต้องส่ง" tab already surfaces) —
-                      so a narrow phone drops them rather than wrapping row 1
-                      onto a second line just to fit two more chips. */}
-                  {(() => {
-                    // "Thread"/"Openchat" are developer jargon, not something
-                    // a general employee needs to know to use this room —
-                    // plain Thai instead ("มุมมองสนทนา" is still shown, just
-                    // in words that don't require knowing the underlying
-                    // implementation concept).
-                    const modeLabel = activeTopic.feedViewMode === "threads" ? "แบบกระทู้" : "แบบแชท";
-                    return (
-                      <span className="hidden sm:flex items-center gap-1 text-xs font-medium text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2.5 py-1 shrink-0">
-                        มุมมองสนทนา: {modeLabel}
-                      </span>
-                    );
-                  })()}
+                  {/* Round 2, explicit instruction: dropped from the header
+                      entirely, not just reworded — it's already reachable in
+                      room settings ("รูปแบบการแสดงโพสต์", see
+                      room-settings-sheet.tsx), and the header should only
+                      carry what's needed to actually use the room right now. */}
                   {/* Today's compliance stats — pushed to the row's own far
                       right (ml-auto carries the gear after it along too)
                       instead of sitting packed right after the mode pill, so
@@ -649,25 +658,18 @@ function ReportFeedPageInner() {
                     blob either ("ดูยาก งง"). Changing the rounds themselves
                     is the ⚙ gear's job, not this row's. */}
                 {requirementParts.length > 0 && (
-                  // Plain inline text now, not a row of pills — "เริ่ม 13:00
-                  // น. · แนบรูป ≥1 รูป" reads as metadata about the room, not
-                  // controls, so it shouldn't look like more buttons stacked
-                  // under the real ones in row 1. One leading icon + one
-                  // "ตัดยอด" for the whole row instead of repeating both per
-                  // round — 2+ rounds each restating "ตัดยอด" and carrying
-                  // their own icon was most of what read as cluttered
-                  // ("มันเยอะไปมันรก"); the times themselves are what
-                  // actually differ between rounds. The currently-active
-                  // round still stands out (accent color + medium weight).
+                  // Plain inline text — metadata about the room, not a
+                  // status to react to, so it stays neutral gray throughout
+                  // (no green — this isn't a success state, §7). "กำหนดส่ง"
+                  // is now part of each segment's own text (see
+                  // requirementParts above), so there's no separate leading
+                  // label to repeat here — just a clock icon once for the
+                  // whole row. The currently-applicable round still stands
+                  // out (medium weight only, not color).
                   <div className="px-5 pb-2 flex items-center gap-1.5 overflow-x-auto text-xs text-[var(--ink-soft)]">
-                    {activeTopic.cutoffs.length > 0 ? (
-                      <TriangleAlert className="h-3 w-3 shrink-0" />
-                    ) : (
-                      <ImagePlus className="h-3 w-3 shrink-0" />
-                    )}
-                    {activeTopic.cutoffs.length > 0 && <span className="shrink-0">ตัดยอด</span>}
+                    <Clock className="h-3 w-3 shrink-0" />
                     {requirementParts.map((r, i) => (
-                      <span key={i} className={cn("shrink-0", r.active && "text-[var(--brand-green-dark)] font-medium")}>
+                      <span key={i} className={cn("shrink-0", r.active && "font-medium text-[var(--ink)]")}>
                         {i > 0 && <span className="text-[var(--ink-faint)]"> · </span>}
                         {r.text}
                       </span>
@@ -685,29 +687,16 @@ function ReportFeedPageInner() {
                     getting shoved onto its own orphan row below (which just
                     looked like disconnected clutter, "งง...จัดให้มันดีๆสิ"). */}
                 <div className="px-5 flex items-center gap-2 border-b border-[var(--line)]">
-                {/* gap-3 + icon-only labels below lg — same breakpoint the
-                    rest of this page switches on (sidebar hides, mobile
-                    topic button shows below lg). Using sm here instead left
-                    a dead zone between 640-1024px where the room panel was
-                    already in its narrow single-column layout but this row
-                    still tried to render full labels + the full filter bar,
-                    colliding ("ย่อแล้วมันชนกัน"). 5 tabs with full text
-                    labels never fit that narrow a column without horizontal
-                    scroll, and that scroll itself was the complaint
-                    ("ไม่อยากมีให้เลื่อนไปมา...อยากให้จบเลย"). Icon + count
-                    alone is compact enough that all 5 fit alongside the
-                    filter button with nothing left to scroll; the label
-                    comes back at lg and up where the sidebar's own width has
-                    already made room for it.
-
-                    Search + one compact "ตัวกรอง N ▾" button now sit right
-                    on this same row (right-aligned) instead of a 6-chip
-                    PostFilterBar needing a row of its own — that's what was
-                    actually colliding with the tabs before, not the filter
-                    concept itself. A single button plus a click-to-expand
-                    search box is narrow enough to share the line at ordinary
-                    desktop widths with room to spare. */}
-                <div role="tablist" aria-label="ส่วนของหัวข้อ" className="flex flex-1 min-w-0 items-center gap-3 lg:gap-4">
+                {/* Round 2, explicit instruction: real labels on every tab
+                    at every width, not icon-only below lg. Worth flagging
+                    that horizontal scroll here specifically was tried and
+                    pulled back once before for a real complaint
+                    ("ไม่อยากมีให้เลื่อนไปมา...อยากให้จบเลย") — icon+count
+                    alone was what let all 5 tabs fit with nothing to scroll.
+                    Bringing the labels back means the scroll comes back too;
+                    overflow-x-auto on the tablist itself keeps it contained
+                    to just this row rather than pushing the whole page wide. */}
+                <div role="tablist" aria-label="ส่วนของหัวข้อ" className="flex flex-1 min-w-0 items-center gap-3 lg:gap-4 overflow-x-auto">
                   {topicTabs.map((t) => {
                     const Icon = t.icon;
                     const active = activeTab === t.id;
@@ -735,7 +724,7 @@ function ReportFeedPageInner() {
                         )}
                       >
                         <Icon className="h-3.5 w-3.5" />
-                        <span className="hidden lg:inline">{t.label}</span>
+                        <span>{t.label}</span>
                         {count != null && count > 0 && (
                           <span className="tabular-nums text-[10px] text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-1.5 py-0.5">{count}</span>
                         )}

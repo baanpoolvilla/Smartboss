@@ -595,42 +595,19 @@ export function ReportCard({
     <div
       id={`report-post-${post.id}`}
       className={cn(
-        // Each post is its own card on the feed's tinted background, which is
-        // what Teams actually does and — more to the point — what finally
-        // answered "ตัวคั่นระหว่างโพสมองยากมาก งงมาก".
-        //
-        // This went the other way twice before: posts as flat edge-to-edge
-        // rows separated by a hairline, then the same rows with a deliberately
-        // darkened hairline. Both kept failing for the same reason, which is
-        // worth writing down so nobody flattens them a third time. A single
-        // line is the weakest boundary a layout has, and these posts don't
-        // give it any help: they're wildly uneven in height (one line of text,
-        // or a title plus tags plus an image plus a reply thread), so the eye
-        // can't fall back on a regular rhythm to tell "new post" from "more of
-        // the same post". Darkening the line only makes a faint boundary
-        // slightly less faint — it doesn't change what the boundary has to do.
-        //
-        // A card closes the shape on all four sides, so where one post ends is
-        // never in question no matter how tall or short it is. The gap between
-        // cards comes from the feed's own spacing (see report-feed.tsx), which
-        // is also what separates a post from its own replies *inside* the card
-        // — the two now read at clearly different levels instead of competing.
-        // Radius, border, shadow and hover are lifted verbatim from
-        // kanban/task-card.tsx — the app already has a card, and a second
-        // one with its own corner radius and its own shadow would read as a
-        // different product bolted on. The one thing not copied is that
-        // card's `-translate-y-0.5` lift: a board of tiles can pop under the
-        // cursor, but a reading feed where the pointer crosses posts on the
-        // way to a scrollbar would twitch the whole column.
-        "group/post relative rounded-xl border border-[#DDE2E8] px-5 py-5 shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all duration-200",
-        highlighted || flashTargetId === post.id
-          ? "bg-[var(--accent)]"
-          : "bg-white hover:shadow-[0_10px_24px_-12px_rgba(16,24,40,0.20)] hover:border-[color-mix(in_srgb,var(--brand-green)_35%,#DDE2E8)]",
-        // Unread reads as a left accent + a dot under the author's name (see
-        // below) instead of a background tint — a background collided with
-        // `highlighted`'s bg-accent (both fighting for the same visual slot).
-        // Unread keeps its left accent — on a card it reads as a colored edge
-        // on the card itself, which is stronger than it was on a flat row.
+        // Round 2, explicit instruction: back to a flat single-surface feed
+        // — no card border/radius/shadow. Worth being honest that flat
+        // hairline-divided rows were tried twice before this and reverted
+        // for a real reason (see git history — "ตัวคั่นระหว่างโพสมองยากมาก
+        // งงมาก", posts vary wildly in height so a single line was a weak
+        // boundary). This round leans harder on the two things that weren't
+        // tried before to compensate: a visible divider on *every* post
+        // (not just some) plus a hover background people can feel as they
+        // scan down the column, rather than relying on the line alone.
+        "group/post relative px-5 py-4 border-b border-[var(--line)] transition-colors duration-150",
+        highlighted || flashTargetId === post.id ? "bg-[var(--accent)]" : "hover:bg-[var(--bg-soft)]",
+        // Unread keeps its left accent — was a card-edge highlight before,
+        // now the same idea against a flat row.
         isUnread && "border-l-[3px] border-l-[var(--chart-blue)]"
       )}
     >
@@ -946,7 +923,7 @@ export function ReportCard({
             <div className="ml-1 border-l-2 border-[#E2E8F0] pl-3 sm:pl-4">
               <div className="flex items-center gap-2 pb-1.5">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-soft)]">
-                  {post.replies.length} ความคิดเห็น
+                  {post.replies.length} การตอบกลับ
                 </p>
                 {post.replies.length > RECENT_REPLY_COUNT && (
                   <button
