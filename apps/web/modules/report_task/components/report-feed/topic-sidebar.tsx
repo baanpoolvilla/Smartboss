@@ -292,6 +292,11 @@ export function TopicSidebar({
         // Openchat room looks identical to any pre-existing stream room,
         // not a different value that happens to mean the same thing.
         feedViewMode: feedViewMode === "stream" ? undefined : "threads",
+        // Always on for "ห้องใหม่แยกอิสระ" — a top-level topic is a category
+        // to organize sub-topics under, not a room in its own right. Only a
+        // sub-topic is ever an actual place to post; create one under this
+        // to get a working chat ("ต้องสร้างลูกก่อนถึงจะแชทได้").
+        isCategory: createKind === "main" ? true : undefined,
       });
       setEditor(null);
       onSelect(id);
@@ -373,12 +378,13 @@ export function TopicSidebar({
   function renderTopicRow(t: ReportTopic, opts?: { depth?: number; hasChildren?: boolean }) {
     const depth = opts?.depth ?? 0;
     const hasChildren = opts?.hasChildren ?? false;
-    // A parent always becomes an organizing folder only once it has
-    // children — never clickable/postable as a room of its own. There used
-    // to be a per-topic opt-out for this (`allowDirectPost`), removed after
-    // it caused real confusion: creating what was meant to be a plain
-    // category still opened as a live, postable chat room by default.
-    const canOpenDirectly = !hasChildren;
+    // `isCategory` (set at creation, see openCreate/handleSubmit) makes a
+    // topic an organizing folder forever, even before it has any children
+    // yet — a topic made this way is a category, never a room. Older topics
+    // (created before this field existed) don't have it, so they keep the
+    // grandfathered rule: postable on their own right up until they get
+    // their first child, same as always.
+    const canOpenDirectly = !t.isCategory && !hasChildren;
     const hiddenForMe = depth > 0 && (t.hiddenBy?.includes(viewingAsUserId) ?? false);
     const collapsed = collapsedTopicIds.has(t.id);
     const topicPosts = posts.filter((p) => p.topicId === t.id);
@@ -834,7 +840,17 @@ export function TopicSidebar({
                         <span className="text-xs font-medium">ห้องย่อยในห้องเดิม</span>
                       </button>
                     </div>
-                    {parentOptions.length === 0 ? (
+                    {createKind === "main" ? (
+                      // Set expectations up front — a top-level topic is a
+                      // category to group sub-topics under, not a chat room
+                      // itself, even before it has any children yet. Saying
+                      // this here (not just after the fact when it turns out
+                      // un-clickable) is what a topic created without
+                      // reading this used to get wrong ("งงทำไมกดแชทไม่ได้").
+                      <p className="text-[11px] text-[var(--ink-soft)]">
+                        หัวข้อหลักไว้จัดหมวดหมู่เท่านั้น กดแชทเองไม่ได้ — สร้างหัวข้อย่อยใต้มันทีหลังเพื่อเริ่มแชทจริง
+                      </p>
+                    ) : parentOptions.length === 0 ? (
                       <p className="text-[11px] text-[var(--ink-soft)]">ยังไม่มีหัวข้อหลักในระบบเลย — สร้างหัวข้อหลักก่อนอันนี้ แล้วค่อยกลับมาสร้างหัวข้อย่อยใต้มันทีหลังได้</p>
                     ) : createKind === "sub" ? (
                       <Select value={parentId ?? ""} onValueChange={(v) => v && setParentId(v)}>
