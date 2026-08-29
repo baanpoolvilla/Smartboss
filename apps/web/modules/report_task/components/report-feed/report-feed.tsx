@@ -84,8 +84,8 @@ export function ReportFeed({
               <MessageSquareText className="h-6 w-6" style={{ color: topic.color }} />
             </div>
             <div className="space-y-1">
-              <p className="text-sm font-semibold">ยังไม่มีรีพอตในหัวข้อนี้</p>
-              <p className="text-xs text-[var(--ink-soft)]">เริ่มการสนทนาแรกได้เลยจากช่องด้านล่าง</p>
+              <p className="text-sm font-semibold">ยังไม่มีโพสต์ในหัวข้อนี้</p>
+              <p className="text-xs text-[var(--ink-soft)]">เริ่มต้นด้วยการเขียนโพสต์แรกของคุณจากช่องด้านล่าง</p>
             </div>
           </div>
         ) : (

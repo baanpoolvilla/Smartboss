@@ -899,11 +899,25 @@ function ReportFeedPageInner() {
 
               {activeTab === "posts" ? (
                 <>
-                  {filteredTopicPosts.length === 0 && postFiltersActiveCount(filters) > 0 ? (
+                  {filteredTopicPosts.length === 0 && topicPosts.length > 0 ? (
                     <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center px-6 bg-[var(--bg-soft)]">
-                      <p className="text-sm font-semibold">ไม่พบโพสต์ตามตัวกรองนี้</p>
-                      <Button variant="outline" size="sm" onClick={() => setFilters(emptyPostFilters)}>
-                        ล้างทั้งหมด
+                      {/* Distinct wording from a search miss vs. a filter miss
+                          (§41 vs §42) — "ไม่พบผลลัพธ์" alone after typing a
+                          search term reads as broken/no-data, when really it
+                          just means nothing matched that specific term. */}
+                      <p className="text-sm font-semibold">
+                        {searchQuery.trim() ? `ไม่พบโพสต์ที่ตรงกับ "${searchQuery.trim()}"` : "ไม่พบโพสต์ตามตัวกรองนี้"}
+                      </p>
+                      {searchQuery.trim() && <p className="text-xs text-[var(--ink-soft)]">ลองเปลี่ยนคำค้นหา หรือล้างตัวกรอง</p>}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSearchQuery("");
+                          setFilters(emptyPostFilters);
+                        }}
+                      >
+                        {searchQuery.trim() ? "ล้างการค้นหาและตัวกรอง" : "ล้างทั้งหมด"}
                       </Button>
                     </div>
                   ) : isOpenchatTopic(activeTopic) ? (
