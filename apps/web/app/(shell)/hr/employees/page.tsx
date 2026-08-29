@@ -10,10 +10,12 @@ import {
   ApiProblem,
   DataTable,
   EmptyState,
+  Pill,
   StatusBadge,
   Td,
 } from "@/modules/hr/components/ui";
 import { employmentTypeLabel, formatDate } from "@/modules/hr/lib/labels";
+import { buildScorecards } from "@/lib/performance";
 
 export default async function EmployeesPage({
   searchParams,
@@ -68,6 +70,34 @@ export default async function EmployeesPage({
         const missing = users.filter(
           (u) => u.isActive && !registeredEmails.has(u.email.toLowerCase()),
         ).length;
+
+        /*
+         * เกรดคิดจาก core.performance_events (งานซ่อมบำรุง + บอร์ดงาน + การลงเวลา)
+         * ซึ่งผูกกับ core.users.id ส่วนทะเบียนจ้างงานอยู่ฝั่ง workforce —
+         * จับคู่ด้วยอีเมล ค่าเดียวที่ทั้งสองระบบมีและไม่ซ้ำ
+         *
+         * ล้มแล้วไม่เป็นไร (คืน null) — เกรดเป็นข้อมูลเสริม ไม่ควรทำให้ทะเบียน
+         * พนักงานเปิดไม่ได้
+         */
+        const now = new Date();
+        const cards = await buildScorecards(
+          session.orgId,
+          new Date(now.getFullYear(), now.getMonth(), 1),
+          now,
+        ).catch(() => null);
+
+        const emailOfPerson = new Map(
+          (people?.items ?? [])
+            .filter((row) => row.email !== null)
+            .map((row) => [row.id, row.email!.toLowerCase()]),
+        );
+        const cardByEmail = new Map(
+          (cards?.cards ?? []).map((c) => [c.email.toLowerCase(), c]),
+        );
+        const gradeOfEmployment = (personId: string) => {
+          const mail = emailOfPerson.get(personId);
+          return mail === undefined ? null : (cardByEmail.get(mail) ?? null);
+        };
 
         return (
           <>
@@ -152,7 +182,15 @@ export default async function EmployeesPage({
               </EmptyState>
             ) : (
               <DataTable
-                head={["รหัส", "ชื่อ-นามสกุล", "ประเภทจ้าง", "วันเริ่มงาน", "สถานะ", ""]}
+                head={[
+                  "รหัส",
+                  "ชื่อ-นามสกุล",
+                  "ประเภทจ้าง",
+                  "วันเริ่มงาน",
+                  "เกรดเดือนนี้",
+                  "สถานะ",
+                  "",
+                ]}
               >
                 {rows.map((e) => (
                   <tr key={e.id} className="hover:bg-(--bg-soft)">
@@ -172,6 +210,26 @@ export default async function EmployeesPage({
                     </Td>
                     <Td>{employmentTypeLabel(e.employment_type)}</Td>
                     <Td>{formatDate(e.hired_on)}</Td>
+                    <Td>
+                      {(() => {
+                        const card = gradeOfEmployment(e.person_id);
+                        if (card === null) return <span className="text-(--ink-soft)">—</span>;
+                        return (
+                          <span className="flex items-center gap-2">
+                            <Pill
+                              tone={
+                                card.grade === "F" ? "var(--danger)" : "var(--tone-ok)"
+                              }
+                            >
+                              {card.grade}
+                            </Pill>
+                            <span className="font-mono text-xs text-(--ink-soft)">
+                              {card.score}
+                            </span>
+                          </span>
+                        );
+                      })()}
+                    </Td>
                     <Td>
                       <StatusBadge value={e.status} />
                     </Td>

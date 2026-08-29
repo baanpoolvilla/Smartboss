@@ -26,10 +26,13 @@ export function EnrollFingerprintForm({
   employments,
   devices,
   nextSlot,
+  /** ตั้งค่าเมื่ออยู่ในหน้าของพนักงานคนเดียว — ซ่อนช่องเลือกคนทิ้ง */
+  lockedTo,
 }: {
   employments: EnrollOption[];
   devices: EnrollOption[];
   nextSlot: number;
+  lockedTo?: string;
 }) {
   const [state, formAction, pending] = useActionState(requestEnrollmentAction, EMPTY);
 
@@ -44,19 +47,26 @@ export function EnrollFingerprintForm({
 
   return (
     <>
-      <form action={formAction} className="grid grid-cols-1 gap-3 sm:grid-cols-5">
-        <Field label="พนักงาน *">
-          <select name="employment_id" required defaultValue="" className={inputClass}>
-            <option value="" disabled>
-              เลือกพนักงาน
-            </option>
-            {employments.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.label}
+      <form
+        action={formAction}
+        className={`grid grid-cols-1 gap-3 ${lockedTo === undefined ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}
+      >
+        {lockedTo === undefined ? (
+          <Field label="พนักงาน *">
+            <select name="employment_id" required defaultValue="" className={inputClass}>
+              <option value="" disabled>
+                เลือกพนักงาน
               </option>
-            ))}
-          </select>
-        </Field>
+              {employments.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+        ) : (
+          <input type="hidden" name="employment_id" value={lockedTo} />
+        )}
 
         <Field label="เครื่องสแกน *">
           <select name="device_id" required defaultValue={devices[0]?.id} className={inputClass}>

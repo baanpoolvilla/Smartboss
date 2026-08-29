@@ -32,19 +32,25 @@ export function AssignShiftForm({
   employments,
   shifts,
   today,
+  /** ตั้งค่าเมื่ออยู่ในหน้าของพนักงานคนเดียว — ซ่อนช่องเลือกคนทิ้ง */
+  lockedTo,
 }: {
   employments: PersonOption[];
   shifts: ShiftOption[];
   today: string;
+  lockedTo?: string;
 }) {
   const [state, formAction, pending] = useActionState(setRecurringPatternAction, EMPTY);
 
-  if (shifts.length === 0 || employments.length === 0) {
+  if (shifts.length === 0) {
     return (
       <p className="text-sm text-(--ink-soft)">
-        ต้องมีทั้งกะทำงานและพนักงานอย่างน้อยอย่างละหนึ่งก่อน จึงจะผูกตารางได้
+        ยังไม่มีกะทำงานในระบบ — สร้างที่หน้า “กะทำงาน” ก่อนจึงจะผูกตารางได้
       </p>
     );
+  }
+  if (lockedTo === undefined && employments.length === 0) {
+    return <p className="text-sm text-(--ink-soft)">ยังไม่มีพนักงานในระบบ</p>;
   }
 
   // วันทำงานตั้งต้นให้กะแรกที่ไม่ใช่วันหยุด — ส่วนเสาร์-อาทิตย์ปล่อยว่าง
@@ -54,18 +60,22 @@ export function AssignShiftForm({
     <>
       <form action={formAction} className="flex flex-col gap-3">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="พนักงาน *">
-            <select name="employment_id" required defaultValue="" className={inputClass}>
-              <option value="" disabled>
-                เลือกพนักงาน
-              </option>
-              {employments.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.label}
+          {lockedTo === undefined ? (
+            <Field label="พนักงาน *">
+              <select name="employment_id" required defaultValue="" className={inputClass}>
+                <option value="" disabled>
+                  เลือกพนักงาน
                 </option>
-              ))}
-            </select>
-          </Field>
+                {employments.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          ) : (
+            <input type="hidden" name="employment_id" value={lockedTo} />
+          )}
           <Field label="เริ่มใช้ตั้งแต่ *" hint="ผลลงเวลาก่อนวันนี้ยังใช้ตารางเดิม">
             <input
               type="date"

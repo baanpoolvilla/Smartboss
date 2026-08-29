@@ -21,7 +21,6 @@ import {
 } from "@/modules/hr/components/ui";
 import { deleteHolidayAction } from "../actions";
 import { AddHolidayForm } from "./add-holiday-form";
-import { EmployeeDaysOff } from "./employee-days-off";
 
 const MONTH_NAMES = [
   "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
@@ -156,51 +155,14 @@ export default async function HolidaysPage({
           <div className="flex flex-col gap-4">
             <SectionCard
               title="วันหยุดของพนักงานรายคน"
-              description="คลิกวันที่จะหยุด — ตารางนี้ทับตารางประจำสัปดาห์เฉพาะเดือนที่บันทึก"
+              description="ย้ายไปอยู่ในหน้าของพนักงานแต่ละคนแล้ว — ตั้งค่าของคนหนึ่งคนจบในหน้าเดียว"
             >
-              <form method="GET" className="mb-4 flex flex-wrap items-end gap-2">
-                <input type="hidden" name="year" value={year} />
-                <label className="flex min-w-56 flex-col gap-1">
-                  <span className="text-xs font-medium text-(--ink-soft)">พนักงาน</span>
-                  <select
-                    name="emp"
-                    defaultValue={selectedEmp ?? ""}
-                    className="h-11 rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm"
-                  >
-                    {people.map((e) => (
-                      <option key={e.id} value={e.id}>
-                        {e.employee_code} · {e.full_name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs font-medium text-(--ink-soft)">เดือน</span>
-                  <input
-                    type="month"
-                    name="month"
-                    defaultValue={month}
-                    className="h-11 rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm"
-                  />
-                </label>
-                <Button type="submit" variant="outline">
-                  แสดง
-                </Button>
-              </form>
-
-              {selectedEmp === null ? (
-                <EmptyState>ยังไม่มีพนักงานในระบบ</EmptyState>
-              ) : (
-                <EmployeeDaysOff
-                  key={`${selectedEmp}-${month}`}
-                  companyId={companyId}
-                  employmentId={selectedEmp}
-                  month={month}
-                  initialOff={initialOff}
-                  workShifts={workShifts}
-                  restShiftId={restShiftId}
-                />
-              )}
+              <Link
+                href="/hr/employees"
+                className="text-sm text-(--app-strong) hover:underline"
+              >
+                ไปที่ทะเบียนพนักงาน → เลือกคน → “วันหยุดของคนนี้”
+              </Link>
             </SectionCard>
 
             <SectionCard

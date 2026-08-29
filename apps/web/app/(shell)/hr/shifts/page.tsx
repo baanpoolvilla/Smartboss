@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Button } from "@smartboss/ui/components/button";
 import { HrPage } from "@/modules/hr/components/hr-page";
 import { HR_PERMS } from "@/modules/hr/permissions";
@@ -20,7 +21,6 @@ import {
   inputClass,
 } from "@/modules/hr/components/ui";
 import { createShiftAction, createWorkPolicyAction } from "../actions";
-import { AssignShiftForm } from "./assign-shift-form";
 
 interface Shift {
   id: string;
@@ -84,13 +84,6 @@ export default async function ShiftsPage() {
         ]);
 
         const today = new Date().toISOString().slice(0, 10);
-        const shiftOptions = (shifts?.items ?? []).map((s) => ({
-          id: s.id,
-          label: s.rest_day
-            ? `${s.name} (วันหยุด)`
-            : `${s.name} ${minutesToClock(s.start_minutes)}-${minutesToClock(s.end_minutes)}`,
-          restDay: s.rest_day,
-        }));
 
         return (
           <div className="flex flex-col gap-4">
@@ -312,16 +305,15 @@ export default async function ShiftsPage() {
             </SectionCard>
 
             <SectionCard
-              title="ผูกกะกับพนักงาน"
-              description="ระบบใช้ตารางนี้เทียบว่าใครควรเข้ากี่โมง — ไม่ผูกก็คิดสาย/ขาดไม่ได้"
+              title="ตารางกะของแต่ละคน"
+              description="ย้ายไปอยู่ในหน้าของพนักงานแต่ละคนแล้ว — ตั้งค่าของคนหนึ่งคนจบในหน้าเดียว"
             >
-              <AssignShiftForm
-                employments={(employments?.items ?? [])
-                  .filter((e) => e.terminated_on === null)
-                  .map((e) => ({ id: e.id, label: `${e.employee_code} · ${e.full_name}` }))}
-                shifts={shiftOptions}
-                today={today}
-              />
+              <Link
+                href="/hr/employees"
+                className="text-sm text-(--app-strong) hover:underline"
+              >
+                ไปที่ทะเบียนพนักงาน → เลือกคน → “ตารางกะประจำสัปดาห์”
+              </Link>
             </SectionCard>
           </div>
         );

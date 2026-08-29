@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 import { Button } from "@smartboss/ui/components/button";
 import { HrPage } from "@/modules/hr/components/hr-page";
@@ -29,7 +30,6 @@ import {
   revokeDeviceAction,
 } from "../actions";
 import { IssueTokenButton } from "./issue-token-button";
-import { EnrollFingerprintForm } from "./enroll-fingerprint-form";
 
 const FINGER_LABEL: Record<string, string> = {
   RIGHT_THUMB: "นิ้วโป้งขวา",
@@ -189,21 +189,20 @@ export default async function DevicesPage() {
 
             {canManage && (
               <SectionCard
-                title="ผูกลายนิ้วมือกับพนักงาน"
+                title="ลายนิ้วมือที่ผูกไว้แล้ว"
                 description="จนกว่า slot จะถูกผูก การสแกนจะถูกบันทึกแต่ไม่มีเจ้าของ และผลลงเวลาจะขึ้นว่าขาดงาน"
                 className="mt-6"
               >
-                <EnrollFingerprintForm
-                  employments={activeEmployments.map((e) => ({
-                    id: e.id,
-                    label: `${e.employee_code} · ${e.full_name}`,
-                  }))}
-                  devices={enrollableDevices.map((d) => ({
-                    id: d.id,
-                    label: `${d.device_code}${d.name ? ` · ${d.name}` : ""}`,
-                  }))}
-                  nextSlot={nextSlot}
-                />
+                <p className="text-sm text-(--ink-soft)">
+                  ผูกลายนิ้วมือย้ายไปอยู่ในหน้าของพนักงานแต่ละคนแล้ว —{" "}
+                  <Link
+                    href="/hr/employees"
+                    className="text-(--app-strong) hover:underline"
+                  >
+                    ไปที่ทะเบียนพนักงาน
+                  </Link>{" "}
+                  → เลือกคน → “ลายนิ้วมือ” · ตารางข้างล่างเป็นภาพรวมว่าใครผูกไว้กับเครื่องไหนบ้าง
+                </p>
 
                 {liveEnrollments.length > 0 && (
                   <div className="mt-4">

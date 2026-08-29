@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 import { Button } from "@smartboss/ui/components/button";
@@ -7,14 +8,21 @@ import {
   wfFetch,
   wfTry,
   WorkforceError,
+  type BiometricEnrollment,
+  type Company,
+  type Device,
   type Employment,
   type Paged,
+  type Person,
 } from "@/modules/hr/lib/api";
 import {
   DataTable,
+  EmptyState,
   Field,
   NoPermission,
+  Pill,
   SectionCard,
+  StatCard,
   StatusBadge,
   Td,
   inputClass,
@@ -26,8 +34,13 @@ import {
 } from "@/modules/hr/lib/labels";
 import {
   addCompensationRateAction,
+  deleteEnrollmentsAction,
   terminateEmploymentAction,
 } from "../../actions";
+import { AssignShiftForm } from "../../shifts/assign-shift-form";
+import { EmployeeDaysOff } from "../../holidays/employee-days-off";
+import { EnrollFingerprintForm } from "../../devices/enroll-fingerprint-form";
+import { buildScorecards } from "@/lib/performance";
 
 interface CompensationRate {
   id: string;
@@ -38,6 +51,18 @@ interface CompensationRate {
   effective_from: string;
   effective_to: string | null;
   note: string;
+}
+
+/** 480 → "08:00" · เกิน 1440 = ข้ามวัน */
+function minutesToClock(minutes: number): string {
+  const day = Math.floor(minutes / 1440);
+  const within = minutes - day * 1440;
+  const text = `${String(Math.floor(within / 60)).padStart(2, "0")}:${String(within % 60).padStart(2, "0")}`;
+  return day > 0 ? `${text} (+${day})` : text;
+}
+
+function deviceCodeOf(devices: Device[], deviceId: string): string {
+  return devices.find((d) => d.id === deviceId)?.device_code ?? "เครื่อง";
 }
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
@@ -51,20 +76,26 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 
 export default async function EmployeeDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ month?: string }>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
+  const month = /^\d{4}-\d{2}$/.test(sp.month ?? "")
+    ? sp.month!
+    : new Date().toISOString().slice(0, 7);
   const session = await requireOrg();
   const canManage = hasPermission(session, HR_PERMS.employeeManage);
   const canManageSalary = hasPermission(session, HR_PERMS.salaryManage);
 
   return (
     <HrPage
-      title="รายละเอียดพนักงาน"
+      title="ตั้งค่าพนักงาน"
       permission={HR_PERMS.employeeView}
       backHref="/hr/employees"
-      width="max-w-3xl"
+      width="max-w-4xl"
       load={async () => {
         let employment: Employment;
         try {
@@ -74,10 +105,71 @@ export default async function EmployeeDetailPage({
           throw error;
         }
 
-        // อัตราค่าจ้างเป็นข้อมูลอ่อนไหว — คนที่ไม่มีสิทธิ์จะได้ null
-        const rates = await wfTry<Paged<CompensationRate>>(
-          `/compensation-rates?employment_id=${id}`
+        const daysInMonth = new Date(
+          Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0),
+        ).getUTCDate();
+        const monthFrom = `${month}-01`;
+        const monthTo = `${month}-${String(daysInMonth).padStart(2, "0")}`;
+
+        /*
+         * รวมทุกอย่างของคนนี้ไว้หน้าเดียว — เดิมกระจายอยู่ 4 หน้า (ค่าจ้างที่นี่,
+         * ตารางกะที่ /hr/shifts, วันหยุดที่ /hr/holidays, ลายนิ้วมือที่ /hr/devices)
+         * ทำให้ตั้งค่าคนหนึ่งคนต้องเดินสี่หน้าและจำได้ยากว่าตั้งครบหรือยัง
+         *
+         * ทุกตัวเป็น wfTry — คนที่ดูทะเบียนพนักงานได้อาจไม่มีสิทธิ์ดูค่าจ้าง
+         * หรือจัดการกะ ไม่ควรให้ 403 ตัวเดียวล้มทั้งหน้า
+         */
+        const [rates, companies, shifts, devices, enrollments, people, assigned] =
+          await Promise.all([
+            // อัตราค่าจ้างเป็นข้อมูลอ่อนไหว — คนที่ไม่มีสิทธิ์จะได้ null
+            wfTry<Paged<CompensationRate>>(`/compensation-rates?employment_id=${id}`),
+            wfTry<Paged<Company>>("/companies"),
+            wfTry<Paged<{ id: string; code: string; name: string; rest_day: boolean; start_minutes: number; end_minutes: number }>>(
+              "/shifts",
+            ),
+            wfTry<Paged<Device>>("/devices"),
+            wfTry<Paged<BiometricEnrollment>>(`/biometric-enrollments?employment_id=${id}`),
+            wfTry<Paged<Person>>("/people"),
+            wfTry<{ items: { work_date: string; shift_id: string | null }[] }>(
+              `/shift-assignments?from=${monthFrom}&to=${monthTo}&employment_id=${id}`,
+            ),
+          ]);
+
+        const companyId = companies?.items[0]?.id;
+        const shiftItems = shifts?.items ?? [];
+        const restShiftId = shiftItems.find((sh) => sh.rest_day)?.id ?? null;
+        const workShifts = shiftItems
+          .filter((sh) => !sh.rest_day)
+          .map((sh) => ({ id: sh.id, label: `${sh.code} · ${sh.name}` }));
+        const initialOff = (assigned?.items ?? [])
+          .filter((a) => a.shift_id !== null && a.shift_id === restShiftId)
+          .map((a) => a.work_date);
+
+        const liveEnrollments = (enrollments?.items ?? []).filter(
+          (en) => en.status !== "DELETED",
         );
+        const activeDevices = (devices?.items ?? []).filter((d) => d.status === "ACTIVE");
+        const nextSlot =
+          liveEnrollments.length === 0
+            ? 1
+            : Math.max(...liveEnrollments.map((en) => en.template_slot)) + 1;
+
+        /*
+         * คะแนนผลงานอยู่ใน core.performance_events ซึ่งผูกกับ core.users.id
+         * ส่วนทะเบียนจ้างงานอยู่ฝั่ง workforce — จับคู่ด้วยอีเมล ค่าเดียวที่ทั้งสอง
+         * ระบบมีและไม่ซ้ำ (ตัวเดียวกับที่ provisionPrincipal และหน้านำเข้าใช้)
+         */
+        const email = (people?.items ?? [])
+          .find((row) => row.id === employment.person_id)
+          ?.email?.toLowerCase();
+        const now = new Date();
+        const scoreFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+        const scorecard =
+          email === undefined
+            ? null
+            : await buildScorecards(session.orgId, scoreFrom, now)
+                .then((r) => r.cards.find((c) => c.email.toLowerCase() === email) ?? null)
+                .catch(() => null);
 
         return (
           <div className="flex flex-col gap-4">
@@ -103,6 +195,62 @@ export default async function EmployeeDetailPage({
               )}
               <Row label="เขตเวลา" value={employment.time_zone} />
             </SectionCard>
+
+            {scorecard !== null && (
+              <SectionCard
+                title="คะแนนผลงานเดือนนี้"
+                description="คิดรวมจากงานซ่อมบำรุง งานในบอร์ด และการลงเวลา — ดูที่มาทุกแต้มได้ที่หน้าผลงานรายคน"
+                action={
+                  <Link href="/admin/performance">
+                    <Button size="sm" variant="outline">
+                      ดูรายละเอียด
+                    </Button>
+                  </Link>
+                }
+              >
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  <StatCard
+                    label="เกรด"
+                    value={scorecard.grade}
+                    tone={
+                      scorecard.grade === "F" ? "var(--danger)" : "var(--app-strong)"
+                    }
+                  />
+                  <StatCard label="คะแนนรวม" value={String(scorecard.score)} />
+                  <StatCard
+                    label="เหตุการณ์ที่หักคะแนน"
+                    value={String(scorecard.eventCount)}
+                    hint={scorecard.eventCount === 0 ? "ไม่มีเลย" : "ครั้ง"}
+                  />
+                </div>
+
+                {scorecard.byCategory.length > 0 && (
+                  <div className="mt-3">
+                    <DataTable head={["เสียคะแนนเพราะ", "จำนวนครั้ง", "คะแนน"]}>
+                      {scorecard.byCategory.map((row) => (
+                        <tr key={row.category} className="hover:bg-(--bg-soft)">
+                          <Td>{row.label}</Td>
+                          <Td align="right">{row.count}</Td>
+                          <Td
+                            align="right"
+                            className="font-medium"
+                            // แต้มติดลบคือสิ่งที่ต้องสังเกต ไม่ใช่ตัวเลขเฉย ๆ
+                          >
+                            <span
+                              style={{
+                                color: row.points < 0 ? "var(--danger)" : "var(--tone-ok)",
+                              }}
+                            >
+                              {row.points > 0 ? `+${row.points}` : row.points}
+                            </span>
+                          </Td>
+                        </tr>
+                      ))}
+                    </DataTable>
+                  </div>
+                )}
+              </SectionCard>
+            )}
 
             <SectionCard
               title="อัตราค่าจ้าง"
@@ -183,6 +331,99 @@ export default async function EmployeeDetailPage({
                   </p>
                 </details>
               )}
+            </SectionCard>
+
+            <SectionCard
+              title="ตารางกะประจำสัปดาห์"
+              description="ระบบใช้ตารางนี้เทียบว่าคนนี้ควรเข้ากี่โมง — ไม่ผูกก็คิดสาย/ขาดไม่ได้"
+            >
+              {canManage ? (
+                <AssignShiftForm
+                  employments={[]}
+                  lockedTo={id}
+                  shifts={shiftItems.map((sh) => ({
+                    id: sh.id,
+                    label: sh.rest_day
+                      ? `${sh.name} (วันหยุด)`
+                      : `${sh.name} ${minutesToClock(sh.start_minutes)}-${minutesToClock(sh.end_minutes)}`,
+                    restDay: sh.rest_day,
+                  }))}
+                  today={new Date().toISOString().slice(0, 10)}
+                />
+              ) : (
+                <p className="text-sm text-(--ink-soft)">ไม่มีสิทธิ์แก้ตารางกะ</p>
+              )}
+            </SectionCard>
+
+            {canManage && companyId !== undefined && (
+              <SectionCard
+                title="วันหยุดของคนนี้"
+                description="คลิกวันที่จะหยุด — ทับตารางประจำสัปดาห์เฉพาะเดือนที่บันทึก"
+                action={
+                  <form method="GET" className="flex items-end gap-2">
+                    <input
+                      type="month"
+                      name="month"
+                      defaultValue={month}
+                      className="h-9 rounded-(--radius) border border-(--line) bg-(--bg) px-2 text-xs"
+                    />
+                    <Button type="submit" size="sm" variant="outline">
+                      แสดง
+                    </Button>
+                  </form>
+                }
+              >
+                <EmployeeDaysOff
+                  key={month}
+                  companyId={companyId}
+                  employmentId={id}
+                  month={month}
+                  initialOff={initialOff}
+                  workShifts={workShifts}
+                  restShiftId={restShiftId}
+                />
+              </SectionCard>
+            )}
+
+            <SectionCard
+              title="ลายนิ้วมือ"
+              description="ต้องผูก slot บนเครื่องกับคนนี้ ระบบถึงจะรู้ว่าใครสแกน"
+            >
+              {liveEnrollments.length > 0 && (
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  {liveEnrollments.map((en) => (
+                    <Pill
+                      key={en.id}
+                      tone={en.status === "ACTIVE" ? "var(--tone-ok)" : "var(--tone-warn)"}
+                    >
+                      {deviceCodeOf(devices?.items ?? [], en.device_id)} · slot {en.template_slot} ·{" "}
+                      {en.status === "ACTIVE" ? "ใช้งานได้" : "รอวางนิ้วที่เครื่อง"}
+                    </Pill>
+                  ))}
+                  {canManage && (
+                    <form action={deleteEnrollmentsAction}>
+                      <input type="hidden" name="employmentId" value={id} />
+                      <Button type="submit" size="sm" variant="danger">
+                        ลบทุกเครื่อง
+                      </Button>
+                    </form>
+                  )}
+                </div>
+              )}
+
+              {canManage ? (
+                <EnrollFingerprintForm
+                  employments={[]}
+                  lockedTo={id}
+                  devices={activeDevices.map((d) => ({
+                    id: d.id,
+                    label: `${d.device_code}${d.name ? ` · ${d.name}` : ""}`,
+                  }))}
+                  nextSlot={nextSlot}
+                />
+              ) : liveEnrollments.length === 0 ? (
+                <EmptyState>ยังไม่ได้ผูกลายนิ้วมือ</EmptyState>
+              ) : null}
             </SectionCard>
 
             {canManage && employment.status === "ACTIVE" && (
