@@ -383,14 +383,14 @@ function ReportFeedPageInner() {
     const active = currentCutoff(activeTopic.cutoffs);
     return activeTopic.cutoffs.map((c) => {
       const required = c.minImages ?? activeTopic.minImages;
+      // A round label of a couple characters or less ("t", "00") is almost
+      // always leftover placeholder text from setting the round up, not a
+      // real name like "รอบเช้า" — showing it as a stray fragment right
+      // before the actual time read as clutter, not useful context
+      // ("มันเยอะไปมันรก"). Real, longer labels still show.
+      const label = c.label.trim().length > 2 ? c.label.trim() : null;
       return {
-        // Was one run-on string ("t 13:00 → 14:00 (แนบรูป ≥1)") — label and
-        // time weren't visually separated at all, so a room whose label
-        // itself happens to contain a dash or a time-looking string
-        // ("ดูยาก งง") read as one indecipherable blob. "ตัดยอด"/"น." and a
-        // full "รูป" spell out what each number actually means instead of
-        // asking the reader to infer it from bare digits.
-        text: `${c.label} · ตัดยอด ${c.time} น.${required > 0 ? ` · แนบรูป ≥${required} รูป` : ""}`,
+        text: `${label ? `${label} ` : ""}${c.time} น.${required > 0 ? ` (≥${required} รูป)` : ""}`,
         active: active?.id === c.id,
       };
     });
@@ -657,13 +657,23 @@ function ReportFeedPageInner() {
                   // Plain inline text now, not a row of pills — "เริ่ม 13:00
                   // น. · แนบรูป ≥1 รูป" reads as metadata about the room, not
                   // controls, so it shouldn't look like more buttons stacked
-                  // under the real ones in row 1. The currently-active round
-                  // still stands out (accent color + medium weight) without
-                  // needing its own colored background to do it.
-                  <div className="px-5 pb-2 flex items-center gap-4 overflow-x-auto text-xs text-[var(--ink-soft)]">
+                  // under the real ones in row 1. One leading icon + one
+                  // "ตัดยอด" for the whole row instead of repeating both per
+                  // round — 2+ rounds each restating "ตัดยอด" and carrying
+                  // their own icon was most of what read as cluttered
+                  // ("มันเยอะไปมันรก"); the times themselves are what
+                  // actually differ between rounds. The currently-active
+                  // round still stands out (accent color + medium weight).
+                  <div className="px-5 pb-2 flex items-center gap-1.5 overflow-x-auto text-xs text-[var(--ink-soft)]">
+                    {activeTopic.cutoffs.length > 0 ? (
+                      <TriangleAlert className="h-3 w-3 shrink-0" />
+                    ) : (
+                      <ImagePlus className="h-3 w-3 shrink-0" />
+                    )}
+                    {activeTopic.cutoffs.length > 0 && <span className="shrink-0">ตัดยอด</span>}
                     {requirementParts.map((r, i) => (
-                      <span key={i} className={cn("flex items-center gap-1 shrink-0", r.active && "text-[var(--brand-green-dark)] font-medium")}>
-                        {activeTopic.minImages > 0 ? <ImagePlus className="h-3 w-3 shrink-0" /> : <TriangleAlert className="h-3 w-3 shrink-0" />}
+                      <span key={i} className={cn("shrink-0", r.active && "text-[var(--brand-green-dark)] font-medium")}>
+                        {i > 0 && <span className="text-[var(--ink-faint)]"> · </span>}
                         {r.text}
                       </span>
                     ))}
