@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import { Input } from "@/modules/report_task/components/ui/input";
@@ -8,8 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { users, departments, getDepartment } from "@/modules/report_task/lib/directory";
 import { colorPalette, useEventColorStore } from "@/modules/report_task/store/event-color-store";
 import { useCalendarVisibilityStore } from "@/modules/report_task/store/calendar-visibility-store";
-import { useHolidayStore, THAI_SOURCE, isSourceSelected } from "@/modules/report_task/store/holiday-store";
-import { useIdentityStore } from "@/modules/report_task/store/identity-store";
+import { THAI_SOURCE } from "@/modules/report_task/store/holiday-store";
 import { cn } from "@/modules/report_task/lib/utils";
 import { ChevronDown, Search } from "lucide-react";
 
@@ -20,63 +19,38 @@ function colorFor(index: number) {
   return colorPalette[index % colorPalette.length]!.value;
 }
 
-// Nager.Date has no Thai data, so Thailand is a fixed, locally-sourced entry
-// pinned above the fetched list — same shape as add-calendar-dialog's own
-// THAILAND constant (kept separate since that one isn't exported).
-const THAILAND_COUNTRY = { countryCode: THAI_SOURCE, name: "ไทย (Thailand)" };
-
-/** Toggle whose country-holiday sets show on your own calendar — the same
- * per-user selection add-calendar-dialog's "เพิ่มวันหยุดตามประเทศ" pane
- * manages, surfaced here as one more show/hide row so it doesn't take a
- * trip to settings just to hide a country you already turned on. Only
+/** Toggle whether holidays show on your own calendar — a purely local
+ * show/hide preference (see calendar-visibility-store's own comment on
+ * hiddenHolidaySourceIds for why: holidays are org-wide data from the HR
+ * module now, not a per-user country selection anymore — the API that used
+ * to back selectSource/deselectSource permanently rejects writes to this
+ * key with 409 since that migration, pointing people at /hr instead). Only
  * rendered on the วันหยุด·ลา tab (see showCountryHolidays), since work-tab
- * calendars don't show holidays at all. */
+ * calendars don't show holidays at all.
+ *
+ * Just "ไทย (Thailand)" for now — that's the only source HR actually
+ * provides (see listHolidayEvents) — but keyed by THAI_SOURCE so this slots
+ * in cleanly if the HR module ever exposes more than one country. */
 function CountryHolidayToggleList() {
-  const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
-  const selectedByUser = useHolidayStore((s) => s.selectedByUser);
-  const selectSource = useHolidayStore((s) => s.selectSource);
-  const deselectSource = useHolidayStore((s) => s.deselectSource);
+  const hiddenHolidaySourceIds = useCalendarVisibilityStore((s) => s.hiddenHolidaySourceIds);
+  const toggleHolidaySource = useCalendarVisibilityStore((s) => s.toggleHolidaySource);
   const holidayColor = useEventColorStore((s) => s.colors.holiday);
-  const [countries, setCountries] = useState<{ countryCode: string; name: string }[]>([]);
-
-  useEffect(() => {
-    fetch("/api/report-task/holidays/countries")
-      .then((r) => r.json())
-      .then((data) => Array.isArray(data) && setCountries(data))
-      .catch(() => {});
-  }, []);
-
-  const isChecked = (code: string) => isSourceSelected(selectedByUser, viewingAsUserId, code);
-  // Only countries this person already turned on — adding a new one still
-  // happens from add-calendar-dialog's full country picker; this list is
-  // just for showing/hiding what's already selected.
-  const active = [THAILAND_COUNTRY, ...countries].filter((c) => isChecked(c.countryCode));
-  if (active.length === 0) return null;
+  const checked = !hiddenHolidaySourceIds.includes(THAI_SOURCE);
 
   return (
     <div className="mb-4">
       <h3 className="text-base font-semibold">วันหยุดประเทศ</h3>
       <p className="text-xs text-[var(--ink-soft)] mt-1 mb-3">ติ๊กเพื่อแสดง/ซ่อนวันหยุดของแต่ละประเทศที่เลือกไว้</p>
       <div className="flex flex-col">
-        {active.map((c) => {
-          const checked = isChecked(c.countryCode);
-          return (
-            <label
-              key={c.countryCode}
-              className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-[var(--bg-soft)] cursor-pointer"
-            >
-              <Checkbox
-                checked={checked}
-                onCheckedChange={() =>
-                  checked ? deselectSource(viewingAsUserId, c.countryCode) : selectSource(viewingAsUserId, c.countryCode)
-                }
-                aria-label={`แสดงวันหยุดของ ${c.name}`}
-              />
-              <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: holidayColor }} />
-              <span className={cn("text-sm truncate", !checked && "text-[var(--ink-soft)] line-through")}>{c.name}</span>
-            </label>
-          );
-        })}
+        <label className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-[var(--bg-soft)] cursor-pointer">
+          <Checkbox
+            checked={checked}
+            onCheckedChange={() => toggleHolidaySource(THAI_SOURCE)}
+            aria-label="แสดงวันหยุดของ ไทย (Thailand)"
+          />
+          <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: holidayColor }} />
+          <span className={cn("text-sm truncate", !checked && "text-[var(--ink-soft)] line-through")}>ไทย (Thailand)</span>
+        </label>
       </div>
     </div>
   );
