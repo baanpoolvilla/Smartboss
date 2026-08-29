@@ -14,11 +14,8 @@ import {
   AlertDialogTitle,
 } from "@/modules/report_task/components/ui/alert-dialog";
 import { Input } from "@/modules/report_task/components/ui/input";
-import { Switch } from "@/modules/report_task/components/ui/switch";
 import { Button } from "@/modules/report_task/components/ui/button";
-import { THAI_SOURCE } from "@/modules/report_task/store/holiday-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { useCalendarVisibilityStore } from "@/modules/report_task/store/calendar-visibility-store";
 import { useGoogleCalendarStore, type ExternalCalendarLink, type IcsLinkTarget } from "@/modules/report_task/store/google-calendar-store";
 import { PeopleCalendarList } from "./people-calendar-list";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -51,17 +48,14 @@ function formatLocalDMY(d: Date) {
   return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
 
-interface Country {
-  countryCode: string;
-  name: string;
-}
-
 type Section = "recommended" | "people";
 
-// "วันหยุดตามประเทศ" and "ปฏิทินภายนอก" moved to /settings (โปรไฟล์ของฉัน) —
-// personal preferences, not something you set up mid-flow while adding a
-// calendar. HolidaysPane/GoogleCalendarPane stay in this file (exported) and
-// are reused there.
+// "ปฏิทินภายนอก" moved to /settings (โปรไฟล์ของฉัน) — a personal preference,
+// not something you set up mid-flow while adding a calendar.
+// GoogleCalendarPane stays in this file (exported) and is reused there.
+// (The old "วันหยุดตามประเทศ" country picker that used to live next to it
+// here was removed outright — see git history — once holidays became
+// org-wide data owned by the HR module instead of a per-user selection.)
 const navItems: { key: Section; label: string; icon: typeof Lightbulb }[] = [
   { key: "recommended", label: "แนะนำ", icon: Lightbulb },
   { key: "people", label: "คนในองค์กร", icon: Users },
@@ -136,7 +130,7 @@ function RecommendedPane({ onNavigate }: { onNavigate: (s: Section) => void }) {
     <div className="max-w-sm">
       <h2 className="text-2xl font-semibold leading-tight">ทีมเวิร์กทำให้งานสำเร็จ</h2>
       <p className="text-sm text-[var(--ink-soft)] mt-2">
-        เลือกดูปฏิทินของเพื่อนร่วมทีม หรือเพิ่มวันหยุดราชการของประเทศที่ทีมมีสำนักงาน เข้ามาไว้ในปฏิทินของคุณเอง (ไม่กระทบปฏิทินคนอื่น)
+        เลือกดูปฏิทินของเพื่อนร่วมทีม หรือเชื่อมต่อปฏิทินภายนอกเข้ามาไว้ในปฏิทินของคุณเอง (ไม่กระทบปฏิทินคนอื่น)
       </p>
       <div className="flex flex-col gap-2 mt-4">
         <button
@@ -146,61 +140,11 @@ function RecommendedPane({ onNavigate }: { onNavigate: (s: Section) => void }) {
           <Users className="h-4 w-4" /> ดูปฏิทินของทีม
         </button>
         <Link
-          href="/report-task/settings?tab=profile&section=holidays"
-          className="flex items-center gap-2 rounded-lg border border-[var(--line)] hover:border-[var(--brand-green)] text-sm font-medium px-4 py-2.5 w-fit transition-colors"
-        >
-          <Globe className="h-4 w-4" /> เพิ่มวันหยุดตามประเทศ (ไปที่หน้าตั้งค่า)
-        </Link>
-        <Link
           href="/report-task/settings?tab=profile&section=externalCalendar"
           className="flex items-center gap-2 rounded-lg border border-[var(--line)] hover:border-[var(--brand-green)] text-sm font-medium px-4 py-2.5 w-fit transition-colors"
         >
           <CalendarCheck2 className="h-4 w-4" /> เชื่อมต่อปฏิทินภายนอก (ไปที่หน้าตั้งค่า)
         </Link>
-      </div>
-    </div>
-  );
-}
-
-// Just "ไทย (Thailand)" now — see this component's own comment below for why
-// the old multi-country picker (Nager.Date search, per-year import) is gone.
-const THAILAND: Country = { countryCode: THAI_SOURCE, name: "ไทย (Thailand)" };
-
-/** Show/hide whether holidays appear on your own calendar — a purely local
- * on/off preference, not a country picker anymore.
- *
- * This used to let each person import and personally select OTHER
- * countries' holidays too (Nager.Date). That broke for real once holidays
- * moved to being org-wide data owned by the HR module: the API now always
- * hands back only the HR-managed (Thai) holidays on every load, silently
- * dropping anything else that had been imported, and rejects any write to
- * the underlying "holidays" key outright (see the store API route's
- * WORKFORCE_KEYS guard) — so selecting another country never actually
- * worked, it just looked like it did for one page view. What's actually
- * wanted here — confirmed directly — is much simpler than that: just a
- * way to see whether a holiday's showing, on or off, nothing more. Same
- * hiddenHolidaySourceIds local toggle as the calendar sidebar's own
- * "วันหยุดประเทศ" list (people-calendar-list.tsx) — one flag, no server
- * round-trip, so there's nothing left here that can 409. */
-export function HolidaysPane() {
-  const hiddenHolidaySourceIds = useCalendarVisibilityStore((s) => s.hiddenHolidaySourceIds);
-  const toggleHolidaySource = useCalendarVisibilityStore((s) => s.toggleHolidaySource);
-  const checked = !hiddenHolidaySourceIds.includes(THAI_SOURCE);
-
-  return (
-    <div>
-      <h3 className="text-base font-semibold">วันหยุดตามประเทศ</h3>
-      <p className="text-xs text-[var(--ink-soft)] mt-1 mb-3">
-        ติ๊กเพื่อแสดง/ซ่อนวันหยุดใน<strong>ปฏิทินของคุณเอง</strong> — วันหยุดจริงมาจากที่ตั้งค่าไว้ในระบบบุคคล (HR) ไม่กระทบปฏิทินคนอื่น
-      </p>
-      <div className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1.5 hover:bg-[var(--bg-soft)] text-sm w-fit min-w-[240px]">
-        <span className="font-medium">{THAILAND.name}</span>
-        <Switch
-          size="sm"
-          checked={checked}
-          onCheckedChange={() => toggleHolidaySource(THAI_SOURCE)}
-          aria-label="เปิด/ปิดวันหยุดของ ไทย (Thailand)"
-        />
       </div>
     </div>
   );

@@ -6,9 +6,8 @@ import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avat
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
 import { users, departments, getDepartment } from "@/modules/report_task/lib/directory";
-import { colorPalette, useEventColorStore } from "@/modules/report_task/store/event-color-store";
+import { colorPalette } from "@/modules/report_task/store/event-color-store";
 import { useCalendarVisibilityStore } from "@/modules/report_task/store/calendar-visibility-store";
-import { THAI_SOURCE } from "@/modules/report_task/store/holiday-store";
 import { cn } from "@/modules/report_task/lib/utils";
 import { ChevronDown, Search } from "lucide-react";
 
@@ -17,43 +16,6 @@ const COLLAPSED_COUNT = 8;
 /** A stable color per person, cycling through the shared palette by index. */
 function colorFor(index: number) {
   return colorPalette[index % colorPalette.length]!.value;
-}
-
-/** Toggle whether holidays show on your own calendar — a purely local
- * show/hide preference (see calendar-visibility-store's own comment on
- * hiddenHolidaySourceIds for why: holidays are org-wide data from the HR
- * module now, not a per-user country selection anymore — the API that used
- * to back selectSource/deselectSource permanently rejects writes to this
- * key with 409 since that migration, pointing people at /hr instead). Only
- * rendered on the วันหยุด·ลา tab (see showCountryHolidays), since work-tab
- * calendars don't show holidays at all.
- *
- * Just "ไทย (Thailand)" for now — that's the only source HR actually
- * provides (see listHolidayEvents) — but keyed by THAI_SOURCE so this slots
- * in cleanly if the HR module ever exposes more than one country. */
-function CountryHolidayToggleList() {
-  const hiddenHolidaySourceIds = useCalendarVisibilityStore((s) => s.hiddenHolidaySourceIds);
-  const toggleHolidaySource = useCalendarVisibilityStore((s) => s.toggleHolidaySource);
-  const holidayColor = useEventColorStore((s) => s.colors.holiday);
-  const checked = !hiddenHolidaySourceIds.includes(THAI_SOURCE);
-
-  return (
-    <div className="mb-4">
-      <h3 className="text-base font-semibold">วันหยุดประเทศ</h3>
-      <p className="text-xs text-[var(--ink-soft)] mt-1 mb-3">ติ๊กเพื่อแสดง/ซ่อนวันหยุดของแต่ละประเทศที่เลือกไว้</p>
-      <div className="flex flex-col">
-        <label className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-[var(--bg-soft)] cursor-pointer">
-          <Checkbox
-            checked={checked}
-            onCheckedChange={() => toggleHolidaySource(THAI_SOURCE)}
-            aria-label="แสดงวันหยุดของ ไทย (Thailand)"
-          />
-          <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: holidayColor }} />
-          <span className={cn("text-sm truncate", !checked && "text-[var(--ink-soft)] line-through")}>ไทย (Thailand)</span>
-        </label>
-      </div>
-    </div>
-  );
 }
 
 /** Outlook-style "People's calendars" — toggle whose tasks/meetings/leave show. */
@@ -66,10 +28,7 @@ export function PeopleCalendarList({
   // shows the full list by default instead and leans on the box's own
   // scroll for the rare org too big to fit — no fixed count involved.
   alwaysExpanded = false,
-  // Only true on the วันหยุด·ลา tab (see calendar-view.tsx/calendar-rail.tsx)
-  // — the งาน tab has no holiday data to toggle.
-  showCountryHolidays = false,
-}: { singleColumn?: boolean; alwaysExpanded?: boolean; showCountryHolidays?: boolean }) {
+}: { singleColumn?: boolean; alwaysExpanded?: boolean }) {
   const hiddenUserIds = useCalendarVisibilityStore((s) => s.hiddenUserIds);
   const toggle = useCalendarVisibilityStore((s) => s.toggle);
   const showAll = useCalendarVisibilityStore((s) => s.showAll);
@@ -97,7 +56,6 @@ export function PeopleCalendarList({
 
   return (
     <div>
-      {showCountryHolidays && <CountryHolidayToggleList />}
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-base font-semibold">คนในองค์กร</h3>
         <button

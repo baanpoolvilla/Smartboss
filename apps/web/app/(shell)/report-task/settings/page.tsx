@@ -19,7 +19,7 @@ import { PermissionGuidePanel } from "@/modules/report_task/components/shared/pe
 import { DepartmentSettingsPanel, EmployeeSettingsPanel } from "@/modules/report_task/components/shared/org-settings-panel";
 import { EmailNotificationSettingsPanel } from "@/modules/report_task/components/shared/email-notification-settings-dialog";
 import { DeadlineReminderSettingsPanel } from "@/modules/report_task/components/shared/deadline-reminder-settings-panel";
-import { HolidaysPane, GoogleCalendarPane } from "@/modules/report_task/components/calendar/add-calendar-dialog";
+import { GoogleCalendarPane } from "@/modules/report_task/components/calendar/add-calendar-dialog";
 import { PageHeader } from "@/modules/report_task/components/shared/page-header";
 import { IssueDeskConfigPanel } from "@/modules/report_task/components/issue-report/issue-desk-config-panel";
 import { useIssueDeskConfigStore } from "@/modules/report_task/store/issue-desk-config-store";
@@ -34,7 +34,6 @@ import {
   CalendarDays,
   CalendarOff,
   ChevronRight,
-  Globe,
   KanbanSquare,
   MessageSquareText,
   Paperclip,
@@ -161,15 +160,14 @@ function SettingsPageInner() {
     reminders: owner ? [{ key: "deadlineReminders", label: "แจ้งเตือนใกล้ถึงกำหนด", icon: Bell }] : [],
     profile: [
       { key: "email", label: "แจ้งเตือนอีเมล", icon: Bell },
-      { key: "holidays", label: "วันหยุดตามประเทศ", icon: Globe },
       { key: "externalCalendar", label: "ปฏิทินภายนอก", icon: CalendarCheck2 },
     ],
   };
 
   const currentSections = sectionsByTab[tab];
-  // A deep link (e.g. "เพิ่มวันหยุดตามประเทศ" from the calendar) can name the
-  // exact section it wants opened via ?section= — falls back to the tab's
-  // first section when absent or when it doesn't belong to this tab.
+  // A deep link can name the exact section it wants opened via ?section= —
+  // falls back to the tab's first section when absent or when it doesn't
+  // belong to this tab.
   const initialSection = searchParams.get("section");
   const [sectionKey, setSectionKey] = useState<string>(
     initialSection && currentSections.some((s) => s.key === initialSection) ? initialSection : currentSections[0]?.key ?? ""
@@ -312,7 +310,6 @@ function SettingsPageInner() {
           {tab === "profile" && (
             <section className="rounded-2xl border border-[var(--line)] bg-white p-5 shadow-sm">
               {sectionKey === "email" && <EmailNotificationSettingsPanel />}
-              {sectionKey === "holidays" && <HolidaysPane />}
               {sectionKey === "externalCalendar" && <GoogleCalendarPane />}
             </section>
           )}

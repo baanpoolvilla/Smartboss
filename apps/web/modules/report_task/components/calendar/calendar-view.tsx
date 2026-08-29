@@ -137,7 +137,6 @@ export function CalendarView() {
   const colors = useEventColorStore((s) => s.colors);
   const hiddenUserIds = useCalendarVisibilityStore((s) => s.hiddenUserIds);
   const toggleUserVisible = useCalendarVisibilityStore((s) => s.toggle);
-  const hiddenHolidaySourceIds = useCalendarVisibilityStore((s) => s.hiddenHolidaySourceIds);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const taskScope = useCalendarScopeStore((s) => s.scope);
   const setTaskScope = useCalendarScopeStore((s) => s.setScope);
@@ -152,20 +151,11 @@ export function CalendarView() {
       setTaskScope("mine");
     }
   }, [viewingAsUserId, setTaskScope]);
-  // isSourceSelected's per-user server selection is effectively dead now —
-  // holidays come from the HR module (org-wide), and the API that used to
-  // back selectSource/deselectSource permanently 409s any write to this key
-  // (see the store route's WORKFORCE_KEYS guard) — so `holidaySelections`
-  // always reads back as `{}` regardless of what anyone clicks. The actual
-  // per-viewer show/hide preference lives client-only in
-  // hiddenHolidaySourceIds instead (calendar-visibility-store) — see
-  // people-calendar-list.tsx's CountryHolidayToggleList, which writes there.
+  // Each country (Thailand included) only shows on the calendar of whoever
+  // personally selected it — see holidaySource/isSourceSelected.
   const holidays = useMemo(
-    () =>
-      allHolidays.filter(
-        (h) => isSourceSelected(holidaySelections, viewingAsUserId, holidaySource(h)) && !hiddenHolidaySourceIds.includes(holidaySource(h))
-      ),
-    [allHolidays, holidaySelections, viewingAsUserId, hiddenHolidaySourceIds]
+    () => allHolidays.filter((h) => isSourceSelected(holidaySelections, viewingAsUserId, holidaySource(h))),
+    [allHolidays, holidaySelections, viewingAsUserId]
   );
   const [tab, setTab] = useState<CalendarTab>("work");
   // Color now encodes type only (task/meeting/สิ่งที่ต้องทำ), not priority —
@@ -1271,7 +1261,7 @@ export function CalendarView() {
       </StickyFilterBar>
 
       <div className="flex items-start gap-5">
-        <CalendarRail showCountryHolidays={tab === "schedule"} />
+        <CalendarRail />
         <div className="flex-1 min-w-0 flex flex-col gap-4 lg:gap-6">
           <FullCalendarView
             ref={fullCalendarRef}
