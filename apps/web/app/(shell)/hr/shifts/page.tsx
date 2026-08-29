@@ -6,7 +6,6 @@ import {
   wfFetch,
   wfTry,
   type Company,
-  type Employment,
   type Paged,
 } from "@/modules/hr/lib/api";
 import {
@@ -77,10 +76,9 @@ export default async function ShiftsPage() {
           return <NotProvisioned what="ตั้งกะทำงาน" />;
         }
 
-        const [shifts, policies, employments] = await Promise.all([
+        const [shifts, policies] = await Promise.all([
           wfTry<Paged<Shift>>(`/shifts?company_id=${companyId}`),
           wfTry<Paged<WorkPolicy>>("/work-policies"),
-          wfTry<Paged<Employment>>("/employments"),
         ]);
 
         const today = new Date().toISOString().slice(0, 10);

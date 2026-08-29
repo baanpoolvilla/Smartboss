@@ -72,7 +72,6 @@ export default async function DevicesPage() {
 
         // สั่ง enroll ได้เฉพาะเครื่องที่ activate แล้ว — ฝั่ง API ปฏิเสธด้วย 409
         // ถ้าเครื่องยังไม่ ACTIVE จึงไม่มีประโยชน์ที่จะให้เลือก
-        const enrollableDevices = devices.items.filter((d) => d.status === "ACTIVE");
         const activeEmployments = (employments?.items ?? []).filter(
           (e) => e.terminated_on === null,
         );
