@@ -149,10 +149,6 @@ export default async function EmployeeDetailPage({
           (en) => en.status !== "DELETED",
         );
         const activeDevices = (devices?.items ?? []).filter((d) => d.status === "ACTIVE");
-        const nextSlot =
-          liveEnrollments.length === 0
-            ? 1
-            : Math.max(...liveEnrollments.map((en) => en.template_slot)) + 1;
 
         /*
          * คะแนนผลงานอยู่ใน core.performance_events ซึ่งผูกกับ core.users.id
@@ -419,7 +415,6 @@ export default async function EmployeeDetailPage({
                     id: d.id,
                     label: `${d.device_code}${d.name ? ` · ${d.name}` : ""}`,
                   }))}
-                  nextSlot={nextSlot}
                 />
               ) : liveEnrollments.length === 0 ? (
                 <EmptyState>ยังไม่ได้ผูกลายนิ้วมือ</EmptyState>

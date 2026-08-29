@@ -25,13 +25,11 @@ export interface EnrollOption {
 export function EnrollFingerprintForm({
   employments,
   devices,
-  nextSlot,
   /** ตั้งค่าเมื่ออยู่ในหน้าของพนักงานคนเดียว — ซ่อนช่องเลือกคนทิ้ง */
   lockedTo,
 }: {
   employments: EnrollOption[];
   devices: EnrollOption[];
-  nextSlot: number;
   lockedTo?: string;
 }) {
   const [state, formAction, pending] = useActionState(requestEnrollmentAction, EMPTY);
@@ -49,7 +47,7 @@ export function EnrollFingerprintForm({
     <>
       <form
         action={formAction}
-        className={`grid grid-cols-1 gap-3 ${lockedTo === undefined ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}
+        className={`grid grid-cols-1 gap-3 ${lockedTo === undefined ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}
       >
         {lockedTo === undefined ? (
           <Field label="พนักงาน *">
@@ -78,18 +76,6 @@ export function EnrollFingerprintForm({
           </select>
         </Field>
 
-        <Field label="Slot *" hint="ช่องเก็บในเซ็นเซอร์">
-          <input
-            name="template_slot"
-            type="number"
-            required
-            min={0}
-            max={65535}
-            defaultValue={nextSlot}
-            className={`${inputClass} font-mono`}
-          />
-        </Field>
-
         <Field label="นิ้ว">
           <select name="finger_position" defaultValue="RIGHT_THUMB" className={inputClass}>
             {FINGERS.map(([value, label]) => (
@@ -111,7 +97,9 @@ export function EnrollFingerprintForm({
 
       {state.ok && (
         <div className="mt-3 rounded-(--radius) border border-(--line) bg-(--bg-soft) p-3 text-sm">
-          <p className="font-medium">ส่งคำสั่งไปที่เครื่องแล้ว — slot {state.slot}</p>
+          <p className="font-medium">
+            ส่งคำสั่งไปที่เครื่องแล้ว — ระบบจองช่องที่ {state.slot} ให้
+          </p>
           <p className="mt-1 text-(--ink-soft)">
             เดินไปที่เครื่องภายใน <strong>10 นาที</strong> จอจะขึ้น
             &ldquo;Place finger&rdquo; ให้วางนิ้ว <strong>2 ครั้ง</strong>

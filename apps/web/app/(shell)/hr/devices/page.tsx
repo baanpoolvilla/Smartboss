@@ -80,11 +80,6 @@ export default async function DevicesPage() {
           (en) => en.status !== "DELETED",
         );
 
-        // เดา slot ถัดไปให้ เพื่อไม่ให้ชนของเดิม (API ตอบ 409 ถ้า slot ซ้ำบนเครื่องเดียวกัน)
-        const nextSlot =
-          liveEnrollments.length === 0
-            ? 1
-            : Math.max(...liveEnrollments.map((en) => en.template_slot)) + 1;
 
         const employmentName = new Map(
           activeEmployments.map((e) => [e.id, `${e.employee_code} · ${e.full_name}`]),

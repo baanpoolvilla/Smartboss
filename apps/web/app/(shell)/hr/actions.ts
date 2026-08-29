@@ -1011,12 +1011,37 @@ export async function requestEnrollmentAction(
 
   const employmentId = String(formData.get("employment_id") ?? "");
   const deviceId = String(formData.get("device_id") ?? "");
-  const slot = Number(formData.get("template_slot"));
 
   if (!employmentId) return { error: "กรุณาเลือกพนักงาน" };
   if (!deviceId) return { error: "กรุณาเลือกเครื่องสแกน" };
-  if (!Number.isInteger(slot) || slot < 0 || slot > 65_535) {
-    return { error: "หมายเลข slot ต้องเป็นจำนวนเต็ม 0-65535" };
+
+  /*
+   * หา slot ว่างเอง ไม่ให้ผู้ใช้กรอก
+   *
+   * slot เป็นช่องเก็บ template ใน **ตัวเครื่อง** ไม่ใช่ของคน คนกรอกจึงไม่มีทาง
+   * รู้ว่าเลขไหนว่างบนเครื่องนั้น เดาแล้วชนก็ได้แค่ 409 กลับมาแบบไม่มีคำใบ้
+   *
+   * ต้องนับจากทุกคนบนเครื่องนั้น ไม่ใช่จากนิ้วของคนที่กำลังตั้งค่า —
+   * ถ้านับจากคนเดียว พนักงานใหม่ทุกคนจะได้ slot 1 แล้วชนกันหมด
+   */
+  let slot: number;
+  try {
+    const onDevice = await wfFetch<Paged<{ template_slot: number; status: string }>>(
+      `/biometric-enrollments?device_id=${deviceId}`,
+    );
+    const used = new Set(
+      onDevice.items
+        .filter((en) => en.status !== "DELETED")
+        .map((en) => en.template_slot),
+    );
+    let candidate = 1;
+    while (used.has(candidate) && candidate < 1000) candidate += 1;
+    if (candidate >= 1000) {
+      return { error: "เครื่องนี้เก็บลายนิ้วมือเต็มแล้ว — ลบของคนที่ลาออกออกก่อน" };
+    }
+    slot = candidate;
+  } catch (error) {
+    return { error: toMessage(error) };
   }
 
   try {
