@@ -390,7 +390,7 @@ function ReportFeedPageInner() {
       // ("มันเยอะไปมันรก"). Real, longer labels still show.
       const label = c.label.trim().length > 2 ? c.label.trim() : null;
       return {
-        text: `${label ? `${label} ` : ""}${c.time} น.${required > 0 ? ` (≥${required} รูป)` : ""}`,
+        text: `${label ? `${label} ` : ""}${c.time} น.${required > 0 ? ` · แนบรูป ≥${required} รูป` : ""}`,
         active: active?.id === c.id,
       };
     });
