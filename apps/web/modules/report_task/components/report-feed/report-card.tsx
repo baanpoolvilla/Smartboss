@@ -622,10 +622,10 @@ export function ReportCard({
         // card's `-translate-y-0.5` lift: a board of tiles can pop under the
         // cursor, but a reading feed where the pointer crosses posts on the
         // way to a scrollbar would twitch the whole column.
-        "group/post relative rounded-2xl border border-[var(--line)] px-5 py-5 shadow-[0_1px_3px_rgba(16,24,40,0.07),0_1px_2px_rgba(16,24,40,0.04)] transition-all duration-200",
+        "group/post relative rounded-xl border border-[#DDE2E8] px-5 py-5 shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all duration-200",
         highlighted || flashTargetId === post.id
           ? "bg-[var(--accent)]"
-          : "bg-white hover:shadow-[0_10px_24px_-12px_rgba(16,24,40,0.20)] hover:border-[color-mix(in_srgb,var(--brand-green)_35%,var(--line))]",
+          : "bg-white hover:shadow-[0_10px_24px_-12px_rgba(16,24,40,0.20)] hover:border-[color-mix(in_srgb,var(--brand-green)_35%,#DDE2E8)]",
         // Unread reads as a left accent + a dot under the author's name (see
         // below) instead of a background tint — a background collided with
         // `highlighted`'s bg-accent (both fighting for the same visual slot).
@@ -936,7 +936,7 @@ export function ReportCard({
               spacing rather than more hairlines — one boundary style per
               level, otherwise every line competes with every other line. */}
           {post.replies.length > 0 && (
-            <div className="ml-1 border-l-2 border-[var(--line)] pl-3 sm:pl-4">
+            <div className="ml-1 border-l-2 border-[#E2E8F0] pl-3 sm:pl-4">
               <div className="flex items-center gap-2 pb-1.5">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-soft)]">
                   {post.replies.length} ความคิดเห็น
@@ -950,7 +950,7 @@ export function ReportCard({
                   </button>
                 )}
               </div>
-              <div className="space-y-1 rounded-lg bg-[var(--bg-soft)]/60 px-2.5 py-1.5">
+              <div className="space-y-1 rounded-lg bg-[#F8FAFC] px-2.5 py-1.5">
                 {(repliesExpanded ? post.replies : post.replies.slice(-RECENT_REPLY_COUNT)).map((r) => (
                   <ReportReply
                     key={r.id}

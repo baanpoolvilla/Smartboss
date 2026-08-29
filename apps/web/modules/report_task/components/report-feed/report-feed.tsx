@@ -73,7 +73,7 @@ export function ReportFeed({
           sheet it sits on. The card treatment and this tint only work as a
           pair; whitening this again brings back the "มองยาก" problem even with
           the borders still on the cards. */}
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto bg-[var(--bg-soft)] px-4 py-4 space-y-5 scroll-pt-4">
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto bg-[#F4F6F8] px-4 py-4 space-y-5 scroll-pt-4">
         {topicPosts.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center gap-3 text-center px-6">
             <div

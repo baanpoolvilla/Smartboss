@@ -2,9 +2,9 @@
 export function DaySeparator({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-3 px-5 py-2" role="separator" aria-label={label}>
-      <div className="h-px flex-1 bg-[var(--line)]" />
+      <div className="h-px flex-1 bg-[#CBD5E1] opacity-60" />
       <span className="shrink-0 text-[11px] font-medium text-[var(--ink-soft)]">{label}</span>
-      <div className="h-px flex-1 bg-[var(--line)]" />
+      <div className="h-px flex-1 bg-[#CBD5E1] opacity-60" />
     </div>
   );
 }

@@ -256,7 +256,7 @@ export function ReportAllPostsFeed({
       ) : (
         <div
           ref={scrollRef}
-          className="flex-1 overflow-y-auto bg-[var(--bg-soft)] px-5 py-5 space-y-5 scroll-pt-4"
+          className="flex-1 overflow-y-auto bg-[#F4F6F8] px-5 py-5 space-y-5 scroll-pt-4"
         >
           {groupByDay(items, (p) => p.createdAt).map((group) => (
             <div key={group.key} className="space-y-5">
