@@ -427,7 +427,10 @@ export function TopicSidebar({
           active
             ? "bg-[var(--accent)] font-semibold"
             : cn(
-                "hover:bg-[var(--bg-soft)]",
+                // bg-white, not bg-soft — bg-soft is close enough to this
+                // sidebar's own new tinted background (see the outer wrapper
+                // above) that hovering barely read as a state change anymore.
+                "hover:bg-white",
                 // Unread reads as full-strength ink regardless of depth — a
                 // sub-topic with something new to see shouldn't be stuck at
                 // the same muted gray as one nobody's posted in for weeks,
@@ -637,12 +640,15 @@ export function TopicSidebar({
   return (
     <div
       className={cn(
-        // Border only, no shadow — sitting right next to the room panel
-        // (also border-only now, see page.tsx), a border+shadow combo on
-        // both read as two competing "this is a boxed thing" signals side
-        // by side instead of one calm, flat line between them.
-        "w-full lg:w-[280px] lg:h-full lg:shrink-0 rounded-2xl border border-[var(--line)] bg-white flex flex-col min-h-0 overflow-hidden",
-        fillHeight ? "h-full border-none rounded-none shadow-none" : "h-64"
+        // No card frame at all — a border+white-fill box sitting right next
+        // to the room panel's own box read as two stacked "this is a boxed
+        // thing" signals before a single post even came into view
+        // ("กรอบซ้อนกันหลายชั้น"). A faint tinted background instead of
+        // white is enough on its own to read as "a different area" next to
+        // the room panel's white, the same way Notion/Linear separate a nav
+        // rail from its content with color contrast, not a drawn line.
+        "w-full lg:w-[280px] lg:h-full lg:shrink-0 bg-[color-mix(in_srgb,var(--bg-soft)_55%,white)] flex flex-col min-h-0 overflow-hidden",
+        fillHeight ? "h-full" : "h-64"
       )}
     >
       {/* Header separated by spacing (extra bottom padding) instead of a

@@ -73,7 +73,7 @@ export function ReportFeed({
           sheet it sits on. The card treatment and this tint only work as a
           pair; whitening this again brings back the "มองยาก" problem even with
           the borders still on the cards. */}
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto bg-[var(--bg-soft)]/50 px-4 py-4 space-y-4 scroll-pt-4">
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto bg-[var(--bg-soft)] px-4 py-4 space-y-5 scroll-pt-4">
         {topicPosts.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center gap-3 text-center px-6">
             <div
@@ -88,14 +88,16 @@ export function ReportFeed({
             </div>
           </div>
         ) : (
-          // space-y-4 between day groups, space-y-3 between the cards inside
+          // space-y-5 between day groups, space-y-4 between the cards inside
           // one — same idea as the card itself: the bigger gap is the bigger
-          // division, so a day boundary never reads the same as a post boundary.
+          // division, so a day boundary never reads the same as a post
+          // boundary. Bumped from 4/3 — 12px between cards still read as
+          // "packed together" even with each one boxed on its own.
           groupByDay(topicPosts, (p) => p.createdAt).map((group) => (
             // Full width, not capped — tried a centred ~860px reading measure
             // here first, but that just left dead margin on either side of
             // every card on a wide screen ("ใช้พื้นที่ข้างๆให้เต็มได้ไหม").
-            <div key={group.key} className="space-y-3">
+            <div key={group.key} className="space-y-4">
               <DaySeparator label={group.label} />
               {group.items.map((p) => (
                 <ReportCard key={p.id} post={p} topic={topic} highlighted={p.id === highlightPostId} highlightReplyId={highlightReplyId} onOpenTask={onOpenTask} />

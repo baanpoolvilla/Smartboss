@@ -622,7 +622,7 @@ export function ReportCard({
         // card's `-translate-y-0.5` lift: a board of tiles can pop under the
         // cursor, but a reading feed where the pointer crosses posts on the
         // way to a scrollbar would twitch the whole column.
-        "group/post relative rounded-2xl border border-[var(--line)] px-5 py-4 shadow-[0_1px_3px_rgba(16,24,40,0.07),0_1px_2px_rgba(16,24,40,0.04)] transition-all duration-200",
+        "group/post relative rounded-2xl border border-[var(--line)] px-5 py-5 shadow-[0_1px_3px_rgba(16,24,40,0.07),0_1px_2px_rgba(16,24,40,0.04)] transition-all duration-200",
         highlighted || flashTargetId === post.id
           ? "bg-[var(--accent)]"
           : "bg-white hover:shadow-[0_10px_24px_-12px_rgba(16,24,40,0.20)] hover:border-[color-mix(in_srgb,var(--brand-green)_35%,var(--line))]",
@@ -1455,7 +1455,13 @@ function PostImageThumb({
     <button
       onClick={onClick}
       className={cn("relative block hover:opacity-90 transition-opacity", !fitToImage && wide && "bg-[var(--bg-soft)]", className)}
-      style={fitToImage && ratio ? { aspectRatio: ratio, height: "auto", maxHeight: "60vh" } : undefined}
+      // 60vh let a tall portrait screenshot (very common for this feed) eat
+      // up to a third of the screen on both desktop and mobile — capping at
+      // a fixed 380px instead keeps the "no letterbox, fill the width"
+      // behavior for normal photos while stopping a single image from
+      // dominating the post the way multi-image posts never do (they're
+      // capped at 190/280px, see PostImageCollage above).
+      style={fitToImage && ratio ? { aspectRatio: ratio, height: "auto", maxHeight: "380px" } : undefined}
       aria-label={`ดูรูป ${img.name} เต็มจอ`}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}

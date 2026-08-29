@@ -446,9 +446,19 @@ function ReportFeedPageInner() {
           />
         </div>
 
+        {/* This panel used to be rounded-2xl + border, matching the topic
+            sidebar's own box (see topic-sidebar.tsx) — two adjacent bordered
+            white cards, each then holding more cards inside (individual
+            posts already have their own border+shadow, report-card.tsx),
+            read as stacked framing before any actual content was on screen
+            ("กรอบซ้อนกันหลายชั้น"). Dropping the border/radius here leaves
+            background contrast to do the separating: white panel next to
+            the sidebar's tinted one, then the feed's own soft-gray scroll
+            area (report-feed.tsx) under white post cards — one visual tier
+            per level instead of every level drawing its own line. */}
         <div className="w-full flex-1 min-w-0 flex flex-col min-h-0 lg:h-full">
           {todayStatusFilter ? (
-            <div className="flex-1 min-h-0 rounded-2xl border border-[var(--line)] bg-white overflow-hidden flex flex-col">
+            <div className="flex-1 min-h-0 bg-white overflow-hidden flex flex-col">
               <TodayStatusPanel
                 status={todayStatusFilter}
                 entries={todayStatus.filter((e) => e.status === todayStatusFilter)}
@@ -457,15 +467,15 @@ function ReportFeedPageInner() {
               />
             </div>
           ) : showAllPosts ? (
-            <div className="flex-1 min-h-0 rounded-2xl border border-[var(--line)] bg-white overflow-hidden flex flex-col">
+            <div className="flex-1 min-h-0 bg-white overflow-hidden flex flex-col">
               <ReportAllPostsFeed topics={visibleTopics} posts={posts} onJumpToTopic={selectView} onOpenTask={setOpenTaskId} />
             </div>
           ) : showPending ? (
-            <div className="flex-1 min-h-0 rounded-2xl border border-[var(--line)] bg-white overflow-hidden flex flex-col">
+            <div className="flex-1 min-h-0 bg-white overflow-hidden flex flex-col">
               <PendingTopicsPanel entries={myPending} onJumpToTopic={selectView} />
             </div>
           ) : showMentions ? (
-            <div className="flex-1 min-h-0 rounded-2xl border border-[var(--line)] bg-white overflow-hidden flex flex-col">
+            <div className="flex-1 min-h-0 bg-white overflow-hidden flex flex-col">
               <ReportAllPostsFeed
                 topics={visibleTopics}
                 posts={mentionPosts}
@@ -479,7 +489,7 @@ function ReportFeedPageInner() {
               />
             </div>
           ) : activeTopic ? (
-            <div className="flex-1 min-h-0 rounded-2xl border border-[var(--line)] bg-white overflow-hidden flex flex-col">
+            <div className="flex-1 min-h-0 bg-white overflow-hidden flex flex-col">
               <div className="shrink-0">
                 {/* Row 1 — identity: logo/name/description on the left,
                     member count + settings gear on the right (R1/R4: two
@@ -496,8 +506,14 @@ function ReportFeedPageInner() {
                   <TopicLogo topic={activeTopic} size="h-8 w-8" />
                   <div className="min-w-0 flex-1">
                     <h2 className="text-[16px] font-semibold truncate">{activeTopic.name}</h2>
+                    {/* Hidden below sm — secondary info that used to force a
+                        whole extra wrapped line into row 1 on a narrow phone,
+                        which together with the mode pill/compliance bar/round
+                        row below it stacked into the header eating close to a
+                        third of the screen before any actual post came into
+                        view ("วงมันเปลืองพื้นที่ไป 1/3 ของหน้าจอ"). */}
                     {activeTopic.description && (
-                      <p className="text-xs text-[var(--ink-soft)] truncate">{activeTopic.description}</p>
+                      <p className="hidden sm:block text-xs text-[var(--ink-soft)] truncate">{activeTopic.description}</p>
                     )}
                   </div>
                   {/* Anyone can open this to browse who's in the room — same
@@ -537,10 +553,15 @@ function ReportFeedPageInner() {
                       real <select> either way — the mode itself is locked
                       for any room created after FEED_VIEW_MODE_LOCK_CUTOFF
                       (see room-settings-sheet.tsx). */}
+                  {/* Both hidden below sm — informational, not controls (the
+                      mode is set once in room settings; the compliance count
+                      repeats what the "ที่ฉันต้องส่ง" tab already surfaces) —
+                      so a narrow phone drops them rather than wrapping row 1
+                      onto a second line just to fit two more chips. */}
                   {(() => {
                     const modeLabel = activeTopic.feedViewMode === "threads" ? "Thread" : "Openchat";
                     return (
-                      <span className="flex items-center gap-1 text-xs font-medium text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2.5 py-1 shrink-0">
+                      <span className="hidden sm:flex items-center gap-1 text-xs font-medium text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2.5 py-1 shrink-0">
                         มุมมอง: {modeLabel}
                       </span>
                     );
@@ -548,15 +569,17 @@ function ReportFeedPageInner() {
                   {/* Today's compliance pills, minimal — icon/dot + bare
                       number, no border or label, right next to the gear it's
                       grouped with here ("แถวหัวห้อง ข้างเกียร์ แบบมินิมอล"). */}
-                  <ReportComplianceBar
-                    variant="mini"
-                    visibleTopics={visibleTopics}
-                    onJumpToPost={(topicId, postId) => {
-                      selectView(topicId);
-                      setHighlightPostId(postId);
-                    }}
-                    onShowTodayStatus={setTodayStatusFilter}
-                  />
+                  <div className="hidden sm:contents">
+                    <ReportComplianceBar
+                      variant="mini"
+                      visibleTopics={visibleTopics}
+                      onJumpToPost={(topicId, postId) => {
+                        selectView(topicId);
+                        setHighlightPostId(postId);
+                      }}
+                      onShowTodayStatus={setTodayStatusFilter}
+                    />
+                  </div>
                   {canEditReportTopic(activeTopic.visibility, viewingAsUserId) && (
                     <button
                       onClick={() => setRoomSettingsOpen(true)}
@@ -580,12 +603,17 @@ function ReportFeedPageInner() {
                     blob either ("ดูยาก งง"). Changing the rounds themselves
                     is the ⚙ gear's job, not this row's. */}
                 {requirementParts.length > 0 && (
-                  <div className="px-5 pb-2 flex flex-wrap items-center gap-1">
+                  // A single scrolling line below sm instead of wrapping —
+                  // 2+ rounds' pills wrapping onto their own extra line was
+                  // one more band stacked into an already-tall mobile header;
+                  // horizontal scroll keeps it to the one line every other
+                  // screen size already gets it in for free.
+                  <div className="px-5 pb-2 flex items-center gap-1 overflow-x-auto sm:flex-wrap sm:overflow-visible">
                     {requirementParts.map((r, i) => (
                       <span
                         key={i}
                         className={cn(
-                          "flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium",
+                          "flex items-center gap-1 shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium",
                           r.active ? "bg-[var(--accent)] text-[var(--brand-green-dark)]" : "bg-[var(--bg-soft)] text-[var(--ink-soft)]"
                         )}
                       >
