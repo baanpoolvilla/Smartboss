@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ReportCard } from "@/modules/report_task/components/report-feed/report-card";
 import { DaySeparator } from "@/modules/report_task/components/report-feed/report-day-separator";
+import { reportDayLabel } from "@/modules/report_task/components/report-feed/report-day-label";
 import { DatePresetPicker } from "@/modules/report_task/components/report-analytics/date-preset-picker";
 import {
   DropdownMenu,
@@ -260,7 +261,7 @@ export function ReportAllPostsFeed({
         >
           {groupByDay(items, (p) => p.createdAt).map((group) => (
             <div key={group.key} className="space-y-5">
-              <DaySeparator label={group.label} />
+              <DaySeparator label={reportDayLabel(group.label)} />
               {group.items.map((p) => {
                 const topic = topicById.get(p.topicId)!;
                 return (

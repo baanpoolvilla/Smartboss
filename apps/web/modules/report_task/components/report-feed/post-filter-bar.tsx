@@ -225,7 +225,7 @@ export function PostFilterBar({
           onClick={() => onChange(emptyPostFilters)}
         >
           <X className={iconSize} />
-          ล้างตัวกรอง ({activeCount})
+          ล้างทั้งหมด ({activeCount})
         </Button>
       )}
     </div>
@@ -284,13 +284,14 @@ export function PostFilterButton({
             )}
           >
             <ListFilter className="h-3.5 w-3.5" />
-            ตัวกรอง
+            กรอง
             {activeCount > 0 && <span className="tabular-nums">{activeCount}</span>}
             <ChevronDown className="h-3 w-3" />
           </button>
         }
       />
       <PopoverContent align="end" className="w-[320px] max-h-[70vh] overflow-y-auto p-0">
+        <p className="px-3 pt-3 text-sm font-semibold">กรองโพสต์</p>
         <div className="p-3 space-y-4">
           <div>
             <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -384,7 +385,7 @@ export function PostFilterButton({
             ล้างทั้งหมด
           </Button>
           <Button size="sm" className="text-xs" onClick={() => setOpen(false)}>
-            ใช้ตัวกรอง
+            ดูผลลัพธ์
           </Button>
         </div>
       </PopoverContent>

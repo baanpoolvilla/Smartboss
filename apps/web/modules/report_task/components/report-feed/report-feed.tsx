@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ReportCard } from "@/modules/report_task/components/report-feed/report-card";
 import { DaySeparator } from "@/modules/report_task/components/report-feed/report-day-separator";
+import { reportDayLabel } from "@/modules/report_task/components/report-feed/report-day-label";
 import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { groupByDay } from "@/modules/report_task/lib/format";
 import { ArrowDown, MessageSquareText } from "lucide-react";
@@ -98,7 +99,7 @@ export function ReportFeed({
             // here first, but that just left dead margin on either side of
             // every card on a wide screen ("ใช้พื้นที่ข้างๆให้เต็มได้ไหม").
             <div key={group.key} className="space-y-4">
-              <DaySeparator label={group.label} />
+              <DaySeparator label={reportDayLabel(group.label)} />
               {group.items.map((p) => (
                 <ReportCard key={p.id} post={p} topic={topic} highlighted={p.id === highlightPostId} highlightReplyId={highlightReplyId} onOpenTask={onOpenTask} />
               ))}

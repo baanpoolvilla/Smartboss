@@ -105,9 +105,9 @@ type TopicTab = "posts" | "files" | "album" | "links" | "stats";
 const topicTabs: { id: TopicTab; label: string; icon: typeof MessageSquareText }[] = [
   { id: "posts", label: "โพสต์", icon: MessageSquareText },
   { id: "files", label: "ไฟล์", icon: FileImage },
-  { id: "album", label: "อัลบั้ม", icon: FolderHeart },
+  { id: "album", label: "รูปภาพ", icon: FolderHeart },
   { id: "links", label: "ลิงก์", icon: Link2 },
-  { id: "stats", label: "สถิติ", icon: BarChart3 },
+  { id: "stats", label: "สรุป", icon: BarChart3 },
 ];
 
 /**
@@ -530,7 +530,7 @@ function ReportFeedPageInner() {
               <ReportAllPostsFeed
                 topics={visibleTopics}
                 posts={mentionPosts}
-                title="ที่กล่าวถึงฉัน"
+                title="กล่าวถึงฉัน"
                 description="ทุกโพสต์และความคิดเห็นที่มีคนแท็กคุณ เรียงตามเวลา ล่าสุดอยู่ล่างสุด"
                 icon={AtSign}
                 emptyTitle="ยังไม่มีใครกล่าวถึงคุณ"
@@ -610,10 +610,15 @@ function ReportFeedPageInner() {
                       so a narrow phone drops them rather than wrapping row 1
                       onto a second line just to fit two more chips. */}
                   {(() => {
-                    const modeLabel = activeTopic.feedViewMode === "threads" ? "Thread" : "Openchat";
+                    // "Thread"/"Openchat" are developer jargon, not something
+                    // a general employee needs to know to use this room —
+                    // plain Thai instead ("มุมมองสนทนา" is still shown, just
+                    // in words that don't require knowing the underlying
+                    // implementation concept).
+                    const modeLabel = activeTopic.feedViewMode === "threads" ? "แบบกระทู้" : "แบบแชท";
                     return (
                       <span className="hidden sm:flex items-center gap-1 text-xs font-medium text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2.5 py-1 shrink-0">
-                        มุมมอง: {modeLabel}
+                        มุมมองสนทนา: {modeLabel}
                       </span>
                     );
                   })()}
@@ -773,7 +778,7 @@ function ReportFeedPageInner() {
                     )}
                   >
                     <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
-                    ตัวกรอง
+                    กรอง
                     {postFiltersActiveCount(filters) > 0 && <span className="tabular-nums">({postFiltersActiveCount(filters)})</span>}
                   </button>
                 </div>
@@ -804,7 +809,7 @@ function ReportFeedPageInner() {
                         row below already ends with its own "ล้างตัวกรอง (N)"
                         button, so this was a redundant second copy anyway. */}
                     <SheetHeader className="pb-2 pr-11">
-                      <SheetTitle>ตัวกรอง</SheetTitle>
+                      <SheetTitle>กรองโพสต์</SheetTitle>
                     </SheetHeader>
                     <div className="px-4 pb-4">
                       <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">แสดงเฉพาะ</p>
@@ -872,9 +877,9 @@ function ReportFeedPageInner() {
                 <>
                   {filteredTopicPosts.length === 0 && postFiltersActiveCount(filters) > 0 ? (
                     <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center px-6 bg-[var(--bg-soft)]">
-                      <p className="text-sm font-semibold">ไม่มีโพสต์ตรงกับตัวกรอง</p>
+                      <p className="text-sm font-semibold">ไม่พบโพสต์ตามตัวกรองนี้</p>
                       <Button variant="outline" size="sm" onClick={() => setFilters(emptyPostFilters)}>
-                        ล้างตัวกรอง
+                        ล้างทั้งหมด
                       </Button>
                     </div>
                   ) : isOpenchatTopic(activeTopic) ? (
@@ -932,7 +937,7 @@ function PendingTopicsPanel({
           <Clock className="h-4 w-4" />
         </span>
         <div>
-          <h2 className="text-[16px] font-semibold leading-tight">ที่ฉันต้องส่ง</h2>
+          <h2 className="text-[16px] font-semibold leading-tight">รอฉันส่ง</h2>
           <p className="text-xs text-[var(--ink-soft)] leading-tight">ห้องที่คุณยังไม่ได้โพสต์รายงานวันนี้</p>
         </div>
       </div>

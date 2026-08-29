@@ -656,7 +656,7 @@ export function TopicSidebar({
           divider just below it and the card's own outer border, all three
           of which used to draw in the same tight space. */}
       <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-2">
-        <p className="text-[15px] font-semibold">หัวข้อทั้งหมด</p>
+        <p className="text-[15px] font-semibold">หัวข้อ</p>
         {canManageTopics && (
           <Button
             size="sm"
@@ -669,13 +669,13 @@ export function TopicSidebar({
             onClick={() => openCreate()}
           >
             <Plus className="h-3.5 w-3.5" />
-            สร้างหัวข้อ
+            หัวข้อใหม่
           </Button>
         )}
       </div>
 
       <div className="px-2.5 pt-1">
-        <p className="px-2.5 pb-1 text-[11px] font-semibold text-[var(--ink-soft)] uppercase tracking-wide">มุมมองรวม</p>
+        <p className="px-2.5 pb-1 text-[11px] font-semibold text-[var(--ink-soft)] uppercase tracking-wide">ภาพรวม</p>
         {/* Not a real topic — a merged read-across-everything view (see
             ReportAllPostsFeed), pinned above the tree since it isn't part
             of the hierarchy it's summarizing. */}
@@ -689,7 +689,7 @@ export function TopicSidebar({
           <span className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--brand-green-dark)]">
             <Rows3 className="h-3.5 w-3.5" />
           </span>
-          ภาพรวมทั้งหมด
+          โพสต์ทั้งหมด
         </button>
         {/* ที่ฉันต้องส่ง — rooms this viewer personally hasn't posted to yet
             today (PendingTopicsPanel). ที่กล่าวถึงฉัน — every post/reply
@@ -704,7 +704,7 @@ export function TopicSidebar({
           <span className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-amber-50 text-[var(--chart-amber)]">
             <Clock className="h-3.5 w-3.5" />
           </span>
-          <span className="flex-1 truncate">ที่ฉันต้องส่ง</span>
+          <span className="flex-1 truncate">รอฉันส่ง</span>
           {pendingCount > 0 && (
             <span className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-[var(--chart-red)] text-white text-[10px] font-semibold flex items-center justify-center tabular-nums">
               {pendingCount}
@@ -721,7 +721,7 @@ export function TopicSidebar({
           <span className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-blue-50 text-[var(--chart-blue)]">
             <AtSign className="h-3.5 w-3.5" />
           </span>
-          <span className="flex-1 truncate">ที่กล่าวถึงฉัน</span>
+          <span className="flex-1 truncate">กล่าวถึงฉัน</span>
           {mentionCount > 0 && (
             <span className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-[var(--chart-red)] text-white text-[10px] font-semibold flex items-center justify-center tabular-nums">
               {mentionCount}
@@ -752,7 +752,7 @@ export function TopicSidebar({
         {topLevelRestTopics.map(renderTopicBranch)}
 
         {topics.length === 0 && (
-          <p className="text-xs text-[var(--ink-soft)] px-2.5 py-3">ยังไม่มีหัวข้อ กด + สร้างหัวข้อ เพื่อเริ่มต้น</p>
+          <p className="text-xs text-[var(--ink-soft)] px-2.5 py-3">ยังไม่มีหัวข้อ กด + หัวข้อใหม่ เพื่อเริ่มต้น</p>
         )}
       </div>
 
