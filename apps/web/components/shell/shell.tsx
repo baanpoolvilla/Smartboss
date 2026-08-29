@@ -20,6 +20,7 @@ import type { ModuleManifest, ModuleMenuItem } from "@/module-registry";
 import { LogoutButton } from "./logout-button";
 import { SessionRefresher } from "./session-refresher";
 import { ShellProvider, type ShellUser } from "./shell-context";
+import { ReportIssueFab } from "@/modules/report_task/components/issue-report/report-issue-fab";
 
 export type { ShellUser };
 
@@ -60,6 +61,11 @@ export function Shell({
   return (
     <ShellProvider user={user} unread={unread}>
       <SessionRefresher />
+      {/* Mounted here (not inside any one module) so "แจ้งปัญหาระบบ" is
+          reachable from every page in the app, same level as SessionRefresher
+          — the component itself already documented this as its intent, it
+          just never actually got wired up anywhere before. */}
+      <ReportIssueFab />
       {activeModule ? (
         <ModuleFrame module={activeModule} pathname={pathname}>
           {children}
