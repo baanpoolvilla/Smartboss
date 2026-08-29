@@ -638,7 +638,7 @@ function ReportFeedPageInner() {
                     "ตัวกรอง" button stays pinned on the same line instead of
                     getting shoved onto its own orphan row below (which just
                     looked like disconnected clutter, "งง...จัดให้มันดีๆสิ"). */}
-                <div className="px-5 flex items-center gap-2 border-b border-[var(--line)]">
+                <div className="px-5 flex flex-col lg:gap-1.5 border-b border-[var(--line)]">
                 {/* gap-3 + icon-only labels below lg — same breakpoint the
                     rest of this page switches on (sidebar hides, mobile
                     topic button shows below lg). Using sm here instead left
@@ -652,7 +652,19 @@ function ReportFeedPageInner() {
                     alone is compact enough that all 5 fit alongside the
                     filter button with nothing left to scroll; the label
                     comes back at lg and up where the sidebar's own width has
-                    already made room for it. */}
+                    already made room for it.
+
+                    At lg+, tabs get a row to themselves now — full labels
+                    ("สถิติ" etc.) plus a 6-chip filter bar plus a "+N
+                    เพิ่มเติม" popover all crammed onto one line left no
+                    slack at ordinary desktop widths (~1600-1700px), so the
+                    last tab and the first filter chip visibly ran into each
+                    other ("ตัวกรองกับแท็บชนกันเป็นแถวเดียว ดูรก"). The
+                    filter bar moves to its own row underneath instead of
+                    sharing this one — same fix ภาพรวมทั้งหมด's own filters
+                    already use, just at a wider breakpoint since this row
+                    has 5 real tabs (not fewer) fighting it for space. */}
+                <div className="flex items-center gap-2">
                 <div role="tablist" aria-label="ส่วนของหัวข้อ" className="flex flex-1 min-w-0 items-center gap-3 lg:gap-4">
                   {topicTabs.map((t) => {
                     const Icon = t.icon;
@@ -689,37 +701,6 @@ function ReportFeedPageInner() {
                     );
                   })}
                 </div>
-                  {/* The filter bar rides the tab row instead of taking a
-                      strip of its own. Four stacked bands of chrome —
-                      identity, tabs, รอบส่ง, filters — was most of what read
-                      as "รกมาก": each band was individually reasonable and
-                      together they pushed the posts under a wall of controls.
-                      Tabs and filters both answer "which posts am I looking
-                      at", so one row holds them: what section, then what
-                      subset of it.
-
-                      Below sm: every chip wrapped onto the tab row used
-                      more of a 375-414px screen than the tabs themselves
-                      ("พอจอแคบ...เนื้อหามันเกินความกว้างจอ") — collapsed to
-                      one "ตัวกรอง" button + bottom sheet instead, same
-                      pattern ภาพรวมทั้งหมด already uses for its own filters.
-
-                      invisible, not unmounted, on every other tab — this row
-                      only makes sense for "โพสต์" (ไฟล์/อัลบั้ม/ลิงก์/สถิติ
-                      aren't filtered by it), but removing it outright shrank
-                      the tab row's height on those tabs, so switching tabs
-                      visibly shifted the whole content border up and down
-                      ("กดโพสแล้วขยับไปอันอื่น...ขอบมันขยับ"). Keeping the
-                      same box (just hidden) holds the row's height steady
-                      either way. */}
-                  <div className={cn("hidden lg:block lg:ml-auto shrink-0 py-1.5", activeTab !== "posts" && "invisible")}>
-                    <PostFilterBar
-                      filters={filters}
-                      onChange={setFilters}
-                      authorOptions={topicMembers.map((m) => m.id)}
-                      tagOptions={reportTags}
-                    />
-                  </div>
                   <button
                     type="button"
                     onClick={() => activeTab === "posts" && setMobileFilterOpen(true)}
@@ -734,6 +715,21 @@ function ReportFeedPageInner() {
                     ตัวกรอง
                     {postFiltersActiveCount(filters) > 0 && <span className="tabular-nums">({postFiltersActiveCount(filters)})</span>}
                   </button>
+                </div>
+
+                  {/* Its own row now, right-aligned, instead of riding the
+                      tab row — see this container's own comment above for
+                      why. invisible (not unmounted) on every other tab so
+                      switching tabs never shifts the row's height/the
+                      content border under it. */}
+                  <div className={cn("hidden lg:flex lg:justify-end pb-2", activeTab !== "posts" && "invisible")}>
+                    <PostFilterBar
+                      filters={filters}
+                      onChange={setFilters}
+                      authorOptions={topicMembers.map((m) => m.id)}
+                      tagOptions={reportTags}
+                    />
+                  </div>
                 </div>
 
                 {/* Same bottom-sheet shell ReportAllPostsFeed's own mobile
