@@ -77,7 +77,7 @@ export default function IssueTicketDetailPage() {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
         <p className="text-sm text-[var(--ink-soft)]">ไม่พบตั๋วนี้ — อาจถูกลบหรือลิงก์ไม่ถูกต้อง</p>
-        <Button variant="outline" onClick={() => router.push("/issue-reports")}>
+        <Button variant="outline" onClick={() => router.push("/report-task/issue-reports")}>
           <ArrowLeft className="h-4 w-4" /> กลับไปหน้ารายการ
         </Button>
       </div>
@@ -88,7 +88,7 @@ export default function IssueTicketDetailPage() {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
         <p className="text-sm text-[var(--ink-soft)]">คุณไม่มีสิทธิ์ดูตั๋วนี้</p>
-        <Button variant="outline" onClick={() => router.push("/issue-reports")}>
+        <Button variant="outline" onClick={() => router.push("/report-task/issue-reports")}>
           <ArrowLeft className="h-4 w-4" /> กลับไปหน้ารายการ
         </Button>
       </div>
@@ -98,7 +98,7 @@ export default function IssueTicketDetailPage() {
   return (
     <div className="flex flex-col gap-4 pt-4 lg:pt-6">
       <button
-        onClick={() => router.push("/issue-reports")}
+        onClick={() => router.push("/report-task/issue-reports")}
         className="inline-flex items-center gap-1 text-xs text-[var(--ink-soft)] hover:text-[var(--ink)] self-start"
       >
         <ArrowLeft className="h-3.5 w-3.5" /> กลับไปหน้ารายการ
