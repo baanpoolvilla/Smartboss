@@ -377,7 +377,7 @@ function ReportFeedPageInner() {
       const required = requiredOf(a!);
       return [
         {
-          text: `กำหนดส่ง ${a!.time}–${b!.time} น.${required > 0 ? ` · แนบอย่างน้อย ${required} รูป` : ""}`,
+          text: `${a!.time}–${b!.time} น.${required > 0 ? ` · แนบอย่างน้อย ${required} รูป` : ""}`,
           active: !!active,
         },
       ];
@@ -385,6 +385,11 @@ function ReportFeedPageInner() {
     // Per-round overrides can make some rounds require a different photo
     // count — spell each one out, and mark whichever round "now" falls into
     // so posting-right-now context is obvious without doing clock math.
+    // "กำหนดส่ง" is NOT repeated per round here (it's said once, in the JSX
+    // render below) — rounds with no requirement of their own (like this
+    // room's first one) otherwise produced "กำหนดส่ง 13:00 น. · กำหนดส่ง
+    // 14:00 น. · แนบอย่างน้อย 1 รูป", repeating the same word for no reason
+    // ("ไม่สวยเลย").
     return activeTopic.cutoffs.map((c) => {
       const required = requiredOf(c);
       // A round label of a couple characters or less ("t", "00") is almost
@@ -394,7 +399,7 @@ function ReportFeedPageInner() {
       // ("มันเยอะไปมันรก"). Real, longer labels still show.
       const label = c.label.trim().length > 2 ? c.label.trim() : null;
       return {
-        text: `${label ? `${label} ` : ""}กำหนดส่ง ${c.time} น.${required > 0 ? ` · แนบอย่างน้อย ${required} รูป` : ""}`,
+        text: `${label ? `${label} ` : ""}${c.time} น.${required > 0 ? ` · แนบอย่างน้อย ${required} รูป` : ""}`,
         active: active?.id === c.id,
       };
     });
@@ -661,13 +666,15 @@ function ReportFeedPageInner() {
                   // Plain inline text — metadata about the room, not a
                   // status to react to, so it stays neutral gray throughout
                   // (no green — this isn't a success state, §7). "กำหนดส่ง"
-                  // is now part of each segment's own text (see
-                  // requirementParts above), so there's no separate leading
-                  // label to repeat here — just a clock icon once for the
-                  // whole row. The currently-applicable round still stands
-                  // out (medium weight only, not color).
+                  // is said once for the whole row (not repeated per round —
+                  // see requirementParts' own comment on why that read badly)
+                  // only when there's an actual deadline to name; a
+                  // topic with no cutoffs at all just states its image rule
+                  // plainly instead. The currently-applicable round still
+                  // stands out (medium weight only, not color).
                   <div className="px-5 pb-2 flex items-center gap-1.5 overflow-x-auto text-xs text-[var(--ink-soft)]">
                     <Clock className="h-3 w-3 shrink-0" />
+                    {activeTopic.cutoffs.length > 0 && <span className="shrink-0">กำหนดส่ง</span>}
                     {requirementParts.map((r, i) => (
                       <span key={i} className={cn("shrink-0", r.active && "font-medium text-[var(--ink)]")}>
                         {i > 0 && <span className="text-[var(--ink-faint)]"> · </span>}

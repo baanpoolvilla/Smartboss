@@ -259,7 +259,9 @@ export function ReportAllPostsFeed({
           ref={scrollRef}
           className="flex-1 overflow-y-auto bg-white py-3 scroll-pt-4"
         >
-          <div className="max-w-[960px] mx-auto space-y-6">
+          {/* Full width, not capped — see report-feed.tsx's own comment on
+              this exact idea being tried and reverted again this same round. */}
+          <div className="space-y-6">
             {groupByDay(items, (p) => p.createdAt).map((group) => (
               <div key={group.key}>
                 <DaySeparator label={reportDayLabel(group.label)} />

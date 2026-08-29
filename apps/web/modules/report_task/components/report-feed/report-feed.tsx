@@ -88,15 +88,17 @@ export function ReportFeed({
             </div>
           </div>
         ) : (
-          // Reading width capped (explicit override — a centred ~860-960px
-          // measure was tried and dropped once before per real feedback
-          // wanting the sides used fully, see git history
-          // "ใช้พื้นที่ข้างๆให้เต็มได้ไหม" — this round asks for the cap
-          // back anyway). space-y-6 between day groups only now; individual
-          // posts inside one lean on their own border-b + padding for
-          // rhythm instead of an extra gap on top of that, so density goes
-          // up the way §15/16 ask for.
-          <div className="max-w-[960px] mx-auto space-y-6">
+          // Full width again, not capped — a centred ~900-960px reading
+          // measure was added this same round, then pulled the moment it was
+          // actually seen on a wide monitor (the empty margin on either side
+          // was flagged directly, "แสดงให้เต็มกรอบสิ") — third time this
+          // exact idea has been tried and reverted in this project, so it's
+          // probably worth treating as settled: don't re-add it without a
+          // real reason next time either. space-y-6 between day groups only
+          // now; individual posts inside one lean on their own border-b +
+          // padding for rhythm instead of an extra gap on top of that, so
+          // density goes up the way §15/16 ask for.
+          <div className="space-y-6">
             {groupByDay(topicPosts, (p) => p.createdAt).map((group) => (
               <div key={group.key}>
                 <DaySeparator label={reportDayLabel(group.label)} />
