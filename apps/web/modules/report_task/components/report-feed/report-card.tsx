@@ -759,12 +759,12 @@ export function ReportCard({
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 {post.pinned && <Pin className="h-3.5 w-3.5 text-[var(--brand-green-dark)] shrink-0" />}
-                <p className="text-[13.5px] font-semibold truncate">{author?.name}</p>
+                <p className="text-sm font-semibold truncate">{author?.name}</p>
                 {isUnread && (
                   <span className="h-1.5 w-1.5 rounded-full bg-[var(--chart-blue)] shrink-0" aria-label="ยังไม่อ่าน" />
                 )}
               </div>
-              <p className="flex items-center gap-1 text-[11.5px] text-[var(--ink-soft)] truncate">
+              <p className="flex items-center gap-1 text-xs text-[var(--ink-soft)] truncate">
                 {author?.role && <span className="truncate">{author.role} ·</span>}
                 <TimeAgo date={post.createdAt} />
                 {post.editedAt && <span>· แก้ไขแล้ว</span>}
@@ -920,7 +920,14 @@ export function ReportCard({
               spacing rather than more hairlines — one boundary style per
               level, otherwise every line competes with every other line. */}
           {post.replies.length > 0 && (
-            <div className="ml-1 border-l-2 border-[#E2E8F0] pl-3 sm:pl-4">
+            // Final polish pass: dropped the tinted rounded panel the thread
+            // used to sit in — with the outer post itself now a flat row too
+            // (no card), a card-within-a-row read as a container with
+            // nothing left to contrast against, just a gray box for its own
+            // sake. The 1px line is what's carrying "these belong to the
+            // post above" now, on its own — same cue Teams/Slack use, just
+            // without the fill behind it.
+            <div className="ml-1 border-l border-[var(--line)] pl-3 sm:pl-4">
               <div className="flex items-center gap-2 pb-1.5">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-soft)]">
                   {post.replies.length} การตอบกลับ
@@ -934,7 +941,7 @@ export function ReportCard({
                   </button>
                 )}
               </div>
-              <div className="space-y-1 rounded-lg bg-[#F8FAFC] px-2.5 py-1.5">
+              <div className="space-y-2.5">
                 {(repliesExpanded ? post.replies : post.replies.slice(-RECENT_REPLY_COUNT)).map((r) => (
                   <ReportReply
                     key={r.id}

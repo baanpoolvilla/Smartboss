@@ -88,14 +88,16 @@ export function ReportFeed({
             </div>
           </div>
         ) : (
-          // Full width again, not capped — a centred ~900-960px reading
-          // measure was added this same round, then pulled the moment it was
-          // actually seen on a wide monitor (the empty margin on either side
-          // was flagged directly, "แสดงให้เต็มกรอบสิ") — third time this
-          // exact idea has been tried and reverted in this project, so it's
-          // probably worth treating as settled: don't re-add it without a
-          // real reason next time either. space-y-6 between day groups only
-          // now; individual posts inside one lean on their own border-b +
+          // Not capped in here — the reading-width constraint now lives one
+          // level up, in page.tsx, wrapping the whole room column (header +
+          // tabs + this feed + the composer) as a single centered unit
+          // instead of just this post list on its own. That's the fix for
+          // why a max-width tried at this level specifically got reverted
+          // twice before: capping only the feed left the header still
+          // full-width above it, plus no mx-auto meant the leftover space
+          // sat one-sided instead of split evenly ("แสดงให้เต็มกรอบสิ").
+          // space-y-6 between day groups only here; individual posts lean on
+          // their own border-b +
           // padding for rhythm instead of an extra gap on top of that, so
           // density goes up the way §15/16 ask for.
           <div className="space-y-6">

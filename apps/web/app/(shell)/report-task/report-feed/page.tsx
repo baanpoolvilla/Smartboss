@@ -444,7 +444,7 @@ function ReportFeedPageInner() {
     // and room panel now start right under the page's own top bar, and the
     // pills moved into the sidebar header (headerExtra below), which is the
     // one thing that's always on screen no matter which room is open.
-    <div className="flex flex-col gap-4 h-full">
+    <div className="flex flex-col gap-2.5 lg:gap-4 h-full">
       {/* Below `lg`, "☰ หัวข้อ" opens the topic tree as a full-screen Sheet
           instead of squeezing it into a fixed h-64 block above the feed with
           its own internal scroll (3.5.5) — the `lg:flex` sidebar right below
@@ -519,6 +519,16 @@ function ReportFeedPageInner() {
             area (report-feed.tsx) under white post cards — one visual tier
             per level instead of every level drawing its own line. */}
         <div className="w-full flex-1 min-w-0 flex flex-col min-h-0 lg:h-full">
+          {/* Final polish pass: reading column capped at ~1000px and
+              centered, not just left-anchored — a max-width was tried once
+              before and reverted the same day ("แสดงให้เต็มกรอบสิ") because
+              it only capped the post list itself, leaving dead space on the
+              right with nothing balancing it on the left. `mx-auto` is the
+              part that was missing then: the whole room column (header,
+              tabs, feed, composer together) now centers as one unit inside
+              this panel, so any leftover width on a wide monitor splits
+              evenly instead of reading as one-sided waste. */}
+          <div className="mx-auto flex w-full max-w-[1000px] flex-1 flex-col min-h-0">
           {todayStatusFilter ? (
             <div className="flex-1 min-h-0 bg-white overflow-hidden flex flex-col">
               <TodayStatusPanel
@@ -564,7 +574,7 @@ function ReportFeedPageInner() {
                     nothing; without a wrap the rest just ran off-screen with
                     no way to reach it ("มุมมอง: Thread" was literally
                     unreachable, cut off past the right edge). */}
-                <div className="px-5 pt-3 pb-2 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+                <div className="px-4 sm:px-5 pt-2.5 sm:pt-3 pb-1.5 sm:pb-2 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
                   <TopicLogo topic={activeTopic} size="h-8 w-8" />
                   {/* Name + description share one line now (not stacked) —
                       matches the reference layout ("# test1
@@ -672,9 +682,14 @@ function ReportFeedPageInner() {
                   // topic with no cutoffs at all just states its image rule
                   // plainly instead. The currently-applicable round still
                   // stands out (medium weight only, not color).
-                  <div className="px-5 pb-2 flex items-center gap-1.5 overflow-x-auto text-xs text-[var(--ink-soft)]">
+                  <div className="px-4 sm:px-5 pb-1.5 sm:pb-2 flex items-center gap-1.5 overflow-x-auto text-xs text-[var(--ink-soft)]">
                     <Clock className="h-3 w-3 shrink-0" />
-                    {activeTopic.cutoffs.length > 0 && <span className="shrink-0">กำหนดส่ง</span>}
+                    {/* Final polish pass: "เวลาส่ง" (a plain fact — the window
+                        this round runs in) reads more naturally than
+                        "กำหนดส่ง" (a deadline you're up against) for a room
+                        with an open submission window rather than a hard
+                        due-time; same word on desktop and mobile. */}
+                    {activeTopic.cutoffs.length > 0 && <span className="shrink-0">เวลาส่ง</span>}
                     {requirementParts.map((r, i) => (
                       <span key={i} className={cn("shrink-0", r.active && "font-medium text-[var(--ink)]")}>
                         {i > 0 && <span className="text-[var(--ink-faint)]"> · </span>}
@@ -693,7 +708,7 @@ function ReportFeedPageInner() {
                     "ตัวกรอง" button stays pinned on the same line instead of
                     getting shoved onto its own orphan row below (which just
                     looked like disconnected clutter, "งง...จัดให้มันดีๆสิ"). */}
-                <div className="px-5 flex items-center gap-2 border-b border-[var(--line)]">
+                <div className="px-4 sm:px-5 flex items-center gap-2 border-b border-[var(--line)]">
                 {/* Round 2, explicit instruction: real labels on every tab
                     at every width, not icon-only below lg. Worth flagging
                     that horizontal scroll here specifically was tried and
@@ -952,6 +967,7 @@ function ReportFeedPageInner() {
               <p className="text-sm">ยังไม่มีหัวข้อ — กด + ทางซ้ายเพื่อเริ่มต้น</p>
             </div>
           )}
+          </div>
         </div>
       </div>
 
