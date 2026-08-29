@@ -34,7 +34,6 @@ import {
   AtSign,
   Bell,
   Briefcase,
-  Check,
   ChevronRight,
   Clock,
   Code2,
@@ -941,31 +940,13 @@ export function TopicSidebar({
               </div>
             )}
 
-            {/* รูปลักษณ์ — สีกับไอคอนอยู่ด้วยกัน เพราะเป็นสิ่งเดียวกันที่เห็นในพรีวิวด้านบน */}
+            {/* รูปลักษณ์ — เหลือแค่ไอคอน; ช่องเลือก "สี" ถูกเอาออกไปแล้ว
+                (เหมือน room-settings-sheet.tsx) เพราะ TopicLogo (ไอคอนจริง
+                ที่แสดงในแถบข้าง/หัวห้อง) ไม่ได้ใช้สีนี้มาสักพักแล้ว — เลือก
+                สีในนี้ไปก็ไม่มีผลอะไรให้เห็นจริงเลยสักที่ ("สีใช้งานไม่ได้") */}
             <div className="rounded-xl border border-[var(--line)] overflow-hidden">
               <p className="px-3.5 py-2 text-xs font-semibold bg-[var(--bg-soft)] border-b border-[var(--line)]">รูปลักษณ์</p>
               <div className="p-3.5 space-y-3.5">
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-[var(--ink-soft)]">สี</Label>
-                  <div className="flex items-center gap-2.5 flex-wrap">
-                    {topicColors.map((c) => (
-                      <button
-                        key={c}
-                        type="button"
-                        onClick={() => setColor(c)}
-                        aria-label={`เลือกสี ${c}`}
-                        className={cn(
-                          "h-7 w-7 rounded-full flex items-center justify-center shrink-0 transition-transform",
-                          color === c && "scale-110 ring-2 ring-offset-2 ring-[var(--line)]"
-                        )}
-                        style={{ backgroundColor: c }}
-                      >
-                        {color === c && <Check className="h-3.5 w-3.5 text-white" />}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
                 {/* Sub-topics are text-only (Discord/Slack "# channel" style) —
                     no custom icon or logo upload, only a top-level topic gets one. */}
                 {!isSubTopic && (
@@ -994,12 +975,12 @@ export function TopicSidebar({
                               setLogoUrl(undefined);
                             }}
                             aria-label={`เลือกไอคอน ${key}`}
-                            className={cn("h-8 w-8 rounded-full flex items-center justify-center transition-colors", selected && "ring-2 ring-offset-1 ring-[var(--line)]")}
-                            style={
+                            className={cn(
+                              "h-8 w-8 rounded-full flex items-center justify-center transition-colors",
                               selected
-                                ? { backgroundColor: `color-mix(in srgb, ${color} 18%, white)`, color }
-                                : { backgroundColor: "white", color: "var(--ink-soft)" }
-                            }
+                                ? "bg-[var(--accent)] text-[var(--brand-green-dark)] ring-2 ring-offset-1 ring-[var(--line)]"
+                                : "bg-white text-[var(--ink-soft)]"
+                            )}
                           >
                             <Icon className="h-4 w-4" />
                           </button>
