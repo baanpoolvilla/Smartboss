@@ -7,6 +7,7 @@ import { Bell, Loader2, LogOut } from "lucide-react";
 import { Button } from "@smartboss/ui/components/button";
 import { useShell } from "@/components/shell/shell-context";
 import { Modal } from "./dialog";
+import { IssueReportBarButton } from "@/modules/report_task/components/issue-report/issue-report-bar-button";
 
 /**
  * ปุ่มขวาสุดของ AppBar — NotificationBell + ปุ่มออกจากระบบ (พร้อมกล่องยืนยัน)
@@ -30,6 +31,8 @@ export function AppBarActions() {
 
   return (
     <>
+      <IssueReportBarButton />
+
       <Link
         href="/notifications"
         className="relative rounded-full p-2 text-(--app-strong) transition-colors hover:bg-(--bg-soft)"

@@ -13,21 +13,22 @@ import { ServerStoreSync } from "@/modules/report_task/components/shared/server-
 import type { User } from "@/modules/report_task/types";
 
 /**
- * App-wide "แจ้งปัญหา" entry point — pinned to the bottom-left corner of
- * every page. Mounted once in Shell (see shell.tsx) so it's reachable from
- * any module, not just report_task's own screens.
+ * App-wide "แจ้งปัญหา" entry point — an icon button in the shared AppBar,
+ * right next to the notification bell (see app-bar-actions.tsx). Reachable
+ * from every module that uses AppScaffold, which is most of the app.
  *
- * A free-roaming version of this (wandering/bouncing around the viewport)
- * was tried first as a fun touch, then walked back after seeing it land in
- * awkward spots on real pages — a moving target is a worse "always
- * reachable" than a fixed one, so this stays put. The home screen also gets
- * its own static tile (issue-report-app-tile.tsx) for people who'd rather
- * find it there than hunt for a corner icon.
+ * Two earlier versions of this lived as a floating overlay instead: first a
+ * bug that wandered/bounced around the whole viewport (fun, but landed in
+ * awkward spots on real pages), then a fixed corner button (worked, but sat
+ * apart from the rest of the app's chrome and could still overlap page
+ * content, e.g. a reply button sitting right where it happened to rest).
+ * Moving it into the AppBar itself — the one thing that's already
+ * consistently on screen and never overlaps anything — reads better on
+ * mobile especially ("ดูสวยกว่า"), so this replaces both.
  */
-export function ReportIssueFab() {
+export function IssueReportBarButton() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
 
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const tickets = useIssueReportStore((s) => s.tickets);
@@ -35,14 +36,12 @@ export function ReportIssueFab() {
     (t) => t.reporterId === viewingAsUserId && reporterStatusGroup(t.status) === "needs_you"
   ).length;
 
-  useEffect(() => setMounted(true), []);
-
   // report_task pages already mount StoreHydrator (report-task-scaffold.tsx),
   // which keeps the employee directory and identity in sync — mounting this
   // again there would double up and race two independent writers against
-  // the same "issue-reports" store. Everywhere else (this button is on every
-  // page in the app, that's the whole point), nothing populates them at
-  // all, same gap AppTileReviewBadge already had to work around: without
+  // the same "issue-reports" store. Everywhere else (this button is in the
+  // AppBar on every module, that's the whole point), nothing populates them
+  // at all, same gap AppTileReviewBadge already had to work around: without
   // this, "who's reporting" would resolve to nobody and any ticket filed
   // from outside report_task would only ever exist in this tab's memory,
   // gone on refresh.
@@ -79,14 +78,9 @@ export function ReportIssueFab() {
   // Hidden on the ticket list/detail pages themselves — those already have
   // their own "แจ้งปัญหาใหม่" entry point in context.
   if (pathname.startsWith("/report-task/issue-reports")) return null;
-  if (!mounted) return null;
 
   return (
     <>
-      {/* Same store, same key StoreHydrator already syncs on every
-          report_task page — only mounted here when we're NOT on one of
-          those pages, so a ticket filed from some unrelated module actually
-          reaches the server instead of living only in this tab's memory. */}
       {!isReportTaskPage && (
         <ServerStoreSync
           apiKey="issue-reports"
@@ -96,17 +90,18 @@ export function ReportIssueFab() {
         />
       )}
       <button
+        type="button"
         onClick={() => setOpen(true)}
         title="แจ้งปัญหาระบบ (Ctrl/⌘+Shift+I)"
         aria-label="แจ้งปัญหาระบบ"
-        className="fixed bottom-5 left-5 z-40 flex h-11 w-11 items-center justify-center rounded-full bg-[var(--ink)] text-white shadow-lg hover:bg-[var(--ink)]/90 print:hidden"
+        className="relative rounded-full p-2 text-(--app-strong) transition-colors hover:bg-(--bg-soft)"
       >
-        <span className="relative">
-          <Bug className="h-5 w-5 shrink-0" />
-          {needsYouCount > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 h-3.5 w-3.5 rounded-full bg-[var(--chart-red)] ring-2 ring-[var(--ink)]" />
-          )}
-        </span>
+        <Bug className="h-5 w-5" />
+        {needsYouCount > 0 && (
+          <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-(--danger) px-1 text-[10px] font-bold text-white">
+            {needsYouCount > 99 ? "99+" : needsYouCount}
+          </span>
+        )}
       </button>
       <IssueReportDialog open={open} onOpenChange={setOpen} />
     </>
