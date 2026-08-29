@@ -174,7 +174,8 @@ export interface LeaveRequest {
   starts_on: string;
   ends_on: string;
   total_minutes: number;
-  status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
+  /** SUBMITTED = รออนุมัติ (ชื่อสถานะภายในของ workforce) */
+  status: "SUBMITTED" | "APPROVED" | "REJECTED" | "CANCELLED";
   reason: string | null;
 }
 

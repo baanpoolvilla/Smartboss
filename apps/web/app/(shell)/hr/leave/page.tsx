@@ -23,7 +23,11 @@ import {
   Td,
   inputClass,
 } from "@/modules/hr/components/ui";
-import { createLeaveTypeAction, decideLeaveAction } from "../actions";
+import {
+  createLeaveTypeAction,
+  decideLeaveAction,
+  seedLeaveTypesAction,
+} from "../actions";
 import {
   LeaveCalendar,
   type DayEntry,
@@ -84,7 +88,8 @@ export default async function LeavePage({
           wfTry<Paged<LeaveType>>("/leave-types"),
           // ตัวนี้ทุกคนเรียกได้ — เป็นแหล่งข้อมูลหลักของปฏิทิน
           wfTry<{ items: LeaveCalendarEntry[] }>(`/leave-calendar?from=${from}&to=${to}`),
-          wfTry<Paged<LeaveRequest>>(`/leave-requests?from=${from}&to=${to}&status=PENDING`),
+          // ใบที่รออนุมัติมีสถานะ SUBMITTED ไม่ใช่ PENDING — ชื่อนี้มาจาก API โดยตรง
+          wfTry<Paged<LeaveRequest>>(`/leave-requests?from=${from}&to=${to}&status=SUBMITTED`),
         ]);
 
         /*
@@ -205,8 +210,22 @@ export default async function LeavePage({
             {canManageTypes && companyId !== undefined && (
               <SectionCard
                 title="ประเภทการลา"
-                description="ต้องมีอย่างน้อยหนึ่งประเภท พนักงานถึงจะขอลาได้"
+                description="ต้องมีอย่างน้อยหนึ่งประเภท พนักงานถึงจะขอลาได้ — ควบคุมด้วยการอนุมัติ ไม่ได้ตัดโควตา"
+                action={
+                  <form action={seedLeaveTypesAction}>
+                    <input type="hidden" name="company_id" value={companyId} />
+                    <Button type="submit" size="sm" variant="outline">
+                      สร้างชุดมาตรฐาน
+                    </Button>
+                  </form>
+                }
               >
+                {(types?.items ?? []).length === 0 && (
+                  <p className="mb-3 text-sm text-(--ink-soft)">
+                    ยังไม่มีประเภทการลา — กด “สร้างชุดมาตรฐาน” จะได้ ลาป่วย · ลากิจ ·
+                    ลาพักร้อน · ลาไม่รับค่าจ้าง ครบในคลิกเดียว
+                  </p>
+                )}
                 {(types?.items ?? []).length > 0 && (
                   <div className="mb-3 flex flex-wrap gap-1.5">
                     {(types?.items ?? []).map((t) => (

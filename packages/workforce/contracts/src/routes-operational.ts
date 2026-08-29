@@ -68,6 +68,15 @@ export const OPERATIONAL_ROUTES: readonly Omit<RouteDefinition, 'response'>[] = 
     successStatus: 200,
   },
   {
+    operationId: 'listTimeEventBoard_get',
+    method: 'get',
+    path: '/time-event-board',
+    summary: 'GET /time-event-board',
+    tag: 'devices',
+    // เปล่า = ขอแค่ยืนยันตัวตนแล้ว ทั้งทีมเห็นว่าใครมาถึงกี่โมง
+    permissions: [] as Permission[],
+  },
+  {
     operationId: 'listRawTimeEvents_get',
     method: 'get',
     path: '/raw-time-events',

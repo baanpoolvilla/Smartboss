@@ -42,6 +42,40 @@ export class DeviceService {
     });
   }
 
+  /**
+   * กระดานลงเวลาของทีม — ใครมาถึงกี่โมง
+   *
+   * แยกจาก listRawTimeEvents เพราะสิทธิ์คนละชั้น: ตัวนั้นต้องมี
+   * attendance.read.all ซึ่ง role EMPLOYEE ไม่มี ⇒ พนักงานเห็นแม้แต่การสแกน
+   * ของตัวเองไม่ได้ แต่ทั้งทีมควรเห็นว่าใครมาถึงแล้วบ้าง
+   *
+   * ⚠ คืนเฉพาะ ชื่อ + เวลา + เครื่อง — **ไม่คืน match_score, slot, สถานะ
+   * quarantine หรือแถวที่จับคู่กับคนไม่ได้** เพราะนั่นเป็นข้อมูลไว้ตรวจปัญหา
+   * ของผู้ดูแล ไม่ใช่ของเพื่อนร่วมงาน และแถวที่ไม่รู้ว่าใครก็ไม่มีประโยชน์กับทีม
+   */
+  async listTimeEventBoard(query: {
+    from: string;
+    to: string;
+  }): Promise<{ items: Record<string, unknown>[] }> {
+    return this.uow.run(async (uow) => {
+      const rows = await this.repository.listRawTimeEvents(uow.tx, {
+        ...query,
+        limit: 500,
+      });
+      return {
+        items: rows
+          .filter((row) => row['slot_resolved'] === true && row['display_name'] !== null)
+          .map((row) => ({
+            id: row['id'],
+            employment_id: row['employment_id'],
+            display_name: row['display_name'],
+            captured_at: row['captured_at'],
+            device_code: row['device_code'],
+          })),
+      };
+    });
+  }
+
   async createDevice(input: CreateDeviceInput): Promise<Device> {
     return this.uow.run(async (uow) => {
       const row = await this.repository.insertDevice(uow.tx, {

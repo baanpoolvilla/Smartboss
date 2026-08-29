@@ -7,6 +7,7 @@ import {
   type AttendanceSummary,
   type Employment,
   type Paged,
+  type RawTimeEvent,
 } from "@/modules/hr/lib/api";
 import {
   DataTable,
@@ -19,6 +20,7 @@ import {
 } from "@/modules/hr/components/ui";
 import { formatMinutes } from "@/modules/hr/lib/labels";
 import { RecalculateForm } from "./recalculate-form";
+import { AutoRefresh } from "./auto-refresh";
 
 /**
  * เครื่องคำนวณบอกสาเหตุไว้ครบอยู่แล้ว แต่ไม่เคยมีหน้าจอไหนแสดง —
@@ -66,28 +68,73 @@ export default async function AttendancePage({
 
   return (
     <HrPage
-      title="ผลลงเวลา"
-      permission={HR_PERMS.employeeView}
+      title="การลงเวลา"
+      // เปิดให้ทุกคนที่เข้าโมดูลได้ — พนักงานต้องเห็นว่าใครมาถึงกี่โมง
+      // ส่วนสรุปผล/สั่งคำนวณยังต้องมีสิทธิ์ ซ่อนเป็นส่วน ๆ ข้างล่าง
+      permission={HR_PERMS.access}
       load={async () => {
         const preset = rangeForDays(days);
         const from = sp.from ?? preset.from;
         const to = sp.to ?? preset.to;
 
-        const [summary, employments, exceptions] = await Promise.all([
+        const today = new Date().toISOString().slice(0, 10);
+
+        const [summary, employments, exceptions, board, raw] = await Promise.all([
           wfTry<AttendanceSummary>(`/attendance-summary?from=${from}&to=${to}`),
           wfTry<Paged<Employment>>("/employments"),
           wfTry<{ items: AttendanceException[] }>(
             `/attendance-exceptions?from=${from}&to=${to}&status=OPEN`,
           ),
+          // ทุกคนเรียกได้ — ชื่อ+เวลา+เครื่อง เท่านั้น
+          wfTry<{
+            items: {
+              id: string;
+              employment_id: string;
+              display_name: string;
+              captured_at: string;
+              device_code: string | null;
+            }[];
+          }>(`/time-event-board?from=${today}&to=${today}`),
+          // รายละเอียดสำหรับผู้ดูแล (คะแนน/slot/แถวที่จับคู่ไม่ได้)
+          wfTry<{ items: RawTimeEvent[] }>(
+            `/raw-time-events?from=${from}&to=${to}&limit=300`,
+          ),
         ]);
 
-        if (summary === null) return <NoPermission what="ผลลงเวลาของทั้งบริษัท" />;
+        /*
+         * ไม่บล็อกทั้งหน้าเมื่ออ่านสรุปไม่ได้ — พนักงานทั่วไปไม่มี
+         * attendance.read.all แต่ต้องเห็นกระดานว่าใครมาถึงแล้วบ้าง
+         * ตัวชี้ขาดว่าเข้าหน้านี้ได้ไหมคือกระดาน ซึ่งทุกคนเรียกได้
+         */
+        if (board === null && summary === null) {
+          return <NoPermission what="การลงเวลา" />;
+        }
 
         const nameOf = (employmentId: string) =>
           (employments?.items ?? []).find((e) => e.id === employmentId)?.full_name ??
           employmentId.slice(0, 8);
 
-        const t = summary.totals;
+        const canSeeResults = summary !== null;
+        const t = summary?.totals;
+
+        /** เวลาเข้างานครั้งแรกของแต่ละคนวันนี้ — คนหนึ่งคนสแกนหลายครั้งต่อวัน */
+        const firstToday = new Map<string, { name: string; at: string; device: string | null }>();
+        for (const e of [...(board?.items ?? [])].reverse()) {
+          firstToday.set(e.employment_id, {
+            name: e.display_name,
+            at: e.captured_at,
+            device: e.device_code,
+          });
+        }
+        const arrivals = [...firstToday.values()].sort((a, b) =>
+          a.at.localeCompare(b.at),
+        );
+        const clock = (iso: string) =>
+          new Date(iso).toLocaleTimeString("th-TH", {
+            hour: "2-digit",
+            minute: "2-digit",
+            timeZone: "Asia/Bangkok",
+          });
 
         const activePeople = (employments?.items ?? [])
           .filter((e) => e.terminated_on === null)
@@ -118,7 +165,34 @@ export default async function AttendancePage({
 
         return (
           <>
-            <RecalculateForm people={activePeople} from={from} to={to} />
+            <SectionCard
+              title={`ใครมาแล้วบ้างวันนี้ · ${arrivals.length} คน`}
+              description="เวลาที่สแกนนิ้วครั้งแรกของวัน — ดูอย่างเดียว แก้ไขไม่ได้"
+              className="mb-4"
+            >
+              {arrivals.length === 0 ? (
+                <EmptyState>วันนี้ยังไม่มีใครสแกน</EmptyState>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {arrivals.map((a) => (
+                    <span
+                      key={a.name + a.at}
+                      className="flex items-center gap-2 rounded-(--radius) border border-(--line) bg-(--bg-soft) px-3 py-1.5 text-sm"
+                      title={a.device ? `เครื่อง ${a.device}` : undefined}
+                    >
+                      <span className="font-medium">{a.name}</span>
+                      <span className="font-mono text-xs text-(--ink-soft)">
+                        {clock(a.at)}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </SectionCard>
+
+            {canSeeResults && (
+              <RecalculateForm people={activePeople} from={from} to={to} />
+            )}
 
             {issues.length > 0 && (
               <SectionCard
@@ -156,6 +230,8 @@ export default async function AttendancePage({
               </SectionCard>
             )}
 
+            {summary !== null && t !== undefined && (
+              <>
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <span className="text-xs text-(--ink-soft)">ช่วงเวลา:</span>
               {[7, 30, 90].map((d) => (
@@ -266,6 +342,51 @@ export default async function AttendancePage({
                   </tr>
                 ))}
               </DataTable>
+            )}
+            {canSeeResults && (
+              <SectionCard
+                title="รายการสแกนทั้งหมด"
+                description="ข้อมูลดิบจากเครื่อง ใช้ตรวจว่าเครื่องส่งถึงเซิร์ฟเวอร์จริงไหม"
+                className="mt-4"
+                action={<AutoRefresh />}
+              >
+                {(raw?.items ?? []).length === 0 ? (
+                  <EmptyState>ไม่มีการสแกนในช่วงนี้</EmptyState>
+                ) : (
+                  <DataTable head={["เวลา", "พนักงาน", "เครื่อง", "Slot", "คะแนน"]}>
+                    {(raw?.items ?? []).map((row) => (
+                      <tr key={row.id} className="hover:bg-(--bg-soft)">
+                        <Td className="font-mono text-xs">
+                          {new Date(row.captured_at).toLocaleString("th-TH", {
+                            day: "numeric",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            second: "2-digit",
+                            timeZone: "Asia/Bangkok",
+                          })}
+                        </Td>
+                        <Td>
+                          {row.slot_resolved && row.display_name !== null ? (
+                            <span className="font-medium">{row.display_name}</span>
+                          ) : (
+                            <Pill tone="var(--danger)">ไม่รู้ว่าเป็นใคร</Pill>
+                          )}
+                        </Td>
+                        <Td className="text-(--ink-soft)">{row.device_code ?? "—"}</Td>
+                        <Td align="right" className="font-mono text-xs">
+                          {row.template_slot ?? "—"}
+                        </Td>
+                        <Td align="right" className="font-mono text-xs">
+                          {row.match_score ?? "—"}
+                        </Td>
+                      </tr>
+                    ))}
+                  </DataTable>
+                )}
+              </SectionCard>
+            )}
+              </>
             )}
           </>
         );

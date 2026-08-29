@@ -20,10 +20,10 @@ export const hrManifest: ModuleManifest = {
   menus: [
     { label: "ภาพรวม", path: "/hr", permission: HR_PERMS.access, icon: "LayoutDashboard" },
     { label: "พนักงาน", path: "/hr/employees", permission: HR_PERMS.employeeView, icon: "Users" },
-    // แยกจาก "ผลลงเวลา" ชัดเจน — อันนี้คือข้อมูลดิบที่เครื่องส่งมา
-    // อีกอันคือผลที่คำนวณแล้ว คนละเรื่องและใช้ตอนคนละสถานการณ์
-    { label: "การลงเวลา", path: "/hr/time-events", permission: HR_PERMS.employeeView, icon: "Fingerprint" },
-    { label: "ผลลงเวลา", path: "/hr/attendance", permission: HR_PERMS.employeeView, icon: "CalendarClock" },
+    // เดิมแยกเป็น "การลงเวลา" (ข้อมูลดิบ) กับ "ผลลงเวลา" (ผลคำนวณ) — รวมแล้ว
+    // เพราะเป็นเรื่องเดียวกัน ข้อมูลดิบมีไว้เพื่อคำนวณเป็นผลอยู่ดี
+    // เปิดด้วย access เพราะพนักงานต้องเห็นว่าใครมาถึงกี่โมง
+    { label: "การลงเวลา", path: "/hr/attendance", permission: HR_PERMS.access, icon: "CalendarClock" },
     { label: "Timesheet", path: "/hr/timesheets", permission: HR_PERMS.employeeView, icon: "ClipboardList" },
     { label: "กะทำงาน", path: "/hr/shifts", permission: HR_PERMS.settingManage, icon: "Clock" },
     // ปฏิทินวันหยุดเปิดให้ทุกคนที่เข้าโมดูลได้ — พนักงานต้องขอลาเองและเห็นของเพื่อน

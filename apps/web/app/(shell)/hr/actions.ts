@@ -887,10 +887,71 @@ export async function createLeaveTypeAction(formData: FormData) {
         paid: formData.get("paid") !== "0",
         unit: "DAY",
         quota_minutes_per_year: Number(formData.get("quota_days") ?? 0) * 480,
+        /*
+         * ตัวควบคุมคือ "ต้องได้รับอนุมัติ" ไม่ใช่โควตา
+         *
+         * ถ้า allow_negative เป็น false เซิร์ฟเวอร์จะเช็คยอดคงเหลือก่อนรับคำขอ
+         * แต่ยอดคงเหลือต้องมีคนไป grant ให้ทีละคนทีละปี ซึ่งยังไม่มีหน้าจอ
+         * ⇒ พนักงานขอลาไม่ผ่านเลยสักใบ ได้แค่ "insufficient leave balance"
+         * ที่อ่านแล้วไม่รู้ว่าต้องทำอะไร
+         *
+         * เปิดไว้ก่อน แล้วให้ผู้อนุมัติเป็นคนตัดสิน — ตรงกับที่เจ้าของบอกว่า
+         * ลาป่วย/ลากิจต้องกดขออนุญาต ส่วนโควตายังเก็บไว้เป็นตัวเลขอ้างอิง
+         */
+        allow_negative: true,
         // ไม่บังคับแจ้งล่วงหน้า/แนบเอกสารในเวอร์ชันแรก — เพิ่มทีหลังได้ที่ API เดิม
         effective_from: new Date().toISOString().slice(0, 10),
       },
     });
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+  revalidatePath("/hr/leave");
+}
+
+/**
+ * สร้างประเภทการลาชุดมาตรฐานให้ในคลิกเดียว
+ *
+ * ไม่ตั้งโควตาเป็นตัวเลขตายตัว เพราะสิทธิ์ลาต่างกันตามบริษัทและอายุงาน —
+ * ใส่ 0 (ไม่จำกัด) แล้วคุมด้วยการอนุมัติ ปรับเป็นตัวเลขจริงทีหลังได้
+ *
+ * ข้ามอันที่มีชื่อซ้ำอยู่แล้ว กดซ้ำได้ไม่สร้างของซ้ำ
+ */
+const STANDARD_LEAVE_TYPES = [
+  { name: "ลาป่วย", paid: true },
+  { name: "ลากิจ", paid: true },
+  { name: "ลาพักร้อน", paid: true },
+  { name: "ลาไม่รับค่าจ้าง", paid: false },
+] as const;
+
+export async function seedLeaveTypesAction(formData: FormData) {
+  await guard(HR_PERMS.settingManage);
+  const companyId = String(formData.get("company_id") ?? "");
+  if (!companyId) throw new Error("ยังไม่มีบริษัทในระบบ workforce");
+
+  try {
+    const existing = await wfFetch<Paged<{ code: string; name: string }>>("/leave-types");
+    const taken = new Set(existing.items.map((t) => t.name.trim()));
+    const codes = existing.items.map((t) => ({ code: t.code }));
+
+    for (const type of STANDARD_LEAVE_TYPES) {
+      if (taken.has(type.name)) continue;
+      const code = nextCode("LEAVE", codes);
+      codes.push({ code });
+      await wfFetch("/leave-types", {
+        method: "POST",
+        body: {
+          company_id: companyId,
+          code,
+          name: type.name,
+          paid: type.paid,
+          unit: "DAY",
+          quota_minutes_per_year: 0,
+          allow_negative: true,
+          effective_from: new Date().toISOString().slice(0, 10),
+        },
+      });
+    }
   } catch (error) {
     throw new Error(toMessage(error));
   }

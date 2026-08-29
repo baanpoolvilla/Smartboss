@@ -546,7 +546,9 @@ export class LeaveService {
             // ทับซ้อนช่วง ไม่ใช่อยู่ในช่วงทั้งก้อน — การลาคร่อมเดือนต้องขึ้นทั้งสองเดือน
             sql`${schema.leaveRequests.startsOn} <= ${query.to}`,
             sql`${schema.leaveRequests.endsOn} >= ${query.from}`,
-            inArray(schema.leaveRequests.status, ['PENDING', 'APPROVED']),
+            // ใบที่เพิ่งส่งมีสถานะ SUBMITTED ไม่ใช่ PENDING (ดู submitRequest)
+            // กรองผิดชื่อคือปฏิทินว่างเปล่าทั้งที่มีคนขอลาแล้ว
+            inArray(schema.leaveRequests.status, ['SUBMITTED', 'APPROVED']),
           ),
         )
         .limit(1000);
@@ -562,7 +564,8 @@ export class LeaveService {
           employee_code: row.employeeCode,
           starts_on: row.startsOn,
           ends_on: row.endsOn,
-          status: row.status,
+          // ฝั่งหน้าจอสนใจแค่ "รออนุมัติ" กับ "อนุมัติแล้ว" — ไม่ต้องรู้ชื่อสถานะภายใน
+          status: row.status === 'APPROVED' ? 'APPROVED' : 'PENDING',
         })),
       };
     });
