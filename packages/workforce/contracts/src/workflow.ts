@@ -13,6 +13,10 @@ export const createLeaveTypeSchema = z.object({
    */
   quota_minutes_per_year: z.number().int().min(0).max(525_600).default(0),
   advance_notice_days: z.number().int().min(0).max(365).default(0),
+  /** true = อนุมัติทันทีตอนส่ง (สิทธิ์ ไม่ใช่คำขอ) */
+  auto_approve: z.boolean().default(false),
+  /** 0 = ไม่จำกัดรายเดือน — quota_minutes_per_year เป็นรายปี คุมรายเดือนไม่ได้ */
+  monthly_quota_days: z.number().int().min(0).max(31).default(0),
   attachment_required: z.boolean().default(false),
   allow_negative: z.boolean().default(false),
   effective_from: isoDateSchema,

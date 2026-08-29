@@ -158,6 +158,8 @@ export default async function LeavePage({
                 leaveTypes={(types?.items ?? []).map((t) => ({
                   id: t.id,
                   label: `${t.name}${t.paid ? "" : " (ไม่ได้ค่าจ้าง)"}`,
+                  autoApprove: t.auto_approve,
+                  monthlyQuotaDays: t.monthly_quota_days,
                 }))}
                 entriesByDate={entriesByDate}
                 people={legend}
@@ -229,8 +231,14 @@ export default async function LeavePage({
                 {(types?.items ?? []).length > 0 && (
                   <div className="mb-3 flex flex-wrap gap-1.5">
                     {(types?.items ?? []).map((t) => (
-                      <Pill key={t.id} tone={t.paid ? "var(--tone-ok)" : "var(--tone-muted)"}>
+                      <Pill
+                        key={t.id}
+                        tone={t.auto_approve ? "var(--app-strong)" : "var(--tone-ok)"}
+                      >
                         {t.name}
+                        {t.auto_approve
+                          ? ` · สิทธิ์${t.monthly_quota_days > 0 ? ` ${t.monthly_quota_days} วัน/เดือน` : ""}`
+                          : " · ต้องอนุมัติ"}
                       </Pill>
                     ))}
                   </div>
@@ -249,16 +257,22 @@ export default async function LeavePage({
                       className={inputClass}
                     />
                   </Field>
-                  <Field label="โควตา (วัน/ปี)" hint="0 = ไม่จำกัด">
+                  <Field label="โควตา (วัน/เดือน)" hint="0 = ไม่จำกัด">
                     <input
                       type="number"
-                      name="quota_days"
+                      name="monthly_quota_days"
                       min={0}
-                      max={365}
+                      max={31}
                       defaultValue={0}
                       className={inputClass}
                     />
                   </Field>
+                  <div className="flex items-end pb-3 text-sm sm:col-span-2">
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" name="auto_approve" value="1" className="h-4 w-4" />
+                      เป็นสิทธิ์ ไม่ต้องอนุมัติ (เลือกวันแล้วมีผลทันที)
+                    </label>
+                  </div>
                   <div className="flex items-end gap-2">
                     <select name="paid" defaultValue="1" className={inputClass}>
                       <option value="1">ได้ค่าจ้าง</option>

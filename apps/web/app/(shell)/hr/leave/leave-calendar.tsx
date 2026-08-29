@@ -50,7 +50,12 @@ export function LeaveCalendar({
   month: string;
   today: string;
   employmentId: string | null;
-  leaveTypes: { id: string; label: string }[];
+  leaveTypes: {
+    id: string;
+    label: string;
+    autoApprove: boolean;
+    monthlyQuotaDays: number;
+  }[];
   entriesByDate: Record<string, DayEntry[]>;
   people: PersonLegend[];
 }) {
@@ -242,6 +247,9 @@ export function LeaveCalendar({
               {leaveTypes.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.label}
+                  {t.autoApprove
+                    ? ` — ไม่ต้องอนุมัติ${t.monthlyQuotaDays > 0 ? ` (${t.monthlyQuotaDays} วัน/เดือน)` : ""}`
+                    : " — ต้องรออนุมัติ"}
                 </option>
               ))}
             </select>
@@ -270,9 +278,10 @@ export function LeaveCalendar({
       {state.error && <p className="text-sm text-(--danger)">{state.error}</p>}
       {state.ok && (
         <div className="rounded-(--radius) border border-(--line) bg-(--bg-soft) p-3 text-sm">
-          <p className="font-medium">ส่งคำขอแล้ว {state.days} วัน</p>
+          <p className="font-medium">บันทึกแล้ว {state.days} วัน</p>
           <p className="mt-1 text-(--ink-soft)">
-            ขึ้นเป็นแถบจาง ๆ มีจุดนำหน้า = รออนุมัติ —{" "}
+            ประเภทที่เป็น <strong>สิทธิ์</strong> มีผลทันที ขึ้นเป็นแถบสีเข้ม ·
+            ประเภทที่ <strong>ต้องอนุมัติ</strong> ขึ้นเป็นแถบจางมีจุดนำหน้า และ
             <strong>ยังถูกนับเป็นขาดงานอยู่จนกว่าจะได้รับอนุมัติ</strong>
           </p>
         </div>

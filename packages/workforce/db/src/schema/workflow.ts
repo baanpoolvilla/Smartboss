@@ -15,6 +15,10 @@ export const leaveTypes = workforce.table('leave_types', {
   carryOverMaxMinutes: integer('carry_over_max_minutes').notNull().default(0),
   carryOverExpiryMonths: integer('carry_over_expiry_months').notNull().default(0),
   advanceNoticeDays: integer('advance_notice_days').notNull().default(0),
+  /** true = อนุมัติทันทีตอนส่ง — ใช้กับสิทธิ์ที่ไม่ใช่คำขอ เช่นวันหยุดประจำเดือน */
+  autoApprove: boolean('auto_approve').notNull().default(false),
+  /** 0 = ไม่จำกัดรายเดือน · quota_minutes_per_year คุมรายเดือนไม่ได้ */
+  monthlyQuotaDays: integer('monthly_quota_days').notNull().default(0),
   attachmentRequired: boolean('attachment_required').notNull().default(false),
   minDurationMinutes: integer('min_duration_minutes').notNull().default(0),
   maxDurationMinutes: integer('max_duration_minutes'),

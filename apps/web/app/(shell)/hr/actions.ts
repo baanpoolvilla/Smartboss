@@ -818,6 +818,7 @@ export async function submitLeaveAction(
    * (เช่นหยุดจันทร์กับศุกร์) ถ้ารวบเป็น starts_on..ends_on จะกินวันกลางไปด้วย
    */
   let failed = 0;
+  let lastError: string | undefined;
   for (const day of dates) {
     try {
       await wfFetch("/leave-requests", {
@@ -831,13 +832,15 @@ export async function submitLeaveAction(
           reason,
         },
       });
-    } catch {
+    } catch (error) {
       failed += 1;
+      lastError = toMessage(error);
     }
   }
 
   if (failed === dates.length) {
-    return { error: "ส่งคำขอไม่สำเร็จ — อาจขอวันเดิมไปแล้ว หรือโควตาไม่พอ" };
+    // ข้อความรวม ๆ ("อาจ...หรือ...") ทำให้ผู้ใช้เดาต่อไม่ถูก — ส่งเหตุผลจริงจาก API
+    return { error: lastError ?? "ส่งคำขอไม่สำเร็จ" };
   }
 
   revalidatePath("/hr/leave");
@@ -887,6 +890,8 @@ export async function createLeaveTypeAction(formData: FormData) {
         paid: formData.get("paid") !== "0",
         unit: "DAY",
         quota_minutes_per_year: Number(formData.get("quota_days") ?? 0) * 480,
+        auto_approve: formData.get("auto_approve") === "1",
+        monthly_quota_days: Number(formData.get("monthly_quota_days") ?? 0),
         /*
          * ตัวควบคุมคือ "ต้องได้รับอนุมัติ" ไม่ใช่โควตา
          *
@@ -918,10 +923,16 @@ export async function createLeaveTypeAction(formData: FormData) {
  * ข้ามอันที่มีชื่อซ้ำอยู่แล้ว กดซ้ำได้ไม่สร้างของซ้ำ
  */
 const STANDARD_LEAVE_TYPES = [
-  { name: "ลาป่วย", paid: true },
-  { name: "ลากิจ", paid: true },
-  { name: "ลาพักร้อน", paid: true },
-  { name: "ลาไม่รับค่าจ้าง", paid: false },
+  /*
+   * วันหยุดประจำเดือนเป็น "สิทธิ์" ไม่ใช่คำขอ — เลือกวันเองแล้วมีผลทันที
+   * 6 วันเป็นค่าตั้งต้นที่เจ้าของกำหนด ไม่ใช่ค่าฝังในโค้ด: เก็บลง
+   * monthly_quota_days ของประเภทนั้น แก้เป็นเลขอื่นได้ที่หน้าจอ
+   */
+  { name: "วันหยุดประจำเดือน", paid: true, autoApprove: true, monthlyDays: 6 },
+  { name: "ลาป่วย", paid: true, autoApprove: false, monthlyDays: 0 },
+  { name: "ลากิจ", paid: true, autoApprove: false, monthlyDays: 0 },
+  { name: "ลาพักร้อน", paid: true, autoApprove: false, monthlyDays: 0 },
+  { name: "ลาไม่รับค่าจ้าง", paid: false, autoApprove: false, monthlyDays: 0 },
 ] as const;
 
 export async function seedLeaveTypesAction(formData: FormData) {
@@ -948,6 +959,8 @@ export async function seedLeaveTypesAction(formData: FormData) {
           unit: "DAY",
           quota_minutes_per_year: 0,
           allow_negative: true,
+          auto_approve: type.autoApprove,
+          monthly_quota_days: type.monthlyDays,
           effective_from: new Date().toISOString().slice(0, 10),
         },
       });

@@ -142,6 +142,10 @@ export interface LeaveType {
   name: string;
   paid: boolean;
   unit: "DAY" | "HALF_DAY" | "HOUR";
+  /** true = สิทธิ์ ไม่ใช่คำขอ — อนุมัติทันทีตอนส่ง ไม่เข้าคิวรออนุมัติ */
+  auto_approve: boolean;
+  /** 0 = ไม่จำกัดรายเดือน */
+  monthly_quota_days: number;
 }
 
 /**

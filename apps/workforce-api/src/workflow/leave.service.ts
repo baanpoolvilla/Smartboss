@@ -39,6 +39,8 @@ export class LeaveService {
     advance_notice_days: number;
     attachment_required: boolean;
     allow_negative: boolean;
+    auto_approve: boolean;
+    monthly_quota_days: number;
     effective_from: string;
   }): Promise<Record<string, unknown>> {
     return this.uow.run(async (uow) => {
@@ -52,6 +54,8 @@ export class LeaveService {
         paid: input.paid,
         unit: input.unit,
         quotaMinutesPerYear: input.quota_minutes_per_year,
+        autoApprove: input.auto_approve,
+        monthlyQuotaDays: input.monthly_quota_days,
         advanceNoticeDays: input.advance_notice_days,
         attachmentRequired: input.attachment_required,
         allowNegative: input.allow_negative,
@@ -242,6 +246,44 @@ export class LeaveService {
         }
       }
 
+      /*
+       * โควตารายเดือน — quota_minutes_per_year คุมรายเดือนไม่ได้
+       * ใส่ 72 ชม./ปี ก็ยังลาหมดในเดือนเดียวได้ ซึ่งไม่ใช่สิ่งที่ตั้งใจเมื่อกฎคือ
+       * "หยุดได้ 6 วันต่อเดือน"
+       *
+       * นับทั้ง SUBMITTED และ APPROVED — ใบที่รออนุมัติกันโควตาไว้แล้ว
+       * ไม่งั้นจะส่งค้างไว้เกินโควตาแล้วรอให้อนุมัติทีเดียวทั้งหมด
+       */
+      if (leaveType.monthlyQuotaDays > 0) {
+        const monthStart = startsOn.firstDayOfMonth().toString();
+        const monthEnd = startsOn.lastDayOfMonth().toString();
+
+        const existing = await uow.tx
+          .select({ totalMinutes: schema.leaveRequests.totalMinutes })
+          .from(schema.leaveRequests)
+          .where(
+            and(
+              eq(schema.leaveRequests.employmentId, input.employment_id),
+              eq(schema.leaveRequests.leaveTypeId, input.leave_type_id),
+              inArray(schema.leaveRequests.status, ['SUBMITTED', 'APPROVED']),
+              sql`${schema.leaveRequests.startsOn} >= ${monthStart}`,
+              sql`${schema.leaveRequests.startsOn} <= ${monthEnd}`,
+            ),
+          );
+
+        const usedDays = existing.reduce((sum, row) => sum + row.totalMinutes, 0) / 480;
+        const requestedDays = input.total_minutes / 480;
+        if (usedDays + requestedDays > leaveType.monthlyQuotaDays) {
+          throw AppError.validation('monthly quota exceeded', {
+            meta: {
+              monthly_quota_days: leaveType.monthlyQuotaDays,
+              used_days: usedDays,
+              requested_days: requestedDays,
+            },
+          });
+        }
+      }
+
       const requestId = uuidv7();
       await uow.tx.insert(schema.leaveRequests).values({
         id: requestId,
@@ -257,7 +299,8 @@ export class LeaveService {
         halfDayStart: input.half_day_start,
         halfDayEnd: input.half_day_end,
         reason: input.reason,
-        status: 'SUBMITTED',
+        // สิทธิ์ที่ไม่ใช่คำขอ (เช่นวันหยุดประจำเดือน) อนุมัติทันที ไม่เข้าคิว
+        status: leaveType.autoApprove ? 'APPROVED' : 'SUBMITTED',
         submittedAt: this.clock.now(),
         createdBy: this.requestContext.requirePrincipal().principalId,
       });
@@ -288,7 +331,10 @@ export class LeaveService {
         },
       });
 
-      return { id: requestId, status: 'SUBMITTED' };
+      return {
+        id: requestId,
+        status: leaveType.autoApprove ? 'APPROVED' : 'SUBMITTED',
+      };
     });
   }
 
@@ -503,6 +549,8 @@ export class LeaveService {
           paid: row.paid,
           unit: row.unit,
           quota_minutes_per_year: row.quotaMinutesPerYear,
+          auto_approve: row.autoApprove,
+          monthly_quota_days: row.monthlyQuotaDays,
         })),
       };
     });
