@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/modules/report_task/components/ui/button";
 import { ReportTopicSettingsPanel } from "@/modules/report_task/components/report-feed/report-topic-settings-dialog";
 import { UNLIMITED_FILES_RETENTION_DAYS } from "@/modules/report_task/components/report-feed/report-topic-panels";
-import { useReportFeedStore, topicColors, FEED_VIEW_MODE_LOCK_CUTOFF, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
+import { useReportFeedStore, FEED_VIEW_MODE_LOCK_CUTOFF, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useActivityLogStore } from "@/modules/report_task/store/activity-log-store";
 import { canManage } from "@/modules/report_task/lib/directory";
@@ -186,24 +186,6 @@ export function RoomSettingsSheet({
                 className="resize-none"
                 placeholder="บอกคร่าวๆ ว่าหัวข้อนี้ไว้คุยเรื่องอะไร"
               />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-[var(--ink-soft)]">สี</Label>
-              <div className="flex items-center gap-2.5 flex-wrap">
-                {topicColors.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => c !== draft.color && patchDraft({ color: c })}
-                    aria-label={`เลือกสี ${c}`}
-                    className={cn(
-                      "h-7 w-7 rounded-full shrink-0 transition-transform",
-                      draft.color === c && "scale-110 ring-2 ring-offset-2 ring-[var(--line)]"
-                    )}
-                    style={{ backgroundColor: c }}
-                  />
-                ))}
-              </div>
             </div>
           </section>
 

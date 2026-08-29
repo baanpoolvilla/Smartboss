@@ -612,3 +612,15 @@ button:active > [data-slot="badge"] {
 *::-webkit-scrollbar-corner {
   background: transparent;
 }
+
+/* For a horizontal-scroll row that's only there as a narrow-screen fallback
+   (e.g. the report-feed tab row) — the thin scrollbar above still renders an
+   empty track under it even with nothing to scroll, which read as a stray
+   short underline sitting under just the tabs. The row still scrolls with a
+   swipe/trackpad, it just doesn't show a bar for it. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

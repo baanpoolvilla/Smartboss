@@ -519,16 +519,15 @@ function ReportFeedPageInner() {
             area (report-feed.tsx) under white post cards — one visual tier
             per level instead of every level drawing its own line. */}
         <div className="w-full flex-1 min-w-0 flex flex-col min-h-0 lg:h-full">
-          {/* Final polish pass: reading column capped at ~1000px and
-              centered, not just left-anchored — a max-width was tried once
-              before and reverted the same day ("แสดงให้เต็มกรอบสิ") because
-              it only capped the post list itself, leaving dead space on the
-              right with nothing balancing it on the left. `mx-auto` is the
-              part that was missing then: the whole room column (header,
-              tabs, feed, composer together) now centers as one unit inside
-              this panel, so any leftover width on a wide monitor splits
-              evenly instead of reading as one-sided waste. */}
-          <div className="mx-auto flex w-full max-w-[1000px] flex-1 flex-col min-h-0">
+          {/* NOT capping this to a reading-width max-width. Tried it — twice
+              before this, plus once more in this same "final polish" round
+              with mx-auto actually centering it correctly this time — and
+              every single time, seeing it rendered got the same answer:
+              full width ("แสดงให้เต็มขอบทั้งหมดสิ" / "แสดงให้เต็มกรอบสิ").
+              This is a real, repeated preference at this point, not a
+              one-off — treat any future "should this read like a Notion doc
+              column" instinct as already answered: no. Full width, always. */}
+          <div className="flex w-full flex-1 flex-col min-h-0">
           {todayStatusFilter ? (
             <div className="flex-1 min-h-0 bg-white overflow-hidden flex flex-col">
               <TodayStatusPanel
@@ -718,7 +717,7 @@ function ReportFeedPageInner() {
                     Bringing the labels back means the scroll comes back too;
                     overflow-x-auto on the tablist itself keeps it contained
                     to just this row rather than pushing the whole page wide. */}
-                <div role="tablist" aria-label="ส่วนของหัวข้อ" className="flex flex-1 min-w-0 items-center gap-3 lg:gap-4 overflow-x-auto">
+                <div role="tablist" aria-label="ส่วนของหัวข้อ" className="no-scrollbar flex flex-1 min-w-0 items-center gap-3 lg:gap-4 overflow-x-auto">
                   {topicTabs.map((t) => {
                     const Icon = t.icon;
                     const active = activeTab === t.id;
