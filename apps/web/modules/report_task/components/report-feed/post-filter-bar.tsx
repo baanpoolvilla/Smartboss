@@ -19,7 +19,7 @@ import {
 } from "@/modules/report_task/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { TagMultiSelectList } from "@/modules/report_task/components/report-feed/report-tag-multiselect";
-import { Bookmark, ChevronDown, Image as ImageIcon, ListFilter, Tag as TagIcon, TriangleAlert, User, X } from "lucide-react";
+import { Bookmark, ChevronDown, Image as ImageIcon, ListFilter, Search, Tag as TagIcon, TriangleAlert, User, X } from "lucide-react";
 
 export interface PostFilters {
   authorIds: Set<string>;
@@ -254,6 +254,8 @@ export function PostFilterButton({
 }) {
   const activeCount = postFiltersActiveCount(filters);
   const [open, setOpen] = useState(false);
+  const [authorQuery, setAuthorQuery] = useState("");
+  const visibleAuthors = authorOptions.filter((id) => !authorQuery.trim() || displayName(id).toLowerCase().includes(authorQuery.trim().toLowerCase()));
 
   function toggleAuthor(id: string) {
     const next = new Set(filters.authorIds);
@@ -291,14 +293,44 @@ export function PostFilterButton({
       <PopoverContent align="end" className="w-[320px] max-h-[70vh] overflow-y-auto p-0">
         <div className="p-3 space-y-4">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)] mb-1.5">ผู้โพสต์</p>
-            <div className="max-h-32 overflow-y-auto space-y-0.5">
-              {authorOptions.map((id) => (
-                <label key={id} className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-[var(--bg-soft)] cursor-pointer text-sm">
-                  <Checkbox checked={filters.authorIds.has(id)} onCheckedChange={() => toggleAuthor(id)} />
-                  {displayName(id)}
-                </label>
-              ))}
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">ผู้โพสต์</p>
+              {filters.authorIds.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onChange({ ...filters, authorIds: new Set() })}
+                  className="text-[11px] font-medium text-[var(--brand-green-dark)] hover:underline"
+                >
+                  ล้าง
+                </button>
+              )}
+            </div>
+            {/* Search once there's enough people to actually need it — same
+                threshold idea TagMultiSelectList already uses for tags. A
+                room whose member list scrolled past a tiny 128px box with no
+                way to jump straight to a name was a big part of "ใช้งานยาก". */}
+            {authorOptions.length > 6 && (
+              <div className="relative mb-1.5">
+                <Search className="h-3 w-3 absolute left-2 top-1/2 -translate-y-1/2 text-[var(--ink-faint)]" />
+                <input
+                  value={authorQuery}
+                  onChange={(e) => setAuthorQuery(e.target.value)}
+                  placeholder="ค้นหาผู้โพสต์..."
+                  className="w-full rounded-md border border-[var(--line)] bg-transparent py-1.5 pl-7 pr-2 text-xs outline-none focus-visible:border-[var(--brand-green)]/50"
+                />
+              </div>
+            )}
+            <div className="max-h-44 overflow-y-auto space-y-0.5">
+              {visibleAuthors.length === 0 ? (
+                <p className="px-1.5 py-2 text-xs text-[var(--ink-soft)]">ไม่พบผู้โพสต์ที่ตรงกับ &quot;{authorQuery}&quot;</p>
+              ) : (
+                visibleAuthors.map((id) => (
+                  <label key={id} className="flex items-center gap-2 rounded-md px-1.5 py-1.5 hover:bg-[var(--bg-soft)] cursor-pointer text-sm">
+                    <Checkbox checked={filters.authorIds.has(id)} onCheckedChange={() => toggleAuthor(id)} />
+                    {displayName(id)}
+                  </label>
+                ))
+              )}
             </div>
           </div>
 
@@ -327,7 +359,22 @@ export function PostFilterButton({
           {tagOptions.length > 0 && (
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)] mb-1.5">แท็ก</p>
-              <TagMultiSelectList tags={tagOptions} selectedIds={[...filters.tagIds]} onToggle={toggleTag} />
+              {/* A checkbox row here, not TagMultiSelectList's own
+                  dot+button treatment (that one's shared with the post
+                  composer's tag picker, a different context) — the plain
+                  colored-dot button next to this popover's checkbox rows
+                  above read as a different kind of control, not one more
+                  filter to tick ("ใช้งานยากมาก"). Same checkbox everywhere
+                  in this popover instead. */}
+              <div className="max-h-32 overflow-y-auto space-y-0.5">
+                {tagOptions.map((t) => (
+                  <label key={t.id} className="flex items-center gap-2 rounded-md px-1.5 py-1.5 hover:bg-[var(--bg-soft)] cursor-pointer text-sm">
+                    <Checkbox checked={filters.tagIds.has(t.id)} onCheckedChange={() => toggleTag(t.id)} />
+                    <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: t.color }} aria-hidden />
+                    <span className="truncate">{t.name}</span>
+                  </label>
+                ))}
+              </div>
             </div>
           )}
         </div>
