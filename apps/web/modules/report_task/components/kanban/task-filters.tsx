@@ -293,7 +293,12 @@ export function TaskFilters({
       <div className="flex flex-col gap-1">
         <span className={FILTER_FIELD_LABEL_CLASS}>&nbsp;</span>
         <button
-          onClick={() => setFilters({ penalty: filters.penalty === "overdue" ? "all" : "overdue" })}
+          // Clears quickView (the KPI chip row above) — the two used to AND
+          // together, which could filter down to an impossible intersection
+          // (e.g. "in-progress AND overdue") and show zero results even with
+          // plenty of overdue tasks elsewhere. Picking this one now replaces
+          // whichever chip was active, instead of narrowing on top of it.
+          onClick={() => setFilters({ penalty: filters.penalty === "overdue" ? "all" : "overdue", quickView: "all" })}
           className={cn(
             filterFieldTriggerClass(filters.penalty === "overdue"),
             "shrink-0",
@@ -435,7 +440,7 @@ export function TaskFilters({
           from. */}
       <button
         type="button"
-        onClick={() => setFilters({ penalty: filters.penalty === "overdue" ? "all" : "overdue" })}
+        onClick={() => setFilters({ penalty: filters.penalty === "overdue" ? "all" : "overdue", quickView: "all" })}
         className={mobileFieldRowTriggerClass(filters.penalty === "overdue")}
       >
         <MobileFieldIcon icon={AlertTriangle} active={filters.penalty === "overdue"} />

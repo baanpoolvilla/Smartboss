@@ -42,7 +42,13 @@ export function TaskBoardKpis({ tasks }: { tasks: Task[] }) {
   );
 
   function toggle(key: QuickView) {
-    setFilters({ quickView: quickView === key ? "all" : key });
+    // Clears "เลยกำหนดเท่านั้น" (filters.penalty) whenever a chip is picked —
+    // the two used to stack (AND together), so picking e.g. "กำลังทำ" then
+    // "เลยกำหนดเท่านั้น" filtered down to "in-progress AND overdue", which
+    // reads as one filter replacing the other, not narrowing further, and
+    // could easily land on zero results even with plenty of overdue tasks
+    // elsewhere ("กดเลยกำหนดทันทีจะเป็นแบบนี้...ไม่เอามารวมเลย").
+    setFilters({ quickView: quickView === key ? "all" : key, penalty: "all" });
   }
 
   const chips: { key: QuickView; label: string; value: number; icon: typeof ListTodo; iconClass: string }[] = [
