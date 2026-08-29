@@ -14,11 +14,11 @@ import {
   AlertDialogTitle,
 } from "@/modules/report_task/components/ui/alert-dialog";
 import { Input } from "@/modules/report_task/components/ui/input";
-import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
 import { Switch } from "@/modules/report_task/components/ui/switch";
 import { Button } from "@/modules/report_task/components/ui/button";
-import { useHolidayStore, THAI_SOURCE, isSourceSelected } from "@/modules/report_task/store/holiday-store";
+import { THAI_SOURCE } from "@/modules/report_task/store/holiday-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
+import { useCalendarVisibilityStore } from "@/modules/report_task/store/calendar-visibility-store";
 import { useGoogleCalendarStore, type ExternalCalendarLink, type IcsLinkTarget } from "@/modules/report_task/store/google-calendar-store";
 import { PeopleCalendarList } from "./people-calendar-list";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -41,7 +41,6 @@ import {
   Plus,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { CalendarEvent } from "@/modules/report_task/types";
 
 /** dd/mm/yyyy, local calendar day — `connectedAt` is a real timestamp (not a
  * date-only UTC-midnight field), so this reads local getters like the rest
@@ -163,192 +162,46 @@ function RecommendedPane({ onNavigate }: { onNavigate: (s: Section) => void }) {
   );
 }
 
-// Nager.Date has no Thai data, so Thailand is a fixed, locally-sourced entry
-// pinned above the fetched list rather than one more row inside it — same
-// personal on/off toggle as every other country, just no API round-trip.
+// Just "ไทย (Thailand)" now — see this component's own comment below for why
+// the old multi-country picker (Nager.Date search, per-year import) is gone.
 const THAILAND: Country = { countryCode: THAI_SOURCE, name: "ไทย (Thailand)" };
 
+/** Show/hide whether holidays appear on your own calendar — a purely local
+ * on/off preference, not a country picker anymore.
+ *
+ * This used to let each person import and personally select OTHER
+ * countries' holidays too (Nager.Date). That broke for real once holidays
+ * moved to being org-wide data owned by the HR module: the API now always
+ * hands back only the HR-managed (Thai) holidays on every load, silently
+ * dropping anything else that had been imported, and rejects any write to
+ * the underlying "holidays" key outright (see the store API route's
+ * WORKFORCE_KEYS guard) — so selecting another country never actually
+ * worked, it just looked like it did for one page view. What's actually
+ * wanted here — confirmed directly — is much simpler than that: just a
+ * way to see whether a holiday's showing, on or off, nothing more. Same
+ * hiddenHolidaySourceIds local toggle as the calendar sidebar's own
+ * "วันหยุดประเทศ" list (people-calendar-list.tsx) — one flag, no server
+ * round-trip, so there's nothing left here that can 409. */
 export function HolidaysPane() {
-  const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
-  const selectedByUser = useHolidayStore((s) => s.selectedByUser);
-  const addManyHolidays = useHolidayStore((s) => s.addManyHolidays);
-  const selectSource = useHolidayStore((s) => s.selectSource);
-  const deselectSource = useHolidayStore((s) => s.deselectSource);
-  const [countries, setCountries] = useState<Country[]>([]);
-  const [loadFailed, setLoadFailed] = useState(false);
-  const [filter, setFilter] = useState("");
-  // The full country list (~100 rows) used to render every time this pane
-  // opened, active ones buried among every other country in the world —
-  // asked for explicitly: only the ones actually turned on should show, with
-  // a toggle to turn them back off, and "add another one" tucked behind its
-  // own button instead of always being on screen.
-  const [addOpen, setAddOpen] = useState(false);
-  // Set (not a single code) so picking two countries before the first
-  // request resolves doesn't have the first one's `finally` clear the
-  // second one's still-in-flight loading indicator.
-  const [pending, setPending] = useState<Set<string>>(new Set());
-  const [year, setYear] = useState(String(new Date().getFullYear()));
-
-  useEffect(() => {
-    fetch("/api/report-task/holidays/countries")
-      .then((r) => r.json())
-      // The API returns countries sorted by ISO code (AD, AG, AI, AL...), not
-      // by name — sort by name so the list actually reads alphabetically.
-      .then((data) => (Array.isArray(data) ? setCountries([...data].sort((a, b) => a.name.localeCompare(b.name))) : setLoadFailed(true)))
-      .catch(() => setLoadFailed(true));
-  }, []);
-
-  const isChecked = (code: string) => isSourceSelected(selectedByUser, viewingAsUserId, code);
-  const filtered = countries.filter((c) => c.name.toLowerCase().includes(filter.toLowerCase()));
-  const showThailand = THAILAND.name.toLowerCase().includes(filter.toLowerCase());
-  const activeCountries = [THAILAND, ...countries].filter((c) => isChecked(c.countryCode));
-
-  async function toggleCountry(c: Country, checked: boolean) {
-    if (!checked) {
-      // Only drops it from your own selection — the underlying holiday data
-      // stays cached in case anyone else (or you, later) still wants it.
-      deselectSource(viewingAsUserId, c.countryCode);
-      toast.success(`นำวันหยุด ${c.name} ออกจากปฏิทินของคุณแล้ว`);
-      return;
-    }
-    // Thailand's holidays are already seeded locally — no fetch needed,
-    // just turn them on for this viewer.
-    if (c.countryCode === THAI_SOURCE) {
-      selectSource(viewingAsUserId, THAI_SOURCE);
-      toast.success("เพิ่มวันหยุดไทยเข้าปฏิทินของคุณแล้ว");
-      return;
-    }
-    setPending((prev) => new Set(prev).add(c.countryCode));
-    try {
-      const res = await fetch(`/api/report-task/holidays?country=${c.countryCode}&year=${year}`);
-      const data = await res.json();
-      if (!res.ok || !Array.isArray(data)) {
-        toast.error(data?.error ?? "โหลดวันหยุดไม่สำเร็จ");
-        return;
-      }
-      if (data.length === 0) {
-        toast.error(`ยังไม่มีข้อมูลวันหยุดของ ${c.name} ปี ${year} จากผู้ให้บริการ`);
-        return;
-      }
-      const items: CalendarEvent[] = data.map((h: { date: string; localName: string; name: string }) => ({
-        id: `holiday-${c.countryCode}-${h.date}`,
-        title: `${h.localName}${h.name !== h.localName ? ` (${h.name})` : ""}`,
-        type: "holiday",
-        start: h.date,
-        end: h.date,
-        allDay: true,
-        description: `นำเข้าจากวันหยุดราชการ ${c.name} ปี ${year}`,
-      }));
-      addManyHolidays(items);
-      selectSource(viewingAsUserId, c.countryCode);
-      toast.success(`เพิ่มวันหยุด ${c.name} ปี ${year} เข้าปฏิทินของคุณแล้ว`);
-    } catch {
-      toast.error("เชื่อมต่อผู้ให้บริการวันหยุดไม่ได้");
-    } finally {
-      setPending((prev) => {
-        const next = new Set(prev);
-        next.delete(c.countryCode);
-        return next;
-      });
-    }
-  }
+  const hiddenHolidaySourceIds = useCalendarVisibilityStore((s) => s.hiddenHolidaySourceIds);
+  const toggleHolidaySource = useCalendarVisibilityStore((s) => s.toggleHolidaySource);
+  const checked = !hiddenHolidaySourceIds.includes(THAI_SOURCE);
 
   return (
     <div>
       <h3 className="text-base font-semibold">วันหยุดตามประเทศ</h3>
       <p className="text-xs text-[var(--ink-soft)] mt-1 mb-3">
-        เพิ่มวันหยุดราชการหลักของแต่ละประเทศเข้าไปใน<strong>ปฏิทินของคุณเอง</strong> — แต่ละคนเลือกได้อิสระ ไม่กระทบปฏิทินคนอื่น (ข้อมูลประเทศอื่นจาก date.nager.at)
+        ติ๊กเพื่อแสดง/ซ่อนวันหยุดใน<strong>ปฏิทินของคุณเอง</strong> — วันหยุดจริงมาจากที่ตั้งค่าไว้ในระบบบุคคล (HR) ไม่กระทบปฏิทินคนอื่น
       </p>
-
-      {/* Only the countries actually turned on — a toggle to turn each back
-          off, right here, instead of having to dig through every country in
-          the world to find the one row you already checked. */}
-      {activeCountries.length > 0 && (
-        <div className="space-y-0.5 mb-4">
-          {activeCountries.map((c) => (
-            <div key={c.countryCode} className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1.5 hover:bg-[var(--bg-soft)] text-sm">
-              <span className="font-medium">{c.name}</span>
-              {pending.has(c.countryCode) ? (
-                <Loader2 className="h-4 w-4 animate-spin shrink-0 text-[var(--ink-soft)]" />
-              ) : (
-                <Switch
-                  size="sm"
-                  checked={isChecked(c.countryCode)}
-                  onCheckedChange={(checked) => toggleCountry(c, !!checked)}
-                  aria-label={`เปิด/ปิดวันหยุดของ ${c.name}`}
-                />
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {!addOpen ? (
-        <button
-          type="button"
-          onClick={() => setAddOpen(true)}
-          className="flex items-center gap-1.5 text-sm font-medium text-[var(--brand-green-dark)] hover:underline"
-        >
-          <Plus className="h-3.5 w-3.5" /> เพิ่มประเทศอื่น
-        </button>
-      ) : (
-        <div className="rounded-lg border border-[var(--line)] p-3">
-          <div className="flex items-center gap-3 mb-3 flex-wrap">
-            <div className="relative max-w-sm flex-1 min-w-[160px]">
-              <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--ink-soft)]" />
-              <Input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="ค้นหาประเทศ" className="pl-8" />
-            </div>
-            <label className="flex items-center gap-1.5 text-xs text-[var(--ink-soft)] shrink-0">
-              ปีที่นำเข้า:
-              <Input
-                type="number"
-                value={year}
-                onChange={(e) => setYear(e.target.value)}
-                className="w-24 h-9"
-              />
-            </label>
-          </div>
-          <p className="text-[11px] text-[var(--ink-soft)] mb-3">
-            ติ๊กจะดึงวันหยุดของปี {year} มาใส่ — ถ้าอยากได้ปีอื่นด้วย เปลี่ยนปีแล้วติ๊กใหม่อีกครั้ง (ไม่ทับของเดิม)
-          </p>
-          {showThailand && (
-            <>
-              <label className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-[var(--bg-soft)] cursor-pointer text-sm w-fit font-medium">
-                <Checkbox
-                  checked={isChecked(THAI_SOURCE)}
-                  onCheckedChange={(checked) => toggleCountry(THAILAND, !!checked)}
-                  aria-label={`เพิ่มวันหยุดของ ${THAILAND.name}`}
-                />
-                <span>{THAILAND.name}</span>
-              </label>
-              <div className="h-px bg-[var(--line)] my-2" />
-            </>
-          )}
-          {loadFailed && <p className="text-sm text-[var(--chart-red)]">โหลดรายชื่อประเทศไม่สำเร็จ ลองใหม่อีกครั้ง</p>}
-          {!loadFailed && countries.length === 0 && (
-            <p className="text-sm text-[var(--ink-soft)] flex items-center gap-1.5"><Loader2 className="h-3.5 w-3.5 animate-spin" /> กำลังโหลดรายชื่อประเทศ...</p>
-          )}
-          {/* columns-2 (not grid-cols-2) so the list flows down one column before
-              starting the next, matching a normal alphabetical read order —
-              a row-major grid would zigzag consecutive names across columns. */}
-          <div className="columns-2 gap-x-4 max-w-2xl">
-            {filtered.map((c) => (
-              <label key={c.countryCode} className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-[var(--bg-soft)] cursor-pointer text-sm break-inside-avoid">
-                {pending.has(c.countryCode) ? (
-                  <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-                ) : (
-                  <Checkbox
-                    checked={isChecked(c.countryCode)}
-                    onCheckedChange={(checked) => toggleCountry(c, !!checked)}
-                    aria-label={`เพิ่มวันหยุดของ ${c.name}`}
-                  />
-                )}
-                <span className="truncate">{c.name}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-      )}
+      <div className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1.5 hover:bg-[var(--bg-soft)] text-sm w-fit min-w-[240px]">
+        <span className="font-medium">{THAILAND.name}</span>
+        <Switch
+          size="sm"
+          checked={checked}
+          onCheckedChange={() => toggleHolidaySource(THAI_SOURCE)}
+          aria-label="เปิด/ปิดวันหยุดของ ไทย (Thailand)"
+        />
+      </div>
     </div>
   );
 }
