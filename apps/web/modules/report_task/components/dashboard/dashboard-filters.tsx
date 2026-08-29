@@ -35,7 +35,7 @@ import { DateRangeSelectField } from "@/modules/report_task/components/shared/da
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { datePresetGroups, datePresetLabels } from "@/modules/report_task/lib/date-filter";
 import { cn } from "@/modules/report_task/lib/utils";
-import { Building2, Users, User as UserIcon, CalendarDays, SlidersHorizontal, ChevronRight, X } from "lucide-react";
+import { Building2, Users, User as UserIcon, CalendarDays, SlidersHorizontal, X } from "lucide-react";
 
 /**
  * §7.2 — filter order is department → person → time, matching the
@@ -232,31 +232,46 @@ export function DashboardFilters() {
       )}
     </div>
 
-    {/* Full-width, not just the small pill the desktop bar uses — a lone
-        small button here left a big empty strip of nothing next to it
-        (Dashboard has no second action like the Task Board's "สร้างงานใหม่"
-        to share the row with). Filling the row itself, with its own count
-        badge + trailing chevron, reads as a real entry point instead of
-        stranded next to dead space. */}
-    <button
-      type="button"
-      onClick={() => setMobileSheetOpen(true)}
-      className={cn(
-        "flex sm:hidden w-full items-center gap-2.5 rounded-2xl border px-4 h-12 text-left transition-colors",
-        activeFilterCount > 0
-          ? "border-[var(--brand-green-dark)]/30 bg-[color-mix(in_srgb,var(--brand-green)_14%,white)]"
-          : "border-[var(--line)] bg-white hover:bg-[var(--bg-soft)]"
-      )}
-    >
-      <SlidersHorizontal className={cn("h-4 w-4 shrink-0", activeFilterCount > 0 ? "text-[var(--brand-green-dark)]" : "text-[var(--ink-soft)]")} />
-      <span className="text-sm font-medium text-[var(--ink)]">ตัวกรอง</span>
-      {activeFilterCount > 0 && (
-        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--brand-green-dark)] px-1.5 text-[11px] font-semibold text-white tabular-nums">
-          {activeFilterCount}
-        </span>
-      )}
-      <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-[var(--ink-faint)]" />
-    </button>
+    {/* Plain toolbar, not a card — this used to be a full-width bordered
+        block on its own row, which read as a content section in its own
+        right (complete with empty space around it) rather than what it
+        actually is: a utility control for the KPIs underneath. "ภาพรวม"
+        labels that section now that the filter isn't visually claiming the
+        space instead; the pill button stays a quiet secondary action next
+        to it (no card, no border-radius-2xl frame, no shadow, no chevron —
+        it's a button, not a row that opens somewhere). */}
+    <div className="flex sm:hidden items-center justify-between px-4 h-11 mb-3">
+      <span className="text-base font-semibold text-[var(--ink)]">ภาพรวม</span>
+      <button
+        type="button"
+        onClick={() => setMobileSheetOpen(true)}
+        className={cn(
+          "flex items-center gap-1.5 h-9 px-3 rounded-lg border text-sm font-medium transition-colors",
+          activeFilterCount > 0
+            ? "border-[var(--brand-green-dark)]/30 bg-[color-mix(in_srgb,var(--brand-green)_8%,white)] text-[var(--brand-green-dark)]"
+            : "border-[var(--line)] bg-white text-[var(--ink)] hover:bg-[var(--bg-soft)]"
+        )}
+      >
+        <SlidersHorizontal className="h-4 w-4 shrink-0" />
+        {activeFilterCount > 0 ? `กรอง ${activeFilterCount}` : "กรอง"}
+      </button>
+    </div>
+
+    {/* Chips only for a filter that's actually narrowed something — "all
+        departments"/"everyone"/"all time" is the default, not a choice
+        worth a chip, so activeFilterCount (which already excludes those)
+        is what decides whether this row renders at all. */}
+    {activeFilterCount > 0 && (
+      <div className="flex sm:hidden flex-wrap items-center gap-2 px-4 -mt-1.5 mb-3">
+        {canPickPerson && deptActive && (
+          <MobileFilterChip label={getDepartment(departmentId)?.name ?? "แผนก"} onRemove={() => setDepartmentId("all")} />
+        )}
+        {canPickPerson && personActive && (
+          <MobileFilterChip label={getUser(personId)?.name ?? "พนักงาน"} onRemove={() => setPersonId("all")} />
+        )}
+        {presetActive && <MobileFilterChip label={datePresetLabels[preset]} onRemove={() => setPreset("all")} />}
+      </div>
+    )}
 
     <Sheet open={mobileSheetOpen} onOpenChange={setMobileSheetOpen}>
       <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
@@ -366,5 +381,24 @@ export function DashboardFilters() {
       </SheetContent>
     </Sheet>
     </>
+  );
+}
+
+/** "ฝ่ายขาย ×" — a picked (non-default) filter value, removable without
+ * reopening the sheet. Only ever rendered for a value that's actually
+ * narrowed something (see activeFilterCount above each call site). */
+function MobileFilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-[var(--line)] bg-white pl-2.5 pr-1.5 py-1 text-xs font-medium text-[var(--ink)]">
+      {label}
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={`เอา ${label} ออกจากตัวกรอง`}
+        className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)]"
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </span>
   );
 }
