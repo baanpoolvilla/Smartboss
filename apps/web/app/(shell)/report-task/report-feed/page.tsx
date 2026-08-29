@@ -60,42 +60,25 @@ function pinnedChip(p: ReportPost, onUnpin: (id: string) => void) {
   );
 }
 
-/** Icon-only until clicked, then a compact input (~200px) — a search box
- * pinned open at full width all the time was one more permanent strip of
- * chrome in a header that's supposed to read as calm, and this is a filter
- * most people reach for occasionally, not every visit. Same height as
- * PostFilterButton so the two sit level on the tab row. */
+/** Always an open input on desktop — this only ever renders inside the
+ * `hidden lg:flex` desktop row (see its call site), so there's no mobile
+ * case to collapse for here (mobile gets its own icon-triggered search
+ * separately). A hidden search reachable only by first noticing and
+ * clicking a small magnifier icon is exactly the "ซ่อนไว้เป็น icon" the
+ * brief flags as a problem — an always-visible input needs no discovery
+ * step. Same height as PostFilterButton so the two sit level on the tab row. */
 function CompactSearchField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [expanded, setExpanded] = useState(value.length > 0);
-  if (!expanded) {
-    return (
-      <button
-        onClick={() => setExpanded(true)}
-        aria-label="ค้นหาในหัวข้อ"
-        className="flex h-[34px] w-[34px] items-center justify-center rounded-lg border border-[var(--line)] bg-white text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] transition-colors shrink-0"
-      >
-        <Search className="h-3.5 w-3.5" />
-      </button>
-    );
-  }
   return (
     <div className="relative shrink-0">
       <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--ink-soft)]" />
       <input
-        autoFocus
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        onBlur={() => {
-          if (!value) setExpanded(false);
-        }}
         onKeyDown={(e) => {
-          if (e.key === "Escape") {
-            onChange("");
-            setExpanded(false);
-          }
+          if (e.key === "Escape") onChange("");
         }}
-        placeholder="ค้นหาในหัวข้อ"
-        className="h-[34px] w-[200px] rounded-lg border border-[var(--line)] bg-white pl-8 pr-2 text-sm outline-none focus:border-[var(--brand-green)]/50"
+        placeholder="ค้นหาในหัวข้อนี้..."
+        className="h-[34px] w-[220px] rounded-lg border border-[var(--line)] bg-white pl-8 pr-2 text-sm outline-none focus:border-[var(--brand-green)]/50"
       />
     </div>
   );
@@ -234,6 +217,7 @@ function ReportFeedPageInner() {
   // title match, additive on top of whatever filterPosts already returns —
   // doesn't touch any existing filter's behavior.
   const [searchQuery, setSearchQuery] = useState("");
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   // Filter bar (1.3) — read once from the URL same as the deep-link params
   // above, then kept in sync both ways via the effect below.
   const [filters, setFilters] = useState<PostFilters>(() => ({
@@ -769,11 +753,27 @@ function ReportFeedPageInner() {
                   </div>
                   <button
                     type="button"
+                    onClick={() => activeTab === "posts" && setMobileSearchOpen((v) => !v)}
+                    tabIndex={activeTab === "posts" ? 0 : -1}
+                    aria-label="ค้นหาโพสต์"
+                    title="ค้นหาโพสต์"
+                    className={cn(
+                      "lg:hidden ml-auto my-1.5 h-8 w-8 shrink-0 flex items-center justify-center rounded-lg border transition-colors",
+                      mobileSearchOpen || searchQuery
+                        ? "border-[var(--brand-green)]/40 bg-[var(--accent)] text-[var(--brand-green-dark)]"
+                        : "border-[var(--line)] bg-white text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]",
+                      activeTab !== "posts" && "invisible"
+                    )}
+                  >
+                    <Search className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => activeTab === "posts" && setMobileFilterOpen(true)}
                     tabIndex={activeTab === "posts" ? 0 : -1}
                     className={cn(
                       filterFieldTriggerClass(postFiltersActiveCount(filters) > 0),
-                      "lg:hidden ml-auto my-1.5 !h-8 shrink-0",
+                      "lg:hidden my-1.5 !h-8 shrink-0",
                       activeTab !== "posts" && "invisible"
                     )}
                   >
@@ -782,6 +782,30 @@ function ReportFeedPageInner() {
                     {postFiltersActiveCount(filters) > 0 && <span className="tabular-nums">({postFiltersActiveCount(filters)})</span>}
                   </button>
                 </div>
+
+                {/* Mobile search — a full-width row of its own instead of
+                    squeezing into the tab row (which is already tight with
+                    5 icon tabs + search + filter on a narrow phone). Icon
+                    trigger above toggles it; typing here drives the same
+                    searchQuery the desktop input does. */}
+                {mobileSearchOpen && activeTab === "posts" && (
+                  <div className="lg:hidden px-5 pb-2 relative">
+                    <Search className="h-3.5 w-3.5 absolute left-8 top-1/2 -translate-y-1/2 text-[var(--ink-soft)]" />
+                    <input
+                      autoFocus
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") {
+                          setSearchQuery("");
+                          setMobileSearchOpen(false);
+                        }
+                      }}
+                      placeholder="ค้นหาโพสต์..."
+                      className="h-9 w-full rounded-lg border border-[var(--line)] bg-white pl-8 pr-2 text-sm outline-none focus:border-[var(--brand-green)]/50"
+                    />
+                  </div>
+                )}
 
                 {/* Active-filter chips — only when something's actually
                     filtered, right under the tab row, desktop only (mobile's

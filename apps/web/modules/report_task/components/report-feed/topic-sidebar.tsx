@@ -465,10 +465,12 @@ export function TopicSidebar({
         }}
       >
         {active && (
-          <span
-            className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full"
-            style={{ backgroundColor: t.color }}
-          />
+          // Brand green, not this topic's own arbitrary color (t.color can
+          // land on red/orange for plenty of topics, purely as a visual
+          // label for telling rooms apart elsewhere) — a green "selected"
+          // background paired with a red/orange left bar reads as two
+          // colors fighting over what they mean on the same row.
+          <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-[var(--brand-green-dark)]" />
         )}
         {depth === 0 ? (
           hasChildren ? (
