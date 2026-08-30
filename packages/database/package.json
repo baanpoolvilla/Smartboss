@@ -16,6 +16,8 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx seed.ts",
+    "db:backfill-modules": "tsx scripts/backfill-new-modules.ts",
+    "db:backfill-grants": "tsx scripts/backfill-role-grants.ts",
     "db:studio": "prisma studio",
     "typecheck": "tsc --noEmit"
   },
