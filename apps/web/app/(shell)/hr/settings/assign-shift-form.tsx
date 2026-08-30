@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { Button } from "@smartboss/ui/components/button";
 import { Field, inputClass } from "@/modules/hr/components/ui";
@@ -45,7 +46,11 @@ export function AssignShiftForm({
   if (shifts.length === 0) {
     return (
       <p className="text-sm text-(--ink-soft)">
-        ยังไม่มีกะทำงานในระบบ — สร้างที่หน้า “กะทำงาน” ก่อนจึงจะผูกตารางได้
+        ยังไม่มีกะทำงานในระบบ — สร้างที่
+        <Link href="/hr/settings" className="mx-1 text-(--app-strong) hover:underline">
+          หน้าตั้งค่า HR
+        </Link>
+        ก่อนจึงจะผูกตารางได้
       </p>
     );
   }
@@ -87,7 +92,12 @@ export function AssignShiftForm({
           </Field>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+        {/*
+          สูงสุด 4 คอลัมน์ ไม่ใช่ 7 — เจ็ดช่องบนการ์ดกว้าง ~900px เหลือช่องละ
+          ~120px ซึ่งตัดชื่อกะทิ้งตั้งแต่ "Officer 08…" อ่านไม่ออกว่าเลือกกะไหน
+          เข้ากี่โมง (select ของเบราว์เซอร์ตัดข้อความตอนหุบ ไม่มีทาง ellipsis หนี)
+        */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {DAYS.map(([field, label]) => (
             <Field key={field} label={label}>
               <select
@@ -95,7 +105,7 @@ export function AssignShiftForm({
                 defaultValue={
                   field === "saturday" || field === "sunday" ? "" : defaultWorkShift
                 }
-                className={inputClass}
+                className={`${inputClass} min-w-0`}
               >
                 <option value="">— หยุด —</option>
                 {shifts.map((s) => (
@@ -107,6 +117,20 @@ export function AssignShiftForm({
             </Field>
           ))}
         </div>
+
+        {/*
+          ลิสต์ในช่องมีเท่าที่บริษัทสร้างกะไว้ — บริษัทที่มีกะเดียวจะเห็นแค่
+          "— หยุด — / Officer" แล้วเข้าใจว่าจอเสีย ("ไม่เห็นมีให้เลือกกะเลย")
+          บอกจำนวนกะที่มีจริงพร้อมทางไปเพิ่ม จะได้รู้ว่าไม่ใช่ระบบพัง
+        */}
+        <p className="text-xs text-(--ink-soft)">
+          ตอนนี้มีกะให้เลือก {shifts.length} กะ ({shifts.map((s) => s.label).join(" · ")})
+          — ต้องการกะอื่นเช่นกะบ่าย/กะดึก
+          <Link href="/hr/settings" className="mx-1 text-(--app-strong) hover:underline">
+            เพิ่มที่หน้าตั้งค่า HR
+          </Link>
+          แล้วกลับมาที่นี่
+        </p>
 
         <div>
           <Button type="submit" disabled={pending} className="sm:w-44">
