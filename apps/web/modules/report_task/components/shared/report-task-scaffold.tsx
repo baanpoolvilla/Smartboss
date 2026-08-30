@@ -10,6 +10,7 @@ import { reportTaskManifest } from "../../manifest";
 import { useEmployeeStore } from "../../store/employee-store";
 import { useIdentityStore } from "../../store/identity-store";
 import type { User } from "../../types";
+import { AppBarLeadingProvider, useAppBarLeading } from "./app-bar-leading";
 import { StoreHydrator } from "./store-hydrator";
 import { TaskSync } from "./task-sync";
 import { TourOverlay } from "./tour-overlay";
@@ -80,7 +81,7 @@ export function ReportTaskScaffold({
   const selfScrolling = isBoard || isReportFeed;
 
   return (
-    <>
+    <AppBarLeadingProvider>
       {/* ตัวเติมข้อมูลให้ store ฝั่ง client — ต้องอยู่ระดับโมดูล ไม่ใช่รายหน้า
           ไม่งั้นจะโหลดใหม่ทุกครั้งที่เปลี่ยนหน้า */}
       <StoreHydrator />
@@ -92,9 +93,29 @@ export function ReportTaskScaffold({
           (สำคัญกับ error ที่มีเนื้อหายาวอย่าง "ยังติ๊ก checklist ไม่ครบ...") */}
       <Toaster position="top-center" closeButton />
 
-      <AppScaffold title={title} width="max-w-[1600px]" fill={selfScrolling} fillMaxWidth={selfScrolling}>
+      <ScaffoldBody title={title} selfScrolling={selfScrolling}>
         {children}
-      </AppScaffold>
-    </>
+      </ScaffoldBody>
+    </AppBarLeadingProvider>
+  );
+}
+
+/** Split out from ReportTaskScaffold so `useAppBarLeading()` reads the
+ * context value from inside AppBarLeadingProvider, not the same component
+ * that renders the provider itself. */
+function ScaffoldBody({
+  title,
+  selfScrolling,
+  children,
+}: {
+  title: string;
+  selfScrolling: boolean;
+  children: React.ReactNode;
+}) {
+  const leading = useAppBarLeading();
+  return (
+    <AppScaffold title={title} leading={leading} width="max-w-[1600px]" fill={selfScrolling} fillMaxWidth={selfScrolling}>
+      {children}
+    </AppScaffold>
   );
 }

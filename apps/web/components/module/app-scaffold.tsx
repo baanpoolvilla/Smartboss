@@ -13,6 +13,7 @@ import { AppBarActions } from "./app-bar-actions";
 export function AppScaffold({
   title,
   backHref,
+  leading,
   actions,
   fab,
   width = "max-w-4xl",
@@ -23,6 +24,13 @@ export function AppScaffold({
   title: string;
   /** ปุ่มย้อนกลับซ้ายสุดของ AppBar (หน้ารายละเอียด/ฟอร์ม) */
   backHref?: string;
+  /**
+   * ตัวควบคุมกำหนดเองซ้ายสุดของ AppBar แทน backHref — ให้หน้าลูก (เช่น
+   * ตัวสลับห้องของหน้ารายงาน) วางปุ่มของตัวเองไว้บนแถบเดียวกับชื่อหน้าได้
+   * โดยไม่ต้องเพิ่ม prop ใหม่ให้ทุกหน้าที่ไม่ได้ใช้. ชนะ backHref เมื่อส่งมาทั้งคู่
+   * (ยังไม่มีหน้าไหนต้องการทั้งสองพร้อมกันจริง ๆ)
+   */
+  leading?: React.ReactNode;
   /** ปุ่มเพิ่มเติมของหน้านั้น วางก่อนกระดิ่ง */
   actions?: React.ReactNode;
   fab?: React.ReactNode;
@@ -44,15 +52,16 @@ export function AppScaffold({
     <header className="shrink-0 border-b border-(--line) bg-(--bg)">
       <div className="flex h-[60px] items-center gap-1 px-2 sm:px-3">
         <div className="flex min-w-[44px] flex-1 items-center justify-start sm:min-w-[110px]">
-          {backHref && (
-            <Link
-              href={backHref}
-              className="rounded-full p-2 text-(--app-strong) transition-colors hover:bg-(--bg-soft)"
-              aria-label="ย้อนกลับ"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Link>
-          )}
+          {leading ??
+            (backHref && (
+              <Link
+                href={backHref}
+                className="rounded-full p-2 text-(--app-strong) transition-colors hover:bg-(--bg-soft)"
+                aria-label="ย้อนกลับ"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Link>
+            ))}
         </div>
 
         <h1 className="truncate px-1 text-center text-lg font-bold text-(--ink) sm:text-xl">

@@ -12,6 +12,7 @@ import { RoomSettingsSheet } from "@/modules/report_task/components/report-feed/
 import { ReportTopicPanels, collectFiles, collectLinks, filesCutoffMs } from "@/modules/report_task/components/report-feed/report-topic-panels";
 import { PostFilterBar, PostFilterButton, ActiveFilterChips, filterPosts, emptyPostFilters, postFiltersActiveCount, type PostFilters } from "@/modules/report_task/components/report-feed/post-filter-bar";
 import { filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
+import { useSetAppBarLeading } from "@/modules/report_task/components/shared/app-bar-leading";
 import { TaskDetailSheet } from "@/modules/report_task/components/kanban/task-detail-sheet";
 import { Button, buttonVariants } from "@/modules/report_task/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
@@ -174,6 +175,26 @@ function ReportFeedPageInner() {
   // squeezed inline block with its own internal scroll (3.5.5) — the desktop
   // sidebar (TopicSidebar, still rendered as-is at `lg:`) is unaffected.
   const [mobileTopicsOpen, setMobileTopicsOpen] = useState(false);
+  // ☰ itself lives in the shared AppBar's top-left corner now, not in its own
+  // row down here — asked for explicitly ("อยากให้สามขีดไปซ้ายบน...แค่นั้น
+  // เองเฉพาะหน้านี้"), scoped to this one page via app-bar-leading.tsx rather
+  // than adding a menu icon to every page in the module. Memoized so the
+  // registration effect only re-fires if the click handler identity ever
+  // changes (it won't — setMobileTopicsOpen is a stable setState function).
+  const topicSwitcherLeading = useMemo(
+    () => (
+      <button
+        type="button"
+        onClick={() => setMobileTopicsOpen(true)}
+        aria-label="เปิดรายการหัวข้อ"
+        className="lg:hidden rounded-full p-2 text-[var(--ink)] transition-colors hover:bg-[var(--bg-soft)]"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+    ),
+    []
+  );
+  useSetAppBarLeading(topicSwitcherLeading);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   // The ⚙ (Phase 6) opens settings right here now instead of navigating the
   // whole page away to /settings and losing which room/tab you were on (G1).
@@ -429,14 +450,17 @@ function ReportFeedPageInner() {
             (also a bordered white block) read as two stacked cards on a
             narrow phone ("ตรงที่วงมันแปลกๆ" — same "กรอบซ้อนกันหลายชั้น"
             issue the desktop sidebar+panel pairing was already fixed for,
-            just not caught here). Dropped the border and the tighter gap
-            above lets this flow as one continuous header instead — the tint
-            + chevron alone is still enough to read as tappable. */}
+            just not caught here). Dropped the border so this flows as one
+            continuous header instead.
+
+            The ☰ itself no longer lives here at all — moved up into the
+            shared AppBar's top-left corner (see topicSwitcherLeading above),
+            asked for explicitly ("อยากให้สามขีดไปซ้ายบน"). This row is just
+            the room name + chevron now; both still open the same sheet. */}
         <button
           onClick={() => setMobileTopicsOpen(true)}
-          className="w-full flex items-center gap-2 rounded-lg bg-[var(--bg-soft)] px-3 py-2 text-sm font-medium hover:bg-[var(--accent)] transition-colors"
+          className="w-full flex items-center gap-1.5 py-2 px-3 text-sm font-medium rounded-lg hover:bg-[var(--bg-soft)] transition-colors"
         >
-          <Menu className="h-4 w-4 shrink-0 text-[var(--ink-soft)]" />
           <span className="truncate">{activeTopic ? activeTopic.name : "หัวข้อ"}</span>
           <ChevronDown className="h-4 w-4 shrink-0 ml-auto text-[var(--ink-soft)]" />
         </button>
