@@ -2,12 +2,23 @@
 
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/modules/report_task/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/modules/report_task/components/ui/alert-dialog";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Label } from "@/modules/report_task/components/ui/label";
 import { Textarea } from "@/modules/report_task/components/ui/textarea";
 import { Switch } from "@/modules/report_task/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
 import { Button } from "@/modules/report_task/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { ReportTopicSettingsPanel } from "@/modules/report_task/components/report-feed/report-topic-settings-dialog";
 import { UNLIMITED_FILES_RETENTION_DAYS } from "@/modules/report_task/components/report-feed/report-topic-panels";
 import { useReportFeedStore, FEED_VIEW_MODE_LOCK_CUTOFF, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
@@ -16,7 +27,41 @@ import { useActivityLogStore } from "@/modules/report_task/store/activity-log-st
 import { canManage } from "@/modules/report_task/lib/directory";
 import { cn } from "@/modules/report_task/lib/utils";
 import { toast } from "sonner";
-import { Archive, ArchiveRestore, Lock, Plus, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Info, Lock, Plus, Trash2 } from "lucide-react";
+
+/** Explains "เก็บเข้าคลัง/กู้คืน" on tap — a `Popover` (click-based), not a
+ * hover `Tooltip`: hover has no equivalent on a touch screen, so a
+ * hover-only explainer would only ever work on desktop and leave mobile
+ * with no way to open it at all. One shared component so the "i" reads and
+ * behaves identically on both. */
+function ArchiveInfoButton() {
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            className="shrink-0 text-[var(--ink-soft)] hover:text-[var(--ink)]"
+            aria-label="เก็บเข้าคลัง/กู้คืน คืออะไร"
+          >
+            <Info className="h-3.5 w-3.5" />
+          </button>
+        }
+      />
+      <PopoverContent className="max-w-[280px] text-xs text-[var(--ink-soft)] p-3" align="start">
+        <p className="font-semibold text-[var(--ink)] mb-1">เก็บเข้าคลัง / กู้คืน คืออะไร</p>
+        <p className="mb-1.5">
+          <b className="text-[var(--ink)]">เก็บเข้าคลัง</b> = ซ่อนห้องที่ไม่ใช้แล้วแบบไม่ลบ ห้องจะจางลงในรายการหัวข้อ
+          โพสต์ใหม่ไม่ได้ แต่ทุกอย่างข้างในยังอยู่ครบ
+        </p>
+        <p className="mb-1.5">
+          <b className="text-[var(--ink)]">กู้คืน</b> = เอาห้องกลับมาแสดงปกติ ทำได้ทุกเมื่อ ไม่มีเงื่อนไข
+        </p>
+        <p>ต่างจากช่องอื่นในหน้านี้ตรงที่กดแล้ว<b className="text-[var(--ink)]">มีผลทันที</b> ไม่ต้องกด &quot;บันทึก&quot;</p>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 const weekdayLabels = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 
@@ -405,20 +450,27 @@ export function RoomSettingsSheet({
 
             {/* เก็บเข้าคลัง — action ทำงานทันทีพร้อม toast ของตัวเอง เหมือน
                 "ลบหัวข้อ" ไม่รวมอยู่ใน draft/บันทึกด้านล่าง เพื่อไม่ให้การกด
-                "ยกเลิก" ทีหลังไปย้อนสถานะเก็บเข้าคลังที่ยืนยันไปแล้วโดยไม่ตั้งใจ. */}
+                "ยกเลิก" ทีหลังไปย้อนสถานะเก็บเข้าคลังที่ยืนยันไปแล้วโดยไม่ตั้งใจ.
+                ยืนยันด้วย AlertDialog จริง แทนการเปลี่ยนข้อความบนปุ่มเดิมแล้วรอ
+                กดซ้ำ — แบบเดิมมีผลทันทีเหมือนกัน แต่ไม่มีอะไรบอกว่านี่เป็น
+                การยืนยัน ไม่ใช่แค่ปุ่มไม่ตอบสนอง ("งงว่าต้องทำไงเลย"), และ
+                ป้าย "มีผลทันที" ช่วยแยกออกจากช่องอื่นในชีทนี้ที่ต้องกด
+                "บันทึก" ด้านล่างก่อนถึงจะมีผล — ตัวนี้ตัวเดียวที่ไม่ต้องรอ. */}
             <div className="flex items-center justify-between rounded-lg border border-[var(--line)] px-3 py-2.5">
               <div className="min-w-0 pr-3">
                 <p className="text-sm font-medium flex items-center gap-1.5">
                   {topic.archived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
                   {topic.archived ? "กู้คืนจากคลัง" : "เก็บเข้าคลัง"}
+                  <ArchiveInfoButton />
                 </p>
                 <p className="text-xs text-[var(--ink-soft)]">
                   {topic.archived ? "ห้องนี้ถูกเก็บเข้าคลังอยู่ — กู้คืนแล้วจะกลับมาแสดงตามปกติ" : "ห้องเก่าที่ไม่ใช้แล้ว ซ่อนแบบไม่ต้องลบ ยังกู้คืนได้เสมอ ไม่เหมือน \"ลบหัวข้อ\""}
                 </p>
+                <p className="text-[11px] text-[var(--ink-soft)] mt-1">⚡ มีผลทันที ไม่ต้องกด &quot;บันทึก&quot;</p>
               </div>
-              <button
-                onClick={() => {
-                  if (topic.archived) {
+              {topic.archived ? (
+                <button
+                  onClick={() => {
                     updateTopicSettings(topic.id, { archived: false });
                     useActivityLogStore.getState().log({
                       userId: viewingAsUserId,
@@ -426,30 +478,45 @@ export function RoomSettingsSheet({
                       target: `"${topic.name}"`,
                     });
                     toast.success(`กู้คืนห้อง "${topic.name}" แล้ว`);
-                    return;
-                  }
-                  if (!archiveConfirm) {
-                    setArchiveConfirm(true);
-                    return;
-                  }
-                  updateTopicSettings(topic.id, { archived: true });
-                  useActivityLogStore.getState().log({
-                    userId: viewingAsUserId,
-                    action: "เก็บห้องเข้าคลัง",
-                    target: `"${topic.name}"`,
-                  });
-                  setArchiveConfirm(false);
-                  toast.success(`เก็บห้อง "${topic.name}" เข้าคลังแล้ว`);
-                }}
-                className={cn(
-                  "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-                  archiveConfirm
-                    ? "border-[var(--chart-red)] bg-red-50 text-[var(--chart-red)]"
-                    : "border-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
-                )}
-              >
-                {topic.archived ? "กู้คืน" : archiveConfirm ? "ยืนยันเก็บเข้าคลัง" : "เก็บเข้าคลัง"}
-              </button>
+                  }}
+                  className="shrink-0 rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-medium text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] transition-colors"
+                >
+                  กู้คืน
+                </button>
+              ) : (
+                <AlertDialog open={archiveConfirm} onOpenChange={setArchiveConfirm}>
+                  <button
+                    onClick={() => setArchiveConfirm(true)}
+                    className="shrink-0 rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-medium text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] transition-colors"
+                  >
+                    เก็บเข้าคลัง
+                  </button>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>เก็บห้อง &quot;{topic.name}&quot; เข้าคลัง?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        ห้องจะซ่อนแบบจางลงในรายการหัวข้อ ไม่มีใครโพสต์ใหม่ได้ — แต่ยังกู้คืนกลับมาได้เสมอ ไม่มีอะไรถูกลบ
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => {
+                          updateTopicSettings(topic.id, { archived: true });
+                          useActivityLogStore.getState().log({
+                            userId: viewingAsUserId,
+                            action: "เก็บห้องเข้าคลัง",
+                            target: `"${topic.name}"`,
+                          });
+                          toast.success(`เก็บห้อง "${topic.name}" เข้าคลังแล้ว`);
+                        }}
+                      >
+                        เก็บเข้าคลัง
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
             </div>
           </section>
         </div>

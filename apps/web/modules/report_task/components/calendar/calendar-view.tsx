@@ -248,7 +248,6 @@ export function CalendarView() {
     setTodoDialogState(target);
   }
   const [addCalendarOpen, setAddCalendarOpen] = useState(false);
-  const [addCalendarSection, setAddCalendarSection] = useState<"recommended" | "people">("recommended");
   const [summaryRange, setSummaryRange] = useState<SummaryRange | null>(null);
   // Real "now" for fading past events — computed once on mount (the calendar is
   // client-only, so this stays stable and needs no server value).
@@ -776,10 +775,7 @@ export function CalendarView() {
             variant="outline"
             size="sm"
             className={cn("ml-auto lg:hidden text-[var(--ink-soft)]", hiddenUserIds.length > 0 && "border-[var(--brand-green-dark)] text-[var(--brand-green-dark)]")}
-            onClick={() => {
-              setAddCalendarSection("people");
-              setAddCalendarOpen(true);
-            }}
+            onClick={() => setAddCalendarOpen(true)}
           >
             <Users className="h-3.5 w-3.5" /> คนในองค์กร
           </Button>
@@ -829,10 +825,7 @@ export function CalendarView() {
         <div className="flex sm:hidden items-center gap-2">
           <button
             type="button"
-            onClick={() => {
-              setAddCalendarSection("people");
-              setAddCalendarOpen(true);
-            }}
+            onClick={() => setAddCalendarOpen(true)}
             className={cn(filterFieldTriggerClass(hiddenUserIds.length > 0), "!h-10 !w-10 !px-0 justify-center shrink-0")}
             aria-label="คนในองค์กร"
             title="คนในองค์กร"
@@ -1320,7 +1313,7 @@ export function CalendarView() {
         />
       )}
       <EventDetailDialog event={selectedEvent} onOpenChange={(open) => !open && setSelectedEvent(null)} />
-      <AddCalendarDialog open={addCalendarOpen} onOpenChange={setAddCalendarOpen} initialSection={addCalendarSection} />
+      <AddCalendarDialog open={addCalendarOpen} onOpenChange={setAddCalendarOpen} />
       <RangeSummaryDialog
         range={summaryRange}
         tab={tab}

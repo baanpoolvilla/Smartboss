@@ -756,8 +756,15 @@ function ReportFeedPageInner() {
                       >
                         <Icon className="h-3.5 w-3.5" />
                         <span className="hidden lg:inline">{t.label}</span>
+                        {/* Capped the same way the notification bell/bug-icon
+                            badges already are (99+) — a room with thousands
+                            of posts otherwise stretched this pill into an
+                            oval with 5+ digits in it instead of staying a
+                            small round badge. */}
                         {count != null && count > 0 && (
-                          <span className="tabular-nums text-[10px] text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-1.5 py-0.5">{count}</span>
+                          <span className="tabular-nums text-[10px] text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-1.5 py-0.5">
+                            {count > 99 ? "99+" : count}
+                          </span>
                         )}
                       </button>
                     );

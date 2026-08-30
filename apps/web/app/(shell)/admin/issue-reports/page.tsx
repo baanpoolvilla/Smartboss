@@ -41,6 +41,21 @@ const TAB_LABEL: Record<Tab, string> = {
   closed: "ปิดแล้ว",
 };
 
+/** "05/09/2569" → a real Date, at local midnight — พ.ศ. year like the rest
+ * of the app's own date displays (see TimeAgo/formatDate), not ค.ศ., so
+ * typing the year you'd actually say out loud works. Returns null for
+ * anything that isn't exactly dd/mm/yyyy rather than silently misreading a
+ * partial/garbled value as some other date. */
+function parseThaiDate(value: string | undefined, endOfDay = false): number | null {
+  if (!value) return null;
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value.trim());
+  if (!m) return null;
+  const [, dd, mm, buddhistYear] = m;
+  const year = Number(buddhistYear) - 543;
+  const date = new Date(year, Number(mm) - 1, Number(dd), endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0);
+  return Number.isNaN(date.getTime()) ? null : date.getTime();
+}
+
 function needsAgentResponse(t: CrossOrgIssueTicket): boolean {
   if (CLOSED_STATUSES.includes(t.status)) return false;
   if (t.status === "new") return true;
@@ -84,8 +99,8 @@ export default async function AllIssueReportsPage({ searchParams }: { searchPara
   });
 
   const q = sp.q?.trim().toLowerCase();
-  const fromMs = sp.from ? new Date(sp.from).getTime() : null;
-  const toMs = sp.to ? new Date(`${sp.to}T23:59:59`).getTime() : null;
+  const fromMs = parseThaiDate(sp.from);
+  const toMs = parseThaiDate(sp.to, true);
   const tickets = byTab.filter((t) => {
     if (sp.orgId && t.orgId !== sp.orgId) return false;
     if (sp.status && t.status !== sp.status) return false;
@@ -196,11 +211,29 @@ export default async function AllIssueReportsPage({ searchParams }: { searchPara
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-(--ink-soft)">ตั้งแต่วันที่</span>
-            <input type="date" name="from" defaultValue={sp.from ?? ""} className={inputClass} />
+            <input
+              type="text"
+              inputMode="numeric"
+              name="from"
+              placeholder="dd/mm/yyyy"
+              pattern="\d{2}/\d{2}/\d{4}"
+              title="รูปแบบ dd/mm/yyyy เช่น 05/09/2569"
+              defaultValue={sp.from ?? ""}
+              className={inputClass}
+            />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-(--ink-soft)">ถึงวันที่</span>
-            <input type="date" name="to" defaultValue={sp.to ?? ""} className={inputClass} />
+            <input
+              type="text"
+              inputMode="numeric"
+              name="to"
+              placeholder="dd/mm/yyyy"
+              pattern="\d{2}/\d{2}/\d{4}"
+              title="รูปแบบ dd/mm/yyyy เช่น 05/09/2569"
+              defaultValue={sp.to ?? ""}
+              className={inputClass}
+            />
           </label>
           <div className="flex items-end gap-2">
             <Button type="submit" className="w-full sm:w-auto">กรอง</Button>

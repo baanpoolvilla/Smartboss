@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/modules/report_task/components/ui/dialog";
 import {
   AlertDialog,
@@ -20,11 +19,9 @@ import { useGoogleCalendarStore, type ExternalCalendarLink, type IcsLinkTarget }
 import { PeopleCalendarList } from "./people-calendar-list";
 import { cn } from "@/modules/report_task/lib/utils";
 import {
-  Lightbulb,
   Globe,
   Loader2,
   Search,
-  Users,
   CalendarCheck2,
   Check,
   Unlink,
@@ -48,105 +45,40 @@ function formatLocalDMY(d: Date) {
   return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
 
-type Section = "recommended" | "people";
-
-// "ปฏิทินภายนอก" moved to /settings (โปรไฟล์ของฉัน) — a personal preference,
-// not something you set up mid-flow while adding a calendar.
-// GoogleCalendarPane stays in this file (exported) and is reused there.
-// (The old "วันหยุดตามประเทศ" country picker that used to live next to it
-// here was removed outright — see git history — once holidays became
-// org-wide data owned by the HR module instead of a per-user selection.)
-const navItems: { key: Section; label: string; icon: typeof Lightbulb }[] = [
-  { key: "recommended", label: "แนะนำ", icon: Lightbulb },
-  { key: "people", label: "คนในองค์กร", icon: Users },
-];
-
+// "แนะนำ" (recommended) tab used to sit here alongside "คนในองค์กร" — it was
+// never anything but a static landing pane pointing you at either the people
+// list or /settings, and both real entry points into this dialog already
+// jumped straight past it to the people list anyway (see calendar-view.tsx).
+// Removed outright per explicit ask ("ให้แสดงแค่คนในองค์กรพอ แนะนำเอาออก
+// เลย") — this dialog now shows only the "คนในองค์กร" list, no tab/section
+// navigation needed for a single pane. "ปฏิทินภายนอก" already lives at
+// /settings (โปรไฟล์ของฉัน) — GoogleCalendarPane stays in this file
+// (exported) and is reused there.
 export function AddCalendarDialog({
   open,
   onOpenChange,
-  initialSection = "recommended",
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  /** Which pane to land on when opened — e.g. a shortcut into "คนในองค์กร"
-   *  for toggling whose external calendar shows, rather than always
-   *  starting from the generic "แนะนำ" landing pane. */
-  initialSection?: Section;
 }) {
-  const [section, setSection] = useState<Section>(initialSection);
-  // Re-seed the pane only on the closed->open transition, computed during
-  // render (not an effect) — same "adjusting state on prop change" pattern
-  // used in event-detail-dialog.tsx. Switching panes inside an already-open
-  // dialog shouldn't get yanked back by an unrelated re-render.
-  const [wasOpen, setWasOpen] = useState(open);
-  if (open !== wasOpen) {
-    setWasOpen(open);
-    if (open) setSection(initialSection);
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* Mobile (no sm: prefix) was a fixed h-[85dvh] — a short filtered list
-          (e.g. one department, 2 people) still forced the same near-full-
-          screen card, leaving a huge dead blank area below the last row.
-          max-h instead of h lets the card shrink to its actual content on a
-          phone, only growing up to the same ceiling once there's enough
-          content to need it. Desktop (sm:) keeps its original fixed height —
-          not reported as an issue there, and RecommendedPane's short landing
-          copy reads better in a taller card at that width. */}
-      <DialogContent className="sm:max-w-3xl p-0 max-h-[85dvh] sm:h-[75vh] sm:max-h-[600px] overflow-hidden" showCloseButton>
-        <div className="flex flex-col sm:flex-row max-h-[85dvh] sm:h-full min-h-0">
-          <div className="w-full sm:w-52 shrink-0 border-b sm:border-b-0 sm:border-r border-[var(--line)] bg-[var(--bg-soft)]/60 p-2 sm:p-4 flex flex-row sm:flex-col gap-1 overflow-x-auto sm:overflow-y-auto min-h-0">
-            <h3 className="hidden sm:block text-sm font-semibold px-2 pb-2">เพิ่มปฏิทิน</h3>
-            {navItems.map((n) => (
-              <button
-                key={n.key}
-                onClick={() => setSection(n.key)}
-                className={cn(
-                  "flex shrink-0 items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-left transition-colors",
-                  section === n.key
-                    ? "bg-[var(--brand-green)] text-[var(--ink)] font-medium"
-                    : "text-[var(--ink)] hover:bg-white"
-                )}
-              >
-                <n.icon className="h-4 w-4 shrink-0" />
-                {n.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex-1 min-w-0 min-h-0 overflow-y-auto p-4 sm:p-6">
-            {section === "recommended" && <RecommendedPane onNavigate={setSection} />}
-            {section === "people" && <PeopleCalendarList />}
-          </div>
+      <DialogContent className="sm:max-w-lg p-0 max-h-[85dvh] sm:max-h-[600px] overflow-hidden flex flex-col" showCloseButton>
+        <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-0">
+          <DialogTitle>คนในองค์กร</DialogTitle>
+        </DialogHeader>
+        {/* alwaysExpanded — this box already has its own fixed max-height +
+            overflow-y-auto (above), so the "ดูเพิ่มเติม (N คน)" collapse-at-8
+            button had nothing real to save; it just made a mobile user tap
+            once before scrolling was even possible ("ให้สกอขึ้นลงเอา ไม่
+            ต้องกดเพิ่มเติม"). Same reasoning CalendarRail's own box already
+            uses — show the full list, let the container's scroll do the
+            rest. */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 pt-3">
+          <PeopleCalendarList alwaysExpanded />
         </div>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function RecommendedPane({ onNavigate }: { onNavigate: (s: Section) => void }) {
-  return (
-    <div className="max-w-sm">
-      <h2 className="text-2xl font-semibold leading-tight">ทีมเวิร์กทำให้งานสำเร็จ</h2>
-      <p className="text-sm text-[var(--ink-soft)] mt-2">
-        เลือกดูปฏิทินของเพื่อนร่วมทีม หรือเชื่อมต่อปฏิทินภายนอกเข้ามาไว้ในปฏิทินของคุณเอง (ไม่กระทบปฏิทินคนอื่น)
-      </p>
-      <div className="flex flex-col gap-2 mt-4">
-        <button
-          onClick={() => onNavigate("people")}
-          className="flex items-center gap-2 rounded-lg bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white text-sm font-medium px-4 py-2.5 w-fit transition-colors"
-        >
-          <Users className="h-4 w-4" /> ดูปฏิทินของทีม
-        </button>
-        <Link
-          href="/report-task/settings?tab=profile&section=externalCalendar"
-          className="flex items-center gap-2 rounded-lg border border-[var(--line)] hover:border-[var(--brand-green)] text-sm font-medium px-4 py-2.5 w-fit transition-colors"
-        >
-          <CalendarCheck2 className="h-4 w-4" /> เชื่อมต่อปฏิทินภายนอก (ไปที่หน้าตั้งค่า)
-        </Link>
-      </div>
-    </div>
   );
 }
 
