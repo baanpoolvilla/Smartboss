@@ -605,7 +605,11 @@ export function ReportCard({
         // ground (see report-feed.tsx) — that's what actually gives a card a
         // surface to contrast against, which flattening the page to plain
         // white specifically removed the first time cards were tried here.
-        "group/post relative rounded-2xl border border-[var(--line)] bg-[var(--bg)] px-5 py-5 sm:py-6 shadow-sm transition-shadow duration-150 hover:shadow-md",
+        // Padding/radius scale down on a narrow phone — the desktop sizing
+        // (px-5 py-6, rounded-2xl) was applied unconditionally, so on a
+        // ~360px screen a single card's own chrome ate a real slice of the
+        // width before any content even started ("ใหญ่มากจนมองได้แค่นี้เอง").
+        "group/post relative rounded-xl sm:rounded-2xl border border-[var(--line)] bg-[var(--bg)] px-3.5 py-3.5 sm:px-5 sm:py-5 md:py-6 shadow-sm transition-shadow duration-150 hover:shadow-md",
         (highlighted || flashTargetId === post.id) && "bg-[var(--accent)] border-[var(--brand-green)]/40",
         // Unread keeps its own accent, now as a ring around the whole card
         // (a plain border-l reads oddly once the corners are rounded).
@@ -751,8 +755,8 @@ export function ReportCard({
           avatar is a rounded square, the same shape the room icons and status
           tiles use elsewhere in the module, so a person reads as a person and
           not as one more round chip in a row of round chips. */}
-      <div className="flex items-start gap-3.5">
-        <Avatar className="h-9 w-9 shrink-0 rounded-xl after:rounded-xl">
+      <div className="flex items-start gap-2.5 sm:gap-3.5">
+        <Avatar className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 rounded-xl after:rounded-xl">
           <AvatarFallback className="rounded-xl text-xs font-semibold bg-[var(--accent)] text-[var(--brand-green-dark)]">{author?.avatar}</AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1">
@@ -826,7 +830,7 @@ export function ReportCard({
       </div>
 
       {visibleSections.length > 0 && (
-        <div className="space-y-3 pl-14 mt-2.5">
+        <div className="space-y-3 pl-[42px] sm:pl-14 mt-2.5">
           {visibleSections.map((s) => (
             <div key={s.id}>
               {s.heading && <p className="text-base font-semibold mb-1">{s.heading}</p>}
@@ -839,14 +843,14 @@ export function ReportCard({
       {isLong && (
         <button
           onClick={() => setShowFull((v) => !v)}
-          className="pl-14 mt-1.5 text-xs font-medium text-[var(--brand-green-dark)] hover:underline"
+          className="pl-[42px] sm:pl-14 mt-1.5 text-xs font-medium text-[var(--brand-green-dark)] hover:underline"
         >
           {showFull ? "ย่อ" : "ดูเพิ่มเติม"}
         </button>
       )}
 
       {post.images.length > 0 && (
-        <div className="pl-14 mt-3.5">
+        <div className="pl-[42px] sm:pl-14 mt-3.5">
           <PostImageCollage
             images={post.images.slice(0, MAX_VISIBLE_IMAGES)}
             remaining={Math.max(0, post.images.length - MAX_VISIBLE_IMAGES)}
@@ -865,7 +869,7 @@ export function ReportCard({
       )}
 
       {activeReactions.length > 0 && (
-        <div className="pl-14 flex items-center gap-1.5 pt-3 flex-wrap">
+        <div className="pl-[42px] sm:pl-14 flex items-center gap-1.5 pt-3 flex-wrap">
           {activeReactions.map(({ emoji, users }) => {
             const active = users.includes(viewingAsUserId);
             return (
@@ -933,12 +937,21 @@ export function ReportCard({
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-soft)]">
                   {post.replies.length} การตอบกลับ
                 </p>
-                {post.replies.length > RECENT_REPLY_COUNT && (
+                {/* "ดูก่อนหน้าอีก N" stays up here — clicking it reveals older
+                    replies *above* the ones already showing, so the trigger
+                    sitting at the top of the list matches where the new
+                    content actually appears. Its collapse counterpart used to
+                    live in this same spot even once expanded, which meant
+                    collapsing a long thread (16+ replies here) meant
+                    scrolling back up past everything you just read to find
+                    it — moved to the bottom of the list instead (below),
+                    right where you already are after reading through. */}
+                {post.replies.length > RECENT_REPLY_COUNT && !repliesExpanded && (
                   <button
-                    onClick={() => setRepliesExpanded((v) => !v)}
+                    onClick={() => setRepliesExpanded(true)}
                     className="text-[11px] font-medium text-[var(--brand-green-dark)] hover:underline"
                   >
-                    {repliesExpanded ? "ย่อลง" : `ดูก่อนหน้าอีก ${post.replies.length - RECENT_REPLY_COUNT}`}
+                    ดูก่อนหน้าอีก {post.replies.length - RECENT_REPLY_COUNT}
                   </button>
                 )}
               </div>
@@ -961,6 +974,14 @@ export function ReportCard({
                   />
                 ))}
               </div>
+              {post.replies.length > RECENT_REPLY_COUNT && repliesExpanded && (
+                <button
+                  onClick={() => setRepliesExpanded(false)}
+                  className="mt-2 text-[11px] font-medium text-[var(--brand-green-dark)] hover:underline"
+                >
+                  ย่อลง
+                </button>
+              )}
             </div>
           )}
 

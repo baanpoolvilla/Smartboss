@@ -653,30 +653,58 @@ function ReportFeedPageInner() {
                     blob either ("ดูยาก งง"). Changing the rounds themselves
                     is the ⚙ gear's job, not this row's. */}
                 {requirementParts.length > 0 && (
-                  // Plain inline text — metadata about the room, not a
-                  // status to react to, so it stays neutral gray throughout
-                  // (no green — this isn't a success state, §7). "กำหนดส่ง"
-                  // is said once for the whole row (not repeated per round —
-                  // see requirementParts' own comment on why that read badly)
-                  // only when there's an actual deadline to name; a
-                  // topic with no cutoffs at all just states its image rule
-                  // plainly instead. The currently-applicable round still
-                  // stands out (medium weight only, not color).
-                  <div className="px-4 sm:px-5 pb-1.5 sm:pb-2 flex items-center gap-1.5 overflow-x-auto text-xs text-[var(--ink-soft)]">
-                    <Clock className="h-3 w-3 shrink-0" />
-                    {/* Final polish pass: "เวลาส่ง" (a plain fact — the window
-                        this round runs in) reads more naturally than
-                        "กำหนดส่ง" (a deadline you're up against) for a room
-                        with an open submission window rather than a hard
-                        due-time; same word on desktop and mobile. */}
-                    {activeTopic.cutoffs.length > 0 && <span className="shrink-0">เวลาส่ง</span>}
-                    {requirementParts.map((r, i) => (
-                      <span key={i} className={cn("shrink-0", r.active && "font-medium text-[var(--ink)]")}>
-                        {i > 0 && <span className="text-[var(--ink-faint)]"> · </span>}
-                        {r.text}
-                      </span>
-                    ))}
-                  </div>
+                  <>
+                    {/* Desktop keeps the always-visible inline row — plain
+                        text, neutral gray (no green — this isn't a success
+                        state, §7). Mobile gets a collapsed trigger instead
+                        (below): this line was permanently eating a full row
+                        of the header on every phone regardless of whether
+                        anyone needed it right now, on a screen where the
+                        header was already flagged for taking "1/3 ของหน้าจอ"
+                        before a single post was visible — asked again
+                        explicitly ("มันใหญ่จนมองได้แค่นี้เอง...เอาไปไว้ใน
+                        ตัวกรองดีกว่า"). The fact itself doesn't disappear,
+                        it just isn't paid for on every screen anymore. */}
+                    <div className="hidden sm:flex px-5 pb-2 items-center gap-1.5 overflow-x-auto text-xs text-[var(--ink-soft)]">
+                      <Clock className="h-3 w-3 shrink-0" />
+                      {/* "เวลาส่ง" (a plain fact — the window this round runs
+                          in) reads more naturally than "กำหนดส่ง" (a deadline
+                          you're up against) for a room with an open
+                          submission window rather than a hard due-time. */}
+                      {activeTopic.cutoffs.length > 0 && <span className="shrink-0">เวลาส่ง</span>}
+                      {requirementParts.map((r, i) => (
+                        <span key={i} className={cn("shrink-0", r.active && "font-medium text-[var(--ink)]")}>
+                          {i > 0 && <span className="text-[var(--ink-faint)]"> · </span>}
+                          {r.text}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="sm:hidden px-4 pb-1.5">
+                      <Popover>
+                        <PopoverTrigger
+                          render={
+                            <button className="flex items-center gap-1 rounded-full border border-[var(--line)] bg-white px-2.5 py-1 text-[11px] font-medium text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]">
+                              <Clock className="h-3 w-3" />
+                              เวลาส่ง
+                              <ChevronDown className="h-3 w-3" />
+                            </button>
+                          }
+                        />
+                        <PopoverContent align="start" className="w-72 p-3">
+                          <div className="flex items-center gap-1.5 flex-wrap text-xs text-[var(--ink-soft)]">
+                            <Clock className="h-3 w-3 shrink-0" />
+                            {activeTopic.cutoffs.length > 0 && <span className="shrink-0">เวลาส่ง</span>}
+                            {requirementParts.map((r, i) => (
+                              <span key={i} className={cn("shrink-0", r.active && "font-medium text-[var(--ink)]")}>
+                                {i > 0 && <span className="text-[var(--ink-faint)]"> · </span>}
+                                {r.text}
+                              </span>
+                            ))}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </>
                 )}
 
                 {/* Row 3 — tabs, full-width so the underline (`border-b` on

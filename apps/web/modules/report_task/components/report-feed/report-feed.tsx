@@ -102,7 +102,7 @@ export function ReportFeed({
           // one — each post is now its own bordered card (see ReportCard),
           // so the gap between them has to be real whitespace, not just a
           // border each card leans on.
-          <div className="space-y-6 px-3">
+          <div className="space-y-6 px-2 sm:px-3">
             {groupByDay(topicPosts, (p) => p.createdAt).map((group) => (
               <div key={group.key} className="space-y-3">
                 <DaySeparator label={reportDayLabel(group.label)} />

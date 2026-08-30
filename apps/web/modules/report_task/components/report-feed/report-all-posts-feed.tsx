@@ -263,7 +263,7 @@ export function ReportAllPostsFeed({
               this exact idea being tried and reverted again this same round.
               Tinted ground + space-y-3 between cards, same as report-feed.tsx
               — each post is its own bordered card now, not a flat row. */}
-          <div className="space-y-6 px-3">
+          <div className="space-y-6 px-2 sm:px-3">
             {groupByDay(items, (p) => p.createdAt).map((group) => (
               <div key={group.key} className="space-y-3">
                 <DaySeparator label={reportDayLabel(group.label)} />
