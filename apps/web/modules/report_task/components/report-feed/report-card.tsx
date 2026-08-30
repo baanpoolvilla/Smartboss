@@ -812,7 +812,7 @@ export function ReportCard({
               unbroken link ("มันล้นการ์ด") — this is the one and only place
               a flat Openchat post's body gets shown, so it's also the only
               place that formatting could ever have applied. */}
-          <p className="text-[16px] font-semibold mt-2 leading-snug break-words">{renderRichBulletText(post.title)}</p>
+          <p className="text-[14.5px] sm:text-[16px] font-semibold mt-2 leading-snug break-words">{renderRichBulletText(post.title)}</p>
           {postTags.length > 0 && (
             <div className="flex items-center gap-1 flex-wrap mt-1.5">
               {postTags.map((t) => (
@@ -851,7 +851,7 @@ export function ReportCard({
         <div className="space-y-3 pl-[42px] sm:pl-14 mt-2.5">
           {visibleSections.map((s) => (
             <div key={s.id}>
-              {s.heading && <p className="text-base font-semibold mb-1">{s.heading}</p>}
+              {s.heading && <p className="text-sm sm:text-base font-semibold mb-1">{s.heading}</p>}
               {s.bullets.length > 0 && renderSectionBullets(s.bullets, (bulletIndex) => toggleChecklistItem(s.id, bulletIndex))}
             </div>
           ))}
@@ -926,26 +926,51 @@ export function ReportCard({
           after that read as *missing* the invite to reply, not as
           intentionally quiet. */}
       <div className="space-y-3 pt-3 mt-3 border-t border-[var(--line)]">
-          {/* Teams-style: nothing renders until this one summary link is
-              tapped — not even the most recent reply. Used to always keep
-              the last few replies visible, which on a long thread was still
-              too much for a phone screen ("มันใหญ่มากกินไปแทบครึ่งหน้า...
-              แสดงแค่อันเดียวพอ และให้กดเพิ่มเติมเอา"); a real Teams
-              screenshot showed it collapses all the way down to one line
-              naming who replied, full stop. Once expanded, the thread hangs
-              off the same vertical line + indent as before (the "these
-              belong to the post above" cue every thread UI uses), with a
-              collapse link at the bottom so closing a long thread doesn't
-              mean scrolling back up past everything just read. */}
+          {/* Collapsed shows just the single latest reply, not the full
+              recent-N or the zero-reply Teams summary link tried before —
+              asked for explicitly ("ให้แสดงแค่คอมเม้นล่าสุดพอ") after a real
+              thread of 16 replies made even "who replied" alone still read
+              as too little context to be useful. The "N การตอบกลับ" line
+              only shows (as a "view all" link) once there's more than the
+              one already on screen. Once expanded, the thread hangs off the
+              same vertical line + indent as before (the "these belong to
+              the post above" cue every thread UI uses), with a collapse
+              link at the bottom so closing a long thread doesn't mean
+              scrolling back up past everything just read. */}
           {post.replies.length > 0 && (
             <div className="ml-1 border-l border-[var(--line)] pl-3 sm:pl-4">
               {!repliesExpanded ? (
-                <button
-                  onClick={() => setRepliesExpanded(true)}
-                  className="text-left text-xs font-medium text-[var(--brand-green-dark)] hover:underline"
-                >
-                  {replySummary}
-                </button>
+                <>
+                  {post.replies.length > 1 && (
+                    <button
+                      onClick={() => setRepliesExpanded(true)}
+                      className="mb-1.5 block text-left text-xs font-medium text-[var(--brand-green-dark)] hover:underline"
+                    >
+                      {replySummary}
+                    </button>
+                  )}
+                  <ReportReply
+                    reply={post.replies[post.replies.length - 1]!}
+                    allReplies={post.replies}
+                    postQuote={{ id: post.id, authorId: post.authorId, body: post.title }}
+                    flashed={flashTargetId === post.replies[post.replies.length - 1]!.id}
+                    isOwn={post.replies[post.replies.length - 1]!.authorId === viewingAsUserId}
+                    onOpenLightbox={openReplyLightbox}
+                    onReplyTo={startReplyTo}
+                    onJumpToQuote={jumpToQuote}
+                    onCopyLink={() => copyLink(post.replies[post.replies.length - 1]!.id)}
+                    onToggleReaction={(emoji) =>
+                      toggleReplyReaction(post.id, post.replies[post.replies.length - 1]!.id, emoji, viewingAsUserId)
+                    }
+                    onEdit={(body) =>
+                      editReplyAction(post.id, post.replies[post.replies.length - 1]!.id, {
+                        body,
+                        images: post.replies[post.replies.length - 1]!.images,
+                      })
+                    }
+                    onDelete={() => setDeleteReplyTarget(post.replies[post.replies.length - 1]!.id)}
+                  />
+                </>
               ) : (
                 <>
                   <p className="pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-soft)]">
@@ -1476,14 +1501,21 @@ function PostImageThumb({
   return (
     <button
       onClick={onClick}
-      className={cn("relative block hover:opacity-90 transition-opacity", !fitToImage && wide && "bg-[var(--bg-soft)]", className)}
-      // 60vh let a tall portrait screenshot (very common for this feed) eat
-      // up to a third of the screen on both desktop and mobile — capping at
-      // a fixed 380px instead keeps the "no letterbox, fill the width"
-      // behavior for normal photos while stopping a single image from
-      // dominating the post the way multi-image posts never do (they're
-      // capped at 190/280px, see PostImageCollage above).
-      style={fitToImage && ratio ? { aspectRatio: ratio, height: "auto", maxHeight: "380px" } : undefined}
+      className={cn(
+        "relative block hover:opacity-90 transition-opacity",
+        !fitToImage && wide && "bg-[var(--bg-soft)]",
+        // 60vh let a tall portrait screenshot (very common for this feed) eat
+        // up to a third of the screen on both desktop and mobile — capping
+        // instead keeps the "no letterbox, fill the width" behavior for
+        // normal photos while stopping a single image from dominating the
+        // post the way multi-image posts never do (they're capped at
+        // 190/280px, see PostImageCollage above). Lower cap on a narrow
+        // phone specifically — asked for explicitly along with the rest of
+        // the post's own responsive sizing ("ขนาดให้ตัวเล็กลงตาม responsive").
+        fitToImage && ratio && "max-h-[260px] sm:max-h-[380px]",
+        className
+      )}
+      style={fitToImage && ratio ? { aspectRatio: ratio, height: "auto" } : undefined}
       aria-label={`ดูรูป ${img.name} เต็มจอ`}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}

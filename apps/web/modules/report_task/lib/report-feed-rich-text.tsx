@@ -365,7 +365,7 @@ export function renderSectionBullets(bullets: string[], onToggleChecklist?: (bul
       blocks.push(
         <ol key={key++} className="space-y-0.5">
           {items.map((b, bi) => (
-            <li key={bi} className="text-base text-[var(--ink)] flex items-start gap-1.5">
+            <li key={bi} className="text-sm sm:text-base text-[var(--ink)] flex items-start gap-1.5">
               <span className="text-[var(--ink)] tabular-nums shrink-0">{bi + 1}.</span>
               <span>{renderRichBulletText(b)}</span>
             </li>
@@ -392,11 +392,11 @@ export function renderSectionBullets(bullets: string[], onToggleChecklist?: (bul
               className="w-full flex items-start gap-1.5 text-left disabled:cursor-default"
             >
               {item.checked ? (
-                <SquareCheckBig className="h-4 w-4 mt-0.5 shrink-0 text-[var(--brand-green-dark)]" />
+                <SquareCheckBig className="h-3.5 w-3.5 sm:h-4 sm:w-4 mt-0.5 shrink-0 text-[var(--brand-green-dark)]" />
               ) : (
-                <Square className="h-4 w-4 mt-0.5 shrink-0 text-[var(--ink-soft)]" />
+                <Square className="h-3.5 w-3.5 sm:h-4 sm:w-4 mt-0.5 shrink-0 text-[var(--ink-soft)]" />
               )}
-              <span className={cn("text-base", item.checked ? "text-[var(--ink-soft)] line-through" : "text-[var(--ink)]")}>
+              <span className={cn("text-sm sm:text-base", item.checked ? "text-[var(--ink-soft)] line-through" : "text-[var(--ink)]")}>
                 {renderRichBulletText(item.text)}
               </span>
             </button>
@@ -424,7 +424,7 @@ export function renderSectionBullets(bullets: string[], onToggleChecklist?: (bul
         {run.map((b, bi) => {
           const bulleted = BULLET_LINE_PREFIX.test(b.trim());
           return (
-            <p key={bi} className="text-base text-[var(--ink)] flex items-start gap-1.5">
+            <p key={bi} className="text-sm sm:text-base text-[var(--ink)] flex items-start gap-1.5">
               {bulleted && <span className="text-[var(--ink)] mt-0.5 shrink-0">•</span>}
               <span>{renderRichBulletText(bulleted ? stripBulletPrefix(b) : b)}</span>
             </p>

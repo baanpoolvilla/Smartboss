@@ -444,49 +444,37 @@ function ReportFeedPageInner() {
       {/* Below `lg`, "☰ หัวข้อ" opens the topic tree as a full-screen Sheet
           instead of squeezing it into a fixed h-64 block above the feed with
           its own internal scroll (3.5.5) — the `lg:flex` sidebar right below
-          is completely untouched at desktop widths. */}
-      <div className="lg:hidden">
-        {/* A bordered pill sitting right above the room panel's own header
-            (also a bordered white block) read as two stacked cards on a
-            narrow phone ("ตรงที่วงมันแปลกๆ" — same "กรอบซ้อนกันหลายชั้น"
-            issue the desktop sidebar+panel pairing was already fixed for,
-            just not caught here). Dropped the border so this flows as one
-            continuous header instead.
+          is completely untouched at desktop widths.
 
-            The ☰ itself no longer lives here at all — moved up into the
-            shared AppBar's top-left corner (see topicSwitcherLeading above),
-            asked for explicitly ("อยากให้สามขีดไปซ้ายบน"). This row is just
-            the room name + chevron now; both still open the same sheet. */}
-        <button
-          onClick={() => setMobileTopicsOpen(true)}
-          className="w-full flex items-center gap-1.5 py-2 px-3 text-sm font-medium rounded-lg hover:bg-[var(--bg-soft)] transition-colors"
-        >
-          <span className="truncate">{activeTopic ? activeTopic.name : "หัวข้อ"}</span>
-          <ChevronDown className="h-4 w-4 shrink-0 ml-auto text-[var(--ink-soft)]" />
-        </button>
-        <Sheet open={mobileTopicsOpen} onOpenChange={setMobileTopicsOpen}>
-          <SheetContent side="left" className="p-0 w-[85vw] max-w-sm flex flex-col">
-            <SheetHeader className="px-4 py-3 border-b border-[var(--line)]/60">
-              <SheetTitle>หัวข้อทั้งหมด</SheetTitle>
-            </SheetHeader>
-            <div className="flex-1 min-h-0">
-              <TopicSidebar
-                topics={visibleTopics}
-                activeId={activeId}
-                fillHeight
-                onSelect={(id) => {
-                  selectView(id);
-                  setMobileTopicsOpen(false);
-                }}
-                onOpenSettings={(id) => {
-                  openTopicSettings(id);
-                  setMobileTopicsOpen(false);
-                }}
-              />
-            </div>
-          </SheetContent>
-        </Sheet>
-      </div>
+          The row that used to sit here (room name + chevron, opening this
+          same sheet) was pure duplication once the ☰ trigger moved up into
+          the shared AppBar (see topicSwitcherLeading above) — the room name
+          right below it in the room panel's own header already says the same
+          thing ("เอาออกแล้วขยับขึ้น"). Removed outright; only the Sheet
+          itself still needs to be mounted somewhere, with no visual row of
+          its own now that its one trigger lives in the AppBar. */}
+      <Sheet open={mobileTopicsOpen} onOpenChange={setMobileTopicsOpen}>
+        <SheetContent side="left" className="p-0 w-[85vw] max-w-sm flex flex-col">
+          <SheetHeader className="px-4 py-3 border-b border-[var(--line)]/60">
+            <SheetTitle>หัวข้อทั้งหมด</SheetTitle>
+          </SheetHeader>
+          <div className="flex-1 min-h-0">
+            <TopicSidebar
+              topics={visibleTopics}
+              activeId={activeId}
+              fillHeight
+              onSelect={(id) => {
+                selectView(id);
+                setMobileTopicsOpen(false);
+              }}
+              onOpenSettings={(id) => {
+                openTopicSettings(id);
+                setMobileTopicsOpen(false);
+              }}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* items-stretch at every width — lg:items-start previously let the
           sidebar and the room panel each auto-size to their own content
