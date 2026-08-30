@@ -85,14 +85,17 @@ export function ReportReply({
   return (
     <div
       id={`report-reply-${reply.id}`}
-      className="group/reply flex items-start gap-2"
+      className="group/reply flex items-start gap-1.5 sm:gap-2"
     >
-      <Avatar className="h-6 w-6 shrink-0 mt-0.5">
-        <AvatarFallback className="text-[10px] bg-[var(--bg-soft)]">{author?.avatar}</AvatarFallback>
+      <Avatar className="h-5 w-5 sm:h-6 sm:w-6 shrink-0 mt-0.5">
+        <AvatarFallback className="text-[9px] sm:text-[10px] bg-[var(--bg-soft)]">{author?.avatar}</AvatarFallback>
       </Avatar>
       <div
         className={cn(
-          "min-w-0 flex-1 rounded-xl px-2.5 py-2 border transition-colors duration-500",
+          // Smaller padding/radius on a narrow phone — the desktop bubble
+          // size applied everywhere meant a two-word reply ("test" / "11111")
+          // still rendered as a tall, wide card ("ใหญ่มากกินไปแทบครึ่งหน้า").
+          "min-w-0 flex-1 rounded-lg sm:rounded-xl px-2 py-1.5 sm:px-2.5 sm:py-2 border transition-colors duration-500",
           flashed
             ? "bg-[var(--accent)] border-[var(--brand-green)]/40"
             : isOwn
@@ -102,7 +105,7 @@ export function ReportReply({
         style={reply.highlightColor ? { borderLeft: `3px solid ${reply.highlightColor}`, paddingLeft: "9px" } : undefined}
       >
         <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-medium">
+          <p className="text-[11px] sm:text-xs font-medium">
             {author?.name} <span className="font-normal text-[var(--ink-soft)]">· <TimeAgo date={reply.createdAt} /></span>
             {reply.editedAt && <span className="font-normal text-[var(--ink-soft)]"> · แก้ไขแล้ว</span>}
           </p>
@@ -321,7 +324,7 @@ export function ReportReply({
                 Without this the browser's default white-space:normal collapsed
                 every line break into a space, so a two-line comment always
                 rendered as one line ("พิม test shift+enter 111 แต่แสดงแถวเดียวกัน"). */}
-            {reply.body && <p className="text-sm mt-0.5 whitespace-pre-wrap">{renderRichBulletText(reply.body)}</p>}
+            {reply.body && <p className="text-[13px] sm:text-sm mt-0.5 whitespace-pre-wrap">{renderRichBulletText(reply.body)}</p>}
             {!!reply.images?.length && (
               <div className="flex flex-wrap gap-1.5 mt-1.5">
                 {reply.images.map((img, i) => (

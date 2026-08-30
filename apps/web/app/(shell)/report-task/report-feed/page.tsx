@@ -28,7 +28,7 @@ import { currentCutoff } from "@/modules/report_task/lib/report-cutoff";
 import { pendingToday, todayStatusEntries, type TodayStatusEntry } from "@/modules/report_task/lib/report-feed-compliance";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
-import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronDown, Clock, FileImage, FolderHeart, Hash, Link2, Lock, Menu, MessageSquareText, Pin, Search, Settings, SlidersHorizontal, TriangleAlert, Users, X } from "lucide-react";
+import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronDown, Clock, FileImage, FolderHeart, Hash, Link2, Lock, Menu, MessageSquareText, Pin, Settings, SlidersHorizontal, TriangleAlert, Users, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 
 // Beyond this many pinned posts, the rest move into the "+N เพิ่มเติม"
@@ -188,12 +188,6 @@ function ReportFeedPageInner() {
   const [todayStatusFilter, setTodayStatusFilter] = useState<"posted" | "late" | "missing" | null>(null);
   const router = useRouter();
   const pathname = usePathname();
-  // Desktop-header search (new — not part of PostFilters/filterPosts, and
-  // not persisted to the URL like the real filters are). A quick client-side
-  // title match, additive on top of whatever filterPosts already returns —
-  // doesn't touch any existing filter's behavior.
-  const [searchQuery, setSearchQuery] = useState("");
-  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   // Filter bar (1.3) — read once from the URL same as the deep-link params
   // above, then kept in sync both ways via the effect below.
   const [filters, setFilters] = useState<PostFilters>(() => ({
@@ -283,9 +277,9 @@ function ReportFeedPageInner() {
   const pinnedPosts = topicPosts.filter((p) => p.pinned);
   // Filter bar (1.3) only narrows the main feed — tab counts/pinned strip
   // above still reflect the room's real totals, not "what's visible right now".
-  const filteredTopicPosts = (
-    activeTopic ? filterPosts(topicPosts, filters, { topicOf: () => activeTopic, viewingAsUserId }) : topicPosts
-  ).filter((p) => !searchQuery.trim() || p.title.toLowerCase().includes(searchQuery.trim().toLowerCase()));
+  const filteredTopicPosts = activeTopic
+    ? filterPosts(topicPosts, filters, { topicOf: () => activeTopic, viewingAsUserId })
+    : topicPosts;
 
   // R5 — a count per tab, so it's obvious there's something to look at
   // before clicking in blind. Same source data each tab's own panel already
@@ -425,30 +419,27 @@ function ReportFeedPageInner() {
     // and room panel now start right under the page's own top bar, and the
     // pills moved into the sidebar header (headerExtra below), which is the
     // one thing that's always on screen no matter which room is open.
-    <div className="flex flex-col gap-2.5 lg:gap-4 h-full">
+    <div className="flex flex-col gap-1.5 lg:gap-4 h-full">
       {/* Below `lg`, "☰ หัวข้อ" opens the topic tree as a full-screen Sheet
           instead of squeezing it into a fixed h-64 block above the feed with
           its own internal scroll (3.5.5) — the `lg:flex` sidebar right below
           is completely untouched at desktop widths. */}
       <div className="lg:hidden">
-        {/* Was plain outline text with no hint that tapping it does anything
-            — asked explicitly for the top bar to signal what's tappable
-            ("แถบบนให้รู้ด้วยว่ากดได้อะไร"). A tinted fill (like every other
-            actionable control on this page) plus a trailing chevron. Leads
-            with the actual room name now (not the generic word "หัวข้อ"),
-            and the chevron points down, not right — a right-pointing chevron
-            reads as "go to a new screen" (like the deep-link ones on other
-            rows), when this is really a selector that opens in place, the
-            same cue a native picker/dropdown uses (§10). */}
-        <Button
-          variant="outline"
+        {/* A bordered pill sitting right above the room panel's own header
+            (also a bordered white block) read as two stacked cards on a
+            narrow phone ("ตรงที่วงมันแปลกๆ" — same "กรอบซ้อนกันหลายชั้น"
+            issue the desktop sidebar+panel pairing was already fixed for,
+            just not caught here). Dropped the border and the tighter gap
+            above lets this flow as one continuous header instead — the tint
+            + chevron alone is still enough to read as tappable. */}
+        <button
           onClick={() => setMobileTopicsOpen(true)}
-          className="w-full justify-start gap-2 bg-[var(--bg-soft)] border-[var(--line)] hover:bg-[var(--accent)]"
+          className="w-full flex items-center gap-2 rounded-lg bg-[var(--bg-soft)] px-3 py-2 text-sm font-medium hover:bg-[var(--accent)] transition-colors"
         >
-          <Menu className="h-4 w-4 shrink-0" />
+          <Menu className="h-4 w-4 shrink-0 text-[var(--ink-soft)]" />
           <span className="truncate">{activeTopic ? activeTopic.name : "หัวข้อ"}</span>
           <ChevronDown className="h-4 w-4 shrink-0 ml-auto text-[var(--ink-soft)]" />
-        </Button>
+        </button>
         <Sheet open={mobileTopicsOpen} onOpenChange={setMobileTopicsOpen}>
           <SheetContent side="left" className="p-0 w-[85vw] max-w-sm flex flex-col">
             <SheetHeader className="px-4 py-3 border-b border-[var(--line)]/60">
@@ -717,15 +708,13 @@ function ReportFeedPageInner() {
                     getting shoved onto its own orphan row below (which just
                     looked like disconnected clutter, "งง...จัดให้มันดีๆสิ"). */}
                 <div className="px-4 sm:px-5 flex items-center gap-2 border-b border-[var(--line)]">
-                {/* Round 2, explicit instruction: real labels on every tab
-                    at every width, not icon-only below lg. Worth flagging
-                    that horizontal scroll here specifically was tried and
-                    pulled back once before for a real complaint
-                    ("ไม่อยากมีให้เลื่อนไปมา...อยากให้จบเลย") — icon+count
-                    alone was what let all 5 tabs fit with nothing to scroll.
-                    Bringing the labels back means the scroll comes back too;
-                    overflow-x-auto on the tablist itself keeps it contained
-                    to just this row rather than pushing the whole page wide. */}
+                {/* Labels show at lg+ only — asked again explicitly to go
+                    back to icon-only below that ("โพส ไฟล์ เอารูปแทน...ไม่เอา
+                    คำมา") after a prior round had asked for labels at every
+                    width. `title` on the button still carries the label for
+                    a11y/hover on every width. Icon+count alone is also what
+                    lets all 5 tabs fit on a narrow phone with nothing to
+                    scroll — labels only come back once lg has the room. */}
                 <div role="tablist" aria-label="ส่วนของหัวข้อ" className="no-scrollbar flex flex-1 min-w-0 items-center gap-3 lg:gap-4 overflow-x-auto">
                   {topicTabs.map((t) => {
                     const Icon = t.icon;
@@ -754,7 +743,7 @@ function ReportFeedPageInner() {
                         )}
                       >
                         <Icon className="h-3.5 w-3.5" />
-                        <span>{t.label}</span>
+                        <span className="hidden lg:inline">{t.label}</span>
                         {count != null && count > 0 && (
                           <span className="tabular-nums text-[10px] text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-1.5 py-0.5">{count}</span>
                         )}
@@ -777,27 +766,11 @@ function ReportFeedPageInner() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => activeTab === "posts" && setMobileSearchOpen((v) => !v)}
-                    tabIndex={activeTab === "posts" ? 0 : -1}
-                    aria-label="ค้นหาโพสต์"
-                    title="ค้นหาโพสต์"
-                    className={cn(
-                      "lg:hidden ml-auto my-1.5 h-8 w-8 shrink-0 flex items-center justify-center rounded-lg border transition-colors",
-                      mobileSearchOpen || searchQuery
-                        ? "border-[var(--brand-green)]/40 bg-[var(--accent)] text-[var(--brand-green-dark)]"
-                        : "border-[var(--line)] bg-white text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]",
-                      activeTab !== "posts" && "invisible"
-                    )}
-                  >
-                    <Search className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => activeTab === "posts" && setMobileFilterOpen(true)}
                     tabIndex={activeTab === "posts" ? 0 : -1}
                     className={cn(
                       filterFieldTriggerClass(postFiltersActiveCount(filters) > 0),
-                      "lg:hidden my-1.5 !h-8 shrink-0",
+                      "lg:hidden ml-auto my-1.5 !h-8 shrink-0",
                       activeTab !== "posts" && "invisible"
                     )}
                   >
@@ -806,30 +779,6 @@ function ReportFeedPageInner() {
                     {postFiltersActiveCount(filters) > 0 && <span className="tabular-nums">({postFiltersActiveCount(filters)})</span>}
                   </button>
                 </div>
-
-                {/* Mobile search — a full-width row of its own instead of
-                    squeezing into the tab row (which is already tight with
-                    5 icon tabs + search + filter on a narrow phone). Icon
-                    trigger above toggles it; typing here drives the same
-                    searchQuery the desktop input does. */}
-                {mobileSearchOpen && activeTab === "posts" && (
-                  <div className="lg:hidden px-5 pb-2 relative">
-                    <Search className="h-3.5 w-3.5 absolute left-8 top-1/2 -translate-y-1/2 text-[var(--ink-soft)]" />
-                    <input
-                      autoFocus
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Escape") {
-                          setSearchQuery("");
-                          setMobileSearchOpen(false);
-                        }
-                      }}
-                      placeholder="ค้นหาโพสต์..."
-                      className="h-9 w-full rounded-lg border border-[var(--line)] bg-white pl-8 pr-2 text-sm outline-none focus:border-[var(--brand-green)]/50"
-                    />
-                  </div>
-                )}
 
                 {/* Active-filter chips — only when something's actually
                     filtered, right under the tab row, desktop only (mobile's
@@ -925,23 +874,9 @@ function ReportFeedPageInner() {
                 <>
                   {filteredTopicPosts.length === 0 && topicPosts.length > 0 ? (
                     <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center px-6 bg-[var(--bg-soft)]">
-                      {/* Distinct wording from a search miss vs. a filter miss
-                          (§41 vs §42) — "ไม่พบผลลัพธ์" alone after typing a
-                          search term reads as broken/no-data, when really it
-                          just means nothing matched that specific term. */}
-                      <p className="text-sm font-semibold">
-                        {searchQuery.trim() ? `ไม่พบโพสต์ที่ตรงกับ "${searchQuery.trim()}"` : "ไม่พบโพสต์ตามตัวกรองนี้"}
-                      </p>
-                      {searchQuery.trim() && <p className="text-xs text-[var(--ink-soft)]">ลองเปลี่ยนคำค้นหา หรือล้างตัวกรอง</p>}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setSearchQuery("");
-                          setFilters(emptyPostFilters);
-                        }}
-                      >
-                        {searchQuery.trim() ? "ล้างการค้นหาและตัวกรอง" : "ล้างทั้งหมด"}
+                      <p className="text-sm font-semibold">ไม่พบโพสต์ตามตัวกรองนี้</p>
+                      <Button variant="outline" size="sm" onClick={() => setFilters(emptyPostFilters)}>
+                        ล้างทั้งหมด
                       </Button>
                     </div>
                   ) : isOpenchatTopic(activeTopic) ? (

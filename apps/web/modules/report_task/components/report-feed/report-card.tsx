@@ -298,7 +298,6 @@ export function ReportCard({
   // shows once the input actually has focus — attach/send stay visible
   // either way so the box still reads as "you can reply here" at rest.
   const [replyFocused, setReplyFocused] = useState(false);
-  const RECENT_REPLY_COUNT = 3;
   const [repliesExpanded, setRepliesExpanded] = useState(false);
   // Teams-style "Reply in thread" — replies + the compose box used to render
   // unconditionally under every single post (a permanently-open text box on
@@ -328,6 +327,29 @@ export function ReportCard({
   const activeReactions = reactionEmojis
     .map((emoji) => ({ emoji, users: post.reactions[emoji] ?? [] }))
     .filter((r) => r.users.length > 0);
+
+  // Teams-style collapsed thread summary ("การตอบกลับ 2 รายการ จาก Waratta-Nok
+  // และ Kenika-bell") — asked for explicitly after a Teams screenshot showed
+  // nothing but this one link until it's tapped, not even the most recent
+  // reply. Names in order of first appearance, capped at 2 with "และอีก N คน"
+  // once a thread has more distinct repliers than that.
+  const replySummary = useMemo(() => {
+    const seen = new Set<string>();
+    const names: string[] = [];
+    for (const r of post.replies) {
+      const name = getUser(r.authorId)?.name;
+      if (name && !seen.has(name)) {
+        seen.add(name);
+        names.push(name);
+      }
+    }
+    const shown = names.slice(0, 2);
+    const extra = names.length - shown.length;
+    const who = extra > 0 ? `${shown.join(", ")} และอีก ${extra} คน` : shown.join(" และ ");
+    return post.replies.length === 1
+      ? `การตอบกลับ 1 รายการ จาก ${who}`
+      : `การตอบกลับ ${post.replies.length} รายการ จาก ${who}`;
+  }, [post.replies]);
 
   // Uses the browser's native bold/italic/underline so the reply box shows
   // real formatting live as you type, same as the post composer's editor —
@@ -396,14 +418,13 @@ export function ReportCard({
   // the post itself or one of its own replies), so this can stay a plain
   // local scroll — no cross-post lookup or page-level routing needed.
   //
-  // The target can be one of the older replies folded away behind "ดูก่อน
-  // หน้าอีก N" (only the last RECENT_REPLY_COUNT render by default) — clicking
-  // a quote that points at one of those used to scroll to nothing, silently,
-  // since the element isn't in the DOM yet. Expand first when that's the
-  // case, then scroll on the next tick once React's had a chance to render it.
+  // Replies are all-or-nothing now (Teams-style: a collapsed summary link,
+  // nothing rendered until it's expanded) — any reply target needs the
+  // thread expanded first, or clicking a quote scrolled to nothing, silently,
+  // since the element isn't in the DOM yet. Scroll happens on the next tick
+  // once React's had a chance to render it.
   function jumpToQuote(id: string) {
-    const recentIds = new Set(post.replies.slice(-RECENT_REPLY_COUNT).map((r) => r.id));
-    const needsExpand = id !== post.id && !recentIds.has(id) && !repliesExpanded;
+    const needsExpand = id !== post.id && !repliesExpanded;
     if (needsExpand) setRepliesExpanded(true);
     const scroll = () => {
       const elId = id === post.id ? `report-post-${post.id}` : `report-reply-${id}`;
@@ -418,16 +439,14 @@ export function ReportCard({
     }
   }
 
-  // A deep link to an older reply that's currently folded away (see C6
-  // below) needs the thread expanded before there's anything to scroll to —
-  // runs first so the effect below finds the reply already in the DOM once
-  // `repliesExpanded` flips true and it re-runs.
+  // A deep link to a reply that's currently folded away behind the
+  // collapsed summary link needs the thread expanded before there's
+  // anything to scroll to — runs first so the effect below finds the reply
+  // already in the DOM once `repliesExpanded` flips true and it re-runs.
   useEffect(() => {
     if (!highlightReplyId || repliesExpanded) return;
     if (!post.replies.some((r) => r.id === highlightReplyId)) return;
     setThreadOpen(true);
-    const recentIds = new Set(post.replies.slice(-RECENT_REPLY_COUNT).map((r) => r.id));
-    if (recentIds.has(highlightReplyId)) return;
     const timer = setTimeout(() => setRepliesExpanded(true), 0);
     return () => clearTimeout(timer);
   }, [highlightReplyId, repliesExpanded, post.replies]);
@@ -438,10 +457,9 @@ export function ReportCard({
   useEffect(() => {
     if (!highlightReplyId) return;
     if (!post.replies.some((r) => r.id === highlightReplyId)) return;
-    const recentIds = new Set(post.replies.slice(-RECENT_REPLY_COUNT).map((r) => r.id));
     // Wait for the expand effect above to actually apply before scrolling —
     // otherwise the target reply isn't in the DOM yet to scroll to.
-    if (!recentIds.has(highlightReplyId) && !repliesExpanded) return;
+    if (!repliesExpanded) return;
     // Deferred a tick — jumpToQuote's setState must not run synchronously
     // inside the effect body itself.
     const timer = setTimeout(() => jumpToQuote(highlightReplyId), 0);
@@ -908,79 +926,57 @@ export function ReportCard({
           after that read as *missing* the invite to reply, not as
           intentionally quiet. */}
       <div className="space-y-3 pt-3 mt-3 border-t border-[var(--line)]">
-          {/* The comments sat at the same indent, on the same white, in the
-              same text size as the post itself, separated by the same faint
-              hairlines — so a post with replies read as one undifferentiated
-              column of names and short lines ("ในส่วนนี้มันยังดูยากมาก...งง
-              มาก"), with no way to see where the post stopped and the
-              conversation about it started.
-
-              Three things fix that here, and they only work together: the
-              whole thread is indented and hangs off a vertical line (the
-              universal "these belong to the thing above" cue — Teams, Slack
-              and every mail client draw some version of it), it sits on a
-              tinted panel so it reads as a different surface from the post,
-              and it's introduced by a count so you know how much is there
-              before reading a single row. Inside it, replies are separated by
-              spacing rather than more hairlines — one boundary style per
-              level, otherwise every line competes with every other line. */}
+          {/* Teams-style: nothing renders until this one summary link is
+              tapped — not even the most recent reply. Used to always keep
+              the last few replies visible, which on a long thread was still
+              too much for a phone screen ("มันใหญ่มากกินไปแทบครึ่งหน้า...
+              แสดงแค่อันเดียวพอ และให้กดเพิ่มเติมเอา"); a real Teams
+              screenshot showed it collapses all the way down to one line
+              naming who replied, full stop. Once expanded, the thread hangs
+              off the same vertical line + indent as before (the "these
+              belong to the post above" cue every thread UI uses), with a
+              collapse link at the bottom so closing a long thread doesn't
+              mean scrolling back up past everything just read. */}
           {post.replies.length > 0 && (
-            // Final polish pass: dropped the tinted rounded panel the thread
-            // used to sit in — with the outer post itself now a flat row too
-            // (no card), a card-within-a-row read as a container with
-            // nothing left to contrast against, just a gray box for its own
-            // sake. The 1px line is what's carrying "these belong to the
-            // post above" now, on its own — same cue Teams/Slack use, just
-            // without the fill behind it.
             <div className="ml-1 border-l border-[var(--line)] pl-3 sm:pl-4">
-              <div className="flex items-center gap-2 pb-1.5">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-soft)]">
-                  {post.replies.length} การตอบกลับ
-                </p>
-                {/* "ดูก่อนหน้าอีก N" stays up here — clicking it reveals older
-                    replies *above* the ones already showing, so the trigger
-                    sitting at the top of the list matches where the new
-                    content actually appears. Its collapse counterpart used to
-                    live in this same spot even once expanded, which meant
-                    collapsing a long thread (16+ replies here) meant
-                    scrolling back up past everything you just read to find
-                    it — moved to the bottom of the list instead (below),
-                    right where you already are after reading through. */}
-                {post.replies.length > RECENT_REPLY_COUNT && !repliesExpanded && (
-                  <button
-                    onClick={() => setRepliesExpanded(true)}
-                    className="text-[11px] font-medium text-[var(--brand-green-dark)] hover:underline"
-                  >
-                    ดูก่อนหน้าอีก {post.replies.length - RECENT_REPLY_COUNT}
-                  </button>
-                )}
-              </div>
-              <div className="space-y-2.5">
-                {(repliesExpanded ? post.replies : post.replies.slice(-RECENT_REPLY_COUNT)).map((r) => (
-                  <ReportReply
-                    key={r.id}
-                    reply={r}
-                    allReplies={post.replies}
-                    postQuote={{ id: post.id, authorId: post.authorId, body: post.title }}
-                    flashed={flashTargetId === r.id}
-                    isOwn={r.authorId === viewingAsUserId}
-                    onOpenLightbox={openReplyLightbox}
-                    onReplyTo={startReplyTo}
-                    onJumpToQuote={jumpToQuote}
-                    onCopyLink={() => copyLink(r.id)}
-                    onToggleReaction={(emoji) => toggleReplyReaction(post.id, r.id, emoji, viewingAsUserId)}
-                    onEdit={(body) => editReplyAction(post.id, r.id, { body, images: r.images })}
-                    onDelete={() => setDeleteReplyTarget(r.id)}
-                  />
-                ))}
-              </div>
-              {post.replies.length > RECENT_REPLY_COUNT && repliesExpanded && (
+              {!repliesExpanded ? (
                 <button
-                  onClick={() => setRepliesExpanded(false)}
-                  className="mt-2 text-[11px] font-medium text-[var(--brand-green-dark)] hover:underline"
+                  onClick={() => setRepliesExpanded(true)}
+                  className="text-left text-xs font-medium text-[var(--brand-green-dark)] hover:underline"
                 >
-                  ย่อลง
+                  {replySummary}
                 </button>
+              ) : (
+                <>
+                  <p className="pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-soft)]">
+                    {post.replies.length} การตอบกลับ
+                  </p>
+                  <div className="space-y-2.5">
+                    {post.replies.map((r) => (
+                      <ReportReply
+                        key={r.id}
+                        reply={r}
+                        allReplies={post.replies}
+                        postQuote={{ id: post.id, authorId: post.authorId, body: post.title }}
+                        flashed={flashTargetId === r.id}
+                        isOwn={r.authorId === viewingAsUserId}
+                        onOpenLightbox={openReplyLightbox}
+                        onReplyTo={startReplyTo}
+                        onJumpToQuote={jumpToQuote}
+                        onCopyLink={() => copyLink(r.id)}
+                        onToggleReaction={(emoji) => toggleReplyReaction(post.id, r.id, emoji, viewingAsUserId)}
+                        onEdit={(body) => editReplyAction(post.id, r.id, { body, images: r.images })}
+                        onDelete={() => setDeleteReplyTarget(r.id)}
+                      />
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setRepliesExpanded(false)}
+                    className="mt-2 text-[11px] font-medium text-[var(--brand-green-dark)] hover:underline"
+                  >
+                    ซ่อนการตอบกลับ
+                  </button>
+                </>
               )}
             </div>
           )}
