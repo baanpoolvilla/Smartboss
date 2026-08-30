@@ -454,7 +454,7 @@ export async function createShiftAction(formData: FormData) {
   } catch (error) {
     throw new Error(toMessage(error));
   }
-  revalidatePath("/hr/shifts");
+  revalidatePath("/hr/settings");
 }
 
 /**
@@ -505,7 +505,7 @@ export async function createWorkPolicyAction(formData: FormData) {
   } catch (error) {
     throw new Error(toMessage(error));
   }
-  revalidatePath("/hr/shifts");
+  revalidatePath("/hr/settings");
 }
 
 /**
@@ -569,7 +569,9 @@ export async function setRecurringPatternAction(
     return { error: toMessage(error) };
   }
 
-  revalidatePath("/hr/shifts");
+  // ฟอร์มนี้อยู่ในหน้าของพนักงานคนนั้น ไม่ใช่หน้าตั้งค่ารวม
+  revalidatePath(`/hr/employees/${employmentId}`);
+  revalidatePath("/hr/attendance");
   return { ok: true };
 }
 
@@ -936,6 +938,7 @@ export async function createLeaveTypeAction(formData: FormData) {
     throw new Error(toMessage(error));
   }
   revalidatePath("/hr/leave");
+  revalidatePath("/hr/settings");
 }
 
 /**
@@ -993,6 +996,7 @@ export async function seedLeaveTypesAction(formData: FormData) {
     throw new Error(toMessage(error));
   }
   revalidatePath("/hr/leave");
+  revalidatePath("/hr/settings");
 }
 
 /* ═══════════════════ งวด timesheet ═══════════════════ */

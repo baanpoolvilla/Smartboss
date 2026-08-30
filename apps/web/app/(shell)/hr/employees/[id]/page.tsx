@@ -37,7 +37,7 @@ import {
   deleteEnrollmentsAction,
   terminateEmploymentAction,
 } from "../../actions";
-import { AssignShiftForm } from "../../shifts/assign-shift-form";
+import { AssignShiftForm } from "../../settings/assign-shift-form";
 import { EnrollFingerprintForm } from "../../devices/enroll-fingerprint-form";
 import { buildScorecards } from "@/lib/performance";
 

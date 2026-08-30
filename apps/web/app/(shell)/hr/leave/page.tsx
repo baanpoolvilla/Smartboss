@@ -5,7 +5,6 @@ import { HR_PERMS } from "@/modules/hr/permissions";
 import {
   wfFetch,
   wfTry,
-  type Company,
   type Employment,
   type LeaveCalendarEntry,
   type LeaveRequest,
@@ -16,18 +15,12 @@ import {
 import {
   DataTable,
   EmptyState,
-  Field,
   NotProvisioned,
   Pill,
   SectionCard,
   Td,
-  inputClass,
 } from "@/modules/hr/components/ui";
-import {
-  createLeaveTypeAction,
-  decideLeaveAction,
-  seedLeaveTypesAction,
-} from "../actions";
+import { decideLeaveAction } from "../actions";
 import {
   LeaveCalendar,
   type DayEntry,
@@ -71,9 +64,6 @@ export default async function LeavePage({
       title="ปฏิทินวันหยุด"
       permission={HR_PERMS.access}
       load={async () => {
-        const companies = await wfTry<Paged<Company>>("/companies");
-        const companyId = companies?.items[0]?.id;
-
         const daysInMonth = new Date(
           Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0),
         ).getUTCDate();
@@ -209,28 +199,23 @@ export default async function LeavePage({
               </SectionCard>
             )}
 
-            {canManageTypes && companyId !== undefined && (
+            {/*
+              ฟอร์มแก้ประเภทการลาย้ายไป /hr/settings แล้ว — ที่นี่เหลือแค่สรุปว่า
+              ตอนนี้มีประเภทอะไรและอันไหนหยุดได้ทันที เพราะเป็นคำถามที่คนอนุมัติ
+              ต้องตอบทุกวัน ส่วนการตั้งค่าทำครั้งเดียวแล้วไม่กลับมาอีก
+            */}
+            {canManageTypes && (
               <SectionCard
                 title="ประเภทการลา"
-                description="ต้องมีอย่างน้อยหนึ่งประเภท พนักงานถึงจะขอลาได้ — ควบคุมด้วยการอนุมัติ ไม่ได้ตัดโควตา"
-                action={
-                  <form action={seedLeaveTypesAction}>
-                    <input type="hidden" name="company_id" value={companyId} />
-                    <Button type="submit" size="sm" variant="outline">
-                      สร้างชุดมาตรฐาน
-                    </Button>
-                  </form>
-                }
+                description="ตัวที่กำหนดว่าพนักงานหยุดเองได้ทันที หรือต้องรออนุมัติ"
               >
-                {(types?.items ?? []).length === 0 && (
-                  <p className="mb-3 text-sm text-(--ink-soft)">
-                    ยังไม่มีประเภทการลา — กด “สร้างชุดมาตรฐาน” จะได้ ลาป่วย · ลากิจ ·
-                    ลาพักร้อน · ลาไม่รับค่าจ้าง ครบในคลิกเดียว
-                  </p>
-                )}
-                {(types?.items ?? []).length > 0 && (
-                  <div className="mb-3 flex flex-wrap gap-1.5">
-                    {(types?.items ?? []).map((t) => (
+                <div className="mb-3 flex flex-wrap gap-1.5">
+                  {(types?.items ?? []).length === 0 ? (
+                    <p className="text-sm text-(--ink-soft)">
+                      ยังไม่มีประเภทการลา — พนักงานจึงยังขอลาเองไม่ได้
+                    </p>
+                  ) : (
+                    (types?.items ?? []).map((t) => (
                       <Pill
                         key={t.id}
                         tone={t.auto_approve ? "var(--app-strong)" : "var(--tone-ok)"}
@@ -240,47 +225,15 @@ export default async function LeavePage({
                           ? ` · สิทธิ์${t.monthly_quota_days > 0 ? ` ${t.monthly_quota_days} วัน/เดือน` : ""}`
                           : " · ต้องอนุมัติ"}
                       </Pill>
-                    ))}
-                  </div>
-                )}
-                <form
-                  action={createLeaveTypeAction}
-                  className="grid grid-cols-1 gap-3 sm:grid-cols-3"
+                    ))
+                  )}
+                </div>
+                <Link
+                  href="/hr/settings"
+                  className="text-sm text-(--app-strong) hover:underline"
                 >
-                  <input type="hidden" name="company_id" value={companyId} />
-                  <Field label="ชื่อ *">
-                    <input
-                      name="name"
-                      required
-                      maxLength={120}
-                      placeholder="ลาพักร้อน"
-                      className={inputClass}
-                    />
-                  </Field>
-                  <Field label="โควตา (วัน/เดือน)" hint="0 = ไม่จำกัด">
-                    <input
-                      type="number"
-                      name="monthly_quota_days"
-                      min={0}
-                      max={31}
-                      defaultValue={0}
-                      className={inputClass}
-                    />
-                  </Field>
-                  <div className="flex items-end pb-3 text-sm sm:col-span-2">
-                    <label className="flex items-center gap-2">
-                      <input type="checkbox" name="auto_approve" value="1" className="h-4 w-4" />
-                      เป็นสิทธิ์ ไม่ต้องอนุมัติ (เลือกวันแล้วมีผลทันที)
-                    </label>
-                  </div>
-                  <div className="flex items-end gap-2">
-                    <select name="paid" defaultValue="1" className={inputClass}>
-                      <option value="1">ได้ค่าจ้าง</option>
-                      <option value="0">ไม่ได้ค่าจ้าง</option>
-                    </select>
-                    <Button type="submit">เพิ่ม</Button>
-                  </div>
-                </form>
+                  เพิ่ม/แก้ที่หน้า “ตั้งค่า HR” →
+                </Link>
               </SectionCard>
             )}
           </div>
