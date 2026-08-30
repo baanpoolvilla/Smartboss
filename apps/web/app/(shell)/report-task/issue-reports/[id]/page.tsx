@@ -23,6 +23,7 @@ import { AttachmentPicker } from "@/modules/report_task/components/issue-report/
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useIssueReportStore } from "@/modules/report_task/store/issue-report-store";
 import { useIssueDeskConfigStore } from "@/modules/report_task/store/issue-desk-config-store";
+import { useSettingsAccessStore } from "@/modules/report_task/store/settings-access-store";
 import {
   canConfirmResolution,
   canEscalateIssue,
@@ -30,6 +31,7 @@ import {
   canReporterCloseOwnIssue,
   canSeeIssue,
   canSeeIssueMessage,
+  canViewCompanyIssues,
   isIssueAgent,
 } from "@/modules/report_task/lib/permissions";
 import {
@@ -43,7 +45,7 @@ import {
   reporterStatusGroupMeta,
 } from "@/modules/report_task/lib/issue-meta";
 import { POST_TRIAGE_STATUSES, type IssueAttachment, type IssueAudience, type IssueMessage, type IssuePriority, type IssueStatus, type IssueTicket } from "@/modules/report_task/types/issue";
-import { getUser, users, isOwner } from "@/modules/report_task/lib/directory";
+import { getUser, users } from "@/modules/report_task/lib/directory";
 import { relativeTime, formatDate } from "@/modules/report_task/lib/format";
 import { cn } from "@/modules/report_task/lib/utils";
 
@@ -53,17 +55,25 @@ export default function IssueTicketDetailPage() {
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const tickets = useIssueReportStore((s) => s.tickets);
   const config = useIssueDeskConfigStore((s) => s.config);
+  const grants = useSettingsAccessStore((s) => s.grants);
   const markRead = useIssueReportStore((s) => s.markRead);
 
   const ticket = tickets.find((t) => t.id === params.id);
 
-  const canSee = ticket ? canSeeIssue(ticket, config, viewingAsUserId) : false;
-  const isDeskView = isOwner(viewingAsUserId) || isIssueAgent(config, viewingAsUserId);
+  // Read-only company-wide oversight (CEO/owner or whoever they delegated
+  // it to, typically IT) — sees the ticket + its "all"-audience thread, same
+  // as canSeeIssue/canSeeIssueMessage below already fold in.
+  const canOversee = canViewCompanyIssues(viewingAsUserId, grants);
+  const canSee = ticket ? canSeeIssue(ticket, config, viewingAsUserId, canOversee) : false;
+  // Retired for every company, owner included — claim/assign/priority/staff
+  // notes now live only in SmartBoss's own admin console. See the matching
+  // comment on isIssueAgent in lib/permissions.ts.
+  const isDeskView = false;
   const [tab, setTab] = useState<IssueAudience>("all");
 
   const visibleMessages = useMemo(
-    () => (ticket ? ticket.messages.filter((m) => m.audience === tab && canSeeIssueMessage(m, ticket, config, viewingAsUserId)) : []),
-    [ticket, tab, config, viewingAsUserId]
+    () => (ticket ? ticket.messages.filter((m) => m.audience === tab && canSeeIssueMessage(m, ticket, config, viewingAsUserId, canOversee)) : []),
+    [ticket, tab, config, viewingAsUserId, canOversee]
   );
 
   useEffect(() => {
@@ -111,7 +121,19 @@ export default function IssueTicketDetailPage() {
           {ticket.status === "pending_verify" && canConfirmResolution(ticket, config, viewingAsUserId) && (
             <ResolutionConfirmBar ticket={ticket} viewingAsUserId={viewingAsUserId} />
           )}
-          <TicketComposer ticket={ticket} tab={tab} viewingAsUserId={viewingAsUserId} isDeskView={isDeskView} />
+          {/* Read-only for a company overseer (CEO/IT) — they can see the
+              thread and status, never post as if they were the reporter or
+              staff. Posting a reply is reporter-only now that there's no
+              more in-company agent to reply as staff either. */}
+          {ticket.reporterId === viewingAsUserId ? (
+            <TicketComposer ticket={ticket} tab={tab} viewingAsUserId={viewingAsUserId} isDeskView={isDeskView} />
+          ) : (
+            canOversee && (
+              <p className="border-t border-[var(--line)] px-4 py-3 text-xs text-[var(--ink-soft)]">
+                คุณกำลังดูอย่างเดียว (สิทธิ์ดูภาพรวม) — ทีม Smartboss เป็นผู้ตอบและปิดเรื่องนี้
+              </p>
+            )
+          )}
         </div>
 
         <TicketSidePanel ticket={ticket} viewingAsUserId={viewingAsUserId} config={config} isDeskView={isDeskView} allTickets={tickets} />

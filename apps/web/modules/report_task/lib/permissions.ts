@@ -212,65 +212,80 @@ export function canManageReportTopics(viewingAsUserId: string, grants: Record<st
 // ---------------------------------------------------------------------------
 
 /**
- * "Agent" = someone on the receiving team's desk — in one of the recipient
- * departments (e.g. Engineering standing in for IT until a real IT
- * department exists), or explicitly added as an extra agent despite being in
- * a different department. Deliberately excludes the owner — the owner is
- * checked separately everywhere (see each function below) so the permission
- * matrix's "Agent" and "Owner" columns stay distinguishable in code, matching
- * the spec's own two-column split.
+ * Retired — issue management moved off every company entirely and onto
+ * SmartBoss's own platform Super Admin console (`/admin/issue-reports`), so
+ * there's no more in-company "IT desk" step between an employee and the
+ * people who actually fix things ("ไม่เอาแบบเดิมที่พนักงานแจ้ง IT แล้ว IT
+ * แจ้งเรา...แจ้งตรงหาเราเราแก้ให้เลย"). Always false now — every caller
+ * below (`canSeeIssue`, `canManageIssue`, etc.) collapses correctly on its
+ * own once this never fires; kept as a function (not deleted) so none of
+ * those call sites or their `cfg` parameter need touching. `cfg`'s
+ * `recipientDepartmentIds`/`extraAgentUserIds` fields are vestigial as of
+ * this change — still read/written by the desk-config store, just no
+ * longer consulted for who can manage a ticket.
  */
 export function isIssueAgent(
-  cfg: { recipientDepartmentIds: string[]; extraAgentUserIds: string[] },
-  userId: string
+  _cfg: { recipientDepartmentIds: string[]; extraAgentUserIds: string[] },
+  _userId: string
 ): boolean {
-  if (cfg.extraAgentUserIds.includes(userId)) return true;
-  const dept = getUser(userId)?.departmentId;
-  return !!dept && cfg.recipientDepartmentIds.includes(dept);
+  return false;
 }
 
 /**
- * Whether `userId` can open a ticket at all: the owner, its own reporter, any
- * Agent (sees the whole shared inbox), or — for a `public_in_org` ticket
- * (a company-wide outage, say) — anyone, so the same incident doesn't get
- * reported 20 separate times. `public_in_org` visibility is read-only for a
- * non-agent viewer; see `canManageIssue` for who can actually act on it.
+ * Whether `userId` can open a ticket at all: its own reporter, anyone with
+ * read-only company-wide oversight (see `canViewCompanyIssues` — the
+ * CEO/owner, or whoever they've delegated the "issueDesk" section to,
+ * typically the IT position), or — for a `public_in_org` ticket (a
+ * company-wide outage, say) — anyone, so the same incident doesn't get
+ * reported 20 separate times.
+ *
+ * This is deliberately NOT the retired in-company Agent desk (see
+ * `isIssueAgent`) — oversight is read-only (see `canSeeIssueMessage` below,
+ * which still hides staff notes from it); nobody inside the reporter's own
+ * company can claim/reply-as-staff/change status on someone else's ticket
+ * through this. Only SmartBoss's platform Super Admin console can act on a
+ * ticket cross-org now (via its own separate data path, not this function).
  */
 export function canSeeIssue(
   ticket: { reporterId: string; visibility: "private" | "public_in_org" },
-  cfg: { recipientDepartmentIds: string[]; extraAgentUserIds: string[] },
-  userId: string
+  _cfg: { recipientDepartmentIds: string[]; extraAgentUserIds: string[] },
+  userId: string,
+  canOverseeCompanyIssues = false
 ): boolean {
-  if (isOwner(userId)) return true;
   if (ticket.reporterId === userId) return true;
-  if (isIssueAgent(cfg, userId)) return true;
+  if (canOverseeCompanyIssues) return true;
   return ticket.visibility === "public_in_org";
 }
 
 /**
  * A message's `audience` gates it independently of ticket-level visibility —
  * seeing the ticket doesn't mean seeing every message on it. `"all"` is open
- * to anyone who can see the ticket (including the reporter); `"staff"` and
- * `"vendor"` both stay owner/Agent-only in this phase since there's no
- * separate vendor account yet (see IssueAudience's doc comment).
+ * to anyone who can see the ticket (including the reporter and a company
+ * overseer — see `canSeeIssue`); `"staff"` and `"vendor"` are
+ * SmartBoss-internal notes now (written from the admin console), so nobody
+ * inside the reporter's own company — owner and IT-position overseer
+ * included — sees them here.
  */
 export function canSeeIssueMessage(
   msg: { audience: "all" | "staff" | "vendor" },
   ticket: { reporterId: string; visibility: "private" | "public_in_org" },
   cfg: { recipientDepartmentIds: string[]; extraAgentUserIds: string[] },
-  userId: string
+  userId: string,
+  canOverseeCompanyIssues = false
 ): boolean {
-  if (!canSeeIssue(ticket, cfg, userId)) return false;
-  if (msg.audience === "all") return true;
-  return isOwner(userId) || isIssueAgent(cfg, userId);
+  if (!canSeeIssue(ticket, cfg, userId, canOverseeCompanyIssues)) return false;
+  return msg.audience === "all";
 }
 
-/** Status / priority / assignee / tags / visibility — Agent-and-up territory. */
+/** Status / priority / assignee / tags / visibility — retired for every
+ * company (see `isIssueAgent`); always false. That workflow now lives only
+ * in SmartBoss's own admin console, gated there by `isSuperAdmin()`, not by
+ * this function. */
 export function canManageIssue(
-  cfg: { recipientDepartmentIds: string[]; extraAgentUserIds: string[] },
-  userId: string
+  _cfg: { recipientDepartmentIds: string[]; extraAgentUserIds: string[] },
+  _userId: string
 ): boolean {
-  return isOwner(userId) || isIssueAgent(cfg, userId);
+  return false;
 }
 
 /**
@@ -292,17 +307,17 @@ export function canEscalateIssue(
 
 /**
  * The `pending_verify` → `resolved`/reopen call belongs to the reporter — they're
- * the one who knows whether it's actually fixed. An Agent/owner can also
- * confirm on the reporter's behalf (someone who moved on, stopped responding),
- * but the UI must require a reason when they do, per the spec's "แทนได้ พร้อม
- * เหตุผล" — this function only says *who*, not that a reason was given.
+ * the one who knows whether it's actually fixed. "Confirm on the reporter's
+ * behalf" is now a SmartBoss-admin-console-only capability (see
+ * `isIssueAgent`), not something anyone inside the reporter's own company —
+ * owner included — can do here.
  */
 export function canConfirmResolution(
   ticket: { reporterId: string },
-  cfg: { recipientDepartmentIds: string[]; extraAgentUserIds: string[] },
+  _cfg: { recipientDepartmentIds: string[]; extraAgentUserIds: string[] },
   userId: string
 ): boolean {
-  return ticket.reporterId === userId || isOwner(userId) || isIssueAgent(cfg, userId);
+  return ticket.reporterId === userId;
 }
 
 /** Only the reporter can close their own ticket outright (mark it resolved
@@ -313,6 +328,25 @@ export function canReporterCloseOwnIssue(ticket: { reporterId: string }, userId:
 
 export function canManageIssueDeskSettings(userId: string, grants: Record<string, GrantableSection[]>): boolean {
   return isOwner(userId) || canAccessCompanySection("issueDesk", userId, grants);
+}
+
+/**
+ * Read-only company-wide oversight — the CEO/owner, or whoever they've
+ * delegated the "issueDesk" section to (in practice, usually whoever holds
+ * the IT position), can see every ticket anyone in the company has filed
+ * and its current status — a running record of what's been reported and
+ * whether it's been fixed ("เก็บไว้ให้ตำแหน่ง IT กับ CEO ดูได้ว่าแจ้งอะไร
+ * ไปบ้างและได้รับการแก้ไขรึยังไง"). Reuses the same delegation
+ * `canManageIssueDeskSettings` already grants for the intake-form settings
+ * panel, rather than inventing a second grant — same trusted circle either
+ * way. This is deliberately narrower than the retired in-company Agent
+ * desk (`isIssueAgent`): it only ever grants *seeing* the ticket + its
+ * "all"-audience thread (see `canSeeIssue`/`canSeeIssueMessage`), never
+ * claiming, replying as staff, or changing status/priority — that stays
+ * SmartBoss-admin-console-only.
+ */
+export function canViewCompanyIssues(userId: string, grants: Record<string, GrantableSection[]>): boolean {
+  return canManageIssueDeskSettings(userId, grants);
 }
 
 /**

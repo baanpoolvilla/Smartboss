@@ -23,7 +23,6 @@ const MENU_PERMISSION: Record<string, string> = {
   [`${REPORT_TASK_BASE}/tasks`]: REPORT_TASK_PERMS.taskView,
   [`${REPORT_TASK_BASE}/calendar`]: REPORT_TASK_PERMS.calendarView,
   [`${REPORT_TASK_BASE}/report-feed`]: REPORT_TASK_PERMS.reportView,
-  [`${REPORT_TASK_BASE}/issue-reports`]: REPORT_TASK_PERMS.issueView,
   [`${REPORT_TASK_BASE}/activity-log`]: REPORT_TASK_PERMS.activityView,
   [`${REPORT_TASK_BASE}/settings`]: REPORT_TASK_PERMS.settingManage,
 };

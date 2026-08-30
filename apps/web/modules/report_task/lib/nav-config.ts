@@ -1,5 +1,4 @@
 import {
-  Bug,
   CalendarDays,
   KanbanSquare,
   LayoutDashboard,
@@ -40,7 +39,12 @@ export const navItems: NavItem[] = [
   { href: `${REPORT_TASK_BASE}/tasks`, label: "งาน / Kanban", icon: KanbanSquare, iconName: "KanbanSquare" },
   { href: `${REPORT_TASK_BASE}/calendar`, label: "ปฏิทิน", icon: CalendarDays, iconName: "CalendarDays" },
   { href: `${REPORT_TASK_BASE}/report-feed`, label: "รายงาน", icon: MessageSquareText, iconName: "MessageSquareText" },
-  { href: `${REPORT_TASK_BASE}/issue-reports`, label: "แจ้งปัญหาระบบ", icon: Bug, iconName: "Bug" },
+  // "แจ้งปัญหาระบบ" dropped from the main menu entirely — filing an issue is
+  // only ever the 🐛 button anywhere in the app now (IssueReportBarButton),
+  // not a page employees navigate to ("แจ้งปัญหาให้แยกเป็นข้างนอกเมนูหลัก
+  // เลย"). The route itself still exists (reached from the button's "ดูเรื่อง
+  // ที่แจ้งไว้" link) — it just isn't listed here, so manifest.ts never turns
+  // it into a sidebar/bottom-nav entry.
   {
     href: `${REPORT_TASK_BASE}/activity-log`,
     label: "บันทึกกิจกรรม",

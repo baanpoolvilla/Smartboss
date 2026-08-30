@@ -16,6 +16,7 @@ import {
 } from "@smartboss/ui/components/dropdown-menu";
 import { Logo } from "@/components/logo";
 import { Icon } from "@/components/icon";
+import { IssueReportBarButton } from "@/modules/report_task/components/issue-report/issue-report-bar-button";
 import type { ModuleManifest, ModuleMenuItem } from "@/module-registry";
 import { LogoutButton } from "./logout-button";
 import { SessionRefresher } from "./session-refresher";
@@ -96,6 +97,14 @@ function LauncherFrame({
         </Link>
 
         <div className="flex items-center gap-2">
+          {/* This launcher header (home page, plus /notifications and
+              /account — anything not matching a module's own basePath, see
+              findActiveModule) is the one place in the app that doesn't go
+              through AppScaffold/AppBarActions, so it never got the 🐛
+              report button every module page has — asked to audit and fix
+              this explicitly ("ทุกหน้าต้องมีให้กดตัวแมลงเพื่อแจ้งนะ ทั้ง
+              ระบบ"). */}
+          <IssueReportBarButton />
           <Link
             href="/notifications"
             className="relative rounded-md p-2 text-(--ink-soft) hover:bg-(--bg-soft) hover:text-(--ink)"

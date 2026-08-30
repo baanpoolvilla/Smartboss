@@ -20,7 +20,7 @@ import { useIssueReportStore } from "@/modules/report_task/store/issue-report-st
 import { useIssueDeskConfigStore } from "@/modules/report_task/store/issue-desk-config-store";
 import { useSettingsAccessStore } from "@/modules/report_task/store/settings-access-store";
 import { IssueReportDialog } from "@/modules/report_task/components/issue-report/issue-report-dialog";
-import { canSeeIssue, canSeeIssueMessage, canSeeIssueSummaryAsHead, isIssueAgent, canManageIssueDeskSettings } from "@/modules/report_task/lib/permissions";
+import { canSeeIssue, canSeeIssueMessage, canSeeIssueSummaryAsHead, canManageIssueDeskSettings, canViewCompanyIssues } from "@/modules/report_task/lib/permissions";
 import {
   isKnownIssuesBannerActive,
   issueCategoryMeta,
@@ -31,13 +31,18 @@ import {
   type ReporterStatusGroup,
 } from "@/modules/report_task/lib/issue-meta";
 import { CLOSED_STATUSES, type IssueTicket } from "@/modules/report_task/types/issue";
-import { getUser, isDepartmentHead, isOwner } from "@/modules/report_task/lib/directory";
+import { getUser, isDepartmentHead } from "@/modules/report_task/lib/directory";
 import { relativeTime } from "@/modules/report_task/lib/format";
 import { cn } from "@/modules/report_task/lib/utils";
 
-function hasUnread(ticket: IssueTicket, viewerId: string, config: { recipientDepartmentIds: string[]; extraAgentUserIds: string[] }) {
+function hasUnread(
+  ticket: IssueTicket,
+  viewerId: string,
+  config: { recipientDepartmentIds: string[]; extraAgentUserIds: string[] },
+  canOversee: boolean
+) {
   return ticket.messages.some(
-    (m) => m.authorId !== viewerId && !m.readBy.includes(viewerId) && canSeeIssueMessage(m, ticket, config, viewerId)
+    (m) => m.authorId !== viewerId && !m.readBy.includes(viewerId) && canSeeIssueMessage(m, ticket, config, viewerId, canOversee)
   );
 }
 
@@ -68,14 +73,24 @@ export default function IssueReportsPage() {
   const config = useIssueDeskConfigStore((s) => s.config);
   const grants = useSettingsAccessStore((s) => s.grants);
 
-  const owner = isOwner(viewingAsUserId);
-  const isAgent = isIssueAgent(config, viewingAsUserId);
-  const isDeskView = owner || isAgent; // sees the whole shared inbox, table layout
+  // The shared "desk" view (table layout, stat tiles, claim/assign) is
+  // retired for every company, owner included — issue management moved
+  // entirely to SmartBoss's own platform Super Admin console
+  // (/admin/issue-reports). Every viewer of this page now only ever sees
+  // their own filed reports, same as isIssueAgent/canManageIssue already
+  // collapse to in lib/permissions.ts.
+  const isDeskView = false;
   const canConfigure = canManageIssueDeskSettings(viewingAsUserId, grants);
+  // Read-only company-wide oversight for the CEO/owner or whoever they've
+  // delegated it to (typically IT) — sees every ticket + its status, never
+  // gets claim/reply-as-staff/status controls (those stay SmartBoss-only).
+  // Asked for explicitly ("เก็บไว้ให้ตำแหน่ง IT กับ CEO ดูได้ว่าแจ้งอะไรไป
+  // บ้างและได้รับการแก้ไขรึยังไง").
+  const canOversee = canViewCompanyIssues(viewingAsUserId, grants);
 
   const visibleTickets = useMemo(
-    () => tickets.filter((t) => canSeeIssue(t, config, viewingAsUserId)),
-    [tickets, config, viewingAsUserId]
+    () => tickets.filter((t) => canSeeIssue(t, config, viewingAsUserId, canOversee)),
+    [tickets, config, viewingAsUserId, canOversee]
   );
 
   // Metadata-only roll-up for a department head who ISN'T also an Agent
@@ -132,6 +147,15 @@ export default function IssueReportsPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Read-only company-wide oversight note — makes it obvious this list
+          isn't just "your own reports" for whoever has it (CEO/owner, or
+          whoever they delegated the issueDesk section to). */}
+      {canOversee && (
+        <p className="text-xs text-[var(--ink-soft)] flex items-center gap-1.5">
+          <Megaphone className="h-3.5 w-3.5 shrink-0" />
+          คุณเห็นทุกเรื่องที่บริษัทนี้แจ้งไว้ (สิทธิ์ดูภาพรวม) — ตอบ/ปิดเรื่องยังต้องทำโดยทีม Smartboss
+        </p>
+      )}
       <StickyFilterBar
         actions={
           <div className="flex items-center gap-2">
@@ -196,7 +220,7 @@ export default function IssueReportsPage() {
       {teamTickets.length > 0 && <TeamTicketsPanel tickets={teamTickets} />}
 
       {sorted.length === 0 ? (
-        <EmptyState isDeskView={isDeskView} hasAnyTickets={visibleTickets.length > 0} onCreate={() => setNewOpen(true)} />
+        <EmptyState isDeskView={isDeskView} canOversee={canOversee} hasAnyTickets={visibleTickets.length > 0} onCreate={() => setNewOpen(true)} />
       ) : isDeskView ? (
         <>
           <div className="hidden md:block rounded-2xl border border-[var(--line)] bg-white overflow-hidden">
@@ -214,21 +238,21 @@ export default function IssueReportsPage() {
               </TableHeader>
               <TableBody>
                 {sorted.map((t) => (
-                  <TicketRow key={t.id} ticket={t} viewingAsUserId={viewingAsUserId} config={config} onClick={() => router.push(`/report-task/issue-reports/${t.id}`)} />
+                  <TicketRow key={t.id} ticket={t} viewingAsUserId={viewingAsUserId} config={config} canOversee={canOversee} onClick={() => router.push(`/report-task/issue-reports/${t.id}`)} />
                 ))}
               </TableBody>
             </Table>
           </div>
           <div className="md:hidden flex flex-col gap-2">
             {sorted.map((t) => (
-              <TicketCard key={t.id} ticket={t} viewingAsUserId={viewingAsUserId} config={config} onClick={() => router.push(`/report-task/issue-reports/${t.id}`)} />
+              <TicketCard key={t.id} ticket={t} viewingAsUserId={viewingAsUserId} config={config} canOversee={canOversee} onClick={() => router.push(`/report-task/issue-reports/${t.id}`)} />
             ))}
           </div>
         </>
       ) : (
         <div className="flex flex-col gap-2">
           {sorted.map((t) => (
-            <TicketCard key={t.id} ticket={t} viewingAsUserId={viewingAsUserId} config={config} onClick={() => router.push(`/report-task/issue-reports/${t.id}`)} />
+            <TicketCard key={t.id} ticket={t} viewingAsUserId={viewingAsUserId} config={config} canOversee={canOversee} onClick={() => router.push(`/report-task/issue-reports/${t.id}`)} />
           ))}
         </div>
       )}
@@ -309,16 +333,18 @@ function TicketRow({
   ticket,
   viewingAsUserId,
   config,
+  canOversee,
   onClick,
 }: {
   ticket: IssueTicket;
   viewingAsUserId: string;
   config: { recipientDepartmentIds: string[]; extraAgentUserIds: string[] };
+  canOversee: boolean;
   onClick: () => void;
 }) {
   const reporter = getUser(ticket.reporterId);
   const assignee = ticket.assigneeId ? getUser(ticket.assigneeId) : null;
-  const unread = hasUnread(ticket, viewingAsUserId, config);
+  const unread = hasUnread(ticket, viewingAsUserId, config, canOversee);
   return (
     <TableRow onClick={onClick} className="cursor-pointer">
       <TableCell className="font-mono text-xs text-[var(--ink-soft)]">
@@ -367,17 +393,19 @@ function TicketCard({
   ticket,
   viewingAsUserId,
   config,
+  canOversee,
   onClick,
 }: {
   ticket: IssueTicket;
   viewingAsUserId: string;
   config: { recipientDepartmentIds: string[]; extraAgentUserIds: string[] };
+  canOversee: boolean;
   onClick: () => void;
 }) {
   const reporter = getUser(ticket.reporterId);
   const group = reporterStatusGroup(ticket.status);
   const groupMeta = reporterStatusGroupMeta[group];
-  const unread = hasUnread(ticket, viewingAsUserId, config);
+  const unread = hasUnread(ticket, viewingAsUserId, config, canOversee);
   return (
     <button
       onClick={onClick}
@@ -410,7 +438,17 @@ function TicketCard({
   );
 }
 
-function EmptyState({ isDeskView, hasAnyTickets, onCreate }: { isDeskView: boolean; hasAnyTickets: boolean; onCreate: () => void }) {
+function EmptyState({
+  isDeskView,
+  canOversee,
+  hasAnyTickets,
+  onCreate,
+}: {
+  isDeskView: boolean;
+  canOversee: boolean;
+  hasAnyTickets: boolean;
+  onCreate: () => void;
+}) {
   if (hasAnyTickets) {
     return (
       <div className="rounded-2xl border border-dashed border-[var(--line)] bg-white p-10 text-center">
@@ -420,8 +458,10 @@ function EmptyState({ isDeskView, hasAnyTickets, onCreate }: { isDeskView: boole
   }
   return (
     <div className="rounded-2xl border border-dashed border-[var(--line)] bg-white p-10 text-center">
-      <p className="text-sm font-medium mb-1">{isDeskView ? "ยังไม่มีตั๋วเข้ามา" : "คุณยังไม่เคยแจ้งปัญหาอะไรเลย"}</p>
-      {!isDeskView && (
+      <p className="text-sm font-medium mb-1">
+        {isDeskView ? "ยังไม่มีตั๋วเข้ามา" : canOversee ? "ยังไม่มีใครในบริษัทนี้แจ้งปัญหาเลย" : "คุณยังไม่เคยแจ้งปัญหาอะไรเลย"}
+      </p>
+      {!isDeskView && !canOversee && (
         <div className="text-xs text-[var(--ink-soft)] max-w-sm mx-auto mt-2 space-y-1 text-left">
           <p className="font-medium text-[var(--ink)]">แจ้งปัญหาให้ทีมช่วยได้เร็วขึ้น:</p>
           <p>• บอกว่าทำอะไรอยู่ตอนเจอปัญหา และคาดว่าควรเป็นยังไง</p>

@@ -10,6 +10,11 @@ export interface CrossOrgIssueTicket extends IssueTicket {
   orgName: string;
   reporterName: string;
   reporterEmail: string | null;
+  /** Role name, e.g. "ผู้จัดการฝ่ายขาย" — the "ตำแหน่ง" column asked for
+   * explicitly ("บอกว่าใครแจ้งจากไหน บริษัทตำแหน่ง แค่นั้นพอ"), same
+   * role-name-of-first-role pattern report-task's own layout.tsx uses for
+   * the logged-in user. */
+  reporterRole: string | null;
 }
 
 /**
@@ -41,7 +46,10 @@ export async function listAllIssueTickets(): Promise<CrossOrgIssueTicket[]> {
   const reporterIds = Array.from(new Set(tickets.map((t) => t.reporterId)));
   const users =
     reporterIds.length > 0
-      ? await prisma.user.findMany({ where: { id: { in: reporterIds } }, select: { id: true, name: true, email: true } })
+      ? await prisma.user.findMany({
+          where: { id: { in: reporterIds } },
+          select: { id: true, name: true, email: true, roles: { select: { role: { select: { name: true } } } } },
+        })
       : [];
   const userById = new Map(users.map((u) => [u.id, u]));
 
@@ -50,6 +58,7 @@ export async function listAllIssueTickets(): Promise<CrossOrgIssueTicket[]> {
       ...t,
       reporterName: userById.get(t.reporterId)?.name ?? "ไม่ทราบชื่อ",
       reporterEmail: userById.get(t.reporterId)?.email ?? null,
+      reporterRole: userById.get(t.reporterId)?.roles[0]?.role.name ?? null,
     }))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }

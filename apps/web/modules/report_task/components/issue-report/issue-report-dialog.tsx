@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ChevronRight, Megaphone } from "lucide-react";
@@ -156,7 +157,7 @@ export function IssueReportDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>แจ้งปัญหาการใช้งาน</DialogTitle>
-          <DialogDescription>ส่งตรงถึงทีมดูแลระบบภายใน — ถ้าต้องส่งต่อผู้พัฒนาระบบ ทีมจะประสานงานให้เอง</DialogDescription>
+          <DialogDescription>ส่งตรงถึงทีม Smartboss — ไม่ต้องผ่าน IT ของบริษัทคุณ ทีมงานจะดูแลและติดต่อกลับโดยตรง</DialogDescription>
         </DialogHeader>
 
         {isKnownIssuesBannerActive(config.knownIssuesBanner) && (
@@ -270,15 +271,28 @@ export function IssueReportDialog({
           )}
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => requestClose(false)}>ยกเลิก</Button>
-          <Button
-            disabled={submitting}
-            className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
-            onClick={handleSubmit}
+        <DialogFooter className="sm:justify-between">
+          {/* Now that "แจ้งปัญหาระบบ" is off the main menu entirely (filing
+              only ever happens through this dialog), this is the one way
+              back to what you've already reported — asked for explicitly
+              ("มีลิงก์ดูเรื่องที่แจ้งไว้ในกล่องแจ้งปัญหา"). */}
+          <Link
+            href="/report-task/issue-reports"
+            onClick={() => requestClose(false)}
+            className="text-xs font-medium text-[var(--brand-green-dark)] hover:underline self-center"
           >
-            {issueSubmitLabel(category)} → ทีมดูแลระบบ
-          </Button>
+            ดูเรื่องที่แจ้งไว้
+          </Link>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => requestClose(false)}>ยกเลิก</Button>
+            <Button
+              disabled={submitting}
+              className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+              onClick={handleSubmit}
+            >
+              {issueSubmitLabel(category)} → ทีม Smartboss
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
 
