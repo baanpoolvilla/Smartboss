@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card } from "@smartboss/ui/components/card";
 import { Button } from "@smartboss/ui/components/button";
-import { Folder as FolderIcon, FileIcon, Upload, FolderPlus, ChevronRight, Home } from "lucide-react";
+import { Folder as FolderIcon, FileIcon, Upload, FolderPlus, ChevronRight, Home, MessagesSquare } from "lucide-react";
 import { createFolder, createFile, type FolderPathEntry } from "@/modules/company-files/data/files";
 import { uploadCompanyFile } from "@/modules/company-files/lib/upload";
 import { formatFileSize, fileIconKind } from "@/modules/company-files/lib/file-meta";
@@ -24,11 +24,15 @@ export function FileBrowser({
   path,
   folders,
   files,
+  roomFolders = [],
 }: {
   currentFolderId: string | null;
   path: FolderPathEntry[];
   folders: CompanyFolder[];
   files: CompanyFile[];
+  /** โฟลเดอร์ที่ผูกกับห้องของโมดูลรายงาน — เห็นเฉพาะคนที่ยังเป็นสมาชิกห้องนั้นอยู่
+   * (ข้อมูลก็กรองมาจากฝั่งเซิร์ฟเวอร์แล้ว ที่นี่แค่โชว์) มีแค่ตอนอยู่หน้าราก */
+  roomFolders?: CompanyFolder[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -107,6 +111,25 @@ export function FileBrowser({
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
+
+      {roomFolders.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-xs font-medium text-(--ink-soft) flex items-center gap-1.5">
+            <MessagesSquare className="h-3.5 w-3.5" /> ห้องรายงาน
+          </p>
+          {roomFolders.map((f) => (
+            <Link key={f.id} href={`/company-files?folder=${f.id}`}>
+              <Card className="p-3 flex items-center gap-3 hover:bg-(--bg-soft) transition-colors">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-(--radius) bg-(--accent-soft,#e0f2fe)">
+                  <MessagesSquare className="h-4.5 w-4.5 text-(--accent-dark,#0177ac)" />
+                </span>
+                <span className="text-sm font-medium truncate">{f.name}</span>
+                <span className="text-[11px] text-(--ink-soft) ml-auto shrink-0">เห็นเฉพาะสมาชิกห้องนี้</span>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      )}
 
       {folders.length === 0 && files.length === 0 ? (
         <Card className="p-10 text-center text-sm text-(--ink-soft)">โฟลเดอร์นี้ยังไม่มีอะไรเลย</Card>

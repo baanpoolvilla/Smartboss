@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { requireOrg, hasPermission, type OrgSession } from "@smartboss/auth";
 import { prisma } from "@smartboss/database";
 import { deleteFile as deleteStoredFile } from "@/lib/storage";
+import { canUserAccessReportTopic, listAccessibleTopicIds } from "@/modules/report_task/lib/room-access-server";
 import { COMPANY_FILES_PERMS } from "../permissions";
 import type { ShareLinkRole } from "../types";
 
@@ -32,17 +33,48 @@ function canModify(session: OrgSession, createdBy: string): boolean {
   return createdBy === session.userId || hasPermission(session, COMPANY_FILES_PERMS.manage);
 }
 
+/**
+ * โฟลเดอร์ที่ผูกกับห้องของโมดูลรายงาน (roomId ตั้งค่า) เห็นเฉพาะสมาชิกห้องนั้น
+ * ไม่ใช่ทุกคนในบริษัท — เดินขึ้นสายพ่อแม่หา roomId ตัวแรกที่เจอ (ลูกของโฟลเดอร์
+ * ห้องก็ถูกจำกัดสิทธิ์ตามห้องนั้นไปด้วย แม้ตัวมันเองจะไม่มี roomId ก็ตาม)
+ * คืน null = โฟลเดอร์ปกติ ไม่มีการจำกัดเพิ่มจาก orgId
+ */
+async function getEffectiveRoomId(orgId: string, folderId: string | null): Promise<string | null> {
+  let currentId = folderId;
+  for (let i = 0; i < 20 && currentId; i++) {
+    const folder = await prisma.companyFolder.findFirst({
+      where: { id: currentId, orgId },
+      select: { roomId: true, parentId: true },
+    });
+    if (!folder) return null;
+    if (folder.roomId) return folder.roomId;
+    currentId = folder.parentId;
+  }
+  return null;
+}
+
+/** โยน error เดียวกับ "ไม่พบ" เมื่อเข้าไม่ได้ — ไม่บอกว่ามีอยู่จริงแต่ไม่มีสิทธิ์ */
+async function assertFolderAccess(session: OrgSession, folderId: string | null): Promise<void> {
+  const roomId = await getEffectiveRoomId(session.orgId, folderId);
+  if (!roomId) return;
+  const allowed = await canUserAccessReportTopic(session.orgId, roomId, session.userId);
+  if (!allowed) throw new Error("ไม่พบโฟลเดอร์นี้");
+}
+
 export interface FolderPathEntry {
   id: string;
   name: string;
 }
 
-/** เนื้อหาของโฟลเดอร์เดียว — โฟลเดอร์ย่อยก่อน ไฟล์ทีหลัง เรียงตามชื่อทั้งคู่ */
+/** เนื้อหาของโฟลเดอร์เดียว — โฟลเดอร์ย่อยก่อน ไฟล์ทีหลัง เรียงตามชื่อทั้งคู่
+ * รากบริษัท (folderId = null) ไม่โชว์โฟลเดอร์ที่ผูกกับห้อง — ดูได้ทางแท็บ
+ * "ห้องรายงาน" (listRoomFolders) แยกต่างหากเท่านั้น ไม่ปนกับ tree ปกติ */
 export async function listFolder(folderId: string | null) {
   const session = await requireAccess();
+  await assertFolderAccess(session, folderId);
   const [folders, files] = await Promise.all([
     prisma.companyFolder.findMany({
-      where: { orgId: session.orgId, parentId: folderId },
+      where: { orgId: session.orgId, parentId: folderId, ...(folderId === null ? { roomId: null } : {}) },
       orderBy: { name: "asc" },
     }),
     prisma.companyFile.findMany({
@@ -56,6 +88,7 @@ export async function listFolder(folderId: string | null) {
 /** เส้นทางเบรดครัมบ์จากรากถึงโฟลเดอร์นี้ */
 export async function getFolderPath(folderId: string | null): Promise<FolderPathEntry[]> {
   const session = await requireAccess();
+  await assertFolderAccess(session, folderId);
   const path: FolderPathEntry[] = [];
   let currentId = folderId;
   // จำนวนชั้นจริงไม่มีทางเกินหลักสิบ — กันลูปไม่รู้จบไว้เผื่อข้อมูลเพี้ยน
@@ -74,6 +107,7 @@ export async function getFolderPath(folderId: string | null): Promise<FolderPath
 
 export async function createFolder(parentId: string | null, name: string) {
   const session = await requireUpload();
+  await assertFolderAccess(session, parentId);
   const trimmed = name.trim();
   if (!trimmed) throw new Error("ตั้งชื่อโฟลเดอร์ก่อน");
   return prisma.companyFolder.create({
@@ -87,6 +121,7 @@ export async function renameFolder(folderId: string, name: string) {
   if (!trimmed) throw new Error("ตั้งชื่อโฟลเดอร์ก่อน");
   const folder = await prisma.companyFolder.findFirst({ where: { id: folderId, orgId: session.orgId } });
   if (!folder) throw new Error("ไม่พบโฟลเดอร์นี้");
+  await assertFolderAccess(session, folderId);
   if (!canModify(session, folder.createdBy)) throw new Error("ไม่มีสิทธิ์แก้ไขโฟลเดอร์นี้");
   return prisma.companyFolder.update({ where: { id: folderId }, data: { name: trimmed } });
 }
@@ -98,6 +133,7 @@ export async function deleteFolder(folderId: string) {
   const session = await requireUpload();
   const folder = await prisma.companyFolder.findFirst({ where: { id: folderId, orgId: session.orgId } });
   if (!folder) throw new Error("ไม่พบโฟลเดอร์นี้");
+  await assertFolderAccess(session, folderId);
   if (!canModify(session, folder.createdBy)) throw new Error("ไม่มีสิทธิ์ลบโฟลเดอร์นี้");
 
   const storageKeys = await collectStorageKeysUnderFolder(session.orgId, folderId);
@@ -126,6 +162,7 @@ export interface UploadedFileInfo {
  * สำเร็จแล้ว (uploaded.url คือ storageKey ในรูป /api/files/<key>) */
 export async function createFile(folderId: string | null, uploaded: UploadedFileInfo) {
   const session = await requireUpload();
+  await assertFolderAccess(session, folderId);
   const file = await prisma.companyFile.create({
     data: {
       orgId: session.orgId,
@@ -157,6 +194,7 @@ export async function addFileVersion(fileId: string, uploaded: UploadedFileInfo,
   const session = await requireUpload();
   const file = await prisma.companyFile.findFirst({ where: { id: fileId, orgId: session.orgId } });
   if (!file) throw new Error("ไม่พบไฟล์นี้");
+  await assertFolderAccess(session, file.folderId);
   if (!canModify(session, file.createdBy)) throw new Error("ไม่มีสิทธิ์อัปโหลดเวอร์ชันใหม่ของไฟล์นี้");
 
   const nextVersion = file.currentVersion + 1;
@@ -188,6 +226,7 @@ export async function listFileVersions(fileId: string) {
   const session = await requireAccess();
   const file = await prisma.companyFile.findFirst({ where: { id: fileId, orgId: session.orgId } });
   if (!file) throw new Error("ไม่พบไฟล์นี้");
+  await assertFolderAccess(session, file.folderId);
   return prisma.companyFileVersion.findMany({ where: { fileId }, orderBy: { versionNumber: "desc" } });
 }
 
@@ -198,6 +237,7 @@ export async function restoreFileVersion(fileId: string, versionNumber: number) 
   const session = await requireUpload();
   const file = await prisma.companyFile.findFirst({ where: { id: fileId, orgId: session.orgId } });
   if (!file) throw new Error("ไม่พบไฟล์นี้");
+  await assertFolderAccess(session, file.folderId);
   if (!canModify(session, file.createdBy)) throw new Error("ไม่มีสิทธิ์กู้คืนเวอร์ชันของไฟล์นี้");
   const target = await prisma.companyFileVersion.findUnique({ where: { fileId_versionNumber: { fileId, versionNumber } } });
   if (!target) throw new Error("ไม่พบเวอร์ชันนี้");
@@ -213,6 +253,7 @@ export async function deleteCompanyFile(fileId: string) {
   const session = await requireUpload();
   const file = await prisma.companyFile.findFirst({ where: { id: fileId, orgId: session.orgId } });
   if (!file) throw new Error("ไม่พบไฟล์นี้");
+  await assertFolderAccess(session, file.folderId);
   if (!canModify(session, file.createdBy)) throw new Error("ไม่มีสิทธิ์ลบไฟล์นี้");
 
   const versions = await prisma.companyFileVersion.findMany({ where: { fileId }, select: { storageKey: true } });
@@ -224,6 +265,7 @@ export async function createShareLink(fileId: string, role: ShareLinkRole, expir
   const session = await requireUpload();
   const file = await prisma.companyFile.findFirst({ where: { id: fileId, orgId: session.orgId } });
   if (!file) throw new Error("ไม่พบไฟล์นี้");
+  await assertFolderAccess(session, file.folderId);
 
   return prisma.companyFileShareLink.create({
     data: {
@@ -240,6 +282,7 @@ export async function listShareLinks(fileId: string) {
   const session = await requireAccess();
   const file = await prisma.companyFile.findFirst({ where: { id: fileId, orgId: session.orgId } });
   if (!file) throw new Error("ไม่พบไฟล์นี้");
+  await assertFolderAccess(session, file.folderId);
   return prisma.companyFileShareLink.findMany({ where: { fileId }, orderBy: { createdAt: "desc" } });
 }
 
@@ -247,6 +290,7 @@ export async function revokeShareLink(linkId: string) {
   const session = await requireUpload();
   const link = await prisma.companyFileShareLink.findUnique({ where: { id: linkId }, include: { file: true } });
   if (!link || link.file.orgId !== session.orgId) throw new Error("ไม่พบลิงก์นี้");
+  await assertFolderAccess(session, link.file.folderId);
   if (!canModify(session, link.createdBy)) throw new Error("ไม่มีสิทธิ์เพิกถอนลิงก์นี้");
   await prisma.companyFileShareLink.update({ where: { id: linkId }, data: { revoked: true } });
 }
@@ -287,5 +331,65 @@ export async function addFileVersionViaShareLink(token: string, uploaded: Upload
   return prisma.companyFile.update({
     where: { id: file.id },
     data: { mimeType: uploaded.mimeType, size: uploaded.size, storageKey: uploaded.url, currentVersion: nextVersion },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// เชื่อมกับ "ห้อง" ของโมดูลรายงาน (report-feed) — ทุกฟังก์ชันในหมวดนี้ตรวจสิทธิ์
+// ห้องจริงฝั่งเซิร์ฟเวอร์ผ่าน room-access-server.ts ไม่ใช่แค่กรอง UI
+// ─────────────────────────────────────────────────────────────────────────
+
+/** โฟลเดอร์ของห้องนี้ — สร้างครั้งแรกตอนมีคนอัปโหลดเอกสารจากห้องนั้น (ก่อนหน้านั้น
+ * ห้องยังไม่มีโฟลเดอร์เลย ไม่ต้องสร้างล่วงหน้าตอนสร้างห้อง) */
+export async function getOrCreateRoomFolder(topicId: string, topicName: string) {
+  const session = await requireUpload();
+  const allowed = await canUserAccessReportTopic(session.orgId, topicId, session.userId);
+  if (!allowed) throw new Error("ไม่มีสิทธิ์เข้าห้องนี้");
+
+  const existing = await prisma.companyFolder.findFirst({ where: { orgId: session.orgId, roomId: topicId } });
+  if (existing) return existing;
+  return prisma.companyFolder.create({
+    data: {
+      orgId: session.orgId,
+      parentId: null,
+      roomId: topicId,
+      name: topicName.trim() || "ห้อง",
+      createdBy: session.userId,
+    },
+  });
+}
+
+/** อัปโหลดเอกสารจากแท็บ "ไฟล์" ของห้อง — ทางเข้าเดียวที่ควรใช้จากฝั่ง UI ของห้อง
+ * (แทนที่จะเรียก getOrCreateRoomFolder + createFile แยกสองที) */
+export async function addFileToRoomFolder(topicId: string, topicName: string, uploaded: UploadedFileInfo) {
+  const folder = await getOrCreateRoomFolder(topicId, topicName);
+  return createFile(folder.id, uploaded);
+}
+
+/** เอกสารของห้องหนึ่ง — ใช้แสดงในแท็บ "ไฟล์" ของห้องนั้นในโมดูลรายงาน
+ * คืนก้อนว่างเงียบๆ ถ้าเข้าห้องนี้ไม่ได้ หรือห้องนี้ยังไม่เคยมีใครอัปโหลดเลย */
+export async function listRoomFiles(topicId: string) {
+  const session = await requireAccess();
+  const allowed = await canUserAccessReportTopic(session.orgId, topicId, session.userId);
+  if (!allowed) return { folder: null, files: [] };
+
+  const folder = await prisma.companyFolder.findFirst({ where: { orgId: session.orgId, roomId: topicId } });
+  if (!folder) return { folder: null, files: [] };
+  const files = await prisma.companyFile.findMany({
+    where: { orgId: session.orgId, folderId: folder.id },
+    orderBy: { name: "asc" },
+  });
+  return { folder, files };
+}
+
+/** โฟลเดอร์ห้องทั้งหมดที่ผู้ใช้ปัจจุบันเห็นได้ — สำหรับ section "ห้องรายงาน"
+ * ในหน้าไฟล์บริษัทหลัก (แยกจาก tree โฟลเดอร์ปกติ) */
+export async function listRoomFolders() {
+  const session = await requireAccess();
+  const accessible = await listAccessibleTopicIds(session.orgId, session.userId);
+  if (accessible.size === 0) return [];
+  return prisma.companyFolder.findMany({
+    where: { orgId: session.orgId, roomId: { in: [...accessible] } },
+    orderBy: { name: "asc" },
   });
 }

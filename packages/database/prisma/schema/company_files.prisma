@@ -16,6 +16,10 @@ model CompanyFolder {
   orgId     String   @map("org_id")
   parentId  String?  @map("parent_id")
   name      String
+  /// ถ้าตั้งค่านี้ = โฟลเดอร์นี้ "เป็นของห้อง" ในโมดูลรายงาน (ReportTopic.id, JSON blob
+  /// ไม่ใช่ FK จริง — ดู room-access-server.ts) สิทธิ์เข้าถึงจะเช็คสมาชิกห้องนั้นแทน orgId
+  /// เฉยๆ — เสมอเป็น root folder (parentId = null) และไม่ปนกับ tree โฟลเดอร์ปกติ
+  roomId    String?  @map("room_id")
   createdBy String   @map("created_by")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -26,6 +30,7 @@ model CompanyFolder {
 
   @@index([orgId])
   @@index([orgId, parentId])
+  @@index([orgId, roomId])
   @@map("folders")
   @@schema("company_files")
 }

@@ -12,6 +12,7 @@ import {
   AlertDialogCancel,
 } from "@/modules/report_task/components/ui/alert-dialog";
 import { AlbumFormDialog } from "@/modules/report_task/components/report-feed/album-form-dialog";
+import { ReportTopicDocuments } from "@/modules/report_task/components/report-feed/report-topic-documents";
 import { users, getUser, getDepartment } from "@/modules/report_task/lib/directory";
 import { useReportFeedStore, type ReportPost, type ReportPostImage, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
@@ -236,6 +237,9 @@ export function ReportTopicPanels({
   if (tab === "files") {
     return (
       <div className="flex-1 overflow-y-auto p-4">
+        <div className="mb-4">
+          <ReportTopicDocuments topicId={topic.id} topicName={topic.name} />
+        </div>
         <p className="text-xs text-[var(--ink-soft)] mb-3">
           รูปในช่วง {filesWindowDays} วันล่าสุด — แตะไอคอนที่มุมรูปเพื่อเก็บลงอัลบั้มแบบถาวร
         </p>
