@@ -69,11 +69,13 @@ export function ReportFeed({
 
   return (
     <div className="relative flex-1 flex flex-col min-h-0">
-      {/* Round 2, explicit instruction: single flat surface (white), not the
-          tinted background a stack of white cards needed for contrast —
-          there's nothing to contrast against anymore (see ReportCard's own
-          comment on why that's a real trade-off, not a free change). */}
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto bg-white py-2 scroll-pt-4">
+      {/* Round 3: back to a tinted ground behind white post cards — asked for
+          explicitly ("กรอบของใครของมันแยกให้ชัดเจน...แบบ thread") after the
+          flat single-surface pass (see git history) still read as one
+          undifferentiated column. A bordered card needs something to
+          contrast against, which flattening this to plain white specifically
+          removed. */}
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto bg-[var(--bg-soft)] py-3 scroll-pt-4">
         {topicPosts.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center gap-3 text-center px-6">
             <div
@@ -96,16 +98,16 @@ export function ReportFeed({
           // twice before: capping only the feed left the header still
           // full-width above it, plus no mx-auto meant the leftover space
           // sat one-sided instead of split evenly ("แสดงให้เต็มกรอบสิ").
-          // space-y-6 between day groups only here; individual posts lean on
-          // their own border-b +
-          // padding for rhythm instead of an extra gap on top of that, so
-          // density goes up the way §15/16 ask for.
-          <div className="space-y-6">
+          // space-y-6 between day groups, space-y-3 between the cards inside
+          // one — each post is now its own bordered card (see ReportCard),
+          // so the gap between them has to be real whitespace, not just a
+          // border each card leans on.
+          <div className="space-y-6 px-3">
             {groupByDay(topicPosts, (p) => p.createdAt).map((group) => (
-              <div key={group.key}>
+              <div key={group.key} className="space-y-3">
                 <DaySeparator label={reportDayLabel(group.label)} />
-                {group.items.map((p, i) => (
-                  <ReportCard key={p.id} post={p} topic={topic} highlighted={p.id === highlightPostId} highlightReplyId={highlightReplyId} onOpenTask={onOpenTask} zebra={i % 2 === 1} />
+                {group.items.map((p) => (
+                  <ReportCard key={p.id} post={p} topic={topic} highlighted={p.id === highlightPostId} highlightReplyId={highlightReplyId} onOpenTask={onOpenTask} />
                 ))}
               </div>
             ))}

@@ -17,7 +17,14 @@ function quotePreview(body: string): string {
   return firstLine.length > 80 ? `${firstLine.slice(0, 80)}…` : firstLine;
 }
 
-/** One reply row inside a report card — plain, no background box, just a light top divider between replies (added by the parent list) so a thread reads as part of the same card, not a stack of nested cards. */
+/** One reply row inside a report card. Used to be fully transparent (no
+ * background at all, just spacing between rows) — against the post's own
+ * plain white/zebra surface that left a comment thread reading as a run-on
+ * paragraph of names with no visual unit of its own ("คอมเม้นต์ยังไม่สวย").
+ * Each reply now sits in its own soft bubble — own replies tinted with the
+ * brand accent (mirrors the composer's own accent border), everyone else's
+ * a neutral gray — the same "your bubble vs. their bubble" convention every
+ * chat app uses, so a thread reads as a conversation rather than a list. */
 export function ReportReply({
   reply,
   allReplies,
@@ -78,21 +85,22 @@ export function ReportReply({
   return (
     <div
       id={`report-reply-${reply.id}`}
-      className={cn(
-        // Sits inside the thread panel now (see report-card.tsx), so it gets a
-        // white hover surface to pick itself out of that panel instead of
-        // relying on a divider above and below it. Tighter vertical padding
-        // too: a reply is a smaller unit than a post and should read that way,
-        // which is half of what tells the two apart at a glance.
-        "group/reply flex items-start gap-2 px-1.5 py-1.5 rounded-lg transition-colors duration-500",
-        flashed ? "bg-[var(--accent)]" : "hover:bg-white"
-      )}
-      style={reply.highlightColor ? { borderLeft: `3px solid ${reply.highlightColor}`, paddingLeft: "9px" } : undefined}
+      className="group/reply flex items-start gap-2"
     >
-      <Avatar className="h-6 w-6 shrink-0">
+      <Avatar className="h-6 w-6 shrink-0 mt-0.5">
         <AvatarFallback className="text-[10px] bg-[var(--bg-soft)]">{author?.avatar}</AvatarFallback>
       </Avatar>
-      <div className="min-w-0 flex-1">
+      <div
+        className={cn(
+          "min-w-0 flex-1 rounded-xl px-2.5 py-2 border transition-colors duration-500",
+          flashed
+            ? "bg-[var(--accent)] border-[var(--brand-green)]/40"
+            : isOwn
+              ? "bg-[color-mix(in_srgb,var(--accent)_45%,white)] border-[var(--brand-green)]/15"
+              : "bg-[var(--bg-soft)] border-transparent"
+        )}
+        style={reply.highlightColor ? { borderLeft: `3px solid ${reply.highlightColor}`, paddingLeft: "9px" } : undefined}
+      >
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs font-medium">
             {author?.name} <span className="font-normal text-[var(--ink-soft)]">· <TimeAgo date={reply.createdAt} /></span>

@@ -257,15 +257,17 @@ export function ReportAllPostsFeed({
       ) : (
         <div
           ref={scrollRef}
-          className="flex-1 overflow-y-auto bg-white py-3 scroll-pt-4"
+          className="flex-1 overflow-y-auto bg-[var(--bg-soft)] py-3 scroll-pt-4"
         >
           {/* Full width, not capped — see report-feed.tsx's own comment on
-              this exact idea being tried and reverted again this same round. */}
-          <div className="space-y-6">
+              this exact idea being tried and reverted again this same round.
+              Tinted ground + space-y-3 between cards, same as report-feed.tsx
+              — each post is its own bordered card now, not a flat row. */}
+          <div className="space-y-6 px-3">
             {groupByDay(items, (p) => p.createdAt).map((group) => (
-              <div key={group.key}>
+              <div key={group.key} className="space-y-3">
                 <DaySeparator label={reportDayLabel(group.label)} />
-                {group.items.map((p, i) => {
+                {group.items.map((p) => {
                   const topic = topicById.get(p.topicId)!;
                   return (
                     <ReportCard
@@ -274,7 +276,6 @@ export function ReportAllPostsFeed({
                       topic={topic}
                       topicBadge={{ label: breadcrumbOf(topic, topicById), onClick: () => onJumpToTopic(topic.id) }}
                       onOpenTask={onOpenTask}
-                      zebra={i % 2 === 1}
                     />
                   );
                 })}

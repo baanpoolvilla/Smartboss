@@ -143,7 +143,6 @@ export function ReportCard({
   highlightReplyId,
   topicBadge,
   onOpenTask,
-  zebra,
 }: {
   post: ReportPost;
   topic: ReportTopic;
@@ -158,11 +157,6 @@ export function ReportCard({
    * already linked to a task. Absent means the page hosting this card hasn't
    * wired up a task sheet, so the menu item silently no-ops. */
   onOpenTask?: (taskId: string) => void;
-  /** Every other post gets a faint tint (see the wrapper's own comment on
-   * why a plain hairline alone kept failing here). Caller's choice, not
-   * computed from post data, so it stays a stable alternation regardless of
-   * which posts get filtered in/out. */
-  zebra?: boolean;
 }) {
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const toggleReaction = useReportFeedStore((s) => s.toggleReaction);
@@ -601,25 +595,21 @@ export function ReportCard({
     <div
       id={`report-post-${post.id}`}
       className={cn(
-        // No card border/radius/shadow — but a plain hairline alone as the
-        // only thing separating posts has now been tried and reverted for
-        // the exact same complaint three times over ("ตัวคั่นระหว่างโพสมอง
-        // ยากมาก งงมาก" / "พวกโพสติดกันเกินไป งงมาก"): posts vary wildly in
-        // height (some are one line, some carry a reply thread), so a
-        // single 1px line at the bottom reads as part of whichever post is
-        // above it, not a boundary you notice while scanning. Zebra tinting
-        // (below) is the one real fix that doesn't mean bringing a card back
-        // — every other post gets a faint fill, so the eye catches "new
-        // post" from the color change alone, before it even reads names.
-        "group/post relative px-5 py-5 sm:py-6 border-b border-[color-mix(in_srgb,var(--line)_65%,var(--ink-soft))] transition-colors duration-150",
-        highlighted || flashTargetId === post.id
-          ? "bg-[var(--accent)]"
-          : zebra
-            ? "bg-[var(--bg-soft)]/50 hover:bg-[var(--bg-soft)]"
-            : "hover:bg-[var(--bg-soft)]",
-        // Unread keeps its left accent — was a card-edge highlight before,
-        // now the same idea against a flat row.
-        isUnread && "border-l-[3px] border-l-[var(--chart-blue)]"
+        // A hairline (with or without zebra tint behind it) was tried and
+        // reverted for the same complaint four times running — posts vary
+        // wildly in height (one line vs. a full reply thread), so a boundary
+        // that isn't a closed shape never reads as "this ended, that begins"
+        // while scanning fast. Asked for explicitly as "กรอบของใครของมัน...
+        // แบบ thread": each post is now its own bordered, rounded card
+        // (Teams/Slack-thread style) sitting on the feed's soft tinted
+        // ground (see report-feed.tsx) — that's what actually gives a card a
+        // surface to contrast against, which flattening the page to plain
+        // white specifically removed the first time cards were tried here.
+        "group/post relative rounded-2xl border border-[var(--line)] bg-[var(--bg)] px-5 py-5 sm:py-6 shadow-sm transition-shadow duration-150 hover:shadow-md",
+        (highlighted || flashTargetId === post.id) && "bg-[var(--accent)] border-[var(--brand-green)]/40",
+        // Unread keeps its own accent, now as a ring around the whole card
+        // (a plain border-l reads oddly once the corners are rounded).
+        isUnread && "ring-2 ring-[var(--chart-blue)]/70 ring-offset-0"
       )}
     >
       {/* Teams-style floating hover toolbar — anchored inside this post's own
