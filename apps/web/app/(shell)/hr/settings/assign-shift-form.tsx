@@ -97,6 +97,19 @@ export function AssignShiftForm({
           ~120px ซึ่งตัดชื่อกะทิ้งตั้งแต่ "Officer 08…" อ่านไม่ออกว่าเลือกกะไหน
           เข้ากี่โมง (select ของเบราว์เซอร์ตัดข้อความตอนหุบ ไม่มีทาง ellipsis หนี)
         */}
+        {/*
+          ⚠ ช่องข้างล่างเป็นค่าตั้งต้น ไม่ใช่ตารางที่บันทึกไว้ — workforce API มีแค่
+          POST /recurring-work-patterns ไม่มี GET จึงอ่านของเดิมกลับมาแสดงไม่ได้
+          คนเปิดหน้ามาเห็นจันทร์-ศุกร์เติม "Officer" ไว้แล้วจึงนึกว่าผูกเสร็จแล้ว
+          ทั้งที่หน้าลงเวลายังขึ้น "ยังไม่ผูกกะ" อยู่ — ต้องบอกออกมาตรง ๆ จนกว่า
+          จะมี endpoint อ่านตารางปัจจุบัน
+        */}
+        <p className="rounded-(--radius) border border-(--line) bg-(--bg-soft) p-2.5 text-xs text-(--ink-soft)">
+          ช่องข้างล่างเป็น<strong>ค่าตั้งต้นที่แนะนำ ไม่ใช่ตารางที่ผูกไว้อยู่</strong> —
+          ระบบยังอ่านตารางเดิมกลับมาแสดงไม่ได้ ถ้าหน้า “การลงเวลา”
+          ยังขึ้นว่าคนนี้ยังไม่ผูกกะ แปลว่ายังไม่เคยกดปุ่มข้างล่างนี้
+        </p>
+
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {DAYS.map(([field, label]) => (
             <Field key={field} label={label}>
@@ -133,8 +146,10 @@ export function AssignShiftForm({
         </p>
 
         <div>
-          <Button type="submit" disabled={pending} className="sm:w-44">
-            {pending ? "กำลังบันทึก…" : "บันทึกตาราง"}
+          {/* คำเดียวกับที่หน้าลงเวลาใช้ ("ยังไม่ผูกกะ") ไม่ใช่ "บันทึกตาราง"
+              ซึ่งไม่มีใครเดาได้ว่าคือปุ่มผูกกะ */}
+          <Button type="submit" disabled={pending} className="sm:w-56">
+            {pending ? "กำลังผูกกะ…" : "ผูกกะตามตารางนี้"}
           </Button>
         </div>
       </form>
@@ -143,7 +158,7 @@ export function AssignShiftForm({
 
       {state.ok && (
         <div className="mt-3 rounded-(--radius) border border-(--line) bg-(--bg-soft) p-3 text-sm">
-          <p className="font-medium">บันทึกตารางแล้ว</p>
+          <p className="font-medium">ผูกกะเรียบร้อยแล้ว</p>
           <p className="mt-1 text-(--ink-soft)">
             ตารางเดิมของคนนี้ถูกปิดให้อัตโนมัติ ระบบจะใช้ตารางใหม่คิดสาย/ขาด/OT
             ตั้งแต่วันที่ระบุเป็นต้นไป — ผลลงเวลาที่คำนวณไปแล้วต้องสั่งคำนวณใหม่ที่หน้า

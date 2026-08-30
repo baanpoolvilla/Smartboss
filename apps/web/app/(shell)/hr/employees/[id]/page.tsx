@@ -306,21 +306,42 @@ export default async function EmployeeDetailPage({
               )}
             </SectionCard>
 
+            {/*
+              ชื่อการ์ดต้องมีคำว่า "ผูกกะ" — หน้าลงเวลาเรียกสิ่งนี้ว่า "ยังไม่ผูกกะ"
+              แล้วส่งคนมาที่นี่ แต่ทั้งหน้าไม่เคยมีคำนั้นโผล่สักที่ (หัวข้อเดิมคือ
+              "ตารางกะประจำสัปดาห์" ปุ่มคือ "บันทึกตาราง") คนจึงกวาดตาหาไม่เจอ
+              ทั้งที่ยืนอยู่บนมันแล้ว — ศัพท์สองหน้าจอต้องเป็นคำเดียวกัน
+            */}
             <SectionCard
-              title="ตารางกะประจำสัปดาห์"
+              title="ผูกกะ · ตารางกะประจำสัปดาห์"
               description="ระบบใช้ตารางนี้เทียบว่าคนนี้ควรเข้ากี่โมง — ไม่ผูกก็คิดสาย/ขาดไม่ได้"
             >
               {canManage ? (
                 <AssignShiftForm
                   employments={[]}
                   lockedTo={id}
-                  shifts={shiftItems.map((sh) => ({
-                    id: sh.id,
-                    label: sh.rest_day
+                  shifts={shiftItems.map((sh) => {
+                    const base = sh.rest_day
                       ? `${sh.name} (วันหยุด)`
-                      : `${sh.name} ${minutesToClock(sh.start_minutes)}-${minutesToClock(sh.end_minutes)}`,
-                    restDay: sh.rest_day,
-                  }))}
+                      : `${sh.name} ${minutesToClock(sh.start_minutes)}-${minutesToClock(sh.end_minutes)}`;
+                    /*
+                     * บริษัทที่เผลอสร้างกะชื่อเวลาเดียวกันสองใบจะได้ตัวเลือกหน้าตา
+                     * เหมือนกันเป๊ะ เลือกไม่ถูกว่าอันไหนคืออันไหน — ต่อรหัสกะให้
+                     * เฉพาะตอนที่ชื่อชนกันจริง จะได้ไม่รกกับบริษัทที่ตั้งชื่อดีอยู่แล้ว
+                     */
+                    const duplicated =
+                      shiftItems.filter(
+                        (other) =>
+                          other.name === sh.name &&
+                          other.start_minutes === sh.start_minutes &&
+                          other.end_minutes === sh.end_minutes,
+                      ).length > 1;
+                    return {
+                      id: sh.id,
+                      label: duplicated ? `${base} · ${sh.code}` : base,
+                      restDay: sh.rest_day,
+                    };
+                  })}
                   today={new Date().toISOString().slice(0, 10)}
                 />
               ) : (
