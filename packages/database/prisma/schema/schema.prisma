@@ -13,5 +13,5 @@ datasource db {
   url       = env("DATABASE_URL")
   // directUrl = unpooled endpoint — prisma migrate/studio ใช้เส้นตรง (ชื่อ env ตาม Neon/Vercel integration)
   directUrl = env("DATABASE_URL_UNPOOLED")
-  schemas   = ["core", "maintenance", "report_task", "chat"]
+  schemas   = ["core", "maintenance", "report_task", "chat", "company_files"]
 }

@@ -3,6 +3,7 @@ import { resolvePermission } from "@smartboss/auth/permissions";
 
 import { adminManifest } from "@/modules/admin/manifest";
 import { chatManifest } from "@/modules/chat/manifest";
+import { companyFilesManifest } from "@/modules/company-files/manifest";
 import { exampleManifest } from "@/modules/example/manifest";
 import { hrManifest } from "@/modules/hr/manifest";
 import { maintenanceManifest } from "@/modules/maintenance/manifest";
@@ -58,6 +59,8 @@ export const moduleRegistry: ModuleManifest[] = [
   reportTaskManifest,
   // MVP แชทองค์กร — ปิดใช้งานทุกบริษัทโดยดีฟอลต์ เปิดทีละบริษัทได้ที่ /admin/modules
   chatManifest,
+  // ที่เก็บไฟล์กลางแบบ SharePoint/Teams Files — ปิดใช้งานทุกบริษัทโดยดีฟอลต์เหมือนแชท
+  companyFilesManifest,
 ];
 
 export interface VisibleModulesInput {

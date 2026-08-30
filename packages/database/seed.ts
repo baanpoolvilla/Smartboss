@@ -4,6 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import argon2 from "argon2";
 import {
   CHAT_PERMS,
+  COMPANY_FILES_PERMS,
   CORE_PERMS,
   ENABLED_MODULES,
   HR_PERMS,
@@ -152,10 +153,21 @@ async function main() {
   });
   moduleIdByCode.set("chat", chatModule.id);
 
+  // โมดูลไฟล์บริษัท (SharePoint-style: โฟลเดอร์ + เวอร์ชัน + ลิงก์แชร์) — เช่นเดียวกับ
+  // แชท: อยู่ในแคตตาล็อกแต่ไม่เปิดใช้ให้บริษัทไหนโดยอัตโนมัติ เปิดทีละบริษัทได้ที่
+  // /admin/modules
+  const companyFilesModule = await prisma.module.upsert({
+    where: { code: "company_files" },
+    update: { name: "ไฟล์บริษัท", color: "#0EA5E9", isEnabled: false, sortOrder: 8 },
+    create: { code: "company_files", name: "ไฟล์บริษัท", color: "#0EA5E9", isEnabled: false, sortOrder: 8 },
+  });
+  moduleIdByCode.set("company_files", companyFilesModule.id);
+
   await registerModulePerms("example", ["example.view", "example.manage"]);
   await registerModulePerms("maintenance", MAINT_PERMS);
   await registerModulePerms("hr", HR_PERMS);
   await registerModulePerms("chat", CHAT_PERMS);
+  await registerModulePerms("company_files", COMPANY_FILES_PERMS);
   // รายงานและงานเคยตกหล่นจากแคตตาล็อก ทำให้ /admin/roles ไม่มีสิทธิ์กลุ่มนี้ให้ติ๊กเลย
   await registerModulePerms("report_task", REPORT_TASK_PERMS);
   console.log(

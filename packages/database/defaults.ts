@@ -109,6 +109,9 @@ export const REPORT_TASK_PERMS = [
 /** ต้องตรงกับ CHAT_PERMS ใน apps/web/modules/chat/permissions.ts */
 export const CHAT_PERMS = ["chat.access", "chat.manage"];
 
+/** ต้องตรงกับ COMPANY_FILES_PERMS ใน apps/web/modules/company-files/permissions.ts */
+export const COMPANY_FILES_PERMS = ["company_files.access", "company_files.upload", "company_files.manage"];
+
 /**
  * สิทธิ์พื้นฐานที่ **ทุกบทบาทได้รับ** — คือคำตอบของกติกา "ทุกคนเห็นและเข้าถึงได้
  * ทุกโมดูล แต่สิทธิ์การใช้งานในแต่ละโมดูลต่างกัน"
@@ -144,6 +147,10 @@ export const BASELINE_PERMS = [
   "maintenance.contractor.view",
   // แชท — เห็นเมนูเฉพาะบริษัทที่เปิดใช้โมดูลนี้ที่ /admin/modules
   "chat.access",
+  // ไฟล์บริษัท — ดู/อัปโหลด/แชร์ไฟล์กันได้ทุกคน (เหมือนกัน) ลบ/จัดการของคนอื่น
+  // ยังต้องเป็น ADMIN — เห็นเมนูเฉพาะบริษัทที่เปิดใช้โมดูลนี้ที่ /admin/modules
+  "company_files.access",
+  "company_files.upload",
 ];
 
 /**
@@ -151,7 +158,7 @@ export const BASELINE_PERMS = [
  * (ประกอบร่างใน ROLE_GRANTS ข้างล่าง) บริษัทปรับเองได้ที่ /admin/roles
  */
 const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
-  ADMIN: [...CORE_PERMS, ...HR_PERMS, ...MAINT_PERMS, ...REPORT_TASK_PERMS, ...CHAT_PERMS],
+  ADMIN: [...CORE_PERMS, ...HR_PERMS, ...MAINT_PERMS, ...REPORT_TASK_PERMS, ...CHAT_PERMS, ...COMPANY_FILES_PERMS],
   CEO: [
     "core.admin", "core.user.view", "core.role.view", "core.audit.view",
     // ผู้บริหารเป็นคนกำหนดว่าบริษัทนี้ถือว่าอะไรคือ "ทำงานได้ดี"

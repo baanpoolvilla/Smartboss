@@ -1,0 +1,102 @@
+// ═══════════════════════════════════════════════════════════════════════
+//  schema "company_files" — โมดูล "ไฟล์บริษัท" (Company Files)
+//  ที่เก็บไฟล์กลางของบริษัทแบบ SharePoint/Teams Files — โฟลเดอร์ + ไฟล์ +
+//  เวอร์ชันย้อนหลัง + ลิงก์แชร์ (ดู/แก้ไข) — เจ้าของ: branch module/company-files
+//
+//  orgId เป็นคอลัมน์ธรรมดา ไม่ผูก @relation ข้าม schema ไปที่ Organization —
+//  สไตล์เดียวกับ maintenance.prisma (ดู Property/WorkOrder เป็นตัวอย่าง) ไม่ใช่
+//  สไตล์ report_task.prisma ที่ผูก relation ตรง — เลือกแบบนี้เพื่อไม่ต้องแก้
+//  core.prisma (ไฟล์กลางที่ทุกโมดูลใช้ร่วมกัน) ทุกครั้งที่เพิ่มโมดูลใหม่
+// ═══════════════════════════════════════════════════════════════════════
+
+/// โฟลเดอร์ — ซ้อนกันได้ไม่จำกัดชั้นผ่าน parentId (self-relation)
+/// parentId = null คือโฟลเดอร์ระดับบนสุดของบริษัท
+model CompanyFolder {
+  id        String   @id @default(uuid())
+  orgId     String   @map("org_id")
+  parentId  String?  @map("parent_id")
+  name      String
+  createdBy String   @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  parent   CompanyFolder?  @relation("CompanyFolderChildren", fields: [parentId], references: [id], onDelete: Cascade)
+  children CompanyFolder[] @relation("CompanyFolderChildren")
+  files    CompanyFile[]
+
+  @@index([orgId])
+  @@index([orgId, parentId])
+  @@map("folders")
+  @@schema("company_files")
+}
+
+/// ไฟล์หนึ่งไฟล์ — คอลัมน์ตรงนี้เป็น "สำเนาล่าสุด" เสมอ (ชื่อ/ขนาด/storageKey ของ
+/// เวอร์ชันปัจจุบัน) ส่วนประวัติแบบเต็มอยู่ใน CompanyFileVersion — คัดลอกมาไว้ที่
+/// นี่ด้วยเพื่อให้ list โฟลเดอร์ query ได้โดยไม่ต้อง join เวอร์ชันล่าสุดทุกครั้ง
+model CompanyFile {
+  id             String   @id @default(uuid())
+  orgId          String   @map("org_id")
+  folderId       String?  @map("folder_id")
+  name           String
+  mimeType       String   @map("mime_type")
+  size           Int
+  storageKey     String   @map("storage_key")
+  currentVersion Int      @default(1) @map("current_version")
+  createdBy      String   @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  updatedBy      String?  @map("updated_by")
+
+  folder     CompanyFolder?         @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  versions   CompanyFileVersion[]
+  shareLinks CompanyFileShareLink[]
+
+  @@index([orgId])
+  @@index([orgId, folderId])
+  @@map("files")
+  @@schema("company_files")
+}
+
+/// สแนปช็อตของไฟล์ ณ เวลาที่อัปโหลดทับ — แถวเวอร์ชันปัจจุบันของไฟล์ก็มีแถวอยู่
+/// ที่นี่ด้วย (ไม่ใช่แค่เวอร์ชันเก่า) ดังนั้น "ประวัติ" ของไฟล์ = query ตารางนี้
+/// ทั้งหมดตรงๆ ไม่ต้องรวมกับคอลัมน์บน CompanyFile
+model CompanyFileVersion {
+  id            String   @id @default(uuid())
+  fileId        String   @map("file_id")
+  versionNumber Int      @map("version_number")
+  storageKey    String   @map("storage_key")
+  size          Int
+  mimeType      String   @map("mime_type")
+  uploadedBy    String   @map("uploaded_by")
+  uploadedAt    DateTime @default(now()) @map("uploaded_at")
+  note          String?
+
+  file CompanyFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@unique([fileId, versionNumber])
+  @@index([fileId])
+  @@map("file_versions")
+  @@schema("company_files")
+}
+
+/// ลิงก์แชร์ไฟล์แบบ token — ใครถือลิงก์นี้ (ไม่ต้องล็อกอินก็ได้ถ้าเป็นคนนอก)
+/// เข้าถึงไฟล์นี้ได้ตามสิทธิ์ที่กำหนด (view/edit) จนกว่าจะหมดอายุหรือถูกเพิกถอน —
+/// รูปแบบเดียวกับ WorkOrderUploadLink ของ maintenance (token เดี่ยว เพิกถอนได้
+/// หมดอายุได้) เพิ่มแค่ฟิลด์ role เพราะที่นี่ต้องแยกดู-ได้/แก้ไข-ได้
+model CompanyFileShareLink {
+  id        String    @id @default(uuid())
+  fileId    String    @map("file_id")
+  token     String    @unique
+  /// "view" | "edit" — ตรวจในโค้ด ไม่ใช้ enum เพื่อเพิ่มค่าใหม่ทีหลังได้โดยไม่ต้อง migrate
+  role      String    @default("view")
+  createdBy String    @map("created_by")
+  createdAt DateTime  @default(now()) @map("created_at")
+  expiresAt DateTime? @map("expires_at")
+  revoked   Boolean   @default(false)
+
+  file CompanyFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@index([fileId])
+  @@map("file_share_links")
+  @@schema("company_files")
+}
