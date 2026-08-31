@@ -11,6 +11,11 @@ import {
   type Paged,
   type Person,
 } from "@/modules/hr/lib/api";
+import {
+  DAYS_OFF_LIMITS,
+  loadDayOffQuota,
+  saveDayOffQuota,
+} from "@/lib/day-off-quota";
 
 /**
  * Server action ของโมดูลบุคคล — ทุกตัวยิงต่อไปที่ workforce API
@@ -749,6 +754,7 @@ export async function deleteHolidayAction(formData: FormData) {
 export interface DaysOffState {
   ok?: boolean;
   offDays?: number;
+  quota?: number;
   error?: string;
 }
 
@@ -756,8 +762,9 @@ export async function setEmployeeDaysOffAction(
   _prev: DaysOffState,
   formData: FormData,
 ): Promise<DaysOffState> {
+  let session: Awaited<ReturnType<typeof guard>>;
   try {
-    await guard(HR_PERMS.settingManage);
+    session = await guard(HR_PERMS.settingManage);
   } catch (error) {
     return { error: error instanceof Error ? error.message : "ไม่มีสิทธิ์ดำเนินการนี้" };
   }
@@ -774,6 +781,21 @@ export async function setEmployeeDaysOffAction(
   if (!/^\d{4}-\d{2}$/.test(month)) return { error: "เดือนไม่ถูกต้อง" };
   if (!workShiftId) return { error: "กรุณาเลือกกะสำหรับวันทำงาน" };
   if (!restShiftId) return { error: "ต้องมีกะประเภทวันหยุดก่อน — สร้างที่หน้า “กะทำงาน”" };
+
+  /*
+   * โควตาวันหยุดต่อเดือนเป็นข้อตกลงรายคน (บางคน 4 บางคน 6) — ตรวจที่นี่
+   * ไม่ใช่แค่ในหน้าจอ เพราะหน้าจอเตือนได้อย่างเดียว ส่วนคนที่ยิง action ตรง ๆ
+   * หรือเปิดสองแท็บแล้วกดพร้อมกันจะข้ามการเตือนนั้นไปทั้งหมด
+   */
+  const quota = await loadDayOffQuota(session.orgId, employmentId);
+  if (offDays.length > quota.daysPerMonth) {
+    return {
+      error:
+        `เลือกวันหยุดไว้ ${offDays.length} วัน แต่คนนี้ได้เดือนละ ${quota.daysPerMonth} วัน` +
+        (quota.perEmployee ? " (ตั้งไว้เฉพาะคนนี้)" : " (ค่าตั้งต้นของบริษัท)") +
+        " — เอาวันที่เกินออก หรือแก้โควตาที่ช่อง “วันหยุดต่อเดือน” ด้านบนก่อน",
+    };
+  }
 
   const [year, mon] = month.split("-").map(Number);
   const daysInMonth = new Date(Date.UTC(year!, mon!, 0)).getUTCDate();
@@ -815,7 +837,60 @@ export async function setEmployeeDaysOffAction(
   }
 
   revalidatePath("/hr/holidays");
-  return { ok: true, offDays: offDays.length };
+  revalidatePath(`/hr/employees/${employmentId}`);
+  return { ok: true, offDays: offDays.length, quota: quota.daysPerMonth };
+}
+
+/* ═══════════════════ โควตาวันหยุดรายคน ═══════════════════ */
+
+/**
+ * ตั้งว่าคนนี้ได้หยุดกี่วันต่อเดือน
+ *
+ * เก็บฝั่ง Smartboss ไม่ใช่ workforce — workforce ไม่มีที่เก็บโควตาแบบนี้
+ * และเครื่องคำนวณผลลงเวลาก็ไม่ได้ใช้ตัวเลขนี้ มันมีผลตอน "บันทึกวันหยุดของ
+ * เดือนนี้" อย่างเดียว: กันไม่ให้ลงวันหยุดเกินสิทธิ์ที่ตกลงกันไว้
+ */
+export interface QuotaState {
+  ok?: boolean;
+  daysPerMonth?: number;
+  cleared?: boolean;
+  error?: string;
+}
+
+export async function setDayOffQuotaAction(
+  _prev: QuotaState,
+  formData: FormData,
+): Promise<QuotaState> {
+  let session: Awaited<ReturnType<typeof guard>>;
+  try {
+    session = await guard(HR_PERMS.settingManage);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "ไม่มีสิทธิ์ดำเนินการนี้" };
+  }
+
+  const employmentId = String(formData.get("employment_id") ?? "");
+  if (!employmentId) return { error: "กรุณาเลือกพนักงาน" };
+
+  const raw = String(formData.get("days_per_month") ?? "").trim();
+  const note = String(formData.get("note") ?? "").slice(0, 200);
+
+  // ว่าง = กลับไปใช้ค่าตั้งต้นของบริษัท ไม่ใช่ 0 วัน — สองอย่างนี้ต่างกันคนละเรื่อง
+  if (raw === "") {
+    await saveDayOffQuota(session.orgId, employmentId, null, "", session.userId);
+    revalidatePath(`/hr/employees/${employmentId}`);
+    return { ok: true, cleared: true };
+  }
+
+  const days = Number(raw);
+  if (!Number.isInteger(days) || days < DAYS_OFF_LIMITS.min || days > DAYS_OFF_LIMITS.max) {
+    return {
+      error: `วันหยุดต่อเดือนต้องเป็นจำนวนเต็ม ${DAYS_OFF_LIMITS.min}–${DAYS_OFF_LIMITS.max} วัน`,
+    };
+  }
+
+  await saveDayOffQuota(session.orgId, employmentId, days, note, session.userId);
+  revalidatePath(`/hr/employees/${employmentId}`);
+  return { ok: true, daysPerMonth: days };
 }
 
 /* ═══════════════════ วันลา / วันหยุดของพนักงาน ═══════════════════ */

@@ -366,6 +366,29 @@ export interface Shift {
   status?: string;
 }
 
+/** กะหนึ่งวันในตารางประจำสัปดาห์ — `id: null` คือวันที่ไม่ได้ผูกกะไว้ */
+export interface PatternDay {
+  id: string | null;
+  code: string | null;
+  name: string | null;
+  rest_day: boolean;
+}
+
+/** ตารางกะประจำสัปดาห์ที่ผูกไว้จริง (GET /recurring-work-patterns) */
+export interface RecurringPattern {
+  id: string;
+  employment_id: string;
+  effective_from: string;
+  effective_to: string | null;
+  monday: PatternDay;
+  tuesday: PatternDay;
+  wednesday: PatternDay;
+  thursday: PatternDay;
+  friday: PatternDay;
+  saturday: PatternDay;
+  sunday: PatternDay;
+}
+
 export interface StatutoryRuleSet {
   id: string;
   rule_type: string;

@@ -159,6 +159,58 @@ export class SchedulingService {
     });
   }
 
+  /**
+   * ตารางกะประจำสัปดาห์ของพนักงานคนหนึ่ง — ใบที่ใช้อยู่และประวัติที่ปิดไปแล้ว
+   *
+   * เดิมมีแต่ POST: ผูกกะไปแล้วไม่มีทางอ่านกลับ หน้าจอจึงได้แต่เดาแล้วเติม
+   * "ค่าตั้งต้นที่แนะนำ" ลงช่อง ซึ่งอ่านแล้วแยกไม่ออกว่าคือของที่ผูกไว้จริง
+   * หรือค่าที่ระบบเดาให้ ⇒ กดทับของเดิมโดยไม่รู้ตัวได้ทุกเมื่อ
+   *
+   * คืนชื่อกะมาด้วย ไม่ใช่แค่ id — หน้าจอต้องแสดงว่าจันทร์คือกะอะไรโดยไม่ต้อง
+   * ไปไล่จับคู่กับ /shifts เอง (และไม่พังเมื่อคนดูไม่มีสิทธิ์อ่านรายการกะ)
+   */
+  async listRecurringPatterns(
+    employmentId: string,
+  ): Promise<{ items: Record<string, unknown>[] }> {
+    return this.uow.run(async (uow) => {
+      const rows = await uow.tx
+        .select()
+        .from(schema.recurringWorkPatterns)
+        .where(eq(schema.recurringWorkPatterns.employmentId, employmentId))
+        .orderBy(desc(schema.recurringWorkPatterns.effectiveFrom));
+
+      const shifts = await uow.tx.select().from(schema.shiftDefinitions);
+      const byId = new Map(shifts.map((shift) => [shift.id, shift]));
+      const describe = (
+        shiftId: string | null,
+      ): { id: string | null; code: string | null; name: string | null; rest_day: boolean } => {
+        const shift = shiftId === null ? undefined : byId.get(shiftId);
+        return {
+          id: shiftId,
+          code: shift?.code ?? null,
+          name: shift?.name ?? null,
+          rest_day: shift?.restDay ?? false,
+        };
+      };
+
+      return {
+        items: rows.map((row) => ({
+          id: row.id,
+          employment_id: row.employmentId,
+          effective_from: row.effectiveFrom,
+          effective_to: row.effectiveTo,
+          monday: describe(row.mondayShiftId),
+          tuesday: describe(row.tuesdayShiftId),
+          wednesday: describe(row.wednesdayShiftId),
+          thursday: describe(row.thursdayShiftId),
+          friday: describe(row.fridayShiftId),
+          saturday: describe(row.saturdayShiftId),
+          sunday: describe(row.sundayShiftId),
+        })),
+      };
+    });
+  }
+
   async createWorkPolicy(input: CreateWorkPolicyInput): Promise<Record<string, unknown>> {
     return this.uow.run(async (uow) => {
       EffectivePeriod.parse(input.effective_from, input.effective_to);

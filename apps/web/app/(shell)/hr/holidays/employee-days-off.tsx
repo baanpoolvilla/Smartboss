@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { Button } from "@smartboss/ui/components/button";
 import { setEmployeeDaysOffAction, type DaysOffState } from "../actions";
 
@@ -15,9 +15,9 @@ export interface ShiftChoice {
 /**
  * ปฏิทินคลิกเลือกวันหยุดรายคน
  *
- * ใช้ checkbox จริงซ่อนไว้แล้วจัดสไตล์ที่ label — ไม่ต้องเก็บ state ใน React
- * ฟอร์มจึงส่งค่าถูกต้องแม้ JS ยังโหลดไม่เสร็จ และไม่มีทางที่จอกับค่าที่ส่ง
- * จะไม่ตรงกัน
+ * ใช้ checkbox จริงซ่อนไว้แล้วจัดสไตล์ที่ label — ไม่ต้องเก็บค่าที่ติ๊กไว้ใน
+ * React ฟอร์มจึงส่งค่าถูกต้องแม้ JS ยังโหลดไม่เสร็จ และไม่มีทางที่จอกับค่าที่ส่ง
+ * จะไม่ตรงกัน (state ที่มีเก็บแค่ "ติ๊กไปกี่วันแล้ว" ไว้โชว์ตัวนับ ไม่ใช่ตัวค่า)
  */
 export function EmployeeDaysOff({
   companyId,
@@ -26,6 +26,10 @@ export function EmployeeDaysOff({
   initialOff,
   workShifts,
   restShiftId,
+  /** หยุดได้กี่วันในเดือนนี้ — ตรวจซ้ำฝั่งเซิร์ฟเวอร์อีกชั้นเสมอ */
+  quota,
+  /** true = โควตานี้ตั้งไว้เฉพาะคนนี้ · false = ใช้ค่าตั้งต้นของบริษัท */
+  quotaPerEmployee,
 }: {
   companyId: string;
   employmentId: string;
@@ -33,13 +37,17 @@ export function EmployeeDaysOff({
   initialOff: string[];
   workShifts: ShiftChoice[];
   restShiftId: string | null;
+  quota: number;
+  quotaPerEmployee: boolean;
 }) {
   const [state, formAction, pending] = useActionState(setEmployeeDaysOffAction, EMPTY);
+  const [picked, setPicked] = useState(initialOff.length);
 
   const [year, mon] = month.split("-").map(Number);
   const daysInMonth = new Date(Date.UTC(year!, mon!, 0)).getUTCDate();
   const leading = new Date(Date.UTC(year!, mon! - 1, 1)).getUTCDay();
   const offSet = new Set(initialOff);
+  const over = picked > quota;
 
   if (restShiftId === null) {
     return (
@@ -64,6 +72,25 @@ export function EmployeeDaysOff({
       <input type="hidden" name="employment_id" value={employmentId} />
       <input type="hidden" name="month" value={month} />
       <input type="hidden" name="rest_shift_id" value={restShiftId} />
+
+      {/*
+        ตัวนับต้องอยู่เหนือปฏิทิน ไม่ใช่ใต้ปุ่ม — คนตัดสินใจว่าจะติ๊กวันไหนต่อ
+        ตอนที่สายตาอยู่บนปฏิทิน ถ้าตัวเลขอยู่ใต้ปุ่มก็รู้ว่าเกินตอนกดไปแล้ว
+      */}
+      <p
+        className="rounded-(--radius) border p-2.5 text-sm"
+        style={{
+          borderColor: over ? "var(--danger)" : "var(--line)",
+          backgroundColor: "var(--bg-soft)",
+          color: over ? "var(--danger)" : "var(--ink)",
+        }}
+      >
+        เลือกไว้ <strong>{picked}</strong> วัน จากโควตา <strong>{quota}</strong> วัน/เดือน
+        <span className="ml-1 text-(--ink-soft)">
+          ({quotaPerEmployee ? "ตั้งไว้เฉพาะคนนี้" : "ค่าตั้งต้นของบริษัท"})
+        </span>
+        {over && <span className="ml-1 font-medium">— เกินโควตา บันทึกไม่ได้</span>}
+      </p>
 
       <label className="flex max-w-md flex-col gap-1">
         <span className="text-xs font-medium text-(--ink-soft)">
@@ -102,6 +129,7 @@ export function EmployeeDaysOff({
                 name="off"
                 value={date}
                 defaultChecked={offSet.has(date)}
+                onChange={(e) => setPicked((n) => n + (e.target.checked ? 1 : -1))}
                 className="peer sr-only"
               />
               <span
@@ -115,7 +143,7 @@ export function EmployeeDaysOff({
       </div>
 
       <div>
-        <Button type="submit" disabled={pending} className="sm:w-52">
+        <Button type="submit" disabled={pending || over} className="sm:w-52">
           {pending ? "กำลังบันทึก…" : "บันทึกวันหยุดของเดือนนี้"}
         </Button>
       </div>
@@ -123,7 +151,10 @@ export function EmployeeDaysOff({
       {state.error && <p className="text-sm text-(--danger)">{state.error}</p>}
       {state.ok && (
         <div className="rounded-(--radius) border border-(--line) bg-(--bg-soft) p-3 text-sm">
-          <p className="font-medium">บันทึกแล้ว — หยุด {state.offDays} วันในเดือนนี้</p>
+          <p className="font-medium">
+            บันทึกแล้ว — หยุด {state.offDays} วันในเดือนนี้
+            {state.quota !== undefined && ` (โควตา ${state.quota} วัน)`}
+          </p>
           <p className="mt-1 text-(--ink-soft)">
             ตารางนี้ทับตารางประจำสัปดาห์เฉพาะเดือนที่บันทึก
             และไปสั่งคำนวณใหม่ที่หน้า “ผลลงเวลา” เพื่อให้ผลที่คำนวณไปแล้วใช้เกณฑ์ใหม่

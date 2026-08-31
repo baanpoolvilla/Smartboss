@@ -18,6 +18,8 @@ const DAYS = [
   ["sunday", "อาทิตย์"],
 ] as const;
 
+type DayField = (typeof DAYS)[number][0];
+
 export interface ShiftOption {
   id: string;
   label: string;
@@ -29,17 +31,27 @@ export interface PersonOption {
   label: string;
 }
 
+/** ตารางที่ผูกไว้จริงในระบบ — วันไหนไม่ได้ผูกกะเป็น `null` */
+export interface CurrentPattern {
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  days: Record<DayField, string | null>;
+}
+
 export function AssignShiftForm({
   employments,
   shifts,
   today,
   /** ตั้งค่าเมื่ออยู่ในหน้าของพนักงานคนเดียว — ซ่อนช่องเลือกคนทิ้ง */
   lockedTo,
+  /** ตารางที่ผูกไว้อยู่ของคนนี้ — `null` = ยังไม่เคยผูก, `undefined` = อ่านไม่ได้ */
+  current,
 }: {
   employments: PersonOption[];
   shifts: ShiftOption[];
   today: string;
   lockedTo?: string;
+  current?: CurrentPattern | null;
 }) {
   const [state, formAction, pending] = useActionState(setRecurringPatternAction, EMPTY);
 
@@ -58,11 +70,91 @@ export function AssignShiftForm({
     return <p className="text-sm text-(--ink-soft)">ยังไม่มีพนักงานในระบบ</p>;
   }
 
-  // วันทำงานตั้งต้นให้กะแรกที่ไม่ใช่วันหยุด — ส่วนเสาร์-อาทิตย์ปล่อยว่าง
-  const defaultWorkShift = shifts.find((s) => !s.restDay)?.id ?? "";
+  /*
+   * "หยุด" ต้องเป็นกะประเภทวันหยุดจริง ๆ ไม่ใช่ค่าว่าง — เดิมวันที่เลือกหยุด
+   * ถูกเก็บเป็น null ซึ่ง resolveShiftId คืน shiftId=null เท่ากับ "ไม่รู้ว่าวันนั้น
+   * ควรเข้ากี่โมง" ⇒ หน้าลงเวลาขึ้น "ยังไม่ผูกกะ" ทุกเสาร์-อาทิตย์ และคนที่มา
+   * สแกนในวันหยุดโดนตั้ง exception NO_SHIFT_ASSIGNED ทั้งที่ผูกครบแล้ว
+   */
+  const restShiftId = shifts.find((s) => s.restDay)?.id ?? "";
+  const workShifts = shifts.filter((s) => !s.restDay);
+  const defaultWorkShift = workShifts[0]?.id ?? "";
+
+  /** ค่าที่ควรอยู่ในช่องของวันหนึ่ง — ของที่ผูกไว้จริงมาก่อนเสมอ */
+  const valueFor = (field: DayField): string => {
+    if (current !== undefined && current !== null) return current.days[field] ?? "";
+    return field === "saturday" || field === "sunday" ? restShiftId : defaultWorkShift;
+  };
+
+  const labelOf = (shiftId: string): string =>
+    shifts.find((s) => s.id === shiftId)?.label ?? "กะที่ถูกลบไปแล้ว";
 
   return (
     <>
+      {/*
+        เห็นของจริงก่อนแก้ — ช่องเลือกด้านล่างบอกไม่ได้ว่าอันไหนคือของที่ผูกไว้อยู่
+        กับอันไหนคือค่าที่ระบบเดาให้ ตารางสรุปนี้จึงเป็นตัวตอบคำถามแรกสุดของคน
+        ที่เปิดหน้ามา: "ตอนนี้คนนี้เข้ากะอะไรบ้าง"
+      */}
+      {current === undefined ? (
+        <p className="mb-3 rounded-(--radius) border border-(--line) bg-(--bg-soft) p-2.5 text-xs text-(--ink-soft)">
+          อ่านตารางที่ผูกไว้ไม่ได้ (ระบบบุคคลไม่ตอบ) — ช่องข้างล่างเป็นค่าตั้งต้นที่แนะนำ
+          ถ้ากดบันทึกจะทับของเดิมทั้งสัปดาห์
+        </p>
+      ) : current === null ? (
+        <p className="mb-3 rounded-(--radius) border border-(--danger) bg-(--bg-soft) p-2.5 text-sm">
+          <strong>ยังไม่เคยผูกกะ</strong> — ระบบยังไม่รู้ว่าคนนี้ควรเข้ากี่โมง
+          จึงคิดสาย/ขาด/OT ให้ไม่ได้ เลือกกะของแต่ละวันข้างล่างแล้วกดผูกกะ
+        </p>
+      ) : (
+        <div className="mb-4">
+          <p className="mb-2 text-sm font-medium text-(--ink)">
+            ตารางที่ใช้อยู่ตอนนี้
+            <span className="ml-2 font-normal text-(--ink-soft)">
+              เริ่ม {current.effectiveFrom}
+              {current.effectiveTo === null
+                ? " · ยังไม่มีวันสิ้นสุด"
+                : ` ถึง ${current.effectiveTo}`}
+            </span>
+          </p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+            {DAYS.map(([field, label]) => {
+              const shiftId = current.days[field];
+              const shift =
+                shiftId === null ? undefined : shifts.find((s) => s.id === shiftId);
+              const isRest = shift?.restDay ?? false;
+              return (
+                <div
+                  key={field}
+                  className="rounded-(--radius) border border-(--line) p-2"
+                  style={
+                    shiftId === null
+                      ? { borderColor: "var(--danger)" }
+                      : isRest
+                        ? { backgroundColor: "var(--bg-soft)" }
+                        : undefined
+                  }
+                >
+                  <p className="text-[11px] text-(--ink-soft)">{label}</p>
+                  <p
+                    className="text-xs font-medium"
+                    style={{ color: shiftId === null ? "var(--danger)" : "var(--ink)" }}
+                  >
+                    {shiftId === null ? "ยังไม่ผูก" : isRest ? "หยุด" : labelOf(shiftId)}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+          {Object.values(current.days).some((id) => id === null) && (
+            <p className="mt-2 text-xs" style={{ color: "var(--danger)" }}>
+              วันที่ขึ้น “ยังไม่ผูก” ทำให้หน้าลงเวลาแจ้งว่าคนนี้ยังไม่ผูกกะเฉพาะวันนั้น —
+              ถ้าตั้งใจให้เป็นวันหยุด ให้เลือก “— หยุด —” ข้างล่างแล้วกดบันทึกใหม่
+            </p>
+          )}
+        </div>
+      )}
+
       <form action={formAction} className="flex flex-col gap-3">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {lockedTo === undefined ? (
@@ -97,31 +189,20 @@ export function AssignShiftForm({
           ~120px ซึ่งตัดชื่อกะทิ้งตั้งแต่ "Officer 08…" อ่านไม่ออกว่าเลือกกะไหน
           เข้ากี่โมง (select ของเบราว์เซอร์ตัดข้อความตอนหุบ ไม่มีทาง ellipsis หนี)
         */}
-        {/*
-          ⚠ ช่องข้างล่างเป็นค่าตั้งต้น ไม่ใช่ตารางที่บันทึกไว้ — workforce API มีแค่
-          POST /recurring-work-patterns ไม่มี GET จึงอ่านของเดิมกลับมาแสดงไม่ได้
-          คนเปิดหน้ามาเห็นจันทร์-ศุกร์เติม "Officer" ไว้แล้วจึงนึกว่าผูกเสร็จแล้ว
-          ทั้งที่หน้าลงเวลายังขึ้น "ยังไม่ผูกกะ" อยู่ — ต้องบอกออกมาตรง ๆ จนกว่า
-          จะมี endpoint อ่านตารางปัจจุบัน
-        */}
-        <p className="rounded-(--radius) border border-(--line) bg-(--bg-soft) p-2.5 text-xs text-(--ink-soft)">
-          ช่องข้างล่างเป็น<strong>ค่าตั้งต้นที่แนะนำ ไม่ใช่ตารางที่ผูกไว้อยู่</strong> —
-          ระบบยังอ่านตารางเดิมกลับมาแสดงไม่ได้ ถ้าหน้า “การลงเวลา”
-          ยังขึ้นว่าคนนี้ยังไม่ผูกกะ แปลว่ายังไม่เคยกดปุ่มข้างล่างนี้
-        </p>
-
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {DAYS.map(([field, label]) => (
             <Field key={field} label={label}>
               <select
                 name={field}
-                defaultValue={
-                  field === "saturday" || field === "sunday" ? "" : defaultWorkShift
-                }
+                defaultValue={valueFor(field)}
                 className={`${inputClass} min-w-0`}
               >
-                <option value="">— หยุด —</option>
-                {shifts.map((s) => (
+                {/*
+                  ค่าของ "หยุด" คือกะประเภทวันหยุด ไม่ใช่ค่าว่าง — เว้นแต่บริษัท
+                  ยังไม่มีกะแบบนั้น ค่อยตกกลับเป็นค่าว่างพร้อมคำเตือนใต้ฟอร์ม
+                */}
+                <option value={restShiftId}>— หยุด —</option>
+                {workShifts.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.label}
                   </option>
@@ -137,19 +218,29 @@ export function AssignShiftForm({
           บอกจำนวนกะที่มีจริงพร้อมทางไปเพิ่ม จะได้รู้ว่าไม่ใช่ระบบพัง
         */}
         <p className="text-xs text-(--ink-soft)">
-          ตอนนี้มีกะให้เลือก {shifts.length} กะ ({shifts.map((s) => s.label).join(" · ")})
-          — ต้องการกะอื่นเช่นกะบ่าย/กะดึก
+          ตอนนี้มีกะทำงานให้เลือก {workShifts.length} กะ (
+          {workShifts.map((s) => s.label).join(" · ") || "ยังไม่มี"}) —
+          ต้องการกะอื่นเช่นกะบ่าย/กะดึก
           <Link href="/hr/settings" className="mx-1 text-(--app-strong) hover:underline">
             เพิ่มที่หน้าตั้งค่า HR
           </Link>
           แล้วกลับมาที่นี่
         </p>
 
+        {restShiftId === "" && (
+          <p className="text-xs" style={{ color: "var(--danger)" }}>
+            ยังไม่มีกะประเภท “วันหยุด” ในระบบ — วันที่เลือก “— หยุด —”
+            จะถูกบันทึกเป็นวันที่ไม่มีกะ แล้วหน้าลงเวลาจะขึ้นว่า “ยังไม่ผูกกะ” ในวันนั้น
+            ถ้าอยากให้ขึ้นว่าเป็นวันหยุด ให้สร้างกะหนึ่งใบที่ติ๊ก “เป็นวันหยุด”
+            (เช่นรหัส OFF) ที่หน้าตั้งค่า HR ก่อน
+          </p>
+        )}
+
         <div>
           {/* คำเดียวกับที่หน้าลงเวลาใช้ ("ยังไม่ผูกกะ") ไม่ใช่ "บันทึกตาราง"
               ซึ่งไม่มีใครเดาได้ว่าคือปุ่มผูกกะ */}
           <Button type="submit" disabled={pending} className="sm:w-56">
-            {pending ? "กำลังผูกกะ…" : "ผูกกะตามตารางนี้"}
+            {pending ? "กำลังผูกกะ…" : current ? "บันทึกตารางใหม่" : "ผูกกะตามตารางนี้"}
           </Button>
         </div>
       </form>

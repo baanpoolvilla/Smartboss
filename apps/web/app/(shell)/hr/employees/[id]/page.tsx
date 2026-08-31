@@ -14,6 +14,7 @@ import {
   type Employment,
   type Paged,
   type Person,
+  type RecurringPattern,
 } from "@/modules/hr/lib/api";
 import {
   DataTable,
@@ -37,9 +38,12 @@ import {
   deleteEnrollmentsAction,
   terminateEmploymentAction,
 } from "../../actions";
-import { AssignShiftForm } from "../../settings/assign-shift-form";
+import { AssignShiftForm, type CurrentPattern } from "../../settings/assign-shift-form";
+import { EmployeeDaysOff } from "../../holidays/employee-days-off";
 import { EnrollFingerprintForm } from "../../devices/enroll-fingerprint-form";
+import { DayOffQuotaForm } from "./day-off-quota-form";
 import { buildScorecards } from "@/lib/performance";
+import { loadDayOffQuota } from "@/lib/day-off-quota";
 
 interface CompensationRate {
   id: string;
@@ -75,10 +79,17 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 
 export default async function EmployeeDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ month?: string }>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
+  // เดือนที่กำลังลงวันหยุด — เดือนนี้เป็นค่าตั้งต้น เปลี่ยนได้ด้วยปุ่มเลื่อนเดือน
+  const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.month ?? "")
+    ? sp.month!
+    : new Date().toISOString().slice(0, 7);
   const session = await requireOrg();
   const canManage = hasPermission(session, HR_PERMS.employeeManage);
   const canManageSalary = hasPermission(session, HR_PERMS.salaryManage);
@@ -106,8 +117,23 @@ export default async function EmployeeDetailPage({
          * ทุกตัวเป็น wfTry — คนที่ดูทะเบียนพนักงานได้อาจไม่มีสิทธิ์ดูค่าจ้าง
          * หรือจัดการกะ ไม่ควรให้ 403 ตัวเดียวล้มทั้งหน้า
          */
-        const [rates, companies, shifts, devices, enrollments, people] =
-          await Promise.all([
+        const daysInMonth = new Date(
+          Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0),
+        ).getUTCDate();
+        const monthFrom = `${month}-01`;
+        const monthTo = `${month}-${String(daysInMonth).padStart(2, "0")}`;
+
+        const [
+          rates,
+          companies,
+          shifts,
+          devices,
+          enrollments,
+          people,
+          patterns,
+          assigned,
+          quota,
+        ] = await Promise.all([
             // อัตราค่าจ้างเป็นข้อมูลอ่อนไหว — คนที่ไม่มีสิทธิ์จะได้ null
             wfTry<Paged<CompensationRate>>(`/compensation-rates?employment_id=${id}`),
             wfTry<Paged<Company>>("/companies"),
@@ -117,10 +143,87 @@ export default async function EmployeeDetailPage({
             wfTry<Paged<Device>>("/devices"),
             wfTry<Paged<BiometricEnrollment>>(`/biometric-enrollments?employment_id=${id}`),
             wfTry<Paged<Person>>("/people"),
+            /*
+             * ตารางกะที่ผูกไว้จริง — ต้องอ่านกลับมาแสดง ไม่งั้นฟอร์มด้านล่างเป็น
+             * แค่ช่องเปล่าที่เติมค่าเดาไว้ แล้วคนที่ตั้งใจมาแก้แค่วันเสาร์จะกด
+             * ทับทั้งสัปดาห์โดยไม่รู้ตัว
+             */
+            wfTry<{ items: RecurringPattern[] }>(
+              `/recurring-work-patterns?employment_id=${id}`,
+            ),
+            wfTry<{ items: { work_date: string; shift_id: string | null }[] }>(
+              `/shift-assignments?from=${monthFrom}&to=${monthTo}&employment_id=${id}`,
+            ),
+            loadDayOffQuota(session.orgId, id),
           ]);
 
         const companyId = companies?.items[0]?.id;
         const shiftItems = shifts?.items ?? [];
+
+        /*
+         * ตัวเลือกกะชุดเดียวใช้ทั้งฟอร์มผูกกะและปฏิทินวันหยุด — สองที่ต้องเรียก
+         * กะเดียวกันด้วยชื่อเดียวกัน ไม่งั้นคนเทียบกันเองไม่ออกว่าอันไหนคืออันไหน
+         */
+        const shiftOptions = shiftItems.map((sh) => {
+          const base = sh.rest_day
+            ? `${sh.name} (วันหยุด)`
+            : `${sh.name} ${minutesToClock(sh.start_minutes)}-${minutesToClock(sh.end_minutes)}`;
+          /*
+           * บริษัทที่เผลอสร้างกะชื่อเวลาเดียวกันสองใบจะได้ตัวเลือกหน้าตาเหมือนกัน
+           * เป๊ะ เลือกไม่ถูกว่าอันไหนคืออันไหน — ต่อรหัสกะให้เฉพาะตอนที่ชื่อชนกันจริง
+           * จะได้ไม่รกกับบริษัทที่ตั้งชื่อดีอยู่แล้ว
+           */
+          const duplicated =
+            shiftItems.filter(
+              (other) =>
+                other.name === sh.name &&
+                other.start_minutes === sh.start_minutes &&
+                other.end_minutes === sh.end_minutes,
+            ).length > 1;
+          return {
+            id: sh.id,
+            label: duplicated ? `${base} · ${sh.code}` : base,
+            restDay: sh.rest_day,
+          };
+        });
+
+        /*
+         * ใบที่ยังไม่ปิด (effective_to = null) คือตารางที่ใช้อยู่ — API เรียงจาก
+         * วันเริ่มล่าสุดมาก่อน จึงหยิบใบแรกที่ยังเปิดอยู่
+         *
+         * `undefined` แปลว่าอ่านไม่ได้ (ไม่มีสิทธิ์/API ล่ม) ซึ่งต่างจาก `null`
+         * ที่แปลว่าอ่านได้แล้วและยังไม่เคยผูกกะ — ฟอร์มบอกคนละเรื่องกัน
+         */
+        const openPattern = patterns?.items.find((p) => p.effective_to === null);
+        const currentPattern: CurrentPattern | null | undefined =
+          patterns === null
+            ? undefined
+            : openPattern === undefined
+              ? null
+              : {
+                  effectiveFrom: openPattern.effective_from,
+                  effectiveTo: openPattern.effective_to,
+                  days: {
+                    monday: openPattern.monday.id,
+                    tuesday: openPattern.tuesday.id,
+                    wednesday: openPattern.wednesday.id,
+                    thursday: openPattern.thursday.id,
+                    friday: openPattern.friday.id,
+                    saturday: openPattern.saturday.id,
+                    sunday: openPattern.sunday.id,
+                  },
+                };
+
+        const restShiftId = shiftItems.find((sh) => sh.rest_day)?.id ?? null;
+        const initialOff = (assigned?.items ?? [])
+          .filter((a) => a.shift_id !== null && a.shift_id === restShiftId)
+          .map((a) => a.work_date);
+        const prevMonth = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 2, 1))
+          .toISOString()
+          .slice(0, 7);
+        const nextMonth = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 1))
+          .toISOString()
+          .slice(0, 7);
 
         const liveEnrollments = (enrollments?.items ?? []).filter(
           (en) => en.status !== "DELETED",
@@ -320,32 +423,69 @@ export default async function EmployeeDetailPage({
                 <AssignShiftForm
                   employments={[]}
                   lockedTo={id}
-                  shifts={shiftItems.map((sh) => {
-                    const base = sh.rest_day
-                      ? `${sh.name} (วันหยุด)`
-                      : `${sh.name} ${minutesToClock(sh.start_minutes)}-${minutesToClock(sh.end_minutes)}`;
-                    /*
-                     * บริษัทที่เผลอสร้างกะชื่อเวลาเดียวกันสองใบจะได้ตัวเลือกหน้าตา
-                     * เหมือนกันเป๊ะ เลือกไม่ถูกว่าอันไหนคืออันไหน — ต่อรหัสกะให้
-                     * เฉพาะตอนที่ชื่อชนกันจริง จะได้ไม่รกกับบริษัทที่ตั้งชื่อดีอยู่แล้ว
-                     */
-                    const duplicated =
-                      shiftItems.filter(
-                        (other) =>
-                          other.name === sh.name &&
-                          other.start_minutes === sh.start_minutes &&
-                          other.end_minutes === sh.end_minutes,
-                      ).length > 1;
-                    return {
-                      id: sh.id,
-                      label: duplicated ? `${base} · ${sh.code}` : base,
-                      restDay: sh.rest_day,
-                    };
-                  })}
+                  shifts={shiftOptions}
+                  current={currentPattern}
                   today={new Date().toISOString().slice(0, 10)}
                 />
               ) : (
                 <p className="text-sm text-(--ink-soft)">ไม่มีสิทธิ์แก้ตารางกะ</p>
+              )}
+            </SectionCard>
+
+            {/*
+              วันหยุดรายคนเคยอยู่ที่หน้า /hr/holidays แล้วถูกย้ายมาที่นี่ —
+              แต่ย้ายค้าง: หน้านั้นเขียนว่า "ย้ายไปหน้าพนักงานแล้ว" ทั้งที่หน้านี้
+              ไม่เคยมีปฏิทินให้ลง ⇒ ลงวันหยุดรายคนไม่ได้เลยไม่ว่าจะเดินไปทางไหน
+            */}
+            <SectionCard
+              title="วันหยุดของคนนี้"
+              description="ทับตารางประจำสัปดาห์เฉพาะเดือนที่เลือก — ใช้กับคนที่หยุดไม่ตรงวันเดิมทุกสัปดาห์"
+              action={
+                <div className="flex items-center gap-1">
+                  <Link href={`/hr/employees/${id}?month=${prevMonth}`}>
+                    <Button size="sm" variant="outline">
+                      ◀
+                    </Button>
+                  </Link>
+                  <span className="px-1 font-mono text-sm">{month}</span>
+                  <Link href={`/hr/employees/${id}?month=${nextMonth}`}>
+                    <Button size="sm" variant="outline">
+                      ▶
+                    </Button>
+                  </Link>
+                </div>
+              }
+            >
+              {canManage ? (
+                <div className="flex flex-col gap-4">
+                  <DayOffQuotaForm
+                    employmentId={id}
+                    daysPerMonth={quota.daysPerMonth}
+                    perEmployee={quota.perEmployee}
+                    companyDefault={quota.companyDefault}
+                    note={quota.note}
+                  />
+                  {companyId === undefined ? (
+                    <p className="text-sm text-(--ink-soft)">
+                      ยังไม่มีบริษัทในระบบบุคคล จึงลงวันหยุดรายคนไม่ได้
+                    </p>
+                  ) : (
+                    <EmployeeDaysOff
+                      companyId={companyId}
+                      employmentId={id}
+                      month={month}
+                      initialOff={initialOff}
+                      workShifts={shiftOptions
+                        .filter((sh) => !sh.restDay)
+                        .map((sh) => ({ id: sh.id, label: sh.label }))}
+                      restShiftId={restShiftId}
+                      quota={quota.daysPerMonth}
+                      quotaPerEmployee={quota.perEmployee}
+                    />
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-(--ink-soft)">ไม่มีสิทธิ์แก้วันหยุดของพนักงาน</p>
               )}
             </SectionCard>
 
