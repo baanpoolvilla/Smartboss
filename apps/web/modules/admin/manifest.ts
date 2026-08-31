@@ -27,6 +27,7 @@ export const adminManifest: ModuleManifest = {
     // เมนูนี้โผล่เฉพาะ SUPER_ADMIN เช่นกัน — รวมตั๋วแจ้งปัญหาจากทุกบริษัทมาไว้ที่เดียว
     { label: "แจ้งปัญหาระบบ (ทุกบริษัท)", path: "/admin/issue-reports", permission: ADMIN_PERMS.orgCreate, icon: "LifeBuoy" },
     { label: "ผลงานรายคน", path: "/admin/performance", permission: ADMIN_PERMS.performanceView, icon: "ChartColumn" },
+    { label: "Discord Report", path: "/admin/discord-reports", permission: ADMIN_PERMS.performanceView, icon: "MessageSquareText" },
     { label: "ความปลอดภัย", path: "/admin/security", permission: ADMIN_PERMS.securitySettingManage, icon: "ShieldCheck" },
     { label: "ประวัติการใช้งาน", path: "/admin/audit", permission: ADMIN_PERMS.auditView, icon: "History" },
   ],

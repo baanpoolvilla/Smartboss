@@ -1,0 +1,14 @@
+{
+  "name": "discord-report-bot",
+  "private": true,
+  "type": "module",
+  "version": "0.0.1",
+  "description": "ตัวเชื่อม Discord -> SmartBoss (ชั่วคราว) — ฟังห้อง report แล้วยิงเข้า /api/report-task/discord-ingest",
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5"
+  }
+}
