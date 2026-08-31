@@ -393,3 +393,61 @@ export async function listRoomFolders() {
     orderBy: { name: "asc" },
   });
 }
+
+export interface AllFilesRow {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  currentVersion: number;
+  createdAt: Date;
+  /** "ไฟล์บริษัท" (อยู่ที่ราก), "โฟลเดอร์: X" หรือ "ห้อง: X" — บอกว่าไฟล์นี้มาจากไหน
+   * โดยไม่ต้องกดเข้าไปดูทีละโฟลเดอร์/ห้องก่อน (มุมมองรวมแบบหน้า SharePoint) */
+  sourceLabel: string;
+}
+
+/** ไฟล์ทั้งหมดที่ผู้ใช้ปัจจุบันเห็นได้ รวมทั้งบริษัท — ไม่ต้องไล่กดเข้าโฟลเดอร์/ห้อง
+ * ทีละที่ (เหมือนหน้า SharePoint ที่รวมไฟล์จากทุกไซต์ที่มีสิทธิ์ไว้หน้าเดียว) ไฟล์ที่
+ * อยู่ในห้องที่เข้าไม่ได้จะไม่ปรากฏเลย — กรองจริงฝั่งเซิร์ฟเวอร์ ไม่ใช่ซ่อนแค่ UI */
+export async function listAllFiles(): Promise<AllFilesRow[]> {
+  const session = await requireAccess();
+  const [allFiles, allFolders, accessibleTopicIds] = await Promise.all([
+    prisma.companyFile.findMany({ where: { orgId: session.orgId }, orderBy: { createdAt: "desc" } }),
+    prisma.companyFolder.findMany({ where: { orgId: session.orgId } }),
+    listAccessibleTopicIds(session.orgId, session.userId),
+  ]);
+  const folderById = new Map(allFolders.map((f) => [f.id, f]));
+
+  function effectiveRoomId(folderId: string | null): string | null {
+    let currentId = folderId;
+    for (let i = 0; i < 20 && currentId; i++) {
+      const folder = folderById.get(currentId);
+      if (!folder) return null;
+      if (folder.roomId) return folder.roomId;
+      currentId = folder.parentId;
+    }
+    return null;
+  }
+
+  function sourceLabelOf(folderId: string | null): string {
+    if (!folderId) return "ไฟล์บริษัท (หน้าหลัก)";
+    const folder = folderById.get(folderId);
+    if (!folder) return "ไฟล์บริษัท";
+    return folder.roomId ? `ห้อง: ${folder.name}` : `โฟลเดอร์: ${folder.name}`;
+  }
+
+  return allFiles
+    .filter((file) => {
+      const roomId = effectiveRoomId(file.folderId);
+      return !roomId || accessibleTopicIds.has(roomId);
+    })
+    .map((file) => ({
+      id: file.id,
+      name: file.name,
+      mimeType: file.mimeType,
+      size: file.size,
+      currentVersion: file.currentVersion,
+      createdAt: file.createdAt,
+      sourceLabel: sourceLabelOf(file.folderId),
+    }));
+}
