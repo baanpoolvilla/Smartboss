@@ -203,7 +203,7 @@ export default async function PerformanceSettingsPage() {
                   label={PERFORMANCE_CATEGORIES[key]}
                   hint={
                     key === "task_manual_dock"
-                      ? "หัวหน้ากรอกคะแนนเอง ค่านี้ไม่ถูกใช้"
+                      ? "คะแนนจริงมาจากสติกเกอร์ที่หัวหน้ากดบนการ์ดงาน (แก้ชุดสติกเกอร์ได้ในบอร์ด Kanban) — ค่าในช่องนี้ไม่ถูกใช้"
                       : `ค่าเริ่มต้น ${DEFAULT_RULE_POINTS[key]}`
                   }
                 >
