@@ -377,6 +377,15 @@ model PerformanceSetting {
   pmGraceDays Int @default(7) @map("pm_grace_days")
 
   /**
+   * ใบงานเลยกำหนดกี่วันถึงถือว่าปล่อยปละละเลย (เผื่อเวลาให้ทำก่อน)
+   *
+   * เดิม workorder_overdue หักทันทีที่เลยกำหนดวินาทีแรก (grace = 0 ตายตัว)
+   * ต่างจาก PM ที่ผ่อนผันได้ — ไม่มีเหตุผลให้สองอย่างนี้มีมาตรฐานต่างกัน
+   * ค่าเริ่มต้น 0 รักษาพฤติกรรมเดิมของบริษัทที่ยังไม่เคยตั้งค่า
+   */
+  workOrderGraceDays Int @default(0) @map("work_order_grace_days")
+
+  /**
    * ย้อนดูผลลงเวลากี่วันในแต่ละรอบ cron
    */
   attendanceLookbackDays Int @default(45) @map("attendance_lookback_days")

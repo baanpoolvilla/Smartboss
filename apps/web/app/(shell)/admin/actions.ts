@@ -782,6 +782,7 @@ const perfNumbers = z.object({
   lateThresholdMinutes: z.number().int().min(0).max(480),
   absenceThresholdMinutes: z.number().int().min(0).max(1440),
   pmGraceDays: z.number().int().min(0).max(365),
+  workOrderGraceDays: z.number().int().min(0).max(365),
   attendanceLookbackDays: z.number().int().min(1).max(365),
 });
 
@@ -802,6 +803,7 @@ export async function savePerformanceSettingsAction(formData: FormData) {
     lateThresholdMinutes: Number(formData.get("lateThresholdMinutes")),
     absenceThresholdMinutes: Number(formData.get("absenceThresholdMinutes")),
     pmGraceDays: Number(formData.get("pmGraceDays")),
+    workOrderGraceDays: Number(formData.get("workOrderGraceDays")),
     attendanceLookbackDays: Number(formData.get("attendanceLookbackDays")),
   });
 

@@ -65,6 +65,7 @@ export interface PerformanceSettings {
   lateThresholdMinutes: number;
   absenceThresholdMinutes: number;
   pmGraceDays: number;
+  workOrderGraceDays: number;
   attendanceLookbackDays: number;
   rulePoints: Record<PerformanceCategory, number>;
   /** เรียงจากคะแนนสูงไปต่ำแล้ว — ตัวแรกที่ผ่านคือเกรดที่ได้ */
@@ -77,6 +78,7 @@ const FALLBACK: PerformanceSettings = {
   lateThresholdMinutes: 15,
   absenceThresholdMinutes: 240,
   pmGraceDays: 7,
+  workOrderGraceDays: 0,
   attendanceLookbackDays: 45,
   rulePoints: DEFAULT_RULE_POINTS,
   gradeThresholds: Object.entries(DEFAULT_GRADE_THRESHOLDS).sort((a, b) => b[1] - a[1]),
@@ -110,6 +112,7 @@ export async function loadPerformanceSettings(orgId: string): Promise<Performanc
     lateThresholdMinutes: row.lateThresholdMinutes,
     absenceThresholdMinutes: row.absenceThresholdMinutes,
     pmGraceDays: row.pmGraceDays,
+    workOrderGraceDays: row.workOrderGraceDays,
     attendanceLookbackDays: row.attendanceLookbackDays,
     rulePoints: { ...DEFAULT_RULE_POINTS, ...overrides } as Record<
       PerformanceCategory,
@@ -141,6 +144,7 @@ export async function loadPerformanceSettingsMap(
       lateThresholdMinutes: row.lateThresholdMinutes,
       absenceThresholdMinutes: row.absenceThresholdMinutes,
       pmGraceDays: row.pmGraceDays,
+      workOrderGraceDays: row.workOrderGraceDays,
       attendanceLookbackDays: row.attendanceLookbackDays,
       rulePoints: { ...DEFAULT_RULE_POINTS, ...overrides } as Record<
         PerformanceCategory,

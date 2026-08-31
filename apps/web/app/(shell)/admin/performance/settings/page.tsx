@@ -160,13 +160,27 @@ export default async function PerformanceSettingsPage() {
               />
             </Field>
             <Field
-              label="ผ่อนผัน PM กี่วัน"
-              hint="เลยกำหนดเกินกี่วันถึงถือว่าปล่อยปละละเลย"
+              label="บำรุงรักษา (PM) เกินได้กี่วัน"
+              hint="เลยกำหนดเกินกี่วันถึงถือว่าปล่อยปละละเลย — 0 = หักทันทีที่เลยกำหนด"
             >
               <input
                 type="number"
                 name="pmGraceDays"
                 defaultValue={s.pmGraceDays}
+                min={0}
+                max={365}
+                required
+                className={inputClass}
+              />
+            </Field>
+            <Field
+              label="ใบงานเกินได้กี่วัน"
+              hint="เลยกำหนดเกินกี่วันถึงถือว่าปล่อยปละละเลย — 0 = หักทันทีที่เลยกำหนด"
+            >
+              <input
+                type="number"
+                name="workOrderGraceDays"
+                defaultValue={s.workOrderGraceDays}
                 min={0}
                 max={365}
                 required
