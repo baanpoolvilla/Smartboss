@@ -249,6 +249,22 @@ export async function restoreFileVersion(fileId: string, versionNumber: number) 
   );
 }
 
+/** เปลี่ยนชื่อไฟล์ — ชื่ออยู่บน CompanyFile (เวอร์ชันเก่าไม่ถูกแตะเลย) เหมือน
+ * SharePoint ที่ rename ไม่นับเป็นเวอร์ชันใหม่ */
+export async function renameFile(fileId: string, name: string) {
+  const session = await requireUpload();
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("ตั้งชื่อไฟล์ก่อน");
+  const file = await prisma.companyFile.findFirst({ where: { id: fileId, orgId: session.orgId } });
+  if (!file) throw new Error("ไม่พบไฟล์นี้");
+  await assertFolderAccess(session, file.folderId);
+  if (!canModify(session, file.createdBy)) throw new Error("ไม่มีสิทธิ์เปลี่ยนชื่อไฟล์นี้");
+  return prisma.companyFile.update({
+    where: { id: fileId },
+    data: { name: trimmed, updatedBy: session.userId },
+  });
+}
+
 export async function deleteCompanyFile(fileId: string) {
   const session = await requireUpload();
   const file = await prisma.companyFile.findFirst({ where: { id: fileId, orgId: session.orgId } });
@@ -401,11 +417,15 @@ export interface AllFilesRow {
   size: number;
   currentVersion: number;
   createdAt: Date;
+  /** วันที่แก้ล่าสุด (updatedAt ของไฟล์) — คอลัมน์ "Modified" แบบ SharePoint */
+  updatedAt: Date;
   /** "ไฟล์บริษัท" (อยู่ที่ราก), "โฟลเดอร์: X" หรือ "ห้อง: X" — บอกว่าไฟล์นี้มาจากไหน
    * โดยไม่ต้องกดเข้าไปดูทีละโฟลเดอร์/ห้องก่อน (มุมมองรวมแบบหน้า SharePoint) */
   sourceLabel: string;
   /** ชื่อคนอัปโหลดไฟล์นี้ครั้งแรก (ไม่ใช่คนแก้เวอร์ชันล่าสุด) — null ถ้าบัญชีถูกปิดใช้งานไปแล้ว */
   uploaderName: string | null;
+  /** ชื่อคนแก้ล่าสุด (updatedBy ถ้ามี ไม่งั้น = คนอัปโหลดแรก) — null ถ้าบัญชีถูกปิด */
+  modifiedByName: string | null;
 }
 
 /** ไฟล์ทั้งหมดที่ผู้ใช้ปัจจุบันเห็นได้ รวมทั้งบริษัท — ไม่ต้องไล่กดเข้าโฟลเดอร์/ห้อง
@@ -419,7 +439,7 @@ export async function listAllFiles(): Promise<AllFilesRow[]> {
     listAccessibleTopicIds(session.orgId, session.userId),
   ]);
   const folderById = new Map(allFolders.map((f) => [f.id, f]));
-  const uploaderIds = [...new Set(allFiles.map((f) => f.createdBy))];
+  const uploaderIds = [...new Set(allFiles.flatMap((f) => [f.createdBy, f.updatedBy].filter((x): x is string => !!x)))];
   const uploaders = uploaderIds.length
     ? await prisma.user.findMany({ where: { id: { in: uploaderIds } }, select: { id: true, name: true } })
     : [];
@@ -455,7 +475,52 @@ export async function listAllFiles(): Promise<AllFilesRow[]> {
       size: file.size,
       currentVersion: file.currentVersion,
       createdAt: file.createdAt,
+      updatedAt: file.updatedAt,
       sourceLabel: sourceLabelOf(file.folderId),
       uploaderName: uploaderNameById.get(file.createdBy) ?? null,
+      modifiedByName: (file.updatedBy && uploaderNameById.get(file.updatedBy)) || uploaderNameById.get(file.createdBy) || null,
     }));
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────
+// ค้นหา + ย้ายไฟล์ (SharePoint parity) — ทั้งหมดผูก orgId + สิทธิ์ห้องฝั่งเซิร์ฟเวอร์
+// ─────────────────────────────────────────────────────────────────────────
+
+/** ค้นไฟล์ตามชื่อทั้งบริษัทที่ผู้ใช้เห็นได้ — ใช้มุมมองรวมเดิม (listAllFiles) เป็นฐาน
+ * จึงกรองสิทธิ์ห้อง/orgId เหมือนกันเป๊ะ ไม่มีทางรั่วไฟล์ห้องที่เข้าไม่ได้
+ * (ตอนนี้กรองใน memory — เมื่อไฟล์เยอะค่อยดันไป SQL contains/full-text ดูรายงาน) */
+export async function searchFiles(query: string): Promise<AllFilesRow[]> {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const all = await listAllFiles();
+  return all.filter((f) => f.name.toLowerCase().includes(q)).slice(0, 100);
+}
+
+/** โฟลเดอร์ปลายทางที่ย้ายไฟล์ไปได้ — เฉพาะที่ผู้ใช้เข้าถึงได้ (โฟลเดอร์ปกติ + ห้องที่
+ * เป็นสมาชิก) ใช้เติม dropdown "ย้ายไปที่..." ฝั่ง UI */
+export async function listMovableFolders(): Promise<{ id: string; name: string; roomId: string | null }[]> {
+  const session = await requireAccess();
+  const [folders, accessible] = await Promise.all([
+    prisma.companyFolder.findMany({ where: { orgId: session.orgId }, orderBy: { name: "asc" } }),
+    listAccessibleTopicIds(session.orgId, session.userId),
+  ]);
+  return folders
+    .filter((f) => !f.roomId || accessible.has(f.roomId))
+    .map((f) => ({ id: f.id, name: f.name, roomId: f.roomId }));
+}
+
+/** ย้ายไฟล์ไปโฟลเดอร์อื่น (targetFolderId = null คือย้ายไปรากบริษัท) — ตรวจสิทธิ์ทั้ง
+ * โฟลเดอร์ต้นทางและปลายทาง กันย้ายไฟล์เข้า/ออกห้องที่ไม่มีสิทธิ์ */
+export async function moveFile(fileId: string, targetFolderId: string | null) {
+  const session = await requireUpload();
+  const file = await prisma.companyFile.findFirst({ where: { id: fileId, orgId: session.orgId } });
+  if (!file) throw new Error("ไม่พบไฟล์นี้");
+  await assertFolderAccess(session, file.folderId);
+  await assertFolderAccess(session, targetFolderId);
+  if (!canModify(session, file.createdBy)) throw new Error("ไม่มีสิทธิ์ย้ายไฟล์นี้");
+  return prisma.companyFile.update({
+    where: { id: fileId },
+    data: { folderId: targetFolderId, updatedBy: session.userId },
+  });
 }

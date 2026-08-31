@@ -4,13 +4,15 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@smartboss/ui/components/card";
 import { Button } from "@smartboss/ui/components/button";
-import { Download, History, Link2, RotateCcw, Trash2, Upload, Copy, Ban } from "lucide-react";
+import { Download, History, Link2, RotateCcw, Trash2, Upload, Copy, Ban, Pencil, CalendarClock, FolderInput } from "lucide-react";
 import {
   addFileVersion,
   restoreFileVersion,
   deleteCompanyFile,
   createShareLink,
   revokeShareLink,
+  renameFile,
+  moveFile,
 } from "@/modules/company-files/data/files";
 import { uploadCompanyFile } from "@/modules/company-files/lib/upload";
 import { formatFileSize, fileIconKind, isPreviewable, fileKindOf } from "@/modules/company-files/lib/file-meta";
@@ -22,18 +24,22 @@ export function FileDetail({
   versions,
   shareLinks,
   uploaderNames,
+  movableFolders,
 }: {
   file: CompanyFile;
   versions: CompanyFileVersion[];
   shareLinks: CompanyFileShareLink[];
   uploaderNames: Record<string, string>;
+  movableFolders: { id: string; name: string; roomId: string | null }[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [shareRole, setShareRole] = useState<ShareLinkRole>("view");
+  const [shareExpiry, setShareExpiry] = useState<string>("0");
   const [shareCreated, setShareCreated] = useState<string | null>(null);
+  const [moveTarget, setMoveTarget] = useState<string>(file.folderId ?? "__root__");
 
   function run(action: () => Promise<unknown>) {
     setError(null);
@@ -66,9 +72,26 @@ export function FileDetail({
   }
 
   function handleCreateShareLink() {
+    const days = shareExpiry === "0" ? null : Number(shareExpiry);
     run(async () => {
-      const link = await createShareLink(file.id, shareRole, null);
+      const link = await createShareLink(file.id, shareRole, days);
       setShareCreated(`${window.location.origin}/s/${link.token}`);
+    });
+  }
+
+  function handleRename() {
+    const name = window.prompt("ตั้งชื่อไฟล์ใหม่:", file.name);
+    if (name === null || !name.trim()) return;
+    run(async () => {
+      await renameFile(file.id, name.trim());
+    });
+  }
+
+  function handleMove() {
+    const target = moveTarget === "__root__" ? null : moveTarget;
+    if (target === file.folderId) return;
+    run(async () => {
+      await moveFile(file.id, target);
     });
   }
 
@@ -91,6 +114,9 @@ export function FileDetail({
               <Upload className="h-4 w-4" /> อัปโหลดเวอร์ชันใหม่
             </Button>
             <input ref={fileInputRef} type="file" className="hidden" onChange={(e) => handleNewVersion(e.target.files)} />
+            <Button variant="outline" size="sm" disabled={isPending} onClick={handleRename}>
+              <Pencil className="h-4 w-4" /> เปลี่ยนชื่อ
+            </Button>
             <Button variant="danger" size="sm" disabled={isPending} onClick={handleDelete}>
               <Trash2 className="h-4 w-4" /> ลบไฟล์
             </Button>
@@ -111,6 +137,26 @@ export function FileDetail({
         {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
       </Card>
 
+      {/* ย้ายไฟล์ */}
+      <Card className="p-4 sm:p-5">
+        <h3 className="text-sm font-semibold flex items-center gap-1.5 mb-3"><FolderInput className="h-4 w-4" /> ตำแหน่งไฟล์</h3>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={moveTarget}
+            onChange={(e) => setMoveTarget(e.target.value)}
+            className="h-9 min-w-[220px] rounded-(--radius) border border-(--line) bg-(--bg) px-2 text-sm"
+          >
+            <option value="__root__">ไฟล์บริษัท (หน้าหลัก)</option>
+            {movableFolders.map((f) => (
+              <option key={f.id} value={f.id}>{f.roomId ? `ห้อง: ${f.name}` : f.name}</option>
+            ))}
+          </select>
+          <Button size="sm" disabled={isPending || moveTarget === (file.folderId ?? "__root__")} onClick={handleMove}>
+            ย้ายไปที่นี่
+          </Button>
+        </div>
+      </Card>
+
       {/* ลิงก์แชร์ */}
       <Card className="p-4 sm:p-5">
         <h3 className="text-sm font-semibold flex items-center gap-1.5 mb-3"><Link2 className="h-4 w-4" /> ลิงก์แชร์</h3>
@@ -123,6 +169,17 @@ export function FileDetail({
             {(Object.keys(SHARE_LINK_ROLE_LABELS) as ShareLinkRole[]).map((r) => (
               <option key={r} value={r}>{SHARE_LINK_ROLE_LABELS[r]}</option>
             ))}
+          </select>
+          <select
+            value={shareExpiry}
+            onChange={(e) => setShareExpiry(e.target.value)}
+            className="h-9 rounded-(--radius) border border-(--line) bg-(--bg) px-2 text-sm"
+            aria-label="อายุลิงก์"
+          >
+            <option value="0">ไม่มีวันหมดอายุ</option>
+            <option value="7">หมดอายุใน 7 วัน</option>
+            <option value="30">หมดอายุใน 30 วัน</option>
+            <option value="90">หมดอายุใน 90 วัน</option>
           </select>
           <Button size="sm" disabled={isPending} onClick={handleCreateShareLink}>สร้างลิงก์</Button>
         </div>
@@ -145,8 +202,16 @@ export function FileDetail({
           <div className="flex flex-col gap-1.5">
             {shareLinks.map((link) => (
               <div key={link.id} className="flex items-center justify-between gap-2 text-xs px-2.5 py-1.5 rounded-(--radius) bg-(--bg-soft)">
-                <span className={link.revoked ? "line-through text-(--ink-soft)" : ""}>
+                <span className={link.revoked ? "line-through text-(--ink-soft)" : "flex items-center gap-1.5 flex-wrap"}>
                   {SHARE_LINK_ROLE_LABELS[link.role as ShareLinkRole] ?? link.role} · สร้างเมื่อ {new Date(link.createdAt).toLocaleDateString("th-TH")}
+                  {link.expiresAt && (
+                    <span className={`inline-flex items-center gap-1 ${new Date(link.expiresAt).getTime() < Date.now() ? "text-red-600" : "text-(--ink-soft)"}`}>
+                      <CalendarClock className="h-3 w-3" />
+                      {new Date(link.expiresAt).getTime() < Date.now()
+                        ? "หมดอายุแล้ว"
+                        : `หมดอายุ ${new Date(link.expiresAt).toLocaleDateString("th-TH")}`}
+                    </span>
+                  )}
                 </span>
                 {!link.revoked && (
                   <button

@@ -29,6 +29,10 @@ export function AllFilesList({ files }: { files: AllFilesRow[] }) {
                 {formatFileSize(f.size)} · {fileIconKind(f.mimeType)} · v{f.currentVersion}
                 {f.uploaderName && <> · อัปโหลดโดย {f.uploaderName}</>}
               </p>
+              <p className="text-[11px] text-(--ink-faint,#7f93a6)">
+                แก้ล่าสุด {new Date(f.updatedAt).toLocaleDateString("th-TH")}
+                {f.modifiedByName && <> · โดย {f.modifiedByName}</>}
+              </p>
             </div>
             <span className="text-[11px] text-(--ink-soft) shrink-0 rounded-full bg-(--bg-soft) px-2.5 py-1">
               {f.sourceLabel}
