@@ -206,6 +206,13 @@ export default async function EmployeeDetailPage({
          * ที่แปลว่าอ่านได้แล้วและยังไม่เคยผูกกะ — ฟอร์มบอกคนละเรื่องกัน
          */
         const openPattern = patterns?.items.find((p) => p.effective_to === null);
+        /*
+         * เข้าถึงผ่าน `?.` ทุกจุด — `patterns` มาจาก wfTry ที่ผ่าน JSON.parse ตรง ๆ
+         * ไม่มีการตรวจ shape รันไทม์ ถ้า workforce-api เวอร์ชันที่รันอยู่จริงตอบ
+         * โครงสร้างต่างจากที่ประกาศไว้ (เช่นยังไม่ได้ deploy โค้ดล่าสุด) การเข้าถึง
+         * แบบ `.monday.id` ตรง ๆ จะโยน TypeError กลางการ render ทำให้ทั้งหน้าพัง
+         * เป็นจอขาว — ที่นี่ต้องพังแบบนุ่มนวลกว่านั้น: ถือว่าอ่านตารางไม่ได้แทน
+         */
         const currentPattern: CurrentPattern | null | undefined =
           patterns === null
             ? undefined
@@ -215,13 +222,13 @@ export default async function EmployeeDetailPage({
                   effectiveFrom: openPattern.effective_from,
                   effectiveTo: openPattern.effective_to,
                   days: {
-                    monday: openPattern.monday.id,
-                    tuesday: openPattern.tuesday.id,
-                    wednesday: openPattern.wednesday.id,
-                    thursday: openPattern.thursday.id,
-                    friday: openPattern.friday.id,
-                    saturday: openPattern.saturday.id,
-                    sunday: openPattern.sunday.id,
+                    monday: openPattern.monday?.id ?? null,
+                    tuesday: openPattern.tuesday?.id ?? null,
+                    wednesday: openPattern.wednesday?.id ?? null,
+                    thursday: openPattern.thursday?.id ?? null,
+                    friday: openPattern.friday?.id ?? null,
+                    saturday: openPattern.saturday?.id ?? null,
+                    sunday: openPattern.sunday?.id ?? null,
                   },
                 };
 
@@ -230,7 +237,7 @@ export default async function EmployeeDetailPage({
         const boundShiftId =
           openPattern === undefined
             ? null
-            : (DAY_FIELDS.map((field) => openPattern[field].id).find(
+            : (DAY_FIELDS.map((field) => openPattern[field]?.id ?? null).find(
                 (id) => id !== null && id !== restShiftId,
               ) ?? null);
         const initialOff = (assigned?.items ?? [])
