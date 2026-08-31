@@ -164,7 +164,13 @@ const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
     // ผู้บริหารเป็นคนกำหนดว่าบริษัทนี้ถือว่าอะไรคือ "ทำงานได้ดี"
     "core.performance.view", "core.performance.setting.manage",
     "core.department.view", "core.department.manage", "core.data.view_all",
-    "hr.access", "hr.employee.view", "hr.salary.view", "hr.payroll.view", "hr.payroll.approve",
+    // เดิมมีแค่ view/payroll.approve — เห็นข้อมูลได้แต่ตั้งค่าฟีเจอร์ของ HR
+    // เองไม่ได้เลย (hr.setting.manage หายไป ⇒ เข้า /hr/settings ไม่ได้ ทั้งที่
+    // เกณฑ์ตัดคะแนน/เกรดที่ผูกกับ HR อยู่ในนั้น) ให้เต็มชุดเหมือน MAINT/REPORT_TASK
+    // ข้างล่าง — payrollManage ให้พร้อมกับ payrollApprove ได้อย่างปลอดภัย:
+    // mapSmartbossRoles ให้สิทธิ์ APPROVER อย่างเดียวเมื่อมี payrollApprove
+    // (ไม่ทับกับ PREPARER) กฎแยกหน้าที่จึงยังอยู่ครบ
+    ...HR_PERMS,
     ...MAINT_PERMS.filter((p) => p !== "maintenance.admin"),
     ...REPORT_TASK_PERMS,
   ],
