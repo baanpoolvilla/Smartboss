@@ -536,6 +536,16 @@ const WEEKDAY_FIELDS = [
   "sunday",
 ] as const;
 
+/**
+ * ผูกกะให้พนักงานหนึ่งคน
+ *
+ * ฟอร์มถามคำถามเดียว ("คนนี้เข้ากะไหน") แต่ workforce เก็บเป็นตารางเจ็ดวัน —
+ * การกางกะเดียวออกเป็นเจ็ดวันจึงเกิดที่นี่ ไม่ใช่ให้คนกรอกซ้ำเจ็ดรอบเอง
+ *
+ * วันที่ติ๊กว่าหยุดประจำได้กะประเภทวันหยุด ไม่ใช่ค่าว่าง — ค่าว่างแปลว่า
+ * "ไม่รู้ว่าวันนั้นควรเข้ากี่โมง" ซึ่งทำให้หน้าลงเวลาขึ้น "ยังไม่ผูกกะ"
+ * และคนที่มาสแกนวันหยุดโดน exception ทั้งที่ผูกครบแล้ว
+ */
 export async function setRecurringPatternAction(
   _prev: PatternState,
   formData: FormData,
@@ -548,15 +558,27 @@ export async function setRecurringPatternAction(
 
   const employmentId = String(formData.get("employment_id") ?? "");
   const effectiveFrom = String(formData.get("effective_from") ?? "");
+  const workShiftId = String(formData.get("work_shift_id") ?? "");
+  // ว่างได้ = บริษัทยังไม่มีกะประเภทวันหยุด (ฟอร์มเตือนไว้แล้ว)
+  const restShiftId = String(formData.get("rest_shift_id") ?? "") || null;
+  const restDays = new Set(formData.getAll("rest_dow").map(String));
+
   if (!employmentId) return { error: "กรุณาเลือกพนักงาน" };
   if (!effectiveFrom) return { error: "กรุณาระบุวันที่เริ่มใช้" };
+  if (!workShiftId) return { error: "กรุณาเลือกกะทำงานของคนนี้" };
+  if (WEEKDAY_FIELDS.every((day) => restDays.has(day))) {
+    return {
+      error:
+        "ติ๊กว่าหยุดครบทั้งเจ็ดวัน เท่ากับคนนี้ไม่มีวันทำงานเลย — ถ้าตั้งใจให้หยุดยาว ใช้ระบบลาแทน",
+    };
+  }
 
   const days = Object.fromEntries(
-    WEEKDAY_FIELDS.map((day) => [`${day}_shift_id`, orNull(formData.get(day))]),
+    WEEKDAY_FIELDS.map((day) => [
+      `${day}_shift_id`,
+      restDays.has(day) ? restShiftId : workShiftId,
+    ]),
   );
-  if (Object.values(days).every((value) => value === null)) {
-    return { error: "ต้องเลือกกะอย่างน้อยหนึ่งวัน ไม่งั้นเท่ากับไม่ได้ตั้งอะไรเลย" };
-  }
 
   try {
     await wfFetch("/recurring-work-patterns", {
