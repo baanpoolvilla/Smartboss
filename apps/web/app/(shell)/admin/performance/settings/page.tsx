@@ -31,7 +31,10 @@ const GROUPS: { title: string; hint: string; keys: PerformanceCategory[] }[] = [
   {
     title: "งานและรายงาน",
     hint: "จากโมดูลรายงานและงาน",
-    keys: ["task_late", "task_manual_dock", "report_missed", "report_late"],
+    // task_manual_dock ไม่อยู่ในนี้แล้ว — คะแนนจริงมาจากสติกเกอร์ที่หัวหน้ากด
+    // บนการ์ดงาน Kanban (ตั้งค่าที่ /report-task/settings) ไม่ใช่เลขในช่องนี้
+    // ปล่อยให้กรอกได้ต่อไปมีแต่ทำให้เข้าใจผิดว่าตัวเลขนี้มีผล
+    keys: ["task_late", "report_missed", "report_late"],
   },
   {
     title: "งานซ่อมบำรุง",
@@ -201,11 +204,7 @@ export default async function PerformanceSettingsPage() {
                 <Field
                   key={key}
                   label={PERFORMANCE_CATEGORIES[key]}
-                  hint={
-                    key === "task_manual_dock"
-                      ? "คะแนนจริงมาจากสติกเกอร์ที่หัวหน้ากดบนการ์ดงาน (แก้ชุดสติกเกอร์ได้ในบอร์ด Kanban) — ค่าในช่องนี้ไม่ถูกใช้"
-                      : `ค่าเริ่มต้น ${DEFAULT_RULE_POINTS[key]}`
-                  }
+                  hint={`ค่าเริ่มต้น ${DEFAULT_RULE_POINTS[key]}`}
                 >
                   <input
                     type="number"
