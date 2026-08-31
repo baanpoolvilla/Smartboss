@@ -27,6 +27,7 @@ export function AllFilesList({ files }: { files: AllFilesRow[] }) {
               <p className="text-sm font-medium truncate">{f.name}</p>
               <p className="text-[11px] text-(--ink-soft)">
                 {formatFileSize(f.size)} · {fileIconKind(f.mimeType)} · v{f.currentVersion}
+                {f.uploaderName && <> · อัปโหลดโดย {f.uploaderName}</>}
               </p>
             </div>
             <span className="text-[11px] text-(--ink-soft) shrink-0 rounded-full bg-(--bg-soft) px-2.5 py-1">

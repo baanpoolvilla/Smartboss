@@ -14,8 +14,17 @@ export default async function CompanyFileDetailPage({ params }: { params: Promis
   const file = await prisma.companyFile.findFirst({ where: { id, orgId: session.orgId } });
   if (!file) notFound();
 
-  const [versions, shareLinks] = await Promise.all([listFileVersions(id), listShareLinks(id)]);
-  const uploaderIds = Array.from(new Set(versions.map((v) => v.uploadedBy)));
+  // listFileVersions/listShareLinks ทั้งคู่โยน error ถ้าไฟล์นี้อยู่ในโฟลเดอร์ห้องที่
+  // เข้าไม่ได้ — จับแล้วตอบเหมือน "ไม่พบ" แทนที่จะปล่อยให้หน้าแตก (ไม่รั่วว่ามีไฟล์นี้อยู่จริง)
+  let versions: Awaited<ReturnType<typeof listFileVersions>>;
+  let shareLinks: Awaited<ReturnType<typeof listShareLinks>>;
+  try {
+    [versions, shareLinks] = await Promise.all([listFileVersions(id), listShareLinks(id)]);
+  } catch {
+    notFound();
+  }
+
+  const uploaderIds = Array.from(new Set([file.createdBy, ...versions.map((v) => v.uploadedBy)]));
   const uploaders = uploaderIds.length > 0 ? await prisma.user.findMany({ where: { id: { in: uploaderIds } }, select: { id: true, name: true } }) : [];
   const uploaderNames = Object.fromEntries(uploaders.map((u) => [u.id, u.name]));
 

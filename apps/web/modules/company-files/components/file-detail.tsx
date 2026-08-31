@@ -79,6 +79,7 @@ export function FileDetail({
           <div>
             <p className="text-xs text-(--ink-soft)">
               {fileIconKind(file.mimeType)} · {formatFileSize(file.size)} · เวอร์ชันปัจจุบัน v{file.currentVersion}
+              {" · อัปโหลดโดย "}{uploaderNames[file.createdBy] ?? "ไม่ทราบชื่อ"}
             </p>
             <h2 className="text-base font-semibold mt-0.5 break-words">{file.name}</h2>
           </div>

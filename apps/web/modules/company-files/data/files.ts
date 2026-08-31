@@ -404,6 +404,8 @@ export interface AllFilesRow {
   /** "ไฟล์บริษัท" (อยู่ที่ราก), "โฟลเดอร์: X" หรือ "ห้อง: X" — บอกว่าไฟล์นี้มาจากไหน
    * โดยไม่ต้องกดเข้าไปดูทีละโฟลเดอร์/ห้องก่อน (มุมมองรวมแบบหน้า SharePoint) */
   sourceLabel: string;
+  /** ชื่อคนอัปโหลดไฟล์นี้ครั้งแรก (ไม่ใช่คนแก้เวอร์ชันล่าสุด) — null ถ้าบัญชีถูกปิดใช้งานไปแล้ว */
+  uploaderName: string | null;
 }
 
 /** ไฟล์ทั้งหมดที่ผู้ใช้ปัจจุบันเห็นได้ รวมทั้งบริษัท — ไม่ต้องไล่กดเข้าโฟลเดอร์/ห้อง
@@ -417,6 +419,11 @@ export async function listAllFiles(): Promise<AllFilesRow[]> {
     listAccessibleTopicIds(session.orgId, session.userId),
   ]);
   const folderById = new Map(allFolders.map((f) => [f.id, f]));
+  const uploaderIds = [...new Set(allFiles.map((f) => f.createdBy))];
+  const uploaders = uploaderIds.length
+    ? await prisma.user.findMany({ where: { id: { in: uploaderIds } }, select: { id: true, name: true } })
+    : [];
+  const uploaderNameById = new Map(uploaders.map((u) => [u.id, u.name]));
 
   function effectiveRoomId(folderId: string | null): string | null {
     let currentId = folderId;
@@ -449,5 +456,6 @@ export async function listAllFiles(): Promise<AllFilesRow[]> {
       currentVersion: file.currentVersion,
       createdAt: file.createdAt,
       sourceLabel: sourceLabelOf(file.folderId),
+      uploaderName: uploaderNameById.get(file.createdBy) ?? null,
     }));
 }
