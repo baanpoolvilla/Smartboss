@@ -30,6 +30,8 @@ export function EmployeeDaysOff({
   quota,
   /** true = โควตานี้ตั้งไว้เฉพาะคนนี้ · false = ใช้ค่าตั้งต้นของบริษัท */
   quotaPerEmployee,
+  /** กะที่ผูกไว้กับคนนี้ — วันที่ไม่ได้หยุดต้องใช้กะเดียวกับที่ผูกไว้ ไม่ใช่ให้เลือกซ้ำ */
+  boundShiftId,
 }: {
   companyId: string;
   employmentId: string;
@@ -39,6 +41,7 @@ export function EmployeeDaysOff({
   restShiftId: string | null;
   quota: number;
   quotaPerEmployee: boolean;
+  boundShiftId: string | null;
 }) {
   const [state, formAction, pending] = useActionState(setEmployeeDaysOffAction, EMPTY);
   const [picked, setPicked] = useState(initialOff.length);
@@ -48,6 +51,7 @@ export function EmployeeDaysOff({
   const leading = new Date(Date.UTC(year!, mon! - 1, 1)).getUTCDay();
   const offSet = new Set(initialOff);
   const over = picked > quota;
+  const bound = workShifts.find((s) => s.id === boundShiftId);
 
   if (restShiftId === null) {
     return (
@@ -92,23 +96,37 @@ export function EmployeeDaysOff({
         {over && <span className="ml-1 font-medium">— เกินโควตา บันทึกไม่ได้</span>}
       </p>
 
-      <label className="flex max-w-md flex-col gap-1">
-        <span className="text-xs font-medium text-(--ink-soft)">
-          กะสำหรับวันที่ไม่ได้หยุด *
-        </span>
-        <select
-          name="work_shift_id"
-          required
-          defaultValue={workShifts[0]?.id}
-          className="h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm"
-        >
-          {workShifts.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-      </label>
+      {/*
+        คนที่ผูกกะไว้แล้วไม่ต้องตอบซ้ำว่าวันทำงานใช้กะอะไร — ถ้าให้เลือกได้อีกที่
+        แล้วเลือกไม่ตรงกับที่ผูกไว้ ทั้งเดือนจะถูกเขียนทับด้วยกะที่ไม่ได้ตั้งใจ
+        โดยไม่มีอะไรเตือน (roster ทับ pattern เสมอ)
+      */}
+      {bound === undefined ? (
+        <label className="flex max-w-md flex-col gap-1">
+          <span className="text-xs font-medium text-(--ink-soft)">
+            กะสำหรับวันที่ไม่ได้หยุด *
+          </span>
+          <select
+            name="work_shift_id"
+            required
+            defaultValue={workShifts[0]?.id}
+            className="h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm"
+          >
+            {workShifts.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <>
+          <input type="hidden" name="work_shift_id" value={bound.id} />
+          <p className="text-xs text-(--ink-soft)">
+            วันที่ไม่ได้หยุดใช้กะที่ผูกไว้: <strong>{bound.label}</strong>
+          </p>
+        </>
+      )}
 
       <div className="grid max-w-md grid-cols-7 gap-1 text-center">
         {DOW.map((d) => (

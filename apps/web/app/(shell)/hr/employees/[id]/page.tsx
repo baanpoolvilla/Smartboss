@@ -56,6 +56,17 @@ interface CompensationRate {
   note: string;
 }
 
+/** ชื่อคอลัมน์วันในตารางกะ — ใช้ไล่หาว่ากะที่ผูกไว้คือใบไหน */
+const DAY_FIELDS = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+] as const;
+
 /** 480 → "08:00" · เกิน 1440 = ข้ามวัน */
 function minutesToClock(minutes: number): string {
   const day = Math.floor(minutes / 1440);
@@ -215,6 +226,13 @@ export default async function EmployeeDetailPage({
                 };
 
         const restShiftId = shiftItems.find((sh) => sh.rest_day)?.id ?? null;
+        // กะที่ผูกไว้จริง — ปฏิทินวันหยุดต้องเขียนวันทำงานด้วยกะเดียวกันนี้
+        const boundShiftId =
+          openPattern === undefined
+            ? null
+            : (DAY_FIELDS.map((field) => openPattern[field].id).find(
+                (id) => id !== null && id !== restShiftId,
+              ) ?? null);
         const initialOff = (assigned?.items ?? [])
           .filter((a) => a.shift_id !== null && a.shift_id === restShiftId)
           .map((a) => a.work_date);
@@ -439,7 +457,7 @@ export default async function EmployeeDetailPage({
             */}
             <SectionCard
               title="วันหยุดของคนนี้"
-              description="ทับตารางประจำสัปดาห์เฉพาะเดือนที่เลือก — ใช้กับคนที่หยุดไม่ตรงวันเดิมทุกสัปดาห์"
+              description="ที่เดียวที่กำหนดว่าคนนี้หยุดวันไหน — เดือนที่ไม่ได้ลงไว้ ระบบถือว่าทำงานทุกวัน"
               action={
                 <div className="flex items-center gap-1">
                   <Link href={`/hr/employees/${id}?month=${prevMonth}`}>
@@ -481,6 +499,7 @@ export default async function EmployeeDetailPage({
                       restShiftId={restShiftId}
                       quota={quota.daysPerMonth}
                       quotaPerEmployee={quota.perEmployee}
+                      boundShiftId={boundShiftId}
                     />
                   )}
                 </div>

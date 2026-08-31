@@ -45,9 +45,10 @@ export interface CurrentPattern {
  * อีกคนเข้า 07:30-16:30 ⇒ เลือกกะครั้งเดียวจบ ไม่ใช่ไล่เลือกทีละวันเจ็ดช่อง
  * ซึ่งบังคับให้ตอบคำถามเดิมซ้ำเจ็ดรอบเพื่อได้คำตอบเดียวกันทั้งเจ็ดครั้ง
  *
- * วันหยุดแยกไปอยู่การ์ด "วันหยุดของคนนี้" ที่คุมด้วยโควตารายเดือน (4/6 วัน)
- * เพราะที่นี่วันหยุดไม่ได้ตรงกับวันเดิมทุกสัปดาห์ — ส่วนที่ตรงทุกสัปดาห์จริง ๆ
- * (เช่นออฟฟิศที่หยุดเสาร์-อาทิตย์) ตั้งได้ในส่วนที่พับไว้ ไม่ต้องเจอถ้าไม่ได้ใช้
+ * กะคือ "เวลาทำงาน" อย่างเดียว ที่นี่จึงไม่มีให้เลือกว่าวันไหนหยุด — วันหยุด
+ * ลงที่ปฏิทินรายเดือนในการ์ด "วันหยุดของคนนี้" ซึ่งคุมด้วยโควตา (4/6 วัน)
+ * และทับตารางประจำสัปดาห์อยู่แล้ว ถามสองที่เท่ากับให้ตอบเรื่องเดียวกันสองแบบ
+ * แล้วต้องมาเดาว่าอันไหนชนะเมื่อสองอันไม่ตรงกัน
  */
 export function AssignShiftForm({
   employments,
@@ -147,13 +148,15 @@ export function AssignShiftForm({
               {current.effectiveTo === null ? "" : ` ถึง ${current.effectiveTo}`}
             </span>
           </p>
-          <p className="mt-1 text-xs text-(--ink-soft)">
-            {restDays.size === 0
-              ? "ไม่มีวันหยุดประจำสัปดาห์ — วันหยุดของคนนี้ลงเป็นรายเดือนที่การ์ดข้างล่าง"
-              : `หยุดประจำทุก ${DAYS.filter(([field]) => restDays.has(field))
-                  .map(([, label]) => label)
-                  .join(" · ")}`}
-          </p>
+          {restDays.size > 0 && (
+            <p className="mt-1 text-xs text-(--ink-soft)">
+              ตารางเดิมตั้งให้หยุดประจำทุก{" "}
+              {DAYS.filter(([field]) => restDays.has(field))
+                .map(([, label]) => label)
+                .join(" · ")}{" "}
+              — บันทึกใหม่แล้ววันพวกนี้จะกลายเป็นวันทำงาน แล้วไปลงวันหยุดจริงที่ปฏิทินข้างล่าง
+            </p>
+          )}
           {mixed && (
             <p className="mt-2 text-xs" style={{ color: "var(--danger)" }}>
               ตารางเดิมตั้งกะไม่เหมือนกันในแต่ละวัน — ถ้ากดบันทึกข้างล่าง
@@ -164,7 +167,6 @@ export function AssignShiftForm({
       )}
 
       <form action={formAction} className="flex flex-col gap-3">
-        <input type="hidden" name="rest_shift_id" value={restShiftId} />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {lockedTo === undefined ? (
             <Field label="พนักงาน *">
@@ -183,7 +185,7 @@ export function AssignShiftForm({
             <input type="hidden" name="employment_id" value={lockedTo} />
           )}
 
-          <Field label="คนนี้เข้ากะไหน *" hint="ใช้กับทุกวันทำงาน — วันหยุดตั้งแยกด้านล่าง">
+          <Field label="คนนี้เข้ากะไหน *" hint="เวลาทำงานของคนนี้ · วันหยุดลงที่ปฏิทินข้างล่าง">
             <select
               name="work_shift_id"
               required
@@ -208,38 +210,6 @@ export function AssignShiftForm({
             />
           </Field>
         </div>
-
-        {/*
-          พับไว้ — ที่นี่วันหยุดส่วนใหญ่ไม่ตรงวันเดิมทุกสัปดาห์ (ดูโควตา 4/6 วัน
-          ต่อเดือนที่การ์ดข้างล่าง) คนที่หยุดเสาร์-อาทิตย์ตายตัวยังตั้งได้
-          แต่ไม่ต้องเดินผ่านช่องเจ็ดช่องทุกครั้งที่จะเปลี่ยนแค่เวลาเข้างาน
-        */}
-        <details open={restDays.size > 0}>
-          <summary className="cursor-pointer text-sm text-(--app-strong)">
-            หยุดประจำทุกสัปดาห์ไหม (ถ้าหยุดไม่ตรงวันเดิม ข้ามไปได้เลย)
-          </summary>
-          <div className="mt-2 flex flex-wrap gap-3 rounded-(--radius) border border-(--line) p-3">
-            {DAYS.map(([field, label]) => (
-              <label key={field} className="flex items-center gap-1.5 text-sm">
-                <input
-                  type="checkbox"
-                  name="rest_dow"
-                  value={field}
-                  defaultChecked={restDays.has(field)}
-                  className="size-4"
-                />
-                {label}
-              </label>
-            ))}
-          </div>
-          {restShiftId === "" && (
-            <p className="mt-2 text-xs" style={{ color: "var(--danger)" }}>
-              ยังไม่มีกะประเภท “วันหยุด” ในระบบ — วันที่ติ๊กไว้จะถูกบันทึกเป็นวันที่ไม่มีกะ
-              แล้วหน้าลงเวลาจะขึ้นว่า “ยังไม่ผูกกะ” ในวันนั้นแทนที่จะขึ้นว่าเป็นวันหยุด
-              สร้างกะหนึ่งใบที่ติ๊ก “เป็นวันหยุด” (เช่นรหัส OFF) ที่หน้าตั้งค่า HR ก่อนจะดีกว่า
-            </p>
-          )}
-        </details>
 
         {/*
           ลิสต์ในช่องมีเท่าที่บริษัทสร้างกะไว้ — บริษัทที่มีกะเดียวจะเห็นตัวเลือกเดียว
