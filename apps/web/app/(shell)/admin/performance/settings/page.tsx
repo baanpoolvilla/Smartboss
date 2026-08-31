@@ -148,32 +148,12 @@ export default async function PerformanceSettingsPage() {
                 className={inputClass}
               />
             </Field>
-            <Field label="ขาดงานเกินกี่นาทีถึงนับ" hint="240 = ครึ่งวัน">
-              <input
-                type="number"
-                name="absenceThresholdMinutes"
-                defaultValue={s.absenceThresholdMinutes}
-                min={0}
-                max={1440}
-                required
-                className={inputClass}
-              />
-            </Field>
-            <Field
-              label="ย้อนดูผลลงเวลากี่วัน"
-              hint="แต่ละรอบที่ระบบตรวจ จะมองย้อนหลังเท่านี้"
-            >
-              <input
-                type="number"
-                name="attendanceLookbackDays"
-                defaultValue={s.attendanceLookbackDays}
-                min={1}
-                max={365}
-                required
-                className={inputClass}
-              />
-            </Field>
           </div>
+          {/*
+            เอาออกตามคำขอ — เส้นแบ่งขาดงาน (240 นาที) กับช่วงย้อนดูผลลงเวลา
+            (45 วัน) ตรึงเป็นค่าคงที่ในโค้ดแทน (ABSENCE_THRESHOLD_MINUTES,
+            ATTENDANCE_LOOKBACK_DAYS ใน lib/performance.ts) ไม่ให้ตั้งต่อบริษัท
+          */}
         </SectionCard>
 
         {GROUPS.map((group) => (

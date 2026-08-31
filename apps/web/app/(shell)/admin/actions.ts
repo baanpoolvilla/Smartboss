@@ -780,10 +780,8 @@ export async function updateOrganizationAction(formData: FormData) {
 const perfNumbers = z.object({
   baseScore: z.number().int().min(0).max(1000),
   lateThresholdMinutes: z.number().int().min(0).max(480),
-  absenceThresholdMinutes: z.number().int().min(0).max(1440),
   pmGraceDays: z.number().int().min(0).max(365),
   workOrderGraceDays: z.number().int().min(0).max(365),
-  attendanceLookbackDays: z.number().int().min(1).max(365),
 });
 
 /** ช่องว่าง = ใช้ค่าเริ่มต้น ไม่ใช่ 0 — Number("") คืน 0 ซึ่งผิดความหมาย */
@@ -801,10 +799,8 @@ export async function savePerformanceSettingsAction(formData: FormData) {
   const numbers = perfNumbers.parse({
     baseScore: Number(formData.get("baseScore")),
     lateThresholdMinutes: Number(formData.get("lateThresholdMinutes")),
-    absenceThresholdMinutes: Number(formData.get("absenceThresholdMinutes")),
     pmGraceDays: Number(formData.get("pmGraceDays")),
     workOrderGraceDays: Number(formData.get("workOrderGraceDays")),
-    attendanceLookbackDays: Number(formData.get("attendanceLookbackDays")),
   });
 
   // เก็บเฉพาะคีย์ที่ระบบรู้จัก — ที่เหลือปล่อยว่างไว้ให้ใช้ค่าเริ่มต้น
