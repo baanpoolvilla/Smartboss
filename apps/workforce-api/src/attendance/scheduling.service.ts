@@ -319,15 +319,45 @@ export class SchedulingService {
         const open = await this.findOpenPattern(uow.tx, input.employment_id);
         if (open !== undefined) {
           const openPeriod = EffectivePeriod.parse(open.effectiveFrom, null);
-          if (!openPeriod.from.isBefore(period.from)) {
-            throw AppError.validation(
-              'cannot supersede a pattern that starts on or after the new effective_from',
-            );
+          if (openPeriod.from.isBefore(period.from)) {
+            await uow.tx
+              .update(schema.recurringWorkPatterns)
+              .set({ effectiveTo: openPeriod.closeBefore(period.from).to?.toString() })
+              .where(eq(schema.recurringWorkPatterns.id, open.id));
+          } else {
+            /*
+             * ใบเดิมเริ่มวันเดียวกันหรือหลังใบใหม่ ⇒ ใบใหม่บังมันทั้งช่วง มันจึงไม่มี
+             * วันไหนเลยที่ยังมีผล — เก็บไว้ก็เป็นแถวตายที่ทำให้ resolveShiftId
+             * ต้องเลือกระหว่างสองใบที่เริ่มวันเดียวกัน ⇒ ลบทิ้งแล้วบันทึกของเดิมลง audit
+             *
+             * เดิมตรงนี้โยน error ทิ้ง ซึ่งแปลว่า "ผูกกะผิดแล้วแก้ในวันเดียวกันไม่ได้"
+             * — สถานการณ์ที่เกิดทุกครั้งที่คนกดผูกกะแล้วเห็นว่าเลือกวันผิด
+             * ทางออกเดียวที่เหลือคือเลื่อนวันเริ่มไปพรุ่งนี้ แปลว่าตารางผิดยังมีผล
+             * ทั้งวันนี้ทั้งที่มีคนพยายามแก้แล้ว
+             */
+            await uow.tx
+              .delete(schema.recurringWorkPatterns)
+              .where(eq(schema.recurringWorkPatterns.id, open.id));
+
+            await uow.audit({
+              action: 'scheduling.pattern.replace',
+              resourceType: 'recurring_work_pattern',
+              resourceId: open.id,
+              outcome: 'SUCCESS',
+              before: {
+                employment_id: open.employmentId,
+                effective_from: open.effectiveFrom,
+                monday_shift_id: open.mondayShiftId,
+                tuesday_shift_id: open.tuesdayShiftId,
+                wednesday_shift_id: open.wednesdayShiftId,
+                thursday_shift_id: open.thursdayShiftId,
+                friday_shift_id: open.fridayShiftId,
+                saturday_shift_id: open.saturdayShiftId,
+                sunday_shift_id: open.sundayShiftId,
+              },
+              after: { replaced_by_effective_from: input.effective_from },
+            });
           }
-          await uow.tx
-            .update(schema.recurringWorkPatterns)
-            .set({ effectiveTo: openPeriod.closeBefore(period.from).to?.toString() })
-            .where(eq(schema.recurringWorkPatterns.id, open.id));
         }
       }
 
