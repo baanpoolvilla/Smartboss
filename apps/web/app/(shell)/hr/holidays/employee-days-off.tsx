@@ -140,8 +140,17 @@ export function EmployeeDaysOff({
         {Array.from({ length: daysInMonth }, (_, i) => {
           const day = i + 1;
           const date = `${month}-${String(day).padStart(2, "0")}`;
+          /*
+           * label ต้อง relative — เป็น grid item ตรง ๆ ของ grid-cols-7 ข้างบน
+           * ถ้าไม่ตั้ง position ตัว checkbox ที่ sr-only (position: absolute)
+           * ข้างในจะหาตำแหน่งอิงจาก ancestor ที่ positioned ตัวถัดไป (เช่น AppBar
+           * ที่ sticky) แทนที่จะอิงจาก label ของตัวเอง ⇒ พิกัดเพี้ยนไปไกลมาก
+           * แล้วพอคลิก label ทำให้ input โฟกัส เบราว์เซอร์ scrollIntoView ไปหา
+           * พิกัดที่เพี้ยนนั้น หน้าเลยกระโดดไปพื้นที่ว่างเปล่าให้เห็น (เจอจริงตอน
+           * ทดสอบ — คลิกวันที่ในปฏิทินแล้วจอเลื่อนลงไปที่ว่าง)
+           */
           return (
-            <label key={date} className="cursor-pointer">
+            <label key={date} className="relative cursor-pointer">
               <input
                 type="checkbox"
                 name="off"
