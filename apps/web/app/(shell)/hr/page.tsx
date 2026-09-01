@@ -20,6 +20,7 @@ import {
   Td,
 } from "@/modules/hr/components/ui";
 import { formatMinutes, runTypeLabel } from "@/modules/hr/lib/labels";
+import { autoRecalculateAttendance } from "@/modules/hr/lib/auto-recalculate";
 
 /** ช่วงวันย้อนหลัง N วันในรูปแบบ ISO date */
 function rangeForDays(days: number): { from: string; to: string } {
@@ -40,6 +41,10 @@ export default async function HrOverviewPage({
   return (
     <HrPage title="ระบบบุคคล" permission={HR_PERMS.access} load={async () => {
       const range = rangeForDays(days);
+
+      // คำนวณให้ทุกคนก่อนอ่านสรุป — คนดูไม่ควรต้องไปกดปุ่ม "คำนวณ" ที่หน้าอื่น
+      // ก่อนถึงจะเห็นตัวเลขที่ถูกต้องในหน้านี้ (ดูเหตุผลเต็มที่ auto-recalculate.ts)
+      await autoRecalculateAttendance(range.from, range.to);
 
       // ผู้ใช้แต่ละคนมีสิทธิ์ไม่เท่ากัน — ส่วนที่ไม่มีสิทธิ์คืน null แล้วซ่อนไป
       const [employments, runs, summary, companies] = await Promise.all([

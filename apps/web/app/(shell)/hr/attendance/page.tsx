@@ -20,6 +20,7 @@ import {
   Td,
 } from "@/modules/hr/components/ui";
 import { formatMinutes } from "@/modules/hr/lib/labels";
+import { autoRecalculateAttendance } from "@/modules/hr/lib/auto-recalculate";
 import { RecalculateForm } from "./recalculate-form";
 import { AutoRefresh } from "./auto-refresh";
 
@@ -81,6 +82,11 @@ export default async function AttendancePage({
         const to = sp.to ?? preset.to;
 
         const today = new Date().toISOString().slice(0, 10);
+
+        // คำนวณให้ทุกคนก่อนอ่านสรุป — ปุ่ม "สั่งคำนวณ" ข้างล่างยังอยู่ไว้กดเอง
+        // ได้เวลาแก้กะ/อนุมัติลาย้อนหลังแล้วอยากให้ผลอัปเดตทันที แต่กรณีปกติ
+        // ไม่ต้องรอใครกดก่อนถึงจะเห็นตัวเลข (ดูเหตุผลเต็มที่ auto-recalculate.ts)
+        await autoRecalculateAttendance(from, to);
 
         const [summary, employments, exceptions, board, raw, shifts, todayAssignments] =
           await Promise.all([
