@@ -291,6 +291,24 @@ export function OpenchatFeed({
     }
   }
 
+  // Same fix as the Thread composer's handleImagePaste — a pasted screenshot
+  // used to fall through to the browser's default paste (a raw inline <img>
+  // that htmlEditorToBulletsText has no case for and just drops on save),
+  // so route it through the real upload path instead.
+  async function handleComposerImagePaste(e: React.ClipboardEvent<HTMLDivElement>) {
+    const item = Array.from(e.clipboardData.items).find((it) => it.kind === "file" && it.type.startsWith("image/"));
+    if (!item) return;
+    e.preventDefault();
+    const file = item.getAsFile();
+    if (!file || composerImages.length >= 6) return;
+    try {
+      const media = await uploadReportMedia(file);
+      setComposerImages((prev) => [...prev, { id: `img-${crypto.randomUUID()}`, url: media.url, name: file.name || "pasted-image.png", mime: media.mime }]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "แนบรูปที่วางไม่สำเร็จ");
+    }
+  }
+
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -775,6 +793,7 @@ export function OpenchatFeed({
             }}
             onKeyUp={(e) => syncMentionMenu(e.currentTarget)}
             onKeyDown={handleComposerKeyDown}
+            onPaste={handleComposerImagePaste}
             onDragOver={handleComposerDragOver}
             onDrop={handleComposerDrop}
             className="flex-1 min-w-0 max-h-32 overflow-y-auto bg-transparent text-sm outline-none py-1 text-[var(--ink)] empty:before:content-[attr(data-placeholder)] empty:before:text-[var(--ink-faint)]"

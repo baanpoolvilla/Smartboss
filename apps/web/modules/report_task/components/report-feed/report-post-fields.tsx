@@ -25,6 +25,8 @@ import { TagPickerButton } from "@/modules/report_task/components/report-feed/ta
 import { Bold, Building2, Code, Hash, ImagePlus, Italic, List, ListOrdered, Minus, Square, Table, TriangleAlert, Underline, User, X } from "lucide-react";
 import { LinkInsertPopover } from "@/modules/report_task/components/report-feed/link-insert-popover";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
+import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
+import { toast } from "sonner";
 
 interface MentionItem {
   type: MentionType;
@@ -332,6 +334,31 @@ export function ReportPostFields({
     sel?.addRange(newRange);
 
     syncFromEditor(sectionId, el);
+  }
+
+  // Pasting a screenshot/copied image (Ctrl+V) used to fall through to the
+  // browser's own default paste behavior — it inserts a real inline <img>
+  // (base64 data URL) right into the contentEditable, which visibly showed
+  // up while composing, but htmlEditorToBulletsText (see report-feed-rich-
+  // text.tsx's collectLines) has no case for <img> at all, so serializing
+  // the post to bulletsText silently dropped it — the image was there the
+  // whole time you were looking at it, then vanished the moment you posted
+  // ("ตอนจะโพสมีรูปขึ้นนะ" / โพสต์แล้วรูปไม่มา). Images live in the separate
+  // `images` array (uploaded via the "แนบรูป/คลิป" button), never inline in
+  // the rich text, so a pasted image needs to go through that same upload
+  // path instead of landing in the DOM at all.
+  async function handleImagePaste(e: React.ClipboardEvent<HTMLDivElement>) {
+    const item = Array.from(e.clipboardData.items).find((it) => it.kind === "file" && it.type.startsWith("image/"));
+    if (!item) return; // no pasted image — let default paste (text, a pasted link) proceed as before
+    e.preventDefault();
+    const file = item.getAsFile();
+    if (!file || images.length >= 6) return;
+    try {
+      const media = await uploadReportMedia(file);
+      onImagesChange([...images, { id: `img-${crypto.randomUUID()}`, url: media.url, name: file.name || "pasted-image.png", mime: media.mime }]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "แนบรูปที่วางไม่สำเร็จ");
+    }
   }
 
   function updateSection(id: string, patch: Partial<{ heading: string; bulletsText: string }>) {
@@ -674,6 +701,7 @@ export function ReportPostFields({
                 onKeyUp={(e) => syncActiveFormat(s.id, e.currentTarget)}
                 onMouseUp={(e) => syncActiveFormat(s.id, e.currentTarget)}
                 onBlur={(e) => autoLinkifyMentions(s.id, e.currentTarget)}
+                onPaste={handleImagePaste}
                 onDragOver={handleMentionDragOver}
                 onDrop={(e) => handleMentionDrop(s.id, e)}
                 className="min-h-16 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground"

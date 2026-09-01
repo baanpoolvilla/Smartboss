@@ -342,7 +342,29 @@ export function ReportCard({
 
   const bulletCount = post.sections.reduce((n, s) => n + s.bullets.length, 0);
   const isLong = bulletCount > LONG_POST_BULLET_THRESHOLD;
-  const visibleSections = !isLong || showFull ? post.sections : post.sections.slice(0, 2);
+  // Was `post.sections.slice(0, 2)` — capped by *section count*, from when a
+  // post could carry several named sections. Posts are single-section only
+  // now (the "+ เพิ่มหัวข้อย่อย" picker was removed), so slicing to "first 2
+  // sections" always kept the one and only section in full — "ดูเพิ่มเติม"
+  // showed up (bulletCount still over threshold) but toggling it did nothing
+  // visible at all. Cap by *bullet count* within the section(s) instead, so
+  // it still degrades correctly for any older multi-section post too.
+  const visibleSections = useMemo(() => {
+    if (!isLong || showFull) return post.sections;
+    let remaining = LONG_POST_BULLET_THRESHOLD;
+    const result: typeof post.sections = [];
+    for (const s of post.sections) {
+      if (remaining <= 0) break;
+      if (s.bullets.length <= remaining) {
+        result.push(s);
+        remaining -= s.bullets.length;
+      } else {
+        result.push({ ...s, bullets: s.bullets.slice(0, remaining) });
+        remaining = 0;
+      }
+    }
+    return result;
+  }, [isLong, showFull, post.sections]);
 
   const activeReactions = reactionEmojis
     .map((emoji) => ({ emoji, users: post.reactions[emoji] ?? [] }))
@@ -504,6 +526,24 @@ export function ReportCard({
       if (next.length > 0) setReplyImages((prev) => [...prev, ...next]);
       setReplyUploading(false);
       if (replyFileInputRef.current) replyFileInputRef.current.value = "";
+    }
+  }
+
+  // Same fix as the post composer's handleImagePaste — a pasted screenshot
+  // used to fall through to the browser's default paste (inserts a raw
+  // inline <img>, which htmlEditorToBulletsText has no case for and just
+  // drops), so route it through the real upload path instead.
+  async function handleReplyImagePaste(e: React.ClipboardEvent<HTMLDivElement>) {
+    const item = Array.from(e.clipboardData.items).find((it) => it.kind === "file" && it.type.startsWith("image/"));
+    if (!item) return;
+    e.preventDefault();
+    const file = item.getAsFile();
+    if (!file || replyImages.length >= 6) return;
+    try {
+      const media = await uploadReportMedia(file);
+      setReplyImages((prev) => [...prev, { id: `img-${crypto.randomUUID()}`, url: media.url, name: file.name || "pasted-image.png", mime: media.mime }]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "แนบรูปที่วางไม่สำเร็จ");
     }
   }
 
@@ -1138,6 +1178,7 @@ export function ReportCard({
                   setReplyFocused(false);
                   setReplyMentionMenu(null);
                 }}
+                onPaste={handleReplyImagePaste}
                 className="flex-1 min-w-[100px] bg-transparent text-sm outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-[var(--ink-soft)]"
                 onKeyDown={(e) => {
                   if (replyMentionMenu) {
@@ -1458,10 +1499,20 @@ function PostImageCollage({
     );
   }
   if (images.length === 2) {
+    // Side-by-side squeezed two wide screenshots (very common in this feed —
+    // "mobile รูปเป็นแบบนี้") into a narrow ~180px-tall crop on a phone-width
+    // card, cropping most of each one away and leaving them unreadable.
+    // Stacked full-width below `sm:` gives each one its own real aspect
+    // ratio instead; side-by-side only once there's enough width for it.
     return (
-      <div className="grid grid-cols-2 gap-2.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         {images.map((img, i) => (
-          <PostImageThumb key={img.id} img={img} onClick={() => onOpen(i)} className="h-[190px] w-full rounded-lg border border-[var(--line)] overflow-hidden" />
+          <PostImageThumb
+            key={img.id}
+            img={img}
+            onClick={() => onOpen(i)}
+            className="h-[220px] sm:h-[190px] w-full rounded-lg border border-[var(--line)] overflow-hidden"
+          />
         ))}
       </div>
     );
