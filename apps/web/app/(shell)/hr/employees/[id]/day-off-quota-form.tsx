@@ -8,20 +8,27 @@ import { setDayOffQuotaAction, type QuotaState } from "../../actions";
 const EMPTY: QuotaState = {};
 
 /**
- * โควตาวันหยุดต่อเดือนของคนนี้
+ * โควตาวันหยุดต่อเดือนของคนนี้ — ผูกกับเดือนที่กำลังดูอยู่ (การ์ดปฏิทินข้างล่าง
+ * ใช้ปุ่ม ◀ ▶ เปลี่ยนเดือนอันเดียวกัน) ไม่ใช่ค่าที่ทับตลอดกาล
  *
- * ปล่อยว่าง = ใช้ค่าตั้งต้นของบริษัท ไม่ใช่ 0 วัน — ต้องแยกให้ออก เพราะ
- * "ยังไม่ได้ตกลงอะไรเป็นพิเศษ" กับ "ตกลงว่าไม่ได้หยุดเลย" คนละความหมาย
- * และการเผลอเก็บ 0 แทนค่าว่างจะทำให้บันทึกวันหยุดไม่ได้สักวัน
+ * เดิมตั้งครั้งเดียวมีผลกับทุกเดือนของคนนั้นไปตลอด — เดือนที่ตกลงกันให้หยุด
+ * พิเศษ (เช่นปิดกิจการชั่วคราว) จะเปลี่ยนโควตาเดือนอื่น ๆ ของคนนั้นไปด้วย
+ * โดยไม่มีใครตั้งใจ ต้องกลับมาแก้คืนเองทีหลัง
+ *
+ * ปล่อยว่าง = ใช้ค่าตั้งต้นของบริษัทเฉพาะเดือนนี้ ไม่ใช่ 0 วัน — ต้องแยกให้ออก
+ * เพราะ "ยังไม่ได้ตกลงอะไรเป็นพิเศษ" กับ "ตกลงว่าไม่ได้หยุดเลย" คนละความหมาย
  */
 export function DayOffQuotaForm({
   employmentId,
+  month,
   daysPerMonth,
   perEmployee,
   companyDefault,
   note,
 }: {
   employmentId: string;
+  /** "YYYY-MM" — เดือนที่การ์ดนี้กำลังตั้งค่าอยู่ */
+  month: string;
   daysPerMonth: number;
   perEmployee: boolean;
   companyDefault: number;
@@ -32,10 +39,10 @@ export function DayOffQuotaForm({
   return (
     <>
       <p className="mb-3 text-sm">
-        ตอนนี้คนนี้ได้หยุด <strong>{daysPerMonth} วัน/เดือน</strong>{" "}
+        เดือน {month} คนนี้ได้หยุด <strong>{daysPerMonth} วัน</strong>{" "}
         <span className="text-(--ink-soft)">
           ({perEmployee
-            ? `ตั้งไว้เฉพาะคนนี้ · มาตรฐานบริษัทคือ ${companyDefault} วัน`
+            ? `ตั้งไว้เฉพาะเดือนนี้ · มาตรฐานบริษัทคือ ${companyDefault} วัน`
             : "ตามค่าตั้งต้นของบริษัท"}
           )
         </span>
@@ -43,9 +50,10 @@ export function DayOffQuotaForm({
 
       <form action={formAction} className="grid grid-cols-1 gap-3 sm:grid-cols-4">
         <input type="hidden" name="employment_id" value={employmentId} />
+        <input type="hidden" name="month" value={month} />
         <Field
-          label="วันหยุดต่อเดือน"
-          hint={`ปล่อยว่างเพื่อใช้ค่าตั้งต้นของบริษัท (${companyDefault} วัน)`}
+          label={`วันหยุดต่อเดือน (${month})`}
+          hint={`มีผลแค่เดือนนี้ · ปล่อยว่างเพื่อใช้ค่าตั้งต้นของบริษัท (${companyDefault} วัน)`}
         >
           <input
             name="days_per_month"
@@ -64,7 +72,7 @@ export function DayOffQuotaForm({
         </Field>
         <div className="flex items-end">
           <Button type="submit" disabled={pending}>
-            {pending ? "กำลังบันทึก…" : "บันทึกโควตา"}
+            {pending ? "กำลังบันทึก…" : "บันทึกโควตาเดือนนี้"}
           </Button>
         </div>
       </form>
@@ -73,8 +81,8 @@ export function DayOffQuotaForm({
       {state.ok && (
         <p className="mt-2 text-sm text-(--ink-soft)">
           {state.cleared
-            ? `ล้างโควตาเฉพาะคนนี้แล้ว — กลับไปใช้ค่าตั้งต้นของบริษัท (${companyDefault} วัน)`
-            : `บันทึกแล้ว — คนนี้ได้หยุด ${state.daysPerMonth} วัน/เดือน`}
+            ? `ล้างโควตาของเดือนนี้แล้ว — กลับไปใช้ค่าตั้งต้นของบริษัท (${companyDefault} วัน)`
+            : `บันทึกแล้ว — เดือนนี้คนนี้ได้หยุด ${state.daysPerMonth} วัน`}
         </p>
       )}
     </>

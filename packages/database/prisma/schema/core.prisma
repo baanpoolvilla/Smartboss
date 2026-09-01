@@ -481,12 +481,17 @@ model DayOffQuotaSetting {
 //
 // employmentId คือ id ฝั่ง workforce จึงไม่มี FK ข้ามฐานให้ผูก — แถวที่
 // พนักงานถูกลบทิ้งจะค้างอยู่เฉย ๆ โดยไม่กระทบอะไร
+// โควตาผูกกับ (คน, เดือน) ไม่ใช่ (คน) เฉย ๆ — เดือนที่ลูกค้าให้หยุดพิเศษ
+// (เช่นเดือนที่ปิดกิจการชั่วคราว) ไม่ควรทำให้โควตาเดือนอื่น ๆ ของคนนั้นเปลี่ยน
+// ตามไปด้วยตลอดกาล ไม่มีแถว = ใช้ค่าตั้งต้นของบริษัทของเดือนนั้น
 model EmployeeDayOffQuota {
   orgId        String @map("org_id")
   employmentId String @map("employment_id")
+  /** "YYYY-MM" — โควตานี้มีผลกับเดือนนี้เดือนเดียว */
+  month        String
 
   /**
-   * วันหยุดต่อเดือนของคนนี้ เช่น 6 สำหรับคนที่ตกลงกันว่าได้มากกว่ามาตรฐาน
+   * วันหยุดของเดือนนี้สำหรับคนนี้ เช่น 6 สำหรับเดือนที่ตกลงกันว่าได้มากกว่ามาตรฐาน
    */
   daysPerMonth Int @map("days_per_month")
 
@@ -497,7 +502,7 @@ model EmployeeDayOffQuota {
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
-  @@id([orgId, employmentId])
+  @@id([orgId, employmentId, month])
   @@map("employee_day_off_quotas")
   @@schema("core")
 }

@@ -165,7 +165,7 @@ export default async function EmployeeDetailPage({
             wfTry<{ items: { work_date: string; shift_id: string | null }[] }>(
               `/shift-assignments?from=${monthFrom}&to=${monthTo}&employment_id=${id}`,
             ),
-            loadDayOffQuota(session.orgId, id),
+            loadDayOffQuota(session.orgId, id, month),
           ]);
 
         const companyId = companies?.items[0]?.id;
@@ -485,6 +485,7 @@ export default async function EmployeeDetailPage({
                 <div className="flex flex-col gap-4">
                   <DayOffQuotaForm
                     employmentId={id}
+                    month={month}
                     daysPerMonth={quota.daysPerMonth}
                     perEmployee={quota.perEmployee}
                     companyDefault={quota.companyDefault}

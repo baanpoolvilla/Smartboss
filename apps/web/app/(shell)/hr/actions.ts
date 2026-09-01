@@ -795,7 +795,7 @@ export async function setEmployeeDaysOffAction(
    * ไม่ใช่แค่ในหน้าจอ เพราะหน้าจอเตือนได้อย่างเดียว ส่วนคนที่ยิง action ตรง ๆ
    * หรือเปิดสองแท็บแล้วกดพร้อมกันจะข้ามการเตือนนั้นไปทั้งหมด
    */
-  const quota = await loadDayOffQuota(session.orgId, employmentId);
+  const quota = await loadDayOffQuota(session.orgId, employmentId, month);
   if (offDays.length > quota.daysPerMonth) {
     return {
       error:
@@ -877,14 +877,16 @@ export async function setDayOffQuotaAction(
   }
 
   const employmentId = String(formData.get("employment_id") ?? "");
+  const month = String(formData.get("month") ?? "");
   if (!employmentId) return { error: "กรุณาเลือกพนักงาน" };
+  if (!/^\d{4}-\d{2}$/.test(month)) return { error: "เดือนไม่ถูกต้อง" };
 
   const raw = String(formData.get("days_per_month") ?? "").trim();
   const note = String(formData.get("note") ?? "").slice(0, 200);
 
-  // ว่าง = กลับไปใช้ค่าตั้งต้นของบริษัท ไม่ใช่ 0 วัน — สองอย่างนี้ต่างกันคนละเรื่อง
+  // ว่าง = กลับไปใช้ค่าตั้งต้นของบริษัทเฉพาะเดือนนี้ ไม่ใช่ 0 วัน — สองอย่างนี้ต่างกันคนละเรื่อง
   if (raw === "") {
-    await saveDayOffQuota(session.orgId, employmentId, null, "", session.userId);
+    await saveDayOffQuota(session.orgId, employmentId, month, null, "", session.userId);
     revalidatePath(`/hr/employees/${employmentId}`);
     return { ok: true, cleared: true };
   }
@@ -896,7 +898,7 @@ export async function setDayOffQuotaAction(
     };
   }
 
-  await saveDayOffQuota(session.orgId, employmentId, days, note, session.userId);
+  await saveDayOffQuota(session.orgId, employmentId, month, days, note, session.userId);
   revalidatePath(`/hr/employees/${employmentId}`);
   return { ok: true, daysPerMonth: days };
 }
