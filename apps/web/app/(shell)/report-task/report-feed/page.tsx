@@ -150,10 +150,19 @@ function ReportFeedPageInner() {
   // Rooms can be scoped to a department or to managers only — filter once
   // here and hand the same list to the sidebar, so the two never disagree
   // about which rooms exist for this viewer.
-  const visibleTopics = useMemo(
-    () => topics.filter((t) => canSeeReportTopic(t.visibility, viewingAsUserId)),
-    [topics, viewingAsUserId]
-  );
+  const visibleTopics = useMemo(() => {
+    const bySelfVisibility = topics.filter((t) => canSeeReportTopic(t.visibility, viewingAsUserId));
+    // A pure category (isCategory) never has visibility rules of its own —
+    // it's just an organizing header, so it always passes the filter above
+    // even when every one of its children got filtered out individually
+    // (each scoped to a different department/person). Left in as-is, that
+    // reads as a dead header with nothing under it and no way to expand it
+    // ("มีตัวหัวข้อไม่มีลูก") — drop a category here once it has no visible
+    // children left, same way it'd never have been shown with zero children
+    // to begin with. A non-category parent (still directly postable on its
+    // own) is untouched even if all its children happen to be hidden.
+    return bySelfVisibility.filter((t) => !t.isCategory || bySelfVisibility.some((c) => c.parentId === t.id));
+  }, [topics, viewingAsUserId]);
   const searchParams = useSearchParams();
   // A pasted "copy link" (?topic=&post=) opens straight to the right room +
   // post — read once as the initial state, no need to re-sync via an effect
