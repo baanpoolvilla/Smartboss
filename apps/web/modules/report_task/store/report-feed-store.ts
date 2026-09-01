@@ -445,6 +445,17 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         // post — same ?topic=&post= shape ReportCard's own "copy link" uses.
         const postId = nextId("post");
         const link = `/report-feed?topic=${topicId}&post=${postId}`;
+        const topic = get().topics.find((t) => t.id === topicId);
+        // Everyone who can see this room, minus the poster themselves — same
+        // set the "new post" notification below reaches. `unreadFor` is what
+        // the sidebar's dot/bold/count actually reads (see topic-sidebar.tsx's
+        // topicUnreadPosts); seeding it with only @mentions left a plain post
+        // with no mention invisible to the rest of the room forever — nobody
+        // but the author and anyone explicitly tagged ever saw it as unread,
+        // no matter how long they'd had the room closed.
+        const otherMemberIds = topic
+          ? users.filter((u) => u.id !== authorId && canSeeReportTopic(topic.visibility, u.id)).map((u) => u.id)
+          : [];
         set((s) => ({
           posts: [
             ...s.posts,
@@ -456,14 +467,13 @@ export const useReportFeedStore = create<ReportFeedStore>()(
               editedAt: null,
               pinned: false,
               savedBy: [],
-              unreadFor: [...mentionedUserIds],
+              unreadFor: [...new Set([...mentionedUserIds, ...otherMemberIds])],
               reactions: {},
               replies: [],
               ...data,
             },
           ],
         }));
-        const topic = get().topics.find((t) => t.id === topicId);
         const actorName = getUser(authorId)?.name ?? "มีคน";
         if (mentionedUserIds.length > 0) {
           useNotificationStore.getState().notifyMany(mentionedUserIds, authorId, `${actorName} แท็กคุณในโพสต์ "${data.title}"`, undefined, link);
@@ -473,9 +483,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         // above (one notification per post, not two). No per-topic
         // subscription toggle exists yet, so this is an all-or-nothing default.
         if (topic) {
-          const recipients = users
-            .filter((u) => u.id !== authorId && !mentionedUserIds.includes(u.id) && canSeeReportTopic(topic.visibility, u.id))
-            .map((u) => u.id);
+          const recipients = otherMemberIds.filter((id) => !mentionedUserIds.includes(id));
           if (recipients.length > 0) {
             useNotificationStore.getState().notifyMany(recipients, authorId, `${actorName} โพสต์ใหม่ใน "${topic.name}": ${data.title}`, undefined, link);
           }

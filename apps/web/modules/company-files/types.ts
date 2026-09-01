@@ -9,3 +9,11 @@ export const SHARE_LINK_ROLE_LABELS: Record<ShareLinkRole, string> = {
   view: "ดูได้อย่างเดียว",
   edit: "แก้ไขได้ (อัปโหลดเวอร์ชันใหม่ทับได้)",
 };
+
+export const SHARE_LINK_SCOPES = ["anyone", "org"] as const;
+export type ShareLinkScope = (typeof SHARE_LINK_SCOPES)[number];
+
+export const SHARE_LINK_SCOPE_LABELS: Record<ShareLinkScope, string> = {
+  anyone: "ใครก็ได้ที่มีลิงก์",
+  org: "เฉพาะคนในบริษัทนี้ (ต้องล็อกอิน)",
+};

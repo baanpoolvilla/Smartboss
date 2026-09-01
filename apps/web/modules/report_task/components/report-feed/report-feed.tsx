@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { ReportCard } from "@/modules/report_task/components/report-feed/report-card";
 import { DaySeparator } from "@/modules/report_task/components/report-feed/report-day-separator";
+import { NewMessagesDivider } from "@/modules/report_task/components/report-feed/report-new-divider";
+import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { reportDayLabel } from "@/modules/report_task/components/report-feed/report-day-label";
 import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { groupByDay } from "@/modules/report_task/lib/format";
@@ -31,6 +33,20 @@ export function ReportFeed({
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+  const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
+
+  // "ข้อความใหม่" divider position, frozen per room. Opening a room marks it
+  // read (page.tsx effect) which clears unreadFor almost immediately, so we
+  // capture the id of the first still-unread post on the very first render for
+  // this room — refs update during render, before that read-clearing effect
+  // runs — and keep the line there until the room changes. null = nothing was
+  // unread when you arrived, so no line shows.
+  const dividerRef = useRef<{ topicId: string; beforeId: string | null }>({ topicId: "", beforeId: null });
+  if (dividerRef.current.topicId !== topic.id) {
+    const firstUnread = topicPosts.find((p) => p.unreadFor.includes(viewingAsUserId) && p.authorId !== viewingAsUserId);
+    dividerRef.current = { topicId: topic.id, beforeId: firstUnread ? firstUnread.id : null };
+  }
+  const newDividerBeforeId = dividerRef.current.beforeId;
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -107,7 +123,10 @@ export function ReportFeed({
               <div key={group.key} className="space-y-3">
                 <DaySeparator label={reportDayLabel(group.label)} />
                 {group.items.map((p) => (
-                  <ReportCard key={p.id} post={p} topic={topic} highlighted={p.id === highlightPostId} highlightReplyId={highlightReplyId} onOpenTask={onOpenTask} />
+                  <Fragment key={p.id}>
+                    {p.id === newDividerBeforeId && <NewMessagesDivider />}
+                    <ReportCard post={p} topic={topic} highlighted={p.id === highlightPostId} highlightReplyId={highlightReplyId} onOpenTask={onOpenTask} />
+                  </Fragment>
                 ))}
               </div>
             ))}

@@ -181,20 +181,7 @@ function ReportFeedPageInner() {
   // than adding a menu icon to every page in the module. Memoized so the
   // registration effect only re-fires if the click handler identity ever
   // changes (it won't — setMobileTopicsOpen is a stable setState function).
-  const topicSwitcherLeading = useMemo(
-    () => (
-      <button
-        type="button"
-        onClick={() => setMobileTopicsOpen(true)}
-        aria-label="เปิดรายการหัวข้อ"
-        className="lg:hidden rounded-full p-2 text-[var(--ink)] transition-colors hover:bg-[var(--bg-soft)]"
-      >
-        <Menu className="h-5 w-5" />
-      </button>
-    ),
-    []
-  );
-  useSetAppBarLeading(topicSwitcherLeading);
+  // (moved below, after activeTopic is known — see activeViewLabel)
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   // The ⚙ (Phase 6) opens settings right here now instead of navigating the
   // whole page away to /settings and losing which room/tab you were on (G1).
@@ -272,6 +259,41 @@ function ReportFeedPageInner() {
   const showPending = activeId === PENDING_ID;
   const showMentions = activeId === MENTIONS_ID;
   const activeTopic = useMemo(() => visibleTopics.find((t) => t.id === activeId), [visibleTopics, activeId]);
+
+  // The AppBar's left slot doubles as a Discord-style channel header: it
+  // always names the room/view that's open right now (# room-name, or the
+  // special "โพสต์ทั้งหมด / รอฉันส่ง / กล่าวถึงฉัน" views), so the top menu
+  // bar matches the highlighted row in the sidebar no matter where you are.
+  // The ☰ trigger (mobile only) keeps its top-left spot to the left of it.
+  const activeViewLabel = showAllPosts
+    ? "โพสต์ทั้งหมด"
+    : showPending
+      ? "รอฉันส่ง"
+      : showMentions
+        ? "กล่าวถึงฉัน"
+        : activeTopic?.name ?? "";
+  const topicSwitcherLeading = useMemo(
+    () => (
+      <div className="flex min-w-0 items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => setMobileTopicsOpen(true)}
+          aria-label="เปิดรายการหัวข้อ"
+          className="lg:hidden rounded-full p-2 text-[var(--ink)] transition-colors hover:bg-[var(--bg-soft)]"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+        {activeViewLabel && (
+          <span className="flex min-w-0 items-center gap-1 text-[var(--ink)]">
+            <Hash className="h-4 w-4 shrink-0 text-[var(--ink-soft)]" />
+            <span className="truncate text-[15px] font-semibold">{activeViewLabel}</span>
+          </span>
+        )}
+      </div>
+    ),
+    [activeViewLabel]
+  );
+  useSetAppBarLeading(topicSwitcherLeading);
   const exemptions = useReportComplianceExemptions();
   // "ที่ฉันต้องส่ง" — same pendingToday() the sidebar badge counts, filtered
   // down to just this viewer, for the actual room list underneath the badge.

@@ -94,3 +94,81 @@ model ReportTaskStore {
   @@map("stores")
   @@schema("report_task")
 }
+
+// ═══════════════════════ Discord Report Sync (ชั่วคราว) ═══════════════════════
+//
+// ตัวเชื่อม Discord → SmartBoss ชั่วคราว รอแอปมือถือ — ถอดทั้งชุดได้เมื่อเลิกใช้
+// โดยไม่แตะ HR/Performance (ดู docs/discord_report_integration.md)
+//
+//   discord_links     ผูก Discord user → พนักงาน (core.users.id)
+//   discord_channels  ผูกห้อง Discord → ReportTopic + กฎรอบ (กรอกเองในหน้าตั้งค่า)
+//   report_submissions เก็บการส่งดิบ ต่อคน/วัน/รอบ ไว้ตรวจย้อนหลัง
+
+/// ผูกด้วย Discord User ID (ชื่อ Discord เปลี่ยนได้ id ไม่เปลี่ยน)
+model DiscordLink {
+  orgId         String   @map("org_id")
+  discordUserId String   @map("discord_user_id")
+  employeeId    String   @map("employee_id") // core.users.id
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@id([orgId, discordUserId])
+  @@index([orgId, employeeId])
+  @@map("discord_links")
+  @@schema("report_task")
+}
+
+/// ผูกด้วย Channel ID (ชื่อห้องซ้ำกันได้หลายแผนก) + กฎรอบที่แอดมินกรอกเอง
+///
+/// rounds = [{ id, label, time("HH:mm"), minImages }] — ล้อ ReportCutoff ฝั่ง client
+/// keywordOnly = true → นับเฉพาะโพสต์ที่มีคำว่า `keyword` (เช่น "daily")
+///               false → ทุกโพสต์ในห้องนับเป็นการส่ง
+model DiscordChannel {
+  orgId            String   @map("org_id")
+  discordChannelId String   @map("discord_channel_id")
+  topicId          String   @map("topic_id") // ล้อ ReportTopic
+  label            String   @default("") // ชื่อ/แผนก ไว้แสดงในหน้าแอดมิน
+  rounds           Json     @default("[]") // [{id,label,time,minImages}]
+  minImages        Int      @default(0) @map("min_images") // ค่ากลางของห้อง
+  requiredWeekdays Int[]    @default([]) @map("required_weekdays") // 0=อา..6=ส ว่าง=ยึด roster
+  useRoster        Boolean  @default(true) @map("use_roster") // ยึดวันทำงานจาก HR roster
+  keywordOnly      Boolean  @default(false) @map("keyword_only")
+  keyword          String   @default("daily")
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@id([orgId, discordChannelId])
+  @@map("discord_channels")
+  @@schema("report_task")
+}
+
+/// การส่งดิบจาก Discord — ต่อคน/วัน/รอบ (idempotent ด้วย messageId)
+model ReportSubmission {
+  orgId         String    @map("org_id")
+  id            String    @default(uuid())
+  employeeId    String?   @map("employee_id") // null = ยังผูกตัวตนไม่ได้
+  discordUserId String    @map("discord_user_id")
+  channelId     String    @map("channel_id")
+  topicId       String    @map("topic_id")
+  roundId       String    @map("round_id")
+  reportDate    DateTime  @map("report_date") @db.Date
+  postedAt      DateTime? @map("posted_at")
+  messageId     String    @map("message_id")
+  imageCount    Int       @default(0) @map("image_count")
+  content       String    @default("")
+  status        String? // on-time | late | missed | image-incomplete | exempt
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@id([orgId, id])
+  @@unique([orgId, messageId])
+  @@index([orgId, topicId, reportDate])
+  @@index([orgId, employeeId, reportDate])
+  @@map("report_submissions")
+  @@schema("report_task")
+}

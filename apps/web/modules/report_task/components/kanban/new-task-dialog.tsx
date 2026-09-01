@@ -34,7 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/modules/report_task/components/ui/select";
-import { departmentIdsOf, getDepartment, getUser, users, canManage, isOwner, departments } from "@/modules/report_task/lib/directory";
+import { departmentIdsOf, getDepartment, getUser, users, canManage } from "@/modules/report_task/lib/directory";
 import { departmentsLabel } from "@/modules/report_task/lib/department-label";
 import { taskPriorityOrder, priorityMeta } from "@/modules/report_task/lib/task-meta";
 import { useLeaveTypeStore } from "@/modules/report_task/store/leave-type-store";
@@ -255,20 +255,10 @@ export function NewTaskDialog({
   // Scheduling a meeting pulls other people's calendars into it — a
   // department head/owner call, not something a regular employee can do.
   const allowedTypes = canManage(viewingAsUserId) ? allowedTypesProp : allowedTypesProp.filter((t) => t !== "meeting");
-  // Who a task can be assigned to: the owner can reach anyone company-wide;
-  // a department head can reach anyone in a department they head, plus
-  // themselves; everyone else is scoped to their own department, plus
-  // themselves — a regular employee shouldn't be able to hand work directly
-  // to the CEO or another team out of the blue the way scheduling a meeting
-  // already can't.
-  const pickableAssignees = useMemo(() => {
-    if (isOwner(viewingAsUserId)) return users;
-    const headedDeptIds = new Set(departments.filter((d) => d.headId === viewingAsUserId).map((d) => d.id));
-    const ownDeptId = assignedByUser.departmentId;
-    return users.filter(
-      (u) => u.id === viewingAsUserId || headedDeptIds.has(u.departmentId) || u.departmentId === ownDeptId
-    );
-  }, [viewingAsUserId, assignedByUser.departmentId]);
+  // Who a task can be assigned to: anyone in the company, regardless of who's
+  // creating it or which department they're in — cross-team hand-offs are a
+  // normal part of how work moves here ("เอาให้ทุกคนแอดงานได้").
+  const pickableAssignees = users;
 
   // When opened from a calendar day, dates start on that day (remounted via key
   // in the parent, so the initializers below pick it up cleanly).

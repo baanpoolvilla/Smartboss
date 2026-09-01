@@ -63,6 +63,8 @@ sql packages/workforce/db/sql/02-lookup-functions-owner.sql
 # ข้ามอันนี้ = หน้าสรุปผลงานไม่แสดงมาสาย/ขาดงานเลย ตลอดกาล โดยไม่มี error
 # ไฟล์นี้ตรวจเจ้าของฟังก์ชันในตัว ถ้าผิดจะล้มทันทีแทนที่จะเงียบ
 sql packages/workforce/db/sql/04-performance-lookup.sql
+# Discord Report Sync (ชั่วคราว) — ทางอ่านวันทำงานรายคนสำหรับตัวตัดสิน
+sql packages/workforce/db/sql/05-report-working-days.sql
 
 step "5/6 ข้อมูลตั้งต้น"
 pnpm db:seed     # role / permission / ผู้ใช้แอดมิน

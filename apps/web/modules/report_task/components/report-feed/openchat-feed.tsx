@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import {
@@ -14,6 +14,7 @@ import {
   AlertDialogCancel,
 } from "@/modules/report_task/components/ui/alert-dialog";
 import { ReportImageLightbox } from "@/modules/report_task/components/report-feed/report-image-lightbox";
+import { NewMessagesDivider } from "@/modules/report_task/components/report-feed/report-new-divider";
 import { useReportFeedStore, type ReportPost, type ReportPostImage, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { getUser, departments, users as directoryUsers } from "@/modules/report_task/lib/directory";
@@ -381,6 +382,21 @@ export function OpenchatFeed({
 
   const dayGroups = groupByDay(messages, (m) => m.createdAt);
 
+  // "ข้อความใหม่" divider, frozen per room (same idea as the Thread feed):
+  // opening a room clears its unread almost immediately, so we snapshot the
+  // first still-unread message on the first render for this room and hold the
+  // line there. Unread lives per-post, so a message counts as new when its
+  // post is unread; the earliest such message in the stream gets the line.
+  const dividerRef = useRef<{ topicId: string; beforeId: string | null }>({ topicId: "", beforeId: null });
+  if (dividerRef.current.topicId !== topic.id) {
+    const unreadPostIds = new Set(
+      topicPosts.filter((p) => p.unreadFor.includes(viewingAsUserId) && p.authorId !== viewingAsUserId).map((p) => p.id)
+    );
+    const firstNew = messages.find((m) => unreadPostIds.has(m.postId));
+    dividerRef.current = { topicId: topic.id, beforeId: firstNew ? firstNew.id : null };
+  }
+  const newDividerBeforeId = dividerRef.current.beforeId;
+
   return (
     <div className="relative flex-1 flex flex-col min-h-0 rounded-b-2xl overflow-hidden bg-[var(--bg)]">
       <div ref={scrollRef} className="flex-1 overflow-y-auto py-3">
@@ -415,7 +431,9 @@ export function OpenchatFeed({
                   // (still well short of a new sender's py-1.5+avatar+name
                   // header) keeps the "same person, still talking" cue while
                   // making each message in the run its own visible line.
-                  <div key={m.id} className={cn("group/msg relative flex gap-3 px-5 hover:bg-[var(--bg-soft)]", grouped ? "py-1" : "py-1.5")}>
+                  <Fragment key={m.id}>
+                    {m.id === newDividerBeforeId && <NewMessagesDivider />}
+                    <div className={cn("group/msg relative flex gap-3 px-5 hover:bg-[var(--bg-soft)]", grouped ? "py-1" : "py-1.5")}>
                     {grouped ? (
                       // Empty avatar-width gutter — on hover shows the message's
                       // own time, same slot Discord uses for a grouped line.
@@ -666,7 +684,8 @@ export function OpenchatFeed({
                         </Popover>
                       </div>
                     )}
-                  </div>
+                    </div>
+                  </Fragment>
                 );
               })}
             </div>

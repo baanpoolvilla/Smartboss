@@ -57,6 +57,9 @@ model Organization {
   reportTaskStores     ReportTaskStore[]
   reportTasks          ReportTask[]
   reportTaskCollection ReportTaskCollection?
+  discordLinks         DiscordLink[]
+  discordChannels      DiscordChannel[]
+  reportSubmissions    ReportSubmission[]
   performanceEvents    PerformanceEvent[]
   performanceSetting   PerformanceSetting?
   securitySetting      SecuritySetting?

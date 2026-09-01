@@ -21,7 +21,7 @@ import {
 import { cn } from "@/modules/report_task/lib/utils";
 import { AlbumPickerButton } from "@/modules/report_task/components/report-feed/album-picker-button";
 import { TagPickerButton } from "@/modules/report_task/components/report-feed/tag-picker-button";
-import { Bold, Building2, Code, Hash, ImagePlus, Italic, List, ListOrdered, Minus, Plus, Square, Table, Trash2, TriangleAlert, Underline, User, X } from "lucide-react";
+import { Bold, Building2, Code, Hash, ImagePlus, Italic, List, ListOrdered, Minus, Square, Table, TriangleAlert, Underline, User, X } from "lucide-react";
 import { LinkInsertPopover } from "@/modules/report_task/components/report-feed/link-insert-popover";
 
 interface MentionItem {
@@ -576,40 +576,20 @@ export function ReportPostFields({
           const fmt = activeFormat[s.id] ?? NO_ACTIVE_FORMAT;
           const toolbarBtn = (active: boolean) =>
             cn(
-              "h-6 w-6 flex items-center justify-center rounded",
+              "h-5 w-5 flex items-center justify-center rounded",
               active ? "bg-[var(--ink)] text-white" : "text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)]"
             );
           return (
             <div key={s.id} className="rounded-lg border border-[var(--line)] p-2.5 space-y-2">
-              <div className="flex items-center gap-2">
-                <Input
-                  aria-label={`หัวข้อย่อย ${i + 1}`}
-                  placeholder={`หัวข้อย่อย ${i + 1} (เช่น บั๊กที่เจอและแก้)`}
-                  value={s.heading}
-                  onChange={(e) => updateSection(s.id, { heading: e.target.value })}
-                  className="text-sm font-medium"
-                />
-                {sections.length > 1 && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="shrink-0 text-[var(--ink-soft)] hover:text-[var(--chart-red)]"
-                    onClick={() => onSectionsChange(sections.filter((x) => x.id !== s.id))}
-                    aria-label="ลบหัวข้อย่อยนี้"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
               <div className="flex items-center gap-0.5">
                 <button type="button" onMouseDown={preserveSelection} onClick={() => exec(s.id, "bold")} className={toolbarBtn(fmt.bold)} aria-label="ตัวหนา" title="ตัวหนา">
-                  <Bold className="h-3.5 w-3.5" />
+                  <Bold className="h-3 w-3" />
                 </button>
                 <button type="button" onMouseDown={preserveSelection} onClick={() => exec(s.id, "italic")} className={toolbarBtn(fmt.italic)} aria-label="ตัวเอียง" title="ตัวเอียง">
-                  <Italic className="h-3.5 w-3.5" />
+                  <Italic className="h-3 w-3" />
                 </button>
                 <button type="button" onMouseDown={preserveSelection} onClick={() => exec(s.id, "underline")} className={toolbarBtn(fmt.underline)} aria-label="ขีดเส้นใต้" title="ขีดเส้นใต้">
-                  <Underline className="h-3.5 w-3.5" />
+                  <Underline className="h-3 w-3" />
                 </button>
                 <span className="w-px h-4 bg-[var(--line)] mx-0.5" />
                 <button
@@ -620,7 +600,7 @@ export function ReportPostFields({
                   aria-label="สัญลักษณ์หัวข้อย่อย"
                   title="สัญลักษณ์หัวข้อย่อย"
                 >
-                  <List className="h-3.5 w-3.5" />
+                  <List className="h-3 w-3" />
                 </button>
                 <button
                   type="button"
@@ -630,7 +610,7 @@ export function ReportPostFields({
                   aria-label="ลำดับเลข"
                   title="ลำดับเลข"
                 >
-                  <ListOrdered className="h-3.5 w-3.5" />
+                  <ListOrdered className="h-3 w-3" />
                 </button>
                 <button
                   type="button"
@@ -640,11 +620,11 @@ export function ReportPostFields({
                   aria-label="เช็คลิสต์"
                   title="เช็คลิสต์"
                 >
-                  <Square className="h-3.5 w-3.5" />
+                  <Square className="h-3 w-3" />
                 </button>
                 <span className="w-px h-4 bg-[var(--line)] mx-0.5" />
                 <button type="button" onMouseDown={preserveSelection} onClick={() => toggleCode(s.id)} className={toolbarBtn(fmt.code)} aria-label="โค้ด" title="โค้ด">
-                  <Code className="h-3.5 w-3.5" />
+                  <Code className="h-3 w-3" />
                 </button>
                 <button
                   type="button"
@@ -654,7 +634,7 @@ export function ReportPostFields({
                   aria-label="เส้นคั่น"
                   title="เส้นคั่น"
                 >
-                  <Minus className="h-3.5 w-3.5" />
+                  <Minus className="h-3 w-3" />
                 </button>
                 <button
                   type="button"
@@ -664,7 +644,7 @@ export function ReportPostFields({
                   aria-label="แทรกตาราง"
                   title="แทรกตาราง"
                 >
-                  <Table className="h-3.5 w-3.5" />
+                  <Table className="h-3 w-3" />
                 </button>
                 <LinkInsertPopover onInsert={(url) => insertLink(s.id, url)} className={toolbarBtn(false)} />
               </div>
@@ -743,10 +723,6 @@ export function ReportPostFields({
             </div>
           );
         })}
-        <Button variant="outline" size="sm" onClick={() => onSectionsChange([...sections, newSection()])}>
-          <Plus className="h-3.5 w-3.5" />
-          เพิ่มหัวข้อย่อย
-        </Button>
       </div>
 
       {images.length > 0 && (

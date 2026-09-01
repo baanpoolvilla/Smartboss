@@ -162,7 +162,16 @@ export function RoomSettingsSheet({
   }
 
   function handleSave() {
-    updateTopicSettings(topic.id, draft);
+    // If the mode buttons/department picker were actually touched this
+    // session, `dirtyKeys` has "visibility" and draft.visibility is the
+    // user's real, explicit edit — that has to win. Otherwise draft.visibility
+    // is just a stale snapshot from whenever this sheet last reset, and the
+    // live store may since have moved on (a member added/removed through
+    // RoomMembersDialog, which saves straight through regardless of this
+    // draft) — writing the stale snapshot back in that case would silently
+    // undo that member change.
+    const visibility = dirtyKeys.has("visibility") ? draft.visibility : topic.visibility;
+    updateTopicSettings(topic.id, { ...draft, visibility });
     const before = topic as unknown as Record<string, unknown>;
     const after = draft as unknown as Record<string, unknown>;
     const changes = [...dirtyKeys].map((key) => describeChange(key, before[key], after[key]));
@@ -263,10 +272,18 @@ export function RoomSettingsSheet({
               ReportTopicSettingsPanel ที่ใช้ร่วมกับหน้า /settings ด้วย จึงคง
               โครงสร้างภายในไว้ตามเดิม แค่ครอบหัวข้อกลุ่มไว้จากภายนอกให้สอดคล้อง
               กับหมวดอื่นๆ ใน Sheet นี้ — ส่ง draft + patchDraft ผ่าน onUpdate
-              แทนการเซฟทันที (onUpdate ไม่ระบุ = เซฟทันทีเหมือนเดิมที่ /settings). */}
+              แทนการเซฟทันที (onUpdate ไม่ระบุ = เซฟทันทีเหมือนเดิมที่ /settings).
+              `visibility` เป็นข้อยกเว้นครึ่งหนึ่ง — ปุ่มโหมด/เลือกแผนกยังแก้ผ่าน
+              draft ตามปกติ (ต้องกด "บันทึก" ถึงจะติด) แต่ RoomMembersDialog
+              ข้างในเซฟตรงเข้า store ทันที ไม่ผ่าน draft เลย จึงส่ง
+              `liveVisibility` แยกไปให้เฉพาะส่วนสมาชิกอ่านค่าจริงปัจจุบัน ไม่งั้น
+              เพิ่มสมาชิกในไดอะล็อกไปแล้วการ์ดสรุปด้านในจะยังโชว์ค่าเก่า
+              เหมือนกดบันทึกแล้วไม่ติด (ห้ามเอา `topic.visibility` ไปแทนที่
+              `draft.visibility` ตรงๆ — จะทำให้กดเปลี่ยนโหมด/แผนกไม่ติดแทน
+              เพราะ draft ที่เพิ่งแก้จะโดนทับด้วยค่าเก่าจาก store ทุก render). */}
           <section className="space-y-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)]">สิทธิ์การมองเห็น &amp; กติกาการส่งรายงาน</p>
-            <ReportTopicSettingsPanel topic={draft} hideHeading onUpdate={patchDraft} />
+            <ReportTopicSettingsPanel topic={draft} hideHeading onUpdate={patchDraft} liveVisibility={topic.visibility} />
           </section>
 
           {/* กติกา เพิ่มเติม */}
