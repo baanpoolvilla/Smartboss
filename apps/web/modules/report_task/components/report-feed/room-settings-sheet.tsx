@@ -162,16 +162,12 @@ export function RoomSettingsSheet({
   }
 
   function handleSave() {
-    // If the mode buttons/department picker were actually touched this
-    // session, `dirtyKeys` has "visibility" and draft.visibility is the
-    // user's real, explicit edit — that has to win. Otherwise draft.visibility
-    // is just a stale snapshot from whenever this sheet last reset, and the
-    // live store may since have moved on (a member added/removed through
-    // RoomMembersDialog, which saves straight through regardless of this
-    // draft) — writing the stale snapshot back in that case would silently
-    // undo that member change.
-    const visibility = dirtyKeys.has("visibility") ? draft.visibility : topic.visibility;
-    updateTopicSettings(topic.id, { ...draft, visibility });
+    // `visibility` (mode/department/member picks) always saves itself
+    // instantly now — see ReportTopicSettingsPanel's own comment — so
+    // draft.visibility is never a real edit to preserve, just a stale
+    // snapshot from whenever this sheet last reset. Always write back the
+    // live value instead, or this save would undo whatever's changed since.
+    updateTopicSettings(topic.id, { ...draft, visibility: topic.visibility });
     const before = topic as unknown as Record<string, unknown>;
     const after = draft as unknown as Record<string, unknown>;
     const changes = [...dirtyKeys].map((key) => describeChange(key, before[key], after[key]));

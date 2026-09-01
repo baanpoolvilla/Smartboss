@@ -59,15 +59,10 @@ export function ReportTopicSettingsPanel({
   topic: ReportTopic;
   hideHeading?: boolean;
   onUpdate?: (patch: Partial<ReportTopic>) => void;
-  /** Override for what the member section (RoomMembersSummaryCard/Dialog)
-   * reads — only needed when `topic` is a batched draft (room-settings-sheet.tsx):
-   * member changes save straight to the store regardless of `onUpdate`, so
-   * that section must read the real current membership, not the draft's
-   * possibly-stale snapshot, or an add/remove there looks like it silently
-   * failed until the draft happens to get reset. The mode buttons/department
-   * picker below still read `topic.visibility` (the draft) as normal — those
-   * genuinely are batched. Unset when `topic` is already live (plain
-   * /settings usage), where `topic.visibility` is correct for both. */
+  /** Override for what "who can see this room" (mode buttons, department
+   * picker, and the member section) reads — only needed when `topic` is a
+   * batched draft (room-settings-sheet.tsx). Unset when `topic` is already
+   * live (plain /settings usage), where `topic.visibility` is correct as-is. */
   liveVisibility?: ReportTopic["visibility"];
 }) {
   const updateTopicSettings = useReportFeedStore((s) => s.updateTopicSettings);
@@ -75,8 +70,19 @@ export function ReportTopicSettingsPanel({
   const [newLabel, setNewLabel] = useState("");
   const [newTime, setNewTime] = useState("09:00");
   const [membersDialogOpen, setMembersDialogOpen] = useState(false);
-  const mode = topicModeOf(topic.visibility);
-  const memberTopic = liveVisibility !== undefined ? { ...topic, visibility: liveVisibility } : topic;
+  // "Who can see this room" (mode, departments, members) always saves
+  // straight to the store the instant you change it — same "own explicit
+  // actions, not a form field to batch" reasoning the member dialog already
+  // had (see its own comment below). It used to only be true for members:
+  // changing the mode here went into room-settings-sheet.tsx's batched draft
+  // instead, so picking a mode, then opening "จัดการสมาชิก" and saving there,
+  // then closing the sheet without ever hitting *its* separate "บันทึก" threw
+  // the mode change away while the member change (already saved) stuck —
+  // confusing regardless of which order you did things in. Reading/writing
+  // both through the same live value removes that trap entirely.
+  const visibility = liveVisibility ?? topic.visibility;
+  const mode = topicModeOf(visibility);
+  const memberTopic = { ...topic, visibility };
 
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const owner = isOwner(viewingAsUserId);
@@ -89,7 +95,7 @@ export function ReportTopicSettingsPanel({
   // The owner has no such restriction; every mode/department stays theirs.
   function setMode(next: VisibilityMode) {
     if (!owner && next !== "department") return;
-    apply({
+    updateTopicSettings(topic.id, {
       visibility:
         next === "open"
           ? undefined
@@ -101,25 +107,25 @@ export function ReportTopicSettingsPanel({
               // department list hitting zero, so seed it with whoever's
               // picking the mode rather than leaving it empty and silently
               // falling back to open-to-everyone.
-              ? { userIds: topic.visibility?.userIds?.length ? topic.visibility.userIds : [viewingAsUserId] }
-              : { departmentIds: topic.visibility?.departmentIds?.length ? topic.visibility.departmentIds : [departments[0]?.id].filter((x): x is string => !!x) },
+              ? { userIds: visibility?.userIds?.length ? visibility.userIds : [viewingAsUserId] }
+              : { departmentIds: visibility?.departmentIds?.length ? visibility.departmentIds : [departments[0]?.id].filter((x): x is string => !!x) },
     });
   }
 
   function toggleDept(deptId: string) {
     if (!owner && deptId === ownDeptId) return;
-    const current = topic.visibility?.departmentIds ?? [];
+    const current = visibility?.departmentIds ?? [];
     const selected = current.includes(deptId);
     const next = selected ? current.filter((id) => id !== deptId) : [...current, deptId];
     // Never leave the room with zero departments selected — that would
     // silently lock everyone but the owner out with no way back short of
     // reopening this dialog and re-adding one.
     if (next.length === 0) return;
-    apply({
+    updateTopicSettings(topic.id, {
       visibility: {
         departmentIds: next,
-        extraUserIds: topic.visibility?.extraUserIds,
-        exemptUserIds: topic.visibility?.exemptUserIds,
+        extraUserIds: visibility?.extraUserIds,
+        exemptUserIds: visibility?.exemptUserIds,
       },
     });
   }
@@ -185,7 +191,7 @@ export function ReportTopicSettingsPanel({
           {mode === "department" && (
             <div className="grid grid-cols-2 gap-1 pt-1">
               {departments.map((d) => {
-                const selected = topic.visibility?.departmentIds?.includes(d.id) ?? false;
+                const selected = visibility?.departmentIds?.includes(d.id) ?? false;
                 const locked = !owner && d.id === ownDeptId;
                 return (
                   <button
