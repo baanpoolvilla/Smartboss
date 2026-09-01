@@ -209,6 +209,66 @@ describe('shift configuration', () => {
     });
     expect(response.status).toBe(400);
   });
+
+  it('reads back the pattern that is actually bound, with shift names', async () => {
+    // หน้าจอต้องแสดงตารางที่ผูกไว้จริง ไม่ใช่ค่าที่มันเดาเอง — ถ้าอ่านกลับไม่ได้
+    // คนที่ตั้งใจแก้แค่วันเสาร์จะกดทับทั้งสัปดาห์โดยไม่รู้ตัว
+    const employmentId = await createEmployment('อ่านตารางกลับ');
+    await assignPattern(employmentId, dayShiftId);
+
+    const response = await call(
+      harness,
+      'GET',
+      `/recurring-work-patterns?employment_id=${employmentId}`,
+      { token: hrToken },
+    );
+
+    expect(response.status).toBe(200);
+    const items = response.body['items'] as Record<string, Record<string, unknown>>[];
+    expect(items).toHaveLength(1);
+    expect(items[0]?.['effective_from']).toBe('2026-01-01');
+    expect(items[0]?.['monday']?.['id']).toBe(dayShiftId);
+    expect(items[0]?.['monday']?.['name']).toBeTypeOf('string');
+    expect(items[0]?.['saturday']?.['rest_day']).toBe(true);
+  });
+
+  it('replaces a pattern that starts on the same day instead of refusing', async () => {
+    /*
+     * ผูกกะแล้วนึกได้ว่าเลือกผิดเป็นเรื่องปกติที่สุด — ถ้าทับใบที่เริ่มวันเดียวกัน
+     * ไม่ได้ ทางออกเดียวคือเลื่อนวันเริ่มไปพรุ่งนี้ แปลว่าตารางผิดยังมีผลทั้งวันนี้
+     */
+    const employmentId = await createEmployment('แก้วันเดียวกัน');
+    await assignPattern(employmentId, dayShiftId);
+
+    const second = await call(harness, 'POST', '/recurring-work-patterns', {
+      token: adminToken,
+      idempotencyKey: uuidv4(),
+      payload: {
+        employment_id: employmentId,
+        monday_shift_id: nightShiftId,
+        tuesday_shift_id: nightShiftId,
+        wednesday_shift_id: nightShiftId,
+        thursday_shift_id: nightShiftId,
+        friday_shift_id: nightShiftId,
+        saturday_shift_id: restShiftId,
+        sunday_shift_id: restShiftId,
+        effective_from: '2026-01-01',
+        supersede_current: true,
+      },
+    });
+    expect(second.status).toBe(201);
+
+    // เหลือใบเดียว ไม่ใช่สองใบที่เริ่มวันเดียวกัน (ซึ่งจะทำให้เลือกกะแบบสุ่ม)
+    const after = await call(
+      harness,
+      'GET',
+      `/recurring-work-patterns?employment_id=${employmentId}`,
+      { token: hrToken },
+    );
+    const items = after.body['items'] as Record<string, Record<string, unknown>>[];
+    expect(items).toHaveLength(1);
+    expect(items[0]?.['monday']?.['id']).toBe(nightShiftId);
+  });
 });
 
 describe('attendance calculation', () => {

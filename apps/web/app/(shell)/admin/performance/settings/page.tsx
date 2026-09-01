@@ -31,7 +31,10 @@ const GROUPS: { title: string; hint: string; keys: PerformanceCategory[] }[] = [
   {
     title: "งานและรายงาน",
     hint: "จากโมดูลรายงานและงาน",
-    keys: ["task_late", "task_manual_dock", "report_missed", "report_late"],
+    // task_manual_dock ไม่อยู่ในนี้แล้ว — คะแนนจริงมาจากสติกเกอร์ที่หัวหน้ากด
+    // บนการ์ดงาน Kanban (ตั้งค่าที่ /report-task/settings) ไม่ใช่เลขในช่องนี้
+    // ปล่อยให้กรอกได้ต่อไปมีแต่ทำให้เข้าใจผิดว่าตัวเลขนี้มีผล
+    keys: ["task_late", "report_missed", "report_late"],
   },
   {
     title: "งานซ่อมบำรุง",
@@ -148,60 +151,60 @@ export default async function PerformanceSettingsPage() {
                 className={inputClass}
               />
             </Field>
-            <Field label="ขาดงานเกินกี่นาทีถึงนับ" hint="240 = ครึ่งวัน">
-              <input
-                type="number"
-                name="absenceThresholdMinutes"
-                defaultValue={s.absenceThresholdMinutes}
-                min={0}
-                max={1440}
-                required
-                className={inputClass}
-              />
-            </Field>
-            <Field
-              label="ผ่อนผัน PM กี่วัน"
-              hint="เลยกำหนดเกินกี่วันถึงถือว่าปล่อยปละละเลย"
-            >
-              <input
-                type="number"
-                name="pmGraceDays"
-                defaultValue={s.pmGraceDays}
-                min={0}
-                max={365}
-                required
-                className={inputClass}
-              />
-            </Field>
-            <Field
-              label="ย้อนดูผลลงเวลากี่วัน"
-              hint="แต่ละรอบที่ระบบตรวจ จะมองย้อนหลังเท่านี้"
-            >
-              <input
-                type="number"
-                name="attendanceLookbackDays"
-                defaultValue={s.attendanceLookbackDays}
-                min={1}
-                max={365}
-                required
-                className={inputClass}
-              />
-            </Field>
           </div>
+          {/*
+            เอาออกตามคำขอ — เส้นแบ่งขาดงาน (240 นาที) กับช่วงย้อนดูผลลงเวลา
+            (45 วัน) ตรึงเป็นค่าคงที่ในโค้ดแทน (ABSENCE_THRESHOLD_MINUTES,
+            ATTENDANCE_LOOKBACK_DAYS ใน lib/performance.ts) ไม่ให้ตั้งต่อบริษัท
+          */}
         </SectionCard>
 
         {GROUPS.map((group) => (
           <SectionCard key={group.title} title={group.title} description={group.hint}>
             <div className="grid gap-3 sm:grid-cols-2">
+              {/*
+                ระยะผ่อนผันของ PM/ใบงานอยู่ด้วยกันกับคะแนนที่หักของสองอย่างนี้
+                แทนที่จะแยกไปอยู่การ์ด "เกณฑ์การนับ" กับตัวเลขของโมดูลอื่น
+                (สาย/ขาดงาน/ย้อนดูกี่วัน) — คนตั้งค่าเรื่องซ่อมบำรุงจะได้ดูจบ
+                ในการ์ดเดียว ไม่ต้องเลื่อนขึ้นไปหาอีกที่
+              */}
+              {group.title === "งานซ่อมบำรุง" && (
+                <>
+                  <Field
+                    label="บำรุงรักษา (PM) เกินได้กี่วัน"
+                    hint="เลยกำหนดเกินกี่วันถึงถือว่าปล่อยปละละเลย — 0 = หักทันทีที่เลยกำหนด"
+                  >
+                    <input
+                      type="number"
+                      name="pmGraceDays"
+                      defaultValue={s.pmGraceDays}
+                      min={0}
+                      max={365}
+                      required
+                      className={inputClass}
+                    />
+                  </Field>
+                  <Field
+                    label="ใบงานเกินได้กี่วัน"
+                    hint="เลยกำหนดเกินกี่วันถึงถือว่าปล่อยปละละเลย — 0 = หักทันทีที่เลยกำหนด"
+                  >
+                    <input
+                      type="number"
+                      name="workOrderGraceDays"
+                      defaultValue={s.workOrderGraceDays}
+                      min={0}
+                      max={365}
+                      required
+                      className={inputClass}
+                    />
+                  </Field>
+                </>
+              )}
               {group.keys.map((key) => (
                 <Field
                   key={key}
                   label={PERFORMANCE_CATEGORIES[key]}
-                  hint={
-                    key === "task_manual_dock"
-                      ? "หัวหน้ากรอกคะแนนเอง ค่านี้ไม่ถูกใช้"
-                      : `ค่าเริ่มต้น ${DEFAULT_RULE_POINTS[key]}`
-                  }
+                  hint={`ค่าเริ่มต้น ${DEFAULT_RULE_POINTS[key]}`}
                 >
                   <input
                     type="number"

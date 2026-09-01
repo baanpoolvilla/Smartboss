@@ -59,13 +59,23 @@ export const DEFAULT_GRADE_THRESHOLDS: Record<string, number> = {
   D: 60,
 };
 
+/*
+ * ตรึงไว้ไม่ให้ตั้งค่าต่อบริษัท (ตามคำขอ — สองตัวนี้ถูกเอาออกจากหน้าตั้งค่า)
+ * ต่างจากตัวเลขอื่นในไฟล์นี้ตรงที่ไม่มีบริบทให้แต่ละบริษัทอยากได้ค่าต่างกัน:
+ *
+ *   ABSENCE_THRESHOLD_MINUTES — เส้นแบ่งระหว่าง "สาย" กับ "ขาดงาน" ของวันหนึ่ง
+ *   ATTENDANCE_LOOKBACK_DAYS  — cron ย้อนดูข้อมูลกี่วันย้อนหลังในแต่ละรอบ
+ *     (ไม่ใช่กติกาตัดสิน แค่ขอบเขตที่ cron มองย้อนกลับไป)
+ */
+export const ABSENCE_THRESHOLD_MINUTES = 240;
+export const ATTENDANCE_LOOKBACK_DAYS = 45;
+
 export interface PerformanceSettings {
   enabled: boolean;
   baseScore: number;
   lateThresholdMinutes: number;
-  absenceThresholdMinutes: number;
   pmGraceDays: number;
-  attendanceLookbackDays: number;
+  workOrderGraceDays: number;
   rulePoints: Record<PerformanceCategory, number>;
   /** เรียงจากคะแนนสูงไปต่ำแล้ว — ตัวแรกที่ผ่านคือเกรดที่ได้ */
   gradeThresholds: [string, number][];
@@ -75,9 +85,8 @@ const FALLBACK: PerformanceSettings = {
   enabled: true,
   baseScore: 100,
   lateThresholdMinutes: 15,
-  absenceThresholdMinutes: 240,
   pmGraceDays: 7,
-  attendanceLookbackDays: 45,
+  workOrderGraceDays: 0,
   rulePoints: DEFAULT_RULE_POINTS,
   gradeThresholds: Object.entries(DEFAULT_GRADE_THRESHOLDS).sort((a, b) => b[1] - a[1]),
 };
@@ -108,9 +117,8 @@ export async function loadPerformanceSettings(orgId: string): Promise<Performanc
     enabled: row.enabled,
     baseScore: row.baseScore,
     lateThresholdMinutes: row.lateThresholdMinutes,
-    absenceThresholdMinutes: row.absenceThresholdMinutes,
     pmGraceDays: row.pmGraceDays,
-    attendanceLookbackDays: row.attendanceLookbackDays,
+    workOrderGraceDays: row.workOrderGraceDays,
     rulePoints: { ...DEFAULT_RULE_POINTS, ...overrides } as Record<
       PerformanceCategory,
       number
@@ -139,9 +147,8 @@ export async function loadPerformanceSettingsMap(
       enabled: row.enabled,
       baseScore: row.baseScore,
       lateThresholdMinutes: row.lateThresholdMinutes,
-      absenceThresholdMinutes: row.absenceThresholdMinutes,
       pmGraceDays: row.pmGraceDays,
-      attendanceLookbackDays: row.attendanceLookbackDays,
+      workOrderGraceDays: row.workOrderGraceDays,
       rulePoints: { ...DEFAULT_RULE_POINTS, ...overrides } as Record<
         PerformanceCategory,
         number

@@ -18,6 +18,8 @@ const DAYS = [
   ["sunday", "อาทิตย์"],
 ] as const;
 
+type DayField = (typeof DAYS)[number][0];
+
 export interface ShiftOption {
   id: string;
   label: string;
@@ -29,28 +31,53 @@ export interface PersonOption {
   label: string;
 }
 
+/** ตารางที่ผูกไว้จริงในระบบ — วันไหนไม่ได้ผูกกะเป็น `null` */
+export interface CurrentPattern {
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  days: Record<DayField, string | null>;
+}
+
+/**
+ * ผูกกะให้พนักงานหนึ่งคน
+ *
+ * คำถามที่คนตั้งค่าถามจริง ๆ คือ "คนนี้เข้างานกี่โมง" — คนหนึ่งเข้า 08:00-17:00
+ * อีกคนเข้า 07:30-16:30 ⇒ เลือกกะครั้งเดียวจบ ไม่ใช่ไล่เลือกทีละวันเจ็ดช่อง
+ * ซึ่งบังคับให้ตอบคำถามเดิมซ้ำเจ็ดรอบเพื่อได้คำตอบเดียวกันทั้งเจ็ดครั้ง
+ *
+ * กะคือ "เวลาทำงาน" อย่างเดียว ที่นี่จึงไม่มีให้เลือกว่าวันไหนหยุด — วันหยุด
+ * ลงที่ปฏิทินรายเดือนในการ์ด "วันหยุดของคนนี้" ซึ่งคุมด้วยโควตา (4/6 วัน)
+ * และทับตารางประจำสัปดาห์อยู่แล้ว ถามสองที่เท่ากับให้ตอบเรื่องเดียวกันสองแบบ
+ * แล้วต้องมาเดาว่าอันไหนชนะเมื่อสองอันไม่ตรงกัน
+ */
 export function AssignShiftForm({
   employments,
   shifts,
   today,
   /** ตั้งค่าเมื่ออยู่ในหน้าของพนักงานคนเดียว — ซ่อนช่องเลือกคนทิ้ง */
   lockedTo,
+  /** ตารางที่ผูกไว้อยู่ของคนนี้ — `null` = ยังไม่เคยผูก, `undefined` = อ่านไม่ได้ */
+  current,
 }: {
   employments: PersonOption[];
   shifts: ShiftOption[];
   today: string;
   lockedTo?: string;
+  current?: CurrentPattern | null;
 }) {
   const [state, formAction, pending] = useActionState(setRecurringPatternAction, EMPTY);
 
-  if (shifts.length === 0) {
+  const restShiftId = shifts.find((s) => s.restDay)?.id ?? "";
+  const workShifts = shifts.filter((s) => !s.restDay);
+
+  if (workShifts.length === 0) {
     return (
       <p className="text-sm text-(--ink-soft)">
         ยังไม่มีกะทำงานในระบบ — สร้างที่
         <Link href="/hr/settings" className="mx-1 text-(--app-strong) hover:underline">
           หน้าตั้งค่า HR
         </Link>
-        ก่อนจึงจะผูกตารางได้
+        ก่อน (เช่น “กะเช้า 08:00-17:00”) จึงจะผูกกะให้พนักงานได้
       </p>
     );
   }
@@ -58,11 +85,87 @@ export function AssignShiftForm({
     return <p className="text-sm text-(--ink-soft)">ยังไม่มีพนักงานในระบบ</p>;
   }
 
-  // วันทำงานตั้งต้นให้กะแรกที่ไม่ใช่วันหยุด — ส่วนเสาร์-อาทิตย์ปล่อยว่าง
-  const defaultWorkShift = shifts.find((s) => !s.restDay)?.id ?? "";
+  /*
+   * ตารางเดิมอาจตั้งกะไว้คนละใบในแต่ละวัน (ของที่ผูกไว้ก่อนหน้านี้ หรือคนที่
+   * เข้ากะเช้าสลับกะบ่าย) — ฟอร์มนี้เลือกได้กะเดียว จึงต้องรู้ว่ากำลังจะทำให้
+   * ของเดิมง่ายลงหรือเปล่า แล้วบอกออกมาก่อนกด ไม่ใช่ให้รู้ตอนตารางเปลี่ยนไปแล้ว
+   */
+  const currentWorkShiftIds =
+    current == null
+      ? []
+      : [
+          ...new Set(
+            DAYS.map(([field]) => current.days[field]).filter(
+              (id): id is string => id !== null && id !== restShiftId,
+            ),
+          ),
+        ];
+  const mixed = currentWorkShiftIds.length > 1;
+
+  const defaultWorkShift = currentWorkShiftIds[0] ?? workShifts[0]?.id ?? "";
+  /** วันที่ตารางปัจจุบันไม่ได้ให้ทำงาน — กะวันหยุด หรือไม่ได้ผูกกะไว้เลย */
+  const restDays = new Set<DayField>(
+    current == null
+      ? []
+      : DAYS.map(([field]) => field).filter((field) => {
+          const id = current.days[field];
+          return id === null || id === restShiftId;
+        }),
+  );
+
+  const labelOf = (shiftId: string): string =>
+    shifts.find((s) => s.id === shiftId)?.label ?? "กะที่ถูกลบไปแล้ว";
 
   return (
     <>
+      {/*
+        เห็นของจริงก่อนแก้ — ช่องเลือกด้านล่างบอกไม่ได้ว่าอันไหนคือของที่ผูกไว้อยู่
+        กับอันไหนคือค่าที่ระบบเดาให้
+      */}
+      {current === undefined ? (
+        <p className="mb-3 rounded-(--radius) border border-(--line) bg-(--bg-soft) p-2.5 text-xs text-(--ink-soft)">
+          อ่านตารางที่ผูกไว้ไม่ได้ (ระบบบุคคลไม่ตอบ) — ช่องข้างล่างเป็นค่าตั้งต้นที่แนะนำ
+          ถ้ากดบันทึกจะทับของเดิม
+        </p>
+      ) : current === null ? (
+        <p className="mb-3 rounded-(--radius) border border-(--danger) bg-(--bg-soft) p-2.5 text-sm">
+          <strong>ยังไม่เคยผูกกะ</strong> — ระบบยังไม่รู้ว่าคนนี้ควรเข้ากี่โมง
+          จึงคิดสาย/ขาด/OT ให้ไม่ได้ เลือกกะข้างล่างแล้วกดผูกกะ
+        </p>
+      ) : (
+        <div className="mb-4 rounded-(--radius) border border-(--line) bg-(--bg-soft) p-3">
+          <p className="text-sm">
+            ตอนนี้เข้ากะ{" "}
+            <strong>
+              {mixed
+                ? currentWorkShiftIds.map(labelOf).join(" / ")
+                : currentWorkShiftIds[0] !== undefined
+                  ? labelOf(currentWorkShiftIds[0])
+                  : "— ไม่มีวันทำงานเลย —"}
+            </strong>
+            <span className="ml-2 text-(--ink-soft)">
+              เริ่ม {current.effectiveFrom}
+              {current.effectiveTo === null ? "" : ` ถึง ${current.effectiveTo}`}
+            </span>
+          </p>
+          {restDays.size > 0 && (
+            <p className="mt-1 text-xs text-(--ink-soft)">
+              ตารางเดิมตั้งให้หยุดประจำทุก{" "}
+              {DAYS.filter(([field]) => restDays.has(field))
+                .map(([, label]) => label)
+                .join(" · ")}{" "}
+              — บันทึกใหม่แล้ววันพวกนี้จะกลายเป็นวันทำงาน แล้วไปลงวันหยุดจริงที่ปฏิทินข้างล่าง
+            </p>
+          )}
+          {mixed && (
+            <p className="mt-2 text-xs" style={{ color: "var(--danger)" }}>
+              ตารางเดิมตั้งกะไม่เหมือนกันในแต่ละวัน — ถ้ากดบันทึกข้างล่าง
+              ทุกวันทำงานจะเปลี่ยนเป็นกะเดียวกันหมดตามที่เลือก
+            </p>
+          )}
+        </div>
+      )}
+
       <form action={formAction} className="flex flex-col gap-3">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {lockedTo === undefined ? (
@@ -81,6 +184,22 @@ export function AssignShiftForm({
           ) : (
             <input type="hidden" name="employment_id" value={lockedTo} />
           )}
+
+          <Field label="คนนี้เข้ากะไหน *" hint="เวลาทำงานของคนนี้ · วันหยุดลงที่ปฏิทินข้างล่าง">
+            <select
+              name="work_shift_id"
+              required
+              defaultValue={defaultWorkShift}
+              className={inputClass}
+            >
+              {workShifts.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+
           <Field label="เริ่มใช้ตั้งแต่ *" hint="ผลลงเวลาก่อนวันนี้ยังใช้ตารางเดิม">
             <input
               type="date"
@@ -93,63 +212,23 @@ export function AssignShiftForm({
         </div>
 
         {/*
-          สูงสุด 4 คอลัมน์ ไม่ใช่ 7 — เจ็ดช่องบนการ์ดกว้าง ~900px เหลือช่องละ
-          ~120px ซึ่งตัดชื่อกะทิ้งตั้งแต่ "Officer 08…" อ่านไม่ออกว่าเลือกกะไหน
-          เข้ากี่โมง (select ของเบราว์เซอร์ตัดข้อความตอนหุบ ไม่มีทาง ellipsis หนี)
-        */}
-        {/*
-          ⚠ ช่องข้างล่างเป็นค่าตั้งต้น ไม่ใช่ตารางที่บันทึกไว้ — workforce API มีแค่
-          POST /recurring-work-patterns ไม่มี GET จึงอ่านของเดิมกลับมาแสดงไม่ได้
-          คนเปิดหน้ามาเห็นจันทร์-ศุกร์เติม "Officer" ไว้แล้วจึงนึกว่าผูกเสร็จแล้ว
-          ทั้งที่หน้าลงเวลายังขึ้น "ยังไม่ผูกกะ" อยู่ — ต้องบอกออกมาตรง ๆ จนกว่า
-          จะมี endpoint อ่านตารางปัจจุบัน
-        */}
-        <p className="rounded-(--radius) border border-(--line) bg-(--bg-soft) p-2.5 text-xs text-(--ink-soft)">
-          ช่องข้างล่างเป็น<strong>ค่าตั้งต้นที่แนะนำ ไม่ใช่ตารางที่ผูกไว้อยู่</strong> —
-          ระบบยังอ่านตารางเดิมกลับมาแสดงไม่ได้ ถ้าหน้า “การลงเวลา”
-          ยังขึ้นว่าคนนี้ยังไม่ผูกกะ แปลว่ายังไม่เคยกดปุ่มข้างล่างนี้
-        </p>
-
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {DAYS.map(([field, label]) => (
-            <Field key={field} label={label}>
-              <select
-                name={field}
-                defaultValue={
-                  field === "saturday" || field === "sunday" ? "" : defaultWorkShift
-                }
-                className={`${inputClass} min-w-0`}
-              >
-                <option value="">— หยุด —</option>
-                {shifts.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          ))}
-        </div>
-
-        {/*
-          ลิสต์ในช่องมีเท่าที่บริษัทสร้างกะไว้ — บริษัทที่มีกะเดียวจะเห็นแค่
-          "— หยุด — / Officer" แล้วเข้าใจว่าจอเสีย ("ไม่เห็นมีให้เลือกกะเลย")
-          บอกจำนวนกะที่มีจริงพร้อมทางไปเพิ่ม จะได้รู้ว่าไม่ใช่ระบบพัง
+          ลิสต์ในช่องมีเท่าที่บริษัทสร้างกะไว้ — บริษัทที่มีกะเดียวจะเห็นตัวเลือกเดียว
+          แล้วเข้าใจว่าจอเสีย บอกจำนวนกะที่มีจริงพร้อมทางไปเพิ่ม จะได้รู้ว่าไม่ใช่ระบบพัง
         */}
         <p className="text-xs text-(--ink-soft)">
-          ตอนนี้มีกะให้เลือก {shifts.length} กะ ({shifts.map((s) => s.label).join(" · ")})
-          — ต้องการกะอื่นเช่นกะบ่าย/กะดึก
+          ตอนนี้มีกะทำงานให้เลือก {workShifts.length} กะ — คนที่เข้างานเวลาอื่น
+          (เช่น 07:30-16:30) ต้อง
           <Link href="/hr/settings" className="mx-1 text-(--app-strong) hover:underline">
-            เพิ่มที่หน้าตั้งค่า HR
+            สร้างกะนั้นที่หน้าตั้งค่า HR
           </Link>
-          แล้วกลับมาที่นี่
+          ก่อน แล้วกลับมาเลือกที่นี่
         </p>
 
         <div>
           {/* คำเดียวกับที่หน้าลงเวลาใช้ ("ยังไม่ผูกกะ") ไม่ใช่ "บันทึกตาราง"
               ซึ่งไม่มีใครเดาได้ว่าคือปุ่มผูกกะ */}
           <Button type="submit" disabled={pending} className="sm:w-56">
-            {pending ? "กำลังผูกกะ…" : "ผูกกะตามตารางนี้"}
+            {pending ? "กำลังผูกกะ…" : current ? "บันทึกกะใหม่" : "ผูกกะให้คนนี้"}
           </Button>
         </div>
       </form>
@@ -160,7 +239,7 @@ export function AssignShiftForm({
         <div className="mt-3 rounded-(--radius) border border-(--line) bg-(--bg-soft) p-3 text-sm">
           <p className="font-medium">ผูกกะเรียบร้อยแล้ว</p>
           <p className="mt-1 text-(--ink-soft)">
-            ตารางเดิมของคนนี้ถูกปิดให้อัตโนมัติ ระบบจะใช้ตารางใหม่คิดสาย/ขาด/OT
+            ตารางเดิมของคนนี้ถูกปิดให้อัตโนมัติ ระบบจะใช้กะใหม่คิดสาย/ขาด/OT
             ตั้งแต่วันที่ระบุเป็นต้นไป — ผลลงเวลาที่คำนวณไปแล้วต้องสั่งคำนวณใหม่ที่หน้า
             &ldquo;ผลลงเวลา&rdquo; ถ้าอยากให้ย้อนไปใช้เกณฑ์ใหม่
           </p>

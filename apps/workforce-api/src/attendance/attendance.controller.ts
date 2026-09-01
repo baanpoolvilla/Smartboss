@@ -71,6 +71,20 @@ export class SchedulingController {
     });
   }
 
+  /**
+   * ตารางกะที่ผูกไว้จริงของคนหนึ่งคน
+   *
+   * หน้า "ผูกกะ" ต้องเปิดมาแล้วเห็นของเดิม ไม่ใช่ช่องว่างที่เติมค่าเดา —
+   * ไม่งั้นคนที่มาแก้แค่วันเสาร์จะกดทับทั้งสัปดาห์โดยไม่รู้ตัว
+   */
+  @Get('recurring-work-patterns')
+  @RequirePermissions('workforce.scheduling.read')
+  async listPatterns(
+    @Query('employment_id') employmentId: string,
+  ): Promise<{ items: Record<string, unknown>[] }> {
+    return this.service.listRecurringPatterns(requireUuid(employmentId, 'employment_id'));
+  }
+
   @Post('work-policies')
   @HttpCode(201)
   @RequirePermissions('workforce.scheduling.manage')

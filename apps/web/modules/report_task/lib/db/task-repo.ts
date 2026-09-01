@@ -2,7 +2,10 @@ import "server-only";
 import { prisma } from "@smartboss/database";
 
 import { nextTaskCode } from "@/lib/document-code";
-import type { Task } from "../../types";
+import { recordPerformanceEvents, type PerformanceEventInput } from "@/lib/performance";
+import { defaultStickers } from "../../data/stickers";
+import { readStore } from "./org-store";
+import type { Sticker, Task, TaskReaction } from "../../types";
 
 /**
  * งานในบอร์ด Kanban — เก็บเป็นตารางจริง หนึ่งแถวต่อหนึ่งงาน
@@ -45,6 +48,61 @@ export interface TaskCollection {
   version: number;
 }
 
+/**
+ * แปลงสติกเกอร์ที่เพิ่งติดใหม่บนงานให้เป็นคะแนนผลงานกลาง (core.performance_events)
+ *
+ * เดิมสติกเกอร์หักคะแนนแค่ในหน้ารายงานของโมดูลนี้เอง (lib/reports.ts) — ไม่เคย
+ * เขียนลง core.performance_events เลย ⇒ หัวหน้ากด "หัวร้อน" ไปแล้วไม่มีผลกับ
+ * เกรดรวมของพนักงานที่หน้า HR/admin เห็นกันเลย ทั้งที่ "หักคะแนนโดยหัวหน้า"
+ * เป็นหนึ่งในหมวดของระบบเกรดกลางอยู่แล้ว (ดู PERFORMANCE_CATEGORIES.task_manual_dock)
+ *
+ * ให้คะแนนทุกคนที่เป็น assignee ของงานนั้นเท่ากัน ไม่แยกว่าใครทำผิด — งาน
+ * มอบหมายร่วมกันหลายคนอยู่แล้วเป็นส่วนน้อย และ lib/reports.ts ก็นับแบบนี้
+ * มาตั้งแต่ต้น (สติกเกอร์หนึ่งอันมีผลกับ "งาน" ไม่ได้เจาะจงคนในกลุ่ม)
+ *
+ * refId ผูกทั้ง reaction id และ userId เข้าด้วยกัน — unique constraint ของ
+ * ตาราง (orgId, source, category, refType, refId) ไม่มี userId อยู่ในนั้น
+ * ถ้าใช้ reaction id เฉยๆ คนที่สองในกลุ่มจะโดน skipDuplicates ทิ้งไปเงียบๆ
+ */
+async function recordStickerEvents(
+  orgId: string,
+  changes: { task: Task; newReactions: TaskReaction[] }[],
+): Promise<void> {
+  if (changes.length === 0) return;
+
+  const custom = await readStore<Sticker[]>(orgId, "stickers");
+  const stickers = custom.data ?? defaultStickers;
+  const pointsById = new Map(stickers.map((s) => [s.id, s.points] as const));
+  const labelById = new Map(stickers.map((s) => [s.id, `${s.emoji} ${s.label}`] as const));
+
+  const events: PerformanceEventInput[] = [];
+  for (const { task, newReactions } of changes) {
+    for (const reaction of newReactions) {
+      const points = pointsById.get(reaction.stickerId);
+      if (points === undefined || points === 0) continue; // สติกเกอร์ที่ตั้งไว้ 0 แต้ม (เช่น "ด่วนมาก") ไม่มีผลกับเกรด
+      const label = labelById.get(reaction.stickerId) ?? reaction.stickerId;
+      const occurredAt = new Date(reaction.createdAt);
+
+      for (const assigneeId of task.assigneeIds) {
+        events.push({
+          orgId,
+          userId: assigneeId,
+          source: "report_task",
+          category: "task_manual_dock",
+          occurredAt: Number.isNaN(occurredAt.getTime()) ? new Date() : occurredAt,
+          points,
+          refType: "task_reaction",
+          refId: `${reaction.id}:${assigneeId}`,
+          note: `${label} · ${task.title}`,
+          createdBy: reaction.byUserId,
+        });
+      }
+    }
+  }
+
+  if (events.length > 0) await recordPerformanceEvents(events);
+}
+
 /** อ่านงานทั้งหมดของบริษัท พร้อมเลขรุ่นของคอลเลกชัน */
 export async function readTasks(orgId: string): Promise<TaskCollection> {
   const [rows, meta] = await Promise.all([
@@ -82,7 +140,9 @@ export async function writeTasks(
   expectedVersion: number | null,
   userId: string | null
 ): Promise<WriteResult> {
-  return prisma.$transaction(async (tx) => {
+  const stickerChanges: { task: Task; newReactions: TaskReaction[] }[] = [];
+
+  const result = await prisma.$transaction(async (tx) => {
     const meta = await tx.reportTaskCollection.findUnique({ where: { orgId } });
     const current = meta?.version ?? 0;
     if (expectedVersion !== null && expectedVersion !== current) {
@@ -90,11 +150,13 @@ export async function writeTasks(
     }
 
     // งานที่มีอยู่แล้ว — เก็บ code ไว้ให้คงเดิม ไม่ออกเลขใหม่ทุกครั้งที่แก้
+    // ก้อน data เดิมก็ต้องอ่านมาด้วย เพื่อเทียบว่ามีสติกเกอร์ที่เพิ่งติดใหม่ไหม
     const existing = await tx.reportTask.findMany({
       where: { orgId },
-      select: { id: true, code: true },
+      select: { id: true, code: true, data: true },
     });
     const codeById = new Map(existing.map((r) => [r.id, r.code]));
+    const priorById = new Map(existing.map((r) => [r.id, r.data as unknown as Task]));
     const incomingIds = new Set(tasks.map((t) => t.id));
 
     let created = 0;
@@ -107,6 +169,13 @@ export async function writeTasks(
     for (const task of tasks) {
       const cols = columnsOf(task);
       const known = codeById.get(task.id);
+
+      // เทียบกับก้อนเดิมด้วย reaction id — อันที่ไม่เคยเห็นมาก่อนคือสติกเกอร์
+      // ที่เพิ่งติดในคำขอนี้ (ทั้งงานเก่าที่แก้ และงานใหม่ที่ยังไม่เคยมีแถวเดิม)
+      const priorReactionIds = new Set((priorById.get(task.id)?.reactions ?? []).map((r) => r.id));
+      const newReactions = (task.reactions ?? []).filter((r) => !priorReactionIds.has(r.id));
+      if (newReactions.length > 0) stickerChanges.push({ task, newReactions });
+
       if (known) {
         await tx.reportTask.update({
           where: { orgId_id: { orgId, id: task.id } },
@@ -147,6 +216,13 @@ export async function writeTasks(
       codes,
     };
   });
+
+  // ทำหลัง transaction ของ report_task จบแล้ว — core.performance_events เป็นคนละ
+  // schema เขียนผ่าน prisma client ตัวหลัก ไม่ใช่ tx ของธุรกรรมนี้ ผูกกันไม่ได้
+  // จริง ๆ อยู่แล้ว (เหมือน cron.ts ที่หักคะแนน PM/ใบงานเป็นขั้นแยกต่างหาก)
+  if (result.ok) await recordStickerEvents(orgId, stickerChanges);
+
+  return result;
 }
 
 /** ล้างงานทั้งหมดของบริษัท — ใช้ตอนรีเซ็ตข้อมูลเท่านั้น */

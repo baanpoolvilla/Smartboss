@@ -63,6 +63,8 @@ model Organization {
   performanceEvents    PerformanceEvent[]
   performanceSetting   PerformanceSetting?
   securitySetting      SecuritySetting?
+  dayOffQuotaSetting   DayOffQuotaSetting?
+  employeeDayOffQuotas EmployeeDayOffQuota[]
 
   chatChannels ChatChannel[]
 
@@ -378,6 +380,15 @@ model PerformanceSetting {
   pmGraceDays Int @default(7) @map("pm_grace_days")
 
   /**
+   * ใบงานเลยกำหนดกี่วันถึงถือว่าปล่อยปละละเลย (เผื่อเวลาให้ทำก่อน)
+   *
+   * เดิม workorder_overdue หักทันทีที่เลยกำหนดวินาทีแรก (grace = 0 ตายตัว)
+   * ต่างจาก PM ที่ผ่อนผันได้ — ไม่มีเหตุผลให้สองอย่างนี้มีมาตรฐานต่างกัน
+   * ค่าเริ่มต้น 0 รักษาพฤติกรรมเดิมของบริษัทที่ยังไม่เคยตั้งค่า
+   */
+  workOrderGraceDays Int @default(0) @map("work_order_grace_days")
+
+  /**
    * ย้อนดูผลลงเวลากี่วันในแต่ละรอบ cron
    */
   attendanceLookbackDays Int @default(45) @map("attendance_lookback_days")
@@ -439,5 +450,62 @@ model SecuritySetting {
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@map("security_settings")
+  @@schema("core")
+}
+
+// โควตาวันหยุดต่อเดือน — ค่าตั้งต้นของบริษัท
+//
+// ที่นี่ไม่ใช่ค่าคงที่ในโค้ด เพราะจำนวนวันหยุดต่อเดือนคือข้อตกลงจ้างงาน
+// ที่ต่างกันทุกบริษัท (และต่างกันในบริษัทเดียวกันด้วย ดู EmployeeDayOffQuota)
+//
+// ไม่มีแถว = ใช้ค่าเริ่มต้นในโค้ด (ดู apps/web/lib/day-off-quota.ts)
+model DayOffQuotaSetting {
+  orgId String @id @map("org_id")
+
+  /**
+   * วันหยุดต่อเดือนที่พนักงานทั่วไปของบริษัทนี้ได้
+   */
+  defaultDaysPerMonth Int @default(4) @map("default_days_per_month")
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@map("day_off_quota_settings")
+  @@schema("core")
+}
+
+// โควตาวันหยุดรายคน — ทับค่าตั้งต้นของบริษัทเฉพาะคนที่ตกลงกันไว้ต่างออกไป
+//
+// เก็บฝั่ง core ไม่ใช่ workforce เพราะเป็นกติกาของ Smartboss ที่บังคับตอน
+// "บันทึกวันหยุดของเดือนนี้" ไม่ใช่ข้อมูลที่ attendance engine ใช้คำนวณ —
+// เครื่องคำนวณยังเห็นแค่กะที่ผูกไว้เหมือนเดิม
+//
+// employmentId คือ id ฝั่ง workforce จึงไม่มี FK ข้ามฐานให้ผูก — แถวที่
+// พนักงานถูกลบทิ้งจะค้างอยู่เฉย ๆ โดยไม่กระทบอะไร
+// โควตาผูกกับ (คน, เดือน) ไม่ใช่ (คน) เฉย ๆ — เดือนที่ลูกค้าให้หยุดพิเศษ
+// (เช่นเดือนที่ปิดกิจการชั่วคราว) ไม่ควรทำให้โควตาเดือนอื่น ๆ ของคนนั้นเปลี่ยน
+// ตามไปด้วยตลอดกาล ไม่มีแถว = ใช้ค่าตั้งต้นของบริษัทของเดือนนั้น
+model EmployeeDayOffQuota {
+  orgId        String @map("org_id")
+  employmentId String @map("employment_id")
+  /** "YYYY-MM" — โควตานี้มีผลกับเดือนนี้เดือนเดียว */
+  month        String
+
+  /**
+   * วันหยุดของเดือนนี้สำหรับคนนี้ เช่น 6 สำหรับเดือนที่ตกลงกันว่าได้มากกว่ามาตรฐาน
+   */
+  daysPerMonth Int @map("days_per_month")
+
+  note String @default("") @map("note")
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@id([orgId, employmentId, month])
+  @@map("employee_day_off_quotas")
   @@schema("core")
 }

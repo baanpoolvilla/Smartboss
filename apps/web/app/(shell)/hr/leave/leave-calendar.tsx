@@ -217,7 +217,7 @@ export function LeaveCalendar({
                 }
 
                 return (
-                  <label key={cell.iso} className="block cursor-pointer">
+                  <label key={cell.iso} className="relative block cursor-pointer">
                     <input
                       type="checkbox"
                       name="day"

@@ -224,13 +224,21 @@ export async function dockOverdueMaintenance(): Promise<{
   if (activeSettings.length === 0) {
     return { workOrders: 0, pmSchedules: 0, recorded: 0 };
   }
-  const minGraceDays = Math.min(...activeSettings.map((s) => s.pmGraceDays));
+  const minPmGraceDays = Math.min(...activeSettings.map((s) => s.pmGraceDays));
+  const minWorkOrderGraceDays = Math.min(
+    ...activeSettings.map((s) => s.workOrderGraceDays),
+  );
 
-  // ── ใบงานที่เลยกำหนดแล้วยังไม่ปิด ──
+  // ── ใบงานที่เลยกำหนดเกินระยะผ่อนผันแล้วยังไม่ปิด ──
+  // ผ่อนผันได้เหมือน PM (ตั้งค่าได้ที่ /admin/performance/settings) — ค่าเริ่มต้น 0
+  // รักษาพฤติกรรมเดิม (หักทันทีที่เลยกำหนด) ของบริษัทที่ยังไม่เคยตั้งค่า
+  const workOrderGraceDate = new Date(now);
+  workOrderGraceDate.setDate(workOrderGraceDate.getDate() - minWorkOrderGraceDays);
+
   const overdue = await prisma.workOrder.findMany({
     where: {
       status: { in: ["open", "in_progress"] },
-      dueDate: { lt: now },
+      dueDate: { lt: workOrderGraceDate },
     },
     select: {
       id: true,
@@ -243,7 +251,16 @@ export async function dockOverdueMaintenance(): Promise<{
   });
 
   for (const wo of overdue) {
-    if (settingsByOrg.get(wo.orgId)?.enabled !== true) continue;
+    const woSt = settingsByOrg.get(wo.orgId);
+    if (!woSt || !woSt.enabled) continue;
+
+    if (wo.dueDate === null) continue; // where: { lt: ... } กันไว้แล้วจริง ๆ ไม่มีทางเข้า แต่ TS ไม่รู้
+
+    // กรองอีกชั้นด้วยระยะผ่อนผันของบริษัทนั้นจริง ๆ (ข้างบนดึงมาด้วยระยะสั้นสุดก่อน)
+    const orgWorkOrderGrace = new Date(now);
+    orgWorkOrderGrace.setDate(orgWorkOrderGrace.getDate() - woSt.workOrderGraceDays);
+    if (wo.dueDate >= orgWorkOrderGrace) continue;
+
     const responsible = wo.assignedTo ?? wo.property?.caretakerId;
     if (!responsible) continue; // ไม่มีใครรับผิดชอบเลย — หักใครไม่ได้
     events.push({
@@ -262,7 +279,7 @@ export async function dockOverdueMaintenance(): Promise<{
   // เผื่อเวลาก่อนถือว่าปล่อยปละละเลย เพราะ generateWorkOrdersForDuePms เพิ่งสร้าง
   // ใบงานให้ตอนถึงกำหนด ควรให้เวลาทำก่อน (ตั้งค่าได้ที่ /admin/performance/settings)
   const graceDate = new Date(now);
-  graceDate.setDate(graceDate.getDate() - minGraceDays);
+  graceDate.setDate(graceDate.getDate() - minPmGraceDays);
 
   const latePms = await prisma.pmSchedule.findMany({
     where: { isActive: true, nextDueDate: { lt: graceDate } },

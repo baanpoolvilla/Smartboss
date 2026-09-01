@@ -2,6 +2,8 @@ import "server-only";
 import { prisma } from "@smartboss/database";
 
 import {
+  ABSENCE_THRESHOLD_MINUTES,
+  ATTENDANCE_LOOKBACK_DAYS,
   loadPerformanceSettingsMap,
   recordPerformanceEvents,
   type PerformanceEventInput,
@@ -37,9 +39,13 @@ interface AttendanceRow {
 }
 
 /**
- * เกณฑ์สาย/ขาดงานตั้งค่าได้รายบริษัท — ที่นี่เป็นงานข้ามบริษัท จึงต้องดึงด้วย
- * เกณฑ์ที่ "ผ่อนผันน้อยที่สุด" ในระบบก่อน แล้วค่อยกรองตามเกณฑ์ของแต่ละบริษัท
- * ทีหลัง ถ้าดึงด้วยเกณฑ์ของบริษัทใดบริษัทหนึ่ง บริษัทที่เข้มกว่าจะตกหล่น
+ * เกณฑ์สายตั้งค่าได้รายบริษัท (lateThresholdMinutes) — ที่นี่เป็นงานข้ามบริษัท
+ * จึงต้องดึงด้วยเกณฑ์ที่ "ผ่อนผันน้อยที่สุด" ในระบบก่อน แล้วค่อยกรองตามเกณฑ์
+ * ของแต่ละบริษัททีหลัง ถ้าดึงด้วยเกณฑ์ของบริษัทใดบริษัทหนึ่ง บริษัทที่เข้มกว่า
+ * จะตกหล่น
+ *
+ * เส้นแบ่งขาดงาน (ABSENCE_THRESHOLD_MINUTES) กับช่วงย้อนดู
+ * (ATTENDANCE_LOOKBACK_DAYS) ตรึงไว้ตายตัว ไม่ตั้งค่าต่อบริษัท
  */
 export async function dockAttendance(): Promise<{
   scanned: number;
@@ -56,17 +62,15 @@ export async function dockAttendance(): Promise<{
   if (active.length === 0) return { scanned: 0, recorded: 0 };
 
   const minLate = Math.min(...active.map((s) => s.lateThresholdMinutes));
-  const minAbsence = Math.min(...active.map((s) => s.absenceThresholdMinutes));
-  const maxLookback = Math.max(...active.map((s) => s.attendanceLookbackDays));
 
   const from = new Date();
-  from.setDate(from.getDate() - maxLookback);
+  from.setDate(from.getDate() - ATTENDANCE_LOOKBACK_DAYS);
 
   // เงื่อนไข (ฉบับปัจจุบัน, ไม่ใช่วันลา/วันหยุด) อยู่ในตัวฟังก์ชันแล้ว
   const rows = await prisma.$queryRaw<AttendanceRow[]>`
     SELECT subject AS user_id, work_date, late_minutes, absence_minutes
     FROM workforce.performance_attendance(
-      ${from}::date, ${minLate}::int, ${minAbsence}::int
+      ${from}::date, ${minLate}::int, ${ABSENCE_THRESHOLD_MINUTES}::int
     )
   `;
 
@@ -90,7 +94,7 @@ export async function dockAttendance(): Promise<{
 
     const day = new Date(r.work_date).toISOString().slice(0, 10);
 
-    if (Number(r.absence_minutes) > st.absenceThresholdMinutes) {
+    if (Number(r.absence_minutes) > ABSENCE_THRESHOLD_MINUTES) {
       events.push({
         orgId,
         userId: r.user_id,

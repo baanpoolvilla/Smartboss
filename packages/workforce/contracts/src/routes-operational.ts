@@ -125,6 +125,14 @@ export const OPERATIONAL_ROUTES: readonly Omit<RouteDefinition, 'response'>[] = 
     successStatus: 201,
   },
   {
+    operationId: 'listPatterns_get',
+    method: 'get',
+    path: '/recurring-work-patterns',
+    summary: 'GET /recurring-work-patterns',
+    tag: 'attendance',
+    permissions: ['workforce.scheduling.read'] as Permission[],
+  },
+  {
     operationId: 'setPattern_post',
     method: 'post',
     path: '/recurring-work-patterns',
