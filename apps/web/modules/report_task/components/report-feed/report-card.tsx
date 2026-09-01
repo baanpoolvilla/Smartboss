@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
@@ -47,6 +47,7 @@ import {
 } from "@/modules/report_task/lib/report-feed-rich-text";
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
+import { NewMessagesDivider } from "@/modules/report_task/components/report-feed/report-new-divider";
 import { ReportPostFields, newSection, type DraftSection } from "@/modules/report_task/components/report-feed/report-post-fields";
 import { useReportTagStore } from "@/modules/report_task/store/report-tag-store";
 import { ReportTagChip } from "@/modules/report_task/components/report-feed/report-tag-chip";
@@ -301,6 +302,22 @@ export function ReportCard({
   // either way so the box still reads as "you can reply here" at rest.
   const [replyFocused, setReplyFocused] = useState(false);
   const [repliesExpanded, setRepliesExpanded] = useState(false);
+  // "ข้อความใหม่" divider for replies — frozen at mount, same reasoning as
+  // ReportFeed's own post-level divider (opening the room marks everything
+  // read almost immediately, so the first-still-unread id has to be captured
+  // on this component's very first render, before that read-clearing effect
+  // runs, or there'd be nothing left flagged by the time anyone looked).
+  // Deliberately NOT re-derived when `repliesExpanded` flips — a post's
+  // ReportCard instance is freshly mounted per room open (post lists are
+  // topic-scoped, so switching rooms remounts every card with a new key),
+  // so "first render" already means "first time this room was opened",
+  // whether or not the thread happens to be collapsed at that moment.
+  const replyDividerRef = useRef<string | null | undefined>(undefined);
+  if (replyDividerRef.current === undefined) {
+    const firstUnreadReply = post.replies.find((r) => r.unreadFor?.includes(viewingAsUserId) && r.authorId !== viewingAsUserId);
+    replyDividerRef.current = firstUnreadReply ? firstUnreadReply.id : null;
+  }
+  const newReplyDividerBeforeId = replyDividerRef.current;
   // Teams-style "Reply in thread" — replies + the compose box used to render
   // unconditionally under every single post (a permanently-open text box on
   // a room with 50 posts read as a wall of empty input fields, not a chat
@@ -980,21 +997,23 @@ export function ReportCard({
                   </p>
                   <div className="space-y-2.5">
                     {post.replies.map((r) => (
-                      <ReportReply
-                        key={r.id}
-                        reply={r}
-                        allReplies={post.replies}
-                        postQuote={{ id: post.id, authorId: post.authorId, body: post.title }}
-                        flashed={flashTargetId === r.id}
-                        isOwn={r.authorId === viewingAsUserId}
-                        onOpenLightbox={openReplyLightbox}
-                        onReplyTo={startReplyTo}
-                        onJumpToQuote={jumpToQuote}
-                        onCopyLink={() => copyLink(r.id)}
-                        onToggleReaction={(emoji) => toggleReplyReaction(post.id, r.id, emoji, viewingAsUserId)}
-                        onEdit={(body) => editReplyAction(post.id, r.id, { body, images: r.images })}
-                        onDelete={() => setDeleteReplyTarget(r.id)}
-                      />
+                      <Fragment key={r.id}>
+                        {r.id === newReplyDividerBeforeId && <NewMessagesDivider />}
+                        <ReportReply
+                          reply={r}
+                          allReplies={post.replies}
+                          postQuote={{ id: post.id, authorId: post.authorId, body: post.title }}
+                          flashed={flashTargetId === r.id}
+                          isOwn={r.authorId === viewingAsUserId}
+                          onOpenLightbox={openReplyLightbox}
+                          onReplyTo={startReplyTo}
+                          onJumpToQuote={jumpToQuote}
+                          onCopyLink={() => copyLink(r.id)}
+                          onToggleReaction={(emoji) => toggleReplyReaction(post.id, r.id, emoji, viewingAsUserId)}
+                          onEdit={(body) => editReplyAction(post.id, r.id, { body, images: r.images })}
+                          onDelete={() => setDeleteReplyTarget(r.id)}
+                        />
+                      </Fragment>
                     ))}
                   </div>
                   <button

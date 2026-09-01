@@ -58,6 +58,13 @@ export interface ReportPostReply {
   authorId: string;
   body: string;
   createdAt: string;
+  /** Same idea as ReportPost.unreadFor, one level down — who hasn't seen this
+   * particular reply yet. Drives the "ข้อความใหม่" divider in the replies
+   * list (see ReportCard) the same way it drives the one in the post feed.
+   * Absent on a reply from before this existed — treated as "everyone's
+   * read it" rather than crashing every `.includes()` call site, same
+   * normalization reasoning ReportPost's own array fields get. */
+  unreadFor?: string[];
   /** Set once the reply's own text/images have been changed after posting —
    * same "· แก้ไขแล้ว" tag the post itself already carries (editedAt), just
    * one level down. Undefined/null = never edited. */
@@ -284,6 +291,14 @@ export const topicColors = [
 ];
 
 const nextId = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
+
+/** Drops `userId` from every reply's `unreadFor` in one post's replies —
+ * shared by markTopicRead/markPostsRead so opening a room/post clears the
+ * in-thread "ข้อความใหม่" divider the same moment it clears the post-level
+ * unread signal, not on some separate action nobody triggers. */
+function clearReplyUnread(replies: ReportPostReply[], userId: string): ReportPostReply[] {
+  return replies.map((r) => (r.unreadFor?.includes(userId) ? { ...r, unreadFor: r.unreadFor.filter((id) => id !== userId) } : r));
+}
 
 // "ทั่วไป" ships as a parent (Teams-style "team") with one sub-topic out of
 // the box — a bare parent with no children would let someone post straight
@@ -544,11 +559,23 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         // this exact reply (?topic=&post=&reply=), same shape ReportCard's
         // own "copy link on a comment" already produces.
         const replyId = nextId("reply");
+        const repliedPost = get().posts.find((p) => p.id === postId);
+        const repliedTopic = repliedPost ? get().topics.find((t) => t.id === repliedPost.topicId) : undefined;
+        // Same set addPost seeds a fresh post's unreadFor with — everyone who
+        // can see this room, minus whoever's replying. Drives both the
+        // in-thread "ข้อความใหม่" divider (this reply's own unreadFor) and
+        // the post's own unread signal in the sidebar (a plain reply used to
+        // flag neither — only an @mention inside one did, see the comment
+        // that used to sit where mentionedInReply's block is below).
+        const otherReplyMemberIds = repliedTopic
+          ? users.filter((u) => u.id !== authorId && canSeeReportTopic(repliedTopic.visibility, u.id)).map((u) => u.id)
+          : [];
         set((s) => ({
           posts: s.posts.map((p) =>
             p.id === postId
               ? {
                   ...p,
+                  unreadFor: [...new Set([...p.unreadFor, ...otherReplyMemberIds])],
                   replies: [
                     ...p.replies,
                     {
@@ -559,6 +586,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
                       images: extra?.images,
                       highlightColor: extra?.highlightColor,
                       replyToId: extra?.replyToId,
+                      unreadFor: otherReplyMemberIds,
                     },
                   ],
                 }
@@ -598,15 +626,10 @@ export const useReportFeedStore = create<ReportFeedStore>()(
           (id) => id !== authorId && id !== quotedAuthorId && id !== post.authorId
         );
         if (mentionedInReply.length > 0) {
+          // Already unread for them via otherReplyMemberIds above (anyone
+          // @mentioned can see the room by definition) — just the "tagged
+          // you" notification is specific to a mention.
           useNotificationStore.getState().notifyMany(mentionedInReply, authorId, `${actorName} แท็กคุณในความคิดเห็นของโพสต์ "${post.title}"`, undefined, link);
-          // Same "reads as unread for whoever got tagged" as a mention in a
-          // fresh post — no separate per-reply unread slot exists, so this
-          // flags the whole post (see addPost's unreadFor seeding above).
-          set((s) => ({
-            posts: s.posts.map((p) =>
-              p.id === postId ? { ...p, unreadFor: [...new Set([...p.unreadFor, ...mentionedInReply])] } : p
-            ),
-          }));
         }
       },
       editReply: (postId, replyId, data) =>
@@ -681,28 +704,34 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         })),
       markTopicRead: (topicId, userId) =>
         set((s) => {
-          const anyUnread = s.posts.some((p) => p.topicId === topicId && p.unreadFor.includes(userId));
+          const anyUnread = s.posts.some(
+            (p) => p.topicId === topicId && (p.unreadFor.includes(userId) || p.replies.some((r) => r.unreadFor?.includes(userId)))
+          );
           if (!anyUnread) return s;
           return {
             posts: s.posts.map((p) =>
-              p.topicId === topicId && p.unreadFor.includes(userId)
-                ? { ...p, unreadFor: p.unreadFor.filter((id) => id !== userId) }
+              p.topicId === topicId
+                ? { ...p, unreadFor: p.unreadFor.filter((id) => id !== userId), replies: clearReplyUnread(p.replies, userId) }
                 : p
             ),
           };
         }),
-      /** Clears `unreadFor` on a specific set of posts for this viewer —
-       * used by ที่กล่าวถึงฉัน (topic-sidebar.tsx's MENTIONS_ID), which spans
-       * posts across many rooms so `markTopicRead`'s whole-room sweep isn't
-       * the right granularity there. */
+      /** Clears `unreadFor` on a specific set of posts (and their replies)
+       * for this viewer — used by ที่กล่าวถึงฉัน (topic-sidebar.tsx's
+       * MENTIONS_ID), which spans posts across many rooms so
+       * `markTopicRead`'s whole-room sweep isn't the right granularity there. */
       markPostsRead: (postIds, userId) =>
         set((s) => {
           const ids = new Set(postIds);
-          const anyUnread = s.posts.some((p) => ids.has(p.id) && p.unreadFor.includes(userId));
+          const anyUnread = s.posts.some(
+            (p) => ids.has(p.id) && (p.unreadFor.includes(userId) || p.replies.some((r) => r.unreadFor?.includes(userId)))
+          );
           if (!anyUnread) return s;
           return {
             posts: s.posts.map((p) =>
-              ids.has(p.id) && p.unreadFor.includes(userId) ? { ...p, unreadFor: p.unreadFor.filter((id) => id !== userId) } : p
+              ids.has(p.id)
+                ? { ...p, unreadFor: p.unreadFor.filter((id) => id !== userId), replies: clearReplyUnread(p.replies, userId) }
+                : p
             ),
           };
         }),
