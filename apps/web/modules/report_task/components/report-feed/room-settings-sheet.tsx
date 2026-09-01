@@ -162,7 +162,11 @@ export function RoomSettingsSheet({
   }
 
   function handleSave() {
-    updateTopicSettings(topic.id, draft);
+    // `draft.visibility` is a stale snapshot from whenever this sheet last
+    // reset (member changes save straight to the store, not through the
+    // draft — see the ReportTopicSettingsPanel comment above) — writing it
+    // back here would silently undo any member added/removed since then.
+    updateTopicSettings(topic.id, { ...draft, visibility: topic.visibility });
     const before = topic as unknown as Record<string, unknown>;
     const after = draft as unknown as Record<string, unknown>;
     const changes = [...dirtyKeys].map((key) => describeChange(key, before[key], after[key]));
@@ -263,10 +267,15 @@ export function RoomSettingsSheet({
               ReportTopicSettingsPanel ที่ใช้ร่วมกับหน้า /settings ด้วย จึงคง
               โครงสร้างภายในไว้ตามเดิม แค่ครอบหัวข้อกลุ่มไว้จากภายนอกให้สอดคล้อง
               กับหมวดอื่นๆ ใน Sheet นี้ — ส่ง draft + patchDraft ผ่าน onUpdate
-              แทนการเซฟทันที (onUpdate ไม่ระบุ = เซฟทันทีเหมือนเดิมที่ /settings). */}
+              แทนการเซฟทันที (onUpdate ไม่ระบุ = เซฟทันทีเหมือนเดิมที่ /settings).
+              `visibility` เป็นข้อยกเว้น — RoomMembersDialog ข้างในเซฟตรงเข้า
+              store ทันที ไม่ผ่าน draft (ดูคอมเมนต์ของมันเอง) จึงต้องอ่านจาก
+              `topic.visibility` (ค่าจริงปัจจุบัน) ไม่ใช่ `draft.visibility`
+              (สแนปช็อตตอนเปิด sheet) ไม่งั้นเพิ่มสมาชิกในไดอะล็อกไปแล้วการ์ด
+              สรุปด้านในจะยังโชว์ค่าเก่า เหมือนกดบันทึกแล้วไม่ติด. */}
           <section className="space-y-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)]">สิทธิ์การมองเห็น &amp; กติกาการส่งรายงาน</p>
-            <ReportTopicSettingsPanel topic={draft} hideHeading onUpdate={patchDraft} />
+            <ReportTopicSettingsPanel topic={{ ...draft, visibility: topic.visibility }} hideHeading onUpdate={patchDraft} />
           </section>
 
           {/* กติกา เพิ่มเติม */}
