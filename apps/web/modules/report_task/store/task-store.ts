@@ -62,6 +62,15 @@ function notifyLateCompletion(task: Task) {
  * self-notifying, so the actor themselves is excluded automatically whether
  * that's a head or an assignee.
  */
+/** Every checklist item reset to unchecked — used whenever a task is forced
+ * back out of "เสร็จสิ้น" by something other than toggling an item itself
+ * (a status change, a rejected review, a revised due date), so the checklist
+ * doesn't keep reading "ครบทุกคนแล้ว" once the task is no longer actually
+ * done. */
+function clearedChecklist(checklist: ChecklistItem[]): ChecklistItem[] {
+  return checklist.map((c) => ({ ...c, done: false }));
+}
+
 function notifyPenaltyChange(task: Task, byUserId: string, message: string) {
   const heads = departments.filter((d) => task.departmentIds.includes(d.id)).map((d) => d.headId);
   const recipients = Array.from(new Set([...task.assigneeIds, ...heads]));
@@ -295,6 +304,13 @@ export const useTaskStore = create<TaskStore>((set) => ({
           // Whatever sign-off existed no longer reflects the current work
           // once a task leaves "เสร็จสิ้น" — see the field's own doc.
           ...(status !== "done" ? { reviewedBy: undefined, reviewedAt: undefined } : {}),
+          // Reopening a done task past the checklist itself (not through
+          // toggling an item, which would recompute this naturally) leaves
+          // every box still ticked — the card then reads "ครบทุกคนแล้ว" while
+          // sitting outside "รอตรวจสอบ"/"เสร็จสิ้น", which looks broken. Clear
+          // it back to unstarted so what's on screen matches where the task
+          // actually landed.
+          ...(status !== "done" && t.status === "done" ? { checklist: clearedChecklist(t.checklist), completedAssigneeIds: [] } : {}),
           updatedAt: new Date().toISOString(),
         };
       }),
@@ -334,6 +350,11 @@ export const useTaskStore = create<TaskStore>((set) => ({
           ...t,
           status: "in_progress" as const,
           completedAt: undefined,
+          // A rejected review means the work isn't actually acceptable —
+          // leaving every checklist box ticked would keep reading as "ครบทุก
+          // คนแล้ว" right after being sent back for more work.
+          checklist: clearedChecklist(t.checklist),
+          completedAssigneeIds: [],
           dueDate: newDate,
           // task-penalty-sweep.ts judges "overdue" against `originalDueDate`,
           // not the current one, on purpose — so someone can't dodge a still-
@@ -371,7 +392,18 @@ export const useTaskStore = create<TaskStore>((set) => ({
         return {
           ...t,
           dueDate: newDate,
-          ...(wasDone ? { status: "in_progress" as const, completedAt: undefined, reviewedBy: undefined, reviewedAt: undefined } : {}),
+          ...(wasDone
+            ? {
+                status: "in_progress" as const,
+                completedAt: undefined,
+                reviewedBy: undefined,
+                reviewedAt: undefined,
+                // Same reasoning as moveTask/rejectReview — otherwise every
+                // box stays ticked on a task that just got reopened.
+                checklist: clearedChecklist(t.checklist),
+                completedAssigneeIds: [],
+              }
+            : {}),
           revisions: [
             ...t.revisions,
             {
