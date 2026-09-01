@@ -133,7 +133,13 @@ export function RoomMembersDialog({
   const [exempt, setExempt] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState<string>("all");
-  const [sorting, setSorting] = useState<SortingState>([{ id: "name", desc: false }]);
+  // Grouped by department first, then alphabetical within each — flat A-Z by
+  // name read as random ("มั่วเลย") once a department had more than a couple
+  // of people, since colleagues in the same team scattered all over the list.
+  const [sorting, setSorting] = useState<SortingState>([
+    { id: "department", desc: false },
+    { id: "name", desc: false },
+  ]);
 
   // Re-seed the draft from the room's current membership every time the
   // dialog opens, so a previous cancelled edit never leaks into the next.
