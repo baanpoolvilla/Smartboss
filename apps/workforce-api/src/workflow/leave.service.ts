@@ -199,6 +199,7 @@ export class LeaveService {
     half_day_start: boolean;
     half_day_end: boolean;
     reason: string;
+    swap_from_date?: string;
   }): Promise<Record<string, unknown>> {
     return this.uow.run(async (uow) => {
       const employments = await uow.tx
@@ -216,6 +217,27 @@ export class LeaveService {
         .limit(1);
       const leaveType = types[0];
       if (leaveType === undefined) throw AppError.notFound('leave type');
+
+      // สลับวันหยุด — ใบเดิมต้องยังมีผลอยู่ตอนนี้ ไม่งั้นไม่รู้จะสลับจากอะไร
+      let swapFromRequest: typeof schema.leaveRequests.$inferSelect | undefined;
+      if (input.swap_from_date !== undefined) {
+        const olds = await uow.tx
+          .select()
+          .from(schema.leaveRequests)
+          .where(
+            and(
+              eq(schema.leaveRequests.employmentId, input.employment_id),
+              eq(schema.leaveRequests.leaveTypeId, input.leave_type_id),
+              eq(schema.leaveRequests.startsOn, input.swap_from_date),
+              inArray(schema.leaveRequests.status, ['SUBMITTED', 'APPROVED']),
+            ),
+          )
+          .limit(1);
+        swapFromRequest = olds[0];
+        if (swapFromRequest === undefined) {
+          throw AppError.validation('the day off to swap from was not found or already released');
+        }
+      }
 
       const startsOn = LocalDate.parse(input.starts_on);
       const endsOn = LocalDate.parse(input.ends_on);
@@ -259,7 +281,7 @@ export class LeaveService {
         const monthEnd = startsOn.lastDayOfMonth().toString();
 
         const existing = await uow.tx
-          .select({ totalMinutes: schema.leaveRequests.totalMinutes })
+          .select({ id: schema.leaveRequests.id, totalMinutes: schema.leaveRequests.totalMinutes })
           .from(schema.leaveRequests)
           .where(
             and(
@@ -271,7 +293,12 @@ export class LeaveService {
             ),
           );
 
-        const usedDays = existing.reduce((sum, row) => sum + row.totalMinutes, 0) / 480;
+        // สลับวันหยุดไม่ได้ขอเพิ่ม — ตัดใบเดิมที่กำลังจะถูกยกเลิกออกจากยอดที่ใช้ไปแล้ว
+        // ไม่งั้นคนที่ใช้โควตาเต็มเดือนอยู่แล้วจะสลับวันไม่ได้ทั้งที่ไม่ได้ขอเพิ่มวัน
+        const usedDays =
+          existing
+            .filter((row) => row.id !== swapFromRequest?.id)
+            .reduce((sum, row) => sum + row.totalMinutes, 0) / 480;
         const requestedDays = input.total_minutes / 480;
         if (usedDays + requestedDays > leaveType.monthlyQuotaDays) {
           throw AppError.validation('monthly quota exceeded', {
@@ -299,8 +326,10 @@ export class LeaveService {
         halfDayStart: input.half_day_start,
         halfDayEnd: input.half_day_end,
         reason: input.reason,
+        swapFromDate: input.swap_from_date ?? null,
         // สิทธิ์ที่ไม่ใช่คำขอ (เช่นวันหยุดประจำเดือน) อนุมัติทันที ไม่เข้าคิว
-        status: leaveType.autoApprove ? 'APPROVED' : 'SUBMITTED',
+        // ยกเว้นคำขอสลับ — ต้องรออนุมัติเสมอเพราะกระทบวันเดิมที่คนอื่นวางแผนไว้แล้ว
+        status: swapFromRequest !== undefined ? 'SUBMITTED' : leaveType.autoApprove ? 'APPROVED' : 'SUBMITTED',
         submittedAt: this.clock.now(),
         createdBy: this.requestContext.requirePrincipal().principalId,
       });
@@ -333,7 +362,7 @@ export class LeaveService {
 
       return {
         id: requestId,
-        status: leaveType.autoApprove ? 'APPROVED' : 'SUBMITTED',
+        status: swapFromRequest !== undefined ? 'SUBMITTED' : leaveType.autoApprove ? 'APPROVED' : 'SUBMITTED',
       };
     });
   }
@@ -397,6 +426,49 @@ export class LeaveService {
           leaveRequestId: requestId,
           reason: 'consumed on approval',
         });
+      }
+
+      // สลับวันหยุด — อนุมัติแล้วต้องยกเลิกใบเดิมพร้อมกัน ไม่งั้นจะหยุดได้สองวัน
+      // ถ้าไม่อนุมัติไม่ต้องทำอะไรกับใบเดิม (มันยังไม่เคยถูกแตะตั้งแต่ยื่นคำขอสลับ)
+      if (input.outcome === 'APPROVED' && request.swapFromDate !== null) {
+        const olds = await uow.tx
+          .select()
+          .from(schema.leaveRequests)
+          .where(
+            and(
+              eq(schema.leaveRequests.employmentId, request.employmentId),
+              eq(schema.leaveRequests.leaveTypeId, request.leaveTypeId),
+              eq(schema.leaveRequests.startsOn, request.swapFromDate),
+              inArray(schema.leaveRequests.status, ['SUBMITTED', 'APPROVED']),
+            ),
+          )
+          .limit(1);
+        const oldRequest = olds[0];
+        // ถ้าใบเดิมหายไปแล้ว (เช่นถูกยกเลิกเองระหว่างรออนุมัติ) ไม่ต้องทำอะไรต่อ
+        if (oldRequest !== undefined) {
+          const oldPeriodYear = LocalDate.parse(oldRequest.startsOn).year;
+          await uow.tx.insert(schema.leaveBalanceLedger).values({
+            id: uuidv7(),
+            tenantId: uow.tenantId,
+            employmentId: oldRequest.employmentId,
+            leaveTypeId: oldRequest.leaveTypeId,
+            entryType: oldRequest.status === 'APPROVED' ? 'REVERSAL' : 'RELEASE',
+            minutes: oldRequest.totalMinutes,
+            effectiveOn: oldRequest.startsOn,
+            periodYear: oldPeriodYear,
+            leaveRequestId: oldRequest.id,
+            reason: `swapped to ${request.startsOn}`,
+          });
+          await uow.tx
+            .update(schema.leaveRequests)
+            .set({
+              status: 'CANCELLED',
+              decisionReason: `swapped to ${request.startsOn}`,
+              decidedAt: now,
+              decidedBy: approverId,
+            })
+            .where(eq(schema.leaveRequests.id, oldRequest.id));
+        }
       }
 
       await uow.audit({

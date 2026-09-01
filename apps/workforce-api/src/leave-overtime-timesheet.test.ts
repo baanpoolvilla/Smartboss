@@ -13,6 +13,7 @@ let dayShiftId: string;
 let restShiftId: string;
 let annualLeaveTypeId: string;
 let unpaidLeaveTypeId: string;
+let dayOffLeaveTypeId: string;
 
 interface Employee {
   employmentId: string;
@@ -178,6 +179,24 @@ beforeAll(async () => {
     },
   });
   unpaidLeaveTypeId = unpaid.body['id'] as string;
+
+  const dayOff = await call(harness, 'POST', '/leave-types', {
+    token: hrToken,
+    idempotencyKey: uuidv4(),
+    payload: {
+      company_id: tenant.companyId,
+      code: 'DAYOFF',
+      name: 'วันหยุดประจำเดือน',
+      paid: true,
+      unit: 'DAY',
+      quota_minutes_per_year: 0,
+      allow_negative: true,
+      auto_approve: true,
+      monthly_quota_days: 6,
+      effective_from: '2026-01-01',
+    },
+  });
+  dayOffLeaveTypeId = dayOff.body['id'] as string;
 }, 180_000);
 
 afterAll(async () => {
@@ -476,6 +495,202 @@ describe('leave balance ledger', () => {
           .where(eq(schema.leaveBalanceLedger.employmentId, employee.employmentId));
       }),
     ).rejects.toThrow();
+  });
+});
+
+describe('leave swap', () => {
+  it('forces SUBMITTED on a swap even though the leave type auto-approves, and keeps the old day untouched while pending', async () => {
+    const employee = await createEmployee('สลับวันหยุด1');
+
+    const original = await call(harness, 'POST', '/leave-requests', {
+      token: employee.token,
+      idempotencyKey: uuidv4(),
+      payload: {
+        employment_id: employee.employmentId,
+        leave_type_id: dayOffLeaveTypeId,
+        starts_on: '2026-09-05',
+        ends_on: '2026-09-05',
+        total_minutes: 480,
+        reason: 'วันหยุดเดิม',
+      },
+    });
+    expect(original.body['status']).toBe('APPROVED'); // auto_approve ทำงานปกติเมื่อไม่ใช่การสลับ
+
+    const swap = await call(harness, 'POST', '/leave-requests', {
+      token: employee.token,
+      idempotencyKey: uuidv4(),
+      payload: {
+        employment_id: employee.employmentId,
+        leave_type_id: dayOffLeaveTypeId,
+        starts_on: '2026-09-12',
+        ends_on: '2026-09-12',
+        total_minutes: 480,
+        reason: 'ขอสลับ',
+        swap_from_date: '2026-09-05',
+      },
+    });
+    // ต้องรออนุมัติเสมอ แม้ประเภทนี้ปกติจะอนุมัติทันที
+    expect(swap.status).toBe(201);
+    expect(swap.body['status']).toBe('SUBMITTED');
+
+    // ระหว่างรออนุมัติ วันเดิมยังต้องเป็นวันหยุดที่มีผลอยู่ตามปกติ
+    const originalRequestId = original.body['id'] as string;
+    const stillActive = await withTenant(harness.database.db, tenant.tenantId, async (tx) =>
+      tx
+        .select()
+        .from(schema.leaveRequests)
+        .where(eq(schema.leaveRequests.id, originalRequestId)),
+    );
+    expect(stillActive[0]?.status).toBe('APPROVED');
+  });
+
+  it('cancels the old day off atomically when the swap is approved', async () => {
+    const employee = await createEmployee('สลับวันหยุด2');
+
+    const original = await call(harness, 'POST', '/leave-requests', {
+      token: employee.token,
+      idempotencyKey: uuidv4(),
+      payload: {
+        employment_id: employee.employmentId,
+        leave_type_id: dayOffLeaveTypeId,
+        starts_on: '2026-09-06',
+        ends_on: '2026-09-06',
+        total_minutes: 480,
+        reason: 'วันหยุดเดิม',
+      },
+    });
+    const originalRequestId = original.body['id'] as string;
+
+    const swap = await call(harness, 'POST', '/leave-requests', {
+      token: employee.token,
+      idempotencyKey: uuidv4(),
+      payload: {
+        employment_id: employee.employmentId,
+        leave_type_id: dayOffLeaveTypeId,
+        starts_on: '2026-09-13',
+        ends_on: '2026-09-13',
+        total_minutes: 480,
+        reason: 'ขอสลับ',
+        swap_from_date: '2026-09-06',
+      },
+    });
+    const swapRequestId = swap.body['id'] as string;
+
+    await call(harness, 'POST', `/leave-requests/${swapRequestId}/decide`, {
+      token: hrToken,
+      idempotencyKey: uuidv4(),
+      payload: { outcome: 'APPROVED', reason: 'อนุมัติการสลับ' },
+    });
+
+    const rows = await withTenant(harness.database.db, tenant.tenantId, async (tx) =>
+      tx
+        .select()
+        .from(schema.leaveRequests)
+        .where(eq(schema.leaveRequests.employmentId, employee.employmentId)),
+    );
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    expect(byId.get(originalRequestId)?.status).toBe('CANCELLED');
+    expect(byId.get(swapRequestId)?.status).toBe('APPROVED');
+
+    // ต้องหยุดสุทธิแค่วันเดียว ไม่ใช่ทั้งสองวัน
+    const balance = await call(
+      harness,
+      'GET',
+      `/leave-balances?employment_id=${employee.employmentId}&period_year=2026`,
+      { token: hrToken },
+    );
+    const dayOffBalance = (
+      balance.body['items'] as { leave_type_id: string; consumed_minutes: number; reserved_minutes: number }[]
+    ).find((row) => row.leave_type_id === dayOffLeaveTypeId);
+    expect(dayOffBalance?.consumed_minutes).toBe(480);
+    expect(dayOffBalance?.reserved_minutes).toBe(0);
+  });
+
+  it('leaves the old day off untouched when the swap is rejected', async () => {
+    const employee = await createEmployee('สลับวันหยุด3');
+
+    const original = await call(harness, 'POST', '/leave-requests', {
+      token: employee.token,
+      idempotencyKey: uuidv4(),
+      payload: {
+        employment_id: employee.employmentId,
+        leave_type_id: dayOffLeaveTypeId,
+        starts_on: '2026-09-07',
+        ends_on: '2026-09-07',
+        total_minutes: 480,
+        reason: 'วันหยุดเดิม',
+      },
+    });
+    const originalRequestId = original.body['id'] as string;
+
+    const swap = await call(harness, 'POST', '/leave-requests', {
+      token: employee.token,
+      idempotencyKey: uuidv4(),
+      payload: {
+        employment_id: employee.employmentId,
+        leave_type_id: dayOffLeaveTypeId,
+        starts_on: '2026-09-14',
+        ends_on: '2026-09-14',
+        total_minutes: 480,
+        reason: 'ขอสลับ',
+        swap_from_date: '2026-09-07',
+      },
+    });
+    const swapRequestId = swap.body['id'] as string;
+
+    await call(harness, 'POST', `/leave-requests/${swapRequestId}/decide`, {
+      token: hrToken,
+      idempotencyKey: uuidv4(),
+      payload: { outcome: 'REJECTED', reason: 'ไม่อนุมัติการสลับ' },
+    });
+
+    const rows = await withTenant(harness.database.db, tenant.tenantId, async (tx) =>
+      tx
+        .select()
+        .from(schema.leaveRequests)
+        .where(eq(schema.leaveRequests.employmentId, employee.employmentId)),
+    );
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    expect(byId.get(originalRequestId)?.status).toBe('APPROVED');
+    expect(byId.get(swapRequestId)?.status).toBe('REJECTED');
+  });
+
+  it('does not count a pending swap against the monthly quota it is replacing', async () => {
+    const employee = await createEmployee('สลับวันหยุด4');
+
+    // ใช้โควตาเต็ม 6 วันของเดือนนี้แล้ว รวมวันที่จะขอสลับด้วย
+    const days = ['2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04', '2026-09-08', '2026-09-09'];
+    for (const day of days) {
+      const response = await call(harness, 'POST', '/leave-requests', {
+        token: employee.token,
+        idempotencyKey: uuidv4(),
+        payload: {
+          employment_id: employee.employmentId,
+          leave_type_id: dayOffLeaveTypeId,
+          starts_on: day,
+          ends_on: day,
+          total_minutes: 480,
+          reason: 'วันหยุดประจำเดือน',
+        },
+      });
+      expect(response.status).toBe(201);
+    }
+
+    // สลับจากวันแรกไปวันใหม่ในเดือนเดียวกัน — ไม่ได้ขอเพิ่มวัน ต้องไม่ติดโควตา
+    const swap = await call(harness, 'POST', '/leave-requests', {
+      token: employee.token,
+      idempotencyKey: uuidv4(),
+      payload: {
+        employment_id: employee.employmentId,
+        leave_type_id: dayOffLeaveTypeId,
+        starts_on: '2026-09-15',
+        ends_on: '2026-09-15',
+        total_minutes: 480,
+        reason: 'ขอสลับ',
+        swap_from_date: '2026-09-01',
+      },
+    });
+    expect(swap.status).toBe(201);
   });
 });
 

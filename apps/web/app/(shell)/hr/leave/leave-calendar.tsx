@@ -1,8 +1,14 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useMemo, useState, useTransition } from "react";
 import { Button } from "@smartboss/ui/components/button";
-import { cancelLeaveAction, submitLeaveAction, type LeaveState } from "../actions";
+import {
+  cancelLeaveAction,
+  submitLeaveAction,
+  swapLeaveAction,
+  type LeaveState,
+  type SwapLeaveState,
+} from "../actions";
 
 const EMPTY: LeaveState = {};
 
@@ -17,6 +23,8 @@ export interface DayEntry {
   mine: boolean;
   /** มีค่าเฉพาะแถวของตัวเอง (mine) — ใช้กดยกเลิก คนอื่นไม่เห็น id ใบของคนอื่น */
   requestId?: string;
+  /** มีค่าเฉพาะแถวของตัวเอง — ใช้ตอนสลับ (ต้องยื่นใบใหม่เป็นประเภทเดียวกับใบเดิม) */
+  leaveTypeId?: string;
 }
 
 export interface PersonLegend {
@@ -64,6 +72,31 @@ export function LeaveCalendar({
   const [state, formAction, pending] = useActionState(submitLeaveAction, EMPTY);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
 
+  // สลับวันหยุด — เลือกวันเดิมก่อน (กด "สลับ") แล้วเข้าโหมดคลิกเลือกวันใหม่
+  const [swapFrom, setSwapFrom] = useState<{ date: string; leaveTypeId: string } | null>(null);
+  const [swapResult, setSwapResult] = useState<SwapLeaveState | null>(null);
+  const [swapPending, startSwapTransition] = useTransition();
+
+  function requestSwap(toDate: string) {
+    if (swapFrom === null) return;
+    if (!window.confirm(`ขอสลับวันหยุดจาก ${swapFrom.date} เป็น ${toDate} — ต้องรออนุมัติก่อนมีผล ดำเนินการ?`)) {
+      return;
+    }
+    const fromDate = swapFrom.date;
+    const leaveTypeId = swapFrom.leaveTypeId;
+    startSwapTransition(async () => {
+      const result = await swapLeaveAction({
+        employmentId: employmentId ?? "",
+        leaveTypeId,
+        fromDate,
+        toDate,
+        reason: "",
+      });
+      setSwapResult(result);
+      if (result.ok) setSwapFrom(null);
+    });
+  }
+
   const canRequest = employmentId !== null && leaveTypes.length > 0;
 
   /** 6 สัปดาห์เต็มเสมอ — ความสูงปฏิทินจะได้ไม่กระโดดเวลาสลับเดือน */
@@ -91,6 +124,24 @@ export function LeaveCalendar({
   return (
     <form action={formAction} className="flex flex-col gap-3">
       <input type="hidden" name="employment_id" value={employmentId ?? ""} />
+
+      {swapFrom !== null && (
+        <div className="flex items-center justify-between gap-2 rounded-(--radius) border border-(--app) bg-(--app-soft) px-3 py-2 text-sm">
+          <span>
+            กำลังสลับวันหยุดจาก <strong>{swapFrom.date}</strong> — คลิกวันที่ต้องการสลับไปในปฏิทิน
+            (ต้องรออนุมัติก่อนมีผล)
+          </span>
+          <Button type="button" size="sm" variant="outline" onClick={() => setSwapFrom(null)}>
+            ยกเลิก
+          </Button>
+        </div>
+      )}
+      {swapResult?.error && <p className="text-sm text-(--danger)">{swapResult.error}</p>}
+      {swapResult?.ok && (
+        <p className="text-sm text-(--ink-soft)">
+          ส่งคำขอสลับแล้ว — วันเดิมยังเป็นวันหยุดของคุณจนกว่าจะได้รับอนุมัติ
+        </p>
+      )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[200px_1fr]">
         {/* ── แถบซ้าย: ใครหยุดบ้าง เปิด/ปิดดูรายคนได้ ── */}
@@ -210,31 +261,71 @@ export function LeaveCalendar({
                   </span>
                 );
 
+                // โหมดกำลังสลับวันหยุด — ปฏิทินทั้งหมดกลายเป็นตัวเลือกวันใหม่
+                // (ยกเว้นวันเดิมที่กำลังจะสลับจาก และวันนอกเดือน)
+                if (swapFrom !== null) {
+                  const pickable = cell.inMonth && cell.iso !== swapFrom.date && !iAmOff;
+                  if (!pickable) {
+                    return (
+                      <span key={cell.iso} className="block" style={cell.iso === swapFrom.date ? { outline: "2px dashed var(--app)", outlineOffset: "-2px" } : undefined}>
+                        {body}
+                      </span>
+                    );
+                  }
+                  return (
+                    <button
+                      key={cell.iso}
+                      type="button"
+                      disabled={swapPending}
+                      onClick={() => requestSwap(cell.iso)}
+                      className="block w-full text-left hover:bg-(--app-soft)"
+                    >
+                      {body}
+                    </button>
+                  );
+                }
+
                 if (!selectable) {
-                  // วันที่เป็นของฉันเอง (ติ๊กไว้แล้ว) มีปุ่มยกเลิกให้กด — ใช้
+                  // วันที่เป็นของฉันเอง (ติ๊กไว้แล้ว) มีปุ่มยกเลิก/สลับให้กด — ใช้
                   // formAction ของปุ่มแทนการซ้อน <form> (ซ้อนฟอร์มทำไม่ได้ใน
                   // HTML) ปุ่มนี้ยิงไปคนละ action จากปุ่ม "ขอหยุด" ด้านล่าง
-                  // แม้จะอยู่ใน <form> เดียวกัน
+                  // แม้จะอยู่ใน <form> เดียวกัน · ปุ่มสลับไม่ใช่ formAction เพราะ
+                  // ต้องเข้าโหมดเลือกวันใหม่ก่อน ไม่ใช่ยิง request ทันที
                   const mine = all.find((e) => e.mine);
                   return (
                     <span key={cell.iso} className="relative block">
                       {body}
                       {mine?.requestId && (
-                        <button
-                          type="submit"
-                          formAction={cancelLeaveAction}
-                          name="requestId"
-                          value={mine.requestId}
-                          title="ยกเลิกวันหยุดนี้"
-                          onClick={(e) => {
-                            if (!window.confirm(`ยกเลิกวันหยุดวันที่ ${cell.iso} ?`)) {
-                              e.preventDefault();
-                            }
-                          }}
-                          className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold text-(--ink-soft) hover:bg-(--danger) hover:text-white"
-                        >
-                          ×
-                        </button>
+                        <span className="absolute right-0.5 top-0.5 flex gap-0.5">
+                          {mine.leaveTypeId && (
+                            <button
+                              type="button"
+                              title="สลับวันหยุดนี้ไปวันอื่น (ต้องรออนุมัติ)"
+                              onClick={() => {
+                                setSwapResult(null);
+                                setSwapFrom({ date: cell.iso, leaveTypeId: mine.leaveTypeId! });
+                              }}
+                              className="flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold text-(--ink-soft) hover:bg-(--app) hover:text-white"
+                            >
+                              ⇄
+                            </button>
+                          )}
+                          <button
+                            type="submit"
+                            formAction={cancelLeaveAction}
+                            name="requestId"
+                            value={mine.requestId}
+                            title="ยกเลิกวันหยุดนี้"
+                            onClick={(e) => {
+                              if (!window.confirm(`ยกเลิกวันหยุดวันที่ ${cell.iso} ?`)) {
+                                e.preventDefault();
+                              }
+                            }}
+                            className="flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold text-(--ink-soft) hover:bg-(--danger) hover:text-white"
+                          >
+                            ×
+                          </button>
+                        </span>
                       )}
                     </span>
                   );
