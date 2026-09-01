@@ -1,3 +1,5 @@
+import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
+
 /** Shared canvas downscale step — draws `file` onto a canvas at most
  * `maxWidth` wide, used by both the upload path and the legacy inline path. */
 function drawToCanvas(file: File, maxWidth: number): Promise<HTMLCanvasElement> {
@@ -45,13 +47,6 @@ export async function uploadCompressedImage(file: File, maxWidth = 1280, quality
   return data.url;
 }
 
-/** Client-side heads-up before the request even fires — the server (see
- * /api/report-task/uploads) is still the real authority, using the company's
- * own configurable `maxVideoMB` (attachment-settings-store.ts, 25MB default);
- * this is just close enough to fail fast with a specific message instead of
- * a slow upload ending in a generic 413. */
-const CLIENT_VIDEO_MAX_BYTES = 25 * 1024 * 1024;
-
 export interface UploadedReportMedia {
   url: string;
   mime: string;
@@ -70,8 +65,16 @@ export async function uploadReportMedia(file: File): Promise<UploadedReportMedia
     if (file.type !== "video/mp4" && file.type !== "video/webm") {
       throw new Error("รองรับเฉพาะไฟล์วิดีโอ .mp4 หรือ .webm");
     }
-    if (file.size > CLIENT_VIDEO_MAX_BYTES) {
-      throw new Error(`ไฟล์วิดีโอใหญ่เกินไป (จำกัด ${CLIENT_VIDEO_MAX_BYTES / 1024 / 1024}MB)`);
+    // Client-side heads-up before the request even fires — the server (see
+    // /api/report-task/uploads) is still the real authority and reads this
+    // exact same company-set value fresh from the DB on every upload, so
+    // there's no risk of the two drifting apart; this just fails fast with a
+    // specific message instead of a slow upload ending in a generic 413. A
+    // company on a plan with a bigger video allowance (or a smaller one)
+    // gets checked against its own real limit here, not a hardcoded number.
+    const maxBytes = useAttachmentSettingsStore.getState().settings.maxVideoMB * 1024 * 1024;
+    if (file.size > maxBytes) {
+      throw new Error(`ไฟล์วิดีโอใหญ่เกินไป (จำกัด ${useAttachmentSettingsStore.getState().settings.maxVideoMB}MB)`);
     }
     const form = new FormData();
     form.append("file", file);

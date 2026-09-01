@@ -5,6 +5,7 @@ import { Button } from "@/modules/report_task/components/ui/button";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { departments, users } from "@/modules/report_task/lib/directory";
 import { useReportFeedStore, type ReportPostImage, type ReportPostSection } from "@/modules/report_task/store/report-feed-store";
+import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import {
   BULLET_LINE_PREFIX,
@@ -104,6 +105,7 @@ export function ReportPostFields({
   busy: boolean;
   onFilesSelected: (files: FileList | null) => void;
 }) {
+  const maxVideoMB = useAttachmentSettingsStore((s) => s.settings.maxVideoMB);
   const editableRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [activeFormat, setActiveFormat] = useState<Record<string, ActiveFormat>>({});
   // The editor is uncontrolled: its DOM is the source of truth once mounted
@@ -142,8 +144,11 @@ export function ReportPostFields({
 
   function mentionMatches(query: string): MentionItem[] {
     const q = query.trim().toLowerCase();
-    const all = q ? mentionCandidates.filter((m) => m.label.toLowerCase().includes(q)) : mentionCandidates;
-    return all.slice(0, 8);
+    // No cap — the dropdown below is already its own scroll area (sized to
+    // fit the composer, see nearestScrollableBounds), so a room with more
+    // than 8 people used to just silently lose everyone past the 8th with
+    // no way to scroll to them ("แท็กคนไม่ครบ").
+    return q ? mentionCandidates.filter((m) => m.label.toLowerCase().includes(q)) : mentionCandidates;
   }
 
   /** Top/bottom edges of the nearest scrollable ancestor (the composer's own scroll area) — the dropdown must stay within these, not just the viewport edges, or it visually spills past the composer card into the page header above or the footer buttons below. */
@@ -764,7 +769,7 @@ export function ReportPostFields({
           size="sm"
           disabled={busy || images.length >= 6}
           onClick={() => fileInputRef.current?.click()}
-          title="รูปหรือคลิปวิดีโอ .mp4/.webm (จำกัด 25MB ต่อคลิป)"
+          title={`รูปหรือคลิปวิดีโอ .mp4/.webm (จำกัด ${maxVideoMB}MB ต่อคลิป)`}
         >
           <ImagePlus className="h-3.5 w-3.5" />
           {busy ? "กำลังแนบไฟล์..." : "แนบรูป/คลิป"}

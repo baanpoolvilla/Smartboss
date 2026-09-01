@@ -237,8 +237,9 @@ export function ReportCard({
 
   function replyMentionMatches(query: string): ReplyMentionItem[] {
     const q = query.trim().toLowerCase();
-    const all = q ? replyMentionCandidates.filter((m) => m.label.toLowerCase().includes(q)) : replyMentionCandidates;
-    return all.slice(0, 8);
+    // No cap — the dropdown is its own scroll area, so a room with more than
+    // 8 people used to just silently lose everyone past the 8th ("แท็กคนไม่ครบ").
+    return q ? replyMentionCandidates.filter((m) => m.label.toLowerCase().includes(q)) : replyMentionCandidates;
   }
 
   function syncReplyMentionMenu(el: HTMLElement) {
