@@ -39,6 +39,11 @@ export const submitLeaveSchema = z.object({
   half_day_start: z.boolean().default(false),
   half_day_end: z.boolean().default(false),
   reason: z.string().trim().max(500).default(''),
+  /**
+   * มีค่า = นี่คือคำขอ "สลับวันหยุด" จากวันนี้มาเป็นวันที่ขอใหม่
+   * บังคับ SUBMITTED เสมอแม้ประเภทการลาจะ auto_approve (ดู leave.service)
+   */
+  swap_from_date: isoDateSchema.optional(),
 });
 
 export const decideLeaveSchema = z.object({

@@ -103,11 +103,12 @@ export default async function LeavePage({
         // ใบของตัวเองที่ "ยังมีผล" (ไม่ใช่ REJECTED/CANCELLED) — ใช้ starts_on
         // เป็นคีย์ตรง ๆ ได้ เพราะ submitLeaveAction ส่งทีละวัน (starts_on = ends_on
         // เสมอ) ถ้าวันไหนมีมากกว่าหนึ่งใบ (ไม่ควรเกิด) ใช้ใบล่าสุดพอ
-        const myRequestIdByDate = new Map(
-          (mine?.items ?? [])
-            .filter((r) => r.status === "SUBMITTED" || r.status === "APPROVED")
-            .map((r) => [r.starts_on, r.id]),
+        const myActiveRequests = (mine?.items ?? []).filter(
+          (r) => r.status === "SUBMITTED" || r.status === "APPROVED",
         );
+        const myRequestIdByDate = new Map(myActiveRequests.map((r) => [r.starts_on, r.id]));
+        // ใช้ตอนสลับวันหยุด — ต้องรู้ว่าวันเดิมเป็นประเภทการลาอะไรถึงจะยื่นสลับแทนที่ถูกใบ
+        const myLeaveTypeIdByDate = new Map(myActiveRequests.map((r) => [r.starts_on, r.leave_type_id]));
 
         // วางคำขอลงปฏิทินรายวัน — endpoint คืนเฉพาะใบที่ยังมีผล (PENDING/APPROVED)
         const entriesByDate: Record<string, DayEntry[]> = {};
@@ -121,6 +122,7 @@ export default async function LeavePage({
               status: entry.status,
               mine: isMine,
               requestId: isMine ? myRequestIdByDate.get(date) : undefined,
+              leaveTypeId: isMine ? myLeaveTypeIdByDate.get(date) : undefined,
             });
           }
         }

@@ -73,6 +73,8 @@ export const leaveRequests = workforce.table(
     halfDayEnd: boolean('half_day_end').notNull().default(false),
     reason: text('reason').notNull().default(''),
     attachmentObjectId: uuid('attachment_object_id'),
+    /** มีค่า = ใบนี้คือคำขอ "สลับ" มาแทนวันนี้ ต้องยกเลิกใบเดิมพร้อมกันตอนอนุมัติ */
+    swapFromDate: date('swap_from_date'),
     status: text('status').notNull().default('DRAFT'),
     submittedAt: timestamp('submitted_at', { withTimezone: true }),
     decidedAt: timestamp('decided_at', { withTimezone: true }),

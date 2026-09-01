@@ -72,6 +72,9 @@ function leaveErrorMessage(raw: string): string {
   if (raw.includes("days of notice")) {
     return "ประเภทการลานี้ต้องแจ้งล่วงหน้า — เลือกวันที่ไกลกว่านี้";
   }
+  if (raw.includes("swap from was not found")) {
+    return "วันเดิมที่จะสลับไม่มีผลแล้ว (อาจถูกยกเลิกไปก่อน) — รีเฟรชหน้าแล้วลองใหม่";
+  }
   return raw;
 }
 
@@ -996,6 +999,57 @@ export async function cancelLeaveAction(formData: FormData) {
     throw new Error(toMessage(error));
   }
   revalidatePath("/hr/leave");
+}
+
+export interface SwapLeaveState {
+  ok?: boolean;
+  error?: string;
+}
+
+/**
+ * สลับวันหยุดที่ลงไปแล้วเป็นอีกวันหนึ่ง — ต้อง "ขออนุญาติ" เสมอ แม้ประเภทการลา
+ * เดิมจะเป็นชนิดที่ไม่ต้องอนุมัติ (workforce บังคับ SUBMITTED เมื่อมี
+ * swap_from_date — ดู leave.service.ts submitRequest) เพราะกระทบวันที่คนอื่น
+ * วางแผนงานไว้แล้ว ระหว่างรออนุมัติวันเดิมยังเป็นวันหยุดของเขาตามปกติ
+ *
+ * เรียกตรงจาก client component ได้เลยไม่ต้องผ่าน <form> เพราะไฟล์นี้เป็น
+ * "use server" ทั้งไฟล์ — export function ทุกตัวเป็น server action อยู่แล้ว
+ */
+export async function swapLeaveAction(input: {
+  employmentId: string;
+  leaveTypeId: string;
+  fromDate: string;
+  toDate: string;
+  reason: string;
+}): Promise<SwapLeaveState> {
+  await requireOrg();
+
+  if (!input.employmentId) {
+    return { error: "บัญชีนี้ยังไม่ถูกผูกกับทะเบียนพนักงาน — แจ้งฝ่ายบุคคล" };
+  }
+  if (!input.leaveTypeId) return { error: "ไม่พบประเภทการลาของวันเดิม" };
+  if (!input.fromDate || !input.toDate) return { error: "ไม่ได้เลือกวัน" };
+  if (input.fromDate === input.toDate) return { error: "เลือกวันใหม่ให้ต่างจากวันเดิม" };
+
+  try {
+    await wfFetch("/leave-requests", {
+      method: "POST",
+      body: {
+        employment_id: input.employmentId,
+        leave_type_id: input.leaveTypeId,
+        starts_on: input.toDate,
+        ends_on: input.toDate,
+        total_minutes: 480,
+        reason: input.reason.trim() || `สลับวันหยุดจากวันที่ ${input.fromDate}`,
+        swap_from_date: input.fromDate,
+      },
+    });
+  } catch (error) {
+    return { error: leaveErrorMessage(toMessage(error)) };
+  }
+
+  revalidatePath("/hr/leave");
+  return { ok: true };
 }
 
 /** อนุมัติ/ไม่อนุมัติคำขอลา — ต้องมี workforce.leave.approve (SUPERVISOR ขึ้นไป) */
