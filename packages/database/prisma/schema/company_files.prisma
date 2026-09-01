@@ -20,6 +20,9 @@ model CompanyFolder {
   /// ไม่ใช่ FK จริง — ดู room-access-server.ts) สิทธิ์เข้าถึงจะเช็คสมาชิกห้องนั้นแทน orgId
   /// เฉยๆ — เสมอเป็น root folder (parentId = null) และไม่ปนกับ tree โฟลเดอร์ปกติ
   roomId    String?  @map("room_id")
+  /// soft-delete (ถังขยะแบบ SharePoint) — null = ปกติ, มีค่า = อยู่ในถังขยะ ลบจริงเมื่อ purge
+  deletedAt DateTime? @map("deleted_at")
+  deletedBy String?  @map("deleted_by")
   createdBy String   @map("created_by")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -47,6 +50,9 @@ model CompanyFile {
   size           Int
   storageKey     String   @map("storage_key")
   currentVersion Int      @default(1) @map("current_version")
+  /// soft-delete (ถังขยะ) — null = ปกติ, มีค่า = อยู่ในถังขยะ
+  deletedAt      DateTime? @map("deleted_at")
+  deletedBy      String?  @map("deleted_by")
   createdBy      String   @map("created_by")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
@@ -58,6 +64,7 @@ model CompanyFile {
 
   @@index([orgId])
   @@index([orgId, folderId])
+  @@index([orgId, deletedAt])
   @@map("files")
   @@schema("company_files")
 }
@@ -94,6 +101,10 @@ model CompanyFileShareLink {
   token     String    @unique
   /// "view" | "edit" — ตรวจในโค้ด ไม่ใช้ enum เพื่อเพิ่มค่าใหม่ทีหลังได้โดยไม่ต้อง migrate
   role      String    @default("view")
+  /// "anyone" (ใครถือลิงก์ก็ได้) | "org" (ต้องล็อกอินเป็นคนในบริษัทนี้) — ตรวจในโค้ด
+  scope     String    @default("anyone")
+  /// แฮชรหัสผ่านลิงก์ (scrypt "salt:hash") — null = ไม่มีรหัส ดูได้เลย
+  passwordHash String? @map("password_hash")
   createdBy String    @map("created_by")
   createdAt DateTime  @default(now()) @map("created_at")
   expiresAt DateTime? @map("expires_at")
@@ -103,5 +114,24 @@ model CompanyFileShareLink {
 
   @@index([fileId])
   @@map("file_share_links")
+  @@schema("company_files")
+}
+
+/// บันทึกกิจกรรม (audit log) ของไฟล์/โฟลเดอร์ — ใครทำอะไรเมื่อไหร่ ("create" |
+/// "version" | "rename" | "move" | "delete" | "restore" | "purge" | "share" |
+/// "revoke") ระดับ append-only ไม่แก้/ไม่ลบ ใช้แสดงไทม์ไลน์ในหน้าไฟล์
+model CompanyFileActivity {
+  id        String   @id @default(uuid())
+  orgId     String   @map("org_id")
+  fileId    String?  @map("file_id")
+  folderId  String?  @map("folder_id")
+  actorId   String   @map("actor_id")
+  action    String
+  detail    String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([orgId])
+  @@index([fileId])
+  @@map("file_activity")
   @@schema("company_files")
 }

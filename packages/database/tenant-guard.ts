@@ -31,7 +31,7 @@ export const TENANT_SCOPED_MODELS = new Set<string>([
   // chat
   "ChatChannel", "ChatChannelMember", "ChatMessage", "ChatReadState",
   // company_files
-  "CompanyFolder", "CompanyFile",
+  "CompanyFolder", "CompanyFile", "CompanyFileActivity",
   // maintenance
   "Asset", "Contractor", "ContractorHistory", "EquipmentReturn", "Expense",
   "LineConfig", "LineNotificationLog", "PmSchedule", "Property", "PropertyCategory",

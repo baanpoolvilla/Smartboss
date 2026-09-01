@@ -15,10 +15,21 @@ import {
   AlertDialogCancel,
 } from "@/modules/report_task/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/modules/report_task/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/modules/report_task/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+} from "@/modules/report_task/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
 import { Textarea } from "@/modules/report_task/components/ui/textarea";
-import { useReportFeedStore, topicColors, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
+import { useReportFeedStore, topicColors, type ReportTopic, type ReportPost } from "@/modules/report_task/store/report-feed-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useSettingsAccessStore } from "@/modules/report_task/store/settings-access-store";
 import { canEditReportTopic, canManageReportTopics } from "@/modules/report_task/lib/permissions";
@@ -33,6 +44,7 @@ import { toast } from "sonner";
 import {
   AtSign,
   Bell,
+  BellOff,
   Briefcase,
   ChevronRight,
   Clock,
@@ -163,6 +175,7 @@ export function TopicSidebar({
   const updateTopicSettings = useReportFeedStore((s) => s.updateTopicSettings);
   const toggleFavoriteTopic = useReportFeedStore((s) => s.toggleFavoriteTopic);
   const toggleHiddenTopic = useReportFeedStore((s) => s.toggleHiddenTopic);
+  const setNotifyPreference = useReportFeedStore((s) => s.setNotifyPreference);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const settingsGrants = useSettingsAccessStore((s) => s.grants);
   // Creating/deleting a topic (either level) is CEO-only by default — the
@@ -374,6 +387,34 @@ export function TopicSidebar({
   // toggles it back on directly.
   const childrenOf = (parentId: string) => restTopics.filter((t) => t.parentId === parentId);
 
+  // Discord-style notify preference, per room per viewer: "all" (default —
+  // every new post lights the room up), "mentions" (only @you does), or "off"
+  // (muted — no unread signal at all, and the row reads dimmed). Stored on the
+  // topic (notifyPreference), set from the room settings sheet. Honoring it
+  // here is what makes muting a room actually go quiet in the sidebar.
+  const notifyPrefFor = (t: ReportTopic): "all" | "mentions" | "off" => t.notifyPreference?.[viewingAsUserId] ?? "all";
+  const postCountsUnread = (post: ReportPost, pref: "all" | "mentions" | "off") => {
+    if (pref === "off") return false;
+    if (!post.unreadFor.includes(viewingAsUserId)) return false;
+    if (pref === "mentions") return postMentionsUser(post, viewingAsUserId);
+    return true;
+  };
+  // Posts in a room that count as unread for this viewer, after its notify
+  // preference — the single source the dot, the bold, the count badge and the
+  // collapsed-still-visible rule all read from, so they never disagree.
+  const topicUnreadPosts = (t: ReportTopic) => {
+    const pref = notifyPrefFor(t);
+    return posts.filter((post) => post.topicId === t.id && postCountsUnread(post, pref));
+  };
+  // Unread @mentions specifically — Discord's red pill. Shown for "all" and
+  // "mentions" rooms alike, silenced only when the room is fully muted.
+  const topicMentionCount = (t: ReportTopic) =>
+    notifyPrefFor(t) === "off"
+      ? 0
+      : posts.filter(
+          (post) => post.topicId === t.id && post.unreadFor.includes(viewingAsUserId) && post.authorId !== viewingAsUserId && postMentionsUser(post, viewingAsUserId)
+        ).length;
+
   function renderTopicRow(t: ReportTopic, opts?: { depth?: number; hasChildren?: boolean }) {
     const depth = opts?.depth ?? 0;
     const hasChildren = opts?.hasChildren ?? false;
@@ -387,15 +428,22 @@ export function TopicSidebar({
     const hiddenForMe = depth > 0 && (t.hiddenBy?.includes(viewingAsUserId) ?? false);
     const collapsed = collapsedTopicIds.has(t.id);
     const topicPosts = posts.filter((p) => p.topicId === t.id);
-    const unreadCount = topicPosts.filter((p) => p.unreadFor.includes(viewingAsUserId)).length;
+    const muted = notifyPrefFor(t) === "off";
+    // Count honors this room's notify preference (muted -> 0, "mentions" ->
+    // only @you), so a muted room shows no dot and no badge, like Discord.
+    const unreadCount = topicUnreadPosts(t).length;
+    // Red mention pill count (Discord) — unread posts that actually @mention
+    // this viewer; suppressed when the room is muted.
+    const mentionCountHere = topicMentionCount(t);
     // A parent topic almost never has posts of its own (it's an organizing
     // folder), so its own unreadCount is normally 0 even when a child
     // sub-topic underneath it has something new. Collapsed, that new post
     // would be invisible with no signal at all to expand and look — so the
     // dot (not the numeric badge, which stays this topic's own count only)
-    // also lights up from descendants.
+    // also lights up from descendants, each child weighed by its own
+    // notify preference.
     const descendantUnread = hasChildren
-      ? childrenOf(t.id).some((c) => posts.some((p) => p.topicId === c.id && p.unreadFor.includes(viewingAsUserId)))
+      ? childrenOf(t.id).some((c) => topicUnreadPosts(c).length > 0)
       : false;
     const hasUnread = unreadCount > 0 || descendantUnread;
     const active = t.id === activeId;
@@ -421,7 +469,7 @@ export function TopicSidebar({
           // reachable to un-hide it) but reads as clearly dimmed either way.
           // Archived (Phase 6) reads the same way, for the same reason —
           // still findable to un-archive from its own ⚙, not hard-hidden.
-          (hiddenForMe || t.archived) && "opacity-50",
+          (hiddenForMe || t.archived || (muted && !active)) && "opacity-50",
           active
             ? "bg-[var(--accent)] font-semibold"
             : cn(
@@ -470,6 +518,17 @@ export function TopicSidebar({
           // colors fighting over what they mean on the same row.
           <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-[var(--brand-green-dark)]" />
         )}
+        {!active && hasUnread && (
+          // Discord's unread "notch" — a short pill hugging the far-left
+          // edge of the rail. It's the at-a-glance "there's something new in
+          // here" mark that reads even when you scan straight past the label,
+          // and it works at every depth (sub-topics have no logo dot). An
+          // open row shows the green selector bar above instead of this.
+          <span
+            className="absolute left-0 top-1/2 -translate-y-1/2 h-2 w-1 rounded-r-full bg-[var(--ink)]"
+            aria-hidden
+          />
+        )}
         {depth === 0 ? (
           hasChildren ? (
             <button
@@ -514,9 +573,13 @@ export function TopicSidebar({
         >
           {t.name}
         </span>
-        {unreadCount > 0 && (
-          <span className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-[var(--brand-green)] text-[var(--ink)] text-[10px] font-semibold flex items-center justify-center tabular-nums">
-            {unreadCount}
+        {mentionCountHere > 0 && (
+          // Only @mentions earn a number here — a red pill (Discord-style),
+          // shown just for posts that tag this viewer. Plain "unread" is
+          // already carried by the left notch + bold label, so a second green
+          // count sitting next to it was redundant ("ตัวเลขเขียวเอาออก").
+          <span className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-[var(--chart-red)] text-white text-[10px] font-semibold flex items-center justify-center tabular-nums">
+            {mentionCountHere}
           </span>
         )}
         {/* Quick "add a sub-topic here" — opens the same create dialog as
@@ -565,7 +628,7 @@ export function TopicSidebar({
             personal preference, not an edit — every viewer gets that item
             regardless, so the menu also opens for a plain viewer of a
             sub-topic even with neither of the other two rights. */}
-        {(canEditReportTopic(t.visibility, viewingAsUserId) || canManageTopics || depth > 0) && (
+        {(canEditReportTopic(t.visibility, viewingAsUserId) || canManageTopics || depth > 0 || canOpenDirectly) && (
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
@@ -584,6 +647,41 @@ export function TopicSidebar({
               }
             />
             <DropdownMenuContent align="end">
+              {/* Per-viewer notification preference — Discord's channel mute,
+                  reachable straight from the room's own "..." so nobody has to
+                  dig into full room settings just to quiet a room. Shown for
+                  any real room (a leaf topic or a sub-topic); a category folder
+                  has no posts of its own to notify from, so it's skipped. */}
+              {(canOpenDirectly || depth > 0) && (
+                <>
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>
+                      {notifyPrefFor(t) === "off" ? <BellOff className="h-3.5 w-3.5" /> : <Bell className="h-3.5 w-3.5" />}
+                      การแจ้งเตือน
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                      <DropdownMenuRadioGroup
+                        value={notifyPrefFor(t)}
+                        onValueChange={(v) => v && setNotifyPreference(t.id, viewingAsUserId, v as "all" | "mentions" | "off")}
+                      >
+                        <DropdownMenuRadioItem value="all">
+                          <Bell className="h-3.5 w-3.5" />
+                          ทุกโพสต์
+                        </DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="mentions">
+                          <AtSign className="h-3.5 w-3.5" />
+                          เฉพาะที่กล่าวถึงฉัน
+                        </DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="off">
+                          <BellOff className="h-3.5 w-3.5" />
+                          ปิดการแจ้งเตือน
+                        </DropdownMenuRadioItem>
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                  {(canEditReportTopic(t.visibility, viewingAsUserId) || canManageTopics || depth > 0) && <DropdownMenuSeparator />}
+                </>
+              )}
               {/* Creating a sub-topic goes through the same "+ สร้างหัวข้อ"
                   dialog as any other topic — its own "หัวข้อหลัก" picker
                   already covers this, so no separate shortcut here. */}
@@ -624,14 +722,23 @@ export function TopicSidebar({
   function renderTopicBranch(t: ReportTopic) {
     const children = childrenOf(t.id);
     const hasChildren = children.length > 0;
-    const showChildren = hasChildren && !collapsedTopicIds.has(t.id);
+    const isCollapsed = collapsedTopicIds.has(t.id);
+    // Discord-style collapse: a collapsed category still keeps any channel
+    // that's unread or currently open on screen — only the read/idle ones
+    // tuck away — so a new post is never hidden behind a folded folder and
+    // whatever room you're standing in stays visible while you collapse the
+    // rest. Expanded shows everything, exactly as before.
+    const visibleChildren = isCollapsed
+      ? children.filter((c) => c.id === activeId || topicUnreadPosts(c).length > 0)
+      : children;
+    const showChildren = visibleChildren.length > 0;
     // A little extra room after this group's last child before the next
     // parent starts, on top of the list's own space-y-1 — keeps groups
     // visually separated without opening up large gaps within a group.
     return (
       <div key={t.id} className={showChildren ? "mb-2 space-y-0.5" : undefined}>
         {renderTopicRow(t, { depth: 0, hasChildren })}
-        {showChildren && children.map((child) => renderTopicRow(child, { depth: 1 }))}
+        {showChildren && visibleChildren.map((child) => renderTopicRow(child, { depth: 1 }))}
       </div>
     );
   }

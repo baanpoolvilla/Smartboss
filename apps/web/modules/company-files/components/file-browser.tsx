@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card } from "@smartboss/ui/components/card";
 import { Button } from "@smartboss/ui/components/button";
-import { Folder as FolderIcon, FileIcon, Upload, FolderPlus, ChevronRight, Home, MessagesSquare } from "lucide-react";
+import { Folder as FolderIcon, FileIcon, Upload, FolderPlus, ChevronRight, Home, MessagesSquare, Trash2 } from "lucide-react";
 import { createFolder, createFile, type FolderPathEntry } from "@/modules/company-files/data/files";
 import { uploadCompanyFile } from "@/modules/company-files/lib/upload";
 import { formatFileSize, fileIconKind } from "@/modules/company-files/lib/file-meta";
@@ -128,6 +128,12 @@ export function FileBrowser({
           <option value="modified">แก้ล่าสุดก่อน</option>
           <option value="size">ขนาดใหญ่ก่อน</option>
         </select>
+        <Link
+          href="/company-files/trash"
+          className="inline-flex items-center gap-1.5 h-9 rounded-(--radius) border border-(--line) px-3 text-sm text-(--ink-soft) hover:text-(--ink) hover:bg-(--bg-soft)"
+        >
+          <Trash2 className="h-4 w-4" /> ถังขยะ
+        </Link>
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}

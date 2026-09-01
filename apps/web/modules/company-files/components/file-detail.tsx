@@ -4,7 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@smartboss/ui/components/card";
 import { Button } from "@smartboss/ui/components/button";
-import { Download, History, Link2, RotateCcw, Trash2, Upload, Copy, Ban, Pencil, CalendarClock, FolderInput } from "lucide-react";
+import { Download, History, Link2, RotateCcw, Trash2, Upload, Copy, Ban, Pencil, CalendarClock, FolderInput, Activity } from "lucide-react";
 import {
   addFileVersion,
   restoreFileVersion,
@@ -16,7 +16,7 @@ import {
 } from "@/modules/company-files/data/files";
 import { uploadCompanyFile } from "@/modules/company-files/lib/upload";
 import { formatFileSize, fileIconKind, isPreviewable, fileKindOf } from "@/modules/company-files/lib/file-meta";
-import { SHARE_LINK_ROLE_LABELS, type ShareLinkRole } from "@/modules/company-files/types";
+import { SHARE_LINK_ROLE_LABELS, SHARE_LINK_SCOPE_LABELS, type ShareLinkRole, type ShareLinkScope } from "@/modules/company-files/types";
 import type { CompanyFile, CompanyFileVersion, CompanyFileShareLink } from "@prisma/client";
 
 export function FileDetail({
@@ -25,12 +25,14 @@ export function FileDetail({
   shareLinks,
   uploaderNames,
   movableFolders,
+  activity,
 }: {
   file: CompanyFile;
   versions: CompanyFileVersion[];
   shareLinks: CompanyFileShareLink[];
   uploaderNames: Record<string, string>;
   movableFolders: { id: string; name: string; roomId: string | null }[];
+  activity: { id: string; action: string; detail: string | null; createdAt: Date; actorName: string | null }[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -40,6 +42,8 @@ export function FileDetail({
   const [shareExpiry, setShareExpiry] = useState<string>("0");
   const [shareCreated, setShareCreated] = useState<string | null>(null);
   const [moveTarget, setMoveTarget] = useState<string>(file.folderId ?? "__root__");
+  const [shareScope, setShareScope] = useState<ShareLinkScope>("anyone");
+  const [sharePassword, setSharePassword] = useState<string>("");
 
   function run(action: () => Promise<unknown>) {
     setError(null);
@@ -73,9 +77,12 @@ export function FileDetail({
 
   function handleCreateShareLink() {
     const days = shareExpiry === "0" ? null : Number(shareExpiry);
+    const scope = shareScope;
+    const password = sharePassword.trim() || null;
     run(async () => {
-      const link = await createShareLink(file.id, shareRole, days);
+      const link = await createShareLink(file.id, shareRole, days, { scope, password });
       setShareCreated(`${window.location.origin}/s/${link.token}`);
+      setSharePassword("");
     });
   }
 
@@ -181,6 +188,24 @@ export function FileDetail({
             <option value="30">หมดอายุใน 30 วัน</option>
             <option value="90">หมดอายุใน 90 วัน</option>
           </select>
+          <select
+            value={shareScope}
+            onChange={(e) => setShareScope(e.target.value as ShareLinkScope)}
+            className="h-9 rounded-(--radius) border border-(--line) bg-(--bg) px-2 text-sm"
+            aria-label="ขอบเขตลิงก์"
+          >
+            {(Object.keys(SHARE_LINK_SCOPE_LABELS) as ShareLinkScope[]).map((sc) => (
+              <option key={sc} value={sc}>{SHARE_LINK_SCOPE_LABELS[sc]}</option>
+            ))}
+          </select>
+          <input
+            type="text"
+            value={sharePassword}
+            onChange={(e) => setSharePassword(e.target.value)}
+            placeholder="รหัสผ่าน (ไม่บังคับ)"
+            className="h-9 rounded-(--radius) border border-(--line) bg-(--bg) px-2 text-sm"
+            aria-label="รหัสผ่านลิงก์"
+          />
           <Button size="sm" disabled={isPending} onClick={handleCreateShareLink}>สร้างลิงก์</Button>
         </div>
         {shareCreated && (
@@ -253,6 +278,39 @@ export function FileDetail({
           ))}
         </div>
       </Card>
+
+      {/* audit log / กิจกรรม */}
+      <Card className="p-4 sm:p-5">
+        <h3 className="text-sm font-semibold flex items-center gap-1.5 mb-3"><Activity className="h-4 w-4" /> กิจกรรม</h3>
+        {activity.length === 0 ? (
+          <p className="text-xs text-(--ink-soft)">ยังไม่มีบันทึกกิจกรรม</p>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            {activity.map((a) => (
+              <div key={a.id} className="flex items-center justify-between gap-2 text-xs px-2.5 py-1.5 rounded-(--radius) bg-(--bg-soft)">
+                <span>
+                  {ACTIVITY_LABELS[a.action] ?? a.action}
+                  {a.detail && ` · ${a.detail}`}
+                  {" · "}{a.actorName ?? "ไม่ทราบชื่อ"}
+                </span>
+                <span className="text-(--ink-soft) shrink-0">{new Date(a.createdAt).toLocaleString("th-TH")}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
     </div>
   );
 }
+
+const ACTIVITY_LABELS: Record<string, string> = {
+  create: "อัปโหลดไฟล์",
+  version: "อัปโหลดเวอร์ชันใหม่",
+  rename: "เปลี่ยนชื่อ",
+  move: "ย้ายไฟล์",
+  delete: "ย้ายเข้าถังขยะ",
+  restore: "กู้คืน",
+  purge: "ลบถาวร",
+  share: "สร้างลิงก์แชร์",
+  revoke: "เพิกถอนลิงก์แชร์",
+};

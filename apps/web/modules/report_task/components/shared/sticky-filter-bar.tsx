@@ -55,8 +55,17 @@ export function StickyFilterBar({
           {actions}
         </div>
       )}
+      {/*
+        The bordered card only makes sense once there's real content to frame —
+        on desktop that's always true (the full filter row). On mobile,
+        DashboardFilters collapses down to just a "ภาพรวม" label + a "กรอง"
+        pill button (every actual filter field is hidden below `sm:`), so the
+        same card wrapped almost nothing but empty padding — it read as a
+        content section that hadn't loaded rather than a two-item header row.
+        `sm:` and up still gets the boxed treatment; mobile stays a plain row.
+      */}
       {children && (
-        <div className="rounded-xl border border-[var(--line)] bg-white p-2.5 sm:p-3 max-w-full overflow-x-auto">
+        <div className="sm:rounded-xl sm:border sm:border-[var(--line)] sm:bg-white sm:p-3 max-w-full overflow-x-auto">
           {children}
         </div>
       )}
