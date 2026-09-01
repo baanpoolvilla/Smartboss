@@ -336,6 +336,97 @@ describe('leave balance ledger', () => {
     ]);
   });
 
+  it('refuses to cancel another employment\'s leave request without approve permission', async () => {
+    const owner = await createEmployee('เจ้าของใบลา');
+    const outsider = await createEmployee('คนอื่น');
+    await grantLeave(owner.employmentId, annualLeaveTypeId, 960);
+
+    const request = await call(harness, 'POST', '/leave-requests', {
+      token: owner.token,
+      idempotencyKey: uuidv4(),
+      payload: {
+        employment_id: owner.employmentId,
+        leave_type_id: annualLeaveTypeId,
+        starts_on: '2026-08-06',
+        ends_on: '2026-08-06',
+        total_minutes: 480,
+        reason: 'ขอลา',
+      },
+    });
+    const requestId = request.body['id'] as string;
+
+    const response = await call(harness, 'POST', `/leave-requests/${requestId}/cancel`, {
+      token: outsider.token,
+      idempotencyKey: uuidv4(),
+      payload: { reason: 'ไม่เกี่ยวกับฉันแต่ลองยกเลิกดู' },
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it('lets a supervisor with approve permission cancel someone else\'s leave', async () => {
+    const owner = await createEmployee('เจ้าของใบลา2');
+    await grantLeave(owner.employmentId, annualLeaveTypeId, 960);
+
+    const request = await call(harness, 'POST', '/leave-requests', {
+      token: owner.token,
+      idempotencyKey: uuidv4(),
+      payload: {
+        employment_id: owner.employmentId,
+        leave_type_id: annualLeaveTypeId,
+        starts_on: '2026-08-07',
+        ends_on: '2026-08-07',
+        total_minutes: 480,
+        reason: 'ขอลา',
+      },
+    });
+    const requestId = request.body['id'] as string;
+
+    const response = await call(harness, 'POST', `/leave-requests/${requestId}/cancel`, {
+      token: hrToken,
+      idempotencyKey: uuidv4(),
+      payload: { reason: 'ฝ่ายบุคคลยกเลิกให้' },
+    });
+    expect(response.status).toBe(200);
+  });
+
+  it('lets an employee list only their own leave requests via /me/leave-requests', async () => {
+    const employee = await createEmployee('ดูของตัวเอง');
+    const other = await createEmployee('คนอื่นอีกคน');
+    await grantLeave(employee.employmentId, annualLeaveTypeId, 960);
+    await grantLeave(other.employmentId, annualLeaveTypeId, 960);
+
+    await call(harness, 'POST', '/leave-requests', {
+      token: employee.token,
+      idempotencyKey: uuidv4(),
+      payload: {
+        employment_id: employee.employmentId,
+        leave_type_id: annualLeaveTypeId,
+        starts_on: '2026-08-08',
+        ends_on: '2026-08-08',
+        total_minutes: 480,
+        reason: 'ของฉัน',
+      },
+    });
+    await call(harness, 'POST', '/leave-requests', {
+      token: other.token,
+      idempotencyKey: uuidv4(),
+      payload: {
+        employment_id: other.employmentId,
+        leave_type_id: annualLeaveTypeId,
+        starts_on: '2026-08-08',
+        ends_on: '2026-08-08',
+        total_minutes: 480,
+        reason: 'ของคนอื่น',
+      },
+    });
+
+    const response = await call(harness, 'GET', '/me/leave-requests', { token: employee.token });
+    expect(response.status).toBe(200);
+    const items = response.body['items'] as Record<string, unknown>[];
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.every((r) => r['employment_id'] === employee.employmentId)).toBe(true);
+  });
+
   it('refuses a request with insufficient balance', async () => {
     const employee = await createEmployee('สิทธิ์ไม่พอ');
     await grantLeave(employee.employmentId, annualLeaveTypeId, 240);

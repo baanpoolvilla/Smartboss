@@ -2,7 +2,7 @@
 
 import { useActionState, useMemo, useState } from "react";
 import { Button } from "@smartboss/ui/components/button";
-import { submitLeaveAction, type LeaveState } from "../actions";
+import { cancelLeaveAction, submitLeaveAction, type LeaveState } from "../actions";
 
 const EMPTY: LeaveState = {};
 
@@ -15,6 +15,8 @@ export interface DayEntry {
   name: string;
   status: "PENDING" | "APPROVED";
   mine: boolean;
+  /** มีค่าเฉพาะแถวของตัวเอง (mine) — ใช้กดยกเลิก คนอื่นไม่เห็น id ใบของคนอื่น */
+  requestId?: string;
 }
 
 export interface PersonLegend {
@@ -209,9 +211,31 @@ export function LeaveCalendar({
                 );
 
                 if (!selectable) {
+                  // วันที่เป็นของฉันเอง (ติ๊กไว้แล้ว) มีปุ่มยกเลิกให้กด — ใช้
+                  // formAction ของปุ่มแทนการซ้อน <form> (ซ้อนฟอร์มทำไม่ได้ใน
+                  // HTML) ปุ่มนี้ยิงไปคนละ action จากปุ่ม "ขอหยุด" ด้านล่าง
+                  // แม้จะอยู่ใน <form> เดียวกัน
+                  const mine = all.find((e) => e.mine);
                   return (
-                    <span key={cell.iso} className="block">
+                    <span key={cell.iso} className="relative block">
                       {body}
+                      {mine?.requestId && (
+                        <button
+                          type="submit"
+                          formAction={cancelLeaveAction}
+                          name="requestId"
+                          value={mine.requestId}
+                          title="ยกเลิกวันหยุดนี้"
+                          onClick={(e) => {
+                            if (!window.confirm(`ยกเลิกวันหยุดวันที่ ${cell.iso} ?`)) {
+                              e.preventDefault();
+                            }
+                          }}
+                          className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold text-(--ink-soft) hover:bg-(--danger) hover:text-white"
+                        >
+                          ×
+                        </button>
+                      )}
                     </span>
                   );
                 }

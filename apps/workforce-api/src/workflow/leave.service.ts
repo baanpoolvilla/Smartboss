@@ -414,7 +414,31 @@ export class LeaveService {
     });
   }
 
-  /** ยกเลิกใบลาที่อนุมัติแล้ว — คืนสิทธิ์ด้วยรายการ REVERSAL ไม่ลบรายการเดิม */
+  /**
+   * ใบลาของตัวเอง — ใช้สิทธิ์พื้นฐาน workforce.leave.request เดียวกับตอนขอลา
+   * ไม่ต้องมี workforce.leave.manage (ตัวนั้นเปิดให้เห็นของทุกคนในบริษัท ซึ่ง
+   * เกินความจำเป็นแค่จะดู "ของฉันมีอะไรบ้าง" — spec เดียวกับ payslip.read.self)
+   */
+  async listMyRequests(query: {
+    status?: string;
+    from?: string;
+    to?: string;
+  }): Promise<{ items: Record<string, unknown>[] }> {
+    const employmentId = this.requestContext.requirePrincipal().employmentId;
+    if (employmentId === null) {
+      throw AppError.validation('this account is not linked to an employment record');
+    }
+    return this.listRequests({ ...query, employmentId });
+  }
+
+  /**
+   * ยกเลิกใบลาที่อนุมัติแล้ว — คืนสิทธิ์ด้วยรายการ REVERSAL ไม่ลบรายการเดิม
+   *
+   * ยกเลิกของตัวเองได้เสมอ (ลงผิดวัน/เปลี่ยนใจ) ส่วนของคนอื่นต้องมี
+   * workforce.leave.approve — เดิมจุดนี้ไม่มีการตรวจความเป็นเจ้าของเลย
+   * ใครก็ตามที่มีแค่สิทธิ์ขอลาพื้นฐาน (ทุกคนมี) ยกเลิกใบของคนอื่นได้หมด
+   * แค่รู้ requestId (เจอระหว่างทำหน้าจอให้พนักงานยกเลิกใบของตัวเอง)
+   */
   async cancelRequest(requestId: string, reason: string): Promise<Record<string, unknown>> {
     return this.uow.run(async (uow) => {
       const requests = await uow.tx
@@ -425,6 +449,12 @@ export class LeaveService {
       const request = requests[0];
       if (request === undefined) throw AppError.notFound('leave request');
       if (request.status === 'CANCELLED') throw AppError.conflict('already cancelled');
+
+      const principal = this.requestContext.requirePrincipal();
+      const isOwn = principal.employmentId !== null && principal.employmentId === request.employmentId;
+      if (!isOwn && !principal.permissions.has('workforce.leave.approve')) {
+        throw AppError.forbidden('cannot cancel another employment\'s leave request');
+      }
 
       const periodYear = LocalDate.parse(request.startsOn).year;
 

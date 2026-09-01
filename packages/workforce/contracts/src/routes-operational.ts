@@ -728,6 +728,15 @@ export const OPERATIONAL_ROUTES: readonly Omit<RouteDefinition, 'response'>[] = 
     permissions: ['workforce.leave.manage'] as Permission[],
   },
   {
+    operationId: 'myLeaveRequests_get',
+    method: 'get',
+    path: '/me/leave-requests',
+    summary: 'GET /me/leave-requests',
+    tag: 'workflow',
+    // เห็นแค่ของตัวเอง — ไม่ต้องมี workforce.leave.manage
+    permissions: ['workforce.leave.request'] as Permission[],
+  },
+  {
     operationId: 'submit_post',
     method: 'post',
     path: '/payroll-runs/{runId}/submit',

@@ -88,6 +88,24 @@ export class LeaveController {
     return this.service.listCalendar({ from, to });
   }
 
+  /**
+   * ใบลาของตัวเอง — ใช้ตอนพนักงานอยากดู/ยกเลิกใบที่ตัวเองยื่นไว้ ไม่ต้องมี
+   * workforce.leave.manage (ตัวนั้นเห็นของทุกคนในบริษัท เกินความจำเป็น)
+   */
+  @Get('me/leave-requests')
+  @RequirePermissions('workforce.leave.request')
+  async myLeaveRequests(
+    @Query('status') status?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ): Promise<{ items: Record<string, unknown>[] }> {
+    return this.service.listMyRequests({
+      ...(status === undefined ? {} : { status }),
+      ...(from === undefined ? {} : { from }),
+      ...(to === undefined ? {} : { to }),
+    });
+  }
+
   @Get('leave-requests')
   @RequirePermissions('workforce.leave.manage')
   async listLeaveRequests(
