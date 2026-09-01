@@ -11,8 +11,9 @@
  * "report-feed" เท่านั้น (อ่านของเดิมมาต่อท้าย ไม่เขียนทับ) ตรวจชื่อหมวด/ห้อง
  * ที่มีอยู่แล้วก่อนด้วย ถ้าซ้ำจะข้าม ไม่สร้างซ้ำ รันซ้ำได้อย่างปลอดภัย
  *
- * ไม่รวมหมวด "ห้องประชุม" (ไม่มีรายชื่อห้องให้เห็นในภาพ) และหมวด "test" —
- * ถ้าต้องการเพิ่มทีหลัง แก้ตรง CATEGORIES ด้านล่างแล้วรันซ้ำได้เลย
+ * รวมทุกหมวด/ห้องที่เห็นในภาพ Discord ครบ — "ห้องประชุม" สร้างเป็นหมวดเปล่า
+ * (ไม่มีรายชื่อห้องให้เห็นในภาพต้นฉบับ) และหมวด "test" (มีห้อง whiteboard)
+ * บวกห้อง "test" เดี่ยวๆ นอกหมวดใดๆ (TOP_LEVEL_CHANNELS ด้านล่าง)
  *
  * รัน (ต้องมี DATABASE_URL ชี้ไปฐานที่ต้องการ — บนเซิร์ฟเวอร์คือ source
  * /etc/smartboss/smartboss.env ก่อน เหมือนตอนรัน db:deploy):
@@ -56,7 +57,14 @@ const CATEGORIES: { name: string; channels: string[] }[] = [
   { name: "Accounting", channels: ["a-talk-acc", "pay-partner-app", "it-cost-spending", "request-อนุมัติโอนเงิน"] },
   { name: "General Worker", channels: ["report"] },
   { name: "Support Tickets", channels: ["open-ticket", "ticket-logs"] },
+  // ไม่มีห้องให้เห็นในภาพต้นฉบับ (ยุบ/ไม่มีข้อความบรรยาย) — สร้างเป็นหมวดเปล่า
+  // ไว้ก่อน เพิ่มห้องทีหลังจากหน้าเว็บได้เมื่อรู้ว่ามีห้องอะไรบ้าง
+  { name: "ห้องประชุม", channels: [] },
+  { name: "test", channels: ["whiteboard"] },
 ];
+
+/** ห้องเดี่ยวๆ ที่ไม่ได้อยู่ใต้หมวดไหนเลยในภาพ (เช่น "test" ที่ลอยอยู่ล่างสุด) */
+const TOP_LEVEL_CHANNELS: string[] = ["test"];
 
 type TopicRow = {
   id: string;
@@ -133,6 +141,24 @@ async function main() {
       });
       colorIdx += 1;
     }
+  }
+
+  for (const channel of TOP_LEVEL_CHANNELS) {
+    if (existingNames.has(channel)) {
+      console.log(`ข้าม ห้อง "${channel}" (มีชื่อนี้อยู่แล้วในระบบ)`);
+      skippedChannels += 1;
+      continue;
+    }
+    newTopics.push({
+      id: id("topic"),
+      name: channel,
+      color: TOPIC_COLORS[colorIdx % TOPIC_COLORS.length]!,
+      createdAt: now,
+      minImages: 0,
+      cutoffs: [],
+      feedViewMode: "threads",
+    });
+    colorIdx += 1;
   }
 
   if (newTopics.length === 0) {
