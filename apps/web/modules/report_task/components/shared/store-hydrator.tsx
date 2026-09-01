@@ -43,7 +43,23 @@ import { useAiInsightSettingsStore } from "@/modules/report_task/store/ai-insigh
  * - Everything shared across teammates (tasks excluded — see TaskSync) is
  *   now server-backed via `ServerStoreSync` instead of localStorage — see
  *   README "Data model" and C4 in the production-readiness audit.
+ *
+ * Each `ServerStoreSync` below polls independently to pick up a teammate's
+ * save without anyone refreshing — with 20+ of these mounted at once, the
+ * default 4s interval on every single one adds up to real background load
+ * for stores nobody actually edits concurrently. `pollMs` is tiered instead:
+ *   - unset (4s default) — report-feed, notifications: people genuinely
+ *     collide on these and expect to see each other's changes live
+ *   - MEDIUM_POLL_MS — meetings/leaves/todos/issue-reports/activity-log:
+ *     occasionally edited by more than one person, but not to the second
+ *   - SLOW_POLL_MS — everything else (company config, departments,
+ *     employees, ...): changes rarely, and a conflicting save still merges
+ *     correctly via the 409 path in ServerStoreSync regardless of poll rate
+ *     — this only controls how fast *someone else's* save shows up passively
  */
+const MEDIUM_POLL_MS = 15_000;
+const SLOW_POLL_MS = 60_000;
+
 export function StoreHydrator() {
   useEffect(() => {
     useDashboardLayoutStore.persist.rehydrate();
@@ -58,30 +74,35 @@ export function StoreHydrator() {
     <>
       <ServerStoreSync
         apiKey="stickers"
+        pollMs={SLOW_POLL_MS}
         store={useStickerStore}
         select={(s) => s.stickers}
         apply={(s, stickers) => ({ ...s, stickers })}
       />
       <ServerStoreSync
         apiKey="penalty-settings"
+        pollMs={SLOW_POLL_MS}
         store={usePenaltySettingsStore}
         select={(s) => s.defaultPoints}
         apply={(s, defaultPoints) => ({ ...s, defaultPoints })}
       />
       <ServerStoreSync
         apiKey="attachment-settings"
+        pollMs={SLOW_POLL_MS}
         store={useAttachmentSettingsStore}
         select={(s) => s.settings}
         apply={(s, settings) => ({ ...s, settings })}
       />
       <ServerStoreSync
         apiKey="ai-insight-settings"
+        pollMs={SLOW_POLL_MS}
         store={useAiInsightSettingsStore}
         select={(s) => s.settings}
         apply={(s, settings) => ({ ...s, settings })}
       />
       <ServerStoreSync
         apiKey="reminder-settings"
+        pollMs={SLOW_POLL_MS}
         store={useReminderSettingsStore}
         select={(s) => s.settings}
         // Merged field-by-field, not spread straight in — a row saved before
@@ -110,24 +131,28 @@ export function StoreHydrator() {
       />
       <ServerStoreSync
         apiKey="meetings"
+        pollMs={MEDIUM_POLL_MS}
         store={useMeetingStore}
         select={(s) => s.meetings}
         apply={(s, meetings) => ({ ...s, meetings })}
       />
       <ServerStoreSync
         apiKey="leaves"
+        pollMs={MEDIUM_POLL_MS}
         store={useLeaveStore}
         select={(s) => s.leaves}
         apply={(s, leaves) => ({ ...s, leaves })}
       />
       <ServerStoreSync
         apiKey="todos"
+        pollMs={MEDIUM_POLL_MS}
         store={useTodoStore}
         select={(s) => s.todos}
         apply={(s, todos) => ({ ...s, todos })}
       />
       <ServerStoreSync
         apiKey="holidays"
+        pollMs={SLOW_POLL_MS}
         store={useHolidayStore}
         select={(s) => ({ holidays: s.holidays, selectedByUser: s.selectedByUser })}
         // The server row is whatever was last saved — if it predates a fixed
@@ -144,12 +169,14 @@ export function StoreHydrator() {
       />
       <ServerStoreSync
         apiKey="leave-types"
+        pollMs={SLOW_POLL_MS}
         store={useLeaveTypeStore}
         select={(s) => s.types}
         apply={(s, types) => ({ ...s, types })}
       />
       <ServerStoreSync
         apiKey="project-topics"
+        pollMs={SLOW_POLL_MS}
         store={useProjectTopicStore}
         select={(s) => s.topics}
         apply={(s, topics) => ({ ...s, topics })}
@@ -167,12 +194,14 @@ export function StoreHydrator() {
       />
       <ServerStoreSync
         apiKey="report-tags"
+        pollMs={SLOW_POLL_MS}
         store={useReportTagStore}
         select={(s) => s.tags}
         apply={(s, tags) => ({ ...s, tags })}
       />
       <ServerStoreSync
         apiKey="issue-reports"
+        pollMs={MEDIUM_POLL_MS}
         store={useIssueReportStore}
         select={(s) => ({ schemaVersion: s.schemaVersion, tickets: s.tickets })}
         apply={(s, slice) => {
@@ -186,24 +215,28 @@ export function StoreHydrator() {
       />
       <ServerStoreSync
         apiKey="issue-desk-config"
+        pollMs={SLOW_POLL_MS}
         store={useIssueDeskConfigStore}
         select={(s) => s.config}
         apply={(s, config) => ({ ...s, config })}
       />
       <ServerStoreSync
         apiKey="departments"
+        pollMs={SLOW_POLL_MS}
         store={useDepartmentStore}
         select={(s) => s.departments}
         apply={(s, departments) => ({ ...s, departments })}
       />
       <ServerStoreSync
         apiKey="employees"
+        pollMs={SLOW_POLL_MS}
         store={useEmployeeStore}
         select={(s) => s.employees}
         apply={(s, employees) => ({ ...s, employees })}
       />
       <ServerStoreSync
         apiKey="people-groups"
+        pollMs={SLOW_POLL_MS}
         store={usePeopleGroupStore}
         select={(s) => s.groups}
         apply={(s, groups) => ({ ...s, groups })}
@@ -216,12 +249,14 @@ export function StoreHydrator() {
       />
       <ServerStoreSync
         apiKey="activity-log"
+        pollMs={MEDIUM_POLL_MS}
         store={useActivityLogStore}
         select={(s) => s.entries}
         apply={(s, entries) => ({ ...s, entries })}
       />
       <ServerStoreSync
         apiKey="routine-dayoff"
+        pollMs={SLOW_POLL_MS}
         store={useRoutineDayOffStore}
         select={(s) => ({
           companyMonthlyQuota: s.companyMonthlyQuota,
@@ -235,6 +270,7 @@ export function StoreHydrator() {
       />
       <ServerStoreSync
         apiKey="settings-access"
+        pollMs={SLOW_POLL_MS}
         store={useSettingsAccessStore}
         select={(s) => s.grants}
         apply={(s, grants) => ({ ...s, grants })}
