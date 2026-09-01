@@ -1525,15 +1525,13 @@ function PostImageThumb({
       className={cn(
         "relative block hover:opacity-90 transition-opacity",
         !fitToImage && wide && "bg-[var(--bg-soft)]",
-        // 60vh let a tall portrait screenshot (very common for this feed) eat
-        // up to a third of the screen on both desktop and mobile — capping
-        // instead keeps the "no letterbox, fill the width" behavior for
-        // normal photos while stopping a single image from dominating the
-        // post the way multi-image posts never do (they're capped at
-        // 190/280px, see PostImageCollage above). Lower cap on a narrow
-        // phone specifically — asked for explicitly along with the rest of
-        // the post's own responsive sizing ("ขนาดให้ตัวเล็กลงตาม responsive").
-        fitToImage && ratio && "max-h-[260px] sm:max-h-[380px]",
+        // A tall portrait screenshot (very common for this feed) or a wide
+        // banner-style image both used to be able to fill up to 380px tall —
+        // dominated the post next to plain text ("รูปตอนแนบในโพสใหญ่มาก").
+        // Capped down close to PostImageCollage's own 190/280px multi-image
+        // cap above — still a little roomier since it's the only photo in
+        // the post, not competing with a grid of others.
+        fitToImage && ratio && "max-h-[200px] sm:max-h-[280px]",
         className
       )}
       style={fitToImage && ratio ? { aspectRatio: ratio, height: "auto" } : undefined}

@@ -734,7 +734,7 @@ export function ReportPostFields({
       {images.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {images.map((img) => (
-            <div key={img.id} className="relative h-20 w-20 rounded-lg overflow-hidden border border-[var(--line)] group">
+            <div key={img.id} className="relative h-16 w-16 rounded-lg overflow-hidden border border-[var(--line)] group">
               <ReportMediaThumb media={img} className="h-full w-full object-cover" />
               <button
                 onClick={() => onImagesChange(images.filter((x) => x.id !== img.id))}
