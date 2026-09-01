@@ -23,11 +23,15 @@ export function calculateAttendance(input: AttendanceInput): AttendanceResult {
   const workDate = input.workDate.toString();
 
   if (!input.employmentActive) {
+    // วันก่อนเริ่มงาน/หลังพ้นสภาพไม่มีทาง "ขาดงาน" ได้ — ไม่ใช่วันที่ต้องทำงาน
+    // เลย เดิมโค้ดตกไปคำนวณ absence ต่อเหมือนวันทำงานปกติ (ไม่มี punch = ขาด
+    // เต็มวัน) ทำให้พนักงานใหม่โดนนับขาดงานย้อนไปถึงก่อนวันที่จ้างจริง
     exceptions.push({
       code: 'INACTIVE_EMPLOYMENT',
       blocking: true,
       detail: 'employment was not active on this work date',
     });
+    return emptyResult(workDate, input, exceptions);
   }
 
   if (input.policy === null) {

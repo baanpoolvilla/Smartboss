@@ -399,6 +399,14 @@ describe('policy and data problems', () => {
     expect(codes(result)).toContain('INACTIVE_EMPLOYMENT');
   });
 
+  it('does not count a day before hire (or after termination) as absent', () => {
+    // ไม่มี punch เลยในวันที่ยังไม่ได้จ้าง — ถ้าคำนวณ absence ต่อแบบวันทำงาน
+    // ปกติ จะได้ขาดงานเต็มวันทั้งที่ยังไม่ได้เริ่มงาน
+    const result = run({ employmentActive: false, punches: [] });
+    expect(result.absenceMinutes).toBe(0);
+    expect(result.lateMinutes).toBe(0);
+  });
+
   it('excludes an ignored punch after a correction', () => {
     const result = run({
       punches: [
