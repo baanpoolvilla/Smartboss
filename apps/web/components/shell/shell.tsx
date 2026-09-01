@@ -304,19 +304,22 @@ function ModuleBottomNav({
             onClick={() => setSheetOpen(false)}
             aria-hidden
           />
-          <div className="absolute inset-x-0 bottom-0 max-h-[70dvh] overflow-y-auto rounded-t-[20px] bg-(--bg) pb-6">
-            <div className="relative flex items-center justify-between px-4 pt-3">
-              <span className="mx-auto h-1 w-10 rounded-full bg-(--line)" />
-              <button
-                type="button"
-                onClick={() => setSheetOpen(false)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-(--ink-soft)"
-                aria-label="ปิด"
-              >
-                <X className="h-5 w-5" />
-              </button>
+          <div className="absolute inset-x-0 bottom-0 max-h-[70dvh] overflow-y-auto rounded-t-[20px] bg-(--bg) pb-6 shadow-[0_-4px_24px_rgba(0,0,0,0.12)]">
+            {/* Drag handle on its own centered row — purely decorative, so it
+                doesn't need to share a row (and fight over centering) with
+                the close button next to it. */}
+            <div className="flex justify-center pt-2.5 pb-1">
+              <span className="h-1 w-10 rounded-full bg-(--line)" />
             </div>
-            <div className="mt-3 flex flex-col">
+            <button
+              type="button"
+              onClick={() => setSheetOpen(false)}
+              className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-(--bg-soft) text-(--ink-soft) hover:bg-(--line) hover:text-(--ink) transition-colors"
+              aria-label="ปิด"
+            >
+              <X className="h-4 w-4" />
+            </button>
+            <div className="mt-2 flex flex-col">
               {overflow.map((menu) => {
                 const active = isMenuActive(
                   pathname,
