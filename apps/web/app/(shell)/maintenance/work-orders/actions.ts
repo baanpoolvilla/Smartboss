@@ -64,7 +64,7 @@ export async function createWorkOrderAction(formData: FormData) {
   const [primary, ...additional] = d.propertyIds;
 
   const photoFiles = formData.getAll("photos").filter((f): f is File => f instanceof File);
-  const photoUrls = await putFiles("maintenance/work-orders", photoFiles);
+  const photoUrls = await putFiles(`${s.orgId}/maintenance/work-orders`, photoFiles);
 
   const wo = await createWorkOrder(s.orgId, {
     propertyId: primary!,
@@ -201,7 +201,7 @@ export async function completeWorkOrderAction(formData: FormData) {
   const files = formData
     .getAll("afterPhotos")
     .filter((f): f is File => f instanceof File);
-  const afterPhotoUrls = await putFiles("maintenance/work-orders/after", files);
+  const afterPhotoUrls = await putFiles(`${s.orgId}/maintenance/work-orders/after`, files);
 
   await updateWorkOrder(s.orgId, id, {
     ...(afterPhotoUrls.length > 0
@@ -224,7 +224,7 @@ export async function addCommentAction(workOrderId: string, formData: FormData) 
   const file = formData.get("image");
   const imageUrl =
     file instanceof File && file.size > 0
-      ? await putFile("maintenance/comments", file)
+      ? await putFile(`${s.orgId}/maintenance/comments`, file)
       : null;
   if (!content && !imageUrl) return;
   // คอมเมนต์ที่มีแต่รูปเก็บ content เป็น 📷 เหมือนของเดิม (หน้าจอซ่อนข้อความนี้)

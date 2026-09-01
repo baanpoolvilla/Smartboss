@@ -17,6 +17,7 @@ export async function listAllOrganizations() {
       slug: true,
       isActive: true,
       planCode: true,
+      storageQuotaMb: true,
       _count: { select: { users: true } },
     },
   });
@@ -28,6 +29,7 @@ export async function listAllOrganizations() {
     slug: o.slug,
     isActive: o.isActive,
     planCode: o.planCode,
+    storageQuotaMb: o.storageQuotaMb,
     userCount: o._count.users,
   }));
 }

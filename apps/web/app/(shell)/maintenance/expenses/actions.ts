@@ -62,7 +62,7 @@ export async function createExpenseAction(formData: FormData) {
   const file = formData.get("receipt");
   const receiptUrl =
     !isNoExpense && file instanceof File && file.size > 0
-      ? await putFile("maintenance/receipts", file)
+      ? await putFile(`${s.orgId}/maintenance/receipts`, file)
       : null;
 
   await createExpensesForProperties(s.orgId, propertyIds, {

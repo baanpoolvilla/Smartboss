@@ -37,9 +37,9 @@ function toDate(v?: string): Date | null {
 }
 
 /** รูปอุปกรณ์ (ไม่บังคับ) — คืน null เมื่อไม่ได้แนบ */
-async function readImage(formData: FormData): Promise<string | null> {
+async function readImage(formData: FormData, orgId: string): Promise<string | null> {
   const f = formData.get("image");
-  if (f instanceof File && f.size > 0) return putFile("maintenance/assets", f);
+  if (f instanceof File && f.size > 0) return putFile(`${orgId}/maintenance/assets`, f);
   return null;
 }
 
@@ -69,7 +69,7 @@ export async function createAssetAction(propertyId: string, formData: FormData) 
     notes: d.notes ?? null,
     installDate: toDate(d.installDate),
     warrantyExpiry: toDate(d.warrantyExpiry),
-    imageUrl: await readImage(formData),
+    imageUrl: await readImage(formData, orgId),
   });
   revalidatePath(`/maintenance/properties/${propertyId}`);
 }
@@ -79,7 +79,7 @@ export async function updateAssetAction(id: string, formData: FormData) {
   const parsed = parseForm(formData);
   if (!parsed.success) return;
   const d = parsed.data;
-  const imageUrl = await readImage(formData);
+  const imageUrl = await readImage(formData, orgId);
   await updateAsset(orgId, id, {
     name: d.name,
     category: d.category ?? null,

@@ -100,7 +100,7 @@ export async function createPoAction(formData: FormData) {
   const emergencyReason =
     String(formData.get("emergencyReason") ?? "").trim() || null;
   const prImageUrls = await putFiles(
-    "maintenance/purchase-orders",
+    `${s.orgId}/maintenance/purchase-orders`,
     formData.getAll("prImages").filter((f): f is File => f instanceof File)
   );
   const now = new Date();
@@ -402,7 +402,7 @@ export async function addPoCommentAction(poId: string, formData: FormData) {
   const file = formData.get("image");
   const imageUrl =
     file instanceof File && file.size > 0
-      ? await putFile("maintenance/purchase-orders", file)
+      ? await putFile(`${s.orgId}/maintenance/purchase-orders`, file)
       : null;
   if (!content && !imageUrl) return;
   await addPoComment(
@@ -463,7 +463,7 @@ export async function createReturnAction(formData: FormData) {
   if (!po) return;
 
   const imageUrls = await putFiles(
-    "maintenance/returns",
+    `${s.orgId}/maintenance/returns`,
     formData.getAll("images").filter((f): f is File => f instanceof File)
   );
 

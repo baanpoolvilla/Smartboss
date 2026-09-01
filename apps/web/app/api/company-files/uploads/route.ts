@@ -6,6 +6,7 @@ import { putFile } from "@/lib/storage";
 import { sniffCompanyFileMime } from "@/modules/company-files/lib/upload-sniff";
 import { COMPANY_FILES_PERMS } from "@/modules/company-files/permissions";
 import { MAX_FILE_MB } from "@/modules/company-files/constants";
+import { checkOrgQuota, toGB } from "@/modules/company-files/lib/quota";
 
 /**
  * อัปโหลดไฟล์ของโมดูล "ไฟล์บริษัท" — เก็บผ่านชั้นเก็บไฟล์กลางเดียวกับ
@@ -67,6 +68,17 @@ export async function POST(request: Request) {
     }
     if (bytes.byteLength > MAX_BYTES) {
       return Response.json({ error: `ไฟล์ใหญ่เกินไป (จำกัด ${MAX_FILE_MB}MB)` }, { status: 413 });
+    }
+
+    // เพดานความจุต่อบริษัท (safety ceiling) — กันค่า storage วิ่งหนี
+    const quota = await checkOrgQuota(session.orgId, bytes.byteLength);
+    if (!quota.ok) {
+      return Response.json(
+        {
+          error: `ความจุไฟล์ของบริษัทเต็ม (ใช้ไป ${toGB(quota.used)}GB จาก ${toGB(quota.limit)}GB) — ลบไฟล์เก่าหรืออัปเกรดแพ็กเกจเพื่อเพิ่มพื้นที่`,
+        },
+        { status: 413 }
+      );
     }
 
     const url = await putFile(

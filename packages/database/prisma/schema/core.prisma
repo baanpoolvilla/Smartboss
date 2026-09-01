@@ -46,6 +46,9 @@ model Organization {
   name      String
   isActive  Boolean  @default(true) @map("is_active")
   planCode  String?  @map("plan_code") // แพ็กเกจ subscription (FREE, PRO, ...) — เก็บเป็น code ไปก่อน
+  /// เพดานพื้นที่ไฟล์คลังกลางของบริษัทนี้ (หน่วย MB) — null = ใช้ค่ากลางจาก env
+  /// (แพ็กเกจเสริม) ตั้งที่ /admin/storage โดย SUPER_ADMIN เท่านั้น
+  storageQuotaMb Int?  @map("storage_quota_mb")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
