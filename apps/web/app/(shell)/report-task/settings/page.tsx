@@ -11,6 +11,7 @@ import { useSettingsAccessStore, type GrantableSection } from "@/modules/report_
 import { StickerManagerPanel } from "@/modules/report_task/components/shared/sticker-manager-dialog";
 import { AttachmentSettingsPanel } from "@/modules/report_task/components/shared/attachment-settings-panel";
 import { ProjectTopicSettingsPanel } from "@/modules/report_task/components/shared/project-topic-settings-panel";
+import { ReportTagSettingsPanel } from "@/modules/report_task/components/shared/report-tag-settings-panel";
 import { LeaveTypeSettingsPanel } from "@/modules/report_task/components/calendar/leave-type-settings-dialog";
 import { RoutineDayOffSettingsPanel } from "@/modules/report_task/components/calendar/routine-dayoff-settings-dialog";
 import { LeaveSummaryPanel } from "@/modules/report_task/components/calendar/leave-summary-panel";
@@ -147,7 +148,10 @@ function SettingsPageInner() {
       ...calendarGrantableSections.filter((s) => canAccessCompanySection(s.key, viewingAsUserId, settingsGrants)),
       ...(owner ? [{ key: "leaveSummary", label: "สรุปวันลาพนักงาน", icon: CalendarDays }] : []),
     ],
-    report: [{ key: "reportRoom", label: "ตั้งค่าห้อง", icon: MessageSquareText }],
+    report: [
+      { key: "reportRoom", label: "ตั้งค่าห้อง", icon: MessageSquareText },
+      { key: "tags", label: "จัดการแท็ก", icon: Tag },
+    ],
     issueDesk: [{ key: "issueDeskConfig", label: "ตั้งค่าแจ้งปัญหา", icon: Bug }],
     permissions: owner
       ? [
@@ -280,18 +284,23 @@ function SettingsPageInner() {
 
           {tab === "report" && manager && (
             <section className="rounded-2xl border border-[var(--line)] bg-white p-5 shadow-sm">
-              {/* Each room's settings live in that room now (⚙ icon, top
-                  right of the room header) instead of duplicated here behind
-                  a room picker — one place per room to edit, not two that
-                  can drift out of sync with each other. */}
-              <p className="text-sm text-[var(--ink)]">ตั้งค่าห้อง Report แต่ละห้องได้จากไอคอน ⚙ ในห้องนั้นๆ โดยตรง</p>
-              <p className="text-xs text-[var(--ink-soft)] mt-1">เข้าห้องที่ต้องการ แล้วกดไอคอนรูปเฟืองมุมขวาบนของห้อง</p>
-              <Link
-                href="/report-task/report-feed"
-                className="inline-flex items-center gap-1.5 mt-3 rounded-lg bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white text-sm font-medium px-3.5 py-2 transition-colors"
-              >
-                ไปที่หน้า Report
-              </Link>
+              {sectionKey === "reportRoom" && (
+                <>
+                  {/* Each room's settings live in that room now (⚙ icon, top
+                      right of the room header) instead of duplicated here
+                      behind a room picker — one place per room to edit, not
+                      two that can drift out of sync with each other. */}
+                  <p className="text-sm text-[var(--ink)]">ตั้งค่าห้อง Report แต่ละห้องได้จากไอคอน ⚙ ในห้องนั้นๆ โดยตรง</p>
+                  <p className="text-xs text-[var(--ink-soft)] mt-1">เข้าห้องที่ต้องการ แล้วกดไอคอนรูปเฟืองมุมขวาบนของห้อง</p>
+                  <Link
+                    href="/report-task/report-feed"
+                    className="inline-flex items-center gap-1.5 mt-3 rounded-lg bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white text-sm font-medium px-3.5 py-2 transition-colors"
+                  >
+                    ไปที่หน้า Report
+                  </Link>
+                </>
+              )}
+              {sectionKey === "tags" && <ReportTagSettingsPanel />}
             </section>
           )}
 
