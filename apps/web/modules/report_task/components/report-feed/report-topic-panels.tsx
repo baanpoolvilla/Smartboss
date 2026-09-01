@@ -13,6 +13,7 @@ import {
 } from "@/modules/report_task/components/ui/alert-dialog";
 import { AlbumFormDialog } from "@/modules/report_task/components/report-feed/album-form-dialog";
 import { ReportTopicDocuments } from "@/modules/report_task/components/report-feed/report-topic-documents";
+import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
 import { users, getUser, getDepartment } from "@/modules/report_task/lib/directory";
 import { useReportFeedStore, type ReportPost, type ReportPostImage, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
@@ -282,10 +283,8 @@ export function ReportTopicPanels({
                     return (
                       <div key={`${f.image.id}-${i}`} className="relative group">
                         <button onClick={() => setLightbox({ images: visibleFiles.map((ff) => ff.image), index: i })} className="block text-left w-full">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={f.image.url ?? f.image.dataUrl}
-                            alt={f.image.name}
+                          <ReportMediaThumb
+                            media={f.image}
                             className="w-full h-24 object-cover rounded-lg border border-[var(--line)] group-hover:opacity-90"
                           />
                           <p className="text-xs mt-1 truncate">{f.image.name}</p>
@@ -362,10 +361,8 @@ export function ReportTopicPanels({
                   onClick={() => setLightbox({ images: openAlbumFiles.map((ff) => ff.image), index: i })}
                   className="group text-left"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={f.image.url ?? f.image.dataUrl}
-                    alt={f.image.name}
+                  <ReportMediaThumb
+                    media={f.image}
                     className="w-full h-24 object-cover rounded-lg border border-[var(--line)] group-hover:opacity-90"
                   />
                   <p className="text-xs mt-1 truncate">{f.image.name}</p>
@@ -454,8 +451,7 @@ export function ReportTopicPanels({
               >
                 <div className="h-24 bg-[var(--bg-soft)] flex items-center justify-center overflow-hidden">
                   {cover ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={cover.url ?? cover.dataUrl} alt={album.name} className="w-full h-full object-cover group-hover:opacity-90" />
+                    <ReportMediaThumb media={cover} className="w-full h-full object-cover group-hover:opacity-90" />
                   ) : (
                     <FolderHeart className="h-6 w-6 text-[var(--ink-soft)]" />
                   )}

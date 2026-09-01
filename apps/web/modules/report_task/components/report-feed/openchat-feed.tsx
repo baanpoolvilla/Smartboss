@@ -25,7 +25,8 @@ import {
   renderRichBulletText,
   type MentionType,
 } from "@/modules/report_task/lib/report-feed-rich-text";
-import { uploadCompressedImage } from "@/modules/report_task/lib/image-resize";
+import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
+import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
 import { DRAG_MENTION_TOPIC_MIME } from "@/modules/report_task/components/report-feed/report-post-fields";
 import { cn } from "@/modules/report_task/lib/utils";
 import { toast } from "sonner";
@@ -277,11 +278,11 @@ export function OpenchatFeed({
     const next: ReportPostImage[] = [];
     try {
       for (const file of Array.from(files).slice(0, 6 - composerImages.length)) {
-        const url = await uploadCompressedImage(file);
-        next.push({ id: `img-${crypto.randomUUID()}`, url, name: file.name });
+        const media = await uploadReportMedia(file);
+        next.push({ id: `img-${crypto.randomUUID()}`, url: media.url, name: media.name, mime: media.mime });
       }
-    } catch {
-      toast.error("แนบรูปไม่สำเร็จบางไฟล์ — ลองใหม่อีกครั้ง");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "แนบไฟล์ไม่สำเร็จบางไฟล์ — ลองใหม่อีกครั้ง");
     } finally {
       if (next.length > 0) setComposerImages((prev) => [...prev, ...next]);
       setUploading(false);
@@ -501,8 +502,7 @@ export function OpenchatFeed({
                                   onClick={() => setLightbox({ images: m.images!, index: i })}
                                   className="rounded-md overflow-hidden border border-[var(--line)] hover:opacity-90 transition-opacity"
                                 >
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img src={img.url ?? img.dataUrl} alt={img.name} className="h-32 w-32 object-cover" />
+                                  <ReportMediaThumb media={img} className="h-32 w-32 object-cover" />
                                 </button>
                               ))}
                             </div>
@@ -728,8 +728,7 @@ export function OpenchatFeed({
           <div className="flex flex-wrap gap-1.5 px-1 pb-2">
             {composerImages.map((img) => (
               <div key={img.id} className="relative h-14 w-14 rounded-md overflow-hidden border border-[var(--line)]">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={img.url ?? img.dataUrl} alt={img.name} className="h-full w-full object-cover" />
+                <ReportMediaThumb media={img} className="h-full w-full object-cover" />
                 <button
                   onClick={() => setComposerImages((prev) => prev.filter((i) => i.id !== img.id))}
                   className="absolute top-0 right-0 h-4 w-4 flex items-center justify-center bg-black/60 text-white rounded-bl-md"
@@ -745,7 +744,7 @@ export function OpenchatFeed({
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept="image/*,video/mp4,video/webm"
             multiple
             className="hidden"
             onChange={(e) => handleComposerFiles(e.target.files)}

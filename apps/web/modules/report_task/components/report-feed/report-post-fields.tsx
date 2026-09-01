@@ -23,6 +23,7 @@ import { AlbumPickerButton } from "@/modules/report_task/components/report-feed/
 import { TagPickerButton } from "@/modules/report_task/components/report-feed/tag-picker-button";
 import { Bold, Building2, Code, Hash, ImagePlus, Italic, List, ListOrdered, Minus, Square, Table, TriangleAlert, Underline, User, X } from "lucide-react";
 import { LinkInsertPopover } from "@/modules/report_task/components/report-feed/link-insert-popover";
+import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
 
 interface MentionItem {
   type: MentionType;
@@ -729,8 +730,7 @@ export function ReportPostFields({
         <div className="flex flex-wrap gap-2">
           {images.map((img) => (
             <div key={img.id} className="relative h-20 w-20 rounded-lg overflow-hidden border border-[var(--line)] group">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={img.url ?? img.dataUrl} alt={img.name} className="h-full w-full object-cover" />
+              <ReportMediaThumb media={img} className="h-full w-full object-cover" />
               <button
                 onClick={() => onImagesChange(images.filter((x) => x.id !== img.id))}
                 className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
@@ -754,7 +754,7 @@ export function ReportPostFields({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept="image/*,video/mp4,video/webm"
           multiple
           className="hidden"
           onChange={(e) => onFilesSelected(e.target.files)}
@@ -764,9 +764,10 @@ export function ReportPostFields({
           size="sm"
           disabled={busy || images.length >= 6}
           onClick={() => fileInputRef.current?.click()}
+          title="รูปหรือคลิปวิดีโอ .mp4/.webm (จำกัด 25MB ต่อคลิป)"
         >
           <ImagePlus className="h-3.5 w-3.5" />
-          {busy ? "กำลังแนบรูป..." : "แนบรูป"}
+          {busy ? "กำลังแนบไฟล์..." : "แนบรูป/คลิป"}
         </Button>
         {/* One album choice for every photo in this post at once — not a
             per-image decision. Only makes sense once something's attached,

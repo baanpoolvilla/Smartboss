@@ -20,12 +20,17 @@ export interface ReportPostSection {
 
 export interface ReportPostImage {
   id: string;
-  /** Uploaded image path from /api/uploads. */
+  /** Uploaded image (or video, see `mime`) path from /api/uploads. */
   url?: string;
   /** Legacy inline data-URL image (pre-upload-endpoint / seed demo images) —
    * prefer `url ?? dataUrl` when rendering. */
   dataUrl?: string;
   name: string;
+  /** Real MIME type from the server's magic-byte sniff (see /api/report-task/uploads).
+   * Undefined = image (every attachment was one before video support existed,
+   * so old rows have no reason to carry this) — `mime?.startsWith("video/")`
+   * is the one check every render site needs to pick `<video>` over `<img>`. */
+  mime?: string;
   /** Which named album (see ReportAlbum) this image is curated into, if any —
    * same LINE-style split as a regular chat photo vs. one explicitly saved
    * to a Keep album. The image always stays attached to its post/reply

@@ -47,15 +47,21 @@ export function ReportImageLightbox({
   const image = images[index];
   if (!image) return null;
 
-  function handlePointerDown(e: React.PointerEvent<HTMLImageElement>) {
+  const isVideo = image.mime?.startsWith("video/") ?? false;
+
+  function handlePointerDown(e: React.PointerEvent<HTMLElement>) {
     if (!hasMultiple) return;
+    // A video has its own controls (play/seek) to drag-swipe past without
+    // hijacking every pointer-down on it as a page-change gesture — same
+    // reason it skips the click-to-close/swipe handling entirely below.
+    if (isVideo) return;
     e.stopPropagation();
     setDragging(true);
     dragStartX.current = e.clientX;
     e.currentTarget.setPointerCapture(e.pointerId);
   }
 
-  function handlePointerMove(e: React.PointerEvent<HTMLImageElement>) {
+  function handlePointerMove(e: React.PointerEvent<HTMLElement>) {
     if (!dragging) return;
     setDragOffset(e.clientX - dragStartX.current);
   }
@@ -104,24 +110,37 @@ export function ReportImageLightbox({
           </button>
         )}
 
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={image.url ?? image.dataUrl}
-          alt={image.name}
-          draggable={false}
-          onDragStart={(e) => e.preventDefault()}
-          onClick={(e) => e.stopPropagation()}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
-          style={{
-            transform: `translateX(${dragOffset}px)`,
-            transition: dragging ? "none" : "transform 200ms ease",
-            touchAction: "pan-y",
-          }}
-          className={`max-w-[92vw] max-h-[88vh] object-contain select-none ${hasMultiple ? (dragging ? "cursor-grabbing" : "cursor-grab") : "cursor-default"}`}
-        />
+        {isVideo ? (
+          // eslint-disable-next-line jsx-a11y/media-has-caption
+          <video
+            key={image.id}
+            src={image.url ?? image.dataUrl}
+            controls
+            autoPlay
+            playsInline
+            onClick={(e) => e.stopPropagation()}
+            className="max-w-[92vw] max-h-[88vh]"
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={image.url ?? image.dataUrl}
+            alt={image.name}
+            draggable={false}
+            onDragStart={(e) => e.preventDefault()}
+            onClick={(e) => e.stopPropagation()}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            style={{
+              transform: `translateX(${dragOffset}px)`,
+              transition: dragging ? "none" : "transform 200ms ease",
+              touchAction: "pan-y",
+            }}
+            className={`max-w-[92vw] max-h-[88vh] object-contain select-none ${hasMultiple ? (dragging ? "cursor-grabbing" : "cursor-grab") : "cursor-default"}`}
+          />
+        )}
 
         {hasMultiple && (
           <button

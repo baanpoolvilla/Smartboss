@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avat
 import { getUser, canManage } from "@/modules/report_task/lib/directory";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useReportFeedStore, type ReportPostImage, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
-import { uploadCompressedImage } from "@/modules/report_task/lib/image-resize";
+import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
 import { currentCutoff, minImagesNow } from "@/modules/report_task/lib/report-cutoff";
 import { ReportPostFields, newSection, type DraftSection } from "@/modules/report_task/components/report-feed/report-post-fields";
 import { Clock, Lock, Send, SquarePen } from "lucide-react";
@@ -59,11 +59,11 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
     const next: ReportPostImage[] = [];
     try {
       for (const file of Array.from(files).slice(0, 6 - images.length)) {
-        const url = await uploadCompressedImage(file);
-        next.push({ id: `img-${crypto.randomUUID()}`, url, name: file.name });
+        const media = await uploadReportMedia(file);
+        next.push({ id: `img-${crypto.randomUUID()}`, url: media.url, name: media.name, mime: media.mime });
       }
-    } catch {
-      toast.error("แนบรูปไม่สำเร็จบางไฟล์ — ลองใหม่อีกครั้ง");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "แนบไฟล์ไม่สำเร็จบางไฟล์ — ลองใหม่อีกครั้ง");
     } finally {
       // Keep whatever uploaded successfully before the failure — no reason
       // to throw away images that already finished just because a later one broke.

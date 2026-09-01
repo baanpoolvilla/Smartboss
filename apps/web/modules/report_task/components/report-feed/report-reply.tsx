@@ -8,6 +8,7 @@ import type { ReportPostImage, ReportPostReply } from "@/modules/report_task/sto
 import { renderRichBulletText } from "@/modules/report_task/lib/report-feed-rich-text";
 import { cn } from "@/modules/report_task/lib/utils";
 import { TimeAgo } from "@/modules/report_task/components/shared/time-ago";
+import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
 
 const reactionEmojis = ["👍", "❤️", "🎉", "😂", "😮", "😢"];
 
@@ -334,8 +335,7 @@ export function ReportReply({
                     className="rounded-md border border-[var(--line)] overflow-hidden hover:opacity-90 transition-opacity"
                     aria-label={`ดูรูป ${img.name} เต็มจอ`}
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={img.url ?? img.dataUrl} alt={img.name} className="h-16 w-16 object-cover" />
+                    <ReportMediaThumb media={img} className="h-16 w-16 object-cover" />
                   </button>
                 ))}
               </div>

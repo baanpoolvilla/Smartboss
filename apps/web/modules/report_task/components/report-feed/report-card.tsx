@@ -45,7 +45,8 @@ import {
   renderSectionBullets,
   type MentionType,
 } from "@/modules/report_task/lib/report-feed-rich-text";
-import { uploadCompressedImage } from "@/modules/report_task/lib/image-resize";
+import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
+import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
 import { ReportPostFields, newSection, type DraftSection } from "@/modules/report_task/components/report-feed/report-post-fields";
 import { useReportTagStore } from "@/modules/report_task/store/report-tag-store";
 import { ReportTagChip } from "@/modules/report_task/components/report-feed/report-tag-chip";
@@ -76,6 +77,7 @@ import {
   Pencil,
   Pin,
   PinOff,
+  Play,
   Quote,
   Reply as ReplyIcon,
   Send,
@@ -473,11 +475,11 @@ export function ReportCard({
     const next: ReportPostImage[] = [];
     try {
       for (const file of Array.from(files).slice(0, 6 - replyImages.length)) {
-        const url = await uploadCompressedImage(file);
-        next.push({ id: `img-${crypto.randomUUID()}`, url, name: file.name });
+        const media = await uploadReportMedia(file);
+        next.push({ id: `img-${crypto.randomUUID()}`, url: media.url, name: media.name, mime: media.mime });
       }
-    } catch {
-      toast.error("แนบรูปไม่สำเร็จบางไฟล์ — ลองใหม่อีกครั้ง");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "แนบไฟล์ไม่สำเร็จบางไฟล์ — ลองใหม่อีกครั้ง");
     } finally {
       // Keep whatever uploaded successfully before the failure — no reason
       // to throw away images that already finished just because a later one broke.
@@ -1060,8 +1062,7 @@ export function ReportCard({
               <div className="flex flex-wrap gap-1.5 pl-1">
                 {replyImages.map((img) => (
                   <div key={img.id} className="relative h-12 w-12 rounded-md overflow-hidden border border-[var(--line)]">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={img.url ?? img.dataUrl} alt={img.name} className="h-full w-full object-cover" />
+                    <ReportMediaThumb media={img} className="h-full w-full object-cover" />
                     <button
                       onClick={() => setReplyImages((prev) => prev.filter((i) => i.id !== img.id))}
                       className="absolute top-0 right-0 h-4 w-4 flex items-center justify-center bg-black/60 text-white rounded-bl-md"
@@ -1238,7 +1239,7 @@ export function ReportCard({
               <input
                 ref={replyFileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/*,video/mp4,video/webm"
                 multiple
                 className="hidden"
                 onChange={(e) => handleReplyFiles(e.target.files)}
@@ -1518,17 +1519,38 @@ function PostImageThumb({
       style={fitToImage && ratio ? { aspectRatio: ratio, height: "auto" } : undefined}
       aria-label={`ดูรูป ${img.name} เต็มจอ`}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={img.url ?? img.dataUrl}
-        alt={img.name}
-        onLoad={(e) => {
-          const el = e.currentTarget;
-          if (el.naturalWidth / el.naturalHeight > 1.6) setWide(true);
-          if (fitToImage) setRatio(el.naturalWidth / el.naturalHeight);
-        }}
-        className={cn("h-full w-full", !fitToImage && wide ? "object-contain" : "object-cover")}
-      />
+      {img.mime?.startsWith("video/") ? (
+        <div className="relative h-full w-full">
+          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+          <video
+            src={img.url ?? img.dataUrl}
+            muted
+            playsInline
+            preload="metadata"
+            onLoadedMetadata={(e) => {
+              const el = e.currentTarget;
+              if (el.videoWidth / el.videoHeight > 1.6) setWide(true);
+              if (fitToImage) setRatio(el.videoWidth / el.videoHeight);
+            }}
+            className={cn("h-full w-full", !fitToImage && wide ? "object-contain" : "object-cover")}
+          />
+          <span className="absolute inset-0 flex items-center justify-center bg-black/25">
+            <Play className="h-10 w-10 text-white drop-shadow" fill="white" />
+          </span>
+        </div>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={img.url ?? img.dataUrl}
+          alt={img.name}
+          onLoad={(e) => {
+            const el = e.currentTarget;
+            if (el.naturalWidth / el.naturalHeight > 1.6) setWide(true);
+            if (fitToImage) setRatio(el.naturalWidth / el.naturalHeight);
+          }}
+          className={cn("h-full w-full", !fitToImage && wide ? "object-contain" : "object-cover")}
+        />
+      )}
     </button>
   );
 }
@@ -1589,11 +1611,11 @@ function EditPostForm({
     const next: ReportPostImage[] = [];
     try {
       for (const file of Array.from(files).slice(0, 6 - images.length)) {
-        const url = await uploadCompressedImage(file);
-        next.push({ id: `img-${crypto.randomUUID()}`, url, name: file.name });
+        const media = await uploadReportMedia(file);
+        next.push({ id: `img-${crypto.randomUUID()}`, url: media.url, name: media.name, mime: media.mime });
       }
-    } catch {
-      toast.error("แนบรูปไม่สำเร็จบางไฟล์ — ลองใหม่อีกครั้ง");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "แนบไฟล์ไม่สำเร็จบางไฟล์ — ลองใหม่อีกครั้ง");
     } finally {
       // Keep whatever uploaded successfully before the failure — no reason
       // to throw away images that already finished just because a later one broke.

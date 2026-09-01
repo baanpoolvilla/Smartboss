@@ -44,3 +44,45 @@ export async function uploadCompressedImage(file: File, maxWidth = 1280, quality
   const data = (await res.json()) as { url: string };
   return data.url;
 }
+
+/** Client-side heads-up before the request even fires — the server (see
+ * /api/report-task/uploads) is still the real authority, using the company's
+ * own configurable `maxVideoMB` (attachment-settings-store.ts, 25MB default);
+ * this is just close enough to fail fast with a specific message instead of
+ * a slow upload ending in a generic 413. */
+const CLIENT_VIDEO_MAX_BYTES = 25 * 1024 * 1024;
+
+export interface UploadedReportMedia {
+  url: string;
+  mime: string;
+  name: string;
+}
+
+/**
+ * Upload one post attachment, image or video — images take the existing
+ * downscale+re-encode path (uploadCompressedImage); a video goes up as-is
+ * through the same /api/uploads endpoint (that route's ALLOWED_TYPES list +
+ * server-side magic-byte check are the real gate, same as every other
+ * non-image upload path in the app — see attachment-upload.ts).
+ */
+export async function uploadReportMedia(file: File): Promise<UploadedReportMedia> {
+  if (file.type.startsWith("video/")) {
+    if (file.type !== "video/mp4" && file.type !== "video/webm") {
+      throw new Error("รองรับเฉพาะไฟล์วิดีโอ .mp4 หรือ .webm");
+    }
+    if (file.size > CLIENT_VIDEO_MAX_BYTES) {
+      throw new Error(`ไฟล์วิดีโอใหญ่เกินไป (จำกัด ${CLIENT_VIDEO_MAX_BYTES / 1024 / 1024}MB)`);
+    }
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch("/api/report-task/uploads", { method: "POST", body: form });
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      throw new Error(data?.error ?? "อัปโหลดวิดีโอไม่สำเร็จ");
+    }
+    const data = (await res.json()) as { url: string; mime: string };
+    return { url: data.url, mime: data.mime, name: file.name };
+  }
+  const url = await uploadCompressedImage(file);
+  return { url, mime: "image/jpeg", name: file.name };
+}
