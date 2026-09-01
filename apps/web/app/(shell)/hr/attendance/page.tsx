@@ -8,6 +8,7 @@ import {
   type Employment,
   type Paged,
   type RawTimeEvent,
+  type RecurringPattern,
 } from "@/modules/hr/lib/api";
 import {
   DataTable,
@@ -81,31 +82,38 @@ export default async function AttendancePage({
 
         const today = new Date().toISOString().slice(0, 10);
 
-        const [summary, employments, exceptions, board, raw] = await Promise.all([
-          wfTry<AttendanceSummary>(`/attendance-summary?from=${from}&to=${to}`),
-          wfTry<Paged<Employment>>("/employments"),
-          wfTry<{ items: AttendanceException[] }>(
-            `/attendance-exceptions?from=${from}&to=${to}&status=OPEN`,
-          ),
-          // ทุกคนเรียกได้ — ชื่อ + เวลา + สถานะสาย/ปกติ
-          wfTry<{
-            items: {
-              employment_id: string;
-              display_name: string;
-              employee_code: string;
-              first_scan_at: string;
-              last_scan_at: string;
-              scan_count: number;
-              scheduled_start_minutes: number | null;
-              status: "ON_TIME" | "LATE" | "REST_DAY" | "NO_SHIFT";
-              late_minutes: number;
-            }[];
-          }>(`/time-event-board?date=${today}`),
-          // รายละเอียดสำหรับผู้ดูแล (คะแนน/slot/แถวที่จับคู่ไม่ได้)
-          wfTry<{ items: RawTimeEvent[] }>(
-            `/raw-time-events?from=${from}&to=${to}&limit=300`,
-          ),
-        ]);
+        const [summary, employments, exceptions, board, raw, shifts, todayAssignments] =
+          await Promise.all([
+            wfTry<AttendanceSummary>(`/attendance-summary?from=${from}&to=${to}`),
+            wfTry<Paged<Employment>>("/employments"),
+            wfTry<{ items: AttendanceException[] }>(
+              `/attendance-exceptions?from=${from}&to=${to}&status=OPEN`,
+            ),
+            // ทุกคนเรียกได้ — ชื่อ + เวลา + สถานะสาย/ปกติ
+            wfTry<{
+              items: {
+                employment_id: string;
+                display_name: string;
+                employee_code: string;
+                first_scan_at: string;
+                last_scan_at: string;
+                scan_count: number;
+                scheduled_start_minutes: number | null;
+                status: "ON_TIME" | "LATE" | "REST_DAY" | "NO_SHIFT";
+                late_minutes: number;
+              }[];
+            }>(`/time-event-board?date=${today}`),
+            // รายละเอียดสำหรับผู้ดูแล (คะแนน/slot/แถวที่จับคู่ไม่ได้)
+            wfTry<{ items: RawTimeEvent[] }>(
+              `/raw-time-events?from=${from}&to=${to}&limit=300`,
+            ),
+            // ใช้บอกว่ากะวันนี้เป็นวันหยุดไหม (rest_day) และเข้ากี่โมง — ต้องมีสำหรับคนที่ยังไม่สแกน
+            wfTry<Paged<{ id: string; rest_day: boolean; start_minutes: number }>>("/shifts"),
+            // ตารางที่ประกาศไว้แล้วของวันนี้ (ทุกคน) — ชนะตารางประจำสัปดาห์เสมอ
+            wfTry<{ items: { employment_id: string; shift_id: string | null }[] }>(
+              `/shift-assignments?from=${today}&to=${today}`,
+            ),
+          ]);
 
         /*
          * ไม่บล็อกทั้งหน้าเมื่ออ่านสรุปไม่ได้ — พนักงานทั่วไปไม่มี
@@ -139,6 +147,73 @@ export default async function AttendancePage({
           .filter((e) => e.terminated_on === null)
           .map((e) => ({ id: e.id, label: `${e.employee_code} · ${e.full_name}` }));
 
+        /*
+         * "การลงเวลาวันนี้" เดิมอ่านจากกระดานสด (/time-event-board) ที่มีแถวเฉพาะ
+         * คนที่สแกนแล้ว — คนที่ควรมาทำงานแต่ไม่มาสแกนเลยจะไม่ปรากฏในตารางนี้เลย
+         * ทั้งที่เป็นเคสสำคัญที่สุด (ขาดงาน) ผสมคนที่ยังไม่สแกนเข้าไปด้วย โดยหา
+         * กะของวันนี้จากตารางที่ประกาศแล้ว (roster) ก่อน — ถ้าไม่มีค่อยย้อนไปดู
+         * ตารางประจำสัปดาห์ (recurring pattern) ทีละคน (roster ชนะ pattern เสมอ
+         * ตรงกับที่ resolveShiftId ฝั่ง API ใช้)
+         */
+        const scannedIds = new Set(arrivals.map((a) => a.employment_id));
+        const restShiftIds = new Set(
+          (shifts?.items ?? []).filter((sh) => sh.rest_day).map((sh) => sh.id),
+        );
+        const startMinutesByShift = new Map(
+          (shifts?.items ?? []).map((sh) => [sh.id, sh.start_minutes]),
+        );
+        const todayAssignmentByEmployment = new Map(
+          (todayAssignments?.items ?? []).map((a) => [a.employment_id, a.shift_id]),
+        );
+        const missingPeople = (employments?.items ?? []).filter(
+          (e) => e.terminated_on === null && !scannedIds.has(e.id),
+        );
+
+        const DOW_FIELDS = [
+          "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday",
+        ] as const;
+        const todayDowField = DOW_FIELDS[new Date(`${today}T00:00:00Z`).getUTCDay()]!;
+
+        const needsPatternLookup = missingPeople.filter(
+          (e) => !todayAssignmentByEmployment.has(e.id),
+        );
+        const patterns = await Promise.all(
+          needsPatternLookup.map((e) =>
+            wfTry<{ items: RecurringPattern[] }>(
+              `/recurring-work-patterns?employment_id=${e.id}`,
+            ),
+          ),
+        );
+        const patternByEmployment = new Map(
+          needsPatternLookup.map((e, i) => [e.id, patterns[i]]),
+        );
+
+        const missingRows = missingPeople.map((e) => {
+          let shiftId: string | null;
+          if (todayAssignmentByEmployment.has(e.id)) {
+            shiftId = todayAssignmentByEmployment.get(e.id) ?? null;
+          } else {
+            const open = patternByEmployment
+              .get(e.id)
+              ?.items.find((p) => p.effective_to === null);
+            shiftId = open ? open[todayDowField].id : null;
+          }
+          const status: "ABSENT" | "REST_DAY" | "NO_SHIFT" =
+            shiftId === null
+              ? "NO_SHIFT"
+              : restShiftIds.has(shiftId)
+                ? "REST_DAY"
+                : "ABSENT";
+          return {
+            employment_id: e.id,
+            display_name: e.full_name,
+            employee_code: e.employee_code,
+            status,
+            scheduled_start_minutes: shiftId === null ? null : (startMinutesByShift.get(shiftId) ?? null),
+          };
+        });
+        const absentCount = missingRows.filter((m) => m.status === "ABSENT").length;
+
         // จัดกลุ่มตามสาเหตุ — 31 วัน x 2 คน ที่ติดเรื่องเดียวกันคือปัญหาเดียว
         // ไม่ใช่ 62 ปัญหา แสดงเรียงรายวันจะกลบสาระจนหาไม่เจอว่าต้องแก้อะไร
         const openExceptions = exceptions?.items ?? [];
@@ -165,16 +240,18 @@ export default async function AttendancePage({
         return (
           <>
             <SectionCard
-              title={`การลงเวลาวันนี้ · ${arrivals.length} คน`}
-              description={
-                lateCount > 0
-                  ? `มาสาย ${lateCount} คน — เทียบกับเวลาเข้างานตามกะและเวลาผ่อนผันของบริษัท`
-                  : "เทียบกับเวลาเข้างานตามกะและเวลาผ่อนผันของบริษัท"
-              }
+              title={`การลงเวลาวันนี้ · ${activePeople.length} คน`}
+              description={[
+                `สแกนแล้ว ${arrivals.length} คน`,
+                lateCount > 0 ? `มาสาย ${lateCount} คน` : null,
+                absentCount > 0 ? `ขาดงาน ${absentCount} คน` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
               className="mb-4"
             >
-              {arrivals.length === 0 ? (
-                <EmptyState>วันนี้ยังไม่มีใครสแกน</EmptyState>
+              {activePeople.length === 0 ? (
+                <EmptyState>ยังไม่มีพนักงานในระบบ</EmptyState>
               ) : (
                 <DataTable
                   head={["พนักงาน", "เข้างาน", "สแกนล่าสุด", "ตามกะ", "สถานะ"]}
@@ -225,12 +302,49 @@ export default async function AttendancePage({
                       </Td>
                     </tr>
                   ))}
+                  {/*
+                    คนที่ยังไม่สแกนเลยวันนี้ — เดิมหายไปจากตารางทั้งหมด ทั้งที่
+                    "ขาดงาน" คือเคสที่ควรเห็นชัดที่สุด ไม่ใช่เคสที่มองไม่เห็นเลย
+                  */}
+                  {missingRows.map((m) => (
+                    <tr key={m.employment_id} className="hover:bg-(--bg-soft)">
+                      <Td>
+                        <span className="font-medium">{m.display_name}</span>
+                        <span className="ml-2 font-mono text-xs text-(--ink-soft)">
+                          {m.employee_code}
+                        </span>
+                      </Td>
+                      <Td className="font-mono text-(--ink-soft)">—</Td>
+                      <Td className="font-mono text-(--ink-soft)">—</Td>
+                      <Td className="font-mono text-(--ink-soft)">
+                        {m.scheduled_start_minutes === null
+                          ? "—"
+                          : fromMinutes(m.scheduled_start_minutes)}
+                      </Td>
+                      <Td>
+                        {m.status === "REST_DAY" ? (
+                          <Pill tone="var(--tone-info)">วันหยุด</Pill>
+                        ) : m.status === "ABSENT" ? (
+                          <Pill tone="var(--danger)">ขาดงาน</Pill>
+                        ) : (
+                          <Link
+                            href={`/hr/employees/${m.employment_id}`}
+                            className="hover:underline"
+                            title="ไปผูกกะของคนนี้"
+                          >
+                            <Pill tone="var(--tone-muted)">ยังไม่ผูกกะ →</Pill>
+                          </Link>
+                        )}
+                      </Td>
+                    </tr>
+                  ))}
                 </DataTable>
               )}
               <p className="mt-3 text-xs text-(--ink-soft)">
                 อ่านจากการสแกนสด ๆ ไม่ต้องรอสั่งคำนวณ — ตัวเลขสรุปรายเดือนและ OT
                 ยังต้องกดคำนวณตามเดิม · &ldquo;ยังไม่ผูกกะ&rdquo; แปลว่าระบบไม่รู้ว่าคนนั้น
-                ควรเข้ากี่โมง จึงบอกไม่ได้ว่าสายหรือไม่ — กดที่ป้ายนั้นเพื่อไปตั้งตารางกะของเขา
+                ควรเข้ากี่โมง จึงบอกไม่ได้ว่าสายหรือไม่ — กดที่ป้ายนั้นเพื่อไปตั้งตารางกะของเขา ·
+                &ldquo;ขาดงาน&rdquo; คือคนที่ควรเข้ากะวันนี้แต่ยังไม่มีการสแกนเลยตลอดวัน
               </p>
             </SectionCard>
 
