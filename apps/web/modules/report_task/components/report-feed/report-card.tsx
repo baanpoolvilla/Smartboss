@@ -1499,20 +1499,21 @@ function PostImageCollage({
     );
   }
   if (images.length === 2) {
-    // Side-by-side squeezed two wide screenshots (very common in this feed —
-    // "mobile รูปเป็นแบบนี้") into a narrow ~180px-tall crop on a phone-width
-    // card, cropping most of each one away and leaving them unreadable.
-    // Stacked full-width below `sm:` gives each one its own real aspect
-    // ratio instead; side-by-side only once there's enough width for it.
+    // Used to force both into a fixed ~190px-tall box with object-cover —
+    // fine for a landscape photo, but this feed's images are routinely tall
+    // app/phone screenshots, so a fixed short box cropped most of each one
+    // away regardless of screen width ("รูป 2 รูป...ภาพถูกครอปจนอ่านไม่ออก...
+    // ใน pc ก็ด้วย" — confirmed happening on desktop too, so the earlier
+    // mobile-only stacking fix wasn't the actual cause). `fitToImage` (same
+    // as the single-image case above) sizes each to its own real aspect
+    // ratio instead of cropping — capped by PostImageThumb's own max-height,
+    // not stretched edge-to-edge, so nothing gets cut off.
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         {images.map((img, i) => (
-          <PostImageThumb
-            key={img.id}
-            img={img}
-            onClick={() => onOpen(i)}
-            className="h-[220px] sm:h-[190px] w-full rounded-lg border border-[var(--line)] overflow-hidden"
-          />
+          <div key={img.id} className="rounded-lg border border-[var(--line)] overflow-hidden">
+            <PostImageThumb img={img} onClick={() => onOpen(i)} className="w-full" fitToImage />
+          </div>
         ))}
       </div>
     );
