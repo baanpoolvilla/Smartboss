@@ -973,6 +973,31 @@ export async function submitLeaveAction(
   return { ok: true, days: dates.length - failed };
 }
 
+/**
+ * ยกเลิกใบลาที่ยื่นไว้ — ใช้ตอนลงผิดวัน/เปลี่ยนใจ
+ *
+ * ไม่ต้องมี hr.* permission เหมือน submitLeaveAction — workforce ตรวจเองว่า
+ * ยกเลิกได้เฉพาะใบของตัวเอง เว้นแต่มีสิทธิ์อนุมัติ (ดู leave.service.ts
+ * cancelRequest — เพิ่งเพิ่มการตรวจความเป็นเจ้าของ เดิมไม่มีเลย)
+ */
+export async function cancelLeaveAction(formData: FormData) {
+  await requireOrg();
+  const id = String(formData.get("requestId") ?? "");
+  if (!id) throw new Error("ไม่พบคำขอ");
+
+  try {
+    await wfFetch(`/leave-requests/${id}/cancel`, {
+      method: "POST",
+      body: {
+        reason: String(formData.get("reason") ?? "").trim() || "ยกเลิกจากปฏิทินวันหยุด",
+      },
+    });
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+  revalidatePath("/hr/leave");
+}
+
 /** อนุมัติ/ไม่อนุมัติคำขอลา — ต้องมี workforce.leave.approve (SUPERVISOR ขึ้นไป) */
 export async function decideLeaveAction(formData: FormData) {
   await requireOrg();

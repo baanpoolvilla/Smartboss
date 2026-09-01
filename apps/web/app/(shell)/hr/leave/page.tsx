@@ -70,7 +70,7 @@ export default async function LeavePage({
         const from = `${month}-01`;
         const to = `${month}-${String(daysInMonth).padStart(2, "0")}`;
 
-        const [me, employments, types, calendar, requests] = await Promise.all([
+        const [me, employments, types, calendar, requests, mine] = await Promise.all([
           wfFetch<Me>("/me"),
           // พนักงานทั่วไปอ่าน /employments ไม่ได้ (ต้องมี people.read) — ปฏิทิน
           // จึงพึ่งชื่อจาก /leave-calendar แทน อันนี้ใช้แค่ตารางอนุมัติ
@@ -80,6 +80,9 @@ export default async function LeavePage({
           wfTry<{ items: LeaveCalendarEntry[] }>(`/leave-calendar?from=${from}&to=${to}`),
           // ใบที่รออนุมัติมีสถานะ SUBMITTED ไม่ใช่ PENDING — ชื่อนี้มาจาก API โดยตรง
           wfTry<Paged<LeaveRequest>>(`/leave-requests?from=${from}&to=${to}&status=SUBMITTED`),
+          // ใบของตัวเอง — เอา id มาผูกกับปุ่มยกเลิก ปฏิทินรวม (/leave-calendar)
+          // ไม่คืน id ให้เพราะทุกคนอ่านได้ (จะเห็น id ใบของคนอื่นไม่ควรเกิดขึ้น)
+          wfTry<{ items: LeaveRequest[] }>(`/me/leave-requests?from=${from}&to=${to}`),
         ]);
 
         /*
@@ -97,16 +100,27 @@ export default async function LeavePage({
         const canApprove = me.permissions.includes("workforce.leave.approve");
         const canManageTypes = me.permissions.includes("workforce.scheduling.manage");
 
+        // ใบของตัวเองที่ "ยังมีผล" (ไม่ใช่ REJECTED/CANCELLED) — ใช้ starts_on
+        // เป็นคีย์ตรง ๆ ได้ เพราะ submitLeaveAction ส่งทีละวัน (starts_on = ends_on
+        // เสมอ) ถ้าวันไหนมีมากกว่าหนึ่งใบ (ไม่ควรเกิด) ใช้ใบล่าสุดพอ
+        const myRequestIdByDate = new Map(
+          (mine?.items ?? [])
+            .filter((r) => r.status === "SUBMITTED" || r.status === "APPROVED")
+            .map((r) => [r.starts_on, r.id]),
+        );
+
         // วางคำขอลงปฏิทินรายวัน — endpoint คืนเฉพาะใบที่ยังมีผล (PENDING/APPROVED)
         const entriesByDate: Record<string, DayEntry[]> = {};
         for (const entry of calendar?.items ?? []) {
           for (const date of datesBetween(entry.starts_on, entry.ends_on)) {
             if (date < from || date > to) continue;
+            const isMine = entry.employment_id === me.employment_id;
             (entriesByDate[date] ??= []).push({
               employmentId: entry.employment_id,
               name: entry.display_name,
               status: entry.status,
-              mine: entry.employment_id === me.employment_id,
+              mine: isMine,
+              requestId: isMine ? myRequestIdByDate.get(date) : undefined,
             });
           }
         }
