@@ -54,10 +54,21 @@ export function ReportTopicSettingsPanel({
   topic,
   hideHeading,
   onUpdate,
+  liveVisibility,
 }: {
   topic: ReportTopic;
   hideHeading?: boolean;
   onUpdate?: (patch: Partial<ReportTopic>) => void;
+  /** Override for what the member section (RoomMembersSummaryCard/Dialog)
+   * reads — only needed when `topic` is a batched draft (room-settings-sheet.tsx):
+   * member changes save straight to the store regardless of `onUpdate`, so
+   * that section must read the real current membership, not the draft's
+   * possibly-stale snapshot, or an add/remove there looks like it silently
+   * failed until the draft happens to get reset. The mode buttons/department
+   * picker below still read `topic.visibility` (the draft) as normal — those
+   * genuinely are batched. Unset when `topic` is already live (plain
+   * /settings usage), where `topic.visibility` is correct for both. */
+  liveVisibility?: ReportTopic["visibility"];
 }) {
   const updateTopicSettings = useReportFeedStore((s) => s.updateTopicSettings);
   const apply = onUpdate ?? ((patch: Partial<ReportTopic>) => updateTopicSettings(topic.id, patch));
@@ -65,6 +76,7 @@ export function ReportTopicSettingsPanel({
   const [newTime, setNewTime] = useState("09:00");
   const [membersDialogOpen, setMembersDialogOpen] = useState(false);
   const mode = topicModeOf(topic.visibility);
+  const memberTopic = liveVisibility !== undefined ? { ...topic, visibility: liveVisibility } : topic;
 
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const owner = isOwner(viewingAsUserId);
@@ -207,11 +219,11 @@ export function ReportTopicSettingsPanel({
                 edit — the owner for any mode, a department head only ever
                 for their own department (see canEditReportTopic) — so
                 whichever mode is showing, "can manage" is exactly that. */}
-            <RoomMembersSummaryCard topic={topic} canManage={owner || mode === "department"} onManage={() => setMembersDialogOpen(true)} />
+            <RoomMembersSummaryCard topic={memberTopic} canManage={owner || mode === "department"} onManage={() => setMembersDialogOpen(true)} />
             <RoomMembersDialog
               open={membersDialogOpen}
               onOpenChange={setMembersDialogOpen}
-              topic={topic}
+              topic={memberTopic}
               updateTopicSettings={updateTopicSettings}
               canManage={owner || mode === "department"}
             />
