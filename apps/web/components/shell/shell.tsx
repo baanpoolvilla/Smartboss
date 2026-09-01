@@ -283,13 +283,18 @@ function ModuleBottomNav({
           />
         ))}
 
-        {overflow.length > 0 && (
-          <BottomNavItem
-            label="เพิ่มเติม"
-            active={overflowActive}
-            onClick={() => setSheetOpen(true)}
-          />
-        )}
+        {/* Always shown, even with nothing to overflow into — the sheet this
+            opens is also the only place "กลับหน้ารวมแอป" lives on mobile
+            (ModuleRail's equivalent header link is lg-only). Gating this tab
+            on `overflow.length > 0` used to strand anyone whose visible menu
+            count fit within MAX_TABS (e.g. a report_task user without
+            settingManage/activityView — exactly 4 items, no overflow) with
+            no way back to the app launcher at all once inside a module. */}
+        <BottomNavItem
+          label="เพิ่มเติม"
+          active={overflowActive}
+          onClick={() => setSheetOpen(true)}
+        />
       </nav>
 
       {sheetOpen && (
