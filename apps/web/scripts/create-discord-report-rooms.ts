@@ -4,6 +4,9 @@
  * เปิดโพสต์ตรงไม่ได้ เป็นแค่ตัวจัดกลุ่ม) แต่ละห้อง (channel) กลายเป็นหัวข้อย่อย
  * (parentId ชี้กลับไปหมวดของมัน) — โครงสร้างตรงกับ topic-sidebar.tsx
  *
+ * ทุกห้องที่สร้างเป็นแบบ Thread (feedViewMode: "threads") ทั้งหมด — ห้องไหน
+ * อยากได้แบบ Openchat แทน ให้สร้าง/แก้เพิ่มเองทีหลังจากหน้าเว็บ
+ *
  * ไม่แตะห้อง/โพสต์ที่มีอยู่แล้ว — merge เข้ากับ topics เดิมใน store คีย์
  * "report-feed" เท่านั้น (อ่านของเดิมมาต่อท้าย ไม่เขียนทับ) ตรวจชื่อหมวด/ห้อง
  * ที่มีอยู่แล้วก่อนด้วย ถ้าซ้ำจะข้าม ไม่สร้างซ้ำ รันซ้ำได้อย่างปลอดภัย
@@ -64,6 +67,7 @@ type TopicRow = {
   cutoffs: never[];
   parentId?: string;
   isCategory?: boolean;
+  feedViewMode?: "stream" | "threads";
 };
 
 async function main() {
@@ -121,6 +125,11 @@ async function main() {
         minImages: 0,
         cutoffs: [],
         parentId: catId,
+        // ทุกห้องสร้างเป็น Thread โดยดีฟอลต์ (ผู้ใช้ขอ) — ห้องไหนอยากได้แบบ
+        // Openchat ค่อยสร้าง/แก้เพิ่มเองทีหลัง (แก้ผ่านห้องตั้งค่าไม่ได้ถ้าห้อง
+        // ถูกสร้างหลัง FEED_VIEW_MODE_LOCK_CUTOFF — ดู isOpenchatTopic ใน
+        // report-feed-store.ts — ต้องลบห้องแล้วสร้างใหม่ หรือแก้ตรง DB)
+        feedViewMode: "threads",
       });
       colorIdx += 1;
     }
