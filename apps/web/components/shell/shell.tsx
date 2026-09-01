@@ -305,12 +305,12 @@ function ModuleBottomNav({
             aria-hidden
           />
           <div className="absolute inset-x-0 bottom-0 max-h-[70dvh] overflow-y-auto rounded-t-[20px] bg-(--bg) pb-6">
-            <div className="flex items-center justify-between px-4 pt-3">
+            <div className="relative flex items-center justify-between px-4 pt-3">
               <span className="mx-auto h-1 w-10 rounded-full bg-(--line)" />
               <button
                 type="button"
                 onClick={() => setSheetOpen(false)}
-                className="absolute right-3 top-3 rounded-md p-1.5 text-(--ink-soft)"
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-(--ink-soft)"
                 aria-label="ปิด"
               >
                 <X className="h-5 w-5" />
