@@ -1520,11 +1520,19 @@ function PostImageCollage({
   // in the lightbox on click.
   const cols = images.length === 2 ? "grid-cols-2" : "grid-cols-3";
   return (
-    <div className={cn("grid gap-1.5", cols)}>
+    // max-w-md caps how big each cell can get — with nothing capping it the
+    // grid stretched to the post card's full width, so on a wide desktop
+    // screen each cell ballooned to ~380px ("การ์ดไม่ต้องเอาใหญ่ขนาดนี้ก็ได้
+    // นะ") even though the same grid looked fine at mobile width. No border
+    // on the cells any more either — against a light/white-background photo
+    // (a scanned document, a receipt) the border read as an odd extra frame
+    // around the crop ("ยังมีขอบเวลาภาพขาวๆ"); the gap between cells already
+    // separates them, same as Discord's own borderless grid.
+    <div className={cn("grid gap-1.5 max-w-md", cols)}>
       {images.map((img, i) => {
         const isLast = i === images.length - 1;
         return (
-          <div key={img.id} className="relative aspect-square rounded-lg border border-[var(--line)] overflow-hidden">
+          <div key={img.id} className="relative aspect-square rounded-lg overflow-hidden">
             <PostImageThumb img={img} onClick={() => onOpen(i)} className="h-full w-full" />
             {isLast && remaining > 0 && (
               <span className="absolute inset-0 bg-black/50 text-white text-sm font-semibold flex items-center justify-center pointer-events-none">
