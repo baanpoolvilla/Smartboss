@@ -30,9 +30,10 @@ export async function uploadIssueAttachment(file: File, uploadedBy: string): Pro
   let mime: string;
   let size: number;
   if (isImage) {
-    url = await uploadCompressedImage(file);
+    const compressed = await uploadCompressedImage(file);
+    url = compressed.url;
     mime = "image/jpeg";
-    size = file.size; // post-compression size isn't returned by uploadCompressedImage; close enough for display
+    size = compressed.size;
   } else {
     const form = new FormData();
     form.append("file", file);

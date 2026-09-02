@@ -31,7 +31,7 @@ function drawToCanvas(file: File, maxWidth: number): Promise<HTMLCanvasElement> 
  * storing the full data URL inline in a store/file). Returns the server path
  * to reference from then on.
  */
-export async function uploadCompressedImage(file: File, maxWidth = 1280, quality = 0.75): Promise<string> {
+export async function uploadCompressedImage(file: File, maxWidth = 1280, quality = 0.75): Promise<{ url: string; size: number }> {
   const canvas = await drawToCanvas(file, maxWidth);
   const blob = await new Promise<Blob>((resolve, reject) =>
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("แปลงรูปภาพไม่สำเร็จ"))), "image/jpeg", quality),
@@ -43,14 +43,15 @@ export async function uploadCompressedImage(file: File, maxWidth = 1280, quality
     const data = await res.json().catch(() => null);
     throw new Error(data?.error ?? "อัปโหลดรูปภาพไม่สำเร็จ");
   }
-  const data = (await res.json()) as { url: string };
-  return data.url;
+  const data = (await res.json()) as { url: string; size: number };
+  return { url: data.url, size: data.size };
 }
 
 export interface UploadedReportMedia {
   url: string;
   mime: string;
   name: string;
+  size: number;
 }
 
 /**
@@ -85,9 +86,9 @@ export async function uploadReportMedia(file: File): Promise<UploadedReportMedia
       const data = await res.json().catch(() => null);
       throw new Error(data?.error ?? "อัปโหลดวิดีโอไม่สำเร็จ");
     }
-    const data = (await res.json()) as { url: string; mime: string };
-    return { url: data.url, mime: data.mime, name: file.name };
+    const data = (await res.json()) as { url: string; mime: string; size: number };
+    return { url: data.url, mime: data.mime, name: file.name, size: data.size };
   }
-  const url = await uploadCompressedImage(file);
-  return { url, mime: "image/jpeg", name: file.name };
+  const { url, size } = await uploadCompressedImage(file);
+  return { url, mime: "image/jpeg", name: file.name, size };
 }

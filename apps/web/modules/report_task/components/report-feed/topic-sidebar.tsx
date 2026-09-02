@@ -251,7 +251,7 @@ export function TopicSidebar({
     if (!file) return;
     setUploading(true);
     try {
-      setLogoUrl(await uploadCompressedImage(file, 256, 0.85));
+      setLogoUrl((await uploadCompressedImage(file, 256, 0.85)).url);
     } catch {
       toast.error("อัปโหลดโลโก้ไม่สำเร็จ — ลองใหม่อีกครั้ง");
     } finally {

@@ -31,6 +31,12 @@ export interface ReportPostImage {
    * so old rows have no reason to carry this) — `mime?.startsWith("video/")`
    * is the one check every render site needs to pick `<video>` over `<img>`. */
   mime?: string;
+  /** Byte size from the upload response — undefined for anything attached
+   * before this was threaded through (old posts). Only used when someone
+   * saves the attachment into the room's actual document library ("เอกสาร
+   * ของห้องนี้" / company-files) — that write needs a real size, unlike
+   * rendering a thumbnail which doesn't care. */
+  size?: number;
   /** Which named album (see ReportAlbum) this image is curated into, if any —
    * same LINE-style split as a regular chat photo vs. one explicitly saved
    * to a Keep album. The image always stays attached to its post/reply

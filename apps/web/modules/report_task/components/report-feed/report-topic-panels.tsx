@@ -30,6 +30,7 @@ import { Badge } from "@/modules/report_task/components/ui/badge";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
 import { AlbumPickerButton } from "@/modules/report_task/components/report-feed/album-picker-button";
+import { SaveToDocumentsButton } from "@/modules/report_task/components/report-feed/save-to-documents-button";
 import { TopicEmptyState } from "@/modules/report_task/components/report-feed/topic-empty-state";
 import { TimeAgo } from "@/modules/report_task/components/shared/time-ago";
 import {
@@ -299,6 +300,9 @@ export function ReportTopicPanels({
                             albumId={f.image.albumId}
                             onChange={(albumId) => setImageAlbum(f.postId, f.image.id, albumId)}
                           />
+                        </div>
+                        <div className="absolute top-1 right-1">
+                          <SaveToDocumentsButton topicId={topic.id} topicName={topic.name} file={f.image} />
                         </div>
                       </div>
                     );

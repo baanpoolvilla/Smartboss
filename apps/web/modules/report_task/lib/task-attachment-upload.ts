@@ -39,9 +39,10 @@ export async function uploadTaskAttachment(file: File, uploadedBy: string): Prom
   let mime: string;
   let size: number;
   if (isImage) {
-    url = await uploadCompressedImage(file);
+    const compressed = await uploadCompressedImage(file);
+    url = compressed.url;
     mime = "image/jpeg";
-    size = file.size; // ขนาดหลังบีบอัดไม่ได้คืนกลับมาจาก uploadCompressedImage — ใช้ขนาดเดิมแทนเพื่อแสดงผลคร่าวๆ
+    size = compressed.size;
   } else {
     const form = new FormData();
     form.append("file", file);
