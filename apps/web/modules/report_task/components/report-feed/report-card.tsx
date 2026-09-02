@@ -1508,40 +1508,24 @@ function PostImageCollage({
       </div>
     );
   }
-  if (images.length === 2) {
-    // Used to force both into a fixed ~190px-tall box with object-cover —
-    // fine for a landscape photo, but this feed's images are routinely tall
-    // app/phone screenshots, so a fixed short box cropped most of each one
-    // away regardless of screen width ("รูป 2 รูป...ภาพถูกครอปจนอ่านไม่ออก...
-    // ใน pc ก็ด้วย" — confirmed happening on desktop too, so the earlier
-    // mobile-only stacking fix wasn't the actual cause). `fitToImage` (same
-    // as the single-image case above) sizes each to its own real aspect
-    // ratio instead of cropping — capped by PostImageThumb's own max-height,
-    // not stretched edge-to-edge, so nothing gets cut off.
-    return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-        {images.map((img, i) => (
-          <div key={img.id} className="rounded-lg border border-[var(--line)] overflow-hidden">
-            <PostImageThumb img={img} onClick={() => onOpen(i)} className="w-full" fitToImage />
-          </div>
-        ))}
-      </div>
-    );
-  }
-  // Used to be a 2fr lead photo beside a fixed-height h-[280px] stacked
-  // column, forced into that box with object-cover — same crop problem as
-  // the old 2-image layout ("ทำไมยังเป็นแบบนี้อยู่เลย" — this box was never
-  // fixed for 3+ images when the 1/2-image cases got fitToImage). A plain
-  // 2-column grid of fitToImage thumbnails (each capped by its own
-  // max-height, not stretched into a shared fixed-height row) avoids
-  // cropping regardless of image count.
+  // 2+ images — a compact tiled grid (2 columns for exactly 2, 3 columns
+  // wrapping to more rows beyond that), same shape Discord's own attachment
+  // gallery uses ("อยากให้แอปเราจัดกริดรูปแบบนี้" — a reference screenshot of
+  // a real Discord channel's multi-image posts). Cropped to a uniform square
+  // cell on purpose this time: the earlier fitToImage version (no crop at
+  // all) kept every photo full quality but let a handful of images push a
+  // post absurdly tall; a uniform grid trades a moderate, consistent crop
+  // for staying compact and scannable — same trade every chat app's
+  // multi-photo grid makes. Each thumbnail still opens full-size, uncropped,
+  // in the lightbox on click.
+  const cols = images.length === 2 ? "grid-cols-2" : "grid-cols-3";
   return (
-    <div className="grid grid-cols-2 gap-2.5">
+    <div className={cn("grid gap-1.5", cols)}>
       {images.map((img, i) => {
         const isLast = i === images.length - 1;
         return (
-          <div key={img.id} className="relative rounded-lg border border-[var(--line)] overflow-hidden">
-            <PostImageThumb img={img} onClick={() => onOpen(i)} className="w-full" fitToImage />
+          <div key={img.id} className="relative aspect-square rounded-lg border border-[var(--line)] overflow-hidden">
+            <PostImageThumb img={img} onClick={() => onOpen(i)} className="h-full w-full" />
             {isLast && remaining > 0 && (
               <span className="absolute inset-0 bg-black/50 text-white text-sm font-semibold flex items-center justify-center pointer-events-none">
                 +{remaining}
