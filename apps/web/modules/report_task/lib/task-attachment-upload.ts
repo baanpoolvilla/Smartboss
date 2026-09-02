@@ -30,7 +30,8 @@ export async function uploadTaskAttachment(file: File, uploadedBy: string): Prom
   const maxMB = isImage ? settings.maxImageMB : isVideo ? settings.maxVideoMB : settings.maxFileMB;
   const maxBytes = maxMB * 1024 * 1024;
   if (!isImage && file.size > maxBytes) {
-    throw new Error(`ไฟล์ใหญ่เกินไป (จำกัด ${maxMB}MB)`);
+    const actualMb = (file.size / 1024 / 1024).toFixed(1);
+    throw new Error(`ไฟล์ใหญ่เกินไป (ไฟล์นี้ ${actualMb}MB ต้องไม่เกิน ${maxMB}MB)`);
   }
 
   let url: string;
