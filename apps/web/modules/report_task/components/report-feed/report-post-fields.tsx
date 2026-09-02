@@ -353,7 +353,11 @@ export function ReportPostFields({
     if (!item) return; // no pasted image — let default paste (text, a pasted link) proceed as before
     e.preventDefault();
     const file = item.getAsFile();
-    if (!file || images.length >= maxImages) return;
+    if (!file) return;
+    if (images.length >= maxImages) {
+      toast.error(`แนบได้สูงสุด ${maxImages} รูป/คลิปต่อโพสต์`);
+      return;
+    }
     try {
       const media = await uploadReportMedia(file);
       onImagesChange([...images, { id: `img-${crypto.randomUUID()}`, url: media.url, name: file.name || "pasted-image.png", mime: media.mime }]);

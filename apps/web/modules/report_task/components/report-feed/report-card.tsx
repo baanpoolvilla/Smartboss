@@ -513,10 +513,14 @@ export function ReportCard({
 
   async function handleReplyFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
+    const available = Math.max(0, maxImages - replyImages.length);
+    if (files.length > available) {
+      toast.error(`แนบได้สูงสุด ${maxImages} รูป/คลิปต่อคอมเมนต์ — เลือกไว้เกิน ข้ามไป ${files.length - available} ไฟล์`);
+    }
     setReplyUploading(true);
     const next: ReportPostImage[] = [];
     try {
-      for (const file of Array.from(files).slice(0, maxImages - replyImages.length)) {
+      for (const file of Array.from(files).slice(0, available)) {
         const media = await uploadReportMedia(file);
         next.push({ id: `img-${crypto.randomUUID()}`, url: media.url, name: media.name, mime: media.mime });
       }
@@ -540,7 +544,11 @@ export function ReportCard({
     if (!item) return;
     e.preventDefault();
     const file = item.getAsFile();
-    if (!file || replyImages.length >= maxImages) return;
+    if (!file) return;
+    if (replyImages.length >= maxImages) {
+      toast.error(`แนบได้สูงสุด ${maxImages} รูป/คลิปต่อคอมเมนต์`);
+      return;
+    }
     try {
       const media = await uploadReportMedia(file);
       setReplyImages((prev) => [...prev, { id: `img-${crypto.randomUUID()}`, url: media.url, name: file.name || "pasted-image.png", mime: media.mime }]);
@@ -1675,10 +1683,14 @@ function EditPostForm({
 
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
+    const available = Math.max(0, maxImages - images.length);
+    if (files.length > available) {
+      toast.error(`แนบได้สูงสุด ${maxImages} รูป/คลิปต่อโพสต์ — เลือกไว้เกิน ข้ามไป ${files.length - available} ไฟล์`);
+    }
     setBusy(true);
     const next: ReportPostImage[] = [];
     try {
-      for (const file of Array.from(files).slice(0, maxImages - images.length)) {
+      for (const file of Array.from(files).slice(0, available)) {
         const media = await uploadReportMedia(file);
         next.push({ id: `img-${crypto.randomUUID()}`, url: media.url, name: media.name, mime: media.mime });
       }

@@ -72,9 +72,11 @@ export async function uploadReportMedia(file: File): Promise<UploadedReportMedia
     // specific message instead of a slow upload ending in a generic 413. A
     // company on a plan with a bigger video allowance (or a smaller one)
     // gets checked against its own real limit here, not a hardcoded number.
-    const maxBytes = useAttachmentSettingsStore.getState().settings.maxVideoMB * 1024 * 1024;
+    const maxVideoMB = useAttachmentSettingsStore.getState().settings.maxVideoMB;
+    const maxBytes = maxVideoMB * 1024 * 1024;
     if (file.size > maxBytes) {
-      throw new Error(`ไฟล์วิดีโอใหญ่เกินไป (จำกัด ${useAttachmentSettingsStore.getState().settings.maxVideoMB}MB)`);
+      const actualMb = (file.size / 1024 / 1024).toFixed(1);
+      throw new Error(`ไฟล์วิดีโอใหญ่เกินไป (ไฟล์นี้ ${actualMb}MB ต้องไม่เกิน ${maxVideoMB}MB)`);
     }
     const form = new FormData();
     form.append("file", file);

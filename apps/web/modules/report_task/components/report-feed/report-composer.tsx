@@ -57,10 +57,14 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
 
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
+    const available = Math.max(0, maxImages - images.length);
+    if (files.length > available) {
+      toast.error(`แนบได้สูงสุด ${maxImages} รูป/คลิปต่อโพสต์ — เลือกไว้เกิน ข้ามไป ${files.length - available} ไฟล์`);
+    }
     setBusy(true);
     const next: ReportPostImage[] = [];
     try {
-      for (const file of Array.from(files).slice(0, maxImages - images.length)) {
+      for (const file of Array.from(files).slice(0, available)) {
         const media = await uploadReportMedia(file);
         next.push({ id: `img-${crypto.randomUUID()}`, url: media.url, name: media.name, mime: media.mime });
       }

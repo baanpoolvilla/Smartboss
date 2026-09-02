@@ -277,10 +277,14 @@ export function OpenchatFeed({
 
   async function handleComposerFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
+    const available = Math.max(0, maxImages - composerImages.length);
+    if (files.length > available) {
+      toast.error(`แนบได้สูงสุด ${maxImages} รูป/คลิปต่อข้อความ — เลือกไว้เกิน ข้ามไป ${files.length - available} ไฟล์`);
+    }
     setUploading(true);
     const next: ReportPostImage[] = [];
     try {
-      for (const file of Array.from(files).slice(0, maxImages - composerImages.length)) {
+      for (const file of Array.from(files).slice(0, available)) {
         const media = await uploadReportMedia(file);
         next.push({ id: `img-${crypto.randomUUID()}`, url: media.url, name: media.name, mime: media.mime });
       }
@@ -302,7 +306,11 @@ export function OpenchatFeed({
     if (!item) return;
     e.preventDefault();
     const file = item.getAsFile();
-    if (!file || composerImages.length >= maxImages) return;
+    if (!file) return;
+    if (composerImages.length >= maxImages) {
+      toast.error(`แนบได้สูงสุด ${maxImages} รูป/คลิปต่อข้อความ`);
+      return;
+    }
     try {
       const media = await uploadReportMedia(file);
       setComposerImages((prev) => [...prev, { id: `img-${crypto.randomUUID()}`, url: media.url, name: file.name || "pasted-image.png", mime: media.mime }]);
