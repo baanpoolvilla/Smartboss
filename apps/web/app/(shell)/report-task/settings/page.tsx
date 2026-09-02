@@ -12,6 +12,7 @@ import { StickerManagerPanel } from "@/modules/report_task/components/shared/sti
 import { AttachmentSettingsPanel } from "@/modules/report_task/components/shared/attachment-settings-panel";
 import { ProjectTopicSettingsPanel } from "@/modules/report_task/components/shared/project-topic-settings-panel";
 import { ReportTagSettingsPanel } from "@/modules/report_task/components/shared/report-tag-settings-panel";
+import { ReportAttachmentSettingsPanel } from "@/modules/report_task/components/shared/report-attachment-settings-panel";
 import { LeaveTypeSettingsPanel } from "@/modules/report_task/components/calendar/leave-type-settings-dialog";
 import { RoutineDayOffSettingsPanel } from "@/modules/report_task/components/calendar/routine-dayoff-settings-dialog";
 import { LeaveSummaryPanel } from "@/modules/report_task/components/calendar/leave-summary-panel";
@@ -151,6 +152,7 @@ function SettingsPageInner() {
     report: [
       { key: "reportRoom", label: "ตั้งค่าห้อง", icon: MessageSquareText },
       { key: "tags", label: "จัดการแท็ก", icon: Tag },
+      { key: "attachments", label: "ไฟล์แนบ", icon: Paperclip },
     ],
     issueDesk: [{ key: "issueDeskConfig", label: "ตั้งค่าแจ้งปัญหา", icon: Bug }],
     permissions: owner
@@ -301,6 +303,7 @@ function SettingsPageInner() {
                 </>
               )}
               {sectionKey === "tags" && <ReportTagSettingsPanel />}
+              {sectionKey === "attachments" && <ReportAttachmentSettingsPanel />}
             </section>
           )}
 
