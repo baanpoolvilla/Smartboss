@@ -22,6 +22,13 @@ export function ReportImageLightbox({
   const [dragOffset, setDragOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
   const dragStartX = useRef(0);
+  const activeThumbRef = useRef<HTMLButtonElement>(null);
+  // With 15-20+ attachments the filmstrip scrolls — keep the active
+  // thumbnail on screen as the arrows/swipe/keyboard move through them,
+  // not just clicks on the strip itself.
+  useEffect(() => {
+    activeThumbRef.current?.scrollIntoView({ block: "nearest", inline: "center" });
+  }, [index]);
   // Reset the drag offset whenever the shown image actually changes (drag
   // commit, arrow keys, buttons, or dots) — adjusting state during render
   // rather than an effect, per React's guidance for resetting on prop change.
@@ -156,22 +163,42 @@ export function ReportImageLightbox({
         )}
 
         {hasMultiple && (
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2">
-            <span className="text-xs text-white/80 tabular-nums">
+          // Thumbnail filmstrip instead of a row of ~6px dots — with a
+          // handful of images the dots were already fiddly to tap, and this
+          // feed's posts routinely carry 15-20+ attachments (a dot per image
+          // shrinks toward unusable at that count anyway). Each thumbnail is
+          // a real 44px tap target and shows which image it actually jumps
+          // to, same as Discord's own lightbox strip
+          // ("ให้กดง่ายหน่อยได้ไหมใหญ่กว่านี้ หรือแสดงเป็นภาพ").
+          <div
+            className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2.5 max-w-[92vw]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className="text-xs text-white/80 tabular-nums shrink-0">
               {index + 1} / {images.length}
             </span>
-            <div className="flex items-center gap-1.5">
-              {images.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onIndexChange(i);
-                  }}
-                  className={`h-1.5 rounded-full transition-all cursor-pointer ${i === index ? "w-4 bg-white" : "w-1.5 bg-white/40 hover:bg-white/70"}`}
-                  aria-label={`ไปที่รูปที่ ${i + 1}`}
-                />
-              ))}
+            <div className="flex items-center gap-1.5 overflow-x-auto py-1 px-0.5 max-w-[70vw] sm:max-w-[60vw]">
+              {images.map((img, i) => {
+                const active = i === index;
+                const thumbIsVideo = img.mime?.startsWith("video/") ?? false;
+                return (
+                  <button
+                    key={img.id}
+                    ref={active ? activeThumbRef : undefined}
+                    onClick={() => onIndexChange(i)}
+                    className={`relative h-11 w-11 shrink-0 rounded-md overflow-hidden transition-opacity cursor-pointer ${active ? "ring-2 ring-white" : "opacity-50 hover:opacity-80"}`}
+                    aria-label={`ไปที่รูปที่ ${i + 1}`}
+                  >
+                    {thumbIsVideo ? (
+                      // eslint-disable-next-line jsx-a11y/media-has-caption
+                      <video src={img.url ?? img.dataUrl} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={img.url ?? img.dataUrl} alt="" className="h-full w-full object-cover" />
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
