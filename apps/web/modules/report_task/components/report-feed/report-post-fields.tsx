@@ -108,6 +108,7 @@ export function ReportPostFields({
   onFilesSelected: (files: FileList | null) => void;
 }) {
   const maxVideoMB = useAttachmentSettingsStore((s) => s.settings.maxVideoMB);
+  const maxImages = useAttachmentSettingsStore((s) => s.settings.maxImagesPerReportPost);
   const editableRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [activeFormat, setActiveFormat] = useState<Record<string, ActiveFormat>>({});
   // The editor is uncontrolled: its DOM is the source of truth once mounted
@@ -352,7 +353,7 @@ export function ReportPostFields({
     if (!item) return; // no pasted image — let default paste (text, a pasted link) proceed as before
     e.preventDefault();
     const file = item.getAsFile();
-    if (!file || images.length >= 6) return;
+    if (!file || images.length >= maxImages) return;
     try {
       const media = await uploadReportMedia(file);
       onImagesChange([...images, { id: `img-${crypto.randomUUID()}`, url: media.url, name: file.name || "pasted-image.png", mime: media.mime }]);
@@ -795,7 +796,7 @@ export function ReportPostFields({
         <Button
           variant="outline"
           size="sm"
-          disabled={busy || images.length >= 6}
+          disabled={busy || images.length >= maxImages}
           onClick={() => fileInputRef.current?.click()}
           title={`รูปหรือคลิปวิดีโอ .mp4/.webm (จำกัด ${maxVideoMB}MB ต่อคลิป)`}
         >

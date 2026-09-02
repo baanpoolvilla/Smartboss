@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avat
 import { getUser, canManage } from "@/modules/report_task/lib/directory";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useReportFeedStore, type ReportPostImage, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
+import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
 import { currentCutoff, minImagesNow } from "@/modules/report_task/lib/report-cutoff";
 import { ReportPostFields, newSection, type DraftSection } from "@/modules/report_task/components/report-feed/report-post-fields";
@@ -23,6 +24,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const viewer = getUser(viewingAsUserId)!;
   const addPost = useReportFeedStore((s) => s.addPost);
+  const maxImages = useAttachmentSettingsStore((s) => s.settings.maxImagesPerReportPost);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [expanded, setExpanded] = useState(false);
@@ -58,7 +60,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
     setBusy(true);
     const next: ReportPostImage[] = [];
     try {
-      for (const file of Array.from(files).slice(0, 6 - images.length)) {
+      for (const file of Array.from(files).slice(0, maxImages - images.length)) {
         const media = await uploadReportMedia(file);
         next.push({ id: `img-${crypto.randomUUID()}`, url: media.url, name: media.name, mime: media.mime });
       }

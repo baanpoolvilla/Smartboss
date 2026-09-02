@@ -26,6 +26,7 @@ import {
   type MentionType,
 } from "@/modules/report_task/lib/report-feed-rich-text";
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
+import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
 import { DRAG_MENTION_TOPIC_MIME } from "@/modules/report_task/components/report-feed/report-post-fields";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -127,6 +128,7 @@ export function OpenchatFeed({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
   const [composerImages, setComposerImages] = useState<ReportPostImage[]>([]);
+  const maxImages = useAttachmentSettingsStore((s) => s.settings.maxImagesPerReportPost);
   const [uploading, setUploading] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [sending, setSending] = useState(false);
@@ -278,7 +280,7 @@ export function OpenchatFeed({
     setUploading(true);
     const next: ReportPostImage[] = [];
     try {
-      for (const file of Array.from(files).slice(0, 6 - composerImages.length)) {
+      for (const file of Array.from(files).slice(0, maxImages - composerImages.length)) {
         const media = await uploadReportMedia(file);
         next.push({ id: `img-${crypto.randomUUID()}`, url: media.url, name: media.name, mime: media.mime });
       }
@@ -300,7 +302,7 @@ export function OpenchatFeed({
     if (!item) return;
     e.preventDefault();
     const file = item.getAsFile();
-    if (!file || composerImages.length >= 6) return;
+    if (!file || composerImages.length >= maxImages) return;
     try {
       const media = await uploadReportMedia(file);
       setComposerImages((prev) => [...prev, { id: `img-${crypto.randomUUID()}`, url: media.url, name: file.name || "pasted-image.png", mime: media.mime }]);
@@ -770,7 +772,7 @@ export function OpenchatFeed({
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            disabled={uploading || composerImages.length >= 6}
+            disabled={uploading || composerImages.length >= maxImages}
             className="h-7 w-7 shrink-0 flex items-center justify-center rounded-full bg-[var(--brand-green)] text-[var(--ink)] disabled:opacity-40 mb-0.5"
             aria-label="แนบรูป"
           >

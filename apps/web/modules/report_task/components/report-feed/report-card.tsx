@@ -46,6 +46,7 @@ import {
   type MentionType,
 } from "@/modules/report_task/lib/report-feed-rich-text";
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
+import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
 import { NewMessagesDivider } from "@/modules/report_task/components/report-feed/report-new-divider";
 import { ReportPostFields, newSection, type DraftSection } from "@/modules/report_task/components/report-feed/report-post-fields";
@@ -162,6 +163,7 @@ export function ReportCard({
   onOpenTask?: (taskId: string) => void;
 }) {
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
+  const maxImages = useAttachmentSettingsStore((s) => s.settings.maxImagesPerReportPost);
   const toggleReaction = useReportFeedStore((s) => s.toggleReaction);
   const addReply = useReportFeedStore((s) => s.addReply);
   const editReplyAction = useReportFeedStore((s) => s.editReply);
@@ -514,7 +516,7 @@ export function ReportCard({
     setReplyUploading(true);
     const next: ReportPostImage[] = [];
     try {
-      for (const file of Array.from(files).slice(0, 6 - replyImages.length)) {
+      for (const file of Array.from(files).slice(0, maxImages - replyImages.length)) {
         const media = await uploadReportMedia(file);
         next.push({ id: `img-${crypto.randomUUID()}`, url: media.url, name: media.name, mime: media.mime });
       }
@@ -538,7 +540,7 @@ export function ReportCard({
     if (!item) return;
     e.preventDefault();
     const file = item.getAsFile();
-    if (!file || replyImages.length >= 6) return;
+    if (!file || replyImages.length >= maxImages) return;
     try {
       const media = await uploadReportMedia(file);
       setReplyImages((prev) => [...prev, { id: `img-${crypto.randomUUID()}`, url: media.url, name: file.name || "pasted-image.png", mime: media.mime }]);
@@ -1307,7 +1309,7 @@ export function ReportCard({
               />
               <button
                 onClick={() => replyFileInputRef.current?.click()}
-                disabled={replyUploading || replyImages.length >= 6}
+                disabled={replyUploading || replyImages.length >= maxImages}
                 aria-label="แนบรูป"
                 className="h-7 w-7 shrink-0 flex items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] disabled:opacity-40"
               >
@@ -1661,6 +1663,7 @@ function EditPostForm({
   onCancel: () => void;
   onSave: (data: { title: string; sections: ReturnType<typeof buildSections>; images: ReportPostImage[]; tagIds: string[] }) => void;
 }) {
+  const maxImages = useAttachmentSettingsStore((s) => s.settings.maxImagesPerReportPost);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState(post.title);
   const [sections, setSections] = useState<DraftSection[]>(
@@ -1680,7 +1683,7 @@ function EditPostForm({
     setBusy(true);
     const next: ReportPostImage[] = [];
     try {
-      for (const file of Array.from(files).slice(0, 6 - images.length)) {
+      for (const file of Array.from(files).slice(0, maxImages - images.length)) {
         const media = await uploadReportMedia(file);
         next.push({ id: `img-${crypto.randomUUID()}`, url: media.url, name: media.name, mime: media.mime });
       }

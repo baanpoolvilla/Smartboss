@@ -8,6 +8,10 @@ export interface AttachmentSettings {
   /** จำนวนไฟล์แนบสูงสุดต่องานหนึ่งงาน / ความคิดเห็นหนึ่งรายการ */
   maxFilesPerTask: number;
   maxFilesPerComment: number;
+  /** จำนวนรูป/คลิปสูงสุดที่แนบได้ต่อโพสต์ (หรือคอมเมนต์) หนึ่งอันในห้องรายงาน —
+   * ก่อนหน้านี้ตายตัวที่ 6 ในโค้ดของแต่ละช่องเขียนโพสต์ (composer/ตอบกลับ/
+   * Openchat) แยกกันคนละที่ ปรับไม่ได้เลย */
+  maxImagesPerReportPost: number;
 }
 
 /** ค่าเริ่มต้น — เท่ากับ limit ตายตัวเดิมก่อนทำให้ปรับได้ (ไม่มีแถว = ใช้ค่านี้) */
@@ -17,6 +21,7 @@ export const DEFAULT_ATTACHMENT_SETTINGS: AttachmentSettings = {
   maxVideoMB: 25,
   maxFilesPerTask: 20,
   maxFilesPerComment: 5,
+  maxImagesPerReportPost: 6,
 };
 
 interface AttachmentSettingsStore {

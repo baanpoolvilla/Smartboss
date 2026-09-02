@@ -14,6 +14,7 @@ const fields: { key: keyof AttachmentSettings; label: string; hint: string; unit
   { key: "maxVideoMB", label: "วิดีโอ", hint: "mp4, webm", unit: "MB ต่อไฟล์" },
   { key: "maxFilesPerTask", label: "ไฟล์แนบต่องาน", hint: "รวมทุกชนิดไฟล์ในงานเดียว", unit: "ไฟล์" },
   { key: "maxFilesPerComment", label: "ไฟล์แนบต่อความคิดเห็น", hint: "แนบพร้อมกันได้สูงสุดกี่ไฟล์ต่อ 1 ข้อความ", unit: "ไฟล์" },
+  { key: "maxImagesPerReportPost", label: "รูป/คลิปต่อโพสต์รายงาน", hint: "แนบพร้อมกันได้สูงสุดกี่รูป/คลิปต่อ 1 โพสต์หรือคอมเมนต์ในห้องรายงาน", unit: "รูป/คลิป" },
 ];
 
 /**
