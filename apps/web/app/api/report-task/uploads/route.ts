@@ -48,6 +48,8 @@ const ALLOWED_TYPES: Record<string, { ext: string; kind: "image" | "file" | "vid
   "application/pdf": { ext: "pdf", kind: "file" },
   "text/plain": { ext: "txt", kind: "file" },
   "application/zip": { ext: "zip", kind: "file" },
+  "application/msword": { ext: "doc", kind: "file" },
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": { ext: "docx", kind: "file" },
   "video/mp4": { ext: "mp4", kind: "video" },
   "video/webm": { ext: "webm", kind: "video" },
 };

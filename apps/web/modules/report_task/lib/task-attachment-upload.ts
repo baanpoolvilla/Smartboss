@@ -10,6 +10,7 @@ function labelFor(mime: string): string {
   if (mime === "application/pdf") return "PDF";
   if (mime === "application/zip") return "ZIP";
   if (mime === "text/plain") return "ข้อความ";
+  if (mime === "application/msword" || mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") return "Word";
   return "ไฟล์";
 }
 

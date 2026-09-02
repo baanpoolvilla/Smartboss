@@ -10,7 +10,7 @@ import { toast } from "sonner";
 
 const fields: { key: keyof AttachmentSettings; label: string; hint: string; unit: string }[] = [
   { key: "maxImageMB", label: "รูปภาพ", hint: "jpg, png, webp, gif", unit: "MB ต่อไฟล์" },
-  { key: "maxFileMB", label: "เอกสาร", hint: "pdf, txt, zip", unit: "MB ต่อไฟล์" },
+  { key: "maxFileMB", label: "เอกสาร", hint: "pdf, txt, zip, doc, docx", unit: "MB ต่อไฟล์" },
   { key: "maxVideoMB", label: "วิดีโอ", hint: "mp4, webm", unit: "MB ต่อไฟล์" },
   { key: "maxFilesPerTask", label: "ไฟล์แนบต่องาน", hint: "รวมทุกชนิดไฟล์ในงานเดียว", unit: "ไฟล์" },
   { key: "maxFilesPerComment", label: "ไฟล์แนบต่อความคิดเห็น", hint: "แนบพร้อมกันได้สูงสุดกี่ไฟล์ต่อ 1 ข้อความ", unit: "ไฟล์" },
