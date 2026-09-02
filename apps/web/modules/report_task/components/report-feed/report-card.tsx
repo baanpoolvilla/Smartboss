@@ -1520,33 +1520,28 @@ function PostImageCollage({
       </div>
     );
   }
-  // Lead image (2fr) beside a stacked column (1fr) holding whatever's left
-  // — up to 4 more, since `images` arrives already capped at MAX_VISIBLE_IMAGES.
-  const rest = images.slice(1);
+  // Used to be a 2fr lead photo beside a fixed-height h-[280px] stacked
+  // column, forced into that box with object-cover — same crop problem as
+  // the old 2-image layout ("ทำไมยังเป็นแบบนี้อยู่เลย" — this box was never
+  // fixed for 3+ images when the 1/2-image cases got fitToImage). A plain
+  // 2-column grid of fitToImage thumbnails (each capped by its own
+  // max-height, not stretched into a shared fixed-height row) avoids
+  // cropping regardless of image count.
   return (
-    // `grid-rows-1 min-h-0` on every level down to the <img> — a grid/flex
-    // item's default `min-height: auto` lets its *content's* intrinsic size
-    // (here, the photo's natural 408x657-ish aspect) override an ancestor's
-    // fixed height and blow the row way past h-[280px] otherwise (this
-    // rendered a single lead photo ~2000px tall before the min-h-0 chain).
-    <div className="grid grid-cols-[2fr_1fr] grid-rows-1 gap-2.5 h-[280px] min-h-0">
-      <PostImageThumb img={images[0]!} onClick={() => onOpen(0)} className="h-full min-h-0 w-full rounded-lg border border-[var(--line)] overflow-hidden" />
-      <div className="grid gap-2.5 min-h-0" style={{ gridTemplateRows: `repeat(${rest.length}, minmax(0, 1fr))` }}>
-        {rest.map((img, i) => {
-          const index = i + 1;
-          const isLast = index === images.length - 1;
-          return (
-            <div key={img.id} className="relative min-h-0 rounded-lg border border-[var(--line)] overflow-hidden">
-              <PostImageThumb img={img} onClick={() => onOpen(index)} className="h-full w-full" />
-              {isLast && remaining > 0 && (
-                <span className="absolute inset-0 bg-black/50 text-white text-sm font-semibold flex items-center justify-center pointer-events-none">
-                  +{remaining}
-                </span>
-              )}
-            </div>
-          );
-        })}
-      </div>
+    <div className="grid grid-cols-2 gap-2.5">
+      {images.map((img, i) => {
+        const isLast = i === images.length - 1;
+        return (
+          <div key={img.id} className="relative rounded-lg border border-[var(--line)] overflow-hidden">
+            <PostImageThumb img={img} onClick={() => onOpen(i)} className="w-full" fitToImage />
+            {isLast && remaining > 0 && (
+              <span className="absolute inset-0 bg-black/50 text-white text-sm font-semibold flex items-center justify-center pointer-events-none">
+                +{remaining}
+              </span>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
