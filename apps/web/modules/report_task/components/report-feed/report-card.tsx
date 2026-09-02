@@ -1538,9 +1538,12 @@ function PostImageCollage({
   );
 }
 
-/** object-cover by default; switches to object-contain on a gray backdrop
- * once the image turns out to be a very wide/short screenshot-style aspect
- * ratio, so it doesn't get cropped down to an unreadable sliver (V4). */
+/** object-cover by default (grid cells — always a hard crop, no letterbox
+ * gap, same as Discord's own multi-image grid: "ของดิสครอบรูปยาวเหมือนกัน
+ * แต่ไม่มีขอบเลย" — a previous "wide image → object-contain on a gray
+ * backdrop" fallback here was meant for the single fitToImage hero, but was
+ * also firing inside the grid and leaving a big blank bar above/below any
+ * wide screenshot instead of just cropping it like every other cell). */
 function PostImageThumb({
   img,
   onClick,
@@ -1550,22 +1553,17 @@ function PostImageThumb({
   img: ReportPostImage;
   onClick: () => void;
   className?: string;
-  /** For the single-image case only — a fixed h-230 box with object-contain
-   * used to letterbox a wide image (e.g. a landscape screenshot) with blank
-   * bg-soft bars on the sides, which read as the image having shrunk
-   * ("หดเข้าไปทำไม") rather than as intentional "not cropped". Sizing the
-   * box to the image's own aspect ratio instead fills the full card width
-   * with no cropping *and* no dead space — there's nothing left to letterbox. */
+  /** For the single-image case only — sizes the box to the image's own
+   * aspect ratio so it fills the full card width with no cropping and no
+   * dead space, instead of a fixed box that would either crop or letterbox. */
   fitToImage?: boolean;
 }) {
-  const [wide, setWide] = useState(false);
   const [ratio, setRatio] = useState<number | null>(null);
   return (
     <button
       onClick={onClick}
       className={cn(
         "relative block hover:opacity-90 transition-opacity",
-        !fitToImage && wide && "bg-[var(--bg-soft)]",
         // A tall portrait screenshot (very common for this feed) or a wide
         // banner-style image both used to be able to fill up to 380px tall —
         // dominated the post next to plain text ("รูปตอนแนบในโพสใหญ่มาก").
@@ -1587,11 +1585,9 @@ function PostImageThumb({
             playsInline
             preload="metadata"
             onLoadedMetadata={(e) => {
-              const el = e.currentTarget;
-              if (el.videoWidth / el.videoHeight > 1.6) setWide(true);
-              if (fitToImage) setRatio(el.videoWidth / el.videoHeight);
+              if (fitToImage) setRatio(e.currentTarget.videoWidth / e.currentTarget.videoHeight);
             }}
-            className={cn("h-full w-full", !fitToImage && wide ? "object-contain" : "object-cover")}
+            className="h-full w-full object-cover"
           />
           <span className="absolute inset-0 flex items-center justify-center bg-black/25">
             <Play className="h-10 w-10 text-white drop-shadow" fill="white" />
@@ -1603,11 +1599,9 @@ function PostImageThumb({
           src={img.url ?? img.dataUrl}
           alt={img.name}
           onLoad={(e) => {
-            const el = e.currentTarget;
-            if (el.naturalWidth / el.naturalHeight > 1.6) setWide(true);
-            if (fitToImage) setRatio(el.naturalWidth / el.naturalHeight);
+            if (fitToImage) setRatio(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight);
           }}
-          className={cn("h-full w-full", !fitToImage && wide ? "object-contain" : "object-cover")}
+          className="h-full w-full object-cover"
         />
       )}
     </button>
