@@ -18,12 +18,16 @@ export const hrManifest: ModuleManifest = {
   basePath: "/hr",
   icon: "Users",
   menus: [
-    { label: "ภาพรวม", path: "/hr", permission: HR_PERMS.access, icon: "LayoutDashboard" },
+    /*
+     * หน้าแรกของโมดูล = การลงเวลาของวันนี้
+     *
+     * เดิมเป็นการ์ดสรุปผลคำนวณย้อนหลัง 30 วัน ซึ่งถูกตัดออกทั้งหมด — สิ่งที่คน
+     * เปิดโมดูลบุคคลอยากรู้ก่อนคือ "วันนี้ใครมาแล้ว ใครยังไม่มา" ไม่ใช่ยอดรวม
+     * ย้อนหลัง เมนู "การลงเวลา" เดิมจึงถูกยุบมารวมที่นี่ (/hr/attendance
+     * ยัง redirect มาให้ ลิงก์เก่าไม่พัง)
+     */
+    { label: "การลงเวลา", path: "/hr", permission: HR_PERMS.access, icon: "CalendarClock" },
     { label: "พนักงาน", path: "/hr/employees", permission: HR_PERMS.employeeView, icon: "Users" },
-    // เดิมแยกเป็น "การลงเวลา" (ข้อมูลดิบ) กับ "ผลลงเวลา" (ผลคำนวณ) — รวมแล้ว
-    // เพราะเป็นเรื่องเดียวกัน ข้อมูลดิบมีไว้เพื่อคำนวณเป็นผลอยู่ดี
-    // เปิดด้วย access เพราะพนักงานต้องเห็นว่าใครมาถึงกี่โมง
-    { label: "การลงเวลา", path: "/hr/attendance", permission: HR_PERMS.access, icon: "CalendarClock" },
     { label: "Timesheet", path: "/hr/timesheets", permission: HR_PERMS.employeeView, icon: "ClipboardList" },
     // ปฏิทินวันหยุดเปิดให้ทุกคนที่เข้าโมดูลได้ — พนักงานต้องขอลาเองและเห็นของเพื่อน
     { label: "ปฏิทินวันหยุด", path: "/hr/leave", permission: HR_PERMS.access, icon: "CalendarDays" },
