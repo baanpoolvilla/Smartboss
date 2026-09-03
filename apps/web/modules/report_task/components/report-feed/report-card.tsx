@@ -215,6 +215,23 @@ export function ReportCard({
         lateCutoffFor(p.createdAt, postDayCutoffs)?.id === lateCutoff.id &&
         new Date(p.createdAt).getTime() < new Date(post.createdAt).getTime()
     );
+  // Same dedup, mirrored for the positive badge — posting twice before the
+  // same round's deadline doesn't mean "on time" twice over, it means the
+  // round was already satisfied by whichever post got there first
+  // ("ถ้าส่งไปแล้วรอบ 2 จะไม่แสดงที่ขึ้นว่าส่งตรงรอบแล้วสิ"). Without this,
+  // every post that day kept re-confirming the same already-met deadline.
+  const isFirstOnTimeOfRound =
+    !onTimeCutoff ||
+    !allPosts.some(
+      (p) =>
+        p.id !== post.id &&
+        p.topicId === post.topicId &&
+        p.authorId === post.authorId &&
+        localDateStr(new Date(p.createdAt)) === localDateStr(new Date(post.createdAt)) &&
+        !lateCutoffFor(p.createdAt, postDayCutoffs) &&
+        onTimeCutoffFor(p.createdAt, postDayCutoffs)?.id === onTimeCutoff.id &&
+        new Date(p.createdAt).getTime() < new Date(post.createdAt).getTime()
+    );
 
   const [replyText, setReplyText] = useState("");
   const [replyImages, setReplyImages] = useState<ReportPostImage[]>([]);
@@ -915,7 +932,7 @@ export function ReportCard({
                 ส่งเกินกำหนด{lateCutoff.label.trim().length > 2 ? ` (${lateCutoff.label.trim()})` : ""} · กำหนด {lateCutoff.time}
               </span>
             </div>
-          ) : !lateCutoff && onTimeCutoff ? (
+          ) : !lateCutoff && onTimeCutoff && isFirstOnTimeOfRound ? (
             // The positive counterpart to "ส่งช้า" (C10) — without it, a
             // room with a schedule only ever showed a warning badge, never
             // confirmation that a post actually met it.
