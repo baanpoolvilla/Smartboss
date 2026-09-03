@@ -757,6 +757,17 @@ export function ReportTopicPanels({
 
         {fileFilter === "all" && (
           <div className="space-y-4">
+            {/* The room's own permanent file library (company-files) isn't
+                a documents-only shelf — its upload picker and the "เพิ่มเข้า
+                เอกสารของห้องนี้" button on any thumbnail both accept any
+                file kind, photos and clips included. Nesting it only under
+                the "เอกสาร" filter (as the "docs" branch below still does,
+                for whoever specifically wants the library view) meant a
+                photo saved there was invisible from "ทั้งหมด" and "รูปภาพ"
+                both — surfacing it here too, unconditionally like "docs"
+                does, so nothing saved into it goes missing from the one
+                filter meant to show everything. */}
+            <ReportTopicDocuments topicId={topic.id} topicName={topic.name} search={fileSearch} />
             {filterCounts.all === 0 ? (
               <TopicEmptyState
                 icon={LayoutGrid}

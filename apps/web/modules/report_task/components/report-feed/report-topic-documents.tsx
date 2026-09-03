@@ -2,17 +2,26 @@
 
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { FileIcon, FolderOpen, Upload } from "lucide-react";
+import { FolderOpen, Upload } from "lucide-react";
 import { listRoomFiles, addFileToRoomFolder } from "@/modules/company-files/data/files";
 import { uploadCompanyFile } from "@/modules/company-files/lib/upload";
 import { formatFileSize, fileIconKind } from "@/modules/company-files/lib/file-meta";
+import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
+import { attachmentKind } from "@/modules/report_task/lib/report-attachment-kind";
 import type { CompanyFile } from "@prisma/client";
 
 /**
- * "เอกสาร" ของห้องนี้ — คนละก้อนกับแกลเลอรีรูปด้านบน (ซึ่งดึงจากรูปที่แนบในโพสต์)
- * นี่คือเอกสารจริงที่อัปโหลดตรงเข้าโฟลเดอร์ที่ผูกกับห้องนี้ในไฟล์บริษัท เห็นเฉพาะ
- * คนที่ยังเป็นสมาชิกห้องอยู่ (บังคับจริงฝั่งเซิร์ฟเวอร์ ดู room-access-server.ts)
- * รายละเอียด/เวอร์ชัน/แชร์ ใช้หน้าเดิมของไฟล์บริษัทเลย ไม่ทำซ้ำที่นี่
+ * The room's permanent file library (company-files) — a separate pool from
+ * the rolling post-attachment gallery above, and NOT documents-only despite
+ * the label: its upload picker and the "เพิ่มเข้าเอกสารของห้องนี้" button on
+ * any post thumbnail both accept any file kind, photos and clips included
+ * ("มันเก็บทุกอย่างรูปอะไรก็ได้ทุกไฟล์วิดีโอด้วย"). So each row picks its
+ * render the same way the rest of the "ไฟล์" tab does — a real image/video
+ * thumbnail via ReportMediaThumb when the mime says so, a generic file row
+ * otherwise — rather than one file icon for everything regardless of kind.
+ * Only members of this room's own room can see it (enforced server-side,
+ * see room-access-server.ts). Detail/version history/sharing reuse the
+ * existing company-files pages rather than being rebuilt here.
  */
 export function ReportTopicDocuments({
   topicId,
@@ -73,7 +82,7 @@ export function ReportTopicDocuments({
         </p>
         <label className="shrink-0 flex items-center gap-1.5 rounded-full bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white text-xs font-medium px-3 py-1.5 transition-colors cursor-pointer">
           <Upload className="h-3.5 w-3.5" />
-          {isPending ? "กำลังอัปโหลด..." : "อัปโหลดเอกสาร"}
+          {isPending ? "กำลังอัปโหลด..." : "อัปโหลดไฟล์"}
           <input type="file" multiple className="hidden" disabled={isPending} onChange={(e) => handleUpload(e.target.files)} />
         </label>
       </div>
@@ -83,26 +92,33 @@ export function ReportTopicDocuments({
       {files === null ? (
         <p className="text-xs text-[var(--ink-soft)]">กำลังโหลด...</p>
       ) : files.length === 0 ? (
-        <p className="text-xs text-[var(--ink-soft)]">ยังไม่มีเอกสารในห้องนี้ — เห็นเฉพาะคนในห้องนี้เท่านั้น</p>
+        <p className="text-xs text-[var(--ink-soft)]">ยังไม่มีไฟล์ในห้องนี้ — เห็นเฉพาะคนในห้องนี้เท่านั้น</p>
       ) : visibleFiles.length === 0 ? (
-        <p className="text-xs text-[var(--ink-soft)]">ไม่มีเอกสารตรงกับคำค้น</p>
+        <p className="text-xs text-[var(--ink-soft)]">ไม่มีไฟล์ตรงกับคำค้น</p>
       ) : (
         <div className="flex flex-col gap-1">
-          {visibleFiles.map((f) => (
-            <Link
-              key={f.id}
-              href={`/company-files/file/${f.id}`}
-              className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-[var(--bg-soft)] transition-colors"
-            >
-              <FileIcon className="h-4 w-4 shrink-0 text-[var(--ink-soft)]" />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm truncate">{f.name}</p>
-                <p className="text-[11px] text-[var(--ink-soft)]">
-                  {formatFileSize(f.size)} · {fileIconKind(f.mimeType)} · v{f.currentVersion}
-                </p>
-              </div>
-            </Link>
-          ))}
+          {visibleFiles.map((f) => {
+            const isMedia = attachmentKind(f.mimeType) !== "doc";
+            return (
+              <Link
+                key={f.id}
+                href={`/company-files/file/${f.id}`}
+                className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-[var(--bg-soft)] transition-colors"
+              >
+                <ReportMediaThumb
+                  media={{ url: f.storageKey, name: f.name, mime: f.mimeType, size: f.size }}
+                  fileChipVariant="icon"
+                  className={isMedia ? "h-8 w-8 shrink-0 rounded-md object-cover" : "h-8 w-8 shrink-0"}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm truncate">{f.name}</p>
+                  <p className="text-[11px] text-[var(--ink-soft)]">
+                    {formatFileSize(f.size)} · {fileIconKind(f.mimeType)} · v{f.currentVersion}
+                  </p>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>
