@@ -35,6 +35,7 @@ import {
   type ReportTopic,
 } from "@/modules/report_task/store/report-feed-store";
 import { cutoffsOnDay, lateCutoffFor, minImagesNow, onTimeCutoffFor } from "@/modules/report_task/lib/report-cutoff";
+import { roundsForUserOnDay } from "@/modules/report_task/lib/submission-rounds";
 import { localDateStr } from "@/modules/report_task/lib/now";
 import {
   bulletsTextToHtml,
@@ -177,6 +178,7 @@ export function ReportCard({
   const toggleSave = useReportFeedStore((s) => s.toggleSave);
   const toggleUnread = useReportFeedStore((s) => s.toggleUnread);
   const setPostLinkedTask = useReportFeedStore((s) => s.setPostLinkedTask);
+  const submitterGroups = useReportFeedStore((s) => s.submitterGroups);
   const allTags = useReportTagStore((s) => s.tags);
   const postTags = allTags.filter((t) => post.tagIds.includes(t.id));
   const author = getUser(post.authorId);
@@ -185,7 +187,13 @@ export function ReportCard({
   const isSaved = post.savedBy.includes(viewingAsUserId);
   const isUnread = post.unreadFor.includes(viewingAsUserId);
   const postDay = localDateStr(new Date(post.createdAt));
-  const postDayCutoffs = cutoffsOnDay(topic, postDay);
+  // Scoped to this post's own author, not just "some cutoff was active that
+  // day" — a round only obligates the people it actually names as
+  // submitters (that's the entire point of "แยกผู้ต้องส่งออกจากผู้เห็นห้อง").
+  // Badging anyone who happens to post — an admin doing QA, a manager just
+  // dropping a note — as "✓ ตรงเวลา" implied they'd fulfilled an obligation
+  // they never had ("ทำไมคนอื่นขึ้นแบบนี้ด้วยละ ต้องขึ้นเฉพาะคนที่ต้องส่ง").
+  const postDayCutoffs = roundsForUserOnDay(topic, post.authorId, postDay, submitterGroups);
   const lateCutoff = lateCutoffFor(post.createdAt, postDayCutoffs);
   const onTimeCutoff = !lateCutoff ? onTimeCutoffFor(post.createdAt, postDayCutoffs) : null;
   const allPosts = useReportFeedStore((s) => s.posts);
