@@ -157,6 +157,41 @@ export interface ReportCutoff {
   minImages?: number;
 }
 
+export interface SubmitterRule {
+  /** everyone = ทุกคนที่เห็นห้อง (canSeeReportTopic) — ค่าเริ่มต้น เท่าพฤติกรรมเดิม */
+  mode: "everyone" | "groups" | "departments" | "people";
+  /** ใช้เมื่อ mode = groups — อ้าง SubmitterGroup */
+  groupIds?: string[];
+  /** ใช้เมื่อ mode = departments */
+  departmentIds?: string[];
+  /** ใช้เมื่อ mode = people */
+  userIds?: string[];
+  /** เพิ่มรายคน "ทับ" ทุก mode */
+  addUserIds?: string[];
+  /** ตัดรายคน "ทับ" ทุก mode */
+  removeUserIds?: string[];
+}
+
+/** 1 รอบส่งของห้อง — ใคร + กี่โมง + วันไหน + รูปกี่ใบ มัดในก้อนเดียว. "คนละเวลา" = คนละรอบ */
+export interface SubmissionRound {
+  id: string;
+  label: string;
+  /** "HH:mm" เวลาปิดรอบ — เลยจากนี้ = สาย */
+  time: string;
+  /** 0=อา..6=ส · undefined/ว่าง = ทุกวัน */
+  weekdays?: number[];
+  /** ต่อรอบ · undefined = ใช้ค่า topic.minImages */
+  minImages?: number;
+  submitters: SubmitterRule;
+}
+
+/** กลุ่มผู้ส่งที่ตั้งเอง ใช้ซ้ำข้ามห้องได้ — นิยามจาก "หน้าที่ส่ง" ไม่ใช่ผังองค์กร */
+export interface SubmitterGroup {
+  id: string;
+  name: string;
+  userIds: string[];
+}
+
 /**
  * Who can see/post in a room. Undefined (or both fields empty) = everyone —
  * matches how every topic behaved before this existed, so old/persisted
@@ -248,6 +283,8 @@ export interface ReportTopic {
   notifyManagerSummary?: boolean;
   /** Per-viewer "which posts in this room notify me" — undefined = "all" (today's behavior). Same per-viewer-map shape as `hiddenBy`/`favoritedBy`. Saved for whenever notification delivery reads it; doesn't suppress anything yet. */
   notifyPreference?: Record<string, "all" | "mentions" | "off">;
+  /** รอบส่ง — คนต้องส่ง+เวลา+วัน แยกจาก visibility. undefined/ว่าง = ห้องนี้ไม่มีใครต้องส่ง (ไม่หัก/ไม่นับ). ถ้าไม่มี ใช้ path เดิม (cutoffs+requiredWeekdays+exemptUserIds). */
+  submissionRounds?: SubmissionRound[];
 }
 
 /**
@@ -276,7 +313,8 @@ export function normalizeReportFeedSlice(slice: {
   posts?: ReportPost[];
   albums?: ReportAlbum[];
   pinnedLinks?: ReportPinnedLink[];
-}): { topics: ReportTopic[]; posts: ReportPost[]; albums: ReportAlbum[]; pinnedLinks: ReportPinnedLink[] } {
+  submitterGroups?: SubmitterGroup[];
+}): { topics: ReportTopic[]; posts: ReportPost[]; albums: ReportAlbum[]; pinnedLinks: ReportPinnedLink[]; submitterGroups: SubmitterGroup[] } {
   return {
     topics: (slice.topics ?? []).map((t) => ({
       ...t,
@@ -299,6 +337,7 @@ export function normalizeReportFeedSlice(slice: {
     })),
     albums: slice.albums ?? [],
     pinnedLinks: slice.pinnedLinks ?? [],
+    submitterGroups: slice.submitterGroups ?? [],
   };
 }
 
@@ -347,6 +386,7 @@ interface ReportFeedStore {
   posts: ReportPost[];
   albums: ReportAlbum[];
   pinnedLinks: ReportPinnedLink[];
+  submitterGroups: SubmitterGroup[];
   /** True once ServerStoreSync's initial GET has resolved. */
   loaded: boolean;
   addTopic: (data: {
@@ -382,6 +422,7 @@ interface ReportFeedStore {
       archived?: boolean;
       remindBeforeCutoffMinutes?: number;
       notifyManagerSummary?: boolean;
+      submissionRounds?: SubmissionRound[];
     }
   ) => void;
   /** Per-viewer notification preference for one room — same "map keyed by
@@ -436,6 +477,9 @@ interface ReportFeedStore {
   pinLink: (topicId: string, url: string, title: string, userId: string) => string;
   renamePinnedLink: (id: string, title: string) => void;
   unpinLink: (id: string) => void;
+  /** สร้าง/แก้กลุ่มผู้ส่ง (ใช้ซ้ำข้ามห้อง) */
+  upsertSubmitterGroup: (group: SubmitterGroup) => void;
+  removeSubmitterGroup: (id: string) => void;
 }
 
 // Server-synced via ServerStoreSync (apiKey "report-feed") in
@@ -446,6 +490,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
       posts: [],
       albums: [],
       pinnedLinks: [],
+      submitterGroups: [],
       loaded: false,
       addTopic: (data) => {
         const id = nextId("topic");
@@ -487,6 +532,14 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         set((s) => ({
           topics: s.topics.map((t) => (t.id === id ? { ...t, ...patch } : t)),
         })),
+      upsertSubmitterGroup: (group) =>
+        set((s) => ({
+          submitterGroups: s.submitterGroups.some((g) => g.id === group.id)
+            ? s.submitterGroups.map((g) => (g.id === group.id ? group : g))
+            : [...s.submitterGroups, group],
+        })),
+      removeSubmitterGroup: (id) =>
+        set((s) => ({ submitterGroups: s.submitterGroups.filter((g) => g.id !== id) })),
       addPost: (topicId, authorId, data) => {
         // Anyone @mentioned in the post gets a distinct "tagged you" notice —
         // same phrasing as the meeting-attendee tag elsewhere — instead of
