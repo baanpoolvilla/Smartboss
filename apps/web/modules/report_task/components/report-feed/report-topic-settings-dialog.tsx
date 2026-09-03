@@ -5,14 +5,35 @@ import { Button } from "@/modules/report_task/components/ui/button";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Label } from "@/modules/report_task/components/ui/label";
 import { RoomMembersSummaryCard, RoomMembersDialog } from "@/modules/report_task/components/report-feed/room-members-dialog";
-import { useReportFeedStore, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
+import { useReportFeedStore, type ReportTopic, type SubmissionRound } from "@/modules/report_task/store/report-feed-store";
+import { SubmissionRoundDialog } from "@/modules/report_task/components/report-feed/submission-round-dialog";
+import { resolvedSubmittersOfTopic } from "@/modules/report_task/lib/submission-rounds";
+import { users as allUsers } from "@/modules/report_task/lib/directory";
 import { departments, getUser, isOwner } from "@/modules/report_task/lib/directory";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { topicModeOf } from "@/modules/report_task/lib/report-topic-membership";
 import { cn } from "@/modules/report_task/lib/utils";
-import { Check, Globe, ImagePlus, Lock, Minus, Plus, Trash2, User, Users } from "lucide-react";
+import { Check, Clock, Globe, ImagePlus, Lock, Minus, Pencil, Plus, Trash2, User, Users, UserCheck } from "lucide-react";
 
 const MAX_REQUIRED_IMAGES = 6;
+
+const WD = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
+function daysLabel(w?: number[]): string {
+  if (!w || w.length === 0) return "ทุกวัน";
+  return w.slice().sort((a, b) => a - b).map((d) => WD[d]).join(" ");
+}
+function whoLabel(r: SubmissionRound, groups: { id: string; name: string }[]): string {
+  const s = r.submitters;
+  let base: string;
+  if (s.mode === "everyone") base = "ทุกคนในห้อง";
+  else if (s.mode === "groups") base = "กลุ่ม: " + (s.groupIds ?? []).map((id) => groups.find((g) => g.id === id)?.name ?? "?").join(", ");
+  else if (s.mode === "departments") base = "แผนก: " + (s.departmentIds ?? []).map((id) => departments.find((d) => d.id === id)?.name ?? "?").join(", ");
+  else base = (s.userIds?.length ?? 0) + " คน";
+  const extra: string[] = [];
+  if (s.addUserIds?.length) extra.push("+" + s.addUserIds.length);
+  if (s.removeUserIds?.length) extra.push("\u2212" + s.removeUserIds.length);
+  return base + (extra.length ? " (" + extra.join(" ") + ")" : "");
+}
 
 function ImageCountStepper({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
@@ -70,6 +91,9 @@ export function ReportTopicSettingsPanel({
   const [newLabel, setNewLabel] = useState("");
   const [newTime, setNewTime] = useState("09:00");
   const [membersDialogOpen, setMembersDialogOpen] = useState(false);
+  const submitterGroups = useReportFeedStore((s) => s.submitterGroups);
+  const [roundDialogOpen, setRoundDialogOpen] = useState(false);
+  const [editingRound, setEditingRound] = useState<SubmissionRound | null>(null);
   // "Who can see this room" (mode, departments, members) always saves
   // straight to the store the instant you change it — same "own explicit
   // actions, not a form field to batch" reasoning the member dialog already
@@ -146,6 +170,27 @@ export function ReportTopicSettingsPanel({
   function setCutoffMinImages(id: string, value: number | undefined) {
     apply({
       cutoffs: topic.cutoffs.map((c) => (c.id === id ? { ...c, minImages: value } : c)),
+    });
+  }
+
+  const rounds = topic.submissionRounds ?? [];
+  function saveRound(round: SubmissionRound) {
+    const exists = rounds.some((r) => r.id === round.id);
+    apply({ submissionRounds: exists ? rounds.map((r) => (r.id === round.id ? round : r)) : [...rounds, round] });
+  }
+  function removeRound(id: string) {
+    apply({ submissionRounds: rounds.filter((r) => r.id !== id) });
+  }
+  function convertLegacy() {
+    apply({
+      submissionRounds: topic.cutoffs.map((c) => ({
+        id: `round-${crypto.randomUUID()}`,
+        label: c.label,
+        time: c.time,
+        minImages: c.minImages,
+        weekdays: topic.requiredWeekdays,
+        submitters: { mode: "everyone", removeUserIds: visibility?.exemptUserIds ?? [] } as SubmissionRound["submitters"],
+      })),
     });
   }
 
@@ -324,6 +369,74 @@ export function ReportTopicSettingsPanel({
             โพสต์ที่ส่งหลังเวลาที่กำหนดจะขึ้นป้าย &quot;ส่งช้า&quot; สีเตือนบนโพสต์ — ไม่บล็อกการโพสต์
           </p>
         </div>
+
+        <div className="space-y-2">
+          <div>
+            <Label className="text-xs text-[var(--ink-soft)]">รอบส่ง — ใครต้องส่ง + กี่โมง</Label>
+            <p className="text-[11px] text-[var(--ink-soft)]">แยกจาก &quot;ใครเห็นห้อง&quot; — เว้นว่าง = ไม่มีใครต้องส่ง ไม่หัก/ไม่นับ</p>
+          </div>
+
+          {rounds.length > 0 && (
+            <div className="space-y-1.5">
+              {rounds.map((r) => (
+                <div key={r.id} className="rounded-lg border border-[var(--line)] p-2 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{r.label}</span>
+                    <span className="flex items-center gap-1 rounded-full bg-[var(--accent)] px-2 py-0.5 text-[11px] font-medium text-[var(--brand-green-dark)]">
+                      <Clock className="h-3 w-3" />ก่อน {r.time}
+                    </span>
+                    <span className="rounded-full bg-[var(--bg-soft)] px-2 py-0.5 text-[11px] text-[var(--ink-soft)]">{daysLabel(r.weekdays)}</span>
+                    <div className="ml-auto flex items-center gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => { setEditingRound(r); setRoundDialogOpen(true); }} aria-label={`แก้รอบ ${r.label}`}>
+                        <Pencil className="h-3.5 w-3.5 text-[var(--ink-soft)]" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => removeRound(r.id)} aria-label={`ลบรอบ ${r.label}`}>
+                        <Trash2 className="h-4 w-4 text-[var(--ink-soft)]" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[11px] text-[var(--ink-soft)]">
+                    <Users className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{whoLabel(r, submitterGroups)}</span>
+                    {(r.minImages ?? topic.minImages) > 0 && <span className="shrink-0">· รูป ≥ {r.minImages ?? topic.minImages}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <Button variant="outline" size="sm" className="w-full" onClick={() => { setEditingRound(null); setRoundDialogOpen(true); }}>
+            <Plus className="mr-1 h-3.5 w-3.5" />เพิ่มรอบส่ง
+          </Button>
+
+          {rounds.length === 0 && topic.cutoffs.length > 0 && (
+            <Button variant="ghost" size="sm" className="w-full text-[var(--brand-green-dark)]" onClick={convertLegacy}>
+              แปลงรอบตัดยอดเดิม ({topic.cutoffs.length}) เป็นรอบส่ง
+            </Button>
+          )}
+
+          {rounds.length > 0 && (() => {
+            const ids = resolvedSubmittersOfTopic(memberTopic, submitterGroups);
+            const names = ids.map((id) => allUsers.find((u) => u.id === id)?.name ?? "?");
+            return (
+              <div className="rounded-lg bg-[var(--bg-soft)] p-2.5">
+                <div className="flex items-center gap-1.5 text-xs font-semibold">
+                  <UserCheck className="h-3.5 w-3.5 text-[var(--tone-ok)]" />คนที่ต้องส่งจริงในห้องนี้ · {ids.length} คน
+                </div>
+                {names.length > 0 && <p className="mt-1 text-[11px] text-[var(--ink-soft)]">{names.slice(0, 12).join(", ")}{names.length > 12 ? ` +${names.length - 12}` : ""}</p>}
+                <p className="mt-1 flex items-center gap-1 text-[11px] text-[var(--ink-soft)]"><Check className="h-3 w-3 text-[var(--tone-ok)]" />คนลา/หยุดวันนั้นระบบไม่นับให้อัตโนมัติ</p>
+              </div>
+            );
+          })()}
+        </div>
+
+        <SubmissionRoundDialog
+          open={roundDialogOpen}
+          onOpenChange={setRoundDialogOpen}
+          initial={editingRound}
+          roomDefaultMinImages={topic.minImages}
+          onSave={saveRound}
+        />
       </div>
   );
 }
