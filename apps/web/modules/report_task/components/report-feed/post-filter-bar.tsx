@@ -4,8 +4,10 @@ import { useState } from "react";
 import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import type { ReportTag } from "@/modules/report_task/store/report-tag-store";
 import { displayName } from "@/modules/report_task/lib/directory";
-import { cutoffsOnDay, lateCutoffFor } from "@/modules/report_task/lib/report-cutoff";
+import { lateCutoffFor } from "@/modules/report_task/lib/report-cutoff";
+import { roundsForUserOnDay } from "@/modules/report_task/lib/submission-rounds";
 import { localDateStr } from "@/modules/report_task/lib/now";
+import type { SubmitterGroup } from "@/modules/report_task/store/report-feed-store";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
@@ -51,7 +53,7 @@ export function postFiltersActiveCount(f: PostFilters): number {
 export function filterPosts(
   posts: ReportPost[],
   filters: PostFilters,
-  opts: { topicOf: (post: ReportPost) => ReportTopic | undefined; viewingAsUserId: string }
+  opts: { topicOf: (post: ReportPost) => ReportTopic | undefined; viewingAsUserId: string; submitterGroups: SubmitterGroup[] }
 ): ReportPost[] {
   if (postFiltersActiveCount(filters) === 0) return posts;
   return posts.filter((p) => {
@@ -65,7 +67,12 @@ export function filterPosts(
     if (filters.savedOnly && !p.savedBy.includes(opts.viewingAsUserId)) return false;
     if (filters.lateOnly) {
       const topic = opts.topicOf(p);
-      if (!topic || !lateCutoffFor(p.createdAt, cutoffsOnDay(topic, localDateStr(new Date(p.createdAt))))) return false;
+      // Scoped to the post's own author (not "any cutoff was active"), same
+      // reasoning as the on-time badge on the card itself — a round's
+      // deadline only binds the people it names, so a post from someone
+      // outside that list was never "late" to begin with.
+      const dayCutoffs = topic ? roundsForUserOnDay(topic, p.authorId, localDateStr(new Date(p.createdAt)), opts.submitterGroups) : [];
+      if (!topic || !lateCutoffFor(p.createdAt, dayCutoffs)) return false;
     }
     return true;
   });

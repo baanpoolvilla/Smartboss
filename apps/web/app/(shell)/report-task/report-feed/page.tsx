@@ -147,6 +147,7 @@ function ReportFeedSkeleton() {
 function ReportFeedPageInner() {
   const topics = useReportFeedStore((s) => s.topics);
   const posts = useReportFeedStore((s) => s.posts);
+  const submitterGroups = useReportFeedStore((s) => s.submitterGroups);
   const reportTags = useReportTagStore((s) => s.tags);
   const togglePin = useReportFeedStore((s) => s.togglePin);
   const updateTopicSettings = useReportFeedStore((s) => s.updateTopicSettings);
@@ -358,7 +359,7 @@ function ReportFeedPageInner() {
   // Filter bar (1.3) only narrows the main feed — tab counts/pinned strip
   // above still reflect the room's real totals, not "what's visible right now".
   const filteredTopicPosts = activeTopic
-    ? filterPosts(topicPosts, filters, { topicOf: () => activeTopic, viewingAsUserId })
+    ? filterPosts(topicPosts, filters, { topicOf: () => activeTopic, viewingAsUserId, submitterGroups })
     : topicPosts;
 
   // R5 — a count per tab, so it's obvious there's something to look at
