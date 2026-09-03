@@ -34,7 +34,7 @@ import {
   type ReportPostReply,
   type ReportTopic,
 } from "@/modules/report_task/store/report-feed-store";
-import { lateCutoffFor, minImagesNow, onTimeCutoffFor } from "@/modules/report_task/lib/report-cutoff";
+import { cutoffsOnDay, lateCutoffFor, minImagesNow, onTimeCutoffFor } from "@/modules/report_task/lib/report-cutoff";
 import { localDateStr } from "@/modules/report_task/lib/now";
 import {
   bulletsTextToHtml,
@@ -184,8 +184,10 @@ export function ReportCard({
   const isOwn = post.authorId === viewingAsUserId;
   const isSaved = post.savedBy.includes(viewingAsUserId);
   const isUnread = post.unreadFor.includes(viewingAsUserId);
-  const lateCutoff = lateCutoffFor(post.createdAt, topic.cutoffs);
-  const onTimeCutoff = !lateCutoff ? onTimeCutoffFor(post.createdAt, topic.cutoffs) : null;
+  const postDay = localDateStr(new Date(post.createdAt));
+  const postDayCutoffs = cutoffsOnDay(topic, postDay);
+  const lateCutoff = lateCutoffFor(post.createdAt, postDayCutoffs);
+  const onTimeCutoff = !lateCutoff ? onTimeCutoffFor(post.createdAt, postDayCutoffs) : null;
   const allPosts = useReportFeedStore((s) => s.posts);
   // Once you're past a cutoff, *every* post you make that day gets flagged
   // "ส่งช้า" — technically true of each one, but posting twice just repeated
@@ -202,7 +204,7 @@ export function ReportCard({
         p.topicId === post.topicId &&
         p.authorId === post.authorId &&
         localDateStr(new Date(p.createdAt)) === localDateStr(new Date(post.createdAt)) &&
-        lateCutoffFor(p.createdAt, topic.cutoffs)?.id === lateCutoff.id &&
+        lateCutoffFor(p.createdAt, postDayCutoffs)?.id === lateCutoff.id &&
         new Date(p.createdAt).getTime() < new Date(post.createdAt).getTime()
     );
 
@@ -1666,7 +1668,7 @@ function EditPostForm({
   const [tagIds, setTagIds] = useState<string[]>(post.tagIds);
   const [busy, setBusy] = useState(false);
 
-  const minImagesRequired = minImagesNow(topic);
+  const minImagesRequired = minImagesNow({ minImages: topic.minImages, cutoffs: cutoffsOnDay(topic, localDateStr(new Date())) });
   const missingRequiredImage = photoCount(images) < minImagesRequired;
 
   async function handleFiles(files: FileList | null) {
