@@ -347,6 +347,43 @@ export class LeaveService {
         reason: 'reserved on submission',
       });
 
+      // อนุมัติทันที = ต้องปิดบัญชีให้ครบเหมือนเส้นทางที่ผ่านการกดอนุมัติจริง
+      //
+      // เดิมเส้นทางนี้ตั้งสถานะเป็น APPROVED แต่ลงบัญชีแค่ RESERVE ทำให้ใบลาที่
+      // อนุมัติอัตโนมัติค้างอยู่ในช่อง "จองไว้" ตลอดกาล ไม่เคยย้ายไป "ใช้ไปแล้ว"
+      // ยอดคงเหลือยังถูก (ทั้งสองช่องถูกหักออกจากสิทธิ์เหมือนกัน) แต่การแยกช่อง
+      // ในรายงานผิด และโค้ดอื่นที่เชื่อว่า "APPROVED แปลว่าตัดสิทธิ์แล้ว" ก็คิดผิดตาม
+      // (เช่นการสลับวันหยุด ที่กลับรายการผิดชนิดจนยอดจองไม่ถูกคืน)
+      //
+      // ลงคู่ RELEASE + CONSUME เหมือน decideRequest ทุกประการ เพื่อให้ได้
+      // ข้อกำหนดที่ยึดถือได้ทั้งระบบ: สถานะ APPROVED ⇒ ปลดจองแล้ว และตัดสิทธิ์แล้ว
+      if (swapFromRequest === undefined && leaveType.autoApprove) {
+        await uow.tx.insert(schema.leaveBalanceLedger).values({
+          id: uuidv7(),
+          tenantId: uow.tenantId,
+          employmentId: input.employment_id,
+          leaveTypeId: input.leave_type_id,
+          entryType: 'RELEASE',
+          minutes: input.total_minutes,
+          effectiveOn: input.starts_on,
+          periodYear,
+          leaveRequestId: requestId,
+          reason: 'release on auto-approve',
+        });
+        await uow.tx.insert(schema.leaveBalanceLedger).values({
+          id: uuidv7(),
+          tenantId: uow.tenantId,
+          employmentId: input.employment_id,
+          leaveTypeId: input.leave_type_id,
+          entryType: 'CONSUME',
+          minutes: -input.total_minutes,
+          effectiveOn: input.starts_on,
+          periodYear,
+          leaveRequestId: requestId,
+          reason: 'consumed on auto-approve',
+        });
+      }
+
       await uow.audit({
         action: 'leave.request.submit',
         resourceType: 'leave_request',
@@ -447,12 +484,17 @@ export class LeaveService {
         // ถ้าใบเดิมหายไปแล้ว (เช่นถูกยกเลิกเองระหว่างรออนุมัติ) ไม่ต้องทำอะไรต่อ
         if (oldRequest !== undefined) {
           const oldPeriodYear = LocalDate.parse(oldRequest.startsOn).year;
+          // ใบเดิมอนุมัติแล้ว = ตัดสิทธิ์ไปแล้ว ต้อง "ยกเลิกการตัด" ไม่ใช่โปะคืน
+          // เข้าโควตา — การสลับไม่ได้ทำให้ได้วันเพิ่ม แค่ย้ายวันเท่านั้น ถ้าใช้
+          // REVERSAL (ซึ่งบวกเข้า granted) ยอด "สิทธิ์ที่ได้รับ" จะพองขึ้นทุกครั้ง
+          // ที่มีคนสลับวัน และยอด "ใช้ไปแล้ว" จะนับซ้ำทั้งวันเก่าและวันใหม่
+          // ยังไม่อนุมัติ = ยังแค่จองไว้ ปลดจองด้วย RELEASE ตามเดิม
           await uow.tx.insert(schema.leaveBalanceLedger).values({
             id: uuidv7(),
             tenantId: uow.tenantId,
             employmentId: oldRequest.employmentId,
             leaveTypeId: oldRequest.leaveTypeId,
-            entryType: oldRequest.status === 'APPROVED' ? 'REVERSAL' : 'RELEASE',
+            entryType: oldRequest.status === 'APPROVED' ? 'CONSUME' : 'RELEASE',
             minutes: oldRequest.totalMinutes,
             effectiveOn: oldRequest.startsOn,
             periodYear: oldPeriodYear,

@@ -145,11 +145,34 @@ export class LeaveController {
     return this.service.decideRequest(requireUuid(requestId, 'requestId'), body);
   }
 
+  /** ยกเลิกใบลาของตัวเอง — สิทธิ์เดียวกับที่ใช้ยื่น */
   @Post('leave-requests/:requestId/cancel')
   @HttpCode(200)
   @RequirePermissions('workforce.leave.request')
   @Idempotent()
   async cancel(
+    @Param('requestId') requestId: string,
+    @Body(zodPipe(cancelLeaveSchema)) body: z.infer<typeof cancelLeaveSchema>,
+  ): Promise<Record<string, unknown>> {
+    return this.service.cancelRequest(requireUuid(requestId, 'requestId'), body.reason);
+  }
+
+  /**
+   * ยกเลิกใบลาแทนคนอื่น — ฝ่ายบุคคล/หัวหน้าที่มีสิทธิ์อนุมัติ
+   *
+   * แยก endpoint ไม่ใช่ทำ guard ให้รับแบบ OR ตามข้อตกลงใน shared/decorators.ts
+   * ("ถ้าต้องการ OR ให้แยกเป็นคนละ endpoint") — และแยกแล้วดีกว่าจริงตรงที่
+   * audit log บอกได้ทันทีว่าเป็นการยกเลิกของตัวเองหรือยกเลิกแทนคนอื่น
+   *
+   * ต้องมีเส้นทางนี้เพราะบทบาทฝ่ายบุคคล (HR_OFFICER) จงใจไม่มีสิทธิ์ประเภท
+   * self-service เลย — คนคนหนึ่งถือสองบทบาท: EMPLOYEE สำหรับเรื่องของตัวเอง
+   * และ HR_OFFICER สำหรับงานบริหาร ฝ่ายบุคคลจึงยิงเส้นทาง /cancel ไม่ได้
+   */
+  @Post('leave-requests/:requestId/cancel-for')
+  @HttpCode(200)
+  @RequirePermissions('workforce.leave.approve')
+  @Idempotent()
+  async cancelFor(
     @Param('requestId') requestId: string,
     @Body(zodPipe(cancelLeaveSchema)) body: z.infer<typeof cancelLeaveSchema>,
   ): Promise<Record<string, unknown>> {

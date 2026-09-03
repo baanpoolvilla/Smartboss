@@ -400,12 +400,22 @@ describe('leave balance ledger', () => {
     });
     const requestId = request.body['id'] as string;
 
-    const response = await call(harness, 'POST', `/leave-requests/${requestId}/cancel`, {
+    // ฝ่ายบุคคลยกเลิกแทนคนอื่นต้องใช้เส้นทาง cancel-for — เส้นทาง cancel ธรรมดา
+    // ต้องมี workforce.leave.request ซึ่งเป็นสิทธิ์ self-service ที่บทบาท
+    // HR_OFFICER จงใจไม่มี (ถือ EMPLOYEE ควบต่างหากสำหรับเรื่องของตัวเอง)
+    const response = await call(harness, 'POST', `/leave-requests/${requestId}/cancel-for`, {
       token: hrToken,
       idempotencyKey: uuidv4(),
       payload: { reason: 'ฝ่ายบุคคลยกเลิกให้' },
     });
     expect(response.status).toBe(200);
+
+    const denied = await call(harness, 'POST', `/leave-requests/${requestId}/cancel`, {
+      token: hrToken,
+      idempotencyKey: uuidv4(),
+      payload: { reason: 'ไม่ควรผ่านเส้นทางนี้' },
+    });
+    expect(denied.status).toBe(403);
   });
 
   it('lets an employee list only their own leave requests via /me/leave-requests', async () => {
