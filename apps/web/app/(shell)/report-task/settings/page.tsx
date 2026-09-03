@@ -13,6 +13,7 @@ import { AttachmentSettingsPanel } from "@/modules/report_task/components/shared
 import { ProjectTopicSettingsPanel } from "@/modules/report_task/components/shared/project-topic-settings-panel";
 import { ReportTagSettingsPanel } from "@/modules/report_task/components/shared/report-tag-settings-panel";
 import { ReportAttachmentSettingsPanel } from "@/modules/report_task/components/shared/report-attachment-settings-panel";
+import { SubmissionSummaryPanel } from "@/modules/report_task/components/report-feed/submission-summary-panel";
 import { LeaveTypeSettingsPanel } from "@/modules/report_task/components/calendar/leave-type-settings-dialog";
 import { RoutineDayOffSettingsPanel } from "@/modules/report_task/components/calendar/routine-dayoff-settings-dialog";
 import { LeaveSummaryPanel } from "@/modules/report_task/components/calendar/leave-summary-panel";
@@ -151,6 +152,7 @@ function SettingsPageInner() {
     ],
     report: [
       { key: "reportRoom", label: "ตั้งค่าห้อง", icon: MessageSquareText },
+      { key: "summary", label: "ภาพรวมการส่ง", icon: CalendarCheck2 },
       { key: "tags", label: "จัดการแท็ก", icon: Tag },
       { key: "attachments", label: "ไฟล์แนบ", icon: Paperclip },
     ],
@@ -302,6 +304,7 @@ function SettingsPageInner() {
                   </Link>
                 </>
               )}
+              {sectionKey === "summary" && <SubmissionSummaryPanel />}
               {sectionKey === "tags" && <ReportTagSettingsPanel />}
               {sectionKey === "attachments" && <ReportAttachmentSettingsPanel />}
             </section>
