@@ -68,6 +68,16 @@ export const OPERATIONAL_ROUTES: readonly Omit<RouteDefinition, 'response'>[] = 
     successStatus: 200,
   },
   {
+    operationId: 'listDayTimeline_get',
+    method: 'get',
+    path: '/time-events',
+    summary: 'GET /time-events',
+    tag: 'attendance',
+    permissions: [] as Permission[],
+    idempotent: false,
+    successStatus: 200,
+  },
+  {
     operationId: 'listTimeEventBoard_get',
     method: 'get',
     path: '/time-event-board',

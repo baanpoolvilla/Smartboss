@@ -9,7 +9,9 @@ import {
   type Paged,
   type RawTimeEvent,
   type RecurringPattern,
+  type TimeEvent,
 } from "@/modules/hr/lib/api";
+import { AttendanceTimeline } from "@/modules/hr/components/attendance-timeline";
 import {
   DataTable,
   EmptyState,
@@ -91,7 +93,7 @@ export default async function AttendancePage({
         // วินาที การรอให้จบก่อนเรนเดอร์ทำให้หน้านี้ค้างทุกครั้งที่เปิด
         void autoRecalculateAttendance(from, to);
 
-        const [summary, employments, exceptions, board, raw, shifts, todayAssignments] =
+        const [summary, employments, exceptions, board, timeline, raw, shifts, todayAssignments] =
           await Promise.all([
             wfTry<AttendanceSummary>(`/attendance-summary?from=${from}&to=${to}`),
             wfTry<Paged<Employment>>("/employments"),
@@ -112,6 +114,8 @@ export default async function AttendancePage({
                 late_minutes: number;
               }[];
             }>(`/time-event-board?date=${today}`),
+            // การตอกบัตรทีละครั้งของวันนี้ — ข้อมูลของ Timeline ด้านบนสุด
+            wfTry<{ items: TimeEvent[] }>(`/time-events?date=${today}`),
             // รายละเอียดสำหรับผู้ดูแล (คะแนน/slot/แถวที่จับคู่ไม่ได้)
             wfTry<{ items: RawTimeEvent[] }>(
               `/raw-time-events?from=${from}&to=${to}&limit=300`,
@@ -248,10 +252,16 @@ export default async function AttendancePage({
 
         return (
           <>
+            {/*
+              Timeline — เห็นทุกครั้งที่มีคนตอกบัตร ไม่ใช่แค่ครั้งแรก/ครั้งสุดท้าย
+              ของแต่ละคนแบบตารางเดิม ซึ่งทำให้การตอกระหว่างวัน (พัก/ออกไปไซต์งาน
+              แล้วกลับ) หายไปหมด และไม่มีทางรู้ว่าแต่ละครั้งลงผ่านช่องทางไหน
+            */}
             <SectionCard
               title={`การลงเวลาวันนี้ · ${activePeople.length} คน`}
               description={[
-                `สแกนแล้ว ${arrivals.length} คน`,
+                `ลงเวลาแล้ว ${arrivals.length} คน`,
+                `${timeline?.items.length ?? 0} ครั้ง`,
                 lateCount > 0 ? `มาสาย ${lateCount} คน` : null,
                 absentCount > 0 ? `ขาดงาน ${absentCount} คน` : null,
               ]
@@ -262,59 +272,26 @@ export default async function AttendancePage({
               {activePeople.length === 0 ? (
                 <EmptyState>ยังไม่มีพนักงานในระบบ</EmptyState>
               ) : (
-                <DataTable
-                  head={["พนักงาน", "เข้างาน", "สแกนล่าสุด", "ตามกะ", "สถานะ"]}
-                >
-                  {arrivals.map((a) => (
-                    <tr key={a.employment_id} className="hover:bg-(--bg-soft)">
-                      <Td>
-                        <span className="font-medium">{a.display_name}</span>
-                        <span className="ml-2 font-mono text-xs text-(--ink-soft)">
-                          {a.employee_code}
-                        </span>
-                      </Td>
-                      <Td className="font-mono">{clock(a.first_scan_at)}</Td>
-                      <Td className="font-mono text-(--ink-soft)">
-                        {a.scan_count > 1 ? clock(a.last_scan_at) : "—"}
-                        {a.scan_count > 2 && (
-                          <span className="ml-1 text-xs">({a.scan_count} ครั้ง)</span>
-                        )}
-                      </Td>
-                      <Td className="font-mono text-(--ink-soft)">
-                        {a.scheduled_start_minutes === null
-                          ? "—"
-                          : fromMinutes(a.scheduled_start_minutes)}
-                      </Td>
-                      <Td>
-                        {a.status === "LATE" ? (
-                          <Pill tone="var(--tone-warn)">
-                            สาย {formatMinutes(a.late_minutes)}
-                          </Pill>
-                        ) : a.status === "ON_TIME" ? (
-                          <Pill tone="var(--tone-ok)">ปกติ</Pill>
-                        ) : a.status === "REST_DAY" ? (
-                          <Pill tone="var(--tone-info)">วันหยุด</Pill>
-                        ) : (
-                          /*
-                            สถานะเดียวในตารางที่ต้องมีคนไปทำอะไรต่อ และสิ่งที่ต้องทำ
-                            อยู่ในหน้าของคนนั้นพอดี — ทำให้กดจากตรงนี้ไปได้เลย
-                            แทนที่จะอ่านว่า "ยังไม่ผูกกะ" แล้วต้องเดาเองว่าผูกที่ไหน
-                          */
-                          <Link
-                            href={`/hr/employees/${a.employment_id}`}
-                            className="hover:underline"
-                            title="ไปผูกกะของคนนี้"
-                          >
-                            <Pill tone="var(--tone-muted)">ยังไม่ผูกกะ →</Pill>
-                          </Link>
-                        )}
-                      </Td>
-                    </tr>
-                  ))}
-                  {/*
-                    คนที่ยังไม่สแกนเลยวันนี้ — เดิมหายไปจากตารางทั้งหมด ทั้งที่
-                    "ขาดงาน" คือเคสที่ควรเห็นชัดที่สุด ไม่ใช่เคสที่มองไม่เห็นเลย
-                  */}
+                <AttendanceTimeline events={timeline?.items ?? []} />
+              )}
+              <p className="mt-3 text-xs text-(--ink-soft)">
+                อ่านจากการสแกนสด ๆ ไม่ต้องรอสั่งคำนวณ — ตัวเลขสรุปรายเดือนและ OT
+                ยังต้องกดคำนวณตามเดิม · ไอคอนขวามือบอกช่องทางที่ใช้ลงเวลา
+                (เครื่องสแกนนิ้ว / แอปมือถือ / เว็บ / เจ้าหน้าที่บันทึกให้)
+              </p>
+            </SectionCard>
+
+            {/*
+              คนที่ยังไม่ตอกเลยวันนี้ — ไม่มี event ให้แสดงใน Timeline โดยธรรมชาติ
+              แต่เป็นเคสที่ควรเห็นชัดที่สุด จึงแยกเป็นส่วนของตัวเองแทนที่จะหายไป
+            */}
+            {missingRows.length > 0 && (
+              <SectionCard
+                title={`ยังไม่ลงเวลาวันนี้ · ${missingRows.length} คน`}
+                description="คนที่ควรเข้ากะวันนี้แต่ยังไม่มีการสแกนเลย"
+                className="mb-4"
+              >
+                <DataTable head={["พนักงาน", "เข้างาน", "สแกนล่าสุด", "ตามกะ", "สถานะ"]}>
                   {missingRows.map((m) => (
                     <tr key={m.employment_id} className="hover:bg-(--bg-soft)">
                       <Td>
@@ -348,14 +325,13 @@ export default async function AttendancePage({
                     </tr>
                   ))}
                 </DataTable>
-              )}
-              <p className="mt-3 text-xs text-(--ink-soft)">
-                อ่านจากการสแกนสด ๆ ไม่ต้องรอสั่งคำนวณ — ตัวเลขสรุปรายเดือนและ OT
-                ยังต้องกดคำนวณตามเดิม · &ldquo;ยังไม่ผูกกะ&rdquo; แปลว่าระบบไม่รู้ว่าคนนั้น
-                ควรเข้ากี่โมง จึงบอกไม่ได้ว่าสายหรือไม่ — กดที่ป้ายนั้นเพื่อไปตั้งตารางกะของเขา ·
-                &ldquo;ขาดงาน&rdquo; คือคนที่ควรเข้ากะวันนี้แต่ยังไม่มีการสแกนเลยตลอดวัน
-              </p>
-            </SectionCard>
+                <p className="mt-3 text-xs text-(--ink-soft)">
+                  &ldquo;ยังไม่ผูกกะ&rdquo; แปลว่าระบบไม่รู้ว่าคนนั้นควรเข้ากี่โมง จึงบอกไม่ได้ว่า
+                  สายหรือไม่ — กดที่ป้ายนั้นเพื่อไปตั้งตารางกะของเขา ·
+                  &ldquo;ขาดงาน&rdquo; คือคนที่ควรเข้ากะวันนี้แต่ยังไม่มีการสแกนเลยตลอดวัน
+                </p>
+              </SectionCard>
+            )}
 
             {canSeeResults && (
               <RecalculateForm people={activePeople} from={from} to={to} />

@@ -218,6 +218,20 @@ export class AttendanceController {
     return this.service.listTimeEventBoard(date);
   }
 
+  /**
+   * รายการลงเวลาของวันหนึ่งทีละครั้ง — หน้า Timeline
+   *
+   * เปิดกว้างเท่ากระดานทีมด้วยเหตุผลเดียวกัน (ทุกคนควรเห็นว่าใครมาถึงแล้ว)
+   * และคืนข้อมูลชุดเดียวกัน คือ ชื่อ + เวลา + ช่องทาง + สถานะ ไม่มีหลักฐาน
+   */
+  @Get('time-events')
+  @RequirePermissions()
+  async timeline(
+    @Query('date') date: string,
+  ): Promise<{ items: Record<string, unknown>[] }> {
+    return this.service.listDayTimeline(date);
+  }
+
   @Get('attendance-summary')
   @RequirePermissions('workforce.attendance.read.all')
   async summary(

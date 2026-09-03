@@ -89,6 +89,68 @@ export const runTypeLabel = (v: string | null | undefined) => lookup(RUN_TYPE, v
 export const categoryLabel = (v: string | null | undefined) => lookup(CATEGORY, v);
 export const ruleTypeLabel = (v: string | null | undefined) => lookup(RULE_TYPE, v);
 
+/** เจตนาการตอกบัตร — คำที่พนักงานเข้าใจ ไม่ใช่ศัพท์ระบบ */
+const EVENT_INTENT: Record<string, string> = {
+  AUTO: "ลงเวลา",
+  CLOCK_IN: "เข้างาน",
+  CLOCK_OUT: "ออกงาน",
+  BREAK_START: "เริ่มพัก",
+  BREAK_END: "กลับจากพัก",
+  SITE_CHECK_IN: "เข้าไซต์งาน",
+  SITE_CHECK_OUT: "ออกจากไซต์งาน",
+};
+
+/** ช่องทางที่ใช้ตอก — บอกว่าเวลานี้มาจากไหน เชื่อถือได้แค่ไหน */
+const EVENT_SOURCE: Record<string, string> = {
+  FINGERPRINT_DEVICE: "เครื่องสแกนนิ้ว",
+  MOBILE_APP: "แอปมือถือ",
+  WEB: "เว็บ",
+  MANUAL: "บันทึกโดยเจ้าหน้าที่",
+  LEGACY_UNTRUSTED: "นำเข้าจากระบบเดิม",
+  IMPORT: "นำเข้าจากไฟล์",
+};
+
+export const eventIntentLabel = (v: string | null | undefined) => lookup(EVENT_INTENT, v);
+export const eventSourceLabel = (v: string | null | undefined) => lookup(EVENT_SOURCE, v);
+
+/** ชื่อไอคอน lucide ของแต่ละช่องทาง — ใช้กับ <Icon name=...> */
+export function eventSourceIcon(value: string | null | undefined): string {
+  switch (value) {
+    case "FINGERPRINT_DEVICE":
+      return "Fingerprint";
+    case "MOBILE_APP":
+      return "Smartphone";
+    case "WEB":
+      return "Monitor";
+    case "MANUAL":
+      return "PenLine";
+    case "IMPORT":
+      return "Upload";
+    case "LEGACY_UNTRUSTED":
+      return "TriangleAlert";
+    default:
+      return "Clock";
+  }
+}
+
+/**
+ * สีของเจตนา — เข้างานเขียว ออกงานแดงอ่อน พักเป็นกลาง
+ * ตามหลักเดียวกับ statusTone: คืนชื่อ CSS variable ไม่ใช่ hex
+ */
+export function eventIntentTone(value: string | null | undefined): string {
+  switch (value) {
+    case "CLOCK_IN":
+    case "SITE_CHECK_IN":
+    case "AUTO":
+      return "var(--tone-ok)";
+    case "CLOCK_OUT":
+    case "SITE_CHECK_OUT":
+      return "var(--tone-danger)";
+    default:
+      return "var(--tone-muted)";
+  }
+}
+
 /**
  * สีของสถานะ — คืนเป็นชื่อ CSS variable ไม่ใช่ hex
  * (spec ข้อ 11: ห้าม hardcode hex ใน component)

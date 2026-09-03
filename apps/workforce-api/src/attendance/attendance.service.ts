@@ -148,6 +148,82 @@ export class AttendanceService {
     });
   }
 
+  /**
+   * รายการลงเวลาของวันหนึ่ง เรียงทีละครั้ง — ข้อมูลของหน้า Timeline
+   *
+   * ต่างจาก listTimeEventBoard ตรงที่ไม่ยุบเป็นคนละแถว: คนเดียวตอกเข้า-ออก-พัก
+   * กี่ครั้งก็เห็นครบทุกครั้ง พร้อมช่องทางที่ใช้ตอก
+   *
+   * "สาย" คิดเฉพาะครั้งที่เป็นการเข้างาน และเทียบกับกะของวันนั้น + ระยะผ่อนผัน
+   * ตามนโยบายบริษัท — ครั้งที่เป็นการออกงานหรือพักไม่มีความหมายว่าสาย
+   *
+   * ⚠ เปิดให้ทุกคนที่ยืนยันตัวตนแล้วเรียกได้เหมือนกระดานทีม จึงคืนเฉพาะ
+   * ชื่อ + เวลา + ช่องทาง + สถานะ ไม่คืนหลักฐาน (พิกัด/รูป) ที่อยู่ใน evidence
+   */
+  async listDayTimeline(workDate: string): Promise<{
+    items: Record<string, unknown>[];
+  }> {
+    return this.uow.run(async (uow) => {
+      const events = await this.repository.listDayTimeEvents(uow.tx, workDate);
+
+      // กะกับนโยบายของคนคนหนึ่งใช้ซ้ำได้ทุกครั้งที่เขาตอกในวันเดียวกัน
+      // แคชไว้กันยิง query ซ้ำต่อ event (คนหนึ่งตอกวันละหลายครั้ง)
+      const shiftCache = new Map<string, { startMinutes: number; restDay: boolean } | null>();
+      const items: Record<string, unknown>[] = [];
+
+      for (const event of events) {
+        let shift = shiftCache.get(event.employmentId);
+        if (shift === undefined) {
+          const { shiftId } = await this.repository.resolveShiftId(
+            uow.tx,
+            event.employmentId,
+            workDate,
+          );
+          const data =
+            shiftId === null
+              ? undefined
+              : await this.repository.findShiftWithBreaks(uow.tx, shiftId);
+          shift =
+            data === undefined
+              ? null
+              : { startMinutes: data.shift.startMinutes, restDay: data.shift.restDay };
+          shiftCache.set(event.employmentId, shift);
+        }
+
+        const isArrival =
+          event.eventIntent === 'CLOCK_IN' || event.eventIntent === 'AUTO';
+        let lateMinutes = 0;
+        if (isArrival && shift !== null && !shift.restDay) {
+          const parts = new Intl.DateTimeFormat('en-GB', {
+            timeZone: event.timeZone,
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+          }).formatToParts(new Date(event.capturedAt));
+          const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? '0');
+          const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? '0');
+          const over = hour * 60 + minute - shift.startMinutes;
+          if (over > 0) lateMinutes = over;
+        }
+
+        items.push({
+          id: event.id,
+          employment_id: event.employmentId,
+          display_name: event.displayName,
+          employee_code: event.employeeCode,
+          captured_at: event.capturedAt,
+          event_intent: event.eventIntent,
+          source_type: event.sourceType,
+          scheduled_start_minutes: shift?.startMinutes ?? null,
+          is_rest_day: shift?.restDay ?? false,
+          late_minutes: lateMinutes,
+        });
+      }
+
+      return { items };
+    });
+  }
+
   async recalculateRange(
     employmentId: string,
     from: string,

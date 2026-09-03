@@ -4,6 +4,76 @@ import { and, asc, desc, eq, gte, isNull, lte, or, sql, type SQL } from 'drizzle
 
 @Injectable()
 export class AttendanceRepository {
+  /**
+   * การลงเวลาของวันหนึ่ง **ทีละครั้ง ไม่รวบ** — สำหรับหน้า Timeline
+   *
+   * ต่างจาก listBoardScans ที่ยุบเหลือคนละแถว (เข้าครั้งแรก/ออกครั้งสุดท้าย)
+   * ตรงที่หน้านี้ต้องเห็นทุกครั้งที่แตะเครื่องจริง ๆ เรียงตามเวลา พร้อมบอกว่า
+   * ครั้งนั้นเป็นเข้า/ออก/พัก และลงผ่านช่องทางไหน (เครื่องสแกน/มือถือ/เว็บ)
+   * ซึ่งเป็นข้อมูลที่การรวบทำให้หายไปหมด
+   */
+  async listDayTimeEvents(
+    tx: Tx,
+    workDate: string,
+  ): Promise<
+    {
+      id: string;
+      employmentId: string;
+      displayName: string;
+      employeeCode: string;
+      capturedAt: string;
+      timeZone: string;
+      eventIntent: string;
+      sourceType: string;
+    }[]
+  > {
+    const rows = await tx
+      .select({
+        id: schema.rawTimeEvents.id,
+        employmentId: schema.rawTimeEvents.employmentId,
+        capturedAt: schema.rawTimeEvents.capturedAt,
+        timeZone: schema.rawTimeEvents.timeZone,
+        eventIntent: schema.rawTimeEvents.eventIntent,
+        sourceType: schema.rawTimeEvents.sourceType,
+        employeeCode: schema.employments.employeeCode,
+        firstName: schema.people.firstName,
+        lastName: schema.people.lastName,
+        preferredName: schema.people.preferredName,
+      })
+      .from(schema.rawTimeEvents)
+      .innerJoin(
+        schema.employments,
+        eq(schema.employments.id, schema.rawTimeEvents.employmentId),
+      )
+      .innerJoin(schema.people, eq(schema.people.id, schema.employments.personId))
+      .where(
+        and(
+          sql`${schema.rawTimeEvents.capturedAt} >= ${`${workDate}T00:00:00Z`}`,
+          sql`${schema.rawTimeEvents.capturedAt} <= ${`${workDate}T23:59:59Z`}`,
+          sql`${schema.rawTimeEvents.employmentId} is not null`,
+          // แถวที่ถูกกักไว้ยังไม่ผ่านการตรวจ ไม่ควรโผล่บนกระดานที่ทุกคนเห็น
+          eq(schema.rawTimeEvents.status, 'ACCEPTED'),
+        ),
+      )
+      // ใหม่สุดอยู่บน — คนเปิดดูอยากรู้ว่า "เมื่อกี้ใครเพิ่งตอก" ก่อนเรื่องเช้านี้
+      .orderBy(desc(schema.rawTimeEvents.capturedAt));
+
+    return rows.map((row) => {
+      const preferred = (row.preferredName ?? '').trim();
+      return {
+        id: row.id,
+        employmentId: row.employmentId!,
+        displayName:
+          preferred === '' ? `${row.firstName} ${row.lastName ?? ''}`.trim() : preferred,
+        employeeCode: row.employeeCode,
+        capturedAt: new Date(row.capturedAt).toISOString(),
+        timeZone: row.timeZone,
+        eventIntent: row.eventIntent,
+        sourceType: row.sourceType,
+      };
+    });
+  }
+
   /** นโยบายที่มีผล ณ วันที่ระบุ — point-in-time เสมอ (ADR-0012) */
   /**
    * การสแกนของวันหนึ่ง สรุปเป็นคนละแถว — ครั้งแรก/ครั้งล่าสุด/จำนวนครั้ง

@@ -428,3 +428,41 @@ export interface AttendanceSummary {
   totals: Omit<EmployeeAttendanceStat, "employment_id"> & { employees: number };
   employees: EmployeeAttendanceStat[];
 }
+
+/** เจตนาของการตอกแต่ละครั้ง — ตรงกับ EVENT_INTENTS ฝั่ง workforce */
+export type TimeEventIntent =
+  | "AUTO"
+  | "CLOCK_IN"
+  | "CLOCK_OUT"
+  | "BREAK_START"
+  | "BREAK_END"
+  | "SITE_CHECK_IN"
+  | "SITE_CHECK_OUT";
+
+/** ช่องทางที่ใช้ตอก — ตรงกับ SOURCE_TYPES ฝั่ง workforce */
+export type TimeEventSource =
+  | "FINGERPRINT_DEVICE"
+  | "MOBILE_APP"
+  | "WEB"
+  | "MANUAL"
+  | "LEGACY_UNTRUSTED"
+  | "IMPORT";
+
+/**
+ * การตอกบัตรหนึ่งครั้ง — หน้า Timeline แสดงทีละแถวตามนี้
+ * ต่างจาก AttendanceSummary ที่เป็นผลรวมของทั้งวันหลังคำนวณแล้ว
+ */
+export interface TimeEvent {
+  id: string;
+  employment_id: string;
+  display_name: string;
+  employee_code: string;
+  captured_at: string;
+  event_intent: TimeEventIntent;
+  source_type: TimeEventSource;
+  /** เวลาเข้ากะเป็นนาทีจากเที่ยงคืน — null = วันนั้นไม่ได้ผูกกะไว้ */
+  scheduled_start_minutes: number | null;
+  is_rest_day: boolean;
+  /** > 0 เฉพาะครั้งที่เป็นการเข้างานและเกินเวลากะ */
+  late_minutes: number;
+}
