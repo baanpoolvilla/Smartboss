@@ -28,6 +28,7 @@ import {
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
+import { REPORT_ATTACHMENT_ACCEPT } from "@/modules/report_task/lib/report-attachment-kind";
 import { DRAG_MENTION_TOPIC_MIME } from "@/modules/report_task/components/report-feed/report-post-fields";
 import { cn } from "@/modules/report_task/lib/utils";
 import { toast } from "sonner";
@@ -773,7 +774,7 @@ export function OpenchatFeed({
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*,video/mp4,video/webm"
+            accept={REPORT_ATTACHMENT_ACCEPT}
             multiple
             className="hidden"
             onChange={(e) => handleComposerFiles(e.target.files)}

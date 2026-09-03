@@ -50,6 +50,11 @@ const ALLOWED_TYPES: Record<string, { ext: string; kind: "image" | "file" | "vid
   "application/zip": { ext: "zip", kind: "file" },
   "application/msword": { ext: "doc", kind: "file" },
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": { ext: "docx", kind: "file" },
+  "application/vnd.ms-excel": { ext: "xls", kind: "file" },
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": { ext: "xlsx", kind: "file" },
+  "application/vnd.ms-powerpoint": { ext: "ppt", kind: "file" },
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": { ext: "pptx", kind: "file" },
+  "text/csv": { ext: "csv", kind: "file" },
   "video/mp4": { ext: "mp4", kind: "video" },
   "video/webm": { ext: "webm", kind: "video" },
 };

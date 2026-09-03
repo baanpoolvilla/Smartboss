@@ -25,6 +25,7 @@ import { TagPickerButton } from "@/modules/report_task/components/report-feed/ta
 import { Bold, Building2, Code, Hash, ImagePlus, Italic, List, ListOrdered, Minus, Square, Table, TriangleAlert, Underline, User, X } from "lucide-react";
 import { LinkInsertPopover } from "@/modules/report_task/components/report-feed/link-insert-popover";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
+import { REPORT_ATTACHMENT_ACCEPT } from "@/modules/report_task/lib/report-attachment-kind";
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
 import { toast } from "sonner";
 
@@ -348,6 +349,41 @@ export function ReportPostFields({
   // `images` array (uploaded via the "แนบรูป/คลิป" button), never inline in
   // the rich text, so a pasted image needs to go through that same upload
   // path instead of landing in the DOM at all.
+  // Chrome's default paste wraps each pasted line in its own <div>, with no
+  // hanging indent — a long pasted bullet line wraps back to the div's own
+  // left edge instead of hanging under its marker's text ("พอวางแล้วมันไม่
+  // ตรง ข้างหน้าคำมันเด้ง"). Routing the pasted text through the same
+  // bulletsTextToHtml used for the composer's initial load gives it the
+  // same <br>-joined, hanging-indent-wrapped structure typing produces,
+  // instead of the browser's own unstyled per-line divs.
+  function handleTextPaste(sectionId: string, e: React.ClipboardEvent<HTMLDivElement>) {
+    const text = e.clipboardData.getData("text/plain");
+    if (!text) return;
+    e.preventDefault();
+    const el = editableRefs.current[sectionId];
+    if (!el) return;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    range.deleteContents();
+
+    const container = document.createElement("div");
+    container.innerHTML = bulletsTextToHtml(text);
+    const frag = document.createDocumentFragment();
+    let lastNode: ChildNode | null = null;
+    while (container.firstChild) {
+      lastNode = frag.appendChild(container.firstChild);
+    }
+    range.insertNode(frag);
+    if (lastNode) {
+      range.setStartAfter(lastNode);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+    syncFromEditor(sectionId, el);
+  }
+
   async function handleImagePaste(e: React.ClipboardEvent<HTMLDivElement>) {
     const item = Array.from(e.clipboardData.items).find((it) => it.kind === "file" && it.type.startsWith("image/"));
     if (!item) return; // no pasted image — let default paste (text, a pasted link) proceed as before
@@ -706,7 +742,13 @@ export function ReportPostFields({
                 onKeyUp={(e) => syncActiveFormat(s.id, e.currentTarget)}
                 onMouseUp={(e) => syncActiveFormat(s.id, e.currentTarget)}
                 onBlur={(e) => autoLinkifyMentions(s.id, e.currentTarget)}
-                onPaste={handleImagePaste}
+                onPaste={(e) => {
+                  if (Array.from(e.clipboardData.items).some((it) => it.kind === "file" && it.type.startsWith("image/"))) {
+                    handleImagePaste(e);
+                  } else {
+                    handleTextPaste(s.id, e);
+                  }
+                }}
                 onDragOver={handleMentionDragOver}
                 onDrop={(e) => handleMentionDrop(s.id, e)}
                 className="min-h-16 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground"
@@ -767,11 +809,11 @@ export function ReportPostFields({
       {images.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {images.map((img) => (
-            <div key={img.id} className="relative h-16 w-16 rounded-lg overflow-hidden border border-[var(--line)] group">
-              <ReportMediaThumb media={img} className="h-full w-full object-cover" />
+            <div key={img.id} className="relative h-16 w-16 rounded-lg overflow-hidden border border-[var(--line)]">
+              <ReportMediaThumb media={img} fileChipVariant="compact" className="h-full w-full object-cover" />
               <button
                 onClick={() => onImagesChange(images.filter((x) => x.id !== img.id))}
-                className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition-colors"
                 aria-label={`ลบรูป ${img.name}`}
               >
                 <X className="h-3 w-3" />
@@ -792,7 +834,7 @@ export function ReportPostFields({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*,video/mp4,video/webm"
+          accept={REPORT_ATTACHMENT_ACCEPT}
           multiple
           className="hidden"
           onChange={(e) => onFilesSelected(e.target.files)}
@@ -802,10 +844,10 @@ export function ReportPostFields({
           size="sm"
           disabled={busy || images.length >= maxImages}
           onClick={() => fileInputRef.current?.click()}
-          title={`รูปหรือคลิปวิดีโอ .mp4/.webm (จำกัด ${maxVideoMB}MB ต่อคลิป)`}
+          title={`รูป, คลิป .mp4/.webm (จำกัด ${maxVideoMB}MB ต่อคลิป) หรือเอกสาร PDF/Word/Excel/PowerPoint/CSV`}
         >
           <ImagePlus className="h-3.5 w-3.5" />
-          {busy ? "กำลังแนบไฟล์..." : "แนบรูป/คลิป"}
+          {busy ? "กำลังแนบไฟล์..." : "แนบไฟล์"}
         </Button>
         {/* One album choice for every photo in this post at once — not a
             per-image decision. Only makes sense once something's attached,

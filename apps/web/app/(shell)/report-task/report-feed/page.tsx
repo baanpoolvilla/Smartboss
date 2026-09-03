@@ -9,7 +9,7 @@ import { OpenchatFeed } from "@/modules/report_task/components/report-feed/openc
 import { ReportAllPostsFeed } from "@/modules/report_task/components/report-feed/report-all-posts-feed";
 import { ReportComplianceBar } from "@/modules/report_task/components/report-feed/report-header";
 import { RoomSettingsSheet } from "@/modules/report_task/components/report-feed/room-settings-sheet";
-import { ReportTopicPanels, collectFiles, collectLinks, filesCutoffMs } from "@/modules/report_task/components/report-feed/report-topic-panels";
+import { ReportTopicPanels, collectFiles, collectLinks, filesCutoffMs, fileFilterForLegacyTab } from "@/modules/report_task/components/report-feed/report-topic-panels";
 import { PostFilterBar, PostFilterButton, ActiveFilterChips, filterPosts, emptyPostFilters, postFiltersActiveCount, type PostFilters } from "@/modules/report_task/components/report-feed/post-filter-bar";
 import { filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
 import { useSetAppBarLeading } from "@/modules/report_task/components/shared/app-bar-leading";
@@ -29,7 +29,7 @@ import { currentCutoff } from "@/modules/report_task/lib/report-cutoff";
 import { pendingToday, todayStatusEntries, type TodayStatusEntry } from "@/modules/report_task/lib/report-feed-compliance";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
-import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronDown, Clock, FileImage, FolderHeart, Hash, Link2, Lock, Menu, MessageSquareText, Pin, Settings, SlidersHorizontal, TriangleAlert, Users, X } from "lucide-react";
+import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronDown, Clock, FolderOpen, Hash, Lock, Menu, MessageSquareText, Pin, Settings, SlidersHorizontal, TriangleAlert, Users, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 
 // Beyond this many pinned posts, the rest move into the "+N เพิ่มเติม"
@@ -61,12 +61,17 @@ function pinnedChip(p: ReportPost, onUnpin: (id: string) => void) {
   );
 }
 
-type TopicTab = "posts" | "files" | "album" | "links" | "stats";
+/**
+ * Three tabs, not five. "ไฟล์" used to mean recent photos and "รูปภาพ" used
+ * to mean albums, which is backwards from what either word suggests, and
+ * "ลิงก์" was a third pile of the same kind of thing — everything a room
+ * accumulates now lives under one "ไฟล์" tab with an explicit filter row
+ * (see FileFilter in report-topic-panels.tsx) that says what each pile is.
+ */
+type TopicTab = "posts" | "files" | "stats";
 const topicTabs: { id: TopicTab; label: string; icon: typeof MessageSquareText }[] = [
   { id: "posts", label: "โพสต์", icon: MessageSquareText },
-  { id: "files", label: "ไฟล์", icon: FileImage },
-  { id: "album", label: "รูปภาพ", icon: FolderHeart },
-  { id: "links", label: "ลิงก์", icon: Link2 },
+  { id: "files", label: "ไฟล์", icon: FolderOpen },
   { id: "stats", label: "สรุป", icon: BarChart3 },
 ];
 
@@ -173,8 +178,13 @@ function ReportFeedPageInner() {
   // `?post=`/`?reply=` — falls back to "posts" for anything else/missing.
   const [activeTab, setActiveTab] = useState<TopicTab>(() => {
     const tab = searchParams.get("tab");
-    return tab === "files" || tab === "album" || tab === "links" || tab === "stats" ? tab : "posts";
+    // "album"/"links" are filters inside "ไฟล์" now, not tabs — an existing
+    // deep link naming one still lands on the right view (see
+    // initialFileFilter below), it just opens the tab that now contains it.
+    if (tab === "album" || tab === "links") return "files";
+    return tab === "files" || tab === "stats" ? tab : "posts";
   });
+  const [initialFileFilter] = useState(() => fileFilterForLegacyTab(searchParams.get("tab")) ?? undefined);
   const [highlightPostId, setHighlightPostId] = useState<string | null>(() => searchParams.get("post"));
   // A "copy link" on a specific comment (not just the post) adds &reply= —
   // same deep-link idea as Teams' parentMessageId, scoped down to one reply.
@@ -264,6 +274,24 @@ function ReportFeedPageInner() {
     }
     return visibleTopics.find((t) => !isParentId(t.id))?.id ?? visibleTopics[0]?.id ?? "";
   })();
+
+  // Clicking a room in the sidebar only ever updated `selectedId` in memory
+  // — the URL's `?topic=` never followed along, so an F5 re-read it as
+  // empty and fell back to the first room in the list instead of staying
+  // put ("มันจะเด้งไปหน้านี้ก่อน"). Mirrors the filter-sync effect above,
+  // keyed off the resolved `activeId` rather than raw `selectedId` so a
+  // stale/parent id gets written back as whatever room it actually
+  // resolved to. Skipped while topics haven't hydrated yet (activeId ""),
+  // so a deep link's `?topic=` isn't wiped out before it's had a chance to
+  // resolve against the real topic list.
+  useEffect(() => {
+    if (!activeId) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("topic", activeId);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId]);
+
   const showAllPosts = activeId === ALL_TOPICS_ID;
   const showPending = activeId === PENDING_ID;
   const showMentions = activeId === MENTIONS_ID;
@@ -340,12 +368,17 @@ function ReportFeedPageInner() {
   // (not useMemo'd): `topicPosts` above is a fresh array every render
   // anyway, so memoizing against it wouldn't skip any work.
   const allAlbums = useReportFeedStore((s) => s.albums);
+  const allPinnedLinks = useReportFeedStore((s) => s.pinnedLinks);
+  // "ไฟล์" is one tab over four kinds of thing now, so its badge counts all
+  // of them — the per-kind numbers still show, on the filter row inside.
   const tabCounts: Partial<Record<TopicTab, number>> = activeTopic
     ? {
         posts: topicPosts.length,
-        files: collectFiles(topicPosts).filter((f) => new Date(f.createdAt).getTime() >= filesCutoffMs(activeTopic.filesRetentionDays)).length,
-        album: allAlbums.filter((a) => a.topicId === activeTopic.id).length,
-        links: collectLinks(topicPosts).length,
+        files:
+          collectFiles(topicPosts).filter((f) => new Date(f.createdAt).getTime() >= filesCutoffMs(activeTopic.filesRetentionDays)).length +
+          collectLinks(topicPosts).length +
+          allPinnedLinks.filter((l) => l.topicId === activeTopic.id).length +
+          allAlbums.filter((a) => a.topicId === activeTopic.id).length,
       }
     : {};
 
@@ -950,7 +983,7 @@ function ReportFeedPageInner() {
                   )}
                 </>
               ) : (
-                <ReportTopicPanels tab={activeTab} topic={activeTopic} topicPosts={topicPosts} />
+                <ReportTopicPanels tab={activeTab} topic={activeTopic} topicPosts={topicPosts} initialFileFilter={initialFileFilter} />
               )}
             </div>
           ) : (

@@ -184,7 +184,7 @@ export function StoreHydrator() {
       <ServerStoreSync
         apiKey="report-feed"
         store={useReportFeedStore}
-        select={(s) => ({ topics: s.topics, posts: s.posts, albums: s.albums })}
+        select={(s) => ({ topics: s.topics, posts: s.posts, albums: s.albums, pinnedLinks: s.pinnedLinks })}
         // Normalized, not spread straight in — a row written by something
         // other than this store (the demo seeding script, an older build) can
         // be missing an array field that every reader treats as always

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import { getUser, canManage } from "@/modules/report_task/lib/directory";
@@ -8,6 +8,7 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useReportFeedStore, type ReportPostImage, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
+import { photoCount } from "@/modules/report_task/lib/report-attachment-kind";
 import { currentCutoff, minImagesNow } from "@/modules/report_task/lib/report-cutoff";
 import { ReportPostFields, newSection, type DraftSection } from "@/modules/report_task/components/report-feed/report-post-fields";
 import { Clock, Lock, Send, SquarePen } from "lucide-react";
@@ -20,6 +21,32 @@ function initialSections(topic: ReportTopic): DraftSection[] {
   return topic.postTemplateSections.map((s) => ({ ...newSection(), heading: s.heading }));
 }
 
+interface StoredDraft {
+  title: string;
+  sections: DraftSection[];
+  images: ReportPostImage[];
+  tagIds: string[];
+}
+
+function draftStorageKey(topicId: string): string {
+  return `report-draft:${topicId}`;
+}
+
+// A refresh used to unmount this component with whatever the user was
+// mid-typing still only in memory — gone with no recovery
+// ("รีเฟชละข้อมูลที่จะกรอกหายหมดเลย"). sessionStorage survives a reload
+// (unlike plain state) while still clearing itself once the tab closes, so
+// an abandoned draft doesn't linger forever in a shared browser profile.
+function loadDraft(topicId: string): StoredDraft | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(draftStorageKey(topicId));
+    return raw ? (JSON.parse(raw) as StoredDraft) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function ReportComposer({ topic }: { topic: ReportTopic }) {
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const viewer = getUser(viewingAsUserId)!;
@@ -27,12 +54,32 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   const maxImages = useAttachmentSettingsStore((s) => s.settings.maxImagesPerReportPost);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [expanded, setExpanded] = useState(false);
-  const [title, setTitle] = useState("");
-  const [sections, setSections] = useState<DraftSection[]>(() => initialSections(topic));
-  const [images, setImages] = useState<ReportPostImage[]>([]);
-  const [tagIds, setTagIds] = useState<string[]>([]);
+  const savedDraft = loadDraft(topic.id);
+  const [expanded, setExpanded] = useState(() => !!savedDraft);
+  const [title, setTitle] = useState(() => savedDraft?.title ?? "");
+  const [sections, setSections] = useState<DraftSection[]>(() => savedDraft?.sections ?? initialSections(topic));
+  const [images, setImages] = useState<ReportPostImage[]>(() => savedDraft?.images ?? []);
+  const [tagIds, setTagIds] = useState<string[]>(() => savedDraft?.tagIds ?? []);
   const [busy, setBusy] = useState(false);
+
+  // Keeps sessionStorage in sync with every keystroke/attachment change so a
+  // reload has something to restore — cleared once the draft is either
+  // posted or explicitly cancelled (reset() below) rather than left behind
+  // as a stale entry that would keep reappearing on the next visit.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const isEmpty = !title.trim() && images.length === 0 && tagIds.length === 0 && sections.every((s) => !s.heading.trim() && !s.bulletsText.trim());
+    try {
+      if (isEmpty) {
+        window.sessionStorage.removeItem(draftStorageKey(topic.id));
+      } else {
+        window.sessionStorage.setItem(draftStorageKey(topic.id), JSON.stringify({ title, sections, images, tagIds }));
+      }
+    } catch {
+      // Storage full/unavailable (private browsing) — the draft just won't
+      // survive a reload, same as before this feature existed.
+    }
+  }, [topic.id, title, sections, images, tagIds]);
 
   function reset() {
     setTitle("");
@@ -40,6 +87,13 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
     setImages([]);
     setTagIds([]);
     setExpanded(false);
+    if (typeof window !== "undefined") {
+      try {
+        window.sessionStorage.removeItem(draftStorageKey(topic.id));
+      } catch {
+        // ignore
+      }
+    }
   }
 
   // "ใครโพสต์ได้" (Phase 6) — announcement/policy rooms can lock posting to
@@ -80,7 +134,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   }
 
   const minImagesRequired = minImagesNow(topic);
-  const missingRequiredImage = images.length < minImagesRequired;
+  const missingRequiredImage = photoCount(images) < minImagesRequired;
   const activeRound = currentCutoff(topic.cutoffs);
 
   function handleSubmit() {
@@ -175,7 +229,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
         {/* P3 — why the button's disabled, not just that it is. */}
         {!busy && (!title.trim() || missingRequiredImage) && (
           <p className="text-xs text-[var(--ink-soft)] mr-auto">
-            {!title.trim() ? "ต้องมีหัวข้อ" : `ต้องแนบรูปอีก ${minImagesRequired - images.length} รูป`}
+            {!title.trim() ? "ต้องมีหัวข้อ" : `ต้องแนบรูปอีก ${minImagesRequired - photoCount(images)} รูป`}
           </p>
         )}
         <Button data-tour="composer-cancel" variant="ghost" size="lg" onClick={reset} className="text-[var(--ink-soft)]">
@@ -186,7 +240,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
           className="rounded-lg px-5 gap-1.5 bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white disabled:opacity-40 transition-transform active:scale-[0.99]"
           disabled={!title.trim() || missingRequiredImage || busy}
           onClick={handleSubmit}
-          title={!title.trim() ? "ต้องมีหัวข้อ" : missingRequiredImage ? `ต้องแนบรูปอีก ${minImagesRequired - images.length} รูป` : undefined}
+          title={!title.trim() ? "ต้องมีหัวข้อ" : missingRequiredImage ? `ต้องแนบรูปอีก ${minImagesRequired - photoCount(images)} รูป` : undefined}
         >
           <Send className="h-4 w-4" />
           โพสต์ {/* Ctrl/⌘+Enter also submits (P4) — see the keydown handler on the title input below. */}
