@@ -1,5 +1,6 @@
 import { departments, getDepartment, getUser, users } from "@/modules/report_task/lib/directory";
-import { mustReportToTopic } from "@/modules/report_task/lib/permissions";
+import { roundsForUserOnDay, mustSubmitToTopic } from "@/modules/report_task/lib/submission-rounds";
+import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
 import { photoCount } from "@/modules/report_task/lib/report-attachment-kind";
 import { lateCutoffFor } from "@/modules/report_task/lib/report-cutoff";
 import { localDateStr, now, todayIso } from "@/modules/report_task/lib/now";
@@ -14,7 +15,7 @@ import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report
  * entirely rather than inventing an obligation nothing configured.
  */
 export function trackedTopicsOf(topics: ReportTopic[]): ReportTopic[] {
-  return topics.filter((t) => t.cutoffs.length > 0);
+  return topics.filter((t) => t.cutoffs.length > 0 || (t.submissionRounds?.length ?? 0) > 0);
 }
 
 /**
@@ -36,6 +37,30 @@ function lastCutoffMinutes(topic: ReportTopic): number {
   }, 0);
 }
 
+/** groups ปัจจุบันจาก store (client) — คืน [] เมื่ออ่านฝั่ง server */
+function groupsNow() {
+  try {
+    return useReportFeedStore.getState().submitterGroups;
+  } catch {
+    return [];
+  }
+}
+
+/** เวลาปิดรอบสุดท้ายที่ "ผู้ใช้คนนี้" ต้องส่งในวันนั้น (นาทีของวัน) — null = ไม่ต้องส่งวันนั้น.
+ * ห้องเก่า (ไม่มี submissionRounds): ใช้ requiredWeekdays + cutoff สุดท้ายของห้อง = พฤติกรรมเดิม. */
+function userRequiredCutoffMinutes(topic: ReportTopic, userId: string, day: string): number | null {
+  if (topic.submissionRounds && topic.submissionRounds.length > 0) {
+    const rounds = roundsForUserOnDay(topic, userId, day, groupsNow());
+    if (rounds.length === 0) return null;
+    return rounds.reduce((max, r) => {
+      const [h, m] = r.time.split(":").map(Number) as [number, number];
+      return Math.max(max, h * 60 + m);
+    }, 0);
+  }
+  if (!isRequiredWeekday(topic, day)) return null;
+  return lastCutoffMinutes(topic);
+}
+
 /** The room's own final cutoff time-of-day, formatted "HH:MM" — for UI that
  * needs to show a specific room's real cutoff instead of assuming a global
  * one (rooms configure their own rounds independently, see ReportTopic). */
@@ -55,6 +80,17 @@ function minutesOfDay(iso: string): number {
 
 /** Minimum photos a post made at `atIso` needed — same rule as report-cutoff.ts's `minImagesNow`, generalized to a specific timestamp instead of always "now" so a past post can be judged against the round it actually fell in. */
 function minImagesFor(topic: ReportTopic, atIso: string): number {
+  if (topic.submissionRounds && topic.submissionRounds.length > 0) {
+    const mins = minutesOfDay(atIso);
+    let pickedMin: number | undefined;
+    let best = -1;
+    for (const r of topic.submissionRounds) {
+      const [h, m] = r.time.split(":").map(Number) as [number, number];
+      const t = h * 60 + m;
+      if (t <= mins && t > best) { best = t; pickedMin = r.minImages; }
+    }
+    return pickedMin ?? topic.minImages;
+  }
   const round = lateCutoffFor(atIso, topic.cutoffs);
   return round?.minImages ?? topic.minImages;
 }
@@ -107,6 +143,10 @@ export function iterationBounds(topic: ReportTopic, range: { from: Date; to: Dat
  * day counts, today's existing behavior (including weekends, which is
  * exactly the "Saturday still shows as 'ไม่ส่ง'" complaint this exists to fix). */
 function isRequiredWeekday(topic: ReportTopic, day: string): boolean {
+  if (topic.submissionRounds && topic.submissionRounds.length > 0) {
+    const dow = new Date(`${day}T00:00:00`).getDay();
+    return topic.submissionRounds.some((r) => !r.weekdays || r.weekdays.length === 0 || r.weekdays.includes(dow));
+  }
   if (!topic.requiredWeekdays || topic.requiredWeekdays.length === 0) return true;
   return topic.requiredWeekdays.includes(new Date(`${day}T00:00:00`).getDay());
 }
@@ -118,10 +158,10 @@ export function dayComplianceStatus(
   posts: ReportPost[],
   exemptions?: DateExemptions
 ): ComplianceStatus {
-  if (!isRequiredWeekday(topic, day)) return "exempt";
+  const lastCutoff = userRequiredCutoffMinutes(topic, userId, day);
+  if (lastCutoff === null) return "exempt";
   if (exemptions && isExemptDate(exemptions, userId, day)) return "exempt";
   const dayPosts = postsForDay(topic, userId, day, posts);
-  const lastCutoff = lastCutoffMinutes(topic);
   if (dayPosts.length > 0) {
     const onTime = dayPosts.some((p) => minutesOfDay(p.createdAt) <= lastCutoff);
     return onTime ? "on-time" : "late";
@@ -202,7 +242,7 @@ export function buildUserComplianceReports(
   return users.map((u) => {
     const row = emptyRow(u.id, u.name, getDepartment(u.departmentId)?.name ?? u.role);
     for (const topic of tracked) {
-      if (!mustReportToTopic(topic.visibility, u.id)) continue;
+      if (!mustSubmitToTopic(topic, u.id)) continue;
       row.roomsCount += 1;
       const { startStr, endStr } = iterationBounds(topic, range);
       for (const day of eachDay(startStr, endStr)) {
@@ -374,7 +414,7 @@ export function reportStatusCountsByUser(
     const { startStr, endStr } = iterationBounds(topic, range);
     const days = eachDay(startStr, endStr);
     for (const u of users) {
-      if (!mustReportToTopic(topic.visibility, u.id)) continue;
+      if (!mustSubmitToTopic(topic, u.id)) continue;
       const counts = out.get(u.id)!;
       for (const day of days) {
         const status = dayComplianceStatus(topic, u.id, day, posts, exemptions);
@@ -452,7 +492,7 @@ export function recentMissedReports(
     const { startStr, endStr } = iterationBounds(topic, null);
     const recentDays = eachDay(startStr, endStr).slice(-3);
     for (const u of users) {
-      if (!mustReportToTopic(topic.visibility, u.id)) continue;
+      if (!mustSubmitToTopic(topic, u.id)) continue;
       for (const day of recentDays) {
         if (dayComplianceStatus(topic, u.id, day, posts, exemptions) === "missed") {
           entries.push({
@@ -496,7 +536,7 @@ export function recentAttachmentIssues(
     const { startStr, endStr } = iterationBounds(topic, null);
     const recentDays = eachDay(startStr, endStr).slice(-3);
     for (const u of users) {
-      if (!mustReportToTopic(topic.visibility, u.id)) continue;
+      if (!mustSubmitToTopic(topic, u.id)) continue;
       for (const day of recentDays) {
         const dayPosts = postsForDay(topic, u.id, day, posts);
         if (dayPosts.length === 0) continue;
@@ -564,8 +604,10 @@ export function todayComplianceSummary(
     if (today < localDateStr(new Date(topic.createdAt))) continue;
     if (!isRequiredWeekday(topic, today)) continue;
     for (const u of users) {
-      if (!mustReportToTopic(topic.visibility, u.id)) continue;
+      if (!mustSubmitToTopic(topic, u.id)) continue;
       if (exemptions && isExemptDate(exemptions, u.id, today)) continue;
+      const lastCutoff = userRequiredCutoffMinutes(topic, u.id, today);
+      if (lastCutoff === null) continue;
       summary.totalTracked += 1;
       const dayPosts = postsForDay(topic, u.id, today, posts);
       if (dayPosts.length === 0) {
@@ -573,7 +615,6 @@ export function todayComplianceSummary(
         continue;
       }
       summary.postedToday += 1;
-      const lastCutoff = lastCutoffMinutes(topic);
       if (!dayPosts.some((p) => minutesOfDay(p.createdAt) <= lastCutoff)) summary.lateToday += 1;
     }
   }
@@ -607,7 +648,7 @@ export function todayStatusEntries(
     if (today < localDateStr(new Date(topic.createdAt))) continue;
     if (!isRequiredWeekday(topic, today)) continue;
     for (const u of users) {
-      if (!mustReportToTopic(topic.visibility, u.id)) continue;
+      if (!mustSubmitToTopic(topic, u.id)) continue;
       if (exemptions && isExemptDate(exemptions, u.id, today)) continue;
       const base = {
         userId: u.id,
@@ -618,12 +659,13 @@ export function todayStatusEntries(
         topicName: topic.name,
         topicColor: topic.color,
       };
+      const lastCutoff = userRequiredCutoffMinutes(topic, u.id, today);
+      if (lastCutoff === null) continue;
       const dayPosts = postsForDay(topic, u.id, today, posts);
       if (dayPosts.length === 0) {
         entries.push({ ...base, status: "missing" });
         continue;
       }
-      const lastCutoff = lastCutoffMinutes(topic);
       const onTime = dayPosts.some((p) => minutesOfDay(p.createdAt) <= lastCutoff);
       entries.push({ ...base, status: onTime ? "posted" : "late" });
     }
@@ -639,8 +681,9 @@ export function pendingToday(topics: ReportTopic[], posts: ReportPost[], exempti
     if (today < localDateStr(new Date(topic.createdAt))) continue;
     if (!isRequiredWeekday(topic, today)) continue;
     for (const u of users) {
-      if (!mustReportToTopic(topic.visibility, u.id)) continue;
+      if (!mustSubmitToTopic(topic, u.id)) continue;
       if (exemptions && isExemptDate(exemptions, u.id, today)) continue;
+      if (userRequiredCutoffMinutes(topic, u.id, today) === null) continue;
       if (postsForDay(topic, u.id, today, posts).length > 0) continue;
       entries.push({
         userId: u.id,
@@ -687,7 +730,7 @@ export function reportBacklogEntries(
     const { startStr, endStr } = iterationBounds(topic, range);
     for (const day of eachDay(startStr, endStr)) {
       for (const u of users) {
-        if (!mustReportToTopic(topic.visibility, u.id)) continue;
+        if (!mustSubmitToTopic(topic, u.id)) continue;
         const status = dayComplianceStatus(topic, u.id, day, posts, exemptions);
         if (status !== "pending" && status !== "missed") continue;
         const entry: ReportBacklogEntry = {
