@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/modules/report_task/components/ui/dialog";
 import type { ReportPostImage } from "@/modules/report_task/store/report-feed-store";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ReportFileChip } from "@/modules/report_task/components/report-feed/report-file-chip";
+import { isDocAttachment, isVideoAttachment } from "@/modules/report_task/lib/report-attachment-kind";
+import { ChevronLeft, ChevronRight, Download, X } from "lucide-react";
 
 const SWIPE_THRESHOLD_PX = 80;
 
@@ -54,7 +56,8 @@ export function ReportImageLightbox({
   const image = images[index];
   if (!image) return null;
 
-  const isVideo = image.mime?.startsWith("video/") ?? false;
+  const isVideo = isVideoAttachment(image.mime);
+  const isDoc = isDocAttachment(image.mime);
 
   function handlePointerDown(e: React.PointerEvent<HTMLElement>) {
     if (!hasMultiple) return;
@@ -117,7 +120,29 @@ export function ReportImageLightbox({
           </button>
         )}
 
-        {isVideo ? (
+        {isDoc ? (
+          /* A pdf/xlsx has no frame to fill a lightbox with — clicking one in
+             a post's attachment grid lands here all the same (the grid holds
+             every attachment, not just the pictures), so it gets the file's
+             identity plus the one action that makes sense for it. */
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="flex w-[min(86vw,26rem)] cursor-default flex-col items-center gap-4 rounded-2xl bg-white px-6 py-7 text-center sm:px-8"
+          >
+            {/* Width-capped so a long filename truncates inside the card
+                instead of stretching it past a phone's screen. */}
+            <ReportFileChip media={image} className="w-full border-0 p-0" />
+            <a
+              href={image.url ?? image.dataUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 rounded-full bg-[var(--brand-green)] px-4 py-2 text-sm font-medium text-[var(--ink)] transition-colors hover:bg-[var(--brand-green-dark)] hover:text-white"
+            >
+              <Download className="h-4 w-4" />
+              เปิด / ดาวน์โหลดไฟล์
+            </a>
+          </div>
+        ) : isVideo ? (
           // eslint-disable-next-line jsx-a11y/media-has-caption
           <video
             key={image.id}
@@ -189,7 +214,9 @@ export function ReportImageLightbox({
                     className={`relative h-11 w-11 shrink-0 rounded-md overflow-hidden transition-opacity cursor-pointer ${active ? "ring-2 ring-white" : "opacity-50 hover:opacity-80"}`}
                     aria-label={`ไปที่รูปที่ ${i + 1}`}
                   >
-                    {thumbIsVideo ? (
+                    {isDocAttachment(img.mime) ? (
+                      <ReportFileChip media={img} variant="icon" className="h-full w-full justify-center bg-white" />
+                    ) : thumbIsVideo ? (
                       // eslint-disable-next-line jsx-a11y/media-has-caption
                       <video src={img.url ?? img.dataUrl} muted playsInline preload="metadata" className="h-full w-full object-cover" />
                     ) : (

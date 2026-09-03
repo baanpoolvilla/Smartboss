@@ -437,10 +437,11 @@ export function RoomSettingsSheet({
             </div>
             <div className="flex items-center justify-between rounded-lg bg-[var(--bg-soft)] px-3 py-2.5">
               <div className="min-w-0 pr-3">
-                <p className="text-sm font-medium">อายุรูปในแท็บ &quot;ไฟล์&quot;</p>
+                <p className="text-sm font-medium">อายุไฟล์แนบในแท็บ &quot;ไฟล์&quot;</p>
                 <p className="text-xs text-[var(--ink-soft)]">
-                  รูปเก่ากว่านี้จะไม่แสดงในแท็บไฟล์ (อัลบั้มไม่มีวันหมดอายุ) — เลือก &quot;ไม่จำกัด&quot;
-                  ถ้าอยากให้แท็บนี้เป็นคลังเก็บไฟล์ถาวรแบบ SharePoint แทนมุมมองรูปล่าสุด
+                  รูป/เอกสารที่แนบในโพสต์เก่ากว่านี้จะไม่แสดงในตัวกรอง &quot;รูปภาพ&quot; และ &quot;เอกสาร&quot;
+                  (อัลบั้ม ลิงก์ปักหมุด และเอกสารของห้องไม่มีวันหมดอายุ) — เลือก &quot;ไม่จำกัด&quot;
+                  ถ้าอยากให้แท็บนี้เป็นคลังเก็บไฟล์ถาวรแบบ SharePoint แทนมุมมองไฟล์ล่าสุด
                 </p>
               </div>
               <Select

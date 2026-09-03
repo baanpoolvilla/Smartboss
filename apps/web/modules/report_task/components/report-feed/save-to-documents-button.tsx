@@ -26,10 +26,16 @@ export function SaveToDocumentsButton({
   topicId,
   topicName,
   file,
+  variant = "overlay",
 }: {
   topicId: string;
   topicName: string;
   file: { url?: string; dataUrl?: string; name: string; mime?: string; size?: number };
+  /** "overlay" is the original: a 20px dark circle sitting on the corner of a
+   * photo thumbnail, where anything bigger would cover the photo. "row" is
+   * for the "เอกสาร" list, where it's a standalone control in a row with
+   * nothing to cover — 20px there is too small to hit on a phone. */
+  variant?: "overlay" | "row";
 }) {
   const [state, setState] = useState<"idle" | "busy" | "done">("idle");
 
@@ -41,6 +47,11 @@ export function SaveToDocumentsButton({
       await addFileToRoomFolder(topicId, topicName, {
         url: file.url,
         name: file.name,
+        // The jpeg fallback is only for attachments from before `mime` was
+        // recorded at all — back then every attachment really was a photo.
+        // A pdf/xlsx must never take it: the library shows the wrong type,
+        // offers an image preview that can't render, and hands the browser a
+        // Content-Type that doesn't match the bytes.
         mimeType: file.mime ?? "image/jpeg",
         size: file.size ?? 0,
       });
@@ -62,13 +73,27 @@ export function SaveToDocumentsButton({
       onClick={handleClick}
       disabled={state !== "idle"}
       className={cn(
-        "shrink-0 flex items-center justify-center h-5 w-5 rounded-full transition-colors",
-        state === "done" ? "bg-[var(--brand-green)] text-[var(--ink)]" : "bg-black/60 text-white/80 hover:text-white disabled:opacity-70"
+        "shrink-0 flex items-center justify-center rounded-full transition-colors",
+        variant === "overlay"
+          ? cn(
+              "h-5 w-5",
+              state === "done" ? "bg-[var(--brand-green)] text-[var(--ink)]" : "bg-black/60 text-white/80 hover:text-white disabled:opacity-70"
+            )
+          : cn(
+              "h-8 w-8 border",
+              state === "done"
+                ? "border-[var(--brand-green)] bg-[var(--accent)] text-[var(--brand-green-dark)]"
+                : "border-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)] disabled:opacity-70"
+            )
       )}
       aria-label={state === "done" ? `เพิ่ม ${file.name} เข้าเอกสารของห้องนี้แล้ว` : `เพิ่ม ${file.name} เข้าเอกสารของห้องนี้`}
       title={state === "done" ? "อยู่ในเอกสารของห้องนี้แล้ว" : "เพิ่มเข้าเอกสารของห้องนี้ (ไม่ต้องอัปโหลดใหม่)"}
     >
-      {state === "done" ? <Check className="h-3 w-3" /> : <FolderInput className="h-3 w-3" />}
+      {state === "done" ? (
+        <Check className={variant === "overlay" ? "h-3 w-3" : "h-3.5 w-3.5"} />
+      ) : (
+        <FolderInput className={variant === "overlay" ? "h-3 w-3" : "h-3.5 w-3.5"} />
+      )}
     </button>
   );
 }
