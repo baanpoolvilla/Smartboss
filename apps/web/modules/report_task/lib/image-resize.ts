@@ -54,43 +54,14 @@ export interface UploadedReportMedia {
   size: number;
 }
 
-/** Sends `file` to the report-task upload endpoint untouched — no canvas
- * round trip. Used for anything that isn't a raster image: re-encoding a pdf
- * or a spreadsheet through a canvas would destroy it, and there's nothing to
- * downscale anyway. */
-async function uploadRaw(file: File, failureMessage: string): Promise<UploadedReportMedia> {
-  const form = new FormData();
-  form.append("file", file);
-  const res = await fetch("/api/report-task/uploads", { method: "POST", body: form });
-  if (!res.ok) {
-    const data = await res.json().catch(() => null);
-    throw new Error(data?.error ?? failureMessage);
-  }
-  const data = (await res.json()) as { url: string; mime: string; size: number };
-  return { url: data.url, mime: data.mime, name: file.name, size: data.size };
-}
-
 /**
- * Upload one post attachment — image, video or document. Images take the
- * existing downscale+re-encode path (uploadCompressedImage); everything else
- * goes up as-is through the same /api/uploads endpoint (that route's
- * ALLOWED_TYPES list + server-side magic-byte check are the real gate, same as
- * every other non-image upload path in the app — see attachment-upload.ts).
+ * Upload one post attachment, image or video — images take the existing
+ * downscale+re-encode path (uploadCompressedImage); a video goes up as-is
+ * through the same /api/uploads endpoint (that route's ALLOWED_TYPES list +
+ * server-side magic-byte check are the real gate, same as every other
+ * non-image upload path in the app — see attachment-upload.ts).
  */
 export async function uploadReportMedia(file: File): Promise<UploadedReportMedia> {
-  // Everything that isn't an image or a video: pdf/word/excel/csv/zip. Sent
-  // byte-for-byte, and size-checked against the company's own maxFileMB
-  // (the same value the server re-reads from the DB on every upload) so an
-  // oversized document fails immediately with a specific message instead of
-  // a slow upload ending in a generic 413 — same treatment videos get below.
-  if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
-    const maxFileMB = useAttachmentSettingsStore.getState().settings.maxFileMB;
-    if (file.size > maxFileMB * 1024 * 1024) {
-      const actualMb = (file.size / 1024 / 1024).toFixed(1);
-      throw new Error(`ไฟล์ใหญ่เกินไป (ไฟล์นี้ ${actualMb}MB ต้องไม่เกิน ${maxFileMB}MB)`);
-    }
-    return uploadRaw(file, "อัปโหลดไฟล์ไม่สำเร็จ");
-  }
   if (file.type.startsWith("video/")) {
     if (file.type !== "video/mp4" && file.type !== "video/webm") {
       throw new Error("รองรับเฉพาะไฟล์วิดีโอ .mp4 หรือ .webm");
@@ -108,7 +79,15 @@ export async function uploadReportMedia(file: File): Promise<UploadedReportMedia
       const actualMb = (file.size / 1024 / 1024).toFixed(1);
       throw new Error(`ไฟล์วิดีโอใหญ่เกินไป (ไฟล์นี้ ${actualMb}MB ต้องไม่เกิน ${maxVideoMB}MB)`);
     }
-    return uploadRaw(file, "อัปโหลดวิดีโอไม่สำเร็จ");
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch("/api/report-task/uploads", { method: "POST", body: form });
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      throw new Error(data?.error ?? "อัปโหลดวิดีโอไม่สำเร็จ");
+    }
+    const data = (await res.json()) as { url: string; mime: string; size: number };
+    return { url: data.url, mime: data.mime, name: file.name, size: data.size };
   }
   const { url, size } = await uploadCompressedImage(file);
   return { url, mime: "image/jpeg", name: file.name, size };

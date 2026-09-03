@@ -1,6 +1,5 @@
 import { departments, getDepartment, getUser, users } from "@/modules/report_task/lib/directory";
 import { mustReportToTopic } from "@/modules/report_task/lib/permissions";
-import { photoCount } from "@/modules/report_task/lib/report-attachment-kind";
 import { lateCutoffFor } from "@/modules/report_task/lib/report-cutoff";
 import { localDateStr, now, todayIso } from "@/modules/report_task/lib/now";
 import { isExemptDate, type DateExemptions } from "@/modules/report_task/lib/report-feed-exemptions";
@@ -143,7 +142,7 @@ function dayHasAttachmentIssue(
   if (exemptions && isExemptDate(exemptions, userId, day)) return false;
   const dayPosts = postsForDay(topic, userId, day, posts);
   if (dayPosts.length === 0) return false;
-  return !dayPosts.some((p) => photoCount(p.images) >= minImagesFor(topic, p.createdAt));
+  return !dayPosts.some((p) => p.images.length >= minImagesFor(topic, p.createdAt));
 }
 
 export interface ComplianceRow {
@@ -502,7 +501,7 @@ export function recentAttachmentIssues(
         if (dayPosts.length === 0) continue;
         if (!dayHasAttachmentIssue(topic, u.id, day, posts, exemptions)) continue;
         // The post with the most images that day is the closest attempt — report that shortfall, not the worst one.
-        const best = dayPosts.reduce((a, b) => (photoCount(b.images) > photoCount(a.images) ? b : a));
+        const best = dayPosts.reduce((a, b) => (b.images.length > a.images.length ? b : a));
         entries.push({
           userId: u.id,
           userName: u.name,
@@ -512,7 +511,7 @@ export function recentAttachmentIssues(
           topicName: topic.name,
           topicColor: topic.color,
           day,
-          imagesAttached: photoCount(best.images),
+          imagesAttached: best.images.length,
           imagesRequired: minImagesFor(topic, best.createdAt),
         });
       }

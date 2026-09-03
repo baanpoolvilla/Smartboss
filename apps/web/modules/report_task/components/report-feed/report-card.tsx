@@ -48,8 +48,6 @@ import {
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
-import { REPORT_ATTACHMENT_ACCEPT } from "@/modules/report_task/lib/report-attachment-kind";
-import { photoCount } from "@/modules/report_task/lib/report-attachment-kind";
 import { NewMessagesDivider } from "@/modules/report_task/components/report-feed/report-new-divider";
 import { ReportPostFields, newSection, type DraftSection } from "@/modules/report_task/components/report-feed/report-post-fields";
 import { useReportTagStore } from "@/modules/report_task/store/report-tag-store";
@@ -1134,7 +1132,7 @@ export function ReportCard({
               <div className="flex flex-wrap gap-1.5 pl-1">
                 {replyImages.map((img) => (
                   <div key={img.id} className="relative h-12 w-12 rounded-md overflow-hidden border border-[var(--line)]">
-                    <ReportMediaThumb media={img} fileChipVariant="icon" className="h-full w-full object-cover" />
+                    <ReportMediaThumb media={img} className="h-full w-full object-cover" />
                     <button
                       onClick={() => setReplyImages((prev) => prev.filter((i) => i.id !== img.id))}
                       className="absolute top-0 right-0 h-4 w-4 flex items-center justify-center bg-black/60 text-white rounded-bl-md"
@@ -1312,7 +1310,7 @@ export function ReportCard({
               <input
                 ref={replyFileInputRef}
                 type="file"
-                accept={REPORT_ATTACHMENT_ACCEPT}
+                accept="image/*,video/mp4,video/webm"
                 multiple
                 className="hidden"
                 onChange={(e) => handleReplyFiles(e.target.files)}
@@ -1667,7 +1665,7 @@ function EditPostForm({
   const [busy, setBusy] = useState(false);
 
   const minImagesRequired = minImagesNow(topic);
-  const missingRequiredImage = photoCount(images) < minImagesRequired;
+  const missingRequiredImage = images.length < minImagesRequired;
 
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;

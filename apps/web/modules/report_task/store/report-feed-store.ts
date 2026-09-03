@@ -59,30 +59,6 @@ export interface ReportAlbum {
   createdBy: string;
 }
 
-/**
- * A link somebody deliberately kept for the room — the counterpart to the
- * "ลิงก์" filter's automatic list, which is only ever a regex sweep over post
- * text and so can't be named, ordered, or found again once the post scrolls
- * away ("แปะแล้วหาทีหลังไม่เจอ").
- *
- * Lives here rather than in its own Prisma table on purpose: everything else
- * a room owns (posts, albums, the rooms themselves) is already one
- * server-synced JSON store shared across teammates (apiKey "report-feed"), so
- * a pinned link inherits that sync, that org scoping, and that backup path
- * for free — and none of it needs a migration. Visibility follows the room:
- * a link is only reachable through a room the viewer can already open.
- */
-export interface ReportPinnedLink {
-  id: string;
-  topicId: string;
-  url: string;
-  /** What the pinner called it — e.g. "แบบแปลน Drive". Falls back to the URL
-   * when they didn't bother naming it. */
-  title: string;
-  createdAt: string;
-  createdBy: string;
-}
-
 export interface ReportPostReply {
   id: string;
   authorId: string;
@@ -275,8 +251,7 @@ export function normalizeReportFeedSlice(slice: {
   topics?: ReportTopic[];
   posts?: ReportPost[];
   albums?: ReportAlbum[];
-  pinnedLinks?: ReportPinnedLink[];
-}): { topics: ReportTopic[]; posts: ReportPost[]; albums: ReportAlbum[]; pinnedLinks: ReportPinnedLink[] } {
+}): { topics: ReportTopic[]; posts: ReportPost[]; albums: ReportAlbum[] } {
   return {
     topics: (slice.topics ?? []).map((t) => ({
       ...t,
@@ -298,7 +273,6 @@ export function normalizeReportFeedSlice(slice: {
       })),
     })),
     albums: slice.albums ?? [],
-    pinnedLinks: slice.pinnedLinks ?? [],
   };
 }
 
@@ -346,7 +320,6 @@ interface ReportFeedStore {
   topics: ReportTopic[];
   posts: ReportPost[];
   albums: ReportAlbum[];
-  pinnedLinks: ReportPinnedLink[];
   /** True once ServerStoreSync's initial GET has resolved. */
   loaded: boolean;
   addTopic: (data: {
@@ -430,12 +403,6 @@ interface ReportFeedStore {
    * just fall back to "not in any album" (see ReportPostImage.albumId) —
    * so nothing about the posts themselves needs to change here. */
   removeAlbum: (id: string) => void;
-  /** Keeps one link for the room and returns its id. Pinning the same URL
-   * twice in a room updates the existing pin's title rather than stacking a
-   * duplicate next to it. */
-  pinLink: (topicId: string, url: string, title: string, userId: string) => string;
-  renamePinnedLink: (id: string, title: string) => void;
-  unpinLink: (id: string) => void;
 }
 
 // Server-synced via ServerStoreSync (apiKey "report-feed") in
@@ -445,7 +412,6 @@ export const useReportFeedStore = create<ReportFeedStore>()(
       topics: defaultTopics,
       posts: [],
       albums: [],
-      pinnedLinks: [],
       loaded: false,
       addTopic: (data) => {
         const id = nextId("topic");
@@ -813,30 +779,6 @@ export const useReportFeedStore = create<ReportFeedStore>()(
       removeAlbum: (id) =>
         set((s) => ({
           albums: s.albums.filter((a) => a.id !== id),
-        })),
-      pinLink: (topicId, url, title, userId) => {
-        // The same URL posted twice in a room is one link worth keeping, not
-        // two — re-pinning it is how you rename a pin you already made, which
-        // is also what the "ปักหมุด" button on an already-pinned post link
-        // ends up doing.
-        const existing = get().pinnedLinks.find((l) => l.topicId === topicId && l.url === url);
-        if (existing) {
-          set((s) => ({ pinnedLinks: s.pinnedLinks.map((l) => (l.id === existing.id ? { ...l, title } : l)) }));
-          return existing.id;
-        }
-        const id = nextId("pinlink");
-        set((s) => ({
-          pinnedLinks: [...s.pinnedLinks, { id, topicId, url, title, createdAt: new Date().toISOString(), createdBy: userId }],
-        }));
-        return id;
-      },
-      renamePinnedLink: (id, title) =>
-        set((s) => ({
-          pinnedLinks: s.pinnedLinks.map((l) => (l.id === id ? { ...l, title } : l)),
-        })),
-      unpinLink: (id) =>
-        set((s) => ({
-          pinnedLinks: s.pinnedLinks.filter((l) => l.id !== id),
         })),
   })
 );

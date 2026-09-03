@@ -14,18 +14,7 @@ import type { CompanyFile } from "@prisma/client";
  * คนที่ยังเป็นสมาชิกห้องอยู่ (บังคับจริงฝั่งเซิร์ฟเวอร์ ดู room-access-server.ts)
  * รายละเอียด/เวอร์ชัน/แชร์ ใช้หน้าเดิมของไฟล์บริษัทเลย ไม่ทำซ้ำที่นี่
  */
-export function ReportTopicDocuments({
-  topicId,
-  topicName,
-  search = "",
-}: {
-  topicId: string;
-  topicName: string;
-  /** The "ไฟล์" tab's single search box — one box covers post attachments,
-   * links, albums AND this library, so it's passed in rather than given a
-   * second box of its own. */
-  search?: string;
-}) {
+export function ReportTopicDocuments({ topicId, topicName }: { topicId: string; topicName: string }) {
   const [files, setFiles] = useState<CompanyFile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -43,9 +32,6 @@ export function ReportTopicDocuments({
       cancelled = true;
     };
   }, [topicId]);
-
-  const q = search.trim().toLowerCase();
-  const visibleFiles = q ? (files ?? []).filter((f) => f.name.toLowerCase().includes(q)) : (files ?? []);
 
   function handleUpload(fileList: FileList | null) {
     const picked = fileList ? Array.from(fileList) : [];
@@ -84,11 +70,9 @@ export function ReportTopicDocuments({
         <p className="text-xs text-[var(--ink-soft)]">กำลังโหลด...</p>
       ) : files.length === 0 ? (
         <p className="text-xs text-[var(--ink-soft)]">ยังไม่มีเอกสารในห้องนี้ — เห็นเฉพาะคนในห้องนี้เท่านั้น</p>
-      ) : visibleFiles.length === 0 ? (
-        <p className="text-xs text-[var(--ink-soft)]">ไม่มีเอกสารตรงกับคำค้น</p>
       ) : (
         <div className="flex flex-col gap-1">
-          {visibleFiles.map((f) => (
+          {files.map((f) => (
             <Link
               key={f.id}
               href={`/company-files/file/${f.id}`}

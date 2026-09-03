@@ -42,15 +42,12 @@ function escapeHtml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-/** A line starting with a "• "/"N. "/"☐ "/"☑ " marker, matched against the same prefixes the toolbar and read-only renderer use. */
-const ANY_LIST_LINE_PREFIX = /^(•|\d+\.|☐|☑)\s+/;
-
 /** Converts stored `**bold**`/`*italic*`/`__underline__`/`` `code` ``/`@[label](type:id)` marker text into the WYSIWYG editor's live HTML. */
 export function bulletsTextToHtml(text: string): string {
   const html = text
     .split("\n")
-    .map((line) => {
-      const rendered = escapeHtml(line).replace(RICH_TEXT_PATTERN, (whole, mLabel, mType, mId, b, i, u, c) => {
+    .map((line) =>
+      escapeHtml(line).replace(RICH_TEXT_PATTERN, (whole, mLabel, mType, mId, b, i, u, c) => {
         // A bare URL match falls through to here too — left as plain text in
         // the editor (not a live <a>), since linkifying it would make the
         // URL uneditable as text mid-edit.
@@ -62,18 +59,8 @@ export function bulletsTextToHtml(text: string): string {
         if (u !== undefined) return `<u>${u}</u>`;
         if (c !== undefined) return `<code>${c}</code>`;
         return whole;
-      });
-      // A wrapped list line otherwise snaps its continuation back to the
-      // editor's own left edge instead of hanging under the marker's text —
-      // text-indent only ever affects a block's *first* line, and every
-      // bullet here lives in the same block, joined by <br>, not one block
-      // each. An inline-block per line sidesteps that: it's still just a
-      // sibling in the <br>-joined flow (so line-splitting on read-back is
-      // untouched), but forcing it to full width gives it its own "first
-      // line" to indent independently of every other bullet.
-      if (!ANY_LIST_LINE_PREFIX.test(line)) return rendered;
-      return `<span style="display:inline-block;width:100%;padding-left:1.25em;text-indent:-1.25em">${rendered}</span>`;
-    })
+      })
+    )
     .join("<br>");
   // A completely empty contentEditable has no node to anchor a caret to —
   // clicking into it doesn't reliably place a selection in Chromium. A lone

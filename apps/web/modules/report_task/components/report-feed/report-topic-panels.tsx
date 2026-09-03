@@ -31,24 +31,17 @@ import { Input } from "@/modules/report_task/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
 import { AlbumPickerButton } from "@/modules/report_task/components/report-feed/album-picker-button";
 import { SaveToDocumentsButton } from "@/modules/report_task/components/report-feed/save-to-documents-button";
-import { ReportFileChip } from "@/modules/report_task/components/report-feed/report-file-chip";
-import { PinLinkDialog } from "@/modules/report_task/components/report-feed/pin-link-dialog";
-import { isDocAttachment } from "@/modules/report_task/lib/report-attachment-kind";
 import { TopicEmptyState } from "@/modules/report_task/components/report-feed/topic-empty-state";
 import { TimeAgo } from "@/modules/report_task/components/shared/time-ago";
 import {
   ArrowLeft,
   FileImage,
-  FileText,
   FolderHeart,
   FolderPlus,
-  LayoutGrid,
   Link2,
   MessageCircle,
   MessageSquareText,
   Pencil,
-  Pin,
-  PinOff,
   Search,
   ThumbsUp,
   Trash2,
@@ -81,37 +74,6 @@ interface LinkEntry {
   postId: string;
   postTitle: string;
   createdAt: string;
-}
-
-/** The five views behind the single "ไฟล์" tab. Everything a room accumulates
- * used to be spread across three sibling tabs whose names didn't match what
- * they held ("ไฟล์" was recent photos, "รูปภาพ" was albums) — one tab with an
- * explicit filter row says what each pile actually is. */
-export type FileFilter = "all" | "images" | "docs" | "links" | "albums";
-
-const fileFilterOptions: { id: FileFilter; label: string; icon: typeof FileImage }[] = [
-  { id: "all", label: "ทั้งหมด", icon: LayoutGrid },
-  { id: "images", label: "รูปภาพ", icon: FileImage },
-  { id: "docs", label: "เอกสาร", icon: FileText },
-  { id: "links", label: "ลิงก์", icon: Link2 },
-  { id: "albums", label: "อัลบั้ม", icon: FolderHeart },
-];
-
-/** The old `?tab=album` / `?tab=links` deep links (dashboard charts, copied
- * URLs, anyone's bookmarks) still name views that exist — they're just filters
- * inside "ไฟล์" now, not tabs of their own. */
-export function fileFilterForLegacyTab(tab: string | null): FileFilter | null {
-  if (tab === "album") return "albums";
-  if (tab === "links") return "links";
-  return null;
-}
-
-function hostnameOf(url: string): string | null {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return null;
-  }
 }
 
 // Every image attached anywhere in the room — including ones not curated
@@ -167,14 +129,10 @@ export function ReportTopicPanels({
   tab,
   topic,
   topicPosts,
-  initialFileFilter,
 }: {
-  tab: "files" | "stats";
+  tab: "files" | "album" | "links" | "stats";
   topic: ReportTopic;
   topicPosts: ReportPost[];
-  /** Which filter the "ไฟล์" tab opens on — set by a legacy `?tab=album` /
-   * `?tab=links` deep link (see fileFilterForLegacyTab), "all" otherwise. */
-  initialFileFilter?: FileFilter;
 }) {
   const [lightbox, setLightbox] = useState<{ images: ReportPostImage[]; index: number } | null>(null);
   const exemptions = useReportComplianceExemptions();
@@ -200,26 +158,11 @@ export function ReportTopicPanels({
   const [deleteAlbumTarget, setDeleteAlbumTarget] = useState<{ id: string; name: string } | null>(null);
   // Files tab toolbar (3.5.2) — search by filename/post title + filter by
   // uploader, on top of the tab's own rolling FILES_TAB_WINDOW_DAYS window.
-  // The search box sits above the filter row and applies to whichever filter
-  // is showing, so there's one place to type no matter what you're looking
-  // for (a filename, a link's name, an album).
   const [fileSearch, setFileSearch] = useState("");
   const [fileAuthorId, setFileAuthorId] = useState<string>("all");
-  const [fileFilter, setFileFilter] = useState<FileFilter>(initialFileFilter ?? "all");
-
-  const pinnedLinksAll = useReportFeedStore((s) => s.pinnedLinks);
-  const pinLink = useReportFeedStore((s) => s.pinLink);
-  const renamePinnedLink = useReportFeedStore((s) => s.renamePinnedLink);
-  const unpinLink = useReportFeedStore((s) => s.unpinLink);
-  const [pinTarget, setPinTarget] = useState<{ url: string; title: string; id?: string } | null>(null);
 
   const files = useMemo(() => collectFiles(topicPosts), [topicPosts]);
   const links = useMemo(() => collectLinks(topicPosts), [topicPosts]);
-  const pinnedLinks = useMemo(
-    () => pinnedLinksAll.filter((l) => l.topicId === topic.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-    [pinnedLinksAll, topic.id]
-  );
-  const pinnedUrls = useMemo(() => new Set(pinnedLinks.map((l) => l.url)), [pinnedLinks]);
   // The "ไฟล์" tab's own rolling window — unrelated to album membership, so
   // an old photo already saved to an album still shows up fine in "อัลบั้ม"
   // even after it's aged out of this list.
@@ -240,21 +183,6 @@ export function ReportTopicPanels({
       return true;
     });
   }, [recentFiles, fileSearch, fileAuthorId]);
-  // The two halves of what a post can carry: pictures/clips (a grid worth
-  // looking at) and documents (a list worth reading names off). Same source,
-  // same window, same search — split only at the point of display.
-  const visibleImages = useMemo(() => visibleFiles.filter((f) => !isDocAttachment(f.image.mime)), [visibleFiles]);
-  const visibleDocs = useMemo(() => visibleFiles.filter((f) => isDocAttachment(f.image.mime)), [visibleFiles]);
-  const visibleLinks = useMemo(() => {
-    const q = fileSearch.trim().toLowerCase();
-    if (!q) return links;
-    return links.filter((l) => l.url.toLowerCase().includes(q) || l.postTitle.toLowerCase().includes(q));
-  }, [links, fileSearch]);
-  const visiblePinnedLinks = useMemo(() => {
-    const q = fileSearch.trim().toLowerCase();
-    if (!q) return pinnedLinks;
-    return pinnedLinks.filter((l) => l.title.toLowerCase().includes(q) || l.url.toLowerCase().includes(q));
-  }, [pinnedLinks, fileSearch]);
   // LINE-style: only images explicitly curated into an album ever show up
   // here — an attachment nobody picked an album for stays view-it-in-the-post
   // only, same as an un-Kept chat photo never appearing in LINE's Keep.
@@ -266,21 +194,8 @@ export function ReportTopicPanels({
       }),
     [albums, files]
   );
-  const visibleAlbumFolders = useMemo(() => {
-    const q = fileSearch.trim().toLowerCase();
-    if (!q) return albumFolders;
-    return albumFolders.filter((f) => f.album.name.toLowerCase().includes(q));
-  }, [albumFolders, fileSearch]);
   const openAlbum = openAlbumId ? albumFolders.find((f) => f.album.id === openAlbumId) : undefined;
   const openAlbumFiles = openAlbumId ? files.filter((f) => f.image.albumId === openAlbumId) : [];
-
-  const filterCounts: Record<FileFilter, number> = {
-    all: visibleImages.length + visibleDocs.length + visibleLinks.length + visiblePinnedLinks.length,
-    images: visibleImages.length,
-    docs: visibleDocs.length,
-    links: visibleLinks.length + visiblePinnedLinks.length,
-    albums: visibleAlbumFolders.length,
-  };
 
   // A room with a posting schedule (cutoffs) gets judged the same way the
   // Dashboard's compliance widgets judge it — ตรงเวลา/สาย/ไม่ส่ง per
@@ -321,221 +236,97 @@ export function ReportTopicPanels({
   // involved. One-tap AlbumPickerButton per thumbnail is how something
   // graduates into a real (non-expiring) album; nothing here requires a
   // decision up front, unlike composing a post.
-  // One image thumbnail with its two overlay actions (เก็บลงอัลบั้ม /
-  // เพิ่มเข้าเอกสาร) — identical in the "รูปภาพ" grid and the mixed
-  // "ทั้งหมด" one, so it's written once here rather than twice below.
-  function imageCell(f: FileEntry, index: number) {
+  if (tab === "files") {
     return (
-      <div key={`${f.image.id}-${index}`} className="relative group">
-        <button onClick={() => setLightbox({ images: visibleImages.map((ff) => ff.image), index })} className="block text-left w-full">
-          <ReportMediaThumb media={f.image} className="w-full h-24 object-cover rounded-lg border border-[var(--line)] group-hover:opacity-90" />
-          <p className="text-xs mt-1 truncate">{f.image.name}</p>
-          <p className="text-[11px] text-[var(--ink-soft)] truncate">
-            {getUser(f.authorId)?.name} · <TimeAgo date={f.createdAt} />
-          </p>
-        </button>
-        <div className="absolute top-1 left-1">
-          <AlbumPickerButton
-            topicId={topic.id}
-            imageName={f.image.name}
-            albumId={f.image.albumId}
-            onChange={(albumId) => setImageAlbum(f.postId, f.image.id, albumId)}
-          />
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="mb-4">
+          <ReportTopicDocuments topicId={topic.id} topicName={topic.name} />
         </div>
-        <div className="absolute top-1 right-1">
-          <SaveToDocumentsButton topicId={topic.id} topicName={topic.name} file={f.image} />
-        </div>
-      </div>
-    );
-  }
-
-  /** A pdf/xlsx attached to a post — a row, not a tile: the filename is the
-   * only thing that identifies it, so it gets the width. Opens the real file
-   * in a new tab; the same "เพิ่มเข้าเอกสารของห้องนี้" button the photos
-   * have sits at the end. */
-  function docRow(f: FileEntry, key: string) {
-    return (
-      <div key={key} className="flex items-center gap-2.5 rounded-lg border border-[var(--line)] px-2.5 py-2">
-        <ReportFileChip media={f.image} variant="icon" className="shrink-0" />
-        <div className="min-w-0 flex-1">
-          <a
-            href={f.image.url ?? f.image.dataUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block truncate text-sm font-medium hover:text-[var(--brand-green-dark)] hover:underline"
-          >
-            {f.image.name}
-          </a>
-          <button onClick={() => scrollToPost(f.postId)} className="block max-w-full truncate text-[11px] text-[var(--ink-soft)] hover:underline">
-            จาก &quot;{f.postTitle}&quot; · {getUser(f.authorId)?.name} · <TimeAgo date={f.createdAt} />
-          </button>
-        </div>
-        <div className="shrink-0">
-          <SaveToDocumentsButton topicId={topic.id} topicName={topic.name} file={f.image} variant="row" />
-        </div>
-      </div>
-    );
-  }
-
-  /** One link row, used for both the pinned group and the automatic
-   * from-posts group — `pinned` decides whether the trailing button pins it
-   * or unpins it. */
-  function linkRow(l: { url: string; title?: string; postId?: string; postTitle?: string; createdAt: string; id?: string }, key: string, pinned: boolean) {
-    const domain = hostnameOf(l.url);
-    return (
-      <div key={key} className="flex items-start gap-2.5 rounded-lg border border-[var(--line)] px-3 py-2.5">
-        {domain ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={`https://www.google.com/s2/favicons?sz=32&domain=${domain}`} alt="" className="h-4 w-4 mt-0.5 shrink-0 rounded" />
-        ) : (
-          <Link2 className="h-4 w-4 mt-0.5 shrink-0 text-[var(--brand-green-dark)]" />
-        )}
-        <div className="min-w-0 flex-1">
-          {l.title ? (
-            <>
-              <a href={l.url} target="_blank" rel="noopener noreferrer" className="block truncate text-sm font-medium hover:text-[var(--brand-green-dark)] hover:underline">
-                {l.title}
-              </a>
-              <p className="truncate text-[11px] text-[var(--ink-soft)]">{l.url}</p>
-            </>
-          ) : (
-            <>
-              {domain && <p className="text-[11px] font-medium text-[var(--ink-soft)] truncate">{domain}</p>}
-              <a href={l.url} target="_blank" rel="noopener noreferrer" className="text-sm text-[var(--brand-green-dark)] hover:underline break-all">
-                {l.url}
-              </a>
-            </>
-          )}
-          {l.postId && l.postTitle && (
-            <button onClick={() => scrollToPost(l.postId!)} className="block max-w-full truncate text-[11px] text-[var(--ink-soft)] hover:underline mt-0.5">
-              จาก &quot;{l.postTitle}&quot; · <TimeAgo date={l.createdAt} />
-            </button>
-          )}
-        </div>
-        <div className="flex shrink-0 items-center gap-0.5">
-          {pinned ? (
-            <>
-              <button
-                onClick={() => setPinTarget({ url: l.url, title: l.title ?? "", id: l.id })}
-                className="h-8 w-8 flex items-center justify-center rounded-md text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
-                aria-label={`เปลี่ยนชื่อลิงก์ ${l.title ?? l.url}`}
-                title="เปลี่ยนชื่อ"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </button>
-              <button
-                onClick={() => l.id && unpinLink(l.id)}
-                className="h-8 w-8 flex items-center justify-center rounded-md text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
-                aria-label={`เลิกปักหมุด ${l.title ?? l.url}`}
-                title="เลิกปักหมุด"
-              >
-                <PinOff className="h-3.5 w-3.5" />
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={() => setPinTarget({ url: l.url, title: "" })}
-              className={cn(
-                "h-8 w-8 flex items-center justify-center rounded-md hover:bg-[var(--bg-soft)]",
-                pinnedUrls.has(l.url) ? "text-[var(--brand-green-dark)]" : "text-[var(--ink-soft)]"
-              )}
-              aria-label={`ปักหมุด ${l.url}`}
-              title={pinnedUrls.has(l.url) ? "ปักหมุดไว้แล้ว — กดเพื่อเปลี่ยนชื่อ" : "ปักหมุดลิงก์นี้ไว้"}
-            >
-              <Pin className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  function imagesGrid(entries: FileEntry[]) {
-    return (
-      <div className="space-y-4">
-        {groupByDay(entries, (f) => f.createdAt).map((group) => (
-          <div key={group.key}>
-            <p className="text-[11px] font-bold text-[var(--ink-soft)] mb-2">{group.label}</p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-              {group.items.map((f) => imageCell(f, visibleImages.indexOf(f)))}
+        <p className="text-xs text-[var(--ink-soft)] mb-3">
+          รูปในช่วง {filesWindowDays} วันล่าสุด — แตะไอคอนที่มุมรูปเพื่อเก็บลงอัลบั้มแบบถาวร
+        </p>
+        {recentFiles.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap mb-3">
+            <div className="relative flex-1 min-w-[160px] max-w-xs">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--ink-soft)]" />
+              <Input
+                value={fileSearch}
+                onChange={(e) => setFileSearch(e.target.value)}
+                placeholder="ค้นชื่อไฟล์..."
+                className="pl-8 h-8 text-xs"
+              />
             </div>
+            <Select value={fileAuthorId} onValueChange={(v) => v && setFileAuthorId(v)}>
+              <SelectTrigger className="h-8 w-[150px] text-xs">
+                <SelectValue>{fileAuthorId === "all" ? "ทุกคน" : getUser(fileAuthorId)?.name}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">ทุกคน</SelectItem>
+                {fileAuthorOptions.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        ))}
-      </div>
-    );
-  }
-
-  function albumFolderGrid() {
-    return (
-      <>
-        <div className="flex items-center justify-between gap-2 mb-3">
-          <p className="text-xs text-[var(--ink-soft)]">อัลบั้มเก็บรูปแบบถาวรของหัวข้อนี้</p>
-          <button
-            onClick={() => setCreateAlbumOpen(true)}
-            className="shrink-0 flex items-center gap-1.5 rounded-full bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white text-xs font-medium px-3 py-1.5 transition-colors"
-          >
-            <FolderPlus className="h-3.5 w-3.5" />
-            สร้างอัลบั้ม
-          </button>
-        </div>
-        {visibleAlbumFolders.length === 0 ? (
-          <TopicEmptyState
-            icon={FolderHeart}
-            title={fileSearch.trim() ? "ไม่มีอัลบั้มตรงกับคำค้น" : "ยังไม่มีอัลบั้มในหัวข้อนี้"}
-            description={fileSearch.trim() ? "ลองค้นด้วยคำอื่น" : "สร้างอัลบั้มไว้ก่อน หรือเก็บรูปจากตัวกรอง “รูปภาพ” ลงอัลบั้มได้"}
-            action={
-              fileSearch.trim() ? undefined : (
-                <button
-                  onClick={() => setCreateAlbumOpen(true)}
-                  className="flex items-center gap-1.5 rounded-full bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white text-xs font-medium px-3.5 py-1.5 transition-colors"
-                >
-                  <FolderPlus className="h-3.5 w-3.5" />
-                  สร้างอัลบั้มแรก
-                </button>
-              )
-            }
-          />
+        )}
+        {recentFiles.length === 0 ? (
+          <TopicEmptyState icon={FileImage} title={`ยังไม่มีรูปในช่วง ${filesWindowDays} วันล่าสุด`} description="รูปที่แนบมากับโพสต์หรือความคิดเห็นในหัวข้อนี้จะขึ้นที่นี่" />
+        ) : visibleFiles.length === 0 ? (
+          <TopicEmptyState icon={Search} title="ไม่มีไฟล์ตรงกับตัวกรอง" description="ลองค้นด้วยคำอื่น หรือเลือก &quot;ทุกคน&quot;" />
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {visibleAlbumFolders.map(({ album, count, cover }) => (
-              <button
-                key={album.id}
-                onClick={() => setOpenAlbumId(album.id)}
-                className="group text-left rounded-lg border border-[var(--line)] overflow-hidden hover:border-[var(--brand-green)]/40 transition-colors"
-              >
-                <div className="h-24 bg-[var(--bg-soft)] flex items-center justify-center overflow-hidden">
-                  {cover ? (
-                    <ReportMediaThumb media={cover} className="w-full h-full object-cover group-hover:opacity-90" />
-                  ) : (
-                    <FolderHeart className="h-6 w-6 text-[var(--ink-soft)]" />
-                  )}
+          <div className="space-y-4">
+            {groupByDay(visibleFiles, (f) => f.createdAt).map((group) => (
+              <div key={group.key}>
+                <p className="text-[11px] font-bold text-[var(--ink-soft)] mb-2">{group.label}</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+                  {group.items.map((f) => {
+                    const i = visibleFiles.indexOf(f);
+                    return (
+                      <div key={`${f.image.id}-${i}`} className="relative group">
+                        <button onClick={() => setLightbox({ images: visibleFiles.map((ff) => ff.image), index: i })} className="block text-left w-full">
+                          <ReportMediaThumb
+                            media={f.image}
+                            className="w-full h-24 object-cover rounded-lg border border-[var(--line)] group-hover:opacity-90"
+                          />
+                          <p className="text-xs mt-1 truncate">{f.image.name}</p>
+                          <p className="text-[11px] text-[var(--ink-soft)] truncate">
+                            {getUser(f.authorId)?.name} · <TimeAgo date={f.createdAt} />
+                          </p>
+                        </button>
+                        <div className="absolute top-1 left-1">
+                          <AlbumPickerButton
+                            topicId={topic.id}
+                            imageName={f.image.name}
+                            albumId={f.image.albumId}
+                            onChange={(albumId) => setImageAlbum(f.postId, f.image.id, albumId)}
+                          />
+                        </div>
+                        <div className="absolute top-1 right-1">
+                          <SaveToDocumentsButton topicId={topic.id} topicName={topic.name} file={f.image} />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className="p-2">
-                  <p className="text-xs font-medium truncate">{album.name}</p>
-                  <p className="text-[11px] text-[var(--ink-soft)]">{count} รูป</p>
-                </div>
-              </button>
+              </div>
             ))}
           </div>
         )}
-      </>
+        {lightbox && (
+          <ReportImageLightbox
+            images={lightbox.images}
+            index={lightbox.index}
+            onIndexChange={(index) => setLightbox((cur) => (cur ? { ...cur, index } : cur))}
+            onClose={() => setLightbox(null)}
+          />
+        )}
+      </div>
     );
   }
 
-  function sectionHeading(text: string, count: number) {
-    return (
-      <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-[var(--ink-soft)]">
-        {text}
-        <span className="rounded-full bg-[var(--bg-soft)] px-1.5 py-0.5 font-medium tabular-nums">{count}</span>
-      </p>
-    );
-  }
-
-  if (tab === "files") {
-    // Inside one album the filter row steps aside entirely — you're in a
-    // folder now, and the way out is its own back button, same as before
-    // this was a filter rather than a tab of its own.
-    if (fileFilter === "albums" && openAlbum) {
+  if (tab === "album") {
+    // Inside one album: its own photo grid, same lightbox as the files tab.
+    if (openAlbum) {
       return (
         <div className="flex-1 overflow-y-auto p-4">
           <div className="flex items-center justify-between gap-2 mb-3">
@@ -565,7 +356,7 @@ export function ReportTopicPanels({
             </div>
           </div>
           {openAlbumFiles.length === 0 ? (
-            <TopicEmptyState icon={FolderHeart} title="อัลบั้มนี้ยังไม่มีรูป" description="เก็บรูปจากตัวกรอง &quot;รูปภาพ&quot; ลงอัลบั้มนี้ได้" />
+            <TopicEmptyState icon={FolderHeart} title="อัลบั้มนี้ยังไม่มีรูป" description="เก็บรูปจากแท็บ &quot;ไฟล์&quot; ลงอัลบั้มนี้ได้" />
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
               {openAlbumFiles.map((f, i) => (
@@ -625,182 +416,57 @@ export function ReportTopicPanels({
       );
     }
 
-    const hasAnything = recentFiles.length + links.length + pinnedLinks.length + albumFolders.length > 0;
-
+    // Folder list — creating one here works before any photo exists at all,
+    // not just as a side effect of saving a photo from "ไฟล์".
     return (
       <div className="flex-1 overflow-y-auto p-4">
-        {/* One search box for the whole tab, above the filter row rather than
-            inside any one filter — a filename, a link's name and an album
-            name are all "something I put in this room", so there's no reason
-            to make people find a different box for each. The uploader
-            dropdown only narrows things that have an uploader (photos and
-            documents), so it hides on the link/album filters. */}
-        {hasAnything && (
-          <div className="flex items-center gap-2 flex-wrap mb-2.5">
-            <div className="relative flex-1 min-w-[160px] max-w-xs">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--ink-soft)]" />
-              <Input
-                value={fileSearch}
-                onChange={(e) => setFileSearch(e.target.value)}
-                placeholder="ค้นชื่อไฟล์ / ลิงก์ / อัลบั้ม..."
-                className="pl-8 h-8 text-xs"
-              />
-            </div>
-            {(fileFilter === "all" || fileFilter === "images" || fileFilter === "docs") && fileAuthorOptions.length > 0 && (
-              <Select value={fileAuthorId} onValueChange={(v) => v && setFileAuthorId(v)}>
-                <SelectTrigger className="h-8 w-[150px] text-xs">
-                  <SelectValue>{fileAuthorId === "all" ? "ทุกคน" : getUser(fileAuthorId)?.name}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">ทุกคน</SelectItem>
-                  {fileAuthorOptions.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
-        )}
-
-        {/* Segmented control, scroll-x on a phone rather than wrapping into a
-            second row that shifts everything below it. */}
-        <div role="tablist" aria-label="ชนิดของไฟล์" className="no-scrollbar -mx-1 mb-3 flex items-center gap-1 overflow-x-auto px-1">
-          {fileFilterOptions.map((opt) => {
-            const Icon = opt.icon;
-            const active = fileFilter === opt.id;
-            const count = filterCounts[opt.id];
-            return (
-              <button
-                key={opt.id}
-                role="tab"
-                aria-selected={active}
-                onClick={() => setFileFilter(opt.id)}
-                className={cn(
-                  "shrink-0 flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-                  active
-                    ? "border-[var(--brand-green)] bg-[var(--accent)] text-[var(--brand-green-dark)]"
-                    : "border-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)]"
-                )}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {opt.label}
-                {count > 0 && <span className="tabular-nums text-[10px] opacity-70">{count > 99 ? "99+" : count}</span>}
-              </button>
-            );
-          })}
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <p className="text-xs text-[var(--ink-soft)]">อัลบั้มเก็บรูปแบบถาวรของหัวข้อนี้</p>
+          <button
+            onClick={() => setCreateAlbumOpen(true)}
+            className="shrink-0 flex items-center gap-1.5 rounded-full bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white text-xs font-medium px-3 py-1.5 transition-colors"
+          >
+            <FolderPlus className="h-3.5 w-3.5" />
+            สร้างอัลบั้ม
+          </button>
         </div>
-
-        {fileFilter === "images" && (
-          <>
-            <p className="text-xs text-[var(--ink-soft)] mb-3">
-              รูป/คลิปในช่วง {filesWindowDays} วันล่าสุด — แตะไอคอนที่มุมรูปเพื่อเก็บลงอัลบั้มแบบถาวร
-            </p>
-            {visibleImages.length === 0 ? (
-              <TopicEmptyState
-                icon={FileImage}
-                title={recentFiles.length === 0 ? `ยังไม่มีรูปในช่วง ${filesWindowDays} วันล่าสุด` : "ไม่มีรูปตรงกับตัวกรอง"}
-                description={recentFiles.length === 0 ? "รูปที่แนบมากับโพสต์หรือความคิดเห็นในหัวข้อนี้จะขึ้นที่นี่" : "ลองค้นด้วยคำอื่น หรือเลือก “ทุกคน”"}
-              />
-            ) : (
-              imagesGrid(visibleImages)
-            )}
-          </>
-        )}
-
-        {fileFilter === "docs" && (
-          <div className="space-y-4">
-            {/* The room's real document library first — it's the permanent
-                half, unlike post attachments which age out of the window
-                above. Used to sit at the top of this tab regardless of what
-                you came here for, which is what made "ไฟล์" confusing. */}
-            <ReportTopicDocuments topicId={topic.id} topicName={topic.name} search={fileSearch} />
-            <div className="space-y-1.5">
-              {sectionHeading("เอกสารที่แนบในโพสต์", visibleDocs.length)}
-              {visibleDocs.length === 0 ? (
-                <p className="text-xs text-[var(--ink-soft)]">
-                  {recentFiles.length === 0
-                    ? `ยังไม่มีเอกสารที่แนบในโพสต์ช่วง ${filesWindowDays} วันล่าสุด — แนบ PDF/Word/Excel ในโพสต์ได้เลย`
-                    : "ไม่มีเอกสารตรงกับตัวกรอง"}
-                </p>
-              ) : (
-                visibleDocs.map((f, i) => docRow(f, `${f.image.id}-${i}`))
-              )}
-            </div>
-          </div>
-        )}
-
-        {fileFilter === "links" && (
-          <div className="space-y-4">
-            {visiblePinnedLinks.length > 0 && (
-              <div className="space-y-1.5">
-                {sectionHeading("ปักหมุดไว้", visiblePinnedLinks.length)}
-                {visiblePinnedLinks.map((l) => linkRow(l, l.id, true))}
-              </div>
-            )}
-            <div className="space-y-1.5">
-              {sectionHeading("ลิงก์จากโพสต์", visibleLinks.length)}
-              {visibleLinks.length === 0 ? (
-                <p className="text-xs text-[var(--ink-soft)]">
-                  {links.length === 0 ? "ลิงก์ที่แปะไว้ในโพสต์หรือความคิดเห็นจะรวบรวมมาไว้ที่นี่" : "ไม่มีลิงก์ตรงกับคำค้น"}
-                </p>
-              ) : (
-                visibleLinks.map((l, i) => linkRow(l, `${l.url}-${i}`, false))
-              )}
-            </div>
-            {visiblePinnedLinks.length === 0 && visibleLinks.length === 0 && links.length === 0 && (
-              <TopicEmptyState icon={Link2} title="ยังไม่มีลิงก์ในหัวข้อนี้" description="ลิงก์ในโพสต์จะขึ้นที่นี่เอง กดหมุดไว้เพื่อตั้งชื่อและเก็บถาวร" />
-            )}
-          </div>
-        )}
-
-        {fileFilter === "albums" && albumFolderGrid()}
-
-        {fileFilter === "all" && (
-          <div className="space-y-4">
-            {filterCounts.all === 0 ? (
-              <TopicEmptyState
-                icon={LayoutGrid}
-                title={hasAnything ? "ไม่มีอะไรตรงกับคำค้น" : "ยังไม่มีไฟล์ในหัวข้อนี้"}
-                description={hasAnything ? "ลองค้นด้วยคำอื่น" : "รูป เอกสาร และลิงก์ที่แนบมากับโพสต์ในหัวข้อนี้จะมารวมกันที่นี่"}
-              />
-            ) : (
-              <>
-                {visibleImages.length > 0 && (
-                  <div className="space-y-2">
-                    {sectionHeading("รูปภาพ", visibleImages.length)}
-                    {imagesGrid(visibleImages)}
-                  </div>
-                )}
-                {visibleDocs.length > 0 && (
-                  <div className="space-y-1.5">
-                    {sectionHeading("เอกสาร", visibleDocs.length)}
-                    {visibleDocs.map((f, i) => docRow(f, `all-${f.image.id}-${i}`))}
-                  </div>
-                )}
-                {visiblePinnedLinks.length > 0 && (
-                  <div className="space-y-1.5">
-                    {sectionHeading("ลิงก์ปักหมุด", visiblePinnedLinks.length)}
-                    {visiblePinnedLinks.map((l) => linkRow(l, `all-${l.id}`, true))}
-                  </div>
-                )}
-                {visibleLinks.length > 0 && (
-                  <div className="space-y-1.5">
-                    {sectionHeading("ลิงก์จากโพสต์", visibleLinks.length)}
-                    {visibleLinks.map((l, i) => linkRow(l, `all-${l.url}-${i}`, false))}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        )}
-
-        {lightbox && (
-          <ReportImageLightbox
-            images={lightbox.images}
-            index={lightbox.index}
-            onIndexChange={(index) => setLightbox((cur) => (cur ? { ...cur, index } : cur))}
-            onClose={() => setLightbox(null)}
+        {albumFolders.length === 0 ? (
+          <TopicEmptyState
+            icon={FolderHeart}
+            title="ยังไม่มีอัลบั้มในหัวข้อนี้"
+            description="สร้างอัลบั้มไว้ก่อน หรือเก็บรูปจากแท็บ &quot;ไฟล์&quot; ลงอัลบั้มได้"
+            action={
+              <button
+                onClick={() => setCreateAlbumOpen(true)}
+                className="flex items-center gap-1.5 rounded-full bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white text-xs font-medium px-3.5 py-1.5 transition-colors"
+              >
+                <FolderPlus className="h-3.5 w-3.5" />
+                สร้างอัลบั้มแรก
+              </button>
+            }
           />
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {albumFolders.map(({ album, count, cover }) => (
+              <button
+                key={album.id}
+                onClick={() => setOpenAlbumId(album.id)}
+                className="group text-left rounded-lg border border-[var(--line)] overflow-hidden hover:border-[var(--brand-green)]/40 transition-colors"
+              >
+                <div className="h-24 bg-[var(--bg-soft)] flex items-center justify-center overflow-hidden">
+                  {cover ? (
+                    <ReportMediaThumb media={cover} className="w-full h-full object-cover group-hover:opacity-90" />
+                  ) : (
+                    <FolderHeart className="h-6 w-6 text-[var(--ink-soft)]" />
+                  )}
+                </div>
+                <div className="p-2">
+                  <p className="text-xs font-medium truncate">{album.name}</p>
+                  <p className="text-[11px] text-[var(--ink-soft)]">{count} รูป</p>
+                </div>
+              </button>
+            ))}
+          </div>
         )}
         <AlbumFormDialog
           open={createAlbumOpen}
@@ -808,18 +474,45 @@ export function ReportTopicPanels({
           title="สร้างอัลบั้มใหม่"
           onSubmit={(name) => setOpenAlbumId(addAlbum(topic.id, name, viewingAsUserId))}
         />
-        <PinLinkDialog
-          open={!!pinTarget}
-          onOpenChange={(v) => !v && setPinTarget(null)}
-          url={pinTarget?.url ?? ""}
-          initialTitle={pinTarget?.title ?? ""}
-          onSubmit={(title) => {
-            if (!pinTarget) return;
-            if (pinTarget.id) renamePinnedLink(pinTarget.id, title);
-            else pinLink(topic.id, pinTarget.url, title, viewingAsUserId);
-            setPinTarget(null);
-          }}
-        />
+      </div>
+    );
+  }
+
+  if (tab === "links") {
+    return (
+      <div className="flex-1 overflow-y-auto p-4 space-y-1.5">
+        {links.length === 0 ? (
+          <TopicEmptyState icon={Link2} title="ยังไม่มีลิงก์ที่แชร์ในหัวข้อนี้" description="ลิงก์ที่แปะไว้ในโพสต์หรือความคิดเห็นจะรวบรวมมาไว้ที่นี่" />
+        ) : (
+          links.map((l, i) => {
+            const domain = (() => {
+              try {
+                return new URL(l.url).hostname;
+              } catch {
+                return null;
+              }
+            })();
+            return (
+              <div key={`${l.url}-${i}`} className="flex items-start gap-2.5 rounded-lg border border-[var(--line)] px-3 py-2.5">
+                {domain ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={`https://www.google.com/s2/favicons?sz=32&domain=${domain}`} alt="" className="h-4 w-4 mt-0.5 shrink-0 rounded" />
+                ) : (
+                  <Link2 className="h-4 w-4 mt-0.5 shrink-0 text-[var(--brand-green-dark)]" />
+                )}
+                <div className="min-w-0 flex-1">
+                  {domain && <p className="text-[11px] font-medium text-[var(--ink-soft)] truncate">{domain}</p>}
+                  <a href={l.url} target="_blank" rel="noopener noreferrer" className="text-sm text-[var(--brand-green-dark)] hover:underline break-all">
+                    {l.url}
+                  </a>
+                  <button onClick={() => scrollToPost(l.postId)} className="block text-[11px] text-[var(--ink-soft)] hover:underline mt-0.5">
+                    จาก &quot;{l.postTitle}&quot; · <TimeAgo date={l.createdAt} />
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
     );
   }
