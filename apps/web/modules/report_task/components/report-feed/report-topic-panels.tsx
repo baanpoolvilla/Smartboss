@@ -351,7 +351,7 @@ export function ReportTopicPanels({
 
   /** A pdf/xlsx attached to a post — a row, not a tile: the filename is the
    * only thing that identifies it, so it gets the width. Opens the real file
-   * in a new tab; the same "เพิ่มเข้าเอกสารของห้องนี้" button the photos
+   * in a new tab; the same "เพิ่มเข้าไฟล์ทั้งหมดของห้องนี้" button the photos
    * have sits at the end. */
   function docRow(f: FileEntry, key: string) {
     return (
@@ -759,7 +759,7 @@ export function ReportTopicPanels({
           <div className="space-y-4">
             {/* The room's own permanent file library (company-files) isn't
                 a documents-only shelf — its upload picker and the "เพิ่มเข้า
-                เอกสารของห้องนี้" button on any thumbnail both accept any
+                ไฟล์ทั้งหมดของห้องนี้" button on any thumbnail both accept any
                 file kind, photos and clips included. Nesting it only under
                 the "เอกสาร" filter (as the "docs" branch below still does,
                 for whoever specifically wants the library view) meant a

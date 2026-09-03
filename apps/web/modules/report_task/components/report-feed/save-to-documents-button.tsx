@@ -10,7 +10,7 @@ import { FolderInput, Check } from "lucide-react";
  * Overlay button (top-right of a thumbnail in the "ไฟล์" tab, mirrors
  * AlbumPickerButton's own top-left bookmark icon) that copies one already-
  * uploaded attachment straight into the room's real document library
- * ("เอกสารของห้องนี้" — company-files, not the report-feed-only "อัลบั้ม")
+ * ("ไฟล์ทั้งหมดของห้องนี้" — company-files, not the report-feed-only "อัลบั้ม")
  * without re-picking the file from disk. Previously the only way in was the
  * "อัปโหลดเอกสาร" button, which meant downloading the photo first just to
  * upload it right back ("ตอนนี้ต้องกดอัพโหลด อยากให้กดจากไฟล์ในห้องได้เลย").
@@ -18,7 +18,7 @@ import { FolderInput, Check } from "lucide-react";
  * No new bytes get written — `addFileToRoomFolder` just points a new
  * CompanyFile row at the same storage key the report already uploaded to,
  * so this can't push anyone over a storage quota. Who can see the result is
- * unchanged too: `เอกสารของห้องนี้` was already gated server-side to current
+ * unchanged too: `ไฟล์ทั้งหมดของห้องนี้` was already gated server-side to current
  * room members only (see room-access-server.ts), same as everything else
  * here — this button doesn't touch that.
  */
@@ -56,10 +56,10 @@ export function SaveToDocumentsButton({
         size: file.size ?? 0,
       });
       setState("done");
-      toast.success(`เพิ่ม "${file.name}" เข้าเอกสารของห้องนี้แล้ว`);
+      toast.success(`เพิ่ม "${file.name}" เข้าไฟล์ทั้งหมดของห้องนี้แล้ว`);
     } catch (err) {
       setState("idle");
-      toast.error(err instanceof Error ? err.message : "เพิ่มเข้าเอกสารไม่สำเร็จ");
+      toast.error(err instanceof Error ? err.message : "เพิ่มเข้าไฟล์ของห้องไม่สำเร็จ");
     }
   }
 
@@ -86,8 +86,8 @@ export function SaveToDocumentsButton({
                 : "border-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)] disabled:opacity-70"
             )
       )}
-      aria-label={state === "done" ? `เพิ่ม ${file.name} เข้าเอกสารของห้องนี้แล้ว` : `เพิ่ม ${file.name} เข้าเอกสารของห้องนี้`}
-      title={state === "done" ? "อยู่ในเอกสารของห้องนี้แล้ว" : "เพิ่มเข้าเอกสารของห้องนี้ (ไม่ต้องอัปโหลดใหม่)"}
+      aria-label={state === "done" ? `เพิ่ม ${file.name} เข้าไฟล์ทั้งหมดของห้องนี้แล้ว` : `เพิ่ม ${file.name} เข้าไฟล์ทั้งหมดของห้องนี้`}
+      title={state === "done" ? "อยู่ในไฟล์ทั้งหมดของห้องนี้แล้ว" : "เพิ่มเข้าไฟล์ทั้งหมดของห้องนี้ (ไม่ต้องอัปโหลดใหม่)"}
     >
       {state === "done" ? (
         <Check className={variant === "overlay" ? "h-3 w-3" : "h-3.5 w-3.5"} />

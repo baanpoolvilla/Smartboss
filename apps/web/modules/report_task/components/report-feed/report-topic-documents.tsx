@@ -13,7 +13,7 @@ import type { CompanyFile } from "@prisma/client";
 /**
  * The room's permanent file library (company-files) — a separate pool from
  * the rolling post-attachment gallery above, and NOT documents-only despite
- * the label: its upload picker and the "เพิ่มเข้าเอกสารของห้องนี้" button on
+ * the label: its upload picker and the "เพิ่มเข้าไฟล์ทั้งหมดของห้องนี้" button on
  * any post thumbnail both accept any file kind, photos and clips included
  * ("มันเก็บทุกอย่างรูปอะไรก็ได้ทุกไฟล์วิดีโอด้วย"). So each row picks its
  * render the same way the rest of the "ไฟล์" tab does — a real image/video
@@ -78,7 +78,7 @@ export function ReportTopicDocuments({
     <div className="rounded-xl border border-[var(--line)] p-3.5">
       <div className="flex items-center justify-between gap-2 mb-2.5">
         <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)]">
-          <FolderOpen className="h-3.5 w-3.5" /> เอกสารของห้องนี้
+          <FolderOpen className="h-3.5 w-3.5" /> ไฟล์ทั้งหมดของห้องนี้
         </p>
         <label className="shrink-0 flex items-center gap-1.5 rounded-full bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white text-xs font-medium px-3 py-1.5 transition-colors cursor-pointer">
           <Upload className="h-3.5 w-3.5" />
