@@ -164,12 +164,28 @@ export function TaskSync() {
     // Re-trigger periodically so a strict task gets docked (and any task gets
     // flagged as once-overdue) the moment its due date passes, even if
     // nobody touches the app in the meantime.
+    //
+    // Skipped while the tab is hidden. The sweep is a whole-org job, so N open
+    // tabs were each waking the server every 60s to redo work that is
+    // identical no matter who triggers it — on a 2-core box shared with the
+    // workforce API that background chatter is not free, and a backgrounded
+    // tab has nobody looking at the result anyway. A tab that comes back to
+    // the foreground sweeps immediately (visibilitychange below), so nothing
+    // is deferred longer than it takes someone to actually look.
     const sweepTimer = setInterval(() => {
-      if (loadedRef.current) {
+      if (loadedRef.current && document.visibilityState === "visible") {
         void runSweep();
         void runReminderSweep();
       }
     }, 60_000);
+
+    function sweepOnReturn() {
+      if (document.visibilityState === "visible" && loadedRef.current) {
+        void runSweep();
+        void runReminderSweep();
+      }
+    }
+    document.addEventListener("visibilitychange", sweepOnReturn);
 
     // Write-through: save after changes settle. Skips writes until the initial
     // load has completed so we never overwrite the file with seed data.
@@ -204,6 +220,7 @@ export function TaskSync() {
       unsub();
       clearInterval(sweepTimer);
       if (timerRef.current) clearTimeout(timerRef.current);
+      document.removeEventListener("visibilitychange", sweepOnReturn);
       window.removeEventListener("pagehide", flushOnUnload);
       flushPending();
     };

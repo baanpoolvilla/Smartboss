@@ -83,10 +83,13 @@ export default async function AttendancePage({
 
         const today = new Date().toISOString().slice(0, 10);
 
-        // คำนวณให้ทุกคนก่อนอ่านสรุป — ปุ่ม "สั่งคำนวณ" ข้างล่างยังอยู่ไว้กดเอง
-        // ได้เวลาแก้กะ/อนุมัติลาย้อนหลังแล้วอยากให้ผลอัปเดตทันที แต่กรณีปกติ
-        // ไม่ต้องรอใครกดก่อนถึงจะเห็นตัวเลข (ดูเหตุผลเต็มที่ auto-recalculate.ts)
-        await autoRecalculateAttendance(from, to);
+        // สั่งคำนวณแบบไม่รอผล — ปุ่ม "สั่งคำนวณ" ข้างล่างยังอยู่ไว้กดเองได้เวลา
+        // แก้กะ/อนุมัติลาย้อนหลังแล้วอยากให้ผลอัปเดตทันที แต่กรณีปกติไม่ต้องรอ
+        // ใครกดก่อนถึงจะเห็นตัวเลข (ดูเหตุผลเต็มที่ auto-recalculate.ts)
+        //
+        // ⚠ ห้าม await ตรงนี้ — งานนี้ยิงคำนวณทีละคนจนครบทุกคน ใช้เวลาหลาย
+        // วินาที การรอให้จบก่อนเรนเดอร์ทำให้หน้านี้ค้างทุกครั้งที่เปิด
+        void autoRecalculateAttendance(from, to);
 
         const [summary, employments, exceptions, board, raw, shifts, todayAssignments] =
           await Promise.all([
