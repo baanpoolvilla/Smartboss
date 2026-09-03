@@ -19,6 +19,7 @@ export class AttendanceRepository {
     {
       id: string;
       employmentId: string;
+      companyId: string;
       displayName: string;
       employeeCode: string;
       capturedAt: string;
@@ -31,6 +32,7 @@ export class AttendanceRepository {
       .select({
         id: schema.rawTimeEvents.id,
         employmentId: schema.rawTimeEvents.employmentId,
+        companyId: schema.rawTimeEvents.companyId,
         capturedAt: schema.rawTimeEvents.capturedAt,
         timeZone: schema.rawTimeEvents.timeZone,
         eventIntent: schema.rawTimeEvents.eventIntent,
@@ -63,6 +65,7 @@ export class AttendanceRepository {
       return {
         id: row.id,
         employmentId: row.employmentId!,
+        companyId: row.companyId,
         displayName:
           preferred === '' ? `${row.firstName} ${row.lastName ?? ''}`.trim() : preferred,
         employeeCode: row.employeeCode,

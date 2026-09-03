@@ -169,6 +169,7 @@ export class AttendanceService {
       // กะกับนโยบายของคนคนหนึ่งใช้ซ้ำได้ทุกครั้งที่เขาตอกในวันเดียวกัน
       // แคชไว้กันยิง query ซ้ำต่อ event (คนหนึ่งตอกวันละหลายครั้ง)
       const shiftCache = new Map<string, { startMinutes: number; restDay: boolean } | null>();
+      const graceCache = new Map<string, number>();
       const items: Record<string, unknown>[] = [];
 
       for (const event of events) {
@@ -190,6 +191,20 @@ export class AttendanceService {
           shiftCache.set(event.employmentId, shift);
         }
 
+        // ระยะผ่อนผันของบริษัท — ต้องหักออกก่อนถึงจะเรียกว่าสาย
+        // บริษัทที่ตั้ง "สายได้ 15 นาที" หมายความว่าเข้า 08:14 ถือว่าตรงเวลา
+        // ไม่ใช่ "สาย 14 นาทีแต่ยังไม่โดนอะไร" — ป้ายที่ขึ้นต้องตรงกับกติกาที่ตั้งไว้
+        let grace = graceCache.get(event.companyId);
+        if (grace === undefined) {
+          const policy = await this.repository.resolveWorkPolicy(
+            uow.tx,
+            event.companyId,
+            workDate,
+          );
+          grace = policy?.lateMode === 'GRACE' ? (policy.graceMinutes ?? 0) : 0;
+          graceCache.set(event.companyId, grace);
+        }
+
         const isArrival =
           event.eventIntent === 'CLOCK_IN' || event.eventIntent === 'AUTO';
         let lateMinutes = 0;
@@ -202,7 +217,7 @@ export class AttendanceService {
           }).formatToParts(new Date(event.capturedAt));
           const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? '0');
           const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? '0');
-          const over = hour * 60 + minute - shift.startMinutes;
+          const over = hour * 60 + minute - shift.startMinutes - grace;
           if (over > 0) lateMinutes = over;
         }
 
