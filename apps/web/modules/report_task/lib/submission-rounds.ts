@@ -1,5 +1,6 @@
 import { canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { users as allUsers, isOwner } from "@/modules/report_task/lib/directory";
+import { localDateStr } from "@/modules/report_task/lib/now";
 import type {
   ReportTopic,
   SubmissionRound,
@@ -19,8 +20,15 @@ import { useReportFeedStore } from "@/modules/report_task/store/report-feed-stor
  * เป๊ะ ทำให้โค้ดจุดเดียวรองรับทั้งห้องเก่าและห้องใหม่โดยของเก่าไม่เปลี่ยนพฤติกรรม
  */
 
-/** วันในสัปดาห์ของรอบตรงกับวันนี้ไหม (undefined/ว่าง = ทุกวัน) */
-export function roundRunsOnDay(round: Pick<SubmissionRound, "weekdays">, day: string): boolean {
+/**
+ * รอบนี้ "มีผล" ในวันนั้นไหม — เช็คทั้งวันในสัปดาห์ (undefined/ว่าง = ทุกวัน) และวันที่
+ * รอบถูกสร้าง (`createdAt`, undefined = ไม่กัน เดินพฤติกรรมเดิม — ห้องเก่า/รอบที่มา
+ * จาก effectiveRoundsOf ไม่มีฟิลด์นี้). วันก่อนรอบถูกสร้างไม่มีทางนับเป็น "ต้องส่ง"
+ * ได้ — วันนั้นไม่มีใครรู้ด้วยซ้ำว่ามีข้อกำหนดนี้อยู่ ไม่งั้นพอเพิ่มรอบใหม่จะโดนตัดสิน
+ * "พลาดส่ง" ย้อนหลังไปถึงวันที่ห้องถูกสร้างทันที (บั๊กที่เจอจากการทดสอบจริง).
+ */
+export function roundRunsOnDay(round: Pick<SubmissionRound, "weekdays" | "createdAt">, day: string): boolean {
+  if (round.createdAt && day < localDateStr(new Date(round.createdAt))) return false;
   if (!round.weekdays || round.weekdays.length === 0) return true;
   return round.weekdays.includes(new Date(`${day}T00:00:00`).getDay());
 }

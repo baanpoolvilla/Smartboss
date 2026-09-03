@@ -182,6 +182,10 @@ export interface SubmissionRound {
   weekdays?: number[];
   /** ต่อรอบ · undefined = ใช้ค่า topic.minImages */
   minImages?: number;
+  /** ISO ของตอนที่รอบนี้ถูกสร้าง — ตัวตัดสินใช้กันไม่ให้ตัดสิน "พลาดส่ง" ย้อนหลัง
+   * ไปถึงวันก่อนรอบนี้เกิด (วันนั้นไม่มีทางรู้ด้วยซ้ำว่ามีข้อกำหนดนี้อยู่). undefined
+   * (รอบเก่าก่อนมีฟิลด์นี้) = ไม่กันย้อนหลัง เดินพฤติกรรมเดิม. ดู roundRunsOnDay. */
+  createdAt?: string;
   submitters: SubmitterRule;
 }
 
