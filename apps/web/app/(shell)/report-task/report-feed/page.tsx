@@ -978,7 +978,22 @@ function ReportFeedPageInner() {
                         highlightReplyId={highlightReplyId}
                         onOpenTask={setOpenTaskId}
                       />
-                      <ReportComposer topic={activeTopic} />
+                      {/* Keyed by room id: right after a refresh the real
+                          topic list hasn't loaded from the server yet, so
+                          `activeTopic` briefly resolves to a fallback room
+                          before snapping to the real deep-linked one once
+                          data arrives. Without a key here, React treats
+                          that as the same composer instance and only ever
+                          updates its `topic` prop — so the draft-recovery
+                          logic below (report-composer.tsx's lazy useState
+                          reading sessionStorage) only ever ran once, for
+                          whichever room was active at that first, wrong
+                          moment, and never re-ran for the real room ("พิม
+                          ข้อความไว้ในโพสก่อนรีเฟรช...พอรีเฟรชข้อความหาย").
+                          The key forces a fresh mount — and a fresh read —
+                          whenever the resolved room id actually changes,
+                          including this fallback-to-real handoff. */}
+                      <ReportComposer key={activeTopic.id} topic={activeTopic} />
                     </>
                   )}
                 </>
