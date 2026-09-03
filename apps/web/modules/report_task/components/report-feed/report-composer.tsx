@@ -9,7 +9,8 @@ import { useReportFeedStore, type ReportPostImage, type ReportTopic } from "@/mo
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
 import { photoCount } from "@/modules/report_task/lib/report-attachment-kind";
-import { currentCutoff, minImagesNow } from "@/modules/report_task/lib/report-cutoff";
+import { currentCutoff, cutoffsOnDay, minImagesNow } from "@/modules/report_task/lib/report-cutoff";
+import { localDateStr } from "@/modules/report_task/lib/now";
 import { ReportPostFields, newSection, type DraftSection } from "@/modules/report_task/components/report-feed/report-post-fields";
 import { Clock, Lock, Send, SquarePen } from "lucide-react";
 import { toast } from "sonner";
@@ -133,9 +134,10 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
     }
   }
 
-  const minImagesRequired = minImagesNow(topic);
+  const todayCutoffs = cutoffsOnDay(topic, localDateStr(new Date()));
+  const minImagesRequired = minImagesNow({ minImages: topic.minImages, cutoffs: todayCutoffs });
   const missingRequiredImage = photoCount(images) < minImagesRequired;
-  const activeRound = currentCutoff(topic.cutoffs);
+  const activeRound = currentCutoff(todayCutoffs);
 
   function handleSubmit() {
     if (!title.trim() || missingRequiredImage) return;

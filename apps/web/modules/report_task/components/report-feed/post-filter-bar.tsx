@@ -4,7 +4,8 @@ import { useState } from "react";
 import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import type { ReportTag } from "@/modules/report_task/store/report-tag-store";
 import { displayName } from "@/modules/report_task/lib/directory";
-import { lateCutoffFor } from "@/modules/report_task/lib/report-cutoff";
+import { cutoffsOnDay, lateCutoffFor } from "@/modules/report_task/lib/report-cutoff";
+import { localDateStr } from "@/modules/report_task/lib/now";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
@@ -64,7 +65,7 @@ export function filterPosts(
     if (filters.savedOnly && !p.savedBy.includes(opts.viewingAsUserId)) return false;
     if (filters.lateOnly) {
       const topic = opts.topicOf(p);
-      if (!topic || !lateCutoffFor(p.createdAt, topic.cutoffs)) return false;
+      if (!topic || !lateCutoffFor(p.createdAt, cutoffsOnDay(topic, localDateStr(new Date(p.createdAt))))) return false;
     }
     return true;
   });
