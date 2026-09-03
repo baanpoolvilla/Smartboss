@@ -56,3 +56,8 @@ coverage/
 
 # state ของตัวจำลองเครื่องสแกน (มี private key ของเครื่อง)
 .device-sim.json
+
+# การตั้งค่า Claude Code ส่วนตัวต่อเครื่อง (สิทธิ์คำสั่ง Bash ที่อนุมัติไว้ ฯลฯ)
+# ต่างจาก .claude/settings.json (ของทีม ยัง track ปกติ) — อันนี้เคยหลุดเข้า commit
+# มาแล้วครั้งหนึ่งเพราะไม่มีบรรทัดนี้ (614835c ก่อนจะ rm --cached ออก)
+.claude/settings.local.json
