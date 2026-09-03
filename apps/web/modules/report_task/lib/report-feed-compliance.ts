@@ -1,5 +1,5 @@
 import { departments, getDepartment, getUser, users } from "@/modules/report_task/lib/directory";
-import { roundsForUserOnDay, mustSubmitToTopic } from "@/modules/report_task/lib/submission-rounds";
+import { roundsForUserOnDay, mustSubmitToTopic, roundRunsOnDay } from "@/modules/report_task/lib/submission-rounds";
 import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
 import { photoCount } from "@/modules/report_task/lib/report-attachment-kind";
 import { lateCutoffFor } from "@/modules/report_task/lib/report-cutoff";
@@ -144,8 +144,12 @@ export function iterationBounds(topic: ReportTopic, range: { from: Date; to: Dat
  * exactly the "Saturday still shows as 'ไม่ส่ง'" complaint this exists to fix). */
 function isRequiredWeekday(topic: ReportTopic, day: string): boolean {
   if (topic.submissionRounds && topic.submissionRounds.length > 0) {
-    const dow = new Date(`${day}T00:00:00`).getDay();
-    return topic.submissionRounds.some((r) => !r.weekdays || r.weekdays.length === 0 || r.weekdays.includes(dow));
+    // Delegates to the same single decider roundsForUserOnDay/userRequiredCutoffMinutes
+    // use, rather than re-checking just the weekday here — otherwise this
+    // would judge a day "required" (and eventually "missed") even before the
+    // round that requires it existed, since only roundRunsOnDay knows about
+    // a round's own createdAt cutoff.
+    return topic.submissionRounds.some((r) => roundRunsOnDay(r, day));
   }
   if (!topic.requiredWeekdays || topic.requiredWeekdays.length === 0) return true;
   return topic.requiredWeekdays.includes(new Date(`${day}T00:00:00`).getDay());

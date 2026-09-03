@@ -138,6 +138,10 @@ export function SubmissionRoundDialog({
       time,
       weekdays: weekdays.size > 0 ? [...weekdays].sort((a, b) => a - b) : undefined,
       minImages,
+      // A brand-new round stamps "now" so the compliance checker never judges
+      // days before it existed as missed; editing an existing round keeps
+      // its original stamp — only creation resets the clock, not every save.
+      createdAt: initial?.createdAt ?? new Date().toISOString(),
       submitters,
     });
     onOpenChange(false);
