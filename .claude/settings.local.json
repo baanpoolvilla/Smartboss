@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm db:generate)",
+      "Bash(mkdir -p \"d:/Smartboss/apps/web/app/api/chat/channels/[id]/messages\" \"d:/Smartboss/apps/web/app/api/chat/channels/[id]/read\" \"d:/Smartboss/apps/web/app/api/chat/users\")",
+      "Bash(mkdir -p \"d:/Smartboss/apps/web/app/api/chat/channels/[id]/messages/[messageId]\")",
+      "Bash(git fetch *)",
+      "Bash(gh pr *)",
+      "Bash(git rev-list *)",
+      "Bash(npx prisma *)"
+    ],
+    "additionalDirectories": [
+      "d:\\Smartboss\\apps\\web\\app\\api\\chat\\channels\\[id]",
+      "d:\\Smartboss\\apps\\web\\app\\api\\chat\\channels\\[id]\\messages"
+    ]
+  }
+}

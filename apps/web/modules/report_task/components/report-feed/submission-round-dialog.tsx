@@ -8,7 +8,7 @@ import { Button } from "@/modules/report_task/components/ui/button";
 import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import { departments, getDepartment, users } from "@/modules/report_task/lib/directory";
-import { useReportFeedStore, type ReportTopic, type SubmissionRound, type SubmitterRule } from "@/modules/report_task/store/report-feed-store";
+import { useReportFeedStore, type SubmissionRound, type SubmitterRule } from "@/modules/report_task/store/report-feed-store";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Globe, Users, Building2, User as UserIcon, Search, Plus, Minus, Check, ImagePlus } from "lucide-react";
 
