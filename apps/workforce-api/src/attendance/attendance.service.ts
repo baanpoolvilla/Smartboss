@@ -160,14 +160,29 @@ export class AttendanceService {
     const days = start.daysUntil(end);
     if (days > 366) throw AppError.validation('range must not exceed 366 days');
 
-    return this.uow.run(async (uow) => {
-      let recalculated = 0;
-      for (let offset = 0; offset <= days; offset += 1) {
-        await this.recalculateWithin(uow, employmentId, start.plusDays(offset).toString(), reason);
-        recalculated += 1;
-      }
-      return { recalculated };
-    });
+    // หนึ่งวัน = หนึ่งทรานแซกชัน ไม่ใช่ทั้งช่วงก้อนเดียว
+    //
+    // เดิมห่อทั้งลูปไว้ใน uow.run() เดียว ทำให้ช่วง 30 วันถือ connection ค้างไว้
+    // ตลอด ~270 query เรียงกัน พอมีหลายคนขอคำนวณพร้อมกัน pool (max 10) หมด
+    // ทันที แล้วทุก request อื่นที่เข้ามาต้องรอคิว — หน้าเว็บทั้งโมดูลบุคคล
+    // ช้าตามไปด้วยทั้งที่ไม่ได้ขอคำนวณอะไรเลย
+    //
+    // แยกได้เพราะแต่ละวันคำนวณจบในตัวเอง: recalculateWithin อ่านข้อมูลดิบ
+    // (สแกน/กะ/นโยบาย/การลา) ของวันนั้นแล้ว supersede + insert version ใหม่
+    // ของวันนั้นเท่านั้น ไม่มี invariant ใดข้ามวัน
+    //
+    // ผลข้างเคียงที่ตั้งใจ: ถ้าวันที่ 25 ล้ม 24 วันแรกยังอยู่ ไม่ถูก rollback
+    // ทิ้งทั้งชุดแบบเดิม — คำนวณซ้ำได้ผลเท่าเดิมอยู่แล้ว การเก็บงานที่สำเร็จไว้
+    // จึงดีกว่าโยนทิ้งแล้วเริ่มใหม่หมด
+    let recalculated = 0;
+    for (let offset = 0; offset <= days; offset += 1) {
+      const workDate = start.plusDays(offset).toString();
+      await this.uow.run(async (uow) =>
+        this.recalculateWithin(uow, employmentId, workDate, reason),
+      );
+      recalculated += 1;
+    }
+    return { recalculated };
   }
 
   private async recalculateWithin(
