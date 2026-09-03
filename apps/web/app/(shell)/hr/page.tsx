@@ -42,9 +42,15 @@ export default async function HrOverviewPage({
     <HrPage title="ระบบบุคคล" permission={HR_PERMS.access} load={async () => {
       const range = rangeForDays(days);
 
-      // คำนวณให้ทุกคนก่อนอ่านสรุป — คนดูไม่ควรต้องไปกดปุ่ม "คำนวณ" ที่หน้าอื่น
-      // ก่อนถึงจะเห็นตัวเลขที่ถูกต้องในหน้านี้ (ดูเหตุผลเต็มที่ auto-recalculate.ts)
-      await autoRecalculateAttendance(range.from, range.to);
+      // สั่งคำนวณให้ทุกคนแบบไม่รอผล (ไม่ await) — คนดูไม่ควรต้องไปกดปุ่ม
+      // "คำนวณ" ที่หน้าอื่นก่อนถึงจะเห็นตัวเลข (ดูเหตุผลเต็มที่
+      // auto-recalculate.ts) แต่การ "รอ" ผลคำนวณของทุกคนก่อนเรนเดอร์หน้านี้
+      // เคยทำให้ /hr ค้างหลายวินาที (ยิง POST คำนวณพร้อมกันทีละคนไปที่
+      // workforce API บน VM 2 core ตัวเดียวกับที่รัน Next.js เอง) ตัวเลขที่
+      // เห็นด้านล่างจึงอาจตามหลังการเปลี่ยนกะ/อนุมัติลาล่าสุดไปเสี้ยววินาที
+      // ถึงไม่กี่วินาที ระหว่างที่คำนวณเสร็จในเบื้องหลัง — ปุ่ม "คำนวณใหม่"
+      // ที่หน้าลงเวลายังบังคับคำนวณสดให้ได้เหมือนเดิมถ้าต้องการความชัวร์ทันที
+      void autoRecalculateAttendance(range.from, range.to);
 
       // ผู้ใช้แต่ละคนมีสิทธิ์ไม่เท่ากัน — ส่วนที่ไม่มีสิทธิ์คืน null แล้วซ่อนไป
       const [employments, runs, summary, companies] = await Promise.all([
