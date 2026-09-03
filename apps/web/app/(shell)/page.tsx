@@ -148,6 +148,11 @@ function AppIcon({ tile }: { tile: AppTile }) {
     <Link
       href={href}
       title={tile.description}
+      // VM 2 core → Prisma pool ~5 connection (คำนวณจาก cores*2+1) — prefetch
+      // ค่าเริ่มต้นของ Next.js ยิงทุก tile ที่มองเห็นพร้อมกันตอนหน้านี้โหลด
+      // (10 โมดูล) แต่ละหน้าเป็น dynamic route ต้อง query จริง ชน pool จนคลิก
+      // จริงต้องรอคิว (เจอเป็นอาการ "กดเมนูรวมแล้วค้าง ต้องพิมพ์ path เอง")
+      prefetch={false}
       className="group flex flex-col items-center rounded-xl outline-hidden focus-visible:ring-2 focus-visible:ring-(--brand-green)/40"
     >
       {body}

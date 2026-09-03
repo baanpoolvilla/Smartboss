@@ -240,6 +240,10 @@ function RailItem({ menu, active }: { menu: ModuleMenuItem; active: boolean }) {
   return (
     <Link
       href={menu.path}
+      // เหตุผลเดียวกับ AppIcon ใน (shell)/page.tsx — เมนูข้างซ้ายมองเห็นครบ
+      // ทุกอันพร้อมกันตอนเข้าโมดูล prefetch ค่าเริ่มต้นเลยยิงพร้อมกันหมด
+      // ชน Prisma pool บน VM 2 core (เจอเป็นอาการ "กดเมนูข้างซ้ายหน่วง")
+      prefetch={false}
       className={cn(
         "flex h-12 items-center gap-3 rounded-xl px-3 text-sm transition-colors",
         active
@@ -394,7 +398,7 @@ function BottomNavItem({
   );
 
   return href ? (
-    <Link href={href} className={className}>
+    <Link href={href} prefetch={false} className={className}>
       {body}
     </Link>
   ) : (
