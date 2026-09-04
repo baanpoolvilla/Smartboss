@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { FolderOpen, Upload } from "lucide-react";
+import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
 import { listRoomFiles, addFileToRoomFolder } from "@/modules/company-files/data/files";
 import { uploadCompanyFile } from "@/modules/company-files/lib/upload";
 import { formatFileSize, fileIconKind } from "@/modules/company-files/lib/file-meta";
@@ -56,8 +57,7 @@ export function ReportTopicDocuments({
   const q = search.trim().toLowerCase();
   const visibleFiles = q ? (files ?? []).filter((f) => f.name.toLowerCase().includes(q)) : (files ?? []);
 
-  function handleUpload(fileList: FileList | null) {
-    const picked = fileList ? Array.from(fileList) : [];
+  function handleUpload(picked: File[]) {
     if (picked.length === 0) return;
     setError(null);
     startTransition(async () => {
@@ -80,11 +80,17 @@ export function ReportTopicDocuments({
         <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)]">
           <FolderOpen className="h-3.5 w-3.5" /> ไฟล์ทั้งหมดของห้องนี้
         </p>
-        <label className="shrink-0 flex items-center gap-1.5 rounded-full bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white text-xs font-medium px-3 py-1.5 transition-colors cursor-pointer">
-          <Upload className="h-3.5 w-3.5" />
-          {isPending ? "กำลังอัปโหลด..." : "อัปโหลดไฟล์"}
-          <input type="file" multiple className="hidden" disabled={isPending} onChange={(e) => handleUpload(e.target.files)} />
-        </label>
+        <AttachMenu
+          onFiles={handleUpload}
+          disabled={isPending}
+          trigger={
+            <>
+              <Upload className="h-3.5 w-3.5" />
+              {isPending ? "กำลังอัปโหลด..." : "อัปโหลดไฟล์"}
+            </>
+          }
+          className="shrink-0 flex items-center gap-1.5 rounded-full bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white text-xs font-medium px-3 py-1.5 transition-colors disabled:opacity-50"
+        />
       </div>
 
       {error && <p className="text-xs text-red-600 mb-2">{error}</p>}

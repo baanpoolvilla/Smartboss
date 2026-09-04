@@ -1,11 +1,12 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
-import { Paperclip, X, FileText, Loader2 } from "lucide-react";
+import { X, FileText, Loader2 } from "lucide-react";
 import { uploadIssueAttachment } from "@/modules/report_task/lib/attachment-upload";
 import type { IssueAttachment } from "@/modules/report_task/types/issue";
 import { cn } from "@/modules/report_task/lib/utils";
+import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
 
 const MAX_FILES = 10;
 
@@ -27,7 +28,6 @@ export function AttachmentPicker({
 }) {
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   async function addFiles(files: FileList | File[]) {
     const list = Array.from(files);
@@ -79,23 +79,10 @@ export function AttachmentPicker({
       tabIndex={-1}
     >
       <div className="flex items-center justify-between gap-2">
-        <button
-          type="button"
+        <AttachMenu
+          onFiles={(files) => void addFiles(files)}
           disabled={disabled}
-          onClick={() => inputRef.current?.click()}
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--ink-soft)] hover:text-[var(--ink)] disabled:opacity-50"
-        >
-          <Paperclip className="h-3.5 w-3.5" /> แนบรูป/ไฟล์ — ลากวาง หรือวางจากคลิปบอร์ด (Ctrl+V) ได้
-        </button>
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files) void addFiles(e.target.files);
-            e.target.value = "";
-          }}
+          label="แนบรูป/ไฟล์ — ลากวาง หรือวางจากคลิปบอร์ด (Ctrl+V) ได้"
         />
       </div>
 

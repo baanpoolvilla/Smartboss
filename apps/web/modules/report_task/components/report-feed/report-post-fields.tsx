@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type RefObject } from "react";
-import { Button } from "@/modules/report_task/components/ui/button";
+import { useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { departments, users } from "@/modules/report_task/lib/directory";
 import { useReportFeedStore, type ReportPostImage, type ReportPostSection } from "@/modules/report_task/store/report-feed-store";
@@ -22,10 +21,10 @@ import {
 import { cn } from "@/modules/report_task/lib/utils";
 import { AlbumPickerButton } from "@/modules/report_task/components/report-feed/album-picker-button";
 import { TagPickerButton } from "@/modules/report_task/components/report-feed/tag-picker-button";
-import { Bold, Building2, Code, Hash, ImagePlus, Italic, List, ListOrdered, Minus, Square, Table, TriangleAlert, Underline, User, X } from "lucide-react";
+import { Bold, Building2, Code, Hash, Italic, List, ListOrdered, Minus, Square, Table, TriangleAlert, Underline, User, X } from "lucide-react";
 import { LinkInsertPopover } from "@/modules/report_task/components/report-feed/link-insert-popover";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
-import { REPORT_ATTACHMENT_ACCEPT } from "@/modules/report_task/lib/report-attachment-kind";
+import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
 import { toast } from "sonner";
 import { uuid } from "@/modules/report_task/lib/uuid";
@@ -88,7 +87,6 @@ export function ReportPostFields({
   tagIds,
   onTagIdsChange,
   minImages,
-  fileInputRef,
   busy,
   onFilesSelected,
 }: {
@@ -105,9 +103,8 @@ export function ReportPostFields({
   onTagIdsChange: (v: string[]) => void;
   /** Minimum photos required before this post can be submitted (0 = not required). */
   minImages: number;
-  fileInputRef: RefObject<HTMLInputElement | null>;
   busy: boolean;
-  onFilesSelected: (files: FileList | null) => void;
+  onFilesSelected: (files: File[]) => void;
 }) {
   const maxVideoMB = useAttachmentSettingsStore((s) => s.settings.maxVideoMB);
   const maxImages = useAttachmentSettingsStore((s) => s.settings.maxImagesPerReportPost);
@@ -832,24 +829,14 @@ export function ReportPostFields({
       )}
 
       <div className="flex items-center gap-2 flex-wrap">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={REPORT_ATTACHMENT_ACCEPT}
-          multiple
-          className="hidden"
-          onChange={(e) => onFilesSelected(e.target.files)}
-        />
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={busy || images.length >= maxImages}
-          onClick={() => fileInputRef.current?.click()}
-          title={`รูป, คลิป .mp4/.webm (จำกัด ${maxVideoMB}MB ต่อคลิป) หรือเอกสาร PDF/Word/Excel/PowerPoint/CSV`}
-        >
-          <ImagePlus className="h-3.5 w-3.5" />
-          {busy ? "กำลังแนบไฟล์..." : "แนบไฟล์"}
-        </Button>
+        <span title={`รูป, คลิป .mp4/.webm (จำกัด ${maxVideoMB}MB ต่อคลิป) หรือเอกสาร PDF/Word/Excel/PowerPoint/CSV`}>
+          <AttachMenu
+            onFiles={onFilesSelected}
+            disabled={busy || images.length >= maxImages}
+            label={busy ? "กำลังแนบไฟล์..." : "แนบไฟล์"}
+            className="h-8 rounded-md border border-input px-3 gap-1.5 text-sm shadow-xs disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground"
+          />
+        </span>
         {/* One album choice for every photo in this post at once — not a
             per-image decision. Only makes sense once something's attached,
             and applies to whatever's attached *right now*; adding more

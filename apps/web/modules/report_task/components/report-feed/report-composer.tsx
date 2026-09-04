@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import { getUser, canManage } from "@/modules/report_task/lib/directory";
@@ -61,7 +61,6 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   const viewer = getUser(viewingAsUserId)!;
   const addPost = useReportFeedStore((s) => s.addPost);
   const maxImages = useAttachmentSettingsStore((s) => s.settings.maxImagesPerReportPost);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const savedDraft = loadDraft(topic.id);
   const [expanded, setExpanded] = useState(() => !!savedDraft);
@@ -131,8 +130,8 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
     );
   }
 
-  async function handleFiles(files: FileList | null) {
-    if (!files || files.length === 0) return;
+  async function handleFiles(files: File[]) {
+    if (files.length === 0) return;
     const available = Math.max(0, maxImages - images.length);
     if (files.length > available) {
       toast.error(`แนบได้สูงสุด ${maxImages} รูป/คลิปต่อโพสต์ — เลือกไว้เกิน ข้ามไป ${files.length - available} ไฟล์`);
@@ -140,7 +139,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
     setBusy(true);
     const next: ReportPostImage[] = [];
     try {
-      for (const file of Array.from(files).slice(0, available)) {
+      for (const file of files.slice(0, available)) {
         const media = await uploadReportMedia(file);
         next.push({ id: `img-${uuid()}`, url: media.url, name: media.name, mime: media.mime, size: media.size });
       }
@@ -151,7 +150,6 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
       // to throw away images that already finished just because a later one broke.
       if (next.length > 0) setImages((prev) => [...prev, ...next]);
       setBusy(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
 
@@ -318,7 +316,6 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
           tagIds={tagIds}
           onTagIdsChange={setTagIds}
           minImages={minImagesRequired}
-          fileInputRef={fileInputRef}
           busy={busy}
           onFilesSelected={handleFiles}
         />

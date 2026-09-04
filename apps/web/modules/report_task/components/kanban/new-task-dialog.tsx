@@ -82,6 +82,7 @@ import {
   Star,
 } from "lucide-react";
 import { toast } from "sonner";
+import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
 import { uuid } from "@/modules/report_task/lib/uuid";
 
 type ItemType = "task" | "meeting" | "leave" | "dayoff";
@@ -1228,23 +1229,11 @@ export function NewTaskDialog({
                   <Label className="text-xs text-[var(--ink-soft)]">
                     ไฟล์แนบ / รูปภาพ{taskFiles.length > 0 ? ` (${taskFiles.length})` : ""}
                   </Label>
-                  <input
-                    id="task-file-input"
-                    type="file"
-                    multiple
-                    className="hidden"
-                    onChange={(e) => {
-                      const picked = Array.from(e.target.files ?? []);
-                      if (picked.length > 0) setTaskFiles((prev) => [...prev, ...picked]);
-                      e.target.value = "";
-                    }}
+                  <AttachMenu
+                    onFiles={(picked) => setTaskFiles((prev) => [...prev, ...picked])}
+                    label="แนบไฟล์หรือรูปภาพ"
+                    className="rounded-lg border border-dashed border-[var(--line)] px-3 py-1.5 hover:border-[var(--brand-green)] hover:text-[var(--brand-green-dark)] transition-colors"
                   />
-                  <label
-                    htmlFor="task-file-input"
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-[var(--line)] px-3 py-1.5 text-xs text-[var(--ink-soft)] cursor-pointer hover:border-[var(--brand-green)] hover:text-[var(--brand-green-dark)] transition-colors"
-                  >
-                    <Paperclip className="h-3.5 w-3.5" /> แนบไฟล์หรือรูปภาพ
-                  </label>
 
                   {taskFiles.length > 0 && (
                     <div className="space-y-1.5">
@@ -1368,23 +1357,11 @@ export function NewTaskDialog({
                   <Label className="text-xs text-[var(--ink-soft)]">
                     ไฟล์แนบ / รูปภาพ{meetFiles.length > 0 ? ` (${meetFiles.length})` : ""}
                   </Label>
-                  <input
-                    id="meet-file-input"
-                    type="file"
-                    multiple
-                    className="hidden"
-                    onChange={(e) => {
-                      const picked = Array.from(e.target.files ?? []);
-                      if (picked.length > 0) setMeetFiles((prev) => [...prev, ...picked]);
-                      e.target.value = "";
-                    }}
+                  <AttachMenu
+                    onFiles={(picked) => setMeetFiles((prev) => [...prev, ...picked])}
+                    label="แนบไฟล์หรือรูปภาพ (ไม่จำกัดจำนวน)"
+                    className="rounded-lg border border-dashed border-[var(--line)] px-3 py-1.5 hover:border-[var(--brand-green)] hover:text-[var(--brand-green-dark)] transition-colors"
                   />
-                  <label
-                    htmlFor="meet-file-input"
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-[var(--line)] px-3 py-1.5 text-xs text-[var(--ink-soft)] cursor-pointer hover:border-[var(--brand-green)] hover:text-[var(--brand-green-dark)] transition-colors"
-                  >
-                    <Paperclip className="h-3.5 w-3.5" /> แนบไฟล์หรือรูปภาพ (ไม่จำกัดจำนวน)
-                  </label>
 
                   {meetFiles.length > 0 && (
                     <div className="space-y-1.5">
