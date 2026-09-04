@@ -26,6 +26,7 @@ import { Switch } from "@/modules/report_task/components/ui/switch";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
+import { TimePickerField } from "@/modules/report_task/components/shared/time-picker-field";
 import { AttendeePicker } from "@/modules/report_task/components/shared/attendee-picker";
 import {
   Select,
@@ -284,12 +285,10 @@ export function NewTaskDialog({
   const [startDate, setStartDate] = useState(initialDate);
   const [dueDate, setDueDate] = useState(initialDate);
   const [dueTime, setDueTime] = useState("");
-  // Hidden behind "+ ใส่เวลา" by default — most tasks don't set one, and an
-  // empty <input type="time"> renders as a blank white box on iOS/Safari
-  // (no placeholder text like desktop shows), which read as a broken field
-  // sitting next to the date picker. `dueTime` already being set (rare here
-  // since this dialog always starts blank, but kept for consistency) keeps
-  // it open instead of hiding a value the user just typed.
+  // Hidden behind "+ ใส่เวลา" by default — most tasks don't set one, so it
+  // stays out of the way until asked for. `dueTime` already being set (rare
+  // here since this dialog always starts blank, but kept for consistency)
+  // keeps it open instead of hiding a value the user just typed.
   const [showDueTime, setShowDueTime] = useState(false);
   const derivedDepartmentIds = departmentIdsOf(assigneeIds);
 
@@ -1062,10 +1061,9 @@ export function NewTaskDialog({
                         showing — see `showDueTime`'s own comment. */}
                     {showDueTime || dueTime ? (
                       <div className="flex items-center gap-1.5 pt-0.5">
-                        <Input
-                          type="time"
+                        <TimePickerField
                           value={dueTime}
-                          onChange={(e) => setDueTime(e.target.value)}
+                          onChange={setDueTime}
                           className="w-full sm:w-[130px]"
                           aria-label="เวลากำหนดส่ง (ไม่บังคับ)"
                           title="เวลากำหนดส่ง (ไม่บังคับ) — ใส่ไว้ถ้าอยากตั้งแจ้งเตือนล่วงหน้าเป็นชั่วโมง/นาทีได้"
@@ -1315,11 +1313,11 @@ export function NewTaskDialog({
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs text-[var(--ink-soft)]">เริ่ม</Label>
-                      <Input type="time" value={meetStart} onChange={(e) => setMeetStart(e.target.value)} />
+                      <TimePickerField value={meetStart} onChange={setMeetStart} className="w-full" />
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs text-[var(--ink-soft)]">สิ้นสุด</Label>
-                      <Input type="time" value={meetEnd} onChange={(e) => setMeetEnd(e.target.value)} />
+                      <TimePickerField value={meetEnd} onChange={setMeetEnd} className="w-full" />
                     </div>
                   </div>
                 )}
@@ -1481,11 +1479,11 @@ export function NewTaskDialog({
                     <div className="grid grid-cols-2 gap-3 mt-2">
                       <div className="space-y-1">
                         <Label className="text-xs text-[var(--ink-soft)]">เริ่ม</Label>
-                        <Input type="time" value={leaveStartTime} onChange={(e) => setLeaveStartTime(e.target.value)} />
+                        <TimePickerField value={leaveStartTime} onChange={setLeaveStartTime} className="w-full" />
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs text-[var(--ink-soft)]">สิ้นสุด</Label>
-                        <Input type="time" value={leaveEndTime} onChange={(e) => setLeaveEndTime(e.target.value)} />
+                        <TimePickerField value={leaveEndTime} onChange={setLeaveEndTime} className="w-full" />
                       </div>
                     </div>
                   )}

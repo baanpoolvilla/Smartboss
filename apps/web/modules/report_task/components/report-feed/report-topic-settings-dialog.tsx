@@ -7,6 +7,7 @@ import { Label } from "@/modules/report_task/components/ui/label";
 import { RoomMembersSummaryCard, RoomMembersDialog } from "@/modules/report_task/components/report-feed/room-members-dialog";
 import { useReportFeedStore, type ReportTopic, type SubmissionRound } from "@/modules/report_task/store/report-feed-store";
 import { SubmissionRoundDialog } from "@/modules/report_task/components/report-feed/submission-round-dialog";
+import { TimePickerField } from "@/modules/report_task/components/shared/time-picker-field";
 import { resolvedSubmittersOfTopic } from "@/modules/report_task/lib/submission-rounds";
 import { users as allUsers } from "@/modules/report_task/lib/directory";
 import { departments, getUser, isOwner } from "@/modules/report_task/lib/directory";
@@ -361,11 +362,10 @@ export function ReportTopicSettingsPanel({
                 placeholder="ชื่อรอบ เช่น เช้า"
                 className="flex-1"
               />
-              <Input
-                type="time"
+              <TimePickerField
                 aria-label="เวลาตัดยอด"
                 value={newTime}
-                onChange={(e) => setNewTime(e.target.value)}
+                onChange={setNewTime}
                 className="w-28 shrink-0"
               />
               <Button variant="outline" size="icon" onClick={addCutoff} aria-label="เพิ่มรอบตัดยอด">
