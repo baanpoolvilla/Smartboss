@@ -482,8 +482,19 @@ export interface ReportStatusCounts {
 
 /** Same 5-way split as `ReportStatusCounts`, one row per user — the per-person
  * breakdown `reportStatusCountsForScope` sums into a single total. Kept as
- * the one place that walks every tracked topic × day × user so the scoped
- * total and the per-person breakdown can never drift apart. */
+ * the one place that walks every tracked topic × round × day × user so the
+ * scoped total and the per-person breakdown can never drift apart.
+ *
+ * Phase 1.1: switched from `dayComplianceStatus` to `roundComplianceStatus`
+ * (one count per (person, round, day), not per (person, day)) — this is what
+ * `kpi-buckets.ts`'s `reportKpiBuckets` feeds the Dashboard's "KPI รวมของระบบ
+ * (Task + Report)" card and `report-feed-status-pie.tsx` with, and leaving it
+ * on the old day-level path made a room with 2 rounds silently undercount
+ * there while every other report-feed number (header pill, "ยังไม่ส่งวันนี้",
+ * per-person stats) had already moved to round-level, so the two disagreed.
+ * `dayComplianceStatus` itself is untouched — the ai-insight analyzers
+ * (risk.ts, root-cause.ts, aggregate.ts) call it directly and stay on the
+ * day-level path, unaffected by this function's own switch. */
 export function reportStatusCountsByUser(
   topics: ReportTopic[],
   posts: ReportPost[],
@@ -496,16 +507,19 @@ export function reportStatusCountsByUser(
   for (const topic of tracked) {
     const { startStr, endStr } = iterationBounds(topic, range);
     const days = eachDay(startStr, endStr);
+    const rounds = effectiveRoundsOf(topic);
     for (const u of users) {
       if (!mustSubmitToTopic(topic, u.id)) continue;
       const counts = out.get(u.id)!;
       for (const day of days) {
-        const status = dayComplianceStatus(topic, u.id, day, posts, exemptions);
-        if (status === "on-time") counts.onTime += 1;
-        else if (status === "late") counts.lateDone += 1;
-        else if (status === "pending") counts.pending += 1;
-        else if (status === "missed") counts.missed += 1;
-        else counts.exempt += 1;
+        for (const round of rounds) {
+          const status = roundComplianceStatus(topic, u.id, round, day, posts, exemptions);
+          if (status === "on-time") counts.onTime += 1;
+          else if (status === "late") counts.lateDone += 1;
+          else if (status === "pending") counts.pending += 1;
+          else if (status === "missed") counts.missed += 1;
+          else counts.exempt += 1;
+        }
       }
     }
   }

@@ -1126,6 +1126,7 @@ function TodayStatusPanel({
     }
     return [...groups.entries()];
   }, [entries]);
+  const uniquePeopleCount = useMemo(() => new Set(entries.map((e) => e.userId)).size, [entries]);
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
@@ -1143,7 +1144,13 @@ function TodayStatusPanel({
         </span>
         <div>
           <h2 className="text-[16px] font-semibold leading-tight">{meta.title}</h2>
-          <p className="text-xs text-[var(--ink-soft)] leading-tight">{entries.length} คน — ในห้องนี้</p>
+          <p className="text-xs text-[var(--ink-soft)] leading-tight">
+            {/* Phase 1.1: entries.length is per (person, round) — a room with
+                2 rounds counts the same person twice. Say "รายการ" (items),
+                not "คน" (people), whenever that's not the same number, so
+                "4 รายการ" for 2 people × 2 rounds doesn't read as 4 people. */}
+            {uniquePeopleCount === entries.length ? `${entries.length} คน` : `${entries.length} รายการ (${uniquePeopleCount} คน)`} — ในห้องนี้
+          </p>
         </div>
       </div>
       {entries.length === 0 ? (
@@ -1177,7 +1184,12 @@ function TodayStatusPanel({
                     </Avatar>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">{r.userName}</p>
-                      <p className="text-[11px] text-[var(--ink-soft)] truncate">{r.roundLabel}</p>
+                      {/* roundTime alongside roundLabel — two rounds named
+                          the same generic "รอบส่ง" (the placeholder text no
+                          one bothered to rename) would otherwise render as
+                          two identical-looking rows for the same person, and
+                          read as a duplicate/bug instead of two real rounds. */}
+                      <p className="text-[11px] text-[var(--ink-soft)] truncate">{r.roundLabel} · {r.roundTime}</p>
                     </div>
                     <span className="text-xs text-[var(--ink-soft)] shrink-0">{r.departmentName}</span>
                   </div>
