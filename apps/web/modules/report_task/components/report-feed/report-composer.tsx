@@ -13,7 +13,7 @@ import { cutoffsOnDay } from "@/modules/report_task/lib/report-cutoff";
 import { localDateStr, now } from "@/modules/report_task/lib/now";
 import { cn } from "@/modules/report_task/lib/utils";
 import { ReportPostFields, newSection, type DraftSection } from "@/modules/report_task/components/report-feed/report-post-fields";
-import { Switch } from "@/modules/report_task/components/ui/switch";
+import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
 import { Clock, Lock, Send, SquarePen } from "lucide-react";
 import { toast } from "sonner";
 
@@ -293,11 +293,16 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
             untracked room has no "counts toward daily" obligation to opt a
             post out of in the first place. */}
         {todayCutoffs.length > 0 && (
-          <label className="flex items-center justify-between gap-2 rounded-lg bg-[var(--bg-soft)] px-3 py-2 cursor-pointer">
-            <span className="text-xs text-[var(--ink-soft)]">
-              โพสต์นี้ไม่นับเป็นการส่ง daily <span className="text-[var(--ink-faint)]">(เช่น ถาม/แจ้งอัปเดตเฉยๆ ไม่ใช่รายงานจริง)</span>
-            </span>
-            <Switch checked={excludeFromSubmission} onCheckedChange={setExcludeFromSubmission} />
+          <label
+            className="flex w-fit items-center gap-1.5 text-[11px] text-[var(--ink-soft)] cursor-pointer"
+            title="เช่น ถาม/แจ้งอัปเดตเฉยๆ ไม่ใช่รายงานจริง"
+          >
+            <Checkbox
+              checked={excludeFromSubmission}
+              onCheckedChange={(v) => setExcludeFromSubmission(v === true)}
+              className="h-3.5 w-3.5"
+            />
+            โพสต์นี้ไม่นับเป็นการส่ง daily
           </label>
         )}
 
