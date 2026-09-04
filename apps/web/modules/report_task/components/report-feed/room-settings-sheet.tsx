@@ -27,7 +27,7 @@ import { useActivityLogStore } from "@/modules/report_task/store/activity-log-st
 import { canManage } from "@/modules/report_task/lib/directory";
 import { cn } from "@/modules/report_task/lib/utils";
 import { toast } from "sonner";
-import { Archive, ArchiveRestore, Info, Lock, Plus, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Info, Lock } from "lucide-react";
 
 /** Explains "เก็บเข้าคลัง/กู้คืน" on tap — a `Popover` (click-based), not a
  * hover `Tooltip`: hover has no equivalent on a touch screen, so a
@@ -135,7 +135,6 @@ export function RoomSettingsSheet({
   const updateTopicSettings = useReportFeedStore((s) => s.updateTopicSettings);
   const setNotifyPreference = useReportFeedStore((s) => s.setNotifyPreference);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
-  const [templateDraft, setTemplateDraft] = useState("");
   const [archiveConfirm, setArchiveConfirm] = useState(false);
 
   const [draft, setDraft] = useState<ReportTopic>(topic);
@@ -195,18 +194,6 @@ export function RoomSettingsSheet({
     const next = current.includes(day) ? current.filter((d) => d !== day) : [...current, day].sort();
     if (next.length === 0) return; // never let this collapse to "no day required"
     patchDraft({ requiredWeekdays: next.length === 7 ? undefined : next });
-  }
-
-  function addTemplateSection() {
-    const heading = templateDraft.trim();
-    if (!heading) return;
-    patchDraft({ postTemplateSections: [...(draft.postTemplateSections ?? []), { heading }] });
-    setTemplateDraft("");
-  }
-
-  function removeTemplateSection(index: number) {
-    const next = (draft.postTemplateSections ?? []).filter((_, i) => i !== index);
-    patchDraft({ postTemplateSections: next.length > 0 ? next : undefined });
   }
 
   const myNotifyPreference = topic.notifyPreference?.[viewingAsUserId] ?? "all";
@@ -313,43 +300,6 @@ export function RoomSettingsSheet({
               </p>
             </section>
           )}
-
-          <section className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)]">เทมเพลตโพสต์</p>
-            <p className="text-[11px] text-[var(--ink-soft)]">หัวข้อย่อยตั้งต้นที่จะขึ้นให้อัตโนมัติทุกครั้งที่เริ่มโพสต์ใหม่ในห้องนี้</p>
-            {(draft.postTemplateSections ?? []).length > 0 && (
-              <div className="space-y-1.5">
-                {draft.postTemplateSections!.map((s, i) => (
-                  <div key={i} className="flex items-center gap-2 rounded-lg border border-[var(--line)] px-2.5 py-1.5">
-                    <span className="flex-1 text-sm truncate">{s.heading}</span>
-                    <button
-                      onClick={() => removeTemplateSection(i)}
-                      className="shrink-0 h-6 w-6 flex items-center justify-center rounded text-[var(--ink-soft)] hover:text-[var(--chart-red)] hover:bg-[var(--chart-red)]/10"
-                      aria-label={`ลบหัวข้อย่อย ${s.heading}`}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="flex items-center gap-2">
-              <Input
-                value={templateDraft}
-                onChange={(e) => setTemplateDraft(e.target.value)}
-                placeholder="เช่น งานที่ทำวันนี้"
-                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addTemplateSection())}
-                className="flex-1"
-              />
-              <button
-                onClick={addTemplateSection}
-                className="shrink-0 h-9 w-9 flex items-center justify-center rounded-lg border border-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
-                aria-label="เพิ่มหัวข้อย่อยในเทมเพลต"
-              >
-                <Plus className="h-4 w-4" />
-              </button>
-            </div>
-          </section>
 
           {/* การแจ้งเตือน */}
           <section className="space-y-3">
