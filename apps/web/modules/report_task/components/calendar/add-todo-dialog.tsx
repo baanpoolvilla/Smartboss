@@ -201,10 +201,27 @@ export function AddTodoDialog({
           />
 
           {!editingTodo && canCreateMeeting && (
-            <label className="flex items-center justify-between gap-2 rounded-lg border border-[var(--line)] px-3 py-2 cursor-pointer">
+            // `<div>`, not `<label>` — a native <label> forwards its own
+            // click to the first form control inside it (Switch renders as
+            // `<button role="switch">`, which qualifies), so tapping the
+            // switch itself fired the toggle twice: once directly, once
+            // forwarded — flipping it on then immediately back off, which
+            // read as the switch just not responding to taps at all.
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => setIsMeeting((v) => !v)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setIsMeeting((v) => !v);
+                }
+              }}
+              className="flex items-center justify-between gap-2 rounded-lg border border-[var(--line)] px-3 py-2 cursor-pointer"
+            >
               <span className="text-sm font-medium">เป็นการประชุม</span>
-              <Switch checked={isMeeting} onCheckedChange={setIsMeeting} />
-            </label>
+              <Switch checked={isMeeting} onCheckedChange={setIsMeeting} onClick={(e) => e.stopPropagation()} />
+            </div>
           )}
 
           {isMeeting ? (
