@@ -28,7 +28,7 @@ import {
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
-import { REPORT_ATTACHMENT_ACCEPT } from "@/modules/report_task/lib/report-attachment-kind";
+import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
 import { DRAG_MENTION_TOPIC_MIME } from "@/modules/report_task/components/report-feed/report-post-fields";
 import { cn } from "@/modules/report_task/lib/utils";
 import { toast } from "sonner";
@@ -126,7 +126,6 @@ export function OpenchatFeed({
   const messages = toMessages(topicPosts);
   const scrollRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
   const [composerImages, setComposerImages] = useState<ReportPostImage[]>([]);
   const maxImages = useAttachmentSettingsStore((s) => s.settings.maxImagesPerReportPost);
@@ -276,8 +275,8 @@ export function OpenchatFeed({
     setEmojiOpen(false);
   }
 
-  async function handleComposerFiles(files: FileList | null) {
-    if (!files || files.length === 0) return;
+  async function handleComposerFiles(files: File[]) {
+    if (files.length === 0) return;
     const available = Math.max(0, maxImages - composerImages.length);
     if (files.length > available) {
       toast.error(`แนบได้สูงสุด ${maxImages} รูป/คลิปต่อข้อความ — เลือกไว้เกิน ข้ามไป ${files.length - available} ไฟล์`);
@@ -285,7 +284,7 @@ export function OpenchatFeed({
     setUploading(true);
     const next: ReportPostImage[] = [];
     try {
-      for (const file of Array.from(files).slice(0, available)) {
+      for (const file of files.slice(0, available)) {
         const media = await uploadReportMedia(file);
         next.push({ id: `img-${crypto.randomUUID()}`, url: media.url, name: media.name, mime: media.mime, size: media.size });
       }
@@ -294,7 +293,6 @@ export function OpenchatFeed({
     } finally {
       if (next.length > 0) setComposerImages((prev) => [...prev, ...next]);
       setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
 
@@ -771,22 +769,13 @@ export function OpenchatFeed({
           </div>
         )}
         <div className="relative flex items-end gap-2 rounded-xl px-3 py-2 bg-[var(--bg-soft)] border border-[var(--line)] focus-within:border-[var(--brand-green)]/50 transition-colors">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={REPORT_ATTACHMENT_ACCEPT}
-            multiple
-            className="hidden"
-            onChange={(e) => handleComposerFiles(e.target.files)}
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
+          <AttachMenu
+            onFiles={handleComposerFiles}
             disabled={uploading || composerImages.length >= maxImages}
             className="h-7 w-7 shrink-0 flex items-center justify-center rounded-full bg-[var(--brand-green)] text-[var(--ink)] disabled:opacity-40 mb-0.5"
+            trigger={uploading ? <ImagePlus className="h-4 w-4 animate-pulse" /> : <Plus className="h-4 w-4" />}
             aria-label="แนบรูป"
-          >
-            {uploading ? <ImagePlus className="h-4 w-4 animate-pulse" /> : <Plus className="h-4 w-4" />}
-          </button>
+          />
           <div
             ref={(el) => {
               editorRef.current = el;

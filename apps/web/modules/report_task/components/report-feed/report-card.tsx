@@ -1705,7 +1705,6 @@ function EditPostForm({
   onSave: (data: { title: string; sections: ReturnType<typeof buildSections>; images: ReportPostImage[]; tagIds: string[] }) => void;
 }) {
   const maxImages = useAttachmentSettingsStore((s) => s.settings.maxImagesPerReportPost);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState(post.title);
   const [sections, setSections] = useState<DraftSection[]>(
     post.sections.length > 0
@@ -1719,8 +1718,8 @@ function EditPostForm({
   const minImagesRequired = minImagesNow({ minImages: topic.minImages, cutoffs: cutoffsOnDay(topic, localDateStr(new Date())) });
   const missingRequiredImage = photoCount(images) < minImagesRequired;
 
-  async function handleFiles(files: FileList | null) {
-    if (!files || files.length === 0) return;
+  async function handleFiles(files: File[]) {
+    if (files.length === 0) return;
     const available = Math.max(0, maxImages - images.length);
     if (files.length > available) {
       toast.error(`แนบได้สูงสุด ${maxImages} รูป/คลิปต่อโพสต์ — เลือกไว้เกิน ข้ามไป ${files.length - available} ไฟล์`);
@@ -1728,7 +1727,7 @@ function EditPostForm({
     setBusy(true);
     const next: ReportPostImage[] = [];
     try {
-      for (const file of Array.from(files).slice(0, available)) {
+      for (const file of files.slice(0, available)) {
         const media = await uploadReportMedia(file);
         next.push({ id: `img-${crypto.randomUUID()}`, url: media.url, name: media.name, mime: media.mime, size: media.size });
       }
@@ -1739,7 +1738,6 @@ function EditPostForm({
       // to throw away images that already finished just because a later one broke.
       if (next.length > 0) setImages((prev) => [...prev, ...next]);
       setBusy(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
 
@@ -1772,7 +1770,6 @@ function EditPostForm({
         tagIds={tagIds}
         onTagIdsChange={setTagIds}
         minImages={minImagesRequired}
-        fileInputRef={fileInputRef}
         busy={busy}
         onFilesSelected={handleFiles}
       />

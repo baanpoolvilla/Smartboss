@@ -72,6 +72,7 @@ import { uploadTaskAttachment } from "@/modules/report_task/lib/task-attachment-
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { toast } from "sonner";
 import { TimeAgo } from "@/modules/report_task/components/shared/time-ago";
+import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
 
 const toDateInput = (iso: string) => iso.slice(0, 10);
 
@@ -133,8 +134,6 @@ export function TaskDetailSheet({
   const [mobileCommentsOpen, setMobileCommentsOpen] = useState(false);
   const [commentUploading, setCommentUploading] = useState(false);
   const [taskAttachUploading, setTaskAttachUploading] = useState(false);
-  const taskFileInputRef = useRef<HTMLInputElement>(null);
-  const commentFileInputRef = useRef<HTMLInputElement>(null);
   const [newChecklistItem, setNewChecklistItem] = useState("");
   const [newChecklistOwnerId, setNewChecklistOwnerId] = useState("");
   // Per-assignee due-date edit — one person at a time via a "แก้ไขกำหนดส่ง"
@@ -266,14 +265,14 @@ export function TaskDetailSheet({
 
   /** Real upload (mirrors the comment-attachment flow below) — replaced the
    * old mock that just faked a "1.2 MB PDF" without ever touching the server. */
-  async function handleTaskFilesSelected(files: FileList | null) {
-    if (!task || !files || files.length === 0) return;
+  async function handleTaskFilesSelected(files: File[]) {
+    if (!task || files.length === 0) return;
     const remaining = attachmentSettings.maxFilesPerTask - task.attachments.length;
     if (remaining <= 0) {
       toast.error(`แนบไฟล์ได้สูงสุด ${attachmentSettings.maxFilesPerTask} ไฟล์ต่องาน`);
       return;
     }
-    const picked = Array.from(files).slice(0, remaining);
+    const picked = files.slice(0, remaining);
     if (picked.length < files.length) {
       toast.error(`แนบได้อีกแค่ ${remaining} ไฟล์ (จำกัด ${attachmentSettings.maxFilesPerTask} ไฟล์ต่องาน)`);
     }
@@ -317,14 +316,14 @@ export function TaskDetailSheet({
     setCommentAttachments([]);
   }
 
-  async function handleCommentFilesSelected(files: FileList | null) {
-    if (!files || files.length === 0) return;
+  async function handleCommentFilesSelected(files: File[]) {
+    if (files.length === 0) return;
     const remaining = attachmentSettings.maxFilesPerComment - commentAttachments.length;
     if (remaining <= 0) {
       toast.error(`แนบไฟล์ได้สูงสุด ${attachmentSettings.maxFilesPerComment} ไฟล์ต่อความคิดเห็น`);
       return;
     }
-    const picked = Array.from(files).slice(0, remaining);
+    const picked = files.slice(0, remaining);
     if (picked.length < files.length) {
       toast.error(`แนบได้อีกแค่ ${remaining} ไฟล์ (จำกัด ${attachmentSettings.maxFilesPerComment} ไฟล์ต่อความคิดเห็น)`);
     }
@@ -1236,18 +1235,15 @@ export function TaskDetailSheet({
                   </TooltipContent>
                 </Tooltip>
               </h4>
-              <Button size="sm" variant="outline" disabled={taskAttachUploading} onClick={() => taskFileInputRef.current?.click()}>
-                {taskAttachUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} แนบไฟล์
-              </Button>
-              <input
-                ref={taskFileInputRef}
-                type="file"
-                multiple
-                className="hidden"
-                onChange={(e) => {
-                  void handleTaskFilesSelected(e.target.files);
-                  e.target.value = "";
-                }}
+              <AttachMenu
+                onFiles={(files) => void handleTaskFilesSelected(files)}
+                disabled={taskAttachUploading}
+                trigger={
+                  <>
+                    {taskAttachUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} แนบไฟล์
+                  </>
+                }
+                className="inline-flex items-center gap-1.5 h-8 rounded-md border border-input px-3 text-sm shadow-xs disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground"
               />
             </div>
             {task.attachments.length === 0 && <p className="text-xs text-[var(--ink-soft)]">ไม่มีไฟล์แนบ</p>}
@@ -1393,17 +1389,13 @@ export function TaskDetailSheet({
               </div>
             )}
             <div className="flex items-end gap-2">
-              <Button
-                size="icon"
-                variant="outline"
-                className="shrink-0"
+              <AttachMenu
+                onFiles={(files) => void handleCommentFilesSelected(files)}
                 disabled={commentUploading}
-                onClick={() => commentFileInputRef.current?.click()}
-                title="แนบไฟล์/รูปภาพ"
+                trigger={commentUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
                 aria-label="แนบไฟล์/รูปภาพ"
-              >
-                {commentUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
-              </Button>
+                className="shrink-0 inline-flex items-center justify-center size-9 rounded-md border border-input shadow-xs disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground"
+              />
               <Tooltip>
                 <TooltipTrigger
                   render={
@@ -1417,16 +1409,6 @@ export function TaskDetailSheet({
                   วิดีโอสูงสุด {attachmentSettings.maxVideoMB}MB · แนบได้สูงสุด {attachmentSettings.maxFilesPerComment} ไฟล์ต่อความคิดเห็น
                 </TooltipContent>
               </Tooltip>
-              <input
-                ref={commentFileInputRef}
-                type="file"
-                multiple
-                className="hidden"
-                onChange={(e) => {
-                  void handleCommentFilesSelected(e.target.files);
-                  e.target.value = "";
-                }}
-              />
               <Textarea
                 placeholder="แสดงความคิดเห็น..."
                 rows={1}
