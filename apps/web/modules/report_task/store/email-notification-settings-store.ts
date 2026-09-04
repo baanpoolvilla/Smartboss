@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
+import { safeLocalStorage } from "@/modules/report_task/lib/safe-storage";
 
 /**
  * UI-only preferences for now — this app has no email-sending backend
@@ -38,6 +39,6 @@ export const useEmailNotificationSettingsStore = create<EmailNotificationSetting
       setEnabled: (enabled) => set((s) => ({ settings: { ...s.settings, enabled } })),
       setCategory: (key, value) => set((s) => ({ settings: { ...s.settings, [key]: value } })),
     }),
-    { name: "eb-email-notification-settings", skipHydration: true }
+    { name: "eb-email-notification-settings", skipHydration: true, storage: createJSONStorage(() => safeLocalStorage) }
   )
 );

@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
+import { safeLocalStorage } from "@/modules/report_task/lib/safe-storage";
 
 export interface WhatsNewItem {
   id: string;
@@ -127,6 +128,6 @@ export const useWhatsNewStore = create<WhatsNewStore>()(
           seenIds: { ...s.seenIds, [userId]: [...new Set([...(s.seenIds[userId] ?? []), ...ids])] },
         })),
     }),
-    { name: "eb-whats-new", skipHydration: true }
+    { name: "eb-whats-new", skipHydration: true, storage: createJSONStorage(() => safeLocalStorage) }
   )
 );

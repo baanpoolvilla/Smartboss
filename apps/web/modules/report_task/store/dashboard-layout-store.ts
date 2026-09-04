@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
+import { safeLocalStorage } from "@/modules/report_task/lib/safe-storage";
 
 // Every widget on the Dashboard is customizable — reorder, resize, or hide
 // any of them (see dashboard-grid.tsx / dashboard-customize-bar.tsx). The
@@ -78,6 +79,7 @@ export const useDashboardLayoutStore = create<DashboardLayoutStore>()(
     {
       name: "eb-dashboard-layout",
       skipHydration: true,
+      storage: createJSONStorage(() => safeLocalStorage),
       // Someone's already-persisted layout may predate a widget that's since
       // been added, renamed, or removed — keep every entry this registry
       // still recognizes in its saved order, then append anything from
