@@ -11,6 +11,7 @@ import {
   type TimeEvent,
 } from "@/modules/hr/lib/api";
 import { AttendanceTimeline } from "@/modules/hr/components/attendance-timeline";
+import { AttendanceDateNav } from "@/modules/hr/components/attendance-date-nav";
 import {
   DataTable,
   EmptyState,
@@ -21,22 +22,37 @@ import {
 } from "@/modules/hr/components/ui";
 import { autoRecalculateAttendance } from "@/modules/hr/lib/auto-recalculate";
 
-/** ช่วงที่สั่งคำนวณย้อนหลัง — ไม่มี UI ให้เลือกแล้ว หน้านี้แสดงแต่ของวันนี้ */
+/** ช่วงที่สั่งคำนวณย้อนหลัง — คงที่ทุกครั้ง ไม่ผูกกับวันที่กำลังดูอยู่ */
 const RECALC_DAYS = 30;
 
-export default async function HrOverviewPage() {
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+export default async function HrOverviewPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ date?: string }>;
+}) {
   return (
     <HrPage
       title="การลงเวลา"
       // เปิดให้ทุกคนที่เข้าโมดูลได้ — พนักงานต้องเห็นว่าใครมาถึงกี่โมง
       permission={HR_PERMS.access}
       load={async () => {
+        const sp = await searchParams;
         const now = new Date();
-        const today = now.toISOString().slice(0, 10);
+        const todayReal = now.toISOString().slice(0, 10);
         const from = new Date(now.getTime() - RECALC_DAYS * 86_400_000)
           .toISOString()
           .slice(0, 10);
-        const to = today;
+        const to = todayReal;
+
+        // วันที่กำลังดู — จำกัดไม่ให้เกินวันนี้ เพราะยังไม่มีข้อมูลของอนาคต
+        // ค่าผิดรูปแบบ (แก้ URL มือ) ก็ตกกลับมาเป็นวันนี้เงียบ ๆ แทนพัง
+        const viewDate =
+          sp.date !== undefined && ISO_DATE.test(sp.date) && sp.date <= todayReal
+            ? sp.date
+            : todayReal;
+        const isToday = viewDate === todayReal;
 
         // สั่งคำนวณแบบไม่รอผล — หน้านี้ไม่ได้แสดงผลคำนวณแล้ว แต่ยังต้องสั่ง
         // เพราะไม่มีอะไรอื่นในระบบคำนวณผลลงเวลาให้เลย (การสแกนเข้ามาไม่ trigger)
@@ -44,6 +60,8 @@ export default async function HrOverviewPage() {
         //
         // ⚠ ห้าม await ตรงนี้ — งานนี้ยิงคำนวณทีละคนจนครบทุกคน ใช้เวลาหลาย
         // วินาที การรอให้จบก่อนเรนเดอร์ทำให้หน้านี้ค้างทุกครั้งที่เปิด
+        // ⚠ ผูกกับ todayReal เสมอ ไม่ใช่ viewDate — เปิดดูวันเก่าไม่ควรสั่งคำนวณ
+        // วันเก่าซ้ำทุกครั้งที่มีคนย้อนดู
         void autoRecalculateAttendance(from, to);
 
         const [
@@ -69,18 +87,18 @@ export default async function HrOverviewPage() {
                 status: "ON_TIME" | "LATE" | "REST_DAY" | "NO_SHIFT";
                 late_minutes: number;
               }[];
-            }>(`/time-event-board?date=${today}`),
-            // การตอกบัตรทีละครั้งของวันนี้ — ข้อมูลของ Timeline
-            wfTry<{ items: TimeEvent[] }>(`/time-events?date=${today}`),
-            // ใช้บอกว่ากะวันนี้เป็นวันหยุดไหม (rest_day) และเข้ากี่โมง — ต้องมีสำหรับคนที่ยังไม่สแกน
+            }>(`/time-event-board?date=${viewDate}`),
+            // การตอกบัตรทีละครั้งของวันที่กำลังดู — ข้อมูลของ Timeline
+            wfTry<{ items: TimeEvent[] }>(`/time-events?date=${viewDate}`),
+            // ใช้บอกว่ากะวันนั้นเป็นวันหยุดไหม (rest_day) และเข้ากี่โมง — ต้องมีสำหรับคนที่ยังไม่สแกน
             wfTry<Paged<{ id: string; rest_day: boolean; start_minutes: number }>>("/shifts"),
-            // ตารางที่ประกาศไว้แล้วของวันนี้ (ทุกคน) — ชนะตารางประจำสัปดาห์เสมอ
+            // ตารางที่ประกาศไว้แล้วของวันที่กำลังดู (ทุกคน) — ชนะตารางประจำสัปดาห์เสมอ
             wfTry<{ items: { employment_id: string; shift_id: string | null }[] }>(
-              `/shift-assignments?from=${today}&to=${today}`,
+              `/shift-assignments?from=${viewDate}&to=${viewDate}`,
             ),
-            // ใบลาที่อนุมัติแล้วของวันนี้ — คนที่ลาไม่ใช่คนขาดงาน
+            // ใบลาที่อนุมัติแล้วของวันที่กำลังดู — คนที่ลาไม่ใช่คนขาดงาน
             wfTry<Paged<LeaveRequest>>(
-              `/leave-requests?from=${today}&to=${today}&status=APPROVED`,
+              `/leave-requests?from=${viewDate}&to=${viewDate}&status=APPROVED`,
             ),
             // ชื่อประเภทการลา — "Day-Off" กับ "ลาป่วย" คนละเรื่องกัน ป้ายต้องบอกให้ตรง
             wfTry<Paged<LeaveType>>("/leave-types"),
@@ -126,7 +144,7 @@ export default async function HrOverviewPage() {
         const DOW_FIELDS = [
           "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday",
         ] as const;
-        const todayDowField = DOW_FIELDS[new Date(`${today}T00:00:00Z`).getUTCDay()]!;
+        const todayDowField = DOW_FIELDS[new Date(`${viewDate}T00:00:00Z`).getUTCDay()]!;
 
         const needsPatternLookup = missingPeople.filter(
           (e) => !todayAssignmentByEmployment.has(e.id),
@@ -191,15 +209,19 @@ export default async function HrOverviewPage() {
         });
         const absentCount = missingRows.filter((m) => m.status === "ABSENT").length;
 
+        const dayLabel = isToday ? "วันนี้" : "วันที่เลือก";
+
         return (
           <>
+            <AttendanceDateNav date={viewDate} today={todayReal} />
+
             {/*
               Timeline — เห็นทุกครั้งที่มีคนตอกบัตร ไม่ใช่แค่ครั้งแรก/ครั้งสุดท้าย
               ของแต่ละคนแบบตารางเดิม ซึ่งทำให้การตอกระหว่างวัน (พัก/ออกไปไซต์งาน
               แล้วกลับ) หายไปหมด และไม่มีทางรู้ว่าแต่ละครั้งลงผ่านช่องทางไหน
             */}
             <SectionCard
-              title={`การลงเวลาวันนี้ · ${activePeople.length} คน`}
+              title={`การลงเวลา${dayLabel} · ${activePeople.length} คน`}
               description={[
                 `ลงเวลาแล้ว ${arrivals.length} คน`,
                 `${timeline?.items.length ?? 0} ครั้ง`,
@@ -223,13 +245,13 @@ export default async function HrOverviewPage() {
             </SectionCard>
 
             {/*
-              คนที่ยังไม่ตอกเลยวันนี้ — ไม่มี event ให้แสดงใน Timeline โดยธรรมชาติ
+              คนที่ยังไม่ตอกเลยในวันนั้น — ไม่มี event ให้แสดงใน Timeline โดยธรรมชาติ
               แต่เป็นเคสที่ควรเห็นชัดที่สุด จึงแยกเป็นส่วนของตัวเองแทนที่จะหายไป
             */}
             {missingRows.length > 0 && (
               <SectionCard
-                title={`ยังไม่ลงเวลาวันนี้ · ${missingRows.length} คน`}
-                description="คนที่ควรเข้ากะวันนี้แต่ยังไม่มีการสแกนเลย"
+                title={`ยังไม่ลงเวลา${dayLabel} · ${missingRows.length} คน`}
+                description={`คนที่ควรเข้ากะ${dayLabel}แต่ยังไม่มีการสแกนเลย`}
                 className="mb-4"
               >
                 <DataTable head={["พนักงาน", "เข้างาน", "สแกนล่าสุด", "ตามกะ", "สถานะ"]}>
