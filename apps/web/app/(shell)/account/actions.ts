@@ -6,6 +6,8 @@ import { redirect } from "next/navigation";
 import { requireAuth, hashPassword, verifyPassword, audit } from "@smartboss/auth";
 import { prisma } from "@smartboss/database";
 import { loadSecuritySettings } from "@/lib/security-settings";
+import { deleteFile, putFile } from "@/lib/storage";
+import { sniffMime } from "@/modules/report_task/lib/upload-sniff";
 
 /**
  * บัญชีของตัวเอง — ทุกคนที่ล็อกอินได้ใช้หน้านี้ได้ ไม่ต้องมีสิทธิ์อะไรเพิ่ม
@@ -100,6 +102,97 @@ export async function updateOwnProfileAction(formData: FormData) {
     where: { id: session.userId },
     data: { name: parsed.name },
   });
+
+  await audit({
+    userId: session.userId,
+    action: "USER_UPDATED",
+    targetId: session.userId,
+  });
+  revalidatePath("/account");
+}
+
+const AVATAR_ALLOWED: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
+const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * รูปโปรไฟล์ของตัวเอง — คนอื่นตั้งให้ไม่ได้ ต้องเป็นเจ้าของบัญชีเท่านั้น
+ * (เหตุผลเดียวกับ changeOwnPasswordAction: หน้านี้ไม่มีสิทธิ์แยกให้เช็ค
+ * ใครก็ตามที่ล็อกอินได้ถือว่าจัดการของตัวเองได้เต็มที่)
+ *
+ * สนิฟฟ์เนื้อไฟล์จริงแทนเชื่อ file.type ตามแพตเทิร์นเดียวกับที่อัปโหลดอื่น
+ * ในระบบใช้ (ดู apps/web/app/api/chat/uploads/route.ts) — ไม่งั้นใครอัปโหลด
+ * ไฟล์ .html ที่ตั้งชื่อ .jpg จะได้ URL ที่เสิร์ฟ HTML กลับมาจริง ๆ
+ */
+export async function updateOwnAvatarAction(formData: FormData) {
+  const session = await requireAuth();
+
+  const file = formData.get("avatar");
+  if (!(file instanceof File) || file.size === 0) {
+    throw new Error("กรุณาเลือกไฟล์รูปภาพ");
+  }
+  if (file.size > AVATAR_MAX_BYTES) {
+    throw new Error(`ไฟล์ใหญ่เกินไป (จำกัด ${AVATAR_MAX_BYTES / 1024 / 1024}MB)`);
+  }
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const sniffed = sniffMime(bytes, file.type);
+  const ext = sniffed ? AVATAR_ALLOWED[sniffed] : undefined;
+  if (!ext) {
+    throw new Error("รองรับเฉพาะไฟล์รูปภาพ (JPG, PNG, WEBP, GIF)");
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { avatarUrl: true },
+  });
+  if (!user) throw new Error("ไม่พบบัญชีผู้ใช้");
+
+  // แยก prefix ตามบริษัท เหมือนไฟล์แนบอื่น ๆ ในระบบ — ผู้ใช้แพลตฟอร์ม (orgId
+  // เป็น null เช่น SUPER_ADMIN) ไม่มีบริษัทให้แยก จึงรวมไว้ใต้ "platform"
+  const prefix = `${session.orgId ?? "platform"}/avatars`;
+  const url = await putFile(
+    prefix,
+    new File([bytes], `${session.userId}.${ext}`, { type: sniffed! }),
+    { ext }
+  );
+
+  await prisma.user.update({
+    where: { id: session.userId },
+    data: { avatarUrl: url },
+  });
+
+  // ลบไฟล์เก่าหลังอัปเดต DB สำเร็จแล้วเท่านั้น — ถ้าลบก่อนแล้วขั้นถัดไปพัง
+  // จะเหลือ URL เก่าชี้ไปไฟล์ที่ไม่มีอยู่แล้ว (รูปหาย) แทนที่จะแค่มีไฟล์ค้าง
+  if (user.avatarUrl) await deleteFile(user.avatarUrl);
+
+  await audit({
+    userId: session.userId,
+    action: "USER_UPDATED",
+    targetId: session.userId,
+  });
+  revalidatePath("/account");
+}
+
+/** เอารูปโปรไฟล์ออก — กลับไปแสดงตัวอักษรย่อชื่อแทน */
+export async function removeOwnAvatarAction() {
+  const session = await requireAuth();
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { avatarUrl: true },
+  });
+  if (!user?.avatarUrl) return;
+
+  await prisma.user.update({
+    where: { id: session.userId },
+    data: { avatarUrl: null },
+  });
+  await deleteFile(user.avatarUrl);
 
   await audit({
     userId: session.userId,

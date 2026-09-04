@@ -2,10 +2,16 @@ import { requireAuth } from "@smartboss/auth";
 import { prisma } from "@smartboss/database";
 import { Card } from "@smartboss/ui/components/card";
 import { Button } from "@smartboss/ui/components/button";
+import { Avatar } from "@smartboss/ui/components/avatar";
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { Field, SectionCard, inputClass } from "@/modules/admin/components/ui";
 import { loadSecuritySettings } from "@/lib/security-settings";
-import { changeOwnPasswordAction, updateOwnProfileAction } from "./actions";
+import {
+  changeOwnPasswordAction,
+  removeOwnAvatarAction,
+  updateOwnAvatarAction,
+  updateOwnProfileAction,
+} from "./actions";
 
 /**
  * บัญชีของฉัน — ทุกคนที่ล็อกอินได้เข้าหน้านี้ได้ ไม่ต้องมีสิทธิ์อะไรเพิ่ม
@@ -24,6 +30,7 @@ export default async function AccountPage() {
     select: {
       name: true,
       email: true,
+      avatarUrl: true,
       createdAt: true,
       organization: { select: { name: true } },
       roles: { select: { role: { select: { name: true } } } },
@@ -50,6 +57,50 @@ export default async function AccountPage() {
           อีเมลใช้เป็นชื่อผู้ใช้สำหรับเข้าระบบ · ต้องการเปลี่ยนอีเมลหรือบทบาท
           ให้แจ้งผู้ดูแลของบริษัท
         </p>
+      </SectionCard>
+
+      <SectionCard
+        title="รูปโปรไฟล์"
+        description="แสดงในเมนูมุมขวาบนและทุกที่ที่มีชื่อคุณขึ้น"
+        className="mt-4"
+      >
+        <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
+          <Avatar name={user.name} src={user.avatarUrl} className="h-20 w-20 text-2xl" />
+
+          <div className="flex flex-1 flex-col gap-3">
+            <form
+              action={updateOwnAvatarAction}
+              encType="multipart/form-data"
+              className="flex flex-col gap-2 sm:flex-row sm:items-center"
+            >
+              <input
+                type="file"
+                name="avatar"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                required
+                className="block w-full text-sm text-(--ink-soft) file:mr-3 file:rounded-(--radius) file:border-0 file:bg-(--bg-soft) file:px-3 file:py-2 file:text-sm file:font-medium file:text-(--ink) hover:file:bg-(--line)"
+              />
+              <Button type="submit" variant="outline" className="h-11 shrink-0">
+                อัปโหลด
+              </Button>
+            </form>
+
+            {user.avatarUrl && (
+              <form action={removeOwnAvatarAction}>
+                <button
+                  type="submit"
+                  className="text-xs text-(--ink-soft) underline-offset-2 hover:underline"
+                >
+                  ลบรูปโปรไฟล์
+                </button>
+              </form>
+            )}
+
+            <p className="text-xs text-(--ink-soft)">
+              JPG, PNG, WEBP หรือ GIF — ขนาดไม่เกิน 5MB
+            </p>
+          </div>
+        </div>
       </SectionCard>
 
       <form action={updateOwnProfileAction} className="mt-4">
