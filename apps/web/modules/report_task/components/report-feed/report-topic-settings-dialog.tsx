@@ -2,22 +2,17 @@
 
 import { useState } from "react";
 import { Button } from "@/modules/report_task/components/ui/button";
-import { Input } from "@/modules/report_task/components/ui/input";
 import { Label } from "@/modules/report_task/components/ui/label";
 import { RoomMembersSummaryCard, RoomMembersDialog } from "@/modules/report_task/components/report-feed/room-members-dialog";
 import { useReportFeedStore, type ReportTopic, type SubmissionRound } from "@/modules/report_task/store/report-feed-store";
 import { SubmissionRoundDialog } from "@/modules/report_task/components/report-feed/submission-round-dialog";
-import { TimePickerField } from "@/modules/report_task/components/shared/time-picker-field";
 import { resolvedSubmittersOfTopic } from "@/modules/report_task/lib/submission-rounds";
 import { users as allUsers } from "@/modules/report_task/lib/directory";
 import { departments, getUser, isOwner } from "@/modules/report_task/lib/directory";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { topicModeOf } from "@/modules/report_task/lib/report-topic-membership";
 import { cn } from "@/modules/report_task/lib/utils";
-import { Check, Clock, Globe, ImagePlus, Lock, Minus, Pencil, Plus, Trash2, User, Users, UserCheck } from "lucide-react";
-import { uuid } from "@/modules/report_task/lib/uuid";
-
-const MAX_REQUIRED_IMAGES = 6;
+import { Check, Clock, Globe, Lock, Pencil, Plus, Trash2, User, Users, UserCheck } from "lucide-react";
 
 const WD = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 function daysLabel(w?: number[]): string {
@@ -35,32 +30,6 @@ function whoLabel(r: SubmissionRound, groups: { id: string; name: string }[]): s
   if (s.addUserIds?.length) extra.push("+" + s.addUserIds.length);
   if (s.removeUserIds?.length) extra.push("\u2212" + s.removeUserIds.length);
   return base + (extra.length ? " (" + extra.join(" ") + ")" : "");
-}
-
-function ImageCountStepper({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  return (
-    <div className="flex items-center gap-1 rounded-full border border-[var(--line)] bg-white px-1 shrink-0">
-      <button
-        type="button"
-        onClick={() => onChange(Math.max(0, value - 1))}
-        disabled={value <= 0}
-        className="h-6 w-6 flex items-center justify-center text-[var(--ink-soft)] hover:text-[var(--ink)] disabled:opacity-30"
-        aria-label="ลดจำนวนรูปขั้นต่ำ"
-      >
-        <Minus className="h-3 w-3" />
-      </button>
-      <span className="w-5 text-center text-sm font-medium tabular-nums">{value}</span>
-      <button
-        type="button"
-        onClick={() => onChange(Math.min(MAX_REQUIRED_IMAGES, value + 1))}
-        disabled={value >= MAX_REQUIRED_IMAGES}
-        className="h-6 w-6 flex items-center justify-center text-[var(--ink-soft)] hover:text-[var(--ink)] disabled:opacity-30"
-        aria-label="เพิ่มจำนวนรูปขั้นต่ำ"
-      >
-        <Plus className="h-3 w-3" />
-      </button>
-    </div>
-  );
 }
 
 type VisibilityMode = "open" | "department" | "manager" | "person";
@@ -90,8 +59,6 @@ export function ReportTopicSettingsPanel({
 }) {
   const updateTopicSettings = useReportFeedStore((s) => s.updateTopicSettings);
   const apply = onUpdate ?? ((patch: Partial<ReportTopic>) => updateTopicSettings(topic.id, patch));
-  const [newLabel, setNewLabel] = useState("");
-  const [newTime, setNewTime] = useState("09:00");
   const [membersDialogOpen, setMembersDialogOpen] = useState(false);
   const submitterGroups = useReportFeedStore((s) => s.submitterGroups);
   const [roundDialogOpen, setRoundDialogOpen] = useState(false);
@@ -156,25 +123,6 @@ export function ReportTopicSettingsPanel({
     });
   }
 
-  function addCutoff() {
-    const label = newLabel.trim();
-    if (!label || !newTime) return;
-    apply({
-      cutoffs: [...topic.cutoffs, { id: `cutoff-${uuid()}`, label, time: newTime }],
-    });
-    setNewLabel("");
-  }
-
-  function removeCutoff(id: string) {
-    apply({ cutoffs: topic.cutoffs.filter((c) => c.id !== id) });
-  }
-
-  function setCutoffMinImages(id: string, value: number | undefined) {
-    apply({
-      cutoffs: topic.cutoffs.map((c) => (c.id === id ? { ...c, minImages: value } : c)),
-    });
-  }
-
   const rounds = topic.submissionRounds ?? [];
   function saveRound(round: SubmissionRound) {
     const exists = rounds.some((r) => r.id === round.id);
@@ -182,18 +130,6 @@ export function ReportTopicSettingsPanel({
   }
   function removeRound(id: string) {
     apply({ submissionRounds: rounds.filter((r) => r.id !== id) });
-  }
-  function convertLegacy() {
-    apply({
-      submissionRounds: topic.cutoffs.map((c) => ({
-        id: `round-${uuid()}`,
-        label: c.label,
-        time: c.time,
-        minImages: c.minImages,
-        weekdays: topic.requiredWeekdays,
-        submitters: { mode: "everyone", removeUserIds: visibility?.exemptUserIds ?? [] } as SubmissionRound["submitters"],
-      })),
-    });
   }
 
   return (
@@ -290,94 +226,6 @@ export function ReportTopicSettingsPanel({
           </p>
         </div>
 
-        <div className="flex items-center justify-between rounded-lg bg-[var(--bg-soft)] px-3 py-2.5">
-          <div>
-            <p className="text-sm font-medium">จำนวนรูปขั้นต่ำต่อโพสต์ (ค่าเริ่มต้น)</p>
-            <p className="text-xs text-[var(--ink-soft)]">
-              {rounds.length > 0
-                ? "ค่าเริ่มต้นให้รอบที่ไม่ตั้งรูปเอง"
-                : topic.cutoffs.length > 0
-                  ? "ใช้กับรอบที่ไม่ได้กำหนดจำนวนรูปไว้เฉพาะด้านล่าง"
-                  : topic.minImages > 0
-                    ? `โพสต์ต้องแนบอย่างน้อย ${topic.minImages} รูปถึงจะโพสต์ได้`
-                    : "0 = ไม่บังคับแนบรูป"}
-            </p>
-          </div>
-          <ImageCountStepper value={topic.minImages} onChange={(v) => apply({ minImages: v })} />
-        </div>
-
-        {/* B — ห้องที่ตั้งรอบส่งแล้ว (`submissionRounds`) ไม่ต้องเห็นรอบตัดยอด
-            เดิมอีก (ซ้ำซ้อนกับรอบส่งด้านล่าง, ห้ามแก้พร้อมกันสองที่) — ห้องเก่าที่
-            ยังไม่แปลงเห็นเหมือนเดิมทุกอย่าง + ปุ่มแปลงด้านล่าง. */}
-        {rounds.length === 0 && (
-          <div className="space-y-2">
-            <Label className="text-xs text-[var(--ink-soft)]">รอบตัดยอดรีพอต (เช่น เช้า 09:00, เย็น 18:00)</Label>
-            {topic.cutoffs.length > 0 && (
-              <div className="space-y-1.5">
-                {topic.cutoffs.map((c) => (
-                  <div key={c.id} className="rounded-lg border border-[var(--line)] p-2 space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <span className="flex-1 text-sm font-medium">{c.label}</span>
-                      <span className="text-sm tabular-nums text-[var(--ink-soft)]">{c.time}</span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeCutoff(c.id)}
-                        aria-label={`ลบรอบ ${c.label}`}
-                      >
-                        <Trash2 className="h-4 w-4 text-[var(--ink-soft)]" />
-                      </Button>
-                    </div>
-                    {/* Per-round override — e.g. เช้าต้องแนบ 2 รูป, เย็นแค่เช็คอินก็พอ. */}
-                    <div className="flex items-center gap-1.5 pl-0.5">
-                      <ImagePlus className="h-3 w-3 text-[var(--ink-soft)] shrink-0" />
-                      <button
-                        type="button"
-                        onClick={() => setCutoffMinImages(c.id, c.minImages === undefined ? topic.minImages : undefined)}
-                        className={cn(
-                          "rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors",
-                          c.minImages === undefined
-                            ? "border-[var(--brand-green)] bg-[var(--accent)] text-[var(--brand-green-dark)]"
-                            : "border-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
-                        )}
-                      >
-                        ตามค่าเริ่มต้น{c.minImages === undefined ? ` (${topic.minImages})` : ""}
-                      </button>
-                      {c.minImages !== undefined && (
-                        <>
-                          <span className="text-[11px] text-[var(--ink-soft)]">กำหนดเอง:</span>
-                          <ImageCountStepper value={c.minImages} onChange={(v) => setCutoffMinImages(c.id, v)} />
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="flex items-center gap-2 rounded-lg border border-dashed border-[var(--line)] p-2">
-              <Input
-                aria-label="ชื่อรอบตัดยอด"
-                value={newLabel}
-                onChange={(e) => setNewLabel(e.target.value)}
-                placeholder="ชื่อรอบ เช่น เช้า"
-                className="flex-1"
-              />
-              <TimePickerField
-                aria-label="เวลาตัดยอด"
-                value={newTime}
-                onChange={setNewTime}
-                className="w-28 shrink-0"
-              />
-              <Button variant="outline" size="icon" onClick={addCutoff} aria-label="เพิ่มรอบตัดยอด">
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-            <p className="text-[11px] text-[var(--ink-soft)]">
-              โพสต์ที่ส่งหลังเวลาที่กำหนดจะขึ้นป้าย &quot;ส่งช้า&quot; สีเตือนบนโพสต์ — ไม่บล็อกการโพสต์
-            </p>
-          </div>
-        )}
-
         <div className="space-y-2">
           <div>
             <Label className="text-xs text-[var(--ink-soft)]">รอบส่ง — ใครต้องส่ง + กี่โมง</Label>
@@ -406,7 +254,7 @@ export function ReportTopicSettingsPanel({
                   <div className="flex items-center gap-1.5 text-[11px] text-[var(--ink-soft)]">
                     <Users className="h-3 w-3 shrink-0" />
                     <span className="truncate">{whoLabel(r, submitterGroups)}</span>
-                    {(r.minImages ?? topic.minImages) > 0 && <span className="shrink-0">· รูป ≥ {r.minImages ?? topic.minImages}</span>}
+                    {(r.minImages ?? 0) > 0 && <span className="shrink-0">· รูป ≥ {r.minImages ?? 0}</span>}
                   </div>
                 </div>
               ))}
@@ -416,12 +264,6 @@ export function ReportTopicSettingsPanel({
           <Button variant="outline" size="sm" className="w-full" onClick={() => { setEditingRound(null); setRoundDialogOpen(true); }}>
             <Plus className="mr-1 h-3.5 w-3.5" />เพิ่มรอบส่ง
           </Button>
-
-          {rounds.length === 0 && topic.cutoffs.length > 0 && (
-            <Button variant="ghost" size="sm" className="w-full text-[var(--brand-green-dark)]" onClick={convertLegacy}>
-              แปลงรอบตัดยอดเดิม ({topic.cutoffs.length}) เป็นรอบส่ง
-            </Button>
-          )}
 
           {rounds.length > 0 && (() => {
             const ids = resolvedSubmittersOfTopic(memberTopic, submitterGroups);
@@ -449,7 +291,6 @@ export function ReportTopicSettingsPanel({
           open={roundDialogOpen}
           onOpenChange={setRoundDialogOpen}
           initial={editingRound}
-          roomDefaultMinImages={topic.minImages}
           onSave={saveRound}
         />
       </div>

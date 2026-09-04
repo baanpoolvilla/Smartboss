@@ -1716,7 +1716,7 @@ function EditPostForm({
   const [tagIds, setTagIds] = useState<string[]>(post.tagIds);
   const [busy, setBusy] = useState(false);
 
-  const minImagesRequired = minImagesNow({ minImages: topic.minImages, cutoffs: cutoffsOnDay(topic, localDateStr(new Date())) });
+  const minImagesRequired = minImagesNow({ cutoffs: cutoffsOnDay(topic, localDateStr(new Date())) });
   const missingRequiredImage = photoCount(images) < minImagesRequired;
 
   async function handleFiles(files: File[]) {

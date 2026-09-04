@@ -21,6 +21,7 @@ import { groupByDay } from "@/modules/report_task/lib/format";
 import { ReportImageLightbox } from "@/modules/report_task/components/report-feed/report-image-lightbox";
 import { canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { buildUserComplianceReports, pendingToday } from "@/modules/report_task/lib/report-feed-compliance";
+import { effectiveRoundsOf } from "@/modules/report_task/lib/submission-rounds";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { DatePresetPicker } from "@/modules/report_task/components/report-analytics/date-preset-picker";
 import { presetRange, type DatePreset } from "@/modules/report_task/lib/date-filter";
@@ -287,7 +288,7 @@ export function ReportTopicPanels({
   // member against that schedule, not just a raw post count. Only meaningful
   // once a schedule exists; an open check-in room has no "on time" to
   // measure against, so it falls back to a plain post count instead.
-  const hasSchedule = topic.cutoffs.length > 0;
+  const hasSchedule = effectiveRoundsOf(topic).length > 0;
 
   const stats = useMemo(() => {
     const totalReplies = topicPosts.reduce((n, p) => n + p.replies.length, 0);

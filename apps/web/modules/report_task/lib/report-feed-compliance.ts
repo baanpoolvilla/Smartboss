@@ -22,7 +22,7 @@ import type { ReportPost, ReportTopic, SubmissionRound } from "@/modules/report_
  * entirely rather than inventing an obligation nothing configured.
  */
 export function trackedTopicsOf(topics: ReportTopic[]): ReportTopic[] {
-  return topics.filter((t) => t.cutoffs.length > 0 || (t.submissionRounds?.length ?? 0) > 0);
+  return topics.filter((t) => effectiveRoundsOf(t).length > 0);
 }
 
 /**
@@ -38,8 +38,8 @@ export function trackedTopicIdForDepartment(topics: ReportTopic[], departmentId:
 }
 
 function lastCutoffMinutes(topic: ReportTopic): number {
-  return topic.cutoffs.reduce((max, c) => {
-    const [h, m] = c.time.split(":").map(Number) as [number, number];
+  return effectiveRoundsOf(topic).reduce((max, r) => {
+    const [h, m] = r.time.split(":").map(Number) as [number, number];
     return Math.max(max, h * 60 + m);
   }, 0);
 }
@@ -54,18 +54,17 @@ function groupsNow() {
 }
 
 /** เวลาปิดรอบสุดท้ายที่ "ผู้ใช้คนนี้" ต้องส่งในวันนั้น (นาทีของวัน) — null = ไม่ต้องส่งวันนั้น.
- * ห้องเก่า (ไม่มี submissionRounds): ใช้ requiredWeekdays + cutoff สุดท้ายของห้อง = พฤติกรรมเดิม. */
+ * `roundsForUserOnDay` เดินผ่าน `effectiveRoundsOf` อยู่แล้ว ครอบทั้งห้องเก่า
+ * (สังเคราะห์รอบจาก cutoffs/requiredWeekdays) และห้องใหม่ในทางเดียวกัน — ไม่ต้อง
+ * แยกสาขา legacy อีกต่อไป, และห้องที่ไม่มี cutoffs/rounds เลยตอบ null เสมอ
+ * (= ไม่มีใครต้องส่ง ตามข้อ 4 ในสเปก). */
 function userRequiredCutoffMinutes(topic: ReportTopic, userId: string, day: string): number | null {
-  if (topic.submissionRounds && topic.submissionRounds.length > 0) {
-    const rounds = roundsForUserOnDay(topic, userId, day, groupsNow());
-    if (rounds.length === 0) return null;
-    return rounds.reduce((max, r) => {
-      const [h, m] = r.time.split(":").map(Number) as [number, number];
-      return Math.max(max, h * 60 + m);
-    }, 0);
-  }
-  if (!isRequiredWeekday(topic, day)) return null;
-  return lastCutoffMinutes(topic);
+  const rounds = roundsForUserOnDay(topic, userId, day, groupsNow());
+  if (rounds.length === 0) return null;
+  return rounds.reduce((max, r) => {
+    const [h, m] = r.time.split(":").map(Number) as [number, number];
+    return Math.max(max, h * 60 + m);
+  }, 0);
 }
 
 /** The room's own final cutoff time-of-day, formatted "HH:MM" — for UI that
@@ -85,21 +84,10 @@ function minutesOfDay(iso: string): number {
   return d.getHours() * 60 + d.getMinutes();
 }
 
-/** Minimum photos a post made at `atIso` needed — same rule as report-cutoff.ts's `minImagesNow`, generalized to a specific timestamp instead of always "now" so a past post can be judged against the round it actually fell in. */
+/** Minimum photos a post made at `atIso` needed — same rule as report-cutoff.ts's `minImagesNow`, generalized to a specific timestamp instead of always "now" so a past post can be judged against the round it actually fell in. No room-level default any more: a round that doesn't set its own `minImages` requires none. */
 function minImagesFor(topic: ReportTopic, atIso: string): number {
-  if (topic.submissionRounds && topic.submissionRounds.length > 0) {
-    const mins = minutesOfDay(atIso);
-    let pickedMin: number | undefined;
-    let best = -1;
-    for (const r of topic.submissionRounds) {
-      const [h, m] = r.time.split(":").map(Number) as [number, number];
-      const t = h * 60 + m;
-      if (t <= mins && t > best) { best = t; pickedMin = r.minImages; }
-    }
-    return pickedMin ?? topic.minImages;
-  }
-  const round = lateCutoffFor(atIso, topic.cutoffs);
-  return round?.minImages ?? topic.minImages;
+  const round = lateCutoffFor(atIso, effectiveRoundsOf(topic));
+  return round?.minImages ?? 0;
 }
 
 /** Excludes posts the poster explicitly marked "ไม่นับเป็นการส่ง daily"
@@ -153,22 +141,6 @@ export function iterationBounds(topic: ReportTopic, range: { from: Date; to: Dat
  * day, and was it before the day's final cutoff — without over-modeling an
  * obligation the product doesn't actually enforce anywhere else.
  */
-/** A room's `requiredWeekdays` (0=Sun..6=Sat) — undefined/empty means every
- * day counts, today's existing behavior (including weekends, which is
- * exactly the "Saturday still shows as 'ไม่ส่ง'" complaint this exists to fix). */
-function isRequiredWeekday(topic: ReportTopic, day: string): boolean {
-  if (topic.submissionRounds && topic.submissionRounds.length > 0) {
-    // Delegates to the same single decider roundsForUserOnDay/userRequiredCutoffMinutes
-    // use, rather than re-checking just the weekday here — otherwise this
-    // would judge a day "required" (and eventually "missed") even before the
-    // round that requires it existed, since only roundRunsOnDay knows about
-    // a round's own createdAt cutoff.
-    return topic.submissionRounds.some((r) => roundRunsOnDay(r, day));
-  }
-  if (!topic.requiredWeekdays || topic.requiredWeekdays.length === 0) return true;
-  return topic.requiredWeekdays.includes(new Date(`${day}T00:00:00`).getDay());
-}
-
 export function dayComplianceStatus(
   topic: ReportTopic,
   userId: string,
@@ -252,9 +224,10 @@ export function roundComplianceStatus(
 }
 
 /** Per-round counterpart to `dayHasAttachmentIssue` — checks only the posts
- * actually attributed to `round`, against that round's own `minImages`
- * (falling back to the room default), instead of re-deriving "whichever
- * round was active" from the post's timestamp. */
+ * actually attributed to `round`, against that round's own `minImages` (no
+ * room-level default any more — a round that doesn't set one requires none),
+ * instead of re-deriving "whichever round was active" from the post's
+ * timestamp. */
 function roundHasAttachmentIssue(
   topic: ReportTopic,
   userId: string,
@@ -266,7 +239,7 @@ function roundHasAttachmentIssue(
   if (exemptions && isExemptDate(exemptions, userId, day)) return false;
   const roundPosts = postsForRound(topic, userId, round, day, posts);
   if (roundPosts.length === 0) return false;
-  const required = round.minImages ?? topic.minImages;
+  const required = round.minImages ?? 0;
   return !roundPosts.some((p) => photoCount(p.images) >= required);
 }
 

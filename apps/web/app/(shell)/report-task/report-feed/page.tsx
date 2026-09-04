@@ -25,7 +25,8 @@ import { cn } from "@/modules/report_task/lib/utils";
 import { canEditReportTopic, canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { topicModeOf } from "@/modules/report_task/lib/report-topic-membership";
 import { RoomMembersDialog } from "@/modules/report_task/components/report-feed/room-members-dialog";
-import { currentCutoff } from "@/modules/report_task/lib/report-cutoff";
+import { currentCutoff, cutoffsOnDay } from "@/modules/report_task/lib/report-cutoff";
+import { localDateStr } from "@/modules/report_task/lib/now";
 import { pendingToday, todayStatusEntries, type TodayStatusEntry } from "@/modules/report_task/lib/report-feed-compliance";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
@@ -431,11 +432,14 @@ function ReportFeedPageInner() {
 
   const requirementParts = useMemo(() => {
     if (!activeTopic) return [];
-    if (activeTopic.cutoffs.length === 0) {
-      return activeTopic.minImages > 0 ? [{ text: `แนบอย่างน้อย ${activeTopic.minImages} รูปทุกโพสต์`, active: false }] : [];
-    }
-    const active = currentCutoff(activeTopic.cutoffs);
-    const requiredOf = (c: { minImages?: number }) => c.minImages ?? activeTopic.minImages;
+    // Today's effective rounds — merges legacy cutoffs and real
+    // submissionRounds into one shape either way (see cutoffsOnDay's own
+    // doc comment). No more room-level minImages default: a room with no
+    // round in force today has nothing required, full stop.
+    const rounds = cutoffsOnDay(activeTopic, localDateStr(new Date()));
+    if (rounds.length === 0) return [];
+    const active = currentCutoff(rounds);
+    const requiredOf = (c: { minImages?: number }) => c.minImages ?? 0;
     // Two rounds with the same photo requirement and no real (non-placeholder)
     // labels read naturally as one deadline window ("กำหนดส่ง 13:00–14:00
     // น."), which is what §7's own example assumes — but that's an accurate
@@ -443,10 +447,10 @@ function ReportFeedPageInner() {
     // differing requirements, or rounds someone actually named stay spelled
     // out individually below instead, since collapsing those into a range
     // would misstate what's actually required.
-    const allSameRequirement = activeTopic.cutoffs.every((c) => requiredOf(c) === requiredOf(activeTopic.cutoffs[0]!));
-    const anyRealLabel = activeTopic.cutoffs.some((c) => c.label.trim().length > 2);
-    if (activeTopic.cutoffs.length === 2 && allSameRequirement && !anyRealLabel) {
-      const [a, b] = activeTopic.cutoffs;
+    const allSameRequirement = rounds.every((c) => requiredOf(c) === requiredOf(rounds[0]!));
+    const anyRealLabel = rounds.some((c) => c.label.trim().length > 2);
+    if (rounds.length === 2 && allSameRequirement && !anyRealLabel) {
+      const [a, b] = rounds;
       const required = requiredOf(a!);
       return [
         {
@@ -463,7 +467,7 @@ function ReportFeedPageInner() {
     // room's first one) otherwise produced "กำหนดส่ง 13:00 น. · กำหนดส่ง
     // 14:00 น. · แนบอย่างน้อย 1 รูป", repeating the same word for no reason
     // ("ไม่สวยเลย").
-    return activeTopic.cutoffs.map((c) => {
+    return rounds.map((c) => {
       const required = requiredOf(c);
       // A round label of a couple characters or less ("t", "00") is almost
       // always leftover placeholder text from setting the round up, not a
@@ -751,7 +755,7 @@ function ReportFeedPageInner() {
                           in) reads more naturally than "กำหนดส่ง" (a deadline
                           you're up against) for a room with an open
                           submission window rather than a hard due-time. */}
-                      {activeTopic.cutoffs.length > 0 && <span className="shrink-0">เวลาส่ง</span>}
+                      {requirementParts.length > 0 && <span className="shrink-0">เวลาส่ง</span>}
                       {requirementParts.map((r, i) => (
                         <span key={i} className={cn("shrink-0", r.active && "font-medium text-[var(--ink)]")}>
                           {i > 0 && <span className="text-[var(--ink-faint)]"> · </span>}
@@ -773,7 +777,7 @@ function ReportFeedPageInner() {
                         <PopoverContent align="start" className="w-72 p-3">
                           <div className="flex items-center gap-1.5 flex-wrap text-xs text-[var(--ink-soft)]">
                             <Clock className="h-3 w-3 shrink-0" />
-                            {activeTopic.cutoffs.length > 0 && <span className="shrink-0">เวลาส่ง</span>}
+                            {requirementParts.length > 0 && <span className="shrink-0">เวลาส่ง</span>}
                             {requirementParts.map((r, i) => (
                               <span key={i} className={cn("shrink-0", r.active && "font-medium text-[var(--ink)]")}>
                                 {i > 0 && <span className="text-[var(--ink-faint)]"> · </span>}

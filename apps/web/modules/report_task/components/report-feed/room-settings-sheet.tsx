@@ -25,7 +25,6 @@ import { useReportFeedStore, FEED_VIEW_MODE_LOCK_CUTOFF, type ReportTopic } from
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useActivityLogStore } from "@/modules/report_task/store/activity-log-store";
 import { canManage } from "@/modules/report_task/lib/directory";
-import { cn } from "@/modules/report_task/lib/utils";
 import { toast } from "sonner";
 import { Archive, ArchiveRestore, Info, Lock } from "lucide-react";
 
@@ -63,8 +62,6 @@ function ArchiveInfoButton() {
   );
 }
 
-const weekdayLabels = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
-
 const reminderOptions = [
   { value: "0", label: "ปิด" },
   { value: "15", label: "15 นาทีก่อนถึงรอบ" },
@@ -79,14 +76,11 @@ const FIELD_LABELS: Record<string, string> = {
   color: "สี",
   postPermission: "สิทธิ์การโพสต์",
   commentsDisabled: "ปิดคอมเมนต์",
-  requiredWeekdays: "วันที่ต้องส่งรายงาน",
   postTemplateSections: "เทมเพลตโพสต์",
   remindBeforeCutoffMinutes: "เตือนก่อนถึงรอบส่ง",
   notifyManagerSummary: "สรุปให้หัวหน้า",
   feedViewMode: "รูปแบบการแสดงโพสต์",
   filesRetentionDays: "อายุรูปในแท็บไฟล์",
-  minImages: "จำนวนรูปขั้นต่ำ",
-  cutoffs: "รอบตัดยอด",
   visibility: "สิทธิ์การมองเห็น",
 };
 
@@ -185,17 +179,6 @@ export function RoomSettingsSheet({
     setDirtyKeys(new Set());
   }
 
-  const requiredWeekdays = draft.requiredWeekdays ?? [];
-  function toggleWeekday(day: number) {
-    const isAllDays = requiredWeekdays.length === 0;
-    // Starting from "every day" (undefined/empty), the first tap should
-    // narrow to just that day, not toggle it off from an implicit full set.
-    const current = isAllDays ? [0, 1, 2, 3, 4, 5, 6] : requiredWeekdays;
-    const next = current.includes(day) ? current.filter((d) => d !== day) : [...current, day].sort();
-    if (next.length === 0) return; // never let this collapse to "no day required"
-    patchDraft({ requiredWeekdays: next.length === 7 ? undefined : next });
-  }
-
   const myNotifyPreference = topic.notifyPreference?.[viewingAsUserId] ?? "all";
   const isManager = canManage(viewingAsUserId);
 
@@ -268,38 +251,6 @@ export function RoomSettingsSheet({
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)]">สิทธิ์การมองเห็น &amp; กติกาการส่งรายงาน</p>
             <ReportTopicSettingsPanel topic={draft} hideHeading onUpdate={patchDraft} liveVisibility={topic.visibility} />
           </section>
-
-          {/* กติกา เพิ่มเติม — B: ห้องที่ตั้งรอบส่งแล้ว (submissionRounds) กำหนด
-              วันทำงานเป็นรายรอบใน ReportTopicSettingsPanel ข้างบนแทน (แต่ละ
-              รอบมี weekdays ของตัวเอง) การตั้ง requiredWeekdays ระดับห้องที่นี่
-              จึงซ้ำซ้อนและไม่มีผลจริงแล้ว — ซ่อนไว้ ห้องเก่าที่ยังไม่มีรอบส่งเห็น
-              เหมือนเดิม. */}
-          {(draft.submissionRounds?.length ?? 0) === 0 && (
-            <section className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)]">วันที่ต้องส่งรายงาน</p>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {weekdayLabels.map((label, day) => {
-                  const active = requiredWeekdays.length === 0 || requiredWeekdays.includes(day);
-                  return (
-                    <button
-                      key={day}
-                      type="button"
-                      onClick={() => toggleWeekday(day)}
-                      className={cn(
-                        "h-8 w-8 rounded-full text-xs font-medium transition-colors shrink-0",
-                        active ? "bg-[var(--brand-green)] text-[var(--ink)]" : "bg-[var(--bg-soft)] text-[var(--ink-soft)] hover:bg-[var(--line)]"
-                      )}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="text-[11px] text-[var(--ink-soft)]">
-                วันที่ไม่เลือกจะไม่นับ &quot;ไม่ส่ง&quot; ในสถิติ — ค่าเริ่มต้นคือทุกวัน (รวมเสาร์–อาทิตย์)
-              </p>
-            </section>
-          )}
 
           {/* การแจ้งเตือน */}
           <section className="space-y-3">
