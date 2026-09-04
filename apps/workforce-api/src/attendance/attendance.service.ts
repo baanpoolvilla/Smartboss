@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import {
   calculateAttendance,
+  pairPunches,
   type AttendanceResult,
   type Punch,
   type ShiftDefinition,
@@ -169,10 +170,87 @@ export class AttendanceService {
       // กะกับนโยบายของคนคนหนึ่งใช้ซ้ำได้ทุกครั้งที่เขาตอกในวันเดียวกัน
       // แคชไว้กันยิง query ซ้ำต่อ event (คนหนึ่งตอกวันละหลายครั้ง)
       const shiftCache = new Map<string, { startMinutes: number; restDay: boolean } | null>();
-      const graceCache = new Map<string, number>();
+      const policyCache = new Map<
+        string,
+        { graceMinutes: number; duplicatePunchWindowMinutes: number; maxShiftMinutes: number }
+      >();
+      async function policyFor(
+        this: void,
+        repository: AttendanceRepository,
+        companyId: string,
+      ): Promise<{
+        graceMinutes: number;
+        duplicatePunchWindowMinutes: number;
+        maxShiftMinutes: number;
+      }> {
+        const cached = policyCache.get(companyId);
+        if (cached !== undefined) return cached;
+        const row = await repository.resolveWorkPolicy(uow.tx, companyId, workDate);
+        const resolved = {
+          graceMinutes: row?.lateMode === 'GRACE' ? (row.graceMinutes ?? 0) : 0,
+          duplicatePunchWindowMinutes: row?.duplicatePunchWindowMinutes ?? 3,
+          maxShiftMinutes: row?.maxShiftMinutes ?? 960,
+        };
+        policyCache.set(companyId, resolved);
+        return resolved;
+      }
+
+      /*
+       * เครื่องสแกนนิ้วส่งมาเป็น AUTO เสมอ ไม่บอกว่าเป็นเข้าหรือออก — เดิมโค้ด
+       * ตรงนี้ตัดสินว่า "AUTO ทุกครั้งคือเข้างาน" ซึ่งพังทันทีที่มีคนสแกนออก
+       * (สแกนออกตอนเย็น 17:xx ถูกตีเป็นเข้างานสาย 500 กว่านาที)
+       *
+       * ใช้ pairPunches ตัวเดียวกับที่เครื่องคำนวณเงินเดือนใช้จริง จับคู่เข้า/ออก
+       * แบบสลับสถานะตามลำดับเวลา (ดูเหตุผลใน pairing.ts) แทนการเดาเอาเอง —
+       * ต้องจับคู่แยกรายคน เพราะ "กำลังเปิดงานอยู่ไหม" เป็นสถานะของแต่ละคน
+       */
+      const eventsByEmployment = new Map<string, typeof events>();
+      for (const event of events) {
+        const list = eventsByEmployment.get(event.employmentId);
+        if (list === undefined) eventsByEmployment.set(event.employmentId, [event]);
+        else list.push(event);
+      }
+
+      const resolvedIntent = new Map<string, EventIntent>();
+      for (const [, group] of eventsByEmployment) {
+        const companyId = group[0]!.companyId;
+        const pairingOptions = await policyFor(this.repository, companyId);
+
+        // pairPunches ตัดสินบทบาทจากลำดับเวลา ไม่ใช่ลำดับที่ query คืนมา
+        const chronological = [...group].sort(
+          (a, b) => new Date(a.capturedAt).getTime() - new Date(b.capturedAt).getTime(),
+        );
+        const punches: Punch[] = chronological.map((e) => ({
+          eventId: e.id,
+          at: new Date(e.capturedAt),
+          intent: e.eventIntent as EventIntent,
+          adjusted: false,
+          trustedIntent: e.eventIntent !== 'AUTO',
+          ignored: false,
+          pendingReview: false,
+        }));
+
+        const { workPairs, breakPairs } = pairPunches(punches, {
+          duplicateWindowMinutes: pairingOptions.duplicatePunchWindowMinutes,
+          maxShiftMinutes: pairingOptions.maxShiftMinutes,
+        });
+        for (const pair of workPairs) {
+          if (pair.inEventId !== null) resolvedIntent.set(pair.inEventId, 'CLOCK_IN');
+          if (pair.outEventId !== null) resolvedIntent.set(pair.outEventId, 'CLOCK_OUT');
+        }
+        for (const pair of breakPairs) {
+          if (pair.inEventId !== null) resolvedIntent.set(pair.inEventId, 'BREAK_START');
+          if (pair.outEventId !== null) resolvedIntent.set(pair.outEventId, 'BREAK_END');
+        }
+      }
+
       const items: Record<string, unknown>[] = [];
 
       for (const event of events) {
+        // แถวที่จับคู่ไม่ได้ (เช่นสแกนซ้อนกันจนกำกวม) เหลือ AUTO ดิบไว้ — ยังดีกว่า
+        // เดาผิดเป็นเข้างาน อย่างน้อยหน้าจอไม่ฟันธงสถานะที่ไม่ชัวร์
+        const effectiveIntent = resolvedIntent.get(event.id) ?? (event.eventIntent as EventIntent);
+
         let shift = shiftCache.get(event.employmentId);
         if (shift === undefined) {
           const { shiftId } = await this.repository.resolveShiftId(
@@ -194,19 +272,9 @@ export class AttendanceService {
         // ระยะผ่อนผันของบริษัท — ต้องหักออกก่อนถึงจะเรียกว่าสาย
         // บริษัทที่ตั้ง "สายได้ 15 นาที" หมายความว่าเข้า 08:14 ถือว่าตรงเวลา
         // ไม่ใช่ "สาย 14 นาทีแต่ยังไม่โดนอะไร" — ป้ายที่ขึ้นต้องตรงกับกติกาที่ตั้งไว้
-        let grace = graceCache.get(event.companyId);
-        if (grace === undefined) {
-          const policy = await this.repository.resolveWorkPolicy(
-            uow.tx,
-            event.companyId,
-            workDate,
-          );
-          grace = policy?.lateMode === 'GRACE' ? (policy.graceMinutes ?? 0) : 0;
-          graceCache.set(event.companyId, grace);
-        }
+        const { graceMinutes: grace } = await policyFor(this.repository, event.companyId);
 
-        const isArrival =
-          event.eventIntent === 'CLOCK_IN' || event.eventIntent === 'AUTO';
+        const isArrival = effectiveIntent === 'CLOCK_IN';
         let lateMinutes = 0;
         if (isArrival && shift !== null && !shift.restDay) {
           const parts = new Intl.DateTimeFormat('en-GB', {
@@ -227,7 +295,7 @@ export class AttendanceService {
           display_name: event.displayName,
           employee_code: event.employeeCode,
           captured_at: event.capturedAt,
-          event_intent: event.eventIntent,
+          event_intent: effectiveIntent,
           source_type: event.sourceType,
           scheduled_start_minutes: shift?.startMinutes ?? null,
           is_rest_day: shift?.restDay ?? false,

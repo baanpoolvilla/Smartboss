@@ -424,6 +424,63 @@ describe('attendance calculation', () => {
   });
 });
 
+describe('daily timeline', () => {
+  it('resolves an AUTO scan-out as CLOCK_OUT, not a second late clock-in', async () => {
+    // เกิดจริง: กะ 08:00-17:00 ผ่อนผัน 15 นาที (setup ด้านบน) พนักงานสแกนเข้า
+    // เช้าตามปกติแล้วสแกนออกตอนเย็น เครื่องส่งมาเป็น AUTO ทั้งคู่ ไม่บอกทิศทาง —
+    // เดิม endpoint นี้ตัดสินว่า AUTO ทุกครั้งคือเข้างาน ตัวเย็นเลยขึ้นสาย 500+ นาที
+    const employmentId = await createEmployment('ตอกออกเย็น');
+    await assignPattern(employmentId, dayShiftId);
+
+    await addEvent(employmentId, '2026-08-04T01:00:00Z', 'AUTO'); // 08:00 น.
+    await addEvent(employmentId, '2026-08-04T10:30:00Z', 'AUTO'); // 17:30 น.
+
+    const response = await call(harness, 'GET', '/time-events?date=2026-08-04', {
+      token: hrToken,
+    });
+    expect(response.status).toBe(200);
+
+    const items = response.body['items'] as {
+      employment_id: string;
+      captured_at: string;
+      event_intent: string;
+      late_minutes: number;
+    }[];
+    const mine = items.filter((i) => i.employment_id === employmentId);
+    const morning = mine.find((i) => i.captured_at.startsWith('2026-08-04T01:'));
+    const evening = mine.find((i) => i.captured_at.startsWith('2026-08-04T10:'));
+
+    expect(morning?.event_intent).toBe('CLOCK_IN');
+    expect(morning?.late_minutes).toBe(0);
+
+    expect(evening?.event_intent).toBe('CLOCK_OUT');
+    expect(evening?.late_minutes).toBe(0);
+  });
+
+  it('still resolves a lone AUTO scan as arrival — cannot infer direction without a pair', async () => {
+    const employmentId = await createEmployment('สแกนครั้งเดียว');
+    await assignPattern(employmentId, dayShiftId);
+
+    await addEvent(employmentId, '2026-08-05T01:03:00Z', 'AUTO'); // 08:03 น. — ไม่มีคู่
+
+    const response = await call(harness, 'GET', '/time-events?date=2026-08-05', {
+      token: hrToken,
+    });
+    // /time-events คืนทุกคนของทั้งบริษัทในวันนั้น เรียงเวลาล่าสุดก่อน — ต้องกรอง
+    // ด้วย employment_id ของตัวเอง ไม่ใช่เดาว่าเป็น items[0] (วันนี้มีเทสต์อื่น
+    // ที่ใช้วันเดียวกันสร้างเหตุการณ์ของพนักงานคนอื่นไว้ด้วย)
+    const items = response.body['items'] as {
+      employment_id: string;
+      event_intent: string;
+      late_minutes: number;
+    }[];
+    const mine = items.find((i) => i.employment_id === employmentId);
+
+    expect(mine?.event_intent).toBe('CLOCK_IN');
+    expect(mine?.late_minutes).toBe(0); // เข้า 08:03 ยังอยู่ในผ่อนผัน 15 นาที
+  });
+});
+
 describe('roster board', () => {
   it('does not apply a draft roster and applies it after publishing', async () => {
     const employmentId = await createEmployment('ตารางเวร');
