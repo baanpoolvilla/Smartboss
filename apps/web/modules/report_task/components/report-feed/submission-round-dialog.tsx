@@ -11,6 +11,7 @@ import { departments, getDepartment, users } from "@/modules/report_task/lib/dir
 import { useReportFeedStore, type SubmissionRound, type SubmitterRule } from "@/modules/report_task/store/report-feed-store";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Globe, Users, Building2, User as UserIcon, Search, Plus, Minus, Check, ImagePlus } from "lucide-react";
+import { uuid } from "@/modules/report_task/lib/uuid";
 
 const WEEKDAYS = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 const MAX_IMAGES = 6;
@@ -117,7 +118,7 @@ export function SubmissionRoundDialog({
   function createGroup() {
     const name = newGroupName.trim();
     if (!name || newGroupMembers.size === 0) return;
-    const id = `sgroup-${crypto.randomUUID()}`;
+    const id = `sgroup-${uuid()}`;
     upsertSubmitterGroup({ id, name, userIds: [...newGroupMembers] });
     setGroupIds((s) => new Set(s).add(id));
     setCreatingGroup(false);
@@ -133,7 +134,7 @@ export function SubmissionRoundDialog({
     if (mode !== "people" && addUserIds.size > 0) submitters.addUserIds = [...addUserIds];
     if (removeUserIds.size > 0) submitters.removeUserIds = [...removeUserIds];
     onSave({
-      id: initial?.id ?? `round-${crypto.randomUUID()}`,
+      id: initial?.id ?? `round-${uuid()}`,
       label: label.trim() || "รอบส่ง",
       time,
       weekdays: weekdays.size > 0 ? [...weekdays].sort((a, b) => a - b) : undefined,

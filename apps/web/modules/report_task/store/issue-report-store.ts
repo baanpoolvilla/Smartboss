@@ -15,6 +15,7 @@ import type {
   IssueStatus,
   IssueTicket,
 } from "@/modules/report_task/types/issue";
+import { uuid } from "@/modules/report_task/lib/uuid";
 
 export type { IssueCategory, IssueStatus } from "@/modules/report_task/types/issue";
 
@@ -67,7 +68,7 @@ function pushEvent(
   audience: IssueAudience = "all"
 ): IssueMessage {
   return {
-    id: `${ticket.id}-evt-${crypto.randomUUID()}`,
+    id: `${ticket.id}-evt-${uuid()}`,
     kind: "event",
     authorId,
     audience,
@@ -92,7 +93,7 @@ export const useIssueReportStore = create<IssueReportStore>()((set, get) => ({
     const now = new Date().toISOString();
     const priority = defaultPriorityFor(input.impact, input.category);
     const ticket: IssueTicket = {
-      id: `issue-${crypto.randomUUID()}`,
+      id: `issue-${uuid()}`,
       code: nextTicketCode(get().tickets.length),
       reporterId: input.reporterId,
       category: input.category,
@@ -115,7 +116,7 @@ export const useIssueReportStore = create<IssueReportStore>()((set, get) => ({
       // empty, followed by an event marking it as waiting on the desk.
       messages: [
         {
-          id: `${crypto.randomUUID()}-msg-0`,
+          id: `${uuid()}-msg-0`,
           kind: "message",
           authorId: input.reporterId,
           audience: "all",
@@ -126,7 +127,7 @@ export const useIssueReportStore = create<IssueReportStore>()((set, get) => ({
           readBy: [input.reporterId],
         },
         {
-          id: `${crypto.randomUUID()}-evt-0`,
+          id: `${uuid()}-evt-0`,
           kind: "event",
           authorId: input.reporterId,
           audience: "all",
@@ -170,7 +171,7 @@ export const useIssueReportStore = create<IssueReportStore>()((set, get) => ({
         if (t.id !== ticketId) return t;
         const isAgentOrOwner = isIssueAgent(useIssueDeskConfigStore.getState().config, authorId) || getUser(authorId)?.isOwner;
         const msg: IssueMessage = {
-          id: `${ticketId}-msg-${crypto.randomUUID()}`,
+          id: `${ticketId}-msg-${uuid()}`,
           kind: "message",
           authorId,
           audience,

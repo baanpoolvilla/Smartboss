@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { chartColors } from "@/modules/report_task/lib/chart-colors";
 import type { ProjectTopic } from "@/modules/report_task/types";
+import { uuid } from "@/modules/report_task/lib/uuid";
 
 interface ProjectTopicStore {
   topics: ProjectTopic[];
@@ -16,7 +17,7 @@ interface ProjectTopicStore {
 export const useProjectTopicStore = create<ProjectTopicStore>()((set) => ({
   topics: [],
   addTopic: (name, color) => {
-    const id = `topic-${crypto.randomUUID()}`;
+    const id = `topic-${uuid()}`;
     set((s) => ({ topics: [...s.topics, { id, name, color: color ?? chartColors.blue }] }));
     return id;
   },

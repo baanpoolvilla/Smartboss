@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { chartColors } from "@/modules/report_task/lib/chart-colors";
+import { uuid } from "@/modules/report_task/lib/uuid";
 
 /**
  * "none" — unlimited, no quota tracked.
@@ -61,7 +62,7 @@ interface LeaveTypeStore {
 // store-hydrator.tsx — shared org-wide config, not per-browser.
 export const useLeaveTypeStore = create<LeaveTypeStore>()((set) => ({
   types: defaultLeaveTypes,
-  addType: (t) => set((s) => ({ types: [...s.types, { ...t, id: `lt-${crypto.randomUUID()}` }] })),
+  addType: (t) => set((s) => ({ types: [...s.types, { ...t, id: `lt-${uuid()}` }] })),
   updateType: (id, patch) =>
     set((s) => ({ types: s.types.map((x) => (x.id === id ? { ...x, ...patch } : x)) })),
   removeType: (id) => set((s) => ({ types: s.types.filter((x) => x.id !== id) })),

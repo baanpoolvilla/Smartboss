@@ -16,6 +16,7 @@ import { ReportPostFields, newSection, type DraftSection } from "@/modules/repor
 import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
 import { Clock, Lock, Send, SquarePen } from "lucide-react";
 import { toast } from "sonner";
+import { uuid } from "@/modules/report_task/lib/uuid";
 
 function roundMinutesOf(time: string): number {
   const [h, m] = time.split(":").map(Number) as [number, number];
@@ -141,7 +142,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
     try {
       for (const file of Array.from(files).slice(0, available)) {
         const media = await uploadReportMedia(file);
-        next.push({ id: `img-${crypto.randomUUID()}`, url: media.url, name: media.name, mime: media.mime, size: media.size });
+        next.push({ id: `img-${uuid()}`, url: media.url, name: media.name, mime: media.mime, size: media.size });
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "แนบไฟล์ไม่สำเร็จบางไฟล์ — ลองใหม่อีกครั้ง");

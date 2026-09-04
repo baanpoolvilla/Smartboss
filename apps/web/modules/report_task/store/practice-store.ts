@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { users } from "@/modules/report_task/lib/directory";
 import type { TaskPriority, TaskStatus } from "@/modules/report_task/types";
+import { uuid } from "@/modules/report_task/lib/uuid";
 
 export interface PracticeComment {
   id: string;
@@ -78,7 +79,7 @@ export const usePracticeStore = create<PracticeStore>((set) => ({
   selectedTaskId: null,
   selectTask: (id) => set({ selectedTaskId: id }),
   addTask: ({ title, priority, assigneeIds }) => {
-    const id = `practice-${crypto.randomUUID()}`;
+    const id = `practice-${uuid()}`;
     set((s) => ({
       tasks: [
         { id, title, status: "todo", priority, assigneeIds, comments: [], createdAt: new Date().toISOString() },
@@ -96,7 +97,7 @@ export const usePracticeStore = create<PracticeStore>((set) => ({
       tasks: s.tasks.map((t) =>
         t.id !== taskId
           ? t
-          : { ...t, comments: [...t.comments, { id: `${taskId}-c-${crypto.randomUUID()}`, authorId, message, createdAt: new Date().toISOString() }] }
+          : { ...t, comments: [...t.comments, { id: `${taskId}-c-${uuid()}`, authorId, message, createdAt: new Date().toISOString() }] }
       ),
     })),
   reset: () => set({ tasks: seedTasks(), selectedTaskId: null }),

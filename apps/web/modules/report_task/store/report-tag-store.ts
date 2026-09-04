@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { topicColors } from "@/modules/report_task/store/report-feed-store";
+import { uuid } from "@/modules/report_task/lib/uuid";
 
 export interface ReportTag {
   id: string;
@@ -24,7 +25,7 @@ interface ReportTagStore {
 export const useReportTagStore = create<ReportTagStore>()((set) => ({
   tags: [],
   addTag: (name, color) => {
-    const id = `rtag-${crypto.randomUUID()}`;
+    const id = `rtag-${uuid()}`;
     set((s) => ({ tags: [...s.tags, { id, name, color: color ?? topicColors[s.tags.length % topicColors.length]! }] }));
     return id;
   },
