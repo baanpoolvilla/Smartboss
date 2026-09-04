@@ -202,7 +202,11 @@ export function ReportCard({
   // existed, or filed under a round that's since stopped applying to this
   // user/day) rather than badging nothing at all.
   const explicitRound = post.roundId ? postDayCutoffs.filter((r) => r.id === post.roundId) : [];
-  const roundCandidates = explicitRound.length > 0 ? explicitRound : postDayCutoffs;
+  // "ไม่นับเป็นการส่ง daily" (excludeFromSubmission) drops this post out of
+  // round candidacy entirely — no ตรงเวลา/สาย badge, same as if it were
+  // never posted for compliance purposes (see postsForDay in
+  // report-feed-compliance.ts, the actual counting choke point this mirrors).
+  const roundCandidates = post.excludeFromSubmission ? [] : explicitRound.length > 0 ? explicitRound : postDayCutoffs;
   const lateCutoff = lateCutoffFor(post.createdAt, roundCandidates);
   const onTimeCutoff = !lateCutoff ? onTimeCutoffFor(post.createdAt, roundCandidates) : null;
   const allPosts = useReportFeedStore((s) => s.posts);
@@ -220,6 +224,7 @@ export function ReportCard({
         p.id !== post.id &&
         p.topicId === post.topicId &&
         p.authorId === post.authorId &&
+        !p.excludeFromSubmission &&
         localDateStr(new Date(p.createdAt)) === localDateStr(new Date(post.createdAt)) &&
         lateCutoffFor(p.createdAt, postDayCutoffs)?.id === lateCutoff.id &&
         new Date(p.createdAt).getTime() < new Date(post.createdAt).getTime()
@@ -236,6 +241,7 @@ export function ReportCard({
         p.id !== post.id &&
         p.topicId === post.topicId &&
         p.authorId === post.authorId &&
+        !p.excludeFromSubmission &&
         localDateStr(new Date(p.createdAt)) === localDateStr(new Date(post.createdAt)) &&
         !lateCutoffFor(p.createdAt, postDayCutoffs) &&
         onTimeCutoffFor(p.createdAt, postDayCutoffs)?.id === onTimeCutoff.id &&
@@ -928,7 +934,15 @@ export function ReportCard({
               ))}
             </div>
           )}
-          {lateCutoff && isFirstLateOfRound ? (
+          {post.excludeFromSubmission ? (
+            // Visible marker so "why is there no ตรงเวลา/สาย badge here" has
+            // an obvious answer — the poster opted this one out on purpose.
+            <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+              <span className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-[var(--bg-soft)] text-[var(--ink-soft)] border border-[var(--line)]">
+                ไม่นับเป็นการส่ง daily
+              </span>
+            </div>
+          ) : lateCutoff && isFirstLateOfRound ? (
             <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
               <span className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200">
                 <TriangleAlert className="h-2.5 w-2.5" />

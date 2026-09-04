@@ -148,6 +148,15 @@ export interface ReportPost extends ReportPostFields {
    * deadline (see `attributePostToRound` in lib/submission-rounds.ts) rather
    * than requiring it. */
   roundId?: string;
+  /** Set by the composer's "ไม่นับเป็นการส่ง daily" toggle — a real post
+   * (shows in the feed like any other, can still be tagged/opened as a
+   * task/etc.) that the poster explicitly marked as not fulfilling that
+   * day's round obligation — a casual update, a question, a heads-up that
+   * isn't "the report" itself. Compliance (postsForDay in
+   * report-feed-compliance.ts) and the per-post ตรงเวลา/สาย badge both skip
+   * a post with this set, same as if it had never been posted at all for
+   * scoring purposes. undefined/false for every normal post. */
+  excludeFromSubmission?: boolean;
 }
 
 /** A daily submission window (e.g. "เช้า" due 09:00) a room can require reports by. */
@@ -440,8 +449,8 @@ interface ReportFeedStore {
   /** Per-viewer notification preference for one room — same "map keyed by
    * userId" pattern as toggleHiddenTopic/toggleFavoriteTopic. */
   setNotifyPreference: (topicId: string, userId: string, pref: "all" | "mentions" | "off") => void;
-  addPost: (topicId: string, authorId: string, data: ReportPostFields & { roundId?: string }) => void;
-  editPost: (postId: string, data: ReportPostFields & { roundId?: string }) => void;
+  addPost: (topicId: string, authorId: string, data: ReportPostFields & { roundId?: string; excludeFromSubmission?: boolean }) => void;
+  editPost: (postId: string, data: ReportPostFields & { roundId?: string; excludeFromSubmission?: boolean }) => void;
   removePost: (id: string) => void;
   /** Records which Task a post was opened/converted into (see report-card.tsx's "เปิดเป็นงาน"). */
   setPostLinkedTask: (postId: string, taskId: string) => void;

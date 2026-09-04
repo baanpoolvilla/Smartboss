@@ -13,6 +13,7 @@ import { cutoffsOnDay } from "@/modules/report_task/lib/report-cutoff";
 import { localDateStr, now } from "@/modules/report_task/lib/now";
 import { cn } from "@/modules/report_task/lib/utils";
 import { ReportPostFields, newSection, type DraftSection } from "@/modules/report_task/components/report-feed/report-post-fields";
+import { Switch } from "@/modules/report_task/components/ui/switch";
 import { Clock, Lock, Send, SquarePen } from "lucide-react";
 import { toast } from "sonner";
 
@@ -74,6 +75,11 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   // (reset() below) so a stale pick from a previous room's rounds can't leak
   // into this one.
   const [selectedRoundId, setSelectedRoundId] = useState<string | null>(null);
+  // "ไม่นับเป็นการส่ง daily" — a real post (still shows in the feed like any
+  // other), just not counted toward this round's compliance. For a casual
+  // update/question that isn't "the report" itself, so it doesn't need to
+  // be buried as a reply just to avoid getting scored.
+  const [excludeFromSubmission, setExcludeFromSubmission] = useState(false);
 
   // Keeps sessionStorage in sync with every keystroke/attachment change so a
   // reload has something to restore — cleared once the draft is either
@@ -100,6 +106,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
     setImages([]);
     setTagIds([]);
     setSelectedRoundId(null);
+    setExcludeFromSubmission(false);
     setExpanded(false);
     if (typeof window !== "undefined") {
       try {
@@ -165,7 +172,11 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   // acceptance criterion) — only 2+ rounds is genuinely ambiguous enough to
   // ask "ส่งของรอบไหน?" for.
   const showRoundPicker = todayCutoffs.length >= 2;
-  const minImagesRequired = activeRound?.minImages ?? topic.minImages;
+  // Opting a post out of counting as the daily submission also drops the
+  // round's own photo requirement — that requirement exists to make sure
+  // "the report" actually has evidence attached, and this post was just
+  // declared not to be that.
+  const minImagesRequired = excludeFromSubmission ? 0 : (activeRound?.minImages ?? topic.minImages);
   const missingRequiredImage = photoCount(images) < minImagesRequired;
 
   function handleSubmit() {
@@ -183,6 +194,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
       images,
       tagIds,
       roundId: activeRound?.id,
+      excludeFromSubmission,
     });
     reset();
   }
@@ -275,6 +287,18 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
             })}
             {minImagesRequired > 0 && <span className="text-xs text-[var(--ink-soft)]">· ต้องแนบรูปอย่างน้อย {minImagesRequired} รูป</span>}
           </div>
+        )}
+
+        {/* Only meaningful in a room that actually tracks a schedule — an
+            untracked room has no "counts toward daily" obligation to opt a
+            post out of in the first place. */}
+        {todayCutoffs.length > 0 && (
+          <label className="flex items-center justify-between gap-2 rounded-lg bg-[var(--bg-soft)] px-3 py-2 cursor-pointer">
+            <span className="text-xs text-[var(--ink-soft)]">
+              โพสต์นี้ไม่นับเป็นการส่ง daily <span className="text-[var(--ink-faint)]">(เช่น ถาม/แจ้งอัปเดตเฉยๆ ไม่ใช่รายงานจริง)</span>
+            </span>
+            <Switch checked={excludeFromSubmission} onCheckedChange={setExcludeFromSubmission} />
+          </label>
         )}
 
         <ReportPostFields

@@ -66,6 +66,10 @@ export function filterPosts(
     if (filters.hasImageOnly && p.images.length === 0) return false;
     if (filters.savedOnly && !p.savedBy.includes(opts.viewingAsUserId)) return false;
     if (filters.lateOnly) {
+      // "ไม่นับเป็นการส่ง daily" posts never carry a ตรงเวลา/สาย badge on the
+      // card (see report-card.tsx) — mirror that here so "ส่งช้า" can't
+      // surface one anyway.
+      if (p.excludeFromSubmission) return false;
       const topic = opts.topicOf(p);
       // Scoped to the post's own author (not "any cutoff was active"), same
       // reasoning as the on-time badge on the card itself — a round's
