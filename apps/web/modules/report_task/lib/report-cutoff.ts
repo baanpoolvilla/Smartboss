@@ -68,11 +68,14 @@ export function currentCutoff(cutoffs: ReportCutoff[]): ReportCutoff | null {
 }
 
 /**
- * Minimum photos a post made right now needs attached. A round's own
- * `minImages` wins when set (lets เช้า require 2 photos while เย็น needs
- * none); otherwise falls back to the room's blanket `minImages`.
+ * Minimum photos a post made right now needs attached, given today's
+ * effective rounds (pass `cutoffsOnDay(topic, today)` — the caller already
+ * has `topic` and `today` to hand). No more room-level blanket default: a
+ * round that doesn't set its own `minImages` requires none (0), matching the
+ * "รูปขั้นต่ำผูกกับรอบเท่านั้น" decision in docs/report-room-unify-submission-
+ * rounds-spec.md — a room with no round in force right now requires nothing.
  */
-export function minImagesNow(topic: Pick<ReportTopic, "minImages" | "cutoffs">): number {
+export function minImagesNow(topic: Pick<ReportTopic, "cutoffs">): number {
   const round = currentCutoff(topic.cutoffs);
-  return round?.minImages ?? topic.minImages;
+  return round?.minImages ?? 0;
 }

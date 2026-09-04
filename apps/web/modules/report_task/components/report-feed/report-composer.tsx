@@ -175,7 +175,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   // round's own photo requirement — that requirement exists to make sure
   // "the report" actually has evidence attached, and this post was just
   // declared not to be that.
-  const minImagesRequired = excludeFromSubmission ? 0 : (activeRound?.minImages ?? topic.minImages);
+  const minImagesRequired = excludeFromSubmission ? 0 : (activeRound?.minImages ?? 0);
   const missingRequiredImage = photoCount(images) < minImagesRequired;
 
   function handleSubmit() {

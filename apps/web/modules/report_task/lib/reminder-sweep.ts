@@ -1,5 +1,6 @@
 import { departments } from "@/modules/report_task/lib/directory";
 import { calendarDateOf, now, todayIso } from "@/modules/report_task/lib/now";
+import { cutoffsOnDay } from "@/modules/report_task/lib/report-cutoff";
 import { pendingToday } from "@/modules/report_task/lib/report-feed-compliance";
 import { SYSTEM_USER_ID } from "@/modules/report_task/lib/task-penalty-sweep";
 import type { ReminderSettings } from "@/modules/report_task/store/reminder-settings-store";
@@ -168,7 +169,7 @@ export function computeReminders(input: {
     for (const [topicId, entries] of pendingByTopic) {
       const topic = topicById.get(topicId);
       if (!topic) continue;
-      const lastCutoffMin = lastCutoffMinutesOf(topic.cutoffs);
+      const lastCutoffMin = lastCutoffMinutesOf(cutoffsOnDay(topic, today));
       if (lastCutoffMin < 0) continue; // no fixed round, nothing to count down to
       const minutesUntilCutoff = lastCutoffMin - nowMinutes;
       if (minutesUntilCutoff < 0) continue; // cutoff already passed today — that's a "missed", not an upcoming reminder

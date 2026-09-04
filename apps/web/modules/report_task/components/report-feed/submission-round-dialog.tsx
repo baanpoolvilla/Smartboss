@@ -87,13 +87,11 @@ export function SubmissionRoundDialog({
   open,
   onOpenChange,
   initial,
-  roomDefaultMinImages,
   onSave,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   initial: SubmissionRound | null;
-  roomDefaultMinImages: number;
   onSave: (round: SubmissionRound) => void;
 }) {
   const submitterGroups = useReportFeedStore((s) => s.submitterGroups);
@@ -102,7 +100,7 @@ export function SubmissionRoundDialog({
   const [label, setLabel] = useState(initial?.label ?? "");
   const [time, setTime] = useState(initial?.time ?? "09:00");
   const [weekdays, setWeekdays] = useState<Set<number>>(new Set(initial?.weekdays ?? []));
-  const [minImages, setMinImages] = useState<number | undefined>(initial?.minImages);
+  const [minImages, setMinImages] = useState<number>(initial?.minImages ?? 0);
   const [mode, setMode] = useState<Mode>(initial?.submitters.mode ?? "everyone");
   const [groupIds, setGroupIds] = useState<Set<string>>(new Set(initial?.submitters.groupIds ?? []));
   const [departmentIds, setDepartmentIds] = useState<Set<string>>(new Set(initial?.submitters.departmentIds ?? []));
@@ -282,15 +280,10 @@ export function SubmissionRoundDialog({
             </div>
             <div className="space-y-1.5">
               <Label className="flex items-center gap-1 text-xs text-[var(--ink-soft)]"><ImagePlus className="h-3 w-3" />รูปขั้นต่ำ</Label>
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1 rounded-full border border-[var(--line)] bg-white px-1">
-                  <button type="button" className="flex h-6 w-6 items-center justify-center text-[var(--ink-soft)] disabled:opacity-30" disabled={(minImages ?? roomDefaultMinImages) <= 0} onClick={() => setMinImages(Math.max(0, (minImages ?? roomDefaultMinImages) - 1))} aria-label="ลดรูป"><Minus className="h-3 w-3" /></button>
-                  <span className="w-5 text-center text-sm tabular-nums">{minImages ?? roomDefaultMinImages}</span>
-                  <button type="button" className="flex h-6 w-6 items-center justify-center text-[var(--ink-soft)] disabled:opacity-30" disabled={(minImages ?? roomDefaultMinImages) >= MAX_IMAGES} onClick={() => setMinImages(Math.min(MAX_IMAGES, (minImages ?? roomDefaultMinImages) + 1))} aria-label="เพิ่มรูป"><Plus className="h-3 w-3" /></button>
-                </div>
-                {minImages !== undefined && (
-                  <button type="button" onClick={() => setMinImages(undefined)} className="text-[11px] text-[var(--ink-soft)] underline">ตามค่าห้อง</button>
-                )}
+              <div className="flex items-center gap-1 rounded-full border border-[var(--line)] bg-white px-1">
+                <button type="button" className="flex h-6 w-6 items-center justify-center text-[var(--ink-soft)] disabled:opacity-30" disabled={minImages <= 0} onClick={() => setMinImages(Math.max(0, minImages - 1))} aria-label="ลดรูป"><Minus className="h-3 w-3" /></button>
+                <span className="w-5 text-center text-sm tabular-nums">{minImages}</span>
+                <button type="button" className="flex h-6 w-6 items-center justify-center text-[var(--ink-soft)] disabled:opacity-30" disabled={minImages >= MAX_IMAGES} onClick={() => setMinImages(Math.min(MAX_IMAGES, minImages + 1))} aria-label="เพิ่มรูป"><Plus className="h-3 w-3" /></button>
               </div>
             </div>
           </div>

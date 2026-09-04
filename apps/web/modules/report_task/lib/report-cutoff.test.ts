@@ -26,10 +26,7 @@ describe("lateCutoffFor", () => {
 });
 
 describe("minImagesNow", () => {
-  it("uses the round's own minImages when a round is active", () => {
-    // currentCutoff depends on the real clock, so just check the resolution
-    // logic directly via lateCutoffFor's result shape instead of the exact
-    // round — falls back to the topic default when no round matches.
-    expect(minImagesNow({ minImages: 2, cutoffs: [] })).toBe(2);
+  it("requires nothing when no round is active — no more room-level default", () => {
+    expect(minImagesNow({ cutoffs: [] })).toBe(0);
   });
 });

@@ -92,6 +92,33 @@ export function effectiveRoundsOf(
   }));
 }
 
+/**
+ * แปลง cutoffs + requiredWeekdays + exemptUserIds เป็น submissionRounds จริง
+ * (ไม่ใช่แค่สังเคราะห์ชั่วคราวแบบ `effectiveRoundsOf`) — ใช้ตอน auto-migrate
+ * ห้องเก่าตอน hydrate (`normalizeReportFeedSlice`) และปุ่ม "แปลงรอบตัดยอดเดิม"
+ * (safety fallback) ใน `report-topic-settings-dialog.tsx` เพื่อไม่ให้ตรรกะ
+ * แตกกันระหว่าง 2 จุด
+ *
+ * ตั้งใจไม่ใส่ `createdAt` (ดูคอมเมนต์ `roundRunsOnDay`) — รอบที่ migrate มา
+ * จากข้อมูลเก่าไม่ควรถูกตัดสิน "พลาดส่ง" ย้อนหลังไปถึงวันก่อน migration.
+ * ใส่ `?? topic.minImages` ที่ minImages ของแต่ละรอบ (effectiveRoundsOf เอง
+ * ไม่ทำแบบนี้) เพื่อคงพฤติกรรมเดิมของห้องที่เคยพึ่ง "ค่าเริ่มต้นระดับห้อง" ไว้ —
+ * หลัง migrate ค่าเริ่มต้นระดับห้องจะเลิกใช้แล้ว (ขั้นที่ 3), รอบต้องพกค่าติดตัวเอง.
+ */
+export function legacyRoundsFromCutoffs(
+  topic: Pick<ReportTopic, "cutoffs" | "requiredWeekdays" | "minImages" | "visibility">
+): SubmissionRound[] {
+  const removeUserIds = topic.visibility?.exemptUserIds ?? [];
+  return topic.cutoffs.map((c) => ({
+    id: c.id,
+    label: c.label,
+    time: c.time,
+    minImages: c.minImages ?? topic.minImages,
+    weekdays: topic.requiredWeekdays,
+    submitters: { mode: "everyone", removeUserIds } as SubmissionRound["submitters"],
+  }));
+}
+
 /** ใช้ path รอบส่งใหม่ไหม (ห้องที่ตั้ง submissionRounds เอง) — ห้องเก่าตอบ false */
 export function usesSubmissionRounds(topic: Pick<ReportTopic, "submissionRounds">): boolean {
   return !!topic.submissionRounds && topic.submissionRounds.length > 0;

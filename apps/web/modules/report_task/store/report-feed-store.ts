@@ -4,6 +4,7 @@ import { canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { extractMentionedIds } from "@/modules/report_task/lib/report-feed-rich-text";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { uuid } from "@/modules/report_task/lib/uuid";
+import { legacyRoundsFromCutoffs } from "@/modules/report_task/lib/submission-rounds";
 
 /** Rooms created at/after this pick their `feedViewMode` once in the
  * create-room dialog and can't change it afterward (see that field's own
@@ -198,7 +199,7 @@ export interface SubmissionRound {
   time: string;
   /** 0=อา..6=ส · undefined/ว่าง = ทุกวัน */
   weekdays?: number[];
-  /** ต่อรอบ · undefined = ใช้ค่า topic.minImages */
+  /** ต่อรอบ · undefined = ไม่บังคับแนบรูปในรอบนี้ (ไม่มี default ระดับห้องแล้ว) */
   minImages?: number;
   /** ISO ของตอนที่รอบนี้ถูกสร้าง — ตัวตัดสินใช้กันไม่ให้ตัดสิน "พลาดส่ง" ย้อนหลัง
    * ไปถึงวันก่อนรอบนี้เกิด (วันนั้นไม่มีทางรู้ด้วยซ้ำว่ามีข้อกำหนดนี้อยู่). undefined
@@ -338,11 +339,18 @@ export function normalizeReportFeedSlice(slice: {
   submitterGroups?: SubmitterGroup[];
 }): { topics: ReportTopic[]; posts: ReportPost[]; albums: ReportAlbum[]; pinnedLinks: ReportPinnedLink[]; submitterGroups: SubmitterGroup[] } {
   return {
-    topics: (slice.topics ?? []).map((t) => ({
-      ...t,
-      minImages: t.minImages ?? 0,
-      cutoffs: t.cutoffs ?? [],
-    })),
+    topics: (slice.topics ?? []).map((t) => {
+      const normalized = { ...t, minImages: t.minImages ?? 0, cutoffs: t.cutoffs ?? [] };
+      // Auto-migrate legacy cutoffs/requiredWeekdays rooms to real
+      // submissionRounds on the way in — see docs/report-room-unify-
+      // submission-rounds-spec.md. Idempotent: only fires while
+      // submissionRounds is still empty, so a room that already migrated
+      // (or was created with rounds directly) is left untouched.
+      if ((normalized.submissionRounds?.length ?? 0) === 0 && normalized.cutoffs.length > 0) {
+        return { ...normalized, submissionRounds: legacyRoundsFromCutoffs(normalized) };
+      }
+      return normalized;
+    }),
     posts: (slice.posts ?? []).map((p) => ({
       ...p,
       sections: p.sections ?? [],
