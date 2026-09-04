@@ -27,6 +27,7 @@ import { Input } from "@/modules/report_task/components/ui/input";
 import { Label } from "@/modules/report_task/components/ui/label";
 import { Switch } from "@/modules/report_task/components/ui/switch";
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
+import { TimePickerField } from "@/modules/report_task/components/shared/time-picker-field";
 import { AttendeePicker } from "@/modules/report_task/components/shared/attendee-picker";
 import { getUser, getDepartment, departmentIdsOf } from "@/modules/report_task/lib/directory";
 import { departmentsLabel } from "@/modules/report_task/lib/department-label";
@@ -449,11 +450,11 @@ function EventEditForm({
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs text-[var(--ink-soft)]">เริ่ม</Label>
-                  <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+                  <TimePickerField value={startTime} onChange={setStartTime} className="w-full" />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs text-[var(--ink-soft)]">สิ้นสุด</Label>
-                  <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+                  <TimePickerField value={endTime} onChange={setEndTime} className="w-full" />
                 </div>
               </div>
             )}

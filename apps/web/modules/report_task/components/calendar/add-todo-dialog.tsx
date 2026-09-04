@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/modules/report_task/components/ui/select";
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
+import { TimePickerField } from "@/modules/report_task/components/shared/time-picker-field";
 import { AttendeePicker } from "@/modules/report_task/components/shared/attendee-picker";
 import { useTodoStore } from "@/modules/report_task/store/todo-store";
 import { useMeetingStore } from "@/modules/report_task/store/meeting-store";
@@ -215,8 +216,8 @@ export function AddTodoDialog({
               <div className="flex flex-wrap gap-2">
                 <DatePickerField value={date} onChange={setDate} className="flex-1 min-w-[140px]" />
                 <div className="flex gap-2 w-full sm:w-auto">
-                  <Input type="time" value={meetStart} onChange={(e) => setMeetStart(e.target.value)} className="flex-1 sm:w-[100px] sm:flex-none" aria-label="เวลาเริ่ม" />
-                  <Input type="time" value={meetEnd} onChange={(e) => setMeetEnd(e.target.value)} className="flex-1 sm:w-[100px] sm:flex-none" aria-label="เวลาสิ้นสุด" />
+                  <TimePickerField value={meetStart} onChange={setMeetStart} className="flex-1 sm:w-[100px] sm:flex-none" aria-label="เวลาเริ่ม" />
+                  <TimePickerField value={meetEnd} onChange={setMeetEnd} className="flex-1 sm:w-[100px] sm:flex-none" aria-label="เวลาสิ้นสุด" />
                 </div>
               </div>
               <AttendeePicker value={meetAttendeeIds} onChange={setMeetAttendeeIds} placeholder="เลือกแผนก/ผู้เข้าร่วม..." />
@@ -237,7 +238,7 @@ export function AddTodoDialog({
           ) : (
             <div className="flex flex-wrap gap-2">
               <DatePickerField value={date} onChange={setDate} className="flex-1 min-w-[140px]" />
-              <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-full sm:w-[110px] sm:shrink-0" aria-label="เวลา (ไม่บังคับ)" />
+              <TimePickerField value={time} onChange={setTime} className="w-full sm:w-[110px] sm:shrink-0" aria-label="เวลา (ไม่บังคับ)" />
             </div>
           )}
 

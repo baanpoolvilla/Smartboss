@@ -34,6 +34,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/modules/report_task/components/ui/tooltip";
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
+import { TimePickerField } from "@/modules/report_task/components/shared/time-picker-field";
 import { PenaltyChip } from "@/modules/report_task/components/shared/penalty-chip";
 import { canEditRecord, canRemoveReaction, canSeePenaltyStatus, canToggleOwnChecklistItem } from "@/modules/report_task/lib/permissions";
 import { todayIso } from "@/modules/report_task/lib/now";
@@ -780,10 +781,9 @@ export function TaskDetailSheet({
               <div className="flex items-center gap-1.5 h-9 px-1 text-sm">
                 {formatDate(task.dueDate)}
                 {canEditMain && (
-                  <Input
-                    type="time"
+                  <TimePickerField
                     value={task.dueTime ?? ""}
-                    onChange={(e) => setDueTime(task.id, e.target.value, viewingAsUserId)}
+                    onChange={(v) => setDueTime(task.id, v, viewingAsUserId)}
                     className="w-[110px] h-7 shrink-0 ml-auto"
                     aria-label="เวลากำหนดส่ง (ไม่บังคับ)"
                     title="เวลากำหนดส่ง (ไม่บังคับ) — ใช้ตั้งแจ้งเตือนล่วงหน้าเป็นชั่วโมง/นาทีได้"

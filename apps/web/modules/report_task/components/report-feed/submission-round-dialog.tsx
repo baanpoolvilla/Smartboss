@@ -7,6 +7,7 @@ import { Label } from "@/modules/report_task/components/ui/label";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { TimePickerField } from "@/modules/report_task/components/shared/time-picker-field";
 import { departments, getDepartment, users } from "@/modules/report_task/lib/directory";
 import { useReportFeedStore, type SubmissionRound, type SubmitterRule } from "@/modules/report_task/store/report-feed-store";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -276,7 +277,7 @@ export function SubmissionRoundDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs text-[var(--ink-soft)]">ส่งก่อนเวลา</Label>
-              <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+              <TimePickerField value={time} onChange={setTime} className="w-full" />
             </div>
             <div className="space-y-1.5">
               <Label className="flex items-center gap-1 text-xs text-[var(--ink-soft)]"><ImagePlus className="h-3 w-3" />รูปขั้นต่ำ</Label>
