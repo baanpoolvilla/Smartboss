@@ -128,6 +128,34 @@ export function mustSubmitToTopic(
   return mustSubmitToTopicPure(topic, userId, useReportFeedStore.getState().submitterGroups);
 }
 
+/** นาทีในวันของ "HH:mm" — ตัวช่วยภายในไฟล์นี้ */
+function timeToMinutes(time: string): number {
+  const [h, m] = time.split(":").map(Number) as [number, number];
+  return h * 60 + m;
+}
+
+/**
+ * จับโพสต์เข้า "รอบ" — ใช้ `post.roundId` ก่อนเสมอถ้ามี (คนเลือกเองตอนโพสต์ ไม่ต้อง
+ * เดา — ดู C4/report-composer.tsx); ถ้าไม่มี (โพสต์เก่าก่อนมีฟิลด์นี้ หรือห้องมีรอบ
+ * เดียวเลยไม่มี picker ให้เลือก) เดาจากเวลา: แบ่งวันด้วยเดดไลน์ของแต่ละรอบ
+ * (เรียงเวลา) โพสต์เข้ารอบแรกที่ deadline ≥ เวลาโพสต์; ถ้าเลยทุกเดดไลน์แล้ว → รอบ
+ * สุดท้าย (สาย) — ยังไงก็ต้องมีรอบให้ตัดสินว่า "สาย" ของรอบไหน ไม่ใช่ลอยไม่มีรอบเลย.
+ */
+export function attributePostToRound(
+  post: { createdAt: string; roundId?: string },
+  rounds: SubmissionRound[]
+): SubmissionRound | null {
+  if (rounds.length === 0) return null;
+  if (post.roundId) {
+    const byId = rounds.find((r) => r.id === post.roundId);
+    if (byId) return byId;
+  }
+  const sorted = [...rounds].sort((a, b) => timeToMinutes(a.time) - timeToMinutes(b.time));
+  const created = new Date(post.createdAt);
+  const postMinutes = created.getHours() * 60 + created.getMinutes();
+  return sorted.find((r) => timeToMinutes(r.time) >= postMinutes) ?? sorted[sorted.length - 1]!;
+}
+
 /** รายชื่อ "คนที่ต้องส่งจริง" ของห้อง (รวมทุกรอบ) — สำหรับกล่องสรุปในหน้าตั้งค่า */
 export function resolvedSubmittersOfTopic(
   topic: Pick<ReportTopic, "submissionRounds" | "cutoffs" | "requiredWeekdays" | "visibility">,

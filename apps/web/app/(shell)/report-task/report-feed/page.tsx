@@ -335,10 +335,22 @@ function ReportFeedPageInner() {
   const exemptions = useReportComplianceExemptions();
   // "ที่ฉันต้องส่ง" — same pendingToday() the sidebar badge counts, filtered
   // down to just this viewer, for the actual room list underneath the badge.
-  const myPending = useMemo(
-    () => (showPending ? pendingToday(visibleTopics, posts, exemptions).filter((e) => e.userId === viewingAsUserId) : []),
-    [showPending, visibleTopics, posts, exemptions, viewingAsUserId]
-  );
+  // Phase 1.1: pendingToday now returns one entry per still-pending *round*,
+  // not per room (a 2-round room shows up twice if both are still owed) —
+  // grouped back down to one row per room here, since that's what this list
+  // actually shows ("ห้องที่คุณยังไม่ได้โพสต์รายงานวันนี้"), with each
+  // room's still-pending round names collected for the subtitle.
+  const myPending = useMemo(() => {
+    if (!showPending) return [];
+    const mine = pendingToday(visibleTopics, posts, exemptions).filter((e) => e.userId === viewingAsUserId);
+    const byTopic = new Map<string, { topicId: string; topicName: string; topicColor: string; roundLabels: string[] }>();
+    for (const e of mine) {
+      const g = byTopic.get(e.topicId) ?? { topicId: e.topicId, topicName: e.topicName, topicColor: e.topicColor, roundLabels: [] };
+      g.roundLabels.push(e.roundLabel);
+      byTopic.set(e.topicId, g);
+    }
+    return [...byTopic.values()];
+  }, [showPending, visibleTopics, posts, exemptions, viewingAsUserId]);
   // "ที่กล่าวถึงฉัน" — every post anywhere this viewer is @mentioned, fed
   // into the same ReportAllPostsFeed the merged view already uses.
   const mentionPosts = useMemo(() => {
@@ -1024,7 +1036,7 @@ function PendingTopicsPanel({
   entries,
   onJumpToTopic,
 }: {
-  entries: { topicId: string; topicName: string; topicColor: string }[];
+  entries: { topicId: string; topicName: string; topicColor: string; roundLabels: string[] }[];
   onJumpToTopic: (topicId: string) => void;
 }) {
   return (
@@ -1064,7 +1076,10 @@ function PendingTopicsPanel({
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium truncate">{e.topicName}</p>
-                <p className="text-xs text-[var(--ink-soft)]">ยังไม่ได้ส่งวันนี้</p>
+                <p className="text-xs text-[var(--ink-soft)] truncate">
+                  {/* 1 รอบ (ห้องเก่า/ห้องรอบเดียว) → ข้อความเดิมเป๊ะ. 2+ รอบ → บอกว่ารอบไหนบ้าง แทนคำว่า "ยังไม่ได้ส่งวันนี้" เฉยๆ ที่จะกำกวมว่านับกี่รอบ */}
+                  {e.roundLabels.length > 1 ? `ยังไม่ได้ส่ง: ${e.roundLabels.join(", ")}` : "ยังไม่ได้ส่งวันนี้"}
+                </p>
               </div>
               <span className="shrink-0 text-xs font-medium text-[var(--brand-green-dark)]">ไปที่ห้องนี้ →</span>
             </button>
@@ -1152,11 +1167,18 @@ function TodayStatusPanel({
               </button>
               <div className="divide-y divide-[var(--line)]">
                 {group.rows.map((r) => (
-                  <div key={r.userId} className="flex items-center gap-2.5 px-4 py-2">
+                  // Phase 1.1: one row per (person, round) — a 2-round room
+                  // can list the same person twice (e.g. missing both), so
+                  // the key needs roundId too, and the round label is what
+                  // actually tells those two rows apart.
+                  <div key={`${r.userId}-${r.roundId}`} className="flex items-center gap-2.5 px-4 py-2">
                     <Avatar className="h-6 w-6 shrink-0">
                       <AvatarFallback className="text-[10px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{r.userAvatar}</AvatarFallback>
                     </Avatar>
-                    <span className="text-sm font-medium truncate flex-1">{r.userName}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{r.userName}</p>
+                      <p className="text-[11px] text-[var(--ink-soft)] truncate">{r.roundLabel}</p>
+                    </div>
                     <span className="text-xs text-[var(--ink-soft)] shrink-0">{r.departmentName}</span>
                   </div>
                 ))}

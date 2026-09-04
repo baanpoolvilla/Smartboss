@@ -844,7 +844,13 @@ export function ReportTopicPanels({
             label="ยังไม่ส่งวันนี้"
             value={pendingTodayList.length}
             color={pendingTodayList.length > 0 ? "var(--chart-red)" : topic.color}
-            title={pendingTodayList.length > 0 ? pendingTodayList.map((p) => p.userName).join(", ") : undefined}
+            title={
+              // Phase 1.1: pendingTodayList is one entry per still-pending
+              // round, so the same person can appear twice — the count above
+              // stays per-round (consistent with the rest of the app), but
+              // the tooltip lists each name once, not twice.
+              pendingTodayList.length > 0 ? [...new Set(pendingTodayList.map((p) => p.userName))].join(", ") : undefined
+            }
           />
         )}
         <StatCard icon={MessageSquareText} label="โพสต์ทั้งหมด" value={stats.totalPosts} color={topic.color} />

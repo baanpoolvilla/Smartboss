@@ -140,6 +140,14 @@ export interface ReportPost extends ReportPostFields {
    * the card show "เปิดงานที่เชื่อมไว้" instead of "สร้างเป็นงาน" the next time,
    * so a post never spawns two duplicate tasks by accident. */
   linkedTaskId?: string;
+  /** Which submission round (see SubmissionRound) the poster said this was
+   * for — set by the composer's round picker when a room has 2+ rounds
+   * running that day (Phase 1.1). undefined for every post made before this
+   * field existed, or in a room with only one round that day: compliance/
+   * badge code falls back to guessing from `createdAt` against each round's
+   * deadline (see `attributePostToRound` in lib/submission-rounds.ts) rather
+   * than requiring it. */
+  roundId?: string;
 }
 
 /** A daily submission window (e.g. "เช้า" due 09:00) a room can require reports by. */
@@ -432,8 +440,8 @@ interface ReportFeedStore {
   /** Per-viewer notification preference for one room — same "map keyed by
    * userId" pattern as toggleHiddenTopic/toggleFavoriteTopic. */
   setNotifyPreference: (topicId: string, userId: string, pref: "all" | "mentions" | "off") => void;
-  addPost: (topicId: string, authorId: string, data: ReportPostFields) => void;
-  editPost: (postId: string, data: ReportPostFields) => void;
+  addPost: (topicId: string, authorId: string, data: ReportPostFields & { roundId?: string }) => void;
+  editPost: (postId: string, data: ReportPostFields & { roundId?: string }) => void;
   removePost: (id: string) => void;
   /** Records which Task a post was opened/converted into (see report-card.tsx's "เปิดเป็นงาน"). */
   setPostLinkedTask: (postId: string, taskId: string) => void;

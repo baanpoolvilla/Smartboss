@@ -1,11 +1,18 @@
 import { departments, getDepartment, getUser, users } from "@/modules/report_task/lib/directory";
-import { roundsForUserOnDay, mustSubmitToTopic, roundRunsOnDay } from "@/modules/report_task/lib/submission-rounds";
+import {
+  roundsForUserOnDay,
+  mustSubmitToTopic,
+  roundRunsOnDay,
+  effectiveRoundsOf,
+  resolveRoundSubmitters,
+  attributePostToRound,
+} from "@/modules/report_task/lib/submission-rounds";
 import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
 import { photoCount } from "@/modules/report_task/lib/report-attachment-kind";
 import { lateCutoffFor } from "@/modules/report_task/lib/report-cutoff";
 import { localDateStr, now, todayIso } from "@/modules/report_task/lib/now";
 import { isExemptDate, type DateExemptions } from "@/modules/report_task/lib/report-feed-exemptions";
-import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
+import type { ReportPost, ReportTopic, SubmissionRound } from "@/modules/report_task/store/report-feed-store";
 
 /**
  * A room only counts toward compliance if it actually has a cutoff — that's
@@ -190,11 +197,80 @@ function dayHasAttachmentIssue(
   return !dayPosts.some((p) => photoCount(p.images) >= minImagesFor(topic, p.createdAt));
 }
 
+function roundMinutes(round: SubmissionRound): number {
+  const [h, m] = round.time.split(":").map(Number) as [number, number];
+  return h * 60 + m;
+}
+
+/** Posts by `userId` in `topic` on `day` that `attributePostToRound` actually
+ * attributes to `round` specifically — the per-round equivalent of
+ * `postsForDay`, which is what every round-level function below needs
+ * instead ("2 รอบ = 2 การส่งแยกกัน", not one shared per-day bucket). */
+function postsForRound(topic: ReportTopic, userId: string, round: SubmissionRound, day: string, posts: ReportPost[]): ReportPost[] {
+  const rounds = effectiveRoundsOf(topic);
+  return postsForDay(topic, userId, day, posts).filter((p) => attributePostToRound(p, rounds)?.id === round.id);
+}
+
+/**
+ * One person's status in one *round* of one room on one calendar day —
+ * `dayComplianceStatus`'s per-round replacement (Phase 1.1): a room with 2
+ * rounds a day now judges each one as its own obligation instead of
+ * collapsing both into a single day-level verdict (see this file's own
+ * `roundRunsOnDay`/`effectiveRoundsOf` doc comments in submission-rounds.ts
+ * for why that collapsing was wrong). `dayComplianceStatus` itself is left
+ * untouched — kpi-buckets.ts and the ai-insight analyzers still read it
+ * directly and stay on the day-level path deliberately (out of this phase's
+ * scope, see spec-report-rounds-phase1.1).
+ */
+export function roundComplianceStatus(
+  topic: ReportTopic,
+  userId: string,
+  round: SubmissionRound,
+  day: string,
+  posts: ReportPost[],
+  exemptions?: DateExemptions
+): ComplianceStatus {
+  if (!roundRunsOnDay(round, day)) return "exempt";
+  if (exemptions && isExemptDate(exemptions, userId, day)) return "exempt";
+  if (!resolveRoundSubmitters(round, topic.visibility, groupsNow()).includes(userId)) return "exempt";
+  const cutoff = roundMinutes(round);
+  const roundPosts = postsForRound(topic, userId, round, day, posts);
+  if (roundPosts.length > 0) {
+    const onTime = roundPosts.some((p) => minutesOfDay(p.createdAt) <= cutoff);
+    return onTime ? "on-time" : "late";
+  }
+  const todayStr = todayIso();
+  if (day < todayStr) return "missed";
+  return minutesOfDay(now().toISOString()) > cutoff ? "missed" : "pending";
+}
+
+/** Per-round counterpart to `dayHasAttachmentIssue` — checks only the posts
+ * actually attributed to `round`, against that round's own `minImages`
+ * (falling back to the room default), instead of re-deriving "whichever
+ * round was active" from the post's timestamp. */
+function roundHasAttachmentIssue(
+  topic: ReportTopic,
+  userId: string,
+  round: SubmissionRound,
+  day: string,
+  posts: ReportPost[],
+  exemptions?: DateExemptions
+): boolean {
+  if (exemptions && isExemptDate(exemptions, userId, day)) return false;
+  const roundPosts = postsForRound(topic, userId, round, day, posts);
+  if (roundPosts.length === 0) return false;
+  const required = round.minImages ?? topic.minImages;
+  return !roundPosts.some((p) => photoCount(p.images) >= required);
+}
+
 export interface ComplianceRow {
   id: string;
   name: string;
   subtitle: string;
   roomsCount: number;
+  /** Count of tracked (round, day) units, not calendar days (Phase 1.1) — a
+   * room with 2 rounds a day contributes up to 2 per day, one per round, so
+   * this can exceed the number of days actually elapsed. */
   trackedDays: number;
   onTime: number;
   late: number;
@@ -249,15 +325,18 @@ export function buildUserComplianceReports(
       if (!mustSubmitToTopic(topic, u.id)) continue;
       row.roomsCount += 1;
       const { startStr, endStr } = iterationBounds(topic, range);
+      const rounds = effectiveRoundsOf(topic);
       for (const day of eachDay(startStr, endStr)) {
-        const status = dayComplianceStatus(topic, u.id, day, posts, exemptions);
-        if (status === "pending" || status === "exempt") continue;
-        row.trackedDays += 1;
-        if (status === "on-time") row.onTime += 1;
-        else if (status === "late") row.late += 1;
-        else row.missed += 1;
-        if ((status === "on-time" || status === "late") && dayHasAttachmentIssue(topic, u.id, day, posts, exemptions)) {
-          row.attachmentIssues += 1;
+        for (const round of rounds) {
+          const status = roundComplianceStatus(topic, u.id, round, day, posts, exemptions);
+          if (status === "pending" || status === "exempt") continue;
+          row.trackedDays += 1;
+          if (status === "on-time") row.onTime += 1;
+          else if (status === "late") row.late += 1;
+          else row.missed += 1;
+          if ((status === "on-time" || status === "late") && roundHasAttachmentIssue(topic, u.id, round, day, posts, exemptions)) {
+            row.attachmentIssues += 1;
+          }
         }
       }
     }
@@ -574,6 +653,13 @@ export interface PendingTodayEntry {
   topicId: string;
   topicName: string;
   topicColor: string;
+  /** Which round (Phase 1.1) this obligation belongs to — a room with 2+
+   * rounds a day now produces one entry per still-pending round, not one
+   * merged per-day entry. */
+  roundId: string;
+  roundLabel: string;
+  /** "HH:mm" — the round's own cutoff, for UI that wants to say exactly which round without a topic lookup. */
+  roundTime: string;
 }
 
 /**
@@ -585,7 +671,7 @@ export interface PendingTodayEntry {
  * doesn't count against them.
  */
 export interface TodayComplianceSummary {
-  /** Every real member of every cutoff-tracked room, today. */
+  /** Every real (person, round) obligation today across every tracked room — Phase 1.1: a room with 2 rounds counts each member twice. */
   totalTracked: number;
   postedToday: number;
   lateToday: number;
@@ -595,7 +681,10 @@ export interface TodayComplianceSummary {
 /** Today's headline numbers for the report-feed page header's actionable
  * pills (H1 — "ส่งแล้ววันนี้ 18/24" / "ส่งช้า 3" / "ยังไม่ส่ง 3"), same
  * today-only scope as `pendingToday` above but counting everyone, not just
- * who's missing. */
+ * who's missing. Phase 1.1: counts per (person, round), not per person — a
+ * room with 2 rounds today gives each of its members up to 2 chances to
+ * show up in postedToday/lateToday/missingToday, matching how `pendingToday`
+ * and `todayStatusEntries` below now count the same day. */
 export function todayComplianceSummary(
   topics: ReportTopic[],
   posts: ReportPost[],
@@ -603,23 +692,24 @@ export function todayComplianceSummary(
 ): TodayComplianceSummary {
   const tracked = trackedTopicsOf(topics);
   const today = todayIso();
+  const groups = groupsNow();
   const summary: TodayComplianceSummary = { totalTracked: 0, postedToday: 0, lateToday: 0, missingToday: 0 };
   for (const topic of tracked) {
     if (today < localDateStr(new Date(topic.createdAt))) continue;
-    if (!isRequiredWeekday(topic, today)) continue;
+    const allRounds = effectiveRoundsOf(topic);
     for (const u of users) {
-      if (!mustSubmitToTopic(topic, u.id)) continue;
       if (exemptions && isExemptDate(exemptions, u.id, today)) continue;
-      const lastCutoff = userRequiredCutoffMinutes(topic, u.id, today);
-      if (lastCutoff === null) continue;
-      summary.totalTracked += 1;
-      const dayPosts = postsForDay(topic, u.id, today, posts);
-      if (dayPosts.length === 0) {
-        summary.missingToday += 1;
-        continue;
+      for (const round of roundsForUserOnDay(topic, u.id, today, groups)) {
+        summary.totalTracked += 1;
+        const roundPosts = postsForDay(topic, u.id, today, posts).filter((p) => attributePostToRound(p, allRounds)?.id === round.id);
+        if (roundPosts.length === 0) {
+          summary.missingToday += 1;
+          continue;
+        }
+        summary.postedToday += 1;
+        const cutoff = roundMinutes(round);
+        if (!roundPosts.some((p) => minutesOfDay(p.createdAt) <= cutoff)) summary.lateToday += 1;
       }
-      summary.postedToday += 1;
-      if (!dayPosts.some((p) => minutesOfDay(p.createdAt) <= lastCutoff)) summary.lateToday += 1;
     }
   }
   return summary;
@@ -634,12 +724,18 @@ export interface TodayStatusEntry {
   topicName: string;
   topicColor: string;
   status: "posted" | "late" | "missing";
+  /** Which round (Phase 1.1) this status is for — see `PendingTodayEntry`'s own comment. */
+  roundId: string;
+  roundLabel: string;
+  roundTime: string;
 }
 
 /** Same today-only scope/loop as `todayComplianceSummary`, but returning the
  * actual per-person rows instead of just totals — what the header pills
  * (H1) link into (ส่งแล้ววันนี้/ส่งช้า/ยังไม่ส่ง), so clicking one lands on
- * the people behind that number instead of a generic merged feed. */
+ * the people behind that number instead of a generic merged feed. Phase
+ * 1.1: one entry per (person, round) today, not per person — see
+ * `todayComplianceSummary`'s own comment. */
 export function todayStatusEntries(
   topics: ReportTopic[],
   posts: ReportPost[],
@@ -647,57 +743,71 @@ export function todayStatusEntries(
 ): TodayStatusEntry[] {
   const tracked = trackedTopicsOf(topics);
   const today = todayIso();
+  const groups = groupsNow();
   const entries: TodayStatusEntry[] = [];
   for (const topic of tracked) {
     if (today < localDateStr(new Date(topic.createdAt))) continue;
-    if (!isRequiredWeekday(topic, today)) continue;
+    const allRounds = effectiveRoundsOf(topic);
     for (const u of users) {
-      if (!mustSubmitToTopic(topic, u.id)) continue;
       if (exemptions && isExemptDate(exemptions, u.id, today)) continue;
-      const base = {
-        userId: u.id,
-        userName: u.name,
-        userAvatar: u.avatar,
-        departmentName: getDepartment(u.departmentId)?.name ?? u.role,
-        topicId: topic.id,
-        topicName: topic.name,
-        topicColor: topic.color,
-      };
-      const lastCutoff = userRequiredCutoffMinutes(topic, u.id, today);
-      if (lastCutoff === null) continue;
-      const dayPosts = postsForDay(topic, u.id, today, posts);
-      if (dayPosts.length === 0) {
-        entries.push({ ...base, status: "missing" });
-        continue;
+      for (const round of roundsForUserOnDay(topic, u.id, today, groups)) {
+        const base = {
+          userId: u.id,
+          userName: u.name,
+          userAvatar: u.avatar,
+          departmentName: getDepartment(u.departmentId)?.name ?? u.role,
+          topicId: topic.id,
+          topicName: topic.name,
+          topicColor: topic.color,
+          roundId: round.id,
+          roundLabel: round.label,
+          roundTime: round.time,
+        };
+        const roundPosts = postsForDay(topic, u.id, today, posts).filter((p) => attributePostToRound(p, allRounds)?.id === round.id);
+        if (roundPosts.length === 0) {
+          entries.push({ ...base, status: "missing" });
+          continue;
+        }
+        const cutoff = roundMinutes(round);
+        const onTime = roundPosts.some((p) => minutesOfDay(p.createdAt) <= cutoff);
+        entries.push({ ...base, status: onTime ? "posted" : "late" });
       }
-      const onTime = dayPosts.some((p) => minutesOfDay(p.createdAt) <= lastCutoff);
-      entries.push({ ...base, status: onTime ? "posted" : "late" });
     }
   }
   return entries;
 }
 
+/** Phase 1.1: one entry per still-pending (person, round) today, not per
+ * person — a member of a 2-round room who's missed both shows up twice,
+ * once per round, so a caller that wants "which rooms still owe me
+ * something" (not "how many separate things") should de-dupe by topicId
+ * itself (see PendingTopicsPanel in page.tsx). */
 export function pendingToday(topics: ReportTopic[], posts: ReportPost[], exemptions?: DateExemptions): PendingTodayEntry[] {
   const tracked = trackedTopicsOf(topics);
   const today = todayIso();
+  const groups = groupsNow();
   const entries: PendingTodayEntry[] = [];
   for (const topic of tracked) {
     if (today < localDateStr(new Date(topic.createdAt))) continue;
-    if (!isRequiredWeekday(topic, today)) continue;
+    const allRounds = effectiveRoundsOf(topic);
     for (const u of users) {
-      if (!mustSubmitToTopic(topic, u.id)) continue;
       if (exemptions && isExemptDate(exemptions, u.id, today)) continue;
-      if (userRequiredCutoffMinutes(topic, u.id, today) === null) continue;
-      if (postsForDay(topic, u.id, today, posts).length > 0) continue;
-      entries.push({
-        userId: u.id,
-        userName: u.name,
-        userAvatar: u.avatar,
-        departmentName: getDepartment(u.departmentId)?.name ?? u.role,
-        topicId: topic.id,
-        topicName: topic.name,
-        topicColor: topic.color,
-      });
+      for (const round of roundsForUserOnDay(topic, u.id, today, groups)) {
+        const roundPosts = postsForDay(topic, u.id, today, posts).filter((p) => attributePostToRound(p, allRounds)?.id === round.id);
+        if (roundPosts.length > 0) continue;
+        entries.push({
+          userId: u.id,
+          userName: u.name,
+          userAvatar: u.avatar,
+          departmentName: getDepartment(u.departmentId)?.name ?? u.role,
+          topicId: topic.id,
+          topicName: topic.name,
+          topicColor: topic.color,
+          roundId: round.id,
+          roundLabel: round.label,
+          roundTime: round.time,
+        });
+      }
     }
   }
   return entries;
@@ -713,9 +823,9 @@ export interface ReportBacklogEntry extends PendingTodayEntry {
  * (always today, used by the /report-feed page itself), this walks every
  * required day inside `range` so it actually follows the Dashboard's date
  * filter instead of secretly always showing today regardless of what preset
- * is selected. Split into two buckets using the same per-day status
- * (`dayComplianceStatus`) the compliance rows above are built from, so these
- * counts always agree with them:
+ * is selected. Split into two buckets using the same per-round status
+ * (`roundComplianceStatus`, Phase 1.1) the compliance rows above are built
+ * from, so these counts always agree with them:
  *  - `pending` — today only, cutoff hasn't passed yet, still postable
  *  - `missed`  — cutoff already passed (today or any earlier required day in range)
  * This is the one shared source for both the KPI card's 4 backlog cells
@@ -732,22 +842,27 @@ export function reportBacklogEntries(
   const missed: ReportBacklogEntry[] = [];
   for (const topic of tracked) {
     const { startStr, endStr } = iterationBounds(topic, range);
+    const rounds = effectiveRoundsOf(topic);
     for (const day of eachDay(startStr, endStr)) {
       for (const u of users) {
-        if (!mustSubmitToTopic(topic, u.id)) continue;
-        const status = dayComplianceStatus(topic, u.id, day, posts, exemptions);
-        if (status !== "pending" && status !== "missed") continue;
-        const entry: ReportBacklogEntry = {
-          userId: u.id,
-          userName: u.name,
-          userAvatar: u.avatar,
-          departmentName: getDepartment(u.departmentId)?.name ?? u.role,
-          topicId: topic.id,
-          topicName: topic.name,
-          topicColor: topic.color,
-          day,
-        };
-        (status === "pending" ? pending : missed).push(entry);
+        for (const round of rounds) {
+          const status = roundComplianceStatus(topic, u.id, round, day, posts, exemptions);
+          if (status !== "pending" && status !== "missed") continue;
+          const entry: ReportBacklogEntry = {
+            userId: u.id,
+            userName: u.name,
+            userAvatar: u.avatar,
+            departmentName: getDepartment(u.departmentId)?.name ?? u.role,
+            topicId: topic.id,
+            topicName: topic.name,
+            topicColor: topic.color,
+            roundId: round.id,
+            roundLabel: round.label,
+            roundTime: round.time,
+            day,
+          };
+          (status === "pending" ? pending : missed).push(entry);
+        }
       }
     }
   }
