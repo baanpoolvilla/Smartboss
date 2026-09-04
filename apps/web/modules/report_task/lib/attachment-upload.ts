@@ -1,5 +1,6 @@
 import { uploadCompressedImage } from "@/modules/report_task/lib/image-resize";
 import type { IssueAttachment } from "@/modules/report_task/types/issue";
+import { uuid } from "@/modules/report_task/lib/uuid";
 
 /** Client-side quota mirrored from the server's per-request limits (see
  * /api/uploads) — checked before the request fires so the user gets an
@@ -49,7 +50,7 @@ export async function uploadIssueAttachment(file: File, uploadedBy: string): Pro
   }
 
   return {
-    id: `att-${crypto.randomUUID()}`,
+    id: `att-${uuid()}`,
     name: file.name || "ไฟล์แนบ",
     size,
     mime,

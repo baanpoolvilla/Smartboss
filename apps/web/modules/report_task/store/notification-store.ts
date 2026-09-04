@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { uuid } from "@/modules/report_task/lib/uuid";
 
 export interface AppNotification {
   id: string;
@@ -33,7 +34,7 @@ export const useNotificationStore = create<NotificationStore>()(
       notify: (n) =>
         set((s) => ({
           notifications: [
-            { ...n, id: `notif-${crypto.randomUUID()}`, createdAt: new Date().toISOString(), read: false },
+            { ...n, id: `notif-${uuid()}`, createdAt: new Date().toISOString(), read: false },
             ...s.notifications,
           ],
         })),
@@ -42,7 +43,7 @@ export const useNotificationStore = create<NotificationStore>()(
           const fresh = userIds
             .filter((id) => id !== byUserId)
             .map((userId) => ({
-              id: `notif-${crypto.randomUUID()}`,
+              id: `notif-${uuid()}`,
               userId,
               byUserId,
               message,

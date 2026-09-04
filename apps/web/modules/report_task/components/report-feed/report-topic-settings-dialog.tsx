@@ -14,6 +14,7 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { topicModeOf } from "@/modules/report_task/lib/report-topic-membership";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Check, Clock, Globe, ImagePlus, Lock, Minus, Pencil, Plus, Trash2, User, Users, UserCheck } from "lucide-react";
+import { uuid } from "@/modules/report_task/lib/uuid";
 
 const MAX_REQUIRED_IMAGES = 6;
 
@@ -158,7 +159,7 @@ export function ReportTopicSettingsPanel({
     const label = newLabel.trim();
     if (!label || !newTime) return;
     apply({
-      cutoffs: [...topic.cutoffs, { id: `cutoff-${crypto.randomUUID()}`, label, time: newTime }],
+      cutoffs: [...topic.cutoffs, { id: `cutoff-${uuid()}`, label, time: newTime }],
     });
     setNewLabel("");
   }
@@ -184,7 +185,7 @@ export function ReportTopicSettingsPanel({
   function convertLegacy() {
     apply({
       submissionRounds: topic.cutoffs.map((c) => ({
-        id: `round-${crypto.randomUUID()}`,
+        id: `round-${uuid()}`,
         label: c.label,
         time: c.time,
         minImages: c.minImages,

@@ -9,6 +9,7 @@ import { useActivityLogStore } from "@/modules/report_task/store/activity-log-st
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { deriveCompletedAssigneeIds, isTaskFullyDone } from "@/modules/report_task/lib/task-completion";
 import type { Attachment, ChecklistItem, Task, TaskPriority, TaskStatus } from "@/modules/report_task/types";
+import { uuid } from "@/modules/report_task/lib/uuid";
 
 /**
  * Single choke point for the audit trail — every meaningful task action logs
@@ -648,7 +649,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
               comments: [
                 ...t.comments,
                 {
-                  id: `${taskId}-cmt-${crypto.randomUUID()}`,
+                  id: `${taskId}-cmt-${uuid()}`,
                   authorId,
                   message,
                   createdAt: new Date().toISOString(),
@@ -738,7 +739,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
                 ...x,
                 reactions: [
                   ...x.reactions,
-                  { id: `${taskId}-rxn-${crypto.randomUUID()}`, stickerId, byUserId, note, createdAt: new Date().toISOString() },
+                  { id: `${taskId}-rxn-${uuid()}`, stickerId, byUserId, note, createdAt: new Date().toISOString() },
                 ],
               }
         ),
@@ -805,7 +806,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
                 comments: [
                   ...x.comments,
                   {
-                    id: `${taskId}-cmt-${crypto.randomUUID()}`,
+                    id: `${taskId}-cmt-${uuid()}`,
                     authorId: byUserId,
                     message: `[ยกเลิกการหักคะแนนอัตโนมัติ] ${reason}`,
                     createdAt: new Date().toISOString(),

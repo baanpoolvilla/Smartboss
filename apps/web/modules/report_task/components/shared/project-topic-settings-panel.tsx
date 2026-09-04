@@ -21,6 +21,7 @@ import { chartColors } from "@/modules/report_task/lib/chart-colors";
 import type { ProjectTopic } from "@/modules/report_task/types";
 import { Plus, Trash2, Check, Save } from "lucide-react";
 import { toast } from "sonner";
+import { uuid } from "@/modules/report_task/lib/uuid";
 
 function ColorPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
@@ -78,7 +79,7 @@ export function ProjectTopicSettingsPanel() {
   function add() {
     const name = newLabel.trim();
     if (!name) return;
-    setDraft((d) => [...d, { id: `topic-${crypto.randomUUID()}`, name, color: chartColors.blue }]);
+    setDraft((d) => [...d, { id: `topic-${uuid()}`, name, color: chartColors.blue }]);
     setNewLabel("");
   }
 

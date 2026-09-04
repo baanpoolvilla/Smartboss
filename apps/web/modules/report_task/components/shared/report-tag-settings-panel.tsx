@@ -18,6 +18,7 @@ import { useReportTagStore, type ReportTag } from "@/modules/report_task/store/r
 import { topicColors } from "@/modules/report_task/store/report-feed-store";
 import { Plus, Trash2, Check, Save } from "lucide-react";
 import { toast } from "sonner";
+import { uuid } from "@/modules/report_task/lib/uuid";
 
 function ColorPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
@@ -75,7 +76,7 @@ export function ReportTagSettingsPanel() {
   function add() {
     const name = newLabel.trim();
     if (!name) return;
-    setDraft((d) => [...d, { id: `rtag-${crypto.randomUUID()}`, name, color: topicColors[d.length % topicColors.length]! }]);
+    setDraft((d) => [...d, { id: `rtag-${uuid()}`, name, color: topicColors[d.length % topicColors.length]! }]);
     setNewLabel("");
   }
 

@@ -25,6 +25,7 @@ import { chartColors } from "@/modules/report_task/lib/chart-colors";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Plus, Trash2, Check, Loader2, ChevronLeft, ChevronRight, Save, Info } from "lucide-react";
 import { toast } from "sonner";
+import { uuid } from "@/modules/report_task/lib/uuid";
 
 interface Country {
   countryCode: string;
@@ -305,7 +306,7 @@ export function LeaveTypeSettingsPanel() {
   function add() {
     const label = newLabel.trim();
     if (!label) return;
-    setDraft((d) => [...d, { id: `lt-${crypto.randomUUID()}`, label, color: chartColors.violet, icon: "umbrella", quotaMode: "none" }]);
+    setDraft((d) => [...d, { id: `lt-${uuid()}`, label, color: chartColors.violet, icon: "umbrella", quotaMode: "none" }]);
     setNewLabel("");
   }
 

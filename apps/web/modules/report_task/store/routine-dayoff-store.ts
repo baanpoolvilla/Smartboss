@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { uuid } from "@/modules/report_task/lib/uuid";
 
 /** Where one occurrence of a routine day off comes from — needed at move
  * time because a plain one-off pick and a recurring rule's weekly instance
@@ -104,7 +105,7 @@ export const useRoutineDayOffStore = create<RoutineDayOffStore>()((set) => ({
           return { pickedDates: { ...s.pickedDates, [userId]: next } };
         }),
       addRule: (userId, weekday, label, startDate, sourceSeriesId, endDate) => {
-        const id = `rule-${crypto.randomUUID()}`;
+        const id = `rule-${uuid()}`;
         set((s) => ({
           rules: [...s.rules, { id, userId, weekday, label, startDate, endDate, sourceSeriesId, createdAt: new Date().toISOString() }],
         }));
