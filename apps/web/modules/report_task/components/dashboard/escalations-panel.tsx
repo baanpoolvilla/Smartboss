@@ -8,7 +8,7 @@ import { useShowMore } from "@/modules/report_task/hooks/use-show-more";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import { Badge } from "@/modules/report_task/components/ui/badge";
 import { Button } from "@/modules/report_task/components/ui/button";
-import { getUser, getDepartment, canManage } from "@/modules/report_task/lib/directory";
+import { getUser, getDepartment, isOwner } from "@/modules/report_task/lib/directory";
 import { overdueTasks } from "@/modules/report_task/lib/reports";
 import { formatShortDate, daysUntil } from "@/modules/report_task/lib/format";
 import { presetRange } from "@/modules/report_task/lib/date-filter";
@@ -80,7 +80,7 @@ export function EscalationsPanel() {
   const { visible, remaining, expanded, toggle } = useShowMore(scope, 5);
 
   function flagAngry(taskId: string, title: string, recipientName: string) {
-    if (!angrySticker) return;
+    if (!angrySticker || !isOwner(viewingAsUserId)) return;
     setPendingSticker({ taskId, title, recipientName });
   }
 
@@ -192,7 +192,7 @@ export function EscalationsPanel() {
                     })()}
                 </div>
               </div>
-              {canManage(viewingAsUserId) && (
+              {isOwner(viewingAsUserId) && (
                 <Button
                   size="sm"
                   variant="outline"

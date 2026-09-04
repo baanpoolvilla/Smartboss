@@ -4,18 +4,41 @@ import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import type { Task } from "@/modules/report_task/types";
+import { mergeThreeWay } from "./store-merge";
+
+// Task collides often (everyone works the same board at once), so it polls
+// tighter than ServerStoreSync's default 4s — matches report-feed's own
+// tuning for a store people actually fight over.
+const TASK_POLL_MS = 5000;
+
+// Rollback switches (R10) — this rewrite touches Task's core save path in
+// production use, so both new behaviors can be killed independently without
+// reverting the whole change: flipping ENABLE_TASK_MERGE back to false
+// restores the old "409 → toast → reload-over-your-edit" behavior, and
+// ENABLE_TASK_POLL back to false stops the live poll (a conflicting save
+// still merges correctly via the 409 path either way — this only controls
+// whether *other people's* saves show up without you touching anything).
+const ENABLE_TASK_MERGE = true;
+const ENABLE_TASK_POLL = true;
 
 /**
- * File-backed persistence for tasks: load the saved collection from the API on
- * mount (the file is the source of truth), then write the whole working copy
- * back on every change (debounced). Keeps the store fully synchronous — the UI
- * doesn't change — while the persistent home becomes `data/tasks/tasks.json`,
- * ready to swap for the shared DB.
+ * File/DB-backed persistence for tasks, on the same collaboration model as
+ * `ServerStoreSync` (see that file's own doc comment): a light poll pulls in
+ * teammates' saves so everyone converges without refreshing, and a 409 from
+ * a race gets 3-way merged (per task id) and retried instead of popping a
+ * warning and reloading over whatever the user was just editing.
  *
- * Uses fetch with keepalive (not sendBeacon) for every write, including the
- * unload-time flush, so we can always read the response: sendBeacon can only
- * fire-and-forget, which meant tab-close writes both 405'd (no POST handler)
- * and could never report a save failure or a version conflict.
+ * `TaskSync` used to be the one store on this whole "read the whole blob /
+ * write the whole blob" model that didn't follow that shape — a conflict
+ * reloaded and silently discarded the losing edit, and there was no poll at
+ * all, so a teammate's change was invisible until a hard refresh. This is
+ * that gap closed, kept as its own component (rather than folded into
+ * `ServerStoreSync`) because Task's route also runs a server-side "sweep"
+ * (overdue docking) and a separate reminder sweep that store has no
+ * equivalent of.
+ *
+ * Uses fetch with keepalive (not sendBeacon) for the unload-time flush so we
+ * can still read the response — sendBeacon can only fire-and-forget.
  */
 export function TaskSync() {
   const loadedRef = useRef(false);
@@ -28,9 +51,28 @@ export function TaskSync() {
   const pendingRef = useRef<Task[] | null>(null);
   // Server's last-known version for this collection (optimistic concurrency).
   const versionRef = useRef<number | null>(null);
+  // The task list as the server last confirmed it — the common ancestor for
+  // the 3-way merge on conflict (and for reconciling a poll). Kept in sync
+  // on every load, reload, successful save, and poll.
+  const baseRef = useRef<Task[] | null>(null);
+  // True while we're writing server-originated tasks into the store (load,
+  // reload, merge, poll). The subscribe listener below checks this so
+  // pulling in a teammate's save doesn't get mistaken for a local edit and
+  // echoed straight back — which would otherwise bounce identical no-op
+  // PUTs between tabs on every poll.
+  const applyingRemoteRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
+
+    function applyRemoteTasks(tasks: Task[]) {
+      applyingRemoteRef.current = true;
+      try {
+        useTaskStore.setState({ tasks });
+      } finally {
+        applyingRemoteRef.current = false;
+      }
+    }
 
     async function reloadFromServer() {
       try {
@@ -38,7 +80,8 @@ export function TaskSync() {
         const tasks = (await res.json()) as Task[];
         versionRef.current = Number(res.headers.get("X-Data-Version")) || null;
         if (!cancelled && Array.isArray(tasks)) {
-          useTaskStore.setState({ tasks });
+          applyRemoteTasks(tasks);
+          baseRef.current = tasks;
         }
       } catch {
         // Offline or server down — keep showing what's already in memory.
@@ -48,24 +91,75 @@ export function TaskSync() {
     async function flush(snapshot: Task[] | null, isUnload = false) {
       if (!snapshot) return;
       pendingRef.current = null;
-      const body = JSON.stringify({ tasks: snapshot, expectedVersion: versionRef.current });
-      try {
-        // `keepalive` only matters for the pagehide flush (surviving the page
-        // going away) and Chromium hard-caps keepalive request bodies at
-        // ~64KB — past that it fails with a silent "Failed to fetch" instead
-        // of an HTTP error. The full task collection routinely exceeds that,
-        // so keepalive must stay off for every normal in-page save.
-        const res = await fetch("/api/report-task/tasks", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body,
-          ...(isUnload ? { keepalive: true } : {}),
-        });
-        if (res.status === 409) {
+
+      // On page unload we get a single keepalive shot and can't do the
+      // fetch/merge/retry dance — send optimistically and let a surviving
+      // tab (or the next load) reconcile. The server keeps a POST alias
+      // specifically for this (see route.ts's own comment) — some browsers'
+      // fetch(keepalive) only reliably delivers non-PUT bodies past a
+      // certain size on unload. `keepalive` request bodies are also
+      // hard-capped at ~64KB by Chromium, so this path stays off for every
+      // normal in-page save.
+      if (isUnload) {
+        try {
+          await fetch("/api/report-task/tasks", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tasks: snapshot, expectedVersion: versionRef.current }),
+            keepalive: true,
+          });
+        } catch {
+          /* best effort on the way out */
+        }
+        return;
+      }
+
+      let mine = snapshot;
+      // Bounded retry: in the split second between our merge and our retry
+      // someone else could save again. A few passes converge; the cap keeps
+      // a very hot board from spinning.
+      for (let attempt = 0; attempt < 4; attempt++) {
+        let res: Response;
+        try {
+          res = await fetch("/api/report-task/tasks", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tasks: mine, expectedVersion: versionRef.current }),
+          });
+        } catch {
+          toast.error("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ การเปลี่ยนแปลงอาจหายไปเมื่อรีเฟรช", { id: "tasksync-network-error" });
+          await reloadFromServer();
+          return;
+        }
+
+        // Someone saved first. Pull their latest, merge our changes on top
+        // per task id, reflect the merge in the UI, and retry — no popup,
+        // nothing lost (unless the same task was deleted on one side while
+        // edited on the other — see mergeThreeWay's own doc comment).
+        if (res.status === 409 && !ENABLE_TASK_MERGE) {
           toast.error("มีคนอื่นแก้ไขงานพร้อมกัน กำลังโหลดข้อมูลล่าสุด — การเปลี่ยนแปลงล่าสุดของคุณอาจไม่ถูกบันทึก", { id: "tasksync-conflict" });
           await reloadFromServer();
           return;
         }
+        if (res.status === 409) {
+          let latest: Task[];
+          let latestVersion: number | null;
+          try {
+            const latestRes = await fetch("/api/report-task/tasks");
+            latest = (await latestRes.json()) as Task[];
+            latestVersion = Number(latestRes.headers.get("X-Data-Version")) || null;
+          } catch {
+            await reloadFromServer();
+            return;
+          }
+          const merged = mergeThreeWay(baseRef.current, mine, latest) as Task[];
+          if (!cancelled) applyRemoteTasks(merged);
+          versionRef.current = latestVersion;
+          baseRef.current = latest; // what the server had when we merged
+          mine = merged;
+          continue; // retry PUT with merged data + the latest version
+        }
+
         if (!res.ok) {
           // Roll the UI back to what the server actually has instead of
           // leaving it stuck on an edit that never saved — a stray toast is
@@ -74,20 +168,17 @@ export function TaskSync() {
           // makes a repeated failure (e.g. sweep retrying every minute)
           // replace the existing toast instead of stacking a new one on top.
           toast.error("บันทึกข้อมูลไม่สำเร็จ กำลังโหลดข้อมูลล่าสุดกลับมา", { id: "tasksync-save-error" });
-          if (!isUnload) await reloadFromServer();
+          await reloadFromServer();
           return;
         }
-        const data = (await res.json().catch(() => null)) as
-          | { version?: number; codes?: Record<string, string> }
-          | null;
+
+        // Success: bump version + base, and merge in the `code` the server
+        // just assigned any newly-created task in this batch — this tab's
+        // own state has no code for it yet (see task-repo.ts), so wait for
+        // the next full reload would leave the task number blank a beat
+        // longer than it needs to.
+        const data = (await res.json().catch(() => null)) as { version?: number; codes?: Record<string, string> } | null;
         if (typeof data?.version === "number") versionRef.current = data.version;
-        // A newly-created task has no `code` yet in this tab's own state —
-        // the server only assigns one once the create actually lands (see
-        // task-repo.ts). Merge it in now instead of waiting for the next
-        // full reload, so the task number shows up immediately. Skipped
-        // (setState left untouched) once every code already matches, so
-        // this doesn't loop: applying a real change re-triggers one more
-        // flush that then finds nothing left to merge.
         if (data?.codes) {
           const codes = data.codes;
           const current = useTaskStore.getState().tasks;
@@ -100,23 +191,29 @@ export function TaskSync() {
             }
             return t;
           });
-          if (changed) useTaskStore.setState({ tasks: next });
+          if (changed) {
+            applyRemoteTasks(next);
+            mine = next;
+          }
         }
-      } catch {
-        toast.error("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ การเปลี่ยนแปลงอาจหายไปเมื่อรีเฟรช", { id: "tasksync-network-error" });
-        if (!isUnload) await reloadFromServer();
+        baseRef.current = mine; // this snapshot is now the server truth
+        return;
       }
+
+      // Merge kept losing the race every pass — vanishingly unlikely. Fall
+      // back to a reload so the UI at least matches the server.
+      await reloadFromServer();
     }
 
     function flushPending() {
       void flush(pendingRef.current);
     }
 
-    // Triggers the server-side sweep (/api/tasks/sweep) and, only if it
-    // actually changed something, reloads so this tab picks up the applied
-    // flags/docks. The sweep computes and writes at most once regardless of
-    // how many tabs/clients trigger it around the same time (see H3 in the
-    // production-readiness audit) — this is just a trigger, not the logic.
+    // Triggers the server-side sweep (/api/report-task/tasks/sweep) and,
+    // only if it actually changed something, reloads so this tab picks up
+    // the applied flags/docks. The sweep computes and writes at most once
+    // regardless of how many tabs/clients trigger it around the same time —
+    // this is just a trigger, not the logic.
     async function runSweep() {
       try {
         const res = await fetch("/api/report-task/tasks/sweep", { method: "POST" });
@@ -146,7 +243,8 @@ export function TaskSync() {
       })
       .then((tasks: Task[]) => {
         if (!cancelled && Array.isArray(tasks)) {
-          useTaskStore.setState({ tasks });
+          applyRemoteTasks(tasks);
+          baseRef.current = tasks;
         }
       })
       .catch(() => {
@@ -179,6 +277,9 @@ export function TaskSync() {
       }
     }, 60_000);
 
+    // A backgrounded tab skips the 60s sweepTimer above, but coming back to
+    // the foreground shouldn't have to wait up to a minute to catch up — fire
+    // once immediately on return instead.
     function sweepOnReturn() {
       if (document.visibilityState === "visible" && loadedRef.current) {
         void runSweep();
@@ -187,21 +288,52 @@ export function TaskSync() {
     }
     document.addEventListener("visibilitychange", sweepOnReturn);
 
-    // Write-through: save after changes settle. Skips writes until the initial
-    // load has completed so we never overwrite the file with seed data.
-    // Fires on the next tick (0ms), not the original 500ms debounce — that
-    // longer window was sized for drag-and-drop generating a burst of
-    // position updates per drag (now removed from the board entirely, see
-    // kanban-board.tsx). Every mutation left is a single discrete click
-    // (status dropdown, ผ่าน/ไม่ผ่าน, checklist toggle, reaction, ...), so
-    // there's no real burst left to coalesce — only React's own state-update
+    // Pull in teammates' saves on a light poll so several people viewing the
+    // same board converge on their own, instead of only finding out on the
+    // next reload/save. Skip while the user has an unsaved edit in flight
+    // (don't yank their work mid-type) or the tab is hidden.
+    const pollTimer = ENABLE_TASK_POLL
+      ? setInterval(() => {
+          if (!loadedRef.current) return;
+          if (pendingRef.current || timerRef.current) return; // edit in flight — don't overwrite it
+          if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+          void (async () => {
+            try {
+              // R1 — check the lightweight version-only endpoint first
+              // (a few dozen bytes, no task rows touched) before paying for
+              // a full GET of the company's whole task collection. Most
+              // ticks find nothing changed, so this is the common case.
+              const versionRes = await fetch("/api/report-task/tasks/version");
+              const version = Number(versionRes.headers.get("X-Data-Version")) || null;
+              if (version === versionRef.current) return; // nothing new
+              if (pendingRef.current || timerRef.current) return; // user started editing while we were checking
+              const res = await fetch("/api/report-task/tasks");
+              const tasks = (await res.json()) as Task[];
+              if (cancelled || !Array.isArray(tasks)) return;
+              versionRef.current = Number(res.headers.get("X-Data-Version")) || version;
+              applyRemoteTasks(tasks);
+              baseRef.current = tasks;
+            } catch {
+              // transient — next tick tries again
+            }
+          })();
+        }, TASK_POLL_MS)
+      : null;
+
+    // Write-through: save after changes settle. Skips writes until the
+    // initial load has completed so we never overwrite the server with
+    // seed/empty state. Fires on the next tick (0ms), not a longer debounce
+    // — every mutation left is a single discrete click (status dropdown,
+    // ผ่าน/ไม่ผ่าน, checklist toggle, reaction, ...), so there's no real
+    // burst to coalesce, only React's own state-update
     // batching within one click handler, which a 0ms setTimeout still
-    // collapses into a single write. Anything longer just widens the "click
-    // ผ่าน then immediately hit refresh" window where the change hadn't
-    // reached the server yet and a reload silently reverts it back to
-    // whatever's on disk — that's strictly worse than one extra PUT.
+    // collapses into a single write. Skips writes until the initial load
+    // has completed so we never overwrite the server with seed/empty state,
+    // and skips remote-originated updates (`applyingRemoteRef`) so a poll or
+    // merge never gets mistaken for a user edit and echoed straight back.
     const unsub = useTaskStore.subscribe((state, prev) => {
       if (!loadedRef.current || state.tasks === prev.tasks) return;
+      if (applyingRemoteRef.current) return;
       if (timerRef.current) clearTimeout(timerRef.current);
       pendingRef.current = state.tasks;
       timerRef.current = setTimeout(flushPending, 0);
@@ -219,6 +351,7 @@ export function TaskSync() {
       cancelled = true;
       unsub();
       clearInterval(sweepTimer);
+      if (pollTimer) clearInterval(pollTimer);
       if (timerRef.current) clearTimeout(timerRef.current);
       document.removeEventListener("visibilitychange", sweepOnReturn);
       window.removeEventListener("pagehide", flushOnUnload);

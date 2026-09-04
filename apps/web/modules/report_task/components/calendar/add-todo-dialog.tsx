@@ -207,10 +207,17 @@ export function AddTodoDialog({
 
           {isMeeting ? (
             <>
-              <div className="flex gap-2">
-                <DatePickerField value={date} onChange={setDate} className="flex-1" />
-                <Input type="time" value={meetStart} onChange={(e) => setMeetStart(e.target.value)} className="w-[100px] shrink-0" aria-label="เวลาเริ่ม" />
-                <Input type="time" value={meetEnd} onChange={(e) => setMeetEnd(e.target.value)} className="w-[100px] shrink-0" aria-label="เวลาสิ้นสุด" />
+              {/* flex-wrap (item 3's own consistency check) — date +
+                  2 required time fields side by side can't shrink below
+                  ~330px combined, wider than a narrow phone; wrapping the
+                  two time fields onto their own row keeps every field at a
+                  usable width instead of getting crushed. */}
+              <div className="flex flex-wrap gap-2">
+                <DatePickerField value={date} onChange={setDate} className="flex-1 min-w-[140px]" />
+                <div className="flex gap-2 w-full sm:w-auto">
+                  <Input type="time" value={meetStart} onChange={(e) => setMeetStart(e.target.value)} className="flex-1 sm:w-[100px] sm:flex-none" aria-label="เวลาเริ่ม" />
+                  <Input type="time" value={meetEnd} onChange={(e) => setMeetEnd(e.target.value)} className="flex-1 sm:w-[100px] sm:flex-none" aria-label="เวลาสิ้นสุด" />
+                </div>
               </div>
               <AttendeePicker value={meetAttendeeIds} onChange={setMeetAttendeeIds} placeholder="เลือกแผนก/ผู้เข้าร่วม..." />
               <div className="flex items-center gap-2">
@@ -228,9 +235,9 @@ export function AddTodoDialog({
               </div>
             </>
           ) : (
-            <div className="flex gap-2">
-              <DatePickerField value={date} onChange={setDate} className="flex-1" />
-              <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-[110px] shrink-0" aria-label="เวลา (ไม่บังคับ)" />
+            <div className="flex flex-wrap gap-2">
+              <DatePickerField value={date} onChange={setDate} className="flex-1 min-w-[140px]" />
+              <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-full sm:w-[110px] sm:shrink-0" aria-label="เวลา (ไม่บังคับ)" />
             </div>
           )}
 
