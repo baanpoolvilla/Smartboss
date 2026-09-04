@@ -23,8 +23,10 @@ import { Toaster } from "../ui/sonner";
  * หน้าระดับบนสุดเหมือนกันหมด (ไม่มีหน้ารายละเอียดที่ต้องมีปุ่มย้อนกลับ)
  * ชื่อหัวข้อดึงจาก manifest ตาม pathname จะได้ไม่ต้องเขียนชื่อซ้ำสองที่
  *
- * width กว้างกว่าโมดูลอื่นเพราะมีบอร์ด Kanban กับปฏิทินที่ต้องใช้พื้นที่
- * (ของเดิมใน workspace ก็ใช้ max-w-[1600px])
+ * ไม่จำกัดความกว้างเนื้อหาเลย (`max-w-none`) — เว็บมีแต่จอกว้าง (มือถือมี
+ * bottom nav ของตัวเอง ไม่ผ่าน rail นี้) การจำกัด max-width แล้วดันเนื้อหาไป
+ * กองกลางจอปล่อยขอบว่างซ้าย-ขวาเยอะโดยเปล่าประโยชน์บนจอกว้าง โดยเฉพาะ
+ * บอร์ด Kanban กับปฏิทินที่กินพื้นที่แนวนอนเยอะอยู่แล้ว.
  */
 export function ReportTaskScaffold({
   currentUser,
@@ -114,7 +116,7 @@ function ScaffoldBody({
 }) {
   const leading = useAppBarLeading();
   return (
-    <AppScaffold title={title} leading={leading} width="max-w-[1600px]" fill={selfScrolling} fillMaxWidth={selfScrolling}>
+    <AppScaffold title={title} leading={leading} width="max-w-none" fill={selfScrolling} fillMaxWidth={selfScrolling}>
       {children}
     </AppScaffold>
   );
