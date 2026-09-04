@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
+import { safeLocalStorage } from "@/modules/report_task/lib/safe-storage";
 
 /**
  * Outlook-style "People's calendars" — which team members' tasks/meetings/
@@ -42,6 +43,6 @@ export const useCalendarVisibilityStore = create<CalendarVisibilityStore>()(
             : [...s.hiddenGoogleOwnerIds, ownerId],
         })),
     }),
-    { name: "eb-calendar-visibility", skipHydration: true }
+    { name: "eb-calendar-visibility", skipHydration: true, storage: createJSONStorage(() => safeLocalStorage) }
   )
 );

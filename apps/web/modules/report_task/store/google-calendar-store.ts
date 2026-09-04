@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
+import { safeLocalStorage } from "@/modules/report_task/lib/safe-storage";
 
 export type IcsLinkTarget = "work" | "schedule";
 
@@ -88,6 +89,7 @@ export const useGoogleCalendarStore = create<GoogleCalendarStore>()(
     {
       name: "eb-google-calendar",
       skipHydration: true,
+      storage: createJSONStorage(() => safeLocalStorage),
       // The fetched events are cheap to re-sync and go stale fast — only
       // connection state/preference is worth persisting across reloads.
       partialize: (s) => ({ linksByUser: s.linksByUser }),

@@ -1,8 +1,47 @@
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 
 /** Shared canvas downscale step — draws `file` onto a canvas at most
- * `maxWidth` wide, used by both the upload path and the legacy inline path. */
-function drawToCanvas(file: File, maxWidth: number): Promise<HTMLCanvasElement> {
+ * `maxWidth` wide, used by both the upload path and the legacy inline path.
+ *
+ * Prefers `createImageBitmap(file)` over the old FileReader→base64→`<img>`
+ * path: a modern iPhone photo (12-48MP) read via `readAsDataURL` holds both
+ * the original file AND a ~1.37x-larger base64 string in memory at once,
+ * then a full-resolution raster on top of that once `<img>` decodes it —
+ * enough to crash the Safari tab outright on large photos (issue C).
+ * `createImageBitmap` decodes the Blob directly off the main thread with no
+ * base64 step, and `.close()` releases it right after drawing instead of
+ * waiting on the image element's GC — important when a post has several
+ * large attachments queued back to back. */
+async function drawToCanvas(file: File, maxWidth: number): Promise<HTMLCanvasElement> {
+  if (typeof createImageBitmap === "function") {
+    try {
+      return await drawToCanvasViaBitmap(file, maxWidth);
+    } catch {
+      // createImageBitmap can reject on some iOS Safari versions for certain
+      // formats — fall back to the FileReader+<img> path rather than failing
+      // the upload outright.
+    }
+  }
+  return drawToCanvasLegacy(file, maxWidth);
+}
+
+async function drawToCanvasViaBitmap(file: File, maxWidth: number): Promise<HTMLCanvasElement> {
+  const bitmap = await createImageBitmap(file);
+  try {
+    const scale = Math.min(1, maxWidth / bitmap.width);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("ไม่สามารถประมวลผลรูปภาพได้");
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    return canvas;
+  } finally {
+    bitmap.close();
+  }
+}
+
+function drawToCanvasLegacy(file: File, maxWidth: number): Promise<HTMLCanvasElement> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(reader.error);

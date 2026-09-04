@@ -280,13 +280,30 @@ export function TaskSync() {
     // A backgrounded tab skips the 60s sweepTimer above, but coming back to
     // the foreground shouldn't have to wait up to a minute to catch up — fire
     // once immediately on return instead.
-    function sweepOnReturn() {
-      if (document.visibilityState === "visible" && loadedRef.current) {
+    //
+    // Also the real "about to be backgrounded" signal on iOS Safari (issue
+    // E): switching apps there doesn't reliably fire `pagehide` or `unload`
+    // before the page gets suspended — the app can be frozen or the tab's
+    // process reclaimed with zero further JS execution, dropping whatever
+    // was still sitting in `pendingRef` waiting on its 0ms debounce timer.
+    // `visibilitychange` to "hidden", by contrast, is the one lifecycle
+    // event iOS guarantees fires first — https://web.dev/articles/page-lifecycle-api
+    // — so flush there too, using the same keepalive/no-retry path `pagehide`
+    // already uses, rather than relying on `pagehide` alone.
+    function onVisibilityChange() {
+      if (!loadedRef.current) return;
+      if (document.visibilityState === "visible") {
         void runSweep();
         void runReminderSweep();
+        return;
       }
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      if (pendingRef.current) void flush(pendingRef.current, true);
     }
-    document.addEventListener("visibilitychange", sweepOnReturn);
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     // Pull in teammates' saves on a light poll so several people viewing the
     // same board converge on their own, instead of only finding out on the
@@ -353,7 +370,7 @@ export function TaskSync() {
       clearInterval(sweepTimer);
       if (pollTimer) clearInterval(pollTimer);
       if (timerRef.current) clearTimeout(timerRef.current);
-      document.removeEventListener("visibilitychange", sweepOnReturn);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("pagehide", flushOnUnload);
       flushPending();
     };
