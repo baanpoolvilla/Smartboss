@@ -9,11 +9,17 @@ import { useReportFeedStore, type ReportPostImage, type ReportTopic } from "@/mo
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
 import { photoCount } from "@/modules/report_task/lib/report-attachment-kind";
-import { currentCutoff, cutoffsOnDay, minImagesNow } from "@/modules/report_task/lib/report-cutoff";
-import { localDateStr } from "@/modules/report_task/lib/now";
+import { cutoffsOnDay } from "@/modules/report_task/lib/report-cutoff";
+import { localDateStr, now } from "@/modules/report_task/lib/now";
+import { cn } from "@/modules/report_task/lib/utils";
 import { ReportPostFields, newSection, type DraftSection } from "@/modules/report_task/components/report-feed/report-post-fields";
 import { Clock, Lock, Send, SquarePen } from "lucide-react";
 import { toast } from "sonner";
+
+function roundMinutesOf(time: string): number {
+  const [h, m] = time.split(":").map(Number) as [number, number];
+  return h * 60 + m;
+}
 
 // A room's own starter sections (Phase 6 "เทมเพลตโพสต์") pre-fill a brand-new
 // draft's headings — bullets stay for the poster to fill in themselves.
@@ -62,6 +68,12 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   const [images, setImages] = useState<ReportPostImage[]>(() => savedDraft?.images ?? []);
   const [tagIds, setTagIds] = useState<string[]>(() => savedDraft?.tagIds ?? []);
   const [busy, setBusy] = useState(false);
+  // Which round (C4) the poster explicitly chose — null means "not chosen
+  // yet, use the default" (nearest round not yet passed, or the last one if
+  // every round today is already overdue). Reset on room switch/post/cancel
+  // (reset() below) so a stale pick from a previous room's rounds can't leak
+  // into this one.
+  const [selectedRoundId, setSelectedRoundId] = useState<string | null>(null);
 
   // Keeps sessionStorage in sync with every keystroke/attachment change so a
   // reload has something to restore — cleared once the draft is either
@@ -87,6 +99,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
     setSections(initialSections(topic));
     setImages([]);
     setTagIds([]);
+    setSelectedRoundId(null);
     setExpanded(false);
     if (typeof window !== "undefined") {
       try {
@@ -134,10 +147,26 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
     }
   }
 
-  const todayCutoffs = cutoffsOnDay(topic, localDateStr(new Date()));
-  const minImagesRequired = minImagesNow({ minImages: topic.minImages, cutoffs: todayCutoffs });
+  const todayCutoffs = [...cutoffsOnDay(topic, localDateStr(new Date()))].sort(
+    (a, b) => roundMinutesOf(a.time) - roundMinutesOf(b.time)
+  );
+  const nowMinutes = now().getHours() * 60 + now().getMinutes();
+  // Default pick: the nearest round not yet passed; once every round today
+  // is overdue, default to the last one (someone opening the composer after
+  // everything's closed is almost always filing the most recent miss, not
+  // re-litigating the morning one).
+  const defaultRoundId =
+    todayCutoffs.length === 0
+      ? null
+      : (todayCutoffs.find((r) => roundMinutesOf(r.time) >= nowMinutes) ?? todayCutoffs[todayCutoffs.length - 1])!.id;
+  const activeRoundId = selectedRoundId && todayCutoffs.some((r) => r.id === selectedRoundId) ? selectedRoundId : defaultRoundId;
+  const activeRound = todayCutoffs.find((r) => r.id === activeRoundId) ?? null;
+  // 1 round today → picked automatically, no picker shown (C4's own
+  // acceptance criterion) — only 2+ rounds is genuinely ambiguous enough to
+  // ask "ส่งของรอบไหน?" for.
+  const showRoundPicker = todayCutoffs.length >= 2;
+  const minImagesRequired = activeRound?.minImages ?? topic.minImages;
   const missingRequiredImage = photoCount(images) < minImagesRequired;
-  const activeRound = currentCutoff(todayCutoffs);
 
   function handleSubmit() {
     if (!title.trim() || missingRequiredImage) return;
@@ -153,6 +182,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
       sections: cleanSections,
       images,
       tagIds,
+      roundId: activeRound?.id,
     });
     reset();
   }
@@ -201,7 +231,10 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
             <AvatarFallback className="text-[10px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{viewer.avatar}</AvatarFallback>
           </Avatar>
           <p className="text-sm font-medium">{viewer.name}</p>
-          {activeRound && (
+          {/* 1 round today → same plain info line as before (no choice to
+              make). 2+ rounds → the picker below takes over saying which
+              round, so this line would just repeat it. */}
+          {!showRoundPicker && activeRound && (
             <span className="flex items-center gap-1 text-[11px] font-medium text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2 py-0.5">
               <Clock className="h-3 w-3" />
               ตอนนี้อยู่ในรอบ &quot;{activeRound.label}&quot; ({activeRound.time})
@@ -209,6 +242,40 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
             </span>
           )}
         </div>
+
+        {/* C4 — a room with 2+ rounds today can't have the round guessed
+            from post time alone (10:00 could be "รอบ 9 สาย" or "รอบ 11
+            ก่อนเวลา"), so the poster picks explicitly. Picking a round
+            that's already past its own cutoff is allowed (ส่งย้อนหลัง) — it
+            just badges late instead of blocking the post. */}
+        {showRoundPicker && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="flex items-center gap-1 text-xs text-[var(--ink-soft)] shrink-0">
+              <Clock className="h-3.5 w-3.5" />
+              ส่งของรอบไหน?
+            </span>
+            {todayCutoffs.map((r) => {
+              const late = nowMinutes > roundMinutesOf(r.time);
+              const selected = r.id === activeRoundId;
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => setSelectedRoundId(r.id)}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11.5px] font-medium transition-colors",
+                    selected
+                      ? "border-[var(--brand-green)] bg-[var(--accent)] text-[var(--brand-green-dark)]"
+                      : "border-[var(--line)] bg-white text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+                  )}
+                >
+                  {r.label} ({r.time}){late && " · ส่งย้อนหลัง = สาย"}
+                </button>
+              );
+            })}
+            {minImagesRequired > 0 && <span className="text-xs text-[var(--ink-soft)]">· ต้องแนบรูปอย่างน้อย {minImagesRequired} รูป</span>}
+          </div>
+        )}
 
         <ReportPostFields
           topicId={topic.id}

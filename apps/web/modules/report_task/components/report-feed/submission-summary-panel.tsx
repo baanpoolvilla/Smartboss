@@ -79,13 +79,17 @@ export function SubmissionSummaryPanel() {
         <div className="space-y-1.5">
           <p className="text-xs font-semibold text-[var(--ink-soft)]">ต้องตาม ({needAttention.length})</p>
           {needAttention.map((e) => {
-            const key = `${e.userId}:${e.topicId}`;
+            // Phase 1.1: today's entries are per (person, round), so the
+            // same person can show up twice for a 2-round room — the key
+            // and the "จี้" state both need the round in them, or nudging
+            // one round would silently mark the other nudged too.
+            const key = `${e.userId}:${e.topicId}:${e.roundId}`;
             return (
               <div key={key} className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-white p-2">
                 <Avatar className="h-7 w-7"><AvatarFallback className="text-[10px]">{e.userName.slice(0, 2)}</AvatarFallback></Avatar>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{e.userName}</p>
-                  <p className="truncate text-[11px] text-[var(--ink-soft)]">{e.topicName} · {e.departmentName}</p>
+                  <p className="truncate text-[11px] text-[var(--ink-soft)]">{e.topicName} · {e.roundLabel} · {e.departmentName}</p>
                 </div>
                 <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", e.status === "late" ? "bg-[var(--accent)] text-[var(--tone-warn)]" : "bg-[var(--danger-bg)] text-[var(--danger)]")}>
                   {e.status === "late" ? "ส่งช้า" : "ยังไม่ส่ง"}

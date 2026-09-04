@@ -20,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/modules/report_task/components/ui/alert-dialog";
-import { reportBacklogEntries, lastCutoffLabel, type ReportBacklogEntry } from "@/modules/report_task/lib/report-feed-compliance";
+import { reportBacklogEntries, type ReportBacklogEntry } from "@/modules/report_task/lib/report-feed-compliance";
 import { useVisibleReportTopics } from "@/modules/report_task/hooks/use-visible-report-topics";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
@@ -162,12 +162,13 @@ export function ReportFeedPendingTodayCard() {
               </p>
             </div>
             {pendingShowMore.visible.map((e) => {
-              const topic = topics.find((t) => t.id === e.topicId);
               return (
                 <PendingRow
-                  key={`${e.userId}-${e.topicId}-${e.day}`}
+                  // Phase 1.1: one entry per still-pending round, so a
+                  // 2-round room's same user/topic/day can appear twice —
+                  // the key needs roundId too, or React collapses them.
+                  key={`${e.userId}-${e.topicId}-${e.day}-${e.roundId}`}
                   entry={e}
-                  cutoffLabel={topic ? lastCutoffLabel(topic) : null}
                   canNudge={canManage(viewingAsUserId)}
                   onOpen={() => router.push(`/report-feed?topic=${e.topicId}`)}
                   onNudge={() => setPendingNudge(e)}
@@ -226,13 +227,11 @@ export function ReportFeedPendingTodayCard() {
 
 function PendingRow({
   entry: e,
-  cutoffLabel,
   canNudge,
   onOpen,
   onNudge,
 }: {
   entry: ReportBacklogEntry;
-  cutoffLabel: string | null;
   canNudge: boolean;
   onOpen: () => void;
   onNudge: () => void;
@@ -262,7 +261,10 @@ function PendingRow({
           <Badge variant="secondary" className="text-[10px] font-normal">
             {e.departmentName}
           </Badge>
-          {cutoffLabel && <span className="text-[11px] text-[var(--ink-soft)]">ปิดรับ {cutoffLabel}</span>}
+          {/* Phase 1.1: this is now specifically the round this entry is for
+              (not the room's blanket last cutoff), so a 2-round room's two
+              rows read distinctly instead of both saying the same time. */}
+          <span className="text-[11px] text-[var(--ink-soft)]">{e.roundLabel} · ปิดรับ {e.roundTime}</span>
         </div>
       </div>
       {canNudge && (

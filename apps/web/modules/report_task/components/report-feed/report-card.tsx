@@ -194,8 +194,17 @@ export function ReportCard({
   // dropping a note — as "✓ ตรงเวลา" implied they'd fulfilled an obligation
   // they never had ("ทำไมคนอื่นขึ้นแบบนี้ด้วยละ ต้องขึ้นเฉพาะคนที่ต้องส่ง").
   const postDayCutoffs = roundsForUserOnDay(topic, post.authorId, postDay, submitterGroups);
-  const lateCutoff = lateCutoffFor(post.createdAt, postDayCutoffs);
-  const onTimeCutoff = !lateCutoff ? onTimeCutoffFor(post.createdAt, postDayCutoffs) : null;
+  // The poster's own explicit round choice (C4's composer picker) wins over
+  // guessing from the timestamp — a 10:00 post is genuinely ambiguous
+  // between "รอบ 9 สาย" and "รอบ 11 ก่อนเวลา" by time alone, which is exactly
+  // why the picker exists. Falls back to the full time-window guess
+  // (`postDayCutoffs`) for posts with no `roundId` (made before this field
+  // existed, or filed under a round that's since stopped applying to this
+  // user/day) rather than badging nothing at all.
+  const explicitRound = post.roundId ? postDayCutoffs.filter((r) => r.id === post.roundId) : [];
+  const roundCandidates = explicitRound.length > 0 ? explicitRound : postDayCutoffs;
+  const lateCutoff = lateCutoffFor(post.createdAt, roundCandidates);
+  const onTimeCutoff = !lateCutoff ? onTimeCutoffFor(post.createdAt, roundCandidates) : null;
   const allPosts = useReportFeedStore((s) => s.posts);
   // Once you're past a cutoff, *every* post you make that day gets flagged
   // "ส่งช้า" — technically true of each one, but posting twice just repeated

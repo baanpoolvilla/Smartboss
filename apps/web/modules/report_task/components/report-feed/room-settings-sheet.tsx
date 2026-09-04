@@ -282,31 +282,37 @@ export function RoomSettingsSheet({
             <ReportTopicSettingsPanel topic={draft} hideHeading onUpdate={patchDraft} liveVisibility={topic.visibility} />
           </section>
 
-          {/* กติกา เพิ่มเติม */}
-          <section className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)]">วันที่ต้องส่งรายงาน</p>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {weekdayLabels.map((label, day) => {
-                const active = requiredWeekdays.length === 0 || requiredWeekdays.includes(day);
-                return (
-                  <button
-                    key={day}
-                    type="button"
-                    onClick={() => toggleWeekday(day)}
-                    className={cn(
-                      "h-8 w-8 rounded-full text-xs font-medium transition-colors shrink-0",
-                      active ? "bg-[var(--brand-green)] text-[var(--ink)]" : "bg-[var(--bg-soft)] text-[var(--ink-soft)] hover:bg-[var(--line)]"
-                    )}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="text-[11px] text-[var(--ink-soft)]">
-              วันที่ไม่เลือกจะไม่นับ &quot;ไม่ส่ง&quot; ในสถิติ — ค่าเริ่มต้นคือทุกวัน (รวมเสาร์–อาทิตย์)
-            </p>
-          </section>
+          {/* กติกา เพิ่มเติม — B: ห้องที่ตั้งรอบส่งแล้ว (submissionRounds) กำหนด
+              วันทำงานเป็นรายรอบใน ReportTopicSettingsPanel ข้างบนแทน (แต่ละ
+              รอบมี weekdays ของตัวเอง) การตั้ง requiredWeekdays ระดับห้องที่นี่
+              จึงซ้ำซ้อนและไม่มีผลจริงแล้ว — ซ่อนไว้ ห้องเก่าที่ยังไม่มีรอบส่งเห็น
+              เหมือนเดิม. */}
+          {(draft.submissionRounds?.length ?? 0) === 0 && (
+            <section className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)]">วันที่ต้องส่งรายงาน</p>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {weekdayLabels.map((label, day) => {
+                  const active = requiredWeekdays.length === 0 || requiredWeekdays.includes(day);
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => toggleWeekday(day)}
+                      className={cn(
+                        "h-8 w-8 rounded-full text-xs font-medium transition-colors shrink-0",
+                        active ? "bg-[var(--brand-green)] text-[var(--ink)]" : "bg-[var(--bg-soft)] text-[var(--ink-soft)] hover:bg-[var(--line)]"
+                      )}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-[var(--ink-soft)]">
+                วันที่ไม่เลือกจะไม่นับ &quot;ไม่ส่ง&quot; ในสถิติ — ค่าเริ่มต้นคือทุกวัน (รวมเสาร์–อาทิตย์)
+              </p>
+            </section>
+          )}
 
           <section className="space-y-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)]">เทมเพลตโพสต์</p>

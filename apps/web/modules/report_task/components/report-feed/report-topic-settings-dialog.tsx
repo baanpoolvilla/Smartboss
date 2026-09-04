@@ -292,83 +292,90 @@ export function ReportTopicSettingsPanel({
           <div>
             <p className="text-sm font-medium">จำนวนรูปขั้นต่ำต่อโพสต์ (ค่าเริ่มต้น)</p>
             <p className="text-xs text-[var(--ink-soft)]">
-              {topic.cutoffs.length > 0
-                ? "ใช้กับรอบที่ไม่ได้กำหนดจำนวนรูปไว้เฉพาะด้านล่าง"
-                : topic.minImages > 0
-                  ? `โพสต์ต้องแนบอย่างน้อย ${topic.minImages} รูปถึงจะโพสต์ได้`
-                  : "0 = ไม่บังคับแนบรูป"}
+              {rounds.length > 0
+                ? "ค่าเริ่มต้นให้รอบที่ไม่ตั้งรูปเอง"
+                : topic.cutoffs.length > 0
+                  ? "ใช้กับรอบที่ไม่ได้กำหนดจำนวนรูปไว้เฉพาะด้านล่าง"
+                  : topic.minImages > 0
+                    ? `โพสต์ต้องแนบอย่างน้อย ${topic.minImages} รูปถึงจะโพสต์ได้`
+                    : "0 = ไม่บังคับแนบรูป"}
             </p>
           </div>
           <ImageCountStepper value={topic.minImages} onChange={(v) => apply({ minImages: v })} />
         </div>
 
-        <div className="space-y-2">
-          <Label className="text-xs text-[var(--ink-soft)]">รอบตัดยอดรีพอต (เช่น เช้า 09:00, เย็น 18:00)</Label>
-          {topic.cutoffs.length > 0 && (
-            <div className="space-y-1.5">
-              {topic.cutoffs.map((c) => (
-                <div key={c.id} className="rounded-lg border border-[var(--line)] p-2 space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="flex-1 text-sm font-medium">{c.label}</span>
-                    <span className="text-sm tabular-nums text-[var(--ink-soft)]">{c.time}</span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeCutoff(c.id)}
-                      aria-label={`ลบรอบ ${c.label}`}
-                    >
-                      <Trash2 className="h-4 w-4 text-[var(--ink-soft)]" />
-                    </Button>
-                  </div>
-                  {/* Per-round override — e.g. เช้าต้องแนบ 2 รูป, เย็นแค่เช็คอินก็พอ. */}
-                  <div className="flex items-center gap-1.5 pl-0.5">
-                    <ImagePlus className="h-3 w-3 text-[var(--ink-soft)] shrink-0" />
-                    <button
-                      type="button"
-                      onClick={() => setCutoffMinImages(c.id, c.minImages === undefined ? topic.minImages : undefined)}
-                      className={cn(
-                        "rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors",
-                        c.minImages === undefined
-                          ? "border-[var(--brand-green)] bg-[var(--accent)] text-[var(--brand-green-dark)]"
-                          : "border-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+        {/* B — ห้องที่ตั้งรอบส่งแล้ว (`submissionRounds`) ไม่ต้องเห็นรอบตัดยอด
+            เดิมอีก (ซ้ำซ้อนกับรอบส่งด้านล่าง, ห้ามแก้พร้อมกันสองที่) — ห้องเก่าที่
+            ยังไม่แปลงเห็นเหมือนเดิมทุกอย่าง + ปุ่มแปลงด้านล่าง. */}
+        {rounds.length === 0 && (
+          <div className="space-y-2">
+            <Label className="text-xs text-[var(--ink-soft)]">รอบตัดยอดรีพอต (เช่น เช้า 09:00, เย็น 18:00)</Label>
+            {topic.cutoffs.length > 0 && (
+              <div className="space-y-1.5">
+                {topic.cutoffs.map((c) => (
+                  <div key={c.id} className="rounded-lg border border-[var(--line)] p-2 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="flex-1 text-sm font-medium">{c.label}</span>
+                      <span className="text-sm tabular-nums text-[var(--ink-soft)]">{c.time}</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeCutoff(c.id)}
+                        aria-label={`ลบรอบ ${c.label}`}
+                      >
+                        <Trash2 className="h-4 w-4 text-[var(--ink-soft)]" />
+                      </Button>
+                    </div>
+                    {/* Per-round override — e.g. เช้าต้องแนบ 2 รูป, เย็นแค่เช็คอินก็พอ. */}
+                    <div className="flex items-center gap-1.5 pl-0.5">
+                      <ImagePlus className="h-3 w-3 text-[var(--ink-soft)] shrink-0" />
+                      <button
+                        type="button"
+                        onClick={() => setCutoffMinImages(c.id, c.minImages === undefined ? topic.minImages : undefined)}
+                        className={cn(
+                          "rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors",
+                          c.minImages === undefined
+                            ? "border-[var(--brand-green)] bg-[var(--accent)] text-[var(--brand-green-dark)]"
+                            : "border-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+                        )}
+                      >
+                        ตามค่าเริ่มต้น{c.minImages === undefined ? ` (${topic.minImages})` : ""}
+                      </button>
+                      {c.minImages !== undefined && (
+                        <>
+                          <span className="text-[11px] text-[var(--ink-soft)]">กำหนดเอง:</span>
+                          <ImageCountStepper value={c.minImages} onChange={(v) => setCutoffMinImages(c.id, v)} />
+                        </>
                       )}
-                    >
-                      ตามค่าเริ่มต้น{c.minImages === undefined ? ` (${topic.minImages})` : ""}
-                    </button>
-                    {c.minImages !== undefined && (
-                      <>
-                        <span className="text-[11px] text-[var(--ink-soft)]">กำหนดเอง:</span>
-                        <ImageCountStepper value={c.minImages} onChange={(v) => setCutoffMinImages(c.id, v)} />
-                      </>
-                    )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+            )}
+            <div className="flex items-center gap-2 rounded-lg border border-dashed border-[var(--line)] p-2">
+              <Input
+                aria-label="ชื่อรอบตัดยอด"
+                value={newLabel}
+                onChange={(e) => setNewLabel(e.target.value)}
+                placeholder="ชื่อรอบ เช่น เช้า"
+                className="flex-1"
+              />
+              <Input
+                type="time"
+                aria-label="เวลาตัดยอด"
+                value={newTime}
+                onChange={(e) => setNewTime(e.target.value)}
+                className="w-28 shrink-0"
+              />
+              <Button variant="outline" size="icon" onClick={addCutoff} aria-label="เพิ่มรอบตัดยอด">
+                <Plus className="h-4 w-4" />
+              </Button>
             </div>
-          )}
-          <div className="flex items-center gap-2 rounded-lg border border-dashed border-[var(--line)] p-2">
-            <Input
-              aria-label="ชื่อรอบตัดยอด"
-              value={newLabel}
-              onChange={(e) => setNewLabel(e.target.value)}
-              placeholder="ชื่อรอบ เช่น เช้า"
-              className="flex-1"
-            />
-            <Input
-              type="time"
-              aria-label="เวลาตัดยอด"
-              value={newTime}
-              onChange={(e) => setNewTime(e.target.value)}
-              className="w-28 shrink-0"
-            />
-            <Button variant="outline" size="icon" onClick={addCutoff} aria-label="เพิ่มรอบตัดยอด">
-              <Plus className="h-4 w-4" />
-            </Button>
+            <p className="text-[11px] text-[var(--ink-soft)]">
+              โพสต์ที่ส่งหลังเวลาที่กำหนดจะขึ้นป้าย &quot;ส่งช้า&quot; สีเตือนบนโพสต์ — ไม่บล็อกการโพสต์
+            </p>
           </div>
-          <p className="text-[11px] text-[var(--ink-soft)]">
-            โพสต์ที่ส่งหลังเวลาที่กำหนดจะขึ้นป้าย &quot;ส่งช้า&quot; สีเตือนบนโพสต์ — ไม่บล็อกการโพสต์
-          </p>
-        </div>
+        )}
 
         <div className="space-y-2">
           <div>
