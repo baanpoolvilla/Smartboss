@@ -5,6 +5,7 @@ import { nextTaskCode } from "@/lib/document-code";
 import { recordPerformanceEvents, type PerformanceEventInput } from "@/lib/performance";
 import { defaultStickers } from "../../data/stickers";
 import { readStore } from "./org-store";
+import { listDirectory } from "./employee-directory";
 import type { Sticker, Task, TaskReaction } from "../../types";
 
 /**
@@ -103,6 +104,15 @@ async function recordStickerEvents(
   if (events.length > 0) await recordPerformanceEvents(events);
 }
 
+/** เลขรุ่นของคอลเลกชันอย่างเดียว ไม่แตะตาราง reportTask เลย (R1) — สำหรับ poll
+ * ที่แค่อยากรู้ "มีอะไรเปลี่ยนไหม" ก่อนค่อยดึงทั้งก้อนจริงถ้าเปลี่ยน แทนที่จะ
+ * SELECT งานทั้งบริษัท (รวม comments/checklist/revisions/attachment) ทุก
+ * ครั้งที่ poll ซึ่งหนักบน VM เดียวเมื่อมีหลายแท็บเปิดพร้อมกัน */
+export async function readTasksVersion(orgId: string): Promise<number> {
+  const meta = await prisma.reportTaskCollection.findUnique({ where: { orgId } });
+  return meta?.version ?? 0;
+}
+
 /** อ่านงานทั้งหมดของบริษัท พร้อมเลขรุ่นของคอลเลกชัน */
 export async function readTasks(orgId: string): Promise<TaskCollection> {
   const [rows, meta] = await Promise.all([
@@ -142,6 +152,19 @@ export async function writeTasks(
 ): Promise<WriteResult> {
   const stickerChanges: { task: Task; newReactions: TaskReaction[] }[] = [];
 
+  // R4 — gating the sticker picker in the UI stops a normal click, but Task
+  // writes the whole collection in one PUT: a client that just edits the
+  // request body could hand-craft a reaction for anyone. Fetched lazily (at
+  // most once per call) since most saves touch no reactions at all — no
+  // reason to query the directory on every single-field task edit.
+  let ownerIdsPromise: Promise<Set<string>> | null = null;
+  function ownerIds(): Promise<Set<string>> {
+    if (!ownerIdsPromise) {
+      ownerIdsPromise = listDirectory(orgId).then((users) => new Set(users.filter((u) => u.isOwner).map((u) => u.id)));
+    }
+    return ownerIdsPromise;
+  }
+
   const result = await prisma.$transaction(async (tx) => {
     const meta = await tx.reportTaskCollection.findUnique({ where: { orgId } });
     const current = meta?.version ?? 0;
@@ -166,15 +189,27 @@ export async function writeTasks(
     // write-through never re-fetches on a plain success — see task-sync.tsx).
     const codes: Record<string, string> = {};
 
-    for (const task of tasks) {
-      const cols = columnsOf(task);
-      const known = codeById.get(task.id);
-
+    for (let task of tasks) {
       // เทียบกับก้อนเดิมด้วย reaction id — อันที่ไม่เคยเห็นมาก่อนคือสติกเกอร์
       // ที่เพิ่งติดในคำขอนี้ (ทั้งงานเก่าที่แก้ และงานใหม่ที่ยังไม่เคยมีแถวเดิม)
       const priorReactionIds = new Set((priorById.get(task.id)?.reactions ?? []).map((r) => r.id));
-      const newReactions = (task.reactions ?? []).filter((r) => !priorReactionIds.has(r.id));
+      let newReactions = (task.reactions ?? []).filter((r) => !priorReactionIds.has(r.id));
+
+      // R4 — ปฏิเสธเฉพาะ reaction ใหม่ที่คนติดไม่ใช่เจ้าของ (คง reaction เดิม
+      // + ฟิลด์อื่นของงานไว้ทั้งหมด ไม่ทำทั้ง request พัง)
+      if (newReactions.length > 0) {
+        const owners = await ownerIds();
+        const rejected = newReactions.filter((r) => !owners.has(r.byUserId));
+        if (rejected.length > 0) {
+          const rejectedIds = new Set(rejected.map((r) => r.id));
+          task = { ...task, reactions: (task.reactions ?? []).filter((r) => !rejectedIds.has(r.id)) };
+          newReactions = newReactions.filter((r) => !rejectedIds.has(r.id));
+        }
+      }
       if (newReactions.length > 0) stickerChanges.push({ task, newReactions });
+
+      const cols = columnsOf(task);
+      const known = codeById.get(task.id);
 
       if (known) {
         await tx.reportTask.update({

@@ -41,7 +41,7 @@ import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
-import { getUser, displayName, getDepartment, users, canManage, isOwner, departmentIdsOf } from "@/modules/report_task/lib/directory";
+import { getUser, displayName, getDepartment, users, isOwner, departmentIdsOf } from "@/modules/report_task/lib/directory";
 import { statusMeta, priorityMeta, taskStatusOrder, taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
 import { isTaskFullyDone, remainingChecklistCount } from "@/modules/report_task/lib/task-completion";
 import { formatDate, formatDateTime } from "@/modules/report_task/lib/format";
@@ -101,6 +101,7 @@ export function TaskDetailSheet({
   const saveTaskDetails = useTaskStore((s) => s.saveTaskDetails);
   const setPriority = useTaskStore((s) => s.setPriority);
   const setStartDate = useTaskStore((s) => s.setStartDate);
+  const setDueTime = useTaskStore((s) => s.setDueTime);
   const removeTask = useTaskStore((s) => s.removeTask);
   const setAssignees = useTaskStore((s) => s.setAssignees);
   const setMainAssignee = useTaskStore((s) => s.setMainAssignee);
@@ -235,9 +236,9 @@ export function TaskDetailSheet({
   const owner = isOwner(viewingAsUserId);
   const removingAssigneeWouldLockMeOut = (nextAssigneeIds: string[]) =>
     !owner && !canEditRecord(task.assignedById, departmentIdsOf(nextAssigneeIds), viewingAsUserId);
-  // "หัวร้อน" is a reprimand, not peer feedback — only the department head
-  // can hand it out. Other stickers stay open to everyone.
-  const pickableStickers = canManage(viewingAsUserId) ? stickers : stickers.filter((s) => s.id !== "angry");
+  // Only the owner (CEO) can hand out any sticker — the whole picker block
+  // is gated to `owner` below, so anyone who reaches this list already is.
+  const pickableStickers = stickers;
 
   function confirmDelete() {
     if (!task) return;
@@ -344,7 +345,7 @@ export function TaskDetailSheet({
   }
 
   function handleReact(sticker: Sticker) {
-    if (!task) return;
+    if (!task || !owner) return;
     setPendingSticker(sticker);
   }
 
@@ -771,8 +772,23 @@ export function TaskDetailSheet({
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs text-[var(--ink-soft)] flex items-center gap-1"><Calendar className="h-3 w-3" /> กำหนดส่ง</Label>
+              {/* R8 — the deadline date itself only moves through the
+                  reason-required "revise" flow below (a real audit trail
+                  for something everyone downstream relies on). The time is
+                  just reminder-sweep timing (see reminder-sweep.ts) with no
+                  such stakes, so it's editable inline instead. */}
               <div className="flex items-center gap-1.5 h-9 px-1 text-sm">
                 {formatDate(task.dueDate)}
+                {canEditMain && (
+                  <Input
+                    type="time"
+                    value={task.dueTime ?? ""}
+                    onChange={(e) => setDueTime(task.id, e.target.value, viewingAsUserId)}
+                    className="w-[110px] h-7 shrink-0 ml-auto"
+                    aria-label="เวลากำหนดส่ง (ไม่บังคับ)"
+                    title="เวลากำหนดส่ง (ไม่บังคับ) — ใช้ตั้งแจ้งเตือนล่วงหน้าเป็นชั่วโมง/นาทีได้"
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -826,27 +842,31 @@ export function TaskDetailSheet({
             </>
           )}
 
-          {/* Reactions / sticker scoring */}
+          {/* Reactions / sticker scoring — only the owner (CEO) can hand
+              out stickers; everyone still sees the reactions already on
+              the task below, just not the picker to add more. */}
           <div className="space-y-3">
             <h4 className="text-sm font-semibold">ให้สติกเกอร์งานนี้</h4>
-            <div className="flex flex-wrap gap-1.5">
-              {pickableStickers.map((s) => (
-                <Tooltip key={s.id}>
-                  <TooltipTrigger
-                    render={
-                      <button
-                        onClick={() => handleReact(s)}
-                        className="flex items-center gap-1 rounded-full border border-[var(--line)] bg-white pl-2 pr-2.5 py-1 text-sm hover:border-[var(--brand-green)] hover:bg-[var(--accent)] transition-colors"
-                      >
-                        <span>{s.emoji}</span>
-                        <span className="text-xs text-[var(--ink-soft)]">{s.label}</span>
-                      </button>
-                    }
-                  />
-                  <TooltipContent>{s.points > 0 ? `+${s.points}` : s.points} คะแนน</TooltipContent>
-                </Tooltip>
-              ))}
-            </div>
+            {owner && (
+              <div className="flex flex-wrap gap-1.5">
+                {pickableStickers.map((s) => (
+                  <Tooltip key={s.id}>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          onClick={() => handleReact(s)}
+                          className="flex items-center gap-1 rounded-full border border-[var(--line)] bg-white pl-2 pr-2.5 py-1 text-sm hover:border-[var(--brand-green)] hover:bg-[var(--accent)] transition-colors"
+                        >
+                          <span>{s.emoji}</span>
+                          <span className="text-xs text-[var(--ink-soft)]">{s.label}</span>
+                        </button>
+                      }
+                    />
+                    <TooltipContent>{s.points > 0 ? `+${s.points}` : s.points} คะแนน</TooltipContent>
+                  </Tooltip>
+                ))}
+              </div>
+            )}
 
             {task.reactions.length > 0 && (
               <div className="space-y-1.5">

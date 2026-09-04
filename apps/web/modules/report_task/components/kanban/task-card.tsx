@@ -7,7 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/c
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/modules/report_task/components/ui/tooltip";
 import { DueDateBadge } from "@/modules/report_task/components/shared/due-date-badge";
 import { PenaltyChip } from "@/modules/report_task/components/shared/penalty-chip";
-import { getUser, getDepartment, canManage } from "@/modules/report_task/lib/directory";
+import { getUser, getDepartment, isOwner } from "@/modules/report_task/lib/directory";
 import { priorityMeta, statusMeta } from "@/modules/report_task/lib/task-meta";
 import { chartColors } from "@/modules/report_task/lib/chart-colors";
 import { isSuspiciousRevision, reactionCounts } from "@/modules/report_task/lib/task-flags";
@@ -67,9 +67,10 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
   const completedCount = task.completedAssigneeIds?.length ?? 0;
   const iAmAssignee = task.assigneeIds.includes(viewingAsUserId);
   const myPartDone = isShared ? (task.completedAssigneeIds ?? []).includes(viewingAsUserId) : isDone;
-  // "หัวร้อน" is a reprimand, not peer feedback — only the department head
-  // can hand it out. Other stickers stay open to everyone.
-  const pickableStickers = canManage(viewingAsUserId) ? stickers : stickers.filter((s) => s.id !== "angry");
+  // Only the owner (CEO) can hand out any sticker — the picker itself is
+  // gated to isOwner below, so anyone who reaches this list is already the
+  // owner and sees every sticker, no per-sticker split anymore.
+  const pickableStickers = stickers;
 
   const assignees = task.assigneeIds.map(getUser).filter(Boolean);
   // In the "เลยกำหนด" column, a group task only has SOME people still
@@ -89,6 +90,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
   const [pendingSticker, setPendingSticker] = useState<Sticker | null>(null);
 
   function handleReact(sticker: Sticker) {
+    if (!isOwner(viewingAsUserId)) return;
     setPendingSticker(sticker);
   }
 
@@ -415,7 +417,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
         </div>
 
         <div className="flex items-center justify-end gap-1.5 shrink-0">
-          {onOpen && (
+          {onOpen && isOwner(viewingAsUserId) && (
             <Popover>
               <PopoverTrigger
                 render={

@@ -217,6 +217,13 @@ interface TaskStore {
   saveTaskDetails: (taskId: string, title: string, description: string, actorId: string) => void;
   setPriority: (taskId: string, priority: TaskPriority, actorId: string) => void;
   setStartDate: (taskId: string, startDate: string, actorId: string) => void;
+  /** R8 — the create dialog is the only place `dueTime` could be set before
+   * this; once a task existed there was no way back in short of deleting and
+   * recreating it. `""` clears it (falls back to 23:59 for the reminder
+   * sweep — see reminder-sweep.ts). Not folded into `reviseDueDate`'s
+   * reason-required flow: this is reminder-timing metadata, not the actual
+   * deadline date, so it doesn't need the same audit trail. */
+  setDueTime: (taskId: string, dueTime: string, actorId: string) => void;
   setAssignees: (taskId: string, assigneeIds: string[]) => void;
   /** Labels one of the task's current assignees as its lead — display-only,
    * no effect on edit/see permissions (those come from assignedById/dept
@@ -550,6 +557,16 @@ export const useTaskStore = create<TaskStore>((set) => ({
       }
       return {
         tasks: s.tasks.map((x) => (x.id === taskId ? { ...x, startDate, updatedAt: new Date().toISOString() } : x)),
+      };
+    }),
+  setDueTime: (taskId, dueTime, actorId) =>
+    set((s) => {
+      const t = s.tasks.find((x) => x.id === taskId);
+      if (t && (t.dueTime ?? "") !== dueTime) {
+        logActivity(actorId, "เปลี่ยนเวลากำหนดส่ง", t.title, t.id, dueTime ? dueTime : "ไม่ระบุเวลา");
+      }
+      return {
+        tasks: s.tasks.map((x) => (x.id === taskId ? { ...x, dueTime: dueTime || undefined, updatedAt: new Date().toISOString() } : x)),
       };
     }),
   // Assignees drive a task's departments, so recompute them together.

@@ -283,6 +283,13 @@ export function NewTaskDialog({
   const [startDate, setStartDate] = useState(initialDate);
   const [dueDate, setDueDate] = useState(initialDate);
   const [dueTime, setDueTime] = useState("");
+  // Hidden behind "+ ใส่เวลา" by default — most tasks don't set one, and an
+  // empty <input type="time"> renders as a blank white box on iOS/Safari
+  // (no placeholder text like desktop shows), which read as a broken field
+  // sitting next to the date picker. `dueTime` already being set (rare here
+  // since this dialog always starts blank, but kept for consistency) keeps
+  // it open instead of hiding a value the user just typed.
+  const [showDueTime, setShowDueTime] = useState(false);
   const derivedDepartmentIds = departmentIdsOf(assigneeIds);
 
   // งานเดี่ยว/งานกลุ่ม — explicit, chosen at creation (not re-derived from
@@ -1046,21 +1053,42 @@ export function NewTaskDialog({
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs text-[var(--ink-soft)]">กำหนดส่ง</Label>
-                    <div className="flex gap-1.5">
-                      <DatePickerField value={dueDate} minDate={startDate || todayIso()} onChange={setDueDate} className="flex-1" />
-                      {/* Optional — unset means "แจ้งเตือนก่อนกำหนด" (Settings ▸
-                          แจ้งเตือน) can only count whole days, since there's no
-                          actual moment to count hours/minutes back from
-                          without this. */}
-                      <Input
-                        type="time"
-                        value={dueTime}
-                        onChange={(e) => setDueTime(e.target.value)}
-                        className="w-[110px] shrink-0"
-                        aria-label="เวลากำหนดส่ง (ไม่บังคับ)"
-                        title="เวลากำหนดส่ง (ไม่บังคับ) — ใส่ไว้ถ้าอยากตั้งแจ้งเตือนล่วงหน้าเป็นชั่วโมง/นาทีได้"
-                      />
-                    </div>
+                    <DatePickerField value={dueDate} minDate={startDate || todayIso()} onChange={setDueDate} />
+                    {/* Optional — unset means "แจ้งเตือนก่อนกำหนด" (Settings ▸
+                        แจ้งเตือน) can only count whole days, since there's no
+                        actual moment to count hours/minutes back from
+                        without this. Hidden behind a toggle instead of always
+                        showing — see `showDueTime`'s own comment. */}
+                    {showDueTime || dueTime ? (
+                      <div className="flex items-center gap-1.5 pt-0.5">
+                        <Input
+                          type="time"
+                          value={dueTime}
+                          onChange={(e) => setDueTime(e.target.value)}
+                          className="w-full sm:w-[130px]"
+                          aria-label="เวลากำหนดส่ง (ไม่บังคับ)"
+                          title="เวลากำหนดส่ง (ไม่บังคับ) — ใส่ไว้ถ้าอยากตั้งแจ้งเตือนล่วงหน้าเป็นชั่วโมง/นาทีได้"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDueTime("");
+                            setShowDueTime(false);
+                          }}
+                          className="shrink-0 text-[11px] text-[var(--ink-soft)] hover:text-[var(--chart-red)] transition-colors"
+                        >
+                          ล้างเวลา
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowDueTime(true)}
+                        className="flex items-center gap-1 text-[11px] text-[var(--ink-soft)] hover:text-[var(--brand-green-dark)] transition-colors pt-0.5"
+                      >
+                        <Clock className="h-3 w-3" />+ ใส่เวลา
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 mt-2 flex-wrap">
