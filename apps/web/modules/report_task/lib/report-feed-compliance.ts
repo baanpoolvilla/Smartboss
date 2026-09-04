@@ -543,6 +543,7 @@ export interface MissedReportEntry {
   userId: string;
   userName: string;
   userAvatar: string;
+  userAvatarUrl: string | null;
   departmentName: string;
   topicId: string;
   topicName: string;
@@ -576,6 +577,7 @@ export function recentMissedReports(
             userId: u.id,
             userName: u.name,
             userAvatar: u.avatar,
+            userAvatarUrl: u.avatarUrl ?? null,
             departmentName: getDepartment(u.departmentId)?.name ?? u.role,
             topicId: topic.id,
             topicName: topic.name,
@@ -624,6 +626,7 @@ export function recentAttachmentIssues(
           userId: u.id,
           userName: u.name,
           userAvatar: u.avatar,
+          userAvatarUrl: u.avatarUrl ?? null,
           departmentName: getDepartment(u.departmentId)?.name ?? u.role,
           topicId: topic.id,
           topicName: topic.name,
@@ -643,6 +646,7 @@ export interface PendingTodayEntry {
   userId: string;
   userName: string;
   userAvatar: string;
+  userAvatarUrl: string | null;
   departmentName: string;
   topicId: string;
   topicName: string;
@@ -713,6 +717,7 @@ export interface TodayStatusEntry {
   userId: string;
   userName: string;
   userAvatar: string;
+  userAvatarUrl: string | null;
   departmentName: string;
   topicId: string;
   topicName: string;
@@ -749,6 +754,7 @@ export function todayStatusEntries(
           userId: u.id,
           userName: u.name,
           userAvatar: u.avatar,
+          userAvatarUrl: u.avatarUrl ?? null,
           departmentName: getDepartment(u.departmentId)?.name ?? u.role,
           topicId: topic.id,
           topicName: topic.name,
@@ -793,6 +799,7 @@ export function pendingToday(topics: ReportTopic[], posts: ReportPost[], exempti
           userId: u.id,
           userName: u.name,
           userAvatar: u.avatar,
+          userAvatarUrl: u.avatarUrl ?? null,
           departmentName: getDepartment(u.departmentId)?.name ?? u.role,
           topicId: topic.id,
           topicName: topic.name,
@@ -846,6 +853,7 @@ export function reportBacklogEntries(
             userId: u.id,
             userName: u.name,
             userAvatar: u.avatar,
+            userAvatarUrl: u.avatarUrl ?? null,
             departmentName: getDepartment(u.departmentId)?.name ?? u.role,
             topicId: topic.id,
             topicName: topic.name,

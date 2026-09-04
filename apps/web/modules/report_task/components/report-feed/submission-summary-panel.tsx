@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { cn } from "@/modules/report_task/lib/utils";
 import { useVisibleReportTopics } from "@/modules/report_task/hooks/use-visible-report-topics";
@@ -86,7 +86,10 @@ export function SubmissionSummaryPanel() {
             const key = `${e.userId}:${e.topicId}:${e.roundId}`;
             return (
               <div key={key} className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-white p-2">
-                <Avatar className="h-7 w-7"><AvatarFallback className="text-[10px]">{e.userName.slice(0, 2)}</AvatarFallback></Avatar>
+                <Avatar className="h-7 w-7">
+                  <AvatarImage src={e.userAvatarUrl ?? undefined} alt={e.userName} />
+                  <AvatarFallback className="text-[10px]">{e.userName.slice(0, 2)}</AvatarFallback>
+                </Avatar>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{e.userName}</p>
                   <p className="truncate text-[11px] text-[var(--ink-soft)]">{e.topicName} · {e.roundLabel} · {e.departmentName}</p>

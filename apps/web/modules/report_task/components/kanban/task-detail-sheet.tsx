@@ -18,7 +18,7 @@ import {
   AlertDialogCancel,
 } from "@/modules/report_task/components/ui/alert-dialog";
 import { Badge } from "@/modules/report_task/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Separator } from "@/modules/report_task/components/ui/separator";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Textarea } from "@/modules/report_task/components/ui/textarea";
@@ -618,6 +618,7 @@ export function TaskDetailSheet({
                         >
                           <div className="relative shrink-0">
                             <Avatar className="h-5 w-5">
+                              <AvatarImage src={a!.avatarUrl ?? undefined} alt={a!.name} />
                               <AvatarFallback className="text-[9px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{a!.avatar}</AvatarFallback>
                             </Avatar>
                             {done && (
@@ -720,6 +721,7 @@ export function TaskDetailSheet({
                           {selected && <Check className="h-3 w-3 text-white" />}
                         </span>
                         <Avatar className="h-6 w-6">
+                          <AvatarImage src={u.avatarUrl ?? undefined} alt={u.name} />
                           <AvatarFallback className="text-[9px] bg-[var(--bg-soft)]">{u.avatar}</AvatarFallback>
                         </Avatar>
                         <span className="flex-1 text-sm truncate">{u.name}</span>
@@ -746,6 +748,7 @@ export function TaskDetailSheet({
                   nothing. */}
               <span className="flex items-center gap-1.5">
                 <Avatar className="h-5 w-5">
+                  <AvatarImage src={assignedBy?.avatarUrl ?? undefined} alt={assignedBy?.name} />
                   <AvatarFallback className="text-[8px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{assignedBy?.avatar}</AvatarFallback>
                 </Avatar>
                 <span className="font-medium text-[var(--ink)]">{assignedBy?.name}</span>
@@ -1019,6 +1022,7 @@ export function TaskDetailSheet({
                   return (
                     <div key={uid} className="flex items-center gap-2">
                       <Avatar className="h-5 w-5 shrink-0">
+                        <AvatarImage src={u?.avatarUrl ?? undefined} alt={u?.name} />
                         <AvatarFallback className="text-[9px] bg-[var(--bg-soft)]">{u?.avatar}</AvatarFallback>
                       </Avatar>
                       <span className="text-xs flex-1 truncate">{u?.name}</span>
@@ -1319,6 +1323,7 @@ export function TaskDetailSheet({
               return (
                 <div key={c.id} className={cn("flex gap-2.5 group", mine && "flex-row-reverse")}>
                   <Avatar className="h-7 w-7 shrink-0">
+                    <AvatarImage src={author?.avatarUrl ?? undefined} alt={author?.name} />
                     <AvatarFallback className={cn("text-[10px]", mine ? "bg-[var(--brand-green)] text-[var(--ink)]" : "bg-[var(--bg-soft)]")}>
                       {author?.avatar}
                     </AvatarFallback>

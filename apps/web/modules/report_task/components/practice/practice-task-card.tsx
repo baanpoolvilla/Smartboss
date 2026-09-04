@@ -1,6 +1,6 @@
 "use client";
 
-import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Badge } from "@/modules/report_task/components/ui/badge";
 import { getUser } from "@/modules/report_task/lib/directory";
 import { priorityMeta } from "@/modules/report_task/lib/task-meta";
@@ -51,6 +51,7 @@ export function PracticeTaskCard({
               if (!u) return null;
               return (
                 <Avatar key={id} className="h-5 w-5 ring-2 ring-[var(--bg)]">
+                  <AvatarImage src={u.avatarUrl ?? undefined} alt={u.name} />
                   <AvatarFallback className="text-[8px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{u.avatar}</AvatarFallback>
                 </Avatar>
               );

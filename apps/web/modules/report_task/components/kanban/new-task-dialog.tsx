@@ -23,7 +23,7 @@ import { Input } from "@/modules/report_task/components/ui/input";
 import { Label } from "@/modules/report_task/components/ui/label";
 import { Textarea } from "@/modules/report_task/components/ui/textarea";
 import { Switch } from "@/modules/report_task/components/ui/switch";
-import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { TimePickerField } from "@/modules/report_task/components/shared/time-picker-field";
@@ -976,6 +976,7 @@ export function NewTaskDialog({
                                 return (
                                   <span key={id} className="flex items-center gap-1 bg-[var(--bg-soft)] rounded-full pl-0.5 pr-2 py-0.5 text-xs">
                                     <Avatar className="h-4 w-4">
+                                      <AvatarImage src={u?.avatarUrl ?? undefined} alt={u?.name} />
                                       <AvatarFallback className="text-[8px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{u?.avatar}</AvatarFallback>
                                     </Avatar>
                                     {u?.name}
@@ -1005,6 +1006,7 @@ export function NewTaskDialog({
                               {selected && <Check className="h-3 w-3 text-white" />}
                             </span>
                             <Avatar className="h-6 w-6">
+                              <AvatarImage src={u.avatarUrl ?? undefined} alt={u.name} />
                               <AvatarFallback className="text-[9px] bg-[var(--bg-soft)]">{u.avatar}</AvatarFallback>
                             </Avatar>
                             <span className="flex-1 text-sm truncate">{u.name}</span>
@@ -1149,6 +1151,7 @@ export function NewTaskDialog({
                           return (
                             <div key={uid} className="flex items-center gap-2">
                               <Avatar className="h-5 w-5 shrink-0">
+                                <AvatarImage src={u?.avatarUrl ?? undefined} alt={u?.name} />
                                 <AvatarFallback className="text-[8px] bg-[var(--bg-soft)]">{u?.avatar}</AvatarFallback>
                               </Avatar>
                               <span className="text-xs flex-1 truncate">{u?.name}</span>
@@ -1602,6 +1605,7 @@ export function NewTaskDialog({
               <Building2 className="h-3.5 w-3.5" />
               <span>มอบหมายโดย</span>
               <Avatar className="h-5 w-5">
+                <AvatarImage src={assignedByUser.avatarUrl ?? undefined} alt={assignedByUser.name} />
                 <AvatarFallback className="text-[8px] bg-white">{assignedByUser.avatar}</AvatarFallback>
               </Avatar>
               <span className="font-medium text-[var(--ink)]">{assignedByUser.name}</span>

@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { getDepartment, users } from "@/modules/report_task/lib/directory";
 import { useLeaveStore } from "@/modules/report_task/store/leave-store";
 import { useLeaveTypeStore } from "@/modules/report_task/store/leave-type-store";
-import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { leaveIconOf } from "@/modules/report_task/lib/leave-icons";
 import { now } from "@/modules/report_task/lib/now";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -111,6 +111,7 @@ export function LeaveSummaryPanel() {
             return (
               <div key={user.id} className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm hover:bg-[var(--bg-soft)]/60">
                 <Avatar className="h-8 w-8 shrink-0">
+                  <AvatarImage src={user.avatarUrl ?? undefined} alt={user.name} />
                   <AvatarFallback className="text-[11px]">{user.avatar}</AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1">

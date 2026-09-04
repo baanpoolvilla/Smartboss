@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
-import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
 import { users, departments, getDepartment, getUser } from "@/modules/report_task/lib/directory";
@@ -177,6 +177,7 @@ export function PeopleCalendarList({
                 <Checkbox checked={visible} onCheckedChange={() => toggle(u.id)} aria-label={`แสดงปฏิทินของ ${u.name}`} />
                 <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
                 <Avatar className="h-6 w-6 shrink-0">
+                  <AvatarImage src={u.avatarUrl ?? undefined} alt={u.name} />
                   <AvatarFallback className="text-[9px] bg-[var(--bg-soft)]">{u.avatar}</AvatarFallback>
                 </Avatar>
                 <span className={cn("text-sm truncate", !visible && "text-[var(--ink-soft)] line-through")}>

@@ -11,7 +11,7 @@ import {
 } from "@tanstack/react-table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/modules/report_task/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/modules/report_task/components/ui/table";
-import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Button } from "@/modules/report_task/components/ui/button";
@@ -31,6 +31,7 @@ interface MemberRow {
   email: string;
   role: string;
   avatar: string;
+  avatarUrl: string | null;
   departmentName: string;
 }
 
@@ -166,6 +167,7 @@ export function RoomMembersDialog({
           email: u.email,
           role: u.role,
           avatar: u.avatar,
+          avatarUrl: u.avatarUrl ?? null,
           departmentName: getDepartment(u.departmentId)?.name ?? "—",
         })),
     [editable, topic.visibility]
@@ -191,6 +193,7 @@ export function RoomMembersDialog({
         cell: ({ row }) => (
           <div className="flex items-center gap-2.5 min-w-0">
             <Avatar className="h-8 w-8 shrink-0">
+              <AvatarImage src={row.original.avatarUrl ?? undefined} alt={row.original.name} />
               <AvatarFallback className="text-[10px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{row.original.avatar}</AvatarFallback>
             </Avatar>
             <div className="min-w-0">

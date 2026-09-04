@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { getUser, getDepartment } from "@/modules/report_task/lib/directory";
 import { formatDate, formatDateTime } from "@/modules/report_task/lib/format";
@@ -94,6 +94,7 @@ export function EventPreviewCard({
             <div className="flex items-center -space-x-1.5">
               {attendees.slice(0, 5).map((a) => (
                 <Avatar key={a!.id} className="h-5 w-5 ring-2 ring-white" title={a!.name}>
+                  <AvatarImage src={a!.avatarUrl ?? undefined} alt={a!.name} />
                   <AvatarFallback className="text-[8px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{a!.avatar}</AvatarFallback>
                 </Avatar>
               ))}
@@ -103,6 +104,7 @@ export function EventPreviewCard({
         ) : user ? (
           <div className="flex items-center gap-1.5">
             <Avatar className="h-5 w-5">
+              <AvatarImage src={user.avatarUrl ?? undefined} alt={user.name} />
               <AvatarFallback className="text-[8px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{user.avatar}</AvatarFallback>
             </Avatar>
             {user.name}

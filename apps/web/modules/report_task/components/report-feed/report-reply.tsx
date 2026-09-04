@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Check, CornerUpLeft, Link2, MoreHorizontal, Pencil, Reply as ReplyIcon, SmilePlus, Trash2 } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { getUser } from "@/modules/report_task/lib/directory";
@@ -89,6 +89,7 @@ export function ReportReply({
       className="group/reply flex items-start gap-1.5 sm:gap-2"
     >
       <Avatar className="h-5 w-5 sm:h-6 sm:w-6 shrink-0 mt-0.5">
+        <AvatarImage src={author?.avatarUrl ?? undefined} alt={author?.name} />
         <AvatarFallback className="text-[9px] sm:text-[10px] bg-[var(--bg-soft)]">{author?.avatar}</AvatarFallback>
       </Avatar>
       <div

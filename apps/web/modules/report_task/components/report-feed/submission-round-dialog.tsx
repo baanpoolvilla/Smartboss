@@ -6,7 +6,7 @@ import { Input } from "@/modules/report_task/components/ui/input";
 import { Label } from "@/modules/report_task/components/ui/label";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
-import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { TimePickerField } from "@/modules/report_task/components/shared/time-picker-field";
 import { departments, getDepartment, users } from "@/modules/report_task/lib/directory";
 import { useReportFeedStore, type SubmissionRound, type SubmitterRule } from "@/modules/report_task/store/report-feed-store";
@@ -64,6 +64,7 @@ function MemberChecklist({
             >
               <Checkbox checked={on} className="pointer-events-none" />
               <Avatar className="h-6 w-6">
+                <AvatarImage src={u.avatarUrl ?? undefined} alt={u.name} />
                 <AvatarFallback className="text-[10px]">{u.name.slice(0, 2)}</AvatarFallback>
               </Avatar>
               <span className="flex-1 truncate text-sm">{u.name}</span>

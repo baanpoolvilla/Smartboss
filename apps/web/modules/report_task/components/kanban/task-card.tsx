@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useState, type CSSProperties, type KeyboardEvent } from "react";
-import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Progress } from "@/modules/report_task/components/ui/progress";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/modules/report_task/components/ui/tooltip";
@@ -346,6 +346,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
           {pendingOverdueAssignees.map((u) => (
             <div key={u!.id} className="flex items-center gap-1.5">
               <Avatar className="h-4 w-4 shrink-0">
+                <AvatarImage src={u!.avatarUrl ?? undefined} alt={u!.name} />
                 <AvatarFallback className="text-[7px] bg-red-50 text-[var(--chart-red)]">{u!.avatar}</AvatarFallback>
               </Avatar>
               <span className="text-[10px] truncate">{u!.name}</span>
@@ -476,6 +477,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
               return (
                 <div key={a!.id} className="relative">
                   <Avatar className="h-6 w-6 ring-2 ring-white">
+                    <AvatarImage src={a!.avatarUrl ?? undefined} alt={a!.name} />
                     <AvatarFallback className="text-[9px] bg-[var(--accent)] text-[var(--brand-green-dark)]">
                       {a!.avatar}
                     </AvatarFallback>

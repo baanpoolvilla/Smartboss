@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/modules/report_task/components/ui/card";
-import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { getUser } from "@/modules/report_task/lib/directory";
 import { useTodoStore } from "@/modules/report_task/store/todo-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
@@ -84,6 +84,7 @@ export function TodoSidebar({
         </button>
         {owner && (
           <Avatar className="h-6 w-6 shrink-0" title={owner.name}>
+            <AvatarImage src={owner.avatarUrl ?? undefined} alt={owner.name} />
             <AvatarFallback className="text-[9px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{owner.avatar}</AvatarFallback>
           </Avatar>
         )}

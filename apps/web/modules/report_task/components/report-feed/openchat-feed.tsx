@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
-import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import {
   AlertDialog,
@@ -474,6 +474,7 @@ export function OpenchatFeed({
                       </div>
                     ) : (
                       <Avatar className="h-9 w-9 shrink-0 mt-0.5">
+                        <AvatarImage src={author?.avatarUrl ?? undefined} alt={author?.name} />
                         <AvatarFallback className="text-[11px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{author?.avatar}</AvatarFallback>
                       </Avatar>
                     )}

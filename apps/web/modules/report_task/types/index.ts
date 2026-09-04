@@ -23,7 +23,10 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  /** Fallback initials shown until avatarUrl loads (or when there isn't one) — never blank. */
   avatar: string;
+  /** Real photo, synced live from core.users.avatarUrl — null/undefined falls back to `avatar`. */
+  avatarUrl?: string | null;
   role: string;
   departmentId: string;
   /** Sees/edits everything company-wide — not scoped to one department like a department head. */

@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/modules/report_task/components/ui/card";
-import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Badge } from "@/modules/report_task/components/ui/badge";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { getUser, getDepartment } from "@/modules/report_task/lib/directory";
@@ -190,6 +190,7 @@ export function WorkSidebar({
                 <div className="flex items-center -space-x-1.5">
                   {attendees.slice(0, 4).map((a) => (
                     <Avatar key={a!.id} className="h-5 w-5 ring-2 ring-white" title={a!.name}>
+                      <AvatarImage src={a!.avatarUrl ?? undefined} alt={a!.name} />
                       <AvatarFallback className="text-[8px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{a!.avatar}</AvatarFallback>
                     </Avatar>
                   ))}
@@ -227,6 +228,7 @@ export function WorkSidebar({
         </div>
         {assignee && (
           <Avatar className="h-6 w-6 shrink-0">
+            <AvatarImage src={assignee.avatarUrl ?? undefined} alt={assignee.name} />
             <AvatarFallback className="text-[9px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{assignee.avatar}</AvatarFallback>
           </Avatar>
         )}
@@ -248,6 +250,7 @@ export function WorkSidebar({
         </div>
         {owner && (
           <Avatar className="h-6 w-6 shrink-0" title={owner.name}>
+            <AvatarImage src={owner.avatarUrl ?? undefined} alt={owner.name} />
             <AvatarFallback className="text-[9px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{owner.avatar}</AvatarFallback>
           </Avatar>
         )}

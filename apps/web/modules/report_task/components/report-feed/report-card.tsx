@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import {
@@ -890,6 +890,7 @@ export function ReportCard({
           not as one more round chip in a row of round chips. */}
       <div className="flex items-start gap-2.5 sm:gap-3.5">
         <Avatar className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 rounded-xl after:rounded-xl">
+          <AvatarImage src={author?.avatarUrl ?? undefined} alt={author?.name} />
           <AvatarFallback className="rounded-xl text-xs font-semibold bg-[var(--accent)] text-[var(--brand-green-dark)]">{author?.avatar}</AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1">
@@ -1216,6 +1217,7 @@ export function ReportCard({
               style={replyHighlight ? { borderColor: replyHighlight } : { borderColor: "var(--line)" }}
             >
               <Avatar className="h-6 w-6 shrink-0">
+                <AvatarImage src={viewer?.avatarUrl ?? undefined} alt={viewer?.name} />
                 <AvatarFallback className="text-[9px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{viewer?.avatar}</AvatarFallback>
               </Avatar>
               <div

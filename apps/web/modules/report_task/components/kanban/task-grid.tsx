@@ -18,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/modules/report_task/components/ui/table";
-import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
 import {
   Select,
@@ -233,6 +233,7 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
             <div className="flex items-center -space-x-1.5" title={fullList}>
               {assignees.slice(0, 3).map((a) => (
                 <Avatar key={a!.id} className="h-6 w-6 ring-2 ring-white">
+                  <AvatarImage src={a!.avatarUrl ?? undefined} alt={a!.name} />
                   <AvatarFallback className="text-[9px] bg-[var(--accent)] text-[var(--brand-green-dark)]">
                     {a!.avatar}
                   </AvatarFallback>
@@ -908,6 +909,7 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
                             <div className="flex items-center -space-x-1.5 shrink-0">
                               {assignees.slice(0, 3).map((a) => (
                                 <Avatar key={a!.id} className="h-6 w-6 ring-2 ring-white">
+                                  <AvatarImage src={a!.avatarUrl ?? undefined} alt={a!.name} />
                                   <AvatarFallback className="text-[9px] bg-[var(--accent)] text-[var(--brand-green-dark)]">
                                     {a!.avatar}
                                   </AvatarFallback>

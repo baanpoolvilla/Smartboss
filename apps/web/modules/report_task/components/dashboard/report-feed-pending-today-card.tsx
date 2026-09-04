@@ -7,7 +7,7 @@ import { DASHBOARD_CARD } from "@/modules/report_task/components/dashboard/dashb
 import { ShowMoreToggle } from "@/modules/report_task/components/shared/show-more-toggle";
 import { useShowMore } from "@/modules/report_task/hooks/use-show-more";
 import { cn } from "@/modules/report_task/lib/utils";
-import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Badge } from "@/modules/report_task/components/ui/badge";
 import { Button } from "@/modules/report_task/components/ui/button";
 import {
@@ -74,11 +74,21 @@ export function ReportFeedPendingTodayCard() {
   }, [topics, posts, range, exemptions, personId, departmentId]);
 
   const missedByUser = useMemo(() => {
-    const counts = new Map<string, { userId: string; userName: string; userAvatar: string; count: number }>();
+    const counts = new Map<
+      string,
+      { userId: string; userName: string; userAvatar: string; userAvatarUrl: string | null; count: number }
+    >();
     for (const e of missed) {
       const row = counts.get(e.userId);
       if (row) row.count += 1;
-      else counts.set(e.userId, { userId: e.userId, userName: e.userName, userAvatar: e.userAvatar, count: 1 });
+      else
+        counts.set(e.userId, {
+          userId: e.userId,
+          userName: e.userName,
+          userAvatar: e.userAvatar,
+          userAvatarUrl: e.userAvatarUrl,
+          count: 1,
+        });
     }
     return Array.from(counts.values()).sort((a, b) => b.count - a.count);
   }, [missed]);
@@ -190,6 +200,7 @@ export function ReportFeedPendingTodayCard() {
                 className="flex items-center gap-2 py-2 border-b last:border-0 border-[var(--line)] -mx-1 px-1"
               >
                 <Avatar className="h-7 w-7 shrink-0">
+                  <AvatarImage src={row.userAvatarUrl ?? undefined} alt={row.userName} />
                   <AvatarFallback className="text-[10px] bg-[var(--bg-soft)] text-[var(--ink)]">{row.userAvatar}</AvatarFallback>
                 </Avatar>
                 <span className="text-sm font-medium truncate min-w-0 flex-1">{row.userName}</span>
@@ -250,6 +261,7 @@ function PendingRow({
       className="flex items-start justify-between gap-2 py-2.5 border-b last:border-0 border-[var(--line)] cursor-pointer hover:bg-[var(--bg-soft)] transition-colors -mx-1 px-1 rounded-lg"
     >
       <Avatar className="h-7 w-7 shrink-0 mt-0.5">
+        <AvatarImage src={e.userAvatarUrl ?? undefined} alt={e.userName} />
         <AvatarFallback className="text-[10px] bg-[var(--bg-soft)] text-[var(--ink)]">{e.userAvatar}</AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1">

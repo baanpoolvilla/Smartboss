@@ -5,7 +5,7 @@ import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/modules/
 import { DASHBOARD_CARD } from "@/modules/report_task/components/dashboard/dashboard-card-style";
 import { ShowMoreToggle } from "@/modules/report_task/components/shared/show-more-toggle";
 import { useShowMore } from "@/modules/report_task/hooks/use-show-more";
-import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Badge } from "@/modules/report_task/components/ui/badge";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { getUser, getDepartment, isOwner } from "@/modules/report_task/lib/directory";
@@ -149,6 +149,7 @@ export function EscalationsPanel() {
               className="flex items-start justify-between gap-2 py-2.5 border-b last:border-0 border-[var(--line)] cursor-pointer hover:bg-[var(--bg-soft)] transition-colors -mx-1 px-1 rounded-lg"
             >
               <Avatar className="h-7 w-7 shrink-0 mt-0.5">
+                <AvatarImage src={assignee?.avatarUrl ?? undefined} alt={assignee?.name} />
                 <AvatarFallback className="text-[10px] bg-[var(--bg-soft)] text-[var(--ink)]">{assignee?.avatar}</AvatarFallback>
               </Avatar>
               <div className="min-w-0 flex-1">

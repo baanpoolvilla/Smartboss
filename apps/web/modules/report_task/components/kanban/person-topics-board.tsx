@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { ArrowLeft, ChevronLeft, ChevronRight, FolderKanban, SearchX, X } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import {
   Select,
   SelectContent,
@@ -180,6 +180,7 @@ export function PersonTopicsBoard({
           <ArrowLeft className="h-4.5 w-4.5" />
         </button>
         <Avatar className="h-7 w-7 shrink-0">
+          <AvatarImage src={person?.avatarUrl ?? undefined} alt={person?.name} />
           <AvatarFallback className="text-[10px]">{person?.avatar}</AvatarFallback>
         </Avatar>
         <h2 className="text-sm font-semibold truncate min-w-0 shrink">งานของ {person?.name ?? "—"} แยกตามหัวข้อโปรเจค</h2>

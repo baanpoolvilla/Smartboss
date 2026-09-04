@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { Users } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { EmptyState } from "@/modules/report_task/components/shared/empty-state";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { getDepartment, scopedUsers } from "@/modules/report_task/lib/directory";
@@ -108,6 +108,7 @@ export function WorkloadView() {
             <div key={r.user.id} className="flex flex-col gap-2 px-5 py-3 hover:bg-[var(--bg-soft)] transition-colors sm:flex-row sm:items-center sm:gap-3">
               <div className="flex items-center gap-3 sm:contents">
                 <Avatar className="h-9 w-9 shrink-0">
+                  <AvatarImage src={r.user.avatarUrl ?? undefined} alt={r.user.name} />
                   <AvatarFallback className="text-[10px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{r.user.avatar}</AvatarFallback>
                 </Avatar>
 

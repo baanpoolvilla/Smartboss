@@ -26,7 +26,7 @@ import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-r
 import { DatePresetPicker } from "@/modules/report_task/components/report-analytics/date-preset-picker";
 import { presetRange, type DatePreset } from "@/modules/report_task/lib/date-filter";
 import { cn } from "@/modules/report_task/lib/utils";
-import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Badge } from "@/modules/report_task/components/ui/badge";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
@@ -900,6 +900,7 @@ export function ReportTopicPanels({
                   <div key={r.id} className="flex items-center justify-between gap-2 py-1.5 border-b last:border-0 border-[var(--line)]">
                     <div className="flex items-center gap-2 min-w-0">
                       <Avatar className="h-6 w-6 shrink-0">
+                        <AvatarImage src={user?.avatarUrl ?? undefined} alt={user?.name} />
                         <AvatarFallback className="text-[10px] bg-[var(--accent)] text-[var(--brand-green-dark)]">
                           {user?.avatar}
                         </AvatarFallback>
@@ -941,6 +942,7 @@ export function ReportTopicPanels({
               <div key={user.id} className="flex items-center justify-between gap-2 py-1.5 border-b last:border-0 border-[var(--line)]">
                 <div className="flex items-center gap-2 min-w-0">
                   <Avatar className="h-6 w-6 shrink-0">
+                    <AvatarImage src={user.avatarUrl ?? undefined} alt={user.name} />
                     <AvatarFallback className="text-[10px] bg-[var(--accent)] text-[var(--brand-green-dark)]">
                       {user.avatar}
                     </AvatarFallback>

@@ -5,7 +5,7 @@ import { Button } from "@/modules/report_task/components/ui/button";
 import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
-import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { getDepartment, departments, users } from "@/modules/report_task/lib/directory";
 import { useSettingsAccessStore, type GrantableSection } from "@/modules/report_task/store/settings-access-store";
 import { toast } from "sonner";
@@ -125,6 +125,7 @@ export function SettingsAccessPanel() {
               >
                 <div className="flex items-center gap-2 min-w-0">
                   <Avatar className="h-7 w-7 shrink-0">
+                    <AvatarImage src={u.avatarUrl ?? undefined} alt={u.name} />
                     <AvatarFallback className="text-[11px]">{u.avatar}</AvatarFallback>
                   </Avatar>
                   <div className="min-w-0">

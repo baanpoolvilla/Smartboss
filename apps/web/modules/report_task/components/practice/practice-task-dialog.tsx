@@ -14,7 +14,7 @@ import {
 } from "@/modules/report_task/components/ui/alert-dialog";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Input } from "@/modules/report_task/components/ui/input";
-import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
 import { getUser } from "@/modules/report_task/lib/directory";
 import { usePracticeStore, practiceUsers } from "@/modules/report_task/store/practice-store";
@@ -192,6 +192,7 @@ export function PracticeTaskDialog({
                   return (
                     <div key={c.id} className="flex items-start gap-2">
                       <Avatar className="h-6 w-6 shrink-0">
+                        <AvatarImage src={author?.avatarUrl ?? undefined} alt={author?.name} />
                         <AvatarFallback className="text-[9px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{author?.avatar}</AvatarFallback>
                       </Avatar>
                       <div className="min-w-0 flex-1 rounded-lg bg-[var(--bg-soft)] px-2.5 py-1.5">

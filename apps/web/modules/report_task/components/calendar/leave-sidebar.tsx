@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/modules/report_task/components/ui/card";
-import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Badge } from "@/modules/report_task/components/ui/badge";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
@@ -373,6 +373,7 @@ export function LeaveSidebar({
             return (
               <div key={e.id} className="flex items-center gap-2.5">
                 <Avatar className="h-8 w-8">
+                  <AvatarImage src={user?.avatarUrl ?? undefined} alt={user?.name} />
                   <AvatarFallback className="text-[10px] bg-[var(--bg-soft)]">{user?.avatar}</AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1">

@@ -20,7 +20,7 @@ import {
   AlertDialogCancel,
 } from "@/modules/report_task/components/ui/alert-dialog";
 import { Badge } from "@/modules/report_task/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount } from "@/modules/report_task/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/modules/report_task/components/ui/tooltip";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Input } from "@/modules/report_task/components/ui/input";
@@ -156,6 +156,7 @@ export function EventDetailDialog({
               {user && (
                 <div className="flex items-center gap-2.5">
                   <Avatar className="h-8 w-8">
+                    <AvatarImage src={user.avatarUrl ?? undefined} alt={user.name} />
                     <AvatarFallback className="text-[10px] bg-[var(--accent)] text-[var(--brand-green-dark)]">
                       {user.avatar}
                     </AvatarFallback>
@@ -192,6 +193,7 @@ export function EventDetailDialog({
                             <TooltipTrigger
                               render={
                                 <Avatar size="sm">
+                                  <AvatarImage src={u.avatarUrl ?? undefined} alt={u.name} />
                                   <AvatarFallback className="text-[9px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{u.avatar}</AvatarFallback>
                                 </Avatar>
                               }

@@ -27,6 +27,9 @@ export interface DirectoryUser {
   name: string;
   email: string;
   avatar: string;
+  /** รูปโปรไฟล์จริง — มาจาก core.users.avatarUrl เสมอ เหมือน id/name/email
+   * ด้านบน ไม่ใช่ข้อมูลเฉพาะโมดูล จึงไม่มีทางตั้งค่าแยกที่นี่แบบตัวย่อ */
+  avatarUrl: string | null;
   role: string;
   departmentId: string;
   isOwner?: boolean;
@@ -74,6 +77,7 @@ export async function listDirectory(orgId: string): Promise<DirectoryUser[]> {
         id: true,
         name: true,
         email: true,
+        avatarUrl: true,
         departmentId: true,
         roles: { select: { role: { select: { code: true, name: true } } } },
       },
@@ -93,6 +97,7 @@ export async function listDirectory(orgId: string): Promise<DirectoryUser[]> {
       name: u.name,
       email: u.email,
       avatar: p.avatar || initialsOf(u.name),
+      avatarUrl: u.avatarUrl,
       role: primaryRoleOf(u.roles)?.role.name || "พนักงาน",
       departmentId: u.departmentId ?? "",
       isOwner: (p.isOwnerOverride ?? roleDerived) || undefined,

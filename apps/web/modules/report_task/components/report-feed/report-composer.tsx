@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/modules/report_task/components/ui/button";
-import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { getUser, canManage } from "@/modules/report_task/lib/directory";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useReportFeedStore, type ReportPostImage, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
@@ -239,6 +239,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
       <div className="max-h-[50vh] overflow-y-auto px-5 pt-4 space-y-3">
         <div className="flex items-center gap-2.5">
           <Avatar className="h-8 w-8 shrink-0">
+            <AvatarImage src={viewer.avatarUrl ?? undefined} alt={viewer.name} />
             <AvatarFallback className="text-[10px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{viewer.avatar}</AvatarFallback>
           </Avatar>
           <p className="text-sm font-medium">{viewer.name}</p>
