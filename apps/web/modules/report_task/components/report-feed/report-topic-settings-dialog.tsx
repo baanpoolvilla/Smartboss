@@ -438,6 +438,13 @@ export function ReportTopicSettingsPanel({
         </div>
 
         <SubmissionRoundDialog
+          // key forces a remount whenever which round is being edited
+          // changes (including switching to/from "add new") — its form
+          // fields are plain useState seeded from `initial` once on mount,
+          // so without this, opening it for a different round (or a second
+          // "add" after editing one) kept showing whatever was left over
+          // from the previous open instead of that round's real values.
+          key={editingRound?.id ?? "new"}
           open={roundDialogOpen}
           onOpenChange={setRoundDialogOpen}
           initial={editingRound}
