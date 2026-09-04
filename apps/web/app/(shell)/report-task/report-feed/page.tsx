@@ -349,8 +349,8 @@ function ReportFeedPageInner() {
   // Header pills (H1) — who's behind "ส่งแล้ววันนี้/ส่งช้า/ยังไม่ส่ง", not
   // just the count. Only computed once a pill's actually been clicked.
   const todayStatus = useMemo(
-    () => (todayStatusFilter ? todayStatusEntries(visibleTopics, posts, exemptions) : []),
-    [todayStatusFilter, visibleTopics, posts, exemptions]
+    () => (todayStatusFilter && activeTopic ? todayStatusEntries([activeTopic], posts, exemptions) : []),
+    [todayStatusFilter, activeTopic, posts, exemptions]
   );
   const topicPosts = posts
     .filter((p) => p.topicId === activeId)
@@ -690,7 +690,7 @@ function ReportFeedPageInner() {
                   <div className="hidden sm:flex items-center gap-1 ml-auto">
                     <ReportComplianceBar
                       variant="mini"
-                      visibleTopics={visibleTopics}
+                      visibleTopics={activeTopic ? [activeTopic] : []}
                       onJumpToPost={(topicId, postId) => {
                         selectView(topicId);
                         setHighlightPostId(postId);
@@ -1128,7 +1128,7 @@ function TodayStatusPanel({
         </span>
         <div>
           <h2 className="text-[16px] font-semibold leading-tight">{meta.title}</h2>
-          <p className="text-xs text-[var(--ink-soft)] leading-tight">{entries.length} คน — จากทุกห้องที่มีรอบตัดยอด</p>
+          <p className="text-xs text-[var(--ink-soft)] leading-tight">{entries.length} คน — ในห้องนี้</p>
         </div>
       </div>
       {entries.length === 0 ? (

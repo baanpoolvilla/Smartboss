@@ -164,7 +164,7 @@ function CompliancePill({
   mini?: boolean;
 }) {
   const toneStyle = tone ? pillToneStyles[tone] : null;
-  const title = `${label}: ${value} — ดูรายละเอียดใน ภาพรวมทั้งหมด`;
+  const title = `${label}: ${value} — ดูรายละเอียดของห้องนี้`;
 
   if (mini) {
     // Round 2, explicit instruction: back to a single line ("ส่งแล้ว 0/4"),
