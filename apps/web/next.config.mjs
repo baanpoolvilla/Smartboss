@@ -26,6 +26,20 @@ const nextConfig = {
    * Turbopack เป็นค่าเริ่มต้นแล้วและ build จะ error ทันทีถ้ามี webpack config ค้างอยู่
    */
   serverExternalPackages: NATIVE_EXTERNALS,
+  /*
+   * ค่าเริ่มต้นของ Next คือ 1MB — ต่ำกว่ารูปถ่ายมือถือทั่วไปแทบทุกใบ
+   * (รูปโปรไฟล์จำกัดไว้ 5MB ที่ apps/web/app/(shell)/account/actions.ts)
+   * ไม่ตั้งตรงนี้ให้ตามกัน ทุก Server Action ที่รับไฟล์ใหญ่กว่า 1MB จะโดน Next
+   * ปัดตกเองก่อนถึงโค้ดเรา ด้วย 500 ที่ไม่มีข้อความ (เจอจริงตอน deploy ฟีเจอร์
+   * รูปโปรไฟล์ — log ฝั่งเซิร์ฟเวอร์เท่านั้นที่บอกว่า "Body exceeded 1 MB limit")
+   *
+   * ตั้งสูงกว่าเพดานไฟล์แอปเผื่อ overhead ของ multipart encoding
+   */
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "6mb",
+    },
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
