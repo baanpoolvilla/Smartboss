@@ -102,8 +102,15 @@ function minImagesFor(topic: ReportTopic, atIso: string): number {
   return round?.minImages ?? topic.minImages;
 }
 
+/** Excludes posts the poster explicitly marked "ไม่นับเป็นการส่ง daily"
+ * (`excludeFromSubmission`) — a casual update/comment made as a real top-
+ * level post, not a reply, but never meant to satisfy that day's round.
+ * The single choke point every compliance function below reads posts
+ * through, so this exclusion applies everywhere at once. */
 function postsForDay(topic: ReportTopic, userId: string, day: string, posts: ReportPost[]): ReportPost[] {
-  return posts.filter((p) => p.topicId === topic.id && p.authorId === userId && localDateStr(new Date(p.createdAt)) === day);
+  return posts.filter(
+    (p) => p.topicId === topic.id && p.authorId === userId && !p.excludeFromSubmission && localDateStr(new Date(p.createdAt)) === day
+  );
 }
 
 /** Inclusive list of "YYYY-MM-DD" strings from `startStr` to `endStr` — capped defensively so a bad range can't spin forever. Exported for lib/ai-insight/aggregate.ts, which needs the same day-walking logic server-side against a real DirectoryUser[] instead of the client-only `users`/`departments` this file's own per-viewer functions (reportStatusCountsByUser, mustReportToTopic, ...) read from lib/directory.ts. */
