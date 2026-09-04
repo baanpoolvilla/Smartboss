@@ -94,6 +94,7 @@ import {
   User,
   X,
 } from "lucide-react";
+import { uuid } from "@/modules/report_task/lib/uuid";
 
 const reactionEmojis = ["👍", "❤️", "🎉", "😂", "😮", "😢"];
 const LONG_POST_BULLET_THRESHOLD = 8;
@@ -566,7 +567,7 @@ export function ReportCard({
     try {
       for (const file of Array.from(files).slice(0, available)) {
         const media = await uploadReportMedia(file);
-        next.push({ id: `img-${crypto.randomUUID()}`, url: media.url, name: media.name, mime: media.mime, size: media.size });
+        next.push({ id: `img-${uuid()}`, url: media.url, name: media.name, mime: media.mime, size: media.size });
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "แนบไฟล์ไม่สำเร็จบางไฟล์ — ลองใหม่อีกครั้ง");
@@ -595,7 +596,7 @@ export function ReportCard({
     }
     try {
       const media = await uploadReportMedia(file);
-      setReplyImages((prev) => [...prev, { id: `img-${crypto.randomUUID()}`, url: media.url, name: file.name || "pasted-image.png", mime: media.mime, size: media.size }]);
+      setReplyImages((prev) => [...prev, { id: `img-${uuid()}`, url: media.url, name: file.name || "pasted-image.png", mime: media.mime, size: media.size }]);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "แนบรูปที่วางไม่สำเร็จ");
     }
@@ -1729,7 +1730,7 @@ function EditPostForm({
     try {
       for (const file of files.slice(0, available)) {
         const media = await uploadReportMedia(file);
-        next.push({ id: `img-${crypto.randomUUID()}`, url: media.url, name: media.name, mime: media.mime, size: media.size });
+        next.push({ id: `img-${uuid()}`, url: media.url, name: media.name, mime: media.mime, size: media.size });
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "แนบไฟล์ไม่สำเร็จบางไฟล์ — ลองใหม่อีกครั้ง");

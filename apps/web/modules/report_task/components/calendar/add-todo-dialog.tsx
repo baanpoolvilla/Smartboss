@@ -33,6 +33,7 @@ import { canManage, departmentIdsOf } from "@/modules/report_task/lib/directory"
 import { X, Trash2, Bell } from "lucide-react";
 import { toast } from "sonner";
 import type { CalendarEvent, TodoItem } from "@/modules/report_task/types";
+import { uuid } from "@/modules/report_task/lib/uuid";
 
 // Exported so DeadlineReminderSettingsPanel's "สิ่งที่ต้องทำ" default picker
 // offers the exact same choices this dialog's own per-item picker does —
@@ -111,7 +112,7 @@ export function AddTodoDialog({
     if (isMeeting && canCreateMeeting) {
       const meetDeptIds = departmentIdsOf(meetAttendeeIds);
       const meeting: CalendarEvent = {
-        id: `meet-${crypto.randomUUID()}`,
+        id: `meet-${uuid()}`,
         title: trimmed,
         type: "meeting",
         start: `${date}T${meetStart}:00`,
@@ -144,7 +145,7 @@ export function AddTodoDialog({
       });
     } else {
       addTodo({
-        id: `todo-${crypto.randomUUID()}`,
+        id: `todo-${uuid()}`,
         userId: viewingAsUserId,
         date,
         title: trimmed,

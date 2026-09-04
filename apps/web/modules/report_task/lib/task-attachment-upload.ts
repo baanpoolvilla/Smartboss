@@ -2,6 +2,7 @@ import { uploadCompressedImage } from "@/modules/report_task/lib/image-resize";
 import { formatFileSize } from "@/modules/report_task/lib/format";
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import type { Attachment } from "@/modules/report_task/types";
+import { uuid } from "@/modules/report_task/lib/uuid";
 
 /** Short Thai label for the attachment list — shown next to the size, e.g. "PDF · 1.2 MB". */
 function labelFor(mime: string): string {
@@ -58,7 +59,7 @@ export async function uploadTaskAttachment(file: File, uploadedBy: string): Prom
   }
 
   return {
-    id: `att-${crypto.randomUUID()}`,
+    id: `att-${uuid()}`,
     name: file.name || "ไฟล์แนบ",
     size: formatFileSize(size),
     type: labelFor(mime),

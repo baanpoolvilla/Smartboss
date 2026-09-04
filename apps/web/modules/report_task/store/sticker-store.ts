@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { defaultStickers } from "@/modules/report_task/data/stickers";
 import type { Sticker } from "@/modules/report_task/types";
+import { uuid } from "@/modules/report_task/lib/uuid";
 
 interface StickerStore {
   stickers: Sticker[];
@@ -17,7 +18,7 @@ export const useStickerStore = create<StickerStore>()((set) => ({
   stickers: defaultStickers,
   addSticker: (sticker) =>
     set((s) => ({
-      stickers: [...s.stickers, { ...sticker, id: `stk-${crypto.randomUUID()}` }],
+      stickers: [...s.stickers, { ...sticker, id: `stk-${uuid()}` }],
     })),
   updateSticker: (id, patch) =>
     set((s) => ({

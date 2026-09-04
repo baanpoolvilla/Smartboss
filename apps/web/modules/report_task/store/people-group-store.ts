@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { uuid } from "@/modules/report_task/lib/uuid";
 
 /** A named, reusable set of people — e.g. "ทีมการตลาด" — for quick-picking in attendee pickers. */
 export interface PeopleGroup {
@@ -18,6 +19,6 @@ interface PeopleGroupStore {
 export const usePeopleGroupStore = create<PeopleGroupStore>()((set) => ({
   groups: [],
   addGroup: (name, userIds) =>
-    set((s) => ({ groups: [...s.groups, { id: `grp-${crypto.randomUUID()}`, name, userIds }] })),
+    set((s) => ({ groups: [...s.groups, { id: `grp-${uuid()}`, name, userIds }] })),
   removeGroup: (id) => set((s) => ({ groups: s.groups.filter((g) => g.id !== id) })),
 }));

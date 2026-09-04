@@ -27,6 +27,7 @@ import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/r
 import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
 import { toast } from "sonner";
+import { uuid } from "@/modules/report_task/lib/uuid";
 
 interface MentionItem {
   type: MentionType;
@@ -41,7 +42,7 @@ export const DRAG_MENTION_TOPIC_MIME = "application/x-mention-topic";
 export type DraftSection = ReportPostSection & { bulletsText: string };
 
 export const newSection = (): DraftSection => ({
-  id: `sec-${crypto.randomUUID()}`,
+  id: `sec-${uuid()}`,
   heading: "",
   bullets: [],
   bulletsText: "",
@@ -393,7 +394,7 @@ export function ReportPostFields({
     }
     try {
       const media = await uploadReportMedia(file);
-      onImagesChange([...images, { id: `img-${crypto.randomUUID()}`, url: media.url, name: file.name || "pasted-image.png", mime: media.mime }]);
+      onImagesChange([...images, { id: `img-${uuid()}`, url: media.url, name: file.name || "pasted-image.png", mime: media.mime }]);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "แนบรูปที่วางไม่สำเร็จ");
     }

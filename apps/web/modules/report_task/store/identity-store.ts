@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
+import { safeLocalStorage } from "@/modules/report_task/lib/safe-storage";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 
 interface IdentityStore {
@@ -36,6 +37,7 @@ export const useIdentityStore = create<IdentityStore>()(
     {
       name: "eb-identity",
       skipHydration: true,
+      storage: createJSONStorage(() => safeLocalStorage),
     }
   )
 );

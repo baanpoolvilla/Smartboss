@@ -19,6 +19,7 @@ import type { Sticker } from "@/modules/report_task/types";
 import { AlarmClockOff, Plus, Save, Trash2 } from "lucide-react";
 import { cn } from "@/modules/report_task/lib/utils";
 import { toast } from "sonner";
+import { uuid } from "@/modules/report_task/lib/uuid";
 
 /** Sticker rewards + missed-deadline penalty default — company-wide config, lives on the settings page (src/app/settings/page.tsx). */
 export function StickerManagerPanel() {
@@ -60,7 +61,7 @@ export function StickerManagerPanel() {
 
   function handleAdd() {
     if (!newEmoji.trim() || !newLabel.trim()) return;
-    setDraftStickers((list) => [...list, { id: `stk-${crypto.randomUUID()}`, emoji: newEmoji.trim(), label: newLabel.trim(), points: newPoints }]);
+    setDraftStickers((list) => [...list, { id: `stk-${uuid()}`, emoji: newEmoji.trim(), label: newLabel.trim(), points: newPoints }]);
     setNewEmoji("");
     setNewLabel("");
     setNewPoints(0);

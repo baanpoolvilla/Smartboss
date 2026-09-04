@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { User } from "@/modules/report_task/types";
+import { uuid } from "@/modules/report_task/lib/uuid";
 
 // Seed matches the org chart data/mock.ts shipped with before this store
 // existed — first-run default only; once ServerStoreSync's GET resolves,
@@ -41,7 +42,7 @@ interface EmployeeStore {
 export const useEmployeeStore = create<EmployeeStore>()((set) => ({
   employees: defaultEmployees,
   addEmployee: (u) => {
-    const id = `usr-${crypto.randomUUID()}`;
+    const id = `usr-${uuid()}`;
     set((s) => ({ employees: [...s.employees, { ...u, id }] }));
     return id;
   },

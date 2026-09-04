@@ -82,6 +82,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
+import { uuid } from "@/modules/report_task/lib/uuid";
 
 type ItemType = "task" | "meeting" | "leave" | "dayoff";
 
@@ -529,7 +530,7 @@ export function NewTaskDialog({
     const attachments = await buildAttachments(taskFiles, viewingAsUserId);
     const now = new Date().toISOString();
     const checklist: ChecklistItem[] = checklistItems.map((c) => ({
-      id: `task-chk-${crypto.randomUUID()}`,
+      id: `task-chk-${uuid()}`,
       text: c.text,
       done: false,
       ownerId: c.ownerId || assigneeIds[0],
@@ -549,7 +550,7 @@ export function NewTaskDialog({
       // collide, and with the file-backed store's whole-collection
       // write-through, a colliding id means one task silently overwrites
       // the other.
-      id: `task-${crypto.randomUUID()}`,
+      id: `task-${uuid()}`,
       title: title.trim(),
       description: description.trim(),
       status: "todo",
@@ -583,7 +584,7 @@ export function NewTaskDialog({
   async function createMeeting() {
     const attachments = await buildAttachments(meetFiles, viewingAsUserId);
     const meeting: CalendarEvent = {
-      id: `meet-${crypto.randomUUID()}`,
+      id: `meet-${uuid()}`,
       title: title.trim(),
       type: "meeting",
       start: meetAllDay ? meetDate : `${meetDate}T${meetStart}:00`,
@@ -618,7 +619,7 @@ export function NewTaskDialog({
     const isHalfDay = !leaveAllDay && leaveStart === leaveEnd;
     const leaveLabel = leaveTypes.find((t) => t.id === leaveType)?.label ?? "ลา";
     const leave: CalendarEvent = {
-      id: `leave-${crypto.randomUUID()}`,
+      id: `leave-${uuid()}`,
       title: `${user?.name.split(" ")[0]} - ${leaveLabel}${isHalfDay ? ` (${leaveStartTime}-${leaveEndTime})` : ""}`,
       type: "leave",
       start: leaveStart,
@@ -702,7 +703,7 @@ export function NewTaskDialog({
     const text = newChecklistText.trim();
     if (!text) return;
     const ownerId = taskMode === "individual" ? (assigneeIds[0] ?? "") : newChecklistOwnerId || assigneeIds[0] || "";
-    setChecklistItems((prev) => [...prev, { id: `draft-${crypto.randomUUID()}`, text, ownerId }]);
+    setChecklistItems((prev) => [...prev, { id: `draft-${uuid()}`, text, ownerId }]);
     setNewChecklistText("");
   }
 

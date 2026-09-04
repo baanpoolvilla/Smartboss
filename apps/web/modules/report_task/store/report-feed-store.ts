@@ -3,6 +3,7 @@ import { users, getUser } from "@/modules/report_task/lib/directory";
 import { canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { extractMentionedIds } from "@/modules/report_task/lib/report-feed-rich-text";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
+import { uuid } from "@/modules/report_task/lib/uuid";
 
 /** Rooms created at/after this pick their `feedViewMode` once in the
  * create-room dialog and can't change it afterward (see that field's own
@@ -382,7 +383,7 @@ export const topicColors = [
   "var(--chart-red)",
 ];
 
-const nextId = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
+const nextId = (prefix: string) => `${prefix}-${uuid()}`;
 
 /** Drops `userId` from every reply's `unreadFor` in one post's replies —
  * shared by markTopicRead/markPostsRead so opening a room/post clears the
