@@ -26,15 +26,31 @@ async function drawToCanvas(file: File, maxWidth: number): Promise<HTMLCanvasEle
 }
 
 async function drawToCanvasViaBitmap(file: File, maxWidth: number): Promise<HTMLCanvasElement> {
-  const bitmap = await createImageBitmap(file);
+  // Two decodes, not one: the first is closed immediately and only ever used
+  // to read natural width/height. The second — the one whose pixels we
+  // actually keep — passes resizeWidth/resizeHeight so engines that support
+  // scaled decoding (WebKit included) downsample while decoding instead of
+  // ever materializing a full-resolution raster in memory. A 48-108MP iPhone
+  // Pro photo decoded at full res first (the previous version of this
+  // function) held that whole raster before the shrink even happened —
+  // exactly the peak-memory spike issue C is about. Closing the probe before
+  // starting the second decode keeps only one bitmap alive at a time.
+  const probe = await createImageBitmap(file);
+  const scale = Math.min(1, maxWidth / probe.width, maxWidth / probe.height);
+  let bitmap = probe;
+  if (scale < 1) {
+    const targetWidth = Math.max(1, Math.round(probe.width * scale));
+    const targetHeight = Math.max(1, Math.round(probe.height * scale));
+    probe.close();
+    bitmap = await createImageBitmap(file, { resizeWidth: targetWidth, resizeHeight: targetHeight, resizeQuality: "high" });
+  }
   try {
-    const scale = Math.min(1, maxWidth / bitmap.width);
     const canvas = document.createElement("canvas");
-    canvas.width = Math.round(bitmap.width * scale);
-    canvas.height = Math.round(bitmap.height * scale);
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("ไม่สามารถประมวลผลรูปภาพได้");
-    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bitmap, 0, 0);
     return canvas;
   } finally {
     bitmap.close();
