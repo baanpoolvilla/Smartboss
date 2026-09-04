@@ -562,7 +562,7 @@ export function TaskFilters({
         </SheetContent>
       </Sheet>
 
-      <NewTaskDialog open={newTaskOpen} onOpenChange={setNewTaskOpen} />
+      <NewTaskDialog open={newTaskOpen} onOpenChange={setNewTaskOpen} allowedTypes={["task"]} />
     </>
   );
 }
