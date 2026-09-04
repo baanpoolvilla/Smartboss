@@ -13,7 +13,7 @@ import { cutoffsOnDay } from "@/modules/report_task/lib/report-cutoff";
 import { localDateStr, now } from "@/modules/report_task/lib/now";
 import { cn } from "@/modules/report_task/lib/utils";
 import { ReportPostFields, newSection, type DraftSection } from "@/modules/report_task/components/report-feed/report-post-fields";
-import { Clock, Lock, Send, SquarePen } from "lucide-react";
+import { Clock, Lock, Send, SquarePen, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 
 function roundMinutesOf(time: string): number {
@@ -262,14 +262,27 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
                   key={r.id}
                   type="button"
                   onClick={() => setSelectedRoundId(r.id)}
+                  // ข้อความเต็ม ("เลยรอบนี้แล้ว — เลือกได้ แต่จะนับว่าส่งย้อนหลัง
+                  // = สาย") อยู่ใน title แทนตัวชิปเอง — บนตัวชิปเหลือแค่คำสั้นๆ
+                  // + สีแดง/ไอคอน ไม่งั้นชิปยาวเกินจนกินพื้นที่แนวตั้งมากบนจอมือถือ
+                  // ถึงจะ wrap ไม่ล้นจอก็ตาม
+                  title={late ? `${r.label} เลยเวลาปิดรอบแล้ว (${r.time}) — เลือกได้ แต่จะนับว่าส่งย้อนหลัง = สาย` : undefined}
                   className={cn(
                     "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11.5px] font-medium transition-colors",
-                    selected
-                      ? "border-[var(--brand-green)] bg-[var(--accent)] text-[var(--brand-green-dark)]"
-                      : "border-[var(--line)] bg-white text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+                    // เลยเวลารอบแล้ว = แดง เสมอ (เลือกอยู่หรือไม่ก็ตาม) — ให้เห็น
+                    // ชัดว่ารอบนี้ปิดไปแล้วโดยไม่ต้องอ่านข้อความ ไม่ใช่แค่ชิปเขียว
+                    // ปกติที่มีตัวหนังสือเล็กๆ ต่อท้ายเฉยๆ
+                    late
+                      ? selected
+                        ? "border-[var(--chart-red)] bg-red-50 text-[var(--chart-red)]"
+                        : "border-red-200 bg-red-50/70 text-[var(--chart-red)] hover:bg-red-50"
+                      : selected
+                        ? "border-[var(--brand-green)] bg-[var(--accent)] text-[var(--brand-green-dark)]"
+                        : "border-[var(--line)] bg-white text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
                   )}
                 >
-                  {r.label} ({r.time}){late && " · ส่งย้อนหลัง = สาย"}
+                  {late && <TriangleAlert className="h-3 w-3 shrink-0" />}
+                  {r.label} ({r.time}){late && <b className="font-semibold">&nbsp;· สาย</b>}
                 </button>
               );
             })}
