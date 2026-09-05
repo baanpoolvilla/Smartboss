@@ -213,13 +213,62 @@ export function LeaveCalendar({
                 const iAmOff = all.some((e) => e.mine);
                 const isToday = cell.iso === today;
                 const selectable = canRequest && cell.inMonth && !iAmOff;
+                const mine = all.find((e) => e.mine);
+                /*
+                 * ปุ่มสลับ/ยกเลิกอยู่ในแถวเดียวกับตัวเลขวันที่ ไม่ใช่ absolute ลอยทับ
+                 *
+                 * เดิมวางไว้ `absolute right-0.5 top-0.5` ซึ่งเป็นตำแหน่งเดียวกับ
+                 * ตัวเลขวันที่พอดี ⇒ ทับกันจนอ่านเป็นขยะบนตัวเลข เจ้าของถามเองว่า
+                 * "ไหนอะสลับวันหยุดหรือยกเลิกวันหยุด" ทั้งที่ปุ่มอยู่ตรงนั้นมาตลอด
+                 * ย้ายมาอยู่ใน flow ทางซ้ายของเลขวัน แล้วไม่ทับอะไรเลยไม่ว่าช่องนั้น
+                 * จะมีกี่คน · มีพื้นหลัง+ขอบให้เห็นว่าเป็นปุ่ม และ 28px ให้กดโดนบนมือถือ
+                 *
+                 * ไม่โผล่ตอนอยู่ในโหมดเลือกวันใหม่ (swapFrom) เพราะทั้งปฏิทินกลายเป็น
+                 * ตัวเลือกวันไปแล้ว การกดปุ่มซ้อนอยู่ข้างในจะยิ่งงง
+                 */
+                const showActions =
+                  swapFrom === null && !selectable && mine?.requestId !== undefined;
 
                 const body = (
                   <span
-                    className="flex h-full min-h-24 flex-col gap-0.5 border-b border-r border-(--line) p-1 transition-colors peer-checked:bg-(--app-soft) peer-checked:outline-2 peer-checked:-outline-offset-2 peer-checked:outline-(--app)"
+                    className="flex h-full min-h-28 flex-col gap-0.5 border-b border-r border-(--line) p-1 transition-colors peer-checked:bg-(--app-soft) peer-checked:outline-2 peer-checked:-outline-offset-2 peer-checked:outline-(--app)"
                     style={{ opacity: cell.inMonth ? 1 : 0.4 }}
                   >
-                    <span className="flex justify-end">
+                    <span className="flex min-h-7 items-center justify-between gap-1">
+                      <span className="flex gap-1">
+                        {showActions && mine?.leaveTypeId && (
+                          <button
+                            type="button"
+                            title="สลับวันหยุดนี้ไปวันอื่น (ต้องรออนุมัติ)"
+                            aria-label={`สลับวันหยุดวันที่ ${cell.iso} ไปวันอื่น`}
+                            onClick={() => {
+                              setSwapResult(null);
+                              setSwapFrom({ date: cell.iso, leaveTypeId: mine.leaveTypeId! });
+                            }}
+                            className="flex h-7 w-7 items-center justify-center rounded-full border border-(--line) bg-(--bg) text-sm font-bold text-(--ink-soft) shadow-sm transition-colors hover:border-(--app) hover:bg-(--app) hover:text-white"
+                          >
+                            ⇄
+                          </button>
+                        )}
+                        {showActions && (
+                          <button
+                            type="submit"
+                            formAction={cancelLeaveAction}
+                            name="requestId"
+                            value={mine!.requestId}
+                            title="ยกเลิกวันหยุดนี้"
+                            aria-label={`ยกเลิกวันหยุดวันที่ ${cell.iso}`}
+                            onClick={(e) => {
+                              if (!window.confirm(`ยกเลิกวันหยุดวันที่ ${cell.iso} ?`)) {
+                                e.preventDefault();
+                              }
+                            }}
+                            className="flex h-7 w-7 items-center justify-center rounded-full border border-(--line) bg-(--bg) text-sm font-bold text-(--ink-soft) shadow-sm transition-colors hover:border-(--danger) hover:bg-(--danger) hover:text-white"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </span>
                       <span
                         className="inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px]"
                         style={
@@ -236,37 +285,48 @@ export function LeaveCalendar({
                       </span>
                     </span>
 
-                    {entries.slice(0, 3).map((entry, index) => {
+                    {/*
+                      ชื่อคนกับชื่อวันหยุดคนละบรรทัด ไม่ใช่ต่อกันด้วย "-"
+                      ช่องวันกว้างไม่ถึง 5rem — "Katawut - Day-Off" บรรทัดเดียวโดน
+                      ตัดเหลือ "Katawut - D…" คือ **อ่านไม่ได้ทั้งชื่อและประเภท**
+                      แย่กว่าตอนที่ขึ้นแค่ชื่อเฉย ๆ · สองบรรทัดกินที่มากขึ้นจึงลด
+                      จำนวนที่แสดงจาก 3 เหลือ 2 แล้วยุบที่เหลือเป็น "+N คน"
+                    */}
+                    {entries.slice(0, 2).map((entry, index) => {
                       const hue = hueOf(entry.employmentId);
                       return (
                         <span
                           key={`${entry.employmentId}-${index}`}
                           title={`${entry.name}${entry.leaveTypeName ? ` · ${entry.leaveTypeName}` : ""} · ${entry.status === "APPROVED" ? "อนุมัติแล้ว" : "รออนุมัติ"}`}
-                          className="truncate rounded-sm border-l-2 px-1 text-[10px] leading-4"
+                          className="flex flex-col rounded-sm border-l-2 px-1 py-px"
                           style={{
                             borderLeftColor: `hsl(${hue} 60% 50%)`,
                             backgroundColor: `hsl(${hue} 85% 94%)`,
                             color: `hsl(${hue} 55% 30%)`,
-                            fontWeight: entry.mine ? 700 : 400,
                             // รออนุมัติ = จาง + มีจุด ต่างจากอนุมัติแล้วให้เห็นชัด
                             opacity: entry.status === "APPROVED" ? 1 : 0.65,
                           }}
                         >
-                          {/*
-                            ชื่อคน + ชื่อวันหยุด ("กตาวุฒิ - ลาป่วย") — เดิมขึ้นแต่ชื่อคน
-                            ซึ่งบอกไม่ได้ว่าวันนั้นเป็นวันหยุดประจำเดือน (ลงเองได้)
-                            หรือลาป่วย (ต้องหาคนแทน) ซึ่งเป็นสิ่งที่คนวางแผนงานต้องรู้
-                            ประเภทที่บริษัทตั้งให้เป็นเรื่องส่วนตัวจะได้ null มาแทน
-                          */}
-                          {entry.status === "PENDING" ? "• " : ""}
-                          {entry.leaveTypeName ? `${entry.name} - ${entry.leaveTypeName}` : entry.name}
+                          <span
+                            className="truncate text-[10px] leading-3"
+                            style={{ fontWeight: entry.mine ? 700 : 500 }}
+                          >
+                            {entry.status === "PENDING" ? "• " : ""}
+                            {entry.name}
+                          </span>
+                          {/* null = บริษัทตั้งให้ประเภทนี้ไม่ขึ้นชื่อบนปฏิทินรวม */}
+                          {entry.leaveTypeName && (
+                            <span className="truncate text-[9px] leading-3 opacity-70">
+                              {entry.leaveTypeName}
+                            </span>
+                          )}
                         </span>
                       );
                     })}
 
-                    {entries.length > 3 && (
+                    {entries.length > 2 && (
                       <span className="px-1 text-[10px] text-(--ink-soft)">
-                        +{entries.length - 3} คน
+                        +{entries.length - 2} คน
                       </span>
                     )}
                   </span>
@@ -297,49 +357,14 @@ export function LeaveCalendar({
                 }
 
                 if (!selectable) {
-                  // วันที่เป็นของฉันเอง (ติ๊กไว้แล้ว) มีปุ่มยกเลิก/สลับให้กด — ใช้
-                  // formAction ของปุ่มแทนการซ้อน <form> (ซ้อนฟอร์มทำไม่ได้ใน
-                  // HTML) ปุ่มนี้ยิงไปคนละ action จากปุ่ม "ขอหยุด" ด้านล่าง
-                  // แม้จะอยู่ใน <form> เดียวกัน · ปุ่มสลับไม่ใช่ formAction เพราะ
-                  // ต้องเข้าโหมดเลือกวันใหม่ก่อน ไม่ใช่ยิง request ทันที
-                  const mine = all.find((e) => e.mine);
-                  return (
-                    <span key={cell.iso} className="relative block">
-                      {body}
-                      {mine?.requestId && (
-                        <span className="absolute right-0.5 top-0.5 flex gap-0.5">
-                          {mine.leaveTypeId && (
-                            <button
-                              type="button"
-                              title="สลับวันหยุดนี้ไปวันอื่น (ต้องรออนุมัติ)"
-                              onClick={() => {
-                                setSwapResult(null);
-                                setSwapFrom({ date: cell.iso, leaveTypeId: mine.leaveTypeId! });
-                              }}
-                              className="flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold text-(--ink-soft) hover:bg-(--app) hover:text-white"
-                            >
-                              ⇄
-                            </button>
-                          )}
-                          <button
-                            type="submit"
-                            formAction={cancelLeaveAction}
-                            name="requestId"
-                            value={mine.requestId}
-                            title="ยกเลิกวันหยุดนี้"
-                            onClick={(e) => {
-                              if (!window.confirm(`ยกเลิกวันหยุดวันที่ ${cell.iso} ?`)) {
-                                e.preventDefault();
-                              }
-                            }}
-                            className="flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold text-(--ink-soft) hover:bg-(--danger) hover:text-white"
-                          >
-                            ×
-                          </button>
-                        </span>
-                      )}
-                    </span>
-                  );
+                  // วันที่เป็นของฉันเอง (ติ๊กไว้แล้ว) — ปุ่มยกเลิก/สลับถูกวาดอยู่ใน
+                  // แถวหัวช่องของ body แล้ว (ดู showActions) ที่นี่จึงเหลือแค่ห่อ
+                  //
+                  // ปุ่มยกเลิกใช้ formAction ของตัวมันเองแทนการซ้อน <form> (ซ้อน
+                  // ฟอร์มทำไม่ได้ใน HTML) จึงยิงไปคนละ action กับปุ่ม "ขอหยุด"
+                  // ด้านล่างได้ แม้อยู่ใน <form> เดียวกัน · ปุ่มสลับไม่ใช่ formAction
+                  // เพราะต้องเข้าโหมดเลือกวันใหม่ก่อน ไม่ใช่ยิง request ทันที
+                  return <span key={cell.iso} className="block">{body}</span>;
                 }
 
                 return (
