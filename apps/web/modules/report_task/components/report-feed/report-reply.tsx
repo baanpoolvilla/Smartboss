@@ -7,6 +7,7 @@ import { getUser } from "@/modules/report_task/lib/directory";
 import type { ReportPostImage, ReportPostReply } from "@/modules/report_task/store/report-feed-store";
 import { renderRichBulletText } from "@/modules/report_task/lib/report-feed-rich-text";
 import { cn } from "@/modules/report_task/lib/utils";
+import { isCoarsePointer } from "@/modules/report_task/lib/device";
 import { TimeAgo } from "@/modules/report_task/components/shared/time-ago";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
 
@@ -300,7 +301,7 @@ export function ReportReply({
               rows={2}
               className="w-full resize-none rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--brand-green)]/50"
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
+                if (e.key === "Enter" && !e.shiftKey && !isCoarsePointer()) {
                   e.preventDefault();
                   saveEdit();
                 } else if (e.key === "Escape") {

@@ -34,6 +34,7 @@ import { cn } from "@/modules/report_task/lib/utils";
 import { toast } from "sonner";
 import { Building2, Check, Hash, ImagePlus, MoreHorizontal, Pencil, Plus, Send, SmilePlus, Trash2, User, X } from "lucide-react";
 import { uuid } from "@/modules/report_task/lib/uuid";
+import { isCoarsePointer } from "@/modules/report_task/lib/device";
 
 const reactionEmojis = ["👍", "❤️", "🎉", "😂", "😮", "😢"];
 // A wider set than the 6-emoji reaction bar — this one's for *writing*, not
@@ -377,7 +378,7 @@ export function OpenchatFeed({
         return;
       }
     }
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !isCoarsePointer()) {
       e.preventDefault();
       if (!uploading) send();
     }
@@ -500,7 +501,7 @@ export function OpenchatFeed({
                             rows={2}
                             className="w-full resize-none rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--brand-green)]/50"
                             onKeyDown={(e) => {
-                              if (e.key === "Enter" && !e.shiftKey) {
+                              if (e.key === "Enter" && !e.shiftKey && !isCoarsePointer()) {
                                 e.preventDefault();
                                 saveEdit();
                               } else if (e.key === "Escape") setEditing(null);
