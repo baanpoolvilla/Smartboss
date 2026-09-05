@@ -78,7 +78,7 @@ export function ServerStoreSync<T, S>({
     // GET the current server slice + version. `slice` is null for a store the
     // company has never saved yet.
     async function fetchServer(): Promise<{ slice: S | null; version: number | null }> {
-      const res = await fetch(`/api/report-task/store/${apiKey}`);
+      const res = await fetch(`/api/report-task/store/${apiKey}`, { cache: "no-store" });
       const version = Number(res.headers.get("X-Data-Version")) || null;
       const slice = (await res.json()) as S | null;
       return { slice, version };
@@ -216,7 +216,7 @@ export function ServerStoreSync<T, S>({
             if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
             void (async () => {
               try {
-                const res = await fetch(`/api/report-task/store/${apiKey}`);
+                const res = await fetch(`/api/report-task/store/${apiKey}`, { cache: "no-store" });
                 const version = Number(res.headers.get("X-Data-Version")) || null;
                 if (version === versionRef.current) return; // nothing new
                 if (pendingRef.current || timerRef.current) return; // user started editing meanwhile

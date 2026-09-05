@@ -13,5 +13,5 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const session = await requireOrg();
   const version = await readTasksVersion(session.orgId);
-  return Response.json({ version }, { headers: { "X-Data-Version": String(version) } });
+  return Response.json({ version }, { headers: { "Cache-Control": "no-store", "X-Data-Version": String(version) } });
 }

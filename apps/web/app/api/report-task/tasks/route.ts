@@ -70,7 +70,7 @@ export async function GET() {
   const { tasks, version } = await readTasks(session.orgId);
   // บริษัทที่ยังไม่เคยบันทึก = ยังไม่มีงาน — คืนอาร์เรย์ว่าง ไม่ใช่ข้อมูลตัวอย่าง
   // (ต้นฉบับ seed ข้อมูลสาธิตให้ ซึ่งใช้กับบริษัทลูกค้าจริงไม่ได้)
-  return Response.json(tasks, { headers: { "X-Data-Version": String(version) } });
+  return Response.json(tasks, { headers: { "Cache-Control": "no-store", "X-Data-Version": String(version) } });
 }
 
 export async function PUT(request: NextRequest) {

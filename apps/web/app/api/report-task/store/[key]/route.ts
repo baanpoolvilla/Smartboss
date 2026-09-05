@@ -77,12 +77,12 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ ke
 
   if (key === DIRECTORY_KEY) {
     const users = await listDirectory(session.orgId);
-    return Response.json(users, { headers: { "X-Data-Version": "1" } });
+    return Response.json(users, { headers: { "Cache-Control": "no-store", "X-Data-Version": "1" } });
   }
 
   if (key === DEPARTMENTS_KEY) {
     const departments = await listDepartmentsWithOverlay(session.orgId);
-    return Response.json(departments, { headers: { "X-Data-Version": "1" } });
+    return Response.json(departments, { headers: { "Cache-Control": "no-store", "X-Data-Version": "1" } });
   }
 
   if (WORKFORCE_KEYS.has(key)) {
@@ -94,11 +94,11 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ ke
     // holidays store เก็บเป็น { holidays, selectedByUser } ส่วน leaves เป็นอาร์เรย์ตรง ๆ
     const payload =
       key === "holidays" ? { holidays: events, selectedByUser: {} } : events;
-    return Response.json(payload, { headers: { "X-Data-Version": "1" } });
+    return Response.json(payload, { headers: { "Cache-Control": "no-store", "X-Data-Version": "1" } });
   }
 
   const { data, version } = await readStore<unknown>(session.orgId, key);
-  return Response.json(data, { headers: { "X-Data-Version": String(version) } });
+  return Response.json(data, { headers: { "Cache-Control": "no-store", "X-Data-Version": String(version) } });
 }
 
 async function put(request: NextRequest, key: string) {
