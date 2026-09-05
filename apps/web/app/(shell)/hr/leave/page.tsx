@@ -144,7 +144,7 @@ export default async function LeavePage({
           <div className="flex flex-col gap-4">
             <SectionCard
               title={`${THAI_MONTH[m! - 1]} ${y! + 543}`}
-              description="คลิกวันที่จะหยุดแล้วกดขอ — แต่ละคนมีสีประจำตัว · แถบจางมีจุดนำหน้า = รออนุมัติ"
+              description="คลิกวันที่จะหยุดแล้วกดขอ · แถบจางมีจุดนำหน้า = รออนุมัติ · วันหยุดของคุณเองมีปุ่ม ⇄ สลับไปวันอื่น และ × ยกเลิก อยู่มุมซ้ายบนของช่อง"
               action={
                 <div className="flex gap-1">
                   <Link href={`/hr/leave?month=${shiftMonth(month, -1)}`}>
