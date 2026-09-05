@@ -11,6 +11,16 @@ export interface AppNotification {
   createdAt: string;
   read: boolean;
   meetingId?: string;
+  /** Which report-feed room this is about, if any — rendered as a small
+   * label ahead of the message so someone with several rooms open can tell
+   * where it happened without reading the whole sentence. Absent for
+   * notifications that aren't about a room at all (task/meeting/ticket).
+   * Stored as the room's name at the moment of the event (not a topicId to
+   * look up later) — cheap to render anywhere without also having to sync
+   * the whole report-feed store just to resolve one name, and a renamed or
+   * deleted room shouldn't rewrite what already happened in someone's
+   * notification history anyway. */
+  topicName?: string;
   /** Where clicking this notification should go — a relative in-app path.
    * Optional so existing callers that don't have anywhere specific to send
    * someone (or haven't been updated yet) keep rendering as plain, unclickable
@@ -22,7 +32,14 @@ interface NotificationStore {
   notifications: AppNotification[];
   notify: (n: Omit<AppNotification, "id" | "createdAt" | "read">) => void;
   /** Tag N people at once, skipping the actor themselves. */
-  notifyMany: (userIds: string[], byUserId: string, message: string, meetingId?: string, link?: string) => void;
+  notifyMany: (
+    userIds: string[],
+    byUserId: string,
+    message: string,
+    meetingId?: string,
+    link?: string,
+    topicName?: string
+  ) => void;
   markAllRead: (userId: string) => void;
 }
 
@@ -38,7 +55,7 @@ export const useNotificationStore = create<NotificationStore>()(
             ...s.notifications,
           ],
         })),
-      notifyMany: (userIds, byUserId, message, meetingId, link) =>
+      notifyMany: (userIds, byUserId, message, meetingId, link, topicName) =>
         set((s) => {
           const fresh = userIds
             .filter((id) => id !== byUserId)
@@ -49,6 +66,7 @@ export const useNotificationStore = create<NotificationStore>()(
               message,
               meetingId,
               link,
+              topicName,
               createdAt: new Date().toISOString(),
               read: false,
             }));
