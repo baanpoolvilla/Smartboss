@@ -599,7 +599,7 @@ export function TopicSidebar({
               e.stopPropagation();
               openCreate(t.id);
             }}
-            className="shrink-0 flex h-5 w-5 items-center justify-center rounded text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity"
+            className="shrink-0 flex h-5 w-5 items-center justify-center rounded text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] opacity-100 pointer-events-auto lg:opacity-0 lg:pointer-events-none lg:group-hover:opacity-100 lg:group-hover:pointer-events-auto transition-opacity"
             aria-label={`สร้างหัวข้อย่อยใต้ ${t.name}`}
             title={`สร้างหัวข้อย่อยใต้ "${t.name}"`}
           >
@@ -620,7 +620,7 @@ export function TopicSidebar({
               "shrink-0 flex h-5 w-5 items-center justify-center rounded text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] transition-opacity",
               favorited || tourOnStarStep
                 ? "opacity-100 text-amber-400 hover:text-amber-500"
-                : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto"
+                : "opacity-100 pointer-events-auto lg:opacity-0 lg:pointer-events-none lg:group-hover:opacity-100 lg:group-hover:pointer-events-auto"
             )}
             aria-label={favorited ? `เลิกติดดาว ${t.name}` : `ติดดาว ${t.name}`}
             title={favorited ? "เลิกติดดาว" : "ติดดาว"}
@@ -645,7 +645,7 @@ export function TopicSidebar({
                     "shrink-0 flex h-5 w-5 items-center justify-center rounded text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] transition-opacity",
                     hiddenForMe
                       ? "opacity-100"
-                      : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto"
+                      : "opacity-100 pointer-events-auto lg:opacity-0 lg:pointer-events-none lg:group-hover:opacity-100 lg:group-hover:pointer-events-auto"
                   )}
                   aria-label={`ตัวเลือกหัวข้อ ${t.name}`}
                 >
