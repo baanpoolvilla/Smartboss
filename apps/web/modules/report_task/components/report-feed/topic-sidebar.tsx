@@ -657,7 +657,20 @@ export function TopicSidebar({
                 </button>
               }
             />
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent
+              align="end"
+              // The row underneath opens/selects this topic on click
+              // (onSelect/toggleCollapsed). This menu's content renders into
+              // a portal, but React still bubbles its clicks up through the
+              // *component* tree rather than the DOM tree a portal actually
+              // sits in — so every item click here was also firing the row's
+              // own onClick underneath, silently navigating into (or
+              // collapsing) the topic every single time any menu action was
+              // used ("กด ...แล้วกด ติดดาว ทำไมเด้งไปหน้าอื่น"). One guard on
+              // the whole popup, not per item, so nothing added here later
+              // falls back into the same trap.
+              onClick={(e) => e.stopPropagation()}
+            >
               {/* Mobile: no hover, so the standalone ⭐/+ row buttons are
                   unreachable — surface them here instead so a phone user can
                   still favorite / add a sub-topic from the one ⋯ menu. */}
