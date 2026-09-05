@@ -205,14 +205,12 @@ function ModuleRail({
   pathname: string;
 }) {
   return (
-    <aside className="hidden w-[68px] shrink-0 flex-col items-center border-r border-(--line) bg-(--bg) lg:flex">
-      {/* หัวราง = ทางออกกลับไปหน้ารวมแอป (เหมือนกดปุ่ม home ของมือถือ) — ไอคอน
-          โมดูลอย่างเดียว ไม่มีชื่อยาว ให้เข้าชุดกับรางไอคอนด้านล่าง */}
+    <aside className="hidden w-[200px] shrink-0 flex-col border-r border-(--line) bg-(--bg) lg:flex">
+      {/* หัวราง = ทางออกกลับไปหน้ารวมแอป (เหมือนกดปุ่ม home ของมือถือ) */}
       <Link
         href="/"
         title="กลับหน้ารวมแอป"
-        aria-label="กลับหน้ารวมแอป"
-        className="flex h-[60px] w-full shrink-0 items-center justify-center border-b border-(--line) transition-colors hover:bg-(--bg-soft)"
+        className="flex h-[60px] shrink-0 items-center gap-2.5 border-b border-(--line) px-4 transition-colors hover:bg-(--bg-soft)"
       >
         <span
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]"
@@ -220,9 +218,12 @@ function ModuleRail({
         >
           <Icon name={module.icon} className="h-5 w-5" style={{ color: module.color }} />
         </span>
+        <span className="truncate text-sm font-bold text-(--ink)">
+          {module.name}
+        </span>
       </Link>
 
-      <nav className="flex flex-1 flex-col items-center gap-1 overflow-y-auto py-3">
+      <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
         {module.menus.map((menu) => (
           <RailItem
             key={menu.path}
@@ -243,19 +244,16 @@ function RailItem({ menu, active }: { menu: ModuleMenuItem; active: boolean }) {
       // ทุกอันพร้อมกันตอนเข้าโมดูล prefetch ค่าเริ่มต้นเลยยิงพร้อมกันหมด
       // ชน Prisma pool บน VM 2 core (เจอเป็นอาการ "กดเมนูข้างซ้ายหน่วง")
       prefetch={false}
-      // ไอคอนอย่างเดียว ไม่มีตัวอักษรค้าง — ชื่อเมนูยังอ่านได้ผ่าน tooltip ของ
-      // เบราว์เซอร์เอง (title) แทน แบบเดียวกับ Discord/Slack's icon rail
-      title={menu.label}
-      aria-label={menu.label}
       className={cn(
-        "relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-colors",
+        "flex h-12 items-center gap-3 rounded-xl px-3 text-sm transition-colors",
         active
-          ? "bg-(--app-soft,#CCFBF1) text-(--app-strong,var(--ink))"
+          ? "bg-(--app-soft,#CCFBF1) font-bold text-(--app-strong,var(--ink))"
           : "text-(--ink-soft) hover:bg-(--bg-soft)"
       )}
     >
-      <Icon name={menu.icon} className="h-5 w-5" />
-      {menu.badge && <span className="absolute -right-1 -top-1">{menu.badge}</span>}
+      <Icon name={menu.icon} className="h-5 w-5 shrink-0" />
+      <span className="truncate">{menu.label}</span>
+      {menu.badge}
     </Link>
   );
 }
