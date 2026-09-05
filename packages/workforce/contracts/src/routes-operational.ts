@@ -929,6 +929,16 @@ export const OPERATIONAL_ROUTES: readonly Omit<RouteDefinition, 'response'>[] = 
     successStatus: 200,
   },
   {
+    operationId: 'relabel_post',
+    method: 'post',
+    path: '/leave-requests/{requestId}/relabel',
+    summary: 'POST /leave-requests/{requestId}/relabel',
+    tag: 'workflow',
+    permissions: ['workforce.leave.request'] as Permission[],
+    idempotent: true,
+    successStatus: 200,
+  },
+  {
     operationId: 'cancel_for_post',
     method: 'post',
     path: '/leave-requests/{requestId}/cancel-for',

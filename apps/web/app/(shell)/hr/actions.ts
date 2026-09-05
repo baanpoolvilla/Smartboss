@@ -958,6 +958,8 @@ export async function submitLeaveAction(
   const leaveTypeId = String(formData.get("leave_type_id") ?? "");
   const dates = formData.getAll("day").map(String).sort();
   const reason = String(formData.get("reason") ?? "").trim();
+  // ชื่อที่ขึ้นบนปฏิทิน — ว่างได้ แล้วหน้าจอจะประกอบจาก "ชื่อคน - ประเภท" ให้เอง
+  const displayLabel = String(formData.get("display_label") ?? "").trim().slice(0, 60);
 
   if (!employmentId) {
     return { error: "บัญชีนี้ยังไม่ถูกผูกกับทะเบียนพนักงาน — แจ้งฝ่ายบุคคล" };
@@ -982,6 +984,7 @@ export async function submitLeaveAction(
           ends_on: day,
           total_minutes: 480,
           reason,
+          display_label: displayLabel,
         },
       });
     } catch (error) {
@@ -1044,6 +1047,8 @@ export async function swapLeaveAction(input: {
   fromDate: string;
   toDate: string;
   reason: string;
+  /** ชื่อของใบเดิม — พกมาด้วยไม่งั้นสลับวันแล้วชื่อที่ตั้งไว้หายเงียบ */
+  displayLabel?: string;
 }): Promise<SwapLeaveState> {
   await requireOrg();
 
@@ -1064,11 +1069,43 @@ export async function swapLeaveAction(input: {
         ends_on: input.toDate,
         total_minutes: 480,
         reason: input.reason.trim() || `สลับวันหยุดจากวันที่ ${input.fromDate}`,
+        display_label: (input.displayLabel ?? "").trim().slice(0, 60),
         swap_from_date: input.fromDate,
       },
     });
   } catch (error) {
     return { error: leaveErrorMessage(toMessage(error)) };
+  }
+
+  revalidatePath("/hr/leave");
+  return { ok: true };
+}
+
+export interface RelabelLeaveState {
+  ok?: boolean;
+  error?: string;
+}
+
+/**
+ * เปลี่ยนชื่อที่ขึ้นบนปฏิทินของวันหยุดที่ลงไปแล้ว
+ *
+ * ไม่กระทบสิทธิ์/ยอดวันลา/ผลลงเวลาเลย เป็นแค่ป้ายชื่อ — จึงไม่ต้องยกเลิกใบเดิม
+ * แล้วยื่นใหม่เพียงเพราะพิมพ์ผิด · workforce ตรวจความเป็นเจ้าของเองอีกชั้น
+ */
+export async function relabelLeaveAction(input: {
+  requestId: string;
+  displayLabel: string;
+}): Promise<RelabelLeaveState> {
+  await requireOrg();
+  if (!input.requestId) return { error: "ไม่พบคำขอ" };
+
+  try {
+    await wfFetch(`/leave-requests/${input.requestId}/relabel`, {
+      method: "POST",
+      body: { display_label: input.displayLabel.trim().slice(0, 60) },
+    });
+  } catch (error) {
+    return { error: toMessage(error) };
   }
 
   revalidatePath("/hr/leave");

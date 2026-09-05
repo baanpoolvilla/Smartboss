@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import {
   cancelLeaveSchema,
+  relabelLeaveSchema,
   closeTimesheetPeriodSchema,
   createLeaveTypeSchema,
   createTimesheetPeriodSchema,
@@ -155,6 +156,21 @@ export class LeaveController {
     @Body(zodPipe(cancelLeaveSchema)) body: z.infer<typeof cancelLeaveSchema>,
   ): Promise<Record<string, unknown>> {
     return this.service.cancelRequest(requireUuid(requestId, 'requestId'), body.reason);
+  }
+
+  /**
+   * เปลี่ยนชื่อที่ขึ้นบนปฏิทินของใบลา — ของตัวเองแก้ได้ด้วยสิทธิ์ขอลาพื้นฐาน
+   * (service ตรวจความเป็นเจ้าของเอง และยอมให้คนที่อนุมัติได้แก้ของคนอื่น)
+   */
+  @Post('leave-requests/:requestId/relabel')
+  @HttpCode(200)
+  @RequirePermissions('workforce.leave.request')
+  @Idempotent()
+  async relabel(
+    @Param('requestId') requestId: string,
+    @Body(zodPipe(relabelLeaveSchema)) body: z.infer<typeof relabelLeaveSchema>,
+  ): Promise<Record<string, unknown>> {
+    return this.service.relabelRequest(requireUuid(requestId, 'requestId'), body.display_label);
   }
 
   /**

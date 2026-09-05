@@ -77,6 +77,13 @@ export const leaveRequests = workforce.table(
     halfDayStart: boolean('half_day_start').notNull().default(false),
     halfDayEnd: boolean('half_day_end').notNull().default(false),
     reason: text('reason').notNull().default(''),
+    /**
+     * ชื่อที่ขึ้นบนปฏิทิน ตั้งเองได้ (เช่น "Bee-Off" · "Aui-V3/6" · "Parguy-Off-OT")
+     * ว่าง = ปฏิทินประกอบชื่อให้เองจาก "ชื่อคน - ประเภท"
+     *
+     * ต่างจาก `reason` ตรงที่อันนี้ทั้งทีมเห็น ส่วน reason เห็นเฉพาะผู้อนุมัติ
+     */
+    displayLabel: text('display_label').notNull().default(''),
     attachmentObjectId: uuid('attachment_object_id'),
     /** มีค่า = ใบนี้คือคำขอ "สลับ" มาแทนวันนี้ ต้องยกเลิกใบเดิมพร้อมกันตอนอนุมัติ */
     swapFromDate: date('swap_from_date'),

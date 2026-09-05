@@ -119,6 +119,7 @@ export default async function LeavePage({
               employmentId: entry.employment_id,
               name: entry.display_name,
               leaveTypeName: entry.leave_type_name,
+              displayLabel: entry.display_label,
               status: entry.status,
               mine: isMine,
               requestId: isMine ? myRequestIdByDate.get(date) : undefined,
@@ -144,7 +145,7 @@ export default async function LeavePage({
           <div className="flex flex-col gap-4">
             <SectionCard
               title={`${THAI_MONTH[m! - 1]} ${y! + 543}`}
-              description="คลิกวันที่จะหยุดแล้วกดขอ · แถบจางมีจุดนำหน้า = รออนุมัติ · วันหยุดของคุณเองมีปุ่ม ⇄ สลับไปวันอื่น และ × ยกเลิก อยู่มุมซ้ายบนของช่อง"
+              description="กดวันไหนก็ได้เพื่อลงวันหยุด เลือกประเภท และตั้งชื่อที่จะขึ้นบนปฏิทิน · กดวันหยุดของตัวเองซ้ำเพื่อแก้ชื่อ สลับวัน หรือยกเลิก · แถบจางมีจุดนำหน้า = รออนุมัติ"
               action={
                 <div className="flex gap-1">
                   <Link href={`/hr/leave?month=${shiftMonth(month, -1)}`}>
@@ -161,6 +162,7 @@ export default async function LeavePage({
                 month={month}
                 today={todayIso()}
                 employmentId={me.employment_id}
+                myName={me.display_name}
                 leaveTypes={(types?.items ?? []).map((t) => ({
                   id: t.id,
                   label: `${t.name}${t.paid ? "" : " (ไม่ได้ค่าจ้าง)"}`,

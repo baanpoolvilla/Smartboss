@@ -178,6 +178,13 @@ export interface LeaveCalendarEntry {
   leave_type_auto_approve: boolean | null;
   /** มีค่า = ใบนี้คือคำขอสลับมาแทนวันนั้น ยังไม่มีผลจนกว่าจะอนุมัติ */
   swap_from_date: string | null;
+  /**
+   * ชื่อที่เจ้าของใบตั้งเอง เช่น "Bee-Off" · "Aui-V3/6" — `""` = ยังไม่ได้ตั้ง
+   * ให้หน้าจอประกอบจาก display_name + leave_type_name เอง
+   *
+   * ไม่ถูกปิดตาม show_on_calendar เพราะเป็นข้อความที่เจ้าตัวพิมพ์เอง
+   */
+  display_label: string;
 }
 
 /**
@@ -199,6 +206,8 @@ export interface LeaveRequest {
   reason: string | null;
   /** มีค่า = คำขอสลับวันหยุด — อนุมัติแล้ววันเดิมจะถูกยกเลิกให้อัตโนมัติ */
   swap_from_date: string | null;
+  /** ชื่อที่ขึ้นบนปฏิทิน ตั้งเองได้ · `""` = ให้ปฏิทินประกอบให้เอง */
+  display_label: string;
 }
 
 export interface Employment {
