@@ -583,18 +583,21 @@ function ReportFeedPageInner() {
           it just had nothing to resolve against without a stretched parent). */}
       <div className="relative flex flex-col lg:flex-row gap-4 lg:gap-6 items-stretch flex-1 min-h-0 lg:min-h-[420px]">
         {topicSidebarCollapsed ? (
-          // Half-circle affix pinned to the feed's own left edge, vertically
+          // Labeled pill affix pinned to the feed's own left edge, vertically
           // centered — the one way back in once the sidebar's gone, so it
           // has to be findable without a moment's hunting, not tucked into a
-          // menu somewhere.
+          // menu somewhere. Carries the word "หัวข้อ" (not just »), matching
+          // the collapse pill's own "« ย่อ" on the other side of this same
+          // toggle — neither one is a bare arrow.
           <button
             type="button"
             onClick={() => setSidebarCollapsed(false)}
             title="เปิดหัวข้อ"
             aria-label="เปิดหัวข้อ"
-            className="absolute left-0 top-1/2 z-10 hidden h-[52px] w-[26px] -translate-y-1/2 items-center justify-center rounded-r-[14px] border border-l-0 border-[var(--line)] bg-white text-[var(--ink-soft)] shadow-[2px_0_8px_rgba(0,0,0,0.08)] transition-colors hover:border-[var(--brand-green)]/50 hover:text-[var(--brand-green-dark)] lg:flex"
+            className="absolute left-0 top-1/2 z-10 hidden -translate-y-1/2 items-center gap-1.5 rounded-r-[22px] border border-l-0 border-[var(--line)] bg-white px-3.5 py-2 text-sm font-bold text-[var(--brand-green-dark)] shadow-[2px_0_8px_rgba(0,0,0,0.08)] transition-colors hover:bg-[var(--accent)] lg:flex"
           >
             <ChevronRight className="h-4 w-4" />
+            หัวข้อ
           </button>
         ) : (
           <div className="hidden lg:flex lg:shrink-0">

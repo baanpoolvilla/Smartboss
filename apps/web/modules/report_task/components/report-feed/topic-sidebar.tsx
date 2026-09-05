@@ -771,14 +771,19 @@ export function TopicSidebar({
       <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-2">
         <div className="flex items-center gap-1">
           {onCollapse && (
+            // Labeled pill, not a bare chevron — a lone arrow here reads as
+            // ambiguous ("ย่ออะไร") without the word next to it (per the
+            // mockup's own collapse/reopen pair — both sides always carry
+            // a label, never just an icon).
             <button
               type="button"
               onClick={onCollapse}
               title="ย่อหัวข้อ"
               aria-label="ย่อหัวข้อ"
-              className="-ml-1.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[var(--ink-soft)] transition-colors hover:bg-[var(--bg-soft)] hover:text-[var(--ink)]"
+              className="-ml-1 flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--accent)] px-2.5 py-1.5 text-xs font-bold text-[var(--brand-green-dark)] transition-colors hover:bg-[var(--brand-green)]/25"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft className="h-3.5 w-3.5" />
+              ย่อ
             </button>
           )}
           <p className="text-[15px] font-semibold">หัวข้อ</p>
