@@ -10,6 +10,7 @@ import { requireAuth } from "@smartboss/auth";
 import { Card } from "@smartboss/ui/components/card";
 import { Button } from "@smartboss/ui/components/button";
 import { listNotifications } from "@/modules/maintenance/data/notify";
+import { ReportTaskNotificationsSection } from "@/modules/report_task/components/shared/report-notification-list";
 import { markAllReadAction } from "./actions";
 
 const TYPE_META: Record<string, { Icon: LucideIcon; color: string }> = {
@@ -60,10 +61,11 @@ export default async function NotificationsPage() {
         )}
       </header>
 
+      <ReportTaskNotificationsSection />
+
+      {items.length > 0 && <h2 className="mb-2 text-sm font-semibold text-(--ink-soft)">งานซ่อมบำรุง</h2>}
       {items.length === 0 ? (
-        <Card className="p-10 text-center text-sm text-(--ink-soft)">
-          ยังไม่มีการแจ้งเตือน
-        </Card>
+        <p className="py-2 text-center text-sm text-(--ink-soft)">ไม่มีการแจ้งเตือนใหม่จากงานซ่อมบำรุง</p>
       ) : (
         <div className="flex flex-col gap-2">
           {items.map((n) => {

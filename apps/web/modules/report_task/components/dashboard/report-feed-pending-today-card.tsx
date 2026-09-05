@@ -128,6 +128,7 @@ export function ReportFeedPendingTodayCard() {
       byUserId: viewingAsUserId,
       message: `คุณยังไม่ส่งรายงาน "${pendingNudge.topicName}" วันนี้`,
       link: `/report-feed?topic=${pendingNudge.topicId}`,
+      topicName: pendingNudge.topicName,
     });
     setPendingNudge(null);
   }

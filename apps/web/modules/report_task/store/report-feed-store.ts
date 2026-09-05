@@ -619,7 +619,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         }));
         const actorName = getUser(authorId)?.name ?? "มีคน";
         if (mentionedUserIds.length > 0) {
-          useNotificationStore.getState().notifyMany(mentionedUserIds, authorId, `${actorName} แท็กคุณในโพสต์ "${data.title}"`, undefined, link);
+          useNotificationStore.getState().notifyMany(mentionedUserIds, authorId, `${actorName} แท็กคุณในโพสต์ "${data.title}"`, undefined, link, topic?.name);
         }
         // Teams-style "new post in a channel" notification — everyone who
         // can see this topic, minus the poster and anyone already tagged
@@ -628,7 +628,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         if (topic) {
           const recipients = otherMemberIds.filter((id) => !mentionedUserIds.includes(id));
           if (recipients.length > 0) {
-            useNotificationStore.getState().notifyMany(recipients, authorId, `${actorName} โพสต์ใหม่ใน "${topic.name}": ${data.title}`, undefined, link);
+            useNotificationStore.getState().notifyMany(recipients, authorId, `${actorName} โพสต์ใหม่ใน "${topic.name}": ${data.title}`, undefined, link, topic.name);
           }
         }
       },
@@ -675,6 +675,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
           byUserId: userId,
           message: `${actorName} ทำเครื่องหมาย ${emoji} ให้โพสต์ของคุณ "${post.title}"`,
           link: `/report-feed?topic=${post.topicId}&post=${postId}`,
+          topicName: get().topics.find((t) => t.id === post.topicId)?.name,
         });
       },
       addReply: (postId, authorId, body, extra) => {
@@ -731,6 +732,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
             byUserId: authorId,
             message: `${actorName} ตอบกลับความคิดเห็นของคุณใน "${post.title}"${preview ? `: ${preview}` : ""}`,
             link,
+            topicName: repliedTopic?.name,
           });
         }
         if (post.authorId !== authorId && post.authorId !== quotedAuthorId) {
@@ -739,6 +741,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
             byUserId: authorId,
             message: `${actorName} ตอบกลับโพสต์ของคุณ "${post.title}"${preview ? `: ${preview}` : ""}`,
             link,
+            topicName: repliedTopic?.name,
           });
         }
         // Anyone @mentioned in the reply, same "tagged you" phrasing as a
@@ -752,7 +755,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
           // Already unread for them via otherReplyMemberIds above (anyone
           // @mentioned can see the room by definition) — just the "tagged
           // you" notification is specific to a mention.
-          useNotificationStore.getState().notifyMany(mentionedInReply, authorId, `${actorName} แท็กคุณในความคิดเห็นของโพสต์ "${post.title}"`, undefined, link);
+          useNotificationStore.getState().notifyMany(mentionedInReply, authorId, `${actorName} แท็กคุณในความคิดเห็นของโพสต์ "${post.title}"`, undefined, link, repliedTopic?.name);
         }
       },
       editReply: (postId, replyId, data) =>
@@ -803,6 +806,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
           byUserId: userId,
           message: `${actorName} ทำเครื่องหมาย ${emoji} ให้ความคิดเห็นของคุณใน "${post.title}"`,
           link: `/report-feed?topic=${post.topicId}&post=${postId}&reply=${replyId}`,
+          topicName: get().topics.find((t) => t.id === post.topicId)?.name,
         });
       },
       togglePin: (postId) =>
