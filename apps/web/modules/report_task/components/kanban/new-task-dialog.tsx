@@ -158,7 +158,7 @@ function attendeeAvailabilityFor(params: {
     for (const l of existingLeaves) {
       if (l.userId !== uid) continue;
       if (date < l.start.slice(0, 10) || date >= (l.end ?? l.start).slice(0, 10)) continue;
-      reasons.push(leaveTypes.find((t) => t.id === l.leaveType)?.label ?? "ลา");
+      reasons.push(leaveTypes.find((t) => t.id === l.leaveType)?.label ?? l.leaveType ?? "ลา");
     }
     const attendeeDeptId = getUser(uid)?.departmentId;
     for (const h of holidays) {

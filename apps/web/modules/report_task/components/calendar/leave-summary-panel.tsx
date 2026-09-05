@@ -132,7 +132,7 @@ export function LeaveSummaryPanel() {
                           style={{ backgroundColor: `color-mix(in srgb, ${lt?.color ?? "var(--ink-soft)"} 14%, white)`, color: lt?.color ?? "var(--ink-soft)" }}
                         >
                           <Icon className="h-3 w-3" />
-                          {lt?.label ?? "อื่นๆ"} {days}
+                          {lt?.label ?? (typeId === "other" ? "อื่นๆ" : typeId)} {days}
                         </span>
                       );
                     })

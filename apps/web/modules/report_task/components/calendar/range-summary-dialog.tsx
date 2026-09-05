@@ -314,7 +314,7 @@ export function RangeSummaryDialog({
                 return (
                   <div key={l.id} className="flex items-center gap-2 px-2 py-1.5 text-sm">
                     <Plane className="h-3.5 w-3.5 shrink-0" style={{ color: lt?.color ?? "var(--ink-soft)" }} />
-                    <span className="min-w-0 flex-1 truncate">{user?.name} · {lt?.label ?? "ลา"}</span>
+                    <span className="min-w-0 flex-1 truncate">{user?.name} · {lt?.label ?? l.leaveType ?? "ลา"}</span>
                     <span className="text-[11px] text-[var(--ink-soft)] shrink-0 whitespace-nowrap">{formatDate(l.start)}</span>
                   </div>
                 );

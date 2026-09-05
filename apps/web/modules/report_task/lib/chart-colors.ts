@@ -66,6 +66,20 @@ export const departmentColorOrder = [
   chartColors.pink,
 ];
 
+// Leave types come from HR (admins add/rename them in /hr/settings), so this
+// module can't assign each one a fixed color by hand — instead every distinct
+// type seen on the calendar gets the next color in this cycle, same pattern
+// as departmentColorOrder above.
+export const leaveTypeColorOrder = [
+  chartColors.orange,
+  chartColors.red,
+  chartColors.amber,
+  chartColors.blue,
+  chartColors.violet,
+  chartColors.teal,
+  chartColors.pink,
+];
+
 export const chartChrome = {
   grid: "#e1e0d9",
   axis: "#c3c2b7",

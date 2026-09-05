@@ -92,6 +92,12 @@ export async function listLeaveEvents(
       id: `wf-leave-${r.id}`,
       title: r.leave_type_name ?? "ลา",
       type: "leave",
+      // The HR module owns the actual set of leave types (admins add/rename
+      // them in /hr/settings) — using its name as-is here, instead of
+      // guessing at a fixed local list, is what lets the calendar's
+      // "ประเภทลา" filter and per-type coloring track whatever HR actually
+      // has without this module having to mirror HR's config by hand.
+      leaveType: r.leave_type_name ?? undefined,
       start: iso(r.starts_on),
       end: iso(r.ends_on),
       allDay: !half,
