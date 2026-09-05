@@ -21,6 +21,15 @@ export function extractMentionedIds(text: string, type: MentionType): string[] {
   return [...ids];
 }
 
+/** `@[label](type:id)` → `@label` — for plain-text contexts that can't render
+ * a mention as its own element (a notification's message string, an
+ * activity-log line): drop the round-trip markup down to what a human is
+ * meant to read, instead of leaking the raw `@[...](user:uuid)` storage
+ * format straight onto the screen. */
+export function mentionMarkersToPlainText(text: string): string {
+  return text.replace(MENTION_ONLY_PATTERN, "@$1");
+}
+
 /** Wrap/insert markers written by the composer's formatting buttons. */
 export const richTextMarkers = {
   bold: "**",
