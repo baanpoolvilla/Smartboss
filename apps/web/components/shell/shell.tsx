@@ -17,6 +17,7 @@ import {
 import { Logo } from "@/components/logo";
 import { Icon } from "@/components/icon";
 import { IssueReportBarButton } from "@/modules/report_task/components/issue-report/issue-report-bar-button";
+import { ReportNotificationSync, useReportTaskUnreadCount } from "@/modules/report_task/components/shared/report-notification-sync";
 import type { ModuleManifest, ModuleMenuItem } from "@/module-registry";
 import { LogoutButton } from "./logout-button";
 import { SessionRefresher } from "./session-refresher";
@@ -88,6 +89,8 @@ function LauncherFrame({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const reportTaskUnread = useReportTaskUnreadCount();
+  const totalUnread = unread + reportTaskUnread;
 
   return (
     <div className="flex min-h-dvh flex-col bg-(--bg-soft)">
@@ -103,17 +106,19 @@ function LauncherFrame({
               through AppScaffold/AppBarActions, so it never got the 🐛
               report button every module page has — asked to audit and fix
               this explicitly ("ทุกหน้าต้องมีให้กดตัวแมลงเพื่อแจ้งนะ ทั้ง
-              ระบบ"). */}
+              ระบบ"). Same reasoning applies to the report_task notification
+              count below — this header needs its own copy of both. */}
           <IssueReportBarButton />
+          <ReportNotificationSync />
           <Link
             href="/notifications"
             className="relative rounded-md p-2 text-(--ink-soft) hover:bg-(--bg-soft) hover:text-(--ink)"
             aria-label="การแจ้งเตือน"
           >
             <Bell className="h-5 w-5" />
-            {unread > 0 && (
+            {totalUnread > 0 && (
               <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-(--danger) px-1 text-[10px] font-bold text-white">
-                {unread > 9 ? "9+" : unread}
+                {totalUnread > 9 ? "9+" : totalUnread}
               </span>
             )}
           </Link>
