@@ -19,6 +19,11 @@ const DOW_FULL = ["จันทร์", "อังคาร", "พุธ", "พ�
 export interface DayEntry {
   employmentId: string;
   name: string;
+  /**
+   * ชื่อประเภทการลา — `null` เมื่อบริษัทตั้งประเภทนั้นให้ไม่ขึ้นปฏิทินรวม
+   * (leave_types.show_on_calendar) ใบของตัวเองเห็นประเภทเสมอ
+   */
+  leaveTypeName: string | null;
   status: "PENDING" | "APPROVED";
   mine: boolean;
   /** มีค่าเฉพาะแถวของตัวเอง (mine) — ใช้กดยกเลิก คนอื่นไม่เห็น id ใบของคนอื่น */
@@ -236,7 +241,7 @@ export function LeaveCalendar({
                       return (
                         <span
                           key={`${entry.employmentId}-${index}`}
-                          title={`${entry.name} · ${entry.status === "APPROVED" ? "อนุมัติแล้ว" : "รออนุมัติ"}`}
+                          title={`${entry.name}${entry.leaveTypeName ? ` · ${entry.leaveTypeName}` : ""} · ${entry.status === "APPROVED" ? "อนุมัติแล้ว" : "รออนุมัติ"}`}
                           className="truncate rounded-sm border-l-2 px-1 text-[10px] leading-4"
                           style={{
                             borderLeftColor: `hsl(${hue} 60% 50%)`,
@@ -247,8 +252,14 @@ export function LeaveCalendar({
                             opacity: entry.status === "APPROVED" ? 1 : 0.65,
                           }}
                         >
+                          {/*
+                            ชื่อคน + ชื่อวันหยุด ("กตาวุฒิ - ลาป่วย") — เดิมขึ้นแต่ชื่อคน
+                            ซึ่งบอกไม่ได้ว่าวันนั้นเป็นวันหยุดประจำเดือน (ลงเองได้)
+                            หรือลาป่วย (ต้องหาคนแทน) ซึ่งเป็นสิ่งที่คนวางแผนงานต้องรู้
+                            ประเภทที่บริษัทตั้งให้เป็นเรื่องส่วนตัวจะได้ null มาแทน
+                          */}
                           {entry.status === "PENDING" ? "• " : ""}
-                          {entry.name}
+                          {entry.leaveTypeName ? `${entry.name} - ${entry.leaveTypeName}` : entry.name}
                         </span>
                       );
                     })}

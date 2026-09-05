@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Button } from "@smartboss/ui/components/button";
 import { HrPage } from "@/modules/hr/components/hr-page";
 import { HR_PERMS } from "@/modules/hr/permissions";
+import { currentMonth, todayIso } from "@/modules/hr/lib/date";
 import {
   wfFetch,
   wfTry,
@@ -55,9 +56,7 @@ export default async function LeavePage({
   searchParams: Promise<{ month?: string }>;
 }) {
   const sp = await searchParams;
-  const month = /^\d{4}-\d{2}$/.test(sp.month ?? "")
-    ? sp.month!
-    : new Date().toISOString().slice(0, 7);
+  const month = /^\d{4}-\d{2}$/.test(sp.month ?? "") ? sp.month! : currentMonth();
 
   return (
     <HrPage
@@ -119,6 +118,7 @@ export default async function LeavePage({
             (entriesByDate[date] ??= []).push({
               employmentId: entry.employment_id,
               name: entry.display_name,
+              leaveTypeName: entry.leave_type_name,
               status: entry.status,
               mine: isMine,
               requestId: isMine ? myRequestIdByDate.get(date) : undefined,
@@ -159,7 +159,7 @@ export default async function LeavePage({
               <LeaveCalendar
                 key={month}
                 month={month}
-                today={new Date().toISOString().slice(0, 10)}
+                today={todayIso()}
                 employmentId={me.employment_id}
                 leaveTypes={(types?.items ?? []).map((t) => ({
                   id: t.id,
@@ -190,6 +190,16 @@ export default async function LeavePage({
                           {r.starts_on === r.ends_on
                             ? r.starts_on
                             : `${r.starts_on} → ${r.ends_on}`}
+                          {/*
+                            คำขอสลับต้องบอกให้ผู้อนุมัติเห็น — อนุมัติแล้ววันเดิมจะถูก
+                            ยกเลิกให้อัตโนมัติ (leave.service decideRequest) ซึ่งเป็น
+                            ผลที่ต่างจากการอนุมัติใบลาธรรมดาโดยสิ้นเชิง
+                          */}
+                          {r.swap_from_date && (
+                            <span className="ml-1 block font-sans text-[11px] text-(--ink-soft)">
+                              สลับมาจาก {r.swap_from_date}
+                            </span>
+                          )}
                         </Td>
                         <Td className="text-(--ink-soft)">{r.reason || "—"}</Td>
                         <Td>

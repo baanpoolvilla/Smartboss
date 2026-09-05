@@ -146,13 +146,22 @@ export interface LeaveType {
   auto_approve: boolean;
   /** 0 = ไม่จำกัดรายเดือน */
   monthly_quota_days: number;
+  /**
+   * false = ปฏิทินรวมไม่บอกว่าเป็นประเภทนี้ (คนอื่นเห็นแค่ "ลา")
+   * ตั้งค่าได้รายบริษัทที่หน้า /hr/settings — ไม่ใช่กฎฝังในโค้ด
+   */
+  show_on_calendar: boolean;
 }
 
 /**
  * รายการวันหยุดของทีมสำหรับปฏิทินรวม
  *
- * เปิดให้ทุกคนที่เข้าระบบเห็น แต่ **ไม่มีเหตุผลและประเภทการลา** —
- * "ลาป่วย" กับเหตุผลเป็นข้อมูลส่วนตัวที่เพื่อนร่วมงานไม่ต้องรู้
+ * เปิดให้ทุกคนที่เข้าระบบเห็น แต่ **ไม่มีเหตุผล** — เหตุผลเป็นข้อความอิสระ
+ * ที่มักมีเรื่องส่วนตัวปนอยู่ คนที่ต้องอ่านคือผู้อนุมัติ (ใช้ LeaveRequest)
+ *
+ * ส่วนประเภทการลาคืนมาตาม show_on_calendar ของประเภทนั้น — ประเภทที่บริษัท
+ * ตั้งให้เป็นเรื่องส่วนตัวจะได้ leave_type_* เป็น null ทั้งชุด (ยกเว้นใบของ
+ * ตัวเอง ซึ่งเห็นประเภทเสมอ)
  */
 export interface LeaveCalendarEntry {
   id: string;
@@ -162,6 +171,13 @@ export interface LeaveCalendarEntry {
   starts_on: string;
   ends_on: string;
   status: "PENDING" | "APPROVED";
+  /** null = ประเภทนี้ถูกตั้งให้ไม่แสดงบนปฏิทินรวม */
+  leave_type_id: string | null;
+  leave_type_name: string | null;
+  leave_type_paid: boolean | null;
+  leave_type_auto_approve: boolean | null;
+  /** มีค่า = ใบนี้คือคำขอสลับมาแทนวันนั้น ยังไม่มีผลจนกว่าจะอนุมัติ */
+  swap_from_date: string | null;
 }
 
 /**
@@ -181,6 +197,8 @@ export interface LeaveRequest {
   /** SUBMITTED = รออนุมัติ (ชื่อสถานะภายในของ workforce) */
   status: "SUBMITTED" | "APPROVED" | "REJECTED" | "CANCELLED";
   reason: string | null;
+  /** มีค่า = คำขอสลับวันหยุด — อนุมัติแล้ววันเดิมจะถูกยกเลิกให้อัตโนมัติ */
+  swap_from_date: string | null;
 }
 
 export interface Employment {
