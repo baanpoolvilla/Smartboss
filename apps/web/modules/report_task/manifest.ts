@@ -5,6 +5,7 @@ import { REPORT_TASK_BASE, REPORT_TASK_CODE } from "./constants";
 import { navItems } from "./lib/nav-config";
 import { ALL_REPORT_TASK_PERMS, REPORT_TASK_PERMS } from "./permissions";
 import { TaskReviewNavBadge } from "./components/shared/task-review-nav-badge";
+import { ReportActivityNavBadge } from "./components/shared/report-activity-nav-badge";
 
 /**
  * โมดูลรายงานและงาน — เดิมพอร์ตมาจากแอป easyboss-workspace ที่เคยรันเดี่ยว ๆ
@@ -32,9 +33,15 @@ const menus: ModuleMenuItem[] = navItems.map((item) => ({
   path: item.href,
   permission: MENU_PERMISSION[item.href] ?? REPORT_TASK_PERMS.access,
   icon: item.iconName,
-  // Discord-style "someone's waiting on you" pill — only the tasks/Kanban
-  // entry needs one; see TaskReviewNavBadge's own doc for what it counts.
-  badge: item.href === `${REPORT_TASK_BASE}/tasks` ? createElement(TaskReviewNavBadge) : undefined,
+  // Discord-style "someone's waiting on you" pill. Tasks/Kanban counts work
+  // sitting in "รอตรวจ" (TaskReviewNavBadge); รายงาน counts unread activity
+  // about the viewer — @mentions + replies on their posts (ReportActivityNavBadge).
+  badge:
+    item.href === `${REPORT_TASK_BASE}/tasks`
+      ? createElement(TaskReviewNavBadge)
+      : item.href === `${REPORT_TASK_BASE}/report-feed`
+        ? createElement(ReportActivityNavBadge)
+        : undefined,
 }));
 
 export const reportTaskManifest: ModuleManifest = {

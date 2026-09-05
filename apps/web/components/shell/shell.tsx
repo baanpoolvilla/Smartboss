@@ -283,6 +283,7 @@ function ModuleBottomNav({
             label={menu.label}
             icon={menu.icon}
             href={menu.path}
+            badge={menu.badge}
             active={isMenuActive(pathname, menu.path, module.basePath)}
           />
         ))}
@@ -369,22 +370,30 @@ function BottomNavItem({
   href,
   active,
   onClick,
+  badge,
 }: {
   label: string;
   icon?: string;
   href?: string;
   active: boolean;
   onClick?: () => void;
+  /** Optional count/dot pill from the module manifest. Overlaid on the icon's
+   * top-right corner (absolute) so it never widens the already-tight bottom
+   * bar — see manifest.ts's ModuleMenuItem.badge. */
+  badge?: React.ReactNode;
 }) {
   const body = (
     <>
       <span
         className={cn(
-          "flex h-8 w-16 items-center justify-center rounded-full transition-colors",
+          "relative flex h-8 w-16 items-center justify-center rounded-full transition-colors",
           active && "bg-(--app-soft,#CCFBF1)"
         )}
       >
         {icon ? <Icon name={icon} className="h-5 w-5" /> : <MoreHorizontal className="h-5 w-5" />}
+        {badge ? (
+          <span className="pointer-events-none absolute -top-1 left-1/2 ml-2">{badge}</span>
+        ) : null}
       </span>
       <span className="mt-0.5 truncate text-[11px] leading-tight">{label}</span>
     </>
