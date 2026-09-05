@@ -118,7 +118,6 @@ export function CalendarView() {
   const meetings = useMeetingStore((s) => s.meetings);
   const updateMeeting = useMeetingStore((s) => s.updateMeeting);
   const leaves = useLeaveStore((s) => s.leaves);
-  const updateLeave = useLeaveStore((s) => s.updateLeave);
   const todos = useTodoStore((s) => s.todos);
   const toggleTodo = useTodoStore((s) => s.toggleTodo);
   const updateTodo = useTodoStore((s) => s.updateTodo);
@@ -575,12 +574,27 @@ export function CalendarView() {
     }
     // Color leaves by type (past ones still gray via `gray`).
     const leaveColorById = new Map(leaveTypes.map((t) => [t.id, t.color]));
-    const coloredLeaves = visibleLeaves.map((l) => ({
-      ...l,
-      colorHint: (l.leaveType && leaveColorById.get(l.leaveType)) ?? chartColors.gray,
-      mine: l.userId === viewingAsUserId,
-      editable: canEditRecord(l.userId, [getUser(l.userId ?? "")?.departmentId], viewingAsUserId),
-    }));
+    const coloredLeaves = visibleLeaves.map((l) => {
+      // Whose day off it is goes in the chip itself ("กตาวุฒิ - ลาป่วย"), same
+      // shape as a routine day off's own title. The leave chip used to read
+      // just "ลาป่วย": on a team calendar that says a leave happened but not
+      // whose, and the per-person color legend is no help once several people
+      // are off in the same week. `l.title` is the leave type's name straight
+      // from workforce (see lib/db/workforce-calendar.ts).
+      const owner = l.userId ? getUser(l.userId)?.name.split(" ")[0] : undefined;
+      return {
+        ...l,
+        title: owner ? `${owner} - ${l.title}` : l.title,
+        colorHint: (l.leaveType && leaveColorById.get(l.leaveType)) ?? chartColors.gray,
+        mine: l.userId === viewingAsUserId,
+        // Never draggable — leave lives in workforce and this store is a
+        // read-only mirror of it (see lib/db/workforce-calendar.ts). A drag
+        // used to show "เลื่อนวันลาแล้ว" and then quietly revert at the next
+        // poll, because the save came back 409 and the sync layer treats 409
+        // as a lost write race rather than a refusal.
+        editable: false,
+      };
+    });
     return [...coloredLeaves, ...holidays, ...dayoffEvents]
       .filter((e) => scheduleActive.has(e.type))
       .filter((e) => e.type !== "leave" || !e.leaveType || !hiddenLeaveTypeIds.has(e.leaveType))
@@ -679,13 +693,12 @@ export function CalendarView() {
       updateMeeting(id, { start, end: end ?? start, allDay });
       toast.success("เลื่อนประชุมแล้ว");
     } else if (type === "leave") {
-      const target = leaves.find((l) => l.id === id);
-      if (target && !canEditRecord(target.userId, [getUser(target.userId ?? "")?.departmentId], viewingAsUserId)) {
-        toast.error("แก้ไขวันลาได้เฉพาะเจ้าของหรือหัวหน้าแผนก");
-        return false;
-      }
-      updateLeave(id, { start, end: end ?? start });
-      toast.success("เลื่อนวันลาแล้ว");
+      // `editable: false` already stops the drag from starting — re-checked
+      // here as defense-in-depth, same as every other branch. Moving a leave
+      // has to go through /hr so it keeps its approval trail and stays in
+      // step with the numbers payroll is computed from.
+      toast.error("ย้ายวันลาที่โมดูลบุคคล (/hr/leave) — ที่นี่แสดงผลอย่างเดียว");
+      return false;
     } else if (type === "todo") {
       const todoId = id.replace("todoevt-", "");
       const target = todos.find((t) => t.id === todoId);
@@ -1335,8 +1348,11 @@ export function CalendarView() {
         key={`${tab}-${createDate ?? "new"}`}
         open={createOpen}
         onOpenChange={setCreateOpen}
-        defaultType="leave"
-        allowedTypes={["leave", "dayoff"]}
+        // No "ลา" here — a leave saved from this module never persisted (the
+        // leaves store is a read-only mirror of workforce). Leave is filed at
+        // /hr/leave, linked from the schedule sidebar.
+        defaultType="dayoff"
+        allowedTypes={["dayoff"]}
         defaultDate={createDate}
       />
       <AddTodoDialog

@@ -14,7 +14,11 @@ import { todayIso, calendarDateOf } from "@/modules/report_task/lib/now";
 export type MemberWorkStatus = "leave" | "dayoff" | "meeting" | "working";
 
 function coversToday(e: CalendarEvent, ymd: string): boolean {
-  if (e.allDay) return calendarDateOf(e.start) <= ymd && calendarDateOf(e.end) >= ymd;
+  // `end` is exclusive for an all-day event (the day *after* the last one) —
+  // the convention the whole module stores leave and holidays in, see
+  // report-feed-exemptions and data/thai-holidays. `>=` here read one day too
+  // many, marking someone "on leave" the morning after they were back.
+  if (e.allDay) return calendarDateOf(e.start) <= ymd && ymd < calendarDateOf(e.end);
   return calendarDateOf(e.start) === ymd;
 }
 

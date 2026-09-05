@@ -283,6 +283,19 @@ export function LeaveSidebar({
   const emptyHolidayLabel = range.viewType === "timeGridDay" ? "ไม่มีวันหยุดราชการวันนี้" : range.viewType === "timeGridWeek" ? "ไม่มีวันหยุดราชการสัปดาห์นี้" : "ไม่มีวันหยุดราชการในเดือนนี้";
   const emptyMyLeaveLabel = range.viewType === "timeGridDay" ? "ไม่มีวันลาของฉันวันนี้" : range.viewType === "timeGridWeek" ? "ไม่มีวันลาของฉันสัปดาห์นี้" : "ไม่มีวันลาของฉันเดือนนี้";
 
+  /**
+   * ชื่อประเภทการลาที่จะโชว์บนป้าย
+   *
+   * `leaveType` เป็น id ของทะเบียนประเภทการลาในโมดูลนี้ (leave-type-store)
+   * ส่วนใบลาจริงมาจาก workforce ซึ่งใช้ทะเบียนคนละชุด ⇒ ไม่มี `leaveType`
+   * ติดมาเลย ป้ายจึงขึ้นว่า "ลา" ทุกใบทั้งที่ชื่อประเภทจริงอยู่ใน `title`
+   * อยู่แล้ว (ดู lib/db/workforce-calendar.ts) — ใช้ `title` เป็นตัวสำรอง
+   */
+  function leaveTypeLabel(e: CalendarEvent): string {
+    if (e.leaveType) return leaveTypes.find((t) => t.id === e.leaveType)?.label ?? "ลา";
+    return e.title.trim() || "ลา";
+  }
+
   function renderPill(entry: EffectiveDayOff) {
     const key = entryKey(entry);
     const isMoving = movingEntry && entryKey(movingEntry) === key;
@@ -381,7 +394,7 @@ export function LeaveSidebar({
                   <p className="text-xs text-[var(--ink-soft)]">{formatDate(e.start)}</p>
                 </div>
                 <Badge variant="secondary" className="text-[10px] shrink-0">
-                  {e.leaveType ? leaveTypes.find((t) => t.id === e.leaveType)?.label ?? "ลา" : "ลา"}
+                  {leaveTypeLabel(e)}
                 </Badge>
               </div>
             );
@@ -452,6 +465,15 @@ export function LeaveSidebar({
 
           <div className="space-y-1.5">
             <p className="text-[11px] font-medium text-[var(--ink-soft)]">{myHeading}</p>
+            {/* วันลายื่นที่โมดูลบุคคลที่เดียว — ที่นี่อ่านอย่างเดียว (ดู
+                lib/db/workforce-calendar.ts) เดิมมีปุ่มลงวันลาในปฏิทินนี้ด้วย
+                แต่บันทึกไม่เคยถึงฐานข้อมูลจริง จึงเหลือไว้แค่ทางเข้า */}
+            <a
+              href="/hr/leave"
+              className="inline-flex items-center gap-1 text-xs text-[var(--brand-green-dark)] hover:underline"
+            >
+              ยื่นลา / ยกเลิกวันลา ที่ฝ่ายบุคคล →
+            </a>
             {myLeave.length === 0 ? (
               <p className="text-sm text-[var(--ink-soft)]">{emptyMyLeaveLabel}</p>
             ) : (
@@ -459,7 +481,7 @@ export function LeaveSidebar({
                 {myLeave.map((e) => (
                   <div key={e.id} className="flex items-center justify-between gap-2 text-sm">
                     <Badge variant="secondary" className="text-[10px] shrink-0">
-                      {e.leaveType ? leaveTypes.find((t) => t.id === e.leaveType)?.label ?? "ลา" : "ลา"}
+                      {leaveTypeLabel(e)}
                     </Badge>
                     <span className="text-xs text-[var(--ink-soft)] shrink-0">{formatDate(e.start)}</span>
                   </div>

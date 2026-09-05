@@ -55,6 +55,24 @@ async function withWorkforceTenant<T>(
 const iso = (d: Date) => new Date(d).toISOString().slice(0, 10);
 
 /**
+ * วันถัดจากวันสุดท้าย — `CalendarEvent.end` ของโมดูลนี้เป็นแบบ **ไม่รวมวันนั้น**
+ * (เหมือน FullCalendar) ทุกที่: วันหยุดในตัวของไทย (data/thai-holidays.ts),
+ * ตัวนับวันลา (leave-summary-panel) และตัวยกเว้นการส่งรายงาน
+ * (report-feed-exemptions) คิดแบบนั้นหมด
+ *
+ * ของ workforce เก็บเป็นวันสุดท้ายจริง ๆ (รวมวันนั้น) — เดิมส่งต่อมาดื้อ ๆ
+ * ผลคือใบลาวันเดียว (ซึ่งตอนนี้คือทุกใบ เพราะ submitLeaveAction ยิงทีละวัน)
+ * ได้ start = end ⇒ ช่วง [start, end) ว่างเปล่า ⇒ **คนที่ลายังถูกนับว่าไม่ส่ง
+ * รายงานในวันที่ลา** และวันหยุดบริษัทก็ไม่ยกเว้นให้ใคร ส่วนใบที่กินหลายวัน
+ * ก็หายไปวันสุดท้ายบนปฏิทิน
+ */
+function endExclusive(d: Date): string {
+  const next = new Date(d);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return iso(next);
+}
+
+/**
  * การลาที่อนุมัติแล้วในช่วงวันที่กำหนด
  *
  * เอาเฉพาะที่อนุมัติแล้ว — คำขอที่ยังรออนุมัติไม่ควรขึ้นปฏิทินทีมเหมือนเป็นเรื่องแน่นอน
@@ -93,7 +111,7 @@ export async function listLeaveEvents(
       title: r.leave_type_name ?? "ลา",
       type: "leave",
       start: iso(r.starts_on),
-      end: iso(r.ends_on),
+      end: endExclusive(r.ends_on),
       allDay: !half,
       ...(r.user_id ? { userId: r.user_id } : {}),
       description: half ? "ลาครึ่งวัน" : undefined,
@@ -122,7 +140,7 @@ export async function listHolidayEvents(
     title: r.name,
     type: "holiday",
     start: iso(r.holiday_date),
-    end: iso(r.holiday_date),
+    end: endExclusive(r.holiday_date),
     allDay: true,
   }));
 }
