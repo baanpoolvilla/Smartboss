@@ -11,6 +11,7 @@ import { useSettingsAccessStore, type GrantableSection } from "@/modules/report_
 import { StickerManagerPanel } from "@/modules/report_task/components/shared/sticker-manager-dialog";
 import { AttachmentSettingsPanel } from "@/modules/report_task/components/shared/attachment-settings-panel";
 import { ProjectTopicSettingsPanel } from "@/modules/report_task/components/shared/project-topic-settings-panel";
+import { TaskReviewSettingsPanel } from "@/modules/report_task/components/shared/task-review-settings-panel";
 import { ReportTagSettingsPanel } from "@/modules/report_task/components/shared/report-tag-settings-panel";
 import { ReportAttachmentSettingsPanel } from "@/modules/report_task/components/shared/report-attachment-settings-panel";
 import { SubmissionSummaryPanel } from "@/modules/report_task/components/report-feed/submission-summary-panel";
@@ -139,6 +140,7 @@ function SettingsPageInner() {
     { key: "stickers", label: "สติกเกอร์ & คะแนน", icon: Smile },
     { key: "attachments", label: "ไฟล์แนบ", icon: Paperclip },
     { key: "projectTopics", label: "หัวข้อโปรเจค", icon: Tag },
+    { key: "taskReview", label: "การตรวจงาน", icon: ShieldCheck },
   ];
   const calendarGrantableSections: { key: GrantableSection; label: string; icon: LucideIcon }[] = [
     { key: "leaveTypes", label: "ประเภทการลา", icon: Ticket },
@@ -266,6 +268,7 @@ function SettingsPageInner() {
               {sectionKey === "stickers" && <StickerManagerPanel />}
               {sectionKey === "attachments" && <AttachmentSettingsPanel />}
               {sectionKey === "projectTopics" && <ProjectTopicSettingsPanel />}
+              {sectionKey === "taskReview" && <TaskReviewSettingsPanel />}
             </section>
           )}
 

@@ -37,6 +37,7 @@ import { DatePickerField } from "@/modules/report_task/components/shared/date-pi
 import { TimePickerField } from "@/modules/report_task/components/shared/time-picker-field";
 import { PenaltyChip } from "@/modules/report_task/components/shared/penalty-chip";
 import { canEditRecord, canRemoveReaction, canReviewTask, canSeePenaltyStatus, canToggleOwnChecklistItem } from "@/modules/report_task/lib/permissions";
+import { useTaskReviewSettingsStore } from "@/modules/report_task/store/task-review-settings-store";
 import { todayIso } from "@/modules/report_task/lib/now";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
@@ -122,6 +123,7 @@ export function TaskDetailSheet({
   const stickers = useStickerStore((s) => s.stickers);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const attachmentSettings = useAttachmentSettingsStore((s) => s.settings);
+  const taskReviewSettings = useTaskReviewSettingsStore((s) => s.settings);
   const projectTopics = useProjectTopicStore((s) => s.topics);
 
   const [comment, setComment] = useState("");
@@ -227,9 +229,10 @@ export function TaskDetailSheet({
   // checklist, comments, attachments, reactions.
   const canEditMain = canEditRecord(task.assignedById, task.departmentIds, viewingAsUserId);
   // Narrower than canEditMain — ผ่าน/ไม่ผ่าน is a sign-off, not editing, so
-  // it's limited to CEO + หัวหน้าแผนก only (an assigner who isn't also a
-  // head can still edit the task, just can't review their own assignment).
-  const canReview = canReviewTask(task.departmentIds, viewingAsUserId);
+  // it's limited to CEO + หัวหน้าแผนก (configurable in ตั้งค่า > งาน >
+  // การตรวจงาน) only — an assigner who isn't also a head can still edit the
+  // task, just can't review their own assignment.
+  const canReview = canReviewTask(task.departmentIds, viewingAsUserId, taskReviewSettings);
   const lockedTitle = "แก้ไขได้เฉพาะผู้สร้างงาน";
   // canEditMain (and canSeeTask) fall back to the viewer's own
   // department-head match once they're no longer an assignee — a non-owner
