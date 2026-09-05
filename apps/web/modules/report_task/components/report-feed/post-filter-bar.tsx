@@ -6,6 +6,7 @@ import type { ReportTag } from "@/modules/report_task/store/report-tag-store";
 import { displayName } from "@/modules/report_task/lib/directory";
 import { lateCutoffFor } from "@/modules/report_task/lib/report-cutoff";
 import { roundsForUserOnDay } from "@/modules/report_task/lib/submission-rounds";
+import { isExemptDate, type DateExemptions } from "@/modules/report_task/lib/report-feed-exemptions";
 import { localDateStr } from "@/modules/report_task/lib/now";
 import type { SubmitterGroup } from "@/modules/report_task/store/report-feed-store";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -53,7 +54,12 @@ export function postFiltersActiveCount(f: PostFilters): number {
 export function filterPosts(
   posts: ReportPost[],
   filters: PostFilters,
-  opts: { topicOf: (post: ReportPost) => ReportTopic | undefined; viewingAsUserId: string; submitterGroups: SubmitterGroup[] }
+  opts: {
+    topicOf: (post: ReportPost) => ReportTopic | undefined;
+    viewingAsUserId: string;
+    submitterGroups: SubmitterGroup[];
+    exemptions?: DateExemptions;
+  }
 ): ReportPost[] {
   if (postFiltersActiveCount(filters) === 0) return posts;
   return posts.filter((p) => {
@@ -68,8 +74,10 @@ export function filterPosts(
     if (filters.lateOnly) {
       // "ไม่นับเป็นการส่ง daily" posts never carry a ตรงเวลา/สาย badge on the
       // card (see report-card.tsx) — mirror that here so "ส่งช้า" can't
-      // surface one anyway.
+      // surface one anyway. Same for a poster who was exempt that day
+      // (approved leave/day-off/holiday) — no real obligation, no badge.
       if (p.excludeFromSubmission) return false;
+      if (opts.exemptions && isExemptDate(opts.exemptions, p.authorId, localDateStr(new Date(p.createdAt)))) return false;
       const topic = opts.topicOf(p);
       // Scoped to the post's own author (not "any cutoff was active"), same
       // reasoning as the on-time badge on the card itself — a round's
