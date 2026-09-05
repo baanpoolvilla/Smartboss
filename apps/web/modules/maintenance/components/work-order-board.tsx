@@ -211,15 +211,22 @@ export function WorkOrderFilteredList({
   creatorNames: Record<string, string>;
 }) {
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-3 p-4 sm:p-5">
-      {orders.map((wo) => (
-        <OrderCard
-          key={wo.id}
-          wo={wo}
-          propertyName={propertyNames[wo.propertyId] ?? ""}
-          creatorName={wo.createdBy ? creatorNames[wo.createdBy] : undefined}
-        />
-      ))}
+    /*
+     * ต้องมี scroll ของตัวเองเหมือนกัน — โหมดกรอง (วันนี้/ด่วน/ยังไม่บันทึก) อยู่
+     * ใน AppScaffold แบบ `fill` ตัวเดียวกับกระดาน ซึ่งห่อด้วย overflow-hidden
+     * ⇒ เดิมรายการยาว ๆ ถูกตัดที่ขอบจอแล้วเลื่อนไม่ได้ ทั้งบนมือถือและจอใหญ่
+     */
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto flex max-w-4xl flex-col gap-3 p-4 sm:p-5">
+        {orders.map((wo) => (
+          <OrderCard
+            key={wo.id}
+            wo={wo}
+            propertyName={propertyNames[wo.propertyId] ?? ""}
+            creatorName={wo.createdBy ? creatorNames[wo.createdBy] : undefined}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -413,7 +420,15 @@ export function WorkOrderBoard({
   };
 
   return (
-    <div className="flex flex-col lg:h-full">
+    /*
+     * h-full ทั้งสองขนาดจอ ไม่ใช่แค่ lg
+     *
+     * หน้านี้ใช้ AppScaffold แบบ `fill` ซึ่งบนมือถือเป็น `fixed inset-0` แล้วห่อ
+     * เนื้อหาด้วย `overflow-hidden` โดยตกลงกันว่า "ผู้ใช้ต้องมี overflow-y-auto
+     * ของตัวเอง" — ฝั่งมือถือของกระดานนี้ไม่เคยมี ⇒ รายการใบงานถูกตัดที่ขอบจอ
+     * แล้วเลื่อนไม่ได้เลย เห็นแค่ไม่กี่ใบแรก
+     */
+    <div className="flex h-full flex-col">
       {/* ─── กรองตามบ้าน: แถวบน = หมวด, แถวล่าง = บ้านในหมวด ─── */}
       {groups.length > 1 && (
         <div className="shrink-0">
@@ -464,8 +479,8 @@ export function WorkOrderBoard({
       )}
 
       {/* ─── มือถือ: แท็บ 4 สถานะ ─── */}
-      <div className="lg:hidden">
-        <div className="flex gap-1 overflow-x-auto border-b border-(--line)">
+      <div className="flex min-h-0 flex-1 flex-col lg:hidden">
+        <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-(--line)">
           {COLUMNS.map((c, i) => (
             <button
               key={c.key}
@@ -490,7 +505,8 @@ export function WorkOrderBoard({
             </button>
           ))}
         </div>
-        <div className="p-3">
+        {/* แถบแท็บอยู่กับที่ เลื่อนเฉพาะรายการ — แบบเดียวกับคอลัมน์ฝั่งจอใหญ่ */}
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
           <ColumnList
             orders={buckets[COLUMNS[tab]!.key]!}
             propertyNames={propertyNames}
