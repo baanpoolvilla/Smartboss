@@ -30,6 +30,7 @@ import { useActivityLogStore } from "@/modules/report_task/store/activity-log-st
 import { useRoutineDayOffStore } from "@/modules/report_task/store/routine-dayoff-store";
 import { useSettingsAccessStore } from "@/modules/report_task/store/settings-access-store";
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
+import { useTaskReviewSettingsStore } from "@/modules/report_task/store/task-review-settings-store";
 import { useReminderSettingsStore, defaultReminderSettings } from "@/modules/report_task/store/reminder-settings-store";
 import { useAiInsightSettingsStore } from "@/modules/report_task/store/ai-insight-settings-store";
 
@@ -90,6 +91,13 @@ export function StoreHydrator() {
         apiKey="attachment-settings"
         pollMs={SLOW_POLL_MS}
         store={useAttachmentSettingsStore}
+        select={(s) => s.settings}
+        apply={(s, settings) => ({ ...s, settings })}
+      />
+      <ServerStoreSync
+        apiKey="task-review-settings"
+        pollMs={SLOW_POLL_MS}
+        store={useTaskReviewSettingsStore}
         select={(s) => s.settings}
         apply={(s, settings) => ({ ...s, settings })}
       />

@@ -33,6 +33,7 @@ export const STORE_KEYS = {
   "report-tags": "stores/report-tags.json",
   "attachment-settings": "stores/attachment-settings.json",
   "reminder-settings": "stores/reminder-settings.json",
+  "task-review-settings": "stores/task-review-settings.json",
   // Only the on/off switch lives here — the AI's own output ("ai-insight-
   // result"), history ("ai-insight-history"), and recommendation ledger
   // ("ai-insight-ledger") are all server-only and deliberately NOT in this

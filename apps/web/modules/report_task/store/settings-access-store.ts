@@ -15,7 +15,8 @@ export type GrantableSection =
   | "reportTopics"
   | "issueDesk"
   | "attachments"
-  | "projectTopics";
+  | "projectTopics"
+  | "taskReview";
 
 interface SettingsAccessStore {
   /** userId -> set of company-tab section keys that user has been granted, on top of their normal role. */

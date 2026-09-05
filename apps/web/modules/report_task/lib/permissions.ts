@@ -1,6 +1,7 @@
 import { canManage, departments, getUser, isOwner } from "@/modules/report_task/lib/directory";
 import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import type { GrantableSection } from "@/modules/report_task/store/settings-access-store";
+import type { TaskReviewSettings } from "@/modules/report_task/store/task-review-settings-store";
 import type { ChecklistItem, Task } from "@/modules/report_task/types";
 
 /**
@@ -23,14 +24,25 @@ export function canEditRecord(
 
 /**
  * Who can mark a done-but-unreviewed task ("รอตรวจสอบ") as ผ่าน/ไม่ผ่าน —
- * deliberately narrower than canEditRecord: the company-wide owner or a head
- * of a department the task touches, but NOT just whoever assigned/created
- * it. Reviewing your own assignment defeats the point of a sign-off ("คนที่
- * มอบหมายงานหรือ ceo" — decided it should be ceo + หัวหน้าแผนก only, an
- * assigner who happens to also be a head still qualifies through that).
+ * deliberately narrower than canEditRecord: the company-wide owner always can;
+ * a head of a department the task touches can too, unless the owner turned
+ * that off in settings (headsCanReview); and anyone the owner explicitly
+ * listed in extraReviewerIds can, regardless of department, for a trusted
+ * reviewer who isn't an official head. NOT just whoever assigned/created the
+ * task — reviewing your own assignment defeats the point of a sign-off,
+ * unless that person also happens to qualify through one of the rules above.
+ * `settings` defaults to the store's own default (heads on, no extras) so
+ * every existing call site keeps working even before it's updated to pass
+ * the real settings.
  */
-export function canReviewTask(recordDepartmentIds: (string | undefined)[], viewingAsUserId: string): boolean {
+export function canReviewTask(
+  recordDepartmentIds: (string | undefined)[],
+  viewingAsUserId: string,
+  settings: TaskReviewSettings = { headsCanReview: true, extraReviewerIds: [] }
+): boolean {
   if (isOwner(viewingAsUserId)) return true;
+  if (settings.extraReviewerIds.includes(viewingAsUserId)) return true;
+  if (!settings.headsCanReview) return false;
   const deptIds = new Set(recordDepartmentIds.filter((id): id is string => !!id));
   return departments.some((d) => d.headId === viewingAsUserId && deptIds.has(d.id));
 }

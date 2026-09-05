@@ -7,6 +7,7 @@ import { useDepartmentStore } from "@/modules/report_task/store/department-store
 import { canReviewTask, canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { aboutMeCountInPost } from "@/modules/report_task/lib/report-feed-activity";
 import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
+import type { TaskReviewSettings } from "@/modules/report_task/store/task-review-settings-store";
 import type { Task } from "@/modules/report_task/types";
 import type { User, Department } from "@/modules/report_task/types";
 
@@ -33,18 +34,20 @@ export function AppTileReviewBadge() {
 
     async function load() {
       try {
-        const [tasksRes, employeesRes, departmentsRes, reportFeedRes] = await Promise.all([
+        const [tasksRes, employeesRes, departmentsRes, reportFeedRes, reviewSettingsRes] = await Promise.all([
           fetch("/api/report-task/tasks"),
           fetch("/api/report-task/store/employees"),
           fetch("/api/report-task/store/departments"),
           fetch("/api/report-task/store/report-feed"),
+          fetch("/api/report-task/store/task-review-settings"),
         ]);
-        const [tasks, employees, departments, reportFeed] = (await Promise.all([
+        const [tasks, employees, departments, reportFeed, reviewSettings] = (await Promise.all([
           tasksRes.json(),
           employeesRes.json(),
           departmentsRes.json(),
           reportFeedRes.json(),
-        ])) as [Task[], User[], Department[], { topics?: ReportTopic[]; posts?: ReportPost[] } | null];
+          reviewSettingsRes.json(),
+        ])) as [Task[], User[], Department[], { topics?: ReportTopic[]; posts?: ReportPost[] } | null, TaskReviewSettings | null];
         if (cancelled) return;
 
         useEmployeeStore.getState().setEmployees(employees);
@@ -52,7 +55,10 @@ export function AppTileReviewBadge() {
         const viewingAsUserId = useIdentityStore.getState().viewingAsUserId;
 
         const reviewCount = tasks.filter(
-          (t) => t.status === "done" && !t.reviewedBy && canReviewTask(t.departmentIds, viewingAsUserId)
+          (t) =>
+            t.status === "done" &&
+            !t.reviewedBy &&
+            canReviewTask(t.departmentIds, viewingAsUserId, reviewSettings ?? undefined)
         ).length;
 
         const topics = reportFeed?.topics ?? [];

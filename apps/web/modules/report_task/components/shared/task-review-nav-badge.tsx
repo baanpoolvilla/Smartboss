@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canReviewTask } from "@/modules/report_task/lib/permissions";
+import { useTaskReviewSettingsStore } from "@/modules/report_task/store/task-review-settings-store";
 
 /**
  * Discord-style unread pill for the "งาน / Kanban" rail item (see
@@ -22,11 +23,13 @@ import { canReviewTask } from "@/modules/report_task/lib/permissions";
 export function TaskReviewNavBadge() {
   const tasks = useTaskStore((s) => s.tasks);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
+  const reviewSettings = useTaskReviewSettingsStore((s) => s.settings);
 
   const count = useMemo(
     () =>
-      tasks.filter((t) => t.status === "done" && !t.reviewedBy && canReviewTask(t.departmentIds, viewingAsUserId)).length,
-    [tasks, viewingAsUserId]
+      tasks.filter((t) => t.status === "done" && !t.reviewedBy && canReviewTask(t.departmentIds, viewingAsUserId, reviewSettings))
+        .length,
+    [tasks, viewingAsUserId, reviewSettings]
   );
 
   if (count === 0) return null;
