@@ -41,6 +41,7 @@ export class LeaveService {
     allow_negative: boolean;
     auto_approve: boolean;
     monthly_quota_days: number;
+    show_on_calendar: boolean;
     effective_from: string;
   }): Promise<Record<string, unknown>> {
     return this.uow.run(async (uow) => {
@@ -59,6 +60,7 @@ export class LeaveService {
         advanceNoticeDays: input.advance_notice_days,
         attachmentRequired: input.attachment_required,
         allowNegative: input.allow_negative,
+        showOnCalendar: input.show_on_calendar,
         effectiveFrom: input.effective_from,
       });
 
@@ -695,26 +697,35 @@ export class LeaveService {
           quota_minutes_per_year: row.quotaMinutesPerYear,
           auto_approve: row.autoApprove,
           monthly_quota_days: row.monthlyQuotaDays,
+          show_on_calendar: row.showOnCalendar,
         })),
       };
     });
   }
 
   /**
-   * ปฏิทินวันหยุดรวมของทีม — ใครหยุดวันไหนบ้าง
+   * ปฏิทินวันหยุดรวมของทีม — ใครหยุดวันไหนบ้าง เป็นวันหยุดชนิดไหน
    *
    * แยกจาก listRequests เพราะสิทธิ์คนละชั้น: listRequests ต้องมี
    * workforce.leave.manage ซึ่ง role EMPLOYEE ไม่มี ⇒ พนักงานจะมองไม่เห็น
    * แม้แต่วันหยุดของตัวเอง แต่ทั้งทีมต้องเห็นว่าใครหยุดวันไหนถึงจะวางแผนงานได้
    *
-   * ⚠ คืนเฉพาะ ชื่อ + ช่วงวัน + สถานะ — **ไม่คืนเหตุผลและประเภทการลา**
-   * เพราะ "ลาป่วย" กับเหตุผลเป็นข้อมูลสุขภาพ/ส่วนตัวที่เพื่อนร่วมงานไม่ต้องรู้
-   * คนที่ต้องเห็นรายละเอียดคือผู้อนุมัติ ซึ่งใช้ listRequests อยู่แล้ว
+   * ⚠ **ไม่คืนเหตุผล** ของคนอื่นเลย — เหตุผลเป็นข้อความอิสระที่มักมีเรื่อง
+   * ส่วนตัว/สุขภาพปนอยู่ คนที่ต้องอ่านคือผู้อนุมัติ ซึ่งใช้ listRequests อยู่แล้ว
+   *
+   * ส่วน **ประเภทการลา** คืนตามค่า show_on_calendar ของประเภทนั้น (ตั้งค่าได้
+   * รายบริษัท) — เดิมตัดออกทั้งหมดเพื่อกันเรื่อง "ลาป่วย" แต่ผลข้างเคียงคือ
+   * ปฏิทินบอกไม่ได้ว่าวันนั้นเป็นวันหยุดประจำเดือนหรือลาป่วย ซึ่งเป็นสิ่งที่
+   * คนวางแผนงานต้องรู้ ⇒ ให้บริษัทปิดเป็นรายประเภทแทนการปิดตายทั้งระบบ
+   * ใบของตัวเองเห็นประเภทเสมอไม่ว่าตั้งค่าไว้อย่างไร
    */
   async listCalendar(query: { from: string; to: string }): Promise<{
     items: Record<string, unknown>[];
   }> {
     return this.uow.run(async (uow) => {
+      // ใบของตัวเองเห็นประเภทการลาเสมอ แม้ประเภทนั้นจะถูกตั้งให้ซ่อนจากคนอื่น
+      const ownEmploymentId = this.requestContext.requirePrincipal().employmentId;
+
       const rows = await uow.tx
         .select({
           id: schema.leaveRequests.id,
@@ -722,10 +733,16 @@ export class LeaveService {
           startsOn: schema.leaveRequests.startsOn,
           endsOn: schema.leaveRequests.endsOn,
           status: schema.leaveRequests.status,
+          swapFromDate: schema.leaveRequests.swapFromDate,
           employeeCode: schema.employments.employeeCode,
           firstName: schema.people.firstName,
           lastName: schema.people.lastName,
           preferredName: schema.people.preferredName,
+          leaveTypeId: schema.leaveRequests.leaveTypeId,
+          leaveTypeName: schema.leaveTypes.name,
+          leaveTypePaid: schema.leaveTypes.paid,
+          leaveTypeAutoApprove: schema.leaveTypes.autoApprove,
+          leaveTypeShowOnCalendar: schema.leaveTypes.showOnCalendar,
         })
         .from(schema.leaveRequests)
         .innerJoin(
@@ -733,6 +750,10 @@ export class LeaveService {
           eq(schema.employments.id, schema.leaveRequests.employmentId),
         )
         .innerJoin(schema.people, eq(schema.people.id, schema.employments.personId))
+        .innerJoin(
+          schema.leaveTypes,
+          eq(schema.leaveTypes.id, schema.leaveRequests.leaveTypeId),
+        )
         .where(
           and(
             // ทับซ้อนช่วง ไม่ใช่อยู่ในช่วงทั้งก้อน — การลาคร่อมเดือนต้องขึ้นทั้งสองเดือน
@@ -746,19 +767,38 @@ export class LeaveService {
         .limit(1000);
 
       return {
-        items: rows.map((row) => ({
-          id: row.id,
-          employment_id: row.employmentId,
-          display_name:
-            row.preferredName.trim() === ''
-              ? `${row.firstName} ${row.lastName}`.trim()
-              : row.preferredName,
-          employee_code: row.employeeCode,
-          starts_on: row.startsOn,
-          ends_on: row.endsOn,
-          // ฝั่งหน้าจอสนใจแค่ "รออนุมัติ" กับ "อนุมัติแล้ว" — ไม่ต้องรู้ชื่อสถานะภายใน
-          status: row.status === 'APPROVED' ? 'APPROVED' : 'PENDING',
-        })),
+        items: rows.map((row) => {
+          const isOwn = ownEmploymentId !== null && row.employmentId === ownEmploymentId;
+          const showType = isOwn || row.leaveTypeShowOnCalendar;
+          return {
+            id: row.id,
+            employment_id: row.employmentId,
+            display_name:
+              row.preferredName.trim() === ''
+                ? `${row.firstName} ${row.lastName}`.trim()
+                : row.preferredName,
+            employee_code: row.employeeCode,
+            starts_on: row.startsOn,
+            ends_on: row.endsOn,
+            // ฝั่งหน้าจอสนใจแค่ "รออนุมัติ" กับ "อนุมัติแล้ว" — ไม่ต้องรู้ชื่อสถานะภายใน
+            status: row.status === 'APPROVED' ? 'APPROVED' : 'PENDING',
+            /*
+             * ประเภทที่ถูกซ่อนคืน id เป็น null ด้วย ไม่ใช่ซ่อนแค่ชื่อ — ไม่งั้น
+             * เอา id ไปเทียบกับ /leave-types (ทุกคนอ่านได้) ก็รู้ชื่ออยู่ดี
+             */
+            leave_type_id: showType ? row.leaveTypeId : null,
+            leave_type_name: showType ? row.leaveTypeName : null,
+            leave_type_paid: showType ? row.leaveTypePaid : null,
+            /** true = ประเภทที่ลงแล้วมีผลทันที ไม่ต้องรออนุมัติ */
+            leave_type_auto_approve: showType ? row.leaveTypeAutoApprove : null,
+            /*
+             * มีค่า = ใบนี้เป็นคำขอ "สลับ" มาแทนวันนั้น ปฏิทินต้องบอกให้เห็น
+             * ไม่งั้นวันเดิมกับวันใหม่ขึ้นเป็นสองวันหยุดที่ไม่เกี่ยวกัน ทั้งที่
+             * อนุมัติเมื่อไรวันเดิมจะหายไปทันที
+             */
+            swap_from_date: row.swapFromDate,
+          };
+        }),
       };
     });
   }
@@ -801,6 +841,14 @@ export class LeaveService {
           half_day_start: row.halfDayStart,
           half_day_end: row.halfDayEnd,
           status: row.status,
+          /*
+           * เหตุผลกับวันเดิมของคำขอสลับหายไปจาก payload มาตลอด — หน้าจออนุมัติ
+           * จึงขึ้น "—" ทุกใบ และผู้อนุมัติมองไม่ออกว่าใบไหนเป็นการสลับ (ซึ่ง
+           * พออนุมัติแล้วจะไปยกเลิกวันเดิมให้ด้วย) endpoint นี้ต้องมีสิทธิ์
+           * workforce.leave.manage อยู่แล้ว จึงไม่ใช่การเปิดข้อมูลให้คนทั่วไป
+           */
+          reason: row.reason,
+          swap_from_date: row.swapFromDate,
         })),
       };
     });

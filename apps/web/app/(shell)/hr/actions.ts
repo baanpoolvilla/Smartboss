@@ -15,6 +15,7 @@ import {
   DAYS_OFF_LIMITS,
   loadDayOffQuota,
   saveDayOffQuota,
+  saveEmployeeDayOffStanding,
 } from "@/lib/day-off-quota";
 
 /**
@@ -800,10 +801,16 @@ export async function setEmployeeDaysOffAction(
    */
   const quota = await loadDayOffQuota(session.orgId, employmentId, month);
   if (offDays.length > quota.daysPerMonth) {
+    const origin =
+      quota.source === "month"
+        ? " (ตั้งไว้เฉพาะเดือนนี้)"
+        : quota.source === "employee"
+          ? " (ค่าประจำของคนนี้)"
+          : " (ค่าตั้งต้นของบริษัท)";
     return {
       error:
         `เลือกวันหยุดไว้ ${offDays.length} วัน แต่คนนี้ได้เดือนละ ${quota.daysPerMonth} วัน` +
-        (quota.perEmployee ? " (ตั้งไว้เฉพาะคนนี้)" : " (ค่าตั้งต้นของบริษัท)") +
+        origin +
         " — เอาวันที่เกินออก หรือแก้โควตาที่ช่อง “วันหยุดต่อเดือน” ด้านบนก่อน",
     };
   }
@@ -865,6 +872,8 @@ export interface QuotaState {
   ok?: boolean;
   daysPerMonth?: number;
   cleared?: boolean;
+  /** ตั้งค่าประจำ (ทุกเดือน) หรือทับเฉพาะเดือนที่กำลังดูอยู่ */
+  scope?: "standing" | "month";
   error?: string;
 }
 
@@ -881,17 +890,27 @@ export async function setDayOffQuotaAction(
 
   const employmentId = String(formData.get("employment_id") ?? "");
   const month = String(formData.get("month") ?? "");
+  /*
+   * "standing" = ข้อตกลงจ้างงานของคนนี้ มีผลทุกเดือน (บางคน 4 บางคน 6)
+   * "month"    = ทับเฉพาะเดือนที่กำลังดูอยู่ เช่นเดือนที่ปิดกิจการชั่วคราว
+   * ฟอร์มเดียวมีสองปุ่ม จึงต้องบอกมาว่ากดปุ่มไหน ไม่ใช่เดาจากค่าที่กรอก
+   */
+  const scope = formData.get("scope") === "standing" ? "standing" : "month";
   if (!employmentId) return { error: "กรุณาเลือกพนักงาน" };
-  if (!/^\d{4}-\d{2}$/.test(month)) return { error: "เดือนไม่ถูกต้อง" };
+  if (scope === "month" && !/^\d{4}-\d{2}$/.test(month)) return { error: "เดือนไม่ถูกต้อง" };
 
-  const raw = String(formData.get("days_per_month") ?? "").trim();
-  const note = String(formData.get("note") ?? "").slice(0, 200);
+  const raw = String(formData.get(scope === "standing" ? "standing_days" : "days_per_month") ?? "").trim();
+  const note = String(formData.get(scope === "standing" ? "standing_note" : "note") ?? "").slice(0, 200);
 
-  // ว่าง = กลับไปใช้ค่าตั้งต้นของบริษัทเฉพาะเดือนนี้ ไม่ใช่ 0 วัน — สองอย่างนี้ต่างกันคนละเรื่อง
+  // ว่าง = กลับไปใช้ชั้นที่กว้างกว่า ไม่ใช่ 0 วัน — สองอย่างนี้ต่างกันคนละเรื่อง
   if (raw === "") {
-    await saveDayOffQuota(session.orgId, employmentId, month, null, "", session.userId);
+    if (scope === "standing") {
+      await saveEmployeeDayOffStanding(session.orgId, employmentId, null, "", session.userId);
+    } else {
+      await saveDayOffQuota(session.orgId, employmentId, month, null, "", session.userId);
+    }
     revalidatePath(`/hr/employees/${employmentId}`);
-    return { ok: true, cleared: true };
+    return { ok: true, cleared: true, scope };
   }
 
   const days = Number(raw);
@@ -901,9 +920,13 @@ export async function setDayOffQuotaAction(
     };
   }
 
-  await saveDayOffQuota(session.orgId, employmentId, month, days, note, session.userId);
+  if (scope === "standing") {
+    await saveEmployeeDayOffStanding(session.orgId, employmentId, days, note, session.userId);
+  } else {
+    await saveDayOffQuota(session.orgId, employmentId, month, days, note, session.userId);
+  }
   revalidatePath(`/hr/employees/${employmentId}`);
-  return { ok: true, daysPerMonth: days };
+  return { ok: true, daysPerMonth: days, scope };
 }
 
 /* ═══════════════════ วันลา / วันหยุดของพนักงาน ═══════════════════ */

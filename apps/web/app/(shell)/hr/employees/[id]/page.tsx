@@ -487,7 +487,8 @@ export default async function EmployeeDetailPage({
                     employmentId={id}
                     month={month}
                     daysPerMonth={quota.daysPerMonth}
-                    perEmployee={quota.perEmployee}
+                    source={quota.source}
+                    employeeStanding={quota.employeeStanding}
                     companyDefault={quota.companyDefault}
                     note={quota.note}
                   />
@@ -506,7 +507,7 @@ export default async function EmployeeDetailPage({
                         .map((sh) => ({ id: sh.id, label: sh.label }))}
                       restShiftId={restShiftId}
                       quota={quota.daysPerMonth}
-                      quotaPerEmployee={quota.perEmployee}
+                      quotaSource={quota.source}
                       boundShiftId={boundShiftId}
                     />
                   )}
