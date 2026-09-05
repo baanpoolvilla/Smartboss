@@ -36,7 +36,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/modules/report_task/c
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { TimePickerField } from "@/modules/report_task/components/shared/time-picker-field";
 import { PenaltyChip } from "@/modules/report_task/components/shared/penalty-chip";
-import { canEditRecord, canRemoveReaction, canSeePenaltyStatus, canToggleOwnChecklistItem } from "@/modules/report_task/lib/permissions";
+import { canEditRecord, canRemoveReaction, canReviewTask, canSeePenaltyStatus, canToggleOwnChecklistItem } from "@/modules/report_task/lib/permissions";
 import { todayIso } from "@/modules/report_task/lib/now";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
@@ -226,6 +226,10 @@ export function TaskDetailSheet({
   // assignees, dates). Everyone else can still execute it: status,
   // checklist, comments, attachments, reactions.
   const canEditMain = canEditRecord(task.assignedById, task.departmentIds, viewingAsUserId);
+  // Narrower than canEditMain — ผ่าน/ไม่ผ่าน is a sign-off, not editing, so
+  // it's limited to CEO + หัวหน้าแผนก only (an assigner who isn't also a
+  // head can still edit the task, just can't review their own assignment).
+  const canReview = canReviewTask(task.departmentIds, viewingAsUserId);
   const lockedTitle = "แก้ไขได้เฉพาะผู้สร้างงาน";
   // canEditMain (and canSeeTask) fall back to the viewer's own
   // department-head match once they're no longer an assignee — a non-owner
@@ -516,11 +520,13 @@ export function TaskDetailSheet({
           </div>
 
           {/* Sign-off — separate from "สถานะ" itself: a done task still needs
-              someone (the assigner/dept head/CEO — same circle as canEditMain)
-              to glance at it and confirm it's actually finished, not just
-              trust whoever ticked the last checklist box. Purely
-              informational, doesn't affect status/scoring — resets whenever
-              the task leaves "เสร็จสิ้น" (see the field's own doc). */}
+              someone (CEO or a head of a department the task touches — see
+              canReviewTask, deliberately narrower than canEditMain so a plain
+              assigner can't review their own assignment) to glance at it and
+              confirm it's actually finished, not just trust whoever ticked
+              the last checklist box. Purely informational, doesn't affect
+              status/scoring — resets whenever the task leaves "เสร็จสิ้น"
+              (see the field's own doc). */}
           {task.status === "done" && (
             <div className="space-y-2">
               <div
@@ -541,7 +547,7 @@ export function TaskDetailSheet({
                   {task.reviewedBy ? <Check className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
                   {task.reviewedBy ? `ตรวจแล้วโดย ${getUser(task.reviewedBy)?.name ?? "—"}` : "รอตรวจสอบ"}
                 </span>
-                {!task.reviewedBy && canEditMain && !rejecting && (
+                {!task.reviewedBy && canReview && !rejecting && (
                   <div className="flex items-center gap-1.5">
                     <Button
                       size="sm"
@@ -563,7 +569,7 @@ export function TaskDetailSheet({
                 )}
               </div>
 
-              {!task.reviewedBy && canEditMain && rejecting && (
+              {!task.reviewedBy && canReview && rejecting && (
                 <div className="rounded-lg border border-[var(--line)] p-2.5 space-y-2">
                   <div className="space-y-1">
                     <Label className="text-xs">กำหนดส่งใหม่</Label>
