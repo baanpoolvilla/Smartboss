@@ -211,15 +211,22 @@ export function WorkOrderFilteredList({
   creatorNames: Record<string, string>;
 }) {
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-3 p-4 sm:p-5">
-      {orders.map((wo) => (
-        <OrderCard
-          key={wo.id}
-          wo={wo}
-          propertyName={propertyNames[wo.propertyId] ?? ""}
-          creatorName={wo.createdBy ? creatorNames[wo.createdBy] : undefined}
-        />
-      ))}
+    /*
+     * ต้องมี scroll ของตัวเองเหมือนกัน — โหมดกรอง (วันนี้/ด่วน/ยังไม่บันทึก) อยู่
+     * ใน AppScaffold แบบ `fill` ตัวเดียวกับกระดาน ซึ่งห่อด้วย overflow-hidden
+     * ⇒ เดิมรายการยาว ๆ ถูกตัดที่ขอบจอแล้วเลื่อนไม่ได้ ทั้งบนมือถือและจอใหญ่
+     */
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto flex max-w-4xl flex-col gap-3 p-4 sm:p-5">
+        {orders.map((wo) => (
+          <OrderCard
+            key={wo.id}
+            wo={wo}
+            propertyName={propertyNames[wo.propertyId] ?? ""}
+            creatorName={wo.createdBy ? creatorNames[wo.createdBy] : undefined}
+          />
+        ))}
+      </div>
     </div>
   );
 }

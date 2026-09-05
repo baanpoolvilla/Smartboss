@@ -104,7 +104,7 @@ export default async function WorkOrdersPage({
       }
     >
       {rows.length === 0 ? (
-        <div className="mx-auto max-w-4xl p-4 sm:p-5">
+        <div className="mx-auto h-full max-w-4xl overflow-y-auto p-4 sm:p-5">
           <EmptyState>
             {isFilterMode
               ? "ไม่พบใบงาน"
