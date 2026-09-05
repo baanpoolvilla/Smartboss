@@ -583,21 +583,26 @@ function ReportFeedPageInner() {
           it just had nothing to resolve against without a stretched parent). */}
       <div className="relative flex flex-col lg:flex-row gap-4 lg:gap-6 items-stretch flex-1 min-h-0 lg:min-h-[420px]">
         {topicSidebarCollapsed ? (
-          // Labeled pill affix pinned to the feed's own left edge, vertically
-          // centered — the one way back in once the sidebar's gone, so it
-          // has to be findable without a moment's hunting, not tucked into a
-          // menu somewhere. Carries the word "หัวข้อ" (not just »), matching
-          // the collapse pill's own "« ย่อ" on the other side of this same
-          // toggle — neither one is a bare arrow.
+          // Icon-only affix at rest, pinned to the feed's own left edge —
+          // the labeled pill this used to always be read as too wide sitting
+          // there permanently ("แบบนี้มันลก"). The label still exists (never
+          // a bare arrow with no accessible name — same reasoning as the
+          // collapse pill's own "« ย่อ"), it just only expands into view on
+          // hover, same discoverability as a tooltip. `title`/`aria-label`
+          // keep the name available for keyboard/assistive tech regardless
+          // of hover, and this whole affix is `lg:`-only to begin with
+          // (desktop, where hover exists) so there's no touch-device gap.
           <button
             type="button"
             onClick={() => setSidebarCollapsed(false)}
             title="เปิดหัวข้อ"
             aria-label="เปิดหัวข้อ"
-            className="absolute left-0 top-1/2 z-10 hidden -translate-y-1/2 items-center gap-1.5 rounded-r-[22px] border border-l-0 border-[var(--line)] bg-white px-3.5 py-2 text-sm font-bold text-[var(--brand-green-dark)] shadow-[2px_0_8px_rgba(0,0,0,0.08)] transition-colors hover:bg-[var(--accent)] lg:flex"
+            className="group absolute left-0 top-1/2 z-10 hidden -translate-y-1/2 items-center gap-1.5 overflow-hidden rounded-r-[22px] border border-l-0 border-[var(--line)] bg-white py-2 pl-2.5 pr-2.5 text-sm font-bold text-[var(--brand-green-dark)] shadow-[2px_0_8px_rgba(0,0,0,0.08)] transition-all duration-200 hover:bg-[var(--accent)] hover:pr-3.5 lg:flex"
           >
-            <ChevronRight className="h-4 w-4" />
-            หัวข้อ
+            <ChevronRight className="h-4 w-4 shrink-0" />
+            <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-200 group-hover:max-w-[56px] group-hover:opacity-100">
+              หัวข้อ
+            </span>
           </button>
         ) : (
           <div className="hidden lg:flex lg:shrink-0">
