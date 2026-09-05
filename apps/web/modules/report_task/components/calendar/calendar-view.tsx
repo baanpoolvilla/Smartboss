@@ -35,12 +35,12 @@ import { TaskDetailSheet } from "@/modules/report_task/components/kanban/task-de
 import { NewTaskDialog } from "@/modules/report_task/components/kanban/new-task-dialog";
 import { useEventColorStore } from "@/modules/report_task/store/event-color-store";
 import { useCalendarScopeStore } from "@/modules/report_task/store/calendar-scope-store";
-import { chartColors } from "@/modules/report_task/lib/chart-colors";
+import { chartColors, leaveTypeColorOrder } from "@/modules/report_task/lib/chart-colors";
 import { canEditRecord, canSeeTask, canSeeTaskOnCalendar } from "@/modules/report_task/lib/permissions";
 import { getUser, canManage, isOwner } from "@/modules/report_task/lib/directory";
 import { eventTypeLabels } from "@/modules/report_task/lib/calendar-colors";
 import { leaveIconOf } from "@/modules/report_task/lib/leave-icons";
-import { useLeaveTypeStore, type LeaveTypeDef } from "@/modules/report_task/store/leave-type-store";
+import type { LeaveTypeDef } from "@/modules/report_task/store/leave-type-store";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Bell, ListChecks, CalendarOff, Plus, Settings2, User, Users, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
@@ -132,7 +132,26 @@ export function CalendarView() {
   const routineCompanyQuota = useRoutineDayOffStore((s) => s.companyMonthlyQuota);
   const routineUseDeptOverrides = useRoutineDayOffStore((s) => s.useDepartmentOverrides);
   const routineDeptQuotas = useRoutineDayOffStore((s) => s.departmentQuotas);
-  const leaveTypes = useLeaveTypeStore((s) => s.types);
+  // ประเภทลาที่แสดง/กรองในปฏิทินนี้มาจากรายการลาจริงที่ดึงจาก HR (workforce)
+  // ล้วน ๆ — ไม่ใช่ค่าคงที่ที่เดาไว้ในโค้ด เพราะ HR เป็นเจ้าของรายชื่อ
+  // ประเภทลาจริง (แอดมินเพิ่ม/เปลี่ยนชื่อได้ที่ /hr/settings) แบบไหนก็ตามที่
+  // มีคนลาจริงในช่วงที่โหลดอยู่ก็จะขึ้นเป็นตัวเลือกกรองที่นี่เอง
+  const leaveTypes = useMemo<LeaveTypeDef[]>(() => {
+    const byId = new Map<string, LeaveTypeDef>();
+    for (const l of leaves) {
+      if (l.type !== "leave") continue;
+      const id = l.leaveType ?? l.title ?? "ลา";
+      if (byId.has(id)) continue;
+      byId.set(id, {
+        id,
+        label: id,
+        color: leaveTypeColorOrder[byId.size % leaveTypeColorOrder.length] ?? chartColors.gray,
+        icon: "umbrella",
+        quotaMode: "none",
+      });
+    }
+    return [...byId.values()];
+  }, [leaves]);
   const colors = useEventColorStore((s) => s.colors);
   const hiddenUserIds = useCalendarVisibilityStore((s) => s.hiddenUserIds);
   const toggleUserVisible = useCalendarVisibilityStore((s) => s.toggle);

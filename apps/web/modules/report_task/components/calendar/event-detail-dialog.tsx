@@ -125,7 +125,7 @@ export function EventDetailDialog({
         <DialogHeader>
           <Badge variant="outline" className="w-fit text-[10px] mb-1" style={{ borderColor: color, color }}>
             {eventTypeLabels[event.type]}
-            {event.leaveType ? ` · ${leaveTypes.find((t) => t.id === event.leaveType)?.label ?? "ลา"}` : ""}
+            {event.leaveType ? ` · ${leaveTypes.find((t) => t.id === event.leaveType)?.label ?? event.leaveType}` : ""}
           </Badge>
           <DialogTitle>{editing ? "แก้ไขรายการ" : event.title}</DialogTitle>
           {!editing && (
