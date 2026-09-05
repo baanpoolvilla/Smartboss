@@ -599,11 +599,14 @@ export function CalendarView() {
       // just "ลาป่วย": on a team calendar that says a leave happened but not
       // whose, and the per-person color legend is no help once several people
       // are off in the same week. `l.title` is the leave type's name straight
-      // from workforce (see lib/db/workforce-calendar.ts).
+      // from workforce (see lib/db/workforce-calendar.ts) — unless the person
+      // named the day off themselves ("Bee-Off"), in which case `authoredTitle`
+      // is set and the name is already in there: prefixing would read
+      // "Bee - Bee-Off".
       const owner = l.userId ? getUser(l.userId)?.name.split(" ")[0] : undefined;
       return {
         ...l,
-        title: owner ? `${owner} - ${l.title}` : l.title,
+        title: owner && !l.authoredTitle ? `${owner} - ${l.title}` : l.title,
         colorHint: (l.leaveType && leaveColorById.get(l.leaveType)) ?? chartColors.gray,
         mine: l.userId === viewingAsUserId,
         // Never draggable — leave lives in workforce and this store is a

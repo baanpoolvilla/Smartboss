@@ -45,6 +45,11 @@ export const submitLeaveSchema = z.object({
   half_day_end: z.boolean().default(false),
   reason: z.string().trim().max(500).default(''),
   /**
+   * ชื่อที่ขึ้นบนปฏิทินรวม ตั้งเองได้ — ว่าง = ให้ปฏิทินประกอบให้เอง
+   * สั้นกว่า reason มากเพราะต้องอ่านออกในช่องวันกว้างไม่ถึง 5rem
+   */
+  display_label: z.string().trim().max(60).default(''),
+  /**
    * มีค่า = นี่คือคำขอ "สลับวันหยุด" จากวันนี้มาเป็นวันที่ขอใหม่
    * บังคับ SUBMITTED เสมอแม้ประเภทการลาจะ auto_approve (ดู leave.service)
    */
@@ -58,6 +63,11 @@ export const decideLeaveSchema = z.object({
 
 export const cancelLeaveSchema = z.object({
   reason: z.string().trim().min(1).max(500),
+});
+
+/** เปลี่ยนชื่อที่ขึ้นบนปฏิทินของใบที่ยื่นไปแล้ว — ว่าง = กลับไปใช้ชื่อที่ประกอบเอง */
+export const relabelLeaveSchema = z.object({
+  display_label: z.string().trim().max(60).default(''),
 });
 
 export const leaveBalanceSchema = z.object({

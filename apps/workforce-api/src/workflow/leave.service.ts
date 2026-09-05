@@ -201,6 +201,7 @@ export class LeaveService {
     half_day_start: boolean;
     half_day_end: boolean;
     reason: string;
+    display_label: string;
     swap_from_date?: string;
   }): Promise<Record<string, unknown>> {
     return this.uow.run(async (uow) => {
@@ -328,6 +329,7 @@ export class LeaveService {
         halfDayStart: input.half_day_start,
         halfDayEnd: input.half_day_end,
         reason: input.reason,
+        displayLabel: input.display_label,
         swapFromDate: input.swap_from_date ?? null,
         // สิทธิ์ที่ไม่ใช่คำขอ (เช่นวันหยุดประจำเดือน) อนุมัติทันที ไม่เข้าคิว
         // ยกเว้นคำขอสลับ — ต้องรออนุมัติเสมอเพราะกระทบวันเดิมที่คนอื่นวางแผนไว้แล้ว
@@ -548,6 +550,56 @@ export class LeaveService {
   }
 
   /**
+   * เปลี่ยนชื่อที่ขึ้นบนปฏิทินของใบที่ยื่นไปแล้ว
+   *
+   * แยกจาก decide/cancel เพราะไม่กระทบสิทธิ์ ยอดวันลา หรือผลลงเวลาเลย —
+   * เป็นแค่ป้ายชื่อ จึงไม่ต้องยกเลิกใบเดิมแล้วยื่นใหม่เพียงเพราะพิมพ์ผิด
+   *
+   * ตรวจความเป็นเจ้าของแบบเดียวกับ cancelRequest: ของตัวเองแก้ได้เสมอ
+   * ของคนอื่นต้องมี workforce.leave.approve
+   *
+   * ใบที่ยกเลิก/ไม่อนุมัติไปแล้วแก้ไม่ได้ — มันไม่ขึ้นปฏิทินอยู่แล้ว การยอมให้
+   * แก้มีแต่จะทำให้ประวัติที่ใช้ตรวจสอบย้อนหลังเพี้ยนโดยไม่ได้อะไรกลับมา
+   */
+  async relabelRequest(requestId: string, displayLabel: string): Promise<Record<string, unknown>> {
+    return this.uow.run(async (uow) => {
+      const requests = await uow.tx
+        .select()
+        .from(schema.leaveRequests)
+        .where(eq(schema.leaveRequests.id, requestId))
+        .limit(1);
+      const request = requests[0];
+      if (request === undefined) throw AppError.notFound('leave request');
+      if (request.status !== 'SUBMITTED' && request.status !== 'APPROVED') {
+        throw AppError.conflict('leave request is no longer active');
+      }
+
+      const principal = this.requestContext.requirePrincipal();
+      const isOwn = principal.employmentId !== null && principal.employmentId === request.employmentId;
+      if (!isOwn && !principal.permissions.has('workforce.leave.approve')) {
+        throw AppError.forbidden('cannot rename a leave request that belongs to someone else');
+      }
+
+      await uow.tx
+        .update(schema.leaveRequests)
+        .set({ displayLabel })
+        .where(eq(schema.leaveRequests.id, requestId));
+
+      await uow.audit({
+        action: 'leave.request.relabel',
+        resourceType: 'leave_request',
+        resourceId: requestId,
+        outcome: 'SUCCESS',
+        companyId: request.companyId,
+        before: { display_label: request.displayLabel },
+        after: { display_label: displayLabel },
+      });
+
+      return { id: requestId, display_label: displayLabel };
+    });
+  }
+
+  /**
    * ยกเลิกใบลาที่อนุมัติแล้ว — คืนสิทธิ์ด้วยรายการ REVERSAL ไม่ลบรายการเดิม
    *
    * ยกเลิกของตัวเองได้เสมอ (ลงผิดวัน/เปลี่ยนใจ) ส่วนของคนอื่นต้องมี
@@ -734,6 +786,7 @@ export class LeaveService {
           endsOn: schema.leaveRequests.endsOn,
           status: schema.leaveRequests.status,
           swapFromDate: schema.leaveRequests.swapFromDate,
+          displayLabel: schema.leaveRequests.displayLabel,
           employeeCode: schema.employments.employeeCode,
           firstName: schema.people.firstName,
           lastName: schema.people.lastName,
@@ -797,6 +850,13 @@ export class LeaveService {
              * อนุมัติเมื่อไรวันเดิมจะหายไปทันที
              */
             swap_from_date: row.swapFromDate,
+            /*
+             * ชื่อที่เจ้าตัวตั้งเอง ('' = ให้หน้าจอประกอบจากชื่อ+ประเภทเหมือนเดิม)
+             *
+             * ไม่ถูกปิดตาม show_on_calendar เพราะเป็นข้อความที่เจ้าของใบพิมพ์เอง
+             * — เขาเลือกแล้วว่าจะบอกทีมแค่ไหน ต่างจากชื่อประเภทที่ระบบเปิดเผยให้
+             */
+            display_label: row.displayLabel,
           };
         }),
       };
@@ -849,6 +909,7 @@ export class LeaveService {
            */
           reason: row.reason,
           swap_from_date: row.swapFromDate,
+          display_label: row.displayLabel,
         })),
       };
     });
