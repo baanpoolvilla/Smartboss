@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { useDepartmentStore } from "@/modules/report_task/store/department-store";
-import { canEditRecord } from "@/modules/report_task/lib/permissions";
+import { canReviewTask } from "@/modules/report_task/lib/permissions";
 import type { Task } from "@/modules/report_task/types";
 import type { User, Department } from "@/modules/report_task/types";
 
@@ -41,7 +41,7 @@ export function AppTileReviewBadge() {
         useDepartmentStore.getState().setDepartments(departments);
         const viewingAsUserId = useIdentityStore.getState().viewingAsUserId;
         const n = tasks.filter(
-          (t) => t.status === "done" && !t.reviewedBy && canEditRecord(t.assignedById, t.departmentIds, viewingAsUserId)
+          (t) => t.status === "done" && !t.reviewedBy && canReviewTask(t.departmentIds, viewingAsUserId)
         ).length;
         setCount(n);
       } catch {

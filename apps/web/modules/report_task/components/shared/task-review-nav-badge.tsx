@@ -3,19 +3,21 @@
 import { useMemo } from "react";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { canEditRecord } from "@/modules/report_task/lib/permissions";
+import { canReviewTask } from "@/modules/report_task/lib/permissions";
 
 /**
  * Discord-style unread pill for the "งาน / Kanban" rail item (see
  * module-registry.ts's `ModuleMenuItem.badge` and shell.tsx's RailItem) —
  * counts tasks sitting in "เสร็จสิ้น" with nobody's sign-off yet
  * (`!task.reviewedBy`, same condition task-detail-sheet.tsx's "รอตรวจสอบ" chip
- * uses), scoped to whoever can actually clear it: the owner, whoever
- * assigned the task, or that task's department head — the same
- * `canEditRecord` circle the "ผ่าน"/"ไม่ผ่าน" buttons themselves are gated
- * behind, so this never nags someone who has no "ผ่าน" button to press.
- * Renders nothing at zero — an always-present empty pill would just be
- * visual noise on every other module's page too.
+ * uses), scoped to whoever can actually clear it: the owner or that task's
+ * department head — the same `canReviewTask` circle the "ผ่าน"/"ไม่ผ่าน"
+ * buttons themselves are gated behind (deliberately narrower than
+ * canEditRecord: a plain assigner who isn't also a head can edit the task
+ * but doesn't get to review their own assignment), so this never nags
+ * someone who has no "ผ่าน" button to press. Renders nothing at zero — an
+ * always-present empty pill would just be visual noise on every other
+ * module's page too.
  */
 export function TaskReviewNavBadge() {
   const tasks = useTaskStore((s) => s.tasks);
@@ -23,9 +25,7 @@ export function TaskReviewNavBadge() {
 
   const count = useMemo(
     () =>
-      tasks.filter(
-        (t) => t.status === "done" && !t.reviewedBy && canEditRecord(t.assignedById, t.departmentIds, viewingAsUserId)
-      ).length,
+      tasks.filter((t) => t.status === "done" && !t.reviewedBy && canReviewTask(t.departmentIds, viewingAsUserId)).length,
     [tasks, viewingAsUserId]
   );
 

@@ -22,6 +22,20 @@ export function canEditRecord(
 }
 
 /**
+ * Who can mark a done-but-unreviewed task ("รอตรวจสอบ") as ผ่าน/ไม่ผ่าน —
+ * deliberately narrower than canEditRecord: the company-wide owner or a head
+ * of a department the task touches, but NOT just whoever assigned/created
+ * it. Reviewing your own assignment defeats the point of a sign-off ("คนที่
+ * มอบหมายงานหรือ ceo" — decided it should be ceo + หัวหน้าแผนก only, an
+ * assigner who happens to also be a head still qualifies through that).
+ */
+export function canReviewTask(recordDepartmentIds: (string | undefined)[], viewingAsUserId: string): boolean {
+  if (isOwner(viewingAsUserId)) return true;
+  const deptIds = new Set(recordDepartmentIds.filter((id): id is string => !!id));
+  return departments.some((d) => d.headId === viewingAsUserId && deptIds.has(d.id));
+}
+
+/**
  * A missed-deadline dock is meant to carry no discretion — every task docks
  * automatically the instant it's overdue (see task-penalty-sweep.ts), so
  * there's no manual "case by case" dock anymore. Only the company-wide owner
