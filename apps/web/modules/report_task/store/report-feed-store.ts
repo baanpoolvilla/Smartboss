@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { users, getUser } from "@/modules/report_task/lib/directory";
 import { canSeeReportTopic } from "@/modules/report_task/lib/permissions";
-import { extractMentionedIds } from "@/modules/report_task/lib/report-feed-rich-text";
+import { extractMentionedIds, mentionMarkersToPlainText } from "@/modules/report_task/lib/report-feed-rich-text";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { uuid } from "@/modules/report_task/lib/uuid";
 import { legacyRoundsFromCutoffs } from "@/modules/report_task/lib/submission-rounds";
@@ -723,7 +723,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         const post = get().posts.find((p) => p.id === postId);
         if (!post) return;
         const actorName = getUser(authorId)?.name ?? "มีคน";
-        const preview = body.split("\n")[0]?.slice(0, 60) ?? "";
+        const preview = mentionMarkersToPlainText(body.split("\n")[0] ?? "").slice(0, 60);
         const link = `/report-feed?topic=${post.topicId}&post=${postId}&reply=${replyId}`;
         const quotedAuthorId = extra?.replyToId ? post.replies.find((r) => r.id === extra.replyToId)?.authorId : undefined;
         if (quotedAuthorId && quotedAuthorId !== authorId) {
