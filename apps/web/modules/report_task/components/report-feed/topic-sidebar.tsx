@@ -38,6 +38,7 @@ import { useTourStore, tourStepsByPage } from "@/modules/report_task/store/tour-
 import { uploadCompressedImage } from "@/modules/report_task/lib/image-resize";
 import { pendingToday } from "@/modules/report_task/lib/report-feed-compliance";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
+import { useIsMobile } from "@/modules/report_task/hooks/use-is-mobile";
 import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
 import { cn } from "@/modules/report_task/lib/utils";
 import { toast } from "sonner";
@@ -422,6 +423,8 @@ export function TopicSidebar({
           (post) => post.topicId === t.id && post.unreadFor.includes(viewingAsUserId) && post.authorId !== viewingAsUserId && postMentionsUser(post, viewingAsUserId)
         ).length;
 
+  const isMobile = useIsMobile();
+
   function renderTopicRow(t: ReportTopic, opts?: { depth?: number; hasChildren?: boolean }) {
     const depth = opts?.depth ?? 0;
     const hasChildren = opts?.hasChildren ?? false;
@@ -599,7 +602,7 @@ export function TopicSidebar({
               e.stopPropagation();
               openCreate(t.id);
             }}
-            className="shrink-0 flex h-5 w-5 items-center justify-center rounded text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] opacity-100 pointer-events-auto lg:opacity-0 lg:pointer-events-none lg:group-hover:opacity-100 lg:group-hover:pointer-events-auto transition-opacity"
+            className={cn("shrink-0 flex h-5 w-5 items-center justify-center rounded text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity", isMobile && "hidden")}
             aria-label={`สร้างหัวข้อย่อยใต้ ${t.name}`}
             title={`สร้างหัวข้อย่อยใต้ "${t.name}"`}
           >
@@ -620,7 +623,8 @@ export function TopicSidebar({
               "shrink-0 flex h-5 w-5 items-center justify-center rounded text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] transition-opacity",
               favorited || tourOnStarStep
                 ? "opacity-100 text-amber-400 hover:text-amber-500"
-                : "opacity-100 pointer-events-auto lg:opacity-0 lg:pointer-events-none lg:group-hover:opacity-100 lg:group-hover:pointer-events-auto"
+                : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto",
+              isMobile && !favorited && !tourOnStarStep && "hidden"
             )}
             aria-label={favorited ? `เลิกติดดาว ${t.name}` : `ติดดาว ${t.name}`}
             title={favorited ? "เลิกติดดาว" : "ติดดาว"}
@@ -643,7 +647,7 @@ export function TopicSidebar({
                   onClick={(e) => e.stopPropagation()}
                   className={cn(
                     "shrink-0 flex h-5 w-5 items-center justify-center rounded text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] transition-opacity",
-                    hiddenForMe
+                    hiddenForMe || isMobile
                       ? "opacity-100"
                       : "opacity-100 pointer-events-auto lg:opacity-0 lg:pointer-events-none lg:group-hover:opacity-100 lg:group-hover:pointer-events-auto"
                   )}
@@ -654,6 +658,22 @@ export function TopicSidebar({
               }
             />
             <DropdownMenuContent align="end">
+              {/* Mobile: no hover, so the standalone ⭐/+ row buttons are
+                  unreachable — surface them here instead so a phone user can
+                  still favorite / add a sub-topic from the one ⋯ menu. */}
+              {isMobile && canOpenDirectly && (
+                <DropdownMenuItem onClick={() => toggleFavoriteTopic(t.id, viewingAsUserId)}>
+                  <Star className="h-3.5 w-3.5" fill={favorited ? "currentColor" : "none"} />
+                  {favorited ? "เลิกติดดาว" : "ติดดาว"}
+                </DropdownMenuItem>
+              )}
+              {isMobile && depth === 0 && canManageTopics && (
+                <DropdownMenuItem onClick={() => openCreate(t.id)}>
+                  <Plus className="h-3.5 w-3.5" />
+                  สร้างหัวข้อย่อย
+                </DropdownMenuItem>
+              )}
+              {isMobile && (canOpenDirectly || (depth === 0 && canManageTopics)) && <DropdownMenuSeparator />}
               {/* Per-viewer notification preference — Discord's channel mute,
                   reachable straight from the room's own "..." so nobody has to
                   dig into full room settings just to quiet a room. Shown for
