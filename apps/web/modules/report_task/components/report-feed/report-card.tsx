@@ -95,6 +95,7 @@ import {
   X,
 } from "lucide-react";
 import { uuid } from "@/modules/report_task/lib/uuid";
+import { isCoarsePointer } from "@/modules/report_task/lib/device";
 
 const reactionEmojis = ["👍", "❤️", "🎉", "😂", "😮", "😢"];
 const LONG_POST_BULLET_THRESHOLD = 8;
@@ -1271,7 +1272,7 @@ export function ReportCard({
                       return;
                     }
                   }
-                  if (e.key === "Enter" && !e.shiftKey) {
+                  if (e.key === "Enter" && !e.shiftKey && !isCoarsePointer()) {
                     e.preventDefault();
                     if (!replyUploading) submitReply();
                   }
