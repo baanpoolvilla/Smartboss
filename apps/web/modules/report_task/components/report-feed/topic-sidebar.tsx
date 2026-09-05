@@ -40,6 +40,7 @@ import { pendingToday } from "@/modules/report_task/lib/report-feed-compliance";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { useIsMobile } from "@/modules/report_task/hooks/use-is-mobile";
 import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
+import { aboutMeCountInPost } from "@/modules/report_task/lib/report-feed-activity";
 import { cn } from "@/modules/report_task/lib/utils";
 import { toast } from "sonner";
 import {
@@ -414,14 +415,17 @@ export function TopicSidebar({
     const pref = notifyPrefFor(t);
     return posts.filter((post) => post.topicId === t.id && postCountsUnread(post, pref));
   };
-  // Unread @mentions specifically — Discord's red pill. Shown for "all" and
-  // "mentions" rooms alike, silenced only when the room is fully muted.
-  const topicMentionCount = (t: ReportTopic) =>
+  // Unread activity "about you" — @mentions (in a post or a reply) AND
+  // comments someone left on your own posts — shown as Discord's red pill.
+  // This is the exact same count the "รายงาน" nav badge sums across rooms
+  // (see aboutMeCountInPost), so the sidebar and the menu never disagree.
+  // Shown for "all" and "mentions" rooms alike, silenced only when muted.
+  const topicAboutMeCount = (t: ReportTopic) =>
     notifyPrefFor(t) === "off"
       ? 0
-      : posts.filter(
-          (post) => post.topicId === t.id && post.unreadFor.includes(viewingAsUserId) && post.authorId !== viewingAsUserId && postMentionsUser(post, viewingAsUserId)
-        ).length;
+      : posts
+          .filter((post) => post.topicId === t.id)
+          .reduce((sum, post) => sum + aboutMeCountInPost(post, viewingAsUserId), 0);
 
   const isMobile = useIsMobile();
 
@@ -442,9 +446,9 @@ export function TopicSidebar({
     // Count honors this room's notify preference (muted -> 0, "mentions" ->
     // only @you), so a muted room shows no dot and no badge, like Discord.
     const unreadCount = topicUnreadPosts(t).length;
-    // Red mention pill count (Discord) — unread posts that actually @mention
-    // this viewer; suppressed when the room is muted.
-    const mentionCountHere = topicMentionCount(t);
+    // Red pill count (Discord) — unread activity about this viewer: @mentions
+    // plus comments on their own posts; suppressed when the room is muted.
+    const aboutMeCountHere = topicAboutMeCount(t);
     // A parent topic almost never has posts of its own (it's an organizing
     // folder), so its own unreadCount is normally 0 even when a child
     // sub-topic underneath it has something new. Collapsed, that new post
@@ -583,13 +587,13 @@ export function TopicSidebar({
         >
           {t.name}
         </span>
-        {mentionCountHere > 0 && (
-          // Only @mentions earn a number here — a red pill (Discord-style),
-          // shown just for posts that tag this viewer. Plain "unread" is
+        {aboutMeCountHere > 0 && (
+          // Activity about this viewer earns a red number here (Discord-style):
+          // @mentions and comments on their own posts. Plain "unread" is
           // already carried by the left notch + bold label, so a second green
           // count sitting next to it was redundant ("ตัวเลขเขียวเอาออก").
           <span className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-[var(--chart-red)] text-white text-[10px] font-semibold flex items-center justify-center tabular-nums">
-            {mentionCountHere}
+            {aboutMeCountHere}
           </span>
         )}
         {/* Quick "add a sub-topic here" — opens the same create dialog as
