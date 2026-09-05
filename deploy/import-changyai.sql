@@ -57,7 +57,6 @@ CREATE TABLE changyai_raw._user_map (old_id text PRIMARY KEY, new_id text NOT NU
 CREATE TEMP TABLE _pairs (cy_email text, sb_email text);
 INSERT INTO _pairs VALUES
   ('line_u8cdb7c98d93fed1812d82be973d866cc@changyai.app', 'chayanun@baanpoolvilla.com'),   -- Skys 💖
-  ('line_u842f7f46929bad44bf6f3483f4f0d27e@changyai.app', 'kenika@baanpoolvilla.com'),     -- BELL
   ('line_u211c85db2aeb61dba4fe6e424b3618a0@changyai.app', 'pacharapol@baanpoolvilla.com'), -- Guy^_^
   ('line_u342002ea3f3f58161ae4547dee04f97e@changyai.app', 'somporn@baanpoolvilla.com'),    -- KATAI 🐰
   ('line_U5089b5659b63d44de621295b32331a4b@changyai.app', 'thanonchai@baanpoolvilla.com'), -- Ossy Maru

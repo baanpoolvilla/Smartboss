@@ -36,8 +36,6 @@ import { eventTypeLabels } from "@/modules/report_task/lib/calendar-colors";
 import { useLeaveTypeStore } from "@/modules/report_task/store/leave-type-store";
 import { useEventColorStore } from "@/modules/report_task/store/event-color-store";
 import { useMeetingStore } from "@/modules/report_task/store/meeting-store";
-import { useLeaveStore } from "@/modules/report_task/store/leave-store";
-import { useHolidayStore } from "@/modules/report_task/store/holiday-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { formatDate, addDays } from "@/modules/report_task/lib/format";
@@ -55,10 +53,6 @@ export function EventDetailDialog({
   const colors = useEventColorStore((s) => s.colors);
   const updateMeeting = useMeetingStore((s) => s.updateMeeting);
   const removeMeeting = useMeetingStore((s) => s.removeMeeting);
-  const updateLeave = useLeaveStore((s) => s.updateLeave);
-  const removeLeave = useLeaveStore((s) => s.removeLeave);
-  const updateHoliday = useHolidayStore((s) => s.updateHoliday);
-  const removeHoliday = useHolidayStore((s) => s.removeHoliday);
   const leaveTypes = useLeaveTypeStore((s) => s.types);
   const notifyMany = useNotificationStore((s) => s.notifyMany);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
@@ -85,10 +79,17 @@ export function EventDetailDialog({
   // creator (seeded before that field existed), which falls through to the
   // department-head check rather than being open to everyone.
   const isOwner =
-    event.type === "holiday" ||
-    (event.type === "meeting" && canEditRecord(event.createdById, event.departmentIds ?? [event.departmentId], viewingAsUserId)) ||
-    (event.type === "leave" && canEditRecord(event.userId, [getUser(event.userId ?? "")?.departmentId], viewingAsUserId));
-  const editable = (event.type === "meeting" || event.type === "leave" || event.type === "holiday") && isOwner;
+    event.type === "meeting" &&
+    canEditRecord(event.createdById, event.departmentIds ?? [event.departmentId], viewingAsUserId);
+  /*
+   * Meetings only. Leave and holidays are read-only mirrors of workforce (see
+   * app/api/report-task/store/[key]/route.ts — those two keys refuse writes),
+   * so an edit here never reached the database: the PUT came back 409, which
+   * the sync layer reads as "someone saved first", so it merged and retried
+   * silently and the edit vanished at the next poll with a success toast
+   * still on screen. Pointing at /hr is the honest answer.
+   */
+  const editable = event.type === "meeting" && isOwner;
 
   function close(open: boolean) {
     if (!open) setEditing(false);
@@ -97,9 +98,8 @@ export function EventDetailDialog({
 
   function confirmDelete() {
     if (!event) return;
-    if (event.type === "meeting") removeMeeting(event.id);
-    else if (event.type === "leave") removeLeave(event.id);
-    else if (event.type === "holiday") removeHoliday(event.id);
+    // Only meetings reach here — see `editable`, which gates both footer buttons.
+    removeMeeting(event.id);
     toast.success("ลบรายการแล้ว");
     close(false);
   }
@@ -114,8 +114,7 @@ export function EventDetailDialog({
         const actor = getUser(viewingAsUserId);
         notifyMany(newlyAdded, viewingAsUserId, `${actor?.name} แท็กคุณในประชุม "${patch.title ?? event.title}"`, event.id);
       }
-    } else if (event.type === "leave") updateLeave(event.id, patch);
-    else if (event.type === "holiday") updateHoliday(event.id, patch);
+    }
     toast.success("บันทึกการแก้ไขแล้ว");
     setEditing(false);
   }
@@ -288,11 +287,27 @@ export function EventDetailDialog({
               )}
               {!editable && (
                 <p className="text-xs text-[var(--ink-soft)]">
-                  {event.type === "holiday"
-                    ? "วันหยุดราชการ — แก้ไขไม่ได้"
-                    : event.type === "google"
-                      ? "นำเข้าจากปฏิทินภายนอก — ดูอย่างเดียว แก้ไข/ลบจากในนี้ไม่ได้"
-                      : "แก้ไขได้เฉพาะผู้สร้างรายการนี้"}
+                  {event.type === "leave" ? (
+                    <>
+                      วันลามาจากโมดูลบุคคล — แก้ไข/ยกเลิกได้ที่{" "}
+                      <a href="/hr/leave" className="underline hover:text-[var(--ink)]">
+                        ปฏิทินวันหยุด (ฝ่ายบุคคล)
+                      </a>{" "}
+                      เพื่อให้ผ่านสายอนุมัติและตรงกับที่ใช้คิดเงินเดือน
+                    </>
+                  ) : event.type === "holiday" ? (
+                    <>
+                      วันหยุดบริษัทตั้งค่าที่{" "}
+                      <a href="/hr/holidays" className="underline hover:text-[var(--ink)]">
+                        โมดูลบุคคล
+                      </a>{" "}
+                      — ปฏิทินนี้แสดงผลอย่างเดียว
+                    </>
+                  ) : event.type === "google" ? (
+                    "นำเข้าจากปฏิทินภายนอก — ดูอย่างเดียว แก้ไข/ลบจากในนี้ไม่ได้"
+                  ) : (
+                    "แก้ไขได้เฉพาะผู้สร้างรายการนี้"
+                  )}
                 </p>
               )}
             </div>

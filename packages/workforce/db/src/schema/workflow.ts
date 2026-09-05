@@ -19,6 +19,11 @@ export const leaveTypes = workforce.table('leave_types', {
   autoApprove: boolean('auto_approve').notNull().default(false),
   /** 0 = ไม่จำกัดรายเดือน · quota_minutes_per_year คุมรายเดือนไม่ได้ */
   monthlyQuotaDays: integer('monthly_quota_days').notNull().default(0),
+  /**
+   * true = ปฏิทินรวมของทีมแสดงชื่อประเภทนี้ให้ทุกคนเห็น
+   * false = คนอื่นเห็นแค่ "ลา" (เจ้าตัวยังเห็นประเภทของตัวเองเสมอ)
+   */
+  showOnCalendar: boolean('show_on_calendar').notNull().default(true),
   attachmentRequired: boolean('attachment_required').notNull().default(false),
   minDurationMinutes: integer('min_duration_minutes').notNull().default(0),
   maxDurationMinutes: integer('max_duration_minutes'),

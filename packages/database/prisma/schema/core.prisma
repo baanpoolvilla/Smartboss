@@ -69,6 +69,8 @@ model Organization {
   dayOffQuotaSetting   DayOffQuotaSetting?
   employeeDayOffQuotas EmployeeDayOffQuota[]
 
+  employeeDayOffQuotaDefaults EmployeeDayOffQuotaDefault[]
+
   chatChannels ChatChannel[]
 
   @@map("organizations")
@@ -476,6 +478,38 @@ model DayOffQuotaSetting {
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@map("day_off_quota_settings")
+  @@schema("core")
+}
+
+// โควตาวันหยุด "ประจำ" ของพนักงานหนึ่งคน — มีผลทุกเดือนจนกว่าจะแก้
+//
+// ข้อตกลงจ้างงานรายคนเป็นค่าถาวร ไม่ใช่การตัดสินใจรายเดือน: บางคนได้หยุด
+// เดือนละ 4 วัน บางคน 6 วัน ตามสัญญาของเขา ⇒ ต้องตั้งครั้งเดียวแล้วอยู่ยาว
+//
+// เดิมมีแต่ EmployeeDayOffQuota ที่ผูกกับ (คน, เดือน) เท่านั้น (ดู migration
+// 20260901100000_day_off_quota_per_month ที่เปลี่ยนไปเป็นรายเดือน) — คนที่
+// ตกลงกันว่าได้ 6 วันจึงตกกลับไปใช้ค่ามาตรฐานของบริษัททันทีในเดือนถัดไป
+// เงียบ ๆ แล้วลงวันหยุดวันที่ 5-6 ไม่ได้ ต้องให้ฝ่ายบุคคลไปกรอกใหม่ทุกเดือน
+//
+// สามชั้นตอนนี้: เดือนนั้นโดยเฉพาะ → ค่าประจำของคนนั้น → ค่าตั้งต้นบริษัท
+model EmployeeDayOffQuotaDefault {
+  orgId        String @map("org_id")
+  employmentId String @map("employment_id")
+
+  /**
+   * วันหยุดต่อเดือนของคนนี้ตามข้อตกลงจ้างงาน — ใช้ทุกเดือนที่ไม่มีค่าทับเฉพาะเดือน
+   */
+  daysPerMonth Int @map("days_per_month")
+
+  note String @default("") @map("note")
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@id([orgId, employmentId])
+  @@map("employee_day_off_quota_defaults")
   @@schema("core")
 }
 

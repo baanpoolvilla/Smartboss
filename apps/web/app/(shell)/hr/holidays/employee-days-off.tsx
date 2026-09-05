@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { Button } from "@smartboss/ui/components/button";
 import { setEmployeeDaysOffAction, type DaysOffState } from "../actions";
+import type { DayOffQuotaSource } from "@/lib/day-off-quota";
 
 const EMPTY: DaysOffState = {};
 const DOW = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
@@ -28,8 +29,8 @@ export function EmployeeDaysOff({
   restShiftId,
   /** หยุดได้กี่วันในเดือนนี้ — ตรวจซ้ำฝั่งเซิร์ฟเวอร์อีกชั้นเสมอ */
   quota,
-  /** true = โควตานี้ตั้งไว้เฉพาะเดือนนี้ของคนนี้ · false = ใช้ค่าตั้งต้นของบริษัท */
-  quotaPerEmployee,
+  /** โควตาที่ใช้จริงมาจากชั้นไหน — เฉพาะเดือนนี้ / ค่าประจำของคนนี้ / ค่าบริษัท */
+  quotaSource,
   /** กะที่ผูกไว้กับคนนี้ — วันที่ไม่ได้หยุดต้องใช้กะเดียวกับที่ผูกไว้ ไม่ใช่ให้เลือกซ้ำ */
   boundShiftId,
 }: {
@@ -40,7 +41,7 @@ export function EmployeeDaysOff({
   workShifts: ShiftChoice[];
   restShiftId: string | null;
   quota: number;
-  quotaPerEmployee: boolean;
+  quotaSource: DayOffQuotaSource;
   boundShiftId: string | null;
 }) {
   const [state, formAction, pending] = useActionState(setEmployeeDaysOffAction, EMPTY);
@@ -91,7 +92,11 @@ export function EmployeeDaysOff({
       >
         เลือกไว้ <strong>{picked}</strong> วัน จากโควตา <strong>{quota}</strong> วัน/เดือน
         <span className="ml-1 text-(--ink-soft)">
-          ({quotaPerEmployee ? "ตั้งไว้เฉพาะเดือนนี้" : "ค่าตั้งต้นของบริษัท"})
+          ({quotaSource === "month"
+            ? "ตั้งไว้เฉพาะเดือนนี้"
+            : quotaSource === "employee"
+              ? "ค่าประจำของคนนี้"
+              : "ค่าตั้งต้นของบริษัท"})
         </span>
         {over && <span className="ml-1 font-medium">— เกินโควตา บันทึกไม่ได้</span>}
       </p>

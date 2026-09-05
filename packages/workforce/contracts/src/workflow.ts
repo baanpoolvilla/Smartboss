@@ -19,6 +19,11 @@ export const createLeaveTypeSchema = z.object({
   monthly_quota_days: z.number().int().min(0).max(31).default(0),
   attachment_required: z.boolean().default(false),
   allow_negative: z.boolean().default(false),
+  /**
+   * false = ปฏิทินรวมของทีมไม่บอกว่าเป็นประเภทนี้ (คนอื่นเห็นแค่ "ลา")
+   * ใช้กับประเภทที่บริษัทถือว่าเป็นเรื่องส่วนตัว เช่นลาป่วย
+   */
+  show_on_calendar: z.boolean().default(true),
   effective_from: isoDateSchema,
 });
 
