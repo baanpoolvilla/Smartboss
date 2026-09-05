@@ -4,32 +4,20 @@ import { useMemo } from "react";
 import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canSeeReportTopic } from "@/modules/report_task/lib/permissions";
-import { extractMentionedIds } from "@/modules/report_task/lib/report-feed-rich-text";
+import { aboutMeCountInPost } from "@/modules/report_task/lib/report-feed-activity";
 
 /**
- * Discord-style unread pill for the "รายงาน" (report-feed) rail item (see
+ * Discord-style red pill for the "รายงาน" (report-feed) rail item (see
  * manifest.ts's `ModuleMenuItem.badge` and shell.tsx's RailItem /
- * BottomNavItem) — counts unread activity that is *about the viewer*, not
- * every unread post. Three things count, each unread item at most once:
+ * BottomNavItem). Counts unread activity *about the viewer* — @mentions plus
+ * comments on their own posts — summed across every room they can see and
+ * haven't muted. The per-item rule lives in aboutMeCountInPost, shared with
+ * the topic sidebar's own red pill so the two never disagree.
  *
- *   1. a post that @mentions the viewer (mention taken from the exact same
- *      source the store seeds `unreadFor` from — `sections.bullets`, not the
- *      title — so this never drifts from the sidebar's own dot/bold state),
- *      and isn't the viewer's own post;
- *   2. a reply someone else left on the viewer's own post;
- *   3. a reply that @mentions the viewer (from its `body`).
- *
- * A plain new post in a room the viewer belongs to is deliberately NOT
- * counted: the store seeds every room member's id into `post.unreadFor`, so
- * counting that would make this badge a duplicate of the topic sidebar's
- * unread state and it would never be quiet. The topic-visibility guard
- * matters because the store seeds mentioned ids into `unreadFor` WITHOUT a
- * visibility check — an @mention in a room the viewer can't open would
- * otherwise be a phantom count that can never be cleared.
- *
- * Renders nothing at zero. The report-feed store is hydrated at module level
- * (see report-task-scaffold.tsx's StoreHydrator), so this is accurate on
- * every page of the module, not just the report page itself.
+ * A muted room (notifyPreference "off") contributes nothing, exactly like the
+ * sidebar. Renders nothing at zero. The report-feed store is hydrated at
+ * module level (report-task-scaffold.tsx's StoreHydrator), so this is
+ * accurate on every page of the module, not just the report page itself.
  */
 export function ReportActivityNavBadge() {
   const posts = useReportFeedStore((s) => s.posts);
@@ -38,28 +26,19 @@ export function ReportActivityNavBadge() {
 
   const count = useMemo(() => {
     if (!me) return 0;
-    const canSee = new Map<string, boolean>(
-      topics.map((t) => [t.id, canSeeReportTopic(t.visibility, me)])
+    // A room counts only if the viewer can see it AND hasn't muted it — the
+    // same two gates the sidebar applies before showing a room's red pill.
+    const active = new Map<string, boolean>(
+      topics.map((t) => [
+        t.id,
+        canSeeReportTopic(t.visibility, me) && (t.notifyPreference?.[me] ?? "all") !== "off",
+      ])
     );
 
     let n = 0;
     for (const post of posts) {
-      if (!(canSee.get(post.topicId) ?? false)) continue;
-      const mine = post.authorId === me;
-
-      // (1) post that @mentions me, still unread, not my own post
-      if (!mine && post.unreadFor.includes(me)) {
-        const text = post.sections.flatMap((s) => s.bullets).join("\n");
-        if (extractMentionedIds(text, "user").includes(me)) n++;
-      }
-
-      // (2)+(3) replies: on my own post, or a reply that @mentions me —
-      // each unread reply counted once even when both are true
-      for (const r of post.replies) {
-        if (r.authorId === me) continue;
-        if (!r.unreadFor?.includes(me)) continue;
-        if (mine || extractMentionedIds(r.body, "user").includes(me)) n++;
-      }
+      if (!(active.get(post.topicId) ?? false)) continue;
+      n += aboutMeCountInPost(post, me);
     }
     return n;
   }, [posts, topics, me]);
