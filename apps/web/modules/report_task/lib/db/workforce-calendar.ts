@@ -26,6 +26,7 @@ interface LeaveRow {
   ends_on: Date;
   status: string;
   leave_type_name: string | null;
+  display_label: string | null;
   half_day_start: boolean | null;
   half_day_end: boolean | null;
 }
@@ -90,6 +91,7 @@ export async function listLeaveEvents(
              lr.ends_on,
              lr.status,
              lt.name          AS leave_type_name,
+             lr.display_label,
              lr.half_day_start,
              lr.half_day_end
       FROM workforce.leave_requests lr
@@ -106,9 +108,16 @@ export async function listLeaveEvents(
 
   return rows.map((r) => {
     const half = r.half_day_start || r.half_day_end;
+    /*
+     * ชื่อที่เจ้าของใบตั้งเองมาก่อนเสมอ ("Bee-Off" · "Aui-V3/6" · "Parguy-Off-OT")
+     * — ตั้งได้ที่ปฏิทินของโมดูลบุคคล และเป็นภาษาที่ทีมนี้ใช้กันมาตั้งแต่อยู่บน
+     * Teams · ว่าง = ยังไม่ได้ตั้ง ใช้ชื่อประเภทแล้วให้ปฏิทินเติมชื่อคนให้เอง
+     */
+    const authored = (r.display_label ?? "").trim();
     return {
       id: `wf-leave-${r.id}`,
-      title: r.leave_type_name ?? "ลา",
+      title: authored !== "" ? authored : (r.leave_type_name ?? "ลา"),
+      ...(authored !== "" ? { authoredTitle: true } : {}),
       type: "leave",
       // The HR module owns the actual set of leave types (admins add/rename
       // them in /hr/settings) — using its name as-is here, instead of

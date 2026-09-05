@@ -210,6 +210,14 @@ export interface CalendarEvent {
   /** Who created this meeting — only they can edit/delete it (leave uses `userId` for the same purpose). */
   createdById?: string;
   leaveType?: LeaveType;
+  /**
+   * true = `title` เป็นชื่อที่คนพิมพ์เอง ห้ามเอาอะไรไปต่อหน้าอีก
+   *
+   * วันลาที่เจ้าตัวตั้งชื่อไว้เองว่า "Bee-Off" ถ้าปฏิทินยังเติมชื่อคนให้อัตโนมัติ
+   * จะกลายเป็น "Bee - Bee-Off" · ส่วนใบที่ยังไม่ได้ตั้งชื่อ (title = ชื่อประเภท
+   * เฉย ๆ) ยังต้องเติมให้เหมือนเดิม ไม่งั้นบอกไม่ได้ว่าเป็นวันลาของใคร
+   */
+  authoredTitle?: boolean;
   taskId?: string;
   location?: string;
   description?: string;
