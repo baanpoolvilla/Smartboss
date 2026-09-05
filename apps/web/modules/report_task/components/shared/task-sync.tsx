@@ -76,7 +76,7 @@ export function TaskSync() {
 
     async function reloadFromServer() {
       try {
-        const res = await fetch("/api/report-task/tasks");
+        const res = await fetch("/api/report-task/tasks", { cache: "no-store" });
         const tasks = (await res.json()) as Task[];
         versionRef.current = Number(res.headers.get("X-Data-Version")) || null;
         if (!cancelled && Array.isArray(tasks)) {
@@ -145,7 +145,7 @@ export function TaskSync() {
           let latest: Task[];
           let latestVersion: number | null;
           try {
-            const latestRes = await fetch("/api/report-task/tasks");
+            const latestRes = await fetch("/api/report-task/tasks", { cache: "no-store" });
             latest = (await latestRes.json()) as Task[];
             latestVersion = Number(latestRes.headers.get("X-Data-Version")) || null;
           } catch {
@@ -236,7 +236,7 @@ export function TaskSync() {
       }
     }
 
-    fetch("/api/report-task/tasks")
+    fetch("/api/report-task/tasks", { cache: "no-store" })
       .then(async (r) => {
         versionRef.current = Number(r.headers.get("X-Data-Version")) || null;
         return r.json();
@@ -320,11 +320,11 @@ export function TaskSync() {
               // (a few dozen bytes, no task rows touched) before paying for
               // a full GET of the company's whole task collection. Most
               // ticks find nothing changed, so this is the common case.
-              const versionRes = await fetch("/api/report-task/tasks/version");
+              const versionRes = await fetch("/api/report-task/tasks/version", { cache: "no-store" });
               const version = Number(versionRes.headers.get("X-Data-Version")) || null;
               if (version === versionRef.current) return; // nothing new
               if (pendingRef.current || timerRef.current) return; // user started editing while we were checking
-              const res = await fetch("/api/report-task/tasks");
+              const res = await fetch("/api/report-task/tasks", { cache: "no-store" });
               const tasks = (await res.json()) as Task[];
               if (cancelled || !Array.isArray(tasks)) return;
               versionRef.current = Number(res.headers.get("X-Data-Version")) || version;
