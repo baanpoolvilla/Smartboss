@@ -46,6 +46,7 @@ import {
   Bell,
   BellOff,
   Briefcase,
+  ChevronLeft,
   ChevronRight,
   Clock,
   Code2,
@@ -153,6 +154,7 @@ export function TopicSidebar({
   onSelect,
   fillHeight,
   onOpenSettings,
+  onCollapse,
 }: {
   /** Pre-filtered to what this viewer can see — see canSeeReportTopic in the parent page. */
   topics: ReportTopic[];
@@ -168,6 +170,11 @@ export function TopicSidebar({
    * which meant opening the room first. This menu's own "แก้ไขหัวข้อ" item
    * is a lighter dialog (name/color/icon only), kept as-is alongside this. */
   onOpenSettings?: (id: string) => void;
+  /** Renders the "«" collapse button in the header when given — the desktop
+   * report-feed layout passes this; the mobile topics Sheet (already its own
+   * dismissible surface) doesn't, so it never shows a redundant collapse
+   * control. */
+  onCollapse?: () => void;
 }) {
   const posts = useReportFeedStore((s) => s.posts);
   const addTopic = useReportFeedStore((s) => s.addTopic);
@@ -762,7 +769,20 @@ export function TopicSidebar({
           divider just below it and the card's own outer border, all three
           of which used to draw in the same tight space. */}
       <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-2">
-        <p className="text-[15px] font-semibold">หัวข้อ</p>
+        <div className="flex items-center gap-1">
+          {onCollapse && (
+            <button
+              type="button"
+              onClick={onCollapse}
+              title="ย่อหัวข้อ"
+              aria-label="ย่อหัวข้อ"
+              className="-ml-1.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[var(--ink-soft)] transition-colors hover:bg-[var(--bg-soft)] hover:text-[var(--ink)]"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+          )}
+          <p className="text-[15px] font-semibold">หัวข้อ</p>
+        </div>
         {canManageTopics && (
           <Button
             size="sm"

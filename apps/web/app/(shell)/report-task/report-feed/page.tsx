@@ -30,12 +30,18 @@ import { localDateStr } from "@/modules/report_task/lib/now";
 import { pendingToday, todayStatusEntries, type TodayStatusEntry } from "@/modules/report_task/lib/report-feed-compliance";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
-import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronDown, Clock, FolderOpen, Hash, Lock, Menu, MessageSquareText, Pin, Settings, SlidersHorizontal, TriangleAlert, Users, X } from "lucide-react";
+import { safeLocalStorage } from "@/modules/report_task/lib/safe-storage";
+import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronDown, ChevronRight, Clock, FolderOpen, Hash, Lock, Menu, MessageSquareText, Pin, Settings, SlidersHorizontal, TriangleAlert, Users, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 
 // Beyond this many pinned posts, the rest move into the "+N เพิ่มเติม"
 // popover instead of forcing the bar to scroll horizontally.
 const PIN_CHIP_LIMIT = 3;
+
+/** Per-viewer, desktop-only "did they collapse the topic sidebar" flag —
+ * localStorage, not a server-synced store field (see topicSidebarCollapsed's
+ * own comment in ReportFeedPageInner). */
+const TOPIC_SIDEBAR_COLLAPSED_KEY = "report_task.topicSidebarCollapsed";
 
 function scrollToPost(postId: string) {
   document.getElementById(`report-post-${postId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -196,6 +202,18 @@ function ReportFeedPageInner() {
   // squeezed inline block with its own internal scroll (3.5.5) — the desktop
   // sidebar (TopicSidebar, still rendered as-is at `lg:`) is unaffected.
   const [mobileTopicsOpen, setMobileTopicsOpen] = useState(false);
+  // Desktop-only: collapse the topic sidebar down to just a floating "»" edge
+  // affix, freeing width for the feed. Per-viewer, not shared team state —
+  // localStorage, not the server-synced store — and safe to read straight in
+  // the initializer here (no SSR/hydration mismatch risk, see this file's own
+  // doc comment on `mounted`: nothing below this point ever renders before
+  // the browser has mounted).
+  const [topicSidebarCollapsed, setTopicSidebarCollapsed] = useState(() => safeLocalStorage.getItem(TOPIC_SIDEBAR_COLLAPSED_KEY) === "1");
+  function setSidebarCollapsed(collapsed: boolean) {
+    setTopicSidebarCollapsed(collapsed);
+    if (collapsed) safeLocalStorage.setItem(TOPIC_SIDEBAR_COLLAPSED_KEY, "1");
+    else safeLocalStorage.removeItem(TOPIC_SIDEBAR_COLLAPSED_KEY);
+  }
   // ☰ itself lives in the shared AppBar's top-left corner now, not in its own
   // row down here — asked for explicitly ("อยากให้สามขีดไปซ้ายบน...แค่นั้น
   // เองเฉพาะหน้านี้"), scoped to this one page via app-bar-leading.tsx rather
@@ -563,15 +581,32 @@ function ReportFeedPageInner() {
           would grow the whole page instead of scrolling inside its own
           `lg:h-full` + overflow-y-auto (both panels already opt into that,
           it just had nothing to resolve against without a stretched parent). */}
-      <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 items-stretch flex-1 min-h-0 lg:min-h-[420px]">
-        <div className="hidden lg:flex lg:shrink-0">
-          <TopicSidebar
-            topics={visibleTopics}
-            activeId={activeId}
-            onSelect={selectView}
-            onOpenSettings={openTopicSettings}
-          />
-        </div>
+      <div className="relative flex flex-col lg:flex-row gap-4 lg:gap-6 items-stretch flex-1 min-h-0 lg:min-h-[420px]">
+        {topicSidebarCollapsed ? (
+          // Half-circle affix pinned to the feed's own left edge, vertically
+          // centered — the one way back in once the sidebar's gone, so it
+          // has to be findable without a moment's hunting, not tucked into a
+          // menu somewhere.
+          <button
+            type="button"
+            onClick={() => setSidebarCollapsed(false)}
+            title="เปิดหัวข้อ"
+            aria-label="เปิดหัวข้อ"
+            className="absolute left-0 top-1/2 z-10 hidden h-[52px] w-[26px] -translate-y-1/2 items-center justify-center rounded-r-[14px] border border-l-0 border-[var(--line)] bg-white text-[var(--ink-soft)] shadow-[2px_0_8px_rgba(0,0,0,0.08)] transition-colors hover:border-[var(--brand-green)]/50 hover:text-[var(--brand-green-dark)] lg:flex"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        ) : (
+          <div className="hidden lg:flex lg:shrink-0">
+            <TopicSidebar
+              topics={visibleTopics}
+              activeId={activeId}
+              onSelect={selectView}
+              onOpenSettings={openTopicSettings}
+              onCollapse={() => setSidebarCollapsed(true)}
+            />
+          </div>
+        )}
 
         {/* This panel used to be rounded-2xl + border, matching the topic
             sidebar's own box (see topic-sidebar.tsx) — two adjacent bordered
