@@ -36,6 +36,8 @@ import {
 } from "@/modules/report_task/store/report-feed-store";
 import { cutoffsOnDay, lateCutoffFor, minImagesNow, onTimeCutoffFor } from "@/modules/report_task/lib/report-cutoff";
 import { roundsForUserOnDay } from "@/modules/report_task/lib/submission-rounds";
+import { isExemptDate } from "@/modules/report_task/lib/report-feed-exemptions";
+import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { localDateStr } from "@/modules/report_task/lib/now";
 import {
   bulletsTextToHtml,
@@ -181,6 +183,7 @@ export function ReportCard({
   const toggleUnread = useReportFeedStore((s) => s.toggleUnread);
   const setPostLinkedTask = useReportFeedStore((s) => s.setPostLinkedTask);
   const submitterGroups = useReportFeedStore((s) => s.submitterGroups);
+  const exemptions = useReportComplianceExemptions();
   const allTags = useReportTagStore((s) => s.tags);
   const postTags = allTags.filter((t) => post.tagIds.includes(t.id));
   const author = getUser(post.authorId);
@@ -204,11 +207,19 @@ export function ReportCard({
   // existed, or filed under a round that's since stopped applying to this
   // user/day) rather than badging nothing at all.
   const explicitRound = post.roundId ? postDayCutoffs.filter((r) => r.id === post.roundId) : [];
+  // A poster exempt that day (approved leave/day-off/holiday — same
+  // isExemptDate the dashboard's "ต้องส่งวันนี้" count already excludes them
+  // from) had no real obligation to meet, so badging their voluntary post
+  // "✓ ตรงเวลา" read as the system having required it anyway — confusing
+  // when the header right above already shows 0 ต้องส่ง for the day. Same
+  // "no badge at all" treatment as excludeFromSubmission below.
+  const postDayExempt = isExemptDate(exemptions, post.authorId, postDay);
   // "ไม่นับเป็นการส่ง daily" (excludeFromSubmission) drops this post out of
   // round candidacy entirely — no ตรงเวลา/สาย badge, same as if it were
   // never posted for compliance purposes (see postsForDay in
   // report-feed-compliance.ts, the actual counting choke point this mirrors).
-  const roundCandidates = post.excludeFromSubmission ? [] : explicitRound.length > 0 ? explicitRound : postDayCutoffs;
+  const roundCandidates =
+    post.excludeFromSubmission || postDayExempt ? [] : explicitRound.length > 0 ? explicitRound : postDayCutoffs;
   const lateCutoff = lateCutoffFor(post.createdAt, roundCandidates);
   const onTimeCutoff = !lateCutoff ? onTimeCutoffFor(post.createdAt, roundCandidates) : null;
   const allPosts = useReportFeedStore((s) => s.posts);
@@ -943,6 +954,16 @@ export function ReportCard({
             <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
               <span className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-[var(--bg-soft)] text-[var(--ink-soft)] border border-[var(--line)]">
                 ไม่นับเป็นการส่ง daily
+              </span>
+            </div>
+          ) : postDayExempt ? (
+            // Same "why no badge" answer, for the other reason one can be
+            // missing: the poster was off/on leave that day, so this post was
+            // never obligated in the first place — posted anyway, just not
+            // tracked, same as excludeFromSubmission above.
+            <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+              <span className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-[var(--bg-soft)] text-[var(--ink-soft)] border border-[var(--line)]">
+                หยุด/ลาวันนี้ · ไม่บังคับส่ง
               </span>
             </div>
           ) : lateCutoff && isFirstLateOfRound ? (
