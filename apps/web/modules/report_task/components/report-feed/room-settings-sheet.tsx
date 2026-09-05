@@ -273,17 +273,6 @@ export function RoomSettingsSheet({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex items-center justify-between rounded-lg bg-[var(--bg-soft)] px-3 py-2.5">
-                  <div className="min-w-0 pr-3">
-                    <p className="text-sm font-medium">สรุปให้หัวหน้าหลังปิดรอบ</p>
-                    <p className="text-xs text-[var(--ink-soft)]">ใครส่งช้า/ไม่ส่งในรอบนั้น</p>
-                  </div>
-                  <Switch
-                    checked={!!draft.notifyManagerSummary}
-                    onCheckedChange={(v) => patchDraft({ notifyManagerSummary: v })}
-                  />
-                </div>
-                <p className="text-[11px] text-[var(--ink-soft)]">บันทึกการตั้งค่าไว้แล้ว — ระบบส่งแจ้งเตือนอัตโนมัติยังอยู่ระหว่างพัฒนา</p>
               </>
             )}
             {/* ส่วนตัว ไม่กระทบคนอื่น — เซฟทันทีเหมือนเดิม ไม่รวมอยู่ใน draft/บันทึกด้านล่าง */}
