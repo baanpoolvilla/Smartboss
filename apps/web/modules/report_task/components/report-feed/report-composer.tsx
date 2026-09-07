@@ -14,19 +14,32 @@ import { localDateStr, now } from "@/modules/report_task/lib/now";
 import { cn } from "@/modules/report_task/lib/utils";
 import { ReportPostFields, newSection, type DraftSection } from "@/modules/report_task/components/report-feed/report-post-fields";
 import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogAction,
-  AlertDialogCancel,
-} from "@/modules/report_task/components/ui/alert-dialog";
 import { Check, Clock, Lock, Send, SquarePen, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { uuid } from "@/modules/report_task/lib/uuid";
+
+/** เก็บไว้แค่ "รอบนี้/วันนี้" ตามคีย์ที่ผูก topic+วันที่+roundId — พรุ่งนี้หรือ
+ * รอบถัดไปกลับมาเตือนได้ใหม่โดยไม่ต้องเคลียร์อะไรเอง (คีย์เก่าแค่ค้างเฉยๆ
+ * ไม่มีผลอะไรอีกต่อไป) */
+function lateToastDismissKey(topicId: string, dateStr: string, roundId: string): string {
+  return `report-late-toast-dismissed:${topicId}:${dateStr}:${roundId}`;
+}
+function isLateToastDismissed(key: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
+function dismissLateToast(key: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(key, "1");
+  } catch {
+    // private mode ฯลฯ — แค่จะกลับมาเตือนอีกครั้งตอนเปิดใหม่ ไม่ร้ายแรง
+  }
+}
 
 function roundMinutesOf(time: string): number {
   const [h, m] = time.split(":").map(Number) as [number, number];
@@ -70,6 +83,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const viewer = getUser(viewingAsUserId)!;
   const addPost = useReportFeedStore((s) => s.addPost);
+  const posts = useReportFeedStore((s) => s.posts);
   const maxImages = useAttachmentSettingsStore((s) => s.settings.maxImagesPerReportPost);
 
   const savedDraft = loadDraft(topic.id);
@@ -90,9 +104,6 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   // update/question that isn't "the report" itself, so it doesn't need to
   // be buried as a reply just to avoid getting scored.
   const [excludeFromSubmission, setExcludeFromSubmission] = useState(false);
-  // Gates the "ยังไงก็ส่ง" confirm popup — only opens when handleSubmit
-  // catches a late round, never toggled from anywhere else.
-  const [confirmLateOpen, setConfirmLateOpen] = useState(false);
 
   // Keeps sessionStorage in sync with every keystroke/attachment change so a
   // reload has something to restore — cleared once the draft is either
@@ -132,16 +143,11 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
 
   // "ใครโพสต์ได้" (Phase 6) — announcement/policy rooms can lock posting to
   // managers/owner only, same population canManage already gates other
-  // company-wide actions with.
+  // company-wide actions with. Checked here but not returned early until
+  // after every hook below (rules-of-hooks) — the late-toast effect has to
+  // run on every render regardless of whether this topic ends up rendering
+  // the locked notice instead of the real composer.
   const canPost = topic.postPermission !== "managersOnly" || canManage(viewingAsUserId);
-  if (!canPost) {
-    return (
-      <div className="shrink-0 border-t border-[var(--line)]/60 bg-[var(--bg-soft)]/60 px-5 py-3.5 flex items-center gap-2 text-sm text-[var(--ink-soft)]">
-        <Lock className="h-4 w-4 shrink-0" />
-        เฉพาะผู้ดูแลโพสต์ในหัวข้อนี้ได้
-      </div>
-    );
-  }
 
   async function handleFiles(files: File[]) {
     if (files.length === 0) return;
@@ -194,6 +200,52 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   // an excluded post ("ไม่นับเป็นการส่ง daily") never reads as late no
   // matter which round is selected.
   const activeLate = !excludeFromSubmission && !!activeRound && nowMinutes > roundMinutesOf(activeRound.time);
+  // Already filed something that counts toward today's submission in this
+  // room — the late-toast below has nothing left to warn about even if the
+  // composer's default round still lands on an overdue one.
+  const todayStr = localDateStr(new Date());
+  const alreadyPostedToday = posts.some(
+    (p) => p.topicId === topic.id && p.authorId === viewingAsUserId && !p.excludeFromSubmission && localDateStr(new Date(p.createdAt)) === todayStr
+  );
+
+  // Non-blocking heads-up, not a confirm-to-proceed gate — fires once per
+  // "opening the composer" (not every keystroke) so someone who's about to
+  // write a late report finds out before they've already typed it all out,
+  // without making them click through anything just to start typing.
+  useEffect(() => {
+    if (!canPost || !expanded || !activeRound || !activeLate || alreadyPostedToday) return;
+    const key = lateToastDismissKey(topic.id, todayStr, activeRound.id);
+    if (isLateToastDismissed(key)) return;
+    let dontShowAgain = false;
+    toast.custom(
+      () => (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-start gap-2.5">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+              <TriangleAlert className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-[var(--ink)]">ยังไม่ได้ส่งรอบนี้</p>
+              <p className="text-xs leading-relaxed text-[var(--ink-soft)]">
+                &quot;{activeRound.label}&quot; ปิดรอบไปแล้วตั้งแต่ {activeRound.time} — ส่งตอนนี้จะถูกนับว่า{" "}
+                <b className="font-semibold text-[var(--chart-red)]">ส่งย้อนหลัง = สาย</b>
+              </p>
+            </div>
+          </div>
+          <label className="flex cursor-pointer items-center gap-1.5 pl-[42px] text-xs text-[var(--ink-soft)]">
+            <input type="checkbox" className="h-3.5 w-3.5" onChange={(e) => { dontShowAgain = e.target.checked; }} />
+            ไม่ต้องแสดงอีก (รอบนี้/วันนี้)
+          </label>
+        </div>
+      ),
+      {
+        duration: 6000,
+        onDismiss: () => { if (dontShowAgain) dismissLateToast(key); },
+        onAutoClose: () => { if (dontShowAgain) dismissLateToast(key); },
+      }
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expanded]);
 
   function doSubmit() {
     const cleanSections = sections
@@ -214,16 +266,18 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
     reset();
   }
 
-  // The red chip already flags a late round, but a chip is easy to miss
-  // when someone's rushing to hit ส่ง — a center-screen confirm is the one
-  // spot they can't scroll past without reading before it actually posts.
   function handleSubmit() {
     if (!title.trim() || missingRequiredImage) return;
-    if (activeLate) {
-      setConfirmLateOpen(true);
-      return;
-    }
     doSubmit();
+  }
+
+  if (!canPost) {
+    return (
+      <div className="shrink-0 border-t border-[var(--line)]/60 bg-[var(--bg-soft)]/60 px-5 py-3.5 flex items-center gap-2 text-sm text-[var(--ink-soft)]">
+        <Lock className="h-4 w-4 shrink-0" />
+        เฉพาะผู้ดูแลโพสต์ในหัวข้อนี้ได้
+      </div>
+    );
   }
 
   if (!expanded) {
@@ -386,31 +440,6 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
           โพสต์ {/* Ctrl/⌘+Enter also submits (P4) — see the keydown handler on the title input below. */}
         </Button>
       </div>
-
-      <AlertDialog open={confirmLateOpen} onOpenChange={setConfirmLateOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-[var(--chart-red)]">
-              <TriangleAlert className="h-5 w-5 shrink-0" />
-              รอบนี้เลยเวลาปิดรอบแล้ว
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {activeRound && (
-                <>
-                  &quot;{activeRound.label}&quot; ปิดรอบไปแล้วตั้งแต่ {activeRound.time} — ยังส่งได้ แต่จะถูกนับว่า
-                  <b className="text-[var(--chart-red)]"> ส่งย้อนหลัง = สาย</b>
-                </>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>กลับไปแก้</AlertDialogCancel>
-            <AlertDialogAction className="bg-[var(--chart-red)] hover:bg-red-700 text-white" onClick={doSubmit}>
-              ส่งย้อนหลังเลย
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
