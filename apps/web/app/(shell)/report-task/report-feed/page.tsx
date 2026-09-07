@@ -119,6 +119,11 @@ const topicTabs: { id: TopicTab; label: string; icon: typeof MessageSquareText }
  */
 export default function ReportFeedPage() {
   const [mounted, setMounted] = useState(false);
+  // Fire-once mount flag, not state derived from props/other state — the
+  // exact "sync with an external fact (are we in the browser yet)" case this
+  // lint rule is meant to allow, not the cascading-render pattern it's
+  // guarding against. See the mismatch explanation above.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
 
   if (!mounted) return <ReportFeedSkeleton />;
