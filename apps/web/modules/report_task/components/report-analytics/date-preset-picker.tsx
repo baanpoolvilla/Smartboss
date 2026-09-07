@@ -70,7 +70,9 @@ export function DatePresetPicker({
                 // or an already-bg-soft filter strip like ภาพรวมทั้งหมด's),
                 // unlike keying the active state off the *outer* background
                 // which used to go invisible whenever the two matched.
-                active ? "bg-white text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
+                active
+                  ? "bg-[var(--brand-green)] text-white shadow-sm"
+                  : "text-[var(--ink-soft)] hover:bg-white/70 hover:text-[var(--ink)]"
               )}
             >
               <Icon className="h-3.5 w-3.5" />
