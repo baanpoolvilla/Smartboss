@@ -788,34 +788,24 @@ export function TopicSidebar({
   }
 
   return (
-    <div
-      className={cn(
-        // No card frame at all — a border+white-fill box sitting right next
-        // to the room panel's own box read as two stacked "this is a boxed
-        // thing" signals before a single post even came into view
-        // ("กรอบซ้อนกันหลายชั้น"). A faint tinted background instead of
-        // white is enough on its own to read as "a different area" next to
-        // the room panel's white, the same way Notion/Linear separate a nav
-        // rail from its content with color contrast, not a drawn line.
-        "relative w-full lg:w-[280px] lg:h-full lg:shrink-0 bg-[color-mix(in_srgb,var(--bg-soft)_55%,white)] flex flex-col min-h-0 overflow-hidden",
-        fillHeight ? "h-full" : "h-64"
-      )}
-    >
-      {onCollapse && (
-        // Floating on the panel's own right edge (vertically centered) —
-        // same spot a resizable pane's collapse handle sits in most apps —
-        // instead of buried in the header next to the "หัวข้อ" label where
-        // it was easy to miss.
-        <button
-          type="button"
-          onClick={onCollapse}
-          title="ย่อหัวข้อ"
-          aria-label="ย่อหัวข้อ"
-          className="absolute top-1/2 -right-3 -translate-y-1/2 z-10 hidden lg:flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[var(--line)] bg-white text-[var(--ink-soft)] shadow-sm transition-colors hover:bg-[var(--accent)] hover:text-[var(--brand-green-dark)]"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </button>
-      )}
+    // Two layers: the outer one stays overflow-visible so the floating
+    // collapse button (positioned half outside the panel's own right edge)
+    // doesn't get sliced into a clipped blob by the inner overflow-hidden —
+    // that inner div is what actually needs the clip (it's the one with the
+    // tinted fill and the flex-col content).
+    <div className={cn("relative w-full lg:w-[280px] lg:h-full lg:shrink-0", fillHeight ? "h-full" : "h-64")}>
+      <div
+        className={cn(
+          // No card frame at all — a border+white-fill box sitting right next
+          // to the room panel's own box read as two stacked "this is a boxed
+          // thing" signals before a single post even came into view
+          // ("กรอบซ้อนกันหลายชั้น"). A faint tinted background instead of
+          // white is enough on its own to read as "a different area" next to
+          // the room panel's white, the same way Notion/Linear separate a nav
+          // rail from its content with color contrast, not a drawn line.
+          "h-full w-full bg-[color-mix(in_srgb,var(--bg-soft)_55%,white)] flex flex-col min-h-0 overflow-hidden"
+        )}
+      >
       {/* Header separated by spacing (extra bottom padding) instead of a
           border-b now — one less hard rule stacking on top of the section
           divider just below it and the card's own outer border, all three
@@ -925,6 +915,27 @@ export function TopicSidebar({
           <p className="text-xs text-[var(--ink-soft)] px-2.5 py-3">ยังไม่มีหัวข้อ กด + หัวข้อใหม่ เพื่อเริ่มต้น</p>
         )}
       </div>
+      </div>
+
+      {onCollapse && (
+        // Rests as a small unobtrusive nub on the panel's edge, then widens
+        // into the same labeled-pill shape the old inline button used
+        // ("ย่ออะไร" needs the word, not just an arrow) once hovered — so it
+        // doesn't compete for attention while idle but is unambiguous the
+        // moment someone's about to click it.
+        <button
+          type="button"
+          onClick={onCollapse}
+          title="ย่อหัวข้อ"
+          aria-label="ย่อหัวข้อ"
+          className="group absolute top-1/2 -right-3 -translate-y-1/2 z-10 hidden lg:flex h-7 items-center gap-1.5 rounded-full border border-[var(--line)] bg-white pl-1.5 pr-1.5 text-[var(--ink-soft)] shadow-sm transition-colors hover:border-[var(--brand-green)]/50 hover:bg-[var(--accent)] hover:text-[var(--brand-green-dark)] hover:pr-3"
+        >
+          <ChevronLeft className="h-4 w-4 shrink-0" />
+          <span className="max-w-0 overflow-hidden whitespace-nowrap text-xs font-semibold transition-[max-width] duration-200 group-hover:max-w-[64px]">
+            หัวข้อ
+          </span>
+        </button>
+      )}
 
       <Dialog open={!!editor} onOpenChange={(open) => !open && setEditor(null)}>
         <DialogContent className="sm:max-w-md p-0 gap-0 max-h-[85vh] flex flex-col overflow-hidden">
