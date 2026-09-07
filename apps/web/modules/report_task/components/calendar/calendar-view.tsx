@@ -915,7 +915,17 @@ export function CalendarView() {
         <div className="hidden sm:block">
         {tab === "work" ? (
           <div className="flex flex-wrap items-center gap-2">
-            {canBroadenScope && (
+            {/* Whichever scope toggle applies goes first, same slot either
+                way — a head/owner gets the task-scope one (broader: every
+                task type), everyone else gets the todo-scope one instead
+                (see effectiveTodoScope's own comment on why a regular user
+                never sees both at once). Used to only exist for
+                canBroadenScope up here, with the todo one bolted on at the
+                very end of the row instead — same control, same meaning,
+                but landing on opposite sides of the toolbar depending on
+                who's looking ("ของฉัน/ทั้งหมด ของ user ไปอยู่ขวา แต่ owner
+                ไปอยู่ซ้าย"). Same position for both now. */}
+            {canBroadenScope ? (
               <>
                 <span className="text-xs text-[var(--ink-soft)]">มุมมอง:</span>
                 <div className="flex items-center gap-1 bg-[var(--bg-soft)] rounded-lg p-1">
@@ -950,6 +960,41 @@ export function CalendarView() {
                 </div>
                 <span className="h-4 w-px bg-[var(--line)] mx-1" />
               </>
+            ) : (
+              showTodosInWork && (
+                <>
+                  <span className="text-xs text-[var(--ink-soft)]">มุมมองสิ่งที่ต้องทำ:</span>
+                  <div className="flex items-center gap-1 bg-[var(--bg-soft)] rounded-lg p-1">
+                    <button
+                      onClick={() => setTodoScope("mine")}
+                      title="แสดงเฉพาะสิ่งที่ต้องทำของฉัน"
+                      className={cn(
+                        "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer",
+                        todoScope === "mine"
+                          ? "bg-white shadow-sm text-[var(--ink)]"
+                          : "text-[var(--ink-soft)] hover:text-[var(--ink)] hover:bg-white/60"
+                      )}
+                    >
+                      <User className="h-3.5 w-3.5" />
+                      ของฉัน
+                    </button>
+                    <button
+                      onClick={() => setTodoScope("all")}
+                      title="แสดงสิ่งที่ต้องทำของทุกคน"
+                      className={cn(
+                        "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer",
+                        todoScope === "all"
+                          ? "bg-white shadow-sm text-[var(--ink)]"
+                          : "text-[var(--ink-soft)] hover:text-[var(--ink)] hover:bg-white/60"
+                      )}
+                    >
+                      <Users className="h-3.5 w-3.5" />
+                      ทั้งหมด
+                    </button>
+                  </div>
+                  <span className="h-4 w-px bg-[var(--line)] mx-1" />
+                </>
+              )
             )}
             <span className="text-xs text-[var(--ink-soft)] mr-0.5">แสดง:</span>
             <button onClick={() => setShowTasksInWork((v) => !v)} title={showTasksInWork ? "คลิกเพื่อซ่อน" : "คลิกเพื่อแสดง"}>
@@ -996,46 +1041,6 @@ export function CalendarView() {
                 <span className="h-2 w-2 rounded-full border-[1.5px] border-[var(--chart-red)]" />
                 จุดกลวง = งานของคนอื่น
               </span>
-            )}
-            {/* Only its own toggle for someone with no task-scope control at
-                all (canBroadenScope false) — a head/owner already has "มุมมอง"
-                above, and having a second near-identical "ของฉัน/ทั้งหมด" pair
-                right next to it read as a confusing duplicate, not two
-                different things, so effectiveTodoScope just rides the task
-                one instead for them (see its own comment). */}
-            {showTodosInWork && !canBroadenScope && (
-              <>
-                <span className="h-4 w-px bg-[var(--line)] mx-1" />
-                <span className="text-xs text-[var(--ink-soft)]">มุมมองสิ่งที่ต้องทำ:</span>
-                <div className="flex items-center gap-1 bg-[var(--bg-soft)] rounded-lg p-1">
-                  <button
-                    onClick={() => setTodoScope("mine")}
-                    title="แสดงเฉพาะสิ่งที่ต้องทำของฉัน"
-                    className={cn(
-                      "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer",
-                      todoScope === "mine"
-                        ? "bg-white shadow-sm text-[var(--ink)]"
-                        : "text-[var(--ink-soft)] hover:text-[var(--ink)] hover:bg-white/60"
-                    )}
-                  >
-                    <User className="h-3.5 w-3.5" />
-                    ของฉัน
-                  </button>
-                  <button
-                    onClick={() => setTodoScope("all")}
-                    title="แสดงสิ่งที่ต้องทำของทุกคน"
-                    className={cn(
-                      "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer",
-                      todoScope === "all"
-                        ? "bg-white shadow-sm text-[var(--ink)]"
-                        : "text-[var(--ink-soft)] hover:text-[var(--ink)] hover:bg-white/60"
-                    )}
-                  >
-                    <Users className="h-3.5 w-3.5" />
-                    ทั้งหมด
-                  </button>
-                </div>
-              </>
             )}
           </div>
         ) : (
