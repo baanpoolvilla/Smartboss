@@ -201,20 +201,28 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   // matter which round is selected.
   const activeLate = !excludeFromSubmission && !!activeRound && nowMinutes > roundMinutesOf(activeRound.time);
   // Already filed something that counts toward today's submission in this
-  // room — the late-toast below has nothing left to warn about even if the
-  // composer's default round still lands on an overdue one.
+  // room — the late-toast below has nothing left to warn about even if some
+  // round today is overdue.
   const todayStr = localDateStr(new Date());
   const alreadyPostedToday = posts.some(
     (p) => p.topicId === topic.id && p.authorId === viewingAsUserId && !p.excludeFromSubmission && localDateStr(new Date(p.createdAt)) === todayStr
   );
+  // The round the toast should warn about — NOT necessarily activeRound:
+  // the picker/composer defaults to the nearest round not yet passed (so
+  // someone can still make it on time), which means the moment an earlier
+  // round quietly goes overdue, activeRound jumps straight past it to the
+  // next one and never reads as late. The toast needs to flag that missed
+  // earlier round anyway, so it looks at the most recently closed round
+  // today regardless of what's currently selected in the picker.
+  const mostRecentLateRound = [...todayCutoffs].reverse().find((r) => nowMinutes > roundMinutesOf(r.time)) ?? null;
 
   // Non-blocking heads-up, not a confirm-to-proceed gate — fires once per
   // "opening the composer" (not every keystroke) so someone who's about to
   // write a late report finds out before they've already typed it all out,
   // without making them click through anything just to start typing.
   useEffect(() => {
-    if (!canPost || !expanded || !activeRound || !activeLate || alreadyPostedToday) return;
-    const key = lateToastDismissKey(topic.id, todayStr, activeRound.id);
+    if (!canPost || !expanded || excludeFromSubmission || !mostRecentLateRound || alreadyPostedToday) return;
+    const key = lateToastDismissKey(topic.id, todayStr, mostRecentLateRound.id);
     if (isLateToastDismissed(key)) return;
     let dontShowAgain = false;
     toast.custom(
@@ -227,7 +235,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
             <div className="min-w-0">
               <p className="text-sm font-semibold text-[var(--ink)]">ยังไม่ได้ส่งรอบนี้</p>
               <p className="text-xs leading-relaxed text-[var(--ink-soft)]">
-                &quot;{activeRound.label}&quot; ปิดรอบไปแล้วตั้งแต่ {activeRound.time} — ส่งตอนนี้จะถูกนับว่า{" "}
+                &quot;{mostRecentLateRound.label}&quot; ปิดรอบไปแล้วตั้งแต่ {mostRecentLateRound.time} — ส่งตอนนี้จะถูกนับว่า{" "}
                 <b className="font-semibold text-[var(--chart-red)]">ส่งย้อนหลัง = สาย</b>
               </p>
             </div>
