@@ -129,78 +129,76 @@ export function ReportAllPostsFeed({
             <p className="text-xs text-[var(--ink-soft)] leading-tight">{description}</p>
           </div>
         </div>
+        {showFilters && (
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {/* ฟิลเตอร์อยู่แถวเดียวกับหัวข้อ (ชิดขวา) ไม่กินบรรทัดเพิ่ม */}
+            <div className="hidden sm:flex items-center gap-2.5 flex-wrap">
+            <DatePresetPicker
+              variant="inline"
+              preset={preset}
+              customFrom={customFrom}
+              customTo={customTo}
+              onPresetChange={setPreset}
+              onCustomRangeChange={(from, to) => {
+                setCustomFrom(from);
+                setCustomTo(to);
+              }}
+            />
+            <div className="h-6 w-px bg-[var(--line)]" />
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <button
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors",
+                      topicFilter.size > 0
+                        ? "border-[var(--brand-green)] bg-[var(--accent)] text-[var(--brand-green-dark)]"
+                        : "border-[var(--line)] bg-white text-[var(--ink-soft)] hover:text-[var(--ink)] hover:bg-[var(--bg-soft)]"
+                    )}
+                  >
+                    <Tag className="h-3.5 w-3.5" />
+                    {topicFilter.size === 0 ? "ทุกหัวข้อ" : `${topicFilter.size} หัวข้อ`}
+                  </button>
+                }
+              />
+              <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>กรองตามหัวข้อ</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {topicFilter.size > 0 && (
+                    <button
+                      onClick={() => setTopicFilter(new Set())}
+                      className="w-full text-left px-2 py-1.5 text-xs font-medium text-[var(--brand-green-dark)] hover:underline"
+                    >
+                      ล้างตัวกรอง
+                    </button>
+                  )}
+                  {topics.map((t) => (
+                    <DropdownMenuCheckboxItem key={t.id} checked={topicFilter.has(t.id)} onCheckedChange={() => toggleTopicFilter(t.id)}>
+                      {breadcrumbOf(t, topicById)}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+            <div className="flex sm:hidden items-center">
+            <button
+              type="button"
+              onClick={() => setMobileSheetOpen(true)}
+              className={cn(filterFieldTriggerClass(activeFilterCount > 0), "!h-10")}
+            >
+              <SlidersHorizontal className="h-4 w-4 shrink-0" />
+              ตัวกรอง
+              {activeFilterCount > 0 && <span className="tabular-nums">({activeFilterCount})</span>}
+            </button>
+          </div>
+          </div>
+        )}
       </div>
 
-      {/* Its own strip under the room header, not crammed into it (V2) —
-          a card-inside-a-card was two header rows stacked on top of each other.
-          ≥640px: unchanged. <640px gets its own button + bottom sheet below
-          instead — a 5-preset segmented control plus a topic dropdown never
-          fit one line on a phone and just wrapped onto 2-3 rows. */}
       {showFilters && (
       <>
-      <div className="hidden sm:flex shrink-0 px-5 py-2.5 items-center gap-2.5 flex-wrap bg-[var(--bg-soft)] border-b border-[var(--line)]">
-        <DatePresetPicker
-          variant="inline"
-          preset={preset}
-          customFrom={customFrom}
-          customTo={customTo}
-          onPresetChange={setPreset}
-          onCustomRangeChange={(from, to) => {
-            setCustomFrom(from);
-            setCustomTo(to);
-          }}
-        />
-        <div className="h-6 w-px bg-[var(--line)]" />
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <button
-                className={cn(
-                  "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors",
-                  topicFilter.size > 0
-                    ? "border-[var(--brand-green)] bg-[var(--accent)] text-[var(--brand-green-dark)]"
-                    : "border-[var(--line)] bg-white text-[var(--ink-soft)] hover:text-[var(--ink)] hover:bg-[var(--bg-soft)]"
-                )}
-              >
-                <Tag className="h-3.5 w-3.5" />
-                {topicFilter.size === 0 ? "ทุกหัวข้อ" : `${topicFilter.size} หัวข้อ`}
-              </button>
-            }
-          />
-          <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>กรองตามหัวข้อ</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {topicFilter.size > 0 && (
-                <button
-                  onClick={() => setTopicFilter(new Set())}
-                  className="w-full text-left px-2 py-1.5 text-xs font-medium text-[var(--brand-green-dark)] hover:underline"
-                >
-                  ล้างตัวกรอง
-                </button>
-              )}
-              {topics.map((t) => (
-                <DropdownMenuCheckboxItem key={t.id} checked={topicFilter.has(t.id)} onCheckedChange={() => toggleTopicFilter(t.id)}>
-                  {breadcrumbOf(t, topicById)}
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      <div className="flex sm:hidden shrink-0 px-5 py-2.5 bg-[var(--bg-soft)] border-b border-[var(--line)]">
-        <button
-          type="button"
-          onClick={() => setMobileSheetOpen(true)}
-          className={cn(filterFieldTriggerClass(activeFilterCount > 0), "!h-10")}
-        >
-          <SlidersHorizontal className="h-4 w-4 shrink-0" />
-          ตัวกรอง
-          {activeFilterCount > 0 && <span className="tabular-nums">({activeFilterCount})</span>}
-        </button>
-      </div>
-
       <Sheet open={mobileSheetOpen} onOpenChange={setMobileSheetOpen}>
         <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
           <SheetHeader className="flex-row items-center justify-between gap-2 pb-2 pr-11">
