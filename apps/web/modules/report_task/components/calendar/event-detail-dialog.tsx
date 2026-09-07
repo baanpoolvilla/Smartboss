@@ -219,6 +219,19 @@ export function EventDetailDialog({
                   </div>
                 );
               })()}
+              {event.type === "meeting" && event.createdById && (() => {
+                // ใครเป็นคน "เปิด/สร้าง" ประชุม — เดิมโชว์แต่รายชื่อผู้เข้าร่วม
+                // เลยดูไม่ออกว่าใครเป็นเจ้าของนัด
+                const creator = getUser(event.createdById);
+                if (!creator) return null;
+                return (
+                  <div className="flex items-center gap-2 text-[var(--ink-soft)]">
+                    <User className="h-4 w-4 shrink-0" />
+                    ผู้สร้าง:{" "}
+                    <span className="font-medium text-[var(--ink)]">{creator.name}</span>
+                  </div>
+                );
+              })()}
               {event.type === "meeting" && (event.departmentIds?.length ?? 0) > 0 && (
                 <div className="flex items-center gap-2 text-[var(--ink-soft)]">
                   <Building2 className="h-4 w-4" />
