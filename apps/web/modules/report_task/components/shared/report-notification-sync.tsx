@@ -67,6 +67,15 @@ export function ReportNotificationSync() {
 export function useReportTaskUnreadCount(): number {
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   return useNotificationStore(
-    (s) => s.notifications.filter((n) => n.userId === viewingAsUserId && !n.read && n.kind !== "room_post").length
+    (s) =>
+      s.notifications.filter(
+        (n) =>
+          n.userId === viewingAsUserId &&
+          !n.read &&
+          // ไม่นับ "โพสต์ใหม่ในห้อง" — ทั้งของใหม่ (kind) และของเก่าที่ยังไม่มี
+          // kind (เดาจากข้อความ) เพื่อให้กระดิ่งของทุกคนนับเฉพาะเรื่องส่วนตัว
+          n.kind !== "room_post" &&
+          !/โพสต์ใหม่ใน\s*"/.test(n.message)
+      ).length
   );
 }

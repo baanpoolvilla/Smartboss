@@ -1,14 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, Loader2, LogOut } from "lucide-react";
+import { Loader2, LogOut } from "lucide-react";
 import { Button } from "@smartboss/ui/components/button";
 import { useShell } from "@/components/shell/shell-context";
 import { Modal } from "./dialog";
 import { IssueReportBarButton } from "@/modules/report_task/components/issue-report/issue-report-bar-button";
-import { ReportNotificationSync, useReportTaskUnreadCount } from "@/modules/report_task/components/shared/report-notification-sync";
+import { ReportNotificationSync } from "@/modules/report_task/components/shared/report-notification-sync";
+import { NotificationBellPopover } from "@/modules/report_task/components/shared/notification-bell-popover";
 
 /**
  * ปุ่มขวาสุดของ AppBar — NotificationBell + ปุ่มออกจากระบบ (พร้อมกล่องยืนยัน)
@@ -16,8 +16,6 @@ import { ReportNotificationSync, useReportTaskUnreadCount } from "@/modules/repo
  */
 export function AppBarActions() {
   const { unread } = useShell();
-  const reportTaskUnread = useReportTaskUnreadCount();
-  const totalUnread = unread + reportTaskUnread;
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -37,18 +35,7 @@ export function AppBarActions() {
       <IssueReportBarButton />
       <ReportNotificationSync />
 
-      <Link
-        href="/notifications"
-        className="relative rounded-full p-2 text-(--app-strong) transition-colors hover:bg-(--bg-soft)"
-        aria-label="การแจ้งเตือน"
-      >
-        <Bell className="h-5 w-5" />
-        {totalUnread > 0 && (
-          <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-(--danger) px-1 text-[10px] font-bold text-white">
-            {totalUnread > 99 ? "99+" : totalUnread}
-          </span>
-        )}
-      </Link>
+      <NotificationBellPopover extraUnread={unread} />
 
       <button
         type="button"

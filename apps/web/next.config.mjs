@@ -43,6 +43,17 @@ const nextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
+  /*
+   * report-feed ย้ายไปอยู่ใต้ /report-task/report-feed แล้ว แต่แจ้งเตือนเก่าที่
+   * ถูกสร้างไว้ก่อนหน้านั้น (รวมถึงลิงก์ที่ผู้ใช้บุ๊กมาร์ก/แชร์กันไว้) ยังเก็บ
+   * พาธเดิม /report-feed?... ไว้ในตัว กดแล้วเลย 404 — redirect นี้พาไปหน้าถูกให้
+   * อัตโนมัติ (Next จะส่ง query string เดิม เช่น ?topic=&post= ต่อไปให้เอง)
+   */
+  async redirects() {
+    return [
+      { source: "/report-feed", destination: "/report-task/report-feed", permanent: false },
+    ];
+  },
 };
 
 export default nextConfig;

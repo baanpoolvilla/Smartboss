@@ -36,10 +36,10 @@ import { ReportNotificationSync } from "@/modules/report_task/components/shared/
 
 const SHOW_ALL_KEY = "sb.notif.showAll";
 
-type ActionMeta = { Icon: LucideIcon; color: string };
+export type ActionMeta = { Icon: LucideIcon; color: string };
 
 /** เดาประเภท action จาก kind + ข้อความ เพื่อเลือกไอคอน/สีของแบดจ์บนรูปโปรไฟล์ */
-function actionMetaFor(n: AppNotification): ActionMeta {
+export function actionMetaFor(n: AppNotification): ActionMeta {
   if (n.kind === "room_post") return { Icon: FileText, color: "#3B82F6" };
   const m = n.message;
   if (m.includes("ตั๋ว") || m.includes("แจ้งปัญหา")) return { Icon: TriangleAlert, color: "#F59E0B" };
@@ -51,6 +51,13 @@ function actionMetaFor(n: AppNotification): ActionMeta {
   if (m.includes("งาน") || m.includes("กำหนดส่ง") || m.includes("ตรวจ") || m.includes("เสร็จสิ้น"))
     return { Icon: CheckCircle2, color: "#0D9488" };
   return { Icon: Bell, color: "#6B7280" };
+}
+
+/** แจ้งเตือน "โพสต์ใหม่ในห้อง" — ปกติดูจาก kind "room_post" แต่ของเก่าที่สร้าง
+ * ก่อนมี field นี้ยังไม่มี kind จึงเดาเพิ่มจากรูปแบบข้อความ (`โพสต์ใหม่ใน "…"`)
+ * เพื่อให้คนทั่วไปไม่เห็นแจ้งเตือนโพสต์ข้ามแผนกที่ค้างอยู่ในระบบ */
+export function isRoomPost(n: AppNotification): boolean {
+  return n.kind === "room_post" || /โพสต์ใหม่ใน\s*"/.test(n.message);
 }
 
 export function ReportTaskNotificationsSection() {
@@ -89,7 +96,7 @@ export function ReportTaskNotificationsSection() {
   if (mine.length === 0) return <ReportNotificationSync />;
 
   // owner + ภาพรวม = เห็นทุกอย่างรวม room_post, นอกนั้นเห็นเฉพาะเรื่องส่วนตัว
-  const visible = owner && showAll ? mine : mine.filter((n) => n.kind !== "room_post");
+  const visible = owner && showAll ? mine : mine.filter((n) => !isRoomPost(n));
   const unread = visible.filter((n) => !n.read);
   const earlier = visible.filter((n) => n.read);
   const hasUnread = unread.length > 0;
