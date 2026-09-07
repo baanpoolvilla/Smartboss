@@ -14,7 +14,17 @@ import { localDateStr, now } from "@/modules/report_task/lib/now";
 import { cn } from "@/modules/report_task/lib/utils";
 import { ReportPostFields, newSection, type DraftSection } from "@/modules/report_task/components/report-feed/report-post-fields";
 import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
-import { Clock, Lock, Send, SquarePen, TriangleAlert } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/modules/report_task/components/ui/alert-dialog";
+import { Check, Clock, Lock, Send, SquarePen, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { uuid } from "@/modules/report_task/lib/uuid";
 
@@ -80,6 +90,9 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   // update/question that isn't "the report" itself, so it doesn't need to
   // be buried as a reply just to avoid getting scored.
   const [excludeFromSubmission, setExcludeFromSubmission] = useState(false);
+  // Gates the "ยังไงก็ส่ง" confirm popup — only opens when handleSubmit
+  // catches a late round, never toggled from anywhere else.
+  const [confirmLateOpen, setConfirmLateOpen] = useState(false);
 
   // Keeps sessionStorage in sync with every keystroke/attachment change so a
   // reload has something to restore — cleared once the draft is either
@@ -177,9 +190,12 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   // declared not to be that.
   const minImagesRequired = excludeFromSubmission ? 0 : (activeRound?.minImages ?? 0);
   const missingRequiredImage = photoCount(images) < minImagesRequired;
+  // Only worth warning about if this post still counts toward the round —
+  // an excluded post ("ไม่นับเป็นการส่ง daily") never reads as late no
+  // matter which round is selected.
+  const activeLate = !excludeFromSubmission && !!activeRound && nowMinutes > roundMinutesOf(activeRound.time);
 
-  function handleSubmit() {
-    if (!title.trim() || missingRequiredImage) return;
+  function doSubmit() {
     const cleanSections = sections
       .map((s) => ({
         id: s.id,
@@ -196,6 +212,18 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
       excludeFromSubmission,
     });
     reset();
+  }
+
+  // The red chip already flags a late round, but a chip is easy to miss
+  // when someone's rushing to hit ส่ง — a center-screen confirm is the one
+  // spot they can't scroll past without reading before it actually posts.
+  function handleSubmit() {
+    if (!title.trim() || missingRequiredImage) return;
+    if (activeLate) {
+      setConfirmLateOpen(true);
+      return;
+    }
+    doSubmit();
   }
 
   if (!expanded) {
@@ -278,22 +306,24 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
                   // = สาย") อยู่ใน title แทนตัวชิปเอง — บนตัวชิปเหลือแค่คำสั้นๆ
                   // + สีแดง/ไอคอน ไม่งั้นชิปยาวเกินจนกินพื้นที่แนวตั้งมากบนจอมือถือ
                   // ถึงจะ wrap ไม่ล้นจอก็ตาม
+                  aria-pressed={selected}
                   title={late ? `${r.label} เลยเวลาปิดรอบแล้ว (${r.time}) — เลือกได้ แต่จะนับว่าส่งย้อนหลัง = สาย` : undefined}
                   className={cn(
                     "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11.5px] font-medium transition-colors",
-                    // เลยเวลารอบแล้ว = แดง เสมอ (เลือกอยู่หรือไม่ก็ตาม) — ให้เห็น
-                    // ชัดว่ารอบนี้ปิดไปแล้วโดยไม่ต้องอ่านข้อความ ไม่ใช่แค่ชิปเขียว
-                    // ปกติที่มีตัวหนังสือเล็กๆ ต่อท้ายเฉยๆ
-                    late
-                      ? selected
-                        ? "border-[var(--chart-red)] bg-red-50 text-[var(--chart-red)]"
-                        : "border-red-200 bg-red-50/70 text-[var(--chart-red)] hover:bg-red-50"
-                      : selected
-                        ? "border-[var(--brand-green)] bg-[var(--accent)] text-[var(--brand-green-dark)]"
+                    // เลือกอยู่ = พื้นทึบสีเข้ม + ตัวหนังสือขาว + ติ๊กถูก ต่างจาก
+                    // ปุ่มเปล่าๆ ชัดเจนแบบ "กดปุ่มแล้วยุบลง" ไม่ใช่แค่ไล่เฉดสี
+                    // อ่อน/เข้มที่คนละยุ่งดูออกยาก (เดิมของสองสถานะต่างกันแค่เฉด
+                    // พื้นหลังจางๆ กับสีขอบ — บนจอมือถือแทบแยกไม่ออก)
+                    selected
+                      ? late
+                        ? "border-transparent bg-[var(--chart-red)] text-white shadow-sm"
+                        : "border-transparent bg-[var(--brand-green)] text-white shadow-sm"
+                      : late
+                        ? "border-red-200 bg-red-50/70 text-[var(--chart-red)] hover:bg-red-50"
                         : "border-[var(--line)] bg-white text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
                   )}
                 >
-                  {late && <TriangleAlert className="h-3 w-3 shrink-0" />}
+                  {selected ? <Check className="h-3 w-3 shrink-0" strokeWidth={3} /> : late && <TriangleAlert className="h-3 w-3 shrink-0" />}
                   {r.label} ({r.time}){late && <b className="font-semibold">&nbsp;· สาย</b>}
                 </button>
               );
@@ -356,6 +386,31 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
           โพสต์ {/* Ctrl/⌘+Enter also submits (P4) — see the keydown handler on the title input below. */}
         </Button>
       </div>
+
+      <AlertDialog open={confirmLateOpen} onOpenChange={setConfirmLateOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-[var(--chart-red)]">
+              <TriangleAlert className="h-5 w-5 shrink-0" />
+              รอบนี้เลยเวลาปิดรอบแล้ว
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {activeRound && (
+                <>
+                  &quot;{activeRound.label}&quot; ปิดรอบไปแล้วตั้งแต่ {activeRound.time} — ยังส่งได้ แต่จะถูกนับว่า
+                  <b className="text-[var(--chart-red)]"> ส่งย้อนหลัง = สาย</b>
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>กลับไปแก้</AlertDialogCancel>
+            <AlertDialogAction className="bg-[var(--chart-red)] hover:bg-red-700 text-white" onClick={doSubmit}>
+              ส่งย้อนหลังเลย
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
