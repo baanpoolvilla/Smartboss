@@ -14,7 +14,7 @@ import { localDateStr, now } from "@/modules/report_task/lib/now";
 import { cn } from "@/modules/report_task/lib/utils";
 import { ReportPostFields, newSection, type DraftSection } from "@/modules/report_task/components/report-feed/report-post-fields";
 import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
-import { Check, Clock, Lock, Send, SquarePen, TriangleAlert } from "lucide-react";
+import { Check, Clock, Lock, Send, SquarePen, TriangleAlert, X } from "lucide-react";
 import { toast } from "sonner";
 import { uuid } from "@/modules/report_task/lib/uuid";
 
@@ -226,28 +226,37 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
     if (isLateToastDismissed(key)) return;
     let dontShowAgain = false;
     toast.custom(
-      () => (
-        <div className="flex flex-col gap-2">
+      (id) => (
+        <div className="relative w-[22rem] max-w-[calc(100vw-2rem)] rounded-xl border border-[var(--line)] bg-white p-3.5 pr-8 shadow-lg">
+          <button
+            type="button"
+            onClick={() => toast.dismiss(id)}
+            aria-label="ปิด"
+            className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full text-[var(--ink-soft)] transition-colors hover:bg-[var(--bg-soft)] hover:text-[var(--ink)]"
+          >
+            <X className="h-3 w-3" />
+          </button>
           <div className="flex items-start gap-2.5">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
               <TriangleAlert className="h-4 w-4" />
             </span>
             <div className="min-w-0">
               <p className="text-sm font-semibold text-[var(--ink)]">ยังไม่ได้ส่งรอบนี้</p>
-              <p className="text-xs leading-relaxed text-[var(--ink-soft)]">
-                &quot;{mostRecentLateRound.label}&quot; ปิดรอบไปแล้วตั้งแต่ {mostRecentLateRound.time} — ส่งตอนนี้จะถูกนับว่า{" "}
-                <b className="font-semibold text-[var(--chart-red)]">ส่งย้อนหลัง = สาย</b>
+              <p className="mt-0.5 text-xs leading-relaxed text-[var(--ink-soft)]">
+                &quot;{mostRecentLateRound.label}&quot; ปิดรอบไปแล้วตั้งแต่ {mostRecentLateRound.time}
+                <br />
+                ส่งตอนนี้จะถูกนับว่า <b className="font-semibold text-[var(--chart-red)]">ส่งย้อนหลัง = สาย</b>
               </p>
             </div>
           </div>
-          <label className="flex cursor-pointer items-center gap-1.5 pl-[42px] text-xs text-[var(--ink-soft)]">
+          <label className="mt-2 flex cursor-pointer items-center gap-1.5 pl-[42px] text-xs text-[var(--ink-soft)]">
             <input type="checkbox" className="h-3.5 w-3.5" onChange={(e) => { dontShowAgain = e.target.checked; }} />
             ไม่ต้องแสดงอีก (รอบนี้/วันนี้)
           </label>
         </div>
       ),
       {
-        duration: 6000,
+        duration: 3500,
         onDismiss: () => { if (dontShowAgain) dismissLateToast(key); },
         onAutoClose: () => { if (dontShowAgain) dismissLateToast(key); },
       }
