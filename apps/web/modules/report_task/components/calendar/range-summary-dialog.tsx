@@ -22,7 +22,7 @@ import { useCalendarScopeStore } from "@/modules/report_task/store/calendar-scop
 import { useEventColorStore } from "@/modules/report_task/store/event-color-store";
 import { priorityMeta, statusMeta } from "@/modules/report_task/lib/task-meta";
 import { dueUrgency } from "@/modules/report_task/lib/task-flags";
-import { canSeeTask, canSeeTaskOnCalendar } from "@/modules/report_task/lib/permissions";
+import { canSeeTask, canSeeTaskOnCalendar, canSeeMeetingOnCalendar } from "@/modules/report_task/lib/permissions";
 import { formatDate, formatDateTime } from "@/modules/report_task/lib/format";
 import { nowMs } from "@/modules/report_task/lib/now";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -107,7 +107,15 @@ export function RangeSummaryDialog({
           (taskScope === "all" && canBroadenScope ? canSeeTask(t, viewingAsUserId) : canSeeTaskOnCalendar(t, viewingAsUserId))
       )
       .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-    const rangeMeetings = meetings.filter((m) => inRange(m.start, start, end)).sort((a, b) => a.start.localeCompare(b.start));
+    const rangeMeetings = meetings
+      .filter((m) => {
+        if (!inRange(m.start, start, end)) return false;
+        // เห็นเฉพาะผู้สร้าง/ผู้ถูกเชิญ (หัวหน้าโหมด "ทั้งหมด" เห็นภาพรวม) —
+        // ประชุมเก่าที่ไม่มีเจ้าของยังโชว์ให้ทุกคนไว้ก่อน
+        const unattributed = !m.attendeeIds?.length && !m.createdById;
+        return unattributed || (taskScope === "all" && canBroadenScope) || canSeeMeetingOnCalendar(m, viewingAsUserId);
+      })
+      .sort((a, b) => a.start.localeCompare(b.start));
     const rangeLeaves = leaves.filter((l) => inRange(l.start, start, end)).sort((a, b) => a.start.localeCompare(b.start));
     const rangeHolidays = holidays.filter((h) => inRange(h.start, start, end)).sort((a, b) => a.start.localeCompare(b.start));
     const rangeDayoffs = dayoffs.filter((d) => inRange(d.start, start, end)).sort((a, b) => a.start.localeCompare(b.start));

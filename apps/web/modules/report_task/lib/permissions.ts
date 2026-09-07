@@ -145,6 +145,19 @@ export function canSeeTaskOnCalendar(
 }
 
 /**
+ * ปฏิทิน: ประชุมควรเห็นเฉพาะ "ผู้สร้าง" กับ "ผู้ถูกเชิญ" เท่านั้น (ขนานกับ
+ * canSeeTaskOnCalendar ของงาน) หัวหน้า/owner ที่สลับมุมมองเป็น "ทั้งหมด" ค่อย
+ * เห็นภาพรวมทุกประชุม (เช็คแยกที่ calendar-view เหมือน canBroadenScope ของงาน)
+ * รับ shape ล้วนเพื่อไม่ผูกกับชนิด CalendarEvent — เป็น helper กลางเหมือนตัวอื่น
+ */
+export function canSeeMeetingOnCalendar(
+  meeting: { attendeeIds?: string[]; createdById?: string },
+  viewingAsUserId: string
+): boolean {
+  return !!meeting.attendeeIds?.includes(viewingAsUserId) || meeting.createdById === viewingAsUserId;
+}
+
+/**
  * Room-level visibility for report feed topics — a room can be scoped to one
  * or more departments, to managers only, or left open (no `visibility`, or
  * both fields empty — the default every topic had before this existed, so

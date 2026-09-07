@@ -17,7 +17,7 @@ import { todayIso } from "@/modules/report_task/lib/now";
 import { rangeLabel, inRange, inRangeLocal, type ViewRange } from "@/modules/report_task/lib/date-filter";
 import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import { canManage } from "@/modules/report_task/lib/directory";
-import { canSeeTask, canSeeTaskOnCalendar } from "@/modules/report_task/lib/permissions";
+import { canSeeTask, canSeeTaskOnCalendar, canSeeMeetingOnCalendar } from "@/modules/report_task/lib/permissions";
 import { cn } from "@/modules/report_task/lib/utils";
 import { User, Check, Plus } from "lucide-react";
 import type { CalendarEvent, Task, TodoItem } from "@/modules/report_task/types";
@@ -59,10 +59,16 @@ export function WorkSidebar({
     .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
   const monthMeetings = meetings
-    .filter(
-      (m) =>
-        inRangeLocal(m.start, range) && (!m.attendeeIds?.length || m.attendeeIds.some((id) => !hiddenUserIds.includes(id)))
-    )
+    .filter((m) => {
+      if (!inRangeLocal(m.start, range)) return false;
+      // เห็นเฉพาะผู้สร้าง/ผู้ถูกเชิญ (หัวหน้าโหมด "ทั้งหมด" เห็นภาพรวม) เหมือน
+      // ปฏิทินหลัก — ประชุมเก่าที่ไม่มีเจ้าของยังโชว์ให้ทุกคนไว้ก่อน
+      const unattributed = !m.attendeeIds?.length && !m.createdById;
+      const canView =
+        unattributed || (taskScope === "all" && canBroadenScope) || canSeeMeetingOnCalendar(m, viewingAsUserId);
+      if (!canView) return false;
+      return !m.attendeeIds?.length || m.attendeeIds.some((id) => !hiddenUserIds.includes(id));
+    })
     .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
 
   // A to-do already done and dated before today is finished business — same

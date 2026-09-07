@@ -36,7 +36,7 @@ import { NewTaskDialog } from "@/modules/report_task/components/kanban/new-task-
 import { useEventColorStore } from "@/modules/report_task/store/event-color-store";
 import { useCalendarScopeStore } from "@/modules/report_task/store/calendar-scope-store";
 import { chartColors, leaveTypeColorOrder } from "@/modules/report_task/lib/chart-colors";
-import { canEditRecord, canSeeTask, canSeeTaskOnCalendar } from "@/modules/report_task/lib/permissions";
+import { canEditRecord, canSeeTask, canSeeTaskOnCalendar, canSeeMeetingOnCalendar } from "@/modules/report_task/lib/permissions";
 import { getUser, canManage, isOwner } from "@/modules/report_task/lib/directory";
 import { eventTypeLabels } from "@/modules/report_task/lib/calendar-colors";
 import { leaveIconOf } from "@/modules/report_task/lib/leave-icons";
@@ -478,11 +478,23 @@ export function CalendarView() {
     [tasks, hiddenUserIds, viewingAsUserId, taskScope, canBroadenScope, colors.task]
   );
 
-  // A meeting with no attendee list can't be attributed to anyone in
-  // particular, so it stays visible regardless of who's toggled off.
+  // ประชุมเห็นเฉพาะผู้สร้าง + ผู้ถูกเชิญ (เหมือน canSeeTaskOnCalendar ของงาน)
+  // — หัวหน้า/owner ที่สลับ "มุมมอง" เป็น "ทั้งหมด" ถึงจะเห็นภาพรวมทุกประชุม
+  // (เท่ากับ canBroadenScope ของงาน) ประชุมเก่าที่ไม่มีทั้งผู้สร้างและผู้ถูก
+  // เชิญ (seed ก่อนมีฟิลด์ createdById) โยงกับใครไม่ได้ ยังโชว์ให้ทุกคนไว้ก่อน
+  // จะได้ไม่หายไปเฉย ๆ. ที่เหลือยังเคารพ toggle ซ่อนปฏิทินรายคนในโหมดเห็นหลายคน
   const visibleMeetings = useMemo(
-    () => meetings.filter((m) => !m.attendeeIds?.length || m.attendeeIds.some((id) => !hiddenUserIds.includes(id))),
-    [meetings, hiddenUserIds]
+    () =>
+      meetings.filter((m) => {
+        const unattributed = !m.attendeeIds?.length && !m.createdById;
+        const canView =
+          unattributed ||
+          (taskScope === "all" && canBroadenScope) ||
+          canSeeMeetingOnCalendar(m, viewingAsUserId);
+        if (!canView) return false;
+        return !m.attendeeIds?.length || m.attendeeIds.some((id) => !hiddenUserIds.includes(id));
+      }),
+    [meetings, hiddenUserIds, viewingAsUserId, taskScope, canBroadenScope]
   );
   const visibleLeaves = useMemo(
     () => leaves.filter((l) => !l.userId || !hiddenUserIds.includes(l.userId)),
