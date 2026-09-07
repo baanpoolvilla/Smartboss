@@ -30,7 +30,7 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useReminderSettingsStore } from "@/modules/report_task/store/reminder-settings-store";
 import { todayIso } from "@/modules/report_task/lib/now";
 import { cn } from "@/modules/report_task/lib/utils";
-import { canManage, departmentIdsOf } from "@/modules/report_task/lib/directory";
+import { departmentIdsOf } from "@/modules/report_task/lib/directory";
 import { X, Trash2, Bell } from "lucide-react";
 import { toast } from "sonner";
 import type { CalendarEvent, TodoItem } from "@/modules/report_task/types";
@@ -67,7 +67,6 @@ export function AddTodoDialog({
   const addMeeting = useMeetingStore((s) => s.addMeeting);
   const notifyMany = useNotificationStore((s) => s.notifyMany);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
-  const canCreateMeeting = canManage(viewingAsUserId);
   const todoReminderDefault = useReminderSettingsStore((s) => s.settings.todo);
 
   const [title, setTitle] = useState("");
@@ -110,7 +109,7 @@ export function AddTodoDialog({
     if (!trimmed) return;
     const trimmedNote = note.trim();
 
-    if (isMeeting && canCreateMeeting) {
+    if (isMeeting) {
       const meetDeptIds = departmentIdsOf(meetAttendeeIds);
       const meeting: CalendarEvent = {
         id: `meet-${uuid()}`,
@@ -200,7 +199,7 @@ export function AddTodoDialog({
             className="resize-none"
           />
 
-          {!editingTodo && canCreateMeeting && (
+          {!editingTodo && (
             // `<div>`, not `<label>` — a native <label> forwards its own
             // click to the first form control inside it (Switch renders as
             // `<button role="switch">`, which qualifies), so tapping the

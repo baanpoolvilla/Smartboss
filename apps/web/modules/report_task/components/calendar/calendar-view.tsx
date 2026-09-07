@@ -828,7 +828,10 @@ export function CalendarView() {
           </Button>
           {/* งาน no longer has a separate "สร้างประชุม" button — "เพิ่มสิ่งที่
               ต้องทำ" is the one create entry point, with a "เป็นการประชุม"
-              switch inside for managers (see AddTodoDialog). */}
+              switch inside open to everyone, not just managers (see
+              AddTodoDialog) — a small team nudging their own meeting onto
+              the calendar shouldn't have to wait on a head/owner just to
+              type a title and pick attendees. */}
           <Button
             size="lg"
             className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white lg:ml-auto"
