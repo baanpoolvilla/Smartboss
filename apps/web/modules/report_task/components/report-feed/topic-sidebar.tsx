@@ -36,8 +36,6 @@ import { canEditReportTopic, canManageReportTopics } from "@/modules/report_task
 import { DRAG_MENTION_TOPIC_MIME } from "@/modules/report_task/components/report-feed/report-post-fields";
 import { useTourStore, tourStepsByPage } from "@/modules/report_task/store/tour-store";
 import { uploadCompressedImage } from "@/modules/report_task/lib/image-resize";
-import { pendingToday } from "@/modules/report_task/lib/report-feed-compliance";
-import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { useIsMobile } from "@/modules/report_task/hooks/use-is-mobile";
 import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
 import { aboutMeCountInPost } from "@/modules/report_task/lib/report-feed-activity";
@@ -50,7 +48,6 @@ import {
   Briefcase,
   ChevronLeft,
   ChevronRight,
-  Clock,
   Code2,
   Crown,
   Eye,
@@ -66,7 +63,6 @@ import {
   Pencil,
   Plus,
   Rocket,
-  Rows3,
   Settings2,
   ShoppingCart,
   Star,
@@ -359,25 +355,6 @@ export function TopicSidebar({
     cutoffs: [],
     visibility: editor?.mode === "edit" ? editor.topic.visibility : undefined,
   };
-
-  const exemptions = useReportComplianceExemptions();
-  // Rooms this viewer personally still owes a report to today (⏰) and posts
-  // anywhere they're @mentioned (@) — the two extra "มุมมองรวม" entries
-  // above the topic tree, same data the room-scoped KPIs elsewhere already
-  // compute, just re-scoped to "for me" instead of "for everyone"/"in this room".
-  const pendingCount = useMemo(
-    () => pendingToday(topics, posts, exemptions).filter((e) => e.userId === viewingAsUserId).length,
-    [topics, posts, exemptions, viewingAsUserId]
-  );
-  // Unread only (not "ever mentioned") — clears once the post's actually
-  // been opened (its own room, or the ที่กล่าวถึงฉัน view itself), same as
-  // any other unread badge in this sidebar.
-  const mentionCount = useMemo(() => {
-    const visibleTopicIds = new Set(topics.map((t) => t.id));
-    return posts.filter(
-      (p) => visibleTopicIds.has(p.topicId) && p.unreadFor.includes(viewingAsUserId) && p.authorId !== viewingAsUserId && postMentionsUser(p, viewingAsUserId)
-    ).length;
-  }, [posts, topics, viewingAsUserId]);
 
   // Favorites are per-viewer (favoritedBy), not a global pin — split into
   // their own section above the rest so the rooms someone cares about most
@@ -831,67 +808,6 @@ export function TopicSidebar({
         )}
       </div>
 
-      <div className="px-2.5 pt-1">
-        <p className="px-2.5 pb-1 text-[11px] font-semibold text-[var(--ink-soft)] uppercase tracking-wide">ภาพรวม</p>
-        {/* Not a real topic — a merged read-across-everything view (see
-            ReportAllPostsFeed), pinned above the tree since it isn't part
-            of the hierarchy it's summarizing. */}
-        <button
-          onClick={() => onSelect(ALL_TOPICS_ID)}
-          className={cn(
-            "w-full flex items-center gap-2.5 rounded-xl pl-3 pr-2 py-2.5 text-sm text-left transition-colors duration-200",
-            activeId === ALL_TOPICS_ID ? "bg-[var(--accent)] font-semibold text-[var(--brand-green-dark)]" : "hover:bg-[var(--bg-soft)] text-[var(--ink)]"
-          )}
-        >
-          <span className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--brand-green-dark)]">
-            <Rows3 className="h-3.5 w-3.5" />
-          </span>
-          โพสต์ทั้งหมด
-        </button>
-        {/* ที่ฉันต้องส่ง — rooms this viewer personally hasn't posted to yet
-            today (PendingTopicsPanel). ที่กล่าวถึงฉัน — every post/reply
-            anywhere they're @mentioned (ReportAllPostsFeed, pre-filtered). */}
-        <button
-          onClick={() => onSelect(PENDING_ID)}
-          className={cn(
-            "w-full flex items-center gap-2.5 rounded-xl pl-3 pr-2 py-2.5 text-sm text-left transition-colors duration-200",
-            activeId === PENDING_ID ? "bg-[var(--accent)] font-semibold text-[var(--brand-green-dark)]" : "hover:bg-[var(--bg-soft)] text-[var(--ink)]"
-          )}
-        >
-          <span className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-amber-50 text-[var(--chart-amber)]">
-            <Clock className="h-3.5 w-3.5" />
-          </span>
-          <span className="flex-1 truncate">รอฉันส่ง</span>
-          {pendingCount > 0 && (
-            <span className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-[var(--chart-red)] text-white text-[10px] font-semibold flex items-center justify-center tabular-nums">
-              {pendingCount}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => onSelect(MENTIONS_ID)}
-          className={cn(
-            "w-full flex items-center gap-2.5 rounded-xl pl-3 pr-2 py-2.5 text-sm text-left transition-colors duration-200",
-            activeId === MENTIONS_ID ? "bg-[var(--accent)] font-semibold text-[var(--brand-green-dark)]" : "hover:bg-[var(--bg-soft)] text-[var(--ink)]"
-          )}
-        >
-          <span className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-blue-50 text-[var(--chart-blue)]">
-            <AtSign className="h-3.5 w-3.5" />
-          </span>
-          <span className="flex-1 truncate">กล่าวถึงฉัน</span>
-          {mentionCount > 0 && (
-            <span className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-[var(--chart-red)] text-white text-[10px] font-semibold flex items-center justify-center tabular-nums">
-              {mentionCount}
-            </span>
-          )}
-        </button>
-        {/* Spacing instead of a full-contrast rule — a hairline this close
-            to the section above and the one below it read as one more hard
-            line in a panel already asked to feel less boxed-in. Still a
-            border, just faint enough to read as a gap between sections
-            rather than a divider. */}
-        <div className="my-3 border-t border-[var(--line)]/50" />
-      </div>
 
       <div className="flex-1 overflow-y-auto px-2.5 pb-2.5 space-y-1">
         {favoriteTopics.length > 0 && (

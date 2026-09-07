@@ -7,6 +7,7 @@ import { ReportComposer } from "@/modules/report_task/components/report-feed/rep
 import { ReportFeed } from "@/modules/report_task/components/report-feed/report-feed";
 import { OpenchatFeed } from "@/modules/report_task/components/report-feed/openchat-feed";
 import { ReportAllPostsFeed } from "@/modules/report_task/components/report-feed/report-all-posts-feed";
+import { ReportViewSwitcher } from "@/modules/report_task/components/report-feed/report-view-switcher";
 import { ReportComplianceBar } from "@/modules/report_task/components/report-feed/report-header";
 import { RoomSettingsSheet } from "@/modules/report_task/components/report-feed/room-settings-sheet";
 import { ReportTopicPanels, collectFiles, collectLinks, filesCutoffMs, fileFilterForLegacyTab } from "@/modules/report_task/components/report-feed/report-topic-panels";
@@ -377,6 +378,19 @@ function ReportFeedPageInner() {
     const visibleTopicIds = new Set(visibleTopics.map((t) => t.id));
     return posts.filter((p) => visibleTopicIds.has(p.topicId) && p.authorId !== viewingAsUserId && postMentionsUser(p, viewingAsUserId));
   }, [showMentions, visibleTopics, posts, viewingAsUserId]);
+  // Badge counts for the "มุมมอง" switcher (ReportViewSwitcher) — same
+  // formulas the old sidebar "ภาพรวม" block used, computed here now that the
+  // switcher lives at page level instead of inside TopicSidebar.
+  const viewPendingCount = useMemo(
+    () => pendingToday(visibleTopics, posts, exemptions).filter((e) => e.userId === viewingAsUserId).length,
+    [visibleTopics, posts, exemptions, viewingAsUserId]
+  );
+  const viewMentionCount = useMemo(() => {
+    const ids = new Set(visibleTopics.map((t) => t.id));
+    return posts.filter(
+      (p) => ids.has(p.topicId) && p.unreadFor.includes(viewingAsUserId) && p.authorId !== viewingAsUserId && postMentionsUser(p, viewingAsUserId)
+    ).length;
+  }, [posts, visibleTopics, viewingAsUserId]);
   // Header pills (H1) — who's behind "ส่งแล้ววันนี้/ส่งช้า/ยังไม่ส่ง", not
   // just the count. Only computed once a pill's actually been clicked.
   const todayStatus = useMemo(
@@ -627,6 +641,16 @@ function ReportFeedPageInner() {
             area (report-feed.tsx) under white post cards — one visual tier
             per level instead of every level drawing its own line. */}
         <div className="w-full flex-1 min-w-0 flex flex-col min-h-0 lg:h-full">
+          {/* "มุมมอง" switcher (ทุกห้องรวมกัน) — ย้ายมาจากบล็อก "ภาพรวม" เดิม
+              ในแถบซ้าย (topic-sidebar) มาไว้เป็น dropdown มุมขวาบนแทน */}
+          <div className="mb-2 flex justify-end px-1">
+            <ReportViewSwitcher
+              activeId={activeId}
+              onSelect={selectView}
+              pendingCount={viewPendingCount}
+              mentionCount={viewMentionCount}
+            />
+          </div>
           {/* NOT capping this to a reading-width max-width. Tried it — twice
               before this, plus once more in this same "final polish" round
               with mx-auto actually centering it correctly this time — and
