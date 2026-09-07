@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { TopicSidebar, TopicLogo, ALL_TOPICS_ID, PENDING_ID, MENTIONS_ID } from "@/modules/report_task/components/report-feed/topic-sidebar";
 import { ReportComposer } from "@/modules/report_task/components/report-feed/report-composer";
@@ -188,8 +188,10 @@ function ReportFeedPageInner() {
   // since the params don't change while this page stays mounted.
   const [selectedId, setSelectedId] = useState(() => searchParams.get("topic") ?? "");
   // จำห้อง/รายงานล่าสุดที่เปิดอยู่ก่อนสลับไป "มุมมองรวม" (ทั้งหมด/รอส่ง/กล่าวถึง)
-  // เพื่อให้มีปุ่ม "ย้อนกลับ" พากลับไปห้องเดิมได้
-  const lastRoomIdRef = useRef<string>("");
+  // เพื่อให้มีปุ่ม "ย้อนกลับ" พากลับไปห้องเดิมได้ — state ไม่ใช่ ref เพราะค่านี้
+  // ขับผลของการ render โดยตรง (backRoomName ด้านล่าง) การอ่าน ref.current ตอน
+  // render ไม่ปลอดภัย (react-hooks/refs) เท่าไหร่ค่าที่ผูกกับ UI ควรเป็น state
+  const [lastRoomId, setLastRoomId] = useState("");
   // A dashboard chart (e.g. "อัตราการส่งรายงานแยกตามแผนก") can deep-link
   // straight into a room's "สถิติ" tab with `?tab=stats`, same pattern as
   // `?post=`/`?reply=` — falls back to "posts" for anything else/missing.
@@ -326,7 +328,7 @@ function ReportFeedPageInner() {
   const showMentions = activeId === MENTIONS_ID;
   const activeTopic = useMemo(() => visibleTopics.find((t) => t.id === activeId), [visibleTopics, activeId]);
   // ชื่อห้องล่าสุด (สำหรับปุ่มย้อนกลับ) — โชว์เฉพาะถ้าห้องนั้นยังมองเห็นได้อยู่
-  const backRoomName = visibleTopics.find((t) => t.id === lastRoomIdRef.current)?.name;
+  const backRoomName = visibleTopics.find((t) => t.id === lastRoomId)?.name;
 
   // The AppBar's left slot doubles as a Discord-style channel header: it
   // always names the room/view that's open right now (# room-name, or the
@@ -547,7 +549,7 @@ function ReportFeedPageInner() {
     const isSentinel = id === ALL_TOPICS_ID || id === PENDING_ID || id === MENTIONS_ID;
     const curIsRoom = selectedId && selectedId !== ALL_TOPICS_ID && selectedId !== PENDING_ID && selectedId !== MENTIONS_ID;
     // กำลังจะเข้ามุมมองรวม และตอนนี้อยู่ในห้องจริง → จำห้องนั้นไว้ให้ปุ่มย้อนกลับ
-    if (isSentinel && curIsRoom) lastRoomIdRef.current = selectedId;
+    if (isSentinel && curIsRoom) setLastRoomId(selectedId);
     setTodayStatusFilter(null);
     setSelectedId(id);
     setActiveTab("posts");
@@ -657,26 +659,31 @@ function ReportFeedPageInner() {
         <div className="w-full flex-1 min-w-0 flex flex-col min-h-0 lg:h-full">
           {/* "มุมมอง" switcher (ทุกห้องรวมกัน) — ย้ายมาจากบล็อก "ภาพรวม" เดิม
               ในแถบซ้าย (topic-sidebar) มาไว้เป็น dropdown มุมขวาบนแทน */}
-          <div className="mb-2 flex items-center justify-between gap-2 px-1">
-            {(showAllPosts || showPending || showMentions) && backRoomName ? (
-              <button
-                type="button"
-                onClick={() => selectView(lastRoomIdRef.current)}
-                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-[var(--ink-soft)] transition-colors hover:bg-[var(--bg-soft)] hover:text-[var(--ink)]"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                <span className="max-w-[180px] truncate">กลับไป # {backRoomName}</span>
-              </button>
-            ) : (
-              <span />
-            )}
-            <ReportViewSwitcher
-              activeId={activeId}
-              onSelect={selectView}
-              pendingCount={viewPendingCount}
-              mentionCount={viewMentionCount}
-            />
-          </div>
+          {/* แถวเดี่ยวสำหรับ "มุมมองรวม" เท่านั้น (มีปุ่มย้อนกลับ + ตัวสลับมุมมอง)
+              — ในโหมดห้องปกติ ตัวสลับมุมมองย้ายไปอยู่แถวเดียวกับปุ่ม "กรอง"
+              (ด้านล่าง) จะได้ไม่กินพื้นที่เพิ่มอีกแถว */}
+          {(showAllPosts || showPending || showMentions) && (
+            <div className="mb-2 flex items-center justify-between gap-2 px-1">
+              {backRoomName ? (
+                <button
+                  type="button"
+                  onClick={() => selectView(lastRoomId)}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-[var(--ink-soft)] transition-colors hover:bg-[var(--bg-soft)] hover:text-[var(--ink)]"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  <span className="max-w-[180px] truncate">กลับไป # {backRoomName}</span>
+                </button>
+              ) : (
+                <span />
+              )}
+              <ReportViewSwitcher
+                activeId={activeId}
+                onSelect={selectView}
+                pendingCount={viewPendingCount}
+                mentionCount={viewMentionCount}
+              />
+            </div>
+          )}
           {/* NOT capping this to a reading-width max-width. Tried it — twice
               before this, plus once more in this same "final polish" round
               with mx-auto actually centering it correctly this time — and
@@ -945,6 +952,15 @@ function ReportFeedPageInner() {
                     );
                   })}
                 </div>
+                  {/* "มุมมอง" (ทุกห้องรวมกัน) อยู่แถวเดียวกับ "กรอง" — ไม่กินแถวเพิ่ม */}
+                  <div className="shrink-0 my-1.5">
+                    <ReportViewSwitcher
+                      activeId={activeId}
+                      onSelect={selectView}
+                      pendingCount={viewPendingCount}
+                      mentionCount={viewMentionCount}
+                    />
+                  </div>
                   {/* Desktop: compact search + the single filter button,
                       right-aligned on the tab row. invisible (not unmounted)
                       on every other tab so switching tabs never shifts this
