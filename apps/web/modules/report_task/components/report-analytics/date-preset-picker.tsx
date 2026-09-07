@@ -6,14 +6,17 @@ import { type DatePreset } from "@/modules/report_task/lib/date-filter";
 import { cn } from "@/modules/report_task/lib/utils";
 import { CalendarDays, CalendarRange, CalendarClock, LayoutGrid, SlidersHorizontal } from "lucide-react";
 
-// Daily/Weekly/Monthly are the primary report cadences — "ทั้งหมด" and
-// "กำหนดเอง" (custom range) are secondary, kept as smaller options after.
-const mainPresets: { id: DatePreset; label: string; icon: typeof CalendarDays }[] = [
+// One flat segmented control, not "3 primary pills + divider + 2 plain-text
+// buttons" (the previous split) — that read as two different controls stuck
+// together, and the divider style put every one of these on the same footing
+// as a genuinely different, disjointed thing next to it. All five presets
+// are the same kind of choice (which window of time), so they get the same
+// pill treatment, in the order someone's most to least likely to reach for
+// them.
+const presets: { id: DatePreset; label: string; icon: typeof CalendarDays }[] = [
   { id: "today", label: "รายวัน", icon: CalendarDays },
   { id: "week", label: "รายสัปดาห์", icon: CalendarRange },
   { id: "month", label: "รายเดือน", icon: CalendarClock },
-];
-const secondaryPresets: { id: DatePreset; label: string; icon: typeof LayoutGrid }[] = [
   { id: "all", label: "ทั้งหมด", icon: LayoutGrid },
   { id: "custom", label: "กำหนดเอง", icon: SlidersHorizontal },
 ];
@@ -52,7 +55,7 @@ export function DatePresetPicker({
       )}
     >
       <div className="inline-flex items-center gap-1 rounded-lg bg-[var(--bg-soft)] p-1 max-w-full overflow-x-auto">
-        {mainPresets.map((p) => {
+        {presets.map((p) => {
           const Icon = p.icon;
           const active = preset === p.id;
           return (
@@ -61,29 +64,13 @@ export function DatePresetPicker({
               onClick={() => onPresetChange(p.id)}
               className={cn(
                 "flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-xs font-semibold transition-all shrink-0",
+                // Active always reads as a white pill lifted off this
+                // group's own bg-soft tray — that contrast holds regardless
+                // of what surface the picker itself sits on (a white card,
+                // or an already-bg-soft filter strip like ภาพรวมทั้งหมด's),
+                // unlike keying the active state off the *outer* background
+                // which used to go invisible whenever the two matched.
                 active ? "bg-white text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
-              )}
-            >
-              <Icon className="h-3.5 w-3.5" />
-              {p.label}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="h-6 w-px bg-[var(--line)]" />
-
-      <div className="flex items-center gap-1">
-        {secondaryPresets.map((p) => {
-          const Icon = p.icon;
-          const active = preset === p.id;
-          return (
-            <button
-              key={p.id}
-              onClick={() => onPresetChange(p.id)}
-              className={cn(
-                "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
-                active ? "bg-[var(--bg-soft)] text-[var(--ink)]" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
               )}
             >
               <Icon className="h-3.5 w-3.5" />

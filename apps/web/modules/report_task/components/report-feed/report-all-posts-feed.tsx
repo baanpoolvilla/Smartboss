@@ -51,6 +51,7 @@ export function ReportAllPostsFeed({
   icon: Icon = Rows3,
   emptyTitle = "ไม่มีโพสต์ในช่วงเวลานี้",
   emptyDescription = "ลองปรับตัวกรองวันที่ด้านบน หรือเลือก \"ทั้งหมด\"",
+  showFilters = true,
 }: {
   /** Already permission-filtered — see useVisibleReportTopics/visibleTopics in the caller. */
   topics: ReportTopic[];
@@ -65,6 +66,11 @@ export function ReportAllPostsFeed({
   icon?: typeof Rows3;
   emptyTitle?: string;
   emptyDescription?: string;
+  /** ซ่อนแถบตัวกรอง (ช่วงเวลา/หัวข้อ) ทั้งแถบ — สำหรับมุมมองที่กรองมาให้แล้ว
+   * โดยธรรมชาติ (เช่น "กล่าวถึงฉัน" ที่จำกัดเฉพาะโพสต์ที่แท็กผู้ดูอยู่แล้ว)
+   * ซึ่งตัวกรองช่วงเวลา/หัวข้อเพิ่มเติมแทบไม่มีประโยชน์ ค่าเริ่มต้น true
+   * (คงพฤติกรรมเดิมของ "ภาพรวมทั้งหมด" ที่ยังจำเป็นต้องกรองอยู่). */
+  showFilters?: boolean;
 }) {
   const [preset, setPreset] = useState<Parameters<typeof presetRange>[0]>("all");
   const [customFrom, setCustomFrom] = useState("");
@@ -130,6 +136,8 @@ export function ReportAllPostsFeed({
           ≥640px: unchanged. <640px gets its own button + bottom sheet below
           instead — a 5-preset segmented control plus a topic dropdown never
           fit one line on a phone and just wrapped onto 2-3 rows. */}
+      {showFilters && (
+      <>
       <div className="hidden sm:flex shrink-0 px-5 py-2.5 items-center gap-2.5 flex-wrap bg-[var(--bg-soft)] border-b border-[var(--line)]">
         <DatePresetPicker
           variant="inline"
@@ -146,7 +154,14 @@ export function ReportAllPostsFeed({
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <button className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-[var(--ink-soft)] hover:text-[var(--ink)] hover:bg-white transition-colors">
+              <button
+                className={cn(
+                  "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors",
+                  topicFilter.size > 0
+                    ? "border-[var(--brand-green)] bg-[var(--accent)] text-[var(--brand-green-dark)]"
+                    : "border-[var(--line)] bg-white text-[var(--ink-soft)] hover:text-[var(--ink)] hover:bg-[var(--bg-soft)]"
+                )}
+              >
                 <Tag className="h-3.5 w-3.5" />
                 {topicFilter.size === 0 ? "ทุกหัวข้อ" : `${topicFilter.size} หัวข้อ`}
               </button>
@@ -243,6 +258,8 @@ export function ReportAllPostsFeed({
           </SheetFooter>
         </SheetContent>
       </Sheet>
+      </>
+      )}
 
       {items.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6 bg-[var(--bg-soft)]/40">

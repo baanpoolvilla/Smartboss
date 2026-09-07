@@ -694,6 +694,7 @@ function ReportFeedPageInner() {
                 emptyDescription="โพสต์หรือความคิดเห็นที่แท็กคุณด้วย @ จะขึ้นที่นี่"
                 onJumpToTopic={selectView}
                 onOpenTask={setOpenTaskId}
+                showFilters={false}
               />
             </div>
           ) : activeTopic ? (
