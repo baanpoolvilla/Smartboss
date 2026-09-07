@@ -641,23 +641,38 @@ export const useTaskStore = create<TaskStore>((set) => ({
     }),
   addComment: (taskId, message, authorId, attachments) =>
     set((s) => ({
-      tasks: s.tasks.map((t) =>
-        t.id !== taskId
-          ? t
-          : {
-              ...t,
-              comments: [
-                ...t.comments,
-                {
-                  id: `${taskId}-cmt-${uuid()}`,
-                  authorId,
-                  message,
-                  createdAt: new Date().toISOString(),
-                  ...(attachments && attachments.length > 0 ? { attachments } : {}),
-                },
-              ],
-            }
-      ),
+      tasks: s.tasks.map((t) => {
+        if (t.id !== taskId) return t;
+        // Everyone already part of this task's conversation — the
+        // assignee(s), whoever assigned it, and anyone who's commented
+        // before — same "someone replied" spirit as report_task's own
+        // comment notifications. notifyMany skips the author themselves.
+        const recipients = Array.from(new Set([...t.assigneeIds, t.assignedById, ...t.comments.map((c) => c.authorId)]));
+        const actorName = getUser(authorId)?.name ?? "มีคน";
+        const preview = message.length > 60 ? `${message.slice(0, 60)}…` : message;
+        useNotificationStore
+          .getState()
+          .notifyMany(
+            recipients,
+            authorId,
+            `${actorName} แสดงความคิดเห็นในงาน "${t.title}": ${preview}`,
+            undefined,
+            `/report-task/tasks?highlight=${t.id}`
+          );
+        return {
+          ...t,
+          comments: [
+            ...t.comments,
+            {
+              id: `${taskId}-cmt-${uuid()}`,
+              authorId,
+              message,
+              createdAt: new Date().toISOString(),
+              ...(attachments && attachments.length > 0 ? { attachments } : {}),
+            },
+          ],
+        };
+      }),
     })),
   removeComment: (taskId, commentId) =>
     set((s) => ({
@@ -697,8 +712,24 @@ export const useTaskStore = create<TaskStore>((set) => ({
       return {
         tasks: s.tasks.map((t) => {
           if (t.id !== taskId) return t;
+          const item = t.checklist.find((c) => c.id === itemId);
           const nextChecklist = t.checklist.map((c) => (c.id === itemId ? { ...c, done: !c.done } : c));
-          return applyChecklistDerivedCompletion(t, nextChecklist, actorId);
+          const updated = applyChecklistDerivedCompletion(t, nextChecklist, actorId);
+          // Checking one item off is worth a quick nod to whoever opened the
+          // task — they shouldn't have to keep the board open just to see
+          // incremental progress. Only the moment it flips to done (not
+          // un-ticking), and never when the task's own creator is the one
+          // ticking their own item.
+          if (item && !item.done && t.assignedById !== actorId) {
+            const actorName = getUser(actorId)?.name ?? "มีคน";
+            useNotificationStore.getState().notify({
+              userId: t.assignedById,
+              byUserId: actorId,
+              message: `${actorName} ทำ "${item.text}" ในเช็คลิสต์ของ "${t.title}" เสร็จแล้ว`,
+              link: `/report-task/tasks?highlight=${t.id}`,
+            });
+          }
+          return updated;
         }),
       };
     }),
