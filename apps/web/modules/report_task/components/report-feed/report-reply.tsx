@@ -5,7 +5,7 @@ import { Button } from "@/modules/report_task/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { getUser } from "@/modules/report_task/lib/directory";
 import type { ReportPostImage, ReportPostReply } from "@/modules/report_task/store/report-feed-store";
-import { renderRichBulletText } from "@/modules/report_task/lib/report-feed-rich-text";
+import { renderRichBulletText, mentionMarkersToPlainText } from "@/modules/report_task/lib/report-feed-rich-text";
 import { cn } from "@/modules/report_task/lib/utils";
 import { isCoarsePointer } from "@/modules/report_task/lib/device";
 import { TimeAgo } from "@/modules/report_task/components/shared/time-ago";
@@ -15,7 +15,12 @@ const reactionEmojis = ["👍", "❤️", "🎉", "😂", "😮", "😢"];
 
 /** Trims a quoted reply's body down to one short line for the reference shown above a reply that answers it. */
 function quotePreview(body: string): string {
-  const firstLine = body.split("\n")[0] ?? "";
+  // Strip @[label](user:id)/(topic:id) markers down to "@label" first — the
+  // preview truncated the raw storage format straight onto the screen
+  // otherwise, same leak mentionMarkersToPlainText exists to prevent
+  // elsewhere (see its own doc comment).
+  const plain = mentionMarkersToPlainText(body);
+  const firstLine = plain.split("\n")[0] ?? "";
   return firstLine.length > 80 ? `${firstLine.slice(0, 80)}…` : firstLine;
 }
 

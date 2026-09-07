@@ -44,6 +44,7 @@ import {
   CHECKLIST_CHECKED,
   CHECKLIST_UNCHECKED,
   htmlEditorToBulletsText,
+  mentionMarkersToPlainText,
   renderRichBulletText,
   renderSectionBullets,
   type MentionType,
@@ -1187,7 +1188,9 @@ export function ReportCard({
                   <p className="text-xs truncate">
                     <span className="font-medium text-[var(--ink)]">{getUser(replyingTo.authorId)?.name}</span>
                     {replyingTo.body && (
-                      <span className="text-[var(--ink-soft)]">: {replyingTo.body.split("\n")[0]?.slice(0, 60)}</span>
+                      <span className="text-[var(--ink-soft)]">
+                        : {mentionMarkersToPlainText(replyingTo.body.split("\n")[0] ?? "").slice(0, 60)}
+                      </span>
                     )}
                   </p>
                 </div>
