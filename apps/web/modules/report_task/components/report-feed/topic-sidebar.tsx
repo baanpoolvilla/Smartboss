@@ -572,7 +572,7 @@ export function TopicSidebar({
                 hunting for a number. */}
             {hasUnread && (
               <span
-                className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-[var(--brand-green)] ring-2 ring-white"
+                className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-[var(--chart-red)] ring-2 ring-white"
                 aria-hidden
               />
             )}
@@ -797,32 +797,31 @@ export function TopicSidebar({
         // white is enough on its own to read as "a different area" next to
         // the room panel's white, the same way Notion/Linear separate a nav
         // rail from its content with color contrast, not a drawn line.
-        "w-full lg:w-[280px] lg:h-full lg:shrink-0 bg-[color-mix(in_srgb,var(--bg-soft)_55%,white)] flex flex-col min-h-0 overflow-hidden",
+        "relative w-full lg:w-[280px] lg:h-full lg:shrink-0 bg-[color-mix(in_srgb,var(--bg-soft)_55%,white)] flex flex-col min-h-0 overflow-hidden",
         fillHeight ? "h-full" : "h-64"
       )}
     >
+      {onCollapse && (
+        // Floating on the panel's own right edge (vertically centered) —
+        // same spot a resizable pane's collapse handle sits in most apps —
+        // instead of buried in the header next to the "หัวข้อ" label where
+        // it was easy to miss.
+        <button
+          type="button"
+          onClick={onCollapse}
+          title="ย่อหัวข้อ"
+          aria-label="ย่อหัวข้อ"
+          className="absolute top-1/2 -right-3 -translate-y-1/2 z-10 hidden lg:flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[var(--line)] bg-white text-[var(--ink-soft)] shadow-sm transition-colors hover:bg-[var(--accent)] hover:text-[var(--brand-green-dark)]"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+      )}
       {/* Header separated by spacing (extra bottom padding) instead of a
           border-b now — one less hard rule stacking on top of the section
           divider just below it and the card's own outer border, all three
           of which used to draw in the same tight space. */}
       <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-2">
         <div className="flex items-center gap-1">
-          {onCollapse && (
-            // Labeled pill, not a bare chevron — a lone arrow here reads as
-            // ambiguous ("ย่ออะไร") without the word next to it (per the
-            // mockup's own collapse/reopen pair — both sides always carry
-            // a label, never just an icon).
-            <button
-              type="button"
-              onClick={onCollapse}
-              title="ย่อหัวข้อ"
-              aria-label="ย่อหัวข้อ"
-              className="-ml-1 flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--accent)] px-2.5 py-1.5 text-xs font-bold text-[var(--brand-green-dark)] transition-colors hover:bg-[var(--brand-green)]/25"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-              ย่อ
-            </button>
-          )}
           <p className="text-[15px] font-semibold">หัวข้อ</p>
         </div>
         {canManageTopics && (
