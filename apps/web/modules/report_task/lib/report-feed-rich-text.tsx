@@ -223,7 +223,7 @@ export function renderRichBulletText(text: string): ReactNode[] {
       const [, label, mType, mId] = match;
       nodes.push(
         mType === "topic" ? (
-          <Link key={key++} href={`/report-feed?topic=${mId}`} onClick={(e) => e.stopPropagation()} className={cn(mentionChipClass, "hover:underline")}>
+          <Link key={key++} href={`/report-task/report-feed?topic=${mId}`} onClick={(e) => e.stopPropagation()} className={cn(mentionChipClass, "hover:underline")}>
             @{label}
           </Link>
         ) : (

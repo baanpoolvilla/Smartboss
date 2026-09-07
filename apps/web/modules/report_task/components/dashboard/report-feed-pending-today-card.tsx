@@ -127,7 +127,7 @@ export function ReportFeedPendingTodayCard() {
       userId: pendingNudge.userId,
       byUserId: viewingAsUserId,
       message: `คุณยังไม่ส่งรายงาน "${pendingNudge.topicName}" วันนี้`,
-      link: `/report-feed?topic=${pendingNudge.topicId}`,
+      link: `/report-task/report-feed?topic=${pendingNudge.topicId}`,
       topicName: pendingNudge.topicName,
     });
     setPendingNudge(null);
@@ -181,7 +181,7 @@ export function ReportFeedPendingTodayCard() {
                   key={`${e.userId}-${e.topicId}-${e.day}-${e.roundId}`}
                   entry={e}
                   canNudge={canManage(viewingAsUserId)}
-                  onOpen={() => router.push(`/report-feed?topic=${e.topicId}`)}
+                  onOpen={() => router.push(`/report-task/report-feed?topic=${e.topicId}`)}
                   onNudge={() => setPendingNudge(e)}
                 />
               );

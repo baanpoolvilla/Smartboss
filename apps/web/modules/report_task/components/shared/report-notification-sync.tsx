@@ -59,10 +59,14 @@ export function ReportNotificationSync() {
 
 /** Unread count for whoever the browser is currently "viewing as" — same
  * identity concept every other report_task badge (TaskReviewNavBadge,
- * ReportActivityNavBadge, IssueReportBarButton) already keys off. */
+ * ReportActivityNavBadge, IssueReportBarButton) already keys off.
+ *
+ * ไม่นับ kind "room_post" (แจ้งเตือน "โพสต์ใหม่ในห้อง" ที่ส่งให้เฉพาะ owner
+ * ไว้ทำภาพรวม CEO) — กระดิ่งของทุกคนรวมถึง CEO จึงนับเฉพาะเรื่องที่เกี่ยวกับ
+ * ตัวเองจริง ๆ ส่วนภาพรวมทั้งหมดจะเปิดดูได้จากสวิตช์ในหน้าแจ้งเตือนแทน */
 export function useReportTaskUnreadCount(): number {
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   return useNotificationStore(
-    (s) => s.notifications.filter((n) => n.userId === viewingAsUserId && !n.read).length
+    (s) => s.notifications.filter((n) => n.userId === viewingAsUserId && !n.read && n.kind !== "room_post").length
   );
 }

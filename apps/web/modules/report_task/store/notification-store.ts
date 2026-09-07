@@ -26,6 +26,10 @@ export interface AppNotification {
    * someone (or haven't been updated yet) keep rendering as plain, unclickable
    * rows, same as before this field existed. */
   link?: string;
+  /** แยกแจ้งเตือนแบบ "โพสต์ใหม่ในห้อง" (ส่งให้เฉพาะ owner ไว้ทำภาพรวม CEO)
+   * ออกจากแจ้งเตือนที่เจาะจงถึงผู้รับโดยตรง (ถูกแท็ก/ตอบกลับ/รีแอ็กชัน/งาน/
+   * ตั๋วปัญหา). ไม่มีค่า = เป็นแจ้งเตือนส่วนตัวของผู้รับ */
+  kind?: "room_post";
 }
 
 interface NotificationStore {
@@ -38,9 +42,12 @@ interface NotificationStore {
     message: string,
     meetingId?: string,
     link?: string,
-    topicName?: string
+    topicName?: string,
+    kind?: "room_post"
   ) => void;
   markAllRead: (userId: string) => void;
+  /** ทำเครื่องหมายอ่านทีละรายการ — ใช้ตอนคลิกการ์ดแจ้งเตือน (สไตล์ Facebook) */
+  markRead: (id: string) => void;
 }
 
 // Server-synced via ServerStoreSync (apiKey "notifications") in
@@ -55,7 +62,7 @@ export const useNotificationStore = create<NotificationStore>()(
             ...s.notifications,
           ],
         })),
-      notifyMany: (userIds, byUserId, message, meetingId, link, topicName) =>
+      notifyMany: (userIds, byUserId, message, meetingId, link, topicName, kind) =>
         set((s) => {
           const fresh = userIds
             .filter((id) => id !== byUserId)
@@ -67,6 +74,7 @@ export const useNotificationStore = create<NotificationStore>()(
               meetingId,
               link,
               topicName,
+              kind,
               createdAt: new Date().toISOString(),
               read: false,
             }));
@@ -75,6 +83,10 @@ export const useNotificationStore = create<NotificationStore>()(
       markAllRead: (userId) =>
         set((s) => ({
           notifications: s.notifications.map((n) => (n.userId === userId ? { ...n, read: true } : n)),
+        })),
+      markRead: (id) =>
+        set((s) => ({
+          notifications: s.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)),
         })),
     })
 );

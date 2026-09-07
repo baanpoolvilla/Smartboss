@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { users, getUser } from "@/modules/report_task/lib/directory";
+import { users, getUser, isOwner } from "@/modules/report_task/lib/directory";
 import { canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { extractMentionedIds, mentionMarkersToPlainText } from "@/modules/report_task/lib/report-feed-rich-text";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
@@ -587,7 +587,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         // call below) so a notification can deep-link straight to this exact
         // post — same ?topic=&post= shape ReportCard's own "copy link" uses.
         const postId = nextId("post");
-        const link = `/report-feed?topic=${topicId}&post=${postId}`;
+        const link = `/report-task/report-feed?topic=${topicId}&post=${postId}`;
         const topic = get().topics.find((t) => t.id === topicId);
         // Everyone who can see this room, minus the poster themselves — same
         // set the "new post" notification below reaches. `unreadFor` is what
@@ -626,9 +626,19 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         // above (one notification per post, not two). No per-topic
         // subscription toggle exists yet, so this is an all-or-nothing default.
         if (topic) {
-          const recipients = otherMemberIds.filter((id) => !mentionedUserIds.includes(id));
-          if (recipients.length > 0) {
-            useNotificationStore.getState().notifyMany(recipients, authorId, `${actorName} โพสต์ใหม่ใน "${topic.name}": ${data.title}`, undefined, link, topic.name);
+          // เดิม: แจ้ง "โพสต์ใหม่ใน <ห้อง>" ให้ทุกคนที่เห็นห้อง ทำให้พนักงานเห็น
+          // แจ้งเตือนโพสต์ของแผนกอื่นเต็มไปหมด ตอนนี้แจ้งเฉพาะเจ้าของระบบ
+          // (CEO/owner) เพื่อใช้เป็น "ภาพรวมทั้งหมด" ที่สลับดูได้ในหน้าแจ้งเตือน
+          // ส่วนคนทั่วไปจะได้รับแค่แจ้งเตือนที่เกี่ยวกับตัวเอง (ถูกแท็ก/มีคนตอบ
+          // โพสต์เรา/รีแอ็กชัน/งาน/ตั๋วปัญหา) เท่านั้น การนับ unread ของกระดิ่ง
+          // ก็ไม่รวม kind "room_post" (ดู useReportTaskUnreadCount)
+          const owners = users
+            .filter((u) => isOwner(u.id) && u.id !== authorId && !mentionedUserIds.includes(u.id))
+            .map((u) => u.id);
+          if (owners.length > 0) {
+            useNotificationStore
+              .getState()
+              .notifyMany(owners, authorId, `${actorName} โพสต์ใหม่ใน "${topic.name}": ${data.title}`, undefined, link, topic.name, "room_post");
           }
         }
       },
@@ -674,7 +684,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
           userId: post.authorId,
           byUserId: userId,
           message: `${actorName} ทำเครื่องหมาย ${emoji} ให้โพสต์ของคุณ "${post.title}"`,
-          link: `/report-feed?topic=${post.topicId}&post=${postId}`,
+          link: `/report-task/report-feed?topic=${post.topicId}&post=${postId}`,
           topicName: get().topics.find((t) => t.id === post.topicId)?.name,
         });
       },
@@ -724,7 +734,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         if (!post) return;
         const actorName = getUser(authorId)?.name ?? "มีคน";
         const preview = mentionMarkersToPlainText(body.split("\n")[0] ?? "").slice(0, 60);
-        const link = `/report-feed?topic=${post.topicId}&post=${postId}&reply=${replyId}`;
+        const link = `/report-task/report-feed?topic=${post.topicId}&post=${postId}&reply=${replyId}`;
         const quotedAuthorId = extra?.replyToId ? post.replies.find((r) => r.id === extra.replyToId)?.authorId : undefined;
         if (quotedAuthorId && quotedAuthorId !== authorId) {
           useNotificationStore.getState().notify({
@@ -805,7 +815,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
           userId: reply.authorId,
           byUserId: userId,
           message: `${actorName} ทำเครื่องหมาย ${emoji} ให้ความคิดเห็นของคุณใน "${post.title}"`,
-          link: `/report-feed?topic=${post.topicId}&post=${postId}&reply=${replyId}`,
+          link: `/report-task/report-feed?topic=${post.topicId}&post=${postId}&reply=${replyId}`,
           topicName: get().topics.find((t) => t.id === post.topicId)?.name,
         });
       },
