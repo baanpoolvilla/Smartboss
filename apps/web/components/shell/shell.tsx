@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, LayoutGrid, MoreHorizontal, X } from "lucide-react";
+import { LayoutGrid, MoreHorizontal, X } from "lucide-react";
 import { cn } from "@smartboss/ui/cn";
 import { Avatar } from "@smartboss/ui/components/avatar";
 import {
@@ -17,7 +17,8 @@ import {
 import { Logo } from "@/components/logo";
 import { Icon } from "@/components/icon";
 import { IssueReportBarButton } from "@/modules/report_task/components/issue-report/issue-report-bar-button";
-import { ReportNotificationSync, useReportTaskUnreadCount } from "@/modules/report_task/components/shared/report-notification-sync";
+import { ReportNotificationSync } from "@/modules/report_task/components/shared/report-notification-sync";
+import { NotificationBellPopover } from "@/modules/report_task/components/shared/notification-bell-popover";
 import type { ModuleManifest, ModuleMenuItem } from "@/module-registry";
 import { LogoutButton } from "./logout-button";
 import { SessionRefresher } from "./session-refresher";
@@ -67,9 +68,7 @@ export function Shell({
           {children}
         </ModuleFrame>
       ) : (
-        <LauncherFrame user={user} unread={unread}>
-          {children}
-        </LauncherFrame>
+        <LauncherFrame user={user}>{children}</LauncherFrame>
       )}
     </ShellProvider>
   );
@@ -81,16 +80,12 @@ export function Shell({
    ══════════════════════════════════════════════════════════════════ */
 function LauncherFrame({
   user,
-  unread,
   children,
 }: {
   user: ShellUser;
-  unread: number;
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const reportTaskUnread = useReportTaskUnreadCount();
-  const totalUnread = unread + reportTaskUnread;
 
   return (
     <div className="flex min-h-dvh flex-col bg-(--bg-soft)">
@@ -110,18 +105,7 @@ function LauncherFrame({
               count below — this header needs its own copy of both. */}
           <IssueReportBarButton />
           <ReportNotificationSync />
-          <Link
-            href="/notifications"
-            className="relative rounded-md p-2 text-(--ink-soft) hover:bg-(--bg-soft) hover:text-(--ink)"
-            aria-label="การแจ้งเตือน"
-          >
-            <Bell className="h-5 w-5" />
-            {totalUnread > 0 && (
-              <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-(--danger) px-1 text-[10px] font-bold text-white">
-                {totalUnread > 9 ? "9+" : totalUnread}
-              </span>
-            )}
-          </Link>
+          <NotificationBellPopover />
 
           <DropdownMenu>
             <DropdownMenuTrigger className="gap-2 rounded-full outline-hidden focus-visible:ring-2 focus-visible:ring-(--brand-green)/40">

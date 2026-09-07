@@ -94,6 +94,15 @@ export async function markAllRead(userId: string) {
   });
 }
 
+/** ทำเครื่องหมายอ่านทีละรายการ — `where` ผูก userId ไว้ด้วยเสมอ กัน user คนหนึ่ง
+ * ยิง id ของอีกคนมาแล้วมาร์คอ่านแจ้งเตือนที่ไม่ใช่ของตัวเอง */
+export async function markRead(userId: string, id: string) {
+  await prisma.notification.updateMany({
+    where: { id, userId, readAt: null },
+    data: { readAt: new Date() },
+  });
+}
+
 // ─── LINE Messaging (per-org config) ─────────────────────
 
 export function getLineConfig(orgId: string) {

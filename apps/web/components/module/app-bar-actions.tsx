@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, LogOut } from "lucide-react";
 import { Button } from "@smartboss/ui/components/button";
-import { useShell } from "@/components/shell/shell-context";
 import { Modal } from "./dialog";
 import { IssueReportBarButton } from "@/modules/report_task/components/issue-report/issue-report-bar-button";
 import { ReportNotificationSync } from "@/modules/report_task/components/shared/report-notification-sync";
@@ -12,10 +11,11 @@ import { NotificationBellPopover } from "@/modules/report_task/components/shared
 
 /**
  * ปุ่มขวาสุดของ AppBar — NotificationBell + ปุ่มออกจากระบบ (พร้อมกล่องยืนยัน)
- * จำนวนแจ้งเตือนดึงจาก ShellProvider จึงไม่ query ซ้ำในทุกหน้า
+ * จำนวนแจ้งเตือนบนกระดิ่งตอนนี้คำนวณเองจาก useUnifiedNotifications (รวม
+ * report_task + maintenance จริง ไม่ใช่แค่ maintenance เหมือนก่อนหน้านี้)
+ * เลยไม่ต้องรับเลข unread จาก ShellProvider มาบวกเพิ่มอีกที
  */
 export function AppBarActions() {
-  const { unread } = useShell();
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -35,7 +35,7 @@ export function AppBarActions() {
       <IssueReportBarButton />
       <ReportNotificationSync />
 
-      <NotificationBellPopover extraUnread={unread} />
+      <NotificationBellPopover />
 
       <button
         type="button"
