@@ -11,6 +11,23 @@
 --
 --  ⚠ ทั้งไฟล์อยู่ใน transaction เดียว — พังตรงไหนก็ย้อนกลับหมด ไม่มีข้อมูลค้างครึ่ง ๆ
 --  ⚠ สำรองฐานข้อมูลก่อนเสมอ: sudo bash /opt/smartboss/deploy/backup.sh
+--
+--  ── รันซ้ำได้ปลอดภัย (idempotent) — ใช้ sync ข้อมูลล่าสุดก่อนเลิกใช้ ChangYai ──
+--
+--  id ยกมาจาก ChangYai ตรง ๆ (ดู docs/changyai_import.md "id เป็น UUID ทั้งสอง
+--  ระบบ") ⇒ รันครั้งที่สองด้วย dump ใหม่ จะ "อัปเดต" แถวที่เคย import ไปแล้วให้
+--  ตรงกับ ChangYai ล่าสุด (สถานะ/ราคา/รูป/ฯลฯ) แล้ว insert เฉพาะแถวที่เพิ่งมี
+--  เพิ่ม — ไม่ต้องลบของเก่าก่อน ไม่ชนกัน
+--
+--  ยกเว้น 2 อย่างที่ตั้งใจ "ไม่แตะของเดิม" แม้ ChangYai จะมีค่าใหม่กว่า:
+--    • core.users ของคนที่เคย import มา — ฝ่ายบุคคลอาจแก้ชื่อ/อีเมล/ตั้ง
+--      รหัสผ่านให้แล้วที่ /admin/users (ดู docs ข้อ 0.5) รันซ้ำต้องไม่ไปทับ
+--    • code ของใบงาน/ใบสั่งซื้อที่มีอยู่แล้ว — เลขที่เอกสารต้องคงที่ตลอดอายุ
+--      ใบ ใบใหม่เท่านั้นที่ได้เลขใหม่ ต่อจากเลขสูงสุดที่มีอยู่
+--
+--  ⚠ ข้อจำกัด — นี่คือ "อัปเดต/เพิ่ม" ไม่ใช่ "ทำให้เหมือนกันเป๊ะ": แถวที่เคย
+--    import ไปแล้วแต่ถูกลบออกจาก ChangYai ไปแล้ว จะไม่ถูกลบตามที่นี่ ต้องลบ
+--    เองถ้าจำเป็น (ปกติไม่จำเป็น — งานที่เคยมีอยู่จริงไม่ควรหายเพราะ resync)
 -- ═══════════════════════════════════════════════════════════════════════
 
 \set ON_ERROR_STOP on
@@ -116,6 +133,10 @@ WHERE u.email IS NOT NULL AND btrim(u.email) <> ''
 -- รหัสผ่านย้ายมาไม่ได้ (Supabase Auth คนละวิธีเข้ารหัส) ⇒ ใส่ค่าที่ไม่ใช่
 -- รูปแบบ hash ที่ถูกต้องเลย ⇒ verify ไม่มีทางผ่าน ต่อให้เดารหัสถูกก็เข้าไม่ได้
 -- ปลอดภัยกว่าตั้งรหัสกลางเหมือนกันทุกคนซึ่งกลายเป็นช่องโหว่ทันที
+--
+-- ⚠ ON CONFLICT (id) DO NOTHING — ไม่ใช่ DO UPDATE — เพราะรอบก่อนหน้าอาจมีคน
+--   ไปแก้ชื่อ/อีเมล/ตั้งรหัสผ่านให้บัญชีนี้แล้วที่ /admin/users (ดู docs ข้อ
+--   0.5) รันซ้ำต้องไม่ไปทับงานที่ฝ่ายบุคคลทำไว้ ให้เหลือแค่ "ยังไม่มีก็สร้าง"
 INSERT INTO core.users (id, org_id, email, name, password_hash, line_user_id, is_active, created_at, updated_at)
 SELECT
   u.id::text,
@@ -129,7 +150,8 @@ SELECT
   COALESCE(u.created_at, now()),
   now()
 FROM changyai_raw.users u
-WHERE NOT EXISTS (SELECT 1 FROM changyai_raw._user_map m WHERE m.old_id = u.id::text);
+WHERE NOT EXISTS (SELECT 1 FROM changyai_raw._user_map m WHERE m.old_id = u.id::text)
+ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO changyai_raw._user_map (old_id, new_id)
 SELECT u.id::text, u.id::text
@@ -164,6 +186,9 @@ CREATE FUNCTION changyai_raw.jarr(p jsonb) RETURNS text[] LANGUAGE sql IMMUTABLE
 $$;
 
 -- ═══ 2. หมวดหมู่บ้าน ═════════════════════════════════════════════════
+--
+-- id = gen_random_uuid() ใหม่ทุกครั้ง แต่มี UNIQUE(org_id, prefix) กันซ้ำ
+-- อยู่แล้ว ⇒ ON CONFLICT DO NOTHING ปลอดภัยสำหรับรันซ้ำโดยไม่ต้องแก้อะไร
 INSERT INTO maintenance.property_categories (id, org_id, prefix, display_name, created_at)
 SELECT gen_random_uuid()::text, :org, c.prefix, c.display_name, COALESCE(c.created_at, now())
 FROM changyai_raw.property_categories c
@@ -174,14 +199,31 @@ INSERT INTO maintenance.properties
   (id, org_id, name, address, owner_name, owner_contact, notes, caretaker_id, created_at)
 SELECT p.id::text, :org, p.name, p.address, p.owner_name, p.owner_contact, p.notes,
        changyai_raw.uid(p.caretaker_id), COALESCE(p.created_at, now())
-FROM changyai_raw.properties p;
+FROM changyai_raw.properties p
+ON CONFLICT (id) DO UPDATE SET
+  name          = EXCLUDED.name,
+  address       = EXCLUDED.address,
+  owner_name    = EXCLUDED.owner_name,
+  owner_contact = EXCLUDED.owner_contact,
+  notes         = EXCLUDED.notes,
+  caretaker_id  = EXCLUDED.caretaker_id;
 
 -- ═══ 4. อุปกรณ์ ══════════════════════════════════════════════════════
 INSERT INTO maintenance.assets
   (id, org_id, property_id, name, category, brand, model, install_date, warranty_expiry, notes, image_url, created_at)
 SELECT a.id::text, :org, a.property_id::text, a.name, a.category, a.brand, a.model,
        a.install_date, a.warranty_expiry, a.notes, a.image_url, COALESCE(a.created_at, now())
-FROM changyai_raw.assets a;
+FROM changyai_raw.assets a
+ON CONFLICT (id) DO UPDATE SET
+  property_id     = EXCLUDED.property_id,
+  name            = EXCLUDED.name,
+  category        = EXCLUDED.category,
+  brand           = EXCLUDED.brand,
+  model           = EXCLUDED.model,
+  install_date    = EXCLUDED.install_date,
+  warranty_expiry = EXCLUDED.warranty_expiry,
+  notes           = EXCLUDED.notes,
+  image_url       = EXCLUDED.image_url;
 
 -- ═══ 5. ผู้รับเหมา ═══════════════════════════════════════════════════
 INSERT INTO maintenance.contractors
@@ -190,7 +232,18 @@ INSERT INTO maintenance.contractors
 SELECT c.id::text, :org, c.name, c.phone, c.specialty, c.company_name, c.zone,
        c.rating, COALESCE(c.is_active, TRUE), c.notes,
        c.price, c.category, COALESCE(c.created_at, now())
-FROM changyai_raw.contractors c;
+FROM changyai_raw.contractors c
+ON CONFLICT (id) DO UPDATE SET
+  name         = EXCLUDED.name,
+  phone        = EXCLUDED.phone,
+  specialty    = EXCLUDED.specialty,
+  company_name = EXCLUDED.company_name,
+  zone         = EXCLUDED.zone,
+  rating       = EXCLUDED.rating,
+  is_active    = EXCLUDED.is_active,
+  notes        = EXCLUDED.notes,
+  price        = EXCLUDED.price,
+  category     = EXCLUDED.category;
 
 -- ═══ 6. แผนบำรุงรักษา ════════════════════════════════════════════════
 INSERT INTO maintenance.pm_schedules
@@ -204,28 +257,88 @@ SELECT s.id::text, :org, s.property_id::text, s.asset_id::text, s.title, s.descr
        COALESCE(s.is_active, TRUE), changyai_raw.uid(s.assigned_to),
        changyai_raw.uids(s.cc_user_ids), COALESCE(s.requires_expense, TRUE),
        changyai_raw.uid(s.created_by), COALESCE(s.created_at, now())
-FROM changyai_raw.pm_schedules s;
+FROM changyai_raw.pm_schedules s
+ON CONFLICT (id) DO UPDATE SET
+  property_id         = EXCLUDED.property_id,
+  asset_id            = EXCLUDED.asset_id,
+  title               = EXCLUDED.title,
+  description         = EXCLUDED.description,
+  frequency           = EXCLUDED.frequency,
+  next_due_date       = EXCLUDED.next_due_date,
+  anchor_date         = EXCLUDED.anchor_date,
+  rounds_per_year     = EXCLUDED.rounds_per_year,
+  total_rounds        = EXCLUDED.total_rounds,
+  rounds_done         = EXCLUDED.rounds_done,
+  awaiting_schedule   = EXCLUDED.awaiting_schedule,
+  last_completed_date = EXCLUDED.last_completed_date,
+  is_active           = EXCLUDED.is_active,
+  assigned_to         = EXCLUDED.assigned_to,
+  cc_user_ids         = EXCLUDED.cc_user_ids,
+  requires_expense    = EXCLUDED.requires_expense,
+  created_by          = EXCLUDED.created_by;
 
 -- ═══ 7. ใบงาน ════════════════════════════════════════════════════════
 --
 -- ⚠ code เป็น NOT NULL + UNIQUE(org_id, code) แต่ ChangYai ไม่มีเลขที่เอกสาร
 --   ⇒ เดินเลขตามลำดับเวลาที่สร้าง ให้เลขเรียงตรงกับความเป็นจริง
+--
+-- ⚠ รันซ้ำ — ใบที่มีอยู่แล้ว "ไม่แตะ code" เลย (คงเลขเดิม) มีแค่ใบใหม่เท่านั้น
+--   ที่ถูกเดินเลขต่อจากเลขสูงสุดที่มีอยู่ในปีนั้น ไม่ใช่นับ 1 ใหม่ทุกครั้ง —
+--   ไม่งั้นรันซ้ำแต่ละครั้งจะเลขชนกันหรือย้อนไปทับใบเก่า
+WITH src AS (
+  SELECT w.*, x.code AS existing_code
+  FROM changyai_raw.work_orders w
+  LEFT JOIN maintenance.work_orders x ON x.id = w.id::text
+),
+new_numbered AS (
+  SELECT id, row_number() OVER (ORDER BY created_at, id) AS n
+  FROM src WHERE existing_code IS NULL
+),
+base AS (
+  SELECT COALESCE(MAX(substring(code FROM '\d+$')::int), 0) AS n
+  FROM maintenance.work_orders
+  WHERE org_id = :org AND code LIKE 'WO-' || :yr || '-%'
+)
 INSERT INTO maintenance.work_orders
   (id, org_id, code, property_id, asset_id, assigned_to, created_by, title, description,
    status, priority, due_date, completed_at, completion_notes, photo_urls, after_photo_urls,
    cc_user_ids, additional_property_ids, pm_schedule_id, pm_schedule_ids,
    auto_created, requires_expense, created_at)
-SELECT w.id::text, :org,
-       'WO-' || :yr || '-' || lpad(row_number() OVER (ORDER BY w.created_at, w.id)::text, 4, '0'),
-       w.property_id::text, w.asset_id::text, changyai_raw.uid(w.assigned_to), changyai_raw.uid(w.created_by),
-       w.title, w.description, w.status, COALESCE(w.priority, 'medium'),
-       w.due_date, w.completed_at, w.completion_notes,
-       COALESCE(w.photo_urls::text[], '{}'), COALESCE(w.after_photo_urls::text[], '{}'),
-       changyai_raw.uids(w.cc_user_ids), COALESCE(w.additional_property_ids::text[], '{}'),
-       w.pm_schedule_id::text, COALESCE(w.pm_schedule_ids::text[], '{}'),
-       COALESCE(w.auto_created, FALSE), COALESCE(w.requires_expense, TRUE),
-       COALESCE(w.created_at, now())
-FROM changyai_raw.work_orders w;
+SELECT src.id::text, :org,
+       COALESCE(src.existing_code,
+                'WO-' || :yr || '-' || lpad((base.n + nn.n)::text, 4, '0')),
+       src.property_id::text, src.asset_id::text, changyai_raw.uid(src.assigned_to), changyai_raw.uid(src.created_by),
+       src.title, src.description, src.status, COALESCE(src.priority, 'medium'),
+       src.due_date, src.completed_at, src.completion_notes,
+       COALESCE(src.photo_urls::text[], '{}'), COALESCE(src.after_photo_urls::text[], '{}'),
+       changyai_raw.uids(src.cc_user_ids), COALESCE(src.additional_property_ids::text[], '{}'),
+       src.pm_schedule_id::text, COALESCE(src.pm_schedule_ids::text[], '{}'),
+       COALESCE(src.auto_created, FALSE), COALESCE(src.requires_expense, TRUE),
+       COALESCE(src.created_at, now())
+FROM src
+CROSS JOIN base
+LEFT JOIN new_numbered nn ON nn.id = src.id
+ON CONFLICT (id) DO UPDATE SET
+  -- code ไม่อยู่ในรายการนี้โดยตั้งใจ — ของเดิมไม่เปลี่ยน
+  property_id              = EXCLUDED.property_id,
+  asset_id                 = EXCLUDED.asset_id,
+  assigned_to              = EXCLUDED.assigned_to,
+  created_by                = EXCLUDED.created_by,
+  title                    = EXCLUDED.title,
+  description              = EXCLUDED.description,
+  status                   = EXCLUDED.status,
+  priority                 = EXCLUDED.priority,
+  due_date                 = EXCLUDED.due_date,
+  completed_at             = EXCLUDED.completed_at,
+  completion_notes         = EXCLUDED.completion_notes,
+  photo_urls               = EXCLUDED.photo_urls,
+  after_photo_urls         = EXCLUDED.after_photo_urls,
+  cc_user_ids              = EXCLUDED.cc_user_ids,
+  additional_property_ids  = EXCLUDED.additional_property_ids,
+  pm_schedule_id           = EXCLUDED.pm_schedule_id,
+  pm_schedule_ids          = EXCLUDED.pm_schedule_ids,
+  auto_created             = EXCLUDED.auto_created,
+  requires_expense         = EXCLUDED.requires_expense;
 
 -- ═══ 8. คอมเมนต์ใบงาน ════════════════════════════════════════════════
 INSERT INTO maintenance.work_order_comments
@@ -233,27 +346,73 @@ INSERT INTO maintenance.work_order_comments
 SELECT c.id::text, :org, c.work_order_id::text, changyai_raw.uid(c.user_id),
        COALESCE(c.content, ''), c.image_url,
        COALESCE(c.created_at, now())
-FROM changyai_raw.work_order_comments c;
+FROM changyai_raw.work_order_comments c
+ON CONFLICT (id) DO UPDATE SET
+  work_order_id = EXCLUDED.work_order_id,
+  user_id       = EXCLUDED.user_id,
+  content       = EXCLUDED.content,
+  image_url     = EXCLUDED.image_url;
 
 -- ═══ 9. ใบสั่งซื้อ ═══════════════════════════════════════════════════
+--
+-- โครงการเดียวกับใบงานข้อ 7 — code ของใบที่มีอยู่แล้วไม่ถูกแตะ ใบใหม่เดินเลข
+-- ต่อจากเลขสูงสุดที่มีอยู่
+WITH src AS (
+  SELECT o.*, x.code AS existing_code
+  FROM changyai_raw.purchase_orders o
+  LEFT JOIN maintenance.purchase_orders x ON x.id = o.id::text
+),
+new_numbered AS (
+  SELECT id, row_number() OVER (ORDER BY created_at, id) AS n
+  FROM src WHERE existing_code IS NULL
+),
+base AS (
+  SELECT COALESCE(MAX(substring(code FROM '\d+$')::int), 0) AS n
+  FROM maintenance.purchase_orders
+  WHERE org_id = :org AND code LIKE 'PO-' || :yr || '-%'
+)
 INSERT INTO maintenance.purchase_orders
   (id, org_id, code, property_id, created_by, po_assigned_to, title, status, items,
    total_price, receipt_image_urls, pr_image_urls, is_self_purchase, is_emergency_purchase,
    emergency_reason, po_created_by, po_created_at, ordered_by, ordered_at,
    received_by, received_at, created_at, updated_at)
-SELECT o.id::text, :org,
-       'PO-' || :yr || '-' || lpad(row_number() OVER (ORDER BY o.created_at, o.id)::text, 4, '0'),
-       o.property_id::text, changyai_raw.uid(o.created_by), changyai_raw.uid(o.po_assigned_to),
-       o.title, o.status, COALESCE(o.items, '[]'::jsonb), COALESCE(o.total_price, 0),
-       changyai_raw.jarr(o.receipt_image_urls), COALESCE(o.pr_image_urls::text[], '{}'),
-       COALESCE(o.is_self_purchase, FALSE), COALESCE(o.is_emergency_purchase, FALSE),
-       o.emergency_reason, changyai_raw.uid(o.po_created_by), o.po_created_at,
-       changyai_raw.uid(o.ordered_by), o.ordered_at, changyai_raw.uid(o.received_by), o.received_at,
-       COALESCE(o.created_at, now()),
+SELECT src.id::text, :org,
+       COALESCE(src.existing_code,
+                'PO-' || :yr || '-' || lpad((base.n + nn.n)::text, 4, '0')),
+       src.property_id::text, changyai_raw.uid(src.created_by), changyai_raw.uid(src.po_assigned_to),
+       src.title, src.status, COALESCE(src.items, '[]'::jsonb), COALESCE(src.total_price, 0),
+       changyai_raw.jarr(src.receipt_image_urls), COALESCE(src.pr_image_urls::text[], '{}'),
+       COALESCE(src.is_self_purchase, FALSE), COALESCE(src.is_emergency_purchase, FALSE),
+       src.emergency_reason, changyai_raw.uid(src.po_created_by), src.po_created_at,
+       changyai_raw.uid(src.ordered_by), src.ordered_at, changyai_raw.uid(src.received_by), src.received_at,
+       COALESCE(src.created_at, now()),
        -- updated_at ของเราเป็น NOT NULL — Prisma @updatedAt เติมให้เองตอนเขียนผ่าน ORM
        -- แต่ SQL ดิบไม่มีใครเติม ⇒ ยกค่าเดิมมา ไม่มีก็ใช้ created_at
-       COALESCE(o.updated_at, o.created_at, now())
-FROM changyai_raw.purchase_orders o;
+       COALESCE(src.updated_at, src.created_at, now())
+FROM src
+CROSS JOIN base
+LEFT JOIN new_numbered nn ON nn.id = src.id
+ON CONFLICT (id) DO UPDATE SET
+  -- code ไม่อยู่ในรายการนี้โดยตั้งใจ — ของเดิมไม่เปลี่ยน
+  property_id           = EXCLUDED.property_id,
+  created_by            = EXCLUDED.created_by,
+  po_assigned_to        = EXCLUDED.po_assigned_to,
+  title                 = EXCLUDED.title,
+  status                = EXCLUDED.status,
+  items                 = EXCLUDED.items,
+  total_price           = EXCLUDED.total_price,
+  receipt_image_urls    = EXCLUDED.receipt_image_urls,
+  pr_image_urls         = EXCLUDED.pr_image_urls,
+  is_self_purchase      = EXCLUDED.is_self_purchase,
+  is_emergency_purchase = EXCLUDED.is_emergency_purchase,
+  emergency_reason      = EXCLUDED.emergency_reason,
+  po_created_by         = EXCLUDED.po_created_by,
+  po_created_at         = EXCLUDED.po_created_at,
+  ordered_by            = EXCLUDED.ordered_by,
+  ordered_at            = EXCLUDED.ordered_at,
+  received_by           = EXCLUDED.received_by,
+  received_at           = EXCLUDED.received_at,
+  updated_at            = EXCLUDED.updated_at;
 
 -- ═══ 10. คอมเมนต์ใบสั่งซื้อ ══════════════════════════════════════════
 --
@@ -265,7 +424,12 @@ SELECT c.id::text, :org, c.purchase_order_id::text, changyai_raw.uid(c.user_id),
        CASE WHEN c.image_url IS NULL OR c.image_url = '' THEN '{}'::text[]
             ELSE ARRAY[c.image_url] END,
        COALESCE(c.created_at, now())
-FROM changyai_raw.purchase_order_comments c;
+FROM changyai_raw.purchase_order_comments c
+ON CONFLICT (id) DO UPDATE SET
+  purchase_order_id = EXCLUDED.purchase_order_id,
+  user_id           = EXCLUDED.user_id,
+  content           = EXCLUDED.content,
+  image_urls        = EXCLUDED.image_urls;
 
 -- ═══ 11. คืนของ ══════════════════════════════════════════════════════
 INSERT INTO maintenance.equipment_returns
@@ -275,7 +439,21 @@ SELECT r.id::text, :org, r.purchase_order_id::text, r.property_id::text, changya
        r.item_name, COALESCE(r.qty, 1), r.problem_type, r.reason, COALESCE(r.status, 'pending'),
        changyai_raw.jarr(r.image_urls), r.resolution_note,
        changyai_raw.uid(r.resolved_by), r.resolved_at, COALESCE(r.created_at, now()), now()
-FROM changyai_raw.equipment_returns r;
+FROM changyai_raw.equipment_returns r
+ON CONFLICT (id) DO UPDATE SET
+  purchase_order_id = EXCLUDED.purchase_order_id,
+  property_id       = EXCLUDED.property_id,
+  created_by        = EXCLUDED.created_by,
+  item_name         = EXCLUDED.item_name,
+  qty               = EXCLUDED.qty,
+  problem_type      = EXCLUDED.problem_type,
+  reason            = EXCLUDED.reason,
+  status            = EXCLUDED.status,
+  image_urls        = EXCLUDED.image_urls,
+  resolution_note   = EXCLUDED.resolution_note,
+  resolved_by       = EXCLUDED.resolved_by,
+  resolved_at       = EXCLUDED.resolved_at,
+  updated_at        = now();
 
 -- ═══ 12. ค่าใช้จ่าย ══════════════════════════════════════════════════
 --
@@ -289,14 +467,37 @@ SELECT e.id::text, :org, e.work_order_id::text, e.pm_schedule_id::text,
        e.description, COALESCE(e.amount, 0), e.category, e.receipt_url,
        COALESCE(e.billable_to_partner, FALSE), e.cost_type, e.paid_by,
        COALESCE(e.is_no_expense, FALSE), e.expense_date, COALESCE(e.created_at, now())
-FROM changyai_raw.expenses e;
+FROM changyai_raw.expenses e
+ON CONFLICT (id) DO UPDATE SET
+  work_order_id        = EXCLUDED.work_order_id,
+  pm_schedule_id       = EXCLUDED.pm_schedule_id,
+  purchase_order_id    = EXCLUDED.purchase_order_id,
+  property_id          = EXCLUDED.property_id,
+  created_by           = EXCLUDED.created_by,
+  description          = EXCLUDED.description,
+  amount               = EXCLUDED.amount,
+  category             = EXCLUDED.category,
+  receipt_url          = EXCLUDED.receipt_url,
+  billable_to_partner  = EXCLUDED.billable_to_partner,
+  cost_type            = EXCLUDED.cost_type,
+  paid_by              = EXCLUDED.paid_by,
+  is_no_expense        = EXCLUDED.is_no_expense,
+  expense_date         = EXCLUDED.expense_date;
 
 -- ═══ 13. ประวัติผู้รับเหมา ═══════════════════════════════════════════
 INSERT INTO maintenance.contractor_history
   (id, org_id, contractor_id, work_order_id, property_id, description, amount, rating, work_date, created_at)
 SELECT h.id::text, :org, h.contractor_id::text, h.work_order_id::text, h.property_id::text,
        h.description, COALESCE(h.amount, 0), h.rating, h.work_date, COALESCE(h.created_at, now())
-FROM changyai_raw.contractor_history h;
+FROM changyai_raw.contractor_history h
+ON CONFLICT (id) DO UPDATE SET
+  contractor_id = EXCLUDED.contractor_id,
+  work_order_id = EXCLUDED.work_order_id,
+  property_id   = EXCLUDED.property_id,
+  description   = EXCLUDED.description,
+  amount        = EXCLUDED.amount,
+  rating        = EXCLUDED.rating,
+  work_date     = EXCLUDED.work_date;
 
 -- ═══ 14. ⚠ ตั้งตัวเดินเลขต่อ — ลืมข้อนี้แล้วพังวันรุ่งขึ้น ═══════════
 --
@@ -304,6 +505,8 @@ FROM changyai_raw.contractor_history h;
 -- เลขถัดไปคือ 1 ⇒ ใบงานใบแรกที่คนสร้างหลัง import จะได้เลขซ้ำแล้ว insert ไม่ผ่าน
 --
 -- ไม่พังตอน import แต่ไปพังตอนใช้งานจริง ซึ่งหาสาเหตุยากกว่ามาก
+--
+-- นับจากจำนวนแถวจริงเสมอ ⇒ รันซ้ำก็ยังได้ค่าที่ถูกต้อง ไม่ต้องแก้อะไรเพิ่ม
 INSERT INTO core.document_counters (org_id, doc_type, period, next_value)
 SELECT :org, 'WO', :yr, COUNT(*) + 1 FROM maintenance.work_orders WHERE org_id = :org
 ON CONFLICT (org_id, doc_type, period) DO UPDATE SET next_value = EXCLUDED.next_value;
@@ -352,4 +555,5 @@ COMMIT;
 \echo '  2. ย้ายไฟล์รูปจาก Supabase Storage เข้า MinIO แล้วแก้ URL'
 \echo '  3. จับคู่ว่าใครคือใคร:  select * from maintenance.v_imported_users;'
 \echo '     แล้วแก้ชื่อ/อีเมล และตั้งรหัสผ่านให้ทีละคนที่ /admin/users'
-\echo '  4. เมื่อมั่นใจแล้วค่อย: DROP SCHEMA changyai_raw CASCADE;'
+\echo '  4. เมื่อมั่นใจแล้วว่าจะไม่ import ซ้ำอีก ค่อย: DROP SCHEMA changyai_raw CASCADE;'
+\echo '     (จะ sync ล่าสุดอีกรอบก่อนเลิกใช้ ChangYai ก็รันไฟล์นี้ซ้ำได้เลย ปลอดภัย)'
