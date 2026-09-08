@@ -39,6 +39,11 @@ export function DatePresetPicker({
    * that already supplies its own surface (e.g. ภาพรวมทั้งหมด's `--bg-soft`
    * strip), so it doesn't end up card-inside-a-card. */
   variant = "card",
+  /** Skips this component's own "ล้างตัวกรอง" button — for a caller that
+   * already has its own clear-all control elsewhere (e.g. a popover panel
+   * with a "ล้างตัวกรอง" link in its header) and would otherwise show two of
+   * them stacked awkwardly close together ("ปุ่มล้างตัวกรองก็ทับ"). */
+  hideClearButton = false,
 }: {
   preset: DatePreset;
   customFrom: string;
@@ -46,6 +51,7 @@ export function DatePresetPicker({
   onPresetChange: (preset: DatePreset) => void;
   onCustomRangeChange: (from: string, to: string) => void;
   variant?: "card" | "inline";
+  hideClearButton?: boolean;
 }) {
   return (
     <div
@@ -99,7 +105,7 @@ export function DatePresetPicker({
         </div>
       )}
 
-      {preset !== "all" && (
+      {preset !== "all" && !hideClearButton && (
         <Button variant="ghost" size="sm" className="ml-auto text-[var(--ink-soft)]" onClick={() => onPresetChange("all")}>
           ล้างตัวกรอง
         </Button>
