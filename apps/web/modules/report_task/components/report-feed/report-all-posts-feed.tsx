@@ -78,6 +78,24 @@ export function ReportAllPostsFeed({
   const [topicFilter, setTopicFilter] = useState<Set<string>>(new Set());
 
   const topicById = useMemo(() => new Map(topics.map((t) => [t.id, t])), [topics]);
+  // Groups the topic-filter checklist by parent room (GL Chats, BPV Chats,
+  // ...) instead of one long flat list repeating "GL Chats › a-talk-gl" on
+  // every row — a sub-topic whose parent isn't in `topics` (visible to this
+  // viewer but its parent isn't, same edge case topic-sidebar.tsx handles)
+  // falls back to rendering as its own top-level group of one.
+  const topicGroups = useMemo(() => {
+    const childrenByParent = new Map<string, ReportTopic[]>();
+    for (const t of topics) {
+      if (t.parentId && topicById.has(t.parentId)) {
+        const arr = childrenByParent.get(t.parentId) ?? [];
+        arr.push(t);
+        childrenByParent.set(t.parentId, arr);
+      }
+    }
+    return topics
+      .filter((t) => !t.parentId || !topicById.has(t.parentId))
+      .map((parent) => ({ parent, children: childrenByParent.get(parent.id) ?? [] }));
+  }, [topics, topicById]);
   const items = posts
     .filter((p) => topicById.has(p.topicId))
     .filter((p) => topicFilter.size === 0 || topicFilter.has(p.topicId))
@@ -172,15 +190,27 @@ export function ReportAllPostsFeed({
                 }}
               />
               <p className="mt-3 mb-1.5 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">หัวข้อ</p>
-              <div className="flex flex-col gap-0.5">
-                {topics.map((t) => (
-                  <label
-                    key={t.id}
-                    className="flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 text-sm hover:bg-[var(--bg-soft)]"
-                  >
-                    <Checkbox checked={topicFilter.has(t.id)} onCheckedChange={() => toggleTopicFilter(t.id)} />
-                    <span className="truncate">{breadcrumbOf(t, topicById)}</span>
-                  </label>
+              <div className="flex flex-col gap-1.5">
+                {topicGroups.map(({ parent, children }) => (
+                  <div key={parent.id}>
+                    <label className="flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 text-sm font-semibold hover:bg-[var(--bg-soft)]">
+                      <Checkbox checked={topicFilter.has(parent.id)} onCheckedChange={() => toggleTopicFilter(parent.id)} />
+                      <span className="truncate">{parent.name}</span>
+                    </label>
+                    {children.length > 0 && (
+                      <div className="flex flex-col gap-0.5 border-l border-[var(--line)] ml-3.5 pl-2.5">
+                        {children.map((c) => (
+                          <label
+                            key={c.id}
+                            className="flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 text-sm hover:bg-[var(--bg-soft)]"
+                          >
+                            <Checkbox checked={topicFilter.has(c.id)} onCheckedChange={() => toggleTopicFilter(c.id)} />
+                            <span className="truncate">{c.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
             </PopoverContent>
