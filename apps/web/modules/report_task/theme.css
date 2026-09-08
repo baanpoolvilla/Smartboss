@@ -325,7 +325,11 @@
    nothing about the text itself gets smaller than it needs to be to read. */
 .ebw-calendar.ebw-dense .fc-dayGridMonth-view .fc-daygrid-day-number {
   padding: 2px 3px 2px 7px;
-  font-size: 0.72rem;
+  /* Font size stays 0.78rem (same as non-dense) on purpose: the only thing
+     dense trims is vertical spacing, never text size, so the calendar reads
+     as the exact same design whether a given screen/browser lands above or
+     below the dense threshold — no visible font "jump" between Chrome/Edge
+     or between screen sizes ("อยากให้รองรับทุกบราวเซอร์...ขนาดปรับตามจอ"). */
 }
 .ebw-calendar.ebw-dense .fc-dayGridMonth-view .fc-event {
   margin: 0 2px 2px !important;
@@ -339,7 +343,9 @@
 }
 .ebw-calendar.ebw-dense .fc-dayGridMonth-view .fc-daygrid-more-link {
   padding: 0 6px;
-  font-size: 0.66rem;
+  /* Font size stays 0.7rem (same as non-dense) — see the day-number note
+     above: dense only trims spacing, never text size, so styling is
+     identical across browsers and screen sizes. */
 }
 .ebw-calendar.ebw-dense .fc-dayGridMonth-view .fc-daygrid-day-bottom {
   margin-top: 0;
