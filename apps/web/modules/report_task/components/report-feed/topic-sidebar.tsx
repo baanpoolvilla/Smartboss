@@ -565,8 +565,13 @@ export function TopicSidebar({
               : "pending";
         return { id: r.id, label: r.label, time: r.time, status };
       });
-    const pendingHoverCount = hoverRows.filter((r) => r.status === "late" || r.status === "pending").length;
-    const currentHoverRow = hoverRows.find((r) => r.status === "pending");
+    // "late" (missed a cutoff that already passed) is the only urgent state —
+    // "pending" just means a later round hasn't come due yet, which used to
+    // get lumped into the same red "ยังไม่ส่ง" count as an actual miss and
+    // read as contradictory next to that same round's own "ยังไม่ถึงเวลา" row
+    // ("บอกว่ายังไม่ส่ง แต่ก็บอกว่ายังไม่ถึงเวลา งงว่าตกลงต้องรีบไหม").
+    const lateHoverCount = hoverRows.filter((r) => r.status === "late").length;
+    const pendingHoverCount = hoverRows.filter((r) => r.status === "pending").length;
     return (
       <div
         key={t.id}
@@ -734,11 +739,10 @@ export function TopicSidebar({
         >
           {t.name}
         </span>
-        {/* 2) Hover ห้องที่มีรอบส่ง — ⏰ always shows for a tracked room;
-            the red "ยังไม่ส่ง" label only when something's still pending
-            today. Tap-to-open on mobile (no hover there) is the Tooltip
-            component's own built-in press behavior, same as every other
-            Tooltip in this app. */}
+        {/* 2) Hover ห้องที่มีรอบส่ง — ⏰ always shows for a tracked room; the
+            red "เลยเวลา" label only once an actual cutoff has passed with
+            nothing posted (not merely "a later round hasn't come due yet",
+            which isn't urgent and used to red-flag the same as a real miss). */}
         {!editingOrder && canSeeStatus && hoverRows.length > 0 && (
           <Tooltip>
             <TooltipTrigger
@@ -747,42 +751,45 @@ export function TopicSidebar({
                   onClick={(e) => e.stopPropagation()}
                   className={cn(
                     "shrink-0 flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-                    pendingHoverCount > 0 ? "text-[var(--chart-red)] bg-red-50" : "text-[var(--ink-soft)]"
+                    lateHoverCount > 0 ? "text-[var(--chart-red)] bg-red-50" : "text-[var(--ink-soft)]"
                   )}
                 >
                   <span aria-hidden>⏰</span>
-                  {pendingHoverCount > 0 && <span>ยังไม่ส่ง</span>}
+                  {lateHoverCount > 0 && <span>เลยเวลา</span>}
                 </span>
               }
             />
-            <TooltipContent className="text-xs max-w-[220px]" side="right">
-              <p className="font-medium">
+            <TooltipContent className="w-64 max-w-[calc(100vw-24px)] p-3" side="right">
+              <p className="text-[13px] font-semibold leading-snug">
                 {viewerRoundIds.size === 0
-                  ? "คุณไม่ใช่ผู้ส่งของห้องนี้"
-                  : pendingHoverCount > 0
-                    ? `ยังไม่ส่งวันนี้ ${pendingHoverCount} รอบ`
-                    : "ส่งครบทุกรอบวันนี้แล้ว"}
+                  ? "ห้องนี้ไม่ใช่รอบที่คุณต้องส่ง"
+                  : lateHoverCount > 0
+                    ? `เลยเวลาส่งแล้ว ${lateHoverCount} รอบ`
+                    : pendingHoverCount > 0
+                      ? `เหลืออีก ${pendingHoverCount} รอบที่ต้องส่งวันนี้`
+                      : "ส่งครบทุกรอบวันนี้แล้ว"}
               </p>
-              {currentHoverRow && (
-                <p className="opacity-80">
-                  รอบปัจจุบัน: {currentHoverRow.label} · ปิดรับ {currentHoverRow.time} น.
-                </p>
-              )}
-              <div className="mt-1 space-y-0.5">
+              <div className="mt-2.5 space-y-1.5 border-t border-white/15 pt-2.5">
                 {hoverRows.map((r) => (
-                  <p key={r.id} className="opacity-80 flex items-center gap-1">
-                    {r.status === "posted" && <Check className="h-3 w-3 shrink-0" />}
-                    <span>
-                      {r.label} {r.time} น. ·{" "}
-                      {r.status === "posted"
-                        ? "ส่งแล้ว"
-                        : r.status === "late"
-                          ? "เลยเวลา"
-                          : r.status === "pending"
-                            ? "ยังไม่ถึงเวลา"
-                            : "ไม่ใช่ผู้ส่งรอบนี้"}
+                  <div key={r.id} className="flex items-center justify-between gap-2.5 text-[12px] leading-snug">
+                    <span className="opacity-90">
+                      {r.label} <span className="opacity-60">· {r.time} น.</span>
                     </span>
-                  </p>
+                    <span
+                      className={cn(
+                        "shrink-0 rounded px-1.5 py-0.5 text-[10.5px] font-medium",
+                        r.status === "posted" && "bg-emerald-400/15 text-emerald-300",
+                        r.status === "late" && "bg-red-400/15 text-red-300",
+                        r.status === "pending" && "bg-white/10 text-current opacity-70",
+                        r.status === "na" && "bg-white/10 text-current opacity-50"
+                      )}
+                    >
+                      {r.status === "posted" && "✓ ส่งแล้ว"}
+                      {r.status === "late" && "เลยเวลา"}
+                      {r.status === "pending" && "ยังไม่ถึง"}
+                      {r.status === "na" && "ไม่ใช่ผู้ส่ง"}
+                    </span>
+                  </div>
                 ))}
               </div>
             </TooltipContent>
