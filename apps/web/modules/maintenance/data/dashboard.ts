@@ -39,6 +39,9 @@ export async function noExpenseWorkOrderCount(orgId: string): Promise<number> {
     where: {
       orgId,
       status: "completed",
+      // ใบที่ตั้งไว้ว่าไม่ต้องกรอกค่าใช้จ่ายไม่ใช่งานค้าง — ถ้านับด้วย ตัวเลขแดง
+      // บนแดชบอร์ดจะไม่มีวันลงถึงศูนย์ (กติกาเดียวกับ notifyMissingExpenses)
+      requiresExpense: true,
       ...(withExpense.length > 0 ? { id: { notIn: withExpense } } : {}),
     },
   });

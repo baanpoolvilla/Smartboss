@@ -32,6 +32,11 @@ export interface BoardOrder {
   autoCreated: boolean;
   createdAtLabel: string;
   hasExpense: boolean;
+  /**
+   * false = ใบงานนี้ตั้งไว้ว่าไม่ต้องกรอกค่าใช้จ่าย (เช่น PM ตรวจเช็คที่ไม่มีของ
+   * ต้องซื้อ) ⇒ ปิดงานแล้วถือว่าจบเลย ไม่ต้องรอบันทึกค่าใช้จ่ายก่อน
+   */
+  requiresExpense: boolean;
 }
 
 /** สีสถานะ = ค่าจริงของ Material palette ที่ ChangYai ใช้ */
@@ -177,17 +182,29 @@ function OrderCard({
 
         <div className="mt-2 flex items-center justify-between">
           {wo.status === "completed" ? (
-            <span
-              className="inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-[10px]"
-              style={{
-                color: wo.hasExpense ? M.green : M.orange,
-                backgroundColor: wo.hasExpense ? `${M.green}1a` : `${M.orange}1a`,
-                border: `1px solid ${wo.hasExpense ? M.green : M.orange}4d`,
-              }}
-            >
-              <ReceiptText className="h-3 w-3" />
-              {wo.hasExpense ? "บันทึกค่าใช้จ่ายแล้ว" : "ยังไม่บันทึกค่าใช้จ่าย"}
-            </span>
+            (() => {
+              // ใบที่ไม่ต้องกรอกค่าใช้จ่ายไม่ควรขึ้นป้ายสีส้มว่า "ยังไม่บันทึก"
+              // เพราะไม่มีอะไรให้บันทึก — ขึ้นเป็นสีเทาบอกไปตรง ๆ ว่าไม่มีค่าใช้จ่าย
+              const settled = wo.hasExpense || !wo.requiresExpense;
+              const tone = !wo.requiresExpense ? M.grey : wo.hasExpense ? M.green : M.orange;
+              return (
+                <span
+                  className="inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-[10px]"
+                  style={{
+                    color: tone,
+                    backgroundColor: `${tone}1a`,
+                    border: `1px solid ${tone}4d`,
+                  }}
+                >
+                  <ReceiptText className="h-3 w-3" />
+                  {!wo.requiresExpense
+                    ? "ไม่มีค่าใช้จ่าย"
+                    : settled
+                      ? "บันทึกค่าใช้จ่ายแล้ว"
+                      : "ยังไม่บันทึกค่าใช้จ่าย"}
+                </span>
+              );
+            })()
           ) : (
             <span />
           )}
@@ -413,9 +430,22 @@ export function WorkOrderBoard({
   const buckets: Record<string, BoardOrder[]> = {
     open: visible.filter((w) => w.status === "open"),
     in_progress: visible.filter((w) => w.status === "in_progress"),
-    no_expense: visible.filter((w) => w.status === "completed" && !w.hasExpense),
+    /*
+     * "ยังไม่บันทึกค่าใช้จ่าย" = ปิดงานแล้ว ต้องกรอกค่าใช้จ่าย แต่ยังไม่ได้กรอก
+     *
+     * ใบที่ตั้งไว้ว่า requiresExpense = false ไม่มีอะไรให้กรอกตั้งแต่แรก ⇒ ปิดงาน
+     * แล้วต้องไปอยู่ "เสร็จแล้ว" เลย · เดิมเช็คแค่ !hasExpense ใบพวกนี้เลยไปค้าง
+     * ในคอลัมน์ทวงค่าใช้จ่ายตลอดกาล ทั้งที่หน้ารายละเอียดบอกเองว่า "งานนี้ไม่มี
+     * ค่าใช้จ่าย — ปิดงานได้โดยไม่ต้องกรอก" (ตัวเตือนทาง LINE ใน data/cron.ts
+     * กรองด้วย requiresExpense ถูกอยู่แล้ว ตกหล่นเฉพาะฝั่งหน้าจอ)
+     */
+    no_expense: visible.filter(
+      (w) => w.status === "completed" && w.requiresExpense && !w.hasExpense
+    ),
     done: visible.filter(
-      (w) => w.status === "cancelled" || (w.status === "completed" && w.hasExpense)
+      (w) =>
+        w.status === "cancelled" ||
+        (w.status === "completed" && (w.hasExpense || !w.requiresExpense))
     ),
   };
 

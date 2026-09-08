@@ -70,7 +70,9 @@ export default async function WorkOrdersPage({
     .filter(
       (o) =>
         filter !== "no-expense" ||
-        (o.status === "completed" && !expenseSet.has(o.id))
+        // ใบที่ตั้งไว้ว่าไม่ต้องกรอกค่าใช้จ่ายไม่ใช่งานค้าง — ไม่ควรโผล่ในลิสต์
+        // ทวงค่าใช้จ่ายจากแดชบอร์ด (กติกาเดียวกับตัวเตือน LINE ใน data/cron.ts)
+        (o.status === "completed" && o.requiresExpense && !expenseSet.has(o.id))
     )
     .map((o) => ({
       id: o.id,
@@ -85,6 +87,7 @@ export default async function WorkOrdersPage({
       autoCreated: o.autoCreated,
       createdAtLabel: fmtThaiDate(o.createdAt),
       hasExpense: expenseSet.has(o.id),
+      requiresExpense: o.requiresExpense,
     }));
 
   const isFilterMode = filter === "today" || filter === "urgent" || filter === "no-expense";
