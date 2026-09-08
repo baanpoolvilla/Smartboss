@@ -40,7 +40,7 @@ import { uploadCompressedImage } from "@/modules/report_task/lib/image-resize";
 import { useIsMobile } from "@/modules/report_task/hooks/use-is-mobile";
 import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
 import { aboutMeCountInPost } from "@/modules/report_task/lib/report-feed-activity";
-import { roundsForUserOnDay, attributePostToRound } from "@/modules/report_task/lib/submission-rounds";
+import { roundsForUserOnDay, attributePostToRound, effectiveRoundsOf, roundRunsOnDay } from "@/modules/report_task/lib/submission-rounds";
 import { todayIso, localDateStr } from "@/modules/report_task/lib/now";
 import { cn } from "@/modules/report_task/lib/utils";
 import { toast } from "sonner";
@@ -517,10 +517,15 @@ export function TopicSidebar({
     const favorited = t.favoritedBy?.includes(viewingAsUserId) ?? false;
     const editingOrder = reorderMode && canManageTopics;
 
-    // 2) Hover ห้องที่มีรอบส่ง — today's rounds this viewer owes here, with
-    // each one's status (posted/late/pending), for the ⏰ badge + tooltip.
+    // 2) Hover ห้องที่มีรอบส่ง — the ⏰ shows for any room tracked with a
+    // round in force today, regardless of who's on the hook for it (an
+    // owner/admin just browsing still gets to see the room's own schedule).
+    // Only the red "ยังไม่ส่ง" label + each row's posted/late status are
+    // scoped to what *this viewer* personally owes (viewerRoundIds) — someone
+    // not listed as a submitter for a round sees it as "na", not "late".
     const today = todayIso();
-    const roundsToday = roundsForUserOnDay(t, viewingAsUserId, today, submitterGroups);
+    const roundsToday = effectiveRoundsOf(t).filter((r) => roundRunsOnDay(r, today));
+    const viewerRoundIds = new Set(roundsForUserOnDay(t, viewingAsUserId, today, submitterGroups).map((r) => r.id));
     const nowMinutes = (() => {
       const n = new Date();
       return n.getHours() * 60 + n.getMinutes();
@@ -529,6 +534,7 @@ export function TopicSidebar({
       .slice()
       .sort((a, b) => a.time.localeCompare(b.time))
       .map((r) => {
+        const owesIt = viewerRoundIds.has(r.id);
         const posted = posts.some(
           (p) =>
             p.topicId === t.id &&
@@ -539,10 +545,16 @@ export function TopicSidebar({
         );
         const [h, m] = r.time.split(":").map(Number) as [number, number];
         const cutoffMinutes = h * 60 + m;
-        const status: "posted" | "late" | "pending" = posted ? "posted" : cutoffMinutes < nowMinutes ? "late" : "pending";
+        const status: "posted" | "late" | "pending" | "na" = !owesIt
+          ? "na"
+          : posted
+            ? "posted"
+            : cutoffMinutes < nowMinutes
+              ? "late"
+              : "pending";
         return { id: r.id, label: r.label, time: r.time, status };
       });
-    const pendingHoverCount = hoverRows.filter((r) => r.status !== "posted").length;
+    const pendingHoverCount = hoverRows.filter((r) => r.status === "late" || r.status === "pending").length;
     const currentHoverRow = hoverRows.find((r) => r.status === "pending");
     return (
       <div
@@ -732,7 +744,11 @@ export function TopicSidebar({
             />
             <TooltipContent className="text-xs max-w-[220px]" side="right">
               <p className="font-medium">
-                {pendingHoverCount > 0 ? `ยังไม่ส่งวันนี้ ${pendingHoverCount} รอบ` : "ส่งครบทุกรอบวันนี้แล้ว"}
+                {viewerRoundIds.size === 0
+                  ? "คุณไม่ใช่ผู้ส่งของห้องนี้"
+                  : pendingHoverCount > 0
+                    ? `ยังไม่ส่งวันนี้ ${pendingHoverCount} รอบ`
+                    : "ส่งครบทุกรอบวันนี้แล้ว"}
               </p>
               {currentHoverRow && (
                 <p className="opacity-80">
@@ -745,7 +761,13 @@ export function TopicSidebar({
                     {r.status === "posted" && <Check className="h-3 w-3 shrink-0" />}
                     <span>
                       {r.label} {r.time} น. ·{" "}
-                      {r.status === "posted" ? "ส่งแล้ว" : r.status === "late" ? "เลยเวลา" : "ยังไม่ถึงเวลา"}
+                      {r.status === "posted"
+                        ? "ส่งแล้ว"
+                        : r.status === "late"
+                          ? "เลยเวลา"
+                          : r.status === "pending"
+                            ? "ยังไม่ถึงเวลา"
+                            : "ไม่ใช่ผู้ส่งรอบนี้"}
                     </span>
                   </p>
                 ))}
