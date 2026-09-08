@@ -42,6 +42,7 @@ import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions
 import { aboutMeCountInPost } from "@/modules/report_task/lib/report-feed-activity";
 import { roundsForUserOnDay, attributePostToRound, effectiveRoundsOf, roundRunsOnDay } from "@/modules/report_task/lib/submission-rounds";
 import { todayIso, localDateStr } from "@/modules/report_task/lib/now";
+import { safeLocalStorage } from "@/modules/report_task/lib/safe-storage";
 import { cn } from "@/modules/report_task/lib/utils";
 import { toast } from "sonner";
 import {
@@ -147,6 +148,27 @@ export const PENDING_ID = "__pending__";
 export const MENTIONS_ID = "__mentions__";
 type Editor = { mode: "create" } | { mode: "edit"; topic: ReportTopic };
 
+// Per-browser, not shared team state (same reasoning/pattern as page.tsx's
+// own topicSidebarCollapsed) — which top-level rooms are folded shut is a
+// pure viewing convenience, so localStorage instead of the server-synced
+// report-feed-store. Without this, every page refresh silently re-expanded
+// everything ("ยุบไว้ พอรีเฟรชแล้วมันมาเปิดทั้งหมดเลย") since the collapsed
+// set lived only in this component's own React state.
+const COLLAPSED_TOPIC_IDS_KEY = "report_task.collapsedTopicIds";
+function loadCollapsedTopicIds(): Set<string> {
+  try {
+    const raw = safeLocalStorage.getItem(COLLAPSED_TOPIC_IDS_KEY);
+    if (typeof raw !== "string" || !raw) return new Set();
+    const ids = JSON.parse(raw);
+    return Array.isArray(ids) ? new Set(ids.filter((id): id is string => typeof id === "string")) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+function saveCollapsedTopicIds(ids: Set<string>) {
+  safeLocalStorage.setItem(COLLAPSED_TOPIC_IDS_KEY, JSON.stringify([...ids]));
+}
+
 // Depth is capped at 2 (team > channel) to match MS Teams — a topic that
 // already has children of its own can't also become someone else's child.
 function isTopLevel(t: ReportTopic) {
@@ -224,13 +246,16 @@ export function TopicSidebar({
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Collapsed = chevron pointing right, hiding the sub-topics — every
   // top-level topic starts expanded so a first-time viewer sees the
-  // Teams-style hierarchy immediately instead of a wall of collapsed rows.
-  const [collapsedTopicIds, setCollapsedTopicIds] = useState<Set<string>>(() => new Set());
+  // Teams-style hierarchy immediately instead of a wall of collapsed rows,
+  // unless a previous visit (this browser) left some folded shut — see
+  // loadCollapsedTopicIds' own comment.
+  const [collapsedTopicIds, setCollapsedTopicIds] = useState<Set<string>>(loadCollapsedTopicIds);
   function toggleCollapsed(id: string) {
     setCollapsedTopicIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      saveCollapsedTopicIds(next);
       return next;
     });
   }
