@@ -759,8 +759,8 @@ export function TopicSidebar({
                 </span>
               }
             />
-            <TooltipContent className="w-64 max-w-[calc(100vw-24px)] p-3" side="right">
-              <p className="text-[13px] font-semibold leading-snug">
+            <TooltipContent className="w-48 max-w-[calc(100vw-24px)] p-2" side="right">
+              <p className="text-[11px] font-semibold leading-snug">
                 {viewerRoundIds.size === 0
                   ? "ห้องนี้ไม่ใช่รอบที่คุณต้องส่ง"
                   : lateHoverCount > 0
@@ -769,15 +769,15 @@ export function TopicSidebar({
                       ? `เหลืออีก ${pendingHoverCount} รอบที่ต้องส่งวันนี้`
                       : "ส่งครบทุกรอบวันนี้แล้ว"}
               </p>
-              <div className="mt-2.5 space-y-1.5 border-t border-white/15 pt-2.5">
+              <div className="mt-1.5 space-y-1 border-t border-white/15 pt-1.5">
                 {hoverRows.map((r) => (
-                  <div key={r.id} className="flex items-center justify-between gap-2.5 text-[12px] leading-snug">
-                    <span className="opacity-90">
+                  <div key={r.id} className="flex items-center justify-between gap-1.5 text-[10px] leading-snug">
+                    <span className="opacity-90 truncate">
                       {r.label} <span className="opacity-60">· {r.time} น.</span>
                     </span>
                     <span
                       className={cn(
-                        "shrink-0 rounded px-1.5 py-0.5 text-[10.5px] font-medium",
+                        "shrink-0 rounded px-1 py-0.5 text-[9px] font-medium",
                         r.status === "posted" && "bg-emerald-400/15 text-emerald-300",
                         r.status === "late" && "bg-red-400/15 text-red-300",
                         r.status === "pending" && "bg-white/10 text-current opacity-70",
