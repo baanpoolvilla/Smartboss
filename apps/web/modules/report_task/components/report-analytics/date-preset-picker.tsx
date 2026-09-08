@@ -39,14 +39,6 @@ export function DatePresetPicker({
    * that already supplies its own surface (e.g. ภาพรวมทั้งหมด's `--bg-soft`
    * strip), so it doesn't end up card-inside-a-card. */
   variant = "card",
-  /** Keeps this whole control (presets + custom-range fields + "ล้างตัวกรอง")
-   * on one horizontally-scrollable row instead of wrapping — for a tight
-   * header strip (ภาพรวมทั้งหมด's filter row) where switching to "กำหนดเอง"
-   * used to bump the row count up/down depending on which preset was picked
-   * ("พอกดดูรายวันแถวเดียว พอกดดูทั้งหมดเด้งมาข้างล่างอีกแถว"). The default
-   * (wrap) stays as-is for every other caller — see report-topic-panels.tsx's
-   * own usage, which wants wrapping in its wider stats layout. */
-  noWrap = false,
 }: {
   preset: DatePreset;
   customFrom: string;
@@ -54,17 +46,15 @@ export function DatePresetPicker({
   onPresetChange: (preset: DatePreset) => void;
   onCustomRangeChange: (from: string, to: string) => void;
   variant?: "card" | "inline";
-  noWrap?: boolean;
 }) {
   return (
     <div
       className={cn(
-        "flex items-center gap-2 print:hidden",
-        noWrap ? "flex-nowrap overflow-x-auto" : "flex-wrap",
+        "flex flex-wrap items-center gap-2 print:hidden",
         variant === "card" && "rounded-xl border border-[var(--line)] bg-white p-2"
       )}
     >
-      <div className={cn("inline-flex items-center gap-1 rounded-lg bg-[var(--bg-soft)] p-1 max-w-full", noWrap ? "shrink-0" : "overflow-x-auto")}>
+      <div className="inline-flex items-center gap-1 rounded-lg bg-[var(--bg-soft)] p-1 max-w-full overflow-x-auto">
         {presets.map((p) => {
           const Icon = p.icon;
           const active = preset === p.id;
@@ -93,29 +83,24 @@ export function DatePresetPicker({
       </div>
 
       {preset === "custom" && (
-        <div className={cn("flex items-center gap-2", noWrap ? "shrink-0" : "flex-wrap")}>
+        <div className="flex items-center gap-2 flex-wrap">
           <DatePickerField
             value={customFrom}
             onChange={(v) => onCustomRangeChange(v, customTo)}
-            className={cn("max-w-full", noWrap ? "w-[130px]" : "w-[150px]")}
+            className="w-[150px] max-w-full"
           />
-          <span className="text-[var(--ink-soft)] text-sm shrink-0">ถึง</span>
+          <span className="text-[var(--ink-soft)] text-sm">ถึง</span>
           <DatePickerField
             value={customTo}
             onChange={(v) => onCustomRangeChange(customFrom, v)}
-            className={cn("max-w-full", noWrap ? "w-[130px]" : "w-[150px]")}
+            className="w-[150px] max-w-full"
             minDate={customFrom || undefined}
           />
         </div>
       )}
 
       {preset !== "all" && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className={cn("shrink-0 text-[var(--ink-soft)]", !noWrap && "ml-auto")}
-          onClick={() => onPresetChange("all")}
-        >
+        <Button variant="ghost" size="sm" className="ml-auto text-[var(--ink-soft)]" onClick={() => onPresetChange("all")}>
           ล้างตัวกรอง
         </Button>
       )}

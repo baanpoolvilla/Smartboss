@@ -5,20 +5,14 @@ import { ReportCard } from "@/modules/report_task/components/report-feed/report-
 import { DaySeparator } from "@/modules/report_task/components/report-feed/report-day-separator";
 import { reportDayLabel } from "@/modules/report_task/components/report-feed/report-day-label";
 import { DatePresetPicker } from "@/modules/report_task/components/report-analytics/date-preset-picker";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/modules/report_task/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
+import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
+import { filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
 import { cn } from "@/modules/report_task/lib/utils";
 import { presetRange } from "@/modules/report_task/lib/date-filter";
 import { groupByDay } from "@/modules/report_task/lib/format";
 import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
-import { Rows3, Tag } from "lucide-react";
+import { Rows3, SlidersHorizontal } from "lucide-react";
 
 /** "ทีมพัฒนา › เช็คอินประจำวัน" — a sub-topic's name alone was ambiguous once
  * several teams reuse the same channel name (V3). Top-level topics have no
@@ -116,82 +110,83 @@ export function ReportAllPostsFeed({
     el.scrollTop = el.scrollHeight;
   }, [items.length]);
 
+  const activeFilterCount = (preset !== "all" ? 1 : 0) + (topicFilter.size > 0 ? 1 : 0);
+
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      {/* Title row — never grows past one line regardless of screen size:
-          description hides below sm (it's informational, not a control) and
-          headerRight (page.tsx's back-button + "มุมมอง" switcher) sits right
-          on this same row instead of a dedicated one above it. */}
-      <div className="shrink-0 px-3 sm:px-5 pt-3.5 pb-2 flex items-center gap-2 border-b border-[var(--line)]">
+      {/* One title row, always — icon/title on the left, everything else
+          (filter trigger, back button, "มุมมอง" switcher) as compact
+          fixed-size controls on the right. Collapsing the old inline
+          date-preset+topic-filter strip into a single "ตัวกรอง" button (whose
+          panel opens in a popover) is what makes this reliably fit one line
+          at every width — the previous horizontally-scrolling strip read as
+          broken in the real deployed app: it could render mid-scrolled with
+          both edges cut off, and the title row still wrapped/overflowed
+          alongside it ("ดูดิเละเทะหมดเลย"). A single button never wraps. */}
+      <div className="shrink-0 px-3 sm:px-5 py-2.5 flex items-center gap-2 border-b border-[var(--line)]">
         <span className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--brand-green-dark)]">
           <Icon className="h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">
           <h2 className="text-[15px] sm:text-[16px] font-semibold leading-tight truncate">{title}</h2>
-          <p className="hidden sm:block text-xs text-[var(--ink-soft)] leading-tight truncate">{description}</p>
+          <p className="hidden md:block text-xs text-[var(--ink-soft)] leading-tight truncate">{description}</p>
         </div>
-        {headerRight && <div className="shrink-0 flex items-center gap-1">{headerRight}</div>}
-      </div>
-
-      {/* Filter row — one and only one row, always, at every breakpoint and
-          regardless of which preset is active: horizontal scroll instead of
-          wrapping, so picking "กำหนดเอง"/"ทั้งหมด" never bumps the row count
-          up or down the way it used to ("พอกดดูรายวันแถวเดียว พอกดดูทั้งหมด
-          เด้งมาข้างล่างอีกแถว งง"). Same single strip on mobile and desktop —
-          no more separate bottom-sheet-only mobile filter UI. */}
-      {showFilters && (
-        <div className="shrink-0 px-3 sm:px-5 py-2 flex items-center gap-2.5 flex-nowrap overflow-x-auto border-b border-[var(--line)] bg-[var(--bg-soft)]/40">
-          <DatePresetPicker
-            variant="inline"
-            noWrap
-            preset={preset}
-            customFrom={customFrom}
-            customTo={customTo}
-            onPresetChange={setPreset}
-            onCustomRangeChange={(from, to) => {
-              setCustomFrom(from);
-              setCustomTo(to);
-            }}
-          />
-          <div className="h-6 w-px bg-[var(--line)] shrink-0" />
-          <DropdownMenu>
-            <DropdownMenuTrigger
+        {showFilters && (
+          <Popover>
+            <PopoverTrigger
               render={
-                <button
-                  className={cn(
-                    "shrink-0 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors",
-                    topicFilter.size > 0
-                      ? "border-[var(--brand-green)] bg-[var(--accent)] text-[var(--brand-green-dark)]"
-                      : "border-[var(--line)] bg-white text-[var(--ink-soft)] hover:text-[var(--ink)] hover:bg-[var(--bg-soft)]"
-                  )}
-                >
-                  <Tag className="h-3.5 w-3.5" />
-                  {topicFilter.size === 0 ? "ทุกหัวข้อ" : `${topicFilter.size} หัวข้อ`}
+                <button className={cn(filterFieldTriggerClass(activeFilterCount > 0), "shrink-0 !h-9 px-2.5 sm:px-3")}>
+                  <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+                  <span className="hidden sm:inline">ตัวกรอง</span>
+                  {activeFilterCount > 0 && <span className="tabular-nums">({activeFilterCount})</span>}
                 </button>
               }
             />
-            <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
-              <DropdownMenuGroup>
-                <DropdownMenuLabel>กรองตามหัวข้อ</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {topicFilter.size > 0 && (
+            <PopoverContent align="end" className="w-[300px] max-h-[75vh] overflow-y-auto p-3">
+              <div className="flex items-center justify-between px-0.5 pb-2">
+                <p className="text-sm font-semibold">ตัวกรอง</p>
+                {activeFilterCount > 0 && (
                   <button
-                    onClick={() => setTopicFilter(new Set())}
-                    className="w-full text-left px-2 py-1.5 text-xs font-medium text-[var(--brand-green-dark)] hover:underline"
+                    type="button"
+                    onClick={() => {
+                      setPreset("all");
+                      setTopicFilter(new Set());
+                    }}
+                    className="text-xs font-medium text-[var(--brand-green-dark)] hover:underline"
                   >
                     ล้างตัวกรอง
                   </button>
                 )}
+              </div>
+              <p className="mb-1.5 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">ช่วงเวลา</p>
+              <DatePresetPicker
+                variant="inline"
+                preset={preset}
+                customFrom={customFrom}
+                customTo={customTo}
+                onPresetChange={setPreset}
+                onCustomRangeChange={(from, to) => {
+                  setCustomFrom(from);
+                  setCustomTo(to);
+                }}
+              />
+              <p className="mt-3 mb-1.5 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">หัวข้อ</p>
+              <div className="flex flex-col gap-0.5">
                 {topics.map((t) => (
-                  <DropdownMenuCheckboxItem key={t.id} checked={topicFilter.has(t.id)} onCheckedChange={() => toggleTopicFilter(t.id)}>
-                    {breadcrumbOf(t, topicById)}
-                  </DropdownMenuCheckboxItem>
+                  <label
+                    key={t.id}
+                    className="flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 text-sm hover:bg-[var(--bg-soft)]"
+                  >
+                    <Checkbox checked={topicFilter.has(t.id)} onCheckedChange={() => toggleTopicFilter(t.id)} />
+                    <span className="truncate">{breadcrumbOf(t, topicById)}</span>
+                  </label>
                 ))}
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      )}
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
+        {headerRight && <div className="shrink-0 flex items-center gap-1">{headerRight}</div>}
+      </div>
 
       {items.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6 bg-[var(--bg-soft)]/40">
