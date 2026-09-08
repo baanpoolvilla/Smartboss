@@ -16,7 +16,11 @@ const grantableSections: { key: GrantableSection; label: string; icon: typeof Sm
   { key: "stickers", label: "สติกเกอร์ & คะแนน", icon: Smile },
   { key: "leaveTypes", label: "ประเภทการลา", icon: Ticket },
   { key: "routineDayoff", label: "วันหยุดประจำ", icon: CalendarOff },
-  { key: "reportTopics", label: "สร้าง/ลบหัวข้อ Report", icon: FolderTree },
+  // canManageReportTopics (lib/permissions.ts) gates create/delete AND the
+  // sidebar's drag-reorder mode (topic-sidebar.tsx §1) off this same grant —
+  // label spells both out so granting this section doesn't read as
+  // "just create/delete" to whoever's checking the box.
+  { key: "reportTopics", label: "สร้าง/ลบ/จัดลำดับหัวข้อ Report", icon: FolderTree },
   { key: "projectTopics", label: "หัวข้อโปรเจค", icon: Tag },
 ];
 

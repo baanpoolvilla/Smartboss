@@ -230,6 +230,9 @@ export function ReportTopicSettingsPanel({
           <div>
             <Label className="text-xs text-[var(--ink-soft)]">รอบส่ง — ใครต้องส่ง + กี่โมง</Label>
             <p className="text-[11px] text-[var(--ink-soft)]">แยกจาก &quot;ใครเห็นห้อง&quot; — เว้นว่าง = ไม่มีใครต้องส่ง ไม่หัก/ไม่นับ</p>
+            <p className="text-[11px] text-[var(--ink-soft)]">
+              ป้าย ⏰ &quot;ยังไม่ส่ง&quot; ในแถบข้างเห็นเฉพาะคนที่ต้องส่งรอบนี้จริง + เจ้าของบริษัท + หัวหน้าแผนกของห้อง (ตามสิทธิ) — คนอื่นที่แค่เห็นห้องไม่เห็นป้ายนี้
+            </p>
           </div>
 
           {rounds.length > 0 && (

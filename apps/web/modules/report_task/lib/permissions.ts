@@ -408,6 +408,28 @@ export function canSeeIssueSummaryAsHead(
   return departments.some((d) => d.id === reporterDeptId && d.headId === viewingAsUserId);
 }
 
+/**
+ * Who has a reason to see a room's own "ยังไม่ส่งวันนี้" ⏰ status in the
+ * sidebar (topic-sidebar.tsx) — deliberately narrower than
+ * `canSeeReportTopic`. Everyone who can see the room can browse it, but the
+ * red "ยังไม่ส่ง" pill + per-round tooltip is only useful to: the CEO/owner
+ * (oversees every room), the head of one of the room's own departments (same
+ * department-head scope `canEditReportTopic` already uses for editing it),
+ * or — checked separately by the caller via `roundsForUserOnDay`, since that
+ * needs submitterGroups this file doesn't have — whoever's personally on the
+ * hook for one of its rounds today. A plain member of a company-wide
+ * ("ทุกคน") room with no stake in today's rounds doesn't need someone else's
+ * obligation flagged red for them.
+ */
+export function canSeeRoomSubmissionStatus(
+  visibility: { departmentIds?: string[] } | undefined,
+  viewingAsUserId: string
+): boolean {
+  if (isOwner(viewingAsUserId)) return true;
+  const deptIds = new Set(visibility?.departmentIds ?? []);
+  return departments.some((d) => d.headId === viewingAsUserId && deptIds.has(d.id));
+}
+
 export function canEditReportTopic(
   visibility: { departmentIds?: string[]; managerOnly?: boolean; userIds?: string[] } | undefined,
   viewingAsUserId: string

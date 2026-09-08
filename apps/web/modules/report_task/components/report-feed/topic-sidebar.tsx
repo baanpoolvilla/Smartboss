@@ -33,7 +33,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/modules/report_task/c
 import { useReportFeedStore, topicColors, type ReportTopic, type ReportPost } from "@/modules/report_task/store/report-feed-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useSettingsAccessStore } from "@/modules/report_task/store/settings-access-store";
-import { canEditReportTopic, canManageReportTopics } from "@/modules/report_task/lib/permissions";
+import { canEditReportTopic, canManageReportTopics, canSeeRoomSubmissionStatus } from "@/modules/report_task/lib/permissions";
 import { DRAG_MENTION_TOPIC_MIME } from "@/modules/report_task/components/report-feed/report-post-fields";
 import { useTourStore, tourStepsByPage } from "@/modules/report_task/store/tour-store";
 import { uploadCompressedImage } from "@/modules/report_task/lib/image-resize";
@@ -526,6 +526,10 @@ export function TopicSidebar({
     const today = todayIso();
     const roundsToday = effectiveRoundsOf(t).filter((r) => roundRunsOnDay(r, today));
     const viewerRoundIds = new Set(roundsForUserOnDay(t, viewingAsUserId, today, submitterGroups).map((r) => r.id));
+    // Only show the ⏰ status at all to someone with a reason to care about
+    // it: a real submitter of one of today's rounds, the CEO/owner, or the
+    // head of one of the room's own departments — see canSeeRoomSubmissionStatus.
+    const canSeeStatus = viewerRoundIds.size > 0 || canSeeRoomSubmissionStatus(t.visibility, viewingAsUserId);
     const nowMinutes = (() => {
       const n = new Date();
       return n.getHours() * 60 + n.getMinutes();
@@ -726,7 +730,7 @@ export function TopicSidebar({
             today. Tap-to-open on mobile (no hover there) is the Tooltip
             component's own built-in press behavior, same as every other
             Tooltip in this app. */}
-        {!editingOrder && hoverRows.length > 0 && (
+        {!editingOrder && canSeeStatus && hoverRows.length > 0 && (
           <Tooltip>
             <TooltipTrigger
               render={
