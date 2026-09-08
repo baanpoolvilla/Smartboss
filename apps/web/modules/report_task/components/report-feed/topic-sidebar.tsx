@@ -54,7 +54,6 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
-  Clock,
   Code2,
   Crown,
   Eye,
@@ -751,7 +750,7 @@ export function TopicSidebar({
                     pendingHoverCount > 0 ? "text-[var(--chart-red)] bg-red-50" : "text-[var(--ink-soft)]"
                   )}
                 >
-                  <Clock className="h-3 w-3" />
+                  <span aria-hidden>⏰</span>
                   {pendingHoverCount > 0 && <span>ยังไม่ส่ง</span>}
                 </span>
               }
