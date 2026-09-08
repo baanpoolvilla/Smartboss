@@ -307,6 +307,12 @@
 .ebw-calendar .fc-dayGridMonth-view .fc-daygrid-day-frame {
   height: var(--ebw-row-height, auto);
   overflow: hidden;
+  /* A few px of breathing room at the bottom so the last item in a cell —
+     usually the "+N รายการ" badge — never sits flush on the cell's bottom
+     border and read as clipped/overlapped by the grid line ("ชิดขอบล่าง
+     เหมือนโดนทับ"), which showed up on the shorter rows some browsers/screens
+     compute. Inside the fixed height, so it can't grow the grid. */
+  padding-bottom: 4px;
 }
 /* With the rows now sized to fit exactly, the month grid's own scroller has
    nothing left to scroll — turning it off outright removes the last way the
