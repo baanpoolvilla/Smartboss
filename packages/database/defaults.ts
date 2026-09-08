@@ -124,7 +124,8 @@ export const COMPANY_FILES_PERMS = ["company_files.access", "company_files.uploa
  *   - `core.*` ทั้งหมด → หลังบ้าน /admin คือที่ที่แก้สิทธิ์ของทุกคนได้
  *     ถ้าเปิดให้ทุกบทบาทเข้า กติกาข้อนี้จะถูกแก้ทิ้งโดยใครก็ได้
  *   - `hr.salary.* / hr.payroll.*` → เงินเดือนเป็นข้อมูลส่วนบุคคล
- *   - `maintenance.expense.* / po.*` → ตัวเลขจัดซื้อ-การเงินของบริษัท
+ *   - `maintenance.expense.* / po.view / po.approve` → ตัวเลขจัดซื้อ-การเงิน
+ *     ของบริษัท · แต่ `po.create` **อยู่ในชุดพื้นฐาน** ดูเหตุผลตรงรายการข้างล่าง
  *   - `report_task.activity.view` → บันทึกการกระทำของคนทั้งบริษัท
  */
 export const BASELINE_PERMS = [
@@ -145,6 +146,18 @@ export const BASELINE_PERMS = [
   "maintenance.asset.view",
   "maintenance.pm.view",
   "maintenance.contractor.view",
+  /*
+   * ทุกบทบาท "ขอ" ซื้อของได้ — คนที่เจอของพังคือคนหน้างาน (ผู้ดูแลบ้าน ช่าง)
+   * ถ้าเปิด PR เองไม่ได้ ต้องไปตามหัวหน้ามากดแทนทุกครั้ง ซึ่งช้ากว่าปัญหาที่
+   * เจอ · เดิมมีแค่ ADMIN/CEO/MANAGER ⇒ ผู้ดูแลบ้านเห็นกระดาน PR/PO ได้ (มี
+   * po.view) แต่ปุ่ม "เปิด PR" ไม่ขึ้นให้เลย
+   *
+   * ไม่ใช่การเปิดให้ใครก็สั่งซื้อได้: นี่คือสิทธิ์ "ขอ" อย่างเดียว ใบที่เปิดมา
+   * เป็นสถานะ pending รอ CEO อนุมัติเสมอ · การ "เปิด PO เลย" (ข้ามอนุมัติ)
+   * ยังต้องมี po.approve ซึ่ง createPoAction บังคับฝั่งเซิร์ฟเวอร์อยู่แล้ว
+   * (openPo = wantsPo && canOpenPo) ยิงฟอร์มตรงมาก็ข้ามไม่ได้
+   */
+  "maintenance.po.create",
   // แชท — เห็นเมนูเฉพาะบริษัทที่เปิดใช้โมดูลนี้ที่ /admin/modules
   "chat.access",
   // ไฟล์บริษัท — ดู/อัปโหลด/แชร์ไฟล์กันได้ทุกคน (เหมือนกัน) ลบ/จัดการของคนอื่น
