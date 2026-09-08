@@ -12,7 +12,7 @@ import { cn } from "@/modules/report_task/lib/utils";
 import { presetRange } from "@/modules/report_task/lib/date-filter";
 import { groupByDay } from "@/modules/report_task/lib/format";
 import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
-import { Rows3, SlidersHorizontal } from "lucide-react";
+import { Rows3, SlidersHorizontal, ChevronRight } from "lucide-react";
 
 /** "ทีมพัฒนา › เช็คอินประจำวัน" — a sub-topic's name alone was ambiguous once
  * several teams reuse the same channel name (V3). Top-level topics have no
@@ -115,6 +115,19 @@ export function ReportAllPostsFeed({
     });
   }
 
+  // Which parent groups are collapsed in the topic-filter checklist — starts
+  // all-expanded, same default topic-sidebar.tsx uses, so a first look at the
+  // filter panel shows the full tree rather than everything folded away.
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
+  function toggleGroupCollapsed(id: string) {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   const scrollRef = useRef<HTMLDivElement>(null);
   // Lands on the newest post (bottom of the list) on open, same as a single
   // room's feed — otherwise "newest at the bottom" would mean opening this
@@ -191,27 +204,44 @@ export function ReportAllPostsFeed({
               />
               <p className="mt-3 mb-1.5 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">หัวข้อ</p>
               <div className="flex flex-col gap-1.5">
-                {topicGroups.map(({ parent, children }) => (
-                  <div key={parent.id}>
-                    <label className="flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 text-sm font-semibold hover:bg-[var(--bg-soft)]">
-                      <Checkbox checked={topicFilter.has(parent.id)} onCheckedChange={() => toggleTopicFilter(parent.id)} />
-                      <span className="truncate">{parent.name}</span>
-                    </label>
-                    {children.length > 0 && (
-                      <div className="flex flex-col gap-0.5 border-l border-[var(--line)] ml-3.5 pl-2.5">
-                        {children.map((c) => (
-                          <label
-                            key={c.id}
-                            className="flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 text-sm hover:bg-[var(--bg-soft)]"
+                {topicGroups.map(({ parent, children }) => {
+                  const collapsed = collapsedGroups.has(parent.id);
+                  return (
+                    <div key={parent.id}>
+                      <div className="flex items-center gap-1 rounded-lg hover:bg-[var(--bg-soft)]">
+                        {children.length > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleGroupCollapsed(parent.id)}
+                            aria-label={collapsed ? `ขยาย ${parent.name}` : `ย่อ ${parent.name}`}
+                            className="flex h-7 w-7 shrink-0 items-center justify-center text-[var(--ink-soft)] hover:text-[var(--ink)]"
                           >
-                            <Checkbox checked={topicFilter.has(c.id)} onCheckedChange={() => toggleTopicFilter(c.id)} />
-                            <span className="truncate">{c.name}</span>
-                          </label>
-                        ))}
+                            <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", !collapsed && "rotate-90")} />
+                          </button>
+                        ) : (
+                          <span className="w-7 shrink-0" />
+                        )}
+                        <label className="flex flex-1 min-w-0 items-center gap-2.5 py-1.5 pr-1.5 text-sm font-semibold cursor-pointer">
+                          <Checkbox checked={topicFilter.has(parent.id)} onCheckedChange={() => toggleTopicFilter(parent.id)} />
+                          <span className="truncate">{parent.name}</span>
+                        </label>
                       </div>
-                    )}
-                  </div>
-                ))}
+                      {children.length > 0 && !collapsed && (
+                        <div className="flex flex-col gap-0.5 border-l border-[var(--line)] ml-3.5 pl-2.5">
+                          {children.map((c) => (
+                            <label
+                              key={c.id}
+                              className="flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 text-sm hover:bg-[var(--bg-soft)]"
+                            >
+                              <Checkbox checked={topicFilter.has(c.id)} onCheckedChange={() => toggleTopicFilter(c.id)} />
+                              <span className="truncate">{c.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </PopoverContent>
           </Popover>
