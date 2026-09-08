@@ -229,21 +229,43 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
         setGridHeight(Math.max(240, Math.floor(desktopCardHeight - cardChrome - toolbarHeight - hintHeight)));
       }
     }
+    // Re-fit FullCalendar's own column/row widths to the current container.
+    // FullCalendar measures its container ONCE during mount and locks the 7
+    // column widths to that measurement; if the container was briefly wider
+    // at that instant (flex siblings not settled yet) or is resized later —
+    // e.g. a narrow desktop side panel — it never re-fits on its own, so the
+    // table keeps the stale (too-wide) width and the last column (เสาร์)
+    // gets clipped by the grid's overflow:hidden with no scrollbar to reveal
+    // it (looked "ค้าง"/frozen with a column hanging off). updateSize()
+    // forces the re-fit; it only touches the inner table, never the
+    // wrapper's own box, so observing the wrapper below can't loop.
+    const refit = () => calendarRef.current?.getApi().updateSize();
     computeLayout();
     // One frame later the calendar has actually rendered, so the header row
     // is measurable (it isn't on the first synchronous pass).
     const raf = requestAnimationFrame(() => {
       computeLayout();
       measureHeader();
+      refit();
     });
     function onResize() {
       computeLayout();
       measureHeader();
+      refit();
     }
     window.addEventListener("resize", onResize);
+    // A window 'resize' never fires when only the calendar's own container
+    // changes width (a side panel dragged narrower, a sibling collapsing) —
+    // watch the wrapper directly so those re-fit the columns too.
+    let ro: ResizeObserver | undefined;
+    if (typeof ResizeObserver !== "undefined" && wrapperRef.current) {
+      ro = new ResizeObserver(() => refit());
+      ro.observe(wrapperRef.current);
+    }
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", onResize);
+      ro?.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
