@@ -241,14 +241,12 @@ export function TopicSidebar({
   // "just done", not a separate save step.
   const [reorderMode, setReorderMode] = useState(false);
   const [draggedTopicId, setDraggedTopicId] = useState<string | null>(null);
-
-  // Mobile has no hover, so the "..." row menu used to render at full opacity
-  // on every single row all the time — a screenful of identical dots that
-  // read as visual noise the moment the list had more than a couple of rooms
-  // ("ลายตามาก"). Now it only shows for the one row you just tapped (leaf or
-  // category — either kind of tap counts), same "reveal on touch" pattern as
-  // the desktop hover, and hides again once you tap a different row.
-  const [revealedRowId, setRevealedRowId] = useState<string | null>(null);
+  // Which room's ⏰ tooltip is open on mobile — base-ui's Tooltip only reacts
+  // to hover/focus, neither of which a tap produces on touch, so tapping the
+  // badge used to do nothing there at all ("กดนาฬิกาแล้วไม่มีอะไรขึ้นเลย").
+  // Controlled per-row on mobile only; desktop still gets the default hover
+  // behavior (see the Tooltip below).
+  const [openClockRowId, setOpenClockRowId] = useState<string | null>(null);
 
   function orderKey(t: ReportTopic): number {
     return t.order ?? new Date(t.createdAt).getTime();
@@ -648,7 +646,6 @@ export function TopicSidebar({
         // doesn't also jump into the room.
         onClick={() => {
           if (editingOrder) return;
-          setRevealedRowId(t.id);
           if (depth === 0 && !canOpenDirectly) toggleCollapsed(t.id);
           else onSelect(t.id);
         }}
@@ -658,7 +655,6 @@ export function TopicSidebar({
           if (editingOrder) return;
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            setRevealedRowId(t.id);
             if (depth === 0 && !canOpenDirectly) toggleCollapsed(t.id);
             else onSelect(t.id);
           }
@@ -744,11 +740,21 @@ export function TopicSidebar({
             nothing posted (not merely "a later round hasn't come due yet",
             which isn't urgent and used to red-flag the same as a real miss). */}
         {!editingOrder && canSeeStatus && hoverRows.length > 0 && (
-          <Tooltip>
+          <Tooltip
+            {...(isMobile
+              ? {
+                  open: openClockRowId === t.id,
+                  onOpenChange: (open: boolean) => setOpenClockRowId(open ? t.id : null),
+                }
+              : {})}
+          >
             <TooltipTrigger
               render={
                 <span
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isMobile) setOpenClockRowId((cur) => (cur === t.id ? null : t.id));
+                  }}
                   className={cn(
                     "shrink-0 flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
                     lateHoverCount > 0 ? "text-[var(--chart-red)] bg-red-50" : "text-[var(--ink-soft)]"
@@ -886,18 +892,22 @@ export function TopicSidebar({
                 <button
                   onClick={(e) => e.stopPropagation()}
                   className={cn(
-                    "shrink-0 flex h-5 w-5 items-center justify-center rounded text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] transition-opacity",
-                    hiddenForMe
-                      ? "opacity-100"
-                      : isMobile
-                        ? revealedRowId === t.id
-                          ? "opacity-100 pointer-events-auto"
-                          : "opacity-0 pointer-events-none"
-                        : "opacity-100 pointer-events-auto lg:opacity-0 lg:pointer-events-none lg:group-hover:opacity-100 lg:group-hover:pointer-events-auto"
+                    "shrink-0 flex items-center justify-center rounded text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] transition-opacity",
+                    // Mobile has no hover, so this always stays visible there
+                    // (a "tap to reveal" version read as broken — "ให้ ...
+                    // ใช้ไม่ได้") — just noticeably smaller than the desktop
+                    // hover-revealed version so it doesn't read as loud/busy
+                    // sitting on screen permanently ("ขอให้ดูเล็กๆหน่อย").
+                    isMobile
+                      ? "h-4 w-4 opacity-100"
+                      : cn(
+                          "h-5 w-5 opacity-100 pointer-events-auto",
+                          !hiddenForMe && "lg:opacity-0 lg:pointer-events-none lg:group-hover:opacity-100 lg:group-hover:pointer-events-auto"
+                        )
                   )}
                   aria-label={`ตัวเลือกหัวข้อ ${t.name}`}
                 >
-                  <MoreHorizontal className="h-3.5 w-3.5" />
+                  <MoreHorizontal className={isMobile ? "h-3 w-3" : "h-3.5 w-3.5"} />
                 </button>
               }
             />
