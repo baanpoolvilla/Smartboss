@@ -403,6 +403,26 @@ function ReportFeedPageInner() {
       (p) => ids.has(p.topicId) && p.unreadFor.includes(viewingAsUserId) && p.authorId !== viewingAsUserId && postMentionsUser(p, viewingAsUserId)
     ).length;
   }, [posts, visibleTopics, viewingAsUserId]);
+  // "กลับไป # ห้อง" + ReportViewSwitcher, built once and handed to whichever
+  // panel is on screen (ReportAllPostsFeed/PendingTopicsPanel's headerRight)
+  // so they render on that panel's own title row instead of a dedicated row
+  // above it (see that prop's own comment for why).
+  const viewSwitcherHeader = (
+    <>
+      {backRoomName && (
+        <button
+          type="button"
+          onClick={() => selectView(lastRoomId)}
+          className="inline-flex items-center gap-1 rounded-lg px-1.5 py-1 text-xs font-medium text-[var(--ink-soft)] transition-colors hover:bg-[var(--bg-soft)] hover:text-[var(--ink)]"
+          title={`กลับไป # ${backRoomName}`}
+        >
+          <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
+          <span className="hidden md:inline max-w-[120px] truncate">{backRoomName}</span>
+        </button>
+      )}
+      <ReportViewSwitcher activeId={activeId} onSelect={selectView} pendingCount={viewPendingCount} mentionCount={viewMentionCount} />
+    </>
+  );
   // Header pills (H1) — who's behind "ส่งแล้ววันนี้/ส่งช้า/ยังไม่ส่ง", not
   // just the count. Only computed once a pill's actually been clicked.
   const todayStatus = useMemo(
@@ -658,24 +678,15 @@ function ReportFeedPageInner() {
             per level instead of every level drawing its own line. */}
         <div className="w-full flex-1 min-w-0 flex flex-col min-h-0 lg:h-full">
           {/* "มุมมอง" switcher (ทุกห้องรวมกัน) — ย้ายมาจากบล็อก "ภาพรวม" เดิม
-              ในแถบซ้าย (topic-sidebar) มาไว้เป็น dropdown มุมขวาบนแทน */}
-          {/* แถวเดี่ยวสำหรับ "มุมมองรวม" เท่านั้น (มีปุ่มย้อนกลับ + ตัวสลับมุมมอง)
-              — ในโหมดห้องปกติ ตัวสลับมุมมองย้ายไปอยู่แถวเดียวกับปุ่ม "กรอง"
-              (ด้านล่าง) จะได้ไม่กินพื้นที่เพิ่มอีกแถว */}
-          {(showAllPosts || showPending || showMentions) && (
+              ในแถบซ้าย (topic-sidebar) มาไว้เป็น dropdown มุมขวาบนแทน. เดิมมี
+              แถวของตัวเองเหนือ ReportAllPostsFeed/PendingTopicsPanel เสมอ กิน
+              พื้นที่ไปบรรทัดนึงเยอะเกินไปไม่ว่าจอขนาดไหน ("มุมมองกินพื้นที่ไป
+              บรรทัดนึงมันกินเยอะเกินไปเอาจับมาอยู่ด้วยเลย") — ตอนนี้ส่งเป็น
+              headerRight ให้ทั้งสองคอมโพเนนต์ไปแสดงในแถวหัวข้อของมันเองแทน
+              (ในโหมดห้องปกติ ตัวสลับมุมมองยังอยู่แถวเดียวกับปุ่ม "กรอง" เหมือนเดิม). */}
+          {(showAllPosts || showPending || showMentions) && todayStatusFilter && (
             <div className="mb-2 flex items-center justify-between gap-2 px-1">
-              {backRoomName ? (
-                <button
-                  type="button"
-                  onClick={() => selectView(lastRoomId)}
-                  className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-[var(--ink-soft)] transition-colors hover:bg-[var(--bg-soft)] hover:text-[var(--ink)]"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                  <span className="max-w-[180px] truncate">กลับไป # {backRoomName}</span>
-                </button>
-              ) : (
-                <span />
-              )}
+              <span />
               <ReportViewSwitcher
                 activeId={activeId}
                 onSelect={selectView}
@@ -704,11 +715,17 @@ function ReportFeedPageInner() {
             </div>
           ) : showAllPosts ? (
             <div className="flex-1 min-h-0 bg-white overflow-hidden flex flex-col">
-              <ReportAllPostsFeed topics={visibleTopics} posts={posts} onJumpToTopic={selectView} onOpenTask={setOpenTaskId} />
+              <ReportAllPostsFeed
+                topics={visibleTopics}
+                posts={posts}
+                onJumpToTopic={selectView}
+                onOpenTask={setOpenTaskId}
+                headerRight={viewSwitcherHeader}
+              />
             </div>
           ) : showPending ? (
             <div className="flex-1 min-h-0 bg-white overflow-hidden flex flex-col">
-              <PendingTopicsPanel entries={myPending} onJumpToTopic={selectView} />
+              <PendingTopicsPanel entries={myPending} onJumpToTopic={selectView} headerRight={viewSwitcherHeader} />
             </div>
           ) : showMentions ? (
             <div className="flex-1 min-h-0 bg-white overflow-hidden flex flex-col">
@@ -723,6 +740,7 @@ function ReportFeedPageInner() {
                 onJumpToTopic={selectView}
                 onOpenTask={setOpenTaskId}
                 showFilters={false}
+                headerRight={viewSwitcherHeader}
               />
             </div>
           ) : activeTopic ? (
@@ -1149,20 +1167,25 @@ function ReportFeedPageInner() {
 function PendingTopicsPanel({
   entries,
   onJumpToTopic,
+  headerRight,
 }: {
   entries: { topicId: string; topicName: string; topicColor: string; roundLabels: string[] }[];
   onJumpToTopic: (topicId: string) => void;
+  /** Same idea as ReportAllPostsFeed's own headerRight — the "มุมมอง" switcher
+   * + back button share this one title row instead of a separate line above it. */
+  headerRight?: React.ReactNode;
 }) {
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <div className="shrink-0 px-5 pt-3.5 pb-2.5 flex items-center gap-2.5 border-b border-[var(--line)]/60">
+      <div className="shrink-0 px-3 sm:px-5 pt-3.5 pb-2.5 flex items-center gap-2 border-b border-[var(--line)]/60">
         <span className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-amber-50 text-[var(--chart-amber)]">
           <Clock className="h-4 w-4" />
         </span>
-        <div>
-          <h2 className="text-[16px] font-semibold leading-tight">รอฉันส่ง</h2>
-          <p className="text-xs text-[var(--ink-soft)] leading-tight">ห้องที่คุณยังไม่ได้โพสต์รายงานวันนี้</p>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-[15px] sm:text-[16px] font-semibold leading-tight truncate">รอฉันส่ง</h2>
+          <p className="hidden sm:block text-xs text-[var(--ink-soft)] leading-tight truncate">ห้องที่คุณยังไม่ได้โพสต์รายงานวันนี้</p>
         </div>
+        {headerRight && <div className="shrink-0 flex items-center gap-1">{headerRight}</div>}
       </div>
       {entries.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6 bg-[var(--bg-soft)]">
