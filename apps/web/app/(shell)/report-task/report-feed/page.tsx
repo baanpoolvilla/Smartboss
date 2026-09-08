@@ -21,6 +21,8 @@ import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/mod
 import { useReportFeedStore, isOpenchatTopic, type ReportPost } from "@/modules/report_task/store/report-feed-store";
 import { useReportTagStore } from "@/modules/report_task/store/report-tag-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
+import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
+import { useDepartmentStore } from "@/modules/report_task/store/department-store";
 import { users } from "@/modules/report_task/lib/directory";
 import { cn } from "@/modules/report_task/lib/utils";
 import { canEditReportTopic, canSeeReportTopic } from "@/modules/report_task/lib/permissions";
@@ -166,6 +168,11 @@ function ReportFeedPageInner() {
   const updateTopicSettings = useReportFeedStore((s) => s.updateTopicSettings);
   const markTopicRead = useReportFeedStore((s) => s.markTopicRead);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
+  // subscribe ข้อมูลพนักงาน/แผนกด้วย — canSeeReportTopic (ในตัวกรอง visibleTopics)
+  // อ่านสองก้อนนี้ผ่าน directory ถ้าไม่ subscribe ไว้ พอมันโหลดมาทีหลัง
+  // ตัวกรองจะไม่คำนวณใหม่ → ห้องที่ผูกแผนกหายค้างจนกว่าจะรีเฟรช (race)
+  const employees = useEmployeeStore((s) => s.employees);
+  const departments = useDepartmentStore((s) => s.departments);
   // Rooms can be scoped to a department or to managers only — filter once
   // here and hand the same list to the sidebar, so the two never disagree
   // about which rooms exist for this viewer.
@@ -181,7 +188,7 @@ function ReportFeedPageInner() {
     // to begin with. A non-category parent (still directly postable on its
     // own) is untouched even if all its children happen to be hidden.
     return bySelfVisibility.filter((t) => !t.isCategory || bySelfVisibility.some((c) => c.parentId === t.id));
-  }, [topics, viewingAsUserId]);
+  }, [topics, viewingAsUserId, employees, departments]);
   const searchParams = useSearchParams();
   // A pasted "copy link" (?topic=&post=) opens straight to the right room +
   // post — read once as the initial state, no need to re-sync via an effect
