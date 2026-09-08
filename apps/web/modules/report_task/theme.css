@@ -441,10 +441,20 @@
    "see more" affordance, not a category; every other colored thing on this
    page is priority/type-coded, so a colored "+more" read as a false category. */
 .ebw-calendar .fc-daygrid-more-link {
+  /* เดิมเป็นตัวเทาจาง (--ink-soft) มองข้ามง่าย เห็นแค่ 2 จุดแล้วนึกว่าหยุด 2 คน
+     เปลี่ยนเป็นป้ายกลมสีเด่น (ขนาดเท่าเดิม ไม่กินที่เพิ่ม อยู่บรรทัดเดียวกับจุด) */
   font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--ink-soft);
-  padding: 1px 6px;
+  font-weight: 800;
+  color: #fff;
+  background: #f97316;
+  border-radius: 999px;
+  padding: 0 7px;
+  line-height: 1.55;
+  display: inline-block;
+}
+.ebw-calendar .fc-daygrid-more-link:hover {
+  background: #ea580c;
+  color: #fff;
 }
 /* "+N more" popover. FullCalendar defaults the popover background to
    --fc-page-bg-color, which we set transparent — so set an explicit solid
