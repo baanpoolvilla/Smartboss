@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { requireOrg, hasPermission } from "@smartboss/auth";
+import { Button } from "@smartboss/ui/components/button";
 import { HrPage } from "@/modules/hr/components/hr-page";
 import { HR_PERMS } from "@/modules/hr/permissions";
 import {
@@ -19,6 +21,7 @@ import {
   Pill,
   SectionCard,
   Td,
+  inputClass,
 } from "@/modules/hr/components/ui";
 import { autoRecalculateAttendance } from "@/modules/hr/lib/auto-recalculate";
 
@@ -32,6 +35,13 @@ export default async function HrOverviewPage({
 }: {
   searchParams: Promise<{ date?: string }>;
 }) {
+  // ปุ่ม export เรียก /attendance-results ซึ่งต้องมีสิทธิ์อ่านผลลงเวลาของทุกคน
+  // ฝั่ง workforce — hr.employee.manage คือสิทธิ์ที่ถูกแปลงเป็นบทบาทนั้นตอน sync
+  // (ดู mapSmartbossRoles) ⇒ ใช้ตัวเดียวกันคุมว่าจะโชว์การ์ดไหม จะได้ไม่มีปุ่ม
+  // ที่กดแล้วได้ 403 ให้คนงง
+  const session = await requireOrg();
+  const canExport = hasPermission(session, HR_PERMS.employeeManage);
+
   return (
     <HrPage
       title="การลงเวลา"
@@ -211,6 +221,8 @@ export default async function HrOverviewPage({
 
         const dayLabel = isToday ? "วันนี้" : "วันที่เลือก";
 
+        const exportMonth = viewDate.slice(0, 7);
+
         return (
           <>
             <AttendanceDateNav date={viewDate} today={todayReal} />
@@ -294,6 +306,46 @@ export default async function HrOverviewPage({
                   &ldquo;ยังไม่ผูกกะ&rdquo; แปลว่าระบบไม่รู้ว่าคนนั้นควรเข้ากี่โมง จึงบอกไม่ได้ว่า
                   สายหรือไม่ — กดที่ป้ายนั้นเพื่อไปตั้งตารางกะของเขา ·
                   &ldquo;ขาดงาน&rdquo; คือคนที่ควรเข้ากะวันนี้แต่ยังไม่มีการสแกนเลยตลอดวัน
+                </p>
+              </SectionCard>
+            )}
+
+            {/*
+              ดาวน์โหลดผลลงเวลาทั้งเดือน — หน้านี้ดูได้ทีละวัน ซึ่งพอสำหรับ
+              "วันนี้ใครมาแล้ว" แต่ตอบไม่ได้ว่าเดือนนี้ใครสายกี่ครั้ง รวมกี่นาที
+              ซึ่งเป็นตัวเลขที่ฝ่ายบุคคลต้องใช้ตอนสรุปเบี้ยขยัน/ประเมินผล
+              เป็น <form method="get"> ธรรมดา ⇒ ทำงานได้แม้ JS ยังไม่โหลด
+            */}
+            {canExport && (
+              <SectionCard
+                title="ดาวน์โหลดรายงานการเข้างาน"
+                description="ไฟล์ CSV รายวันของพนักงานทุกคน พร้อมสรุปรายคน (เปิดด้วย Excel ได้เลย)"
+              >
+                <form
+                  method="get"
+                  action="/hr/attendance/export"
+                  className="flex flex-wrap items-end gap-2"
+                >
+                  <label className="flex min-w-44 flex-col gap-1">
+                    <span className="text-xs font-medium text-(--ink-soft)">เดือน</span>
+                    <input
+                      type="month"
+                      name="month"
+                      defaultValue={exportMonth}
+                      max={todayReal.slice(0, 7)}
+                      className={inputClass}
+                    />
+                  </label>
+                  <Button type="submit" variant="outline">
+                    ดาวน์โหลด CSV
+                  </Button>
+                </form>
+                <p className="mt-3 text-xs text-(--ink-soft)">
+                  มีคอลัมน์: เวลาเข้า-ออก · สาย · ออกก่อน · ขาดงาน · ชั่วโมงทำงาน · OT ·
+                  สถานะรายวัน (ปกติ / มาสาย / ขาดงาน / ลา / วันหยุด) แล้วปิดท้ายด้วยสรุปรายคน
+                  <br />
+                  ⚠ ไฟล์อ่านจาก<strong>ผลคำนวณ</strong> ไม่ใช่การสแกนดิบ — เดือนที่เก่ากว่า 30 วัน
+                  อาจได้ข้อมูลไม่ครบถ้ายังไม่เคยสั่งคำนวณ
                 </p>
               </SectionCard>
             )}
