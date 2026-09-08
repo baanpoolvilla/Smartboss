@@ -121,6 +121,10 @@ const topicTabs: { id: TopicTab; label: string; icon: typeof MessageSquareText }
  */
 export default function ReportFeedPage() {
   const [mounted, setMounted] = useState(false);
+  // รอให้ข้อมูลห้องโหลดจาก server เสร็จก่อน (loaded) ค่อยแสดงหน้าจริง — ไม่งั้น
+  // จะแว้บ "ค่าเริ่มต้น" (ห้อง ทั่วไป/ประกาศทั่วไป ที่ seed มากับ store) ให้เห็น
+  // แป๊บนึงก่อนข้อมูลจริงมา แล้วค่อยเด้งเปลี่ยน (ดูเหมือนโหลดไม่ครบ)
+  const feedLoaded = useReportFeedStore((s) => s.loaded);
   // Fire-once mount flag, not state derived from props/other state — the
   // exact "sync with an external fact (are we in the browser yet)" case this
   // lint rule is meant to allow, not the cascading-render pattern it's
@@ -128,7 +132,7 @@ export default function ReportFeedPage() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
 
-  if (!mounted) return <ReportFeedSkeleton />;
+  if (!mounted || !feedLoaded) return <ReportFeedSkeleton />;
 
   return (
     <Suspense fallback={null}>
