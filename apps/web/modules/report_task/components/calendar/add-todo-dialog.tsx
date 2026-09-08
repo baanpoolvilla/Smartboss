@@ -26,6 +26,7 @@ import { AttendeePicker } from "@/modules/report_task/components/shared/attendee
 import { useTodoStore } from "@/modules/report_task/store/todo-store";
 import { useMeetingStore } from "@/modules/report_task/store/meeting-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
+import { useActivityLogStore } from "@/modules/report_task/store/activity-log-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useReminderSettingsStore } from "@/modules/report_task/store/reminder-settings-store";
 import { todayIso } from "@/modules/report_task/lib/now";
@@ -127,6 +128,7 @@ export function AddTodoDialog({
         reminderMinutes: reminderMinutes || undefined,
       };
       addMeeting(meeting);
+      useActivityLogStore.getState().log({ userId: viewingAsUserId, action: "สร้างประชุม", target: trimmed });
       if (meetAttendeeIds.length > 0) {
         notifyMany(meetAttendeeIds, viewingAsUserId, `แท็กคุณในประชุม "${trimmed}"`);
       }

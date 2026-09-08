@@ -38,6 +38,7 @@ import { useEventColorStore } from "@/modules/report_task/store/event-color-stor
 import { useMeetingStore } from "@/modules/report_task/store/meeting-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
+import { useActivityLogStore } from "@/modules/report_task/store/activity-log-store";
 import { formatDate, addDays } from "@/modules/report_task/lib/format";
 import type { CalendarEvent } from "@/modules/report_task/types";
 import { Calendar, MapPin, User, Trash2, Pencil, Clock, Building2, Paperclip, FileText } from "lucide-react";
@@ -100,6 +101,7 @@ export function EventDetailDialog({
     if (!event) return;
     // Only meetings reach here — see `editable`, which gates both footer buttons.
     removeMeeting(event.id);
+    useActivityLogStore.getState().log({ userId: viewingAsUserId, action: "ลบประชุม", target: event.title });
     toast.success("ลบรายการแล้ว");
     close(false);
   }
@@ -108,6 +110,7 @@ export function EventDetailDialog({
     if (!event) return;
     if (event.type === "meeting") {
       updateMeeting(event.id, patch);
+      useActivityLogStore.getState().log({ userId: viewingAsUserId, action: "แก้ไขประชุม", target: patch.title ?? event.title });
       const before = new Set(event.attendeeIds ?? []);
       const newlyAdded = (patch.attendeeIds ?? []).filter((id) => !before.has(id));
       if (newlyAdded.length > 0) {

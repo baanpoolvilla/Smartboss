@@ -29,6 +29,7 @@ import {
 } from "@/modules/report_task/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
 import { Textarea } from "@/modules/report_task/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/modules/report_task/components/ui/tooltip";
 import { useReportFeedStore, topicColors, type ReportTopic, type ReportPost } from "@/modules/report_task/store/report-feed-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useSettingsAccessStore } from "@/modules/report_task/store/settings-access-store";
@@ -39,6 +40,8 @@ import { uploadCompressedImage } from "@/modules/report_task/lib/image-resize";
 import { useIsMobile } from "@/modules/report_task/hooks/use-is-mobile";
 import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
 import { aboutMeCountInPost } from "@/modules/report_task/lib/report-feed-activity";
+import { roundsForUserOnDay, attributePostToRound } from "@/modules/report_task/lib/submission-rounds";
+import { todayIso, localDateStr } from "@/modules/report_task/lib/now";
 import { cn } from "@/modules/report_task/lib/utils";
 import { toast } from "sonner";
 import {
@@ -46,13 +49,18 @@ import {
   Bell,
   BellOff,
   Briefcase,
+  Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
+  Clock,
   Code2,
   Crown,
   Eye,
   EyeOff,
   Flag,
+  GripVertical,
   Hash,
   Headset,
   ImagePlus,
@@ -178,6 +186,8 @@ export function TopicSidebar({
   const addTopic = useReportFeedStore((s) => s.addTopic);
   const removeTopic = useReportFeedStore((s) => s.removeTopic);
   const updateTopicSettings = useReportFeedStore((s) => s.updateTopicSettings);
+  const moveTopic = useReportFeedStore((s) => s.moveTopic);
+  const submitterGroups = useReportFeedStore((s) => s.submitterGroups);
   const toggleFavoriteTopic = useReportFeedStore((s) => s.toggleFavoriteTopic);
   const toggleHiddenTopic = useReportFeedStore((s) => s.toggleHiddenTopic);
   const setNotifyPreference = useReportFeedStore((s) => s.setNotifyPreference);
@@ -224,6 +234,69 @@ export function TopicSidebar({
       else next.add(id);
       return next;
     });
+  }
+
+  // 1) จัดลำดับห้อง (drag reorder) — a local editing mode, canManageTopics-
+  // only (see the header toggle button). Everything below sorts/positions by
+  // `order` (fallback createdAt via orderKey) so leaving this mode is
+  // "just done", not a separate save step.
+  const [reorderMode, setReorderMode] = useState(false);
+  const [draggedTopicId, setDraggedTopicId] = useState<string | null>(null);
+
+  function orderKey(t: ReportTopic): number {
+    return t.order ?? new Date(t.createdAt).getTime();
+  }
+  function byOrder(a: ReportTopic, b: ReportTopic): number {
+    return orderKey(a) - orderKey(b);
+  }
+
+  /** Reindexes one sibling group (same parentId) to 0..n-1 after `movedId`
+   * lands in `orderedList` — logs the activity entry only for the moved
+   * topic itself (via moveTopic); the rest are silently renumbered
+   * (updateTopicSettings) so a drag never spams the log with every sibling
+   * that merely shifted position. */
+  function commitOrder(newParentId: string | undefined, orderedList: ReportTopic[], movedId: string) {
+    orderedList.forEach((t, i) => {
+      if (t.id === movedId) {
+        moveTopic(t.id, { parentId: newParentId, order: i }, viewingAsUserId);
+      } else if (t.order !== i || t.parentId !== newParentId) {
+        updateTopicSettings(t.id, { order: i });
+      }
+    });
+  }
+
+  /** Drop `draggedId` next to `targetId`, joining whatever sibling group
+   * `targetId` itself belongs to — dropping on a top-level room's row makes
+   * the dragged room top-level too (parentId undefined), dropping on a
+   * sub-topic's row joins that sub-topic's parent. A room that already has
+   * children of its own can't become anyone's child (two-level cap, same
+   * rule the create/edit dialog already enforces). */
+  function reorderByDrop(draggedId: string, targetId: string, position: "before" | "after") {
+    if (draggedId === targetId) return;
+    const dragged = topics.find((t) => t.id === draggedId);
+    const target = topics.find((t) => t.id === targetId);
+    if (!dragged || !target) return;
+    const newParentId = target.parentId;
+    const draggedHasChildren = topics.some((t) => t.parentId === draggedId);
+    if (newParentId && draggedHasChildren) return;
+    const siblings = topics.filter((t) => t.parentId === newParentId && t.id !== draggedId).sort(byOrder);
+    const targetIndex = siblings.findIndex((t) => t.id === targetId);
+    if (targetIndex === -1) return;
+    const insertAt = position === "before" ? targetIndex : targetIndex + 1;
+    const nextSiblings = [...siblings.slice(0, insertAt), dragged, ...siblings.slice(insertAt)];
+    commitOrder(newParentId, nextSiblings, draggedId);
+  }
+
+  /** ▲▼ fallback — swaps `t` with its previous/next sibling (same parentId), then reindexes the group the same way a drag-drop does. */
+  function moveTopicStep(t: ReportTopic, direction: -1 | 1) {
+    const siblings = topics.filter((x) => x.parentId === t.parentId).sort(byOrder);
+    const idx = siblings.findIndex((x) => x.id === t.id);
+    const swapIdx = idx + direction;
+    if (idx === -1 || swapIdx < 0 || swapIdx >= siblings.length) return;
+    const reordered = [...siblings];
+    const [moved] = reordered.splice(idx, 1);
+    reordered.splice(swapIdx, 0, moved!);
+    commitOrder(t.parentId, reordered, t.id);
   }
 
   // `defaultParentId` lets a top-level topic's own row jump straight into
@@ -314,6 +387,7 @@ export function TopicSidebar({
         // sub-topic is ever an actual place to post; create one under this
         // to get a working chat ("ต้องสร้างลูกก่อนถึงจะแชทได้").
         isCategory: createKind === "main" ? true : undefined,
+        byUserId: viewingAsUserId,
       });
       setEditor(null);
       onSelect(id);
@@ -334,7 +408,7 @@ export function TopicSidebar({
   function confirmDelete() {
     if (!deleteTarget) return;
     const wasActive = deleteTarget === activeId;
-    removeTopic(deleteTarget);
+    removeTopic(deleteTarget, viewingAsUserId);
     if (wasActive) {
       const next = topics.find((t) => t.id !== deleteTarget);
       onSelect(next?.id ?? "");
@@ -361,17 +435,17 @@ export function TopicSidebar({
   // don't get lost scrolling past everything else. Hierarchy only applies
   // within "the rest" — a favorited sub-topic surfaces on its own up top,
   // Teams-style quick access, rather than dragging its parent team along.
-  const favoriteTopics = topics.filter((t) => t.favoritedBy?.includes(viewingAsUserId));
+  const favoriteTopics = topics.filter((t) => t.favoritedBy?.includes(viewingAsUserId)).sort(byOrder);
   const restTopics = topics.filter((t) => !t.favoritedBy?.includes(viewingAsUserId));
   // A sub-topic whose parent didn't make it into `restTopics` (favorited or
   // deleted) has nothing to nest under here, so it renders as its own
   // top-level row instead of vanishing.
-  const topLevelRestTopics = restTopics.filter((t) => isTopLevel(t) || !restTopics.some((p) => p.id === t.parentId));
+  const topLevelRestTopics = restTopics.filter((t) => isTopLevel(t) || !restTopics.some((p) => p.id === t.parentId)).sort(byOrder);
   // A sub-topic the viewer hid (Teams' "hide channel") stays in the tree —
   // dimmed, see below — rather than disappearing with no way back to it
   // short of a link from somewhere else. Its own "..." menu (renderTopicRow)
   // toggles it back on directly.
-  const childrenOf = (parentId: string) => restTopics.filter((t) => t.parentId === parentId);
+  const childrenOf = (parentId: string) => restTopics.filter((t) => t.parentId === parentId).sort(byOrder);
 
   // Discord-style notify preference, per room per viewer: "all" (default —
   // every new post lights the room up), "mentions" (only @you does), or "off"
@@ -417,7 +491,9 @@ export function TopicSidebar({
     // their first child, same as always.
     const canOpenDirectly = !t.isCategory && !hasChildren;
     const hiddenForMe = depth > 0 && (t.hiddenBy?.includes(viewingAsUserId) ?? false);
-    const collapsed = collapsedTopicIds.has(t.id);
+    // Reorder mode force-expands every group — a collapsed sub-topic list
+    // would have nothing to drag onto/into.
+    const collapsed = !reorderMode && collapsedTopicIds.has(t.id);
     const topicPosts = posts.filter((p) => p.topicId === t.id);
     const muted = notifyPrefFor(t) === "off";
     // Count honors this room's notify preference (muted -> 0, "mentions" ->
@@ -439,6 +515,35 @@ export function TopicSidebar({
     const hasUnread = unreadCount > 0 || descendantUnread;
     const active = t.id === activeId;
     const favorited = t.favoritedBy?.includes(viewingAsUserId) ?? false;
+    const editingOrder = reorderMode && canManageTopics;
+
+    // 2) Hover ห้องที่มีรอบส่ง — today's rounds this viewer owes here, with
+    // each one's status (posted/late/pending), for the ⏰ badge + tooltip.
+    const today = todayIso();
+    const roundsToday = roundsForUserOnDay(t, viewingAsUserId, today, submitterGroups);
+    const nowMinutes = (() => {
+      const n = new Date();
+      return n.getHours() * 60 + n.getMinutes();
+    })();
+    const hoverRows = roundsToday
+      .slice()
+      .sort((a, b) => a.time.localeCompare(b.time))
+      .map((r) => {
+        const posted = posts.some(
+          (p) =>
+            p.topicId === t.id &&
+            p.authorId === viewingAsUserId &&
+            !p.excludeFromSubmission &&
+            localDateStr(new Date(p.createdAt)) === today &&
+            attributePostToRound(p, roundsToday)?.id === r.id
+        );
+        const [h, m] = r.time.split(":").map(Number) as [number, number];
+        const cutoffMinutes = h * 60 + m;
+        const status: "posted" | "late" | "pending" = posted ? "posted" : cutoffMinutes < nowMinutes ? "late" : "pending";
+        return { id: r.id, label: r.label, time: r.time, status };
+      });
+    const pendingHoverCount = hoverRows.filter((r) => r.status !== "posted").length;
+    const currentHoverRow = hoverRows.find((r) => r.status === "pending");
     return (
       <div
         key={t.id}
@@ -447,11 +552,30 @@ export function TopicSidebar({
         data-topic-name={t.name}
         draggable
         onDragStart={(e) => {
+          if (editingOrder) {
+            setDraggedTopicId(t.id);
+            e.dataTransfer.effectAllowed = "move";
+            return;
+          }
           // Lets a room be tagged in a post by dragging it straight from
           // here into the composer's text box (report-post-fields.tsx),
           // instead of only via typing "@ห้องชื่อ" and picking it.
           e.dataTransfer.setData(DRAG_MENTION_TOPIC_MIME, JSON.stringify({ id: t.id, name: t.name }));
           e.dataTransfer.effectAllowed = "copy";
+        }}
+        onDragEnd={() => setDraggedTopicId(null)}
+        onDragOver={(e) => {
+          if (!editingOrder || !draggedTopicId || draggedTopicId === t.id) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+        }}
+        onDrop={(e) => {
+          if (!editingOrder || !draggedTopicId) return;
+          e.preventDefault();
+          const rect = e.currentTarget.getBoundingClientRect();
+          const position = e.clientY - rect.top < rect.height / 2 ? "before" : "after";
+          reorderByDrop(draggedTopicId, t.id, position);
+          setDraggedTopicId(null);
         }}
         className={cn(
           "group relative flex items-center gap-2 rounded-xl pr-2 cursor-pointer transition-colors duration-200 w-full",
@@ -461,6 +585,7 @@ export function TopicSidebar({
           // Archived (Phase 6) reads the same way, for the same reason —
           // still findable to un-archive from its own ⚙, not hard-hidden.
           (hiddenForMe || t.archived || (muted && !active)) && "opacity-50",
+          editingOrder && draggedTopicId === t.id && "opacity-40",
           active
             ? "bg-[var(--accent)] font-semibold"
             : cn(
@@ -489,11 +614,19 @@ export function TopicSidebar({
         // A parent (has sub-topics) is an organizing folder only — clicking
         // its row just expands/collapses the sub-topic list underneath, same
         // as the chevron button. It has nothing of its own to "open" anymore
-        // (see report-topic-children-panel.tsx, now settings-only).
-        onClick={() => (depth === 0 && !canOpenDirectly ? toggleCollapsed(t.id) : onSelect(t.id))}
+        // (see report-topic-children-panel.tsx, now settings-only). In
+        // reorder mode the row itself no longer navigates/collapses — only
+        // the grip handle / ▲▼ act on it, so a stray tap while reordering
+        // doesn't also jump into the room.
+        onClick={() => {
+          if (editingOrder) return;
+          if (depth === 0 && !canOpenDirectly) toggleCollapsed(t.id);
+          else onSelect(t.id);
+        }}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => {
+          if (editingOrder) return;
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
             if (depth === 0 && !canOpenDirectly) toggleCollapsed(t.id);
@@ -519,6 +652,18 @@ export function TopicSidebar({
             className="absolute left-0 top-1/2 -translate-y-1/2 h-2 w-1 rounded-r-full bg-[var(--ink)]"
             aria-hidden
           />
+        )}
+        {editingOrder && (
+          // The one drag handle — doubles as the "this row is now
+          // reorderable" affordance. Not a button (no click action of its
+          // own beyond dragging); ▲▼ below is the tap/keyboard-reachable
+          // equivalent for mobile or anyone who'd rather not drag.
+          <span
+            className="shrink-0 flex h-5 w-5 items-center justify-center text-[var(--ink-soft)] cursor-grab active:cursor-grabbing"
+            aria-hidden
+          >
+            <GripVertical className="h-3.5 w-3.5" />
+          </span>
         )}
         {depth === 0 ? (
           hasChildren ? (
@@ -564,6 +709,78 @@ export function TopicSidebar({
         >
           {t.name}
         </span>
+        {/* 2) Hover ห้องที่มีรอบส่ง — ⏰ always shows for a tracked room;
+            the red "ยังไม่ส่ง" label only when something's still pending
+            today. Tap-to-open on mobile (no hover there) is the Tooltip
+            component's own built-in press behavior, same as every other
+            Tooltip in this app. */}
+        {!editingOrder && hoverRows.length > 0 && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <span
+                  onClick={(e) => e.stopPropagation()}
+                  className={cn(
+                    "shrink-0 flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                    pendingHoverCount > 0 ? "text-[var(--chart-red)] bg-red-50" : "text-[var(--ink-soft)]"
+                  )}
+                >
+                  <Clock className="h-3 w-3" />
+                  {pendingHoverCount > 0 && <span>ยังไม่ส่ง</span>}
+                </span>
+              }
+            />
+            <TooltipContent className="text-xs max-w-[220px]" side="right">
+              <p className="font-medium">
+                {pendingHoverCount > 0 ? `ยังไม่ส่งวันนี้ ${pendingHoverCount} รอบ` : "ส่งครบทุกรอบวันนี้แล้ว"}
+              </p>
+              {currentHoverRow && (
+                <p className="opacity-80">
+                  รอบปัจจุบัน: {currentHoverRow.label} · ปิดรับ {currentHoverRow.time} น.
+                </p>
+              )}
+              <div className="mt-1 space-y-0.5">
+                {hoverRows.map((r) => (
+                  <p key={r.id} className="opacity-80 flex items-center gap-1">
+                    {r.status === "posted" && <Check className="h-3 w-3 shrink-0" />}
+                    <span>
+                      {r.label} {r.time} น. ·{" "}
+                      {r.status === "posted" ? "ส่งแล้ว" : r.status === "late" ? "เลยเวลา" : "ยังไม่ถึงเวลา"}
+                    </span>
+                  </p>
+                ))}
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        )}
+        {editingOrder && (
+          // ▲▼ fallback for mobile/keyboard — same reorder logic the drag
+          // handle drives, one step at a time within the same sibling group.
+          <span className="shrink-0 flex flex-col">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                moveTopicStep(t, -1);
+              }}
+              aria-label={`ย้าย ${t.name} ขึ้น`}
+              className="flex h-3.5 w-4 items-center justify-center text-[var(--ink-soft)] hover:text-[var(--ink)]"
+            >
+              <ChevronUp className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                moveTopicStep(t, 1);
+              }}
+              aria-label={`ย้าย ${t.name} ลง`}
+              className="flex h-3.5 w-4 items-center justify-center text-[var(--ink-soft)] hover:text-[var(--ink)]"
+            >
+              <ChevronDown className="h-3 w-3" />
+            </button>
+          </span>
+        )}
         {aboutMeCountHere > 0 && (
           // Activity about this viewer earns a red number here (Discord-style):
           // @mentions and comments on their own posts. Plain "unread" is
@@ -577,7 +794,7 @@ export function TopicSidebar({
             the main "+ สร้างหัวข้อ" button, just with this topic already
             picked as the parent, so you don't have to hunt for it in the
             dropdown. Only top-level topics can take a sub-topic. */}
-        {depth === 0 && canManageTopics && (
+        {!editingOrder && depth === 0 && canManageTopics && (
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -593,7 +810,7 @@ export function TopicSidebar({
         {/* A parent (has sub-topics) is an organizing folder, not somewhere
             to browse/post — favoriting only makes sense on a room you can
             actually open, i.e. a leaf topic or a sub-topic. */}
-        {canOpenDirectly && (
+        {!editingOrder && canOpenDirectly && (
           <button
             data-tour="topic-star"
             onClick={(e) => {
@@ -620,7 +837,7 @@ export function TopicSidebar({
             personal preference, not an edit — every viewer gets that item
             regardless, so the menu also opens for a plain viewer of a
             sub-topic even with neither of the other two rights. */}
-        {(canEditReportTopic(t.visibility, viewingAsUserId) || canManageTopics || depth > 0 || canOpenDirectly) && (
+        {!editingOrder && (canEditReportTopic(t.visibility, viewingAsUserId) || canManageTopics || depth > 0 || canOpenDirectly) && (
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
@@ -743,7 +960,7 @@ export function TopicSidebar({
   function renderTopicBranch(t: ReportTopic) {
     const children = childrenOf(t.id);
     const hasChildren = children.length > 0;
-    const isCollapsed = collapsedTopicIds.has(t.id);
+    const isCollapsed = !reorderMode && collapsedTopicIds.has(t.id);
     // Discord-style collapse: a collapsed category still keeps any channel
     // that's unread or currently open on screen — only the read/idle ones
     // tuck away — so a new post is never hidden behind a folded folder and
@@ -792,19 +1009,49 @@ export function TopicSidebar({
           <p className="text-[15px] font-semibold">หัวข้อ</p>
         </div>
         {canManageTopics && (
-          <Button
-            size="sm"
-            variant="outline"
-            // Outline instead of a solid fill — a filled button read as
-            // heavier/more opaque than the rest of this now-lighter panel
-            // ("ปุ่มไม่ต้องใหญ่หรือทึบเกินไป"); still unmistakably the
-            // primary action here via the brand-colored border/text.
-            className="h-8 gap-1 rounded-full border-[var(--brand-green)]/50 text-[var(--brand-green-dark)] hover:bg-[var(--accent)] hover:border-[var(--brand-green)] px-3.5 text-xs transition-transform active:scale-[0.99]"
-            onClick={() => openCreate()}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            หัวข้อใหม่
-          </Button>
+          <div className="flex items-center gap-1.5">
+            {reorderMode ? (
+              <Button
+                size="sm"
+                className="h-8 gap-1 rounded-full bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white px-3.5 text-xs"
+                onClick={() => setReorderMode(false)}
+              >
+                <Check className="h-3.5 w-3.5" />
+                เสร็จ
+              </Button>
+            ) : (
+              <>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <button
+                        type="button"
+                        onClick={() => setReorderMode(true)}
+                        aria-label="จัดลำดับห้อง"
+                        className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)] transition-colors"
+                      >
+                        <GripVertical className="h-4 w-4" />
+                      </button>
+                    }
+                  />
+                  <TooltipContent className="text-xs">จัดลำดับห้อง</TooltipContent>
+                </Tooltip>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  // Outline instead of a solid fill — a filled button read as
+                  // heavier/more opaque than the rest of this now-lighter panel
+                  // ("ปุ่มไม่ต้องใหญ่หรือทึบเกินไป"); still unmistakably the
+                  // primary action here via the brand-colored border/text.
+                  className="h-8 gap-1 rounded-full border-[var(--brand-green)]/50 text-[var(--brand-green-dark)] hover:bg-[var(--accent)] hover:border-[var(--brand-green)] px-3.5 text-xs transition-transform active:scale-[0.99]"
+                  onClick={() => openCreate()}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  หัวข้อใหม่
+                </Button>
+              </>
+            )}
+          </div>
         )}
       </div>
 

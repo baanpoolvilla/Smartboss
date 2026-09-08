@@ -3,6 +3,7 @@ import { users, getUser, isOwner } from "@/modules/report_task/lib/directory";
 import { canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { extractMentionedIds, mentionMarkersToPlainText } from "@/modules/report_task/lib/report-feed-rich-text";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
+import { useActivityLogStore } from "@/modules/report_task/store/activity-log-store";
 import { uuid } from "@/modules/report_task/lib/uuid";
 import { legacyRoundsFromCutoffs } from "@/modules/report_task/lib/submission-rounds";
 
@@ -269,6 +270,12 @@ export interface ReportTopic {
   hiddenBy?: string[];
   /** Optional one-line blurb — "what this room is about", shown under its name in the header. Teams calls this a team/channel description; purely informational, no effect on permissions or behavior. */
   description?: string;
+  /** Manual sort position within its sibling group (same `parentId`), set by
+   * dragging/reordering in topic-sidebar.tsx's reorder mode — lower sorts
+   * first. Undefined (every topic before this existed, and any topic never
+   * touched by reorder) falls back to `createdAt` order, so nothing needs a
+   * migration to keep its current position. */
+  order?: number;
 
   // --- Phase 6 settings (all optional/backward-compatible — undefined means
   // "today's existing behavior", never a breaking default). ---
@@ -429,8 +436,14 @@ interface ReportFeedStore {
     visibility?: ReportTopicVisibility;
     feedViewMode?: "stream" | "threads";
     isCategory?: boolean;
+    /** Who created it, for the activity log — undefined skips logging (e.g. seed/demo data). */
+    byUserId?: string;
   }) => string;
-  removeTopic: (id: string) => void;
+  removeTopic: (id: string, byUserId?: string) => void;
+  /** Repositions a topic in the sidebar's manual order — sets `parentId`
+   * (undefined = becomes a standalone top-level topic) and `order`, then logs
+   * the move to the activity feed. Used by topic-sidebar.tsx's drag-reorder mode. */
+  moveTopic: (id: string, patch: { parentId?: string; order: number }, byUserId: string) => void;
   updateTopicSettings: (
     id: string,
     patch: {
@@ -453,6 +466,7 @@ interface ReportFeedStore {
       remindBeforeCutoffMinutes?: number;
       notifyManagerSummary?: boolean;
       submissionRounds?: SubmissionRound[];
+      order?: number;
     }
   ) => void;
   /** Per-viewer notification preference for one room — same "map keyed by
@@ -544,20 +558,42 @@ export const useReportFeedStore = create<ReportFeedStore>()(
             },
           ],
         }));
+        if (data.byUserId) {
+          useActivityLogStore.getState().log({ userId: data.byUserId, action: "สร้างห้อง", target: data.name });
+        }
         return id;
       },
       // Deleting a top-level (Teams-style) topic takes its sub-topics down
       // with it, same as deleting a Team removes its channels — a sub-topic
       // left pointing at a parentId that no longer exists would otherwise
       // dangle with no room settings/visibility of its own.
-      removeTopic: (id) =>
+      removeTopic: (id, byUserId) => {
+        const removedTopic = get().topics.find((t) => t.id === id);
         set((s) => {
           const removedIds = new Set([id, ...s.topics.filter((t) => t.parentId === id).map((t) => t.id)]);
           return {
             topics: s.topics.filter((t) => !removedIds.has(t.id)),
             posts: s.posts.filter((p) => !removedIds.has(p.topicId)),
           };
-        }),
+        });
+        if (byUserId && removedTopic) {
+          useActivityLogStore.getState().log({ userId: byUserId, action: "ลบห้อง", target: removedTopic.name });
+        }
+      },
+      moveTopic: (id, patch, byUserId) => {
+        set((s) => ({
+          topics: s.topics.map((t) => (t.id === id ? { ...t, parentId: patch.parentId, order: patch.order } : t)),
+        }));
+        const topic = get().topics.find((t) => t.id === id);
+        if (!topic) return;
+        const destination = patch.parentId ? get().topics.find((t) => t.id === patch.parentId)?.name : undefined;
+        useActivityLogStore.getState().log({
+          userId: byUserId,
+          action: "ย้ายห้อง",
+          target: topic.name,
+          detail: `ไป${destination ? ` ${destination}` : "หัวข้อหลัก"} ลำดับ ${patch.order}`,
+        });
+      },
       updateTopicSettings: (id, patch) =>
         set((s) => ({
           topics: s.topics.map((t) => (t.id === id ? { ...t, ...patch } : t)),
