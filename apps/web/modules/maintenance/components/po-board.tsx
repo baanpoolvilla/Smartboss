@@ -7,11 +7,9 @@ import {
   ClipboardCheck,
   Truck,
   CheckCircle2,
-  Undo2,
   Home as HomeIcon,
   UserCog,
   AlertTriangle,
-  Plus,
   FileEdit,
   Package,
   CalendarDays,
@@ -187,8 +185,23 @@ const COLUMNS = [
   { key: "done", title: "เสร็จสิ้น", subtitle: "รับของแล้ว / ยกเลิก", color: "#6B7280", Icon: CheckCircle2 },
 ] as const;
 
-const TAB_LABEL = ["PR", "PO ที่ได้รับ", "ดำเนินการ", "เสร็จสิ้น", "คืน/ปัญหา"];
-const BROWN = "#795548";
+const TAB_LABEL = ["PR", "PO ที่ได้รับ", "ดำเนินการ", "เสร็จสิ้น"];
+
+/**
+ * รายการคืนของอยู่ในขั้นตอนไหน
+ *
+ * เดิมคืนของเป็นคอลัมน์ที่ 5 แยกออกมาต่างหาก ซึ่งอ่านแล้วเหมือนเป็นงานคนละสาย
+ * ทั้งที่จริงมันคือสิ่งที่เกิดขึ้น "ระหว่างทาง" ของการสั่งซื้อใบหนึ่ง ⇒ ยุบเข้า
+ * ขั้นตอนที่ตรงกับสถานะของมันแทน: ที่ยังไม่จบอยู่ "กำลังดำเนินการ" ที่จบแล้ว
+ * ไปรวมกับ "เสร็จสิ้น" (ถ้าไม่ย้ายตัวที่จบแล้วไปด้วย มันจะหายไปจากกระดานเลย)
+ */
+function returnsOf(returns: BoardReturn[], columnKey: string): BoardReturn[] {
+  if (columnKey === "ordered")
+    return returns.filter((r) => r.status === "pending" || r.status === "processing");
+  if (columnKey === "done")
+    return returns.filter((r) => r.status === "resolved" || r.status === "cancelled");
+  return [];
+}
 
 export function PoBoard({
   orders,
@@ -199,7 +212,9 @@ export function PoBoard({
   returns: BoardReturn[];
   initialTab?: string;
 }) {
-  const [tab, setTab] = useState(initialTab === "returns" ? 4 : 0);
+  // ?tab=returns มาจากตอนเพิ่ง "แจ้งคืน" เสร็จ (ดู actions.ts) — คืนของที่เพิ่ง
+  // แจ้งยังไม่จบเรื่อง จึงอยู่แท็บ "ดำเนินการ" ไม่ใช่แท็บที่ 5 ที่ไม่มีแล้ว
+  const [tab, setTab] = useState(initialTab === "returns" ? 2 : 0);
 
   const buckets: Record<string, BoardPo[]> = {
     pending: orders.filter((o) => o.status === "pending"),
@@ -207,21 +222,14 @@ export function PoBoard({
     ordered: orders.filter((o) => o.status === "ordered"),
     done: orders.filter((o) => o.status === "received" || o.status === "cancelled"),
   };
-  const openReturns = returns.filter(
-    (r) => r.status === "pending" || r.status === "processing"
+  const counts = COLUMNS.map(
+    (c) => buckets[c.key]!.length + returnsOf(returns, c.key).length
   );
-  const counts = [
-    buckets.pending!.length,
-    buckets.approved!.length,
-    buckets.ordered!.length,
-    buckets.done!.length,
-    openReturns.length,
-  ];
-  const tabColors = ["#EA580C", "#2563EB", "#4F46E5", "#6B7280", BROWN];
+  const tabColors = ["#EA580C", "#2563EB", "#4F46E5", "#6B7280"];
 
   return (
     <div>
-      {/* ─── มือถือ: 5 แท็บ ─── */}
+      {/* ─── มือถือ: 4 แท็บ ─── */}
       <div className="xl:hidden">
         <div className="mb-3 flex gap-1 overflow-x-auto border-b border-(--line)">
           {TAB_LABEL.map((label, i) => (
@@ -250,26 +258,29 @@ export function PoBoard({
         </div>
 
         <div className="flex flex-col gap-3">
-          {tab === 4 ? (
-            returns.length === 0 ? (
-              <p className="py-10 text-center text-sm text-(--ink-soft)">
-                ยังไม่มีรายการคืน/ปัญหา
-              </p>
-            ) : (
-              returns.map((r) => <ReturnCard key={r.id} r={r} />)
-            )
-          ) : buckets[COLUMNS[tab]!.key]!.length === 0 ? (
-            <p className="py-10 text-center text-sm text-(--ink-soft)">
-              ไม่มีรายการ
-            </p>
-          ) : (
-            buckets[COLUMNS[tab]!.key]!.map((po) => <PoCard key={po.id} po={po} />)
-          )}
+          {(() => {
+            const key = COLUMNS[tab]!.key;
+            const pos = buckets[key]!;
+            const rets = returnsOf(returns, key);
+            if (pos.length === 0 && rets.length === 0) {
+              return (
+                <p className="py-10 text-center text-sm text-(--ink-soft)">
+                  ไม่มีรายการ
+                </p>
+              );
+            }
+            return (
+              <>
+                {pos.map((po) => <PoCard key={po.id} po={po} />)}
+                {rets.map((r) => <ReturnCard key={r.id} r={r} />)}
+              </>
+            );
+          })()}
         </div>
       </div>
 
-      {/* ─── จอกว้าง: Kanban 5 คอลัมน์ ─── */}
-      <div className="hidden gap-4 xl:grid xl:grid-cols-5">
+      {/* ─── จอกว้าง: Kanban 4 คอลัมน์ (คืนของปนอยู่ในขั้นตอนของมัน) ─── */}
+      <div className="hidden gap-4 xl:grid xl:grid-cols-4">
         {COLUMNS.map((c) => (
           <div key={c.key} className="flex min-w-0 flex-col">
             <div
@@ -289,60 +300,25 @@ export function PoBoard({
                 className="ml-auto rounded-full px-2 py-0.5 text-xs font-bold"
                 style={{ color: c.color, backgroundColor: `${c.color}26` }}
               >
-                {buckets[c.key]!.length}
+                {buckets[c.key]!.length + returnsOf(returns, c.key).length}
               </span>
             </div>
             <div className="flex flex-col gap-2">
-              {buckets[c.key]!.length === 0 ? (
+              {buckets[c.key]!.length === 0 && returnsOf(returns, c.key).length === 0 ? (
                 <p className="px-2 py-4 text-center text-xs text-(--ink-soft)">
                   ไม่มีรายการ
                 </p>
               ) : (
-                buckets[c.key]!.map((po) => <PoCard key={po.id} po={po} />)
+                <>
+                  {buckets[c.key]!.map((po) => <PoCard key={po.id} po={po} />)}
+                  {returnsOf(returns, c.key).map((r) => (
+                    <ReturnCard key={r.id} r={r} />
+                  ))}
+                </>
               )}
             </div>
           </div>
         ))}
-
-        {/* คอลัมน์ที่ 5: คืน/ปัญหา */}
-        <div className="flex min-w-0 flex-col">
-          <div
-            className="mb-2 flex items-center gap-2 rounded-(--radius) px-3 py-2"
-            style={{ backgroundColor: `${BROWN}14`, border: `1px solid ${BROWN}33` }}
-          >
-            <Undo2 className="h-4 w-4 shrink-0" style={{ color: BROWN }} />
-            <div className="min-w-0">
-              <p className="truncate text-sm font-bold" style={{ color: BROWN }}>
-                คืน/ปัญหา
-              </p>
-              <p className="truncate text-[11px]" style={{ color: `${BROWN}b3` }}>
-                คืนของ / ของมีปัญหา
-              </p>
-            </div>
-            <span
-              className="ml-auto rounded-full px-2 py-0.5 text-xs font-bold"
-              style={{ color: BROWN, backgroundColor: `${BROWN}26` }}
-            >
-              {openReturns.length}
-            </span>
-            <Link
-              href="/maintenance/purchase-orders/returns/new"
-              aria-label="แจ้งคืน/ปัญหา"
-              style={{ color: BROWN }}
-            >
-              <Plus className="h-4 w-4" />
-            </Link>
-          </div>
-          <div className="flex flex-col gap-2">
-            {returns.length === 0 ? (
-              <p className="px-2 py-4 text-center text-xs text-(--ink-soft)">
-                ไม่มีรายการ
-              </p>
-            ) : (
-              returns.map((r) => <ReturnCard key={r.id} r={r} />)
-            )}
-          </div>
-        </div>
       </div>
     </div>
   );
