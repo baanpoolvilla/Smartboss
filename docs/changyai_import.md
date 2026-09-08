@@ -17,8 +17,14 @@ import มา** (ถ้าฝ่ายบุคคลแก้ไว้แล้
 
 ขั้นตอนเหมือนเดิมทุกอย่าง — ทำ **ข้อ 0.1–0.4 ใหม่ทั้งชุด** (dump ใหม่จาก
 Supabase → `DROP SCHEMA changyai_raw CASCADE` แล้วโหลด dump ใหม่เข้าไป → รัน
-`import-changyai.sql` อีกครั้งด้วย `:org`/`:yr` ตัวเดิม) แล้วค่อยทำ **ข้อ 0.6**
-ซ้ำ (ทั้ง rclone copy และสคริปต์แก้ URL ระบุไว้ในตัวเองแล้วว่า "รันซ้ำได้ปลอดภัย")
+`import-changyai.sql` อีกครั้งด้วย `:org`/`:yr` ตัวเดิม) แล้ว **ต้องทำข้อ 0.6 ซ้ำ
+ทุกครั้งด้วย ห้ามข้าม**
+
+> ⚠ **ทำไมข้าม 0.6 ไม่ได้แม้จะไม่มีรูปใหม่เลย** — การ sync เขียนทับ `photo_urls`
+> ฯลฯ ด้วยค่าดิบจาก ChangYai ซึ่งเป็น URL เต็มของ Supabase ⇒ รูปที่เคยแก้ URL
+> ไว้แล้วรอบก่อนจะ **กลับไปชี้ Supabase อีกครั้ง** ต้องรัน
+> `import-changyai-images.sql` ตามหลังเสมอเพื่อแปลงกลับ
+> (รอบ 2026-09-08 มี 543 ใบงานที่ต้องแปลง URL ใหม่ทั้งที่รูปเดิมไม่ได้เปลี่ยน)
 
 ⚠ **ข้อจำกัด**: นี่คือ "อัปเดต/เพิ่ม" ไม่ใช่ mirror ที่ลบตาม — แถวที่เคย import
 ไปแล้วแต่ถูกลบออกจาก ChangYai ไปแล้ว จะไม่ถูกลบที่นี่ให้อัตโนมัติ ปกติไม่ใช่
@@ -176,31 +182,65 @@ sudo bash deploy/psql.sh -c "select * from maintenance.v_imported_users;"
 Supabase → **Project Settings → Storage → S3 Connection** → **New access key**
 
 จดไว้ 3 ค่า: `endpoint` · `access key id` · `secret access key`
-(endpoint หน้าตาแบบ `https://ytrfgetdrtjrjfhvcqgt.supabase.co/storage/v1/s3`, region `ap-southeast-2`)
+
+> ⚠ **secret ดูย้อนหลังไม่ได้** — Supabase โชว์ครั้งเดียวตอนสร้าง คีย์เก่าที่เคยสร้าง
+> ไว้จึงใช้ต่อไม่ได้ถ้าไม่ได้เก็บ secret ไว้ ⇒ กด **New access key** สร้างใหม่ทุกครั้ง
+>
+> ⚠ **endpoint มี `.storage` คั่น** — คัดลอกจากหน้าจอเสมอ อย่าเดาเอง
+> (ยืนยันเมื่อ 2026-09-08) รูปแบบที่ใช้ได้จริงคือ
+> `https://<project>.storage.supabase.co/storage/v1/s3` — ไม่ใช่
+> `https://<project>.supabase.co/storage/v1/s3` ที่เคยเขียนไว้ในเอกสารรุ่นก่อน
+> · region `ap-southeast-2`
 
 ### 0.6.2 ก๊อปไฟล์เข้า MinIO — รันบนเซิร์ฟเวอร์ 🅱
 
 ```bash
 cd /opt/smartboss
-set -a; . /etc/smartboss/smartboss.env; set +a     # เอาคีย์ MinIO ของเราออกมา
 
-sudo -u smartboss docker run --rm -it --network host \
+# ⚠ ต้องอ่านผ่าน sudo — user ทั่วไปอ่าน /etc/smartboss/smartboss.env ไม่ได้
+#   ถ้าใช้ `. /etc/smartboss/smartboss.env` เฉย ๆ จะขึ้น "Permission denied" แล้ว
+#   $S3_ACCESS_KEY_ID ว่างเปล่าแบบเงียบ ๆ ⇒ `lsd SB:` ยังผ่าน (แตะแต่ฝั่ง Supabase)
+#   แต่ copy จะพังที่ปลายทาง MinIO
+set -a; . <(sudo cat /etc/smartboss/smartboss.env); set +a
+echo "MinIO key ${#S3_ACCESS_KEY_ID} ตัว / secret ${#S3_SECRET_ACCESS_KEY} ตัว"   # ต้องไม่เป็น 0
+
+SBKEY='<access key id ของ Supabase>'
+SBSECRET='<secret ของ Supabase>'
+
+RC() { sudo -u smartboss docker run --rm -i --network host \
   -e RCLONE_CONFIG_SB_TYPE=s3 -e RCLONE_CONFIG_SB_PROVIDER=Other \
-  -e RCLONE_CONFIG_SB_ENDPOINT="https://ytrfgetdrtjrjfhvcqgt.supabase.co/storage/v1/s3" \
+  -e RCLONE_CONFIG_SB_ENDPOINT="https://ytrfgetdrtjrjfhvcqgt.storage.supabase.co/storage/v1/s3" \
   -e RCLONE_CONFIG_SB_REGION=ap-southeast-2 \
-  -e RCLONE_CONFIG_SB_ACCESS_KEY_ID="<access key ของ Supabase>" \
-  -e RCLONE_CONFIG_SB_SECRET_ACCESS_KEY="<secret ของ Supabase>" \
+  -e RCLONE_CONFIG_SB_ACCESS_KEY_ID="$SBKEY" \
+  -e RCLONE_CONFIG_SB_SECRET_ACCESS_KEY="$SBSECRET" \
   -e RCLONE_CONFIG_MN_TYPE=s3 -e RCLONE_CONFIG_MN_PROVIDER=Minio \
   -e RCLONE_CONFIG_MN_ENDPOINT="http://127.0.0.1:9000" \
   -e RCLONE_CONFIG_MN_ACCESS_KEY_ID="$S3_ACCESS_KEY_ID" \
   -e RCLONE_CONFIG_MN_SECRET_ACCESS_KEY="$S3_SECRET_ACCESS_KEY" \
-  rclone/rclone copy -P SB:<ชื่อ bucket เดิม> MN:smartboss/maintenance/imported
+  rclone/rclone "$@"; }
+
+RC lsd SB:      # รายชื่อ bucket ต้นทาง
+RC lsd MN:      # ต้องเห็น bucket `smartboss` = ต่อ MinIO ติด
 ```
 
-`<ชื่อ bucket เดิม>` ดูได้ที่ Supabase → Storage (น่าจะชื่อ `work-order-photos` หรือคล้ายกัน)
+bucket ของ ChangYai มี 3 อัน (ยืนยันเมื่อ 2026-09-08): `photos` · `asset-images` · `po-receipts`
 
+```bash
+RC copy -P SB:photos       MN:smartboss/maintenance/imported/photos
+RC copy -P SB:asset-images MN:smartboss/maintenance/imported/asset-images
+RC copy -P SB:po-receipts  MN:smartboss/maintenance/imported/po-receipts
+```
+
+> ⚠ **ปลายทางต้องมีชื่อ bucket ต่อท้ายด้วย** — สคริปต์แก้ URL (0.6.3) เก็บชื่อ bucket
+> ไว้ในเส้นทาง (`/api/files/maintenance/imported/<bucket>/<path>`) ถ้าก๊อปทุก bucket
+> เทรวมลง `MN:smartboss/maintenance/imported` เฉย ๆ เส้นทางจะขาดชั้นชื่อ bucket ไป
+> **รูปทุกใบเปิดไม่ขึ้น** และไฟล์คนละถังที่ชื่อซ้ำกันจะทับกันเงียบ ๆ ด้วย
+>
 > ทำไมวางไว้ใต้ `maintenance/imported/` — **ให้ path เดิมของ Supabase คงรูปเดิมทั้งหมด**
 > พอ key ตรงกัน การแก้ URL ในฐานข้อมูลจึงเป็นแค่การเปลี่ยนส่วนหน้า ไม่ต้องไล่จับคู่ทีละไฟล์
+>
+> `rclone copy` ข้ามไฟล์ที่มีอยู่แล้วและเหมือนเดิม ⇒ รันซ้ำตอน sync รอบใหม่ได้เลย
+> ก๊อปเฉพาะรูปที่เพิ่งถ่ายเพิ่ม
 
 ### 0.6.3 แก้ URL ในฐานข้อมูล
 
