@@ -540,17 +540,14 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
                 />
               ))}
               {items.length > DOT_CAP && (
-                // Bold colored badge, not faint gray text — 4 dots + a plain
-                // "+2" read as "4 people off" at a glance, undercounting a
-                // busy day ("เห็น 4 จุดนึกว่าหยุด 4 คน"). Orange normally,
-                // red when the day is heavy (≥6 off) so a short-staffed day
-                // stands out on the phone grid too. Dots themselves unchanged.
-                <span
-                  className={cn(
-                    "rounded-full px-1 text-[9px] font-extrabold leading-[1.5] text-white shrink-0",
-                    items.length >= 6 ? "bg-[var(--danger)]" : "bg-[#f97316]"
-                  )}
-                >
+                // Bold badge, not faint gray text — 4 dots + a plain "+2"
+                // read as "4 people off" at a glance, undercounting a busy day
+                // ("เห็น 4 จุดนึกว่าหยุด 4 คน"). Single neutral-dark color
+                // (--ink), the SAME as the desktop more-link pill (theme.css):
+                // deliberately not orange/red, which would blend into the
+                // orange/red/amber day-off events — a dark chip contrasts with
+                // every event color and reads as a "count". Dots unchanged.
+                <span className="rounded-full px-1 text-[9px] font-extrabold leading-[1.5] text-white shrink-0 bg-[var(--ink)]">
                   +{items.length - DOT_CAP}
                 </span>
               )}

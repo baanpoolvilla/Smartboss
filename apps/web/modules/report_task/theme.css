@@ -447,19 +447,22 @@
    "see more" affordance, not a category; every other colored thing on this
    page is priority/type-coded, so a colored "+more" read as a false category. */
 .ebw-calendar .fc-daygrid-more-link {
-  /* เดิมเป็นตัวเทาจาง (--ink-soft) มองข้ามง่าย เห็นแค่ 2 จุดแล้วนึกว่าหยุด 2 คน
-     เปลี่ยนเป็นป้ายกลมสีเด่น (ขนาดเท่าเดิม ไม่กินที่เพิ่ม อยู่บรรทัดเดียวกับจุด) */
+  /* เดิมเป็นตัวเทาจาง มองข้ามง่าย เห็นแค่ 2 อันแล้วนึกว่ามีแค่นั้น เปลี่ยนเป็น
+     ป้ายกลมสีเดียวโทนเข้ม (--ink) ตัวอักษรขาว — จงใจใช้สีกลางเข้มแทนส้ม/แดง
+     เพราะ event วันหยุดเป็นส้ม/แดง/เหลืองอยู่แล้ว ป้ายสีเดียวกันจะกลืนไป
+     สีเข้มนี้ตัดกับทุกสี event เห็นชัดว่าเป็น "ตัวนับ" ไม่ใช่ event และใช้สี
+     เดียวกันกับป้าย +N บนมือถือ (full-calendar-view.tsx) ให้เหมือนกันทั้ง PC/มือถือ */
   font-size: 0.7rem;
   font-weight: 800;
   color: #fff;
-  background: #f97316;
+  background: var(--ink);
   border-radius: 999px;
   padding: 0 7px;
   line-height: 1.55;
   display: inline-block;
 }
 .ebw-calendar .fc-daygrid-more-link:hover {
-  background: #ea580c;
+  background: #000;
   color: #fff;
 }
 /* "+N more" popover. FullCalendar defaults the popover background to
