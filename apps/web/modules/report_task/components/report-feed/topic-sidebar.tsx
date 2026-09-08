@@ -243,6 +243,14 @@ export function TopicSidebar({
   const [reorderMode, setReorderMode] = useState(false);
   const [draggedTopicId, setDraggedTopicId] = useState<string | null>(null);
 
+  // Mobile has no hover, so the "..." row menu used to render at full opacity
+  // on every single row all the time — a screenful of identical dots that
+  // read as visual noise the moment the list had more than a couple of rooms
+  // ("ลายตามาก"). Now it only shows for the one row you just tapped (leaf or
+  // category — either kind of tap counts), same "reveal on touch" pattern as
+  // the desktop hover, and hides again once you tap a different row.
+  const [revealedRowId, setRevealedRowId] = useState<string | null>(null);
+
   function orderKey(t: ReportTopic): number {
     return t.order ?? new Date(t.createdAt).getTime();
   }
@@ -636,6 +644,7 @@ export function TopicSidebar({
         // doesn't also jump into the room.
         onClick={() => {
           if (editingOrder) return;
+          setRevealedRowId(t.id);
           if (depth === 0 && !canOpenDirectly) toggleCollapsed(t.id);
           else onSelect(t.id);
         }}
@@ -645,6 +654,7 @@ export function TopicSidebar({
           if (editingOrder) return;
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
+            setRevealedRowId(t.id);
             if (depth === 0 && !canOpenDirectly) toggleCollapsed(t.id);
             else onSelect(t.id);
           }
@@ -871,9 +881,13 @@ export function TopicSidebar({
                   onClick={(e) => e.stopPropagation()}
                   className={cn(
                     "shrink-0 flex h-5 w-5 items-center justify-center rounded text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] transition-opacity",
-                    hiddenForMe || isMobile
+                    hiddenForMe
                       ? "opacity-100"
-                      : "opacity-100 pointer-events-auto lg:opacity-0 lg:pointer-events-none lg:group-hover:opacity-100 lg:group-hover:pointer-events-auto"
+                      : isMobile
+                        ? revealedRowId === t.id
+                          ? "opacity-100 pointer-events-auto"
+                          : "opacity-0 pointer-events-none"
+                        : "opacity-100 pointer-events-auto lg:opacity-0 lg:pointer-events-none lg:group-hover:opacity-100 lg:group-hover:pointer-events-auto"
                   )}
                   aria-label={`ตัวเลือกหัวข้อ ${t.name}`}
                 >
