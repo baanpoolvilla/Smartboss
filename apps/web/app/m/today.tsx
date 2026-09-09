@@ -90,6 +90,14 @@ export function Today({
 }) {
   const [data, setData] = useState<TodayData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  /**
+   * บัญชีนี้ยังไม่ถูกผูกกับทะเบียนพนักงานของ workforce
+   *
+   * เกิดกับบัญชีผู้ดูแลระบบที่ไม่ได้เป็นพนักงานจริง — กดปุ่มไปก็ล้มทุกครั้ง
+   * เพราะฝั่ง workforce ต้องมี employment_id ถึงจะเปิด session ลงเวลาได้
+   * ⇒ ปิดปุ่มไปเลยดีกว่าปล่อยให้กดแล้วเจอ error ซ้ำ ๆ โดยไม่รู้ว่าต้องทำอะไร
+   */
+  const [noEmployment, setNoEmployment] = useState(false);
   const [state, setState] = useState<Submitting>("idle");
   const [message, setMessage] = useState<{ tone: "ok" | "warn" | "bad"; text: string } | null>(
     null,
@@ -103,13 +111,16 @@ export function Today({
       const response = await fetch("/api/m/today", { cache: "no-store" });
       const payload = (await response.json().catch(() => ({}))) as TodayData & {
         error?: string;
+        code?: string;
       };
       if (!response.ok) {
+        setNoEmployment(payload.code === "NO_EMPLOYMENT");
         setLoadError(payload.error ?? "โหลดข้อมูลไม่สำเร็จ");
         return;
       }
       setData(payload);
       setLoadError(null);
+      setNoEmployment(false);
     } catch {
       setLoadError("เชื่อมต่อไม่ได้ ตรวจสัญญาณอินเทอร์เน็ตแล้วลองใหม่");
     }
@@ -213,7 +224,7 @@ export function Today({
   const lastIntent = events.length > 0 ? events[events.length - 1]!.intent : null;
   const nextIntent: "CLOCK_IN" | "CLOCK_OUT" =
     lastIntent === "CLOCK_IN" ? "CLOCK_OUT" : "CLOCK_IN";
-  const busy = state !== "idle";
+  const busy = state !== "idle" || noEmployment;
 
   return (
     <div className="flex flex-1 flex-col gap-5 p-5 pt-8">
@@ -235,11 +246,13 @@ export function Today({
         onClick={() => void submit(nextIntent)}
         className="h-32 w-full rounded-2xl bg-(--app) text-2xl font-bold text-white disabled:opacity-60"
       >
-        {state === "locating"
-          ? "กำลังหาตำแหน่ง…"
-          : state === "sending"
-            ? "กำลังบันทึก…"
-            : INTENT_LABEL[nextIntent]}
+        {noEmployment
+          ? "ยังลงเวลาไม่ได้"
+          : state === "locating"
+            ? "กำลังหาตำแหน่ง…"
+            : state === "sending"
+              ? "กำลังบันทึก…"
+              : INTENT_LABEL[nextIntent]}
       </button>
 
       {/* กล้องเปิดเมื่อ *นโยบายบริษัท* สั่งเท่านั้น ไม่ได้ขอรูปทุกครั้ง */}
@@ -273,7 +286,15 @@ export function Today({
         </p>
       )}
 
-      {loadError && <p className="text-sm text-(--danger)">{loadError}</p>}
+      {loadError && (
+        <p
+          className={`rounded-(--radius) p-3 text-sm ${
+            noEmployment ? "bg-(--bg-soft) text-(--tone-warn)" : "text-(--danger)"
+          }`}
+        >
+          {loadError}
+        </p>
+      )}
 
       <div>
         <h2 className="mb-2 text-sm font-semibold text-(--ink-soft)">การลงเวลาวันนี้</h2>
