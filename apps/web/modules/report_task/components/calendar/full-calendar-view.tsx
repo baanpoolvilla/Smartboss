@@ -121,11 +121,11 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
   // keeps the full pill unchanged.
   const [isNarrowViewport, setIsNarrowViewport] = useState(false);
   // A day cell is (viewport width) ÷ 7, so its usable width scales with the
-  // phone, but the dot cap was a flat number — 6 dots + the "+N" badge fit
-  // fine on a 440px-wide phone but touched the cell's own edge on a 390px
-  // one ("พอเป็น 16 มันได้ แต่พอ 12 จุดมันเลย"). Scale the cap down a step
-  // on genuinely narrow phones instead of keeping one fixed number for
-  // every width under the 640px breakpoint.
+  // phone continuously, not in steps — a flat dot cap fit fine on a 440px
+  // phone but touched the cell's own edge on a 390px one ("พอเป็น 16 มันได้
+  // แต่พอ 12 จุดมันเลย"). Asked to scale with the screen instead of jumping
+  // between two fixed numbers ("ใหญ่ก็ได้เพิ่ม น้อยก็ลดลงตามสเกล") — computed
+  // from the actual column width below (see setDotCap).
   const [dotCap, setDotCap] = useState(6);
   // ≥1024px (lg) only — CalendarRail (the "คนในองค์กร" card) shows up at the
   // exact same breakpoint. This card's *own* outer height gets pinned to
@@ -198,9 +198,16 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
       // same 32px here too.
       setCalendarHeight(Math.max(360, Math.round(window.innerHeight - top - 32 - bottomNavHeight)));
       setIsNarrowViewport(window.innerWidth < 640);
-      // 415px ≈ iPhone 12 Pro (390) and smaller; anything from the 14/15/16
-      // Pro Max (428–440) up keeps the full 6.
-      setDotCap(window.innerWidth < 415 ? 5 : 6);
+      // 7 equal-width day columns; each dot (6px) plus its gap (1px) is
+      // ~7px of pitch, and ~20px of a column's width is spoken for by the
+      // cell's own side padding plus room for the "+N" badge when it has to
+      // appear. Calibrated against two real devices (iPhone 12 Pro 390px →
+      // 5 dots fits without touching the border; 16 Pro Max 440px → 6 dots
+      // does) rather than picked arbitrarily — floor((390/7 - 20) / 7) = 5,
+      // floor((440/7 - 20) / 7) = 6. Clamped so it can't collapse to
+      // nothing on a tiny screen or run away on a wide one.
+      const columnWidth = window.innerWidth / 7;
+      setDotCap(Math.max(3, Math.min(8, Math.floor((columnWidth - 20) / 7))));
 
       const desktop = window.innerWidth >= 1024;
       setIsDesktop(desktop);
