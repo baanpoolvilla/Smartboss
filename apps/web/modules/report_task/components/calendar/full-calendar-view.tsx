@@ -509,7 +509,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
       // read as messy/hard-to-read clutter at real phone width once actually
       // deployed ("ให้แสดงแค่จุดๆพอ" — just dots is enough). No count
       // threshold anymore, dots for every day that has anything.
-      const DOT_CAP = 5;
+      const DOT_CAP = 6;
       const items = events.filter((e) => {
         if (e.type === "holiday") return false;
         const start = e.start.slice(0, 10);
@@ -530,7 +530,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
             // เอียงๆไปขวา"). Centered grows outward symmetrically from the
             // middle instead as more dots are added, which reads balanced
             // whether there's one dot or four.
-            <div className="flex flex-nowrap items-center justify-center gap-0.5 px-0.5 pb-0.5">
+            <div className="flex flex-nowrap items-center justify-center gap-px px-0.5 pb-0.5">
               {items.slice(0, DOT_CAP).map((e) => (
                 <span
                   key={e.id}
@@ -549,7 +549,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
             // fully visible and the compact one-screen square layout is
             // unchanged. Single neutral-dark (--ink), same as desktop. Dark
             // pill reads as a "count" against the orange/red/amber events.
-            <span className="pointer-events-none absolute bottom-0.5 right-0.5 rounded-full px-1 text-[8px] font-extrabold leading-[1.4] text-white bg-[var(--ink)]">
+            <span className="pointer-events-none absolute bottom-px right-px rounded-full px-[3px] text-[7px] font-extrabold leading-[1.35] text-white bg-[var(--ink)]">
               +{items.length - DOT_CAP}
             </span>
           )}
