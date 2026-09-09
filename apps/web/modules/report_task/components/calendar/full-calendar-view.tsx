@@ -530,7 +530,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
             // เอียงๆไปขวา"). Centered grows outward symmetrically from the
             // middle instead as more dots are added, which reads balanced
             // whether there's one dot or four.
-            <div className="flex flex-nowrap items-center justify-center gap-px px-0.5 pb-0.5">
+            <div className="flex max-w-full flex-nowrap items-center justify-center gap-px overflow-hidden px-0.5 pb-0.5">
               {items.slice(0, DOT_CAP).map((e) => (
                 <span
                   key={e.id}
