@@ -8,8 +8,18 @@ import { verifyAccessToken } from "@smartboss/auth/jwt";
 
 const COOKIE_ACCESS = "sb_access";
 
-/** path ที่เข้าถึงได้โดยไม่ต้อง login */
-const PUBLIC_PATHS = ["/login"];
+/**
+ * path ที่เข้าถึงได้โดยไม่ต้อง login
+ *
+ * `/m` = LINE Mini App ซึ่ง **ต้องเปิดได้โดยยังไม่มี cookie** เพราะมันล็อกอินให้
+ * ตัวเองผ่าน LIFF (ยืนยัน ID token กับ LINE → POST /api/auth/line → ได้ cookie)
+ * ถ้าปล่อยให้ถูกเด้งไป /login ก่อน โค้ด LIFF จะไม่มีวันได้ทำงานเลย และพนักงาน
+ * จะเจอหน้าล็อกอินของเว็บผู้บริหารแทนที่จะเป็นแอป
+ *
+ * ปลอดภัย เพราะตัวหน้าไม่ได้แสดงข้อมูลอะไรเอง — ข้อมูลทั้งหมดมาจาก `/api/m/*`
+ * ซึ่งยังอยู่ใต้ `/api/` ที่ยังต้องมี session ตามเดิม
+ */
+const PUBLIC_PATHS = ["/login", "/m"];
 
 function isPublic(pathname: string): boolean {
   if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
