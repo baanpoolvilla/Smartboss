@@ -991,11 +991,17 @@ function ReportFeedPageInner() {
                     />
                   </div>
                   {/* Desktop: compact search + the single filter button,
-                      right-aligned on the tab row. invisible (not unmounted)
-                      on every other tab so switching tabs never shifts this
-                      row's height/the content border under it — same reason
-                      the old PostFilterBar block did this. */}
-                  <div className={cn("hidden lg:flex items-center gap-2 my-1.5", activeTab !== "posts" && "invisible")}>
+                      right-aligned on the tab row. `hidden`, not just
+                      invisible, on every other tab — "ไฟล์"/"สรุป" have no
+                      filter of this kind at all (their own search/filter
+                      lives inside the panel body instead), so reserving its
+                      width here just left "มุมมอง" stranded with a dead gap
+                      to its right instead of sitting flush against the edge
+                      ("อยากให้ขยับมุมมองไว้ชิดริม"). The row's own height
+                      still holds steady across tabs regardless — it's set by
+                      the tab buttons/มุมมอง sharing this same flex line, not
+                      by this filter button. */}
+                  <div className={cn("hidden lg:flex items-center gap-2 my-1.5", activeTab !== "posts" && "!hidden")}>
                     <PostFilterButton
                       filters={filters}
                       onChange={setFilters}
@@ -1010,7 +1016,12 @@ function ReportFeedPageInner() {
                     className={cn(
                       filterFieldTriggerClass(postFiltersActiveCount(filters) > 0),
                       "lg:hidden ml-auto my-1.5 !h-8 shrink-0",
-                      activeTab !== "posts" && "invisible"
+                      // `hidden`, not invisible — see the desktop filter's own
+                      // comment above ("อยากให้ขยับมุมมองไว้ชิดริม"). Without
+                      // this the (invisible but still occupying its width)
+                      // button left "มุมมอง" stranded away from the edge on
+                      // mobile's "ไฟล์"/"สรุป" tabs too.
+                      activeTab !== "posts" && "hidden"
                     )}
                   >
                     <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
