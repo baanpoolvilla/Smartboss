@@ -14,7 +14,7 @@ import {
 import { AlbumFormDialog } from "@/modules/report_task/components/report-feed/album-form-dialog";
 import { ReportTopicDocuments } from "@/modules/report_task/components/report-feed/report-topic-documents";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
-import { users, getUser, getDepartment } from "@/modules/report_task/lib/directory";
+import { users, getUser, getDepartment, isOwner } from "@/modules/report_task/lib/directory";
 import { useReportFeedStore, type ReportPost, type ReportPostImage, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { groupByDay } from "@/modules/report_task/lib/format";
@@ -58,6 +58,7 @@ import {
   Trash2,
   TriangleAlert,
   Trophy,
+  X,
 } from "lucide-react";
 
 const URL_PATTERN = /https?:\/\/[^\s<>"']+/g;
@@ -197,6 +198,7 @@ export function ReportTopicPanels({
   const setImageAlbum = useReportFeedStore((s) => s.setImageAlbum);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const stickers = useStickerStore((s) => s.stickers);
+  const removeStickerReaction = useReportFeedStore((s) => s.removeStickerReaction);
   // กดชื่อคนในตาราง "สถิติการโพสต์ของสมาชิก" แล้วกรองประวัติสติกเกอร์ด้านล่าง
   // ให้เหลือแค่ของคนนั้น ("กดไปของคนนั้นๆ จะแสดงมาว่าโดนหักที่ไหน") — กดซ้ำ
   // คนเดิมเพื่อยกเลิกตัวกรอง กลับไปเห็นทุกคนเหมือนเดิม
@@ -1058,16 +1060,34 @@ export function ReportTopicPanels({
                       </p>
                     </div>
                   </div>
-                  {!!sticker && sticker.points !== 0 && (
-                    <span
-                      className={cn(
-                        "shrink-0 text-xs font-bold tabular-nums",
-                        sticker.points < 0 ? "text-[var(--chart-red)]" : "text-[var(--brand-green-dark)]"
-                      )}
-                    >
-                      {sticker.points > 0 ? `+${sticker.points}` : sticker.points}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {!!sticker && sticker.points !== 0 && (
+                      <span
+                        className={cn(
+                          "text-xs font-bold tabular-nums",
+                          sticker.points < 0 ? "text-[var(--chart-red)]" : "text-[var(--brand-green-dark)]"
+                        )}
+                      >
+                        {sticker.points > 0 ? `+${sticker.points}` : sticker.points}
+                      </span>
+                    )}
+                    {/* ยกเลิกได้ถ้ากดผิด/ไม่ได้ตั้งใจ ("ให้กดยกเลิกได้ด้วยสิ
+                        ถ้าแบบกดผิด") — คืนคะแนนที่หักไปด้วย (ดู
+                        report-feed-performance.ts ฝั่งเซิร์ฟ สร้าง event
+                        หักล้างของเดิม ไม่ใช่แค่ลบแถวออกจากหน้าจอเฉยๆ)
+                        เฉพาะ CEO เหมือนกับคนที่ให้สิทธิ์ติดได้ตั้งแต่แรก */}
+                    {isOwner(viewingAsUserId) && (
+                      <button
+                        type="button"
+                        onClick={() => removeStickerReaction(e.post.id, e.id, viewingAsUserId)}
+                        className="flex h-5 w-5 items-center justify-center rounded-full text-[var(--ink-faint)] hover:bg-[var(--bg-soft)] hover:text-[var(--chart-red)]"
+                        aria-label="ยกเลิกสติกเกอร์นี้"
+                        title="ยกเลิก (คืนคะแนน)"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}

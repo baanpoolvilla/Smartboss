@@ -191,7 +191,8 @@ async function put(request: NextRequest, key: string) {
     await recordReportStickerEvents(
       session.orgId,
       before?.data as Parameters<typeof recordReportStickerEvents>[1],
-      body.data as Parameters<typeof recordReportStickerEvents>[2]
+      body.data as Parameters<typeof recordReportStickerEvents>[2],
+      session.userId
     );
   }
 

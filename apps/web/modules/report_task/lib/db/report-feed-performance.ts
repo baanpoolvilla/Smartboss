@@ -40,18 +40,33 @@ interface FeedSliceLike {
 export async function recordReportStickerEvents(
   orgId: string,
   oldData: FeedSliceLike | null,
-  newData: FeedSliceLike
+  newData: FeedSliceLike,
+  removedBy: string | null
 ): Promise<void> {
-  const oldReactionIds = new Set(
-    (oldData?.posts ?? []).flatMap((p) => (p.stickerReactions ?? []).map((r) => r.id))
+  const oldPosts = oldData?.posts ?? [];
+  const oldReactionById = new Map(
+    oldPosts.flatMap((p) => (p.stickerReactions ?? []).map((r) => [r.id, { post: p, reaction: r }] as const))
   );
+  const newReactionIds = new Set(
+    (newData.posts ?? []).flatMap((p) => (p.stickerReactions ?? []).map((r) => r.id))
+  );
+
   const additions: { post: PostLike; reaction: PostStickerReaction }[] = [];
   for (const post of newData.posts ?? []) {
     for (const reaction of post.stickerReactions ?? []) {
-      if (!oldReactionIds.has(reaction.id)) additions.push({ post, reaction });
+      if (!oldReactionById.has(reaction.id)) additions.push({ post, reaction });
     }
   }
-  if (additions.length === 0) return;
+  // ถูกลบไป — เคยอยู่ใน oldData แต่หายไปจาก newData แล้ว ("ให้กดยกเลิกได้ด้วย
+  // สิ ถ้าแบบกดผิดหรือไม่ได้ตั้งใจ") ต้องหักคะแนนที่เคยให้ไปคืน ไม่ใช่แค่ซ่อน
+  // แถวออกจากหน้าจอเฉยๆ — สร้าง event ตัวใหม่หักล้างของเดิม (ไม่ลบ event เก่า
+  // ทิ้ง) เพื่อให้ประวัติ audit ยังอ่านย้อนได้ครบว่าเคยให้แล้วก็ยกเลิกทีหลัง
+  const removals: { post: PostLike; reaction: PostStickerReaction }[] = [];
+  for (const [id, entry] of oldReactionById) {
+    if (!newReactionIds.has(id)) removals.push(entry);
+  }
+
+  if (additions.length === 0 && removals.length === 0) return;
 
   // เช่นเดียวกับ writeTasks — client PUT ก้อนข้อมูลทั้งหมด ปลอม reaction
   // แทนใครก็ได้ถ้าไม่เช็คซ้ำฝั่งเซิร์ฟเวอร์ (ปุ่มถูกซ่อนไว้ที่ UI เฉยๆ ไม่ใช่
@@ -82,6 +97,28 @@ export async function recordReportStickerEvents(
       note: `${label} · ${post.title}`,
       createdBy: reaction.byUserId,
     });
+  }
+
+  // ยกเลิกได้เฉพาะคนที่มีสิทธิ์ให้ตั้งแต่แรก (isOwner) — ตรวจจาก session.userId
+  // ที่ route.ts ส่งมา (`removedBy`) ไม่ใช่จาก request body ที่แก้เองได้
+  if (removedBy && owners.has(removedBy)) {
+    for (const { post, reaction } of removals) {
+      const points = pointsById.get(reaction.stickerId);
+      if (points === undefined || points === 0) continue;
+      const label = labelById.get(reaction.stickerId) ?? reaction.stickerId;
+      events.push({
+        orgId,
+        userId: post.authorId,
+        source: "report_task",
+        category: "task_manual_dock",
+        occurredAt: new Date(),
+        points: -points,
+        refType: "report_post_reaction_undo",
+        refId: reaction.id,
+        note: `ยกเลิก: ${label} · ${post.title}`,
+        createdBy: removedBy,
+      });
+    }
   }
 
   if (events.length > 0) await recordPerformanceEvents(events);
