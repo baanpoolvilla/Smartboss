@@ -14,32 +14,9 @@ import { localDateStr, now } from "@/modules/report_task/lib/now";
 import { cn } from "@/modules/report_task/lib/utils";
 import { ReportPostFields, newSection, type DraftSection } from "@/modules/report_task/components/report-feed/report-post-fields";
 import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
-import { Check, Clock, Lock, Send, SquarePen, TriangleAlert, X } from "lucide-react";
+import { Check, Clock, Lock, Send, SquarePen, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { uuid } from "@/modules/report_task/lib/uuid";
-
-/** เก็บไว้แค่ "รอบนี้/วันนี้" ตามคีย์ที่ผูก topic+วันที่+roundId — พรุ่งนี้หรือ
- * รอบถัดไปกลับมาเตือนได้ใหม่โดยไม่ต้องเคลียร์อะไรเอง (คีย์เก่าแค่ค้างเฉยๆ
- * ไม่มีผลอะไรอีกต่อไป) */
-function lateToastDismissKey(topicId: string, dateStr: string, roundId: string): string {
-  return `report-late-toast-dismissed:${topicId}:${dateStr}:${roundId}`;
-}
-function isLateToastDismissed(key: string): boolean {
-  if (typeof window === "undefined") return false;
-  try {
-    return window.localStorage.getItem(key) === "1";
-  } catch {
-    return false;
-  }
-}
-function dismissLateToast(key: string): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(key, "1");
-  } catch {
-    // private mode ฯลฯ — แค่จะกลับมาเตือนอีกครั้งตอนเปิดใหม่ ไม่ร้ายแรง
-  }
-}
 
 function roundMinutesOf(time: string): number {
   const [h, m] = time.split(":").map(Number) as [number, number];
@@ -83,7 +60,6 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const viewer = getUser(viewingAsUserId)!;
   const addPost = useReportFeedStore((s) => s.addPost);
-  const posts = useReportFeedStore((s) => s.posts);
   const maxImages = useAttachmentSettingsStore((s) => s.settings.maxImagesPerReportPost);
 
   const savedDraft = loadDraft(topic.id);
@@ -196,74 +172,6 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   // declared not to be that.
   const minImagesRequired = excludeFromSubmission ? 0 : (activeRound?.minImages ?? 0);
   const missingRequiredImage = photoCount(images) < minImagesRequired;
-  // Only worth warning about if this post still counts toward the round —
-  // an excluded post ("ไม่นับเป็นการส่ง daily") never reads as late no
-  // matter which round is selected.
-  const activeLate = !excludeFromSubmission && !!activeRound && nowMinutes > roundMinutesOf(activeRound.time);
-  // Already filed something that counts toward today's submission in this
-  // room — the late-toast below has nothing left to warn about even if some
-  // round today is overdue.
-  const todayStr = localDateStr(new Date());
-  const alreadyPostedToday = posts.some(
-    (p) => p.topicId === topic.id && p.authorId === viewingAsUserId && !p.excludeFromSubmission && localDateStr(new Date(p.createdAt)) === todayStr
-  );
-  // The round the toast should warn about — NOT necessarily activeRound:
-  // the picker/composer defaults to the nearest round not yet passed (so
-  // someone can still make it on time), which means the moment an earlier
-  // round quietly goes overdue, activeRound jumps straight past it to the
-  // next one and never reads as late. The toast needs to flag that missed
-  // earlier round anyway, so it looks at the most recently closed round
-  // today regardless of what's currently selected in the picker.
-  const mostRecentLateRound = [...todayCutoffs].reverse().find((r) => nowMinutes > roundMinutesOf(r.time)) ?? null;
-
-  // Non-blocking heads-up, not a confirm-to-proceed gate — fires once per
-  // "opening the composer" (not every keystroke) so someone who's about to
-  // write a late report finds out before they've already typed it all out,
-  // without making them click through anything just to start typing.
-  useEffect(() => {
-    if (!canPost || !expanded || excludeFromSubmission || !mostRecentLateRound || alreadyPostedToday) return;
-    const key = lateToastDismissKey(topic.id, todayStr, mostRecentLateRound.id);
-    if (isLateToastDismissed(key)) return;
-    let dontShowAgain = false;
-    toast.custom(
-      (id) => (
-        <div className="relative w-[22rem] max-w-[calc(100vw-2rem)] rounded-xl border border-[var(--line)] bg-white p-3.5 pr-8 shadow-lg">
-          <button
-            type="button"
-            onClick={() => toast.dismiss(id)}
-            aria-label="ปิด"
-            className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full text-[var(--ink-soft)] transition-colors hover:bg-[var(--bg-soft)] hover:text-[var(--ink)]"
-          >
-            <X className="h-3 w-3" />
-          </button>
-          <div className="flex items-start gap-2.5">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
-              <TriangleAlert className="h-4 w-4" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-[var(--ink)]">ยังไม่ได้ส่งรอบนี้</p>
-              <p className="mt-0.5 text-xs leading-relaxed text-[var(--ink-soft)]">
-                &quot;{mostRecentLateRound.label}&quot; ปิดรอบไปแล้วตั้งแต่ {mostRecentLateRound.time}
-                <br />
-                ส่งตอนนี้จะถูกนับว่า <b className="font-semibold text-[var(--chart-red)]">ส่งย้อนหลัง = สาย</b>
-              </p>
-            </div>
-          </div>
-          <label className="mt-2 flex cursor-pointer items-center gap-1.5 pl-[42px] text-xs text-[var(--ink-soft)]">
-            <input type="checkbox" className="h-3.5 w-3.5" onChange={(e) => { dontShowAgain = e.target.checked; }} />
-            ไม่ต้องแสดงอีก (รอบนี้/วันนี้)
-          </label>
-        </div>
-      ),
-      {
-        duration: 3500,
-        onDismiss: () => { if (dontShowAgain) dismissLateToast(key); },
-        onAutoClose: () => { if (dontShowAgain) dismissLateToast(key); },
-      }
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expanded]);
-
   function doSubmit() {
     const cleanSections = sections
       .map((s) => ({

@@ -34,6 +34,8 @@ import { pendingToday, todayStatusEntries, type TodayStatusEntry } from "@/modul
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
 import { safeLocalStorage } from "@/modules/report_task/lib/safe-storage";
+import { lateToastDismissKey, isLateToastDismissed, dismissLateToast } from "@/modules/report_task/lib/late-toast-dismiss";
+import { toast } from "sonner";
 import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronDown, ChevronRight, Clock, FolderOpen, Hash, Lock, Menu, MessageSquareText, Pin, Settings, SlidersHorizontal, TriangleAlert, Users, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 
@@ -414,6 +416,90 @@ function ReportFeedPageInner() {
       (p) => ids.has(p.topicId) && p.unreadFor.includes(viewingAsUserId) && p.authorId !== viewingAsUserId && postMentionsUser(p, viewingAsUserId)
     ).length;
   }, [posts, visibleTopics, viewingAsUserId]);
+  // ทุกรอบของฉันเองที่ "ปิดรอบไปแล้ว" (ไม่ใช่แค่ยังไม่ส่ง — pendingToday เอง
+  // ไม่แยกว่ายังทันเวลาหรือสายไปแล้ว) คำนวณแบบไม่ผูกกับแท็บที่เปิดอยู่
+  // ("มี showPending gate") ต่างจาก myPending ด้านบน เพราะต้องรู้ทันทีที่
+  // เข้าหน้านี้ ไม่ใช่แค่ตอนสลับไปดูมุมมอง "ที่ฉันต้องส่ง" เท่านั้น
+  const myLatePendingToday = useMemo(() => {
+    const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+    return pendingToday(visibleTopics, posts, exemptions)
+      .filter((e) => e.userId === viewingAsUserId)
+      .filter((e) => {
+        const [h, m] = e.roundTime.split(":").map(Number) as [number, number];
+        return nowMinutes > h * 60 + m;
+      });
+  }, [visibleTopics, posts, exemptions, viewingAsUserId]);
+  // แจ้งเตือน "ยังไม่ได้ส่งรอบนี้" ทันทีที่เข้าหน้ารายงาน แทนที่จะรอให้กด
+  // ขยายกล่องเขียนโพสต์ในห้องนั้นก่อนถึงจะเห็น ("อยากให้กดหน้ารายงานมาแล้ว
+  // แจ้งเตือนแบบนี้แทน") — ย้ายมาจาก report-composer.tsx เดิม (ดูคอมเมนต์ที่
+  // นั่น) กดตรงตัวแจ้งเตือนแล้วพาไปห้องนั้นเลย ("พอกดที่เตือนให้นำไปยังห้อง
+  // ที่ส่งเลย") ผ่าน selectView ตัวเดียวกับที่แถบสลับห้องใช้ ยิงครั้งเดียวตอน
+  // mount/รายการเปลี่ยน ไม่ผูกกับห้องที่เปิดอยู่ตอนนั้น
+  useEffect(() => {
+    const today = localDateStr(new Date());
+    for (const entry of myLatePendingToday) {
+      const key = lateToastDismissKey(entry.topicId, today, entry.roundId);
+      if (isLateToastDismissed(key)) continue;
+      let dontShowAgain = false;
+      toast.custom(
+        (id) => (
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => {
+              selectView(entry.topicId);
+              toast.dismiss(id);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                selectView(entry.topicId);
+                toast.dismiss(id);
+              }
+            }}
+            className="relative w-[22rem] max-w-[calc(100vw-2rem)] cursor-pointer rounded-xl border border-[var(--line)] bg-white p-3.5 pr-8 shadow-lg hover:border-[var(--brand-green)]/40"
+          >
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                toast.dismiss(id);
+              }}
+              aria-label="ปิด"
+              className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full text-[var(--ink-soft)] transition-colors hover:bg-[var(--bg-soft)] hover:text-[var(--ink)]"
+            >
+              <X className="h-3 w-3" />
+            </button>
+            <div className="flex items-start gap-2.5">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                <TriangleAlert className="h-4 w-4" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-[var(--ink)]">ยังไม่ได้ส่งรอบนี้</p>
+                <p className="mt-0.5 text-xs leading-relaxed text-[var(--ink-soft)]">
+                  ห้อง &quot;{entry.topicName}&quot; · รอบ &quot;{entry.roundLabel}&quot; ปิดรอบไปแล้วตั้งแต่ {entry.roundTime}
+                  <br />
+                  ส่งตอนนี้จะถูกนับว่า <b className="font-semibold text-[var(--chart-red)]">ส่งย้อนหลัง = สาย</b> — แตะเพื่อไปห้องนี้
+                </p>
+              </div>
+            </div>
+            <label
+              className="mt-2 flex cursor-pointer items-center gap-1.5 pl-[42px] text-xs text-[var(--ink-soft)]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <input type="checkbox" className="h-3.5 w-3.5" onChange={(e) => { dontShowAgain = e.target.checked; }} />
+              ไม่ต้องแสดงอีก (รอบนี้/วันนี้)
+            </label>
+          </div>
+        ),
+        {
+          duration: 6000,
+          onDismiss: () => { if (dontShowAgain) dismissLateToast(key); },
+          onAutoClose: () => { if (dontShowAgain) dismissLateToast(key); },
+        }
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myLatePendingToday]);
   // "กลับไป # ห้อง" + ReportViewSwitcher, built once and handed to whichever
   // panel is on screen (ReportAllPostsFeed/PendingTopicsPanel's headerRight)
   // so they render on that panel's own title row instead of a dedicated row
