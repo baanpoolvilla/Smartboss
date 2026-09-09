@@ -27,8 +27,19 @@ import { useReportFeedStore } from "@/modules/report_task/store/report-feed-stor
  * ได้ — วันนั้นไม่มีใครรู้ด้วยซ้ำว่ามีข้อกำหนดนี้อยู่ ไม่งั้นพอเพิ่มรอบใหม่จะโดนตัดสิน
  * "พลาดส่ง" ย้อนหลังไปถึงวันที่ห้องถูกสร้างทันที (บั๊กที่เจอจากการทดสอบจริง).
  */
-export function roundRunsOnDay(round: Pick<SubmissionRound, "weekdays" | "createdAt">, day: string): boolean {
+export function roundRunsOnDay(
+  round: Pick<SubmissionRound, "weekdays" | "createdAt" | "dayOfMonth">,
+  day: string
+): boolean {
   if (round.createdAt && day < localDateStr(new Date(round.createdAt))) return false;
+  if (round.dayOfMonth) {
+    const d = new Date(`${day}T00:00:00`);
+    // เดือนที่ไม่มีวันที่ตั้งไว้ (30 ในเดือน ก.พ.) ตกไปวันสุดท้ายของเดือนนั้น
+    // แทนเสมอ — `new Date(y, m+1, 0)` คือ "วันที่ 0 ของเดือนถัดไป" = วันสุดท้าย
+    // ของเดือนนี้พอดี, วิธีมาตรฐานของ JS ในการหาจำนวนวันของเดือน
+    const lastDayOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    return d.getDate() === Math.min(round.dayOfMonth, lastDayOfMonth);
+  }
   if (!round.weekdays || round.weekdays.length === 0) return true;
   return round.weekdays.includes(new Date(`${day}T00:00:00`).getDay());
 }
@@ -177,7 +188,17 @@ export function attributePostToRound(
     const byId = rounds.find((r) => r.id === post.roundId);
     if (byId) return byId;
   }
-  const sorted = [...rounds].sort((a, b) => timeToMinutes(a.time) - timeToMinutes(b.time));
+  // จำกัดผู้ท้าชิงเหลือแค่รอบที่ "วิ่ง" ในวันนี้จริง ๆ ก่อนเดา — เดิมไม่กรอง
+  // เพราะทุกรอบของทุกห้องวิ่งทุกวันเหมือนกันหมด (ไม่เคยผสม Daily กับ
+  // Weekly/Monthly คนละความถี่กันในห้องเดียว) พอห้องเริ่มมีรอบความถี่ต่างกัน
+  // (Daily ทุกวัน + Weekly เฉพาะศุกร์ + Monthly เฉพาะวันที่ 30) โพสต์วันอังคาร
+  // ธรรมดาจะเดาผิดไปเข้ารอบ Weekly/Monthly ได้ถ้าเวลาใกล้เคียงกัน ทั้งที่รอบ
+  // นั้นไม่ได้วิ่งวันอังคารเลย — กรองก่อนตัดปัญหานี้ทิ้ง; เผื่อไม่มีรอบไหนวิ่งเลย
+  // (ไม่ควรเกิดจริง) ใช้ทั้งก้อนเดิมกันไม่ให้คืน null ทั้งที่ห้องนี้มีรอบ
+  const day = localDateStr(new Date(post.createdAt));
+  const candidates = rounds.filter((r) => roundRunsOnDay(r, day));
+  const pool = candidates.length > 0 ? candidates : rounds;
+  const sorted = [...pool].sort((a, b) => timeToMinutes(a.time) - timeToMinutes(b.time));
   const created = new Date(post.createdAt);
   const postMinutes = created.getHours() * 60 + created.getMinutes();
   return sorted.find((r) => timeToMinutes(r.time) >= postMinutes) ?? sorted[sorted.length - 1]!;

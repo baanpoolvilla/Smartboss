@@ -101,6 +101,12 @@ export function SubmissionRoundDialog({
   const [label, setLabel] = useState(initial?.label ?? "");
   const [time, setTime] = useState(initial?.time ?? "09:00");
   const [weekdays, setWeekdays] = useState<Set<number>>(new Set(initial?.weekdays ?? []));
+  // รอบรายเดือน (เช่น "Monthly Report" ทุกวันที่ 30) เป็นทางเลือกที่สาม แยก
+  // จาก "ทุกวัน"/"เลือกวันในสัปดาห์" เดิม — ตัวเลข 30 ตายตัวตามสเปก
+  // ("ทุกวันที่ 30 เลย จะมีแค่เดือนกุมภาที่ 28-29") ไม่ใช่ช่องให้พิมพ์วันที่
+  // เองแบบอิสระ, ยังไม่มีความต้องการใช้วันที่อื่นตอนนี้
+  const MONTHLY_DAY = 30;
+  const [monthly, setMonthly] = useState(!!initial?.dayOfMonth);
   const [minImages, setMinImages] = useState<number>(initial?.minImages ?? 0);
   const [mode, setMode] = useState<Mode>(initial?.submitters.mode ?? "everyone");
   const [groupIds, setGroupIds] = useState<Set<string>>(new Set(initial?.submitters.groupIds ?? []));
@@ -137,7 +143,8 @@ export function SubmissionRoundDialog({
       id: initial?.id ?? `round-${uuid()}`,
       label: label.trim() || "รอบส่ง",
       time,
-      weekdays: weekdays.size > 0 ? [...weekdays].sort((a, b) => a - b) : undefined,
+      weekdays: !monthly && weekdays.size > 0 ? [...weekdays].sort((a, b) => a - b) : undefined,
+      dayOfMonth: monthly ? MONTHLY_DAY : undefined,
       minImages,
       // A brand-new round stamps "now" so the compliance checker never judges
       // days before it existed as missed; editing an existing round keeps
@@ -289,29 +296,66 @@ export function SubmissionRoundDialog({
             </div>
           </div>
 
-          {/* วัน */}
+          {/* ความถี่ */}
           <div className="space-y-1.5">
-            <Label className="text-xs text-[var(--ink-soft)]">วันที่ต้องส่ง (ไม่เลือก = ทุกวัน)</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {WEEKDAYS.map((w, i) => {
-                const on = weekdays.has(i);
-                return (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => setWeekdays((s) => { const n = new Set(s); if (n.has(i)) n.delete(i); else n.add(i); return n; })}
-                    className={cn(
-                      "h-9 w-10 rounded-lg border text-xs font-medium transition-colors",
-                      on ? "border-[var(--brand-green)] bg-[var(--accent)] text-[var(--brand-green-dark)]" : "border-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
-                    )}
-                  >
-                    {w}
-                  </button>
-                );
-              })}
+            <Label className="text-xs text-[var(--ink-soft)]">ความถี่</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setMonthly(false)}
+                className={cn(
+                  "rounded-lg border px-2 py-2 text-center text-xs font-medium transition-colors",
+                  !monthly ? "border-[var(--brand-green)] bg-[var(--accent)] text-[var(--brand-green-dark)]" : "border-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+                )}
+              >
+                รายวัน / รายสัปดาห์
+              </button>
+              <button
+                type="button"
+                onClick={() => setMonthly(true)}
+                className={cn(
+                  "rounded-lg border px-2 py-2 text-center text-xs font-medium transition-colors",
+                  monthly ? "border-[var(--brand-green)] bg-[var(--accent)] text-[var(--brand-green-dark)]" : "border-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+                )}
+              >
+                รายเดือน (วันที่ {MONTHLY_DAY})
+              </button>
             </div>
-            <p className="flex items-center gap-1 text-[11px] text-[var(--ink-soft)]"><Check className="h-3 w-3 text-[var(--tone-ok)]" />วันหยุด/วันลา ตัดออกให้เองตามปฏิทิน HR</p>
           </div>
+
+          {/* วัน */}
+          {monthly ? (
+            <div className="space-y-1.5">
+              <Label className="text-xs text-[var(--ink-soft)]">วันที่ต้องส่ง</Label>
+              <p className="rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] px-3 py-2 text-xs text-[var(--ink)]">
+                ส่งทุกวันที่ {MONTHLY_DAY} ของเดือน — เดือนที่ไม่มีวันที่ {MONTHLY_DAY} (กุมภาพันธ์) ใช้วันสุดท้ายของเดือนแทนอัตโนมัติ (28 หรือ 29 แล้วแต่ปี)
+              </p>
+              <p className="flex items-center gap-1 text-[11px] text-[var(--ink-soft)]"><Check className="h-3 w-3 text-[var(--tone-ok)]" />วันหยุด/วันลา ตัดออกให้เองตามปฏิทิน HR</p>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <Label className="text-xs text-[var(--ink-soft)]">วันที่ต้องส่ง (ไม่เลือก = ทุกวัน)</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {WEEKDAYS.map((w, i) => {
+                  const on = weekdays.has(i);
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setWeekdays((s) => { const n = new Set(s); if (n.has(i)) n.delete(i); else n.add(i); return n; })}
+                      className={cn(
+                        "h-9 w-10 rounded-lg border text-xs font-medium transition-colors",
+                        on ? "border-[var(--brand-green)] bg-[var(--accent)] text-[var(--brand-green-dark)]" : "border-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+                      )}
+                    >
+                      {w}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="flex items-center gap-1 text-[11px] text-[var(--ink-soft)]"><Check className="h-3 w-3 text-[var(--tone-ok)]" />วันหยุด/วันลา ตัดออกให้เองตามปฏิทิน HR</p>
+            </div>
+          )}
         </div>
 
         <DialogFooter>

@@ -1,7 +1,7 @@
 import { departments } from "@/modules/report_task/lib/directory";
 import { calendarDateOf, now, todayIso } from "@/modules/report_task/lib/now";
-import { cutoffsOnDay } from "@/modules/report_task/lib/report-cutoff";
 import { pendingToday } from "@/modules/report_task/lib/report-feed-compliance";
+import { effectiveRoundsOf } from "@/modules/report_task/lib/submission-rounds";
 import { SYSTEM_USER_ID } from "@/modules/report_task/lib/task-penalty-sweep";
 import type { ReminderSettings } from "@/modules/report_task/store/reminder-settings-store";
 import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
@@ -19,18 +19,6 @@ export interface ReminderSweepResult {
   /** Dedup keys to add to the sent-log so the same reminder never fires
    * twice — see the sweep route for how this gets persisted. */
   newSentKeys: string[];
-}
-
-/** The latest (last) round of the day, in minutes-since-midnight — what
- * `remindBeforeCutoffMinutes` counts down to. -1 if the room has no cutoffs
- * configured (nothing to remind before). */
-function lastCutoffMinutesOf(cutoffs: ReportTopic["cutoffs"]): number {
-  let max = -1;
-  for (const c of cutoffs) {
-    const [h, m] = c.time.split(":").map(Number) as [number, number];
-    max = Math.max(max, h * 60 + m);
-  }
-  return max;
 }
 
 /**
@@ -153,44 +141,61 @@ export function computeReminders(input: {
     }
   }
 
-  // ---- Reports: N minutes before a room's last daily cutoff, per person who hasn't posted ----
+  // ---- Reports: N minutes before EACH round's own cutoff, per person who hasn't posted that round ----
+  // Grouped by (topic, round) — not just topic — since Weekly/Monthly rounds
+  // added on top of Daily can share a room but have their own cutoff *time*
+  // and their own name worth calling out ("แจ้งเตือนว่า พนักงานมีรายงาน
+  // รายเดือน รายอาทิตย์"). Counting down to the topic's single latest cutoff
+  // (the old behavior) would tell someone who still owes an 18:00 Daily
+  // round "ใกล้ถึงรอบตัดยอดแล้ว" too early/late whenever a different round
+  // in the same room closes later that day (e.g. a 20:00 Weekly round) — the
+  // countdown has to be relative to *that person's own outstanding round*.
   if (settings.report.enabled) {
     const today = todayIso();
     const nowMinutes = now().getHours() * 60 + now().getMinutes();
     const topicById = new Map(topics.map((t) => [t.id, t]));
     const pending = pendingToday(topics, posts);
-    // Group by room so a manager summary only counts each room once.
-    const pendingByTopic = new Map<string, typeof pending>();
+    // Group by (room, round) so a manager summary counts each round once,
+    // and the per-person countdown below uses that round's own cutoff time.
+    const pendingByTopicRound = new Map<string, typeof pending>();
     for (const entry of pending) {
-      const list = pendingByTopic.get(entry.topicId) ?? [];
+      const groupKey = `${entry.topicId}:${entry.roundId}`;
+      const list = pendingByTopicRound.get(groupKey) ?? [];
       list.push(entry);
-      pendingByTopic.set(entry.topicId, list);
+      pendingByTopicRound.set(groupKey, list);
     }
-    for (const [topicId, entries] of pendingByTopic) {
-      const topic = topicById.get(topicId);
+    for (const [groupKey, entries] of pendingByTopicRound) {
+      const first = entries[0]!;
+      const topic = topicById.get(first.topicId);
       if (!topic) continue;
-      const lastCutoffMin = lastCutoffMinutesOf(cutoffsOnDay(topic, today));
-      if (lastCutoffMin < 0) continue; // no fixed round, nothing to count down to
-      const minutesUntilCutoff = lastCutoffMin - nowMinutes;
+      const [h, m] = first.roundTime.split(":").map(Number) as [number, number];
+      const cutoffMin = h * 60 + m;
+      const minutesUntilCutoff = cutoffMin - nowMinutes;
       if (minutesUntilCutoff < 0) continue; // cutoff already passed today — that's a "missed", not an upcoming reminder
       const leadOptions = topic.remindBeforeCutoffMinutes != null ? [topic.remindBeforeCutoffMinutes] : settings.report.leadMinutes;
+      // "Daily Report" reads as noise on a room where every round already is
+      // one (the common case today) — only worth naming the round when this
+      // room actually has more than one kind of round in force at all, so
+      // existing single-round rooms keep their exact old wording.
+      const namesRound = effectiveRoundsOf(topic).length > 1;
+      const roundPhrase = namesRound ? ` "${first.roundLabel}"` : "";
       for (const lead of leadOptions) {
         if (lead <= 0 || minutesUntilCutoff > lead) continue;
         if (settings.report.notifyPending) {
           for (const entry of entries) {
-            const key = `report:${topicId}:${entry.userId}:${today}:${lead}`;
+            const key = `report:${groupKey}:${entry.userId}:${today}:${lead}`;
             if (alreadySent.has(key)) continue;
             newSentKeys.push(key);
             notifications.push({
               recipients: [entry.userId],
               byUserId: SYSTEM_USER_ID,
-              message: `ยังไม่ได้ส่งรีพอตห้อง "${topic.name}" วันนี้ ใกล้ถึงรอบตัดยอดแล้ว`,
-              link: `/report-task/report-feed?topic=${topicId}`,
+              message: `ยังไม่ได้ส่งรีพอต${roundPhrase} ห้อง "${topic.name}" วันนี้ ใกล้ถึงรอบตัดยอดแล้ว`,
+              link: `/report-task/report-feed?topic=${topic.id}`,
             });
           }
         }
         if (settings.report.notifyManagerSummary) {
-          const summaryKey = `report-summary:${topicId}:${today}:${lead}`;
+          const summaryKey = `report-summary:${groupKey}:${today}:${lead}`;
           if (!alreadySent.has(summaryKey)) {
             newSentKeys.push(summaryKey);
             const headIds = new Set<string>();
@@ -201,8 +206,8 @@ export function computeReminders(input: {
               notifications.push({
                 recipients: [...headIds],
                 byUserId: SYSTEM_USER_ID,
-                message: `ห้อง "${topic.name}" ยังมี ${entries.length} คนไม่ได้ส่งรีพอตวันนี้ ใกล้ถึงรอบตัดยอดแล้ว`,
-                link: `/report-task/report-feed?topic=${topicId}`,
+                message: `ห้อง "${topic.name}" ยังมี ${entries.length} คนไม่ได้ส่งรีพอต${roundPhrase}วันนี้ ใกล้ถึงรอบตัดยอดแล้ว`,
+                link: `/report-task/report-feed?topic=${topic.id}`,
               });
             }
           }

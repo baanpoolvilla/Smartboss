@@ -15,7 +15,8 @@ import { cn } from "@/modules/report_task/lib/utils";
 import { Check, Clock, Globe, Lock, Pencil, Plus, Trash2, User, Users, UserCheck } from "lucide-react";
 
 const WD = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
-function daysLabel(w?: number[]): string {
+function daysLabel(w?: number[], dayOfMonth?: number): string {
+  if (dayOfMonth) return `วันที่ ${dayOfMonth} ของเดือน`;
   if (!w || w.length === 0) return "ทุกวัน";
   return w.slice().sort((a, b) => a - b).map((d) => WD[d]).join(" ");
 }
@@ -244,7 +245,7 @@ export function ReportTopicSettingsPanel({
                     <span className="flex items-center gap-1 rounded-full bg-[var(--accent)] px-2 py-0.5 text-[11px] font-medium text-[var(--brand-green-dark)]">
                       <Clock className="h-3 w-3" />ก่อน {r.time}
                     </span>
-                    <span className="rounded-full bg-[var(--bg-soft)] px-2 py-0.5 text-[11px] text-[var(--ink-soft)]">{daysLabel(r.weekdays)}</span>
+                    <span className="rounded-full bg-[var(--bg-soft)] px-2 py-0.5 text-[11px] text-[var(--ink-soft)]">{daysLabel(r.weekdays, r.dayOfMonth)}</span>
                     <div className="ml-auto flex items-center gap-1">
                       <Button variant="ghost" size="icon" onClick={() => { setEditingRound(r); setRoundDialogOpen(true); }} aria-label={`แก้รอบ ${r.label}`}>
                         <Pencil className="h-3.5 w-3.5 text-[var(--ink-soft)]" />
