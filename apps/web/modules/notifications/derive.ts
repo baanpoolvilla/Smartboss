@@ -9,6 +9,7 @@ import {
   FileText,
   Heart,
   ReceiptText,
+  RotateCcw,
   TriangleAlert,
   UserPlus,
   type LucideIcon,
@@ -48,6 +49,11 @@ export function actionMetaFor(n: AppNotification): ActionMeta {
   if (m.includes("ทำเครื่องหมาย") && (m.includes("ให้โพสต์") || m.includes("ให้ความคิดเห็น")))
     return { Icon: Heart, color: "#EC4899" };
   if (m.includes("ตอบกลับ")) return { Icon: CornerDownRight, color: "#16A34A" };
+  // rejectReview()'s "ตรวจงาน...แล้วไม่ผ่าน" also contains "งาน"/"ตรวจ", so it
+  // has to be checked before the generic task rule below or it'd get the
+  // same green checkmark as a normal completed/approved task ("ต้องแยกสิ
+  // เวลาโดนไม่ผ่าน") — a rejection needs to read as "sent back", not "done".
+  if (m.includes("ตรวจงาน") && m.includes("ไม่ผ่าน")) return { Icon: RotateCcw, color: "#DC2626" };
   if (m.includes("งาน") || m.includes("กำหนดส่ง") || m.includes("ตรวจ") || m.includes("เสร็จสิ้น"))
     return { Icon: CheckCircle2, color: "#0D9488" };
   return { Icon: Bell, color: "#6B7280" };
@@ -68,6 +74,8 @@ export function reportCategoryFor(n: AppNotification): NotifCategory {
   if (m.includes("ทำเครื่องหมาย") && (m.includes("ให้โพสต์") || m.includes("ให้ความคิดเห็น")))
     return "reaction";
   if (m.includes("ตอบกลับ")) return "reply";
+  // Same reasoning as actionMetaFor — must come before the generic task rule.
+  if (m.includes("ตรวจงาน") && m.includes("ไม่ผ่าน")) return "task_rejected";
   if (m.includes("งาน") || m.includes("กำหนดส่ง") || m.includes("ตรวจ") || m.includes("เสร็จสิ้น")) return "task";
   return "general";
 }
@@ -94,6 +102,7 @@ const CATEGORY_META: Record<NotifCategory, ActionMeta> = {
   mention: { Icon: AtSign, color: "#8B5CF6" },
   reaction: { Icon: Heart, color: "#EC4899" },
   task: { Icon: CheckCircle2, color: "#0D9488" },
+  task_rejected: { Icon: RotateCcw, color: "#DC2626" },
   meeting: { Icon: CalendarClock, color: "#6366F1" },
   ticket: { Icon: TriangleAlert, color: "#F59E0B" },
   report_reminder: { Icon: Clock, color: "#F59E0B" },
@@ -117,6 +126,7 @@ const CATEGORY_LABEL: Record<NotifCategory, string> = {
   mention: "แท็ก/เชิญเข้าห้อง",
   reaction: "รีแอ็กชัน",
   task: "งาน",
+  task_rejected: "ตรวจแล้วไม่ผ่าน",
   meeting: "ประชุม",
   ticket: "ตั๋วปัญหา",
   report_reminder: "แจ้งเตือนส่งรายงาน",
