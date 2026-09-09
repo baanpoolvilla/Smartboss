@@ -215,14 +215,12 @@ function ModuleRail({
         <Logo size="md" />
       </Link>
 
-      {/* หัวข้อโมดูล ต่อจากโลโก้ในบล็อกหัวรางเดียวกัน — ยังเป็นทางออกกลับ
-          หน้ารวมแอปเหมือนเดิม เส้นขอบล่างอยู่ตรงนี้ที่เดียว ปิดท้ายบล็อกหัวราง
-          ก่อนเข้าเมนู */}
-      <Link
-        href="/"
-        title="กลับหน้ารวมแอป"
-        className="flex h-[56px] shrink-0 items-center gap-2.5 border-b border-(--line) px-4 transition-colors hover:bg-(--bg-soft)"
-      >
+      {/* หัวข้อโมดูล ต่อจากโลโก้ในบล็อกหัวรางเดียวกัน — แค่ป้ายบอกว่าอยู่โมดูล
+          ไหน ไม่ใช่ลิงก์อีกต่อไป (เดิมกดกลับหน้ารวมแอปได้เหมือนโลโก้ด้านบน
+          ซึ่งซ้ำซ้อนกันเอง "ตอนแรกกดได้ ตอนนี้ต้องกดไม่ได้แล้วเพราะกดที่โลโก้
+          แทน" — โลโก้ทำหน้าที่นั้นแทนตัวเดียวพอ) เส้นขอบล่างอยู่ตรงนี้ที่เดียว
+          ปิดท้ายบล็อกหัวรางก่อนเข้าเมนู */}
+      <div className="flex h-[56px] shrink-0 items-center gap-2.5 border-b border-(--line) px-4">
         <span
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]"
           style={{ backgroundColor: module.colorBg }}
@@ -232,7 +230,7 @@ function ModuleRail({
         <span className="truncate text-sm font-bold text-(--ink)">
           {module.name}
         </span>
-      </Link>
+      </div>
 
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
         {module.menus.map((menu) => (
