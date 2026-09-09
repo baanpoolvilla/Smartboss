@@ -120,6 +120,13 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
   // (already wired up here via onDateClick's day-summary popup). Desktop
   // keeps the full pill unchanged.
   const [isNarrowViewport, setIsNarrowViewport] = useState(false);
+  // A day cell is (viewport width) ÷ 7, so its usable width scales with the
+  // phone, but the dot cap was a flat number — 6 dots + the "+N" badge fit
+  // fine on a 440px-wide phone but touched the cell's own edge on a 390px
+  // one ("พอเป็น 16 มันได้ แต่พอ 12 จุดมันเลย"). Scale the cap down a step
+  // on genuinely narrow phones instead of keeping one fixed number for
+  // every width under the 640px breakpoint.
+  const [dotCap, setDotCap] = useState(6);
   // ≥1024px (lg) only — CalendarRail (the "คนในองค์กร" card) shows up at the
   // exact same breakpoint. This card's *own* outer height gets pinned to
   // match it there (see cardHeight below) so the two cards start and end on
@@ -191,6 +198,9 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
       // same 32px here too.
       setCalendarHeight(Math.max(360, Math.round(window.innerHeight - top - 32 - bottomNavHeight)));
       setIsNarrowViewport(window.innerWidth < 640);
+      // 415px ≈ iPhone 12 Pro (390) and smaller; anything from the 14/15/16
+      // Pro Max (428–440) up keeps the full 6.
+      setDotCap(window.innerWidth < 415 ? 5 : 6);
 
       const desktop = window.innerWidth >= 1024;
       setIsDesktop(desktop);
@@ -509,7 +519,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
       // read as messy/hard-to-read clutter at real phone width once actually
       // deployed ("ให้แสดงแค่จุดๆพอ" — just dots is enough). No count
       // threshold anymore, dots for every day that has anything.
-      const DOT_CAP = 6;
+      const DOT_CAP = dotCap;
       const items = events.filter((e) => {
         if (e.type === "holiday") return false;
         const start = e.start.slice(0, 10);
