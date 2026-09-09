@@ -5,9 +5,20 @@ import { Dialog, DialogContent } from "@/modules/report_task/components/ui/dialo
 import type { ReportPostImage } from "@/modules/report_task/store/report-feed-store";
 import { ReportFileChip } from "@/modules/report_task/components/report-feed/report-file-chip";
 import { isDocAttachment, isVideoAttachment } from "@/modules/report_task/lib/report-attachment-kind";
-import { ChevronLeft, ChevronRight, Download, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Minus, Plus, X } from "lucide-react";
 
 const SWIPE_THRESHOLD_PX = 80;
+const MIN_SCALE = 1;
+const MAX_SCALE = 4;
+const DOUBLE_TAP_SCALE = 2.5;
+
+function clampScale(s: number) {
+  return Math.min(MAX_SCALE, Math.max(MIN_SCALE, s));
+}
+
+function distanceBetween(a: { x: number; y: number }, b: { x: number; y: number }) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
 
 export function ReportImageLightbox({
   images,
@@ -25,6 +36,45 @@ export function ReportImageLightbox({
   const [dragging, setDragging] = useState(false);
   const dragStartX = useRef(0);
   const activeThumbRef = useRef<HTMLButtonElement>(null);
+
+  // Zoom — double-click/double-tap, scroll wheel, and pinch all land here
+  // ("zoom in / zoom out รูปภาพได้ด้วย ทั้งหมดที่เป็นรูปภาพเลย") since this
+  // one component is what every "รูปภาพ" click across the module opens into.
+  // `pan` only ever matters while `scale > 1` — reset together whenever the
+  // image resets (index change, zooming back out to 1x).
+  const [scale, setScale] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const zoomed = scale > 1;
+  // Single-pointer drag-to-pan while zoomed; the existing swipe-to-next-image
+  // drag above only makes sense at 1x, where there's nothing to pan.
+  const panStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+  const isPanning = useRef(false);
+  // Two-finger pinch — tracks every active pointer by id so the second
+  // finger's own pointerdown/move can be told apart from the first's.
+  const activePointers = useRef(new Map<number, { x: number; y: number }>());
+  const pinchStart = useRef({ dist: 0, scale: 1 });
+
+  function resetZoom() {
+    setScale(1);
+    setPan({ x: 0, y: 0 });
+  }
+
+  function zoomBy(delta: number, center?: { x: number; y: number }) {
+    setScale((s) => {
+      const next = clampScale(s + delta);
+      if (next === 1) setPan({ x: 0, y: 0 });
+      else if (center) {
+        // Keep the point under the cursor/pinch-center visually still as the
+        // scale changes, instead of always zooming toward the image's own
+        // center — same feel as a map or photo app's zoom.
+        setPan((p) => ({
+          x: p.x - center.x * (next / s - 1),
+          y: p.y - center.y * (next / s - 1),
+        }));
+      }
+      return next;
+    });
+  }
   // With 15-20+ attachments the filmstrip scrolls — keep the active
   // thumbnail on screen as the arrows/swipe/keyboard move through them,
   // not just clicks on the strip itself.
@@ -38,6 +88,8 @@ export function ReportImageLightbox({
   if (lastIndex !== index) {
     setLastIndex(index);
     setDragOffset(0);
+    setScale(1);
+    setPan({ x: 0, y: 0 });
   }
 
   // Standard lightbox conventions: arrow keys page through, Escape closes.
@@ -59,24 +111,81 @@ export function ReportImageLightbox({
   const isVideo = isVideoAttachment(image.mime);
   const isDoc = isDocAttachment(image.mime);
 
-  function handlePointerDown(e: React.PointerEvent<HTMLElement>) {
-    if (!hasMultiple) return;
-    // A video has its own controls (play/seek) to drag-swipe past without
-    // hijacking every pointer-down on it as a page-change gesture — same
-    // reason it skips the click-to-close/swipe handling entirely below.
-    if (isVideo) return;
+  function handleWheel(e: React.WheelEvent<HTMLElement>) {
+    if (isVideo || isDoc) return;
+    e.preventDefault();
     e.stopPropagation();
-    setDragging(true);
-    dragStartX.current = e.clientX;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const center = { x: e.clientX - (rect.left + rect.width / 2), y: e.clientY - (rect.top + rect.height / 2) };
+    zoomBy(-e.deltaY * 0.0025 * Math.max(scale, 1), center);
+  }
+
+  function handleDoubleClick(e: React.MouseEvent<HTMLElement>) {
+    if (isVideo || isDoc) return;
+    e.stopPropagation();
+    if (zoomed) {
+      resetZoom();
+    } else {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const center = { x: e.clientX - (rect.left + rect.width / 2), y: e.clientY - (rect.top + rect.height / 2) };
+      setScale(DOUBLE_TAP_SCALE);
+      setPan({ x: -center.x * (DOUBLE_TAP_SCALE - 1), y: -center.y * (DOUBLE_TAP_SCALE - 1) });
+    }
+  }
+
+  function handlePointerDown(e: React.PointerEvent<HTMLElement>) {
+    // A video has its own controls (play/seek) to drag-swipe/pinch past
+    // without hijacking every pointer-down on it — same reason it skips the
+    // click-to-close/swipe/zoom handling entirely below.
+    if (isVideo || isDoc) return;
+    e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
+    activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (activePointers.current.size === 2) {
+      // Second finger landed — this becomes a pinch, not a pan/swipe.
+      isPanning.current = false;
+      setDragging(false);
+      const [p1, p2] = [...activePointers.current.values()];
+      pinchStart.current = { dist: distanceBetween(p1!, p2!), scale };
+      return;
+    }
+
+    if (zoomed) {
+      isPanning.current = true;
+      panStart.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
+    } else if (hasMultiple) {
+      setDragging(true);
+      dragStartX.current = e.clientX;
+    }
   }
 
   function handlePointerMove(e: React.PointerEvent<HTMLElement>) {
-    if (!dragging) return;
-    setDragOffset(e.clientX - dragStartX.current);
+    if (!activePointers.current.has(e.pointerId)) return;
+    activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (activePointers.current.size === 2) {
+      const [p1, p2] = [...activePointers.current.values()];
+      const dist = distanceBetween(p1!, p2!);
+      if (pinchStart.current.dist > 0) {
+        setScale(clampScale(pinchStart.current.scale * (dist / pinchStart.current.dist)));
+      }
+      return;
+    }
+
+    if (isPanning.current) {
+      setPan({ x: panStart.current.panX + (e.clientX - panStart.current.x), y: panStart.current.panY + (e.clientY - panStart.current.y) });
+    } else if (dragging) {
+      setDragOffset(e.clientX - dragStartX.current);
+    }
   }
 
-  function handlePointerUp() {
+  function handlePointerUp(e: React.PointerEvent<HTMLElement>) {
+    activePointers.current.delete(e.pointerId);
+    if (activePointers.current.size < 2 && scale <= 1) resetZoom(); // pinched back below 1x
+    if (activePointers.current.size > 0) return; // one finger still down mid-pinch
+
+    isPanning.current = false;
     if (!dragging) return;
     setDragging(false);
     if (dragOffset > SWIPE_THRESHOLD_PX) {
@@ -106,6 +215,35 @@ export function ReportImageLightbox({
         >
           <X className="h-5 w-5" />
         </button>
+
+        {/* +/- buttons for discoverability — double-click, scroll wheel, and
+            pinch all zoom too (see the img's own handlers), but none of
+            those are obvious just by looking at the screen. Hidden for a
+            video/doc, which have no zoom of their own. */}
+        {!isVideo && !isDoc && (
+          <div
+            className="absolute top-4 left-4 flex items-center gap-0.5 rounded-full bg-white/10 p-0.5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => zoomBy(-0.75)}
+              disabled={scale <= MIN_SCALE}
+              className="h-9 w-9 rounded-full text-white flex items-center justify-center hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer"
+              aria-label="ย่อรูป"
+            >
+              <Minus className="h-4 w-4" />
+            </button>
+            <span className="w-11 text-center text-xs tabular-nums text-white/80 select-none">{Math.round(scale * 100)}%</span>
+            <button
+              onClick={() => zoomBy(0.75)}
+              disabled={scale >= MAX_SCALE}
+              className="h-9 w-9 rounded-full text-white flex items-center justify-center hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer"
+              aria-label="ขยายรูป"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
+        )}
 
         {hasMultiple && (
           <button
@@ -161,16 +299,28 @@ export function ReportImageLightbox({
             draggable={false}
             onDragStart={(e) => e.preventDefault()}
             onClick={(e) => e.stopPropagation()}
+            onWheel={handleWheel}
+            onDoubleClick={handleDoubleClick}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerUp}
             style={{
-              transform: `translateX(${dragOffset}px)`,
-              transition: dragging ? "none" : "transform 200ms ease",
-              touchAction: "pan-y",
+              // Pan/zoom compose with the swipe-to-next-image offset — at 1x
+              // pan is always {0,0} so this collapses to the old
+              // translateX-only behavior exactly.
+              transform: `translate(${pan.x + dragOffset}px, ${pan.y}px) scale(${scale})`,
+              transition: dragging || isPanning.current ? "none" : "transform 200ms ease",
+              // "none" while zoomed — the browser's own native pinch/pan
+              // would otherwise fight the pointer-based zoom/pan above.
+              // "pan-y" at 1x keeps vertical scroll gestures (nothing to
+              // scroll here, but this matches the pre-existing behavior)
+              // while letting our own handlers own horizontal swipe.
+              touchAction: zoomed ? "none" : "pan-y",
             }}
-            className={`max-w-[92vw] max-h-[88vh] object-contain select-none ${hasMultiple ? (dragging ? "cursor-grabbing" : "cursor-grab") : "cursor-default"}`}
+            className={`max-w-[92vw] max-h-[88vh] object-contain select-none ${
+              zoomed ? (isPanning.current ? "cursor-grabbing" : "cursor-zoom-out") : hasMultiple ? (dragging ? "cursor-grabbing" : "cursor-grab") : "cursor-zoom-in"
+            }`}
           />
         )}
 
