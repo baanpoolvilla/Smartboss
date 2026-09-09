@@ -182,6 +182,7 @@ export function ReportCard({
   const maxImages = useAttachmentSettingsStore((s) => s.settings.maxImagesPerReportPost);
   const toggleReaction = useReportFeedStore((s) => s.toggleReaction);
   const addStickerReaction = useReportFeedStore((s) => s.addStickerReaction);
+  const removeStickerReaction = useReportFeedStore((s) => s.removeStickerReaction);
   const stickers = useStickerStore((s) => s.stickers);
   const addReply = useReportFeedStore((s) => s.addReply);
   const editReplyAction = useReportFeedStore((s) => s.editReply);
@@ -1134,10 +1135,12 @@ export function ReportCard({
               </button>
             );
           })}
-          {/* Scored stickers a lead handed the author — display-only chip
-              (same spot Kanban shows them on a task card), tallied by
-              stickerId instead of one chip per event, so 3x 😡 on one post
-              reads as "😡 3" instead of three separate pills. */}
+          {/* Scored stickers a lead handed the author — tallied by stickerId
+              instead of one chip per event, so 3x 😡 on one post reads as
+              "😡 3" instead of three separate pills. CEO can click straight
+              from here to undo the most recent one of that kind ("กด
+              ยกเลิกตรงนี้ได้ด้วยสิ" — not just from the room summary tab);
+              everyone else just sees it, same as before. */}
           {Object.entries(
             post.stickerReactions.reduce<Record<string, number>>((acc, r) => {
               acc[r.stickerId] = (acc[r.stickerId] ?? 0) + 1;
@@ -1146,14 +1149,32 @@ export function ReportCard({
           ).map(([stickerId, count]) => {
             const sticker = stickers.find((s) => s.id === stickerId);
             if (!sticker) return null;
+            const canUndo = isOwner(viewingAsUserId);
+            // Undoes whichever one of this stickerId was given most recently —
+            // there's no way to tell which specific instance a click "means"
+            // when several of the same sticker sit stacked in one chip, and
+            // the most recent is the one most likely to be the mistake being
+            // undone right after giving it.
+            const latest = post.stickerReactions
+              .filter((r) => r.stickerId === stickerId)
+              .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
             return (
               <span
                 key={stickerId}
-                title={`${sticker.label} (${sticker.points > 0 ? `+${sticker.points}` : sticker.points})`}
-                className="text-xs px-1.5 py-0.5 rounded-full bg-[var(--bg-soft)] flex items-center gap-0.5"
+                title={
+                  canUndo
+                    ? `${sticker.label} (${sticker.points > 0 ? `+${sticker.points}` : sticker.points}) — คลิกเพื่อยกเลิกอันล่าสุด`
+                    : `${sticker.label} (${sticker.points > 0 ? `+${sticker.points}` : sticker.points})`
+                }
+                className={cn(
+                  "text-xs px-1.5 py-0.5 rounded-full bg-[var(--bg-soft)] flex items-center gap-0.5",
+                  canUndo && "hover:bg-red-50 cursor-pointer group/sticker"
+                )}
+                onClick={canUndo && latest ? () => removeStickerReaction(post.id, latest.id, viewingAsUserId) : undefined}
               >
                 <span>{sticker.emoji}</span>
                 {count > 1 && <span className="text-[var(--ink-soft)]">{count}</span>}
+                {canUndo && <X className="h-3 w-3 text-[var(--ink-faint)] group-hover/sticker:text-[var(--chart-red)]" />}
               </span>
             );
           })}
