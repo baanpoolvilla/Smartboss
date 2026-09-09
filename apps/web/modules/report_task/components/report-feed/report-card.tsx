@@ -242,8 +242,30 @@ export function ReportCard({
   // Only the earliest post by this author, in this room, under this same
   // round, on this same day actually shows the badge — later ones already
   // said it once.
+  // Also suppressed when a DIFFERENT post that same day already satisfied
+  // this exact round on time — the round's own compliance status
+  // (roundComplianceStatus in report-feed-compliance.ts) already counts the
+  // day as "ตรงเวลา" the moment any one post beats the cutoff, so a later
+  // post badging itself "ส่งช้า" read as a real miss when the obligation was
+  // already met ("จะเตือนทำไมถ้ามันส่งไปแล้ว...ถ้าไม่ยกเลิกหรือลบโพสที่ถูก
+  // นับไปแล้ว"). Order doesn't matter here (unlike the late-vs-late dedup
+  // above) — a cutoff is a fixed clock time each day, not "whoever posted
+  // first," so an on-time post counts regardless of whether it landed before
+  // or after this one.
+  const roundAlreadySatisfiedOnTime =
+    !!lateCutoff &&
+    allPosts.some(
+      (p) =>
+        p.id !== post.id &&
+        p.topicId === post.topicId &&
+        p.authorId === post.authorId &&
+        !p.excludeFromSubmission &&
+        localDateStr(new Date(p.createdAt)) === localDateStr(new Date(post.createdAt)) &&
+        onTimeCutoffFor(p.createdAt, postDayCutoffs)?.id === lateCutoff.id
+    );
   const isFirstLateOfRound =
     !lateCutoff ||
+    (!roundAlreadySatisfiedOnTime &&
     !allPosts.some(
       (p) =>
         p.id !== post.id &&
@@ -253,7 +275,7 @@ export function ReportCard({
         localDateStr(new Date(p.createdAt)) === localDateStr(new Date(post.createdAt)) &&
         lateCutoffFor(p.createdAt, postDayCutoffs)?.id === lateCutoff.id &&
         new Date(p.createdAt).getTime() < new Date(post.createdAt).getTime()
-    );
+    ));
   // Same dedup, mirrored for the positive badge — posting twice before the
   // same round's deadline doesn't mean "on time" twice over, it means the
   // round was already satisfied by whichever post got there first
