@@ -1049,7 +1049,7 @@ export function ReportCard({
             // an obvious answer — the poster opted this one out on purpose.
             <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
               <span className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-[var(--bg-soft)] text-[var(--ink-soft)] border border-[var(--line)]">
-                ไม่นับเป็นการส่ง daily
+                ไม่นับเป็นการส่งรีพอต
               </span>
             </div>
           ) : postDayExempt ? (

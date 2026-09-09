@@ -416,7 +416,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
               onCheckedChange={(v) => setExcludeFromSubmission(v === true)}
               className="h-3.5 w-3.5"
             />
-            โพสต์นี้ไม่นับเป็นการส่ง daily
+            โพสต์นี้ไม่นับเป็นการส่งรีพอต
           </label>
         )}
 
