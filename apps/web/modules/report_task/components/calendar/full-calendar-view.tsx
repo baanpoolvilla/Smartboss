@@ -539,19 +539,18 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
                   style={{ backgroundColor: e.colorHint ?? colors[e.type] }}
                 />
               ))}
+              {items.length > DOT_CAP && (
+                // Right after the dots, same row, instead of pinned to the
+                // cell's corner — asked to sit right where the dots end
+                // ("เอามาไว้ตรงที่วงได้ไหม") rather than jump to the
+                // bottom-right. Small enough (text-[7px]) that it still
+                // fits the row without wrapping or getting clipped by the
+                // square cell's overflow:hidden.
+                <span className="shrink-0 rounded-full px-[3px] text-[7px] font-extrabold leading-[1.35] text-white bg-[var(--ink)]">
+                  +{items.length - DOT_CAP}
+                </span>
+              )}
             </div>
-          )}
-          {items.length > DOT_CAP && (
-            // Count badge pinned to the cell's bottom-right corner (the month
-            // day-frame is position:relative) instead of inline after the dots.
-            // Inline, it wrapped to a second line and got clipped by the square
-            // cell's overflow:hidden ("+ โดนทับ"); in the corner it's always
-            // fully visible and the compact one-screen square layout is
-            // unchanged. Single neutral-dark (--ink), same as desktop. Dark
-            // pill reads as a "count" against the orange/red/amber events.
-            <span className="pointer-events-none absolute bottom-px right-px rounded-full px-[3px] text-[7px] font-extrabold leading-[1.35] text-white bg-[var(--ink)]">
-              +{items.length - DOT_CAP}
-            </span>
           )}
         </div>
       );
