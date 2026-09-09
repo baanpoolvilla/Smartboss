@@ -89,7 +89,11 @@ function LauncherFrame({
 
   return (
     <div className="flex min-h-dvh flex-col bg-(--bg-soft)">
-      <header className="flex h-[60px] shrink-0 items-center justify-between border-b border-(--line) bg-(--bg) px-4 sm:px-6">
+      {/* ไม่มี border-b ตั้งใจ — ("อยากให้เป็นแบบนี้ไม่มีเส้น มันงงอะดูแปลกๆ")
+          สีพื้นขาว (--bg) ต่างจากพื้นหลังหน้า (--bg-soft) ด้านล่างอยู่แล้ว พอ
+          แยกส่วนได้โดยไม่ต้องมีเส้นขีดเพิ่ม ให้ตรงกับหัวรางฝั่งซ้ายในโมดูล
+          ที่เอาเส้นระหว่างโลโก้กับหัวข้อออกไปแล้วเหมือนกัน */}
+      <header className="flex h-[60px] shrink-0 items-center justify-between bg-(--bg) px-4 sm:px-6">
         <Link href="/" aria-label="หน้าหลัก">
           <Logo size="md" />
         </Link>
