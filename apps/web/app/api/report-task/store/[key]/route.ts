@@ -11,6 +11,7 @@ import {
   saveDepartmentOverlay,
 } from "@/modules/report_task/lib/db/departments";
 import { isValidStoreKey, readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
+import { recordReportStickerEvents } from "@/modules/report_task/lib/db/report-feed-performance";
 import {
   listHolidayEvents,
   listLeaveEvents,
@@ -50,6 +51,14 @@ const DIRECTORY_KEY = "employees";
  * /admin/departments) ส่วนสี/หัวหน้าแผนกยังเป็นของโมดูลนี้เอง (ดู lib/db/departments.ts)
  */
 const DEPARTMENTS_KEY = "departments";
+
+/**
+ * ฟีดรายงาน — เขียนทั้งก้อนเหมือนคีย์ทั่วไป แต่ต้องอ่านก้อนเก่าไว้ก่อนทับ
+ * เพื่อ diff หา sticker reaction ที่เพิ่งติดใหม่ (recordReportStickerEvents)
+ * แล้วส่งเข้าระบบคะแนนผลงานกลาง (core.performance_events) — ขนานกับที่
+ * writeTasks ของ Kanban ทำกับ task.reactions อยู่แล้ว
+ */
+const REPORT_FEED_KEY = "report-feed";
 
 /*
  * การลากับวันหยุดเป็นของโมดูลบุคคล (workforce) — อ่านอย่างเดียวที่นี่
@@ -158,6 +167,11 @@ async function put(request: NextRequest, key: string) {
   }
 
   const expectedVersion = typeof body.expectedVersion === "number" ? body.expectedVersion : null;
+
+  // ต้องอ่านก้อนเก่าไว้ก่อนเขียนทับ — หลังเขียนแล้วก้อนเก่าหายไปเลย ไม่มีทาง
+  // ย้อนกลับมา diff ว่า reaction ไหนเพิ่งติดใหม่ (เฉพาะคีย์ report-feed)
+  const before = key === REPORT_FEED_KEY ? await readStore<{ posts?: unknown[] }>(session.orgId, key) : null;
+
   const result = await writeStore(
     session.orgId,
     key,
@@ -172,6 +186,15 @@ async function put(request: NextRequest, key: string) {
       { status: 409 }
     );
   }
+
+  if (key === REPORT_FEED_KEY) {
+    await recordReportStickerEvents(
+      session.orgId,
+      before?.data as Parameters<typeof recordReportStickerEvents>[1],
+      body.data as Parameters<typeof recordReportStickerEvents>[2]
+    );
+  }
+
   return Response.json({ ok: true, version: result.version });
 }
 
