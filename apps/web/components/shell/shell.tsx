@@ -195,11 +195,23 @@ function ModuleRail({
 }) {
   return (
     <aside className="hidden w-[200px] shrink-0 flex-col border-r border-(--line) bg-(--bg) lg:flex">
-      {/* หัวราง = ทางออกกลับไปหน้ารวมแอป (เหมือนกดปุ่ม home ของมือถือ) */}
+      {/* โลโก้ SmartBoss ตรึงบนสุดทุกหน้าในโมดูล ("อยากให้โลโก้สมาบอสแสดงมุม
+          ซ้ายขนทุกหน้าเลย") — เดิมแถวนี้เป็นของหัวข้อโมดูลไปเลย ทำให้โลโก้
+          หายไปทันทีที่กดเข้าโมดูล เห็นแค่ตอนอยู่หน้ารวมแอป (LauncherFrame) */}
+      <Link
+        href="/"
+        aria-label="หน้าหลัก"
+        className="flex h-[56px] shrink-0 items-center border-b border-(--line) px-4 transition-colors hover:bg-(--bg-soft)"
+      >
+        <Logo size="sm" />
+      </Link>
+
+      {/* หัวข้อโมดูล ขยับลงมาเป็นแถวของตัวเอง ใต้โลโก้ — ยังเป็นทางออกกลับ
+          หน้ารวมแอปเหมือนเดิม */}
       <Link
         href="/"
         title="กลับหน้ารวมแอป"
-        className="flex h-[60px] shrink-0 items-center gap-2.5 border-b border-(--line) px-4 transition-colors hover:bg-(--bg-soft)"
+        className="flex h-[56px] shrink-0 items-center gap-2.5 border-b border-(--line) px-4 transition-colors hover:bg-(--bg-soft)"
       >
         <span
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]"
