@@ -9,6 +9,7 @@ import type {
   Position,
   Site,
   UpdateCompanyInput,
+  UpdateSiteInput,
 } from '@workforce/contracts';
 import type { schema } from '@workforce/db';
 import { AppError, uuidv7 } from '@workforce/domain';
@@ -234,6 +235,61 @@ export class OrganizationService {
     });
   }
 
+  async getSite(id: string): Promise<Site> {
+    return this.uow.run(async (uow) => {
+      const row = await this.repository.findSiteById(uow.tx, id);
+      if (row === undefined) throw AppError.notFound('site');
+      return toSite(row);
+    });
+  }
+
+  /**
+   * แก้ไขสถานที่ — ย้ายหมุด / แก้รัศมี / ปิดใช้งาน
+   *
+   * พิกัดกับรัศมีคือสิ่งที่ตัดสินว่าการลงเวลาของพนักงานผ่านหรือไม่ผ่าน
+   * (`evaluateCheckin()` ใน @workforce/domain) ⇒ ต้องลง audit ทั้งค่าก่อนและหลัง
+   * ไม่ใช่แค่บอกว่า "มีคนแก้" เพราะเวลาพนักงานร้องว่าลงเวลาไม่ผ่าน ต้องย้อนได้ว่า
+   * ตอนนั้นหมุดอยู่ที่ไหนและรัศมีเท่าไร
+   */
+  async updateSite(id: string, input: UpdateSiteInput): Promise<Site> {
+    return this.uow.run(async (uow) => {
+      const before = await this.repository.findSiteById(uow.tx, id);
+      if (before === undefined) throw AppError.notFound('site');
+
+      const patch: Partial<typeof schema.sites.$inferInsert> = {};
+      if (input.name !== undefined) patch.name = input.name;
+      if (input.time_zone !== undefined) patch.timeZone = input.time_zone;
+      if (input.radius_m !== undefined) patch.radiusM = input.radius_m;
+      if (input.status !== undefined) patch.status = input.status;
+      // schema บังคับให้พิกัดมาเป็นคู่แล้ว เช็คข้างเดียวพอ
+      if (input.latitude !== undefined) {
+        patch.latitude = input.latitude === null ? null : input.latitude.toFixed(6);
+        patch.longitude =
+          input.longitude === null || input.longitude === undefined
+            ? null
+            : input.longitude.toFixed(6);
+      }
+
+      if (Object.keys(patch).length === 0) return toSite(before);
+
+      const after = await this.repository.updateSite(uow.tx, id, patch);
+      if (after === undefined) throw AppError.notFound('site');
+
+      await uow.audit({
+        action: 'organization.site.update',
+        resourceType: 'site',
+        resourceId: id,
+        resourceVersion: after.version,
+        outcome: 'SUCCESS',
+        companyId: after.companyId,
+        before: toSiteAudit(before),
+        after: toSiteAudit(after),
+      });
+
+      return toSite(after);
+    });
+  }
+
   // --- positions ---
 
   async createPosition(input: CreatePositionInput): Promise<Position> {
@@ -307,6 +363,22 @@ function toCompanyAudit(row: CompanyRow): Record<string, unknown> {
     status: row.status,
     // ชื่อ field ลงท้าย tax_id → redactSensitive จะปิดค่าให้เอง
     tax_id_present: row.taxIdEncrypted !== null,
+  };
+}
+
+/**
+ * ค่าที่ลง audit ตอนแก้สถานที่ — เก็บพิกัดกับรัศมีไว้ด้วยโดยตั้งใจ
+ * เพราะเป็นตัวเลขที่ตัดสินว่าการลงเวลาผ่านหรือไม่ (ไม่ใช่ข้อมูลส่วนบุคคล)
+ */
+function toSiteAudit(row: SiteRow): Record<string, unknown> {
+  return {
+    code: row.code,
+    name: row.name,
+    time_zone: row.timeZone,
+    latitude: row.latitude,
+    longitude: row.longitude,
+    radius_m: row.radiusM,
+    status: row.status,
   };
 }
 

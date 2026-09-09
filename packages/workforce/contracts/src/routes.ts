@@ -39,6 +39,7 @@ import {
   positionSchema,
   siteSchema,
   updateCompanySchema,
+  updateSiteSchema,
 } from './organization';
 import {
   assignmentSchema,
@@ -201,6 +202,25 @@ export const ROUTES: readonly RouteDefinition[] = [
     body: createSiteSchema,
     response: siteSchema,
     successStatus: 201,
+  },
+  {
+    operationId: 'getSite',
+    method: 'get',
+    path: '/sites/{siteId}',
+    summary: 'ดูสถานที่ทำงาน',
+    tag: 'organization',
+    permissions: ['workforce.people.read'],
+    response: siteSchema,
+  },
+  {
+    operationId: 'updateSite',
+    method: 'patch',
+    path: '/sites/{siteId}',
+    summary: 'แก้ไขสถานที่ทำงาน (ย้ายหมุด / แก้รัศมี)',
+    tag: 'organization',
+    permissions: ['workforce.settings.manage'],
+    body: updateSiteSchema,
+    response: siteSchema,
   },
   {
     operationId: 'listPositions',

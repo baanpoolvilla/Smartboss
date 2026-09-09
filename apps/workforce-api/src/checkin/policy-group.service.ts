@@ -1,7 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import type { AppConfig } from '@workforce/config';
 import type { CreatePolicyGroupInput } from '@workforce/contracts';
-import { AppError, EffectivePeriod, LocalDate, uuidv7 } from '@workforce/domain';
+import { AppError, EffectivePeriod, LocalDate, uuidv7, type Clock } from '@workforce/domain';
 import { UnitOfWork } from '../infrastructure/unit-of-work';
+import { APP_CONFIG, CLOCK } from '../shared/tokens';
 import { CheckinRepository } from './checkin.repository';
 
 @Injectable()
@@ -9,7 +11,22 @@ export class PolicyGroupService {
   constructor(
     private readonly uow: UnitOfWork,
     private readonly repository: CheckinRepository,
+    @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
+
+  /**
+   * วันที่ที่ใช้ resolve นโยบาย — ต้องมาจาก Clock ที่ฉีดเข้ามา ไม่ใช่ `new Date()`
+   * ตรง ๆ เพราะเทสต์ใช้ FixedClock เดินเวลาเอง และวันที่ต้องเป็นวันตามโซนเวลา
+   * ของบริษัท ไม่ใช่ของ UTC (ต่างกันจริงในช่วงเที่ยงคืนถึงเจ็ดโมงเช้าบ้านเรา)
+   */
+  private resolveAsOf(asOf: string | undefined): string {
+    if (asOf === undefined) {
+      return LocalDate.fromInstant(this.clock.now(), this.config.DEFAULT_TIME_ZONE).toString();
+    }
+    // ส่งค่าที่ไม่ใช่วันที่มาต้องได้ 400 ไม่ใช่ผลลัพธ์เพี้ยนเงียบ ๆ
+    return LocalDate.parse(asOf).toString();
+  }
 
   async create(input: CreatePolicyGroupInput): Promise<Record<string, unknown>> {
     return this.uow.run(async (uow) => {
@@ -56,6 +73,74 @@ export class PolicyGroupService {
       });
 
       return { id: row.id, code: row.code, name: row.name, effective_from: row.effectiveFrom };
+    });
+  }
+
+  /**
+   * รายการนโยบายทั้งหมด พร้อมจำนวนคนที่อยู่ในแต่ละกลุ่ม ณ วันนี้
+   *
+   * หน้าตั้งค่าต้องตอบคำถามเดียวให้ได้: "พนักงานคนนี้จะลงเวลาผ่านไหม"
+   * ⇒ ต้องเห็นทั้งค่าที่ตั้งไว้ **และ** ว่ามีใครถูกจัดเข้ากลุ่มแล้วบ้าง
+   * กลุ่มที่ตั้งไว้สวยแต่ไม่มีสมาชิกเลย = ทุกคนยังตกไปใช้ค่า default ที่เข้มมาก
+   * (checkin.service.ts DEFAULT_POLICY) ซึ่งเป็นอาการที่หาสาเหตุยากที่สุด
+   */
+  async list(companyId: string | undefined, asOf?: string): Promise<{
+    items: Record<string, unknown>[];
+  }> {
+    const on = this.resolveAsOf(asOf);
+    return this.uow.run(async (uow) => {
+      const groups = await this.repository.listPolicyGroups(uow.tx, {
+        ...(companyId === undefined ? {} : { companyId }),
+      });
+      const members = await this.repository.listActivePolicyMembers(uow.tx, on);
+
+      const countByGroup = new Map<string, number>();
+      for (const member of members) {
+        countByGroup.set(
+          member.policyGroupId,
+          (countByGroup.get(member.policyGroupId) ?? 0) + 1,
+        );
+      }
+
+      return {
+        items: groups.map((group) => ({
+          id: group.id,
+          company_id: group.companyId,
+          code: group.code,
+          name: group.name,
+          allowed_methods: group.allowedMethods,
+          photo_required: group.photoRequired,
+          photo_random_percent: group.photoRandomPercent,
+          location_required: group.locationRequired,
+          allowed_site_ids: group.allowedSiteIds,
+          radius_m: group.radiusM,
+          max_accuracy_m: group.maxAccuracyM,
+          capture_deadline_seconds: group.captureDeadlineSeconds,
+          require_enrolled_device: group.requireEnrolledDevice,
+          require_live_capture: group.requireLiveCapture,
+          risk_action: group.riskAction,
+          photo_retention_days: group.photoRetentionDays,
+          effective_from: group.effectiveFrom,
+          effective_to: group.effectiveTo,
+          member_count: countByGroup.get(group.id) ?? 0,
+        })),
+      };
+    });
+  }
+
+  /** employment_id → policy group ที่สังกัดอยู่ตอนนี้ (ใช้เติมช่องเลือกในหน้าจอ) */
+  async listMemberships(asOf?: string): Promise<{
+    items: { employment_id: string; policy_group_id: string }[];
+  }> {
+    const on = this.resolveAsOf(asOf);
+    return this.uow.run(async (uow) => {
+      const members = await this.repository.listActivePolicyMembers(uow.tx, on);
+      return {
+        items: members.map((member) => ({
+          employment_id: member.employmentId,
+          policy_group_id: member.policyGroupId,
+        })),
+      };
     });
   }
 

@@ -243,6 +243,61 @@ export interface Company {
   currency: string;
 }
 
+/**
+ * สถานที่ทำงาน — พิกัดกับรัศมีคือตัวตัดสินว่าการลงเวลาด้วยมือถือผ่านหรือไม่ผ่าน
+ * (`evaluateCheckin()` ฝั่ง workforce) ⇒ ไซต์ที่ไม่มีพิกัดใช้ลงเวลาแบบ check-in ไม่ได้
+ *
+ * latitude/longitude เป็น numeric(9,6) ใน Postgres ⇒ API คืนมาเป็น **สตริง**
+ * ไม่ใช่ number (กันความคลาดเคลื่อนของ float) — อย่าเผลอเทียบด้วย ===
+ */
+export interface Site {
+  id: string;
+  company_id: string;
+  code: string;
+  name: string;
+  time_zone: string;
+  latitude: string | null;
+  longitude: string | null;
+  radius_m: number | null;
+  status: string;
+  version: number;
+}
+
+/**
+ * นโยบายลงเวลาด้วยมือถือ ของกลุ่มพนักงานหนึ่งกลุ่ม
+ *
+ * ตัวนี้คือสิ่งที่ตัดสินว่าพนักงานกดลงเวลาแล้วผ่านหรือไม่ผ่าน · พนักงานที่ยังไม่
+ * ถูกจัดเข้ากลุ่มไหนเลยจะตกไปใช้ค่า default ของ workforce ซึ่ง **เข้มมาก**
+ * (บังคับถ่ายรูปทุกครั้ง + เครื่องต้องได้รับอนุมัติ) ⇒ `member_count` เป็น 0
+ * ทุกกลุ่ม = ยังไม่มีใครได้ใช้นโยบายที่ตั้งไว้เลย
+ */
+export interface CheckinPolicyGroup {
+  id: string;
+  company_id: string;
+  code: string;
+  name: string;
+  allowed_methods: string[];
+  photo_required: string;
+  photo_random_percent: number;
+  location_required: boolean;
+  allowed_site_ids: string[];
+  radius_m: number;
+  max_accuracy_m: number;
+  capture_deadline_seconds: number;
+  require_enrolled_device: boolean;
+  require_live_capture: boolean;
+  risk_action: string;
+  photo_retention_days: number;
+  effective_from: string;
+  effective_to: string | null;
+  member_count: number;
+}
+
+export interface CheckinPolicyMembership {
+  employment_id: string;
+  policy_group_id: string;
+}
+
 export interface Device {
   id: string;
   company_id: string;

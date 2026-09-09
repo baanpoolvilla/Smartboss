@@ -11,6 +11,7 @@ import {
   type Paged,
   type Person,
 } from "@/modules/hr/lib/api";
+import { todayIso } from "@/modules/hr/lib/date";
 import {
   DAYS_OFF_LIMITS,
   loadDayOffQuota,
@@ -1259,6 +1260,249 @@ export async function createTimesheetPeriodAction(formData: FormData) {
     throw new Error(toMessage(error));
   }
   revalidatePath("/hr/timesheets");
+}
+
+/* ═══════════════════ สถานที่ทำงาน (geofence) ═══════════════════ */
+
+/**
+ * แปลงช่องพิกัดจากฟอร์มเป็นตัวเลข หรือ null เมื่อเว้นว่าง
+ *
+ * ช่องว่างกับเลข 0 ต้องแยกกันให้เด็ดขาด — ละติจูด 0 เป็นพิกัดจริง (เส้นศูนย์สูตร)
+ * ถ้าใช้ `Number(x) || null` ตามปกติ พิกัดนั้นจะกลายเป็น null เงียบ ๆ
+ */
+function coordOrNull(raw: FormDataEntryValue | null): number | null {
+  const text = String(raw ?? "").trim();
+  if (text === "") return null;
+  const value = Number(text);
+  return Number.isFinite(value) ? value : null;
+}
+
+export async function createSiteAction(formData: FormData) {
+  await guard(HR_PERMS.settingManage);
+
+  const companyId = String(formData.get("company_id") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  if (!companyId) throw new Error("ยังไม่มีบริษัทในระบบ workforce");
+  if (!name) throw new Error("กรุณาตั้งชื่อสถานที่");
+
+  const latitude = coordOrNull(formData.get("latitude"));
+  const longitude = coordOrNull(formData.get("longitude"));
+  // API ปฏิเสธพิกัดที่มาข้างเดียวด้วย 400 — ดักที่นี่เพื่อให้ข้อความเป็นภาษาคน
+  if ((latitude === null) !== (longitude === null)) {
+    throw new Error("ต้องกรอกละติจูดและลองจิจูดให้ครบทั้งคู่ หรือเว้นว่างทั้งคู่");
+  }
+
+  let existing: Paged<{ code?: string }> | null = null;
+  try {
+    existing = await wfFetch<Paged<{ code?: string }>>(`/sites?company_id=${companyId}`);
+  } catch {
+    // อ่านรายการเดิมไม่ได้ก็ยังสร้างได้ — แค่เสี่ยงรหัสชนแล้วได้ 409 ซึ่งบอกผู้ใช้ได้
+    existing = null;
+  }
+
+  try {
+    await wfFetch("/sites", {
+      method: "POST",
+      body: {
+        company_id: companyId,
+        code: nextCode("SITE", existing?.items ?? []),
+        name,
+        time_zone: "Asia/Bangkok",
+        latitude,
+        longitude,
+        radius_m: coordOrNull(formData.get("radius_m")),
+      },
+    });
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+  revalidatePath("/hr/sites");
+}
+
+/**
+ * แก้ไขสถานที่ — ย้ายหมุด / แก้รัศมี / เปิด-ปิดใช้งาน
+ *
+ * ส่งเฉพาะฟิลด์ที่ฟอร์มนั้นมีจริง เพราะ PATCH ของ workforce ถือว่า "ไม่ส่ง = ไม่แก้"
+ * ถ้าส่ง undefined ไปทั้งก้อนจะกลายเป็นการเคลียร์ค่าที่ผู้ใช้ไม่ได้สั่ง
+ */
+export async function updateSiteAction(formData: FormData) {
+  await guard(HR_PERMS.settingManage);
+
+  const siteId = String(formData.get("site_id") ?? "");
+  if (!siteId) throw new Error("ไม่พบสถานที่");
+
+  const body: Record<string, unknown> = {};
+
+  const name = String(formData.get("name") ?? "").trim();
+  if (name !== "") body.name = name;
+
+  const status = String(formData.get("status") ?? "").trim();
+  if (status !== "") body.status = status;
+
+  if (formData.has("radius_m")) body.radius_m = coordOrNull(formData.get("radius_m"));
+
+  // พิกัดต้องไปเป็นคู่เสมอ (schema ฝั่ง API บังคับ) — ส่งข้างเดียวแล้วอีกข้าง
+  // ค้างค่าเดิมไว้คือหมุดเพี้ยนแบบไม่มีใครรู้
+  if (formData.has("latitude") || formData.has("longitude")) {
+    const latitude = coordOrNull(formData.get("latitude"));
+    const longitude = coordOrNull(formData.get("longitude"));
+    if ((latitude === null) !== (longitude === null)) {
+      throw new Error("ต้องกรอกละติจูดและลองจิจูดให้ครบทั้งคู่ หรือเว้นว่างทั้งคู่เพื่อล้างหมุด");
+    }
+    body.latitude = latitude;
+    body.longitude = longitude;
+  }
+
+  if (Object.keys(body).length === 0) return;
+
+  try {
+    await wfFetch(`/sites/${siteId}`, { method: "PATCH", body });
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+  revalidatePath("/hr/sites");
+}
+
+/* ═══════════════ นโยบายลงเวลาด้วยมือถือ ═══════════════ */
+
+/** checkbox ที่ไม่ถูกติ๊กจะไม่อยู่ใน FormData เลย ⇒ ไม่มีค่า = false */
+function checked(formData: FormData, field: string): boolean {
+  return formData.get(field) !== null;
+}
+
+function intOr(formData: FormData, field: string, fallback: number): number {
+  const value = Number(String(formData.get(field) ?? "").trim());
+  return Number.isFinite(value) && value > 0 ? Math.trunc(value) : fallback;
+}
+
+export async function createCheckinPolicyAction(formData: FormData) {
+  await guard(HR_PERMS.settingManage);
+
+  const companyId = String(formData.get("company_id") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  if (!companyId) throw new Error("ยังไม่มีบริษัทในระบบ workforce");
+  if (!name) throw new Error("กรุณาตั้งชื่อนโยบาย");
+
+  const methods = formData.getAll("allowed_methods").map(String);
+  if (methods.length === 0) {
+    throw new Error("ต้องเลือกวิธีลงเวลาอย่างน้อยหนึ่งอย่าง ไม่งั้นกลุ่มนี้ลงเวลาไม่ได้เลย");
+  }
+
+  let existing: { items: { code?: string }[] } | null = null;
+  try {
+    existing = await wfFetch<{ items: { code?: string }[] }>("/attendance-policy-groups");
+  } catch {
+    existing = null;
+  }
+
+  try {
+    await wfFetch("/attendance-policy-groups", {
+      method: "POST",
+      body: {
+        company_id: companyId,
+        code: nextCode("POL", existing?.items ?? []),
+        name,
+        allowed_methods: methods,
+        photo_required: String(formData.get("photo_required") ?? "DISABLED"),
+        photo_random_percent: 0,
+        location_required: checked(formData, "location_required"),
+        // ว่าง = ใช้ได้ทุกสถานที่ของบริษัท ซึ่งเป็นสิ่งที่คนส่วนใหญ่ต้องการ
+        allowed_site_ids: formData.getAll("allowed_site_ids").map(String),
+        radius_m: intOr(formData, "radius_m", 200),
+        max_accuracy_m: intOr(formData, "max_accuracy_m", 100),
+        capture_deadline_seconds: 30,
+        allow_offline_capture: false,
+        offline_max_age_minutes: 120,
+        require_enrolled_device: checked(formData, "require_enrolled_device"),
+        require_live_capture: checked(formData, "require_live_capture"),
+        risk_action: String(formData.get("risk_action") ?? "REVIEW"),
+        photo_retention_days: intOr(formData, "photo_retention_days", 90),
+        // มีผลตั้งแต่วันนี้ — ตั้งวันในอดีตไม่ได้ช่วยอะไรเพราะผลลงเวลาที่คำนวณ
+        // ไปแล้วไม่ได้ถูกคิดใหม่ให้อัตโนมัติ
+        effective_from: todayIso(),
+        effective_to: null,
+      },
+    });
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+  revalidatePath("/hr/checkin-policy");
+}
+
+/**
+ * จัดพนักงานเข้ากลุ่มนโยบาย
+ *
+ * `supersede_current: true` เสมอ — คนหนึ่งควรอยู่กลุ่มเดียว ณ เวลาหนึ่ง
+ * ถ้าไม่ปิดของเดิม จะมีสองแถวเปิดค้างพร้อมกันแล้วผลลัพธ์ขึ้นกับว่า query
+ * เจอแถวไหนก่อน = นโยบายที่มีผลจริงเดาไม่ได้
+ */
+export async function assignCheckinPolicyAction(formData: FormData) {
+  await guard(HR_PERMS.settingManage);
+
+  const groupId = String(formData.get("policy_group_id") ?? "");
+  const employmentId = String(formData.get("employment_id") ?? "");
+  if (!groupId) throw new Error("กรุณาเลือกกลุ่มนโยบาย");
+  if (!employmentId) throw new Error("กรุณาเลือกพนักงาน");
+
+  try {
+    await wfFetch(`/attendance-policy-groups/${groupId}/members`, {
+      method: "POST",
+      body: {
+        employment_id: employmentId,
+        effective_from: todayIso(),
+        effective_to: null,
+        supersede_current: true,
+      },
+    });
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+  revalidatePath("/hr/checkin-policy");
+}
+
+/**
+ * จัด "ทุกคนที่ยังไม่มีกลุ่ม" เข้ากลุ่มเดียวรวดเดียว
+ *
+ * มีเพราะการกดทีละคนสำหรับพนักงาน 50-300 คนคือสิ่งที่ไม่มีใครทำจนจบ แล้วจะจบลง
+ * ที่คนส่วนใหญ่ยังตกไปใช้ค่า default ที่เข้มจนลงเวลาไม่ผ่าน โดยไม่มีใครรู้ว่าทำไม
+ *
+ * ตั้งใจไม่แตะคนที่ถูกจัดกลุ่มไว้แล้ว — การย้ายกลุ่มคนที่ตั้งใจแยกไว้เป็นการ
+ * ทำลายการตั้งค่าของคนอื่น ซึ่งกู้กลับยากกว่าการกดเพิ่มทีละคนมาก
+ */
+export async function assignUnassignedToCheckinPolicyAction(formData: FormData) {
+  await guard(HR_PERMS.settingManage);
+
+  const groupId = String(formData.get("policy_group_id") ?? "");
+  if (!groupId) throw new Error("กรุณาเลือกกลุ่มนโยบาย");
+
+  try {
+    const [employments, memberships] = await Promise.all([
+      wfFetch<Paged<{ id: string; terminated_on: string | null }>>("/employments"),
+      wfFetch<{ items: { employment_id: string }[] }>("/attendance-policy-group-members"),
+    ]);
+
+    const assigned = new Set(memberships.items.map((m) => m.employment_id));
+    const targets = employments.items.filter(
+      (e) => e.terminated_on === null && !assigned.has(e.id)
+    );
+
+    // ยิงทีละคนตามลำดับ ไม่ขนานกัน — workforce ใช้ pool ขนาดเล็ก (max 10)
+    // ยิงพร้อมกัน 300 คำขอจะกิน connection จนหน้าอื่นของโมดูลบุคคลค้างตาม
+    for (const employment of targets) {
+      await wfFetch(`/attendance-policy-groups/${groupId}/members`, {
+        method: "POST",
+        body: {
+          employment_id: employment.id,
+          effective_from: todayIso(),
+          effective_to: null,
+          supersede_current: true,
+        },
+      });
+    }
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+  revalidatePath("/hr/checkin-policy");
 }
 
 /* ═══════════════════ เครื่องสแกน ═══════════════════ */

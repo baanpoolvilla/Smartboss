@@ -86,19 +86,47 @@ export const listOrgUnitsQuerySchema = cursorPaginationSchema.extend({
 // Site
 // ---------------------------------------------------------------------------
 
-export const createSiteSchema = z
-  .object({
-    company_id: uuidSchema,
-    code: codeSchema,
-    name: z.string().trim().min(1).max(120),
-    time_zone: timeZoneSchema.default('Asia/Bangkok'),
-    latitude: z.number().min(-90).max(90).nullable().default(null),
-    longitude: z.number().min(-180).max(180).nullable().default(null),
-    /** รัศมีที่ยอมรับสำหรับ photo check-in (ใช้จริงใน Phase 3) */
-    radius_m: z.number().int().positive().max(100_000).nullable().default(null),
-  })
+/**
+ * ฟิลด์ของสถานที่ แยกออกมาเป็น object เปล่า ๆ เพราะ `createSiteSchema` ต่อ `.refine()`
+ * ไว้ซึ่งทำให้กลายเป็น ZodEffects ที่ไม่มี `.partial()` ให้ `updateSiteSchema` ใช้ต่อ
+ */
+const siteFieldsSchema = z.object({
+  company_id: uuidSchema,
+  code: codeSchema,
+  name: z.string().trim().min(1).max(120),
+  time_zone: timeZoneSchema.default('Asia/Bangkok'),
+  latitude: z.number().min(-90).max(90).nullable().default(null),
+  longitude: z.number().min(-180).max(180).nullable().default(null),
+  /** รัศมีที่ยอมรับสำหรับ photo check-in (ใช้จริงใน Phase 3) */
+  radius_m: z.number().int().positive().max(100_000).nullable().default(null),
+});
+
+export const createSiteSchema = siteFieldsSchema.refine(
+  (value) => (value.latitude === null) === (value.longitude === null),
+  { message: 'latitude and longitude must be provided together', path: ['latitude'] },
+);
+
+/**
+ * แก้ไขสถานที่ — ย้ายหมุด/แก้รัศมีเป็นงานที่ HR ทำบ่อยที่สุด และ site ถูกอ้างอิงใน
+ * time event ย้อนหลัง จึงลบ-สร้างใหม่แทนการแก้ไม่ได้
+ *
+ * `company_id` กับ `code` แก้ไม่ได้ (เหมือน updateCompanySchema ที่ omit code)
+ * — ย้ายสถานที่ข้ามนิติบุคคลคือของใหม่ ไม่ใช่การแก้ไข
+ */
+export const updateSiteSchema = siteFieldsSchema
+  .partial()
+  .omit({ company_id: true, code: true })
+  .extend({ status: statusSchema.optional() })
   .refine(
-    (value) => (value.latitude === null) === (value.longitude === null),
+    // ส่งมาข้างเดียวแล้วอีกข้างค้างค่าเดิมไว้ = หมุดเพี้ยนแบบไม่มีใครรู้
+    // ⇒ บังคับให้พิกัดมาเป็นคู่ หรือไม่มาเลย (ทั้งคู่เป็น null = ล้างหมุดทิ้ง)
+    (value) => (value.latitude === undefined) === (value.longitude === undefined),
+    { message: 'latitude and longitude must be updated together', path: ['latitude'] },
+  )
+  .refine(
+    (value) =>
+      value.latitude === undefined ||
+      (value.latitude === null) === (value.longitude === null),
     { message: 'latitude and longitude must be provided together', path: ['latitude'] },
   );
 
@@ -150,6 +178,7 @@ export type Company = z.infer<typeof companySchema>;
 export type CreateOrgUnitInput = z.infer<typeof createOrgUnitSchema>;
 export type OrgUnit = z.infer<typeof orgUnitSchema>;
 export type CreateSiteInput = z.infer<typeof createSiteSchema>;
+export type UpdateSiteInput = z.infer<typeof updateSiteSchema>;
 export type Site = z.infer<typeof siteSchema>;
 export type CreatePositionInput = z.infer<typeof createPositionSchema>;
 export type Position = z.infer<typeof positionSchema>;

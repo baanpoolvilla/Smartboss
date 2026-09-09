@@ -145,6 +145,30 @@ export class CheckinController {
     return this.policyGroups.create(body);
   }
 
+  /**
+   * อ่านได้ด้วย people.read ไม่ใช่ settings.manage — หัวหน้างานที่ดูแลคนหน้างาน
+   * ต้องตอบได้ว่า "ทำไมลูกน้องลงเวลาไม่ผ่าน" โดยไม่ต้องมีสิทธิ์แก้ค่าตั้งต้นของบริษัท
+   */
+  @Get('attendance-policy-groups')
+  @RequirePermissions('workforce.people.read')
+  async listPolicyGroups(
+    @Query('company_id') companyId?: string,
+    @Query('as_of') asOf?: string,
+  ): Promise<{ items: Record<string, unknown>[] }> {
+    return this.policyGroups.list(
+      companyId === undefined ? undefined : requireUuid(companyId, 'company_id'),
+      asOf,
+    );
+  }
+
+  @Get('attendance-policy-group-members')
+  @RequirePermissions('workforce.people.read')
+  async listPolicyMemberships(
+    @Query('as_of') asOf?: string,
+  ): Promise<{ items: { employment_id: string; policy_group_id: string }[] }> {
+    return this.policyGroups.listMemberships(asOf);
+  }
+
   @Post('attendance-policy-groups/:groupId/members')
   @HttpCode(201)
   @RequirePermissions('workforce.settings.manage')

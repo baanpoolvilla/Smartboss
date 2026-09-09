@@ -8,6 +8,13 @@ export type AuditAction =
   | "LOGOUT"
   | "TOKEN_REFRESH"
   | "TOKEN_REUSE_DETECTED"
+  // ── เข้าสู่ระบบผ่าน LINE Mini App ──
+  | "LOGIN_SUCCESS_LINE"
+  | "LINE_LOGIN_FAILED"
+  | "LINE_LINKED"
+  | "LINE_RELINKED"
+  | "LINE_LINK_FAILED"
+  | "LINE_LINK_CONFLICT"
   // ── หลังบ้าน (/admin) ──
   | "USER_CREATED"
   | "USER_UPDATED"
@@ -52,6 +59,12 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   LOGOUT: "ออกจากระบบ",
   TOKEN_REFRESH: "ต่ออายุ session",
   TOKEN_REUSE_DETECTED: "ตรวจพบการใช้ token ซ้ำ",
+  LOGIN_SUCCESS_LINE: "เข้าสู่ระบบผ่าน LINE",
+  LINE_LOGIN_FAILED: "เข้าสู่ระบบผ่าน LINE ไม่สำเร็จ",
+  LINE_LINKED: "ผูกบัญชี LINE",
+  LINE_RELINKED: "เปลี่ยนบัญชี LINE ที่ผูกไว้",
+  LINE_LINK_FAILED: "ผูกบัญชี LINE ไม่สำเร็จ",
+  LINE_LINK_CONFLICT: "บัญชี LINE ถูกผูกกับคนอื่นแล้ว",
   USER_CREATED: "สร้างผู้ใช้",
   USER_UPDATED: "แก้ไขผู้ใช้",
   USER_DELETED: "ลบผู้ใช้",

@@ -13,7 +13,11 @@ model User {
   passwordHash String    @map("password_hash")
   name         String
   avatarUrl    String?   @map("avatar_url")
-  lineUserId   String?   @map("line_user_id") // ผูกกับ LINE เพื่อส่งแจ้งเตือน (ไม่ใช่ login)
+  /// ตัวตนฝั่ง LINE — ใช้ทั้งส่งแจ้งเตือน **และเข้าสู่ระบบ** ผ่าน Mini App
+  /// unique เพราะเป็นตัวระบุตัวตนขาเข้าแล้ว ซ้ำได้เมื่อไหร่คือเข้าเป็นคนอื่นได้
+  /// ค่านี้ผูกกับ LINE *provider* ไม่ใช่ channel — เปลี่ยน provider เมื่อไหร่
+  /// ค่าเดิมใช้ไม่ได้ทั้งหมด (docs/line-mini-app-checkin-spec.md ข้อ 0.1)
+  lineUserId   String?   @unique @map("line_user_id")
   isActive     Boolean   @default(true) @map("is_active")
   failedLogins Int       @default(0) @map("failed_logins")
   lockedUntil  DateTime? @map("locked_until")

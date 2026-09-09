@@ -120,6 +120,19 @@ export class OrganizationRepository {
     return rows[0];
   }
 
+  async updateSite(
+    tx: Tx,
+    id: string,
+    values: Partial<typeof schema.sites.$inferInsert>,
+  ): Promise<typeof schema.sites.$inferSelect | undefined> {
+    const rows = await tx
+      .update(schema.sites)
+      .set(values)
+      .where(eq(schema.sites.id, id))
+      .returning();
+    return rows[0];
+  }
+
   async listSites(
     tx: Tx,
     options: { cursor: string | null; limit: number; companyId?: string },
