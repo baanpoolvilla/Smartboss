@@ -201,10 +201,11 @@ function ModuleRail({
       <Link
         href="/"
         aria-label="หน้าหลัก"
-        // h-[60px] เพื่อให้เส้นใต้แถวนี้อยู่ระดับเดียวกับเส้นใต้ topbar ของ
-        // เนื้อหาฝั่งขวา (AppScaffold ใช้ h-[60px] เหมือนกัน) — ตอนเป็น
-        // h-[56px] เส้นสองฝั่งเหลื่อมกันไม่เท่ากัน ("ให้เส้นมันเท่ากันสิ")
-        className="flex h-[60px] shrink-0 items-center border-b border-(--line) px-4 transition-colors hover:bg-(--bg-soft)"
+        // h-[60px] + px-4 sm:px-6 ตรงกับ header ของ LauncherFrame ทุกตัวเป๊ะ ๆ
+        // (เดิม px-4 ตายตัว ทำให้โลโก้อยู่คนละตำแหน่งกับหน้าหลัก "ให้มันตรง
+        // กับตำแหน่งหน้าหลัก") — ความสูง 60px เท่ากับ topbar ของเนื้อหาฝั่งขวา
+        // (AppScaffold) พอดี เส้นใต้แถวนี้เลยต่อเป็นเส้นเดียวกันไม่เหลื่อม
+        className="flex h-[60px] shrink-0 items-center border-b border-(--line) px-4 sm:px-6 transition-colors hover:bg-(--bg-soft)"
       >
         <Logo size="md" />
       </Link>
