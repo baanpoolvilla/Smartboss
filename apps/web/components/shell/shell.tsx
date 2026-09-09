@@ -201,7 +201,10 @@ function ModuleRail({
       <Link
         href="/"
         aria-label="หน้าหลัก"
-        className="flex h-[56px] shrink-0 items-center border-b border-(--line) px-4 transition-colors hover:bg-(--bg-soft)"
+        // h-[60px] เพื่อให้เส้นใต้แถวนี้อยู่ระดับเดียวกับเส้นใต้ topbar ของ
+        // เนื้อหาฝั่งขวา (AppScaffold ใช้ h-[60px] เหมือนกัน) — ตอนเป็น
+        // h-[56px] เส้นสองฝั่งเหลื่อมกันไม่เท่ากัน ("ให้เส้นมันเท่ากันสิ")
+        className="flex h-[60px] shrink-0 items-center border-b border-(--line) px-4 transition-colors hover:bg-(--bg-soft)"
       >
         <Logo size="md" />
       </Link>
