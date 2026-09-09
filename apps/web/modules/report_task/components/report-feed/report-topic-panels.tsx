@@ -899,6 +899,14 @@ export function ReportTopicPanels({
               </span>
             )}
           </span>
+          {/* บอกไว้ตรงๆ ว่ากดชื่อคนแล้วทำอะไรได้ ("มีบอกด้วยนะว่ากดชื่อคน
+              แล้วจะฟิลเตอร์เลือกโพสต์ที่ถูกหักคะแนน") — ไม่งั้นเป็นแค่แถวเฉยๆ
+              ที่ดูไม่ออกว่ากดได้ จนกว่าจะมีคนบังเอิญลองกด */}
+          {stickerEvents.length > 0 && (
+            <span className="text-[11px] text-[var(--ink-soft)] basis-full">
+              💡 กดชื่อคนเพื่อกรองดูว่าโพสต์ไหนของเขาถูกให้คะแนนบ้าง
+            </span>
+          )}
           {/* Only meaningful once there's a schedule to be "on time" against
               — the plain-post-count fallback for open rooms has no date
               window to narrow, so it stays hidden there. */}
@@ -920,7 +928,10 @@ export function ReportTopicPanels({
           stats.complianceRows.length === 0 ? (
             <p className="text-sm text-[var(--ink-soft)]">ห้องนี้ยังไม่มีสมาชิก</p>
           ) : (
-            <div>
+            // ห้องที่คนเยอะไม่ดันความสูงของทั้งหน้าให้ยาวไม่จบไม่สิ้น ("ถ้ามี
+            // คนเยอะมันจะล้นลงไปเรื่อยๆ") — ตรึงความสูงแล้วให้เลื่อนในกรอบ
+            // ตัวเองแทน (~6 แถวครึ่งก่อนเริ่มเลื่อน)
+            <div className="max-h-[19rem] overflow-y-auto pr-1">
               {stats.complianceRows.map((r) => {
                 const user = getUser(r.id);
                 return (
@@ -964,7 +975,7 @@ export function ReportTopicPanels({
         ) : stats.contributors.length === 0 ? (
           <p className="text-sm text-[var(--ink-soft)]">ห้องนี้ยังไม่มีสมาชิก</p>
         ) : (
-          <div>
+          <div className="max-h-[19rem] overflow-y-auto pr-1">
             {stats.contributors.map(({ user, count }) => {
               const userStickerCount = stickerEvents.filter((e) => e.post.authorId === user.id).length;
               const selected = stickerFilterUserId === user.id;
@@ -1031,7 +1042,10 @@ export function ReportTopicPanels({
               </button>
             )}
           </div>
-          <div>
+          {/* เรียงใหม่สุดขึ้นก่อนอยู่แล้ว (ดู stickerEvents useMemo ด้านบน —
+              "คะแนนที่ถูกลบไล่จากวันล่าสุดมาแสดงก่อน") ตรึงความสูงไม่ให้ยาว
+              ไม่จบ ("เปลืองพื้นที่ยาวไม่หยุดเลย") เหมือนตารางสมาชิกด้านบน */}
+          <div className="max-h-[22rem] overflow-y-auto pr-1">
             {stickerEvents
               .filter((e) => !stickerFilterUserId || e.post.authorId === stickerFilterUserId)
               .map((e) => {
