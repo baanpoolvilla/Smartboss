@@ -10,6 +10,8 @@ interface PostStickerReaction {
   stickerId: string;
   byUserId: string;
   createdAt: string;
+  cancelledAt?: string;
+  cancelledBy?: string;
 }
 interface PostLike {
   id: string;
@@ -36,6 +38,11 @@ interface FeedSliceLike {
  * `oldData`/`newData` คือทั้งก้อนก่อน/หลังเขียน ต้อง diff เอาเฉพาะ reaction id
  * ที่เพิ่งโผล่มาใหม่ (ไม่เคยอยู่ใน oldData) กันหักคะแนนซ้ำทุกครั้งที่มีการ
  * PUT ก้อนข้อมูลทั้งหมด (ซึ่งเกิดบ่อยกว่า "มีสติกเกอร์ใหม่จริง ๆ" มาก)
+ *
+ * การยกเลิกเป็น soft-cancel ไม่ใช่การลบออกจากอาร์เรย์ (ดู
+ * removeStickerReaction ใน report-feed-store.ts — ตั้งใจไว้ให้ "แค่โชว์
+ * ประวัติที่ยกเลิก" ในแท็บสรุปของห้อง) ⇒ ตรวจจาก **การเปลี่ยนสถานะ**
+ * (ไม่มี cancelledAt ในก้อนเก่า แต่มีในก้อนใหม่) แทนที่จะเช็คว่า id หายไป
  */
 export async function recordReportStickerEvents(
   orgId: string,
@@ -47,23 +54,20 @@ export async function recordReportStickerEvents(
   const oldReactionById = new Map(
     oldPosts.flatMap((p) => (p.stickerReactions ?? []).map((r) => [r.id, { post: p, reaction: r }] as const))
   );
-  const newReactionIds = new Set(
-    (newData.posts ?? []).flatMap((p) => (p.stickerReactions ?? []).map((r) => r.id))
-  );
 
   const additions: { post: PostLike; reaction: PostStickerReaction }[] = [];
+  const removals: { post: PostLike; reaction: PostStickerReaction }[] = [];
   for (const post of newData.posts ?? []) {
     for (const reaction of post.stickerReactions ?? []) {
-      if (!oldReactionById.has(reaction.id)) additions.push({ post, reaction });
+      const prior = oldReactionById.get(reaction.id);
+      if (!prior) {
+        additions.push({ post, reaction });
+      } else if (reaction.cancelledAt && !prior.reaction.cancelledAt) {
+        // เพิ่งถูกยกเลิกในคำขอนี้ (มี cancelledAt ใหม่ที่ก้อนเก่าไม่มี) —
+        // ใช้ reaction ตัวใหม่ (มี cancelledBy) ไม่ใช่ตัวเก่าจาก oldData
+        removals.push({ post, reaction });
+      }
     }
-  }
-  // ถูกลบไป — เคยอยู่ใน oldData แต่หายไปจาก newData แล้ว ("ให้กดยกเลิกได้ด้วย
-  // สิ ถ้าแบบกดผิดหรือไม่ได้ตั้งใจ") ต้องหักคะแนนที่เคยให้ไปคืน ไม่ใช่แค่ซ่อน
-  // แถวออกจากหน้าจอเฉยๆ — สร้าง event ตัวใหม่หักล้างของเดิม (ไม่ลบ event เก่า
-  // ทิ้ง) เพื่อให้ประวัติ audit ยังอ่านย้อนได้ครบว่าเคยให้แล้วก็ยกเลิกทีหลัง
-  const removals: { post: PostLike; reaction: PostStickerReaction }[] = [];
-  for (const [id, entry] of oldReactionById) {
-    if (!newReactionIds.has(id)) removals.push(entry);
   }
 
   if (additions.length === 0 && removals.length === 0) return;

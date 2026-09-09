@@ -1115,7 +1115,11 @@ export function ReportCard({
           sticker was given is not the same privilege as being the one
           allowed to hand one out (that's the picker button above, isOwner-
           gated) — same split Kanban's own task card already uses. */}
-      {(activeReactions.length > 0 || post.stickerReactions.length > 0) && (
+      {/* Only ever-live (not soft-cancelled) stickers count toward the chip on
+          the post itself — a cancelled one has no ongoing effect, so it has
+          no business showing here anymore; its trace lives only in the
+          room's "สรุป" tab history now (see report-topic-panels.tsx). */}
+      {(activeReactions.length > 0 || post.stickerReactions.some((r) => !r.cancelledAt)) && (
         <div className="pl-[42px] sm:pl-14 flex items-center gap-1.5 pt-3 flex-wrap">
           {activeReactions.map(({ emoji, users }) => {
             const active = users.includes(viewingAsUserId);
@@ -1142,10 +1146,12 @@ export function ReportCard({
               ยกเลิกตรงนี้ได้ด้วยสิ" — not just from the room summary tab);
               everyone else just sees it, same as before. */}
           {Object.entries(
-            post.stickerReactions.reduce<Record<string, number>>((acc, r) => {
-              acc[r.stickerId] = (acc[r.stickerId] ?? 0) + 1;
-              return acc;
-            }, {})
+            post.stickerReactions
+              .filter((r) => !r.cancelledAt)
+              .reduce<Record<string, number>>((acc, r) => {
+                acc[r.stickerId] = (acc[r.stickerId] ?? 0) + 1;
+                return acc;
+              }, {})
           ).map(([stickerId, count]) => {
             const sticker = stickers.find((s) => s.id === stickerId);
             if (!sticker) return null;
@@ -1154,9 +1160,10 @@ export function ReportCard({
             // there's no way to tell which specific instance a click "means"
             // when several of the same sticker sit stacked in one chip, and
             // the most recent is the one most likely to be the mistake being
-            // undone right after giving it.
+            // undone right after giving it. Only among still-active ones —
+            // an already-cancelled instance can't be cancelled again.
             const latest = post.stickerReactions
-              .filter((r) => r.stickerId === stickerId)
+              .filter((r) => r.stickerId === stickerId && !r.cancelledAt)
               .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
             return (
               <span

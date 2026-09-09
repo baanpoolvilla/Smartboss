@@ -984,7 +984,9 @@ export function ReportTopicPanels({
         ) : (
           <div className="max-h-[19rem] overflow-y-auto pr-1">
             {stats.contributors.map(({ user, count }) => {
-              const userStickerCount = stickerEvents.filter((e) => e.post.authorId === user.id).length;
+              // นับเฉพาะที่ยังมีผลอยู่จริง — อันที่ถูกยกเลิกไปแล้วไม่ควรทำให้
+              // ป้ายเลขข้างชื่อดูเหมือนยังโดนอยู่
+              const userStickerCount = stickerEvents.filter((e) => e.post.authorId === user.id && !e.cancelledAt).length;
               const selected = stickerFilterUserId === user.id;
               return (
                 <button
@@ -1059,25 +1061,49 @@ export function ReportTopicPanels({
               const sticker = stickers.find((s) => s.id === e.stickerId);
               const author = getUser(e.post.authorId);
               const actor = getUser(e.byUserId);
+              // ถูกยกเลิกไปแล้ว — ยังโชว์แถวนี้ไว้เป็นประวัติ ("แค่โชว้
+              // ประวัติที่ยกเลิก") แค่จางลง/ขีดฆ่า ไม่ใช่หายไปเฉยๆ
+              const cancelled = !!e.cancelledAt;
+              const cancelledByUser = cancelled ? getUser(e.cancelledBy ?? "") : undefined;
               return (
-                <div key={e.id} className="flex items-start justify-between gap-2 py-2 border-b last:border-0 border-[var(--line)]">
+                <div
+                  key={e.id}
+                  className={cn(
+                    "flex items-start justify-between gap-2 py-2 border-b last:border-0 border-[var(--line)]",
+                    cancelled && "opacity-50"
+                  )}
+                >
                   <div className="min-w-0 flex items-start gap-2">
                     <span className="text-base leading-none shrink-0 mt-0.5">{sticker?.emoji ?? "🏷️"}</span>
                     <div className="min-w-0">
-                      <p className="text-sm leading-snug">
+                      <p className={cn("text-sm leading-snug", cancelled && "line-through")}>
                         <span className="font-medium">{sticker?.label ?? e.stickerId}</span>
                         {" ให้ "}
                         <span className="font-medium">{author?.name ?? "ไม่ทราบชื่อ"}</span>
                         {" · บนโพสต์ "}
                         <Link
                           href={`/report-task/report-feed?topic=${topic.id}&post=${e.post.id}`}
-                          className="text-[var(--brand-green-dark)] hover:underline"
+                          className={cn(!cancelled && "text-[var(--brand-green-dark)] hover:underline")}
                         >
                           &ldquo;{e.post.title || "(ไม่มีหัวข้อ)"}&rdquo;
                         </Link>
                       </p>
                       <p className="text-xs text-[var(--ink-soft)] mt-0.5">
                         โดย {actor?.name ?? "ไม่ทราบชื่อ"} · <TimeAgo date={e.createdAt} />
+                        {cancelled && (
+                          <>
+                            {" · "}
+                            <span className="font-semibold text-[var(--chart-red)]">ยกเลิกแล้ว</span>
+                            {" โดย "}
+                            {cancelledByUser?.name ?? "ไม่ทราบชื่อ"}
+                            {e.cancelledAt && (
+                              <>
+                                {" · "}
+                                <TimeAgo date={e.cancelledAt} />
+                              </>
+                            )}
+                          </>
+                        )}
                       </p>
                     </div>
                   </div>
@@ -1086,7 +1112,11 @@ export function ReportTopicPanels({
                       <span
                         className={cn(
                           "text-xs font-bold tabular-nums",
-                          sticker.points < 0 ? "text-[var(--chart-red)]" : "text-[var(--brand-green-dark)]"
+                          cancelled
+                            ? "line-through text-[var(--ink-faint)]"
+                            : sticker.points < 0
+                              ? "text-[var(--chart-red)]"
+                              : "text-[var(--brand-green-dark)]"
                         )}
                       >
                         {sticker.points > 0 ? `+${sticker.points}` : sticker.points}
@@ -1096,8 +1126,9 @@ export function ReportTopicPanels({
                         ถ้าแบบกดผิด") — คืนคะแนนที่หักไปด้วย (ดู
                         report-feed-performance.ts ฝั่งเซิร์ฟ สร้าง event
                         หักล้างของเดิม ไม่ใช่แค่ลบแถวออกจากหน้าจอเฉยๆ)
-                        เฉพาะ CEO เหมือนกับคนที่ให้สิทธิ์ติดได้ตั้งแต่แรก */}
-                    {isOwner(viewingAsUserId) && (
+                        เฉพาะ CEO เหมือนกับคนที่ให้สิทธิ์ติดได้ตั้งแต่แรก —
+                        ซ่อนถ้ายกเลิกไปแล้ว จะยกเลิกซ้ำไม่ได้อีก */}
+                    {!cancelled && isOwner(viewingAsUserId) && (
                       <button
                         type="button"
                         onClick={() => removeStickerReaction(e.post.id, e.id, viewingAsUserId)}

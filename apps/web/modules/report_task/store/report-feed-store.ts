@@ -173,7 +173,18 @@ export interface ReportPost extends ReportPostFields {
    * used). Points apply to `authorId` ("คนที่โพสต์รายงานนั้น"), not to
    * whoever reacted.
    */
-  stickerReactions: { id: string; stickerId: string; byUserId: string; createdAt: string }[];
+  stickerReactions: {
+    id: string;
+    stickerId: string;
+    byUserId: string;
+    createdAt: string;
+    /** ยกเลิกแบบ soft-delete แทนการลบทิ้งจริง ("แค่โชว์ประวัติที่ยกเลิก") —
+     * ต้องเก็บร่องรอยไว้ในแท็บ "สรุป" ของห้องว่าเคยให้แล้วยกเลิกทีหลัง ไม่ใช่
+     * แค่หายไปเงียบๆ เหมือนไม่เคยเกิดขึ้น. คะแนนคืนไปแล้วจริง (ดู
+     * report-feed-performance.ts ฝั่งเซิร์ฟ) — สองฟิลด์นี้แค่ไว้แสดงผล. */
+    cancelledAt?: string;
+    cancelledBy?: string;
+  }[];
 }
 
 /** A daily submission window (e.g. "เช้า" due 09:00) a room can require reports by. */
@@ -777,9 +788,20 @@ export const useReportFeedStore = create<ReportFeedStore>()(
       removeStickerReaction: (postId, reactionId, byUserId) => {
         const post = get().posts.find((p) => p.id === postId);
         const removed = post?.stickerReactions.find((r) => r.id === reactionId);
+        // Soft-cancel, not a real delete — marks it `cancelledAt`/`cancelledBy`
+        // instead of filtering it out of the array, so the room's "สรุป" tab
+        // can still show it happened and was undone ("แค่โชว์ประวัติที่
+        // ยกเลิก") instead of it just vanishing with no trace.
         set((s) => ({
           posts: s.posts.map((p) =>
-            p.id !== postId ? p : { ...p, stickerReactions: p.stickerReactions.filter((r) => r.id !== reactionId) }
+            p.id !== postId
+              ? p
+              : {
+                  ...p,
+                  stickerReactions: p.stickerReactions.map((r) =>
+                    r.id !== reactionId ? r : { ...r, cancelledAt: new Date().toISOString(), cancelledBy: byUserId }
+                  ),
+                }
           ),
         }));
         if (!post) return;
