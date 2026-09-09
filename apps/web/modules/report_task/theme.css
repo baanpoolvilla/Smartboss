@@ -382,17 +382,12 @@
    Capping the frame to a square keeps every cell's proportions consistent
    across phone widths — it shrinks as a whole, not just sideways. */
 @media (max-width: 639.98px) {
-  /* No forced square + no clipping on phones: the square (aspect-ratio:1/1)
-     together with the frame's overflow:hidden was cutting the "+N" count badge
-     off the bottom whenever the dots + badge were taller than the square (the
-     badge wrapped to a second line and got clipped). Let each cell size to its
-     own content and stay fully visible instead — a busier day is just a little
-     taller, which reads fine on the scrolling phone view. */
-  .ebw-calendar .fc-dayGridMonth-view .fc-daygrid-day-frame {
-    aspect-ratio: auto;
-    height: auto;
-    min-height: 3.25rem;
-    overflow: visible;
+  /* Compact square cells so the whole month fits one phone screen in the first
+     view (unchanged from the original). The "+N" count badge is pinned to the
+     cell's bottom-right corner in renderDayCellContent, so the square's
+     overflow:hidden can't clip it even though the cell stays square. */
+  .ebw-calendar .fc-daygrid-day-frame {
+    aspect-ratio: 1 / 1;
   }
 }
 /* Pale chip in the event's own color with a solid left accent bar. Only the

@@ -539,19 +539,19 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
                   style={{ backgroundColor: e.colorHint ?? colors[e.type] }}
                 />
               ))}
-              {items.length > DOT_CAP && (
-                // Bold badge, not faint gray text — 4 dots + a plain "+2"
-                // read as "4 people off" at a glance, undercounting a busy day
-                // ("เห็น 4 จุดนึกว่าหยุด 4 คน"). Single neutral-dark color
-                // (--ink), the SAME as the desktop more-link pill (theme.css):
-                // deliberately not orange/red, which would blend into the
-                // orange/red/amber day-off events — a dark chip contrasts with
-                // every event color and reads as a "count". Dots unchanged.
-                <span className="rounded-full px-1 text-[9px] font-extrabold leading-[1.5] text-white shrink-0 bg-[var(--ink)]">
-                  +{items.length - DOT_CAP}
-                </span>
-              )}
             </div>
+          )}
+          {items.length > DOT_CAP && (
+            // Count badge pinned to the cell's bottom-right corner (the month
+            // day-frame is position:relative) instead of inline after the dots.
+            // Inline, it wrapped to a second line and got clipped by the square
+            // cell's overflow:hidden ("+ โดนทับ"); in the corner it's always
+            // fully visible and the compact one-screen square layout is
+            // unchanged. Single neutral-dark (--ink), same as desktop. Dark
+            // pill reads as a "count" against the orange/red/amber events.
+            <span className="pointer-events-none absolute bottom-0.5 right-0.5 rounded-full px-1 text-[8px] font-extrabold leading-[1.4] text-white bg-[var(--ink)]">
+              +{items.length - DOT_CAP}
+            </span>
           )}
         </div>
       );
