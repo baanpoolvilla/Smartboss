@@ -37,7 +37,16 @@ export function actionMetaFor(n: AppNotification): ActionMeta {
   if (m.includes("ประชุม")) return { Icon: CalendarClock, color: "#6366F1" };
   if (m.includes("เพิ่มคุณเข้าห้อง")) return { Icon: UserPlus, color: "#16A34A" };
   if (m.includes("แท็ก")) return { Icon: AtSign, color: "#8B5CF6" };
-  if (m.includes("ทำเครื่องหมาย")) return { Icon: Heart, color: "#EC4899" };
+  // "ทำเครื่องหมาย" alone is ambiguous — task-store.ts uses the exact same
+  // verb for "ทำเครื่องหมาย ... ว่าเสร็จสิ้น" (marking a TASK complete), so
+  // checking the word alone caught that message here first and showed it
+  // as a pink reaction heart instead of a task checkmark ("มันจะรู้ได้ไง
+  // แจ้งเตือนอันนี้ใช้อะไร" — the icon didn't match what the notification
+  // was actually about). Only report-feed-store's emoji-reaction messages
+  // say "ให้โพสต์ของคุณ" / "ให้ความคิดเห็นของคุณ" — require that phrasing so
+  // a task-completion notice falls through to the "เสร็จสิ้น" task rule below.
+  if (m.includes("ทำเครื่องหมาย") && (m.includes("ให้โพสต์") || m.includes("ให้ความคิดเห็น")))
+    return { Icon: Heart, color: "#EC4899" };
   if (m.includes("ตอบกลับ")) return { Icon: CornerDownRight, color: "#16A34A" };
   if (m.includes("งาน") || m.includes("กำหนดส่ง") || m.includes("ตรวจ") || m.includes("เสร็จสิ้น"))
     return { Icon: CheckCircle2, color: "#0D9488" };
@@ -55,7 +64,9 @@ export function reportCategoryFor(n: AppNotification): NotifCategory {
   if (m.includes("ตั๋ว") || m.includes("แจ้งปัญหา")) return "ticket";
   if (m.includes("ประชุม")) return "meeting";
   if (m.includes("เพิ่มคุณเข้าห้อง") || m.includes("แท็ก")) return "mention";
-  if (m.includes("ทำเครื่องหมาย")) return "reaction";
+  // Same ambiguity as actionMetaFor above — keep both in sync.
+  if (m.includes("ทำเครื่องหมาย") && (m.includes("ให้โพสต์") || m.includes("ให้ความคิดเห็น")))
+    return "reaction";
   if (m.includes("ตอบกลับ")) return "reply";
   if (m.includes("งาน") || m.includes("กำหนดส่ง") || m.includes("ตรวจ") || m.includes("เสร็จสิ้น")) return "task";
   return "general";
