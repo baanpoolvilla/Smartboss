@@ -197,6 +197,10 @@ export function ReportTopicPanels({
   const setImageAlbum = useReportFeedStore((s) => s.setImageAlbum);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const stickers = useStickerStore((s) => s.stickers);
+  // กดชื่อคนในตาราง "สถิติการโพสต์ของสมาชิก" แล้วกรองประวัติสติกเกอร์ด้านล่าง
+  // ให้เหลือแค่ของคนนั้น ("กดไปของคนนั้นๆ จะแสดงมาว่าโดนหักที่ไหน") — กดซ้ำ
+  // คนเดิมเพื่อยกเลิกตัวกรอง กลับไปเห็นทุกคนเหมือนเดิม
+  const [stickerFilterUserId, setStickerFilterUserId] = useState<string | null>(null);
   const albums = useMemo(() => allAlbums.filter((a) => a.topicId === topic.id), [allAlbums, topic.id]);
   // null = browsing the folder list; a string = inside that one album's grid.
   const [openAlbumId, setOpenAlbumId] = useState<string | null>(null);
@@ -959,25 +963,43 @@ export function ReportTopicPanels({
           <p className="text-sm text-[var(--ink-soft)]">ห้องนี้ยังไม่มีสมาชิก</p>
         ) : (
           <div>
-            {stats.contributors.map(({ user, count }) => (
-              <div key={user.id} className="flex items-center justify-between gap-2 py-1.5 border-b last:border-0 border-[var(--line)]">
-                <div className="flex items-center gap-2 min-w-0">
-                  <Avatar className="h-6 w-6 shrink-0">
-                    <AvatarImage src={user.avatarUrl ?? undefined} alt={user.name} />
-                    <AvatarFallback className="text-[10px] bg-[var(--accent)] text-[var(--brand-green-dark)]">
-                      {user.avatar}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="text-sm font-medium truncate">{user.name}</span>
-                  <Badge variant="secondary" className="text-[10px] font-normal shrink-0 hidden sm:inline-flex">
-                    {getDepartment(user.departmentId)?.name ?? user.role}
-                  </Badge>
-                </div>
-                <span className={cn("text-xs tabular-nums shrink-0 whitespace-nowrap", count === 0 ? "text-[var(--chart-red)] font-medium" : "text-[var(--ink-soft)]")}>
-                  {count} โพสต์
-                </span>
-              </div>
-            ))}
+            {stats.contributors.map(({ user, count }) => {
+              const userStickerCount = stickerEvents.filter((e) => e.post.authorId === user.id).length;
+              const selected = stickerFilterUserId === user.id;
+              return (
+                <button
+                  key={user.id}
+                  type="button"
+                  onClick={() => setStickerFilterUserId((cur) => (cur === user.id ? null : user.id))}
+                  className={cn(
+                    "flex w-full items-center justify-between gap-2 py-1.5 border-b last:border-0 border-[var(--line)] text-left rounded-md px-1.5 -mx-1.5 transition-colors",
+                    selected ? "bg-[var(--accent)]" : "hover:bg-[var(--bg-soft)]"
+                  )}
+                  title={userStickerCount > 0 ? `กดดูประวัติสติกเกอร์ของ ${user.name} (${userStickerCount} รายการ)` : undefined}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Avatar className="h-6 w-6 shrink-0">
+                      <AvatarImage src={user.avatarUrl ?? undefined} alt={user.name} />
+                      <AvatarFallback className="text-[10px] bg-[var(--accent)] text-[var(--brand-green-dark)]">
+                        {user.avatar}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="text-sm font-medium truncate">{user.name}</span>
+                    <Badge variant="secondary" className="text-[10px] font-normal shrink-0 hidden sm:inline-flex">
+                      {getDepartment(user.departmentId)?.name ?? user.role}
+                    </Badge>
+                    {userStickerCount > 0 && (
+                      <span className="text-[10px] font-semibold shrink-0 rounded-full bg-[var(--bg-soft)] px-1.5 py-0.5 text-[var(--ink-soft)]">
+                        🏷️ {userStickerCount}
+                      </span>
+                    )}
+                  </div>
+                  <span className={cn("text-xs tabular-nums shrink-0 whitespace-nowrap", count === 0 ? "text-[var(--chart-red)] font-medium" : "text-[var(--ink-soft)]")}>
+                    {count} โพสต์
+                  </span>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
@@ -987,15 +1009,30 @@ export function ReportTopicPanels({
           (หน้านั้นสรุปแค่ยอดรวม ไม่รู้จักโพสต์เลย) */}
       {stickerEvents.length > 0 && (
         <div className="rounded-xl border border-[var(--line)] p-4">
-          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)] mb-3">
-            <StickerIcon className="h-3.5 w-3.5" />
-            ประวัติสติกเกอร์ให้คะแนน
-            <span className="text-xs font-normal text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2 py-0.5">
-              {stickerEvents.length}
-            </span>
-          </p>
+          <div className="flex items-center gap-2 flex-wrap mb-3">
+            <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)]">
+              <StickerIcon className="h-3.5 w-3.5" />
+              ประวัติสติกเกอร์ให้คะแนน
+              <span className="text-xs font-normal text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2 py-0.5">
+                {stickerFilterUserId
+                  ? stickerEvents.filter((e) => e.post.authorId === stickerFilterUserId).length
+                  : stickerEvents.length}
+              </span>
+            </p>
+            {stickerFilterUserId && (
+              <button
+                type="button"
+                onClick={() => setStickerFilterUserId(null)}
+                className="flex items-center gap-1 text-xs font-medium text-[var(--brand-green-dark)] bg-[var(--accent)] rounded-full px-2 py-0.5 hover:opacity-80"
+              >
+                กรอง: {getUser(stickerFilterUserId)?.name ?? "-"} ✕
+              </button>
+            )}
+          </div>
           <div>
-            {stickerEvents.map((e) => {
+            {stickerEvents
+              .filter((e) => !stickerFilterUserId || e.post.authorId === stickerFilterUserId)
+              .map((e) => {
               const sticker = stickers.find((s) => s.id === e.stickerId);
               const author = getUser(e.post.authorId);
               const actor = getUser(e.byUserId);
