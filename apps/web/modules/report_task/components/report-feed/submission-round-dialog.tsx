@@ -101,12 +101,19 @@ export function SubmissionRoundDialog({
   const [label, setLabel] = useState(initial?.label ?? "");
   const [time, setTime] = useState(initial?.time ?? "09:00");
   const [weekdays, setWeekdays] = useState<Set<number>>(new Set(initial?.weekdays ?? []));
-  // รอบรายเดือน (เช่น "Monthly Report" ทุกวันที่ 30) เป็นทางเลือกที่สาม แยก
-  // จาก "ทุกวัน"/"เลือกวันในสัปดาห์" เดิม — ตัวเลข 30 ตายตัวตามสเปก
-  // ("ทุกวันที่ 30 เลย จะมีแค่เดือนกุมภาที่ 28-29") ไม่ใช่ช่องให้พิมพ์วันที่
-  // เองแบบอิสระ, ยังไม่มีความต้องการใช้วันที่อื่นตอนนี้
-  const MONTHLY_DAY = 30;
-  const [monthly, setMonthly] = useState(!!initial?.dayOfMonth);
+  // 3 ความถี่แยกจากกันชัดเจน ("รายสัปดาห์ แยกจากรายวันสิ") แทนที่จะรวม
+  // "รายวัน" กับ "รายสัปดาห์" ไว้ปุ่มเดียวกันแล้วให้ตัวเลือกวันในสัปดาห์บอกใบ้
+  // ว่า "ไม่เลือกวัน = ทุกวัน" (คลุมเครือ)
+  const DEFAULT_MONTHLY_DAY = 30;
+  // แก้ไขวันที่ของรอบรายเดือนได้เอง ("รายเดือนให้แก้ไขวันที่") ไม่ตายตัวที่
+  // 30 อีกต่อไป — เดือนที่ไม่มีวันที่นี้ (30 ในเดือนกุมภาพันธ์ที่มีแค่ 28-29
+  // วัน) ตกไปวันสุดท้ายของเดือนนั้นเสมอ ไม่ว่าจะตั้งวันที่ไว้เท่าไหร่ก็ตาม
+  // (ดู roundRunsOnDay ใน submission-rounds.ts ที่คำนวณจริง)
+  const [dayOfMonth, setDayOfMonth] = useState<number>(initial?.dayOfMonth ?? DEFAULT_MONTHLY_DAY);
+  type Frequency = "daily" | "weekly" | "monthly";
+  const [frequency, setFrequency] = useState<Frequency>(
+    initial?.dayOfMonth ? "monthly" : initial?.weekdays && initial.weekdays.length > 0 ? "weekly" : "daily"
+  );
   const [minImages, setMinImages] = useState<number>(initial?.minImages ?? 0);
   const [mode, setMode] = useState<Mode>(initial?.submitters.mode ?? "everyone");
   const [groupIds, setGroupIds] = useState<Set<string>>(new Set(initial?.submitters.groupIds ?? []));
@@ -143,8 +150,8 @@ export function SubmissionRoundDialog({
       id: initial?.id ?? `round-${uuid()}`,
       label: label.trim() || "รอบส่ง",
       time,
-      weekdays: !monthly && weekdays.size > 0 ? [...weekdays].sort((a, b) => a - b) : undefined,
-      dayOfMonth: monthly ? MONTHLY_DAY : undefined,
+      weekdays: frequency === "weekly" && weekdays.size > 0 ? [...weekdays].sort((a, b) => a - b) : undefined,
+      dayOfMonth: frequency === "monthly" ? dayOfMonth : undefined,
       minImages,
       // A brand-new round stamps "now" so the compliance checker never judges
       // days before it existed as missed; editing an existing round keeps
@@ -296,45 +303,47 @@ export function SubmissionRoundDialog({
             </div>
           </div>
 
-          {/* ความถี่ */}
+          {/* ความถี่ — 3 ตัวเลือกแยกกันชัดเจน ("รายสัปดาห์ แยกจากรายวันสิ") */}
           <div className="space-y-1.5">
             <Label className="text-xs text-[var(--ink-soft)]">ความถี่</Label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setMonthly(false)}
-                className={cn(
-                  "rounded-lg border px-2 py-2 text-center text-xs font-medium transition-colors",
-                  !monthly ? "border-[var(--brand-green)] bg-[var(--accent)] text-[var(--brand-green-dark)]" : "border-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
-                )}
-              >
-                รายวัน / รายสัปดาห์
-              </button>
-              <button
-                type="button"
-                onClick={() => setMonthly(true)}
-                className={cn(
-                  "rounded-lg border px-2 py-2 text-center text-xs font-medium transition-colors",
-                  monthly ? "border-[var(--brand-green)] bg-[var(--accent)] text-[var(--brand-green-dark)]" : "border-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
-                )}
-              >
-                รายเดือน (วันที่ {MONTHLY_DAY})
-              </button>
+            <div className="grid grid-cols-3 gap-2">
+              {(
+                [
+                  { key: "daily", label: "รายวัน" },
+                  { key: "weekly", label: "รายสัปดาห์" },
+                  { key: "monthly", label: "รายเดือน" },
+                ] as const
+              ).map(({ key, label: freqLabel }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => {
+                    setFrequency(key);
+                    // สลับเข้า "รายสัปดาห์" ต้องมีวันตั้งต้นเสมอ (บังคับเลือก
+                    // วันเดียว ไม่ใช่ปล่อยว่างแล้วแปลว่า "ทุกวัน" แบบเดิมอีก
+                    // ต่อไป) ไม่งั้นกดสลับมาแล้วไม่มีอะไรถูกเลือกเลย
+                    if (key === "weekly" && weekdays.size === 0) setWeekdays(new Set([5]));
+                  }}
+                  className={cn(
+                    "rounded-lg border px-2 py-2 text-center text-xs font-medium transition-colors",
+                    frequency === key ? "border-[var(--brand-green)] bg-[var(--accent)] text-[var(--brand-green-dark)]" : "border-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+                  )}
+                >
+                  {freqLabel}
+                </button>
+              ))}
             </div>
           </div>
 
           {/* วัน */}
-          {monthly ? (
+          {frequency === "daily" && (
+            <p className="flex items-center gap-1 text-[11px] text-[var(--ink-soft)] rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] px-3 py-2">
+              <Check className="h-3 w-3 text-[var(--tone-ok)] shrink-0" />ส่งทุกวัน — วันหยุด/วันลา ตัดออกให้เองตามปฏิทิน HR
+            </p>
+          )}
+          {frequency === "weekly" && (
             <div className="space-y-1.5">
-              <Label className="text-xs text-[var(--ink-soft)]">วันที่ต้องส่ง</Label>
-              <p className="rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] px-3 py-2 text-xs text-[var(--ink)]">
-                ส่งทุกวันที่ {MONTHLY_DAY} ของเดือน — เดือนที่ไม่มีวันที่ {MONTHLY_DAY} (กุมภาพันธ์) ใช้วันสุดท้ายของเดือนแทนอัตโนมัติ (28 หรือ 29 แล้วแต่ปี)
-              </p>
-              <p className="flex items-center gap-1 text-[11px] text-[var(--ink-soft)]"><Check className="h-3 w-3 text-[var(--tone-ok)]" />วันหยุด/วันลา ตัดออกให้เองตามปฏิทิน HR</p>
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              <Label className="text-xs text-[var(--ink-soft)]">วันที่ต้องส่ง (ไม่เลือก = ทุกวัน)</Label>
+              <Label className="text-xs text-[var(--ink-soft)]">ส่งวันไหนของสัปดาห์ (เลือกได้วันเดียว)</Label>
               <div className="flex flex-wrap gap-1.5">
                 {WEEKDAYS.map((w, i) => {
                   const on = weekdays.has(i);
@@ -342,7 +351,10 @@ export function SubmissionRoundDialog({
                     <button
                       key={i}
                       type="button"
-                      onClick={() => setWeekdays((s) => { const n = new Set(s); if (n.has(i)) n.delete(i); else n.add(i); return n; })}
+                      // เลือกวันเดียวเสมอ (แทนที่ ไม่ใช่ toggle สะสมหลายวัน) —
+                      // "บังคับให้เลือกวันเดียว" ต่างจากตอนเป็นแท็บ "รายวัน/
+                      // รายสัปดาห์" รวมกันเดิมที่เลือกได้หลายวัน
+                      onClick={() => setWeekdays(new Set([i]))}
                       className={cn(
                         "h-9 w-10 rounded-lg border text-xs font-medium transition-colors",
                         on ? "border-[var(--brand-green)] bg-[var(--accent)] text-[var(--brand-green-dark)]" : "border-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
@@ -353,6 +365,49 @@ export function SubmissionRoundDialog({
                   );
                 })}
               </div>
+              <p className="flex items-center gap-1 text-[11px] text-[var(--ink-soft)]"><Check className="h-3 w-3 text-[var(--tone-ok)]" />วันหยุด/วันลา ตัดออกให้เองตามปฏิทิน HR</p>
+            </div>
+          )}
+          {frequency === "monthly" && (
+            <div className="space-y-1.5">
+              <Label className="text-xs text-[var(--ink-soft)]">วันที่ต้องส่งของเดือน</Label>
+              <div className="flex items-center gap-1 rounded-full border border-[var(--line)] bg-white px-1 w-fit">
+                <button
+                  type="button"
+                  className="flex h-8 w-8 items-center justify-center text-[var(--ink-soft)] disabled:opacity-30"
+                  disabled={dayOfMonth <= 1}
+                  onClick={() => setDayOfMonth((d) => Math.max(1, d - 1))}
+                  aria-label="วันที่ก่อนหน้า"
+                >
+                  <Minus className="h-3.5 w-3.5" />
+                </button>
+                <span className="w-14 text-center text-sm font-semibold tabular-nums">วันที่ {dayOfMonth}</span>
+                <button
+                  type="button"
+                  className="flex h-8 w-8 items-center justify-center text-[var(--ink-soft)] disabled:opacity-30"
+                  disabled={dayOfMonth >= 31}
+                  onClick={() => setDayOfMonth((d) => Math.min(31, d + 1))}
+                  aria-label="วันที่ถัดไป"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              {/* คำนวณจำนวนวันจริงของกุมภาพันธ์ "ปีนี้" มาบอกเป็นรูปธรรม
+                  ("บอกด้วยว่าเดือนกุมภามี 28-29 วัน จะปรับเป็นวันสุดท้ายของ
+                  เดือนกุมภาปีนั้นๆแทน") แทนพูดลอย ๆ ว่า "28 หรือ 29 แล้วแต่ปี" */}
+              {(() => {
+                const thisYear = new Date().getFullYear();
+                const febLastDay = new Date(thisYear, 2, 0).getDate();
+                return dayOfMonth > febLastDay ? (
+                  <p className="rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] px-3 py-2 text-xs text-[var(--ink)]">
+                    เดือนที่ไม่มีวันที่ {dayOfMonth} ให้ใช้วันสุดท้ายของเดือนนั้นแทนอัตโนมัติ — เช่น กุมภาพันธ์ปี {thisYear} มี {febLastDay} วัน ก็จะปรับเป็นวันที่ {febLastDay} ของเดือนนั้นแทน (ปีอื่นอาจเป็น 28 หรือ 29 แล้วแต่ปีอธิกสุรทิน)
+                  </p>
+                ) : (
+                  <p className="rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] px-3 py-2 text-xs text-[var(--ink)]">
+                    ทุกเดือนมีวันที่ {dayOfMonth} อยู่แล้ว จึงส่งตรงวันที่ {dayOfMonth} ทุกเดือนโดยไม่ต้องปรับ
+                  </p>
+                );
+              })()}
               <p className="flex items-center gap-1 text-[11px] text-[var(--ink-soft)]"><Check className="h-3 w-3 text-[var(--tone-ok)]" />วันหยุด/วันลา ตัดออกให้เองตามปฏิทิน HR</p>
             </div>
           )}
