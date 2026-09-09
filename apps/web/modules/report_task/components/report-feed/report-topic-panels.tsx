@@ -909,13 +909,20 @@ export function ReportTopicPanels({
           )}
           {/* Only meaningful once there's a schedule to be "on time" against
               — the plain-post-count fallback for open rooms has no date
-              window to narrow, so it stays hidden there. */}
+              window to narrow, so it stays hidden there.
+              w-full + min-w-0 forces its own row on a narrow screen instead
+              of overflowing/getting clipped past the card's right edge
+              ("คำนึงถึง responsive mobile ด้วยนะ") — DatePresetPicker's own
+              overflow-x-auto can't kick in without min-w-0 here, since a
+              flex item won't shrink below its content width by default and
+              just spills past the card instead of scrolling internally. */}
           {hasSchedule && (
             <DatePresetPicker
               preset={preset}
               customFrom={customFrom}
               customTo={customTo}
               onPresetChange={setPreset}
+              className="w-full min-w-0 sm:w-auto"
               onCustomRangeChange={(from, to) => {
                 setCustomFrom(from);
                 setCustomTo(to);

@@ -44,6 +44,13 @@ export function DatePresetPicker({
    * with a "ล้างตัวกรอง" link in its header) and would otherwise show two of
    * them stacked awkwardly close together ("ปุ่มล้างตัวกรองก็ทับ"). */
   hideClearButton = false,
+  /** Extra classes on the outer wrapper — e.g. `w-full min-w-0 sm:w-auto` so
+   * a caller placing this inside a flex row can force it onto its own line
+   * on a narrow screen instead of it overflowing/getting clipped past a
+   * sibling (a flex item won't shrink below its content width, and thus
+   * won't let the segmented control's own `overflow-x-auto` below kick in,
+   * without `min-w-0` from the caller). */
+  className,
 }: {
   preset: DatePreset;
   customFrom: string;
@@ -52,12 +59,14 @@ export function DatePresetPicker({
   onCustomRangeChange: (from: string, to: string) => void;
   variant?: "card" | "inline";
   hideClearButton?: boolean;
+  className?: string;
 }) {
   return (
     <div
       className={cn(
         "flex flex-wrap items-center gap-2 print:hidden",
-        variant === "card" && "rounded-xl border border-[var(--line)] bg-white p-2"
+        variant === "card" && "rounded-xl border border-[var(--line)] bg-white p-2",
+        className
       )}
     >
       <div className="inline-flex items-center gap-1 rounded-lg bg-[var(--bg-soft)] p-1 max-w-full overflow-x-auto">
