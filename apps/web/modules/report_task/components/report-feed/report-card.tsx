@@ -95,7 +95,6 @@ import {
   Send,
   Share2,
   SmilePlus,
-  Sticker as StickerIcon,
   Trash2,
   TriangleAlert,
   Underline,
@@ -105,7 +104,11 @@ import {
 import { uuid } from "@/modules/report_task/lib/uuid";
 import { isCoarsePointer } from "@/modules/report_task/lib/device";
 
-const reactionEmojis = ["👍", "❤️", "🎉", "😂", "😮", "😢"];
+// ขยายจาก 6 เป็น 12 ("อิโมจิธรรมดาอยากได้เยอะๆ ตอนนี้มี 4-5 อันเอง") —
+// เลี่ยงอิโมจิที่ชนกับชุดสติกเกอร์มีคะแนนเริ่มต้น (😡⚠️🔥👏⭐ ดู
+// data/stickers.ts) เพราะอันเดียวกันไปโผล่สองแถวในป็อปอัปเดียวกันจะงงว่า
+// ทำไมกดแล้วมีผลไม่เท่ากัน
+const reactionEmojis = ["👍", "❤️", "🎉", "😂", "😮", "😢", "🙏", "💯", "👀", "🤔", "✅", "💡"];
 const LONG_POST_BULLET_THRESHOLD = 8;
 const MAX_VISIBLE_IMAGES = 5;
 
@@ -355,7 +358,6 @@ export function ReportCard({
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleteReplyTarget, setDeleteReplyTarget] = useState<string | null>(null);
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
-  const [stickerPickerOpen, setStickerPickerOpen] = useState(false);
   const [pendingSticker, setPendingSticker] = useState<Sticker | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   // Touch's combined react/reply/edit/more menu — separate from moreOpen
@@ -807,60 +809,59 @@ export function ReportCard({
               emoji rendered as an unclickable-looking vertical stack instead
               ("ไม่เห็นกดได้เลยอีโมจิอะไรแบบนี้"). Same fix applied everywhere
               else this same base component is used for a horizontal row. */}
-          <PopoverContent className="w-auto p-1.5 flex flex-row items-center gap-0.5">
-            {reactionEmojis.map((emoji) => (
-              <button
-                key={emoji}
-                onClick={() => {
-                  toggleReaction(post.id, emoji, viewingAsUserId);
-                  setReactionPickerOpen(false);
-                }}
-                className={cn(
-                  "h-8 w-8 flex items-center justify-center rounded-md text-base hover:bg-[var(--bg-soft)] transition-transform hover:scale-110",
-                  (post.reactions[emoji] ?? []).includes(viewingAsUserId) && "bg-[var(--accent)]"
-                )}
-              >
-                {emoji}
-              </button>
-            ))}
-          </PopoverContent>
-        </Popover>
-        {/* สติกเกอร์มีคะแนน — ชุดเดียวกับ Kanban (useStickerStore, ตั้งค่าที่
-            เดียวใช้ร่วมกัน) หัก/บวกคะแนนให้คนที่โพสต์รายงานนี้ ("คนที่โพสต์
-            รายงานนั้น") ต่างจากปุ่ม react ด้านบนซึ่งใครก็กดได้ไม่มีผลคะแนน —
-            ต้องซ่อนจากคนทั่วไปเลย ไม่ใช่แค่กดไม่ได้ ("ไม่ต้องให้คนอื่นเห็นไหม
-            ได้เฉพาะคนที่มีสิทธิ") จึงเช็ค isOwner ก่อน render ปุ่มนี้เลย
-            เหมือน Kanban's task-card.tsx เป๊ะ ๆ */}
-        {isOwner(viewingAsUserId) && (
-          <Popover open={stickerPickerOpen} onOpenChange={setStickerPickerOpen}>
-            <PopoverTrigger
-              render={
+          {/* ปุ่มเดียวสำหรับทั้งอีโมจิธรรมดาและสติกเกอร์มีคะแนน แทนที่จะมี
+              ไอคอนสองอันแยกกันในแถบเครื่องมือ ("ให้อยู่ในอันเดียวกันเลยสิ")
+              — แถวอีโมจิ (ใครก็กดได้ ไม่มีผลคะแนน) กับแถวสติกเกอร์ (isOwner
+              เท่านั้น หัก/บวกคะแนนคนโพสต์) อยู่ใน popover เดียวกัน คั่นด้วย
+              เส้นบางๆ เฉพาะตอนที่แถวสติกเกอร์โผล่จริง (คนไม่มีสิทธิเห็นแค่
+              แถวอีโมจิแถวเดียว เหมือนเดิมทุกอย่าง ไม่รู้ด้วยซ้ำว่ามีแถวที่สอง
+              ซ่อนอยู่ — "คนมีสิทธิจะเห็น...ไม่มีสิทธิจะไม่เห็น") */}
+          <PopoverContent className="w-auto max-w-[232px] p-1.5 flex flex-col gap-1">
+            <div className="flex flex-row flex-wrap items-center gap-0.5">
+              {reactionEmojis.map((emoji) => (
                 <button
-                  className="h-7 w-7 flex items-center justify-center rounded-md text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
-                  aria-label="ติดสติกเกอร์ / ให้คะแนน"
-                  title="ติดสติกเกอร์ / ให้คะแนน"
-                >
-                  <StickerIcon className="h-4 w-4" />
-                </button>
-              }
-            />
-            <PopoverContent className="w-auto p-1.5 flex flex-row items-center gap-0.5">
-              {stickers.map((s) => (
-                <button
-                  key={s.id}
+                  key={emoji}
                   onClick={() => {
-                    setPendingSticker(s);
-                    setStickerPickerOpen(false);
+                    toggleReaction(post.id, emoji, viewingAsUserId);
+                    setReactionPickerOpen(false);
                   }}
-                  className="h-8 w-8 flex items-center justify-center rounded-md text-base hover:bg-[var(--bg-soft)] transition-transform hover:scale-110"
-                  title={`${s.label} (${s.points > 0 ? `+${s.points}` : s.points})`}
+                  className={cn(
+                    "h-8 w-8 flex items-center justify-center rounded-md text-base hover:bg-[var(--bg-soft)] transition-transform hover:scale-110",
+                    (post.reactions[emoji] ?? []).includes(viewingAsUserId) && "bg-[var(--accent)]"
+                  )}
                 >
-                  {s.emoji}
+                  {emoji}
                 </button>
               ))}
-            </PopoverContent>
-          </Popover>
-        )}
+            </div>
+            {/* แถวสติกเกอร์มีคะแนน — แยกให้เห็นชัดจากอีโมจิธรรมดาด้านบนด้วย
+                ป้ายกำกับ + พื้นสีต่างกัน ไม่ใช่แค่มีเส้นคั่นเฉยๆ ("อยากให้
+                แสดงให้รู้ว่าอันไหนที่มีผลต่อคะแนน") คนไม่มีสิทธิ์ไม่เห็นแถวนี้
+                เลยทั้งป้ายและปุ่ม (isOwner gate เดิม) */}
+            {isOwner(viewingAsUserId) && (
+              <div className="rounded-md bg-[var(--bg-soft)] p-1 -mx-0.5">
+                <p className="px-1 pb-1 text-[10px] font-semibold text-[var(--ink-soft)]">
+                  มีผลต่อคะแนน
+                </p>
+                <div className="flex flex-row flex-wrap items-center gap-0.5">
+                  {stickers.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => {
+                        setPendingSticker(s);
+                        setReactionPickerOpen(false);
+                      }}
+                      className="h-8 w-8 flex items-center justify-center rounded-md text-base hover:bg-white transition-transform hover:scale-110"
+                      title={`${s.label} (${s.points > 0 ? `+${s.points}` : s.points})`}
+                    >
+                      {s.emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </PopoverContent>
+        </Popover>
         <button
           onClick={() => {
             setThreadOpen(true);
@@ -911,8 +912,8 @@ export function ReportCard({
               </button>
             }
           />
-          <PopoverContent className="w-auto p-1 flex flex-col min-w-44" align="end">
-            <div className="flex flex-row gap-0.5 p-0.5">
+          <PopoverContent className="w-auto max-w-[232px] p-1 flex flex-col min-w-44" align="end">
+            <div className="flex flex-row flex-wrap gap-0.5 p-0.5">
               {reactionEmojis.map((emoji) => (
                 <button
                   key={emoji}
@@ -930,9 +931,9 @@ export function ReportCard({
               ))}
             </div>
             {isOwner(viewingAsUserId) && (
-              <>
-                <div className="h-px bg-[var(--line)] mx-1 my-0.5" />
-                <div className="flex flex-row gap-0.5 p-0.5">
+              <div className="rounded-md bg-[var(--bg-soft)] p-1 mx-0.5 mt-0.5">
+                <p className="px-1 pb-1 text-[10px] font-semibold text-[var(--ink-soft)]">มีผลต่อคะแนน</p>
+                <div className="flex flex-row flex-wrap gap-0.5">
                   {stickers.map((s) => (
                     <button
                       key={s.id}
@@ -940,14 +941,14 @@ export function ReportCard({
                         setPendingSticker(s);
                         setTouchMenuOpen(false);
                       }}
-                      className="h-8 w-8 flex items-center justify-center rounded-md text-base hover:bg-[var(--bg-soft)]"
+                      className="h-8 w-8 flex items-center justify-center rounded-md text-base hover:bg-white"
                       title={`${s.label} (${s.points > 0 ? `+${s.points}` : s.points})`}
                     >
                       {s.emoji}
                     </button>
                   ))}
                 </div>
-              </>
+              </div>
             )}
             <div className="h-px bg-[var(--line)] mx-1 my-0.5" />
             <MenuButton
