@@ -1104,7 +1104,16 @@ export function ReportCard({
         />
       )}
 
-      {activeReactions.length > 0 && (
+      {/* One shared row for both kinds of chip instead of two stacked rows
+          ("แถบสติกเกอให้มันเป็นแถบเดียวกันเลยสิ มันเปลืองพื้นที่") — plain
+          reactions (👍❤️🎉…, anyone can click, no score) come first, then
+          scored stickers (😡⚠️👏⭐, view-only here — see their own comment
+          below) right after in the same flex-wrap line. Visible to everyone
+          who can see the post, CEO and regular employee alike: seeing that a
+          sticker was given is not the same privilege as being the one
+          allowed to hand one out (that's the picker button above, isOwner-
+          gated) — same split Kanban's own task card already uses. */}
+      {(activeReactions.length > 0 || post.stickerReactions.length > 0) && (
         <div className="pl-[42px] sm:pl-14 flex items-center gap-1.5 pt-3 flex-wrap">
           {activeReactions.map(({ emoji, users }) => {
             const active = users.includes(viewingAsUserId);
@@ -1124,16 +1133,10 @@ export function ReportCard({
               </button>
             );
           })}
-        </div>
-      )}
-
-      {/* Scored stickers a lead handed the author — display-only chip (same
-          spot Kanban shows them on a task card), visible to whoever can see
-          the post since it's evidence of a call already made, not an action
-          in progress. Tallied by stickerId, not one chip per event, so 3x
-          😡 on one post reads as "😡 3" instead of three separate pills. */}
-      {post.stickerReactions.length > 0 && (
-        <div className="pl-[42px] sm:pl-14 flex items-center gap-1.5 pt-2 flex-wrap">
+          {/* Scored stickers a lead handed the author — display-only chip
+              (same spot Kanban shows them on a task card), tallied by
+              stickerId instead of one chip per event, so 3x 😡 on one post
+              reads as "😡 3" instead of three separate pills. */}
           {Object.entries(
             post.stickerReactions.reduce<Record<string, number>>((acc, r) => {
               acc[r.stickerId] = (acc[r.stickerId] ?? 0) + 1;
