@@ -203,7 +203,7 @@ function ModuleRail({
         aria-label="หน้าหลัก"
         className="flex h-[56px] shrink-0 items-center border-b border-(--line) px-4 transition-colors hover:bg-(--bg-soft)"
       >
-        <Logo size="sm" />
+        <Logo size="md" />
       </Link>
 
       {/* หัวข้อโมดูล ขยับลงมาเป็นแถวของตัวเอง ใต้โลโก้ — ยังเป็นทางออกกลับ
