@@ -4,6 +4,7 @@ import { canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { extractMentionedIds, mentionMarkersToPlainText } from "@/modules/report_task/lib/report-feed-rich-text";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useActivityLogStore } from "@/modules/report_task/store/activity-log-store";
+import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { uuid } from "@/modules/report_task/lib/uuid";
 import { legacyRoundsFromCutoffs } from "@/modules/report_task/lib/submission-rounds";
 
@@ -160,6 +161,19 @@ export interface ReportPost extends ReportPostFields {
    * a post with this set, same as if it had never been posted at all for
    * scoring purposes. undefined/false for every normal post. */
   excludeFromSubmission?: boolean;
+  /**
+   * Scored stickers (same set as Kanban's — see data/stickers.ts /
+   * useStickerStore, edited in one place from settings) a lead handed the
+   * POST'S AUTHOR — deliberately separate from `reactions` above, which is
+   * an unscored, anyone-can-click emoji toggle with no consequence. Only the
+   * top-level post can carry these, never a reply ("การตอบคอมเม้นจะไม่มีการ
+   * หักคะแนนทั้งสิ้น") — a reply has no single obvious person to score
+   * against the way a post's author does. Defaults to `[]` like every other
+   * array field on this type (see `tagIds`'s own note on why undefined isn't
+   * used). Points apply to `authorId` ("คนที่โพสต์รายงานนั้น"), not to
+   * whoever reacted.
+   */
+  stickerReactions: { id: string; stickerId: string; byUserId: string; createdAt: string }[];
 }
 
 /** A daily submission window (e.g. "เช้า" due 09:00) a room can require reports by. */
@@ -366,6 +380,7 @@ export function normalizeReportFeedSlice(slice: {
       savedBy: p.savedBy ?? [],
       unreadFor: p.unreadFor ?? [],
       reactions: p.reactions ?? {},
+      stickerReactions: p.stickerReactions ?? [],
       replies: (p.replies ?? []).map((r) => ({
         ...r,
         images: r.images ?? [],
@@ -483,6 +498,13 @@ interface ReportFeedStore {
    * which of those it lives in. */
   setImageAlbum: (postId: string, imageId: string, albumId: string | undefined) => void;
   toggleReaction: (postId: string, emoji: string, userId: string) => void;
+  /** Hands the POST's author a scored sticker (same set Kanban uses, see
+   * useStickerStore) — owner-only at the call site, same gate Kanban's own
+   * sticker button uses (isOwner). Unlike toggleReaction this isn't a toggle:
+   * every click is its own discrete "call it out" event, so the same sticker
+   * can be handed out more than once (mirrors task-store's addReaction). */
+  addStickerReaction: (postId: string, stickerId: string, byUserId: string) => void;
+  removeStickerReaction: (postId: string, reactionId: string, byUserId: string) => void;
   addReply: (
     postId: string,
     authorId: string,
@@ -648,6 +670,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
               savedBy: [],
               unreadFor: [...new Set([...mentionedUserIds, ...otherMemberIds])],
               reactions: {},
+              stickerReactions: [],
               replies: [],
               ...data,
             },
@@ -723,6 +746,40 @@ export const useReportFeedStore = create<ReportFeedStore>()(
           link: `/report-task/report-feed?topic=${post.topicId}&post=${postId}`,
           topicName: get().topics.find((t) => t.id === post.topicId)?.name,
         });
+      },
+      addStickerReaction: (postId, stickerId, byUserId) => {
+        const sticker = useStickerStore.getState().stickers.find((s) => s.id === stickerId);
+        set((s) => ({
+          posts: s.posts.map((p) =>
+            p.id !== postId
+              ? p
+              : {
+                  ...p,
+                  stickerReactions: [
+                    ...p.stickerReactions,
+                    { id: `${postId}-stk-${uuid()}`, stickerId, byUserId, createdAt: new Date().toISOString() },
+                  ],
+                }
+          ),
+        }));
+        const post = get().posts.find((p) => p.id === postId);
+        if (!post || !sticker) return;
+        useActivityLogStore.getState().log({
+          userId: byUserId,
+          action: "ติดสติกเกอร์",
+          target: post.title,
+          detail: sticker.label,
+        });
+      },
+      removeStickerReaction: (postId, reactionId, byUserId) => {
+        set((s) => ({
+          posts: s.posts.map((p) =>
+            p.id !== postId ? p : { ...p, stickerReactions: p.stickerReactions.filter((r) => r.id !== reactionId) }
+          ),
+        }));
+        const post = get().posts.find((p) => p.id === postId);
+        if (!post) return;
+        useActivityLogStore.getState().log({ userId: byUserId, action: "ลบสติกเกอร์", target: post.title });
       },
       addReply: (postId, authorId, body, extra) => {
         // Captured up front so notifications below can deep-link straight to

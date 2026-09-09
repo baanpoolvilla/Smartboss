@@ -23,6 +23,10 @@ export function StickerConfirmDialog({
   sticker,
   recipientName,
   taskTitle,
+  /** "งาน" (Kanban's own tasks) or "โพสต์" (a report-feed post gets a
+   * scored sticker too now — same set, same confirm step, just different
+   * noun so the copy reads right for either sender). */
+  itemLabel = "งาน",
   onConfirm,
 }: {
   open: boolean;
@@ -30,6 +34,7 @@ export function StickerConfirmDialog({
   sticker: Sticker | null;
   recipientName: string;
   taskTitle: string;
+  itemLabel?: "งาน" | "โพสต์";
   onConfirm: () => void;
 }) {
   return (
@@ -40,7 +45,7 @@ export function StickerConfirmDialog({
             <span className="text-xl">{sticker?.emoji}</span> ส่งสติกเกอร์
           </AlertDialogTitle>
           <AlertDialogDescription>
-            ส่ง &ldquo;{sticker?.emoji} {sticker?.label}&rdquo; ให้ <span className="font-medium text-[var(--ink)]">{recipientName}</span> สำหรับงาน
+            ส่ง &ldquo;{sticker?.emoji} {sticker?.label}&rdquo; ให้ <span className="font-medium text-[var(--ink)]">{recipientName}</span> สำหรับ{itemLabel}
             &ldquo;{taskTitle}&rdquo;?
             {!!sticker && sticker.points !== 0 && (
               <span className="block mt-2 text-[var(--chart-red-dark)]">

@@ -43,6 +43,7 @@ function postAt(local: Date, roundId?: string, authorId: string = userId): Repor
     savedBy: [],
     unreadFor: [],
     reactions: {},
+    stickerReactions: [],
     replies: [],
     title: "x",
     sections: [],

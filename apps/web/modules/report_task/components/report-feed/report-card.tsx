@@ -23,7 +23,11 @@ import {
   DialogDescription,
 } from "@/modules/report_task/components/ui/dialog";
 import { NewTaskDialog } from "@/modules/report_task/components/kanban/new-task-dialog";
-import { getUser, users as directoryUsers, departments } from "@/modules/report_task/lib/directory";
+import { getUser, users as directoryUsers, departments, isOwner } from "@/modules/report_task/lib/directory";
+import { useStickerStore } from "@/modules/report_task/store/sticker-store";
+import { StickerConfirmDialog } from "@/modules/report_task/components/shared/sticker-confirm-dialog";
+import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
+import type { Sticker } from "@/modules/report_task/types";
 import { canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import {
@@ -91,6 +95,7 @@ import {
   Send,
   Share2,
   SmilePlus,
+  Sticker as StickerIcon,
   Trash2,
   TriangleAlert,
   Underline,
@@ -173,6 +178,8 @@ export function ReportCard({
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const maxImages = useAttachmentSettingsStore((s) => s.settings.maxImagesPerReportPost);
   const toggleReaction = useReportFeedStore((s) => s.toggleReaction);
+  const addStickerReaction = useReportFeedStore((s) => s.addStickerReaction);
+  const stickers = useStickerStore((s) => s.stickers);
   const addReply = useReportFeedStore((s) => s.addReply);
   const editReplyAction = useReportFeedStore((s) => s.editReply);
   const deleteReplyAction = useReportFeedStore((s) => s.deleteReply);
@@ -348,6 +355,8 @@ export function ReportCard({
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleteReplyTarget, setDeleteReplyTarget] = useState<string | null>(null);
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
+  const [stickerPickerOpen, setStickerPickerOpen] = useState(false);
+  const [pendingSticker, setPendingSticker] = useState<Sticker | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   // Touch's combined react/reply/edit/more menu — separate from moreOpen
   // (the hover toolbar's own "..." submenu) since the two triggers are
@@ -355,6 +364,12 @@ export function ReportCard({
   // same open/close state.
   const [touchMenuOpen, setTouchMenuOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  function confirmPostSticker() {
+    if (!pendingSticker) return;
+    addStickerReaction(post.id, pendingSticker.id, viewingAsUserId);
+    showStickerToast(pendingSticker, post.title, "โพสต์");
+    setPendingSticker(null);
+  }
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const [showFull, setShowFull] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -810,6 +825,42 @@ export function ReportCard({
             ))}
           </PopoverContent>
         </Popover>
+        {/* สติกเกอร์มีคะแนน — ชุดเดียวกับ Kanban (useStickerStore, ตั้งค่าที่
+            เดียวใช้ร่วมกัน) หัก/บวกคะแนนให้คนที่โพสต์รายงานนี้ ("คนที่โพสต์
+            รายงานนั้น") ต่างจากปุ่ม react ด้านบนซึ่งใครก็กดได้ไม่มีผลคะแนน —
+            ต้องซ่อนจากคนทั่วไปเลย ไม่ใช่แค่กดไม่ได้ ("ไม่ต้องให้คนอื่นเห็นไหม
+            ได้เฉพาะคนที่มีสิทธิ") จึงเช็ค isOwner ก่อน render ปุ่มนี้เลย
+            เหมือน Kanban's task-card.tsx เป๊ะ ๆ */}
+        {isOwner(viewingAsUserId) && (
+          <Popover open={stickerPickerOpen} onOpenChange={setStickerPickerOpen}>
+            <PopoverTrigger
+              render={
+                <button
+                  className="h-7 w-7 flex items-center justify-center rounded-md text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+                  aria-label="ติดสติกเกอร์ / ให้คะแนน"
+                  title="ติดสติกเกอร์ / ให้คะแนน"
+                >
+                  <StickerIcon className="h-4 w-4" />
+                </button>
+              }
+            />
+            <PopoverContent className="w-auto p-1.5 flex flex-row items-center gap-0.5">
+              {stickers.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => {
+                    setPendingSticker(s);
+                    setStickerPickerOpen(false);
+                  }}
+                  className="h-8 w-8 flex items-center justify-center rounded-md text-base hover:bg-[var(--bg-soft)] transition-transform hover:scale-110"
+                  title={`${s.label} (${s.points > 0 ? `+${s.points}` : s.points})`}
+                >
+                  {s.emoji}
+                </button>
+              ))}
+            </PopoverContent>
+          </Popover>
+        )}
         <button
           onClick={() => {
             setThreadOpen(true);
@@ -878,6 +929,26 @@ export function ReportCard({
                 </button>
               ))}
             </div>
+            {isOwner(viewingAsUserId) && (
+              <>
+                <div className="h-px bg-[var(--line)] mx-1 my-0.5" />
+                <div className="flex flex-row gap-0.5 p-0.5">
+                  {stickers.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => {
+                        setPendingSticker(s);
+                        setTouchMenuOpen(false);
+                      }}
+                      className="h-8 w-8 flex items-center justify-center rounded-md text-base hover:bg-[var(--bg-soft)]"
+                      title={`${s.label} (${s.points > 0 ? `+${s.points}` : s.points})`}
+                    >
+                      {s.emoji}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
             <div className="h-px bg-[var(--line)] mx-1 my-0.5" />
             <MenuButton
               icon={MessageCircle}
@@ -1051,6 +1122,35 @@ export function ReportCard({
                 <span>{emoji}</span>
                 <span className="tabular-nums">{users.length}</span>
               </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Scored stickers a lead handed the author — display-only chip (same
+          spot Kanban shows them on a task card), visible to whoever can see
+          the post since it's evidence of a call already made, not an action
+          in progress. Tallied by stickerId, not one chip per event, so 3x
+          😡 on one post reads as "😡 3" instead of three separate pills. */}
+      {post.stickerReactions.length > 0 && (
+        <div className="pl-[42px] sm:pl-14 flex items-center gap-1.5 pt-2 flex-wrap">
+          {Object.entries(
+            post.stickerReactions.reduce<Record<string, number>>((acc, r) => {
+              acc[r.stickerId] = (acc[r.stickerId] ?? 0) + 1;
+              return acc;
+            }, {})
+          ).map(([stickerId, count]) => {
+            const sticker = stickers.find((s) => s.id === stickerId);
+            if (!sticker) return null;
+            return (
+              <span
+                key={stickerId}
+                title={`${sticker.label} (${sticker.points > 0 ? `+${sticker.points}` : sticker.points})`}
+                className="text-xs px-1.5 py-0.5 rounded-full bg-[var(--bg-soft)] flex items-center gap-0.5"
+              >
+                <span>{sticker.emoji}</span>
+                {count > 1 && <span className="text-[var(--ink-soft)]">{count}</span>}
+              </span>
             );
           })}
         </div>
@@ -1466,6 +1566,16 @@ export function ReportCard({
             onClose={() => setReplyLightbox(null)}
           />
         )}
+
+      <StickerConfirmDialog
+        open={!!pendingSticker}
+        onOpenChange={(open) => !open && setPendingSticker(null)}
+        sticker={pendingSticker}
+        recipientName={author?.name ?? "ผู้โพสต์"}
+        taskTitle={post.title}
+        itemLabel="โพสต์"
+        onConfirm={confirmPostSticker}
+      />
 
       <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
         <AlertDialogContent>

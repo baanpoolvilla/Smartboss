@@ -2,8 +2,11 @@ import { toast } from "sonner";
 import { cn } from "@/modules/report_task/lib/utils";
 import type { Sticker } from "@/modules/report_task/types";
 
-/** A loud, color-coded toast for sticker reactions — the default sonner toast is too quiet for a penalty/praise action. */
-export function showStickerToast(sticker: Sticker, taskTitle: string) {
+/** A loud, color-coded toast for sticker reactions — the default sonner toast
+ * is too quiet for a penalty/praise action. `itemLabel` lets a report-feed
+ * post ("โพสต์") share this same toast with Kanban's tasks ("งาน", the
+ * default) instead of always reading "งาน" for something that isn't one. */
+export function showStickerToast(sticker: Sticker, taskTitle: string, itemLabel: "งาน" | "โพสต์" = "งาน") {
   const negative = sticker.points < 0;
   const positive = sticker.points > 0;
 
@@ -28,7 +31,7 @@ export function showStickerToast(sticker: Sticker, taskTitle: string) {
         >
           {sticker.label}
         </p>
-        <p className="text-xs text-[var(--ink-soft)] truncate">งาน &quot;{taskTitle}&quot;</p>
+        <p className="text-xs text-[var(--ink-soft)] truncate">{itemLabel} &quot;{taskTitle}&quot;</p>
       </div>
       {sticker.points !== 0 && (
         <span
