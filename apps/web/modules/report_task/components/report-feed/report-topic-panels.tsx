@@ -37,6 +37,8 @@ import { PinLinkDialog } from "@/modules/report_task/components/report-feed/pin-
 import { isDocAttachment } from "@/modules/report_task/lib/report-attachment-kind";
 import { TopicEmptyState } from "@/modules/report_task/components/report-feed/topic-empty-state";
 import { TimeAgo } from "@/modules/report_task/components/shared/time-ago";
+import Link from "next/link";
+import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import {
   ArrowLeft,
   FileImage,
@@ -51,6 +53,7 @@ import {
   Pin,
   PinOff,
   Search,
+  Sticker as StickerIcon,
   ThumbsUp,
   Trash2,
   TriangleAlert,
@@ -193,6 +196,7 @@ export function ReportTopicPanels({
   const removeAlbum = useReportFeedStore((s) => s.removeAlbum);
   const setImageAlbum = useReportFeedStore((s) => s.setImageAlbum);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
+  const stickers = useStickerStore((s) => s.stickers);
   const albums = useMemo(() => allAlbums.filter((a) => a.topicId === topic.id), [allAlbums, topic.id]);
   // null = browsing the folder list; a string = inside that one album's grid.
   const [openAlbumId, setOpenAlbumId] = useState<string | null>(null);
@@ -312,6 +316,23 @@ export function ReportTopicPanels({
       .sort((a, b) => b.count - a.count || a.user.name.localeCompare(b.user.name));
     return { totalPosts: topicPosts.length, totalReplies, totalReactions, complianceRows: [] as ReturnType<typeof buildUserComplianceReports>, contributors };
   }, [topicPosts, topic, exemptions, hasSchedule, range]);
+
+  // ประวัติสติกเกอร์มีคะแนนที่ติดในห้องนี้ — คำขอเดิมคือ "เวลามีอ้างอิงต้องมี
+  // ให้ดูว่าหักจากอันนี้นะ": หน้าคะแนนรวมของ HR (/hr/performance) สรุปแค่ยอด
+  // รวม ไม่บอกว่าแต้มไหนมาจากโพสต์ไหน — วางไว้ที่นี่แทน (ในห้องรายงานที่
+  // สติกเกอร์ถูกติดจริง "เก็บไว้ในห้องรายงานสรุปอะไรแบบนี้ได้ไหม") ซึ่งมี
+  // ทั้งบริบทของห้องและลิงก์กลับไปโพสต์ต้นตอให้อยู่แล้ว ต่างจากหน้า HR ที่
+  // ไม่รู้จักแนวคิด "โพสต์"/"ห้อง" เลย
+  const stickerEvents = useMemo(() => {
+    return topicPosts
+      .flatMap((p) =>
+        (p.stickerReactions ?? []).map((r) => ({
+          ...r,
+          post: p,
+        }))
+      )
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [topicPosts]);
 
   // The single most useful number on this tab — who still owes a report
   // *today*, not just a historical count (3.5.4). Always "today", regardless
@@ -960,6 +981,62 @@ export function ReportTopicPanels({
           </div>
         )}
       </div>
+
+      {/* ประวัติสติกเกอร์มีคะแนนของห้องนี้ — ให้อ้างอิงย้อนกลับได้ว่าแต้มที่
+          หน้าคะแนนรวมของ HR (/hr/performance) โดนหัก/ได้จากโพสต์ไหนบ้าง
+          (หน้านั้นสรุปแค่ยอดรวม ไม่รู้จักโพสต์เลย) */}
+      {stickerEvents.length > 0 && (
+        <div className="rounded-xl border border-[var(--line)] p-4">
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)] mb-3">
+            <StickerIcon className="h-3.5 w-3.5" />
+            ประวัติสติกเกอร์ให้คะแนน
+            <span className="text-xs font-normal text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2 py-0.5">
+              {stickerEvents.length}
+            </span>
+          </p>
+          <div>
+            {stickerEvents.map((e) => {
+              const sticker = stickers.find((s) => s.id === e.stickerId);
+              const author = getUser(e.post.authorId);
+              const actor = getUser(e.byUserId);
+              return (
+                <div key={e.id} className="flex items-start justify-between gap-2 py-2 border-b last:border-0 border-[var(--line)]">
+                  <div className="min-w-0 flex items-start gap-2">
+                    <span className="text-base leading-none shrink-0 mt-0.5">{sticker?.emoji ?? "🏷️"}</span>
+                    <div className="min-w-0">
+                      <p className="text-sm leading-snug">
+                        <span className="font-medium">{sticker?.label ?? e.stickerId}</span>
+                        {" ให้ "}
+                        <span className="font-medium">{author?.name ?? "ไม่ทราบชื่อ"}</span>
+                        {" · บนโพสต์ "}
+                        <Link
+                          href={`/report-task/report-feed?topic=${topic.id}&post=${e.post.id}`}
+                          className="text-[var(--brand-green-dark)] hover:underline"
+                        >
+                          &ldquo;{e.post.title || "(ไม่มีหัวข้อ)"}&rdquo;
+                        </Link>
+                      </p>
+                      <p className="text-xs text-[var(--ink-soft)] mt-0.5">
+                        โดย {actor?.name ?? "ไม่ทราบชื่อ"} · <TimeAgo date={e.createdAt} />
+                      </p>
+                    </div>
+                  </div>
+                  {!!sticker && sticker.points !== 0 && (
+                    <span
+                      className={cn(
+                        "shrink-0 text-xs font-bold tabular-nums",
+                        sticker.points < 0 ? "text-[var(--chart-red)]" : "text-[var(--brand-green-dark)]"
+                      )}
+                    >
+                      {sticker.points > 0 ? `+${sticker.points}` : sticker.points}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
