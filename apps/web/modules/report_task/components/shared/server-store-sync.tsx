@@ -106,6 +106,16 @@ export function ServerStoreSync<T, S>({
     async function flush(snapshot: S | null, isUnload = false) {
       if (!snapshot) return;
       pendingRef.current = null;
+      // The debounce timer that scheduled this flush has now fired and is
+      // spent — clear the id too, not just pendingRef. Left set, the poll
+      // guard below (`if (pendingRef.current || timerRef.current) return`)
+      // reads this stale, already-consumed setTimeout id as "an edit is
+      // still in flight" forever, permanently skipping every future poll
+      // tick for the life of this mount. Any local edit (even just opening
+      // a room with an unread post, which calls markTopicRead) arms this —
+      // matches "ต้องรีเฟรชถึงจะเปลี่ยน / ย้ายห้องไปมาแล้วกลับมา" exactly:
+      // both remount ServerStoreSync, which resets timerRef fresh.
+      timerRef.current = null;
 
       // On page unload we get a single keepalive shot and can't do the
       // fetch/merge/retry dance — send optimistically and let a surviving tab
