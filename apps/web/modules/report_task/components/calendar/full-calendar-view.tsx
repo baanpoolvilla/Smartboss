@@ -509,7 +509,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
       // read as messy/hard-to-read clutter at real phone width once actually
       // deployed ("ให้แสดงแค่จุดๆพอ" — just dots is enough). No count
       // threshold anymore, dots for every day that has anything.
-      const DOT_CAP = 3;
+      const DOT_CAP = 6;
       const items = events.filter((e) => {
         if (e.type === "holiday") return false;
         const start = e.start.slice(0, 10);
@@ -853,7 +853,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           // dozen+ entries ballooned that row far past the others, so it's
           // back. Week/day/list keep auto-fit — those don't stack multiple
           // events per cell the same way, so a fixed cap doesn't apply there.
-          dayMaxEvents={view === "dayGridMonth" ? 2 : isNarrowViewport ? 3 : true}
+          dayMaxEvents={isNarrowViewport && view === "dayGridMonth" ? 3 : true}
           eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
           // "+N more" opens the same day popup as clicking the date itself
           // instead of FullCalendar's own bare popover — one consistent

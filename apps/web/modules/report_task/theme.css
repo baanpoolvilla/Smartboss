@@ -307,22 +307,15 @@
 .ebw-calendar .fc-dayGridMonth-view .fc-daygrid-day-frame {
   height: var(--ebw-row-height, auto);
   overflow: hidden;
-  /* Anchor for the absolutely-pinned "+N รายการ" badge below. */
+  /* Anchor for the mobile "+N" corner badge (renderDayCellContent). */
   position: relative;
-  /* Breathing room at the bottom so a day with only chips (no +N badge)
-     doesn't sit flush on the cell's bottom border. */
-  padding-bottom: 4px;
-}
-/* Pin the "+N รายการ" overflow badge to the bottom of the fixed-height,
-   overflow-hidden month cell so it can NEVER be clipped, however short the row
-   works out on a given browser/screen (it was getting cut off on Edge's
-   shorter rows). Chips fill from the top and any that don't fit clip cleanly
-   behind it; the count itself stays fully visible and clickable. */
-.ebw-calendar .fc-dayGridMonth-view .fc-daygrid-day-bottom {
-  position: absolute;
-  bottom: 3px;
-  inset-inline-start: 4px;
-  margin: 0;
+  /* Breathing room so the last chip / the "+N รายการ" link never sits flush on
+     the cell's bottom border. The link itself is NOT absolutely pinned anymore
+     — FullCalendar's own dayMaxEvents auto-fit (see full-calendar-view.tsx)
+     shows only as many chips as actually fit and then flows the "+N รายการ"
+     link right after them, so it can't overlap a chip (the previous absolute
+     pin did) or get clipped. */
+  padding-bottom: 3px;
 }
 /* With the rows now sized to fit exactly, the month grid's own scroller has
    nothing left to scroll — turning it off outright removes the last way the
