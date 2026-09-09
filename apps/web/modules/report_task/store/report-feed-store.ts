@@ -764,22 +764,32 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         }));
         const post = get().posts.find((p) => p.id === postId);
         if (!post || !sticker) return;
+        // ระบุ "ให้ใคร" ในบันทึกกิจกรรมด้วย ไม่ใช่แค่ชื่อสติกเกอร์ + โพสต์
+        // ("มีให้บอกด้วยสิ...ใส่อิโมจิแบบมีผลต่อคะแนนให้ใคร") — เจ้าของโพสต์
+        // คือคนที่โดนหัก/ได้คะแนนเสมอ ไม่ใช่คนกด
         useActivityLogStore.getState().log({
           userId: byUserId,
           action: "ติดสติกเกอร์",
           target: post.title,
-          detail: sticker.label,
+          detail: `${sticker.label} ให้ ${getUser(post.authorId)?.name ?? "ไม่ทราบชื่อ"}`,
         });
       },
       removeStickerReaction: (postId, reactionId, byUserId) => {
+        const post = get().posts.find((p) => p.id === postId);
+        const removed = post?.stickerReactions.find((r) => r.id === reactionId);
         set((s) => ({
           posts: s.posts.map((p) =>
             p.id !== postId ? p : { ...p, stickerReactions: p.stickerReactions.filter((r) => r.id !== reactionId) }
           ),
         }));
-        const post = get().posts.find((p) => p.id === postId);
         if (!post) return;
-        useActivityLogStore.getState().log({ userId: byUserId, action: "ลบสติกเกอร์", target: post.title });
+        const sticker = removed ? useStickerStore.getState().stickers.find((s) => s.id === removed.stickerId) : undefined;
+        useActivityLogStore.getState().log({
+          userId: byUserId,
+          action: "ลบสติกเกอร์",
+          target: post.title,
+          detail: sticker ? `${sticker.label} ที่เคยให้ ${getUser(post.authorId)?.name ?? "ไม่ทราบชื่อ"}` : undefined,
+        });
       },
       addReply: (postId, authorId, body, extra) => {
         // Captured up front so notifications below can deep-link straight to
