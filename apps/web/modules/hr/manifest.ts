@@ -44,6 +44,15 @@ export const hrManifest: ModuleManifest = {
     // ถ้าใช้ settingManage เมนูจะโผล่ให้คนที่กดแล้วโดน 403 (เช่น SUPER_ADMIN)
     { label: "ชุดกฎตามกฎหมาย", path: "/hr/rule-sets", permission: HR_PERMS.payrollManage, icon: "Scale" },
     { label: "เครื่องสแกน", path: "/hr/devices", permission: HR_PERMS.settingManage, icon: "Fingerprint" },
+    /*
+     * พิกัด + รัศมีของแต่ละสถานที่ — ตัวตัดสินว่าการลงเวลาด้วยมือถือผ่านหรือไม่
+     * แยกเมนูของตัวเองเพราะต้องตั้งก่อนเปิดใช้ลงเวลาด้วยมือถือ ถ้าซ่อนไว้ใต้
+     * "ตั้งค่า HR" จะไม่มีใครรู้ว่าต้องมาตั้งที่นี่ก่อน แล้วพนักงานจะลงเวลาไม่ผ่าน
+     * โดยไม่มีอะไรชี้ว่าสาเหตุอยู่ที่ไหน (ดู docs/line-mini-app-checkin-spec.md ข้อ 4.1)
+     */
+    { label: "สถานที่ทำงาน", path: "/hr/sites", permission: HR_PERMS.settingManage, icon: "MapPin" },
+    // คู่กับ "สถานที่ทำงาน" — ต้องตั้งทั้งคู่ถึงจะลงเวลาด้วยมือถือผ่าน
+    { label: "นโยบายลงเวลามือถือ", path: "/hr/checkin-policy", permission: HR_PERMS.settingManage, icon: "ShieldCheck" },
     { label: "สลิปของฉัน", path: "/hr/my-payslips", permission: HR_PERMS.access, icon: "ReceiptText" },
     /*
      * ค่าตั้งต้นที่ตั้งครั้งเดียวแล้วมีผลทุกหน้า — กะทำงาน + นโยบายการมาสาย +

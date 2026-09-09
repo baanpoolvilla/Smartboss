@@ -26,6 +26,46 @@ export class CheckinRepository {
     return rows[0];
   }
 
+  async listPolicyGroups(
+    tx: Tx,
+    options: { companyId?: string },
+  ): Promise<(typeof schema.attendancePolicyGroups.$inferSelect)[]> {
+    return tx
+      .select()
+      .from(schema.attendancePolicyGroups)
+      .where(
+        options.companyId === undefined
+          ? undefined
+          : eq(schema.attendancePolicyGroups.companyId, options.companyId),
+      )
+      .orderBy(schema.attendancePolicyGroups.code);
+  }
+
+  /**
+   * สมาชิกที่ยังมีผลอยู่ของแต่ละกลุ่ม
+   *
+   * นับเฉพาะแถวที่ยังไม่ปิด (`effective_to` เป็น null หรือยังไม่ถึง) — แถวเก่า
+   * ที่ถูก supersede ไปแล้วยังอยู่ในตารางเพื่อให้ย้อนดูอดีตได้ ถ้านับรวมด้วย
+   * ตัวเลข "กี่คนอยู่ในกลุ่มนี้" จะพองขึ้นทุกครั้งที่มีการย้ายกลุ่ม
+   */
+  async listActivePolicyMembers(
+    tx: Tx,
+    asOf: string,
+  ): Promise<(typeof schema.attendancePolicyGroupMembers.$inferSelect)[]> {
+    return tx
+      .select()
+      .from(schema.attendancePolicyGroupMembers)
+      .where(
+        and(
+          sql`${schema.attendancePolicyGroupMembers.effectiveFrom} <= ${asOf}`,
+          or(
+            isNull(schema.attendancePolicyGroupMembers.effectiveTo),
+            sql`${schema.attendancePolicyGroupMembers.effectiveTo} >= ${asOf}`,
+          ),
+        ),
+      );
+  }
+
   /**
    * นโยบายที่มีผลกับพนักงานคนนี้ ณ วันที่ระบุ
    * resolve แบบ point-in-time เสมอ ไม่ใช่ "แถวล่าสุด" (ADR-0012)

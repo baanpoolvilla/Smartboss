@@ -9,6 +9,7 @@ import {
   listPositionsQuerySchema,
   listSitesQuerySchema,
   updateCompanySchema,
+  updateSiteSchema,
   type Company,
   type CreateCompanyInput,
   type CreateOrgUnitInput,
@@ -18,6 +19,7 @@ import {
   type Position,
   type Site,
   type UpdateCompanyInput,
+  type UpdateSiteInput,
 } from '@workforce/contracts';
 import { AppError, isUuid } from '@workforce/domain';
 import type { z } from 'zod';
@@ -108,6 +110,27 @@ export class OrganizationController {
   @Idempotent()
   async createSite(@Body(zodPipe(createSiteSchema)) body: CreateSiteInput): Promise<Site> {
     return this.service.createSite(body);
+  }
+
+  @Get('sites/:siteId')
+  @RequirePermissions('workforce.people.read')
+  async getSite(@Param('siteId') siteId: string): Promise<Site> {
+    return this.service.getSite(requireUuid(siteId, 'siteId'));
+  }
+
+  /**
+   * แก้ไขสถานที่ — ย้ายหมุด / แก้รัศมี / ปิดใช้งาน
+   *
+   * ไม่ใส่ @Idempotent() เหมือน POST เพราะ PATCH แบบนี้ idempotent อยู่แล้วโดยธรรมชาติ
+   * (ส่งค่าเดิมซ้ำได้ผลเท่าเดิม) — ตรงกับ PATCH companies/:companyId ที่มีอยู่
+   */
+  @Patch('sites/:siteId')
+  @RequirePermissions('workforce.settings.manage')
+  async updateSite(
+    @Param('siteId') siteId: string,
+    @Body(zodPipe(updateSiteSchema)) body: UpdateSiteInput,
+  ): Promise<Site> {
+    return this.service.updateSite(requireUuid(siteId, 'siteId'), body);
   }
 
   @Get('positions')

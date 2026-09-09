@@ -229,6 +229,22 @@ export const OPERATIONAL_ROUTES: readonly Omit<RouteDefinition, 'response'>[] = 
     successStatus: 201,
   },
   {
+    operationId: 'listPolicyGroups_get',
+    method: 'get',
+    path: '/attendance-policy-groups',
+    summary: 'GET /attendance-policy-groups',
+    tag: 'checkin',
+    permissions: ['workforce.people.read'] as Permission[],
+  },
+  {
+    operationId: 'listPolicyMemberships_get',
+    method: 'get',
+    path: '/attendance-policy-group-members',
+    summary: 'GET /attendance-policy-group-members',
+    tag: 'checkin',
+    permissions: ['workforce.people.read'] as Permission[],
+  },
+  {
     operationId: 'assignPolicyGroup_post',
     method: 'post',
     path: '/attendance-policy-groups/{groupId}/members',
