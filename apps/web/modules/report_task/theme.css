@@ -307,12 +307,22 @@
 .ebw-calendar .fc-dayGridMonth-view .fc-daygrid-day-frame {
   height: var(--ebw-row-height, auto);
   overflow: hidden;
-  /* A few px of breathing room at the bottom so the last item in a cell —
-     usually the "+N รายการ" badge — never sits flush on the cell's bottom
-     border and read as clipped/overlapped by the grid line ("ชิดขอบล่าง
-     เหมือนโดนทับ"), which showed up on the shorter rows some browsers/screens
-     compute. Inside the fixed height, so it can't grow the grid. */
+  /* Anchor for the absolutely-pinned "+N รายการ" badge below. */
+  position: relative;
+  /* Breathing room at the bottom so a day with only chips (no +N badge)
+     doesn't sit flush on the cell's bottom border. */
   padding-bottom: 4px;
+}
+/* Pin the "+N รายการ" overflow badge to the bottom of the fixed-height,
+   overflow-hidden month cell so it can NEVER be clipped, however short the row
+   works out on a given browser/screen (it was getting cut off on Edge's
+   shorter rows). Chips fill from the top and any that don't fit clip cleanly
+   behind it; the count itself stays fully visible and clickable. */
+.ebw-calendar .fc-dayGridMonth-view .fc-daygrid-day-bottom {
+  position: absolute;
+  bottom: 3px;
+  inset-inline-start: 4px;
+  margin: 0;
 }
 /* With the rows now sized to fit exactly, the month grid's own scroller has
    nothing left to scroll — turning it off outright removes the last way the
@@ -372,8 +382,17 @@
    Capping the frame to a square keeps every cell's proportions consistent
    across phone widths — it shrinks as a whole, not just sideways. */
 @media (max-width: 639.98px) {
-  .ebw-calendar .fc-daygrid-day-frame {
-    aspect-ratio: 1 / 1;
+  /* No forced square + no clipping on phones: the square (aspect-ratio:1/1)
+     together with the frame's overflow:hidden was cutting the "+N" count badge
+     off the bottom whenever the dots + badge were taller than the square (the
+     badge wrapped to a second line and got clipped). Let each cell size to its
+     own content and stay fully visible instead — a busier day is just a little
+     taller, which reads fine on the scrolling phone view. */
+  .ebw-calendar .fc-dayGridMonth-view .fc-daygrid-day-frame {
+    aspect-ratio: auto;
+    height: auto;
+    min-height: 3.25rem;
+    overflow: visible;
   }
 }
 /* Pale chip in the event's own color with a solid left accent bar. Only the

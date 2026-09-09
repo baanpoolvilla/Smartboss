@@ -509,7 +509,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
       // read as messy/hard-to-read clutter at real phone width once actually
       // deployed ("ให้แสดงแค่จุดๆพอ" — just dots is enough). No count
       // threshold anymore, dots for every day that has anything.
-      const DOT_CAP = 4;
+      const DOT_CAP = 3;
       const items = events.filter((e) => {
         if (e.type === "holiday") return false;
         const start = e.start.slice(0, 10);
