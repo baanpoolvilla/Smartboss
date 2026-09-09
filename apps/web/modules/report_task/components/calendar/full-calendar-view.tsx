@@ -517,6 +517,16 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
         const end = endRaw > start ? endRaw : start;
         return end === start ? ymd === start : ymd >= start && ymd < end;
       });
+      // One fewer dot than the cap whenever the "+N" badge has to show —
+      // 6 dots plus the badge crammed the row right up against the cell's
+      // own border on real phones ("มันล้นอะ"), even with overflow:hidden
+      // clipping the true overflow: nothing spilled into the next day, but
+      // the badge sat flush on the edge, reading as pushed/overlapping.
+      // Dropping to 5 dots when a badge is needed frees up exactly the
+      // width the badge needs, so the whole row sits with room to spare
+      // instead of touching the border.
+      const hasOverflow = items.length > DOT_CAP;
+      const visibleDots = hasOverflow ? DOT_CAP - 1 : DOT_CAP;
       return (
         <div className="flex flex-col items-center w-full">
           {numberRow}
@@ -531,7 +541,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
             // middle instead as more dots are added, which reads balanced
             // whether there's one dot or four.
             <div className="flex max-w-full flex-nowrap items-center justify-center gap-px overflow-hidden px-0.5 pb-0.5">
-              {items.slice(0, DOT_CAP).map((e) => (
+              {items.slice(0, visibleDots).map((e) => (
                 <span
                   key={e.id}
                   title={e.title}
@@ -539,7 +549,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
                   style={{ backgroundColor: e.colorHint ?? colors[e.type] }}
                 />
               ))}
-              {items.length > DOT_CAP && (
+              {hasOverflow && (
                 // Right after the dots, same row, instead of pinned to the
                 // cell's corner — asked to sit right where the dots end
                 // ("เอามาไว้ตรงที่วงได้ไหม") rather than jump to the
@@ -547,7 +557,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
                 // fits the row without wrapping or getting clipped by the
                 // square cell's overflow:hidden.
                 <span className="shrink-0 rounded-full px-[3px] text-[7px] font-extrabold leading-[1.35] text-white bg-[var(--ink)]">
-                  +{items.length - DOT_CAP}
+                  +{items.length - visibleDots}
                 </span>
               )}
             </div>
