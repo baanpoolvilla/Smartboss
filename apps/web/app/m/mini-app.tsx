@@ -16,6 +16,9 @@ import { Today } from "./today";
 
 const LIFF_SDK = "https://static.line-scdn.net/liff/edge/2/sdk.js";
 
+/** ธงกัน `liff.login()` วนเด้งไม่รู้จบ — อยู่แค่ในแท็บนี้ ปิดแล้วหายไปเอง */
+const LOGIN_ATTEMPT_KEY = "sb.liff.login-attempt";
+
 interface Liff {
   init(config: { liffId: string }): Promise<void>;
   isLoggedIn(): boolean;
@@ -96,11 +99,41 @@ export function MiniApp({ liffId, lineReady }: { liffId: string; lineReady: bool
 
         if (!liff.isLoggedIn()) {
           if (liff.isInClient()) {
+            /*
+             * กันวนไม่รู้จบ — `liff.login()` พาออกไปแล้วกลับมาที่หน้าเดิม
+             * ถ้ากลับมาแล้ว `isLoggedIn()` ยังเป็น false อยู่ (เช่น scope ไม่ครบ
+             * หรือ endpoint ไม่ตรงกับที่ลงทะเบียนไว้) มันจะสั่ง login ซ้ำทันที
+             * กลายเป็นวนเด้งจนหน้าจอกะพริบแล้วไปไหนไม่ได้เลย โดยไม่มี error
+             * ให้เห็นสักตัว — จำไว้ใน sessionStorage ว่าลองไปแล้วหนึ่งรอบ
+             */
+            let alreadyTried = false;
+            try {
+              alreadyTried = sessionStorage.getItem(LOGIN_ATTEMPT_KEY) === "1";
+              sessionStorage.setItem(LOGIN_ATTEMPT_KEY, "1");
+            } catch {
+              // โหมดส่วนตัวบางเครื่องปิด sessionStorage — ยอมให้ลองครั้งเดียวไปเลย
+            }
+
+            if (alreadyTried) {
+              setPhase({
+                kind: "needs_login",
+                reason: "เข้าสู่ระบบผ่าน LINE ไม่สำเร็จ — เข้าด้วยอีเมลแทนได้",
+              });
+              return;
+            }
+
             liff.login();
             return; // เบราว์เซอร์จะพาออกไปแล้วกลับมาที่หน้านี้เอง
           }
           setPhase({ kind: "needs_login", reason: null });
           return;
+        }
+
+        // เข้าได้แล้ว — ล้างธงกันวน เผื่อเซสชันหน้าเริ่มนับใหม่
+        try {
+          sessionStorage.removeItem(LOGIN_ATTEMPT_KEY);
+        } catch {
+          // ไม่เป็นไร ธงจะหายเองตอนปิดแท็บอยู่แล้ว
         }
 
         const idToken = liff.getIDToken();

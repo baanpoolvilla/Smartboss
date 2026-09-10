@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import { MapBoundary } from "./map-boundary";
 
 /**
  * ต้องโหลดแบบ `ssr: false` เท่านั้น — ห้ามเปลี่ยนเป็น static import เด็ดขาด
@@ -260,8 +261,11 @@ export function Today({
         </p>
       )}
 
-      {/* ดูก่อนกดว่าอยู่ในระยะไหม — ไม่ได้บังคับ แค่ให้เห็นก่อนเสียเวลากดแล้วไม่ผ่าน */}
-      <CheckinMap />
+      {/* ดูก่อนกดว่าอยู่ในระยะไหม — ไม่ได้บังคับ แค่ให้เห็นก่อนเสียเวลากดแล้วไม่ผ่าน
+          ครอบด้วย boundary เพราะแผนที่พังต้องไม่ลากปุ่มลงเวลาตายไปด้วย */}
+      <MapBoundary>
+        <CheckinMap />
+      </MapBoundary>
 
       <button
         type="button"
