@@ -1,7 +1,26 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CheckinMap } from "./checkin-map";
+import dynamic from "next/dynamic";
+
+/**
+ * ต้องโหลดแบบ `ssr: false` เท่านั้น — ห้ามเปลี่ยนเป็น static import เด็ดขาด
+ *
+ * `checkin-map.tsx` import ไลบรารี leaflet ที่หน้า module อ่านค่า `window`
+ * ทันทีตอนโหลดโมดูล (ไม่ใช่ตอนถูกเรียกใช้) ⇒ ต่อให้ตัวคอมโพเนนต์มี "use client"
+ * กำกับไว้ Next ก็ยังรันผ่าน server ครั้งแรกเพื่อสร้าง HTML อยู่ดี (route
+ * `/m` เป็น dynamic) แล้ว `window is not defined` ทำให้ทั้งหน้าล้มเป็น 500
+ * — เจอจริงตอน deploy ขึ้น production ครั้งแรก (ทดสอบตอน build ไม่เจอเพราะ
+ * `next build` ไม่ prerender หน้าที่ตั้ง force-dynamic ไว้)
+ */
+const CheckinMap = dynamic(() => import("./checkin-map").then((m) => m.CheckinMap), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-56 w-full items-center justify-center rounded-(--radius) border border-(--line) bg-(--bg-soft) text-sm text-(--ink-soft)">
+      กำลังโหลดแผนที่…
+    </div>
+  ),
+});
 
 /**
  * หน้า "วันนี้" — จอเดียวที่พนักงานหน้างานเปิดบ่อยที่สุด
