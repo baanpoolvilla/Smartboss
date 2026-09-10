@@ -599,10 +599,19 @@ function ReportFeedPageInner() {
   // Opening a room marks its posts read, same as any chat app — a parent
   // (organizing-folder) topic has no posts of its own to mark either way,
   // so this is harmless to run unconditionally on whatever's selected.
+  //
+  // `posts` is in the dependency list too — without it, this only fired once
+  // at the moment you switched into the room, so a new post/reply (or an
+  // @mention) landing while you were already sitting there stayed unread
+  // forever, showing a red badge on the very room you had open on screen
+  // ("เปิดห้องนั้นไว้แล้วมันยังขึ้น 1 แดงอยู่"). markTopicRead itself already
+  // no-ops (returns the same state reference) when there's nothing left to
+  // clear, so re-running it on every post-list change is harmless — no extra
+  // renders, no loop.
   useEffect(() => {
     if (!activeId || showAllPosts || showPending || showMentions) return;
     markTopicRead(activeId, viewingAsUserId);
-  }, [activeId, showAllPosts, showPending, showMentions, viewingAsUserId, markTopicRead]);
+  }, [activeId, showAllPosts, showPending, showMentions, viewingAsUserId, markTopicRead, posts]);
 
   // ที่กล่าวถึงฉัน spans posts across many rooms, so opening it clears
   // exactly those posts' unread flag (markPostsRead) instead of a whole
