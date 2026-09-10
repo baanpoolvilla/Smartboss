@@ -1,7 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSession, hasPermission } from "@smartboss/auth";
 import { HR_PERMS } from "@/modules/hr/permissions";
-import { wfTry, type Employment, type Paged } from "@/modules/hr/lib/api";
+import {
+  wfTry,
+  type Employment,
+  type LeaveRequest,
+  type LeaveType,
+  type Paged,
+} from "@/modules/hr/lib/api";
 
 export const runtime = "nodejs";
 
@@ -63,8 +69,11 @@ function hhmm(minutes: number): string {
  * เรียงตามลำดับที่ "กลบ" กัน: ลา/วันหยุดมาก่อนเสมอ เพราะวันที่ไม่ต้องมาทำงาน
  * ไม่ควรถูกอ่านว่าขาดงานหรือมาสาย แม้ตัวเลขนาทีจะเป็นศูนย์เหมือนกัน
  */
-function statusLabel(r: AttendanceResult): string {
-  if (r.is_on_leave) return "ลา";
+function statusLabel(r: AttendanceResult, leaveName?: string): string {
+  // ใช้ "ชื่อประเภทจริง" ไม่ใช่คำว่า "ลา" เหมารวม — วันหยุดประจำเดือนคือวันหยุด
+  // ตามสิทธิ์ ไม่ใช่การลา การเหมารวมทำให้อ่านรายงานแล้วเข้าใจว่าพนักงานใช้สิทธิ์
+  // ลาไปทั้งที่เป็นวันหยุดปกติของเขา (เจ้าของระบบสั่งแก้ 2026-09-10)
+  if (r.is_on_leave) return leaveName ?? "ลา";
   if (r.is_holiday) return "วันหยุดนักขัตฤกษ์";
   if (r.is_rest_day) return "วันหยุด";
   if (r.actual_in_at === null) return r.absence_minutes > 0 ? "ขาดงาน" : "ไม่มีกะ";
@@ -118,11 +127,21 @@ export async function GET(req: NextRequest) {
   }
   if (to < from) return new NextResponse("ช่วงวันที่ไม่ถูกต้อง", { status: 400 });
 
-  const [employments, results] = await Promise.all([
+  const [employments, results, leaves, leaveTypes] = await Promise.all([
     wfTry<Paged<Employment>>("/employments"),
     wfTry<{ items: AttendanceResult[] }>(
       `/attendance-results?from=${from}&to=${to}`
     ),
+    // ผลลงเวลาบอกได้แค่ "ลาหรือไม่" (is_on_leave) ไม่ได้บอกว่าลาประเภทไหน
+    // ⇒ ต้องดึงใบจริงมาเทียบเองถึงจะแยก "วันหยุดประจำเดือน" ออกจาก "ลาป่วย" ได้
+    //
+    // ⚠ ฝั่ง API คืนสูงสุด 500 ใบต่อครั้ง — ถ้าบริษัทใหญ่พอที่ช่วงที่ export
+    // มีใบเกินนั้น ใบที่เกินมาจะตกไปใช้ป้ายเดิมคือ "ลา" (ไม่ได้ผิด แค่หยาบกว่า)
+    // ถึงจุดนั้นต้องเพิ่ม paging ที่ /leave-requests ก่อน ไม่ใช่แก้ที่ไฟล์นี้
+    wfTry<Paged<LeaveRequest>>(
+      `/leave-requests?from=${from}&to=${to}&status=APPROVED`
+    ),
+    wfTry<Paged<LeaveType>>("/leave-types"),
   ]);
 
   /*
@@ -134,6 +153,26 @@ export async function GET(req: NextRequest) {
       "ดึงผลลงเวลาไม่ได้ — บัญชีนี้ไม่มีสิทธิ์อ่านผลลงเวลาของทุกคน หรือระบบบุคคลไม่ตอบสนอง",
       { status: 403 }
     );
+  }
+
+  /**
+   * (พนักงาน, วันที่) → ชื่อประเภทที่หยุดวันนั้น
+   *
+   * ใบหนึ่งใบกินได้หลายวัน จึงต้องกางออกทีละวันก่อนถึงจะเทียบกับผลลงเวลาราย
+   * วันได้ · อ่านไม่ได้ (ไม่มีสิทธิ์) ก็ไม่เป็นไร จะตกไปใช้คำว่า "ลา" เหมือนเดิม
+   */
+  const leaveTypeName = new Map(
+    (leaveTypes?.items ?? []).map((t) => [t.id, t.name]),
+  );
+  const leaveNameByDay = new Map<string, string>();
+  for (const leave of leaves?.items ?? []) {
+    const name = leaveTypeName.get(leave.leave_type_id);
+    if (name === undefined) continue;
+    const start = new Date(`${leave.starts_on}T00:00:00Z`);
+    const end = new Date(`${leave.ends_on}T00:00:00Z`);
+    for (let d = start; d <= end; d = new Date(d.getTime() + 86_400_000)) {
+      leaveNameByDay.set(`${leave.employment_id}|${d.toISOString().slice(0, 10)}`, name);
+    }
   }
 
   const people = new Map(
@@ -187,7 +226,7 @@ export async function GET(req: NextRequest) {
         r.absence_minutes || "",
         csvCell(hhmm(r.worked_minutes)),
         r.ot_candidate_minutes || "",
-        csvCell(statusLabel(r)),
+        csvCell(statusLabel(r, leaveNameByDay.get(`${r.employment_id}|${r.work_date}`))),
       ].join(",")
     );
   }

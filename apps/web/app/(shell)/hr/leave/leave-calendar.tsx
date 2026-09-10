@@ -493,7 +493,7 @@ function DayDialog({
       <Modal title={`วันหยุดของคุณ · ${date}`} onClose={onClose}>
         <div className="flex flex-col gap-4">
           <p className="text-sm text-(--ink-soft)">
-            {mine.leaveTypeName ?? "ลา"} ·{" "}
+            {mine.leaveTypeName ?? "วันหยุด"} ·{" "}
             {mine.status === "APPROVED"
               ? "มีผลแล้ว"
               : "รออนุมัติ — ยังถูกนับเป็นขาดงานจนกว่าจะอนุมัติ"}

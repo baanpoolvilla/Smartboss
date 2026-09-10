@@ -83,7 +83,10 @@ export function DaysOff() {
     }
   }, []);
 
+  // ดึงข้อมูลจากเซิร์ฟเวอร์เมื่อเดือนเปลี่ยน — เป็นการ sync กับระบบภายนอก
+  // (HTTP) ไม่ใช่ state ที่คำนวณได้จาก props จึงเป็นกรณีที่กฎนี้อนุญาต
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- ตามคำอธิบายด้านบน
     void load(month);
   }, [load, month]);
 
@@ -95,6 +98,9 @@ export function DaysOff() {
   const [year, m] = month.split("-").map(Number);
   const firstWeekday = new Date(Date.UTC(year!, m! - 1, 1)).getUTCDay();
   const daysInMonth = new Date(Date.UTC(year!, m!, 0)).getUTCDate();
+  // อ่านนาฬิกาตอน render โดยตั้งใจ — วงแหวน "วันนี้" ต้องเลื่อนตามเวลาจริง
+  // ถ้าแอปเปิดค้างข้ามเที่ยงคืน ไม่ใช่ค่าที่ควรแช่ไว้ตั้งแต่ render แรก
+  // eslint-disable-next-line react-hooks/purity -- ตามคำอธิบายด้านบน
   const today = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   const cells: (string | null)[] = [
@@ -174,13 +180,15 @@ export function DaysOff() {
 
       <div>
         <h2 className="mb-2 text-sm font-semibold text-(--ink-soft)">
-          วันหยุดเดือนนี้ {items.length > 0 && `(${marked.size} วัน)`}
+          {/* แยก "วันหยุด" กับ "วันลา" ไม่เหมารวม — วันหยุดประจำเดือนคือสิทธิ์
+              ตามสัญญาจ้าง ส่วนลาป่วย/ลากิจคนละเรื่องกัน แต่ละแถวบอกชื่อจริงของตัวเอง */}
+          วันหยุด / วันลาเดือนนี้ {items.length > 0 && `(${marked.size} วัน)`}
         </h2>
 
         {loading ? (
           <p className="text-sm text-(--ink-soft)">กำลังโหลด…</p>
         ) : items.length === 0 ? (
-          <p className="text-sm text-(--ink-soft)">เดือนนี้ยังไม่มีวันหยุด</p>
+          <p className="text-sm text-(--ink-soft)">เดือนนี้ยังไม่มีวันหยุดหรือวันลา</p>
         ) : (
           <ul className="divide-y divide-(--line) rounded-(--radius) border border-(--line)">
             {items.map((item) => (
