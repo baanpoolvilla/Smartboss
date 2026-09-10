@@ -142,7 +142,15 @@ function StatusBar({
   const heightPct = max && total > 0 ? Math.min(100, Math.sqrt(total / max) * 100) : 0;
   return (
     <div className="flex h-full w-8 flex-col items-center justify-end">
-      <span className="mb-1 text-[11px] font-bold tabular-nums text-[var(--ink)]">{total}</span>
+      {/* pointer-events-none — purely decorative, sitting flush against the
+          bar's own top edge with only 4px (mb-1) of gap. Without this, a
+          cursor landing anywhere in the label's own box (its line-height is
+          taller than the glyphs it draws) intercepted hover/click meant for
+          the topmost segment's button right underneath it — that segment
+          specifically never showed its tooltip or responded to a click
+          ("hover ไม่ขึ้น กดไม่ได้อะอันบนสุด"), while every segment below it
+          (with only other segments, not this label, above it) worked fine. */}
+      <span className="pointer-events-none mb-1 text-[11px] font-bold tabular-nums text-[var(--ink)]">{total}</span>
       <div className="flex w-full flex-col-reverse" style={{ height: `${heightPct}%` }}>
         {people.length === 0 ? (
           <div className="w-full flex-1 rounded-t-[5px]" style={{ backgroundColor: `color-mix(in srgb, ${color} 15%, var(--bg))` }} />
