@@ -1048,6 +1048,54 @@ export function ReportCard({
                     is still one hover away via the tooltip, same as the post
                     time itself. */}
                 {post.editedAt && <span title={formatDateTimeFull(post.editedAt)}>· แก้ไข</span>}
+                {/* Moved up onto this same author/time row instead of its
+                    own line under the title+tags below — asked for
+                    explicitly to save the vertical space a dedicated row
+                    cost on every single post ("ไว้ตรงที่วงที่ชี้ได้ไหม...
+                    คำนึงถึง mobile ด้วย"). Round name stays in the badge
+                    (not trimmed down to just "ตรงเวลา") — asked for
+                    separately so a room with more than one round doesn't
+                    read as ambiguous which one this post satisfied
+                    ("อยากให้บอกรอบด้วยว่าส่งของอันไหน กันงง"). Still its own
+                    flex-wrap item in this row, so it drops to its own line
+                    on a narrow phone rather than clipping or squeezing the
+                    name/time next to it. */}
+                {post.excludeFromSubmission ? (
+                  // Visible marker so "why is there no ตรงเวลา/สาย badge
+                  // here" has an obvious answer — the poster opted this one
+                  // out on purpose.
+                  <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-[var(--bg-soft)] text-[var(--ink-soft)] border border-[var(--line)]">
+                    ไม่นับเป็นการส่งรีพอต
+                  </span>
+                ) : postDayExempt ? (
+                  // Same "why no badge" answer, for the other reason one can
+                  // be missing: the poster was off/on leave that day, so
+                  // this post was never obligated in the first place —
+                  // posted anyway, just not tracked, same as
+                  // excludeFromSubmission above.
+                  <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-[var(--bg-soft)] text-[var(--ink-soft)] border border-[var(--line)]">
+                    หยุด/ลาวันนี้ · ไม่บังคับส่ง
+                  </span>
+                ) : lateCutoff && isFirstLateOfRound ? (
+                  <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                    <TriangleAlert className="h-2.5 w-2.5" />
+                    {/* "ส่งช้า (เลยรอบ t 14:00)" read as cryptic shorthand,
+                        and a short/placeholder round label ("t", "00") made
+                        it worse — "ส่งเกินกำหนด · กำหนด 14:00" states the
+                        actual fact plainly, with the round's name only when
+                        it's long enough to actually mean something (same
+                        rule the room-header metadata row uses). */}
+                    ส่งเกินกำหนด{lateCutoff.label.trim().length > 2 ? ` (${lateCutoff.label.trim()})` : ""} · กำหนด {lateCutoff.time}
+                  </span>
+                ) : !lateCutoff && onTimeCutoff && isFirstOnTimeOfRound ? (
+                  // The positive counterpart to "ส่งช้า" (C10) — without it,
+                  // a room with a schedule only ever showed a warning badge,
+                  // never confirmation that a post actually met it.
+                  <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-[var(--accent)] text-[var(--brand-green-dark)] border border-[var(--brand-green)]/20">
+                    <Check className="h-2.5 w-2.5" />
+                    ตรงเวลา · รอบ{onTimeCutoff.label}
+                  </span>
+                ) : null}
               </p>
             </div>
             {topicBadge && (
@@ -1077,48 +1125,6 @@ export function ReportCard({
               ))}
             </div>
           )}
-          {post.excludeFromSubmission ? (
-            // Visible marker so "why is there no ตรงเวลา/สาย badge here" has
-            // an obvious answer — the poster opted this one out on purpose.
-            <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
-              <span className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-[var(--bg-soft)] text-[var(--ink-soft)] border border-[var(--line)]">
-                ไม่นับเป็นการส่งรีพอต
-              </span>
-            </div>
-          ) : postDayExempt ? (
-            // Same "why no badge" answer, for the other reason one can be
-            // missing: the poster was off/on leave that day, so this post was
-            // never obligated in the first place — posted anyway, just not
-            // tracked, same as excludeFromSubmission above.
-            <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
-              <span className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-[var(--bg-soft)] text-[var(--ink-soft)] border border-[var(--line)]">
-                หยุด/ลาวันนี้ · ไม่บังคับส่ง
-              </span>
-            </div>
-          ) : lateCutoff && isFirstLateOfRound ? (
-            <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
-              <span className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200">
-                <TriangleAlert className="h-2.5 w-2.5" />
-                {/* "ส่งช้า (เลยรอบ t 14:00)" read as cryptic shorthand, and a
-                    short/placeholder round label ("t", "00") made it worse —
-                    "ส่งเกินกำหนด · กำหนด 14:00" states the actual fact
-                    plainly, with the round's name only when it's long enough
-                    to actually mean something (same rule the room-header
-                    metadata row uses). */}
-                ส่งเกินกำหนด{lateCutoff.label.trim().length > 2 ? ` (${lateCutoff.label.trim()})` : ""} · กำหนด {lateCutoff.time}
-              </span>
-            </div>
-          ) : !lateCutoff && onTimeCutoff && isFirstOnTimeOfRound ? (
-            // The positive counterpart to "ส่งช้า" (C10) — without it, a
-            // room with a schedule only ever showed a warning badge, never
-            // confirmation that a post actually met it.
-            <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
-              <span className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-[var(--accent)] text-[var(--brand-green-dark)] border border-[var(--brand-green)]/20">
-                <Check className="h-2.5 w-2.5" />
-                ตรงเวลา · รอบ{onTimeCutoff.label}
-              </span>
-            </div>
-          ) : null}
         </div>
       </div>
 
