@@ -39,7 +39,7 @@ import {
   type ReportTopic,
 } from "@/modules/report_task/store/report-feed-store";
 import { cutoffsOnDay, lateCutoffFor, minImagesNow, onTimeCutoffFor } from "@/modules/report_task/lib/report-cutoff";
-import { roundsForUserOnDay } from "@/modules/report_task/lib/submission-rounds";
+import { roundsForUserOnDay, attributePostToRound } from "@/modules/report_task/lib/submission-rounds";
 import { isExemptDate } from "@/modules/report_task/lib/report-feed-exemptions";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { localDateStr } from "@/modules/report_task/lib/now";
@@ -252,6 +252,26 @@ export function ReportCard({
   // above) — a cutoff is a fixed clock time each day, not "whoever posted
   // first," so an on-time post counts regardless of whether it landed before
   // or after this one.
+  // Which round `p` counts against, same attribution the compliance counting
+  // (pendingToday/roundComplianceStatus) already uses — `p`'s own explicit
+  // roundId first, only guessing from its time when that's absent. The dedup
+  // checks below used to guess every other post's round from time alone
+  // (lateCutoffFor/onTimeCutoffFor against the full postDayCutoffs set),
+  // which ignored roundId entirely — once every round for the day was
+  // already overdue, that guess collapsed onto whichever cutoff was latest,
+  // so a second post explicitly filed under a *different*, earlier round
+  // read as "the same round, again" and had its own ตรงเวลา/สาย badge wrongly
+  // swallowed ("มีหลายรอบ...ก็ไม่ขึ้นเลยสิ มันต้องขึ้นรอบใครรอบมันสิ").
+  function roundIdOf(p: ReportPost): string | null {
+    return p.excludeFromSubmission ? null : (attributePostToRound(p, postDayCutoffs)?.id ?? null);
+  }
+  function isLateForRound(p: ReportPost, roundId: string): boolean {
+    const round = postDayCutoffs.find((r) => r.id === roundId);
+    if (!round) return false;
+    const created = new Date(p.createdAt);
+    const [h, m] = round.time.split(":").map(Number) as [number, number];
+    return created.getHours() * 60 + created.getMinutes() > h * 60 + m;
+  }
   const roundAlreadySatisfiedOnTime =
     !!lateCutoff &&
     allPosts.some(
@@ -259,9 +279,9 @@ export function ReportCard({
         p.id !== post.id &&
         p.topicId === post.topicId &&
         p.authorId === post.authorId &&
-        !p.excludeFromSubmission &&
         localDateStr(new Date(p.createdAt)) === localDateStr(new Date(post.createdAt)) &&
-        onTimeCutoffFor(p.createdAt, postDayCutoffs)?.id === lateCutoff.id
+        roundIdOf(p) === lateCutoff.id &&
+        !isLateForRound(p, lateCutoff.id)
     );
   const isFirstLateOfRound =
     !lateCutoff ||
@@ -271,9 +291,9 @@ export function ReportCard({
         p.id !== post.id &&
         p.topicId === post.topicId &&
         p.authorId === post.authorId &&
-        !p.excludeFromSubmission &&
         localDateStr(new Date(p.createdAt)) === localDateStr(new Date(post.createdAt)) &&
-        lateCutoffFor(p.createdAt, postDayCutoffs)?.id === lateCutoff.id &&
+        roundIdOf(p) === lateCutoff.id &&
+        isLateForRound(p, lateCutoff.id) &&
         new Date(p.createdAt).getTime() < new Date(post.createdAt).getTime()
     ));
   // Same dedup, mirrored for the positive badge — posting twice before the
@@ -288,10 +308,9 @@ export function ReportCard({
         p.id !== post.id &&
         p.topicId === post.topicId &&
         p.authorId === post.authorId &&
-        !p.excludeFromSubmission &&
         localDateStr(new Date(p.createdAt)) === localDateStr(new Date(post.createdAt)) &&
-        !lateCutoffFor(p.createdAt, postDayCutoffs) &&
-        onTimeCutoffFor(p.createdAt, postDayCutoffs)?.id === onTimeCutoff.id &&
+        roundIdOf(p) === onTimeCutoff.id &&
+        !isLateForRound(p, onTimeCutoff.id) &&
         new Date(p.createdAt).getTime() < new Date(post.createdAt).getTime()
     );
 
