@@ -116,6 +116,23 @@ export function DashboardFilters() {
       setDepartmentId("all");
     }
   }, [viewingAsUserId, canPickPerson, setPersonId, setDepartmentId]);
+  // The effect above only catches a *switch* — `lastIdentity` is seeded from
+  // `viewingAsUserId` itself, so on the very first mount its guard is always
+  // false and never runs. A non-privileged viewer's very first page load
+  // therefore left `personId` sitting at the store's own "all" default while
+  // this same component's read-only branch below displayed their own name
+  // as if it were already locked in — the widget looked scoped, but every
+  // dashboard card underneath was still querying company-wide
+  // ("user ทั่วไปก็เห็นของทุกคนหมด...ต้องเห็นของใครของมันสิ"). Runs on every
+  // render where a restricted viewer's personId isn't already their own id —
+  // covers first mount and a stale value left over from before this viewer
+  // lost pick rights, without needing a second ref to track "have I forced
+  // it yet".
+  useEffect(() => {
+    if (!canPickPerson && personId !== viewingAsUserId) {
+      setPersonId(viewingAsUserId);
+    }
+  }, [canPickPerson, personId, viewingAsUserId, setPersonId]);
 
   // §7.2 — switching department while a specific person is selected: if that
   // person isn't in the newly-picked department, fall back to "everyone in
