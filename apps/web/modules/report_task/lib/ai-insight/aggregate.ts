@@ -477,7 +477,18 @@ export async function buildAiInsightAggregate(orgId: string): Promise<AiInsightA
       });
     }
   }
-  flagged.sort((a, b) => b.count - a.count);
+  // Genuinely overdue/missed always outranks merely-pending (not yet due,
+  // self-resolving the moment it's posted/done), regardless of either
+  // count — same fix as status-overview-donut.tsx's/system-kpi-summary.tsx's
+  // own "ปัญหาหลัก" ranking, and just as load-bearing here: this order is
+  // what flagged[0] (topOpenIssue below, and the AI prompt's own "what's
+  // actually wrong" list) treats as the biggest problem, so ranking pending
+  // above overdue/missed here didn't just mislabel a dashboard card — it
+  // fed the wrong "fix this first" framing straight into the AI's own
+  // summary. lateDone sorts last of all: it's already resolved (just late),
+  // not a currently-open item to prioritize fixing.
+  const flagTier = (key: FlaggedGroup["key"]): number => (key === "pending" ? 1 : key === "lateDone" ? 2 : 0);
+  flagged.sort((a, b) => flagTier(a.key) - flagTier(b.key) || b.count - a.count);
 
   // Combined (task+report) success rate right now, and the projected rate
   // if the single biggest flagged group vanished entirely — e.g. flagged[0]
