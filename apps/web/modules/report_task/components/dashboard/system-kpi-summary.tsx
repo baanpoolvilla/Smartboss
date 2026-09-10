@@ -174,9 +174,23 @@ function StatusBar({
                   render={
                     <button
                       type="button"
-                      disabled={isOther}
+                      // Not the native `disabled` attribute — a disabled
+                      // <button> doesn't reliably fire hover/pointer events
+                      // at all in most browsers (Safari/Firefox skip them
+                      // entirely), so the "อื่นๆ" aggregate — which
+                      // `topPeople` always appends *last*, i.e. always the
+                      // visually topmost segment — never showed its tooltip
+                      // or responded to anything ("hover ไม่ขึ้น กดไม่ได้อะ
+                      // อันบนสุด", and it really was every single time,
+                      // because "other" always lands in that exact spot).
+                      // `onPick` already no-ops for "other" on its own, so
+                      // aria-disabled (announces non-interactive to screen
+                      // readers, doesn't touch pointer events) plus the
+                      // cursor-default styling below is enough to keep it
+                      // visually/semantically inert without breaking hover.
+                      aria-disabled={isOther}
                       onClick={() => onPick(p.id)}
-                      aria-pressed={isActive}
+                      aria-pressed={isOther ? undefined : isActive}
                       aria-label={`${p.name} — ${p.count} ${seriesLabel}${isActive ? " (กำลังกรองอยู่ คลิกเพื่อยกเลิก)" : ""}`}
                       className={cn(
                         "relative w-full flex-1 border-t border-white/70 first:border-t-0",
