@@ -133,16 +133,21 @@ export function StatusOverviewDonut({
 
   const selected = selectedKey ? slices.find((s) => s.key === selectedKey) ?? null : null;
 
-  // "ตัวปัญหาหลัก" — one category (whichever of overdue/pending is bigger),
-  // scoped to this one donut's own domain. When several people are tied for
-  // the most in that category, all of them are named, not just one — the
-  // "+N เพิ่มเติม" toggle expands the name list, not a second category.
+  // "ตัวปัญหาหลัก" — overdue always wins over pending when both are nonzero,
+  // never just "whichever count is bigger". Pending means the deadline
+  // simply hasn't arrived yet (someone who submits every day at 20:00 sits
+  // in "pending" all afternoon and clears on its own the moment they post),
+  // so it isn't a problem at all — sorting by raw count used to let it
+  // outrank overdue whenever more people happened to still have time left
+  // than had actually missed their cutoff, headlining "ปัญหาหลัก" with people
+  // who hadn't done anything wrong ("เค้าจะส่งช่วงเย็น พอส่งก็หายหมด...ไม่ใช่
+  // ปัญหาหลัก"). Pending only ever surfaces here when overdue is exactly
+  // zero — nothing has actually been missed yet, so it's the closest thing
+  // to worth flagging.
   const mainIssue: { key: "overdue" | "pending"; label: string; count: number } | undefined = [
     { key: "overdue" as const, label: labels.overdue, count: buckets.overdue },
     { key: "pending" as const, label: labels.pending, count: buckets.pending },
-  ]
-    .filter((i) => i.count > 0)
-    .sort((a, b) => b.count - a.count)[0];
+  ].find((i) => i.count > 0);
   const people = mainIssue ? (topPersonByBucket?.[mainIssue.key] ?? []) : [];
   const [showAllPeople, setShowAllPeople] = useState(false);
   const shownPeople = showAllPeople ? people : people.slice(0, 1);
