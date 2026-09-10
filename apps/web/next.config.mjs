@@ -1,6 +1,12 @@
 /** @type {import('next').NextConfig} */
+/*
+ * X-Frame-Options ไม่อยู่ในนี้แล้ว — ย้ายไปตั้งใน proxy.ts (middleware) แทน
+ * เพราะต้อง**ยกเว้น** /m (LINE Mini App ซึ่งต้องถูกฝังอยู่ในเว็บวิวของ LINE ได้)
+ * และพิสูจน์แล้วว่า headers() ของไฟล์นี้เป็นชั้นที่ชนะเสมอไม่ว่า middleware
+ * จะตั้งค่าอะไรมาก็ตาม (ทดสอบจริงตอนไล่บั๊กนี้) — ถ้าประกาศ DENY แบบ blanket
+ * ไว้ที่นี่จะไม่มีทางยกเว้นเส้นทางไหนได้เลยไม่ว่าจะเขียน source pattern ยังไง
+ */
 const securityHeaders = [
-  { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
 ];

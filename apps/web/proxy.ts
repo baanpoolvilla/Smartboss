@@ -45,11 +45,28 @@ function isPublic(pathname: string): boolean {
   );
 }
 
+/**
+ * กัน clickjacking ทุกหน้า **ยกเว้น** `/m` — Mini App ต้องถูกฝังอยู่ในเว็บวิว
+ * ของแอป LINE ได้ ถ้าส่ง DENY ไปด้วยจะโหลดไม่ขึ้นเลย ("This page couldn't
+ * load" แบบไม่มี error ให้เห็น เพราะ webview เป็นฝ่ายปฏิเสธ render เอง)
+ *
+ * ⚠ ต้องตั้งที่นี่ ไม่ใช่ next.config.mjs — header ที่ตั้งใน next.config.mjs
+ * เป็นชั้นที่ชนะเสมอไม่ว่า middleware จะพยายามตั้ง/ลบยังไงก็ตาม (ทดสอบจริง
+ * แล้วตอนไล่บั๊กนี้) ⇒ ถ้าประกาศ DENY แบบ blanket ไว้ที่นั่น จะยกเว้นเส้นทาง
+ * ไหนไม่ได้เลยไม่ว่าจะเขียน source pattern ยังไง
+ */
+function withFrameProtection(res: NextResponse, pathname: string): NextResponse {
+  if (pathname !== "/m" && !pathname.startsWith("/m/")) {
+    res.headers.set("X-Frame-Options", "DENY");
+  }
+  return res;
+}
+
 export async function proxy(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
 
   if (isPublic(pathname)) {
-    return NextResponse.next();
+    return withFrameProtection(NextResponse.next(), pathname);
   }
 
   const token = req.cookies.get(COOKIE_ACCESS)?.value;
@@ -61,10 +78,10 @@ export async function proxy(req: NextRequest) {
     const res = NextResponse.redirect(loginUrl);
     // ล้าง access cookie ที่หมดอายุทิ้ง
     if (token) res.cookies.delete(COOKIE_ACCESS);
-    return res;
+    return withFrameProtection(res, pathname);
   }
 
-  return NextResponse.next();
+  return withFrameProtection(NextResponse.next(), pathname);
 }
 
 export const config = {
