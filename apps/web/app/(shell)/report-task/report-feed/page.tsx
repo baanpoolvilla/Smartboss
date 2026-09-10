@@ -429,6 +429,20 @@ function ReportFeedPageInner() {
         return nowMinutes > h * 60 + m;
       });
   }, [visibleTopics, posts, exemptions, viewingAsUserId]);
+  // A plain string key of *which* (topic, round) pairs are late — not the
+  // array itself. myLatePendingToday is rebuilt (new array reference) on
+  // every store sync, including the ~4s background poll picking up some
+  // unrelated teammate's post in a totally different room — with the array
+  // itself as the effect's dependency below, that unrelated poll re-fired
+  // this exact toast every few seconds even though nothing about the
+  // viewer's own overdue rounds had changed at all ("ทำไมมันขึ้นมารัวๆ...
+  // การดึงข้อมูลทุกๆ 4 วิ"). Keying on the sorted topicId:roundId pairs
+  // instead means the effect only re-runs when the actual *set* of late
+  // rounds for this viewer changes.
+  const myLatePendingKey = myLatePendingToday
+    .map((e) => `${e.topicId}:${e.roundId}`)
+    .sort()
+    .join(",");
   // แจ้งเตือน "ยังไม่ได้ส่งรอบนี้" ทันทีที่เข้าหน้ารายงาน แทนที่จะรอให้กด
   // ขยายกล่องเขียนโพสต์ในห้องนั้นก่อนถึงจะเห็น ("อยากให้กดหน้ารายงานมาแล้ว
   // แจ้งเตือนแบบนี้แทน") — ย้ายมาจาก report-composer.tsx เดิม (ดูคอมเมนต์ที่
@@ -499,7 +513,7 @@ function ReportFeedPageInner() {
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [myLatePendingToday]);
+  }, [myLatePendingKey]);
   // "กลับไป # ห้อง" + ReportViewSwitcher, built once and handed to whichever
   // panel is on screen (ReportAllPostsFeed/PendingTopicsPanel's headerRight)
   // so they render on that panel's own title row instead of a dedicated row
