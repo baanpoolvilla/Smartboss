@@ -292,16 +292,14 @@ export function SystemKpiSummary() {
       }
       return m;
     };
-    // Overdue (task or report) always outranks pending (task or report),
-    // never just "whichever count is bigger" — same fix, same reasoning as
+    // Overdue only (task or report), ranked by count between the two —
+    // pending never stands in as a fallback "ปัญหาหลัก" anymore. Pending
+    // means the deadline simply hasn't arrived yet, not a real problem, so
+    // when nothing's actually overdue the card just shows no "ปัญหาหลัก" box
+    // at all rather than headlining people who hadn't done anything wrong
+    // ("ถ้ามันไม่สำคัญไม่ต้องแสดงก็ได้") — same fix, same reasoning as
     // status-overview-donut.tsx's own mainIssue (this card duplicates that
-    // logic combined across both domains instead of reusing it, so it never
-    // got that fix the first time around: "ปัญหาหลัก" here kept headlining
-    // "รายงานยังไม่ส่ง (ในกำหนด)" — people who simply hadn't reached their
-    // deadline yet — over "รายงานขาดส่ง", people who'd genuinely missed
-    // theirs, whenever the pending count happened to be bigger). Rank within
-    // each tier by count, but a tier-1 (overdue) entry always beats every
-    // tier-2 (pending) one regardless of either count.
+    // logic combined across both domains instead of reusing it).
     type Issue = { key: IssueTipKey; label: string; count: number; people: { name: string; count: number }[] };
     const overdueIssues: Issue[] = [
       { key: "taskOverdue" as const, label: "งานเลยกำหนด", count: taskBuckets.overdue, people: topPeopleOf(taskByAssignee.overdue) },
@@ -309,18 +307,7 @@ export function SystemKpiSummary() {
     ]
       .filter((i) => i.count > 0)
       .sort((a, b) => b.count - a.count);
-    const pendingIssues: Issue[] = [
-      { key: "taskPending" as const, label: "งานยังไม่เสร็จ (ในกำหนด)", count: taskBuckets.pending, people: topPeopleOf(taskByAssignee.pending) },
-      {
-        key: "reportPending" as const,
-        label: "รายงานยังไม่ส่ง (ในกำหนด)",
-        count: reportBuckets.pending,
-        people: topPeopleOf(reportPersonCounts("pending")),
-      },
-    ]
-      .filter((i) => i.count > 0)
-      .sort((a, b) => b.count - a.count);
-    const mainIssue = overdueIssues[0] ?? pendingIssues[0];
+    const mainIssue = overdueIssues[0];
 
     return {
       taskBuckets,
