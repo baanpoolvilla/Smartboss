@@ -47,6 +47,21 @@ export class CheckinController {
     return this.service.listMyMobileDevices();
   }
 
+  /**
+   * สถานที่ + รัศมีที่ตัวเองเช็คอินได้ — ให้แอปวาดแผนที่ก่อนกดเช็คอินจริง
+   * (ไม่ใช่ `/sites` ของหลังบ้านซึ่งต้องการ workforce.people.read ที่พนักงาน
+   * ทั่วไปไม่มี — endpoint นี้กรองมาแล้วว่าเป็นของนโยบายตัวเองเท่านั้น)
+   */
+  @Get('me/checkin-sites')
+  @RequirePermissions('workforce.attendance.read.self')
+  async myCheckinSites(): Promise<{
+    location_required: boolean;
+    max_accuracy_m: number;
+    sites: { id: string; name: string; latitude: number; longitude: number; radius_m: number }[];
+  }> {
+    return this.service.myCheckinSites();
+  }
+
   @Post('mobile-devices/:registrationId/approve')
   @HttpCode(200)
   @RequirePermissions('workforce.people.manage')

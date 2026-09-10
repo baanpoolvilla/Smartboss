@@ -202,6 +202,64 @@ afterAll(async () => {
   await harness.close();
 });
 
+describe('my check-in sites (map preview before committing)', () => {
+  it('returns every company site when no policy group is assigned yet', async () => {
+    // ยังไม่ได้จัดกลุ่ม ⇒ ใช้ DEFAULT_POLICY ซึ่ง allowedSiteIds ว่าง = ทุกไซต์ของบริษัท
+    const employee = await createEmployee('ยังไม่จัดกลุ่ม');
+
+    const response = await call(harness, 'GET', '/me/checkin-sites', { token: employee.token });
+    expect(response.status).toBe(200);
+    const sites = response.body['sites'] as Record<string, unknown>[];
+    expect(sites.some((site) => site['id'] === siteId)).toBe(true);
+    expect(sites[0]).toMatchObject({ latitude: 12.9231, longitude: 100.8826 });
+  });
+
+  it('narrows to only the sites the assigned policy allows, and a site with its own radius wins over the policy default', async () => {
+    const employee = await createEmployee('จัดกลุ่มแล้ว');
+    // HQ (siteId) ตั้งรัศมีของตัวเองไว้ 150 ตอนสร้าง (beforeAll) — ต้องชนะ
+    // ค่า 250 ที่ตั้งไว้ในนโยบาย ตามลำดับความสำคัญเดียวกับ evaluateCheckin()
+    const group = await createPolicyGroup({ radius_m: 250 });
+    await assignPolicy(group, employee.employmentId);
+
+    const response = await call(harness, 'GET', '/me/checkin-sites', { token: employee.token });
+    expect(response.status).toBe(200);
+    expect(response.body['location_required']).toBe(true);
+    const sites = response.body['sites'] as Record<string, unknown>[];
+    expect(sites).toHaveLength(1);
+    expect(sites[0]).toMatchObject({ id: siteId, radius_m: 150 });
+  });
+
+  it("falls back to the policy's radius when the site itself has none set", async () => {
+    const branch = await call(harness, 'POST', '/sites', {
+      token: adminToken,
+      idempotencyKey: uuidv4(),
+      payload: {
+        company_id: tenant.companyId,
+        code: `BR-${uuidv4().slice(0, 8)}`,
+        name: 'สาขาไม่มีรัศมี',
+        latitude: 13.75,
+        longitude: 100.5,
+        // ไม่ส่ง radius_m ⇒ null ตาม createSiteSchema
+      },
+    });
+    expect(branch.status).toBe(201);
+    const branchId = branch.body['id'] as string;
+
+    const employee = await createEmployee('สาขาไม่มีรัศมี');
+    const group = await createPolicyGroup({ allowed_site_ids: [branchId], radius_m: 300 });
+    await assignPolicy(group, employee.employmentId);
+
+    const response = await call(harness, 'GET', '/me/checkin-sites', { token: employee.token });
+    const sites = response.body['sites'] as Record<string, unknown>[];
+    expect(sites).toEqual([expect.objectContaining({ id: branchId, radius_m: 300 })]);
+  });
+
+  it('does not leak this to someone without a workforce account', async () => {
+    const response = await call(harness, 'GET', '/me/checkin-sites', {});
+    expect(response.status).toBe(401);
+  });
+});
+
 describe('mobile device registration', () => {
   it('activates the first device and holds the second for approval', async () => {
     // spec §6.4: 1 active device ต่อพนักงาน; เครื่องที่สองต้องขออนุมัติ
