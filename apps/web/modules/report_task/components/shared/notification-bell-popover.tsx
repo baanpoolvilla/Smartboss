@@ -16,17 +16,23 @@ import type { UnifiedNotification } from "@/modules/notifications/types";
  * Facebook) แทนการพาไปหน้าเต็มทันที มีปุ่ม "ดูทั้งหมด" ไปหน้า /notifications
  *
  * รวม 2 แหล่ง (report_task + maintenance) ผ่าน useUnifiedNotifications —
- * เฉพาะแจ้งเตือนที่เกี่ยวกับผู้ใช้เอง (ตัด "โพสต์ใหม่ในห้อง"/ข้ามแผนกออกเสมอ
- * ในกระดิ่งนี้ — โหมดภาพรวมของ owner อยู่ที่หน้าเต็มเท่านั้น) เอาล่าสุดสุด
- * ~10 อัน เรียงยังไม่อ่านขึ้นก่อนเสมอ ตัวเลขบนกระดิ่งจึงรวมทุก module จริง
- * ไม่ต้องรับเลขจากที่อื่นมาบวกเองอีก
+ * แจ้งเตือนส่วนตัว (mention/reply/task/ตั๋ว) ของทุกคน บวก "โพสต์ใหม่ในห้อง"
+ * (room_post) ของทุกห้องทั้งบริษัทด้วยสำหรับ owner โดยเฉพาะ (`isOwner` gate
+ * อยู่ในตัว hook เอง — คนทั่วไปไม่มีทางเห็น room_post หลุดมาที่นี่)
+ * เอาล่าสุดสุด ~10 อัน เรียงยังไม่อ่านขึ้นก่อนเสมอ ตัวเลขบนกระดิ่งจึงรวมทุก
+ * module จริง ไม่ต้องรับเลขจากที่อื่นมาบวกเองอีก
  */
 const MAX_ITEMS = 10;
 
 export function NotificationBellPopover() {
   const [open, setOpen] = useState(false);
   const employees = useEmployeeStore((s) => s.employees);
-  const { items, unreadCount, maintenanceLoaded, markRead, markAllRead, refresh } = useUnifiedNotifications();
+  // includeRoomPosts: true — an owner explicitly asked for "ทุกโพสต์ทุกห้อง"
+  // to show up right in this dropdown too, not just the full /notifications
+  // page's own "ดูทั้งหมด" mode. Safe to pass unconditionally: the hook
+  // re-checks isOwner itself, so a non-owner never sees room_post items no
+  // matter what this call site passes.
+  const { items, unreadCount, maintenanceLoaded, markRead, markAllRead, refresh } = useUnifiedNotifications({ includeRoomPosts: true });
 
   // โหลดแจ้งเตือนซ่อมบำรุงรอบแรกตอน mount แล้วรีเฟรชอีกทีทุกครั้งที่เปิด
   // dropdown — ของ report_task server-synced อยู่แล้วผ่าน ServerStoreSync
