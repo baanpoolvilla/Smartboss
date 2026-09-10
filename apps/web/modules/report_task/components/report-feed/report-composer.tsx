@@ -9,7 +9,7 @@ import { useReportFeedStore, type ReportPostImage, type ReportTopic } from "@/mo
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
 import { photoCount } from "@/modules/report_task/lib/report-attachment-kind";
-import { cutoffsOnDay } from "@/modules/report_task/lib/report-cutoff";
+import { roundsForUserOnDay } from "@/modules/report_task/lib/submission-rounds";
 import { localDateStr, now } from "@/modules/report_task/lib/now";
 import { cn } from "@/modules/report_task/lib/utils";
 import { ReportPostFields, newSection, type DraftSection } from "@/modules/report_task/components/report-feed/report-post-fields";
@@ -60,6 +60,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const viewer = getUser(viewingAsUserId)!;
   const addPost = useReportFeedStore((s) => s.addPost);
+  const submitterGroups = useReportFeedStore((s) => s.submitterGroups);
   const maxImages = useAttachmentSettingsStore((s) => s.settings.maxImagesPerReportPost);
 
   const savedDraft = loadDraft(topic.id);
@@ -148,7 +149,11 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
     }
   }
 
-  const todayCutoffs = [...cutoffsOnDay(topic, localDateStr(new Date()))].sort(
+  // Scoped to this poster specifically (roundsForUserOnDay), not every round
+  // the room runs that day (cutoffsOnDay) — a round someone isn't actually a
+  // submitter of has no business showing up asking them "ส่งของรอบไหน?" when
+  // it was never theirs to answer for ("ถ้าคนไม่มีรอบส่งนั้นตรงนี้ต้องไม่ขึ้น").
+  const todayCutoffs = [...roundsForUserOnDay(topic, viewingAsUserId, localDateStr(new Date()), submitterGroups)].sort(
     (a, b) => roundMinutesOf(a.time) - roundMinutesOf(b.time)
   );
   const nowMinutes = now().getHours() * 60 + now().getMinutes();
