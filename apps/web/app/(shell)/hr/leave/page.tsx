@@ -195,7 +195,7 @@ export default async function LeavePage({
                           {/*
                             คำขอสลับต้องบอกให้ผู้อนุมัติเห็น — อนุมัติแล้ววันเดิมจะถูก
                             ยกเลิกให้อัตโนมัติ (leave.service decideRequest) ซึ่งเป็น
-                            ผลที่ต่างจากการอนุมัติใบลาธรรมดาโดยสิ้นเชิง
+                            ผลที่ต่างจากการอนุมัติคำขอวันหยุดธรรมดาโดยสิ้นเชิง
                           */}
                           {r.swap_from_date && (
                             <span className="ml-1 block font-sans text-[11px] text-(--ink-soft)">
@@ -240,7 +240,7 @@ export default async function LeavePage({
                 <div className="mb-3 flex flex-wrap gap-1.5">
                   {(types?.items ?? []).length === 0 ? (
                     <p className="text-sm text-(--ink-soft)">
-                      ยังไม่มีประเภทการลา — พนักงานจึงยังขอลาเองไม่ได้
+                      ยังไม่มีประเภทวันหยุด/การลา — พนักงานจึงยังลงวันหยุดเองไม่ได้
                     </p>
                   ) : (
                     (types?.items ?? []).map((t) => (

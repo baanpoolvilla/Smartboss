@@ -384,7 +384,7 @@ export default async function HrSettingsPage() {
             {canManageLeaveTypes && (
               <SectionCard
                 title="ประเภทการลา"
-                description="ต้องมีอย่างน้อยหนึ่งประเภท พนักงานถึงจะขอลาเองได้ที่ปฏิทินวันหยุด"
+                description="ต้องมีอย่างน้อยหนึ่งประเภท พนักงานถึงจะลงวันหยุดเองได้ที่ปฏิทินวันหยุด"
                 action={
                   <form action={seedLeaveTypesAction}>
                     <input type="hidden" name="company_id" value={companyId} />

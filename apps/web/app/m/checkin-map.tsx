@@ -132,10 +132,25 @@ export function CheckinMap() {
   useEffect(() => {
     if (state.kind !== "ready" || !containerRef.current) return;
 
+    const me = L.latLng(state.me.latitude, state.me.longitude);
+
+    /*
+     * ⚠ ต้องมี center+zoom ตั้งแต่ตอนสร้าง — ห้ามสร้างแผนที่เปล่าแล้วค่อย fitBounds
+     *
+     * Leaflet ไม่ผูก layer เข้ากับแผนที่จริง ๆ จนกว่าแผนที่จะ "พร้อม" (มีจุดกึ่งกลาง
+     * กับระดับซูมแล้ว) — `addTo(map)` แค่เข้าคิวรอไว้เฉย ๆ ⇒ `circle._map` ยังเป็น
+     * undefined อยู่ พอเรียก `circle.getBounds()` ต่อทันทีจึงพังด้วย
+     * "undefined is not an object (evaluating 'this._map.layerPointToLatLng')"
+     *
+     * บนคอมไม่เจอเพราะบัญชีที่ทดสอบไม่มีข้อมูลพนักงาน ⇒ ไม่มีสถานที่ให้วาดวงเลย
+     * โค้ดท่อนที่พังจึงไม่เคยถูกรันจนกระทั่งเปิดบนมือถือด้วยบัญชีพนักงานจริง
+     */
     const map = L.map(containerRef.current, {
       zoomControl: false,
       attributionControl: true,
       scrollWheelZoom: false,
+      center: me,
+      zoom: 16,
     });
     mapRef.current = map;
 
@@ -146,7 +161,6 @@ export function CheckinMap() {
       maxZoom: 19,
     }).addTo(map);
 
-    const me = L.latLng(state.me.latitude, state.me.longitude);
     const bounds = L.latLngBounds([me]);
 
     L.marker(me, { icon: meIcon(), zIndexOffset: 1000 }).addTo(map);

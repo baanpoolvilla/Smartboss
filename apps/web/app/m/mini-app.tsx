@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { CalendarDays, Clock } from "lucide-react";
+import { DaysOff } from "./days-off";
 import { Today } from "./today";
 
 /**
@@ -207,7 +209,76 @@ export function MiniApp({ liffId, lineReady }: { liffId: string; lineReady: bool
     return <LoginForm reason={phase.reason} onDone={finishSignedIn} />;
   }
 
-  return <Today userName={phase.name} showFriendHint={notFriend} />;
+  return <SignedIn userName={phase.name} showFriendHint={notFriend} />;
+}
+
+/**
+ * แถบเมนูล่างในตัวแอป — ไม่ได้ใช้ path แยกต่อหน้า
+ *
+ * LINE Mini App เปิด "custom path" ให้เฉพาะแอปที่ผ่าน verified แล้ว ของเรายัง
+ * unverified ⇒ ลิงก์แบบ `miniapp.line.me/<id>/days-off` ยังใช้ไม่ได้
+ * สลับหน้าในตัวแอปเองจึงเป็นทางที่ไม่ต้องรอ review และได้ผลเหมือนกัน
+ * (docs/line-mini-app-checkin-spec.md ข้อ 0.7)
+ */
+function SignedIn({
+  userName,
+  showFriendHint,
+}: {
+  userName: string;
+  showFriendHint: boolean;
+}) {
+  const [tab, setTab] = useState<"today" | "days-off">("today");
+
+  return (
+    <div className="flex min-h-dvh flex-col">
+      <div className="flex-1 pb-20">
+        {tab === "today" ? (
+          <Today userName={userName} showFriendHint={showFriendHint} />
+        ) : (
+          <DaysOff />
+        )}
+      </div>
+
+      {/* ลอยติดขอบล่างเสมอ — พนักงานถือมือถือมือเดียว นิ้วโป้งเอื้อมถึงแค่ครึ่งล่างของจอ */}
+      <nav className="fixed inset-x-0 bottom-0 mx-auto flex max-w-lg border-t border-(--line) bg-(--bg) pb-[env(safe-area-inset-bottom)]">
+        <TabButton active={tab === "today"} onClick={() => setTab("today")} icon={<Clock className="h-5 w-5" />}>
+          วันนี้
+        </TabButton>
+        <TabButton
+          active={tab === "days-off"}
+          onClick={() => setTab("days-off")}
+          icon={<CalendarDays className="h-5 w-5" />}
+        >
+          วันหยุด
+        </TabButton>
+      </nav>
+    </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  icon,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex flex-1 flex-col items-center gap-0.5 py-2.5 text-xs ${
+        active ? "font-semibold text-(--app-strong)" : "text-(--ink-soft)"
+      }`}
+    >
+      {icon}
+      {children}
+    </button>
+  );
 }
 
 function Splash() {
