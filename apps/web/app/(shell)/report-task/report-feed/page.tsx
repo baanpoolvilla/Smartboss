@@ -197,8 +197,16 @@ function ReportFeedPageInner() {
   }, [topics, viewingAsUserId, employees, departments]);
   const searchParams = useSearchParams();
   // A pasted "copy link" (?topic=&post=) opens straight to the right room +
-  // post — read once as the initial state, no need to re-sync via an effect
-  // since the params don't change while this page stays mounted.
+  // post — read once as the initial state, kept in sync afterward by the
+  // effect below for the one case that assumption missed: a notification (or
+  // any other in-app Link) pointing at a *different* topic/post/reply while
+  // this exact page is already mounted. Next's client-side navigation
+  // updates the URL without remounting this component, so without that
+  // effect nothing here ever noticed the new target and clicking a
+  // notification just sat on whatever room was already open
+  // ("กดแจ้งเตือน...ไม่เห็นเด้งไปอยู่หน้าเดิม" — happened to work for whoever
+  // wasn't already on this page, since a real navigation *into* it mounts
+  // fresh and reads the URL correctly; nothing to do with permissions).
   const [selectedId, setSelectedId] = useState(() => searchParams.get("topic") ?? "");
   // จำห้อง/รายงานล่าสุดที่เปิดอยู่ก่อนสลับไป "มุมมองรวม" (ทั้งหมด/รอส่ง/กล่าวถึง)
   // เพื่อให้มีปุ่ม "ย้อนกลับ" พากลับไปห้องเดิมได้ — state ไม่ใช่ ref เพราะค่านี้
@@ -221,6 +229,23 @@ function ReportFeedPageInner() {
   // A "copy link" on a specific comment (not just the post) adds &reply= —
   // same deep-link idea as Teams' parentMessageId, scoped down to one reply.
   const [highlightReplyId, setHighlightReplyId] = useState<string | null>(() => searchParams.get("reply"));
+  // Re-derives the three deep-link params from the URL whenever it actually
+  // changes — the fix for the stale-initializer gap noted above. A plain
+  // room switch via the sidebar (selectView) is a no-op here: the
+  // activeId-writing effect further down keeps `?topic=` equal to whatever's
+  // already selected, so this only ever *changes* anything when something
+  // outside this component's own state updates (an in-app Link navigating
+  // here with new params). The equality checks keep it from fighting that
+  // effect or looping.
+  useEffect(() => {
+    const topic = searchParams.get("topic");
+    if (topic && topic !== selectedId) setSelectedId(topic);
+    const post = searchParams.get("post");
+    if (post !== highlightPostId) setHighlightPostId(post);
+    const reply = searchParams.get("reply");
+    if (reply !== highlightReplyId) setHighlightReplyId(reply);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
   const [membersDialogOpen, setMembersDialogOpen] = useState(false);
   // Below `lg`, the topic tree moves into a full-screen Sheet instead of a
   // squeezed inline block with its own internal scroll (3.5.5) — the desktop
