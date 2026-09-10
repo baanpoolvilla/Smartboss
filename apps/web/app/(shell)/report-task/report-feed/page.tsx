@@ -6,7 +6,6 @@ import { TopicSidebar, TopicLogo, ALL_TOPICS_ID, PENDING_ID, MENTIONS_ID } from 
 import { ReportComposer } from "@/modules/report_task/components/report-feed/report-composer";
 import { ReportFeed } from "@/modules/report_task/components/report-feed/report-feed";
 import { OpenchatFeed } from "@/modules/report_task/components/report-feed/openchat-feed";
-import { ThreadListFeed } from "@/modules/report_task/components/report-feed/thread-list-feed";
 import { ReportAllPostsFeed } from "@/modules/report_task/components/report-feed/report-all-posts-feed";
 import { ReportViewSwitcher } from "@/modules/report_task/components/report-feed/report-view-switcher";
 import { ReportComplianceBar } from "@/modules/report_task/components/report-feed/report-header";
@@ -1216,21 +1215,6 @@ function ReportFeedPageInner() {
                         ล้างทั้งหมด
                       </Button>
                     </div>
-                  ) : activeTopic.feedViewMode === "threads" ? (
-                    /* "Thread" room-setting pick — a left rail of collapsed
-                       thread headers next to a detail pane for whichever one
-                       is selected, instead of one continuous scroll. Still
-                       needs the composer below to start a new thread. */
-                    <>
-                      <ThreadListFeed
-                        topic={activeTopic}
-                        topicPosts={filteredTopicPosts}
-                        highlightPostId={highlightPostId}
-                        highlightReplyId={highlightReplyId}
-                        onOpenTask={setOpenTaskId}
-                      />
-                      <ReportComposer key={activeTopic.id} topic={activeTopic} />
-                    </>
                   ) : isOpenchatTopic(activeTopic) ? (
                     /* Openchat rooms carry their own composer built into the
                        flat message stream (Discord's single bottom bar) —
