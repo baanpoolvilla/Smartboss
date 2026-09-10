@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Label } from "@/modules/report_task/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { RoomMembersSummaryCard, RoomMembersDialog } from "@/modules/report_task/components/report-feed/room-members-dialog";
 import { useReportFeedStore, type ReportTopic, type SubmissionRound } from "@/modules/report_task/store/report-feed-store";
 import { SubmissionRoundDialog } from "@/modules/report_task/components/report-feed/submission-round-dialog";
@@ -11,8 +12,11 @@ import { users as allUsers } from "@/modules/report_task/lib/directory";
 import { departments, getUser, isOwner } from "@/modules/report_task/lib/directory";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { topicModeOf } from "@/modules/report_task/lib/report-topic-membership";
+import { canEditReportTopic } from "@/modules/report_task/lib/permissions";
 import { cn } from "@/modules/report_task/lib/utils";
-import { Check, Clock, Globe, Lock, Pencil, Plus, Trash2, User, Users, UserCheck } from "lucide-react";
+import { uuid } from "@/modules/report_task/lib/uuid";
+import { toast } from "sonner";
+import { Check, ClipboardCopy, Clock, Globe, Lock, Pencil, Plus, Trash2, User, Users, UserCheck } from "lucide-react";
 
 const WD = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 function daysLabel(w?: number[], dayOfMonth?: number): string {
@@ -62,8 +66,14 @@ export function ReportTopicSettingsPanel({
   const apply = onUpdate ?? ((patch: Partial<ReportTopic>) => updateTopicSettings(topic.id, patch));
   const [membersDialogOpen, setMembersDialogOpen] = useState(false);
   const submitterGroups = useReportFeedStore((s) => s.submitterGroups);
+  const allTopics = useReportFeedStore((s) => s.topics);
   const [roundDialogOpen, setRoundDialogOpen] = useState(false);
   const [editingRound, setEditingRound] = useState<SubmissionRound | null>(null);
+  // Which round's "คัดลอกไปห้องอื่น" popover is open, and which target rooms
+  // are checked in it — keyed by round id so opening one round's popover
+  // doesn't carry over a selection made in another's.
+  const [copyRoundId, setCopyRoundId] = useState<string | null>(null);
+  const [copyTargetIds, setCopyTargetIds] = useState<string[]>([]);
   // "Who can see this room" (mode, departments, members) always saves
   // straight to the store the instant you change it — same "own explicit
   // actions, not a form field to batch" reasoning the member dialog already
@@ -131,6 +141,33 @@ export function ReportTopicSettingsPanel({
   }
   function removeRound(id: string) {
     apply({ submissionRounds: rounds.filter((r) => r.id !== id) });
+  }
+
+  // Rooms this same viewer can actually edit the settings of — same gate the
+  // sidebar already uses to decide whether this whole dialog is reachable
+  // for a room, so a department head only ever sees their own rooms as copy
+  // targets, never a room they couldn't open this dialog for themselves.
+  const copyTargets = allTopics.filter((t) => t.id !== topic.id && canEditReportTopic(t.visibility, viewingAsUserId));
+
+  function toggleCopyTarget(id: string) {
+    setCopyTargetIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+  }
+
+  // Adds the round as a brand-new round (fresh id) in every picked room —
+  // never overwrites/replaces whatever that room's own rounds already are,
+  // so copying is always additive and the destination stays editable on its
+  // own afterward (same "each room owns its own rounds after that" as
+  // filling out the add-round form by hand would).
+  function copyRoundToRooms(round: SubmissionRound, targetIds: string[]) {
+    for (const id of targetIds) {
+      const target = allTopics.find((t) => t.id === id);
+      if (!target) continue;
+      const targetRounds = target.submissionRounds ?? [];
+      updateTopicSettings(id, { submissionRounds: [...targetRounds, { ...round, id: `round-${uuid()}` }] });
+    }
+    toast.success(`คัดลอกรอบ "${round.label}" ไปอีก ${targetIds.length} ห้องแล้ว`);
+    setCopyRoundId(null);
+    setCopyTargetIds([]);
   }
 
   return (
@@ -247,6 +284,69 @@ export function ReportTopicSettingsPanel({
                     </span>
                     <span className="rounded-full bg-[var(--bg-soft)] px-2 py-0.5 text-[11px] text-[var(--ink-soft)]">{daysLabel(r.weekdays, r.dayOfMonth)}</span>
                     <div className="ml-auto flex items-center gap-1">
+                      {copyTargets.length > 0 && (
+                        <Popover
+                          open={copyRoundId === r.id}
+                          onOpenChange={(open) => {
+                            setCopyRoundId(open ? r.id : null);
+                            if (open) setCopyTargetIds([]);
+                          }}
+                        >
+                          <PopoverTrigger
+                            render={
+                              <Button variant="ghost" size="icon" aria-label={`คัดลอกรอบ ${r.label} ไปห้องอื่น`} title="คัดลอกไปห้องอื่น">
+                                <ClipboardCopy className="h-3.5 w-3.5 text-[var(--brand-green-dark)]" />
+                              </Button>
+                            }
+                          />
+                          <PopoverContent align="end" className="w-64 p-2.5">
+                            <p className="text-xs font-semibold">คัดลอกรอบนี้ไปห้องอื่น</p>
+                            <p className="mt-0.5 text-[11px] text-[var(--ink-soft)]">
+                              เลือกห้องปลายทาง — เพิ่มรอบใหม่ให้ ไม่ทับรอบเดิมที่มีอยู่
+                            </p>
+                            <div className="mt-2 max-h-44 space-y-0.5 overflow-y-auto">
+                              {copyTargets.map((t) => {
+                                const checked = copyTargetIds.includes(t.id);
+                                return (
+                                  <label
+                                    key={t.id}
+                                    className="flex items-center gap-2 rounded-md px-1.5 py-1 text-[12.5px] hover:bg-[var(--bg-soft)] cursor-pointer"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={() => toggleCopyTarget(t.id)}
+                                      className="h-3.5 w-3.5 accent-[var(--brand-green)]"
+                                    />
+                                    <span className="truncate">{t.name}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                            <div className="mt-2.5 flex gap-1.5">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="flex-1"
+                                onClick={() => {
+                                  setCopyRoundId(null);
+                                  setCopyTargetIds([]);
+                                }}
+                              >
+                                ยกเลิก
+                              </Button>
+                              <Button
+                                size="sm"
+                                className="flex-1"
+                                disabled={copyTargetIds.length === 0}
+                                onClick={() => copyRoundToRooms(r, copyTargetIds)}
+                              >
+                                คัดลอก{copyTargetIds.length > 0 ? ` (${copyTargetIds.length})` : ""}
+                              </Button>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      )}
                       <Button variant="ghost" size="icon" onClick={() => { setEditingRound(r); setRoundDialogOpen(true); }} aria-label={`แก้รอบ ${r.label}`}>
                         <Pencil className="h-3.5 w-3.5 text-[var(--ink-soft)]" />
                       </Button>
