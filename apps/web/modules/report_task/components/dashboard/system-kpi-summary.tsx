@@ -292,9 +292,24 @@ export function SystemKpiSummary() {
       }
       return m;
     };
-    const rankedIssues: { key: IssueTipKey; label: string; count: number; people: { name: string; count: number }[] }[] = [
+    // Overdue (task or report) always outranks pending (task or report),
+    // never just "whichever count is bigger" — same fix, same reasoning as
+    // status-overview-donut.tsx's own mainIssue (this card duplicates that
+    // logic combined across both domains instead of reusing it, so it never
+    // got that fix the first time around: "ปัญหาหลัก" here kept headlining
+    // "รายงานยังไม่ส่ง (ในกำหนด)" — people who simply hadn't reached their
+    // deadline yet — over "รายงานขาดส่ง", people who'd genuinely missed
+    // theirs, whenever the pending count happened to be bigger). Rank within
+    // each tier by count, but a tier-1 (overdue) entry always beats every
+    // tier-2 (pending) one regardless of either count.
+    type Issue = { key: IssueTipKey; label: string; count: number; people: { name: string; count: number }[] };
+    const overdueIssues: Issue[] = [
       { key: "taskOverdue" as const, label: "งานเลยกำหนด", count: taskBuckets.overdue, people: topPeopleOf(taskByAssignee.overdue) },
       { key: "reportOverdue" as const, label: "รายงานขาดส่ง", count: reportBuckets.overdue, people: topPeopleOf(reportPersonCounts("missed")) },
+    ]
+      .filter((i) => i.count > 0)
+      .sort((a, b) => b.count - a.count);
+    const pendingIssues: Issue[] = [
       { key: "taskPending" as const, label: "งานยังไม่เสร็จ (ในกำหนด)", count: taskBuckets.pending, people: topPeopleOf(taskByAssignee.pending) },
       {
         key: "reportPending" as const,
@@ -305,7 +320,7 @@ export function SystemKpiSummary() {
     ]
       .filter((i) => i.count > 0)
       .sort((a, b) => b.count - a.count);
-    const mainIssue = rankedIssues[0];
+    const mainIssue = overdueIssues[0] ?? pendingIssues[0];
 
     return {
       taskBuckets,
