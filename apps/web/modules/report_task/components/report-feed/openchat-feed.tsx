@@ -23,6 +23,7 @@ import { groupByDay } from "@/modules/report_task/lib/format";
 import {
   htmlEditorToBulletsText,
   renderRichBulletText,
+  mentionSymbolFor,
   type MentionType,
 } from "@/modules/report_task/lib/report-feed-rich-text";
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
@@ -152,23 +153,29 @@ export function OpenchatFeed({
   // Users filtered to who can actually see *this* room, same rule the member
   // count/RoomMembersDialog use — otherwise this listed the whole company
   // directory regardless of room ("ต้องแสดงเฉพาะคนที่อยู่ในห้องนั้นไหม").
-  const mentionCandidates = useMemo<MentionItem[]>(
+  const personMentionCandidates = useMemo<MentionItem[]>(
     () => [
       ...directoryUsers
         .filter((u) => canSeeReportTopic(topic.visibility, u.id))
         .map((u): MentionItem => ({ type: "user", id: u.id, label: u.name, sublabel: u.role })),
-      ...topics.map((t): MentionItem => ({ type: "topic", id: t.id, label: t.name, sublabel: "ห้อง Report" })),
       ...departments.map((d): MentionItem => ({ type: "dept", id: d.id, label: d.name, sublabel: "แผนก" })),
     ],
-    [topics, topic.visibility]
+    [topic.visibility]
   );
-  const [mentionMenu, setMentionMenu] = useState<{ query: string; rect: DOMRect; containerTop: number; containerBottom: number; index: number } | null>(null);
+  const topicMentionCandidates = useMemo<MentionItem[]>(
+    () => topics.map((t): MentionItem => ({ type: "topic", id: t.id, label: t.name, sublabel: "ห้อง Report" })),
+    [topics]
+  );
+  // "@" opens people/departments; "#" opens rooms — split trigger, same
+  // reasoning as report-post-fields.tsx's own copy of this (see its comment).
+  const [mentionMenu, setMentionMenu] = useState<{ symbol: "@" | "#"; query: string; rect: DOMRect; containerTop: number; containerBottom: number; index: number } | null>(null);
 
-  function mentionMatches(query: string): MentionItem[] {
+  function mentionMatches(query: string, symbol: "@" | "#"): MentionItem[] {
     const q = query.trim().toLowerCase();
+    const candidates = symbol === "#" ? topicMentionCandidates : personMentionCandidates;
     // No cap — the dropdown is its own scroll area, so a room with more than
     // 8 people used to just silently lose everyone past the 8th ("แท็กคนไม่ครบ").
-    return q ? mentionCandidates.filter((m) => m.label.toLowerCase().includes(q)) : mentionCandidates;
+    return q ? candidates.filter((m) => m.label.toLowerCase().includes(q)) : candidates;
   }
 
   function nearestScrollableBounds(el: HTMLElement): { top: number; bottom: number } {
@@ -184,24 +191,28 @@ export function OpenchatFeed({
     return { top: 0, bottom: window.innerHeight };
   }
 
-  function detectMentionTrigger(el: HTMLElement): { query: string; rect: DOMRect; containerTop: number; containerBottom: number } | null {
+  function detectMentionTrigger(el: HTMLElement): { symbol: "@" | "#"; query: string; rect: DOMRect; containerTop: number; containerBottom: number } | null {
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0 || !sel.isCollapsed || !el.contains(sel.getRangeAt(0).startContainer)) return null;
     const range = sel.getRangeAt(0);
     const node = range.startContainer;
     if (node.nodeType !== Node.TEXT_NODE) return null;
     const before = (node.textContent ?? "").slice(0, range.startOffset);
-    const match = before.match(/(?:^|\s)@([^\s@]*)$/);
+    const match = before.match(/(?:^|\s)([@#])([^\s@#]*)$/);
     if (!match) return null;
     const caretRange = range.cloneRange();
     const rect = caretRange.getClientRects()[0] ?? caretRange.getBoundingClientRect();
     const bounds = nearestScrollableBounds(el);
-    return { query: match[1]!, rect, containerTop: bounds.top, containerBottom: bounds.bottom };
+    return { symbol: match[1] as "@" | "#", query: match[2]!, rect, containerTop: bounds.top, containerBottom: bounds.bottom };
   }
 
   function syncMentionMenu(el: HTMLElement) {
     const trigger = detectMentionTrigger(el);
-    setMentionMenu(trigger ? { query: trigger.query, rect: trigger.rect, containerTop: trigger.containerTop, containerBottom: trigger.containerBottom, index: 0 } : null);
+    setMentionMenu(
+      trigger
+        ? { symbol: trigger.symbol, query: trigger.query, rect: trigger.rect, containerTop: trigger.containerTop, containerBottom: trigger.containerBottom, index: 0 }
+        : null
+    );
   }
 
   function makeMentionChip(item: MentionItem): HTMLSpanElement {
@@ -210,7 +221,7 @@ export function OpenchatFeed({
     chip.contentEditable = "false";
     chip.setAttribute("data-mention-type", item.type);
     chip.setAttribute("data-mention-id", item.id);
-    chip.textContent = `@${item.label}`;
+    chip.textContent = `${mentionSymbolFor(item.type)}${item.label}`;
     return chip;
   }
 
@@ -223,7 +234,7 @@ export function OpenchatFeed({
     if (node.nodeType !== Node.TEXT_NODE) return;
     const nodeText = node.textContent ?? "";
     const before = nodeText.slice(0, range.startOffset);
-    const atIndex = before.lastIndexOf("@");
+    const atIndex = before.lastIndexOf(mentionSymbolFor(item.type));
     if (atIndex === -1) return;
     const afterCaret = nodeText.slice(range.startOffset);
     const parent = node.parentNode;
@@ -354,7 +365,7 @@ export function OpenchatFeed({
 
   function handleComposerKeyDown(e: KeyboardEvent<HTMLDivElement>) {
     if (mentionMenu) {
-      const matches = mentionMatches(mentionMenu.query);
+      const matches = mentionMatches(mentionMenu.query, mentionMenu.symbol);
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setMentionMenu({ ...mentionMenu, index: matches.length === 0 ? 0 : (mentionMenu.index + 1) % matches.length });
@@ -835,7 +846,7 @@ export function OpenchatFeed({
 
           {mentionMenu &&
             (() => {
-              const matches = mentionMatches(mentionMenu.query);
+              const matches = mentionMatches(mentionMenu.query, mentionMenu.symbol);
               const spaceBelow = mentionMenu.containerBottom - mentionMenu.rect.bottom - 8;
               const spaceAbove = mentionMenu.rect.top - mentionMenu.containerTop - 8;
               const openAbove = spaceBelow < 160 && spaceAbove > spaceBelow;

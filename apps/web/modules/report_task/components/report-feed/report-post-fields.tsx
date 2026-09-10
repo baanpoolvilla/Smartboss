@@ -16,6 +16,7 @@ import {
   bulletsTextToHtml,
   htmlEditorToBulletsText,
   numberedMarker,
+  mentionSymbolFor,
   type MentionType,
 } from "@/modules/report_task/lib/report-feed-rich-text";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -118,12 +119,18 @@ export function ReportPostFields({
   // which React never revisits.
   const initializedIds = useRef<Set<string>>(new Set());
 
-  // Typing "@" opens a mention picker over people, rooms, and departments —
-  // a picked item is inserted as a non-editable chip and stored as
-  // `@[label](type:id)` (see report-feed-rich-text.tsx), so it round-trips
-  // through the plain-text bullet storage the same way bold/links already do.
-  // Dragging a room straight from the sidebar and dropping it here (see
-  // handleMentionDrop) inserts the same chip without the "@" round-trip.
+  // Typing "@" opens a picker over people and departments; "#" opens a
+  // separate one over rooms only — kept as two distinct triggers (not "@"
+  // over all three) because a room kept showing up mixed into the people/
+  // department list and read as out of place there ("ทำไมมีห้องโผล่มาด้วย
+  // ...ถ้าพวกห้องต้องเป็น #รึป่าว"). A picked item is inserted as a
+  // non-editable chip and stored as `@[label](type:id)` either way (see
+  // report-feed-rich-text.tsx — the storage marker is always written with a
+  // literal `@`, only the *displayed*/typed symbol differs by type via
+  // `mentionSymbolFor`), so it round-trips through the plain-text bullet
+  // storage the same way bold/links already do. Dragging a room straight
+  // from the sidebar and dropping it here (see handleMentionDrop) inserts
+  // the same chip without either round-trip.
   const topics = useReportFeedStore((s) => s.topics);
   // People filtered to who can actually see the room this post is going
   // into — same rule the member count/RoomMembersDialog use elsewhere,
@@ -132,25 +139,29 @@ export function ReportPostFields({
   // (tagging a whole other topic) and department mentions stay unfiltered —
   // neither is scoped to who's already in this one room.
   const targetTopicVisibility = topics.find((t) => t.id === topicId)?.visibility;
-  const mentionCandidates = useMemo<MentionItem[]>(
+  const personMentionCandidates = useMemo<MentionItem[]>(
     () => [
       ...users
         .filter((u) => canSeeReportTopic(targetTopicVisibility, u.id))
         .map((u): MentionItem => ({ type: "user", id: u.id, label: u.name, sublabel: u.role })),
-      ...topics.map((t): MentionItem => ({ type: "topic", id: t.id, label: t.name, sublabel: "ห้อง Report" })),
       ...departments.map((d): MentionItem => ({ type: "dept", id: d.id, label: d.name, sublabel: "แผนก" })),
     ],
-    [topics, targetTopicVisibility]
+    [targetTopicVisibility]
   );
-  const [mentionMenu, setMentionMenu] = useState<{ sectionId: string; query: string; rect: DOMRect; containerTop: number; containerBottom: number; index: number } | null>(null);
+  const topicMentionCandidates = useMemo<MentionItem[]>(
+    () => topics.map((t): MentionItem => ({ type: "topic", id: t.id, label: t.name, sublabel: "ห้อง Report" })),
+    [topics]
+  );
+  const [mentionMenu, setMentionMenu] = useState<{ sectionId: string; symbol: "@" | "#"; query: string; rect: DOMRect; containerTop: number; containerBottom: number; index: number } | null>(null);
 
-  function mentionMatches(query: string): MentionItem[] {
+  function mentionMatches(query: string, symbol: "@" | "#"): MentionItem[] {
     const q = query.trim().toLowerCase();
+    const candidates = symbol === "#" ? topicMentionCandidates : personMentionCandidates;
     // No cap — the dropdown below is already its own scroll area (sized to
     // fit the composer, see nearestScrollableBounds), so a room with more
     // than 8 people used to just silently lose everyone past the 8th with
     // no way to scroll to them ("แท็กคนไม่ครบ").
-    return q ? mentionCandidates.filter((m) => m.label.toLowerCase().includes(q)) : mentionCandidates;
+    return q ? candidates.filter((m) => m.label.toLowerCase().includes(q)) : candidates;
   }
 
   /** Top/bottom edges of the nearest scrollable ancestor (the composer's own scroll area) — the dropdown must stay within these, not just the viewport edges, or it visually spills past the composer card into the page header above or the footer buttons below. */
@@ -167,25 +178,29 @@ export function ReportPostFields({
     return { top: 0, bottom: window.innerHeight };
   }
 
-  /** An "@word" ending exactly at the caret, in the same text node — good enough for the normal case of typing "@" then a query with no interruption. */
-  function detectMentionTrigger(el: HTMLElement): { query: string; rect: DOMRect; containerTop: number; containerBottom: number } | null {
+  /** An "@word" or "#word" ending exactly at the caret, in the same text node — good enough for the normal case of typing the trigger then a query with no interruption. */
+  function detectMentionTrigger(el: HTMLElement): { symbol: "@" | "#"; query: string; rect: DOMRect; containerTop: number; containerBottom: number } | null {
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0 || !sel.isCollapsed || !el.contains(sel.getRangeAt(0).startContainer)) return null;
     const range = sel.getRangeAt(0);
     const node = range.startContainer;
     if (node.nodeType !== Node.TEXT_NODE) return null;
     const before = (node.textContent ?? "").slice(0, range.startOffset);
-    const match = before.match(/(?:^|\s)@([^\s@]*)$/);
+    const match = before.match(/(?:^|\s)([@#])([^\s@#]*)$/);
     if (!match) return null;
     const caretRange = range.cloneRange();
     const rect = caretRange.getClientRects()[0] ?? caretRange.getBoundingClientRect();
     const bounds = nearestScrollableBounds(el);
-    return { query: match[1]!, rect, containerTop: bounds.top, containerBottom: bounds.bottom };
+    return { symbol: match[1] as "@" | "#", query: match[2]!, rect, containerTop: bounds.top, containerBottom: bounds.bottom };
   }
 
   function syncMentionMenu(sectionId: string, el: HTMLElement) {
     const trigger = detectMentionTrigger(el);
-    setMentionMenu(trigger ? { sectionId, query: trigger.query, rect: trigger.rect, containerTop: trigger.containerTop, containerBottom: trigger.containerBottom, index: 0 } : null);
+    setMentionMenu(
+      trigger
+        ? { sectionId, symbol: trigger.symbol, query: trigger.query, rect: trigger.rect, containerTop: trigger.containerTop, containerBottom: trigger.containerBottom, index: 0 }
+        : null
+    );
   }
 
   function makeMentionChip(item: MentionItem): HTMLSpanElement {
@@ -194,7 +209,7 @@ export function ReportPostFields({
     chip.contentEditable = "false";
     chip.setAttribute("data-mention-type", item.type);
     chip.setAttribute("data-mention-id", item.id);
-    chip.textContent = `@${item.label}`;
+    chip.textContent = `${mentionSymbolFor(item.type)}${item.label}`;
     return chip;
   }
 
@@ -207,7 +222,7 @@ export function ReportPostFields({
     if (node.nodeType !== Node.TEXT_NODE) return;
     const text = node.textContent ?? "";
     const before = text.slice(0, range.startOffset);
-    const atIndex = before.lastIndexOf("@");
+    const atIndex = before.lastIndexOf(mentionSymbolFor(item.type));
     if (atIndex === -1) return;
     const afterCaret = text.slice(range.startOffset);
     const parent = node.parentNode;
@@ -245,12 +260,12 @@ export function ReportPostFields({
    * over a shorter name that happens to be a prefix of it.
    */
   function autoLinkifyMentions(sectionId: string, el: HTMLDivElement) {
-    const sorted = [...mentionCandidates].sort((a, b) => b.label.length - a.label.length);
+    const sorted = [...personMentionCandidates, ...topicMentionCandidates].sort((a, b) => b.label.length - a.label.length);
     function replaceOne(node: Node): boolean {
       if (node.nodeType === Node.TEXT_NODE) {
         const text = node.textContent ?? "";
         for (const item of sorted) {
-          const needle = `@${item.label}`;
+          const needle = `${mentionSymbolFor(item.type)}${item.label}`;
           const idx = text.indexOf(needle);
           if (idx === -1) continue;
           const parent = node.parentNode;
@@ -282,7 +297,7 @@ export function ReportPostFields({
   }
 
   // Dragging a room straight from the sidebar and dropping it into the
-  // editor inserts the same mention chip typing "@ห้องชื่อ" and picking it
+  // editor inserts the same mention chip typing "#ห้องชื่อ" and picking it
   // would — no keyboard round-trip needed for the common "tag this room" case.
   function handleMentionDrop(sectionId: string, e: DragEvent<HTMLDivElement>) {
     const raw = e.dataTransfer.getData(DRAG_MENTION_TOPIC_MIME);
@@ -535,7 +550,7 @@ export function ReportPostFields({
    */
   function handleEditorKeyDown(sectionId: string, e: KeyboardEvent<HTMLDivElement>) {
     if (mentionMenu?.sectionId === sectionId) {
-      const matches = mentionMatches(mentionMenu.query);
+      const matches = mentionMatches(mentionMenu.query, mentionMenu.symbol);
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setMentionMenu({ ...mentionMenu, index: matches.length === 0 ? 0 : (mentionMenu.index + 1) % matches.length });
@@ -752,7 +767,7 @@ export function ReportPostFields({
                 className="min-h-16 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground"
               />
               {mentionMenu?.sectionId === s.id && (() => {
-                const matches = mentionMatches(mentionMenu.query);
+                const matches = mentionMatches(mentionMenu.query, mentionMenu.symbol);
                 // Prefer opening below the caret, but flip above it whenever
                 // there isn't enough room before the composer's own scroll
                 // area ends — otherwise the dropdown visually spills past

@@ -21,13 +21,23 @@ export function extractMentionedIds(text: string, type: MentionType): string[] {
   return [...ids];
 }
 
-/** `@[label](type:id)` → `@label` — for plain-text contexts that can't render
- * a mention as its own element (a notification's message string, an
- * activity-log line): drop the round-trip markup down to what a human is
- * meant to read, instead of leaking the raw `@[...](user:uuid)` storage
- * format straight onto the screen. */
+/** `@[label](type:id)` → `@label`/`#label` — for plain-text contexts that
+ * can't render a mention as its own element (a notification's message
+ * string, an activity-log line): drop the round-trip markup down to what a
+ * human is meant to read, instead of leaking the raw `@[...](user:uuid)`
+ * storage format straight onto the screen. A room mention reads back as
+ * `#label` — same symbol split as the composer's own @-vs-# triggers (see
+ * mentionSymbolFor) — even though the underlying marker is always written
+ * with a literal `@[...]` regardless of type. */
 export function mentionMarkersToPlainText(text: string): string {
-  return text.replace(MENTION_ONLY_PATTERN, "@$1");
+  return text.replace(MENTION_ONLY_PATTERN, (_m, label: string, type: string) => `${mentionSymbolFor(type as MentionType)}${label}`);
+}
+
+/** Which leading character a mention type reads back as — `#` for a room
+ * (matches the composer's own "#" trigger for tagging one), `@` for
+ * everything else (a person, a department). */
+export function mentionSymbolFor(type: MentionType): "@" | "#" {
+  return type === "topic" ? "#" : "@";
 }
 
 /** Wrap/insert markers written by the composer's formatting buttons. */
@@ -224,11 +234,11 @@ export function renderRichBulletText(text: string): ReactNode[] {
       nodes.push(
         mType === "topic" ? (
           <Link key={key++} href={`/report-task/report-feed?topic=${mId}`} onClick={(e) => e.stopPropagation()} className={cn(mentionChipClass, "hover:underline")}>
-            @{label}
+            {mentionSymbolFor(mType as MentionType)}{label}
           </Link>
         ) : (
           <span key={key++} className={mentionChipClass}>
-            @{label}
+            {mentionSymbolFor(mType as MentionType)}{label}
           </span>
         )
       );
