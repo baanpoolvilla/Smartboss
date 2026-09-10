@@ -163,6 +163,7 @@ export function ReportCard({
   highlightReplyId,
   topicBadge,
   onOpenTask,
+  forceOpen,
 }: {
   post: ReportPost;
   topic: ReportTopic;
@@ -177,6 +178,12 @@ export function ReportCard({
    * already linked to a task. Absent means the page hosting this card hasn't
    * wired up a task sheet, so the menu item silently no-ops. */
   onOpenTask?: (taskId: string) => void;
+  /** Thread-list view's detail pane renders exactly one post at a time as
+   * the whole point of clicking into it — starting collapsed like the
+   * chronological feed would mean an extra click just to see what you
+   * already came here to read. Only affects this card's own initial
+   * open/expanded state, same collapse controls after that. */
+  forceOpen?: boolean;
 }) {
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const maxImages = useAttachmentSettingsStore((s) => s.settings.maxImagesPerReportPost);
@@ -402,7 +409,7 @@ export function ReportCard({
   // shows once the input actually has focus — attach/send stay visible
   // either way so the box still reads as "you can reply here" at rest.
   const [replyFocused, setReplyFocused] = useState(false);
-  const [repliesExpanded, setRepliesExpanded] = useState(false);
+  const [repliesExpanded, setRepliesExpanded] = useState(!!forceOpen);
   // "ข้อความใหม่" divider for replies — frozen at mount, same reasoning as
   // ReportFeed's own post-level divider (opening the room marks everything
   // read almost immediately, so the first-still-unread id has to be captured
@@ -424,7 +431,7 @@ export function ReportCard({
   // a room with 50 posts read as a wall of empty input fields, not a chat
   // feed). Collapsed by default now; opens on the reply icon, the reply-
   // count link, or a deep link into a specific reply (see the effects below).
-  const [threadOpen, setThreadOpen] = useState(false);
+  const [threadOpen, setThreadOpen] = useState(!!forceOpen);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [replyLightbox, setReplyLightbox] = useState<{ images: ReportPostImage[]; index: number } | null>(null);
   // Which reply the box is currently answering, if any — shows a quoted
