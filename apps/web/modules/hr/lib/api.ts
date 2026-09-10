@@ -298,6 +298,42 @@ export interface CheckinPolicyMembership {
   policy_group_id: string;
 }
 
+/**
+ * คำขอแก้ไข/เพิ่มเวลาลงงานแบบ manual (เช่น ลืมสแกน เครื่องเสีย)
+ *
+ * ต้องมีผู้จัดการขึ้นไป **สองคนที่ไม่ซ้ำกัน** กดอนุมัติก่อนถึงจะมีผลจริงและ
+ * เริ่มคำนวณผลลงเวลาใหม่ — `approval_stage` บอกว่าตอนนี้รอใครอยู่
+ * (คำนวณจากฝั่ง workforce ไม่ได้เก็บเป็นค่าจริงใน DB)
+ */
+export interface AttendanceCorrection {
+  id: string;
+  employment_id: string;
+  employee_code: string;
+  full_name: string;
+  work_date: string;
+  adjustment_type: "ADD_PUNCH" | "IGNORE_EVENT" | "CHANGE_INTENT";
+  punch_at: string | null;
+  event_intent: string | null;
+  reason: string;
+  comment: string;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
+  approval_stage:
+    | "AWAITING_FIRST_APPROVAL"
+    | "AWAITING_SECOND_APPROVAL"
+    | "APPROVED"
+    | "REJECTED"
+    | "CANCELLED";
+  requested_by_name: string | null;
+  first_approved_by_name: string | null;
+  first_approved_at: string | null;
+  second_approved_by_name: string | null;
+  second_approved_at: string | null;
+  rejected_by_name: string | null;
+  rejected_at: string | null;
+  rejection_reason: string | null;
+  created_at: string;
+}
+
 export interface Device {
   id: string;
   company_id: string;

@@ -12,6 +12,14 @@ import type { RouteDefinition } from './routes';
  */
 export const OPERATIONAL_ROUTES: readonly Omit<RouteDefinition, 'response'>[] = [
   {
+    operationId: 'listAdjustments_get',
+    method: 'get',
+    path: '/attendance-correction-requests',
+    summary: 'GET /attendance-correction-requests',
+    tag: 'attendance',
+    permissions: ['workforce.attendance.correct.approve'] as Permission[],
+  },
+  {
     operationId: 'requestAdjustment_post',
     method: 'post',
     path: '/attendance-correction-requests',
@@ -26,6 +34,16 @@ export const OPERATIONAL_ROUTES: readonly Omit<RouteDefinition, 'response'>[] = 
     method: 'post',
     path: '/attendance-correction-requests/{adjustmentId}/approve',
     summary: 'POST /attendance-correction-requests/{adjustmentId}/approve',
+    tag: 'attendance',
+    permissions: ['workforce.attendance.correct.approve'] as Permission[],
+    idempotent: true,
+    successStatus: 200,
+  },
+  {
+    operationId: 'rejectAdjustment_post',
+    method: 'post',
+    path: '/attendance-correction-requests/{adjustmentId}/reject',
+    summary: 'POST /attendance-correction-requests/{adjustmentId}/reject',
     tag: 'attendance',
     permissions: ['workforce.attendance.correct.approve'] as Permission[],
     idempotent: true,

@@ -615,7 +615,8 @@ describe('corrections', () => {
     });
     expect(request.status).toBe(201);
 
-    const approved = await call(
+    // คนที่ 1 อนุมัติ — ต้องยังไม่มีผลจนกว่าจะครบคนที่ 2 (spec เพิ่มเติม 2026-09-10)
+    const firstApprove = await call(
       harness,
       'POST',
       `/attendance-correction-requests/${request.body['id'] as string}/approve`,
@@ -625,7 +626,26 @@ describe('corrections', () => {
         payload: { reason: 'ยืนยันกับหัวหน้างานแล้ว' },
       },
     );
-    expect(approved.status).toBe(200);
+    expect(firstApprove.status).toBe(200);
+    expect(firstApprove.body['status']).toBe('PENDING');
+    expect(firstApprove.body['approval_stage']).toBe('AWAITING_SECOND_APPROVAL');
+
+    const stillUnapplied = await recalculate(employmentId, '2026-08-03');
+    expect(stillUnapplied['has_blocking_exception']).toBe(true);
+
+    // คนที่ 2 — ต้องคนละคนกับคนที่ 1 (adminToken ≠ hrToken ที่อนุมัติไปแล้ว)
+    const secondApprove = await call(
+      harness,
+      'POST',
+      `/attendance-correction-requests/${request.body['id'] as string}/approve`,
+      {
+        token: adminToken,
+        idempotencyKey: uuidv4(),
+        payload: { reason: 'ตรวจซ้ำแล้ว เห็นด้วย' },
+      },
+    );
+    expect(secondApprove.status).toBe(200);
+    expect(secondApprove.body['status']).toBe('APPROVED');
 
     const after = await recalculate(employmentId, '2026-08-03');
     expect(after['worked_minutes']).toBe(480);
@@ -682,6 +702,13 @@ describe('corrections', () => {
       `/attendance-correction-requests/${request.body['id'] as string}/approve`,
       { token: hrToken, idempotencyKey: uuidv4(), payload: { reason: 'ตรวจกล้องวงจรปิดแล้ว' } },
     );
+    // ครบสองผู้อนุมัติ (คนละคนกับ hrToken) ถึงจะเริ่มคำนวณใหม่จริง
+    await call(
+      harness,
+      'POST',
+      `/attendance-correction-requests/${request.body['id'] as string}/approve`,
+      { token: adminToken, idempotencyKey: uuidv4(), payload: { reason: 'เห็นด้วย' } },
+    );
 
     const after = await recalculate(employmentId, '2026-08-03');
     expect(after['has_blocking_exception']).toBe(false);
@@ -716,6 +743,163 @@ describe('corrections', () => {
       { token: supervisorToken, idempotencyKey: uuidv4(), payload: { reason: 'อนุมัติเอง' } },
     );
     expect(selfApprove.status).toBe(403);
+  });
+
+  it('refuses a second approval by the same person who approved first', async () => {
+    // maker-checker แบบ 2 คน — คนที่ 1 กดซ้ำเป็นคนที่ 2 ไม่ได้ ไม่งั้นกฎ "2 คน" ไร้ความหมาย
+    const employmentId = await createEmployment('อนุมัติซ้ำคนเดิม');
+    const request = await call(harness, 'POST', '/attendance-correction-requests', {
+      token: supervisorToken,
+      idempotencyKey: uuidv4(),
+      payload: {
+        employment_id: employmentId,
+        work_date: '2026-08-03',
+        adjustment_type: 'ADD_PUNCH',
+        punch_at: '2026-08-03T01:00:00Z',
+        event_intent: 'CLOCK_IN',
+        reason: 'ขอเพิ่มเวลาเข้างาน',
+      },
+    });
+
+    const first = await call(
+      harness,
+      'POST',
+      `/attendance-correction-requests/${request.body['id'] as string}/approve`,
+      { token: hrToken, idempotencyKey: uuidv4(), payload: { reason: 'เห็นด้วย' } },
+    );
+    expect(first.body['approval_stage']).toBe('AWAITING_SECOND_APPROVAL');
+
+    const secondBySamePerson = await call(
+      harness,
+      'POST',
+      `/attendance-correction-requests/${request.body['id'] as string}/approve`,
+      { token: hrToken, idempotencyKey: uuidv4(), payload: { reason: 'อนุมัติอีกรอบ' } },
+    );
+    expect(secondBySamePerson.status).toBe(403);
+  });
+
+  it('refuses the requester as the second approver too, even when someone else already approved first', async () => {
+    const employmentId = await createEmployment('ผู้ขอสวมเป็นคนที่สอง');
+    const request = await call(harness, 'POST', '/attendance-correction-requests', {
+      token: supervisorToken,
+      idempotencyKey: uuidv4(),
+      payload: {
+        employment_id: employmentId,
+        work_date: '2026-08-03',
+        adjustment_type: 'ADD_PUNCH',
+        punch_at: '2026-08-03T01:00:00Z',
+        event_intent: 'CLOCK_IN',
+        reason: 'ขอเพิ่มเวลาเข้างาน',
+      },
+    });
+
+    await call(
+      harness,
+      'POST',
+      `/attendance-correction-requests/${request.body['id'] as string}/approve`,
+      { token: hrToken, idempotencyKey: uuidv4(), payload: { reason: 'เห็นด้วย' } },
+    );
+
+    const requesterAsSecond = await call(
+      harness,
+      'POST',
+      `/attendance-correction-requests/${request.body['id'] as string}/approve`,
+      { token: supervisorToken, idempotencyKey: uuidv4(), payload: { reason: 'อนุมัติของตัวเอง' } },
+    );
+    expect(requesterAsSecond.status).toBe(403);
+  });
+
+  it('rejects a correction request and refuses to approve it afterwards', async () => {
+    const employmentId = await createEmployment('ปฏิเสธคำขอ');
+    const request = await call(harness, 'POST', '/attendance-correction-requests', {
+      token: supervisorToken,
+      idempotencyKey: uuidv4(),
+      payload: {
+        employment_id: employmentId,
+        work_date: '2026-08-03',
+        adjustment_type: 'ADD_PUNCH',
+        punch_at: '2026-08-03T01:00:00Z',
+        event_intent: 'CLOCK_IN',
+        reason: 'ขอเพิ่มเวลาเข้างาน',
+      },
+    });
+
+    const rejected = await call(
+      harness,
+      'POST',
+      `/attendance-correction-requests/${request.body['id'] as string}/reject`,
+      { token: hrToken, idempotencyKey: uuidv4(), payload: { reason: 'เวลาที่ขอไม่ตรงกับกล้องวงจรปิด' } },
+    );
+    expect(rejected.status).toBe(200);
+    expect(rejected.body['status']).toBe('REJECTED');
+
+    // คำขอที่ถูกปฏิเสธแล้วเป็นจุดจบ — อนุมัติย้อนหลังไม่ได้
+    const approveAfterReject = await call(
+      harness,
+      'POST',
+      `/attendance-correction-requests/${request.body['id'] as string}/approve`,
+      { token: adminToken, idempotencyKey: uuidv4(), payload: { reason: 'ลองอนุมัติ' } },
+    );
+    expect(approveAfterReject.status).toBe(409);
+  });
+
+  it('lists correction requests with the employee name and approval stage', async () => {
+    const employmentId = await createEmployment('ดูคิวอนุมัติ');
+    const request = await call(harness, 'POST', '/attendance-correction-requests', {
+      token: supervisorToken,
+      idempotencyKey: uuidv4(),
+      payload: {
+        employment_id: employmentId,
+        work_date: '2026-08-03',
+        adjustment_type: 'ADD_PUNCH',
+        punch_at: '2026-08-03T01:00:00Z',
+        event_intent: 'CLOCK_IN',
+        reason: 'ขอเพิ่มเวลาเข้างาน',
+      },
+    });
+
+    await call(
+      harness,
+      'POST',
+      `/attendance-correction-requests/${request.body['id'] as string}/approve`,
+      { token: hrToken, idempotencyKey: uuidv4(), payload: { reason: 'เห็นด้วย' } },
+    );
+
+    const list = await call(
+      harness,
+      'GET',
+      `/attendance-correction-requests?employment_id=${employmentId}`,
+      { token: hrToken },
+    );
+    expect(list.status).toBe(200);
+    const items = list.body['items'] as Record<string, unknown>[];
+    const found = items.find((item) => item['id'] === request.body['id']);
+    expect(found).toMatchObject({
+      full_name: 'ดูคิวอนุมัติ ทดสอบ',
+      status: 'PENDING',
+      approval_stage: 'AWAITING_SECOND_APPROVAL',
+    });
+    expect(found?.['first_approved_by_name']).toBeTruthy();
+    expect(found?.['second_approved_by_name']).toBeNull();
+  });
+
+  it('lets HR request a manual correction on behalf of an employee, not only approve one', async () => {
+    // ก่อนหน้านี้ HR_OFFICER มีแค่ correct.approve — กดขอเองให้พนักงานไม่ได้เลย
+    // ทั้งที่หน้าลงเวลาแบบ manual ต้องให้ HR เป็นคนกรอกแทนคนที่ลืมสแกน/เครื่องเสีย
+    const employmentId = await createEmployment('HR กรอกแทน');
+    const request = await call(harness, 'POST', '/attendance-correction-requests', {
+      token: hrToken,
+      idempotencyKey: uuidv4(),
+      payload: {
+        employment_id: employmentId,
+        work_date: '2026-08-03',
+        adjustment_type: 'ADD_PUNCH',
+        punch_at: '2026-08-03T01:00:00Z',
+        event_intent: 'CLOCK_IN',
+        reason: 'เครื่องสแกนเสีย HR กรอกแทนตามใบลงเวลากระดาษ',
+      },
+    });
+    expect(request.status).toBe(201);
   });
 
   it('requires a reason to waive an exception', async () => {

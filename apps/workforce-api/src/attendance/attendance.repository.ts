@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { schema, type Tx } from '@workforce/db';
-import { and, asc, desc, eq, gte, isNull, lte, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, lte, or, sql, type SQL } from 'drizzle-orm';
 
 @Injectable()
 export class AttendanceRepository {
@@ -499,10 +499,91 @@ export class AttendanceRepository {
     tx: Tx,
     id: string,
     values: Partial<typeof schema.timeEventAdjustments.$inferInsert>,
-  ): Promise<void> {
-    await tx
+  ): Promise<typeof schema.timeEventAdjustments.$inferSelect> {
+    const rows = await tx
       .update(schema.timeEventAdjustments)
       .set(values)
-      .where(eq(schema.timeEventAdjustments.id, id));
+      .where(eq(schema.timeEventAdjustments.id, id))
+      .returning();
+    return rows[0] as typeof schema.timeEventAdjustments.$inferSelect;
+  }
+
+  /**
+   * รายการคำขอแก้ไขเวลา พร้อมชื่อพนักงานเจ้าของเวลา (join employments+people)
+   *
+   * ไม่ join principals ที่นี่เพราะ requested_by/approved_by/second_approved_by/
+   * rejected_by ชี้ไปคนละคอลัมน์กัน — join 4 รอบในคิวรีเดียวอ่านยากและช้ากว่า
+   * ปล่อยให้ service ไล่ resolve ชื่อจาก `findPrincipalDisplayNames` แทน
+   */
+  async listAdjustments(
+    tx: Tx,
+    options: {
+      companyId?: string;
+      employmentId?: string;
+      status?: string;
+      from?: string;
+      to?: string;
+    },
+  ): Promise<
+    (typeof schema.timeEventAdjustments.$inferSelect & {
+      employeeCode: string;
+      firstName: string;
+      lastName: string;
+      preferredName: string;
+    })[]
+  > {
+    const conditions: SQL[] = [];
+    if (options.companyId !== undefined)
+      conditions.push(eq(schema.timeEventAdjustments.companyId, options.companyId));
+    if (options.employmentId !== undefined)
+      conditions.push(eq(schema.timeEventAdjustments.employmentId, options.employmentId));
+    if (options.status !== undefined)
+      conditions.push(eq(schema.timeEventAdjustments.status, options.status));
+    if (options.from !== undefined)
+      conditions.push(sql`${schema.timeEventAdjustments.workDate} >= ${options.from}`);
+    if (options.to !== undefined)
+      conditions.push(sql`${schema.timeEventAdjustments.workDate} <= ${options.to}`);
+
+    const rows = await tx
+      .select({
+        adjustment: schema.timeEventAdjustments,
+        employeeCode: schema.employments.employeeCode,
+        firstName: schema.people.firstName,
+        lastName: schema.people.lastName,
+        preferredName: schema.people.preferredName,
+      })
+      .from(schema.timeEventAdjustments)
+      .innerJoin(
+        schema.employments,
+        eq(schema.employments.id, schema.timeEventAdjustments.employmentId),
+      )
+      .innerJoin(schema.people, eq(schema.people.id, schema.employments.personId))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(schema.timeEventAdjustments.createdAt))
+      .limit(200);
+
+    return rows.map((row) => ({
+      ...row.adjustment,
+      employeeCode: row.employeeCode,
+      firstName: row.firstName,
+      lastName: row.lastName,
+      preferredName: row.preferredName,
+    }));
+  }
+
+  /** ชื่อที่แสดงของ principal หลายคนพร้อมกัน — ใช้แปะชื่อผู้ขอ/ผู้อนุมัติในรายการข้างบน */
+  async findPrincipalDisplayNames(
+    tx: Tx,
+    ids: readonly string[],
+  ): Promise<Map<string, string>> {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) return new Map();
+
+    const rows = await tx
+      .select({ id: schema.principals.id, displayName: schema.principals.displayName })
+      .from(schema.principals)
+      .where(inArray(schema.principals.id, unique));
+
+    return new Map(rows.map((row) => [row.id, row.displayName]));
   }
 }

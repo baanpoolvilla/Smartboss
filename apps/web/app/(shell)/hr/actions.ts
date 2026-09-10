@@ -1505,6 +1505,96 @@ export async function assignUnassignedToCheckinPolicyAction(formData: FormData) 
   revalidatePath("/hr/checkin-policy");
 }
 
+/* ═══════════════ ลงเวลาแบบ manual (ต้อง 2 ผู้จัดการอนุมัติ) ═══════════════ */
+
+/**
+ * ต่อวันที่ (`YYYY-MM-DD`) กับเวลา (`HH:mm` จาก input type="time") เป็น ISO
+ * ที่มีโซนเวลากำกับชัดเจน (+07:00 = เวลาไทย) แทนที่จะพึ่ง TZ ของเครื่องที่รัน
+ *
+ * เครื่อง dev ไม่ได้ตั้ง TZ=Asia/Bangkok เหมือน production เสมอไป (ดู
+ * modules/hr/lib/date.ts) — `new Date("2026-08-03 10:00")` แปลผลต่างกันไป
+ * ตามเครื่อง ในขณะที่ต่อ offset เองแบบนี้ได้ค่าเดียวกันทุกที่ที่รันโค้ดนี้
+ */
+function bangkokIso(dateStr: string, timeStr: string): string {
+  return `${dateStr}T${timeStr}:00+07:00`;
+}
+
+export async function requestManualAttendanceAction(formData: FormData) {
+  await guard(HR_PERMS.employeeManage);
+
+  const employmentId = String(formData.get("employment_id") ?? "");
+  const workDate = String(formData.get("work_date") ?? "");
+  const time = String(formData.get("time") ?? "");
+  const intent = String(formData.get("event_intent") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim();
+
+  if (!employmentId) throw new Error("กรุณาเลือกพนักงาน");
+  if (!workDate) throw new Error("กรุณาเลือกวันที่");
+  if (!time) throw new Error("กรุณาเลือกเวลา");
+  if (intent !== "CLOCK_IN" && intent !== "CLOCK_OUT") throw new Error("กรุณาเลือกประเภทเวลา");
+  if (!reason) throw new Error("กรุณาระบุเหตุผล — ใช้เป็นหลักฐานประกอบตอนตรวจสอบภายหลัง");
+
+  try {
+    await wfFetch("/attendance-correction-requests", {
+      method: "POST",
+      body: {
+        employment_id: employmentId,
+        work_date: workDate,
+        adjustment_type: "ADD_PUNCH",
+        event_intent: intent,
+        punch_at: bangkokIso(workDate, time),
+        reason,
+      },
+    });
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+  revalidatePath("/hr/attendance/corrections");
+}
+
+/**
+ * กดครั้งแรก = บันทึกว่า "ผู้จัดการคนที่ 1 เห็นด้วยแล้ว" ยังไม่มีผลจริง
+ * กดครั้งที่สองโดย**คนละคน**กับคนแรกและคนละคนกับผู้ขอ = มีผลจริงทันที
+ * ปุ่มเดียวกันทั้งสองครั้ง — workforce API เป็นคนตัดสินว่าตอนนี้เป็นรอบไหน
+ */
+export async function approveAttendanceCorrectionAction(formData: FormData) {
+  await guard(HR_PERMS.employeeManage);
+
+  const adjustmentId = String(formData.get("adjustment_id") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!adjustmentId) throw new Error("ไม่พบคำขอ");
+  if (!reason) throw new Error("กรุณาระบุเหตุผลที่อนุมัติ");
+
+  try {
+    await wfFetch(`/attendance-correction-requests/${adjustmentId}/approve`, {
+      method: "POST",
+      body: { reason },
+    });
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+  revalidatePath("/hr/attendance/corrections");
+}
+
+export async function rejectAttendanceCorrectionAction(formData: FormData) {
+  await guard(HR_PERMS.employeeManage);
+
+  const adjustmentId = String(formData.get("adjustment_id") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!adjustmentId) throw new Error("ไม่พบคำขอ");
+  if (!reason) throw new Error("กรุณาระบุเหตุผลที่ปฏิเสธ");
+
+  try {
+    await wfFetch(`/attendance-correction-requests/${adjustmentId}/reject`, {
+      method: "POST",
+      body: { reason },
+    });
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+  revalidatePath("/hr/attendance/corrections");
+}
+
 /* ═══════════════════ เครื่องสแกน ═══════════════════ */
 
 export async function createDeviceAction(formData: FormData) {

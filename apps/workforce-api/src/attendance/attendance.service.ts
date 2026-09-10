@@ -762,6 +762,65 @@ export class AttendanceService {
 
   // --- corrections (spec §7.4) ---
 
+  /**
+   * คิวคำขอแก้ไขเวลา พร้อมชื่อพนักงานและชื่อของทุกคนที่เกี่ยวข้องกับการอนุมัติ
+   *
+   * `approval_stage` เป็นค่าที่ *คำนวณตอนตอบ* ไม่ใช่ค่าที่เก็บจริงใน DB —
+   * ตั้งใจไม่เพิ่มสถานะ PENDING_SECOND_APPROVAL ลงคอลัมน์ status เพราะจะต้องแก้
+   * CHECK constraint และ partial index ที่ผูกกับค่า 'PENDING' อยู่แล้วตั้งแต่
+   * 0004_scheduling_and_attendance.sql โดยไม่ได้อะไรเพิ่มขึ้นเลย — เช็คจาก
+   * approved_by ว่ามีคนที่ 1 แล้วหรือยังก็รู้ผลเดียวกัน
+   */
+  async listAdjustments(query: {
+    companyId?: string;
+    employmentId?: string;
+    status?: string;
+    from?: string;
+    to?: string;
+  }): Promise<{ items: Record<string, unknown>[] }> {
+    return this.uow.run(async (uow) => {
+      const rows = await this.repository.listAdjustments(uow.tx, query);
+
+      const principalIds = rows.flatMap((row) =>
+        [row.requestedBy, row.approvedBy, row.secondApprovedBy, row.rejectedBy].filter(
+          (id): id is string => id !== null,
+        ),
+      );
+      const names = await this.repository.findPrincipalDisplayNames(uow.tx, principalIds);
+
+      return {
+        items: rows.map((row) => ({
+          id: row.id,
+          employment_id: row.employmentId,
+          employee_code: row.employeeCode,
+          full_name: `${row.firstName} ${row.lastName}${
+            row.preferredName ? ` (${row.preferredName})` : ''
+          }`,
+          work_date: row.workDate,
+          adjustment_type: row.adjustmentType,
+          punch_at: row.punchAt?.toISOString() ?? null,
+          event_intent: row.eventIntent,
+          reason: row.reason,
+          comment: row.comment,
+          status: row.status,
+          approval_stage: approvalStageOf(row),
+          requested_by: row.requestedBy,
+          requested_by_name: row.requestedBy ? (names.get(row.requestedBy) ?? null) : null,
+          first_approved_by_name: row.approvedBy ? (names.get(row.approvedBy) ?? null) : null,
+          first_approved_at: row.approvedAt?.toISOString() ?? null,
+          second_approved_by_name: row.secondApprovedBy
+            ? (names.get(row.secondApprovedBy) ?? null)
+            : null,
+          second_approved_at: row.secondApprovedAt?.toISOString() ?? null,
+          rejected_by_name: row.rejectedBy ? (names.get(row.rejectedBy) ?? null) : null,
+          rejected_at: row.rejectedAt?.toISOString() ?? null,
+          rejection_reason: row.rejectionReason,
+          created_at: row.createdAt.toISOString(),
+        })),
+      };
+    });
+  }
+
   async requestAdjustment(input: {
     employment_id: string;
     work_date: string;
@@ -829,10 +888,18 @@ export class AttendanceService {
   }
 
   /**
-   * อนุมัติคำขอแก้เวลา แล้วคำนวณผลของวันนั้นใหม่ทันที
+   * อนุมัติคำขอแก้เวลา — ต้องมีผู้จัดการขึ้นไป **สองคนที่ไม่ซ้ำกัน** กดยืนยัน
+   * ก่อนถึงจะมีผลจริง (เพิ่มจากเดิมที่อนุมัติครั้งเดียวจบ ตามที่เจ้าของระบบสั่ง
+   * 2026-09-10 — การแก้เวลาทำงานกระทบเงินเดือนโดยตรง คนเดียวอนุมัติเองไม่พอ)
    *
-   * ผู้อนุมัติต้องไม่ใช่ผู้ขอ — การแก้เวลาของตัวเองแล้วอนุมัติเองทำให้ระบบ
-   * ไม่มีความหมาย (spec §5, §10.2 maker-checker)
+   * endpoint เดียวกันถูกเรียกสองครั้งโดยคนละคน:
+   *   ครั้งที่ 1 (adjustment.approvedBy ยังว่าง) — บันทึกว่าใครเป็นคนที่ 1
+   *     สถานะยังคง PENDING และ**ยังไม่คำนวณผลลงเวลาใหม่** เพราะยังไม่ครบเงื่อนไข
+   *   ครั้งที่ 2 (approvedBy มีค่าแล้ว) — ผู้กดต้องไม่ใช่คนที่ 1 และไม่ใช่ผู้ขอ
+   *     ถึงจะเปลี่ยนเป็น APPROVED แล้วคำนวณผลลงเวลาใหม่จริง
+   *
+   * ผู้อนุมัติต้องไม่ใช่ผู้ขอทั้งสองรอบ — การแก้เวลาของตัวเองแล้วอนุมัติเอง
+   * ทำให้ระบบไม่มีความหมาย (spec §5, §10.2 maker-checker)
    */
   async approveAdjustment(
     adjustmentId: string,
@@ -841,17 +908,58 @@ export class AttendanceService {
     return this.uow.run(async (uow) => {
       const adjustment = await this.repository.findAdjustmentById(uow.tx, adjustmentId);
       if (adjustment === undefined) throw AppError.notFound('time event adjustment');
-      if (adjustment.status !== 'PENDING') throw AppError.conflict('adjustment is not pending');
+      if (adjustment.status !== 'PENDING') {
+        throw AppError.conflict(
+          adjustment.status === 'APPROVED'
+            ? 'adjustment is already fully approved'
+            : 'adjustment is not pending',
+        );
+      }
 
       const approverId = this.requestContext.requirePrincipal().principalId;
       if (adjustment.requestedBy === approverId) {
         throw AppError.forbidden('the approver must be different from the requester');
       }
 
+      if (adjustment.approvedBy === null) {
+        // ── คนที่ 1 ──
+        const after = await this.repository.updateAdjustment(uow.tx, adjustmentId, {
+          approvedBy: approverId,
+          approvedAt: this.clock.now(),
+        });
+
+        await uow.audit({
+          action: 'attendance.correction.approve',
+          resourceType: 'time_event_adjustment',
+          resourceId: adjustmentId,
+          outcome: 'SUCCESS',
+          companyId: adjustment.companyId,
+          reason: input.reason,
+          metadata: { stage: 'FIRST' },
+          before: { status: 'PENDING', approved_by: null },
+          after: { status: 'PENDING', approved_by: approverId },
+        });
+
+        // ยังไม่คำนวณผลลงเวลาใหม่ — รอคนที่ 2 ก่อน (ต่างจากพฤติกรรมเดิมที่จบ
+        // ในครั้งเดียว) ไม่งั้นผลลงเวลาจะเปลี่ยนไปแล้วทั้งที่ยังไม่ครบผู้อนุมัติ
+        return {
+          id: adjustmentId,
+          status: after.status,
+          approval_stage: approvalStageOf(after),
+        };
+      }
+
+      // ── คนที่ 2 — ต้องไม่ใช่คนเดียวกับคนที่ 1 ──
+      if (adjustment.approvedBy === approverId) {
+        throw AppError.forbidden(
+          'the second approver must be different from the first approver',
+        );
+      }
+
       await this.repository.updateAdjustment(uow.tx, adjustmentId, {
         status: 'APPROVED',
-        approvedBy: approverId,
-        approvedAt: this.clock.now(),
+        secondApprovedBy: approverId,
+        secondApprovedAt: this.clock.now(),
       });
 
       await uow.audit({
@@ -861,11 +969,13 @@ export class AttendanceService {
         outcome: 'SUCCESS',
         companyId: adjustment.companyId,
         reason: input.reason,
-        before: { status: 'PENDING' },
-        after: { status: 'APPROVED' },
+        metadata: { stage: 'SECOND' },
+        before: { status: 'PENDING', first_approved_by: adjustment.approvedBy },
+        after: { status: 'APPROVED', second_approved_by: approverId },
       });
 
-      // สร้าง attendance result version ใหม่ทันที (spec §7.4)
+      // สร้าง attendance result version ใหม่ทันที (spec §7.4) — เฉพาะตอนนี้
+      // ที่ครบสองผู้อนุมัติแล้วเท่านั้น
       const recalculated = await this.recalculateWithin(
         uow,
         adjustment.employmentId,
@@ -873,9 +983,64 @@ export class AttendanceService {
         'CORRECTION_APPROVED',
       );
 
-      return { id: adjustmentId, status: 'APPROVED', result: recalculated };
+      return {
+        id: adjustmentId,
+        status: 'APPROVED',
+        approval_stage: 'APPROVED',
+        result: recalculated,
+      };
     });
   }
+
+  /**
+   * ปฏิเสธคำขอ — ทำได้ทั้งก่อนหรือหลังคนที่ 1 อนุมัติ ตราบใดที่ยังไม่ครบสองคน
+   * (สถานะ APPROVED แล้วถือว่าจบ ย้อนกลับไม่ได้ ต้องเปิดคำขอใหม่แทน)
+   *
+   * ไม่บังคับว่าผู้ปฏิเสธต้องต่างจากผู้ขอ — ต่างจากอนุมัติ เพราะปฏิเสธไม่ได้
+   * เปลี่ยนแปลงข้อมูลเงินเดือนของใคร ความเสี่ยงจึงต่างกัน
+   */
+  async rejectAdjustment(
+    adjustmentId: string,
+    input: { reason: string },
+  ): Promise<Record<string, unknown>> {
+    return this.uow.run(async (uow) => {
+      const adjustment = await this.repository.findAdjustmentById(uow.tx, adjustmentId);
+      if (adjustment === undefined) throw AppError.notFound('time event adjustment');
+      if (adjustment.status !== 'PENDING') throw AppError.conflict('adjustment is not pending');
+
+      const rejecterId = this.requestContext.requirePrincipal().principalId;
+
+      await this.repository.updateAdjustment(uow.tx, adjustmentId, {
+        status: 'REJECTED',
+        rejectedBy: rejecterId,
+        rejectedAt: this.clock.now(),
+        rejectionReason: input.reason,
+      });
+
+      await uow.audit({
+        action: 'attendance.correction.reject',
+        resourceType: 'time_event_adjustment',
+        resourceId: adjustmentId,
+        outcome: 'SUCCESS',
+        companyId: adjustment.companyId,
+        reason: input.reason,
+        before: { status: 'PENDING' },
+        after: { status: 'REJECTED' },
+      });
+
+      return { id: adjustmentId, status: 'REJECTED' };
+    });
+  }
+}
+
+/** ขั้นการอนุมัติที่คำนวณจากคอลัมน์จริง — ไม่ใช่ค่าที่เก็บใน DB (ดูเหตุผลใน listAdjustments) */
+function approvalStageOf(
+  row: Pick<typeof schema.timeEventAdjustments.$inferSelect, 'status' | 'approvedBy'>,
+): 'AWAITING_FIRST_APPROVAL' | 'AWAITING_SECOND_APPROVAL' | 'APPROVED' | 'REJECTED' | 'CANCELLED' {
+  if (row.status === 'APPROVED') return 'APPROVED';
+  if (row.status === 'REJECTED') return 'REJECTED';
+  if (row.status === 'CANCELLED') return 'CANCELLED';
+  return row.approvedBy === null ? 'AWAITING_FIRST_APPROVAL' : 'AWAITING_SECOND_APPROVAL';
 }
 
 function toEnginePolicy(row: typeof schema.workPolicies.$inferSelect): WorkPolicy {

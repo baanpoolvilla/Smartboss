@@ -29,6 +29,9 @@ export const hrManifest: ModuleManifest = {
     { label: "การลงเวลา", path: "/hr", permission: HR_PERMS.access, icon: "CalendarClock" },
     { label: "พนักงาน", path: "/hr/employees", permission: HR_PERMS.employeeView, icon: "Users" },
     { label: "Timesheet", path: "/hr/timesheets", permission: HR_PERMS.employeeView, icon: "ClipboardList" },
+    // แก้เวลาลงงานกระทบเงินเดือนตรง ๆ — ใช้สิทธิ์เดียวกับหน้าจัดการพนักงาน
+    // (ตัวบังคับ "ต้อง 2 ผู้จัดการอนุมัติ" จริง ๆ อยู่ที่ workforce API ไม่ใช่ที่นี่)
+    { label: "ลงเวลาแบบ manual", path: "/hr/attendance/corrections", permission: HR_PERMS.employeeManage, icon: "ClipboardEdit" },
     // ปฏิทินวันหยุดเปิดให้ทุกคนที่เข้าโมดูลได้ — พนักงานต้องขอลาเองและเห็นของเพื่อน
     { label: "ปฏิทินวันหยุด", path: "/hr/leave", permission: HR_PERMS.access, icon: "CalendarDays" },
     { label: "ตั้งวันหยุด (HR)", path: "/hr/holidays", permission: HR_PERMS.settingManage, icon: "CalendarCog" },

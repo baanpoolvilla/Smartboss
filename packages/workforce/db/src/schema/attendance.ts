@@ -157,9 +157,16 @@ export const timeEventAdjustments = workforce.table(
     comment: text('comment').notNull().default(''),
     status: text('status').notNull().default('PENDING'),
     requestedBy: uuid('requested_by'),
+    // approvedBy/approvedAt = ผู้อนุมัติคนที่ 1 · ต้องมีคนที่ 2 (คนละคนกับคนแรก
+    // และคนละคนกับผู้ขอ) มาซ้ำอีกครั้งก่อนจะนับว่า APPROVED และเริ่มคำนวณใหม่
+    // — maker-checker แบบ 2 ผู้อนุมัติ ไม่ใช่ 1 (ดู approveAdjustment ใน service)
     approvedBy: uuid('approved_by'),
     approvedAt: timestamp('approved_at', { withTimezone: true }),
+    secondApprovedBy: uuid('second_approved_by'),
+    secondApprovedAt: timestamp('second_approved_at', { withTimezone: true }),
     rejectionReason: text('rejection_reason'),
+    rejectedBy: uuid('rejected_by'),
+    rejectedAt: timestamp('rejected_at', { withTimezone: true }),
     postCutoff: boolean('post_cutoff').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
