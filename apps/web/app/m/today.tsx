@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { CheckinMap } from "./checkin-map";
 
 /**
  * หน้า "วันนี้" — จอเดียวที่พนักงานหน้างานเปิดบ่อยที่สุด
@@ -239,6 +240,9 @@ export function Today({
           แต่จะไม่ได้รับข้อความแจ้งเตือน
         </p>
       )}
+
+      {/* ดูก่อนกดว่าอยู่ในระยะไหม — ไม่ได้บังคับ แค่ให้เห็นก่อนเสียเวลากดแล้วไม่ผ่าน */}
+      <CheckinMap />
 
       <button
         type="button"

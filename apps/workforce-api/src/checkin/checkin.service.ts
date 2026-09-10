@@ -593,6 +593,59 @@ export class CheckinService {
     return this.repository.resolvePolicyForEmployment(uow.tx, employmentId, asOf);
   }
 
+  /**
+   * สถานที่ที่นโยบายของตัวเองอนุญาตให้เช็คอิน พร้อมรัศมี — สำหรับวาดแผนที่
+   * "อยู่ตรงนี้ วงกลมคือที่ที่สแกนได้" **ก่อน**กดเช็คอินจริง โดยไม่ต้องเปิด
+   * session ทิ้งไว้เปล่า ๆ แค่เพื่อดูแผนที่ (session มีอายุและทิ้งค้างเป็นขยะ)
+   *
+   * ใช้ตรรกะกรองสถานที่ตัวเดียวกับ commitSession() เป๊ะ (policy.allowedSiteIds)
+   * เพื่อให้วงกลมที่พนักงานเห็นตรงกับสิ่งที่ตัดสินผลจริง ไม่ใช่ค่าประมาณที่
+   * อาจจะตรงหรือไม่ตรงก็ได้ — ตั้งใจ**ไม่กรองสถานะ ACTIVE/INACTIVE ของสถานที่**
+   * ด้วยเหตุผลเดียวกัน: ตัว evaluateCheckin() เองก็ไม่ได้กรอง (SiteLocation
+   * ไม่มีฟิลด์ status เลย) ถ้ากรองที่นี่แต่ของจริงไม่กรอง แผนที่จะโกหกพนักงาน
+   */
+  async myCheckinSites(): Promise<{
+    location_required: boolean;
+    max_accuracy_m: number;
+    sites: { id: string; name: string; latitude: number; longitude: number; radius_m: number }[];
+  }> {
+    const employmentId = this.requireEmployment();
+
+    return this.uow.run(async (uow) => {
+      const employments = await uow.tx
+        .select()
+        .from(schema.employments)
+        .where(eq(schema.employments.id, employmentId))
+        .limit(1);
+      const employmentRow = employments[0];
+      if (employmentRow === undefined) throw AppError.notFound('employment');
+
+      const policy = await this.loadPolicy(uow, employmentId, this.clock.now());
+      const allSites = await this.repository.listSitesForCompany(uow.tx, employmentRow.companyId);
+
+      const candidates =
+        policy.allowedSiteIds.length === 0
+          ? allSites
+          : allSites.filter((site) => policy.allowedSiteIds.includes(site.id));
+
+      return {
+        location_required: policy.locationRequired,
+        max_accuracy_m: policy.maxAccuracyM,
+        sites: candidates
+          .filter((site) => site.latitude !== null && site.longitude !== null)
+          .map((site) => ({
+            id: site.id,
+            name: site.name,
+            latitude: Number(site.latitude),
+            longitude: Number(site.longitude),
+            // ไซต์ไม่ได้ตั้งรัศมีของตัวเอง = ใช้ค่าจากนโยบาย (ตรรกะเดียวกับ
+            // evaluateCheckin: `nearest.site.radiusM ?? policy.radiusM`)
+            radius_m: site.radiusM ?? policy.radiusM,
+          })),
+      };
+    });
+  }
+
   private async loadPolicy(
     uow: UnitOfWorkContext,
     employmentId: string,

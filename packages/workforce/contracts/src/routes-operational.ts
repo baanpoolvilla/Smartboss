@@ -299,6 +299,14 @@ export const OPERATIONAL_ROUTES: readonly Omit<RouteDefinition, 'response'>[] = 
     permissions: ['workforce.attendance.read.self'] as Permission[],
   },
   {
+    operationId: 'myCheckinSites_get',
+    method: 'get',
+    path: '/me/checkin-sites',
+    summary: 'GET /me/checkin-sites',
+    tag: 'checkin',
+    permissions: ['workforce.attendance.read.self'] as Permission[],
+  },
+  {
     operationId: 'enrollDevice_post',
     method: 'post',
     path: '/mobile-devices/enroll',
