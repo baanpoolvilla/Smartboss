@@ -53,6 +53,9 @@ export const SYSTEM_ROLE_PERMISSIONS: Readonly<Record<SystemRole, readonly Permi
     'workforce.scheduling.manage',
     'workforce.scheduling.publish',
     'workforce.attendance.read.all',
+    // ต้องมีทั้งขอและอนุมัติ — หน้าลงเวลาแบบ manual ให้ HR เป็นคนกรอกแทนพนักงาน
+    // ที่ลืมสแกน/เครื่องเสีย ไม่ใช่แค่พนักงานขอเองแล้ว HR อนุมัติอย่างเดียว
+    'workforce.attendance.correct.request',
     'workforce.attendance.correct.approve',
     'workforce.attendance.evidence.read',
     'workforce.leave.manage',

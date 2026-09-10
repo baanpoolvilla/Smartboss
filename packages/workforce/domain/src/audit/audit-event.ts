@@ -25,6 +25,7 @@ export interface AuditEventInput {
 export const REASON_REQUIRED_ACTIONS: ReadonlySet<string> = new Set([
   'attendance.exception.waive',
   'attendance.correction.approve',
+  'attendance.correction.reject',
   'timesheet.period.reopen',
   'payroll.run.reject',
   'payroll.run.void',

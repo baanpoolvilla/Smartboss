@@ -8,9 +8,11 @@ import {
   createRosterPeriodSchema,
   createShiftSchema,
   createWorkPolicySchema,
+  listAdjustmentsQuerySchema,
   listAttendanceResultsQuerySchema,
   listExceptionsQuerySchema,
   recalculateSchema,
+  rejectAdjustmentSchema,
   resolveExceptionSchema,
   setRecurringPatternSchema,
   type CreateAdjustmentInput,
@@ -295,6 +297,25 @@ export class AttendanceController {
     return this.service.resolveException(requireUuid(exceptionId, 'exceptionId'), body);
   }
 
+  /**
+   * คิวคำขอแก้ไขเวลา — เปิดด้วยสิทธิ์อนุมัติ (ผู้จัดการขึ้นไป) ไม่ใช่สิทธิ์ขอ
+   * เพราะหน้าที่ต้องใช้รายการนี้คือคิวรออนุมัติ ไม่ใช่ผู้ขอมาย้อนดูของตัวเอง
+   */
+  @Get('attendance-correction-requests')
+  @RequirePermissions('workforce.attendance.correct.approve')
+  async listAdjustments(
+    @Query(zodPipe(listAdjustmentsQuerySchema))
+    query: z.infer<typeof listAdjustmentsQuerySchema>,
+  ): Promise<{ items: Record<string, unknown>[] }> {
+    return this.service.listAdjustments({
+      ...(query.company_id === undefined ? {} : { companyId: query.company_id }),
+      ...(query.employment_id === undefined ? {} : { employmentId: query.employment_id }),
+      ...(query.status === undefined ? {} : { status: query.status }),
+      ...(query.from === undefined ? {} : { from: query.from }),
+      ...(query.to === undefined ? {} : { to: query.to }),
+    });
+  }
+
   @Post('attendance-correction-requests')
   @HttpCode(201)
   @RequirePermissions('workforce.attendance.correct.request')
@@ -305,6 +326,14 @@ export class AttendanceController {
     return this.service.requestAdjustment(body);
   }
 
+  /**
+   * อนุมัติ — ต้องกดสองครั้งโดยคนละคนก่อนจะมีผลจริง (spec เพิ่มเติม 2026-09-10)
+   *
+   * ครั้งแรกแค่บันทึกว่า "คนที่ 1 เห็นด้วยแล้ว" สถานะยังเป็น PENDING เหมือนเดิม
+   * และ**ยังไม่คำนวณผลลงเวลาใหม่** — endpoint เดียวกัน เรียกซ้ำโดยคนที่สอง
+   * (ต้องคนละคนกับทั้งคนแรกและผู้ขอ) ถึงจะเปลี่ยนเป็น APPROVED และคำนวณใหม่จริง
+   * รายละเอียดกฎอยู่ใน AttendanceService.approveAdjustment
+   */
   @Post('attendance-correction-requests/:adjustmentId/approve')
   @HttpCode(200)
   @RequirePermissions('workforce.attendance.correct.approve')
@@ -314,5 +343,17 @@ export class AttendanceController {
     @Body(zodPipe(approveAdjustmentSchema)) body: z.infer<typeof approveAdjustmentSchema>,
   ): Promise<Record<string, unknown>> {
     return this.service.approveAdjustment(requireUuid(adjustmentId, 'adjustmentId'), body);
+  }
+
+  /** ปฏิเสธได้ทั้งก่อนหรือหลังคนที่ 1 อนุมัติแล้ว ตราบใดที่ยังไม่ถึงคนที่ 2 */
+  @Post('attendance-correction-requests/:adjustmentId/reject')
+  @HttpCode(200)
+  @RequirePermissions('workforce.attendance.correct.approve')
+  @Idempotent()
+  async rejectAdjustment(
+    @Param('adjustmentId') adjustmentId: string,
+    @Body(zodPipe(rejectAdjustmentSchema)) body: z.infer<typeof rejectAdjustmentSchema>,
+  ): Promise<Record<string, unknown>> {
+    return this.service.rejectAdjustment(requireUuid(adjustmentId, 'adjustmentId'), body);
   }
 }

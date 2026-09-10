@@ -188,6 +188,20 @@ export const approveAdjustmentSchema = z.object({
   reason: z.string().trim().min(1).max(500),
 });
 
+export const rejectAdjustmentSchema = z.object({
+  reason: z.string().trim().min(1).max(500),
+});
+
+export const listAdjustmentsQuerySchema = z.object({
+  company_id: uuidSchema.optional(),
+  employment_id: uuidSchema.optional(),
+  // ไม่มี PENDING_SECOND_APPROVAL แยกเป็นค่าของตัวเอง — ขั้นที่รอคือ approval_stage
+  // ที่คำนวณตอนตอบ ไม่ใช่ค่าที่เก็บจริงใน DB (ดูเหตุผลใน attendance.service.ts)
+  status: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED']).optional(),
+  from: isoDateSchema.optional(),
+  to: isoDateSchema.optional(),
+});
+
 export const attendanceResultSchema = z.object({
   id: uuidSchema,
   employment_id: uuidSchema,
