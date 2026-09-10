@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { users, getUser, isOwner } from "@/modules/report_task/lib/directory";
+import { users, getUser, isOwner, departments } from "@/modules/report_task/lib/directory";
 import { canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { extractMentionedIds, mentionMarkersToPlainText } from "@/modules/report_task/lib/report-feed-rich-text";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
@@ -693,17 +693,24 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         if (topic) {
           // เดิม: แจ้ง "โพสต์ใหม่ใน <ห้อง>" ให้ทุกคนที่เห็นห้อง ทำให้พนักงานเห็น
           // แจ้งเตือนโพสต์ของแผนกอื่นเต็มไปหมด ตอนนี้แจ้งเฉพาะเจ้าของระบบ
-          // (CEO/owner) เพื่อใช้เป็น "ภาพรวมทั้งหมด" ที่สลับดูได้ในหน้าแจ้งเตือน
-          // ส่วนคนทั่วไปจะได้รับแค่แจ้งเตือนที่เกี่ยวกับตัวเอง (ถูกแท็ก/มีคนตอบ
-          // โพสต์เรา/รีแอ็กชัน/งาน/ตั๋วปัญหา) เท่านั้น การนับ unread ของกระดิ่ง
-          // ก็ไม่รวม kind "room_post" (ดู useReportTaskUnreadCount)
-          const owners = users
-            .filter((u) => isOwner(u.id) && u.id !== authorId && !mentionedUserIds.includes(u.id))
+          // (CEO/owner — ทุกห้องทั้งบริษัท) และหัวหน้าแผนกของห้องนั้นๆ (เฉพาะ
+          // ห้อง/แผนกที่ตัวเองดูแล) เพื่อใช้เป็น "ภาพรวมทั้งหมด" ที่สลับดูได้
+          // ในกระดิ่ง/หน้าแจ้งเตือน ("หัวหน้าจะเลือกได้ระหว่างแจ้งเตือนของตัวเอง
+          // ที่มี action หรือทั้งหมดของบริษัท...เฉพาะแผนกที่ตัวเองดูแล") ส่วนคน
+          // ทั่วไปจะได้รับแค่แจ้งเตือนที่เกี่ยวกับตัวเอง (ถูกแท็ก/มีคนตอบโพสต์
+          // เรา/รีแอ็กชัน/งาน/ตั๋วปัญหา) เท่านั้น การนับ unread ของกระดิ่งก็ไม่รวม
+          // kind "room_post" (ดู useReportTaskUnreadCount)
+          const headIds = new Set<string>();
+          for (const d of departments) {
+            if (topic.visibility?.departmentIds?.includes(d.id)) headIds.add(d.headId);
+          }
+          const overviewRecipients = users
+            .filter((u) => (isOwner(u.id) || headIds.has(u.id)) && u.id !== authorId && !mentionedUserIds.includes(u.id))
             .map((u) => u.id);
-          if (owners.length > 0) {
+          if (overviewRecipients.length > 0) {
             useNotificationStore
               .getState()
-              .notifyMany(owners, authorId, `${actorName} โพสต์ใหม่ใน "${topic.name}": ${data.title}`, undefined, link, topic.name, "room_post");
+              .notifyMany(overviewRecipients, authorId, `${actorName} โพสต์ใหม่ใน "${topic.name}": ${data.title}`, undefined, link, topic.name, "room_post");
           }
         }
       },

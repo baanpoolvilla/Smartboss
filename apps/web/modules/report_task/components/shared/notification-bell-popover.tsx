@@ -6,33 +6,65 @@ import { Bell } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
+import { useIdentityStore } from "@/modules/report_task/store/identity-store";
+import { isOwner, canManage } from "@/modules/report_task/lib/directory";
 import { relativeTime } from "@/modules/report_task/lib/format";
 import { metaForCategory } from "@/modules/notifications/derive";
 import { useUnifiedNotifications } from "@/modules/notifications/use-unified-notifications";
 import type { UnifiedNotification } from "@/modules/notifications/types";
+
+/** Same key notifications-page-client.tsx's own "เฉพาะฉัน/ภาพรวมทั้งหมด"
+ * toggle uses — deliberately shared, so switching it here or on the full
+ * page stays in sync either way instead of the two drifting independently. */
+const SHOW_ALL_KEY = "sb.notif.showAll";
 
 /**
  * กระดิ่งแจ้งเตือนบน AppBar — กดแล้วเด้ง dropdown สรุปแจ้งเตือนล่าสุด (สไตล์
  * Facebook) แทนการพาไปหน้าเต็มทันที มีปุ่ม "ดูทั้งหมด" ไปหน้า /notifications
  *
  * รวม 2 แหล่ง (report_task + maintenance) ผ่าน useUnifiedNotifications —
- * แจ้งเตือนส่วนตัว (mention/reply/task/ตั๋ว) ของทุกคน บวก "โพสต์ใหม่ในห้อง"
- * (room_post) ของทุกห้องทั้งบริษัทด้วยสำหรับ owner โดยเฉพาะ (`isOwner` gate
- * อยู่ในตัว hook เอง — คนทั่วไปไม่มีทางเห็น room_post หลุดมาที่นี่)
- * เอาล่าสุดสุด ~10 อัน เรียงยังไม่อ่านขึ้นก่อนเสมอ ตัวเลขบนกระดิ่งจึงรวมทุก
- * module จริง ไม่ต้องรับเลขจากที่อื่นมาบวกเองอีก
+ * ปกติทุกคนเห็นแค่แจ้งเตือนของตัวเอง (mention/reply/task/ตั๋ว) owner/หัวหน้า
+ * แผนก (canManage) สลับดู "โพสต์ใหม่ในห้อง" (room_post) เพิ่มได้ด้วยสวิตช์
+ * เล็กบนหัว dropdown — owner เห็นทุกห้องทั้งบริษัท หัวหน้าแผนกเห็นเฉพาะห้อง
+ * ในแผนกตัวเอง (ขอบเขตจริงตัดสินตอนสร้าง notification เอง ดู
+ * report-feed-store.ts's addPost, ไม่ใช่ที่นี่) เอาล่าสุดสุด ~10 อัน เรียง
+ * ยังไม่อ่านขึ้นก่อนเสมอ ตัวเลขบนกระดิ่งจึงรวมทุก module จริง ไม่ต้องรับเลข
+ * จากที่อื่นมาบวกเองอีก
  */
 const MAX_ITEMS = 10;
 
 export function NotificationBellPopover() {
   const [open, setOpen] = useState(false);
   const employees = useEmployeeStore((s) => s.employees);
-  // includeRoomPosts: true — an owner explicitly asked for "ทุกโพสต์ทุกห้อง"
-  // to show up right in this dropdown too, not just the full /notifications
-  // page's own "ดูทั้งหมด" mode. Safe to pass unconditionally: the hook
-  // re-checks isOwner itself, so a non-owner never sees room_post items no
-  // matter what this call site passes.
-  const { items, unreadCount, maintenanceLoaded, markRead, markAllRead, refresh } = useUnifiedNotifications({ includeRoomPosts: true });
+  const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
+  const owner = isOwner(viewingAsUserId);
+  const manager = canManage(viewingAsUserId);
+
+  // Same "read once after mount" reasoning as the full page's own copy of
+  // this toggle — server has no localStorage, so starting at false avoids a
+  // hydration mismatch, then the real saved value lands right after.
+  const [showAll, setShowAll] = useState(false);
+  useEffect(() => {
+    if (!manager) return;
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShowAll(localStorage.getItem(SHOW_ALL_KEY) === "1");
+    } catch {
+      /* private mode ฯลฯ — คงค่าเริ่มต้น เฉพาะฉัน */
+    }
+  }, [manager]);
+  function toggleShowAll(next: boolean) {
+    setShowAll(next);
+    try {
+      localStorage.setItem(SHOW_ALL_KEY, next ? "1" : "0");
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  const { items, unreadCount, maintenanceLoaded, markRead, markAllRead, refresh } = useUnifiedNotifications({
+    includeRoomPosts: manager && showAll,
+  });
 
   // โหลดแจ้งเตือนซ่อมบำรุงรอบแรกตอน mount แล้วรีเฟรชอีกทีทุกครั้งที่เปิด
   // dropdown — ของ report_task server-synced อยู่แล้วผ่าน ServerStoreSync
@@ -67,12 +99,36 @@ export function NotificationBellPopover() {
       </PopoverTrigger>
 
       <PopoverContent align="end" sideOffset={8} className="w-[22rem] gap-0 p-0">
-        <div className="flex items-center justify-between border-b border-(--line) px-4 py-3">
-          <span className="text-base font-semibold text-(--ink)">การแจ้งเตือน</span>
-          {unreadCount > 0 && (
-            <button type="button" onClick={markAllRead} className="text-xs font-medium text-(--brand-green-dark) hover:underline">
-              อ่านทั้งหมด
-            </button>
+        <div className="border-b border-(--line) px-4 py-3">
+          <div className="flex items-center justify-between">
+            <span className="text-base font-semibold text-(--ink)">การแจ้งเตือน</span>
+            {unreadCount > 0 && (
+              <button type="button" onClick={markAllRead} className="text-xs font-medium text-(--brand-green-dark) hover:underline">
+                อ่านทั้งหมด
+              </button>
+            )}
+          </div>
+          {/* เฉพาะ owner/หัวหน้าแผนก — พนักงานทั่วไปไม่มีอะไรให้สลับ (ไม่มีทาง
+              เห็น room_post อยู่แล้วไม่ว่าจะตั้งค่านี้เป็นอะไร) */}
+          {manager && (
+            <div className="mt-2 inline-flex rounded-full border border-(--line) bg-(--bg-soft) p-0.5 text-[11px]">
+              <button
+                type="button"
+                onClick={() => toggleShowAll(false)}
+                className="rounded-full px-2.5 py-1 font-medium transition-colors"
+                style={!showAll ? { backgroundColor: "var(--brand-green-dark)", color: "#fff" } : { color: "var(--ink-soft)" }}
+              >
+                เฉพาะฉัน
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleShowAll(true)}
+                className="rounded-full px-2.5 py-1 font-medium transition-colors"
+                style={showAll ? { backgroundColor: "var(--brand-green-dark)", color: "#fff" } : { color: "var(--ink-soft)" }}
+              >
+                {owner ? "ทั้งบริษัท" : "แผนกที่ดูแล"}
+              </button>
+            </div>
           )}
         </div>
 

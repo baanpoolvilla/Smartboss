@@ -5,7 +5,7 @@ import Link from "next/link";
 import { X } from "lucide-react";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
-import { isOwner } from "@/modules/report_task/lib/directory";
+import { isOwner, canManage } from "@/modules/report_task/lib/directory";
 import { relativeTime } from "@/modules/report_task/lib/format";
 import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
@@ -31,28 +31,34 @@ const MODULE_LABEL: Record<ModuleFilter, string> = {
  * การ์ดซ่อมบำรุงต่างหาก) ด้วยลิสต์เดียวเรียง unread-first
  *
  * สิทธิ์: ทุกคนเห็นเฉพาะแจ้งเตือนของตัวเอง โหมด "ภาพรวมทั้งหมด" (เห็น
- * "โพสต์ใหม่ในห้อง" ข้ามแผนกด้วย) เปิดได้เฉพาะ owner — useUnifiedNotifications
- * เองก็เช็ค isOwner ซ้ำอีกชั้นก่อนจะยอมรวม room_post เข้ามาจริง
+ * "โพสต์ใหม่ในห้อง" ด้วย) เปิดได้เฉพาะ owner/หัวหน้าแผนก (canManage) —
+ * useUnifiedNotifications เองก็เช็ค canManage ซ้ำอีกชั้นก่อนจะยอมรวม
+ * room_post เข้ามาจริง ขอบเขตต่างกันตาม role: owner เห็นทั้งบริษัท
+ * หัวหน้าแผนกเห็นแค่ห้องในแผนกตัวเอง — ตัดสินใจตอนสร้าง notification เอง
+ * (report-feed-store.ts's addPost) ไม่ใช่ตรงนี้ สวิตช์นี้แค่เลือกว่าจะรวม
+ * room_post เข้ามาไหม ไม่ได้เลือกขอบเขต
  */
 export function NotificationsPageClient() {
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const employees = useEmployeeStore((s) => s.employees);
   const owner = isOwner(viewingAsUserId);
+  const manager = canManage(viewingAsUserId);
 
   const [showAll, setShowAll] = useState(false);
-  // จำค่าสวิตช์ภาพรวมไว้ในเครื่อง (เฉพาะ owner) — อ่านหลัง mount เท่านั้น
+  // จำค่าสวิตช์ภาพรวมไว้ในเครื่อง (เฉพาะคนมีสิทธิ์) — อ่านหลัง mount เท่านั้น
   // เพราะ server ไม่รู้จัก localStorage เลยเริ่มด้วย false เสมอ อ่านตรงๆ ใน
   // useState initializer จะได้ค่าจริงจากเครื่อง client ทันที ต่างจากที่ server
-  // render มาให้ตอน hydrate → hydration mismatch
+  // render มาให้ตอน hydrate → hydration mismatch — คีย์เดียวกับสวิตช์เล็กบน
+  // กระดิ่ง (notification-bell-popover.tsx) เจตนาให้สลับที่ไหนก็ตรงกันทั้งคู่
   useEffect(() => {
-    if (!owner) return;
+    if (!manager) return;
     try {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setShowAll(localStorage.getItem(SHOW_ALL_KEY) === "1");
     } catch {
       /* private mode ฯลฯ — คงค่าเริ่มต้น เฉพาะฉัน */
     }
-  }, [owner]);
+  }, [manager]);
   function toggleShowAll(next: boolean) {
     setShowAll(next);
     try {
@@ -63,7 +69,7 @@ export function NotificationsPageClient() {
   }
 
   const { items, maintenanceLoaded, markRead, markAllRead, refresh } = useUnifiedNotifications({
-    includeRoomPosts: owner && showAll,
+    includeRoomPosts: manager && showAll,
   });
   useEffect(() => {
     if (!maintenanceLoaded) void refresh();
@@ -184,7 +190,7 @@ export function NotificationsPageClient() {
       <header className="mb-4 flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-(--ink)">การแจ้งเตือน</h1>
         <div className="flex items-center gap-3">
-          {owner && (
+          {manager && (
             <div className="inline-flex rounded-full border border-(--line) bg-(--bg) p-0.5 text-xs">
               <button
                 type="button"
@@ -200,7 +206,7 @@ export function NotificationsPageClient() {
                 className="rounded-full px-3 py-1 font-medium transition-colors"
                 style={showAll ? { backgroundColor: "var(--brand-green-dark)", color: "#fff" } : { color: "var(--ink-soft)" }}
               >
-                ภาพรวมทั้งหมด
+                {owner ? "ภาพรวมทั้งบริษัท" : "ภาพรวมแผนกที่ดูแล"}
               </button>
             </div>
           )}

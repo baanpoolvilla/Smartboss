@@ -3,16 +3,21 @@
 import { useMemo } from "react";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { isOwner } from "@/modules/report_task/lib/directory";
+import { canManage } from "@/modules/report_task/lib/directory";
 import { useMaintenanceNotifStore } from "@/modules/notifications/use-maintenance-notifications";
 import { isRoomPost, reportCategoryFor, maintenanceCategoryFor, maintenanceHrefFor } from "@/modules/notifications/derive";
 import type { UnifiedNotification } from "@/modules/notifications/types";
 
 export interface UseUnifiedNotificationsOptions {
-  /** รวมแจ้งเตือน "โพสต์ใหม่ในห้อง" (ข้ามแผนก) ด้วยไหม — ใช้ตอน owner เปิด
-   * โหมด "ภาพรวมทั้งหมด" บนหน้าเต็มเท่านั้น ค่าเริ่มต้น false (bell dropdown
-   * + คนทั่วไปทุกกรณี) เช็คซ้ำด้วย isOwner ในนี้อีกชั้น — ต่อให้ผู้เรียกส่ง
-   * true มาผิดๆ คนที่ไม่ใช่ owner ก็ยังไม่มีทางเห็น room_post หลุดออกไป */
+  /** รวมแจ้งเตือน "โพสต์ใหม่ในห้อง" (room_post) ด้วยไหม — โหมด "ทั้งหมด" ที่
+   * owner/หัวหน้าแผนกสลับเปิดเองได้ (ดู notification-bell-popover.tsx),
+   * ค่าเริ่มต้น false (เฉพาะแจ้งเตือนของตัวเอง — ทุกคนรวมถึง owner/หัวหน้า
+   * ตอนยังไม่ได้สลับโหมด) เช็คซ้ำด้วย canManage ในนี้อีกชั้น — ต่อให้ผู้เรียก
+   * ส่ง true มาผิดๆ พนักงานทั่วไปก็ยังไม่มีทางเห็น room_post หลุดออกไป
+   * (ขอบเขตจริงว่าเห็น "ทั้งหมด" แค่ไหน — แค่แผนกตัวเองหรือทั้งบริษัท — ถูก
+   * กำหนดไว้แล้วตั้งแต่ตอนสร้าง notification เอง ไม่ใช่ตรงนี้: report-feed-
+   * store.ts's addPost ส่ง room_post ให้ owner ทุกโพสต์ทุกห้อง แต่ส่งให้
+   * หัวหน้าแผนกเฉพาะห้องที่แผนกตัวเองเห็นเท่านั้น). */
   includeRoomPosts?: boolean;
 }
 
@@ -21,8 +26,7 @@ export interface UseUnifiedNotificationsOptions {
  * ใหม่→เก่า ให้ทั้ง bell popover และหน้าเต็ม /notifications ใช้ตัวเดียวกัน */
 export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions = {}) {
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
-  const owner = isOwner(viewingAsUserId);
-  const includeRoomPosts = !!options.includeRoomPosts && owner;
+  const includeRoomPosts = !!options.includeRoomPosts && canManage(viewingAsUserId);
 
   const reportNotifications = useNotificationStore((s) => s.notifications);
   const reportMarkRead = useNotificationStore((s) => s.markRead);
