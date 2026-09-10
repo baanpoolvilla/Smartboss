@@ -13,67 +13,104 @@ import { pickDaily } from "@/modules/report_task/lib/utils";
  * AI-generated. Rotated daily via `pickDaily` so it doesn't read as the
  * exact same static sentence on every single visit.
  *
- * Split single-person vs multi-person per bucket — advice about making
- * something "ทีมเห็นร่วมกัน"/spreading visibility reads oddly pointed at
- * exactly one repeat offender ("อยากได้คำแนะนำที่มีประสิทธิภาพ" — a tip that
- * doesn't fit the actual headcount isn't useful, no matter how sound the
- * advice is in the abstract). One person gets advice aimed at that one
- * relationship (ask what's actually blocking them, escalate if it's a
- * repeat pattern); more than one gets advice aimed at the group dynamic
- * (shared visibility, a structural fix, reassigning).
+ * Split along two axes so the advice actually fits the situation on screen,
+ * not just "sounds reasonable in the abstract"
+ * ("อยากได้คำแนะนำที่มีประสิทธิภาพ...ให้เข้าได้กับทุกสถานการณ์"):
+ *
+ *  - single vs multiple — how many *people* this issue is about. Advice
+ *    about spreading visibility to "ทั้งทีม" reads oddly pointed at exactly
+ *    one person; advice about a 1:1 conversation doesn't scale to naming a
+ *    whole roster.
+ *  - first vs repeat — whether the worst-affected person's own count is
+ *    still 1 (this is the first time this has come up for anyone shown) or
+ *    already 2+ (someone's missed the same thing more than once). A first
+ *    miss usually has a one-off, situational cause worth just asking about;
+ *    a repeat is a *pattern* — re-sending the same nudge that already
+ *    failed once doesn't fix a pattern, so that tier's advice points at
+ *    capacity, scheduling, or the deadline/round itself instead.
  */
-const ISSUE_TIPS = {
+type TipBucket = { first: readonly string[]; repeat: readonly string[] };
+type SizeSplit = { single: TipBucket; multiple: TipBucket };
+export type IssueTipKey = "taskOverdue" | "reportOverdue" | "taskPending" | "reportPending";
+
+const ISSUE_TIPS: Record<IssueTipKey, SizeSplit> = {
   taskOverdue: {
-    single: [
-      "คุยตรงๆ ว่าติดอะไรอยู่ บางทีปัญหาจริงไม่ใช่แค่ผัดวันประกันพรุ่ง",
-      "ถ้าเป็นคนเดิมพลาดซ้ำ อาจต้องดูภาระงานรวมของเขาจริงจัง ไม่ใช่แค่เตือนซ้ำไปเรื่อยๆ",
-      "ลองมอบต่อให้คนอื่นที่มีคิวว่างกว่า ถ้างานนี้ไม่จำเป็นต้องเป็นคนนี้ทำ",
-    ],
-    multiple: [
-      "มอบหมายต่อให้คนที่มีคิวว่างและทักษะตรงกับงานนั้นจริงๆ ไม่ใช่ใครก็ได้ที่ว่าง",
-      "ทบทวนงานค้างเป็นประจำทุกสัปดาห์ ดูว่าอะไรติดขัดก่อนจะกองสะสมนานขึ้น",
-      "จัดลำดับความสำคัญใหม่ตามผลกระทบจริง ไม่ใช่เรียงตามที่ค้างนานสุดเสมอไป",
-    ],
+    single: {
+      first: [
+        "คุยตรงๆ ว่าติดอะไรอยู่ ครั้งแรกมักมีเหตุผลเฉพาะหน้าที่แก้ได้เร็ว",
+        "เตือนพร้อมเสนอความช่วยเหลือ ไม่ใช่แค่ทวงถาม อาจติดขัดจริงๆ อยู่",
+      ],
+      repeat: [
+        "พลาดซ้ำกับคนเดิม ต้องดูภาระงานรวมของเขาจริงจัง ไม่ใช่แค่เตือนซ้ำไปเรื่อยๆ",
+        "คุยตัวต่อตัวว่าเกิดอะไรขึ้นเป็นระบบ อาจต้องปรับวิธีมอบหมายงานให้เขาใหม่",
+        "พิจารณาลดจำนวนงานที่มอบให้ ถ้าภาระเกินกำลังจริงๆ",
+      ],
+    },
+    multiple: {
+      first: [
+        "มอบหมายต่อให้คนที่มีคิวว่างและทักษะตรงกับงานนั้นจริงๆ ไม่ใช่ใครก็ได้ที่ว่าง",
+        "ทบทวนงานค้างเป็นประจำทุกสัปดาห์ ดูว่าอะไรติดขัดก่อนจะกองสะสมนานขึ้น",
+      ],
+      repeat: [
+        "หลายคนพลาดซ้ำพร้อมกัน อาจเป็นปัญหาเชิงระบบ เช่น เดดไลน์ไม่สมเหตุสมผลหรือทรัพยากรไม่พอ",
+        "จัดลำดับความสำคัญใหม่ทั้งทีมตามผลกระทบจริง ไม่ใช่ปล่อยให้ต่างคนต่างจัดการเอง",
+        "ประชุมทบทวนภาระงานรวมของทีม อาจต้องกระจายงานใหม่ทั้งกระดาน",
+      ],
+    },
   },
   reportOverdue: {
-    single: [
-      "ทักไปถามตรงๆ ว่าติดขัดตรงไหน บางทีปัญหาจริงไม่ใช่แค่ลืมส่ง",
-      "ถ้าเป็นคนเดิมพลาดซ้ำหลายครั้ง อาจต้องคุยเรื่องภาระงาน ไม่ใช่แค่เตือนซ้ำอีกรอบ",
-      "ส่งลิงก์ส่งตรงพร้อมเหตุผลว่าทำไมรายงานนี้สำคัญ ให้เขาส่งได้เร็วที่สุด",
-    ],
-    multiple: [
-      "เปลี่ยนจากเตือนแบบส่วนตัวเป็นให้ทั้งทีมเห็น จะได้ช่วยกันดันแทนที่จะรอคนเดียว",
-      "เช็คว่าเป็นรอบเวลาเดียวกันหรือเปล่า ถ้าใช่อาจต้องปรับเวลารอบให้เหมาะขึ้น",
-      "ประกาศให้เห็นทั้งทีมว่าใครยังไม่ส่งบ้าง ความโปร่งใสมักกระตุ้นได้ดีกว่าการเตือนแอบๆ",
-    ],
+    single: {
+      first: [
+        "ทักไปถามตรงๆ ว่าติดขัดตรงไหน บางทีปัญหาจริงไม่ใช่แค่ลืมส่ง",
+        "ส่งลิงก์ส่งตรงพร้อมเหตุผลว่าทำไมรายงานนี้สำคัญ ให้เขาส่งได้เร็วที่สุด",
+      ],
+      repeat: [
+        "พลาดซ้ำหลายครั้งแล้ว น่าจะคุยเรื่องภาระงานจริงจัง ไม่ใช่แค่เตือนซ้ำอีกรอบ",
+        "ลองถามว่ารอบเวลาที่กำหนดเหมาะกับตารางงานเขาจริงไหม อาจต้องปรับให้เขาโดยเฉพาะ",
+      ],
+    },
+    multiple: {
+      first: [
+        "เปลี่ยนจากเตือนแบบส่วนตัวเป็นให้ทั้งทีมเห็น จะได้ช่วยกันดันแทนที่จะรอคนเดียว",
+        "เช็คว่าเป็นรอบเวลาเดียวกันหรือเปล่า ถ้าใช่อาจต้องปรับเวลารอบให้เหมาะขึ้น",
+      ],
+      repeat: [
+        "หลายคนพลาดซ้ำรอบแล้วรอบเล่า น่าจะเป็นปัญหาที่ตัวรอบเอง ไม่ใช่ตัวคน ลองทบทวนเวลา/ความถี่ของรอบใหม่",
+        "ประกาศให้เห็นทั้งทีมว่าใครยังไม่ส่งบ้างซ้ำๆ ความโปร่งใสมักกระตุ้นได้ดีกว่าการเตือนแอบๆ",
+      ],
+    },
   },
   taskPending: {
-    single: [
-      "เตือนก่อนถึงกำหนดพร้อมบอกว่าทำไมงานนี้สำคัญ ไม่ใช่แค่แจ้งวันที่เฉยๆ",
-      "ถามล่วงหน้าว่าจะทันไหม ให้มีเวลาขอความช่วยเหลือก่อนจะเลยกำหนดจริง",
-    ],
-    multiple: [
-      "ให้เพื่อนร่วมทีมช่วยเช็คความคืบหน้ากันเอง ไม่ต้องรอหัวหน้าถามอย่างเดียว",
-      "ใช้บอร์ดที่ทุกคนเห็นร่วมกัน งานที่มองเห็นได้ทั่วถึงมักไม่ถูกลืม",
-    ],
+    single: {
+      first: ["เตือนก่อนถึงกำหนดพร้อมบอกว่าทำไมงานนี้สำคัญ ไม่ใช่แค่แจ้งวันที่เฉยๆ"],
+      repeat: ["ใกล้กำหนดบ่อยๆ ทุกรอบ อาจต้องเช็คว่าประเมินเวลาทำงานผิดตั้งแต่ต้นหรือเปล่า"],
+    },
+    multiple: {
+      first: ["ให้เพื่อนร่วมทีมช่วยเช็คความคืบหน้ากันเอง ไม่ต้องรอหัวหน้าถามอย่างเดียว", "ใช้บอร์ดที่ทุกคนเห็นร่วมกัน งานที่มองเห็นได้ทั่วถึงมักไม่ถูกลืม"],
+      repeat: ["หลายคนใกล้กำหนดพร้อมกันซ้ำๆ ลองดูว่าปริมาณงานที่มอบต่อรอบเหมาะสมไหม"],
+    },
   },
   reportPending: {
-    single: [
-      "เตือนใกล้เวลาปิดรอบพร้อมลิงก์ส่งตรง ลดขั้นตอนที่ทำให้ลืม",
-      "ถามล่วงหน้าว่ามีอะไรติดขัดไหม ก่อนจะกลายเป็นพลาดกำหนดจริง",
-    ],
-    multiple: [
-      "บอกผลที่ตามมาให้ชัดตั้งแต่ต้น จะได้ไม่ต้องเดาว่าสำคัญแค่ไหน",
-      "แชร์ตัวอย่างรายงานที่เคยส่งผ่าน ให้มีต้นแบบเริ่มต้นได้เร็วขึ้น",
-    ],
+    single: {
+      first: ["เตือนใกล้เวลาปิดรอบพร้อมลิงก์ส่งตรง ลดขั้นตอนที่ทำให้ลืม"],
+      repeat: ["ใกล้ปิดรอบทุกครั้ง อาจต้องถามว่าเวลาที่ตั้งไว้เหมาะกับตารางงานเขาจริงไหม"],
+    },
+    multiple: {
+      first: ["บอกผลที่ตามมาให้ชัดตั้งแต่ต้น จะได้ไม่ต้องเดาว่าสำคัญแค่ไหน", "แชร์ตัวอย่างรายงานที่เคยส่งผ่าน ให้มีต้นแบบเริ่มต้นได้เร็วขึ้น"],
+      repeat: ["หลายคนใกล้ปิดรอบซ้ำๆ ทุกรอบ ลองทบทวนว่าเวลาปิดรอบเหมาะกับจังหวะงานจริงของทีมไหม"],
+    },
   },
-} as const;
+};
 
-export type IssueTipKey = keyof typeof ISSUE_TIPS;
-
-/** `peopleCount` picks the single-vs-multiple pool — pass how many distinct
- * people are behind this issue, not the raw incident count (one person with
- * 3 late reports is still "single"). */
-export function issueSuggestion(key: IssueTipKey, peopleCount: number): string {
-  return pickDaily(ISSUE_TIPS[key][peopleCount <= 1 ? "single" : "multiple"]);
+/**
+ * `peopleCount` picks single vs multiple — how many distinct people are
+ * behind this issue. `worstCount` picks first vs repeat — the highest
+ * per-person incident count among them (1 = nobody shown has hit this twice
+ * yet; 2+ = at least one has). Pass the worst offender's own count, not the
+ * bucket's grand total (a 5-person bucket where everyone's missed once
+ * totals 5, but nobody's actually repeating — that's still "first").
+ */
+export function issueSuggestion(key: IssueTipKey, peopleCount: number, worstCount: number): string {
+  const sizeTier = ISSUE_TIPS[key][peopleCount <= 1 ? "single" : "multiple"];
+  return pickDaily(sizeTier[worstCount > 1 ? "repeat" : "first"]);
 }
