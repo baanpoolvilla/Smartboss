@@ -67,7 +67,7 @@ import { ReportReply } from "@/modules/report_task/components/report-feed/report
 import { LinkInsertPopover } from "@/modules/report_task/components/report-feed/link-insert-popover";
 import { cn } from "@/modules/report_task/lib/utils";
 import { toast } from "sonner";
-import { formatDateTime, formatDateTimeShort } from "@/modules/report_task/lib/format";
+import { formatDateTimeFull, formatDateTimeShort } from "@/modules/report_task/lib/format";
 import {
   Bold,
   Bookmark,
@@ -1042,9 +1042,9 @@ export function ReportCard({
                     formatDateTime reads fixed fields off the stored
                     timestamp (no "now" involved), so unlike TimeAgo there's
                     no server/client hydration skew to guard against here. */}
-                <span title={formatDateTime(post.createdAt)}>{formatDateTimeShort(post.createdAt)}</span>
+                <span title={formatDateTimeFull(post.createdAt)}>{formatDateTimeShort(post.createdAt)}</span>
                 {post.editedAt && (
-                  <span title={formatDateTime(post.editedAt)}>· แก้ไข {formatDateTimeShort(post.editedAt)}</span>
+                  <span title={formatDateTimeFull(post.editedAt)}>· แก้ไข {formatDateTimeShort(post.editedAt)}</span>
                 )}
               </p>
             </div>

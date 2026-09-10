@@ -8,7 +8,7 @@ import type { ReportPostImage, ReportPostReply } from "@/modules/report_task/sto
 import { renderRichBulletText, mentionMarkersToPlainText } from "@/modules/report_task/lib/report-feed-rich-text";
 import { cn } from "@/modules/report_task/lib/utils";
 import { isCoarsePointer } from "@/modules/report_task/lib/device";
-import { formatDateTime, formatDateTimeShort } from "@/modules/report_task/lib/format";
+import { formatDateTimeFull, formatDateTimeShort } from "@/modules/report_task/lib/format";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
 
 const reactionEmojis = ["👍", "❤️", "🎉", "😂", "😮", "😢"];
@@ -115,11 +115,11 @@ export function ReportReply({
         <div className="flex items-center justify-between gap-2">
           <p className="text-[11px] sm:text-xs font-medium">
             {author?.name}{" "}
-            <span className="font-normal text-[var(--ink-soft)]" title={formatDateTime(reply.createdAt)}>
+            <span className="font-normal text-[var(--ink-soft)]" title={formatDateTimeFull(reply.createdAt)}>
               · {formatDateTimeShort(reply.createdAt)}
             </span>
             {reply.editedAt && (
-              <span className="font-normal text-[var(--ink-soft)]" title={formatDateTime(reply.editedAt)}>
+              <span className="font-normal text-[var(--ink-soft)]" title={formatDateTimeFull(reply.editedAt)}>
                 {" "}
                 · แก้ไข {formatDateTimeShort(reply.editedAt)}
               </span>

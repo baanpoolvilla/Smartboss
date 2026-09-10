@@ -59,6 +59,28 @@ export function formatDateTimeShort(input: string | Date) {
   return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)} ${time}`;
 }
 
+const THAI_WEEKDAYS = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
+const THAI_MONTHS = [
+  "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+  "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
+];
+
+/** Spelled-out Thai ("วันจันทร์ที่ 20 กรกฎาคม 2026 เวลา 15:19 น.") — Teams'
+ * own hover tooltip on a timestamp does exactly this (weekday + full date),
+ * asked for explicitly ("อยากได้แบบของ Teams"). Tooltip-only: the visible
+ * text everywhere else stays the short numeric formatDateTimeShort, this is
+ * just what `title` shows on hover. Built from fixed local arrays instead of
+ * `toLocaleDateString`'s own long-format output — the rest of this file
+ * deliberately avoids locale-dependent spelled-out dates elsewhere (see
+ * formatDate's own comment) precisely so the exact wording can't drift
+ * between a server render and a browser's own ICU data; same reasoning
+ * applies here, just for a tooltip instead of the main text. */
+export function formatDateTimeFull(input: string | Date) {
+  const d = typeof input === "string" ? new Date(input) : input;
+  const time = d.toLocaleTimeString(TH_LOCALE, { hour: "numeric", minute: "2-digit" });
+  return `วัน${THAI_WEEKDAYS[d.getDay()]}ที่ ${d.getDate()} ${THAI_MONTHS[d.getMonth()]} ${d.getFullYear()} เวลา ${time} น.`;
+}
+
 export function relativeTime(input: string | Date) {
   const d = typeof input === "string" ? new Date(input) : input;
   const diffMs = nowMs() - d.getTime();
