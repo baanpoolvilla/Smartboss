@@ -389,17 +389,26 @@ export function renderSectionBullets(bullets: string[], onToggleChecklist?: (bul
     }
 
     if (isNumberedLine(line)) {
-      const items: string[] = [];
+      // Each numbered line's own typed number, not its position within this
+      // run — a run only ever spans *consecutive* numbered lines, so a
+      // numbered heading followed by bullet sub-items before the next
+      // numbered heading ("1. งานขาย" / "- ช่วยงานขาย..." / "2. งานจัดการรีวิว"
+      // / "- ...") put each heading alone in its own run of one. Recomputing
+      // "1st in this run" for each of those collapsed every single heading
+      // back down to "1." regardless of what was actually typed
+      // ("พิมพ์ 1. 2. 3. 4. แต่ได้ในโพสเป็น 1. 1. 1. 1. หมดเลย").
+      const items: { number: number; text: string }[] = [];
       while (i < bullets.length && isNumberedLine(bullets[i]!)) {
-        items.push(stripNumberedPrefix(bullets[i]!));
+        const match = bullets[i]!.trim().match(NUMBERED_LINE_PREFIX);
+        items.push({ number: match ? parseInt(match[1]!, 10) : items.length + 1, text: stripNumberedPrefix(bullets[i]!) });
         i++;
       }
       blocks.push(
         <ol key={key++} className="space-y-0.5">
-          {items.map((b, bi) => (
+          {items.map((item, bi) => (
             <li key={bi} className="text-sm sm:text-base text-[var(--ink)] flex items-start gap-1.5">
-              <span className="text-[var(--ink)] tabular-nums shrink-0">{bi + 1}.</span>
-              <span>{renderRichBulletText(b)}</span>
+              <span className="text-[var(--ink)] tabular-nums shrink-0">{item.number}.</span>
+              <span>{renderRichBulletText(item.text)}</span>
             </li>
           ))}
         </ol>
