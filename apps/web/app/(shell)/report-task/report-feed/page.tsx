@@ -1001,58 +1001,34 @@ function ReportFeedPageInner() {
                     blob either ("ดูยาก งง"). Changing the rounds themselves
                     is the ⚙ gear's job, not this row's. */}
                 {requirementParts.length > 0 && (
-                  <>
-                    {/* Desktop keeps the always-visible inline row — plain
-                        text, neutral gray (no green — this isn't a success
-                        state, §7). Mobile gets a collapsed trigger instead
-                        (below): this line was permanently eating a full row
-                        of the header on every phone regardless of whether
-                        anyone needed it right now, on a screen where the
-                        header was already flagged for taking "1/3 ของหน้าจอ"
-                        before a single post was visible — asked again
-                        explicitly ("มันใหญ่จนมองได้แค่นี้เอง...เอาไปไว้ใน
-                        ตัวกรองดีกว่า"). The fact itself doesn't disappear,
-                        it just isn't paid for on every screen anymore. */}
-                    <div className="hidden sm:flex px-5 pb-2 items-center gap-1.5 overflow-x-auto text-xs text-[var(--ink-soft)]">
-                      <Clock className="h-3 w-3 shrink-0" />
-                      {/* "เวลาส่ง" (a plain fact — the window this round runs
-                          in) reads more naturally than "กำหนดส่ง" (a deadline
-                          you're up against) for a room with an open
-                          submission window rather than a hard due-time. */}
-                      {requirementParts.length > 0 && <span className="shrink-0">เวลาส่ง</span>}
-                      {requirementParts.map((r, i) => (
-                        <span key={i} className={cn("shrink-0", r.active && "font-medium text-[var(--ink)]")}>
-                          {i > 0 && <span className="text-[var(--ink-faint)]"> · </span>}
-                          {r.text}
-                        </span>
-                      ))}
-                    </div>
-                    <div className="sm:hidden px-4 pb-1.5">
-                      <Popover>
-                        <PopoverTrigger
-                          render={
-                            <button className="flex items-center gap-1 rounded-full border border-[var(--line)] bg-white px-2.5 py-1 text-[11px] font-medium text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]">
-                              <Clock className="h-3 w-3" />
-                              เวลาส่ง
-                              <ChevronDown className="h-3 w-3" />
-                            </button>
-                          }
-                        />
-                        <PopoverContent align="start" className="w-72 p-3">
-                          <div className="flex items-center gap-1.5 flex-wrap text-xs text-[var(--ink-soft)]">
-                            <Clock className="h-3 w-3 shrink-0" />
-                            {requirementParts.length > 0 && <span className="shrink-0">เวลาส่ง</span>}
-                            {requirementParts.map((r, i) => (
-                              <span key={i} className={cn("shrink-0", r.active && "font-medium text-[var(--ink)]")}>
-                                {i > 0 && <span className="text-[var(--ink-faint)]"> · </span>}
-                                {r.text}
-                              </span>
-                            ))}
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  </>
+                  // Desktop keeps the always-visible inline row — plain
+                  // text, neutral gray (no green — this isn't a success
+                  // state, §7). Mobile gets a collapsed trigger instead,
+                  // moved into the tab row further down (see "เวลาส่ง
+                  // collapsed trigger, mobile only" below) instead of its
+                  // own row here — this line used to permanently eat a full
+                  // row of the header on every phone regardless of whether
+                  // anyone needed it right now, on a screen where the
+                  // header was already flagged for taking "1/3 ของหน้าจอ"
+                  // before a single post was visible — asked again
+                  // explicitly ("มันใหญ่จนมองได้แค่นี้เอง...เอาไปไว้ใน
+                  // ตัวกรองดีกว่า" and again "หัวห้องกินพื้นที่แนวตั้งเยอะเกินไป
+                  // บนมือถือ"). The fact itself doesn't disappear, it just
+                  // isn't paid for on every screen anymore.
+                  <div className="hidden sm:flex px-5 pb-2 items-center gap-1.5 overflow-x-auto text-xs text-[var(--ink-soft)]">
+                    <Clock className="h-3 w-3 shrink-0" />
+                    {/* "เวลาส่ง" (a plain fact — the window this round runs
+                        in) reads more naturally than "กำหนดส่ง" (a deadline
+                        you're up against) for a room with an open
+                        submission window rather than a hard due-time. */}
+                    <span className="shrink-0">เวลาส่ง</span>
+                    {requirementParts.map((r, i) => (
+                      <span key={i} className={cn("shrink-0", r.active && "font-medium text-[var(--ink)]")}>
+                        {i > 0 && <span className="text-[var(--ink-faint)]"> · </span>}
+                        {r.text}
+                      </span>
+                    ))}
+                  </div>
                 )}
 
                 {/* Row 3 — tabs, full-width so the underline (`border-b` on
@@ -1115,6 +1091,42 @@ function ReportFeedPageInner() {
                     );
                   })}
                 </div>
+                  {/* "เวลาส่ง" collapsed trigger, mobile only — moved into
+                      this same tab row instead of its own row underneath
+                      (see the desktop inline version above) so the header
+                      is 2 rows before the feed starts on a phone, not 3
+                      ("หัวห้องกินพื้นที่แนวตั้งเยอะเกินไปบนมือถือ"). Kept as a
+                      collapsed popover rather than shown inline like
+                      desktop — the full "Weekly-report 09:22 น. · Daily-
+                      report 09:27 น." text is too long to share a row with
+                      the tabs on a narrow screen. */}
+                  {requirementParts.length > 0 && (
+                    <div className="sm:hidden shrink-0 my-1.5">
+                      <Popover>
+                        <PopoverTrigger
+                          render={
+                            <button className="flex items-center gap-1 rounded-full border border-[var(--line)] bg-white px-2 py-1 text-[11px] font-medium text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]">
+                              <Clock className="h-3 w-3" />
+                              เวลาส่ง
+                              <ChevronDown className="h-3 w-3" />
+                            </button>
+                          }
+                        />
+                        <PopoverContent align="start" className="w-72 p-3">
+                          <div className="flex items-center gap-1.5 flex-wrap text-xs text-[var(--ink-soft)]">
+                            <Clock className="h-3 w-3 shrink-0" />
+                            {requirementParts.length > 0 && <span className="shrink-0">เวลาส่ง</span>}
+                            {requirementParts.map((r, i) => (
+                              <span key={i} className={cn("shrink-0", r.active && "font-medium text-[var(--ink)]")}>
+                                {i > 0 && <span className="text-[var(--ink-faint)]"> · </span>}
+                                {r.text}
+                              </span>
+                            ))}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  )}
                   {/* "มุมมอง" (ทุกห้องรวมกัน) อยู่แถวเดียวกับ "กรอง" — ไม่กินแถวเพิ่ม */}
                   <div className="shrink-0 my-1.5">
                     <ReportViewSwitcher
