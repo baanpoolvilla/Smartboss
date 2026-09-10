@@ -472,7 +472,7 @@ export function SystemKpiSummary() {
                   <Lightbulb className="h-4 w-4 text-[var(--chart-amber-dark)] shrink-0 mt-0.5" />
                   <p className="text-[12px] text-[var(--ink)]">
                     <span className="font-semibold text-[var(--chart-amber-dark)]">คำแนะนำ:</span>{" "}
-                    <span className="text-[var(--ink-soft)]">{issueSuggestion(data.mainIssue.key)}</span>
+                    <span className="text-[var(--ink-soft)]">{issueSuggestion(data.mainIssue.key, data.mainIssue.people.length)}</span>
                   </p>
                 </div>
               </div>
