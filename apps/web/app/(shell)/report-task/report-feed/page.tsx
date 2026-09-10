@@ -29,6 +29,7 @@ import { canEditReportTopic, canSeeReportTopic } from "@/modules/report_task/lib
 import { topicModeOf } from "@/modules/report_task/lib/report-topic-membership";
 import { RoomMembersDialog } from "@/modules/report_task/components/report-feed/room-members-dialog";
 import { currentCutoff, cutoffsOnDay } from "@/modules/report_task/lib/report-cutoff";
+import { roundsForUserOnDay, attributePostToRound, effectiveRoundsOf } from "@/modules/report_task/lib/submission-rounds";
 import { localDateStr } from "@/modules/report_task/lib/now";
 import { pendingToday, todayStatusEntries, type TodayStatusEntry } from "@/modules/report_task/lib/report-feed-compliance";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
@@ -641,14 +642,49 @@ function ReportFeedPageInner() {
 
   const requirementParts = useMemo(() => {
     if (!activeTopic) return [];
+    const today = localDateStr(new Date());
     // Today's effective rounds — merges legacy cutoffs and real
     // submissionRounds into one shape either way (see cutoffsOnDay's own
     // doc comment). No more room-level minImages default: a room with no
     // round in force today has nothing required, full stop.
-    const rounds = cutoffsOnDay(activeTopic, localDateStr(new Date()));
+    const rounds = cutoffsOnDay(activeTopic, today);
     if (rounds.length === 0) return [];
     const active = currentCutoff(rounds);
     const requiredOf = (c: { minImages?: number }) => c.minImages ?? 0;
+
+    // Per-round status for the viewer specifically — red/เหลือง/เขียว so
+    // "เวลาส่ง" answers "did *I* already cover this" at a glance instead of
+    // just stating the room's schedule as a flat fact ("อยากให้ผู้ใช้ทราบ").
+    // Only meaningful for a round this viewer is actually a submitter of —
+    // an owner just checking the room, or a teammate this round doesn't
+    // name, gets "neutral" (no color) instead of a status that isn't theirs
+    // to have.
+    const myRoundIds = new Set(roundsForUserOnDay(activeTopic, viewingAsUserId, today, submitterGroups).map((r) => r.id));
+    const allRoundsToday = effectiveRoundsOf(activeTopic);
+    const myPostedRoundIds = new Set(
+      posts
+        .filter(
+          (p) => p.topicId === activeTopic.id && p.authorId === viewingAsUserId && !p.excludeFromSubmission && localDateStr(new Date(p.createdAt)) === today
+        )
+        .map((p) => attributePostToRound(p, allRoundsToday)?.id)
+        .filter((id): id is string => !!id)
+    );
+    const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+    type RoundStatus = "done" | "late" | "pending" | "neutral";
+    function statusOf(c: { id: string; time: string }): RoundStatus {
+      if (!myRoundIds.has(c.id)) return "neutral";
+      if (myPostedRoundIds.has(c.id)) return "done";
+      const [h, m] = c.time.split(":").map(Number) as [number, number];
+      return nowMinutes > h * 60 + m ? "late" : "pending";
+    }
+    // Worse wins when two rounds collapse into one summary line below —
+    // "late" trumps "pending" trumps "done", so the merged line never
+    // undersells an actually-missed round as merely pending.
+    const STATUS_RANK: Record<RoundStatus, number> = { late: 3, pending: 2, done: 1, neutral: 0 };
+    function worseStatus(a: RoundStatus, b: RoundStatus): RoundStatus {
+      return STATUS_RANK[a] >= STATUS_RANK[b] ? a : b;
+    }
+
     // Two rounds with the same photo requirement and no real (non-placeholder)
     // labels read naturally as one deadline window ("กำหนดส่ง 13:00–14:00
     // น."), which is what §7's own example assumes — but that's an accurate
@@ -665,6 +701,7 @@ function ReportFeedPageInner() {
         {
           text: `${a!.time}–${b!.time} น.${required > 0 ? ` · แนบอย่างน้อย ${required} รูป` : ""}`,
           active: !!active,
+          status: worseStatus(statusOf(a!), statusOf(b!)),
         },
       ];
     }
@@ -687,9 +724,10 @@ function ReportFeedPageInner() {
       return {
         text: `${label ? `${label} ` : ""}${c.time} น.${required > 0 ? ` · แนบอย่างน้อย ${required} รูป` : ""}`,
         active: active?.id === c.id,
+        status: statusOf(c),
       };
     });
-  }, [activeTopic]);
+  }, [activeTopic, viewingAsUserId, posts, submitterGroups]);
 
   // Who can actually see this room, from the same rule the sidebar and store
   // use to gate visibility — a real list, not a placeholder count.
@@ -1072,33 +1110,85 @@ function ReportFeedPageInner() {
                       09:22 น. · Daily-report 09:27 น." text has nowhere
                       fixed-width to sit without either crowding the tabs or
                       forcing this row to wrap on a 2+ round room. */}
-                  {requirementParts.length > 0 && (
-                    <div className="shrink-0 my-1.5">
-                      <Popover>
-                        <PopoverTrigger
-                          render={
-                            <button className="flex items-center gap-1 rounded-full border border-[var(--line)] bg-white px-2 py-1 text-[11px] font-medium text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]">
-                              <Clock className="h-3 w-3" />
-                              เวลาส่ง
-                              <ChevronDown className="h-3 w-3" />
-                            </button>
-                          }
-                        />
-                        <PopoverContent align="start" className="w-72 p-3">
-                          <div className="flex items-center gap-1.5 flex-wrap text-xs text-[var(--ink-soft)]">
-                            <Clock className="h-3 w-3 shrink-0" />
-                            {requirementParts.length > 0 && <span className="shrink-0">เวลาส่ง</span>}
-                            {requirementParts.map((r, i) => (
-                              <span key={i} className={cn("shrink-0", r.active && "font-medium text-[var(--ink)]")}>
-                                {i > 0 && <span className="text-[var(--ink-faint)]"> · </span>}
-                                {r.text}
-                              </span>
-                            ))}
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  )}
+                  {requirementParts.length > 0 && (() => {
+                    // Trigger itself picks up the worst status too, not just
+                    // the popover contents — worth knowing "am I covered"
+                    // before even opening it. late > pending > done, and
+                    // stays the default neutral gray if every round here is
+                    // "neutral" (nothing this viewer personally owes today).
+                    const anyLate = requirementParts.some((r) => r.status === "late");
+                    const anyPending = !anyLate && requirementParts.some((r) => r.status === "pending");
+                    const allDone = !anyLate && !anyPending && requirementParts.some((r) => r.status === "done");
+                    return (
+                      <div className="shrink-0 my-1.5">
+                        <Popover>
+                          <PopoverTrigger
+                            render={
+                              <button
+                                className={cn(
+                                  "flex items-center gap-1 rounded-full border bg-white px-2 py-1 text-[11px] font-medium hover:bg-[var(--bg-soft)]",
+                                  anyLate
+                                    ? "border-red-200 text-[var(--chart-red)]"
+                                    : anyPending
+                                      ? "border-amber-200 text-amber-700"
+                                      : allDone
+                                        ? "border-[var(--brand-green)]/30 text-[var(--brand-green-dark)]"
+                                        : "border-[var(--line)] text-[var(--ink-soft)]"
+                                )}
+                              >
+                                <Clock className="h-3 w-3" />
+                                เวลาส่ง
+                                <ChevronDown className="h-3 w-3" />
+                              </button>
+                            }
+                          />
+                          <PopoverContent align="start" className="w-72 p-3">
+                            {/* One row per round instead of one run-on
+                                inline line — asked for explicitly
+                                ("แก้ให้อ่านได้ง่ายเวลากดไปดู") after the old
+                                "เวลาส่ง Weekly-report 09:22 น. · Daily-report
+                                09:27 น." wrapped text read as one indistinct
+                                blob. The colored dot + status word next to
+                                each round is this viewer's own coverage for
+                                it today (red = missed, amber = still open,
+                                green = already sent) — blank for a round
+                                they aren't actually a submitter of, so it
+                                never claims a status that isn't theirs to
+                                have. */}
+                            <p className="flex items-center gap-1.5 text-xs font-semibold text-[var(--ink)] mb-2">
+                              <Clock className="h-3.5 w-3.5 text-[var(--ink-soft)]" />
+                              เวลาส่งวันนี้
+                            </p>
+                            <div className="space-y-1.5">
+                              {requirementParts.map((r, i) => {
+                                const dotColor =
+                                  r.status === "late"
+                                    ? "bg-[var(--chart-red)]"
+                                    : r.status === "pending"
+                                      ? "bg-amber-400"
+                                      : r.status === "done"
+                                        ? "bg-[var(--brand-green)]"
+                                        : "bg-[var(--ink-faint)]";
+                                const statusLabel =
+                                  r.status === "late" ? "ยังไม่ส่ง (เลยกำหนด)" : r.status === "pending" ? "ยังไม่ส่ง" : r.status === "done" ? "ส่งแล้ว" : null;
+                                const statusTextColor =
+                                  r.status === "late" ? "text-[var(--chart-red)]" : r.status === "pending" ? "text-amber-600" : "text-[var(--brand-green-dark)]";
+                                return (
+                                  <div key={i} className="flex items-center gap-2">
+                                    <span className={cn("h-2 w-2 rounded-full shrink-0", dotColor)} aria-hidden />
+                                    <span className={cn("text-xs flex-1 min-w-0", r.active ? "font-medium text-[var(--ink)]" : "text-[var(--ink-soft)]")}>
+                                      {r.text}
+                                    </span>
+                                    {statusLabel && <span className={cn("text-[10px] font-medium shrink-0", statusTextColor)}>{statusLabel}</span>}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    );
+                  })()}
                   {/* "มุมมอง" (ทุกห้องรวมกัน) อยู่แถวเดียวกับ "กรอง" — ไม่กินแถวเพิ่ม */}
                   <div className="shrink-0 my-1.5">
                     <ReportViewSwitcher
