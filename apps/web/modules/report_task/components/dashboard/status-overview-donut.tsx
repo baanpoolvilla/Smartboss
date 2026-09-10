@@ -14,7 +14,7 @@ import { periodTrend } from "@/modules/report_task/lib/dashboard-trend";
 import { TrendText, tierFor } from "@/modules/report_task/components/shared/trend-badge";
 import type { RankedPerson } from "@/modules/report_task/lib/ranked-people";
 import { issueSuggestion, type IssueTipKey } from "@/modules/report_task/lib/issue-tips";
-import { Lightbulb, AlertTriangle } from "lucide-react";
+import { Lightbulb, AlertTriangle, CircleCheck } from "lucide-react";
 
 interface Slice {
   key: string;
@@ -390,6 +390,26 @@ export function StatusOverviewDonut({
                     <span className="text-[var(--ink-soft)]">{issueSuggestion(issueTipKey!)}</span>
                   </p>
                 </div>
+              </div>
+            )}
+
+            {/* Explains the *absence* of "ปัญหาหลัก" (rather than just
+                silently showing nothing) whenever there's still an open
+                pending count with no overdue among it — "อยากให้มี tip
+                เล็กๆว่าทำไมถึงยังไม่มีปัญหาหลัก และปัญหาหลักจะเกิดได้เพราะอะไร".
+                Doesn't show once everything's actually done (buckets.pending
+                also 0) — nothing outstanding at all needs no explanation for
+                why nothing's flagged. */}
+            {!mainIssue && buckets.pending > 0 && (
+              <div className="flex items-start gap-2 rounded-lg bg-green-50 px-3 py-2">
+                <CircleCheck className="h-4 w-4 text-[var(--brand-green-dark)] shrink-0 mt-0.5" />
+                <p className="text-[12px] text-[var(--ink)]">
+                  <span className="font-semibold text-[var(--brand-green-dark)]">ยังไม่มีปัญหาหลักตอนนี้ —</span>{" "}
+                  <span className="text-[var(--ink-soft)]">
+                    {buckets.pending} {unitLabel}ที่เห็น &quot;{labels.pending}&quot; ยังไม่ถึงกำหนดส่งจริง ไม่นับเป็นปัญหา
+                    ปัญหาหลักจะขึ้นก็ต่อเมื่อมีคน &quot;{labels.overdue}&quot; จริง — พลาดกำหนดไปแล้ว ไม่ใช่แค่ยังไม่ถึงเวลา
+                  </span>
+                </p>
               </div>
             )}
 

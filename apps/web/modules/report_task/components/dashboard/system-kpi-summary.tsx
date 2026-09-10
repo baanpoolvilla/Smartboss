@@ -18,7 +18,7 @@ import { useReportFeedStore } from "@/modules/report_task/store/report-feed-stor
 import { useDashboardFilterStore } from "@/modules/report_task/store/dashboard-filter-store";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/modules/report_task/components/ui/tooltip";
 import { issueSuggestion, type IssueTipKey } from "@/modules/report_task/lib/issue-tips";
-import { Gauge, Lightbulb, AlertTriangle, ListChecks, MessageSquareText } from "lucide-react";
+import { Gauge, Lightbulb, AlertTriangle, ListChecks, MessageSquareText, CircleCheck } from "lucide-react";
 import { cn } from "@/modules/report_task/lib/utils";
 
 /** Task/Report share one consistent color each across the whole chart — the
@@ -475,6 +475,25 @@ export function SystemKpiSummary() {
                     <span className="text-[var(--ink-soft)]">{issueSuggestion(data.mainIssue.key)}</span>
                   </p>
                 </div>
+              </div>
+            )}
+
+            {/* Same "why is there no ปัญหาหลัก box" explainer as
+                status-overview-donut.tsx's own copy — "อยากให้มี tip เล็กๆว่า
+                ทำไมถึงยังไม่มีปัญหาหลัก และปัญหาหลักจะเกิดได้เพราะอะไร". Only
+                when there's a pending count sitting there with nothing
+                overdue behind it — a fully clear board needs no explanation
+                for why nothing's flagged. */}
+            {!data.mainIssue && data.taskBuckets.pending + data.reportBuckets.pending > 0 && (
+              <div className="flex items-start gap-2 rounded-lg bg-green-50 px-3 py-2">
+                <CircleCheck className="h-4 w-4 text-[var(--brand-green-dark)] shrink-0 mt-0.5" />
+                <p className="text-[12px] text-[var(--ink)]">
+                  <span className="font-semibold text-[var(--brand-green-dark)]">ยังไม่มีปัญหาหลักตอนนี้ —</span>{" "}
+                  <span className="text-[var(--ink-soft)]">
+                    {data.taskBuckets.pending + data.reportBuckets.pending} รายการที่เห็น &quot;ในกำหนด&quot; ยังไม่ถึงกำหนดส่งจริง
+                    ไม่นับเป็นปัญหา ปัญหาหลักจะขึ้นก็ต่อเมื่อมีงานหรือรายงาน &quot;เลยกำหนด&quot; จริง — พลาดกำหนดไปแล้ว ไม่ใช่แค่ยังไม่ถึงเวลา
+                  </span>
+                </p>
               </div>
             )}
           </>
