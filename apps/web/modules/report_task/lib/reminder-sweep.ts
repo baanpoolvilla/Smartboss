@@ -1,4 +1,4 @@
-import { departments } from "@/modules/report_task/lib/directory";
+import { departments, users, isOwner } from "@/modules/report_task/lib/directory";
 import { calendarDateOf, now, todayIso } from "@/modules/report_task/lib/now";
 import { pendingToday } from "@/modules/report_task/lib/report-feed-compliance";
 import { effectiveRoundsOf } from "@/modules/report_task/lib/submission-rounds";
@@ -198,9 +198,18 @@ export function computeReminders(input: {
           const summaryKey = `report-summary:${groupKey}:${today}:${lead}`;
           if (!alreadySent.has(summaryKey)) {
             newSentKeys.push(summaryKey);
+            // Department heads of this room's own department(s), plus every
+            // company owner regardless of which room this is — an owner has
+            // no single department to be "head" of, so without this they
+            // never got this summary for any room at all, unlike a dept
+            // head who at least gets their own ("owner ควรได้รับแจ้งเตือน
+            // สรุป...ทุกห้อง").
             const headIds = new Set<string>();
             for (const d of departments) {
               if (topic.visibility?.departmentIds?.includes(d.id)) headIds.add(d.headId);
+            }
+            for (const u of users) {
+              if (isOwner(u.id)) headIds.add(u.id);
             }
             if (headIds.size > 0) {
               notifications.push({
