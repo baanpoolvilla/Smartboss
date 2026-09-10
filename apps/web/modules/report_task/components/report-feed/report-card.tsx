@@ -1043,9 +1043,11 @@ export function ReportCard({
                     timestamp (no "now" involved), so unlike TimeAgo there's
                     no server/client hydration skew to guard against here. */}
                 <span title={formatDateTimeFull(post.createdAt)}>{formatDateTimeShort(post.createdAt)}</span>
-                {post.editedAt && (
-                  <span title={formatDateTimeFull(post.editedAt)}>· แก้ไข {formatDateTimeShort(post.editedAt)}</span>
-                )}
+                {/* Just the word, no repeated timestamp next to the post's
+                    own — same as Teams' own "Edited" — the exact edit time
+                    is still one hover away via the tooltip, same as the post
+                    time itself. */}
+                {post.editedAt && <span title={formatDateTimeFull(post.editedAt)}>· แก้ไข</span>}
               </p>
             </div>
             {topicBadge && (

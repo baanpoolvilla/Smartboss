@@ -121,7 +121,7 @@ export function ReportReply({
             {reply.editedAt && (
               <span className="font-normal text-[var(--ink-soft)]" title={formatDateTimeFull(reply.editedAt)}>
                 {" "}
-                · แก้ไข {formatDateTimeShort(reply.editedAt)}
+                · แก้ไข
               </span>
             )}
           </p>
