@@ -47,6 +47,18 @@ export function formatDateTime(input: string | Date) {
   return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()} ${time}`;
 }
 
+/** Same as `formatDateTime` but without the year — for a spot where the full
+ * one reads as too long (a post's own header row, stacked with the author's
+ * role and possibly an "แก้ไขแล้ว" edit stamp right next to it —
+ * "มันยาวไปอะ"). The year is still one tap/hover away via `formatDateTime`
+ * in a `title` tooltip at each call site, so nothing's actually lost, just
+ * not printed twice in a row most viewers don't need spelled out. */
+export function formatDateTimeShort(input: string | Date) {
+  const d = typeof input === "string" ? new Date(input) : input;
+  const time = d.toLocaleTimeString(TH_LOCALE, { hour: "numeric", minute: "2-digit" });
+  return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)} ${time}`;
+}
+
 export function relativeTime(input: string | Date) {
   const d = typeof input === "string" ? new Date(input) : input;
   const diffMs = nowMs() - d.getTime();

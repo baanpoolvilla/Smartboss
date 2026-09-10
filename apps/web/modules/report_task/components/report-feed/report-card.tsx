@@ -67,7 +67,7 @@ import { ReportReply } from "@/modules/report_task/components/report-feed/report
 import { LinkInsertPopover } from "@/modules/report_task/components/report-feed/link-insert-popover";
 import { cn } from "@/modules/report_task/lib/utils";
 import { toast } from "sonner";
-import { formatDateTime } from "@/modules/report_task/lib/format";
+import { formatDateTime, formatDateTimeShort } from "@/modules/report_task/lib/format";
 import {
   Bold,
   Bookmark,
@@ -1030,17 +1030,22 @@ export function ReportCard({
                   <span className="h-1.5 w-1.5 rounded-full bg-[var(--chart-blue)] shrink-0" aria-label="ยังไม่อ่าน" />
                 )}
               </div>
-              <p className="flex items-center gap-1 text-xs text-[var(--ink-soft)] truncate">
+              <p className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xs text-[var(--ink-soft)]">
                 {author?.role && <span className="truncate">{author.role} ·</span>}
-                {/* Teams-style absolute timestamp ("20/07/2026 15:19") instead
-                    of a relative "22 ชม. ที่แล้ว" — asked for explicitly so a
+                {/* Teams-style absolute timestamp ("20/07 15:19") instead of a
+                    relative "22 ชม. ที่แล้ว" — asked for explicitly so a
                     post's actual clock time is always readable at a glance,
-                    not just a fuzzy age that keeps changing. formatDateTime
-                    reads fixed fields off the stored timestamp (no "now"
-                    involved), so unlike TimeAgo there's no server/client
-                    hydration skew to guard against here. */}
-                <span>{formatDateTime(post.createdAt)}</span>
-                {post.editedAt && <span>· แก้ไขแล้ว {formatDateTime(post.editedAt)}</span>}
+                    not just a fuzzy age that keeps changing. No year in the
+                    visible text (with role + a possible edit stamp right
+                    next to it, the full year on both made this row overflow
+                    — "มันยาวไปอะ") — still there in the `title` tooltip, and
+                    formatDateTime reads fixed fields off the stored
+                    timestamp (no "now" involved), so unlike TimeAgo there's
+                    no server/client hydration skew to guard against here. */}
+                <span title={formatDateTime(post.createdAt)}>{formatDateTimeShort(post.createdAt)}</span>
+                {post.editedAt && (
+                  <span title={formatDateTime(post.editedAt)}>· แก้ไข {formatDateTimeShort(post.editedAt)}</span>
+                )}
               </p>
             </div>
             {topicBadge && (
