@@ -9,7 +9,7 @@ import { useReportFeedStore, type ReportPostImage, type ReportTopic } from "@/mo
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
 import { photoCount } from "@/modules/report_task/lib/report-attachment-kind";
-import { roundsForUserOnDay } from "@/modules/report_task/lib/submission-rounds";
+import { roundsForUserOnDay, attributePostToRound, effectiveRoundsOf } from "@/modules/report_task/lib/submission-rounds";
 import { localDateStr, now } from "@/modules/report_task/lib/now";
 import { cn } from "@/modules/report_task/lib/utils";
 import { ReportPostFields, newSection, type DraftSection } from "@/modules/report_task/components/report-feed/report-post-fields";
@@ -61,6 +61,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   const viewer = getUser(viewingAsUserId)!;
   const addPost = useReportFeedStore((s) => s.addPost);
   const submitterGroups = useReportFeedStore((s) => s.submitterGroups);
+  const allPosts = useReportFeedStore((s) => s.posts);
   const maxImages = useAttachmentSettingsStore((s) => s.settings.maxImagesPerReportPost);
 
   const savedDraft = loadDraft(topic.id);
@@ -149,13 +150,29 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
     }
   }
 
+  const today = localDateStr(new Date());
+  // A round this poster already has a post filed against today (attributed
+  // by explicit roundId, or guessed from time when older) is done — showing
+  // it again invited a second post to double up on the same round instead of
+  // starting the next one, and there's no way to tell "genuinely posting
+  // again for this round" apart from "picker just showed it out of habit"
+  // ("ถ้าคนนั้นส่งไปแล้วต้องไม่มีให้เลือก...ยกเว้นยกเลิกโพสนั้นๆ"). Recomputed
+  // live off the store's own posts, so deleting that post is all it takes
+  // for the round to reappear here — no separate "undo" state to track.
+  const allRoundsForAttribution = effectiveRoundsOf(topic);
+  const fulfilledRoundIds = new Set(
+    allPosts
+      .filter((p) => p.topicId === topic.id && p.authorId === viewingAsUserId && !p.excludeFromSubmission && localDateStr(new Date(p.createdAt)) === today)
+      .map((p) => attributePostToRound(p, allRoundsForAttribution)?.id)
+      .filter((id): id is string => !!id)
+  );
   // Scoped to this poster specifically (roundsForUserOnDay), not every round
   // the room runs that day (cutoffsOnDay) — a round someone isn't actually a
   // submitter of has no business showing up asking them "ส่งของรอบไหน?" when
   // it was never theirs to answer for ("ถ้าคนไม่มีรอบส่งนั้นตรงนี้ต้องไม่ขึ้น").
-  const todayCutoffs = [...roundsForUserOnDay(topic, viewingAsUserId, localDateStr(new Date()), submitterGroups)].sort(
-    (a, b) => roundMinutesOf(a.time) - roundMinutesOf(b.time)
-  );
+  const todayCutoffs = [...roundsForUserOnDay(topic, viewingAsUserId, today, submitterGroups)]
+    .filter((r) => !fulfilledRoundIds.has(r.id))
+    .sort((a, b) => roundMinutesOf(a.time) - roundMinutesOf(b.time));
   const nowMinutes = now().getHours() * 60 + now().getMinutes();
   // Default pick: the nearest round not yet passed; once every round today
   // is overdue, default to the last one (someone opening the composer after
