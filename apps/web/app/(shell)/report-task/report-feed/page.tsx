@@ -1000,37 +1000,6 @@ function ReportFeedPageInner() {
                     string of every round's text isn't one indecipherable
                     blob either ("ดูยาก งง"). Changing the rounds themselves
                     is the ⚙ gear's job, not this row's. */}
-                {requirementParts.length > 0 && (
-                  // Desktop keeps the always-visible inline row — plain
-                  // text, neutral gray (no green — this isn't a success
-                  // state, §7). Mobile gets a collapsed trigger instead,
-                  // moved into the tab row further down (see "เวลาส่ง
-                  // collapsed trigger, mobile only" below) instead of its
-                  // own row here — this line used to permanently eat a full
-                  // row of the header on every phone regardless of whether
-                  // anyone needed it right now, on a screen where the
-                  // header was already flagged for taking "1/3 ของหน้าจอ"
-                  // before a single post was visible — asked again
-                  // explicitly ("มันใหญ่จนมองได้แค่นี้เอง...เอาไปไว้ใน
-                  // ตัวกรองดีกว่า" and again "หัวห้องกินพื้นที่แนวตั้งเยอะเกินไป
-                  // บนมือถือ"). The fact itself doesn't disappear, it just
-                  // isn't paid for on every screen anymore.
-                  <div className="hidden sm:flex px-5 pb-2 items-center gap-1.5 overflow-x-auto text-xs text-[var(--ink-soft)]">
-                    <Clock className="h-3 w-3 shrink-0" />
-                    {/* "เวลาส่ง" (a plain fact — the window this round runs
-                        in) reads more naturally than "กำหนดส่ง" (a deadline
-                        you're up against) for a room with an open
-                        submission window rather than a hard due-time. */}
-                    <span className="shrink-0">เวลาส่ง</span>
-                    {requirementParts.map((r, i) => (
-                      <span key={i} className={cn("shrink-0", r.active && "font-medium text-[var(--ink)]")}>
-                        {i > 0 && <span className="text-[var(--ink-faint)]"> · </span>}
-                        {r.text}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
                 {/* Row 3 — tabs, full-width so the underline (`border-b` on
                     the container, `-mb-px` per tab) actually connects to a
                     real line instead of floating (R2), with counts (R5) and
@@ -1091,17 +1060,20 @@ function ReportFeedPageInner() {
                     );
                   })}
                 </div>
-                  {/* "เวลาส่ง" collapsed trigger, mobile only — moved into
-                      this same tab row instead of its own row underneath
-                      (see the desktop inline version above) so the header
-                      is 2 rows before the feed starts on a phone, not 3
-                      ("หัวห้องกินพื้นที่แนวตั้งเยอะเกินไปบนมือถือ"). Kept as a
-                      collapsed popover rather than shown inline like
-                      desktop — the full "Weekly-report 09:22 น. · Daily-
-                      report 09:27 น." text is too long to share a row with
-                      the tabs on a narrow screen. */}
+                  {/* "เวลาส่ง" collapsed trigger — moved into this same tab
+                      row instead of its own row above (desktop used to keep
+                      an always-visible inline version there, on top of
+                      mobile's own collapsed-row version) so the header is
+                      down to 2 rows before the feed starts on *every* width,
+                      not just mobile ("แก้ของ pc ด้วยสิ...อยากได้แนวสูง
+                      เพิ่มขึ้นด้วย" — desktop wanted the same vertical space
+                      back). Stays a collapsed popover rather than inline
+                      text even on a wide screen — the full "Weekly-report
+                      09:22 น. · Daily-report 09:27 น." text has nowhere
+                      fixed-width to sit without either crowding the tabs or
+                      forcing this row to wrap on a 2+ round room. */}
                   {requirementParts.length > 0 && (
-                    <div className="sm:hidden shrink-0 my-1.5">
+                    <div className="shrink-0 my-1.5">
                       <Popover>
                         <PopoverTrigger
                           render={
