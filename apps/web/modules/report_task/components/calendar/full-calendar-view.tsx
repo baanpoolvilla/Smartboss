@@ -16,7 +16,7 @@ import { Calendar } from "@/modules/report_task/components/ui/calendar";
 import { ChevronLeft, ChevronRight, ChevronDown, CalendarDays, MousePointerClick, CalendarOff, Check } from "lucide-react";
 import { cn } from "@/modules/report_task/lib/utils";
 import { useLeaveTypeStore } from "@/modules/report_task/store/leave-type-store";
-import { leaveIconOf } from "@/modules/report_task/lib/leave-icons";
+import { leaveIconOf, leaveTypePresetFor } from "@/modules/report_task/lib/leave-icons";
 import type { CalendarEvent, CalendarEventType } from "@/modules/report_task/types";
 import { useEventColorStore } from "@/modules/report_task/store/event-color-store";
 import { now, todayIso, localDateStr } from "@/modules/report_task/lib/now";
@@ -682,11 +682,16 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
     // deliberate signal (same "วงกลมไม่เต็ม อยากได้แบบเต็มๆ" feedback as the
     // narrow-view dot above). Past events fade via the .ebw-event-muted CSS
     // opacity rule (same color, just paler) instead.
+    // leaveType is the real HR leave-type name (e.g. "ลาป่วย"), not the old
+    // leave-type-store's own id ("sick") — leaveIconById is keyed by that
+    // store's id and so never actually matched an HR-sourced leave's name;
+    // leaveTypePresetFor keys by the same real names calendar-view.tsx's
+    // filter chips use, so the two now show the same icon.
     const Icon =
       type === "dayoff"
           ? CalendarOff
           : type === "leave" && leaveType
-            ? leaveIconOf(leaveIconById[leaveType])
+            ? leaveIconOf(leaveTypePresetFor(leaveType)?.icon ?? leaveIconById[leaveType])
             : null;
     return (
       <div className="flex items-center gap-1.5 px-2 py-[3px] overflow-hidden leading-tight">
