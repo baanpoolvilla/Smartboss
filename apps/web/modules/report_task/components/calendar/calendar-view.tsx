@@ -631,7 +631,15 @@ export function CalendarView() {
       return {
         ...l,
         title: owner && !l.authoredTitle ? `${owner} - ${l.title}` : l.title,
-        colorHint: (l.leaveType && leaveColorById.get(l.leaveType)) ?? chartColors.gray,
+        // An HR Day-Off (l.type === "dayoff") never has `leaveType` set (see
+        // workforce-calendar.ts — it's deliberately not a leave-type chip
+        // anymore), so it fell through to the "unknown leave type" gray
+        // fallback below. It isn't unknown, it's just not a leave — give it
+        // the same green as the "วันหยุดประจำ" category dot instead.
+        colorHint:
+          l.type === "dayoff"
+            ? colors.dayoff
+            : (l.leaveType && leaveColorById.get(l.leaveType)) ?? chartColors.gray,
         mine: l.userId === viewingAsUserId,
         // Never draggable — leave lives in workforce and this store is a
         // read-only mirror of it (see lib/db/workforce-calendar.ts). A drag
