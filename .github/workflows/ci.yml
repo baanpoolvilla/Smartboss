@@ -1,0 +1,57 @@
+name: CI
+
+# ตาม docs/deploy.md §14 ("ยังไม่พร้อม — ต้องรู้ก่อนเปิดให้ลูกค้าจ่ายเงิน") และ
+# Claude outputs/SmartBoss-Fix-List-2026-09-11.md ข้อ 3 — ตอนนี้ไม่มี CI เลย
+# แปลว่า lint/typecheck/test ไม่ถูกบังคับรันก่อน merge เลย
+#
+# ⚠ รอบแรกที่รัน `lint` จะแดง — มี 17 errors ของเดิมในโค้ด (ไม่เกี่ยวกับ workflow
+# นี้) ที่ต้องไล่แก้แยกต่างหาก ไม่ใช่ปัญหาของไฟล์นี้
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    env:
+      # ค่าหลอกสำหรับ CI เท่านั้น — typecheck/test ไม่ต้องต่อ DB จริง (prisma
+      # generate อ่านแค่ schema, wf:test ใช้ PGlite ในตัวเอง — ดูคอมเมนต์ใน
+      # vitest.workforce.config.ts) แต่บาง build step ต้องมีตัวแปรพวกนี้ตั้งไว้
+      # ถึงจะไม่ throw ตอน validate env — **ห้ามใช้ค่าพวกนี้จริงที่ไหนทั้งสิ้น**
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      DATABASE_URL_UNPOOLED: postgresql://ci:ci@localhost:5432/ci
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-only-placeholder-not-a-real-secret-32ch
+      ACCESS_TOKEN_TTL: 15m
+      REFRESH_TOKEN_TTL: 7d
+      COOKIE_SECURE: "false"
+      CRON_SECRET: ci-only-placeholder
+      SEED_ADMIN_PASSWORD: ci-only-placeholder-12345
+      SEED_STAFF_PASSWORD: ci-only-placeholder-12345
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.13.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: ติดตั้ง dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test (apps/web, @smartboss/auth)
+        run: pnpm test
+
+      - name: Test (workforce — PGlite ในตัวเอง ไม่ต้องมี Postgres จริง)
+        run: pnpm wf:test
