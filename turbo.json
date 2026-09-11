@@ -11,7 +11,8 @@
     "REFRESH_TOKEN_TTL",
     "COOKIE_SECURE",
     "SEED_ADMIN_PASSWORD",
-    "SEED_STAFF_PASSWORD"
+    "SEED_STAFF_PASSWORD",
+    "TENANT_GUARD"
   ],
   "tasks": {
     "dev": {

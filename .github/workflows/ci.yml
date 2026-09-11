@@ -21,6 +21,13 @@ env:
   # generate อ่านแค่ schema, wf:test ใช้ PGlite ในตัวเอง — ดูคอมเมนต์ใน
   # vitest.workforce.config.ts) แต่บาง build step ต้องมีตัวแปรพวกนี้ตั้งไว้
   # ถึงจะไม่ throw ตอน validate env — **ห้ามใช้ค่าพวกนี้จริงที่ไหนทั้งสิ้น**
+  #
+  # TENANT_GUARD=strict — throw ทันทีถ้า query ไหนแตะโมเดลที่มี orgId โดยไม่
+  # กรอง orgId (packages/database/tenant-guard.ts) ตอนนี้ยังไม่มี test ไหนใน
+  # `pnpm test`/`wf:test` เรียก Prisma client จริงเลย (wf:test ใช้ Drizzle
+  # คนละตัว ไม่ผ่านการ์ดนี้) เลยยังไม่ทำให้ CI แดงจากที่มีอยู่ — เตรียมไว้ให้
+  # test ตัวใหม่ (fix-list ข้อ 1 track B) ได้ค่านี้ทันทีที่เพิ่มเข้ามา
+  TENANT_GUARD: strict
   DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
   DATABASE_URL_UNPOOLED: postgresql://ci:ci@localhost:5432/ci
   REDIS_URL: redis://localhost:6379
