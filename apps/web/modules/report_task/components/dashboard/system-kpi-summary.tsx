@@ -17,6 +17,7 @@ import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-r
 import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
 import { useDashboardFilterStore } from "@/modules/report_task/store/dashboard-filter-store";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/modules/report_task/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { issueSuggestion, type IssueTipKey } from "@/modules/report_task/lib/issue-tips";
 import { Gauge, Lightbulb, AlertTriangle, ListChecks, MessageSquareText, CircleCheck } from "lucide-react";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -52,6 +53,10 @@ interface PersonSeg {
   id: string;
   name: string;
   count: number;
+  /** Only set on the folded "อื่นๆ" segment — everyone past MAX_SEGMENTS,
+   * already sorted biggest-first, so the popover listing them doesn't need
+   * to re-sort. Undefined on a real person's own segment. */
+  others?: { name: string; count: number }[];
 }
 
 interface KpiGroup {
@@ -76,7 +81,12 @@ function topPeople(counts: Map<string, number>): PersonSeg[] {
   const rest = entries.slice(MAX_SEGMENTS);
   return [
     ...entries.slice(0, MAX_SEGMENTS),
-    { id: "other", name: `อีก ${rest.length} คนที่เหลือ`, count: rest.reduce((s, e) => s + e.count, 0) },
+    {
+      id: "other",
+      name: `อีก ${rest.length} คนที่เหลือ`,
+      count: rest.reduce((s, e) => s + e.count, 0),
+      others: rest.map((e) => ({ name: e.name, count: e.count })),
+    },
   ];
 }
 
@@ -140,6 +150,9 @@ function StatusBar({
   // ordering intact, but pulls the small bars up to something actually
   // visible instead of near-zero.
   const heightPct = max && total > 0 ? Math.min(100, Math.sqrt(total / max) * 100) : 0;
+  // "อื่นๆ" segment's own popover — a single flag is enough since a bar only
+  // ever has one folded segment at a time.
+  const [otherOpen, setOtherOpen] = useState(false);
   return (
     <div className="flex h-full w-8 flex-col items-center justify-end">
       {/* pointer-events-none — purely decorative, sitting flush against the
@@ -168,35 +181,67 @@ function StatusBar({
             const mixPct = isOther ? 45 : Math.max(40, 100 - i * 15);
             const mixTarget = isOther ? "var(--chart-gray)" : "#ffffff";
             const segColor = `color-mix(in srgb, ${color} ${mixPct}%, ${mixTarget})`;
+            const segButtonClass = cn(
+              "relative w-full flex-1 cursor-pointer border-t border-white/70 first:border-t-0 hover:brightness-90",
+              isTop && "rounded-t-[5px]"
+            );
+
+            // "อื่นๆ" opens a popover listing exactly who got folded in,
+            // instead of the plain hover-only tooltip every real person's
+            // segment gets — asked for explicitly ("กดแล้วแสดงคนที่เหลือว่ามี
+            // ใครมั้ง") after the tooltip's bare "อีก N คนที่เหลือ" total
+            // gave no way to actually see the names. Popover (click), not
+            // Tooltip (hover) — hover has no equivalent on a touchscreen, so
+            // a click-to-open was the only way this could work on mobile too
+            // ("คำนึงถึง mobile ด้วยนะ"); base-ui's own Positioner already
+            // measures real space and flips/clamps on its own the same way
+            // the tooltip beside it does, so it never spills off a narrow
+            // phone screen. Never wired to onPick/the person filter — "อื่นๆ"
+            // is several people at once, not one id a single-person filter
+            // could ever mean.
+            if (isOther) {
+              return (
+                <Popover key={p.id} open={otherOpen} onOpenChange={setOtherOpen}>
+                  <PopoverTrigger
+                    render={
+                      <button
+                        type="button"
+                        aria-label={`${p.name} — ${p.count} ${seriesLabel} — กดเพื่อดูรายชื่อ`}
+                        className={segButtonClass}
+                        style={{ backgroundColor: segColor, flexGrow: p.count, flexBasis: 0 }}
+                      />
+                    }
+                  />
+                  <PopoverContent side="top" align="center" className="w-56 p-2.5">
+                    <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-[var(--ink)]">
+                      {p.name} ({p.count} {seriesLabel})
+                    </p>
+                    <div className="max-h-48 space-y-1 overflow-y-auto pr-1">
+                      {p.others?.map((o, oi) => (
+                        <div key={oi} className="flex items-center gap-2 text-xs">
+                          <span className="min-w-0 flex-1 truncate text-[var(--ink-soft)]">{o.name}</span>
+                          <span className="shrink-0 font-medium tabular-nums text-[var(--ink)]">{o.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="mt-1.5 border-t border-[var(--line)] pt-1.5 text-[10px] text-[var(--ink-faint)]">
+                      ดูรายชื่ออย่างเดียว — กรองแดชบอร์ดทีละคนได้จาก 5 อันดับแรกบนแท่งแทน
+                    </p>
+                  </PopoverContent>
+                </Popover>
+              );
+            }
+
             return (
               <Tooltip key={p.id}>
                 <TooltipTrigger
                   render={
                     <button
                       type="button"
-                      // Not the native `disabled` attribute — a disabled
-                      // <button> doesn't reliably fire hover/pointer events
-                      // at all in most browsers (Safari/Firefox skip them
-                      // entirely), so the "อื่นๆ" aggregate — which
-                      // `topPeople` always appends *last*, i.e. always the
-                      // visually topmost segment — never showed its tooltip
-                      // or responded to anything ("hover ไม่ขึ้น กดไม่ได้อะ
-                      // อันบนสุด", and it really was every single time,
-                      // because "other" always lands in that exact spot).
-                      // `onPick` already no-ops for "other" on its own, so
-                      // aria-disabled (announces non-interactive to screen
-                      // readers, doesn't touch pointer events) plus the
-                      // cursor-default styling below is enough to keep it
-                      // visually/semantically inert without breaking hover.
-                      aria-disabled={isOther}
                       onClick={() => onPick(p.id)}
-                      aria-pressed={isOther ? undefined : isActive}
+                      aria-pressed={isActive}
                       aria-label={`${p.name} — ${p.count} ${seriesLabel}${isActive ? " (กำลังกรองอยู่ คลิกเพื่อยกเลิก)" : ""}`}
-                      className={cn(
-                        "relative w-full flex-1 border-t border-white/70 first:border-t-0",
-                        isTop && "rounded-t-[5px]",
-                        isOther ? "cursor-default" : "cursor-pointer hover:brightness-90"
-                      )}
+                      className={segButtonClass}
                       style={{ backgroundColor: segColor, flexGrow: p.count, flexBasis: 0 }}
                     >
                       {isActive && <span className="pointer-events-none absolute inset-0 ring-2 ring-inset ring-white" />}
