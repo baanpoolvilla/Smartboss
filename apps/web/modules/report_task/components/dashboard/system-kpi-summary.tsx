@@ -55,8 +55,10 @@ interface PersonSeg {
   count: number;
   /** Only set on the folded "อื่นๆ" segment — everyone past MAX_SEGMENTS,
    * already sorted biggest-first, so the popover listing them doesn't need
-   * to re-sort. Undefined on a real person's own segment. */
-  others?: { name: string; count: number }[];
+   * to re-sort. Undefined on a real person's own segment. Carries `id` too
+   * (not just name/count) so a row in that popover can filter the Dashboard
+   * to that one person exactly like clicking a real segment does. */
+  others?: { id: string; name: string; count: number }[];
 }
 
 interface KpiGroup {
@@ -71,7 +73,10 @@ interface KpiGroup {
 /** `counts` (personId -> count) into the segment list one bar draws, sorted
  * biggest-first so the tallest, most-identifiable segment lands at the
  * bottom of the stack. Beyond `MAX_SEGMENTS` people the remainder folds into
- * one un-clickable "อื่นๆ" segment (no single person it could filter to). */
+ * one "อื่นๆ" segment — clicking it doesn't filter by itself (no single
+ * person it could mean), but opens a popover listing each folded person by
+ * name, and picking one of *those* filters the Dashboard exactly like a
+ * real segment would. */
 function topPeople(counts: Map<string, number>): PersonSeg[] {
   const entries = [...counts.entries()]
     .filter(([, n]) => n > 0)
@@ -85,7 +90,7 @@ function topPeople(counts: Map<string, number>): PersonSeg[] {
       id: "other",
       name: `อีก ${rest.length} คนที่เหลือ`,
       count: rest.reduce((s, e) => s + e.count, 0),
-      others: rest.map((e) => ({ name: e.name, count: e.count })),
+      others: rest,
     },
   ];
 }
@@ -216,17 +221,40 @@ function StatusBar({
                     <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-[var(--ink)]">
                       {p.name} ({p.count} {seriesLabel})
                     </p>
-                    <div className="max-h-48 space-y-1 overflow-y-auto pr-1">
-                      {p.others?.map((o, oi) => (
-                        <div key={oi} className="flex items-center gap-2 text-xs">
-                          <span className="min-w-0 flex-1 truncate text-[var(--ink-soft)]">{o.name}</span>
-                          <span className="shrink-0 font-medium tabular-nums text-[var(--ink)]">{o.count}</span>
-                        </div>
-                      ))}
+                    {/* Each name filters the Dashboard to that one person —
+                        same as clicking any of the 5 real segments, or
+                        picking them from the "พนักงาน" dropdown up top
+                        (asked for explicitly: "กดชื่อตรงนี้ให้มันลิงก์ตรงชื่อ
+                        ด้วย...ปกติกดหลอดแล้วของใครของมันจะแสดง"). Closes the
+                        popover on pick, same directness as clicking a real
+                        segment (nothing lingers open after). */}
+                    <div className="max-h-48 space-y-0.5 overflow-y-auto pr-1">
+                      {p.others?.map((o) => {
+                        const isOtherActive = activePersonId === o.id;
+                        return (
+                          <button
+                            key={o.id}
+                            type="button"
+                            onClick={() => {
+                              onPick(o.id);
+                              setOtherOpen(false);
+                            }}
+                            className={cn(
+                              "flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-xs hover:bg-[var(--bg-soft)]",
+                              isOtherActive && "bg-[var(--accent)] hover:bg-[var(--accent)]"
+                            )}
+                          >
+                            <span className={cn("min-w-0 flex-1 truncate text-left", isOtherActive ? "font-medium text-[var(--brand-green-dark)]" : "text-[var(--ink-soft)]")}>
+                              {o.name}
+                            </span>
+                            <span className={cn("shrink-0 font-medium tabular-nums", isOtherActive ? "text-[var(--brand-green-dark)]" : "text-[var(--ink)]")}>
+                              {o.count}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
-                    <p className="mt-1.5 border-t border-[var(--line)] pt-1.5 text-[10px] text-[var(--ink-faint)]">
-                      ดูรายชื่ออย่างเดียว — กรองแดชบอร์ดทีละคนได้จาก 5 อันดับแรกบนแท่งแทน
-                    </p>
+                    <p className="mt-1.5 border-t border-[var(--line)] pt-1.5 text-[10px] text-[var(--ink-faint)]">กดชื่อเพื่อกรองแดชบอร์ดเฉพาะคนนั้น</p>
                   </PopoverContent>
                 </Popover>
               );
