@@ -36,8 +36,8 @@
 BEGIN;
 
 -- ด่านตรวจ schema — error ธรรมชาติถ้าไม่มีจริง (regnamespace แปลงไม่ได้ = ไม่มี schema นี้)
-SELECT 'changyai_raw'::regnamespace   AS _check_changyai_raw;
-SELECT :baseline_schema::regnamespace AS _check_baseline_schema;
+SELECT 'changyai_raw'::regnamespace    AS _check_changyai_raw;
+SELECT :'baseline_schema'::regnamespace AS _check_baseline_schema;
 
 CREATE TEMP TABLE _cfg AS
 SELECT :org::text AS org, :yr::text AS yr, :cutover::timestamptz AS cutover;
