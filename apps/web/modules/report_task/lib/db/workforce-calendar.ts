@@ -29,6 +29,7 @@ interface LeaveRow {
   display_label: string | null;
   half_day_start: boolean | null;
   half_day_end: boolean | null;
+  auto_approve: boolean | null;
 }
 
 interface HolidayRow {
@@ -93,7 +94,8 @@ export async function listLeaveEvents(
              lt.name          AS leave_type_name,
              lr.display_label,
              lr.half_day_start,
-             lr.half_day_end
+             lr.half_day_end,
+             lt.auto_approve  AS auto_approve
       FROM workforce.leave_requests lr
       LEFT JOIN workforce.employments e ON e.id = lr.employment_id
       LEFT JOIN workforce.principals  p ON p.person_id = e.person_id
@@ -114,17 +116,32 @@ export async function listLeaveEvents(
      * Teams · ว่าง = ยังไม่ได้ตั้ง ใช้ชื่อประเภทแล้วให้ปฏิทินเติมชื่อคนให้เอง
      */
     const authored = (r.display_label ?? "").trim();
+    // A leave type flagged `autoApprove` in HR is an entitlement someone
+    // gets automatically (the standing example: "วันหยุดประจำเดือน"), not a
+    // real request needing a decision — see the column's own comment in
+    // packages/workforce/db/src/schema/workflow.ts. It doesn't belong in the
+    // "ประเภทลา"/leave bucket at all: showing it there read as "this also
+    // needs approval like ลาป่วย/ลาพักร้อน" when it never did
+    // ("day off มันจะไม่ต้องอนุมัติสิ...จะเป็นหมวดของมันเองเลย"). Routed to
+    // "dayoff" instead — the calendar's own leave-type chip builder
+    // (calendar-view.tsx) already only scans `type === "leave"`, so this
+    // alone is what drops it out of that filter row and into "วันหยุดประจำ".
+    // report-feed-exemptions.ts's `leaves` param doesn't branch on `.type`
+    // at all (just start/end/userId), so compliance exemption keeps working
+    // unchanged either way.
+    const isDayOff = r.auto_approve === true;
     return {
       id: `wf-leave-${r.id}`,
       title: authored !== "" ? authored : (r.leave_type_name ?? "ลา"),
       ...(authored !== "" ? { authoredTitle: true } : {}),
-      type: "leave",
+      type: isDayOff ? "dayoff" : "leave",
       // The HR module owns the actual set of leave types (admins add/rename
       // them in /hr/settings) — using its name as-is here, instead of
       // guessing at a fixed local list, is what lets the calendar's
       // "ประเภทลา" filter and per-type coloring track whatever HR actually
       // has without this module having to mirror HR's config by hand.
-      leaveType: r.leave_type_name ?? undefined,
+      // Left unset for a dayoff row — it's not a "leave type" chip anymore.
+      ...(isDayOff ? {} : { leaveType: r.leave_type_name ?? undefined }),
       start: iso(r.starts_on),
       end: endExclusive(r.ends_on),
       allDay: !half,

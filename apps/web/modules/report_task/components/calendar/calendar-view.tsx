@@ -831,15 +831,23 @@ export function CalendarView() {
               switch inside open to everyone, not just managers (see
               AddTodoDialog) — a small team nudging their own meeting onto
               the calendar shouldn't have to wait on a head/owner just to
-              type a title and pick attendees. */}
-          <Button
-            size="lg"
-            className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white lg:ml-auto"
-            onClick={() => (tab === "work" ? openTodoDialog({}) : openCreate())}
-          >
-            <Plus className="h-4 w-4" />
-            {tab === "work" ? "เพิ่มสิ่งที่ต้องทำ" : "เพิ่มวันลา"}
-          </Button>
+              type a title and pick attendees.
+              "เพิ่มวันลา" (the schedule tab's own create button) is gone —
+              ลา/Day-Off are read straight from HR now (workforce-calendar.ts),
+              so submitting one has to happen at /hr, which has the approval
+              chain and leave-balance ledger this module never had. This
+              calendar is display-only for วันหยุด-ลา going forward
+              ("หน้าของเราจะไม่ได้ให้ลงแล้ว จะให้ลงใน HR"). */}
+          {tab === "work" && (
+            <Button
+              size="lg"
+              className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white lg:ml-auto"
+              onClick={() => openTodoDialog({})}
+            >
+              <Plus className="h-4 w-4" />
+              เพิ่มสิ่งที่ต้องทำ
+            </Button>
+          )}
         </div>
 
         {/* <640px: tabs on their own row, filter + create below — cramming
@@ -901,14 +909,18 @@ export function CalendarView() {
               whole header (and the calendar grid sizing off of it) into a
               horizontal scroll instead of actually shrinking. Truncating
               with an ellipsis here keeps the row — and everything measured
-              against it — inside the real viewport at any width. */}
-          <Button
-            className="ml-auto min-w-0 max-w-[46%] bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
-            onClick={() => (tab === "work" ? openTodoDialog({}) : openCreate())}
-          >
-            <Plus className="h-4 w-4 shrink-0" />
-            <span className="truncate">{tab === "work" ? "เพิ่มสิ่งที่ต้องทำ" : "เพิ่มวันลา"}</span>
-          </Button>
+              against it — inside the real viewport at any width.
+              "เพิ่มวันลา" removed here too, same reason as the desktop button
+              above — ลา/Day-Off entry moved to /hr. */}
+          {tab === "work" && (
+            <Button
+              className="ml-auto min-w-0 max-w-[46%] bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+              onClick={() => openTodoDialog({})}
+            >
+              <Plus className="h-4 w-4 shrink-0" />
+              <span className="truncate">เพิ่มสิ่งที่ต้องทำ</span>
+            </Button>
+          )}
         </div>
 
         {/* ≥640px: unchanged. <640px gets a button + bottom sheet below
