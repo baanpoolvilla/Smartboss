@@ -19,7 +19,8 @@
     "db:backfill-modules": "tsx scripts/backfill-new-modules.ts",
     "db:backfill-grants": "tsx scripts/backfill-role-grants.ts",
     "db:studio": "prisma studio",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --import tsx ./tenant-guard.test.ts"
   },
   "prisma": {
     "seed": "tsx seed.ts",

@@ -26,8 +26,10 @@ export const TENANT_SCOPED_MODELS = new Set<string>([
   // core
   "User", "Role", "Department", "Notification", "OrgModule", "SecuritySetting",
   "PerformanceEvent", "PerformanceSetting", "DocumentCounter", "ExampleItem",
+  "DayOffQuotaSetting", "EmployeeDayOffQuota", "EmployeeDayOffQuotaDefault",
   // report_task
   "ReportTask", "ReportTaskCollection", "ReportTaskStore",
+  "DiscordChannel", "DiscordLink", "ReportSubmission",
   // chat
   "ChatChannel", "ChatChannelMember", "ChatMessage", "ChatReadState",
   // company_files
@@ -55,11 +57,19 @@ function mode(): GuardMode {
   return "warn";
 }
 
-/** มี orgId อยู่ใน where หรือไม่ (ไล่เข้า AND/OR ด้วย) */
+/**
+ * มี orgId อยู่ใน where หรือไม่ (ไล่เข้า AND/OR ด้วย)
+ *
+ * `orgId: null` **นับว่ามี** — User/Role/Notification มี orgId เป็น nullable
+ * จริง (null = แถวระดับแพลตฟอร์ม เช่น super admin ข้ามทุกบริษัท ดูคอมเมนต์ของ
+ * field นั้นในเสกีมา) การ query `{ orgId: null }` จึงเป็นการกรองที่ตั้งใจ
+ * ชัดเจน ไม่ใช่ "ลืมกรอง" — เดิมเช็ค `!== null` ทำให้ query แบบนี้โดน flag เป็น
+ * รั่วทั้งที่ไม่ได้รั่ว (จะพังตอนเปิด strict mode ถ้าไม่แก้จุดนี้ก่อน)
+ */
 function whereHasOrgId(where: unknown): boolean {
   if (!where || typeof where !== "object") return false;
   const w = where as Record<string, unknown>;
-  if ("orgId" in w && w.orgId !== undefined && w.orgId !== null) return true;
+  if ("orgId" in w && w.orgId !== undefined) return true;
   for (const key of ["AND", "OR"] as const) {
     const v = w[key];
     if (Array.isArray(v) && v.some((x) => whereHasOrgId(x))) return true;
@@ -68,11 +78,13 @@ function whereHasOrgId(where: unknown): boolean {
   return false;
 }
 
+/** เหตุผลเดียวกับ whereHasOrgId — `orgId: null` ใน data (สร้าง user ระดับ
+ * แพลตฟอร์ม) นับว่ามี ไม่ใช่ลืมใส่ */
 function dataHasOrgId(data: unknown): boolean {
   if (Array.isArray(data)) return data.length > 0 && data.every((d) => dataHasOrgId(d));
   if (!data || typeof data !== "object") return false;
   const orgId = (data as Record<string, unknown>).orgId;
-  return orgId !== undefined && orgId !== null;
+  return orgId !== undefined;
 }
 
 
