@@ -39,7 +39,7 @@ import { chartColors, leaveTypeColorOrder } from "@/modules/report_task/lib/char
 import { canEditRecord, canSeeTask, canSeeTaskOnCalendar, canSeeMeetingOnCalendar } from "@/modules/report_task/lib/permissions";
 import { getUser, canManage, isOwner } from "@/modules/report_task/lib/directory";
 import { eventTypeLabels } from "@/modules/report_task/lib/calendar-colors";
-import { leaveIconOf } from "@/modules/report_task/lib/leave-icons";
+import { leaveIconOf, leaveTypePresetFor } from "@/modules/report_task/lib/leave-icons";
 import type { LeaveTypeDef } from "@/modules/report_task/store/leave-type-store";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Bell, ListChecks, CalendarOff, Plus, Settings2, User, Users, SlidersHorizontal } from "lucide-react";
@@ -138,15 +138,20 @@ export function CalendarView() {
   // มีคนลาจริงในช่วงที่โหลดอยู่ก็จะขึ้นเป็นตัวเลือกกรองที่นี่เอง
   const leaveTypes = useMemo<LeaveTypeDef[]>(() => {
     const byId = new Map<string, LeaveTypeDef>();
+    let cycleIndex = 0;
     for (const l of leaves) {
       if (l.type !== "leave") continue;
       const id = l.leaveType ?? l.title ?? "ลา";
       if (byId.has(id)) continue;
+      // HR's own standard names get a fixed color+icon (leave-icons.ts) so
+      // "ลาป่วย" always reads the same red/thermometer everywhere; a custom
+      // type an admin added themselves falls back to the old cycling colors.
+      const preset = leaveTypePresetFor(id);
       byId.set(id, {
         id,
         label: id,
-        color: leaveTypeColorOrder[byId.size % leaveTypeColorOrder.length] ?? chartColors.gray,
-        icon: "umbrella",
+        color: preset?.color ?? leaveTypeColorOrder[cycleIndex++ % leaveTypeColorOrder.length] ?? chartColors.gray,
+        icon: preset?.icon ?? "umbrella",
         quotaMode: "none",
       });
     }
