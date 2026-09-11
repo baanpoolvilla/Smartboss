@@ -21,8 +21,8 @@ import {
   provisionWorkforceTenant,
   setWorkforcePrincipalStatus,
   syncWorkforceCompanyName,
-  syncWorkforcePrincipal,
 } from "@/lib/workforce-provisioning";
+import { assertManageableUser, syncUserToWorkforce } from "@/modules/admin/data/user-guards";
 import {
   BASELINE_PERMS,
   ENABLED_MODULES,
@@ -53,20 +53,6 @@ async function resolveTargetOrgId(
   if (!isSuperAdmin(session)) throw new Error("ไม่มีสิทธิ์จัดการข้อมูลข้ามบริษัท");
   if (!(await organizationExists(requested))) throw new Error("ไม่พบบริษัทนี้");
   return requested;
-}
-
-/**
- * ผู้ใช้ที่ action นี้แก้ได้
- *
- * SUPER_ADMIN แก้ได้ทุกบริษัท ส่วนแอดมินบริษัทแก้ได้เฉพาะคนในบริษัทตัวเอง
- * — เช็คทุกครั้งก่อนเขียน เพื่อไม่ให้ยิง userId ข้ามบริษัทเข้ามาแก้ได้
- */
-async function assertManageableUser(session: OrgSession, userId: string) {
-  const user = isSuperAdmin(session)
-    ? await prisma.user.findUnique({ where: { id: userId } })
-    : await prisma.user.findFirst({ where: { id: userId, orgId: session.orgId } });
-  if (!user) throw new Error("ไม่พบผู้ใช้ที่จัดการได้");
-  return user;
 }
 
 /**
@@ -109,62 +95,11 @@ function createUserSchema(minLength: number) {
   });
 }
 
-/* ═════════════════ เชื่อมผู้ใช้ไปยังโมดูลบุคคล (workforce) ═════════════════ */
-
-/**
- * ดันข้อมูลผู้ใช้หนึ่งคนไปให้ workforce รู้จัก
- *
- * ต้องเรียกทุกครั้งที่ตัวตนหรือสิทธิ์เปลี่ยน (สร้าง เปลี่ยนบทบาท ย้ายบริษัท
- * เปิด/ปิดบัญชี) เพราะ workforce เก็บสิทธิ์ของตัวเองแยกและ **ไม่ auto-provision**
- * ผู้ใช้ที่ยังไม่ถูก sync จะโดนปฏิเสธทุกหน้าในโมดูลบุคคล
- *
- * ตั้งใจไม่ให้ล้มทั้ง action: การเพิ่มผู้ใช้ต้องสำเร็จแม้โมดูลบุคคลยังไม่ถูกติดตั้ง
- * (ยังไม่ได้รัน wf:migrate) — ที่หน้ารายชื่อบริษัทมีปุ่มซ่อมให้กดตามทีหลัง
- */
-async function syncUserToWorkforce(userId: string, actorId: string): Promise<void> {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        orgId: true,
-        name: true,
-        email: true,
-        isActive: true,
-        roles: {
-          select: {
-            role: {
-              select: {
-                code: true,
-                permissions: { select: { permission: { select: { code: true } } } },
-              },
-            },
-          },
-        },
-      },
-    });
-    // ผู้ใช้ระดับแพลตฟอร์ม (orgId = null) ไม่มี tenant ให้ผูก — ข้ามไปโดยตั้งใจ
-    if (!user?.orgId) return;
-
-    await syncWorkforcePrincipal({
-      orgId: user.orgId,
-      userId: user.id,
-      displayName: user.name,
-      email: user.email,
-      roleCodes: user.roles.map((r) => r.role.code),
-      permissionCodes: user.roles.flatMap((r) =>
-        r.role.permissions.map((p) => p.permission.code)
-      ),
-      actorId,
-    });
-
-    // ตั้งสถานะทุกครั้ง ไม่ใช่เฉพาะตอนปิด — ไม่งั้นการเปิดบัญชีคืนจะไม่คืนสิทธิ์
-    // ฝั่งโมดูลบุคคล คนนั้นจะยังเข้าไม่ได้ทั้งที่หน้าจอบอกว่าเปิดใช้งานแล้ว
-    await setWorkforcePrincipalStatus(user.orgId, user.id, user.isActive, actorId);
-  } catch (err) {
-    console.error("[workforce] sync principal failed:", userId, err);
-  }
-}
+/* ═════════════ เชื่อมผู้ใช้ไปยังโมดูลบุคคล (workforce) ═════════════
+   assertManageableUser/syncUserToWorkforce ย้ายไป
+   modules/admin/data/user-guards.ts แล้ว (เพื่อให้เทสต์ import ได้ —
+   ไฟล์นี้เป็น "use server" export อะไรจากที่นี่กลายเป็น server action
+   ที่เรียกตรงจาก client ได้ทันที ไม่เหมาะเอาไว้ export ให้แค่เทสต์เรียก) */
 
 export async function createUserAction(formData: FormData) {
   const session = await guard(ADMIN_PERMS.userManage);
@@ -198,7 +133,7 @@ export async function createUserAction(formData: FormData) {
     },
   });
 
-  await syncUserToWorkforce(user.id, session.userId);
+  await syncUserToWorkforce(user.id, targetOrgId, session.userId);
 
   await audit({
     userId: session.userId,
@@ -212,7 +147,7 @@ export async function createUserAction(formData: FormData) {
 export async function updateUserAction(formData: FormData) {
   const session = await guard(ADMIN_PERMS.userManage);
   const userId = String(formData.get("userId") ?? "");
-  await assertManageableUser(session, userId);
+  const target = await assertManageableUser(session, userId);
 
   const name = String(formData.get("name") ?? "").trim();
   const lineUserId = String(formData.get("lineUserId") ?? "").trim();
@@ -223,7 +158,7 @@ export async function updateUserAction(formData: FormData) {
     data: { name, lineUserId: lineUserId || null },
   });
 
-  await syncUserToWorkforce(userId, session.userId);
+  await syncUserToWorkforce(userId, target.orgId ?? "", session.userId);
 
   await audit({ userId: session.userId, action: "USER_UPDATED", targetId: userId });
   revalidatePath("/admin/users");
@@ -277,7 +212,7 @@ export async function moveUserOrgAction(formData: FormData) {
       console.error("[workforce] disable principal in old org failed:", userId, err);
     }
   }
-  await syncUserToWorkforce(userId, session.userId);
+  await syncUserToWorkforce(userId, targetOrgId, session.userId);
 
   await audit({
     userId: session.userId,
@@ -319,7 +254,7 @@ export async function setUserRolesAction(formData: FormData) {
 
   // บทบาทฝั่ง workforce มาจากสิทธิ์ชุดนี้ — ไม่ sync ต่อ การถอนสิทธิ์จะมีผลแค่
   // ใน Smartboss ส่วนโมดูลบุคคลยังให้สิทธิ์เดิมจนกว่าจะมีคนไปรัน wf:sync เอง
-  await syncUserToWorkforce(userId, session.userId);
+  await syncUserToWorkforce(userId, target.orgId, session.userId);
 
   await audit({
     userId: session.userId,
@@ -335,7 +270,7 @@ export async function setUserActiveAction(formData: FormData) {
   const session = await guard(ADMIN_PERMS.userManage);
   const userId = String(formData.get("userId") ?? "");
   const isActive = String(formData.get("isActive") ?? "") === "1";
-  await assertManageableUser(session, userId);
+  const target = await assertManageableUser(session, userId);
 
   if (userId === session.userId && !isActive) {
     throw new Error("ปิดการใช้งานบัญชีตัวเองไม่ได้");
@@ -356,7 +291,7 @@ export async function setUserActiveAction(formData: FormData) {
 
   // ตัด refresh token อย่างเดียวไม่พอ — access token ที่ยังไม่หมดอายุยิง
   // workforce API ได้ตรง ๆ จึงต้องปิดที่ principal ด้วย
-  await syncUserToWorkforce(userId, session.userId);
+  await syncUserToWorkforce(userId, target.orgId ?? "", session.userId);
 
   await audit({
     userId: session.userId,
@@ -1066,7 +1001,7 @@ export async function createOrganizationAction(formData: FormData) {
       org.code
     );
     // ผู้ดูแลคนแรกต้องเข้าโมดูลบุคคลได้ทันทีวันแรก ไม่ต้องรอใครไปรัน wf:sync
-    await syncUserToWorkforce(org.adminUserId, session.userId);
+    await syncUserToWorkforce(org.adminUserId, org.id, session.userId);
   } catch (err) {
     // ไม่ล้มทั้งการสร้างบริษัท — บริษัทใช้โมดูลอื่นได้แล้ว เหลือแต่โมดูลบุคคล
     console.error("[createOrganization] provision workforce tenant failed:", err);
@@ -1117,7 +1052,7 @@ export async function repairWorkforceTenantAction(formData: FormData) {
     select: { id: true },
   });
   for (const member of members) {
-    await syncUserToWorkforce(member.id, session.userId);
+    await syncUserToWorkforce(member.id, org.id, session.userId);
   }
 
   await audit({
