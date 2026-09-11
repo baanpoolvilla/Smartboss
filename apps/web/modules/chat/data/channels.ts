@@ -59,11 +59,17 @@ export async function listChannelsForUser(orgId: string, userId: string): Promis
 
   // แถว membership ใช้บอกแค่ "เข้าได้ไหม" — สถานะอ่านแยกอยู่ใน ChatReadState
   // เดียว ใช้กับทุกประเภทห้อง (รวม org ที่ไม่มีแถว membership เอง)
+  //
+  // orgId ในทุก where ด้านล่างซ้ำซ้อนกับข้อเท็จจริงที่ channelIds มาจาก
+  // memberships ที่กรอง orgId ไปแล้วข้างบน (+ orgChanId ผูก orgId ไว้ในตัว
+  // id เอง) แต่เติมไว้เป็นกำแพงชั้นสองที่ query เหล่านี้เอง เพราะ channelId
+  // เป็น input จากภายนอก — ถ้าวันหน้ามีใคร refactor แล้ว channelIds มาจาก
+  // ทางอื่นที่ไม่ผ่านการกรอง orgId เหมือนเดิม query พวกนี้ยังกันเองได้
   const [channels, allMembers, lastMessages, readStates] = await Promise.all([
-    prisma.chatChannel.findMany({ where: { id: { in: channelIds }, archived: false } }),
-    prisma.chatChannelMember.findMany({ where: { channelId: { in: channelIds } }, select: { channelId: true, userId: true } }),
+    prisma.chatChannel.findMany({ where: { orgId, id: { in: channelIds }, archived: false } }),
+    prisma.chatChannelMember.findMany({ where: { orgId, channelId: { in: channelIds } }, select: { channelId: true, userId: true } }),
     prisma.chatMessage.findMany({
-      where: { channelId: { in: channelIds }, deletedAt: null },
+      where: { orgId, channelId: { in: channelIds }, deletedAt: null },
       orderBy: { createdAt: "desc" },
       distinct: ["channelId"],
     }),
@@ -83,6 +89,7 @@ export async function listChannelsForUser(orgId: string, userId: string): Promis
     channelIds.length > 0
       ? await prisma.chatMessage.findMany({
           where: {
+            orgId,
             deletedAt: null,
             authorId: { not: userId },
             OR: channelIds.map((id) => {

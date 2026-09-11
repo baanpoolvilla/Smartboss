@@ -53,7 +53,7 @@ export async function listMessages(
       throw err;
     }
     const rows = await prisma.chatMessage.findMany({
-      where: { channelId, deletedAt: null, seq: { gt: afterSeq } },
+      where: { orgId, channelId, deletedAt: null, seq: { gt: afterSeq } },
       orderBy: { seq: "asc" },
       take: limit,
     });
@@ -61,7 +61,7 @@ export async function listMessages(
   }
 
   const rows = await prisma.chatMessage.findMany({
-    where: { channelId, deletedAt: null },
+    where: { orgId, channelId, deletedAt: null },
     orderBy: { seq: "desc" },
     take: limit,
   });
@@ -110,7 +110,7 @@ export async function otherMemberIds(orgId: string, channelId: string, excludeUs
     return rows.map((r) => r.id);
   }
   const rows = await prisma.chatChannelMember.findMany({
-    where: { channelId, userId: { not: excludeUserId } },
+    where: { orgId, channelId, userId: { not: excludeUserId } },
     select: { userId: true },
   });
   return rows.map((r) => r.userId);
@@ -124,9 +124,9 @@ const RECENTLY_DELETED_WINDOW_MS = 5 * 60 * 1000;
  * เอาออกตามไปด้วย ไม่ต้องรอ reload หน้าถึงจะหาย — ลบจริงคือ soft-delete
  * (deletedAt) ไม่ใช่ตัดออกจากตาราง จึง query ย้อนกลับมาแบบนี้ได้
  */
-export async function listRecentlyDeletedIds(channelId: string): Promise<string[]> {
+export async function listRecentlyDeletedIds(orgId: string, channelId: string): Promise<string[]> {
   const rows = await prisma.chatMessage.findMany({
-    where: { channelId, deletedAt: { gt: new Date(Date.now() - RECENTLY_DELETED_WINDOW_MS) } },
+    where: { orgId, channelId, deletedAt: { gt: new Date(Date.now() - RECENTLY_DELETED_WINDOW_MS) } },
     select: { id: true },
   });
   return rows.map((r) => r.id);

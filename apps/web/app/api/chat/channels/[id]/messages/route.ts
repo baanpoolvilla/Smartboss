@@ -34,7 +34,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     // ลำดับตั้งใจ ไม่ใช่ Promise.all — listMessages เช็คสิทธิ์สมาชิกห้องก่อน
     // (โยน 403 ถ้าไม่ใช่) ต้องผ่านด่านนั้นก่อนค่อย query ข้อมูลห้องนี้ต่อ
     const messages = await listMessages(session.orgId, id, session.userId, { after });
-    const deletedIds = await listRecentlyDeletedIds(id);
+    const deletedIds = await listRecentlyDeletedIds(session.orgId, id);
     return Response.json({ messages, deletedIds });
   } catch (err) {
     return errorResponse(err);
