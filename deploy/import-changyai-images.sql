@@ -61,13 +61,16 @@ UPDATE maintenance.equipment_returns
    SET image_urls = pg_temp.fix_urls(image_urls)
  WHERE org_id = :org AND array_to_string(image_urls, ',') LIKE '%supabase%';
 
--- รูปจากช่างนอกเก็บเป็น path ล้วนอยู่แล้ว เติมแค่ส่วนหน้า
--- รูปช่างนอกเก็บเป็น path ล้วนไม่มีชื่อถัง ⇒ ต้องเติมเอง
--- ChangYai อัปโหลดผ่าน bucket "photos" (ดู register_external_work_order_photo)
+-- รูปจากช่างนอกเก็บเป็น path ล้วนไม่มีชื่อถัง (ChangYai อัปโหลดผ่าน bucket "photos"
+-- เสมอ — ดู register_external_work_order_photo) ⇒ ต้องเติมทั้งชื่อถังและ prefix เอง
+--
+-- ⚠ ต้องมี '/api/files/' นำหน้าด้วย — คอลัมน์นี้ไม่เหมือนคอลัมน์อื่น มันถูกใช้เป็น
+--   <img src> ตรง ๆ ไม่ผ่าน fix_url() (ดู app/(shell)/maintenance/work-orders/[id]/page.tsx
+--   บรรทัด externalUrls) ถ้าลืม prefix รูปช่างนอกจะพัง 404 ทั้งหมดแม้ไฟล์จะอยู่ถูกที่แล้ว
 -- ⚠ ถ้าเปิดรูปช่างนอกไม่ขึ้นหลัง import ให้มาตรวจบรรทัดนี้เป็นอันดับแรก
 UPDATE maintenance.work_order_external_photos
-   SET storage_path = 'maintenance/imported/photos/' || storage_path
- WHERE org_id = :org AND storage_path <> '' AND storage_path NOT LIKE 'maintenance/%';
+   SET storage_path = '/api/files/maintenance/imported/photos/' || storage_path
+ WHERE org_id = :org AND storage_path <> '' AND storage_path NOT LIKE '/api/files/%';
 
 \echo ''
 \echo '── เหลือ URL ที่ยังชี้ไป Supabase (ต้องได้ 0 ทุกบรรทัด) ──'
