@@ -130,6 +130,18 @@ export default async function HrOverviewPage({
           .map((e) => ({ id: e.id, label: `${e.employee_code} · ${e.full_name}` }));
 
         /*
+         * /employments ถูกจำกัดสิทธิ์ตาม data scope ของผู้เรียก (ดู resolveScopeFilter
+         * ฝั่ง workforce-api) — คนที่ไม่มี workforce.people.manage และไม่มี employment_id
+         * ผูกกับบัญชีตัวเอง จะได้ [] กลับมาเงียบ ๆ (HTTP 200) ทั้งที่บริษัทมีพนักงานจริง
+         * ต่างจาก /time-event-board ที่เปิดให้ทุกคนเรียกได้แบบไม่จำกัด scope เลย
+         * ⇒ ถ้ามีคนสแกนจริง (arrivals ไม่ว่าง) ให้ถือว่ามีพนักงานอยู่แน่ ๆ แม้ activePeople
+         * จะว่างเพราะโดนจำกัดสิทธิ์ — กันไม่ให้ตัวเลขบนสุด (ลงเวลาแล้ว N คน) กับ
+         * รายการด้านล่าง (ยังไม่มีพนักงานในระบบ) ขัดแย้งกันเองอย่างที่เจอ
+         */
+        const hasEmployees = activePeople.length > 0 || arrivals.length > 0;
+        const peopleCount = Math.max(activePeople.length, arrivals.length);
+
+        /*
          * "การลงเวลาวันนี้" เดิมอ่านจากกระดานสด (/time-event-board) ที่มีแถวเฉพาะ
          * คนที่สแกนแล้ว — คนที่ควรมาทำงานแต่ไม่มาสแกนเลยจะไม่ปรากฏในตารางนี้เลย
          * ทั้งที่เป็นเคสสำคัญที่สุด (ขาดงาน) ผสมคนที่ยังไม่สแกนเข้าไปด้วย โดยหา
@@ -233,7 +245,7 @@ export default async function HrOverviewPage({
               แล้วกลับ) หายไปหมด และไม่มีทางรู้ว่าแต่ละครั้งลงผ่านช่องทางไหน
             */}
             <SectionCard
-              title={`การลงเวลา${dayLabel} · ${activePeople.length} คน`}
+              title={`การลงเวลา${dayLabel} · ${peopleCount} คน`}
               description={[
                 `ลงเวลาแล้ว ${arrivals.length} คน`,
                 `${timeline?.items.length ?? 0} ครั้ง`,
@@ -244,10 +256,10 @@ export default async function HrOverviewPage({
                 .join(" · ")}
               className="mb-4"
             >
-              {activePeople.length === 0 ? (
-                <EmptyState>ยังไม่มีพนักงานในระบบ</EmptyState>
-              ) : (
+              {hasEmployees ? (
                 <AttendanceTimeline events={timeline?.items ?? []} />
+              ) : (
+                <EmptyState>ยังไม่มีพนักงานในระบบ</EmptyState>
               )}
               <p className="mt-3 text-xs text-(--ink-soft)">
                 อ่านจากการสแกนสด ๆ ไม่ต้องรอสั่งคำนวณ — ตัวเลขสรุปรายเดือนและ OT

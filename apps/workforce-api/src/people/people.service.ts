@@ -213,7 +213,8 @@ export class PeopleService {
         ...(query.status === undefined ? {} : { status: query.status }),
         ...(query.personId === undefined ? {} : { personId: query.personId }),
         ...(query.asOf === undefined ? {} : { activeOn: query.asOf }),
-        ...(scopeFilter === null ? {} : { employmentIds: scopeFilter }),
+        ...(scopeFilter.employmentIds === null ? {} : { employmentIds: scopeFilter.employmentIds }),
+        ...(scopeFilter.companyIds === undefined ? {} : { companyIds: scopeFilter.companyIds }),
       });
 
       const page = buildPage(rows, query.limit);
@@ -341,28 +342,39 @@ export class PeopleService {
   // --- scope helpers ---
 
   /**
-   * แปลง permission scope เป็นรายการ employment ที่ผู้เรียกเห็นได้
-   * คืน `null` = ไม่จำกัด (scope ระดับ tenant)
+   * แปลง permission scope เป็นขอบเขตของ employment ที่ผู้เรียกเห็นได้
+   * `employmentIds: null` = ไม่จำกัดตามรายชื่อ (อาจยังถูกจำกัดด้วย companyIds ต่อ)
    */
   private async resolveScopeFilter(
     uow: UnitOfWorkContext,
     asOf: string | undefined,
-  ): Promise<string[] | null> {
+  ): Promise<{ employmentIds: string[] | null; companyIds?: string[] }> {
     const principal = this.requestContext.requirePrincipal();
     const scope: DataScope | undefined = principal.scopes['workforce.attendance.read'];
 
     // ผู้ที่มีสิทธิ์จัดการบุคคลเห็นได้ทั้ง tenant อยู่แล้ว
-    if (principal.permissions.has('workforce.people.manage')) return null;
-    if (scope === undefined || scope === 'TENANT' || scope === 'COMPANY') return null;
+    if (principal.permissions.has('workforce.people.manage')) return { employmentIds: null };
+    if (scope === undefined || scope === 'TENANT' || scope === 'COMPANY') {
+      return { employmentIds: null };
+    }
 
     const asOfDate = asOf ?? this.clock.today(this.config.DEFAULT_TIME_ZONE).toString();
     const self = principal.employmentId;
-    if (self === null) return [];
+    if (self === null) {
+      // บัญชีนี้ไม่มี employment ผูกตัวเอง (เช่นผู้จัดการที่ไม่เคยถูกบันทึกเป็น
+      // พนักงานในระบบ) จึงคำนวณ "ทีมของตัวเอง" จากลำดับชั้นพนักงานไม่ได้เลย
+      // ใช้ขอบเขตบริษัทที่บทบาทนี้ถูกมอบหมาย (principalRoleAssignments) แทน
+      // การคืนว่างเปล่า ไม่งั้นคนที่ถือสิทธิ์ระดับทีม/บริษัทอยู่แล้วจะมองไม่เห็น
+      // พนักงานทั้งบริษัทเลยทั้งที่สิทธิ์ไม่ได้ห้าม
+      return principal.companyIds.length > 0
+        ? { employmentIds: null, companyIds: [...principal.companyIds] }
+        : { employmentIds: [] };
+    }
 
-    if (scope === 'SELF') return [self];
+    if (scope === 'SELF') return { employmentIds: [self] };
 
     const managed = await this.repository.listManagedEmploymentIds(uow.tx, self, asOfDate);
-    return [...new Set([self, ...managed])];
+    return { employmentIds: [...new Set([self, ...managed])] };
   }
 
   private async loadEmploymentInScope(
@@ -373,8 +385,12 @@ export class PeopleService {
     if (row === undefined) throw AppError.notFound('employment');
 
     const allowed = await this.resolveScopeFilter(uow, undefined);
+    const inScope =
+      allowed.employmentIds !== null
+        ? allowed.employmentIds.includes(id)
+        : (allowed.companyIds?.includes(row.companyId) ?? true);
     // นอก scope ตอบ 404 เหมือนของที่ไม่มี — ไม่ยืนยันว่ามีพนักงานคนนี้อยู่
-    if (allowed !== null && !allowed.includes(id)) throw AppError.notFound('employment');
+    if (!inScope) throw AppError.notFound('employment');
     return row;
   }
 }

@@ -122,6 +122,8 @@ export class PeopleRepository {
       activeOn?: string;
       /** จำกัดตาม data scope ของผู้เรียก */
       employmentIds?: string[];
+      /** จำกัดตาม data scope ของผู้เรียกเมื่ออ้างอิงเป็นรายชื่อ employment ไม่ได้ */
+      companyIds?: string[];
     },
   ): Promise<EmploymentWithPerson[]> {
     const conditions: SQL[] = [];
@@ -143,6 +145,10 @@ export class PeopleRepository {
       // scope ที่ไม่ครอบคลุมใครเลยต้องคืนว่าง ไม่ใช่คืนทุกแถว
       if (options.employmentIds.length === 0) return [];
       conditions.push(inArray(schema.employments.id, options.employmentIds));
+    }
+    if (options.companyIds !== undefined) {
+      if (options.companyIds.length === 0) return [];
+      conditions.push(inArray(schema.employments.companyId, options.companyIds));
     }
 
     const rows = await tx
