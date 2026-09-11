@@ -151,6 +151,29 @@ export async function listLeaveEvents(
   });
 }
 
+interface LeaveTypeNameRow {
+  name: string;
+}
+
+/**
+ * ชื่อประเภทลาทั้งหมด (ไม่รวมที่ auto_approve — อันนั้นคือ "วันหยุดประจำ" ไม่ใช่ "ลา")
+ *
+ * ต่างจาก listLeaveEvents ตรงที่ไม่สนใจว่าช่วงวันที่ที่ขอมามีใครลาจริงไหม —
+ * เอาไว้ให้แถบ "ประเภทลา" ของปฏิทินโชว์ครบทุกประเภทที่ HR ตั้งไว้เสมอ ไม่ใช่
+ * แค่ประเภทที่บังเอิญมีคนลาในเดือนที่กำลังดูอยู่
+ */
+export async function listLeaveTypeCatalog(orgId: string): Promise<string[]> {
+  const rows = await withWorkforceTenant(orgId, (tx) =>
+    tx.$queryRaw<LeaveTypeNameRow[]>`
+      SELECT name
+      FROM workforce.leave_types
+      WHERE auto_approve IS NOT TRUE
+      ORDER BY name
+    `
+  );
+  return rows.map((r) => r.name);
+}
+
 /** วันหยุดของบริษัทตามปฏิทินวันหยุดที่ตั้งไว้ในโมดูลบุคคล */
 export async function listHolidayEvents(
   orgId: string,

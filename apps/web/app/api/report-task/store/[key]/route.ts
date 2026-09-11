@@ -15,6 +15,7 @@ import { recordReportStickerEvents } from "@/modules/report_task/lib/db/report-f
 import {
   listHolidayEvents,
   listLeaveEvents,
+  listLeaveTypeCatalog,
 } from "@/modules/report_task/lib/db/workforce-calendar";
 import type { Department } from "@/modules/report_task/types";
 
@@ -68,6 +69,9 @@ const REPORT_FEED_KEY = "report-feed";
  */
 const WORKFORCE_KEYS = new Set(["leaves", "holidays"]);
 
+/** ชื่อประเภทลาทั้งหมด — ไม่ต้องใช้ช่วงวันที่เหมือนสองคีย์ข้างบน */
+const LEAVE_TYPE_CATALOG_KEY = "leave-type-catalog";
+
 /** ช่วงที่ปฏิทินขอมาโดยปริยาย — กว้างพอครอบคลุมมุมมองปีของ FullCalendar */
 function defaultRange(): { from: string; to: string } {
   const now = new Date();
@@ -92,6 +96,11 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ ke
   if (key === DEPARTMENTS_KEY) {
     const departments = await listDepartmentsWithOverlay(session.orgId);
     return Response.json(departments, { headers: { "Cache-Control": "no-store", "X-Data-Version": "1" } });
+  }
+
+  if (key === LEAVE_TYPE_CATALOG_KEY) {
+    const names = await listLeaveTypeCatalog(session.orgId);
+    return Response.json(names, { headers: { "Cache-Control": "no-store", "X-Data-Version": "1" } });
   }
 
   if (WORKFORCE_KEYS.has(key)) {
@@ -127,6 +136,13 @@ async function put(request: NextRequest, key: string) {
   }
   if (!body || typeof body !== "object" || !("data" in body)) {
     return Response.json({ error: "รูปแบบข้อมูลไม่ถูกต้อง" }, { status: 400 });
+  }
+
+  if (key === LEAVE_TYPE_CATALOG_KEY) {
+    return Response.json(
+      { error: "ประเภทลาตั้งค่าที่โมดูลบุคคล (/hr/settings) — ปฏิทินนี้แสดงผลอย่างเดียว" },
+      { status: 409 }
+    );
   }
 
   if (WORKFORCE_KEYS.has(key)) {

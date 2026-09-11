@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useMeetingStore } from "@/modules/report_task/store/meeting-store";
 import { useLeaveStore } from "@/modules/report_task/store/leave-store";
+import { useLeaveTypeCatalogStore } from "@/modules/report_task/store/leave-type-catalog-store";
 import { useTodoStore } from "@/modules/report_task/store/todo-store";
 import { useHolidayStore, holidaySource, isSourceSelected } from "@/modules/report_task/store/holiday-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
@@ -118,6 +119,7 @@ export function CalendarView() {
   const meetings = useMeetingStore((s) => s.meetings);
   const updateMeeting = useMeetingStore((s) => s.updateMeeting);
   const leaves = useLeaveStore((s) => s.leaves);
+  const leaveTypeCatalog = useLeaveTypeCatalogStore((s) => s.names);
   const todos = useTodoStore((s) => s.todos);
   const toggleTodo = useTodoStore((s) => s.toggleTodo);
   const updateTodo = useTodoStore((s) => s.updateTodo);
@@ -132,17 +134,17 @@ export function CalendarView() {
   const routineCompanyQuota = useRoutineDayOffStore((s) => s.companyMonthlyQuota);
   const routineUseDeptOverrides = useRoutineDayOffStore((s) => s.useDepartmentOverrides);
   const routineDeptQuotas = useRoutineDayOffStore((s) => s.departmentQuotas);
-  // ประเภทลาที่แสดง/กรองในปฏิทินนี้มาจากรายการลาจริงที่ดึงจาก HR (workforce)
-  // ล้วน ๆ — ไม่ใช่ค่าคงที่ที่เดาไว้ในโค้ด เพราะ HR เป็นเจ้าของรายชื่อ
-  // ประเภทลาจริง (แอดมินเพิ่ม/เปลี่ยนชื่อได้ที่ /hr/settings) แบบไหนก็ตามที่
-  // มีคนลาจริงในช่วงที่โหลดอยู่ก็จะขึ้นเป็นตัวเลือกกรองที่นี่เอง
+  // ประเภทลาที่แสดง/กรองในปฏิทินนี้มาจาก HR (workforce) ล้วน ๆ — ไม่ใช่ค่าคงที่
+  // ที่เดาไว้ในโค้ด เพราะ HR เป็นเจ้าของรายชื่อประเภทลาจริง (แอดมินเพิ่ม/
+  // เปลี่ยนชื่อได้ที่ /hr/settings) ชื่อทุกประเภทที่ HR ตั้งไว้ขึ้นเป็นตัวเลือก
+  // กรองที่นี่เสมอ ไม่ใช่แค่ประเภทที่บังเอิญมีคนลาในช่วงที่กำลังดูอยู่ —
+  // เดิมกรองจากรายการลาจริงในช่วงนี้เท่านั้น ผลคือประเภทที่ไม่มีคนใช้เดือนนั้น
+  // (เช่น "ลากิจ") จะหายไปจากแถบตัวกรองไปเลย ทั้งที่ HR มีประเภทนี้ตั้งไว้อยู่
   const leaveTypes = useMemo<LeaveTypeDef[]>(() => {
     const byId = new Map<string, LeaveTypeDef>();
     let cycleIndex = 0;
-    for (const l of leaves) {
-      if (l.type !== "leave") continue;
-      const id = l.leaveType ?? l.title ?? "ลา";
-      if (byId.has(id)) continue;
+    function ensure(id: string) {
+      if (byId.has(id)) return;
       // HR's own standard names get a fixed color+icon (leave-icons.ts) so
       // "ลาป่วย" always reads the same red/thermometer everywhere; a custom
       // type an admin added themselves falls back to the old cycling colors.
@@ -155,8 +157,13 @@ export function CalendarView() {
         quotaMode: "none",
       });
     }
+    for (const name of leaveTypeCatalog) ensure(name);
+    for (const l of leaves) {
+      if (l.type !== "leave") continue;
+      ensure(l.leaveType ?? l.title ?? "ลา");
+    }
     return [...byId.values()];
-  }, [leaves]);
+  }, [leaves, leaveTypeCatalog]);
   const colors = useEventColorStore((s) => s.colors);
   const hiddenUserIds = useCalendarVisibilityStore((s) => s.hiddenUserIds);
   const toggleUserVisible = useCalendarVisibilityStore((s) => s.toggle);

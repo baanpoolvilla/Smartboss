@@ -13,6 +13,7 @@ import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { usePenaltySettingsStore } from "@/modules/report_task/store/penalty-settings-store";
 import { useMeetingStore } from "@/modules/report_task/store/meeting-store";
 import { useLeaveStore } from "@/modules/report_task/store/leave-store";
+import { useLeaveTypeCatalogStore } from "@/modules/report_task/store/leave-type-catalog-store";
 import { useTodoStore } from "@/modules/report_task/store/todo-store";
 import { useHolidayStore } from "@/modules/report_task/store/holiday-store";
 import { thaiHolidayEvents } from "@/modules/report_task/data/thai-holidays";
@@ -150,6 +151,13 @@ export function StoreHydrator() {
         store={useLeaveStore}
         select={(s) => s.leaves}
         apply={(s, leaves) => ({ ...s, leaves })}
+      />
+      <ServerStoreSync
+        apiKey="leave-type-catalog"
+        pollMs={MEDIUM_POLL_MS}
+        store={useLeaveTypeCatalogStore}
+        select={(s) => s.names}
+        apply={(s, names) => ({ ...s, names })}
       />
       <ServerStoreSync
         apiKey="todos"

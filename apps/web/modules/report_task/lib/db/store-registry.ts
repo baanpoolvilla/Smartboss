@@ -18,6 +18,10 @@ export const STORE_KEYS = {
   "employee-profiles": "stores/employee-profiles.json",
   holidays: "stores/holidays.json",
   leaves: "stores/leaves.json",
+  // ไม่มีไฟล์ต้นทางคู่กัน (ของ Smartboss เพิ่มเอง) — รายชื่อประเภทลาทั้งหมด
+  // จาก workforce แม้ประเภทนั้นจะยังไม่มีใครลาในช่วงที่ปฏิทินกำลังโหลดอยู่เลย
+  // ดู workforce-calendar.ts:listLeaveTypeCatalog
+  "leave-type-catalog": "stores/leave-type-catalog.json",
   todos: "stores/todos.json",
   "leave-types": "stores/leave-types.json",
   "issue-reports": "stores/issue-reports.json",

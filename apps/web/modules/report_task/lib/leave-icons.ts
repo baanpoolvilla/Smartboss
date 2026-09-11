@@ -49,7 +49,9 @@ export function leaveIconOf(name: string | undefined): LucideIcon {
  */
 const LEAVE_TYPE_PRESETS: Record<string, { color: string; icon: string }> = {
   "ลาป่วย": { color: chartColors.red, icon: "thermometer" },
-  "ลาพักร้อน": { color: chartColors.orange, icon: "sun" },
+  // amber (gold), not orange — orange sits too close to red at chip size and
+  // the two read as the same color at a glance.
+  "ลาพักร้อน": { color: chartColors.amber, icon: "sun" },
   "ลากิจ": { color: chartColors.teal, icon: "briefcase" },
   "ลาไม่รับค่าจ้าง": { color: chartColors.violet, icon: "ban" },
 };
