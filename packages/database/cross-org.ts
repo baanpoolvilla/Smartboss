@@ -39,8 +39,6 @@ export const CROSS_ORG_REASONS = [
   // ค้นหาแถวด้วย id ภายนอกที่ unique ทั้งระบบ (ไม่ใช่แค่ unique ในบริษัทเดียว)
   // ตอนที่ยังไม่รู้ orgId เลย — orgId คือ "คำตอบ" ที่ query นี้กำลังหา ไม่ใช่
   // เงื่อนไขกรอง: apps/web/app/api/auth/line/*.ts (lineUserId, ก่อนล็อกอิน)
-  // และ discord/config.ts findChannel() (discordChannelId, webhook ขาเข้า
-  // ไม่ใช่ล็อกอิน แต่หลักการเดียวกัน)
   "auth:lookup-by-globally-unique-external-id",
   // apps/web/modules/maintenance/data/notify.ts — Notification.orgId เป็น
   // metadata ว่า "เรื่องนี้เกี่ยวกับบริษัทไหน" ไม่ใช่เส้นแบ่งว่าใครอ่านได้ —

@@ -29,7 +29,6 @@ export const adminManifest: ModuleManifest = {
     // เมนูนี้โผล่เฉพาะ SUPER_ADMIN — คุมเพดานพื้นที่ไฟล์รายบริษัท (แพ็กเกจเสริม)
     { label: "พื้นที่จัดเก็บไฟล์ (ทุกบริษัท)", path: "/admin/storage", permission: ADMIN_PERMS.orgCreate, icon: "HardDrive" },
     { label: "ผลงานรายคน", path: "/admin/performance", permission: ADMIN_PERMS.performanceView, icon: "ChartColumn" },
-    { label: "Discord Report", path: "/admin/discord-reports", permission: ADMIN_PERMS.performanceView, icon: "MessageSquareText" },
     { label: "ความปลอดภัย", path: "/admin/security", permission: ADMIN_PERMS.securitySettingManage, icon: "ShieldCheck" },
     { label: "ประวัติการใช้งาน", path: "/admin/audit", permission: ADMIN_PERMS.auditView, icon: "History" },
   ],

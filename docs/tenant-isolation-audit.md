@@ -43,6 +43,11 @@ orgId เสมอ" — `packages/database/tenant-guard.ts` เป็น Prisma 
 `DayOffQuotaSetting`, `EmployeeDayOffQuota`, `EmployeeDayOffQuotaDefault`,
 `DiscordChannel`, `DiscordLink`, `ReportSubmission`
 
+> อัปเดต 2026-09-11: `DiscordChannel`/`DiscordLink`/`ReportSubmission` (และ
+> ฟีเจอร์ Discord Report Sync ทั้งชุด) ถูกลบออกจากระบบทั้งหมดในภายหลัง —
+> ยืนยันแล้วว่าไม่ได้ใช้งาน ไม่ใช่เพราะปัญหา tenant isolation แต่อย่างใด
+> ตอนลบก็ถอดออกจาก `TENANT_SCOPED_MODELS` ไปด้วยพร้อมกัน
+
 ระหว่างแก้ยังพบว่า `User`/`Role`/`Notification` มี `orgId` แบบ **nullable**
 (null = แถวระดับแพลตฟอร์ม เช่น super admin) แต่การ์ดเดิมปฏิบัติกับ `orgId: null`
 เหมือน "ไม่มี orgId เลย" — จะทำให้ query ที่ตั้งใจดึง platform user (เช่น
@@ -56,7 +61,7 @@ orgId เสมอ" — `packages/database/tenant-guard.ts` เป็น Prisma 
 ## 3. Escape hatch — `crossOrg()`
 
 บาง query ตั้งใจข้ามบริษัทจริงๆ (cron ระดับแพลตฟอร์ม, ค้นหา user ก่อน login
-ด้วย LINE/Discord id ที่ unique ทั้งระบบ, แจ้งเตือนที่ผูกกับ userId ไม่ใช่ orgId)
+ด้วย LINE id ที่ unique ทั้งระบบ, แจ้งเตือนที่ผูกกับ userId ไม่ใช่ orgId)
 — สร้างกลไก `packages/database/cross-org.ts` ให้ห่อ query เหล่านี้แบบ grep-able
 ที่จุดเรียกจริง บังคับเหตุผล (TS literal union, ไม่ใช่ string ใดก็ได้) และ
 snapshot รายการเหตุผลไว้ในเทสต์กันเพิ่มเงียบๆ
