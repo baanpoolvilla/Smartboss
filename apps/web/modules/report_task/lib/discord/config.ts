@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
+import { crossOrg } from "@smartboss/database/cross-org";
 import type { DiscordRound } from "@/modules/report_task/lib/discord/decider";
 
 export interface ChannelConfig {
@@ -18,7 +19,9 @@ export interface ChannelConfig {
 
 /** หา config ห้องจาก Channel ID (ห้องหนึ่งอยู่บริษัทเดียวในทางปฏิบัติ) — org มาจากตรงนี้ ไม่รับจาก client */
 export async function findChannel(discordChannelId: string): Promise<ChannelConfig | null> {
-  const row = await prisma.discordChannel.findFirst({ where: { discordChannelId } });
+  const row = await crossOrg("auth:lookup-by-globally-unique-external-id", () =>
+    prisma.discordChannel.findFirst({ where: { discordChannelId } })
+  );
   if (!row) return null;
   return {
     orgId: row.orgId,

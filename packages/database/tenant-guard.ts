@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { activeCrossOrgReason } from "./cross-org";
 
 /**
  * ─────────────────────────────────────────────────────────────────────────
@@ -89,11 +90,17 @@ function dataHasOrgId(data: unknown): boolean {
 
 
 function report(model: string, operation: string): void {
+  // query นี้ห่อด้วย crossOrg(reason, fn) จาก cross-org.ts ไว้แล้ว — ตั้งใจ
+  // ข้ามบริษัทจริง ผ่านการรีวิวแล้ว (ดู CROSS_ORG_REASONS) ไม่ต้องเตือน/บล็อก
+  const crossOrgReason = activeCrossOrgReason();
+  if (crossOrgReason) return;
+
   const m = mode();
   if (m === "off") return;
   const msg =
     `[tenant-guard] ${model}.${operation} ไม่มีเงื่อนไข orgId — เสี่ยงข้อมูลข้ามบริษัท ` +
-    `(ถ้าตั้งใจ query ข้ามบริษัทจริง ใช้ prisma ที่ไม่ผ่านการ์ด หรือระบุ orgId ให้ครบ)`;
+    `(ถ้าตั้งใจ query ข้ามบริษัทจริง ห่อด้วย crossOrg(reason, fn) จาก ./cross-org ` +
+    `ไม่ใช่ query ตรง ๆ — ไม่งั้นระบุ orgId ให้ครบ)`;
   if (m === "strict") throw new Error(msg);
   console.error(msg);
 }

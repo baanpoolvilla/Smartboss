@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
+import { crossOrg } from "@smartboss/database/cross-org";
 
 // ─── In-app notifications (core.notifications) ───────────
 
@@ -75,32 +76,46 @@ export async function managersAndCaretaker(
   return Array.from(ids);
 }
 
+// Notification.orgId คือ metadata ว่า "เรื่องนี้เกี่ยวกับบริษัทไหน" ไม่ใช่เส้น
+// แบ่งว่าใครอ่านได้ — เส้นแบ่งจริงคือ userId ที่ทุก query ด้านล่างผูกไว้แล้ว
+// (ผู้รับคนเดียว) การกรองซ้ำด้วย orgId ของผู้รับจะพังกับ platform user ที่
+// userId ไม่มี orgId ผูกเลย (เช่น super admin — ดู apps/web/lib/nav.ts) จึงห่อ
+// ด้วย crossOrg แทนที่จะเติม orgId ผิดความหมาย
+
 export function listNotifications(userId: string) {
-  return prisma.notification.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-    take: 50,
-  });
+  return crossOrg("notification:recipient-scoped-not-org-scoped", () =>
+    prisma.notification.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    })
+  );
 }
 
 export function unreadCount(userId: string) {
-  return prisma.notification.count({ where: { userId, readAt: null } });
+  return crossOrg("notification:recipient-scoped-not-org-scoped", () =>
+    prisma.notification.count({ where: { userId, readAt: null } })
+  );
 }
 
 export async function markAllRead(userId: string) {
-  await prisma.notification.updateMany({
-    where: { userId, readAt: null },
-    data: { readAt: new Date() },
-  });
+  await crossOrg("notification:recipient-scoped-not-org-scoped", () =>
+    prisma.notification.updateMany({
+      where: { userId, readAt: null },
+      data: { readAt: new Date() },
+    })
+  );
 }
 
 /** ทำเครื่องหมายอ่านทีละรายการ — `where` ผูก userId ไว้ด้วยเสมอ กัน user คนหนึ่ง
  * ยิง id ของอีกคนมาแล้วมาร์คอ่านแจ้งเตือนที่ไม่ใช่ของตัวเอง */
 export async function markRead(userId: string, id: string) {
-  await prisma.notification.updateMany({
-    where: { id, userId, readAt: null },
-    data: { readAt: new Date() },
-  });
+  await crossOrg("notification:recipient-scoped-not-org-scoped", () =>
+    prisma.notification.updateMany({
+      where: { id, userId, readAt: null },
+      data: { readAt: new Date() },
+    })
+  );
 }
 
 // ─── LINE Messaging (per-org config) ─────────────────────

@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
+import { crossOrg } from "@smartboss/database/cross-org";
 
 import { nextWorkOrderCode } from "@/lib/document-code";
 import { fmtThaiDate } from "@/modules/maintenance/lib/format";
@@ -21,13 +22,15 @@ export async function generateWorkOrdersForDuePms(): Promise<{
   const today = new Date();
   today.setHours(23, 59, 59, 999);
 
-  const duePms = await prisma.pmSchedule.findMany({
-    where: {
-      isActive: true,
-      awaitingSchedule: false,
-      nextDueDate: { lte: today },
-    },
-  });
+  const duePms = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.pmSchedule.findMany({
+      where: {
+        isActive: true,
+        awaitingSchedule: false,
+        nextDueDate: { lte: today },
+      },
+    })
+  );
 
   let created = 0;
   for (const pm of duePms) {
@@ -79,9 +82,11 @@ export async function notifyDuePmSchedules(): Promise<{ notified: number }> {
   soon.setHours(23, 59, 59, 999);
   soon.setDate(soon.getDate() + 7);
 
-  const pms = await prisma.pmSchedule.findMany({
-    where: { isActive: true, awaitingSchedule: false, nextDueDate: { lte: soon } },
-  });
+  const pms = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.pmSchedule.findMany({
+      where: { isActive: true, awaitingSchedule: false, nextDueDate: { lte: soon } },
+    })
+  );
 
   let notified = 0;
   for (const pm of pms) {
@@ -144,23 +149,27 @@ export async function notifyDuePmSchedules(): Promise<{ notified: number }> {
  * (port จาก checkAndNotifyMissingExpenses — เดิมรันทุกวัน 17:00)
  */
 export async function notifyMissingExpenses(): Promise<{ reminded: number }> {
-  const rows = await prisma.expense.findMany({
-    where: { workOrderId: { not: null } },
-    select: { workOrderId: true },
-  });
+  const rows = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.expense.findMany({
+      where: { workOrderId: { not: null } },
+      select: { workOrderId: true },
+    })
+  );
   const withExpense = rows
     .map((r) => r.workOrderId)
     .filter((x): x is string => !!x);
 
-  const orders = await prisma.workOrder.findMany({
-    where: {
-      status: "completed",
-      // ใบงานที่ตั้งไว้ว่าไม่มีค่าใช้จ่ายต้องไม่ถูกทวง — ไม่งั้นทวงไปก็ไม่มีอะไรให้กรอก
-      // แล้วคนจะบันทึก 0 บาทเพื่อให้เตือนหาย ซึ่งทำให้รายงานค่าใช้จ่ายเชื่อไม่ได้
-      requiresExpense: true,
-      ...(withExpense.length > 0 ? { id: { notIn: withExpense } } : {}),
-    },
-  });
+  const orders = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.workOrder.findMany({
+      where: {
+        status: "completed",
+        // ใบงานที่ตั้งไว้ว่าไม่มีค่าใช้จ่ายต้องไม่ถูกทวง — ไม่งั้นทวงไปก็ไม่มีอะไรให้กรอก
+        // แล้วคนจะบันทึก 0 บาทเพื่อให้เตือนหาย ซึ่งทำให้รายงานค่าใช้จ่ายเชื่อไม่ได้
+        requiresExpense: true,
+        ...(withExpense.length > 0 ? { id: { notIn: withExpense } } : {}),
+      },
+    })
+  );
 
   // รวมเป็นสรุปรายบริษัท เพื่อไม่ให้ยิงแจ้งเตือนทีละใบ
   const byOrg = new Map<string, typeof orders>();
@@ -235,20 +244,22 @@ export async function dockOverdueMaintenance(): Promise<{
   const workOrderGraceDate = new Date(now);
   workOrderGraceDate.setDate(workOrderGraceDate.getDate() - minWorkOrderGraceDays);
 
-  const overdue = await prisma.workOrder.findMany({
-    where: {
-      status: { in: ["open", "in_progress"] },
-      dueDate: { lt: workOrderGraceDate },
-    },
-    select: {
-      id: true,
-      orgId: true,
-      title: true,
-      dueDate: true,
-      assignedTo: true,
-      property: { select: { caretakerId: true, name: true } },
-    },
-  });
+  const overdue = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.workOrder.findMany({
+      where: {
+        status: { in: ["open", "in_progress"] },
+        dueDate: { lt: workOrderGraceDate },
+      },
+      select: {
+        id: true,
+        orgId: true,
+        title: true,
+        dueDate: true,
+        assignedTo: true,
+        property: { select: { caretakerId: true, name: true } },
+      },
+    })
+  );
 
   for (const wo of overdue) {
     const woSt = settingsByOrg.get(wo.orgId);
@@ -281,17 +292,19 @@ export async function dockOverdueMaintenance(): Promise<{
   const graceDate = new Date(now);
   graceDate.setDate(graceDate.getDate() - minPmGraceDays);
 
-  const latePms = await prisma.pmSchedule.findMany({
-    where: { isActive: true, nextDueDate: { lt: graceDate } },
-    select: {
-      id: true,
-      orgId: true,
-      title: true,
-      nextDueDate: true,
-      assignedTo: true,
-      property: { select: { caretakerId: true, name: true } },
-    },
-  });
+  const latePms = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.pmSchedule.findMany({
+      where: { isActive: true, nextDueDate: { lt: graceDate } },
+      select: {
+        id: true,
+        orgId: true,
+        title: true,
+        nextDueDate: true,
+        assignedTo: true,
+        property: { select: { caretakerId: true, name: true } },
+      },
+    })
+  );
 
   for (const pm of latePms) {
     const st = settingsByOrg.get(pm.orgId);

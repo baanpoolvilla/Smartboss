@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@smartboss/database";
+import { crossOrg } from "@smartboss/database/cross-org";
 import { audit, rateLimit } from "@smartboss/auth";
 import { lineLoginConfigured, verifyLineIdToken } from "@/lib/line";
 import { clientIp, establishSession, jsonError, userAgent } from "../_lib";
@@ -57,10 +58,12 @@ export async function POST(req: NextRequest) {
 
   const { userId: lineUserId } = verified.identity;
 
-  const user = await prisma.user.findFirst({
-    where: { lineUserId, isActive: true },
-    select: { id: true },
-  });
+  const user = await crossOrg("auth:lookup-by-globally-unique-external-id", () =>
+    prisma.user.findFirst({
+      where: { lineUserId, isActive: true },
+      select: { id: true },
+    })
+  );
 
   if (!user) {
     return jsonError("บัญชี LINE นี้ยังไม่ได้ผูกกับพนักงานคนไหน", 404, {

@@ -8,7 +8,8 @@
   "exports": {
     ".": "./client.ts",
     "./client": "./client.ts",
-    "./defaults": "./defaults.ts"
+    "./defaults": "./defaults.ts",
+    "./cross-org": "./cross-org.ts"
   },
   "scripts": {
     "postinstall": "prisma generate",
@@ -20,7 +21,7 @@
     "db:backfill-grants": "tsx scripts/backfill-role-grants.ts",
     "db:studio": "prisma studio",
     "typecheck": "tsc --noEmit",
-    "test": "node --test --import tsx ./tenant-guard.test.ts"
+    "test": "node --test --import tsx ./tenant-guard.test.ts ./cross-org.test.ts"
   },
   "prisma": {
     "seed": "tsx seed.ts",

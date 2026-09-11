@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@smartboss/database";
+import { crossOrg } from "@smartboss/database/cross-org";
 import { audit, rateLimit, verifyPassword } from "@smartboss/auth";
 import { lineLoginConfigured, verifyLineIdToken } from "@/lib/line";
 import { loadSecuritySettings } from "@/lib/security-settings";
@@ -105,10 +106,12 @@ export async function POST(req: NextRequest) {
   }
 
   // บัญชี LINE ใบนี้ถูกใช้ผูกกับพนักงานคนอื่นไปแล้วหรือยัง
-  const taken = await prisma.user.findFirst({
-    where: { lineUserId, NOT: { id: user.id } },
-    select: { id: true },
-  });
+  const taken = await crossOrg("auth:lookup-by-globally-unique-external-id", () =>
+    prisma.user.findFirst({
+      where: { lineUserId, NOT: { id: user.id } },
+      select: { id: true },
+    })
+  );
   if (taken) {
     await audit({
       userId: user.id,
