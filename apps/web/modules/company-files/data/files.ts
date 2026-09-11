@@ -622,8 +622,11 @@ export async function listAllFiles(): Promise<AllFilesRow[]> {
   ]);
   const folderById = new Map(allFolders.map((f) => [f.id, f]));
   const uploaderIds = [...new Set(allFiles.flatMap((f) => [f.createdBy, f.updatedBy].filter((x): x is string => !!x)))];
+  // orgId ซ้ำซ้อนกับข้อเท็จจริงที่ว่า uploaderIds มาจาก allFiles ซึ่งกรอง
+  // orgId ไปแล้วข้างบน — เติมไว้ให้ตรงกับ sibling query เดียวกันที่บรรทัด
+  // 729 (resolveUpdatedByNames) และกันไว้เป็นกำแพงชั้นสอง
   const uploaders = uploaderIds.length
-    ? await prisma.user.findMany({ where: { id: { in: uploaderIds } }, select: { id: true, name: true } })
+    ? await prisma.user.findMany({ where: { orgId: session.orgId, id: { in: uploaderIds } }, select: { id: true, name: true } })
     : [];
   const uploaderNameById = new Map(uploaders.map((u) => [u.id, u.name]));
 

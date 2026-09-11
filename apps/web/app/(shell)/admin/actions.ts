@@ -669,7 +669,10 @@ export async function deleteDepartmentAction(formData: FormData) {
   const departmentId = String(formData.get("departmentId") ?? "");
   await assertEditableDepartment(session.orgId, departmentId);
 
-  const inUse = await prisma.user.count({ where: { departmentId } });
+  // orgId ซ้ำซ้อนกับ assertEditableDepartment ด้านบนที่เช็คไปแล้วว่า
+  // departmentId เป็นของ org นี้จริง — แต่เติมไว้เป็นกำแพงชั้นสองของ query
+  // นี้เอง เผื่อวันหน้ามีใคร refactor ตัดการเช็คด้านบนออกโดยไม่ตั้งใจ
+  const inUse = await prisma.user.count({ where: { orgId: session.orgId, departmentId } });
   if (inUse > 0) {
     throw new Error(`ยังมีผู้ใช้ ${inUse} คนอยู่แผนกนี้ — ย้ายคนออกก่อน`);
   }

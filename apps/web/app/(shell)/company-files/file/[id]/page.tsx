@@ -25,7 +25,12 @@ export default async function CompanyFileDetailPage({ params }: { params: Promis
   }
 
   const uploaderIds = Array.from(new Set([file.createdBy, ...versions.map((v) => v.uploadedBy)]));
-  const uploaders = uploaderIds.length > 0 ? await prisma.user.findMany({ where: { id: { in: uploaderIds } }, select: { id: true, name: true } }) : [];
+  // orgId ซ้ำซ้อนกับ file ที่ query ด้วย orgId ไปแล้วข้างบน — เติมไว้ให้
+  // เป็นกำแพงชั้นสอง เหมือนที่แก้ไว้ที่ modules/company-files/data/files.ts
+  const uploaders =
+    uploaderIds.length > 0
+      ? await prisma.user.findMany({ where: { orgId: session.orgId, id: { in: uploaderIds } }, select: { id: true, name: true } })
+      : [];
   const uploaderNames = Object.fromEntries(uploaders.map((u) => [u.id, u.name]));
   const movableFolders = await listMovableFolders();
   const activity = await listFileActivity(id).catch(() => []);
