@@ -4,31 +4,67 @@ name: CI
 # Claude outputs/SmartBoss-Fix-List-2026-09-11.md ข้อ 3 — ตอนนี้ไม่มี CI เลย
 # แปลว่า lint/typecheck/test ไม่ถูกบังคับรันก่อน merge เลย
 #
-# ⚠ รอบแรกที่รัน `lint` จะแดง — มี 17 errors ของเดิมในโค้ด (ไม่เกี่ยวกับ workflow
-# นี้) ที่ต้องไล่แก้แยกต่างหาก ไม่ใช่ปัญหาของไฟล์นี้
+# แยกเป็น 2 job ตั้งใจ: `verify` (typecheck/test/wf:test — เขียวสะอาดอยู่แล้ว
+# ตอนเขียน) ตั้งเป็น required status check ได้ทันที ส่วน `lint` แยกออกมาเป็น
+# job ของตัวเอง **ไม่ผูกกับ required check** เพราะตอนนี้มี 17 errors ของเดิมใน
+# โค้ดที่ยังไม่ได้ไล่แก้ — ถ้ารวมไว้ใน job เดียวกับ verify จะบล็อก merge ทุก PR
+# ทันทีจนกว่าจะแก้ 17 จุดนั้นก่อน ทั้งที่ไม่เกี่ยวกับ tenant-isolation test (ข้อ 1)
+# ที่ต้องได้ประตูกั้นเร็วกว่านั้น — ไล่แก้ lint แล้วค่อยย้าย `lint` เข้า required
+# check เป็นงานแยกทีหลัง
 on:
   pull_request:
   push:
     branches: [main]
 
+env:
+  # ค่าหลอกสำหรับ CI เท่านั้น — typecheck/test ไม่ต้องต่อ DB จริง (prisma
+  # generate อ่านแค่ schema, wf:test ใช้ PGlite ในตัวเอง — ดูคอมเมนต์ใน
+  # vitest.workforce.config.ts) แต่บาง build step ต้องมีตัวแปรพวกนี้ตั้งไว้
+  # ถึงจะไม่ throw ตอน validate env — **ห้ามใช้ค่าพวกนี้จริงที่ไหนทั้งสิ้น**
+  DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+  DATABASE_URL_UNPOOLED: postgresql://ci:ci@localhost:5432/ci
+  REDIS_URL: redis://localhost:6379
+  JWT_SECRET: ci-only-placeholder-not-a-real-secret-32ch
+  ACCESS_TOKEN_TTL: 15m
+  REFRESH_TOKEN_TTL: 7d
+  COOKIE_SECURE: "false"
+  CRON_SECRET: ci-only-placeholder
+  SEED_ADMIN_PASSWORD: ci-only-placeholder-12345
+  SEED_STAFF_PASSWORD: ci-only-placeholder-12345
+
 jobs:
-  ci:
+  # ตั้งเป็น required status check ได้เลย — ผ่านสะอาดอยู่แล้ว ณ วันที่เขียน
+  # (typecheck: 14 packages, test: 25+18, wf:test: 386 — เช็คจริงก่อนเขียนไฟล์นี้)
+  verify:
     runs-on: ubuntu-latest
-    env:
-      # ค่าหลอกสำหรับ CI เท่านั้น — typecheck/test ไม่ต้องต่อ DB จริง (prisma
-      # generate อ่านแค่ schema, wf:test ใช้ PGlite ในตัวเอง — ดูคอมเมนต์ใน
-      # vitest.workforce.config.ts) แต่บาง build step ต้องมีตัวแปรพวกนี้ตั้งไว้
-      # ถึงจะไม่ throw ตอน validate env — **ห้ามใช้ค่าพวกนี้จริงที่ไหนทั้งสิ้น**
-      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
-      DATABASE_URL_UNPOOLED: postgresql://ci:ci@localhost:5432/ci
-      REDIS_URL: redis://localhost:6379
-      JWT_SECRET: ci-only-placeholder-not-a-real-secret-32ch
-      ACCESS_TOKEN_TTL: 15m
-      REFRESH_TOKEN_TTL: 7d
-      COOKIE_SECURE: "false"
-      CRON_SECRET: ci-only-placeholder
-      SEED_ADMIN_PASSWORD: ci-only-placeholder-12345
-      SEED_STAFF_PASSWORD: ci-only-placeholder-12345
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.13.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: ติดตั้ง dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test (apps/web, @smartboss/auth)
+        run: pnpm test
+
+      - name: Test (workforce — PGlite ในตัวเอง ไม่ต้องมี Postgres จริง)
+        run: pnpm wf:test
+
+  # ยังไม่ผูกเป็น required check — มี 17 errors ของเดิมในโค้ดที่ยังไม่ได้แก้
+  # (ดูหัวคอมเมนต์ของไฟล์) job นี้แยกอิสระจาก verify เพื่อไม่ให้บล็อก merge
+  lint:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -46,12 +82,3 @@ jobs:
 
       - name: Lint
         run: pnpm lint
-
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Test (apps/web, @smartboss/auth)
-        run: pnpm test
-
-      - name: Test (workforce — PGlite ในตัวเอง ไม่ต้องมี Postgres จริง)
-        run: pnpm wf:test
