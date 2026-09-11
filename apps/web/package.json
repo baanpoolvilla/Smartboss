@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "test": "tsx --test \"modules/**/__tests__/*.test.ts\"",
+    "test:tenant-isolation": "tsx --test \"modules/__tests__/tenant-isolation/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -44,6 +44,24 @@ jobs:
   # (typecheck: 14 packages, test: 25+18, wf:test: 386 — เช็คจริงก่อนเขียนไฟล์นี้)
   verify:
     runs-on: ubuntu-latest
+    # Postgres จริง (เวอร์ชันเดียวกับ docker-compose.yml ของ dev — prod เป็น
+    # PG18, มี gap dev/CI 16 vs prod 18 อยู่ จดไว้ ยังไม่กระทบชุดเทสต์นี้เพราะ
+    # ไม่ได้พึ่งพฤติกรรมเฉพาะเวอร์ชัน) ใช้เฉพาะ step tenant-isolation ด้านล่าง
+    # — สร้างใหม่ทุกรัน ไม่มีอะไรค้างข้ามรันให้ต้อง cleanup เอง
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: smartboss_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -67,6 +85,22 @@ jobs:
 
       - name: Test (workforce — PGlite ในตัวเอง ไม่ต้องมี Postgres จริง)
         run: pnpm wf:test
+
+      # ── Tenant isolation integration tests — ต่อ Postgres จริงข้างบน ──
+      # แยกออกจาก `pnpm test` ข้างบนตั้งใจ (ดู apps/web/modules/__tests__/
+      # tenant-isolation/README.md) ไม่งั้นทุก local `pnpm test` จะบังคับต้อง
+      # มี Postgres รันอยู่ ทั้งที่ปกติเป็น pure unit test ล้วน
+      - name: Migrate ฐานทดสอบ
+        run: pnpm --filter @smartboss/database db:deploy
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/smartboss_test
+          DATABASE_URL_UNPOOLED: postgresql://ci:ci@localhost:5432/smartboss_test
+
+      - name: Test (tenant isolation — Postgres จริง)
+        run: pnpm --filter web test:tenant-isolation
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/smartboss_test
+          DATABASE_URL_UNPOOLED: postgresql://ci:ci@localhost:5432/smartboss_test
 
   # ยังไม่ผูกเป็น required check — มี 17 errors ของเดิมในโค้ดที่ยังไม่ได้แก้
   # (ดูหัวคอมเมนต์ของไฟล์) job นี้แยกอิสระจาก verify เพื่อไม่ให้บล็อก merge

@@ -68,5 +68,12 @@ export function activeCrossOrgReason(): string | undefined {
  *   );
  */
 export function crossOrg<T>(reason: CrossOrgReason, run: () => Promise<T>): Promise<T> {
-  return storage.run({ reason }, run);
+  // ต้อง await ข้างใน callback ของ storage.run() เอง ห้าม return promise ที่
+  // ยังไม่ resolve ออกไปให้ผู้เรียกไป await เอาข้างนอก — Prisma's query เป็น
+  // lazy thenable กำหนดจริง (PrismaPromise) การ์ดถูกเช็คตอน `.then()` ถูกเรียก
+  // ไม่ใช่ตอนสร้าง query object ถ้า .then() ถูกเรียกนอก storage.run() (เช่น
+  // ตอน caller เขียน `await crossOrg(reason, () => prisma...)`) ALS context
+  // จะหลุดไปแล้ว การ์ดจะไม่เห็น reason เลย — เจอบั๊กนี้จริงจาก smoke test
+  // (guard.smoke.test.ts) ก่อนจะเชื่อ escape hatch นี้กว้างขึ้น
+  return storage.run({ reason }, async () => run());
 }
