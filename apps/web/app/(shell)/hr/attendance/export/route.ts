@@ -164,14 +164,24 @@ export async function GET(req: NextRequest) {
   const leaveTypeName = new Map(
     (leaveTypes?.items ?? []).map((t) => [t.id, t.name]),
   );
+  // auto_approve = สิทธิ์ (เช่น "วันหยุดประจำเดือน") ไม่ใช่การลาจริง — นับรวมกับ
+  // ลาป่วย/ลาพักร้อนในคอลัมน์ "ลา (วัน)" แล้วจะทำให้ยอดลาของพนักงานสูงเกินจริง
+  // (เจ้าของระบบสั่งแก้ 2026-09-11 คู่กับ statusLabel ด้านบน)
+  const leaveTypeAutoApprove = new Map(
+    (leaveTypes?.items ?? []).map((t) => [t.id, t.auto_approve]),
+  );
   const leaveNameByDay = new Map<string, string>();
+  const dayOffByDay = new Set<string>();
   for (const leave of leaves?.items ?? []) {
     const name = leaveTypeName.get(leave.leave_type_id);
     if (name === undefined) continue;
+    const isDayOff = leaveTypeAutoApprove.get(leave.leave_type_id) === true;
     const start = new Date(`${leave.starts_on}T00:00:00Z`);
     const end = new Date(`${leave.ends_on}T00:00:00Z`);
     for (let d = start; d <= end; d = new Date(d.getTime() + 86_400_000)) {
-      leaveNameByDay.set(`${leave.employment_id}|${d.toISOString().slice(0, 10)}`, name);
+      const key = `${leave.employment_id}|${d.toISOString().slice(0, 10)}`;
+      leaveNameByDay.set(key, name);
+      if (isDayOff) dayOffByDay.add(key);
     }
   }
 
@@ -243,7 +253,7 @@ export async function GET(req: NextRequest) {
   lines.push(
     [
       "รหัสพนักงาน", "ชื่อ", "วันทำงาน", "มาสาย (ครั้ง)", "รวมสาย (นาที)",
-      "ขาดงาน (วัน)", "รวมขาดงาน (นาที)", "ลา (วัน)", "วันหยุด (วัน)",
+      "ขาดงาน (วัน)", "รวมขาดงาน (นาที)", "ลา (วัน)", "วันหยุดประจำ (วัน)", "วันหยุด (วัน)",
       "รวมชั่วโมงทำงาน", "รวม OT (นาที)",
     ].join(",")
   );
@@ -256,6 +266,8 @@ export async function GET(req: NextRequest) {
     ).length;
     const sum = (pick: (r: AttendanceResult) => number) =>
       items.reduce((s, r) => s + pick(r), 0);
+    const isDayOffRow = (r: AttendanceResult) =>
+      r.is_on_leave && dayOffByDay.has(`${r.employment_id}|${r.work_date}`);
     lines.push(
       [
         csvCell(p.code),
@@ -265,7 +277,8 @@ export async function GET(req: NextRequest) {
         String(sum((r) => r.late_minutes)),
         String(absentDays),
         String(sum((r) => r.absence_minutes)),
-        String(items.filter((r) => r.is_on_leave).length),
+        String(items.filter((r) => r.is_on_leave && !isDayOffRow(r)).length),
+        String(items.filter(isDayOffRow).length),
         String(items.filter((r) => r.is_rest_day || r.is_holiday).length),
         csvCell(hhmm(sum((r) => r.worked_minutes))),
         String(sum((r) => r.ot_candidate_minutes)),

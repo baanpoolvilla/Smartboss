@@ -34,6 +34,8 @@ export interface DayEntry {
   requestId?: string;
   /** มีค่าเฉพาะแถวของตัวเอง — ใช้ตอนสลับ (ต้องยื่นใบใหม่เป็นประเภทเดียวกับใบเดิม) */
   leaveTypeId?: string;
+  /** true = สิทธิ์ (เช่น "วันหยุดประจำเดือน") ไม่ใช่การลาที่ต้องรออนุมัติ */
+  autoApprove: boolean;
 }
 
 export interface PersonLegend {
@@ -113,6 +115,9 @@ export function LeaveCalendar({
 }) {
   const [state, formAction, pending] = useActionState(submitLeaveAction, EMPTY);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
+  // "ทั้งหมด" ปนกันไว้ก่อน — วันหยุดประจำ (สิทธิ์) กับลา (ต้องอนุมัติ) เป็นคนละ
+  // เรื่องกัน คนดูปฏิทินอยากรู้บ่อย ๆ ว่า "ใครลาจริง" แยกจาก "ใครหยุดประจำ"
+  const [typeFilter, setTypeFilter] = useState<"all" | "dayoff" | "leave">("all");
 
   /** วันที่กดเปิดหน้าต่างอยู่ — null = ปิดอยู่ */
   const [picked, setPicked] = useState<string | null>(null);
@@ -204,6 +209,31 @@ export function LeaveCalendar({
         </p>
       )}
 
+      <div className="flex items-center gap-1.5 text-xs">
+        <span className="text-(--ink-soft)">แสดง:</span>
+        {(
+          [
+            ["all", "ทั้งหมด"],
+            ["dayoff", "วันหยุดประจำ"],
+            ["leave", "ลา"],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setTypeFilter(key)}
+            className="rounded-full border px-2.5 py-1 font-medium transition-colors"
+            style={
+              typeFilter === key
+                ? { borderColor: "var(--app)", backgroundColor: "var(--app-soft)", color: "var(--app)" }
+                : { borderColor: "var(--line)", color: "var(--ink-soft)" }
+            }
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[200px_1fr]">
         {/* ── แถบซ้าย: ใครหยุดบ้าง เปิด/ปิดดูรายคนได้ ── */}
         <aside className="order-2 lg:order-1">
@@ -263,7 +293,11 @@ export function LeaveCalendar({
             <div className="grid grid-cols-7">
               {grid.map((cell) => {
                 const all = entriesByDate[cell.iso] ?? [];
-                const entries = all.filter((e) => !hidden.has(e.employmentId));
+                const entries = all.filter(
+                  (e) =>
+                    !hidden.has(e.employmentId) &&
+                    (typeFilter === "all" || (typeFilter === "dayoff") === e.autoApprove),
+                );
                 const iAmOff = all.some((e) => e.mine);
                 const isToday = cell.iso === today;
 
@@ -290,18 +324,25 @@ export function LeaveCalendar({
                       return (
                         <span
                           key={`${entry.employmentId}-${index}`}
-                          title={`${labelOf(entry)} · ${entry.status === "APPROVED" ? "อนุมัติแล้ว" : "รออนุมัติ"}`}
-                          className="truncate rounded-sm border-l-2 px-1 text-[10px] leading-4"
+                          title={`${labelOf(entry)} · ${entry.autoApprove ? "วันหยุดประจำ (สิทธิ์)" : entry.status === "APPROVED" ? "ลา · อนุมัติแล้ว" : "ลา · รออนุมัติ"}`}
+                          className="truncate rounded-sm px-1 text-[10px] leading-4"
                           style={{
-                            borderLeftColor: `hsl(${hue} 60% 50%)`,
+                            // สิทธิ์ (วันหยุดประจำ) ได้กรอบเส้นประแทนเส้นทึบ — ตัดกับ
+                            // ลาจริงให้เห็นชัดว่าเป็นคนละหมวดแม้จะเห็นสีคนเดียวกัน
+                            // (ยังคงสีตามตัวคนไว้ เพราะจุดประสงค์หลักของปฏิทินนี้คือ
+                            // "ใครหยุด" ไม่ใช่แค่ "หยุดประเภทไหน")
+                            borderLeft: entry.autoApprove
+                              ? `2px dashed hsl(${hue} 60% 50%)`
+                              : `2px solid hsl(${hue} 60% 50%)`,
                             backgroundColor: `hsl(${hue} 85% 94%)`,
                             color: `hsl(${hue} 55% 30%)`,
                             fontWeight: entry.mine ? 700 : 400,
                             // รออนุมัติ = จาง + มีจุด ต่างจากอนุมัติแล้วให้เห็นชัด
-                            opacity: entry.status === "APPROVED" ? 1 : 0.65,
+                            // (สิทธิ์อนุมัติทันทีอยู่แล้ว ไม่มีสถานะรออนุมัติ)
+                            opacity: entry.autoApprove || entry.status === "APPROVED" ? 1 : 0.65,
                           }}
                         >
-                          {entry.status === "PENDING" ? "• " : ""}
+                          {!entry.autoApprove && entry.status === "PENDING" ? "• " : ""}
                           {labelOf(entry)}
                         </span>
                       );

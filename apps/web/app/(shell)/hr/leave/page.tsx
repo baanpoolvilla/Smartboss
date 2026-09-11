@@ -124,6 +124,9 @@ export default async function LeavePage({
               mine: isMine,
               requestId: isMine ? myRequestIdByDate.get(date) : undefined,
               leaveTypeId: isMine ? myLeaveTypeIdByDate.get(date) : undefined,
+              // สิทธิ์ (เช่น "วันหยุดประจำเดือน") ไม่ใช่การลา — ให้ปฏิทินแยกมันออก
+              // จากลาจริงแทนที่จะปนกันเป็น "ลา" เหมือนเดิม
+              autoApprove: entry.leave_type_auto_approve === true,
             });
           }
         }
