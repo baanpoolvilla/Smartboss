@@ -5,7 +5,7 @@ import { requireOrg } from "@smartboss/auth";
 import { recordPerformanceEvents, type PerformanceEventInput } from "@/lib/performance";
 import { readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
 import { readTasks, writeTasks } from "@/modules/report_task/lib/db/task-repo";
-import { sweepAutoPenalties } from "@/modules/report_task/lib/task-penalty-sweep";
+import { LATE_PENALTY_POINTS, sweepAutoPenalties } from "@/modules/report_task/lib/task-penalty-sweep";
 import type { ActivityItem, Task } from "@/modules/report_task/types";
 import type { AppNotification } from "@/modules/report_task/store/notification-store";
 
@@ -33,7 +33,16 @@ export async function POST() {
     return Response.json({ ok: true, changed: false });
   }
 
-  const result = sweepAutoPenalties(tasks);
+  // ค่านี้ตั้งได้ที่ /report-task/settings (สติกเกอร์ฯ) — เดิม sweep ใช้ค่าคงที่
+  // ในโค้ดเสมอ (LATE_PENALTY_POINTS) โดยไม่สนใจว่าบริษัทตั้งไว้เท่าไหร่ ทำให้
+  // ตัวเลขที่หักจริงกับตัวเลขที่ตั้งค่าไว้ไม่ตรงกัน
+  const { data: configuredPoints } = await readStore<number>(orgId, "penalty-settings");
+  const latePenaltyPoints =
+    typeof configuredPoints === "number" && configuredPoints > 0
+      ? Math.round(configuredPoints)
+      : LATE_PENALTY_POINTS;
+
+  const result = sweepAutoPenalties(tasks, latePenaltyPoints);
   if (!result.changed) {
     return Response.json({ ok: true, changed: false });
   }
@@ -83,25 +92,52 @@ export async function POST() {
    * ส่งการหักคะแนนเข้าระบบกลาง เพื่อให้ไปโผล่ในหน้าสรุปรายคนของผู้บริหาร
    * รวมกับคะแนนจากโมดูลอื่น (ใบแจ้งซ่อมค้าง ฯลฯ) — ดู lib/performance.ts
    *
-   * ใช้ taskId เป็นต้นเรื่อง ⇒ งานใบเดียวหักได้ครั้งเดียว แม้ sweep จะรันทุก 60 วินาที
-   * ผู้รับผิดชอบคือคนแรกใน assigneeIds (งานที่ไม่มีคนรับ ข้ามไป)
+   * ใช้ taskId (+ userId สำหรับงานกลุ่ม) เป็นต้นเรื่อง ⇒ หักได้ครั้งเดียวต่อคน
+   * แม้ sweep จะรันทุก 60 วินาที
+   *
+   * เดิมอ่านแค่ task.penalty (งานเดี่ยว) เท่านั้น — งานโหมดกลุ่มหักคะแนนผ่าน
+   * task.penalties (รายคน) แทน ลูปนี้เลยไม่เคยส่งคะแนนงานกลุ่มที่เลยกำหนดเข้า
+   * ระบบกลางเลยสักครั้ง (การ์ดบนบอร์ด Kanban ขึ้นหักคะแนนให้เห็น แต่คะแนนรวม
+   * ที่หน้าผู้บริหารไม่เคยเปลี่ยนตาม) ต้องอ่านทั้งสองฟิลด์
    */
   const dockEvents: PerformanceEventInput[] = [];
   for (const task of result.tasks) {
-    if (!task.penalty || !task.missedDeadlineOnce) continue;
-    const owner = task.assigneeIds?.[0];
-    if (!owner) continue;
-    dockEvents.push({
-      orgId,
-      userId: owner,
-      source: "report_task",
-      category: "task_late",
-      points: -Math.abs(task.penalty.points),
-      occurredAt: task.dueDate ? new Date(task.dueDate) : new Date(),
-      refType: "task",
-      refId: task.id,
-      note: task.title,
-    });
+    if (!task.missedDeadlineOnce) continue;
+
+    if (task.penalty) {
+      const owner = task.assigneeIds?.[0];
+      if (owner) {
+        dockEvents.push({
+          orgId,
+          userId: owner,
+          source: "report_task",
+          category: "task_late",
+          points: -Math.abs(task.penalty.points),
+          occurredAt: task.dueDate ? new Date(task.dueDate) : new Date(),
+          refType: "task",
+          refId: task.id,
+          note: task.title,
+        });
+      }
+    }
+
+    for (const [assigneeId, penalty] of Object.entries(task.penalties ?? {})) {
+      dockEvents.push({
+        orgId,
+        userId: assigneeId,
+        source: "report_task",
+        category: "task_late",
+        points: -Math.abs(penalty.points),
+        occurredAt: task.assigneeDueDates?.[assigneeId]
+          ? new Date(task.assigneeDueDates[assigneeId]!)
+          : task.dueDate
+            ? new Date(task.dueDate)
+            : new Date(),
+        refType: "task",
+        refId: `${task.id}:${assigneeId}`,
+        note: task.title,
+      });
+    }
   }
   const dockedCount = await recordPerformanceEvents(dockEvents);
 

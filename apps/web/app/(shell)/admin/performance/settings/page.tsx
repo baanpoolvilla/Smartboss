@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 import { Card } from "@smartboss/ui/components/card";
 import { Button } from "@smartboss/ui/components/button";
@@ -26,16 +27,22 @@ export const dynamic = "force-dynamic";
 /** แถวเกรดว่างที่เตรียมไว้ให้กรอกเพิ่ม */
 const GRADE_SPARE_ROWS = 2;
 
+/**
+ * งานและรายงาน (task_late, task_manual_dock, report_missed, report_late) ไม่มี
+ * กลุ่มในนี้เลย — ทั้งสี่ตัวนี้ไม่เคยถูก rulePoints ที่ตั้งในหน้านี้พาไปใช้จริง:
+ *
+ *   - task_manual_dock: คะแนนมาจากสติกเกอร์ที่หัวหน้ากดบนการ์ดงาน Kanban
+ *   - task_late: sweep อัตโนมัติส่งค่า points มาเองเสมอ (แก้ที่ /report-task/settings)
+ *   - report_missed / report_late: ยังไม่มีฟีเจอร์ไหนสร้างเหตุการณ์สองชนิดนี้เลย
+ *     (จองชื่อไว้ล่วงหน้าสำหรับ "รอบส่งรายงาน" เฟส 2 ที่ยังไม่ได้สร้าง —
+ *     ดู docs/spec-report-submission-rounds.md)
+ *
+ * เคยแสดงเป็นช่องกรอกได้ในหน้านี้ทั้งที่ตั้งแล้วไม่มีผล — เอาออกกันเข้าใจผิด
+ */
+const REPORT_TASK_SETTINGS_HREF = "/report-task/settings";
+
 /** จัดกลุ่มตามโมดูลต้นทาง ให้หาเจอง่ายกว่าเรียงยาวเป็นพืด */
 const GROUPS: { title: string; hint: string; keys: PerformanceCategory[] }[] = [
-  {
-    title: "งานและรายงาน",
-    hint: "จากโมดูลรายงานและงาน",
-    // task_manual_dock ไม่อยู่ในนี้แล้ว — คะแนนจริงมาจากสติกเกอร์ที่หัวหน้ากด
-    // บนการ์ดงาน Kanban (ตั้งค่าที่ /report-task/settings) ไม่ใช่เลขในช่องนี้
-    // ปล่อยให้กรอกได้ต่อไปมีแต่ทำให้เข้าใจผิดว่าตัวเลขนี้มีผล
-    keys: ["task_late", "report_missed", "report_late"],
-  },
   {
     title: "งานซ่อมบำรุง",
     hint: "จากโมดูลแจ้งซ่อมบำรุง — ใช้จับการปล่อยงานค้าง",
@@ -157,6 +164,22 @@ export default async function PerformanceSettingsPage() {
             (45 วัน) ตรึงเป็นค่าคงที่ในโค้ดแทน (ABSENCE_THRESHOLD_MINUTES,
             ATTENDANCE_LOOKBACK_DAYS ใน lib/performance.ts) ไม่ให้ตั้งต่อบริษัท
           */}
+        </SectionCard>
+
+        <SectionCard
+          title="งานและรายงาน"
+          description="จากโมดูลรายงานและงาน"
+        >
+          <p className="text-sm text-(--ink-soft)">
+            คะแนน &quot;ส่งงานเลยกำหนด&quot; และ &quot;หักคะแนนโดยหัวหน้า&quot;
+            ตั้งแยกอยู่ที่{" "}
+            <Link href={REPORT_TASK_SETTINGS_HREF} className="text-(--app-strong) underline">
+              ตั้งค่าโมดูลรายงานและงาน
+            </Link>{" "}
+            ไม่ใช่ที่หน้านี้ — ส่วน &quot;ไม่ส่งรายงานประจำวัน&quot; และ
+            &quot;ส่งรายงานสาย&quot; ยังไม่เปิดใช้งาน (ยังไม่มีฟีเจอร์ตรวจรอบ
+            ส่งรายงานที่จะสร้างการหักคะแนนสองแบบนี้)
+          </p>
         </SectionCard>
 
         {GROUPS.map((group) => (
