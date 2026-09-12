@@ -38,7 +38,50 @@ interface RawRow {
   absence_minutes: number;
 }
 
+/**
+ * ซ่อมเหตุการณ์ "แก้ไข" ที่เคยเขียนด้วย occurredAt ผิด (เป็นวันที่รันสคริปต์
+ * แทนที่จะเป็นวันของเหตุการณ์เดิม) — รุ่นแรกของสคริปต์นี้เขียนผิดแบบนั้น ทำให้
+ * แต้มที่คืนไปโผล่ผิดเดือน คะแนนเดือนปัจจุบันทะลุคะแนนตั้งต้น (105/110) ส่วนเดือน
+ * เก่ายังหักค้างผิดเหมือนเดิม แก้โดยย้าย occurredAt กลับไปตรงกับเหตุการณ์ต้นทาง
+ */
+async function repairMisdatedCorrections(): Promise<number> {
+  const corrections = await prisma.performanceEvent.findMany({
+    where: { source: "workforce", refType: "attendance_day_correction" },
+    select: { id: true, refId: true, occurredAt: true },
+  });
+  if (corrections.length === 0) return 0;
+
+  const originals = await prisma.performanceEvent.findMany({
+    where: { id: { in: corrections.map((c) => c.refId!).filter(Boolean) } },
+    select: { id: true, occurredAt: true },
+  });
+  const originalDateById = new Map(originals.map((o) => [o.id, o.occurredAt]));
+
+  let fixed = 0;
+  for (const c of corrections) {
+    const shouldBe = c.refId ? originalDateById.get(c.refId) : undefined;
+    if (!shouldBe || shouldBe.getTime() === c.occurredAt.getTime()) continue;
+    if (!dryRun) {
+      await prisma.performanceEvent.update({
+        where: { id: c.id },
+        data: { occurredAt: shouldBe },
+      });
+    }
+    fixed += 1;
+  }
+  return fixed;
+}
+
 async function main() {
+  const misdated = await repairMisdatedCorrections();
+  if (misdated > 0) {
+    console.log(
+      dryRun
+        ? `[dry-run] จะย้ายวันของเหตุการณ์แก้ไข ${misdated} รายการ กลับไปตรงกับวันของเหตุการณ์เดิม\n`
+        : `✔ ย้ายวันของเหตุการณ์แก้ไข ${misdated} รายการ กลับไปตรงกับวันของเหตุการณ์เดิมแล้ว\n`,
+    );
+  }
+
   const candidates = await prisma.performanceEvent.findMany({
     where: {
       source: "workforce",
@@ -138,7 +181,13 @@ async function main() {
       source: original.source,
       category: original.category,
       points: new Prisma.Decimal(Number(original.points) * -1),
-      occurredAt: new Date(),
+      /*
+       * ต้องเป็น "วันเดียวกับเหตุการณ์ที่แก้" ไม่ใช่วันที่รันสคริปต์ —
+       * buildScorecards รวมคะแนนตามช่วงเดือนของ occurredAt ถ้าใส่วันที่วันนี้
+       * แต้มที่คืนจะไปโผล่ผิดเดือน: เดือนเก่าที่หักผิดยังหักค้างเหมือนเดิม
+       * ส่วนเดือนนี้ได้แต้มบวกฟรีจนคะแนนทะลุคะแนนตั้งต้น (เห็นเป็น 105/110)
+       */
+      occurredAt: original.occurredAt,
       refType: "attendance_day_correction",
       refId: original.id,
       note: `แก้ไขค่าที่บันทึกผิดตอน ${original.occurredAt.toISOString().slice(0, 10)}: ${reason}`,
