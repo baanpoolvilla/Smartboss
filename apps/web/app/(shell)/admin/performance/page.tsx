@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
-import { AlertTriangle, ClipboardList, Wrench } from "lucide-react";
+import { AlertTriangle, ClipboardList, Minus, TrendingDown, TrendingUp, Wrench } from "lucide-react";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 import { Card } from "@smartboss/ui/components/card";
 import { Button } from "@smartboss/ui/components/button";
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { ADMIN_PERMS } from "@/modules/admin/permissions";
-import { EmptyState, selectClass } from "@/modules/admin/components/ui";
+import { EmptyState } from "@/modules/admin/components/ui";
 import Link from "next/link";
 import { buildScorecards } from "@/lib/performance";
 
@@ -18,16 +18,19 @@ import { buildScorecards } from "@/lib/performance";
  *
  * เกณฑ์ทั้งหมด (คะแนนตั้งต้น อัตราหัก เกณฑ์เกรด) ตั้งค่าได้รายบริษัทที่
  * /admin/performance/settings — หน้านี้อ่านค่าที่บริษัทตั้งไว้เสมอ ไม่มีค่าฝังในโค้ด
+ *
+ * ⚠ เปลี่ยนจากช่วง "N วันล่าสุด" (หน้าต่างเลื่อนไปเรื่อยๆ ที่คาบเกี่ยวสองเดือน
+ * ปฏิทินได้) มาเป็น "ทีละเดือนปฏิทิน" ตรงตัว — เพราะคะแนนรายเดือนต้องเทียบกัน
+ * ข้ามเดือนได้แน่นอนสำหรับคำนวณโบนัสปลายปี ("เดือนที่แล้วเกรดอะไร เดือนนี้
+ * เกรดอะไร") ซึ่งหน้าต่างเลื่อนแบบเดิมตอบไม่ได้ตรงๆ (เจ้าของระบบสั่งแก้ 2569-09-12)
  */
 export const dynamic = "force-dynamic";
 
-const RANGES = {
-  "30": { days: 30, label: "30 วันล่าสุด" },
-  "90": { days: 90, label: "90 วันล่าสุด" },
-  "365": { days: 365, label: "1 ปีล่าสุด" },
-} as const;
-
-type RangeKey = keyof typeof RANGES;
+const TREND_MONTHS = 6;
+const THAI_MONTH = [
+  "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
+  "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
+];
 
 const SOURCE_META = [
   { key: "report_task", label: "งาน", Icon: ClipboardList, color: "var(--mod-report)" },
@@ -48,23 +51,67 @@ function gradeColor(grade: string, order: string[]): string {
   return "var(--tone-danger)";
 }
 
+function monthKey(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+function shiftMonth(month: string, delta: number): string {
+  const [y, m] = month.split("-").map(Number);
+  return monthKey(new Date(Date.UTC(y!, m! - 1 + delta, 1)));
+}
+/** ขอบเขตวันของเดือนปฏิทินนั้น — ใช้ UTC ตรงๆ กันเดือนเลื่อนจาก timezone */
+function monthRange(month: string): { from: Date; to: Date } {
+  const [y, m] = month.split("-").map(Number);
+  const from = new Date(Date.UTC(y!, m! - 1, 1, 0, 0, 0));
+  const to = new Date(Date.UTC(y!, m!, 1, 0, 0, 0) - 1);
+  return { from, to };
+}
+function monthDisplay(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  return `${THAI_MONTH[m! - 1]} ${y! + 543}`;
+}
+
 export default async function PerformancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string }>;
+  searchParams: Promise<{ month?: string }>;
 }) {
   const session = await requireOrg();
   if (!hasPermission(session, ADMIN_PERMS.performanceView)) redirect("/admin");
 
-  const { range } = await searchParams;
-  const key: RangeKey = range === "90" || range === "365" ? range : "30";
-  const { days, label } = RANGES[key];
+  const { month: monthParam } = await searchParams;
+  const thisRealMonth = monthKey(new Date());
+  // เดือนอนาคตยังไม่มีข้อมูลให้ดู — ค่าผิดรูปแบบก็ตกกลับมาเป็นเดือนนี้เงียบๆ
+  const month =
+    monthParam !== undefined && /^\d{4}-\d{2}$/.test(monthParam) && monthParam <= thisRealMonth
+      ? monthParam
+      : thisRealMonth;
+  const isCurrentMonth = month === thisRealMonth;
+  const prevMonthKey = shiftMonth(month, -1);
 
-  const to = new Date();
-  const from = new Date(to);
-  from.setDate(from.getDate() - days);
+  // แถบเทรนด์ — เดือนที่เลือกอยู่ขวาสุด ย้อนหลังไป TREND_MONTHS-1 เดือน
+  const trendMonths = Array.from({ length: TREND_MONTHS }, (_, i) =>
+    shiftMonth(month, -(TREND_MONTHS - 1 - i)),
+  );
 
-  const { settings, cards } = await buildScorecards(session.orgId, from, to);
+  const [current, previous, ...trend] = await Promise.all([
+    buildScorecards(session.orgId, monthRange(month).from, monthRange(month).to),
+    buildScorecards(session.orgId, monthRange(prevMonthKey).from, monthRange(prevMonthKey).to),
+    ...trendMonths.map((m) =>
+      buildScorecards(session.orgId, monthRange(m).from, monthRange(m).to),
+    ),
+  ]);
+
+  const { settings, cards } = current;
+  const prevByUser = new Map(previous.cards.map((c) => [c.userId, c]));
+  const trendByUser = new Map<string, { month: string; grade: string; score: number }[]>();
+  trendMonths.forEach((m, i) => {
+    for (const c of trend[i]!.cards) {
+      const arr = trendByUser.get(c.userId) ?? [];
+      arr.push({ month: m, grade: c.grade, score: c.score });
+      trendByUser.set(c.userId, arr);
+    }
+  });
+
   const needsAttention = cards.filter((c) => c.score < settings.baseScore);
   const gradeOrder = settings.gradeThresholds.map(([g]) => g);
   const canConfigure = hasPermission(session, ADMIN_PERMS.performanceSettingManage);
@@ -72,21 +119,39 @@ export default async function PerformancePage({
   return (
     <AppScaffold title="ผลงานรายคน" width="max-w-5xl" backHref="/admin">
       <Card className="mb-4 p-4">
-        <form method="GET" className="flex flex-wrap items-end gap-3">
-          <label className="flex min-w-[200px] flex-1 flex-col gap-1">
-            <span className="text-xs font-medium text-(--ink-soft)">ช่วงเวลา</span>
-            <select name="range" defaultValue={key} className={selectClass}>
-              {Object.entries(RANGES).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <Button type="submit" variant="outline" className="w-full sm:w-28">
-            ดูข้อมูล
-          </Button>
-        </form>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Link href={`/admin/performance?month=${shiftMonth(month, -1)}`}>
+            <Button type="button" variant="outline" size="sm">
+              ◀ เดือนก่อน
+            </Button>
+          </Link>
+          <div className="min-w-[150px] text-center">
+            <span className="text-base font-bold text-(--ink)">{monthDisplay(month)}</span>
+            {isCurrentMonth && (
+              <span className="ml-2 rounded-full bg-(--brand-green)/15 px-2 py-0.5 text-[11px] font-semibold text-(--brand-green)">
+                เดือนนี้
+              </span>
+            )}
+          </div>
+          {isCurrentMonth ? (
+            <Button type="button" variant="outline" size="sm" disabled>
+              เดือนถัดไป ▶
+            </Button>
+          ) : (
+            <Link href={`/admin/performance?month=${shiftMonth(month, 1)}`}>
+              <Button type="button" variant="outline" size="sm">
+                เดือนถัดไป ▶
+              </Button>
+            </Link>
+          )}
+          {!isCurrentMonth && (
+            <Link href="/admin/performance">
+              <Button type="button" variant="ghost" size="sm">
+                กลับเดือนนี้
+              </Button>
+            </Link>
+          )}
+        </div>
       </Card>
 
       {!settings.enabled && (
@@ -99,7 +164,7 @@ export default async function PerformancePage({
       )}
 
       <p className="mb-3 text-sm text-(--ink-soft)">
-        {label} · {cards.length} คน ·{" "}
+        {cards.length} คน ·{" "}
         {needsAttention.length > 0 ? (
           <span className="font-semibold text-(--tone-warn)">
             ต้องติดตาม {needsAttention.length} คน
@@ -126,11 +191,15 @@ export default async function PerformancePage({
         <div className="flex flex-col gap-2">
           {cards.map((c) => {
             const color = gradeColor(c.grade, gradeOrder);
-            const lost = settings.baseScore - c.score;
+            const prev = prevByUser.get(c.userId);
+            const prevColor = prev ? gradeColor(prev.grade, gradeOrder) : null;
+            const delta = prev ? c.score - prev.score : null;
+            const history = trendByUser.get(c.userId) ?? [];
+
             return (
               <Card key={c.userId} className="p-4">
                 <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
-                  {/* คะแนน + เกรด อยู่ซ้ายสุด อ่านได้ในแวบเดียว */}
+                  {/* คะแนน + เกรดเดือนนี้ อยู่ซ้ายสุด อ่านได้ในแวบเดียว */}
                   <div className="flex min-w-[76px] flex-col items-center">
                     <span
                       className="text-2xl leading-none font-bold tabular-nums"
@@ -160,6 +229,40 @@ export default async function PerformancePage({
                     </p>
                     <p className="truncate text-xs text-(--ink-soft)">{c.email}</p>
 
+                    {/* เดือนที่แล้วเทียบเดือนนี้ — ตัวเลขที่ต้องใช้ตอนคิดโบนัสปลายปี */}
+                    {prev && (
+                      <p className="mt-1.5 flex items-center gap-1.5 text-xs">
+                        <span className="text-(--ink-soft)">{monthDisplay(prevMonthKey)}:</span>
+                        <span
+                          className="rounded-full px-1.5 py-0.5 font-semibold"
+                          style={{
+                            color: prevColor!,
+                            backgroundColor: `color-mix(in srgb, ${prevColor} 14%, transparent)`,
+                          }}
+                        >
+                          {prev.grade} · {prev.score}
+                        </span>
+                        {delta !== null && delta !== 0 && (
+                          <span
+                            className="flex items-center gap-0.5 font-medium"
+                            style={{ color: delta > 0 ? "var(--tone-ok)" : "var(--tone-danger)" }}
+                          >
+                            {delta > 0 ? (
+                              <TrendingUp className="h-3 w-3" />
+                            ) : (
+                              <TrendingDown className="h-3 w-3" />
+                            )}
+                            {delta > 0 ? `+${delta}` : delta}
+                          </span>
+                        )}
+                        {delta === 0 && (
+                          <span className="flex items-center gap-0.5 text-(--ink-soft)">
+                            <Minus className="h-3 w-3" /> เท่าเดิม
+                          </span>
+                        )}
+                      </p>
+                    )}
+
                     {c.byCategory.length > 0 && (
                       <ul className="mt-2 flex flex-wrap gap-1.5">
                         {c.byCategory.slice(0, 4).map((cat) => (
@@ -178,15 +281,37 @@ export default async function PerformancePage({
                         ))}
                       </ul>
                     )}
+
+                    {/* เทรนด์ {TREND_MONTHS} เดือนล่าสุด — ดูรวดเดียวได้ว่าดีขึ้น/แย่ลงต่อเนื่องไหม
+                        โดยไม่ต้องกดย้อนทีละเดือน (ใช้ตอนสรุปโบนัสปลายปี) */}
+                    {history.length > 0 && (
+                      <div className="mt-2 flex items-center gap-1">
+                        {trendMonths.map((m) => {
+                          const h = history.find((x) => x.month === m);
+                          const hColor = h ? gradeColor(h.grade, gradeOrder) : "var(--line)";
+                          return (
+                            <span
+                              key={m}
+                              title={h ? `${monthDisplay(m)} · เกรด ${h.grade} · ${h.score} คะแนน` : monthDisplay(m)}
+                              className="h-2.5 w-2.5 rounded-sm"
+                              style={{ backgroundColor: h ? hColor : "var(--line)" }}
+                            />
+                          );
+                        })}
+                        <span className="ml-1 text-[10px] text-(--ink-soft)">
+                          {TREND_MONTHS} เดือนล่าสุด
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* แยกตามโมดูล — บอกว่าเสียคะแนนมาจากงานฝั่งไหน */}
                   <div className="flex shrink-0 gap-3">
-                    {SOURCE_META.map(({ key: src, label: srcLabel, Icon, color }) => {
+                    {SOURCE_META.map(({ key: src, label: srcLabel, Icon, color: srcColor }) => {
                       const v = c.bySource[src];
                       return (
                         <div key={src} className="flex flex-col items-center gap-0.5">
-                          <Icon className="h-3.5 w-3.5" style={{ color }} />
+                          <Icon className="h-3.5 w-3.5" style={{ color: srcColor }} />
                           <span
                             className="text-xs font-semibold tabular-nums"
                             style={{ color: v < 0 ? "var(--tone-danger)" : "var(--ink-soft)" }}
@@ -200,9 +325,9 @@ export default async function PerformancePage({
                   </div>
                 </div>
 
-                {lost === 0 && c.eventCount === 0 && (
+                {c.eventCount === 0 && (
                   <p className="mt-2 text-xs text-(--ink-soft)">
-                    ไม่มีเหตุการณ์ที่ถูกบันทึกในช่วงนี้
+                    ไม่มีเหตุการณ์ที่ถูกบันทึกในเดือนนี้
                   </p>
                 )}
               </Card>
@@ -212,8 +337,10 @@ export default async function PerformancePage({
       )}
 
       <p className="mt-4 text-xs text-(--ink-soft)">
-        คะแนนตั้งต้น {settings.baseScore} แล้วหักตามเหตุการณ์จากทุกโมดูล · คำนวณใหม่ทุกครั้งที่เปิดหน้า
-        ไม่ได้เก็บยอดสะสมไว้ จึงย้อนดูที่มาได้ทุกแต้ม
+        คะแนนตั้งต้น {settings.baseScore} แล้วหักตามเหตุการณ์จากทุกโมดูลเฉพาะที่เกิดขึ้นใน{" "}
+        {monthDisplay(month)} · คำนวณใหม่ทุกครั้งที่เปิดหน้าจากเหตุการณ์ดิบ ไม่ได้เก็บยอดสะสมไว้
+        จึงย้อนดูที่มาได้ทุกแต้ม — แก้เกณฑ์การหักคะแนนแล้วจะไม่กระทบแต้มของเดือนที่ปิดไปแล้ว
+        เพราะแต้มถูกตรึงไว้ตอนบันทึกจริง
       </p>
     </AppScaffold>
   );
