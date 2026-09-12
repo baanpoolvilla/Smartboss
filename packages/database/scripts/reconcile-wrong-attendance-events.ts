@@ -1,5 +1,3 @@
-import { config } from "dotenv";
-import { resolve } from "node:path";
 import { PrismaClient, Prisma } from "@prisma/client";
 
 /**
@@ -23,12 +21,12 @@ import { PrismaClient, Prisma } from "@prisma/client";
  * แล้ว) ให้ออกเหตุการณ์ "แก้ไข" หักล้างของเดิมพอดี — **ไม่ลบ/ไม่แก้ของเดิม**
  * เพื่อให้ประวัติ audit ย้อนอ่านได้ครบว่าเคยหักแล้วก็แก้ไขทีหลังเพราะอะไร
  *
- * รัน: pnpm --filter @smartboss/database exec tsx scripts/reconcile-wrong-attendance-events.ts
+ * รัน (ต้องมี DATABASE_URL ชี้ไปฐานที่ต้องการ — บนเซิร์ฟเวอร์คือ source
+ * /etc/smartboss/smartboss.env ก่อนเหมือนตอนรัน db:deploy):
+ *   set -a; . /etc/smartboss/smartboss.env; set +a
+ *   pnpm --filter @smartboss/database exec tsx scripts/reconcile-wrong-attendance-events.ts --dry-run
  *      เติม --dry-run เพื่อดูรายการที่จะแก้โดยยังไม่เขียนลงฐานข้อมูล
  */
-
-config({ path: resolve(process.cwd(), "../../.env") });
-config({ path: resolve(process.cwd(), ".env") });
 
 const prisma = new PrismaClient();
 const dryRun = process.argv.includes("--dry-run");

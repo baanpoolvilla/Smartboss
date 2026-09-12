@@ -1,5 +1,3 @@
-import { config } from "dotenv";
-import { resolve } from "node:path";
 import { PrismaClient, Prisma } from "@prisma/client";
 
 /**
@@ -21,12 +19,12 @@ import { PrismaClient, Prisma } from "@prisma/client";
  * ปลอดภัยเมื่อรันซ้ำ: ใช้ unique constraint เดียวกับ recordPerformanceEvents
  * (orgId, source, category, refType, refId) + skipDuplicates
  *
- * รัน: pnpm --filter @smartboss/database exec tsx scripts/backfill-missing-group-task-late-events.ts
+ * รัน (ต้องมี DATABASE_URL ชี้ไปฐานที่ต้องการ — บนเซิร์ฟเวอร์คือ source
+ * /etc/smartboss/smartboss.env ก่อนเหมือนตอนรัน db:deploy):
+ *   set -a; . /etc/smartboss/smartboss.env; set +a
+ *   pnpm --filter @smartboss/database exec tsx scripts/backfill-missing-group-task-late-events.ts --dry-run
  *      เติม --dry-run เพื่อดูว่าจะเพิ่มอะไรบ้างโดยยังไม่เขียนลงฐานข้อมูล
  */
-
-config({ path: resolve(process.cwd(), "../../.env") });
-config({ path: resolve(process.cwd(), ".env") });
 
 const prisma = new PrismaClient();
 const dryRun = process.argv.includes("--dry-run");
