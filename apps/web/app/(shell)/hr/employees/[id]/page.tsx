@@ -292,7 +292,7 @@ export default async function EmployeeDetailPage({
          */
         const scoreEvents =
           tab === "score" && scorecard !== null
-            ? await listUserEvents(session.orgId, scorecard.userId, 15)
+            ? await listUserEvents(session.orgId, scorecard.userId, { limit: 15 })
             : [];
 
         return (

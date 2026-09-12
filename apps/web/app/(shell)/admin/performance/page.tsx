@@ -7,7 +7,8 @@ import { AppScaffold } from "@/components/module/app-scaffold";
 import { ADMIN_PERMS } from "@/modules/admin/permissions";
 import { EmptyState } from "@/modules/admin/components/ui";
 import Link from "next/link";
-import { buildScorecards } from "@/lib/performance";
+import { buildScorecards, gradeColor } from "@/lib/performance";
+import { monthDisplay, monthRange, resolveMonthParam, shiftMonth } from "@/lib/performance-month";
 
 /**
  * สรุปผลงานรายคน — รวมคะแนนจากทุกโมดูลไว้ที่เดียว
@@ -27,10 +28,6 @@ import { buildScorecards } from "@/lib/performance";
 export const dynamic = "force-dynamic";
 
 const TREND_MONTHS = 6;
-const THAI_MONTH = [
-  "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
-  "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
-];
 
 const SOURCE_META = [
   { key: "report_task", label: "งาน", Icon: ClipboardList, color: "var(--mod-report)" },
@@ -42,33 +39,6 @@ const SOURCE_META = [
  * สีของเกรดคิดจาก "อันดับ" ไม่ใช่ชื่อ — บริษัทตั้งชื่อเกรดเองได้ (A/B/C หรือ
  * ดีมาก/ดี/พอใช้) ถ้าผูกสีกับตัวอักษรตายตัว เกรดที่ตั้งชื่อเองจะไม่มีสี
  */
-function gradeColor(grade: string, order: string[]): string {
-  const i = order.indexOf(grade);
-  if (i === -1) return "var(--tone-danger)"; // ต่ำกว่าทุกเกณฑ์
-  const ratio = order.length <= 1 ? 0 : i / (order.length - 1);
-  if (ratio <= 0.34) return "var(--tone-ok)";
-  if (ratio <= 0.67) return "var(--tone-warn)";
-  return "var(--tone-danger)";
-}
-
-function monthKey(d: Date): string {
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-}
-function shiftMonth(month: string, delta: number): string {
-  const [y, m] = month.split("-").map(Number);
-  return monthKey(new Date(Date.UTC(y!, m! - 1 + delta, 1)));
-}
-/** ขอบเขตวันของเดือนปฏิทินนั้น — ใช้ UTC ตรงๆ กันเดือนเลื่อนจาก timezone */
-function monthRange(month: string): { from: Date; to: Date } {
-  const [y, m] = month.split("-").map(Number);
-  const from = new Date(Date.UTC(y!, m! - 1, 1, 0, 0, 0));
-  const to = new Date(Date.UTC(y!, m!, 1, 0, 0, 0) - 1);
-  return { from, to };
-}
-function monthDisplay(month: string): string {
-  const [y, m] = month.split("-").map(Number);
-  return `${THAI_MONTH[m! - 1]} ${y! + 543}`;
-}
 
 export default async function PerformancePage({
   searchParams,
@@ -79,13 +49,8 @@ export default async function PerformancePage({
   if (!hasPermission(session, ADMIN_PERMS.performanceView)) redirect("/admin");
 
   const { month: monthParam } = await searchParams;
-  const thisRealMonth = monthKey(new Date());
-  // เดือนอนาคตยังไม่มีข้อมูลให้ดู — ค่าผิดรูปแบบก็ตกกลับมาเป็นเดือนนี้เงียบๆ
-  const month =
-    monthParam !== undefined && /^\d{4}-\d{2}$/.test(monthParam) && monthParam <= thisRealMonth
-      ? monthParam
-      : thisRealMonth;
-  const isCurrentMonth = month === thisRealMonth;
+  const month = resolveMonthParam(monthParam);
+  const isCurrentMonth = month === resolveMonthParam(undefined);
   const prevMonthKey = shiftMonth(month, -1);
 
   // แถบเทรนด์ — เดือนที่เลือกอยู่ขวาสุด ย้อนหลังไป TREND_MONTHS-1 เดือน
@@ -220,7 +185,9 @@ export default async function PerformancePage({
 
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-(--ink)">
-                      {c.name}
+                      <Link href={`/admin/performance/${c.userId}?month=${month}`} className="hover:underline">
+                        {c.name}
+                      </Link>
                       {c.userId === session.userId && (
                         <span className="ml-2 text-[11px] font-normal text-(--ink-soft)">
                           (คุณ)
@@ -266,17 +233,20 @@ export default async function PerformancePage({
                     {c.byCategory.length > 0 && (
                       <ul className="mt-2 flex flex-wrap gap-1.5">
                         {c.byCategory.slice(0, 4).map((cat) => (
-                          <li
-                            key={cat.category}
-                            className="rounded-full border border-(--line) px-2 py-0.5 text-[11px] text-(--ink-soft)"
-                          >
-                            {cat.label}{" "}
-                            <span className="font-semibold tabular-nums text-(--tone-danger)">
-                              {cat.points}
-                            </span>
-                            {cat.count > 1 && (
-                              <span className="text-(--ink-soft)"> ×{cat.count}</span>
-                            )}
+                          <li key={cat.category}>
+                            <Link
+                              href={`/admin/performance/${c.userId}?month=${month}`}
+                              className="block rounded-full border border-(--line) px-2 py-0.5 text-[11px] text-(--ink-soft) hover:border-(--ink-soft)"
+                              title="ดูวันที่และรายละเอียดของแต่ละครั้ง"
+                            >
+                              {cat.label}{" "}
+                              <span className="font-semibold tabular-nums text-(--tone-danger)">
+                                {cat.points}
+                              </span>
+                              {cat.count > 1 && (
+                                <span className="text-(--ink-soft)"> ×{cat.count}</span>
+                              )}
+                            </Link>
                           </li>
                         ))}
                       </ul>
@@ -325,10 +295,17 @@ export default async function PerformancePage({
                   </div>
                 </div>
 
-                {c.eventCount === 0 && (
+                {c.eventCount === 0 ? (
                   <p className="mt-2 text-xs text-(--ink-soft)">
                     ไม่มีเหตุการณ์ที่ถูกบันทึกในเดือนนี้
                   </p>
+                ) : (
+                  <Link
+                    href={`/admin/performance/${c.userId}?month=${month}`}
+                    className="mt-2 inline-block text-xs text-(--brand-green) hover:underline"
+                  >
+                    ดูวันที่และรายละเอียดทีละครั้ง →
+                  </Link>
                 )}
               </Card>
             );

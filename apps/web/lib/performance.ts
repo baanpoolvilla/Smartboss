@@ -247,6 +247,19 @@ export function gradeOf(score: number, thresholds: [string, number][]): string {
 }
 
 /**
+ * สีของเกรดคิดจาก "อันดับ" ไม่ใช่ชื่อ — บริษัทตั้งชื่อเกรดเองได้ (A/B/C หรือ
+ * ดีมาก/ดี/พอใช้) ถ้าผูกสีกับตัวอักษรตายตัว เกรดที่ตั้งชื่อเองจะไม่มีสี
+ */
+export function gradeColor(grade: string, order: string[]): string {
+  const i = order.indexOf(grade);
+  if (i === -1) return "var(--tone-danger)"; // ต่ำกว่าทุกเกณฑ์
+  const ratio = order.length <= 1 ? 0 : i / (order.length - 1);
+  if (ratio <= 0.34) return "var(--tone-ok)";
+  if (ratio <= 0.67) return "var(--tone-warn)";
+  return "var(--tone-danger)";
+}
+
+/**
  * สรุปคะแนนของทุกคนในบริษัทตามช่วงเวลา — ใช้ในหน้าภาพรวมของผู้บริหาร
  *
  * รวมคนที่ยังไม่มีเหตุการณ์เลยด้วย (คะแนนเต็ม) ไม่งั้นคนที่ทำงานเรียบร้อย
@@ -328,11 +341,33 @@ export async function buildScorecards(
   };
 }
 
-/** เหตุการณ์ล่าสุดของคนหนึ่งคน — ใช้ในหน้ารายละเอียด */
-export async function listUserEvents(orgId: string, userId: string, limit = 100) {
+/**
+ * เหตุการณ์ของคนหนึ่งคน — ใช้ในหน้ารายละเอียด
+ *
+ * ไม่ระบุ from/to = ล่าสุดเท่าที่ limit อนุญาต (หน้าโปรไฟล์พนักงาน) ระบุมาเมื่อ
+ * ต้องการเฉพาะเหตุการณ์ที่ประกอบเป็นคะแนนของเดือนใดเดือนหนึ่ง (หน้าผลงานรายคน
+ * ที่แยกดูทีละเดือน) — ให้ตรงกับช่วงเดียวกับที่ buildScorecards ใช้คิดคะแนน
+ * เดือนนั้นเป๊ะ ๆ ไม่งั้นรายการที่เห็นกับยอดรวมที่โชว์จะไม่ตรงกัน
+ */
+export async function listUserEvents(
+  orgId: string,
+  userId: string,
+  opts: { limit?: number; from?: Date; to?: Date } = {},
+) {
   return prisma.performanceEvent.findMany({
-    where: { orgId, userId },
+    where: {
+      orgId,
+      userId,
+      ...(opts.from || opts.to
+        ? {
+            occurredAt: {
+              ...(opts.from ? { gte: opts.from } : {}),
+              ...(opts.to ? { lte: opts.to } : {}),
+            },
+          }
+        : {}),
+    },
     orderBy: { occurredAt: "desc" },
-    take: limit,
+    take: opts.limit ?? 100,
   });
 }
