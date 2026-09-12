@@ -8,7 +8,7 @@ import {
   assignCheckinPolicyAction,
   assignUnassignedToCheckinPolicyAction,
   createCheckinPolicyAction,
-} from "../actions";
+} from "../../actions";
 
 /**
  * ค่าตั้งต้นที่ฟอร์มเปิดมาให้ = ชุดที่ "ใช้งานได้จริงตั้งแต่วันแรก"

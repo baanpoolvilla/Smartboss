@@ -233,3 +233,38 @@ export function formatDateTime(value: string | null | undefined): string {
     calendar: "buddhist",
   }).format(date);
 }
+
+/**
+ * วันที่แบบสั้น ไม่มีปี — ใช้กับตัวเลือกวันของหน้าการลงเวลา (ผูกกับ TZ "UTC"
+ * ตรงตัวเพราะ input เป็น ISO date ล้วน "YYYY-MM-DD" ที่ประกอบเป็นเที่ยงคืน UTC
+ * ไว้แล้วตอนเรียก — ใช้ timeZone ท้องถิ่นตรงนี้จะเลื่อนวันผิดได้)
+ */
+export function formatShortDate(iso: string, opts?: { weekday?: boolean }): string {
+  const date = new Date(`${iso}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return iso;
+  return new Intl.DateTimeFormat("th-TH", {
+    ...(opts?.weekday === false ? {} : { weekday: "short" }),
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    calendar: "buddhist",
+    timeZone: "UTC",
+  }).format(date);
+}
+
+/** เวลาอย่างเดียว "08:22" — ผูก timeZone ให้ชัดเพราะบางจุดเรียกจากฝั่งเบราว์เซอร์ */
+export function formatTime(value: string, timeZone: string = "Asia/Bangkok"): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("th-TH", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
+/** ปี ค.ศ. → พ.ศ. — จุดเดียวแทนเลข +543 ที่กระจายอยู่หลายไฟล์ */
+export function formatBuddhistYear(gregorianYear: number): number {
+  return gregorianYear + 543;
+}

@@ -300,15 +300,30 @@ export function LeaveCalendar({
                 );
                 const iAmOff = all.some((e) => e.mine);
                 const isToday = cell.iso === today;
+                // เตือนวันที่คนหยุดพร้อมกันเยอะผิดปกติ — ปัญหาจริงของธุรกิจที่พึ่ง
+                // กะเข้างานสลับกัน (เช่น pool villa) ถ้าหยุดพร้อมกันหลายคนอาจขาดคน
+                const heavy = cell.inMonth && all.length >= 3;
 
                 const body = (
                   <span
                     className="flex h-full min-h-24 flex-col gap-0.5 border-b border-r border-(--line) p-1 text-left"
-                    style={{ opacity: cell.inMonth ? 1 : 0.4 }}
+                    style={{
+                      opacity: cell.inMonth ? 1 : 0.4,
+                      boxShadow: heavy ? "inset 0 0 0 1.5px var(--tone-warn)" : undefined,
+                    }}
                   >
-                    <span className="flex justify-end">
+                    <span className="flex items-center justify-between">
+                      {heavy && (
+                        <span
+                          title={`${all.length} คนหยุดพร้อมกันวันนี้`}
+                          className="text-[10px] font-semibold"
+                          style={{ color: "var(--tone-warn)" }}
+                        >
+                          ⚠ {all.length}
+                        </span>
+                      )}
                       <span
-                        className="inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px]"
+                        className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px]"
                         style={
                           isToday
                             ? { backgroundColor: "var(--app)", color: "white", fontWeight: 700 }

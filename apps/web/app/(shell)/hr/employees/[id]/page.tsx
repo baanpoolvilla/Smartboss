@@ -39,10 +39,10 @@ import {
   terminateEmploymentAction,
 } from "../../actions";
 import { AssignShiftForm, type CurrentPattern } from "../../settings/assign-shift-form";
-import { EmployeeDaysOff } from "../../holidays/employee-days-off";
-import { EnrollFingerprintForm } from "../../devices/enroll-fingerprint-form";
+import { EmployeeDaysOff } from "./employee-days-off";
+import { EnrollFingerprintForm } from "../../settings/devices/enroll-fingerprint-form";
 import { DayOffQuotaForm } from "./day-off-quota-form";
-import { buildScorecards } from "@/lib/performance";
+import { buildScorecards, listUserEvents, PERFORMANCE_CATEGORIES } from "@/lib/performance";
 import { loadDayOffQuota } from "@/lib/day-off-quota";
 
 interface CompensationRate {
@@ -88,12 +88,21 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+const TABS = [
+  { id: "info", label: "ข้อมูล" },
+  { id: "shift", label: "กะและวันหยุด" },
+  { id: "wage", label: "ค่าจ้าง" },
+  { id: "attendance", label: "การลงเวลา" },
+  { id: "score", label: "คะแนน" },
+] as const;
+type TabId = (typeof TABS)[number]["id"];
+
 export default async function EmployeeDetailPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ month?: string; tab?: string }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -101,13 +110,14 @@ export default async function EmployeeDetailPage({
   const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.month ?? "")
     ? sp.month!
     : new Date().toISOString().slice(0, 7);
+  const tab: TabId = TABS.some((t) => t.id === sp.tab) ? (sp.tab as TabId) : "info";
   const session = await requireOrg();
   const canManage = hasPermission(session, HR_PERMS.employeeManage);
   const canManageSalary = hasPermission(session, HR_PERMS.salaryManage);
 
   return (
     <HrPage
-      title="ตั้งค่าพนักงาน"
+      title="พนักงาน"
       permission={HR_PERMS.employeeView}
       backHref="/hr/employees"
       width="max-w-4xl"
@@ -122,7 +132,8 @@ export default async function EmployeeDetailPage({
 
         /*
          * รวมทุกอย่างของคนนี้ไว้หน้าเดียว — เดิมกระจายอยู่ 4 หน้า (ค่าจ้างที่นี่,
-         * ตารางกะที่ /hr/shifts, วันหยุดที่ /hr/holidays, ลายนิ้วมือที่ /hr/devices)
+         * ตารางกะที่ /hr/settings, วันหยุดที่ /hr/settings/holidays, ลายนิ้วมือที่
+         * /hr/settings/devices)
          * ทำให้ตั้งค่าคนหนึ่งคนต้องเดินสี่หน้าและจำได้ยากว่าตั้งครบหรือยัง
          *
          * ทุกตัวเป็น wfTry — คนที่ดูทะเบียนพนักงานได้อาจไม่มีสิทธิ์ดูค่าจ้าง
@@ -272,8 +283,68 @@ export default async function EmployeeDetailPage({
                 .then((r) => r.cards.find((c) => c.email.toLowerCase() === email) ?? null)
                 .catch(() => null);
 
+        const wageIncomplete = rates === null || rates.items.length === 0;
+
+        /*
+         * รายการหักคะแนนแยกทีละครั้งพร้อมวันที่ — เดิมเห็นแค่ยอดรวมตามหมวด
+         * ("ขาดงาน 9 ครั้ง -45") ซึ่งพนักงานโต้แย้งไม่ได้ว่าครั้งไหนผิดพลาด
+         * (สเปคข้อ 4.5) ดึงเฉพาะตอนเปิดแท็บคะแนน ไม่ต้องกวนฐานข้อมูลทุกแท็บ
+         */
+        const scoreEvents =
+          tab === "score" && scorecard !== null
+            ? await listUserEvents(session.orgId, scorecard.userId, 15)
+            : [];
+
         return (
           <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-3 border-b border-(--line) pb-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-(--app-pale,var(--bg-soft)) text-sm font-bold text-(--app-strong,var(--ink))">
+                {employment.display_name.trim().slice(0, 2).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-base font-bold text-(--ink)">
+                  {employment.full_name}
+                  {employment.display_name !== employment.full_name && (
+                    <span className="ml-1.5 font-normal text-(--ink-soft)">
+                      ({employment.display_name})
+                    </span>
+                  )}
+                </p>
+                <p className="truncate text-xs text-(--ink-soft)">
+                  {employment.employee_code} · {employmentTypeLabel(employment.employment_type)}
+                  {" · "}เริ่ม {formatDate(employment.hired_on)}
+                </p>
+              </div>
+              <div className="ml-auto shrink-0">
+                <StatusBadge value={employment.status} />
+              </div>
+            </div>
+
+            <div className="flex gap-1 overflow-x-auto border-b border-(--line)">
+              {TABS.map((t) => (
+                <Link
+                  key={t.id}
+                  href={t.id === "info" ? `/hr/employees/${id}` : `/hr/employees/${id}?tab=${t.id}`}
+                  className={`shrink-0 border-b-2 px-3 py-2 text-sm font-medium ${
+                    tab === t.id
+                      ? "border-(--app-strong,var(--ink)) text-(--ink)"
+                      : "border-transparent text-(--ink-soft) hover:text-(--ink)"
+                  }`}
+                >
+                  {t.label}
+                  {t.id === "wage" && wageIncomplete && (
+                    <span
+                      className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle"
+                      style={{ backgroundColor: "var(--tone-warn)" }}
+                      title="ยังไม่มีการตั้งอัตราค่าจ้าง"
+                    />
+                  )}
+                </Link>
+              ))}
+            </div>
+
+            {tab === "info" && (
+              <>
             <SectionCard title="ข้อมูลการจ้าง">
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 <span className="font-mono text-sm text-(--ink-soft)">
@@ -296,8 +367,10 @@ export default async function EmployeeDetailPage({
               )}
               <Row label="เขตเวลา" value={employment.time_zone} />
             </SectionCard>
+              </>
+            )}
 
-            {scorecard !== null && (
+            {tab === "score" && scorecard !== null && (
               <SectionCard
                 title="คะแนนผลงานเดือนนี้"
                 description="คิดรวมจากงานซ่อมบำรุง งานในบอร์ด และการลงเวลา — ดูที่มาทุกแต้มได้ที่หน้าผลงานรายคน"
@@ -352,7 +425,52 @@ export default async function EmployeeDetailPage({
                 )}
               </SectionCard>
             )}
+            {tab === "score" && scorecard !== null && scoreEvents.length > 0 && (
+              <SectionCard
+                title="รายการหักคะแนนล่าสุด"
+                description="เรียงจากล่าสุดไปเก่าสุด — กดดูวันนั้นได้ทันทีถ้ามาจากการลงเวลา"
+              >
+                <DataTable head={["วันที่", "เหตุการณ์", "คะแนน", ""]}>
+                  {scoreEvents.map((ev) => {
+                    const label =
+                      PERFORMANCE_CATEGORIES[ev.category as keyof typeof PERFORMANCE_CATEGORIES] ??
+                      ev.category;
+                    const workDate = ev.occurredAt.toISOString().slice(0, 10);
+                    return (
+                      <tr key={ev.id} className="hover:bg-(--bg-soft)">
+                        <Td>{formatDate(workDate)}</Td>
+                        <Td>
+                          {label}
+                          {ev.note && (
+                            <span className="ml-1.5 text-xs text-(--ink-soft)">({ev.note})</span>
+                          )}
+                        </Td>
+                        <Td align="right" className="font-medium">
+                          <span style={{ color: Number(ev.points) < 0 ? "var(--danger)" : "var(--tone-ok)" }}>
+                            {Number(ev.points) > 0 ? `+${ev.points}` : String(ev.points)}
+                          </span>
+                        </Td>
+                        <Td>
+                          {ev.source === "workforce" && (
+                            <Link
+                              href={`/hr?date=${workDate}`}
+                              className="text-xs text-(--app-strong,var(--ink)) hover:underline"
+                            >
+                              ดูวันนั้น →
+                            </Link>
+                          )}
+                        </Td>
+                      </tr>
+                    );
+                  })}
+                </DataTable>
+              </SectionCard>
+            )}
+            {tab === "score" && scorecard === null && (
+              <EmptyState>ยังไม่มีข้อมูลผลงานของคนนี้ในเดือนนี้</EmptyState>
+            )}
 
+            {tab === "wage" && (
             <SectionCard
               title="อัตราค่าจ้าง"
               description="เก็บเป็นช่วงเวลาที่ไม่ทับกัน — งวดย้อนหลังจึงคำนวณด้วยอัตราที่ถูก ณ เวลานั้น"
@@ -433,7 +551,10 @@ export default async function EmployeeDetailPage({
                 </details>
               )}
             </SectionCard>
+            )}
 
+            {tab === "shift" && (
+              <>
             {/*
               ชื่อการ์ดต้องมีคำว่า "ผูกกะ" — หน้าลงเวลาเรียกสิ่งนี้ว่า "ยังไม่ผูกกะ"
               แล้วส่งคนมาที่นี่ แต่ทั้งหน้าไม่เคยมีคำนั้นโผล่สักที่ (หัวข้อเดิมคือ
@@ -457,11 +578,7 @@ export default async function EmployeeDetailPage({
               )}
             </SectionCard>
 
-            {/*
-              วันหยุดรายคนเคยอยู่ที่หน้า /hr/holidays แล้วถูกย้ายมาที่นี่ —
-              แต่ย้ายค้าง: หน้านั้นเขียนว่า "ย้ายไปหน้าพนักงานแล้ว" ทั้งที่หน้านี้
-              ไม่เคยมีปฏิทินให้ลง ⇒ ลงวันหยุดรายคนไม่ได้เลยไม่ว่าจะเดินไปทางไหน
-            */}
+            {/* วันหยุดรายคน — ย้ายมาจาก /hr/holidays เดิม ที่นี่เป็นเจ้าของแหล่งเดียว */}
             <SectionCard
               title="วันหยุดของคนนี้"
               description="ที่เดียวที่กำหนดว่าคนนี้หยุดวันไหน — เดือนที่ไม่ได้ลงไว้ ระบบถือว่าทำงานทุกวัน"
@@ -516,7 +633,10 @@ export default async function EmployeeDetailPage({
                 <p className="text-sm text-(--ink-soft)">ไม่มีสิทธิ์แก้วันหยุดของพนักงาน</p>
               )}
             </SectionCard>
+              </>
+            )}
 
+            {tab === "attendance" && (
             <SectionCard
               title="ลายนิ้วมือ"
               description="ต้องผูก slot บนเครื่องกับคนนี้ ระบบถึงจะรู้ว่าใครสแกน"
@@ -556,8 +676,9 @@ export default async function EmployeeDetailPage({
                 <EmptyState>ยังไม่ได้ผูกลายนิ้วมือ</EmptyState>
               ) : null}
             </SectionCard>
+            )}
 
-            {canManage && employment.status === "ACTIVE" && (
+            {tab === "info" && canManage && employment.status === "ACTIVE" && (
               <SectionCard
                 title="แจ้งพ้นสภาพ"
                 description="ปิดสัญญาจ้าง — ประวัติและงวดที่จ่ายไปแล้วยังอยู่ครบ"

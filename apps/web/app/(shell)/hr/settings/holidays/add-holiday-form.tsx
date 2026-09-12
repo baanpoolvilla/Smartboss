@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { Button } from "@smartboss/ui/components/button";
 import { Field, inputClass } from "@/modules/hr/components/ui";
-import { addHolidayAction, type HolidayState } from "../actions";
+import { addHolidayAction, type HolidayState } from "../../actions";
 
 const EMPTY: HolidayState = {};
 

@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { Button } from "@smartboss/ui/components/button";
 import { Field, inputClass } from "@/modules/hr/components/ui";
-import { requestEnrollmentAction, type EnrollState } from "../actions";
+import { requestEnrollmentAction, type EnrollState } from "../../actions";
 
 const EMPTY: EnrollState = {};
 

@@ -2,7 +2,8 @@
 
 import { useActionState, useState } from "react";
 import { Button } from "@smartboss/ui/components/button";
-import { issueDeviceTokenAction, type IssueTokenState } from "../actions";
+import { formatDateTime } from "@/modules/hr/lib/labels";
+import { issueDeviceTokenAction, type IssueTokenState } from "../../actions";
 
 const EMPTY: IssueTokenState = {};
 
@@ -45,7 +46,7 @@ export function IssueTokenButton({ deviceId }: { deviceId: string }) {
           <p className="mb-1 text-xs text-(--ink-soft)">
             คัดลอกไปวางที่เครื่อง — ใช้ได้ครั้งเดียว
             {state.expiresAt
-              ? ` · หมดอายุ ${new Date(state.expiresAt).toLocaleString("th-TH")}`
+              ? ` · หมดอายุ ${formatDateTime(state.expiresAt)}`
               : ""}
           </p>
           <code className="block break-all font-mono text-xs">{state.token}</code>

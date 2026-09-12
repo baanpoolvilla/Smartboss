@@ -3,22 +3,13 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { formatShortDate } from "../lib/labels";
 
 /** ISO date (YYYY-MM-DD) → ISO date ของอีก N วัน — บวกลบตรงๆ ไม่ผ่าน Date เพื่อกัน timezone เพี้ยน */
 function shiftDate(iso: string, deltaDays: number): string {
   const d = new Date(`${iso}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + deltaDays);
   return d.toISOString().slice(0, 10);
-}
-
-function formatThai(iso: string): string {
-  return new Intl.DateTimeFormat("th-TH", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(`${iso}T00:00:00Z`));
 }
 
 /**
@@ -57,7 +48,7 @@ export function AttendanceDateNav({ date, today }: { date: string; today: string
           aria-label="เลือกวันที่"
         />
         <div className="pointer-events-none flex h-9 items-center justify-center rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm font-medium text-(--ink)">
-          {formatThai(date)}
+          {formatShortDate(date)}
           {isToday && (
             <span className="ml-2 rounded-full bg-(--app-soft,#EFF5FF) px-2 py-px text-[11px] font-bold text-(--app-strong,var(--ink))">
               วันนี้

@@ -101,7 +101,7 @@ export async function generateTimesheetAction(formData: FormData) {
   } catch (error) {
     throw new Error(toMessage(error));
   }
-  revalidatePath("/hr/timesheets");
+  revalidatePath("/hr/payroll");
 }
 
 export async function closeTimesheetAction(formData: FormData) {
@@ -119,7 +119,7 @@ export async function closeTimesheetAction(formData: FormData) {
   } catch (error) {
     throw new Error(toMessage(error));
   }
-  revalidatePath("/hr/timesheets");
+  revalidatePath("/hr/payroll");
 }
 
 /* ═══════════════════ งวดเงินเดือน ═══════════════════ */
@@ -735,7 +735,7 @@ export async function addHolidayAction(
     return { error: toMessage(error) };
   }
 
-  revalidatePath("/hr/holidays");
+  revalidatePath("/hr/settings/holidays");
   return { ok: true, added: date };
 }
 
@@ -749,7 +749,7 @@ export async function deleteHolidayAction(formData: FormData) {
   } catch (error) {
     throw new Error(toMessage(error));
   }
-  revalidatePath("/hr/holidays");
+  revalidatePath("/hr/settings/holidays");
 }
 
 /**
@@ -855,7 +855,7 @@ export async function setEmployeeDaysOffAction(
     return { error: toMessage(error) };
   }
 
-  revalidatePath("/hr/holidays");
+  revalidatePath("/hr/settings/holidays");
   revalidatePath(`/hr/employees/${employmentId}`);
   return { ok: true, offDays: offDays.length, quota: quota.daysPerMonth };
 }
@@ -999,7 +999,7 @@ export async function submitLeaveAction(
     return { error: lastError ?? "ส่งคำขอไม่สำเร็จ" };
   }
 
-  revalidatePath("/hr/leave");
+  revalidatePath("/hr");
   return { ok: true, days: dates.length - failed };
 }
 
@@ -1025,7 +1025,7 @@ export async function cancelLeaveAction(formData: FormData) {
   } catch (error) {
     throw new Error(toMessage(error));
   }
-  revalidatePath("/hr/leave");
+  revalidatePath("/hr");
 }
 
 export interface SwapLeaveState {
@@ -1078,7 +1078,7 @@ export async function swapLeaveAction(input: {
     return { error: leaveErrorMessage(toMessage(error)) };
   }
 
-  revalidatePath("/hr/leave");
+  revalidatePath("/hr");
   return { ok: true };
 }
 
@@ -1109,7 +1109,7 @@ export async function relabelLeaveAction(input: {
     return { error: toMessage(error) };
   }
 
-  revalidatePath("/hr/leave");
+  revalidatePath("/hr");
   return { ok: true };
 }
 
@@ -1134,7 +1134,7 @@ export async function decideLeaveAction(formData: FormData) {
   } catch (error) {
     throw new Error(toMessage(error));
   }
-  revalidatePath("/hr/leave");
+  revalidatePath("/hr");
 }
 
 /** ประเภทการลา — ต้องมีอย่างน้อยหนึ่งอันก่อนพนักงานจะขอลาได้ */
@@ -1177,7 +1177,7 @@ export async function createLeaveTypeAction(formData: FormData) {
   } catch (error) {
     throw new Error(toMessage(error));
   }
-  revalidatePath("/hr/leave");
+  revalidatePath("/hr");
   revalidatePath("/hr/settings");
 }
 
@@ -1235,7 +1235,7 @@ export async function seedLeaveTypesAction(formData: FormData) {
   } catch (error) {
     throw new Error(toMessage(error));
   }
-  revalidatePath("/hr/leave");
+  revalidatePath("/hr");
   revalidatePath("/hr/settings");
 }
 
@@ -1259,7 +1259,7 @@ export async function createTimesheetPeriodAction(formData: FormData) {
   } catch (error) {
     throw new Error(toMessage(error));
   }
-  revalidatePath("/hr/timesheets");
+  revalidatePath("/hr/payroll");
 }
 
 /* ═══════════════════ สถานที่ทำงาน (geofence) ═══════════════════ */
@@ -1316,7 +1316,7 @@ export async function createSiteAction(formData: FormData) {
   } catch (error) {
     throw new Error(toMessage(error));
   }
-  revalidatePath("/hr/sites");
+  revalidatePath("/hr/settings/attendance");
 }
 
 /**
@@ -1360,7 +1360,7 @@ export async function updateSiteAction(formData: FormData) {
   } catch (error) {
     throw new Error(toMessage(error));
   }
-  revalidatePath("/hr/sites");
+  revalidatePath("/hr/settings/attendance");
 }
 
 /* ═══════════════ นโยบายลงเวลาด้วยมือถือ ═══════════════ */
@@ -1426,7 +1426,7 @@ export async function createCheckinPolicyAction(formData: FormData) {
   } catch (error) {
     throw new Error(toMessage(error));
   }
-  revalidatePath("/hr/checkin-policy");
+  revalidatePath("/hr/settings/attendance");
 }
 
 /**
@@ -1457,7 +1457,7 @@ export async function assignCheckinPolicyAction(formData: FormData) {
   } catch (error) {
     throw new Error(toMessage(error));
   }
-  revalidatePath("/hr/checkin-policy");
+  revalidatePath("/hr/settings/attendance");
 }
 
 /**
@@ -1502,7 +1502,7 @@ export async function assignUnassignedToCheckinPolicyAction(formData: FormData) 
   } catch (error) {
     throw new Error(toMessage(error));
   }
-  revalidatePath("/hr/checkin-policy");
+  revalidatePath("/hr/settings/attendance");
 }
 
 /* ═══════════════ ลงเวลาแบบ manual (ต้อง 2 ผู้จัดการอนุมัติ) ═══════════════ */
@@ -1549,7 +1549,7 @@ export async function requestManualAttendanceAction(formData: FormData) {
   } catch (error) {
     throw new Error(toMessage(error));
   }
-  revalidatePath("/hr/attendance/corrections");
+  revalidatePath("/hr");
 }
 
 /**
@@ -1573,7 +1573,7 @@ export async function approveAttendanceCorrectionAction(formData: FormData) {
   } catch (error) {
     throw new Error(toMessage(error));
   }
-  revalidatePath("/hr/attendance/corrections");
+  revalidatePath("/hr");
 }
 
 export async function rejectAttendanceCorrectionAction(formData: FormData) {
@@ -1592,7 +1592,7 @@ export async function rejectAttendanceCorrectionAction(formData: FormData) {
   } catch (error) {
     throw new Error(toMessage(error));
   }
-  revalidatePath("/hr/attendance/corrections");
+  revalidatePath("/hr");
 }
 
 /* ═══════════════════ เครื่องสแกน ═══════════════════ */
@@ -1619,7 +1619,7 @@ export async function createDeviceAction(formData: FormData) {
   } catch (error) {
     throw new Error(toMessage(error));
   }
-  revalidatePath("/hr/devices");
+  revalidatePath("/hr/settings/devices");
 }
 
 /**
@@ -1734,7 +1734,7 @@ export async function requestEnrollmentAction(
     return { error: toMessage(error) };
   }
 
-  revalidatePath("/hr/devices");
+  revalidatePath("/hr/settings/devices");
   return { ok: true, slot };
 }
 
@@ -1760,7 +1760,7 @@ export async function deleteEnrollmentsAction(formData: FormData) {
   } catch (error) {
     throw new Error(toMessage(error));
   }
-  revalidatePath("/hr/devices");
+  revalidatePath("/hr/settings/devices");
 }
 
 export async function revokeDeviceAction(formData: FormData) {
@@ -1777,5 +1777,5 @@ export async function revokeDeviceAction(formData: FormData) {
   } catch (error) {
     throw new Error(toMessage(error));
   }
-  revalidatePath("/hr/devices");
+  revalidatePath("/hr/settings/devices");
 }

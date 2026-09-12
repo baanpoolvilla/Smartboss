@@ -306,15 +306,15 @@ export function EventDetailDialog({
                   {event.type === "leave" ? (
                     <>
                       วันลามาจากโมดูลบุคคล — แก้ไข/ยกเลิกได้ที่{" "}
-                      <a href="/hr/leave" className="underline hover:text-[var(--ink)]">
-                        ปฏิทินวันหยุด (ฝ่ายบุคคล)
+                      <a href="/hr?tab=calendar" className="underline hover:text-[var(--ink)]">
+                        ปฏิทินทีม (ฝ่ายบุคคล)
                       </a>{" "}
                       เพื่อให้ผ่านสายอนุมัติและตรงกับที่ใช้คิดเงินเดือน
                     </>
                   ) : event.type === "holiday" ? (
                     <>
                       วันหยุดบริษัทตั้งค่าที่{" "}
-                      <a href="/hr/holidays" className="underline hover:text-[var(--ink)]">
+                      <a href="/hr/settings/holidays" className="underline hover:text-[var(--ink)]">
                         โมดูลบุคคล
                       </a>{" "}
                       — ปฏิทินนี้แสดงผลอย่างเดียว

@@ -68,6 +68,25 @@ export async function HrPage({
 }
 
 function ProblemBody({ error, title }: { error: WorkforceError; title: string }) {
+  /*
+   * บัญชีนี้ไม่มี employment ผูกอยู่เลย (เช่นบัญชีแอดมิน/เจ้าของที่ไม่เคยถูก
+   * เพิ่มเป็นพนักงานในทะเบียน) — เกิดกับ endpoint ที่ต้องรู้ว่า "ตัวเอง" คือ
+   * employment คนไหน เช่น /me/payslips ข้อความเดิมจาก workforce API เป็น
+   * ภาษาอังกฤษล้วน ("this account is not linked to an employment record")
+   * และไม่ตรงกับ error code ไหนที่มีข้อความเฉพาะอยู่แล้วด้านล่าง (เป็น 400
+   * ธรรมดา) จึงต้องเช็คข้อความตรง ๆ ก่อนตกไปที่ fallback ท้ายฟังก์ชัน — API ส่ง
+   * ข้อความนี้มาใน `title` ไม่ใช่ `detail` (ไม่ได้ส่ง detail มาด้วย) ⇒ ใช้
+   * displayMessage ซึ่ง fallback ไปที่ title เมื่อไม่มี detail
+   */
+  if (error.displayMessage.includes("not linked to an employment record")) {
+    return (
+      <ApiProblem
+        heading="บัญชีนี้ยังไม่ได้ผูกกับพนักงานในทะเบียน"
+        detail="ให้ฝ่ายบุคคลเพิ่มอีเมลของคุณในหน้าพนักงาน (ทะเบียนพนักงาน) ก่อน ถึงจะใช้ส่วนนี้ได้"
+      />
+    );
+  }
+
   if (error.status === 403) {
     const required = (error.problem as { meta?: { required_permissions?: string[] } })
       .meta?.required_permissions;
@@ -82,10 +101,14 @@ function ProblemBody({ error, title }: { error: WorkforceError; title: string })
      *   บัญชียังไม่ถูก provision → เข้าใหม่กี่ครั้งก็ไม่หาย ต้องให้แอดมิน sync ให้
      *
      * เดิมขึ้น "เซสชันหมดอายุ" ทั้งสองกรณี คนที่เจอแบบหลังจึงวนล็อกอินซ้ำไปเรื่อย ๆ
-     * โดยไม่มีทางรู้ว่าปัญหาอยู่ที่ไหน — แยกข้อความตาม detail ที่ API ส่งมา
+     * โดยไม่มีทางรู้ว่าปัญหาอยู่ที่ไหน — แยกข้อความตามที่ API ส่งมา
+     *
+     * ⚠ ใช้ displayMessage ไม่ใช่ problem.detail ตรง ๆ — principal-loader โยน
+     * ข้อความนี้ผ่าน AppError.unauthenticated(message) โดยไม่ได้ส่ง detail มา
+     * ด้วย ⇒ ข้อความจริงอยู่ใน `title` (ดู problem.filter.ts: title: error.message)
+     * เช็คแค่ `detail` เดิมจึงไม่เคย match เลยสักครั้ง ข้อความมิตรนี้เลยไม่เคยขึ้นจริง
      */
-    const detail = error.problem.detail ?? "";
-    if (detail.includes("not provisioned")) {
+    if (error.displayMessage.includes("not provisioned")) {
       return (
         <ApiProblem
           heading="บัญชีนี้ยังไม่ถูกเปิดใช้ในระบบบุคคล"

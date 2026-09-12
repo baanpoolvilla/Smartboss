@@ -93,8 +93,9 @@ export function SectionCard({
   className = "",
   children,
 }: {
-  title?: string;
-  description?: string;
+  /** ปกติเป็นข้อความล้วน — รับ ReactNode ด้วยเผื่อต้องแปะ HelpPopover ต่อท้ายหัวข้อ */
+  title?: React.ReactNode;
+  description?: React.ReactNode;
   action?: React.ReactNode;
   className?: string;
   children: React.ReactNode;
@@ -105,7 +106,7 @@ export function SectionCard({
         <div className="mb-3 flex items-start justify-between gap-3">
           <div className="min-w-0">
             {title && (
-              <h2 className="text-sm font-semibold text-(--ink)">{title}</h2>
+              <h2 className="flex items-center gap-1.5 text-sm font-semibold text-(--ink)">{title}</h2>
             )}
             {description && (
               <p className="mt-0.5 text-xs text-(--ink-soft)">{description}</p>
@@ -119,10 +120,22 @@ export function SectionCard({
   );
 }
 
-export function EmptyState({ children }: { children: React.ReactNode }) {
+export function EmptyState({
+  icon,
+  action,
+  children,
+}: {
+  /** ไอคอนอธิบายว่าทำไมว่าง — ใส่ตอนย้ายหน้าเข้า design kit ใหม่ ของเดิมไม่ใส่ก็ยังใช้ได้ */
+  icon?: React.ReactNode;
+  /** ปุ่ม/ลิงก์ไปขั้นถัดไป — ตามกฎที่ว่าหน้าว่างต้องไม่ใช่ทางตัน */
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <Card className="p-10 text-center text-sm text-(--ink-soft)">
+      {icon && <div className="mb-3 flex justify-center">{icon}</div>}
       {children}
+      {action && <div className="mt-4 flex justify-center">{action}</div>}
     </Card>
   );
 }
@@ -284,15 +297,24 @@ export function Td({
   children,
   className = "",
   align,
+  numeric = false,
 }: {
   children: React.ReactNode;
   className?: string;
   align?: "right" | "center";
+  /** ตัวเลขในตาราง — จัดชิดขวา + tabular-nums กันเลขวิ่งเวลาแถวเลื่อน */
+  numeric?: boolean;
 }) {
   return (
     <td
       className={`px-3 py-2.5 text-(--ink) ${
-        align === "right" ? "text-right" : align === "center" ? "text-center" : ""
+        numeric
+          ? "text-right tabular-nums"
+          : align === "right"
+            ? "text-right"
+            : align === "center"
+              ? "text-center"
+              : ""
       } ${className}`}
     >
       {children}

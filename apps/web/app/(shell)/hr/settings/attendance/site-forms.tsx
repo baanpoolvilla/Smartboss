@@ -5,7 +5,7 @@ import { Crosshair } from "lucide-react";
 import { Button } from "@smartboss/ui/components/button";
 import { Field, inputClass } from "@/modules/hr/components/ui";
 import type { Site } from "@/modules/hr/lib/api";
-import { createSiteAction, updateSiteAction } from "../actions";
+import { createSiteAction, updateSiteAction } from "../../actions";
 
 /**
  * ดึงพิกัดเครื่องที่ใช้อยู่ แล้วยัดลงช่อง latitude/longitude ของฟอร์มที่ครอบปุ่มนี้
@@ -210,6 +210,13 @@ export function SiteEditCard({ site }: { site: Site }) {
             placeholder="ตามนโยบาย"
             className={inputClass}
           />
+          {/* GPS ทั่วไปคลาดเคลื่อนได้หลักสิบเมตรแม้กลางที่โล่ง — รัศมีแคบกว่านี้
+              มักทำให้พนักงานยืนอยู่หน้างานจริงแต่ลงเวลาไม่ผ่าน (สเปคข้อ 4.9) */}
+          {site.radius_m !== null && site.radius_m < 100 && (
+            <span className="text-xs text-(--tone-warn)">
+              ⚠ รัศมีแคบกว่าความแม่นยำ GPS ทั่วไป — พนักงานอาจลงเวลาไม่ผ่านทั้งที่อยู่หน้างาน
+            </span>
+          )}
         </Field>
 
         <Field label="สถานะ">

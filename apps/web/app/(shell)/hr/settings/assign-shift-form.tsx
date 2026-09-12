@@ -75,7 +75,7 @@ export function AssignShiftForm({
       <p className="text-sm text-(--ink-soft)">
         ยังไม่มีกะทำงานในระบบ — สร้างที่
         <Link href="/hr/settings" className="mx-1 text-(--app-strong) hover:underline">
-          หน้าตั้งค่า HR
+          หน้าตั้งค่า
         </Link>
         ก่อน (เช่น “กะเช้า 08:00-17:00”) จึงจะผูกกะให้พนักงานได้
       </p>
@@ -219,7 +219,7 @@ export function AssignShiftForm({
           ตอนนี้มีกะทำงานให้เลือก {workShifts.length} กะ — คนที่เข้างานเวลาอื่น
           (เช่น 07:30-16:30) ต้อง
           <Link href="/hr/settings" className="mx-1 text-(--app-strong) hover:underline">
-            สร้างกะนั้นที่หน้าตั้งค่า HR
+            สร้างกะนั้นที่หน้าตั้งค่า
           </Link>
           ก่อน แล้วกลับมาเลือกที่นี่
         </p>

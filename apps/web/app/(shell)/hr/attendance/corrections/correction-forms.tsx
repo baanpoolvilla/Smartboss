@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@smartboss/ui/components/button";
 import { Field, Pill, inputClass } from "@/modules/hr/components/ui";
+import { formatDate, formatTime } from "@/modules/hr/lib/labels";
 import type { AttendanceCorrection, Employment } from "@/modules/hr/lib/api";
 import {
   approveAttendanceCorrectionAction,
@@ -26,6 +27,71 @@ const INTENT_LABEL: Record<string, string> = {
 export function StageBadge({ stage }: { stage: AttendanceCorrection["approval_stage"] }) {
   const { text, tone } = STAGE_LABEL[stage];
   return <Pill tone={tone}>{text}</Pill>;
+}
+
+/**
+ * แถบขั้นตอนอนุมัติ — ผู้ขอ → อนุมัติคนที่ 1 → อนุมัติคนที่ 2 เห็นความคืบหน้า
+ * เป็นภาพแทนข้อความ "ยังไม่มี" ที่อ่านแล้วไม่รู้ว่าใกล้เสร็จแค่ไหน (สเปคข้อ 4.2)
+ */
+function ApprovalStepper({ correction }: { correction: AttendanceCorrection }) {
+  const rejected = correction.status === "REJECTED" || correction.status === "CANCELLED";
+  const step =
+    correction.approval_stage === "AWAITING_FIRST_APPROVAL"
+      ? 0
+      : correction.approval_stage === "AWAITING_SECOND_APPROVAL"
+        ? 1
+        : 2;
+  const dots: { label: string; done: boolean }[] = [
+    { label: "ผู้ขอ", done: true },
+    { label: "อนุมัติ 1", done: step >= 1 },
+    { label: "อนุมัติ 2", done: step >= 2 && !rejected },
+  ];
+  return (
+    <div className="flex items-center gap-1.5 text-[11px]">
+      {dots.map((d, i) => (
+        <span key={d.label} className="flex items-center gap-1.5">
+          <span className="flex items-center gap-1">
+            <span
+              className="h-2 w-2 shrink-0 rounded-full"
+              style={{
+                backgroundColor: rejected && i === dots.length - 1
+                  ? "var(--tone-danger)"
+                  : d.done
+                    ? "var(--tone-ok)"
+                    : "var(--line)",
+              }}
+            />
+            <span className={d.done ? "text-(--ink)" : "text-(--ink-faint,var(--ink-soft))"}>
+              {d.label}
+            </span>
+          </span>
+          {i < dots.length - 1 && <span className="h-px w-4 bg-(--line)" aria-hidden />}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * สรุปเดิม/ใหม่แบบตรงไปตรงมา — แสดงเฉพาะสิ่งที่ API ให้มาจริง ไม่เดา/ไม่แต่งค่า
+ * ผลกระทบต่อคะแนน (เช่น "+5") เพราะสูตรคะแนนเป็นค่าตั้งค่าต่อบริษัท ไม่ใช่ค่าคงที่
+ * ที่หน้านี้จะรู้ล่วงหน้าได้ (ดูกฎ "ห้าม hard code" ของโปรเจกต์)
+ */
+function CorrectionDiff({ correction }: { correction: AttendanceCorrection }) {
+  const after =
+    correction.adjustment_type === "IGNORE_EVENT"
+      ? "เพิกเฉยรายการสแกนนี้"
+      : `${INTENT_LABEL[correction.event_intent ?? ""] ?? correction.adjustment_type}${
+          correction.punch_at ? ` ${formatTime(correction.punch_at)}` : ""
+        }`;
+  const before = correction.adjustment_type === "ADD_PUNCH" ? "ไม่มีข้อมูล" : "มีข้อมูลเดิมอยู่แล้ว";
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 rounded-(--radius) bg-(--bg-soft) px-3 py-2 text-xs">
+      <span><span className="text-(--ink-soft)">เดิม:</span> {before}</span>
+      <span><span className="text-(--ink-soft)">→ ใหม่:</span> <strong className="text-(--ink)">{after}</strong></span>
+    </div>
+  );
 }
 
 export function ManualAttendanceForm({ employees }: { employees: Employment[] }) {
@@ -103,17 +169,19 @@ export function CorrectionCard({ correction }: { correction: AttendanceCorrectio
             </span>
           </p>
           <p className="text-sm text-(--ink-soft)">
-            {correction.work_date} · {INTENT_LABEL[correction.event_intent ?? ""] ?? correction.adjustment_type}
-            {correction.punch_at &&
-              ` เวลา ${new Date(correction.punch_at).toLocaleTimeString("th-TH", {
-                hour: "2-digit",
-                minute: "2-digit",
-                timeZone: "Asia/Bangkok",
-              })}`}
+            {formatDate(correction.work_date)} ·{" "}
+            {INTENT_LABEL[correction.event_intent ?? ""] ?? correction.adjustment_type}
+            {correction.punch_at && ` เวลา ${formatTime(correction.punch_at)}`}
           </p>
         </div>
         <StageBadge stage={correction.approval_stage} />
       </div>
+
+      <div className="mt-3">
+        <ApprovalStepper correction={correction} />
+      </div>
+
+      <CorrectionDiff correction={correction} />
 
       <p className="mt-2 text-sm text-(--ink)">{correction.reason}</p>
 
@@ -130,10 +198,10 @@ export function CorrectionCard({ correction }: { correction: AttendanceCorrectio
 
       {pending && (
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button type="button" variant="ghost" onClick={() => setShowApprove((v) => !v)}>
+          <Button type="button" variant="outline" onClick={() => setShowApprove((v) => !v)}>
             อนุมัติ
           </Button>
-          <Button type="button" variant="ghost" onClick={() => setShowReject((v) => !v)}>
+          <Button type="button" variant="outline" onClick={() => setShowReject((v) => !v)}>
             ปฏิเสธ
           </Button>
         </div>
@@ -171,7 +239,7 @@ export function CorrectionCard({ correction }: { correction: AttendanceCorrectio
             placeholder="เหตุผลที่ปฏิเสธ เช่น เวลาที่ขอไม่ตรงกับหลักฐาน"
             className={`${inputClass} h-9`}
           />
-          <Button type="submit" variant="ghost" className="shrink-0">
+          <Button type="submit" variant="danger" className="shrink-0">
             ยืนยันปฏิเสธ
           </Button>
         </form>

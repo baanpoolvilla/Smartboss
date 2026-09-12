@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { Button } from "@smartboss/ui/components/button";
-import { setEmployeeDaysOffAction, type DaysOffState } from "../actions";
+import { setEmployeeDaysOffAction, type DaysOffState } from "../../actions";
 import type { DayOffQuotaSource } from "@/lib/day-off-quota";
 
 const EMPTY: DaysOffState = {};

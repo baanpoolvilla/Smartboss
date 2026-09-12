@@ -751,7 +751,7 @@ export function CalendarView() {
       // here as defense-in-depth, same as every other branch. Moving a leave
       // has to go through /hr so it keeps its approval trail and stays in
       // step with the numbers payroll is computed from.
-      toast.error("ย้ายวันลาที่โมดูลบุคคล (/hr/leave) — ที่นี่แสดงผลอย่างเดียว");
+      toast.error("ย้ายวันลาที่โมดูลบุคคล (/hr แท็บปฏิทินทีม) — ที่นี่แสดงผลอย่างเดียว");
       return false;
     } else if (type === "todo") {
       const todoId = id.replace("todoevt-", "");
@@ -1424,7 +1424,7 @@ export function CalendarView() {
         onOpenChange={setCreateOpen}
         // No "ลา" here — a leave saved from this module never persisted (the
         // leaves store is a read-only mirror of workforce). Leave is filed at
-        // /hr/leave, linked from the schedule sidebar.
+        // /hr (calendar tab), linked from the schedule sidebar.
         defaultType="dayoff"
         allowedTypes={["dayoff"]}
         defaultDate={createDate}

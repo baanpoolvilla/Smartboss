@@ -1,13 +1,12 @@
 import Link from "next/link";
 import { Button } from "@smartboss/ui/components/button";
 import { HrPage } from "@/modules/hr/components/hr-page";
+import { SettingsSubnav } from "@/modules/hr/components/design-kit";
 import { HR_PERMS } from "@/modules/hr/permissions";
 import {
   wfFetch,
   wfTry,
   type Company,
-  type LeaveType,
-  type Me,
   type Paged,
 } from "@/modules/hr/lib/api";
 import {
@@ -21,12 +20,7 @@ import {
   Td,
   inputClass,
 } from "@/modules/hr/components/ui";
-import {
-  createLeaveTypeAction,
-  createShiftAction,
-  createWorkPolicyAction,
-  seedLeaveTypesAction,
-} from "../actions";
+import { createShiftAction, createWorkPolicyAction } from "../actions";
 
 interface Shift {
   id: string;
@@ -71,38 +65,16 @@ const LATE_MODE: Record<string, string> = {
   FLEX: "เข้าได้ยืดหยุ่น",
 };
 
-/** ตั้งค่าส่วนที่มีหน้าจอของตัวเองอยู่แล้ว — รวมทางเข้าไว้ที่นี่ให้ครบ */
+/*
+ * ตั้งค่าส่วนที่มีหน้าจอของตัวเองอยู่แล้ว "นอก" ต้นไม้ /hr/settings — ที่เหลือ
+ * (วันหยุด/อุปกรณ์/ชุดกฎ/เกณฑ์คะแนน) ย้ายเข้า sub-nav ของหน้าตั้งค่าแล้ว
+ * (SettingsSubnav) ไม่ต้องมีลิงก์ซ้ำอีกที่นี่
+ */
 const ELSEWHERE: { href: string; label: string; hint: string }[] = [
   {
     href: "/hr/employees",
     label: "ผูกตารางกะให้พนักงาน",
     hint: "เลือกคน → การ์ด “ตารางกะประจำสัปดาห์” · ไม่ผูกก็คิดสาย/ขาดไม่ได้",
-  },
-  {
-    href: "/hr/holidays",
-    label: "ตั้งวันหยุด",
-    hint: "วันหยุดประจำปีของบริษัทและวันหยุดรายคน",
-  },
-  {
-    href: "/hr/devices",
-    label: "เครื่องสแกน",
-    hint: "ลงทะเบียนเครื่องและผูกลายนิ้วมือกับพนักงาน",
-  },
-  {
-    href: "/hr/rule-sets",
-    label: "ชุดกฎตามกฎหมาย",
-    hint: "อัตราประกันสังคมและภาษี ใช้ตอนคำนวณเงินเดือน",
-  },
-  /*
-   * เกณฑ์ตัดคะแนน/เกรดเป็นของระบบผลงานกลาง (core.performance_settings) ไม่ใช่
-   * ของโมดูลบุคคลโดยตรง — ใบงานเกินกำหนด/PM ค้าง/ไม่รีพอทมาจากคนละโมดูล
-   * (ซ่อมบำรุง, รายงาน) เก็บเกณฑ์แยกไว้ที่ HR อีกชุดจะกลายเป็นสองแหล่งความจริง
-   * ที่ตัดกันเองได้ ⇒ ลิงก์ไปหน้าเดียวที่มีอยู่แล้วแทนที่จะสร้างซ้ำ
-   */
-  {
-    href: "/admin/performance/settings",
-    label: "เกณฑ์ตัดคะแนน/เกรด",
-    hint: "คะแนนตั้งต้น ตัดกี่คะแนนต่อเหตุการณ์ (สาย/ใบงานเกินกำหนด/ไม่รีพอท ฯลฯ) และช่วงคะแนนของแต่ละเกรด",
   },
   /*
    * ย้ายโค้ดจริงมาไว้ที่นี่ไม่ได้ — หน้าจัดการสติกเกอร์ผูกกับ StoreHydrator
@@ -118,16 +90,15 @@ const ELSEWHERE: { href: string; label: string; hint: string }[] = [
 ];
 
 /**
- * ที่รวมค่าตั้งต้นของโมดูลบุคคล
+ * หน้า index ของ /hr/settings — กะทำงาน + นโยบายการมาสาย
  *
- * เดิมกระจายอยู่ท้ายหน้าที่ใช้งานประจำ — กะอยู่ที่ /hr/shifts ส่วนประเภทการลา
- * ซ่อนอยู่ท้ายปฏิทินวันหยุด ซึ่งคนที่มาตั้งค่าไม่มีเหตุให้เลื่อนลงไปเจอ
- * ทั้งสองอย่างตั้งครั้งเดียวแล้วมีผลกับทุกหน้า จึงควรอยู่ที่เดียวกัน
+ * ประเภทการลาแยกไปอยู่ /hr/settings/leave-types แล้ว ส่วนวันหยุด/อุปกรณ์/
+ * ชุดกฎ/เกณฑ์คะแนนอยู่ในหน้าย่อยอื่นของ /hr/settings เช่นกัน — ดู SettingsSubnav
  */
 export default async function HrSettingsPage() {
   return (
     <HrPage
-      title="ตั้งค่า HR"
+      title="กะและเวลาทำงาน"
       permission={HR_PERMS.settingManage}
       load={async () => {
         const companies = await wfFetch<Paged<Company>>("/companies");
@@ -136,24 +107,17 @@ export default async function HrSettingsPage() {
           return <NotProvisioned what="ตั้งค่าระบบบุคคล" />;
         }
 
-        const [me, shifts, policies, leaveTypes] = await Promise.all([
-          wfFetch<Me>("/me"),
+        const [shifts, policies] = await Promise.all([
           wfTry<Paged<Shift>>(`/shifts?company_id=${companyId}`),
           wfTry<Paged<WorkPolicy>>("/work-policies"),
-          wfTry<Paged<LeaveType>>("/leave-types"),
         ]);
 
-        /*
-         * สิทธิ์ของ workforce ไม่ใช่ชุดเดียวกับของ Smartboss — คนที่เข้าหน้านี้ได้
-         * อาจยังแก้ประเภทการลาไม่ได้ ซ่อนการ์ดดีกว่าปล่อยให้กดแล้วโดน 403
-         */
-        const canManageLeaveTypes = me.permissions.includes(
-          "workforce.scheduling.manage",
-        );
         const today = new Date().toISOString().slice(0, 10);
 
         return (
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
+          <SettingsSubnav active="/hr/settings" />
+          <div className="flex min-w-0 flex-1 flex-col gap-4">
             <SectionCard
               title="กะทำงาน"
               description="เวลาเข้า-ออกและช่วงพัก ใช้เป็นเกณฑ์คิดสาย/ขาด/OT"
@@ -162,7 +126,7 @@ export default async function HrSettingsPage() {
                 <EmptyState>ยังไม่มีกะทำงาน</EmptyState>
               ) : (
                 <DataTable
-                  head={["ชื่อกะ", "เข้า", "ออก", "พัก", "ประเภท", "สถานะ"]}
+                  head={["ชื่อกะ", "รหัส", "เข้า", "ออก", "พัก", "ประเภท", "สถานะ"]}
                 >
                   {shifts.items.map((shift) => {
                     const breakMinutes = shift.breaks.reduce(
@@ -172,6 +136,7 @@ export default async function HrSettingsPage() {
                     return (
                       <tr key={shift.id} className="hover:bg-(--bg-soft)">
                         <Td className="font-medium">{shift.name}</Td>
+                        <Td className="font-mono text-xs text-(--ink-soft)">{shift.code}</Td>
                         <Td>{minutesToClock(shift.start_minutes)}</Td>
                         <Td>{minutesToClock(shift.end_minutes)}</Td>
                         <Td>{breakMinutes > 0 ? `${breakMinutes} น.` : "—"}</Td>
@@ -381,86 +346,6 @@ export default async function HrSettingsPage() {
               </p>
             </SectionCard>
 
-            {canManageLeaveTypes && (
-              <SectionCard
-                title="ประเภทการลา"
-                description="ต้องมีอย่างน้อยหนึ่งประเภท พนักงานถึงจะลงวันหยุดเองได้ที่ปฏิทินวันหยุด"
-                action={
-                  <form action={seedLeaveTypesAction}>
-                    <input type="hidden" name="company_id" value={companyId} />
-                    <Button type="submit" size="sm" variant="outline">
-                      สร้างชุดมาตรฐาน
-                    </Button>
-                  </form>
-                }
-              >
-                {(leaveTypes?.items ?? []).length === 0 ? (
-                  <p className="mb-3 text-sm text-(--ink-soft)">
-                    ยังไม่มีประเภทการลา — กด “สร้างชุดมาตรฐาน” จะได้ วันหยุดประจำเดือน ·
-                    ลาป่วย · ลากิจ · ลาพักร้อน · ลาไม่รับค่าจ้าง ครบในคลิกเดียว
-                  </p>
-                ) : (
-                  <div className="mb-3 flex flex-wrap gap-1.5">
-                    {(leaveTypes?.items ?? []).map((t) => (
-                      <Pill
-                        key={t.id}
-                        tone={t.auto_approve ? "var(--app-strong)" : "var(--tone-ok)"}
-                      >
-                        {t.name}
-                        {t.auto_approve
-                          ? ` · สิทธิ์${t.monthly_quota_days > 0 ? ` ${t.monthly_quota_days} วัน/เดือน` : ""}`
-                          : " · ต้องอนุมัติ"}
-                      </Pill>
-                    ))}
-                  </div>
-                )}
-                <form
-                  action={createLeaveTypeAction}
-                  className="grid grid-cols-1 gap-3 sm:grid-cols-3"
-                >
-                  <input type="hidden" name="company_id" value={companyId} />
-                  <Field label="ชื่อ *">
-                    <input
-                      name="name"
-                      required
-                      maxLength={120}
-                      placeholder="ลาพักร้อน"
-                      className={inputClass}
-                    />
-                  </Field>
-                  <Field label="โควตา (วัน/เดือน)" hint="0 = ไม่จำกัด">
-                    <input
-                      type="number"
-                      name="monthly_quota_days"
-                      min={0}
-                      max={31}
-                      defaultValue={0}
-                      className={inputClass}
-                    />
-                  </Field>
-                  <div className="flex items-end pb-3 text-sm sm:col-span-2">
-                    <label className="flex items-center gap-2">
-                      <input type="checkbox" name="auto_approve" value="1" className="h-4 w-4" />
-                      เป็นสิทธิ์ ไม่ต้องอนุมัติ (เลือกวันแล้วมีผลทันที)
-                    </label>
-                  </div>
-                  <div className="flex items-end gap-2">
-                    <select name="paid" defaultValue="1" className={inputClass}>
-                      <option value="1">ได้ค่าจ้าง</option>
-                      <option value="0">ไม่ได้ค่าจ้าง</option>
-                    </select>
-                    <Button type="submit">เพิ่ม</Button>
-                  </div>
-                </form>
-                <p className="mt-3 text-xs text-(--ink-soft)">
-                  ประเภทที่ติ๊ก &ldquo;เป็นสิทธิ์&rdquo;
-                  พนักงานคลิกวันในปฏิทินแล้วหยุดได้ทันทีไม่ต้องรอใคร ·
-                  ประเภทที่ไม่ติ๊กจะค้างเป็นคำขอ และ
-                  <strong> ยังถูกนับเป็นขาดงานจนกว่าจะอนุมัติ</strong>
-                </p>
-              </SectionCard>
-            )}
-
             <SectionCard
               title="ตั้งค่าอื่นของระบบบุคคล"
               description="ส่วนที่มีหน้าจอของตัวเอง — รวมทางเข้าไว้ที่นี่จะได้ไม่ต้องไล่หาในเมนู"
@@ -482,6 +367,7 @@ export default async function HrSettingsPage() {
                 ))}
               </div>
             </SectionCard>
+          </div>
           </div>
         );
       }}

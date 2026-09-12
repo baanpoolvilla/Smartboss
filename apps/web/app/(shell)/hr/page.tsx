@@ -1,366 +1,87 @@
 import Link from "next/link";
 import { requireOrg, hasPermission } from "@smartboss/auth";
-import { Button } from "@smartboss/ui/components/button";
 import { HrPage } from "@/modules/hr/components/hr-page";
 import { HR_PERMS } from "@/modules/hr/permissions";
-import {
-  wfTry,
-  type Employment,
-  type LeaveRequest,
-  type LeaveType,
-  type Paged,
-  type RecurringPattern,
-  type TimeEvent,
-} from "@/modules/hr/lib/api";
-import { AttendanceTimeline } from "@/modules/hr/components/attendance-timeline";
-import { AttendanceDateNav } from "@/modules/hr/components/attendance-date-nav";
-import {
-  DataTable,
-  EmptyState,
-  NoPermission,
-  Pill,
-  SectionCard,
-  Td,
-  inputClass,
-} from "@/modules/hr/components/ui";
-import { autoRecalculateAttendance } from "@/modules/hr/lib/auto-recalculate";
+import { renderTodayTab } from "./home-today";
+import { renderCorrectionsTab } from "./home-corrections";
+import { renderCalendarTab } from "./home-calendar";
 
-/** ช่วงที่สั่งคำนวณย้อนหลัง — คงที่ทุกครั้ง ไม่ผูกกับวันที่กำลังดูอยู่ */
-const RECALC_DAYS = 30;
+const TABS = [
+  { id: "today", label: "วันนี้" },
+  { id: "corrections", label: "คำขอแก้เวลา" },
+  { id: "calendar", label: "ปฏิทินทีม" },
+] as const;
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+type TabId = (typeof TABS)[number]["id"];
 
+const TAB_TITLE: Record<TabId, string> = {
+  today: "การลงเวลา",
+  corrections: "คำขอแก้เวลา",
+  calendar: "ปฏิทินทีม",
+};
+
+/**
+ * หน้าหลักของโมดูลบุคคล — รวม 3 อย่างที่เคยเป็นเมนูแยกกัน (การลงเวลา/
+ * ลงเวลาแบบ manual/ปฏิทินวันหยุด) เป็น tab เดียวกันตาม IA ใหม่ (ยุบเมนู 15 → 5)
+ *
+ * "คำขอแก้เวลา" เดิมต้องมี HR_PERMS.employeeManage ถึงเข้าได้ (แก้เวลากระทบ
+ * เงินเดือนตรง ๆ) ส่วน "วันนี้"/"ปฏิทินทีม" เปิดด้วย HR_PERMS.access เหมือนกัน
+ * — เพราะ HrPage เช็คสิทธิ์ได้แค่ระดับหน้า ไม่ใช่ระดับ tab จึงต้องเช็คสิทธิ์
+ * ของ tab "คำขอแก้เวลา" เองตรงนี้ แล้วเด้งกลับไป "วันนี้" เงียบ ๆ ถ้าไม่มีสิทธิ์
+ * (ไม่ใช่ 403 เพราะ tab อื่นในหน้าเดียวกันเข้าได้อยู่แล้ว)
+ */
 export default async function HrOverviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string }>;
+  searchParams: Promise<{ tab?: string; date?: string; month?: string }>;
 }) {
+  const session = await requireOrg();
   // ปุ่ม export เรียก /attendance-results ซึ่งต้องมีสิทธิ์อ่านผลลงเวลาของทุกคน
   // ฝั่ง workforce — hr.employee.manage คือสิทธิ์ที่ถูกแปลงเป็นบทบาทนั้นตอน sync
-  // (ดู mapSmartbossRoles) ⇒ ใช้ตัวเดียวกันคุมว่าจะโชว์การ์ดไหม จะได้ไม่มีปุ่ม
-  // ที่กดแล้วได้ 403 ให้คนงง
-  const session = await requireOrg();
-  const canExport = hasPermission(session, HR_PERMS.employeeManage);
+  // (ดู mapSmartbossRoles) ⇒ ใช้ตัวเดียวกันคุมว่าจะโชว์การ์ดไหน จะได้ไม่มีปุ่ม
+  // ที่กดแล้วได้ 403 ให้คนงง — และคุมว่าเข้าแท็บ "คำขอแก้เวลา" ได้ไหมด้วย
+  const canManage = hasPermission(session, HR_PERMS.employeeManage);
+
+  const sp = await searchParams;
+  const requested = TABS.some((t) => t.id === sp.tab) ? (sp.tab as TabId) : "today";
+  const tab: TabId = requested === "corrections" && !canManage ? "today" : requested;
 
   return (
     <HrPage
-      title="การลงเวลา"
-      // เปิดให้ทุกคนที่เข้าโมดูลได้ — พนักงานต้องเห็นว่าใครมาถึงกี่โมง
+      title={TAB_TITLE[tab]}
       permission={HR_PERMS.access}
       load={async () => {
-        const sp = await searchParams;
-        const now = new Date();
-        const todayReal = now.toISOString().slice(0, 10);
-        const from = new Date(now.getTime() - RECALC_DAYS * 86_400_000)
-          .toISOString()
-          .slice(0, 10);
-        const to = todayReal;
+        const tabBar = (
+          <div className="mb-4 flex gap-1 border-b border-(--line)">
+            {TABS.filter((t) => t.id !== "corrections" || canManage).map((t) => (
+              <Link
+                key={t.id}
+                href={t.id === "today" ? "/hr" : `/hr?tab=${t.id}`}
+                className={`border-b-2 px-3 py-2 text-sm font-medium ${
+                  tab === t.id
+                    ? "border-(--app-strong,var(--ink)) text-(--ink)"
+                    : "border-transparent text-(--ink-soft) hover:text-(--ink)"
+                }`}
+              >
+                {t.label}
+              </Link>
+            ))}
+          </div>
+        );
 
-        // วันที่กำลังดู — จำกัดไม่ให้เกินวันนี้ เพราะยังไม่มีข้อมูลของอนาคต
-        // ค่าผิดรูปแบบ (แก้ URL มือ) ก็ตกกลับมาเป็นวันนี้เงียบ ๆ แทนพัง
-        const viewDate =
-          sp.date !== undefined && ISO_DATE.test(sp.date) && sp.date <= todayReal
-            ? sp.date
-            : todayReal;
-        const isToday = viewDate === todayReal;
-
-        // สั่งคำนวณแบบไม่รอผล — หน้านี้ไม่ได้แสดงผลคำนวณแล้ว แต่ยังต้องสั่ง
-        // เพราะไม่มีอะไรอื่นในระบบคำนวณผลลงเวลาให้เลย (การสแกนเข้ามาไม่ trigger)
-        // ถ้าตัดออก ข้อมูลที่เงินเดือนใช้อ้างอิงจะไม่ถูกอัปเดตเงียบ ๆ
-        //
-        // ⚠ ห้าม await ตรงนี้ — งานนี้ยิงคำนวณทีละคนจนครบทุกคน ใช้เวลาหลาย
-        // วินาที การรอให้จบก่อนเรนเดอร์ทำให้หน้านี้ค้างทุกครั้งที่เปิด
-        // ⚠ ผูกกับ todayReal เสมอ ไม่ใช่ viewDate — เปิดดูวันเก่าไม่ควรสั่งคำนวณ
-        // วันเก่าซ้ำทุกครั้งที่มีคนย้อนดู
-        void autoRecalculateAttendance(from, to);
-
-        const [
-          employments,
-          board,
-          timeline,
-          shifts,
-          todayAssignments,
-          todayLeave,
-          leaveTypes,
-        ] = await Promise.all([
-            wfTry<Paged<Employment>>("/employments"),
-            // ทุกคนเรียกได้ — ชื่อ + เวลา + สถานะสาย/ปกติ
-            wfTry<{
-              items: {
-                employment_id: string;
-                display_name: string;
-                employee_code: string;
-                first_scan_at: string;
-                last_scan_at: string;
-                scan_count: number;
-                scheduled_start_minutes: number | null;
-                status: "ON_TIME" | "LATE" | "REST_DAY" | "NO_SHIFT";
-                late_minutes: number;
-              }[];
-            }>(`/time-event-board?date=${viewDate}`),
-            // การตอกบัตรทีละครั้งของวันที่กำลังดู — ข้อมูลของ Timeline
-            wfTry<{ items: TimeEvent[] }>(`/time-events?date=${viewDate}`),
-            // ใช้บอกว่ากะวันนั้นเป็นวันหยุดไหม (rest_day) และเข้ากี่โมง — ต้องมีสำหรับคนที่ยังไม่สแกน
-            wfTry<Paged<{ id: string; rest_day: boolean; start_minutes: number }>>("/shifts"),
-            // ตารางที่ประกาศไว้แล้วของวันที่กำลังดู (ทุกคน) — ชนะตารางประจำสัปดาห์เสมอ
-            wfTry<{ items: { employment_id: string; shift_id: string | null }[] }>(
-              `/shift-assignments?from=${viewDate}&to=${viewDate}`,
-            ),
-            // ใบลาที่อนุมัติแล้วของวันที่กำลังดู — คนที่ลาไม่ใช่คนขาดงาน
-            wfTry<Paged<LeaveRequest>>(
-              `/leave-requests?from=${viewDate}&to=${viewDate}&status=APPROVED`,
-            ),
-            // ชื่อประเภทการลา — "Day-Off" กับ "ลาป่วย" คนละเรื่องกัน ป้ายต้องบอกให้ตรง
-            wfTry<Paged<LeaveType>>("/leave-types"),
-          ]);
-
-        // ตัวชี้ขาดว่าเข้าหน้านี้ได้ไหมคือกระดาน/Timeline ซึ่งทุกคนที่เข้าระบบเรียกได้
-        if (board === null && timeline === null) {
-          return <NoPermission what="การลงเวลา" />;
+        let body: React.ReactNode;
+        if (tab === "corrections") {
+          body = await renderCorrectionsTab();
+        } else if (tab === "calendar") {
+          body = await renderCalendarTab(sp.month);
+        } else {
+          body = await renderTodayTab(sp.date, canManage);
         }
-
-        const arrivals = board?.items ?? [];
-        /** 480 → "08:00" — เวลาเข้างานตามกะเก็บเป็นนาทีจากเที่ยงคืน */
-        const fromMinutes = (m: number) =>
-          `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-        const lateCount = arrivals.filter((a) => a.status === "LATE").length;
-
-        const activePeople = (employments?.items ?? [])
-          .filter((e) => e.terminated_on === null)
-          .map((e) => ({ id: e.id, label: `${e.employee_code} · ${e.full_name}` }));
-
-        /*
-         * /employments ถูกจำกัดสิทธิ์ตาม data scope ของผู้เรียก (ดู resolveScopeFilter
-         * ฝั่ง workforce-api) — คนที่ไม่มี workforce.people.manage และไม่มี employment_id
-         * ผูกกับบัญชีตัวเอง จะได้ [] กลับมาเงียบ ๆ (HTTP 200) ทั้งที่บริษัทมีพนักงานจริง
-         * ต่างจาก /time-event-board ที่เปิดให้ทุกคนเรียกได้แบบไม่จำกัด scope เลย
-         * ⇒ ถ้ามีคนสแกนจริง (arrivals ไม่ว่าง) ให้ถือว่ามีพนักงานอยู่แน่ ๆ แม้ activePeople
-         * จะว่างเพราะโดนจำกัดสิทธิ์ — กันไม่ให้ตัวเลขบนสุด (ลงเวลาแล้ว N คน) กับ
-         * รายการด้านล่าง (ยังไม่มีพนักงานในระบบ) ขัดแย้งกันเองอย่างที่เจอ
-         */
-        const hasEmployees = activePeople.length > 0 || arrivals.length > 0;
-        const peopleCount = Math.max(activePeople.length, arrivals.length);
-
-        /*
-         * "การลงเวลาวันนี้" เดิมอ่านจากกระดานสด (/time-event-board) ที่มีแถวเฉพาะ
-         * คนที่สแกนแล้ว — คนที่ควรมาทำงานแต่ไม่มาสแกนเลยจะไม่ปรากฏในตารางนี้เลย
-         * ทั้งที่เป็นเคสสำคัญที่สุด (ขาดงาน) ผสมคนที่ยังไม่สแกนเข้าไปด้วย โดยหา
-         * กะของวันนี้จากตารางที่ประกาศแล้ว (roster) ก่อน — ถ้าไม่มีค่อยย้อนไปดู
-         * ตารางประจำสัปดาห์ (recurring pattern) ทีละคน (roster ชนะ pattern เสมอ
-         * ตรงกับที่ resolveShiftId ฝั่ง API ใช้)
-         */
-        const scannedIds = new Set(arrivals.map((a) => a.employment_id));
-        const restShiftIds = new Set(
-          (shifts?.items ?? []).filter((sh) => sh.rest_day).map((sh) => sh.id),
-        );
-        const startMinutesByShift = new Map(
-          (shifts?.items ?? []).map((sh) => [sh.id, sh.start_minutes]),
-        );
-        const todayAssignmentByEmployment = new Map(
-          (todayAssignments?.items ?? []).map((a) => [a.employment_id, a.shift_id]),
-        );
-        const missingPeople = (employments?.items ?? []).filter(
-          (e) => e.terminated_on === null && !scannedIds.has(e.id),
-        );
-
-        const DOW_FIELDS = [
-          "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday",
-        ] as const;
-        const todayDowField = DOW_FIELDS[new Date(`${viewDate}T00:00:00Z`).getUTCDay()]!;
-
-        const needsPatternLookup = missingPeople.filter(
-          (e) => !todayAssignmentByEmployment.has(e.id),
-        );
-        const patterns = await Promise.all(
-          needsPatternLookup.map((e) =>
-            wfTry<{ items: RecurringPattern[] }>(
-              `/recurring-work-patterns?employment_id=${e.id}`,
-            ),
-          ),
-        );
-        const patternByEmployment = new Map(
-          needsPatternLookup.map((e, i) => [e.id, patterns[i]]),
-        );
-
-        /*
-         * คนที่ลาวันนี้ไม่ใช่คนขาดงาน — เดิมหน้านี้ดูแค่ตารางกะ ใครไม่มีสแกน
-         * และวันนั้นไม่ใช่วันหยุดตามกะ ก็ขึ้น "ขาดงาน" หมด ทั้งที่เขายื่นลาและ
-         * ได้รับอนุมัติไว้แล้ว ซึ่งเป็นการกล่าวหาพนักงานด้วยข้อมูลที่ระบบมีอยู่แล้ว
-         *
-         * เก็บ "ชื่อประเภท" ไม่ใช่แค่ "ลา/ไม่ลา" เพราะวันหยุดประจำเดือน (Day-Off)
-         * กับลาป่วยเป็นคนละเรื่องกันในสายตาคนอ่าน — ป้ายที่เหมารวมว่า "ลา"
-         * ทำให้เข้าใจผิดว่าคนนั้นใช้สิทธิ์ลาไป ทั้งที่เป็นวันหยุดตามสิทธิ์ปกติ
-         */
-        const leaveTypeName = new Map(
-          (leaveTypes?.items ?? []).map((t) => [t.id, t.name]),
-        );
-        const leaveByEmployment = new Map(
-          (todayLeave?.items ?? []).map((l) => [
-            l.employment_id,
-            leaveTypeName.get(l.leave_type_id) ?? "ลา",
-          ]),
-        );
-
-        const missingRows = missingPeople.map((e) => {
-          let shiftId: string | null;
-          if (todayAssignmentByEmployment.has(e.id)) {
-            shiftId = todayAssignmentByEmployment.get(e.id) ?? null;
-          } else {
-            const open = patternByEmployment
-              .get(e.id)
-              ?.items.find((p) => p.effective_to === null);
-            shiftId = open ? open[todayDowField].id : null;
-          }
-          const leaveName = leaveByEmployment.get(e.id);
-          const status: "ABSENT" | "REST_DAY" | "NO_SHIFT" | "ON_LEAVE" =
-            leaveName !== undefined
-              ? "ON_LEAVE"
-              : shiftId === null
-                ? "NO_SHIFT"
-                : restShiftIds.has(shiftId)
-                  ? "REST_DAY"
-                  : "ABSENT";
-          return {
-            employment_id: e.id,
-            display_name: e.full_name,
-            employee_code: e.employee_code,
-            status,
-            leave_name: leaveName ?? null,
-            scheduled_start_minutes: shiftId === null ? null : (startMinutesByShift.get(shiftId) ?? null),
-          };
-        });
-        const absentCount = missingRows.filter((m) => m.status === "ABSENT").length;
-
-        const dayLabel = isToday ? "วันนี้" : "วันที่เลือก";
-
-        const exportMonth = viewDate.slice(0, 7);
 
         return (
           <>
-            <AttendanceDateNav date={viewDate} today={todayReal} />
-
-            {/*
-              Timeline — เห็นทุกครั้งที่มีคนตอกบัตร ไม่ใช่แค่ครั้งแรก/ครั้งสุดท้าย
-              ของแต่ละคนแบบตารางเดิม ซึ่งทำให้การตอกระหว่างวัน (พัก/ออกไปไซต์งาน
-              แล้วกลับ) หายไปหมด และไม่มีทางรู้ว่าแต่ละครั้งลงผ่านช่องทางไหน
-            */}
-            <SectionCard
-              title={`การลงเวลา${dayLabel} · ${peopleCount} คน`}
-              description={[
-                `ลงเวลาแล้ว ${arrivals.length} คน`,
-                `${timeline?.items.length ?? 0} ครั้ง`,
-                lateCount > 0 ? `มาสาย ${lateCount} คน` : null,
-                absentCount > 0 ? `ขาดงาน ${absentCount} คน` : null,
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-              className="mb-4"
-            >
-              {hasEmployees ? (
-                <AttendanceTimeline events={timeline?.items ?? []} />
-              ) : (
-                <EmptyState>ยังไม่มีพนักงานในระบบ</EmptyState>
-              )}
-              <p className="mt-3 text-xs text-(--ink-soft)">
-                อ่านจากการสแกนสด ๆ ไม่ต้องรอสั่งคำนวณ — ตัวเลขสรุปรายเดือนและ OT
-                ยังต้องกดคำนวณตามเดิม · ไอคอนขวามือบอกช่องทางที่ใช้ลงเวลา
-                (เครื่องสแกนนิ้ว / แอปมือถือ / เว็บ / เจ้าหน้าที่บันทึกให้)
-              </p>
-            </SectionCard>
-
-            {/*
-              คนที่ยังไม่ตอกเลยในวันนั้น — ไม่มี event ให้แสดงใน Timeline โดยธรรมชาติ
-              แต่เป็นเคสที่ควรเห็นชัดที่สุด จึงแยกเป็นส่วนของตัวเองแทนที่จะหายไป
-            */}
-            {missingRows.length > 0 && (
-              <SectionCard
-                title={`ยังไม่ลงเวลา${dayLabel} · ${missingRows.length} คน`}
-                description={`คนที่ควรเข้ากะ${dayLabel}แต่ยังไม่มีการสแกนเลย`}
-                className="mb-4"
-              >
-                <DataTable head={["พนักงาน", "เข้างาน", "สแกนล่าสุด", "ตามกะ", "สถานะ"]}>
-                  {missingRows.map((m) => (
-                    <tr key={m.employment_id} className="hover:bg-(--bg-soft)">
-                      <Td>
-                        <span className="font-medium">{m.display_name}</span>
-                        <span className="ml-2 font-mono text-xs text-(--ink-soft)">
-                          {m.employee_code}
-                        </span>
-                      </Td>
-                      <Td className="font-mono text-(--ink-soft)">—</Td>
-                      <Td className="font-mono text-(--ink-soft)">—</Td>
-                      <Td className="font-mono text-(--ink-soft)">
-                        {m.scheduled_start_minutes === null
-                          ? "—"
-                          : fromMinutes(m.scheduled_start_minutes)}
-                      </Td>
-                      <Td>
-                        {m.status === "ON_LEAVE" ? (
-                          <Pill tone="var(--tone-info)">{m.leave_name}</Pill>
-                        ) : m.status === "REST_DAY" ? (
-                          <Pill tone="var(--tone-info)">วันหยุด</Pill>
-                        ) : m.status === "ABSENT" ? (
-                          <Pill tone="var(--danger)">ขาดงาน</Pill>
-                        ) : (
-                          <Link
-                            href={`/hr/employees/${m.employment_id}`}
-                            className="hover:underline"
-                            title="ไปผูกกะของคนนี้"
-                          >
-                            <Pill tone="var(--tone-muted)">ยังไม่ผูกกะ →</Pill>
-                          </Link>
-                        )}
-                      </Td>
-                    </tr>
-                  ))}
-                </DataTable>
-                <p className="mt-3 text-xs text-(--ink-soft)">
-                  &ldquo;ยังไม่ผูกกะ&rdquo; แปลว่าระบบไม่รู้ว่าคนนั้นควรเข้ากี่โมง จึงบอกไม่ได้ว่า
-                  สายหรือไม่ — กดที่ป้ายนั้นเพื่อไปตั้งตารางกะของเขา ·
-                  &ldquo;ขาดงาน&rdquo; คือคนที่ควรเข้ากะวันนี้แต่ยังไม่มีการสแกนเลยตลอดวัน
-                </p>
-              </SectionCard>
-            )}
-
-            {/*
-              ดาวน์โหลดผลลงเวลาทั้งเดือน — หน้านี้ดูได้ทีละวัน ซึ่งพอสำหรับ
-              "วันนี้ใครมาแล้ว" แต่ตอบไม่ได้ว่าเดือนนี้ใครสายกี่ครั้ง รวมกี่นาที
-              ซึ่งเป็นตัวเลขที่ฝ่ายบุคคลต้องใช้ตอนสรุปเบี้ยขยัน/ประเมินผล
-              เป็น <form method="get"> ธรรมดา ⇒ ทำงานได้แม้ JS ยังไม่โหลด
-            */}
-            {canExport && (
-              <SectionCard
-                title="ดาวน์โหลดรายงานการเข้างาน"
-                description="ไฟล์ CSV รายวันของพนักงานทุกคน พร้อมสรุปรายคน (เปิดด้วย Excel ได้เลย)"
-              >
-                <form
-                  method="get"
-                  action="/hr/attendance/export"
-                  className="flex flex-wrap items-end gap-2"
-                >
-                  <label className="flex min-w-44 flex-col gap-1">
-                    <span className="text-xs font-medium text-(--ink-soft)">เดือน</span>
-                    <input
-                      type="month"
-                      name="month"
-                      defaultValue={exportMonth}
-                      max={todayReal.slice(0, 7)}
-                      className={inputClass}
-                    />
-                  </label>
-                  <Button type="submit" variant="outline">
-                    ดาวน์โหลด CSV
-                  </Button>
-                </form>
-                <p className="mt-3 text-xs text-(--ink-soft)">
-                  มีคอลัมน์: เวลาเข้า-ออก · สาย · ออกก่อน · ขาดงาน · ชั่วโมงทำงาน · OT ·
-                  สถานะรายวัน (ปกติ / มาสาย / ขาดงาน / ลา / วันหยุด) แล้วปิดท้ายด้วยสรุปรายคน
-                  <br />
-                  ⚠ ไฟล์อ่านจาก<strong>ผลคำนวณ</strong> ไม่ใช่การสแกนดิบ — เดือนที่เก่ากว่า 30 วัน
-                  อาจได้ข้อมูลไม่ครบถ้ายังไม่เคยสั่งคำนวณ
-                </p>
-              </SectionCard>
-            )}
+            {tabBar}
+            {body}
           </>
         );
       }}

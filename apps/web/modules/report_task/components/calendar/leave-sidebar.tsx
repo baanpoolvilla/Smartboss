@@ -469,7 +469,7 @@ export function LeaveSidebar({
                 lib/db/workforce-calendar.ts) เดิมมีปุ่มลงวันลาในปฏิทินนี้ด้วย
                 แต่บันทึกไม่เคยถึงฐานข้อมูลจริง จึงเหลือไว้แค่ทางเข้า */}
             <a
-              href="/hr/leave"
+              href="/hr?tab=calendar"
               className="inline-flex items-center gap-1 text-xs text-[var(--brand-green-dark)] hover:underline"
             >
               ยื่นลา / ยกเลิกวันลา ที่ฝ่ายบุคคล →

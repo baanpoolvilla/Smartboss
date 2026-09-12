@@ -8,6 +8,7 @@ import {
   eventIntentTone,
   eventSourceIcon,
   eventSourceLabel,
+  formatTime,
 } from "../lib/labels";
 import type { TimeEvent } from "../lib/api";
 
@@ -68,15 +69,6 @@ const BUCKETS: Bucket[] = [
       e.event_intent === "SITE_CHECK_IN" || e.event_intent === "SITE_CHECK_OUT",
   },
 ];
-
-function timeOf(iso: string, timeZone = "Asia/Bangkok"): string {
-  return new Intl.DateTimeFormat("th-TH", {
-    timeZone,
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(new Date(iso));
-}
 
 /** 480 → "08:00" — เวลาเข้ากะเก็บเป็นนาทีจากเที่ยงคืน */
 function fromMinutes(m: number): string {
@@ -250,7 +242,7 @@ export function AttendanceTimeline({ events }: { events: TimeEvent[] }) {
                 </span>
 
                 <span className="shrink-0 font-mono text-sm tabular-nums text-(--ink)">
-                  {timeOf(event.captured_at)}
+                  {formatTime(event.captured_at)}
                 </span>
               </div>
             );

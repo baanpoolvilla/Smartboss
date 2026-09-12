@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSession, hasPermission } from "@smartboss/auth";
 import { HR_PERMS } from "@/modules/hr/permissions";
+import { formatBuddhistYear, formatDate } from "@/modules/hr/lib/labels";
 import {
   wfTry,
   type Employment,
@@ -227,7 +228,7 @@ export async function GET(req: NextRequest) {
       [
         csvCell(p.code),
         csvCell(p.name),
-        csvCell(r.work_date),
+        csvCell(formatDate(r.work_date)),
         csvCell(DOW[d.getUTCDay()] ?? ""),
         csvCell(timeIn(r.actual_in_at, p.timeZone)),
         csvCell(timeIn(r.actual_out_at, p.timeZone)),
@@ -298,7 +299,7 @@ export async function GET(req: NextRequest) {
   // BOM ให้ Excel อ่านภาษาไทยถูก (แบบเดียวกับ export ของโมดูลซ่อมบำรุง)
   const csv = "﻿" + lines.join("\r\n");
   const [fy, fm] = from.split("-").map(Number);
-  const fileName = `การเข้างาน_${THAI_MONTHS[fm!]}_${fy! + 543}.csv`;
+  const fileName = `การเข้างาน_${THAI_MONTHS[fm!]}_${formatBuddhistYear(fy!)}.csv`;
 
   return new NextResponse(csv, {
     headers: {
