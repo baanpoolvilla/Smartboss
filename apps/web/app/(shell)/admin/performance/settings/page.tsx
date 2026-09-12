@@ -144,10 +144,13 @@ export default async function PerformanceSettingsPage() {
 
         <SectionCard
           title="เกณฑ์การนับ"
-          description="เท่าไหร่ถึงเริ่มถือว่าผิด — ต่ำกว่านี้ไม่ถูกบันทึกเลย"
+          description="เวลาเข้างาน กะ และการผ่อนผันสาย ตั้งที่ ตั้งค่า → การลงเวลา — ตรงนี้คือผ่อนผันเพิ่มเฉพาะตอนคิดคะแนนเท่านั้น"
         >
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="สายเกินกี่นาทีถึงนับ" hint="ต่ำกว่านี้ถือว่าอยู่ในวิสัยปกติ">
+            <Field
+              label="ผ่อนผันการมาสายเพิ่มอีกกี่นาที"
+              hint="ปกติใส่ 0 — เวลาผ่อนผันของกะ (เช่น 15 นาที) ถูกหักให้แล้วจากการลงเวลา ใส่เลขที่นี่คือผ่อนผันซ้ำอีกชั้น"
+            >
               <input
                 type="number"
                 name="lateThresholdMinutes"

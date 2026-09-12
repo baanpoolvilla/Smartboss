@@ -81,10 +81,22 @@ export interface PerformanceSettings {
   gradeThresholds: [string, number][];
 }
 
+/*
+ * lateThresholdMinutes = 0 โดยตั้งใจ — ไม่ใช่ "ไม่ผ่อนผันการมาสาย"
+ *
+ * late_minutes ที่ได้จากฝั่ง workforce **หักเวลาผ่อนผันของกะออกให้แล้ว**
+ * (นโยบายลงเวลาโหมด GRACE: late_minutes = เวลาเข้าจริง − เวลาเข้ากะ − ผ่อนผัน
+ * ดู packages/workforce/attendance-engine/src/calculate.ts computeLate)
+ * เข้างาน 08:16 โดยกะเริ่ม 08:00 ผ่อนผัน 15 นาที ⇒ late_minutes = 1
+ *
+ * เดิมค่านี้เป็น 15 ทำให้ผ่อนผันซ้อนสองชั้น (15 ของกะ + 15 ของคะแนน = 30 นาที)
+ * ใครเข้างานก่อน 08:30 จึงไม่เคยถูกหักคะแนนเลยแม้ระบบลงเวลาจะบันทึกว่า "มาสาย"
+ * ไปแล้วก็ตาม — ค่านี้คือ "ผ่อนผันเพิ่มจากของกะอีกกี่นาที" ปกติต้องเป็น 0
+ */
 const FALLBACK: PerformanceSettings = {
   enabled: true,
   baseScore: 100,
-  lateThresholdMinutes: 15,
+  lateThresholdMinutes: 0,
   pmGraceDays: 7,
   workOrderGraceDays: 0,
   rulePoints: DEFAULT_RULE_POINTS,

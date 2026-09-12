@@ -113,6 +113,31 @@ async function main() {
     ]),
   );
 
+  /*
+   * ค่าเดิม 15 คือของที่ตกทอดมาจากตอนที่ผ่อนผันซ้อนสองชั้น — late_minutes ฝั่ง
+   * workforce หักเวลาผ่อนผันของกะออกให้แล้ว การเอา 15 มาเทียบอีกทีเท่ากับผ่อนผัน
+   * รวม 30 นาที (ดู FALLBACK ใน apps/web/lib/performance.ts) บริษัทที่ยังเก็บ
+   * ค่า 15 ไว้พอดีเป๊ะ ถือว่าเป็นค่าที่ตกทอดมา ไม่ใช่ค่าที่ตั้งใจตั้ง — ปรับเป็น 0
+   */
+  const LEGACY_DOUBLE_GRACE = 15;
+  const legacy = await prisma.performanceSetting.findMany({
+    where: { lateThresholdMinutes: LEGACY_DOUBLE_GRACE },
+    select: { orgId: true },
+  });
+  if (legacy.length > 0) {
+    console.log(
+      dryRun
+        ? `[dry-run] จะปรับ "ผ่อนผันการมาสายเพิ่ม" ของ ${legacy.length} บริษัท จาก ${LEGACY_DOUBLE_GRACE} เป็น 0 (เลิกผ่อนผันซ้อนสองชั้น)\n`
+        : `✔ ปรับ "ผ่อนผันการมาสายเพิ่ม" ของ ${legacy.length} บริษัท จาก ${LEGACY_DOUBLE_GRACE} เป็น 0 แล้ว\n`,
+    );
+    if (!dryRun) {
+      await prisma.performanceSetting.updateMany({
+        where: { lateThresholdMinutes: LEGACY_DOUBLE_GRACE },
+        data: { lateThresholdMinutes: 0 },
+      });
+    }
+  }
+
   const settings = await prisma.performanceSetting.findMany({
     select: { orgId: true, lateThresholdMinutes: true },
   });
@@ -130,7 +155,8 @@ async function main() {
     const day = ev.occurredAt.toISOString().slice(0, 10);
     const key = `${ev.userId}:${day}`;
     const current = currentByKey.get(key) ?? null;
-    const lateThreshold = lateThresholdByOrg.get(ev.orgId) ?? 15;
+    // ไม่มีแถวตั้งค่า = ใช้ค่าเริ่มต้นเดียวกับ FALLBACK ใน lib/performance.ts (0)
+    const lateThreshold = lateThresholdByOrg.get(ev.orgId) ?? 0;
 
     if (current === null) {
       toCorrect.push({
