@@ -66,13 +66,35 @@ export async function dockAttendance(): Promise<{
   const from = new Date();
   from.setDate(from.getDate() - ATTENDANCE_LOOKBACK_DAYS);
 
+  /*
+   * ห้ามตัดสิน "วันนี้" (ของตอนที่ cron รันอยู่) เด็ดขาด — attendance_results
+   * ของวันที่ยังไม่จบกะเชื่อไม่ได้เลย เพราะแถวนั้นคำนวณใหม่ทุกครั้งที่มีคนเปิด
+   * /hr (autoRecalculateAttendance ย้อนหลัง 30 วันรวมวันนี้) ถ้าใครเปิด /hr
+   * ตอนเช้าก่อนพนักงานตอกบัตรเข้า netWorkedMinutes ตอนนั้น = 0 ⇒ absence_minutes
+   * เท่ากับความยาวกะเต็มวันทันที (พบจริง: พนักงานเข้า-ออกงานปกติทุกวัน แต่ระบบ
+   * บันทึก "ขาดงาน 9 ชั่วโมง" เพราะ cron 08:00 น. อ่านค่านั้นไปก่อนที่ค่าจะถูก
+   * คำนวณใหม่ให้ถูกต้องตอนสาย ๆ) เหตุการณ์ที่บันทึกไปแล้วแก้ไม่ได้อีก (กันซ้ำด้วย
+   * unique key ถาวร) จึงต้องกันไว้ที่ต้นทาง — รอให้วันนั้น "จบ" ก่อนเสมอ แล้วให้
+   * cron รอบถัดไป (พรุ่งนี้) ค่อยเก็บวันนี้แทน ตอนนั้นค่าควรนิ่งแล้วเพราะมีคน
+   * เปิด /hr ระหว่างวันไปแล้วอย่างน้อยหนึ่งครั้งตามปกติ
+   *
+   * ใช้เวลาไทยตรง ๆ (ไม่ใช่ UTC ของเซิร์ฟเวอร์) เพราะกะทำงานอิงเวลาไทย —
+   * ระบบนี้เป็น Thailand-only อยู่แล้ว (ปฏิทินพุทธ, cron อิงเวลาไทยใน docs/deploy.md)
+   */
+  const todayInThailand = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Bangkok",
+  }).format(new Date());
+
   // เงื่อนไข (ฉบับปัจจุบัน, ไม่ใช่วันลา/วันหยุด) อยู่ในตัวฟังก์ชันแล้ว
-  const rows = await prisma.$queryRaw<AttendanceRow[]>`
+  const rawRows = await prisma.$queryRaw<AttendanceRow[]>`
     SELECT subject AS user_id, work_date, late_minutes, absence_minutes
     FROM workforce.performance_attendance(
       ${from}::date, ${minLate}::int, ${ABSENCE_THRESHOLD_MINUTES}::int
     )
   `;
+  const rows = rawRows.filter(
+    (r) => new Date(r.work_date).toISOString().slice(0, 10) < todayInThailand,
+  );
 
   if (rows.length === 0) return { scanned: 0, recorded: 0 };
 
