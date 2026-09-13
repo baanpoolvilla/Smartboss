@@ -17,6 +17,7 @@ let dayOffLeaveTypeId: string;
 
 interface Employee {
   employmentId: string;
+  personId: string;
   token: string;
 }
 
@@ -60,7 +61,7 @@ async function createEmployee(name: string): Promise<Employee> {
     },
   });
 
-  return { employmentId, token: await harness.token(subject, tenant.tenantId) };
+  return { employmentId, personId, token: await harness.token(subject, tenant.tenantId) };
 }
 
 async function addEvent(employmentId: string, capturedAt: string, intent: string): Promise<void> {
@@ -826,6 +827,140 @@ describe('overtime', () => {
       `/overtime-requests/${request.body['id'] as string}/pre-approve`,
       { token: supervisorToken, idempotencyKey: uuidv4(), payload: { reason: 'อนุมัติเอง' } },
     );
+    expect(response.status).toBe(403);
+  });
+
+  /** ใช้วันหยุดประจำเดือนแต่ยังมาสแกนทำงาน 08:00–17:00 แล้วคืนนาที OT ที่ระบบตรวจพบ */
+  async function workOnDayOff(
+    name: string,
+    workDate: string,
+  ): Promise<{ employee: Employee; detected: number }> {
+    const employee = await createEmployee(name);
+    const leave = await call(harness, 'POST', '/leave-requests', {
+      token: employee.token,
+      idempotencyKey: uuidv4(),
+      payload: {
+        employment_id: employee.employmentId,
+        leave_type_id: dayOffLeaveTypeId,
+        starts_on: workDate,
+        ends_on: workDate,
+        total_minutes: 480,
+        reason: 'วันหยุดประจำเดือน',
+      },
+    });
+    expect(leave.status).toBe(201);
+
+    await addEvent(employee.employmentId, `${workDate}T01:00:00Z`, 'CLOCK_IN');
+    await addEvent(employee.employmentId, `${workDate}T10:00:00Z`, 'CLOCK_OUT');
+    await call(harness, 'POST', '/attendance-results:recalculate', {
+      token: hrToken,
+      idempotencyKey: uuidv4(),
+      payload: { employment_id: employee.employmentId, from: workDate, to: workDate },
+    });
+
+    const results = await call(
+      harness,
+      'GET',
+      `/attendance-results?employment_id=${employee.employmentId}&from=${workDate}&to=${workDate}`,
+      { token: hrToken },
+    );
+    const day = (results.body['items'] as Record<string, unknown>[])[0];
+    // วันหยุดตามสิทธิ์: ไม่มีสาย/ขาด เวลาที่มาทำงานเป็น OT ทั้งหมด
+    expect(day?.['late_minutes']).toBe(0);
+    expect(day?.['absence_minutes']).toBe(0);
+    const detected = day?.['ot_candidate_minutes'] as number;
+    expect(detected).toBeGreaterThan(0);
+    return { employee, detected };
+  }
+
+  it('detects overtime on a day off and pays it only after approval', async () => {
+    const workDate = '2026-08-18';
+    const { employee, detected } = await workOnDayOff('โอทีวันหยุด', workDate);
+
+    const period = await call(harness, 'POST', '/timesheet-periods', {
+      token: hrToken,
+      idempotencyKey: uuidv4(),
+      payload: {
+        company_id: tenant.companyId,
+        name: `งวด OT ${uuidv4().slice(0, 6)}`,
+        starts_on: '2026-08-17',
+        ends_on: '2026-08-23',
+      },
+    });
+    expect(period.status).toBe(201);
+    const periodId = period.body['id'] as string;
+
+    const sheetOf = async (): Promise<Record<string, unknown> | undefined> => {
+      await call(harness, 'POST', `/timesheet-periods/${periodId}/generate`, {
+        token: hrToken,
+        idempotencyKey: uuidv4(),
+        payload: {},
+      });
+      const sheets = await call(harness, 'GET', `/timesheet-periods/${periodId}/timesheets`, {
+        token: hrToken,
+      });
+      return (sheets.body['items'] as Record<string, unknown>[]).find(
+        (item) => item['employment_id'] === employee.employmentId,
+      );
+    };
+
+    // ตรวจพบแล้วแต่ยังไม่อนุมัติ = ยังไม่เข้าใบลงเวลา
+    expect((await sheetOf())?.['ot_rest_day_minutes']).toBe(0);
+
+    const decide = (payload: Record<string, unknown>) =>
+      call(harness, 'POST', '/overtime-requests:decide', {
+        token: supervisorToken,
+        idempotencyKey: uuidv4(),
+        payload: { employment_id: employee.employmentId, work_date: workDate, ...payload },
+      });
+
+    const overApproved = await decide({
+      decision: 'APPROVE',
+      approved_minutes: detected + 1,
+      reason: 'ขอจ่ายเพิ่ม',
+    });
+    expect(overApproved.status).toBe(400);
+
+    const approved = await decide({
+      decision: 'APPROVE',
+      approved_minutes: null,
+      reason: 'หัวหน้าสั่งให้มาทำ',
+    });
+    expect(approved.status).toBe(201);
+    expect(approved.body['ot_category']).toBe('REST_DAY');
+    expect(approved.body['approved_minutes']).toBe(detected);
+
+    const sheet = await sheetOf();
+    expect(sheet?.['ot_rest_day_minutes']).toBe(detected);
+    expect(sheet?.['ot_workday_minutes']).toBe(0);
+
+    const again = await decide({ decision: 'REJECT', approved_minutes: null, reason: 'เปลี่ยนใจ' });
+    expect(again.status).toBe(409);
+  });
+
+  it('refuses to decide overtime on your own employment', async () => {
+    const workDate = '2026-08-19';
+    const { employee, detected } = await workOnDayOff('อนุมัติโอทีตัวเอง', workDate);
+
+    // หัวหน้าที่เป็นพนักงานคนเดียวกัน — มีสิทธิ์อนุมัติ OT แต่ต้องตัดสินของตัวเองไม่ได้
+    const subject = `s|${uuidv4().slice(0, 8)}`;
+    await harness.createPrincipal(tenant, {
+      subject,
+      roles: ['SUPERVISOR'],
+      personId: employee.personId,
+    });
+
+    const response = await call(harness, 'POST', '/overtime-requests:decide', {
+      token: await harness.token(subject, tenant.tenantId),
+      idempotencyKey: uuidv4(),
+      payload: {
+        employment_id: employee.employmentId,
+        work_date: workDate,
+        decision: 'APPROVE',
+        approved_minutes: detected,
+        reason: 'อนุมัติเอง',
+      },
+    });
     expect(response.status).toBe(403);
   });
 });

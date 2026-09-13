@@ -237,7 +237,10 @@ export async function GET(req: NextRequest) {
         r.absence_minutes || "",
         csvCell(hhmm(r.worked_minutes)),
         r.ot_candidate_minutes || "",
-        csvCell(statusLabel(r, leaveNameByDay.get(`${r.employment_id}|${r.work_date}`))),
+        csvCell(
+          statusLabel(r, leaveNameByDay.get(`${r.employment_id}|${r.work_date}`)) +
+            (r.ot_candidate_minutes > 0 ? " · OT" : ""),
+        ),
       ].join(",")
     );
   }

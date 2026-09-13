@@ -675,6 +675,37 @@ export class LeaveService {
   }
 
   /** วันลาที่อนุมัติแล้วในช่วง — attendance engine และ timesheet ใช้ */
+  /**
+   * วันหยุดตามสิทธิ์ของคนหนึ่ง — ใบลาที่อนุมัติแล้วของประเภทที่อนุมัติอัตโนมัติ
+   * (เช่นวันหยุดประจำเดือน) ไม่ใช่การลาจริง ผลลงเวลาคิดวันนั้นเหมือนวันหยุด
+   */
+  async dayOffDates(tx: Tx, employmentId: string, from: string, to: string): Promise<Set<string>> {
+    const rows = await tx
+      .select({ startsOn: schema.leaveRequests.startsOn, endsOn: schema.leaveRequests.endsOn })
+      .from(schema.leaveRequests)
+      .innerJoin(schema.leaveTypes, eq(schema.leaveTypes.id, schema.leaveRequests.leaveTypeId))
+      .where(
+        and(
+          eq(schema.leaveRequests.employmentId, employmentId),
+          eq(schema.leaveRequests.status, 'APPROVED'),
+          eq(schema.leaveTypes.autoApprove, true),
+          sql`${schema.leaveRequests.endsOn} >= ${from}`,
+          sql`${schema.leaveRequests.startsOn} <= ${to}`,
+        ),
+      );
+
+    const dates = new Set<string>();
+    for (const row of rows) {
+      const start = LocalDate.parse(row.startsOn);
+      const days = start.daysUntil(LocalDate.parse(row.endsOn)) + 1;
+      for (let offset = 0; offset < days; offset += 1) {
+        const key = start.plusDays(offset).toString();
+        if (key >= from && key <= to) dates.add(key);
+      }
+    }
+    return dates;
+  }
+
   async approvedMinutesByDate(
     tx: Tx,
     employmentId: string,

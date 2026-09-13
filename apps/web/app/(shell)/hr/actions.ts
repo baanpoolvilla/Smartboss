@@ -1595,6 +1595,51 @@ export async function rejectAttendanceCorrectionAction(formData: FormData) {
   revalidatePath("/hr");
 }
 
+/* ═══════════════════ OT จากเวลาสแกน ═══════════════════ */
+
+/**
+ * อนุมัติ/ไม่อนุมัติ OT ที่ระบบตรวจพบจากเวลาสแกน — decision มาจาก hidden input
+ * ของแต่ละ <form> ไม่ใช่ formAction/value ของปุ่ม (ปุ่มกินค่าตัวเองจนฟอร์มพังเงียบ)
+ */
+export async function decideOvertimeAction(formData: FormData) {
+  await guard(HR_PERMS.employeeManage);
+
+  const employmentId = String(formData.get("employment_id") ?? "");
+  const workDate = String(formData.get("work_date") ?? "");
+  const decision = String(formData.get("decision") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim();
+  const minutesRaw = String(formData.get("approved_minutes") ?? "").trim();
+
+  if (!employmentId || !workDate) throw new Error("ไม่พบรายการ OT");
+  if (decision !== "APPROVE" && decision !== "REJECT") throw new Error("ไม่พบผลการตัดสิน");
+  if (!reason) {
+    throw new Error(decision === "APPROVE" ? "กรุณาระบุเหตุผลที่อนุมัติ" : "กรุณาระบุเหตุผลที่ไม่อนุมัติ");
+  }
+
+  let approvedMinutes: number | null = null;
+  if (decision === "APPROVE" && minutesRaw) {
+    const n = Number(minutesRaw);
+    if (!Number.isInteger(n) || n < 1) throw new Error("จำนวนนาทีที่อนุมัติไม่ถูกต้อง");
+    approvedMinutes = n;
+  }
+
+  try {
+    await wfFetch("/overtime-requests:decide", {
+      method: "POST",
+      body: {
+        employment_id: employmentId,
+        work_date: workDate,
+        decision,
+        approved_minutes: approvedMinutes,
+        reason,
+      },
+    });
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+  revalidatePath("/hr");
+}
+
 /* ═══════════════════ เครื่องสแกน ═══════════════════ */
 
 export async function createDeviceAction(formData: FormData) {

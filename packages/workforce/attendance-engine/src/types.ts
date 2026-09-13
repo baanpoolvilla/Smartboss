@@ -119,6 +119,11 @@ export interface AttendanceInput {
   holiday: HolidayInfo | null;
   leave: LeaveDay | null;
   employmentActive: boolean;
+  /**
+   * true = วันหยุดตามสิทธิ์ (เช่นวันหยุดประจำเดือน) ที่เก็บเป็นใบลาอนุมัติอัตโนมัติ
+   * ไม่ใช่ restDay ของกะ — คิดเหมือนวันหยุด: ไม่มีสาย/ขาด และเวลาที่มาทำงานเป็น OT ทั้งหมด
+   */
+  dayOff?: boolean;
 }
 
 export interface PunchPair {

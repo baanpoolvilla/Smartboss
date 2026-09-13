@@ -79,6 +79,35 @@ function codes(result: ReturnType<typeof calculateAttendance>): ExceptionCode[] 
   return result.exceptions.map((exception) => exception.code);
 }
 
+describe('day-off entitlement', () => {
+  // วันหยุดประจำเดือนเก็บเป็นใบลาอนุมัติอัตโนมัติ 480 นาที ไม่ใช่ restDay ของกะ
+  const dayOffLeave = { paidMinutes: 480, unpaidMinutes: 0, fullDay: false };
+  const noBreakShift: ShiftDefinition = { ...dayShift, breaks: [] };
+
+  it('counts all work on a day off as overtime with no late or absence', () => {
+    const result = run({ dayOff: true, leave: dayOffLeave, punches: [punch('08:20'), punch('17:04')] });
+
+    expect(result.lateMinutes).toBe(0);
+    expect(result.absenceMinutes).toBe(0);
+    // 08:20–17:04 = 524 นาที ลบพักกลางวัน 60 = 464 → ปัดลงทีละ 30 = 450
+    expect(result.otCandidateMinutes).toBe(450);
+  });
+
+  it('does not count a day off without punches as absence', () => {
+    const result = run({ dayOff: true, leave: dayOffLeave, shift: noBreakShift });
+
+    expect(result.absenceMinutes).toBe(0);
+    expect(result.otCandidateMinutes).toBe(0);
+  });
+
+  it('keeps ordinary leave on a workday unchanged', () => {
+    const result = run({ leave: dayOffLeave, shift: noBreakShift });
+
+    // กะ 540 นาที − ลา 480 = ขาด 60
+    expect(result.absenceMinutes).toBe(60);
+  });
+});
+
 describe('normal day', () => {
   it('computes worked, paid and break minutes for a full day', () => {
     const result = run({ punches: [punch('07:55'), punch('17:05')] });

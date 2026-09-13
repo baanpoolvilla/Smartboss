@@ -5,18 +5,24 @@ import { HR_PERMS } from "@/modules/hr/permissions";
 import { renderTodayTab } from "./home-today";
 import { renderCorrectionsTab } from "./home-corrections";
 import { renderCalendarTab } from "./home-calendar";
+import { renderOvertimeTab } from "./home-overtime";
 
 const TABS = [
   { id: "today", label: "วันนี้" },
   { id: "corrections", label: "คำขอแก้เวลา" },
+  { id: "overtime", label: "OT รออนุมัติ" },
   { id: "calendar", label: "ปฏิทินทีม" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
 
+/** แท็บที่ต้องมีสิทธิ์จัดการพนักงาน — แก้เวลาและ OT กระทบเงินเดือนตรง ๆ */
+const MANAGE_TABS: readonly TabId[] = ["corrections", "overtime"];
+
 const TAB_TITLE: Record<TabId, string> = {
   today: "การลงเวลา",
   corrections: "คำขอแก้เวลา",
+  overtime: "OT รออนุมัติ",
   calendar: "ปฏิทินทีม",
 };
 
@@ -44,7 +50,7 @@ export default async function HrOverviewPage({
 
   const sp = await searchParams;
   const requested = TABS.some((t) => t.id === sp.tab) ? (sp.tab as TabId) : "today";
-  const tab: TabId = requested === "corrections" && !canManage ? "today" : requested;
+  const tab: TabId = MANAGE_TABS.includes(requested) && !canManage ? "today" : requested;
 
   return (
     <HrPage
@@ -53,7 +59,7 @@ export default async function HrOverviewPage({
       load={async () => {
         const tabBar = (
           <div className="mb-4 flex gap-1 border-b border-(--line)">
-            {TABS.filter((t) => t.id !== "corrections" || canManage).map((t) => (
+            {TABS.filter((t) => !MANAGE_TABS.includes(t.id) || canManage).map((t) => (
               <Link
                 key={t.id}
                 href={t.id === "today" ? "/hr" : `/hr?tab=${t.id}`}
@@ -72,6 +78,8 @@ export default async function HrOverviewPage({
         let body: React.ReactNode;
         if (tab === "corrections") {
           body = await renderCorrectionsTab();
+        } else if (tab === "overtime") {
+          body = await renderOvertimeTab();
         } else if (tab === "calendar") {
           body = await renderCalendarTab(sp.month);
         } else {

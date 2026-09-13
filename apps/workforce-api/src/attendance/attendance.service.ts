@@ -403,6 +403,12 @@ export class AttendanceService {
               leaveMinutes.paid + leaveMinutes.unpaid >= scheduledMinutes,
           };
 
+    // วันหยุดตามสิทธิ์ (ใบลาประเภทอนุมัติอัตโนมัติ เช่น Day-Off) คิดเหมือนวันหยุด —
+    // มาทำงานวันนั้นเป็น OT ทั้งหมด ไม่ใช่วันทำงานปกติที่มีใบลาแปะอยู่
+    const dayOff = (
+      await this.leave.dayOffDates(uow.tx, employmentId, workDateText, workDateText)
+    ).has(workDateText);
+
     const employmentActive =
       LocalDate.parse(employment.hiredOn).isOnOrBefore(workDate) &&
       (employment.terminatedOn === null ||
@@ -417,6 +423,7 @@ export class AttendanceService {
       holiday: holiday === undefined ? null : { name: holiday.name, paid: holiday.paid },
       leave: leaveForDay,
       employmentActive,
+      dayOff,
     });
 
     const previousVersion = await this.repository.supersedeCurrentResult(

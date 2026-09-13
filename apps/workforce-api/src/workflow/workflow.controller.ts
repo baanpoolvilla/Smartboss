@@ -6,6 +6,7 @@ import {
   createLeaveTypeSchema,
   createTimesheetPeriodSchema,
   decideLeaveSchema,
+  decideOvertimeFromAttendanceSchema,
   finalApproveOvertimeSchema,
   grantLeaveBalanceSchema,
   preApproveOvertimeSchema,
@@ -232,15 +233,30 @@ export class OvertimeController {
     return this.service.finalApprove(requireUuid(requestId, 'requestId'), body);
   }
 
+  @Post('overtime-requests:decide')
+  @HttpCode(201)
+  @RequirePermissions('workforce.overtime.approve')
+  @Idempotent()
+  async decideFromAttendance(
+    @Body(zodPipe(decideOvertimeFromAttendanceSchema))
+    body: z.infer<typeof decideOvertimeFromAttendanceSchema>,
+  ): Promise<Record<string, unknown>> {
+    return this.service.decideFromAttendance(body);
+  }
+
   @Get('overtime-requests')
   @RequirePermissions('workforce.overtime.manage')
   async list(
     @Query('employment_id') employmentId: string | undefined,
     @Query('status') status: string | undefined,
+    @Query('from') from: string | undefined,
+    @Query('to') to: string | undefined,
   ): Promise<{ items: Record<string, unknown>[] }> {
     return this.service.list({
       ...(employmentId === undefined ? {} : { employmentId: requireUuid(employmentId, 'employment_id') }),
       ...(status === undefined ? {} : { status }),
+      ...(from === undefined ? {} : { from }),
+      ...(to === undefined ? {} : { to }),
     });
   }
 }

@@ -1,10 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { schema, type Tx } from '@workforce/db';
 import { AppError, uuidv7, type Clock } from '@workforce/domain';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { UnitOfWork } from '../infrastructure/unit-of-work';
 import { RequestContextService } from '../shared/request-context';
 import { CLOCK } from '../shared/tokens';
+import { LeaveService } from './leave.service';
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * ล่วงเวลา (spec §8.3)
@@ -17,6 +20,7 @@ export class OvertimeService {
   constructor(
     private readonly uow: UnitOfWork,
     private readonly requestContext: RequestContextService,
+    private readonly leave: LeaveService,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -169,11 +173,138 @@ export class OvertimeService {
     });
   }
 
+  /**
+   * อนุมัติ/ไม่อนุมัติ OT ที่ตรวจพบจากเวลาสแกน (ผลลงเวลาฉบับปัจจุบัน) ในขั้นเดียว
+   *
+   * ไม่มีคำขอล่วงหน้า — มาทำงานวันหยุดหรืออยู่ต่อหลังเลิกกะแล้วระบบเห็นเอง ผู้อนุมัติ
+   * ยืนยันหรือลดนาทีได้แต่เกินที่ตรวจพบไม่ได้ และตัดสิน OT ของตัวเองไม่ได้
+   *
+   * ตัดสินได้ครั้งเดียวต่อคนต่อวัน — ใบลงเวลาอ่าน OT รายวันเป็นค่าเดียว
+   * (timesheet.service otByDate) ถ้ามีหลายใบต่อวันจะนับไม่ครบ
+   */
+  async decideFromAttendance(input: {
+    employment_id: string;
+    work_date: string;
+    decision: 'APPROVE' | 'REJECT';
+    approved_minutes: number | null;
+    reason: string;
+  }): Promise<Record<string, unknown>> {
+    return this.uow.run(async (uow) => {
+      const principal = this.requestContext.requirePrincipal();
+      if (principal.employmentId === input.employment_id) {
+        throw AppError.forbidden('you cannot decide your own overtime');
+      }
+
+      const results = await uow.tx
+        .select()
+        .from(schema.attendanceResults)
+        .where(
+          and(
+            eq(schema.attendanceResults.employmentId, input.employment_id),
+            eq(schema.attendanceResults.workDate, input.work_date),
+            eq(schema.attendanceResults.isCurrent, true),
+          ),
+        )
+        .limit(1);
+      const result = results[0];
+      if (result === undefined || result.otCandidateMinutes <= 0) {
+        throw AppError.validation('no overtime was detected for this employee on this date', {
+          meta: { employment_id: input.employment_id, work_date: input.work_date },
+        });
+      }
+
+      const decided = await uow.tx
+        .select({ id: schema.overtimeRequests.id })
+        .from(schema.overtimeRequests)
+        .where(
+          and(
+            eq(schema.overtimeRequests.employmentId, input.employment_id),
+            eq(schema.overtimeRequests.workDate, input.work_date),
+            inArray(schema.overtimeRequests.status, ['FINAL_APPROVED', 'REJECTED']),
+          ),
+        )
+        .limit(1);
+      if (decided.length > 0) {
+        throw AppError.conflict('overtime for this date has already been decided');
+      }
+
+      const detected = result.otCandidateMinutes;
+      const approve = input.decision === 'APPROVE';
+      const approved = approve ? (input.approved_minutes ?? detected) : 0;
+      if (approved > detected) {
+        throw AppError.validation('approved_minutes must not exceed the detected overtime', {
+          meta: { detected_minutes: detected, approved_minutes: approved },
+        });
+      }
+
+      const dayOff = (
+        await this.leave.dayOffDates(uow.tx, input.employment_id, input.work_date, input.work_date)
+      ).has(input.work_date);
+      const category = result.isHoliday
+        ? 'PUBLIC_HOLIDAY'
+        : result.isRestDay || dayOff
+          ? 'REST_DAY'
+          : 'WORKDAY';
+
+      const id = uuidv7();
+      const status = approve ? 'FINAL_APPROVED' : 'REJECTED';
+      await uow.tx.insert(schema.overtimeRequests).values({
+        id,
+        tenantId: uow.tenantId,
+        companyId: result.companyId,
+        employmentId: input.employment_id,
+        workDate: input.work_date,
+        otCategory: category,
+        plannedMinutes: 0,
+        actualMinutes: detected,
+        eligibleMinutes: detected,
+        approvedMinutes: approved,
+        reason: 'ตรวจพบจากเวลาสแกน',
+        status,
+        finalApprovedBy: principal.principalId,
+        finalApprovedAt: this.clock.now(),
+        decisionReason: input.reason,
+        createdBy: principal.principalId,
+      });
+
+      await uow.audit({
+        action: 'overtime.request.decide-from-attendance',
+        resourceType: 'overtime_request',
+        resourceId: id,
+        outcome: 'SUCCESS',
+        companyId: result.companyId,
+        reason: input.reason,
+        after: {
+          work_date: input.work_date,
+          ot_category: category,
+          detected_minutes: detected,
+          approved_minutes: approved,
+          status,
+        },
+      });
+
+      return { id, status, ot_category: category, detected_minutes: detected, approved_minutes: approved };
+    });
+  }
+
   async list(query: {
     companyId?: string;
     employmentId?: string;
     status?: string;
+    from?: string;
+    to?: string;
   }): Promise<{ items: Record<string, unknown>[] }> {
+    for (const [name, value] of [
+      ['from', query.from],
+      ['to', query.to],
+    ] as const) {
+      if (value !== undefined && !ISO_DATE.test(value)) {
+        throw AppError.validation(`${name} must be an ISO date (YYYY-MM-DD)`, {
+          meta: { [name]: value },
+        });
+      }
+    }
+
     return this.uow.run(async (uow) => {
       const conditions = [];
       if (query.companyId !== undefined)
@@ -182,11 +313,16 @@ export class OvertimeService {
         conditions.push(eq(schema.overtimeRequests.employmentId, query.employmentId));
       if (query.status !== undefined)
         conditions.push(eq(schema.overtimeRequests.status, query.status));
+      if (query.from !== undefined)
+        conditions.push(sql`${schema.overtimeRequests.workDate} >= ${query.from}`);
+      if (query.to !== undefined)
+        conditions.push(sql`${schema.overtimeRequests.workDate} <= ${query.to}`);
 
       const rows = await uow.tx
         .select()
         .from(schema.overtimeRequests)
         .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .orderBy(desc(schema.overtimeRequests.workDate))
         .limit(200);
 
       return {
@@ -200,6 +336,9 @@ export class OvertimeService {
           eligible_minutes: row.eligibleMinutes,
           approved_minutes: row.approvedMinutes,
           status: row.status,
+          reason: row.reason,
+          decision_reason: row.decisionReason,
+          final_approved_at: row.finalApprovedAt?.toISOString() ?? null,
         })),
       };
     });

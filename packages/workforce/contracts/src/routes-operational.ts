@@ -1049,6 +1049,16 @@ export const OPERATIONAL_ROUTES: readonly Omit<RouteDefinition, 'response'>[] = 
     successStatus: 200,
   },
   {
+    operationId: 'decideFromAttendance_post',
+    method: 'post',
+    path: '/overtime-requests:decide',
+    summary: 'POST /overtime-requests:decide',
+    tag: 'workflow',
+    permissions: ['workforce.overtime.approve'] as Permission[],
+    idempotent: true,
+    successStatus: 201,
+  },
+  {
     operationId: 'createPeriod_post',
     method: 'post',
     path: '/timesheet-periods',

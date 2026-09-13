@@ -54,6 +54,7 @@ export function calculateAttendance(input: AttendanceInput): AttendanceResult {
   const isRestDay = input.shift?.restDay ?? false;
   const isHoliday = input.holiday !== null;
   const isOnLeave = input.leave !== null;
+  const isDayOff = input.dayOff === true;
   const hasAnyPunch = pairing.workPairs.length > 0;
 
   if (input.shift === null && !isHoliday && !isOnLeave && hasAnyPunch) {
@@ -83,8 +84,9 @@ export function calculateAttendance(input: AttendanceInput): AttendanceResult {
   const breaks = resolveBreaks(input, pairing.workPairs, pairing.breakPairs);
   const netWorkedMinutes = Math.max(0, workedMinutes - breaks.unpaidMinutes);
 
-  const late = computeLate(policy, input.shift, scheduledInAt, actualInAt);
-  const earlyOut = computeEarlyOut(policy, input.shift, scheduledOutAt, actualOutAt);
+  // วันหยุดตามสิทธิ์ไม่มีเวลาเข้า-ออกที่ต้องตรง — มาทำงานเท่าไหร่ก็เป็น OT ทั้งหมด
+  const late = isDayOff ? 0 : computeLate(policy, input.shift, scheduledInAt, actualInAt);
+  const earlyOut = isDayOff ? 0 : computeEarlyOut(policy, input.shift, scheduledOutAt, actualOutAt);
   const absence = computeAbsence({
     input,
     policy,
@@ -96,7 +98,7 @@ export function calculateAttendance(input: AttendanceInput): AttendanceResult {
 
   const scheduledMinutes = scheduledWorkMinutes(input.shift, breaks.unpaidMinutes);
   const otCandidate = computeOvertimeCandidate(policy, netWorkedMinutes, scheduledMinutes, {
-    isRestDay,
+    isRestDay: isRestDay || isDayOff,
     isHoliday,
   });
 
@@ -312,6 +314,7 @@ function computeAbsence(context: {
   // ไม่ต้องมาทำงาน = ไม่มีการขาดงาน
   if (shift === null || shift.restDay) return 0;
   if (input.holiday !== null) return 0;
+  if (input.dayOff === true) return 0;
   if (input.leave?.fullDay === true) return 0;
 
   const requiredMinutes =

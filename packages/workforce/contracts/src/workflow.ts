@@ -98,6 +98,18 @@ export const finalApproveOvertimeSchema = z.object({
   reason: z.string().trim().min(1).max(500),
 });
 
+/**
+ * อนุมัติ/ไม่อนุมัติ OT ที่ระบบตรวจพบจากเวลาสแกน — ไม่ต้องมีคำขอล่วงหน้า
+ * approved_minutes = null → อนุมัติเต็มตามที่ตรวจพบ
+ */
+export const decideOvertimeFromAttendanceSchema = z.object({
+  employment_id: uuidSchema,
+  work_date: isoDateSchema,
+  decision: z.enum(['APPROVE', 'REJECT']),
+  approved_minutes: z.number().int().min(1).max(1440).nullable().default(null),
+  reason: z.string().trim().min(1).max(500),
+});
+
 export const overtimeRequestSchema = z.object({
   id: uuidSchema,
   employment_id: uuidSchema,
