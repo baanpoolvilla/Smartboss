@@ -1,21 +1,24 @@
 import { PrismaClient, Prisma } from "@prisma/client";
 
 /**
- * ล้างคะแนนผลงานที่ระบบคำนวณไว้ แล้วคำนวณใหม่ทั้งหมด เริ่มนับตั้งแต่วันที่กำหนด
+ * ลบคะแนนผลงานที่ระบบคำนวณทั้งหมด แล้วดึงข้อมูลต้นทางมาคำนวณใหม่ เริ่มนับตั้งแต่ --from
  *
  * ต่อบริษัทที่เปิดระบบคะแนนอยู่:
- *   1. ตั้ง "เริ่มนับคะแนนตั้งแต่วันที่" = --from — cron ทุกตัวจะไม่บันทึกอะไรก่อนวันนี้อีก
- *   2. ลบทุกเหตุการณ์ก่อน --from
- *   3. ตั้งแต่ --from: ลบเหตุการณ์ที่สร้างคืนจากต้นทางได้ (มาสาย/ขาดงาน/ส่งงานเลยกำหนด
- *      รวมรายการแก้ไขที่สคริปต์ reconcile เคยออกไว้) แล้วสร้างใหม่จากข้อมูลปัจจุบัน
+ *   1. ตั้ง "เริ่มนับคะแนนตั้งแต่วันที่" = --from — ระบบจะไม่บันทึก/ไม่นับอะไรก่อนวันนี้อีก
+ *   2. ลบทุกเหตุการณ์ที่ระบบสร้าง (created_by ว่าง) ทุกวันที่ รวมรายการแก้ไขที่เคยออกไว้
+ *   3. คำนวณใหม่ตั้งแต่ --from จากข้อมูลต้นทางปัจจุบัน:
+ *        ขาดงาน/มาสาย     ← ผลลงเวลา (สแกนนิ้ว)
+ *        ส่งงานเลยกำหนด   ← งานในบอร์ด
+ *        ใบงานเกินกำหนด   ← วันครบกำหนด/วันปิดงาน/สถานะของใบงาน
+ *        PM เกินกำหนด     ← รอบปัจจุบันที่ยังค้างอยู่เท่านั้น (ไม่มีประวัติรายรอบ)
  *
- * ไม่แตะ (ตั้งแต่ --from): สติกเกอร์ที่หัวหน้ากดเอง (คนตัดสิน สร้างคืนไม่ได้) และใบงาน/PM
- * เกินกำหนด (บันทึกวันที่ตรวจพบไว้ ใบงานที่ปิดไปแล้วสร้างประวัติคืนไม่ได้)
+ * ไม่แตะ: ข้อมูลต้นทางทั้งหมด (สแกนนิ้ว งาน ใบงาน PM — อ่านอย่างเดียว) และเหตุการณ์ที่คน
+ * สร้างเอง (created_by มีค่า = สติกเกอร์ของหัวหน้า) ทุกวันที่ — ก่อน --from เก็บไว้แต่ไม่ถูกนับ
  *
  * ผลลงเวลาอ่านจาก attendance_results ปัจจุบัน — เปิดหน้า /hr ก่อนรัน ให้ระบบคำนวณผลลงเวลา
  * 30 วันล่าสุดใหม่ (สคริปต์สั่งคำนวณเองไม่ได้ ต้องผ่าน workforce API ด้วย session)
  *
- * รัน (หลัง pnpm db:deploy):
+ * รัน (หลัง pnpm db:deploy และติดตั้ง 04-performance-lookup.sql รุ่นใหม่):
  *   set -a; . /etc/smartboss/smartboss.env; set +a
  *   pnpm --filter @smartboss/database exec tsx scripts/rebuild-performance-events.ts --from=2026-09-01 --dry-run
  */
@@ -24,19 +27,25 @@ const prisma = new PrismaClient();
 const dryRun = process.argv.includes("--dry-run");
 const fromArg = process.argv.find((a) => a.startsWith("--from="))?.slice("--from=".length);
 
+const DAY_MS = 86_400_000;
 // ต้องตรงกับ DEFAULT_RULE_POINTS / ABSENCE_THRESHOLD_MINUTES ใน apps/web/lib/performance.ts
 // (packages/database import จาก apps/web ไม่ได้)
-const DEFAULT_POINTS: Record<string, number> = { attendance_late: -1, attendance_absent: -5 };
+const DEFAULT_POINTS: Record<string, number> = {
+  attendance_late: -1,
+  attendance_absent: -5,
+  workorder_overdue: -3,
+  pm_missed: -5,
+};
 const ABSENCE_THRESHOLD_MINUTES = 240;
-const REBUILDABLE = ["attendance_late", "attendance_absent", "task_late"];
 const LABEL: Record<string, string> = {
   attendance_absent: "ขาดงาน",
   attendance_late: "มาสาย",
   task_late: "ส่งงานเลยกำหนด",
-  task_manual_dock: "หักคะแนนโดยหัวหน้า",
+  task_manual_dock: "สติกเกอร์หัวหน้า",
   workorder_overdue: "ใบงานเกินกำหนด",
-  pm_missed: "ไม่ทำบำรุงรักษาตามรอบ",
+  pm_missed: "PM เกินกำหนด",
 };
+const REBUILT_ORDER = ["attendance_absent", "attendance_late", "task_late", "workorder_overdue", "pm_missed"];
 
 interface AttendanceRow {
   subject: string;
@@ -68,12 +77,19 @@ function firstValidDate(...values: (string | undefined)[]): Date | null {
   return null;
 }
 
+/** รูปแบบเดียวกับ fmtThaiDate ใน apps/web/modules/maintenance/lib/format.ts */
+function fmtThaiDate(d: Date): string {
+  return new Intl.DateTimeFormat("th-TH", { dateStyle: "medium" }).format(d);
+}
+
 async function main() {
   if (!fromArg || !/^\d{4}-\d{2}-\d{2}$/.test(fromArg)) {
     throw new Error("ต้องระบุ --from=YYYY-MM-DD เช่น --from=2026-09-01");
   }
   const from = new Date(`${fromArg}T00:00:00Z`);
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
+  const now = new Date();
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(now);
+  const atLeastFrom = (d: Date) => (d > from ? d : from);
 
   const orgs = await prisma.organization.findMany({
     where: { isActive: true },
@@ -92,6 +108,8 @@ async function main() {
     select: { id: true, orgId: true, name: true },
   });
   const userById = new Map(users.map((u) => [u.id, u]));
+  const belongs = (userId: string | null | undefined, orgId: string): userId is string =>
+    !!userId && userById.get(userId)?.orgId === orgId;
 
   function pointsFor(orgId: string, category: string): number {
     const overrides = (settingByOrg.get(orgId)?.rulePoints ?? {}) as Record<string, unknown>;
@@ -101,7 +119,8 @@ async function main() {
 
   const events: Prisma.PerformanceEventCreateManyInput[] = [];
 
-  // ── มาสาย/ขาดงาน: ผลลงเวลาปัจจุบัน ตั้งแต่ --from ถึงเมื่อวาน (วันที่ยังไม่จบไม่ตัดสิน) ──
+  // ── ขาดงาน/มาสาย: ผลลงเวลาปัจจุบัน ตั้งแต่ --from ถึงเมื่อวาน (วันที่ยังไม่จบไม่ตัดสิน) ──
+  // ตรงกับ dockAttendance ใน apps/web/lib/attendance-performance.ts
   const rows = await prisma.$queryRaw<AttendanceRow[]>`
     SELECT subject, work_date, late_minutes, absence_minutes, missing_punch
     FROM workforce.performance_attendance(${from}::date, -1::int, -1::int)
@@ -112,6 +131,7 @@ async function main() {
     const user = userById.get(r.subject);
     if (!user?.orgId) continue;
     const orgId = user.orgId;
+    const st = settingByOrg.get(orgId);
     const late = Number(r.late_minutes);
     const absence = Number(r.absence_minutes);
     const base = {
@@ -122,10 +142,9 @@ async function main() {
       refType: "attendance_day",
       refId: `${user.id}:${day}`,
     };
-    // ตรงกับ dockAttendance: สแกนแค่ครั้งเดียวนับเป็นขาดงานเฉพาะบริษัทที่ตั้งไว้
+    // สแกนแค่ครั้งเดียวนับเป็นขาดงานเฉพาะบริษัทที่ตั้งไว้ ไม่นับ = ไปเช็คมาสายต่อ
     const absent =
-      absence > ABSENCE_THRESHOLD_MINUTES &&
-      (!r.missing_punch || (settingByOrg.get(orgId)?.missingPunchCountsAsAbsent ?? false));
+      absence > ABSENCE_THRESHOLD_MINUTES && (!r.missing_punch || (st?.missingPunchCountsAsAbsent ?? false));
     if (absent) {
       events.push({
         ...base,
@@ -133,7 +152,7 @@ async function main() {
         points: pointsFor(orgId, "attendance_absent"),
         note: `ขาดงาน ${Math.round(absence / 60)} ชั่วโมง`,
       });
-    } else if (late > (settingByOrg.get(orgId)?.lateThresholdMinutes ?? 0)) {
+    } else if (late > (st?.lateThresholdMinutes ?? 0)) {
       events.push({
         ...base,
         category: "attendance_late",
@@ -144,7 +163,7 @@ async function main() {
   }
 
   // ── ส่งงานเลยกำหนด: สถานะงานปัจจุบัน — งานที่เจ้าของระบบยกเลิกการหักไปแล้วจะไม่ถูกนับ ──
-  // occurredAt/refId ตรงกับ apps/web/app/api/report-task/tasks/sweep/route.ts
+  // ตรงกับ apps/web/app/api/report-task/tasks/sweep/route.ts
   const tasks = await prisma.reportTask.findMany({
     where: { orgId: { in: orgIds } },
     select: { id: true, orgId: true, data: true },
@@ -153,7 +172,7 @@ async function main() {
     const d = t.data as unknown as TaskData;
     if (!d.missedDeadlineOnce) continue;
     const push = (userId: string | undefined, penalty: Penalty, when: Date | null, refId: string) => {
-      if (!userId || userById.get(userId)?.orgId !== t.orgId) return;
+      if (!belongs(userId, t.orgId)) return;
       if (typeof penalty.points !== "number" || !when || when < from) return;
       events.push({
         orgId: t.orgId,
@@ -169,39 +188,105 @@ async function main() {
     };
     if (d.penalty) push(d.assigneeIds?.[0], d.penalty, firstValidDate(d.dueDate, d.penalty.appliedAt), t.id);
     for (const [assigneeId, p] of Object.entries(d.penalties ?? {})) {
-      push(
-        assigneeId,
-        p,
-        firstValidDate(d.assigneeDueDates?.[assigneeId], d.dueDate, p.appliedAt),
-        `${t.id}:${assigneeId}`,
-      );
+      push(assigneeId, p, firstValidDate(d.assigneeDueDates?.[assigneeId], d.dueDate, p.appliedAt), `${t.id}:${assigneeId}`);
     }
+  }
+
+  // ── ใบงานเกินกำหนด: เลยวันครบกำหนด + ระยะผ่อนผัน ก่อนปิดงาน (ยังไม่ปิด = ถึงตอนนี้) ──
+  // ตรงกับ dockOverdueMaintenance ใน apps/web/modules/maintenance/data/cron.ts
+  // ช่วงที่ค้างต้องคาบเกี่ยว --from ขึ้นไป · ค้างมาตั้งแต่ก่อน --from ลงวันที่ --from
+  const workOrders = await prisma.workOrder.findMany({
+    where: { orgId: { in: orgIds }, dueDate: { not: null }, status: { not: "cancelled" } },
+    select: {
+      id: true,
+      orgId: true,
+      title: true,
+      status: true,
+      dueDate: true,
+      completedAt: true,
+      assignedTo: true,
+      property: { select: { name: true, caretakerId: true } },
+    },
+  });
+  for (const wo of workOrders) {
+    const graceDays = settingByOrg.get(wo.orgId)?.workOrderGraceDays ?? 0;
+    const overdueAt = new Date(wo.dueDate!.getTime() + graceDays * DAY_MS);
+    const endedAt = wo.status === "completed" ? wo.completedAt : now;
+    if (!endedAt || overdueAt >= endedAt || endedAt <= from) continue;
+    const responsible = wo.assignedTo ?? wo.property?.caretakerId;
+    if (!belongs(responsible, wo.orgId)) continue;
+    events.push({
+      orgId: wo.orgId,
+      userId: responsible,
+      source: "maintenance",
+      category: "workorder_overdue",
+      points: pointsFor(wo.orgId, "workorder_overdue"),
+      occurredAt: atLeastFrom(overdueAt),
+      refType: "work_order",
+      refId: wo.id,
+      note: `${wo.title}${wo.property?.name ? ` · ${wo.property.name}` : ""} · ครบกำหนด ${fmtThaiDate(wo.dueDate!)}`,
+    });
+  }
+
+  // ── PM เกินกำหนด: รอบปัจจุบันที่เลยกำหนด + ระยะผ่อนผันแล้วยังค้างอยู่ ──
+  // แผน PM เก็บแค่รอบปัจจุบัน รอบที่เคยเลยกำหนดแล้วทำเสร็จไปแล้วคำนวณย้อนไม่ได้
+  const pms = await prisma.pmSchedule.findMany({
+    where: { orgId: { in: orgIds }, isActive: true },
+    select: {
+      id: true,
+      orgId: true,
+      title: true,
+      nextDueDate: true,
+      assignedTo: true,
+      property: { select: { name: true, caretakerId: true } },
+    },
+  });
+  for (const pm of pms) {
+    const graceDays = settingByOrg.get(pm.orgId)?.pmGraceDays ?? 7;
+    const overdueAt = new Date(pm.nextDueDate.getTime() + graceDays * DAY_MS);
+    if (overdueAt >= now) continue;
+    const responsible = pm.assignedTo ?? pm.property?.caretakerId;
+    if (!belongs(responsible, pm.orgId)) continue;
+    events.push({
+      orgId: pm.orgId,
+      userId: responsible,
+      source: "maintenance",
+      category: "pm_missed",
+      points: pointsFor(pm.orgId, "pm_missed"),
+      occurredAt: atLeastFrom(overdueAt),
+      refType: "pm_schedule",
+      refId: `${pm.id}:${pm.nextDueDate.toISOString().slice(0, 10)}`,
+      note: `${pm.title}${pm.property?.name ? ` · ${pm.property.name}` : ""} · ครบกำหนด ${fmtThaiDate(pm.nextDueDate)}`,
+    });
   }
 
   // ── สรุปก่อนเขียน ──
   const inScope = { orgId: { in: orgIds } };
-  const before = await prisma.performanceEvent.groupBy({
+  const toDelete = await prisma.performanceEvent.groupBy({
     by: ["category"],
-    where: { ...inScope, occurredAt: { lt: from } },
+    where: { ...inScope, createdBy: null },
     _count: true,
-  });
-  const toRebuild = await prisma.performanceEvent.count({
-    where: { ...inScope, occurredAt: { gte: from }, category: { in: REBUILDABLE } },
   });
   const kept = await prisma.performanceEvent.groupBy({
     by: ["category"],
-    where: { ...inScope, occurredAt: { gte: from }, category: { notIn: REBUILDABLE } },
+    where: { ...inScope, createdBy: { not: null } },
     _count: true,
   });
 
+  const total = (gs: { _count: number }[]) => gs.reduce((s, g) => s + g._count, 0);
   const line = (g: { category: string; _count: number }) => `    ${LABEL[g.category] ?? g.category} ${g._count}`;
+  const createdByCategory = new Map<string, number>();
+  for (const e of events) createdByCategory.set(e.category, (createdByCategory.get(e.category) ?? 0) + 1);
+
   console.log(`เริ่มนับคะแนนตั้งแต่ ${fromArg} · ${scope.map((o) => o.name).join(", ")}\n`);
-  console.log(`ลบทิ้ง — เหตุการณ์ก่อน ${fromArg}: ${before.reduce((s, g) => s + g._count, 0)} รายการ`);
-  before.forEach((g) => console.log(line(g)));
-  console.log(`ลบเพื่อคำนวณใหม่ — มาสาย/ขาดงาน/ส่งงานเลยกำหนด ตั้งแต่ ${fromArg}: ${toRebuild} รายการ`);
-  console.log(`เก็บไว้ตามเดิม — ตั้งแต่ ${fromArg}: ${kept.reduce((s, g) => s + g._count, 0)} รายการ`);
+  console.log("ไม่แตะ: ข้อมูลสแกนนิ้ว งาน ใบงาน PM (อ่านอย่างเดียว)\n");
+  console.log(`เก็บไว้ — คะแนนที่คนให้เอง: ${total(kept)} รายการ`);
   kept.forEach((g) => console.log(line(g)));
-  console.log(`\nสร้างใหม่: ${events.length} รายการ\n`);
+  console.log(`ลบ — คะแนนที่ระบบคำนวณ (ทุกวันที่): ${total(toDelete)} รายการ`);
+  toDelete.forEach((g) => console.log(line(g)));
+  console.log(`คำนวณใหม่ตั้งแต่ ${fromArg}: ${events.length} รายการ`);
+  REBUILT_ORDER.forEach((c) => console.log(`    ${LABEL[c]} ${createdByCategory.get(c) ?? 0}`));
+  console.log("\nรายคน:");
 
   const perUser = new Map<string, Record<string, number>>();
   for (const e of events) {
@@ -213,7 +298,7 @@ async function main() {
     .map(([id, counts]) => ({ name: userById.get(id)?.name ?? id, counts }))
     .sort((a, b) => a.name.localeCompare(b.name))
     .forEach(({ name, counts }) => {
-      const parts = REBUILDABLE.filter((c) => counts[c]).map((c) => `${LABEL[c]} ${counts[c]}`);
+      const parts = REBUILT_ORDER.filter((c) => counts[c]).map((c) => `${LABEL[c]} ${counts[c]}`);
       console.log(`  ${name.padEnd(32)} ${parts.join(" · ")}`);
     });
 
@@ -232,15 +317,12 @@ async function main() {
           create: { orgId: o.id, scoringStartDate: from },
         });
       }
-      await tx.performanceEvent.deleteMany({ where: { ...inScope, occurredAt: { lt: from } } });
-      await tx.performanceEvent.deleteMany({
-        where: { ...inScope, occurredAt: { gte: from }, category: { in: REBUILDABLE } },
-      });
+      await tx.performanceEvent.deleteMany({ where: { ...inScope, createdBy: null } });
       await tx.performanceEvent.createMany({ data: events, skipDuplicates: true });
     },
     { timeout: 120_000 },
   );
-  console.log(`\n✔ ล้างและคำนวณใหม่เรียบร้อย — เริ่มนับตั้งแต่ ${fromArg}`);
+  console.log(`\n✔ ลบและคำนวณใหม่เรียบร้อย — เริ่มนับตั้งแต่ ${fromArg}`);
 }
 
 main()
