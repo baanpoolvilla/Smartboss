@@ -76,6 +76,8 @@ export interface PerformanceSettings {
   lateThresholdMinutes: number;
   pmGraceDays: number;
   workOrderGraceDays: number;
+  /** เหตุการณ์ก่อนวันนี้ไม่ถูกบันทึกและไม่ถูกนับ — null = นับทั้งหมด */
+  scoringStartDate: Date | null;
   rulePoints: Record<PerformanceCategory, number>;
   /** เรียงจากคะแนนสูงไปต่ำแล้ว — ตัวแรกที่ผ่านคือเกรดที่ได้ */
   gradeThresholds: [string, number][];
@@ -99,6 +101,7 @@ const FALLBACK: PerformanceSettings = {
   lateThresholdMinutes: 0,
   pmGraceDays: 7,
   workOrderGraceDays: 0,
+  scoringStartDate: null,
   rulePoints: DEFAULT_RULE_POINTS,
   gradeThresholds: Object.entries(DEFAULT_GRADE_THRESHOLDS).sort((a, b) => b[1] - a[1]),
 };
@@ -131,6 +134,7 @@ export async function loadPerformanceSettings(orgId: string): Promise<Performanc
     lateThresholdMinutes: row.lateThresholdMinutes,
     pmGraceDays: row.pmGraceDays,
     workOrderGraceDays: row.workOrderGraceDays,
+    scoringStartDate: row.scoringStartDate,
     rulePoints: { ...DEFAULT_RULE_POINTS, ...overrides } as Record<
       PerformanceCategory,
       number
@@ -161,6 +165,7 @@ export async function loadPerformanceSettingsMap(
       lateThresholdMinutes: row.lateThresholdMinutes,
       pmGraceDays: row.pmGraceDays,
       workOrderGraceDays: row.workOrderGraceDays,
+      scoringStartDate: row.scoringStartDate,
       rulePoints: { ...DEFAULT_RULE_POINTS, ...overrides } as Record<
         PerformanceCategory,
         number
@@ -210,7 +215,13 @@ export async function recordPerformanceEvents(
   ]);
 
   const rows = events
-    .filter((e) => settingsByOrg.get(e.orgId)?.enabled !== false)
+    .filter((e) => {
+      const st = settingsByOrg.get(e.orgId);
+      if (st?.enabled === false) return false;
+      // จุดเดียวที่ทุก cron/โมดูลผ่าน — กันทั้ง cron ลงเวลาที่ย้อนดู 45 วัน และ sweep
+      // งานที่ส่งเหตุการณ์ของงานเก่าซ้ำทุกครั้งที่มีงานเปลี่ยน ไม่ให้เก็บช่วงก่อนวันเริ่มนับกลับมา
+      return !(st?.scoringStartDate && e.occurredAt < st.scoringStartDate);
+    })
     .map((e) => ({
       orgId: e.orgId,
       userId: e.userId,
@@ -282,15 +293,17 @@ export async function buildScorecards(
   from: Date,
   to: Date
 ): Promise<{ settings: PerformanceSettings; cards: UserScorecard[] }> {
-  const [settings, users, events] = await Promise.all([
-    loadPerformanceSettings(orgId),
+  const settings = await loadPerformanceSettings(orgId);
+  const start =
+    settings.scoringStartDate && settings.scoringStartDate > from ? settings.scoringStartDate : from;
+  const [users, events] = await Promise.all([
     prisma.user.findMany({
       where: { orgId, isActive: true },
       select: { id: true, name: true, email: true },
       orderBy: { name: "asc" },
     }),
     prisma.performanceEvent.findMany({
-      where: { orgId, occurredAt: { gte: from, lte: to } },
+      where: { orgId, occurredAt: { gte: start, lte: to } },
       select: { userId: true, source: true, category: true, points: true },
     }),
   ]);

@@ -373,7 +373,7 @@ model PerformanceSetting {
   /**
    * สายเกินกี่นาทีถึงเริ่มหัก — ต่ำกว่านี้ถือว่าอยู่ในวิสัยปกติ
    */
-  lateThresholdMinutes Int @default(15) @map("late_threshold_minutes")
+  lateThresholdMinutes Int @default(0) @map("late_threshold_minutes")
 
   /**
    * ขาดงานเกินกี่นาทีถึงนับเป็นขาดงาน
@@ -393,6 +393,13 @@ model PerformanceSetting {
    * ค่าเริ่มต้น 0 รักษาพฤติกรรมเดิมของบริษัทที่ยังไม่เคยตั้งค่า
    */
   workOrderGraceDays Int @default(0) @map("work_order_grace_days")
+
+  /**
+   * เริ่มนับคะแนนตั้งแต่วันที่ — เหตุการณ์ที่เกิดก่อนวันนี้ไม่ถูกบันทึกและไม่ถูกนับ
+   * null = นับทั้งหมด ใช้ตอนเริ่มใช้ระบบคะแนนจริง หรือล้างแล้วคำนวณใหม่ เพื่อไม่ให้
+   * cron ที่ย้อนดูหลายสิบวันเก็บเหตุการณ์ช่วงก่อนหน้ากลับเข้ามาอีก
+   */
+  scoringStartDate DateTime? @db.Date @map("scoring_start_date")
 
   /**
    * ย้อนดูผลลงเวลากี่วันในแต่ละรอบ cron

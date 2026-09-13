@@ -161,6 +161,17 @@ export default async function PerformanceSettingsPage() {
                 className={inputClass}
               />
             </Field>
+            <Field
+              label="เริ่มนับคะแนนตั้งแต่วันที่"
+              hint="เว้นว่าง = นับทั้งหมด — เหตุการณ์ก่อนวันนี้จะไม่ถูกบันทึกและไม่ถูกนับ"
+            >
+              <input
+                type="date"
+                name="scoringStartDate"
+                defaultValue={s.scoringStartDate?.toISOString().slice(0, 10) ?? ""}
+                className={inputClass}
+              />
+            </Field>
           </div>
           {/*
             เอาออกตามคำขอ — เส้นแบ่งขาดงาน (240 นาที) กับช่วงย้อนดูผลลงเวลา

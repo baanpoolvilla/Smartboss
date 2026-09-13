@@ -762,9 +762,16 @@ export async function savePerformanceSettingsAction(formData: FormData) {
     throw new Error("ต้องมีเกณฑ์เกรดอย่างน้อยหนึ่งระดับ");
   }
 
+  const startRaw = String(formData.get("scoringStartDate") ?? "").trim();
+  if (startRaw && !/^\d{4}-\d{2}-\d{2}$/.test(startRaw)) {
+    throw new Error("วันที่เริ่มนับคะแนนไม่ถูกต้อง");
+  }
+  const scoringStartDate = startRaw ? new Date(`${startRaw}T00:00:00Z`) : null;
+
   const data = {
     enabled: formData.get("enabled") === "1",
     ...numbers,
+    scoringStartDate,
     rulePoints,
     gradeThresholds,
     updatedBy: session.userId,
