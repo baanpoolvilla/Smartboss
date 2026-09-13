@@ -36,6 +36,7 @@ interface AttendanceRow {
   work_date: Date;
   late_minutes: number;
   absence_minutes: number;
+  missing_punch: boolean;
 }
 
 /**
@@ -87,7 +88,7 @@ export async function dockAttendance(): Promise<{
 
   // เงื่อนไข (ฉบับปัจจุบัน, ไม่ใช่วันลา/วันหยุด) อยู่ในตัวฟังก์ชันแล้ว
   const rawRows = await prisma.$queryRaw<AttendanceRow[]>`
-    SELECT subject AS user_id, work_date, late_minutes, absence_minutes
+    SELECT subject AS user_id, work_date, late_minutes, absence_minutes, missing_punch
     FROM workforce.performance_attendance(
       ${from}::date, ${minLate}::int, ${ABSENCE_THRESHOLD_MINUTES}::int
     )
@@ -116,7 +117,12 @@ export async function dockAttendance(): Promise<{
 
     const day = new Date(r.work_date).toISOString().slice(0, 10);
 
-    if (Number(r.absence_minutes) > ABSENCE_THRESHOLD_MINUTES) {
+    // สแกนแค่ครั้งเดียว = ขาดงานเต็มกะในผลลงเวลา แต่จะนับเป็นขาดงานไหมแล้วแต่บริษัทตั้ง
+    // ไม่นับ = ตกไปเช็คมาสายตามเวลาที่สแกนเข้าต่อ
+    const absent =
+      Number(r.absence_minutes) > ABSENCE_THRESHOLD_MINUTES &&
+      (!r.missing_punch || st.missingPunchCountsAsAbsent);
+    if (absent) {
       events.push({
         orgId,
         userId: r.user_id,

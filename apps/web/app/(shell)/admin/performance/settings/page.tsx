@@ -173,6 +173,21 @@ export default async function PerformanceSettingsPage() {
               />
             </Field>
           </div>
+          <label className="mt-3 flex items-start gap-2.5 text-sm text-(--ink)">
+            <input
+              type="checkbox"
+              name="missingPunchCountsAsAbsent"
+              value="1"
+              defaultChecked={s.missingPunchCountsAsAbsent}
+              className="mt-1 h-4 w-4"
+            />
+            <span>
+              นับวันที่สแกนแค่ครั้งเดียว (ลืมสแกนเข้าหรือออก) เป็นขาดงาน
+              <span className="block text-xs text-(--ink-soft)">
+                ไม่ติ๊ก = ไม่นับเป็นขาดงาน ให้ HR ลงเวลาที่ลืมให้ภายหลัง · ยังนับมาสายตามเวลาที่สแกนเข้า
+              </span>
+            </span>
+          </label>
           {/*
             เอาออกตามคำขอ — เส้นแบ่งขาดงาน (240 นาที) กับช่วงย้อนดูผลลงเวลา
             (45 วัน) ตรึงเป็นค่าคงที่ในโค้ดแทน (ABSENCE_THRESHOLD_MINUTES,

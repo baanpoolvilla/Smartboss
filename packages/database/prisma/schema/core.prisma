@@ -402,6 +402,13 @@ model PerformanceSetting {
   scoringStartDate DateTime? @db.Date @map("scoring_start_date")
 
   /**
+   * วันที่สแกนแค่ครั้งเดียว (ลืมสแกนเข้าหรือออก) นับเป็นขาดงานไหม
+   * ระบบลงเวลาคิดวันแบบนี้เป็นขาดงานเต็มวันเพราะหาเวลาทำงานไม่ได้ แต่หลายบริษัทให้
+   * HR ลงเวลาที่ลืมให้ภายหลัง ไม่ถือเป็นความผิด — ค่าเริ่มต้นจึงเป็นไม่นับ
+   */
+  missingPunchCountsAsAbsent Boolean @default(false) @map("missing_punch_counts_as_absent")
+
+  /**
    * ย้อนดูผลลงเวลากี่วันในแต่ละรอบ cron
    */
   attendanceLookbackDays Int @default(45) @map("attendance_lookback_days")

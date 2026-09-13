@@ -58,8 +58,15 @@ CREATE POLICY principals_lookup ON workforce.principals
  *
  * subject = core.users.id (ผูกไว้ตอน wf:sync จับคู่ principal กับ person ด้วยอีเมล)
  * ตัดวันลา/วันหยุด/วันหยุดประจำออกแล้ว — ลาที่อนุมัติแล้วไม่ใช่ความผิด
+ *
+ * missing_punch = สแกนแค่ครั้งเดียว (ลืมสแกนเข้าหรือออก) — absence_minutes ของวันแบบนี้
+ * เป็นเต็มกะเพราะหาเวลาทำงานไม่ได้ ฝั่งคิดคะแนนตัดสินเองว่านับเป็นขาดงานไหม
+ * (performance_settings.missing_punch_counts_as_absent)
+ *
+ * DROP ก่อนเพราะเพิ่มคอลัมน์ที่คืน — CREATE OR REPLACE เปลี่ยนชนิดผลลัพธ์ไม่ได้
  */
-CREATE OR REPLACE FUNCTION workforce.performance_attendance(
+DROP FUNCTION IF EXISTS workforce.performance_attendance(date, integer, integer);
+CREATE FUNCTION workforce.performance_attendance(
   p_from date,
   p_late_threshold integer,
   p_absence_threshold integer
@@ -68,7 +75,8 @@ RETURNS TABLE (
   subject text,
   work_date date,
   late_minutes integer,
-  absence_minutes integer
+  absence_minutes integer,
+  missing_punch boolean
 )
 LANGUAGE sql
 STABLE
@@ -78,7 +86,8 @@ AS $$
   SELECT p.subject,
          ar.work_date,
          ar.late_minutes,
-         ar.absence_minutes
+         ar.absence_minutes,
+         (ar.actual_in_at IS NULL) <> (ar.actual_out_at IS NULL)
   FROM workforce.attendance_results ar
   JOIN workforce.employments e ON e.id = ar.employment_id
   JOIN workforce.principals  p ON p.person_id = e.person_id

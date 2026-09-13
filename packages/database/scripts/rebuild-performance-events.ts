@@ -43,6 +43,7 @@ interface AttendanceRow {
   work_date: Date;
   late_minutes: number;
   absence_minutes: number;
+  missing_punch: boolean;
 }
 interface Penalty {
   points: number;
@@ -102,7 +103,7 @@ async function main() {
 
   // ── มาสาย/ขาดงาน: ผลลงเวลาปัจจุบัน ตั้งแต่ --from ถึงเมื่อวาน (วันที่ยังไม่จบไม่ตัดสิน) ──
   const rows = await prisma.$queryRaw<AttendanceRow[]>`
-    SELECT subject, work_date, late_minutes, absence_minutes
+    SELECT subject, work_date, late_minutes, absence_minutes, missing_punch
     FROM workforce.performance_attendance(${from}::date, -1::int, -1::int)
   `;
   for (const r of rows) {
@@ -121,7 +122,11 @@ async function main() {
       refType: "attendance_day",
       refId: `${user.id}:${day}`,
     };
-    if (absence > ABSENCE_THRESHOLD_MINUTES) {
+    // ตรงกับ dockAttendance: สแกนแค่ครั้งเดียวนับเป็นขาดงานเฉพาะบริษัทที่ตั้งไว้
+    const absent =
+      absence > ABSENCE_THRESHOLD_MINUTES &&
+      (!r.missing_punch || (settingByOrg.get(orgId)?.missingPunchCountsAsAbsent ?? false));
+    if (absent) {
       events.push({
         ...base,
         category: "attendance_absent",

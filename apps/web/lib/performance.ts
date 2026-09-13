@@ -78,6 +78,8 @@ export interface PerformanceSettings {
   workOrderGraceDays: number;
   /** เหตุการณ์ก่อนวันนี้ไม่ถูกบันทึกและไม่ถูกนับ — null = นับทั้งหมด */
   scoringStartDate: Date | null;
+  /** สแกนแค่ครั้งเดียว (ลืมสแกนเข้าหรือออก) นับเป็นขาดงานไหม */
+  missingPunchCountsAsAbsent: boolean;
   rulePoints: Record<PerformanceCategory, number>;
   /** เรียงจากคะแนนสูงไปต่ำแล้ว — ตัวแรกที่ผ่านคือเกรดที่ได้ */
   gradeThresholds: [string, number][];
@@ -102,6 +104,7 @@ const FALLBACK: PerformanceSettings = {
   pmGraceDays: 7,
   workOrderGraceDays: 0,
   scoringStartDate: null,
+  missingPunchCountsAsAbsent: false,
   rulePoints: DEFAULT_RULE_POINTS,
   gradeThresholds: Object.entries(DEFAULT_GRADE_THRESHOLDS).sort((a, b) => b[1] - a[1]),
 };
@@ -135,6 +138,7 @@ export async function loadPerformanceSettings(orgId: string): Promise<Performanc
     pmGraceDays: row.pmGraceDays,
     workOrderGraceDays: row.workOrderGraceDays,
     scoringStartDate: row.scoringStartDate,
+    missingPunchCountsAsAbsent: row.missingPunchCountsAsAbsent,
     rulePoints: { ...DEFAULT_RULE_POINTS, ...overrides } as Record<
       PerformanceCategory,
       number
@@ -166,6 +170,7 @@ export async function loadPerformanceSettingsMap(
       pmGraceDays: row.pmGraceDays,
       workOrderGraceDays: row.workOrderGraceDays,
       scoringStartDate: row.scoringStartDate,
+      missingPunchCountsAsAbsent: row.missingPunchCountsAsAbsent,
       rulePoints: { ...DEFAULT_RULE_POINTS, ...overrides } as Record<
         PerformanceCategory,
         number

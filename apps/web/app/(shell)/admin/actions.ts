@@ -772,6 +772,7 @@ export async function savePerformanceSettingsAction(formData: FormData) {
     enabled: formData.get("enabled") === "1",
     ...numbers,
     scoringStartDate,
+    missingPunchCountsAsAbsent: formData.get("missingPunchCountsAsAbsent") === "1",
     rulePoints,
     gradeThresholds,
     updatedBy: session.userId,
