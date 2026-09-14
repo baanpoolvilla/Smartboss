@@ -79,7 +79,7 @@ export async function renderScoreTab(
             </p>
           </div>
           {canConfigure && (
-            <Link href="/admin/performance/settings">
+            <Link href="/hr/settings/scoring">
               <Button size="sm" variant="outline">ทบทวนเกณฑ์</Button>
             </Link>
           )}
@@ -124,7 +124,7 @@ export async function renderScoreTab(
               </Button>
             </form>
             {canConfigure && (
-              <Link href="/admin/performance/settings">
+              <Link href="/hr/settings/scoring">
                 <Button size="sm" variant="ghost">
                   ตั้งเกณฑ์
                 </Button>

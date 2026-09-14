@@ -77,9 +77,9 @@ const SETTINGS_NAV: { href: string; label: string }[] = [
   { href: "/hr/settings/devices", label: "อุปกรณ์" },
   { href: "/hr/settings/holidays", label: "วันหยุดบริษัท" },
   { href: "/hr/settings/leave-types", label: "ประเภทการลา" },
-  // เกณฑ์คะแนน/เกรดเป็นของระบบผลงานกลาง (core.performance_settings) ไม่ใช่ของ
-  // โมดูลบุคคล — ลิงก์ไปหน้าเดียวที่มีอยู่แล้วแทนที่จะสร้างซ้ำเป็นสองแหล่งความจริง
-  { href: "/admin/performance/settings", label: "เกณฑ์คะแนน" },
+  // ข้อมูลเป็นของระบบผลงานกลาง (core.performance_settings) — หน้านี้ใช้ฟอร์มตัวเดียวกับ
+  // /admin/performance/settings จึงไม่มีสองแหล่งความจริง แต่ไม่ต้องเด้งออกไปหลังบ้าน
+  { href: "/hr/settings/scoring", label: "เกณฑ์คะแนน" },
   { href: "/hr/settings/statutory", label: "ค่าจ้างและกฎหมาย" },
   { href: "/hr/settings/audit", label: "ประวัติการใช้งาน" },
 ];

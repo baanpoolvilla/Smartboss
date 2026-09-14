@@ -792,6 +792,8 @@ export async function savePerformanceSettingsAction(formData: FormData) {
   });
   revalidatePath("/admin/performance");
   revalidatePath("/admin/performance/settings");
+  revalidatePath("/hr/settings/scoring");
+  revalidatePath("/hr/employees");
 }
 
 /* ═══════════════════════ ความปลอดภัยตอนเข้าสู่ระบบ ═══════════════════════ */
