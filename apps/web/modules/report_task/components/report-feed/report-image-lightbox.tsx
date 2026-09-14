@@ -294,7 +294,11 @@ export function ReportImageLightbox({
                 ดาวน์โหลด
               </a>
             </div>
-            <iframe src={src} title={image.name} className="min-h-0 flex-1" />
+            {/* #zoom=page-width — "open parameters" ที่ Chrome/Edge/Firefox
+                ตัว viewer ในตัวรองรับ (มาตรฐานเดิมของ Adobe Acrobat) สั่งให้
+                เปิดมาแล้วพอดีความกว้างเลย ไม่ต้องมาไล่ซูมเองทุกครั้งที่เปิด
+                ("ให้เวลาเปิดมาเริ่มมาแบบจอประมาณนี้เลย อ่านง่าย ไม่ต้องขยาย") */}
+            <iframe src={src ? `${src}#zoom=page-width` : src} title={image.name} className="min-h-0 flex-1" />
           </div>
         ) : isDoc && image.thumbUrl ? (
           /* word/excel/ppt ไม่มีตัวเรนเดอร์ live ในตัว browser แต่มี thumbUrl
