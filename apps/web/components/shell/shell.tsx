@@ -20,7 +20,9 @@ import { IssueReportBarButton } from "@/modules/report_task/components/issue-rep
 import { ReportNotificationSync } from "@/modules/report_task/components/shared/report-notification-sync";
 import { NotificationBellPopover } from "@/modules/report_task/components/shared/notification-bell-popover";
 import type { ModuleManifest, ModuleMenuItem } from "@/module-registry";
+import { Toaster } from "@/modules/report_task/components/ui/sonner";
 import { LogoutButton } from "./logout-button";
+import { SaveFeedback } from "./save-feedback";
 import { SessionRefresher } from "./session-refresher";
 import { ShellProvider, type ShellUser } from "./shell-context";
 
@@ -63,6 +65,10 @@ export function Shell({
   return (
     <ShellProvider user={user} unread={unread}>
       <SessionRefresher />
+      {/* ตัวแสดง toast ของทั้งแอป (ย้ายมาจาก report-task-scaffold ที่มีแค่โมดูลเดียว)
+          + ข้อความ "บันทึกสำเร็จ" หลังกดส่งฟอร์มทุกฟอร์ม */}
+      <Toaster position="top-center" closeButton />
+      <SaveFeedback />
       {activeModule ? (
         <ModuleFrame module={activeModule} pathname={pathname}>
           {children}

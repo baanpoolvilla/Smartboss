@@ -32,7 +32,7 @@ export function IssueTokenButton({ deviceId }: { deviceId: string }) {
 
   return (
     <div className="space-y-2">
-      <form action={formAction}>
+      <form action={formAction} data-save-toast="off">
         <input type="hidden" name="deviceId" value={deviceId} />
         <Button type="submit" size="sm" variant="outline" disabled={pending}>
           {pending ? "กำลังออกโทเคน…" : "ออกโทเคนผูกเครื่อง"}

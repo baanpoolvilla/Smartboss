@@ -14,7 +14,6 @@ import { AppBarLeadingProvider, useAppBarLeading } from "./app-bar-leading";
 import { StoreHydrator } from "./store-hydrator";
 import { TaskSync } from "./task-sync";
 import { TourOverlay } from "./tour-overlay";
-import { Toaster } from "../ui/sonner";
 
 /**
  * ครอบทุกหน้าของโมดูลด้วย AppScaffold ตัวเดียวกับ maintenance / hr / admin
@@ -89,11 +88,8 @@ export function ReportTaskScaffold({
       <StoreHydrator />
       <TaskSync />
       <TourOverlay />
-      {/* ตัวแสดงผล toast.success/error/... ที่เรียกกันทั่วทั้งโมดูล — เดิมไม่มี
-          <Toaster /> วางไว้ที่ไหนเลยสักหน้า เรียก toast(...) แล้วเงียบไปเฉยๆ
-          ไม่มีอะไรขึ้นบนจอ. closeButton — กดปิดข้อความได้เอง ไม่ต้องรอหมดเวลา
-          (สำคัญกับ error ที่มีเนื้อหายาวอย่าง "ยังติ๊ก checklist ไม่ครบ...") */}
-      <Toaster position="top-center" closeButton />
+      {/* <Toaster /> ย้ายไปอยู่ที่ Shell แล้ว (components/shell/shell.tsx) — ครอบทุกโมดูล
+          ห้ามวางซ้ำที่นี่ ไม่งั้นทุก toast ในโมดูลนี้จะเด้งขึ้นสองอัน */}
 
       <ScaffoldBody title={title} selfScrolling={selfScrolling}>
         {children}

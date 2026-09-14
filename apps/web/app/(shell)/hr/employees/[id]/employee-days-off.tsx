@@ -72,7 +72,7 @@ export function EmployeeDaysOff({
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-3">
+    <form action={formAction} data-save-toast="off" className="flex flex-col gap-3">
       <input type="hidden" name="company_id" value={companyId} />
       <input type="hidden" name="employment_id" value={employmentId} />
       <input type="hidden" name="month" value={month} />

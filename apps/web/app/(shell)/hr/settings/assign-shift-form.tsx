@@ -166,7 +166,7 @@ export function AssignShiftForm({
         </div>
       )}
 
-      <form action={formAction} className="flex flex-col gap-3">
+      <form action={formAction} data-save-toast="off" className="flex flex-col gap-3">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {lockedTo === undefined ? (
             <Field label="พนักงาน *">

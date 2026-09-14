@@ -18,7 +18,8 @@ export function AddHolidayForm({
 
   return (
     <>
-      <form action={formAction} className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+      {/* ผลแสดงใต้ฟอร์มเองแล้ว และ action คืน { error } แบบไม่โยน — ปิด toast กลาง */}
+      <form action={formAction} data-save-toast="off" className="grid grid-cols-1 gap-3 sm:grid-cols-4">
         <input type="hidden" name="company_id" value={companyId} />
         <Field label="วันที่ *">
           <input

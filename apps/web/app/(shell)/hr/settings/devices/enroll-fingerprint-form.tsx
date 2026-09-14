@@ -47,6 +47,7 @@ export function EnrollFingerprintForm({
     <>
       <form
         action={formAction}
+        data-save-toast="off"
         className={`grid grid-cols-1 gap-3 ${lockedTo === undefined ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}
       >
         {lockedTo === undefined ? (

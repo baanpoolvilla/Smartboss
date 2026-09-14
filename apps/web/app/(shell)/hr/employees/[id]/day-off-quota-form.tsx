@@ -61,7 +61,7 @@ export function DayOffQuotaForm({
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* ── ค่าประจำ: ข้อตกลงจ้างงาน มีผลทุกเดือน ── */}
-        <form action={formAction} className="flex flex-col gap-3 rounded-(--radius) border border-(--line) p-3">
+        <form action={formAction} data-save-toast="off" className="flex flex-col gap-3 rounded-(--radius) border border-(--line) p-3">
           <input type="hidden" name="employment_id" value={employmentId} />
           <input type="hidden" name="scope" value="standing" />
           <p className="text-xs font-semibold text-(--ink)">ค่าประจำของคนนี้ (ทุกเดือน)</p>
@@ -95,7 +95,7 @@ export function DayOffQuotaForm({
         </form>
 
         {/* ── ทับเฉพาะเดือนที่กำลังดูอยู่ ── */}
-        <form action={formAction} className="flex flex-col gap-3 rounded-(--radius) border border-(--line) p-3">
+        <form action={formAction} data-save-toast="off" className="flex flex-col gap-3 rounded-(--radius) border border-(--line) p-3">
           <input type="hidden" name="employment_id" value={employmentId} />
           <input type="hidden" name="month" value={month} />
           <input type="hidden" name="scope" value="month" />
