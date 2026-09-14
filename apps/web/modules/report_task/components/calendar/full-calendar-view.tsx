@@ -747,6 +747,23 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
   // spare rather than landing exactly on the edge.
   const monthRowsAreDense = usesFixedRows && monthRowHeight < 118;
 
+  // FullCalendar measures each day-row's own height once (on mount, and
+  // whenever the earlier resize/ResizeObserver effect calls updateSize()) and
+  // caches it to absolutely-position the "+N รายการ" link and each event
+  // harness — but --ebw-row-height and .ebw-dense are plain CSS applied to a
+  // *wrapper* div outside FullCalendar's own props, so swapping months (a
+  // 5-row month vs. a 6-row one, which changes monthRowHeight/denseness with
+  // no window or wrapper resize at all) never told FullCalendar to
+  // re-measure. Its cached, now-stale row height kept placing the more-link
+  // at the *previous* month's row height, which is what actually read as
+  // "ทับกันแปลกๆ" — a link floating away from its own chips or crowding the
+  // week below — independent of how much padding/threshold tuning happened
+  // above. Re-fit any time the row metrics we hand it actually change.
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => calendarRef.current?.getApi().updateSize());
+    return () => cancelAnimationFrame(raf);
+  }, [monthRowHeight, monthRowsAreDense, usesFixedRows]);
+
   return (
     <div
       ref={cardRef}
