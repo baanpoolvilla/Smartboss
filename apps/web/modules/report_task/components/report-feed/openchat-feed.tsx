@@ -299,7 +299,7 @@ export function OpenchatFeed({
     try {
       for (const file of files.slice(0, available)) {
         const media = await uploadReportMedia(file);
-        next.push({ id: `img-${uuid()}`, url: media.url, name: media.name, mime: media.mime, size: media.size });
+        next.push({ id: `img-${uuid()}`, url: media.url, name: media.name, mime: media.mime, size: media.size, thumbUrl: media.thumbUrl ?? undefined });
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "แนบไฟล์ไม่สำเร็จบางไฟล์ — ลองใหม่อีกครั้ง");
@@ -325,7 +325,7 @@ export function OpenchatFeed({
     }
     try {
       const media = await uploadReportMedia(file);
-      setComposerImages((prev) => [...prev, { id: `img-${uuid()}`, url: media.url, name: file.name || "pasted-image.png", mime: media.mime, size: media.size }]);
+      setComposerImages((prev) => [...prev, { id: `img-${uuid()}`, url: media.url, name: file.name || "pasted-image.png", mime: media.mime, size: media.size, thumbUrl: media.thumbUrl ?? undefined }]);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "แนบรูปที่วางไม่สำเร็จ");
     }

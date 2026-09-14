@@ -48,6 +48,12 @@ export interface ReportPostImage {
    * the room's albums (report-topic-panels.tsx's "ไฟล์" tab). Undefined
    * means "not in any album" — just view it in the post, nothing curated. */
   albumId?: string;
+  /** ภาพหน้าแรกของ pdf/word/excel/ppt ที่ server สร้างให้ตอนอัปโหลด (ดู
+   * generate-doc-thumbnail.ts) — ไม่มีเสมอไป (แปลงไม่สำเร็จ/ยังไม่ติดตั้ง
+   * soffice บนเซิร์ฟเวอร์/ไฟล์ชนิดที่ดูเป็นภาพไม่ได้จริง เช่น zip/txt) ไม่มี
+   * = แสดงเป็นการ์ดไอคอนแทน ไม่เกี่ยวกับรูปภาพจริง (kind "image") ซึ่งใช้
+   * `url`/`dataUrl` ของตัวเองแสดงตรง ๆ อยู่แล้ว */
+  thumbUrl?: string;
 }
 
 /** A named photo collection scoped to one room — e.g. "ทริปดูงาน ส.ค." — so a

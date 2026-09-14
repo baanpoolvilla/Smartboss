@@ -56,7 +56,7 @@ import {
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
-import { REPORT_ATTACHMENT_ACCEPT } from "@/modules/report_task/lib/report-attachment-kind";
+import { REPORT_ATTACHMENT_ACCEPT, attachmentKind, fileKindOf } from "@/modules/report_task/lib/report-attachment-kind";
 import { photoCount } from "@/modules/report_task/lib/report-attachment-kind";
 import { NewMessagesDivider } from "@/modules/report_task/components/report-feed/report-new-divider";
 import { ReportPostFields, newSection, type DraftSection } from "@/modules/report_task/components/report-feed/report-post-fields";
@@ -639,7 +639,7 @@ export function ReportCard({
     try {
       for (const file of Array.from(files).slice(0, available)) {
         const media = await uploadReportMedia(file);
-        next.push({ id: `img-${uuid()}`, url: media.url, name: media.name, mime: media.mime, size: media.size });
+        next.push({ id: `img-${uuid()}`, url: media.url, name: media.name, mime: media.mime, size: media.size, thumbUrl: media.thumbUrl ?? undefined });
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "แนบไฟล์ไม่สำเร็จบางไฟล์ — ลองใหม่อีกครั้ง");
@@ -668,7 +668,7 @@ export function ReportCard({
     }
     try {
       const media = await uploadReportMedia(file);
-      setReplyImages((prev) => [...prev, { id: `img-${uuid()}`, url: media.url, name: file.name || "pasted-image.png", mime: media.mime, size: media.size }]);
+      setReplyImages((prev) => [...prev, { id: `img-${uuid()}`, url: media.url, name: file.name || "pasted-image.png", mime: media.mime, size: media.size, thumbUrl: media.thumbUrl ?? undefined }]);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "แนบรูปที่วางไม่สำเร็จ");
     }
@@ -1778,8 +1778,13 @@ function PostImageCollage({
   onOpen: (index: number) => void;
 }) {
   if (images.length === 1) {
+    // การ์ดไฟล์ (ReportFileChip variant="full", ตอนไม่มี thumbUrl) มีขอบ/
+    // พื้นหลังของตัวเองอยู่แล้ว — ถ้าห่อด้วยกรอบนี้ซ้ำจะกลายเป็นขอบซ้อนขอบ
+    // ต่างจากรูปถ่ายจริงและ thumbnail เอกสาร (มี thumbUrl) ที่ไม่มีกรอบของ
+    // ตัวเอง จึงต้องพึ่งกรอบนี้แทนเหมือนกันทั้งคู่
+    const isBareChip = attachmentKind(images[0]!.mime) === "doc" && !images[0]!.thumbUrl;
     return (
-      <div className="rounded-lg border border-[var(--line)] overflow-hidden">
+      <div className={cn(!isBareChip && "rounded-lg border border-[var(--line)] overflow-hidden")}>
         <PostImageThumb img={images[0]!} onClick={() => onOpen(0)} className="w-full" fitToImage />
       </div>
     );
@@ -1843,6 +1848,27 @@ function PostImageThumb({
   fitToImage?: boolean;
 }) {
   const [ratio, setRatio] = useState<number | null>(null);
+
+  // เอกสาร (pdf/word/excel/…) ไม่มีภาพให้ครอป — ตอนก่อนแก้จะหลุดมาที่
+  // <img src="…file.pdf"> เฉยๆ ด้านล่าง กลายเป็นไอคอนภาพพังเต็มความกว้าง
+  // ("แนบไฟล์แล้วมันเป็นแบบนี้ละแสดงไม่สวยเลย") server สร้างภาพหน้าแรกจริง
+  // ให้ตอนอัปโหลด (thumbUrl — ดู generate-doc-thumbnail.ts) แล้วก็เอามาโชว์
+  // เหมือนรูปถ่ายเลย พร้อม badge มุมบอกชนิดไฟล์กันสับสนว่าเป็นรูปจริง — ไม่มี
+  // thumbUrl (แปลงไม่สำเร็จ/ยังไม่ติดตั้ง soffice บนเซิร์ฟเวอร์/ไฟล์ที่ดูเป็น
+  // ภาพไม่ได้จริงเช่น zip) ค่อย fallback เป็นการ์ดไอคอน (ReportFileChip)
+  const isDoc = attachmentKind(img.mime) === "doc";
+  if (isDoc && !img.thumbUrl) {
+    return (
+      <button
+        onClick={onClick}
+        className={cn("block hover:opacity-90 transition-opacity", className)}
+        aria-label={`เปิดไฟล์ ${img.name}`}
+      >
+        <ReportMediaThumb media={img} fileChipVariant={fitToImage ? "full" : "compact"} className="h-full w-full" />
+      </button>
+    );
+  }
+
   return (
     <button
       onClick={onClick}
@@ -1878,18 +1904,47 @@ function PostImageThumb({
           </span>
         </div>
       ) : (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={img.url ?? img.dataUrl}
-          alt={img.name}
-          onLoad={(e) => {
-            if (fitToImage) setRatio(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight);
-          }}
-          className="h-full w-full object-cover"
-        />
+        <div className="relative h-full w-full">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={isDoc ? img.thumbUrl : (img.url ?? img.dataUrl)}
+            alt={img.name}
+            onLoad={(e) => {
+              if (fitToImage) setRatio(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight);
+            }}
+            className="h-full w-full object-cover"
+          />
+          {isDoc && (
+            <span
+              className={cn(
+                "absolute bottom-1.5 left-1.5 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow",
+                docBadgeTone(img.mime)
+              )}
+            >
+              {fileKindOf(img.mime ?? "")}
+            </span>
+          )}
+        </div>
       )}
     </button>
   );
+}
+
+/** สีป้ายมุมภาพ thumbnail เอกสาร — โทนเดียวกับ ReportFileChip เพื่อให้ผู้ใช้
+ * จำสีต่อชนิดไฟล์ได้เหมือนกันทั้งแอป ไม่ว่าจะเจอแบบไอคอนหรือแบบภาพจริง */
+function docBadgeTone(mime?: string) {
+  switch (fileKindOf(mime ?? "")) {
+    case "pdf":
+      return "bg-[var(--chart-red)]";
+    case "word":
+      return "bg-[var(--chart-blue)]";
+    case "excel":
+      return "bg-[var(--chart-green)]";
+    case "powerpoint":
+      return "bg-[var(--chart-orange)]";
+    default:
+      return "bg-[var(--ink-soft)]";
+  }
 }
 
 function MenuButton({
@@ -1953,7 +2008,7 @@ function EditPostForm({
     try {
       for (const file of files.slice(0, available)) {
         const media = await uploadReportMedia(file);
-        next.push({ id: `img-${uuid()}`, url: media.url, name: media.name, mime: media.mime, size: media.size });
+        next.push({ id: `img-${uuid()}`, url: media.url, name: media.name, mime: media.mime, size: media.size, thumbUrl: media.thumbUrl ?? undefined });
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "แนบไฟล์ไม่สำเร็จบางไฟล์ — ลองใหม่อีกครั้ง");

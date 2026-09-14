@@ -138,7 +138,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
     try {
       for (const file of files.slice(0, available)) {
         const media = await uploadReportMedia(file);
-        next.push({ id: `img-${uuid()}`, url: media.url, name: media.name, mime: media.mime, size: media.size });
+        next.push({ id: `img-${uuid()}`, url: media.url, name: media.name, mime: media.mime, size: media.size, thumbUrl: media.thumbUrl ?? undefined });
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "แนบไฟล์ไม่สำเร็จบางไฟล์ — ลองใหม่อีกครั้ง");

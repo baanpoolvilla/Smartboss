@@ -21,18 +21,26 @@ export function ReportMediaThumb({
   alt,
   fileChipVariant = "full",
 }: {
-  media: { url?: string; dataUrl?: string; mime?: string; name: string; size?: number };
+  media: { url?: string; dataUrl?: string; mime?: string; name: string; size?: number; thumbUrl?: string };
   className?: string;
   alt?: string;
   /** How much of a document's file card fits in this spot — a photo scales
    * to any square, a card of text doesn't. Small preview squares (the
    * composer's 64px row, a reply's 48px row) pass "compact"/"icon"; see
-   * FileChipVariant. Ignored for images and videos. */
+   * FileChipVariant. Ignored for images and videos, and for a doc that has
+   * a server-generated `thumbUrl` (renders like a photo instead — see below). */
   fileChipVariant?: FileChipVariant;
 }) {
   const src = media.url ?? media.dataUrl;
   const kind = attachmentKind(media.mime);
   if (kind === "doc") {
+    // มี thumbUrl (server สร้างภาพหน้าแรกให้ตอนอัปโหลด — ดู
+    // generate-doc-thumbnail.ts) ก็โชว์เหมือนรูปถ่ายไปเลย ไม่มีค่อย fallback
+    // เป็นการ์ดไอคอน
+    if (media.thumbUrl) {
+      // eslint-disable-next-line @next/next/no-img-element
+      return <img src={media.thumbUrl} alt={alt ?? media.name} className={className} />;
+    }
     return <ReportFileChip media={media} variant={fileChipVariant} className={className} />;
   }
   if (kind === "video") {

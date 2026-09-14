@@ -166,11 +166,22 @@ export async function putFiles(prefix: string, files: File[]): Promise<string[]>
  * presigned URL สำหรับดาวน์โหลดตรงจาก object storage (หมดอายุใน 5 นาที)
  * คืน null เมื่อรันโหมด local disk — ผู้เรียกต้อง fallback ไป readStoredFile
  */
-export async function getSignedFileUrl(key: string): Promise<string | null> {
+export async function getSignedFileUrl(
+  key: string,
+  opts?: { downloadFileName?: string }
+): Promise<string | null> {
   if (!isRemoteStorage()) return null;
   return getSignedUrl(
     getS3(),
-    new GetObjectCommand({ Bucket: S3_BUCKET, Key: key }),
+    new GetObjectCommand({
+      Bucket: S3_BUCKET,
+      Key: key,
+      // ตั้งเฉพาะตอนกด "ดาวน์โหลด" จริง ๆ (ดู /api/files) — ไม่งั้น browser จะ
+      // บังคับ save-as ทุกครั้งที่กดดูไฟล์ แม้แต่ PDF ที่โชว์แบบฝังในหน้าได้เลย
+      ...(opts?.downloadFileName
+        ? { ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(opts.downloadFileName)}` }
+        : {}),
+    }),
     { expiresIn: SIGNED_URL_TTL_SECONDS }
   );
 }

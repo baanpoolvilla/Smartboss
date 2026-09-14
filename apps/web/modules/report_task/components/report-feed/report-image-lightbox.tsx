@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/modules/report_task/components/ui/dialog";
 import type { ReportPostImage } from "@/modules/report_task/store/report-feed-store";
 import { ReportFileChip } from "@/modules/report_task/components/report-feed/report-file-chip";
-import { isDocAttachment, isVideoAttachment } from "@/modules/report_task/lib/report-attachment-kind";
+import { fileKindOf, isDocAttachment, isVideoAttachment } from "@/modules/report_task/lib/report-attachment-kind";
 import { ChevronLeft, ChevronRight, Download, Minus, Plus, X } from "lucide-react";
 
 const SWIPE_THRESHOLD_PX = 80;
@@ -110,6 +110,17 @@ export function ReportImageLightbox({
 
   const isVideo = isVideoAttachment(image.mime);
   const isDoc = isDocAttachment(image.mime);
+  // มีแค่ pdf ที่ browser ทุกตัวโชว์เนื้อในได้เองแบบฝังในหน้า (iframe) —
+  // word/excel/ppt/zip ไม่มีตัวเรนเดอร์ในตัว ต้องดาวน์โหลดไปเปิดในโปรแกรมจริง
+  // อยู่ดี ("มันต้องขึ้นแบบ... กดเข้าไปดูก่อนได้" ใช้ได้จริงแค่กับ pdf)
+  const isPreviewablePdf = isDoc && fileKindOf(image.mime ?? "") === "pdf";
+  const src = image.url ?? image.dataUrl;
+  // ปุ่มดาวน์โหลดจริง (แยกจากการเปิดดู) — ต่อ query ให้ /api/files ตอบกลับ
+  // Content-Disposition: attachment แทนที่จะปล่อยให้ browser ตัดสินใจเอง
+  // (เดิมกดปุ่มเดียวกันแล้วบาง browser เปิดแท็บใหม่เฉย ๆ ไม่ดาวน์โหลดให้)
+  // data: URL (ไฟล์เก่าก่อนย้ายไป object storage) ไม่มี query ให้ต่อ — ใช้
+  // download attribute ของ browser เองแทน ซึ่งก็ทำงานได้กับ data: URL อยู่แล้ว
+  const downloadHref = image.url ? `${image.url}${image.url.includes("?") ? "&" : "?"}download=${encodeURIComponent(image.name)}` : src;
 
   function handleWheel(e: React.WheelEvent<HTMLElement>) {
     if (isVideo || isDoc) return;
@@ -258,11 +269,57 @@ export function ReportImageLightbox({
           </button>
         )}
 
-        {isDoc ? (
-          /* A pdf/xlsx has no frame to fill a lightbox with — clicking one in
-             a post's attachment grid lands here all the same (the grid holds
-             every attachment, not just the pictures), so it gets the file's
-             identity plus the one action that makes sense for it. */
+        {isPreviewablePdf ? (
+          /* pdf จริงมีตัวเรนเดอร์ในตัว browser เอง — ฝังตรงนี้เลยแทนที่จะ
+             บังคับเปิดแท็บใหม่ก่อนถึงจะเห็นเนื้อไฟล์ ("ใน pc มันต้องโหลดก่อน
+             ถึงจะดู") ปุ่มดาวน์โหลดยังแยกไว้ต่างหากสำหรับคนที่อยากได้ไฟล์
+             ไปเก็บในเครื่องจริง ๆ */
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="flex h-[88vh] w-[min(92vw,56rem)] cursor-default flex-col overflow-hidden rounded-2xl bg-white"
+          >
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--line)] px-4 py-2.5">
+              <span className="min-w-0 truncate text-sm font-medium text-[var(--ink)]" title={image.name}>
+                {image.name}
+              </span>
+              <a
+                href={downloadHref}
+                download={image.url ? undefined : image.name}
+                className="flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--brand-green)] px-3 py-1.5 text-xs font-medium text-[var(--ink)] transition-colors hover:bg-[var(--brand-green-dark)] hover:text-white"
+              >
+                <Download className="h-3.5 w-3.5" />
+                ดาวน์โหลด
+              </a>
+            </div>
+            <iframe src={src} title={image.name} className="min-h-0 flex-1" />
+          </div>
+        ) : isDoc && image.thumbUrl ? (
+          /* word/excel/ppt ไม่มีตัวเรนเดอร์ live ในตัว browser แต่มี thumbUrl
+             (ภาพหน้าแรกจริงที่ server สร้างไว้ตอนอัปโหลด — ดู
+             generate-doc-thumbnail.ts) ก็โชว์ภาพนิ่งนั้นขยายใหญ่แทนการ์ด
+             ไอคอนเฉย ๆ — ดีกว่าเดิมชัดเจนแม้จะไม่ใช่เอกสารที่เลื่อนดูได้จริง
+             แบบ pdf ก็ตาม */
+          <div onClick={(e) => e.stopPropagation()} className="flex max-h-[88vh] w-[min(92vw,32rem)] cursor-default flex-col overflow-hidden rounded-2xl bg-white">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--line)] px-4 py-2.5">
+              <span className="min-w-0 truncate text-sm font-medium text-[var(--ink)]" title={image.name}>
+                {image.name}
+              </span>
+              <a
+                href={downloadHref}
+                download={image.url ? undefined : image.name}
+                className="flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--brand-green)] px-3 py-1.5 text-xs font-medium text-[var(--ink)] transition-colors hover:bg-[var(--brand-green-dark)] hover:text-white"
+              >
+                <Download className="h-3.5 w-3.5" />
+                ดาวน์โหลด
+              </a>
+            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={image.thumbUrl} alt={image.name} className="min-h-0 flex-1 object-contain bg-[var(--bg-soft)]" />
+          </div>
+        ) : isDoc ? (
+          /* ไม่มีทั้ง live renderer และ thumbUrl (แปลงไม่สำเร็จ/ไม่ติดตั้ง
+             soffice บนเซิร์ฟเวอร์/zip ที่ดูเป็นภาพไม่ได้จริง) — เหลือแค่การ์ด
+             ไอคอน + ปุ่มดาวน์โหลดเหมือนเดิม */
           <div
             onClick={(e) => e.stopPropagation()}
             className="flex w-[min(86vw,26rem)] cursor-default flex-col items-center gap-4 rounded-2xl bg-white px-6 py-7 text-center sm:px-8"
@@ -271,13 +328,12 @@ export function ReportImageLightbox({
                 instead of stretching it past a phone's screen. */}
             <ReportFileChip media={image} className="w-full border-0 p-0" />
             <a
-              href={image.url ?? image.dataUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+              href={downloadHref}
+              download={image.url ? undefined : image.name}
               className="flex items-center gap-1.5 rounded-full bg-[var(--brand-green)] px-4 py-2 text-sm font-medium text-[var(--ink)] transition-colors hover:bg-[var(--brand-green-dark)] hover:text-white"
             >
               <Download className="h-4 w-4" />
-              เปิด / ดาวน์โหลดไฟล์
+              ดาวน์โหลดไฟล์
             </a>
           </div>
         ) : isVideo ? (

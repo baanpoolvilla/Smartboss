@@ -33,6 +33,11 @@ export async function GET(
 
   const { key } = await params;
   const joined = key.join("/");
+  const url = new URL(_req.url);
+  // มาจากปุ่ม "ดาวน์โหลด" โดยเฉพาะ (report-image-lightbox.tsx) — ต่างจากการกด
+  // เปิดดูเฉย ๆ ที่อยากให้ browser render ในหน้าเลย (PDF ทำได้) ไม่ใช่บังคับ
+  // save-as ทุกครั้ง ชื่อไฟล์มาจาก client เพราะฝั่งนี้เก็บแต่ key สุ่ม ไม่รู้ชื่อจริง
+  const downloadFileName = url.searchParams.get("download") || undefined;
 
   // กัน path traversal และ key ว่าง
   if (!joined || joined.includes("..")) {
@@ -64,7 +69,7 @@ export async function GET(
     if (!allowed) return new NextResponse("Forbidden", { status: 403 });
   }
 
-  const signedUrl = await getSignedFileUrl(joined);
+  const signedUrl = await getSignedFileUrl(joined, { downloadFileName });
   if (signedUrl) {
     return NextResponse.redirect(signedUrl, {
       status: 302,
@@ -79,6 +84,9 @@ export async function GET(
     headers: {
       "Content-Type": result.contentType,
       "Cache-Control": "private, max-age=31536000, immutable",
+      ...(downloadFileName
+        ? { "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(downloadFileName)}` }
+        : {}),
     },
   });
 }

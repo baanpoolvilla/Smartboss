@@ -409,7 +409,7 @@ export function ReportPostFields({
     }
     try {
       const media = await uploadReportMedia(file);
-      onImagesChange([...images, { id: `img-${uuid()}`, url: media.url, name: file.name || "pasted-image.png", mime: media.mime }]);
+      onImagesChange([...images, { id: `img-${uuid()}`, url: media.url, name: file.name || "pasted-image.png", mime: media.mime, thumbUrl: media.thumbUrl ?? undefined }]);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "แนบรูปที่วางไม่สำเร็จ");
     }

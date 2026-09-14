@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { requireOrg } from "@smartboss/auth";
 
 import { putFile } from "@/modules/maintenance/lib/storage";
+import { generateDocThumbnail } from "@/modules/report_task/lib/thumbnail/generate-doc-thumbnail";
 import { sniffMime } from "@/modules/report_task/lib/upload-sniff";
 import { readStore } from "@/modules/report_task/lib/db/org-store";
 import {
@@ -112,7 +113,21 @@ export async function POST(request: Request) {
       // pdf/txt/zip/mp4 จะถูกเก็บเป็น .jpg แล้วเสิร์ฟกลับเป็น image/jpeg
       { ext: meta.ext }
     );
-    return Response.json({ url, mime: sniffed, size: bytes.byteLength });
+
+    // ภาพหน้าแรกของ pdf/word/excel/ppt ไว้แสดงแทนไอคอนเฉย ๆ — best effort
+    // ล้วน ๆ (ดู generate-doc-thumbnail.ts) พังยังไงก็ไม่ทำให้ upload ไฟล์
+    // จริงข้างบนพังตามไปด้วย แค่ไม่มี thumbUrl ในคำตอบ ฝั่ง client เจอ
+    // thumbUrl ว่างก็ fallback ไปการ์ดไอคอนเดิมเอง
+    const thumbBuf = await generateDocThumbnail(bytes, meta.ext);
+    const thumbUrl = thumbBuf
+      ? await putFile(
+          `${session.orgId}/report-task`,
+          new File([new Uint8Array(thumbBuf)], `${randomUUID()}-thumb.png`, { type: "image/png" }),
+          { ext: "png" }
+        )
+      : null;
+
+    return Response.json({ url, mime: sniffed, size: bytes.byteLength, thumbUrl });
   } catch (err) {
     // Wraps the whole handler, not just putFile — readStore (a Postgres
     // query) can throw too, and a narrower try/catch would leave that path

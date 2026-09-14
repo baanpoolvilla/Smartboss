@@ -107,6 +107,10 @@ export interface UploadedReportMedia {
   mime: string;
   name: string;
   size: number;
+  /** ภาพหน้าแรกของ pdf/word/excel/ppt ที่ server สร้างให้ — ไม่มีเสมอไป
+   * (ยังไม่ติดตั้ง soffice/poppler บนเซิร์ฟเวอร์ หรือแปลงไม่สำเร็จก็ได้)
+   * ไม่มี = แสดงเป็นการ์ดไอคอนแทน ดู ReportMediaThumb */
+  thumbUrl?: string | null;
 }
 
 /** Sends `file` to the report-task upload endpoint untouched — no canvas
@@ -121,8 +125,8 @@ async function uploadRaw(file: File, failureMessage: string): Promise<UploadedRe
     const data = await res.json().catch(() => null);
     throw new Error(data?.error ?? failureMessage);
   }
-  const data = (await res.json()) as { url: string; mime: string; size: number };
-  return { url: data.url, mime: data.mime, name: file.name, size: data.size };
+  const data = (await res.json()) as { url: string; mime: string; size: number; thumbUrl?: string | null };
+  return { url: data.url, mime: data.mime, name: file.name, size: data.size, thumbUrl: data.thumbUrl };
 }
 
 /**
