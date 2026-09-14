@@ -36,6 +36,10 @@ export const PERMISSIONS = [
   'workforce.timesheet.close',
   'workforce.timesheet.reopen',
 
+  // ตั้ง/ปรับฐานค่าจ้างรายคน — แยกจาก payroll.prepare เพราะ "ผู้อนุมัติงวด" อย่างเจ้าของ
+  // บริษัทก็ต้องตั้งเงินเดือนพนักงานได้ โดยไม่ต้องได้สิทธิ์จัดทำ/คำนวณงวดไปด้วย
+  'workforce.compensation.manage',
+
   'workforce.payroll.read',
   'workforce.payroll.prepare',
   'workforce.payroll.calculate',

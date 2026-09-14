@@ -64,6 +64,12 @@ export function mapSmartbossRoles(input: RoleMappingInput): SystemRole[] {
     granted.add('PAYROLL_PREPARER');
   }
 
+  // ตั้งฐานเงินเดือนเป็นสิทธิ์แยก — เดิมผูกกับ PREPARER อย่างเดียว เจ้าของ/แอดมินที่อนุมัติ
+  // งวดได้ (ได้ APPROVER แทน) จึงกดบันทึกฐานเงินเดือนแล้วโดน 403 ทุกครั้ง
+  if (has(SMARTBOSS_PERMISSION.salaryManage)) {
+    granted.add('COMPENSATION_MANAGER');
+  }
+
   if (has(SMARTBOSS_PERMISSION.settingManage)) {
     granted.add('HR_OFFICER');
     // หน้า /hr/devices ของ Smartboss เปิดให้คนที่มี hr.setting.manage

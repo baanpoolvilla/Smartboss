@@ -366,7 +366,7 @@ export const ROUTES: readonly RouteDefinition[] = [
     path: '/compensation-rates',
     summary: 'บันทึกฐานค่าจ้างช่วงใหม่',
     tag: 'compensation',
-    permissions: ['workforce.payroll.prepare'],
+    permissions: ['workforce.compensation.manage'],
     idempotent: true,
     body: createCompensationSchema,
     response: compensationSchema,

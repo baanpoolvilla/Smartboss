@@ -368,7 +368,7 @@ export const OPERATIONAL_ROUTES: readonly Omit<RouteDefinition, 'response'>[] = 
     path: '/compensation-rates',
     summary: 'POST /compensation-rates',
     tag: 'compensation',
-    permissions: ['workforce.payroll.prepare'] as Permission[],
+    permissions: ['workforce.compensation.manage'] as Permission[],
     idempotent: true,
     successStatus: 201,
   },

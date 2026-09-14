@@ -17,6 +17,21 @@ describe('mapSmartbossRoles', () => {
     expect(result).not.toContain('PAYROLL_PREPARER');
   });
 
+  it('คนที่ตั้งฐานเงินเดือนได้ ได้ COMPENSATION_MANAGER แม้จะเป็นผู้อนุมัติงวด', () => {
+    // เดิมสิทธิ์บันทึกฐานค่าจ้างมากับ PREPARER เท่านั้น — แอดมินที่อนุมัติงวดได้
+    // จึงบันทึกฐานเงินเดือนไม่ได้เลย (403)
+    const approver = mapSmartbossRoles({
+      roles: ['ADMIN'],
+      permissions: ['hr.payroll.approve', 'hr.salary.manage'],
+    });
+    expect(approver).toEqual(expect.arrayContaining(['PAYROLL_APPROVER', 'COMPENSATION_MANAGER']));
+    expect(approver).not.toContain('PAYROLL_PREPARER');
+
+    expect(
+      mapSmartbossRoles({ roles: [], permissions: ['hr.salary.view'] }),
+    ).not.toContain('COMPENSATION_MANAGER');
+  });
+
   it('ผู้จัดทำงวดที่อนุมัติไม่ได้ ได้ PREPARER', () => {
     const result = mapSmartbossRoles({
       roles: ['HR_OFFICER'],

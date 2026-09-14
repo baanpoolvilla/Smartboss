@@ -30,7 +30,7 @@ export class CompensationController {
 
   @Post('compensation-rates')
   @HttpCode(201)
-  @RequirePermissions('workforce.payroll.prepare')
+  @RequirePermissions('workforce.compensation.manage')
   @Idempotent()
   async create(
     @Body(zodPipe(createCompensationSchema)) body: CreateCompensationInput,

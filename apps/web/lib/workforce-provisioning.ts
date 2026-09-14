@@ -339,4 +339,5 @@ const ROLE_NAMES: Record<SystemRole, string> = {
   AUDITOR: "ผู้ตรวจสอบ",
   TENANT_ADMIN: "ผู้ดูแลองค์กร",
   SUPPORT_OPERATOR: "เจ้าหน้าที่สนับสนุน (ชั่วคราว)",
+  COMPENSATION_MANAGER: "ผู้ตั้งฐานค่าจ้าง",
 };

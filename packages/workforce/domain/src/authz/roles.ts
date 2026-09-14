@@ -17,6 +17,7 @@ export const SYSTEM_ROLES = [
   'AUDITOR',
   'TENANT_ADMIN',
   'SUPPORT_OPERATOR',
+  'COMPENSATION_MANAGER',
 ] as const;
 
 export type SystemRole = (typeof SYSTEM_ROLES)[number];
@@ -76,6 +77,7 @@ export const SYSTEM_ROLE_PERMISSIONS: Readonly<Record<SystemRole, readonly Permi
     'workforce.payroll.read',
     'workforce.payroll.prepare',
     'workforce.payroll.calculate',
+    'workforce.compensation.manage',
   ],
 
   // อนุมัติ/ล็อกได้ แต่แก้ input ไม่ได้ (spec §5)
@@ -122,4 +124,12 @@ export const SYSTEM_ROLE_PERMISSIONS: Readonly<Record<SystemRole, readonly Permi
 
   // JIT: role assignment ต้องมี expires_at + reason บังคับ (ADR-0006)
   SUPPORT_OPERATOR: ['workforce.people.read', 'workforce.audit.read'],
+
+  // ตั้ง/ปรับฐานค่าจ้าง (hr.salary.manage ของ Smartboss) — ไม่มีสิทธิ์จัดทำ/คำนวณงวด
+  // จึงให้คู่กับ PAYROLL_APPROVER ได้โดยไม่ทำลาย maker-checker ของงวดเงินเดือน
+  COMPENSATION_MANAGER: [
+    'workforce.people.read',
+    'workforce.payroll.read',
+    'workforce.compensation.manage',
+  ],
 };
