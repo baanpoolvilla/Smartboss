@@ -162,6 +162,11 @@ export function ReportAllPostsFeed({
           <h2 className="text-[15px] sm:text-[16px] font-semibold leading-tight truncate">{title}</h2>
           <p className="hidden md:block text-xs text-[var(--ink-soft)] leading-tight truncate">{description}</p>
         </div>
+        {/* headerRight (back-link + view switcher) before "ตัวกรอง" — reads
+            left-to-right as "where you are, then how to narrow it down"
+            instead of the filter button splitting the back-link away from
+            the title it's next to ("สลับตำแหน่งกัน"). */}
+        {headerRight && <div className="shrink-0 flex items-center gap-1">{headerRight}</div>}
         {showFilters && (
           <Popover>
             <PopoverTrigger
@@ -246,7 +251,6 @@ export function ReportAllPostsFeed({
             </PopoverContent>
           </Popover>
         )}
-        {headerRight && <div className="shrink-0 flex items-center gap-1">{headerRight}</div>}
       </div>
 
       {items.length === 0 ? (
