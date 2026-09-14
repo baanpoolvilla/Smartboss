@@ -1784,7 +1784,11 @@ function PostImageCollage({
     // ตัวเอง จึงต้องพึ่งกรอบนี้แทนเหมือนกันทั้งคู่
     const isBareChip = attachmentKind(images[0]!.mime) === "doc" && !images[0]!.thumbUrl;
     return (
-      <div className={cn(!isBareChip && "rounded-lg border border-[var(--line)] overflow-hidden")}>
+      // max-w กันไม่ให้แนบไฟล์/รูปแค่ชิ้นเดียวยืดเต็มความกว้างการ์ดโพสต์ —
+      // เดิมไม่มีเพดานเลยตอนโพสต์กว้าง (จอ desktop) ทำให้ทั้งการ์ดไฟล์ (กล่อง
+      // ว่างเปล่าใหญ่โต) และรูปถ่ายเดี่ยวยืดยาวเกินจำเป็นทั้งที่กดเข้าไปดู
+      // เต็มจอได้อยู่แล้วใน lightbox ("อยากให้แสดงเล็กๆพอ")
+      <div className={cn("max-w-[280px]", !isBareChip && "rounded-lg border border-[var(--line)] overflow-hidden")}>
         <PostImageThumb img={images[0]!} onClick={() => onOpen(0)} className="w-full" fitToImage />
       </div>
     );
@@ -1864,7 +1868,7 @@ function PostImageThumb({
         className={cn("block hover:opacity-90 transition-opacity", className)}
         aria-label={`เปิดไฟล์ ${img.name}`}
       >
-        <ReportMediaThumb media={img} fileChipVariant={fitToImage ? "full" : "compact"} className="h-full w-full" />
+        <ReportMediaThumb media={img} fileChipVariant={fitToImage ? "full" : "compact"} className="w-full" />
       </button>
     );
   }
