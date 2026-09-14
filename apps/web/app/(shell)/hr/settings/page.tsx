@@ -46,6 +46,7 @@ interface WorkPolicy {
   late_mode: string;
   grace_minutes: number;
   ot_requires_approval: boolean;
+  ot_on_workdays: boolean;
 }
 
 /** 480 → "08:00" · เกิน 1440 = ข้ามวัน แสดง +1 */
@@ -235,7 +236,7 @@ export default async function HrSettingsPage() {
                 <p className="text-sm text-(--ink-soft)">ยังไม่มีนโยบาย</p>
               ) : (
                 <DataTable
-                  head={["ชื่อ", "วิธีคิดสาย", "ผ่อนผัน", "OT ต้องอนุมัติ"]}
+                  head={["ชื่อ", "วิธีคิดสาย", "ผ่อนผัน", "OT ต้องอนุมัติ", "OT วันทำงาน"]}
                 >
                   {policies.items.map((policy) => (
                     <tr key={policy.id} className="hover:bg-(--bg-soft)">
@@ -247,6 +248,13 @@ export default async function HrSettingsPage() {
                           <Pill tone="var(--tone-warn)">ต้องอนุมัติ</Pill>
                         ) : (
                           <Pill tone="var(--tone-muted)">ไม่ต้อง</Pill>
+                        )}
+                      </Td>
+                      <Td>
+                        {policy.ot_on_workdays ? (
+                          <Pill tone="var(--tone-ok)">นับ</Pill>
+                        ) : (
+                          <Pill tone="var(--tone-muted)">เฉพาะวันหยุด</Pill>
                         )}
                       </Td>
                     </tr>
@@ -331,6 +339,17 @@ export default async function HrSettingsPage() {
                       className="h-4 w-4"
                     />
                     OT ต้องอนุมัติก่อน
+                  </label>
+                </div>
+                <div className="flex items-end pb-3 text-sm">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      name="ot_on_workdays"
+                      value="1"
+                      className="h-4 w-4"
+                    />
+                    นับ OT เมื่ออยู่ต่อหลังเลิกงานในวันทำงาน
                   </label>
                 </div>
                 <div className="flex items-end">

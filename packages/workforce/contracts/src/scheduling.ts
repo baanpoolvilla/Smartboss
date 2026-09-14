@@ -25,6 +25,8 @@ export const createWorkPolicySchema = z
     max_shift_minutes: z.number().int().min(60).max(1440).default(960),
     excessive_work_minutes: z.number().int().min(60).max(1440).default(840),
     ot_requires_approval: z.boolean().default(true),
+    /** false = OT เฉพาะวันหยุด · true = อยู่ต่อหลังเลิกกะในวันทำงานก็นับเป็น OT */
+    ot_on_workdays: z.boolean().default(false),
     ot_minimum_minutes: z.number().int().min(0).max(480).default(30),
     ot_rounding_minutes: z.number().int().min(0).max(120).default(0),
     effective_from: isoDateSchema,

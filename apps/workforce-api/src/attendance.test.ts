@@ -119,6 +119,8 @@ beforeAll(async () => {
       grace_minutes: 15,
       grace_deduction: 'EXCESS_OVER_GRACE',
       ot_requires_approval: true,
+      // ไฟล์นี้ทดสอบ OT จากการทำงานเกินกะในวันทำงานด้วย — ค่าเริ่มต้นนับเฉพาะวันหยุด
+      ot_on_workdays: true,
       ot_minimum_minutes: 30,
       ot_rounding_minutes: 30,
       effective_from: '2026-01-01',

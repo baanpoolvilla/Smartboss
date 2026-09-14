@@ -25,6 +25,8 @@ export interface WorkPolicy {
   excessiveWorkMinutes: number;
   /** นับ OT อัตโนมัติจากเวลาที่เกินกะหรือไม่ */
   otRequiresApproval: boolean;
+  /** นับเวลาที่เกินกะในวันทำงานปกติเป็น OT ไหม — false = OT เฉพาะวันหยุด */
+  otOnWorkdays: boolean;
   otMinimumMinutes: number;
   /** ปัดเศษเวลา OT เป็นช่วงละกี่นาที (0 = ไม่ปัด) */
   otRoundingMinutes: number;

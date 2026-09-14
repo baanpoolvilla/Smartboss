@@ -509,6 +509,7 @@ export async function createWorkPolicyAction(formData: FormData) {
           formData.get("early_out_tolerance_minutes") ?? 0,
         ),
         ot_requires_approval: formData.get("ot_requires_approval") === "1",
+        ot_on_workdays: formData.get("ot_on_workdays") === "1",
         effective_from: effectiveFrom,
       },
     });

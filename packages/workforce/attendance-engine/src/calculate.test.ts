@@ -79,6 +79,32 @@ function codes(result: ReturnType<typeof calculateAttendance>): ExceptionCode[] 
   return result.exceptions.map((exception) => exception.code);
 }
 
+describe('overtime on workdays', () => {
+  // 07:55–19:05 = 670 นาที ลบพัก 60 = 610 · เกินกะ 480 ไป 130 → ปัดลงทีละ 30 = 120
+  const lateStay = [punch('07:55'), punch('19:05')];
+
+  it('does not offer workday overtime when the policy counts OT on days off only', () => {
+    const counted = run({ policy: { ...policy, otOnWorkdays: true }, punches: lateStay });
+    const offOnly = run({ policy: { ...policy, otOnWorkdays: false }, punches: lateStay });
+
+    expect(counted.otCandidateMinutes).toBe(120);
+    expect(offOnly.otCandidateMinutes).toBe(0);
+    // เวลาที่เกินกะไม่กลายเป็นเวลาทำงานปกติที่จ่ายเงิน
+    expect(offOnly.paidMinutes).toBe(counted.paidMinutes);
+  });
+
+  it('still counts all work on a day off as overtime', () => {
+    const result = run({
+      policy: { ...policy, otOnWorkdays: false },
+      dayOff: true,
+      leave: { paidMinutes: 480, unpaidMinutes: 0, fullDay: false },
+      punches: [punch('08:20'), punch('17:04')],
+    });
+
+    expect(result.otCandidateMinutes).toBe(450);
+  });
+});
+
 describe('day-off entitlement', () => {
   // วันหยุดประจำเดือนเก็บเป็นใบลาอนุมัติอัตโนมัติ 480 นาที ไม่ใช่ restDay ของกะ
   const dayOffLeave = { paidMinutes: 480, unpaidMinutes: 0, fullDay: false };

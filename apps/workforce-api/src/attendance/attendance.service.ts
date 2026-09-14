@@ -1063,6 +1063,7 @@ function toEnginePolicy(row: typeof schema.workPolicies.$inferSelect): WorkPolic
     maxShiftMinutes: row.maxShiftMinutes,
     excessiveWorkMinutes: row.excessiveWorkMinutes,
     otRequiresApproval: row.otRequiresApproval,
+    otOnWorkdays: row.otOnWorkdays,
     otMinimumMinutes: row.otMinimumMinutes,
     otRoundingMinutes: row.otRoundingMinutes,
   };

@@ -97,10 +97,14 @@ export function calculateAttendance(input: AttendanceInput): AttendanceResult {
   });
 
   const scheduledMinutes = scheduledWorkMinutes(input.shift, breaks.unpaidMinutes);
-  const otCandidate = computeOvertimeCandidate(policy, netWorkedMinutes, scheduledMinutes, {
+  const beyondSchedule = computeOvertimeCandidate(policy, netWorkedMinutes, scheduledMinutes, {
     isRestDay: isRestDay || isDayOff,
     isHoliday,
   });
+  // วันทำงานปกติเสนอเป็น OT เฉพาะนโยบายที่เปิดไว้ — ไม่เปิด เวลาที่เกินกะก็ยังถูกกันออก
+  // จาก paidMinutes เหมือนเดิม (ไม่กลายเป็นเวลาทำงานปกติที่จ่ายเงิน) แค่ไม่ถูกเสนอเป็น OT
+  const workday = !isRestDay && !isDayOff && !isHoliday;
+  const otCandidate = workday && !policy.otOnWorkdays ? 0 : beyondSchedule;
 
   if (otCandidate > 0 && policy.otRequiresApproval) {
     exceptions.push({
@@ -121,7 +125,7 @@ export function calculateAttendance(input: AttendanceInput): AttendanceResult {
   // paid = เวลาที่ทำงานจริง + เวลาพักที่ได้รับค่าจ้าง + เวลาลาที่ได้รับค่าจ้าง
   // ไม่รวม OT เพราะ OT จ่ายด้วยตัวคูณคนละอัตรา (Phase 6)
   const paidMinutes =
-    Math.max(0, netWorkedMinutes - otCandidate) +
+    Math.max(0, netWorkedMinutes - beyondSchedule) +
     breaks.paidMinutes +
     (input.leave?.paidMinutes ?? 0);
 

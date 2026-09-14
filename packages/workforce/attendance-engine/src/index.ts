@@ -34,6 +34,7 @@ export const REFERENCE_WORK_POLICY = {
   maxShiftMinutes: 16 * 60,
   excessiveWorkMinutes: 14 * 60,
   otRequiresApproval: true,
+  otOnWorkdays: true,
   otMinimumMinutes: 30,
   otRoundingMinutes: 30,
 } as const;

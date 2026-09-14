@@ -20,6 +20,7 @@ export const workPolicies = workforce.table(
     maxShiftMinutes: integer('max_shift_minutes').notNull().default(960),
     excessiveWorkMinutes: integer('excessive_work_minutes').notNull().default(840),
     otRequiresApproval: boolean('ot_requires_approval').notNull().default(true),
+    otOnWorkdays: boolean('ot_on_workdays').notNull().default(false),
     otMinimumMinutes: integer('ot_minimum_minutes').notNull().default(30),
     otRoundingMinutes: integer('ot_rounding_minutes').notNull().default(0),
     effectiveFrom: date('effective_from').notNull(),
