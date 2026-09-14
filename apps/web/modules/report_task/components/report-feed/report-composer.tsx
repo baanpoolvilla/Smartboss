@@ -10,6 +10,8 @@ import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachme
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
 import { photoCount } from "@/modules/report_task/lib/report-attachment-kind";
 import { roundsForUserOnDay, attributePostToRound, effectiveRoundsOf } from "@/modules/report_task/lib/submission-rounds";
+import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
+import { isExemptDate } from "@/modules/report_task/lib/report-feed-exemptions";
 import { localDateStr, now } from "@/modules/report_task/lib/now";
 import { cn } from "@/modules/report_task/lib/utils";
 import { ReportPostFields, newSection, type DraftSection } from "@/modules/report_task/components/report-feed/report-post-fields";
@@ -170,9 +172,18 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   // the room runs that day (cutoffsOnDay) — a round someone isn't actually a
   // submitter of has no business showing up asking them "ส่งของรอบไหน?" when
   // it was never theirs to answer for ("ถ้าคนไม่มีรอบส่งนั้นตรงนี้ต้องไม่ขึ้น").
-  const todayCutoffs = [...roundsForUserOnDay(topic, viewingAsUserId, today, submitterGroups)]
-    .filter((r) => !fulfilledRoundIds.has(r.id))
-    .sort((a, b) => roundMinutesOf(a.time) - roundMinutesOf(b.time));
+  // On leave/holiday/routine day-off today, this poster owes no round at
+  // all — showing "ตอนนี้อยู่ในรอบ ..." here was misleading a viewer into
+  // thinking a round was still due (this label is purely informational; the
+  // composer stays open and postable regardless — see excludeFromSubmission
+  // above), same exemption the room-sidebar hover status already honors.
+  const complianceExemptions = useReportComplianceExemptions();
+  const viewerExemptToday = isExemptDate(complianceExemptions, viewingAsUserId, today);
+  const todayCutoffs = viewerExemptToday
+    ? []
+    : [...roundsForUserOnDay(topic, viewingAsUserId, today, submitterGroups)]
+        .filter((r) => !fulfilledRoundIds.has(r.id))
+        .sort((a, b) => roundMinutesOf(a.time) - roundMinutesOf(b.time));
   const nowMinutes = now().getHours() * 60 + now().getMinutes();
   // Default pick: the nearest round not yet passed; once every round today
   // is overdue, default to the last one (someone opening the composer after

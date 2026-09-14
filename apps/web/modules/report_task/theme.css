@@ -357,7 +357,9 @@
      identical across browsers and screen sizes. */
 }
 .ebw-calendar.ebw-dense .fc-dayGridMonth-view .fc-daygrid-day-bottom {
-  margin-top: 0;
+  /* 1px, not 0 — a true zero gap read as the "+N รายการ" pill touching/
+     overlapping the chip right above it rather than sitting under it. */
+  margin-top: 1px;
 }
 /* Hover a day cell to hint it's clickable (add event). */
 .ebw-calendar .fc-daygrid-day {

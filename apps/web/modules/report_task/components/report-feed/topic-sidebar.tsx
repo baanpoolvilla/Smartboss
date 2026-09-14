@@ -41,6 +41,8 @@ import { useIsMobile } from "@/modules/report_task/hooks/use-is-mobile";
 import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
 import { aboutMeCountInPost } from "@/modules/report_task/lib/report-feed-activity";
 import { roundsForUserOnDay, attributePostToRound, effectiveRoundsOf, roundRunsOnDay } from "@/modules/report_task/lib/submission-rounds";
+import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
+import { isExemptDate } from "@/modules/report_task/lib/report-feed-exemptions";
 import { todayIso, localDateStr } from "@/modules/report_task/lib/now";
 import { safeLocalStorage } from "@/modules/report_task/lib/safe-storage";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -213,6 +215,11 @@ export function TopicSidebar({
   const toggleHiddenTopic = useReportFeedStore((s) => s.toggleHiddenTopic);
   const setNotifyPreference = useReportFeedStore((s) => s.setNotifyPreference);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
+  // Leave/holiday/routine day-off dates — so a room's ⏰ hover status doesn't
+  // nag someone to send a report on a day they're legitimately off, matching
+  // the same exemption already honored by the report-feed's own compliance
+  // pills (dayComplianceStatus etc.).
+  const complianceExemptions = useReportComplianceExemptions();
   const settingsGrants = useSettingsAccessStore((s) => s.grants);
   // Creating/deleting a topic (either level) is CEO-only by default — the
   // CEO can delegate it to specific employees via the "สร้าง/ลบหัวข้อ Report"
@@ -555,7 +562,12 @@ export function TopicSidebar({
     // not listed as a submitter for a round sees it as "na", not "late".
     const today = todayIso();
     const roundsToday = effectiveRoundsOf(t).filter((r) => roundRunsOnDay(r, today));
-    const viewerRoundIds = new Set(roundsForUserOnDay(t, viewingAsUserId, today, submitterGroups).map((r) => r.id));
+    // A day this viewer is on leave/holiday/routine day-off owes nothing —
+    // same exemption the report-feed compliance pills already honor.
+    const viewerExemptToday = isExemptDate(complianceExemptions, viewingAsUserId, today);
+    const viewerRoundIds = viewerExemptToday
+      ? new Set<string>()
+      : new Set(roundsForUserOnDay(t, viewingAsUserId, today, submitterGroups).map((r) => r.id));
     // Only show the ⏰ status at all to someone with a reason to care about
     // it: a real submitter of one of today's rounds, the CEO/owner, or the
     // head of one of the room's own departments — see canSeeRoomSubmissionStatus.

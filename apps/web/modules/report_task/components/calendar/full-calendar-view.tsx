@@ -737,7 +737,15 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
   // padding/margins, a slightly smaller date number and "+N" link. Two chips
   // still fit, they're just a touch more compact — the same trade every
   // calendar app makes on a short window.
-  const monthRowsAreDense = usesFixedRows && monthRowHeight < 104;
+  // Was < 104 — that budget matched the chips' own nominal box model but not
+  // quite what actually renders (line-height/font-metric rounding across
+  // browsers), so a row landing just above 104 could still clip or crowd the
+  // "+N รายการ" link against the row below instead of clearing it
+  // ("มันทับกันแปลกๆ...ไม่ทับหรือไม่ย่อไม่หด"). Widening the band a row or two
+  // earlier costs nothing extra visually (dense only trims spacing, not text
+  // size) but guarantees the two chips + link always have real room to
+  // spare rather than landing exactly on the edge.
+  const monthRowsAreDense = usesFixedRows && monthRowHeight < 118;
 
   return (
     <div
