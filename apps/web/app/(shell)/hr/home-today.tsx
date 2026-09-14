@@ -334,12 +334,13 @@ export async function renderTodayTab(
       */}
       {canExport && (
         <SectionCard
-          title="ดาวน์โหลดรายงานการเข้างาน"
-          description="ไฟล์ CSV เลือกได้ทั้งรายวันและสรุปรายคน (เปิดด้วย Excel ได้เลย)"
+          title="รายงานการเข้างาน"
+          description="สรุปทั้งเดือนและรายวันทีละคน จัดหน้าเหมือนเอกสาร พิมพ์หรือบันทึกเป็น PDF ได้"
         >
           <form
             method="get"
-            action="/hr/attendance/export"
+            action="/hr/attendance/report"
+            target="_blank"
             className="flex flex-wrap items-end gap-2"
           >
             <label className="flex min-w-44 flex-col gap-1">
@@ -352,22 +353,12 @@ export async function renderTodayTab(
                 className={inputClass}
               />
             </label>
-            <label className="flex min-w-44 flex-col gap-1">
-              <span className="text-xs font-medium text-(--ink-soft)">รูปแบบ</span>
-              <select name="view" defaultValue="daily" className={inputClass}>
-                <option value="daily">รายวัน — ทุกคน ทุกวัน</option>
-                <option value="summary">สรุปรายคน — ทั้งเดือน</option>
-              </select>
-            </label>
-            <Button type="submit" variant="outline">
-              ดาวน์โหลด CSV
+            <Button type="submit">
+              เปิดรายงาน
             </Button>
           </form>
           <p className="mt-3 text-xs text-(--ink-soft)">
-            รายวัน: สถานะ · เวลาเข้า-ออก · ชั่วโมงทำงาน · สาย · ออกก่อน · OT และ OT ที่อนุมัติ —
-            สถานะรวมได้หลายอย่างในวันเดียว เช่น &ldquo;ลืมสแกนออก · มาสาย&rdquo;
-            <br />
-            สรุปรายคน: มาทำงาน · มาสาย · ขาดงาน · ลืมสแกน · ลา · วันหยุด · ชั่วโมงรวม · OT
+            เปิดในแท็บใหม่ — สรุปรายคนทั้งเดือน ตามด้วยตารางรายวันทีละคน (พิมพ์แล้วคนละหน้า)
             <br />
             ขาดงาน = ขาดเกิน 4 ชั่วโมง นิยามเดียวกับระบบคะแนน · ลืมสแกนไม่นับเป็นขาดงาน
             <br />

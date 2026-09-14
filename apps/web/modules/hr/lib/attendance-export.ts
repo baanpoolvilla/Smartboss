@@ -1,7 +1,7 @@
 /**
- * แปลงผลลงเวลารายวันเป็น CSV รายงานการเข้างาน — แยกจาก route เพื่อทดสอบได้
+ * จัดประเภทผลลงเวลารายวันสำหรับรายงานการเข้างาน — ใช้ทั้งหน้ารายงานและ CSV
  *
- * รายวันและสรุปรายคนมาจากการจัดประเภทวันตัวเดียวกัน (classifyDay) สองไฟล์จึงขัดกัน
+ * ทุกมุมมอง (รายวัน สรุปรายคน หน้ารายงาน) มาจาก classifyDay ตัวเดียวกัน จึงขัดกัน
  * ไม่ได้ — เดิมสรุปนับ "ขาดงาน" จากทุกวันที่ absence_minutes > 0 รวมวันที่เข้างาน
  * ในช่วงผ่อนผันไม่กี่นาที คนที่มาทำงานครบทุกวันจึงขึ้นว่าขาด 9 วัน
  */
@@ -47,9 +47,18 @@ export interface ExportContext {
 
 type DayKind = "work" | "leave" | "dayoff" | "rest" | "holiday";
 
+export type TagTone = "ok" | "warn" | "danger" | "info" | "muted";
+
+export interface StatusTag {
+  label: string;
+  tone: TagTone;
+}
+
 export interface ClassifiedDay {
   result: ExportAttendanceResult;
   kind: DayKind;
+  tags: StatusTag[];
+  /** tags ต่อกันเป็นข้อความเดียว เช่น "ลืมสแกนออก · มาสาย" */
   status: string;
   scanned: boolean;
   missingPunch: boolean;
@@ -75,6 +84,18 @@ export interface PersonSummary {
   otPendingMinutes: number;
   otApprovedMinutes: number;
 }
+
+export interface PersonReport {
+  employmentId: string;
+  person: ExportPerson;
+  days: ClassifiedDay[];
+  summary: PersonSummary;
+}
+
+export const THAI_MONTHS = [
+  "", "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+  "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
+];
 
 const DOW = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 
@@ -104,14 +125,19 @@ export function hhmm(minutes: number): string {
   return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`;
 }
 
-/** 2026-09-01 → "01/09/2569" — เติมศูนย์ให้เรียงใน Excel ได้ถูกลำดับ */
-function thaiDate(iso: string): string {
+/** 2026-09-01 → "01/09/2569" — เติมศูนย์ให้เรียงลำดับได้ถูก */
+export function formatThaiDate(iso: string): string {
   const [y, m, d] = iso.split("-");
   return `${d}/${m}/${Number(y) + 543}`;
 }
 
+/** 2026-09-01 → "อ" */
+export function dayOfWeek(iso: string): string {
+  return DOW[new Date(`${iso}T00:00:00Z`).getUTCDay()] ?? "";
+}
+
 /** เวลาตอกบัตรตามเขตเวลาของพนักงาน — ISO string เก็บเป็น UTC ช้ากว่าเวลาไทย 7 ชั่วโมง */
-function clock(iso: string | null, timeZone: string): string {
+export function formatClock(iso: string | null, timeZone: string): string {
   if (!iso) return "";
   return new Intl.DateTimeFormat("en-GB", {
     hour: "2-digit",
@@ -156,34 +182,35 @@ export function classifyDay(r: ExportAttendanceResult, ctx: ExportContext): Clas
   const rejected = decision?.status === "REJECTED";
   const otMinutes = r.ot_candidate_minutes;
 
-  const tags: string[] = [];
-  if (kind === "holiday") tags.push("วันหยุดนักขัตฤกษ์");
-  if (kind === "rest") tags.push("วันหยุด");
-  if (kind === "dayoff" || kind === "leave") tags.push(leave?.name ?? "ลา");
-  if (offDay && scanned) tags.push("มาทำงาน");
-  if (noShift) tags.push("ไม่มีกะ");
-  if (absent) tags.push("ขาดงาน");
-  if (hasIn && !hasOut) tags.push("ลืมสแกนออก");
-  if (!hasIn && hasOut) tags.push("ลืมสแกนเข้า");
-  if (late > 0) tags.push("มาสาย");
-  if (earlyOut > 0) tags.push("ออกก่อน");
+  const tags: StatusTag[] = [];
+  if (kind === "holiday") tags.push({ label: "วันหยุดนักขัตฤกษ์", tone: "muted" });
+  if (kind === "rest") tags.push({ label: "วันหยุด", tone: "muted" });
+  if (kind === "dayoff" || kind === "leave") tags.push({ label: leave?.name ?? "ลา", tone: "muted" });
+  if (offDay && scanned) tags.push({ label: "มาทำงาน", tone: "info" });
+  if (noShift) tags.push({ label: "ไม่มีกะ", tone: "muted" });
+  if (absent) tags.push({ label: "ขาดงาน", tone: "danger" });
+  if (hasIn && !hasOut) tags.push({ label: "ลืมสแกนออก", tone: "warn" });
+  if (!hasIn && hasOut) tags.push({ label: "ลืมสแกนเข้า", tone: "warn" });
+  if (late > 0) tags.push({ label: "มาสาย", tone: "warn" });
+  if (earlyOut > 0) tags.push({ label: "ออกก่อน", tone: "warn" });
   if (otMinutes > 0 || decision !== undefined) {
     tags.push(
       ctx.overtimeOf === null
-        ? "OT"
+        ? { label: "OT", tone: "info" }
         : approved
-          ? "OT อนุมัติแล้ว"
+          ? { label: "OT อนุมัติแล้ว", tone: "ok" }
           : rejected
-            ? "OT ไม่อนุมัติ"
-            : "OT รออนุมัติ",
+            ? { label: "OT ไม่อนุมัติ", tone: "muted" }
+            : { label: "OT รออนุมัติ", tone: "info" },
     );
   }
-  if (tags.length === 0) tags.push("ปกติ");
+  if (tags.length === 0) tags.push({ label: "ปกติ", tone: "ok" });
 
   return {
     result: r,
     kind,
-    status: tags.join(" · "),
+    tags,
+    status: tags.map((t) => t.label).join(" · "),
     scanned,
     missingPunch,
     late,
@@ -229,19 +256,30 @@ export function summarizeDays(days: readonly ClassifiedDay[]): PersonSummary {
   return s;
 }
 
-/** เรียงตามรหัสพนักงาน แล้วตามวัน — อ่านทีละคนต่อเนื่อง */
-function classifyAll(results: readonly ExportAttendanceResult[], ctx: ExportContext): ClassifiedDay[] {
-  return results
-    .map((r) => classifyDay(r, ctx))
-    .sort((a, b) => {
-      const pa = ctx.personOf(a.result.employment_id);
-      const pb = ctx.personOf(b.result.employment_id);
-      return (
-        pa.code.localeCompare(pb.code, "th") ||
-        pa.name.localeCompare(pb.name, "th") ||
-        a.result.work_date.localeCompare(b.result.work_date)
-      );
-    });
+/** รายคนเรียงตามรหัสพนักงาน แต่ละคนเรียงตามวัน */
+export function buildPersonReports(
+  results: readonly ExportAttendanceResult[],
+  ctx: ExportContext,
+): PersonReport[] {
+  const byPerson = new Map<string, ClassifiedDay[]>();
+  for (const r of results) {
+    const list = byPerson.get(r.employment_id) ?? [];
+    list.push(classifyDay(r, ctx));
+    byPerson.set(r.employment_id, list);
+  }
+
+  return [...byPerson.entries()]
+    .map(([employmentId, days]) => ({
+      employmentId,
+      person: ctx.personOf(employmentId),
+      days: days.sort((a, b) => a.result.work_date.localeCompare(b.result.work_date)),
+      summary: summarizeDays(days),
+    }))
+    .sort(
+      (a, b) =>
+        a.person.code.localeCompare(b.person.code, "th") ||
+        a.person.name.localeCompare(b.person.name, "th"),
+    );
 }
 
 /** หัวตารางอยู่บรรทัดแรกเสมอ — มีชื่อรายงาน/บรรทัดว่างนำหน้าแล้ว Excel กรอง/เรียงไม่ได้ */
@@ -250,25 +288,26 @@ export function buildDailyLines(
   ctx: ExportContext,
 ): string[] {
   const lines = [DAILY_HEADER.join(",")];
-  for (const d of classifyAll(results, ctx)) {
-    const r = d.result;
-    const p = ctx.personOf(r.employment_id);
-    lines.push(
-      [
-        csvCell(p.code),
-        csvCell(p.name),
-        csvCell(thaiDate(r.work_date)),
-        csvCell(DOW[new Date(`${r.work_date}T00:00:00Z`).getUTCDay()] ?? ""),
-        csvCell(d.status),
-        csvCell(clock(r.actual_in_at, p.timeZone)),
-        csvCell(clock(r.actual_out_at, p.timeZone)),
-        csvCell(hhmm(r.worked_minutes)),
-        d.late > 0 ? String(d.late) : "",
-        d.earlyOut > 0 ? String(d.earlyOut) : "",
-        csvCell(hhmm(d.otMinutes)),
-        csvCell(d.otApprovedMinutes === null ? "" : hhmm(d.otApprovedMinutes) || "0:00"),
-      ].join(","),
-    );
+  for (const { person: p, days } of buildPersonReports(results, ctx)) {
+    for (const d of days) {
+      const r = d.result;
+      lines.push(
+        [
+          csvCell(p.code),
+          csvCell(p.name),
+          csvCell(formatThaiDate(r.work_date)),
+          csvCell(dayOfWeek(r.work_date)),
+          csvCell(d.status),
+          csvCell(formatClock(r.actual_in_at, p.timeZone)),
+          csvCell(formatClock(r.actual_out_at, p.timeZone)),
+          csvCell(hhmm(r.worked_minutes)),
+          d.late > 0 ? String(d.late) : "",
+          d.earlyOut > 0 ? String(d.earlyOut) : "",
+          csvCell(hhmm(d.otMinutes)),
+          csvCell(d.otApprovedMinutes === null ? "" : hhmm(d.otApprovedMinutes) || "0:00"),
+        ].join(","),
+      );
+    }
   }
   return lines;
 }
@@ -277,17 +316,8 @@ export function buildSummaryLines(
   results: readonly ExportAttendanceResult[],
   ctx: ExportContext,
 ): string[] {
-  const byPerson = new Map<string, ClassifiedDay[]>();
-  for (const d of classifyAll(results, ctx)) {
-    const list = byPerson.get(d.result.employment_id) ?? [];
-    list.push(d);
-    byPerson.set(d.result.employment_id, list);
-  }
-
   const lines = [SUMMARY_HEADER.join(",")];
-  for (const [employmentId, days] of byPerson) {
-    const p = ctx.personOf(employmentId);
-    const s = summarizeDays(days);
+  for (const { person: p, summary: s } of buildPersonReports(results, ctx)) {
     lines.push(
       [
         csvCell(p.code),
