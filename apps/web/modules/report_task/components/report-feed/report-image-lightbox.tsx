@@ -276,7 +276,10 @@ export function ReportImageLightbox({
              ไปเก็บในเครื่องจริง ๆ */
           <div
             onClick={(e) => e.stopPropagation()}
-            className="flex h-[88vh] w-[min(92vw,56rem)] cursor-default flex-col overflow-hidden rounded-2xl bg-white"
+            // เกือบเต็มจอ — ก่อนหน้านี้จำกัดกว้างไว้แค่ 56rem แม้จอกว้างแค่ไหน
+            // ทำให้เหลือพื้นที่ดำโล่งซ้ายขวาเยอะทั้งที่เนื้อหาคือเอกสารที่
+            // ควรได้พื้นที่อ่านมากสุด ("แสดงให้เต็มหน้าหน่อยสิ")
+            className="flex h-[94vh] w-[97vw] cursor-default flex-col overflow-hidden rounded-2xl bg-white"
           >
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--line)] px-4 py-2.5">
               <span className="min-w-0 truncate text-sm font-medium text-[var(--ink)]" title={image.name}>
