@@ -51,11 +51,21 @@ export function StickerManagerPanel() {
   }
 
   async function resetData() {
-    await fetch("/api/report-task/tasks", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ confirm: "RESET_ALL_DATA" }),
-    }).catch(() => {});
+    try {
+      const res = await fetch("/api/report-task/tasks", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: "RESET_ALL_DATA" }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        toast.error(body?.error ?? "ล้างข้อมูลไม่สำเร็จ");
+        return;
+      }
+    } catch {
+      toast.error("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ลองใหม่อีกครั้ง");
+      return;
+    }
     window.location.reload();
   }
 

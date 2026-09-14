@@ -49,7 +49,9 @@ export type AuditAction =
   | "PAYROLL_RUN_APPROVED"
   | "PAYROLL_RUN_PAID"
   | "PAYROLL_RUN_DELETED"
-  | "SALARY_CHANGED";
+  | "SALARY_CHANGED"
+  // ── โมดูลรายงานและงาน ──
+  | "REPORT_TASK_DATA_RESET";
 
 /** ป้ายไทยของ action — ใช้บนหน้า /admin/audit */
 export const AUDIT_ACTION_LABELS: Record<string, string> = {
@@ -98,6 +100,7 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   PAYROLL_RUN_PAID: "ปิดรอบจ่าย (จ่ายแล้ว)",
   PAYROLL_RUN_DELETED: "ลบรอบจ่าย",
   SALARY_CHANGED: "ปรับฐานเงินเดือน",
+  REPORT_TASK_DATA_RESET: "ล้างข้อมูลงานทั้งหมด (โมดูลรายงานและงาน)",
 
   // ── legacy (ตัดออกจาก AuditAction แล้ว ไม่มีทางเขียนใหม่อีก) ──
   // แถวเก่าในฐานข้อมูลก่อน 20260816120000_role_only_department_heads ยังใช้

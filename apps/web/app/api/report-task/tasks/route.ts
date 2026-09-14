@@ -1,9 +1,10 @@
 import type { NextRequest } from "next/server";
 import { z } from "zod";
-import { requireOrg } from "@smartboss/auth";
+import { audit, hasPermission, requireOrg } from "@smartboss/auth";
 
 import { clearTasks, readTasks, writeTasks } from "@/modules/report_task/lib/db/task-repo";
 import { taskListSchema } from "@/modules/report_task/lib/db/task-schema";
+import { REPORT_TASK_PERMS } from "@/modules/report_task/permissions";
 import type { Task } from "@/modules/report_task/types";
 
 /**
@@ -83,16 +84,30 @@ export async function POST(request: NextRequest) {
   return putTasks(request);
 }
 
-// ล้างงานทั้งหมดของบริษัท — ต้องส่งคำยืนยันมาด้วย กันคำขอหลงมาลบข้อมูลทิ้ง
+/**
+ * ล้างงานทั้งหมดของบริษัท — ทำลายล้าง กู้คืนไม่ได้ (deleteMany จริง ไม่ใช่ soft
+ * delete) จำกัดไว้ที่คนตั้งค่าโมดูลได้เท่านั้น (report_task.setting.manage) —
+ * เดิมมีแค่ requireOrg() แปลว่าสมาชิกคนไหนในบริษัทก็ล้างข้อมูลทั้งบอร์ดทิ้งได้
+ * (เจอจาก route-permissions audit — เป็น caller เดียวของ endpoint นี้คือปุ่ม
+ * "ล้างข้อมูลงานทั้งหมด" ใน sticker-manager-dialog.tsx ซึ่งซ่อนปุ่มใน UI ตาม
+ * สิทธิ์ไม่ได้ช่วยอะไรเลยถ้า API เองไม่เช็ค)
+ */
 export async function DELETE(request: NextRequest) {
   const session = await requireOrg();
+  if (!hasPermission(session, REPORT_TASK_PERMS.settingManage)) {
+    return Response.json({ error: "ไม่มีสิทธิ์ล้างข้อมูลงานทั้งหมด" }, { status: 403 });
+  }
   const body = await request.json().catch(() => null);
+  // ไม่ echo ค่าที่ต้องส่งกลับไปในข้อความ error (defense in depth) — คนที่ควร
+  // กดปุ่มนี้เห็นคำเตือนจาก dialog ยืนยันในหน้าเว็บอยู่แล้ว ไม่ต้องพึ่ง error นี้
   if (body?.confirm !== "RESET_ALL_DATA") {
-    return Response.json(
-      { error: 'ต้องส่ง { "confirm": "RESET_ALL_DATA" } เพื่อยืนยันการล้างข้อมูล' },
-      { status: 400 }
-    );
+    return Response.json({ error: "ต้องยืนยันก่อนล้างข้อมูลทั้งหมด" }, { status: 400 });
   }
   await clearTasks(session.orgId);
+  await audit({
+    userId: session.userId,
+    action: "REPORT_TASK_DATA_RESET",
+    targetId: session.orgId,
+  });
   return Response.json({ ok: true, count: 0 });
 }

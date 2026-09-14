@@ -149,7 +149,11 @@ export async function POST() {
   });
 }
 
-// Vercel Cron ยิงมาเป็น GET
+// เผื่อ client ฝั่งไหนยิง GET แทน POST มา (เช่นเดียวกับ reminders/sweep) —
+// ไม่ใช่ cron จริง route นี้ยังต้องมี session ผ่าน requireOrg() เหมือนเดิม
+// (คอมเมนต์เดิมพูดถึง Vercel Cron ที่ไม่มีแล้วตั้งแต่ย้ายมา VM เดียว + crontab
+// ของเครื่องเอง — cron จริงยิง /api/cron/maintenance ที่มี CRON_SECRET ของ
+// ตัวเอง ไม่ใช่ route นี้ ดู docs/deploy.md §10 + deploy/cron-run.sh)
 export async function GET() {
   return POST();
 }
