@@ -43,6 +43,9 @@ import { EmployeeDaysOff } from "./employee-days-off";
 import { EnrollFingerprintForm } from "../../settings/devices/enroll-fingerprint-form";
 import { DayOffQuotaForm } from "./day-off-quota-form";
 import { buildScorecards, listUserEvents, PERFORMANCE_CATEGORIES } from "@/lib/performance";
+import { monthDisplay, resolveMonthParam } from "@/lib/performance-month";
+import { formatSatang } from "@/modules/hr/lib/commission";
+import { loadCommissionMonth } from "@/modules/hr/lib/commission-data";
 import { loadDayOffQuota } from "@/lib/day-off-quota";
 
 interface CompensationRate {
@@ -114,6 +117,7 @@ export default async function EmployeeDetailPage({
   const session = await requireOrg();
   const canManage = hasPermission(session, HR_PERMS.employeeManage);
   const canManageSalary = hasPermission(session, HR_PERMS.salaryManage);
+  const canSeeCommission = canManageSalary || hasPermission(session, HR_PERMS.salaryView);
 
   return (
     <HrPage
@@ -295,6 +299,17 @@ export default async function EmployeeDetailPage({
             ? await listUserEvents(session.orgId, scorecard.userId, { limit: 15 })
             : [];
 
+        // ค่าคอมเดือนนี้ของคนนี้ — คิดจากชุดเดียวกับแท็บค่าคอม ยอดจึงตรงกันเสมอ
+        const commissionMonth = resolveMonthParam(undefined);
+        const commission =
+          tab === "score" && canSeeCommission && scorecard !== null
+            ? await loadCommissionMonth(session.orgId, commissionMonth).catch(() => null)
+            : null;
+        const commissionShare =
+          commission?.pool == null
+            ? null
+            : (commission.split.shares.find((s) => s.userId === scorecard?.userId) ?? null);
+
         return (
           <div className="flex flex-col gap-4">
             <div className="flex items-center gap-3 border-b border-(--line) pb-3">
@@ -396,6 +411,20 @@ export default async function EmployeeDetailPage({
                     value={String(scorecard.eventCount)}
                     hint={scorecard.eventCount === 0 ? "ไม่มีเลย" : "ครั้ง"}
                   />
+                  {commission !== null && (
+                    <StatCard
+                      label={`ค่าคอม ${monthDisplay(commissionMonth)}`}
+                      value={commissionShare === null ? "—" : formatSatang(commissionShare.amountSatang)}
+                      hint={
+                        commission.pool === null
+                          ? "ยังไม่ได้ใส่ยอด Pool"
+                          : commissionShare === null
+                            ? "ไม่อยู่ในรายชื่อรับค่าคอม"
+                            : `บาท · ตัวคูณ ${commissionShare.weight}`
+                      }
+                      href="/hr/employees?tab=commission"
+                    />
+                  )}
                 </div>
 
                 {scorecard.byCategory.length > 0 && (

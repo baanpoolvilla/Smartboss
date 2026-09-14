@@ -18,6 +18,7 @@ import {
   saveDayOffQuota,
   saveEmployeeDayOffStanding,
 } from "@/lib/day-off-quota";
+import { saveCommissionPool, saveCommissionWeights } from "@/modules/hr/lib/commission-data";
 
 /**
  * Server action ของโมดูลบุคคล — ทุกตัวยิงต่อไปที่ workforce API
@@ -403,9 +404,40 @@ export async function addCompensationRateAction(formData: FormData) {
       },
     });
   } catch (error) {
+    if (error instanceof WorkforceError && error.status === 403) {
+      throw new Error(
+        "บัญชีนี้ยังไม่ได้สิทธิ์ตั้งฐานค่าจ้างในระบบบุคคล — ต้องมีสิทธิ์ “ตั้ง/แก้ไขฐานเงินเดือน” " +
+          "แล้วบันทึกบทบาทผู้ใช้ใหม่อีกครั้ง (หรือให้ผู้ดูแลเซิร์ฟเวอร์รัน pnpm wf:sync)",
+      );
+    }
     throw new Error(toMessage(error));
   }
   revalidatePath(`/hr/employees/${employmentId}`);
+}
+
+/* ═══════════════════ ค่าคอม Pool ═══════════════════ */
+
+export async function saveCommissionPoolAction(formData: FormData) {
+  const session = await guard(HR_PERMS.salaryManage);
+  await saveCommissionPool({
+    orgId: session.orgId,
+    userId: session.userId,
+    month: String(formData.get("month") ?? ""),
+    amount: String(formData.get("amount") ?? ""),
+    note: String(formData.get("note") ?? ""),
+  });
+  revalidatePath("/hr/employees");
+}
+
+export async function saveCommissionWeightsAction(formData: FormData) {
+  const session = await guard(HR_PERMS.salaryManage);
+  await saveCommissionWeights({
+    orgId: session.orgId,
+    userId: session.userId,
+    grades: formData.getAll("gradeName").map(String),
+    weights: formData.getAll("weight").map(String),
+  });
+  revalidatePath("/hr/employees");
 }
 
 export async function terminateEmploymentAction(formData: FormData) {

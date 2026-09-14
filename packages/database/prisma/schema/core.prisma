@@ -69,6 +69,8 @@ model Organization {
   securitySetting      SecuritySetting?
   dayOffQuotaSetting   DayOffQuotaSetting?
   employeeDayOffQuotas EmployeeDayOffQuota[]
+  commissionSetting    CommissionSetting?
+  commissionPools      CommissionPool[]
 
   employeeDayOffQuotaDefaults EmployeeDayOffQuotaDefault[]
 
@@ -431,6 +433,48 @@ model PerformanceSetting {
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@map("performance_settings")
+  @@schema("core")
+}
+
+// ตัวคูณค่าคอม Pool ตามเกรด — แยกรายบริษัท
+//
+// ค่าคอมรวมของเดือนถูกแบ่งให้พนักงานทุกคนตามสัดส่วนตัวคูณของเกรดเดือนนั้น
+// (หน่วยของคน = ตัวคูณของเกรด · เงินต่อหน่วย = Pool ÷ หน่วยรวม)
+// ไม่มีแถว/เกรดที่ไม่ได้ตั้ง = ใช้ค่าตั้งต้นไล่ตามอันดับเกรด (ดู apps/web/lib/commission.ts)
+model CommissionSetting {
+  orgId String @id @map("org_id")
+
+  /**
+   * { "A": 1, "B": 0.8, "C": 0.6, "D": 0.4, "F": 0 } — ชื่อเกรดตามเกณฑ์คะแนนของบริษัท
+   */
+  gradeWeights Json @default("{}") @map("grade_weights")
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@map("commission_settings")
+  @@schema("core")
+}
+
+// ยอดค่าคอม Pool รวมของบริษัทต่อเดือน — แสดงผลอย่างเดียว ยังไม่เข้างวดเงินเดือน
+model CommissionPool {
+  orgId String @map("org_id")
+  /** "YYYY-MM" */
+  month String
+
+  amount Decimal @db.Decimal(14, 2)
+  note   String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@id([orgId, month])
+  @@map("commission_pools")
   @@schema("core")
 }
 
