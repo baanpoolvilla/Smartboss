@@ -84,3 +84,42 @@ export async function writeStore(
 export async function clearStore(orgId: string, key: string): Promise<void> {
   await prisma.reportTaskStore.deleteMany({ where: { orgId, key } });
 }
+
+/**
+ * สร้างแถวใหม่แบบ atomic จริง — สำหรับตอนที่ "ใครมาก่อนชนะ" สำคัญจริงแม้แถว
+ * ยังไม่เคยมีมาก่อนเลย (เช่น ตัวนับที่หลายคำขอแย่งจองพร้อมกันตั้งแต่ครั้งแรก)
+ *
+ * ⚠ `writeStore(orgId, key, data, null)` **ไม่ใช่ CAS ตอนแถวยังไม่มี** — เป็น
+ * upsert เฉยๆ (ตั้งใจไว้สำหรับเคสปกติ: client คนเดียวเขียนครั้งแรกหลังยังไม่
+ * เคยอ่านมาก่อน) ถ้าหลายคำขอแข่งกันตอนยังไม่มีแถวเลย (`readStore` คืน
+ * `version: 0` ให้ทุกคนเหมือนกัน) จะไม่มีใครถูกปฏิเสธเลยสักคำขอ — upsert
+ * ทับกันไปเรื่อยๆ เงียบๆ ไม่ throw ไม่ conflict เจอจริงตอนเขียนเทสต์
+ * concurrency ของ AI Insight quota (fix-list ข้อ 2): 25 reservation พร้อมกัน
+ * ผ่านหมดทั้ง 25 ทั้งที่โควตามีแค่ 10
+ *
+ * ฟังก์ชันนี้ใช้ unique constraint ของ `(orgId, key)` เป็นตัวตัดสินแทน —
+ * `create()` ตรงๆ ชนกันจริงจะได้ P2002 (unique violation) จาก Postgres เอง
+ * ไม่ใช่แค่เทียบ version ในแอป
+ */
+export async function createStoreIfAbsent(
+  orgId: string,
+  key: string,
+  data: unknown,
+  updatedBy?: string
+): Promise<StoreWrite> {
+  try {
+    const row = await prisma.reportTaskStore.create({
+      data: { orgId, key, data: data as never, version: 1, updatedBy: updatedBy ?? null },
+      select: { version: true },
+    });
+    return { ok: true, version: row.version };
+  } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "P2002") {
+      // อีกคำขอสร้างแถวนี้ไปแล้วก่อนเรา — ให้ผู้เรียกอ่านใหม่แล้วลองทางที่
+      // ถูกสำหรับแถวที่มีอยู่แล้ว (writeStore ด้วย version จริง)
+      const current = await readStore(orgId, key);
+      return { ok: false, conflict: true, currentVersion: current.version };
+    }
+    throw err;
+  }
+}

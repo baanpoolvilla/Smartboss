@@ -22,8 +22,13 @@ export async function POST() {
       locked: "ฟีเจอร์นี้อยู่ในแพ็กเกจ Pro ขึ้นไป",
       disabled: "ปิดการวิเคราะห์ AI อยู่ — เปิดสวิตช์ก่อน",
       quota: "ใช้ครบโควตาการวิเคราะห์ของเดือนนี้แล้ว",
+      // มีคำขออื่นแย่งจองโควตาพร้อมกันจนลองครบรอบแล้วยังไม่ผ่าน (ดู
+      // reserveQuotaSlot's MAX_CAS_ATTEMPTS) — ลองกดใหม่อีกครั้งได้เลย ไม่ใช่
+      // สถานะค้างถาวรแบบ locked/disabled/quota
+      busy: "ระบบกำลังประมวลผลคำขออื่นอยู่ ลองกดใหม่อีกครั้ง",
     };
-    return Response.json({ error: messages[outcome.reason], reason: outcome.reason }, { status: 409 });
+    const status = outcome.reason === "busy" ? 429 : 409;
+    return Response.json({ error: messages[outcome.reason], reason: outcome.reason }, { status });
   }
   return Response.json(outcome.status);
 }
