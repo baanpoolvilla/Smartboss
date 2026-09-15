@@ -16,7 +16,7 @@ import {
 import {
   notifyUser,
   notifyUsers,
-  managersAndCaretaker,
+  propertyCaretaker,
 } from "@/modules/maintenance/data/notify";
 import { getProperty } from "@/modules/maintenance/data/properties";
 import { putFile, putFiles } from "@/modules/maintenance/lib/storage";
@@ -120,7 +120,7 @@ export async function updateStatusAction(formData: FormData) {
   await updateWorkOrderStatus(s.orgId, id, status);
   // ปิดงาน = เดิน PM ที่ผูกไว้ไปรอบถัดไป (batch → single → fallback ตามอุปกรณ์)
   if (status === "completed") await advanceLinkedPm(s.orgId, wo);
-  await notifyStatusChanged(s.orgId, wo, status);
+  await notifyStatusChanged(s.orgId, wo, status, s.userId);
 
   revalidatePath(`/maintenance/work-orders/${id}`);
   revalidatePath("/maintenance/work-orders");
@@ -133,16 +133,26 @@ const STATUS_TEXT: Record<string, { emoji: string; label: string }> = {
   cancelled: { emoji: "❌", label: "ยกเลิก" },
 };
 
-/** แจ้งผู้ดูแลบ้าน + ผู้จัดการ เมื่อสถานะใบงานเปลี่ยน (port จาก notifyWorkOrderStatusChanged) */
+/** แจ้งผู้เกี่ยวข้องกับใบงานนี้จริง (ผู้รับมอบหมาย/ผู้สร้าง/cc/ผู้ดูแลบ้าน) เมื่อ
+ * สถานะเปลี่ยน — ไม่ยิงหาผู้จัดการทั้งบริษัทเหมือนเดิมอีกต่อไป (ดู notify.ts's
+ * propertyCaretaker) ยกเว้นคนที่เพิ่งกดเปลี่ยนสถานะเอง ไม่ต้องแจ้งตัวเอง */
 async function notifyStatusChanged(
   orgId: string,
-  wo: { id: string; title: string; propertyId: string },
-  status: string
+  wo: { id: string; title: string; propertyId: string; assignedTo: string | null; createdBy: string | null; ccUserIds: string[] },
+  status: string,
+  actorId: string
 ) {
   const st = STATUS_TEXT[status] ?? { emoji: "📋", label: status };
   const property = await getProperty(orgId, wo.propertyId);
   const propertyName = property?.name ?? "-";
-  await notifyUsers(orgId, await managersAndCaretaker(orgId, wo.propertyId), {
+  const targets = new Set<string>([
+    ...(wo.assignedTo ? [wo.assignedTo] : []),
+    ...(wo.createdBy ? [wo.createdBy] : []),
+    ...wo.ccUserIds,
+    ...(await propertyCaretaker(orgId, wo.propertyId)),
+  ]);
+  targets.delete(actorId);
+  await notifyUsers(orgId, [...targets], {
     title: `${st.emoji} ใบงานอัปเดตสถานะ: ${wo.title}`,
     body: `บ้าน: ${propertyName} • สถานะ: ${st.label}`,
     type: "work_order",
@@ -211,7 +221,7 @@ export async function completeWorkOrderAction(formData: FormData) {
   });
   await updateWorkOrderStatus(s.orgId, id, "completed");
   await advanceLinkedPm(s.orgId, wo);
-  await notifyStatusChanged(s.orgId, wo, "completed");
+  await notifyStatusChanged(s.orgId, wo, "completed", s.userId);
 
   revalidatePath(`/maintenance/work-orders/${id}`);
   revalidatePath("/maintenance/work-orders");

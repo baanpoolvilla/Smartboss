@@ -4,7 +4,7 @@ import { crossOrg } from "@smartboss/database/cross-org";
 
 import { nextWorkOrderCode } from "@/lib/document-code";
 import { fmtThaiDate } from "@/modules/maintenance/lib/format";
-import { notifyUsers, managersAndCaretaker } from "@/modules/maintenance/data/notify";
+import { notifyUser, notifyUsers, propertyCaretaker } from "@/modules/maintenance/data/notify";
 import {
   loadPerformanceSettingsMap,
   recordPerformanceEvents,
@@ -129,7 +129,7 @@ export async function notifyDuePmSchedules(): Promise<{ notified: number }> {
     const targets = [
       pm.assignedTo,
       ...pm.ccUserIds,
-      ...(await managersAndCaretaker(pm.orgId, pm.propertyId)),
+      ...(await propertyCaretaker(pm.orgId, pm.propertyId)),
     ];
     await notifyUsers(pm.orgId, targets, {
       title: `${head} PM ${statusText}: ${pm.title}`,
@@ -171,20 +171,25 @@ export async function notifyMissingExpenses(): Promise<{ reminded: number }> {
     })
   );
 
-  // รวมเป็นสรุปรายบริษัท เพื่อไม่ให้ยิงแจ้งเตือนทีละใบ
-  const byOrg = new Map<string, typeof orders>();
+  // รวมเป็นสรุปรายคนที่รับผิดชอบ (ผู้รับมอบหมาย ไม่งั้นตกเป็นของผู้สร้างงาน)
+  // แทนการยิงหาผู้จัดการทั้งบริษัท — เพื่อไม่ให้คนที่ไม่เกี่ยวข้องกับใบงานนั้นเห็น
+  // แจ้งเตือนของบ้าน/งานที่ตัวเองไม่ได้รับผิดชอบ ใบงานที่ไม่มีทั้งสองอย่างข้ามไป
+  // เพราะไม่มีใครให้เตือน
+  const byResponsible = new Map<string, { orgId: string; orders: typeof orders }>();
   for (const o of orders) {
-    if (!byOrg.has(o.orgId)) byOrg.set(o.orgId, []);
-    byOrg.get(o.orgId)!.push(o);
+    const responsible = o.assignedTo ?? o.createdBy;
+    if (!responsible) continue;
+    if (!byResponsible.has(responsible)) byResponsible.set(responsible, { orgId: o.orgId, orders: [] });
+    byResponsible.get(responsible)!.orders.push(o);
   }
 
   let reminded = 0;
-  for (const [orgId, list] of byOrg) {
+  for (const [userId, { orgId, orders: list }] of byResponsible) {
     const titles = list
       .slice(0, 10)
       .map((o) => `- ${o.title}`)
       .join("\n");
-    await notifyUsers(orgId, await managersAndCaretaker(orgId), {
+    await notifyUser(orgId, userId, {
       title: `🧾 มีใบงาน ${list.length} ใบยังไม่บันทึกค่าใช้จ่าย`,
       body: titles,
       type: "expense",

@@ -44,36 +44,23 @@ export async function notifyUsers(
 }
 
 /**
- * ผู้รับแจ้งเตือนกลาง: ผู้ดูแลบ้านของบ้านนั้น + ผู้จัดการ/ผู้บริหารทั้งหมด
- * (port จาก _getPropertyCaretaker + _getManagersAndAdmins)
+ * ผู้ดูแลบ้านของทรัพย์สินนั้น (ถ้ามี) — เดิมฟังก์ชันนี้ยิงแจ้งเตือนให้
+ * MANAGER/CEO/SUPER_ADMIN "ทุกคน" ในบริษัทด้วย ไม่ว่าจะรับผิดชอบบ้านหลังนั้น
+ * จริงไหม ทำให้หัวหน้าคนหนึ่งเห็นแจ้งเตือน PM/ใบงานของทุกบ้านทั้งบริษัทแม้
+ * เปิดแท็บ "เฉพาะฉัน" อยู่ — ตัดส่วนนั้นออก เหลือแค่คนรับผิดชอบบ้านนั้นจริง ๆ
+ * ผู้เรียกที่ต้องการแจ้งคนอื่นเพิ่ม (ผู้รับมอบหมาย, cc, ผู้สร้างงาน) ให้ส่งมา
+ * รวมกันเองที่ต้นทาง (ดู cron.ts, work-orders/actions.ts)
  */
-export async function managersAndCaretaker(
+export async function propertyCaretaker(
   orgId: string,
   propertyId?: string | null
 ): Promise<string[]> {
-  const ids = new Set<string>();
-
-  if (propertyId) {
-    const prop = await prisma.property.findFirst({
-      where: { orgId, id: propertyId },
-      select: { caretakerId: true },
-    });
-    if (prop?.caretakerId) ids.add(prop.caretakerId);
-  }
-
-  const managers = await prisma.user.findMany({
-    where: {
-      orgId,
-      isActive: true,
-      roles: {
-        some: { role: { code: { in: ["SUPER_ADMIN", "CEO", "MANAGER"] } } },
-      },
-    },
-    select: { id: true },
+  if (!propertyId) return [];
+  const prop = await prisma.property.findFirst({
+    where: { orgId, id: propertyId },
+    select: { caretakerId: true },
   });
-  for (const m of managers) ids.add(m.id);
-
-  return Array.from(ids);
+  return prop?.caretakerId ? [prop.caretakerId] : [];
 }
 
 // Notification.orgId คือ metadata ว่า "เรื่องนี้เกี่ยวกับบริษัทไหน" ไม่ใช่เส้น
