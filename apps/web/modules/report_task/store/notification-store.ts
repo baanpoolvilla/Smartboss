@@ -30,7 +30,7 @@ export interface AppNotification {
    * ออกจากแจ้งเตือนที่เจาะจงถึงผู้รับโดยตรง (ถูกแท็ก/ตอบกลับ/รีแอ็กชัน/งาน/
    * ตั๋วปัญหา). "task_comment"/"task_attachment" = มีคนคอมเมนต์/แนบไฟล์ใหม่ใน
    * งาน (ดู taskId) ไม่มีค่า = เป็นแจ้งเตือนส่วนตัวของผู้รับแบบอื่น ๆ */
-  kind?: "room_post" | "task_comment" | "task_attachment";
+  kind?: "room_post" | "task_comment" | "task_attachment" | "sticker_settings";
   /** งานที่แจ้งเตือนนี้พูดถึง — ใส่เฉพาะ kind "task_comment"/"task_attachment"
    * ไว้นับ unread ต่อการ์ดบน Kanban (ดู task-comment-activity.ts) ตัวข้อความ/
    * ลิงก์เองไม่พอให้ parse เพราะรูปแบบข้อความเปลี่ยนได้ */
@@ -48,7 +48,7 @@ interface NotificationStore {
     meetingId?: string,
     link?: string,
     topicName?: string,
-    kind?: "room_post" | "task_comment" | "task_attachment",
+    kind?: "room_post" | "task_comment" | "task_attachment" | "sticker_settings",
     taskId?: string
   ) => void;
   markAllRead: (userId: string) => void;

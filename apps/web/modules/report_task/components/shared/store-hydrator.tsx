@@ -7,6 +7,7 @@ import { useGoogleCalendarStore } from "@/modules/report_task/store/google-calen
 import { useEmailNotificationSettingsStore } from "@/modules/report_task/store/email-notification-settings-store";
 import { useWhatsNewStore } from "@/modules/report_task/store/whats-new-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
+import { useStickerUsageStore } from "@/modules/report_task/store/sticker-usage-store";
 
 import { ServerStoreSync } from "./server-store-sync";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
@@ -71,6 +72,7 @@ export function StoreHydrator() {
     useEmailNotificationSettingsStore.persist.rehydrate();
     useWhatsNewStore.persist.rehydrate();
     useIdentityStore.persist.rehydrate();
+    useStickerUsageStore.persist.rehydrate();
   }, []);
 
   return (

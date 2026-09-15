@@ -265,7 +265,7 @@ function SettingsPageInner() {
         <div className="flex-1 min-w-0">
           {tab === "task" && hasTaskAccess && (
             <section className="rounded-2xl border border-[var(--line)] bg-white p-5 shadow-sm">
-              {sectionKey === "stickers" && <StickerManagerPanel />}
+              {sectionKey === "stickers" && <StickerManagerPanel viewingAsUserId={viewingAsUserId} />}
               {sectionKey === "attachments" && <AttachmentSettingsPanel />}
               {sectionKey === "projectTopics" && <ProjectTopicSettingsPanel />}
               {sectionKey === "taskReview" && <TaskReviewSettingsPanel />}

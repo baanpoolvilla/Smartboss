@@ -25,6 +25,9 @@ import {
 import { NewTaskDialog } from "@/modules/report_task/components/kanban/new-task-dialog";
 import { getUser, users as directoryUsers, departments, isOwner } from "@/modules/report_task/lib/directory";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
+import { useStickerUsageStore, sortByUsage } from "@/modules/report_task/store/sticker-usage-store";
+import { notifyStickerChange } from "@/modules/report_task/lib/notify-sticker-change";
+import { StickerManagerPanel } from "@/modules/report_task/components/shared/sticker-manager-dialog";
 import { StickerConfirmDialog } from "@/modules/report_task/components/shared/sticker-confirm-dialog";
 import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
 import type { Sticker } from "@/modules/report_task/types";
@@ -90,9 +93,11 @@ import {
   Pin,
   PinOff,
   Play,
+  Plus,
   Quote,
   Reply as ReplyIcon,
   Send,
+  Settings,
   Share2,
   SmilePlus,
   Trash2,
@@ -104,11 +109,19 @@ import {
 import { uuid } from "@/modules/report_task/lib/uuid";
 import { isCoarsePointer } from "@/modules/report_task/lib/device";
 
-// ขยายจาก 6 เป็น 12 ("อิโมจิธรรมดาอยากได้เยอะๆ ตอนนี้มี 4-5 อันเอง") —
+// ขยายจาก 12 เป็นชุดใหญ่ขึ้นอีก ("สติกเกอร์ปกติด้วยสิแบบมีให้เลือกเยอะๆ") —
 // เลี่ยงอิโมจิที่ชนกับชุดสติกเกอร์มีคะแนนเริ่มต้น (😡⚠️🔥👏⭐ ดู
 // data/stickers.ts) เพราะอันเดียวกันไปโผล่สองแถวในป็อปอัปเดียวกันจะงงว่า
-// ทำไมกดแล้วมีผลไม่เท่ากัน
-const reactionEmojis = ["👍", "❤️", "🎉", "😂", "😮", "😢", "🙏", "💯", "👀", "🤔", "✅", "💡"];
+// ทำไมกดแล้วมีผลไม่เท่ากัน. แถวนี้ยาวเกินหนึ่งแถวแล้ว — popover เลย
+// ครอบด้วย max-height + scroll (ดูจุดที่ใช้ reactionEmojis ด้านล่าง) แทนที่
+// จะปล่อยให้ป็อปอัปสูงเกินจอ.
+const reactionEmojis = [
+  "👍", "👎", "❤️", "🧡", "💛", "💚", "💙", "💜",
+  "🎉", "🥳", "😂", "🤣", "😮", "😢", "😭", "🙏",
+  "🙌", "💯", "👀", "🤔", "✅", "❌", "💡", "😍",
+  "🥰", "😎", "😅", "😴", "🤯", "👌", "💪", "🤝",
+  "🫡", "😱", "🤗", "😆", "🙄", "😏",
+];
 const LONG_POST_BULLET_THRESHOLD = 8;
 const MAX_VISIBLE_IMAGES = 5;
 
@@ -402,6 +415,30 @@ export function ReportCard({
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
   const [pendingSticker, setPendingSticker] = useState<Sticker | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  // "อันไหนใช้งานบ่อยก็เด้งมาข้างหน้า" — per-browser usage tally (see
+  // sticker-usage-store.ts), covers both the plain emoji row and the scored
+  // sticker row in the picker below.
+  const stickerUsageCounts = useStickerUsageStore((s) => s.counts);
+  const bumpStickerUsage = useStickerUsageStore((s) => s.bump);
+  const sortedReactionEmojis = useMemo(
+    () => sortByUsage(reactionEmojis, (e) => `emoji:${e}`, stickerUsageCounts),
+    [stickerUsageCounts]
+  );
+  const sortedStickers = useMemo(
+    () => sortByUsage(stickers, (s) => `sticker:${s.id}`, stickerUsageCounts),
+    [stickers, stickerUsageCounts]
+  );
+  // ปกติโชว์แค่ไม่กี่อันแรก (เรียงตามความถี่แล้ว) ต้องกด "เพิ่มเติม" ถึงจะ
+  // กางเต็มชุด — เดิมกางโชว์ทั้ง 38 อันพร้อมสกรอลล์ค้างไว้ตลอด ("อยากให้มีกด
+  // แล้วคลิกเอาแทนไม่ใช่เปิดหมดแบบนี้")
+  const [emojiExpanded, setEmojiExpanded] = useState(false);
+  const REACTION_COLLAPSED_COUNT = 10;
+  const visibleReactionEmojis = emojiExpanded ? sortedReactionEmojis : sortedReactionEmojis.slice(0, REACTION_COLLAPSED_COUNT);
+  // "แก้ได้เลยจากหน้านี้เป็นการแก้แบบเต็มๆเลย" — ทั้งปุ่มเฟืองและช่องว่าง "+"
+  // เปิดตัวแก้ไขสติกเกอร์แบบเต็ม (StickerManagerPanel ตัวเดียวกับหน้าตั้งค่า)
+  // ฝังอยู่ในป็อปอัปนี้ตรงๆ แทนที่ฟอร์มเพิ่มอย่างเดียวแบบย่อเดิม (บ่นว่า "มัน
+  // น้อยไป งง") และแทนที่ไดอะล็อกแยกต่างหากเดิม (ไม่ต้องเปิดหน้าต่างซ้อน)
+  const [stickerEditorOpen, setStickerEditorOpen] = useState(false);
   // Touch's combined react/reply/edit/more menu — separate from moreOpen
   // (the hover toolbar's own "..." submenu) since the two triggers are
   // mutually exclusive by media query and would otherwise fight over the
@@ -858,49 +895,109 @@ export function ReportCard({
               เส้นบางๆ เฉพาะตอนที่แถวสติกเกอร์โผล่จริง (คนไม่มีสิทธิเห็นแค่
               แถวอีโมจิแถวเดียว เหมือนเดิมทุกอย่าง ไม่รู้ด้วยซ้ำว่ามีแถวที่สอง
               ซ่อนอยู่ — "คนมีสิทธิจะเห็น...ไม่มีสิทธิจะไม่เห็น") */}
-          <PopoverContent className="w-auto max-w-[232px] p-1.5 flex flex-col gap-1">
-            <div className="flex flex-row flex-wrap items-center gap-0.5">
-              {reactionEmojis.map((emoji) => (
-                <button
-                  key={emoji}
-                  onClick={() => {
-                    toggleReaction(post.id, emoji, viewingAsUserId);
-                    setReactionPickerOpen(false);
-                  }}
-                  className={cn(
-                    "h-8 w-8 flex items-center justify-center rounded-md text-base hover:bg-[var(--bg-soft)] transition-transform hover:scale-110",
-                    (post.reactions[emoji] ?? []).includes(viewingAsUserId) && "bg-[var(--accent)]"
-                  )}
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
-            {/* แถวสติกเกอร์มีคะแนน — แยกให้เห็นชัดจากอีโมจิธรรมดาด้านบนด้วย
-                ป้ายกำกับ + พื้นสีต่างกัน ไม่ใช่แค่มีเส้นคั่นเฉยๆ ("อยากให้
-                แสดงให้รู้ว่าอันไหนที่มีผลต่อคะแนน") คนไม่มีสิทธิ์ไม่เห็นแถวนี้
-                เลยทั้งป้ายและปุ่ม (isOwner gate เดิม) */}
-            {isOwner(viewingAsUserId) && (
-              <div className="rounded-md bg-[var(--bg-soft)] p-1 -mx-0.5">
-                <p className="px-1 pb-1 text-[10px] font-semibold text-[var(--ink-soft)]">
-                  มีผลต่อคะแนน
-                </p>
+          <PopoverContent className={cn("flex flex-col gap-1 p-1.5", stickerEditorOpen ? "w-[300px]" : "w-auto max-w-[232px]")}>
+            {stickerEditorOpen ? (
+              <div className="flex flex-col gap-2 max-h-[420px] overflow-y-auto">
+                <div className="flex items-center justify-between px-1">
+                  <p className="text-xs font-semibold">แก้ไขสติกเกอร์คะแนน</p>
+                  <button
+                    type="button"
+                    onClick={() => setStickerEditorOpen(false)}
+                    className="h-6 w-6 flex items-center justify-center rounded hover:bg-[var(--bg-soft)] text-[var(--ink-soft)]"
+                    aria-label="ปิด"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <StickerManagerPanel
+                  viewingAsUserId={viewingAsUserId}
+                  compact
+                  onSaved={() => setStickerEditorOpen(false)}
+                />
+              </div>
+            ) : (
+              <>
                 <div className="flex flex-row flex-wrap items-center gap-0.5">
-                  {stickers.map((s) => (
+                  {/* เดิมกางโชว์ทั้ง 38 อันพร้อมสกรอลล์ค้างไว้ตลอด — ตอนนี้
+                      โชว์แค่ไม่กี่อันแรก (เรียงตามความถี่ใช้งานเงียบๆ ไม่มี
+                      ตัวเลขกำกับ) ต้องกด "เพิ่มเติม" ก่อนถึงจะกางเต็มชุด
+                      ("อยากให้มีกดแล้วคลิกเอาแทนไม่ใช่เปิดหมดแบบนี้") */}
+                  {visibleReactionEmojis.map((emoji) => (
                     <button
-                      key={s.id}
+                      key={emoji}
                       onClick={() => {
-                        setPendingSticker(s);
+                        toggleReaction(post.id, emoji, viewingAsUserId);
+                        bumpStickerUsage(`emoji:${emoji}`);
                         setReactionPickerOpen(false);
                       }}
-                      className="h-8 w-8 flex items-center justify-center rounded-md text-base hover:bg-white transition-transform hover:scale-110"
-                      title={`${s.label} (${s.points > 0 ? `+${s.points}` : s.points})`}
+                      className={cn(
+                        "h-8 w-8 flex items-center justify-center rounded-md text-base hover:bg-[var(--bg-soft)] transition-transform hover:scale-110",
+                        (post.reactions[emoji] ?? []).includes(viewingAsUserId) && "bg-[var(--accent)]"
+                      )}
                     >
-                      {s.emoji}
+                      {emoji}
                     </button>
                   ))}
+                  {sortedReactionEmojis.length > REACTION_COLLAPSED_COUNT && (
+                    <button
+                      onClick={() => setEmojiExpanded((v) => !v)}
+                      className="h-8 w-8 flex items-center justify-center rounded-md text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+                      aria-label={emojiExpanded ? "ย่อรายการอีโมจิ" : "ดูอีโมจิเพิ่มเติม"}
+                      title={emojiExpanded ? "ย่อ" : "เพิ่มเติม"}
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
-              </div>
+                {/* แถวสติกเกอร์มีคะแนน — แยกให้เห็นชัดจากอีโมจิธรรมดาด้านบนด้วย
+                    ป้ายกำกับ + พื้นสีต่างกัน ไม่ใช่แค่มีเส้นคั่นเฉยๆ ("อยากให้
+                    แสดงให้รู้ว่าอันไหนที่มีผลต่อคะแนน") คนไม่มีสิทธิ์ไม่เห็นแถวนี้
+                    เลยทั้งป้ายและปุ่ม (isOwner gate เดิม) */}
+                {isOwner(viewingAsUserId) && (
+                  <div className="rounded-md bg-[var(--bg-soft)] p-1 -mx-0.5">
+                    <div className="flex items-center justify-between px-1 pb-1">
+                      <p className="text-[10px] font-semibold text-[var(--ink-soft)]">มีผลต่อคะแนน</p>
+                      <button
+                        type="button"
+                        onClick={() => setStickerEditorOpen(true)}
+                        className="h-5 w-5 flex items-center justify-center rounded text-[var(--ink-soft)] hover:bg-white"
+                        aria-label="ตั้งค่าสติกเกอร์"
+                        title="ตั้งค่าสติกเกอร์"
+                      >
+                        <Settings className="h-3 w-3" />
+                      </button>
+                    </div>
+                    <div className="flex flex-row flex-wrap items-center gap-0.5">
+                      {sortedStickers.map((s) => (
+                        <button
+                          key={s.id}
+                          onClick={() => {
+                            setPendingSticker(s);
+                            bumpStickerUsage(`sticker:${s.id}`);
+                            setReactionPickerOpen(false);
+                          }}
+                          className="h-8 w-8 flex items-center justify-center rounded-md text-base hover:bg-white transition-transform hover:scale-110"
+                          title={`${s.label} (${s.points > 0 ? `+${s.points}` : s.points})`}
+                        >
+                          {s.emoji}
+                        </button>
+                      ))}
+                      {/* ช่องว่างสำหรับเพิ่ม/แก้สติกเกอร์มีคะแนน — จุดที่วงไว้ใน
+                          สกรีนช็อต ("กดในพื้นๆที่วงสามารถตั้งค่าได้เลย") เปิด
+                          ตัวแก้ไขแบบเต็มตัวเดียวกับปุ่มเฟือง ไม่ใช่ฟอร์มย่อ */}
+                      <button
+                        type="button"
+                        onClick={() => setStickerEditorOpen(true)}
+                        className="h-8 w-8 flex items-center justify-center rounded-md border border-dashed border-[var(--line)] text-[var(--ink-soft)] hover:bg-white"
+                        aria-label="เพิ่ม/แก้ไขสติกเกอร์ที่มีผลต่อคะแนน"
+                        title="เพิ่ม/แก้ไขสติกเกอร์"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </PopoverContent>
         </Popover>
@@ -954,57 +1051,114 @@ export function ReportCard({
               </button>
             }
           />
-          <PopoverContent className="w-auto max-w-[232px] p-1 flex flex-col min-w-44" align="end">
-            <div className="flex flex-row flex-wrap gap-0.5 p-0.5">
-              {reactionEmojis.map((emoji) => (
-                <button
-                  key={emoji}
-                  onClick={() => {
-                    toggleReaction(post.id, emoji, viewingAsUserId);
-                    setTouchMenuOpen(false);
-                  }}
-                  className={cn(
-                    "h-8 w-8 flex items-center justify-center rounded-md text-base hover:bg-[var(--bg-soft)]",
-                    (post.reactions[emoji] ?? []).includes(viewingAsUserId) && "bg-[var(--accent)]"
-                  )}
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
-            {isOwner(viewingAsUserId) && (
-              <div className="rounded-md bg-[var(--bg-soft)] p-1 mx-0.5 mt-0.5">
-                <p className="px-1 pb-1 text-[10px] font-semibold text-[var(--ink-soft)]">มีผลต่อคะแนน</p>
-                <div className="flex flex-row flex-wrap gap-0.5">
-                  {stickers.map((s) => (
+          <PopoverContent className={cn("flex flex-col min-w-44 p-1", stickerEditorOpen ? "w-[280px]" : "w-auto max-w-[232px]")} align="end">
+            {stickerEditorOpen ? (
+              <div className="flex flex-col gap-2 max-h-[420px] overflow-y-auto p-0.5">
+                <div className="flex items-center justify-between px-1">
+                  <p className="text-xs font-semibold">แก้ไขสติกเกอร์คะแนน</p>
+                  <button
+                    type="button"
+                    onClick={() => setStickerEditorOpen(false)}
+                    className="h-6 w-6 flex items-center justify-center rounded hover:bg-[var(--bg-soft)] text-[var(--ink-soft)]"
+                    aria-label="ปิด"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <StickerManagerPanel
+                  viewingAsUserId={viewingAsUserId}
+                  compact
+                  onSaved={() => setStickerEditorOpen(false)}
+                />
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-row flex-wrap gap-0.5 p-0.5">
+                  {visibleReactionEmojis.map((emoji) => (
                     <button
-                      key={s.id}
+                      key={emoji}
                       onClick={() => {
-                        setPendingSticker(s);
+                        toggleReaction(post.id, emoji, viewingAsUserId);
+                        bumpStickerUsage(`emoji:${emoji}`);
                         setTouchMenuOpen(false);
                       }}
-                      className="h-8 w-8 flex items-center justify-center rounded-md text-base hover:bg-white"
-                      title={`${s.label} (${s.points > 0 ? `+${s.points}` : s.points})`}
+                      className={cn(
+                        "h-8 w-8 flex items-center justify-center rounded-md text-base hover:bg-[var(--bg-soft)]",
+                        (post.reactions[emoji] ?? []).includes(viewingAsUserId) && "bg-[var(--accent)]"
+                      )}
                     >
-                      {s.emoji}
+                      {emoji}
                     </button>
                   ))}
+                  {sortedReactionEmojis.length > REACTION_COLLAPSED_COUNT && (
+                    <button
+                      onClick={() => setEmojiExpanded((v) => !v)}
+                      className="h-8 w-8 flex items-center justify-center rounded-md text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+                      aria-label={emojiExpanded ? "ย่อรายการอีโมจิ" : "ดูอีโมจิเพิ่มเติม"}
+                      title={emojiExpanded ? "ย่อ" : "เพิ่มเติม"}
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
-              </div>
+                {isOwner(viewingAsUserId) && (
+                  <div className="rounded-md bg-[var(--bg-soft)] p-1 mx-0.5 mt-0.5">
+                    <div className="flex items-center justify-between px-1 pb-1">
+                      <p className="text-[10px] font-semibold text-[var(--ink-soft)]">มีผลต่อคะแนน</p>
+                      <button
+                        type="button"
+                        onClick={() => setStickerEditorOpen(true)}
+                        className="h-5 w-5 flex items-center justify-center rounded text-[var(--ink-soft)] hover:bg-white"
+                        aria-label="ตั้งค่าสติกเกอร์"
+                        title="ตั้งค่าสติกเกอร์"
+                      >
+                        <Settings className="h-3 w-3" />
+                      </button>
+                    </div>
+                    <div className="flex flex-row flex-wrap gap-0.5">
+                      {sortedStickers.map((s) => (
+                        <button
+                          key={s.id}
+                          onClick={() => {
+                            setPendingSticker(s);
+                            bumpStickerUsage(`sticker:${s.id}`);
+                            setTouchMenuOpen(false);
+                          }}
+                          className="h-8 w-8 flex items-center justify-center rounded-md text-base hover:bg-white"
+                          title={`${s.label} (${s.points > 0 ? `+${s.points}` : s.points})`}
+                        >
+                          {s.emoji}
+                        </button>
+                      ))}
+                      {/* กดแล้วเปิดตัวแก้ไขแบบเต็มในป็อปอัปนี้เลย เหมือนกับ
+                          ปุ่มเฟือง ไม่พาไปหน้าอื่น */}
+                      <button
+                        type="button"
+                        onClick={() => setStickerEditorOpen(true)}
+                        className="h-8 w-8 flex items-center justify-center rounded-md border border-dashed border-[var(--line)] text-[var(--ink-soft)] hover:bg-white"
+                        aria-label="เพิ่ม/แก้ไขสติกเกอร์ที่มีผลต่อคะแนน"
+                        title="เพิ่ม/แก้ไขสติกเกอร์"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <div className="h-px bg-[var(--line)] mx-1 my-0.5" />
+                <MenuButton
+                  icon={MessageCircle}
+                  label="ตอบกลับ"
+                  onClick={() => {
+                    setTouchMenuOpen(false);
+                    setThreadOpen(true);
+                    requestAnimationFrame(() => replyEditorRef.current?.focus());
+                  }}
+                />
+                {isOwn && <MenuButton icon={Pencil} label="แก้ไขโพสต์" onClick={() => { setTouchMenuOpen(false); setEditing(true); }} />}
+                <div className="h-px bg-[var(--line)] mx-1 my-0.5" />
+                {postMenuItems(() => setTouchMenuOpen(false))}
+              </>
             )}
-            <div className="h-px bg-[var(--line)] mx-1 my-0.5" />
-            <MenuButton
-              icon={MessageCircle}
-              label="ตอบกลับ"
-              onClick={() => {
-                setTouchMenuOpen(false);
-                setThreadOpen(true);
-                requestAnimationFrame(() => replyEditorRef.current?.focus());
-              }}
-            />
-            {isOwn && <MenuButton icon={Pencil} label="แก้ไขโพสต์" onClick={() => { setTouchMenuOpen(false); setEditing(true); }} />}
-            <div className="h-px bg-[var(--line)] mx-1 my-0.5" />
-            {postMenuItems(() => setTouchMenuOpen(false))}
           </PopoverContent>
         </Popover>
       </div>
