@@ -71,6 +71,9 @@ import {
 import type { Attachment, Sticker, TaskPriority, TaskStatus } from "@/modules/report_task/types";
 import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
 import { StickerConfirmDialog } from "@/modules/report_task/components/shared/sticker-confirm-dialog";
+import { ReportImageLightbox } from "@/modules/report_task/components/report-feed/report-image-lightbox";
+import type { ReportPostImage } from "@/modules/report_task/store/report-feed-store";
+import { mimeFromLegacyTaskLabel } from "@/modules/report_task/lib/report-attachment-kind";
 import { uploadTaskAttachment } from "@/modules/report_task/lib/task-attachment-upload";
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { toast } from "sonner";
@@ -78,6 +81,15 @@ import { TimeAgo } from "@/modules/report_task/components/shared/time-ago";
 import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
 
 const toDateInput = (iso: string) => iso.slice(0, 10);
+
+/** เปิดไฟล์แนบของงาน/คอมเมนต์ในตัวดูไฟล์เดียวกับที่ห้องรายงานใช้ (รูป/วิดีโอ/pdf
+ * ดูในหน้าเดิม มีปุ่มย้อนกลับ+ดาวน์โหลด) แทนที่จะเด้งไปแท็บใหม่เฉยๆ — ต้องแปลง
+ * เป็น ReportPostImage ก่อนเพราะ ReportImageLightbox อ่านชนิดไฟล์จาก `mime`
+ * ไม่ใช่ป้ายไทยแบบที่ Attachment เก็บ (ของเก่าก่อนมี field mime เดาจากป้ายแทน
+ * ดู report-attachment-kind.ts's mimeFromLegacyTaskLabel) */
+function toLightboxImage(a: Attachment): ReportPostImage {
+  return { id: a.id, url: a.url, dataUrl: a.dataUrl, name: a.name, mime: a.mime ?? mimeFromLegacyTaskLabel(a.type) };
+}
 
 /** Highlight @mentions inside a comment so tagged people stand out. */
 function renderMentions(text: string) {
@@ -136,6 +148,7 @@ export function TaskDetailSheet({
 
   const [comment, setComment] = useState("");
   const [commentAttachments, setCommentAttachments] = useState<Attachment[]>([]);
+  const [attachmentViewer, setAttachmentViewer] = useState<{ images: ReportPostImage[]; index: number } | null>(null);
   // <md only — the comment rail is a permanent side column on desktop
   // ("always visible, not buried" per its own comment below), but on mobile
   // it stacks full-width below everything else and pushed the whole sheet
@@ -1268,26 +1281,32 @@ export function TaskDetailSheet({
               />
             </div>
             {task.attachments.length === 0 && <p className="text-xs text-[var(--ink-soft)]">ไม่มีไฟล์แนบ</p>}
-            {task.attachments.map((a) => {
+            {task.attachments.map((a, attIndex) => {
               // Whoever uploaded it (or whoever can edit the task's core
               // fields) can remove it — same self-scoping as comments below,
               // rather than anyone who can open the task deleting anyone
               // else's file.
               const canRemove = a.uploadedBy === viewingAsUserId || canEditMain;
               const src = a.url ?? a.dataUrl;
+              // เปิดในตัวดูไฟล์ในหน้าเดิม (มีปุ่มย้อนกลับ+ดาวน์โหลดในตัว)
+              // แทนที่จะเด้งแท็บใหม่ — ทุกไฟล์แนบของงานนี้เข้าเป็นชุดเดียวกัน
+              // เลื่อนซ้าย-ขวาดูไฟล์อื่นต่อได้โดยไม่ต้องปิดแล้วเปิดใหม่
+              const openViewer = () => setAttachmentViewer({ images: task.attachments.map(toLightboxImage), index: attIndex });
               return (
                 <div key={a.id} className="flex items-center gap-2.5 text-sm rounded-lg border border-[var(--line)] px-3 py-2">
                   {a.type === "รูปภาพ" && src ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={src} alt={a.name} className="h-8 w-8 rounded object-cover shrink-0" />
+                    <button type="button" onClick={openViewer} className="shrink-0 cursor-pointer">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={src} alt={a.name} className="h-8 w-8 rounded object-cover" />
+                    </button>
                   ) : (
                     <FileText className="h-4 w-4 text-[var(--ink-soft)] shrink-0" />
                   )}
                   <div className="min-w-0 flex-1">
                     {src ? (
-                      <a href={src} target="_blank" rel="noreferrer" className="truncate font-medium block hover:underline">
+                      <button type="button" onClick={openViewer} className="truncate font-medium block text-left hover:underline cursor-pointer">
                         {a.name}
-                      </a>
+                      </button>
                     ) : (
                       <p className="truncate font-medium">{a.name}</p>
                     )}
@@ -1353,24 +1372,25 @@ export function TaskDetailSheet({
                     {c.message && <p className="text-sm mt-0.5 whitespace-pre-wrap break-words">{renderMentions(c.message)}</p>}
                     {c.attachments && c.attachments.length > 0 && (
                       <div className="mt-1.5 space-y-1">
-                        {c.attachments.map((a) => {
+                        {c.attachments.map((a, attIndex) => {
                           const src = a.url ?? a.dataUrl;
+                          const openViewer = () =>
+                            setAttachmentViewer({ images: c.attachments!.map(toLightboxImage), index: attIndex });
                           return a.type === "รูปภาพ" && src ? (
-                            <a key={a.id} href={src} target="_blank" rel="noreferrer">
+                            <button key={a.id} type="button" onClick={openViewer} className="block cursor-pointer">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={src} alt={a.name} className="max-h-32 rounded-lg border border-[var(--line)]" />
-                            </a>
+                            </button>
                           ) : (
-                            <a
+                            <button
                               key={a.id}
-                              href={src}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="flex items-center gap-1.5 text-xs bg-white/60 rounded-md px-2 py-1 hover:underline"
+                              type="button"
+                              onClick={openViewer}
+                              className="flex w-full items-center gap-1.5 text-xs bg-white/60 rounded-md px-2 py-1 text-left hover:underline cursor-pointer"
                             >
                               <FileText className="h-3.5 w-3.5 shrink-0" />
                               <span className="truncate">{a.name}</span>
-                            </a>
+                            </button>
                           );
                         })}
                       </div>
@@ -1504,6 +1524,14 @@ export function TaskDetailSheet({
       taskTitle={task?.title ?? ""}
       onConfirm={confirmSticker}
     />
+    {attachmentViewer && (
+      <ReportImageLightbox
+        images={attachmentViewer.images}
+        index={attachmentViewer.index}
+        onIndexChange={(i) => setAttachmentViewer((v) => (v ? { ...v, index: i } : v))}
+        onClose={() => setAttachmentViewer(null)}
+      />
+    )}
     </>
   );
 }

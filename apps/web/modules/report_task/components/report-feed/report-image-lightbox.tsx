@@ -221,38 +221,50 @@ export function ReportImageLightbox({
       >
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
+          className="absolute top-4 left-4 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
           aria-label="ปิด"
         >
           <X className="h-5 w-5" />
         </button>
 
-        {/* +/- buttons for discoverability — double-click, scroll wheel, and
-            pinch all zoom too (see the img's own handlers), but none of
-            those are obvious just by looking at the screen. Hidden for a
-            video/doc, which have no zoom of their own. */}
+        {/* Download + zoom, both top-right — close button moved to top-left
+            to make room. A plain image had no download button at all before
+            (only the pdf/doc cards below had their own); +/- buttons are for
+            discoverability since double-click/wheel/pinch all zoom too but
+            aren't obvious just by looking at the screen. Hidden for a
+            video/doc, which have no zoom of their own and (for doc) already
+            carry their own download button in-card. Zoom % always visible,
+            not just while zoomed, so it reads as "current zoom level" even
+            at the 100% resting state. */}
         {!isVideo && !isDoc && (
-          <div
-            className="absolute top-4 left-4 flex items-center gap-0.5 rounded-full bg-white/10 p-0.5"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={() => zoomBy(-0.75)}
-              disabled={scale <= MIN_SCALE}
-              className="h-9 w-9 rounded-full text-white flex items-center justify-center hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer"
-              aria-label="ย่อรูป"
+          <div className="absolute top-4 right-4 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+            <a
+              href={downloadHref}
+              download={image.url ? undefined : image.name}
+              className="h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
+              aria-label="ดาวน์โหลด"
             >
-              <Minus className="h-4 w-4" />
-            </button>
-            <span className="w-11 text-center text-xs tabular-nums text-white/80 select-none">{Math.round(scale * 100)}%</span>
-            <button
-              onClick={() => zoomBy(0.75)}
-              disabled={scale >= MAX_SCALE}
-              className="h-9 w-9 rounded-full text-white flex items-center justify-center hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer"
-              aria-label="ขยายรูป"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
+              <Download className="h-5 w-5" />
+            </a>
+            <div className="flex items-center gap-0.5 rounded-full bg-white/10 p-0.5">
+              <button
+                onClick={() => zoomBy(-0.75)}
+                disabled={scale <= MIN_SCALE}
+                className="h-9 w-9 rounded-full text-white flex items-center justify-center hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer"
+                aria-label="ย่อรูป"
+              >
+                <Minus className="h-4 w-4" />
+              </button>
+              <span className="w-11 text-center text-xs tabular-nums text-white/80 select-none">{Math.round(scale * 100)}%</span>
+              <button
+                onClick={() => zoomBy(0.75)}
+                disabled={scale >= MAX_SCALE}
+                className="h-9 w-9 rounded-full text-white flex items-center justify-center hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer"
+                aria-label="ขยายรูป"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         )}
 

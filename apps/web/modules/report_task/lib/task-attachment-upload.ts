@@ -66,5 +66,6 @@ export async function uploadTaskAttachment(file: File, uploadedBy: string): Prom
     uploadedBy,
     uploadedAt: new Date().toISOString(),
     url,
+    mime,
   };
 }

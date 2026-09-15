@@ -51,6 +51,36 @@ export function attachmentTypeLabel(mime?: string): string {
 
 export { fileKindOf };
 
+/** ก่อน Attachment (task/comment) มี field `mime` เอง เก็บไว้แค่ป้ายภาษาไทย
+ * สั้นๆ (ดู task-attachment-upload.ts's labelFor) — เดา mime กลับจากป้ายนั้น
+ * ให้พอเปิดในตัวดูไฟล์เดียวกับ report-feed ได้ถูกโหมด (รูป/วิดีโอ/เอกสาร)
+ * เฉพาะไฟล์เก่าที่อัปโหลดไว้ก่อนมี field นี้เท่านั้น — ของใหม่มี a.mime ตรงๆ
+ * อยู่แล้วไม่ต้องเดา ป้าย "ไฟล์" เดายังไงก็ไม่รู้ชนิดจริง ปล่อย undefined ไว้
+ * (ตกไปเป็นการ์ดดาวน์โหลดเฉยๆ) ป้าย "ไฟล์" ทั่วไปคืน mime ปลอมที่ไม่ใช่ทั้ง
+ * image/video โดยตั้งใจ — เพื่อให้ attachmentKind() จัดเป็น "doc" (การ์ด
+ * ดาวน์โหลด) แทนที่จะตกไปใช้กติกา "ไม่มี mime = รูปภาพ" ของ ReportPostImage
+ * (ใช้ได้กับของนั้นเพราะของเก่าจริงๆ เป็นรูปทั้งหมด แต่ Attachment ของ
+ * task/comment มีทั้งไฟล์อื่นมาตั้งแต่ต้น ถือว่าเป็นรูปไปเลยจะพังกลายเป็น
+ * broken image แทนการ์ดดาวน์โหลด) */
+export function mimeFromLegacyTaskLabel(label: string): string {
+  switch (label) {
+    case "รูปภาพ":
+      return "image/jpeg";
+    case "วิดีโอ":
+      return "video/mp4";
+    case "PDF":
+      return "application/pdf";
+    case "Word":
+      return "application/msword";
+    case "ZIP":
+      return "application/zip";
+    case "ข้อความ":
+      return "text/plain";
+    default:
+      return "application/octet-stream";
+  }
+}
+
 /**
  * What the "แนบรูป/คลิป" file pickers accept. Deliberately an explicit list
  * rather than a wildcard: it mirrors ALLOWED_TYPES in

@@ -56,6 +56,13 @@ export interface Attachment {
    * kept so old data (seed/demo tasks) still renders; new attachments use
    * `url` instead. Prefer `url ?? dataUrl` when rendering. */
   dataUrl?: string;
+  /** Real MIME type from the upload response (see task-attachment-upload.ts)
+   * — undefined on attachments uploaded before this field existed. Lets a
+   * click open the same in-app lightbox report-feed images use (image/pdf
+   * preview, video playback, download card) instead of a new browser tab;
+   * see report-attachment-kind.ts's mimeFromLegacyTaskLabel for the fallback
+   * on older rows that only kept the Thai display label (`type`). */
+  mime?: string;
 }
 
 export interface Comment {
