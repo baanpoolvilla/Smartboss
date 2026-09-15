@@ -32,7 +32,7 @@ export const eventTypeLabels: Record<CalendarEventType, string> = {
   task: "งาน",
   meeting: "ประชุม",
   leave: "ลา",
-  holiday: "วันหยุด",
+  holiday: "วันหยุดนักขัตฤกษ์",
   google: "ปฏิทินภายนอก",
   dayoff: "วันหยุดประจำ",
   todo: "สิ่งที่ต้องทำ",

@@ -261,8 +261,13 @@ export function LeaveSidebar({
     removePickedDate(viewingAsUserId, date);
   }
 
+  // type "dayoff" = สิทธิ์วันหยุดประจำแบบ auto-approve จาก workforce (เช่น
+  // "วันหยุดประจำเดือน") ไม่ใช่การลาจริงที่ต้องอนุมัติ — ไม่นับรวมในลิสต์/สถิติ
+  // "วันลา" ที่นี่ เพราะสถิติ "วันหยุดประจำ" ของการ์ดนี้ผูกกับโควตาของระบบ
+  // วันหยุดประจำที่ตั้งเองในนี้ (routine dayoff) อยู่แล้ว เป็นคนละระบบกัน
+  // นับปนกันจะเบิ้ลผิดทั้งสองฝั่ง (ดู range-summary-dialog.tsx's own comment)
   const monthLeave = leaves
-    .filter((e) => inRange(e.start, range) && (!e.userId || !hiddenUserIds.includes(e.userId)))
+    .filter((e) => e.type !== "dayoff" && inRange(e.start, range) && (!e.userId || !hiddenUserIds.includes(e.userId)))
     .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
 
   const monthHolidays = holidays
@@ -273,11 +278,11 @@ export function LeaveSidebar({
   // not a slice of the team view, so hiding yourself from the team calendar
   // shouldn't also empty out your own summary.
   const myLeave = leaves
-    .filter((e) => inRange(e.start, range) && e.userId === viewingAsUserId)
+    .filter((e) => e.type !== "dayoff" && inRange(e.start, range) && e.userId === viewingAsUserId)
     .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
 
   const leaveHeading = range.viewType === "timeGridDay" ? "ทีมที่ลาวันนี้" : range.viewType === "timeGridWeek" ? "ทีมที่ลาสัปดาห์นี้" : "ทีมที่ลา";
-  const holidayHeading = range.viewType === "timeGridDay" ? "วันหยุดวันนี้" : range.viewType === "timeGridWeek" ? "วันหยุดสัปดาห์นี้" : "วันหยุดในเดือนนี้";
+  const holidayHeading = range.viewType === "timeGridDay" ? "วันหยุดนักขัตฤกษ์วันนี้" : range.viewType === "timeGridWeek" ? "วันหยุดนักขัตฤกษ์สัปดาห์นี้" : "วันหยุดนักขัตฤกษ์ในเดือนนี้";
   const myHeading = range.viewType === "timeGridDay" ? "วันลาของฉันวันนี้" : range.viewType === "timeGridWeek" ? "วันลาของฉันสัปดาห์นี้" : "วันลาของฉันเดือนนี้";
   const emptyLeaveLabel = range.viewType === "timeGridDay" ? "ไม่มีวันลาวันนี้" : range.viewType === "timeGridWeek" ? "ไม่มีวันลาสัปดาห์นี้" : "ไม่มีวันลาในเดือนนี้";
   const emptyHolidayLabel = range.viewType === "timeGridDay" ? "ไม่มีวันหยุดราชการวันนี้" : range.viewType === "timeGridWeek" ? "ไม่มีวันหยุดราชการสัปดาห์นี้" : "ไม่มีวันหยุดราชการในเดือนนี้";

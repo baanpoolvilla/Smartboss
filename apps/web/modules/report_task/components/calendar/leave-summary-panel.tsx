@@ -55,7 +55,11 @@ export function LeaveSummaryPanel() {
     };
     return users
       .map((u) => {
-        const mine = leaves.filter((l) => l.userId === u.id && inRange(l));
+        // type "dayoff" = สิทธิ์วันหยุดประจำแบบ auto-approve จาก workforce
+        // ไม่ใช่การลาจริง — ไม่ผูก leaveType มาด้วย เคยตกลงไปกอง "อื่นๆ" ใน
+        // สรุปนี้ทั้งที่ไม่ใช่ประเภทการลาเลย (ดู range-summary-dialog.tsx's
+        // own comment เรื่องเดียวกัน)
+        const mine = leaves.filter((l) => l.type !== "dayoff" && l.userId === u.id && inRange(l));
         const byType = new Map<string, number>();
         let total = 0;
         for (const l of mine) {

@@ -20,6 +20,7 @@ import { useLeaveTypeStore } from "@/modules/report_task/store/leave-type-store"
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useCalendarScopeStore } from "@/modules/report_task/store/calendar-scope-store";
 import { useEventColorStore } from "@/modules/report_task/store/event-color-store";
+import { eventTypeLabels } from "@/modules/report_task/lib/calendar-colors";
 import { priorityMeta, statusMeta } from "@/modules/report_task/lib/task-meta";
 import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import { canSeeTask, canSeeTaskOnCalendar, canSeeMeetingOnCalendar } from "@/modules/report_task/lib/permissions";
@@ -116,9 +117,22 @@ export function RangeSummaryDialog({
         return unattributed || (taskScope === "all" && canBroadenScope) || canSeeMeetingOnCalendar(m, viewingAsUserId);
       })
       .sort((a, b) => a.start.localeCompare(b.start));
-    const rangeLeaves = leaves.filter((l) => inRange(l.start, start, end)).sort((a, b) => a.start.localeCompare(b.start));
+    // "leaves" จาก workforce ปนสองแบบมาด้วยกัน (ดู workforce-calendar.ts's
+    // isDayOff): ลาจริงที่ต้องอนุมัติ (type "leave") กับสิทธิ์วันหยุดประจำแบบ
+    // auto-approve (type "dayoff", เช่น "วันหยุดประจำเดือน") — ก่อนหน้านี้ตัว
+    // ไดอะล็อกนี้ไม่ได้แยกสองอย่างนี้เลย เอาทุกอันไปกอง "วันลา" หมด แถวที่จริง
+    // เป็นวันหยุดประจำเลยทั้งถูกนับผิดหมวดและโชว์ป้ายว่า "ลา" เฉย ๆ (ไม่มีชื่อ
+    // ประเภทให้แสดง เพราะแถวแบบนี้ตั้งใจไม่ผูก leaveType มาตั้งแต่ต้น — ดู
+    // comment เดียวกัน) แยกออกมารวมกับ dayoffs (รอบวันหยุดประจำที่ตั้งเอง)
+    // แทน ให้ตรงกับที่ calendar-view.tsx เองก็แยกสองอย่างนี้อยู่แล้ว
+    const rangeLeaves = leaves
+      .filter((l) => l.type !== "dayoff" && inRange(l.start, start, end))
+      .sort((a, b) => a.start.localeCompare(b.start));
     const rangeHolidays = holidays.filter((h) => inRange(h.start, start, end)).sort((a, b) => a.start.localeCompare(b.start));
-    const rangeDayoffs = dayoffs.filter((d) => inRange(d.start, start, end)).sort((a, b) => a.start.localeCompare(b.start));
+    const rangeDayoffs = [
+      ...dayoffs.filter((d) => inRange(d.start, start, end)),
+      ...leaves.filter((l) => l.type === "dayoff" && inRange(l.start, start, end)),
+    ].sort((a, b) => a.start.localeCompare(b.start));
     const rangeTodos = todos
       .filter((t) => inRange(t.date, start, end))
       .filter((t) => (todoScope === "mine" ? t.userId === viewingAsUserId : !hiddenUserIds.includes(t.userId)))
@@ -309,7 +323,7 @@ export function RangeSummaryDialog({
           <>
             <div className="grid grid-cols-3 gap-2">
               <Stat label="วันลา" value={data.leaves.length} />
-              <Stat label="วันหยุด" value={data.holidays.length} />
+              <Stat label={eventTypeLabels.holiday} value={data.holidays.length} />
               <Stat label="วันหยุดประจำ" value={data.dayoffs.length} />
             </div>
             <div className="max-h-72 overflow-y-auto space-y-1.5 mt-1">
