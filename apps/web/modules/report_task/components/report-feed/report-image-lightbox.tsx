@@ -105,6 +105,22 @@ export function ReportImageLightbox({
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [index, images.length, hasMultiple, onIndexChange, onClose]);
 
+  // Block native browser/OS page zoom (Ctrl+wheel — also how Windows/Chrome
+  // report trackpad pinch) for as long as this lightbox is open, everywhere
+  // inside it, not just over the image itself. Left alone, that zooms the
+  // whole PAGE instead of just the picture, and since page zoom rescales
+  // where a `position: fixed` element actually lands on screen, the close/
+  // zoom/download buttons can end up scrolled past the edge entirely
+  // ("หายไปเลยตรง%") — a different, uncontrolled zoom from the in-app
+  // scale/pan above the image, which never touches the page itself.
+  useEffect(() => {
+    function blockPageZoom(e: WheelEvent) {
+      if (e.ctrlKey) e.preventDefault();
+    }
+    window.addEventListener("wheel", blockPageZoom, { passive: false });
+    return () => window.removeEventListener("wheel", blockPageZoom);
+  }, []);
+
   const image = images[index];
   if (!image) return null;
 
@@ -217,6 +233,15 @@ export function ReportImageLightbox({
         onClick={(e) => {
           if (e.target === e.currentTarget) onClose();
         }}
+        // touch-action:none on the whole overlay (not just the image) — a
+        // pinch that lands with a finger even slightly off the picture (near
+        // an edge, or right over a toolbar button) would otherwise still
+        // trigger the OS/browser's own native pinch-zoom-the-page gesture,
+        // same class of bug the ctrl+wheel guard above stops for
+        // trackpad/mouse pinch. The image's own pointer handlers implement
+        // pinch-to-zoom themselves already — this only turns off the
+        // browser's *default* gesture handling, not our own JS.
+        style={{ touchAction: "none" }}
         className="inset-0 top-0 left-0 right-0 bottom-0 translate-x-0 translate-y-0 max-w-none sm:max-w-none w-screen h-screen max-h-screen bg-black/95 border-none ring-0 rounded-none p-0 gap-0 flex items-center justify-center cursor-zoom-out overflow-hidden"
       >
         <button
