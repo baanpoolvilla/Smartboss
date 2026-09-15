@@ -137,7 +137,19 @@ export function PeopleCalendarList({
           <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--ink-soft)]" />
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ค้นหาชื่อ" className="pl-8 h-9" />
         </div>
-        <Select value={departmentId} onValueChange={(v) => v && setDepartmentId(v)}>
+        <Select
+          value={departmentId}
+          onValueChange={(v) => {
+            if (!v) return;
+            setDepartmentId(v);
+            // เลือกแผนกแล้วเอาแค่แผนกนั้นขึ้นปฏิทินเลย ไม่ต้องมาติ๊กเลือกทีละคน
+            // ซ้ำอีกรอบ — คงสถานะซ่อน/โชว์ "ปฏิทินของฉัน" ของตัวเองไว้เหมือนเดิม
+            // เหมือนปุ่ม "ซ่อนทั้งหมด/แสดงทั้งหมด" ด้านบนทำ ไม่ยุ่งกับมัน
+            const mine = hiddenUserIds.includes(viewingAsUserId) ? [viewingAsUserId] : [];
+            const outsideDept = v === "all" ? [] : others.filter((u) => u.departmentId !== v).map((u) => u.id);
+            hideAll([...mine, ...outsideDept]);
+          }}
+        >
           <SelectTrigger className="w-[160px] bg-white">
             <SelectValue placeholder="แผนก">
               {departmentId === "all" ? "ทุกแผนก" : (getDepartment(departmentId)?.name ?? "แผนก")}
