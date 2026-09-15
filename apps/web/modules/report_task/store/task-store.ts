@@ -786,8 +786,18 @@ export const useTaskStore = create<TaskStore>((set) => ({
     set((s) => {
       const t = s.tasks.find((x) => x.id === taskId);
       if (t) {
-        const label = useStickerStore.getState().stickers.find((st) => st.id === stickerId)?.label ?? stickerId;
+        const sticker = useStickerStore.getState().stickers.find((st) => st.id === stickerId);
+        const label = sticker?.label ?? stickerId;
         logActivity(byUserId, "ติดสติกเกอร์", t.title, t.id, label);
+        // "อีโมจิพวกนี้มีการแจ้งเตือนใช่ไหม" — ก่อนหน้านี้แค่บันทึก activity
+        // log ไม่เคยแจ้งเจ้าของงานเลย แจ้งเฉพาะ assignee (ไม่รวมหัวหน้าแผนก
+        // เหมือน notifyPenaltyChange — สติกเกอร์แค่ชม/หัก ไม่ใช่เรื่องใหญ่
+        // ระดับต้องให้หัวหน้ารับรู้ด้วย)
+        const actorName = getUser(byUserId)?.name ?? "มีคน";
+        const pts = sticker?.points ?? 0;
+        useNotificationStore
+          .getState()
+          .notifyMany(t.assigneeIds, byUserId, `${actorName} ติดสติกเกอร์ "${sticker?.emoji ?? "🏷️"} ${label}" ให้งาน "${t.title}"${pts !== 0 ? ` (${pts > 0 ? `+${pts}` : pts} คะแนน)` : ""}`);
       }
       return {
         tasks: s.tasks.map((x) =>
@@ -814,14 +824,23 @@ export const useTaskStore = create<TaskStore>((set) => ({
       };
     }),
   toggleEmojiReaction: (taskId, emoji, userId) =>
-    set((s) => ({
-      tasks: s.tasks.map((x) => {
-        if (x.id !== taskId) return x;
-        const current = x.emojiReactions?.[emoji] ?? [];
-        const next = current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId];
-        return { ...x, emojiReactions: { ...x.emojiReactions, [emoji]: next } };
-      }),
-    })),
+    set((s) => {
+      const t = s.tasks.find((x) => x.id === taskId);
+      // แจ้งเฉพาะตอน "ติด" ไม่ใช่ตอนกดซ้ำเพื่อเอาออก — กันสแปมแจ้งเตือนจาก
+      // การกดเข้า-ออกซ้ำๆ ("อีโมจิพวกนี้มีการแจ้งเตือนใช่ไหม")
+      if (t && !(t.emojiReactions?.[emoji] ?? []).includes(userId)) {
+        const actorName = getUser(userId)?.name ?? "มีคน";
+        useNotificationStore.getState().notifyMany(t.assigneeIds, userId, `${actorName} ส่ง ${emoji} ให้งาน "${t.title}"`);
+      }
+      return {
+        tasks: s.tasks.map((x) => {
+          if (x.id !== taskId) return x;
+          const current = x.emojiReactions?.[emoji] ?? [];
+          const next = current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId];
+          return { ...x, emojiReactions: { ...x.emojiReactions, [emoji]: next } };
+        }),
+      };
+    }),
   applyPenalty: (taskId, points, byUserId, reason) =>
     set((s) => {
       const t = s.tasks.find((x) => x.id === taskId);
