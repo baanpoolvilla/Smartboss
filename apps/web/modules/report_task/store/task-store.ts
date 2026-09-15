@@ -657,7 +657,10 @@ export const useTaskStore = create<TaskStore>((set) => ({
             authorId,
             `${actorName} แสดงความคิดเห็นในงาน "${t.title}": ${preview}`,
             undefined,
-            `/report-task/tasks?highlight=${t.id}`
+            `/report-task/tasks?highlight=${t.id}`,
+            undefined,
+            "task_comment",
+            t.id
           );
         return {
           ...t,
@@ -682,9 +685,26 @@ export const useTaskStore = create<TaskStore>((set) => ({
     })),
   addAttachment: (taskId, attachment) =>
     set((s) => ({
-      tasks: s.tasks.map((t) =>
-        t.id !== taskId ? t : { ...t, attachments: [...t.attachments, attachment] }
-      ),
+      tasks: s.tasks.map((t) => {
+        if (t.id !== taskId) return t;
+        // แจ้งคนกลุ่มเดียวกับตอนมีคอมเมนต์ใหม่ (ดู addComment ข้างบน) — ไฟล์แนบ
+        // ใหม่ที่ยังไม่มีใครเห็นก็ควรมีจุดแดงบนการ์ดเหมือนกัน ไม่ใช่แค่คอมเมนต์
+        const recipients = Array.from(new Set([...t.assigneeIds, t.assignedById, ...t.comments.map((c) => c.authorId)]));
+        const actorName = getUser(attachment.uploadedBy)?.name ?? "มีคน";
+        useNotificationStore
+          .getState()
+          .notifyMany(
+            recipients,
+            attachment.uploadedBy,
+            `${actorName} แนบไฟล์ "${attachment.name}" ในงาน "${t.title}"`,
+            undefined,
+            `/report-task/tasks?highlight=${t.id}`,
+            undefined,
+            "task_attachment",
+            t.id
+          );
+        return { ...t, attachments: [...t.attachments, attachment] };
+      }),
     })),
   removeAttachment: (taskId, attachmentId) =>
     set((s) => ({

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -42,6 +42,7 @@ import { todayIso } from "@/modules/report_task/lib/now";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
+import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
 import { getUser, displayName, getDepartment, users, isOwner, departmentIdsOf } from "@/modules/report_task/lib/directory";
 import { statusMeta, priorityMeta, taskStatusOrder, taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
@@ -125,6 +126,13 @@ export function TaskDetailSheet({
   const attachmentSettings = useAttachmentSettingsStore((s) => s.settings);
   const taskReviewSettings = useTaskReviewSettingsStore((s) => s.settings);
   const projectTopics = useProjectTopicStore((s) => s.topics);
+  const markTaskActivityRead = useNotificationStore((s) => s.markTaskActivityRead);
+
+  // เปิดดูรายละเอียดงานแล้ว = ถือว่าอ่านคอมเมนต์/ไฟล์แนบใหม่ของงานนี้หมดแล้ว
+  // ไม่ต้องรอให้ไปคลิกที่แจ้งเตือนแยกอีกที (ดู notification-store.ts's markTaskActivityRead)
+  useEffect(() => {
+    if (taskId) markTaskActivityRead(viewingAsUserId, taskId);
+  }, [taskId, viewingAsUserId, markTaskActivityRead]);
 
   const [comment, setComment] = useState("");
   const [commentAttachments, setCommentAttachments] = useState<Attachment[]>([]);

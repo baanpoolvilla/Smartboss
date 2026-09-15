@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { memo, useMemo, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Progress } from "@/modules/report_task/components/ui/progress";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
@@ -19,6 +19,8 @@ import type { Task } from "@/modules/report_task/types";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
+import { useNotificationStore } from "@/modules/report_task/store/notification-store";
+import { unreadTaskAttachmentCounts, unreadTaskCommentCounts } from "@/modules/report_task/lib/task-comment-activity";
 import { MessageSquare, Paperclip, History, SmilePlus, SearchCheck, Check, Circle, Star, Clock } from "lucide-react";
 import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
 import { StickerConfirmDialog } from "@/modules/report_task/components/shared/sticker-confirm-dialog";
@@ -49,6 +51,15 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
   const toggleAssigneeChecklist = useTaskStore((s) => s.toggleAssigneeChecklist);
   const stickers = useStickerStore((s) => s.stickers);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
+  const notifications = useNotificationStore((s) => s.notifications);
+  const unreadComments = useMemo(
+    () => unreadTaskCommentCounts(notifications, viewingAsUserId).get(task.id) ?? 0,
+    [notifications, viewingAsUserId, task.id]
+  );
+  const unreadAttachments = useMemo(
+    () => unreadTaskAttachmentCounts(notifications, viewingAsUserId).get(task.id) ?? 0,
+    [notifications, viewingAsUserId, task.id]
+  );
   const isDone = task.status === "done";
   // Strikethrough specifically means "confirmed finished" — a done-but-
   // unreviewed card ("รอตรวจสอบ") still needs someone to actually check it,
@@ -406,13 +417,31 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
             </span>
           )}
           {task.comments.length > 0 && (
-            <span className="flex items-center gap-0.5 text-[11px] font-medium" title="ความคิดเห็น">
+            <span
+              className={cn(
+                "relative flex items-center gap-0.5 text-[11px] font-medium",
+                unreadComments > 0 && "font-semibold text-(--danger)"
+              )}
+              title={unreadComments > 0 ? `มีความคิดเห็นใหม่ที่ยังไม่ได้อ่าน ${unreadComments} รายการ` : "ความคิดเห็น"}
+            >
               <MessageSquare className="h-3.5 w-3.5" /> {task.comments.length}
+              {unreadComments > 0 && (
+                <span className="absolute -right-1 -top-1 h-1.5 w-1.5 rounded-full bg-(--danger)" />
+              )}
             </span>
           )}
           {task.attachments.length > 0 && (
-            <span className="flex items-center gap-0.5 text-[11px] font-medium" title="ไฟล์แนบ">
+            <span
+              className={cn(
+                "relative flex items-center gap-0.5 text-[11px] font-medium",
+                unreadAttachments > 0 && "font-semibold text-(--danger)"
+              )}
+              title={unreadAttachments > 0 ? `มีไฟล์แนบใหม่ที่ยังไม่ได้ดู ${unreadAttachments} รายการ` : "ไฟล์แนบ"}
+            >
               <Paperclip className="h-3.5 w-3.5" /> {task.attachments.length}
+              {unreadAttachments > 0 && (
+                <span className="absolute -right-1 -top-1 h-1.5 w-1.5 rounded-full bg-(--danger)" />
+              )}
             </span>
           )}
         </div>

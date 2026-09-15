@@ -6,6 +6,8 @@ import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { useDepartmentStore } from "@/modules/report_task/store/department-store";
 import { canReviewTask, canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { aboutMeCountInPost } from "@/modules/report_task/lib/report-feed-activity";
+import { unreadTaskAttachmentCounts, unreadTaskCommentCounts } from "@/modules/report_task/lib/task-comment-activity";
+import type { AppNotification } from "@/modules/report_task/store/notification-store";
 import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import type { TaskReviewSettings } from "@/modules/report_task/store/task-review-settings-store";
 import type { Task } from "@/modules/report_task/types";
@@ -13,10 +15,10 @@ import type { User, Department } from "@/modules/report_task/types";
 
 /**
  * Combined "needs your attention in รายงานและงาน" count, rendered on the home
- * app-launcher tile — the sum of two independent things the module already
- * badges elsewhere, added together since this is the one spot with only a
- * single number to show:
- *   - "งานรอตรวจ" (see TaskReviewNavBadge's own doc for the exact rule)
+ * app-launcher tile — the sum of things the module already badges elsewhere,
+ * added together since this is the one spot with only a single number to
+ * show:
+ *   - "งานรอตรวจ" + unread task comments/attachments (see TaskReviewNavBadge's own doc)
  *   - "ความเคลื่อนไหวเกี่ยวกับคุณ" in report-feed (see ReportActivityNavBadge/
  *     aboutMeCountInPost — @mentions and comments on your own posts)
  * This sits outside the report_task module, so none of its sync components
@@ -34,20 +36,29 @@ export function AppTileReviewBadge() {
 
     async function load() {
       try {
-        const [tasksRes, employeesRes, departmentsRes, reportFeedRes, reviewSettingsRes] = await Promise.all([
+        const [tasksRes, employeesRes, departmentsRes, reportFeedRes, reviewSettingsRes, notificationsRes] = await Promise.all([
           fetch("/api/report-task/tasks"),
           fetch("/api/report-task/store/employees"),
           fetch("/api/report-task/store/departments"),
           fetch("/api/report-task/store/report-feed"),
           fetch("/api/report-task/store/task-review-settings"),
+          fetch("/api/report-task/store/notifications"),
         ]);
-        const [tasks, employees, departments, reportFeed, reviewSettings] = (await Promise.all([
+        const [tasks, employees, departments, reportFeed, reviewSettings, notifications] = (await Promise.all([
           tasksRes.json(),
           employeesRes.json(),
           departmentsRes.json(),
           reportFeedRes.json(),
           reviewSettingsRes.json(),
-        ])) as [Task[], User[], Department[], { topics?: ReportTopic[]; posts?: ReportPost[] } | null, TaskReviewSettings | null];
+          notificationsRes.json(),
+        ])) as [
+          Task[],
+          User[],
+          Department[],
+          { topics?: ReportTopic[]; posts?: ReportPost[] } | null,
+          TaskReviewSettings | null,
+          AppNotification[] | null,
+        ];
         if (cancelled) return;
 
         useEmployeeStore.getState().setEmployees(employees);
@@ -60,6 +71,10 @@ export function AppTileReviewBadge() {
             !t.reviewedBy &&
             canReviewTask(t.departmentIds, viewingAsUserId, reviewSettings ?? undefined)
         ).length;
+
+        let unreadActivityCount = 0;
+        for (const n of unreadTaskCommentCounts(notifications ?? [], viewingAsUserId).values()) unreadActivityCount += n;
+        for (const n of unreadTaskAttachmentCounts(notifications ?? [], viewingAsUserId).values()) unreadActivityCount += n;
 
         const topics = reportFeed?.topics ?? [];
         const posts = reportFeed?.posts ?? [];
@@ -74,7 +89,7 @@ export function AppTileReviewBadge() {
           0
         );
 
-        setCount(reviewCount + activityCount);
+        setCount(reviewCount + unreadActivityCount + activityCount);
       } catch {
         // Best-effort — a failed fetch just leaves the tile without a badge.
       }

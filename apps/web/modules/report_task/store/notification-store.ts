@@ -28,8 +28,13 @@ export interface AppNotification {
   link?: string;
   /** แยกแจ้งเตือนแบบ "โพสต์ใหม่ในห้อง" (ส่งให้เฉพาะ owner ไว้ทำภาพรวม CEO)
    * ออกจากแจ้งเตือนที่เจาะจงถึงผู้รับโดยตรง (ถูกแท็ก/ตอบกลับ/รีแอ็กชัน/งาน/
-   * ตั๋วปัญหา). ไม่มีค่า = เป็นแจ้งเตือนส่วนตัวของผู้รับ */
-  kind?: "room_post";
+   * ตั๋วปัญหา). "task_comment"/"task_attachment" = มีคนคอมเมนต์/แนบไฟล์ใหม่ใน
+   * งาน (ดู taskId) ไม่มีค่า = เป็นแจ้งเตือนส่วนตัวของผู้รับแบบอื่น ๆ */
+  kind?: "room_post" | "task_comment" | "task_attachment";
+  /** งานที่แจ้งเตือนนี้พูดถึง — ใส่เฉพาะ kind "task_comment"/"task_attachment"
+   * ไว้นับ unread ต่อการ์ดบน Kanban (ดู task-comment-activity.ts) ตัวข้อความ/
+   * ลิงก์เองไม่พอให้ parse เพราะรูปแบบข้อความเปลี่ยนได้ */
+  taskId?: string;
 }
 
 interface NotificationStore {
@@ -43,11 +48,18 @@ interface NotificationStore {
     meetingId?: string,
     link?: string,
     topicName?: string,
-    kind?: "room_post"
+    kind?: "room_post" | "task_comment" | "task_attachment",
+    taskId?: string
   ) => void;
   markAllRead: (userId: string) => void;
   /** ทำเครื่องหมายอ่านทีละรายการ — ใช้ตอนคลิกการ์ดแจ้งเตือน (สไตล์ Facebook) */
   markRead: (id: string) => void;
+  /** อ่านคอมเมนต์/ไฟล์แนบใหม่ของงานนี้หมดแล้ว — เรียกตอนเปิดดูรายละเอียดงาน
+   * (ไม่ใช่แค่คลิกจากกระดิ่ง) เพื่อให้ badge บนการ์ด/เมนูหายไปทันทีที่คนเข้าไป
+   * ดูจริง ไม่ต้องรอไปคลิกที่แจ้งเตือนแยกทีละอัน ล้างทั้งสอง kind พร้อมกัน —
+   * เปิดงานแล้วเห็นทั้งคอมเมนต์และไฟล์แนบอยู่แล้วในหน้าเดียวกัน ไม่มีเหตุผลจะ
+   * ล้างแค่อย่างใดอย่างหนึ่ง */
+  markTaskActivityRead: (userId: string, taskId: string) => void;
 }
 
 // Server-synced via ServerStoreSync (apiKey "notifications") in
@@ -62,7 +74,7 @@ export const useNotificationStore = create<NotificationStore>()(
             ...s.notifications,
           ],
         })),
-      notifyMany: (userIds, byUserId, message, meetingId, link, topicName, kind) =>
+      notifyMany: (userIds, byUserId, message, meetingId, link, topicName, kind, taskId) =>
         set((s) => {
           const fresh = userIds
             .filter((id) => id !== byUserId)
@@ -75,6 +87,7 @@ export const useNotificationStore = create<NotificationStore>()(
               link,
               topicName,
               kind,
+              taskId,
               createdAt: new Date().toISOString(),
               read: false,
             }));
@@ -87,6 +100,17 @@ export const useNotificationStore = create<NotificationStore>()(
       markRead: (id) =>
         set((s) => ({
           notifications: s.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)),
+        })),
+      markTaskActivityRead: (userId, taskId) =>
+        set((s) => ({
+          notifications: s.notifications.map((n) =>
+            n.userId === userId &&
+            n.taskId === taskId &&
+            (n.kind === "task_comment" || n.kind === "task_attachment") &&
+            !n.read
+              ? { ...n, read: true }
+              : n
+          ),
         })),
     })
 );
