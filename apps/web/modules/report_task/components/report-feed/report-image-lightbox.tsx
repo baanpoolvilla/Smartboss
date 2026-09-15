@@ -100,6 +100,10 @@ export function ReportImageLightbox({
       if (e.key === "ArrowLeft" && hasMultiple) onIndexChange((index - 1 + images.length) % images.length);
       if (e.key === "ArrowRight" && hasMultiple) onIndexChange((index + 1) % images.length);
       if (e.key === "Escape") onClose();
+      // Ctrl+Plus/Minus/0 is the keyboard route to the same native page-zoom
+      // this lightbox otherwise blocks via wheel+ctrlKey below — same reason
+      // (a zoomed page drags the fixed toolbar off past the screen edge).
+      if (e.ctrlKey && (e.key === "+" || e.key === "-" || e.key === "=" || e.key === "0")) e.preventDefault();
     }
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
@@ -246,7 +250,7 @@ export function ReportImageLightbox({
       >
         <button
           onClick={onClose}
-          className="absolute top-4 left-4 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
+          className="absolute top-4 left-4 z-10 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
           aria-label="ปิด"
         >
           <X className="h-5 w-5" />
@@ -262,7 +266,7 @@ export function ReportImageLightbox({
             not just while zoomed, so it reads as "current zoom level" even
             at the 100% resting state. */}
         {!isVideo && !isDoc && (
-          <div className="absolute top-4 right-4 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          <div className="absolute top-4 right-4 z-10 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
             <a
               href={downloadHref}
               download={image.url ? undefined : image.name}
@@ -299,7 +303,7 @@ export function ReportImageLightbox({
               e.stopPropagation();
               onIndexChange((index - 1 + images.length) % images.length);
             }}
-            className="absolute left-4 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
+            className="absolute left-4 top-1/2 z-10 -translate-y-1/2 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
             aria-label="รูปก่อนหน้า"
           >
             <ChevronLeft className="h-6 w-6" />
@@ -430,7 +434,7 @@ export function ReportImageLightbox({
               e.stopPropagation();
               onIndexChange((index + 1) % images.length);
             }}
-            className="absolute right-4 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
+            className="absolute right-4 top-1/2 z-10 -translate-y-1/2 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
             aria-label="รูปถัดไป"
           >
             <ChevronRight className="h-6 w-6" />
@@ -446,7 +450,7 @@ export function ReportImageLightbox({
           // to, same as Discord's own lightbox strip
           // ("ให้กดง่ายหน่อยได้ไหมใหญ่กว่านี้ หรือแสดงเป็นภาพ").
           <div
-            className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2.5 max-w-[92vw]"
+            className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 flex items-center gap-2.5 max-w-[92vw]"
             onClick={(e) => e.stopPropagation()}
           >
             <span className="text-xs text-white/80 tabular-nums shrink-0">
