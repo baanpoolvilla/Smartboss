@@ -195,7 +195,7 @@ function topicDepth(t: ReportTopic, byId: Map<string, ReportTopic>): number {
 }
 
 export function TopicSidebar({
-  topics,
+  topics: topicsProp,
   activeId,
   onSelect,
   fillHeight,
@@ -255,6 +255,20 @@ export function TopicSidebar({
   const [icon, setIcon] = useState<string | undefined>(undefined);
   const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
   const [parentId, setParentId] = useState<string | undefined>(undefined);
+  // Which department groups are collapsed in the "ห้องย่อย ชั้น 2" parent
+  // picker — company-wide, every sub-topic flattened by department read as
+  // too much to scan through even after grouping them
+  // ("กดยุบย่อได้นะ ถ้าอยากดูหมวดไหนไม่อยากดูหมวดไหนอะ แบบปิดเปิดได้"). Starts
+  // empty (all expanded), same default the sidebar's own tree uses.
+  const [collapsedSubParentGroups, setCollapsedSubParentGroups] = useState<Set<string>>(new Set());
+  function toggleSubParentGroupCollapsed(parentName: string) {
+    setCollapsedSubParentGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(parentName)) next.delete(parentName);
+      else next.add(parentName);
+      return next;
+    });
+  }
   const [description, setDescription] = useState("");
   // Create-only: an explicit three-way choice instead of a dropdown
   // defaulting to "none" — "หัวข้อหลัก" (brand-new top-level topic),
@@ -290,10 +304,24 @@ export function TopicSidebar({
   }
 
   // 1) จัดลำดับห้อง (drag reorder) — a local editing mode, canManageTopics-
-  // only (see the header toggle button). Everything below sorts/positions by
-  // `order` (fallback createdAt via orderKey) so leaving this mode is
-  // "just done", not a separate save step.
+  // only (see the header toggle button). Staged, not live: every drag/▲▼
+  // while this is on only mutates `pendingTopics` (below), a local working
+  // copy — nothing reaches the real store (moveTopic/updateTopicSettings)
+  // until "เสร็จ" actually commits it. Used to write on every single click
+  // instead, which read as sluggish ("กดแล้วจะสลับค้าง" — each click really
+  // was a live save/sync round-trip) and, worse, meant a drag was already
+  // permanent the instant you made it — refreshing before ever pressing
+  // "เสร็จ" still showed the moved position ("ยังไม่กดเสร็จเลยนะ"), with no
+  // way to back out short of manually dragging everything back by hand.
+  // "ยกเลิก" now just drops `pendingTopics` untouched — since nothing was
+  // ever written, there's nothing to revert.
   const [reorderMode, setReorderMode] = useState(false);
+  const [pendingTopics, setPendingTopics] = useState<ReportTopic[] | null>(null);
+  // Every read of `topics` below (grouping, ordering, drag targets, the lot)
+  // transparently sees the staged copy while reorder mode has one pending —
+  // otherwise the real, saved list. No call site elsewhere in this
+  // component needs to know which one it's looking at.
+  const topics = reorderMode && pendingTopics ? pendingTopics : topicsProp;
   const [draggedTopicId, setDraggedTopicId] = useState<string | null>(null);
   // Which room's ⏰ tooltip is open on mobile — base-ui's Tooltip only reacts
   // to hover/focus, neither of which a tap produces on touch, so tapping the
@@ -310,18 +338,35 @@ export function TopicSidebar({
   }
 
   /** Reindexes one sibling group (same parentId) to 0..n-1 after `movedId`
-   * lands in `orderedList` — logs the activity entry only for the moved
-   * topic itself (via moveTopic); the rest are silently renumbered
-   * (updateTopicSettings) so a drag never spams the log with every sibling
-   * that merely shifted position. */
-  function commitOrder(newParentId: string | undefined, orderedList: ReportTopic[], movedId: string) {
+   * lands in `orderedList` — staged into `pendingTopics` only, nothing
+   * written to the real store yet (see commitPendingOrder, fired by "เสร็จ"). */
+  function applyLocalReorder(newParentId: string | undefined, orderedList: ReportTopic[], movedId: string) {
+    const patchById = new Map<string, Partial<ReportTopic>>();
     orderedList.forEach((t, i) => {
-      if (t.id === movedId) {
-        moveTopic(t.id, { parentId: newParentId, order: i }, viewingAsUserId);
-      } else if (t.order !== i || t.parentId !== newParentId) {
-        updateTopicSettings(t.id, { order: i });
-      }
+      if (t.id === movedId) patchById.set(t.id, { parentId: newParentId, order: i });
+      else if (t.order !== i || t.parentId !== newParentId) patchById.set(t.id, { order: i });
     });
+    setPendingTopics((prev) => (prev ?? topicsProp).map((t) => (patchById.has(t.id) ? { ...t, ...patchById.get(t.id) } : t)));
+  }
+
+  /** Fired once, by "เสร็จ" — diffs the staged copy against what's actually
+   * saved and writes only what really changed. Logs the activity entry only
+   * for a topic whose parentId itself changed (via moveTopic); everything
+   * that merely got renumbered by the shift uses the quieter
+   * updateTopicSettings, so leaving a whole group re-sorted never spams the
+   * log with every sibling that just shifted position. */
+  function commitPendingOrder() {
+    if (!pendingTopics) return;
+    const originalById = new Map(topicsProp.map((t) => [t.id, t] as const));
+    for (const t of pendingTopics) {
+      const original = originalById.get(t.id);
+      if (!original || (original.parentId === t.parentId && original.order === t.order)) continue;
+      if (original.parentId !== t.parentId) {
+        moveTopic(t.id, { parentId: t.parentId, order: t.order ?? 0 }, viewingAsUserId);
+      } else {
+        updateTopicSettings(t.id, { order: t.order ?? 0 });
+      }
+    }
   }
 
   /** Drop `draggedId` next to `targetId`, joining whatever sibling group
@@ -343,7 +388,7 @@ export function TopicSidebar({
     if (targetIndex === -1) return;
     const insertAt = position === "before" ? targetIndex : targetIndex + 1;
     const nextSiblings = [...siblings.slice(0, insertAt), dragged, ...siblings.slice(insertAt)];
-    commitOrder(newParentId, nextSiblings, draggedId);
+    applyLocalReorder(newParentId, nextSiblings, draggedId);
   }
 
   /** ▲▼ fallback — swaps `t` with its previous/next sibling (same parentId), then reindexes the group the same way a drag-drop does. */
@@ -355,7 +400,7 @@ export function TopicSidebar({
     const reordered = [...siblings];
     const [moved] = reordered.splice(idx, 1);
     reordered.splice(swapIdx, 0, moved!);
-    commitOrder(t.parentId, reordered, t.id);
+    applyLocalReorder(t.parentId, reordered, t.id);
   }
 
   // `defaultParentId` lets a top-level topic's own row jump straight into
@@ -472,6 +517,22 @@ export function TopicSidebar({
   // nests under.
   const topLevelParentOptions = parentOptions.filter(isTopLevel);
   const subParentOptions = parentOptions.filter((t) => !isTopLevel(t));
+  // The "ชั้น 2" picker's own options are every sub-topic company-wide,
+  // flattened — a long undifferentiated list across every room's own
+  // sub-topics with no way to tell which department each belonged to
+  // ("อยากให้แยกหมวดหมู่ให้ชัดเจนว่าอะไรคืออะไร"). Grouped by each one's real
+  // parent room instead, same SelectGroup/SelectLabel pattern the "ชั้น 1"
+  // vs "ชั้น 2" split itself used — the inline "(ย่อยของ X)" suffix is
+  // redundant once the group header already says it, so it's dropped here.
+  const subParentOptionsByParent = useMemo(() => {
+    const groups = new Map<string, { parentName: string; items: ReportTopic[] }>();
+    for (const t of subParentOptions) {
+      const parentName = (t.parentId ? topicById.get(t.parentId)?.name : undefined) ?? "อื่นๆ";
+      if (!groups.has(parentName)) groups.set(parentName, { parentName, items: [] });
+      groups.get(parentName)!.items.push(t);
+    }
+    return [...groups.values()].sort((a, b) => a.parentName.localeCompare(b.parentName, "th"));
+  }, [subParentOptions, topicById]);
   const canPickParent = editor?.mode !== "edit" || !topics.some((t) => t.parentId === editor.topic.id);
   // A sub-topic is text-only — no icon/logo picker, in the form or anywhere
   // else — so this mirrors the same effective-parent check `save()` uses.
@@ -1169,14 +1230,33 @@ export function TopicSidebar({
         {canManageTopics && (
           <div className="flex items-center gap-1.5">
             {reorderMode ? (
-              <Button
-                size="sm"
-                className="h-8 gap-1 rounded-full bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white px-3.5 text-xs"
-                onClick={() => setReorderMode(false)}
-              >
-                <Check className="h-3.5 w-3.5" />
-                เสร็จ
-              </Button>
+              <>
+                {/* ทิ้ง pendingTopics เฉยๆ — ไม่เคยเขียนอะไรลง store จริงเลย
+                    ตราบใดที่ยังไม่กด "เสร็จ" เลยไม่มีอะไรต้อง revert */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 rounded-full px-3.5 text-xs"
+                  onClick={() => {
+                    setPendingTopics(null);
+                    setReorderMode(false);
+                  }}
+                >
+                  ยกเลิก
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-8 gap-1 rounded-full bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white px-3.5 text-xs"
+                  onClick={() => {
+                    commitPendingOrder();
+                    setPendingTopics(null);
+                    setReorderMode(false);
+                  }}
+                >
+                  <Check className="h-3.5 w-3.5" />
+                  เสร็จ
+                </Button>
+              </>
             ) : (
               <>
                 <Tooltip>
@@ -1184,7 +1264,10 @@ export function TopicSidebar({
                     render={
                       <button
                         type="button"
-                        onClick={() => setReorderMode(true)}
+                        onClick={() => {
+                          setPendingTopics(null); // defensive — should already be null, see "เสร็จ"/"ยกเลิก"
+                          setReorderMode(true);
+                        }}
                         aria-label="จัดลำดับห้อง"
                         className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)] transition-colors"
                       >
@@ -1409,13 +1492,31 @@ export function TopicSidebar({
                               </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
-                              {subParentOptions.map((t) => {
-                                const grandparent = t.parentId ? topics.find((p) => p.id === t.parentId) : undefined;
+                              {subParentOptionsByParent.map(({ parentName, items }) => {
+                                const collapsed = collapsedSubParentGroups.has(parentName);
                                 return (
-                                  <SelectItem key={t.id} value={t.id}>
-                                    {t.name}
-                                    {grandparent ? ` (ย่อยของ ${grandparent.name})` : ""}
-                                  </SelectItem>
+                                  <SelectGroup key={parentName}>
+                                    {/* A clickable header, not the plain
+                                        SelectLabel every other group uses —
+                                        stopPropagation so toggling a group
+                                        never also closes the dropdown or
+                                        reads as picking an item. */}
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        toggleSubParentGroupCollapsed(parentName);
+                                      }}
+                                      className="flex w-full items-center gap-1 px-1.5 py-1 text-xs text-muted-foreground hover:text-[var(--ink)] cursor-pointer"
+                                    >
+                                      <ChevronRight className={cn("h-3 w-3 shrink-0 transition-transform", !collapsed && "rotate-90")} />
+                                      {parentName}
+                                    </button>
+                                    {!collapsed && items.map((t) => (
+                                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                                    ))}
+                                  </SelectGroup>
                                 );
                               })}
                             </SelectContent>
