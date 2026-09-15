@@ -32,6 +32,7 @@ import { AddCalendarDialog } from "./add-calendar-dialog";
 import { AddTodoDialog } from "./add-todo-dialog";
 import { EventPreviewCard } from "./event-preview-card";
 import { RangeSummaryDialog, type SummaryRange } from "./range-summary-dialog";
+import { SubmitLeaveDialog } from "./submit-leave-dialog";
 import { TaskDetailSheet } from "@/modules/report_task/components/kanban/task-detail-sheet";
 import { NewTaskDialog } from "@/modules/report_task/components/kanban/new-task-dialog";
 import { useEventColorStore } from "@/modules/report_task/store/event-color-store";
@@ -269,6 +270,11 @@ export function CalendarView() {
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createDate, setCreateDate] = useState<string | undefined>(undefined);
+  // Real ลา submission (goes through workforce, unlike createOpen's local
+  // "วันหยุดประจำ" picker above) — separate open/date state since it's a
+  // completely different dialog (SubmitLeaveDialog), not another mode of
+  // NewTaskDialog.
+  const [submitLeaveDate, setSubmitLeaveDate] = useState<string | null>(null);
   // The To Do add/edit dialog has its own tiny state, separate from
   // createOpen/createDate above (those still drive NewTaskDialog for
   // meetings/leaves) — `todo` present means "editing this one", absent
@@ -419,6 +425,11 @@ export function CalendarView() {
   function openAddFromSummary(date: string) {
     setSummaryRange(null);
     openCreate(date);
+  }
+
+  function openSubmitLeaveFromSummary(date: string) {
+    setSummaryRange(null);
+    setSubmitLeaveDate(date);
   }
 
   function handleToggleTodo(eventId: string) {
@@ -1413,6 +1424,7 @@ export function CalendarView() {
         onRemoveTodo={removeTodo}
         showTodos={showTodosInWork}
         onAddSchedule={openAddFromSummary}
+        onSubmitLeave={openSubmitLeaveFromSummary}
         onAddTodo={(date) => { setSummaryRange(null); openTodoDialog({ date }); }}
       />
       <TaskDetailSheet taskId={openTaskId} onOpenChange={(open) => !open && setOpenTaskId(null)} />
@@ -1423,8 +1435,9 @@ export function CalendarView() {
         open={createOpen}
         onOpenChange={setCreateOpen}
         // No "ลา" here — a leave saved from this module never persisted (the
-        // leaves store is a read-only mirror of workforce). Leave is filed at
-        // /hr (calendar tab), linked from the schedule sidebar.
+        // leaves store is a read-only mirror of workforce). Real ลา submission
+        // now goes through SubmitLeaveDialog below instead (same workforce
+        // action /hr's own calendar uses) — this dialog stays "วันหยุดประจำ" only.
         defaultType="dayoff"
         allowedTypes={["dayoff"]}
         defaultDate={createDate}
@@ -1434,6 +1447,11 @@ export function CalendarView() {
         onOpenChange={(open) => !open && setTodoDialogState(null)}
         defaultDate={todoDialogState?.date}
         editingTodo={todoDialogState?.todo ?? null}
+      />
+      <SubmitLeaveDialog
+        open={submitLeaveDate !== null}
+        onOpenChange={(open) => !open && setSubmitLeaveDate(null)}
+        defaultDate={submitLeaveDate ?? undefined}
       />
     </div>
   );

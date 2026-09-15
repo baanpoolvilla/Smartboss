@@ -60,6 +60,7 @@ export function RangeSummaryDialog({
   onRemoveTodo,
   showTodos = true,
   onAddSchedule,
+  onSubmitLeave,
   onAddTodo,
 }: {
   range: SummaryRange | null;
@@ -80,8 +81,13 @@ export function RangeSummaryDialog({
   /** Mirrors calendar-view.tsx's showTodosInWork overlay switch — hides the
    *  to-do section from the work-tab summary when the user turned it off. */
   showTodos?: boolean;
-  /** Same idea, for the schedule tab's "เพิ่มวันลา/วันหยุดประจำ" button. */
+  /** Same idea, for the schedule tab's "เพิ่มวันหยุดประจำ" button (the local
+   *  routine day-off picker — not a real leave submission, see its own doc). */
   onAddSchedule?: (date: string) => void;
+  /** Opens SubmitLeaveDialog for this date — the real ลา submission that goes
+   *  through the same workforce action HR's own calendar uses, distinct from
+   *  onAddSchedule's local "วันหยุดประจำ" picker above. */
+  onSubmitLeave?: (date: string) => void;
   /** Same idea, for the work tab's "เพิ่มสิ่งที่ต้องทำ" button — this is now
    *  the only way to add anything (task/meeting/to-do) from this dialog. */
   onAddTodo?: (date: string) => void;
@@ -372,14 +378,27 @@ export function RangeSummaryDialog({
           </Button>
         )}
 
-        {tab === "schedule" && isSingleDay && onAddSchedule && (
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => onAddSchedule(range.start)}
-          >
-            <CalendarPlus className="h-4 w-4" /> เพิ่มวันลา / วันหยุดประจำ
-          </Button>
+        {tab === "schedule" && isSingleDay && (onAddSchedule || onSubmitLeave) && (
+          <div className="flex gap-2">
+            {onSubmitLeave && (
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => onSubmitLeave(range.start)}
+              >
+                <CalendarPlus className="h-4 w-4" /> ยื่นวันลา
+              </Button>
+            )}
+            {onAddSchedule && (
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => onAddSchedule(range.start)}
+              >
+                <CalendarPlus className="h-4 w-4" /> เพิ่มวันหยุดประจำ
+              </Button>
+            )}
+          </div>
         )}
 
         <p className="flex items-center gap-1.5 text-[11px] text-[var(--ink-soft)] pt-1">

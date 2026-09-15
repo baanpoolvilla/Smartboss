@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/modules/report_task/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Badge } from "@/modules/report_task/components/ui/badge";
@@ -23,10 +23,12 @@ import {
 import { formatDate, addDays } from "@/modules/report_task/lib/format";
 import { todayIso } from "@/modules/report_task/lib/now";
 import { rangeLabel, inRange, type ViewRange } from "@/modules/report_task/lib/date-filter";
+import { SubmitLeaveDialog } from "./submit-leave-dialog";
 import { cn } from "@/modules/report_task/lib/utils";
-import { User, Plus, X, Pencil, Check, Repeat, ChevronLeft, ChevronRight } from "lucide-react";
+import { User, Plus, X, Pencil, Check, Repeat, ChevronLeft, ChevronRight, ArrowLeftRight } from "lucide-react";
 import { toast } from "sonner";
 import type { CalendarEvent } from "@/modules/report_task/types";
+import { swapLeaveAction } from "@/app/(shell)/hr/actions";
 
 /** A single concrete day off for the month currently in view — either a
  * plain one-off pick, or one week's occurrence of a recurring rule. Both
@@ -55,6 +57,17 @@ export function LeaveSidebar({
   const leaves = useLeaveStore((s) => s.leaves);
   const leaveTypes = useLeaveTypeStore((s) => s.types);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
+  const [submitLeaveOpen, setSubmitLeaveOpen] = useState(false);
+  // สลับวันลาจริง (workforce) — ต่างจาก startMove/confirmMove ด้านล่างซึ่งเป็น
+  // "ย้ายวันหยุดประจำ" ของโมดูลนี้เอง (local store, sync ทันที) อันนี้ต้องยิง
+  // ไปฝ่ายบุคคลจริงแล้วรอผล จึงมี state/loading ของตัวเองแยกกัน
+  const [leaveSwapContext, setLeaveSwapContext] = useState<{
+    employmentId: string | null;
+    requests: { leaveTypeId: string; startsOn: string; displayLabel: string }[];
+  } | null>(null);
+  const [swappingLeaveDate, setSwappingLeaveDate] = useState<string | null>(null);
+  const [leaveSwapTarget, setLeaveSwapTarget] = useState(todayIso());
+  const [leaveSwapPending, startLeaveSwapTransition] = useTransition();
   const hiddenUserIds = useCalendarVisibilityStore((s) => s.hiddenUserIds);
   const myDeptIds = new Set(departmentIdsOf([viewingAsUserId]));
 
@@ -259,6 +272,62 @@ export function LeaveSidebar({
    *  whole routine (see the pill's dropdown below). */
   function removeManualEntry(date: string) {
     removePickedDate(viewingAsUserId, date);
+  }
+
+  /** เปิดโหมดสลับวันลาจริง — โหลด context (employment id + คำขอของตัวเองที่ยัง
+   * มีผล) รอบแรกที่ใช้เท่านั้น ไม่ต้องเสียเวลาโหลดล่วงหน้าตั้งแต่เปิดการ์ด */
+  async function startLeaveSwap(date: string) {
+    setLeaveSwapTarget(date);
+    setSwappingLeaveDate(date);
+    if (leaveSwapContext) return;
+    try {
+      const res = await fetch("/api/report-task/hr/leave-context");
+      const data = await res.json();
+      if (data.error) {
+        toast.error(data.error);
+        setSwappingLeaveDate(null);
+        return;
+      }
+      setLeaveSwapContext({ employmentId: data.employmentId, requests: data.myRequests ?? [] });
+    } catch {
+      toast.error("เชื่อมต่อระบบบุคคลไม่ได้");
+      setSwappingLeaveDate(null);
+    }
+  }
+
+  function confirmLeaveSwap() {
+    if (!swappingLeaveDate || !leaveSwapContext) return;
+    const fromDate = swappingLeaveDate;
+    const request = leaveSwapContext.requests.find((r) => r.startsOn === fromDate);
+    if (!request) {
+      toast.error("ไม่พบคำขอนี้ในระบบบุคคล — สลับไม่ได้");
+      setSwappingLeaveDate(null);
+      return;
+    }
+    if (leaveSwapTarget === fromDate) {
+      setSwappingLeaveDate(null);
+      return;
+    }
+    if (!window.confirm(`ขอสลับวันหยุดจาก ${fromDate} เป็น ${leaveSwapTarget} — ต้องรออนุมัติก่อนมีผล ดำเนินการ?`)) {
+      return;
+    }
+    startLeaveSwapTransition(async () => {
+      const result = await swapLeaveAction({
+        employmentId: leaveSwapContext.employmentId ?? "",
+        leaveTypeId: request.leaveTypeId,
+        fromDate,
+        toDate: leaveSwapTarget,
+        reason: "",
+        displayLabel: request.displayLabel,
+      });
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("ส่งคำขอสลับแล้ว — วันเดิมยังเป็นวันหยุดของคุณจนกว่าจะได้รับอนุมัติ");
+      setSwappingLeaveDate(null);
+      setLeaveSwapContext(null); // รอบหน้าดึงใหม่ ให้เห็นคำขอที่เพิ่งยื่นด้วย
+    });
   }
 
   // type "dayoff" = สิทธิ์วันหยุดประจำแบบ auto-approve จาก workforce (เช่น
@@ -470,27 +539,74 @@ export function LeaveSidebar({
 
           <div className="space-y-1.5">
             <p className="text-[11px] font-medium text-[var(--ink-soft)]">{myHeading}</p>
-            {/* วันลายื่นที่โมดูลบุคคลที่เดียว — ที่นี่อ่านอย่างเดียว (ดู
-                lib/db/workforce-calendar.ts) เดิมมีปุ่มลงวันลาในปฏิทินนี้ด้วย
-                แต่บันทึกไม่เคยถึงฐานข้อมูลจริง จึงเหลือไว้แค่ทางเข้า */}
-            <a
-              href="/hr?tab=calendar"
-              className="inline-flex items-center gap-1 text-xs text-[var(--brand-green-dark)] hover:underline"
-            >
-              ยื่นลา / ยกเลิกวันลา ที่ฝ่ายบุคคล →
-            </a>
+            {/* ยื่น/สลับตรงนี้ได้แล้ว — เรียก submitLeaveAction/swapLeaveAction
+                ตัวเดียวกับ /hr เอง (ดู submit-leave-dialog.tsx, confirmLeaveSwap
+                ด้านบน) ของเดิมเคยมีปุ่มลงวันลาในปฏิทินนี้แต่บันทึกไม่เคยถึง
+                ฐานข้อมูลจริง เลยลดเหลือแค่ลิงก์ไป /hr — ยกเลิก/แก้ชื่อของใบที่
+                ยื่นแล้ว ยังต้องไปที่ /hr อยู่ (ยังไม่ได้ทำหน้านั้นซ้ำที่นี่) */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <button
+                type="button"
+                onClick={() => setSubmitLeaveOpen(true)}
+                className="inline-flex items-center gap-1 text-xs font-medium text-[var(--brand-green-dark)] hover:underline"
+              >
+                + ยื่นวันลา
+              </button>
+              <a
+                href="/hr?tab=calendar"
+                className="text-xs text-[var(--ink-soft)] hover:underline"
+              >
+                ยกเลิก/แก้วันลาที่ยื่นแล้ว ที่ฝ่ายบุคคล →
+              </a>
+            </div>
             {myLeave.length === 0 ? (
               <p className="text-sm text-[var(--ink-soft)]">{emptyMyLeaveLabel}</p>
             ) : (
               <div className="space-y-1.5">
-                {myLeave.map((e) => (
-                  <div key={e.id} className="flex items-center justify-between gap-2 text-sm">
-                    <Badge variant="secondary" className="text-[10px] shrink-0">
-                      {leaveTypeLabel(e)}
-                    </Badge>
-                    <span className="text-xs text-[var(--ink-soft)] shrink-0">{formatDate(e.start)}</span>
-                  </div>
-                ))}
+                {myLeave.map((e) => {
+                  const swapping = swappingLeaveDate === e.start;
+                  if (swapping) {
+                    return (
+                      <div key={e.id} className="flex items-center gap-1.5 text-sm">
+                        <Badge variant="secondary" className="text-[10px] shrink-0">
+                          {leaveTypeLabel(e)}
+                        </Badge>
+                        {leaveSwapContext ? (
+                          <>
+                            <DatePickerField value={leaveSwapTarget} onChange={setLeaveSwapTarget} minDate={todayIso()} className="h-6 text-xs" />
+                            <button type="button" onClick={confirmLeaveSwap} disabled={leaveSwapPending} aria-label="ยืนยันสลับวันลา" title="ยืนยัน">
+                              <Check className="h-3 w-3 text-[var(--brand-green-dark)] hover:opacity-70" />
+                            </button>
+                            <button type="button" onClick={() => setSwappingLeaveDate(null)} aria-label="ยกเลิกสลับวันลา" title="ยกเลิก">
+                              <X className="h-3 w-3 text-[var(--ink-soft)] hover:text-[var(--ink)]" />
+                            </button>
+                          </>
+                        ) : (
+                          <span className="text-xs text-[var(--ink-soft)]">กำลังโหลด…</span>
+                        )}
+                      </div>
+                    );
+                  }
+                  return (
+                    <div key={e.id} className="group flex items-center justify-between gap-2 text-sm">
+                      <Badge variant="secondary" className="text-[10px] shrink-0">
+                        {leaveTypeLabel(e)}
+                      </Badge>
+                      <span className="flex items-center gap-1 shrink-0">
+                        <span className="text-xs text-[var(--ink-soft)]">{formatDate(e.start)}</span>
+                        <button
+                          type="button"
+                          onClick={() => startLeaveSwap(e.start)}
+                          className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+                          aria-label={`ขอสลับวันลา ${formatDate(e.start)}`}
+                          title="ขอสลับวัน (ต้องรออนุมัติ)"
+                        >
+                          <ArrowLeftRight className="h-3 w-3 text-[var(--ink-soft)] hover:text-[var(--ink)]" />
+                        </button>
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -627,6 +743,7 @@ export function LeaveSidebar({
           </div>
         </CardContent>
       </Card>
+      <SubmitLeaveDialog open={submitLeaveOpen} onOpenChange={setSubmitLeaveOpen} />
     </>
   );
 }
