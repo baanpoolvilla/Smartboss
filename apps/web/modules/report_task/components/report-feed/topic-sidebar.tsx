@@ -27,7 +27,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
 } from "@/modules/report_task/components/ui/dropdown-menu";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
 import { Textarea } from "@/modules/report_task/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/modules/report_task/components/ui/tooltip";
 import { useReportFeedStore, topicColors, type ReportTopic, type ReportPost } from "@/modules/report_task/store/report-feed-store";
@@ -456,6 +456,15 @@ export function TopicSidebar({
   const parentOptions = topics.filter(
     (t) => topicDepth(t, topicById) <= 1 && (editor?.mode !== "edit" || t.id !== editor.topic.id)
   );
+  // Split for the picker UI so "pick a top-level room" and "pick an
+  // existing sub-topic (nests one tier deeper again)" read as two clearly
+  // different choices instead of one flat list mixing both — the exact
+  // confusion this was reported over ("แยกกันสิ ระหว่างหัวข้อย่อยและย่อยอีกที
+  // ใช้คำพูดอะไรให้ไม่งง"). A sub-topic option also shows its own parent's
+  // name, since "weekly-sale" alone doesn't say which room it already
+  // nests under.
+  const topLevelParentOptions = parentOptions.filter(isTopLevel);
+  const subParentOptions = parentOptions.filter((t) => !isTopLevel(t));
   const canPickParent = editor?.mode !== "edit" || !topics.some((t) => t.parentId === editor.topic.id);
   // A sub-topic is text-only — no icon/logo picker, in the form or anywhere
   // else — so this mirrors the same effective-parent check `save()` uses.
@@ -1336,16 +1345,47 @@ export function TopicSidebar({
                     ) : parentOptions.length === 0 ? (
                       <p className="text-[11px] text-[var(--ink-soft)]">ยังไม่มีหัวข้อหลักในระบบเลย — สร้างหัวข้อหลักก่อนอันนี้ แล้วค่อยกลับมาสร้างหัวข้อย่อยใต้มันทีหลังได้</p>
                     ) : createKind === "sub" ? (
-                      <Select value={parentId ?? ""} onValueChange={(v) => v && setParentId(v)}>
-                        <SelectTrigger className="w-full">
-                          <SelectValue>{parentId ? topics.find((t) => t.id === parentId)?.name : "เลือกหัวข้อหลัก..."}</SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {parentOptions.map((t) => (
-                            <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="space-y-1">
+                        <Select value={parentId ?? ""} onValueChange={(v) => v && setParentId(v)}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue>{parentId ? topics.find((t) => t.id === parentId)?.name : "เลือกหัวข้อหลัก..."}</SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {topLevelParentOptions.length > 0 && (
+                              <SelectGroup>
+                                <SelectLabel>หัวข้อหลัก</SelectLabel>
+                                {topLevelParentOptions.map((t) => (
+                                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                                ))}
+                              </SelectGroup>
+                            )}
+                            {subParentOptions.length > 0 && (
+                              <SelectGroup>
+                                <SelectLabel>หัวข้อย่อย (เลือกแล้วจะได้หัวข้อย่อยซ้อนอีกชั้น)</SelectLabel>
+                                {subParentOptions.map((t) => {
+                                  const grandparent = t.parentId ? topics.find((p) => p.id === t.parentId) : undefined;
+                                  return (
+                                    <SelectItem key={t.id} value={t.id}>
+                                      {t.name}
+                                      {grandparent ? ` (ย่อยของ ${grandparent.name})` : ""}
+                                    </SelectItem>
+                                  );
+                                })}
+                              </SelectGroup>
+                            )}
+                          </SelectContent>
+                        </Select>
+                        {/* บอกผลลัพธ์ที่จะได้ตรงๆ ตามตัวที่เลือกจริง — กันงงว่า
+                            "เลือกอันนี้แล้วจะได้ห้องย่อยชั้นไหนกันแน่" โดยไม่ต้อง
+                            นั่งนับเอาเองจากชื่อ */}
+                        {parentId && (
+                          <p className="text-[11px] text-[var(--ink-soft)]">
+                            {topics.find((t) => t.id === parentId && !isTopLevel(t))
+                              ? "จะกลายเป็นหัวข้อย่อยซ้อนอีกชั้นใต้หัวข้อย่อยที่เลือก"
+                              : "จะกลายเป็นหัวข้อย่อยชั้นแรกใต้หัวข้อหลักที่เลือก"}
+                          </p>
+                        )}
+                      </div>
                     ) : null}
                   </div>
                 ) : (
@@ -1358,9 +1398,28 @@ export function TopicSidebar({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">ไม่มี (หัวข้อนี้เป็นหัวข้อหลักเอง)</SelectItem>
-                          {parentOptions.map((t) => (
-                            <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                          ))}
+                          {topLevelParentOptions.length > 0 && (
+                            <SelectGroup>
+                              <SelectLabel>หัวข้อหลัก</SelectLabel>
+                              {topLevelParentOptions.map((t) => (
+                                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                              ))}
+                            </SelectGroup>
+                          )}
+                          {subParentOptions.length > 0 && (
+                            <SelectGroup>
+                              <SelectLabel>หัวข้อย่อย (เลือกแล้วจะได้หัวข้อย่อยซ้อนอีกชั้น)</SelectLabel>
+                              {subParentOptions.map((t) => {
+                                const grandparent = t.parentId ? topics.find((p) => p.id === t.parentId) : undefined;
+                                return (
+                                  <SelectItem key={t.id} value={t.id}>
+                                    {t.name}
+                                    {grandparent ? ` (ย่อยของ ${grandparent.name})` : ""}
+                                  </SelectItem>
+                                );
+                              })}
+                            </SelectGroup>
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
