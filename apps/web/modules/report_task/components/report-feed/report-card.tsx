@@ -97,7 +97,6 @@ import {
   Quote,
   Reply as ReplyIcon,
   Send,
-  Settings,
   Share2,
   SmilePlus,
   Trash2,
@@ -955,18 +954,7 @@ export function ReportCard({
                     เลยทั้งป้ายและปุ่ม (isOwner gate เดิม) */}
                 {isOwner(viewingAsUserId) && (
                   <div className="rounded-md bg-[var(--bg-soft)] p-1 -mx-0.5">
-                    <div className="flex items-center justify-between px-1 pb-1">
-                      <p className="text-[10px] font-semibold text-[var(--ink-soft)]">มีผลต่อคะแนน</p>
-                      <button
-                        type="button"
-                        onClick={() => setStickerEditorOpen(true)}
-                        className="h-5 w-5 flex items-center justify-center rounded text-[var(--ink-soft)] hover:bg-white"
-                        aria-label="ตั้งค่าสติกเกอร์"
-                        title="ตั้งค่าสติกเกอร์"
-                      >
-                        <Settings className="h-3 w-3" />
-                      </button>
-                    </div>
+                    <p className="px-1 pb-1 text-[10px] font-semibold text-[var(--ink-soft)]">มีผลต่อคะแนน</p>
                     <div className="flex flex-row flex-wrap items-center gap-0.5">
                       {sortedStickers.map((s) => (
                         <button
@@ -1103,18 +1091,7 @@ export function ReportCard({
                 </div>
                 {isOwner(viewingAsUserId) && (
                   <div className="rounded-md bg-[var(--bg-soft)] p-1 mx-0.5 mt-0.5">
-                    <div className="flex items-center justify-between px-1 pb-1">
-                      <p className="text-[10px] font-semibold text-[var(--ink-soft)]">มีผลต่อคะแนน</p>
-                      <button
-                        type="button"
-                        onClick={() => setStickerEditorOpen(true)}
-                        className="h-5 w-5 flex items-center justify-center rounded text-[var(--ink-soft)] hover:bg-white"
-                        aria-label="ตั้งค่าสติกเกอร์"
-                        title="ตั้งค่าสติกเกอร์"
-                      >
-                        <Settings className="h-3 w-3" />
-                      </button>
-                    </div>
+                    <p className="px-1 pb-1 text-[10px] font-semibold text-[var(--ink-soft)]">มีผลต่อคะแนน</p>
                     <div className="flex flex-row flex-wrap gap-0.5">
                       {sortedStickers.map((s) => (
                         <button

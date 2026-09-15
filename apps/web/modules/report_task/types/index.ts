@@ -179,6 +179,13 @@ export interface Task {
   comments: Comment[];
   revisions: RevisionEntry[];
   reactions: TaskReaction[];
+  /** Plain, no-score-effect reactions — anyone can drop one, same idea as a
+   * report post's emoji row (see ReportPost.reactions in report-feed-store.ts).
+   * Separate from `reactions` above (TaskReaction[], scored stickers,
+   * owner-only) on purpose: "อยากมีสติกเกอร์ธรรมดา...เอาไว้ชมให้กำลังใจ
+   * เบื้องต้น" — casual encouragement shouldn't need owner gating or touch
+   * core.performance_events at all. Keyed by emoji -> user ids who reacted. */
+  emojiReactions?: Record<string, string[]>;
   /** Set automatically the moment a task goes overdue (see task-penalty-sweep.ts) — every task docks the same way, no manual/case-by-case path. Individual tasks only — a group task docks per assignee via `penalties` instead. */
   penalty?: TaskPenalty | null;
   /** Per-assignee dock map for a group task (userId -> their own penalty) —

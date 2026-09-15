@@ -255,6 +255,9 @@ interface TaskStore {
   toggleAssigneeChecklist: (taskId: string, userId: string) => void;
   addReaction: (taskId: string, stickerId: string, byUserId: string, note?: string) => void;
   removeReaction: (taskId: string, reactionId: string) => void;
+  /** Plain no-score reaction — anyone toggles their own id in/out of that
+   * emoji's list, same shape/behavior as a report post's emoji reactions. */
+  toggleEmojiReaction: (taskId: string, emoji: string, userId: string) => void;
   /** Case-by-case missed-deadline dock, applied at a lead's discretion. */
   applyPenalty: (taskId: string, points: number, byUserId: string, reason?: string) => void;
   clearPenalty: (taskId: string) => void;
@@ -810,6 +813,15 @@ export const useTaskStore = create<TaskStore>((set) => ({
         ),
       };
     }),
+  toggleEmojiReaction: (taskId, emoji, userId) =>
+    set((s) => ({
+      tasks: s.tasks.map((x) => {
+        if (x.id !== taskId) return x;
+        const current = x.emojiReactions?.[emoji] ?? [];
+        const next = current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId];
+        return { ...x, emojiReactions: { ...x.emojiReactions, [emoji]: next } };
+      }),
+    })),
   applyPenalty: (taskId, points, byUserId, reason) =>
     set((s) => {
       const t = s.tasks.find((x) => x.id === taskId);

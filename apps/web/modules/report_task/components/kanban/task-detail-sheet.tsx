@@ -41,6 +41,8 @@ import { useTaskReviewSettingsStore } from "@/modules/report_task/store/task-rev
 import { todayIso } from "@/modules/report_task/lib/now";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
+import { useStickerUsageStore, sortByUsage } from "@/modules/report_task/store/sticker-usage-store";
+import { StickerManagerPanel } from "@/modules/report_task/components/shared/sticker-manager-dialog";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
@@ -67,6 +69,7 @@ import {
   Star,
   Clock,
   ChevronDown,
+  MoreHorizontal,
 } from "lucide-react";
 import type { Attachment, Sticker, TaskPriority, TaskStatus } from "@/modules/report_task/types";
 import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
@@ -81,6 +84,19 @@ import { TimeAgo } from "@/modules/report_task/components/shared/time-ago";
 import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
 
 const toDateInput = (iso: string) => iso.slice(0, 10);
+
+// "อยากมีสติกเกอร์ธรรมดา...เอาไว้ชมให้กำลังใจเบื้องต้น" — ปฏิกิริยาธรรมดา
+// ไม่มีผลคะแนน ใครก็กดได้ (ไม่ต้อง owner เหมือนแถวสติกเกอร์มีคะแนนด้านล่าง)
+// ชุดเดียวกับหน้ารายงาน (report-card.tsx's reactionEmojis) เพื่อให้คุ้นตา
+// เดียวกันทั้งสองที่ในระบบ
+const plainTaskEmojis = [
+  "👍", "👎", "❤️", "🧡", "💛", "💚", "💙", "💜",
+  "🎉", "🥳", "😂", "🤣", "😮", "😢", "😭", "🙏",
+  "🙌", "💯", "👀", "🤔", "✅", "❌", "💡", "😍",
+  "🥰", "😎", "😅", "😴", "🤯", "👌", "💪", "🤝",
+  "🫡", "😱", "🤗", "😆", "🙄", "😏",
+];
+const PLAIN_EMOJI_COLLAPSED_COUNT = 10;
 
 /** เปิดไฟล์แนบของงาน/คอมเมนต์ในตัวดูไฟล์เดียวกับที่ห้องรายงานใช้ (รูป/วิดีโอ/pdf
  * ดูในหน้าเดิม มีปุ่มย้อนกลับ+ดาวน์โหลด) แทนที่จะเด้งไปแท็บใหม่เฉยๆ — ต้องแปลง
@@ -133,7 +149,13 @@ export function TaskDetailSheet({
   const removeChecklistItem = useTaskStore((s) => s.removeChecklistItem);
   const addReaction = useTaskStore((s) => s.addReaction);
   const removeReaction = useTaskStore((s) => s.removeReaction);
+  const toggleEmojiReaction = useTaskStore((s) => s.toggleEmojiReaction);
   const stickers = useStickerStore((s) => s.stickers);
+  // "อยากมีสติกเกอร์ธรรมดา...เอาไว้ชมให้กำลังใจเบื้องต้น" — เรียงตามความถี่
+  // ใช้งานเหมือนในหน้ารายงาน (ดู sticker-usage-store.ts) ใช้ชุดคีย์เดียวกัน
+  // (ขึ้นต้น "emoji:"/"sticker:") เลยนับความถี่ร่วมกันข้ามทั้งสองที่ได้เลย
+  const stickerUsageCounts = useStickerUsageStore((s) => s.counts);
+  const bumpStickerUsage = useStickerUsageStore((s) => s.bump);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const attachmentSettings = useAttachmentSettingsStore((s) => s.settings);
   const taskReviewSettings = useTaskReviewSettingsStore((s) => s.settings);
@@ -204,6 +226,10 @@ export function TaskDetailSheet({
   const [draftDescription, setDraftDescription] = useState(task?.description ?? "");
   const [lastTaskId, setLastTaskId] = useState(task?.id);
   const [pendingSticker, setPendingSticker] = useState<Sticker | null>(null);
+  // เหมือนหน้ารายงาน: อีโมจิธรรมดาพับเก็บก่อน กด "···" ถึงกางเพิ่ม, ปุ่ม "+"
+  // ท้ายแถวมีผลต่อคะแนนเปิดตัวแก้ไขสติกเกอร์แบบเต็มฝังในหน้านี้เลย
+  const [emojiExpanded, setEmojiExpanded] = useState(false);
+  const [stickerEditorOpen, setStickerEditorOpen] = useState(false);
   if (task?.id !== lastTaskId) {
     setLastTaskId(task?.id);
     setAssigneesExpanded(false);
@@ -267,6 +293,10 @@ export function TaskDetailSheet({
   // Only the owner (CEO) can hand out any sticker — the whole picker block
   // is gated to `owner` below, so anyone who reaches this list already is.
   const pickableStickers = stickers;
+  const sortedPickableStickers = sortByUsage(pickableStickers, (s) => `sticker:${s.id}`, stickerUsageCounts);
+  const sortedPlainEmojis = sortByUsage(plainTaskEmojis, (e) => `emoji:${e}`, stickerUsageCounts);
+  const visiblePlainEmojis = emojiExpanded ? sortedPlainEmojis : sortedPlainEmojis.slice(0, PLAIN_EMOJI_COLLAPSED_COUNT);
+  const activeEmojiReactions = Object.entries(task.emojiReactions ?? {}).filter(([, ids]) => ids.length > 0);
 
   function confirmDelete() {
     if (!task) return;
@@ -874,30 +904,101 @@ export function TaskDetailSheet({
             </>
           )}
 
-          {/* Reactions / sticker scoring — only the owner (CEO) can hand
-              out stickers; everyone still sees the reactions already on
-              the task below, just not the picker to add more. */}
+          {/* Reactions / sticker scoring — อีโมจิธรรมดาด้านบนใครก็กดได้ ไม่มี
+              ผลคะแนน ใช้ชมให้กำลังใจเบื้องต้น ("อยากมีสติกเกอร์ธรรมดา...เอา
+              ไว้ชมให้กำลังใจเบื้องต้น") ส่วนสติกเกอร์มีผลต่อคะแนนด้านล่าง
+              ยังคงจำกัดเฉพาะ owner (CEO) เหมือนเดิม — คนอื่นเห็นแต่กดไม่ได้ */}
           <div className="space-y-3">
             <h4 className="text-sm font-semibold">ให้สติกเกอร์งานนี้</h4>
-            {owner && (
-              <div className="flex flex-wrap gap-1.5">
-                {pickableStickers.map((s) => (
-                  <Tooltip key={s.id}>
-                    <TooltipTrigger
-                      render={
-                        <button
-                          onClick={() => handleReact(s)}
-                          className="flex items-center gap-1 rounded-full border border-[var(--line)] bg-white pl-2 pr-2.5 py-1 text-sm hover:border-[var(--brand-green)] hover:bg-[var(--accent)] transition-colors"
-                        >
-                          <span>{s.emoji}</span>
-                          <span className="text-xs text-[var(--ink-soft)]">{s.label}</span>
-                        </button>
-                      }
-                    />
-                    <TooltipContent>{s.points > 0 ? `+${s.points}` : s.points} คะแนน</TooltipContent>
-                  </Tooltip>
+
+            <div className="flex flex-wrap items-center gap-1">
+              {visiblePlainEmojis.map((emoji) => (
+                <button
+                  key={emoji}
+                  onClick={() => {
+                    toggleEmojiReaction(task.id, emoji, viewingAsUserId);
+                    bumpStickerUsage(`emoji:${emoji}`);
+                  }}
+                  className={cn(
+                    "h-8 w-8 flex items-center justify-center rounded-md text-base hover:bg-[var(--bg-soft)] transition-transform hover:scale-110",
+                    (task.emojiReactions?.[emoji] ?? []).includes(viewingAsUserId) && "bg-[var(--accent)]"
+                  )}
+                >
+                  {emoji}
+                </button>
+              ))}
+              {sortedPlainEmojis.length > PLAIN_EMOJI_COLLAPSED_COUNT && (
+                <button
+                  onClick={() => setEmojiExpanded((v) => !v)}
+                  className="h-8 w-8 flex items-center justify-center rounded-md text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+                  aria-label={emojiExpanded ? "ย่อรายการอีโมจิ" : "ดูอีโมจิเพิ่มเติม"}
+                  title={emojiExpanded ? "ย่อ" : "เพิ่มเติม"}
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            {activeEmojiReactions.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {activeEmojiReactions.map(([emoji, ids]) => (
+                  <span key={emoji} className="inline-flex items-center gap-1 rounded-full bg-[var(--bg-soft)] px-2 py-0.5 text-xs">
+                    <span>{emoji}</span>
+                    <span className="text-[var(--ink-soft)] tabular-nums">{ids.length}</span>
+                  </span>
                 ))}
               </div>
+            )}
+
+            {owner && (
+              stickerEditorOpen ? (
+                <div className="rounded-md bg-[var(--bg-soft)] p-2 flex flex-col gap-2 max-h-[420px] overflow-y-auto">
+                  <div className="flex items-center justify-between px-1">
+                    <p className="text-xs font-semibold">แก้ไขสติกเกอร์คะแนน</p>
+                    <button
+                      type="button"
+                      onClick={() => setStickerEditorOpen(false)}
+                      className="h-6 w-6 flex items-center justify-center rounded hover:bg-white text-[var(--ink-soft)]"
+                      aria-label="ปิด"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <StickerManagerPanel viewingAsUserId={viewingAsUserId} compact onSaved={() => setStickerEditorOpen(false)} />
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {sortedPickableStickers.map((s) => (
+                    <Tooltip key={s.id}>
+                      <TooltipTrigger
+                        render={
+                          <button
+                            onClick={() => {
+                              handleReact(s);
+                              bumpStickerUsage(`sticker:${s.id}`);
+                            }}
+                            className="flex items-center gap-1 rounded-full border border-[var(--line)] bg-white pl-2 pr-2.5 py-1 text-sm hover:border-[var(--brand-green)] hover:bg-[var(--accent)] transition-colors"
+                          >
+                            <span>{s.emoji}</span>
+                            <span className="text-xs text-[var(--ink-soft)]">{s.label}</span>
+                          </button>
+                        }
+                      />
+                      <TooltipContent>{s.points > 0 ? `+${s.points}` : s.points} คะแนน</TooltipContent>
+                    </Tooltip>
+                  ))}
+                  {/* กดแล้วเปิดตัวแก้ไขสติกเกอร์คะแนนแบบเต็มฝังในหน้านี้เลย —
+                      "กดแก้คะแนนได้แบบของสติกเกอด้วยนะ" เหมือนที่ทำในหน้ารายงาน */}
+                  <button
+                    type="button"
+                    onClick={() => setStickerEditorOpen(true)}
+                    className="h-8 w-8 flex items-center justify-center rounded-full border border-dashed border-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+                    aria-label="เพิ่ม/แก้ไขสติกเกอร์ที่มีผลต่อคะแนน"
+                    title="เพิ่ม/แก้ไขสติกเกอร์"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )
             )}
 
             {task.reactions.length > 0 && (
