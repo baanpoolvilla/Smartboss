@@ -60,6 +60,12 @@ interface NotificationStore {
    * เปิดงานแล้วเห็นทั้งคอมเมนต์และไฟล์แนบอยู่แล้วในหน้าเดียวกัน ไม่มีเหตุผลจะ
    * ล้างแค่อย่างใดอย่างหนึ่ง */
   markTaskActivityRead: (userId: string, taskId: string) => void;
+  /** ลบงานแล้วต้องเก็บกวาดแจ้งเตือนของงานนั้นทิ้งด้วย ไม่งั้นกระดิ่ง/badge เมนู
+   * ค้างชี้ไปงานที่ไม่มีอยู่แล้ว ("ลบงานไปแล้วแต่ทำไมแจ้งเตือนยังขึ้น") จับคู่
+   * ด้วย taskId (แจ้งเตือนคอมเมนต์/ไฟล์แนบใหม่) หรือ link ที่พาไป highlight
+   * งานนั้นเป๊ะๆ (แจ้งเตือนงานแบบอื่น ๆ ที่เกิดก่อนมี field taskId — สถานะ
+   * เปลี่ยน/ตรวจงาน/ตั้งกำหนดส่งใหม่ ฯลฯ ไม่มี taskId ผูกมา มีแต่ link) */
+  removeTaskNotifications: (taskId: string) => void;
 }
 
 // Server-synced via ServerStoreSync (apiKey "notifications") in
@@ -110,6 +116,12 @@ export const useNotificationStore = create<NotificationStore>()(
             !n.read
               ? { ...n, read: true }
               : n
+          ),
+        })),
+      removeTaskNotifications: (taskId) =>
+        set((s) => ({
+          notifications: s.notifications.filter(
+            (n) => n.taskId !== taskId && !(n.link && n.link.includes(`highlight=${taskId}`))
           ),
         })),
     })

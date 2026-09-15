@@ -517,6 +517,10 @@ export const useTaskStore = create<TaskStore>((set) => ({
     set((s) => {
       const t = s.tasks.find((x) => x.id === taskId);
       if (t) logActivity(useIdentityStore.getState().viewingAsUserId, "ลบงาน", t.title, t.id);
+      // เก็บกวาดแจ้งเตือนของงานนี้ด้วย ไม่งั้นกระดิ่ง/badge เมนูค้างชี้ไปงานที่
+      // ลบไปแล้ว ("ลบงานไปแล้วแต่ทำไมแจ้งเตือนยังขึ้น") — ดู notification-store.ts's
+      // removeTaskNotifications เรื่อง doc ว่าจับคู่ยังไง
+      useNotificationStore.getState().removeTaskNotifications(taskId);
       return { tasks: s.tasks.filter((x) => x.id !== taskId) };
     }),
   updateTask: (taskId, patch) =>
