@@ -56,6 +56,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronsRight,
   ChevronUp,
   Code2,
   Crown,
@@ -255,12 +256,17 @@ export function TopicSidebar({
   const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
   const [parentId, setParentId] = useState<string | undefined>(undefined);
   const [description, setDescription] = useState("");
-  // Create-only: an explicit either/or instead of a dropdown defaulting to
-  // "none" — you pick "หัวข้อหลัก" (a brand-new top-level topic) or
-  // "หัวข้อย่อย" (nested under an existing one) up front, and the parent
-  // picker only appears once "หัวข้อย่อย" is chosen. Forced to "หัวข้อหลัก"
-  // when there's nothing eligible to nest under yet.
-  const [createKind, setCreateKind] = useState<"main" | "sub">("main");
+  // Create-only: an explicit three-way choice instead of a dropdown
+  // defaulting to "none" — "หัวข้อหลัก" (brand-new top-level topic),
+  // "หัวข้อย่อย" (nested under an existing top-level topic), or "หัวข้อย่อย
+  // ในหัวข้อย่อย" (nested under an existing sub-topic — the 3rd tier).
+  // Splitting "sub" into two explicit buttons instead of one button plus a
+  // dropdown that silently changes what tier you land on ("ต้องมี 3 ล็อคให้
+  // เลือกสิ") — each button's own parent picker only ever lists options at
+  // the one tier that button actually means, so there's nothing to infer
+  // from which row got picked. Buttons force back to "main" when there's
+  // nothing eligible to nest under yet at that tier.
+  const [createKind, setCreateKind] = useState<"main" | "sub" | "subsub">("main");
   // Create-only, same as createKind — chosen once here and never surfaced
   // again as an editable field for this room afterward (see room-settings-
   // sheet.tsx and feedViewMode's own comment on ReportTopic).
@@ -395,9 +401,10 @@ export function TopicSidebar({
     const trimmed = name.trim();
     if (!trimmed) return;
     const trimmedDescription = description.trim() || undefined;
-    // "หัวข้อย่อย" mode always needs a parent picked — the submit button is
-    // disabled until one is, so this is just the last line of defense.
-    if (editor?.mode === "create" && createKind === "sub" && !parentId) return;
+    // "หัวข้อย่อย"/"หัวข้อย่อยในหัวข้อย่อย" mode always needs a parent picked —
+    // the submit button is disabled until one is, so this is just the last
+    // line of defense.
+    if (editor?.mode === "create" && createKind !== "main" && !parentId) return;
     const effectiveParentId = editor?.mode === "create" && createKind === "main" ? undefined : parentId;
     // Sub-topics are text-only (no custom icon/logo) — strip both on save
     // regardless of leftover local state, rather than trusting the icon
@@ -468,7 +475,7 @@ export function TopicSidebar({
   const canPickParent = editor?.mode !== "edit" || !topics.some((t) => t.parentId === editor.topic.id);
   // A sub-topic is text-only — no icon/logo picker, in the form or anywhere
   // else — so this mirrors the same effective-parent check `save()` uses.
-  const isSubTopic = editor?.mode === "create" ? createKind === "sub" : !!parentId;
+  const isSubTopic = editor?.mode === "create" ? createKind !== "main" : !!parentId;
 
   function confirmDelete() {
     if (!deleteTarget) return;
@@ -1292,22 +1299,27 @@ export function TopicSidebar({
                 </div>
 
                 {editor?.mode === "create" ? (
-                  <div className="space-y-1.5">
-                    {/* Was "ประเภทหัวข้อ" + "หัวข้อย่อยของหัวข้อหลักที่มี" — a label
-                        that reads as a generic category picker, paired with an
-                        option long enough to need a second read to parse
-                        ("อ่านละ งงๆ"). Renamed to what each button actually
-                        does — a standalone room, or one nested under a room
-                        that already exists — with a one-line caption under
-                        each so the choice never depends on remembering what
-                        "หัวข้อย่อย" means elsewhere in the app. */}
+                  // Boxed as its own card — this whole block (kind, parent
+                  // picker) is one decision, and reads that way better set
+                  // apart from the plain name/description fields around it
+                  // ("อยากได้แบ่งเป็นแบบนี้").
+                  <div className="space-y-1.5 rounded-lg border border-[var(--line)] p-3">
+                    {/* Three explicit buttons, not two-plus-a-dropdown-that-
+                        silently-changes-the-tier — "sub" and "subsub" used to
+                        be one button ("ห้องย่อยในห้องเดิม") whose resulting
+                        depth depended on which row you picked from a combined
+                        dropdown underneath, which read as one choice hiding
+                        another ("ต้องมี 3 ล็อคให้เลือกสิ อันใหม่ที่เป็นย่อยใน
+                        ย่อยต้องอยู่ในนี้ด้วยสิ"). Each button's own parent
+                        picker below now only ever lists options at the one
+                        tier that button actually means. */}
                     <Label className="text-xs text-[var(--ink-soft)]">สร้างห้องแบบไหน</Label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                       <button
                         type="button"
                         onClick={() => setCreateKind("main")}
                         className={cn(
-                          "flex flex-col items-center gap-1 rounded-lg border px-2 py-2.5 text-center transition-colors",
+                          "flex flex-col items-center gap-1 rounded-lg border px-1.5 py-2.5 text-center transition-colors",
                           createKind === "main" ? "border-[var(--brand-green)] bg-[var(--accent)]" : "border-[var(--line)] hover:bg-[var(--bg-soft)]"
                         )}
                       >
@@ -1316,12 +1328,12 @@ export function TopicSidebar({
                       </button>
                       <button
                         type="button"
-                        disabled={parentOptions.length === 0}
+                        disabled={topLevelParentOptions.length === 0}
                         onClick={() => setCreateKind("sub")}
-                        title={parentOptions.length === 0 ? "ยังไม่มีหัวข้อหลักให้เลือก — สร้างหัวข้อหลักก่อน" : undefined}
+                        title={topLevelParentOptions.length === 0 ? "ยังไม่มีหัวข้อหลักให้เลือก — สร้างหัวข้อหลักก่อน" : undefined}
                         className={cn(
-                          "flex flex-col items-center gap-1 rounded-lg border px-2 py-2.5 text-center transition-colors",
-                          parentOptions.length === 0
+                          "flex flex-col items-center gap-1 rounded-lg border px-1.5 py-2.5 text-center transition-colors",
+                          topLevelParentOptions.length === 0
                             ? "border-[var(--line)] opacity-40 cursor-not-allowed"
                             : createKind === "sub"
                               ? "border-[var(--brand-green)] bg-[var(--accent)]"
@@ -1329,7 +1341,24 @@ export function TopicSidebar({
                         )}
                       >
                         <ChevronRight className="h-4 w-4" />
-                        <span className="text-xs font-medium">ห้องย่อยในห้องเดิม</span>
+                        <span className="text-xs font-medium">ห้องย่อย ชั้น 1</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={subParentOptions.length === 0}
+                        onClick={() => setCreateKind("subsub")}
+                        title={subParentOptions.length === 0 ? "ยังไม่มีหัวข้อย่อยให้เลือก — สร้างหัวข้อย่อยก่อน" : undefined}
+                        className={cn(
+                          "flex flex-col items-center gap-1 rounded-lg border px-1.5 py-2.5 text-center transition-colors",
+                          subParentOptions.length === 0
+                            ? "border-[var(--line)] opacity-40 cursor-not-allowed"
+                            : createKind === "subsub"
+                              ? "border-[var(--brand-green)] bg-[var(--accent)]"
+                              : "border-[var(--line)] hover:bg-[var(--bg-soft)]"
+                        )}
+                      >
+                        <ChevronsRight className="h-4 w-4" />
+                        <span className="text-xs font-medium">ห้องย่อย ชั้น 2</span>
                       </button>
                     </div>
                     {createKind === "main" ? (
@@ -1342,48 +1371,55 @@ export function TopicSidebar({
                       <p className="text-[11px] text-[var(--ink-soft)]">
                         หัวข้อหลักไว้จัดหมวดหมู่เท่านั้น กดแชทเองไม่ได้ — สร้างหัวข้อย่อยใต้มันทีหลังเพื่อเริ่มแชทจริง
                       </p>
-                    ) : parentOptions.length === 0 ? (
-                      <p className="text-[11px] text-[var(--ink-soft)]">ยังไม่มีหัวข้อหลักในระบบเลย — สร้างหัวข้อหลักก่อนอันนี้ แล้วค่อยกลับมาสร้างหัวข้อย่อยใต้มันทีหลังได้</p>
                     ) : createKind === "sub" ? (
-                      <div className="space-y-1">
-                        <Select value={parentId ?? ""} onValueChange={(v) => v && setParentId(v)}>
-                          <SelectTrigger className="w-full">
-                            <SelectValue>{parentId ? topics.find((t) => t.id === parentId)?.name : "เลือกหัวข้อหลัก..."}</SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            {topLevelParentOptions.length > 0 && (
-                              <SelectGroup>
-                                <SelectLabel>หัวข้อหลัก</SelectLabel>
-                                {topLevelParentOptions.map((t) => (
-                                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                                ))}
-                              </SelectGroup>
-                            )}
-                            {subParentOptions.length > 0 && (
-                              <SelectGroup>
-                                <SelectLabel>หัวข้อย่อย (เลือกแล้วจะได้หัวข้อย่อยซ้อนอีกชั้น)</SelectLabel>
-                                {subParentOptions.map((t) => {
-                                  const grandparent = t.parentId ? topics.find((p) => p.id === t.parentId) : undefined;
-                                  return (
-                                    <SelectItem key={t.id} value={t.id}>
-                                      {t.name}
-                                      {grandparent ? ` (ย่อยของ ${grandparent.name})` : ""}
-                                    </SelectItem>
-                                  );
-                                })}
-                              </SelectGroup>
-                            )}
-                          </SelectContent>
-                        </Select>
-                        {/* บอกผลลัพธ์ที่จะได้ตรงๆ ตามตัวที่เลือกจริง — กันงงว่า
-                            "เลือกอันนี้แล้วจะได้ห้องย่อยชั้นไหนกันแน่" โดยไม่ต้อง
-                            นั่งนับเอาเองจากชื่อ */}
-                        {parentId && (
-                          <p className="text-[11px] text-[var(--ink-soft)]">
-                            {topics.find((t) => t.id === parentId && !isTopLevel(t))
-                              ? "จะกลายเป็นหัวข้อย่อยซ้อนอีกชั้นใต้หัวข้อย่อยที่เลือก"
-                              : "จะกลายเป็นหัวข้อย่อยชั้นแรกใต้หัวข้อหลักที่เลือก"}
-                          </p>
+                      <div className="space-y-1.5">
+                        {/* Ties the label back to what the button said —
+                            "ชั้น 1" alone on the button, explained in one
+                            plain sentence here so it's never just a number
+                            to interpret ("งง ยุ" — the button label change
+                            alone wasn't enough on its own). */}
+                        <p className="text-[11px] text-[var(--ink-soft)]">ห้องย่อยชั้น 1 — ซ้อนอยู่ใต้ห้องหลักโดยตรง เลือกห้องหลักที่จะซ้อนเข้าไป:</p>
+                        {topLevelParentOptions.length === 0 ? (
+                          <p className="text-[11px] text-[var(--ink-soft)]">ยังไม่มีหัวข้อหลักในระบบเลย — สร้างหัวข้อหลักก่อนอันนี้ แล้วค่อยกลับมาสร้างหัวข้อย่อยใต้มันทีหลังได้</p>
+                        ) : (
+                          <Select value={parentId ?? ""} onValueChange={(v) => v && setParentId(v)}>
+                            <SelectTrigger className="w-full">
+                              <SelectValue>{parentId ? topics.find((t) => t.id === parentId)?.name : "เลือกหัวข้อหลัก..."}</SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              {topLevelParentOptions.map((t) => (
+                                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </div>
+                    ) : createKind === "subsub" ? (
+                      <div className="space-y-1.5">
+                        <p className="text-[11px] text-[var(--ink-soft)]">ห้องย่อยชั้น 2 — ซ้อนอยู่ใต้ห้องย่อยชั้น 1 อีกที (ลึกสุด) เลือกห้องย่อยที่จะซ้อนเข้าไป:</p>
+                        {subParentOptions.length === 0 ? (
+                          <p className="text-[11px] text-[var(--ink-soft)]">ยังไม่มีหัวข้อย่อยในระบบเลย — สร้างหัวข้อย่อยชั้น 1 ก่อนอันนี้ แล้วค่อยกลับมาสร้างหัวข้อย่อยชั้น 2 ทีหลังได้</p>
+                        ) : (
+                          <Select value={parentId ?? ""} onValueChange={(v) => v && setParentId(v)}>
+                            <SelectTrigger className="w-full">
+                              <SelectValue>
+                                {parentId
+                                  ? topics.find((t) => t.id === parentId)?.name
+                                  : "เลือกหัวข้อย่อยที่จะซ้อนเข้าไป..."}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              {subParentOptions.map((t) => {
+                                const grandparent = t.parentId ? topics.find((p) => p.id === t.parentId) : undefined;
+                                return (
+                                  <SelectItem key={t.id} value={t.id}>
+                                    {t.name}
+                                    {grandparent ? ` (ย่อยของ ${grandparent.name})` : ""}
+                                  </SelectItem>
+                                );
+                              })}
+                            </SelectContent>
+                          </Select>
                         )}
                       </div>
                     ) : null}
@@ -1558,7 +1594,7 @@ export function TopicSidebar({
             </Button>
             <Button
               className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
-              disabled={!name.trim() || (editor?.mode === "create" && createKind === "sub" && !parentId)}
+              disabled={!name.trim() || (editor?.mode === "create" && createKind !== "main" && !parentId)}
               onClick={save}
             >
               {editor?.mode === "edit" ? "บันทึก" : "สร้างหัวข้อ"}
