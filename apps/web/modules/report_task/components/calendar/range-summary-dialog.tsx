@@ -13,6 +13,7 @@ import { getUser, canManage } from "@/modules/report_task/lib/directory";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useMeetingStore } from "@/modules/report_task/store/meeting-store";
 import { useLeaveStore } from "@/modules/report_task/store/leave-store";
+import { useOvertimeStore } from "@/modules/report_task/store/overtime-store";
 import { useHolidayStore } from "@/modules/report_task/store/holiday-store";
 import { useTodoStore } from "@/modules/report_task/store/todo-store";
 import { useCalendarVisibilityStore } from "@/modules/report_task/store/calendar-visibility-store";
@@ -28,7 +29,7 @@ import { formatDate, formatDateTime } from "@/modules/report_task/lib/format";
 import { nowMs } from "@/modules/report_task/lib/now";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Button } from "@/modules/report_task/components/ui/button";
-import { Users, CalendarDays, Plane, PartyPopper, CalendarOff, ListChecks, ListTodo, CalendarPlus, Check, X, Trash2 } from "lucide-react";
+import { Users, CalendarDays, Plane, PartyPopper, CalendarOff, Clock, ListChecks, ListTodo, CalendarPlus, Check, X, Trash2 } from "lucide-react";
 import type { CalendarEvent, TodoItem } from "@/modules/report_task/types";
 
 export type SummaryRange = { start: string; end: string }; // end exclusive (YYYY-MM-DD)
@@ -95,6 +96,7 @@ export function RangeSummaryDialog({
   const tasks = useTaskStore((s) => s.tasks);
   const meetings = useMeetingStore((s) => s.meetings);
   const leaves = useLeaveStore((s) => s.leaves);
+  const overtime = useOvertimeStore((s) => s.overtime);
   const holidays = useHolidayStore((s) => s.holidays);
   const todos = useTodoStore((s) => s.todos);
   const hiddenUserIds = useCalendarVisibilityStore((s) => s.hiddenUserIds);
@@ -103,6 +105,7 @@ export function RangeSummaryDialog({
   const taskScope = useCalendarScopeStore((s) => s.scope);
   const canBroadenScope = canManage(viewingAsUserId);
   const meetingColor = useEventColorStore((s) => s.colors.meeting);
+  const otColor = useEventColorStore((s) => s.colors.ot);
 
   const data = useMemo(() => {
     if (!range) return null;
@@ -143,17 +146,19 @@ export function RangeSummaryDialog({
       .filter((t) => inRange(t.date, start, end))
       .filter((t) => (todoScope === "mine" ? t.userId === viewingAsUserId : !hiddenUserIds.includes(t.userId)))
       .sort((a, b) => Number(a.done) - Number(b.done) || a.date.localeCompare(b.date));
+    const rangeOvertime = overtime.filter((o) => inRange(o.start, start, end)).sort((a, b) => a.start.localeCompare(b.start));
     return {
       tasks: rangeTasks,
       meetings: rangeMeetings,
       leaves: rangeLeaves,
       holidays: rangeHolidays,
       dayoffs: rangeDayoffs,
+      overtime: rangeOvertime,
       todos: rangeTodos,
       done: rangeTasks.filter((t) => t.status === "done").length,
       overdue: rangeTasks.filter((t) => dueUrgency(t) === "overdue").length,
     };
-  }, [range, tasks, meetings, leaves, holidays, dayoffs, todos, todoScope, hiddenUserIds, viewingAsUserId, taskScope, canBroadenScope]);
+  }, [range, tasks, meetings, leaves, overtime, holidays, dayoffs, todos, todoScope, hiddenUserIds, viewingAsUserId, taskScope, canBroadenScope]);
 
   if (!range || !data) return null;
 
@@ -327,13 +332,14 @@ export function RangeSummaryDialog({
           </>
         ) : (
           <>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <Stat label="วันลา" value={data.leaves.length} />
               <Stat label={eventTypeLabels.holiday} value={data.holidays.length} />
               <Stat label="วันหยุดประจำ" value={data.dayoffs.length} />
+              <Stat label={eventTypeLabels.ot} value={data.overtime.length} />
             </div>
             <div className="max-h-72 overflow-y-auto space-y-1.5 mt-1">
-              {data.leaves.length === 0 && data.holidays.length === 0 && data.dayoffs.length === 0 && (
+              {data.leaves.length === 0 && data.holidays.length === 0 && data.dayoffs.length === 0 && data.overtime.length === 0 && (
                 <p className="text-sm text-[var(--ink-soft)] text-center py-4">ไม่มีวันลา/วันหยุดในช่วงนี้</p>
               )}
               {data.leaves.map((l) => {
@@ -356,11 +362,27 @@ export function RangeSummaryDialog({
               ))}
               {data.dayoffs.map((d) => {
                 const user = d.userId ? getUser(d.userId) : undefined;
+                // "Name · Type" เหมือนแถวลาด้านบน — เดิมโชว์แค่ user?.name ??
+                // d.title เฉยๆ พอ user resolve ได้ (เคสส่วนใหญ่) ก็เห็นแค่ชื่อ
+                // คน ไม่รู้เลยว่าเป็นวันหยุดประเภทไหน ("ไม่เห็นมีเลย") ต่อท้าย
+                // ด้วย title เฉพาะตอนยังไม่ใช่ authoredTitle (คนไม่ได้ตั้งชื่อ
+                // เองรวมชื่อตัวเองไว้แล้ว — ไม่งั้นจะซ้ำแบบ "Bee - Bee-Off")
+                const label = user ? (d.authoredTitle ? user.name : `${user.name} · ${d.title}`) : d.title;
                 return (
                   <div key={d.id} className="flex items-center gap-2 px-2 py-1.5 text-sm">
                     <CalendarOff className="h-3.5 w-3.5 text-teal-600 shrink-0" />
-                    <span className="min-w-0 flex-1 truncate">{user?.name ?? d.title}</span>
+                    <span className="min-w-0 flex-1 truncate">{label}</span>
                     <span className="text-[11px] text-[var(--ink-soft)] shrink-0 whitespace-nowrap">{formatDate(d.start)}</span>
+                  </div>
+                );
+              })}
+              {data.overtime.map((o) => {
+                const user = o.userId ? getUser(o.userId) : undefined;
+                return (
+                  <div key={o.id} className="flex items-center gap-2 px-2 py-1.5 text-sm">
+                    <Clock className="h-3.5 w-3.5 shrink-0" style={{ color: otColor }} />
+                    <span className="min-w-0 flex-1 truncate">{user ? `${user.name} · ${o.title}` : o.title}</span>
+                    <span className="text-[11px] text-[var(--ink-soft)] shrink-0 whitespace-nowrap">{formatDate(o.start)}</span>
                   </div>
                 );
               })}

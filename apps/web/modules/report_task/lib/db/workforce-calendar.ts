@@ -38,6 +38,14 @@ interface HolidayRow {
   name: string;
 }
 
+interface OvertimeRow {
+  id: string;
+  user_id: string | null;
+  work_date: Date;
+  ot_category: string;
+  approved_minutes: number;
+}
+
 /** client ภายใน transaction ของ Prisma — ตัดเมธอดที่เรียกในนั้นไม่ได้ออก */
 type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
@@ -197,5 +205,60 @@ export async function listHolidayEvents(
     start: iso(r.holiday_date),
     end: endExclusive(r.holiday_date),
     allDay: true,
+  }));
+}
+
+const OT_CATEGORY_TH: Record<string, string> = {
+  WORKDAY: "วันทำงานปกติ",
+  REST_DAY: "วันหยุดประจำสัปดาห์",
+  PUBLIC_HOLIDAY: "วันหยุดนักขัตฤกษ์",
+};
+
+/** ชม./นาที อ่านง่าย — ปัดนาทีทิ้งถ้าลงตัวพอดีชั่วโมง ("OT 2 ชม." ไม่ใช่ "OT 2 ชม. 0 นาที") */
+function formatOtDuration(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m} นาที`;
+  if (m === 0) return `${h} ชม.`;
+  return `${h} ชม. ${m} นาที`;
+}
+
+/**
+ * OT ที่อนุมัติครบแล้ว (FINAL_APPROVED) ในช่วงวันที่กำหนด — เหมือน listLeaveEvents
+ * เอาเฉพาะที่ตัดสินใจเสร็จแล้ว ไม่เอา OT ที่ตรวจจับได้จาก attendance แต่ยังไม่
+ * ผ่านการอนุมัติขึ้นปฏิทิน (นั่นเป็นแค่ตัวเลขดิบรอการตัดสินใจ ไม่ใช่ "เหตุการณ์"
+ * จริงที่ควรขึ้นเป็นรายการบนปฏิทินทีม — ดูได้ที่ /hr เอง)
+ */
+export async function listOvertimeEvents(
+  orgId: string,
+  from: string,
+  to: string
+): Promise<CalendarEvent[]> {
+  const rows = await withWorkforceTenant(orgId, (tx) =>
+    tx.$queryRaw<OvertimeRow[]>`
+      SELECT ot.id,
+             p.subject           AS user_id,
+             ot.work_date,
+             ot.ot_category,
+             ot.approved_minutes
+      FROM workforce.overtime_requests ot
+      LEFT JOIN workforce.employments e ON e.id = ot.employment_id
+      LEFT JOIN workforce.principals  p ON p.person_id = e.person_id
+      WHERE ot.status = 'FINAL_APPROVED'
+        AND ot.work_date BETWEEN ${from}::date AND ${to}::date
+      ORDER BY ot.work_date
+      LIMIT 1000
+    `
+  );
+
+  return rows.map((r) => ({
+    id: `wf-ot-${r.id}`,
+    title: `OT ${formatOtDuration(r.approved_minutes)}`,
+    type: "ot",
+    start: iso(r.work_date),
+    end: endExclusive(r.work_date),
+    allDay: true,
+    ...(r.user_id ? { userId: r.user_id } : {}),
+    description: OT_CATEGORY_TH[r.ot_category] ?? r.ot_category,
   }));
 }

@@ -16,6 +16,7 @@ import {
   listHolidayEvents,
   listLeaveEvents,
   listLeaveTypeCatalog,
+  listOvertimeEvents,
 } from "@/modules/report_task/lib/db/workforce-calendar";
 import type { Department } from "@/modules/report_task/types";
 
@@ -67,7 +68,7 @@ const REPORT_FEED_KEY = "report-feed";
  * เดิมโมดูลนี้เก็บของตัวเอง ทำให้มีข้อมูลการลาสองชุด และเงินเดือนคำนวณจาก
  * ชุดของ workforce เท่านั้น ⇒ ปฏิทินกับสลิปไม่ตรงกันโดยไม่มีอะไรเตือน
  */
-const WORKFORCE_KEYS = new Set(["leaves", "holidays"]);
+const WORKFORCE_KEYS = new Set(["leaves", "holidays", "overtime"]);
 
 /** ชื่อประเภทลาทั้งหมด — ไม่ต้องใช้ช่วงวันที่เหมือนสองคีย์ข้างบน */
 const LEAVE_TYPE_CATALOG_KEY = "leave-type-catalog";
@@ -108,8 +109,10 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ ke
     const events =
       key === "leaves"
         ? await listLeaveEvents(session.orgId, from, to)
-        : await listHolidayEvents(session.orgId, from, to);
-    // holidays store เก็บเป็น { holidays, selectedByUser } ส่วน leaves เป็นอาร์เรย์ตรง ๆ
+        : key === "overtime"
+          ? await listOvertimeEvents(session.orgId, from, to)
+          : await listHolidayEvents(session.orgId, from, to);
+    // holidays store เก็บเป็น { holidays, selectedByUser } ส่วน leaves/overtime เป็นอาร์เรย์ตรง ๆ
     const payload =
       key === "holidays" ? { holidays: events, selectedByUser: {} } : events;
     return Response.json(payload, { headers: { "Cache-Control": "no-store", "X-Data-Version": "1" } });

@@ -188,7 +188,7 @@ export interface Task {
   updatedAt: string;
 }
 
-export type CalendarEventType = "task" | "leave" | "meeting" | "holiday" | "google" | "dayoff" | "todo";
+export type CalendarEventType = "task" | "leave" | "meeting" | "holiday" | "google" | "dayoff" | "todo" | "ot";
 
 /** Leave-type id — configurable at runtime (see leave-type-store). */
 export type LeaveType = string;

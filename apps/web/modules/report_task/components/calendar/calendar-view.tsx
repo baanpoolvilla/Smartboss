@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useMeetingStore } from "@/modules/report_task/store/meeting-store";
 import { useLeaveStore } from "@/modules/report_task/store/leave-store";
+import { useOvertimeStore } from "@/modules/report_task/store/overtime-store";
 import { useLeaveTypeCatalogStore } from "@/modules/report_task/store/leave-type-catalog-store";
 import { useTodoStore } from "@/modules/report_task/store/todo-store";
 import { useHolidayStore, holidaySource, isSourceSelected } from "@/modules/report_task/store/holiday-store";
@@ -66,7 +67,7 @@ const dateJumpLabels: Record<DateJump, string> = {
 // Work calendar = task deadlines (flat task-type color) + meetings.
 // Schedule calendar = leaves (live from store) + holidays (opted-in per
 // country, see holiday-store) + routine days off.
-const scheduleTypes: CalendarEventType[] = ["leave", "dayoff", "holiday"];
+const scheduleTypes: CalendarEventType[] = ["leave", "dayoff", "holiday", "ot"];
 
 function monthKeysInRange(start: Date, end: Date): string[] {
   const keys: string[] = [];
@@ -120,6 +121,7 @@ export function CalendarView() {
   const meetings = useMeetingStore((s) => s.meetings);
   const updateMeeting = useMeetingStore((s) => s.updateMeeting);
   const leaves = useLeaveStore((s) => s.leaves);
+  const overtime = useOvertimeStore((s) => s.overtime);
   const leaveTypeCatalog = useLeaveTypeCatalogStore((s) => s.names);
   const todos = useTodoStore((s) => s.todos);
   const toggleTodo = useTodoStore((s) => s.toggleTodo);
@@ -523,6 +525,10 @@ export function CalendarView() {
     () => leaves.filter((l) => !l.userId || !hiddenUserIds.includes(l.userId)),
     [leaves, hiddenUserIds]
   );
+  const visibleOvertime = useMemo(
+    () => overtime.filter((o) => !o.userId || !hiddenUserIds.includes(o.userId)),
+    [overtime, hiddenUserIds]
+  );
 
   // Everyone's routine days off (manual picks + expanded recurring rules,
   // team-wide, not just the viewer's own) that fall within the visible
@@ -660,7 +666,19 @@ export function CalendarView() {
         editable: false,
       };
     });
-    return [...coloredLeaves, ...holidays, ...dayoffEvents]
+    // OT เหมือน leave ทุกอย่าง — read-only mirror ของ workforce, เติมชื่อคนให้
+    // เพราะ title จาก workforce-calendar.ts เป็นแค่ "OT 2 ชม." เฉยๆ ไม่มีชื่อคน
+    const coloredOvertime = visibleOvertime.map((o) => {
+      const owner = o.userId ? getUser(o.userId)?.name.split(" ")[0] : undefined;
+      return {
+        ...o,
+        title: owner ? `${owner} - ${o.title}` : o.title,
+        colorHint: colors.ot,
+        mine: o.userId === viewingAsUserId,
+        editable: false,
+      };
+    });
+    return [...coloredLeaves, ...coloredOvertime, ...holidays, ...dayoffEvents]
       .filter((e) => scheduleActive.has(e.type))
       .filter((e) => e.type !== "leave" || !e.leaveType || !hiddenLeaveTypeIds.has(e.leaveType))
       .map(gray);
@@ -674,6 +692,7 @@ export function CalendarView() {
     hiddenLeaveTypeIds,
     visibleMeetings,
     visibleLeaves,
+    visibleOvertime,
     holidays,
     dayoffEvents,
     todoEvents,

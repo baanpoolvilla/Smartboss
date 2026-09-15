@@ -26,6 +26,9 @@ export const eventTypeColors: Record<CalendarEventType, string> = {
   // Its own hue (amber) — distinct from every other type so a checked-off
   // to-do reads as "done" the same amber-to-gray way a checklist item does.
   todo: chartColors.amber,
+  // Orange — OT ที่อนุมัติแล้วจาก workforce, คนละเรื่องกับลา/วันหยุดประจำเลย
+  // ไม่มีสีไหนข้างบนที่ยังไม่ถูกใช้ใกล้เคียงพอจะสับสนกัน
+  ot: chartColors.orange,
 };
 
 export const eventTypeLabels: Record<CalendarEventType, string> = {
@@ -36,6 +39,7 @@ export const eventTypeLabels: Record<CalendarEventType, string> = {
   google: "ปฏิทินภายนอก",
   dayoff: "วันหยุดประจำ",
   todo: "สิ่งที่ต้องทำ",
+  ot: "OT",
 };
 
 // Leave-type labels/colors/icons are configurable at runtime — see leave-type-store.

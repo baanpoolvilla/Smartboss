@@ -18,6 +18,9 @@ export const STORE_KEYS = {
   "employee-profiles": "stores/employee-profiles.json",
   holidays: "stores/holidays.json",
   leaves: "stores/leaves.json",
+  // ไม่มีไฟล์ต้นทางคู่กัน (ของ Smartboss เพิ่มเอง) — OT ที่อนุมัติแล้วจาก
+  // workforce ดู workforce-calendar.ts:listOvertimeEvents
+  overtime: "stores/overtime.json",
   // ไม่มีไฟล์ต้นทางคู่กัน (ของ Smartboss เพิ่มเอง) — รายชื่อประเภทลาทั้งหมด
   // จาก workforce แม้ประเภทนั้นจะยังไม่มีใครลาในช่วงที่ปฏิทินกำลังโหลดอยู่เลย
   // ดู workforce-calendar.ts:listLeaveTypeCatalog
