@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Label } from "@/modules/report_task/components/ui/label";
@@ -171,10 +171,26 @@ function saveCollapsedTopicIds(ids: Set<string>) {
   safeLocalStorage.setItem(COLLAPSED_TOPIC_IDS_KEY, JSON.stringify([...ids]));
 }
 
-// Depth is capped at 2 (team > channel) to match MS Teams — a topic that
-// already has children of its own can't also become someone else's child.
 function isTopLevel(t: ReportTopic) {
   return !t.parentId;
+}
+
+/** 0 = top-level, 1 = sub-topic, 2 = sub-of-sub — walks up `parentId` until
+ * it runs out (or hits a topic not in `byId`, e.g. one this viewer can't
+ * see, which just stops the count there rather than throwing). Used to cap
+ * nesting at 3 tiers total (see `parentOptions` below) — deeper than MS
+ * Teams' own 2, since a flat "daily/weekly/monthly" sub-topic layer under
+ * each room was the actual ask ("อยากได้ย้อยไปย้อยอีกที"). */
+function topicDepth(t: ReportTopic, byId: Map<string, ReportTopic>): number {
+  let depth = 0;
+  let cur = t;
+  while (cur.parentId) {
+    const parent = byId.get(cur.parentId);
+    if (!parent) break;
+    depth += 1;
+    cur = parent;
+  }
+  return depth;
 }
 
 export function TopicSidebar({
@@ -431,11 +447,14 @@ export function TopicSidebar({
     }
   }
 
-  // A topic that already has sub-topics of its own can't become a child
-  // (keeps nesting to the two Teams-style levels) — and it obviously can't
-  // be its own parent while being edited.
+  // Valid parents: anything at depth 0 or 1 — picking one puts the new/edited
+  // topic at depth 1 or 2, never past the 3-tier cap (topicDepth's own doc).
+  // A depth-2 topic itself never shows up here since it can't become a
+  // parent — that'd need a 4th tier. Also can't be its own parent while
+  // being edited.
+  const topicById = useMemo(() => new Map(topics.map((t) => [t.id, t] as const)), [topics]);
   const parentOptions = topics.filter(
-    (t) => isTopLevel(t) && (editor?.mode !== "edit" || t.id !== editor.topic.id)
+    (t) => topicDepth(t, topicById) <= 1 && (editor?.mode !== "edit" || t.id !== editor.topic.id)
   );
   const canPickParent = editor?.mode !== "edit" || !topics.some((t) => t.parentId === editor.topic.id);
   // A sub-topic is text-only — no icon/logo picker, in the form or anywhere
@@ -546,9 +565,13 @@ export function TopicSidebar({
     // dot (not the numeric badge, which stays this topic's own count only)
     // also lights up from descendants, each child weighed by its own
     // notify preference.
-    const descendantUnread = hasChildren
-      ? childrenOf(t.id).some((c) => topicUnreadPosts(c).length > 0)
-      : false;
+    // Recurses past immediate children too — a depth-0 parent must still
+    // light up from an unread post on a depth-2 grandchild tucked under a
+    // depth-1 child it hasn't expanded, not just its own direct children.
+    function hasUnreadDescendant(topic: ReportTopic): boolean {
+      return childrenOf(topic.id).some((c) => topicUnreadPosts(c).length > 0 || hasUnreadDescendant(c));
+    }
+    const descendantUnread = hasChildren ? hasUnreadDescendant(t) : false;
     const hasUnread = unreadCount > 0 || descendantUnread;
     const active = t.id === activeId;
     const favorited = t.favoritedBy?.includes(viewingAsUserId) ?? false;
@@ -683,7 +706,10 @@ export function TopicSidebar({
         // doesn't also jump into the room.
         onClick={() => {
           if (editingOrder) return;
-          if (depth === 0 && !canOpenDirectly) toggleCollapsed(t.id);
+          // !canOpenDirectly already means "has children" for any depth>0
+          // row (isCategory only ever applies at depth 0 — see its own doc
+          // above), so this one check covers every tier, not just the top.
+          if (!canOpenDirectly) toggleCollapsed(t.id);
           else onSelect(t.id);
         }}
         role="button"
@@ -692,7 +718,7 @@ export function TopicSidebar({
           if (editingOrder) return;
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            if (depth === 0 && !canOpenDirectly) toggleCollapsed(t.id);
+            if (!canOpenDirectly) toggleCollapsed(t.id);
             else onSelect(t.id);
           }
         }}
@@ -728,21 +754,22 @@ export function TopicSidebar({
             <GripVertical className="h-3.5 w-3.5" />
           </span>
         )}
-        {depth === 0 ? (
-          hasChildren ? (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleCollapsed(t.id);
-              }}
-              aria-label={collapsed ? `ขยาย ${t.name}` : `ย่อ ${t.name}`}
-              className="shrink-0 flex h-3.5 w-3.5 items-center justify-center text-[var(--ink-soft)] hover:text-[var(--ink)]"
-            >
-              <ChevronRight className={cn("h-3 w-3 transition-transform", !collapsed && "rotate-90")} />
-            </button>
-          ) : (
-            <span className="shrink-0 w-3.5" />
-          )
+        {hasChildren ? (
+          // Any tier can carry this now, not just depth 0 — a depth-1
+          // sub-topic that's picked up sub-topics of its own (depth 2) needs
+          // the exact same expand/collapse affordance the top tier always had.
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleCollapsed(t.id);
+            }}
+            aria-label={collapsed ? `ขยาย ${t.name}` : `ย่อ ${t.name}`}
+            className="shrink-0 flex h-3.5 w-3.5 items-center justify-center text-[var(--ink-soft)] hover:text-[var(--ink)]"
+          >
+            <ChevronRight className={cn("h-3 w-3 transition-transform", !collapsed && "rotate-90")} />
+          </button>
+        ) : depth === 0 ? (
+          <span className="shrink-0 w-3.5" />
         ) : null}
         {/* Sub-topics are text-only — no icon, no "#" glyph (read as visual
             noise once every row in a channel list carried one). The
@@ -1047,10 +1074,12 @@ export function TopicSidebar({
     );
   }
 
-  // A top-level topic plus (if expanded) its indented sub-topics — the
-  // Teams "team, then its channels" block as one unit. Plain indentation,
-  // no connector line — just tucked further right under the parent.
-  function renderTopicBranch(t: ReportTopic) {
+  // One row plus (if expanded) its own indented children, recursively — a
+  // depth-1 sub-topic with sub-topics of its own renders exactly the same
+  // way a top-level topic does, just one tier deeper. Used by
+  // renderTopicBranch below for the top of each branch, and calls itself for
+  // any deeper tier.
+  function renderTopicSubtree(t: ReportTopic, depth: number) {
     const children = childrenOf(t.id);
     const hasChildren = children.length > 0;
     const isCollapsed = !reorderMode && collapsedTopicIds.has(t.id);
@@ -1058,7 +1087,27 @@ export function TopicSidebar({
     // that's unread or currently open on screen — only the read/idle ones
     // tuck away — so a new post is never hidden behind a folded folder and
     // whatever room you're standing in stays visible while you collapse the
-    // rest. Expanded shows everything, exactly as before.
+    // rest. Expanded shows everything, exactly as before. A child's own
+    // unread posts count even if its collapse state hides ITS children in
+    // turn — topicUnreadPosts is about that one room's own posts, not its
+    // descendants, so each tier's collapse only ever hides its own idle kids.
+    const visibleChildren = isCollapsed
+      ? children.filter((c) => c.id === activeId || topicUnreadPosts(c).length > 0)
+      : children;
+    return (
+      <Fragment key={t.id}>
+        {renderTopicRow(t, { depth, hasChildren })}
+        {visibleChildren.map((child) => renderTopicSubtree(child, depth + 1))}
+      </Fragment>
+    );
+  }
+
+  // A top-level topic plus (if expanded) its indented sub-topics — the
+  // Teams "team, then its channels" block as one unit. Plain indentation,
+  // no connector line — just tucked further right under the parent.
+  function renderTopicBranch(t: ReportTopic) {
+    const children = childrenOf(t.id);
+    const isCollapsed = !reorderMode && collapsedTopicIds.has(t.id);
     const visibleChildren = isCollapsed
       ? children.filter((c) => c.id === activeId || topicUnreadPosts(c).length > 0)
       : children;
@@ -1068,8 +1117,8 @@ export function TopicSidebar({
     // visually separated without opening up large gaps within a group.
     return (
       <div key={t.id} className={showChildren ? "mb-2 space-y-0.5" : undefined}>
-        {renderTopicRow(t, { depth: 0, hasChildren })}
-        {showChildren && visibleChildren.map((child) => renderTopicRow(child, { depth: 1 }))}
+        {renderTopicRow(t, { depth: 0, hasChildren: children.length > 0 })}
+        {visibleChildren.map((child) => renderTopicSubtree(child, 1))}
       </div>
     );
   }

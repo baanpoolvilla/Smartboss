@@ -14,12 +14,21 @@ import { groupByDay } from "@/modules/report_task/lib/format";
 import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { Rows3, SlidersHorizontal, ChevronRight } from "lucide-react";
 
-/** "ทีมพัฒนา › เช็คอินประจำวัน" — a sub-topic's name alone was ambiguous once
- * several teams reuse the same channel name (V3). Top-level topics have no
- * parent, so they're just their own name. */
+/** "ทีมพัฒนา › รายวัน › รายสัปดาห์" — walks the full parentId chain, not just
+ * one hop, now that a sub-topic can itself have sub-topics (up to 3 tiers —
+ * see topic-sidebar.tsx's topicDepth). A sub-topic's name alone was
+ * ambiguous once several teams reuse the same channel name (V3). Top-level
+ * topics have no parent, so they're just their own name. */
 function breadcrumbOf(topic: ReportTopic, topicById: Map<string, ReportTopic>): string {
-  const parent = topic.parentId ? topicById.get(topic.parentId) : undefined;
-  return parent ? `${parent.name} › ${topic.name}` : topic.name;
+  const chain: string[] = [topic.name];
+  let cur = topic;
+  while (cur.parentId) {
+    const parent = topicById.get(cur.parentId);
+    if (!parent) break;
+    chain.unshift(parent.name);
+    cur = parent;
+  }
+  return chain.join(" › ");
 }
 
 /**
@@ -78,23 +87,43 @@ export function ReportAllPostsFeed({
   const [topicFilter, setTopicFilter] = useState<Set<string>>(new Set());
 
   const topicById = useMemo(() => new Map(topics.map((t) => [t.id, t])), [topics]);
-  // Groups the topic-filter checklist by parent room (GL Chats, BPV Chats,
+  // Groups the topic-filter checklist by root room (GL Chats, BPV Chats,
   // ...) instead of one long flat list repeating "GL Chats › a-talk-gl" on
-  // every row — a sub-topic whose parent isn't in `topics` (visible to this
+  // every row. Buckets by the ROOT ancestor, not just the immediate parent —
+  // a sub-topic can itself have sub-topics now (3 tiers, see topic-sidebar.tsx's
+  // topicDepth), and a 3rd-tier topic still needs to show up under its actual
+  // top-level room here, not vanish because its own parent (a sub-topic, not
+  // a root) never gets treated as a group key. Every descendant renders as
+  // one flat indented list under the root either way — this checklist never
+  // distinguished tier 1 from tier 2 rows visually, so a 3rd tier doesn't
+  // either. A sub-topic whose parent isn't in `topics` (visible to this
   // viewer but its parent isn't, same edge case topic-sidebar.tsx handles)
   // falls back to rendering as its own top-level group of one.
   const topicGroups = useMemo(() => {
-    const childrenByParent = new Map<string, ReportTopic[]>();
-    for (const t of topics) {
-      if (t.parentId && topicById.has(t.parentId)) {
-        const arr = childrenByParent.get(t.parentId) ?? [];
-        arr.push(t);
-        childrenByParent.set(t.parentId, arr);
+    function rootOf(t: ReportTopic): ReportTopic {
+      let cur = t;
+      while (cur.parentId) {
+        const parent = topicById.get(cur.parentId);
+        if (!parent) break;
+        cur = parent;
       }
+      return cur;
+    }
+    const childrenByRoot = new Map<string, ReportTopic[]>();
+    for (const t of topics) {
+      if (!t.parentId) continue;
+      const root = rootOf(t);
+      if (root.id === t.id) continue; // its own parent chain is broken — it's a root of one, handled below
+      const arr = childrenByRoot.get(root.id) ?? [];
+      arr.push(t);
+      childrenByRoot.set(root.id, arr);
     }
     return topics
       .filter((t) => !t.parentId || !topicById.has(t.parentId))
-      .map((parent) => ({ parent, children: childrenByParent.get(parent.id) ?? [] }));
+      .map((parent) => ({
+        parent,
+        children: (childrenByRoot.get(parent.id) ?? []).sort((a, b) => a.name.localeCompare(b.name, "th")),
+      }));
   }, [topics, topicById]);
   const items = posts
     .filter((p) => topicById.has(p.topicId))

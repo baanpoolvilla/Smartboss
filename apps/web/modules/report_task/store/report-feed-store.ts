@@ -275,7 +275,11 @@ export interface ReportTopic {
   logoUrl?: string;
   /** User ids who've starred this room — per-person, like `savedBy` on a post; a starred room pins to its own section at the top of the sidebar for that viewer only. */
   favoritedBy?: string[];
-  /** Id of the top-level topic this one nests under, Teams-style (team > channel) — undefined means this is itself a top-level topic. Only one level deep: a topic that already has children can't also be a child. */
+  /** Id of the topic this one nests directly under, Teams-style (team >
+   * channel) — undefined means this is itself a top-level topic. Up to 3
+   * tiers total (top-level > sub-topic > sub-of-sub) — a topic at the 3rd
+   * tier can't itself become a parent (see topic-sidebar.tsx's
+   * `parentOptions`, filtered by computed depth, not just "has no parent"). */
   parentId?: string;
   /** Deprecated, no longer read by anything (see `isCategory` below) — kept
    * only so a value saved on an older topic doesn't get silently dropped by
