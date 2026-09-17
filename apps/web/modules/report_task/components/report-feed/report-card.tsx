@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Button } from "@/modules/report_task/components/ui/button";
+import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import {
   AlertDialog,
@@ -2131,7 +2132,7 @@ function EditPostForm({
   post: ReportPost;
   topic: ReportTopic;
   onCancel: () => void;
-  onSave: (data: { title: string; sections: ReturnType<typeof buildSections>; images: ReportPostImage[]; tagIds: string[] }) => void;
+  onSave: (data: { title: string; sections: ReturnType<typeof buildSections>; images: ReportPostImage[]; tagIds: string[]; excludeFromSubmission?: boolean }) => void;
 }) {
   const maxImages = useAttachmentSettingsStore((s) => s.settings.maxImagesPerReportPost);
   const [title, setTitle] = useState(post.title);
@@ -2142,8 +2143,15 @@ function EditPostForm({
   );
   const [images, setImages] = useState<ReportPostImage[]>(post.images);
   const [tagIds, setTagIds] = useState<string[]>(post.tagIds);
+  // "ไม่นับเป็นการส่ง daily" was only ever settable once, in the composer at
+  // creation — there was no way to fix a wrong pick afterward short of
+  // deleting and reposting. Editable here now too, so a post that was
+  // ticked by mistake (a real, on-time post that ended up counted as a
+  // missed "ขาดส่ง" report) can be corrected without losing the post itself.
+  const [excludeFromSubmission, setExcludeFromSubmission] = useState(post.excludeFromSubmission ?? false);
   const [busy, setBusy] = useState(false);
 
+  const postDayCutoffs = cutoffsOnDay(topic, localDateStr(new Date(post.createdAt)));
   const minImagesRequired = minImagesNow({ cutoffs: cutoffsOnDay(topic, localDateStr(new Date())) });
   const missingRequiredImage = photoCount(images) < minImagesRequired;
 
@@ -2177,6 +2185,7 @@ function EditPostForm({
       sections: buildSections(sections),
       images,
       tagIds,
+      excludeFromSubmission,
     });
   }
 
@@ -2202,6 +2211,23 @@ function EditPostForm({
         busy={busy}
         onFilesSelected={handleFiles}
       />
+      {postDayCutoffs.length > 0 && (
+        <div className="w-fit">
+          <label className="flex items-center gap-1.5 text-[11px] text-[var(--ink-soft)] cursor-pointer">
+            <Checkbox
+              checked={excludeFromSubmission}
+              onCheckedChange={(v) => setExcludeFromSubmission(v === true)}
+              className="h-3.5 w-3.5"
+            />
+            โพสต์นี้ไม่ใช่รีพอตของวันนี้ (เช่น ถาม/แจ้งอัปเดตเฉยๆ)
+          </label>
+          {excludeFromSubmission && (
+            <p className="mt-1 pl-5 text-[10.5px] text-[var(--chart-red)]">
+              จะถูกนับว่า &quot;ยังไม่ส่งรีพอตวันนี้&quot; ในแดชบอร์ด แม้โพสต์นี้จะมีเนื้อหาก็ตาม
+            </p>
+          )}
+        </div>
+      )}
       <div className="flex items-center justify-end gap-2 pt-1">
         <Button variant="ghost" size="sm" onClick={onCancel}>
           ยกเลิก
