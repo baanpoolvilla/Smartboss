@@ -7,8 +7,9 @@ import { Input } from "@/modules/report_task/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
 import { useReminderSettingsStore } from "@/modules/report_task/store/reminder-settings-store";
 import { REMINDER_OPTIONS } from "@/modules/report_task/components/calendar/add-todo-dialog";
+import { TimePickerField } from "@/modules/report_task/components/shared/time-picker-field";
 import { cn } from "@/modules/report_task/lib/utils";
-import { Bell, CheckSquare, ClipboardList, FileText, Plus, Users, X } from "lucide-react";
+import { Bell, CheckSquare, ClipboardList, FileText, Lock, Plus, Users, X } from "lucide-react";
 
 /** One removable "N วัน/นาทีก่อนกำหนด" chip + an inline "+ เพิ่มจุดแจ้งเตือน"
  *  field — shared by all three reminder types below, just with a different
@@ -190,6 +191,7 @@ export function DeadlineReminderSettingsPanel() {
   const setMeetingSettings = useReminderSettingsStore((s) => s.setMeetingSettings);
   const setReportSettings = useReminderSettingsStore((s) => s.setReportSettings);
   const setTodoSettings = useReminderSettingsStore((s) => s.setTodoSettings);
+  const setSubmissionLockSettings = useReminderSettingsStore((s) => s.setSubmissionLockSettings);
 
   function toggleRecipient(setFn: (patch: Record<string, boolean>) => void, key: string, current: boolean) {
     setFn({ [key]: !current });
@@ -262,6 +264,41 @@ export function DeadlineReminderSettingsPanel() {
             <span className="text-[11px] text-[var(--ink-faint)]">แจ้งใคร:</span>
             <RecipientPill active={settings.report.notifyPending} label="คนที่ยังไม่ส่งในห้อง" onClick={() => toggleRecipient(setReportSettings, "notifyPending", settings.report.notifyPending)} />
             <RecipientPill active={settings.report.notifyManagerSummary} label="หัวหน้าห้อง (สรุปรวม)" onClick={() => toggleRecipient(setReportSettings, "notifyManagerSummary", settings.report.notifyManagerSummary)} />
+          </div>
+        </div>
+      </div>
+
+      {/* ปิดรับรายงาน — a hard deadline, not a reminder: this is the only
+          thing that actually blocks the composer's submit button once
+          passed (see report-cutoff.ts's effectiveHardCutoffTime). Sits next
+          to the รีพอต reminder card since both are about a room's daily
+          report deadline, but they're independent — a room can remind at
+          30 นาทีก่อน and still let people post all night if this is off. */}
+      <div className="rounded-xl border border-[var(--line)] overflow-hidden">
+        <div className="flex items-center gap-3 px-4 py-3">
+          <span className="h-8.5 w-8.5 rounded-lg flex items-center justify-center bg-rose-50 text-rose-600 shrink-0">
+            <Lock className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">ปิดรับรายงาน (เวลาตัดรอบ)</p>
+            <p className="text-[11px] text-[var(--ink-soft)]">
+              เปิด — ทุกห้องปิดรับรายงานของวันนั้นพร้อมกันตามเวลานี้ (ส่งไม่ได้จริง ไม่ใช่แค่ขึ้นป้าย &quot;สาย&quot;) ปิด — แต่ละห้องตั้งเวลาปิดรับของตัวเองได้ที่หน้าตั้งค่าห้อง
+            </p>
+          </div>
+          <Switch checked={settings.submissionLock.useGlobalCutoff} onCheckedChange={(v) => setSubmissionLockSettings({ useGlobalCutoff: v })} />
+        </div>
+        <div className="px-4 pb-3.5 pl-[46px]">
+          <div className="flex items-center gap-2">
+            <TimePickerField
+              value={settings.submissionLock.time}
+              onChange={(time) => setSubmissionLockSettings({ time: time || "23:59" })}
+              aria-label="เวลาปิดรับรายงานมาตรฐาน"
+            />
+            <span className="text-[11px] text-[var(--ink-soft)]">
+              {settings.submissionLock.useGlobalCutoff
+                ? "น. — ใช้เวลานี้ปิดรับทุกห้องพร้อมกัน"
+                : "น. — ค่ามาตรฐานที่ห้องใหม่จะได้เมื่อเปิดปิดรับของตัวเอง (ห้องเก่ายังใช้เวลาที่ตั้งไว้แต่เดิม)"}
+            </span>
           </div>
         </div>
       </div>

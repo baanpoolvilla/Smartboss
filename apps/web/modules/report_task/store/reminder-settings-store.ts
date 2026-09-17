@@ -35,6 +35,20 @@ export interface ReportReminderSettings {
   notifyManagerSummary: boolean;
 }
 
+export interface ReportSubmissionLockSettings {
+  /** ON: every room's hard "ปิดรับ" time is `time` below, ignoring whatever
+   * each room set for itself (`ReportTopic.hardCutoffTime`) — one deadline
+   * company-wide. OFF: each room decides on its own (unset = never locks,
+   * same as before this feature existed). Separate from the *reminder*
+   * lead-time above and from a room's submission-round times — those only
+   * ever badge a post "ส่งช้า"; this is the only thing that can actually
+   * block the submit button. */
+  useGlobalCutoff: boolean;
+  /** "HH:mm" — the shared deadline when `useGlobalCutoff` is on, and the
+   * value a room's own toggle pre-fills with when turned on while off. */
+  time: string;
+}
+
 export interface TodoReminderSettings {
   enabled: boolean;
   /** A to-do is personal (only its own owner ever sees it), so there's no
@@ -51,6 +65,7 @@ export interface ReminderSettings {
   meeting: MeetingReminderSettings;
   report: ReportReminderSettings;
   todo: TodoReminderSettings;
+  submissionLock: ReportSubmissionLockSettings;
 }
 
 export const defaultReminderSettings: ReminderSettings = {
@@ -58,6 +73,7 @@ export const defaultReminderSettings: ReminderSettings = {
   meeting: { enabled: true, leadMinutes: [15], notifyAttendees: true },
   report: { enabled: true, leadMinutes: [30], notifyPending: true, notifyManagerSummary: false },
   todo: { enabled: true, defaultLeadMinutes: 0 },
+  submissionLock: { useGlobalCutoff: false, time: "23:59" },
 };
 
 interface ReminderSettingsStore {
@@ -66,6 +82,7 @@ interface ReminderSettingsStore {
   setMeetingSettings: (patch: Partial<MeetingReminderSettings>) => void;
   setReportSettings: (patch: Partial<ReportReminderSettings>) => void;
   setTodoSettings: (patch: Partial<TodoReminderSettings>) => void;
+  setSubmissionLockSettings: (patch: Partial<ReportSubmissionLockSettings>) => void;
 }
 
 // Server-synced via ServerStoreSync (apiKey "reminder-settings") in
@@ -76,4 +93,5 @@ export const useReminderSettingsStore = create<ReminderSettingsStore>()((set) =>
   setMeetingSettings: (patch) => set((s) => ({ settings: { ...s.settings, meeting: { ...s.settings.meeting, ...patch } } })),
   setReportSettings: (patch) => set((s) => ({ settings: { ...s.settings, report: { ...s.settings.report, ...patch } } })),
   setTodoSettings: (patch) => set((s) => ({ settings: { ...s.settings, todo: { ...s.settings.todo, ...patch } } })),
+  setSubmissionLockSettings: (patch) => set((s) => ({ settings: { ...s.settings, submissionLock: { ...s.settings.submissionLock, ...patch } } })),
 }));

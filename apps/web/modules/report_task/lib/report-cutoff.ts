@@ -1,3 +1,4 @@
+import type { ReportSubmissionLockSettings } from "@/modules/report_task/store/reminder-settings-store";
 import type { ReportCutoff, ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { effectiveRoundsOf, roundRunsOnDay } from "@/modules/report_task/lib/submission-rounds";
 
@@ -78,4 +79,27 @@ export function currentCutoff(cutoffs: ReportCutoff[]): ReportCutoff | null {
 export function minImagesNow(topic: Pick<ReportTopic, "cutoffs">): number {
   const round = currentCutoff(topic.cutoffs);
   return round?.minImages ?? 0;
+}
+
+/**
+ * The one "HH:mm" past which this room's submit button locks for the rest of
+ * "today" — distinct from `submissionRounds[].time`/`cutoffs[].time`, which
+ * only ever badge a post "ส่งช้า" and never block it. `null` = no lock (a
+ * post can always be submitted), matching every room's behavior before this
+ * feature existed. The company-wide toggle wins over whatever the room set
+ * for itself — one shared deadline is the point of turning it on.
+ */
+export function effectiveHardCutoffTime(
+  topic: Pick<ReportTopic, "hardCutoffTime">,
+  lock: ReportSubmissionLockSettings
+): string | null {
+  if (lock.useGlobalCutoff) return lock.time;
+  return topic.hardCutoffTime || null;
+}
+
+/** Minutes-of-day `hardCutoff` ("HH:mm") has already passed, given `nowMinutes` (also minutes-of-day) — `null`/empty never locks. */
+export function isPastHardCutoff(hardCutoff: string | null | undefined, nowMinutes: number): boolean {
+  if (!hardCutoff) return false;
+  const [h, m] = hardCutoff.split(":").map(Number) as [number, number];
+  return h * 60 + m <= nowMinutes;
 }

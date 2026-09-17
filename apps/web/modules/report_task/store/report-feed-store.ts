@@ -345,6 +345,12 @@ export interface ReportTopic {
   notifyPreference?: Record<string, "all" | "mentions" | "off">;
   /** รอบส่ง — คนต้องส่ง+เวลา+วัน แยกจาก visibility. undefined/ว่าง = ห้องนี้ไม่มีใครต้องส่ง (ไม่หัก/ไม่นับ). ถ้าไม่มี ใช้ path เดิม (cutoffs+requiredWeekdays+exemptUserIds). */
   submissionRounds?: SubmissionRound[];
+  /** "HH:mm" — เลยเวลานี้แล้วห้ามส่งรายงานของ "วันนี้" อีกเลย (ปุ่มส่งถูกปิด
+   * จริง ไม่ใช่แค่ขึ้นป้าย "ส่งช้า" แบบ `submissionRounds[].time`) รีเซ็ตให้
+   * ส่งได้ใหม่ทุกเที่ยงคืน. undefined = ไม่ปิดรับเลย (พฤติกรรมเดิม). ถูก
+   * override ทั้งบริษัทเมื่อ `ReportSubmissionLockSettings.useGlobalCutoff`
+   * เปิดอยู่ — ดู `effectiveHardCutoffTime` ใน report-cutoff.ts. */
+  hardCutoffTime?: string;
 }
 
 /**
@@ -498,6 +504,7 @@ interface ReportFeedStore {
       notifyManagerSummary?: boolean;
       submissionRounds?: SubmissionRound[];
       order?: number;
+      hardCutoffTime?: string;
     }
   ) => void;
   /** Per-viewer notification preference for one room — same "map keyed by

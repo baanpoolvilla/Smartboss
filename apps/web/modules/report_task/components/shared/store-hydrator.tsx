@@ -137,6 +137,7 @@ export function StoreHydrator() {
               meeting: { ...defaultReminderSettings.meeting, ...settings?.meeting },
               report: { ...defaultReminderSettings.report, ...settings?.report },
               todo: { ...defaultReminderSettings.todo, ...settings?.todo },
+              submissionLock: { ...defaultReminderSettings.submissionLock, ...settings?.submissionLock },
             },
           };
         }}
