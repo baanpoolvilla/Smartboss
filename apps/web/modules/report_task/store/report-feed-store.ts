@@ -158,6 +158,16 @@ export interface ReportPost extends ReportPostFields {
    * deadline (see `attributePostToRound` in lib/submission-rounds.ts) rather
    * than requiring it. */
   roundId?: string;
+  /** The round's own "HH:mm" cutoff *at the moment this post was submitted*
+   * — a snapshot, not a live lookup. Badge/lateness code (report-card.tsx's
+   * isLateForRound) compares `createdAt` against this instead of the round's
+   * *current* time whenever it's set, so editing a round's schedule later
+   * never silently re-judges old posts as late/on-time that weren't at the
+   * time they were actually sent. undefined for every post made before this
+   * field existed (or with no `roundId`) — those still fall back to the
+   * round's live time, same as always; there's no historical value to
+   * recover for them. */
+  roundTimeAtSubmission?: string;
   /** Set by the composer's "ไม่นับเป็นการส่ง daily" toggle — a real post
    * (shows in the feed like any other, can still be tagged/opened as a
    * task/etc.) that the poster explicitly marked as not fulfilling that
@@ -503,7 +513,7 @@ interface ReportFeedStore {
   /** Per-viewer notification preference for one room — same "map keyed by
    * userId" pattern as toggleHiddenTopic/toggleFavoriteTopic. */
   setNotifyPreference: (topicId: string, userId: string, pref: "all" | "mentions" | "off") => void;
-  addPost: (topicId: string, authorId: string, data: ReportPostFields & { roundId?: string; excludeFromSubmission?: boolean }) => void;
+  addPost: (topicId: string, authorId: string, data: ReportPostFields & { roundId?: string; roundTimeAtSubmission?: string; excludeFromSubmission?: boolean }) => void;
   editPost: (postId: string, data: ReportPostFields & { roundId?: string; excludeFromSubmission?: boolean }) => void;
   removePost: (id: string) => void;
   /** Records which Task a post was opened/converted into (see report-card.tsx's "เปิดเป็นงาน"). */

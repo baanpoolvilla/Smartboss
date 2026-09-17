@@ -219,6 +219,12 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
       images,
       tagIds,
       roundId: activeRound?.id,
+      // Snapshotted now, at submission — see the field's own doc comment on
+      // ReportPost. Without this, editing the round's time later silently
+      // re-judges this post's ตรงเวลา/สาย badge against the NEW time forever
+      // after, even though it was actually sent against the time in force
+      // right now.
+      roundTimeAtSubmission: activeRound?.time,
       excludeFromSubmission,
     });
     reset();

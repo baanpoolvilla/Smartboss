@@ -244,8 +244,19 @@ export function ReportCard({
   // report-feed-compliance.ts, the actual counting choke point this mirrors).
   const roundCandidates =
     post.excludeFromSubmission || postDayExempt ? [] : explicitRound.length > 0 ? explicitRound : postDayCutoffs;
-  const lateCutoff = lateCutoffFor(post.createdAt, roundCandidates);
-  const onTimeCutoff = !lateCutoff ? onTimeCutoffFor(post.createdAt, roundCandidates) : null;
+  // Judge this post against the round's time AS IT WAS when this post was
+  // actually sent (roundTimeAtSubmission), not whatever the round's time
+  // has since been edited to — otherwise moving a room's 09:00 round to a
+  // different time retroactively flips every old post that already
+  // satisfied the original schedule into "ส่งช้า". Only applies to `post`'s
+  // own explicit round (there's nothing to override when guessing from the
+  // full `postDayCutoffs` set); posts made before this field existed have no
+  // snapshot and keep falling back to the round's live time, same as always.
+  const roundCandidatesAtSubmission = roundCandidates.map((r) =>
+    r.id === post.roundId && post.roundTimeAtSubmission ? { ...r, time: post.roundTimeAtSubmission } : r
+  );
+  const lateCutoff = lateCutoffFor(post.createdAt, roundCandidatesAtSubmission);
+  const onTimeCutoff = !lateCutoff ? onTimeCutoffFor(post.createdAt, roundCandidatesAtSubmission) : null;
   const allPosts = useReportFeedStore((s) => s.posts);
   // Once you're past a cutoff, *every* post you make that day gets flagged
   // "ส่งช้า" — technically true of each one, but posting twice just repeated
@@ -280,8 +291,12 @@ export function ReportCard({
   function isLateForRound(p: ReportPost, roundId: string): boolean {
     const round = postDayCutoffs.find((r) => r.id === roundId);
     if (!round) return false;
+    // Same snapshot-over-live-time preference as roundCandidatesAtSubmission
+    // above, generalized to whichever post `p` this is checking (the dedup
+    // logic above calls this on other posts by the same author that day too).
+    const time = p.roundId === roundId && p.roundTimeAtSubmission ? p.roundTimeAtSubmission : round.time;
     const created = new Date(p.createdAt);
-    const [h, m] = round.time.split(":").map(Number) as [number, number];
+    const [h, m] = time.split(":").map(Number) as [number, number];
     return created.getHours() * 60 + created.getMinutes() > h * 60 + m;
   }
   const roundAlreadySatisfiedOnTime =
