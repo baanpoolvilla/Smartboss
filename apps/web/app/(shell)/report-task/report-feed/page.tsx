@@ -30,6 +30,7 @@ import { topicModeOf } from "@/modules/report_task/lib/report-topic-membership";
 import { RoomMembersDialog } from "@/modules/report_task/components/report-feed/room-members-dialog";
 import { currentCutoff, cutoffsOnDay } from "@/modules/report_task/lib/report-cutoff";
 import { roundsForUserOnDay, attributePostToRound, effectiveRoundsOf } from "@/modules/report_task/lib/submission-rounds";
+import { isExemptDate } from "@/modules/report_task/lib/report-feed-exemptions";
 import { localDateStr } from "@/modules/report_task/lib/now";
 import { pendingToday, todayStatusEntries, type TodayStatusEntry } from "@/modules/report_task/lib/report-feed-compliance";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
@@ -658,8 +659,15 @@ function ReportFeedPageInner() {
     // Only meaningful for a round this viewer is actually a submitter of —
     // an owner just checking the room, or a teammate this round doesn't
     // name, gets "neutral" (no color) instead of a status that isn't theirs
-    // to have.
-    const myRoundIds = new Set(roundsForUserOnDay(activeTopic, viewingAsUserId, today, submitterGroups).map((r) => r.id));
+    // to have. Same reasoning empties it entirely on a day the viewer is
+    // exempt (approved leave/holiday/routine day off) — this widget used to
+    // keep showing "ยังไม่ส่ง" for those days even though nothing else in the
+    // app (compliance tables, the sidebar's own ⏰ tooltip) ever counted it
+    // against them.
+    const viewerExemptToday = isExemptDate(exemptions, viewingAsUserId, today);
+    const myRoundIds = viewerExemptToday
+      ? new Set<string>()
+      : new Set(roundsForUserOnDay(activeTopic, viewingAsUserId, today, submitterGroups).map((r) => r.id));
     const allRoundsToday = effectiveRoundsOf(activeTopic);
     const myPostedRoundIds = new Set(
       posts
@@ -727,7 +735,7 @@ function ReportFeedPageInner() {
         status: statusOf(c),
       };
     });
-  }, [activeTopic, viewingAsUserId, posts, submitterGroups]);
+  }, [activeTopic, viewingAsUserId, posts, submitterGroups, exemptions]);
 
   // Who can actually see this room, from the same rule the sidebar and store
   // use to gate visibility — a real list, not a placeholder count.
