@@ -352,19 +352,30 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
 
         {/* Only meaningful in a room that actually tracks a schedule — an
             untracked room has no "counts toward daily" obligation to opt a
-            post out of in the first place. */}
+            post out of in the first place. The wording spells out the actual
+            consequence (ถูกนับว่ายังไม่ส่ง) instead of just naming the
+            mechanism — a poster who ticked this not realizing it could make
+            them show up as "ขาดส่ง" on the dashboard (a real post, on time,
+            with content and photos, still counted as a missed report) had no
+            way to tell from "ไม่นับเป็นการส่งรีพอต" alone that this is what
+            it meant, since that phrase alone reads as neutral/technical
+            rather than as a warning. */}
         {todayCutoffs.length > 0 && (
-          <label
-            className="flex w-fit items-center gap-1.5 text-[11px] text-[var(--ink-soft)] cursor-pointer"
-            title="เช่น ถาม/แจ้งอัปเดตเฉยๆ ไม่ใช่รายงานจริง"
-          >
-            <Checkbox
-              checked={excludeFromSubmission}
-              onCheckedChange={(v) => setExcludeFromSubmission(v === true)}
-              className="h-3.5 w-3.5"
-            />
-            โพสต์นี้ไม่นับเป็นการส่งรีพอต
-          </label>
+          <div className="w-fit">
+            <label className="flex items-center gap-1.5 text-[11px] text-[var(--ink-soft)] cursor-pointer">
+              <Checkbox
+                checked={excludeFromSubmission}
+                onCheckedChange={(v) => setExcludeFromSubmission(v === true)}
+                className="h-3.5 w-3.5"
+              />
+              โพสต์นี้ไม่ใช่รีพอตของวันนี้ (เช่น ถาม/แจ้งอัปเดตเฉยๆ)
+            </label>
+            {excludeFromSubmission && (
+              <p className="mt-1 pl-5 text-[10.5px] text-[var(--chart-red)]">
+                จะถูกนับว่า &quot;ยังไม่ส่งรีพอตวันนี้&quot; ในแดชบอร์ด แม้โพสต์นี้จะมีเนื้อหาก็ตาม
+              </p>
+            )}
+          </div>
         )}
 
         <ReportPostFields
