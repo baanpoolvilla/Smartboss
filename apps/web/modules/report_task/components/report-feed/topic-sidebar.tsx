@@ -284,7 +284,11 @@ export function TopicSidebar({
   // Create-only, same as createKind — chosen once here and never surfaced
   // again as an editable field for this room afterward (see room-settings-
   // sheet.tsx and feedViewMode's own comment on ReportTopic).
-  const [feedViewMode, setFeedViewMode] = useState<"stream" | "threads">("stream");
+  // "threads" pre-selected (not locked — still switchable to Openchat before
+  // hitting "สร้างหัวข้อ") for every tier, main topic or sub-topic alike —
+  // matches what the team actually picks most of the time now, so the
+  // common case doesn't need an extra click every time.
+  const [feedViewMode, setFeedViewMode] = useState<"stream" | "threads">("threads");
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Collapsed = chevron pointing right, hiding the sub-topics — every
@@ -416,7 +420,7 @@ export function TopicSidebar({
     setParentId(defaultParentId);
     setDescription("");
     setCreateKind(defaultParentId ? "sub" : "main");
-    setFeedViewMode("stream");
+    setFeedViewMode("threads");
   }
 
   function openEdit(t: ReportTopic) {
@@ -487,13 +491,36 @@ export function TopicSidebar({
         // Openchat room looks identical to any pre-existing stream room,
         // not a different value that happens to mean the same thing.
         feedViewMode: feedViewMode === "stream" ? undefined : "threads",
-        // Always on for "ห้องใหม่แยกอิสระ" — a top-level topic is a category
-        // to organize sub-topics under, not a room in its own right. Only a
-        // sub-topic is ever an actual place to post; create one under this
-        // to get a working chat ("ต้องสร้างลูกก่อนถึงจะแชทได้").
-        isCategory: createKind === "main" ? true : undefined,
+        // No longer forced on for "ห้องใหม่แยกอิสระ" — every new topic now
+        // gets its own รายสัปดาห์/รายเดือน children below, which makes it a
+        // real, postable room with a standard schedule already in place,
+        // not a category with nothing of its own ("ต้องกดเข้าไปโพสได้หมดเลย").
         byUserId: viewingAsUserId,
       });
+      // Standard รายสัปดาห์/รายเดือน siblings, auto-created under every new
+      // topic (main or sub) — the requested default is "always," not opt-in:
+      // unwanted ones get deleted same as any other room, and more can be
+      // added the normal way if two isn't enough. Skipped only for "subsub"
+      // (tier 2), the deepest tier allowed — there's no room to nest a child
+      // under it at all (topicDepth's 3-tier cap).
+      if (createKind !== "subsub") {
+        addTopic({
+          name: `${trimmed} - รายสัปดาห์`,
+          color,
+          parentId: id,
+          visibility: parentVisibility,
+          feedViewMode: feedViewMode === "stream" ? undefined : "threads",
+          byUserId: viewingAsUserId,
+        });
+        addTopic({
+          name: `${trimmed} - รายเดือน`,
+          color,
+          parentId: id,
+          visibility: parentVisibility,
+          feedViewMode: feedViewMode === "stream" ? undefined : "threads",
+          byUserId: viewingAsUserId,
+        });
+      }
       setEditor(null);
       onSelect(id);
     }
