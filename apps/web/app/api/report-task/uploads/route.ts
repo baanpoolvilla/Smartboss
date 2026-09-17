@@ -22,20 +22,27 @@ import {
  * และคืน URL รูปแบบ `/api/files/<key>` ที่ **ต้อง login** ถึงจะเปิดได้
  * โดย key นำหน้าด้วย orgId ⇒ ไฟล์ของแต่ละบริษัทแยกโฟลเดอร์กัน
  *
- * ── ตรวจชนิดไฟล์จากเนื้อไฟล์จริง (พอร์ตมาจากต้นทาง 2026-08-08) ──
+ * ── ตรวจชนิดไฟล์จากเนื้อไฟล์จริงสำหรับชนิดที่รู้จัก (พอร์ตมาจากต้นทาง 2026-08-08) ──
  * `file.type` ที่ client ส่งมาเป็นแค่สิ่งที่เบราว์เซอร์เดาจากนามสกุล หรือสิ่งที่
  * ผู้โจมตีตั้งเอง — เชื่อไม่ได้ จึงอ่าน magic byte มาเทียบกับลายเซ็นจริงอีกชั้น
- * เช่นเปลี่ยนชื่อ .html เป็น .txt แล้วอัปโหลด จะถูกปฏิเสธที่นี่
+ * เช่นเปลี่ยนชื่อ .html เป็น .txt แล้วอัปโหลด จะถูกจับได้ตรงนี้ (แล้วเก็บเป็น
+ * ไฟล์ทั่วไปตามนามสกุลที่ผู้ใช้ตั้งจริง ไม่ใช่ถูกปฏิเสธ — ดูหมายเหตุด้านล่าง)
  *
  * ต่างจากต้นทางตรงที่ไม่ต้องมี route แยกสำหรับบังคับดาวน์โหลด เพราะทุกไฟล์ที่นี่
  * ออกทาง `/api/files/<key>` ซึ่งอยู่คนละโดเมนกับหน้าเว็บ (files.<โดเมน>)
  * ⇒ ต่อให้มีอะไรเรนเดอร์ได้หลุดเข้าไป ก็อ่านคุกกี้ของ app.<โดเมน> ไม่ได้
+ *
+ * ── ชนิดไฟล์ที่ไม่รู้จัก (รวม .html) ──
+ * รับได้หมดตามที่ขอ ("ไฟล์อื่นๆ ได้ทุกไฟล์") แทนที่จะบล็อกด้วย allow-list — แต่
+ * เก็บเป็น `application/octet-stream` เสมอ (บังคับดาวน์โหลด ไม่ใช่เปิด/รันในเบราว์เซอร์
+ * ตรง ๆ) ดู contentTypeFor()'s ในเลเยอร์ storage เอง ⇒ ต่อให้เนื้อไฟล์มี
+ * <script> ก็ไม่ถูกตีความเป็น HTML ที่รันได้เมื่อเปิดลิงก์
  */
 export const dynamic = "force-dynamic";
 
 /**
- * ⚠ ไม่มี image/svg+xml โดยตั้งใจ — SVG แนบ <script> ได้ และที่นี่ไม่มีตัวล้าง
- * อย่าเพิ่มเข้ามาถ้ายังไม่มีตัวล้าง
+ * ⚠ ไม่มี image/svg+xml ในนี้โดยตั้งใจ (SVG แนบ <script> ได้ และที่นี่ไม่มีตัวล้าง)
+ * แต่ยังอัปโหลดได้อยู่ดีผ่านทางเดินชนิดไม่รู้จักด้านล่าง — octet-stream กันไม่ให้รันเหมือนกัน
  *
  * ขนาดสูงสุดต่อชนิด **ไม่ได้ตายตัวในนี้อีกต่อไป** — มาจากค่าที่บริษัทตั้งเอง
  * ที่หน้าตั้งค่า (attachment-settings-store.ts) อ่านสดทุกครั้งที่อัปโหลด
@@ -65,6 +72,17 @@ function maxBytesFor(kind: "image" | "file" | "video", settings: AttachmentSetti
   return mb * 1024 * 1024;
 }
 
+/** Extension for a file whose type isn't one of ALLOWED_TYPES — taken from
+ * the name the uploader gave it (the one thing we have for something we
+ * can't sniff a real signature for), stripped down to a safe, short token
+ * so it can't smuggle a path segment or an extension `contentTypeFor()`
+ * treats specially. Falls back to "bin" when there's nothing usable. */
+function genericExt(name: string): string {
+  const raw = name.split(".").pop()?.toLowerCase() ?? "";
+  const cleaned = raw.replace(/[^a-z0-9]/g, "").slice(0, 12);
+  return cleaned || "bin";
+}
+
 export async function POST(request: Request) {
   try {
     const session = await requireOrg();
@@ -77,11 +95,11 @@ export async function POST(request: Request) {
       return Response.json({ error: "ต้องแนบไฟล์" }, { status: 400 });
     }
 
+    // Anything not in ALLOWED_TYPES — including .html — is still accepted,
+    // just capped at the generic "file" size limit up front (no per-kind
+    // limit to look up for a type we don't recognize).
     const claimed = ALLOWED_TYPES[file.type];
-    if (!claimed) {
-      return Response.json({ error: `ไม่รองรับชนิดไฟล์นี้ (${file.type || "ไม่ทราบชนิด"})` }, { status: 400 });
-    }
-    const claimedMaxBytes = maxBytesFor(claimed.kind, settings);
+    const claimedMaxBytes = maxBytesFor(claimed?.kind ?? "file", settings);
     if (file.size > claimedMaxBytes) {
       const mb = Math.round(claimedMaxBytes / 1024 / 1024);
       const actualMb = (file.size / 1024 / 1024).toFixed(1);
@@ -91,10 +109,17 @@ export async function POST(request: Request) {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const sniffed = sniffMime(bytes, file.type);
     const meta = sniffed ? ALLOWED_TYPES[sniffed] : null;
-    if (!sniffed || !meta) {
-      return Response.json({ error: "เนื้อไฟล์ไม่ตรงกับชนิดที่แจ้ง" }, { status: 400 });
-    }
-    const sniffedMaxBytes = maxBytesFor(meta.kind, settings);
+    // Recognized signature → use it (existing behavior: proper Content-Type,
+    // thumbnail support). Anything else (unknown type, or the claimed type
+    // didn't match what the bytes actually are — e.g. a renamed .html) is
+    // still stored, not rejected — as a generic file named after the
+    // uploader's own extension, always served back as a forced download
+    // (see contentTypeFor()'s own doc comment on why that's safe even for
+    // something like .html).
+    const ext = meta ? meta.ext : genericExt(file.name);
+    const kind = meta ? meta.kind : "file";
+    const mime = sniffed ?? "application/octet-stream";
+    const sniffedMaxBytes = maxBytesFor(kind, settings);
     if (bytes.byteLength > sniffedMaxBytes) {
       const mb = Math.round(sniffedMaxBytes / 1024 / 1024);
       const actualMb = (bytes.byteLength / 1024 / 1024).toFixed(1);
@@ -108,17 +133,18 @@ export async function POST(request: Request) {
      */
     const url = await putFile(
       `${session.orgId}/report-task`,
-      new File([bytes], `${randomUUID()}.${meta.ext}`, { type: sniffed }),
+      new File([bytes], `${randomUUID()}.${ext}`, { type: mime }),
       // ส่งนามสกุลไปตรง ๆ — ตัวเดาของ storage รู้จักแต่รูปภาพ ถ้าไม่บอก
       // pdf/txt/zip/mp4 จะถูกเก็บเป็น .jpg แล้วเสิร์ฟกลับเป็น image/jpeg
-      { ext: meta.ext }
+      { ext }
     );
 
     // ภาพหน้าแรกของ pdf/word/excel/ppt ไว้แสดงแทนไอคอนเฉย ๆ — best effort
     // ล้วน ๆ (ดู generate-doc-thumbnail.ts) พังยังไงก็ไม่ทำให้ upload ไฟล์
     // จริงข้างบนพังตามไปด้วย แค่ไม่มี thumbUrl ในคำตอบ ฝั่ง client เจอ
-    // thumbUrl ว่างก็ fallback ไปการ์ดไอคอนเดิมเอง
-    const thumbBuf = await generateDocThumbnail(bytes, meta.ext);
+    // thumbUrl ว่างก็ fallback ไปการ์ดไอคอนเดิมเอง — ข้ามไปเลยสำหรับชนิดที่ไม่รู้จัก
+    // (generateDocThumbnail รู้จักแต่นามสกุลใน ALLOWED_TYPES)
+    const thumbBuf = meta ? await generateDocThumbnail(bytes, ext) : null;
     const thumbUrl = thumbBuf
       ? await putFile(
           `${session.orgId}/report-task`,
@@ -127,7 +153,7 @@ export async function POST(request: Request) {
         )
       : null;
 
-    return Response.json({ url, mime: sniffed, size: bytes.byteLength, thumbUrl });
+    return Response.json({ url, mime, size: bytes.byteLength, thumbUrl });
   } catch (err) {
     // Wraps the whole handler, not just putFile — readStore (a Postgres
     // query) can throw too, and a narrower try/catch would leave that path

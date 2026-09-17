@@ -83,6 +83,9 @@ function safeExt(name: string): string {
 function contentTypeFor(key: string): string {
   const ext = key.split(".").pop()?.toLowerCase() ?? "";
   switch (ext) {
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
     case "png":
       return "image/png";
     case "webp":
@@ -93,14 +96,16 @@ function contentTypeFor(key: string): string {
       return "application/pdf";
     case "txt":
       return "text/plain; charset=utf-8";
+    case "csv":
+      return "text/csv; charset=utf-8";
     case "zip":
       return "application/zip";
     case "mp4":
       return "video/mp4";
     case "webm":
       return "video/webm";
-    // เอกสารออฟฟิศ — ต้องมีที่นี่ให้ครบ ไม่งั้นตกไป default "image/jpeg" ด้านล่าง
-    // แล้วเปิดไม่ได้เลย (เพิ่มไว้ให้โมดูลไฟล์บริษัทที่รับไฟล์พวกนี้โดยเฉพาะ)
+    // เอกสารออฟฟิศ — ต้องมีที่นี่ให้ครบ ไม่งั้นตกไป default ด้านล่าง แล้วเปิดไม่ได้เลย
+    // (เพิ่มไว้ให้โมดูลไฟล์บริษัทที่รับไฟล์พวกนี้โดยเฉพาะ)
     case "doc":
       return "application/msword";
     case "docx":
@@ -113,8 +118,21 @@ function contentTypeFor(key: string): string {
       return "application/vnd.ms-powerpoint";
     case "pptx":
       return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+    // .html (and anything else unrecognized below) is served as a forced
+    // download, not text/html — this domain is already cookie-isolated from
+    // the app (see uploads/route.ts's own doc comment), but an inline
+    // text/html response still executes any <script> the file carries in
+    // the viewer's browser on THIS origin, which octet-stream avoids outright.
+    case "html":
+    case "htm":
+      return "application/octet-stream";
     default:
-      return "image/jpeg";
+      // Was "image/jpeg" — silently correct for the one extension that
+      // used to fall through here (.jpg, now its own case above) but wrong
+      // for anything else that reaches this branch (report-task's uploads
+      // route now accepts arbitrary file types, see its own doc comment).
+      // A generic download beats mislabeling some unrelated file as a JPEG.
+      return "application/octet-stream";
   }
 }
 

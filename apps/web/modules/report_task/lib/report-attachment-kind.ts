@@ -82,31 +82,11 @@ export function mimeFromLegacyTaskLabel(label: string): string {
 }
 
 /**
- * What the "แนบรูป/คลิป" file pickers accept. Deliberately an explicit list
- * rather than a wildcard: it mirrors ALLOWED_TYPES in
- * `app/api/report-task/uploads/route.ts`, which is the real gate (it re-checks
- * the bytes themselves, not the browser's guess). Anything added here without
- * being added there gets picked in the dialog and then rejected on upload,
- * which is a worse experience than not offering it at all.
+ * What the "แนบรูป/คลิป" file pickers accept. Empty — the real gate is
+ * `app/api/report-task/uploads/route.ts`, which now accepts any file type
+ * (re-checking the bytes for the ones it recognizes, and storing anything
+ * else as a plain forced-download file). Restricting this `accept` would
+ * just filter the OS file dialog for no reason, since nothing gets rejected
+ * on upload anymore.
  */
-export const REPORT_ATTACHMENT_ACCEPT = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-  "video/mp4",
-  "video/webm",
-  "application/pdf",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.ms-powerpoint",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  "text/csv",
-  "text/plain",
-  "application/zip",
-  // Extensions alongside the MIME types — Windows file dialogs match on
-  // extension, and a .docx picked there can arrive with an empty `type`.
-  ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.zip",
-].join(",");
+export const REPORT_ATTACHMENT_ACCEPT = "";
