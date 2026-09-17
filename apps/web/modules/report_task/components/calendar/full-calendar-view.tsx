@@ -704,8 +704,22 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           : type === "leave" && leaveType
             ? leaveIconOf(leaveTypePresetFor(leaveType)?.icon ?? leaveIconById[leaveType])
             : null;
+    // A leave/dayoff/OT title is composed as "ชื่อคน - ประเภท" (calendar-
+    // view.tsx) — at the laptop tier a month-view column is narrow enough
+    // that the " - ประเภท" half is exactly what pushes the whole thing into
+    // an unreadable "Kanitha-P'ใ…" ellipsis, when the icon/color already say
+    // the category and the day-summary popup (a click away) already has the
+    // full text. Dropping just that half — not the whole title — keeps the
+    // one thing a glance actually needs (whose day this chip belongs to)
+    // legible instead of cut off mid-name. Month view only (week/day run
+    // tall, not narrow, so there's real room there); the full title still
+    // shows on hover via the native `title` tooltip.
+    const displayTitle =
+      isLaptopViewport && view === "dayGridMonth" && arg.event.title.includes(" - ")
+        ? arg.event.title.split(" - ")[0]!
+        : arg.event.title;
     return (
-      <div className="flex items-center gap-1.5 px-2 py-[3px] overflow-hidden leading-tight">
+      <div className="flex items-center gap-1.5 px-2 py-[3px] overflow-hidden leading-tight" title={displayTitle !== arg.event.title ? arg.event.title : undefined}>
         {Icon ? (
           <Icon className="h-3 w-3 shrink-0" style={{ color }} />
         ) : (
@@ -714,7 +728,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
         {!arg.event.allDay && (
           <span className="text-[10px] font-semibold tabular-nums opacity-75 shrink-0" style={{ color }}>{arg.timeText.replace(":", ".")}</span>
         )}
-        <span className="truncate text-[11px] font-medium" style={{ color }}>{arg.event.title}</span>
+        <span className="truncate text-[11px] font-medium" style={{ color }}>{displayTitle}</span>
       </div>
     );
   }
