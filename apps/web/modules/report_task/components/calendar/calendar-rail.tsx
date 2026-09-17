@@ -36,7 +36,15 @@ export function CalendarRail() {
   }, []);
 
   return (
-    <aside className="hidden lg:flex w-64 shrink-0 flex-col">
+    // Narrower on a laptop window (lg, 1024-1279px) and the space right above
+    // it (xl, 1280-1535px) than on a full-width monitor (2xl, 1536px+) — full
+    // 256px here was a fixed tax on every window in that whole range, on top
+    // of the app shell's own left nav, that left the calendar grid's 7
+    // columns squeezed enough for names to truncate hard ("Kanitha-Aui...").
+    // Names/avatars in PeopleCalendarList already wrap/truncate gracefully at
+    // any of these widths, so shrinking this doesn't lose information, just
+    // gives the calendar grid the room back.
+    <aside className="hidden lg:flex lg:w-52 xl:w-56 2xl:w-64 shrink-0 flex-col">
       {/* Explicit height (not just a max-height cap) keeps this box the same
           height as the calendar next to it regardless of how many people
           are showing, and alwaysExpanded skips PeopleCalendarList's own

@@ -120,6 +120,16 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
   // (already wired up here via onDateClick's day-summary popup). Desktop
   // keeps the full pill unchanged.
   const [isNarrowViewport, setIsNarrowViewport] = useState(false);
+  // ~1024-1536px (a laptop window, not phone-narrow and not a full-width
+  // monitor) — the desktop pill layout stayed identical across this whole
+  // range even though CalendarRail's fixed 256px sidebar eats a much bigger
+  // share of a 1280-1450px window than a 1920px one, squeezing each day
+  // column enough that a plain name ("Kanitha-Aui") already truncates to
+  // "Kanitha-Aui…" ("ข้อมูลมันหาย...ต้องเห็นหมดสิ"). Lowering dayMaxEvents by
+  // one at this tier gives each still-shown chip more of the cell's width
+  // instead of cramming the same count into less room — the rest already
+  // collapse into the existing "+N" link either way.
+  const [isLaptopViewport, setIsLaptopViewport] = useState(false);
   // A day cell is (viewport width) ÷ 7, so its usable width scales with the
   // phone continuously, not in steps — a flat dot cap fit fine on a 440px
   // phone but touched the cell's own edge on a 390px one ("พอเป็น 16 มันได้
@@ -198,6 +208,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
       // same 32px here too.
       setCalendarHeight(Math.max(360, Math.round(window.innerHeight - top - 32 - bottomNavHeight)));
       setIsNarrowViewport(window.innerWidth < 640);
+      setIsLaptopViewport(window.innerWidth >= 1024 && window.innerWidth < 1536);
       // 7 equal-width day columns; each dot (6px) plus its gap (1px) is
       // ~7px of pitch, and ~20px of a column's width is spoken for by the
       // cell's own side padding plus room for the "+N" badge when it has to
@@ -899,17 +910,27 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           // same pale-chip treatment.
           eventDisplay={view === "dayGridMonth" ? (isNarrowViewport ? "list-item" : "block") : "auto"}
           eventContent={renderEventContent}
-          // Month view: a fixed cap of 2 per day, then "+N รายการ" — the cap
-          // never changes with window size (a short row goes dense instead, see
-          // monthRowsAreDense), so a day reads the same way everywhere —
-          // every day reads the same way regardless of row height, rather
-          // than `true`'s auto-fit (which let a taller 5-week month's rows
-          // show 3-4 events on one day and 2 on another). Tried removing this
-          // cap entirely to show every event inline — one test day with a
-          // dozen+ entries ballooned that row far past the others, so it's
-          // back. Week/day/list keep auto-fit — those don't stack multiple
-          // events per cell the same way, so a fixed cap doesn't apply there.
-          dayMaxEvents={view === "dayGridMonth" ? (isNarrowViewport ? 3 : 2) : true}
+          // Month view: a fixed cap per day, then "+N รายการ" — the cap
+          // doesn't change with *row height* (a short row goes dense instead,
+          // see monthRowsAreDense), so a day reads the same way regardless of
+          // row height, rather than `true`'s auto-fit (which let a taller
+          // 5-week month's rows show 3-4 events on one day and 2 on another).
+          // Tried removing this cap entirely to show every event inline — one
+          // test day with a dozen+ entries ballooned that row far past the
+          // others, so it's back. Week/day/list keep auto-fit — those don't
+          // stack multiple events per cell the same way, so a fixed cap
+          // doesn't apply there.
+          //
+          // It DOES change with column *width* (isLaptopViewport, ~1024-
+          // 1536px): the pale-pill "block" display desktop/laptop both use
+          // takes real horizontal room per chip, and CalendarRail's fixed
+          // 256px sidebar leaves a laptop window's 7 columns meaningfully
+          // narrower than a full-width monitor's — same cap of 2 there
+          // squeezed every name down to a couple characters before "…"
+          // ("Kanitha-Aui..." — ข้อมูลมันหาย). One fewer chip shown gives the
+          // rest more of the column's width; the dropped one still reaches
+          // the same "+N" popup as always.
+          dayMaxEvents={view === "dayGridMonth" ? (isNarrowViewport ? 3 : isLaptopViewport ? 1 : 2) : true}
           eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
           // "+N more" opens the same day popup as clicking the date itself
           // instead of FullCalendar's own bare popover — one consistent
