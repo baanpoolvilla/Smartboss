@@ -618,11 +618,16 @@ export function TopicSidebar({
     const hasChildren = opts?.hasChildren ?? false;
     // `isCategory` (set at creation, see openCreate/handleSubmit) makes a
     // topic an organizing folder forever, even before it has any children
-    // yet — a topic made this way is a category, never a room. Older topics
-    // (created before this field existed) don't have it, so they keep the
-    // grandfathered rule: postable on their own right up until they get
-    // their first child, same as always.
-    const canOpenDirectly = !t.isCategory && !hasChildren;
+    // yet — a topic made this way is a category, never a room. Every other
+    // topic stays postable regardless of whether it's picked up children —
+    // gaining a sub-topic used to silently turn a normal room into a
+    // click-to-expand-only folder with nothing of its own to open, which
+    // read as the room having broken ("ห้องหลักกดเข้าไปไม่ได้") rather than
+    // "now organizes sub-topics too." The two aren't mutually exclusive:
+    // the chevron button below handles expand/collapse independently
+    // (its own onClick + stopPropagation), so a parent with children can be
+    // both postable AND expandable — no longer forced into "pick one."
+    const canOpenDirectly = !t.isCategory;
     const hiddenForMe = depth > 0 && (t.hiddenBy?.includes(viewingAsUserId) ?? false);
     // Reorder mode force-expands every group — a collapsed sub-topic list
     // would have nothing to drag onto/into.
@@ -774,18 +779,16 @@ export function TopicSidebar({
         // container width — a fixed marginLeft next to an explicit 100%
         // width overflows unless the width itself is reduced to match.
         style={depth > 0 ? { marginLeft: depth * 32, width: `calc(100% - ${depth * 32}px)` } : undefined}
-        // A parent (has sub-topics) is an organizing folder only — clicking
-        // its row just expands/collapses the sub-topic list underneath, same
-        // as the chevron button. It has nothing of its own to "open" anymore
-        // (see report-topic-children-panel.tsx, now settings-only). In
+        // Only a pure category (isCategory, "ห้องใหม่แยกอิสระ") has nothing of
+        // its own to open — clicking its row expands/collapses instead, same
+        // as the chevron button. Every other topic opens/selects on click
+        // regardless of whether it has children (the chevron still handles
+        // expand/collapse independently — see its own onClick above). In
         // reorder mode the row itself no longer navigates/collapses — only
         // the grip handle / ▲▼ act on it, so a stray tap while reordering
         // doesn't also jump into the room.
         onClick={() => {
           if (editingOrder) return;
-          // !canOpenDirectly already means "has children" for any depth>0
-          // row (isCategory only ever applies at depth 0 — see its own doc
-          // above), so this one check covers every tier, not just the top.
           if (!canOpenDirectly) toggleCollapsed(t.id);
           else onSelect(t.id);
         }}
@@ -996,8 +999,8 @@ export function TopicSidebar({
             <Plus className="h-3.5 w-3.5" />
           </button>
         )}
-        {/* A parent (has sub-topics) is an organizing folder, not somewhere
-            to browse/post — favoriting only makes sense on a room you can
+        {/* Only a pure category has nothing of its own to browse/post in —
+            favoriting only makes sense on a room you can
             actually open, i.e. a leaf topic or a sub-topic. */}
         {!editingOrder && canOpenDirectly && (
           <button
