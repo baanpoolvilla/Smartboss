@@ -679,11 +679,7 @@ export function CalendarView() {
       };
     });
     return [...coloredLeaves, ...coloredOvertime, ...holidays, ...dayoffEvents]
-      // `holidayLike` dayoff entries follow the "วันหยุดนักขัตฤกษ์" toggle
-      // instead of "วันหยุดประจำ" — their `.type` itself stays "dayoff" so
-      // rendering (chip color, month-view special-casing) is untouched; only
-      // which show/hide switch controls them moves.
-      .filter((e) => scheduleActive.has(e.holidayLike ? "holiday" : e.type))
+      .filter((e) => scheduleActive.has(e.type))
       .filter((e) => e.type !== "leave" || !e.leaveType || !hiddenLeaveTypeIds.has(e.leaveType))
       .map(gray);
   }, [
