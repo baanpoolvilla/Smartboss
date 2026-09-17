@@ -10,7 +10,7 @@ import {
   type Paged,
 } from "@/modules/hr/lib/api";
 import { Field, NotProvisioned, Pill, SectionCard, inputClass } from "@/modules/hr/components/ui";
-import { createLeaveTypeAction, seedLeaveTypesAction } from "../../actions";
+import { createLeaveTypeAction, seedLeaveTypesAction, setLeaveTypeCountsAsHolidayAction } from "../../actions";
 import { Button } from "@smartboss/ui/components/button";
 
 export default async function LeaveTypesSettingsPage() {
@@ -65,17 +65,42 @@ export default async function LeaveTypesSettingsPage() {
                       ลาป่วย · ลากิจ · ลาพักร้อน · ลาไม่รับค่าจ้าง ครบในคลิกเดียว
                     </p>
                   ) : (
-                    <div className="mb-3 flex flex-wrap gap-1.5">
+                    <div className="mb-3 flex flex-col gap-1.5">
                       {(leaveTypes?.items ?? []).map((t) => (
-                        <Pill
-                          key={t.id}
-                          tone={t.auto_approve ? "var(--app-strong)" : "var(--tone-ok)"}
-                        >
-                          {t.name}
-                          {t.auto_approve
-                            ? ` · สิทธิ์${t.monthly_quota_days > 0 ? ` ${t.monthly_quota_days} วัน/เดือน` : ""}`
-                            : " · ต้องอนุมัติ"}
-                        </Pill>
+                        <div key={t.id} className="flex flex-wrap items-center gap-1.5">
+                          <Pill tone={t.auto_approve ? "var(--app-strong)" : "var(--tone-ok)"}>
+                            {t.name}
+                            {t.auto_approve
+                              ? ` · สิทธิ์${t.monthly_quota_days > 0 ? ` ${t.monthly_quota_days} วัน/เดือน` : ""}`
+                              : " · ต้องอนุมัติ"}
+                          </Pill>
+                          {/* นับเป็น "วันหยุดนักขัตฤกษ์" หรือ "วันหยุดประจำ" ในปฏิทินรวม
+                              — เฉพาะสิทธิ์ (auto_approve) เท่านั้นที่มีความหมายจุดนี้
+                              คำขอที่ต้องรออนุมัติเข้าหมวด "วันลา" อยู่แล้ว ไม่เกี่ยวกับ
+                              สองหมวดนี้เลย */}
+                          {t.auto_approve && (
+                            <form action={setLeaveTypeCountsAsHolidayAction}>
+                              <input type="hidden" name="leave_type_id" value={t.id} />
+                              <input
+                                type="hidden"
+                                name="counts_as_holiday"
+                                value={t.counts_as_holiday ? "0" : "1"}
+                              />
+                              <button
+                                type="submit"
+                                className="rounded-full border px-2.5 py-0.5 text-[11px] font-medium"
+                                style={
+                                  t.counts_as_holiday
+                                    ? { color: "var(--tone-info)", backgroundColor: "color-mix(in srgb, var(--tone-info) 12%, transparent)", borderColor: "color-mix(in srgb, var(--tone-info) 35%, transparent)" }
+                                    : { color: "var(--ink-soft)", borderColor: "var(--line)" }
+                                }
+                                title={t.counts_as_holiday ? "กำลังนับเป็นวันหยุดนักขัตฤกษ์ — กดเพื่อเปลี่ยนกลับเป็นวันหยุดประจำ" : "กำลังนับเป็นวันหยุดประจำ — กดเพื่อนับเป็นวันหยุดนักขัตฤกษ์แทน"}
+                              >
+                                {t.counts_as_holiday ? "✓ นับเป็นวันหยุดนักขัตฤกษ์" : "นับเป็นวันหยุดประจำ"}
+                              </button>
+                            </form>
+                          )}
+                        </div>
                       ))}
                     </div>
                   )}
@@ -103,10 +128,14 @@ export default async function LeaveTypesSettingsPage() {
                         className={inputClass}
                       />
                     </Field>
-                    <div className="flex items-end pb-3 text-sm sm:col-span-2">
+                    <div className="flex flex-col gap-1.5 pb-3 text-sm sm:col-span-2">
                       <label className="flex items-center gap-2">
                         <input type="checkbox" name="auto_approve" value="1" className="h-4 w-4" />
                         เป็นสิทธิ์ ไม่ต้องอนุมัติ (เลือกวันแล้วมีผลทันที)
+                      </label>
+                      <label className="flex items-center gap-2 text-(--ink-soft)">
+                        <input type="checkbox" name="counts_as_holiday" value="1" className="h-4 w-4" />
+                        นับเป็น &ldquo;วันหยุดนักขัตฤกษ์&rdquo; ในปฏิทินรวม แทน &ldquo;วันหยุดประจำ&rdquo;
                       </label>
                     </div>
                     <div className="flex items-end gap-2">

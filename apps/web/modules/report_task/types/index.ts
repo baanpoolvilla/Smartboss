@@ -232,6 +232,11 @@ export interface CalendarEvent {
    * เฉย ๆ) ยังต้องเติมให้เหมือนเดิม ไม่งั้นบอกไม่ได้ว่าเป็นวันลาของใคร
    */
   authoredTitle?: boolean;
+  /** `type: "dayoff"` only — this personal entitlement counts toward the
+   * "วันหยุดนักขัตฤกษ์" stat/filter bucket instead of "วันหยุดประจำ" (set from
+   * the leave type's `counts_as_holiday` in HR). Doesn't change rendering —
+   * still a per-person chip, not a real company-wide holiday. */
+  holidayLike?: boolean;
   taskId?: string;
   location?: string;
   description?: string;

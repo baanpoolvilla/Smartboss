@@ -11,6 +11,7 @@ import {
   grantLeaveBalanceSchema,
   preApproveOvertimeSchema,
   reopenTimesheetPeriodSchema,
+  setLeaveTypeCountsAsHolidaySchema,
   submitLeaveSchema,
   submitOvertimeSchema,
   type SubmitLeaveInput,
@@ -57,6 +58,29 @@ export class LeaveController {
     return this.service.getBalance(
       requireUuid(employmentId, 'employment_id'),
       Number(periodYear),
+    );
+  }
+
+  /**
+   * เปลี่ยนหมวดที่ประเภทลานี้นับในปฏิทินรวม — "วันหยุดนักขัตฤกษ์" หรือ
+   * "วันหยุดประจำ" (ดู counts_as_holiday ใน schema) แยก endpoint จาก
+   * createType เพราะไม่มี update ทั่วไปสำหรับ leave_types อยู่แล้ว
+   * (ตั้งค่าอื่นตั้งครั้งเดียวตอนสร้าง เปลี่ยนทีหลังไม่ได้เป็นเรื่องปกติของ
+   * ตารางนี้) จุดนี้ต้องแก้ทีหลังได้เพราะเป็นการตัดสินใจที่ผิดพลาดแล้วแก้คืน
+   * ได้บ่อย ไม่ใช่ตอนสร้างประเภทลาครั้งแรก
+   */
+  @Post('leave-types/:leaveTypeId/counts-as-holiday')
+  @HttpCode(200)
+  @RequirePermissions('workforce.leave.manage')
+  @Idempotent()
+  async setCountsAsHoliday(
+    @Param('leaveTypeId') leaveTypeId: string,
+    @Body(zodPipe(setLeaveTypeCountsAsHolidaySchema))
+    body: z.infer<typeof setLeaveTypeCountsAsHolidaySchema>,
+  ): Promise<Record<string, unknown>> {
+    return this.service.setLeaveTypeCountsAsHoliday(
+      requireUuid(leaveTypeId, 'leaveTypeId'),
+      body.counts_as_holiday,
     );
   }
 
