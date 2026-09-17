@@ -1215,6 +1215,29 @@ export async function createLeaveTypeAction(formData: FormData) {
 }
 
 /**
+ * แก้ชื่อประเภทลาที่มีอยู่แล้ว (เช่นแก้คำสะกดผิดตอนสร้าง) — ค่าอื่น ๆ ของ
+ * ประเภทลา (โควตา, ต้องอนุมัติหรือไม่ ฯลฯ) ยังตั้งได้ครั้งเดียวตอนสร้างเท่านั้น
+ */
+export async function renameLeaveTypeAction(formData: FormData) {
+  await guard(HR_PERMS.settingManage);
+  const leaveTypeId = String(formData.get("leave_type_id") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  if (!leaveTypeId) throw new Error("ไม่พบประเภทการลานี้");
+  if (!name) throw new Error("กรุณากรอกชื่อประเภทการลา");
+
+  try {
+    await wfFetch(`/leave-types/${leaveTypeId}/rename`, {
+      method: "POST",
+      body: { name },
+    });
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+  revalidatePath("/hr");
+  revalidatePath("/hr/settings");
+}
+
+/**
  * สร้างประเภทการลาชุดมาตรฐานให้ในคลิกเดียว
  *
  * ไม่ตั้งโควตาเป็นตัวเลขตายตัว เพราะสิทธิ์ลาต่างกันตามบริษัทและอายุงาน —

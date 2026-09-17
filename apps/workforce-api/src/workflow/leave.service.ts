@@ -77,6 +77,36 @@ export class LeaveService {
     });
   }
 
+  /** แก้ชื่อประเภทลาที่มีอยู่แล้ว — ดูคอมเมนต์บน endpoint ใน workflow.controller.ts */
+  async renameLeaveType(leaveTypeId: string, name: string): Promise<Record<string, unknown>> {
+    return this.uow.run(async (uow) => {
+      const types = await uow.tx
+        .select()
+        .from(schema.leaveTypes)
+        .where(eq(schema.leaveTypes.id, leaveTypeId))
+        .limit(1);
+      const type = types[0];
+      if (type === undefined) throw AppError.notFound('leave type');
+
+      await uow.tx
+        .update(schema.leaveTypes)
+        .set({ name })
+        .where(eq(schema.leaveTypes.id, leaveTypeId));
+
+      await uow.audit({
+        action: 'leave.type.rename',
+        resourceType: 'leave_type',
+        resourceId: leaveTypeId,
+        outcome: 'SUCCESS',
+        companyId: type.companyId,
+        before: { name: type.name },
+        after: { name },
+      });
+
+      return { id: leaveTypeId, name };
+    });
+  }
+
   /** ให้สิทธิ์ต้นงวด — บันทึกเป็นรายการ ไม่ใช่ตั้งค่ายอด */
   async grantOpeningBalance(input: {
     employment_id: string;

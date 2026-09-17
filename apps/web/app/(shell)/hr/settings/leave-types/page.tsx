@@ -10,7 +10,7 @@ import {
   type Paged,
 } from "@/modules/hr/lib/api";
 import { Field, NotProvisioned, Pill, SectionCard, inputClass } from "@/modules/hr/components/ui";
-import { createLeaveTypeAction, seedLeaveTypesAction } from "../../actions";
+import { createLeaveTypeAction, renameLeaveTypeAction, seedLeaveTypesAction } from "../../actions";
 import { Button } from "@smartboss/ui/components/button";
 
 export default async function LeaveTypesSettingsPage() {
@@ -65,17 +65,30 @@ export default async function LeaveTypesSettingsPage() {
                       ลาป่วย · ลากิจ · ลาพักร้อน · ลาไม่รับค่าจ้าง ครบในคลิกเดียว
                     </p>
                   ) : (
-                    <div className="mb-3 flex flex-wrap gap-1.5">
+                    <div className="mb-3 flex flex-col gap-1.5">
                       {(leaveTypes?.items ?? []).map((t) => (
-                        <Pill
-                          key={t.id}
-                          tone={t.auto_approve ? "var(--app-strong)" : "var(--tone-ok)"}
-                        >
-                          {t.name}
-                          {t.auto_approve
-                            ? ` · สิทธิ์${t.monthly_quota_days > 0 ? ` ${t.monthly_quota_days} วัน/เดือน` : ""}`
-                            : " · ต้องอนุมัติ"}
-                        </Pill>
+                        <div key={t.id} className="flex flex-wrap items-center gap-1.5">
+                          <Pill tone={t.auto_approve ? "var(--app-strong)" : "var(--tone-ok)"}>
+                            {t.name}
+                            {t.auto_approve
+                              ? ` · สิทธิ์${t.monthly_quota_days > 0 ? ` ${t.monthly_quota_days} วัน/เดือน` : ""}`
+                              : " · ต้องอนุมัติ"}
+                          </Pill>
+                          {/* แก้คำสะกดผิดในชื่อจริงได้ตรงนี้ — ค่าอื่น ๆ (โควตา,
+                              ต้องอนุมัติหรือไม่) ยังตั้งได้ครั้งเดียวตอนสร้างเท่านั้น */}
+                          <form action={renameLeaveTypeAction} className="flex items-center gap-1">
+                            <input type="hidden" name="leave_type_id" value={t.id} />
+                            <input
+                              name="name"
+                              defaultValue={t.name}
+                              className={`${inputClass} h-7 w-40 text-xs`}
+                              aria-label={`แก้ชื่อประเภทการลา ${t.name}`}
+                            />
+                            <Button type="submit" size="sm" variant="outline" className="h-7 px-2 text-xs">
+                              บันทึกชื่อ
+                            </Button>
+                          </form>
+                        </div>
                       ))}
                     </div>
                   )}

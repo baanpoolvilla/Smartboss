@@ -10,6 +10,7 @@ import {
   finalApproveOvertimeSchema,
   grantLeaveBalanceSchema,
   preApproveOvertimeSchema,
+  renameLeaveTypeSchema,
   reopenTimesheetPeriodSchema,
   submitLeaveSchema,
   submitOvertimeSchema,
@@ -58,6 +59,22 @@ export class LeaveController {
       requireUuid(employmentId, 'employment_id'),
       Number(periodYear),
     );
+  }
+
+  /**
+   * แก้ชื่อประเภทลาที่มีอยู่แล้ว (เช่นแก้คำสะกดผิดตอนสร้าง) — ไม่มี endpoint
+   * แก้ไขทั่วไปสำหรับ leave_types (ค่าอื่น ๆ ตั้งครั้งเดียวตอนสร้าง) จุดนี้
+   * ต้องแก้ทีหลังได้เพราะเป็นการพิมพ์ผิด ไม่ใช่การตัดสินใจเชิงนโยบาย
+   */
+  @Post('leave-types/:leaveTypeId/rename')
+  @HttpCode(200)
+  @RequirePermissions('workforce.leave.manage')
+  @Idempotent()
+  async renameType(
+    @Param('leaveTypeId') leaveTypeId: string,
+    @Body(zodPipe(renameLeaveTypeSchema)) body: z.infer<typeof renameLeaveTypeSchema>,
+  ): Promise<Record<string, unknown>> {
+    return this.service.renameLeaveType(requireUuid(leaveTypeId, 'leaveTypeId'), body.name);
   }
 
   /**

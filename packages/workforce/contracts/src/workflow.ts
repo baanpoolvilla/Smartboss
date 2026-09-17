@@ -27,6 +27,11 @@ export const createLeaveTypeSchema = z.object({
   effective_from: isoDateSchema,
 });
 
+/** แก้ชื่อประเภทลาที่มีอยู่แล้ว (เช่นแก้คำสะกดผิด) — ไม่มี endpoint แก้ไขทั่วไปสำหรับ leave_types มาก่อน มีแค่ตัวนี้ */
+export const renameLeaveTypeSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+});
+
 export const grantLeaveBalanceSchema = z.object({
   employment_id: uuidSchema,
   leave_type_id: uuidSchema,
