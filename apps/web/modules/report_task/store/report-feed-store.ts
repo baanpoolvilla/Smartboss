@@ -351,6 +351,13 @@ export interface ReportTopic {
    * override ทั้งบริษัทเมื่อ `ReportSubmissionLockSettings.useGlobalCutoff`
    * เปิดอยู่ — ดู `effectiveHardCutoffTime` ใน report-cutoff.ts. */
   hardCutoffTime?: string;
+  /** Opts this room out of the company-wide `useGlobalCutoff` lock — while
+   * the global toggle is on, every other room ignores its own
+   * `hardCutoffTime` in favor of the shared one, but a room with this set
+   * always uses its own (undefined = no lock at all for this room, even
+   * while every other room is locked). Meaningless while the global toggle
+   * is off — every room already uses its own `hardCutoffTime` then. */
+  hardCutoffExemptFromGlobal?: boolean;
 }
 
 /**
@@ -505,6 +512,7 @@ interface ReportFeedStore {
       submissionRounds?: SubmissionRound[];
       order?: number;
       hardCutoffTime?: string;
+      hardCutoffExemptFromGlobal?: boolean;
     }
   ) => void;
   /** Per-viewer notification preference for one room — same "map keyed by

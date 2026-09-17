@@ -174,6 +174,26 @@ export function ReportTopicSettingsPanel({
     setCopyTargetIds([]);
   }
 
+  // This room's own "ปิดรับ" time picker — reused both when the company-wide
+  // toggle is off (every room always uses its own) and when it's on but this
+  // room opted itself out via hardCutoffExemptFromGlobal.
+  function ownHardCutoffEditor(indent = true) {
+    const pad = indent ? "pl-4" : "";
+    return topic.hardCutoffTime ? (
+      <div className={cn("flex flex-wrap items-center gap-x-2 gap-y-1", pad)}>
+        <TimePickerField
+          className="w-[104px] shrink-0"
+          value={topic.hardCutoffTime}
+          onChange={(time) => apply({ hardCutoffTime: time || undefined })}
+          aria-label="เวลาปิดรับของห้องนี้"
+        />
+        <span className="text-[11px] text-[var(--ink-soft)]">น. — เลยเวลานี้ส่งรายงานของวันนั้นไม่ได้อีก (เปิดรับใหม่ทุกเที่ยงคืน)</span>
+      </div>
+    ) : (
+      <p className={cn("text-[11px] text-[var(--ink-faint)]", pad)}>ปิดอยู่ — ส่งได้ตลอดเวลา ไม่มีการปิดรับ</p>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {!hideHeading && (
@@ -412,20 +432,23 @@ export function ReportTopicSettingsPanel({
                 />
               )}
             </div>
-            {!lockSettings.useGlobalCutoff && (
-              topic.hardCutoffTime ? (
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pl-4">
-                  <TimePickerField
-                    className="w-[104px] shrink-0"
-                    value={topic.hardCutoffTime}
-                    onChange={(time) => apply({ hardCutoffTime: time || undefined })}
-                    aria-label="เวลาปิดรับของห้องนี้"
+
+            {lockSettings.useGlobalCutoff ? (
+              <div className="space-y-1.5 pl-4">
+                <label className="flex items-center gap-2 text-[11px] text-[var(--ink-soft)] cursor-pointer">
+                  <Switch
+                    className="shrink-0"
+                    checked={!!topic.hardCutoffExemptFromGlobal}
+                    onCheckedChange={(v) =>
+                      apply({ hardCutoffExemptFromGlobal: v, hardCutoffTime: v ? (topic.hardCutoffTime || lockSettings.time) : topic.hardCutoffTime })
+                    }
                   />
-                  <span className="text-[11px] text-[var(--ink-soft)]">น. — เลยเวลานี้ส่งรายงานของวันนั้นไม่ได้อีก (เปิดรับใหม่ทุกเที่ยงคืน)</span>
-                </div>
-              ) : (
-                <p className="pl-4 text-[11px] text-[var(--ink-faint)]">ปิดอยู่ — ส่งได้ตลอดเวลา ไม่มีการปิดรับ</p>
-              )
+                  ยกเว้นห้องนี้จากเวลากลาง — ใช้เวลาของตัวเอง
+                </label>
+                {topic.hardCutoffExemptFromGlobal && ownHardCutoffEditor(false)}
+              </div>
+            ) : (
+              ownHardCutoffEditor()
             )}
           </div>
         </div>

@@ -87,13 +87,16 @@ export function minImagesNow(topic: Pick<ReportTopic, "cutoffs">): number {
  * only ever badge a post "ส่งช้า" and never block it. `null` = no lock (a
  * post can always be submitted), matching every room's behavior before this
  * feature existed. The company-wide toggle wins over whatever the room set
- * for itself — one shared deadline is the point of turning it on.
+ * for itself — one shared deadline is the point of turning it on — *unless*
+ * the room opted itself out via `hardCutoffExemptFromGlobal` (e.g. a
+ * night-shift room that genuinely needs a later cutoff, or none at all),
+ * in which case it always falls through to its own `hardCutoffTime`.
  */
 export function effectiveHardCutoffTime(
-  topic: Pick<ReportTopic, "hardCutoffTime">,
+  topic: Pick<ReportTopic, "hardCutoffTime" | "hardCutoffExemptFromGlobal">,
   lock: ReportSubmissionLockSettings
 ): string | null {
-  if (lock.useGlobalCutoff) return lock.time;
+  if (lock.useGlobalCutoff && !topic.hardCutoffExemptFromGlobal) return lock.time;
   return topic.hardCutoffTime || null;
 }
 
