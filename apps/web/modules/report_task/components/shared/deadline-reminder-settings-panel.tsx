@@ -288,8 +288,9 @@ export function DeadlineReminderSettingsPanel() {
           <Switch checked={settings.submissionLock.useGlobalCutoff} onCheckedChange={(v) => setSubmissionLockSettings({ useGlobalCutoff: v })} />
         </div>
         <div className="px-4 pb-3.5 pl-[46px]">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <TimePickerField
+              className="w-[104px] shrink-0"
               value={settings.submissionLock.time}
               onChange={(time) => setSubmissionLockSettings({ time: time || "23:59" })}
               aria-label="เวลาปิดรับรายงานมาตรฐาน"
