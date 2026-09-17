@@ -491,28 +491,38 @@ export function TopicSidebar({
         // Openchat room looks identical to any pre-existing stream room,
         // not a different value that happens to mean the same thing.
         feedViewMode: feedViewMode === "stream" ? undefined : "threads",
-        // No longer forced on for "ห้องใหม่แยกอิสระ" — every new topic now
-        // gets its own รายวัน/รายสัปดาห์/รายเดือน structure below, which makes
-        // it a real, postable room with a standard schedule already in
-        // place, not a category with nothing of its own
-        // ("ต้องกดเข้าไปโพสได้หมดเลย").
+        // Back on for "ห้องใหม่แยกอิสระ" — a top-level topic is the
+        // department-style header (matches "General Worker": a pure
+        // organizing folder, never itself a room to post in), while the
+        // auto-created รายวัน/รายสัปดาห์/รายเดือน/คุยเล่น structure below are
+        // the actual postable rooms under it.
+        isCategory: createKind === "main" ? true : undefined,
         byUserId: viewingAsUserId,
       });
-      // Standard รายวัน > รายสัปดาห์/รายเดือน structure, auto-created under
-      // every new topic — matches the hand-built pattern this mirrors
-      // (General Worker > daily-report > weekly-report, monthly-report)
-      // exactly. The requested default is "always," not opt-in: unwanted
-      // rooms get deleted same as any other room, and more can be added the
-      // normal way if these aren't enough.
+      // Standard คุยเล่น + รายวัน > รายสัปดาห์/รายเดือน structure, auto-created
+      // under every new topic — matches the hand-built pattern this mirrors
+      // (General Worker > a-talk, daily-report > weekly-report,
+      // monthly-report) exactly. The requested default is "always," not
+      // opt-in: unwanted rooms get deleted same as any other room, and more
+      // can be added the normal way if these aren't enough.
       //
       // A depth-0 ("main") topic has two tiers of room left under the
       // 3-tier cap (topicDepth's own doc), so it gets the full nested shape:
-      // รายวัน one tier down, รายสัปดาห์/รายเดือน nested a further tier under
-      // that. A depth-1 ("sub") topic has only one tier left, so รายวัน
-      // would have nowhere to put its own children — รายสัปดาห์/รายเดือน go
-      // directly under it instead, same as before. A depth-2 ("subsub")
-      // topic is already at the cap, so it gets neither.
+      // คุยเล่น and รายวัน one tier down, รายสัปดาห์/รายเดือน nested a further
+      // tier under รายวัน. A depth-1 ("sub") topic has only one tier left, so
+      // รายวัน would have nowhere to put its own children — คุยเล่น/
+      // รายสัปดาห์/รายเดือน all go directly under it as flat siblings
+      // instead. A depth-2 ("subsub") topic is already at the cap, so it
+      // gets none of these.
       if (createKind === "main") {
+        addTopic({
+          name: "คุยเล่น",
+          color,
+          parentId: id,
+          visibility: parentVisibility,
+          feedViewMode: feedViewMode === "stream" ? undefined : "threads",
+          byUserId: viewingAsUserId,
+        });
         const dailyId = addTopic({
           name: "รายวัน",
           color,
@@ -538,6 +548,14 @@ export function TopicSidebar({
           byUserId: viewingAsUserId,
         });
       } else if (createKind === "sub") {
+        addTopic({
+          name: "คุยเล่น",
+          color,
+          parentId: id,
+          visibility: parentVisibility,
+          feedViewMode: feedViewMode === "stream" ? undefined : "threads",
+          byUserId: viewingAsUserId,
+        });
         addTopic({
           name: "รายสัปดาห์",
           color,
@@ -1509,12 +1527,14 @@ export function TopicSidebar({
                       </button>
                     </div>
                     {createKind === "main" ? (
-                      // Set expectations up front — the topic itself is a
-                      // normal postable room, and it automatically comes with
-                      // "รายวัน" underneath it, itself holding "รายสัปดาห์" /
-                      // "รายเดือน" (delete any of them after if unwanted).
+                      // Set expectations up front — a top-level topic is a
+                      // category to organize sub-topics under, not a room in
+                      // its own right, but it's never left empty: "คุยเล่น"
+                      // and "รายวัน" (itself holding "รายสัปดาห์"/"รายเดือน")
+                      // come along automatically (delete any of them after
+                      // if unwanted).
                       <p className="text-[11px] text-[var(--ink-soft)]">
-                        โพสต์ได้ทันทีที่สร้าง พร้อมห้องย่อย "รายวัน" ที่มี "รายสัปดาห์" และ "รายเดือน" ซ้อนอยู่ข้างใน ติดมาให้อัตโนมัติ — ไม่ใช้ก็ลบทิ้งได้ทีหลัง
+                        หัวข้อหลักไว้จัดหมวดหมู่เท่านั้น กดแชทเองไม่ได้ — มาพร้อมห้องย่อย "คุยเล่น" และ "รายวัน" (ที่มี "รายสัปดาห์"/"รายเดือน" ซ้อนอยู่ข้างใน) ให้อัตโนมัติ
                       </p>
                     ) : createKind === "sub" ? (
                       <div className="space-y-1.5">
@@ -1523,7 +1543,7 @@ export function TopicSidebar({
                             plain sentence here so it's never just a number
                             to interpret ("งง ยุ" — the button label change
                             alone wasn't enough on its own). */}
-                        <p className="text-[11px] text-[var(--ink-soft)]">ห้องย่อยชั้น 1 — ซ้อนอยู่ใต้ห้องหลักโดยตรง มาพร้อมห้องย่อย "รายสัปดาห์"/"รายเดือน" อัตโนมัติเหมือนกัน เลือกห้องหลักที่จะซ้อนเข้าไป:</p>
+                        <p className="text-[11px] text-[var(--ink-soft)]">ห้องย่อยชั้น 1 — ซ้อนอยู่ใต้ห้องหลักโดยตรง มาพร้อมห้องย่อย "คุยเล่น"/"รายสัปดาห์"/"รายเดือน" อัตโนมัติเหมือนกัน เลือกห้องหลักที่จะซ้อนเข้าไป:</p>
                         {topLevelParentOptions.length === 0 ? (
                           <p className="text-[11px] text-[var(--ink-soft)]">ยังไม่มีหัวข้อหลักในระบบเลย — สร้างหัวข้อหลักก่อนอันนี้ แล้วค่อยกลับมาสร้างหัวข้อย่อยใต้มันทีหลังได้</p>
                         ) : (
