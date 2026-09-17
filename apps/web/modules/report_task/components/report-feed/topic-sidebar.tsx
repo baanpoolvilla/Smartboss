@@ -505,7 +505,7 @@ export function TopicSidebar({
       // under it at all (topicDepth's 3-tier cap).
       if (createKind !== "subsub") {
         addTopic({
-          name: `${trimmed} - รายสัปดาห์`,
+          name: "รายสัปดาห์",
           color,
           parentId: id,
           visibility: parentVisibility,
@@ -513,7 +513,7 @@ export function TopicSidebar({
           byUserId: viewingAsUserId,
         });
         addTopic({
-          name: `${trimmed} - รายเดือน`,
+          name: "รายเดือน",
           color,
           parentId: id,
           visibility: parentVisibility,
