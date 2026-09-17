@@ -4,10 +4,13 @@ import { requireOrg } from "@smartboss/auth";
 
 import { readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
 import { readTasks } from "@/modules/report_task/lib/db/task-repo";
+import { listHolidayEvents, listLeaveEvents } from "@/modules/report_task/lib/db/workforce-calendar";
+import { buildDateExemptions } from "@/modules/report_task/lib/report-feed-exemptions";
 import { computeReminders } from "@/modules/report_task/lib/reminder-sweep";
 import { defaultReminderSettings, type ReminderSettings } from "@/modules/report_task/store/reminder-settings-store";
 import type { ReportAlbum, ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import type { AppNotification } from "@/modules/report_task/store/notification-store";
+import type { RoutineDayOffRule } from "@/modules/report_task/store/routine-dayoff-store";
 import type { CalendarEvent, TodoItem } from "@/modules/report_task/types";
 
 /**
@@ -28,6 +31,21 @@ const NOTIFICATIONS_KEY = "notifications";
 const MEETINGS_KEY = "meetings";
 const TODOS_KEY = "todos";
 const REPORT_FEED_KEY = "report-feed";
+const ROUTINE_DAYOFF_KEY = "routine-dayoff";
+
+/*
+ * ช่วงกว้างพอครอบคลุมใบลาที่เริ่มไปแล้วแต่ยังไม่จบ (ลาต่อเนื่องหลายวัน
+ * คร่อมวันนี้) โดยไม่ต้องดึงทั้งปีเหมือนที่ปฏิทินทำ — sweep นี้สนใจแค่
+ * "วันนี้" เท่านั้น
+ */
+function exemptionRange(): { from: string; to: string } {
+  const t = new Date();
+  const from = new Date(t);
+  from.setDate(from.getDate() - 60);
+  const to = new Date(t);
+  to.setDate(to.getDate() + 1);
+  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+}
 // Dedup keys accumulate roughly one per (task × lead-day) and (person × room
 // × day × lead) — capped so a company running this for years doesn't grow
 // the row unbounded. Old keys aging out just means a years-old task/day
@@ -39,13 +57,22 @@ export async function POST() {
   const session = await requireOrg();
   const orgId = session.orgId;
 
-  const [{ data: settingsRaw }, { tasks }, { data: meetings }, { data: todos }, { data: reportFeed }] = await Promise.all([
+  const { from, to } = exemptionRange();
+  const [{ data: settingsRaw }, { tasks }, { data: meetings }, { data: todos }, { data: reportFeed }, leaves, holidays, { data: routineDayOff }] = await Promise.all([
     readStore<ReminderSettings>(orgId, SETTINGS_KEY),
     readTasks(orgId),
     readStore<CalendarEvent[]>(orgId, MEETINGS_KEY),
     readStore<TodoItem[]>(orgId, TODOS_KEY),
     readStore<{ topics: ReportTopic[]; posts: ReportPost[]; albums: ReportAlbum[] }>(orgId, REPORT_FEED_KEY),
+    listLeaveEvents(orgId, from, to),
+    listHolidayEvents(orgId, from, to),
+    readStore<{ pickedDates: Record<string, string[]>; rules: RoutineDayOffRule[]; ruleExceptions: Record<string, string> }>(orgId, ROUTINE_DAYOFF_KEY),
   ]);
+  const exemptions = buildDateExemptions(leaves, holidays, {
+    pickedDates: routineDayOff?.pickedDates ?? {},
+    rules: routineDayOff?.rules ?? [],
+    ruleExceptions: routineDayOff?.ruleExceptions ?? {},
+  });
   // Merged field-by-field, not a plain `?? default` — a row saved before
   // `task.leadMinutes`/`todo` existed on ReminderSettings only has the old
   // shape (`task.leadDays`, no `todo` key at all), and computeReminders reads
@@ -60,6 +87,7 @@ export async function POST() {
     meeting: { ...defaultReminderSettings.meeting, ...settingsRaw?.meeting },
     report: { ...defaultReminderSettings.report, ...settingsRaw?.report },
     todo: { ...defaultReminderSettings.todo, ...settingsRaw?.todo },
+    submissionLock: { ...defaultReminderSettings.submissionLock, ...settingsRaw?.submissionLock },
   };
 
   const { data: sentLog, version: sentVersion } = await readStore<string[]>(orgId, SENT_LOG_KEY);
@@ -73,6 +101,7 @@ export async function POST() {
     posts: reportFeed?.posts ?? [],
     settings,
     alreadySent,
+    exemptions,
   });
 
   if (result.newSentKeys.length === 0) {
