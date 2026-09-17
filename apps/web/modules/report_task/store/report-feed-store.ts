@@ -178,6 +178,22 @@ export interface ReportPost extends ReportPostFields {
    * scoring purposes. undefined/false for every normal post. */
   excludeFromSubmission?: boolean;
   /**
+   * Owner-only override that suppresses the ตรงเวลา/สาย badge on a post
+   * that's genuinely a legitimate submission but got wrongly branded "ส่งช้า"
+   * — typically an old post from before `roundTimeAtSubmission` existed,
+   * re-judged against a room's round time after it was edited (see that
+   * field's own comment). Deliberately NOT the same as `excludeFromSubmission`:
+   * that drops a post out of counting toward the round entirely, which turns
+   * the day "ขาดส่ง" (missing) if nothing else satisfies it — the opposite of
+   * what's wanted here. This keeps the post counting as a normal, satisfying
+   * submission (report-feed-compliance.ts's dayComplianceStatus/
+   * roundComplianceStatus treat it as on-time), just without the late label
+   * anywhere it'd otherwise show (the post card, the dashboard's late tally).
+   * Owner-gated (not the post's own author) because it's correcting the
+   * record, not opting out of an obligation. undefined/false for every post.
+   */
+  lateBadgeHidden?: boolean;
+  /**
    * Scored stickers (same set as Kanban's — see data/stickers.ts /
    * useStickerStore, edited in one place from settings) a lead handed the
    * POST'S AUTHOR — deliberately separate from `reactions` above, which is
@@ -561,6 +577,10 @@ interface ReportFeedStore {
   deleteReply: (postId: string, replyId: string) => void;
   toggleReplyReaction: (postId: string, replyId: string, emoji: string, userId: string) => void;
   togglePin: (postId: string) => void;
+  /** Owner-only — see ReportPost.lateBadgeHidden's own doc comment. Caller
+   * (the "..." menu in report-card.tsx) is responsible for the permission
+   * check; this just writes the flag. */
+  setLateBadgeHidden: (postId: string, hidden: boolean) => void;
   toggleSave: (postId: string, userId: string) => void;
   toggleUnread: (postId: string, userId: string) => void;
   /** Clears `unreadFor` on every post in a room for this viewer — opening a
@@ -974,6 +994,10 @@ export const useReportFeedStore = create<ReportFeedStore>()(
       togglePin: (postId) =>
         set((s) => ({
           posts: s.posts.map((p) => (p.id === postId ? { ...p, pinned: !p.pinned } : p)),
+        })),
+      setLateBadgeHidden: (postId, hidden) =>
+        set((s) => ({
+          posts: s.posts.map((p) => (p.id === postId ? { ...p, lateBadgeHidden: hidden } : p)),
         })),
       toggleSave: (postId, userId) =>
         set((s) => ({

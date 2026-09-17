@@ -153,7 +153,12 @@ export function dayComplianceStatus(
   if (exemptions && isExemptDate(exemptions, userId, day)) return "exempt";
   const dayPosts = postsForDay(topic, userId, day, posts);
   if (dayPosts.length > 0) {
-    const onTime = dayPosts.some((p) => minutesOfDay(p.createdAt) <= lastCutoff);
+    // lateBadgeHidden (owner-only override, see its own doc comment on
+    // ReportPost) counts as on-time here too — it exists specifically so a
+    // post doesn't drag a day/round into "late" once the badge itself is
+    // suppressed; leaving this check out would keep the dashboard's late
+    // tally showing the very thing the override was meant to hide.
+    const onTime = dayPosts.some((p) => minutesOfDay(p.createdAt) <= lastCutoff || p.lateBadgeHidden);
     return onTime ? "on-time" : "late";
   }
   const todayStr = todayIso();
@@ -215,7 +220,11 @@ export function roundComplianceStatus(
   const cutoff = roundMinutes(round);
   const roundPosts = postsForRound(topic, userId, round, day, posts);
   if (roundPosts.length > 0) {
-    const onTime = roundPosts.some((p) => minutesOfDay(p.createdAt) <= cutoff);
+    // Same lateBadgeHidden allowance as dayComplianceStatus above — this is
+    // the function that actually feeds the dashboard's late tally
+    // (reportStatusCountsByUser → report-feed-status-pie.tsx), so it's the
+    // one that matters most for "don't show this as late in the dashboard".
+    const onTime = roundPosts.some((p) => minutesOfDay(p.createdAt) <= cutoff || p.lateBadgeHidden);
     return onTime ? "on-time" : "late";
   }
   const todayStr = todayIso();
@@ -706,7 +715,7 @@ export function todayComplianceSummary(
         }
         summary.postedToday += 1;
         const cutoff = roundMinutes(round);
-        if (!roundPosts.some((p) => minutesOfDay(p.createdAt) <= cutoff)) summary.lateToday += 1;
+        if (!roundPosts.some((p) => minutesOfDay(p.createdAt) <= cutoff || p.lateBadgeHidden)) summary.lateToday += 1;
       }
     }
   }
@@ -769,7 +778,7 @@ export function todayStatusEntries(
           continue;
         }
         const cutoff = roundMinutes(round);
-        const onTime = roundPosts.some((p) => minutesOfDay(p.createdAt) <= cutoff);
+        const onTime = roundPosts.some((p) => minutesOfDay(p.createdAt) <= cutoff || p.lateBadgeHidden);
         entries.push({ ...base, status: onTime ? "posted" : "late" });
       }
     }

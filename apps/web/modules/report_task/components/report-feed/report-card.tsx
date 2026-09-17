@@ -99,6 +99,8 @@ import {
   Reply as ReplyIcon,
   Send,
   Share2,
+  Shield,
+  ShieldOff,
   SmilePlus,
   Trash2,
   TriangleAlert,
@@ -204,6 +206,7 @@ export function ReportCard({
   const removePost = useReportFeedStore((s) => s.removePost);
   const editPost = useReportFeedStore((s) => s.editPost);
   const togglePin = useReportFeedStore((s) => s.togglePin);
+  const setLateBadgeHidden = useReportFeedStore((s) => s.setLateBadgeHidden);
   const toggleSave = useReportFeedStore((s) => s.toggleSave);
   const toggleUnread = useReportFeedStore((s) => s.toggleUnread);
   const setPostLinkedTask = useReportFeedStore((s) => s.setPostLinkedTask);
@@ -256,8 +259,16 @@ export function ReportCard({
   const roundCandidatesAtSubmission = roundCandidates.map((r) =>
     r.id === post.roundId && post.roundTimeAtSubmission ? { ...r, time: post.roundTimeAtSubmission } : r
   );
-  const lateCutoff = lateCutoffFor(post.createdAt, roundCandidatesAtSubmission);
-  const onTimeCutoff = !lateCutoff ? onTimeCutoffFor(post.createdAt, roundCandidatesAtSubmission) : null;
+  // Unhidden lateness, purely to decide whether "ซ่อนป้ายส่งช้า" belongs in
+  // the "..." menu at all — no point offering it on a post that was never
+  // late in the first place.
+  const rawLateCutoff = lateCutoffFor(post.createdAt, roundCandidatesAtSubmission);
+  // Owner-only override (ReportPost.lateBadgeHidden) — suppresses BOTH
+  // badges outright rather than falling through to "ตรงเวลา" once lateCutoff
+  // is nulled out, since the post genuinely wasn't on time; the point is to
+  // stop asserting either label, not to overstate it as on-time.
+  const lateCutoff = post.lateBadgeHidden ? null : rawLateCutoff;
+  const onTimeCutoff = !lateCutoff && !post.lateBadgeHidden ? onTimeCutoffFor(post.createdAt, roundCandidatesAtSubmission) : null;
   const allPosts = useReportFeedStore((s) => s.posts);
   // Once you're past a cutoff, *every* post you make that day gets flagged
   // "ส่งช้า" — technically true of each one, but posting twice just repeated
@@ -290,6 +301,7 @@ export function ReportCard({
     return p.excludeFromSubmission ? null : (attributePostToRound(p, postDayCutoffs)?.id ?? null);
   }
   function isLateForRound(p: ReportPost, roundId: string): boolean {
+    if (p.lateBadgeHidden) return false;
     const round = postDayCutoffs.find((r) => r.id === roundId);
     if (!round) return false;
     // Same snapshot-over-live-time preference as roundCandidatesAtSubmission
@@ -819,6 +831,17 @@ export function ReportCard({
           label={isUnread ? "ทำเครื่องหมายว่าอ่านแล้ว" : "ทำเครื่องหมายว่ายังไม่อ่าน"}
           onClick={() => { toggleUnread(post.id, viewingAsUserId); close(); }}
         />
+        {/* Owner-only — see ReportPost.lateBadgeHidden's doc comment. Only
+            offered on a post that's actually late (or already hidden), same
+            reasoning as every other conditional item here — no point
+            showing a toggle with nothing real to toggle. */}
+        {isOwner(viewingAsUserId) && (rawLateCutoff || post.lateBadgeHidden) && (
+          <MenuButton
+            icon={post.lateBadgeHidden ? Shield : ShieldOff}
+            label={post.lateBadgeHidden ? "เลิกซ่อนป้ายส่งช้า" : "ซ่อนป้ายส่งช้า"}
+            onClick={() => { setLateBadgeHidden(post.id, !post.lateBadgeHidden); close(); }}
+          />
+        )}
         {isOwn && (
           <MenuButton
             icon={Trash2}
