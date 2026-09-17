@@ -118,14 +118,15 @@ function contentTypeFor(key: string): string {
       return "application/vnd.ms-powerpoint";
     case "pptx":
       return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
-    // .html (and anything else unrecognized below) is served as a forced
-    // download, not text/html — this domain is already cookie-isolated from
-    // the app (see uploads/route.ts's own doc comment), but an inline
-    // text/html response still executes any <script> the file carries in
-    // the viewer's browser on THIS origin, which octet-stream avoids outright.
+    // Opens inline (viewable in a tab, not forced to download) rather than
+    // octet-stream, per explicit request — any <script> the file carries
+    // does run in the viewer's browser on this origin, but that origin is
+    // already login-gated and cookie-isolated from the main app (see
+    // uploads/route.ts's own doc comment), and everyone with access here is
+    // an already-authenticated teammate, not the public.
     case "html":
     case "htm":
-      return "application/octet-stream";
+      return "text/html; charset=utf-8";
     default:
       // Was "image/jpeg" — silently correct for the one extension that
       // used to fall through here (.jpg, now its own case above) but wrong
