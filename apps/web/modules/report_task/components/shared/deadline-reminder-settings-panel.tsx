@@ -6,8 +6,11 @@ import { Badge } from "@/modules/report_task/components/ui/badge";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
 import { useReminderSettingsStore } from "@/modules/report_task/store/reminder-settings-store";
+import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
+import { trackedTopicsOf } from "@/modules/report_task/lib/report-feed-compliance";
 import { REMINDER_OPTIONS } from "@/modules/report_task/components/calendar/add-todo-dialog";
 import { TimePickerField } from "@/modules/report_task/components/shared/time-picker-field";
+import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Bell, CheckSquare, ClipboardList, FileText, Lock, Plus, Users, X } from "lucide-react";
 
@@ -192,6 +195,13 @@ export function DeadlineReminderSettingsPanel() {
   const setReportSettings = useReminderSettingsStore((s) => s.setReportSettings);
   const setTodoSettings = useReminderSettingsStore((s) => s.setTodoSettings);
   const setSubmissionLockSettings = useReminderSettingsStore((s) => s.setSubmissionLockSettings);
+  const topics = useReportFeedStore((s) => s.topics);
+  const updateTopicSettings = useReportFeedStore((s) => s.updateTopicSettings);
+  // Only rooms that actually require a report — a category/organizing topic
+  // or a room with no submission round configured has nothing for the
+  // global lock to apply to in the first place, so listing it here would
+  // just be a checkbox that does nothing either way.
+  const lockableTopics = trackedTopicsOf(topics).slice().sort((a, b) => a.name.localeCompare(b.name, "th"));
 
   function toggleRecipient(setFn: (patch: Record<string, boolean>) => void, key: string, current: boolean) {
     setFn({ [key]: !current });
@@ -301,6 +311,48 @@ export function DeadlineReminderSettingsPanel() {
                 : "น. — ค่ามาตรฐานที่ห้องใหม่จะได้เมื่อเปิดปิดรับของตัวเอง (ห้องเก่ายังใช้เวลาที่ตั้งไว้แต่เดิม)"}
             </span>
           </div>
+
+          {/* Which rooms actually follow the shared time — off here means
+              "ยกเว้น" (ReportTopic.hardCutoffExemptFromGlobal), which just
+              falls through to that room's own hardCutoffTime instead (same
+              field the room's own settings dialog edits — this list and
+              that dialog both write it, so either place stays in sync).
+              Only rooms with a real submission schedule show up — nothing
+              to exempt in a room nobody's required to report into. */}
+          {settings.submissionLock.useGlobalCutoff && lockableTopics.length > 0 && (
+            <div className="mt-3 rounded-lg border border-[var(--line)]">
+              <p className="border-b border-[var(--line)] bg-[var(--bg-soft)] px-3 py-1.5 text-[11px] font-medium text-[var(--ink-soft)]">
+                ใช้เวลากลางกับห้อง — ปิดติ๊กเพื่อยกเว้นห้องนั้น ({lockableTopics.length} ห้องมีรอบส่ง)
+              </p>
+              <div className="max-h-52 overflow-y-auto p-1">
+                {lockableTopics.map((t) => {
+                  const usesGlobal = !t.hardCutoffExemptFromGlobal;
+                  return (
+                    <label
+                      key={t.id}
+                      className="flex items-center gap-2 rounded-md px-2 py-1.5 text-[12.5px] hover:bg-[var(--bg-soft)] cursor-pointer"
+                    >
+                      <Checkbox
+                        checked={usesGlobal}
+                        onCheckedChange={(v) =>
+                          updateTopicSettings(t.id, {
+                            hardCutoffExemptFromGlobal: v !== true,
+                            hardCutoffTime: v !== true ? (t.hardCutoffTime || settings.submissionLock.time) : t.hardCutoffTime,
+                          })
+                        }
+                      />
+                      <span className="min-w-0 flex-1 truncate">{t.name}</span>
+                      {!usesGlobal && (
+                        <span className="shrink-0 rounded-full bg-[var(--bg-soft)] px-2 py-0.5 text-[10.5px] text-[var(--ink-faint)]">
+                          ยกเว้น{t.hardCutoffTime ? ` · ${t.hardCutoffTime} น.` : " · ไม่ปิดรับ"}
+                        </span>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
