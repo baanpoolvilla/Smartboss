@@ -492,18 +492,52 @@ export function TopicSidebar({
         // not a different value that happens to mean the same thing.
         feedViewMode: feedViewMode === "stream" ? undefined : "threads",
         // No longer forced on for "ห้องใหม่แยกอิสระ" — every new topic now
-        // gets its own รายสัปดาห์/รายเดือน children below, which makes it a
-        // real, postable room with a standard schedule already in place,
-        // not a category with nothing of its own ("ต้องกดเข้าไปโพสได้หมดเลย").
+        // gets its own รายวัน/รายสัปดาห์/รายเดือน structure below, which makes
+        // it a real, postable room with a standard schedule already in
+        // place, not a category with nothing of its own
+        // ("ต้องกดเข้าไปโพสได้หมดเลย").
         byUserId: viewingAsUserId,
       });
-      // Standard รายสัปดาห์/รายเดือน siblings, auto-created under every new
-      // topic (main or sub) — the requested default is "always," not opt-in:
-      // unwanted ones get deleted same as any other room, and more can be
-      // added the normal way if two isn't enough. Skipped only for "subsub"
-      // (tier 2), the deepest tier allowed — there's no room to nest a child
-      // under it at all (topicDepth's 3-tier cap).
-      if (createKind !== "subsub") {
+      // Standard รายวัน > รายสัปดาห์/รายเดือน structure, auto-created under
+      // every new topic — matches the hand-built pattern this mirrors
+      // (General Worker > daily-report > weekly-report, monthly-report)
+      // exactly. The requested default is "always," not opt-in: unwanted
+      // rooms get deleted same as any other room, and more can be added the
+      // normal way if these aren't enough.
+      //
+      // A depth-0 ("main") topic has two tiers of room left under the
+      // 3-tier cap (topicDepth's own doc), so it gets the full nested shape:
+      // รายวัน one tier down, รายสัปดาห์/รายเดือน nested a further tier under
+      // that. A depth-1 ("sub") topic has only one tier left, so รายวัน
+      // would have nowhere to put its own children — รายสัปดาห์/รายเดือน go
+      // directly under it instead, same as before. A depth-2 ("subsub")
+      // topic is already at the cap, so it gets neither.
+      if (createKind === "main") {
+        const dailyId = addTopic({
+          name: "รายวัน",
+          color,
+          parentId: id,
+          visibility: parentVisibility,
+          feedViewMode: feedViewMode === "stream" ? undefined : "threads",
+          byUserId: viewingAsUserId,
+        });
+        addTopic({
+          name: "รายสัปดาห์",
+          color,
+          parentId: dailyId,
+          visibility: parentVisibility,
+          feedViewMode: feedViewMode === "stream" ? undefined : "threads",
+          byUserId: viewingAsUserId,
+        });
+        addTopic({
+          name: "รายเดือน",
+          color,
+          parentId: dailyId,
+          visibility: parentVisibility,
+          feedViewMode: feedViewMode === "stream" ? undefined : "threads",
+          byUserId: viewingAsUserId,
+        });
+      } else if (createKind === "sub") {
         addTopic({
           name: "รายสัปดาห์",
           color,
@@ -1476,11 +1510,11 @@ export function TopicSidebar({
                     </div>
                     {createKind === "main" ? (
                       // Set expectations up front — the topic itself is a
-                      // normal postable room, and it automatically comes
-                      // with "- รายสัปดาห์" / "- รายเดือน" children already
-                      // set up underneath it (delete them after if unwanted).
+                      // normal postable room, and it automatically comes with
+                      // "รายวัน" underneath it, itself holding "รายสัปดาห์" /
+                      // "รายเดือน" (delete any of them after if unwanted).
                       <p className="text-[11px] text-[var(--ink-soft)]">
-                        โพสต์ได้ทันทีที่สร้าง พร้อมห้องย่อย "รายสัปดาห์" และ "รายเดือน" ติดมาให้อัตโนมัติ — ไม่ใช้ก็ลบทิ้งได้ทีหลัง
+                        โพสต์ได้ทันทีที่สร้าง พร้อมห้องย่อย "รายวัน" ที่มี "รายสัปดาห์" และ "รายเดือน" ซ้อนอยู่ข้างใน ติดมาให้อัตโนมัติ — ไม่ใช้ก็ลบทิ้งได้ทีหลัง
                       </p>
                     ) : createKind === "sub" ? (
                       <div className="space-y-1.5">
