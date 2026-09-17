@@ -60,6 +60,7 @@ export async function POST() {
     meeting: { ...defaultReminderSettings.meeting, ...settingsRaw?.meeting },
     report: { ...defaultReminderSettings.report, ...settingsRaw?.report },
     todo: { ...defaultReminderSettings.todo, ...settingsRaw?.todo },
+    submissionLock: { ...defaultReminderSettings.submissionLock, ...settingsRaw?.submissionLock },
   };
 
   const { data: sentLog, version: sentVersion } = await readStore<string[]>(orgId, SENT_LOG_KEY);
