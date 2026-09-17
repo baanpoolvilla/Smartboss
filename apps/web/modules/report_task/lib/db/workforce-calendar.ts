@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
 
+import { readStore } from "./org-store";
 import type { CalendarEvent } from "../../types";
 
 /**
@@ -92,6 +93,14 @@ export async function listLeaveEvents(
   from: string,
   to: string
 ): Promise<CalendarEvent[]> {
+  // Admin-picked from HR/Settings ▸ ประเภทลา — which auto-approve leave
+  // types (by name) should read as "วันหยุดนักขัตฤกษ์" instead of "วันหยุด
+  // ประจำ" on this org's calendar. Lives entirely in this app's own store
+  // (report_task.stores), not the workforce schema, so toggling it never
+  // touches workforce-api or needs a migration.
+  const holidayLikeStore = await readStore<string[]>(orgId, "holiday-like-leave-types");
+  const holidayLikeNames = new Set(holidayLikeStore.data ?? []);
+
   const rows = await withWorkforceTenant(orgId, (tx) =>
     tx.$queryRaw<LeaveRow[]>`
       SELECT lr.id,
@@ -138,17 +147,16 @@ export async function listLeaveEvents(
     // at all (just start/end/userId), so compliance exemption keeps working
     // unchanged either way.
     const isDayOff = r.auto_approve === true;
-    // A "สิทธิ์" entitlement whose HR-configured name itself reads as a
-    // holiday (e.g. "Holiday") — matched by name only, no schema change, so
-    // this stays a pure calendar-display decision. Keeps `type: "dayoff"`
-    // (still one person's own entry, still rendered as a normal per-person
-    // chip) but the "วันหยุดนักขัตฤกษ์"/"วันหยุดประจำ" show/hide toggles
-    // (calendar-view.tsx) and the day-summary stat tiles (range-summary-
-    // dialog.tsx) both read this flag to file it under "วันหยุดนักขัตฤกษ์"
-    // instead — it used to only ever land in "วันหยุดประจำ" with no way to
-    // separate it out, so hiding "วันหยุดประจำ" hid it too even though the
-    // name says it's a holiday.
-    const holidayLike = isDayOff && /holiday/i.test(r.leave_type_name ?? "");
+    // A "สิทธิ์" entitlement the admin explicitly picked (checklist at
+    // /report-task/settings ▸ ประเภทลา, `holiday-like-leave-types` above) —
+    // keeps `type: "dayoff"` (still one person's own entry, still rendered
+    // as a normal per-person chip) but the "วันหยุดนักขัตฤกษ์"/"วันหยุด
+    // ประจำ" show/hide toggles (calendar-view.tsx) and the day-summary stat
+    // tiles (range-summary-dialog.tsx) both read this flag to file it under
+    // "วันหยุดนักขัตฤกษ์" instead — it used to only ever land in "วันหยุด
+    // ประจำ" with no way to separate it out, so hiding "วันหยุดประจำ" hid
+    // it too even for an entitlement everyone agreed reads as a holiday.
+    const holidayLike = isDayOff && r.leave_type_name !== null && holidayLikeNames.has(r.leave_type_name);
     return {
       id: `wf-leave-${r.id}`,
       title: authored !== "" ? authored : (r.leave_type_name ?? "ลา"),
@@ -188,6 +196,24 @@ export async function listLeaveTypeCatalog(orgId: string): Promise<string[]> {
       SELECT name
       FROM workforce.leave_types
       WHERE auto_approve IS NOT TRUE
+      ORDER BY name
+    `
+  );
+  return rows.map((r) => r.name);
+}
+
+/**
+ * ชื่อประเภทลาที่อนุมัติอัตโนมัติทั้งหมด ("สิทธิ์" — วันหยุดประจำ) — คู่กับ
+ * listLeaveTypeCatalog ข้างบนแต่กลับด้าน (`auto_approve IS TRUE`) ให้กล่อง
+ * "นับเป็นวันหยุดนักขัตฤกษ์" มีชื่อให้เลือกครบทุกประเภทเสมอ ไม่ใช่แค่ที่
+ * บังเอิญมีคนใช้อยู่ในช่วงที่ปฏิทินกำลังโหลด
+ */
+export async function listAutoApproveLeaveTypeNames(orgId: string): Promise<string[]> {
+  const rows = await withWorkforceTenant(orgId, (tx) =>
+    tx.$queryRaw<LeaveTypeNameRow[]>`
+      SELECT name
+      FROM workforce.leave_types
+      WHERE auto_approve IS TRUE
       ORDER BY name
     `
   );

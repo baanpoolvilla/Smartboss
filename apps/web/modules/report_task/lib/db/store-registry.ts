@@ -25,6 +25,18 @@ export const STORE_KEYS = {
   // จาก workforce แม้ประเภทนั้นจะยังไม่มีใครลาในช่วงที่ปฏิทินกำลังโหลดอยู่เลย
   // ดู workforce-calendar.ts:listLeaveTypeCatalog
   "leave-type-catalog": "stores/leave-type-catalog.json",
+  // ไม่มีไฟล์ต้นทางคู่กัน (ของ Smartboss เพิ่มเอง) — ชื่อประเภทลาที่อนุมัติ
+  // อัตโนมัติทั้งหมดจาก workforce (auto_approve = true) ให้ตัวเลือกในกล่อง
+  // ติ๊ก "นับเป็นวันหยุดนักขัตฤกษ์" ด้านล่างมีชื่อให้เลือกครบ ไม่ใช่แค่ที่
+  // บังเอิญมีคนใช้ในช่วงที่ปฏิทินกำลังโหลดอยู่เลย — อ่านอย่างเดียว ดู
+  // workforce-calendar.ts:listAutoApproveLeaveTypeNames
+  "dayoff-type-catalog": "stores/dayoff-type-catalog.json",
+  // เขียนได้ (ต่างจากคีย์ ..-catalog ทั้งสองข้างบนที่เป็นมิเรอร์อ่านอย่างเดียว
+  // จาก workforce) — ชื่อประเภทลา (auto_approve) ที่แอดมินติ๊กเลือกไว้ว่า
+  // "นับเป็นวันหยุดนักขัตฤกษ์" แทน "วันหยุดประจำ" บนปฏิทิน เก็บฝั่ง report_task
+  // เอง (ไม่แตะ schema/service ของ workforce เลย) — ดู holidayLike ใน
+  // workforce-calendar.ts:listLeaveEvents
+  "holiday-like-leave-types": "stores/holiday-like-leave-types.json",
   todos: "stores/todos.json",
   "leave-types": "stores/leave-types.json",
   "issue-reports": "stores/issue-reports.json",

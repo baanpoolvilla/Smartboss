@@ -16,8 +16,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/modules/report_task/c
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Input } from "@/modules/report_task/components/ui/input";
+import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
 import { useLeaveTypeStore, type LeaveQuotaMode, type LeaveTypeDef } from "@/modules/report_task/store/leave-type-store";
 import { colorPalette } from "@/modules/report_task/store/event-color-store";
+import { useDayoffTypeCatalogStore } from "@/modules/report_task/store/dayoff-type-catalog-store";
+import { useHolidayLikeLeaveTypesStore } from "@/modules/report_task/store/holiday-like-leave-types-store";
 import { useHolidayStore, THAI_SOURCE, importCountryHolidays } from "@/modules/report_task/store/holiday-store";
 import { countryHolidayGrantResolver } from "@/modules/report_task/lib/holiday-grant";
 import { leaveIconRegistry, leaveIconNames, leaveIconOf } from "@/modules/report_task/lib/leave-icons";
@@ -99,6 +102,42 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (v: string)
         </div>
       </PopoverContent>
     </Popover>
+  );
+}
+
+/**
+ * แยกจากประเภทการลาข้างบนโดยสิ้นเชิง — ประเภทลาข้างบนเป็นค่าตกแต่ง/โควตา
+ * ของโมดูลนี้เอง (useLeaveTypeStore) ส่วนกล่องนี้อ่าน "สิทธิ์" (auto-approve)
+ * ตัวจริงจาก HR (workforce.leave_types) มาให้ติ๊กเลือกว่าตัวไหนควรนับเป็น
+ * "วันหยุดนักขัตฤกษ์" บนปฏิทินแทน "วันหยุดประจำ" — เก็บอยู่ในสโตร์ของโมดูล
+ * นี้เอง (report_task.stores) ไม่แตะ schema/service ของ workforce เลย จึง
+ * ไม่ต้องมี migration หรือ deploy service แยกเหมือนวิธีเดิมที่เคยลองแล้ว
+ * ทำให้เว็บล่มตอน deploy ไม่ครบขั้นตอน
+ */
+function HolidayLikeLeaveTypesPanel() {
+  const dayoffNames = useDayoffTypeCatalogStore((s) => s.names);
+  const holidayLikeNames = useHolidayLikeLeaveTypesStore((s) => s.names);
+  const toggle = useHolidayLikeLeaveTypesStore((s) => s.toggle);
+
+  if (dayoffNames.length === 0) return null;
+
+  return (
+    <div className="space-y-2 rounded-lg border border-[var(--line)] p-3">
+      <div>
+        <h3 className="text-sm font-semibold">นับเป็นวันหยุดนักขัตฤกษ์</h3>
+        <p className="text-xs text-[var(--ink-soft)] mt-0.5">
+          ติ๊กสิทธิ์ (จาก HR) ที่ควรนับเป็น &quot;วันหยุดนักขัตฤกษ์&quot; บนปฏิทิน แทน &quot;วันหยุดประจำ&quot; — ยังเป็นสิทธิ์ส่วนตัวของพนักงานคนนั้นเหมือนเดิม แค่เปลี่ยนหมวดที่ปฏิทินเอาไปนับ/กรอง
+        </p>
+      </div>
+      <div className="space-y-1">
+        {dayoffNames.map((name) => (
+          <label key={name} className="flex items-center gap-2 rounded-md px-1.5 py-1 text-sm hover:bg-[var(--bg-soft)] cursor-pointer">
+            <Checkbox checked={holidayLikeNames.includes(name)} onCheckedChange={() => toggle(name)} />
+            {name}
+          </label>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -423,6 +462,8 @@ export function LeaveTypeSettingsPanel() {
       <Button onClick={save}>
         <Save className="h-4 w-4" /> บันทึก
       </Button>
+
+      <HolidayLikeLeaveTypesPanel />
 
       <AlertDialog open={!!removeTarget} onOpenChange={(v) => !v && setRemoveTarget(null)}>
         <AlertDialogContent>

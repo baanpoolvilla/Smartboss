@@ -16,6 +16,8 @@ import { useMeetingStore } from "@/modules/report_task/store/meeting-store";
 import { useLeaveStore } from "@/modules/report_task/store/leave-store";
 import { useOvertimeStore } from "@/modules/report_task/store/overtime-store";
 import { useLeaveTypeCatalogStore } from "@/modules/report_task/store/leave-type-catalog-store";
+import { useDayoffTypeCatalogStore } from "@/modules/report_task/store/dayoff-type-catalog-store";
+import { useHolidayLikeLeaveTypesStore } from "@/modules/report_task/store/holiday-like-leave-types-store";
 import { useTodoStore } from "@/modules/report_task/store/todo-store";
 import { useHolidayStore } from "@/modules/report_task/store/holiday-store";
 import { thaiHolidayEvents } from "@/modules/report_task/data/thai-holidays";
@@ -168,6 +170,20 @@ export function StoreHydrator() {
         store={useLeaveTypeCatalogStore}
         select={(s) => s.names}
         apply={(s, names) => ({ ...s, names })}
+      />
+      <ServerStoreSync
+        apiKey="dayoff-type-catalog"
+        pollMs={MEDIUM_POLL_MS}
+        store={useDayoffTypeCatalogStore}
+        select={(s) => s.names}
+        apply={(s, names) => ({ ...s, names })}
+      />
+      <ServerStoreSync
+        apiKey="holiday-like-leave-types"
+        pollMs={SLOW_POLL_MS}
+        store={useHolidayLikeLeaveTypesStore}
+        select={(s) => s.names}
+        apply={(s, names) => ({ ...s, names: names ?? [] })}
       />
       <ServerStoreSync
         apiKey="todos"

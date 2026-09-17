@@ -13,6 +13,7 @@ import {
 import { isValidStoreKey, readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
 import { recordReportStickerEvents } from "@/modules/report_task/lib/db/report-feed-performance";
 import {
+  listAutoApproveLeaveTypeNames,
   listHolidayEvents,
   listLeaveEvents,
   listLeaveTypeCatalog,
@@ -73,6 +74,9 @@ const WORKFORCE_KEYS = new Set(["leaves", "holidays", "overtime"]);
 /** ชื่อประเภทลาทั้งหมด — ไม่ต้องใช้ช่วงวันที่เหมือนสองคีย์ข้างบน */
 const LEAVE_TYPE_CATALOG_KEY = "leave-type-catalog";
 
+/** ชื่อประเภทลาที่อนุมัติอัตโนมัติทั้งหมด — อ่านอย่างเดียว ให้กล่องติ๊ก "นับเป็นวันหยุดนักขัตฤกษ์" มีตัวเลือกครบ */
+const DAYOFF_TYPE_CATALOG_KEY = "dayoff-type-catalog";
+
 /** ช่วงที่ปฏิทินขอมาโดยปริยาย — กว้างพอครอบคลุมมุมมองปีของ FullCalendar */
 function defaultRange(): { from: string; to: string } {
   const now = new Date();
@@ -101,6 +105,11 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ ke
 
   if (key === LEAVE_TYPE_CATALOG_KEY) {
     const names = await listLeaveTypeCatalog(session.orgId);
+    return Response.json(names, { headers: { "Cache-Control": "no-store", "X-Data-Version": "1" } });
+  }
+
+  if (key === DAYOFF_TYPE_CATALOG_KEY) {
+    const names = await listAutoApproveLeaveTypeNames(session.orgId);
     return Response.json(names, { headers: { "Cache-Control": "no-store", "X-Data-Version": "1" } });
   }
 
@@ -141,7 +150,7 @@ async function put(request: NextRequest, key: string) {
     return Response.json({ error: "รูปแบบข้อมูลไม่ถูกต้อง" }, { status: 400 });
   }
 
-  if (key === LEAVE_TYPE_CATALOG_KEY) {
+  if (key === LEAVE_TYPE_CATALOG_KEY || key === DAYOFF_TYPE_CATALOG_KEY) {
     return Response.json(
       { error: "ประเภทลาตั้งค่าที่โมดูลบุคคล (/hr/settings) — ปฏิทินนี้แสดงผลอย่างเดียว" },
       { status: 409 }
