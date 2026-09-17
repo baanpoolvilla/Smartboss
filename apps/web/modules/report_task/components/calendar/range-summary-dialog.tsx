@@ -137,10 +137,17 @@ export function RangeSummaryDialog({
     const rangeLeaves = leaves
       .filter((l) => l.type !== "dayoff" && inRange(l.start, start, end))
       .sort((a, b) => a.start.localeCompare(b.start));
-    const rangeHolidays = holidays.filter((h) => inRange(h.start, start, end)).sort((a, b) => a.start.localeCompare(b.start));
+    // A dayoff whose entitlement name itself reads as a holiday
+    // (`holidayLike`, see workforce-calendar.ts) joins the holidays tile
+    // instead of the dayoffs one — still someone's personal entry, just
+    // counted where its own name says it belongs.
+    const rangeHolidays = [
+      ...holidays.filter((h) => inRange(h.start, start, end)),
+      ...leaves.filter((l) => l.type === "dayoff" && l.holidayLike && inRange(l.start, start, end)),
+    ].sort((a, b) => a.start.localeCompare(b.start));
     const rangeDayoffs = [
       ...dayoffs.filter((d) => inRange(d.start, start, end)),
-      ...leaves.filter((l) => l.type === "dayoff" && inRange(l.start, start, end)),
+      ...leaves.filter((l) => l.type === "dayoff" && !l.holidayLike && inRange(l.start, start, end)),
     ].sort((a, b) => a.start.localeCompare(b.start));
     const rangeTodos = todos
       .filter((t) => inRange(t.date, start, end))

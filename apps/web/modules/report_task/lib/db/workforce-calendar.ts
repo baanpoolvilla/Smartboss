@@ -138,11 +138,23 @@ export async function listLeaveEvents(
     // at all (just start/end/userId), so compliance exemption keeps working
     // unchanged either way.
     const isDayOff = r.auto_approve === true;
+    // A "สิทธิ์" entitlement whose HR-configured name itself reads as a
+    // holiday (e.g. "Holiday") — matched by name only, no schema change, so
+    // this stays a pure calendar-display decision. Keeps `type: "dayoff"`
+    // (still one person's own entry, still rendered as a normal per-person
+    // chip) but the "วันหยุดนักขัตฤกษ์"/"วันหยุดประจำ" show/hide toggles
+    // (calendar-view.tsx) and the day-summary stat tiles (range-summary-
+    // dialog.tsx) both read this flag to file it under "วันหยุดนักขัตฤกษ์"
+    // instead — it used to only ever land in "วันหยุดประจำ" with no way to
+    // separate it out, so hiding "วันหยุดประจำ" hid it too even though the
+    // name says it's a holiday.
+    const holidayLike = isDayOff && /holiday/i.test(r.leave_type_name ?? "");
     return {
       id: `wf-leave-${r.id}`,
       title: authored !== "" ? authored : (r.leave_type_name ?? "ลา"),
       ...(authored !== "" ? { authoredTitle: true } : {}),
       type: isDayOff ? "dayoff" : "leave",
+      ...(holidayLike ? { holidayLike: true } : {}),
       // The HR module owns the actual set of leave types (admins add/rename
       // them in /hr/settings) — using its name as-is here, instead of
       // guessing at a fixed local list, is what lets the calendar's
