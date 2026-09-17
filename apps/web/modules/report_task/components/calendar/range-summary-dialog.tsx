@@ -137,18 +137,10 @@ export function RangeSummaryDialog({
     const rangeLeaves = leaves
       .filter((l) => l.type !== "dayoff" && inRange(l.start, start, end))
       .sort((a, b) => a.start.localeCompare(b.start));
-    // A dayoff (auto-approve entitlement) the company flagged
-    // `counts_as_holiday` in HR joins the holidays tile instead of the
-    // dayoffs one — still someone's personal entry (see `holidayLike`'s own
-    // comment in types/index.ts), just counted where the company said it
-    // should read as "วันหยุดนักขัตฤกษ์" rather than "วันหยุดประจำ".
-    const rangeHolidays = [
-      ...holidays.filter((h) => inRange(h.start, start, end)),
-      ...leaves.filter((l) => l.type === "dayoff" && l.holidayLike && inRange(l.start, start, end)),
-    ].sort((a, b) => a.start.localeCompare(b.start));
+    const rangeHolidays = holidays.filter((h) => inRange(h.start, start, end)).sort((a, b) => a.start.localeCompare(b.start));
     const rangeDayoffs = [
       ...dayoffs.filter((d) => inRange(d.start, start, end)),
-      ...leaves.filter((l) => l.type === "dayoff" && !l.holidayLike && inRange(l.start, start, end)),
+      ...leaves.filter((l) => l.type === "dayoff" && inRange(l.start, start, end)),
     ].sort((a, b) => a.start.localeCompare(b.start));
     const rangeTodos = todos
       .filter((t) => inRange(t.date, start, end))

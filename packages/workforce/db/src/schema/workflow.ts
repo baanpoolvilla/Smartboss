@@ -24,12 +24,6 @@ export const leaveTypes = workforce.table('leave_types', {
    * false = คนอื่นเห็นแค่ "ลา" (เจ้าตัวยังเห็นประเภทของตัวเองเสมอ)
    */
   showOnCalendar: boolean('show_on_calendar').notNull().default(true),
-  /**
-   * true = ปฏิทินรวมนับวันที่ใช้สิทธิ์นี้เป็น "วันหยุดนักขัตฤกษ์" แทน
-   * "วันหยุดประจำ" — ยังเป็นสิทธิ์รายบุคคลเหมือนเดิม (คนละเรื่องกับ
-   * holiday_dates ที่เป็นวันหยุดทั้งบริษัท) แค่เปลี่ยนหมวดที่นับ
-   */
-  countsAsHoliday: boolean('counts_as_holiday').notNull().default(false),
   attachmentRequired: boolean('attachment_required').notNull().default(false),
   minDurationMinutes: integer('min_duration_minutes').notNull().default(0),
   maxDurationMinutes: integer('max_duration_minutes'),

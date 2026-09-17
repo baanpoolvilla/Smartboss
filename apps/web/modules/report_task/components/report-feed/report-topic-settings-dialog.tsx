@@ -7,15 +7,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/c
 import { RoomMembersSummaryCard, RoomMembersDialog } from "@/modules/report_task/components/report-feed/room-members-dialog";
 import { useReportFeedStore, type ReportTopic, type SubmissionRound } from "@/modules/report_task/store/report-feed-store";
 import { SubmissionRoundDialog } from "@/modules/report_task/components/report-feed/submission-round-dialog";
-import { TimePickerField } from "@/modules/report_task/components/shared/time-picker-field";
-import { Switch } from "@/modules/report_task/components/ui/switch";
 import { resolvedSubmittersOfTopic } from "@/modules/report_task/lib/submission-rounds";
 import { users as allUsers } from "@/modules/report_task/lib/directory";
 import { departments, getUser, isOwner } from "@/modules/report_task/lib/directory";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { topicModeOf } from "@/modules/report_task/lib/report-topic-membership";
 import { canEditReportTopic } from "@/modules/report_task/lib/permissions";
-import { useReminderSettingsStore } from "@/modules/report_task/store/reminder-settings-store";
 import { cn } from "@/modules/report_task/lib/utils";
 import { uuid } from "@/modules/report_task/lib/uuid";
 import { toast } from "sonner";
@@ -66,7 +63,6 @@ export function ReportTopicSettingsPanel({
   liveVisibility?: ReportTopic["visibility"];
 }) {
   const updateTopicSettings = useReportFeedStore((s) => s.updateTopicSettings);
-  const lockSettings = useReminderSettingsStore((s) => s.settings.submissionLock);
   const apply = onUpdate ?? ((patch: Partial<ReportTopic>) => updateTopicSettings(topic.id, patch));
   const [membersDialogOpen, setMembersDialogOpen] = useState(false);
   const submitterGroups = useReportFeedStore((s) => s.submitterGroups);
@@ -172,26 +168,6 @@ export function ReportTopicSettingsPanel({
     toast.success(`คัดลอกรอบ "${round.label}" ไปอีก ${targetIds.length} ห้องแล้ว`);
     setCopyRoundId(null);
     setCopyTargetIds([]);
-  }
-
-  // This room's own "ปิดรับ" time picker — reused both when the company-wide
-  // toggle is off (every room always uses its own) and when it's on but this
-  // room opted itself out via hardCutoffExemptFromGlobal.
-  function ownHardCutoffEditor(indent = true) {
-    const pad = indent ? "pl-4" : "";
-    return topic.hardCutoffTime ? (
-      <div className={cn("flex flex-wrap items-center gap-x-2 gap-y-1", pad)}>
-        <TimePickerField
-          className="w-[104px] shrink-0"
-          value={topic.hardCutoffTime}
-          onChange={(time) => apply({ hardCutoffTime: time || undefined })}
-          aria-label="เวลาปิดรับของห้องนี้"
-        />
-        <span className="text-[11px] text-[var(--ink-soft)]">น. — เลยเวลานี้ส่งรายงานของวันนั้นไม่ได้อีก (เปิดรับใหม่ทุกเที่ยงคืน)</span>
-      </div>
-    ) : (
-      <p className={cn("text-[11px] text-[var(--ink-faint)]", pad)}>ปิดอยู่ — ส่งได้ตลอดเวลา ไม่มีการปิดรับ</p>
-    );
   }
 
   return (
@@ -406,51 +382,6 @@ export function ReportTopicSettingsPanel({
               </div>
             );
           })()}
-
-          {/* ปิดรับรายงาน — separate from the rounds above (those only badge
-              "สาย"); this is the one thing that actually disables the
-              composer's submit button once passed. Read-only + a link to
-              the company-wide setting when that's on, since it overrides
-              whatever's picked here. */}
-          <div className="rounded-lg border border-[var(--line)] p-2.5 space-y-2">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <Label className="flex items-center gap-1 text-xs text-[var(--ink-soft)]">
-                  <Lock className="h-3 w-3 shrink-0" />ปิดรับรายงานของห้องนี้อัตโนมัติ
-                </Label>
-                {lockSettings.useGlobalCutoff && (
-                  <p className="mt-1 text-[11px] text-[var(--ink-soft)]">
-                    ใช้เวลาปิดรับกลางที่ตั้งรวมทุกห้องอยู่: <b className="text-[var(--ink)]">{lockSettings.time} น.</b> — แก้ที่การตั้งค่า ▸ แจ้งเตือนใกล้ถึงกำหนด
-                  </p>
-                )}
-              </div>
-              {!lockSettings.useGlobalCutoff && (
-                <Switch
-                  className="shrink-0"
-                  checked={!!topic.hardCutoffTime}
-                  onCheckedChange={(v) => apply({ hardCutoffTime: v ? (topic.hardCutoffTime || lockSettings.time) : undefined })}
-                />
-              )}
-            </div>
-
-            {lockSettings.useGlobalCutoff ? (
-              <div className="space-y-1.5 pl-4">
-                <label className="flex items-center gap-2 text-[11px] text-[var(--ink-soft)] cursor-pointer">
-                  <Switch
-                    className="shrink-0"
-                    checked={!!topic.hardCutoffExemptFromGlobal}
-                    onCheckedChange={(v) =>
-                      apply({ hardCutoffExemptFromGlobal: v, hardCutoffTime: v ? (topic.hardCutoffTime || lockSettings.time) : topic.hardCutoffTime })
-                    }
-                  />
-                  ยกเว้นห้องนี้จากเวลากลาง — ใช้เวลาของตัวเอง
-                </label>
-                {topic.hardCutoffExemptFromGlobal && ownHardCutoffEditor(false)}
-              </div>
-            ) : (
-              ownHardCutoffEditor()
-            )}
-          </div>
         </div>
 
         <SubmissionRoundDialog

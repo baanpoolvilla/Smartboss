@@ -1,7 +1,6 @@
 import { departments, users, isOwner } from "@/modules/report_task/lib/directory";
 import { calendarDateOf, now, todayIso } from "@/modules/report_task/lib/now";
 import { pendingToday } from "@/modules/report_task/lib/report-feed-compliance";
-import type { DateExemptions } from "@/modules/report_task/lib/report-feed-exemptions";
 import { effectiveRoundsOf } from "@/modules/report_task/lib/submission-rounds";
 import { SYSTEM_USER_ID } from "@/modules/report_task/lib/task-penalty-sweep";
 import type { ReminderSettings } from "@/modules/report_task/store/reminder-settings-store";
@@ -32,10 +31,10 @@ export interface ReminderSweepResult {
  * Each notification has its own dedup key (`newSentKeys`) so re-running this
  * every 60s — or after a gap where nobody had a tab open — never re-sends
  * something already delivered, while still catching anything missed.
- * Takes `exemptions` (approved leave + public holidays) so someone who is
- * legitimately off today never gets nudged to submit a report — the sweep
- * route builds this the same way `useReportComplianceExemptions` does on the
- * client, from the org's leave/holiday/routine-day-off data.
+ * Deliberately doesn't take `DateExemptions` (approved-leave exceptions) —
+ * a rare edge case where someone on leave might get one extra nudge, traded
+ * for keeping this callable from a stateless server route without wiring up
+ * the exemptions store there too.
  */
 export function computeReminders(input: {
   tasks: Task[];
@@ -45,9 +44,8 @@ export function computeReminders(input: {
   posts: ReportPost[];
   settings: ReminderSettings;
   alreadySent: Set<string>;
-  exemptions?: DateExemptions;
 }): ReminderSweepResult {
-  const { tasks, meetings, todos, topics, posts, settings, alreadySent, exemptions } = input;
+  const { tasks, meetings, todos, topics, posts, settings, alreadySent } = input;
   const notifications: ReminderNotification[] = [];
   const newSentKeys: string[] = [];
 
@@ -156,7 +154,7 @@ export function computeReminders(input: {
     const today = todayIso();
     const nowMinutes = now().getHours() * 60 + now().getMinutes();
     const topicById = new Map(topics.map((t) => [t.id, t]));
-    const pending = pendingToday(topics, posts, exemptions);
+    const pending = pendingToday(topics, posts);
     // Group by (room, round) so a manager summary counts each round once,
     // and the per-person countdown below uses that round's own cutoff time.
     const pendingByTopicRound = new Map<string, typeof pending>();

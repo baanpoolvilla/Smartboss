@@ -1191,7 +1191,6 @@ export async function createLeaveTypeAction(formData: FormData) {
         quota_minutes_per_year: Number(formData.get("quota_days") ?? 0) * 480,
         auto_approve: formData.get("auto_approve") === "1",
         monthly_quota_days: Number(formData.get("monthly_quota_days") ?? 0),
-        counts_as_holiday: formData.get("counts_as_holiday") === "1",
         /*
          * ตัวควบคุมคือ "ต้องได้รับอนุมัติ" ไม่ใช่โควตา
          *
@@ -1207,29 +1206,6 @@ export async function createLeaveTypeAction(formData: FormData) {
         // ไม่บังคับแจ้งล่วงหน้า/แนบเอกสารในเวอร์ชันแรก — เพิ่มทีหลังได้ที่ API เดิม
         effective_from: new Date().toISOString().slice(0, 10),
       },
-    });
-  } catch (error) {
-    throw new Error(toMessage(error));
-  }
-  revalidatePath("/hr");
-  revalidatePath("/hr/settings");
-}
-
-/**
- * เปลี่ยนหมวดที่ประเภทลานี้นับในปฏิทินรวม (วันหยุดนักขัตฤกษ์ vs วันหยุด
- * ประจำ) — แก้ทีหลังได้ ต่างจากค่าอื่นๆ ของประเภทลาที่ตั้งได้ครั้งเดียวตอน
- * สร้าง (ไม่มี endpoint แก้ไขทั่วไปสำหรับ leave_types)
- */
-export async function setLeaveTypeCountsAsHolidayAction(formData: FormData) {
-  await guard(HR_PERMS.settingManage);
-  const leaveTypeId = String(formData.get("leave_type_id") ?? "");
-  if (!leaveTypeId) throw new Error("ไม่พบประเภทการลานี้");
-  const countsAsHoliday = formData.get("counts_as_holiday") === "1";
-
-  try {
-    await wfFetch(`/leave-types/${leaveTypeId}/counts-as-holiday`, {
-      method: "POST",
-      body: { counts_as_holiday: countsAsHoliday },
     });
   } catch (error) {
     throw new Error(toMessage(error));

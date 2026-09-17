@@ -30,7 +30,6 @@ interface LeaveRow {
   half_day_start: boolean | null;
   half_day_end: boolean | null;
   auto_approve: boolean | null;
-  counts_as_holiday: boolean | null;
 }
 
 interface HolidayRow {
@@ -104,8 +103,7 @@ export async function listLeaveEvents(
              lr.display_label,
              lr.half_day_start,
              lr.half_day_end,
-             lt.auto_approve  AS auto_approve,
-             lt.counts_as_holiday AS counts_as_holiday
+             lt.auto_approve  AS auto_approve
       FROM workforce.leave_requests lr
       LEFT JOIN workforce.employments e ON e.id = lr.employment_id
       LEFT JOIN workforce.principals  p ON p.person_id = e.person_id
@@ -140,23 +138,9 @@ export async function listLeaveEvents(
     // at all (just start/end/userId), so compliance exemption keeps working
     // unchanged either way.
     const isDayOff = r.auto_approve === true;
-    // A dayoff row drops `leaveType` below (it's not a leave-type chip
-    // anymore, see the comment there), so its own custom nickname is the
-    // *only* place the actual entitlement ("สิทธิ์", "วันหยุดประจำเดือน", ...)
-    // could otherwise show at all — appending it keeps "which entitlement
-    // did they use" readable even once someone's renamed the entry to a
-    // personal nickname that no longer says so itself (e.g. "Holidya").
-    // A plain leave (`isDayOff` false) skips this — its `leaveType` chip
-    // already carries that same information visibly elsewhere.
-    const title =
-      authored !== ""
-        ? isDayOff && r.leave_type_name
-          ? `${authored} · ${r.leave_type_name}`
-          : authored
-        : (r.leave_type_name ?? "ลา");
     return {
       id: `wf-leave-${r.id}`,
-      title,
+      title: authored !== "" ? authored : (r.leave_type_name ?? "ลา"),
       ...(authored !== "" ? { authoredTitle: true } : {}),
       type: isDayOff ? "dayoff" : "leave",
       // The HR module owns the actual set of leave types (admins add/rename
@@ -166,15 +150,6 @@ export async function listLeaveEvents(
       // has without this module having to mirror HR's config by hand.
       // Left unset for a dayoff row — it's not a "leave type" chip anymore.
       ...(isDayOff ? {} : { leaveType: r.leave_type_name ?? undefined }),
-      // Still a personal entry (`userId`, per-person chip, `type: "dayoff"`
-      // rendering) — this only moves which stat/filter bucket it counts
-      // toward (range-summary-dialog.tsx's "วันหยุดนักขัตฤกษ์" tile instead
-      // of "วันหยุดประจำ"). Deliberately NOT `type: "holiday"`: that type
-      // gets a special one-per-day, personless treatment in month view
-      // (full-calendar-view.tsx's renderDayCellContent) meant for a real
-      // company-wide holiday — reusing it here would hide whose day off
-      // this actually is, or collide with a real holiday on the same date.
-      ...(isDayOff && r.counts_as_holiday ? { holidayLike: true } : {}),
       start: iso(r.starts_on),
       end: endExclusive(r.ends_on),
       allDay: !half,

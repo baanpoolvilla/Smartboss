@@ -10,10 +10,8 @@ import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachme
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
 import { photoCount } from "@/modules/report_task/lib/report-attachment-kind";
 import { roundsForUserOnDay, attributePostToRound, effectiveRoundsOf } from "@/modules/report_task/lib/submission-rounds";
-import { effectiveHardCutoffTime, isPastHardCutoff } from "@/modules/report_task/lib/report-cutoff";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { isExemptDate } from "@/modules/report_task/lib/report-feed-exemptions";
-import { useReminderSettingsStore } from "@/modules/report_task/store/reminder-settings-store";
 import { localDateStr, now } from "@/modules/report_task/lib/now";
 import { cn } from "@/modules/report_task/lib/utils";
 import { ReportPostFields, newSection, type DraftSection } from "@/modules/report_task/components/report-feed/report-post-fields";
@@ -207,15 +205,6 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   // declared not to be that.
   const minImagesRequired = excludeFromSubmission ? 0 : (activeRound?.minImages ?? 0);
   const missingRequiredImage = photoCount(images) < minImagesRequired;
-  // Hard "ปิดรับ" deadline — unlike a round's own `time` (which only ever
-  // badges a late post), this actually blocks the submit button once passed.
-  // Skipped for a post opted out of counting as the report (a stray comment
-  // isn't "the report" this deadline exists for) and for someone already
-  // exempt today (leave/holiday/routine day off) — they owe nothing today
-  // regardless of the clock, so there's nothing here to lock.
-  const lockSettings = useReminderSettingsStore((s) => s.settings.submissionLock);
-  const hardCutoff = effectiveHardCutoffTime(topic, lockSettings);
-  const submissionLocked = !excludeFromSubmission && !viewerExemptToday && isPastHardCutoff(hardCutoff, nowMinutes);
   function doSubmit() {
     const cleanSections = sections
       .map((s) => ({
@@ -236,7 +225,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   }
 
   function handleSubmit() {
-    if (!title.trim() || missingRequiredImage || submissionLocked) return;
+    if (!title.trim() || missingRequiredImage) return;
     doSubmit();
   }
 
@@ -390,13 +379,9 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
 
       <div className="flex items-center justify-end gap-2.5 px-5 py-3 mt-1 border-t border-[var(--line)]/60 bg-[var(--bg-soft)]/40">
         {/* P3 — why the button's disabled, not just that it is. */}
-        {!busy && (!title.trim() || missingRequiredImage || submissionLocked) && (
+        {!busy && (!title.trim() || missingRequiredImage) && (
           <p className="text-xs text-[var(--ink-soft)] mr-auto">
-            {submissionLocked
-              ? `ปิดรับรายงานของวันนี้แล้ว (หลัง ${hardCutoff} น.) — ส่งได้อีกทีพรุ่งนี้`
-              : !title.trim()
-                ? "ต้องมีหัวข้อ"
-                : `ต้องแนบรูปอีก ${minImagesRequired - photoCount(images)} รูป`}
+            {!title.trim() ? "ต้องมีหัวข้อ" : `ต้องแนบรูปอีก ${minImagesRequired - photoCount(images)} รูป`}
           </p>
         )}
         <Button data-tour="composer-cancel" variant="ghost" size="lg" onClick={reset} className="text-[var(--ink-soft)]">
@@ -405,17 +390,9 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
         <Button
           size="lg"
           className="rounded-lg px-5 gap-1.5 bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white disabled:opacity-40 transition-transform active:scale-[0.99]"
-          disabled={!title.trim() || missingRequiredImage || busy || submissionLocked}
+          disabled={!title.trim() || missingRequiredImage || busy}
           onClick={handleSubmit}
-          title={
-            submissionLocked
-              ? `ปิดรับรายงานของวันนี้แล้ว (หลัง ${hardCutoff} น.)`
-              : !title.trim()
-                ? "ต้องมีหัวข้อ"
-                : missingRequiredImage
-                  ? `ต้องแนบรูปอีก ${minImagesRequired - photoCount(images)} รูป`
-                  : undefined
-          }
+          title={!title.trim() ? "ต้องมีหัวข้อ" : missingRequiredImage ? `ต้องแนบรูปอีก ${minImagesRequired - photoCount(images)} รูป` : undefined}
         >
           <Send className="h-4 w-4" />
           โพสต์ {/* Ctrl/⌘+Enter also submits (P4) — see the keydown handler on the title input below. */}

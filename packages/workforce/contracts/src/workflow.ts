@@ -24,20 +24,7 @@ export const createLeaveTypeSchema = z.object({
    * ใช้กับประเภทที่บริษัทถือว่าเป็นเรื่องส่วนตัว เช่นลาป่วย
    */
   show_on_calendar: z.boolean().default(true),
-  /**
-   * true = นับในหมวด "วันหยุดนักขัตฤกษ์" ของปฏิทินรวมแทน "วันหยุดประจำ" —
-   * ยังเป็นสิทธิ์ส่วนตัวของพนักงานคนนั้นทุกอย่างเหมือนเดิม (ไม่ใช่วันหยุด
-   * บริษัททั้งบริษัทแบบ workforce.holiday_dates) แค่เปลี่ยนหมวดที่นับ ใช้กับ
-   * auto_approve ที่บริษัทตั้งใจให้อ่านเป็น "หยุดพักผ่อนประจำปี/นักขัตฤกษ์
-   * ส่วนตัว" มากกว่า "วันหยุดประจำเดือน" ทั่วไป
-   */
-  counts_as_holiday: z.boolean().default(false),
   effective_from: isoDateSchema,
-});
-
-/** เปลี่ยนหมวดที่ประเภทลานี้นับในปฏิทินรวม (ดู `counts_as_holiday` ข้างบน) — แก้ทีหลังได้ ไม่ต้องตั้งใหม่ทั้งประเภท */
-export const setLeaveTypeCountsAsHolidaySchema = z.object({
-  counts_as_holiday: z.boolean(),
 });
 
 export const grantLeaveBalanceSchema = z.object({

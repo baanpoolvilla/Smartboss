@@ -42,7 +42,6 @@ export class LeaveService {
     auto_approve: boolean;
     monthly_quota_days: number;
     show_on_calendar: boolean;
-    counts_as_holiday: boolean;
     effective_from: string;
   }): Promise<Record<string, unknown>> {
     return this.uow.run(async (uow) => {
@@ -62,7 +61,6 @@ export class LeaveService {
         attachmentRequired: input.attachment_required,
         allowNegative: input.allow_negative,
         showOnCalendar: input.show_on_calendar,
-        countsAsHoliday: input.counts_as_holiday,
         effectiveFrom: input.effective_from,
       });
 
@@ -76,39 +74,6 @@ export class LeaveService {
       });
 
       return { id, code: input.code };
-    });
-  }
-
-  /** เปลี่ยนหมวดที่ประเภทลานี้นับในปฏิทินรวม — ดู counts_as_holiday บน schema */
-  async setLeaveTypeCountsAsHoliday(
-    leaveTypeId: string,
-    countsAsHoliday: boolean,
-  ): Promise<Record<string, unknown>> {
-    return this.uow.run(async (uow) => {
-      const types = await uow.tx
-        .select()
-        .from(schema.leaveTypes)
-        .where(eq(schema.leaveTypes.id, leaveTypeId))
-        .limit(1);
-      const type = types[0];
-      if (type === undefined) throw AppError.notFound('leave type');
-
-      await uow.tx
-        .update(schema.leaveTypes)
-        .set({ countsAsHoliday })
-        .where(eq(schema.leaveTypes.id, leaveTypeId));
-
-      await uow.audit({
-        action: 'leave.type.counts_as_holiday.set',
-        resourceType: 'leave_type',
-        resourceId: leaveTypeId,
-        outcome: 'SUCCESS',
-        companyId: type.companyId,
-        before: { counts_as_holiday: type.countsAsHoliday },
-        after: { counts_as_holiday: countsAsHoliday },
-      });
-
-      return { id: leaveTypeId, counts_as_holiday: countsAsHoliday };
     });
   }
 
@@ -816,7 +781,6 @@ export class LeaveService {
           auto_approve: row.autoApprove,
           monthly_quota_days: row.monthlyQuotaDays,
           show_on_calendar: row.showOnCalendar,
-          counts_as_holiday: row.countsAsHoliday,
         })),
       };
     });
@@ -863,7 +827,6 @@ export class LeaveService {
           leaveTypePaid: schema.leaveTypes.paid,
           leaveTypeAutoApprove: schema.leaveTypes.autoApprove,
           leaveTypeShowOnCalendar: schema.leaveTypes.showOnCalendar,
-          leaveTypeCountsAsHoliday: schema.leaveTypes.countsAsHoliday,
         })
         .from(schema.leaveRequests)
         .innerJoin(
@@ -912,8 +875,6 @@ export class LeaveService {
             leave_type_paid: showType ? row.leaveTypePaid : null,
             /** true = ประเภทที่ลงแล้วมีผลทันที ไม่ต้องรออนุมัติ */
             leave_type_auto_approve: showType ? row.leaveTypeAutoApprove : null,
-            /** true = ปฏิทินฝั่งหน้าจอควรนับวันนี้เป็น "วันหยุดนักขัตฤกษ์" แทน "วันหยุดประจำ" */
-            leave_type_counts_as_holiday: showType ? row.leaveTypeCountsAsHoliday : null,
             /*
              * มีค่า = ใบนี้เป็นคำขอ "สลับ" มาแทนวันนั้น ปฏิทินต้องบอกให้เห็น
              * ไม่งั้นวันเดิมกับวันใหม่ขึ้นเป็นสองวันหยุดที่ไม่เกี่ยวกัน ทั้งที่

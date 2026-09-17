@@ -18,6 +18,7 @@ import { useOvertimeStore } from "@/modules/report_task/store/overtime-store";
 import { useLeaveTypeCatalogStore } from "@/modules/report_task/store/leave-type-catalog-store";
 import { useTodoStore } from "@/modules/report_task/store/todo-store";
 import { useHolidayStore } from "@/modules/report_task/store/holiday-store";
+import { thaiHolidayEvents } from "@/modules/report_task/data/thai-holidays";
 import { useLeaveTypeStore } from "@/modules/report_task/store/leave-type-store";
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
 import { useReportFeedStore, normalizeReportFeedSlice } from "@/modules/report_task/store/report-feed-store";
@@ -136,7 +137,6 @@ export function StoreHydrator() {
               meeting: { ...defaultReminderSettings.meeting, ...settings?.meeting },
               report: { ...defaultReminderSettings.report, ...settings?.report },
               todo: { ...defaultReminderSettings.todo, ...settings?.todo },
-              submissionLock: { ...defaultReminderSettings.submissionLock, ...settings?.submissionLock },
             },
           };
         }}
@@ -181,17 +181,17 @@ export function StoreHydrator() {
         pollMs={SLOW_POLL_MS}
         store={useHolidayStore}
         select={(s) => ({ holidays: s.holidays, selectedByUser: s.selectedByUser })}
-        // Plain mirror, same as "leaves"/"overtime" below — the API route
-        // for this key always live-queries workforce.holiday_dates (HR)
-        // on every GET rather than trusting a saved row (see
-        // apps/web/app/api/report-task/store/[key]/route.ts's WORKFORCE_KEYS
-        // branch), so there's no "stale saved row" case left to patch over.
-        // This used to union the local `thaiHolidayEvents` seed back in to
-        // guard against exactly that staleness, but with the server always
-        // fresh, that union only ever added holidays HR never configured —
-        // the calendar showed dates nobody in HR set up, and no config
-        // change here could ever remove them.
-        apply={(s, slice) => ({ ...s, ...slice })}
+        // The server row is whatever was last saved — if it predates a fixed
+        // Thai holiday being added to thai-holidays.ts (e.g. the 2026 dates),
+        // it silently overwrites the code's up-to-date seed with a stale,
+        // narrower list and the country's holidays just stop appearing.
+        // Union any built-in event missing by id back in on every load
+        // instead of trusting the server row alone.
+        apply={(s, slice) => {
+          const existingIds = new Set(slice.holidays.map((h) => h.id));
+          const missingBuiltIns = thaiHolidayEvents.filter((h) => !existingIds.has(h.id));
+          return { ...s, ...slice, holidays: [...slice.holidays, ...missingBuiltIns] };
+        }}
       />
       <ServerStoreSync
         apiKey="leave-types"
