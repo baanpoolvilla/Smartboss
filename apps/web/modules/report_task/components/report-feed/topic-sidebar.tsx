@@ -1475,14 +1475,12 @@ export function TopicSidebar({
                       </button>
                     </div>
                     {createKind === "main" ? (
-                      // Set expectations up front — a top-level topic is a
-                      // category to group sub-topics under, not a chat room
-                      // itself, even before it has any children yet. Saying
-                      // this here (not just after the fact when it turns out
-                      // un-clickable) is what a topic created without
-                      // reading this used to get wrong ("งงทำไมกดแชทไม่ได้").
+                      // Set expectations up front — the topic itself is a
+                      // normal postable room, and it automatically comes
+                      // with "- รายสัปดาห์" / "- รายเดือน" children already
+                      // set up underneath it (delete them after if unwanted).
                       <p className="text-[11px] text-[var(--ink-soft)]">
-                        หัวข้อหลักไว้จัดหมวดหมู่เท่านั้น กดแชทเองไม่ได้ — สร้างหัวข้อย่อยใต้มันทีหลังเพื่อเริ่มแชทจริง
+                        โพสต์ได้ทันทีที่สร้าง พร้อมห้องย่อย "รายสัปดาห์" และ "รายเดือน" ติดมาให้อัตโนมัติ — ไม่ใช้ก็ลบทิ้งได้ทีหลัง
                       </p>
                     ) : createKind === "sub" ? (
                       <div className="space-y-1.5">
@@ -1491,7 +1489,7 @@ export function TopicSidebar({
                             plain sentence here so it's never just a number
                             to interpret ("งง ยุ" — the button label change
                             alone wasn't enough on its own). */}
-                        <p className="text-[11px] text-[var(--ink-soft)]">ห้องย่อยชั้น 1 — ซ้อนอยู่ใต้ห้องหลักโดยตรง เลือกห้องหลักที่จะซ้อนเข้าไป:</p>
+                        <p className="text-[11px] text-[var(--ink-soft)]">ห้องย่อยชั้น 1 — ซ้อนอยู่ใต้ห้องหลักโดยตรง มาพร้อมห้องย่อย "รายสัปดาห์"/"รายเดือน" อัตโนมัติเหมือนกัน เลือกห้องหลักที่จะซ้อนเข้าไป:</p>
                         {topLevelParentOptions.length === 0 ? (
                           <p className="text-[11px] text-[var(--ink-soft)]">ยังไม่มีหัวข้อหลักในระบบเลย — สร้างหัวข้อหลักก่อนอันนี้ แล้วค่อยกลับมาสร้างหัวข้อย่อยใต้มันทีหลังได้</p>
                         ) : (
