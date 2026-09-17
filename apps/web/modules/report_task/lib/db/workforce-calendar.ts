@@ -138,9 +138,23 @@ export async function listLeaveEvents(
     // at all (just start/end/userId), so compliance exemption keeps working
     // unchanged either way.
     const isDayOff = r.auto_approve === true;
+    // A dayoff row drops `leaveType` below (it's not a leave-type chip
+    // anymore, see the comment there), so its own custom nickname is the
+    // *only* place the actual entitlement ("สิทธิ์", "วันหยุดประจำเดือน", ...)
+    // could otherwise show at all — appending it keeps "which entitlement
+    // did they use" readable even once someone's renamed the entry to a
+    // personal nickname that no longer says so itself (e.g. "Holidya").
+    // A plain leave (`isDayOff` false) skips this — its `leaveType` chip
+    // already carries that same information visibly elsewhere.
+    const title =
+      authored !== ""
+        ? isDayOff && r.leave_type_name
+          ? `${authored} · ${r.leave_type_name}`
+          : authored
+        : (r.leave_type_name ?? "ลา");
     return {
       id: `wf-leave-${r.id}`,
-      title: authored !== "" ? authored : (r.leave_type_name ?? "ลา"),
+      title,
       ...(authored !== "" ? { authoredTitle: true } : {}),
       type: isDayOff ? "dayoff" : "leave",
       // The HR module owns the actual set of leave types (admins add/rename
