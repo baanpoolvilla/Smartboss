@@ -311,20 +311,23 @@ function ReportFeedPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
-  // A parent topic (has sub-topics, Teams-style) is an organizing folder
-  // only, with nothing of its own to show — it's not selectable by clicking
-  // its sidebar row (see topic-sidebar.tsx), so landing on one here only
-  // happens via a stale/deep-linked id. Redirect to its first sub-topic
-  // instead of rendering an empty folder view.
+  // Only a pure category (isCategory — "ห้องใหม่แยกอิสระ") is an organizing
+  // folder with nothing of its own to show, not selectable by clicking its
+  // sidebar row (see topic-sidebar.tsx's canOpenDirectly). A topic that
+  // simply has sub-topics but isn't itself a category (e.g. an auto-created
+  // "daily-report" holding "weekly-report"/"monthly-report") is a normal
+  // postable room — landing on it should render its own feed, not redirect
+  // past it. Used to treat "has children" alone as reason enough to bounce
+  // past a topic, which silently redirected clicks on exactly those rooms to
+  // their first child instead of opening them ("กดเปิดไม่ได้").
   const isParentId = (id: string) => {
     const topic = visibleTopics.find((t) => t.id === id);
-    // A category topic (see topic-sidebar.tsx's isCategory) counts as a
-    // parent even with zero children yet — it's never itself a room, so
-    // landing here (a stale link, or before its first sub-topic exists)
-    // should fall through the same way an empty-of-selectable-content
-    // parent already does, not render as if it were a normal feed.
-    if (topic?.isCategory) return true;
-    return visibleTopics.some((t) => t.parentId === id);
+    // A category topic counts as a parent even with zero children yet — it's
+    // never itself a room, so landing here (a stale link, or before its
+    // first sub-topic exists) should fall through the same way an
+    // empty-of-selectable-content parent already does, not render as if it
+    // were a normal feed.
+    return topic?.isCategory ?? false;
   };
 
   // Falls back to the first (non-folder) topic once the persisted store
