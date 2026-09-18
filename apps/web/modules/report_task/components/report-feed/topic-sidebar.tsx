@@ -34,6 +34,7 @@ import { useReportFeedStore, topicColors, type ReportTopic, type ReportPost } fr
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useSettingsAccessStore } from "@/modules/report_task/store/settings-access-store";
 import { canEditReportTopic, canManageReportTopics, canSeeRoomSubmissionStatus } from "@/modules/report_task/lib/permissions";
+import { holdServerSync } from "@/modules/report_task/lib/sync-pause";
 import { useTourStore, tourStepsByPage } from "@/modules/report_task/store/tour-store";
 import { uploadCompressedImage } from "@/modules/report_task/lib/image-resize";
 import { useIsMobile } from "@/modules/report_task/hooks/use-is-mobile";
@@ -380,20 +381,21 @@ export function TopicSidebar({
   // dragging everything back by hand. "ยกเลิก" now just drops
   // `pendingTopics` untouched — since nothing was ever written, there's
   // nothing to revert.
+  const [reorderMode, setReorderMode] = useState(false);
   const [pendingTopics, setPendingTopics] = useState<ReportTopic[] | null>(null);
   // Every read of `topics` below (grouping, ordering, drag targets, the lot)
   // transparently sees the staged copy whenever one's pending — otherwise
   // the real, saved list. No call site elsewhere in this component needs to
   // know which one it's looking at.
-  const topics = pendingTopics ?? topicsProp;
-  // True once a drag/▲▼ has actually staged something into pendingTopics —
-  // not a manually-toggled mode (no more "เข้าสู่โหมดจัดลำดับ" button in the
-  // header). Every row stays draggable all the time for anyone who can
-  // manage topics (see `draggable` on each row), so this review-mode UI
-  // (drag handle/▲▼ column, hiding other row actions, the hover-status/
-  // unread perf skips, force-expanding collapsed groups) only switches on
-  // once there's actually something staged to review.
-  const editingOrder = canManageTopics && pendingTopics !== null;
+  const topics = reorderMode && pendingTopics ? pendingTopics : topicsProp;
+  // An explicit mode again, entered from the ⠿ button in the header —
+  // dragging only works once you're in it, and nothing is saved until
+  // "เสร็จ" ("แก้ให้มีกดปุ่มแก้ไขแบบเดิม และก็กดถึงจะลากได้...พอกดผิดก็กด
+  // ยกเลิก"). Briefly tried making every row draggable at all times with no
+  // mode to enter first; putting it back behind a deliberate button also
+  // means a stray drag on a room you only meant to click can't quietly
+  // reshape the sidebar.
+  const editingOrder = reorderMode && canManageTopics;
   const [draggedTopicId, setDraggedTopicId] = useState<string | null>(null);
   // Discord-style drop feedback while dragging over another row: a thin
   // green line above/below it for "become a sibling here", or a highlighted
@@ -404,6 +406,30 @@ export function TopicSidebar({
   // in — "ย้ายออกมาแล้วย้ายกลับเข้าไปไม่ได้"). Purely visual/hit-testing state,
   // never touches `topics` itself.
   const [dropIndicator, setDropIndicator] = useState<{ id: string; position: "before" | "after" | "into" } | null>(null);
+  // `dragover` fires continuously while the pointer moves — far more often
+  // than once a frame — and every setDropIndicator from it re-renders this
+  // whole sidebar (~every row, each doing its own childrenOf/filter work).
+  // Worse, that re-render mutates the very row the pointer is over (the
+  // indicator line is a child node of it), which makes the browser fire
+  // more drag events at it, which re-renders again: a render→event→render
+  // feedback loop that pins the main thread and reads as the tab freezing
+  // mid-drag until a refresh ("พอจะกดลากก็ค้าง"). These two refs coalesce
+  // all of that down to at most ONE state update per animation frame, so
+  // the handler itself never re-renders anything synchronously.
+  const dropIndicatorFrame = useRef<number | null>(null);
+  const dropIndicatorNext = useRef<{ id: string; position: "before" | "after" | "into" } | null>(null);
+  // Reorder is staged locally (pendingTopics), so the background sync poll
+  // can't tell an edit is in progress and would happily replace `topics`
+  // out from under a drag every 4s — which both re-renders the row being
+  // dragged (killing the native drag: its `dragend` never fires, the row
+  // stays stuck dimmed) and stalls the main thread parsing the whole feed
+  // payload right as someone is trying to drop. Hold the poll off for as
+  // long as this session is open; saving still works normally, and the
+  // hold is released on "เสร็จ"/"ยกเลิก" or if this unmounts mid-edit.
+  useEffect(() => {
+    if (!reorderMode) return;
+    return holdServerSync();
+  }, [reorderMode]);
   // Which room's ⏰ tooltip is open on mobile — base-ui's Tooltip only reacts
   // to hover/focus, neither of which a tap produces on touch, so tapping the
   // badge used to do nothing there at all ("กดนาฬิกาแล้วไม่มีอะไรขึ้นเลย").
@@ -910,22 +936,12 @@ export function TopicSidebar({
         data-tour="topic-row"
         data-topic-id={t.id}
         data-topic-name={t.name}
-        // Draggable any time this viewer can manage topics at all — no more
-        // "enter reorder mode first" step (see the header: no more ⠿
-        // toggle). Used to ALSO be draggable at all times for a totally
-        // different reason (dragging a room straight into the composer as
-        // an @mention), which made every normal click on a row one shaky
-        // pixel away from silently starting a native browser drag instead
-        // of opening the room; that feature is gone now (tagging a room in
-        // a post works by typing "@ห้องชื่อ" and picking it instead), so this
-        // is safe to leave on all the time again — the only thing a plain
-        // drag can start now IS the reorder flow below.
-        draggable={canManageTopics}
+        // Only draggable inside the deliberate reorder mode (the ⠿ button in
+        // the header) — a plain click on a room should never be one shaky
+        // pixel away from starting a drag that reshapes the sidebar.
+        draggable={editingOrder}
         onDragStart={(e) => {
-          if (!canManageTopics) return;
-          // Starts the staged review session on the first drag, if one
-          // isn't already open — see pendingTopics' own comment above.
-          setPendingTopics((prev) => prev ?? topicsProp);
+          if (!editingOrder) return;
           setDraggedTopicId(t.id);
           e.dataTransfer.effectAllowed = "move";
         }}
@@ -948,7 +964,17 @@ export function TopicSidebar({
           const canNestInto = topicDepth(t, topicById) < 2 && !topics.some((x) => x.parentId === draggedTopicId);
           const position: "before" | "after" | "into" =
             frac < 0.3 ? "before" : frac > 0.7 || !canNestInto ? "after" : "into";
-          setDropIndicator((prev) => (prev?.id === t.id && prev.position === position ? prev : { id: t.id, position }));
+          // Never setState straight from this handler — see the refs' own
+          // comment. Latest wins; at most one re-render per frame.
+          dropIndicatorNext.current = { id: t.id, position };
+          if (dropIndicatorFrame.current !== null) return;
+          dropIndicatorFrame.current = requestAnimationFrame(() => {
+            dropIndicatorFrame.current = null;
+            const next = dropIndicatorNext.current;
+            setDropIndicator((prev) =>
+              prev?.id === next?.id && prev?.position === next?.position ? prev : next
+            );
+          });
         }}
         onDragLeave={(e) => {
           // Only clear once the pointer actually leaves this row's box, not
@@ -956,6 +982,7 @@ export function TopicSidebar({
           // fires on those too) — relatedTarget still inside means it's not
           // really gone yet.
           if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+          dropIndicatorNext.current = null;
           setDropIndicator((prev) => (prev?.id === t.id ? null : prev));
         }}
         onDrop={(e) => {
@@ -972,6 +999,11 @@ export function TopicSidebar({
           // opacity with no drag actually in progress ("กดย้ายละค้าง"), while
           // the ▲▼ buttons (which never touch this state) kept working fine.
           const draggedId = draggedTopicId;
+          if (dropIndicatorFrame.current !== null) {
+            cancelAnimationFrame(dropIndicatorFrame.current);
+            dropIndicatorFrame.current = null;
+          }
+          dropIndicatorNext.current = null;
           setDraggedTopicId(null);
           setDropIndicator(null);
           reorderByDrop(draggedId, t.id, position);
@@ -1516,16 +1548,9 @@ export function TopicSidebar({
         </div>
         {canManageTopics && (
           <div className="flex items-center gap-1.5">
-            {pendingTopics !== null ? (
-              // No separate "เข้าสู่โหมดจัดลำดับ" step anymore — every row is
-              // draggable all the time now (Discord-style, "อยากกดและลากแก้ไข
-              // ได้แบบดิสครอด...ไม่ต้องกดปุ่มก่อน"), and dragging one starts
-              // staging into pendingTopics right there. These two buttons
-              // just show up once something's actually staged, to review/
-              // commit or throw it away — "เสร็จ"/"ยกเลิก" as a safety net,
-              // not as a mode to opt into first ("อยากได้กันแก้ผิด กดย้อนกลับ
-              // ได้"). ทิ้ง pendingTopics เฉยๆ — ไม่เคยเขียนอะไรลง store จริงเลย
-              // ตราบใดที่ยังไม่กด "เสร็จ" เลยไม่มีอะไรต้อง revert.
+            {reorderMode ? (
+              // ทิ้ง pendingTopics เฉยๆ — ไม่เคยเขียนอะไรลง store จริงเลย
+              // ตราบใดที่ยังไม่กด "เสร็จ" เลยไม่มีอะไรต้อง revert
               <>
                 <Button
                   variant="outline"
@@ -1535,6 +1560,7 @@ export function TopicSidebar({
                     setPendingTopics(null);
                     setDraggedTopicId(null);
                     setDropIndicator(null);
+                    setReorderMode(false);
                   }}
                 >
                   ยกเลิก
@@ -1547,6 +1573,7 @@ export function TopicSidebar({
                     setPendingTopics(null);
                     setDraggedTopicId(null);
                     setDropIndicator(null);
+                    setReorderMode(false);
                   }}
                 >
                   <Check className="h-3.5 w-3.5" />
@@ -1554,19 +1581,39 @@ export function TopicSidebar({
                 </Button>
               </>
             ) : (
-              <Button
-                size="sm"
-                variant="outline"
-                // Outline instead of a solid fill — a filled button read as
-                // heavier/more opaque than the rest of this now-lighter panel
-                // ("ปุ่มไม่ต้องใหญ่หรือทึบเกินไป"); still unmistakably the
-                // primary action here via the brand-colored border/text.
-                className="h-8 gap-1 rounded-full border-[var(--brand-green)]/50 text-[var(--brand-green-dark)] hover:bg-[var(--accent)] hover:border-[var(--brand-green)] px-3.5 text-xs transition-transform active:scale-[0.99]"
-                onClick={() => openCreate()}
-              >
-                <Plus className="h-3.5 w-3.5" />
-                หัวข้อใหม่
-              </Button>
+              <>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPendingTopics(null); // defensive — should already be null, see "เสร็จ"/"ยกเลิก"
+                          setReorderMode(true);
+                        }}
+                        aria-label="จัดลำดับห้อง"
+                        className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)] transition-colors"
+                      >
+                        <GripVertical className="h-4 w-4" />
+                      </button>
+                    }
+                  />
+                  <TooltipContent className="text-xs">จัดลำดับห้อง</TooltipContent>
+                </Tooltip>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  // Outline instead of a solid fill — a filled button read as
+                  // heavier/more opaque than the rest of this now-lighter panel
+                  // ("ปุ่มไม่ต้องใหญ่หรือทึบเกินไป"); still unmistakably the
+                  // primary action here via the brand-colored border/text.
+                  className="h-8 gap-1 rounded-full border-[var(--brand-green)]/50 text-[var(--brand-green-dark)] hover:bg-[var(--accent)] hover:border-[var(--brand-green)] px-3.5 text-xs transition-transform active:scale-[0.99]"
+                  onClick={() => openCreate()}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  หัวข้อใหม่
+                </Button>
+              </>
             )}
           </div>
         )}

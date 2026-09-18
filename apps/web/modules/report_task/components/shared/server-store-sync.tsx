@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import type { StoreApi, UseBoundStore } from "zustand";
 import type { StoreKey } from "@/modules/report_task/lib/db/store-registry";
+import { isServerSyncHeld } from "@/modules/report_task/lib/sync-pause";
 import { mergeThreeWay } from "./store-merge";
 
 type AnyStore<T> = UseBoundStore<StoreApi<T>>;
@@ -223,6 +224,11 @@ export function ServerStoreSync<T, S>({
         : setInterval(() => {
             if (!loadedRef.current) return;
             if (pendingRef.current || timerRef.current) return;
+            // Some edits are staged locally and haven't been written to the
+            // store yet, so the two guards above can't see them — see
+            // holdServerSync's own comment for why landing a poll on top of
+            // one of those (an in-progress drag reorder) breaks it outright.
+            if (isServerSyncHeld()) return;
             if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
             void (async () => {
               try {
