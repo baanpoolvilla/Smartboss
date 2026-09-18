@@ -19,6 +19,7 @@ export function AppScaffold({
   width = "max-w-4xl",
   fill = false,
   fillMaxWidth = false,
+  hideDefaultActions = false,
   children,
 }: {
   title: string;
@@ -46,6 +47,15 @@ export function AppScaffold({
    * หน้าที่ใช้ fill โดยไม่ได้ตั้งใจเทียบขอบกับหน้าอื่น
    */
   fillMaxWidth?: boolean;
+  /**
+   * true = ไม่แสดง AppBarActions (แจ้งบัค/กระดิ่ง/ออกจากระบบ) ชุดที่สองของ
+   * AppBar นี้ — เฉพาะหน้าที่อยู่ใน LauncherFrame (ดู shell.tsx) ซึ่งมีแถบบน
+   * ของตัวเองที่มีปุ่มชุดเดียวกันอยู่แล้ว (แจ้งบัค/กระดิ่ง/เมนูโปรไฟล์ที่มี
+   * "ออกจากระบบ" ในตัว) เดิมสองแถบซ้อนกันมีไอคอนซ้ำ ("หัวเมนูซ้ำซ้อนกับแถบบน")
+   * — โมดูลปกติ (ModuleFrame) ไม่มีแถบบนของตัวเอง จึงยังต้องพึ่ง AppBarActions
+   * ตรงนี้เป็นทางเดียว ไม่ส่ง prop นี้เข้ามา (ค่าเริ่มต้น false).
+   */
+  hideDefaultActions?: boolean;
   children: React.ReactNode;
 }) {
   const header = (
@@ -70,7 +80,7 @@ export function AppScaffold({
 
         <div className="flex min-w-[44px] flex-1 items-center justify-end gap-0.5 sm:min-w-[110px]">
           {actions}
-          <AppBarActions />
+          {!hideDefaultActions && <AppBarActions />}
         </div>
       </div>
     </header>

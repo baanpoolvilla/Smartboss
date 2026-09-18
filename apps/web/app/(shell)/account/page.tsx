@@ -6,6 +6,7 @@ import { Avatar } from "@smartboss/ui/components/avatar";
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { Field, SectionCard, inputClass } from "@/modules/admin/components/ui";
 import { loadSecuritySettings } from "@/lib/security-settings";
+import { AccountTabs } from "./account-tabs";
 import {
   changeOwnPasswordAction,
   removeOwnAvatarAction,
@@ -43,7 +44,9 @@ export default async function AccountPage() {
   const { passwordMinLength } = await loadSecuritySettings(session.orgId ?? null);
 
   return (
-    <AppScaffold title="บัญชีของฉัน" width="max-w-2xl" backHref="/">
+    <AppScaffold title="บัญชีของฉัน" width="max-w-2xl" backHref="/" hideDefaultActions>
+      <AccountTabs active="/account" />
+
       <SectionCard title="ข้อมูลบัญชี">
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
           <dt className="text-(--ink-soft)">อีเมล</dt>
