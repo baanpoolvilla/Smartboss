@@ -245,6 +245,21 @@ export function ReportTopicSettingsPanel({
   // ("เห็นห้องที่ไม่มีในแถบเมนูด้วย") คัดลอกรอบส่งเข้าห้องที่เลิกใช้แล้วไม่มี
   // ประโยชน์อะไร มีแต่จะงงว่าทำไมมีห้องโผล่มาที่หาไม่เจอในแถบข้าง
   const copyTargets = allTopics.filter((t) => t.id !== topic.id && !t.archived && canEditReportTopic(t.visibility, viewingAsUserId));
+  // จัดกลุ่มตามหัวข้อแม่ให้เห็นชัดว่าห้องไหนอยู่ตรงไหน ("แยกหมวดหมู่ให้ชัดเจน
+  // หน่อย") แทนลิสต์แบนที่แค่ต่อชื่อห้องแม่ท้ายชื่อ — และตอบคำถาม "ทำไม test
+  // ยังโชว์อยู่" ตรงๆ ในตัว UI เลย: ห้องที่มี parentId แต่หาห้องแม่ไม่เจอ (ห้อง
+  // แม่ถูกลบไปแล้ว เหลือแต่ห้องลูกลอยอยู่) จะขึ้นกลุ่ม "ไม่มีหมวดหมู่" แยกออกมา
+  // ชัดๆ แทนที่จะเงียบๆ ไม่บอกอะไรเหมือนเดิม
+  const copyTargetGroups = (() => {
+    const groups = new Map<string, { label: string; items: ReportTopic[] }>();
+    for (const t of copyTargets) {
+      const key = !t.parentId ? "" : t.parentId;
+      const label = !t.parentId ? "หัวข้อหลัก" : (allTopics.find((p) => p.id === t.parentId)?.name ?? "ไม่มีหมวดหมู่ (หาหัวข้อแม่ไม่เจอ)");
+      if (!groups.has(key)) groups.set(key, { label, items: [] });
+      groups.get(key)!.items.push(t);
+    }
+    return [...groups.values()].sort((a, b) => a.label.localeCompare(b.label, "th"));
+  })();
 
   function toggleCopyTarget(id: string) {
     setCopyTargetIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
@@ -425,32 +440,31 @@ export function ReportTopicSettingsPanel({
                             <p className="mt-0.5 text-[11px] text-[var(--ink-soft)]">
                               เลือกห้องปลายทาง — เพิ่มรอบใหม่ให้ ไม่ทับรอบเดิมที่มีอยู่
                             </p>
-                            <div className="mt-2 max-h-44 space-y-0.5 overflow-y-auto">
-                              {copyTargets.map((t) => {
-                                const checked = copyTargetIds.includes(t.id);
-                                // ชื่อห้องแม่ต่อท้าย — กันงงเวลามีห้องชื่อซ้ำกัน
-                                // อยู่คนละกลุ่ม (เช่น "test" หลายห้องคนละที่)
-                                // ที่ในแถบข้างแยกกันด้วยตำแหน่ง แต่ลิสต์นี้เป็น
-                                // รายการแบนไม่มีการจัดกลุ่มให้ดูเอง
-                                const parentName = t.parentId ? allTopics.find((p) => p.id === t.parentId)?.name : undefined;
-                                return (
-                                  <label
-                                    key={t.id}
-                                    className="flex items-center gap-2 rounded-md px-1.5 py-1 text-[12.5px] hover:bg-[var(--bg-soft)] cursor-pointer"
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={checked}
-                                      onChange={() => toggleCopyTarget(t.id)}
-                                      className="h-3.5 w-3.5 accent-[var(--brand-green)]"
-                                    />
-                                    <span className="truncate">
-                                      {t.name}
-                                      {parentName && <span className="text-[var(--ink-faint)]"> · {parentName}</span>}
-                                    </span>
-                                  </label>
-                                );
-                              })}
+                            <div className="mt-2 max-h-52 space-y-2 overflow-y-auto">
+                              {copyTargetGroups.map((g) => (
+                                <div key={g.label}>
+                                  <p className="px-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">{g.label}</p>
+                                  <div className="space-y-0.5">
+                                    {g.items.map((t) => {
+                                      const checked = copyTargetIds.includes(t.id);
+                                      return (
+                                        <label
+                                          key={t.id}
+                                          className="flex items-center gap-2 rounded-md px-1.5 py-1 text-[12.5px] hover:bg-[var(--bg-soft)] cursor-pointer"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={checked}
+                                            onChange={() => toggleCopyTarget(t.id)}
+                                            className="h-3.5 w-3.5 accent-[var(--brand-green)]"
+                                          />
+                                          <span className="truncate">{t.name}</span>
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                             <div className="mt-2.5 flex gap-1.5">
                               <Button

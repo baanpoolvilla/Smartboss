@@ -606,6 +606,13 @@ export function TopicSidebar({
   // nests under.
   const topLevelParentOptions = parentOptions.filter(isTopLevel);
   const subParentOptions = parentOptions.filter((t) => !isTopLevel(t));
+  // Reached via a top-level topic's own + button — only ITS OWN sub-topics
+  // are valid "ชั้น 2" parents ("ตัวเลือกลูกจะเอามาแสดงแค่ห้องในหัวข้อนั้นพอแล้ว"),
+  // not every sub-topic company-wide (that full picker below stays for the
+  // top-right "+ สร้างหัวข้อ" button, which isn't scoped to any one topic).
+  const scopedSubParentOptions = quickCreateParentId
+    ? subParentOptions.filter((t) => t.parentId === quickCreateParentId)
+    : subParentOptions;
   // The "ชั้น 2" picker's own options are every sub-topic company-wide,
   // flattened — a long undifferentiated list across every room's own
   // sub-topics with no way to tell which department each belonged to
@@ -1582,8 +1589,34 @@ export function TopicSidebar({
                       </div>
                     ) : createKind === "subsub" ? (
                       <div className="space-y-1.5">
+                        {/* Opened via a specific topic's own + (quickCreateParentId
+                            set) — only that topic's own sub-topics belong here,
+                            not every sub-topic company-wide ("ตัวเลือกลูกจะเอามา
+                            แสดงแค่ห้องในหัวข้อนั้นพอแล้ว"). Want to nest under a
+                            sub-topic somewhere else entirely? That's what the
+                            top-right "+ สร้างหัวข้อ" button (no quickCreateParentId,
+                            full company-wide grouped list below) is for. */}
                         <p className="text-[11px] text-[var(--ink-soft)]">ห้องย่อยชั้น 2 — ซ้อนอยู่ใต้ห้องย่อยชั้น 1 อีกที (ลึกสุด) เลือกห้องย่อยที่จะซ้อนเข้าไป:</p>
-                        {subParentOptions.length === 0 ? (
+                        {quickCreateParentId ? (
+                          scopedSubParentOptions.length === 0 ? (
+                            <p className="text-[11px] text-[var(--ink-soft)]">หัวข้อ &quot;{topics.find((t) => t.id === quickCreateParentId)?.name}&quot; ยังไม่มีหัวข้อย่อยชั้น 1 เลย — สร้างหัวข้อย่อยชั้น 1 ก่อน แล้วค่อยกลับมาสร้างชั้น 2 ทีหลังได้</p>
+                          ) : (
+                            <Select value={parentId ?? ""} onValueChange={(v) => v && setParentId(v)}>
+                              <SelectTrigger className="w-full">
+                                <SelectValue>
+                                  {parentId
+                                    ? topics.find((t) => t.id === parentId)?.name
+                                    : "เลือกหัวข้อย่อยที่จะซ้อนเข้าไป..."}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                {scopedSubParentOptions.map((t) => (
+                                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )
+                        ) : subParentOptions.length === 0 ? (
                           <p className="text-[11px] text-[var(--ink-soft)]">ยังไม่มีหัวข้อย่อยในระบบเลย — สร้างหัวข้อย่อยชั้น 1 ก่อนอันนี้ แล้วค่อยกลับมาสร้างหัวข้อย่อยชั้น 2 ทีหลังได้</p>
                         ) : (
                           <Select value={parentId ?? ""} onValueChange={(v) => v && setParentId(v)}>
