@@ -255,6 +255,15 @@ export function TopicSidebar({
   const [icon, setIcon] = useState<string | undefined>(undefined);
   const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
   const [parentId, setParentId] = useState<string | undefined>(undefined);
+  // Set only when this "create" session started from a specific topic row's
+  // quick + button (openCreate(t.id)) — not from the general "+ หัวข้อใหม่".
+  // Locks the "เลือกห้องหลักที่จะซ้อนเข้าไป" picker below to that one topic
+  // instead of still showing every top-level topic in the company to pick
+  // from ("เลือกได้ทุกห้องเลยมันเยอะเกินไป") — the button already committed to
+  // "a sub-topic under THIS one", so re-showing the full picker just invited
+  // picking a different parent by mistake, defeating the point of the quick
+  // button in the first place ("ไม่ต้องมาหาในดรอปดาวน์" — see its own comment).
+  const [quickCreateParentId, setQuickCreateParentId] = useState<string | undefined>(undefined);
   // Which department groups are collapsed in the "ห้องย่อย ชั้น 2" parent
   // picker — company-wide, every sub-topic flattened by department read as
   // too much to scan through even after grouping them
@@ -418,6 +427,7 @@ export function TopicSidebar({
     setIcon(undefined);
     setLogoUrl(undefined);
     setParentId(defaultParentId);
+    setQuickCreateParentId(defaultParentId);
     setDescription("");
     setCreateKind(defaultParentId ? "sub" : "main");
     setFeedViewMode("threads");
@@ -1544,8 +1554,18 @@ export function TopicSidebar({
                             plain sentence here so it's never just a number
                             to interpret ("งง ยุ" — the button label change
                             alone wasn't enough on its own). */}
-                        <p className="text-[11px] text-[var(--ink-soft)]">ห้องย่อยชั้น 1 — ซ้อนอยู่ใต้ห้องหลักโดยตรง มาพร้อมห้องย่อย "a-talk"/"weekly-report"/"monthly-report" อัตโนมัติเหมือนกัน เลือกห้องหลักที่จะซ้อนเข้าไป:</p>
-                        {topLevelParentOptions.length === 0 ? (
+                        <p className="text-[11px] text-[var(--ink-soft)]">ห้องย่อยชั้น 1 — ซ้อนอยู่ใต้ห้องหลักโดยตรง มาพร้อมห้องย่อย "a-talk"/"weekly-report"/"monthly-report" อัตโนมัติเหมือนกัน{quickCreateParentId ? "" : " เลือกห้องหลักที่จะซ้อนเข้าไป:"}</p>
+                        {quickCreateParentId ? (
+                          // มาจากปุ่ม + ที่หัวข้อใดหัวข้อหนึ่งโดยตรง (openCreate(t.id))
+                          // — รู้อยู่แล้วว่าจะซ้อนใต้หัวข้อไหน ไม่ต้องโชว์ดรอปดาวน์
+                          // ให้เลือกได้ทุกหัวข้อหลักในบริษัทอีก ("เลือกได้ทุกห้อง
+                          // เลยมันเยอะเกินไป") — อยากได้หัวข้ออื่น ปิดแล้วกด
+                          // "+ หัวข้อใหม่" จากแถบด้านล่างแทน
+                          <p className="flex items-center gap-1 rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] px-3 py-2 text-[12.5px] text-[var(--ink)]">
+                            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[var(--ink-soft)]" />
+                            ซ้อนอยู่ใต้หัวข้อ &quot;{topics.find((t) => t.id === quickCreateParentId)?.name}&quot;
+                          </p>
+                        ) : topLevelParentOptions.length === 0 ? (
                           <p className="text-[11px] text-[var(--ink-soft)]">ยังไม่มีหัวข้อหลักในระบบเลย — สร้างหัวข้อหลักก่อนอันนี้ แล้วค่อยกลับมาสร้างหัวข้อย่อยใต้มันทีหลังได้</p>
                         ) : (
                           <Select value={parentId ?? ""} onValueChange={(v) => v && setParentId(v)}>

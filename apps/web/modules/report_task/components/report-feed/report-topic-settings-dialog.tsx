@@ -241,7 +241,10 @@ export function ReportTopicSettingsPanel({
   // sidebar already uses to decide whether this whole dialog is reachable
   // for a room, so a department head only ever sees their own rooms as copy
   // targets, never a room they couldn't open this dialog for themselves.
-  const copyTargets = allTopics.filter((t) => t.id !== topic.id && canEditReportTopic(t.visibility, viewingAsUserId));
+  // ไม่รวมห้องที่เก็บเข้ากรุแล้ว (archived) — เห็นในเมนูจริงก็แค่จางๆ/พับไว้
+  // ("เห็นห้องที่ไม่มีในแถบเมนูด้วย") คัดลอกรอบส่งเข้าห้องที่เลิกใช้แล้วไม่มี
+  // ประโยชน์อะไร มีแต่จะงงว่าทำไมมีห้องโผล่มาที่หาไม่เจอในแถบข้าง
+  const copyTargets = allTopics.filter((t) => t.id !== topic.id && !t.archived && canEditReportTopic(t.visibility, viewingAsUserId));
 
   function toggleCopyTarget(id: string) {
     setCopyTargetIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
@@ -425,6 +428,11 @@ export function ReportTopicSettingsPanel({
                             <div className="mt-2 max-h-44 space-y-0.5 overflow-y-auto">
                               {copyTargets.map((t) => {
                                 const checked = copyTargetIds.includes(t.id);
+                                // ชื่อห้องแม่ต่อท้าย — กันงงเวลามีห้องชื่อซ้ำกัน
+                                // อยู่คนละกลุ่ม (เช่น "test" หลายห้องคนละที่)
+                                // ที่ในแถบข้างแยกกันด้วยตำแหน่ง แต่ลิสต์นี้เป็น
+                                // รายการแบนไม่มีการจัดกลุ่มให้ดูเอง
+                                const parentName = t.parentId ? allTopics.find((p) => p.id === t.parentId)?.name : undefined;
                                 return (
                                   <label
                                     key={t.id}
@@ -436,7 +444,10 @@ export function ReportTopicSettingsPanel({
                                       onChange={() => toggleCopyTarget(t.id)}
                                       className="h-3.5 w-3.5 accent-[var(--brand-green)]"
                                     />
-                                    <span className="truncate">{t.name}</span>
+                                    <span className="truncate">
+                                      {t.name}
+                                      {parentName && <span className="text-[var(--ink-faint)]"> · {parentName}</span>}
+                                    </span>
                                   </label>
                                 );
                               })}
