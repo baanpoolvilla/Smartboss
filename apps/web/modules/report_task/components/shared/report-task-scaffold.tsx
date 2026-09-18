@@ -58,7 +58,10 @@ export function ReportTaskScaffold({
   useEffect(() => {
     const store = useEmployeeStore.getState();
     if (!store.employees.some((e) => e.id === currentUser.id)) {
-      store.setEmployees([...store.employees, currentUser]);
+      // setState, not setEmployees — this is just a stopgap so getUser(me)
+      // resolves before the real directory lands; it must not flip `loaded`,
+      // or the demo seed would be treated as the real employee list.
+      useEmployeeStore.setState((s) => ({ employees: [...s.employees, currentUser] }));
     }
     useIdentityStore.getState().setViewingAs(currentUser.id);
   }, [currentUser]);

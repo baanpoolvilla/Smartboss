@@ -27,6 +27,11 @@ const defaultEmployees: User[] = [
 
 interface EmployeeStore {
   employees: User[];
+  /** False until the real directory (core.users, via ServerStoreSync
+   * "employees") has landed — until then `employees` is still the demo seed
+   * above, which must never be shown as a room's real members or, worse,
+   * saved into a room's visibility (fake usr-XX ids in real data). */
+  loaded: boolean;
   addEmployee: (u: Omit<User, "id">) => string;
   updateEmployee: (id: string, patch: Partial<Omit<User, "id">>) => void;
   removeEmployee: (id: string) => void;
@@ -41,6 +46,7 @@ interface EmployeeStore {
 // working unchanged as employees are added/edited/removed.
 export const useEmployeeStore = create<EmployeeStore>()((set) => ({
   employees: defaultEmployees,
+  loaded: false,
   addEmployee: (u) => {
     const id = `usr-${uuid()}`;
     set((s) => ({ employees: [...s.employees, { ...u, id }] }));
@@ -49,5 +55,8 @@ export const useEmployeeStore = create<EmployeeStore>()((set) => ({
   updateEmployee: (id, patch) =>
     set((s) => ({ employees: s.employees.map((u) => (u.id === id ? { ...u, ...patch } : u)) })),
   removeEmployee: (id) => set((s) => ({ employees: s.employees.filter((u) => u.id !== id) })),
-  setEmployees: (employees) => set({ employees }),
+  // Callers of setEmployees (the settings panel's Save, the outside-report-
+  // task bootstraps in report-notification-sync/issue-report-bar-button/
+  // app-tile-review-badge) all pass the real directory, so it counts as loaded.
+  setEmployees: (employees) => set({ employees, loaded: true }),
 }));

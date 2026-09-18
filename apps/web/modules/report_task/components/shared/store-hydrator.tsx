@@ -261,7 +261,7 @@ export function StoreHydrator() {
         pollMs={SLOW_POLL_MS}
         store={useEmployeeStore}
         select={(s) => s.employees}
-        apply={(s, employees) => ({ ...s, employees })}
+        apply={(s, employees) => ({ ...s, employees, loaded: true })}
       />
       <ServerStoreSync
         apiKey="people-groups"

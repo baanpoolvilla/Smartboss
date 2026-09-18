@@ -16,7 +16,8 @@ import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
-import { departments, getDepartment, getUser, users } from "@/modules/report_task/lib/directory";
+import { departments, getDepartment, getUser } from "@/modules/report_task/lib/directory";
+import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { topicModeOf } from "@/modules/report_task/lib/report-topic-membership";
 import type { ReportTopic } from "@/modules/report_task/store/report-feed-store";
@@ -50,7 +51,16 @@ export function RoomMembersSummaryCard({
   canManage: boolean;
   onManage: () => void;
 }) {
-  const memberCount = useMemo(() => users.filter((u) => canSeeReportTopic(topic.visibility, u.id)).length, [topic.visibility]);
+  // Subscribed, not the module-level `users` view — that one isn't reactive,
+  // so a count computed while the store still held the demo seed (before the
+  // real directory landed) stayed frozen on those fake people until a full
+  // reload ("ข้อมูลเพี้ยน ต้องรีเฟรชถี่ถึงจะกลับมา").
+  const employees = useEmployeeStore((s) => s.employees);
+  const employeesLoaded = useEmployeeStore((s) => s.loaded);
+  const memberCount = useMemo(
+    () => employees.filter((u) => canSeeReportTopic(topic.visibility, u.id)).length,
+    [employees, topic.visibility]
+  );
   const exemptCount = topic.visibility?.exemptUserIds?.length ?? 0;
 
   return (
@@ -62,7 +72,7 @@ export function RoomMembersSummaryCard({
         <div className="min-w-0">
           <p className="text-sm font-medium">สมาชิกที่มีสิทธิ์เข้าห้อง</p>
           <p className="text-2xl font-bold tabular-nums leading-tight">
-            {memberCount} <span className="text-sm font-normal text-[var(--ink-soft)]">คน</span>
+            {employeesLoaded ? memberCount : "…"} <span className="text-sm font-normal text-[var(--ink-soft)]">คน</span>
           </p>
           <p className="text-xs text-[var(--ink-soft)]">
             มีสมาชิกทั้งหมดที่สามารถเข้าห้องนี้ได้
@@ -110,6 +120,12 @@ export function RoomMembersDialog({
   canManage: boolean;
 }) {
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
+  // Reactive roster — see RoomMembersSummaryCard for why. Until the real
+  // directory has loaded, the store still holds the demo seed (usr-01..15,
+  // @easyboss.io): the table shows a loading state instead, and Save is
+  // blocked so fake ids can never be written into this room's visibility.
+  const employees = useEmployeeStore((s) => s.employees);
+  const employeesLoaded = useEmployeeStore((s) => s.loaded);
   const mode = topicModeOf(topic.visibility);
   // The same dialog opens for every room regardless of mode/permission —
   // "open"/"manager" rooms and viewers who can't edit this room get a
@@ -125,8 +141,8 @@ export function RoomMembersDialog({
   const lockedIds = useMemo(() => {
     if (mode !== "department") return new Set<string>();
     const deptIds = new Set(topic.visibility?.departmentIds ?? []);
-    return new Set(users.filter((u) => u.departmentId && deptIds.has(u.departmentId)).map((u) => u.id));
-  }, [mode, topic.visibility?.departmentIds]);
+    return new Set(employees.filter((u) => u.departmentId && deptIds.has(u.departmentId)).map((u) => u.id));
+  }, [employees, mode, topic.visibility?.departmentIds]);
 
   const [checked, setChecked] = useState<Set<string>>(new Set());
   // Members who can stay in the room but are excluded from the posting
@@ -144,18 +160,21 @@ export function RoomMembersDialog({
 
   // Re-seed the draft from the room's current membership every time the
   // dialog opens, so a previous cancelled edit never leaks into the next.
+  // Also re-seeds once the real directory lands (employeesLoaded), in case
+  // the dialog was opened while the store still held the demo seed.
   useEffect(() => {
     if (!open) return;
-    const current = users.filter((u) => !u.isOwner && canSeeReportTopic(topic.visibility, u.id)).map((u) => u.id);
+    const current = employees.filter((u) => !u.isOwner && canSeeReportTopic(topic.visibility, u.id)).map((u) => u.id);
     setChecked(new Set(current));
     setExempt(new Set(topic.visibility?.exemptUserIds ?? []));
     setSearch("");
     setDeptFilter("all");
-  }, [open, topic.visibility]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on loaded, not every roster edit, so an in-progress draft isn't wiped by an unrelated directory poll
+  }, [open, topic.visibility, employeesLoaded]);
 
   const rows: MemberRow[] = useMemo(
     () =>
-      users
+      employees
         // Editable: the full roster to check/uncheck against, minus the
         // owner (who always has access, nothing to toggle). Read-only:
         // exactly who currently has access — including the owner, since
@@ -170,20 +189,20 @@ export function RoomMembersDialog({
           avatarUrl: u.avatarUrl ?? null,
           departmentName: getDepartment(u.departmentId)?.name ?? "—",
         })),
-    [editable, topic.visibility]
+    [employees, editable, topic.visibility]
   );
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
       if (deptFilter !== "all") {
-        const u = users.find((usr) => usr.id === r.id);
+        const u = employees.find((usr) => usr.id === r.id);
         if (u?.departmentId !== deptFilter) return false;
       }
       if (!q) return true;
       return r.name.toLowerCase().includes(q) || r.email.toLowerCase().includes(q) || r.role.toLowerCase().includes(q);
     });
-  }, [rows, search, deptFilter]);
+  }, [employees, rows, search, deptFilter]);
 
   const columns = useMemo<ColumnDef<MemberRow>[]>(() => {
     const nameEtc: ColumnDef<MemberRow>[] = [
@@ -290,9 +309,12 @@ export function RoomMembersDialog({
   });
 
   const selectedCount = checked.size;
-  const canSave = mode === "department" || selectedCount > 0; // person-mode room can't be saved down to zero people
+  // person-mode room can't be saved down to zero people; nothing can be saved
+  // off the demo seed (fake ids would land in the room's real visibility).
+  const canSave = employeesLoaded && (mode === "department" || selectedCount > 0);
 
   function handleSave() {
+    if (!employeesLoaded) return;
     // Whoever couldn't see this room a moment ago but is checked now is
     // newly granted access — worth a notification, same "someone gave you
     // access to something" pattern as a meeting-attendee tag elsewhere.
@@ -322,7 +344,7 @@ export function RoomMembersDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl max-h-[85vh] max-sm:!inset-0 max-sm:!top-0 max-sm:!left-0 max-sm:!h-full max-sm:!max-h-full max-sm:!w-full max-sm:!max-w-full max-sm:!translate-x-0 max-sm:!translate-y-0 max-sm:!rounded-none flex flex-col gap-0 p-0 overflow-hidden">
         <DialogHeader className="p-4 pb-3 border-b border-[var(--line)] gap-3">
-          <DialogTitle>สมาชิกทั้งหมด ({rows.length})</DialogTitle>
+          <DialogTitle>สมาชิกทั้งหมด ({employeesLoaded ? rows.length : "…"})</DialogTitle>
           <div className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--ink-soft)]" />
@@ -386,7 +408,13 @@ export function RoomMembersDialog({
               ))}
             </TableHeader>
             <TableBody>
-              {table.getRowModel().rows.length === 0 ? (
+              {!employeesLoaded ? (
+                <TableRow>
+                  <TableCell colSpan={columns.length} className="text-center text-sm text-[var(--ink-soft)] py-8">
+                    กำลังโหลดรายชื่อพนักงาน…
+                  </TableCell>
+                </TableRow>
+              ) : table.getRowModel().rows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={columns.length} className="text-center text-sm text-[var(--ink-soft)] py-8">
                     ไม่พบคนที่ค้นหา
@@ -407,7 +435,7 @@ export function RoomMembersDialog({
 
         <DialogFooter className="!mx-0 !mb-0 rounded-b-none justify-between sm:justify-between items-center">
           <p className="text-sm text-[var(--ink-soft)]">
-            {editable ? `เลือกแล้ว ${selectedCount} คน` : `ทั้งหมด ${filteredRows.length} คน`}
+            {!employeesLoaded ? "กำลังโหลด…" : editable ? `เลือกแล้ว ${selectedCount} คน` : `ทั้งหมด ${filteredRows.length} คน`}
           </p>
           {editable ? (
             <div className="flex gap-2">
