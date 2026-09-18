@@ -34,7 +34,6 @@ import { useReportFeedStore, topicColors, type ReportTopic, type ReportPost } fr
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useSettingsAccessStore } from "@/modules/report_task/store/settings-access-store";
 import { canEditReportTopic, canManageReportTopics, canSeeRoomSubmissionStatus } from "@/modules/report_task/lib/permissions";
-import { DRAG_MENTION_TOPIC_MIME } from "@/modules/report_task/components/report-feed/report-post-fields";
 import { useTourStore, tourStepsByPage } from "@/modules/report_task/store/tour-store";
 import { uploadCompressedImage } from "@/modules/report_task/lib/image-resize";
 import { useIsMobile } from "@/modules/report_task/hooks/use-is-mobile";
@@ -336,6 +335,15 @@ export function TopicSidebar({
   // component needs to know which one it's looking at.
   const topics = reorderMode && pendingTopics ? pendingTopics : topicsProp;
   const [draggedTopicId, setDraggedTopicId] = useState<string | null>(null);
+  // Discord-style drop feedback while dragging over another row: a thin
+  // green line above/below it for "become a sibling here", or a highlighted
+  // ring around the whole row for "nest inside this one" — the *only* way to
+  // rejoin a topic as a child once it's out (dropping ON the parent's own
+  // row used to always mean "become its sibling," so a topic dragged out
+  // with no siblings left under that parent had nowhere left to drop it back
+  // in — "ย้ายออกมาแล้วย้ายกลับเข้าไปไม่ได้"). Purely visual/hit-testing state,
+  // never touches `topics` itself.
+  const [dropIndicator, setDropIndicator] = useState<{ id: string; position: "before" | "after" | "into" } | null>(null);
   // Which room's ⏰ tooltip is open on mobile — base-ui's Tooltip only reacts
   // to hover/focus, neither of which a tap produces on touch, so tapping the
   // badge used to do nothing there at all ("กดนาฬิกาแล้วไม่มีอะไรขึ้นเลย").
@@ -388,18 +396,54 @@ export function TopicSidebar({
    * sub-topic's row joins that sub-topic's parent. A room that already has
    * children of its own can't become anyone's child (two-level cap, same
    * rule the create/edit dialog already enforces). */
-  function reorderByDrop(draggedId: string, targetId: string, position: "before" | "after") {
+  function reorderByDrop(draggedId: string, targetId: string, position: "before" | "after" | "into") {
     if (draggedId === targetId) return;
     const dragged = topics.find((t) => t.id === draggedId);
     const target = topics.find((t) => t.id === targetId);
     if (!dragged || !target) return;
-    const newParentId = target.parentId;
+    // "into" (dropped on the middle band of a row, see the dragOver handler
+    // below) nests the dragged topic as target's own child instead of its
+    // sibling — the only way back in once a topic's been dragged out to
+    // become a sibling of its old parent, since dropping on the *parent's*
+    // row always meant "join the parent's own siblings," never "become its
+    // child" ("ย้ายออกมาแล้วย้ายกลับเข้าไปไม่ได้"). Same 3-tier cap as the
+    // create dialog: target already at the deepest tier can't take a child.
+    if (position === "into" && topicDepth(target, topicById) >= 2) return;
+    const newParentId = position === "into" ? targetId : target.parentId;
     const draggedHasChildren = topics.some((t) => t.parentId === draggedId);
     if (newParentId && draggedHasChildren) return;
+    // Belt-and-suspenders on top of the check above: walk newParentId's own
+    // ancestor chain and refuse the drop if it ever leads back to draggedId.
+    // draggedHasChildren *should* already rule this out (a subtree with any
+    // depth always has a direct child), but this only had to be wrong once —
+    // dropping a topic onto one of its own descendants reparents it under
+    // itself, and every recursive tree-walk below (childrenOf/renderTopicBranch,
+    // hasUnreadDescendant, topicDepth) then recurses forever the next time it
+    // runs, hanging the whole tab, not just this row ("ค้างทั้งเว็บเลย" — far
+    // worse than the row just staying visually stuck). The `seen` set also
+    // keeps this walk itself from looping forever against already-bad data.
+    if (newParentId) {
+      const seen = new Set<string>();
+      let cursor: ReportTopic | undefined = topics.find((t) => t.id === newParentId);
+      while (cursor) {
+        if (cursor.id === draggedId) return;
+        if (!cursor.parentId || seen.has(cursor.parentId)) break;
+        seen.add(cursor.parentId);
+        cursor = topics.find((t) => t.id === cursor!.parentId);
+      }
+    }
     const siblings = topics.filter((t) => t.parentId === newParentId && t.id !== draggedId).sort(byOrder);
-    const targetIndex = siblings.findIndex((t) => t.id === targetId);
-    if (targetIndex === -1) return;
-    const insertAt = position === "before" ? targetIndex : targetIndex + 1;
+    let insertAt: number;
+    if (position === "into") {
+      // Lands last among target's existing children — simplest, predictable
+      // spot; drag it again afterward (▲▼ or another drop) to reorder within
+      // that group same as any other sibling.
+      insertAt = siblings.length;
+    } else {
+      const targetIndex = siblings.findIndex((t) => t.id === targetId);
+      if (targetIndex === -1) return;
+      insertAt = position === "before" ? targetIndex : targetIndex + 1;
+    }
     const nextSiblings = [...siblings.slice(0, insertAt), dragged, ...siblings.slice(insertAt)];
     applyLocalReorder(newParentId, nextSiblings, draggedId);
   }
@@ -516,14 +560,16 @@ export function TopicSidebar({
       // deleted same as any other room, and more can be added the normal
       // way if these aren't enough.
       //
-      // A depth-0 ("main") topic has two tiers of room left under the
-      // 3-tier cap (topicDepth's own doc), so it gets the full nested shape:
-      // a-talk and daily-report one tier down, weekly-report/monthly-report
-      // nested a further tier under daily-report. A depth-1 ("sub") topic
-      // has only one tier left, so daily-report would have nowhere to put
-      // its own children — a-talk/weekly-report/monthly-report all go
-      // directly under it as flat siblings instead. A depth-2 ("subsub")
-      // topic is already at the cap, so it gets none of these.
+      // Only a depth-0 ("main") topic gets the auto-scaffold — it's a pure
+      // category (isCategory, can't hold posts of its own, see above), so
+      // creating one bare would leave it with nothing to actually open;
+      // it has two tiers of room left under the 3-tier cap (topicDepth's own
+      // doc) for the full nested shape: a-talk and daily-report one tier
+      // down, weekly-report/monthly-report nested a further tier under
+      // daily-report. A "sub"/"subsub" topic IS itself a real, postable room
+      // the moment it's created — auto-filling it with three more rooms
+      // nobody asked for was never wanted there ("ไม่ต้องสร้างแบบนี้สิ เอาแค่
+      // สร้างห้องนั้นมาเลย"), it only made sense for the category case above.
       if (createKind === "main") {
         addTopic({
           name: "a-talk",
@@ -553,31 +599,6 @@ export function TopicSidebar({
           name: "monthly-report",
           color,
           parentId: dailyId,
-          visibility: parentVisibility,
-          feedViewMode: feedViewMode === "stream" ? undefined : "threads",
-          byUserId: viewingAsUserId,
-        });
-      } else if (createKind === "sub") {
-        addTopic({
-          name: "a-talk",
-          color,
-          parentId: id,
-          visibility: parentVisibility,
-          feedViewMode: feedViewMode === "stream" ? undefined : "threads",
-          byUserId: viewingAsUserId,
-        });
-        addTopic({
-          name: "weekly-report",
-          color,
-          parentId: id,
-          visibility: parentVisibility,
-          feedViewMode: feedViewMode === "stream" ? undefined : "threads",
-          byUserId: viewingAsUserId,
-        });
-        addTopic({
-          name: "monthly-report",
-          color,
-          parentId: id,
           visibility: parentVisibility,
           feedViewMode: feedViewMode === "stream" ? undefined : "threads",
           byUserId: viewingAsUserId,
@@ -815,30 +836,53 @@ export function TopicSidebar({
         data-tour="topic-row"
         data-topic-id={t.id}
         data-topic-name={t.name}
-        draggable
+        // Only draggable while actively reordering now — used to be
+        // draggable at all times so a room could also be dragged straight
+        // into the composer as an @mention, but that meant every normal
+        // click on a row was one shaky pixel away from silently starting a
+        // native browser drag instead of opening the room: nothing responds
+        // until that drag ends, which read as the whole page freezing
+        // ("กดห้องและกดลากไปนิดหน่อยก็ค้างแล้ว...ไม่ได้กดแก้ไขนะ" — this wasn't
+        // even reorder mode). Tagging a room in a post still works fine by
+        // typing "@ห้องชื่อ" and picking it.
+        draggable={editingOrder}
         onDragStart={(e) => {
-          if (editingOrder) {
-            setDraggedTopicId(t.id);
-            e.dataTransfer.effectAllowed = "move";
-            return;
-          }
-          // Lets a room be tagged in a post by dragging it straight from
-          // here into the composer's text box (report-post-fields.tsx),
-          // instead of only via typing "@ห้องชื่อ" and picking it.
-          e.dataTransfer.setData(DRAG_MENTION_TOPIC_MIME, JSON.stringify({ id: t.id, name: t.name }));
-          e.dataTransfer.effectAllowed = "copy";
+          setDraggedTopicId(t.id);
+          e.dataTransfer.effectAllowed = "move";
         }}
-        onDragEnd={() => setDraggedTopicId(null)}
+        onDragEnd={() => {
+          setDraggedTopicId(null);
+          setDropIndicator(null);
+        }}
         onDragOver={(e) => {
           if (!editingOrder || !draggedTopicId || draggedTopicId === t.id) return;
           e.preventDefault();
           e.dataTransfer.dropEffect = "move";
+          // Discord-style 3-band hit test — top/bottom 30% of the row means
+          // "drop as a sibling here" (before/after), the middle 40% means
+          // "nest inside this one" (only offered when this row can actually
+          // take a child — already at the deepest tier, or already has a
+          // child of its own coming along with it, and the middle band just
+          // isn't offered at all). See reorderByDrop for what each does.
+          const rect = e.currentTarget.getBoundingClientRect();
+          const frac = (e.clientY - rect.top) / rect.height;
+          const canNestInto = topicDepth(t, topicById) < 2 && !topics.some((x) => x.parentId === draggedTopicId);
+          const position: "before" | "after" | "into" =
+            frac < 0.3 ? "before" : frac > 0.7 || !canNestInto ? "after" : "into";
+          setDropIndicator((prev) => (prev?.id === t.id && prev.position === position ? prev : { id: t.id, position }));
+        }}
+        onDragLeave={(e) => {
+          // Only clear once the pointer actually leaves this row's box, not
+          // on every child element boundary crossing inside it (dragleave
+          // fires on those too) — relatedTarget still inside means it's not
+          // really gone yet.
+          if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+          setDropIndicator((prev) => (prev?.id === t.id ? null : prev));
         }}
         onDrop={(e) => {
           if (!editingOrder || !draggedTopicId) return;
           e.preventDefault();
-          const rect = e.currentTarget.getBoundingClientRect();
-          const position = e.clientY - rect.top < rect.height / 2 ? "before" : "after";
+          const position = dropIndicator?.id === t.id ? dropIndicator.position : "after";
           // Clear the "being dragged" state FIRST, before reorderByDrop
           // writes into pendingTopics — that write can shift this row to a
           // different depth/parent group in the tree, which React sometimes
@@ -850,6 +894,7 @@ export function TopicSidebar({
           // the ▲▼ buttons (which never touch this state) kept working fine.
           const draggedId = draggedTopicId;
           setDraggedTopicId(null);
+          setDropIndicator(null);
           reorderByDrop(draggedId, t.id, position);
         }}
         className={cn(
@@ -861,6 +906,7 @@ export function TopicSidebar({
           // still findable to un-archive from its own ⚙, not hard-hidden.
           (hiddenForMe || t.archived || (muted && !active)) && "opacity-50",
           editingOrder && draggedTopicId === t.id && "opacity-40",
+          dropIndicator?.id === t.id && dropIndicator.position === "into" && "ring-2 ring-[var(--brand-green)] bg-[var(--accent)]",
           active
             ? "bg-[var(--accent)] font-semibold"
             : cn(
@@ -910,6 +956,17 @@ export function TopicSidebar({
           }
         }}
       >
+        {dropIndicator?.id === t.id && (dropIndicator.position === "before" || dropIndicator.position === "after") && (
+          // The "become a sibling here" line — top edge for "before", bottom
+          // edge for "after", same green as the active-room bar so it reads
+          // as "this is where it'll land" at a glance (Discord's own line).
+          <span
+            className={cn(
+              "absolute left-1 right-1 h-[2px] rounded-full bg-[var(--brand-green)]",
+              dropIndicator.position === "before" ? "-top-[1px]" : "-bottom-[1px]"
+            )}
+          />
+        )}
         {active && (
           // Brand green, not this topic's own arbitrary color (t.color can
           // land on red/orange for plenty of topics, purely as a visual
@@ -1581,7 +1638,7 @@ export function TopicSidebar({
                             plain sentence here so it's never just a number
                             to interpret ("งง ยุ" — the button label change
                             alone wasn't enough on its own). */}
-                        <p className="text-[11px] text-[var(--ink-soft)]">ห้องย่อยชั้น 1 — ซ้อนอยู่ใต้ห้องหลักโดยตรง มาพร้อมห้องย่อย "a-talk"/"weekly-report"/"monthly-report" อัตโนมัติเหมือนกัน{quickCreateParentId ? "" : " เลือกห้องหลักที่จะซ้อนเข้าไป:"}</p>
+                        <p className="text-[11px] text-[var(--ink-soft)]">ห้องย่อยชั้น 1 — ซ้อนอยู่ใต้ห้องหลักโดยตรง เป็นห้องที่กดแชทได้เองเลย{quickCreateParentId ? "" : " เลือกห้องหลักที่จะซ้อนเข้าไป:"}</p>
                         {quickCreateParentId ? (
                           // มาจากปุ่ม + ที่หัวข้อใดหัวข้อหนึ่งโดยตรง (openCreate(t.id))
                           // — รู้อยู่แล้วว่าจะซ้อนใต้หัวข้อไหน ไม่ต้องโชว์ดรอปดาวน์

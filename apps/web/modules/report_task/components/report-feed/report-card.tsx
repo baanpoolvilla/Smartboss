@@ -1395,9 +1395,9 @@ export function ReportCard({
                   <button
                     onClick={() => toggleReaction(post.id, emoji, viewingAsUserId)}
                     aria-label={`รีแอค ${emoji}`}
-                    className="flex items-center px-1.5 border-l border-[var(--line)] hover:bg-[var(--accent)] hover:text-[var(--brand-green-dark)] transition-colors"
+                    className="flex items-center px-1 border-l border-[var(--line)] hover:bg-[var(--accent)] hover:text-[var(--brand-green-dark)] transition-colors"
                   >
-                    <Plus className="h-2.5 w-2.5" />
+                    <Plus className="h-2 w-2" />
                   </button>
                 )}
               </div>
