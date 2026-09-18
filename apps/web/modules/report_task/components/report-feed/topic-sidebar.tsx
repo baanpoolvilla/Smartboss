@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Label } from "@/modules/report_task/components/ui/label";
@@ -249,7 +249,22 @@ export function TopicSidebar({
 
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [editor, setEditor] = useState<Editor | null>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState("");
+  // Opening this dialog right after a fast/double-click elsewhere (e.g. the
+  // quick + on a topic row) can leave the browser mid text-selection —
+  // autoFocus alone doesn't clear that, so the name field could come up with
+  // its whole default value pre-selected/highlighted for no reason the user
+  // did on purpose ("ปัญหานี้พึ่งมาตอนแก้ไขห้อง...เช็คดูดีๆสิ"). Explicitly
+  // collapse the cursor to the end whenever this field mounts, overriding
+  // whatever selection state it inherited.
+  useEffect(() => {
+    if (!editor) return;
+    const el = nameInputRef.current;
+    if (!el) return;
+    const len = el.value.length;
+    el.setSelectionRange(len, len);
+  }, [editor]);
   const [color, setColor] = useState(topicColors[0]!);
   const [icon, setIcon] = useState<string | undefined>(undefined);
   const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
@@ -783,46 +798,55 @@ export function TopicSidebar({
     // Only the red "ยังไม่ส่ง" label + each row's posted/late status are
     // scoped to what *this viewer* personally owes (viewerRoundIds) — someone
     // not listed as a submitter for a round sees it as "na", not "late".
+    //
+    // None of this ever renders while editingOrder (the ⏰ badge/tooltip is
+    // gated `!editingOrder` below) — skipped entirely in that case rather
+    // than computed and thrown away, since dragging over a row fires this
+    // same per-row work (posts.some(...) scans the WHOLE posts array per
+    // round) dozens of times a second for every visible row, which read as
+    // the whole page freezing while dragging ("กดจัดลำดับและลากห้อง...ค้าง").
     const today = todayIso();
-    const roundsToday = effectiveRoundsOf(t).filter((r) => roundRunsOnDay(r, today));
+    const roundsToday = editingOrder ? [] : effectiveRoundsOf(t).filter((r) => roundRunsOnDay(r, today));
     // A day this viewer is on leave/holiday/routine day-off owes nothing —
     // same exemption the report-feed compliance pills already honor.
-    const viewerExemptToday = isExemptDate(complianceExemptions, viewingAsUserId, today);
-    const viewerRoundIds = viewerExemptToday
+    const viewerExemptToday = !editingOrder && isExemptDate(complianceExemptions, viewingAsUserId, today);
+    const viewerRoundIds = editingOrder || viewerExemptToday
       ? new Set<string>()
       : new Set(roundsForUserOnDay(t, viewingAsUserId, today, submitterGroups).map((r) => r.id));
     // Only show the ⏰ status at all to someone with a reason to care about
     // it: a real submitter of one of today's rounds, the CEO/owner, or the
     // head of one of the room's own departments — see canSeeRoomSubmissionStatus.
-    const canSeeStatus = viewerRoundIds.size > 0 || canSeeRoomSubmissionStatus(t.visibility, viewingAsUserId);
+    const canSeeStatus = !editingOrder && (viewerRoundIds.size > 0 || canSeeRoomSubmissionStatus(t.visibility, viewingAsUserId));
     const nowMinutes = (() => {
       const n = new Date();
       return n.getHours() * 60 + n.getMinutes();
     })();
-    const hoverRows = roundsToday
-      .slice()
-      .sort((a, b) => a.time.localeCompare(b.time))
-      .map((r) => {
-        const owesIt = viewerRoundIds.has(r.id);
-        const posted = posts.some(
-          (p) =>
-            p.topicId === t.id &&
-            p.authorId === viewingAsUserId &&
-            !p.excludeFromSubmission &&
-            localDateStr(new Date(p.createdAt)) === today &&
-            attributePostToRound(p, roundsToday)?.id === r.id
-        );
-        const [h, m] = r.time.split(":").map(Number) as [number, number];
-        const cutoffMinutes = h * 60 + m;
-        const status: "posted" | "late" | "pending" | "na" = !owesIt
-          ? "na"
-          : posted
-            ? "posted"
-            : cutoffMinutes < nowMinutes
-              ? "late"
-              : "pending";
-        return { id: r.id, label: r.label, time: r.time, status };
-      });
+    const hoverRows = editingOrder
+      ? []
+      : roundsToday
+          .slice()
+          .sort((a, b) => a.time.localeCompare(b.time))
+          .map((r) => {
+            const owesIt = viewerRoundIds.has(r.id);
+            const posted = posts.some(
+              (p) =>
+                p.topicId === t.id &&
+                p.authorId === viewingAsUserId &&
+                !p.excludeFromSubmission &&
+                localDateStr(new Date(p.createdAt)) === today &&
+                attributePostToRound(p, roundsToday)?.id === r.id
+            );
+            const [h, m] = r.time.split(":").map(Number) as [number, number];
+            const cutoffMinutes = h * 60 + m;
+            const status: "posted" | "late" | "pending" | "na" = !owesIt
+              ? "na"
+              : posted
+                ? "posted"
+                : cutoffMinutes < nowMinutes
+                  ? "late"
+                  : "pending";
+            return { id: r.id, label: r.label, time: r.time, status };
+          });
     // "late" (missed a cutoff that already passed) is the only urgent state —
     // "pending" just means a later round hasn't come due yet, which used to
     // get lumped into the same red "ยังไม่ส่ง" count as an actual miss and
@@ -898,7 +922,16 @@ export function TopicSidebar({
           reorderByDrop(draggedId, t.id, position);
         }}
         className={cn(
-          "group relative flex items-center gap-2 rounded-xl pr-2 cursor-pointer transition-colors duration-200 w-full",
+          // select-none — without it, clicking a row fast/repeatedly (double-
+          // click timing) makes the BROWSER select the room's name as plain
+          // text instead of just opening it; the next mouse-move while that
+          // selection is live starts a native "drag this selected text"
+          // operation, which eats input the same way the old always-on
+          // `draggable` bug did — nothing responds until it ends, reading as
+          // the whole page freezing ("กดเลือกห้องเร็วๆก็ค้างเลย"), even now
+          // that `draggable` itself is reorder-mode-only. A row's text is
+          // never meant to be selected/copied on its own anyway.
+          "group relative flex items-center gap-2 rounded-xl pr-2 cursor-pointer select-none transition-colors duration-200 w-full",
           depth > 0 ? "pl-2 py-1.5 text-[13px]" : "pl-1.5 py-2 text-sm",
           // Hidden-for-me stays in the tree (so its own "..." menu is always
           // reachable to un-hide it) but reads as clearly dimmed either way.
@@ -1341,14 +1374,27 @@ export function TopicSidebar({
     return (
       <Fragment key={t.id}>
         {renderTopicRow(t, { depth, hasChildren })}
-        {visibleChildren.map((child) => renderTopicSubtree(child, depth + 1))}
+        {visibleChildren.length > 0 && (
+          <div className="relative">
+            {/* Guide line down to this parent's own children — every child
+                at THIS depth lines up under it, and any grandchildren
+                (rendered by this same call one level deeper) get their own
+                line further in again, never lining up with this one. Plain
+                indentation alone read as "each row just shifted right a
+                bit," not "these specific rows belong to that specific
+                parent" ("อยากให้แสดงให้ชัดเจนว่าลูก 1 เท่ากับลูก1...แต่ลูก1 จะ
+                ไม่เท่ากับแม่"). */}
+            <span className="absolute top-0 bottom-1 w-px bg-[var(--line)]" style={{ left: (depth + 1) * 32 - 16 }} aria-hidden />
+            {visibleChildren.map((child) => renderTopicSubtree(child, depth + 1))}
+          </div>
+        )}
       </Fragment>
     );
   }
 
   // A top-level topic plus (if expanded) its indented sub-topics — the
-  // Teams "team, then its channels" block as one unit. Plain indentation,
-  // no connector line — just tucked further right under the parent.
+  // Teams "team, then its channels" block as one unit, with a guide line
+  // (see renderTopicSubtree above) down to its own children.
   function renderTopicBranch(t: ReportTopic) {
     const children = childrenOf(t.id);
     const isCollapsed = !reorderMode && collapsedTopicIds.has(t.id);
@@ -1362,7 +1408,12 @@ export function TopicSidebar({
     return (
       <div key={t.id} className={showChildren ? "mb-2 space-y-0.5" : undefined}>
         {renderTopicRow(t, { depth: 0, hasChildren: children.length > 0 })}
-        {visibleChildren.map((child) => renderTopicSubtree(child, 1))}
+        {showChildren && (
+          <div className="relative">
+            <span className="absolute top-0 bottom-1 w-px bg-[var(--line)]" style={{ left: 32 - 16 }} aria-hidden />
+            {visibleChildren.map((child) => renderTopicSubtree(child, 1))}
+          </div>
+        )}
       </div>
     );
   }
@@ -1540,6 +1591,7 @@ export function TopicSidebar({
                 <div className="space-y-1.5">
                   <Label className="text-xs text-[var(--ink-soft)]">ชื่อหัวข้อ</Label>
                   <Input
+                    ref={nameInputRef}
                     autoFocus
                     value={name}
                     onChange={(e) => setName(e.target.value)}
