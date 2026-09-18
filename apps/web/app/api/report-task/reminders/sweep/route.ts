@@ -6,7 +6,7 @@ import { readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
 import { readTasks } from "@/modules/report_task/lib/db/task-repo";
 import { computeReminders } from "@/modules/report_task/lib/reminder-sweep";
 import { defaultReminderSettings, type ReminderSettings } from "@/modules/report_task/store/reminder-settings-store";
-import type { ReportAlbum, ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
+import type { ReportAlbum, ReportPost, ReportTopic, SubmitterGroup } from "@/modules/report_task/store/report-feed-store";
 import type { AppNotification } from "@/modules/report_task/store/notification-store";
 import type { CalendarEvent, TodoItem } from "@/modules/report_task/types";
 
@@ -44,7 +44,7 @@ export async function POST() {
     readTasks(orgId),
     readStore<CalendarEvent[]>(orgId, MEETINGS_KEY),
     readStore<TodoItem[]>(orgId, TODOS_KEY),
-    readStore<{ topics: ReportTopic[]; posts: ReportPost[]; albums: ReportAlbum[] }>(orgId, REPORT_FEED_KEY),
+    readStore<{ topics: ReportTopic[]; posts: ReportPost[]; albums: ReportAlbum[]; submitterGroups?: SubmitterGroup[] }>(orgId, REPORT_FEED_KEY),
   ]);
   // Merged field-by-field, not a plain `?? default` — a row saved before
   // `task.leadMinutes`/`todo` existed on ReminderSettings only has the old
@@ -74,6 +74,7 @@ export async function POST() {
     posts: reportFeed?.posts ?? [],
     settings,
     alreadySent,
+    groups: reportFeed?.submitterGroups ?? [],
   });
 
   if (result.newSentKeys.length === 0) {

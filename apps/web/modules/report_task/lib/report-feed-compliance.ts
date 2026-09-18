@@ -3,6 +3,7 @@ import {
   roundsForUserOnDay,
   mustSubmitToTopic,
   roundRunsOnDay,
+  roundIgnoresDateExemptions,
   effectiveRoundsOf,
   resolveRoundSubmitters,
   attributePostToRound,
@@ -215,7 +216,7 @@ export function roundComplianceStatus(
   exemptions?: DateExemptions
 ): ComplianceStatus {
   if (!roundRunsOnDay(round, day)) return "exempt";
-  if (exemptions && isExemptDate(exemptions, userId, day)) return "exempt";
+  if (exemptions && !roundIgnoresDateExemptions(round) && isExemptDate(exemptions, userId, day)) return "exempt";
   if (!resolveRoundSubmitters(round, topic.visibility, groupsNow()).includes(userId)) return "exempt";
   const cutoff = roundMinutes(round);
   const roundPosts = postsForRound(topic, userId, round, day, posts);
@@ -245,7 +246,7 @@ function roundHasAttachmentIssue(
   posts: ReportPost[],
   exemptions?: DateExemptions
 ): boolean {
-  if (exemptions && isExemptDate(exemptions, userId, day)) return false;
+  if (exemptions && !roundIgnoresDateExemptions(round) && isExemptDate(exemptions, userId, day)) return false;
   const roundPosts = postsForRound(topic, userId, round, day, posts);
   if (roundPosts.length === 0) return false;
   const required = round.minImages ?? 0;
@@ -705,8 +706,8 @@ export function todayComplianceSummary(
     if (today < localDateStr(new Date(topic.createdAt))) continue;
     const allRounds = effectiveRoundsOf(topic);
     for (const u of users) {
-      if (exemptions && isExemptDate(exemptions, u.id, today)) continue;
       for (const round of roundsForUserOnDay(topic, u.id, today, groups)) {
+        if (exemptions && !roundIgnoresDateExemptions(round) && isExemptDate(exemptions, u.id, today)) continue;
         summary.totalTracked += 1;
         const roundPosts = postsForDay(topic, u.id, today, posts).filter((p) => attributePostToRound(p, allRounds)?.id === round.id);
         if (roundPosts.length === 0) {
@@ -757,8 +758,8 @@ export function todayStatusEntries(
     if (today < localDateStr(new Date(topic.createdAt))) continue;
     const allRounds = effectiveRoundsOf(topic);
     for (const u of users) {
-      if (exemptions && isExemptDate(exemptions, u.id, today)) continue;
       for (const round of roundsForUserOnDay(topic, u.id, today, groups)) {
+        if (exemptions && !roundIgnoresDateExemptions(round) && isExemptDate(exemptions, u.id, today)) continue;
         const base = {
           userId: u.id,
           userName: u.name,
@@ -800,8 +801,8 @@ export function pendingToday(topics: ReportTopic[], posts: ReportPost[], exempti
     if (today < localDateStr(new Date(topic.createdAt))) continue;
     const allRounds = effectiveRoundsOf(topic);
     for (const u of users) {
-      if (exemptions && isExemptDate(exemptions, u.id, today)) continue;
       for (const round of roundsForUserOnDay(topic, u.id, today, groups)) {
+        if (exemptions && !roundIgnoresDateExemptions(round) && isExemptDate(exemptions, u.id, today)) continue;
         const roundPosts = postsForDay(topic, u.id, today, posts).filter((p) => attributePostToRound(p, allRounds)?.id === round.id);
         if (roundPosts.length > 0) continue;
         entries.push({

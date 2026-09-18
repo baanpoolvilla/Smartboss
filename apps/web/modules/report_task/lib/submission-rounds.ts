@@ -135,6 +135,18 @@ export function usesSubmissionRounds(topic: Pick<ReportTopic, "submissionRounds"
   return !!topic.submissionRounds && topic.submissionRounds.length > 0;
 }
 
+/**
+ * รอบรายสัปดาห์/รายเดือน "ไม่ยกเว้น" ให้วันหยุดบริษัทหรือวันลาส่วนตัวที่ตรงกับ
+ * วันครบกำหนดพอดี — ต่างจากรอบรายวัน ที่ความหมายคือ "วันนี้บริษัทเปิดไหม คน
+ * มาไหม" (หยุดจริงก็ไม่มีอะไรให้ส่ง) รอบรายสัปดาห์/รายเดือนคือรายงานสรุปของ
+ * "ช่วงเวลา" ที่ต้องส่งภายในกำหนดเสมอไม่ว่าวันนั้นจะเป็นวันหยุดหรือวันลาของ
+ * คนที่ต้องส่งหรือไม่ (product decision — ดู docs/spec-report-submission-rounds.md
+ * และการยืนยันจากเจ้าของระบบ: "ให้ส่งวันเดิมไม่ว่าคนนั้นจะหยุดแบบไหนก็ตาม")
+ */
+export function roundIgnoresDateExemptions(round: Pick<SubmissionRound, "weekdays" | "dayOfMonth">): boolean {
+  return !!round.dayOfMonth || !!(round.weekdays && round.weekdays.length > 0);
+}
+
 /** รอบที่ user "คนนี้" ต้องส่งในวันนั้น (คิดวันในสัปดาห์ + เป็นผู้ส่งของรอบ) */
 export function roundsForUserOnDay(
   topic: Pick<ReportTopic, "submissionRounds" | "cutoffs" | "requiredWeekdays" | "visibility">,

@@ -258,16 +258,16 @@ export function DeadlineReminderSettingsPanel() {
             <FileText className="h-4 w-4" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold">รีพอต (รอบส่งประจำวัน)</p>
-            <p className="text-[11px] text-[var(--ink-soft)]">ค่าเริ่มต้น — ห้องไหนตั้งค่าของตัวเองไว้ (ในตั้งค่าห้อง) ใช้ค่านั้นแทน</p>
+            <p className="text-sm font-semibold">รีพอต (รอบส่งประจำวัน/สัปดาห์/เดือน)</p>
+            <p className="text-[11px] text-[var(--ink-soft)]">
+              ค่าเริ่มต้น — ห้องไหนตั้งค่าของตัวเองไว้ (ในตั้งค่าห้อง) ใช้ค่านั้นแทน · ตั้งเป็น &quot;วัน&quot; ได้ด้วย เผื่อรอบรายสัปดาห์/รายเดือนที่อยากแจ้งเตือนล่วงหน้าข้ามวัน
+            </p>
           </div>
           <Switch checked={settings.report.enabled} onCheckedChange={(v) => setReportSettings({ enabled: v })} />
         </div>
         <div className={cn("px-4 pb-3.5 space-y-2.5", !settings.report.enabled && "opacity-50 pointer-events-none")}>
-          <LeadPointsEditor
+          <MixedUnitLeadPointsEditor
             values={settings.report.leadMinutes}
-            unit="นาทีก่อนรอบตัดยอด"
-            max={240}
             onChange={(leadMinutes) => setReportSettings({ leadMinutes })}
           />
           <div className="flex flex-wrap items-center gap-2 pl-[46px]">

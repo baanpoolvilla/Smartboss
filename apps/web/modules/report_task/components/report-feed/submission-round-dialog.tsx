@@ -365,7 +365,7 @@ export function SubmissionRoundDialog({
                   );
                 })}
               </div>
-              <p className="flex items-center gap-1 text-[11px] text-[var(--ink-soft)]"><Check className="h-3 w-3 text-[var(--tone-ok)]" />วันหยุด/วันลา ตัดออกให้เองตามปฏิทิน HR</p>
+              <p className="flex items-center gap-1 text-[11px] text-[var(--ink-soft)]"><Check className="h-3 w-3 text-[var(--tone-ok)]" />ยังต้องส่งตามกำหนดแม้วันนั้นตรงกับวันหยุดบริษัทหรือวันลาของคนที่ต้องส่ง</p>
             </div>
           )}
           {frequency === "monthly" && (
@@ -408,7 +408,7 @@ export function SubmissionRoundDialog({
                   </p>
                 );
               })()}
-              <p className="flex items-center gap-1 text-[11px] text-[var(--ink-soft)]"><Check className="h-3 w-3 text-[var(--tone-ok)]" />วันหยุด/วันลา ตัดออกให้เองตามปฏิทิน HR</p>
+              <p className="flex items-center gap-1 text-[11px] text-[var(--ink-soft)]"><Check className="h-3 w-3 text-[var(--tone-ok)]" />ยังต้องส่งตามกำหนดแม้วันนั้นตรงกับวันหยุดบริษัทหรือวันลาของคนที่ต้องส่ง</p>
             </div>
           )}
         </div>

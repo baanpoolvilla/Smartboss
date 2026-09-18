@@ -1,11 +1,21 @@
 import { departments, users, isOwner } from "@/modules/report_task/lib/directory";
-import { calendarDateOf, now, todayIso } from "@/modules/report_task/lib/now";
+import { calendarDateOf, localDateStr, now, todayIso } from "@/modules/report_task/lib/now";
 import { pendingToday } from "@/modules/report_task/lib/report-feed-compliance";
-import { effectiveRoundsOf } from "@/modules/report_task/lib/submission-rounds";
+import { effectiveRoundsOf, roundRunsOnDay, resolveRoundSubmitters } from "@/modules/report_task/lib/submission-rounds";
 import { SYSTEM_USER_ID } from "@/modules/report_task/lib/task-penalty-sweep";
 import type { ReminderSettings } from "@/modules/report_task/store/reminder-settings-store";
-import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
+import type { ReportPost, ReportTopic, SubmitterGroup } from "@/modules/report_task/store/report-feed-store";
 import type { CalendarEvent, Task, TodoItem } from "@/modules/report_task/types";
+
+const DAY_MINUTES = 1440;
+
+/** "YYYY-MM-DD" + N days — used by the day-ahead report reminder below to
+ * find the future date a weekly/monthly round is actually due on. */
+function addDays(dayStr: string, n: number): string {
+  const d = new Date(`${dayStr}T00:00:00`);
+  d.setDate(d.getDate() + n);
+  return localDateStr(d);
+}
 
 export interface ReminderNotification {
   recipients: string[];
@@ -44,8 +54,12 @@ export function computeReminders(input: {
   posts: ReportPost[];
   settings: ReminderSettings;
   alreadySent: Set<string>;
+  /** Needed only by the day-ahead report reminder below (`resolveRoundSubmitters`
+   * reads groups for `mode: "groups"` rounds) — defaults to none for callers
+   * that don't have it handy. */
+  groups?: SubmitterGroup[];
 }): ReminderSweepResult {
-  const { tasks, meetings, todos, topics, posts, settings, alreadySent } = input;
+  const { tasks, meetings, todos, topics, posts, settings, alreadySent, groups = [] } = input;
   const notifications: ReminderNotification[] = [];
   const newSentKeys: string[] = [];
 
@@ -180,7 +194,11 @@ export function computeReminders(input: {
       const namesRound = effectiveRoundsOf(topic).length > 1;
       const roundPhrase = namesRound ? ` "${first.roundLabel}"` : "";
       for (const lead of leadOptions) {
-        if (lead <= 0 || minutesUntilCutoff > lead) continue;
+        // Whole-day leads (1440+, e.g. "1 วันก่อน") are handled by the
+        // day-ahead block right below this loop instead — a same-day
+        // countdown can't express "the day before a Friday-only weekly
+        // round" since that round isn't even due today.
+        if (lead <= 0 || lead >= DAY_MINUTES || minutesUntilCutoff > lead) continue;
         if (settings.report.notifyPending) {
           for (const entry of entries) {
             const key = `report:${groupKey}:${entry.userId}:${today}:${lead}`;
@@ -218,6 +236,66 @@ export function computeReminders(input: {
                 message: `ห้อง "${topic.name}" ยังมี ${entries.length} คนไม่ได้ส่งรีพอต${roundPhrase}วันนี้ ใกล้ถึงรอบตัดยอดแล้ว`,
                 link: `/report-task/report-feed?topic=${topic.id}`,
               });
+            }
+          }
+        }
+      }
+    }
+
+    // ---- Reports (day-ahead): whole-day leads look ahead to a future date
+    // a round is actually due on, instead of counting down within today —
+    // this is what makes "แจ้งเตือนก่อน 1 วัน" work for a Friday-only weekly
+    // round on Thursday. Fires for every round (daily included, if someone
+    // configures a day-lead for one), but it's the only path that matters
+    // for weekly/monthly, since those never show up in `pendingToday` before
+    // their actual due date. Deliberately ignores DateExemptions the same
+    // way `roundComplianceStatus` does for weekly/monthly (see
+    // roundIgnoresDateExemptions) — a period report reminds on schedule
+    // whether or not the due date lands on a holiday or someone's leave.
+    for (const topic of topics) {
+      const namesRound = effectiveRoundsOf(topic).length > 1;
+      for (const round of effectiveRoundsOf(topic)) {
+        const leadOptions = topic.remindBeforeCutoffMinutes != null ? [topic.remindBeforeCutoffMinutes] : settings.report.leadMinutes;
+        const dayLeads = [...new Set(leadOptions.filter((m) => m >= DAY_MINUTES && m % DAY_MINUTES === 0).map((m) => m / DAY_MINUTES))];
+        if (dayLeads.length === 0) continue;
+        const roundPhrase = namesRound ? ` "${round.label}"` : "";
+        for (const dayLead of dayLeads) {
+          const targetDate = addDays(today, dayLead);
+          if (!roundRunsOnDay(round, targetDate)) continue;
+          const recipients = resolveRoundSubmitters(round, topic.visibility, groups);
+          if (recipients.length === 0) continue;
+          if (settings.report.notifyPending) {
+            for (const userId of recipients) {
+              const key = `report-day:${topic.id}:${round.id}:${targetDate}:${userId}:${dayLead}`;
+              if (alreadySent.has(key)) continue;
+              newSentKeys.push(key);
+              notifications.push({
+                recipients: [userId],
+                byUserId: SYSTEM_USER_ID,
+                message: `รีพอต${roundPhrase} ห้อง "${topic.name}" ใกล้ถึงกำหนดส่งในอีก ${dayLead} วัน (${targetDate})`,
+                link: `/report-task/report-feed?topic=${topic.id}`,
+              });
+            }
+          }
+          if (settings.report.notifyManagerSummary) {
+            const summaryKey = `report-day-summary:${topic.id}:${round.id}:${targetDate}:${dayLead}`;
+            if (!alreadySent.has(summaryKey)) {
+              newSentKeys.push(summaryKey);
+              const headIds = new Set<string>();
+              for (const d of departments) {
+                if (topic.visibility?.departmentIds?.includes(d.id)) headIds.add(d.headId);
+              }
+              for (const u of users) {
+                if (isOwner(u.id)) headIds.add(u.id);
+              }
+              if (headIds.size > 0) {
+                notifications.push({
+                  recipients: [...headIds],
+                  byUserId: SYSTEM_USER_ID,
+                  message: `ห้อง "${topic.name}" มีรีพอต${roundPhrase} ถึงกำหนดส่งในอีก ${dayLead} วัน (${targetDate}) — ${recipients.length} คนต้องส่ง`,
+                  link: `/report-task/report-feed?topic=${topic.id}`,
+                });
+              }
             }
           }
         }
