@@ -1837,39 +1837,27 @@ export function TopicSidebar({
                     ) : null}
                   </div>
                 ) : (
+                  // Read-only now, on purpose — this used to be an editable
+                  // picker with the full list of topics to move to that had
+                  // no cycle guard of its own (unlike drag reorder, which
+                  // does), so choosing one of this topic's own descendants
+                  // as its new parent was a real, reachable way to hang the
+                  // whole tab. Moving a topic between parents now happens
+                  // only through the sidebar's own drag reorder (see the ⠿
+                  // "จัดลำดับห้อง" button), which already checks for exactly
+                  // that — one place that can move a topic, one place that
+                  // has to stay safe, instead of two ("อยากให้แค่เก็บข้อมูลพอ
+                  // ให้ไปย้ายที่ตรงที่ลากให้ก่อนหน้าเป็นหลัก เพราะมันจะได้ใช้
+                  // งานได้ง่ายกว่า").
                   canPickParent && parentOptions.length > 0 && (
                     <div className="space-y-1.5">
                       <Label className="text-xs text-[var(--ink-soft)]">หัวข้อนี้อยู่ภายใต้หัวข้อหลักไหน?</Label>
-                      <Select value={parentId ?? "none"} onValueChange={(v) => setParentId(!v || v === "none" ? undefined : v)}>
-                        <SelectTrigger className="w-full">
-                          <SelectValue>{parentId ? topics.find((t) => t.id === parentId)?.name : "ไม่มี (หัวข้อนี้เป็นหัวข้อหลักเอง)"}</SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">ไม่มี (หัวข้อนี้เป็นหัวข้อหลักเอง)</SelectItem>
-                          {topLevelParentOptions.length > 0 && (
-                            <SelectGroup>
-                              <SelectLabel>หัวข้อหลัก</SelectLabel>
-                              {topLevelParentOptions.map((t) => (
-                                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                              ))}
-                            </SelectGroup>
-                          )}
-                          {subParentOptions.length > 0 && (
-                            <SelectGroup>
-                              <SelectLabel>หัวข้อย่อย (เลือกแล้วจะได้หัวข้อย่อยซ้อนอีกชั้น)</SelectLabel>
-                              {subParentOptions.map((t) => {
-                                const grandparent = t.parentId ? topics.find((p) => p.id === t.parentId) : undefined;
-                                return (
-                                  <SelectItem key={t.id} value={t.id}>
-                                    {t.name}
-                                    {grandparent ? ` (ย่อยของ ${grandparent.name})` : ""}
-                                  </SelectItem>
-                                );
-                              })}
-                            </SelectGroup>
-                          )}
-                        </SelectContent>
-                      </Select>
+                      <p className="rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] px-3 py-2 text-[13px] text-[var(--ink)]">
+                        {parentId ? topics.find((t) => t.id === parentId)?.name : "ไม่มี (หัวข้อนี้เป็นหัวข้อหลักเอง)"}
+                      </p>
+                      <p className="text-[11px] text-[var(--ink-soft)]">
+                        จะย้ายหัวข้อนี้ไปที่อื่น ปิดหน้าต่างนี้แล้วลากในแถบข้าง (ปุ่ม ⠿ &quot;จัดลำดับห้อง&quot;) แทน
+                      </p>
                     </div>
                   )
                 )}
