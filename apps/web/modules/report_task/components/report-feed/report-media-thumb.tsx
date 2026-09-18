@@ -39,7 +39,7 @@ export function ReportMediaThumb({
     // เป็นการ์ดไอคอน
     if (media.thumbUrl) {
       // eslint-disable-next-line @next/next/no-img-element
-      return <img src={media.thumbUrl} alt={alt ?? media.name} className={className} />;
+      return <img src={media.thumbUrl} alt={alt ?? media.name} className={className} loading="lazy" decoding="async" />;
     }
     return <ReportFileChip media={media} variant={fileChipVariant} className={className} />;
   }
@@ -54,6 +54,7 @@ export function ReportMediaThumb({
       </span>
     );
   }
+  // lazy: thumbnails in long chat/file lists shouldn't all download up front.
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={src} alt={alt ?? media.name} className={className} />;
+  return <img src={src} alt={alt ?? media.name} className={className} loading="lazy" decoding="async" />;
 }

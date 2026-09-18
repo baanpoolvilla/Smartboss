@@ -31,8 +31,30 @@ const S3_REGION = process.env.S3_REGION || "auto"; // R2 ใช้ "auto"
 const S3_ACCESS_KEY_ID = process.env.S3_ACCESS_KEY_ID;
 const S3_SECRET_ACCESS_KEY = process.env.S3_SECRET_ACCESS_KEY;
 
-/** อายุ presigned URL — สั้นพอที่ลิงก์หลุดไปแล้วใช้ต่อไม่ได้ แต่ยาวพอให้โหลดแกลเลอรีจบ */
-const SIGNED_URL_TTL_SECONDS = 300;
+/**
+ * presigned URL เซ็นแบบ "ช่วงเวลาคงที่" แทนเวลาปัจจุบัน — ลายเซ็นมีเวลาที่เซ็นฝังอยู่
+ * ถ้าเซ็นด้วย "ตอนนี้" ลิงก์จะไม่ซ้ำกันเลยทุกครั้งที่ขอ เบราว์เซอร์เลยมองว่าเป็นรูปใหม่
+ * แล้วโหลดจาก S3 ใหม่หมดทุกครั้งที่เปิด/สลับหน้า ("รูปโหลดมาแสดงช้าจัง")
+ * เซ็นด้วยต้นชั่วโมงแทน ⇒ ลิงก์เดิมทั้งชั่วโมง ⇒ cache ของเบราว์เซอร์ใช้ได้
+ *
+ * อายุลิงก์ = ช่วง + ส่วนเผื่อ ⇒ ไม่ว่าจะขอตอนไหนของช่วง ลิงก์ยังเหลืออายุ
+ * อย่างน้อยเท่าส่วนเผื่อ (เท่ากับอายุ 5 นาทีเดิม) ส่วนลิงก์ที่หลุดออกไปใช้ได้นานสุด
+ * ~1 ชม. 5 นาที แทน 5 นาที — ยังต้องผ่าน /api/files (login + ตรวจบริษัท) ก่อนถึงจะได้ลิงก์
+ */
+const SIGNED_URL_WINDOW_SECONDS = 3600;
+const SIGNED_URL_GRACE_SECONDS = 300;
+
+function signedUrlWindowStart(nowMs = Date.now()): number {
+  const windowMs = SIGNED_URL_WINDOW_SECONDS * 1000;
+  return Math.floor(nowMs / windowMs) * windowMs;
+}
+
+/** วินาทีที่เหลือก่อนขึ้นช่วงใหม่ (ลิงก์จะเปลี่ยน) — ให้ /api/files ใช้เป็นอายุ cache
+ * ของ redirect เพื่อให้ทั้งช่วงเบราว์เซอร์ไม่ต้องวิ่งกลับมาถามเซิร์ฟเวอร์ซ้ำ */
+export function signedUrlCacheSeconds(nowMs = Date.now()): number {
+  const end = signedUrlWindowStart(nowMs) + SIGNED_URL_WINDOW_SECONDS * 1000;
+  return Math.max(0, Math.floor((end - nowMs) / 1000));
+}
 
 const IMG_EXT = new Set(["jpg", "jpeg", "png", "webp", "heic", "gif"]);
 
@@ -201,7 +223,10 @@ export async function getSignedFileUrl(
         ? { ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(opts.downloadFileName)}` }
         : {}),
     }),
-    { expiresIn: SIGNED_URL_TTL_SECONDS }
+    {
+      signingDate: new Date(signedUrlWindowStart()),
+      expiresIn: SIGNED_URL_WINDOW_SECONDS + SIGNED_URL_GRACE_SECONDS,
+    }
   );
 }
 

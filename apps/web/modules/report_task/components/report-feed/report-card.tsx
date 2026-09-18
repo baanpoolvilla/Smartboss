@@ -2181,6 +2181,11 @@ function PostImageThumb({
           <img
             src={isDoc ? img.thumbUrl : (img.url ?? img.dataUrl)}
             alt={img.name}
+            // Only fetch once it's near the viewport — without this every
+            // image of every post in the feed downloaded at once on open,
+            // starving the ones actually on screen ("รูปโหลดมาแสดงช้าจัง").
+            loading="lazy"
+            decoding="async"
             onLoad={(e) => {
               if (fitToImage) setRatio(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight);
             }}

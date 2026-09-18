@@ -533,7 +533,7 @@ export function ReportImageLightbox({
                       <video src={img.url ?? img.dataUrl} muted playsInline preload="metadata" className="h-full w-full object-cover" />
                     ) : (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={img.url ?? img.dataUrl} alt="" className="h-full w-full object-cover" />
+                      <img src={img.url ?? img.dataUrl} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
                     )}
                   </button>
                 );

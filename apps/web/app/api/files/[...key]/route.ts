@@ -5,6 +5,7 @@ import {
   getSignedFileUrl,
   readStoredFile,
 } from "@/modules/maintenance/lib/storage";
+import { signedUrlCacheSeconds } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
@@ -74,7 +75,10 @@ export async function GET(
     return NextResponse.redirect(signedUrl, {
       status: 302,
       // private = ห้าม CDN/proxy ร่วมกันแคช (response นี้ผ่าน auth มาแล้ว)
-      headers: { "Cache-Control": "private, max-age=60" },
+      // อายุ cache = เวลาที่เหลือจนลิงก์ S3 เปลี่ยน (ดู signedUrlCacheSeconds) —
+      // เดิม 60 วิ ทำให้เปิดหน้าซ้ำ/สลับกลับมาเกิน 1 นาที รูปทุกใบต้องวิ่งมาที่
+      // server ใหม่หมด ทั้งที่ลิงก์ปลายทางยังเป็นอันเดิมทั้งชั่วโมง
+      headers: { "Cache-Control": `private, max-age=${Math.max(60, signedUrlCacheSeconds())}` },
     });
   }
 
