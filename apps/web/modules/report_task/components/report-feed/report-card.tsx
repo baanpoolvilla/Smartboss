@@ -446,6 +446,12 @@ export function ReportCard({
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleteReplyTarget, setDeleteReplyTarget] = useState<string | null>(null);
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
+  // Which emoji's reactor list is open (Discord-style "who reacted" popup —
+  // "คลิกเพื่อเข้าไปดูว่าใครกดมาได้ประมานของดิสครอด"). Adding a reaction still
+  // goes through the picker button above; clicking an existing pill now opens
+  // this list instead of silently toggling, so removing your own reaction is
+  // a deliberate "ยกเลิก" inside the list, not an easy-to-misclick same-spot tap.
+  const [reactionListEmoji, setReactionListEmoji] = useState<string | null>(null);
   const [pendingSticker, setPendingSticker] = useState<Sticker | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   // "อันไหนใช้งานบ่อยก็เด้งมาข้างหน้า" — per-browser usage tally (see
@@ -558,6 +564,8 @@ export function ReportCard({
   const activeReactions = reactionEmojis
     .map((emoji) => ({ emoji, users: post.reactions[emoji] ?? [] }))
     .filter((r) => r.users.length > 0);
+  const reactionListUsers = activeReactions.find((r) => r.emoji === reactionListEmoji)?.users ?? [];
+  const viewerInReactionList = reactionListEmoji !== null && reactionListUsers.includes(viewingAsUserId);
 
   // Teams-style collapsed thread summary ("การตอบกลับ 2 รายการ จาก Waratta-Nok
   // และ Kenika-bell") — asked for explicitly after a Teams screenshot showed
@@ -1360,16 +1368,16 @@ export function ReportCard({
             return (
               <button
                 key={emoji}
-                onClick={() => toggleReaction(post.id, emoji, viewingAsUserId)}
+                onClick={() => setReactionListEmoji(emoji)}
                 className={cn(
-                  "flex items-center gap-1 rounded-full px-2 py-0.5 text-xs border transition-colors",
+                  "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm border transition-colors",
                   active
                     ? "bg-[var(--accent)] border-[var(--brand-green)]/40 text-[var(--brand-green-dark)]"
                     : "border-[var(--line)] text-[var(--ink-soft)] hover:bg-white"
                 )}
               >
-                <span>{emoji}</span>
-                <span className="tabular-nums">{users.length}</span>
+                <span className="text-base leading-none">{emoji}</span>
+                <span className="tabular-nums font-medium">{users.length}</span>
               </button>
             );
           })}
@@ -1418,6 +1426,66 @@ export function ReportCard({
           })}
         </div>
       )}
+
+      {/* Discord-style "who reacted" popup — opened by clicking a reaction
+          pill above. A tab per emoji the post actually has (skips straight
+          to the one clicked), the reactor list under it, and — only when the
+          viewer is one of them — a "ยกเลิก" button up top next to the close X
+          to remove their own reaction right from here, instead of the plain
+          toggle-on-click this replaced. */}
+      <Dialog open={reactionListEmoji !== null} onOpenChange={(open) => !open && setReactionListEmoji(null)}>
+        <DialogContent className="sm:max-w-xs">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between pr-6">
+              รีแอคชั่น
+              {viewerInReactionList && reactionListEmoji !== null && (
+                <button
+                  onClick={() => {
+                    toggleReaction(post.id, reactionListEmoji, viewingAsUserId);
+                    setReactionListEmoji(null);
+                  }}
+                  className="text-xs font-medium text-[var(--chart-red)] hover:underline"
+                >
+                  ยกเลิก
+                </button>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          {activeReactions.length > 1 && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {activeReactions.map(({ emoji, users }) => (
+                <button
+                  key={emoji}
+                  onClick={() => setReactionListEmoji(emoji)}
+                  className={cn(
+                    "flex items-center gap-1 rounded-full px-2 py-0.5 text-xs border transition-colors",
+                    emoji === reactionListEmoji
+                      ? "bg-[var(--accent)] border-[var(--brand-green)]/40 text-[var(--brand-green-dark)]"
+                      : "border-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+                  )}
+                >
+                  <span>{emoji}</span>
+                  <span className="tabular-nums">{users.length}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="space-y-1 max-h-72 overflow-y-auto">
+            {reactionListUsers.map((userId) => {
+              const u = getUser(userId);
+              return (
+                <div key={userId} className="flex items-center gap-2.5 rounded-lg px-1.5 py-1.5">
+                  <Avatar className="h-8 w-8 shrink-0">
+                    <AvatarImage src={u?.avatarUrl ?? undefined} alt={u?.name} />
+                    <AvatarFallback className="text-xs bg-[var(--accent)] text-[var(--brand-green-dark)]">{u?.avatar}</AvatarFallback>
+                  </Avatar>
+                  <span className="text-sm font-medium truncate">{u?.name ?? userId}</span>
+                </div>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Existing replies stay visible inline (Teams shows them straight
           under the post, same as it always has) — only the *compose box*

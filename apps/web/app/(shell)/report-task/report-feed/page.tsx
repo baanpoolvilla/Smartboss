@@ -205,7 +205,13 @@ function ReportFeedPageInner() {
     // children left, same way it'd never have been shown with zero children
     // to begin with. A non-category parent (still directly postable on its
     // own) is untouched even if all its children happen to be hidden.
-    return bySelfVisibility.filter((t) => !t.isCategory || bySelfVisibility.some((c) => c.parentId === t.id));
+    //
+    // A room manager (canManageTopics) is the exception — a dead, childless
+    // category is exactly the kind of thing they need to FIND in order to
+    // clean it up (delete it, or give it a child again), so hiding it from
+    // them defeats the point of letting them see every room in the first
+    // place. Everyone else still never sees a header with nothing under it.
+    return bySelfVisibility.filter((t) => canManageTopics || !t.isCategory || bySelfVisibility.some((c) => c.parentId === t.id));
   }, [topics, viewingAsUserId, employees, departments, canManageTopics]);
   const searchParams = useSearchParams();
   // A pasted "copy link" (?topic=&post=) opens straight to the right room +

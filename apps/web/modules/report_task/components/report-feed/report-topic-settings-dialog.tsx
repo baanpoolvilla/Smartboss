@@ -251,8 +251,20 @@ export function ReportTopicSettingsPanel({
   // ห้องที่ตั้ง visibility แบบเฉพาะบุคคล/ผู้จัดการเท่านั้น หลุดผ่าน canEditReportTopic
   // มาโผล่ในลิสต์นี้ได้ทั้งที่แถบข้างไม่โชว์เลย ("test ในหัวข้อหลัก แต่ทำไมหน้า
   // เว็ปไม่แสดง") — ต้องผ่านทั้งคู่ ให้ตรงกับสิ่งที่ผู้ใช้เห็นในแถบข้างจริงๆ
+  //
+  // ยังไม่พอจริงๆ — "test" ที่ยังโผล่ (แม้หลังแก้ข้อบน) ไม่ใช่ปัญหาสิทธิ์เลย แต่
+  // เป็นหัวข้อหลักแบบ "ห้องใหม่แยกอิสระ" (isCategory: true) ที่ไม่มีห้องย่อยอยู่
+  // ข้างใต้แล้ว — ตัวมันเองกดแชทไม่ได้ตั้งแต่ต้น ("หัวข้อหลักไว้จัดหมวดหมู่
+  // เท่านั้น กดแชทเองไม่ได้") แถบข้างเลยซ่อนหัวข้อแบบนี้อัตโนมัติเมื่อไม่มีลูกให้
+  // จัดหมวดแล้ว (ดู visibleTopics ใน report-feed/page.tsx) — คัดลอกรอบส่งไปที่
+  // นี่ไม่มีทางทำได้จริงอยู่แล้ว ต้องกันออกจากลิสต์นี้ตรงๆ ไม่ใช่แค่พึ่งสิทธิ์มองเห็น
   const copyTargets = allTopics.filter(
-    (t) => t.id !== topic.id && !t.archived && canSeeReportTopic(t.visibility, viewingAsUserId) && canEditReportTopic(t.visibility, viewingAsUserId)
+    (t) =>
+      t.id !== topic.id &&
+      !t.archived &&
+      !t.isCategory &&
+      canSeeReportTopic(t.visibility, viewingAsUserId) &&
+      canEditReportTopic(t.visibility, viewingAsUserId)
   );
   // จัดกลุ่มตามหัวข้อแม่ให้เห็นชัดว่าห้องไหนอยู่ตรงไหน ("แยกหมวดหมู่ให้ชัดเจน
   // หน่อย") แทนลิสต์แบนที่แค่ต่อชื่อห้องแม่ท้ายชื่อ — และตอบคำถาม "ทำไม test
