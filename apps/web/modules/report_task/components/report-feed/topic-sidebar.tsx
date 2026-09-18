@@ -642,22 +642,23 @@ export function TopicSidebar({
     visibility: editor?.mode === "edit" ? editor.topic.visibility : undefined,
   };
 
-  // Favorites are per-viewer (favoritedBy), not a global pin — split into
-  // their own section above the rest so the rooms someone cares about most
-  // don't get lost scrolling past everything else. Hierarchy only applies
-  // within "the rest" — a favorited sub-topic surfaces on its own up top,
-  // Teams-style quick access, rather than dragging its parent team along.
+  // Favorites are per-viewer (favoritedBy), not a global pin — a favorited
+  // topic gets a pinned DUPLICATE row up top for quick access, but its real
+  // position in the "หัวข้อของฉัน" tree never moves. Earlier this removed a
+  // favorited topic from the tree entirely, which meant favoriting a PARENT
+  // orphaned every one of its children — each one suddenly popped out to its
+  // own top-level row with no parent to nest under, reading as everything
+  // shuffling around at random ("ห้องแม่ห้องลูกขยับมั่วซั่ว") for something
+  // that was only ever supposed to add a shortcut. The tree below is now
+  // always built from every topic, favorited or not, so nothing can ever be
+  // pulled out from under its parent by starring it.
   const favoriteTopics = topics.filter((t) => t.favoritedBy?.includes(viewingAsUserId)).sort(byOrder);
-  const restTopics = topics.filter((t) => !t.favoritedBy?.includes(viewingAsUserId));
-  // A sub-topic whose parent didn't make it into `restTopics` (favorited or
-  // deleted) has nothing to nest under here, so it renders as its own
-  // top-level row instead of vanishing.
-  const topLevelRestTopics = restTopics.filter((t) => isTopLevel(t) || !restTopics.some((p) => p.id === t.parentId)).sort(byOrder);
+  const topLevelTopics = topics.filter((t) => isTopLevel(t) || !topics.some((p) => p.id === t.parentId)).sort(byOrder);
   // A sub-topic the viewer hid (Teams' "hide channel") stays in the tree —
   // dimmed, see below — rather than disappearing with no way back to it
   // short of a link from somewhere else. Its own "..." menu (renderTopicRow)
   // toggles it back on directly.
-  const childrenOf = (parentId: string) => restTopics.filter((t) => t.parentId === parentId).sort(byOrder);
+  const childrenOf = (parentId: string) => topics.filter((t) => t.parentId === parentId).sort(byOrder);
 
   // Discord-style notify preference, per room per viewer: "all" (default —
   // every new post lights the room up), "mentions" (only @you does), or "off"
@@ -1392,10 +1393,10 @@ export function TopicSidebar({
         <div className="my-3 border-t border-[var(--line)]/50" />
           </>
         )}
-        {topLevelRestTopics.length > 0 && (
+        {topLevelTopics.length > 0 && (
           <p className="px-2.5 pt-1 pb-1 text-[11px] font-semibold text-[var(--ink-soft)] uppercase tracking-wide">หัวข้อของฉัน</p>
         )}
-        {topLevelRestTopics.map(renderTopicBranch)}
+        {topLevelTopics.map(renderTopicBranch)}
 
         {topics.length === 0 && (
           <p className="text-xs text-[var(--ink-soft)] px-2.5 py-3">ยังไม่มีหัวข้อ กด + หัวข้อใหม่ เพื่อเริ่มต้น</p>
