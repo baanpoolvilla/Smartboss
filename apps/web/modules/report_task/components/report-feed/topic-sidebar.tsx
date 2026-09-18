@@ -604,31 +604,25 @@ export function TopicSidebar({
         byUserId: viewingAsUserId,
       });
       // Fixed literal names (never derived from the new topic's own name) —
-      // matches the hand-built reference this mirrors exactly (General
-      // Worker > a-talk, daily-report > weekly-report, monthly-report). The
-      // requested default is "always," not opt-in: unwanted rooms get
-      // deleted same as any other room, and more can be added the normal
-      // way if these aren't enough.
+      // matches the hand-built reference this mirrors (General Worker >
+      // daily-report > weekly-report, monthly-report). The requested
+      // default is "always," not opt-in: unwanted rooms get deleted same as
+      // any other room, and more can be added the normal way if these
+      // aren't enough. No more auto "a-talk" alongside it — just the report
+      // structure itself ("เวลาสร้างหัวข้อใหม่ให้เอา a-talk ออกเลย เอาเหลือไว้
+      // แค่ report").
       //
       // Only a depth-0 ("main") topic gets the auto-scaffold — it's a pure
       // category (isCategory, can't hold posts of its own, see above), so
       // creating one bare would leave it with nothing to actually open;
       // it has two tiers of room left under the 3-tier cap (topicDepth's own
-      // doc) for the full nested shape: a-talk and daily-report one tier
-      // down, weekly-report/monthly-report nested a further tier under
-      // daily-report. A "sub"/"subsub" topic IS itself a real, postable room
-      // the moment it's created — auto-filling it with three more rooms
-      // nobody asked for was never wanted there ("ไม่ต้องสร้างแบบนี้สิ เอาแค่
-      // สร้างห้องนั้นมาเลย"), it only made sense for the category case above.
+      // doc) for the full nested shape: daily-report one tier down,
+      // weekly-report/monthly-report nested a further tier under it. A
+      // "sub"/"subsub" topic IS itself a real, postable room the moment
+      // it's created — auto-filling it with more rooms nobody asked for was
+      // never wanted there ("ไม่ต้องสร้างแบบนี้สิ เอาแค่สร้างห้องนั้นมาเลย"),
+      // it only made sense for the category case above.
       if (createKind === "main") {
-        addTopic({
-          name: "a-talk",
-          color,
-          parentId: id,
-          visibility: parentVisibility,
-          feedViewMode: feedViewMode === "stream" ? undefined : "threads",
-          byUserId: viewingAsUserId,
-        });
         const dailyId = addTopic({
           name: "daily-report",
           color,
@@ -1722,12 +1716,12 @@ export function TopicSidebar({
                     {createKind === "main" ? (
                       // Set expectations up front — a top-level topic is a
                       // category to organize sub-topics under, not a room in
-                      // its own right, but it's never left empty: "a-talk"
-                      // and "daily-report" (itself holding "weekly-report"/
-                      // "monthly-report") come along automatically (delete
-                      // any of them after if unwanted).
+                      // its own right, but it's never left empty: "daily-report"
+                      // (itself holding "weekly-report"/"monthly-report") comes
+                      // along automatically (delete any of them after if
+                      // unwanted). No more "a-talk" alongside it.
                       <p className="text-[11px] text-[var(--ink-soft)]">
-                        หัวข้อหลักไว้จัดหมวดหมู่เท่านั้น กดแชทเองไม่ได้ — มาพร้อมห้องย่อย "a-talk" และ "daily-report" (ที่มี "weekly-report"/"monthly-report" ซ้อนอยู่ข้างใน) ให้อัตโนมัติ
+                        หัวข้อหลักไว้จัดหมวดหมู่เท่านั้น กดแชทเองไม่ได้ — มาพร้อมห้องย่อย &quot;daily-report&quot; (ที่มี &quot;weekly-report&quot;/&quot;monthly-report&quot; ซ้อนอยู่ข้างใน) ให้อัตโนมัติ
                       </p>
                     ) : createKind === "sub" ? (
                       <div className="space-y-1.5">
