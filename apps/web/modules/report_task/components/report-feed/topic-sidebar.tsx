@@ -1497,18 +1497,28 @@ export function TopicSidebar({
                         picker below now only ever lists options at the one
                         tier that button actually means. */}
                     <Label className="text-xs text-[var(--ink-soft)]">สร้างห้องแบบไหน</Label>
-                    <div className="grid grid-cols-3 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setCreateKind("main")}
-                        className={cn(
-                          "flex flex-col items-center gap-1 rounded-lg border px-1.5 py-2.5 text-center transition-colors",
-                          createKind === "main" ? "border-[var(--brand-green)] bg-[var(--accent)]" : "border-[var(--line)] hover:bg-[var(--bg-soft)]"
-                        )}
-                      >
-                        <Hash className="h-4 w-4" />
-                        <span className="text-xs font-medium">ห้องใหม่แยกอิสระ</span>
-                      </button>
+                    <div className={cn("grid gap-2", quickCreateParentId ? "grid-cols-2" : "grid-cols-3")}>
+                      {/* Opened via a specific topic's own + (quickCreateParentId
+                          set) — "ห้องใหม่แยกอิสระ" doesn't belong here at all: a
+                          brand-new independent top-level topic has nothing to do
+                          with the topic you clicked + on, and offering it just
+                          invites picking the wrong tab by habit. That flow lives
+                          only behind the top-right "+ หัวข้อใหม่" button now
+                          ("อยากสร้างหัวข้อใหม่ให้สร้างที่ + หัวข้อใหม่บนขวาเท่านั้น
+                          ลดการสับสน"). */}
+                      {!quickCreateParentId && (
+                        <button
+                          type="button"
+                          onClick={() => setCreateKind("main")}
+                          className={cn(
+                            "flex flex-col items-center gap-1 rounded-lg border px-1.5 py-2.5 text-center transition-colors",
+                            createKind === "main" ? "border-[var(--brand-green)] bg-[var(--accent)]" : "border-[var(--line)] hover:bg-[var(--bg-soft)]"
+                          )}
+                        >
+                          <Hash className="h-4 w-4" />
+                          <span className="text-xs font-medium">ห้องใหม่แยกอิสระ</span>
+                        </button>
+                      )}
                       <button
                         type="button"
                         disabled={topLevelParentOptions.length === 0}

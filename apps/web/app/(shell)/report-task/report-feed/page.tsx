@@ -25,7 +25,8 @@ import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { useDepartmentStore } from "@/modules/report_task/store/department-store";
 import { users } from "@/modules/report_task/lib/directory";
 import { cn } from "@/modules/report_task/lib/utils";
-import { canEditReportTopic, canSeeReportTopic } from "@/modules/report_task/lib/permissions";
+import { canEditReportTopic, canManageReportTopics, canSeeReportTopic } from "@/modules/report_task/lib/permissions";
+import { useSettingsAccessStore } from "@/modules/report_task/store/settings-access-store";
 import { topicModeOf } from "@/modules/report_task/lib/report-topic-membership";
 import { RoomMembersDialog } from "@/modules/report_task/components/report-feed/room-members-dialog";
 import { currentCutoff, cutoffsOnDay } from "@/modules/report_task/lib/report-cutoff";
@@ -180,11 +181,21 @@ function ReportFeedPageInner() {
   // ตัวกรองจะไม่คำนวณใหม่ → ห้องที่ผูกแผนกหายค้างจนกว่าจะรีเฟรช (race)
   const employees = useEmployeeStore((s) => s.employees);
   const departments = useDepartmentStore((s) => s.departments);
+  const settingsGrants = useSettingsAccessStore((s) => s.grants);
+  // Whoever can create/delete rooms company-wide (owner, or explicitly
+  // delegated the "reportTopics" section — same narrow, owner-level trust
+  // circle canManageReportTopics already gates that with) also needs to be
+  // able to FIND every room to administer it — a room scoped to "เฉพาะบุคคล"/
+  // "เฉพาะผู้จัดการ" that excludes this viewer personally was invisible in
+  // their own sidebar even though they could still edit/delete it via the
+  // copy-targets list or a direct link, with no way to get there
+  // ("ให้มันแสดงให้หน่อย เดี๋ยวผมจะลบเอง — มันรก").
+  const canManageTopics = canManageReportTopics(viewingAsUserId, settingsGrants);
   // Rooms can be scoped to a department or to managers only — filter once
   // here and hand the same list to the sidebar, so the two never disagree
   // about which rooms exist for this viewer.
   const visibleTopics = useMemo(() => {
-    const bySelfVisibility = topics.filter((t) => canSeeReportTopic(t.visibility, viewingAsUserId));
+    const bySelfVisibility = topics.filter((t) => canManageTopics || canSeeReportTopic(t.visibility, viewingAsUserId));
     // A pure category (isCategory) never has visibility rules of its own —
     // it's just an organizing header, so it always passes the filter above
     // even when every one of its children got filtered out individually
@@ -195,7 +206,7 @@ function ReportFeedPageInner() {
     // to begin with. A non-category parent (still directly postable on its
     // own) is untouched even if all its children happen to be hidden.
     return bySelfVisibility.filter((t) => !t.isCategory || bySelfVisibility.some((c) => c.parentId === t.id));
-  }, [topics, viewingAsUserId, employees, departments]);
+  }, [topics, viewingAsUserId, employees, departments, canManageTopics]);
   const searchParams = useSearchParams();
   // A pasted "copy link" (?topic=&post=) opens straight to the right room +
   // post — read once as the initial state, kept in sync afterward by the

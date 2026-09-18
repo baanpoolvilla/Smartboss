@@ -14,7 +14,7 @@ import { users as allUsers } from "@/modules/report_task/lib/directory";
 import { departments, getUser, isOwner } from "@/modules/report_task/lib/directory";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { topicModeOf } from "@/modules/report_task/lib/report-topic-membership";
-import { canEditReportTopic } from "@/modules/report_task/lib/permissions";
+import { canEditReportTopic, canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { useReminderSettingsStore } from "@/modules/report_task/store/reminder-settings-store";
 import { useRoomSettingsIntroStore } from "@/modules/report_task/store/room-settings-intro-store";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -244,7 +244,16 @@ export function ReportTopicSettingsPanel({
   // ไม่รวมห้องที่เก็บเข้ากรุแล้ว (archived) — เห็นในเมนูจริงก็แค่จางๆ/พับไว้
   // ("เห็นห้องที่ไม่มีในแถบเมนูด้วย") คัดลอกรอบส่งเข้าห้องที่เลิกใช้แล้วไม่มี
   // ประโยชน์อะไร มีแต่จะงงว่าทำไมมีห้องโผล่มาที่หาไม่เจอในแถบข้าง
-  const copyTargets = allTopics.filter((t) => t.id !== topic.id && !t.archived && canEditReportTopic(t.visibility, viewingAsUserId));
+  //
+  // canEditReportTopic เพียงอย่างเดียวไม่พอ — มันเช็คแค่ department-head match
+  // บน departmentIds เท่านั้น ไม่ได้เช็ค userIds/managerOnly เหมือน
+  // canSeeReportTopic ที่แถบข้าง (sidebar) ใช้กรอง `topics` ก่อนส่งลงมา ทำให้
+  // ห้องที่ตั้ง visibility แบบเฉพาะบุคคล/ผู้จัดการเท่านั้น หลุดผ่าน canEditReportTopic
+  // มาโผล่ในลิสต์นี้ได้ทั้งที่แถบข้างไม่โชว์เลย ("test ในหัวข้อหลัก แต่ทำไมหน้า
+  // เว็ปไม่แสดง") — ต้องผ่านทั้งคู่ ให้ตรงกับสิ่งที่ผู้ใช้เห็นในแถบข้างจริงๆ
+  const copyTargets = allTopics.filter(
+    (t) => t.id !== topic.id && !t.archived && canSeeReportTopic(t.visibility, viewingAsUserId) && canEditReportTopic(t.visibility, viewingAsUserId)
+  );
   // จัดกลุ่มตามหัวข้อแม่ให้เห็นชัดว่าห้องไหนอยู่ตรงไหน ("แยกหมวดหมู่ให้ชัดเจน
   // หน่อย") แทนลิสต์แบนที่แค่ต่อชื่อห้องแม่ท้ายชื่อ — และตอบคำถาม "ทำไม test
   // ยังโชว์อยู่" ตรงๆ ในตัว UI เลย: ห้องที่มี parentId แต่หาห้องแม่ไม่เจอ (ห้อง
