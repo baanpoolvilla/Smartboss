@@ -46,7 +46,7 @@ export function roundRunsOnDay(
 
 /** คืน userId ที่ต้องส่ง "รอบนี้" (ยังไม่คิดวัน/วันลา — คิดชั้นบน) */
 export function resolveRoundSubmitters(
-  round: SubmissionRound,
+  round: Pick<SubmissionRound, "submitters">,
   visibility: ReportTopicVisibility | undefined,
   groups: SubmitterGroup[]
 ): string[] {

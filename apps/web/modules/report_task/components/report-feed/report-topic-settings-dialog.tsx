@@ -16,10 +16,100 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { topicModeOf } from "@/modules/report_task/lib/report-topic-membership";
 import { canEditReportTopic } from "@/modules/report_task/lib/permissions";
 import { useReminderSettingsStore } from "@/modules/report_task/store/reminder-settings-store";
+import { useRoomSettingsIntroStore } from "@/modules/report_task/store/room-settings-intro-store";
 import { cn } from "@/modules/report_task/lib/utils";
 import { uuid } from "@/modules/report_task/lib/uuid";
 import { toast } from "sonner";
-import { Check, ClipboardCopy, Clock, Globe, Lock, Pencil, Plus, Trash2, User, Users, UserCheck } from "lucide-react";
+import { Check, ClipboardCopy, Clock, Globe, HelpCircle, Lock, Pencil, Plus, Trash2, TriangleAlert, User, Users, UserCheck, X } from "lucide-react";
+
+/**
+ * แบนเนอร์ต้อนรับ — โผล่อัตโนมัติครั้งแรกที่คนคนนั้นเปิดหน้าตั้งค่าห้อง (ทุกห้อง
+ * นับรวมกัน ไม่แยกต่อห้อง — ดู room-settings-intro-store.ts) สรุปทั้ง 4
+ * หัวข้อที่หน้านี้คุมได้ พร้อมเน้น 2 จุดที่มักสับสน:
+ * "ใครเห็นห้อง" ≠ "รอบส่ง" (เห็นห้องได้ไม่ได้แปลว่าต้องส่ง) และรอบส่งที่แก้ไข
+ * แล้วจะแจ้งเตือนคนที่เกี่ยวข้องอัตโนมัติทันที. กดปิดแล้วไม่โผล่อีก แต่เปิดดูซ้ำ
+ * ได้เสมอผ่านปุ่ม "?" ข้างหัวเรื่อง — ตั้งใจไม่ทำเป็นทัวร์สปอตไลต์แยกต่างหาก
+ * (เคยพิจารณาไว้) เพราะจะพูดเรื่องเดียวกันซ้ำสองรอบ งงกว่าเดิม.
+ */
+function RoomSettingsIntroBanner({ viewingAsUserId }: { viewingAsUserId: string }) {
+  const seenBy = useRoomSettingsIntroStore((s) => s.seenBy);
+  const markSeen = useRoomSettingsIntroStore((s) => s.markSeen);
+  const [forceOpen, setForceOpen] = useState(false);
+  const seen = !!seenBy[viewingAsUserId];
+  const open = forceOpen || !seen;
+
+  return (
+    <div className="flex items-start justify-between gap-2">
+      {!open && (
+        <button
+          type="button"
+          onClick={() => setForceOpen(true)}
+          aria-label="เปิดดูคำอธิบายหน้าตั้งค่าห้องอีกครั้ง"
+          title="หน้านี้ตั้งค่าอะไรได้บ้าง"
+          className="ml-auto flex h-6 w-6 items-center justify-center rounded-full border border-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] shrink-0"
+        >
+          <HelpCircle className="h-3.5 w-3.5" />
+        </button>
+      )}
+      {open && (
+        <div className="w-full rounded-xl border border-[var(--brand-green)]/35 bg-gradient-to-b from-[var(--accent)] to-[var(--accent)]/60 p-3 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-[var(--ink)]">👋 หน้านี้ตั้งค่าได้ 4 อย่าง</span>
+            <button
+              type="button"
+              onClick={() => {
+                markSeen(viewingAsUserId);
+                setForceOpen(false);
+              }}
+              aria-label="ปิดคำอธิบายนี้"
+              className="text-[var(--ink-faint)] hover:text-[var(--ink)] shrink-0"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <ol className="space-y-1.5">
+            <li className="flex gap-1.5 text-[11px] leading-relaxed text-[var(--ink)]">
+              <span className="font-semibold text-[var(--brand-green-dark)] shrink-0">1.</span>
+              <span><b>ใครเห็นห้อง</b> — ใครเปิดเข้ามาอ่านได้</span>
+            </li>
+            <li className="flex gap-1.5 text-[11px] leading-relaxed text-[var(--ink)]">
+              <span className="font-semibold text-[var(--brand-green-dark)] shrink-0">2.</span>
+              <span>
+                <b>รอบส่ง</b> — ใครต้องส่งจริง + กี่โมง{" "}
+                <span className="inline-flex items-center gap-0.5 text-[var(--danger)] font-medium">
+                  <TriangleAlert className="h-3 w-3 shrink-0" />คนละเรื่องกับข้อ 1 นะ
+                </span>{" "}
+                — เห็นห้องได้ไม่ได้แปลว่าต้องส่ง
+              </span>
+            </li>
+            <li className="flex gap-1.5 text-[11px] leading-relaxed text-[var(--ink)]">
+              <span className="font-semibold text-[var(--brand-green-dark)] shrink-0">3.</span>
+              <span><b>แจ้งเตือน</b> — เตือนคนที่ยังไม่ส่งให้อัตโนมัติ</span>
+            </li>
+            <li className="flex gap-1.5 text-[11px] leading-relaxed text-[var(--ink)]">
+              <span className="font-semibold text-[var(--brand-green-dark)] shrink-0">4.</span>
+              <span><b>ปิดรับอัตโนมัติ</b> — ล็อกจริง ส่งไม่ได้เมื่อเลยเวลา</span>
+            </li>
+          </ol>
+          <p className="text-[11px] leading-relaxed text-[var(--ink-soft)]">
+            💡 แก้ข้อ 2 เมื่อไหร่ คนที่เกี่ยวข้องได้รับแจ้งเตือนทันทีอัตโนมัติ
+          </p>
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              onClick={() => {
+                markSeen(viewingAsUserId);
+                setForceOpen(false);
+              }}
+            >
+              เข้าใจแล้ว
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const WD = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 function daysLabel(w?: number[], dayOfMonth?: number): string {
@@ -203,6 +293,7 @@ export function ReportTopicSettingsPanel({
         </div>
       )}
 
+      <RoomSettingsIntroBanner viewingAsUserId={viewingAsUserId} />
 
       <div className="space-y-2">
           <Label className="text-xs text-[var(--ink-soft)]">ใครเห็นห้องนี้ได้บ้าง</Label>
@@ -294,6 +385,9 @@ export function ReportTopicSettingsPanel({
             <p className="text-[11px] text-[var(--ink-soft)]">แยกจาก &quot;ใครเห็นห้อง&quot; — เว้นว่าง = ไม่มีใครต้องส่ง ไม่หัก/ไม่นับ</p>
             <p className="text-[11px] text-[var(--ink-soft)]">
               ป้าย ⏰ &quot;ยังไม่ส่ง&quot; ในแถบข้างเห็นเฉพาะคนที่ต้องส่งรอบนี้จริง + เจ้าของบริษัท + หัวหน้าแผนกของห้อง (ตามสิทธิ) — คนอื่นที่แค่เห็นห้องไม่เห็นป้ายนี้
+            </p>
+            <p className="text-[11px] text-[var(--ink-soft)]">
+              ทุกครั้งที่เพิ่ม/แก้ไข/ลบรอบ ระบบแจ้งเตือนให้อัตโนมัติ — เฉพาะคนที่ได้รับผลกระทบจริง (ถูกเพิ่มเป็นผู้ส่ง/ถูกถอด/เวลาเปลี่ยน) เท่านั้น ไม่ต้องไปบอกเองนอกระบบ
             </p>
           </div>
 
@@ -465,6 +559,7 @@ export function ReportTopicSettingsPanel({
           onOpenChange={setRoundDialogOpen}
           initial={editingRound}
           onSave={saveRound}
+          topicVisibility={visibility}
         />
       </div>
   );

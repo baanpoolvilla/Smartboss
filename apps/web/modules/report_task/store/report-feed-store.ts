@@ -5,8 +5,10 @@ import { extractMentionedIds, mentionMarkersToPlainText } from "@/modules/report
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useActivityLogStore } from "@/modules/report_task/store/activity-log-store";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
+import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { uuid } from "@/modules/report_task/lib/uuid";
 import { legacyRoundsFromCutoffs } from "@/modules/report_task/lib/submission-rounds";
+import { submissionRoundChangeNotices } from "@/modules/report_task/lib/submission-round-notify";
 
 /** Rooms created at/after this pick their `feedViewMode` once in the
  * create-room dialog and can't change it afterward (see that field's own
@@ -678,10 +680,43 @@ export const useReportFeedStore = create<ReportFeedStore>()(
           detail: `ไป${destination ? ` ${destination}` : "หัวข้อหลัก"} ลำดับ ${patch.order}`,
         });
       },
-      updateTopicSettings: (id, patch) =>
+      updateTopicSettings: (id, patch) => {
+        const before = get().topics.find((t) => t.id === id);
         set((s) => ({
           topics: s.topics.map((t) => (t.id === id ? { ...t, ...patch } : t)),
-        })),
+        }));
+        // Anyone whose submission rounds actually changed (added/dropped
+        // from a round, or that round's own time/days/minImages moved under
+        // them) gets told directly — "แจ้งคนที่โดนส่งในเวลานั้นด้วย" — instead
+        // of silently finding out the next time they miss a deadline they
+        // never knew existed. Centralized here (not in the dialogs that call
+        // this) so it fires the same way whether saved from the plain
+        // /settings page or room-settings-sheet.tsx's batched "บันทึก".
+        if (before && patch.submissionRounds !== undefined) {
+          const after = { ...before, ...patch };
+          const notices = submissionRoundChangeNotices(
+            after.name,
+            before.submissionRounds ?? [],
+            after.submissionRounds ?? [],
+            after.visibility,
+            get().submitterGroups
+          );
+          if (notices.length > 0) {
+            const actorId = useIdentityStore.getState().viewingAsUserId;
+            const link = `/report-task/report-feed?topic=${id}`;
+            for (const n of notices) {
+              if (n.userId === actorId) continue; // ไม่ต้องแจ้งคนที่เพิ่งแก้เอง
+              useNotificationStore.getState().notify({
+                userId: n.userId,
+                byUserId: actorId,
+                message: n.message,
+                link,
+                topicName: after.name,
+              });
+            }
+          }
+        }
+      },
       upsertSubmitterGroup: (group) =>
         set((s) => ({
           submitterGroups: s.submitterGroups.some((g) => g.id === group.id)

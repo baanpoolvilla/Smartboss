@@ -9,9 +9,10 @@ import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
 import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { TimePickerField } from "@/modules/report_task/components/shared/time-picker-field";
 import { departments, getDepartment, users } from "@/modules/report_task/lib/directory";
-import { useReportFeedStore, type SubmissionRound, type SubmitterRule } from "@/modules/report_task/store/report-feed-store";
+import { useReportFeedStore, type ReportTopicVisibility, type SubmissionRound, type SubmitterRule } from "@/modules/report_task/store/report-feed-store";
+import { resolveRoundSubmitters } from "@/modules/report_task/lib/submission-rounds";
 import { cn } from "@/modules/report_task/lib/utils";
-import { Globe, Users, Building2, User as UserIcon, Search, Plus, Minus, Check, ImagePlus } from "lucide-react";
+import { Globe, Users, Building2, User as UserIcon, Search, Plus, Minus, Check, ImagePlus, Bell, UserCheck } from "lucide-react";
 import { uuid } from "@/modules/report_task/lib/uuid";
 
 const WEEKDAYS = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
@@ -89,11 +90,16 @@ export function SubmissionRoundDialog({
   onOpenChange,
   initial,
   onSave,
+  topicVisibility,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   initial: SubmissionRound | null;
   onSave: (round: SubmissionRound) => void;
+  /** ใครเห็นห้องนี้ — ใช้คำนวณ &quot;จะมีผลกับใครบ้าง&quot; แบบสดๆ ก่อนกดบันทึก (กล่อง
+   * ด้านล่างฟอร์ม) ต้องส่งมาเสมอแม้เป็น undefined จริงๆ (ห้องเปิดให้ทุกคนเห็น —
+   * undefined คือค่านั้นเอง ไม่ใช่ &quot;ไม่ได้ส่งมา&quot;) เพื่อให้พรีวิวคำนวณได้ถูกต้อง */
+  topicVisibility: ReportTopicVisibility | undefined;
 }) {
   const submitterGroups = useReportFeedStore((s) => s.submitterGroups);
   const upsertSubmitterGroup = useReportFeedStore((s) => s.upsertSubmitterGroup);
@@ -139,13 +145,32 @@ export function SubmissionRoundDialog({
     setNewGroupMembers(new Set());
   }
 
-  function handleSave() {
+  // Shared between handleSave (what actually gets saved) and the live
+  // "จะมีผลกับใคร" preview below — one place building the submitters rule so
+  // the preview can never drift from what saving actually produces.
+  function buildSubmitters(): SubmitterRule {
     const submitters: SubmitterRule = { mode };
     if (mode === "groups") submitters.groupIds = [...groupIds];
     if (mode === "departments") submitters.departmentIds = [...departmentIds];
     if (mode === "people") submitters.userIds = [...peopleIds];
     if (mode !== "people" && addUserIds.size > 0) submitters.addUserIds = [...addUserIds];
     if (removeUserIds.size > 0) submitters.removeUserIds = [...removeUserIds];
+    return submitters;
+  }
+
+  // Live-computed "who does this round actually reach right now" — recalculated
+  // on every keystroke/toggle so an admin sees the real headcount *before*
+  // hitting save, not just a description of the rule they picked
+  // ("ให้คนตั้งค่าใช้งานง่าย" — ไม่ต้องเดาว่าตั้งค่านี้จะกระทบใครบ้าง).
+  const previewSubmitterIds = useMemo(
+    () => resolveRoundSubmitters({ submitters: buildSubmitters() }, topicVisibility, submitterGroups),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [topicVisibility, submitterGroups, mode, groupIds, departmentIds, peopleIds, addUserIds, removeUserIds]
+  );
+  const previewNames = previewSubmitterIds.map((id) => users.find((u) => u.id === id)?.name ?? "?");
+
+  function handleSave() {
+    const submitters = buildSubmitters();
     onSave({
       id: initial?.id ?? `round-${uuid()}`,
       label: label.trim() || "รอบส่ง",
@@ -411,6 +436,32 @@ export function SubmissionRoundDialog({
               <p className="flex items-center gap-1 text-[11px] text-[var(--ink-soft)]"><Check className="h-3 w-3 text-[var(--tone-ok)]" />ยังต้องส่งตามกำหนดแม้วันนั้นตรงกับวันหยุดบริษัทหรือวันลาของคนที่ต้องส่ง</p>
             </div>
           )}
+
+          {/* "จะมีผลกับใคร" — คำนวณสดจากฟอร์มปัจจุบัน (ก่อนกดบันทึกจริง) ตอบ
+              คำถามที่คนตั้งค่ามักเดาไม่ออก: "รอบนี้จะไปเข้ากับใครบ้าง" +
+              เตือนล่วงหน้าว่าคนกลุ่มนี้จะได้รับแจ้งเตือนทันทีที่กดบันทึก (ระบบ
+              แจ้งเตือนจริง ไม่ใช่แค่ข้อความเฉยๆ — ดู updateTopicSettings ใน
+              report-feed-store.ts) เพื่อไม่ให้คนตั้งค่าต้องเดาผลกระทบเอง. */}
+          <div className="rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-2.5 space-y-1.5">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--ink)]">
+              <UserCheck className="h-3.5 w-3.5 text-[var(--tone-ok)]" />
+              รอบนี้จะมีผลกับ {previewSubmitterIds.length} คน
+            </div>
+            {previewNames.length > 0 ? (
+              <p className="text-[11px] text-[var(--ink-soft)]">
+                {previewNames.slice(0, 10).join(", ")}
+                {previewNames.length > 10 ? ` +${previewNames.length - 10} คน` : ""}
+              </p>
+            ) : (
+              <p className="text-[11px] text-[var(--ink-soft)]">ยังไม่มีใครเข้าเงื่อนไขนี้ — เลือก &quot;ใครต้องส่งรอบนี้&quot; ด้านบนก่อน</p>
+            )}
+            {previewSubmitterIds.length > 0 && (
+              <p className="flex items-start gap-1 text-[11px] text-[var(--ink-soft)]">
+                <Bell className="h-3 w-3 shrink-0 mt-0.5 text-[var(--ink-faint)]" />
+                กดบันทึกแล้ว คนกลุ่มนี้ (เฉพาะคนที่เพิ่ม/ถอด/เปลี่ยนเวลา — ไม่ใช่ทุกคน) จะได้รับแจ้งเตือนทันทีว่าตารางส่งของตัวเองเปลี่ยน
+              </p>
+            )}
+          </div>
         </div>
 
         <DialogFooter>
