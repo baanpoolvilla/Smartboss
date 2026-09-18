@@ -17,13 +17,16 @@ function addDays(dayStr: string, n: number): string {
   return localDateStr(d);
 }
 
-/** Which lead-time list applies to this round — a room's own override
- * (`remindBeforeCutoffMinutes`) still wins over everything for every round
- * in that room, same as before. Otherwise picks the company-wide list by
- * the round's own frequency (Daily/Weekly/Monthly each have their own list,
- * see `ReportReminderSettings`) instead of one shared list — a "1 วันก่อน"
- * point added for Weekly shouldn't also fire every day on a Daily round
- * sharing the same room/company. */
+/** Which lead-time list applies to this round. A room's own
+ * `remindBeforeCutoffMinutes`, when set, wins over everything — the
+ * settings UI only ever sets it to `0` now (room-settings-sheet.tsx's
+ * "เตือนก่อนถึงรอบส่ง" switch, muted), which naturally yields zero
+ * notifications below (every lead-check requires `lead > 0`), so this
+ * doubles as the room's mute switch without a separate code path. Otherwise
+ * picks the company-wide list by the round's own frequency (Daily/Weekly/
+ * Monthly each have their own list, see `ReportReminderSettings`) instead of
+ * one shared list — a "1 วันก่อน" point added for Weekly shouldn't also fire
+ * every day on a Daily round sharing the same room/company. */
 function leadMinutesForRound(topic: ReportTopic, round: SubmissionRound, settings: ReminderSettings): number[] {
   if (topic.remindBeforeCutoffMinutes != null) return [topic.remindBeforeCutoffMinutes];
   const freq = roundFrequencyOf(round);

@@ -62,19 +62,6 @@ function ArchiveInfoButton() {
   );
 }
 
-const reminderOptions = [
-  { value: "0", label: "ปิด" },
-  { value: "15", label: "15 นาทีก่อนถึงรอบ" },
-  { value: "30", label: "30 นาทีก่อนถึงรอบ" },
-  { value: "60", label: "60 นาทีก่อนถึงรอบ" },
-  // ระดับ "วัน" — จำเป็นสำหรับรอบรายสัปดาห์/รายเดือน ที่กำหนดส่งไม่ใช่วันนี้
-  // เสมอไป (ดู reminder-sweep.ts ส่วน day-ahead) ห้องที่ override เองต้อง
-  // เลือกระดับวันได้ด้วย ไม่งั้นติดเพดาน 60 นาทีทั้งที่ค่ากลางตั้งเป็นวันได้แล้ว
-  { value: "1440", label: "1 วันก่อนถึงรอบ" },
-  { value: "2880", label: "2 วันก่อนถึงรอบ" },
-  { value: "4320", label: "3 วันก่อนถึงรอบ" },
-];
-
 /** ป้ายไทยของแต่ละช่องที่แก้ได้ในชีทนี้ (รวมช่องที่มาจาก ReportTopicSettingsPanel ด้วย) — ใช้สรุปว่า "แก้อะไรไปบ้าง" ตอน log */
 const FIELD_LABELS: Record<string, string> = {
   name: "ชื่อห้อง",
@@ -263,21 +250,20 @@ export function RoomSettingsSheet({
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)]">การแจ้งเตือน</p>
             {isManager && (
               <>
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-[var(--ink-soft)]">เตือนก่อนถึงรอบส่ง (คนที่ยังไม่ส่ง)</Label>
-                  <Select
-                    value={String(draft.remindBeforeCutoffMinutes ?? 0)}
-                    onValueChange={(v) => v && patchDraft({ remindBeforeCutoffMinutes: Number(v) || undefined })}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue>{reminderOptions.find((o) => o.value === String(draft.remindBeforeCutoffMinutes ?? 0))?.label}</SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {reminderOptions.map((o) => (
-                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <Label className="text-xs text-[var(--ink-soft)]">เตือนก่อนถึงรอบส่ง (คนที่ยังไม่ส่ง)</Label>
+                    <p className="mt-1 text-[11px] text-[var(--ink-soft)]">
+                      {draft.remindBeforeCutoffMinutes === 0
+                        ? "ปิดอยู่ — ห้องนี้ไม่แจ้งเตือนใกล้ถึงกำหนดเลย"
+                        : "ใช้จุดแจ้งเตือนของค่ากลาง (ตั้งค่า ▸ แจ้งเตือนใกล้ถึงกำหนด — แยกรายวัน/สัปดาห์/เดือน)"}
+                    </p>
+                  </div>
+                  <Switch
+                    className="shrink-0"
+                    checked={draft.remindBeforeCutoffMinutes !== 0}
+                    onCheckedChange={(v) => patchDraft({ remindBeforeCutoffMinutes: v ? undefined : 0 })}
+                  />
                 </div>
               </>
             )}

@@ -361,9 +361,15 @@ export interface ReportTopic {
   /** Archived rooms drop out of the sidebar tree and topic pickers but keep
    * their data — recoverable (toggle off), unlike `removeTopic`. */
   archived?: boolean;
-  /** Minutes before the day's last cutoff to remind whoever hasn't posted
-   * yet — undefined/0 = off. Saved for whenever the reminder-delivery sweep
-   * lands; not wired to send anything yet. */
+  /** Per-room override of the report reminder — binary in the UI
+   * (room-settings-sheet.tsx's switch), not a custom time: `undefined` =
+   * follow the company-wide lead-time lists (reminder-settings-store.ts's
+   * `report.leadMinutes`/`weeklyLeadMinutes`/`monthlyLeadMinutes`, per round
+   * frequency), `0` = muted, this room never reminds. Any other stored value
+   * is a leftover from before the per-room custom-minutes picker was removed
+   * (redundant with the company-wide setting) — reminder-sweep.ts still
+   * honors it as a single custom lead time if present, but the UI no longer
+   * offers a way to set one. */
   remindBeforeCutoffMinutes?: number;
   /** Notify the room's managers once a cutoff round closes, summarizing who
    * was late/missing — saved for whenever the delivery sweep lands; not
