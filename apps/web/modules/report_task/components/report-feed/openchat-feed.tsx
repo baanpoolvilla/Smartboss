@@ -136,7 +136,7 @@ export function OpenchatFeed({
   const [uploading, setUploading] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [sending, setSending] = useState(false);
-  const [lightbox, setLightbox] = useState<{ images: ReportPostImage[]; index: number } | null>(null);
+  const [lightbox, setLightbox] = useState<{ images: ReportPostImage[]; index: number; authorId: string; createdAt: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ postId: string; replyId?: string } | null>(null);
   const [editing, setEditing] = useState<{ id: string; body: string } | null>(null);
   const [openReactionFor, setOpenReactionFor] = useState<string | null>(null);
@@ -545,7 +545,7 @@ export function OpenchatFeed({
                               {m.images.map((img, i) => (
                                 <button
                                   key={img.id}
-                                  onClick={() => setLightbox({ images: m.images!, index: i })}
+                                  onClick={() => setLightbox({ images: m.images!, index: i, authorId: m.authorId, createdAt: m.createdAt })}
                                   className="rounded-md overflow-hidden border border-[var(--line)] hover:opacity-90 transition-opacity"
                                 >
                                   <ReportMediaThumb media={img} className="h-32 w-32 object-cover" />
@@ -745,6 +745,7 @@ export function OpenchatFeed({
           index={lightbox.index}
           onIndexChange={(index) => setLightbox((cur) => (cur ? { ...cur, index } : cur))}
           onClose={() => setLightbox(null)}
+          imageMeta={() => ({ authorId: lightbox.authorId, at: lightbox.createdAt })}
         />
       )}
 

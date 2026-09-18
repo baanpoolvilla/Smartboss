@@ -515,7 +515,7 @@ export function ReportCard({
   // count link, or a deep link into a specific reply (see the effects below).
   const [threadOpen, setThreadOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [replyLightbox, setReplyLightbox] = useState<{ images: ReportPostImage[]; index: number } | null>(null);
+  const [replyLightbox, setReplyLightbox] = useState<{ images: ReportPostImage[]; index: number; authorId: string; createdAt: string } | null>(null);
   // Which reply the box is currently answering, if any — shows a quoted
   // reference above the input and tags the new reply with replyToId.
   const [replyingTo, setReplyingTo] = useState<ReportPostReply | null>(null);
@@ -808,8 +808,8 @@ export function ReportCard({
     }
   }
 
-  function openReplyLightbox(images: ReportPostImage[], index: number) {
-    setReplyLightbox({ images, index });
+  function openReplyLightbox(images: ReportPostImage[], index: number, authorId: string, createdAt: string) {
+    setReplyLightbox({ images, index, authorId, createdAt });
   }
 
   // Shared between the hover toolbar's "..." submenu and the touch-only
@@ -1340,6 +1340,7 @@ export function ReportCard({
           index={lightboxIndex}
           onIndexChange={setLightboxIndex}
           onClose={() => setLightboxIndex(null)}
+          imageMeta={() => ({ authorId: post.authorId, at: post.createdAt })}
         />
       )}
 
@@ -1826,6 +1827,7 @@ export function ReportCard({
             index={replyLightbox.index}
             onIndexChange={(index) => setReplyLightbox((cur) => (cur ? { ...cur, index } : cur))}
             onClose={() => setReplyLightbox(null)}
+            imageMeta={() => ({ authorId: replyLightbox.authorId, at: replyLightbox.createdAt })}
           />
         )}
 

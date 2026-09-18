@@ -181,7 +181,10 @@ export function ReportTopicPanels({
    * `?tab=links` deep link (see fileFilterForLegacyTab), "all" otherwise. */
   initialFileFilter?: FileFilter;
 }) {
-  const [lightbox, setLightbox] = useState<{ images: ReportPostImage[]; index: number } | null>(null);
+  // เก็บเป็น FileEntry[] ไม่ใช่ ReportPostImage[] เฉยๆ — อัลบั้ม/แท็บไฟล์รวม
+  // รูปจากคนละโพสต์คนละคนไว้ในลิสต์เดียวกัน imageMeta ของ lightbox ด้านล่าง
+  // เลยต้องมี authorId/createdAt ผูกกับแต่ละรูปแยกกัน ไม่ใช่ค่าเดียวทั้งชุด
+  const [lightbox, setLightbox] = useState<{ items: FileEntry[]; index: number } | null>(null);
   const exemptions = useReportComplianceExemptions();
   // Own local filter, not the global report-feed one (useReportFeedFilterStore)
   // — this panel is scoped to one room's stats tab, so its date window
@@ -355,7 +358,7 @@ export function ReportTopicPanels({
   function imageCell(f: FileEntry, index: number) {
     return (
       <div key={`${f.image.id}-${index}`} className="relative group">
-        <button onClick={() => setLightbox({ images: visibleImages.map((ff) => ff.image), index })} className="block text-left w-full">
+        <button onClick={() => setLightbox({ items: visibleImages, index })} className="block text-left w-full">
           <ReportMediaThumb media={f.image} className="w-full h-24 object-cover rounded-lg border border-[var(--line)] group-hover:opacity-90" />
           <p className="text-xs mt-1 truncate">{f.image.name}</p>
           <p className="text-[11px] text-[var(--ink-soft)] truncate">
@@ -599,7 +602,7 @@ export function ReportTopicPanels({
               {openAlbumFiles.map((f, i) => (
                 <button
                   key={`${f.image.id}-${i}`}
-                  onClick={() => setLightbox({ images: openAlbumFiles.map((ff) => ff.image), index: i })}
+                  onClick={() => setLightbox({ items: openAlbumFiles, index: i })}
                   className="group text-left"
                 >
                   <ReportMediaThumb
@@ -614,10 +617,14 @@ export function ReportTopicPanels({
           )}
           {lightbox && (
             <ReportImageLightbox
-              images={lightbox.images}
+              images={lightbox.items.map((f) => f.image)}
               index={lightbox.index}
               onIndexChange={(index) => setLightbox((cur) => (cur ? { ...cur, index } : cur))}
               onClose={() => setLightbox(null)}
+              imageMeta={(_img, i) => {
+                const f = lightbox.items[i];
+                return f ? { authorId: f.authorId, at: f.createdAt } : null;
+              }}
             />
           )}
           <AlbumFormDialog
@@ -835,10 +842,14 @@ export function ReportTopicPanels({
 
         {lightbox && (
           <ReportImageLightbox
-            images={lightbox.images}
+            images={lightbox.items.map((f) => f.image)}
             index={lightbox.index}
             onIndexChange={(index) => setLightbox((cur) => (cur ? { ...cur, index } : cur))}
             onClose={() => setLightbox(null)}
+            imageMeta={(_img, i) => {
+              const f = lightbox.items[i];
+              return f ? { authorId: f.authorId, at: f.createdAt } : null;
+            }}
           />
         )}
         <AlbumFormDialog

@@ -55,7 +55,7 @@ export function ReportReply({
   flashed?: boolean;
   /** Only the reply's own author gets edit/delete — same "yours only" gate the post itself already applies. */
   isOwn?: boolean;
-  onOpenLightbox: (images: ReportPostImage[], index: number) => void;
+  onOpenLightbox: (images: ReportPostImage[], index: number, authorId: string, createdAt: string) => void;
   onReplyTo: (reply: ReportPostReply) => void;
   /** Scrolls to and flashes whatever `id` (a reply id, or the post id) this reply is quoting. */
   onJumpToQuote: (id: string) => void;
@@ -346,7 +346,7 @@ export function ReportReply({
                 {reply.images.map((img, i) => (
                   <button
                     key={img.id}
-                    onClick={() => onOpenLightbox(reply.images!, i)}
+                    onClick={() => onOpenLightbox(reply.images!, i, reply.authorId, reply.createdAt)}
                     className="rounded-md border border-[var(--line)] overflow-hidden hover:opacity-90 transition-opacity"
                     aria-label={`ดูรูป ${img.name} เต็มจอ`}
                   >

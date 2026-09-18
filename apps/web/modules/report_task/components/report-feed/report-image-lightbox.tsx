@@ -2,10 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/modules/report_task/components/ui/dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import type { ReportPostImage } from "@/modules/report_task/store/report-feed-store";
 import { ReportFileChip } from "@/modules/report_task/components/report-feed/report-file-chip";
 import { fileKindOf, isDocAttachment, isVideoAttachment } from "@/modules/report_task/lib/report-attachment-kind";
-import { ChevronLeft, ChevronRight, Download, Minus, Plus, X } from "lucide-react";
+import { getUser } from "@/modules/report_task/lib/directory";
+import { formatDateTimeFull, formatDateTimeShort } from "@/modules/report_task/lib/format";
+import { toast } from "sonner";
+import { ChevronLeft, ChevronRight, Download, Link2, Minus, Plus, X } from "lucide-react";
 
 const SWIPE_THRESHOLD_PX = 80;
 const MIN_SCALE = 1;
@@ -25,11 +29,18 @@ export function ReportImageLightbox({
   index,
   onIndexChange,
   onClose,
+  imageMeta,
 }: {
   images: ReportPostImage[];
   index: number;
   onIndexChange: (i: number) => void;
   onClose: () => void;
+  /** ใครเป็นคนโพสต์รูปนี้ + โพสต์เมื่อไหร่ — โชว์เป็นชิปมุมซ้ายบนแบบ Discord
+   * (avatar+ชื่อ+เวลา) เรียกต่อรูป ไม่ใช่ครั้งเดียวต่อ lightbox เพราะบาง caller
+   * (แท็บ "ไฟล์" ของห้อง) เปิดหลายรูปจากคนละโพสต์ไว้ในอัลบั้มเดียวกัน — ไม่ใส่
+   * มา (undefined) = ไม่โชว์ชิปนี้เลย เหมือนของเดิม (เช่น ไฟล์แนบของงาน Kanban
+   * ที่ไม่มีแนวคิด "โพสต์" ให้ผูก). */
+  imageMeta?: (image: ReportPostImage, index: number) => { authorId: string; at: string } | null | undefined;
 }) {
   const hasMultiple = images.length > 1;
   const [dragOffset, setDragOffset] = useState(0);
@@ -127,6 +138,20 @@ export function ReportImageLightbox({
 
   const image = images[index];
   if (!image) return null;
+
+  const meta = imageMeta?.(image, index);
+  const author = meta ? getUser(meta.authorId) : undefined;
+
+  const imageUrl = image.url;
+  function copyImageLink() {
+    if (!imageUrl) return; // data: URL (ไฟล์เก่าก่อนย้าย object storage) ไม่มีลิงก์สาธารณะให้คัดลอก
+    const href = imageUrl.startsWith("http") ? imageUrl : `${window.location.origin}${imageUrl}`;
+    if (!navigator.clipboard) {
+      toast.error("คัดลอกลิงก์ไม่สำเร็จ");
+      return;
+    }
+    navigator.clipboard.writeText(href).then(() => toast.success("คัดลอกลิงก์รูปแล้ว")).catch(() => toast.error("คัดลอกลิงก์ไม่สำเร็จ"));
+  }
 
   const isVideo = isVideoAttachment(image.mime);
   const isDoc = isDocAttachment(image.mime);
@@ -248,33 +273,40 @@ export function ReportImageLightbox({
         style={{ touchAction: "none" }}
         className="inset-0 top-0 left-0 right-0 bottom-0 translate-x-0 translate-y-0 max-w-none sm:max-w-none w-screen h-screen max-h-screen bg-black/95 border-none ring-0 rounded-none p-0 gap-0 flex items-center justify-center cursor-zoom-out overflow-hidden"
       >
-        <button
-          onClick={onClose}
-          className="absolute top-4 left-4 z-10 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
-          aria-label="ปิด"
-        >
-          <X className="h-5 w-5" />
-        </button>
+        {/* Discord-style identity chip, top-left — who posted this image and
+            when, so the picture doesn't lose its context once it fills the
+            whole screen ("อยากได้แบบของ discord เลยอะ"). Purely informational,
+            no jump-to-post — `imageMeta` is per-image (not per-lightbox) since
+            some callers (the room's "ไฟล์" tab) open an album mixing images
+            from several different posts/authors into one lightbox. Omitted
+            entirely when the caller has no author to give (e.g. a task's
+            attachment lightbox, which has no "post" concept). */}
+        {author && (
+          <div
+            className="absolute top-4 left-4 z-10 flex items-center gap-2 rounded-full bg-black/40 py-1 pl-1 pr-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Avatar className="h-7 w-7 shrink-0">
+              <AvatarImage src={author.avatarUrl ?? undefined} alt={author.name} />
+              <AvatarFallback className="text-[10px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{author.avatar}</AvatarFallback>
+            </Avatar>
+            <div className="flex flex-col items-start leading-tight">
+              <span className="text-[12.5px] font-semibold text-white">{author.name}</span>
+              <span className="text-[10px] text-white/60" title={meta ? formatDateTimeFull(meta.at) : undefined}>
+                {meta ? formatDateTimeShort(meta.at) : ""}
+              </span>
+            </div>
+          </div>
+        )}
 
-        {/* Download + zoom, both top-right — close button moved to top-left
-            to make room. A plain image had no download button at all before
-            (only the pdf/doc cards below had their own); +/- buttons are for
-            discoverability since double-click/wheel/pinch all zoom too but
-            aren't obvious just by looking at the screen. Hidden for a
-            video/doc, which have no zoom of their own and (for doc) already
-            carry their own download button in-card. Zoom % always visible,
-            not just while zoomed, so it reads as "current zoom level" even
-            at the 100% resting state. */}
-        {!isVideo && !isDoc && (
-          <div className="absolute top-4 right-4 z-10 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-            <a
-              href={downloadHref}
-              download={image.url ? undefined : image.name}
-              className="h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
-              aria-label="ดาวน์โหลด"
-            >
-              <Download className="h-5 w-5" />
-            </a>
+        {/* แถบปุ่มรวม มุมขวาบน แบบ Discord — เรียงจากซ้ายไปขวา: ซูม (เฉพาะรูป
+            ไม่ใช่วิดีโอ/เอกสาร) · คัดลอกลิงก์ (เฉพาะไฟล์ที่มี url จริง ไม่ใช่
+            data: URL เก่า) · ดาวน์โหลด · ปิด — ย้ายปุ่มปิดมาจากมุมซ้ายบนเดิม
+            เพื่อเปิดที่ให้ชิปคนโพสต์ด้านซ้าย ("มุมขวาบน" ของจริงใน discord ก็มี
+            ปุ่มปิดอยู่ท้ายแถบเดียวกันนี้เหมือนกัน). Zoom %/+/- ของเดิมยังอยู่
+            ครบ ไม่ตัดออก แค่ย้ายมารวมพวงเดียวกับปุ่มอื่น. */}
+        <div className="absolute top-4 right-4 z-10 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          {!isVideo && !isDoc && (
             <div className="flex items-center gap-0.5 rounded-full bg-white/10 p-0.5">
               <button
                 onClick={() => zoomBy(-0.75)}
@@ -294,8 +326,34 @@ export function ReportImageLightbox({
                 <Plus className="h-4 w-4" />
               </button>
             </div>
-          </div>
-        )}
+          )}
+          {!isVideo && !isDoc && image.url && (
+            <button
+              onClick={copyImageLink}
+              className="h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
+              aria-label="คัดลอกลิงก์รูป"
+            >
+              <Link2 className="h-5 w-5" />
+            </button>
+          )}
+          {!isVideo && !isDoc && (
+            <a
+              href={downloadHref}
+              download={image.url ? undefined : image.name}
+              className="h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
+              aria-label="ดาวน์โหลด"
+            >
+              <Download className="h-5 w-5" />
+            </a>
+          )}
+          <button
+            onClick={onClose}
+            className="h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
+            aria-label="ปิด"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
 
         {hasMultiple && (
           <button
