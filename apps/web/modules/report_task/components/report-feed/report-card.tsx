@@ -1366,19 +1366,41 @@ export function ReportCard({
           {activeReactions.map(({ emoji, users }) => {
             const active = users.includes(viewingAsUserId);
             return (
-              <button
+              // Split in two — the body opens "who reacted" (see the dialog
+              // below), a separate "+" reacts with this same emoji in one tap
+              // instead of making that go through the picker above too
+              // ("กดสติกเกอแบบที่คนแรกส่งทำยังไง...คิดว่ามันยากไป"). Only shown
+              // once (when the viewer hasn't reacted yet) — already-active
+              // pills don't need it, the green fill already says "you're in",
+              // and removing your own goes through "ยกเลิก" in that same
+              // dialog. Both halves stay ≥28px tall for a comfortable touch
+              // target on mobile, not just desktop hover.
+              <div
                 key={emoji}
-                onClick={() => setReactionListEmoji(emoji)}
                 className={cn(
-                  "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm border transition-colors",
+                  "flex items-stretch rounded-full border text-sm transition-colors overflow-hidden",
                   active
                     ? "bg-[var(--accent)] border-[var(--brand-green)]/40 text-[var(--brand-green-dark)]"
-                    : "border-[var(--line)] text-[var(--ink-soft)] hover:bg-white"
+                    : "border-[var(--line)] text-[var(--ink-soft)]"
                 )}
               >
-                <span className="text-base leading-none">{emoji}</span>
-                <span className="tabular-nums font-medium">{users.length}</span>
-              </button>
+                <button
+                  onClick={() => setReactionListEmoji(emoji)}
+                  className={cn("flex items-center gap-1.5 pl-2.5 pr-2.5 py-1", !active && "hover:bg-white")}
+                >
+                  <span className="text-base leading-none">{emoji}</span>
+                  <span className="tabular-nums font-medium">{users.length}</span>
+                </button>
+                {!active && (
+                  <button
+                    onClick={() => toggleReaction(post.id, emoji, viewingAsUserId)}
+                    aria-label={`รีแอค ${emoji}`}
+                    className="flex items-center px-1.5 border-l border-[var(--line)] hover:bg-[var(--accent)] hover:text-[var(--brand-green-dark)] transition-colors"
+                  >
+                    <Plus className="h-2.5 w-2.5" />
+                  </button>
+                )}
+              </div>
             );
           })}
           {/* Scored stickers a lead handed the author — tallied by stickerId

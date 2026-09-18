@@ -839,8 +839,18 @@ export function TopicSidebar({
           e.preventDefault();
           const rect = e.currentTarget.getBoundingClientRect();
           const position = e.clientY - rect.top < rect.height / 2 ? "before" : "after";
-          reorderByDrop(draggedTopicId, t.id, position);
+          // Clear the "being dragged" state FIRST, before reorderByDrop
+          // writes into pendingTopics — that write can shift this row to a
+          // different depth/parent group in the tree, which React sometimes
+          // remounts instead of moving in place. A remounted node's native
+          // `dragend` never fires (the browser fires it on the original
+          // element, which is now gone), so `draggedTopicId` was staying
+          // stuck pointing at this row forever — permanently dimmed at 40%
+          // opacity with no drag actually in progress ("กดย้ายละค้าง"), while
+          // the ▲▼ buttons (which never touch this state) kept working fine.
+          const draggedId = draggedTopicId;
           setDraggedTopicId(null);
+          reorderByDrop(draggedId, t.id, position);
         }}
         className={cn(
           "group relative flex items-center gap-2 rounded-xl pr-2 cursor-pointer transition-colors duration-200 w-full",
