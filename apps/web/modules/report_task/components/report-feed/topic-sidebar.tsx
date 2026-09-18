@@ -175,6 +175,31 @@ function isTopLevel(t: ReportTopic) {
   return !t.parentId;
 }
 
+/** Whether `candidateId` sits anywhere under `ancestorId` in the parentId
+ * chain — used to keep the edit dialog's "หัวข้อนี้อยู่ภายใต้หัวข้อหลักไหน?"
+ * picker from ever offering one of the topic's OWN descendants as its new
+ * parent. `parentOptions` used to only exclude the topic itself, not its
+ * descendants, so editing e.g. "GL Chats" and picking its own child
+ * "management-gl" as GL Chats' new parent was a real, reachable way to
+ * create a parentId cycle (GL Chats under management-gl, which is already
+ * under GL Chats) with no guard at all — unlike drag reorder, which already
+ * checks this. Once that cycle exists, every recursive tree walk
+ * (childrenOf/renderTopicSubtree, topicDepth) loops forever on it, hanging
+ * the whole tab on the next render, drag or no drag ("ค้างจริง ต้องรีเฟรช"
+ * — "ปัญหานี้พึ่งมาตอนแก้แก้ไขห้องเอง"). The `seen` set guards this walk
+ * itself the same way, in case a cycle already exists from before this fix. */
+function isDescendantOf(candidateId: string, ancestorId: string, byId: Map<string, ReportTopic>): boolean {
+  const seen = new Set<string>();
+  let cur = byId.get(candidateId);
+  while (cur?.parentId) {
+    if (cur.parentId === ancestorId) return true;
+    if (seen.has(cur.parentId)) return false;
+    seen.add(cur.parentId);
+    cur = byId.get(cur.parentId);
+  }
+  return false;
+}
+
 /** 0 = top-level, 1 = sub-topic, 2 = sub-of-sub — walks up `parentId` until
  * it runs out (or hits a topic not in `byId`, e.g. one this viewer can't
  * see, which just stops the count there rather than throwing). Used to cap
@@ -184,9 +209,19 @@ function isTopLevel(t: ReportTopic) {
 function topicDepth(t: ReportTopic, byId: Map<string, ReportTopic>): number {
   let depth = 0;
   let cur = t;
+  // `seen` catches a corrupted parentId chain that loops back on itself
+  // (A's parent is B, B's parent is A, or deeper) — should never happen
+  // given the guards where parentId gets set (drag reorder, the edit
+  // dialog's parent picker), but this function runs on every render for
+  // every topic, so if it ever DID happen, an unguarded `while (cur.parentId)`
+  // here would recurse forever and hang the whole tab, not just misreport a
+  // depth. Bail out to whatever depth was reached so far instead.
+  const seen = new Set<string>([t.id]);
   while (cur.parentId) {
+    if (seen.has(cur.parentId)) break;
     const parent = byId.get(cur.parentId);
     if (!parent) break;
+    seen.add(cur.parentId);
     depth += 1;
     cur = parent;
   }
@@ -631,7 +666,9 @@ export function TopicSidebar({
   // being edited.
   const topicById = useMemo(() => new Map(topics.map((t) => [t.id, t] as const)), [topics]);
   const parentOptions = topics.filter(
-    (t) => topicDepth(t, topicById) <= 1 && (editor?.mode !== "edit" || t.id !== editor.topic.id)
+    (t) =>
+      topicDepth(t, topicById) <= 1 &&
+      (editor?.mode !== "edit" || (t.id !== editor.topic.id && !isDescendantOf(t.id, editor.topic.id, topicById)))
   );
   // Split for the picker UI so "pick a top-level room" and "pick an
   // existing sub-topic (nests one tier deeper again)" read as two clearly
@@ -1357,6 +1394,15 @@ export function TopicSidebar({
   // renderTopicBranch below for the top of each branch, and calls itself for
   // any deeper tier.
   function renderTopicSubtree(t: ReportTopic, depth: number) {
+    // The tree is only ever meant to go 3 tiers deep (topicDepth's own
+    // doc) — a `parentId` chain that loops back on itself (see topicDepth's
+    // `seen` guard) would otherwise make this recurse into itself forever
+    // through childrenOf, hanging the whole tab on every render, not just
+    // when something calls topicDepth ("กดจัดลำดับและลากห้องย้ายห้องนี่ค้าง
+    // เลย...ค้างจริง ต้องรีเฟรช"). A depth this far past the real cap only
+    // happens with corrupted data, so just stop recursing rather than
+    // render an obviously-wrong tree.
+    if (depth > 8) return null;
     const children = childrenOf(t.id);
     const hasChildren = children.length > 0;
     const isCollapsed = !reorderMode && collapsedTopicIds.has(t.id);
