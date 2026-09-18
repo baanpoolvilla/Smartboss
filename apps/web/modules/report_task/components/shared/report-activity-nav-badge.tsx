@@ -28,6 +28,7 @@ export function ReportActivityNavBadge() {
     if (!me) return 0;
     // A room counts only if the viewer can see it AND hasn't muted it — the
     // same two gates the sidebar applies before showing a room's red pill.
+    const topicById = new Map(topics.map((t) => [t.id, t]));
     const active = new Map<string, boolean>(
       topics.map((t) => [
         t.id,
@@ -38,7 +39,7 @@ export function ReportActivityNavBadge() {
     let n = 0;
     for (const post of posts) {
       if (!(active.get(post.topicId) ?? false)) continue;
-      n += aboutMeCountInPost(post, me);
+      n += aboutMeCountInPost(post, me, topicById.get(post.topicId));
     }
     return n;
   }, [posts, topics, me]);

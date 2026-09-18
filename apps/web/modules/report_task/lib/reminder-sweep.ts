@@ -1,10 +1,10 @@
 import { departments, users, isOwner } from "@/modules/report_task/lib/directory";
 import { calendarDateOf, localDateStr, now, todayIso } from "@/modules/report_task/lib/now";
 import { pendingToday } from "@/modules/report_task/lib/report-feed-compliance";
-import { effectiveRoundsOf, roundRunsOnDay, resolveRoundSubmitters } from "@/modules/report_task/lib/submission-rounds";
+import { effectiveRoundsOf, roundRunsOnDay, roundFrequencyOf, resolveRoundSubmitters } from "@/modules/report_task/lib/submission-rounds";
 import { SYSTEM_USER_ID } from "@/modules/report_task/lib/task-penalty-sweep";
 import type { ReminderSettings } from "@/modules/report_task/store/reminder-settings-store";
-import type { ReportPost, ReportTopic, SubmitterGroup } from "@/modules/report_task/store/report-feed-store";
+import type { ReportPost, ReportTopic, SubmissionRound, SubmitterGroup } from "@/modules/report_task/store/report-feed-store";
 import type { CalendarEvent, Task, TodoItem } from "@/modules/report_task/types";
 
 const DAY_MINUTES = 1440;
@@ -15,6 +15,21 @@ function addDays(dayStr: string, n: number): string {
   const d = new Date(`${dayStr}T00:00:00`);
   d.setDate(d.getDate() + n);
   return localDateStr(d);
+}
+
+/** Which lead-time list applies to this round — a room's own override
+ * (`remindBeforeCutoffMinutes`) still wins over everything for every round
+ * in that room, same as before. Otherwise picks the company-wide list by
+ * the round's own frequency (Daily/Weekly/Monthly each have their own list,
+ * see `ReportReminderSettings`) instead of one shared list — a "1 วันก่อน"
+ * point added for Weekly shouldn't also fire every day on a Daily round
+ * sharing the same room/company. */
+function leadMinutesForRound(topic: ReportTopic, round: SubmissionRound, settings: ReminderSettings): number[] {
+  if (topic.remindBeforeCutoffMinutes != null) return [topic.remindBeforeCutoffMinutes];
+  const freq = roundFrequencyOf(round);
+  if (freq === "monthly") return settings.report.monthlyLeadMinutes ?? settings.report.leadMinutes;
+  if (freq === "weekly") return settings.report.weeklyLeadMinutes ?? settings.report.leadMinutes;
+  return settings.report.leadMinutes;
 }
 
 export interface ReminderNotification {
@@ -182,11 +197,13 @@ export function computeReminders(input: {
       const first = entries[0]!;
       const topic = topicById.get(first.topicId);
       if (!topic) continue;
+      const round = effectiveRoundsOf(topic).find((r) => r.id === first.roundId);
+      if (!round) continue;
       const [h, m] = first.roundTime.split(":").map(Number) as [number, number];
       const cutoffMin = h * 60 + m;
       const minutesUntilCutoff = cutoffMin - nowMinutes;
       if (minutesUntilCutoff < 0) continue; // cutoff already passed today — that's a "missed", not an upcoming reminder
-      const leadOptions = topic.remindBeforeCutoffMinutes != null ? [topic.remindBeforeCutoffMinutes] : settings.report.leadMinutes;
+      const leadOptions = leadMinutesForRound(topic, round, settings);
       // "Daily Report" reads as noise on a room where every round already is
       // one (the common case today) — only worth naming the round when this
       // room actually has more than one kind of round in force at all, so
@@ -255,7 +272,7 @@ export function computeReminders(input: {
     for (const topic of topics) {
       const namesRound = effectiveRoundsOf(topic).length > 1;
       for (const round of effectiveRoundsOf(topic)) {
-        const leadOptions = topic.remindBeforeCutoffMinutes != null ? [topic.remindBeforeCutoffMinutes] : settings.report.leadMinutes;
+        const leadOptions = leadMinutesForRound(topic, round, settings);
         const dayLeads = [...new Set(leadOptions.filter((m) => m >= DAY_MINUTES && m % DAY_MINUTES === 0).map((m) => m / DAY_MINUTES))];
         if (dayLeads.length === 0) continue;
         const roundPhrase = namesRound ? ` "${round.label}"` : "";

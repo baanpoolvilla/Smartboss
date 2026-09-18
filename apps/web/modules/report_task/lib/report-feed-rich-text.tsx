@@ -3,14 +3,20 @@ import Link from "next/link";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Square, SquareCheckBig } from "lucide-react";
 
-export type MentionType = "user" | "topic" | "dept";
+export type MentionType = "user" | "topic" | "dept" | "everyone";
+
+/** Fixed id stored on an "@ทุกคน" marker (`@[ทุกคนในห้องนี้](everyone:all)`)
+ * — there's no real user/topic id to point at, it always resolves against
+ * whichever room the post/reply carrying it actually lives in (see
+ * `textMentionsUser` in report-feed-mentions.ts), not a fixed target. */
+export const EVERYONE_MENTION_ID = "all";
 
 /** Wraps a mention target so `@สมชาย ศรีสุข`/`@ทีมพัฒนา`/`@วิศวกรรม` round-trip through storage as `@[label](type:id)` — the label is frozen at post time (renaming the target later doesn't rewrite old mentions), the id is what a topic mention actually navigates to. */
 export function mentionMarker(type: MentionType, id: string, label: string): string {
   return `@[${label}](${type}:${id})`;
 }
 
-const MENTION_ONLY_PATTERN = /@\[([^\]]+)\]\((user|topic|dept):([^)]+)\)/g;
+const MENTION_ONLY_PATTERN = /@\[([^\]]+)\]\((user|topic|dept|everyone):([^)]+)\)/g;
 
 /** Every distinct id of the given mention type found in a chunk of stored text — e.g. who to notify when a post/reply @mentions people. */
 export function extractMentionedIds(text: string, type: MentionType): string[] {
@@ -55,7 +61,7 @@ export const HORIZONTAL_RULE_LINE = "---";
 // The mention branch comes first — its label can itself contain characters
 // like "(" that would otherwise confuse the later branches.
 const RICH_TEXT_PATTERN =
-  /@\[([^\]]+)\]\((user|topic|dept):([^)]+)\)|\*\*(.+?)\*\*|\*(.+?)\*|__(.+?)__|`(.+?)`|(https?:\/\/[^\s<>"']+)/g;
+  /@\[([^\]]+)\]\((user|topic|dept|everyone):([^)]+)\)|\*\*(.+?)\*\*|\*(.+?)\*|__(.+?)__|`(.+?)`|(https?:\/\/[^\s<>"']+)/g;
 
 function escapeHtml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

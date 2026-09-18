@@ -55,6 +55,7 @@ import {
   mentionMarkersToPlainText,
   renderRichBulletText,
   renderSectionBullets,
+  EVERYONE_MENTION_ID,
   type MentionType,
 } from "@/modules/report_task/lib/report-feed-rich-text";
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
@@ -106,6 +107,7 @@ import {
   TriangleAlert,
   Underline,
   User,
+  Users,
   X,
 } from "lucide-react";
 import { uuid } from "@/modules/report_task/lib/uuid";
@@ -378,6 +380,10 @@ export function ReportCard({
   // mention is a notify-this-group action, not scoped to room membership.
   const replyMentionCandidates = useMemo<ReplyMentionItem[]>(
     () => [
+      // Pinned first, same as the post composer's own copy of this — "@ทุกคน"
+      // only ever reaches whoever can see *this* room (resolved at
+      // notify-time, see textMentionsUser), never the whole company.
+      { type: "everyone", id: EVERYONE_MENTION_ID, label: "ทุกคนในห้องนี้", sublabel: "แจ้งทุกคนที่เห็นห้องนี้" },
       ...directoryUsers
         .filter((u) => canSeeReportTopic(topic.visibility, u.id))
         .map((u): ReplyMentionItem => ({ type: "user", id: u.id, label: u.name, sublabel: u.role })),
@@ -1681,7 +1687,7 @@ export function ReportCard({
                         <p className="px-3 py-2 text-xs text-[var(--ink-soft)]">ไม่พบที่ตรงกับ &quot;{replyMentionMenu.query}&quot;</p>
                       ) : (
                         matches.map((item, i) => {
-                          const Icon = item.type === "user" ? User : Building2;
+                          const Icon = item.type === "user" ? User : item.type === "everyone" ? Users : Building2;
                           return (
                             <button
                               key={`${item.type}-${item.id}`}

@@ -78,6 +78,7 @@ export function AppTileReviewBadge() {
 
         const topics = reportFeed?.topics ?? [];
         const posts = reportFeed?.posts ?? [];
+        const topicById = new Map(topics.map((t) => [t.id, t]));
         const activeTopics = new Map<string, boolean>(
           topics.map((t) => [
             t.id,
@@ -85,7 +86,7 @@ export function AppTileReviewBadge() {
           ])
         );
         const activityCount = posts.reduce(
-          (sum, post) => (activeTopics.get(post.topicId) ? sum + aboutMeCountInPost(post, viewingAsUserId) : sum),
+          (sum, post) => (activeTopics.get(post.topicId) ? sum + aboutMeCountInPost(post, viewingAsUserId, topicById.get(post.topicId)) : sum),
           0
         );
 

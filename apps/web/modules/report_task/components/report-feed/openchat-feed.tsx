@@ -24,6 +24,7 @@ import {
   htmlEditorToBulletsText,
   renderRichBulletText,
   mentionSymbolFor,
+  EVERYONE_MENTION_ID,
   type MentionType,
 } from "@/modules/report_task/lib/report-feed-rich-text";
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
@@ -33,7 +34,7 @@ import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu"
 import { DRAG_MENTION_TOPIC_MIME } from "@/modules/report_task/components/report-feed/report-post-fields";
 import { cn } from "@/modules/report_task/lib/utils";
 import { toast } from "sonner";
-import { Building2, Check, Hash, ImagePlus, MoreHorizontal, Pencil, Plus, Send, SmilePlus, Trash2, User, X } from "lucide-react";
+import { Building2, Check, Hash, ImagePlus, MoreHorizontal, Pencil, Plus, Send, SmilePlus, Trash2, User, Users, X } from "lucide-react";
 import { uuid } from "@/modules/report_task/lib/uuid";
 import { isCoarsePointer } from "@/modules/report_task/lib/device";
 
@@ -155,6 +156,9 @@ export function OpenchatFeed({
   // directory regardless of room ("ต้องแสดงเฉพาะคนที่อยู่ในห้องนั้นไหม").
   const personMentionCandidates = useMemo<MentionItem[]>(
     () => [
+      // Pinned first, same as the section composer's own copy of this —
+      // "@ทุกคน" only ever reaches whoever can see *this* room.
+      { type: "everyone", id: EVERYONE_MENTION_ID, label: "ทุกคนในห้องนี้", sublabel: "แจ้งทุกคนที่เห็นห้องนี้" },
       ...directoryUsers
         .filter((u) => canSeeReportTopic(topic.visibility, u.id))
         .map((u): MentionItem => ({ type: "user", id: u.id, label: u.name, sublabel: u.role })),
@@ -867,7 +871,7 @@ export function OpenchatFeed({
                     <p className="px-3 py-2 text-xs text-[var(--ink-soft)]">ไม่พบที่ตรงกับ &quot;{mentionMenu.query}&quot;</p>
                   ) : (
                     matches.map((item, i) => {
-                      const Icon = item.type === "user" ? User : item.type === "topic" ? Hash : Building2;
+                      const Icon = item.type === "user" ? User : item.type === "topic" ? Hash : item.type === "everyone" ? Users : Building2;
                       return (
                         <button
                           key={`${item.type}-${item.id}`}

@@ -1,5 +1,5 @@
-import { extractMentionedIds } from "@/modules/report_task/lib/report-feed-rich-text";
-import type { ReportPost } from "@/modules/report_task/store/report-feed-store";
+import { textMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
+import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
 
 /**
  * How many unread items in this post are "about" `me` — the single shared
@@ -16,14 +16,14 @@ import type { ReportPost } from "@/modules/report_task/store/report-feed-store";
  * is ordinary unread, already carried by the sidebar's green notch + bold
  * label. Counting it here would make the red pill/badge never go quiet.
  */
-export function aboutMeCountInPost(post: ReportPost, me: string): number {
+export function aboutMeCountInPost(post: ReportPost, me: string, topic?: Pick<ReportTopic, "visibility">): number {
   let n = 0;
   const mine = post.authorId === me;
 
-  // (1) post that @mentions me, still unread, not my own
+  // (1) post that @mentions me (directly or via "@ทุกคน"), still unread, not my own
   if (!mine && post.unreadFor.includes(me)) {
     const text = post.sections.flatMap((s) => s.bullets).join("\n");
-    if (extractMentionedIds(text, "user").includes(me)) n++;
+    if (textMentionsUser(text, me, topic)) n++;
   }
 
   // (2)+(3) replies: on my own post, or a reply that @mentions me —
@@ -31,7 +31,7 @@ export function aboutMeCountInPost(post: ReportPost, me: string): number {
   for (const r of post.replies) {
     if (r.authorId === me) continue;
     if (!r.unreadFor?.includes(me)) continue;
-    if (mine || extractMentionedIds(r.body, "user").includes(me)) n++;
+    if (mine || textMentionsUser(r.body, me, topic)) n++;
   }
 
   return n;

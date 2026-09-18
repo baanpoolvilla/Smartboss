@@ -260,16 +260,33 @@ export function DeadlineReminderSettingsPanel() {
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold">รีพอต (รอบส่งประจำวัน/สัปดาห์/เดือน)</p>
             <p className="text-[11px] text-[var(--ink-soft)]">
-              ค่าเริ่มต้น — ห้องไหนตั้งค่าของตัวเองไว้ (ในตั้งค่าห้อง) ใช้ค่านั้นแทน · ตั้งเป็น &quot;วัน&quot; ได้ด้วย เผื่อรอบรายสัปดาห์/รายเดือนที่อยากแจ้งเตือนล่วงหน้าข้ามวัน
+              ค่าเริ่มต้น — ห้องไหนตั้งค่าของตัวเองไว้ (ในตั้งค่าห้อง) ใช้ค่านั้นแทน · จุดแจ้งเตือนแยกตามความถี่ของรอบ ตั้ง &quot;วัน&quot; ให้เฉพาะรายสัปดาห์/รายเดือนได้โดยไม่กระทบรายวัน
             </p>
           </div>
           <Switch checked={settings.report.enabled} onCheckedChange={(v) => setReportSettings({ enabled: v })} />
         </div>
-        <div className={cn("px-4 pb-3.5 space-y-2.5", !settings.report.enabled && "opacity-50 pointer-events-none")}>
-          <MixedUnitLeadPointsEditor
-            values={settings.report.leadMinutes}
-            onChange={(leadMinutes) => setReportSettings({ leadMinutes })}
-          />
+        <div className={cn("px-4 pb-3.5 space-y-3", !settings.report.enabled && "opacity-50 pointer-events-none")}>
+          <div className="space-y-1.5">
+            <p className="pl-[46px] text-[11px] font-semibold text-[var(--ink)]">รายวัน</p>
+            <MixedUnitLeadPointsEditor
+              values={settings.report.leadMinutes}
+              onChange={(leadMinutes) => setReportSettings({ leadMinutes })}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <p className="pl-[46px] text-[11px] font-semibold text-[var(--ink)]">รายสัปดาห์</p>
+            <MixedUnitLeadPointsEditor
+              values={settings.report.weeklyLeadMinutes ?? settings.report.leadMinutes}
+              onChange={(weeklyLeadMinutes) => setReportSettings({ weeklyLeadMinutes })}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <p className="pl-[46px] text-[11px] font-semibold text-[var(--ink)]">รายเดือน</p>
+            <MixedUnitLeadPointsEditor
+              values={settings.report.monthlyLeadMinutes ?? settings.report.leadMinutes}
+              onChange={(monthlyLeadMinutes) => setReportSettings({ monthlyLeadMinutes })}
+            />
+          </div>
           <div className="flex flex-wrap items-center gap-2 pl-[46px]">
             <span className="text-[11px] text-[var(--ink-faint)]">แจ้งใคร:</span>
             <RecipientPill active={settings.report.notifyPending} label="คนที่ยังไม่ส่งในห้อง" onClick={() => toggleRecipient(setReportSettings, "notifyPending", settings.report.notifyPending)} />

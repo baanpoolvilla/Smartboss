@@ -24,11 +24,20 @@ export interface MeetingReminderSettings {
 
 export interface ReportReminderSettings {
   enabled: boolean;
-  /** Company-wide default minutes-before-last-cutoff — a room's own
-   * `ReportTopic.remindBeforeCutoffMinutes` (room-settings-sheet.tsx) wins
-   * over this when set, same "room override, company default" relationship
-   * as `filesRetentionDays`. */
+  /** Company-wide default minutes-before-cutoff for **Daily** rounds — a
+   * room's own `ReportTopic.remindBeforeCutoffMinutes`
+   * (room-settings-sheet.tsx) wins over all three of these lists when set,
+   * same "room override, company default" relationship as
+   * `filesRetentionDays`. */
   leadMinutes: number[];
+  /** Same idea, scoped to **Weekly** rounds — separate list since a weekly
+   * round's "1 วันก่อน" shouldn't also fire every single day on a Daily
+   * round sharing this company-wide default. `undefined` (old saved rows
+   * from before this field existed) falls back to `leadMinutes`. */
+  weeklyLeadMinutes?: number[];
+  /** Same idea, scoped to **Monthly** rounds. `undefined` falls back to
+   * `leadMinutes`, same as `weeklyLeadMinutes`. */
+  monthlyLeadMinutes?: number[];
   notifyPending: boolean;
   /** One daily digest to whoever's responsible for a room, on top of (not
    * instead of) nudging the people who still haven't posted. */
@@ -72,7 +81,7 @@ export interface ReminderSettings {
 export const defaultReminderSettings: ReminderSettings = {
   task: { enabled: true, leadMinutes: [4320, 1440], notifyAssignee: true, notifyAssigner: false, notifyDeptHead: false },
   meeting: { enabled: true, leadMinutes: [15], notifyAttendees: true },
-  report: { enabled: true, leadMinutes: [30], notifyPending: true, notifyManagerSummary: false },
+  report: { enabled: true, leadMinutes: [30], weeklyLeadMinutes: [30], monthlyLeadMinutes: [30], notifyPending: true, notifyManagerSummary: false },
   todo: { enabled: true, defaultLeadMinutes: 0 },
   submissionLock: { useGlobalCutoff: false, time: "23:59" },
 };

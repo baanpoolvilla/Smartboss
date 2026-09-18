@@ -665,10 +665,10 @@ export function TopicSidebar({
   // topic (notifyPreference), set from the room settings sheet. Honoring it
   // here is what makes muting a room actually go quiet in the sidebar.
   const notifyPrefFor = (t: ReportTopic): "all" | "mentions" | "off" => t.notifyPreference?.[viewingAsUserId] ?? "all";
-  const postCountsUnread = (post: ReportPost, pref: "all" | "mentions" | "off") => {
+  const postCountsUnread = (post: ReportPost, pref: "all" | "mentions" | "off", t: ReportTopic) => {
     if (pref === "off") return false;
     if (!post.unreadFor.includes(viewingAsUserId)) return false;
-    if (pref === "mentions") return postMentionsUser(post, viewingAsUserId);
+    if (pref === "mentions") return postMentionsUser(post, viewingAsUserId, t);
     return true;
   };
   // Posts in a room that count as unread for this viewer, after its notify
@@ -676,7 +676,7 @@ export function TopicSidebar({
   // collapsed-still-visible rule all read from, so they never disagree.
   const topicUnreadPosts = (t: ReportTopic) => {
     const pref = notifyPrefFor(t);
-    return posts.filter((post) => post.topicId === t.id && postCountsUnread(post, pref));
+    return posts.filter((post) => post.topicId === t.id && postCountsUnread(post, pref, t));
   };
   // Unread activity "about you" — @mentions (in a post or a reply) AND
   // comments someone left on your own posts — shown as Discord's red pill.
@@ -688,7 +688,7 @@ export function TopicSidebar({
       ? 0
       : posts
           .filter((post) => post.topicId === t.id)
-          .reduce((sum, post) => sum + aboutMeCountInPost(post, viewingAsUserId), 0);
+          .reduce((sum, post) => sum + aboutMeCountInPost(post, viewingAsUserId, t), 0);
 
   const isMobile = useIsMobile();
 

@@ -699,10 +699,12 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         // mentioned person the same way a fresh post in their room does,
         // not require a separate manual "mark as unread" first (see
         // markPostsRead, cleared once they actually open ที่กล่าวถึงฉัน).
-        const mentionedUserIds = extractMentionedIds(
-          data.sections.flatMap((s) => s.bullets).join("\n"),
-          "user"
-        ).filter((id) => id !== authorId);
+        const postText = data.sections.flatMap((s) => s.bullets).join("\n");
+        const mentionedUserIds = extractMentionedIds(postText, "user").filter((id) => id !== authorId);
+        // "@ทุกคน" — scoped to whoever can actually see *this* room, not the
+        // whole company (ดู textMentionsUser/canSeeReportTopic) — resolved
+        // right below once `topic` is known.
+        const hasEveryoneMention = extractMentionedIds(postText, "everyone").length > 0;
         // Captured up front (instead of generated inline inside the set()
         // call below) so a notification can deep-link straight to this exact
         // post — same ?topic=&post= shape ReportCard's own "copy link" uses.
@@ -718,6 +720,11 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         // no matter how long they'd had the room closed.
         const otherMemberIds = topic
           ? users.filter((u) => u.id !== authorId && canSeeReportTopic(topic.visibility, u.id)).map((u) => u.id)
+          : [];
+        // "@ทุกคน" reaches the same set as otherMemberIds, minus anyone
+        // already getting the explicit "แท็กคุณ" notice below (no double tag).
+        const everyoneMentionRecipients = hasEveryoneMention
+          ? otherMemberIds.filter((id) => !mentionedUserIds.includes(id))
           : [];
         set((s) => ({
           posts: [
@@ -742,6 +749,11 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         if (mentionedUserIds.length > 0) {
           useNotificationStore.getState().notifyMany(mentionedUserIds, authorId, `${actorName} แท็กคุณในโพสต์ "${data.title}"`, undefined, link, topic?.name);
         }
+        if (everyoneMentionRecipients.length > 0) {
+          useNotificationStore
+            .getState()
+            .notifyMany(everyoneMentionRecipients, authorId, `${actorName} แท็ก @ทุกคน ในโพสต์ "${data.title}"`, undefined, link, topic?.name);
+        }
         // Teams-style "new post in a channel" notification — everyone who
         // can see this topic, minus the poster and anyone already tagged
         // above (one notification per post, not two). No per-topic
@@ -761,7 +773,13 @@ export const useReportFeedStore = create<ReportFeedStore>()(
             if (topic.visibility?.departmentIds?.includes(d.id)) headIds.add(d.headId);
           }
           const overviewRecipients = users
-            .filter((u) => (isOwner(u.id) || headIds.has(u.id)) && u.id !== authorId && !mentionedUserIds.includes(u.id))
+            .filter(
+              (u) =>
+                (isOwner(u.id) || headIds.has(u.id)) &&
+                u.id !== authorId &&
+                !mentionedUserIds.includes(u.id) &&
+                !everyoneMentionRecipients.includes(u.id)
+            )
             .map((u) => u.id);
           if (overviewRecipients.length > 0) {
             useNotificationStore
@@ -933,11 +951,25 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         const mentionedInReply = extractMentionedIds(body, "user").filter(
           (id) => id !== authorId && id !== quotedAuthorId && id !== post.authorId
         );
+        // "@ทุกคน" in a reply — same room-scoped resolution as addPost above,
+        // minus whoever already got a more specific notice (quoted author,
+        // post author, or an explicit individual @mention) in this same reply.
+        const hasEveryoneMentionInReply = extractMentionedIds(body, "everyone").length > 0;
+        const everyoneMentionReplyRecipients = hasEveryoneMentionInReply
+          ? otherReplyMemberIds.filter(
+              (id) => id !== quotedAuthorId && id !== post.authorId && !mentionedInReply.includes(id)
+            )
+          : [];
         if (mentionedInReply.length > 0) {
           // Already unread for them via otherReplyMemberIds above (anyone
           // @mentioned can see the room by definition) — just the "tagged
           // you" notification is specific to a mention.
           useNotificationStore.getState().notifyMany(mentionedInReply, authorId, `${actorName} แท็กคุณในความคิดเห็นของโพสต์ "${post.title}"`, undefined, link, repliedTopic?.name);
+        }
+        if (everyoneMentionReplyRecipients.length > 0) {
+          useNotificationStore
+            .getState()
+            .notifyMany(everyoneMentionReplyRecipients, authorId, `${actorName} แท็ก @ทุกคน ในความคิดเห็นของโพสต์ "${post.title}"`, undefined, link, repliedTopic?.name);
         }
       },
       editReply: (postId, replyId, data) =>

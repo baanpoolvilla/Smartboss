@@ -135,6 +135,16 @@ export function usesSubmissionRounds(topic: Pick<ReportTopic, "submissionRounds"
   return !!topic.submissionRounds && topic.submissionRounds.length > 0;
 }
 
+export type RoundFrequency = "daily" | "weekly" | "monthly";
+
+/** จัดประเภทความถี่ของรอบจากฟิลด์ที่มีอยู่ — `dayOfMonth` = รายเดือน,
+ * `weekdays` ไม่ว่าง = รายสัปดาห์, ไม่มีทั้งคู่ = รายวัน (ค่าเริ่มต้น วิ่งทุกวัน) */
+export function roundFrequencyOf(round: Pick<SubmissionRound, "weekdays" | "dayOfMonth">): RoundFrequency {
+  if (round.dayOfMonth) return "monthly";
+  if (round.weekdays && round.weekdays.length > 0) return "weekly";
+  return "daily";
+}
+
 /**
  * รอบรายสัปดาห์/รายเดือน "ไม่ยกเว้น" ให้วันหยุดบริษัทหรือวันลาส่วนตัวที่ตรงกับ
  * วันครบกำหนดพอดี — ต่างจากรอบรายวัน ที่ความหมายคือ "วันนี้บริษัทเปิดไหม คน
@@ -144,7 +154,7 @@ export function usesSubmissionRounds(topic: Pick<ReportTopic, "submissionRounds"
  * และการยืนยันจากเจ้าของระบบ: "ให้ส่งวันเดิมไม่ว่าคนนั้นจะหยุดแบบไหนก็ตาม")
  */
 export function roundIgnoresDateExemptions(round: Pick<SubmissionRound, "weekdays" | "dayOfMonth">): boolean {
-  return !!round.dayOfMonth || !!(round.weekdays && round.weekdays.length > 0);
+  return roundFrequencyOf(round) !== "daily";
 }
 
 /** รอบที่ user "คนนี้" ต้องส่งในวันนั้น (คิดวันในสัปดาห์ + เป็นผู้ส่งของรอบ) */
