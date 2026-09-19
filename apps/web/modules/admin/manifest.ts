@@ -24,8 +24,9 @@ export const adminManifest: ModuleManifest = {
     { label: "ข้อมูลบริษัท", path: "/admin/organization", permission: ADMIN_PERMS.orgManage, icon: "Building2" },
     // เมนูนี้โผล่เฉพาะ SUPER_ADMIN เพราะไม่มีบทบาทไหนถือ core.org.create
     { label: "บริษัททั้งหมด", path: "/admin/organizations", permission: ADMIN_PERMS.orgCreate, icon: "Building" },
-    // เมนูนี้โผล่เฉพาะ SUPER_ADMIN เช่นกัน — รวมตั๋วแจ้งปัญหาจากทุกบริษัทมาไว้ที่เดียว
-    { label: "แจ้งปัญหาระบบ (ทุกบริษัท)", path: "/admin/issue-reports", permission: ADMIN_PERMS.orgCreate, icon: "LifeBuoy" },
+    // "แจ้งปัญหาระบบ (ทุกบริษัท)" ย้ายออกไปเป็นเมนูหลักแยกของตัวเองแล้ว — ดู
+    // issue-report-manifest.ts ("อยากให้ไปอยู่ในเมนูแยกเลยอะ") ไม่ซ้อนอยู่ใต้
+    // "หลังบ้าน" ที่นี่อีก
     // เมนูนี้โผล่เฉพาะ SUPER_ADMIN — คุมเพดานพื้นที่ไฟล์รายบริษัท (แพ็กเกจเสริม)
     { label: "พื้นที่จัดเก็บไฟล์ (ทุกบริษัท)", path: "/admin/storage", permission: ADMIN_PERMS.orgCreate, icon: "HardDrive" },
     { label: "ผลงานรายคน", path: "/admin/performance", permission: ADMIN_PERMS.performanceView, icon: "ChartColumn" },

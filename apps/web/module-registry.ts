@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { resolvePermission } from "@smartboss/auth/permissions";
 
 import { adminManifest } from "@/modules/admin/manifest";
+import { adminIssueReportManifest } from "@/modules/admin/issue-report-manifest";
 import { chatManifest } from "@/modules/chat/manifest";
 import { companyFilesManifest } from "@/modules/company-files/manifest";
 import { exampleManifest } from "@/modules/example/manifest";
@@ -51,6 +52,9 @@ export interface ModuleManifest {
  */
 export const moduleRegistry: ModuleManifest[] = [
   adminManifest,
+  // เมนูหลักแยกต่างหากของ "แจ้งบัค" (รับเรื่องทุกบริษัท) — ไม่ซ้อนอยู่ใต้
+  // เมนู "หลังบ้าน" ข้างบนแล้ว แม้หน้าจริงจะยังอยู่ใต้ /admin เหมือนเดิม
+  adminIssueReportManifest,
   exampleManifest,
   maintenanceManifest,
   // หน้าจออยู่ใน Smartboss แต่ข้อมูลมาจาก workforce API (โปรเซสแยก)
