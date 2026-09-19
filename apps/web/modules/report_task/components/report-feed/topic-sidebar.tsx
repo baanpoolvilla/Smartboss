@@ -973,9 +973,18 @@ export function TopicSidebar({
     // ("กดแล้วค้าง") instead of a normal room open.
     const canOpenDirectly = !t.isCategory && !t.archived;
     const hiddenForMe = depth > 0 && (t.hiddenBy?.includes(viewingAsUserId) ?? false);
-    // Reorder mode force-expands every group — a collapsed sub-topic list
-    // would have nothing to drag onto/into.
-    const collapsed = !editingOrder && collapsedTopicIds.has(t.id);
+    // Collapse works the same in reorder mode as it does normally now —
+    // used to force-expand every group while reordering (a collapsed group
+    // has nothing to drag its own children onto/into), which made a long
+    // tree impossible to tuck away just to reposition the *parent* rooms
+    // themselves ("ห้องที่มีลูกจะต้องเลื่อนผ่านลูกมันไปเรื่อยๆ...อยากย่อได้").
+    // The trade-off is real but narrow: a collapsed group can still be
+    // reordered among its own siblings and can still receive a drop as a
+    // new last child (reorderByDrop only needs the group's own header row,
+    // always rendered regardless of collapse) — only reordering *among* a
+    // collapsed group's existing children needs it expanded first, since
+    // those rows aren't in the DOM to drag/drop onto while hidden.
+    const collapsed = collapsedTopicIds.has(t.id);
     const muted = notifyPrefFor(t) === "off";
     // Unread dot/badge/red-pill — each one filters (or, for the descendant
     // check below, recursively filters) the WHOLE posts array per topic.
@@ -1547,7 +1556,10 @@ export function TopicSidebar({
     if (depth > 8) return null;
     const children = childrenOf(t.id);
     const hasChildren = children.length > 0;
-    const isCollapsed = !editingOrder && collapsedTopicIds.has(t.id);
+    // Collapse works during reorder mode too now — see the matching
+    // `collapsed` in renderTopicRow for why the old force-expand-while-
+    // reordering behavior got dropped.
+    const isCollapsed = collapsedTopicIds.has(t.id);
     // Discord-style collapse: a collapsed category still keeps any channel
     // that's unread or currently open on screen — only the read/idle ones
     // tuck away — so a new post is never hidden behind a folded folder and
@@ -1585,7 +1597,7 @@ export function TopicSidebar({
   // (see renderTopicSubtree above) down to its own children.
   function renderTopicBranch(t: ReportTopic) {
     const children = childrenOf(t.id);
-    const isCollapsed = !editingOrder && collapsedTopicIds.has(t.id);
+    const isCollapsed = collapsedTopicIds.has(t.id);
     const visibleChildren = isCollapsed
       ? children.filter((c) => c.id === activeId || topicUnreadPosts(c).length > 0)
       : children;
