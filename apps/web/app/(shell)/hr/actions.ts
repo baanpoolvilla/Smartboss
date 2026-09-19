@@ -1403,27 +1403,7 @@ export async function createSiteAction(formData: FormData) {
   revalidatePath("/hr/settings/attendance");
 }
 
-/**
- * ติ๊ก/เอาออก สถานที่ที่นโยบายกลุ่มหนึ่งอนุญาต — ไม่ติ๊กเลย = ทุกสถานที่
- *
- * เดิมตั้งได้แค่ตอนสร้างกลุ่ม แก้ทีหลังไม่ได้เลย ต้องสร้างกลุ่มใหม่แล้วย้ายคนทั้งหมด
- */
-export async function setPolicyAllowedSitesAction(formData: FormData) {
-  await guard(HR_PERMS.settingManage);
 
-  const groupId = String(formData.get("group_id") ?? "");
-  if (!groupId) throw new Error("ไม่พบกลุ่มนโยบาย");
-
-  try {
-    await wfFetch(`/attendance-policy-groups/${groupId}/allowed-sites`, {
-      method: "PATCH",
-      body: { allowed_site_ids: formData.getAll("allowed_site_ids").map(String) },
-    });
-  } catch (error) {
-    throw new Error(toMessage(error));
-  }
-  revalidatePath("/hr/settings/attendance");
-}
 
 /**
  * แก้ไขสถานที่ — ย้ายหมุด / แก้รัศมี / เปิด-ปิดใช้งาน
@@ -1512,8 +1492,15 @@ export async function createCheckinPolicyAction(formData: FormData) {
         photo_required: String(formData.get("photo_required") ?? "DISABLED"),
         photo_random_percent: 0,
         location_required: checked(formData, "location_required"),
-        // ว่าง = ใช้ได้ทุกสถานที่ของบริษัท ซึ่งเป็นสิ่งที่คนส่วนใหญ่ต้องการ
-        allowed_site_ids: formData.getAll("allowed_site_ids").map(String),
+        /*
+         * ว่างเสมอ = ลงเวลาได้ทุกสถานที่ของนิติบุคคลนั้น
+         *
+         * ไม่เปิดให้เลือกสถานที่ตอนสร้างนโยบายอีกแล้ว — สถานที่ที่เพิ่มทีหลัง
+         * ต้องใช้งานได้ทันทีโดยไม่ต้องกลับมาติ๊กอะไร ("เพิ่มไปแล้วก็จะขึ้นเลย
+         * ไม่ต้องเลือกอะไรทั้งนั้น") การจำกัดไซต์คือต้นเหตุที่ไซต์ใหม่ลงเวลา
+         * ไม่ผ่านแบบเงียบ ๆ
+         */
+        allowed_site_ids: [],
         radius_m: intOr(formData, "radius_m", 200),
         max_accuracy_m: intOr(formData, "max_accuracy_m", 100),
         capture_deadline_seconds: 30,

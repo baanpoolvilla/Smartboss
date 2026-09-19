@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "@smartboss/ui/components/button";
 import { Field, inputClass } from "@/modules/hr/components/ui";
-import type { CheckinPolicyGroup, Site } from "@/modules/hr/lib/api";
+import type { CheckinPolicyGroup } from "@/modules/hr/lib/api";
 import {
   assignCheckinPolicyAction,
   assignUnassignedToCheckinPolicyAction,
@@ -26,13 +26,12 @@ import {
  */
 const checkboxClass = "h-5 w-5 rounded border-(--line) accent-(--app)";
 
-export function CreatePolicyForm({
-  companyId,
-  sites,
-}: {
-  companyId: string;
-  sites: Site[];
-}) {
+/*
+ * ไม่มีช่อง "จำกัดเฉพาะสถานที่" โดยตั้งใจ — นโยบายอนุญาตทุกสถานที่ของนิติบุคคล
+ * ตัวเองเสมอ (allowed_site_ids ว่าง) สถานที่ที่เพิ่มทีหลังจึงใช้ได้ทันทีโดยไม่ต้อง
+ * กลับมาติ๊กอะไรอีก · เดิมช่องนี้ทำให้ไซต์ใหม่ลงเวลาไม่ผ่านแบบไม่มีใครรู้สาเหตุ
+ */
+export function CreatePolicyForm({ companyId }: { companyId: string }) {
   const [photoRequired, setPhotoRequired] = useState("DISABLED");
 
   return (
@@ -127,24 +126,6 @@ export function CreatePolicyForm({
           />
         </Field>
       </div>
-
-      {sites.length > 0 && (
-        <fieldset>
-          <legend className="mb-2 text-sm font-medium">
-            จำกัดเฉพาะสถานที่{" "}
-            <span className="font-normal text-(--ink-soft)">
-              (ไม่ติ๊กเลย = ใช้ได้ทุกสถานที่)
-            </span>
-          </legend>
-          <div className="flex flex-wrap gap-4">
-            {sites.map((site) => (
-              <Check key={site.id} name="allowed_site_ids" value={site.id}>
-                {site.name}
-              </Check>
-            ))}
-          </div>
-        </fieldset>
-      )}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-6">
         <Check name="location_required" value="1" defaultChecked>

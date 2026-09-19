@@ -1,4 +1,3 @@
-import { Button } from "@smartboss/ui/components/button";
 import { HrPage } from "@/modules/hr/components/hr-page";
 import { SettingsSubnav } from "@/modules/hr/components/design-kit";
 import { HR_PERMS } from "@/modules/hr/permissions";
@@ -20,7 +19,6 @@ import {
   SectionCard,
   Td,
 } from "@/modules/hr/components/ui";
-import { setPolicyAllowedSitesAction } from "../../actions";
 import { SiteCreateForm, SiteEditCard } from "./site-forms";
 import { AssignPanel, CreatePolicyForm } from "./policy-forms";
 
@@ -243,10 +241,9 @@ export default async function AttendanceSettingsPage() {
                               : "ไม่บังคับ"}
                           </Td>
                           {/*
-                            เดิมตารางไม่บอกเลยว่านโยบายจำกัดสถานที่ไว้แค่ไหน — ตั้ง
-                            "จำกัดเฉพาะสถานที่" ไว้ตอนสร้าง สถานที่ที่เพิ่มทีหลังจะไม่
-                            เข้าเงื่อนไขเอง แล้วแผนที่ในมือถือจะไม่ขึ้นที่นั้นเลย
-                            โดยไม่มีอะไรบนหน้าจอชี้สาเหตุ
+                            ปกติเป็น "ทุกสถานที่" ทุกกลุ่ม — คอลัมน์นี้เหลือไว้เพราะ
+                            ยังมีทางที่กลุ่มถูกจำกัดไซต์ได้ (ยิง API ตรง) แล้วถ้าไม่
+                            แสดงตรงนี้ จะไม่มีอะไรบอกเลยว่าทำไมบางที่ลงเวลาไม่ผ่าน
                           */}
                           <Td>
                             {group.allowed_site_ids.length === 0 ? (
@@ -258,13 +255,9 @@ export default async function AttendanceSettingsPage() {
                                   .map((site) => (
                                     <Pill key={site.id}>{site.name}</Pill>
                                   ))}
-                                {siteList.some(
-                                  (site) => !group.allowed_site_ids.includes(site.id),
-                                ) && (
-                                  <span className="text-[11px] text-(--tone-warn)">
-                                    ที่อื่นลงเวลาไม่ได้
-                                  </span>
-                                )}
+                                <span className="text-[11px] text-(--tone-warn)">
+                                  ที่อื่นลงเวลาไม่ได้
+                                </span>
                               </span>
                             )}
                           </Td>
@@ -285,56 +278,6 @@ export default async function AttendanceSettingsPage() {
                   )}
                 </SectionCard>
 
-                {groups.items.length > 0 && siteList.length > 0 && (
-                  <SectionCard
-                    title="สถานที่ที่แต่ละนโยบายอนุญาต"
-                    description="ไม่ติ๊กเลย = ลงเวลาได้ทุกสถานที่ · สถานที่ที่เพิ่มใหม่ ระบบติ๊กให้เองทันที"
-                  >
-                    <div className="flex flex-col gap-4">
-                      {groups.items.map((group) => (
-                        <form
-                          key={group.id}
-                          action={setPolicyAllowedSitesAction}
-                          className="flex flex-col gap-2 rounded-(--radius) border border-(--line) p-3"
-                        >
-                          <input type="hidden" name="group_id" value={group.id} />
-                          <p className="text-sm font-medium text-(--ink)">
-                            {group.name}
-                            <span className="ml-2 font-mono text-[11px] text-(--ink-soft)">
-                              {group.code}
-                            </span>
-                          </p>
-                          <div className="flex flex-wrap gap-x-5 gap-y-2">
-                            {siteList.map((site) => (
-                              <label
-                                key={site.id}
-                                className="flex items-center gap-2 text-sm text-(--ink)"
-                              >
-                                <input
-                                  type="checkbox"
-                                  name="allowed_site_ids"
-                                  value={site.id}
-                                  defaultChecked={group.allowed_site_ids.includes(site.id)}
-                                  className="h-4 w-4"
-                                />
-                                {site.name}
-                                {(site.latitude === null || site.longitude === null) && (
-                                  <span className="text-[11px] text-(--tone-warn)">ไม่มีหมุด</span>
-                                )}
-                              </label>
-                            ))}
-                          </div>
-                          <div>
-                            <Button type="submit" size="sm" variant="outline">
-                              บันทึกสถานที่ของกลุ่มนี้
-                            </Button>
-                          </div>
-                        </form>
-                      ))}
-                    </div>
-                  </SectionCard>
-                )}
-
                 <SectionCard
                   title="จัดพนักงานเข้ากลุ่ม"
                   description={`พนักงานที่ทำงานอยู่ ${employees.length} คน · ยังไม่มีกลุ่ม ${unassignedCount} คน`}
@@ -351,7 +294,7 @@ export default async function AttendanceSettingsPage() {
                     title="สร้างนโยบายใหม่"
                     description="ค่าที่เปิดมาให้เป็นชุดที่ใช้งานได้จริงตั้งแต่วันแรก ปรับได้ทุกช่อง"
                   >
-                    <CreatePolicyForm companyId={companyId} sites={siteList} />
+                    <CreatePolicyForm companyId={companyId} />
                   </SectionCard>
                 )}
 
