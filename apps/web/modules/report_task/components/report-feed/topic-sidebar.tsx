@@ -1277,7 +1277,7 @@ export function TopicSidebar({
         )}
         <span
           className={cn(
-            "truncate flex-1 leading-none",
+            "truncate flex-1 leading-none [&::first-letter]:uppercase",
             depth === 0 || hasUnread ? "font-semibold" : "font-normal",
             active && "text-[var(--brand-green-dark)]"
           )}

@@ -23,6 +23,7 @@ const MODULE_LABEL: Record<ModuleFilter, string> = {
   all: "ทุกโมดูล",
   report: "รายงาน-งาน",
   maintenance: "ซ่อมบำรุง",
+  hr: "ระบบบุคคล",
 };
 
 /**
@@ -244,7 +245,7 @@ export function NotificationsPageClient() {
             <SelectValue>{MODULE_LABEL[moduleFilter]}</SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {(["all", "report", "maintenance"] as const).map((m) => (
+            {(["all", "report", "maintenance", "hr"] as const).map((m) => (
               <SelectItem key={m} value={m}>
                 {MODULE_LABEL[m]}
               </SelectItem>
