@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canManage } from "@/modules/report_task/lib/directory";
@@ -74,7 +74,15 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
   const maintenanceMarkRead = useMaintenanceNotifStore((s) => s.markRead);
   const maintenanceMarkAllRead = useMaintenanceNotifStore((s) => s.markAllRead);
   const includeOrgActivity = !!options.includeOrgActivity;
-  const maintenanceRefresh = () => maintenanceRefreshRaw({ includeOrgActivity });
+  // ต้องคงหน้าตาฟังก์ชันไว้ (useCallback) ไม่งั้นได้ reference ใหม่ทุก render
+  // — ผู้เรียก (notification-bell-popover.tsx) มี useEffect ที่มี refresh
+  // เป็น dependency ตัวหนึ่ง ถ้า reference เปลี่ยนทุกครั้ง effect จะยิงซ้ำทุก
+  // render, ยิงซ้ำแล้ว set() ก็ทำให้ re-render อีก วนไม่จบจนกว่าจะเบรกเอง
+  // ("กดทั้งบริษัทแล้วมันเด้งแบบรัวๆแล้วค่อยมาอันสุดท้าย")
+  const maintenanceRefresh = useCallback(
+    () => maintenanceRefreshRaw({ includeOrgActivity }),
+    [maintenanceRefreshRaw, includeOrgActivity]
+  );
 
   const items = useMemo<UnifiedNotification[]>(() => {
     const fromReport: UnifiedNotification[] = reportNotifications
