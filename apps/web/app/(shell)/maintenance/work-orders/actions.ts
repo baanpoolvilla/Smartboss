@@ -97,6 +97,15 @@ export async function createWorkOrderAction(formData: FormData) {
   }
 
   revalidatePath("/maintenance/work-orders");
+
+  // ติ๊ก "เปิด PR ต่อเลย" ⇒ ไปต่อหน้าเปิด PR ที่ผูกใบงานนี้ให้เลย ไม่ต้องย้อน
+  // เข้าใบงานไปกดเอง — เช็คสิทธิ์ซ้ำที่นี่ เพราะ checkbox ถูกยิงตรงมาได้
+  if (
+    formData.get("openPr") === "1" &&
+    hasPermission(s, MAINT_PERMS.poCreate)
+  ) {
+    redirect(`/maintenance/purchase-orders/new?workOrderId=${wo.id}`);
+  }
   redirect("/maintenance/work-orders");
 }
 

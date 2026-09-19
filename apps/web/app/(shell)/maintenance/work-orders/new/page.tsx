@@ -75,6 +75,10 @@ export default async function NewWorkOrderPage({
       : []),
   ];
 
+  // เห็นช่อง "เปิด PR ต่อเลย" เฉพาะคนที่เปิด PR ได้จริง — ติ๊กแล้วไปต่อหน้า PR
+  // ซึ่ง guard ด้วยสิทธิ์เดียวกัน คนที่เปิดไม่ได้ติ๊กไปก็เจอแค่หน้าเด้งกลับ
+  const canOpenPr = hasPermission(session, MAINT_PERMS.poCreate);
+
   const userOptions = users.map((u) => ({
     id: u.id,
     label: u.name,
@@ -171,6 +175,26 @@ export default async function NewWorkOrderPage({
           </Field>
 
           <FilePreviewInput name="photos" label="แนบรูปภาพ" />
+
+          {canOpenPr && (
+            <label className="flex items-start gap-2.5 rounded-(--radius) border border-(--line) p-3">
+              <input
+                type="checkbox"
+                name="openPr"
+                value="1"
+                className="mt-0.5 h-4 w-4"
+              />
+              <span>
+                <span className="block text-sm font-medium text-(--ink)">
+                  เปิด PR ขอซื้ออุปกรณ์ต่อเลย
+                </span>
+                <span className="block text-xs text-(--ink-soft)">
+                  ติ๊กแล้วพอบันทึกใบงานเสร็จ จะพาไปหน้าเปิด PR
+                  ที่ผูกกับใบงานนี้ให้ทันที
+                </span>
+              </span>
+            </label>
+          )}
 
           <div>
             <Button type="submit" className="w-full sm:w-48">
