@@ -119,6 +119,34 @@ export function moduleForCategory(cat: NotifCategory): NotifModule {
   return "maintenance";
 }
 
+/** สีประจำโมดูล (ตัวเดียวกับ tile หน้าแรก/แถบโมดูล — ดู packages/ui/tokens.css)
+ * ใช้แต้มแถบสีข้างซ้ายของแต่ละแจ้งเตือนในกระดิ่ง ให้กวาดตาแล้วรู้ทันทีว่า
+ * มาจากระบบไหนโดยไม่ต้องอ่านข้อความ ("อยากให้แจ้งเตือนมีแท็บ...แสดงสีบอกว่า
+ * มาจาก module ไหน") ไอคอน/สีต่อ category ที่มีอยู่แล้ว (CATEGORY_META) บอก
+ * "เรื่องอะไร" ภายในโมดูลนั้นอีกที — แถบสีนี้คือชั้นที่หยาบกว่า บอกแค่ "จาก
+ * ระบบไหน" เท่านั้น */
+export function moduleColorVar(mod: NotifModule): string {
+  switch (mod) {
+    case "hr":
+      return "var(--mod-hr)";
+    case "maintenance":
+      return "var(--mod-maintenance)";
+    case "report":
+    default:
+      return "var(--mod-report)";
+  }
+}
+
+const MODULE_LABEL: Record<NotifModule, string> = {
+  report: "รายงานและงาน",
+  maintenance: "แจ้งซ่อมบำรุง",
+  hr: "ระบบบุคคล",
+};
+
+export function labelForModule(mod: NotifModule): string {
+  return MODULE_LABEL[mod] ?? mod;
+}
+
 const CATEGORY_META: Record<NotifCategory, ActionMeta> = {
   report_post: { Icon: FileText, color: "#3B82F6" },
   reply: { Icon: CornerDownRight, color: "#16A34A" },

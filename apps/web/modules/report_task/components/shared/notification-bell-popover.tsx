@@ -9,7 +9,7 @@ import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { isOwner, canManage } from "@/modules/report_task/lib/directory";
 import { relativeTime } from "@/modules/report_task/lib/format";
-import { metaForCategory } from "@/modules/notifications/derive";
+import { metaForCategory, moduleColorVar, labelForModule } from "@/modules/notifications/derive";
 import { useUnifiedNotifications } from "@/modules/notifications/use-unified-notifications";
 import type { UnifiedNotification } from "@/modules/notifications/types";
 
@@ -155,9 +155,18 @@ export function NotificationBellPopover() {
               const { Icon, color } = metaForCategory(n.category);
               const row = (
                 <div
-                  className="flex items-start gap-3 px-3 py-2.5 transition-colors hover:bg-(--bg-soft)"
+                  className="relative flex items-start gap-3 py-2.5 pr-3 pl-4 transition-colors hover:bg-(--bg-soft)"
                   style={!n.read ? { backgroundColor: "color-mix(in srgb, var(--brand-green) 7%, transparent)" } : undefined}
                 >
+                  {/* แถบสีประจำโมดูล — บอก "มาจากระบบไหน" ในแวบเดียวโดยไม่ต้อง
+                      อ่านข้อความ (ไอคอน/สีข้าง avatar บอก "เรื่องอะไร" ในระบบ
+                      นั้นอีกที คนละชั้นกัน) */}
+                  <span
+                    className="absolute inset-y-0 left-0 w-1"
+                    style={{ backgroundColor: moduleColorVar(n.module) }}
+                    title={labelForModule(n.module)}
+                    aria-hidden
+                  />
                   <div className="relative shrink-0">
                     {/* report items แนบคนที่ทำมาด้วยเสมอ → โชว์ avatar จริง +
                         แบดจ์ไอคอนมุมล่าง maintenance ไม่มีคนแนบ → ใช้วงกลม
