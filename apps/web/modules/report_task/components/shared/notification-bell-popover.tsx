@@ -162,7 +162,7 @@ export function NotificationBellPopover() {
                       อ่านข้อความ (ไอคอน/สีข้าง avatar บอก "เรื่องอะไร" ในระบบ
                       นั้นอีกที คนละชั้นกัน) */}
                   <span
-                    className="absolute inset-y-0 left-0 w-1"
+                    className="absolute top-2 bottom-2 left-1 w-1 rounded-full"
                     style={{ backgroundColor: stripeColorFor(n.category, n.module) }}
                     title={stripeLabelFor(n.category, n.module)}
                     aria-hidden
