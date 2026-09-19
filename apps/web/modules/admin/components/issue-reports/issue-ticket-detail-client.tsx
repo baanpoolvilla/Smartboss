@@ -278,6 +278,15 @@ export function IssueTicketDetailClient({
           <Row label="อีเมลผู้แจ้ง" value={reporter?.email ?? "-"} />
           {assignee && <Row label="ผู้รับผิดชอบ" value={assignee.name} />}
           <Row label="หน้าที่แจ้งมา" value={ticket.context.pageUrl || "-"} mono />
+          {/* เดิมเคยโชว์แค่ในหน้า agent ต่อบริษัท (isDeskView) ซึ่งปิดตายไปแล้ว
+              ตอนย้ายงานรับเรื่อง-ตอบ-ปิดมาไว้ที่นี่ที่เดียว — ค่าพวกนี้เก็บมา
+              ตั้งแต่ต้นอยู่แล้ว (ดู IssueTicket.context) แค่ไม่เคยถูกย้ายมาโชว์
+              ที่นี่ด้วย ทำให้ทีม Smartboss เห็นแค่ URL แต่ไม่เห็นขนาดจอ/เบราว์
+              เซอร์ที่เจอปัญหาอีกเลย ทั้งที่เป็นข้อมูลที่จำเป็นเวลาไล่บั๊กที่ขึ้น
+              เฉพาะบางอุปกรณ์ ("ไม่เห็นส่งขนาดหน้าจอที่แจ้งมาเลย ตอนแรกมีด้วยนะ") */}
+          {ticket.context.viewport && <Row label="ขนาดจอ" value={ticket.context.viewport} />}
+          <Row label="อุปกรณ์/เบราว์เซอร์" value={ticket.context.userAgent || "-"} />
+          <Row label="เกิดขึ้นเมื่อ" value={new Date(ticket.context.occurredAt).toLocaleString("th-TH")} />
           {ticket.whatWasChecked && <Row label="ตรวจสอบแล้ว" value={ticket.whatWasChecked} />}
           {ticket.rejectReason && <Row label="เหตุผลที่ไม่ดำเนินการ" value={ticket.rejectReason} />}
           {ticket.duplicateOfId && <Row label="ซ้ำกับตั๋ว" value={ticket.duplicateOfId} />}

@@ -72,7 +72,15 @@ export function ReportTaskScaffold({
     .filter((m) => pathname === m.path || pathname.startsWith(`${m.path}/`))
     .sort((a, b) => b.path.length - a.path.length)[0];
 
-  const title = match?.label ?? reportTaskManifest.name;
+  // "แจ้งบัค" (/report-task/issue-reports) ตั้งใจไม่อยู่ใน navItems เลย (ดู
+  // lib/nav-config.ts) — ไม่มีเมนูของตัวเองในแถบข้าง เข้าได้แค่ทางไอคอนแมลงบน
+  // AppBar เท่านั้น ("ให้เห็นแค่ปุ่มขวาบนอันเดียว") แต่พอไม่มีเมนูให้ match,
+  // path ที่เหลือตัวเดียวที่ยังเป็นคำนำหน้าของมันคือ "แดชบอร์ด" (path =
+  // REPORT_TASK_BASE เฉยๆ) ทำให้ AppBar ขึ้นหัวข้อผิด ("แดชบอร์ด" แทนที่จะ
+  // เป็นชื่อของหน้านี้เอง) เช็คแยกไว้ตรงนี้แทน ไม่ผูกกับระบบเมนู/sidebar เลย
+  const isIssueReports = pathname.startsWith(`${REPORT_TASK_BASE}/issue-reports`);
+
+  const title = isIssueReports ? "แจ้งบัค" : (match?.label ?? reportTaskManifest.name);
 
   // กระดาน Kanban กับหน้ารายงาน (topic sidebar + feed สองแผงเลื่อนแยกกันเอง
   // ข้างใน) จัดการ scroll ของตัวเองทั้งคู่ — ถ้าไม่ตั้ง fill ไว้ ตัวห่อของ
