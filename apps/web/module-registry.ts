@@ -8,6 +8,7 @@ import { exampleManifest } from "@/modules/example/manifest";
 import { hrManifest } from "@/modules/hr/manifest";
 import { maintenanceManifest } from "@/modules/maintenance/manifest";
 import { reportTaskManifest } from "@/modules/report_task/manifest";
+import { issueReportManifest } from "@/modules/report_task/issue-report-manifest";
 
 export interface ModuleMenuItem {
   label: string;
@@ -57,6 +58,9 @@ export const moduleRegistry: ModuleManifest[] = [
   hrManifest,
   // พอร์ตมาจากแอป easyboss-workspace ที่เคยรันเดี่ยว ๆ
   reportTaskManifest,
+  // เมนูหลักแยกต่างหากของ "แจ้งบัค" — ไม่ผูกกับการเปิด/ปิดโมดูลรายงานและงาน
+  // ข้างบน แม้หน้าจริงจะยังอยู่ใต้ route เดียวกัน (ดู issue-report-manifest.ts)
+  issueReportManifest,
   // MVP แชทองค์กร — ปิดใช้งานทุกบริษัทโดยดีฟอลต์ เปิดทีละบริษัทได้ที่ /admin/modules
   chatManifest,
   // ที่เก็บไฟล์กลางแบบ SharePoint/Teams Files — ปิดใช้งานทุกบริษัทโดยดีฟอลต์เหมือนแชท

@@ -35,11 +35,14 @@ function findActiveModule(
   modules: ModuleManifest[],
   pathname: string
 ): ModuleManifest | null {
-  return (
-    modules.find(
-      (m) => pathname === m.basePath || pathname.startsWith(m.basePath + "/")
-    ) ?? null
-  );
+  // Longest basePath wins, not first-in-array — "แจ้งบัค" (basePath
+  // /report-task/issue-reports) sits underneath "รายงานและงาน"'s own
+  // basePath (/report-task), so a first-match .find() would always resolve
+  // to รายงานและงาน instead (its shorter basePath matches the same
+  // pathname.startsWith() check first), making แจ้งบัค's own single-item
+  // sidebar unreachable no matter where it sits in moduleRegistry's array.
+  const matches = modules.filter((m) => pathname === m.basePath || pathname.startsWith(m.basePath + "/"));
+  return matches.sort((a, b) => b.basePath.length - a.basePath.length)[0] ?? null;
 }
 
 function isMenuActive(pathname: string, menuPath: string, basePath: string) {

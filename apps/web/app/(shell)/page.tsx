@@ -6,6 +6,7 @@ import { iconByName } from "@/lib/icons";
 import { loadShellNav } from "@/lib/nav";
 import { AppTileReviewBadge } from "@/modules/report_task/components/shared/app-tile-review-badge";
 import { IssueReportAppTile } from "@/modules/report_task/components/issue-report/issue-report-app-tile";
+import { ISSUE_REPORT_CODE } from "@/modules/report_task/issue-report-manifest";
 
 interface AppTile {
   code: string;
@@ -54,6 +55,10 @@ export default async function HomePage() {
   // โมดูลที่ติดตั้งเพิ่มภายหลัง (ไม่อยู่ใน 6 การ์ด) — ดึงหน้าตาจาก manifest
   for (const m of nav.modules) {
     if (tiles.some((t) => t.code === m.id)) continue;
+    // "แจ้งบัค" มี tile คงที่ของตัวเองอยู่แล้วท้ายกริดนี้ (ดูด้านล่าง) — ข้าม
+    // ไม่งั้นจะได้ tile ซ้ำสองอันตั้งแต่ตอนเพิ่ม issueReportManifest เข้า
+    // moduleRegistry เพื่อให้มันมีเมนูของตัวเองบน sidebar ด้วย
+    if (m.id === ISSUE_REPORT_CODE) continue;
     tiles.push({
       code: m.id,
       name: m.name,

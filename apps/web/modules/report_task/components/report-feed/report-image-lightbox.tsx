@@ -346,13 +346,22 @@ export function ReportImageLightbox({
               <Download className="h-5 w-5" />
             </a>
           )}
-          <button
-            onClick={onClose}
-            className="h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
-            aria-label="ปิด"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          {/* isDoc (pdf/word/excel/ppt) gets its own close button inside its
+              white panel's header below — this white/10-on-black styling
+              reads fine over the black backdrop, but a pdf's panel is
+              97vw/94vh, leaving barely any backdrop around it, so this
+              button ends up sitting on the panel's white background instead
+              — a white icon on white is effectively invisible
+              ("กากบาทเวลากดเปิดไฟล์และมันไม่ชัดเจนอะ"). */}
+          {!isDoc && (
+            <button
+              onClick={onClose}
+              className="h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
+              aria-label="ปิด"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          )}
         </div>
 
         {hasMultiple && (
@@ -384,14 +393,26 @@ export function ReportImageLightbox({
               <span className="min-w-0 truncate text-sm font-medium text-[var(--ink)]" title={image.name}>
                 {image.name}
               </span>
-              <a
-                href={downloadHref}
-                download={image.url ? undefined : image.name}
-                className="flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--brand-green)] px-3 py-1.5 text-xs font-medium text-[var(--ink)] transition-colors hover:bg-[var(--brand-green-dark)] hover:text-white"
-              >
-                <Download className="h-3.5 w-3.5" />
-                ดาวน์โหลด
-              </a>
+              <div className="flex shrink-0 items-center gap-2">
+                <a
+                  href={downloadHref}
+                  download={image.url ? undefined : image.name}
+                  className="flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--brand-green)] px-3 py-1.5 text-xs font-medium text-[var(--ink)] transition-colors hover:bg-[var(--brand-green-dark)] hover:text-white"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  ดาวน์โหลด
+                </a>
+                {/* Dark icon on this panel's own white header — the global
+                    black-backdrop close button (white-on-white here) was the
+                    "มันไม่ชัดเจน" close button this replaces for pdf/doc panels. */}
+                <button
+                  onClick={onClose}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)] cursor-pointer"
+                  aria-label="ปิด"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
             {/* #zoom=page-width — "open parameters" ที่ Chrome/Edge/Firefox
                 ตัว viewer ในตัวรองรับ (มาตรฐานเดิมของ Adobe Acrobat) สั่งให้
@@ -410,14 +431,23 @@ export function ReportImageLightbox({
               <span className="min-w-0 truncate text-sm font-medium text-[var(--ink)]" title={image.name}>
                 {image.name}
               </span>
-              <a
-                href={downloadHref}
-                download={image.url ? undefined : image.name}
-                className="flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--brand-green)] px-3 py-1.5 text-xs font-medium text-[var(--ink)] transition-colors hover:bg-[var(--brand-green-dark)] hover:text-white"
-              >
-                <Download className="h-3.5 w-3.5" />
-                ดาวน์โหลด
-              </a>
+              <div className="flex shrink-0 items-center gap-2">
+                <a
+                  href={downloadHref}
+                  download={image.url ? undefined : image.name}
+                  className="flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--brand-green)] px-3 py-1.5 text-xs font-medium text-[var(--ink)] transition-colors hover:bg-[var(--brand-green-dark)] hover:text-white"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  ดาวน์โหลด
+                </a>
+                <button
+                  onClick={onClose}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)] cursor-pointer"
+                  aria-label="ปิด"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={image.thumbUrl} alt={image.name} className="min-h-0 flex-1 object-contain bg-[var(--bg-soft)]" />
@@ -428,8 +458,20 @@ export function ReportImageLightbox({
              ไอคอน + ปุ่มดาวน์โหลดเหมือนเดิม */
           <div
             onClick={(e) => e.stopPropagation()}
-            className="flex w-[min(86vw,26rem)] cursor-default flex-col items-center gap-4 rounded-2xl bg-white px-6 py-7 text-center sm:px-8"
+            className="relative flex w-[min(86vw,26rem)] cursor-default flex-col items-center gap-4 rounded-2xl bg-white px-6 py-7 text-center sm:px-8"
           >
+            {/* This card is small enough to leave real backdrop around it, so
+                unlike the pdf/thumb panels above it doesn't need its own
+                close button purely for contrast — but the global one was
+                removed for every isDoc case, so it still needs one of its
+                own to stay closeable at all. */}
+            <button
+              onClick={onClose}
+              className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)] cursor-pointer"
+              aria-label="ปิด"
+            >
+              <X className="h-4 w-4" />
+            </button>
             {/* Width-capped so a long filename truncates inside the card
                 instead of stretching it past a phone's screen. */}
             <ReportFileChip media={image} className="w-full border-0 p-0" />

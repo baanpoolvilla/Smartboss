@@ -235,12 +235,18 @@ export default async function AllIssueReportsPage({ searchParams }: { searchPara
               className={inputClass}
             />
           </label>
-          <div className="flex items-end gap-2">
+          {/* w-full on the submit button only works alongside a fixed-width
+              sibling inside a plain flex row when there's room to spare —
+              on a phone it forces itself to the row's full width and
+              squeezes/overflows "ล้าง" beside it. grid-cols-2 at mobile
+              splits the row evenly between both instead; sm+ reverts to the
+              original auto-width flex row. */}
+          <div className="grid grid-cols-2 items-end gap-2 sm:flex sm:w-auto">
             <Button type="submit" className="w-full sm:w-auto">กรอง</Button>
             {(sp.q || sp.orgId || sp.status || sp.category || sp.priority || sp.from || sp.to) && (
               <Link
                 href={tab !== "all" ? `?tab=${tab}` : "?"}
-                className="inline-flex h-10 items-center rounded-(--radius) border border-(--line) px-3 text-sm text-(--ink-soft) hover:bg-(--bg-soft)"
+                className="inline-flex h-10 items-center justify-center rounded-(--radius) border border-(--line) px-3 text-sm text-(--ink-soft) hover:bg-(--bg-soft)"
               >
                 ล้าง
               </Link>
