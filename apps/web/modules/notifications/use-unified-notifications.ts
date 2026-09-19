@@ -6,7 +6,32 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canManage } from "@/modules/report_task/lib/directory";
 import { useMaintenanceNotifStore } from "@/modules/notifications/use-maintenance-notifications";
 import { isRoomPost, reportCategoryFor, maintenanceCategoryFor, maintenanceHrefFor } from "@/modules/notifications/derive";
-import type { UnifiedNotification } from "@/modules/notifications/types";
+import type { NotifCategory, UnifiedNotification } from "@/modules/notifications/types";
+
+/** "มีคนทำอะไรบางอย่างที่พาดพิงถึงฉันโดยตรง เมื่อกี้นี้" (แท็ก/มอบหมายงาน/
+ * ตอบกลับ/ตั๋วปัญหา/นัดประชุม/ใบงานที่มอบหมายให้) เทียบกับแจ้งเตือนแบบ
+ * "เตือนตามกำหนดเวลา" ที่ระบบสร้างเป็นชุดใหญ่ล่วงหน้า (แผนบำรุงรักษา,
+ * ค่าใช้จ่าย, ใบสั่งซื้อ, เตือนส่งรายงาน) — PM เดียวสร้างเตือนล่วงหน้าได้
+ * หลายรอบ (7 วัน/5 วัน/1 วันก่อนถึงกำหนด ฯลฯ) ต่อหนึ่งงาน คูณด้วยจำนวนงาน PM
+ * ทั้งบริษัท ยอดรวมจึงมากกว่าจำนวนครั้งที่มีคนแท็ก/มอบหมายงานให้จริงๆ เป็นสิบ
+ * เท่าได้ง่ายๆ — เรียงแค่ unread-first + ใหม่→เก่า อย่างเดียวเลยทำให้ของจริง
+ * ที่ควรรีบเห็น (เพิ่งมีคนมอบหมายงานให้) จมหายไปในกองเตือน PM ที่ backfill
+ * มาทีเดียวหลายสิบอัน แม้จะเพิ่งเกิดใหม่กว่าก็ตาม ("กระดิ่งไม่ขึ้น...เปิดใน
+ * งาน/Kanban ถึงเห็น") จัดลำดับกลุ่มนี้ไว้ก่อนเสมอ ไม่ว่าฝั่งเตือนตามกำหนดจะมี
+ * เยอะแค่ไหนหรือใหม่กว่าแค่ไหน */
+const PERSONAL_CATEGORIES = new Set<NotifCategory>([
+  "mention",
+  "reply",
+  "reaction",
+  "task",
+  "task_rejected",
+  "ticket",
+  "meeting",
+  "work_order",
+]);
+function isPersonal(n: UnifiedNotification): boolean {
+  return PERSONAL_CATEGORIES.has(n.category);
+}
 
 export interface UseUnifiedNotificationsOptions {
   /** รวมแจ้งเตือน "โพสต์ใหม่ในห้อง" (room_post) ด้วยไหม — โหมด "ทั้งหมด" ที่
@@ -23,7 +48,8 @@ export interface UseUnifiedNotificationsOptions {
 
 /** รวมแจ้งเตือน 2 แหล่ง (report_task client store + maintenance ผ่าน
  * /api/notifications/maintenance) เป็นลิสต์เดียว เรียง unread-first แล้ว
- * ใหม่→เก่า ให้ทั้ง bell popover และหน้าเต็ม /notifications ใช้ตัวเดียวกัน */
+ * "เกี่ยวกับฉันโดยตรง" ก่อนแจ้งเตือนตามกำหนดเวลา (ดู isPersonal ด้านล่าง)
+ * แล้วค่อยใหม่→เก่า ให้ทั้ง bell popover และหน้าเต็ม /notifications ใช้ตัวเดียวกัน */
 export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions = {}) {
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const includeRoomPosts = !!options.includeRoomPosts && canManage(viewingAsUserId);
@@ -64,9 +90,14 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
       link: maintenanceHrefFor(n.type, n.referenceId),
     }));
 
-    // unread-first, then newest→oldest within each bucket
+    // unread-first, then "about me directly" ahead of scheduled/bulk
+    // reminders (see isPersonal's own doc comment), then newest→oldest
+    // within each bucket
     return [...fromReport, ...fromMaintenance].sort(
-      (a, b) => Number(a.read) - Number(b.read) || b.createdAt.localeCompare(a.createdAt)
+      (a, b) =>
+        Number(a.read) - Number(b.read) ||
+        Number(isPersonal(b)) - Number(isPersonal(a)) ||
+        b.createdAt.localeCompare(a.createdAt)
     );
   }, [reportNotifications, maintenanceItems, viewingAsUserId, includeRoomPosts]);
 
