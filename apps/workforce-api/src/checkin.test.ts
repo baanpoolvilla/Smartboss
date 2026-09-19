@@ -765,3 +765,86 @@ describe('risk review queue', () => {
     expect(noReason.status).toBe(400);
   });
 });
+
+describe('แก้สถานที่ที่นโยบายอนุญาต', () => {
+  /** ไซต์ใหม่ของนิติบุคคลเดียวกัน — ใช้จำลอง "เพิ่มสถานที่ทีหลัง" */
+  async function createSite(name: string): Promise<string> {
+    const response = await call(harness, 'POST', '/sites', {
+      token: adminToken,
+      idempotencyKey: uuidv4(),
+      payload: {
+        company_id: tenant.companyId,
+        code: `NB-${uuidv4().slice(0, 8)}`,
+        name,
+        latitude: 12.791890,
+        longitude: 100.923862,
+      },
+    });
+    expect(response.status).toBe(201);
+    return response.body['id'] as string;
+  }
+
+  async function mySiteIds(token: string): Promise<string[]> {
+    const response = await call(harness, 'GET', '/me/checkin-sites', { token });
+    expect(response.status).toBe(200);
+    return (response.body['sites'] as { id: string }[]).map((site) => site.id);
+  }
+
+  it('สถานที่ที่เพิ่มทีหลัง ใส่เข้านโยบายเดิมได้ทันที ไม่ต้องสร้างกลุ่มใหม่แล้วย้ายคน', async () => {
+    const employee = await createEmployee('เพิ่มไซต์ทีหลัง');
+    const group = await createPolicyGroup({ allowed_site_ids: [siteId] });
+    await assignPolicy(group, employee.employmentId);
+
+    const branchId = await createSite('ไซต์ที่เพิ่มทีหลัง');
+    // นโยบายที่จำกัดไซต์ไว้ไม่รู้จักไซต์ใหม่เอง ⇒ ลงเวลาที่นั่นไม่ผ่านทุกครั้ง
+    expect(await mySiteIds(employee.token)).toEqual([siteId]);
+
+    const patched = await call(
+      harness,
+      'PATCH',
+      `/attendance-policy-groups/${group}/allowed-sites`,
+      { token: adminToken, payload: { allowed_site_ids: [siteId, branchId] } },
+    );
+    expect(patched.status).toBe(200);
+
+    expect((await mySiteIds(employee.token)).sort()).toEqual([siteId, branchId].sort());
+  });
+
+  it('ส่งรายการว่าง = อนุญาตทุกสถานที่ของนิติบุคคลนั้น', async () => {
+    const employee = await createEmployee('ทุกไซต์');
+    const group = await createPolicyGroup({ allowed_site_ids: [siteId] });
+    await assignPolicy(group, employee.employmentId);
+    const branchId = await createSite('ไซต์นอกรายการ');
+
+    await call(harness, 'PATCH', `/attendance-policy-groups/${group}/allowed-sites`, {
+      token: adminToken,
+      payload: { allowed_site_ids: [] },
+    });
+
+    const ids = await mySiteIds(employee.token);
+    expect(ids).toContain(siteId);
+    expect(ids).toContain(branchId);
+  });
+
+  it('ปฏิเสธสถานที่ที่ไม่ใช่ของนิติบุคคลเดียวกับนโยบาย', async () => {
+    const group = await createPolicyGroup();
+    const response = await call(
+      harness,
+      'PATCH',
+      `/attendance-policy-groups/${group}/allowed-sites`,
+      { token: adminToken, payload: { allowed_site_ids: [uuidv4()] } },
+    );
+    expect(response.status).toBe(400);
+  });
+
+  it('คนที่ไม่มีสิทธิ์ตั้งค่าโมดูล แก้ไม่ได้', async () => {
+    const group = await createPolicyGroup();
+    const response = await call(
+      harness,
+      'PATCH',
+      `/attendance-policy-groups/${group}/allowed-sites`,
+      { token: hrToken, payload: { allowed_site_ids: [] } },
+    );
+    expect(response.status).toBe(403);
+  });
+});

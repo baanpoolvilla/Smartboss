@@ -273,6 +273,14 @@ export const OPERATIONAL_ROUTES: readonly Omit<RouteDefinition, 'response'>[] = 
     successStatus: 201,
   },
   {
+    operationId: 'setPolicyGroupSites_patch',
+    method: 'patch',
+    path: '/attendance-policy-groups/{groupId}/allowed-sites',
+    summary: 'PATCH /attendance-policy-groups/{groupId}/allowed-sites',
+    tag: 'checkin',
+    permissions: ['workforce.settings.manage'] as Permission[],
+  },
+  {
     operationId: 'listRiskAssessments_get',
     method: 'get',
     path: '/attendance-risk-assessments',

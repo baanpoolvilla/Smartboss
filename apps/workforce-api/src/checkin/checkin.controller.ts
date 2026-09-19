@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import {
   approveMobileDeviceSchema,
   assignPolicyGroupSchema,
@@ -9,10 +9,12 @@ import {
   enrollMobileDeviceSchema,
   listRiskAssessmentsQuerySchema,
   reviewRiskAssessmentSchema,
+  setPolicyGroupSitesSchema,
   type CommitResult,
   type CommitSessionInput,
   type CreatePolicyGroupInput,
   type EnrollMobileDeviceInput,
+  type SetPolicyGroupSitesInput,
 } from '@workforce/contracts';
 import type { z } from 'zod';
 import { requireUuid } from '../organization/organization.controller';
@@ -182,6 +184,19 @@ export class CheckinController {
     @Query('as_of') asOf?: string,
   ): Promise<{ items: { employment_id: string; policy_group_id: string }[] }> {
     return this.policyGroups.listMemberships(asOf);
+  }
+
+  /**
+   * แก้สถานที่ที่กลุ่มนี้ลงเวลาได้ — สถานที่ที่เพิ่มหลังสร้างกลุ่มต้องเข้าระบบได้
+   * โดยไม่ต้องสร้างกลุ่มใหม่แล้วย้ายพนักงานทั้งบริษัท
+   */
+  @Patch('attendance-policy-groups/:groupId/allowed-sites')
+  @RequirePermissions('workforce.settings.manage')
+  async setPolicyGroupSites(
+    @Param('groupId') groupId: string,
+    @Body(zodPipe(setPolicyGroupSitesSchema)) body: SetPolicyGroupSitesInput,
+  ): Promise<Record<string, unknown>> {
+    return this.policyGroups.setAllowedSites(requireUuid(groupId, 'groupId'), body);
   }
 
   @Post('attendance-policy-groups/:groupId/members')

@@ -1,3 +1,4 @@
+import { Button } from "@smartboss/ui/components/button";
 import { HrPage } from "@/modules/hr/components/hr-page";
 import { SettingsSubnav } from "@/modules/hr/components/design-kit";
 import { HR_PERMS } from "@/modules/hr/permissions";
@@ -19,6 +20,7 @@ import {
   SectionCard,
   Td,
 } from "@/modules/hr/components/ui";
+import { setPolicyAllowedSitesAction } from "../../actions";
 import { SiteCreateForm, SiteEditCard } from "./site-forms";
 import { AssignPanel, CreatePolicyForm } from "./policy-forms";
 
@@ -209,7 +211,15 @@ export default async function AttendanceSettingsPage() {
                     </EmptyState>
                   ) : (
                     <DataTable
-                      head={["กลุ่ม", "วิธีลงเวลา", "รูป", "พิกัด", "เมื่อเสี่ยง", "สมาชิก"]}
+                      head={[
+                        "กลุ่ม",
+                        "วิธีลงเวลา",
+                        "รูป",
+                        "พิกัด",
+                        "สถานที่ที่อนุญาต",
+                        "เมื่อเสี่ยง",
+                        "สมาชิก",
+                      ]}
                     >
                       {groups.items.map((group) => (
                         <tr key={group.id}>
@@ -232,6 +242,32 @@ export default async function AttendanceSettingsPage() {
                               ? `บังคับ · รัศมี ${group.radius_m} ม.`
                               : "ไม่บังคับ"}
                           </Td>
+                          {/*
+                            เดิมตารางไม่บอกเลยว่านโยบายจำกัดสถานที่ไว้แค่ไหน — ตั้ง
+                            "จำกัดเฉพาะสถานที่" ไว้ตอนสร้าง สถานที่ที่เพิ่มทีหลังจะไม่
+                            เข้าเงื่อนไขเอง แล้วแผนที่ในมือถือจะไม่ขึ้นที่นั้นเลย
+                            โดยไม่มีอะไรบนหน้าจอชี้สาเหตุ
+                          */}
+                          <Td>
+                            {group.allowed_site_ids.length === 0 ? (
+                              "ทุกสถานที่"
+                            ) : (
+                              <span className="flex flex-wrap items-center gap-1">
+                                {siteList
+                                  .filter((site) => group.allowed_site_ids.includes(site.id))
+                                  .map((site) => (
+                                    <Pill key={site.id}>{site.name}</Pill>
+                                  ))}
+                                {siteList.some(
+                                  (site) => !group.allowed_site_ids.includes(site.id),
+                                ) && (
+                                  <span className="text-[11px] text-(--tone-warn)">
+                                    ที่อื่นลงเวลาไม่ได้
+                                  </span>
+                                )}
+                              </span>
+                            )}
+                          </Td>
                           <Td>{RISK_LABEL[group.risk_action] ?? group.risk_action}</Td>
                           <Td align="right">
                             {(() => {
@@ -248,6 +284,56 @@ export default async function AttendanceSettingsPage() {
                     </DataTable>
                   )}
                 </SectionCard>
+
+                {groups.items.length > 0 && siteList.length > 0 && (
+                  <SectionCard
+                    title="สถานที่ที่แต่ละนโยบายอนุญาต"
+                    description="ไม่ติ๊กเลย = ลงเวลาได้ทุกสถานที่ · สถานที่ที่เพิ่มใหม่ ระบบติ๊กให้เองทันที"
+                  >
+                    <div className="flex flex-col gap-4">
+                      {groups.items.map((group) => (
+                        <form
+                          key={group.id}
+                          action={setPolicyAllowedSitesAction}
+                          className="flex flex-col gap-2 rounded-(--radius) border border-(--line) p-3"
+                        >
+                          <input type="hidden" name="group_id" value={group.id} />
+                          <p className="text-sm font-medium text-(--ink)">
+                            {group.name}
+                            <span className="ml-2 font-mono text-[11px] text-(--ink-soft)">
+                              {group.code}
+                            </span>
+                          </p>
+                          <div className="flex flex-wrap gap-x-5 gap-y-2">
+                            {siteList.map((site) => (
+                              <label
+                                key={site.id}
+                                className="flex items-center gap-2 text-sm text-(--ink)"
+                              >
+                                <input
+                                  type="checkbox"
+                                  name="allowed_site_ids"
+                                  value={site.id}
+                                  defaultChecked={group.allowed_site_ids.includes(site.id)}
+                                  className="h-4 w-4"
+                                />
+                                {site.name}
+                                {(site.latitude === null || site.longitude === null) && (
+                                  <span className="text-[11px] text-(--tone-warn)">ไม่มีหมุด</span>
+                                )}
+                              </label>
+                            ))}
+                          </div>
+                          <div>
+                            <Button type="submit" size="sm" variant="outline">
+                              บันทึกสถานที่ของกลุ่มนี้
+                            </Button>
+                          </div>
+                        </form>
+                      ))}
+                    </div>
+                  </SectionCard>
+                )}
 
                 <SectionCard
                   title="จัดพนักงานเข้ากลุ่ม"

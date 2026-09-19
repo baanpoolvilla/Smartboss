@@ -46,6 +46,19 @@ export const policyGroupSchema = createPolicyGroupSchema
   .extend({ id: uuidSchema })
   .merge(auditFieldsSchema);
 
+/**
+ * แก้ "จำกัดเฉพาะสถานที่" ของนโยบายที่มีอยู่แล้ว — ส่งรายการเต็มมาทับทั้งชุด
+ * (ว่าง = อนุญาตทุกสถานที่ของนิติบุคคลนั้น)
+ *
+ * เดิมตั้งได้แค่ตอนสร้างกลุ่ม ⇒ สถานที่ที่เพิ่มทีหลังลงเวลาไม่ผ่านตลอดไป
+ * จนกว่าจะสร้างกลุ่มใหม่แล้วย้ายพนักงานทั้งหมด (เจอจริงกับไซต์ที่เพิ่มใหม่)
+ */
+export const setPolicyGroupSitesSchema = z.object({
+  allowed_site_ids: z.array(uuidSchema).default([]),
+});
+
+export type SetPolicyGroupSitesInput = z.infer<typeof setPolicyGroupSitesSchema>;
+
 export const assignPolicyGroupSchema = z.object({
   employment_id: uuidSchema,
   effective_from: isoDateSchema,

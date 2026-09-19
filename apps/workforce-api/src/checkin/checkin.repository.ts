@@ -407,4 +407,17 @@ export class CheckinRepository {
   ): Promise<(typeof schema.sites.$inferSelect)[]> {
     return tx.select().from(schema.sites).where(eq(schema.sites.companyId, companyId));
   }
+
+  async updatePolicyGroupSites(
+    tx: Tx,
+    id: string,
+    allowedSiteIds: string[],
+  ): Promise<typeof schema.attendancePolicyGroups.$inferSelect | undefined> {
+    const rows = await tx
+      .update(schema.attendancePolicyGroups)
+      .set({ allowedSiteIds })
+      .where(eq(schema.attendancePolicyGroups.id, id))
+      .returning();
+    return rows[0];
+  }
 }

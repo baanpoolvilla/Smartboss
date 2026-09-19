@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { AppConfig } from '@workforce/config';
-import type { CreatePolicyGroupInput } from '@workforce/contracts';
+import type { CreatePolicyGroupInput, SetPolicyGroupSitesInput } from '@workforce/contracts';
 import { AppError, EffectivePeriod, LocalDate, uuidv7, type Clock } from '@workforce/domain';
 import { UnitOfWork } from '../infrastructure/unit-of-work';
 import { APP_CONFIG, CLOCK } from '../shared/tokens';
@@ -73,6 +73,49 @@ export class PolicyGroupService {
       });
 
       return { id: row.id, code: row.code, name: row.name, effective_from: row.effectiveFrom };
+    });
+  }
+
+  /**
+   * ทับรายการสถานที่ที่นโยบายอนุญาต (ว่าง = ทุกสถานที่ของนิติบุคคลนั้น)
+   *
+   * แก้ในที่เดิมโดยตั้งใจ ไม่ออกนโยบายเวอร์ชันใหม่ — "ที่นี่ลงเวลาได้ไหม" เป็น
+   * ข้อเท็จจริงของวันนี้ ไม่ใช่ข้อตกลงย้อนหลัง และผลลงเวลาที่คำนวณไปแล้วก็ไม่ถูก
+   * คิดใหม่จากนโยบายอยู่ดี · ทางเลือกเดิม (สร้างกลุ่มใหม่แล้วย้ายคนทั้งบริษัท)
+   * ทำให้สถานที่ที่เพิ่มใหม่ใช้งานไม่ได้จนกว่าจะมีคนไปทำสิ่งนั้น
+   */
+  async setAllowedSites(
+    groupId: string,
+    input: SetPolicyGroupSitesInput,
+  ): Promise<Record<string, unknown>> {
+    return this.uow.run(async (uow) => {
+      const group = await this.repository.findPolicyGroupById(uow.tx, groupId);
+      if (group === undefined) throw AppError.notFound('attendance policy group');
+
+      const wanted = [...new Set(input.allowed_site_ids)];
+      const sites = await this.repository.listSitesForCompany(uow.tx, group.companyId);
+      const known = new Set(sites.map((site) => site.id));
+      if (wanted.some((id) => !known.has(id))) {
+        throw AppError.validation(
+          'allowed_site_ids must all belong to the same company as the policy group',
+        );
+      }
+
+      const after = await this.repository.updatePolicyGroupSites(uow.tx, groupId, wanted);
+      if (after === undefined) throw AppError.notFound('attendance policy group');
+
+      await uow.audit({
+        action: 'attendance.policy-group.set-allowed-sites',
+        resourceType: 'attendance_policy_group',
+        resourceId: groupId,
+        resourceVersion: after.version,
+        outcome: 'SUCCESS',
+        companyId: after.companyId,
+        before: { allowed_site_ids: group.allowedSiteIds },
+        after: { allowed_site_ids: after.allowedSiteIds },
+      });
+
+      return { id: after.id, allowed_site_ids: after.allowedSiteIds };
     });
   }
 

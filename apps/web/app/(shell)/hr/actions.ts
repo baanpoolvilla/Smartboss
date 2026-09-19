@@ -1356,8 +1356,9 @@ export async function createSiteAction(formData: FormData) {
     existing = null;
   }
 
+  let createdId: string;
   try {
-    await wfFetch("/sites", {
+    const created = await wfFetch<{ id: string }>("/sites", {
       method: "POST",
       body: {
         company_id: companyId,
@@ -1368,6 +1369,55 @@ export async function createSiteAction(formData: FormData) {
         longitude,
         radius_m: coordOrNull(formData.get("radius_m")),
       },
+    });
+    createdId = created.id;
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+
+  /*
+   * นโยบายที่ตั้ง "จำกัดเฉพาะสถานที่" ไว้ ไม่รู้จักสถานที่ที่เพิ่มทีหลังเอง
+   * พนักงานจะลงเวลาที่นี่ไม่ผ่าน และแผนที่ในมือถือไม่ขึ้นที่นี้เลยโดยไม่มีอะไร
+   * บอกสาเหตุ (เจอจริง: เพิ่มไซต์ที่สองแล้วลงเวลาไม่ได้ ระบบเทียบระยะกับไซต์แรก
+   * ที่อยู่ห่าง 57 กม.) ⇒ เพิ่มเข้าให้ทุกกลุ่มที่จำกัดอยู่ทันที
+   * กลุ่มที่ไม่จำกัด (รายการว่าง) ครอบทุกสถานที่อยู่แล้ว ไม่ต้องแตะ
+   */
+  try {
+    const groups = await wfFetch<{
+      items: { id: string; company_id: string; allowed_site_ids: string[] }[];
+    }>("/attendance-policy-groups");
+
+    for (const group of groups.items) {
+      if (group.company_id !== companyId || group.allowed_site_ids.length === 0) continue;
+      await wfFetch(`/attendance-policy-groups/${group.id}/allowed-sites`, {
+        method: "PATCH",
+        body: { allowed_site_ids: [...group.allowed_site_ids, createdId] },
+      });
+    }
+  } catch (error) {
+    throw new Error(
+      `เพิ่มสถานที่แล้ว แต่ใส่เข้านโยบายลงเวลาไม่สำเร็จ (${toMessage(error)}) — ` +
+        "ไปติ๊กสถานที่นี้เองที่การ์ด “สถานที่ที่แต่ละนโยบายอนุญาต” ไม่งั้นพนักงานลงเวลาที่นี่ไม่ผ่าน",
+    );
+  }
+  revalidatePath("/hr/settings/attendance");
+}
+
+/**
+ * ติ๊ก/เอาออก สถานที่ที่นโยบายกลุ่มหนึ่งอนุญาต — ไม่ติ๊กเลย = ทุกสถานที่
+ *
+ * เดิมตั้งได้แค่ตอนสร้างกลุ่ม แก้ทีหลังไม่ได้เลย ต้องสร้างกลุ่มใหม่แล้วย้ายคนทั้งหมด
+ */
+export async function setPolicyAllowedSitesAction(formData: FormData) {
+  await guard(HR_PERMS.settingManage);
+
+  const groupId = String(formData.get("group_id") ?? "");
+  if (!groupId) throw new Error("ไม่พบกลุ่มนโยบาย");
+
+  try {
+    await wfFetch(`/attendance-policy-groups/${groupId}/allowed-sites`, {
+      method: "PATCH",
+      body: { allowed_site_ids: formData.getAll("allowed_site_ids").map(String) },
     });
   } catch (error) {
     throw new Error(toMessage(error));
