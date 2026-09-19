@@ -46,6 +46,13 @@ export const CROSS_ORG_REASONS = [
   // อยู่แล้วโดยไม่ต้องเช็คซ้ำ, ยกเว้น platform user ที่ userId ไม่มี orgId
   // ผูกเลย ซึ่งเป็นเหตุผลที่ห้ามกรองด้วย orgId ของผู้รับตรง ๆ)
   "notification:recipient-scoped-not-org-scoped",
+  // apps/web/modules/admin/data/users.ts (listUsersAcrossOrgs, ไม่ส่ง orgId)
+  // และ apps/web/modules/admin/data/issue-tickets.ts (listAllIssueTickets) —
+  // คอนโซล /admin/issue-reports ของทีม Smartboss เองที่ตั้งใจดูข้อมูล (ผู้ใช้/
+  // ผู้แจ้ง/ผู้รับผิดชอบ) ข้ามทุกบริษัทพร้อมกัน ผู้เรียกทุกจุดเช็ค
+  // requireOrg()+isSuperAdmin() เองก่อนเสมอ (ดู requireSuperAdmin() ใน
+  // issue-ticket-actions.ts) ไม่ใช่ query ที่ลืมกรอง orgId
+  "admin:platform-support-console-cross-company-users",
 ] as const;
 
 export type CrossOrgReason = (typeof CROSS_ORG_REASONS)[number];

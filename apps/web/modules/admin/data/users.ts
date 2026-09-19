@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
+import { crossOrg } from "@smartboss/database/cross-org";
 
 /** ผู้ใช้ทั้งหมดของบริษัท + role ที่ถืออยู่ */
 export async function listOrgUsers(orgId: string) {
@@ -39,16 +40,21 @@ export async function getOrgUser(orgId: string, userId: string) {
  * แยกชื่อออกมาชัด ๆ เพื่อให้เห็นตอนอ่านโค้ดว่าตรงไหนข้ามบริษัท
  */
 
-/** ผู้ใช้ทุกบริษัท (หรือกรองเฉพาะบริษัทเดียวถ้าส่ง orgId มา) */
+/** ผู้ใช้ทุกบริษัท (หรือกรองเฉพาะบริษัทเดียวถ้าส่ง orgId มา) — ไม่ส่ง orgId
+ * มาตั้งใจข้ามทุกบริษัทจริง (เช่น listSuperAdmins() หา Super Admin ทุกคนใน
+ * แพลตฟอร์ม ไม่ใช่ของบริษัทใดบริษัทหนึ่ง) ผู้เรียกทั้งหมดเช็ค isSuperAdmin()
+ * เองก่อนแล้วตามที่คอมเมนต์ของไฟล์นี้บอกไว้ */
 export async function listUsersAcrossOrgs(orgId?: string) {
-  const users = await prisma.user.findMany({
-    where: orgId ? { orgId } : {},
-    orderBy: [{ isActive: "desc" }, { name: "asc" }],
-    include: {
-      roles: { include: { role: true } },
-      organization: { select: { id: true, name: true } },
-    },
-  });
+  const users = await crossOrg("admin:platform-support-console-cross-company-users", () =>
+    prisma.user.findMany({
+      where: orgId ? { orgId } : {},
+      orderBy: [{ isActive: "desc" }, { name: "asc" }],
+      include: {
+        roles: { include: { role: true } },
+        organization: { select: { id: true, name: true } },
+      },
+    })
+  );
 
   return users.map((u) => ({
     id: u.id,

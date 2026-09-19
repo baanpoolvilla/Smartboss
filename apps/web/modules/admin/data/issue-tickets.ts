@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
+import { crossOrg } from "@smartboss/database/cross-org";
 import { readStore } from "@/modules/report_task/lib/db/org-store";
 import { migrateIssueStoreSlice } from "@/modules/report_task/lib/issue-migration";
 import type { IssueTicket } from "@/modules/report_task/types/issue";
@@ -51,12 +52,18 @@ export async function listAllIssueTickets(): Promise<CrossOrgIssueTicket[]> {
   // adminSetAssignee/listSuperAdmins), never scoped to the ticket's own org,
   // so they can safely share this same cross-org lookup with reporters.
   const userIds = Array.from(new Set(tickets.flatMap((t) => [t.reporterId, t.assigneeId].filter((id): id is string => !!id))));
+  // ค้นด้วย id ข้ามทุกบริษัทตั้งใจ — คนที่โพสต์เรื่อง/รับเรื่องแต่ละใบอาจอยู่คน
+  // ละบริษัทกัน ไม่มี orgId เดียวให้กรองตั้งแต่ต้น (นี่คือ "คำตอบ" ที่ query
+  // นี้ต้องไปหาต่อ ไม่ใช่เงื่อนไขกรอง) ผู้เรียก listAllIssueTickets() (หน้า
+  // /admin/issue-reports) เช็ค requireOrg()+isSuperAdmin() เองอยู่แล้ว
   const users =
     userIds.length > 0
-      ? await prisma.user.findMany({
-          where: { id: { in: userIds } },
-          select: { id: true, name: true, email: true, roles: { select: { role: { select: { name: true } } } } },
-        })
+      ? await crossOrg("admin:platform-support-console-cross-company-users", () =>
+          prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, name: true, email: true, roles: { select: { role: { select: { name: true } } } } },
+          })
+        )
       : [];
   const userById = new Map(users.map((u) => [u.id, u]));
 

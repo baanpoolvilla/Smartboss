@@ -14,6 +14,7 @@ test("CROSS_ORG_REASONS มีแค่เหตุผลที่รีวิ�
   assert.deepEqual(
     [...CROSS_ORG_REASONS].sort(),
     [
+      "admin:platform-support-console-cross-company-users",
       "auth:lookup-by-globally-unique-external-id",
       "cron:platform-job-resolves-org-per-row",
       "notification:recipient-scoped-not-org-scoped",
