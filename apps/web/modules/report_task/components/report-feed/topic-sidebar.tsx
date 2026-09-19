@@ -1580,11 +1580,19 @@ export function TopicSidebar({
     // `collapsed` in renderTopicRow for why the old force-expand-while-
     // reordering behavior got dropped.
     const isCollapsed = collapsedTopicIds.has(t.id);
-    // ยุบห้องแล้วต้องซ่อนจริง ไม่มีข้อยกเว้น — ยกเว้นห้องที่เปิดดูอยู่ตอนนี้
-    // (activeId) ที่ยังโชว์ไว้ กันหลงทาง ("ยุบห้องแล้วแจ้งเตือนยังขึ้นอยู่เลย
-    // ต้องไม่แสดงสิ") — เดิมเคยให้ห้องที่มีโพสต์ยังไม่อ่านโผล่ค้างไว้ตอนยุบด้วย
-    // (แบบ Discord) แต่ผู้ใช้ไม่ต้องการพฤติกรรมนี้แล้ว
-    const visibleChildren = isCollapsed ? children.filter((c) => c.id === activeId) : children;
+    // Discord-style collapse: a collapsed category still keeps any channel
+    // that's unread or currently open on screen — only the read/idle ones
+    // tuck away — so a new post is never hidden behind a folded folder and
+    // whatever room you're standing in stays visible while you collapse the
+    // rest. Expanded shows everything, exactly as before. A child's own
+    // unread posts count even if its collapse state hides ITS children in
+    // turn — topicUnreadPosts is about that one room's own posts, not its
+    // descendants, so each tier's collapse only ever hides its own idle kids.
+    // ("อยากให้เวลาย่อไว้และถ้ามีอันที่เรายังไม่ได้อ่านละมีเตือนให้ขึ้นคาไว้จนกว่า
+    // จะอ่าน...พออ่านละก็หายไปเหมือนเดิม" — คอนเฟิร์มว่าต้องการพฤติกรรมนี้จริง)
+    const visibleChildren = isCollapsed
+      ? children.filter((c) => c.id === activeId || topicUnreadPosts(c).length > 0)
+      : children;
     return (
       <Fragment key={t.id}>
         {renderTopicRow(t, { depth, hasChildren })}
@@ -1612,7 +1620,9 @@ export function TopicSidebar({
   function renderTopicBranch(t: ReportTopic) {
     const children = childrenOf(t.id);
     const isCollapsed = collapsedTopicIds.has(t.id);
-    const visibleChildren = isCollapsed ? children.filter((c) => c.id === activeId) : children;
+    const visibleChildren = isCollapsed
+      ? children.filter((c) => c.id === activeId || topicUnreadPosts(c).length > 0)
+      : children;
     const showChildren = visibleChildren.length > 0;
     // A little extra room after this group's last child before the next
     // parent starts, on top of the list's own space-y-1 — keeps groups
