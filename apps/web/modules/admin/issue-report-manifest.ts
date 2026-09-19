@@ -37,7 +37,7 @@ export const adminIssueReportManifest: ModuleManifest = {
   alwaysOn: true,
   menus: [
     {
-      label: "แจ้งบัค",
+      label: "ทั้งหมด",
       path: "/admin/issue-reports",
       permission: ADMIN_PERMS.orgCreate,
       icon: "Bug",
@@ -49,6 +49,16 @@ export const adminIssueReportManifest: ModuleManifest = {
         className:
           "ml-auto flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-(--danger) px-1 text-[10px] font-bold text-white",
       }),
+    },
+    // "อยากให้ตั๋วของฉันอยู่ในแจ้งบัคเลย อยู่ในหัวข้อเดียวกันเป็นหัวข้อย่อย
+    // ข้างในสิ...ส่วนแอดมินก็เห็นตั๋วของฉันด้วยเพื่อแจ้งอะไรแบบนี้มาร์คไว้กัน
+    // ลืม" — เมนูย่อยจริงในไซด์บาร์ ไม่ใช่แค่แท็บในเนื้อหา ใช้หน้าเดียวกับ
+    // ด้านบนเป๊ะ (renderIssueReportsPage) แค่ล็อก tab ไว้ที่ "mine" เสมอ
+    {
+      label: "ตั๋วของฉัน",
+      path: "/admin/issue-reports/mine",
+      permission: ADMIN_PERMS.orgCreate,
+      icon: "User",
     },
   ],
   permissions: [ADMIN_PERMS.orgCreate],

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import type { LucideIcon } from "lucide-react";
+import { Bug, type LucideIcon } from "lucide-react";
 import { MODULE_CARDS } from "@/lib/modules";
 import { iconByName } from "@/lib/icons";
 import { loadShellNav } from "@/lib/nav";
@@ -65,6 +65,24 @@ export default async function HomePage() {
     });
   }
 
+  // "แจ้งบัค" ของลูกค้าทั่วไป — ต่างจาก tile ข้างบน (adminIssueReportManifest)
+  // ที่มีเฉพาะทีม Smartboss/Super Admin เห็น (พาไปคอนโซลรับเรื่องข้ามบริษัท)
+  // อันนี้พาไปหน้ารายการของตัวเอง (/report-task/issue-reports) เห็นแค่ตั๋วที่
+  // ตัวเองแจ้งไว้เท่านั้น (canSeeIssue กรองให้อยู่แล้ว) — ไม่โชว์ซ้ำให้ Super
+  // Admin ที่มี tile ของตัวเองอยู่แล้วด้านบน ("ให้ user ทั่วไปกดได้แต่เห็นแค่
+  // ข้อมูลของฉันและตั๋วของฉันเองที่แจ้งบัคไป")
+  if (visible.has("report_task") && !visible.has("admin_issue_report")) {
+    tiles.push({
+      code: "issue_report_self",
+      name: "แจ้งบัค",
+      description: "แจ้งปัญหา + ดูตั๋วที่คุณเคยแจ้งไว้",
+      icon: Bug,
+      color: "#dc2626",
+      colorBg: "#fef2f2",
+      href: "/report-task/issue-reports",
+    });
+  }
+
   return (
     <div className="mx-auto max-w-4xl">
       <header className="mb-8 text-center sm:mb-10">
@@ -117,7 +135,7 @@ function AppIcon({ tile }: { tile: AppTile }) {
             ทั่วไปแทน เพราะแจ้งซ่อมบำรุง/HR ไม่มี array งานให้สแกนแบบนั้น */}
         {href && tile.code === "maintenance" && <NotifCountBadge categories={["work_order", "pm", "expense", "purchase_order"]} />}
         {href && tile.code === "hr" && <NotifCountBadge categories={["hr_leave", "hr_attendance"]} />}
-        {href && tile.code === "admin_issue_report" && <NotifCountBadge categories={["ticket"]} />}
+        {href && (tile.code === "admin_issue_report" || tile.code === "issue_report_self") && <NotifCountBadge categories={["ticket"]} />}
       </span>
 
       <span

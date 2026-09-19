@@ -31,7 +31,7 @@ import { cn } from "@/modules/report_task/lib/utils";
  */
 export const dynamic = "force-dynamic";
 
-const TABS = ["all", "unclaimed", "needs_reply", "with_vendor", "closed"] as const;
+const TABS = ["all", "unclaimed", "needs_reply", "with_vendor", "closed", "mine"] as const;
 type Tab = (typeof TABS)[number];
 const TAB_LABEL: Record<Tab, string> = {
   all: "ทั้งหมด",
@@ -39,6 +39,11 @@ const TAB_LABEL: Record<Tab, string> = {
   needs_reply: "รอเราตอบ",
   with_vendor: "ส่งผู้พัฒนา",
   closed: "ปิดแล้ว",
+  // ตั๋วที่ตัวเอง (Super Admin คนนี้) เป็นคนแจ้งเอง — ไม่แยกเป็น tile ต่างหาก
+  // บนหน้าหลักเพราะจะงงว่าอันไหนคืออันไหน ("อยากให้ตั๋วของฉันอยู่ในแจ้งบัค
+  // เลย อยู่ในหัวข้อเดียวกันเป็นหัวข้อย่อยข้างในสิ") — เป็นแค่แท็บกรองในหน้า
+  // เดียวกันนี้แทน ยังกดเข้าไปตอบ/ดูผ่านหน้ารายละเอียดตั๋วปกติเหมือนตั๋วอื่น
+  mine: "ตั๋วของฉัน",
 };
 
 /** "05/09/2569" → a real Date, at local midnight — พ.ศ. year like the rest
@@ -75,11 +80,22 @@ interface SearchParams {
 }
 
 export default async function AllIssueReportsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  return renderIssueReportsPage(await searchParams, {});
+}
+
+/** เนื้อหาจริงของหน้านี้ ดึงออกมาให้ /admin/issue-reports/mine (เมนูย่อย
+ * "ตั๋วของฉัน" ในไซด์บาร์ — ดู admin/issue-report-manifest.ts) เรียกใช้ซ้ำได้
+ * โดยไม่ต้อง copy โค้ดทั้งหน้า ต่างกันแค่ forcedTab (ล็อกไว้ที่ "mine" เสมอ
+ * ไม่สนใจ query ?tab=) และ hideTabSwitcher (ซ่อนแถบแท็บทั้งหมด เพราะสลับ
+ * มุมมองผ่านไซด์บาร์แทนแล้ว ไม่ต้องมีแท็บซ้ำซ้อนในเนื้อหาอีกชั้น) */
+export async function renderIssueReportsPage(
+  sp: SearchParams,
+  { forcedTab, hideTabSwitcher }: { forcedTab?: Tab; hideTabSwitcher?: boolean }
+) {
   const session = await requireOrg();
   if (!isSuperAdmin(session)) redirect("/admin");
 
-  const sp = await searchParams;
-  const tab: Tab = TABS.includes(sp.tab as Tab) ? (sp.tab as Tab) : "all";
+  const tab: Tab = forcedTab ?? (TABS.includes(sp.tab as Tab) ? (sp.tab as Tab) : "all");
 
   const [allTickets, organizations] = await Promise.all([listAllIssueTickets(), listAllOrganizations()]);
 
@@ -93,6 +109,8 @@ export default async function AllIssueReportsPage({ searchParams }: { searchPara
         return ["escalated", "vendor_working", "vendor_released"].includes(t.status);
       case "closed":
         return CLOSED_STATUSES.includes(t.status);
+      case "mine":
+        return t.reporterId === session.userId;
       default:
         return true;
     }
@@ -123,9 +141,15 @@ export default async function AllIssueReportsPage({ searchParams }: { searchPara
   const filterParams = Object.entries(sp).filter(([k, v]) => k !== "tab" && v);
 
   return (
-    <AppScaffold title="แจ้งปัญหาระบบ (ทุกบริษัท)" width="max-w-6xl" backHref="/admin">
+    <AppScaffold
+      title={hideTabSwitcher ? "แจ้งบัค — ตั๋วของฉัน" : "แจ้งปัญหาระบบ (ทุกบริษัท)"}
+      width="max-w-6xl"
+      backHref={hideTabSwitcher ? "/admin/issue-reports" : "/admin"}
+    >
       <p className="mb-4 text-sm text-(--ink-soft)">
-        ตั๋วแจ้งปัญหาจากพนักงานทุกบริษัทลูกค้า ส่งตรงมาที่นี่ — รับเรื่อง ตอบ และปิดงานได้จากหน้านี้เลย ไม่ต้องเข้าบัญชีของบริษัทนั้น
+        {hideTabSwitcher
+          ? "เฉพาะตั๋วที่คุณเป็นคนแจ้งเอง — กันลืมเรื่องที่ตัวเองเจอปัญหาแล้วแจ้งไว้"
+          : "ตั๋วแจ้งปัญหาจากพนักงานทุกบริษัทลูกค้า ส่งตรงมาที่นี่ — รับเรื่อง ตอบ และปิดงานได้จากหน้านี้เลย ไม่ต้องเข้าบัญชีของบริษัทนั้น"}
       </p>
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -136,28 +160,32 @@ export default async function AllIssueReportsPage({ searchParams }: { searchPara
       </div>
 
       {/* Tabs — plain links (server-rendered, no client state) carrying every
-          other active filter forward via hidden-equivalent query params. */}
-      <div className="mb-3 flex flex-wrap gap-1.5 overflow-x-auto">
-        {TABS.map((key) => {
-          const params = new URLSearchParams(filterParams as [string, string][]);
-          if (key !== "all") params.set("tab", key);
-          const href = params.size > 0 ? `?${params.toString()}` : "?";
-          return (
-            <Link
-              key={key}
-              href={href}
-              className={cn(
-                "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-                tab === key
-                  ? "bg-(--ink) text-white border-(--ink)"
-                  : "bg-(--bg) text-(--ink-soft) border-(--line) hover:bg-(--bg-soft)"
-              )}
-            >
-              {TAB_LABEL[key]}
-            </Link>
-          );
-        })}
-      </div>
+          other active filter forward via hidden-equivalent query params.
+          ซ่อนทั้งแถบตอนอยู่หน้า /mine — สลับมุมมองผ่านเมนูย่อยในไซด์บาร์แทน
+          แล้ว (ดู admin/issue-report-manifest.ts) ไม่ต้องมีแท็บซ้ำอีกชั้น */}
+      {!hideTabSwitcher && (
+        <div className="mb-3 flex flex-wrap gap-1.5 overflow-x-auto">
+          {TABS.filter((key) => key !== "mine").map((key) => {
+            const params = new URLSearchParams(filterParams as [string, string][]);
+            if (key !== "all") params.set("tab", key);
+            const href = params.size > 0 ? `?${params.toString()}` : "?";
+            return (
+              <Link
+                key={key}
+                href={href}
+                className={cn(
+                  "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                  tab === key
+                    ? "bg-(--ink) text-white border-(--ink)"
+                    : "bg-(--bg) text-(--ink-soft) border-(--line) hover:bg-(--bg-soft)"
+                )}
+              >
+                {TAB_LABEL[key]}
+              </Link>
+            );
+          })}
+        </div>
+      )}
 
       {/* Comprehensive filters — company/status/category/priority/date range
           + free-text search, all one GET form (same pattern admin/users'
