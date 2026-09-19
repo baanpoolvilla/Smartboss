@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { requireOrg, isSuperAdmin } from "@smartboss/auth";
 import { prisma } from "@smartboss/database";
+import { crossOrg } from "@smartboss/database/cross-org";
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { readStore } from "@/modules/report_task/lib/db/org-store";
 import { migrateIssueStoreSlice } from "@/modules/report_task/lib/issue-migration";
@@ -38,10 +39,12 @@ export default async function AdminIssueTicketDetailPage({
   );
   const users =
     userIds.length > 0
-      ? await prisma.user.findMany({
-          where: { id: { in: userIds } },
-          select: { id: true, name: true, email: true, roles: { select: { role: { select: { name: true } } } } },
-        })
+      ? await crossOrg("admin:platform-support-console-cross-company-users", () =>
+          prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, name: true, email: true, roles: { select: { role: { select: { name: true } } } } },
+          })
+        )
       : [];
   const userMap: Record<string, TicketUserInfo> = {};
   for (const u of users) userMap[u.id] = { name: u.name, email: u.email, role: u.roles[0]?.role.name ?? null };
