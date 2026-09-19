@@ -125,7 +125,7 @@ export function moduleForCategory(cat: NotifCategory): NotifModule {
  * มาจาก module ไหน") ไอคอน/สีต่อ category ที่มีอยู่แล้ว (CATEGORY_META) บอก
  * "เรื่องอะไร" ภายในโมดูลนั้นอีกที — แถบสีนี้คือชั้นที่หยาบกว่า บอกแค่ "จาก
  * ระบบไหน" เท่านั้น */
-export function moduleColorVar(mod: NotifModule): string {
+function moduleColorVar(mod: NotifModule): string {
   switch (mod) {
     case "hr":
       return "var(--mod-hr)";
@@ -143,7 +143,22 @@ const MODULE_LABEL: Record<NotifModule, string> = {
   hr: "ระบบบุคคล",
 };
 
-export function labelForModule(mod: NotifModule): string {
+/** "แจ้งบัค" ไม่ได้อยู่ใน NotifModule ของตัวเองเลย (ticket category ก็แค่
+ * moduleForCategory ไปลง "report" เพราะ route จริงอยู่ใต้ /report-task/
+ * issue-reports) แต่มีไอคอน/สีเป็นของตัวเองชัดเจนอยู่แล้วในหน้าแรก (ไอคอน
+ * แมลงสีแดง #dc2626 — ดู admin/issue-report-manifest.ts) แถบสีในกระดิ่งควร
+ * ใช้สีนั้นแทนสีเทาของ "รายงานและงาน" เฉยๆ ไม่งั้นมองแวบเดียวจะดูเหมือนเป็น
+ * งาน/รายงานธรรมดา ทั้งที่จริงคือแจ้งบัค ("แจ้งเตือนสีนี้สิ" ชี้ไปที่ tile
+ * สีแดงของแจ้งบัคตรงๆ) */
+const ISSUE_TICKET_COLOR = "#dc2626";
+
+export function stripeColorFor(category: NotifCategory, mod: NotifModule): string {
+  if (category === "ticket") return ISSUE_TICKET_COLOR;
+  return moduleColorVar(mod);
+}
+
+export function stripeLabelFor(category: NotifCategory, mod: NotifModule): string {
+  if (category === "ticket") return "แจ้งบัค";
   return MODULE_LABEL[mod] ?? mod;
 }
 

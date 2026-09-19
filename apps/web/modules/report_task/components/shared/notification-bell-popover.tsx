@@ -9,7 +9,7 @@ import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { isOwner, canManage } from "@/modules/report_task/lib/directory";
 import { relativeTime } from "@/modules/report_task/lib/format";
-import { metaForCategory, moduleColorVar, labelForModule } from "@/modules/notifications/derive";
+import { metaForCategory, stripeColorFor, stripeLabelFor } from "@/modules/notifications/derive";
 import { useUnifiedNotifications } from "@/modules/notifications/use-unified-notifications";
 import type { UnifiedNotification } from "@/modules/notifications/types";
 
@@ -163,8 +163,8 @@ export function NotificationBellPopover() {
                       นั้นอีกที คนละชั้นกัน) */}
                   <span
                     className="absolute inset-y-0 left-0 w-1"
-                    style={{ backgroundColor: moduleColorVar(n.module) }}
-                    title={labelForModule(n.module)}
+                    style={{ backgroundColor: stripeColorFor(n.category, n.module) }}
+                    title={stripeLabelFor(n.category, n.module)}
                     aria-hidden
                   />
                   <div className="relative shrink-0">
