@@ -19,6 +19,7 @@ import {
   saveEmployeeDayOffStanding,
 } from "@/lib/day-off-quota";
 import { saveCommissionPool, saveCommissionWeights } from "@/modules/hr/lib/commission-data";
+import { notifyApprovers } from "@/modules/hr/lib/hr-notify";
 
 /**
  * Server action ของโมดูลบุคคล — ทุกตัวยิงต่อไปที่ workforce API
@@ -986,7 +987,7 @@ export async function submitLeaveAction(
   _prev: LeaveState,
   formData: FormData,
 ): Promise<LeaveState> {
-  await requireOrg();
+  const session = await requireOrg();
 
   const employmentId = String(formData.get("employment_id") ?? "");
   const leaveTypeId = String(formData.get("leave_type_id") ?? "");
@@ -1032,8 +1033,17 @@ export async function submitLeaveAction(
     return { error: lastError ?? "ส่งคำขอไม่สำเร็จ" };
   }
 
+  const submitted = dates.length - failed;
+  // ครั้งเดียวต่อการยื่นทั้งชุด ไม่ใช่ต่อวัน — ลาทีเดียว 5 วันไม่ควรได้ 5
+  // แจ้งเตือนแยกกันในกระดิ่งของผู้อนุมัติ
+  void notifyApprovers(session.orgId, "workforce.leave.approve", session.userId, {
+    title: submitted > 1 ? `มีคำขอลาใหม่ ${submitted} วันรออนุมัติ` : "มีคำขอลาใหม่รออนุมัติ",
+    body: reason || undefined,
+    type: "hr_leave_submitted",
+  });
+
   revalidatePath("/hr");
-  return { ok: true, days: dates.length - failed };
+  return { ok: true, days: submitted };
 }
 
 /**
@@ -1084,7 +1094,7 @@ export async function swapLeaveAction(input: {
   /** ชื่อของใบเดิม — พกมาด้วยไม่งั้นสลับวันแล้วชื่อที่ตั้งไว้หายเงียบ */
   displayLabel?: string;
 }): Promise<SwapLeaveState> {
-  await requireOrg();
+  const session = await requireOrg();
 
   if (!input.employmentId) {
     return { error: "บัญชีนี้ยังไม่ถูกผูกกับทะเบียนพนักงาน — แจ้งฝ่ายบุคคล" };
@@ -1110,6 +1120,15 @@ export async function swapLeaveAction(input: {
   } catch (error) {
     return { error: leaveErrorMessage(toMessage(error)) };
   }
+
+  // สลับวันแล้วสถานะกลับไปเป็น "รออนุมัติ" ใหม่ (swap_from_date บังคับ
+  // SUBMITTED ฝั่ง workforce-api) — ต้องมีคนอนุมัติวันใหม่นี้อีกรอบเหมือนใบ
+  // ลาใหม่ปกติทุกอย่าง
+  void notifyApprovers(session.orgId, "workforce.leave.approve", session.userId, {
+    title: "มีคำขอสลับวันลาใหม่รออนุมัติ",
+    body: input.reason.trim() || undefined,
+    type: "hr_leave_submitted",
+  });
 
   revalidatePath("/hr");
   return { ok: true };
@@ -1613,7 +1632,7 @@ function bangkokIso(dateStr: string, timeStr: string): string {
 }
 
 export async function requestManualAttendanceAction(formData: FormData) {
-  await guard(HR_PERMS.employeeManage);
+  const session = await guard(HR_PERMS.employeeManage);
 
   const employmentId = String(formData.get("employment_id") ?? "");
   const workDate = String(formData.get("work_date") ?? "");
@@ -1642,6 +1661,15 @@ export async function requestManualAttendanceAction(formData: FormData) {
   } catch (error) {
     throw new Error(toMessage(error));
   }
+
+  // ต้องมีคนอนุมัติ 2 รอบ (คนละคนกับผู้ขอ) ก่อนมีผลจริง (ดูคอมเมนต์
+  // approveAttendanceCorrectionAction ด้านล่าง) — แจ้งให้รู้ว่ามีคำขอใหม่รอ
+  void notifyApprovers(session.orgId, "workforce.attendance.correct.approve", session.userId, {
+    title: "มีคำขอแก้ไขเวลาเข้า-ออกงานใหม่รออนุมัติ",
+    body: reason || undefined,
+    type: "hr_attendance_correction_submitted",
+  });
+
   revalidatePath("/hr");
 }
 

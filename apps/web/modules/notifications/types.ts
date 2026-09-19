@@ -18,6 +18,8 @@ export type NotifCategory =
   | "pm"
   | "expense"
   | "purchase_order"
+  | "hr_leave"
+  | "hr_attendance"
   | "general";
 
 /** Normalized shape both notification sources (report_task's client store +

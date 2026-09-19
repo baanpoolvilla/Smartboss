@@ -28,6 +28,8 @@ const PERSONAL_CATEGORIES = new Set<NotifCategory>([
   "ticket",
   "meeting",
   "work_order",
+  "hr_leave",
+  "hr_attendance",
 ]);
 function isPersonal(n: UnifiedNotification): boolean {
   return PERSONAL_CATEGORIES.has(n.category);

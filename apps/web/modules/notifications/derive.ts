@@ -80,7 +80,11 @@ export function reportCategoryFor(n: AppNotification): NotifCategory {
   return "general";
 }
 
-/** maintenance's own `type` field ผูกกับ category ตรงตัว 1:1 */
+/** ผูกกับ category ตรงตัว 1:1 จาก `type` field ที่เก็บใน core.notifications —
+ * ชื่อฟังก์ชันเหลือไว้ตามเดิม (มาจากยุคที่มีแต่ maintenance เขียนลงตารางนี้)
+ * แต่ตารางนี้ generic จริง ๆ ไม่ได้ผูกกับ maintenance เท่านั้น — HR ก็เขียน
+ * "hr_leave_submitted"/"hr_attendance_correction_submitted" ลงมาด้วย (ดู
+ * apps/web/modules/hr/lib/hr-notify.ts) */
 export function maintenanceCategoryFor(type: string): NotifCategory {
   switch (type) {
     case "work_order":
@@ -91,6 +95,10 @@ export function maintenanceCategoryFor(type: string): NotifCategory {
       return "expense";
     case "purchase_order":
       return "purchase_order";
+    case "hr_leave_submitted":
+      return "hr_leave";
+    case "hr_attendance_correction_submitted":
+      return "hr_attendance";
     default:
       return "general";
   }
@@ -110,6 +118,8 @@ const CATEGORY_META: Record<NotifCategory, ActionMeta> = {
   pm: { Icon: CalendarClock, color: "#FF9800" },
   expense: { Icon: ReceiptText, color: "#4CAF50" },
   purchase_order: { Icon: ReceiptText, color: "#4CAF50" },
+  hr_leave: { Icon: CalendarClock, color: "#8B5CF6" },
+  hr_attendance: { Icon: Clock, color: "#F59E0B" },
   general: { Icon: Bell, color: "#6B7280" },
 };
 
@@ -134,6 +144,8 @@ const CATEGORY_LABEL: Record<NotifCategory, string> = {
   pm: "แผนบำรุงรักษา",
   expense: "ค่าใช้จ่าย",
   purchase_order: "ใบสั่งซื้อ",
+  hr_leave: "คำขอลา",
+  hr_attendance: "แก้ไขเวลาเข้า-ออกงาน",
   general: "ทั่วไป",
 };
 
@@ -148,5 +160,10 @@ export function maintenanceHrefFor(type: string, referenceId: string | null): st
   if (type === "purchase_order" && referenceId) return `/maintenance/purchase-orders/${referenceId}`;
   if (type === "pm") return "/maintenance/pm";
   if (type === "expense") return "/maintenance/expenses";
+  // HR ไม่มีหน้ารายละเอียดต่อคำขอแยกให้ลิงก์ตรง (และคำขอลาหลายวันในครั้ง
+  // เดียวก็กลายเป็นหลาย request id แยกกันอยู่แล้ว — ดู hr-notify.ts) พาไปหน้า
+  // รายการที่อนุมัติได้เลยแทน
+  if (type === "hr_leave_submitted") return "/hr/leave";
+  if (type === "hr_attendance_correction_submitted") return "/hr/attendance/corrections";
   return null;
 }
