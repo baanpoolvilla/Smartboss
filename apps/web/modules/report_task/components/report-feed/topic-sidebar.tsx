@@ -498,12 +498,27 @@ export function TopicSidebar({
     }
   }
 
+  /** How many extra tiers hang below `id` — 0 for a leaf, 1 if its children
+   * are themselves all leaves. The 3-tier cap means this is only ever 0 or 1
+   * in practice (a depth-2 topic can never have children of its own to begin
+   * with — reorderByDrop's own depth check already prevents that), but this
+   * walks it for real with its own cycle guard rather than assuming, same
+   * reasoning as topicDepth's own `seen` set. */
+  function subtreeExtraDepth(id: string, seen: Set<string> = new Set()): number {
+    if (seen.has(id)) return 0;
+    seen.add(id);
+    const kids = topics.filter((t) => t.parentId === id);
+    if (kids.length === 0) return 0;
+    return 1 + Math.max(...kids.map((k) => subtreeExtraDepth(k.id, seen)));
+  }
+
   /** Drop `draggedId` next to `targetId`, joining whatever sibling group
    * `targetId` itself belongs to — dropping on a top-level room's row makes
    * the dragged room top-level too (parentId undefined), dropping on a
-   * sub-topic's row joins that sub-topic's parent. A room that already has
-   * children of its own can't become anyone's child (two-level cap, same
-   * rule the create/edit dialog already enforces). */
+   * sub-topic's row joins that sub-topic's parent. A room's own children (if
+   * any) come along for the ride, so the 3-tier cap has to hold for the
+   * *deepest* one of those after the move, not just for the dragged room
+   * itself — see subtreeExtraDepth above. */
   function reorderByDrop(draggedId: string, targetId: string, position: "before" | "after" | "into") {
     if (draggedId === targetId) return;
     const dragged = topics.find((t) => t.id === draggedId);
@@ -514,22 +529,27 @@ export function TopicSidebar({
     // sibling — the only way back in once a topic's been dragged out to
     // become a sibling of its old parent, since dropping on the *parent's*
     // row always meant "join the parent's own siblings," never "become its
-    // child" ("ย้ายออกมาแล้วย้ายกลับเข้าไปไม่ได้"). Same 3-tier cap as the
-    // create dialog: target already at the deepest tier can't take a child.
-    if (position === "into" && topicDepth(target, topicById) >= 2) return;
+    // child" ("ย้ายออกมาแล้วย้ายกลับเข้าไปไม่ได้").
     const newParentId = position === "into" ? targetId : target.parentId;
-    const draggedHasChildren = topics.some((t) => t.parentId === draggedId);
-    if (newParentId && draggedHasChildren) return;
-    // Belt-and-suspenders on top of the check above: walk newParentId's own
-    // ancestor chain and refuse the drop if it ever leads back to draggedId.
-    // draggedHasChildren *should* already rule this out (a subtree with any
-    // depth always has a direct child), but this only had to be wrong once —
-    // dropping a topic onto one of its own descendants reparents it under
-    // itself, and every recursive tree-walk below (childrenOf/renderTopicBranch,
-    // hasUnreadDescendant, topicDepth) then recurses forever the next time it
-    // runs, hanging the whole tab, not just this row ("ค้างทั้งเว็บเลย" — far
-    // worse than the row just staying visually stuck). The `seen` set also
-    // keeps this walk itself from looping forever against already-bad data.
+    // Same 3-tier cap as the create dialog, but checked against the whole
+    // subtree that's moving, not just the dragged room's own new depth —
+    // used to block moving ANY room with children at all, full stop
+    // ("ย้ายห้องที่มีลูกไปเป็นลูกห้องอื่นไม่ได้เลย ต้องย้ายลูกออกทีละตัวก่อน"),
+    // which is stricter than the cap actually requires: moving a room and
+    // its own children under another *top-level* room keeps every one of
+    // them at the exact same depth they already had.
+    if (newParentId) {
+      const newDraggedDepth = position === "into" ? topicDepth(target, topicById) + 1 : topicDepth(target, topicById);
+      if (newDraggedDepth + subtreeExtraDepth(draggedId) > 2) return;
+    }
+    // Walk newParentId's own ancestor chain and refuse the drop if it ever
+    // leads back to draggedId — dropping a topic onto one of its own
+    // descendants would reparent it under itself, and every recursive
+    // tree-walk below (childrenOf/renderTopicBranch, hasUnreadDescendant,
+    // topicDepth) then recurses forever the next time it runs, hanging the
+    // whole tab, not just this row ("ค้างทั้งเว็บเลย" — far worse than the
+    // row just staying visually stuck). The `seen` set also keeps this walk
+    // itself from looping forever against already-bad data.
     if (newParentId) {
       const seen = new Set<string>();
       let cursor: ReportTopic | undefined = topics.find((t) => t.id === newParentId);
