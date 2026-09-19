@@ -62,8 +62,14 @@ export function NotificationBellPopover() {
     }
   }
 
+  // "ทั้งบริษัท" ของ owner ไม่ได้แปลว่าแค่ room_post กว้างขึ้นอย่างเดียวอีกต่อไป
+  // — ดึงภาพรวมกิจกรรม PM/ใบงานช่าง/HR ของทุกคนมาด้วย (อ่านอย่างเดียว, ดู
+  // UnifiedNotification.scope's doc comment) เฉพาะ owner เท่านั้น หัวหน้า
+  // แผนกสลับ "แผนกที่ดูแล" ยังได้แค่ room_post กว้างขึ้นเหมือนเดิม
+  const includeOrgActivity = owner && showAll;
   const { items, unreadCount, maintenanceLoaded, markRead, markAllRead, refresh } = useUnifiedNotifications({
     includeRoomPosts: manager && showAll,
+    includeOrgActivity,
   });
 
   // โหลดแจ้งเตือนซ่อมบำรุงรอบแรกตอน mount แล้วรีเฟรชอีกทีทุกครั้งที่เปิด
@@ -75,6 +81,14 @@ export function NotificationBellPopover() {
   useEffect(() => {
     if (open) void refresh();
   }, [open, refresh]);
+  // Toggling "ทั้งบริษัท" on doesn't reopen the dropdown or flip
+  // maintenanceLoaded — refetch on the toggle itself too, or an owner who
+  // switches modes on an already-open popover would see an empty org-activity
+  // list until they close and reopen it.
+  useEffect(() => {
+    if (open) void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [includeOrgActivity]);
 
   const recent = items.slice(0, MAX_ITEMS);
   const empById = new Map(employees.map((e) => [e.id, e] as const));
@@ -174,6 +188,14 @@ export function NotificationBellPopover() {
                       {n.message}
                     </p>
                     <div className="mt-0.5 flex items-center gap-2">
+                      {/* อ่านอย่างเดียว เป็นของคนอื่น ไม่ใช่ของเจ้าของบริษัท
+                          เอง — ป้ายนี้กันสับสนว่าทำไมกด "อ่านทั้งหมด" ไม่ทำให้
+                          แถวนี้จางลง (ดู UnifiedNotification.scope's doc) */}
+                      {n.scope === "org" && (
+                        <span className="max-w-[8rem] truncate rounded-full bg-(--bg-soft) px-1.5 py-0.5 text-[10px] font-medium text-(--ink-soft)">
+                          ทั้งบริษัท
+                        </span>
+                      )}
                       {n.roomName && (
                         <span className="max-w-[8rem] truncate rounded-full bg-(--bg-soft) px-1.5 py-0.5 text-[10px] font-medium text-(--ink-soft)">
                           {n.roomName}

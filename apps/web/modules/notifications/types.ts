@@ -44,4 +44,9 @@ export interface UnifiedNotification {
   createdAt: string;
   read: boolean;
   link?: string | null;
+  /** "org" = ภาพรวมทั้งบริษัทของคนอื่น (เจ้าของบริษัทเท่านั้นที่เห็นได้ —
+   * ดู listOrgNotifications) อ่านอย่างเดียว ห้าม markRead ให้แถวพวกนี้เด็ดขาด
+   * เพราะเป็นแจ้งเตือนจริงของคนอื่น ไม่ใช่ตัวเอง ไม่มีค่า = แจ้งเตือนของ
+   * ตัวเองตามปกติ (มีอยู่ก่อนแล้ว ไม่ต้องระบุ) */
+  scope?: "org";
 }

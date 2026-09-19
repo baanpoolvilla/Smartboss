@@ -14,10 +14,15 @@ export interface MaintenanceNotif {
 
 interface MaintenanceNotifStore {
   items: MaintenanceNotif[];
+  /** "วันนี้ทั้งบริษัทมีอะไรเกิดขึ้นบ้าง" — เฉพาะเจ้าของบริษัท (เซิร์ฟเวอร์เช็ค
+   * สิทธิ์เองใน route, ดูคอมเมนต์ที่นั่น) ว่างเปล่าเสมอสำหรับคนอื่น อ่านอย่าง
+   * เดียว ห้ามมี markRead ให้แถวพวกนี้ — เป็นแจ้งเตือนของคนอื่น ไม่ใช่ของ
+   * เจ้าของบริษัทเอง (ดู listOrgNotifications's doc comment) */
+  orgItems: MaintenanceNotif[];
   /** `true` once the first fetch has completed (success or failure) — lets
    * callers avoid flashing "no notifications" before data has even loaded. */
   loaded: boolean;
-  refresh: () => Promise<void>;
+  refresh: (opts?: { includeOrgActivity?: boolean }) => Promise<void>;
   markRead: (id: string) => Promise<void>;
   markAllRead: () => Promise<void>;
 }
@@ -30,13 +35,15 @@ interface MaintenanceNotifStore {
  * report_task store's own server-synced state. */
 export const useMaintenanceNotifStore = create<MaintenanceNotifStore>()((set, get) => ({
   items: [],
+  orgItems: [],
   loaded: false,
-  async refresh() {
+  async refresh(opts) {
     try {
-      const res = await fetch("/api/notifications/maintenance");
+      const url = opts?.includeOrgActivity ? "/api/notifications/maintenance?scope=org" : "/api/notifications/maintenance";
+      const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = (await res.json()) as { items: MaintenanceNotif[] };
-      set({ items: data.items, loaded: true });
+      const data = (await res.json()) as { items: MaintenanceNotif[]; orgItems?: MaintenanceNotif[] };
+      set({ items: data.items, orgItems: data.orgItems ?? [], loaded: true });
     } catch {
       // Network hiccup/not logged in yet — leave whatever's already loaded
       // in place rather than clearing a good list out from under the user.

@@ -79,6 +79,28 @@ export function listNotifications(userId: string) {
   );
 }
 
+/**
+ * ภาพรวม "วันนี้มีอะไรเกิดขึ้นบ้าง" ทั้งบริษัท — สำหรับเจ้าของบริษัทเท่านั้น
+ * (เช็คสิทธิ์ที่ผู้เรียก ดู /api/notifications/maintenance's GET) ต่างจาก
+ * listNotifications ข้างบนตรงที่นี่**ไม่ผูก userId** ตั้งใจ — ขอบเขตจริงคือ
+ * "ทุกคนในบริษัทนี้" ไม่ใช่ผู้รับคนเดียว จึงกรองด้วย orgId ตรง ๆ แทน (ผ่าน
+ * tenant-guard ปกติ ไม่ต้องใช้ crossOrg เพราะนี่คือ query ที่มี orgId จริง ๆ)
+ *
+ * อ่านอย่างเดียว — เจตนาคือ "รู้ว่าเกิดอะไรขึ้น" ไม่ใช่กล่องแจ้งเตือนของ
+ * เจ้าของบริษัทเอง จึงไม่มี readAt/markRead ให้ที่นี่: แถวพวกนี้เป็นของคนอื่น
+ * (พนักงานที่ได้รับแจ้งเตือนจริง) การให้เจ้าของบริษัทมากดอ่านแทนจะไปเปลี่ยน
+ * สถานะที่เจ้าของแจ้งเตือนจริงเห็นด้วยโดยที่เขาไม่รู้ตัว — ฝั่ง client
+ * (use-unified-notifications.ts) จึงต้องไม่เรียก markRead กับแถวจากฟังก์ชันนี้
+ * เด็ดขาด
+ */
+export function listOrgNotifications(orgId: string, excludeUserId: string, limit = 50) {
+  return prisma.notification.findMany({
+    where: { orgId, userId: { not: excludeUserId } },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+}
+
 export function unreadCount(userId: string) {
   return crossOrg("notification:recipient-scoped-not-org-scoped", () =>
     prisma.notification.count({ where: { userId, readAt: null } })

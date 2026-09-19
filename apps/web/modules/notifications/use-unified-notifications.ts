@@ -46,6 +46,13 @@ export interface UseUnifiedNotificationsOptions {
    * store.ts's addPost ส่ง room_post ให้ owner ทุกโพสต์ทุกห้อง แต่ส่งให้
    * หัวหน้าแผนกเฉพาะห้องที่แผนกตัวเองเห็นเท่านั้น). */
   includeRoomPosts?: boolean;
+  /** "วันนี้ทั้งบริษัทมีอะไรเกิดขึ้นบ้าง" (PM/ใบงานช่าง/HR ของทุกคน) — server
+   * เช็คซ้ำว่าเรียกคนนี้เป็นเจ้าของบริษัทจริงไหมเสมอ (ดู route ของ
+   * /api/notifications/maintenance) ส่ง true มาแล้วไม่ใช่เจ้าของก็แค่ได้
+   * ลิสต์ว่างกลับมาเฉย ๆ ไม่ error รายการที่ได้มาเป็น "ของคนอื่น" ล้วน ๆ —
+   * อ่านอย่างเดียว, ไม่นับใน unreadCount, กด markRead ไม่ได้ (ดู
+   * UnifiedNotification.scope's doc) */
+  includeOrgActivity?: boolean;
 }
 
 /** รวมแจ้งเตือน 2 แหล่ง (report_task client store + maintenance ผ่าน
@@ -61,10 +68,13 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
   const reportMarkAllRead = useNotificationStore((s) => s.markAllRead);
 
   const maintenanceItems = useMaintenanceNotifStore((s) => s.items);
+  const orgItems = useMaintenanceNotifStore((s) => s.orgItems);
   const maintenanceLoaded = useMaintenanceNotifStore((s) => s.loaded);
-  const maintenanceRefresh = useMaintenanceNotifStore((s) => s.refresh);
+  const maintenanceRefreshRaw = useMaintenanceNotifStore((s) => s.refresh);
   const maintenanceMarkRead = useMaintenanceNotifStore((s) => s.markRead);
   const maintenanceMarkAllRead = useMaintenanceNotifStore((s) => s.markAllRead);
+  const includeOrgActivity = !!options.includeOrgActivity;
+  const maintenanceRefresh = () => maintenanceRefreshRaw({ includeOrgActivity });
 
   const items = useMemo<UnifiedNotification[]>(() => {
     const fromReport: UnifiedNotification[] = reportNotifications
@@ -92,20 +102,42 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
       link: maintenanceHrefFor(n.type, n.referenceId),
     }));
 
+    // "mtorg:" prefix (not "mt:") so markRead below can never mistake one of
+    // these for the viewer's own — read: true always, since these are other
+    // people's notifications, not a real unread count for the viewer.
+    const fromOrgActivity: UnifiedNotification[] = includeOrgActivity
+      ? orgItems.map((n) => ({
+          id: `mtorg:${n.id}`,
+          module: "maintenance" as const,
+          category: maintenanceCategoryFor(n.type),
+          message: n.title,
+          body: n.body,
+          createdAt: n.createdAt,
+          read: true,
+          link: maintenanceHrefFor(n.type, n.referenceId),
+          scope: "org" as const,
+        }))
+      : [];
+
     // unread-first, then "about me directly" ahead of scheduled/bulk
     // reminders (see isPersonal's own doc comment), then newest→oldest
-    // within each bucket
-    return [...fromReport, ...fromMaintenance].sort(
+    // within each bucket — org-activity items are always "read" so they
+    // naturally settle to the bottom, after everything the viewer still
+    // actually needs to act on themselves.
+    return [...fromReport, ...fromMaintenance, ...fromOrgActivity].sort(
       (a, b) =>
         Number(a.read) - Number(b.read) ||
         Number(isPersonal(b)) - Number(isPersonal(a)) ||
         b.createdAt.localeCompare(a.createdAt)
     );
-  }, [reportNotifications, maintenanceItems, viewingAsUserId, includeRoomPosts]);
+  }, [reportNotifications, maintenanceItems, orgItems, viewingAsUserId, includeRoomPosts, includeOrgActivity]);
 
   const unreadCount = items.filter((n) => !n.read).length;
 
   function markRead(id: string) {
+    // "mtorg:" (org-activity, someone else's notification) is deliberately
+    // not handled here at all — see UnifiedNotification.scope's doc comment
+    // on why marking it read would be wrong. Falls through as a no-op.
     if (id.startsWith("rt:")) reportMarkRead(id.slice(3));
     else if (id.startsWith("mt:")) void maintenanceMarkRead(id.slice(3));
   }
