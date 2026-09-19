@@ -14,6 +14,8 @@ import type {
 } from "@/modules/report_task/types/issue";
 import { listUsersAcrossOrgs } from "./users";
 import { notifyUser } from "@/modules/maintenance/data/notify";
+import { SYSTEM_USER_ID } from "@/modules/report_task/lib/task-penalty-sweep";
+import type { ActivityItem } from "@/modules/report_task/types";
 
 /**
  * Cross-org write actions for the platform Super Admin console
@@ -226,6 +228,42 @@ export async function adminConfirmResolution(orgId: string, ticketId: string, wo
     ];
     return next;
   });
+}
+
+/** ลงบันทึกลง "บันทึกกิจกรรม" ของบริษัทนั้นเอง (report_task/activity-log)
+ * เมื่อทีม Smartboss ลบตั๋ว — ใช้ SYSTEM_USER_ID เป็นผู้กระทำ เพราะ session
+ * ของ Super Admin ที่ลบเป็นบัญชีข้ามบริษัท ไม่มีทางอยู่ใน employee directory
+ * ของบริษัทเจ้าของตั๋วเลย (getUser(userId) ในหน้าบันทึกกิจกรรมจะหาไม่เจอ
+ * กลายเป็น "ไม่ทราบ") — ใส่รายละเอียดว่าใครลบไว้ใน detail แทน */
+async function logTicketDeletion(orgId: string, ticket: IssueTicket, deletedByName: string) {
+  const { data, version } = await readStore<ActivityItem[]>(orgId, "activity-log");
+  const entries = data ?? [];
+  const entry: ActivityItem = {
+    id: `log-${crypto.randomUUID()}`,
+    userId: SYSTEM_USER_ID,
+    action: "ลบตั๋วแจ้งบัค",
+    target: `${ticket.code} — ${ticket.title}`,
+    detail: `ลบโดย ${deletedByName} (ทีม Smartboss)`,
+    createdAt: new Date().toISOString(),
+  };
+  await writeStore(orgId, "activity-log", [entry, ...entries], version, "smartboss-admin");
+}
+
+/** ลบตั๋วทิ้งทั้งหมด (รวมข้อความในตั๋วทุกอัน) — ทำไม่ได้ย้อนกลับ ใช้ตอนตั๋วเป็น
+ * สแปม/ทดสอบ/ไม่เกี่ยวข้อง ไม่ใช่ workflow ปกติ (ปิดตั๋วใช้เปลี่ยนสถานะแทน) */
+export async function adminDeleteTicket(orgId: string, ticketId: string) {
+  const session = await requireSuperAdmin();
+  const { data, version } = await readStore<unknown>(orgId, "issue-reports");
+  const slice = migrateIssueStoreSlice(data);
+  const ticket = slice.tickets.find((t) => t.id === ticketId);
+  if (!ticket) throw new Error("ไม่พบตั๋วนี้ — อาจถูกลบไปแล้ว");
+  const nextTickets = slice.tickets.filter((t) => t.id !== ticketId);
+  const result = await writeStore(orgId, "issue-reports", { ...slice, tickets: nextTickets }, version, "smartboss-admin");
+  if (!result.ok) throw new Error("มีคนแก้ตั๋วนี้พร้อมกัน — โหลดหน้าใหม่แล้วลองอีกครั้ง");
+
+  const admins = await listUsersAcrossOrgs();
+  const deletedByName = admins.find((u) => u.id === session.userId)?.name ?? "ทีม Smartboss";
+  await logTicketDeletion(orgId, ticket, deletedByName);
 }
 
 /** Who a ticket can be assigned to — any active platform Super Admin, not a

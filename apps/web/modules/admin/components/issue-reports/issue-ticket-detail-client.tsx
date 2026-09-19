@@ -12,6 +12,7 @@ import {
   adminSetPriority,
   adminSetAssignee,
   adminConfirmResolution,
+  adminDeleteTicket,
 } from "@/modules/admin/data/issue-ticket-actions";
 import {
   issueCategoryMeta,
@@ -71,6 +72,19 @@ export function IssueTicketDetailClient({
       try {
         await action();
         router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "เกิดข้อผิดพลาด ลองใหม่อีกครั้ง");
+      }
+    });
+  }
+
+  function handleDelete() {
+    if (!window.confirm(`ลบตั๋ว "${ticket.title}" ทิ้งทั้งหมด (รวมข้อความทุกอัน) — ทำไม่ได้ย้อนกลับ ต้องการลบจริงไหม?`)) return;
+    setError(null);
+    startTransition(async () => {
+      try {
+        await adminDeleteTicket(orgId, ticket.id);
+        router.push("/admin/issue-reports");
       } catch (e) {
         setError(e instanceof Error ? e.message : "เกิดข้อผิดพลาด ลองใหม่อีกครั้ง");
       }
@@ -291,6 +305,19 @@ export function IssueTicketDetailClient({
           {ticket.rejectReason && <Row label="เหตุผลที่ไม่ดำเนินการ" value={ticket.rejectReason} />}
           {ticket.duplicateOfId && <Row label="ซ้ำกับตั๋ว" value={ticket.duplicateOfId} />}
         </Card>
+
+        {/* แยกจาก workflow ปกติชัดๆ (ปิดตั๋วใช้เปลี่ยนสถานะ ไม่ใช่ตรงนี้) —
+            ใช้เฉพาะตั๋วสแปม/ทดสอบ/ไม่เกี่ยวข้อง ลบแล้วกู้คืนไม่ได้ และลง
+            บันทึกกิจกรรมของบริษัทนั้นไว้ด้วย ("ลบก็ให้ข้อความที่แจ้งหายไปด้วย
+            และลงบันทึกกิจกรรมด้วยนะ") */}
+        <Button
+          variant="outline"
+          className="w-full border-red-200 text-red-600 hover:bg-red-50"
+          disabled={isPending}
+          onClick={handleDelete}
+        >
+          ลบตั๋วนี้ทิ้ง
+        </Button>
       </div>
     </div>
   );
