@@ -418,6 +418,28 @@ export function TopicSidebar({
   // the handler itself never re-renders anything synchronously.
   const dropIndicatorFrame = useRef<number | null>(null);
   const dropIndicatorNext = useRef<{ id: string; position: "before" | "after" | "into" } | null>(null);
+  // Pointer-events drag, not browser-native HTML5 draggable — see the big
+  // effect below (right after `topicById`) for why: native drag depends on
+  // the browser firing `dragend` back on the exact DOM node a drag started
+  // from, and any React re-render that remounts that node instead of
+  // updating it in place (a drop reshaping the tree, a store update landing
+  // mid-drag, ...) means that event never comes — the drag reads as "stuck"
+  // forever with the row dimmed and the whole page unresponsive until a
+  // refresh, and zero console error, because nothing actually threw
+  // ("กดลากแล้วค้าง...ไม่มีอะไรขึ้นเลย" — this was never a JS exception, it's
+  // the browser's own native-drag state machine waiting on an event that
+  // will never fire). A handful of narrower patches over time (opacity-40
+  // stuck-row fix, the rAF-coalesced dropIndicator below, the sync-hold
+  // above) each closed one specific way that could happen — this replaces
+  // the fragile foundation itself instead of the next patch. Global
+  // pointerup/pointercancel listeners always fire and always clear state,
+  // regardless of what got remounted, because they're not tied to any one
+  // row's DOM node. Same code path drives mouse AND touch, which also
+  // happens to fix drag never having worked on touch at all (native
+  // draggable has no touch equivalent — the ▲▼ buttons were the only
+  // touch-friendly way to reorder before this).
+  const dragCandidateRef = useRef<{ id: string; x: number; y: number } | null>(null);
+  const draggedTopicIdRef = useRef<string | null>(null);
   // Reorder is staged locally (pendingTopics), so the background sync poll
   // can't tell an edit is in progress and would happily replace `topics`
   // out from under a drag every 4s — which both re-renders the row being
@@ -695,6 +717,120 @@ export function TopicSidebar({
   // parent — that'd need a 4th tier. Also can't be its own parent while
   // being edited.
   const topicById = useMemo(() => new Map(topics.map((t) => [t.id, t] as const)), [topics]);
+
+  // Keep a ref mirror of draggedTopicId — the window listeners below read it
+  // synchronously (setState itself is async/batched, so reading the state
+  // variable directly right after calling its setter inside the same
+  // pointermove wouldn't see the update yet).
+  useEffect(() => {
+    draggedTopicIdRef.current = draggedTopicId;
+  }, [draggedTopicId]);
+
+  // Drives the whole pointer-based drag — see dragCandidateRef's own doc
+  // comment above for why this replaces native HTML5 draggable. `topics`/
+  // `topicById` only actually change once a drop lands (applyLocalReorder),
+  // never mid-drag, so this effect re-subscribing when they change doesn't
+  // interrupt an active drag — there's nothing active to interrupt at that
+  // instant.
+  useEffect(() => {
+    if (!editingOrder) return;
+
+    // 5px slop before a pointerdown on a row counts as "dragging" rather
+    // than "about to be a click" — matches native drag's own built-in
+    // threshold, and without it a plain click that jitters by a pixel would
+    // start reordering things.
+    const DRAG_THRESHOLD_PX = 5;
+
+    function topicRowAt(clientX: number, clientY: number): HTMLElement | null {
+      return document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>("[data-topic-id]") ?? null;
+    }
+
+    function clearDropIndicator() {
+      if (dropIndicatorFrame.current !== null) {
+        cancelAnimationFrame(dropIndicatorFrame.current);
+        dropIndicatorFrame.current = null;
+      }
+      dropIndicatorNext.current = null;
+      setDropIndicator(null);
+    }
+
+    function handlePointerMove(e: PointerEvent) {
+      const candidate = dragCandidateRef.current;
+      if (!draggedTopicIdRef.current && candidate) {
+        if (Math.hypot(e.clientX - candidate.x, e.clientY - candidate.y) < DRAG_THRESHOLD_PX) return;
+        draggedTopicIdRef.current = candidate.id;
+        setDraggedTopicId(candidate.id);
+      }
+      const draggedId = draggedTopicIdRef.current;
+      if (!draggedId) return;
+      // Dragging a room shouldn't also select its text or scroll the page
+      // like a normal touch drag would.
+      e.preventDefault();
+
+      const el = topicRowAt(e.clientX, e.clientY);
+      const targetId = el?.dataset.topicId;
+      if (!el || !targetId || targetId === draggedId) {
+        dropIndicatorNext.current = null;
+        if (dropIndicatorFrame.current === null) {
+          dropIndicatorFrame.current = requestAnimationFrame(() => {
+            dropIndicatorFrame.current = null;
+            setDropIndicator((prev) => (prev === null ? prev : null));
+          });
+        }
+        return;
+      }
+      const target = topicById.get(targetId);
+      if (!target) return;
+      // Same 3-band hit test the old onDragOver did — top/bottom 30% of the
+      // row means "become a sibling here", the middle 40% means "nest
+      // inside this one" (only offered when the row can actually take a
+      // child). See reorderByDrop for what each position actually does.
+      const rect = el.getBoundingClientRect();
+      const frac = (e.clientY - rect.top) / rect.height;
+      const canNestInto = topicDepth(target, topicById) < 2 && !topics.some((x) => x.parentId === draggedId);
+      const position: "before" | "after" | "into" = frac < 0.3 ? "before" : frac > 0.7 || !canNestInto ? "after" : "into";
+      dropIndicatorNext.current = { id: targetId, position };
+      if (dropIndicatorFrame.current !== null) return;
+      dropIndicatorFrame.current = requestAnimationFrame(() => {
+        dropIndicatorFrame.current = null;
+        const next = dropIndicatorNext.current;
+        setDropIndicator((prev) => (prev?.id === next?.id && prev?.position === next?.position ? prev : next));
+      });
+    }
+
+    // pointerup AND pointercancel both end a drag the same way — a global
+    // listener on `window`, not the row that started it, so this always
+    // fires no matter what got remounted underneath the pointer since
+    // pointerdown. This is the fix: nothing here depends on the original
+    // DOM node still existing. Also handles a pointerdown that never
+    // crossed the drag threshold before lifting (just a click) — nothing to
+    // reorder there, just forget the candidate.
+    function finishDrag(e: PointerEvent) {
+      const draggedId = draggedTopicIdRef.current;
+      dragCandidateRef.current = null;
+      if (!draggedId) return;
+      const el = topicRowAt(e.clientX, e.clientY);
+      const targetId = el?.dataset.topicId;
+      const current = dropIndicatorNext.current;
+      const position = current && current.id === targetId ? current.position : "after";
+      draggedTopicIdRef.current = null;
+      setDraggedTopicId(null);
+      clearDropIndicator();
+      if (targetId && targetId !== draggedId) reorderByDrop(draggedId, targetId, position);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove, { passive: false });
+    window.addEventListener("pointerup", finishDrag);
+    window.addEventListener("pointercancel", finishDrag);
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", finishDrag);
+      window.removeEventListener("pointercancel", finishDrag);
+      dragCandidateRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingOrder, topics, topicById]);
+
   const parentOptions = topics.filter(
     (t) =>
       topicDepth(t, topicById) <= 1 &&
@@ -944,79 +1080,22 @@ export function TopicSidebar({
         data-tour="topic-row"
         data-topic-id={t.id}
         data-topic-name={t.name}
-        // Only draggable inside the deliberate reorder mode (the ⠿ button in
-        // the header) — a plain click on a room should never be one shaky
-        // pixel away from starting a drag that reshapes the sidebar.
-        draggable={editingOrder}
-        onDragStart={(e) => {
-          if (!editingOrder) return;
-          setDraggedTopicId(t.id);
-          e.dataTransfer.effectAllowed = "move";
-        }}
-        onDragEnd={() => {
-          setDraggedTopicId(null);
-          setDropIndicator(null);
-        }}
-        onDragOver={(e) => {
-          if (!editingOrder || !draggedTopicId || draggedTopicId === t.id) return;
-          e.preventDefault();
-          e.dataTransfer.dropEffect = "move";
-          // Discord-style 3-band hit test — top/bottom 30% of the row means
-          // "drop as a sibling here" (before/after), the middle 40% means
-          // "nest inside this one" (only offered when this row can actually
-          // take a child — already at the deepest tier, or already has a
-          // child of its own coming along with it, and the middle band just
-          // isn't offered at all). See reorderByDrop for what each does.
-          const rect = e.currentTarget.getBoundingClientRect();
-          const frac = (e.clientY - rect.top) / rect.height;
-          const canNestInto = topicDepth(t, topicById) < 2 && !topics.some((x) => x.parentId === draggedTopicId);
-          const position: "before" | "after" | "into" =
-            frac < 0.3 ? "before" : frac > 0.7 || !canNestInto ? "after" : "into";
-          // Never setState straight from this handler — see the refs' own
-          // comment. Latest wins; at most one re-render per frame.
-          dropIndicatorNext.current = { id: t.id, position };
-          if (dropIndicatorFrame.current !== null) return;
-          dropIndicatorFrame.current = requestAnimationFrame(() => {
-            dropIndicatorFrame.current = null;
-            const next = dropIndicatorNext.current;
-            setDropIndicator((prev) =>
-              prev?.id === next?.id && prev?.position === next?.position ? prev : next
-            );
-          });
-        }}
-        onDragLeave={(e) => {
-          // Only clear once the pointer actually leaves this row's box, not
-          // on every child element boundary crossing inside it (dragleave
-          // fires on those too) — relatedTarget still inside means it's not
-          // really gone yet.
-          if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
-          dropIndicatorNext.current = null;
-          setDropIndicator((prev) => (prev?.id === t.id ? null : prev));
-        }}
-        onDrop={(e) => {
-          if (!editingOrder || !draggedTopicId) return;
-          e.preventDefault();
-          const position = dropIndicator?.id === t.id ? dropIndicator.position : "after";
-          // Clear the "being dragged" state FIRST, before reorderByDrop
-          // writes into pendingTopics — that write can shift this row to a
-          // different depth/parent group in the tree, which React sometimes
-          // remounts instead of moving in place. A remounted node's native
-          // `dragend` never fires (the browser fires it on the original
-          // element, which is now gone), so `draggedTopicId` was staying
-          // stuck pointing at this row forever — permanently dimmed at 40%
-          // opacity with no drag actually in progress ("กดย้ายละค้าง"), while
-          // the ▲▼ buttons (which never touch this state) kept working fine.
-          const draggedId = draggedTopicId;
-          if (dropIndicatorFrame.current !== null) {
-            cancelAnimationFrame(dropIndicatorFrame.current);
-            dropIndicatorFrame.current = null;
-          }
-          dropIndicatorNext.current = null;
-          setDraggedTopicId(null);
-          setDropIndicator(null);
-          reorderByDrop(draggedId, t.id, position);
+        // Pointer-events drag, not native HTML5 draggable — see
+        // dragCandidateRef's own doc comment (near the other reorder state,
+        // above) for why. Only arms a *candidate*; the window-level
+        // pointermove effect promotes it to an actual drag once the pointer
+        // has moved past a small threshold, so a plain click never counts
+        // as "started dragging" for one shaky pixel of mouse jitter — same
+        // guarantee `draggable`'s own built-in threshold used to give for
+        // free. Skips interactive descendants (▲▼, "...", chevron, star,
+        // +) — those still work as plain clicks/taps.
+        onPointerDown={(e) => {
+          if (!editingOrder || e.button !== 0) return;
+          if ((e.target as HTMLElement).closest("button, a")) return;
+          dragCandidateRef.current = { id: t.id, x: e.clientX, y: e.clientY };
         }}
         className={cn(
+          editingOrder && "touch-none",
           // select-none — without it, clicking a row fast/repeatedly (double-
           // click timing) makes the BROWSER select the room's name as plain
           // text instead of just opening it; the next mouse-move while that
