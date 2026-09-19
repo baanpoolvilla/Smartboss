@@ -1,4 +1,4 @@
-export type NotifModule = "report" | "maintenance";
+export type NotifModule = "report" | "maintenance" | "hr";
 
 export type NotifCategory =
   | "report_post"

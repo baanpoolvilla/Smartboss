@@ -35,6 +35,7 @@ import { isKnownIssuesBannerActive, issueCategoryMeta, issueImpactMeta, issueSub
 import { ALL_ISSUE_CATEGORIES, type IssueAttachment, type IssueCategory, type IssueImpact } from "@/modules/report_task/types/issue";
 import { getDepartment, getUser } from "@/modules/report_task/lib/directory";
 import { cn } from "@/modules/report_task/lib/utils";
+import { notifyNewIssueTicket } from "@/modules/report_task/lib/issue-notify";
 
 /** Categories that often touch something private (pay/perf-adjacent access
  * issues) — "ให้หัวหน้าแผนกเห็น" starts unticked for these specifically,
@@ -135,6 +136,10 @@ export function IssueReportDialog({
           occurredAt: new Date().toISOString(),
         },
       });
+      // ตั๋วเขียนจริงผ่าน ServerStoreSync ของ store นี้เองอยู่แล้ว (ไม่ต้องรอ
+      // ตรงนี้) — fire-and-forget แค่ไปเรียกทีม Smartboss มาดูตั๋วใหม่ ไม่ผูก
+      // กับผลลัพธ์ของการยื่นจริงเลย ล้มเหลวก็ไม่ทำให้ยื่นตั๋วไม่สำเร็จตามไปด้วย
+      void notifyNewIssueTicket(ticket.id, ticket.title, ticket.description);
       reset();
       onOpenChange(false);
       router.push(`/report-task/issue-reports/${ticket.id}`);

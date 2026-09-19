@@ -13,6 +13,7 @@ import type {
   IssueTicket,
 } from "@/modules/report_task/types/issue";
 import { listUsersAcrossOrgs } from "./users";
+import { notifyUser } from "@/modules/maintenance/data/notify";
 
 /**
  * Cross-org write actions for the platform Super Admin console
@@ -75,7 +76,7 @@ export async function adminReplyToTicket(orgId: string, ticketId: string, body: 
   const session = await requireSuperAdmin();
   const trimmed = body.trim();
   if (!trimmed) throw new Error("พิมพ์ข้อความก่อนส่ง");
-  return mutateTicket(orgId, ticketId, (t) => {
+  const updated = await mutateTicket(orgId, ticketId, (t) => {
     const now = new Date().toISOString();
     const msg: IssueMessage = {
       id: `${ticketId}-msg-${crypto.randomUUID()}`,
@@ -95,6 +96,18 @@ export async function adminReplyToTicket(orgId: string, ticketId: string, body: 
       firstResponseAt: t.firstResponseAt ?? (audience === "all" ? now : t.firstResponseAt),
     };
   });
+
+  // แจ้งผู้แจ้งเฉพาะข้อความที่เขาเห็นได้จริง — "staff" คือโน้ตภายในที่ผู้แจ้ง
+  // ไม่มีทางเห็นในหน้าของตัวเองเลย แจ้งไปก็จะงงว่าลิงก์พาไปแล้วไม่เห็นอะไร
+  if (audience === "all") {
+    void notifyUser(orgId, updated.reporterId, {
+      title: `มีการตอบกลับตั๋ว "${updated.title}" ที่คุณแจ้งไว้`,
+      type: "issue_ticket_reply_reporter",
+      referenceId: ticketId,
+    });
+  }
+
+  return updated;
 }
 
 /** "รับเรื่อง" — claim (assign to self) + move to triaged in one step, same

@@ -5,6 +5,7 @@ import { MODULE_CARDS } from "@/lib/modules";
 import { iconByName } from "@/lib/icons";
 import { loadShellNav } from "@/lib/nav";
 import { AppTileReviewBadge } from "@/modules/report_task/components/shared/app-tile-review-badge";
+import { NotifCountBadge } from "@/modules/notifications/notif-count-badge";
 
 interface AppTile {
   code: string;
@@ -110,6 +111,13 @@ function AppIcon({ tile }: { tile: AppTile }) {
           }}
         />
         {href && tile.code === "report_task" && <AppTileReviewBadge />}
+        {/* "อยากให้เห็นว่าตรงไหนมีแจ้งเตือนอะไรบ้าง...ทำให้หมดกับทุก module"
+            — report_task's own badge above มีตรรกะพิเศษของตัวเอง (สแกน
+            tasks/posts ตรงๆ ไม่ใช่แค่นับแจ้งเตือน) สองอันนี้ใช้ตัวนับแจ้งเตือน
+            ทั่วไปแทน เพราะแจ้งซ่อมบำรุง/HR ไม่มี array งานให้สแกนแบบนั้น */}
+        {href && tile.code === "maintenance" && <NotifCountBadge categories={["work_order", "pm", "expense", "purchase_order"]} />}
+        {href && tile.code === "hr" && <NotifCountBadge categories={["hr_leave", "hr_attendance"]} />}
+        {href && tile.code === "admin_issue_report" && <NotifCountBadge categories={["ticket"]} />}
       </span>
 
       <span

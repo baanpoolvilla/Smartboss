@@ -15,7 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { AppNotification } from "@/modules/report_task/store/notification-store";
-import type { NotifCategory } from "@/modules/notifications/types";
+import type { NotifCategory, NotifModule } from "@/modules/notifications/types";
 
 export type ActionMeta = { Icon: LucideIcon; color: string };
 
@@ -99,9 +99,24 @@ export function maintenanceCategoryFor(type: string): NotifCategory {
       return "hr_leave";
     case "hr_attendance_correction_submitted":
       return "hr_attendance";
+    case "issue_ticket_new":
+    case "issue_ticket_reply_reporter":
+      return "ticket";
     default:
       return "general";
   }
+}
+
+/** โมดูลที่ category นี้เป็นของจริง — ใช้แยก badge ต่อ tile/เมนู (HR กับ
+ * maintenance เขียนแถวลง core.notifications ตารางเดียวกันจริง แต่เป็นคน
+ * ละโมดูลกันในสายตาผู้ใช้ ต้องแยกว่า category ไหนควรขึ้นเลขที่ tile ไหน)
+ * เรียกเฉพาะกับ category ที่มาจาก maintenanceCategoryFor(n.type) เท่านั้น
+ * (แถวจาก core.notifications) — ฝั่ง report_task (reportCategoryFor) รู้ตัว
+ * module ของตัวเองอยู่แล้วโดยไม่ต้องผ่านฟังก์ชันนี้ */
+export function moduleForCategory(cat: NotifCategory): NotifModule {
+  if (cat === "hr_leave" || cat === "hr_attendance") return "hr";
+  if (cat === "ticket") return "report";
+  return "maintenance";
 }
 
 const CATEGORY_META: Record<NotifCategory, ActionMeta> = {
@@ -165,5 +180,14 @@ export function maintenanceHrefFor(type: string, referenceId: string | null): st
   // รายการที่อนุมัติได้เลยแทน
   if (type === "hr_leave_submitted") return "/hr/leave";
   if (type === "hr_attendance_correction_submitted") return "/hr/attendance/corrections";
+  // "issue_ticket_new" ไปทีมหลังบ้าน (Super Admin) เท่านั้น — referenceId
+  // เก็บเป็น "orgId:ticketId" (ดู issue-notify.ts) เพราะคอนโซลข้ามบริษัทต้อง
+  // รู้ทั้งสองอย่างถึงจะลิงก์ตรงตั๋วได้ ส่วน "..._reporter" กลับไปหน้าของผู้
+  // แจ้งเอง ซึ่ง org มาจาก session อยู่แล้วไม่ต้องมีใน referenceId
+  if (type === "issue_ticket_new" && referenceId?.includes(":")) {
+    const [orgId, ticketId] = referenceId.split(":");
+    return `/admin/issue-reports/${orgId}/${ticketId}`;
+  }
+  if (type === "issue_ticket_reply_reporter" && referenceId) return `/report-task/issue-reports/${referenceId}`;
   return null;
 }

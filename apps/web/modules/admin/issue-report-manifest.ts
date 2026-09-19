@@ -1,5 +1,7 @@
+import { createElement } from "react";
 import type { ModuleManifest } from "@/module-registry";
 import { ADMIN_PERMS } from "./permissions";
+import { NotifCountBadge } from "@/modules/notifications/notif-count-badge";
 
 export const ADMIN_ISSUE_REPORT_CODE = "admin_issue_report";
 
@@ -33,6 +35,21 @@ export const adminIssueReportManifest: ModuleManifest = {
   basePath: "/admin/issue-reports",
   icon: "Bug",
   alwaysOn: true,
-  menus: [{ label: "แจ้งบัค", path: "/admin/issue-reports", permission: ADMIN_PERMS.orgCreate, icon: "Bug" }],
+  menus: [
+    {
+      label: "แจ้งบัค",
+      path: "/admin/issue-reports",
+      permission: ADMIN_PERMS.orgCreate,
+      icon: "Bug",
+      // มีตั๋วใหม่/ผู้แจ้งตอบกลับที่ยังไม่ได้ดู (issue-notify.ts) — เห็นเฉพาะ
+      // Super Admin เหมือนเมนูนี้เอง จึงไม่มีทางเห็นแจ้งเตือนของบริษัทอื่น
+      // ปนมาโดยไม่ได้ตั้งใจ (core.notifications กรองด้วย userId อยู่แล้ว)
+      badge: createElement(NotifCountBadge, {
+        categories: ["ticket"],
+        className:
+          "ml-auto flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-(--danger) px-1 text-[10px] font-bold text-white",
+      }),
+    },
+  ],
   permissions: [ADMIN_PERMS.orgCreate],
 };

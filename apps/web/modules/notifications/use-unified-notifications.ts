@@ -5,7 +5,7 @@ import { useNotificationStore } from "@/modules/report_task/store/notification-s
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canManage } from "@/modules/report_task/lib/directory";
 import { useMaintenanceNotifStore } from "@/modules/notifications/use-maintenance-notifications";
-import { isRoomPost, reportCategoryFor, maintenanceCategoryFor, maintenanceHrefFor } from "@/modules/notifications/derive";
+import { isRoomPost, reportCategoryFor, maintenanceCategoryFor, maintenanceHrefFor, moduleForCategory } from "@/modules/notifications/derive";
 import type { NotifCategory, UnifiedNotification } from "@/modules/notifications/types";
 
 /** "มีคนทำอะไรบางอย่างที่พาดพิงถึงฉันโดยตรง เมื่อกี้นี้" (แท็ก/มอบหมายงาน/
@@ -91,32 +91,38 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
         link: n.link ?? null,
       }));
 
-    const fromMaintenance: UnifiedNotification[] = maintenanceItems.map((n) => ({
-      id: `mt:${n.id}`,
-      module: "maintenance" as const,
-      category: maintenanceCategoryFor(n.type),
-      message: n.title,
-      body: n.body,
-      createdAt: n.createdAt,
-      read: n.readAt !== null,
-      link: maintenanceHrefFor(n.type, n.referenceId),
-    }));
+    const fromMaintenance: UnifiedNotification[] = maintenanceItems.map((n) => {
+      const category = maintenanceCategoryFor(n.type);
+      return {
+        id: `mt:${n.id}`,
+        module: moduleForCategory(category),
+        category,
+        message: n.title,
+        body: n.body,
+        createdAt: n.createdAt,
+        read: n.readAt !== null,
+        link: maintenanceHrefFor(n.type, n.referenceId),
+      };
+    });
 
     // "mtorg:" prefix (not "mt:") so markRead below can never mistake one of
     // these for the viewer's own — read: true always, since these are other
     // people's notifications, not a real unread count for the viewer.
     const fromOrgActivity: UnifiedNotification[] = includeOrgActivity
-      ? orgItems.map((n) => ({
-          id: `mtorg:${n.id}`,
-          module: "maintenance" as const,
-          category: maintenanceCategoryFor(n.type),
-          message: n.title,
-          body: n.body,
-          createdAt: n.createdAt,
-          read: true,
-          link: maintenanceHrefFor(n.type, n.referenceId),
-          scope: "org" as const,
-        }))
+      ? orgItems.map((n) => {
+          const category = maintenanceCategoryFor(n.type);
+          return {
+            id: `mtorg:${n.id}`,
+            module: moduleForCategory(category),
+            category,
+            message: n.title,
+            body: n.body,
+            createdAt: n.createdAt,
+            read: true,
+            link: maintenanceHrefFor(n.type, n.referenceId),
+            scope: "org" as const,
+          };
+        })
       : [];
 
     // unread-first, then "about me directly" ahead of scheduled/bulk

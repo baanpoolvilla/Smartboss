@@ -48,6 +48,7 @@ import { POST_TRIAGE_STATUSES, type IssueAttachment, type IssueAudience, type Is
 import { getUser, users } from "@/modules/report_task/lib/directory";
 import { relativeTime, formatDate } from "@/modules/report_task/lib/format";
 import { cn } from "@/modules/report_task/lib/utils";
+import { notifyIssueReplyFromReporter } from "@/modules/report_task/lib/issue-notify";
 
 export default function IssueTicketDetailPage() {
   const params = useParams<{ id: string }>();
@@ -297,6 +298,10 @@ function TicketComposer({
   function send() {
     if (!body.trim() && attachments.length === 0) return;
     addMessage(ticket.id, viewingAsUserId, body.trim(), tab, attachments);
+    // เขียนจริงผ่าน ServerStoreSync ของ store นี้เองอยู่แล้ว (debounce 500ms)
+    // — fire-and-forget แค่ไปเรียกทีมที่รับผิดชอบตั๋วนี้มาดู ไม่ผูกกับผลลัพธ์
+    // ของการส่งข้อความจริงเลย
+    void notifyIssueReplyFromReporter(ticket.id, ticket.title, ticket.assigneeId);
     setBody("");
     setAttachments([]);
   }
