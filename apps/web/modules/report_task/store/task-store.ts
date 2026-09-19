@@ -514,6 +514,25 @@ export const useTaskStore = create<TaskStore>((set) => ({
   addTask: (task) => {
     const assigneeNames = task.assigneeIds.map((id) => getUser(id)?.name).filter(Boolean).join(", ");
     logActivity(task.assignedById, "สร้างงาน", task.title, task.id, assigneeNames ? `มอบให้ ${assigneeNames}` : "ยังไม่มีผู้รับผิดชอบ");
+    // งานที่เพิ่งสร้างไม่เคยแจ้งผู้รับผิดชอบเลยมาก่อน — เห็นแค่ตอนเปิดบอร์ด
+    // เอง ไม่มีอะไรขึ้นทั้งกระดิ่งและ badge เมนู ("เวลามีคนมอบหมายงานมาทำไม
+    // ตรงที่วงไม่ขึ้นแดง") notifyMany เองก็ข้าม self-notify ให้แล้ว (คนสร้าง
+    // มอบงานให้ตัวเองไม่ต้องเตือนตัวเอง)
+    if (task.assigneeIds.length > 0) {
+      const actorName = getUser(task.assignedById)?.name ?? "หัวหน้า";
+      useNotificationStore
+        .getState()
+        .notifyMany(
+          task.assigneeIds,
+          task.assignedById,
+          `${actorName} มอบหมายงาน "${task.title}" ให้คุณ`,
+          undefined,
+          `/report-task/tasks?task=${task.id}`,
+          undefined,
+          "task_assigned",
+          task.id
+        );
+    }
     set((s) => ({ tasks: [task, ...s.tasks] }));
   },
   removeTask: (taskId) =>
@@ -590,6 +609,25 @@ export const useTaskStore = create<TaskStore>((set) => ({
         const actorId = useIdentityStore.getState().viewingAsUserId;
         const names = assigneeIds.map((id) => getUser(id)?.name).filter(Boolean).join(", ");
         logActivity(actorId, "เปลี่ยนผู้รับผิดชอบ", t.title, t.id, names ? `เป็น ${names}` : "ไม่มีผู้รับผิดชอบ");
+        // แจ้งเฉพาะคนที่เพิ่ง "เพิ่มเข้ามาใหม่" ไม่ใช่ทั้งลิสต์ — คนที่รับผิดชอบ
+        // อยู่แล้วไม่ต้องเตือนซ้ำแค่เพราะมีคนอื่นถูกเพิ่ม/เอาออก เหมือนตอนสร้าง
+        // งานใหม่ (addTask) ที่เพิ่งเพิ่มแจ้งเตือนไปด้วยกัน
+        const newlyAdded = assigneeIds.filter((id) => !t.assigneeIds.includes(id));
+        if (newlyAdded.length > 0) {
+          const actorName = getUser(actorId)?.name ?? "หัวหน้า";
+          useNotificationStore
+            .getState()
+            .notifyMany(
+              newlyAdded,
+              actorId,
+              `${actorName} มอบหมายงาน "${t.title}" ให้คุณ`,
+              undefined,
+              `/report-task/tasks?task=${t.id}`,
+              undefined,
+              "task_assigned",
+              t.id
+            );
+        }
         // Going from a solo task to a group one promotes that original
         // person to lead by default (they were already "the" owner before
         // anyone else joined) — only when nobody's been picked yet, so it

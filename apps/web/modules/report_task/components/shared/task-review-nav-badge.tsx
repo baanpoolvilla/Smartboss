@@ -6,7 +6,7 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { canReviewTask } from "@/modules/report_task/lib/permissions";
 import { useTaskReviewSettingsStore } from "@/modules/report_task/store/task-review-settings-store";
-import { unreadTaskAttachmentCounts, unreadTaskCommentCounts } from "@/modules/report_task/lib/task-comment-activity";
+import { unreadTaskAssignmentCounts, unreadTaskAttachmentCounts, unreadTaskCommentCounts } from "@/modules/report_task/lib/task-comment-activity";
 
 /**
  * Discord-style unread pill for the "งาน / Kanban" rail item (see
@@ -20,9 +20,10 @@ import { unreadTaskAttachmentCounts, unreadTaskCommentCounts } from "@/modules/r
  *     than canEditRecord: a plain assigner who isn't also a head can edit the
  *     task but doesn't get to review their own assignment), so this never
  *     nags someone who has no "ผ่าน" button to press.
- *   - unread comments/attachments on tasks (see task-comment-activity.ts) —
- *     someone replied or attached a file and the viewer hasn't opened the
- *     task since, same rule the per-card badges on the Kanban board itself use.
+ *   - unread comments/attachments/assignments on tasks (see
+ *     task-comment-activity.ts) — someone replied, attached a file, or
+ *     assigned the viewer to a task, and they haven't opened it since, same
+ *     rule the per-card badges on the Kanban board itself use.
  * Renders nothing at zero — an always-present empty pill would just be
  * visual noise on every other module's page too.
  */
@@ -38,9 +39,11 @@ export function TaskReviewNavBadge() {
     ).length;
     const unreadComments = unreadTaskCommentCounts(notifications, viewingAsUserId);
     const unreadAttachments = unreadTaskAttachmentCounts(notifications, viewingAsUserId);
+    const unreadAssignments = unreadTaskAssignmentCounts(notifications, viewingAsUserId);
     let unreadActivityCount = 0;
     for (const n of unreadComments.values()) unreadActivityCount += n;
     for (const n of unreadAttachments.values()) unreadActivityCount += n;
+    for (const n of unreadAssignments.values()) unreadActivityCount += n;
     return reviewCount + unreadActivityCount;
   }, [tasks, viewingAsUserId, reviewSettings, notifications]);
 
@@ -48,8 +51,8 @@ export function TaskReviewNavBadge() {
   return (
     <span
       className="ml-auto flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-(--danger) px-1 text-[10px] font-bold text-white"
-      aria-label={`มีงานรอตรวจ/คอมเมนต์หรือไฟล์แนบใหม่ ${count} รายการ`}
-      title={`มีงานรอตรวจ/คอมเมนต์หรือไฟล์แนบใหม่ ${count} รายการ`}
+      aria-label={`มีงานรอตรวจ/งานที่ได้รับมอบหมาย/คอมเมนต์หรือไฟล์แนบใหม่ ${count} รายการ`}
+      title={`มีงานรอตรวจ/งานที่ได้รับมอบหมาย/คอมเมนต์หรือไฟล์แนบใหม่ ${count} รายการ`}
     >
       {count > 9 ? "9+" : count}
     </span>

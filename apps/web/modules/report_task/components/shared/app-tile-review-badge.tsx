@@ -6,7 +6,7 @@ import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { useDepartmentStore } from "@/modules/report_task/store/department-store";
 import { canReviewTask, canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { aboutMeCountInPost } from "@/modules/report_task/lib/report-feed-activity";
-import { unreadTaskAttachmentCounts, unreadTaskCommentCounts } from "@/modules/report_task/lib/task-comment-activity";
+import { unreadTaskAssignmentCounts, unreadTaskAttachmentCounts, unreadTaskCommentCounts } from "@/modules/report_task/lib/task-comment-activity";
 import type { AppNotification } from "@/modules/report_task/store/notification-store";
 import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import type { TaskReviewSettings } from "@/modules/report_task/store/task-review-settings-store";
@@ -18,7 +18,7 @@ import type { User, Department } from "@/modules/report_task/types";
  * app-launcher tile — the sum of things the module already badges elsewhere,
  * added together since this is the one spot with only a single number to
  * show:
- *   - "งานรอตรวจ" + unread task comments/attachments (see TaskReviewNavBadge's own doc)
+ *   - "งานรอตรวจ" + unread task comments/attachments/assignments (see TaskReviewNavBadge's own doc)
  *   - "ความเคลื่อนไหวเกี่ยวกับคุณ" in report-feed (see ReportActivityNavBadge/
  *     aboutMeCountInPost — @mentions and comments on your own posts)
  * This sits outside the report_task module, so none of its sync components
@@ -75,6 +75,7 @@ export function AppTileReviewBadge() {
         let unreadActivityCount = 0;
         for (const n of unreadTaskCommentCounts(notifications ?? [], viewingAsUserId).values()) unreadActivityCount += n;
         for (const n of unreadTaskAttachmentCounts(notifications ?? [], viewingAsUserId).values()) unreadActivityCount += n;
+        for (const n of unreadTaskAssignmentCounts(notifications ?? [], viewingAsUserId).values()) unreadActivityCount += n;
 
         const topics = reportFeed?.topics ?? [];
         const posts = reportFeed?.posts ?? [];

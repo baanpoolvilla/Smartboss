@@ -6,7 +6,7 @@ import type { AppNotification } from "@/modules/report_task/store/notification-s
 function unreadTaskCountsByKind(
   notifications: AppNotification[],
   userId: string,
-  kind: "task_comment" | "task_attachment"
+  kind: "task_comment" | "task_attachment" | "task_assigned"
 ): Map<string, number> {
   const map = new Map<string, number>();
   for (const n of notifications) {
@@ -29,4 +29,13 @@ export function unreadTaskCommentCounts(notifications: AppNotification[], userId
  * (ดู notification-store.ts's markTaskActivityRead) */
 export function unreadTaskAttachmentCounts(notifications: AppNotification[], userId: string): Map<string, number> {
   return unreadTaskCountsByKind(notifications, userId, "task_attachment");
+}
+
+/** เหมือน unreadTaskCommentCounts แต่นับ "มีคนมอบหมาย/เพิ่มคุณเป็นผู้รับผิดชอบ
+ * งานนี้" ที่ยังไม่ได้เปิดดูแทน — เดิมงานที่เพิ่งได้รับมอบหมายไม่ขึ้น badge ที่
+ * เมนู "งาน / Kanban" หรือไอคอนหน้าแรกเลย เห็นแค่ในกระดิ่งอย่างเดียว
+ * ("เวลามีคนมอบหมายงานมาทำไมตรงที่วงไม่ขึ้นแดง") mark-as-read ตอนเปิดงาน
+ * ร่วมจุดเดียวกับสองอันบน (ดู notification-store.ts's markTaskActivityRead) */
+export function unreadTaskAssignmentCounts(notifications: AppNotification[], userId: string): Map<string, number> {
+  return unreadTaskCountsByKind(notifications, userId, "task_assigned");
 }
