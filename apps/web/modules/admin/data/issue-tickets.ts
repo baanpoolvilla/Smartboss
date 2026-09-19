@@ -15,6 +15,10 @@ export interface CrossOrgIssueTicket extends IssueTicket {
    * role-name-of-first-role pattern report-task's own layout.tsx uses for
    * the logged-in user. */
   reporterRole: string | null;
+  /** ชื่อผู้รับผิดชอบ (ไม่ใช่แค่ id) — ให้เห็นในหน้ารายการทันทีว่า "ใครรับเรื่อง
+   * ไปแล้วบ้าง" โดยไม่ต้องเปิดดูตั๋วทีละใบ (ตามที่ขอ "ใครรับเรื่องแก้ไขยังไง")
+   * null เมื่อยังไม่มีใครรับ (assigneeId เป็น null) */
+  assigneeName: string | null;
 }
 
 /**
@@ -40,14 +44,17 @@ export async function listAllIssueTickets(): Promise<CrossOrgIssueTicket[]> {
   );
   const tickets = perOrg.flat();
 
-  // Batch-resolve reporter names in one query — report_task's own directory
-  // helper (lib/directory.ts) only ever knows the *current session's* org,
-  // which is no use here since tickets span every org at once.
-  const reporterIds = Array.from(new Set(tickets.map((t) => t.reporterId)));
+  // Batch-resolve reporter + assignee names in one query — report_task's own
+  // directory helper (lib/directory.ts) only ever knows the *current
+  // session's* org, which is no use here since tickets span every org at
+  // once. Assignees are always a Smartboss Super Admin (see
+  // adminSetAssignee/listSuperAdmins), never scoped to the ticket's own org,
+  // so they can safely share this same cross-org lookup with reporters.
+  const userIds = Array.from(new Set(tickets.flatMap((t) => [t.reporterId, t.assigneeId].filter((id): id is string => !!id))));
   const users =
-    reporterIds.length > 0
+    userIds.length > 0
       ? await prisma.user.findMany({
-          where: { id: { in: reporterIds } },
+          where: { id: { in: userIds } },
           select: { id: true, name: true, email: true, roles: { select: { role: { select: { name: true } } } } },
         })
       : [];
@@ -59,6 +66,7 @@ export async function listAllIssueTickets(): Promise<CrossOrgIssueTicket[]> {
       reporterName: userById.get(t.reporterId)?.name ?? "ไม่ทราบชื่อ",
       reporterEmail: userById.get(t.reporterId)?.email ?? null,
       reporterRole: userById.get(t.reporterId)?.roles[0]?.role.name ?? null,
+      assigneeName: t.assigneeId ? (userById.get(t.assigneeId)?.name ?? "ไม่ทราบชื่อ") : null,
     }))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }

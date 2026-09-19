@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import type { LucideIcon } from "lucide-react";
+import { Bug, type LucideIcon } from "lucide-react";
+import { getSession, isSuperAdmin } from "@smartboss/auth";
 import { MODULE_CARDS } from "@/lib/modules";
 import { iconByName } from "@/lib/icons";
 import { loadShellNav } from "@/lib/nav";
@@ -36,6 +37,11 @@ export default async function HomePage() {
   const nav = await loadShellNav();
   if (!nav) redirect("/login");
 
+  // แยกจาก loadShellNav() เพราะนั่นไม่ได้ส่ง roles ออกมาด้วย — ใช้ session
+  // ตรงๆ แค่เช็ค isSuperAdmin ราคาถูก (อ่านจาก JWT claims ไม่ query DB)
+  const session = await getSession();
+  const superAdmin = session ? isSuperAdmin(session) : false;
+
   const firstName = nav.user.name.split(/\s+/)[0] ?? "ผู้ใช้งาน";
   const visible = new Map(nav.modules.map((m) => [m.id, m]));
 
@@ -61,6 +67,27 @@ export default async function HomePage() {
       color: m.color,
       colorBg: m.colorBg,
       href: m.basePath,
+    });
+  }
+
+  // ทางลัดไปหน้า "รับเรื่องทุกบริษัท" ของทีม Smartboss เอง — ไม่ใช่โมดูล
+  // (ไม่ผ่าน moduleRegistry/getVisibleModules เลย) เพราะ /admin/issue-reports
+  // เองก็ requireOrg()+isSuperAdmin() กันไว้อยู่แล้ว ("แจ้งบัค" ธรรมดาที่ปุ่ม
+  // AppBar ใครก็กดได้ นี่คนละอันกับตรงนั้น) เช็คตรงนี้ตามให้ตรงกัน ไม่งั้น
+  // จะมี tile โผล่ให้กดแต่กดแล้วเด้งกลับเพราะไม่ผ่านด่านจริงที่หน้านั้น —
+  // สำคัญ: isSuperAdmin เป็นสิทธิ์ระดับแพลตฟอร์ม ไม่ใช่บทบาท "ADMIN"/"CEO"
+  // ของบริษัทใดบริษัทหนึ่ง (บริษัทลูกค้าก็มี ADMIN/CEO ของตัวเองได้เหมือนกัน
+  // แต่ไม่ใช่ SUPER_ADMIN) — คนในทีมที่ควรเห็นปุ่มนี้ต้องได้รับสิทธิ์
+  // SUPER_ADMIN มาโดยเฉพาะ ไม่ใช่แค่มีตำแหน่ง ADMIN/CEO ในบริษัทตัวเอง
+  if (superAdmin) {
+    tiles.push({
+      code: "__issue_report_admin",
+      name: "แจ้งบัค",
+      description: "รับเรื่องแจ้งปัญหาจากทุกบริษัท",
+      icon: Bug,
+      color: "#dc2626",
+      colorBg: "#fef2f2",
+      href: "/admin/issue-reports",
     });
   }
 

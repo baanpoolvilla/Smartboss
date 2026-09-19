@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Building2, Mail, Search } from "lucide-react";
+import { Building2, Mail, Search, UserCheck } from "lucide-react";
 import { requireOrg, isSuperAdmin } from "@smartboss/auth";
 import { Card } from "@smartboss/ui/components/card";
 import { Button } from "@smartboss/ui/components/button";
@@ -309,6 +309,12 @@ function TicketRow({ ticket }: { ticket: CrossOrgIssueTicket }) {
                   <Mail className="h-3 w-3" /> {ticket.reporterEmail}
                 </span>
               )}
+              {/* "ใครรับเรื่องแก้ไขยังไง" ต้องเห็นได้จากหน้ารายการเลย ไม่ต้อง
+                  เปิดตั๋วทีละใบ — เดิมมีแค่ assigneeId ดิบ ไม่มีชื่อให้โชว์ที่
+                  หน้านี้ (listAllIssueTickets ตอนนี้ resolve ชื่อให้แล้ว) */}
+              <span className={cn("flex items-center gap-1", !ticket.assigneeName && "text-amber-600")}>
+                <UserCheck className="h-3 w-3" /> {ticket.assigneeName ?? "ยังไม่มีคนรับ"}
+              </span>
               <span><TimeAgo date={ticket.createdAt} /></span>
               <span className="sm:hidden">{category.label}</span>
             </div>
