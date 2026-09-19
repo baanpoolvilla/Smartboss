@@ -827,7 +827,15 @@ export function TopicSidebar({
     // the chevron button below handles expand/collapse independently
     // (its own onClick + stopPropagation), so a parent with children can be
     // both postable AND expandable — no longer forced into "pick one."
-    const canOpenDirectly = !t.isCategory;
+    // Archived stays in the tree (dimmed, see opacity-50 below) so its own
+    // "..." menu is still reachable to un-archive — but that menu's click
+    // already stopPropagation()s independently of this row's onClick, so
+    // opening the room itself here is never actually needed for that. Feed/
+    // composer/round-status code downstream all assumes "current" rooms
+    // only, so letting a click through to onSelect() here just hands them
+    // an id they don't handle, which read as the whole page hanging
+    // ("กดแล้วค้าง") instead of a normal room open.
+    const canOpenDirectly = !t.isCategory && !t.archived;
     const hiddenForMe = depth > 0 && (t.hiddenBy?.includes(viewingAsUserId) ?? false);
     // Reorder mode force-expands every group — a collapsed sub-topic list
     // would have nothing to drag onto/into.

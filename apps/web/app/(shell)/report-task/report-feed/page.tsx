@@ -195,7 +195,14 @@ function ReportFeedPageInner() {
   // here and hand the same list to the sidebar, so the two never disagree
   // about which rooms exist for this viewer.
   const visibleTopics = useMemo(() => {
-    const bySelfVisibility = topics.filter((t) => canManageTopics || canSeeReportTopic(t.visibility, viewingAsUserId));
+    // Archived (Phase 6) is documented to "drop out of the sidebar tree" —
+    // true for everyone except a room manager, who still needs to find an
+    // archived room in order to un-archive it (its own "..." menu, reached
+    // via room-settings-sheet). Everyone else only ever saw it as a dimmed,
+    // still-clickable duplicate with no working way to open it.
+    const bySelfVisibility = topics.filter(
+      (t) => (canManageTopics || !t.archived) && (canManageTopics || canSeeReportTopic(t.visibility, viewingAsUserId))
+    );
     // A pure category (isCategory) never has visibility rules of its own —
     // it's just an organizing header, so it always passes the filter above
     // even when every one of its children got filtered out individually
