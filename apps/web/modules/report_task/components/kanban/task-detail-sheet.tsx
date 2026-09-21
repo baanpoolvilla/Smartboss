@@ -1488,7 +1488,11 @@ export function TaskDetailSheet({
               />
             </div>
             {task.attachments.length === 0 && <p className="text-xs text-[var(--ink-soft)]">ไม่มีไฟล์แนบ</p>}
-            {task.attachments.map((a, attIndex) => {
+            {/* ไฟล์ทั้งหมดของงาน (ที่ผู้สั่งงานแนบมา + ที่คนส่งงาน) รวมเป็นรายการเดียว เรียงตามเวลาที่แนบ (เก่า → ใหม่)
+                บอกว่าใครเป็นคนแนบ — ไม่แยกส่วน */}
+            {[...task.attachments]
+              .sort((x, y) => new Date(x.uploadedAt).getTime() - new Date(y.uploadedAt).getTime())
+              .map((a, attIndex, sortedAttachments) => {
               // Whoever uploaded it (or whoever can edit the task's core
               // fields) can remove it — same self-scoping as comments below,
               // rather than anyone who can open the task deleting anyone
@@ -1498,7 +1502,7 @@ export function TaskDetailSheet({
               // เปิดในตัวดูไฟล์ในหน้าเดิม (มีปุ่มย้อนกลับ+ดาวน์โหลดในตัว)
               // แทนที่จะเด้งแท็บใหม่ — ทุกไฟล์แนบของงานนี้เข้าเป็นชุดเดียวกัน
               // เลื่อนซ้าย-ขวาดูไฟล์อื่นต่อได้โดยไม่ต้องปิดแล้วเปิดใหม่
-              const openViewer = () => setAttachmentViewer({ images: task.attachments.map(toLightboxImage), index: attIndex });
+              const openViewer = () => setAttachmentViewer({ images: sortedAttachments.map(toLightboxImage), index: attIndex });
               return (
                 <div key={a.id} className="flex items-center gap-2.5 text-sm rounded-lg border border-[var(--line)] px-3 py-2">
                   {a.type === "รูปภาพ" && src ? (
@@ -1517,7 +1521,9 @@ export function TaskDetailSheet({
                     ) : (
                       <p className="truncate font-medium">{a.name}</p>
                     )}
-                    <p className="text-xs text-[var(--ink-soft)]">{a.type} · {a.size}</p>
+                    <p className="truncate text-xs text-[var(--ink-soft)]">
+                      {a.type} · {a.size} · โดย {getUser(a.uploadedBy)?.name ?? "ไม่ทราบชื่อ"} · <TimeAgo date={a.uploadedAt} />
+                    </p>
                   </div>
                   {canRemove && (
                     <button
