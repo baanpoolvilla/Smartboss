@@ -20,6 +20,7 @@ import {
 } from "@/modules/report_task/components/ui/alert-dialog";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Input } from "@/modules/report_task/components/ui/input";
+import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
 import { Label } from "@/modules/report_task/components/ui/label";
 import { Textarea } from "@/modules/report_task/components/ui/textarea";
 import { Switch } from "@/modules/report_task/components/ui/switch";
@@ -301,10 +302,10 @@ export function NewTaskDialog({
   const [taskMode, setTaskMode] = useState<"individual" | "group">("individual");
   // งานกลุ่ม: ปิดงานเมื่อครบทุกคน (ค่าเดิม) หรือคนใดคนหนึ่งเสร็จก็พอ
   const [completionRule, setCompletionRule] = useState<"all" | "any">("all");
-  // หัวหน้าหลัก / วันครบกำหนดรายคน ใช้น้อย — พับไว้ในลิงก์เดียว ไม่กินที่ตอนสลับเป็นงานกลุ่ม
-  const [showGroupMore, setShowGroupMore] = useState(false);
   // ตัวเลือกขั้นสูง (เช็คลิสต์ · เดี่ยว/กลุ่ม · หัวข้อโปรเจค · ไฟล์แนบ) — เริ่มพับไว้ทุกครั้ง ไม่จำโหมดล่าสุด
   const [showAdvanced, setShowAdvanced] = useState(false);
+  // ติ๊ก "มีเช็คลิสต์" ถึงจะเห็นช่องเพิ่มรายการ — ไม่ติ๊ก = ไม่มีเช็คลิสต์ ไม่กินที่
+  const [useChecklist, setUseChecklist] = useState(false);
   // Point person on a group task — display-only label, optional even then.
   const [mainAssigneeId, setMainAssigneeId] = useState<string>("");
   // Staged files/images — uploaded for real (see buildAttachments) only once
@@ -508,6 +509,7 @@ export function NewTaskDialog({
     setMainAssigneeId("");
     setTaskFiles([]);
     setChecklistItems([]);
+    setUseChecklist(false);
     setNewChecklistText("");
     setNewChecklistOwnerId("");
     setUseAssigneeDueDates(false);
@@ -824,12 +826,31 @@ export function NewTaskDialog({
   }
 
   // เช็คลิสต์ (ไม่บังคับ)
+  const checklistOn = useChecklist || checklistItems.length > 0;
   const renderChecklistRow = () => (
       <Row icon={ListChecks}>
         <div className="space-y-1.5">
-          <Label className="text-xs text-[var(--ink-soft)]">
-            เช็คลิสต์ ({checklistItems.length}) <span className="text-[var(--ink-soft)]">(ไม่บังคับ{taskMode === "group" ? " · แยกตามคน" : ""})</span>
-          </Label>
+          <label className="flex w-fit cursor-pointer items-center gap-2 py-1.5 text-sm">
+            <Checkbox
+              checked={checklistOn}
+              onCheckedChange={(v) => {
+                setUseChecklist(!!v);
+                // เอาติ๊กออก = ไม่มีเช็คลิสต์ — ล้างรายการที่พิมพ์ค้างไว้ด้วย ไม่ให้ส่งไปโดยที่มองไม่เห็น
+                if (!v) {
+                  setChecklistItems([]);
+                  setNewChecklistText("");
+                }
+              }}
+              aria-label="มีเช็คลิสต์"
+            />
+            <span className="font-medium">มีเช็คลิสต์</span>
+            {checklistOn ? (
+              <span className="text-xs text-[var(--ink-soft)]">({checklistItems.length}{taskMode === "group" ? " · แยกตามคน" : ""})</span>
+            ) : (
+              <span className="text-xs text-[var(--ink-soft)]">ไม่บังคับ — ไม่ติ๊ก = ไม่มีเช็คลิสต์</span>
+            )}
+          </label>
+          {checklistOn && (
           <div className="flex items-center gap-1.5">
             <Input
               value={newChecklistText}
@@ -859,7 +880,8 @@ export function NewTaskDialog({
               เพิ่ม
             </Button>
           </div>
-          {checklistItems.length > 0 && (
+          )}
+          {checklistOn && checklistItems.length > 0 && (
             <div className="space-y-1 pt-1">
               {checklistItems.map((c) => (
                 <div key={c.id} className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-white px-2.5 py-1.5 text-xs">
@@ -882,6 +904,71 @@ export function NewTaskDialog({
         </div>
       </Row>
   );
+
+  // งานกลุ่ม: หัวหน้าหลัก + วันครบกำหนดแยกรายคน (ไม่บังคับ) — อยู่ในตัวเลือกขั้นสูง
+  const renderGroupExtras = () => {
+    const validMainAssigneeId = mainAssigneeId && assigneeIds.includes(mainAssigneeId) ? mainAssigneeId : "";
+    return (
+      <Row icon={Star}>
+        <div className="space-y-1">
+          <Label className="text-xs text-[var(--ink-soft)]">งานกลุ่ม (ไม่บังคับ)</Label>
+          <div className="space-y-2 rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-2.5">
+            {assigneeIds.length > 1 && (
+              <div className="flex items-center gap-2">
+                <span className="w-20 shrink-0 text-xs text-[var(--ink-soft)]">หัวหน้าหลัก</span>
+                <Select value={validMainAssigneeId || "none"} onValueChange={(v) => setMainAssigneeId(v === "none" ? "" : v ?? "")}>
+                  <SelectTrigger className="h-8 w-full text-xs">
+                    <SelectValue placeholder="ไม่ระบุ">
+                      {validMainAssigneeId ? getUser(validMainAssigneeId)?.name : "ไม่ระบุ"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">ไม่ระบุ</SelectItem>
+                    {assigneeIds.map((uid) => (
+                      <SelectItem key={uid} value={uid}>{getUser(uid)?.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {assigneeIds.length > 0 && (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs">ตั้งวันครบกำหนดแยกรายคน</span>
+                  <Switch checked={useAssigneeDueDates} onCheckedChange={setUseAssigneeDueDates} />
+                </div>
+                {useAssigneeDueDates && (
+                  <div className="space-y-1.5">
+                    {assigneeIds.map((uid) => {
+                      const u = getUser(uid);
+                      return (
+                        <div key={uid} className="flex items-center gap-2">
+                          <Avatar className="h-5 w-5 shrink-0">
+                            <AvatarImage src={u?.avatarUrl ?? undefined} alt={u?.name} />
+                            <AvatarFallback className="text-[8px] bg-white">{u?.avatar}</AvatarFallback>
+                          </Avatar>
+                          <span className="min-w-0 flex-1 truncate text-xs">{u?.name}</span>
+                          <DatePickerField
+                            value={assigneeDueDateOverrides[uid] ?? dueDate}
+                            minDate={startDate || todayIso()}
+                            onChange={(v) => setAssigneeDueDateOverrides((prev) => ({ ...prev, [uid]: v }))}
+                            className="h-8 w-36 text-xs"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+            {assigneeIds.length === 0 && (
+              <p className="text-[10px] text-[var(--ink-soft)]">เลือกผู้รับผิดชอบก่อน แล้วตัวเลือกจะขึ้นที่นี่</p>
+            )}
+          </div>
+        </div>
+      </Row>
+    );
+  };
 
   return (
     <Dialog open={open} onOpenChange={requestClose}>
@@ -946,8 +1033,29 @@ export function NewTaskDialog({
 
           {itemType === "task" && (
             <>
+              {/* เช็คลิสต์ (ไม่บังคับ) — อยู่ใต้รายละเอียดเสมอ (แบบธรรมดา) ไม่ย้ายไปมาตามโหมด */}
+              {renderChecklistRow()}
               <Row icon={User}>
-                <div className="space-y-1">
+                <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+                <div className="shrink-0 space-y-1">
+                  <Label className="text-xs text-[var(--ink-soft)]">ประเภทงาน</Label>
+                  <div className="inline-flex h-9 w-fit items-center gap-0.5 rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-0.5">
+                    {(["individual", "group"] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => changeTaskMode(m)}
+                        className={cn(
+                          "h-full rounded-md px-3 text-sm font-medium transition-colors",
+                          taskMode === m ? "bg-white shadow-sm text-[var(--ink)]" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
+                        )}
+                      >
+                        {m === "individual" ? "งานเดี่ยว" : "งานกลุ่ม"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="min-w-[220px] flex-1 space-y-1">
                   <Label className="text-xs text-[var(--ink-soft)]">
                     ผู้รับผิดชอบ {taskMode === "group" ? "(เลือกได้หลายคน)" : "(เลือก 1 คน)"} · {assigneeIds.length} คน
                   </Label>
@@ -1015,7 +1123,44 @@ export function NewTaskDialog({
                     (ตามผู้รับผิดชอบ)
                   </p>
                 </div>
+                </div>
               </Row>
+
+              {/* งานกลุ่ม: บรรทัดเดียว (ปิดงานเมื่อ ...) — หัวหน้าหลัก/วันครบกำหนดรายคนอยู่ในตัวเลือกขั้นสูง */}
+              {taskMode === "group" && (() => {
+                return (
+                  <div className="ml-[30px] -mt-1 space-y-2">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                      <span className="shrink-0 text-xs text-[var(--ink-soft)]">ปิดงานเมื่อ</span>
+                      <div
+                        className="inline-grid min-w-[200px] flex-1 grid-cols-2 gap-0.5 rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-0.5 sm:flex-none"
+                        title="ครบทุกคน: ทุกคนต้องทำส่วนของตัวเองครบ · คนใดคนหนึ่ง: ใครครบก่อน งานปิดทันที"
+                      >
+                        {([
+                          { v: "all", label: "ครบทุกคน" },
+                          { v: "any", label: "คนใดคนหนึ่ง" },
+                        ] as const).map((o) => (
+                          <button
+                            key={o.v}
+                            type="button"
+                            onClick={() => setCompletionRule(o.v)}
+                            className={cn(
+                              "rounded-md px-3 py-1 text-xs font-medium transition-colors",
+                              completionRule === o.v ? "bg-white text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
+                            )}
+                          >
+                            {o.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {completionRule === "any" && (
+                      <p className="text-[10px] leading-snug text-[var(--ink-soft)]">ใครทำส่วนของตัวเองครบก่อน งานปิดทันที (ที่เหลือไม่ถูกหักคะแนน)</p>
+                    )}
+
+                  </div>
+                );
+              })()}
 
               <Row icon={CalendarDays}>
                 <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3">
@@ -1110,9 +1255,8 @@ export function NewTaskDialog({
               {(() => {
                 const topicName = selectedTopicId !== "none" ? projectTopics.find((t) => t.id === selectedTopicId)?.name : undefined;
                 const usedSummary = [
-                  taskMode === "group" ? "งานกลุ่ม" : "งานเดี่ยว",
-                  checklistItems.length > 0 ? `เช็คลิสต์ ${checklistItems.length} ข้อ` : "ไม่มีเช็คลิสต์",
                   topicName ?? "ไม่ระบุหัวข้อโปรเจค",
+                  ...(taskMode === "group" && (mainAssigneeId || useAssigneeDueDates) ? ["ตั้งค่างานกลุ่มเพิ่มเติม"] : []),
                   ...(taskFiles.length > 0 ? [`ไฟล์แนบ ${taskFiles.length}`] : []),
                 ].join(" · ");
                 return (
@@ -1137,37 +1281,6 @@ export function NewTaskDialog({
               {showAdvanced && (
                 <div className="space-y-3 border-t border-dashed border-[var(--line)] pt-3">
                   <p className="ml-[30px] text-[11px] font-semibold tracking-wide text-[var(--ink-soft)]">ตัวเลือกขั้นสูง</p>
-                  {/* เช็คลิสต์ (ไม่บังคับ) — อยู่ใต้รายละเอียดเสมอ ทั้งงานเดี่ยวและงานกลุ่ม (ไม่ย้ายไปมาตามโหมด) */}
-                  {renderChecklistRow()}
-                  {/* ประเภทงาน + หัวข้อโปรเจค อยู่แถวเดียวกัน (จอแคบเรียงลงเหมือนเดิม) */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
-                  <Row icon={Users}>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-[var(--ink-soft)]">ประเภทงาน</Label>
-                      <div className="inline-flex items-center gap-1 rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-1 w-fit">
-                        {(["individual", "group"] as const).map((m) => (
-                          <button
-                            key={m}
-                            type="button"
-                            onClick={() => changeTaskMode(m)}
-                            className={cn(
-                              "rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors",
-                              taskMode === m ? "bg-white shadow-sm text-[var(--ink)]" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
-                            )}
-                          >
-                            {m === "individual" ? "งานเดี่ยว" : "งานกลุ่ม"}
-                          </button>
-                        ))}
-                      </div>
-                      {/* บอกความต่างของโหมดที่เลือก — อยู่ติดปุ่มสลับเสมอ (จอแคบที่หัวข้อโปรเจคตกลงไปอยู่ใต้ ก็ไม่ห่างกัน) */}
-                      <p className="text-[11px] leading-snug text-[var(--ink-soft)]">
-                        {taskMode === "individual" ? "1 คนรับผิดชอบ · ติ๊กครบ = เสร็จ" : "หลายคน · แต่ละคนมีเช็คลิสต์ของตัวเอง"}
-                      </p>
-                    </div>
-                  </Row>
-
-                  {/* ตอนกำลังสร้างหัวข้อใหม่ ช่องกรอกกว้างขึ้นเต็มแถว */}
-                  <div className={cn(creatingTopic && "sm:col-span-2")}>
                   <Row icon={Tag}>
                     <div className="space-y-1 flex-1">
                       <Label className="text-xs text-[var(--ink-soft)]">หัวข้อโปรเจค</Label>
@@ -1223,116 +1336,7 @@ export function NewTaskDialog({
                       )}
                     </div>
                   </Row>
-                  </div>
-                  </div>
-                  {/* งานกลุ่ม: เพิ่มมาแค่บรรทัดเดียว (ปิดงานเมื่อ ...) — ที่เหลือพับไว้ในลิงก์ ไม่กินที่ */}
-                  {taskMode === "group" && (() => {
-                    const validMainAssigneeId = mainAssigneeId && assigneeIds.includes(mainAssigneeId) ? mainAssigneeId : "";
-                    const moreOpen = showGroupMore || useAssigneeDueDates || !!validMainAssigneeId;
-                    return (
-                      <div className="ml-[30px] -mt-1 space-y-2">
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                          <span className="shrink-0 text-xs text-[var(--ink-soft)]">ปิดงานเมื่อ</span>
-                          <div
-                            className="inline-grid min-w-[200px] flex-1 grid-cols-2 gap-0.5 rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-0.5 sm:flex-none"
-                            title="ครบทุกคน: ทุกคนต้องทำส่วนของตัวเองครบ · คนใดคนหนึ่ง: ใครครบก่อน งานปิดทันที"
-                          >
-                            {([
-                              { v: "all", label: "ครบทุกคน" },
-                              { v: "any", label: "คนใดคนหนึ่ง" },
-                            ] as const).map((o) => (
-                              <button
-                                key={o.v}
-                                type="button"
-                                onClick={() => setCompletionRule(o.v)}
-                                className={cn(
-                                  "rounded-md px-3 py-1 text-xs font-medium transition-colors",
-                                  completionRule === o.v ? "bg-white text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
-                                )}
-                              >
-                                {o.label}
-                              </button>
-                            ))}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setShowGroupMore((v) => !v)}
-                            aria-expanded={moreOpen}
-                            title="ตั้งหัวหน้าหลัก และวันครบกำหนดแยกรายคน (ไม่บังคับ)"
-                            className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-md border border-[var(--line)] bg-white px-2 py-1 text-[11px] font-medium text-[var(--ink-soft)] transition-colors hover:border-[var(--brand-green)] hover:text-[var(--brand-green-dark)]"
-                          >
-                            ตัวเลือกเพิ่มเติม
-                            <ChevronDown className={cn("h-3 w-3 transition-transform", moreOpen && "rotate-180")} />
-                          </button>
-                        </div>
-                        {!moreOpen && (
-                          <p className="text-[10px] leading-snug text-[var(--ink-soft)]">
-                            กดปุ่ม ตัวเลือกเพิ่มเติม เพื่อตั้งหัวหน้าหลัก และวันครบกำหนดแยกรายคน (ไม่บังคับ)
-                          </p>
-                        )}
-                        {completionRule === "any" && (
-                          <p className="text-[10px] leading-snug text-[var(--ink-soft)]">ใครทำส่วนของตัวเองครบก่อน งานปิดทันที (ที่เหลือไม่ถูกหักคะแนน)</p>
-                        )}
-
-                        {moreOpen && (
-                          <div className="space-y-2 rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-2.5">
-                            {assigneeIds.length > 1 && (
-                              <div className="flex items-center gap-2">
-                                <span className="w-20 shrink-0 text-xs text-[var(--ink-soft)]">หัวหน้าหลัก</span>
-                                <Select value={validMainAssigneeId || "none"} onValueChange={(v) => setMainAssigneeId(v === "none" ? "" : v ?? "")}>
-                                  <SelectTrigger className="h-8 w-full text-xs">
-                                    <SelectValue placeholder="ไม่ระบุ">
-                                      {validMainAssigneeId ? getUser(validMainAssigneeId)?.name : "ไม่ระบุ"}
-                                    </SelectValue>
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="none">ไม่ระบุ</SelectItem>
-                                    {assigneeIds.map((uid) => (
-                                      <SelectItem key={uid} value={uid}>{getUser(uid)?.name}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            )}
-                            {assigneeIds.length > 0 && (
-                              <>
-                                <div className="flex items-center justify-between gap-3">
-                                  <span className="text-xs">ตั้งวันครบกำหนดแยกรายคน</span>
-                                  <Switch checked={useAssigneeDueDates} onCheckedChange={setUseAssigneeDueDates} />
-                                </div>
-                                {useAssigneeDueDates && (
-                                  <div className="space-y-1.5">
-                                    {assigneeIds.map((uid) => {
-                                      const u = getUser(uid);
-                                      return (
-                                        <div key={uid} className="flex items-center gap-2">
-                                          <Avatar className="h-5 w-5 shrink-0">
-                                            <AvatarImage src={u?.avatarUrl ?? undefined} alt={u?.name} />
-                                            <AvatarFallback className="text-[8px] bg-white">{u?.avatar}</AvatarFallback>
-                                          </Avatar>
-                                          <span className="min-w-0 flex-1 truncate text-xs">{u?.name}</span>
-                                          <DatePickerField
-                                            value={assigneeDueDateOverrides[uid] ?? dueDate}
-                                            minDate={startDate || todayIso()}
-                                            onChange={(v) => setAssigneeDueDateOverrides((prev) => ({ ...prev, [uid]: v }))}
-                                            className="h-8 w-36 text-xs"
-                                          />
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-                              </>
-                            )}
-                            {assigneeIds.length === 0 && (
-                              <p className="text-[10px] text-[var(--ink-soft)]">เลือกผู้รับผิดชอบก่อน แล้วตัวเลือกจะขึ้นที่นี่</p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
-
+                  {taskMode === "group" && renderGroupExtras()}
                   <Row icon={Paperclip}>
                     <div className="space-y-2">
                       <Label className="text-xs text-[var(--ink-soft)]">
