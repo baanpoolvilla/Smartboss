@@ -118,6 +118,37 @@ function renderMentions(text: string) {
   );
 }
 
+/** ข้อความของรายการเช็คลิสต์ — ยาวเกินก็ตัดเหลือ 2 บรรทัด มีปุ่ม "ดูเพิ่มเติม" กางอ่านเต็ม ๆ ได้ (ไม่ใช้การวัดขนาดจริง
+ * จึงประมาณจากจำนวนตัวอักษร/บรรทัด กันโค้ดซับซ้อนและไม่กระพริบตอนโหลด) */
+const CHECKLIST_LONG_CHARS = 90;
+function ChecklistItemText({ text, done }: { text: string; done: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const long = text.length > CHECKLIST_LONG_CHARS || text.split("\n").length > 2;
+  return (
+    <span className="min-w-0 flex-1">
+      <span
+        className={cn(
+          "block whitespace-pre-wrap break-words text-sm",
+          long && !expanded && "line-clamp-2",
+          done && "line-through text-[var(--ink-soft)]"
+        )}
+      >
+        {text}
+      </span>
+      {long && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          className="text-[11px] font-medium text-[var(--brand-green-dark)] hover:underline"
+        >
+          {expanded ? "ย่อ" : "ดูเพิ่มเติม"}
+        </button>
+      )}
+    </span>
+  );
+}
+
 export function TaskDetailSheet({
   taskId,
   onOpenChange,
@@ -1273,15 +1304,16 @@ export function TaskDetailSheet({
 
             {(() => {
               const checklistOwnerIds = isShared ? task.assigneeIds : [task.assigneeIds[0]!];
-              const renderItem = (c: (typeof task.checklist)[number]) => {
+              const renderItem = (c: (typeof task.checklist)[number], showOwner = false) => {
                 const canToggle = canToggleOwnChecklistItem(c, viewingAsUserId);
+                const ownerName = c.ownerId ? (getUser(c.ownerId)?.name ?? c.ownerId) : "";
                 return (
-                  <div key={c.id} className="flex items-center gap-2 group rounded-md px-1 py-0.5 hover:bg-[var(--bg-soft)]">
+                  <div key={c.id} className="flex items-start gap-2 group rounded-md px-1 py-0.5 hover:bg-[var(--bg-soft)]">
                     <button
                       onClick={() => canToggle && toggleChecklistItem(task.id, c.id)}
                       disabled={!canToggle}
                       className={cn(
-                        "h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors",
+                        "mt-0.5 h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors",
                         c.done ? "bg-[var(--chart-green)] border-[var(--chart-green)]" : "border-[var(--line)]",
                         canToggle ? "hover:border-[var(--brand-green)]" : "opacity-50 cursor-not-allowed"
                       )}
@@ -1290,11 +1322,19 @@ export function TaskDetailSheet({
                     >
                       {c.done && <Check className="h-3 w-3 text-white" />}
                     </button>
-                    <span className={cn("flex-1 text-sm", c.done && "line-through text-[var(--ink-soft)]")}>{c.text}</span>
+                    {showOwner && (
+                      <span
+                        className="mt-0.5 max-w-[8rem] shrink-0 truncate rounded-full bg-[var(--bg-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--ink-soft)]"
+                        title={ownerName}
+                      >
+                        {ownerName}
+                      </span>
+                    )}
+                    <ChecklistItemText text={c.text} done={c.done} />
                     {canEditMain && (
                       <button
                         onClick={() => removeChecklistItem(task.id, c.id)}
-                        className="text-[var(--ink-soft)] hover:text-[var(--chart-red)] opacity-0 group-hover:opacity-100"
+                        className="mt-0.5 text-[var(--ink-soft)] hover:text-[var(--chart-red)] opacity-0 group-hover:opacity-100"
                         aria-label={`ลบรายการ "${c.text}"`}
                       >
                         <X className="h-3.5 w-3.5" />
@@ -1305,26 +1345,28 @@ export function TaskDetailSheet({
               };
 
               if (!isShared) {
-                return task.checklist.map(renderItem);
+                return task.checklist.map((c) => renderItem(c));
               }
-              // Group task: one sub-section per assignee, so it's clear at a
-              // glance whose part is whose.
-              return checklistOwnerIds.map((ownerId) => {
-                const items = task.checklist.filter((c) => c.ownerId === ownerId);
-                const owner = getUser(ownerId);
-                return (
-                  <div key={ownerId} className="space-y-0.5">
-                    <p className="text-xs font-medium text-[var(--ink-soft)] px-1 pt-1">
-                      เช็คลิสต์ของ {owner?.name ?? ownerId}{" "}
-                      {items.length > 0 && (
-                        <span className="font-normal">({items.filter((c) => c.done).length}/{items.length})</span>
-                      )}
-                    </p>
-                    {items.length === 0 && <p className="text-xs text-[var(--ink-soft)] px-1">ยังไม่มีรายการ</p>}
-                    {items.map(renderItem)}
-                  </div>
-                );
-              });
+              // งานกลุ่ม: รายการเดียวต่อกัน — ชื่อเจ้าของนำหน้าแล้วตามด้วยงาน (แทนหัวข้อแยกทีละคน กินที่น้อยกว่า)
+              // มีบรรทัดสรุปความคืบหน้ารายคนอยู่ด้านบน
+              const allItems = checklistOwnerIds.flatMap((ownerId) => task.checklist.filter((c) => c.ownerId === ownerId));
+              return (
+                <div className="space-y-1">
+                  <p className="flex flex-wrap gap-x-3 gap-y-0.5 px-1 text-[11px] text-[var(--ink-soft)]">
+                    {checklistOwnerIds.map((ownerId) => {
+                      const items = task.checklist.filter((c) => c.ownerId === ownerId);
+                      return (
+                        <span key={ownerId}>
+                          {getUser(ownerId)?.name ?? ownerId}{" "}
+                          {items.length > 0 ? `${items.filter((c) => c.done).length}/${items.length}` : "ยังไม่มีรายการ"}
+                        </span>
+                      );
+                    })}
+                  </p>
+                  {allItems.length === 0 && <p className="px-1 text-xs text-[var(--ink-soft)]">ยังไม่มีรายการ</p>}
+                  {allItems.map((c) => renderItem(c, true))}
+                </div>
+              );
             })()}
 
             {canEditMain && (
