@@ -7,6 +7,7 @@ import { defaultStickers } from "../../data/stickers";
 import { readStore } from "./org-store";
 import { listDirectory } from "./employee-directory";
 import type { Sticker, Task, TaskReaction } from "../../types";
+import { reactionRecipients } from "@/modules/report_task/lib/sticker-target";
 
 /**
  * งานในบอร์ด Kanban — เก็บเป็นตารางจริง หนึ่งแถวต่อหนึ่งงาน
@@ -84,7 +85,8 @@ async function recordStickerEvents(
       const label = labelById.get(reaction.stickerId) ?? reaction.stickerId;
       const occurredAt = new Date(reaction.createdAt);
 
-      for (const assigneeId of task.assigneeIds) {
+      // งานกลุ่มที่ส่งให้รายคน: คะแนนเข้าเฉพาะคนนั้น (ไม่ระบุ = ทุกคนในกลุ่มเหมือนเดิม)
+      for (const assigneeId of reactionRecipients(task.assigneeIds, reaction.targetUserId)) {
         events.push({
           orgId,
           userId: assigneeId,

@@ -107,9 +107,9 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
     setPendingSticker(sticker);
   }
 
-  function confirmSticker() {
+  function confirmSticker(targetUserId?: string) {
     if (!pendingSticker) return;
-    addReaction(task.id, pendingSticker.id, viewingAsUserId);
+    addReaction(task.id, pendingSticker.id, viewingAsUserId, undefined, targetUserId);
     showStickerToast(pendingSticker, task.title);
     setPendingSticker(null);
   }
@@ -542,6 +542,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
       sticker={pendingSticker}
       recipientName={assignees[0]?.name ?? "ผู้รับผิดชอบ"}
       taskTitle={task.title}
+      targets={task.taskMode === "group" && assignees.length > 1 ? assignees.flatMap((u) => (u ? [{ id: u.id, name: u.name }] : [])) : undefined}
       onConfirm={confirmSticker}
     />
     </>

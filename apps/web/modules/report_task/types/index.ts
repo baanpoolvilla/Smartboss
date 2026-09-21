@@ -97,6 +97,8 @@ export interface TaskReaction {
   stickerId: string;
   byUserId: string;
   note?: string;
+  /** งานกลุ่ม: สติกเกอร์นี้ส่งให้คนนี้คนเดียว — ไม่มี = ทั้งกลุ่ม (รวมสติกเกอร์เก่าและงานเดี่ยว) ดู lib/sticker-target.ts */
+  targetUserId?: string;
   createdAt: string;
 }
 

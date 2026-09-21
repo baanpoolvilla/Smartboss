@@ -8,6 +8,7 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useActivityLogStore } from "@/modules/report_task/store/activity-log-store";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { deriveCompletedAssigneeIds, isDoneByRule, isTaskFullyDone } from "@/modules/report_task/lib/task-completion";
+import { reactionRecipients } from "@/modules/report_task/lib/sticker-target";
 import type { Attachment, ChecklistItem, Task, TaskPriority, TaskStatus } from "@/modules/report_task/types";
 import { uuid } from "@/modules/report_task/lib/uuid";
 
@@ -260,7 +261,8 @@ interface TaskStore {
    * items on this task.
    */
   toggleAssigneeChecklist: (taskId: string, userId: string) => void;
-  addReaction: (taskId: string, stickerId: string, byUserId: string, note?: string) => void;
+  /** targetUserId: งานกลุ่ม ส่งให้คนนี้คนเดียว (ไม่ส่ง = ทั้งกลุ่ม) */
+  addReaction: (taskId: string, stickerId: string, byUserId: string, note?: string, targetUserId?: string) => void;
   removeReaction: (taskId: string, reactionId: string) => void;
   /** Plain no-score reaction — anyone toggles their own id in/out of that
    * emoji's list, same shape/behavior as a report post's emoji reactions. */
@@ -827,7 +829,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
         return applyChecklistDerivedCompletion(t, nextChecklist, userId);
       }),
     })),
-  addReaction: (taskId, stickerId, byUserId, note) =>
+  addReaction: (taskId, stickerId, byUserId, note, targetUserId) =>
     set((s) => {
       const t = s.tasks.find((x) => x.id === taskId);
       if (t) {
@@ -842,7 +844,11 @@ export const useTaskStore = create<TaskStore>((set) => ({
         const pts = sticker?.points ?? 0;
         useNotificationStore
           .getState()
-          .notifyMany(t.assigneeIds, byUserId, `${actorName} ติดสติกเกอร์ "${sticker?.emoji ?? "🏷️"} ${label}" ให้งาน "${t.title}"${pts !== 0 ? ` (${pts > 0 ? `+${pts}` : pts} คะแนน)` : ""}`);
+          .notifyMany(
+            reactionRecipients(t.assigneeIds, targetUserId),
+            byUserId,
+            `${actorName} ติดสติกเกอร์ "${sticker?.emoji ?? "🏷️"} ${label}" ให้งาน "${t.title}"${targetUserId ? " (เฉพาะคุณ)" : t.taskMode === "group" ? " (ทั้งกลุ่ม)" : ""}${pts !== 0 ? ` (${pts > 0 ? `+${pts}` : pts} คะแนน)` : ""}`
+          );
       }
       return {
         tasks: s.tasks.map((x) =>
@@ -852,7 +858,14 @@ export const useTaskStore = create<TaskStore>((set) => ({
                 ...x,
                 reactions: [
                   ...x.reactions,
-                  { id: `${taskId}-rxn-${uuid()}`, stickerId, byUserId, note, createdAt: new Date().toISOString() },
+                  {
+                    id: `${taskId}-rxn-${uuid()}`,
+                    stickerId,
+                    byUserId,
+                    note,
+                    ...(targetUserId ? { targetUserId } : {}),
+                    createdAt: new Date().toISOString(),
+                  },
                 ],
               }
         ),

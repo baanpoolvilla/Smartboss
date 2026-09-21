@@ -2,6 +2,7 @@ import { departments, users } from "@/modules/report_task/lib/directory";
 import { defaultStickers } from "@/modules/report_task/data/stickers";
 import { daysUntil } from "@/modules/report_task/lib/format";
 import type { DepartmentReport, ScoreBreakdown, Sticker, Task, UserReport } from "@/modules/report_task/types";
+import { reactionCountsFor } from "@/modules/report_task/lib/sticker-target";
 
 export function isLate(task: Task) {
   if (task.status === "done") return false;
@@ -20,11 +21,13 @@ export function completionHours(task: Task) {
   return Math.max(1, Math.round((end - start) / (1000 * 60 * 60)));
 }
 
-function stickerPoints(taskList: Task[], stickers: Sticker[]) {
+/** userId: นับเฉพาะสติกเกอร์ที่เป็นของคนนี้ (รายคน) + ทั้งกลุ่ม; ไม่ส่ง = นับหมดทั้งงาน/แผนก */
+function stickerPoints(taskList: Task[], stickers: Sticker[], userId?: string) {
   const byId = new Map(stickers.map((s) => [s.id, s.points]));
   let sum = 0;
   for (const t of taskList) {
     for (const r of t.reactions) {
+      if (!reactionCountsFor(r, userId)) continue;
       sum += byId.get(r.stickerId) ?? 0;
     }
   }
@@ -58,7 +61,7 @@ function scoreFor(
 }
 
 /** The metrics shared by a per-user and a per-department report row. */
-function reportMetricsFor(scopedTasks: Task[], stickers: Sticker[]) {
+function reportMetricsFor(scopedTasks: Task[], stickers: Sticker[], userId?: string) {
   const completed = scopedTasks.filter((t) => t.status === "done");
   const late = scopedTasks.filter(isLate);
   const revisionCount = scopedTasks.reduce((sum, t) => sum + t.revisions.length, 0);
@@ -71,7 +74,7 @@ function reportMetricsFor(scopedTasks: Task[], stickers: Sticker[]) {
     completed.length,
     late.length,
     revisionCount,
-    stickerPoints(scopedTasks, stickers),
+    stickerPoints(scopedTasks, stickers, userId),
     manualPenaltyPoints(scopedTasks)
   );
   return {
@@ -91,7 +94,8 @@ export function buildUserReports(taskList: Task[], stickers: Sticker[] = default
     userId: u.id,
     ...reportMetricsFor(
       taskList.filter((t) => t.assigneeIds.includes(u.id)),
-      stickers
+      stickers,
+      u.id
     ),
   }));
 }

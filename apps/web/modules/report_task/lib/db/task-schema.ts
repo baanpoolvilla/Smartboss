@@ -44,6 +44,8 @@ const taskReactionSchema = z.object({
   stickerId: z.string(),
   byUserId: z.string(),
   note: z.string().optional(),
+  // ไม่ใส่ตรงนี้ zod จะตัดฟิลด์ทิ้งเงียบ ๆ ตอนบันทึก (ดูคอมเมนต์ reviewedBy ด้านล่าง)
+  targetUserId: z.string().optional(),
   createdAt: z.string(),
 });
 

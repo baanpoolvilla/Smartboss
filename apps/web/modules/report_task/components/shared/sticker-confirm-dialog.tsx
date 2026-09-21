@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { Check, User, Users } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -10,12 +12,22 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/modules/report_task/components/ui/alert-dialog";
+import { cn } from "@/modules/report_task/lib/utils";
 import type { Sticker } from "@/modules/report_task/types";
+
+export interface StickerTarget {
+  id: string;
+  name: string;
+}
 
 /**
  * §6 — every sticker send goes through this confirm step first instead of
  * firing on click. Shared across every send point (task card, task detail
  * sheet, escalations panel) so the copy/behavior never drifts between them.
+ *
+ * งานกลุ่ม (ส่ง \`targets\` มา 2 คนขึ้นไป): ถามก่อนว่าจะส่งให้ "ทั้งกลุ่ม" หรือ "รายคน" (แล้วเลือกชื่อ)
+ * ต้องเลือกก่อนถึงกดยืนยันได้ — สติกเกอร์นี้มีผลกับคะแนน (เช่น หัวร้อน -5) จึงไม่เดาให้
+ * onConfirm ได้ id คนที่เลือก (รายคน) หรือ undefined (ทั้งกลุ่ม / งานที่ไม่ต้องเลือก)
  */
 export function StickerConfirmDialog({
   open,
@@ -27,6 +39,7 @@ export function StickerConfirmDialog({
    * scored sticker too now — same set, same confirm step, just different
    * noun so the copy reads right for either sender). */
   itemLabel = "งาน",
+  targets,
   onConfirm,
 }: {
   open: boolean;
@@ -35,31 +48,154 @@ export function StickerConfirmDialog({
   recipientName: string;
   taskTitle: string;
   itemLabel?: "งาน" | "โพสต์";
-  onConfirm: () => void;
+  targets?: StickerTarget[];
+  onConfirm: (targetUserId?: string) => void;
 }) {
   return (
     <AlertDialog open={open && !!sticker} onOpenChange={onOpenChange}>
       <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle className="flex items-center gap-2">
-            <span className="text-xl">{sticker?.emoji}</span> ส่งสติกเกอร์
-          </AlertDialogTitle>
-          <AlertDialogDescription>
-            ส่ง &ldquo;{sticker?.emoji} {sticker?.label}&rdquo; ให้ <span className="font-medium text-[var(--ink)]">{recipientName}</span> สำหรับ{itemLabel}
-            &ldquo;{taskTitle}&rdquo;?
-            {!!sticker && sticker.points !== 0 && (
-              <span className="block mt-2 text-[var(--chart-red-dark)]">
-                สติกเกอร์นี้จะบันทึกลงประวัติงาน และ
-                {sticker.points < 0 ? `หักคะแนน ${Math.abs(sticker.points)} แต้ม` : `ให้คะแนน +${sticker.points} แต้ม`}ของผู้รับผิดชอบ
-              </span>
-            )}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm}>ยืนยันส่ง</AlertDialogAction>
-        </AlertDialogFooter>
+        {/* key: เปิดใหม่ทุกครั้งเริ่มจากยังไม่ได้เลือก (ไม่จำตัวเลือกครั้งก่อน) */}
+        <StickerConfirmBody
+          key={open ? "open" : "closed"}
+          sticker={sticker}
+          recipientName={recipientName}
+          taskTitle={taskTitle}
+          itemLabel={itemLabel}
+          targets={targets}
+          onConfirm={onConfirm}
+        />
       </AlertDialogContent>
     </AlertDialog>
+  );
+}
+
+function StickerConfirmBody({
+  sticker,
+  recipientName,
+  taskTitle,
+  itemLabel,
+  targets,
+  onConfirm,
+}: {
+  sticker: Sticker | null;
+  recipientName: string;
+  taskTitle: string;
+  itemLabel: "งาน" | "โพสต์";
+  targets?: StickerTarget[];
+  onConfirm: (targetUserId?: string) => void;
+}) {
+  const hasChoice = (targets?.length ?? 0) > 1;
+  const [mode, setMode] = useState<"all" | "one" | null>(null);
+  const [personId, setPersonId] = useState<string | null>(null);
+
+  const person = targets?.find((t) => t.id === personId);
+  const recipient = !hasChoice ? recipientName : mode === "all" ? "ทั้งกลุ่ม" : mode === "one" && person ? person.name : "…";
+  const canConfirm = !hasChoice || mode === "all" || (mode === "one" && !!personId);
+
+  return (
+    <>
+      <AlertDialogHeader>
+        <AlertDialogTitle className="flex items-center gap-2">
+          <span className="text-xl">{sticker?.emoji}</span> ส่งสติกเกอร์
+        </AlertDialogTitle>
+        <AlertDialogDescription>
+          ส่ง &ldquo;{sticker?.emoji} {sticker?.label}&rdquo; ให้ <span className="font-medium text-[var(--ink)]">{recipient}</span> สำหรับ{itemLabel}
+          &ldquo;{taskTitle}&rdquo;?
+          {!!sticker && sticker.points !== 0 && (
+            <span className="block mt-2 text-[var(--chart-red-dark)]">
+              สติกเกอร์นี้จะบันทึกลงประวัติงาน และ
+              {sticker.points < 0 ? `หักคะแนน ${Math.abs(sticker.points)} แต้ม` : `ให้คะแนน +${sticker.points} แต้ม`}
+              {hasChoice ? (mode === "one" && person ? `ของ ${person.name}` : mode === "all" ? "ของทุกคนในกลุ่ม" : "ของผู้ที่เลือก") : "ของผู้รับผิดชอบ"}
+            </span>
+          )}
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+
+      {hasChoice && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-[var(--ink-soft)]">งานกลุ่ม — ส่งให้ใคร?</p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <ChoiceButton
+              selected={mode === "all"}
+              onClick={() => {
+                setMode("all");
+                setPersonId(null);
+              }}
+              icon={<Users className="h-4 w-4" />}
+              title="ทั้งกลุ่ม"
+              sub={`ทุกคน ${targets!.length} คน`}
+            />
+            <ChoiceButton
+              selected={mode === "one"}
+              onClick={() => setMode("one")}
+              icon={<User className="h-4 w-4" />}
+              title="รายคน"
+              sub="เลือกชื่อด้านล่าง"
+            />
+          </div>
+          {mode === "one" && (
+            <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="เลือกคน">
+              {targets!.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={personId === t.id}
+                  onClick={() => setPersonId(t.id)}
+                  className={cn(
+                    "inline-flex max-w-full items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                    personId === t.id
+                      ? "border-[var(--brand-green)] bg-[var(--accent)] text-[var(--brand-green-dark)]"
+                      : "border-[var(--line)] bg-white text-[var(--ink)] hover:border-[var(--brand-green)]"
+                  )}
+                >
+                  {personId === t.id && <Check className="h-3 w-3 shrink-0" />}
+                  <span className="truncate">{t.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <AlertDialogFooter>
+        <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+        <AlertDialogAction disabled={!canConfirm} onClick={() => onConfirm(mode === "one" ? (personId ?? undefined) : undefined)}>
+          ยืนยันส่ง
+        </AlertDialogAction>
+      </AlertDialogFooter>
+    </>
+  );
+}
+
+function ChoiceButton({
+  selected,
+  onClick,
+  icon,
+  title,
+  sub,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  title: string;
+  sub: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      className={cn(
+        "flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors",
+        selected ? "border-[var(--brand-green)] bg-[var(--accent)]" : "border-[var(--line)] bg-white hover:border-[var(--brand-green)]"
+      )}
+    >
+      <span className={cn("shrink-0", selected ? "text-[var(--brand-green-dark)]" : "text-[var(--ink-soft)]")}>{icon}</span>
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold text-[var(--ink)]">{title}</span>
+        <span className="block text-[11px] text-[var(--ink-soft)]">{sub}</span>
+      </span>
+    </button>
   );
 }

@@ -84,9 +84,9 @@ export function EscalationsPanel() {
     setPendingSticker({ taskId, title, recipientName });
   }
 
-  function confirmSticker() {
+  function confirmSticker(targetUserId?: string) {
     if (!pendingSticker || !angrySticker) return;
-    addReaction(pendingSticker.taskId, angrySticker.id, viewingAsUserId);
+    addReaction(pendingSticker.taskId, angrySticker.id, viewingAsUserId, undefined, targetUserId);
     showStickerToast(angrySticker, pendingSticker.title);
     setPendingSticker(null);
   }
@@ -222,6 +222,14 @@ export function EscalationsPanel() {
         sticker={angrySticker ?? null}
         recipientName={pendingSticker?.recipientName ?? ""}
         taskTitle={pendingSticker?.title ?? ""}
+        targets={(() => {
+          const t = pendingSticker ? tasks.find((x) => x.id === pendingSticker.taskId) : undefined;
+          if (!t || t.taskMode !== "group" || t.assigneeIds.length < 2) return undefined;
+          return t.assigneeIds.flatMap((id) => {
+            const u = getUser(id);
+            return u ? [{ id: u.id, name: u.name }] : [];
+          });
+        })()}
         onConfirm={confirmSticker}
       />
     </Card>

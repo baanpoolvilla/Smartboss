@@ -74,6 +74,7 @@ import {
 import type { Attachment, Sticker, TaskPriority, TaskStatus } from "@/modules/report_task/types";
 import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
 import { StickerConfirmDialog } from "@/modules/report_task/components/shared/sticker-confirm-dialog";
+import { reactionTargetLabel } from "@/modules/report_task/lib/sticker-target";
 import { ReportImageLightbox } from "@/modules/report_task/components/report-feed/report-image-lightbox";
 import type { ReportPostImage } from "@/modules/report_task/store/report-feed-store";
 import { mimeFromLegacyTaskLabel } from "@/modules/report_task/lib/report-attachment-kind";
@@ -460,9 +461,9 @@ export function TaskDetailSheet({
     setPendingSticker(sticker);
   }
 
-  function confirmSticker() {
+  function confirmSticker(targetUserId?: string) {
     if (!task || !pendingSticker) return;
-    addReaction(task.id, pendingSticker.id, viewingAsUserId);
+    addReaction(task.id, pendingSticker.id, viewingAsUserId, undefined, targetUserId);
     showStickerToast(pendingSticker, task.title);
     setPendingSticker(null);
   }
@@ -1079,11 +1080,26 @@ export function TaskDetailSheet({
                     <div key={r.id} className="flex items-center gap-2.5 text-sm rounded-lg bg-[var(--bg-soft)] px-3 py-2">
                       <span className="text-base">{sticker?.emoji ?? "🏷️"}</span>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate">
-                          <span className="font-medium">{by?.name}</span>{" "}
-                          <span className="text-[var(--ink-soft)]">ติด{sticker?.label ?? "สติกเกอร์"}</span>
-                        </p>
-                        <TimeAgo date={r.createdAt} className="text-[10px] text-[var(--ink-soft)] block" />
+                        {task.taskMode === "group" ? (
+                          <>
+                            {/* งานกลุ่ม: อิโมจิ + ชื่อคนที่ได้รับ (รายคน) หรือ "ทั้งกลุ่ม" */}
+                            <p className="truncate">
+                              <span className="font-medium">{reactionTargetLabel(r, (id) => getUser(id)?.name)}</span>{" "}
+                              <span className="text-[var(--ink-soft)]">· {sticker?.label ?? "สติกเกอร์"}</span>
+                            </p>
+                            <p className="truncate text-[10px] text-[var(--ink-soft)]">
+                              ติดโดย {by?.name} · <TimeAgo date={r.createdAt} />
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="truncate">
+                              <span className="font-medium">{by?.name}</span>{" "}
+                              <span className="text-[var(--ink-soft)]">ติด{sticker?.label ?? "สติกเกอร์"}</span>
+                            </p>
+                            <TimeAgo date={r.createdAt} className="text-[10px] text-[var(--ink-soft)] block" />
+                          </>
+                        )}
                       </div>
                       {sticker && sticker.points !== 0 && (
                         <span className={cn("text-xs font-semibold tabular-nums", sticker.points < 0 ? "text-[var(--chart-red)]" : "text-[var(--brand-green-dark)]")}>
@@ -1708,6 +1724,7 @@ export function TaskDetailSheet({
       sticker={pendingSticker}
       recipientName={assignees[0]?.name ?? "ผู้รับผิดชอบ"}
       taskTitle={task?.title ?? ""}
+      targets={task && task.taskMode === "group" && assignees.length > 1 ? assignees.flatMap((u) => (u ? [{ id: u.id, name: u.name }] : [])) : undefined}
       onConfirm={confirmSticker}
     />
     {attachmentViewer && (
