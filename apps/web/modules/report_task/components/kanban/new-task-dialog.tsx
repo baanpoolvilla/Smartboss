@@ -536,7 +536,8 @@ export function NewTaskDialog({
   }
 
   async function createTask() {
-    const attachments = await buildAttachments(taskFiles, viewingAsUserId);
+    // ไฟล์ที่แนบตอนสั่งงานเป็นของผู้สั่งงานเสมอ (แม้สั่งงานให้ตัวเอง) — ไม่ให้ไปนับเป็น "ไฟล์ส่งงาน"
+    const attachments = (await buildAttachments(taskFiles, viewingAsUserId)).map((a) => ({ ...a, role: "brief" as const }));
     const now = new Date().toISOString();
     const checklist: ChecklistItem[] = checklistItems.map((c) => ({
       id: `task-chk-${uuid()}`,

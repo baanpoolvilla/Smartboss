@@ -22,6 +22,7 @@ const attachmentSchema = z.object({
   uploadedAt: z.string(),
   dataUrl: z.string().optional(),
   url: z.string().optional(),
+  role: z.enum(["brief", "submission"]).optional(),
 });
 
 const commentSchema = z.object({

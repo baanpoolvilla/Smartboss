@@ -68,6 +68,7 @@ import {
   Info,
   Star,
   Clock,
+  Upload,
   ChevronDown,
   MoreHorizontal,
 } from "lucide-react";
@@ -378,7 +379,7 @@ export function TaskDetailSheet({
 
   /** Real upload (mirrors the comment-attachment flow below) — replaced the
    * old mock that just faked a "1.2 MB PDF" without ever touching the server. */
-  async function handleTaskFilesSelected(files: File[]) {
+  async function handleTaskFilesSelected(files: File[], role: "brief" | "submission") {
     if (!task || files.length === 0) return;
     const remaining = attachmentSettings.maxFilesPerTask - task.attachments.length;
     if (remaining <= 0) {
@@ -393,7 +394,7 @@ export function TaskDetailSheet({
     for (const file of picked) {
       try {
         const att = await uploadTaskAttachment(file, viewingAsUserId);
-        addAttachment(task.id, att);
+        addAttachment(task.id, { ...att, role });
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "อัปโหลดไฟล์ไม่สำเร็จ");
       }
@@ -1457,42 +1458,50 @@ export function TaskDetailSheet({
 
           <Separator />
 
-          {/* Attachments (add / remove) */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-semibold flex items-center gap-1.5">
-                <Paperclip className="h-4 w-4" /> ไฟล์แนบ ({task.attachments.length})
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <button type="button" className="text-[var(--ink-soft)] hover:text-[var(--ink)]" aria-label="เงื่อนไขการแนบไฟล์">
-                        <Info className="h-3.5 w-3.5" />
-                      </button>
-                    }
-                  />
-                  <TooltipContent>
-                    รูปภาพสูงสุด {attachmentSettings.maxImageMB}MB · เอกสารสูงสุด {attachmentSettings.maxFileMB}MB ·
-                    วิดีโอสูงสุด {attachmentSettings.maxVideoMB}MB · แนบได้สูงสุด {attachmentSettings.maxFilesPerTask} ไฟล์ต่องาน
-                  </TooltipContent>
-                </Tooltip>
-              </h4>
+          {/* ไฟล์แนบ — แยก 2 ส่วน: ที่ผู้สั่งงานแนบไว้ (ตอนสั่งงานหรือเพิ่มทีหลัง) กับที่ผู้รับผิดชอบส่งมา
+              แต่ละส่วนเรียงตามเวลา (เก่า → ใหม่) บอกว่าใครแนบ — ส่วนส่งงานรวมทุกคนไว้ด้วยกัน ไม่แยกรายคน */}
+          {(() => {
+            const isSubmission = (a: Attachment) => (a.role ? a.role === "submission" : task.assigneeIds.includes(a.uploadedBy));
+            const byTime = (x: Attachment, y: Attachment) => new Date(x.uploadedAt).getTime() - new Date(y.uploadedAt).getTime();
+            const briefFiles = task.attachments.filter((a) => !isSubmission(a)).sort(byTime);
+            const submittedFiles = task.attachments.filter(isSubmission).sort(byTime);
+            // ตัวดูไฟล์เลื่อนต่อเนื่องตามลำดับที่เห็นในหน้า (ส่วนบนก่อน แล้วส่วนส่งงาน)
+            const viewerList = [...briefFiles, ...submittedFiles];
+            // ผู้สั่งงาน/หัวหน้า (หรือคนที่ไม่ใช่ผู้รับผิดชอบ) แนบไฟล์ส่วนบนได้ · ผู้รับผิดชอบส่งไฟล์งานในส่วนล่าง
+            const canAddBrief = canEditMain || !iAmAssignee;
+            const canSubmit = iAmAssignee;
+
+            const limitsTip = (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button type="button" className="text-[var(--ink-soft)] hover:text-[var(--ink)]" aria-label="เงื่อนไขการแนบไฟล์">
+                      <Info className="h-3.5 w-3.5" />
+                    </button>
+                  }
+                />
+                <TooltipContent>
+                  รูปภาพสูงสุด {attachmentSettings.maxImageMB}MB · เอกสารสูงสุด {attachmentSettings.maxFileMB}MB ·
+                  วิดีโอสูงสุด {attachmentSettings.maxVideoMB}MB · แนบได้สูงสุด {attachmentSettings.maxFilesPerTask} ไฟล์ต่องาน
+                </TooltipContent>
+              </Tooltip>
+            );
+
+            const addButton = (role: "brief" | "submission", label: string) => (
               <AttachMenu
-                onFiles={(files) => void handleTaskFilesSelected(files)}
+                onFiles={(files) => void handleTaskFilesSelected(files, role)}
                 disabled={taskAttachUploading}
                 trigger={
                   <>
-                    {taskAttachUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} แนบไฟล์
+                    {taskAttachUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} {label}
                   </>
                 }
-                className="inline-flex items-center gap-1.5 h-8 rounded-md border border-input px-3 text-sm shadow-xs disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground"
+                className="inline-flex items-center gap-1.5 h-8 shrink-0 rounded-md border border-input px-3 text-sm shadow-xs disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground"
               />
-            </div>
-            {task.attachments.length === 0 && <p className="text-xs text-[var(--ink-soft)]">ไม่มีไฟล์แนบ</p>}
-            {/* ไฟล์ทั้งหมดของงาน (ที่ผู้สั่งงานแนบมา + ที่คนส่งงาน) รวมเป็นรายการเดียว เรียงตามเวลาที่แนบ (เก่า → ใหม่)
-                บอกว่าใครเป็นคนแนบ — ไม่แยกส่วน */}
-            {[...task.attachments]
-              .sort((x, y) => new Date(x.uploadedAt).getTime() - new Date(y.uploadedAt).getTime())
-              .map((a, attIndex, sortedAttachments) => {
+            );
+
+            const renderFile = (a: Attachment) => {
+              const attIndex = viewerList.indexOf(a);
               // Whoever uploaded it (or whoever can edit the task's core
               // fields) can remove it — same self-scoping as comments below,
               // rather than anyone who can open the task deleting anyone
@@ -1502,7 +1511,7 @@ export function TaskDetailSheet({
               // เปิดในตัวดูไฟล์ในหน้าเดิม (มีปุ่มย้อนกลับ+ดาวน์โหลดในตัว)
               // แทนที่จะเด้งแท็บใหม่ — ทุกไฟล์แนบของงานนี้เข้าเป็นชุดเดียวกัน
               // เลื่อนซ้าย-ขวาดูไฟล์อื่นต่อได้โดยไม่ต้องปิดแล้วเปิดใหม่
-              const openViewer = () => setAttachmentViewer({ images: sortedAttachments.map(toLightboxImage), index: attIndex });
+              const openViewer = () => setAttachmentViewer({ images: viewerList.map(toLightboxImage), index: attIndex });
               return (
                 <div key={a.id} className="flex items-center gap-2.5 text-sm rounded-lg border border-[var(--line)] px-3 py-2">
                   {a.type === "รูปภาพ" && src ? (
@@ -1536,8 +1545,38 @@ export function TaskDetailSheet({
                   )}
                 </div>
               );
-            })}
-          </div>
+            };
+
+            return (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-sm font-semibold flex items-center gap-1.5">
+                      <Paperclip className="h-4 w-4" /> ไฟล์แนบตอนสั่งงาน ({briefFiles.length}) {limitsTip}
+                    </h4>
+                    {canAddBrief && addButton("brief", "แนบไฟล์")}
+                  </div>
+                  <p className="text-[11px] text-[var(--ink-soft)]">ไฟล์ที่ผู้สั่งงานแนบมาให้ — ตอนเปิดงานหรือเพิ่มทีหลัง</p>
+                  {briefFiles.length === 0 && <p className="text-xs text-[var(--ink-soft)]">ไม่มีไฟล์แนบ</p>}
+                  {briefFiles.map(renderFile)}
+                </div>
+
+                <div className="space-y-2 border-t border-[var(--line)] pt-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-sm font-semibold flex items-center gap-1.5">
+                      <Upload className="h-4 w-4" /> ไฟล์ส่งงาน ({submittedFiles.length})
+                    </h4>
+                    {canSubmit && addButton("submission", "ส่งไฟล์งาน")}
+                  </div>
+                  <p className="text-[11px] text-[var(--ink-soft)]">
+                    ไฟล์ที่ผู้รับผิดชอบส่งมาให้ตรวจ{task.taskMode === "group" ? " (รวมทุกคน — ดูชื่อคนส่งที่แต่ละไฟล์)" : ""}
+                  </p>
+                  {submittedFiles.length === 0 && <p className="text-xs text-[var(--ink-soft)]">ยังไม่มีใครส่งไฟล์งาน</p>}
+                  {submittedFiles.map(renderFile)}
+                </div>
+              </div>
+            );
+          })()}
 
           <p className="text-[10px] text-[var(--ink-soft)] pt-1">
             สร้างเมื่อ {formatDateTime(task.createdAt)} · อัปเดต <TimeAgo date={task.updatedAt} />

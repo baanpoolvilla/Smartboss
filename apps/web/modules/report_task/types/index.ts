@@ -63,6 +63,9 @@ export interface Attachment {
    * see report-attachment-kind.ts's mimeFromLegacyTaskLabel for the fallback
    * on older rows that only kept the Thai display label (`type`). */
   mime?: string;
+  /** ไฟล์นี้เป็นของส่วนไหนในหน้างาน — "brief" = ไฟล์ที่ผู้สั่งงานแนบ (ตอนสั่งงานหรือเพิ่มทีหลัง),
+   * "submission" = ไฟล์ที่ผู้รับผิดชอบส่งมา · ไม่มี (ไฟล์เก่า) = ดูจากคนอัปโหลด: เป็นผู้รับผิดชอบ = ส่งงาน นอกนั้น = ผู้สั่งงาน */
+  role?: "brief" | "submission";
 }
 
 export interface Comment {
