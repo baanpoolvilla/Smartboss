@@ -1271,9 +1271,13 @@ export function ReportCard({
                   // this post was never obligated in the first place —
                   // posted anyway, just not tracked, same as
                   // excludeFromSubmission above.
-                  <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-[var(--bg-soft)] text-[var(--ink-soft)] border border-[var(--line)]">
-                    หยุด/ลาวันนี้ · ไม่บังคับส่ง
-                  </span>
+                  // ห้องที่ไม่มีรอบให้ส่งเลยในวันนั้น (ยังไม่ได้ตั้งเวลา / ส่งแล้ว 0/0) ไม่ต้องบอกว่า "ไม่บังคับส่ง" —
+                  // ไม่เคยมีอะไรให้บังคับอยู่แล้ว ป้ายนี้จะทำให้งงเปล่า ๆ (ขึ้นเฉพาะเมื่อวันนั้นห้องมีรอบที่ปกติต้องส่ง)
+                  postDayCutoffs.length > 0 ? (
+                    <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-[var(--bg-soft)] text-[var(--ink-soft)] border border-[var(--line)]">
+                      หยุด/ลาวันนี้ · ไม่บังคับส่ง
+                    </span>
+                  ) : null
                 ) : lateCutoff && isFirstLateOfRound ? (
                   <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
                     <TriangleAlert className="h-2.5 w-2.5" />
