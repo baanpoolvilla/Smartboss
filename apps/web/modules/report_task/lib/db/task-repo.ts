@@ -106,6 +106,64 @@ async function recordStickerEvents(
   if (events.length > 0) await recordPerformanceEvents(events);
 }
 
+/**
+ * สติกเกอร์ถูกยกเลิก (หรืองานที่ติดสติกเกอร์ถูกลบ) ⇒ คืนคะแนนที่เคยบันทึกไว้
+ *
+ * เดิมมีแต่ขาติด — ยกเลิกสติกเกอร์แล้ว reaction หายจากงาน แต่ event "หักคะแนนโดยหัวหน้า"
+ * ใน core.performance_events ค้างอยู่ ⇒ คะแนน & เกรดที่หน้า HR ยังโดนหักอยู่ ทั้งที่ไม่มีสติกเกอร์แล้ว
+ *
+ * ไม่ลบ event เดิม — ออก event ใหม่ points ติดลบหักล้างพอดี (ประวัติยังอ่านย้อนได้ว่าเคยหักแล้วยกเลิก)
+ * แบบเดียวกับสติกเกอร์บนโพสต์ (report-feed-performance.ts) · ลงวันเดียวกับของเดิม
+ * ให้คะแนนคืนในเดือนที่เคยถูกหัก · ทำเฉพาะรายการที่มี event เดิมอยู่จริง (สติกเกอร์ที่ติดไว้ก่อนมีระบบ
+ * บันทึกคะแนน หรือก่อนวันเริ่มนับ ไม่เคยถูกหัก จึงไม่มีอะไรต้องคืน) · refId เหมือนของเดิมภายใต้ refType
+ * "task_reaction_undo" ⇒ unique key กันคืนซ้ำเอง
+ */
+export async function recordStickerUndoEvents(
+  orgId: string,
+  removed: { task: Pick<Task, "title" | "assigneeIds">; reaction: TaskReaction }[],
+  removedBy: string | null,
+): Promise<void> {
+  if (removed.length === 0) return;
+
+  const custom = await readStore<Sticker[]>(orgId, "stickers");
+  const stickers = custom.data ?? defaultStickers;
+  const labelById = new Map(stickers.map((s) => [s.id, `${s.emoji} ${s.label}`] as const));
+
+  const refIds = removed.flatMap(({ task, reaction }) =>
+    reactionRecipients(task.assigneeIds, reaction.targetUserId).map((id) => `${reaction.id}:${id}`),
+  );
+  const originals = await prisma.performanceEvent.findMany({
+    where: { orgId, source: "report_task", category: "task_manual_dock", refType: "task_reaction", refId: { in: refIds } },
+    select: { userId: true, points: true, occurredAt: true, refId: true },
+  });
+  if (originals.length === 0) return;
+  const originalByRef = new Map(originals.map((e) => [e.refId, e] as const));
+
+  const events: PerformanceEventInput[] = [];
+  for (const { task, reaction } of removed) {
+    const label = labelById.get(reaction.stickerId) ?? reaction.stickerId;
+    for (const assigneeId of reactionRecipients(task.assigneeIds, reaction.targetUserId)) {
+      const refId = `${reaction.id}:${assigneeId}`;
+      const original = originalByRef.get(refId);
+      if (!original || Number(original.points) === 0) continue;
+      events.push({
+        orgId,
+        userId: original.userId,
+        source: "report_task",
+        category: "task_manual_dock",
+        occurredAt: original.occurredAt,
+        points: -Number(original.points),
+        refType: "task_reaction_undo",
+        refId,
+        note: `ยกเลิก: ${label} · ${task.title}`,
+        createdBy: removedBy ?? undefined,
+      });
+    }
+  }
+
+  if (events.length > 0) await recordPerformanceEvents(events);
+}
+
 /** เลขรุ่นของคอลเลกชันอย่างเดียว ไม่แตะตาราง reportTask เลย (R1) — สำหรับ poll
  * ที่แค่อยากรู้ "มีอะไรเปลี่ยนไหม" ก่อนค่อยดึงทั้งก้อนจริงถ้าเปลี่ยน แทนที่จะ
  * SELECT งานทั้งบริษัท (รวม comments/checklist/revisions/attachment) ทุก
@@ -153,6 +211,8 @@ export async function writeTasks(
   userId: string | null
 ): Promise<WriteResult> {
   const stickerChanges: { task: Task; newReactions: TaskReaction[] }[] = [];
+  // สติกเกอร์ที่หายไปจากงาน (ยกเลิกเอง หรือทั้งงานถูกลบ) — ต้องคืนคะแนนที่เคยหักไว้
+  const removedReactions: { task: Task; reaction: TaskReaction }[] = [];
 
   // R4 — gating the sticker picker in the UI stops a normal click, but Task
   // writes the whole collection in one PUT: a client that just edits the
@@ -210,6 +270,11 @@ export async function writeTasks(
       }
       if (newReactions.length > 0) stickerChanges.push({ task, newReactions });
 
+      const keptReactionIds = new Set((task.reactions ?? []).map((r) => r.id));
+      for (const gone of priorById.get(task.id)?.reactions ?? []) {
+        if (!keptReactionIds.has(gone.id)) removedReactions.push({ task: priorById.get(task.id)!, reaction: gone });
+      }
+
       const cols = columnsOf(task);
       const known = codeById.get(task.id);
 
@@ -233,6 +298,11 @@ export async function writeTasks(
     }
 
     const removed = existing.filter((r) => !incomingIds.has(r.id)).map((r) => r.id);
+    for (const row of existing) {
+      if (incomingIds.has(row.id)) continue;
+      const prior = row.data as unknown as Task;
+      for (const reaction of prior.reactions ?? []) removedReactions.push({ task: prior, reaction });
+    }
     if (removed.length > 0) {
       await tx.reportTask.deleteMany({ where: { orgId, id: { in: removed } } });
     }
@@ -257,7 +327,10 @@ export async function writeTasks(
   // ทำหลัง transaction ของ report_task จบแล้ว — core.performance_events เป็นคนละ
   // schema เขียนผ่าน prisma client ตัวหลัก ไม่ใช่ tx ของธุรกรรมนี้ ผูกกันไม่ได้
   // จริง ๆ อยู่แล้ว (เหมือน cron.ts ที่หักคะแนน PM/ใบงานเป็นขั้นแยกต่างหาก)
-  if (result.ok) await recordStickerEvents(orgId, stickerChanges);
+  if (result.ok) {
+    await recordStickerEvents(orgId, stickerChanges);
+    await recordStickerUndoEvents(orgId, removedReactions, userId);
+  }
 
   return result;
 }
