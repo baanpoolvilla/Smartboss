@@ -1468,6 +1468,31 @@ export async function updateSiteAction(formData: FormData) {
   revalidatePath("/hr/settings/attendance");
 }
 
+/**
+ * คำขอแก้เวลาต้องมีผู้อนุมัติกี่คน — 1 คนจบในครั้งเดียว, 2 คนต้องเป็นคนละคน
+ *
+ * เดิมบังคับ 2 คนตายตัว บริษัทที่มีหัวหน้าคนเดียวจึงมีคำขอค้างตลอดไป
+ */
+export async function setCorrectionApprovalsAction(formData: FormData) {
+  await guard(HR_PERMS.settingManage);
+
+  const companyId = String(formData.get("company_id") ?? "");
+  const approvals = Number(formData.get("approvals"));
+  if (!companyId) throw new Error("ยังไม่มีบริษัทในระบบ workforce");
+  if (approvals !== 1 && approvals !== 2) throw new Error("เลือกได้เฉพาะ 1 หรือ 2 คน");
+
+  try {
+    await wfFetch(`/companies/${companyId}`, {
+      method: "PATCH",
+      body: { attendance_correction_approvals: approvals },
+    });
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+  revalidatePath("/hr/settings/attendance");
+  revalidatePath("/hr");
+}
+
 /* ═══════════════ นโยบายลงเวลาด้วยมือถือ ═══════════════ */
 
 /** checkbox ที่ไม่ถูกติ๊กจะไม่อยู่ใน FormData เลย ⇒ ไม่มีค่า = false */

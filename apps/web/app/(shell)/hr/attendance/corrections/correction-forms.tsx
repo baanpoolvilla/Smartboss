@@ -187,8 +187,13 @@ export function CorrectionCard({ correction }: { correction: AttendanceCorrectio
 
       <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-0.5 text-xs text-(--ink-soft) sm:grid-cols-3">
         <div>ผู้ขอ: {correction.requested_by_name ?? "—"}</div>
-        <div>ผู้อนุมัติคนที่ 1: {correction.first_approved_by_name ?? "ยังไม่มี"}</div>
-        <div>ผู้อนุมัติคนที่ 2: {correction.second_approved_by_name ?? "ยังไม่มี"}</div>
+        <div>ผู้อนุมัติ: {correction.first_approved_by_name ?? "ยังไม่มี"}</div>
+        {/* บริษัทที่ตั้งผู้อนุมัติไว้คนเดียวไม่มีคนที่ 2 เลย — โชว์ "ยังไม่มี" ค้างไว้
+            ทำให้ดูเหมือนคำขอยังไม่เสร็จทั้งที่อนุมัติจบแล้ว */}
+        {(correction.second_approved_by_name !== null ||
+          correction.approval_stage === "AWAITING_SECOND_APPROVAL") && (
+          <div>ผู้อนุมัติคนที่ 2: {correction.second_approved_by_name ?? "ยังไม่มี"}</div>
+        )}
       </dl>
       {correction.status === "REJECTED" && correction.rejection_reason && (
         <p className="mt-2 text-xs text-(--tone-danger)">

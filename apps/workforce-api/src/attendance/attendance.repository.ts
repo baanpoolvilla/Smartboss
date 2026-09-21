@@ -508,6 +508,16 @@ export class AttendanceRepository {
     return rows[0] as typeof schema.timeEventAdjustments.$inferSelect;
   }
 
+  /** คำขอแก้เวลาของบริษัทนี้ต้องมีผู้อนุมัติกี่คน (ตั้งรายนิติบุคคล, ดู migration 0015) */
+  async findCorrectionApprovalsRequired(tx: Tx, companyId: string): Promise<number> {
+    const rows = await tx
+      .select({ required: schema.companies.attendanceCorrectionApprovals })
+      .from(schema.companies)
+      .where(eq(schema.companies.id, companyId))
+      .limit(1);
+    return rows[0]?.required ?? 1;
+  }
+
   /**
    * รายการคำขอแก้ไขเวลา พร้อมชื่อพนักงานเจ้าของเวลา (join employments+people)
    *

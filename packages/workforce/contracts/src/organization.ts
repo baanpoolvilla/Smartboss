@@ -27,6 +27,11 @@ export const createCompanySchema = z.object({
   tax_id: z.string().trim().min(1).max(32).optional(),
   time_zone: timeZoneSchema.default('Asia/Bangkok'),
   currency: currencySchema.default('THB'),
+  /**
+   * คำขอแก้เวลาต้องมีผู้อนุมัติกี่คนถึงจะมีผลจริง
+   * 1 = อนุมัติคนเดียวจบ · 2 = maker-checker ต้องเป็นคนละคนและต่างจากผู้ขอ
+   */
+  attendance_correction_approvals: z.number().int().min(1).max(2).default(1),
 });
 
 export const updateCompanySchema = createCompanySchema
@@ -45,6 +50,7 @@ export const companySchema = z
     time_zone: z.string(),
     currency: z.string(),
     status: statusSchema,
+    attendance_correction_approvals: z.number().int().min(1).max(2),
   })
   .merge(auditFieldsSchema);
 

@@ -27,10 +27,11 @@ export async function renderCorrectionsTab(): Promise<React.ReactNode> {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="flex items-center gap-1.5 text-sm font-medium text-(--ink-soft)">
           ตรวจสอบและอนุมัติเวลาที่พนักงานขอแก้ไข
-          <HelpPopover label="ทำไมต้องอนุมัติสองคน">
-            การแก้เวลาลงงานกระทบเงินเดือนโดยตรง — ต้องมีผู้จัดการขึ้นไป{" "}
-            <strong>สองคนที่ไม่ซ้ำกัน</strong> กดอนุมัติ (คนที่ 2 ต้องต่างจากทั้งคนที่ 1
-            และคนที่ขอ) อนุมัติคนแรกยังไม่มีผลทันที และปฏิเสธได้ตลอดจนกว่าจะอนุมัติครบสองคน
+          <HelpPopover label="ใครอนุมัติได้บ้าง">
+            การแก้เวลาลงงานกระทบเงินเดือนโดยตรง — <strong>ผู้อนุมัติต้องไม่ใช่คนที่ขอ</strong>{" "}
+            เสมอ · จำนวนผู้อนุมัติที่ต้องมีตั้งได้ที่ ตั้งค่า → การลงเวลา (ค่าเริ่มต้น 1 คน
+            อนุมัติแล้วมีผลทันที) ถ้าตั้งไว้ 2 คน คนที่ 2 ต้องต่างจากคนแรก และอนุมัติคนแรก
+            ยังไม่มีผลจนกว่าจะครบ · ปฏิเสธได้ตลอดจนกว่าจะอนุมัติครบ
           </HelpPopover>
         </h2>
         <NewCorrectionButton employees={activeEmployees} />

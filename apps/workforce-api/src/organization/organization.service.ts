@@ -49,6 +49,7 @@ export class OrganizationService {
         taxIdEncrypted: input.tax_id === undefined ? null : this.encryption.encrypt(input.tax_id),
         timeZone: input.time_zone,
         currency: input.currency,
+        attendanceCorrectionApprovals: input.attendance_correction_approvals,
       });
 
       await uow.audit({
@@ -110,6 +111,9 @@ export class OrganizationService {
       if (input.currency !== undefined) patch.currency = input.currency;
       if (input.status !== undefined) patch.status = input.status;
       if (input.tax_id !== undefined) patch.taxIdEncrypted = this.encryption.encrypt(input.tax_id);
+      if (input.attendance_correction_approvals !== undefined) {
+        patch.attendanceCorrectionApprovals = input.attendance_correction_approvals;
+      }
 
       if (Object.keys(patch).length === 0) return toCompany(before);
 
@@ -347,6 +351,7 @@ function toCompany(row: CompanyRow): Company {
     time_zone: row.timeZone,
     currency: row.currency,
     status: row.status as Company['status'],
+    attendance_correction_approvals: row.attendanceCorrectionApprovals,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
     version: row.version,
@@ -361,6 +366,7 @@ function toCompanyAudit(row: CompanyRow): Record<string, unknown> {
     time_zone: row.timeZone,
     currency: row.currency,
     status: row.status,
+    attendance_correction_approvals: row.attendanceCorrectionApprovals,
     // ชื่อ field ลงท้าย tax_id → redactSensitive จะปิดค่าให้เอง
     tax_id_present: row.taxIdEncrypted !== null,
   };

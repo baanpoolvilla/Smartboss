@@ -1,3 +1,4 @@
+import { Button } from "@smartboss/ui/components/button";
 import { HrPage } from "@/modules/hr/components/hr-page";
 import { SettingsSubnav } from "@/modules/hr/components/design-kit";
 import { HR_PERMS } from "@/modules/hr/permissions";
@@ -14,11 +15,14 @@ import {
 import {
   DataTable,
   EmptyState,
+  Field,
   NotProvisioned,
   Pill,
   SectionCard,
   Td,
+  inputClass,
 } from "@/modules/hr/components/ui";
+import { setCorrectionApprovalsAction } from "../../actions";
 import { SiteCreateForm, SiteEditCard } from "./site-forms";
 import { AssignPanel, CreatePolicyForm } from "./policy-forms";
 
@@ -96,6 +100,8 @@ export default async function AttendanceSettingsPage() {
           memberCountByGroup.set(e.groupId, (memberCountByGroup.get(e.groupId) ?? 0) + 1);
         }
 
+        const company = companies?.items[0];
+        const correctionApprovals = company?.attendance_correction_approvals ?? 1;
         const siteList = sites.items;
         const noSiteWithPin =
           siteList.filter((s) => s.latitude !== null && s.longitude !== null).length === 0;
@@ -307,6 +313,38 @@ export default async function AttendanceSettingsPage() {
                 )}
               </div>
             </div>
+
+            {company && (
+              <div>
+                <h2 className="mb-3 text-sm font-bold text-(--ink)">คำขอแก้เวลา</h2>
+                <SectionCard
+                  title="ต้องมีผู้อนุมัติกี่คน"
+                  description="คำขอแก้เวลาเข้า-ออกงานกระทบเงินเดือนโดยตรง — เลือกได้ว่าให้คนเดียวจบ หรือต้องมีคนตรวจซ้ำ"
+                >
+                  <form
+                    action={setCorrectionApprovalsAction}
+                    className="flex flex-wrap items-end gap-3"
+                  >
+                    <input type="hidden" name="company_id" value={company.id} />
+                    <Field label="จำนวนผู้อนุมัติ">
+                      <select
+                        name="approvals"
+                        defaultValue={String(correctionApprovals)}
+                        className={inputClass}
+                      >
+                        <option value="1">1 คน — อนุมัติแล้วมีผลทันที</option>
+                        <option value="2">2 คน — ต้องเป็นคนละคนกัน</option>
+                      </select>
+                    </Field>
+                    <Button type="submit">บันทึก</Button>
+                  </form>
+                  <p className="mt-2 text-xs text-(--ink-soft)">
+                    ผู้อนุมัติต้องไม่ใช่ผู้ขอเสมอ ไม่ว่าจะตั้งไว้กี่คน ·
+                    ตั้ง 2 คนแล้วคนที่ 2 ต้องต่างจากคนแรกด้วย
+                  </p>
+                </SectionCard>
+              </div>
+            )}
             </div>
           </div>
         );

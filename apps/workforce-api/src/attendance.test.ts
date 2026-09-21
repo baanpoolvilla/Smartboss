@@ -594,6 +594,96 @@ describe('roster board', () => {
 });
 
 describe('corrections', () => {
+  /** จำนวนผู้อนุมัติที่บริษัทนี้ต้องมี — ตั้งรายนิติบุคคล (migration 0015) */
+  async function setApprovalsRequired(count: number): Promise<void> {
+    const response = await call(harness, 'PATCH', `/companies/${tenant.companyId}`, {
+      token: adminToken,
+      payload: { attendance_correction_approvals: count },
+    });
+    expect(response.status).toBe(200);
+  }
+
+  // เทสต์ชุดนี้เขียนไว้ตอนกติกาเป็น 2 คนตายตัว — ตั้งให้ตรงกันก่อน
+  // แล้วคืนเป็นค่าเริ่มต้น (1 คน) ตอนจบ เพื่อไม่ให้ไหลไป describe อื่น
+  beforeAll(async () => {
+    await setApprovalsRequired(2);
+  });
+
+  afterAll(async () => {
+    await setApprovalsRequired(1);
+  });
+
+  it('อนุมัติคนเดียวจบ เมื่อบริษัทตั้งผู้อนุมัติไว้ 1 คน', async () => {
+    await setApprovalsRequired(1);
+    try {
+      const employmentId = await createEmployment('อนุมัติคนเดียว');
+      await assignPattern(employmentId, dayShiftId);
+      await addEvent(employmentId, '2026-08-03T01:00:00Z', 'CLOCK_IN');
+
+      const before = await recalculate(employmentId, '2026-08-03');
+      expect(before['has_blocking_exception']).toBe(true);
+
+      const request = await call(harness, 'POST', '/attendance-correction-requests', {
+        token: supervisorToken,
+        idempotencyKey: uuidv4(),
+        payload: {
+          employment_id: employmentId,
+          work_date: '2026-08-03',
+          adjustment_type: 'ADD_PUNCH',
+          punch_at: '2026-08-03T10:00:00Z',
+          event_intent: 'CLOCK_OUT',
+          reason: 'ลืมสแกนออก หัวหน้ายืนยันแล้ว',
+        },
+      });
+      expect(request.status).toBe(201);
+
+      const approve = await call(
+        harness,
+        'POST',
+        `/attendance-correction-requests/${request.body['id'] as string}/approve`,
+        { token: hrToken, idempotencyKey: uuidv4(), payload: { reason: 'ตรวจแล้วถูกต้อง' } },
+      );
+      expect(approve.status).toBe(200);
+      expect(approve.body['status']).toBe('APPROVED');
+      expect(approve.body['approval_stage']).toBe('APPROVED');
+
+      // มีผลกับผลลงเวลาทันที ไม่ต้องรอใครอีกคน
+      const after = await recalculate(employmentId, '2026-08-03');
+      expect(after['worked_minutes']).toBe(480);
+      expect(after['has_blocking_exception']).toBe(false);
+    } finally {
+      await setApprovalsRequired(2);
+    }
+  });
+
+  it('ผู้ขอกดอนุมัติเองไม่ได้ แม้บริษัทตั้งไว้คนเดียว', async () => {
+    await setApprovalsRequired(1);
+    try {
+      const employmentId = await createEmployment('ขอเองอนุมัติเอง');
+      const request = await call(harness, 'POST', '/attendance-correction-requests', {
+        token: supervisorToken,
+        idempotencyKey: uuidv4(),
+        payload: {
+          employment_id: employmentId,
+          work_date: '2026-08-03',
+          adjustment_type: 'ADD_PUNCH',
+          punch_at: '2026-08-03T01:00:00Z',
+          event_intent: 'CLOCK_IN',
+          reason: 'ขอเพิ่มเวลาเข้างาน',
+        },
+      });
+
+      const selfApprove = await call(
+        harness,
+        'POST',
+        `/attendance-correction-requests/${request.body['id'] as string}/approve`,
+        { token: supervisorToken, idempotencyKey: uuidv4(), payload: { reason: 'อนุมัติเอง' } },
+      );
+      expect(selfApprove.status).toBe(403);
+    } finally {
+      await setApprovalsRequired(2);
+    }
+  });
   it('creates a new result version instead of editing the raw event', async () => {
     const employmentId = await createEmployment('แก้เวลา');
     await assignPattern(employmentId, dayShiftId);

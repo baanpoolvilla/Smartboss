@@ -895,18 +895,19 @@ export class AttendanceService {
   }
 
   /**
-   * อนุมัติคำขอแก้เวลา — ต้องมีผู้จัดการขึ้นไป **สองคนที่ไม่ซ้ำกัน** กดยืนยัน
-   * ก่อนถึงจะมีผลจริง (เพิ่มจากเดิมที่อนุมัติครั้งเดียวจบ ตามที่เจ้าของระบบสั่ง
-   * 2026-09-10 — การแก้เวลาทำงานกระทบเงินเดือนโดยตรง คนเดียวอนุมัติเองไม่พอ)
+   * อนุมัติคำขอแก้เวลา — จำนวนผู้อนุมัติที่ต้องมี **ตั้งรายนิติบุคคล**
+   * (companies.attendance_correction_approvals ค่าเริ่มต้น 1 คน)
    *
-   * endpoint เดียวกันถูกเรียกสองครั้งโดยคนละคน:
-   *   ครั้งที่ 1 (adjustment.approvedBy ยังว่าง) — บันทึกว่าใครเป็นคนที่ 1
-   *     สถานะยังคง PENDING และ**ยังไม่คำนวณผลลงเวลาใหม่** เพราะยังไม่ครบเงื่อนไข
-   *   ครั้งที่ 2 (approvedBy มีค่าแล้ว) — ผู้กดต้องไม่ใช่คนที่ 1 และไม่ใช่ผู้ขอ
-   *     ถึงจะเปลี่ยนเป็น APPROVED แล้วคำนวณผลลงเวลาใหม่จริง
+   *   ตั้งไว้ 1 คน — คนแรกที่กดอนุมัติจบเลย คำนวณผลลงเวลาใหม่ทันที
+   *   ตั้งไว้ 2 คน — endpoint เดียวกันถูกเรียกสองครั้งโดยคนละคน:
+   *     ครั้งที่ 1 บันทึกว่าใครเป็นคนที่ 1 สถานะยังคง PENDING และ**ยังไม่คำนวณใหม่**
+   *     ครั้งที่ 2 ผู้กดต้องไม่ใช่คนที่ 1 ถึงจะ APPROVED แล้วคำนวณผลลงเวลาใหม่จริง
    *
-   * ผู้อนุมัติต้องไม่ใช่ผู้ขอทั้งสองรอบ — การแก้เวลาของตัวเองแล้วอนุมัติเอง
-   * ทำให้ระบบไม่มีความหมาย (spec §5, §10.2 maker-checker)
+   * เดิมบังคับ 2 คนตายตัวในโค้ด (2026-09-10) — บริษัทที่มีหัวหน้าคนเดียวจึงมี
+   * คำขอค้างที่ "รอคนที่ 2" ตลอดไป ⇒ ย้ายมาเป็นค่าตั้งของบริษัท 2026-09-21
+   *
+   * ผู้อนุมัติต้องไม่ใช่ผู้ขอเสมอ ไม่ว่าจะตั้งไว้กี่คน — การแก้เวลาของตัวเองแล้ว
+   * อนุมัติเองทำให้ระบบไม่มีความหมาย (spec §5, §10.2 maker-checker)
    */
   async approveAdjustment(
     adjustmentId: string,
@@ -926,6 +927,46 @@ export class AttendanceService {
       const approverId = this.requestContext.requirePrincipal().principalId;
       if (adjustment.requestedBy === approverId) {
         throw AppError.forbidden('the approver must be different from the requester');
+      }
+
+      const approvalsRequired = await this.repository.findCorrectionApprovalsRequired(
+        uow.tx,
+        adjustment.companyId,
+      );
+
+      if (adjustment.approvedBy === null && approvalsRequired <= 1) {
+        // ── บริษัทนี้ตั้งไว้คนเดียว — จบในครั้งเดียว ──
+        await this.repository.updateAdjustment(uow.tx, adjustmentId, {
+          status: 'APPROVED',
+          approvedBy: approverId,
+          approvedAt: this.clock.now(),
+        });
+
+        await uow.audit({
+          action: 'attendance.correction.approve',
+          resourceType: 'time_event_adjustment',
+          resourceId: adjustmentId,
+          outcome: 'SUCCESS',
+          companyId: adjustment.companyId,
+          reason: input.reason,
+          metadata: { stage: 'ONLY', approvals_required: approvalsRequired },
+          before: { status: 'PENDING', approved_by: null },
+          after: { status: 'APPROVED', approved_by: approverId },
+        });
+
+        const recalculated = await this.recalculateWithin(
+          uow,
+          adjustment.employmentId,
+          adjustment.workDate,
+          'CORRECTION_APPROVED',
+        );
+
+        return {
+          id: adjustmentId,
+          status: 'APPROVED',
+          approval_stage: 'APPROVED',
+          result: recalculated,
+        };
       }
 
       if (adjustment.approvedBy === null) {

@@ -60,6 +60,10 @@ export const companies = workforce.table(
     timeZone: text('time_zone').notNull().default('Asia/Bangkok'),
     currency: char('currency', { length: 3 }).notNull().default('THB'),
     status: text('status').notNull().default('ACTIVE'),
+    /** คำขอแก้เวลาต้องมีผู้อนุมัติกี่คน (1 หรือ 2) — ดู migration 0015 */
+    attendanceCorrectionApprovals: integer('attendance_correction_approvals')
+      .notNull()
+      .default(1),
     ...auditColumns,
   },
   (table) => [index('companies_tenant_idx').on(table.tenantId)],

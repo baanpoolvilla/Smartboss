@@ -241,6 +241,8 @@ export interface Company {
   display_name: string;
   time_zone: string;
   currency: string;
+  /** คำขอแก้เวลาต้องมีผู้อนุมัติกี่คน (1 หรือ 2) */
+  attendance_correction_approvals: number;
 }
 
 /**
