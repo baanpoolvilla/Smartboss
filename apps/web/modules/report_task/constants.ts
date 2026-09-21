@@ -7,3 +7,6 @@
 export const REPORT_TASK_CODE = "report_task";
 
 export const REPORT_TASK_BASE = "/report-task";
+
+/** "แจ้งบัค" ของ user ทั่วไป — โมดูลของตัวเอง แยกจาก REPORT_TASK_BASE */
+export const ISSUE_REPORTS_BASE = "/issue-reports";

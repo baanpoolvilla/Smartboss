@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Bug, type LucideIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { MODULE_CARDS } from "@/lib/modules";
 import { iconByName } from "@/lib/icons";
 import { loadShellNav } from "@/lib/nav";
@@ -54,6 +54,10 @@ export default async function HomePage() {
   // โมดูลที่ติดตั้งเพิ่มภายหลัง (ไม่อยู่ใน 6 การ์ด) — ดึงหน้าตาจาก manifest
   for (const m of nav.modules) {
     if (tiles.some((t) => t.code === m.id)) continue;
+    // "แจ้งบัค" ของ user ทั่วไป (issueReportSelfManifest) — Super Admin มี tile
+    // "แจ้งบัค" ของตัวเองอยู่แล้ว (admin_issue_report ที่มีเมนู "ตั๋วของฉัน")
+    // ไม่โชว์ซ้ำสองอัน
+    if (m.id === "issue_report_self" && visible.has("admin_issue_report")) continue;
     tiles.push({
       code: m.id,
       name: m.name,
@@ -62,24 +66,6 @@ export default async function HomePage() {
       color: m.color,
       colorBg: m.colorBg,
       href: m.basePath,
-    });
-  }
-
-  // "แจ้งบัค" ของลูกค้าทั่วไป — ต่างจาก tile ข้างบน (adminIssueReportManifest)
-  // ที่มีเฉพาะทีม Smartboss/Super Admin เห็น (พาไปคอนโซลรับเรื่องข้ามบริษัท)
-  // อันนี้พาไปหน้ารายการของตัวเอง (/report-task/issue-reports) เห็นแค่ตั๋วที่
-  // ตัวเองแจ้งไว้เท่านั้น (canSeeIssue กรองให้อยู่แล้ว) — ไม่โชว์ซ้ำให้ Super
-  // Admin ที่มี tile ของตัวเองอยู่แล้วด้านบน ("ให้ user ทั่วไปกดได้แต่เห็นแค่
-  // ข้อมูลของฉันและตั๋วของฉันเองที่แจ้งบัคไป")
-  if (visible.has("report_task") && !visible.has("admin_issue_report")) {
-    tiles.push({
-      code: "issue_report_self",
-      name: "แจ้งบัค",
-      description: "แจ้งปัญหา + ดูตั๋วที่คุณเคยแจ้งไว้",
-      icon: Bug,
-      color: "#dc2626",
-      colorBg: "#fef2f2",
-      href: "/report-task/issue-reports",
     });
   }
 

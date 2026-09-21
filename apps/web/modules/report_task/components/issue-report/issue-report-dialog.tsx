@@ -142,7 +142,7 @@ export function IssueReportDialog({
       void notifyNewIssueTicket(ticket.id, ticket.title, ticket.description);
       reset();
       onOpenChange(false);
-      router.push(`/report-task/issue-reports/${ticket.id}`);
+      router.push(`/issue-reports/${ticket.id}`);
     } finally {
       setSubmitting(false);
     }
@@ -282,7 +282,7 @@ export function IssueReportDialog({
               back to what you've already reported — asked for explicitly
               ("มีลิงก์ดูเรื่องที่แจ้งไว้ในกล่องแจ้งปัญหา"). */}
           <Link
-            href="/report-task/issue-reports"
+            href="/issue-reports"
             onClick={() => requestClose(false)}
             className="text-xs font-medium text-[var(--brand-green-dark)] hover:underline self-center"
           >

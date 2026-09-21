@@ -10,7 +10,6 @@ import {
   MessageCircle,
   Settings2,
 } from "lucide-react";
-import { StickyFilterBar } from "@/modules/report_task/components/shared/sticky-filter-bar";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Badge } from "@/modules/report_task/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
@@ -146,7 +145,7 @@ export default function IssueReportsPage() {
   }, [visibleTickets]);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-[860px] flex-col gap-5 py-2">
       {/* Read-only company-wide oversight note — makes it obvious this list
           isn't just "your own reports" for whoever has it (CEO/owner, or
           whoever they delegated the issueDesk section to). */}
@@ -156,9 +155,14 @@ export default function IssueReportsPage() {
           คุณเห็นทุกเรื่องที่บริษัทนี้แจ้งไว้ (สิทธิ์ดูภาพรวม) — ตอบ/ปิดเรื่องยังต้องทำโดยทีม Smartboss
         </p>
       )}
-      <StickyFilterBar
-        actions={
-          <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-[var(--ink)]">ตั๋วของฉัน</h1>
+          <p className="mt-1 text-sm text-[var(--ink-soft)]">
+            {canOversee ? "ตั๋วที่บริษัทแจ้งไว้ — ติดตามสถานะได้จากที่นี่" : "ตั๋วที่คุณแจ้งไว้ — ตอบกลับและติดตามสถานะได้จากที่นี่"}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
             {canConfigure && (
               <Link
                 href="/settings?tab=issueDesk"
@@ -168,14 +172,15 @@ export default function IssueReportsPage() {
               </Link>
             )}
             <Button
-              className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+              className="h-11 rounded-full bg-[#dc2626] px-5 text-white hover:bg-[#b91c1c]"
               onClick={() => setNewOpen(true)}
             >
               <Send className="h-4 w-4" /> แจ้งปัญหาใหม่
             </Button>
-          </div>
-        }
-      >
+        </div>
+      </div>
+
+      <div>
         {/* A reporter with zero tickets has nothing to filter — showing 6
          * filter chips above an empty state reads as "the feature is
          * broken," not "you have nothing yet". Agents always see the
@@ -199,7 +204,7 @@ export default function IssueReportsPage() {
             </div>
           </div>
         )}
-      </StickyFilterBar>
+      </div>
 
       {isKnownIssuesBannerActive(config.knownIssuesBanner) && (
         <div className="flex items-start gap-2 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-[var(--chart-amber)]">
@@ -238,21 +243,21 @@ export default function IssueReportsPage() {
               </TableHeader>
               <TableBody>
                 {sorted.map((t) => (
-                  <TicketRow key={t.id} ticket={t} viewingAsUserId={viewingAsUserId} config={config} canOversee={canOversee} onClick={() => router.push(`/report-task/issue-reports/${t.id}`)} />
+                  <TicketRow key={t.id} ticket={t} viewingAsUserId={viewingAsUserId} config={config} canOversee={canOversee} onClick={() => router.push(`/issue-reports/${t.id}`)} />
                 ))}
               </TableBody>
             </Table>
           </div>
           <div className="md:hidden flex flex-col gap-2">
             {sorted.map((t) => (
-              <TicketCard key={t.id} ticket={t} viewingAsUserId={viewingAsUserId} config={config} canOversee={canOversee} onClick={() => router.push(`/report-task/issue-reports/${t.id}`)} />
+              <TicketCard key={t.id} ticket={t} viewingAsUserId={viewingAsUserId} config={config} canOversee={canOversee} onClick={() => router.push(`/issue-reports/${t.id}`)} />
             ))}
           </div>
         </>
       ) : (
         <div className="flex flex-col gap-2">
           {sorted.map((t) => (
-            <TicketCard key={t.id} ticket={t} viewingAsUserId={viewingAsUserId} config={config} canOversee={canOversee} onClick={() => router.push(`/report-task/issue-reports/${t.id}`)} />
+            <TicketCard key={t.id} ticket={t} viewingAsUserId={viewingAsUserId} config={config} canOversee={canOversee} onClick={() => router.push(`/issue-reports/${t.id}`)} />
           ))}
         </div>
       )}

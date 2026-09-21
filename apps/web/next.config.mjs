@@ -58,6 +58,10 @@ const nextConfig = {
   async redirects() {
     return [
       { source: "/report-feed", destination: "/report-task/report-feed", permanent: false },
+      // "แจ้งบัค" ของ user ย้ายออกจากรายงานและงานมาเป็นโมดูลของตัวเอง — แจ้งเตือน/
+      // ลิงก์เก่าที่ยังเก็บพาธเดิมไว้ให้ไปหน้าใหม่ (รวมหน้ารายละเอียดตั๋ว)
+      { source: "/report-task/issue-reports", destination: "/issue-reports", permanent: false },
+      { source: "/report-task/issue-reports/:id", destination: "/issue-reports/:id", permanent: false },
     ];
   },
 };

@@ -9,6 +9,7 @@ import { exampleManifest } from "@/modules/example/manifest";
 import { hrManifest } from "@/modules/hr/manifest";
 import { maintenanceManifest } from "@/modules/maintenance/manifest";
 import { reportTaskManifest } from "@/modules/report_task/manifest";
+import { issueReportSelfManifest } from "@/modules/report_task/issue-report-self-manifest";
 
 export interface ModuleMenuItem {
   label: string;
@@ -43,6 +44,11 @@ export interface ModuleManifest {
    * ใช้กับหลังบ้าน /admin ที่ทุกบริษัทต้องมี — การมองเห็นยังคุมด้วย permission ตามปกติ
    */
   alwaysOn?: boolean;
+  /**
+   * โมดูลย่อยที่ไม่มีแถว Module ของตัวเองใน DB — เปิดให้เห็นตามที่บริษัทเปิดใช้
+   * โมดูลอื่น (code นี้) แทน เช่น "แจ้งบัค" ของ user ทั่วไปผูกกับ report_task
+   */
+  requiresModule?: string;
 }
 
 /**
@@ -61,6 +67,8 @@ export const moduleRegistry: ModuleManifest[] = [
   hrManifest,
   // พอร์ตมาจากแอป easyboss-workspace ที่เคยรันเดี่ยว ๆ
   reportTaskManifest,
+  // "แจ้งบัค" ของ user ทั่วไป — โมดูลของตัวเอง เมนูเดียว "ตั๋วของฉัน" (ไม่ปนรายงานและงาน)
+  issueReportSelfManifest,
   // MVP แชทองค์กร — ปิดใช้งานทุกบริษัทโดยดีฟอลต์ เปิดทีละบริษัทได้ที่ /admin/modules
   chatManifest,
   // ที่เก็บไฟล์กลางแบบ SharePoint/Teams Files — ปิดใช้งานทุกบริษัทโดยดีฟอลต์เหมือนแชท
@@ -88,7 +96,7 @@ export function getVisibleModules({
   const enabled = new Set(enabledCodes);
 
   return moduleRegistry
-    .filter((m) => m.alwaysOn || enabled.has(m.id))
+    .filter((m) => m.alwaysOn || enabled.has(m.requiresModule ?? m.id))
     .map((m) => ({
       ...m,
       // ใช้ตัวตัดสินเดียวกับฝั่ง server (packages/auth/permissions.ts) เพื่อไม่ให้

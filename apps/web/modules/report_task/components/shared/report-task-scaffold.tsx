@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 import { AppScaffold } from "@/components/module/app-scaffold";
 
-import { REPORT_TASK_BASE } from "../../constants";
+import { ISSUE_REPORTS_BASE, REPORT_TASK_BASE } from "../../constants";
 import { reportTaskManifest } from "../../manifest";
 import { useEmployeeStore } from "../../store/employee-store";
 import { useIdentityStore } from "../../store/identity-store";
@@ -72,13 +72,11 @@ export function ReportTaskScaffold({
     .filter((m) => pathname === m.path || pathname.startsWith(`${m.path}/`))
     .sort((a, b) => b.path.length - a.path.length)[0];
 
-  // "แจ้งบัค" (/report-task/issue-reports) ตั้งใจไม่อยู่ใน navItems เลย (ดู
-  // lib/nav-config.ts) — ไม่มีเมนูของตัวเองในแถบข้าง เข้าได้แค่ทางไอคอนแมลงบน
-  // AppBar เท่านั้น ("ให้เห็นแค่ปุ่มขวาบนอันเดียว") แต่พอไม่มีเมนูให้ match,
-  // path ที่เหลือตัวเดียวที่ยังเป็นคำนำหน้าของมันคือ "แดชบอร์ด" (path =
-  // REPORT_TASK_BASE เฉยๆ) ทำให้ AppBar ขึ้นหัวข้อผิด ("แดชบอร์ด" แทนที่จะ
-  // เป็นชื่อของหน้านี้เอง) เช็คแยกไว้ตรงนี้แทน ไม่ผูกกับระบบเมนู/sidebar เลย
-  const isIssueReports = pathname.startsWith(`${REPORT_TASK_BASE}/issue-reports`);
+  // "แจ้งบัค" (/issue-reports) เป็นโมดูลของตัวเอง (issue-report-self-manifest.ts)
+  // ไม่ใช่เมนูของรายงานและงาน แต่ใช้ scaffold นี้ห่อ (ข้อมูลตั๋วอยู่ใน store
+  // ของ report_task) จึงไม่มีเมนูของ reportTaskManifest ให้ match — ตั้งชื่อ
+  // หัวหน้าจอแยกไว้ตรงนี้ ไม่งั้นจะตกไปใช้ชื่อ "รายงานและงาน"
+  const isIssueReports = pathname.startsWith(ISSUE_REPORTS_BASE);
 
   const title = isIssueReports ? "แจ้งบัค" : (match?.label ?? reportTaskManifest.name);
 

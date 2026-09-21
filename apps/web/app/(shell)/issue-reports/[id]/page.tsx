@@ -88,7 +88,7 @@ export default function IssueTicketDetailPage() {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
         <p className="text-sm text-[var(--ink-soft)]">ไม่พบตั๋วนี้ — อาจถูกลบหรือลิงก์ไม่ถูกต้อง</p>
-        <Button variant="outline" onClick={() => router.push("/report-task/issue-reports")}>
+        <Button variant="outline" onClick={() => router.push("/issue-reports")}>
           <ArrowLeft className="h-4 w-4" /> กลับไปหน้ารายการ
         </Button>
       </div>
@@ -99,7 +99,7 @@ export default function IssueTicketDetailPage() {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
         <p className="text-sm text-[var(--ink-soft)]">คุณไม่มีสิทธิ์ดูตั๋วนี้</p>
-        <Button variant="outline" onClick={() => router.push("/report-task/issue-reports")}>
+        <Button variant="outline" onClick={() => router.push("/issue-reports")}>
           <ArrowLeft className="h-4 w-4" /> กลับไปหน้ารายการ
         </Button>
       </div>
@@ -107,16 +107,16 @@ export default function IssueTicketDetailPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4 pt-4 lg:pt-6">
+    <div className="mx-auto flex w-full max-w-[1000px] flex-col gap-4 pt-2">
       <button
-        onClick={() => router.push("/report-task/issue-reports")}
+        onClick={() => router.push("/issue-reports")}
         className="inline-flex items-center gap-1 text-xs text-[var(--ink-soft)] hover:text-[var(--ink)] self-start"
       >
         <ArrowLeft className="h-3.5 w-3.5" /> กลับไปหน้ารายการ
       </button>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
-        <div className="rounded-2xl border border-[var(--line)] bg-white flex flex-col min-h-[70vh]">
+        <div className="rounded-2xl border border-[var(--line)] bg-white flex flex-col min-h-[420px]">
           <TicketThreadHeader ticket={ticket} isDeskView={isDeskView} tab={tab} setTab={setTab} />
           <TicketTimeline messages={visibleMessages} tab={tab} />
           {ticket.status === "pending_verify" && canConfirmResolution(ticket, config, viewingAsUserId) && (
@@ -542,7 +542,7 @@ function TicketSidePanel({
         {ticket.duplicateOfId && (
           <div className="flex items-center gap-1 text-[var(--brand-green-dark)]">
             <ExternalLink className="h-3 w-3" />
-            <a href={`/report-task/issue-reports/${ticket.duplicateOfId}`} className="hover:underline">
+            <a href={`/issue-reports/${ticket.duplicateOfId}`} className="hover:underline">
               ซ้ำกับ {allTickets.find((t) => t.id === ticket.duplicateOfId)?.code ?? "-"}
             </a>
           </div>

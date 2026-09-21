@@ -77,7 +77,7 @@ export function IssueReportBarButton() {
 
   // Hidden on the ticket list/detail pages themselves — those already have
   // their own "แจ้งปัญหาใหม่" entry point in context.
-  if (pathname.startsWith("/report-task/issue-reports")) return null;
+  if (pathname.startsWith("/issue-reports")) return null;
 
   return (
     <>
