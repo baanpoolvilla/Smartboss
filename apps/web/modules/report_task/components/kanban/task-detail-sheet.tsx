@@ -121,11 +121,11 @@ function renderMentions(text: string) {
 /** ข้อความของรายการเช็คลิสต์ — ยาวเกินก็ตัดเหลือ 2 บรรทัด มีปุ่ม "ดูเพิ่มเติม" กางอ่านเต็ม ๆ ได้ (ไม่ใช้การวัดขนาดจริง
  * จึงประมาณจากจำนวนตัวอักษร/บรรทัด กันโค้ดซับซ้อนและไม่กระพริบตอนโหลด) */
 const CHECKLIST_LONG_CHARS = 90;
-function ChecklistItemText({ text, done }: { text: string; done: boolean }) {
+function ChecklistItemText({ text, done, alignRight = false }: { text: string; done: boolean; alignRight?: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const long = text.length > CHECKLIST_LONG_CHARS || text.split("\n").length > 2;
   return (
-    <span className="min-w-0 flex-1">
+    <span className={cn("min-w-0 flex-1", alignRight && "text-right")}>
       <span
         className={cn(
           "block whitespace-pre-wrap break-words text-sm",
@@ -1306,7 +1306,8 @@ export function TaskDetailSheet({
               const checklistOwnerIds = isShared ? task.assigneeIds : [task.assigneeIds[0]!];
               const renderItem = (c: (typeof task.checklist)[number], showOwner = false) => {
                 const canToggle = canToggleOwnChecklistItem(c, viewingAsUserId);
-                const ownerName = c.ownerId ? (getUser(c.ownerId)?.name ?? c.ownerId) : "";
+                // รายการเก่าที่ไม่มีเจ้าของ = ของผู้รับผิดชอบคนแรก (งานเดี่ยวมีคนเดียวอยู่แล้ว)
+                const ownerName = c.ownerId ? (getUser(c.ownerId)?.name ?? c.ownerId) : (getUser(task.assigneeIds[0] ?? "")?.name ?? "");
                 return (
                   <div key={c.id} className="flex items-start gap-2 group rounded-md px-1 py-0.5 hover:bg-[var(--bg-soft)]">
                     <button
@@ -1322,7 +1323,7 @@ export function TaskDetailSheet({
                     >
                       {c.done && <Check className="h-3 w-3 text-white" />}
                     </button>
-                    {showOwner && (
+                    {showOwner && ownerName && (
                       <span
                         className="mt-0.5 max-w-[8rem] shrink-0 truncate rounded-full bg-[var(--bg-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--ink-soft)]"
                         title={ownerName}
@@ -1330,7 +1331,7 @@ export function TaskDetailSheet({
                         {ownerName}
                       </span>
                     )}
-                    <ChecklistItemText text={c.text} done={c.done} />
+                    <ChecklistItemText text={c.text} done={c.done} alignRight={showOwner && !!ownerName} />
                     {canEditMain && (
                       <button
                         onClick={() => removeChecklistItem(task.id, c.id)}
@@ -1345,26 +1346,31 @@ export function TaskDetailSheet({
               };
 
               if (!isShared) {
-                return task.checklist.map((c) => renderItem(c));
+                // งานเดี่ยวหน้าตาเดียวกับงานกลุ่ม (ชื่อเจ้าของนำหน้า ข้อความชิดขวา) จะได้ไม่สับสน
+              return task.checklist.map((c) => renderItem(c, true));
               }
-              // งานกลุ่ม: รายการเดียวต่อกัน — ชื่อเจ้าของนำหน้าแล้วตามด้วยงาน (แทนหัวข้อแยกทีละคน กินที่น้อยกว่า)
-              // มีบรรทัดสรุปความคืบหน้ารายคนอยู่ด้านบน
-              const allItems = checklistOwnerIds.flatMap((ownerId) => task.checklist.filter((c) => c.ownerId === ownerId));
+              // งานกลุ่ม: แถวละรายการ [ติ๊ก] [ชื่อเจ้าของ] ข้อความงาน — จัดเป็นกลุ่มทีละคน มีเส้นบาง ๆ คั่นระหว่างคน
+              // (ไม่มีหัวข้อแยก) คนที่ยังไม่มีรายการขึ้นบรรทัด "ยังไม่มีรายการ" ให้รู้ว่าเป็นของใคร
               return (
-                <div className="space-y-1">
-                  <p className="flex flex-wrap gap-x-3 gap-y-0.5 px-1 text-[11px] text-[var(--ink-soft)]">
-                    {checklistOwnerIds.map((ownerId) => {
-                      const items = task.checklist.filter((c) => c.ownerId === ownerId);
-                      return (
-                        <span key={ownerId}>
-                          {getUser(ownerId)?.name ?? ownerId}{" "}
-                          {items.length > 0 ? `${items.filter((c) => c.done).length}/${items.length}` : "ยังไม่มีรายการ"}
-                        </span>
-                      );
-                    })}
-                  </p>
-                  {allItems.length === 0 && <p className="px-1 text-xs text-[var(--ink-soft)]">ยังไม่มีรายการ</p>}
-                  {allItems.map((c) => renderItem(c, true))}
+                <div className="divide-y divide-[var(--line)]">
+                  {checklistOwnerIds.map((ownerId) => {
+                    const items = task.checklist.filter((c) => c.ownerId === ownerId);
+                    const ownerName = getUser(ownerId)?.name ?? ownerId;
+                    return (
+                      <div key={ownerId} className="space-y-0.5 py-1.5 first:pt-0 last:pb-0">
+                        {items.length === 0 ? (
+                          <div className="flex items-center gap-2 px-1 pl-7">
+                            <span className="max-w-[8rem] shrink-0 truncate rounded-full bg-[var(--bg-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--ink-soft)]" title={ownerName}>
+                              {ownerName}
+                            </span>
+                            <span className="text-xs text-[var(--ink-soft)]">ยังไม่มีรายการ</span>
+                          </div>
+                        ) : (
+                          items.map((c) => renderItem(c, true))
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })()}
