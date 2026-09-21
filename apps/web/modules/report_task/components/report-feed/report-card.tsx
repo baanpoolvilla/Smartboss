@@ -43,7 +43,7 @@ import {
   type ReportTopic,
 } from "@/modules/report_task/store/report-feed-store";
 import { cutoffsOnDay, lateCutoffFor, minImagesNow, onTimeCutoffFor } from "@/modules/report_task/lib/report-cutoff";
-import { roundsForUserOnDay, attributePostToRound } from "@/modules/report_task/lib/submission-rounds";
+import { roundIgnoresDateExemptions, roundsForUserOnDay, attributePostToRound } from "@/modules/report_task/lib/submission-rounds";
 import { isExemptDate } from "@/modules/report_task/lib/report-feed-exemptions";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { localDateStr } from "@/modules/report_task/lib/now";
@@ -248,8 +248,22 @@ export function ReportCard({
   // round candidacy entirely — no ตรงเวลา/สาย badge, same as if it were
   // never posted for compliance purposes (see postsForDay in
   // report-feed-compliance.ts, the actual counting choke point this mirrors).
-  const roundCandidates =
-    post.excludeFromSubmission || postDayExempt ? [] : explicitRound.length > 0 ? explicitRound : postDayCutoffs;
+  // รอบรายสัปดาห์/รายเดือน "ไม่ยกเว้น" วันหยุด/ลา (roundIgnoresDateExemptions — product decision เดียวกับที่ตัว
+  // นับการส่งใน report-feed-compliance.ts ใช้: "ให้ส่งวันเดิมไม่ว่าคนนั้นจะหยุดแบบไหนก็ตาม") — คนที่หยุดวันนั้นแต่ส่ง
+  // รายงานรายสัปดาห์เข้ามา ต้องขึ้น "ตรงเวลา/ส่งเกินกำหนด · <ชื่อรอบ>" เหมือนวันปกติ ไม่ใช่ถูกมองว่าไม่ต้องส่ง
+  // (เดิมบัตรนี้ถือว่า "ยกเว้นทุกรอบ" พอผู้โพสต์หยุด ขัดกับหัวห้องที่ยังนับ "ต้องส่ง 1")
+  const roundsStillDue = postDayCutoffs.filter((r) => roundIgnoresDateExemptions(r));
+  const explicitDueRound = post.roundId ? roundsStillDue.filter((r) => r.id === post.roundId) : [];
+  const roundCandidates = post.excludeFromSubmission
+    ? []
+    : postDayExempt
+      ? // วันหยุด/ลา: ดูเฉพาะรอบที่ยังต้องส่งอยู่ (รายสัปดาห์/เดือน) — ถ้าโพสต์นี้ระบุรอบรายวันไว้ ไม่นับ
+        post.roundId
+        ? explicitDueRound
+        : roundsStillDue
+      : explicitRound.length > 0
+        ? explicitRound
+        : postDayCutoffs;
   // Judge this post against the round's time AS IT WAS when this post was
   // actually sent (roundTimeAtSubmission), not whatever the round's time
   // has since been edited to — otherwise moving a room's 09:00 round to a
@@ -1251,7 +1265,7 @@ export function ReportCard({
                   <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-[var(--bg-soft)] text-[var(--ink-soft)] border border-[var(--line)]">
                     ไม่นับเป็นการส่งรีพอต
                   </span>
-                ) : postDayExempt ? (
+                ) : postDayExempt && roundCandidates.length === 0 ? (
                   // Same "why no badge" answer, for the other reason one can
                   // be missing: the poster was off/on leave that day, so
                   // this post was never obligated in the first place —
