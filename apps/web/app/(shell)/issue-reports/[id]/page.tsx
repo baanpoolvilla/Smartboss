@@ -43,12 +43,13 @@ import {
   nextStatusOptions,
   reporterStatusGroup,
   reporterStatusGroupMeta,
+  ticketAcceptance,
 } from "@/modules/report_task/lib/issue-meta";
 import { POST_TRIAGE_STATUSES, type IssueAttachment, type IssueAudience, type IssueMessage, type IssuePriority, type IssueStatus, type IssueTicket } from "@/modules/report_task/types/issue";
 import { getUser, users } from "@/modules/report_task/lib/directory";
 import { relativeTime, formatDate } from "@/modules/report_task/lib/format";
 import { cn } from "@/modules/report_task/lib/utils";
-import { notifyIssueReplyFromReporter } from "@/modules/report_task/lib/issue-notify";
+import { markMyIssueTicketRead, notifyIssueReplyFromReporter } from "@/modules/report_task/lib/issue-notify";
 
 export default function IssueTicketDetailPage() {
   const params = useParams<{ id: string }>();
@@ -71,6 +72,12 @@ export default function IssueTicketDetailPage() {
   // comment on isIssueAgent in lib/permissions.ts.
   const isDeskView = false;
   const [tab, setTab] = useState<IssueAudience>("all");
+
+  // เปิดดูตั๋วนี้แล้ว — แจ้งเตือนของตั๋วนี้ที่ยังไม่อ่านถือว่าอ่านแล้ว (ตัวเลขแดงลดลงเอง)
+  const ticketId = ticket?.id;
+  useEffect(() => {
+    if (ticketId) void markMyIssueTicketRead(ticketId);
+  }, [ticketId]);
 
   const visibleMessages = useMemo(
     () => (ticket ? ticket.messages.filter((m) => m.audience === tab && canSeeIssueMessage(m, ticket, config, viewingAsUserId, canOversee)) : []),
@@ -361,6 +368,7 @@ function TicketSidePanel({
   const agentCandidates = users.filter((u) => isIssueAgent(config, u.id));
   const reporter = getUser(ticket.reporterId);
   const groupMeta = reporterStatusGroupMeta[reporterStatusGroup(ticket.status)];
+  const acceptance = ticketAcceptance(ticket);
 
   function handleStatusChange(status: IssueStatus) {
     if (status === "escalated" && !ticket.escalatedAt) {
@@ -445,6 +453,15 @@ function TicketSidePanel({
           </Badge>
         )}
         {isDeskView && <p className="text-[11px] text-[var(--ink-soft)] mt-1.5">รอมาแล้ว {formatWaitDuration(ticket.createdAt)}</p>}
+        {!isDeskView && (
+          <p className={cn("mt-2 flex items-center gap-1.5 text-xs font-medium", acceptance.accepted ? "text-teal-700" : "text-amber-700")}>
+            <span className={cn("h-1.5 w-1.5 rounded-full", acceptance.accepted ? "bg-teal-500" : "bg-amber-500")} />
+            {acceptance.label}
+            {acceptance.accepted && acceptance.at && (
+              <span className="font-normal text-[var(--ink-soft)]">· {relativeTime(acceptance.at)}</span>
+            )}
+          </p>
+        )}
         {canCloseOwn && !isDeskView && ticket.status !== "resolved" && (
           confirmingSelfClose ? (
             <div className="mt-2 flex items-center gap-2 text-xs">

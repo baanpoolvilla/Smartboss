@@ -2,7 +2,9 @@
 
 import { requireOrg } from "@smartboss/auth";
 import { notifyUser } from "@/modules/maintenance/data/notify";
-import { listUsersAcrossOrgs } from "@/modules/admin/data/users";
+import { getSession } from "@smartboss/auth";
+import { listIssueStaff } from "@/modules/admin/data/issue-staff";
+import { markTicketNotificationsRead } from "@/modules/admin/data/issue-notify-state";
 
 /**
  * แจ้งเตือนข้ามบริษัทของระบบ "แจ้งบัค" — เรียกควบคู่ (ไม่ใช่แทนที่) การเขียน
@@ -26,8 +28,19 @@ import { listUsersAcrossOrgs } from "@/modules/admin/data/users";
  * เพื่อส่งแจ้งเตือนให้ ไม่ได้ให้สิทธิ์อะไรเพิ่ม)
  */
 async function superAdminIds(): Promise<string[]> {
-  const all = await listUsersAcrossOrgs();
-  return all.filter((u) => u.hasSystemRole && u.isActive).map((u) => u.id);
+  // ทีมรับเรื่องทั้งหมด = Super Admin + CEO/ADMIN ของบริษัทเรา (ISSUE_SUPPORT_ORG)
+  return (await listIssueStaff()).map((u) => u.id);
+}
+
+/** ผู้แจ้งเปิดดูตั๋วของตัวเอง → แจ้งเตือนของตั๋วนี้ที่ยังไม่อ่านถือว่าอ่านแล้ว */
+export async function markMyIssueTicketRead(ticketId: string): Promise<void> {
+  try {
+    const session = await getSession();
+    if (!session) return;
+    await markTicketNotificationsRead(session.userId, ticketId);
+  } catch (err) {
+    console.error("[issue-notify] markMyIssueTicketRead failed", err);
+  }
 }
 
 /** มีคนแจ้งบัคใหม่ — แจ้งทีม Smartboss (Super Admin) ทุกคนที่ยังใช้งานอยู่

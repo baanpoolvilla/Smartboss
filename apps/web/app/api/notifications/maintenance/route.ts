@@ -28,7 +28,11 @@ export async function GET(request: Request) {
     let orgItems: Awaited<ReturnType<typeof listOrgNotifications>> = [];
     if (wantsOrgScope && session.orgId) {
       const me = (await listDirectory(session.orgId)).find((u) => u.id === session.userId);
-      if (me?.isOwner) orgItems = await listOrgNotifications(session.orgId, session.userId);
+      if (me?.isOwner) {
+        // แจ้งบัคเป็นเรื่องส่วนตัวของผู้แจ้ง — ไม่ให้เจ้าของบริษัทเห็นหัวข้อตั๋วของคนอื่นผ่านภาพรวมนี้
+        // (การดูตั๋วทุกเรื่องย้ายไปอยู่คอนโซลแจ้งบัคของทีมรับเรื่องแล้ว)
+        orgItems = (await listOrgNotifications(session.orgId, session.userId)).filter((n) => !n.type.startsWith("issue_ticket"));
+      }
     }
 
     return Response.json({ items, orgItems });

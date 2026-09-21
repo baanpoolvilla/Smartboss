@@ -8,6 +8,7 @@ import { iconByName } from "@/lib/icons";
 import { moduleRegistry } from "@/module-registry";
 import { classifyIssueSource, type IssueSource, type SourceModule } from "@/modules/admin/issue-source";
 import { requireIssueConsoleAccess } from "@/modules/admin/data/issue-console-access";
+import { unreadIssueTicketIds } from "@/modules/admin/data/issue-notify-state";
 import { EmptyState, Pill, StatCard, inputClass, selectClass } from "@/modules/admin/components/ui";
 import { listAllIssueTickets, type CrossOrgIssueTicket } from "@/modules/admin/data/issue-tickets";
 import { listAllOrganizations } from "@/modules/admin/data/orgs";
@@ -125,7 +126,11 @@ export async function renderIssueReportsPage(
 
   const tab: Tab = forcedTab ?? (TABS.includes(sp.tab as Tab) ? (sp.tab as Tab) : "all");
 
-  const [rawTickets, organizations] = await Promise.all([listAllIssueTickets(), listAllOrganizations()]);
+  const [rawTickets, organizations, unreadIds] = await Promise.all([
+    listAllIssueTickets(),
+    listAllOrganizations(),
+    unreadIssueTicketIds(session.userId).catch(() => new Set<string>()),
+  ]);
   // จัดหมวดตามหน้าที่แจ้งมา (โมดูล › เมนู) — คำนวณจาก pageUrl ที่เก็บในตั๋วอยู่แล้ว
   const allTickets = rawTickets.map((t) => {
     const source = classifyIssueSource(t.context.pageUrl, SOURCE_MODULES);
@@ -391,7 +396,7 @@ export async function renderIssueReportsPage(
       ) : (
         <div className="flex flex-col gap-2">
           {tickets.map((t) => (
-            <TicketRow key={`${t.orgId}-${t.id}`} ticket={t} canOpenPage={t.orgId === session.orgId} />
+            <TicketRow key={`${t.orgId}-${t.id}`} ticket={t} canOpenPage={t.orgId === session.orgId} unread={unreadIds.has(t.id)} />
           ))}
         </div>
       )}
@@ -402,9 +407,12 @@ export async function renderIssueReportsPage(
 function TicketRow({
   ticket,
   canOpenPage,
+  unread,
 }: {
   ticket: CrossOrgIssueTicket & { source: IssueSource; SourceIcon: LucideIcon };
   canOpenPage: boolean;
+  /** มีแจ้งเตือนของตั๋วนี้ที่ผู้ดูยังไม่อ่าน (ตั๋วใหม่/ผู้แจ้งตอบกลับ/ถูกมอบหมาย) */
+  unread: boolean;
 }) {
   const { source, SourceIcon } = ticket;
   const category = issueCategoryMeta[ticket.category];
@@ -430,6 +438,7 @@ function TicketRow({
               <Pill color="#0D9488">
                 <Building2 className="h-3 w-3" /> {ticket.orgName}
               </Pill>
+              {unread && <span className="h-2 w-2 shrink-0 rounded-full bg-(--danger)" title="มีความเคลื่อนไหวใหม่ที่ยังไม่ได้ดู" aria-label="มีความเคลื่อนไหวใหม่ที่ยังไม่ได้ดู" />}
               <span className="font-mono text-[11px] text-(--ink-soft)">{ticket.code}</span>
               <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${group.className}`}>
                 <span className={`h-1.5 w-1.5 rounded-full ${group.dot}`} /> {group.label}

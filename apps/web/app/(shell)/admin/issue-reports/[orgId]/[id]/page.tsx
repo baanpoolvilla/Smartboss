@@ -6,6 +6,7 @@ import { readStore } from "@/modules/report_task/lib/db/org-store";
 import { migrateIssueStoreSlice } from "@/modules/report_task/lib/issue-migration";
 import { listAssignableStaff } from "@/modules/admin/data/issue-ticket-actions";
 import { requireIssueConsoleAccess } from "@/modules/admin/data/issue-console-access";
+import { markTicketNotificationsRead } from "@/modules/admin/data/issue-notify-state";
 import { canActOnTicketOrg } from "@/modules/admin/support-org";
 import { classifyIssueSource } from "@/modules/admin/issue-source";
 import { moduleRegistry } from "@/module-registry";
@@ -54,6 +55,9 @@ export default async function AdminIssueTicketDetailPage({
   for (const u of users) userMap[u.id] = { name: u.name, email: u.email, role: u.roles[0]?.role.name ?? null };
 
   const assignees = await listAssignableStaff();
+
+  // เปิดดูตั๋วนี้แล้ว — แจ้งเตือนของตั๋วนี้ที่ยังไม่อ่านถือว่าอ่านแล้ว (ตัวเลขแดงลดลงเอง)
+  await markTicketNotificationsRead(session.userId, id).catch((err) => console.error("[issue-reports] mark read failed", err));
 
   // แจ้งมาจากโมดูล › เมนูไหน + (ถ้าเป็นหน้ารายการเดี่ยวของบริษัทที่ผู้ดูสังกัดอยู่) ลิงก์เปิดหน้านั้น
   // — ข้อมูลบริษัทอื่นเปิดจากบัญชีนี้ไม่ได้อยู่แล้ว จึงไม่ให้ลิงก์

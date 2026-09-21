@@ -47,6 +47,8 @@ export const adminIssueReportManifest: ModuleManifest = {
       // ปนมาโดยไม่ได้ตั้งใจ (core.notifications กรองด้วย userId อยู่แล้ว)
       badge: createElement(NotifCountBadge, {
         categories: ["ticket"],
+        // เฉพาะตั๋วที่คนอื่นแจ้งเข้ามา/ถูกมอบหมายให้ฉัน — ความคืบหน้าของตั๋วที่ฉันแจ้งเองไปนับที่ "ตั๋วของฉัน"
+        types: ["issue_ticket_new"],
         className:
           "ml-auto flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-(--danger) px-1 text-[10px] font-bold text-white",
       }),
@@ -61,6 +63,13 @@ export const adminIssueReportManifest: ModuleManifest = {
       permission: ADMIN_PERMS.orgCreate,
       allowSupportStaff: true,
       icon: "User",
+      // ทีมตอบ/รับเรื่อง/เปลี่ยนสถานะตั๋วที่ฉันแจ้งเอง
+      badge: createElement(NotifCountBadge, {
+        categories: ["ticket"],
+        types: ["issue_ticket_reply_reporter", "issue_ticket_status_reporter"],
+        className:
+          "ml-auto flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-(--danger) px-1 text-[10px] font-bold text-white",
+      }),
     },
   ],
   permissions: [ADMIN_PERMS.orgCreate],

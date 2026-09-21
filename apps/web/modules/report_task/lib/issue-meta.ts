@@ -86,6 +86,21 @@ export function reporterStatusGroup(status: IssueStatus): ReporterStatusGroup {
   return REPORTER_GROUP_BY_STATUS[status];
 }
 
+/**
+ * "มีคนรับเรื่องแล้วหรือยัง" สำหรับผู้แจ้ง — ตั๋วที่ยังเป็น "new" คือยังไม่มีใครรับ
+ * สถานะอื่นทั้งหมดผ่านการรับเรื่องมาแล้ว (ทีมดูแลระบบเป็นคนรับ ไม่ใช่คนในบริษัท
+ * ผู้แจ้ง และชื่อผู้รับอยู่คนละบริษัทกับผู้แจ้ง จึงบอกแค่ว่า "ทีม Smartboss")
+ */
+export function ticketAcceptance(t: { status: IssueStatus; firstResponseAt: string | null }): {
+  accepted: boolean;
+  label: string;
+  /** เวลาที่รับเรื่อง/ตอบครั้งแรก (ถ้ามี) */
+  at: string | null;
+} {
+  if (t.status === "new") return { accepted: false, label: "ยังไม่มีคนรับเรื่อง", at: null };
+  return { accepted: true, label: "ทีม Smartboss รับเรื่องแล้ว", at: t.firstResponseAt };
+}
+
 export function nextTicketCode(existingCount: number): string {
   return `IS-${String(existingCount + 1).padStart(4, "0")}`;
 }

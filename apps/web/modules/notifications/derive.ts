@@ -101,6 +101,7 @@ export function maintenanceCategoryFor(type: string): NotifCategory {
       return "hr_attendance";
     case "issue_ticket_new":
     case "issue_ticket_reply_reporter":
+    case "issue_ticket_status_reporter":
       return "ticket";
     default:
       return "general";
@@ -231,6 +232,6 @@ export function maintenanceHrefFor(type: string, referenceId: string | null): st
     const [orgId, ticketId] = referenceId.split(":");
     return `/admin/issue-reports/${orgId}/${ticketId}`;
   }
-  if (type === "issue_ticket_reply_reporter" && referenceId) return `/issue-reports/${referenceId}`;
+  if ((type === "issue_ticket_reply_reporter" || type === "issue_ticket_status_reporter") && referenceId) return `/issue-reports/${referenceId}`;
   return null;
 }

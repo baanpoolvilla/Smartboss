@@ -19,7 +19,18 @@ import type { NotifCategory } from "./types";
  * useNotificationStore/useIdentityStore hydrate ก่อน ซึ่งหน้าแรก/โมดูลอื่นๆ
  * ไม่ได้ mount ให้) — ยิง fetch ของตัวเองตรงๆ เหมือนที่ AppTileReviewBadge ทำ
  */
-export function NotifCountBadge({ categories, className }: { categories: NotifCategory[]; className?: string }) {
+export function NotifCountBadge({
+  categories,
+  types,
+  className,
+}: {
+  categories: NotifCategory[];
+  /** จำกัดเฉพาะชนิดแจ้งเตือน (core.notifications.type) เพิ่มจาก category — ใช้แยกเลขของเมนูย่อย
+   * ที่อยู่ category เดียวกัน เช่น แจ้งบัค "ทั้งหมด" (ตั๋วที่คนอื่นแจ้ง) กับ "ตั๋วของฉัน" (ความคืบหน้า
+   * ของตั๋วที่ฉันแจ้งเอง) */
+  types?: string[];
+  className?: string;
+}) {
   const [count, setCount] = useState(0);
 
   useEffect(() => {
@@ -29,7 +40,7 @@ export function NotifCountBadge({ categories, className }: { categories: NotifCa
       .then((data: { items?: { type: string; readAt: string | null }[] }) => {
         if (cancelled) return;
         const n = (data.items ?? []).filter(
-          (it) => !it.readAt && categories.includes(maintenanceCategoryFor(it.type))
+          (it) => !it.readAt && categories.includes(maintenanceCategoryFor(it.type)) && (!types || types.includes(it.type))
         ).length;
         setCount(n);
       })
@@ -40,7 +51,7 @@ export function NotifCountBadge({ categories, className }: { categories: NotifCa
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categories.join(",")]);
+  }, [categories.join(","), types?.join(",")]);
 
   if (count === 0) return null;
   return (

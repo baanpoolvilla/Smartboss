@@ -2,9 +2,9 @@
 
 import { redirect } from "next/navigation";
 import { requireOrg } from "@smartboss/auth";
-import { prisma } from "@smartboss/database";
-import { getIssueConsoleAccess, getSupportOrgId } from "./issue-console-access";
-import { SUPPORT_STAFF_ROLES, canActOnTicketOrg } from "../support-org";
+import { getIssueConsoleAccess } from "./issue-console-access";
+import { listIssueStaff } from "./issue-staff";
+import { canActOnTicketOrg } from "../support-org";
 import { readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
 import { migrateIssueStoreSlice } from "@/modules/report_task/lib/issue-migration";
 import { issueStatusMeta, issuePriorityMeta } from "@/modules/report_task/lib/issue-meta";
@@ -119,11 +119,50 @@ export async function adminReplyToTicket(orgId: string, ticketId: string, body: 
   return updated;
 }
 
+/** ข้อความแจ้งผู้แจ้งเมื่อสถานะตั๋วเปลี่ยน (เฉพาะสถานะที่ผู้แจ้งควรรู้) */
+function statusChangeText(status: IssueStatus, title: string): string | null {
+  switch (status) {
+    case "triaged":
+      return `ทีม Smartboss รับเรื่อง "${title}" ของคุณแล้ว`;
+    case "in_progress":
+      return `กำลังแก้ไข "${title}" ของคุณอยู่`;
+    case "waiting_reporter":
+      return `ทีมต้องการข้อมูลเพิ่มเรื่อง "${title}" — รบกวนตอบกลับ`;
+    case "escalated":
+    case "vendor_working":
+    case "vendor_released":
+      return `ส่งเรื่อง "${title}" ให้ผู้พัฒนาแล้ว`;
+    case "pending_verify":
+      return `แก้ไข "${title}" แล้ว — รอคุณยืนยันว่าใช้ได้`;
+    case "resolved":
+      return `เรื่อง "${title}" แก้ไขเสร็จแล้ว`;
+    case "rejected":
+      return `เรื่อง "${title}" — ทีมไม่ดำเนินการ`;
+    case "duplicate":
+      return `เรื่อง "${title}" ซ้ำกับตั๋วอื่น`;
+    default:
+      return null;
+  }
+}
+
+/** แจ้งผู้แจ้งว่าตั๋วมีความคืบหน้า — ห่อ try/catch กันแจ้งเตือนพังแล้วทำให้การเปลี่ยน
+ * สถานะจริงพังตาม ไม่แจ้งตัวเองถ้าผู้แจ้งเป็นคนกดเอง */
+async function notifyReporterOfStatus(orgId: string, ticket: IssueTicket, status: IssueStatus, actorId: string) {
+  if (ticket.reporterId === actorId) return;
+  const title = statusChangeText(status, ticket.title);
+  if (!title) return;
+  try {
+    await notifyUser(orgId, ticket.reporterId, { title, type: "issue_ticket_status_reporter", referenceId: ticket.id });
+  } catch (err) {
+    console.error("[issue-ticket-actions] notifyReporterOfStatus failed", err);
+  }
+}
+
 /** "รับเรื่อง" — claim (assign to self) + move to triaged in one step, same
  * shortcut the old per-org side panel offered agents. */
 export async function adminClaimTicket(orgId: string, ticketId: string) {
   const session = await requireTicketActor(orgId);
-  return mutateTicket(orgId, ticketId, (t) => {
+  const updated = await mutateTicket(orgId, ticketId, (t) => {
     const now = new Date().toISOString();
     const next: IssueTicket = {
       ...t,
@@ -138,6 +177,8 @@ export async function adminClaimTicket(orgId: string, ticketId: string) {
     ];
     return next;
   });
+  await notifyReporterOfStatus(orgId, updated, "triaged", session.userId);
+  return updated;
 }
 
 export async function adminSetStatus(
@@ -147,7 +188,9 @@ export async function adminSetStatus(
   extra?: { rejectReason?: string; duplicateOfId?: string; whatWasChecked?: string }
 ) {
   const session = await requireTicketActor(orgId);
-  return mutateTicket(orgId, ticketId, (t) => {
+  let previousStatus: IssueStatus | null = null;
+  const updated = await mutateTicket(orgId, ticketId, (t) => {
+    previousStatus = t.status;
     const now = new Date().toISOString();
     const isEscalating = status === "escalated" && t.escalatedAt === null;
     const isResolving = status === "resolved";
@@ -177,6 +220,8 @@ export async function adminSetStatus(
     ];
     return next;
   });
+  if (previousStatus !== status) await notifyReporterOfStatus(orgId, updated, status, session.userId);
+  return updated;
 }
 
 export async function adminSetPriority(orgId: string, ticketId: string, priority: IssuePriority) {
@@ -201,7 +246,7 @@ export async function adminSetPriority(orgId: string, ticketId: string, priority
 export async function adminSetAssignee(orgId: string, ticketId: string, assigneeId: string | null, assigneeName: string) {
   const session = await requireTicketActor(orgId);
   if (assigneeId && !(await assignableStaff()).some((u) => u.id === assigneeId)) throw new Error("มอบหมายให้คนนี้ไม่ได้");
-  return mutateTicket(orgId, ticketId, (t) => {
+  const updated = await mutateTicket(orgId, ticketId, (t) => {
     const now = new Date().toISOString();
     const next = { ...t, assigneeId, updatedAt: now };
     next.messages = [
@@ -216,6 +261,19 @@ export async function adminSetAssignee(orgId: string, ticketId: string, assignee
     ];
     return next;
   });
+  // ผู้รับผิดชอบคนใหม่ (ไม่ใช่ตัวเอง) ได้แจ้งเตือนว่ามีตั๋วมอบหมายให้ — ลิงก์เข้าหน้าตั๋วในคอนโซล
+  if (assigneeId && assigneeId !== session.userId) {
+    try {
+      await notifyUser(orgId, assigneeId, {
+        title: `มอบหมายตั๋ว "${updated.title}" ให้คุณ`,
+        type: "issue_ticket_new",
+        referenceId: `${orgId}:${ticketId}`,
+      });
+    } catch (err) {
+      console.error("[issue-ticket-actions] notify assignee failed", err);
+    }
+  }
+  return updated;
 }
 
 /** Confirming "on the reporter's behalf" — same idea the old side panel had
@@ -278,17 +336,7 @@ export async function adminDeleteTicket(orgId: string, ticketId: string) {
  * CEO/ADMIN of our own company (ISSUE_SUPPORT_ORG), not a per-org employee
  * list (there's no more "in-company agent"). */
 async function assignableStaff() {
-  const all = await listUsersAcrossOrgs();
-  const people = new Map(all.filter((u) => u.hasSystemRole && u.isActive).map((u) => [u.id, u.name]));
-  const supportOrgId = await getSupportOrgId();
-  if (supportOrgId) {
-    const staff = await prisma.user.findMany({
-      where: { orgId: supportOrgId, isActive: true, roles: { some: { role: { code: { in: [...SUPPORT_STAFF_ROLES] } } } } },
-      select: { id: true, name: true },
-    });
-    for (const u of staff) people.set(u.id, u.name);
-  }
-  return Array.from(people, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, "th"));
+  return listIssueStaff();
 }
 
 export async function listAssignableStaff() {

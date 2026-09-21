@@ -9,6 +9,8 @@ import {
   Paperclip,
   MessageCircle,
   Settings2,
+  UserCheck,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Badge } from "@/modules/report_task/components/ui/badge";
@@ -27,6 +29,7 @@ import {
   issueStatusMeta,
   reporterStatusGroup,
   reporterStatusGroupMeta,
+  ticketAcceptance,
   type ReporterStatusGroup,
 } from "@/modules/report_task/lib/issue-meta";
 import { CLOSED_STATUSES, type IssueTicket } from "@/modules/report_task/types/issue";
@@ -437,9 +440,26 @@ function TicketCard({
           {reporter?.name} · {relativeTime(ticket.createdAt)}
           {ticket.attachments.length > 0 && <span className="inline-flex items-center gap-0.5"><Paperclip className="h-3 w-3" />{ticket.attachments.length}</span>}
           {ticket.messages.length > 0 && <span>· {ticket.messages.length} ข้อความ</span>}
+          <AcceptanceChip ticket={ticket} />
         </div>
       </div>
     </button>
+  );
+}
+
+/** "มีคนรับเรื่องแล้ว" / "ยังไม่มีคนรับเรื่อง" — เห็นได้จากหน้ารายการเลย */
+function AcceptanceChip({ ticket }: { ticket: IssueTicket }) {
+  const a = ticketAcceptance(ticket);
+  const Icon = a.accepted ? UserCheck : Clock;
+  return (
+    <span
+      className={cn(
+        "ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium",
+        a.accepted ? "bg-teal-50 text-teal-700" : "bg-amber-50 text-amber-700"
+      )}
+    >
+      <Icon className="h-3 w-3" /> {a.label}
+    </span>
   );
 }
 
