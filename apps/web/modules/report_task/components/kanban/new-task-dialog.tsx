@@ -80,6 +80,7 @@ import {
   X,
   Loader2,
   Star,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
@@ -1132,11 +1133,19 @@ export function NewTaskDialog({
                       <button
                         type="button"
                         onClick={() => setShowGroupMore((v) => !v)}
-                        className="ml-auto shrink-0 text-[11px] text-[var(--ink-soft)] transition-colors hover:text-[var(--brand-green-dark)]"
+                        aria-expanded={moreOpen}
+                        title="ตั้งหัวหน้าหลัก และวันครบกำหนดแยกรายคน (ไม่บังคับ)"
+                        className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-md border border-[var(--line)] bg-white px-2 py-1 text-[11px] font-medium text-[var(--ink-soft)] transition-colors hover:border-[var(--brand-green)] hover:text-[var(--brand-green-dark)]"
                       >
-                        {moreOpen ? "ซ่อนตัวเลือก" : "+ หัวหน้าหลัก / วันรายคน"}
+                        ตัวเลือกเพิ่มเติม
+                        <ChevronDown className={cn("h-3 w-3 transition-transform", moreOpen && "rotate-180")} />
                       </button>
                     </div>
+                    {!moreOpen && (
+                      <p className="text-[10px] leading-snug text-[var(--ink-soft)]">
+                        กดปุ่ม ตัวเลือกเพิ่มเติม เพื่อตั้งหัวหน้าหลัก และวันครบกำหนดแยกรายคน (ไม่บังคับ)
+                      </p>
+                    )}
                     {completionRule === "any" && (
                       <p className="text-[10px] leading-snug text-[var(--ink-soft)]">ใครทำส่วนของตัวเองครบก่อน งานปิดทันที (ที่เหลือไม่ถูกหักคะแนน)</p>
                     )}

@@ -496,7 +496,6 @@ export function TaskDetailSheet({
             <div className="rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-3">
               <p className="text-xs font-medium text-[var(--ink-soft)]">
                 {completedCount}/{task.assigneeIds.length} คนเสร็จแล้ว — ติ๊กเช็คลิสต์ของคุณให้ครบด้านล่างเพื่อปิดส่วนของคุณ
-                {task.completionRule === "any" ? " · งานนี้ปิดเมื่อมีคนใดคนหนึ่งเสร็จ" : " · งานนี้ปิดเมื่อครบทุกคน"}
               </p>
             </div>
           )}
@@ -549,11 +548,7 @@ export function TaskDetailSheet({
                     ))}
                 </SelectContent>
               </Select>
-              {isShared && (
-                <p className="text-[10px] text-[var(--ink-soft)]">
-                  งานนี้ปิดอัตโนมัติเมื่อทุกคนมาร์คเสร็จในรายชื่อผู้รับผิดชอบด้านบน
-                </p>
-              )}
+
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs text-[var(--ink-soft)]">ความสำคัญ</Label>
@@ -658,7 +653,31 @@ export function TaskDetailSheet({
 
           {/* Assignees (add / remove — creator only) */}
           <div className="space-y-1.5">
-            <Label className="text-xs text-[var(--ink-soft)]">ผู้รับผิดชอบ ({assignees.length})</Label>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <Label className="text-xs text-[var(--ink-soft)]">ผู้รับผิดชอบ ({assignees.length})</Label>
+              {isShared && assignees.length > 1 && (
+                <>
+                  <span
+                    className={cn(
+                      "rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                      task.completionRule === "any"
+                        ? "border-[var(--brand-green)]/30 bg-[var(--accent)] text-[var(--brand-green-dark)]"
+                        : "border-[var(--line)] bg-[var(--bg-soft)] text-[var(--ink-soft)]"
+                    )}
+                    title={
+                      task.completionRule === "any"
+                        ? "ใครทำส่วนของตัวเองครบก่อน งานปิดทันที"
+                        : "ทุกคนต้องทำส่วนของตัวเองครบ งานถึงจะปิด"
+                    }
+                  >
+                    ปิดงานเมื่อ: {task.completionRule === "any" ? "คนใดคนหนึ่งเสร็จ" : "ครบทุกคน"}
+                  </span>
+                  <span className="text-[10px] text-[var(--ink-soft)]">
+                    เสร็จแล้ว {completedCount}/{assignees.length} คน
+                  </span>
+                </>
+              )}
+            </div>
             <div className="flex flex-wrap gap-1.5 items-center">
               {(() => {
                 const ASSIGNEES_COLLAPSED_COUNT = 10;

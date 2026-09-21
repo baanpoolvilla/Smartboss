@@ -296,7 +296,10 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
             {task.title}
           </p>
           {isShared && (
-            <p className="text-[10px] text-[var(--ink)] mt-0.5">{completedCount}/{task.assigneeIds.length} คนเสร็จแล้ว</p>
+            <p className="text-[10px] text-[var(--ink)] mt-0.5">
+              {completedCount}/{task.assigneeIds.length} คนเสร็จแล้ว
+              <span className="text-[var(--ink-soft)]"> · {task.completionRule === "any" ? "คนใดคนหนึ่งก็ปิดงาน" : "ต้องครบทุกคน"}</span>
+            </p>
           )}
         </div>
       </div>
