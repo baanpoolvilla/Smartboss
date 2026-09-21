@@ -496,6 +496,7 @@ export function TaskDetailSheet({
             <div className="rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-3">
               <p className="text-xs font-medium text-[var(--ink-soft)]">
                 {completedCount}/{task.assigneeIds.length} คนเสร็จแล้ว — ติ๊กเช็คลิสต์ของคุณให้ครบด้านล่างเพื่อปิดส่วนของคุณ
+                {task.completionRule === "any" ? " · งานนี้ปิดเมื่อมีคนใดคนหนึ่งเสร็จ" : " · งานนี้ปิดเมื่อครบทุกคน"}
               </p>
             </div>
           )}
@@ -519,13 +520,13 @@ export function TaskDetailSheet({
                 value={task.status}
                 onValueChange={(v) => {
                   if (!v) return;
-                  if (v === "done" && !isTaskFullyDone(task.assigneeIds, task.checklist)) {
+                  if (v === "done" && !isTaskFullyDone(task.assigneeIds, task.checklist, task.completionRule)) {
                     toast.error(`ยังติ๊ก checklist ไม่ครบ ${remainingChecklistCount(task.checklist)} ข้อ — ทำให้ครบก่อนถึงจะปิดงานได้`);
                     return;
                   }
                   moveTask(task.id, v as TaskStatus);
                 }}
-                disabled={isShared && task.status === "done"}
+                disabled={isShared && task.status === "done" && task.checklist.length > 0}
               >
                 <SelectTrigger className="w-full" title={isShared && task.status === "done" ? "งานนี้มีผู้รับผิดชอบหลายคน — กด \"แก้ไขกำหนดส่ง\" ด้านล่างเพื่อแก้ไขแทน" : undefined}>
                   <SelectValue>
@@ -537,7 +538,7 @@ export function TaskDetailSheet({
                 </SelectTrigger>
                 <SelectContent>
                   {taskStatusOrder
-                    .filter((s) => !isShared || s !== "done")
+                    .filter((s) => !isShared || s !== "done" || task.checklist.length === 0)
                     .map((s) => (
                       <SelectItem key={s} value={s}>
                         <span className="flex items-center gap-2">

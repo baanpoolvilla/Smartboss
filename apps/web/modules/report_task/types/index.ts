@@ -168,6 +168,9 @@ export interface Task {
    * here; unmarking one flips it back to "in_progress". A single-assignee
    * task ignores this and moves status directly, same as before. */
   completedAssigneeIds?: string[];
+  /** งานกลุ่มปิดเมื่อไหร่ — "all" (ค่าเดิม/ไม่ตั้ง) = ทุกคนทำส่วนของตัวเองครบ, "any" = คนใดคนหนึ่งครบก็ปิดงานได้
+   * (คนที่เหลือไม่ถูกหักคะแนนเพราะงานปิดแล้ว) ใช้เฉพาะงานกลุ่มที่มีผู้รับผิดชอบตั้งแต่ 2 คน */
+  completionRule?: "all" | "any";
   /** Sign-off on a "เสร็จสิ้น" task — set once the assigner/dept head/CEO
    * clicks "ผ่าน" after checking the work. Purely informational (doesn't
    * gate status, scoring, or anything else) — a task sits "รอตรวจสอบ" until

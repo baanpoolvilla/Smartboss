@@ -7,7 +7,7 @@ import { useNotificationStore } from "@/modules/report_task/store/notification-s
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useActivityLogStore } from "@/modules/report_task/store/activity-log-store";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
-import { deriveCompletedAssigneeIds, isTaskFullyDone } from "@/modules/report_task/lib/task-completion";
+import { deriveCompletedAssigneeIds, isDoneByRule, isTaskFullyDone } from "@/modules/report_task/lib/task-completion";
 import type { Attachment, ChecklistItem, Task, TaskPriority, TaskStatus } from "@/modules/report_task/types";
 import { uuid } from "@/modules/report_task/lib/uuid";
 
@@ -90,11 +90,18 @@ function notifyPenaltyChange(task: Task, byUserId: string, message: string) {
 function applyChecklistDerivedCompletion(t: Task, nextChecklist: ChecklistItem[], actorUserId: string): Task {
   const nextCompleted = deriveCompletedAssigneeIds(t.assigneeIds, nextChecklist);
   const prevCompleted = t.completedAssigneeIds ?? [];
-  const allDone = t.assigneeIds.length > 0 && t.assigneeIds.every((id) => nextCompleted.includes(id));
+  const rule = t.completionRule ?? "all";
+  const allDone = isDoneByRule(t.assigneeIds, nextCompleted, rule);
   const now = new Date().toISOString();
 
   if (allDone && t.status !== "done") {
-    logActivity(actorUserId, "เสร็จสิ้น (ครบทุกคน)", t.title, t.id, `${t.assigneeIds.length}/${t.assigneeIds.length} คน`);
+    logActivity(
+      actorUserId,
+      rule === "any" ? "เสร็จสิ้น (มีคนเสร็จแล้ว)" : "เสร็จสิ้น (ครบทุกคน)",
+      t.title,
+      t.id,
+      `${nextCompleted.length}/${t.assigneeIds.length} คน`
+    );
     const updated: Task = {
       ...t,
       checklist: nextChecklist,
@@ -297,7 +304,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
         // out of step with the automatic completion path (see
         // applyChecklistDerivedCompletion). Callers check isTaskFullyDone
         // themselves first to show a toast; this is the backstop.
-        if (status === "done" && !isTaskFullyDone(t.assigneeIds, t.checklist)) return t;
+        if (status === "done" && !isTaskFullyDone(t.assigneeIds, t.checklist, t.completionRule)) return t;
         if (status === "done") notifyLateCompletion(t);
         logActivity(
           useIdentityStore.getState().viewingAsUserId,

@@ -77,7 +77,9 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
   const isShared = task.taskMode === "group";
   const completedCount = task.completedAssigneeIds?.length ?? 0;
   const iAmAssignee = task.assigneeIds.includes(viewingAsUserId);
-  const myPartDone = isShared ? (task.completedAssigneeIds ?? []).includes(viewingAsUserId) : isDone;
+  // งานกลุ่มที่ไม่มีเช็คลิสต์เลยไม่มี "ส่วนของฉัน" ให้ติ๊ก — ปุ่มวงกลมปิด/เปิดทั้งงานเหมือนงานเดี่ยว
+  const trackPerPerson = isShared && task.checklist.length > 0;
+  const myPartDone = trackPerPerson ? (task.completedAssigneeIds ?? []).includes(viewingAsUserId) : isDone;
   // Only the owner (CEO) can hand out any sticker — the picker itself is
   // gated to isOwner below, so anyone who reaches this list is already the
   // owner and sees every sticker, no per-sticker split anymore.
@@ -247,11 +249,11 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (isShared) {
+                    if (trackPerPerson) {
                       if (iAmAssignee) toggleAssigneeChecklist(task.id, viewingAsUserId);
                     } else if (isDone) {
                       moveTask(task.id, "todo");
-                    } else if (!isTaskFullyDone(task.assigneeIds, task.checklist)) {
+                    } else if (!isTaskFullyDone(task.assigneeIds, task.checklist, task.completionRule)) {
                       toast.error(`ยังติ๊ก checklist ไม่ครบ ${remainingChecklistCount(task.checklist)} ข้อ — ทำให้ครบก่อนถึงจะปิดงานได้`);
                     } else {
                       moveTask(task.id, "done");

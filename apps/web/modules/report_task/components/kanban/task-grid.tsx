@@ -334,7 +334,7 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
                       key={opt}
                       onClick={() => {
                         if (opt === s) return;
-                        if (opt === "done" && !isTaskFullyDone(t.assigneeIds, t.checklist)) {
+                        if (opt === "done" && !isTaskFullyDone(t.assigneeIds, t.checklist, t.completionRule)) {
                           toast.error(`"${t.title}" ยังติ๊ก checklist ไม่ครบ ${remainingChecklistCount(t.checklist)} ข้อ — ทำให้ครบก่อนถึงจะปิดงานได้`);
                           return;
                         }
@@ -537,7 +537,7 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
   function bulkStatus(s: TaskStatus) {
     if (s === "done") {
       const selectedTasks = tasks.filter((t) => selected.has(t.id));
-      const ready = selectedTasks.filter((t) => isTaskFullyDone(t.assigneeIds, t.checklist));
+      const ready = selectedTasks.filter((t) => isTaskFullyDone(t.assigneeIds, t.checklist, t.completionRule));
       const skipped = selectedTasks.length - ready.length;
       ready.forEach((t) => moveTask(t.id, s));
       toast[skipped > 0 ? "error" : "success"](

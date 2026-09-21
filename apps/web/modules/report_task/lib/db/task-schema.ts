@@ -83,6 +83,7 @@ export const taskSchema = z.object({
   missedDeadlineOnce: z.boolean().optional(),
   reopenedOnce: z.boolean().optional(),
   completedAssigneeIds: z.array(z.string()).optional(),
+  completionRule: z.enum(["all", "any"]).optional(),
   // Missing here meant zod's default "strip unknown keys" behavior silently
   // dropped the "ผ่าน" sign-off on every save — the client showed it
   // immediately (optimistic store update) but a refresh re-fetched the
