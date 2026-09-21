@@ -4,8 +4,10 @@ import type { ChecklistItem } from "@/modules/report_task/types";
  * An assignee's part is done once every checklist item they own is checked.
  * An individual task is just a group of one under this rule — every item's
  * `ownerId` is the sole assignee, so it collapses to "checklist fully done".
- * An assignee with zero owned items never counts as done (checklists are
- * mandatory at creation, so this only matters for pre-migration data).
+ * An assignee with zero owned items never counts as done here — this is the
+ * *automatic* completion path driven by ticking boxes. A task with no checklist
+ * at all (checklists are optional at creation) is finished by hand instead;
+ * see isTaskFullyDone.
  */
 export function deriveCompletedAssigneeIds(assigneeIds: string[], checklist: ChecklistItem[]): string[] {
   return assigneeIds.filter((id) => {
@@ -23,7 +25,10 @@ export function deriveCompletedAssigneeIds(assigneeIds: string[], checklist: Che
  * incomplete checklist, out of step with the automatic completion path.
  */
 export function isTaskFullyDone(assigneeIds: string[], checklist: ChecklistItem[]): boolean {
-  return assigneeIds.length > 0 && deriveCompletedAssigneeIds(assigneeIds, checklist).length === assigneeIds.length;
+  if (assigneeIds.length === 0) return false;
+  // งานที่ไม่มีเช็คลิสต์เลย (เช็คลิสต์ไม่บังคับแล้ว) ไม่มีอะไรให้ติ๊กเป็นเงื่อนไข — เลื่อนเป็น "เสร็จสิ้น" เองได้
+  if (checklist.length === 0) return true;
+  return deriveCompletedAssigneeIds(assigneeIds, checklist).length === assigneeIds.length;
 }
 
 /** How many checklist items are still unchecked across every assignee — for

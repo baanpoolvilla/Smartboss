@@ -454,7 +454,6 @@ export function NewTaskDialog({
   const canSubmit = useMemo(() => {
     if (itemType !== "leave" && itemType !== "dayoff" && !title.trim()) return false;
     if (itemType === "task" && assigneeIds.length === 0) return false;
-    if (itemType === "task" && checklistItems.length === 0) return false;
     if (itemType === "task" && dueDate < startDate) return false;
     if (itemType === "meeting" && !meetAllDay && meetEnd <= meetStart) return false;
     if (itemType === "leave") {
@@ -758,10 +757,6 @@ export function NewTaskDialog({
       toast.error("กรุณาเลือกผู้รับผิดชอบอย่างน้อย 1 คน");
       return;
     }
-    if (itemType === "task" && checklistItems.length === 0) {
-      toast.error("กรุณาเพิ่มเช็คลิสต์อย่างน้อย 1 ข้อ");
-      return;
-    }
     if (itemType === "task" && dueDate < startDate) {
       toast.error("กำหนดส่งต้องไม่ก่อนวันเริ่มต้น");
       return;
@@ -848,7 +843,7 @@ export function NewTaskDialog({
           )}
         </DialogHeader>
 
-        <div className="px-5 py-4 space-y-4 border-t border-[var(--line)] min-w-0">
+        <div className="px-5 py-4 space-y-3 border-t border-[var(--line)] min-w-0">
           {/* Title (task/meeting) */}
           {itemType !== "leave" && itemType !== "dayoff" && (
             <Row icon={Type}>
@@ -871,7 +866,7 @@ export function NewTaskDialog({
                 <Textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  rows={itemType === "leave" ? 2 : 3}
+                  rows={2}
                   placeholder={itemType === "task" ? "ต้องทำอะไรบ้าง?" : itemType === "meeting" ? "วาระการประชุม / บันทึก" : "เหตุผลการลา (ถ้ามี)"}
                 />
               </div>
@@ -880,6 +875,66 @@ export function NewTaskDialog({
 
           {itemType === "task" && (
             <>
+              {/* เช็คลิสต์ (ไม่บังคับ) — อยู่ใต้รายละเอียดเลย ก่อนช่องอื่น ๆ */}
+              <Row icon={ListChecks}>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-[var(--ink-soft)]">
+                    เช็คลิสต์ ({checklistItems.length}) <span className="text-[var(--ink-soft)]">(ไม่บังคับ)</span>
+                  </Label>
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      value={newChecklistText}
+                      onChange={(e) => setNewChecklistText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addChecklistDraft();
+                        }
+                      }}
+                      placeholder="เพิ่มรายการเช็คลิสต์..."
+                      className="flex-1"
+                    />
+                    {taskMode === "group" && assigneeIds.length > 1 && (
+                      <Select value={newChecklistOwnerId || assigneeIds[0]!} onValueChange={(v) => v && setNewChecklistOwnerId(v)}>
+                        <SelectTrigger className="w-32 shrink-0">
+                          <SelectValue>{getUser(newChecklistOwnerId || assigneeIds[0]!)?.name ?? "ผู้รับผิดชอบ"}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {assigneeIds.map((uid) => (
+                            <SelectItem key={uid} value={uid}>{getUser(uid)?.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    <Button type="button" size="sm" variant="outline" onClick={addChecklistDraft} className="shrink-0">
+                      เพิ่ม
+                    </Button>
+                  </div>
+                  {checklistItems.length > 0 && (
+                    <div className="space-y-1 pt-1">
+                      {checklistItems.map((c) => (
+                        <div key={c.id} className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-white px-2.5 py-1.5 text-xs">
+                          <span className="flex-1 truncate">{c.text}</span>
+                          {taskMode === "group" && (
+                            <span className="text-[10px] text-[var(--ink-soft)] shrink-0">{getUser(c.ownerId)?.name}</span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeChecklistDraft(c.id)}
+                            className="text-[var(--ink-soft)] hover:text-[var(--chart-red)] shrink-0"
+                            aria-label={`ลบ ${c.text}`}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </Row>
+
+              {/* ประเภทงาน + หัวข้อโปรเจค อยู่แถวเดียวกัน (จอแคบเรียงลงเหมือนเดิม) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
               <Row icon={Users}>
                 <div className="space-y-1">
                   <Label className="text-xs text-[var(--ink-soft)]">ประเภทงาน</Label>
@@ -901,6 +956,8 @@ export function NewTaskDialog({
                 </div>
               </Row>
 
+              {/* ตอนกำลังสร้างหัวข้อใหม่ ช่องกรอกกว้างขึ้นเต็มแถว */}
+              <div className={cn(creatingTopic && "sm:col-span-2")}>
               <Row icon={Tag}>
                 <div className="space-y-1 flex-1">
                   <Label className="text-xs text-[var(--ink-soft)]">หัวข้อโปรเจค</Label>
@@ -956,6 +1013,8 @@ export function NewTaskDialog({
                   )}
                 </div>
               </Row>
+              </div>
+              </div>
 
               <Row icon={User}>
                 <div className="space-y-1">
@@ -1026,22 +1085,21 @@ export function NewTaskDialog({
                 </div>
               </Row>
 
-              <Row icon={Flag}>
-                <div className="space-y-1">
-                  <Label className="text-xs text-[var(--ink-soft)]">ความสำคัญ</Label>
-                  <Select value={priority} onValueChange={(v) => v && setPriority(v as TaskPriority)}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue>{priorityMeta[priority]?.label ?? ""}</SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {taskPriorityOrder.map((p) => <SelectItem key={p} value={p}>{priorityMeta[p].label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </Row>
-
               <Row icon={CalendarDays}>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3">
+                  <div className="space-y-1">
+                    <Label className="flex items-center gap-1 text-xs text-[var(--ink-soft)]">
+                      <Flag className="h-3 w-3" /> ความสำคัญ
+                    </Label>
+                    <Select value={priority} onValueChange={(v) => v && setPriority(v as TaskPriority)}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue>{priorityMeta[priority]?.label ?? ""}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {taskPriorityOrder.map((p) => <SelectItem key={p} value={p}>{priorityMeta[p].label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="space-y-1">
                     <Label className="text-xs text-[var(--ink-soft)]">วันเริ่มต้น</Label>
                     <DatePickerField
@@ -1057,59 +1115,62 @@ export function NewTaskDialog({
                   <div className="space-y-1">
                     <Label className="text-xs text-[var(--ink-soft)]">กำหนดส่ง</Label>
                     <DatePickerField value={dueDate} minDate={startDate || todayIso()} onChange={setDueDate} />
-                    {/* Optional — unset means "แจ้งเตือนก่อนกำหนด" (Settings ▸
-                        แจ้งเตือน) can only count whole days, since there's no
-                        actual moment to count hours/minutes back from
-                        without this. Hidden behind a toggle instead of always
-                        showing — see `showDueTime`'s own comment. */}
-                    {showDueTime || dueTime ? (
-                      <div className="flex items-center gap-1.5 pt-0.5">
-                        <TimePickerField
-                          value={dueTime}
-                          onChange={setDueTime}
-                          className="w-full sm:w-[130px]"
-                          aria-label="เวลากำหนดส่ง (ไม่บังคับ)"
-                          title="เวลากำหนดส่ง (ไม่บังคับ) — ใส่ไว้ถ้าอยากตั้งแจ้งเตือนล่วงหน้าเป็นชั่วโมง/นาทีได้"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDueTime("");
-                            setShowDueTime(false);
-                          }}
-                          className="shrink-0 text-[11px] text-[var(--ink-soft)] hover:text-[var(--chart-red)] transition-colors"
-                        >
-                          ล้างเวลา
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setShowDueTime(true)}
-                        className="flex items-center gap-1 text-[11px] text-[var(--ink-soft)] hover:text-[var(--brand-green-dark)] transition-colors pt-0.5"
-                      >
-                        <Clock className="h-3 w-3" />+ ใส่เวลา
-                      </button>
-                    )}
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                  <span className="text-[11px] text-[var(--ink-soft)]">กำหนดส่งไว: </span>
-                  {[
-                    { label: "3 วัน", days: 3 },
-                    { label: "7 วัน", days: 7 },
-                    { label: "14 วัน", days: 14 },
-                    { label: "30 วัน", days: 30 },
-                  ].map((p) => (
+                {/* กำหนดส่งไว + เวลากำหนดส่ง อยู่แถวเดียวกัน ตัวเล็ก ๆ ประหยัดที่ */}
+                <div className="flex items-center justify-between gap-x-3 gap-y-1 mt-1.5 flex-wrap">
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <span className="text-[10px] text-[var(--ink-soft)]">กำหนดส่งไว:</span>
+                    {[
+                      { label: "3 วัน", days: 3 },
+                      { label: "7 วัน", days: 7 },
+                      { label: "14 วัน", days: 14 },
+                      { label: "30 วัน", days: 30 },
+                    ].map((p) => (
+                      <button
+                        key={p.days}
+                        type="button"
+                        onClick={() => setDueDate(shiftDate(startDate || todayIso(), p.days))}
+                        className="rounded border border-[var(--line)] px-1.5 text-[10px] leading-4 text-[var(--ink-soft)] hover:border-[var(--brand-green)] hover:text-[var(--brand-green-dark)] transition-colors shrink-0"
+                      >
+                        +{p.label}
+                      </button>
+                    ))}
+                  </div>
+                  {/* Optional — unset means "แจ้งเตือนก่อนกำหนด" (Settings ▸
+                      แจ้งเตือน) can only count whole days, since there's no
+                      actual moment to count hours/minutes back from
+                      without this. Hidden behind a toggle instead of always
+                      showing — see `showDueTime`'s own comment. */}
+                  {showDueTime || dueTime ? (
+                    <div className="flex items-center gap-1.5 pt-0.5">
+                      <TimePickerField
+                        value={dueTime}
+                        onChange={setDueTime}
+                        className="w-full sm:w-[130px]"
+                        aria-label="เวลากำหนดส่ง (ไม่บังคับ)"
+                        title="เวลากำหนดส่ง (ไม่บังคับ) — ใส่ไว้ถ้าอยากตั้งแจ้งเตือนล่วงหน้าเป็นชั่วโมง/นาทีได้"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDueTime("");
+                          setShowDueTime(false);
+                        }}
+                        className="shrink-0 text-[11px] text-[var(--ink-soft)] hover:text-[var(--chart-red)] transition-colors"
+                      >
+                        ล้างเวลา
+                      </button>
+                    </div>
+                  ) : (
                     <button
-                      key={p.days}
                       type="button"
-                      onClick={() => setDueDate(shiftDate(startDate || todayIso(), p.days))}
-                      className="rounded-md border border-[var(--line)] px-2 py-0.5 text-[11px] text-[var(--ink-soft)] hover:border-[var(--brand-green)] hover:text-[var(--brand-green-dark)] transition-colors shrink-0"
+                      onClick={() => setShowDueTime(true)}
+                      className="flex items-center gap-1 text-[11px] text-[var(--ink-soft)] hover:text-[var(--brand-green-dark)] transition-colors pt-0.5"
                     >
-                      +{p.label}
+                      <Clock className="h-3 w-3" />+ ใส่เวลา
                     </button>
-                  ))}
+                  )}
                 </div>
               </Row>
 
@@ -1169,63 +1230,6 @@ export function NewTaskDialog({
                   </div>
                 </Row>
               )}
-
-              <Row icon={ListChecks}>
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-[var(--ink-soft)]">
-                    เช็คลิสต์ ({checklistItems.length}) <span className="text-[var(--chart-red)]">*ต้องมีอย่างน้อย 1 ข้อ</span>
-                  </Label>
-                  <div className="flex items-center gap-1.5">
-                    <Input
-                      value={newChecklistText}
-                      onChange={(e) => setNewChecklistText(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          addChecklistDraft();
-                        }
-                      }}
-                      placeholder="เพิ่มรายการเช็คลิสต์..."
-                      className="flex-1"
-                    />
-                    {taskMode === "group" && assigneeIds.length > 1 && (
-                      <Select value={newChecklistOwnerId || assigneeIds[0]!} onValueChange={(v) => v && setNewChecklistOwnerId(v)}>
-                        <SelectTrigger className="w-32 shrink-0">
-                          <SelectValue>{getUser(newChecklistOwnerId || assigneeIds[0]!)?.name ?? "ผู้รับผิดชอบ"}</SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {assigneeIds.map((uid) => (
-                            <SelectItem key={uid} value={uid}>{getUser(uid)?.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                    <Button type="button" size="sm" variant="outline" onClick={addChecklistDraft} className="shrink-0">
-                      เพิ่ม
-                    </Button>
-                  </div>
-                  {checklistItems.length > 0 && (
-                    <div className="space-y-1 pt-1">
-                      {checklistItems.map((c) => (
-                        <div key={c.id} className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-white px-2.5 py-1.5 text-xs">
-                          <span className="flex-1 truncate">{c.text}</span>
-                          {taskMode === "group" && (
-                            <span className="text-[10px] text-[var(--ink-soft)] shrink-0">{getUser(c.ownerId)?.name}</span>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => removeChecklistDraft(c.id)}
-                            className="text-[var(--ink-soft)] hover:text-[var(--chart-red)] shrink-0"
-                            aria-label={`ลบ ${c.text}`}
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </Row>
 
               <Row icon={Paperclip}>
                 <div className="space-y-2">
