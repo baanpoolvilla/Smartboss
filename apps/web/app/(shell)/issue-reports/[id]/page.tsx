@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -114,18 +114,12 @@ export default function IssueTicketDetailPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[1000px] flex-col gap-4 pt-2">
-      <button
-        onClick={() => router.push("/issue-reports")}
-        className="inline-flex items-center gap-1 text-xs text-[var(--ink-soft)] hover:text-[var(--ink)] self-start"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" /> กลับไปหน้ารายการ
-      </button>
-
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
-        <div className="rounded-2xl border border-[var(--line)] bg-white flex flex-col min-h-[420px]">
+    <div className="flex w-full flex-col gap-4">
+      {/* ปุ่มย้อนกลับอยู่ที่มุมซ้ายของแถบบนแล้ว (ดู report-task-scaffold.tsx) */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-4 items-start">
+        <div className="order-2 lg:order-1 flex h-[calc(100dvh-13rem)] min-h-[420px] flex-col overflow-hidden rounded-2xl border border-[var(--line)] bg-white lg:h-[calc(100dvh-9rem)]">
           <TicketThreadHeader ticket={ticket} isDeskView={isDeskView} tab={tab} setTab={setTab} />
-          <TicketTimeline messages={visibleMessages} tab={tab} />
+          <TicketTimeline messages={visibleMessages} tab={tab} viewingAsUserId={viewingAsUserId} />
           {ticket.status === "pending_verify" && canConfirmResolution(ticket, config, viewingAsUserId) && (
             <ResolutionConfirmBar ticket={ticket} viewingAsUserId={viewingAsUserId} />
           )}
@@ -144,7 +138,9 @@ export default function IssueTicketDetailPage() {
           )}
         </div>
 
-        <TicketSidePanel ticket={ticket} viewingAsUserId={viewingAsUserId} config={config} isDeskView={isDeskView} allTickets={tickets} />
+        <div className="order-1 lg:order-2 min-w-0">
+          <TicketSidePanel ticket={ticket} viewingAsUserId={viewingAsUserId} config={config} isDeskView={isDeskView} allTickets={tickets} />
+        </div>
       </div>
     </div>
   );
@@ -195,50 +191,99 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
   );
 }
 
-function TicketTimeline({ messages, tab }: { messages: IssueMessage[]; tab: IssueAudience }) {
+/** วันที่แบบไทยสั้น ๆ ไว้คั่นวันในแชท เหมือน LINE */
+function dayKey(iso: string): string {
+  return new Date(iso).toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" });
+}
+
+function clock(iso: string): string {
+  return new Date(iso).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+}
+
+/** แชทสไตล์ LINE — ข้อความของคนอื่นชิดซ้าย (มีรูป+ชื่อ) ของเรา (สีเขียว) ชิดขวา
+ * เหตุการณ์ระบบ (รับเรื่อง/เปลี่ยนสถานะ) เป็นป้ายเทาตรงกลาง คั่นวันด้วยป้ายวันที่ และ
+ * เลื่อนลงล่างสุดเองเมื่อมีข้อความใหม่ */
+function TicketTimeline({ messages, tab, viewingAsUserId }: { messages: IssueMessage[]; tab: IssueAudience; viewingAsUserId: string }) {
+  const endRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: "end" });
+  }, [messages.length]);
+
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-3">
+    <div className="flex-1 min-h-0 overflow-y-auto bg-[var(--bg-soft)] px-3 py-4 sm:px-5 flex flex-col gap-2.5">
       {messages.length === 0 && (
         <p className="text-xs text-[var(--ink-soft)] text-center py-8">
           {tab === "staff" ? "ยังไม่มีโน้ตภายใน" : "ยังไม่มีข้อความ"}
         </p>
       )}
-      {messages.map((m) =>
-        m.kind === "event" ? (
-          <div key={m.id} className="flex items-center gap-2 text-[11px] text-[var(--ink-soft)] pl-1">
-            <span className="h-1 w-1 rounded-full bg-[var(--ink-soft)]" />
-            {getUser(m.authorId)?.name ?? "ระบบ"} — {m.body} · {relativeTime(m.createdAt)}
+      {messages.map((m, i) => {
+        const day = dayKey(m.createdAt);
+        const showDay = i === 0 || day !== dayKey(messages[i - 1]!.createdAt);
+        return (
+          <div key={m.id} className="flex flex-col gap-2.5">
+            {showDay && (
+              <div className="self-center rounded-full bg-black/10 px-3 py-0.5 text-[11px] text-[var(--ink-soft)]">{day}</div>
+            )}
+            {m.kind === "event" ? (
+              <div className="self-center max-w-[90%] rounded-full bg-black/5 px-3 py-1 text-center text-[11px] text-[var(--ink-soft)]">
+                {m.body} · {clock(m.createdAt)}
+              </div>
+            ) : (
+              <MessageBubble message={m} mine={m.authorId === viewingAsUserId} />
+            )}
           </div>
-        ) : (
-          <MessageBubble key={m.id} message={m} />
-        )
-      )}
+        );
+      })}
+      <div ref={endRef} />
     </div>
   );
 }
 
-function MessageBubble({ message }: { message: IssueMessage }) {
+function MessageBubble({ message, mine }: { message: IssueMessage; mine: boolean }) {
   const author = getUser(message.authorId);
+  const bubble = (
+    <div
+      className={cn(
+        "min-w-0 rounded-2xl px-3 py-2 text-sm shadow-sm",
+        mine ? "rounded-br-md bg-emerald-200 text-[var(--ink)]" : "rounded-bl-md border border-[var(--line)] bg-white",
+        message.audience === "staff" && "bg-amber-50"
+      )}
+    >
+      {message.body && <p className="whitespace-pre-wrap break-words">{message.body}</p>}
+      {message.attachments.length > 0 && (
+        <div className={cn("flex flex-wrap gap-2", message.body && "mt-2")}>
+          {message.attachments.map((a: IssueAttachment) =>
+            a.isPreviewable ? (
+              <img key={a.id} src={a.url} alt={a.name} className="h-28 w-28 rounded-lg object-cover border border-[var(--line)]" />
+            ) : (
+              <a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 rounded-md border border-[var(--line)] bg-white px-2 py-1 text-xs">
+                <Paperclip className="h-3 w-3" /> {a.name}
+              </a>
+            )
+          )}
+        </div>
+      )}
+    </div>
+  );
+  const time = <span className="shrink-0 self-end pb-0.5 text-[10px] text-[var(--ink-soft)]">{clock(message.createdAt)}</span>;
+
+  if (mine) {
+    return (
+      <div className="flex items-end justify-end gap-1.5">
+        {time}
+        <div className="max-w-[80%] sm:max-w-[70%]">{bubble}</div>
+      </div>
+    );
+  }
   return (
-    <div className="flex items-start gap-2.5">
-      <Avatar className="h-7 w-7 shrink-0"><AvatarFallback className="text-[10px] bg-[var(--accent)]">{author?.avatar}</AvatarFallback></Avatar>
-      <div className={cn("min-w-0 flex-1 rounded-lg px-3 py-2", message.audience === "staff" ? "bg-amber-50" : "bg-[var(--bg-soft)]")}>
-        <p className="text-xs font-medium">{author?.name}</p>
-        {message.body && <p className="text-sm whitespace-pre-wrap mt-0.5">{message.body}</p>}
-        {message.attachments.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-2">
-            {message.attachments.map((a: IssueAttachment) =>
-              a.isPreviewable ? (
-                <img key={a.id} src={a.url} alt={a.name} className="h-20 w-20 rounded-md object-cover border border-[var(--line)]" />
-              ) : (
-                <a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 rounded-md border border-[var(--line)] bg-white px-2 py-1 text-xs">
-                  <Paperclip className="h-3 w-3" /> {a.name}
-                </a>
-              )
-            )}
-          </div>
-        )}
-        <p className="text-[10px] text-[var(--ink-soft)] mt-1">{formatDate(message.createdAt)}</p>
+    <div className="flex items-start gap-2">
+      <Avatar className="h-8 w-8 shrink-0"><AvatarFallback className="text-[10px] bg-[var(--accent)]">{author?.avatar}</AvatarFallback></Avatar>
+      <div className="flex min-w-0 max-w-[80%] flex-col gap-0.5 sm:max-w-[70%]">
+        <span className="text-[11px] text-[var(--ink-soft)]">{author?.name}</span>
+        <div className="flex items-end gap-1.5">
+          {bubble}
+          {time}
+        </div>
       </div>
     </div>
   );

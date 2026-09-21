@@ -4,7 +4,8 @@ import { prisma } from "@smartboss/database";
 import { getVisibleModules, type ModuleManifest } from "@/module-registry";
 import { roleLabel } from "@/lib/roles";
 import { unreadCount } from "@/modules/maintenance/data/notify";
-import { configuredSupportOrg, isSupportStaff, SUPPORT_STAFF_ROLES } from "@/modules/admin/support-org";
+import { getIssueConsoleAccess } from "@/modules/admin/data/issue-console-access";
+import { ADMIN_ISSUE_REPORT_CODE } from "@/modules/admin/issue-report-manifest";
 
 export interface ShellNavUser {
   name: string;
@@ -41,16 +42,11 @@ export const loadShellNav = cache(async (): Promise<ShellNav | null> => {
       ).map((om) => om.module.code)
     : [];
 
-  // CEO/ADMIN ของ "บริษัทของเรา" เห็นเมนูคอนโซลแจ้งบัคด้วย — query บริษัทเฉพาะ
-  // เมื่อตั้ง ISSUE_SUPPORT_ORG แล้วและมี role ที่เข้าข่ายเท่านั้น
-  const supportStaff =
-    !!user.orgId &&
-    !!configuredSupportOrg() &&
-    user.roles.some((r) => (SUPPORT_STAFF_ROLES as readonly string[]).includes(r)) &&
-    isSupportStaff(
-      user.roles,
-      await prisma.organization.findUnique({ where: { id: user.orgId }, select: { code: true, slug: true } })
-    );
+  // แผนก IT (คนแก้) และ CEO/ADMIN (แค่รู้) ของ "บริษัทของเรา" เห็นเมนูคอนโซลแจ้งบัคด้วย —
+  // query เฉพาะเมื่อตั้ง ISSUE_SUPPORT_ORG แล้ว (ดู getSupportRole)
+  // ไม่มีสิทธิ์เข้าคอนโซล (เช่น Super Admin ของบริษัทอื่น) → ซ่อนโมดูลนี้ทั้งอัน ไม่ให้โผล่แล้วกดเข้าไม่ได้
+  const consoleAccess = await getIssueConsoleAccess({ userId: user.id, orgId: user.orgId, roles: user.roles });
+  const supportStaff = consoleAccess?.kind === "home";
 
   return {
     user: {
@@ -64,7 +60,7 @@ export const loadShellNav = cache(async (): Promise<ShellNav | null> => {
       roles: user.roles,
       enabledCodes,
       isSupportStaff: supportStaff,
-    }),
+    }).filter((m) => m.id !== ADMIN_ISSUE_REPORT_CODE || consoleAccess !== null),
     unread: await unreadCount(user.id),
   };
 });

@@ -5,6 +5,7 @@ import { Card } from "@smartboss/ui/components/card";
 import { Button } from "@smartboss/ui/components/button";
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { iconByName } from "@/lib/icons";
+import { ModuleMenuFilter } from "@/modules/admin/components/issue-reports/module-menu-filter";
 import { moduleRegistry } from "@/module-registry";
 import { classifyIssueSource, type IssueSource, type SourceModule } from "@/modules/admin/issue-source";
 import { requireIssueConsoleAccess } from "@/modules/admin/data/issue-console-access";
@@ -199,6 +200,11 @@ export async function renderIssueReportsPage(
     if (t.assigneeId && t.assigneeName) assigneeOptions.set(t.assigneeId, t.assigneeName);
   }
 
+  const menusByModule: Record<string, { path: string; label: string }[]> = {};
+  for (const [moduleId, group] of menuGroups) {
+    menusByModule[moduleId] = Array.from(group.items, ([path, label]) => ({ path, label }));
+  }
+
   const openTickets = allTickets.filter((t) => !CLOSED_STATUSES.includes(t.status));
   const companiesReporting = new Set(allTickets.map((t) => t.orgId)).size;
 
@@ -303,28 +309,13 @@ export async function renderIssueReportsPage(
               ))}
             </select>
           </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-(--ink-soft)">โมดูลที่แจ้ง</span>
-            <select name="module" defaultValue={sp.module ?? ""} className={selectClass}>
-              <option value="">ทุกโมดูล</option>
-              {Array.from(moduleOptions.values()).map((m) => (
-                <option key={m.moduleId} value={m.moduleId}>{m.moduleName}</option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-(--ink-soft)">เมนู</span>
-            <select name="menu" defaultValue={sp.menu ?? ""} className={selectClass}>
-              <option value="">ทุกเมนู</option>
-              {Array.from(menuGroups.entries()).map(([moduleId, g]) => (
-                <optgroup key={moduleId} label={g.moduleName}>
-                  {Array.from(g.items.entries()).map(([path, label]) => (
-                    <option key={path} value={path}>{label}</option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-          </label>
+          <ModuleMenuFilter
+            key={`${sp.module ?? ""}|${sp.menu ?? ""}`}
+            modules={Array.from(moduleOptions.values()).map((m) => ({ id: m.moduleId, name: m.moduleName }))}
+            menusByModule={menusByModule}
+            defaultModule={sp.module ?? ""}
+            defaultMenu={sp.menu ?? ""}
+          />
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-(--ink-soft)">ตั้งแต่วันที่</span>
             <input

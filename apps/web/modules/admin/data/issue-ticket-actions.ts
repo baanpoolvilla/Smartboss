@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { requireOrg } from "@smartboss/auth";
 import { getIssueConsoleAccess } from "./issue-console-access";
 import { listIssueStaff } from "./issue-staff";
-import { canActOnTicketOrg } from "../support-org";
+import { canActOnTickets } from "../support-org";
 import { readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
 import { migrateIssueStoreSlice } from "@/modules/report_task/lib/issue-migration";
 import { issueStatusMeta, issuePriorityMeta } from "@/modules/report_task/lib/issue-meta";
@@ -37,13 +37,13 @@ import type { ActivityItem } from "@/modules/report_task/types";
  * to be kept in sync by hand if the ticket state machine ever changes.
  */
 
-/** แก้/ตอบ/รับเรื่อง/ลบตั๋วของบริษัท orgId ได้ไหม — Super Admin ทุกบริษัท,
- * CEO/ADMIN ของบริษัทเรา (ISSUE_SUPPORT_ORG) เฉพาะตั๋วของบริษัทเราเอง ตัดสินจาก
- * session ฝั่งเซิร์ฟเวอร์ ไม่เชื่อค่าที่ client ส่งมา */
-async function requireTicketActor(orgId: string) {
+/** แก้/ตอบ/รับเรื่อง/ลบตั๋วได้ไหม — Super Admin และแผนก IT/ฝ่ายพัฒนาระบบของบริษัทเรา
+ * (ISSUE_SUPPORT_ORG) ทำได้ทุกบริษัท (บริษัทอื่นแจ้ง/ดูตั๋วตัวเองได้อย่างเดียว เราเป็นคนแก้ให้);
+ * CEO/ADMIN ดูอย่างเดียว ตัดสินจาก session ฝั่งเซิร์ฟเวอร์ ไม่เชื่อค่าที่ client ส่งมา */
+async function requireTicketActor(_orgId: string, _ticketId: string) {
   const session = await requireOrg();
   const access = await getIssueConsoleAccess(session);
-  if (!access || !canActOnTicketOrg(access, orgId)) throw new Error("คุณไม่มีสิทธิ์แก้ตั๋วของบริษัทนี้ (ดูได้อย่างเดียว)");
+  if (!access || !canActOnTickets(access)) throw new Error("คุณไม่มีสิทธิ์แก้ตั๋วนี้ (ดูได้อย่างเดียว)");
   return session;
 }
 
@@ -82,7 +82,7 @@ async function mutateTicket(orgId: string, ticketId: string, mutate: (ticket: Is
 }
 
 export async function adminReplyToTicket(orgId: string, ticketId: string, body: string, audience: IssueAudience = "all") {
-  const session = await requireTicketActor(orgId);
+  const session = await requireTicketActor(orgId, ticketId);
   const trimmed = body.trim();
   if (!trimmed) throw new Error("พิมพ์ข้อความก่อนส่ง");
   const updated = await mutateTicket(orgId, ticketId, (t) => {
@@ -161,7 +161,7 @@ async function notifyReporterOfStatus(orgId: string, ticket: IssueTicket, status
 /** "รับเรื่อง" — claim (assign to self) + move to triaged in one step, same
  * shortcut the old per-org side panel offered agents. */
 export async function adminClaimTicket(orgId: string, ticketId: string) {
-  const session = await requireTicketActor(orgId);
+  const session = await requireTicketActor(orgId, ticketId);
   const updated = await mutateTicket(orgId, ticketId, (t) => {
     const now = new Date().toISOString();
     const next: IssueTicket = {
@@ -187,7 +187,7 @@ export async function adminSetStatus(
   status: IssueStatus,
   extra?: { rejectReason?: string; duplicateOfId?: string; whatWasChecked?: string }
 ) {
-  const session = await requireTicketActor(orgId);
+  const session = await requireTicketActor(orgId, ticketId);
   let previousStatus: IssueStatus | null = null;
   const updated = await mutateTicket(orgId, ticketId, (t) => {
     previousStatus = t.status;
@@ -225,7 +225,7 @@ export async function adminSetStatus(
 }
 
 export async function adminSetPriority(orgId: string, ticketId: string, priority: IssuePriority) {
-  const session = await requireTicketActor(orgId);
+  const session = await requireTicketActor(orgId, ticketId);
   return mutateTicket(orgId, ticketId, (t) => {
     const now = new Date().toISOString();
     const next = { ...t, priority, updatedAt: now };
@@ -244,7 +244,7 @@ export async function adminSetPriority(orgId: string, ticketId: string, priority
 }
 
 export async function adminSetAssignee(orgId: string, ticketId: string, assigneeId: string | null, assigneeName: string) {
-  const session = await requireTicketActor(orgId);
+  const session = await requireTicketActor(orgId, ticketId);
   if (assigneeId && !(await assignableStaff()).some((u) => u.id === assigneeId)) throw new Error("มอบหมายให้คนนี้ไม่ได้");
   const updated = await mutateTicket(orgId, ticketId, (t) => {
     const now = new Date().toISOString();
@@ -279,7 +279,7 @@ export async function adminSetAssignee(orgId: string, ticketId: string, assignee
 /** Confirming "on the reporter's behalf" — same idea the old side panel had
  * for an agent, now only ever done by a Super Admin from this console. */
 export async function adminConfirmResolution(orgId: string, ticketId: string, worked: boolean, reason?: string) {
-  const session = await requireTicketActor(orgId);
+  const session = await requireTicketActor(orgId, ticketId);
   return mutateTicket(orgId, ticketId, (t) => {
     const now = new Date().toISOString();
     const next: IssueTicket = worked
@@ -318,7 +318,7 @@ async function logTicketDeletion(orgId: string, ticket: IssueTicket, deletedByNa
 /** ลบตั๋วทิ้งทั้งหมด (รวมข้อความในตั๋วทุกอัน) — ทำไม่ได้ย้อนกลับ ใช้ตอนตั๋วเป็น
  * สแปม/ทดสอบ/ไม่เกี่ยวข้อง ไม่ใช่ workflow ปกติ (ปิดตั๋วใช้เปลี่ยนสถานะแทน) */
 export async function adminDeleteTicket(orgId: string, ticketId: string) {
-  const session = await requireTicketActor(orgId);
+  const session = await requireTicketActor(orgId, ticketId);
   const { data, version } = await readStore<unknown>(orgId, "issue-reports");
   const slice = migrateIssueStoreSlice(data);
   const ticket = slice.tickets.find((t) => t.id === ticketId);

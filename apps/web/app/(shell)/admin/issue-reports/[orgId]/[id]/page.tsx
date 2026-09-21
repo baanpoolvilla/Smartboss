@@ -7,7 +7,7 @@ import { migrateIssueStoreSlice } from "@/modules/report_task/lib/issue-migratio
 import { listAssignableStaff } from "@/modules/admin/data/issue-ticket-actions";
 import { requireIssueConsoleAccess } from "@/modules/admin/data/issue-console-access";
 import { markTicketNotificationsRead } from "@/modules/admin/data/issue-notify-state";
-import { canActOnTicketOrg } from "@/modules/admin/support-org";
+import { canActOnTickets } from "@/modules/admin/support-org";
 import { classifyIssueSource } from "@/modules/admin/issue-source";
 import { moduleRegistry } from "@/module-registry";
 import { IssueTicketDetailClient, type TicketUserInfo } from "@/modules/admin/components/issue-reports/issue-ticket-detail-client";
@@ -19,9 +19,9 @@ export const dynamic = "force-dynamic";
  * ticket (reply, claim, change status/priority/assignee) now that the
  * per-org "issue desk" is retired everywhere else. Reads straight from the
  * target org's own raw store row (no session/org boundary to cross around —
- * requireIssueConsoleAccess() is the gate, same as the list page). Super Admin
- * works any ticket; CEO/ADMIN of our own company (ISSUE_SUPPORT_ORG) can read
- * any ticket but only work the ones filed by our own company (readOnly).
+ * requireIssueConsoleAccess() is the gate, same as the list page). Super Admin and
+ * the IT/ฝ่ายพัฒนาระบบ of our own company (ISSUE_SUPPORT_ORG) work any ticket;
+ * CEO/ADMIN of our company can read any ticket but not work it (readOnly).
  */
 export default async function AdminIssueTicketDetailPage({
   params,
@@ -84,7 +84,7 @@ export default async function AdminIssueTicketDetailPage({
         userMap={userMap}
         assignees={assignees}
         currentUserId={session.userId}
-        readOnly={!canActOnTicketOrg(access, orgId)}
+        readOnly={!canActOnTickets(access)}
         sourceLabel={sourceLabel}
         pageLink={pageLink}
       />

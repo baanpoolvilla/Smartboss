@@ -79,6 +79,8 @@ export function ReportTaskScaffold({
   const isIssueReports = pathname.startsWith(ISSUE_REPORTS_BASE);
 
   const title = isIssueReports ? "แจ้งบัค" : (match?.label ?? reportTaskManifest.name);
+  // หน้ารายละเอียดตั๋ว (/issue-reports/[id]) มีลูกศรย้อนกลับที่มุมซ้ายของแถบบน กลับไปหน้ารายการ
+  const backHref = pathname.startsWith(`${ISSUE_REPORTS_BASE}/`) ? ISSUE_REPORTS_BASE : undefined;
 
   // กระดาน Kanban กับหน้ารายงาน (topic sidebar + feed สองแผงเลื่อนแยกกันเอง
   // ข้างใน) จัดการ scroll ของตัวเองทั้งคู่ — ถ้าไม่ตั้ง fill ไว้ ตัวห่อของ
@@ -100,7 +102,7 @@ export function ReportTaskScaffold({
       {/* <Toaster /> ย้ายไปอยู่ที่ Shell แล้ว (components/shell/shell.tsx) — ครอบทุกโมดูล
           ห้ามวางซ้ำที่นี่ ไม่งั้นทุก toast ในโมดูลนี้จะเด้งขึ้นสองอัน */}
 
-      <ScaffoldBody title={title} selfScrolling={selfScrolling}>
+      <ScaffoldBody title={title} selfScrolling={selfScrolling} backHref={backHref}>
         {children}
       </ScaffoldBody>
     </AppBarLeadingProvider>
@@ -113,15 +115,17 @@ export function ReportTaskScaffold({
 function ScaffoldBody({
   title,
   selfScrolling,
+  backHref,
   children,
 }: {
   title: string;
   selfScrolling: boolean;
+  backHref?: string;
   children: React.ReactNode;
 }) {
   const leading = useAppBarLeading();
   return (
-    <AppScaffold title={title} leading={leading} width="max-w-none" fill={selfScrolling} fillMaxWidth={selfScrolling}>
+    <AppScaffold title={title} leading={leading} backHref={backHref} width="max-w-none" fill={selfScrolling} fillMaxWidth={selfScrolling}>
       {children}
     </AppScaffold>
   );
