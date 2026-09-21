@@ -118,31 +118,53 @@ function renderMentions(text: string) {
   );
 }
 
-/** ข้อความของรายการเช็คลิสต์ — ยาวเกินก็ตัดเหลือ 2 บรรทัด มีปุ่ม "ดูเพิ่มเติม" กางอ่านเต็ม ๆ ได้ (ไม่ใช้การวัดขนาดจริง
- * จึงประมาณจากจำนวนตัวอักษร/บรรทัด กันโค้ดซับซ้อนและไม่กระพริบตอนโหลด) */
-const CHECKLIST_LONG_CHARS = 90;
+/** ข้อความของรายการเช็คลิสต์ — ปกติแสดงบรรทัดเดียว (ตัดด้วย …) ถ้ายาวเกินจริงถึงมีลูกศรเล็ก ๆ ท้ายบรรทัด
+ * กดเพื่อกางอ่านเต็ม ๆ กดอีกครั้งย่อกลับ — ลูกศรอยู่บรรทัดเดียวกัน ไม่เพิ่มบรรทัด/ไม่กินที่ วัดจากขนาดจริงของกล่อง
+ * ไม่ใช่นับตัวอักษร (ข้อความที่พอดีบรรทัดจึงไม่มีลูกศรหลอก) */
 function ChecklistItemText({ text, done, alignRight = false }: { text: string; done: boolean; alignRight?: boolean }) {
+  const ref = useRef<HTMLSpanElement>(null);
   const [expanded, setExpanded] = useState(false);
-  const long = text.length > CHECKLIST_LONG_CHARS || text.split("\n").length > 2;
+  const [clamped, setClamped] = useState(false);
+  const multiLine = text.includes(String.fromCharCode(10));
+
+  // ResizeObserver เรียกครั้งแรกทันทีที่เริ่มสังเกต และเรียกอีกเมื่อขนาดเปลี่ยน (ย่อ-ขยายหน้าจอ, กดย่อ)
+  // ตอนกางอยู่ไม่วัด (กล่องไม่ถูกตัดแล้ว ผลจะเป็น "ไม่ยาว" ทำให้ลูกศรย่อหาย)
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      if (el.dataset.expanded === "true") return;
+      setClamped(el.scrollWidth > el.clientWidth + 1);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [text]);
+
+  const canToggle = clamped || multiLine || expanded;
   return (
-    <span className={cn("min-w-0 flex-1", alignRight && "text-right")}>
+    <span className="flex min-w-0 flex-1 items-start justify-end gap-1">
       <span
+        ref={ref}
+        data-expanded={expanded ? "true" : "false"}
         className={cn(
-          "block whitespace-pre-wrap break-words text-sm",
-          long && !expanded && "line-clamp-2",
+          "min-w-0 flex-1 text-sm",
+          expanded ? "whitespace-pre-wrap break-words" : "truncate",
+          alignRight && "text-right",
           done && "line-through text-[var(--ink-soft)]"
         )}
       >
         {text}
       </span>
-      {long && (
+      {canToggle && (
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
-          className="text-[11px] font-medium text-[var(--brand-green-dark)] hover:underline"
+          aria-label={expanded ? "ย่อ" : "ดูเพิ่มเติม"}
+          title={expanded ? "ย่อ" : "ดูเพิ่มเติม"}
+          className="mt-0.5 shrink-0 rounded p-0.5 text-[var(--ink-soft)] transition-colors hover:bg-[var(--bg-soft)] hover:text-[var(--brand-green-dark)]"
         >
-          {expanded ? "ย่อ" : "ดูเพิ่มเติม"}
+          <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")} />
         </button>
       )}
     </span>
