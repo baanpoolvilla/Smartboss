@@ -107,9 +107,14 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
     setPendingSticker(sticker);
   }
 
-  function confirmSticker(targetUserId?: string) {
+  function confirmSticker(targetUserIds?: string[]) {
     if (!pendingSticker) return;
-    addReaction(task.id, pendingSticker.id, viewingAsUserId, undefined, targetUserId);
+    // รายคน (เลือกได้หลายคน) = ติดให้ทีละคน · ไม่ระบุ = ทั้งกลุ่ม/งานเดี่ยว ติดครั้งเดียว
+    if (targetUserIds && targetUserIds.length > 0) {
+      for (const id of targetUserIds) addReaction(task.id, pendingSticker.id, viewingAsUserId, undefined, id);
+    } else {
+      addReaction(task.id, pendingSticker.id, viewingAsUserId);
+    }
     showStickerToast(pendingSticker, task.title);
     setPendingSticker(null);
   }

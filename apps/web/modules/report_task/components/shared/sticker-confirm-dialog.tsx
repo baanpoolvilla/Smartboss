@@ -27,7 +27,8 @@ export interface StickerTarget {
  *
  * งานกลุ่ม (ส่ง \`targets\` มา 2 คนขึ้นไป): ถามก่อนว่าจะส่งให้ "ทั้งกลุ่ม" หรือ "รายคน" (แล้วเลือกชื่อ)
  * ต้องเลือกก่อนถึงกดยืนยันได้ — สติกเกอร์นี้มีผลกับคะแนน (เช่น หัวร้อน -5) จึงไม่เดาให้
- * onConfirm ได้ id คนที่เลือก (รายคน) หรือ undefined (ทั้งกลุ่ม / งานที่ไม่ต้องเลือก)
+ * รายคนเลือกได้หลายคนในครั้งเดียว — onConfirm ได้รายการ id ที่เลือก (รายคน) หรือ undefined (ทั้งกลุ่ม /
+ * งานที่ไม่ต้องเลือก) ผู้เรียกติดสติกเกอร์ให้ทีละคนตามรายการ
  */
 export function StickerConfirmDialog({
   open,
@@ -49,7 +50,7 @@ export function StickerConfirmDialog({
   taskTitle: string;
   itemLabel?: "งาน" | "โพสต์";
   targets?: StickerTarget[];
-  onConfirm: (targetUserId?: string) => void;
+  onConfirm: (targetUserIds?: string[]) => void;
 }) {
   return (
     <AlertDialog open={open && !!sticker} onOpenChange={onOpenChange}>
@@ -82,15 +83,19 @@ function StickerConfirmBody({
   taskTitle: string;
   itemLabel: "งาน" | "โพสต์";
   targets?: StickerTarget[];
-  onConfirm: (targetUserId?: string) => void;
+  onConfirm: (targetUserIds?: string[]) => void;
 }) {
   const hasChoice = (targets?.length ?? 0) > 1;
   const [mode, setMode] = useState<"all" | "one" | null>(null);
-  const [personId, setPersonId] = useState<string | null>(null);
+  const [personIds, setPersonIds] = useState<string[]>([]);
 
-  const person = targets?.find((t) => t.id === personId);
-  const recipient = !hasChoice ? recipientName : mode === "all" ? "ทั้งกลุ่ม" : mode === "one" && person ? person.name : "…";
-  const canConfirm = !hasChoice || mode === "all" || (mode === "one" && !!personId);
+  const picked = (targets ?? []).filter((t) => personIds.includes(t.id));
+  // 1 คน = ชื่อ, 2-3 คน = ชื่อคั่นด้วยจุลภาค, มากกว่านั้น = ย่อ "และอีก N คน"
+  const pickedLabel =
+    picked.length <= 3 ? picked.map((p) => p.name).join(", ") : `${picked.slice(0, 2).map((p) => p.name).join(", ")} และอีก ${picked.length - 2} คน`;
+  const recipient = !hasChoice ? recipientName : mode === "all" ? "ทั้งกลุ่ม" : mode === "one" && picked.length > 0 ? pickedLabel : "…";
+  const canConfirm = !hasChoice || mode === "all" || (mode === "one" && picked.length > 0);
+  const togglePerson = (id: string) => setPersonIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   return (
     <>
@@ -105,7 +110,15 @@ function StickerConfirmBody({
             <span className="block mt-2 text-[var(--chart-red-dark)]">
               สติกเกอร์นี้จะบันทึกลงประวัติงาน และ
               {sticker.points < 0 ? `หักคะแนน ${Math.abs(sticker.points)} แต้ม` : `ให้คะแนน +${sticker.points} แต้ม`}
-              {hasChoice ? (mode === "one" && person ? `ของ ${person.name}` : mode === "all" ? "ของทุกคนในกลุ่ม" : "ของผู้ที่เลือก") : "ของผู้รับผิดชอบ"}
+              {hasChoice
+                ? mode === "one" && picked.length > 0
+                  ? picked.length > 1
+                    ? ` ให้แต่ละคน: ${pickedLabel}`
+                    : `ของ ${pickedLabel}`
+                  : mode === "all"
+                    ? "ของทุกคนในกลุ่ม"
+                    : "ของผู้ที่เลือก"
+                : "ของผู้รับผิดชอบ"}
             </span>
           )}
         </AlertDialogDescription>
@@ -119,7 +132,7 @@ function StickerConfirmBody({
               selected={mode === "all"}
               onClick={() => {
                 setMode("all");
-                setPersonId(null);
+                setPersonIds([]);
               }}
               icon={<Users className="h-4 w-4" />}
               title="ทั้งกลุ่ม"
@@ -130,29 +143,31 @@ function StickerConfirmBody({
               onClick={() => setMode("one")}
               icon={<User className="h-4 w-4" />}
               title="รายคน"
-              sub="เลือกชื่อด้านล่าง"
+              sub={mode === "one" && picked.length > 0 ? `เลือกแล้ว ${picked.length} คน` : "เลือกได้หลายคน"}
             />
           </div>
           {mode === "one" && (
-            <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="เลือกคน">
-              {targets!.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={personId === t.id}
-                  onClick={() => setPersonId(t.id)}
-                  className={cn(
-                    "inline-flex max-w-full items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-                    personId === t.id
-                      ? "border-[var(--brand-green)] bg-[var(--accent)] text-[var(--brand-green-dark)]"
-                      : "border-[var(--line)] bg-white text-[var(--ink)] hover:border-[var(--brand-green)]"
-                  )}
-                >
-                  {personId === t.id && <Check className="h-3 w-3 shrink-0" />}
-                  <span className="truncate">{t.name}</span>
-                </button>
-              ))}
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="เลือกคน (เลือกได้หลายคน)">
+              {targets!.map((t) => {
+                const on = personIds.includes(t.id);
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => togglePerson(t.id)}
+                    className={cn(
+                      "inline-flex max-w-full items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                      on
+                        ? "border-[var(--brand-green)] bg-[var(--accent)] text-[var(--brand-green-dark)]"
+                        : "border-[var(--line)] bg-white text-[var(--ink)] hover:border-[var(--brand-green)]"
+                    )}
+                  >
+                    {on && <Check className="h-3 w-3 shrink-0" />}
+                    <span className="truncate">{t.name}</span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -160,7 +175,7 @@ function StickerConfirmBody({
 
       <AlertDialogFooter>
         <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
-        <AlertDialogAction disabled={!canConfirm} onClick={() => onConfirm(mode === "one" ? (personId ?? undefined) : undefined)}>
+        <AlertDialogAction disabled={!canConfirm} onClick={() => onConfirm(mode === "one" ? picked.map((p) => p.id) : undefined)}>
           ยืนยันส่ง
         </AlertDialogAction>
       </AlertDialogFooter>

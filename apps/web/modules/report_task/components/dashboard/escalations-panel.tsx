@@ -84,9 +84,14 @@ export function EscalationsPanel() {
     setPendingSticker({ taskId, title, recipientName });
   }
 
-  function confirmSticker(targetUserId?: string) {
+  function confirmSticker(targetUserIds?: string[]) {
     if (!pendingSticker || !angrySticker) return;
-    addReaction(pendingSticker.taskId, angrySticker.id, viewingAsUserId, undefined, targetUserId);
+    // รายคน (เลือกได้หลายคน) = ติดให้ทีละคน · ไม่ระบุ = ทั้งกลุ่ม/งานเดี่ยว ติดครั้งเดียว
+    if (targetUserIds && targetUserIds.length > 0) {
+      for (const id of targetUserIds) addReaction(pendingSticker.taskId, angrySticker.id, viewingAsUserId, undefined, id);
+    } else {
+      addReaction(pendingSticker.taskId, angrySticker.id, viewingAsUserId);
+    }
     showStickerToast(angrySticker, pendingSticker.title);
     setPendingSticker(null);
   }
