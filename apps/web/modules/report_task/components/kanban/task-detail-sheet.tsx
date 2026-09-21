@@ -658,12 +658,7 @@ export function TaskDetailSheet({
               {isShared && assignees.length > 1 && (
                 <>
                   <span
-                    className={cn(
-                      "rounded-full border px-2 py-0.5 text-[10px] font-medium",
-                      task.completionRule === "any"
-                        ? "border-[var(--brand-green)]/30 bg-[var(--accent)] text-[var(--brand-green-dark)]"
-                        : "border-[var(--line)] bg-[var(--bg-soft)] text-[var(--ink-soft)]"
-                    )}
+                    className="rounded-full border border-[var(--line)] bg-[var(--bg-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--ink-soft)]"
                     title={
                       task.completionRule === "any"
                         ? "ใครทำส่วนของตัวเองครบก่อน งานปิดทันที"
