@@ -19,6 +19,7 @@ import {
   propertyCaretaker,
 } from "@/modules/maintenance/data/notify";
 import { getProperty } from "@/modules/maintenance/data/properties";
+import { fmtThaiDate } from "@/modules/maintenance/lib/format";
 import { putFile, putFiles } from "@/modules/maintenance/lib/storage";
 import { createUploadLink } from "@/modules/maintenance/data/external-upload";
 import {
@@ -27,12 +28,28 @@ import {
   completePmSchedulesForAsset,
 } from "@/modules/maintenance/data/pm";
 
+/**
+ * วันครบกำหนดจาก input[type=date] → สิ้นวันตามเวลาไทย (23:59:59.999+07:00)
+ *
+ * ไม่ใช่เที่ยงคืน UTC แบบ parseDate ของฝั่ง PM เพราะคอลัมน์นี้เป็น DateTime จริง
+ * ที่ cron เอาไปเทียบ `<` ตรง ๆ เพื่อหางานเลยกำหนด (data/cron.ts) — ถ้าเก็บเป็น
+ * เที่ยงคืน UTC งานจะถูกนับว่าเลยกำหนดตั้งแต่ 7 โมงเช้า *ของวันครบกำหนดเอง*
+ * ทั้งที่ยังเหลือทั้งวันให้ทำ แล้วผู้รับผิดชอบโดนหักคะแนนผลงานฟรี ๆ
+ * ส่วนการแสดงผลได้วันเดียวกันทั้งสองแบบ (16:59Z ยังเป็นวันเดิมในเขตเวลา UTC)
+ */
+function parseDueDate(v: string | null | undefined): Date | null {
+  if (!v) return null;
+  const d = new Date(`${v}T23:59:59.999+07:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 const createSchema = z.object({
   title: z.string().trim().min(1, "กรุณากรอกหัวข้องาน").max(200),
   propertyIds: z.array(z.string()).min(1, "เลือกอย่างน้อย 1 บ้าน"),
   assignedTo: z.string().optional(),
   ccUserIds: z.array(z.string()).optional(),
   priority: z.enum(["low", "medium", "high", "urgent"]).default("medium"),
+  dueDate: z.string().optional(),
   description: z.string().trim().max(2000).optional(),
   assetId: z.string().optional(),
   pmScheduleId: z.string().optional(),
@@ -52,6 +69,7 @@ export async function createWorkOrderAction(formData: FormData) {
     assignedTo: (formData.get("assignedTo") as string) || undefined,
     ccUserIds,
     priority: (formData.get("priority") as string) || "medium",
+    dueDate: (formData.get("dueDate") as string) || undefined,
     description: (formData.get("description") as string) || undefined,
     assetId: (formData.get("assetId") as string) || undefined,
     pmScheduleId: (formData.get("pmScheduleId") as string) || undefined,
@@ -63,6 +81,8 @@ export async function createWorkOrderAction(formData: FormData) {
   const cc = (d.ccUserIds ?? []).filter((id) => id !== assignedTo);
   const [primary, ...additional] = d.propertyIds;
 
+  const dueDate = parseDueDate(d.dueDate);
+
   const photoFiles = formData.getAll("photos").filter((f): f is File => f instanceof File);
   const photoUrls = await putFiles(`${s.orgId}/maintenance/work-orders`, photoFiles);
 
@@ -72,6 +92,7 @@ export async function createWorkOrderAction(formData: FormData) {
     title: d.title,
     description: d.description ?? null,
     priority: d.priority,
+    dueDate,
     assignedTo,
     createdBy: s.userId,
     ccUserIds: cc,
@@ -89,10 +110,15 @@ export async function createWorkOrderAction(formData: FormData) {
   for (const uid of notifyTargets) {
     await notifyUser(s.orgId, uid, {
       title: `📋 ได้รับมอบหมายงานใหม่: ${d.title}`,
-      body: d.description ?? undefined,
+      // วันครบกำหนดอยู่ในแจ้งเตือนด้วย — คนรับงานเห็นแค่ข้อความที่เด้งเข้า LINE
+      // ก่อนจะเปิดระบบ ถ้าไม่บอกตรงนี้ก็ไม่มีทางรู้ว่ามีเวลาถึงเมื่อไหร่
+      body:
+        [dueDate ? `ครบกำหนด ${fmtThaiDate(dueDate)}` : null, d.description ?? null]
+          .filter(Boolean)
+          .join("\n") || undefined,
       type: "work_order",
       referenceId: wo.id,
-      line: `📢 งานใหม่: ${d.title}\nเข้าดูรายละเอียดในระบบ Smartboss`,
+      line: `📢 งานใหม่: ${d.title}\n${dueDate ? `📅 ครบกำหนด ${fmtThaiDate(dueDate)}\n` : ""}เข้าดูรายละเอียดในระบบ Smartboss`,
     });
   }
 

@@ -42,6 +42,7 @@ export default async function NewWorkOrderPage({
     technicianId?: string;
     assetId?: string;
     priority?: string;
+    dueDate?: string;
     pmScheduleId?: string;
     pmScheduleIds?: string;
     description?: string;
@@ -145,6 +146,14 @@ export default async function NewWorkOrderPage({
               <option value="medium">ปานกลาง</option>
               <option value="urgent">เร่งด่วน</option>
             </select>
+          </Field>
+
+          <Field label="วันครบกำหนด" hint="(ไม่ใส่ก็ได้)">
+            <Input name="dueDate" type="date" defaultValue={sp.dueDate ?? ""} />
+            <span className="text-xs font-normal text-(--ink-soft)">
+              ใส่แล้วถ้าเลยวันนี้ยังไม่ปิดงาน ใบงานจะขึ้นแดงว่าเลยกำหนด
+              และถูกนับเป็นงานค้างของผู้รับผิดชอบในรายงานผลงาน
+            </span>
           </Field>
 
           <label className="flex items-start gap-2.5 rounded-(--radius) border border-(--line) p-3">
