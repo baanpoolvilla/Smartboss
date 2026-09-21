@@ -40,6 +40,7 @@ export const adminIssueReportManifest: ModuleManifest = {
       label: "ทั้งหมด",
       path: "/admin/issue-reports",
       permission: ADMIN_PERMS.orgCreate,
+      allowSupportStaff: true,
       icon: "Bug",
       // มีตั๋วใหม่/ผู้แจ้งตอบกลับที่ยังไม่ได้ดู (issue-notify.ts) — เห็นเฉพาะ
       // Super Admin เหมือนเมนูนี้เอง จึงไม่มีทางเห็นแจ้งเตือนของบริษัทอื่น
@@ -58,6 +59,7 @@ export const adminIssueReportManifest: ModuleManifest = {
       label: "ตั๋วของฉัน",
       path: "/admin/issue-reports/mine",
       permission: ADMIN_PERMS.orgCreate,
+      allowSupportStaff: true,
       icon: "User",
     },
   ],

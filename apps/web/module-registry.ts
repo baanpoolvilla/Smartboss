@@ -28,6 +28,12 @@ export interface ModuleMenuItem {
    * this unset; Shell renders nothing when it's absent.
    */
   badge?: ReactNode;
+  /**
+   * true = CEO/ADMIN ของ "บริษัทของเรา" (ISSUE_SUPPORT_ORG, ดู
+   * modules/admin/support-org.ts) เห็นเมนูนี้ด้วย แม้ไม่มี permission ข้างบน —
+   * ใช้กับเมนูแจ้งบัคของคอนโซลรับเรื่อง ตัวหน้าเช็คสิทธิ์จริงซ้ำอีกชั้นที่ server
+   */
+  allowSupportStaff?: boolean;
 }
 
 export interface ModuleManifest {
@@ -82,6 +88,8 @@ export interface VisibleModulesInput {
   roles: string[];
   /** โมดูล (code) ที่บริษัทของผู้ใช้เปิดใช้งานอยู่ = subscription */
   enabledCodes: string[];
+  /** CEO/ADMIN ของบริษัทเรา (ดู ModuleMenuItem.allowSupportStaff) */
+  isSupportStaff?: boolean;
 }
 
 /**
@@ -92,6 +100,7 @@ export function getVisibleModules({
   permissions,
   roles,
   enabledCodes,
+  isSupportStaff = false,
 }: VisibleModulesInput): ModuleManifest[] {
   const enabled = new Set(enabledCodes);
 
@@ -101,8 +110,10 @@ export function getVisibleModules({
       ...m,
       // ใช้ตัวตัดสินเดียวกับฝั่ง server (packages/auth/permissions.ts) เพื่อไม่ให้
       // เมนูโผล่มาแล้วกดเข้าไปโดนเด้งออก — SUPER_ADMIN ผ่านหมดยกเว้นกลุ่มเงินเดือน
-      menus: m.menus.filter((menu) =>
-        resolvePermission({ permissions, roles, permission: menu.permission })
+      menus: m.menus.filter(
+        (menu) =>
+          (isSupportStaff && menu.allowSupportStaff) ||
+          resolvePermission({ permissions, roles, permission: menu.permission })
       ),
     }))
     .filter((m) => m.menus.length > 0);

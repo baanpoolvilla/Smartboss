@@ -1,7 +1,10 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { requireOrg, isSuperAdmin } from "@smartboss/auth";
+import { requireOrg } from "@smartboss/auth";
+import { prisma } from "@smartboss/database";
+import { getIssueConsoleAccess, getSupportOrgId } from "./issue-console-access";
+import { SUPPORT_STAFF_ROLES, canActOnTicketOrg } from "../support-org";
 import { readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
 import { migrateIssueStoreSlice } from "@/modules/report_task/lib/issue-migration";
 import { issueStatusMeta, issuePriorityMeta } from "@/modules/report_task/lib/issue-meta";
@@ -34,9 +37,13 @@ import type { ActivityItem } from "@/modules/report_task/types";
  * to be kept in sync by hand if the ticket state machine ever changes.
  */
 
-async function requireSuperAdmin() {
+/** แก้/ตอบ/รับเรื่อง/ลบตั๋วของบริษัท orgId ได้ไหม — Super Admin ทุกบริษัท,
+ * CEO/ADMIN ของบริษัทเรา (ISSUE_SUPPORT_ORG) เฉพาะตั๋วของบริษัทเราเอง ตัดสินจาก
+ * session ฝั่งเซิร์ฟเวอร์ ไม่เชื่อค่าที่ client ส่งมา */
+async function requireTicketActor(orgId: string) {
   const session = await requireOrg();
-  if (!isSuperAdmin(session)) redirect("/admin");
+  const access = await getIssueConsoleAccess(session);
+  if (!access || !canActOnTicketOrg(access, orgId)) throw new Error("คุณไม่มีสิทธิ์แก้ตั๋วของบริษัทนี้ (ดูได้อย่างเดียว)");
   return session;
 }
 
@@ -75,7 +82,7 @@ async function mutateTicket(orgId: string, ticketId: string, mutate: (ticket: Is
 }
 
 export async function adminReplyToTicket(orgId: string, ticketId: string, body: string, audience: IssueAudience = "all") {
-  const session = await requireSuperAdmin();
+  const session = await requireTicketActor(orgId);
   const trimmed = body.trim();
   if (!trimmed) throw new Error("พิมพ์ข้อความก่อนส่ง");
   const updated = await mutateTicket(orgId, ticketId, (t) => {
@@ -115,7 +122,7 @@ export async function adminReplyToTicket(orgId: string, ticketId: string, body: 
 /** "รับเรื่อง" — claim (assign to self) + move to triaged in one step, same
  * shortcut the old per-org side panel offered agents. */
 export async function adminClaimTicket(orgId: string, ticketId: string) {
-  const session = await requireSuperAdmin();
+  const session = await requireTicketActor(orgId);
   return mutateTicket(orgId, ticketId, (t) => {
     const now = new Date().toISOString();
     const next: IssueTicket = {
@@ -139,7 +146,7 @@ export async function adminSetStatus(
   status: IssueStatus,
   extra?: { rejectReason?: string; duplicateOfId?: string; whatWasChecked?: string }
 ) {
-  const session = await requireSuperAdmin();
+  const session = await requireTicketActor(orgId);
   return mutateTicket(orgId, ticketId, (t) => {
     const now = new Date().toISOString();
     const isEscalating = status === "escalated" && t.escalatedAt === null;
@@ -173,7 +180,7 @@ export async function adminSetStatus(
 }
 
 export async function adminSetPriority(orgId: string, ticketId: string, priority: IssuePriority) {
-  const session = await requireSuperAdmin();
+  const session = await requireTicketActor(orgId);
   return mutateTicket(orgId, ticketId, (t) => {
     const now = new Date().toISOString();
     const next = { ...t, priority, updatedAt: now };
@@ -192,7 +199,8 @@ export async function adminSetPriority(orgId: string, ticketId: string, priority
 }
 
 export async function adminSetAssignee(orgId: string, ticketId: string, assigneeId: string | null, assigneeName: string) {
-  const session = await requireSuperAdmin();
+  const session = await requireTicketActor(orgId);
+  if (assigneeId && !(await assignableStaff()).some((u) => u.id === assigneeId)) throw new Error("มอบหมายให้คนนี้ไม่ได้");
   return mutateTicket(orgId, ticketId, (t) => {
     const now = new Date().toISOString();
     const next = { ...t, assigneeId, updatedAt: now };
@@ -213,7 +221,7 @@ export async function adminSetAssignee(orgId: string, ticketId: string, assignee
 /** Confirming "on the reporter's behalf" — same idea the old side panel had
  * for an agent, now only ever done by a Super Admin from this console. */
 export async function adminConfirmResolution(orgId: string, ticketId: string, worked: boolean, reason?: string) {
-  const session = await requireSuperAdmin();
+  const session = await requireTicketActor(orgId);
   return mutateTicket(orgId, ticketId, (t) => {
     const now = new Date().toISOString();
     const next: IssueTicket = worked
@@ -252,7 +260,7 @@ async function logTicketDeletion(orgId: string, ticket: IssueTicket, deletedByNa
 /** ลบตั๋วทิ้งทั้งหมด (รวมข้อความในตั๋วทุกอัน) — ทำไม่ได้ย้อนกลับ ใช้ตอนตั๋วเป็น
  * สแปม/ทดสอบ/ไม่เกี่ยวข้อง ไม่ใช่ workflow ปกติ (ปิดตั๋วใช้เปลี่ยนสถานะแทน) */
 export async function adminDeleteTicket(orgId: string, ticketId: string) {
-  const session = await requireSuperAdmin();
+  const session = await requireTicketActor(orgId);
   const { data, version } = await readStore<unknown>(orgId, "issue-reports");
   const slice = migrateIssueStoreSlice(data);
   const ticket = slice.tickets.find((t) => t.id === ticketId);
@@ -266,10 +274,25 @@ export async function adminDeleteTicket(orgId: string, ticketId: string) {
   await logTicketDeletion(orgId, ticket, deletedByName);
 }
 
-/** Who a ticket can be assigned to — any active platform Super Admin, not a
- * per-org employee list (there's no more "in-company agent"). */
-export async function listSuperAdmins() {
-  await requireSuperAdmin();
+/** Who a ticket can be assigned to — any active platform Super Admin plus the
+ * CEO/ADMIN of our own company (ISSUE_SUPPORT_ORG), not a per-org employee
+ * list (there's no more "in-company agent"). */
+async function assignableStaff() {
   const all = await listUsersAcrossOrgs();
-  return all.filter((u) => u.hasSystemRole && u.isActive).map((u) => ({ id: u.id, name: u.name }));
+  const people = new Map(all.filter((u) => u.hasSystemRole && u.isActive).map((u) => [u.id, u.name]));
+  const supportOrgId = await getSupportOrgId();
+  if (supportOrgId) {
+    const staff = await prisma.user.findMany({
+      where: { orgId: supportOrgId, isActive: true, roles: { some: { role: { code: { in: [...SUPPORT_STAFF_ROLES] } } } } },
+      select: { id: true, name: true },
+    });
+    for (const u of staff) people.set(u.id, u.name);
+  }
+  return Array.from(people, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, "th"));
+}
+
+export async function listAssignableStaff() {
+  const session = await requireOrg();
+  if (!(await getIssueConsoleAccess(session))) redirect("/");
+  return assignableStaff();
 }

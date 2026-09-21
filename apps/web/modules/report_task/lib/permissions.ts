@@ -384,8 +384,12 @@ export function canManageIssueDeskSettings(userId: string, grants: Record<string
  * claiming, replying as staff, or changing status/priority — that stays
  * SmartBoss-admin-console-only.
  */
-export function canViewCompanyIssues(userId: string, grants: Record<string, GrantableSection[]>): boolean {
-  return canManageIssueDeskSettings(userId, grants);
+export function canViewCompanyIssues(_userId: string, _grants: Record<string, GrantableSection[]>): boolean {
+  // ปิดแล้วทุกบริษัท: CEO/ADMIN/IT ของบริษัทลูกค้าเห็นแค่ตั๋วที่ตัวเองแจ้ง — การ
+  // เห็นตั๋ว "ทุกเรื่อง" ย้ายไปอยู่ที่คอนโซลแจ้งบัค (/admin/issue-reports) เฉพาะ
+  // Super Admin กับ CEO/ADMIN ของบริษัทเราเอง (ISSUE_SUPPORT_ORG) ดู
+  // modules/admin/support-org.ts ("admin ceo จะไม่ให้เห็นหมดเลย ของบริษัทอื่น")
+  return false;
 }
 
 /**

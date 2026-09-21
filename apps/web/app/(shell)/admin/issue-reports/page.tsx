@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Building2, Mail, Search, UserCheck } from "lucide-react";
-import { requireOrg, isSuperAdmin } from "@smartboss/auth";
 import { Card } from "@smartboss/ui/components/card";
 import { Button } from "@smartboss/ui/components/button";
 import { AppScaffold } from "@/components/module/app-scaffold";
+import { requireIssueConsoleAccess } from "@/modules/admin/data/issue-console-access";
 import { EmptyState, Pill, StatCard, inputClass, selectClass } from "@/modules/admin/components/ui";
 import { listAllIssueTickets, type CrossOrgIssueTicket } from "@/modules/admin/data/issue-tickets";
 import { listAllOrganizations } from "@/modules/admin/data/orgs";
@@ -92,8 +92,7 @@ export async function renderIssueReportsPage(
   sp: SearchParams,
   { forcedTab, hideTabSwitcher }: { forcedTab?: Tab; hideTabSwitcher?: boolean }
 ) {
-  const session = await requireOrg();
-  if (!isSuperAdmin(session)) redirect("/admin");
+  const { session } = await requireIssueConsoleAccess();
 
   const tab: Tab = forcedTab ?? (TABS.includes(sp.tab as Tab) ? (sp.tab as Tab) : "all");
 

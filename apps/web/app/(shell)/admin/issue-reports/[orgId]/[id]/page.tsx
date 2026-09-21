@@ -1,11 +1,12 @@
-import { notFound, redirect } from "next/navigation";
-import { requireOrg, isSuperAdmin } from "@smartboss/auth";
+import { notFound } from "next/navigation";
 import { prisma } from "@smartboss/database";
 import { crossOrg } from "@smartboss/database/cross-org";
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { readStore } from "@/modules/report_task/lib/db/org-store";
 import { migrateIssueStoreSlice } from "@/modules/report_task/lib/issue-migration";
-import { listSuperAdmins } from "@/modules/admin/data/issue-ticket-actions";
+import { listAssignableStaff } from "@/modules/admin/data/issue-ticket-actions";
+import { requireIssueConsoleAccess } from "@/modules/admin/data/issue-console-access";
+import { canActOnTicketOrg } from "@/modules/admin/support-org";
 import { IssueTicketDetailClient, type TicketUserInfo } from "@/modules/admin/components/issue-reports/issue-ticket-detail-client";
 
 export const dynamic = "force-dynamic";
@@ -15,15 +16,16 @@ export const dynamic = "force-dynamic";
  * ticket (reply, claim, change status/priority/assignee) now that the
  * per-org "issue desk" is retired everywhere else. Reads straight from the
  * target org's own raw store row (no session/org boundary to cross around —
- * requireOrg()+isSuperAdmin() is the gate, same as the list page).
+ * requireIssueConsoleAccess() is the gate, same as the list page). Super Admin
+ * works any ticket; CEO/ADMIN of our own company (ISSUE_SUPPORT_ORG) can read
+ * any ticket but only work the ones filed by our own company (readOnly).
  */
 export default async function AdminIssueTicketDetailPage({
   params,
 }: {
   params: Promise<{ orgId: string; id: string }>;
 }) {
-  const session = await requireOrg();
-  if (!isSuperAdmin(session)) redirect("/admin");
+  const { session, access } = await requireIssueConsoleAccess();
 
   const { orgId, id } = await params;
   const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { id: true, name: true } });
@@ -49,7 +51,7 @@ export default async function AdminIssueTicketDetailPage({
   const userMap: Record<string, TicketUserInfo> = {};
   for (const u of users) userMap[u.id] = { name: u.name, email: u.email, role: u.roles[0]?.role.name ?? null };
 
-  const superAdmins = await listSuperAdmins();
+  const assignees = await listAssignableStaff();
 
   return (
     <AppScaffold title={`ตั๋ว ${ticket.code}`} width="max-w-4xl" backHref="/admin/issue-reports">
@@ -58,8 +60,9 @@ export default async function AdminIssueTicketDetailPage({
         orgName={org.name}
         ticket={ticket}
         userMap={userMap}
-        superAdmins={superAdmins}
+        assignees={assignees}
         currentUserId={session.userId}
+        readOnly={!canActOnTicketOrg(access, orgId)}
       />
     </AppScaffold>
   );

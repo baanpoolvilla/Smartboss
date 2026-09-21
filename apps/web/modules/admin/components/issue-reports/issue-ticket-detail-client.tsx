@@ -45,15 +45,18 @@ export function IssueTicketDetailClient({
   orgName,
   ticket,
   userMap,
-  superAdmins,
+  assignees,
   currentUserId,
+  readOnly = false,
 }: {
   orgId: string;
   orgName: string;
   ticket: IssueTicket;
   userMap: Record<string, TicketUserInfo>;
-  superAdmins: { id: string; name: string }[];
+  assignees: { id: string; name: string }[];
   currentUserId: string;
+  /** ตั๋วของบริษัทอื่น (ทีมเราเห็นได้แต่ไม่ใช่ Super Admin) — ดูอย่างเดียว */
+  readOnly?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -130,6 +133,11 @@ export function IssueTicketDetailClient({
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
       <div className="flex flex-col gap-4 min-w-0">
+        {readOnly && (
+          <p className="rounded-(--radius) border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
+            ดูอย่างเดียว — ตั๋วของบริษัทอื่น ตอบ/รับเรื่อง/เปลี่ยนสถานะได้เฉพาะตั๋วของบริษัทเราเอง
+          </p>
+        )}
         <Card className="p-4 sm:p-5">
           <div className="flex flex-wrap items-start gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-(--radius) bg-(--bg-soft)">
@@ -181,7 +189,7 @@ export function IssueTicketDetailClient({
               })}
           </div>
 
-          {ticket.status === "pending_verify" && (
+          {!readOnly && ticket.status === "pending_verify" && (
             <div className="flex flex-wrap items-center gap-2 border-t border-(--line) bg-amber-50 px-4 py-3">
               <p className="text-xs text-amber-800 flex-1 min-w-[200px]">
                 ตั๋วนี้รอผู้แจ้งยืนยันว่าใช้ได้แล้ว — ยืนยันแทนได้ถ้าติดต่อผู้แจ้งแล้ว
@@ -210,6 +218,7 @@ export function IssueTicketDetailClient({
             </div>
           )}
 
+          {!readOnly && (
           <div className="flex flex-col gap-2 border-t border-(--line) p-3">
             <textarea
               value={replyText}
@@ -224,13 +233,14 @@ export function IssueTicketDetailClient({
               </Button>
             </div>
           </div>
+          )}
         </Card>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
       </div>
 
       <div className="flex flex-col gap-3">
-        {ticket.status === "new" && (
+        {!readOnly && ticket.status === "new" && (
           <Button className="w-full" disabled={isPending} onClick={() => run(() => adminClaimTicket(orgId, ticket.id))}>
             รับเรื่อง + มอบหมายให้ฉัน
           </Button>
@@ -241,7 +251,7 @@ export function IssueTicketDetailClient({
             <select
               className={selectClass}
               value={ticket.status}
-              disabled={isPending}
+              disabled={isPending || readOnly}
               onChange={(e) => handleStatusChange(e.target.value as IssueStatus)}
             >
               {nextStatusOptions(ticket.status).map((s) => (
@@ -254,7 +264,7 @@ export function IssueTicketDetailClient({
             <select
               className={selectClass}
               value={ticket.priority}
-              disabled={isPending}
+              disabled={isPending || readOnly}
               onChange={(e) => run(() => adminSetPriority(orgId, ticket.id, e.target.value as IssuePriority))}
             >
               {(Object.keys(issuePriorityMeta) as IssuePriority[]).map((p) => (
@@ -267,15 +277,15 @@ export function IssueTicketDetailClient({
             <select
               className={selectClass}
               value={ticket.assigneeId ?? ""}
-              disabled={isPending}
+              disabled={isPending || readOnly}
               onChange={(e) => {
                 const id = e.target.value || null;
-                const name = superAdmins.find((a) => a.id === id)?.name ?? "-";
+                const name = assignees.find((a) => a.id === id)?.name ?? "-";
                 run(() => adminSetAssignee(orgId, ticket.id, id, name));
               }}
             >
               <option value="">— ยังไม่มอบหมาย —</option>
-              {superAdmins.map((a) => (
+              {assignees.map((a) => (
                 <option key={a.id} value={a.id}>{a.name}{a.id === currentUserId ? " (ฉัน)" : ""}</option>
               ))}
             </select>
@@ -310,6 +320,7 @@ export function IssueTicketDetailClient({
             ใช้เฉพาะตั๋วสแปม/ทดสอบ/ไม่เกี่ยวข้อง ลบแล้วกู้คืนไม่ได้ และลง
             บันทึกกิจกรรมของบริษัทนั้นไว้ด้วย ("ลบก็ให้ข้อความที่แจ้งหายไปด้วย
             และลงบันทึกกิจกรรมด้วยนะ") */}
+        {!readOnly && (
         <Button
           variant="outline"
           className="w-full border-red-200 text-red-600 hover:bg-red-50"
@@ -318,6 +329,7 @@ export function IssueTicketDetailClient({
         >
           ลบตั๋วนี้ทิ้ง
         </Button>
+        )}
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { prisma } from "@smartboss/database";
 import { getVisibleModules, type ModuleManifest } from "@/module-registry";
 import { roleLabel } from "@/lib/roles";
 import { unreadCount } from "@/modules/maintenance/data/notify";
+import { configuredSupportOrg, isSupportStaff, SUPPORT_STAFF_ROLES } from "@/modules/admin/support-org";
 
 export interface ShellNavUser {
   name: string;
@@ -40,6 +41,17 @@ export const loadShellNav = cache(async (): Promise<ShellNav | null> => {
       ).map((om) => om.module.code)
     : [];
 
+  // CEO/ADMIN ของ "บริษัทของเรา" เห็นเมนูคอนโซลแจ้งบัคด้วย — query บริษัทเฉพาะ
+  // เมื่อตั้ง ISSUE_SUPPORT_ORG แล้วและมี role ที่เข้าข่ายเท่านั้น
+  const supportStaff =
+    !!user.orgId &&
+    !!configuredSupportOrg() &&
+    user.roles.some((r) => (SUPPORT_STAFF_ROLES as readonly string[]).includes(r)) &&
+    isSupportStaff(
+      user.roles,
+      await prisma.organization.findUnique({ where: { id: user.orgId }, select: { code: true, slug: true } })
+    );
+
   return {
     user: {
       name: user.name,
@@ -51,6 +63,7 @@ export const loadShellNav = cache(async (): Promise<ShellNav | null> => {
       permissions: user.permissions,
       roles: user.roles,
       enabledCodes,
+      isSupportStaff: supportStaff,
     }),
     unread: await unreadCount(user.id),
   };
