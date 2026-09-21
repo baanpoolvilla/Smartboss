@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Building2, Mail, Search, UserCheck } from "lucide-react";
+import { Building2, ExternalLink, Mail, Search, UserCheck, type LucideIcon } from "lucide-react";
 import { Card } from "@smartboss/ui/components/card";
 import { Button } from "@smartboss/ui/components/button";
 import { AppScaffold } from "@/components/module/app-scaffold";
+import { iconByName } from "@/lib/icons";
+import { moduleRegistry } from "@/module-registry";
+import { classifyIssueSource, type IssueSource, type SourceModule } from "@/modules/admin/issue-source";
 import { requireIssueConsoleAccess } from "@/modules/admin/data/issue-console-access";
 import { EmptyState, Pill, StatCard, inputClass, selectClass } from "@/modules/admin/components/ui";
 import { listAllIssueTickets, type CrossOrgIssueTicket } from "@/modules/admin/data/issue-tickets";
@@ -77,7 +80,33 @@ interface SearchParams {
   from?: string;
   to?: string;
   q?: string;
+  /** โมดูล/เมนูที่แจ้งมา (จาก pageUrl ของตั๋ว) ดู modules/admin/issue-source.ts */
+  module?: string;
+  menu?: string;
+  /** id ผู้รับผิดชอบ หรือ "none" = ยังไม่มีคนรับ */
+  assignee?: string;
+  sort?: string;
 }
+
+const SORTS = ["newest", "oldest", "updated", "priority"] as const;
+type Sort = (typeof SORTS)[number];
+const SORT_LABEL: Record<Sort, string> = {
+  newest: "ใหม่สุดก่อน",
+  oldest: "เก่าสุดก่อน",
+  updated: "อัปเดตล่าสุด",
+  priority: "ความสำคัญสูงก่อน",
+};
+const PRIORITY_RANK: Record<IssuePriority, number> = { urgent: 0, high: 1, normal: 2, low: 3 };
+
+/** โมดูลจากทะเบียน แปลงเป็นรูปที่ตัวจัดหมวดใช้ (ไม่ผูกกับ React/manifest ตรง ๆ) */
+const SOURCE_MODULES: SourceModule[] = moduleRegistry.map((m) => ({
+  id: m.id,
+  name: m.name,
+  color: m.color,
+  icon: m.icon,
+  basePath: m.basePath,
+  menus: m.menus.map((menu) => ({ label: menu.label, path: menu.path })),
+}));
 
 export default async function AllIssueReportsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   return renderIssueReportsPage(await searchParams, {});
@@ -96,7 +125,13 @@ export async function renderIssueReportsPage(
 
   const tab: Tab = forcedTab ?? (TABS.includes(sp.tab as Tab) ? (sp.tab as Tab) : "all");
 
-  const [allTickets, organizations] = await Promise.all([listAllIssueTickets(), listAllOrganizations()]);
+  const [rawTickets, organizations] = await Promise.all([listAllIssueTickets(), listAllOrganizations()]);
+  // จัดหมวดตามหน้าที่แจ้งมา (โมดูล › เมนู) — คำนวณจาก pageUrl ที่เก็บในตั๋วอยู่แล้ว
+  const allTickets = rawTickets.map((t) => {
+    const source = classifyIssueSource(t.context.pageUrl, SOURCE_MODULES);
+    return { ...t, source, SourceIcon: iconByName(source.icon) };
+  });
+  const sort: Sort = SORTS.includes(sp.sort as Sort) ? (sp.sort as Sort) : "newest";
 
   const byTab = allTickets.filter((t) => {
     switch (tab) {
@@ -123,6 +158,10 @@ export async function renderIssueReportsPage(
     if (sp.status && t.status !== sp.status) return false;
     if (sp.category && t.category !== sp.category) return false;
     if (sp.priority && t.priority !== sp.priority) return false;
+    if (sp.module && t.source.moduleId !== sp.module) return false;
+    if (sp.menu && t.source.menuPath !== sp.menu) return false;
+    if (sp.assignee === "none" && t.assigneeId) return false;
+    if (sp.assignee && sp.assignee !== "none" && t.assigneeId !== sp.assignee) return false;
     if (fromMs !== null && new Date(t.createdAt).getTime() < fromMs) return false;
     if (toMs !== null && new Date(t.createdAt).getTime() > toMs) return false;
     if (q) {
@@ -131,6 +170,29 @@ export async function renderIssueReportsPage(
     }
     return true;
   });
+
+  const ts = (d: string) => new Date(d).getTime();
+  const sorters: Record<Sort, (a: (typeof tickets)[number], b: (typeof tickets)[number]) => number> = {
+    newest: (a, b) => ts(b.createdAt) - ts(a.createdAt),
+    oldest: (a, b) => ts(a.createdAt) - ts(b.createdAt),
+    updated: (a, b) => ts(b.updatedAt) - ts(a.updatedAt),
+    priority: (a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] || ts(b.createdAt) - ts(a.createdAt),
+  };
+  tickets.sort(sorters[sort]);
+
+  // ตัวเลือกของตัวกรองโมดูล/เมนู/ผู้รับผิดชอบ — เอาเฉพาะที่มีตั๋วจริง ไม่ให้เลือกแล้วว่าง
+  const moduleOptions = new Map<string, IssueSource>();
+  const menuGroups = new Map<string, { moduleName: string; items: Map<string, string> }>();
+  const assigneeOptions = new Map<string, string>();
+  for (const t of allTickets) {
+    if (!moduleOptions.has(t.source.moduleId)) moduleOptions.set(t.source.moduleId, t.source);
+    if (t.source.menuPath && t.source.menuLabel) {
+      const g = menuGroups.get(t.source.moduleId) ?? { moduleName: t.source.moduleName, items: new Map<string, string>() };
+      g.items.set(t.source.menuPath, t.source.menuLabel);
+      menuGroups.set(t.source.moduleId, g);
+    }
+    if (t.assigneeId && t.assigneeName) assigneeOptions.set(t.assigneeId, t.assigneeName);
+  }
 
   const openTickets = allTickets.filter((t) => !CLOSED_STATUSES.includes(t.status));
   const companiesReporting = new Set(allTickets.map((t) => t.orgId)).size;
@@ -237,6 +299,28 @@ export async function renderIssueReportsPage(
             </select>
           </label>
           <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-(--ink-soft)">โมดูลที่แจ้ง</span>
+            <select name="module" defaultValue={sp.module ?? ""} className={selectClass}>
+              <option value="">ทุกโมดูล</option>
+              {Array.from(moduleOptions.values()).map((m) => (
+                <option key={m.moduleId} value={m.moduleId}>{m.moduleName}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-(--ink-soft)">เมนู</span>
+            <select name="menu" defaultValue={sp.menu ?? ""} className={selectClass}>
+              <option value="">ทุกเมนู</option>
+              {Array.from(menuGroups.entries()).map(([moduleId, g]) => (
+                <optgroup key={moduleId} label={g.moduleName}>
+                  {Array.from(g.items.entries()).map(([path, label]) => (
+                    <option key={path} value={path}>{label}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-(--ink-soft)">ตั้งแต่วันที่</span>
             <input
               type="text"
@@ -262,6 +346,24 @@ export async function renderIssueReportsPage(
               className={inputClass}
             />
           </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-(--ink-soft)">ผู้รับผิดชอบ</span>
+            <select name="assignee" defaultValue={sp.assignee ?? ""} className={selectClass}>
+              <option value="">ทุกคน</option>
+              <option value="none">ยังไม่มีคนรับ</option>
+              {Array.from(assigneeOptions.entries()).map(([id, name]) => (
+                <option key={id} value={id}>{name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-(--ink-soft)">เรียงตาม</span>
+            <select name="sort" defaultValue={sort} className={selectClass}>
+              {SORTS.map((s) => (
+                <option key={s} value={s}>{SORT_LABEL[s]}</option>
+              ))}
+            </select>
+          </label>
           {/* w-full on the submit button only works alongside a fixed-width
               sibling inside a plain flex row when there's room to spare —
               on a phone it forces itself to the row's full width and
@@ -270,7 +372,7 @@ export async function renderIssueReportsPage(
               original auto-width flex row. */}
           <div className="grid grid-cols-2 items-end gap-2 sm:flex sm:w-auto">
             <Button type="submit" className="w-full sm:w-auto">กรอง</Button>
-            {(sp.q || sp.orgId || sp.status || sp.category || sp.priority || sp.from || sp.to) && (
+            {(sp.q || sp.orgId || sp.status || sp.category || sp.priority || sp.from || sp.to || sp.module || sp.menu || sp.assignee || (sp.sort && sp.sort !== "newest")) && (
               <Link
                 href={tab !== "all" ? `?tab=${tab}` : "?"}
                 className="inline-flex h-10 items-center justify-center rounded-(--radius) border border-(--line) px-3 text-sm text-(--ink-soft) hover:bg-(--bg-soft)"
@@ -289,7 +391,7 @@ export async function renderIssueReportsPage(
       ) : (
         <div className="flex flex-col gap-2">
           {tickets.map((t) => (
-            <TicketRow key={`${t.orgId}-${t.id}`} ticket={t} />
+            <TicketRow key={`${t.orgId}-${t.id}`} ticket={t} canOpenPage={t.orgId === session.orgId} />
           ))}
         </div>
       )}
@@ -297,7 +399,14 @@ export async function renderIssueReportsPage(
   );
 }
 
-function TicketRow({ ticket }: { ticket: CrossOrgIssueTicket }) {
+function TicketRow({
+  ticket,
+  canOpenPage,
+}: {
+  ticket: CrossOrgIssueTicket & { source: IssueSource; SourceIcon: LucideIcon };
+  canOpenPage: boolean;
+}) {
+  const { source, SourceIcon } = ticket;
   const category = issueCategoryMeta[ticket.category];
   const priority = issuePriorityMeta[ticket.priority];
   const group = reporterStatusGroupMeta[reporterStatusGroup(ticket.status)];
@@ -313,6 +422,11 @@ function TicketRow({ ticket }: { ticket: CrossOrgIssueTicket }) {
 
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-1.5">
+              <Pill color={source.color}>
+                <SourceIcon className="h-3 w-3" /> {source.moduleName}
+                {source.menuLabel && <span className="opacity-60">›</span>}
+                {source.menuLabel}
+              </Pill>
               <Pill color="#0D9488">
                 <Building2 className="h-3 w-3" /> {ticket.orgName}
               </Pill>
@@ -343,6 +457,15 @@ function TicketRow({ ticket }: { ticket: CrossOrgIssueTicket }) {
                 <UserCheck className="h-3 w-3" /> {ticket.assigneeName ?? "ยังไม่มีคนรับ"}
               </span>
               <span><TimeAgo date={ticket.createdAt} /></span>
+              {/* ตั๋วที่แจ้งจากหน้ารายการเดี่ยว (เช่น ใบงานหนึ่งใบ) ของบริษัทที่ผู้ดูสังกัด —
+                  เปิดตรงไปหน้านั้นได้จากหน้ารายละเอียดตั๋ว (ตั๋วบริษัทอื่นเปิดจากบัญชีนี้ไม่ได้
+                  อยู่แล้ว จึงไม่โชว์). ที่นี่เป็นแค่ป้ายบอก เพราะการ์ดทั้งใบเป็นลิงก์อยู่แล้ว
+                  ซ้อนลิงก์ไม่ได้ */}
+              {canOpenPage && source.recordPath && (
+                <span className="flex items-center gap-1 rounded-full border border-dashed border-(--line) px-2 py-0.5 text-(--ink)">
+                  <ExternalLink className="h-3 w-3" /> แจ้งจากรายการเฉพาะ
+                </span>
+              )}
               <span className="sm:hidden">{category.label}</span>
             </div>
           </div>

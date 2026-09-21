@@ -48,6 +48,8 @@ export function IssueTicketDetailClient({
   assignees,
   currentUserId,
   readOnly = false,
+  sourceLabel,
+  pageLink = null,
 }: {
   orgId: string;
   orgName: string;
@@ -57,6 +59,10 @@ export function IssueTicketDetailClient({
   currentUserId: string;
   /** ตั๋วของบริษัทอื่น (ทีมเราเห็นได้แต่ไม่ใช่ Super Admin) — ดูอย่างเดียว */
   readOnly?: boolean;
+  /** "โมดูล › เมนู" ที่แจ้งมา (จาก pageUrl) */
+  sourceLabel?: string;
+  /** หน้าเดี่ยวที่แจ้งมา (เช่น ใบงานหนึ่งใบ) เปิดได้เฉพาะตั๋วของบริษัทที่ผู้ดูสังกัด */
+  pageLink?: string | null;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -146,6 +152,7 @@ export function IssueTicketDetailClient({
             <div className="min-w-0 flex-1">
               <p className="text-xs text-(--ink-soft)">
                 {orgName} · {category.label} · {issueImpactMeta[ticket.impact].label}
+                {sourceLabel && ` · แจ้งจาก ${sourceLabel}`}
               </p>
               <h2 className="mt-0.5 text-base font-semibold text-(--ink) break-words">{ticket.title}</h2>
               <p className="mt-1 text-xs text-(--ink-soft)">
@@ -302,6 +309,11 @@ export function IssueTicketDetailClient({
           <Row label="อีเมลผู้แจ้ง" value={reporter?.email ?? "-"} />
           {assignee && <Row label="ผู้รับผิดชอบ" value={assignee.name} />}
           <Row label="หน้าที่แจ้งมา" value={ticket.context.pageUrl || "-"} mono />
+          {pageLink && (
+            <a href={pageLink} className="self-end text-[11px] font-medium text-teal-700 hover:underline">
+              เปิดหน้าที่แจ้ง ↗
+            </a>
+          )}
           {/* เดิมเคยโชว์แค่ในหน้า agent ต่อบริษัท (isDeskView) ซึ่งปิดตายไปแล้ว
               ตอนย้ายงานรับเรื่อง-ตอบ-ปิดมาไว้ที่นี่ที่เดียว — ค่าพวกนี้เก็บมา
               ตั้งแต่ต้นอยู่แล้ว (ดู IssueTicket.context) แค่ไม่เคยถูกย้ายมาโชว์

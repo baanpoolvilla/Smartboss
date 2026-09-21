@@ -7,6 +7,8 @@ import { migrateIssueStoreSlice } from "@/modules/report_task/lib/issue-migratio
 import { listAssignableStaff } from "@/modules/admin/data/issue-ticket-actions";
 import { requireIssueConsoleAccess } from "@/modules/admin/data/issue-console-access";
 import { canActOnTicketOrg } from "@/modules/admin/support-org";
+import { classifyIssueSource } from "@/modules/admin/issue-source";
+import { moduleRegistry } from "@/module-registry";
 import { IssueTicketDetailClient, type TicketUserInfo } from "@/modules/admin/components/issue-reports/issue-ticket-detail-client";
 
 export const dynamic = "force-dynamic";
@@ -53,6 +55,22 @@ export default async function AdminIssueTicketDetailPage({
 
   const assignees = await listAssignableStaff();
 
+  // แจ้งมาจากโมดูล › เมนูไหน + (ถ้าเป็นหน้ารายการเดี่ยวของบริษัทที่ผู้ดูสังกัดอยู่) ลิงก์เปิดหน้านั้น
+  // — ข้อมูลบริษัทอื่นเปิดจากบัญชีนี้ไม่ได้อยู่แล้ว จึงไม่ให้ลิงก์
+  const source = classifyIssueSource(
+    ticket.context.pageUrl,
+    moduleRegistry.map((m) => ({
+      id: m.id,
+      name: m.name,
+      color: m.color,
+      icon: m.icon,
+      basePath: m.basePath,
+      menus: m.menus.map((menu) => ({ label: menu.label, path: menu.path })),
+    }))
+  );
+  const sourceLabel = source.menuLabel ? `${source.moduleName} › ${source.menuLabel}` : source.moduleName;
+  const pageLink = orgId === session.orgId ? source.recordPath : null;
+
   return (
     <AppScaffold title={`ตั๋ว ${ticket.code}`} width="max-w-4xl" backHref="/admin/issue-reports">
       <IssueTicketDetailClient
@@ -63,6 +81,8 @@ export default async function AdminIssueTicketDetailPage({
         assignees={assignees}
         currentUserId={session.userId}
         readOnly={!canActOnTicketOrg(access, orgId)}
+        sourceLabel={sourceLabel}
+        pageLink={pageLink}
       />
     </AppScaffold>
   );
