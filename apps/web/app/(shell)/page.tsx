@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
-import { MODULE_CARDS } from "@/lib/modules";
+import { MODULE_CARDS, PRIMARY_MODULE_CODES } from "@/lib/modules";
 import { iconByName } from "@/lib/icons";
 import { loadShellNav } from "@/lib/nav";
 import { AppTileReviewBadge } from "@/modules/report_task/components/shared/app-tile-review-badge";
@@ -32,6 +32,9 @@ function thaiToday(): string {
 /**
  * หน้ารวมแอป — เข้าโมดูลด้วยการกดไอคอนตรงกลาง เหมือนหน้าโฮมของมือถือ
  * (ไม่มีรายการโมดูลบนแถบซ้ายอีกแล้ว — แถบซ้ายจะโผล่เฉพาะตอนอยู่ในโมดูล)
+ *
+ * แบ่งสองฝั่ง: ซ้าย = โมดูลหลักที่บริษัทใช้ทุกวัน (ไอคอนใหญ่กว่า) /
+ * ขวา = โมดูลและเครื่องมือที่เหลือ
  */
 export default async function HomePage() {
   const nav = await loadShellNav();
@@ -69,8 +72,16 @@ export default async function HomePage() {
     });
   }
 
+  // ฝั่งซ้าย = โมดูลหลัก เรียงตามลำดับที่ตั้งไว้ (ไม่ใช่ลำดับใน tiles)
+  const byCode = new Map(tiles.map((t) => [t.code, t]));
+  const primary = PRIMARY_MODULE_CODES.map((code) => byCode.get(code)).filter(
+    (t): t is AppTile => t !== undefined,
+  );
+  const primaryCodes = new Set(primary.map((t) => t.code));
+  const secondary = tiles.filter((t) => !primaryCodes.has(t.code));
+
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto max-w-5xl">
       <header className="mb-8 text-center sm:mb-10">
         <h1 className="text-2xl font-semibold text-(--ink)">
           สวัสดี, {firstName}
@@ -78,10 +89,25 @@ export default async function HomePage() {
         <p className="mt-1 text-sm text-(--ink-soft)">{thaiToday()}</p>
       </header>
 
-      <div className="grid grid-cols-3 gap-x-2 gap-y-7 sm:grid-cols-4 sm:gap-x-4 md:grid-cols-5">
-        {tiles.map((tile) => (
-          <AppIcon key={tile.code} tile={tile} />
-        ))}
+      {/* จอเล็กเรียงบนล่าง (เส้นคั่นเป็นขีดแนวนอน) — md ขึ้นไปแยกซ้าย-ขวา */}
+      <div className="grid gap-8 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] md:gap-0">
+        <section className="md:pr-8">
+          <SectionLabel>โมดูลหลัก</SectionLabel>
+          <div className="grid grid-cols-3 gap-x-2 gap-y-7 sm:gap-x-4">
+            {primary.map((tile) => (
+              <AppIcon key={tile.code} tile={tile} size="lg" />
+            ))}
+          </div>
+        </section>
+
+        <section className="border-t border-(--line) pt-8 md:border-t-0 md:border-l md:pt-0 md:pl-8">
+          <SectionLabel>อื่น ๆ</SectionLabel>
+          <div className="grid grid-cols-3 gap-x-2 gap-y-7 sm:grid-cols-4 sm:gap-x-4">
+            {secondary.map((tile) => (
+              <AppIcon key={tile.code} tile={tile} size="md" />
+            ))}
+          </div>
+        </section>
       </div>
 
       {visible.size === 0 && (
@@ -93,22 +119,38 @@ export default async function HomePage() {
   );
 }
 
+/** หัวข้อเล็ก ๆ ของแต่ละฝั่ง */
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <h2 className="mb-5 text-center text-xs font-medium tracking-wide text-(--ink-soft) md:text-left">
+      {children}
+    </h2>
+  );
+}
+
 /** ไอคอนแอปหนึ่งช่อง — กดได้เมื่อบริษัทเปิดใช้และผู้ใช้มีสิทธิ์ */
-function AppIcon({ tile }: { tile: AppTile }) {
+function AppIcon({ tile, size = "md" }: { tile: AppTile; size?: "md" | "lg" }) {
   const { href, icon: Icon } = tile;
+
+  // โมดูลหลักไอคอนใหญ่กว่า เพื่อให้แยกออกจากฝั่งขวาแม้อยู่จอเดียวกัน
+  const box =
+    size === "lg"
+      ? "h-[80px] w-[80px] rounded-[26px] sm:h-[92px] sm:w-[92px]"
+      : "h-[68px] w-[68px] rounded-[22px] sm:h-[76px] sm:w-[76px]";
+  const glyph = size === "lg" ? "h-9 w-9 sm:h-11 sm:w-11" : "h-8 w-8 sm:h-9 sm:w-9";
 
   const body = (
     <>
       <span
         className={
           href
-            ? "relative flex h-[68px] w-[68px] items-center justify-center rounded-[22px] shadow-(--shadow-card) ring-1 ring-black/[0.04] transition-transform duration-150 group-hover:-translate-y-0.5 group-active:scale-95 sm:h-[76px] sm:w-[76px]"
-            : "relative flex h-[68px] w-[68px] items-center justify-center rounded-[22px] bg-(--bg) ring-1 ring-(--line) sm:h-[76px] sm:w-[76px]"
+            ? `relative flex ${box} items-center justify-center shadow-(--shadow-card) ring-1 ring-black/[0.04] transition-transform duration-150 group-hover:-translate-y-0.5 group-active:scale-95`
+            : `relative flex ${box} items-center justify-center bg-(--bg) ring-1 ring-(--line)`
         }
         style={href ? { backgroundColor: tile.colorBg } : undefined}
       >
         <Icon
-          className="h-8 w-8 sm:h-9 sm:w-9"
+          className={glyph}
           style={{
             color: href ? tile.color : "var(--ink-soft)",
             opacity: href ? 1 : 0.4,
