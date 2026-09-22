@@ -52,9 +52,6 @@ import {
   Bell,
   BellOff,
   Briefcase,
-  CalendarClock,
-  CalendarRange,
-  CalendarDays,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -152,23 +149,6 @@ export const ALL_TOPICS_ID = "__all__";
 export const PENDING_ID = "__pending__";
 /** Every post/reply anywhere this viewer can see that @mentions them, newest first — reuses ReportAllPostsFeed with a pre-filtered post list. */
 export const MENTIONS_ID = "__mentions__";
-
-/**
- * "รวมห้องรายงาน" (สรุปงาน-รวมห้องรายงาน 2026-09-22) — 3 มุมมองรวมข้ามแผนก
- * หนึ่งอันต่อประเภทรายงาน (Daily/Weekly/Monthly) รวมโพสต์จากห้องรายงานของ
- * ทุกแผนกที่ตรงประเภทนั้นมาไว้ฟีดเดียว (ห้องแยกรายแผนกเดิมยังอยู่ครบ ไม่ถูก
- * ลบ/ย้าย — ดู topicReportFrequency ว่าห้องไหนนับเป็นประเภทไหน) เหมือน
- * ALL_TOPICS_ID/MENTIONS_ID ด้านบนตรงที่เป็น sentinel ไม่ใช่หัวข้อจริง แต่ต่าง
- * ตรงที่ผู้ใช้ยืนยันชัดเจนว่าอยากเห็นเป็นแถวปักหมุดในลิสต์ "หัวข้อ" นี้เอง (ไม่ใช่
- * dropdown "มุมมอง" มุมขวาบนที่ ALL_TOPICS_ID ใช้อยู่) จึงเรนเดอร์เป็นกลุ่ม
- * "รายงาน" ปักหมุดไว้บนสุดของทรี แยกต่างหากจากด้านล่างนี้ (ดู reportAllViews
- * และจุดเรนเดอร์ก่อน "หัวข้อของฉัน")
- */
-export const DAILY_ALL_ID = "__daily_all__";
-export const WEEKLY_ALL_ID = "__weekly_all__";
-export const MONTHLY_ALL_ID = "__monthly_all__";
-export const REPORT_ALL_IDS = [DAILY_ALL_ID, WEEKLY_ALL_ID, MONTHLY_ALL_ID] as const;
-
 type Editor = { mode: "create" } | { mode: "edit"; topic: ReportTopic };
 
 // Per-browser, not shared team state (same reasoning/pattern as page.tsx's
@@ -950,13 +930,6 @@ export function TopicSidebar({
   // pulled out from under its parent by starring it.
   const favoriteTopics = topics.filter((t) => t.favoritedBy?.includes(viewingAsUserId)).sort(byOrder);
   const topLevelTopics = topics.filter((t) => isTopLevel(t) || !topics.some((p) => p.id === t.parentId)).sort(byOrder);
-  // The 3 pinned "รายงาน" rows (Daily/Weekly/Monthly รวมทุกแผนก) — see
-  // REPORT_ALL_IDS above for what each sentinel means.
-  const reportAllRows = [
-    { id: DAILY_ALL_ID, label: "Daily-report", Icon: CalendarClock },
-    { id: WEEKLY_ALL_ID, label: "Weekly-report", Icon: CalendarRange },
-    { id: MONTHLY_ALL_ID, label: "Monthly-report", Icon: CalendarDays },
-  ];
   // A sub-topic the viewer hid (Teams' "hide channel") stays in the tree —
   // dimmed, see below — rather than disappearing with no way back to it
   // short of a link from somewhere else. Its own "..." menu (renderTopicRow)
@@ -1781,33 +1754,9 @@ export function TopicSidebar({
         <div className="my-3 border-t border-[var(--line)]/50" />
           </>
         )}
-        {(topLevelTopics.length > 0 || reportAllRows.length > 0) && (
+        {topLevelTopics.length > 0 && (
           <p className="px-2.5 pt-1 pb-1 text-[11px] font-semibold text-[var(--ink-soft)] uppercase tracking-wide">หัวข้อของฉัน</p>
         )}
-        {/* Daily-report/Weekly-report/Monthly-report รวม (สรุปงาน-รวมห้อง
-            รายงาน 2026-09-22, รอบแก้ที่ 2) — ยืนยันจากผู้ใช้ให้อยู่ปนกับห้อง
-            จริงในนี้เลย ("อยู่ในหมวดหัวข้อของฉันเลย") ไม่ใช่กลุ่มปักหมุดแยก
-            ต่างหากแบบรอบแรก จึงวางแถวเดียวกับ renderTopicRow ทุกอย่าง (แค่ไม่
-            มีเมนู .../ลาก/แก้ไข เพราะไม่ใช่หัวข้อจริงที่แก้ผ่านหน้านี้ได้) */}
-        {reportAllRows.map((row) => {
-          const active = row.id === activeId;
-          return (
-            <button
-              key={row.id}
-              type="button"
-              onClick={() => onSelect(row.id)}
-              className={cn(
-                "group flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors",
-                active ? "bg-[var(--accent)] font-semibold text-[var(--brand-green-dark)]" : "text-[var(--ink)] hover:bg-[var(--bg-soft)]"
-              )}
-            >
-              <span className="relative shrink-0 rounded-full flex items-center justify-center bg-[var(--bg-soft)] h-6 w-6">
-                <row.Icon className="h-3.5 w-3.5 text-[var(--ink-soft)]" />
-              </span>
-              <span className="flex-1 truncate">{row.label}</span>
-            </button>
-          );
-        })}
         {topLevelTopics.map(renderTopicBranch)}
 
         {topics.length === 0 && (

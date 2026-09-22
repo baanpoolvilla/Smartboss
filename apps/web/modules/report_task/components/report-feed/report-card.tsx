@@ -217,6 +217,14 @@ export function ReportCard({
   const allTags = useReportTagStore((s) => s.tags);
   const postTags = allTags.filter((t) => post.tagIds.includes(t.id));
   const author = getUser(post.authorId);
+  // ป้ายแผนกของผู้โพสต์ — โชว์เฉพาะห้องที่เปิดรับหลายแผนก (ไม่ได้ล็อกไว้แค่
+  // แผนกเดียวใน `visibility.departmentIds`) เพราะห้องแบบนั้นเท่านั้นที่ป้าย
+  // นี้มีประโยชน์จริง (ห้องล็อกแผนกเดียวรู้อยู่แล้วว่าทุกคนแผนกไหน ติดป้ายซ้ำ
+  // เปล่า ๆ) — ใช้ได้กับห้องรวมทุกแผนกทั่วไป (เช่นห้อง "Daily-report" ที่ทุก
+  // แผนกโพสต์ปนกัน) โดยไม่ต้องเพิ่ม field ใหม่ในหัวข้อเลย
+  const authorDeptId = author?.departmentId;
+  const showAuthorDept = !topic.visibility?.departmentIds || topic.visibility.departmentIds.length !== 1;
+  const authorDept = showAuthorDept && authorDeptId ? departments.find((d) => d.id === authorDeptId) : undefined;
   const viewer = getUser(viewingAsUserId);
   const isOwn = post.authorId === viewingAsUserId;
   const isSaved = post.savedBy.includes(viewingAsUserId);
@@ -1224,6 +1232,11 @@ export function ReportCard({
               <div className="flex items-center gap-1.5">
                 {post.pinned && <Pin className="h-3.5 w-3.5 text-[var(--brand-green-dark)] shrink-0" />}
                 <p className="text-sm font-semibold truncate">{author?.name}</p>
+                {authorDept && (
+                  <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold bg-[var(--accent)] text-[var(--brand-green-dark)]">
+                    {authorDept.name}
+                  </span>
+                )}
                 {isUnread && (
                   <span className="h-1.5 w-1.5 rounded-full bg-[var(--chart-blue)] shrink-0" aria-label="ยังไม่อ่าน" />
                 )}

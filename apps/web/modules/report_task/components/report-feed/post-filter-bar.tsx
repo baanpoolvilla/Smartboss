@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import type { ReportTag } from "@/modules/report_task/store/report-tag-store";
-import { displayName } from "@/modules/report_task/lib/directory";
+import { displayName, getUser, departments } from "@/modules/report_task/lib/directory";
 import { lateCutoffFor } from "@/modules/report_task/lib/report-cutoff";
 import { roundsForUserOnDay } from "@/modules/report_task/lib/submission-rounds";
 import { isExemptDate, type DateExemptions } from "@/modules/report_task/lib/report-feed-exemptions";
@@ -23,10 +23,14 @@ import {
 } from "@/modules/report_task/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { TagMultiSelectList } from "@/modules/report_task/components/report-feed/report-tag-multiselect";
-import { Bookmark, ChevronDown, Image as ImageIcon, ListFilter, Search, Tag as TagIcon, TriangleAlert, User, X } from "lucide-react";
+import { Bookmark, Briefcase, ChevronDown, Image as ImageIcon, ListFilter, Search, Tag as TagIcon, TriangleAlert, User, X } from "lucide-react";
 
 export interface PostFilters {
   authorIds: Set<string>;
+  /** กรองตามแผนกของ "ผู้โพสต์" (ไม่ใช่แผนกที่ห้องสังกัด) — มีประโยชน์เฉพาะห้อง
+   * ที่เปิดรับหลายแผนกปนกัน (เช่นห้องรวม "Daily-report" ที่ทุกแผนกโพสต์
+   * ปนกัน) ดูรายละเอียดที่ report-card.tsx's showAuthorDept */
+  departmentIds: Set<string>;
   tagIds: Set<string>;
   lateOnly: boolean;
   unreadOnly: boolean;
@@ -36,6 +40,7 @@ export interface PostFilters {
 
 export const emptyPostFilters: PostFilters = {
   authorIds: new Set(),
+  departmentIds: new Set(),
   tagIds: new Set(),
   lateOnly: false,
   unreadOnly: false,
@@ -44,7 +49,9 @@ export const emptyPostFilters: PostFilters = {
 };
 
 export function postFiltersActiveCount(f: PostFilters): number {
-  return f.authorIds.size + f.tagIds.size + Number(f.lateOnly) + Number(f.unreadOnly) + Number(f.hasImageOnly) + Number(f.savedOnly);
+  return (
+    f.authorIds.size + f.departmentIds.size + f.tagIds.size + Number(f.lateOnly) + Number(f.unreadOnly) + Number(f.hasImageOnly) + Number(f.savedOnly)
+  );
 }
 
 /** A post's own topic — needed for the ส่งช้า check, which is per-room
@@ -64,6 +71,10 @@ export function filterPosts(
   if (postFiltersActiveCount(filters) === 0) return posts;
   return posts.filter((p) => {
     if (filters.authorIds.size > 0 && !filters.authorIds.has(p.authorId)) return false;
+    if (filters.departmentIds.size > 0) {
+      const dept = getUser(p.authorId)?.departmentId;
+      if (!dept || !filters.departmentIds.has(dept)) return false;
+    }
     // OR across selected tags (matches ANY of them), same "narrow to these"
     // reading as the author filter above — a post picking one of several
     // selected tags is exactly the point of letting more than one be checked.
@@ -116,12 +127,22 @@ export function PostFilterBar({
   const activeCount = postFiltersActiveCount(filters);
   const chipSize = size === "lg" ? "gap-2 px-3.5 py-2.5 text-sm" : "gap-1.5 px-2.5 py-1 text-xs";
   const iconSize = size === "lg" ? "h-4 w-4" : "h-3 w-3";
+  // เฉพาะแผนกที่มีคนอยู่ในห้องนี้จริง (ไม่ใช่ทุกแผนกของบริษัท) — ห้องเดียว
+  // ปกติมีคนไม่กี่แผนก โชว์แค่ตัวเลือกที่กดแล้วมีผลจริงเท่านั้น
+  const departmentOptions = departments.filter((d) => authorOptions.some((id) => getUser(id)?.departmentId === d.id));
 
   function toggleAuthor(id: string) {
     const next = new Set(filters.authorIds);
     if (next.has(id)) next.delete(id);
     else next.add(id);
     onChange({ ...filters, authorIds: next });
+  }
+
+  function toggleDepartment(id: string) {
+    const next = new Set(filters.departmentIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onChange({ ...filters, departmentIds: next });
   }
 
   function toggleTag(id: string) {
@@ -173,6 +194,38 @@ export function PostFilterBar({
           </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {departmentOptions.length > 1 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <button
+                className={cn(
+                  "flex items-center rounded-full border font-medium transition-colors",
+                  chipSize,
+                  filters.departmentIds.size > 0
+                    ? "border-[var(--brand-green)]/40 bg-[var(--accent)] text-[var(--brand-green-dark)]"
+                    : "border-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+                )}
+              >
+                <Briefcase className={iconSize} />
+                {filters.departmentIds.size === 0 ? "ทุกแผนก" : `${filters.departmentIds.size} แผนก`}
+              </button>
+            }
+          />
+          <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>กรองตามแผนก</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {departmentOptions.map((d) => (
+                <DropdownMenuCheckboxItem key={d.id} checked={filters.departmentIds.has(d.id)} onCheckedChange={() => toggleDepartment(d.id)}>
+                  {d.name}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
 
       {tagOptions.length > 0 && (
         <Popover>
@@ -276,12 +329,20 @@ export function PostFilterButton({
   const [open, setOpen] = useState(false);
   const [authorQuery, setAuthorQuery] = useState("");
   const visibleAuthors = authorOptions.filter((id) => !authorQuery.trim() || displayName(id).toLowerCase().includes(authorQuery.trim().toLowerCase()));
+  const departmentOptions = departments.filter((d) => authorOptions.some((id) => getUser(id)?.departmentId === d.id));
 
   function toggleAuthor(id: string) {
     const next = new Set(filters.authorIds);
     if (next.has(id)) next.delete(id);
     else next.add(id);
     onChange({ ...filters, authorIds: next });
+  }
+
+  function toggleDepartment(id: string) {
+    const next = new Set(filters.departmentIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onChange({ ...filters, departmentIds: next });
   }
 
   function toggleTag(id: string) {
@@ -354,6 +415,31 @@ export function PostFilterButton({
               )}
             </div>
           </div>
+
+          {departmentOptions.length > 1 && (
+            <div>
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">แผนก</p>
+                {filters.departmentIds.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => onChange({ ...filters, departmentIds: new Set() })}
+                    className="text-[11px] font-medium text-[var(--brand-green-dark)] hover:underline"
+                  >
+                    ล้าง
+                  </button>
+                )}
+              </div>
+              <div className="max-h-32 overflow-y-auto space-y-0.5">
+                {departmentOptions.map((d) => (
+                  <label key={d.id} className="flex items-center gap-2 rounded-md px-1.5 py-1.5 hover:bg-[var(--bg-soft)] cursor-pointer text-sm">
+                    <Checkbox checked={filters.departmentIds.has(d.id)} onCheckedChange={() => toggleDepartment(d.id)} />
+                    {d.name}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)] mb-1.5">สถานะ</p>
@@ -436,6 +522,16 @@ export function ActiveFilterChips({
       key: "authors",
       label: filters.authorIds.size === 1 ? displayName([...filters.authorIds][0]!) : `ผู้โพสต์ ${filters.authorIds.size} คน`,
       onRemove: () => onChange({ ...filters, authorIds: new Set() }),
+    });
+  }
+  if (filters.departmentIds.size > 0) {
+    chips.push({
+      key: "departments",
+      label:
+        filters.departmentIds.size === 1
+          ? (departments.find((d) => d.id === [...filters.departmentIds][0])?.name ?? "1 แผนก")
+          : `${filters.departmentIds.size} แผนก`,
+      onRemove: () => onChange({ ...filters, departmentIds: new Set() }),
     });
   }
   if (filters.tagIds.size > 0) {

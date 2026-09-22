@@ -2,20 +2,8 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import {
-  TopicSidebar,
-  TopicLogo,
-  ALL_TOPICS_ID,
-  PENDING_ID,
-  MENTIONS_ID,
-  DAILY_ALL_ID,
-  WEEKLY_ALL_ID,
-  MONTHLY_ALL_ID,
-} from "@/modules/report_task/components/report-feed/topic-sidebar";
-import { topicReportFrequency, withSimplifiedDailyRoundLabels } from "@/modules/report_task/lib/report-frequency";
+import { TopicSidebar, TopicLogo, ALL_TOPICS_ID, PENDING_ID, MENTIONS_ID } from "@/modules/report_task/components/report-feed/topic-sidebar";
 import { ReportComposer } from "@/modules/report_task/components/report-feed/report-composer";
-import { MergedReportFeed } from "@/modules/report_task/components/report-feed/merged-report-feed";
-import { mustSubmitToTopic } from "@/modules/report_task/lib/submission-rounds";
 import { ReportFeed } from "@/modules/report_task/components/report-feed/report-feed";
 import { OpenchatFeed } from "@/modules/report_task/components/report-feed/openchat-feed";
 import { ReportAllPostsFeed } from "@/modules/report_task/components/report-feed/report-all-posts-feed";
@@ -30,7 +18,7 @@ import { TaskDetailSheet } from "@/modules/report_task/components/kanban/task-de
 import { Button, buttonVariants } from "@/modules/report_task/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/modules/report_task/components/ui/sheet";
-import { useReportFeedStore, isOpenchatTopic, type ReportPost, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
+import { useReportFeedStore, isOpenchatTopic, type ReportPost } from "@/modules/report_task/store/report-feed-store";
 import { useReportTagStore } from "@/modules/report_task/store/report-tag-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
@@ -50,7 +38,7 @@ import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions
 import { safeLocalStorage } from "@/modules/report_task/lib/safe-storage";
 import { lateToastDismissKey, isLateToastDismissed, dismissLateToast } from "@/modules/report_task/lib/late-toast-dismiss";
 import { toast } from "sonner";
-import { ArrowLeft, AtSign, BarChart3, CalendarClock, CalendarRange, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronRight, Clock, FolderOpen, Hash, Lock, Menu, MessageSquareText, Pin, Settings, SlidersHorizontal, TriangleAlert, Users, X, type LucideIcon } from "lucide-react";
+import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronDown, ChevronRight, Clock, FolderOpen, Hash, Lock, Menu, MessageSquareText, Pin, Settings, SlidersHorizontal, TriangleAlert, Users, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 
 // Beyond this many pinned posts, the rest move into the "+N เพิ่มเติม"
@@ -175,81 +163,6 @@ function ReportFeedSkeleton() {
         <div className="hidden lg:block w-64 shrink-0 bg-[color-mix(in_srgb,var(--bg-soft)_55%,white)]" />
         <div className="flex-1 bg-white" />
       </div>
-    </div>
-  );
-}
-
-// ทุก sentinel id ที่ไม่ใช่หัวข้อจริง — ใช้แทนสายเงื่อนไข `id === A || id === B || ...`
-// ที่ซ้ำกันหลายจุด (activeId resolution, selectView, ฯลฯ) ครั้งเดียว รวม 3
-// มุมมองรวม Daily/Weekly/Monthly (สรุปงาน-รวมห้องรายงาน 2026-09-22) เข้ากับ
-// ของเดิม 3 ตัว จะได้ไม่ต้องไล่แก้ทีละจุดเวลาเพิ่ม sentinel ใหม่อีกในอนาคต
-const SENTINEL_IDS = new Set<string>([ALL_TOPICS_ID, PENDING_ID, MENTIONS_ID, DAILY_ALL_ID, WEEKLY_ALL_ID, MONTHLY_ALL_ID]);
-
-/**
- * ห้องรวม "Daily-report / Weekly-report / Monthly-report" (สรุปงาน-รวมห้อง
- * รายงาน 2026-09-22, รอบแก้ที่ 2) — ผู้ใช้ยืนยันชัดเจนว่าไม่เอาหน้าตาแบบ
- * "ภาพรวม" (ReportAllPostsFeed: ปุ่มย้อนกลับ/มุมมอง/คำอธิบายใต้ชื่อ) อยากให้
- * "เหมือนห้องรีพอตปกติเลย...โพสในนั้นแบบอันอื่นๆเลย" จึงแยกเป็น panel
- * ของตัวเอง หน้าตาแบบห้องจริง (โลโก้+ชื่อห้อง, ฟีดโพสต์, ช่องเขียนข้อความ
- * ด้านล่าง) แต่ข้างในดึงโพสต์จากทุกห้องแผนกที่ตรงประเภทมารวมกัน — ไม่มี
- * ปุ่มย้อนกลับ/มุมมอง/บรรทัดคำอธิบายแบบภาพรวมเดิม, ไม่มีแท็บไฟล์/สรุป
- * (ต้องรวมไฟล์/สรุปข้ามหลายห้องซึ่งเป็นคนละงาน ยังไม่ทำรอบนี้)
- *
- * โพสต์จากช่องเขียนข้อความ "นับเป็นของแผนกตัวเองอัตโนมัติ" — ยืนยันจากผู้ใช้
- * ("นับเป็นของแผนกตัวเองโดยอัตโนมัติ") จึงส่ง `myTopic` (ห้องแผนกจริงที่
- * viewer เป็นผู้ส่งอยู่แล้ว, หาโดย mustSubmitToTopic ใน ReportFeedPageInner)
- * ตรงเข้า ReportComposer ตัวเดิมทันที — โพสต์จริง ๆ แล้วไปลงห้องแผนกนั้นเอง
- * ไม่ใช่ห้องใหม่ที่ไม่มีอยู่จริง ระบบนับคะแนน/ความถูกต้องของรอบยังทำงานถูก
- * เหมือนโพสต์จากห้องแผนกตรง ๆ ทุกอย่าง ไม่มี myTopic (เช่น CEO/แอดมินที่เห็น
- * ได้ทุกห้องแต่ไม่ได้เป็นผู้ส่งของห้องไหนเลย) → ซ่อนช่องเขียนแทนเดาส่งผิดห้อง
- */
-function MergedRoomPanel({
-  name,
-  icon: Icon,
-  topics,
-  posts,
-  myTopic,
-  onJumpToTopic,
-  onOpenTask,
-  emptyTitle,
-  emptyDescription,
-}: {
-  name: string;
-  icon: LucideIcon;
-  topics: ReportTopic[];
-  posts: ReportPost[];
-  myTopic: ReportTopic | undefined;
-  onJumpToTopic: (id: string) => void;
-  onOpenTask?: (id: string) => void;
-  emptyTitle: string;
-  emptyDescription: string;
-}) {
-  const topicById = useMemo(() => new Map(topics.map((t) => [t.id, t])), [topics]);
-  const mergedPosts = useMemo(() => posts.filter((p) => topicById.has(p.topicId)), [posts, topicById]);
-
-  return (
-    <div className="flex-1 min-h-0 bg-white overflow-hidden flex flex-col">
-      <div className="shrink-0 px-4 sm:px-5 pt-2.5 sm:pt-3 pb-1.5 sm:pb-2 flex items-center gap-2.5 border-b border-[var(--line)]">
-        <span className="relative shrink-0 rounded-full flex items-center justify-center bg-[var(--bg-soft)] h-8 w-8">
-          <Icon className="h-4 w-4 text-[var(--ink-soft)]" />
-        </span>
-        <h2 className="text-[16px] font-semibold truncate"># {name}</h2>
-      </div>
-      <MergedReportFeed
-        posts={mergedPosts}
-        topicOf={(p) => topicById.get(p.topicId)}
-        onJumpToTopic={onJumpToTopic}
-        onOpenTask={onOpenTask}
-        emptyTitle={emptyTitle}
-        emptyDescription={emptyDescription}
-      />
-      {myTopic ? (
-        <ReportComposer key={myTopic.id} topic={myTopic} />
-      ) : (
-        <div className="shrink-0 px-4 sm:px-5 py-3 border-t border-[var(--line)] text-xs text-[var(--ink-soft)]">
-          คุณไม่ได้เป็นผู้ส่งรายงานของห้องแผนกไหนในหมวดนี้ เลยยังโพสต์จากตรงนี้ไม่ได้ — ถ้าคิดว่าผิดพลาด ติดต่อผู้ดูแลห้องแผนกของคุณ
-        </div>
-      )}
     </div>
   );
 }
@@ -400,6 +313,7 @@ function ReportFeedPageInner() {
   // above, then kept in sync both ways via the effect below.
   const [filters, setFilters] = useState<PostFilters>(() => ({
     authorIds: new Set((searchParams.get("author") ?? "").split(",").filter(Boolean)),
+    departmentIds: new Set((searchParams.get("department") ?? "").split(",").filter(Boolean)),
     tagIds: new Set((searchParams.get("tag") ?? "").split(",").filter(Boolean)),
     lateOnly: searchParams.get("late") === "1",
     unreadOnly: searchParams.get("unread") === "1",
@@ -413,6 +327,7 @@ function ReportFeedPageInner() {
       else params.delete(key);
     };
     set("author", filters.authorIds.size > 0 ? [...filters.authorIds].join(",") : null);
+    set("department", filters.departmentIds.size > 0 ? [...filters.departmentIds].join(",") : null);
     set("tag", filters.tagIds.size > 0 ? [...filters.tagIds].join(",") : null);
     set("late", filters.lateOnly ? "1" : null);
     set("unread", filters.unreadOnly ? "1" : null);
@@ -448,7 +363,7 @@ function ReportFeedPageInner() {
   // it through as-is rather than falling back, same as any real,
   // currently-selected topic.
   const activeId = (() => {
-    if (selectedId && SENTINEL_IDS.has(selectedId)) return selectedId;
+    if (selectedId === ALL_TOPICS_ID || selectedId === PENDING_ID || selectedId === MENTIONS_ID) return selectedId;
     if (selectedId && visibleTopics.some((t) => t.id === selectedId) && !isParentId(selectedId)) {
       return selectedId;
     }
@@ -479,9 +394,6 @@ function ReportFeedPageInner() {
   const showAllPosts = activeId === ALL_TOPICS_ID;
   const showPending = activeId === PENDING_ID;
   const showMentions = activeId === MENTIONS_ID;
-  const showDailyAll = activeId === DAILY_ALL_ID;
-  const showWeeklyAll = activeId === WEEKLY_ALL_ID;
-  const showMonthlyAll = activeId === MONTHLY_ALL_ID;
   const activeTopic = useMemo(() => visibleTopics.find((t) => t.id === activeId), [visibleTopics, activeId]);
   // ชื่อห้องล่าสุด (สำหรับปุ่มย้อนกลับ) — โชว์เฉพาะถ้าห้องนั้นยังมองเห็นได้อยู่
   const backRoomName = visibleTopics.find((t) => t.id === lastRoomId)?.name;
@@ -497,13 +409,7 @@ function ReportFeedPageInner() {
       ? "รอฉันส่ง"
       : showMentions
         ? "กล่าวถึงฉัน"
-        : showDailyAll
-          ? "Daily-report"
-          : showWeeklyAll
-            ? "Weekly-report"
-            : showMonthlyAll
-              ? "Monthly-report"
-              : activeTopic?.name ?? "";
+        : activeTopic?.name ?? "";
   const topicSwitcherLeading = useMemo(
     () => (
       <div className="flex min-w-0 items-center gap-1.5">
@@ -552,31 +458,6 @@ function ReportFeedPageInner() {
     const visibleTopicIds = new Set(visibleTopics.map((t) => t.id));
     return posts.filter((p) => visibleTopicIds.has(p.topicId) && p.authorId !== viewingAsUserId && postMentionsUser(p, viewingAsUserId));
   }, [showMentions, visibleTopics, posts, viewingAsUserId]);
-  // Daily-report/Weekly-report/Monthly-report รวม (สรุปงาน-รวมห้องรายงาน
-  // 2026-09-22) — ทุกห้องรายงานของ "ทุกแผนก" ที่ตรงประเภทนั้น (จัดจาก
-  // topicReportFrequency ไม่ใช่จากชื่อห้อง — ดูคอมเมนต์ที่ฟังก์ชันนั้น) มารวม
-  // เป็นฟีดเดียวผ่าน ReportAllPostsFeed ตัวเดิม (ตัวกรอง "หัวข้อ" ของมันเอง
-  // ก็ทำหน้าที่เป็นตัวกรองแผนกไปในตัว เพราะแต่ละห้องคือ 1 แผนกอยู่แล้ว) —
-  // ไม่กรอง topics ตาม visibleTopics ซ้ำอีกที เพราะ ReportAllPostsFeed เอง
-  // ก็รับแค่ topics ที่ส่งเข้าไป (visibleTopics คือ permission-filtered แล้ว
-  // ตั้งแต่ต้นทาง) เพื่อไม่ให้ข้อมูลตกหล่นจากห้องที่มองไม่เห็น
-  const dailyAllTopics = useMemo(
-    () => visibleTopics.filter((t) => topicReportFrequency(t) === "daily").map(withSimplifiedDailyRoundLabels),
-    [visibleTopics]
-  );
-  const weeklyAllTopics = useMemo(() => visibleTopics.filter((t) => topicReportFrequency(t) === "weekly"), [visibleTopics]);
-  const monthlyAllTopics = useMemo(() => visibleTopics.filter((t) => topicReportFrequency(t) === "monthly"), [visibleTopics]);
-  // "โพสต์ในห้องรวมนี้ นับเป็นการส่งของห้องแผนกไหน" — ยันยันจากผู้ใช้: โพสต์
-  // ในห้องรวมแล้วนับเป็นของแผนกตัวเองอัตโนมัติ ไม่ต้องเลือกเอง จึงหาห้องแผนก
-  // ของ viewer เอง (ห้องที่ viewer เป็นผู้ส่งจริงอยู่แล้ว — mustSubmitToTopic
-  // เดียวกับที่ตัดสิน "พลาดส่ง/ส่งช้า" ทุกที่ในระบบ) จากเซตห้องที่ตรงประเภทนั้น
-  // ที่ viewer มองเห็น (ไม่ใช่ทุกห้องในบริษัท — visibleTopics กรอง permission
-  // มาแล้ว คนทั่วไปจะเห็นแค่ห้องแผนกตัวเองในเซตนี้พอดี) ไม่พบ (เช่น
-  // CEO/แอดมินที่เห็นได้ทุกห้องแต่ไม่ได้เป็นผู้ส่งของห้องไหนเลย) → undefined,
-  // ผู้เรียกจะซ่อนช่องเขียนแทนเดาส่งเข้าห้องผิด
-  const myDailyTopic = useMemo(() => dailyAllTopics.find((t) => mustSubmitToTopic(t, viewingAsUserId)), [dailyAllTopics, viewingAsUserId]);
-  const myWeeklyTopic = useMemo(() => weeklyAllTopics.find((t) => mustSubmitToTopic(t, viewingAsUserId)), [weeklyAllTopics, viewingAsUserId]);
-  const myMonthlyTopic = useMemo(() => monthlyAllTopics.find((t) => mustSubmitToTopic(t, viewingAsUserId)), [monthlyAllTopics, viewingAsUserId]);
   // Badge counts for the "มุมมอง" switcher (ReportViewSwitcher) — same
   // formulas the old sidebar "ภาพรวม" block used, computed here now that the
   // switcher lives at page level instead of inside TopicSidebar.
@@ -758,9 +639,9 @@ function ReportFeedPageInner() {
   // clear, so re-running it on every post-list change is harmless — no extra
   // renders, no loop.
   useEffect(() => {
-    if (!activeId || SENTINEL_IDS.has(activeId)) return;
+    if (!activeId || showAllPosts || showPending || showMentions) return;
     markTopicRead(activeId, viewingAsUserId);
-  }, [activeId, showAllPosts, showPending, showMentions, showDailyAll, showWeeklyAll, showMonthlyAll, viewingAsUserId, markTopicRead, posts]);
+  }, [activeId, showAllPosts, showPending, showMentions, viewingAsUserId, markTopicRead, posts]);
 
   // ที่กล่าวถึงฉัน spans posts across many rooms, so opening it clears
   // exactly those posts' unread flag (markPostsRead) instead of a whole
@@ -897,8 +778,8 @@ function ReportFeedPageInner() {
   // drops whatever header-pill filter was active — otherwise picking a room
   // out of "ยังไม่ส่ง"'s list would still show the pill panel underneath it.
   function selectView(id: string) {
-    const isSentinel = SENTINEL_IDS.has(id);
-    const curIsRoom = !!selectedId && !SENTINEL_IDS.has(selectedId);
+    const isSentinel = id === ALL_TOPICS_ID || id === PENDING_ID || id === MENTIONS_ID;
+    const curIsRoom = selectedId && selectedId !== ALL_TOPICS_ID && selectedId !== PENDING_ID && selectedId !== MENTIONS_ID;
     // กำลังจะเข้ามุมมองรวม และตอนนี้อยู่ในห้องจริง → จำห้องนั้นไว้ให้ปุ่มย้อนกลับ
     if (isSentinel && curIsRoom) setLastRoomId(selectedId);
     setTodayStatusFilter(null);
@@ -1074,42 +955,6 @@ function ReportFeedPageInner() {
                 headerRight={viewSwitcherHeader}
               />
             </div>
-          ) : showDailyAll ? (
-            <MergedRoomPanel
-              name="Daily-report"
-              icon={CalendarClock}
-              topics={dailyAllTopics}
-              posts={posts}
-              myTopic={myDailyTopic}
-              onJumpToTopic={selectView}
-              onOpenTask={setOpenTaskId}
-              emptyTitle="ยังไม่มีโพสต์รายวันในช่วงเวลานี้"
-              emptyDescription="พอมีใครโพสต์ในห้องแผนกไหนก็จะขึ้นที่นี่เอง"
-            />
-          ) : showWeeklyAll ? (
-            <MergedRoomPanel
-              name="Weekly-report"
-              icon={CalendarRange}
-              topics={weeklyAllTopics}
-              posts={posts}
-              myTopic={myWeeklyTopic}
-              onJumpToTopic={selectView}
-              onOpenTask={setOpenTaskId}
-              emptyTitle="ยังไม่มีโพสต์รายสัปดาห์ในช่วงเวลานี้"
-              emptyDescription="พอมีใครโพสต์ในห้องแผนกไหนก็จะขึ้นที่นี่เอง"
-            />
-          ) : showMonthlyAll ? (
-            <MergedRoomPanel
-              name="Monthly-report"
-              icon={CalendarDays}
-              topics={monthlyAllTopics}
-              posts={posts}
-              myTopic={myMonthlyTopic}
-              onJumpToTopic={selectView}
-              onOpenTask={setOpenTaskId}
-              emptyTitle="ยังไม่มีโพสต์รายเดือนในช่วงเวลานี้"
-              emptyDescription="พอมีใครโพสต์ในห้องแผนกไหนก็จะขึ้นที่นี่เอง"
-            />
           ) : activeTopic ? (
             <div className="flex-1 min-h-0 bg-white overflow-hidden flex flex-col">
               <div className="shrink-0">
