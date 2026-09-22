@@ -5,8 +5,7 @@ import { loadPerformanceSettings, recordPerformanceEvents, type PerformanceEvent
 import { readStore } from "@/modules/report_task/lib/db/org-store";
 import { listDirectory } from "@/modules/report_task/lib/db/employee-directory";
 import { buildDateExemptions } from "@/modules/report_task/lib/report-feed-exemptions";
-import { computeReportPenaltyCandidates, roundComplianceStatusServer } from "@/modules/report_task/lib/report-penalty-sweep";
-import { effectiveRoundsOf } from "@/modules/report_task/lib/submission-rounds";
+import { computeReportPenaltyCandidates } from "@/modules/report_task/lib/report-penalty-sweep";
 import { todayIso } from "@/modules/report_task/lib/now";
 import { thaiHolidayEvents } from "@/modules/report_task/data/thai-holidays";
 import type { ReportPost, ReportTopic, SubmitterGroup } from "@/modules/report_task/store/report-feed-store";
@@ -138,94 +137,69 @@ export async function POST() {
     priorByRefId.set(e.refId!, list);
   }
 
-  const events: PerformanceEventInput[] = [];
+  // "สถานะที่ควร active อยู่ตอนนี้" ต่อ refId — มาจาก candidates (พลาด/สาย)
+  // ถ้าไม่อยู่ใน candidates เลยแปลว่าสถานะสดตอนนี้ไม่ใช่พลาด/สายแล้ว (เช่น
+  // exempt จากลาย้อนหลัง) จึงไม่ควรมี event ไหน active เหลืออยู่เลย (null)
+  const targetCategoryByRefId = new Map<string, "report_missed" | "report_late">();
   for (const c of candidates) {
-    const targetCategory = c.status === "missed" ? "report_missed" : "report_late";
-    const otherCategory = c.status === "missed" ? "report_late" : "report_missed";
-    const prior = priorByRefId.get(c.refId) ?? [];
-    const alreadyRecorded = prior.some((p) => p.category === targetCategory && p.refType === "report_round");
-    if (alreadyRecorded) continue;
+    targetCategoryByRefId.set(c.refId, c.status === "missed" ? "report_missed" : "report_late");
+  }
 
-    // สถานะของรอบนี้เปลี่ยนทิศทางจากที่เคยบันทึกไว้ (พลาด <-> สาย) — ทั้งสอง
-    // ทิศทางต้องคืนคะแนนของฝั่งเดิมก่อนเสมอ แล้วค่อยหักตามสถานะใหม่ กันไม่ให้
-    // -1 (ส่งช้า) กับ -2 (พลาด) ของรอบเดียวกันมาบวกกันเป็น -3:
-    //   - พลาดไปแล้ว (-2) แต่มีคนส่งย้อนหลังทัน (กลายเป็น "late") → คืน -2 ก่อน
-    //   - เคยส่งช้าไว้ (-1) แต่ภายหลังโพสต์นั้นหายไป (เช่นถูกลบ, กลายเป็น
-    //     "missed" จริง) → คืน -1 ก่อน
-    // ไม่ลบ event เดิมทิ้ง (เก็บ audit trail อ่านย้อนได้ครบ เหมือน
-    // task_reaction_undo / report_post_reaction_undo ที่อื่นในระบบนี้)
-    const priorOther = prior.find((p) => p.category === otherCategory && p.refType === "report_round");
-    const otherAlreadyUndone = prior.some((p) => p.category === otherCategory && p.refType === "report_round_undo");
-    if (priorOther && !otherAlreadyUndone) {
+  // วนทุก refId ที่ "ควร active" (จาก candidates) รวมกับทุก refId ที่ "เคยมี
+  // event บันทึกไว้แล้ว" (จาก priorByRefId) เป็นชุดเดียว — ครอบคลุมทั้ง 3 เคส
+  // ในลูปเดียว ไม่แยกเป็นสอง pass เหมือนเดิม (ของเดิมใช้ prior.find() ซึ่งเจอ
+  // event แรกที่ตรง refType เท่านั้น พอมี event ค้างสองสถานะพร้อมกันสำหรับ
+  // refId เดียวกัน — เช่น report_missed กับ report_late ทั้งคู่ active
+  // พร้อมกัน ซึ่งไม่ควรเกิดแต่เกิดขึ้นจริงจากข้อมูลเก่าก่อนแก้ครั้งก่อน ๆ —
+  // จะเห็นแค่ตัวเดียวแล้วปล่อยอีกตัวค้างไว้ กลายเป็น -2 กับ -1 ค้างพร้อมกัน):
+  //   1. ยังไม่เคยบันทึกอะไรเลย + ควร active → สร้างใหม่
+  //   2. เคยบันทึกไว้ตรงกับที่ควร active อยู่แล้ว → ไม่ต้องทำอะไร
+  //   3. เคยบันทึกไว้ "ไม่ตรง" กับที่ควร active (พลาด<->สาย, กลายเป็น exempt,
+  //      หรือมีสองสถานะ active ค้างพร้อมกันผิดปกติ) → คืนคะแนนของทุกอันที่ไม่
+  //      ตรงเป้าหมาย (ไม่ใช่แค่ตัวแรกที่เจอ) ไม่ลบ event เดิมทิ้ง เก็บ audit
+  //      trail อ่านย้อนได้ครบ เหมือน task_reaction_undo ที่อื่นในระบบนี้
+  const events: PerformanceEventInput[] = [];
+  const allRefIds = new Set([...targetCategoryByRefId.keys(), ...priorByRefId.keys()]);
+
+  for (const refId of allRefIds) {
+    const parsed = parseRefId(refId);
+    if (!parsed) continue;
+
+    const prior = priorByRefId.get(refId) ?? [];
+    const originals = prior.filter((p) => p.refType === "report_round");
+    const targetCategory = targetCategoryByRefId.get(refId) ?? null;
+
+    for (const original of originals) {
+      if (original.category === targetCategory) continue; // ตรงกับสถานะปัจจุบันอยู่แล้ว
+      const alreadyUndone = prior.some((p) => p.category === original.category && p.refType === "report_round_undo");
+      if (alreadyUndone) continue;
       events.push({
         orgId,
-        userId: c.userId,
+        userId: parsed.userId,
         source: "report_task",
-        category: otherCategory,
-        points: -priorOther.points,
+        category: original.category as "report_missed" | "report_late",
+        points: -original.points,
         occurredAt: new Date(),
         refType: "report_round_undo",
-        refId: c.refId,
-        note: c.status === "missed" ? "ยกเลิก: เคยส่งช้าไว้ แต่ภายหลังไม่มีรายงานอยู่จริง" : "ยกเลิก: ส่งย้อนหลังหลังพลาดกำหนด",
+        refId,
+        note:
+          targetCategory === null
+            ? "ยกเลิก: วันนั้นมีวันลา/หยุด/ไม่ต้องส่งแล้ว"
+            : "ยกเลิก: มีบันทึกคะแนนซ้ำสองสถานะสำหรับรอบเดียวกัน คืนคะแนนของฝั่งที่ไม่ตรงกับสถานะปัจจุบัน",
       });
     }
 
-    events.push({
-      orgId,
-      userId: c.userId,
-      source: "report_task",
-      category: targetCategory,
-      occurredAt: new Date(`${c.day}T00:00:00`),
-      refType: "report_round",
-      refId: c.refId,
-    });
-  }
-
-  // คืนคะแนนของ event เก่าที่ "ไม่ต้องส่งแล้วจริง ๆ" (สถานะปัจจุบัน = exempt,
-  // เช่นมีคนไปยื่น/อนุมัติวันลาย้อนหลังให้วันนั้นทีหลัง — เดิมคะแนนที่เคยหักไป
-  // ก่อนใบลาจะอนุมัติจะค้างอยู่ถาวรไม่มีอะไรคืนให้เลย) — วนทุก refId ที่ยังมี
-  // ของจริง (report_round) ค้างอยู่และยังไม่เคยถูกคืน แล้วคำนวณสถานะสดอีกที
-  // ด้วยข้อมูล/ข้อยกเว้นล่าสุด ถ้าไม่ใช่ "พลาด"/"สาย" อีกต่อไปแล้ว (ลูป
-  // candidates ข้างบนจัดการกรณีพลาด<->สายให้ครบแล้ว) ให้คืนคะแนน
-  const topicById = new Map(topics.map((t) => [t.id, t] as const));
-  for (const [refId, prior] of priorByRefId) {
-    const original = prior.find((p) => p.refType === "report_round");
-    if (!original) continue;
-    const alreadyUndone = prior.some((p) => p.category === original.category && p.refType === "report_round_undo");
-    if (alreadyUndone) continue;
-
-    const parsed = parseRefId(refId);
-    if (!parsed) continue;
-    const topic = topicById.get(parsed.topicId);
-    if (!topic) continue; // ห้องถูกลบไปแล้ว — refundDeletedReportRoundEvents (ตอนบันทึก) ดูแลเคสนี้แยกอยู่แล้ว
-    const round = effectiveRoundsOf(topic).find((r) => r.id === parsed.roundId);
-    if (!round) continue; // รอบถูกลบไปแล้ว — เคสเดียวกับข้างบน
-
-    const liveStatus = roundComplianceStatusServer(
-      topic,
-      parsed.userId,
-      round,
-      parsed.day,
-      posts,
-      groups,
-      users,
-      exemptions,
-      submissionLock,
-      weeklyMonthlyGraceDays
-    );
-    if (liveStatus === "missed" || liveStatus === "late") continue; // ยังตรงกับที่บันทึกไว้ หรือ candidates ข้างบนจัดการให้แล้ว
-
-    events.push({
-      orgId,
-      userId: parsed.userId,
-      source: "report_task",
-      category: original.category as "report_missed" | "report_late",
-      points: -original.points,
-      occurredAt: new Date(),
-      refType: "report_round_undo",
-      refId,
-      note: liveStatus === "exempt" ? "ยกเลิก: วันนั้นมีวันลา/หยุด/ไม่ต้องส่งแล้ว" : "ยกเลิก: ไม่ใช่ภาระที่ต้องส่งอีกต่อไป",
-    });
+    if (targetCategory && !originals.some((o) => o.category === targetCategory)) {
+      events.push({
+        orgId,
+        userId: parsed.userId,
+        source: "report_task",
+        category: targetCategory,
+        occurredAt: new Date(`${parsed.day}T00:00:00`),
+        refType: "report_round",
+        refId,
+      });
+    }
   }
 
   if (events.length === 0) {
