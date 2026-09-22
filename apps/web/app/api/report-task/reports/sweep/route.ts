@@ -5,7 +5,9 @@ import { loadPerformanceSettings, recordPerformanceEvents, type PerformanceEvent
 import { readStore } from "@/modules/report_task/lib/db/org-store";
 import { listDirectory } from "@/modules/report_task/lib/db/employee-directory";
 import { buildDateExemptions } from "@/modules/report_task/lib/report-feed-exemptions";
-import { computeReportPenaltyCandidates } from "@/modules/report_task/lib/report-penalty-sweep";
+import { computeReportPenaltyCandidates, roundComplianceStatusServer } from "@/modules/report_task/lib/report-penalty-sweep";
+import { effectiveRoundsOf } from "@/modules/report_task/lib/submission-rounds";
+import { todayIso } from "@/modules/report_task/lib/now";
 import { thaiHolidayEvents } from "@/modules/report_task/data/thai-holidays";
 import type { ReportPost, ReportTopic, SubmitterGroup } from "@/modules/report_task/store/report-feed-store";
 import type { RoutineDayOffRule } from "@/modules/report_task/store/routine-dayoff-store";
@@ -36,6 +38,14 @@ interface RoutineDayOffSlice {
   pickedDates: Record<string, string[]>;
   rules: RoutineDayOffRule[];
   ruleExceptions: Record<string, string>;
+}
+
+/** refId มาตรฐาน `${day}:${topicId}:${roundId}:${userId}` (ดู report-penalty-sweep.ts) */
+function parseRefId(refId: string): { day: string; topicId: string; roundId: string; userId: string } | null {
+  const parts = refId.split(":");
+  if (parts.length !== 4) return null;
+  const [day, topicId, roundId, userId] = parts as [string, string, string, string];
+  return { day, topicId, roundId, userId };
 }
 
 export async function POST() {
@@ -98,26 +108,26 @@ export async function POST() {
     REPORT_PENALTY_LOOKBACK_DAYS,
     notBeforeDay
   );
-  if (candidates.length === 0) {
-    return Response.json({ ok: true, changed: false });
-  }
 
-  // เช็คว่า refId ไหนเคยมี event บันทึกไปแล้วบ้าง (ทั้งของจริงและตัวยกเลิก) —
-  // ต้องอ่านก่อนเขียนเพราะกรณี "เคยพลาดแล้วมาส่งย้อนหลังทีหลัง" (สถานะเปลี่ยน
-  // missed -> late) ต้องคืนคะแนนที่เคยหักไปให้ก่อน ไม่ใช่แค่ไม่หักซ้ำเฉย ๆ —
-  // ดูคอมเมนต์ในลูปด้านล่าง
-  const refIds = candidates.map((c) => c.refId);
-  const existing = await prisma.performanceEvent.findMany({
+  // เช็คทุก event ที่เคยบันทึกไว้ในช่วงวันเดียวกับที่ sweep รอบนี้ดูอยู่ (ทั้งของ
+  // จริงและตัวยกเลิก) — ไม่ได้กรองเฉพาะ refId ที่ตรงกับ candidates ตอนนี้เท่านั้น
+  // เพราะต้องจับกรณี "เคยพลาด/สายแล้วบันทึกไปแล้ว แต่ตอนนี้ไม่ต้องส่งอีกต่อไป
+  // แล้ว" ด้วย (ลาย้อนหลัง/วันหยุดที่เพิ่งเพิ่ม ฯลฯ — สถานะกลายเป็น "exempt" จึง
+  // ไม่โผล่เป็น candidate เลย ไม่ใช่แค่ "พลาด<->สาย" ที่ candidates เห็นอยู่แล้ว)
+  // refId ขึ้นต้นด้วยวันแบบ "YYYY-MM-DD:..." เทียบเป็น string ตรงลำดับตัวอักษร
+  // ได้เลย (ISO date เรียงตามตัวอักษร = เรียงตามเวลาจริงพอดี)
+  const todayStr = todayIso();
+  const dayRangeEvents = await prisma.performanceEvent.findMany({
     where: {
       orgId,
       source: "report_task",
       refType: { in: ["report_round", "report_round_undo"] },
-      refId: { in: refIds },
+      refId: { gte: notBeforeDay, lte: `${todayStr}:￿` },
     },
     select: { refId: true, category: true, refType: true, points: true },
   });
   const priorByRefId = new Map<string, { category: string; refType: string; points: number }[]>();
-  for (const e of existing) {
+  for (const e of dayRangeEvents) {
     const list = priorByRefId.get(e.refId!) ?? [];
     list.push({ category: e.category, refType: e.refType!, points: Number(e.points) });
     priorByRefId.set(e.refId!, list);
@@ -164,6 +174,46 @@ export async function POST() {
       refType: "report_round",
       refId: c.refId,
     });
+  }
+
+  // คืนคะแนนของ event เก่าที่ "ไม่ต้องส่งแล้วจริง ๆ" (สถานะปัจจุบัน = exempt,
+  // เช่นมีคนไปยื่น/อนุมัติวันลาย้อนหลังให้วันนั้นทีหลัง — เดิมคะแนนที่เคยหักไป
+  // ก่อนใบลาจะอนุมัติจะค้างอยู่ถาวรไม่มีอะไรคืนให้เลย) — วนทุก refId ที่ยังมี
+  // ของจริง (report_round) ค้างอยู่และยังไม่เคยถูกคืน แล้วคำนวณสถานะสดอีกที
+  // ด้วยข้อมูล/ข้อยกเว้นล่าสุด ถ้าไม่ใช่ "พลาด"/"สาย" อีกต่อไปแล้ว (ลูป
+  // candidates ข้างบนจัดการกรณีพลาด<->สายให้ครบแล้ว) ให้คืนคะแนน
+  const topicById = new Map(topics.map((t) => [t.id, t] as const));
+  for (const [refId, prior] of priorByRefId) {
+    const original = prior.find((p) => p.refType === "report_round");
+    if (!original) continue;
+    const alreadyUndone = prior.some((p) => p.category === original.category && p.refType === "report_round_undo");
+    if (alreadyUndone) continue;
+
+    const parsed = parseRefId(refId);
+    if (!parsed) continue;
+    const topic = topicById.get(parsed.topicId);
+    if (!topic) continue; // ห้องถูกลบไปแล้ว — refundDeletedReportRoundEvents (ตอนบันทึก) ดูแลเคสนี้แยกอยู่แล้ว
+    const round = effectiveRoundsOf(topic).find((r) => r.id === parsed.roundId);
+    if (!round) continue; // รอบถูกลบไปแล้ว — เคสเดียวกับข้างบน
+
+    const liveStatus = roundComplianceStatusServer(topic, parsed.userId, round, parsed.day, posts, groups, users, exemptions, submissionLock);
+    if (liveStatus === "missed" || liveStatus === "late") continue; // ยังตรงกับที่บันทึกไว้ หรือ candidates ข้างบนจัดการให้แล้ว
+
+    events.push({
+      orgId,
+      userId: parsed.userId,
+      source: "report_task",
+      category: original.category as "report_missed" | "report_late",
+      points: -original.points,
+      occurredAt: new Date(),
+      refType: "report_round_undo",
+      refId,
+      note: liveStatus === "exempt" ? "ยกเลิก: วันนั้นมีวันลา/หยุด/ไม่ต้องส่งแล้ว" : "ยกเลิก: ไม่ใช่ภาระที่ต้องส่งอีกต่อไป",
+    });
+  }
+
+  if (events.length === 0) {
+    return Response.json({ ok: true, changed: false });
   }
 
   const recorded = await recordPerformanceEvents(events);
