@@ -51,6 +51,30 @@ fi
 step "build"
 pnpm turbo run build
 
+# ตรวจ migration ของ workforce **หลัง build** เพราะ wf:migrate เป็น TypeScript ที่
+# import @workforce/config ซึ่งชี้ main ไปที่ dist/ (ดู bootstrap-db.sh) — ตรวจก่อน
+# build จะตายด้วย MODULE_NOT_FOUND บนเครื่องที่ยังไม่เคย build
+#
+# ด่านนี้จำเป็น: ขั้นตรวจด้านบนดูแต่ฝั่ง Prisma ⇒ deploy โค้ดที่ต้องการคอลัมน์ใหม่
+# ของ schema workforce ได้โดยไม่มีอะไรเตือน แล้วทุกหน้าที่อ่านตารางนั้นพังเป็น 500
+# ทั้งโมดูล (เจอจริง 2026-09-22: เพิ่ม companies.attendance_correction_approvals
+# แล้ว /hr ทั้งโมดูลขึ้น Internal Server Error เพราะ /companies อ่านคอลัมน์ที่ยังไม่มี)
+#
+# ล้มที่นี่ = ยังไม่รีสตาร์ต ⇒ บริการที่รันอยู่ยังเป็นเวอร์ชันเดิมที่เข้ากับฐานข้อมูล
+step "ตรวจ migration ของระบบบุคคล (workforce)"
+if ! pnpm wf:migrate --verify; then
+  cat >&2 <<'EOF'
+
+⚠ schema ของ workforce ไม่ตรงกับโค้ดที่เพิ่ง build
+
+  ลงจริง:  pnpm wf:migrate
+
+  แล้วรัน release.sh --no-pull อีกครั้ง — build ถูกแคชไว้แล้ว ไม่ต้องรอนาน
+  (ยังไม่รีสตาร์ตบริการ ของที่รันอยู่จึงยังเป็นเวอร์ชันเดิมที่ใช้งานได้)
+EOF
+  exit 1
+fi
+
 step "รีสตาร์ตบริการ"
 # -n = ไม่ยอมถามรหัสผ่าน ล้มทันทีแทน
 #
