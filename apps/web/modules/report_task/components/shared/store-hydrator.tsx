@@ -109,6 +109,13 @@ export function StoreHydrator() {
         apply={(s, enabledSince) => ({ ...s, enabledSince })}
       />
       <ServerStoreSync
+        apiKey="report-penalty-grace-days"
+        pollMs={SLOW_POLL_MS}
+        store={useReportPenaltySettingsStore}
+        select={(s) => s.weeklyMonthlyGraceDays}
+        apply={(s, weeklyMonthlyGraceDays) => ({ ...s, weeklyMonthlyGraceDays })}
+      />
+      <ServerStoreSync
         apiKey="attachment-settings"
         pollMs={SLOW_POLL_MS}
         store={useAttachmentSettingsStore}

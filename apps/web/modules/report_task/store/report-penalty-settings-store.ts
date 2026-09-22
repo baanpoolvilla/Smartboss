@@ -26,7 +26,17 @@ interface ReportPenaltySettingsStore {
    * สวิตช์ครั้งแรก) จึงต้องมีฟิลด์นี้กันไว้ตรง ๆ แทนที่จะพึ่ง lookback อย่างเดียว
    */
   enabledSince: string | null;
+  /**
+   * รอบรายสัปดาห์/รายเดือน "เผื่อเวลา" ส่งย้อนหลังได้กี่วัน หลังพ้นวันครบกำหนด
+   * ไปแล้ว ก่อนจะกลายเป็น "พลาด" (-2) ถาวร — ระหว่างช่วงนี้ถ้าส่งทันยังนับเป็น
+   * "สาย" (-1) เท่านั้น เหมือน pmGraceDays/workOrderGraceDays ที่มีอยู่แล้วใน
+   * core.performance_settings (แต่คีย์นี้แยกเก็บในโมดูลรายงานเอง ไม่แตะ schema
+   * ของ performance_settings) — ไม่มีผลกับรอบรายวัน (รายวันมี "เผื่อเวลา" ของ
+   * ตัวเองอยู่แล้วคือ hard cutoff ของห้อง ดู report-penalty-sweep.ts)
+   */
+  weeklyMonthlyGraceDays: number;
   setEnabled: (v: boolean) => void;
+  setWeeklyMonthlyGraceDays: (n: number) => void;
 }
 
 // Server-synced via ServerStoreSync (apiKey "report-penalty-settings" +
@@ -35,7 +45,9 @@ interface ReportPenaltySettingsStore {
 export const useReportPenaltySettingsStore = create<ReportPenaltySettingsStore>()((set) => ({
   enabled: false,
   enabledSince: null,
+  weeklyMonthlyGraceDays: 3,
   // ทุกครั้งที่เปิด (แม้จะเคยเปิดมาก่อนแล้วปิดแล้วเปิดใหม่) ตั้ง enabledSince
   // เป็นวันนี้เสมอ — กันไม่ให้ช่วงที่เคยปิดไว้ถูกแบ็คฟิลย้อนหลังตอนเปิดใหม่ด้วย
   setEnabled: (v) => set(v ? { enabled: true, enabledSince: todayIso() } : { enabled: false }),
+  setWeeklyMonthlyGraceDays: (n) => set({ weeklyMonthlyGraceDays: Math.max(0, Math.round(n) || 0) }),
 }));

@@ -17,6 +17,8 @@ import { ShieldAlert } from "lucide-react";
 export function ReportPenaltySettingsPanel() {
   const enabled = useReportPenaltySettingsStore((s) => s.enabled);
   const setEnabled = useReportPenaltySettingsStore((s) => s.setEnabled);
+  const graceDays = useReportPenaltySettingsStore((s) => s.weeklyMonthlyGraceDays);
+  const setGraceDays = useReportPenaltySettingsStore((s) => s.setWeeklyMonthlyGraceDays);
 
   return (
     <div className="space-y-4">
@@ -47,6 +49,27 @@ export function ReportPenaltySettingsPanel() {
         </Link>{" "}
         — ปิดสวิตช์นี้ไว้ ค่าที่ตั้งไว้จะยังไม่มีผลอะไร ข้อมูลเดิมที่หักไปแล้วก่อนปิดยังอยู่เหมือนเดิม
       </p>
+
+      <div className="pt-2 border-t border-[var(--line)]">
+        <label className="flex items-center gap-2 text-sm text-[var(--ink)]">
+          เผื่อเวลาส่งย้อนหลังของรอบรายสัปดาห์/รายเดือน
+          <input
+            type="number"
+            min={0}
+            max={30}
+            value={graceDays}
+            onChange={(e) => setGraceDays(Number(e.target.value))}
+            className="w-16 rounded-md border border-[var(--line)] px-2 py-1 text-sm"
+          />
+          วัน
+        </label>
+        <p className="mt-1 text-xs text-[var(--ink-soft)]">
+          เลยกำหนดของรอบรายสัปดาห์/รายเดือนไปแล้ว (เช่นตั้งไว้ทุกวันศุกร์)
+          แต่ยังส่งทันภายในจำนวนวันนี้ → หัก -1 (สาย) เท่านั้น เลยช่วงนี้ไปแล้วไม่ส่งเลย
+          → หัก -2 (พลาด) ถาวร — ไม่มีผลกับรอบรายวัน (รอบรายวันมี &quot;เวลาปิดรับอัตโนมัติ&quot;
+          ของตัวเองอยู่แล้วที่ตั้งค่าห้องแต่ละห้อง)
+        </p>
+      </div>
     </div>
   );
 }

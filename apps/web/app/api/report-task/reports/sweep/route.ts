@@ -52,11 +52,12 @@ export async function POST() {
   const session = await requireOrg();
   const orgId = session.orgId;
 
-  const [settings, { data: featureEnabled }, { data: enabledSince }, { data: reportFeed }, users, { data: leaves }, { data: holidaysSlice }, { data: routine }, { data: reminderSettingsRaw }] =
+  const [settings, { data: featureEnabled }, { data: enabledSince }, { data: graceDaysRaw }, { data: reportFeed }, users, { data: leaves }, { data: holidaysSlice }, { data: routine }, { data: reminderSettingsRaw }] =
     await Promise.all([
       loadPerformanceSettings(orgId),
       readStore<boolean>(orgId, "report-penalty-settings"),
       readStore<string>(orgId, "report-penalty-enabled-since"),
+      readStore<number>(orgId, "report-penalty-grace-days"),
       readStore<{ topics: ReportTopic[]; posts: ReportPost[]; submitterGroups?: SubmitterGroup[] }>(orgId, "report-feed"),
       listDirectory(orgId),
       readStore<CalendarEvent[]>(orgId, "leaves"),
@@ -64,6 +65,9 @@ export async function POST() {
       readStore<RoutineDayOffSlice>(orgId, "routine-dayoff"),
       readStore<Partial<ReminderSettings>>(orgId, "reminder-settings"),
     ]);
+  // เผื่อเวลาส่งย้อนหลังของรอบรายสัปดาห์/รายเดือน (วัน) — ตั้งได้ที่ ตั้งค่า →
+  // ห้อง Report → หักคะแนน HR (report-penalty-settings-store.ts) ค่าเริ่มต้น 3
+  const weeklyMonthlyGraceDays = typeof graceDaysRaw === "number" && graceDaysRaw >= 0 ? graceDaysRaw : 3;
   // "เวลาปิดรับรายงานอัตโนมัติ" (hard cutoff) — คนละค่ากับเวลารอบส่งของแต่ละ
   // ห้อง (round.time, ใช้แค่ตัดสิน "สาย" ไม่เคยบล็อกการส่งจริง) ดู
   // report-cutoff.ts's effectiveHardCutoffTime สำหรับตรรกะเต็ม — ไม่มีค่าที่
@@ -105,6 +109,7 @@ export async function POST() {
     groups,
     exemptions,
     submissionLock,
+    weeklyMonthlyGraceDays,
     REPORT_PENALTY_LOOKBACK_DAYS,
     notBeforeDay
   );
@@ -196,7 +201,18 @@ export async function POST() {
     const round = effectiveRoundsOf(topic).find((r) => r.id === parsed.roundId);
     if (!round) continue; // รอบถูกลบไปแล้ว — เคสเดียวกับข้างบน
 
-    const liveStatus = roundComplianceStatusServer(topic, parsed.userId, round, parsed.day, posts, groups, users, exemptions, submissionLock);
+    const liveStatus = roundComplianceStatusServer(
+      topic,
+      parsed.userId,
+      round,
+      parsed.day,
+      posts,
+      groups,
+      users,
+      exemptions,
+      submissionLock,
+      weeklyMonthlyGraceDays
+    );
     if (liveStatus === "missed" || liveStatus === "late") continue; // ยังตรงกับที่บันทึกไว้ หรือ candidates ข้างบนจัดการให้แล้ว
 
     events.push({

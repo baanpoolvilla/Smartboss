@@ -4,6 +4,7 @@ import {
   effectiveRoundsOf,
   roundRunsOnDay,
   roundIgnoresDateExemptions,
+  roundFrequencyOf,
   attributePostToRound,
 } from "@/modules/report_task/lib/submission-rounds";
 import { trackedTopicsOf, iterationBounds, eachDay, type ComplianceStatus } from "@/modules/report_task/lib/report-feed-compliance";
@@ -115,6 +116,47 @@ function minutesOfDay(iso: string): number {
   return d.getHours() * 60 + d.getMinutes();
 }
 
+function addDaysStr(day: string, n: number): string {
+  const d = new Date(`${day}T00:00:00`);
+  d.setDate(d.getDate() + n);
+  return localDateStr(d);
+}
+
+/**
+ * เทียบเท่า `postsForRoundServer` แต่ค้นข้ามวัน — ใช้เฉพาะรอบรายสัปดาห์/รายเดือน
+ * ในช่วง "เผื่อเวลาส่งย้อนหลัง" (หลัง due date ผ่านไปแล้ว) เท่านั้น
+ *
+ * **ไม่ใช้ `attributePostToRound`** (ตัวจับคู่โพสต์เข้ารอบที่แดชบอร์ด/badge
+ * ใช้อยู่) เพราะฟังก์ชันนั้นกรองผู้ท้าชิงด้วย `roundRunsOnDay(round, วันที่โพสต์)`
+ * ก่อนเสมอ — โพสต์ที่ส่ง "วันจันทร์" ไม่มีทางจับคู่กับรอบที่วิ่งแค่ "วันศุกร์"
+ * ได้เลยแม้จะตั้งใจส่งย้อนหลังให้รอบศุกร์นั้นก็ตาม (ข้อจำกัดโดยธรรมชาติของ
+ * ระบบจับคู่ตามวันที่ ใช้กับกรณี "ส่งข้ามวัน" ไม่ได้) แก้ที่ฟังก์ชันร่วมนั้น
+ * กระทบวงกว้างกว่านี้มาก (badge ตรงเวลา/สายของทุกโพสต์ ไม่ใช่แค่คะแนน) จึงตั้งใจ
+ * แยกตรรกะเฉพาะ "ช่วงเผื่อเวลา" นี้ไว้ต่างหาก ใช้กับการหักคะแนนเท่านั้น
+ *
+ * จับคู่แบบระมัดระวัง: ใช้ `post.roundId` ที่คนเลือกเองตอนโพสต์เป็นหลักเสมอ
+ * (ไม่กำกวม) — กรณีไม่มี `roundId` (ห้องมีรอบเดียว เลยไม่มี picker ให้เลือก)
+ * ยอมรับได้เฉพาะห้องที่มีรอบเดียวจริง ๆ เท่านั้น (`totalRounds === 1`) กันไม่ให้
+ * เดาผิดรอบตอนห้องมีหลายรอบพร้อมกัน
+ */
+function postsInGraceWindowServer(
+  topic: ReportTopic,
+  userId: string,
+  round: SubmissionRound,
+  dueDay: string,
+  graceEndDay: string,
+  posts: ReportPost[],
+  totalRounds: number
+): ReportPost[] {
+  return posts.filter((p) => {
+    if (p.topicId !== topic.id || p.authorId !== userId || p.excludeFromSubmission) return false;
+    const postDay = localDateStr(new Date(p.createdAt));
+    if (postDay < dueDay || postDay > graceEndDay) return false;
+    if (p.roundId) return p.roundId === round.id;
+    return totalRounds === 1;
+  });
+}
+
 /** เทียบเท่า `postsForRound` (report-feed-compliance.ts) — คัดลอกเองเพราะตัว
  * ต้นฉบับไม่ได้ export (private ของไฟล์นั้น) และไม่มีอะไรให้ใช้ร่วมได้จริง */
 function postsForRoundServer(
@@ -147,7 +189,8 @@ export function roundComplianceStatusServer(
   groups: SubmitterGroup[],
   users: DirectoryUser[],
   exemptions: DateExemptions,
-  lock: ReportSubmissionLockSettings
+  lock: ReportSubmissionLockSettings,
+  weeklyMonthlyGraceDays: number
 ): ComplianceStatus {
   if (!roundRunsOnDay(round, day)) return "exempt";
   if (!roundIgnoresDateExemptions(round) && isExemptDate(exemptions, userId, day)) return "exempt";
@@ -161,7 +204,19 @@ export function roundComplianceStatusServer(
     return onTime ? "on-time" : "late";
   }
   const todayStr = todayIso();
-  if (day < todayStr) return "missed"; // วันผ่านไปแล้ว ปิดจริงเสมอไม่ว่า hard cutoff จะตั้งกี่โมง
+  if (day < todayStr) {
+    // รอบรายสัปดาห์/รายเดือน "เผื่อเวลา" ส่งย้อนหลังได้ (`weeklyMonthlyGraceDays`,
+    // ตั้งได้ที่ ตั้งค่า → ห้อง Report → หักคะแนน HR) ก่อนจะกลายเป็น "พลาด" ถาวร
+    // — รอบรายวันไม่ได้อะไรตรงนี้ (เผื่อของรายวันคือ hard cutoff ข้างล่างซึ่ง
+    // จบภายในวันเดียวกันอยู่แล้วเสมอ, ดูคอมเมนต์บนสุดของไฟล์เรื่องทำไมแยกกัน)
+    if (roundFrequencyOf(round) !== "daily" && weeklyMonthlyGraceDays > 0) {
+      const graceEndDay = addDaysStr(day, weeklyMonthlyGraceDays);
+      const gracePosts = postsInGraceWindowServer(topic, userId, round, day, graceEndDay, posts, rounds.length);
+      if (gracePosts.length > 0) return "late"; // ส่งทันภายในช่วงเผื่อเวลา แม้เลย due date ไปแล้ว
+      if (todayStr <= graceEndDay) return "pending"; // ยังอยู่ในช่วงเผื่อเวลา ยังไม่ตัดสิน ยังไม่หักคะแนน
+    }
+    return "missed"; // วันผ่านไปแล้ว (หรือหมดช่วงเผื่อเวลาแล้ว) ปิดจริงถาวร
+  }
 
   const nowMinutes = minutesOfDay(now().toISOString());
   if (nowMinutes <= cutoff) return "pending"; // ยังไม่ถึงเวลารอบส่งด้วยซ้ำ
@@ -212,6 +267,7 @@ export function computeReportPenaltyCandidates(
   groups: SubmitterGroup[],
   exemptions: DateExemptions,
   lock: ReportSubmissionLockSettings,
+  weeklyMonthlyGraceDays: number,
   lookbackDays: number,
   notBeforeDay: string
 ): ReportPenaltyCandidate[] {
@@ -227,7 +283,7 @@ export function computeReportPenaltyCandidates(
     for (const day of eachDay(startStr, endStr)) {
       for (const round of rounds) {
         for (const u of users) {
-          const status = roundComplianceStatusServer(topic, u.id, round, day, posts, groups, users, exemptions, lock);
+          const status = roundComplianceStatusServer(topic, u.id, round, day, posts, groups, users, exemptions, lock, weeklyMonthlyGraceDays);
           if (status !== "missed" && status !== "late") continue;
           out.push({
             userId: u.id,

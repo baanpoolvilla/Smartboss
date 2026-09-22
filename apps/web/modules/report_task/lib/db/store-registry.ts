@@ -33,6 +33,7 @@ export const STORE_KEYS = {
   "penalty-settings": "stores/penalty-settings.json",
   "report-penalty-settings": "stores/report-penalty-settings.json",
   "report-penalty-enabled-since": "stores/report-penalty-enabled-since.json",
+  "report-penalty-grace-days": "stores/report-penalty-grace-days.json",
   "people-groups": "stores/people-groups.json",
   "report-feed": "stores/report-feed.json",
   "routine-dayoff": "stores/routine-dayoff.json",
