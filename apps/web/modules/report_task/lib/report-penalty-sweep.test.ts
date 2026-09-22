@@ -113,10 +113,13 @@ describe("computeReportPenaltyCandidates", () => {
   // lookbackDays: 0 — the room existed since Jan 1 and runs every day, so a
   // wider lookback would also (correctly) surface earlier missed days; these
   // three tests only care about today's single round, so they pin the walk
-  // to just today to isolate that.
+  // to just today to isolate that. notBeforeDay is set far in the past
+  // (well before the room existed) so it never becomes the binding floor here.
+  const noFloor = "2026-01-01";
+
   it("produces one missed candidate for a user who never posted, with the spec's refId shape", () => {
     const topic = topicWith([morning]);
-    const candidates = computeReportPenaltyCandidates([topic], [], users, [], noExemptions, 0);
+    const candidates = computeReportPenaltyCandidates([topic], [], users, [], noExemptions, 0, noFloor);
     const mine = candidates.filter((c) => c.userId === userId);
     expect(mine).toEqual([
       { userId, topicId: "t1", roundId: "r9", day: today, refId: `${today}:t1:r9:${userId}`, status: "missed" },
@@ -126,20 +129,32 @@ describe("computeReportPenaltyCandidates", () => {
   it("an on-time post produces no candidate at all", () => {
     const topic = topicWith([morning]);
     const posts = [postAt(new Date(2026, 1, 2, 8, 30), "r9", userId)];
-    const candidates = computeReportPenaltyCandidates([topic], posts, users, [], noExemptions, 0);
+    const candidates = computeReportPenaltyCandidates([topic], posts, users, [], noExemptions, 0, noFloor);
     expect(candidates.filter((c) => c.userId === userId)).toEqual([]);
   });
 
   it("a late post produces a late candidate, not missed", () => {
     const topic = topicWith([morning]);
     const posts = [postAt(new Date(2026, 1, 2, 10, 0), "r9", userId)];
-    const candidates = computeReportPenaltyCandidates([topic], posts, users, [], noExemptions, 0);
+    const candidates = computeReportPenaltyCandidates([topic], posts, users, [], noExemptions, 0, noFloor);
     expect(candidates.filter((c) => c.userId === userId).map((c) => c.status)).toEqual(["late"]);
   });
 
   it("a room with no rounds at all (untracked) never produces a candidate", () => {
     const untracked: ReportTopic = { id: "t2", name: "untracked", color: "#000", createdAt: new Date(2026, 0, 1).toISOString(), minImages: 0, cutoffs: [] };
-    const candidates = computeReportPenaltyCandidates([untracked], [], users, [], noExemptions, 5);
+    const candidates = computeReportPenaltyCandidates([untracked], [], users, [], noExemptions, 5, noFloor);
     expect(candidates).toEqual([]);
+  });
+
+  // Regression test for the real production bug: turning the feature on for
+  // the first time must never backfill days from before that moment, no
+  // matter how wide lookbackDays is — notBeforeDay is the real floor.
+  it("notBeforeDay blocks backfill even with a wide lookback — the day the feature was turned on wins over lookbackDays", () => {
+    const topic = topicWith([morning]); // room existed since Jan 1, runs every day, never posted
+    const candidates = computeReportPenaltyCandidates([topic], [], users, [], noExemptions, 45, today);
+    const mine = candidates.filter((c) => c.userId === userId);
+    expect(mine).toEqual([
+      { userId, topicId: "t1", roundId: "r9", day: today, refId: `${today}:t1:r9:${userId}`, status: "missed" },
+    ]);
   });
 });

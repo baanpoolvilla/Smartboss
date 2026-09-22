@@ -180,8 +180,12 @@ export interface ReportPenaltyCandidate {
  *
  * จำกัดด้วย `lookbackDays` (ไม่ไล่ทั้งประวัติห้องทุกครั้ง) เหมือนแนวทางเดียวกับ
  * `dockAttendance`'s ATTENDANCE_LOOKBACK_DAYS — ห้อง/รอบ/วันที่เก่ากว่านั้นถือว่า
- * นิ่งแล้ว (ถ้าเคยพลาดไปนานแล้วไม่เคยหักเพราะฟีเจอร์นี้เพิ่งเปิด ก็ไม่ไล่ย้อน
- * หักคะแนนเก่าเป็นสิบ ๆ วันตอนเปิดใช้งานครั้งแรก)
+ * นิ่งแล้ว **แต่ `lookbackDays` เพียงอย่างเดียวไม่พอ**: ครั้งแรกที่บริษัทเปิด
+ * ฟีเจอร์นี้ก็จะไล่ย้อนหลังเต็ม `lookbackDays` ทันที ไปหักของทุกวันที่เคยพลาด
+ * *ก่อน* ฟีเจอร์นี้จะมีอยู่ด้วยซ้ำ (บั๊กที่เจอจริงจากการใช้งาน) — `notBeforeDay`
+ * ("YYYY-MM-DD" ของครั้งล่าสุดที่เปิดสวิตช์, เก็บใน
+ * report-penalty-settings-store.ts's `enabledSince`) คือเพดานล่างที่แท้จริง
+ * ผู้เรียกต้องส่งมาเสมอ ไม่ปล่อยให้ `lookbackDays` เป็นเพดานเดียว
  */
 export function computeReportPenaltyCandidates(
   topics: ReportTopic[],
@@ -189,12 +193,14 @@ export function computeReportPenaltyCandidates(
   users: DirectoryUser[],
   groups: SubmitterGroup[],
   exemptions: DateExemptions,
-  lookbackDays: number
+  lookbackDays: number,
+  notBeforeDay: string
 ): ReportPenaltyCandidate[] {
   const tracked = trackedTopicsOf(topics);
   const out: ReportPenaltyCandidate[] = [];
   const todayStr = todayIso();
-  const earliestStr = localDateStr(new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000));
+  const lookbackFloor = localDateStr(new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000));
+  const earliestStr = lookbackFloor > notBeforeDay ? lookbackFloor : notBeforeDay;
 
   for (const topic of tracked) {
     const { startStr, endStr } = iterationBounds(topic, { from: new Date(`${earliestStr}T00:00:00`), to: new Date(`${todayStr}T00:00:00`) });
