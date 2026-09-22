@@ -1,4 +1,6 @@
 import "server-only";
+import { prisma } from "@smartboss/database";
+import { Prisma } from "@prisma/client";
 import { recordPerformanceEvents, type PerformanceEventInput } from "@/lib/performance";
 import { readStore } from "./org-store";
 import { listDirectory } from "./employee-directory";
@@ -122,4 +124,116 @@ export async function recordReportStickerEvents(
   }
 
   if (events.length > 0) await recordPerformanceEvents(events);
+}
+
+interface RoundLike {
+  id: string;
+}
+interface CutoffLike {
+  id: string;
+}
+interface TopicRoundsLike {
+  id: string;
+  submissionRounds?: RoundLike[];
+  cutoffs?: CutoffLike[];
+}
+interface ReportFeedTopicsSlice {
+  topics?: TopicRoundsLike[];
+}
+
+function roundIdsByTopic(topics: TopicRoundsLike[]): Map<string, Set<string>> {
+  const map = new Map<string, Set<string>>();
+  for (const t of topics) {
+    const ids = new Set<string>();
+    for (const r of t.submissionRounds ?? []) ids.add(r.id);
+    for (const c of t.cutoffs ?? []) ids.add(c.id); // ห้องเก่า — id เดียวกับที่ effectiveRoundsOf สังเคราะห์เป็นรอบ
+    map.set(t.id, ids);
+  }
+  return map;
+}
+
+/**
+ * คืนคะแนนของ report_missed/report_late อัตโนมัติทันทีที่ "รอบส่ง" (หรือทั้งห้อง)
+ * ที่เป็นต้นเรื่องถูกลบไปในการเซฟนี้ — ขนานกับ recordReportStickerEvents ข้างบน
+ * (diff oldData/newData ก้อนเดียวกัน) ต่างกันแค่ทิศทาง: อันนั้นมองหา "ของใหม่ที่
+ * เพิ่งเพิ่ม" ส่วนนี้มองหา "รอบที่เคยมีแต่หายไปแล้ว"
+ *
+ * ที่มา: sweep (report-penalty-sweep.ts) ตัดสินจากรอบที่ "มีอยู่ตอนนี้" เท่านั้น
+ * — ลบรอบทิ้งแล้ว คะแนนที่เคยหักไปตอนรอบนั้นยังมีอยู่จะค้างติดลบถาวรไม่มีอะไร
+ * คืนให้ (เจอจริงจากการใช้งาน) เดิมต้องรันสคริปต์แยก
+ * (reconcile-orphan-report-penalty-events.ts, ยังเก็บไว้แก้ของเก่าที่ค้างมา
+ * ก่อนไฟล์นี้จะมีอยู่) — จากนี้ไปจับที่นี่ทันทีตอนลบ ไม่ต้องรอใครมารันสคริปต์
+ *
+ * เจตนา: หักเฉพาะรอบที่ "มีอยู่จริงตอนนี้" เท่านั้น — รอบที่เคยใส่แล้วลบทิ้ง
+ * ไม่ควรมีคะแนนติดค้างอยู่เลย เหมือนไม่เคยมีรอบนั้นอยู่ตั้งแต่แรก
+ *
+ * ใช้ `refId.contains(":${topicId}:${roundId}:")` แทนการ match ทั้งก้อน เพราะ
+ * refId จริงมี day/userId ปนอยู่ด้วย (`${day}:${topicId}:${roundId}:${userId}`,
+ * ดู report-penalty-sweep.ts) — เดินคิวรีแค่ตอนมีรอบถูกลบจริงเท่านั้น (ปกติ
+ * diff ว่างเปล่าทุกครั้งที่เซฟ ไม่กระทบ perf ของการเซฟปกติ)
+ */
+export async function refundDeletedReportRoundEvents(
+  orgId: string,
+  oldData: ReportFeedTopicsSlice | null,
+  newData: ReportFeedTopicsSlice
+): Promise<void> {
+  const oldTopics = oldData?.topics ?? [];
+  if (oldTopics.length === 0) return;
+  const newRoundsByTopic = roundIdsByTopic(newData.topics ?? []);
+
+  const deletedRounds: { topicId: string; roundId: string }[] = [];
+  for (const t of oldTopics) {
+    const stillAlive = newRoundsByTopic.get(t.id); // undefined = ทั้งห้องถูกลบไปเลย
+    const oldIds = new Set<string>();
+    for (const r of t.submissionRounds ?? []) oldIds.add(r.id);
+    for (const c of t.cutoffs ?? []) oldIds.add(c.id);
+    for (const roundId of oldIds) {
+      if (!stillAlive?.has(roundId)) deletedRounds.push({ topicId: t.id, roundId });
+    }
+  }
+  if (deletedRounds.length === 0) return;
+
+  const events = await prisma.performanceEvent.findMany({
+    where: {
+      orgId,
+      source: "report_task",
+      refType: "report_round",
+      category: { in: ["report_missed", "report_late"] },
+      OR: deletedRounds.map(({ topicId, roundId }) => ({ refId: { contains: `:${topicId}:${roundId}:` } })),
+    },
+    select: { userId: true, category: true, points: true, occurredAt: true, refId: true, createdBy: true },
+  });
+  if (events.length === 0) return;
+
+  const undone = new Set(
+    (
+      await prisma.performanceEvent.findMany({
+        where: {
+          orgId,
+          source: "report_task",
+          refType: "report_round_undo",
+          refId: { in: events.map((e) => e.refId!) },
+        },
+        select: { refId: true },
+      })
+    ).map((u) => u.refId)
+  );
+  const toRefund = events.filter((e) => e.refId && !undone.has(e.refId));
+  if (toRefund.length === 0) return;
+
+  await prisma.performanceEvent.createMany({
+    data: toRefund.map((e) => ({
+      orgId,
+      userId: e.userId,
+      source: "report_task" as const,
+      category: e.category,
+      points: new Prisma.Decimal(e.points).neg(),
+      occurredAt: e.occurredAt,
+      refType: "report_round_undo",
+      refId: e.refId,
+      note: "ยกเลิก (รอบส่ง/ห้องถูกลบ)",
+      createdBy: e.createdBy,
+    })),
+    skipDuplicates: true,
+  });
 }

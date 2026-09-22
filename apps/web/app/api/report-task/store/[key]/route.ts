@@ -11,7 +11,7 @@ import {
   saveDepartmentOverlay,
 } from "@/modules/report_task/lib/db/departments";
 import { isValidStoreKey, readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
-import { recordReportStickerEvents } from "@/modules/report_task/lib/db/report-feed-performance";
+import { recordReportStickerEvents, refundDeletedReportRoundEvents } from "@/modules/report_task/lib/db/report-feed-performance";
 import {
   listHolidayEvents,
   listLeaveEvents,
@@ -188,8 +188,8 @@ async function put(request: NextRequest, key: string) {
   const expectedVersion = typeof body.expectedVersion === "number" ? body.expectedVersion : null;
 
   // ต้องอ่านก้อนเก่าไว้ก่อนเขียนทับ — หลังเขียนแล้วก้อนเก่าหายไปเลย ไม่มีทาง
-  // ย้อนกลับมา diff ว่า reaction ไหนเพิ่งติดใหม่ (เฉพาะคีย์ report-feed)
-  const before = key === REPORT_FEED_KEY ? await readStore<{ posts?: unknown[] }>(session.orgId, key) : null;
+  // ย้อนกลับมา diff ว่า reaction ไหนเพิ่งติดใหม่ หรือรอบส่งไหนถูกลบไป (เฉพาะคีย์ report-feed)
+  const before = key === REPORT_FEED_KEY ? await readStore<{ posts?: unknown[]; topics?: unknown[] }>(session.orgId, key) : null;
 
   const result = await writeStore(
     session.orgId,
@@ -212,6 +212,11 @@ async function put(request: NextRequest, key: string) {
       before?.data as Parameters<typeof recordReportStickerEvents>[1],
       body.data as Parameters<typeof recordReportStickerEvents>[2],
       session.userId
+    );
+    await refundDeletedReportRoundEvents(
+      session.orgId,
+      before?.data as Parameters<typeof refundDeletedReportRoundEvents>[1],
+      body.data as Parameters<typeof refundDeletedReportRoundEvents>[2]
     );
   }
 
