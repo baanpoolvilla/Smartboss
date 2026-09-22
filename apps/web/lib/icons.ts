@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  Award,
   Boxes,
   Bug,
   Building,
@@ -32,6 +33,7 @@ import {
   Scale,
   ScrollText,
   Settings,
+  ShieldAlert,
   ShieldCheck,
   ShoppingCart,
   Smartphone,
@@ -48,6 +50,7 @@ import {
  * ชื่อที่ใช้อ้างอิงจาก lucide-react ตรง ๆ
  */
 const ICONS: Record<string, LucideIcon> = {
+  Award,
   Boxes,
   Bug,
   Building,
@@ -80,6 +83,7 @@ const ICONS: Record<string, LucideIcon> = {
   Scale,
   ScrollText,
   Settings,
+  ShieldAlert,
   ShieldCheck,
   ShoppingCart,
   Smartphone,

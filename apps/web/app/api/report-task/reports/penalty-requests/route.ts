@@ -7,8 +7,12 @@ import { listCeoUserIds, createPenaltyRequest, listPenaltyRequests } from "@/mod
 import type { AppNotification } from "@/modules/report_task/store/notification-store";
 
 /**
- * คำร้องขอแก้ไข/ขอส่งย้อนหลังของคะแนนรายงาน — คู่กับหน้าคะแนน & เกรด (/hr/employees?tab=score)
- * ต้องเห็นหน้านั้นได้ก่อน (core.performance.view) ถึงจะยื่น/ดูคำร้องได้
+ * คำร้องขอแก้ไข/ขอส่งย้อนหลังของคะแนนรายงาน
+ *
+ * ยื่น/ดูของตัวเองได้ทุกคน (แค่ต้องเข้าโมดูลบุคคลได้ — HR_PERMS.access) ไม่ว่า
+ * จะยื่นจากหน้า "คะแนนของฉัน" (/hr/my-score, ทุกคนเข้าได้) หรือหัวหน้า/HR ยื่น
+ * แทนจากหน้าคะแนน & เกรดรวม (/hr/employees?tab=score, core.performance.view
+ * เท่านั้น) — เห็น "ของคนอื่น" หรือ "ทั้งหมด" (?all=1) ถึงต้องมี performanceView
  *
  * GET: ?all=1 (เฉพาะ CEO/SUPER_ADMIN เห็นของทุกคน) ไม่งั้นเห็นเฉพาะของตัวเอง
  * POST: ยื่นคำร้องใหม่ — แจ้งเตือนไปหา CEO ทุกคนในบริษัททันที (เข้าคิว
@@ -20,12 +24,12 @@ const NOTIFICATIONS_KEY = "notifications";
 
 export async function GET(request: Request) {
   const session = await requireOrg();
-  if (!hasPermission(session, ADMIN_PERMS.performanceView)) {
-    return Response.json({ error: "ไม่มีสิทธิ์" }, { status: 403 });
-  }
 
   const wantsAll = new URL(request.url).searchParams.get("all") === "1";
   const canSeeAll = wantsAll && (hasRole(session, "CEO") || isSuperAdmin(session));
+  if (wantsAll && !canSeeAll) {
+    return Response.json({ error: "ไม่มีสิทธิ์" }, { status: 403 });
+  }
 
   const [all, users] = await Promise.all([listPenaltyRequests(session.orgId), listDirectory(session.orgId)]);
   const nameById = new Map(users.map((u) => [u.id, u.name] as const));
@@ -36,15 +40,18 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const session = await requireOrg();
-  if (!hasPermission(session, ADMIN_PERMS.performanceView)) {
-    return Response.json({ error: "ไม่มีสิทธิ์" }, { status: 403 });
-  }
 
   const body = (await request.json().catch(() => null)) as
     | { userId?: string; refId?: string; type?: string; reason?: string }
     | null;
   if (!body?.userId || !body?.refId || !body?.reason || (body.type !== "retroactive" && body.type !== "waive")) {
     return Response.json({ error: "ข้อมูลไม่ครบ" }, { status: 400 });
+  }
+
+  // ยื่นให้ตัวเองทำได้เสมอ — ยื่นแทน "คนอื่น" ต้องเป็นคนที่เห็นหน้าคะแนนรวมได้
+  // (หัวหน้า/HR/CEO) เท่านั้น กันพนักงานทั่วไปยื่นคำร้องปลอมแทนคนอื่น
+  if (body.userId !== session.userId && !hasPermission(session, ADMIN_PERMS.performanceView)) {
+    return Response.json({ error: "ไม่มีสิทธิ์" }, { status: 403 });
   }
 
   const result = await createPenaltyRequest(session.orgId, {

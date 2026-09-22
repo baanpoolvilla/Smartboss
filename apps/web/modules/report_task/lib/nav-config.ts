@@ -5,6 +5,7 @@ import {
   MessageSquareText,
   ScrollText,
   Settings,
+  ShieldAlert,
   type LucideIcon,
 } from "lucide-react";
 
@@ -54,4 +55,13 @@ export const navItems: NavItem[] = [
   },
   // เห็นได้ทุกคน — ตัวหน้าเองซ่อนส่วนที่เป็นของทั้งบริษัทจากคนที่ไม่ใช่หัวหน้า
   { href: `${REPORT_TASK_BASE}/settings`, label: "ตั้งค่า", icon: Settings, iconName: "Settings" },
+  // เห็นได้ทุกคน (เข้าดูสถานะคำร้องของตัวเองได้) — หน้าเองเช็คซ้ำว่าอนุมัติได้
+  // เฉพาะ CEO เท่านั้น (ดู penalty-requests/page.tsx) ใส่ไว้ในเมนูหลักเพราะ
+  // เดิมเข้าถึงได้แค่ผ่านลิงก์ในแจ้งเตือน — หัวหน้า/CEO หาไม่เจอว่าต้องกดตรงไหน
+  {
+    href: `${REPORT_TASK_BASE}/penalty-requests`,
+    label: "คำร้องขอแก้ไขคะแนน",
+    icon: ShieldAlert,
+    iconName: "ShieldAlert",
+  },
 ];

@@ -18,15 +18,16 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const session = await requireOrg();
-  if (!hasPermission(session, ADMIN_PERMS.performanceView)) {
-    return Response.json({ error: "ไม่มีสิทธิ์" }, { status: 403 });
-  }
 
   const params = new URL(request.url).searchParams;
   const userId = params.get("userId");
   const category = params.get("category");
   if (!userId || (category !== "report_missed" && category !== "report_late")) {
     return Response.json({ error: "ข้อมูลไม่ครบ" }, { status: 400 });
+  }
+  // ดูของตัวเองได้เสมอ — ดูของคนอื่นต้องเห็นหน้าคะแนนรวมได้ (หัวหน้า/HR/CEO)
+  if (userId !== session.userId && !hasPermission(session, ADMIN_PERMS.performanceView)) {
+    return Response.json({ error: "ไม่มีสิทธิ์" }, { status: 403 });
   }
 
   const [events, undoRefIds, requests, { data: reportFeed }] = await Promise.all([
