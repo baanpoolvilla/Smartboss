@@ -222,8 +222,22 @@ export async function POST() {
       }
     }
 
+    // DEBUG ชั่วคราว — ลบออกทีหลังหลังไล่บั๊กเสร็จ
+    const watchRefIds = [...allRefIds].filter((r) => r.includes("214b545e") || r.includes("315a9634"));
+    const debug = {
+      candidatesCount: candidates.length,
+      allRefIdsCount: allRefIds.size,
+      eventsPlanned: events.length,
+      eventsPlannedList: events,
+      watched: watchRefIds.map((refId) => ({
+        refId,
+        target: targetCategoryByRefId.get(refId) ?? null,
+        prior: priorByRefId.get(refId) ?? [],
+      })),
+    };
+
     if (events.length === 0) {
-      return { changed: false };
+      return { changed: false, debug };
     }
 
     // เขียนตรงในทรานแซกชันนี้เอง ไม่ผ่าน recordPerformanceEvents (ซึ่งเปิด
@@ -244,10 +258,10 @@ export async function POST() {
         note: e.note ?? null,
         createdBy: e.createdBy ?? null,
       }));
-    if (rows.length === 0) return { changed: false };
+    if (rows.length === 0) return { changed: false, debug };
 
     const recorded = await tx.performanceEvent.createMany({ data: rows, skipDuplicates: true });
-    return { changed: recorded.count > 0, performanceEvents: recorded.count };
+    return { changed: recorded.count > 0, performanceEvents: recorded.count, debug };
   });
 
   return Response.json({ ok: true, ...result });
