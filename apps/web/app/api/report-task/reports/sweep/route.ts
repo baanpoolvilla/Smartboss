@@ -6,7 +6,6 @@ import { readStore } from "@/modules/report_task/lib/db/org-store";
 import { listDirectory } from "@/modules/report_task/lib/db/employee-directory";
 import { buildDateExemptions } from "@/modules/report_task/lib/report-feed-exemptions";
 import { computeReportPenaltyCandidates } from "@/modules/report_task/lib/report-penalty-sweep";
-import { todayIso } from "@/modules/report_task/lib/now";
 import { thaiHolidayEvents } from "@/modules/report_task/data/thai-holidays";
 import type { ReportPost, ReportTopic, SubmitterGroup } from "@/modules/report_task/store/report-feed-store";
 import type { RoutineDayOffRule } from "@/modules/report_task/store/routine-dayoff-store";
@@ -128,8 +127,6 @@ export async function POST() {
     targetCategoryByRefId.set(c.refId, c.status === "missed" ? "report_missed" : "report_late");
   }
 
-  const todayStr = todayIso();
-
   // ตั้งแต่ที่ไป (อ่าน event เดิม + ตัดสิน + เขียน) ต้องอยู่ในทรานแซกชันเดียว
   // ล็อกด้วยกัน — ดูคอมเมนต์บนสุดของไฟล์ว่าทำไม (race ระหว่างสองแท็บ ตัดสิน
   // คนละสถานะสำหรับ refId เดียวกัน แล้วเขียนได้ทั้งคู่เพราะ unique constraint
@@ -146,16 +143,24 @@ export async function POST() {
     // ตอนนี้เท่านั้น เพราะต้องจับกรณี "เคยพลาด/สายแล้วบันทึกไปแล้ว แต่ตอนนี้ไม่
     // ต้องส่งอีกต่อไปแล้ว" ด้วย (ลาย้อนหลัง/วันหยุดที่เพิ่งเพิ่ม ฯลฯ — สถานะ
     // กลายเป็น "exempt" จึงไม่โผล่เป็น candidate เลย ไม่ใช่แค่ "พลาด<->สาย" ที่
-    // candidates เห็นอยู่แล้ว) refId ขึ้นต้นด้วยวันแบบ "YYYY-MM-DD:..." เทียบ
-    // เป็น string ตรงลำดับตัวอักษรได้เลย (ISO date เรียงตามตัวอักษร = เรียง
-    // ตามเวลาจริงพอดี) — อ่านครั้งนี้เกิดหลังได้ล็อกแล้ว ไม่มีแท็บอื่นเขียนแทรก
-    // ระหว่างทางได้อีก
+    // candidates เห็นอยู่แล้ว) refId ขึ้นต้นด้วยวันแบบ "YYYY-MM-DD:..." — แค่
+    // `gte: notBeforeDay` พอ ไม่ต้องมี upper bound เลย (refId ไม่มีทางเกิน
+    // วันนี้ตั้งแต่แรกอยู่แล้ว เพราะ candidates เองก็ไม่เดินเกิน todayStr)
+    //
+    // เดิมใส่ `lte: `${todayStr}:￿`` ไว้เป็น upper bound sentinel —
+    // **บั๊กจริงที่เจอจากการใช้งาน**: U+FFFF เป็น Unicode noncharacter
+    // อย่างเป็นทางการ ขึ้นอยู่กับ collation ของคอลัมน์ ฐานข้อมูลอาจไม่ได้เทียบ
+    // แบบ byte-order ตรงไปตรงมาเหมือนที่ JavaScript ทำ (ทดสอบใน JS แล้วดูถูก
+    // ต้องทุกอย่าง แต่ Postgres จริงกลับกรอง refId เกือบทั้งหมดออกเงียบๆ)
+    // ผลคือ query นี้ได้แถวว่างเปล่าตลอด ทำให้ sweep คิดว่าไม่มี event เดิมเลย
+    // สักตัว แล้วสร้าง "ของใหม่" ซ้ำทับของเดิมที่ยัง active อยู่โดยไม่คืนคะแนน
+    // เก่าให้ก่อน (กลายเป็น -1 กับ -2 ค้างพร้อมกันจริงตามที่เจอ)
     const dayRangeEvents = await tx.performanceEvent.findMany({
       where: {
         orgId,
         source: "report_task",
         refType: { in: ["report_round", "report_round_undo"] },
-        refId: { gte: notBeforeDay, lte: `${todayStr}:￿` },
+        refId: { gte: notBeforeDay },
       },
       select: { refId: true, category: true, refType: true, points: true },
     });
@@ -222,22 +227,8 @@ export async function POST() {
       }
     }
 
-    // DEBUG ชั่วคราว — ลบออกทีหลังหลังไล่บั๊กเสร็จ
-    const watchRefIds = [...allRefIds].filter((r) => r.includes("214b545e") || r.includes("315a9634"));
-    const debug = {
-      candidatesCount: candidates.length,
-      allRefIdsCount: allRefIds.size,
-      eventsPlanned: events.length,
-      eventsPlannedList: events,
-      watched: watchRefIds.map((refId) => ({
-        refId,
-        target: targetCategoryByRefId.get(refId) ?? null,
-        prior: priorByRefId.get(refId) ?? [],
-      })),
-    };
-
     if (events.length === 0) {
-      return { changed: false, debug };
+      return { changed: false };
     }
 
     // เขียนตรงในทรานแซกชันนี้เอง ไม่ผ่าน recordPerformanceEvents (ซึ่งเปิด
@@ -258,10 +249,10 @@ export async function POST() {
         note: e.note ?? null,
         createdBy: e.createdBy ?? null,
       }));
-    if (rows.length === 0) return { changed: false, debug };
+    if (rows.length === 0) return { changed: false };
 
     const recorded = await tx.performanceEvent.createMany({ data: rows, skipDuplicates: true });
-    return { changed: recorded.count > 0, performanceEvents: recorded.count, debug };
+    return { changed: recorded.count > 0, performanceEvents: recorded.count };
   });
 
   return Response.json({ ok: true, ...result });
