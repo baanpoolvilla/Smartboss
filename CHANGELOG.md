@@ -24,6 +24,37 @@ commit ที่เพิ่งทำก็ได้ ไม่ต้องเด
 
 ## บันทึก
 
+### 2026-09-22 08:42 — baanpoolvilla (แก้ร่วมกับ Claude)
+**feat:** หักคะแนน HR อัตโนมัติเมื่อพลาด/ส่งช้ารายงาน (Daily/Weekly/Monthly) — เฟส 2 ของ spec-report-submission-rounds
+- ทำอะไร: category `report_missed`/`report_late` มีชื่อจองไว้ใน `performance.ts`
+  อยู่แล้วแต่ไม่เคยมีอะไรสร้าง event จริง (เจอจากพนักงานขาดส่งรีพอตแล้วคะแนนไม่โดนหัก) —
+  เพิ่ม sweep ใหม่ที่คำนวณ "พลาด/สาย" ต่อ (ห้อง, รอบ, วัน, คน) แล้วยิงเข้า
+  `recordPerformanceEvents` ที่มีอยู่แล้ว เหมือน `task_late` sweep ทุกประการ
+  (dedup ด้วย refId `${day}:${topicId}:${roundId}:${userId}`, ยกเว้นวันลา/หยุด,
+  รองรับกรณีส่งย้อนหลังหลังพลาดไปแล้วด้วยการคืนคะแนนที่เคยหัก + หักแบบสายแทน)
+  · **ไม่ใช้** `report-feed-compliance.ts`'s `roundComplianceStatus`/
+  `resolveRoundSubmitters` ตรงๆ เพราะสายนั้นอ่าน `users`/`isOwner`/groups จาก
+  global ฝั่ง client (`lib/directory.ts`, zustand) ซึ่งฝั่งเซิร์ฟเวอร์ไม่มีทาง
+  hydrate ต่อบริษัทได้ (`reminder-sweep.ts` ทำแบบเดิมอยู่แล้วโดยไม่มีใครสังเกต
+  — ความเสี่ยงเดิมที่ไม่เอามาต่อกับงาน "หักคะแนนจริง") เขียนตัวตัดสินคู่ขนาน
+  ที่รับ `DirectoryUser[]` จริงจาก DB เป็นพารามิเตอร์แทน
+  · เปิด/ปิดแยกสวิตช์ที่ ตั้งค่า → ห้อง Report → หักคะแนน HR (ปิดไว้เป็น
+  ค่าเริ่มต้น — บริษัทที่อัปเกรดมาไม่โดนหักคะแนนย้อนหลังทันทีที่ deploy)
+  จำนวนแต้มตั้งที่หน้าคะแนนผลงานรวม (`/admin/performance/settings`) เหมือนเดิม
+- ไฟล์/branch หลัก: `lib/report-penalty-sweep.ts` (+ `.test.ts`),
+  `app/api/report-task/reports/sweep/route.ts`, `store/report-penalty-settings-store.ts`,
+  `components/shared/report-penalty-settings-panel.tsx`, wiring ใน
+  `task-sync.tsx`/`store-hydrator.tsx`/`store-registry.ts`, ปรับข้อความที่
+  `admin/components/performance-settings-form.tsx`
+- ต้องทำหลัง pull: ไม่มี (ฟีเจอร์ปิดไว้เป็นค่าเริ่มต้น ไม่กระทบข้อมูลเดิม
+  จนกว่าจะมีคนไปเปิดสวิตช์เอง) · แก้ `reconcile-orphan-sticker-events.ts`
+  ค้างของสติกเกอร์งานที่ยกเลิกแล้วแต่คะแนนยังติดลบค้างในรอบเดียวกันนี้ด้วย
+  (คนละเรื่อง แต่เจอพร้อมกันจากการเช็คหน้า HR)
+- ค้างอยู่ / ต้องระวัง: ยังไม่ทำ "grace เตือนก่อน N ครั้งค่อยหัก" ที่ spec
+  เสนอไว้ (ไม่มีคนขอตอนนี้) · `vitest.config.ts` เพิ่ม alias `server-only` →
+  no-op shim (`test/server-only-shim.ts`) ให้เทสต์ import ไฟล์ server-only ได้ —
+  ใช้ร่วมกับไฟล์ server-only อื่นในอนาคตได้เลย ไม่ต้องเพิ่มซ้ำ
+
 ### 2026-08-19 16:15 — baanpoolvilla (แก้ร่วมกับ Claude)
 **feat:** AI Insight — remediation approach + 3 analyzer (root-cause/forecast/risk)
 - ทำอะไร: ทำตาม §15 + §16/§17 ของ `docs/ai-insight-v2-spec.md` (ภาค 2 —

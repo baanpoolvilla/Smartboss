@@ -31,6 +31,7 @@ export const STORE_KEYS = {
   "issue-desk-config": "stores/issue-desk-config.json",
   meetings: "stores/meetings.json",
   "penalty-settings": "stores/penalty-settings.json",
+  "report-penalty-settings": "stores/report-penalty-settings.json",
   "people-groups": "stores/people-groups.json",
   "report-feed": "stores/report-feed.json",
   "routine-dayoff": "stores/routine-dayoff.json",

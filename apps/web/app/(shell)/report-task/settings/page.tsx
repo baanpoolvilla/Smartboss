@@ -14,6 +14,7 @@ import { ProjectTopicSettingsPanel } from "@/modules/report_task/components/shar
 import { TaskReviewSettingsPanel } from "@/modules/report_task/components/shared/task-review-settings-panel";
 import { ReportTagSettingsPanel } from "@/modules/report_task/components/shared/report-tag-settings-panel";
 import { ReportAttachmentSettingsPanel } from "@/modules/report_task/components/shared/report-attachment-settings-panel";
+import { ReportPenaltySettingsPanel } from "@/modules/report_task/components/shared/report-penalty-settings-panel";
 import { SubmissionSummaryPanel } from "@/modules/report_task/components/report-feed/submission-summary-panel";
 import { LeaveTypeSettingsPanel } from "@/modules/report_task/components/calendar/leave-type-settings-dialog";
 import { RoutineDayOffSettingsPanel } from "@/modules/report_task/components/calendar/routine-dayoff-settings-dialog";
@@ -41,6 +42,7 @@ import {
   KanbanSquare,
   MessageSquareText,
   Paperclip,
+  ShieldAlert,
   ShieldCheck,
   Smile,
   Tag,
@@ -157,6 +159,9 @@ function SettingsPageInner() {
       { key: "summary", label: "ภาพรวมการส่ง", icon: CalendarCheck2 },
       { key: "tags", label: "จัดการแท็ก", icon: Tag },
       { key: "attachments", label: "ไฟล์แนบ", icon: Paperclip },
+      // owner-only — เป็นสวิตช์ระดับบริษัทที่กระทบคะแนนผลงานของทุกแผนก
+      // ไม่ใช่แค่ห้องที่หัวหน้าแผนกดูแลอยู่ (ต่างจากอีก 4 section ในแท็บนี้)
+      ...(owner ? [{ key: "penalty", label: "หักคะแนน HR", icon: ShieldAlert }] : []),
     ],
     issueDesk: [{ key: "issueDeskConfig", label: "ตั้งค่าแจ้งปัญหา", icon: Bug }],
     permissions: owner
@@ -310,6 +315,7 @@ function SettingsPageInner() {
               {sectionKey === "summary" && <SubmissionSummaryPanel />}
               {sectionKey === "tags" && <ReportTagSettingsPanel />}
               {sectionKey === "attachments" && <ReportAttachmentSettingsPanel />}
+              {sectionKey === "penalty" && owner && <ReportPenaltySettingsPanel />}
             </section>
           )}
 

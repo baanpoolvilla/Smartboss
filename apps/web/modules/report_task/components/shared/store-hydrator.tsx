@@ -13,6 +13,7 @@ import { useStickerUsageStore } from "@/modules/report_task/store/sticker-usage-
 import { ServerStoreSync } from "./server-store-sync";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { usePenaltySettingsStore } from "@/modules/report_task/store/penalty-settings-store";
+import { useReportPenaltySettingsStore } from "@/modules/report_task/store/report-penalty-settings-store";
 import { useMeetingStore } from "@/modules/report_task/store/meeting-store";
 import { useLeaveStore } from "@/modules/report_task/store/leave-store";
 import { useOvertimeStore } from "@/modules/report_task/store/overtime-store";
@@ -92,6 +93,13 @@ export function StoreHydrator() {
         store={usePenaltySettingsStore}
         select={(s) => s.defaultPoints}
         apply={(s, defaultPoints) => ({ ...s, defaultPoints })}
+      />
+      <ServerStoreSync
+        apiKey="report-penalty-settings"
+        pollMs={SLOW_POLL_MS}
+        store={useReportPenaltySettingsStore}
+        select={(s) => s.enabled}
+        apply={(s, enabled) => ({ ...s, enabled })}
       />
       <ServerStoreSync
         apiKey="attachment-settings"

@@ -24,16 +24,20 @@ import { savePerformanceSettingsAction } from "@/app/(shell)/admin/actions";
 const GRADE_SPARE_ROWS = 2;
 
 /**
- * งานและรายงาน (task_late, task_manual_dock, report_missed, report_late) ไม่มี
- * กลุ่มในนี้เลย — ทั้งสี่ตัวนี้ไม่เคยถูก rulePoints ที่ตั้งในหน้านี้พาไปใช้จริง:
+ * task_late / task_manual_dock ไม่มีกลุ่มในนี้ — สองตัวนี้ไม่เคยถูก rulePoints
+ * ที่ตั้งในหน้านี้พาไปใช้จริง:
  *
  *   - task_manual_dock: คะแนนมาจากสติกเกอร์ที่หัวหน้ากดบนการ์ดงาน Kanban
  *   - task_late: sweep อัตโนมัติส่งค่า points มาเองเสมอ (แก้ที่ /report-task/settings)
- *   - report_missed / report_late: ยังไม่มีฟีเจอร์ไหนสร้างเหตุการณ์สองชนิดนี้เลย
- *     (จองชื่อไว้ล่วงหน้าสำหรับ "รอบส่งรายงาน" เฟส 2 ที่ยังไม่ได้สร้าง —
- *     ดู docs/spec-report-submission-rounds.md)
  *
  * เคยแสดงเป็นช่องกรอกได้ในหน้านี้ทั้งที่ตั้งแล้วไม่มีผล — เอาออกกันเข้าใจผิด
+ *
+ * report_missed / report_late ต่างจากสองตัวบน — "จำนวนแต้ม" ที่ตั้งในหน้านี้
+ * (กลุ่ม "รายงาน" ด้านล่าง) มีผลจริงแล้ว ตั้งแต่ sweep เฟส 2 (ดู
+ * lib/report-penalty-sweep.ts + /api/report-task/reports/sweep) ต่อเข้ากับ
+ * recordPerformanceEvents ที่มีอยู่แล้ว — แต่ "จะหักจริงไหม" ยังเป็นสวิตช์แยก
+ * ต่างหากที่ /report-task/settings (ห้อง Report → หักคะแนน HR, ปิดไว้เป็น
+ * ค่าเริ่มต้น) ไม่ใช่ที่นี่ — เห็นเลข rulePoints ที่นี่ไม่ได้แปลว่าหักจริงแล้ว
  */
 const REPORT_TASK_SETTINGS_HREF = "/report-task/settings";
 
@@ -48,6 +52,11 @@ const GROUPS: { title: string; hint: string; keys: PerformanceCategory[] }[] = [
     title: "การลงเวลา",
     hint: "จากโมดูลบุคคล — วันลาที่อนุมัติแล้วไม่ถูกนับ",
     keys: ["attendance_late", "attendance_absent"],
+  },
+  {
+    title: "รายงาน (Daily/Weekly/Monthly)",
+    hint: "จากห้อง Report ที่ตั้ง \"รอบส่งรายงาน\" ไว้ — ต้องเปิดสวิตช์ที่ ตั้งค่า → ห้อง Report → หักคะแนน HR ด้วย ไม่งั้นเลขนี้ยังไม่มีผล",
+    keys: ["report_missed", "report_late"],
   },
 ];
 
@@ -188,8 +197,15 @@ export function PerformanceSettingsForm({ settings: s }: { settings: Performance
             ตั้งค่าโมดูลรายงานและงาน
           </Link>{" "}
           ไม่ใช่ที่หน้านี้ — ส่วน &quot;ไม่ส่งรายงานประจำวัน&quot; และ
-          &quot;ส่งรายงานสาย&quot; ยังไม่เปิดใช้งาน (ยังไม่มีฟีเจอร์ตรวจรอบ
-          ส่งรายงานที่จะสร้างการหักคะแนนสองแบบนี้)
+          &quot;ส่งรายงานสาย&quot; (กลุ่ม &quot;รายงาน&quot; ด้านล่าง) ตั้งจำนวนแต้มที่นี่ได้แล้ว
+          แต่ต้องไปเปิดสวิตช์ &quot;หักคะแนน HR&quot; ที่{" "}
+          <Link
+            href={`${REPORT_TASK_SETTINGS_HREF}?tab=report&section=penalty`}
+            className="text-(--app-strong) underline"
+          >
+            ตั้งค่า → ห้อง Report
+          </Link>{" "}
+          ก่อน (ปิดไว้เป็นค่าเริ่มต้น) ไม่งั้นจำนวนแต้มที่ตั้งไว้ยังไม่มีผลจริง
         </p>
       </SectionCard>
 
