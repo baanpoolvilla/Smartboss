@@ -24,12 +24,23 @@ export function ReportFeed({
   highlightPostId,
   highlightReplyId,
   onOpenTask,
+  topicOf,
+  onJumpToTopic,
 }: {
   topic: ReportTopic;
   topicPosts: ReportPost[];
   highlightPostId: string | null;
   highlightReplyId?: string | null;
   onOpenTask?: (taskId: string) => void;
+  /** ห้องรวม (Daily-report/Weekly-report/Monthly-report — ดู
+   * mergedReportRoomFrequency) เท่านั้นที่ส่งมา: โพสต์ในฟีดมาจากหลายห้องปนกัน
+   * แต่ละการ์ดจึงต้องได้ "ห้องต้นทางของตัวเอง" ไม่ใช่ห้องที่เปิดอยู่ — ตรรกะ
+   * รอบส่ง/ตรงเวลา/สาย/จำนวนรูปขั้นต่ำ ทั้งหมดอ่านจาก topic ที่ส่งเข้า
+   * ReportCard ถ้าใช้ห้องรวม (ซึ่งไม่มีรอบของตัวเอง) ตัดสินแทนห้องต้นทาง
+   * ป้ายพวกนั้นจะผิดหมด ห้องปกติไม่ส่ง prop นี้ = พฤติกรรมเดิมเป๊ะ */
+  topicOf?: (post: ReportPost) => ReportTopic | undefined;
+  /** คู่กับ topicOf — ทำให้การ์ดของโพสต์ที่มาจากห้องอื่นมีป้ายชื่อห้องต้นทาง กดแล้วเด้งไปห้องนั้นจริง */
+  onJumpToTopic?: (topicId: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
@@ -122,12 +133,27 @@ export function ReportFeed({
             {groupByDay(topicPosts, (p) => p.createdAt).map((group) => (
               <div key={group.key} className="space-y-3">
                 <DaySeparator label={reportDayLabel(group.label)} />
-                {group.items.map((p) => (
-                  <Fragment key={p.id}>
-                    {p.id === newDividerBeforeId && <NewMessagesDivider />}
-                    <ReportCard post={p} topic={topic} highlighted={p.id === highlightPostId} highlightReplyId={highlightReplyId} onOpenTask={onOpenTask} />
-                  </Fragment>
-                ))}
+                {group.items.map((p) => {
+                  const postTopic = topicOf?.(p) ?? topic;
+                  const fromAnotherRoom = postTopic.id !== topic.id;
+                  return (
+                    <Fragment key={p.id}>
+                      {p.id === newDividerBeforeId && <NewMessagesDivider />}
+                      <ReportCard
+                        post={p}
+                        topic={postTopic}
+                        highlighted={p.id === highlightPostId}
+                        highlightReplyId={highlightReplyId}
+                        onOpenTask={onOpenTask}
+                        topicBadge={
+                          fromAnotherRoom && onJumpToTopic
+                            ? { label: postTopic.name, onClick: () => onJumpToTopic(postTopic.id) }
+                            : undefined
+                        }
+                      />
+                    </Fragment>
+                  );
+                })}
               </div>
             ))}
           </div>

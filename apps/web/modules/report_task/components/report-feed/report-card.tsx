@@ -1233,7 +1233,10 @@ export function ReportCard({
                 {post.pinned && <Pin className="h-3.5 w-3.5 text-[var(--brand-green-dark)] shrink-0" />}
                 <p className="text-sm font-semibold truncate">{author?.name}</p>
                 {authorDept && (
-                  <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold bg-[var(--accent)] text-[var(--brand-green-dark)]">
+                  // ฟ้า/น้ำเงิน ไม่ใช่เขียวแบรนด์ — ขอมาโดยตรง ("ขอเป็นพื้นหลัง
+                  // สีฟ้าได้ไหม") และยังช่วยแยกป้าย "แผนกของคนโพสต์" ออกจาก
+                  // ป้ายเขียว "ตรงเวลา/รอบ" ที่อยู่แถวเดียวกันด้วย
+                  <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold bg-[#dbeafe] text-[var(--chart-blue,#2563eb)]">
                     {authorDept.name}
                   </span>
                 )}

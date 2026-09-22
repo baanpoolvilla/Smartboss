@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { TopicSidebar, TopicLogo, ALL_TOPICS_ID, PENDING_ID, MENTIONS_ID } from "@/modules/report_task/components/report-feed/topic-sidebar";
 import { ReportComposer } from "@/modules/report_task/components/report-feed/report-composer";
+import { mergedReportRoomFrequency, topicReportFrequency } from "@/modules/report_task/lib/report-frequency";
 import { ReportFeed } from "@/modules/report_task/components/report-feed/report-feed";
 import { OpenchatFeed } from "@/modules/report_task/components/report-feed/openchat-feed";
 import { ReportAllPostsFeed } from "@/modules/report_task/components/report-feed/report-all-posts-feed";
@@ -18,7 +19,7 @@ import { TaskDetailSheet } from "@/modules/report_task/components/kanban/task-de
 import { Button, buttonVariants } from "@/modules/report_task/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/modules/report_task/components/ui/sheet";
-import { useReportFeedStore, isOpenchatTopic, type ReportPost } from "@/modules/report_task/store/report-feed-store";
+import { useReportFeedStore, isOpenchatTopic, type ReportPost, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { useReportTagStore } from "@/modules/report_task/store/report-tag-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
@@ -595,14 +596,39 @@ function ReportFeedPageInner() {
     () => (todayStatusFilter && activeTopic ? todayStatusEntries([activeTopic], posts, exemptions) : []),
     [todayStatusFilter, activeTopic, posts, exemptions]
   );
+  // ห้องรวม "Daily-report / Weekly-report / Monthly-report" (สรุปงาน-รวมห้อง
+  // รายงาน 2026-09-22) — ห้องจริงธรรมดาที่ผู้ใช้สร้างเองใต้หมวด Report ไม่มี
+  // อะไรพิเศษในข้อมูล ยกเว้นว่าเปิดแล้วจะ "ดึง" โพสต์ของห้องแผนกทุกห้องที่เป็น
+  // ประเภทเดียวกันมารวมเรียงตามเวลาโพสต์ด้วย ("ของ daily ก็ไปดึงมาทุกไดเร็กทอรี
+  // และเรียงตามเวลาโพส") ห้องแผนกต้นทางไม่ถูกแตะเลย — ไม่ย้าย ไม่ลบ ไม่แก้ เป็น
+  // การอ่านมารวมแสดงผลล้วน ๆ โพสต์ใหม่ที่เขียนในห้องรวมก็ลงห้องรวมนี้ตามปกติ
+  const mergeFrequency = activeTopic ? mergedReportRoomFrequency(activeTopic) : null;
+  const mergeSourceTopics = useMemo(
+    () =>
+      mergeFrequency && activeTopic
+        ? visibleTopics.filter((t) => t.id !== activeTopic.id && topicReportFrequency(t) === mergeFrequency)
+        : [],
+    [mergeFrequency, activeTopic, visibleTopics]
+  );
+  // การ์ดแต่ละใบต้องได้ "ห้องต้นทางของตัวเอง" ไม่ใช่ห้องรวมที่เปิดอยู่ ไม่งั้น
+  // ป้ายรอบ/ตรงเวลา/สาย จะถูกตัดสินด้วยรอบของห้องรวม (ซึ่งไม่มีรอบ) — ดู
+  // ReportFeed's topicOf
+  const mergeTopicById = useMemo(() => {
+    const map = new Map<string, ReportTopic>();
+    if (activeTopic) map.set(activeTopic.id, activeTopic);
+    for (const t of mergeSourceTopics) map.set(t.id, t);
+    return map;
+  }, [activeTopic, mergeSourceTopics]);
+  const mergeSourceIds = useMemo(() => new Set(mergeSourceTopics.map((t) => t.id)), [mergeSourceTopics]);
   const topicPosts = posts
-    .filter((p) => p.topicId === activeId)
+    .filter((p) => p.topicId === activeId || mergeSourceIds.has(p.topicId))
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   const pinnedPosts = topicPosts.filter((p) => p.pinned);
+  const topicOfPost = (p: ReportPost) => (mergeFrequency ? mergeTopicById.get(p.topicId) : activeTopic);
   // Filter bar (1.3) only narrows the main feed — tab counts/pinned strip
   // above still reflect the room's real totals, not "what's visible right now".
   const filteredTopicPosts = activeTopic
-    ? filterPosts(topicPosts, filters, { topicOf: () => activeTopic, viewingAsUserId, submitterGroups, exemptions })
+    ? filterPosts(topicPosts, filters, { topicOf: topicOfPost, viewingAsUserId, submitterGroups, exemptions })
     : topicPosts;
 
   // R5 — a count per tab, so it's obvious there's something to look at
@@ -762,8 +788,12 @@ function ReportFeedPageInner() {
   // use to gate visibility — a real list, not a placeholder count.
   const topicMembers = useMemo(() => {
     if (!activeTopic) return [];
-    return users.filter((u) => canSeeReportTopic(activeTopic.visibility, u.id));
-  }, [activeTopic]);
+    // ห้องรวม (Daily-report ฯลฯ) มีโพสต์จากคนของห้องแผนกอื่นไหลเข้ามาด้วย —
+    // ตัวเลือก "ผู้โพสต์"/"แผนก" ในตัวกรองจึงต้องครอบคลุมคนของห้องต้นทาง
+    // ทุกห้องด้วย ไม่งั้นกรองหาคนที่เห็นโพสต์อยู่ตรงหน้าไม่เจอ
+    const rooms = [activeTopic, ...mergeSourceTopics];
+    return users.filter((u) => rooms.some((t) => canSeeReportTopic(t.visibility, u.id)));
+  }, [activeTopic, mergeSourceTopics]);
 
   // Managing membership (add/remove) opens the shared RoomMembersDialog —
   // only for the two modes where membership is a plain list of people
@@ -1381,6 +1411,8 @@ function ReportFeedPageInner() {
                         highlightPostId={highlightPostId}
                         highlightReplyId={highlightReplyId}
                         onOpenTask={setOpenTaskId}
+                        topicOf={mergeFrequency ? topicOfPost : undefined}
+                        onJumpToTopic={mergeFrequency ? selectView : undefined}
                       />
                       {/* Keyed by room id: right after a refresh the real
                           topic list hasn't loaded from the server yet, so
