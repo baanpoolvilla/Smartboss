@@ -3,7 +3,7 @@ import { HrPage } from "@/modules/hr/components/hr-page";
 import { HR_PERMS } from "@/modules/hr/permissions";
 import { EmptyState } from "@/modules/hr/components/ui";
 import { buildScorecards } from "@/lib/performance";
-import { PenaltyRequestChip } from "@/app/(shell)/hr/employees/penalty-request-chip";
+import { MissedReportsList } from "./missed-reports-list";
 
 /**
  * "คะแนนของฉัน" — ทุกคนเข้าได้ (HR_PERMS.access เดียวกับเมนู "ของฉัน")
@@ -53,32 +53,26 @@ export default async function MyScorePage() {
                 <p className="text-sm text-(--ink-soft)">ไม่มีเลย — คะแนนเต็มอยู่</p>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
-                  {card.byCategory.map((row) =>
-                    row.category === "report_missed" || row.category === "report_late" ? (
-                      <PenaltyRequestChip
-                        key={row.category}
-                        userId={card.userId}
-                        category={row.category}
-                        label={row.label}
-                        points={row.points}
-                        count={row.count}
-                      />
-                    ) : (
-                      <span
-                        key={row.category}
-                        className="rounded-full border border-(--line) px-2.5 py-1 text-xs text-(--ink-soft)"
-                      >
-                        {row.label} <span style={{ color: "var(--danger)" }}>{row.points}</span>
-                        {row.count > 1 ? ` ×${row.count}` : ""}
-                      </span>
-                    )
-                  )}
+                  {card.byCategory.map((row) => (
+                    <span
+                      key={row.category}
+                      className="rounded-full border border-(--line) px-2.5 py-1 text-xs text-(--ink-soft)"
+                    >
+                      {row.label} <span style={{ color: "var(--danger)" }}>{row.points}</span>
+                      {row.count > 1 ? ` ×${row.count}` : ""}
+                    </span>
+                  ))}
                 </div>
               )}
-              <p className="mt-3 text-xs text-(--ink-soft)">
-                คิดว่าถูกหักคะแนนผิดหรือมีเหตุสุดวิสัย (ป่วยกะทันหัน ระบบขัดข้อง) —
-                กดที่ชิป &quot;ไม่ส่งรายงานประจำวัน&quot;/&quot;ส่งรายงานสาย&quot; เพื่อยื่นคำร้องขอแก้ไขให้ CEO พิจารณาได้เลย
+            </div>
+
+            <div className="rounded-2xl border border-(--line) bg-white p-5">
+              <p className="text-sm font-semibold text-(--ink)">รายงานที่พลาด/ส่งช้า</p>
+              <p className="mb-3 text-xs text-(--ink-soft)">
+                คิดว่าถูกหักคะแนนผิด หรือมีเหตุสุดวิสัย (ป่วยกะทันหัน ระบบขัดข้อง) — กด &quot;ขอแก้ไข&quot;
+                ที่แถวนั้นเพื่อยื่นให้ CEO พิจารณาได้เลย
               </p>
+              <MissedReportsList userId={card.userId} />
             </div>
           </div>
         );

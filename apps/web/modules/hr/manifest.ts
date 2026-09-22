@@ -47,6 +47,10 @@ export const hrManifest: ModuleManifest = {
     // เท่านั้น) หน้านี้เห็น "คะแนนของฉัน" คนเดียว ยื่นคำร้องขอแก้ไขได้เอง
     // (เดิมยื่นได้แค่จากหน้าคะแนนรวมที่พนักงานทั่วไปเข้าไม่ถึงด้วยซ้ำ)
     { label: "คะแนนของฉัน", path: "/hr/my-score", permission: HR_PERMS.access, icon: "Award" },
+    // เห็นได้ทุกคน (เข้าดูสถานะคำร้องของตัวเองได้) — หน้าเองเช็คซ้ำว่าอนุมัติได้
+    // เฉพาะ CEO เท่านั้น (ดู penalty-requests/page.tsx) ก่อนหน้านี้อยู่ในเมนูของ
+    // โมดูล "รายงานและงาน" ทั้งที่เนื้อหาเป็นเรื่องคะแนนผลงาน/HR — ย้ายมาที่นี่
+    { label: "คำร้องขอแก้ไขคะแนน", path: "/hr/penalty-requests", permission: HR_PERMS.access, icon: "ShieldAlert" },
   ],
   permissions: Object.values(HR_PERMS),
 };

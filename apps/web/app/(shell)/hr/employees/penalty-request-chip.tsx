@@ -52,7 +52,7 @@ export function PenaltyRequestChip({
   );
 }
 
-interface PenaltyEventItem {
+export interface PenaltyEventItem {
   refId: string;
   points: number;
   day: string | null;
@@ -61,20 +61,29 @@ interface PenaltyEventItem {
   hasPendingRequest: boolean;
 }
 
-function PenaltyRequestDialog({
+/**
+ * ไดอะล็อกยื่นคำร้อง — ใช้ 2 แบบ:
+ *   1. ไม่ส่ง `fixedItem` มา (จากชิปรวม) → ดึงรายการที่ยัง active ของหมวดนั้น
+ *      มาให้เลือกว่า "ครั้งไหน" ก่อน (หน้าคะแนนโชว์แค่ยอดรวม ไม่ได้แยกรายครั้ง)
+ *   2. ส่ง `fixedItem` มา (จากปุ่ม "ขอแก้ไข" บนแถวที่เจาะจงอยู่แล้ว เช่นหน้า
+ *      "คะแนนของฉัน") → ข้ามขั้นเลือก ไปตรงเลือกประเภท+เหตุผลเลย
+ */
+export function PenaltyRequestDialog({
   userId,
   category,
   categoryLabel,
+  fixedItem,
   onClose,
 }: {
   userId: string;
   category: "report_missed" | "report_late";
   categoryLabel: string;
+  fixedItem?: PenaltyEventItem;
   onClose: () => void;
 }) {
-  const [loading, setLoading] = useState(true);
-  const [items, setItems] = useState<PenaltyEventItem[]>([]);
-  const [selectedRefId, setSelectedRefId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(!fixedItem);
+  const [items, setItems] = useState<PenaltyEventItem[]>(fixedItem ? [fixedItem] : []);
+  const [selectedRefId, setSelectedRefId] = useState<string | null>(fixedItem?.refId ?? null);
   const [type, setType] = useState<"retroactive" | "waive">("retroactive");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -82,6 +91,7 @@ function PenaltyRequestDialog({
   const [done, setDone] = useState(false);
 
   useEffect(() => {
+    if (fixedItem) return; // เจาะจงมาแล้ว ไม่ต้องดึงรายการทั้งหมด
     let cancelled = false;
     (async () => {
       try {
@@ -97,7 +107,7 @@ function PenaltyRequestDialog({
     return () => {
       cancelled = true;
     };
-  }, [userId, category]);
+  }, [userId, category, fixedItem]);
 
   async function submit() {
     if (!selectedRefId || !reason.trim()) return;
@@ -151,7 +161,16 @@ function PenaltyRequestDialog({
       }
     >
       <div className="flex flex-col gap-4">
-        {loading ? (
+        {fixedItem ? (
+          <div className="rounded-(--radius) border border-(--line) bg-(--bg-soft) px-3 py-2 text-sm">
+            <span className="text-(--ink)">
+              {fixedItem.topicName} · {fixedItem.roundLabel} · {fixedItem.day ?? "-"}
+            </span>{" "}
+            <span className="font-mono" style={{ color: "var(--danger)" }}>
+              {fixedItem.points}
+            </span>
+          </div>
+        ) : loading ? (
           <p className="text-sm text-(--ink-soft)">กำลังโหลด...</p>
         ) : selectable.length === 0 ? (
           <p className="text-sm text-(--ink-soft)">

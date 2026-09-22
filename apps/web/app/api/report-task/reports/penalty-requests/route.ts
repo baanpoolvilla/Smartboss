@@ -16,7 +16,7 @@ import type { AppNotification } from "@/modules/report_task/store/notification-s
  *
  * GET: ?all=1 (เฉพาะ CEO/SUPER_ADMIN เห็นของทุกคน) ไม่งั้นเห็นเฉพาะของตัวเอง
  * POST: ยื่นคำร้องใหม่ — แจ้งเตือนไปหา CEO ทุกคนในบริษัททันที (เข้าคิว
- * /report-task/penalty-requests ผ่านลิงก์ในแจ้งเตือน)
+ * /hr/penalty-requests ผ่านลิงก์ในแจ้งเตือน หรือเมนู "คำร้องขอแก้ไขคะแนน")
  */
 export const dynamic = "force-dynamic";
 
@@ -71,7 +71,7 @@ export async function POST(request: Request) {
       userId,
       byUserId: session.userId,
       message: `มีคำร้องขอแก้ไขคะแนนใหม่ — รอการอนุมัติ`,
-      link: "/report-task/penalty-requests",
+      link: "/hr/penalty-requests",
       createdAt: new Date().toISOString(),
       read: false,
     }));
