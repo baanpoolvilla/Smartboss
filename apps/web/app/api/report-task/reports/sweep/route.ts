@@ -9,6 +9,7 @@ import { computeReportPenaltyCandidates } from "@/modules/report_task/lib/report
 import { thaiHolidayEvents } from "@/modules/report_task/data/thai-holidays";
 import type { ReportPost, ReportTopic, SubmitterGroup } from "@/modules/report_task/store/report-feed-store";
 import type { RoutineDayOffRule } from "@/modules/report_task/store/routine-dayoff-store";
+import { defaultReminderSettings, type ReminderSettings } from "@/modules/report_task/store/reminder-settings-store";
 import type { CalendarEvent } from "@/modules/report_task/types";
 
 /**
@@ -41,7 +42,7 @@ export async function POST() {
   const session = await requireOrg();
   const orgId = session.orgId;
 
-  const [settings, { data: featureEnabled }, { data: enabledSince }, { data: reportFeed }, users, { data: leaves }, { data: holidaysSlice }, { data: routine }] =
+  const [settings, { data: featureEnabled }, { data: enabledSince }, { data: reportFeed }, users, { data: leaves }, { data: holidaysSlice }, { data: routine }, { data: reminderSettingsRaw }] =
     await Promise.all([
       loadPerformanceSettings(orgId),
       readStore<boolean>(orgId, "report-penalty-settings"),
@@ -51,7 +52,13 @@ export async function POST() {
       readStore<CalendarEvent[]>(orgId, "leaves"),
       readStore<{ holidays: CalendarEvent[] }>(orgId, "holidays"),
       readStore<RoutineDayOffSlice>(orgId, "routine-dayoff"),
+      readStore<Partial<ReminderSettings>>(orgId, "reminder-settings"),
     ]);
+  // "เวลาปิดรับรายงานอัตโนมัติ" (hard cutoff) — คนละค่ากับเวลารอบส่งของแต่ละ
+  // ห้อง (round.time, ใช้แค่ตัดสิน "สาย" ไม่เคยบล็อกการส่งจริง) ดู
+  // report-cutoff.ts's effectiveHardCutoffTime สำหรับตรรกะเต็ม — ไม่มีค่าที่
+  // บันทึกไว้ = ยังไม่เคยตั้ง ใช้ค่าเริ่มต้นเดียวกับที่หน้าตั้งค่าใช้
+  const submissionLock = { ...defaultReminderSettings.submissionLock, ...reminderSettingsRaw?.submissionLock };
 
   if (!settings.enabled || featureEnabled !== true) {
     return Response.json({ ok: true, changed: false, skipped: "disabled" });
@@ -81,7 +88,16 @@ export async function POST() {
     ruleExceptions: routine?.ruleExceptions ?? {},
   });
 
-  const candidates = computeReportPenaltyCandidates(topics, posts, users, groups, exemptions, REPORT_PENALTY_LOOKBACK_DAYS, notBeforeDay);
+  const candidates = computeReportPenaltyCandidates(
+    topics,
+    posts,
+    users,
+    groups,
+    exemptions,
+    submissionLock,
+    REPORT_PENALTY_LOOKBACK_DAYS,
+    notBeforeDay
+  );
   if (candidates.length === 0) {
     return Response.json({ ok: true, changed: false });
   }

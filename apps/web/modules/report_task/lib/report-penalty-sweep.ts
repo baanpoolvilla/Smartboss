@@ -8,6 +8,7 @@ import {
 } from "@/modules/report_task/lib/submission-rounds";
 import { trackedTopicsOf, iterationBounds, eachDay, type ComplianceStatus } from "@/modules/report_task/lib/report-feed-compliance";
 import { isExemptDate, type DateExemptions } from "@/modules/report_task/lib/report-feed-exemptions";
+import { effectiveHardCutoffTime, isPastHardCutoff } from "@/modules/report_task/lib/report-cutoff";
 import { localDateStr, now, todayIso } from "@/modules/report_task/lib/now";
 import type { DirectoryUser } from "@/modules/report_task/lib/db/employee-directory";
 import type {
@@ -17,6 +18,7 @@ import type {
   SubmissionRound,
   SubmitterGroup,
 } from "@/modules/report_task/store/report-feed-store";
+import type { ReportSubmissionLockSettings } from "@/modules/report_task/store/reminder-settings-store";
 
 /**
  * เฟส 2 ของ docs/spec-report-submission-rounds.md — sweep ที่ทำให้ "พลาดส่ง /
@@ -144,7 +146,8 @@ export function roundComplianceStatusServer(
   posts: ReportPost[],
   groups: SubmitterGroup[],
   users: DirectoryUser[],
-  exemptions: DateExemptions
+  exemptions: DateExemptions,
+  lock: ReportSubmissionLockSettings
 ): ComplianceStatus {
   if (!roundRunsOnDay(round, day)) return "exempt";
   if (!roundIgnoresDateExemptions(round) && isExemptDate(exemptions, userId, day)) return "exempt";
@@ -158,8 +161,23 @@ export function roundComplianceStatusServer(
     return onTime ? "on-time" : "late";
   }
   const todayStr = todayIso();
-  if (day < todayStr) return "missed";
-  return minutesOfDay(now().toISOString()) > cutoff ? "missed" : "pending";
+  if (day < todayStr) return "missed"; // วันผ่านไปแล้ว ปิดจริงเสมอไม่ว่า hard cutoff จะตั้งกี่โมง
+
+  const nowMinutes = minutesOfDay(now().toISOString());
+  if (nowMinutes <= cutoff) return "pending"; // ยังไม่ถึงเวลารอบส่งด้วยซ้ำ
+
+  // เลยเวลา "รอบส่ง" ไปแล้วแต่ยังไม่ส่ง — ห้องนี้ยังรับได้จริงจนกว่าจะถึง
+  // "เวลาปิดรับอัตโนมัติ" (hard cutoff, คนละค่ากับเวลารอบส่ง — ดู
+  // report-cutoff.ts's effectiveHardCutoffTime) ซึ่งอาจไกลกว่ารอบส่งมาก
+  // (เช่น รอบส่ง 10:14 แต่ห้องปิดจริง 23:59) ตราบใดที่ยังส่งได้อยู่ ถือว่า
+  // "สาย" (-1) ไปก่อน ไม่ใช่ "พลาด" (-2) ทันที — เดิมตัดสิน "พลาด" ทันทีที่
+  // เลยเวลารอบส่ง โดยไม่สนใจว่าห้องยังเปิดรับอยู่หรือเปล่า ทำให้คนที่ยังมี
+  // เวลาส่งเหลืออีกหลายชั่วโมงโดนตราหน้าว่า "พลาด" ไปก่อนอย่างไม่เป็นธรรม
+  // (แก้ไขได้เองถ้าส่งทันจริง แต่ระหว่างทางคะแนนขึ้นผิดให้เห็น) — ยืนยันจากผู้ใช้
+  // จริง: "เลยรอบส่ง ให้ -1 ไว้ก่อน ถ้ายังไม่ส่งอีกจนเลย cutoff ค่อยเป็น -2"
+  const hardCutoff = effectiveHardCutoffTime(topic, lock);
+  if (isPastHardCutoff(hardCutoff, nowMinutes)) return "missed"; // ห้องปิดรับจริงแล้ว ไม่มีทางส่งได้อีก
+  return "late";
 }
 
 export interface ReportPenaltyCandidate {
@@ -193,6 +211,7 @@ export function computeReportPenaltyCandidates(
   users: DirectoryUser[],
   groups: SubmitterGroup[],
   exemptions: DateExemptions,
+  lock: ReportSubmissionLockSettings,
   lookbackDays: number,
   notBeforeDay: string
 ): ReportPenaltyCandidate[] {
@@ -208,7 +227,7 @@ export function computeReportPenaltyCandidates(
     for (const day of eachDay(startStr, endStr)) {
       for (const round of rounds) {
         for (const u of users) {
-          const status = roundComplianceStatusServer(topic, u.id, round, day, posts, groups, users, exemptions);
+          const status = roundComplianceStatusServer(topic, u.id, round, day, posts, groups, users, exemptions, lock);
           if (status !== "missed" && status !== "late") continue;
           out.push({
             userId: u.id,
