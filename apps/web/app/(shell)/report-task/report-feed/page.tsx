@@ -2,7 +2,17 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { TopicSidebar, TopicLogo, ALL_TOPICS_ID, PENDING_ID, MENTIONS_ID } from "@/modules/report_task/components/report-feed/topic-sidebar";
+import {
+  TopicSidebar,
+  TopicLogo,
+  ALL_TOPICS_ID,
+  PENDING_ID,
+  MENTIONS_ID,
+  DAILY_ALL_ID,
+  WEEKLY_ALL_ID,
+  MONTHLY_ALL_ID,
+} from "@/modules/report_task/components/report-feed/topic-sidebar";
+import { topicReportFrequency, withSimplifiedDailyRoundLabels } from "@/modules/report_task/lib/report-frequency";
 import { ReportComposer } from "@/modules/report_task/components/report-feed/report-composer";
 import { ReportFeed } from "@/modules/report_task/components/report-feed/report-feed";
 import { OpenchatFeed } from "@/modules/report_task/components/report-feed/openchat-feed";
@@ -38,7 +48,7 @@ import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions
 import { safeLocalStorage } from "@/modules/report_task/lib/safe-storage";
 import { lateToastDismissKey, isLateToastDismissed, dismissLateToast } from "@/modules/report_task/lib/late-toast-dismiss";
 import { toast } from "sonner";
-import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronDown, ChevronRight, Clock, FolderOpen, Hash, Lock, Menu, MessageSquareText, Pin, Settings, SlidersHorizontal, TriangleAlert, Users, X } from "lucide-react";
+import { ArrowLeft, AtSign, BarChart3, CalendarClock, CalendarRange, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronRight, Clock, FolderOpen, Hash, Lock, Menu, MessageSquareText, Pin, Settings, SlidersHorizontal, TriangleAlert, Users, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 
 // Beyond this many pinned posts, the rest move into the "+N เพิ่มเติม"
@@ -166,6 +176,12 @@ function ReportFeedSkeleton() {
     </div>
   );
 }
+
+// ทุก sentinel id ที่ไม่ใช่หัวข้อจริง — ใช้แทนสายเงื่อนไข `id === A || id === B || ...`
+// ที่ซ้ำกันหลายจุด (activeId resolution, selectView, ฯลฯ) ครั้งเดียว รวม 3
+// มุมมองรวม Daily/Weekly/Monthly (สรุปงาน-รวมห้องรายงาน 2026-09-22) เข้ากับ
+// ของเดิม 3 ตัว จะได้ไม่ต้องไล่แก้ทีละจุดเวลาเพิ่ม sentinel ใหม่อีกในอนาคต
+const SENTINEL_IDS = new Set<string>([ALL_TOPICS_ID, PENDING_ID, MENTIONS_ID, DAILY_ALL_ID, WEEKLY_ALL_ID, MONTHLY_ALL_ID]);
 
 function ReportFeedPageInner() {
   const topics = useReportFeedStore((s) => s.topics);
@@ -361,7 +377,7 @@ function ReportFeedPageInner() {
   // it through as-is rather than falling back, same as any real,
   // currently-selected topic.
   const activeId = (() => {
-    if (selectedId === ALL_TOPICS_ID || selectedId === PENDING_ID || selectedId === MENTIONS_ID) return selectedId;
+    if (selectedId && SENTINEL_IDS.has(selectedId)) return selectedId;
     if (selectedId && visibleTopics.some((t) => t.id === selectedId) && !isParentId(selectedId)) {
       return selectedId;
     }
@@ -392,6 +408,9 @@ function ReportFeedPageInner() {
   const showAllPosts = activeId === ALL_TOPICS_ID;
   const showPending = activeId === PENDING_ID;
   const showMentions = activeId === MENTIONS_ID;
+  const showDailyAll = activeId === DAILY_ALL_ID;
+  const showWeeklyAll = activeId === WEEKLY_ALL_ID;
+  const showMonthlyAll = activeId === MONTHLY_ALL_ID;
   const activeTopic = useMemo(() => visibleTopics.find((t) => t.id === activeId), [visibleTopics, activeId]);
   // ชื่อห้องล่าสุด (สำหรับปุ่มย้อนกลับ) — โชว์เฉพาะถ้าห้องนั้นยังมองเห็นได้อยู่
   const backRoomName = visibleTopics.find((t) => t.id === lastRoomId)?.name;
@@ -407,7 +426,13 @@ function ReportFeedPageInner() {
       ? "รอฉันส่ง"
       : showMentions
         ? "กล่าวถึงฉัน"
-        : activeTopic?.name ?? "";
+        : showDailyAll
+          ? "Daily-report"
+          : showWeeklyAll
+            ? "Weekly-report"
+            : showMonthlyAll
+              ? "Monthly-report"
+              : activeTopic?.name ?? "";
   const topicSwitcherLeading = useMemo(
     () => (
       <div className="flex min-w-0 items-center gap-1.5">
@@ -456,6 +481,20 @@ function ReportFeedPageInner() {
     const visibleTopicIds = new Set(visibleTopics.map((t) => t.id));
     return posts.filter((p) => visibleTopicIds.has(p.topicId) && p.authorId !== viewingAsUserId && postMentionsUser(p, viewingAsUserId));
   }, [showMentions, visibleTopics, posts, viewingAsUserId]);
+  // Daily-report/Weekly-report/Monthly-report รวม (สรุปงาน-รวมห้องรายงาน
+  // 2026-09-22) — ทุกห้องรายงานของ "ทุกแผนก" ที่ตรงประเภทนั้น (จัดจาก
+  // topicReportFrequency ไม่ใช่จากชื่อห้อง — ดูคอมเมนต์ที่ฟังก์ชันนั้น) มารวม
+  // เป็นฟีดเดียวผ่าน ReportAllPostsFeed ตัวเดิม (ตัวกรอง "หัวข้อ" ของมันเอง
+  // ก็ทำหน้าที่เป็นตัวกรองแผนกไปในตัว เพราะแต่ละห้องคือ 1 แผนกอยู่แล้ว) —
+  // ไม่กรอง topics ตาม visibleTopics ซ้ำอีกที เพราะ ReportAllPostsFeed เอง
+  // ก็รับแค่ topics ที่ส่งเข้าไป (visibleTopics คือ permission-filtered แล้ว
+  // ตั้งแต่ต้นทาง) เพื่อไม่ให้ข้อมูลตกหล่นจากห้องที่มองไม่เห็น
+  const dailyAllTopics = useMemo(
+    () => visibleTopics.filter((t) => topicReportFrequency(t) === "daily").map(withSimplifiedDailyRoundLabels),
+    [visibleTopics]
+  );
+  const weeklyAllTopics = useMemo(() => visibleTopics.filter((t) => topicReportFrequency(t) === "weekly"), [visibleTopics]);
+  const monthlyAllTopics = useMemo(() => visibleTopics.filter((t) => topicReportFrequency(t) === "monthly"), [visibleTopics]);
   // Badge counts for the "มุมมอง" switcher (ReportViewSwitcher) — same
   // formulas the old sidebar "ภาพรวม" block used, computed here now that the
   // switcher lives at page level instead of inside TopicSidebar.
@@ -637,9 +676,9 @@ function ReportFeedPageInner() {
   // clear, so re-running it on every post-list change is harmless — no extra
   // renders, no loop.
   useEffect(() => {
-    if (!activeId || showAllPosts || showPending || showMentions) return;
+    if (!activeId || SENTINEL_IDS.has(activeId)) return;
     markTopicRead(activeId, viewingAsUserId);
-  }, [activeId, showAllPosts, showPending, showMentions, viewingAsUserId, markTopicRead, posts]);
+  }, [activeId, showAllPosts, showPending, showMentions, showDailyAll, showWeeklyAll, showMonthlyAll, viewingAsUserId, markTopicRead, posts]);
 
   // ที่กล่าวถึงฉัน spans posts across many rooms, so opening it clears
   // exactly those posts' unread flag (markPostsRead) instead of a whole
@@ -776,8 +815,8 @@ function ReportFeedPageInner() {
   // drops whatever header-pill filter was active — otherwise picking a room
   // out of "ยังไม่ส่ง"'s list would still show the pill panel underneath it.
   function selectView(id: string) {
-    const isSentinel = id === ALL_TOPICS_ID || id === PENDING_ID || id === MENTIONS_ID;
-    const curIsRoom = selectedId && selectedId !== ALL_TOPICS_ID && selectedId !== PENDING_ID && selectedId !== MENTIONS_ID;
+    const isSentinel = SENTINEL_IDS.has(id);
+    const curIsRoom = !!selectedId && !SENTINEL_IDS.has(selectedId);
     // กำลังจะเข้ามุมมองรวม และตอนนี้อยู่ในห้องจริง → จำห้องนั้นไว้ให้ปุ่มย้อนกลับ
     if (isSentinel && curIsRoom) setLastRoomId(selectedId);
     setTodayStatusFilter(null);
@@ -950,6 +989,51 @@ function ReportFeedPageInner() {
                 onJumpToTopic={selectView}
                 onOpenTask={setOpenTaskId}
                 showFilters={false}
+                headerRight={viewSwitcherHeader}
+              />
+            </div>
+          ) : showDailyAll ? (
+            <div className="flex-1 min-h-0 bg-white overflow-hidden flex flex-col">
+              <ReportAllPostsFeed
+                topics={dailyAllTopics}
+                posts={posts}
+                title="Daily-report"
+                description='รวมโพสต์รายวันจากทุกแผนกไว้ที่เดียว — ห้องแผนกเดิมยังอยู่ครบ โพสต์ยังทำที่ห้องแผนกตามปกติ ใช้ตัวกรอง "หัวข้อ" เพื่อดูเฉพาะแผนกที่ต้องการ'
+                icon={CalendarClock}
+                emptyTitle="ยังไม่มีโพสต์รายวันในช่วงเวลานี้"
+                emptyDescription="ลองปรับตัวกรองวันที่ หรือเลือกแผนกอื่นดู"
+                onJumpToTopic={selectView}
+                onOpenTask={setOpenTaskId}
+                headerRight={viewSwitcherHeader}
+              />
+            </div>
+          ) : showWeeklyAll ? (
+            <div className="flex-1 min-h-0 bg-white overflow-hidden flex flex-col">
+              <ReportAllPostsFeed
+                topics={weeklyAllTopics}
+                posts={posts}
+                title="Weekly-report"
+                description="รวมโพสต์รายสัปดาห์จากทุกแผนกไว้ที่เดียว — ห้องแผนกเดิมยังอยู่ครบ โพสต์ยังทำที่ห้องแผนกตามปกติ"
+                icon={CalendarRange}
+                emptyTitle="ยังไม่มีโพสต์รายสัปดาห์ในช่วงเวลานี้"
+                emptyDescription="ลองปรับตัวกรองวันที่ หรือเลือกแผนกอื่นดู"
+                onJumpToTopic={selectView}
+                onOpenTask={setOpenTaskId}
+                headerRight={viewSwitcherHeader}
+              />
+            </div>
+          ) : showMonthlyAll ? (
+            <div className="flex-1 min-h-0 bg-white overflow-hidden flex flex-col">
+              <ReportAllPostsFeed
+                topics={monthlyAllTopics}
+                posts={posts}
+                title="Monthly-report"
+                description="รวมโพสต์รายเดือนจากทุกแผนกไว้ที่เดียว — ห้องแผนกเดิมยังอยู่ครบ โพสต์ยังทำที่ห้องแผนกตามปกติ"
+                icon={CalendarDays}
+                emptyTitle="ยังไม่มีโพสต์รายเดือนในช่วงเวลานี้"
+                emptyDescription="ลองปรับตัวกรองวันที่ หรือเลือกแผนกอื่นดู"
+                onJumpToTopic={selectView}
+                onOpenTask={setOpenTaskId}
                 headerRight={viewSwitcherHeader}
               />
             </div>

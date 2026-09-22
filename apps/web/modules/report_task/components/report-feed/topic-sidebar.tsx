@@ -149,6 +149,23 @@ export const ALL_TOPICS_ID = "__all__";
 export const PENDING_ID = "__pending__";
 /** Every post/reply anywhere this viewer can see that @mentions them, newest first — reuses ReportAllPostsFeed with a pre-filtered post list. */
 export const MENTIONS_ID = "__mentions__";
+
+/**
+ * "รวมห้องรายงาน" (สรุปงาน-รวมห้องรายงาน 2026-09-22) — 3 มุมมองรวมข้ามแผนก
+ * หนึ่งอันต่อประเภทรายงาน (Daily/Weekly/Monthly) รวมโพสต์จากห้องรายงานของ
+ * ทุกแผนกที่ตรงประเภทนั้นมาไว้ฟีดเดียว (ห้องแยกรายแผนกเดิมยังอยู่ครบ ไม่ถูก
+ * ลบ/ย้าย — ดู topicReportFrequency ว่าห้องไหนนับเป็นประเภทไหน) เหมือน
+ * ALL_TOPICS_ID/MENTIONS_ID ด้านบนตรงที่เป็น sentinel ไม่ใช่หัวข้อจริง แต่ต่าง
+ * ตรงที่ผู้ใช้ยืนยันชัดเจนว่าอยากเห็นเป็นแถวปักหมุดในลิสต์ "หัวข้อ" นี้เอง (ไม่ใช่
+ * dropdown "มุมมอง" มุมขวาบนที่ ALL_TOPICS_ID ใช้อยู่) จึงเรนเดอร์เป็นกลุ่ม
+ * "รายงาน" ปักหมุดไว้บนสุดของทรี แยกต่างหากจากด้านล่างนี้ (ดู reportAllViews
+ * และจุดเรนเดอร์ก่อน "หัวข้อของฉัน")
+ */
+export const DAILY_ALL_ID = "__daily_all__";
+export const WEEKLY_ALL_ID = "__weekly_all__";
+export const MONTHLY_ALL_ID = "__monthly_all__";
+export const REPORT_ALL_IDS = [DAILY_ALL_ID, WEEKLY_ALL_ID, MONTHLY_ALL_ID] as const;
+
 type Editor = { mode: "create" } | { mode: "edit"; topic: ReportTopic };
 
 // Per-browser, not shared team state (same reasoning/pattern as page.tsx's
@@ -930,6 +947,13 @@ export function TopicSidebar({
   // pulled out from under its parent by starring it.
   const favoriteTopics = topics.filter((t) => t.favoritedBy?.includes(viewingAsUserId)).sort(byOrder);
   const topLevelTopics = topics.filter((t) => isTopLevel(t) || !topics.some((p) => p.id === t.parentId)).sort(byOrder);
+  // The 3 pinned "รายงาน" rows (Daily/Weekly/Monthly รวมทุกแผนก) — see
+  // REPORT_ALL_IDS above for what each sentinel means.
+  const reportAllRows = [
+    { id: DAILY_ALL_ID, label: "Daily-report" },
+    { id: WEEKLY_ALL_ID, label: "Weekly-report" },
+    { id: MONTHLY_ALL_ID, label: "Monthly-report" },
+  ];
   // A sub-topic the viewer hid (Teams' "hide channel") stays in the tree —
   // dimmed, see below — rather than disappearing with no way back to it
   // short of a link from somewhere else. Its own "..." menu (renderTopicRow)
@@ -1742,6 +1766,40 @@ export function TopicSidebar({
 
 
       <div className="flex-1 overflow-y-auto px-2.5 pb-2.5 space-y-1">
+        {/* "รายงาน" — 3 แถวปักหมุดบนสุดเสมอ (Daily/Weekly/Monthly รวมทุกแผนก),
+            ก่อน "รายการโปรด"/"หัวข้อของฉัน" เสมอ — สรุปงาน-รวมห้องรายงาน
+            2026-09-22 ยืนยันตำแหน่งนี้ตรงตาม mockup ที่ผู้ใช้ดูแล้ว ไม่ใช่
+            dropdown "มุมมอง" มุมขวาบนที่ ALL_TOPICS_ID/MENTIONS_ID ใช้อยู่
+            (แม้จะเป็น sentinel เหมือนกันก็ตาม) เพราะผู้ใช้อยากให้เห็น/กดถึงได้
+            ทันทีจากลิสต์นี้เลย ไม่ต้องเปิดเมนูอีกชั้น */}
+        <div className="pb-1">
+          <div className="flex items-center gap-2 px-2.5 pt-1 pb-1.5">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--brand-green-dark)] text-[9px] font-bold text-white">
+              RP
+            </span>
+            <p className="text-[11px] font-semibold text-[var(--ink-soft)] uppercase tracking-wide">รายงาน</p>
+          </div>
+          <div className="ml-2.5 flex flex-col gap-0.5 border-l border-[var(--line)] pl-2">
+            {reportAllRows.map((row) => {
+              const active = row.id === activeId;
+              return (
+                <button
+                  key={row.id}
+                  type="button"
+                  onClick={() => onSelect(row.id)}
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] transition-colors",
+                    active ? "bg-[var(--accent)] font-semibold text-[var(--brand-green-dark)]" : "text-[var(--ink)] hover:bg-[var(--bg-soft)]"
+                  )}
+                >
+                  <ChevronRight className="h-3 w-3 shrink-0 text-[var(--ink-faint)]" />
+                  <span className="flex-1 truncate">{row.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="my-2 border-t border-[var(--line)]/50" />
         {favoriteTopics.length > 0 && (
           <>
             <p className="px-2.5 pt-1 pb-1 text-[11px] font-semibold text-[var(--ink-soft)] uppercase tracking-wide">รายการโปรด</p>
