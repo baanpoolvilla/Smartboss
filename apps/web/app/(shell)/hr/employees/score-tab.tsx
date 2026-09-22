@@ -13,6 +13,7 @@ import {
   Td,
 } from "@/modules/hr/components/ui";
 import { buildScorecards } from "@/lib/performance";
+import { PenaltyRequestChip } from "./penalty-request-chip";
 
 const RANGES = {
   "30": { days: 30, label: "30 วันล่าสุด" },
@@ -158,16 +159,27 @@ export async function renderScoreTab(
                     <span className="text-(--ink-soft)">ไม่มีเลย</span>
                   ) : (
                     <div className="flex flex-wrap gap-1">
-                      {card.byCategory.slice(0, 3).map((row) => (
-                        <span
-                          key={row.category}
-                          className="rounded-full border border-(--line) px-2 py-0.5 text-[11px] text-(--ink-soft)"
-                        >
-                          {row.label}{" "}
-                          <span style={{ color: "var(--danger)" }}>{row.points}</span>
-                          {row.count > 1 ? ` ×${row.count}` : ""}
-                        </span>
-                      ))}
+                      {card.byCategory.slice(0, 3).map((row) =>
+                        row.category === "report_missed" || row.category === "report_late" ? (
+                          <PenaltyRequestChip
+                            key={row.category}
+                            userId={card.userId}
+                            category={row.category}
+                            label={row.label}
+                            points={row.points}
+                            count={row.count}
+                          />
+                        ) : (
+                          <span
+                            key={row.category}
+                            className="rounded-full border border-(--line) px-2 py-0.5 text-[11px] text-(--ink-soft)"
+                          >
+                            {row.label}{" "}
+                            <span style={{ color: "var(--danger)" }}>{row.points}</span>
+                            {row.count > 1 ? ` ×${row.count}` : ""}
+                          </span>
+                        )
+                      )}
                       {card.byCategory.length > 3 && (
                         <span className="px-1 text-[11px] text-(--ink-soft)">
                           +{card.byCategory.length - 3}

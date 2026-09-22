@@ -24,6 +24,36 @@ commit ที่เพิ่งทำก็ได้ ไม่ต้องเด
 
 ## บันทึก
 
+### 2026-09-22 11:35 — baanpoolvilla (แก้ร่วมกับ Claude)
+**feat:** คำร้องขอแก้ไข/ขอส่งย้อนหลังคะแนนรายงาน — CEO อนุมัติแล้วคืนคะแนนทันที
+- ทำอะไร: หน้าคะแนน & เกรด (`/hr/employees?tab=score`) ชิปของ report_missed/
+  report_late (เช่น "ไม่ส่งรายงานประจำวัน -2 ×14") ตอนนี้กดได้ — เปิดไดอะล็อก
+  ให้เลือกว่า "ครั้งไหน" (ดึงรายการ event ที่ยัง active จาก DB จริง เพราะหน้า
+  คะแนนโชว์แค่ยอดรวมต่อหมวด ไม่ได้แยกรายครั้ง) เลือกประเภทคำร้อง (ขอส่งย้อนหลัง
+  / ขอให้พิจารณายกเลิกการหักคะแนน — สองแบบนี้แค่บันทึกเหตุผลต่างกัน ผลลัพธ์
+  ตอนอนุมัติเหมือนกันทุกประการ) ใส่เหตุผลแล้วส่ง
+  · **อนุมัติได้เฉพาะ CEO เท่านั้น** (ยืนยันจากผู้ใช้ตรง ๆ, `hasRole(session,
+  "CEO")` + SUPER_ADMIN ผ่านได้เหมือนทุกจุดอื่น) ที่หน้าใหม่
+  `/report-task/penalty-requests` — อนุมัติ = คืนคะแนนทันที (event ตรงข้าม
+  `report_round_undo` แบบเดียวกับทุกจุดคืนคะแนนอื่นในระบบนี้) ไม่ต้องรอส่ง
+  รายงานซ้ำ ไม่อนุมัติ = ไม่มีอะไรเปลี่ยน
+  · แจ้งเตือนเข้ากระดิ่ง (ระบบแจ้งเตือนเดิม, `notifications` store) ทั้ง 2 ทาง —
+  ยื่นคำร้องใหม่แจ้ง CEO ทุกคน, ตัดสินผลแจ้งกลับผู้ยื่น
+  · store คำร้องใหม่ (`report-penalty-requests`) **ไม่อยู่ใน STORE_KEYS
+  whitelist โดยตั้งใจ** กัน client PUT ทับ/ปลอมสถานะอนุมัติเองผ่าน
+  `/api/report-task/store/[key]` ตรง ๆ — เขียนได้เฉพาะผ่านฟังก์ชันที่ตรวจ
+  สิทธิ์เองใน `lib/db/report-penalty-requests.ts` เท่านั้น
+- ไฟล์/branch หลัก: `lib/db/report-penalty-requests.ts`,
+  `api/report-task/reports/penalty-requests/route.ts` (+`[id]/decide/route.ts`),
+  `api/report-task/reports/penalty-events/route.ts`,
+  `app/(shell)/hr/employees/penalty-request-chip.tsx`,
+  `app/(shell)/report-task/penalty-requests/` (page + queue component)
+- ต้องทำหลัง pull: deploy ปกติ
+- ค้างอยู่ / ต้องระวัง: ยังไม่มีแนบไฟล์จริง (ช่อง "แนบใบรับรองแพทย์" ใน mockup
+  ยังไม่ทำ ยื่นคำร้องได้แค่ข้อความเหตุผล) · ยังไม่มี nav sidebar entry ไปหน้า
+  `/report-task/penalty-requests` โดยตรง (เข้าถึงผ่านลิงก์ในแจ้งเตือน หรือพิมพ์
+  URL เอง) — เพิ่มได้ทีหลังถ้าอยากให้เข้าถึงง่ายขึ้น
+
 ### 2026-09-22 10:54 — baanpoolvilla (แก้ร่วมกับ Claude)
 **feat:** เผื่อเวลาส่งย้อนหลังของรอบรายสัปดาห์/รายเดือน (grace days) ก่อนจะกลายเป็น "พลาด" ถาวร
 - ทำอะไร: ลาไม่มีผลกับรอบรายสัปดาห์/รายเดือนโดยตั้งใจ (`roundIgnoresDateExemptions`)

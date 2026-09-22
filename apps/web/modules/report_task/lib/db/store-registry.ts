@@ -34,6 +34,13 @@ export const STORE_KEYS = {
   "report-penalty-settings": "stores/report-penalty-settings.json",
   "report-penalty-enabled-since": "stores/report-penalty-enabled-since.json",
   "report-penalty-grace-days": "stores/report-penalty-grace-days.json",
+  // "report-penalty-requests" ไม่อยู่ใน whitelist นี้โดยตั้งใจ — เก็บคำร้อง
+  // ขอแก้ไขคะแนน (สถานะ pending/approved/rejected) ต้องเขียนผ่านโค้ดที่ตรวจ
+  // สิทธิ์เองเท่านั้น (ดู lib/db/report-penalty-requests.ts) ถ้าอยู่ใน
+  // whitelist นี้ พนักงานคนไหนก็ PUT ทับก้อนข้อมูลนี้ตรง ๆ ผ่าน
+  // /api/report-task/store/report-penalty-requests ได้เลย (bypass การตรวจ
+  // ทั้งหมด รวมถึงปลอมสถานะ "approved" เองได้) — readStore/writeStore ยังใช้
+  // คีย์นี้ได้ปกติจากโค้ดฝั่งเซิร์ฟเวอร์ของเราเอง ไม่ต้องอยู่ในลิสต์นี้
   "people-groups": "stores/people-groups.json",
   "report-feed": "stores/report-feed.json",
   "routine-dayoff": "stores/routine-dayoff.json",
