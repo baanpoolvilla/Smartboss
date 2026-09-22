@@ -52,6 +52,9 @@ import {
   Bell,
   BellOff,
   Briefcase,
+  CalendarClock,
+  CalendarRange,
+  CalendarDays,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -950,9 +953,9 @@ export function TopicSidebar({
   // The 3 pinned "รายงาน" rows (Daily/Weekly/Monthly รวมทุกแผนก) — see
   // REPORT_ALL_IDS above for what each sentinel means.
   const reportAllRows = [
-    { id: DAILY_ALL_ID, label: "Daily-report" },
-    { id: WEEKLY_ALL_ID, label: "Weekly-report" },
-    { id: MONTHLY_ALL_ID, label: "Monthly-report" },
+    { id: DAILY_ALL_ID, label: "Daily-report", Icon: CalendarClock },
+    { id: WEEKLY_ALL_ID, label: "Weekly-report", Icon: CalendarRange },
+    { id: MONTHLY_ALL_ID, label: "Monthly-report", Icon: CalendarDays },
   ];
   // A sub-topic the viewer hid (Teams' "hide channel") stays in the tree —
   // dimmed, see below — rather than disappearing with no way back to it
@@ -1766,40 +1769,6 @@ export function TopicSidebar({
 
 
       <div className="flex-1 overflow-y-auto px-2.5 pb-2.5 space-y-1">
-        {/* "รายงาน" — 3 แถวปักหมุดบนสุดเสมอ (Daily/Weekly/Monthly รวมทุกแผนก),
-            ก่อน "รายการโปรด"/"หัวข้อของฉัน" เสมอ — สรุปงาน-รวมห้องรายงาน
-            2026-09-22 ยืนยันตำแหน่งนี้ตรงตาม mockup ที่ผู้ใช้ดูแล้ว ไม่ใช่
-            dropdown "มุมมอง" มุมขวาบนที่ ALL_TOPICS_ID/MENTIONS_ID ใช้อยู่
-            (แม้จะเป็น sentinel เหมือนกันก็ตาม) เพราะผู้ใช้อยากให้เห็น/กดถึงได้
-            ทันทีจากลิสต์นี้เลย ไม่ต้องเปิดเมนูอีกชั้น */}
-        <div className="pb-1">
-          <div className="flex items-center gap-2 px-2.5 pt-1 pb-1.5">
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--brand-green-dark)] text-[9px] font-bold text-white">
-              RP
-            </span>
-            <p className="text-[11px] font-semibold text-[var(--ink-soft)] uppercase tracking-wide">รายงาน</p>
-          </div>
-          <div className="ml-2.5 flex flex-col gap-0.5 border-l border-[var(--line)] pl-2">
-            {reportAllRows.map((row) => {
-              const active = row.id === activeId;
-              return (
-                <button
-                  key={row.id}
-                  type="button"
-                  onClick={() => onSelect(row.id)}
-                  className={cn(
-                    "flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] transition-colors",
-                    active ? "bg-[var(--accent)] font-semibold text-[var(--brand-green-dark)]" : "text-[var(--ink)] hover:bg-[var(--bg-soft)]"
-                  )}
-                >
-                  <ChevronRight className="h-3 w-3 shrink-0 text-[var(--ink-faint)]" />
-                  <span className="flex-1 truncate">{row.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        <div className="my-2 border-t border-[var(--line)]/50" />
         {favoriteTopics.length > 0 && (
           <>
             <p className="px-2.5 pt-1 pb-1 text-[11px] font-semibold text-[var(--ink-soft)] uppercase tracking-wide">รายการโปรด</p>
@@ -1812,9 +1781,33 @@ export function TopicSidebar({
         <div className="my-3 border-t border-[var(--line)]/50" />
           </>
         )}
-        {topLevelTopics.length > 0 && (
+        {(topLevelTopics.length > 0 || reportAllRows.length > 0) && (
           <p className="px-2.5 pt-1 pb-1 text-[11px] font-semibold text-[var(--ink-soft)] uppercase tracking-wide">หัวข้อของฉัน</p>
         )}
+        {/* Daily-report/Weekly-report/Monthly-report รวม (สรุปงาน-รวมห้อง
+            รายงาน 2026-09-22, รอบแก้ที่ 2) — ยืนยันจากผู้ใช้ให้อยู่ปนกับห้อง
+            จริงในนี้เลย ("อยู่ในหมวดหัวข้อของฉันเลย") ไม่ใช่กลุ่มปักหมุดแยก
+            ต่างหากแบบรอบแรก จึงวางแถวเดียวกับ renderTopicRow ทุกอย่าง (แค่ไม่
+            มีเมนู .../ลาก/แก้ไข เพราะไม่ใช่หัวข้อจริงที่แก้ผ่านหน้านี้ได้) */}
+        {reportAllRows.map((row) => {
+          const active = row.id === activeId;
+          return (
+            <button
+              key={row.id}
+              type="button"
+              onClick={() => onSelect(row.id)}
+              className={cn(
+                "group flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors",
+                active ? "bg-[var(--accent)] font-semibold text-[var(--brand-green-dark)]" : "text-[var(--ink)] hover:bg-[var(--bg-soft)]"
+              )}
+            >
+              <span className="relative shrink-0 rounded-full flex items-center justify-center bg-[var(--bg-soft)] h-6 w-6">
+                <row.Icon className="h-3.5 w-3.5 text-[var(--ink-soft)]" />
+              </span>
+              <span className="flex-1 truncate">{row.label}</span>
+            </button>
+          );
+        })}
         {topLevelTopics.map(renderTopicBranch)}
 
         {topics.length === 0 && (
