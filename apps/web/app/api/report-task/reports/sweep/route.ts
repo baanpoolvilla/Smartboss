@@ -110,30 +110,33 @@ export async function POST() {
   const events: PerformanceEventInput[] = [];
   for (const c of candidates) {
     const targetCategory = c.status === "missed" ? "report_missed" : "report_late";
+    const otherCategory = c.status === "missed" ? "report_late" : "report_missed";
     const prior = priorByRefId.get(c.refId) ?? [];
     const alreadyRecorded = prior.some((p) => p.category === targetCategory && p.refType === "report_round");
     if (alreadyRecorded) continue;
 
-    // พลาดไปแล้วครั้งก่อน (บันทึก report_missed ไปแล้ว) แต่ตอนนี้มีคนส่งย้อนหลัง
-    // มา (สถานะกลายเป็น "late") — คืนคะแนนที่เคยหักไปให้ก่อนแล้วค่อยหักแบบ
-    // "ส่งช้า" แทน ไม่ลบ event เดิมทิ้ง (เก็บ audit trail อ่านย้อนได้ครบ เหมือน
+    // สถานะของรอบนี้เปลี่ยนทิศทางจากที่เคยบันทึกไว้ (พลาด <-> สาย) — ทั้งสอง
+    // ทิศทางต้องคืนคะแนนของฝั่งเดิมก่อนเสมอ แล้วค่อยหักตามสถานะใหม่ กันไม่ให้
+    // -1 (ส่งช้า) กับ -2 (พลาด) ของรอบเดียวกันมาบวกกันเป็น -3:
+    //   - พลาดไปแล้ว (-2) แต่มีคนส่งย้อนหลังทัน (กลายเป็น "late") → คืน -2 ก่อน
+    //   - เคยส่งช้าไว้ (-1) แต่ภายหลังโพสต์นั้นหายไป (เช่นถูกลบ, กลายเป็น
+    //     "missed" จริง) → คืน -1 ก่อน
+    // ไม่ลบ event เดิมทิ้ง (เก็บ audit trail อ่านย้อนได้ครบ เหมือน
     // task_reaction_undo / report_post_reaction_undo ที่อื่นในระบบนี้)
-    if (c.status === "late") {
-      const priorMissed = prior.find((p) => p.category === "report_missed" && p.refType === "report_round");
-      const alreadyUndone = prior.some((p) => p.category === "report_missed" && p.refType === "report_round_undo");
-      if (priorMissed && !alreadyUndone) {
-        events.push({
-          orgId,
-          userId: c.userId,
-          source: "report_task",
-          category: "report_missed",
-          points: -priorMissed.points,
-          occurredAt: new Date(),
-          refType: "report_round_undo",
-          refId: c.refId,
-          note: "ยกเลิก: ส่งย้อนหลังหลังพลาดกำหนด",
-        });
-      }
+    const priorOther = prior.find((p) => p.category === otherCategory && p.refType === "report_round");
+    const otherAlreadyUndone = prior.some((p) => p.category === otherCategory && p.refType === "report_round_undo");
+    if (priorOther && !otherAlreadyUndone) {
+      events.push({
+        orgId,
+        userId: c.userId,
+        source: "report_task",
+        category: otherCategory,
+        points: -priorOther.points,
+        occurredAt: new Date(),
+        refType: "report_round_undo",
+        refId: c.refId,
+        note: c.status === "missed" ? "ยกเลิก: เคยส่งช้าไว้ แต่ภายหลังไม่มีรายงานอยู่จริง" : "ยกเลิก: ส่งย้อนหลังหลังพลาดกำหนด",
+      });
     }
 
     events.push({
