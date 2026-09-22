@@ -102,6 +102,13 @@ export function StoreHydrator() {
         apply={(s, enabled) => ({ ...s, enabled })}
       />
       <ServerStoreSync
+        apiKey="report-penalty-enabled-since"
+        pollMs={SLOW_POLL_MS}
+        store={useReportPenaltySettingsStore}
+        select={(s) => s.enabledSince}
+        apply={(s, enabledSince) => ({ ...s, enabledSince })}
+      />
+      <ServerStoreSync
         apiKey="attachment-settings"
         pollMs={SLOW_POLL_MS}
         store={useAttachmentSettingsStore}

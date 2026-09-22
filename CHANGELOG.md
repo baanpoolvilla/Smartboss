@@ -24,6 +24,28 @@ commit ที่เพิ่งทำก็ได้ ไม่ต้องเด
 
 ## บันทึก
 
+### 2026-09-22 09:01 — baanpoolvilla (แก้ร่วมกับ Claude)
+**fix:** sweep หักคะแนนรายงาน (report_missed/report_late) แบ็คฟิลคะแนนย้อนหลังผิดตอนเปิดใช้งานครั้งแรก
+- ทำอะไร: บั๊กที่เกิดจริงหลัง deploy ฟีเจอร์ในบันทึกก่อนหน้านี้ — ตอนเปิดสวิตช์
+  ครั้งแรก sweep ไล่ย้อนหลังเต็ม lookback (45 วัน) แล้วหักคะแนนของทุกวันที่
+  เคยพลาด **ก่อน** ฟีเจอร์นี้จะมีอยู่ด้วยซ้ำ พร้อมกันรวดเดียว (พนักงานหลายคน
+  คะแนนหายเยอะผิดปกติทันทีที่เปิดสวิตช์ ทั้งที่ตั้งใจไว้ว่า "เปิดวันไหนเริ่ม
+  นับจากวันนั้น") · เพิ่ม `enabledSince` ("YYYY-MM-DD" ของครั้งล่าสุดที่เปิด
+  สวิตช์ — เขียนทับเป็นวันนี้ทุกครั้งที่เปิด แม้เคยปิดแล้วเปิดใหม่) เป็นเพดาน
+  ล่างที่แท้จริงของ `computeReportPenaltyCandidates` (`notBeforeDay`) แทนที่
+  จะพึ่ง lookbackDays อย่างเดียว — ไม่มี anchor (ข้อมูลเก่าก่อนแก้) ก็ fallback
+  เป็น "วันนี้วันเดียว" (ปลอดภัยสุด ไม่แบ็คฟิล) โดยไม่ต้องให้ใครไปกดเปิดสวิตช์
+  ใหม่หลัง deploy · เพิ่ม `undo-report-penalty-backfill.ts` คืนคะแนนที่หักผิด
+  ไปแล้วให้ทุกคน (เหมือน `reconcile-orphan-sticker-events.ts`)
+- ไฟล์/branch หลัก: `report-penalty-sweep.ts`/`.test.ts` (เพิ่ม param
+  `notBeforeDay`), `report-penalty-settings-store.ts` (เพิ่ม `enabledSince`),
+  `api/report-task/reports/sweep/route.ts`, store key ใหม่
+  `report-penalty-enabled-since`, `packages/database/scripts/undo-report-penalty-backfill.ts`
+- ต้องทำหลัง pull: **รัน `undo-report-penalty-backfill.ts --dry-run` บน
+  production ก่อน** เช็คตัวเลขแล้วรันจริง (ตัด `--dry-run`) เพื่อคืนคะแนนที่
+  หักผิดไปจากบั๊กนี้ — ดู comment ในสคริปต์สำหรับคำสั่งรันเต็ม
+- ค้างอยู่ / ต้องระวัง: ไม่มี
+
 ### 2026-09-22 08:42 — baanpoolvilla (แก้ร่วมกับ Claude)
 **feat:** หักคะแนน HR อัตโนมัติเมื่อพลาด/ส่งช้ารายงาน (Daily/Weekly/Monthly) — เฟส 2 ของ spec-report-submission-rounds
 - ทำอะไร: category `report_missed`/`report_late` มีชื่อจองไว้ใน `performance.ts`

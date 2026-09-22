@@ -41,10 +41,11 @@ export async function POST() {
   const session = await requireOrg();
   const orgId = session.orgId;
 
-  const [settings, { data: featureEnabled }, { data: reportFeed }, users, { data: leaves }, { data: holidaysSlice }, { data: routine }] =
+  const [settings, { data: featureEnabled }, { data: enabledSince }, { data: reportFeed }, users, { data: leaves }, { data: holidaysSlice }, { data: routine }] =
     await Promise.all([
       loadPerformanceSettings(orgId),
       readStore<boolean>(orgId, "report-penalty-settings"),
+      readStore<string>(orgId, "report-penalty-enabled-since"),
       readStore<{ topics: ReportTopic[]; posts: ReportPost[]; submitterGroups?: SubmitterGroup[] }>(orgId, "report-feed"),
       listDirectory(orgId),
       readStore<CalendarEvent[]>(orgId, "leaves"),
@@ -55,6 +56,9 @@ export async function POST() {
   if (!settings.enabled || featureEnabled !== true) {
     return Response.json({ ok: true, changed: false, skipped: "disabled" });
   }
+  // ไม่ควรเกิด (ตั้งค่า setEnabled(true) เขียนคู่กันเสมอ) แต่ถ้าไม่มี anchor
+  // จริง ๆ ห้ามหักย้อนหลังเด็ดขาด — จำกัดแค่วันนี้วันเดียวไว้ก่อน (ปลอดภัยสุด)
+  const notBeforeDay = enabledSince ?? new Date().toISOString().slice(0, 10);
 
   const topics = reportFeed?.topics ?? [];
   const posts = reportFeed?.posts ?? [];
@@ -77,7 +81,7 @@ export async function POST() {
     ruleExceptions: routine?.ruleExceptions ?? {},
   });
 
-  const candidates = computeReportPenaltyCandidates(topics, posts, users, groups, exemptions, REPORT_PENALTY_LOOKBACK_DAYS);
+  const candidates = computeReportPenaltyCandidates(topics, posts, users, groups, exemptions, REPORT_PENALTY_LOOKBACK_DAYS, notBeforeDay);
   if (candidates.length === 0) {
     return Response.json({ ok: true, changed: false });
   }
