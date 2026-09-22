@@ -12,6 +12,10 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": resolve(__dirname, "."),
+      // See test/server-only-shim.ts — lets tests import server-only-marked
+      // modules (e.g. lib/report-penalty-sweep.ts) without a bundler-only
+      // package erroring out under plain Node.
+      "server-only": resolve(__dirname, "test/server-only-shim.ts"),
     },
   },
   test: {

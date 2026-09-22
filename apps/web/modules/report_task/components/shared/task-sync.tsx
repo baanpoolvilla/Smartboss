@@ -236,6 +236,19 @@ export function TaskSync() {
       }
     }
 
+    // Same trigger-only shape again, for the report-room penalty sweep (หัก
+    // คะแนน HR เมื่อพลาด/ส่งช้ารายงาน — see /api/report-task/reports/sweep and
+    // lib/report-penalty-sweep.ts). No-ops server-side until a company turns
+    // the feature on at ตั้งค่า → ห้อง Report → หักคะแนน HR, so this is safe
+    // to always trigger. Doesn't touch the task store either, no reload.
+    async function runReportPenaltySweep() {
+      try {
+        await fetch("/api/report-task/reports/sweep", { method: "POST" });
+      } catch {
+        // Offline or server down — next tick tries again.
+      }
+    }
+
     fetch("/api/report-task/tasks", { cache: "no-store" })
       .then(async (r) => {
         versionRef.current = Number(r.headers.get("X-Data-Version")) || null;
@@ -256,6 +269,7 @@ export function TaskSync() {
           useTaskStore.setState({ loaded: true });
           void runSweep();
           void runReminderSweep();
+          void runReportPenaltySweep();
         }
       });
 
@@ -274,6 +288,7 @@ export function TaskSync() {
       if (loadedRef.current && document.visibilityState === "visible") {
         void runSweep();
         void runReminderSweep();
+        void runReportPenaltySweep();
       }
     }, 60_000);
 
@@ -295,6 +310,7 @@ export function TaskSync() {
       if (document.visibilityState === "visible") {
         void runSweep();
         void runReminderSweep();
+        void runReportPenaltySweep();
         return;
       }
       if (timerRef.current) {

@@ -11,6 +11,14 @@
 > **ขอบเขตสำคัญ:** งานนี้ทำ **เฟส 1 (A)** ก่อน = ตัดสิน + แสดงผล/แดชบอร์ด **ห้ามแตะระบบหักคะแนน HR**
 > (`apps/web/lib/performance.ts`, ตาราง `performance_events`, หน้า `/hr/performance`) เด็ดขาด
 > เฟส 2 (เชื่อม HR) เขียนไว้ท้ายเอกสารเป็น "เตรียมโครงให้เปิดทีหลัง" — **ยังไม่เปิดในงานนี้**
+>
+> **อัปเดต 2026-09-22: เฟส 2 (ข้อ 7) ทำแล้ว** — ดู
+> `apps/web/modules/report_task/lib/report-penalty-sweep.ts` +
+> `apps/web/app/api/report-task/reports/sweep/route.ts` (trigger จาก
+> `task-sync.tsx` เหมือน tasks/sweep) เปิด/ปิดที่ ตั้งค่า → ห้อง Report →
+> หักคะแนน HR (ปิดไว้เป็นค่าเริ่มต้น, `report-penalty-settings-store.ts`)
+> ยังไม่ทำ "grace เตือนก่อน N ครั้ง" ตามที่ข้อ 7 เสนอไว้ (ไม่มีคนขอ ทำเผื่อ
+> ทีหลังได้ถ้าอยากได้)
 
 ---
 
@@ -223,9 +231,10 @@ export function resolveRoundSubmitters(
 
 ---
 
-## 7. เฟส 2 (เตรียมโครงไว้ — ยังไม่เปิดในงานนี้) เชื่อม HR
+## 7. เฟส 2 — เชื่อม HR (ทำแล้ว 2026-09-22)
 
-> **ห้ามทำในงานนี้** เขียนไว้ให้ตัว decider เฟส 1 ออกแบบมาแล้วต่อยอดง่าย
+> เดิมเขียนไว้ว่า "ห้ามทำในงานนี้" (ของเฟส 1) — ตอนนี้ทำแล้วแยก PR ต่างหาก
+> รายละเอียดที่ทำจริงต่างจากร่างด้านล่างเล็กน้อย ดูโค้ดจริงเป็นหลัก:
 
 - ทำ sweep ปิดรอบ (แบบ `app/api/report-task/tasks/sweep/route.ts`): ต่อบริษัท/ห้อง/รอบ/วัน หา "ผู้ต้องส่ง" (จาก decider เดียวกัน, คิดวันลาแล้ว) → late/missed → เรียก `recordPerformanceEvents()` ที่มีอยู่
 - category `report_late` / `report_missed` (มีใน `PERFORMANCE_CATEGORIES` แล้ว), แต้มมาจาก `performance_settings`
@@ -272,7 +281,7 @@ export function resolveRoundSubmitters(
 - [ ] เปิดเบราว์เซอร์จริง เช็ค console: แดชบอร์ด/ห้อง/ตั้งค่า/หน้าสรุป ไม่มี error
 - [ ] ยืนยันไม่มีการเรียก `recordPerformanceEvents` จากโค้ดเฟสนี้ (grep)
 
-**เฟส 2 (แยกออกไป):** ข้อ 7 — เปิดการหักเข้า HR หลัง shadow นิ่ง
+**เฟส 2 (แยกออกไป):** ข้อ 7 — เปิดการหักเข้า HR หลัง shadow นิ่ง — **ทำแล้ว 2026-09-22**
 
 ---
 
