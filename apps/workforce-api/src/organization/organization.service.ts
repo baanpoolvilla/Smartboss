@@ -50,6 +50,7 @@ export class OrganizationService {
         timeZone: input.time_zone,
         currency: input.currency,
         attendanceCorrectionApprovals: input.attendance_correction_approvals,
+        displayNameFormat: input.display_name_format,
       });
 
       await uow.audit({
@@ -113,6 +114,9 @@ export class OrganizationService {
       if (input.tax_id !== undefined) patch.taxIdEncrypted = this.encryption.encrypt(input.tax_id);
       if (input.attendance_correction_approvals !== undefined) {
         patch.attendanceCorrectionApprovals = input.attendance_correction_approvals;
+      }
+      if (input.display_name_format !== undefined) {
+        patch.displayNameFormat = input.display_name_format;
       }
 
       if (Object.keys(patch).length === 0) return toCompany(before);
@@ -352,6 +356,7 @@ function toCompany(row: CompanyRow): Company {
     currency: row.currency,
     status: row.status as Company['status'],
     attendance_correction_approvals: row.attendanceCorrectionApprovals,
+    display_name_format: row.displayNameFormat as Company['display_name_format'],
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
     version: row.version,
@@ -367,6 +372,7 @@ function toCompanyAudit(row: CompanyRow): Record<string, unknown> {
     currency: row.currency,
     status: row.status,
     attendance_correction_approvals: row.attendanceCorrectionApprovals,
+    display_name_format: row.displayNameFormat,
     // ชื่อ field ลงท้าย tax_id → redactSensitive จะปิดค่าให้เอง
     tax_id_present: row.taxIdEncrypted !== null,
   };

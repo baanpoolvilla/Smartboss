@@ -77,6 +77,7 @@ const SETTINGS_NAV: { href: string; label: string }[] = [
   { href: "/hr/settings/devices", label: "อุปกรณ์" },
   { href: "/hr/settings/holidays", label: "วันหยุดบริษัท" },
   { href: "/hr/settings/leave-types", label: "ประเภทการลา" },
+  { href: "/hr/settings/names", label: "รูปแบบชื่อที่แสดง" },
   // ข้อมูลเป็นของระบบผลงานกลาง (core.performance_settings) — หน้านี้ใช้ฟอร์มตัวเดียวกับ
   // /admin/performance/settings จึงไม่มีสองแหล่งความจริง แต่ไม่ต้องเด้งออกไปหลังบ้าน
   { href: "/hr/settings/scoring", label: "เกณฑ์คะแนน" },

@@ -64,6 +64,8 @@ export const companies = workforce.table(
     attendanceCorrectionApprovals: integer('attendance_correction_approvals')
       .notNull()
       .default(1),
+    /** รูปแบบชื่อที่แสดงทั้งระบบ (DisplayNameFormat) — ดู migration 0016 */
+    displayNameFormat: text('display_name_format').notNull().default('FULL_NAME'),
     ...auditColumns,
   },
   (table) => [index('companies_tenant_idx').on(table.tenantId)],

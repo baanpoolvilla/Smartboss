@@ -8,14 +8,18 @@ import type {
   Person,
 } from '@workforce/contracts';
 import type { AppConfig } from '@workforce/config';
-import type { schema } from '@workforce/db';
+import type { schema, Tx } from '@workforce/db';
 import {
   AppError,
+  composeDisplayName,
+  DEFAULT_DISPLAY_NAME_FORMAT,
   EffectivePeriod,
+  isDisplayNameFormat,
   LocalDate,
   uuidv7,
   type Clock,
   type DataScope,
+  type DisplayNameFormat,
 } from '@workforce/domain';
 import { FieldEncryptionService } from '../infrastructure/crypto/field-encryption';
 import { UnitOfWork, type UnitOfWorkContext } from '../infrastructure/unit-of-work';
@@ -38,6 +42,17 @@ export class PeopleService {
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
+
+  /**
+   * รูปแบบชื่อที่แสดงที่บริษัทเลือกไว้ — อ่านครั้งเดียวต่อหนึ่งคำขอ แล้วส่งต่อให้ mapper
+   *
+   * ค่าในฐานข้อมูลเพี้ยนหรือเป็นค่าที่โค้ดรุ่นนี้ยังไม่รู้จัก → ใช้ค่าตั้งต้น
+   * แทนที่จะโยน error กลางคำขอที่แค่ขอดูรายชื่อพนักงาน
+   */
+  private async nameFormat(tx: Tx): Promise<DisplayNameFormat> {
+    const stored = await this.repository.findDisplayNameFormat(tx);
+    return isDisplayNameFormat(stored) ? stored : DEFAULT_DISPLAY_NAME_FORMAT;
+  }
 
   // --- people ---
 
@@ -78,7 +93,7 @@ export class PeopleService {
         after: toPersonAudit(row),
       });
 
-      return toPerson(row);
+      return toPerson(row, await this.nameFormat(uow.tx));
     });
   }
 
@@ -86,7 +101,7 @@ export class PeopleService {
     return this.uow.run(async (uow) => {
       const row = await this.repository.findPersonById(uow.tx, id);
       if (row === undefined) throw AppError.notFound('person');
-      return toPerson(row);
+      return toPerson(row, await this.nameFormat(uow.tx));
     });
   }
 
@@ -102,7 +117,11 @@ export class PeopleService {
         ...(query.search === undefined ? {} : { search: query.search }),
       });
       const page = buildPage(rows, query.limit);
-      return { items: page.items.map(toPerson), next_cursor: page.next_cursor };
+      const format = await this.nameFormat(uow.tx);
+      return {
+        items: page.items.map((row) => toPerson(row, format)),
+        next_cursor: page.next_cursor,
+      };
     });
   }
 
@@ -128,7 +147,9 @@ export class PeopleService {
         }
       }
 
-      if (Object.keys(patch).length === 0) return toPerson(before);
+      if (Object.keys(patch).length === 0) {
+        return toPerson(before, await this.nameFormat(uow.tx));
+      }
 
       const after = await this.repository.updatePerson(uow.tx, id, patch);
       if (after === undefined) throw AppError.notFound('person');
@@ -143,7 +164,7 @@ export class PeopleService {
         after: toPersonAudit(after),
       });
 
-      return toPerson(after);
+      return toPerson(after, await this.nameFormat(uow.tx));
     });
   }
 
@@ -184,14 +205,14 @@ export class PeopleService {
         payload: { employment_id: row.id, company_id: row.companyId, hired_on: row.hiredOn },
       });
 
-      return toEmployment({ ...row, person });
+      return toEmployment({ ...row, person }, await this.nameFormat(uow.tx));
     });
   }
 
   async getEmployment(id: string): Promise<Employment> {
     return this.uow.run(async (uow) => {
       const row = await this.loadEmploymentInScope(uow, id);
-      return toEmployment(row);
+      return toEmployment(row, await this.nameFormat(uow.tx));
     });
   }
 
@@ -218,7 +239,11 @@ export class PeopleService {
       });
 
       const page = buildPage(rows, query.limit);
-      return { items: page.items.map(toEmployment), next_cursor: page.next_cursor };
+      const format = await this.nameFormat(uow.tx);
+      return {
+        items: page.items.map((row) => toEmployment(row, format)),
+        next_cursor: page.next_cursor,
+      };
     });
   }
 
@@ -268,7 +293,7 @@ export class PeopleService {
       // อ่านกลับเพื่อเอาข้อมูลบุคคลมาด้วย — lockEmployment คืนเฉพาะแถว employment
       const withPerson = await this.repository.findEmploymentById(uow.tx, id);
       if (withPerson === undefined) throw AppError.notFound('employment');
-      return toEmployment(withPerson);
+      return toEmployment(withPerson, await this.nameFormat(uow.tx));
     });
   }
 
@@ -395,9 +420,8 @@ export class PeopleService {
   }
 }
 
-function toPerson(row: PersonRow): Person {
-  const displayName =
-    row.preferredName.trim() === '' ? `${row.firstName} ${row.lastName}` : row.preferredName;
+function toPerson(row: PersonRow, format: DisplayNameFormat): Person {
+  const displayName = composeDisplayName(row, format);
 
   return {
     id: row.id,
@@ -430,17 +454,14 @@ function toPersonAudit(row: PersonRow): Record<string, unknown> {
   };
 }
 
-function toEmployment(row: EmploymentRow): Employment {
+function toEmployment(row: EmploymentRow, format: DisplayNameFormat): Employment {
   return {
     id: row.id,
     company_id: row.companyId,
     person_id: row.personId,
     employee_code: row.employeeCode,
-    // ชื่อเล่นถ้ามี ไม่งั้นใช้ชื่อจริง — หน้าจอส่วนใหญ่มีที่แสดงจำกัด
-    display_name:
-      row.person.preferredName !== null && row.person.preferredName !== ''
-        ? row.person.preferredName
-        : row.person.firstName,
+    // รูปแบบชื่อเป็นค่าตั้งของบริษัท (migration 0016) — ประกอบที่เดียวกับ person
+    display_name: composeDisplayName(row.person, format),
     full_name: `${row.person.firstName} ${row.person.lastName}`.trim(),
     employment_type: row.employmentType as Employment['employment_type'],
     hired_on: row.hiredOn,

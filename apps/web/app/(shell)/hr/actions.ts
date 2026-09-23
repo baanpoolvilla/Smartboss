@@ -8,9 +8,11 @@ import {
   wfFetch,
   WorkforceError,
   WorkforceUnavailableError,
+  type Company,
   type Paged,
   type Person,
 } from "@/modules/hr/lib/api";
+import { isDisplayNameFormat } from "@workforce/domain";
 import { todayIso } from "@/modules/hr/lib/date";
 import {
   DAYS_OFF_LIMITS,
@@ -19,6 +21,7 @@ import {
   saveEmployeeDayOffStanding,
 } from "@/lib/day-off-quota";
 import { saveCommissionPool, saveCommissionWeights } from "@/modules/hr/lib/commission-data";
+import { syncAllUserNames, syncUserName } from "@/modules/hr/lib/name-sync";
 import { notifyApprovers } from "@/modules/hr/lib/hr-notify";
 
 /**
@@ -458,6 +461,91 @@ export async function terminateEmploymentAction(formData: FormData) {
   }
   revalidatePath(`/hr/employees/${employmentId}`);
   revalidatePath("/hr/employees");
+}
+
+/**
+ * แก้ชื่อพนักงาน
+ *
+ * ชื่อจริง/นามสกุล/ชื่อเล่น เก็บที่ person ไม่ใช่ employment — คนหนึ่งคนมีสัญญาจ้าง
+ * ได้หลายใบ (ลาออกแล้วกลับมา) แก้ที่นี่ทีเดียวจึงมีผลกับทุกใบของคนนี้
+ *
+ * "ชื่อ-นามสกุล" กับ "ชื่อที่แสดง" ที่เห็นทั้งระบบเป็นค่าที่ API คำนวณจากสามช่องนี้
+ * ไม่ได้เก็บซ้ำไว้อีกที่ — แก้สามช่องนี้แล้วทุกหน้าเปลี่ยนตามเอง
+ */
+export async function updateEmployeeNameAction(formData: FormData) {
+  const session = await guard(HR_PERMS.employeeManage);
+  const employmentId = String(formData.get("employment_id") ?? "");
+  const personId = String(formData.get("person_id") ?? "");
+  const firstName = String(formData.get("first_name") ?? "").trim();
+  const lastName = String(formData.get("last_name") ?? "").trim();
+  // ชื่อเล่นลบทิ้งได้ — ส่งค่าว่างไปแล้วชื่อที่แสดงจะกลับไปใช้ชื่อจริงเอง
+  const preferredName = String(formData.get("preferred_name") ?? "").trim();
+
+  if (!personId) throw new Error("ไม่พบข้อมูลบุคคลของพนักงานคนนี้");
+  if (!firstName || !lastName) throw new Error("กรุณากรอกชื่อและนามสกุล");
+
+  let person: Person;
+  try {
+    person = await wfFetch<Person>(`/people/${personId}`, {
+      method: "PATCH",
+      body: {
+        first_name: firstName,
+        last_name: lastName,
+        preferred_name: preferredName,
+      },
+    });
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+
+  /*
+   * ชื่อในแชท/บอร์ดงาน/รายงานอ่านจาก core.users.name ไม่ใช่ทะเบียนพนักงาน —
+   * ไม่เขียนตามให้ที่นี่ คนแก้ชื่อจะเห็นชื่อใหม่แค่ในโมดูลบุคคล แล้วงงว่าทำไม
+   * แชทยังเรียกชื่อเก่า (ดู name-sync.ts)
+   *
+   * ล้มตรงนี้ต้องไม่ทำให้ดูเหมือนแก้ชื่อไม่สำเร็จ — ทะเบียนถูกแก้ไปแล้วจริง
+   */
+  try {
+    await syncUserName(session.orgId, person.email, person.display_name);
+  } catch {
+    // ชื่อบัญชีจะตามมาเองรอบหน้าที่บันทึกรูปแบบชื่อในหน้าตั้งค่า
+  }
+
+  revalidatePath(`/hr/employees/${employmentId}`);
+  revalidatePath("/hr/employees");
+}
+
+/**
+ * รูปแบบชื่อที่แสดงทั้งระบบ — ค่าของบริษัท ไม่ใช่ของรายคน (migration 0016)
+ *
+ * workforce ประกอบ display_name ใหม่ให้ทุกคนทันทีที่ค่าเปลี่ยน ส่วนชื่อบัญชีผู้ใช้
+ * (core.users.name) ที่แชท/บอร์ด/รายงานใช้ ต้องเขียนตามเองทีละคน
+ */
+export async function setDisplayNameFormatAction(formData: FormData) {
+  const session = await guard(HR_PERMS.settingManage);
+
+  const companyId = String(formData.get("company_id") ?? "");
+  const format = String(formData.get("display_name_format") ?? "");
+  if (!companyId) throw new Error("ยังไม่มีบริษัทในระบบ workforce");
+  if (!isDisplayNameFormat(format)) throw new Error("รูปแบบชื่อไม่ถูกต้อง");
+
+  try {
+    await wfFetch<Company>(`/companies/${companyId}`, {
+      method: "PATCH",
+      body: { display_name_format: format },
+    });
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+
+  // ทะเบียนพนักงานเปลี่ยนแล้วตั้งแต่บรรทัดบน — ที่เหลือคือไล่เขียนชื่อบัญชีให้ตรงกัน
+  await syncAllUserNames(session.orgId);
+
+  /*
+   * ชื่อคนโผล่แทบทุกหน้าของระบบ ล้างทั้งเส้นทางแทนที่จะไล่ทีละหน้า —
+   * ไล่ไม่หมดเมื่อไหร่คือหน้าที่ยังโชว์ชื่อรูปแบบเก่าปนกับรูปแบบใหม่
+   */
+  revalidatePath("/", "layout");
 }
 
 /* ═══════════════════ กะทำงาน ═══════════════════ */

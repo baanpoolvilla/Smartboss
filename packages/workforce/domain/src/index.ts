@@ -55,6 +55,16 @@ export {
 } from './identity/principal';
 
 export {
+  composeDisplayName,
+  DEFAULT_DISPLAY_NAME_FORMAT,
+  DISPLAY_NAME_FORMAT_LABELS,
+  DISPLAY_NAME_FORMATS,
+  isDisplayNameFormat,
+  type DisplayNameFormat,
+  type DisplayNameParts,
+} from './identity/display-name';
+
+export {
   REASON_REQUIRED_ACTIONS,
   requiresReason,
   type AuditActorType,

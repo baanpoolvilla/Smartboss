@@ -9,6 +9,7 @@ let tenant: TestTenant;
 let hrToken: string;
 let preparerToken: string;
 let auditorToken: string;
+let adminToken: string;
 
 async function createPerson(overrides: Record<string, unknown> = {}): Promise<string> {
   const response = await call(harness, 'POST', '/people', {
@@ -48,10 +49,12 @@ beforeAll(async () => {
   await harness.createPrincipal(tenant, { subject: 'p|hr', roles: ['HR_OFFICER'] });
   await harness.createPrincipal(tenant, { subject: 'p|preparer', roles: ['PAYROLL_PREPARER'] });
   await harness.createPrincipal(tenant, { subject: 'p|auditor', roles: ['AUDITOR'] });
+  await harness.createPrincipal(tenant, { subject: 'p|admin', roles: ['TENANT_ADMIN'] });
 
   hrToken = await harness.token('p|hr', tenant.tenantId);
   preparerToken = await harness.token('p|preparer', tenant.tenantId);
   auditorToken = await harness.token('p|auditor', tenant.tenantId);
+  adminToken = await harness.token('p|admin', tenant.tenantId);
 }, 120_000);
 
 afterAll(async () => {
@@ -74,8 +77,66 @@ describe('people', () => {
     expect(response.status).toBe(201);
     expect(response.body['has_national_id']).toBe(true);
     expect(JSON.stringify(response.body)).not.toContain('1234567890123');
-    // ชื่อเล่นแยกจากชื่อจริง (คงคุณสมบัติจากระบบเดิม)
-    expect(response.body['display_name']).toBe('อา');
+    // บริษัททดสอบยังไม่ได้เลือกรูปแบบชื่อ → ค่าตั้งต้น FULL_NAME (migration 0016)
+    expect(response.body['display_name']).toBe('อารีย์ บุคคลดี');
+  });
+
+  /*
+   * รูปแบบชื่อเป็นค่าตั้งรายบริษัท — คนเดียวกันแต่คนละบริษัทเห็นชื่อคนละแบบ
+   * ทดทั้ง person และ employment เพราะสองทางนี้มีหน้าจอที่ใช้จริงคนละชุด
+   */
+  it('composes the display name with the format the company chose', async () => {
+    const personId = await createPerson({
+      first_name: 'Katawut',
+      last_name: 'Nantaprom',
+      preferred_name: 'กีม',
+    });
+    const employmentId = await createEmployment(personId);
+
+    const cases = [
+      { format: 'NICK_FIRST', expected: 'กีม-Katawut' },
+      { format: 'FIRST_NICK', expected: 'Katawut(กีม)' },
+      { format: 'FULL_NAME', expected: 'Katawut Nantaprom' },
+    ];
+
+    for (const { format, expected } of cases) {
+      const updated = await call(harness, 'PATCH', `/companies/${tenant.companyId}`, {
+        token: adminToken,
+        payload: { display_name_format: format },
+      });
+      expect(updated.status).toBe(200);
+
+      const person = await call(harness, 'GET', `/people/${personId}`, { token: hrToken });
+      expect(person.body['display_name']).toBe(expected);
+
+      const employment = await call(harness, 'GET', `/employments/${employmentId}`, {
+        token: hrToken,
+      });
+      expect(employment.body['display_name']).toBe(expected);
+    }
+  });
+
+  it('falls back to the real name when the person has no nickname', async () => {
+    await call(harness, 'PATCH', `/companies/${tenant.companyId}`, {
+      token: adminToken,
+      payload: { display_name_format: 'NICK_FIRST' },
+    });
+
+    const personId = await createPerson({
+      first_name: 'มานะ',
+      last_name: 'ไม่มีชื่อเล่น',
+      preferred_name: '',
+    });
+
+    const person = await call(harness, 'GET', `/people/${personId}`, { token: hrToken });
+    // ไม่ใช่ "-มานะ" และไม่ใช่ค่าว่าง
+    expect(person.body['display_name']).toBe('มานะ');
+
+    // คืนค่าตั้งต้น — ทุกเคสในไฟล์นี้ใช้บริษัทเดียวกัน
+    await call(harness, 'PATCH', `/companies/${tenant.companyId}`, {
+      token: adminToken,
+      payload: { display_name_format: 'FULL_NAME' },
+    });
   });
 
   it('stores the national ID encrypted, not in clear text', async () => {

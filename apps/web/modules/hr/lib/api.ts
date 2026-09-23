@@ -243,6 +243,8 @@ export interface Company {
   currency: string;
   /** คำขอแก้เวลาต้องมีผู้อนุมัติกี่คน (1 หรือ 2) */
   attendance_correction_approvals: number;
+  /** รูปแบบชื่อที่แสดงทั้งระบบ — NICK_FIRST | FIRST_NICK | FULL_NAME */
+  display_name_format: string;
 }
 
 /**

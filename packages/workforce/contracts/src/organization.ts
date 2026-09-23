@@ -1,3 +1,4 @@
+import { DEFAULT_DISPLAY_NAME_FORMAT, DISPLAY_NAME_FORMATS } from '@workforce/domain';
 import { z } from 'zod';
 import {
   auditFieldsSchema,
@@ -32,6 +33,11 @@ export const createCompanySchema = z.object({
    * 1 = อนุมัติคนเดียวจบ · 2 = maker-checker ต้องเป็นคนละคนและต่างจากผู้ขอ
    */
   attendance_correction_approvals: z.number().int().min(1).max(2).default(1),
+  /**
+   * รูปแบบชื่อที่แสดงทั้งระบบ — API ประกอบ `display_name` ของคนทุกคนตามค่านี้
+   * (composeDisplayName ใน @workforce/domain คือที่เดียวที่ประกอบจริง)
+   */
+  display_name_format: z.enum(DISPLAY_NAME_FORMATS).default(DEFAULT_DISPLAY_NAME_FORMAT),
 });
 
 export const updateCompanySchema = createCompanySchema
@@ -51,6 +57,7 @@ export const companySchema = z
     currency: z.string(),
     status: statusSchema,
     attendance_correction_approvals: z.number().int().min(1).max(2),
+    display_name_format: z.enum(DISPLAY_NAME_FORMATS),
   })
   .merge(auditFieldsSchema);
 

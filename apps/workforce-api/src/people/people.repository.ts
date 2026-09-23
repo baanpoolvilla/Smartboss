@@ -9,6 +9,22 @@ export type EmploymentWithPerson = typeof schema.employments.$inferSelect & {
 
 @Injectable()
 export class PeopleRepository {
+  /**
+   * รูปแบบชื่อที่แสดงของ tenant นี้ (migration 0016)
+   *
+   * RLS กรองให้เห็นเฉพาะบริษัทของ tenant ที่เรียกมาอยู่แล้ว — หยิบใบที่สร้างก่อน
+   * เพราะเป็นนิติบุคคลหลัก ตัวเดียวกับที่ workforce-provisioning ของ Smartboss สร้าง/แก้ชื่อให้
+   * (คนหนึ่งคนอยู่ได้หลายบริษัท แต่ชื่อที่แสดงเป็นของคน ไม่ใช่ของสัญญาจ้างใบใดใบหนึ่ง)
+   */
+  async findDisplayNameFormat(tx: Tx): Promise<string | undefined> {
+    const rows = await tx
+      .select({ format: schema.companies.displayNameFormat })
+      .from(schema.companies)
+      .orderBy(asc(schema.companies.createdAt))
+      .limit(1);
+    return rows[0]?.format;
+  }
+
   // --- people ---
 
   async insertPerson(

@@ -37,6 +37,7 @@ import {
   addCompensationRateAction,
   deleteEnrollmentsAction,
   terminateEmploymentAction,
+  updateEmployeeNameAction,
 } from "../../actions";
 import { AssignShiftForm, type CurrentPattern } from "../../settings/assign-shift-form";
 import { EmployeeDaysOff } from "./employee-days-off";
@@ -155,7 +156,7 @@ export default async function EmployeeDetailPage({
           shifts,
           devices,
           enrollments,
-          people,
+          person,
           patterns,
           assigned,
           quota,
@@ -168,7 +169,12 @@ export default async function EmployeeDetailPage({
             ),
             wfTry<Paged<Device>>("/devices"),
             wfTry<Paged<BiometricEnrollment>>(`/biometric-enrollments?employment_id=${id}`),
-            wfTry<Paged<Person>>("/people"),
+            /*
+             * คนนี้คนเดียว — ดึงตรง ไม่ไล่หาจากหน้าแรกของ /people ซึ่งแบ่งหน้า:
+             * บริษัทที่คนมากกว่าหนึ่งหน้า คนท้าย ๆ จะหาไม่เจอ แล้วหน้านี้จะเงียบ ๆ
+             * หายทั้งช่องแก้ชื่อและคะแนนผลงาน โดยไม่มีอะไรบอกว่าทำไม
+             */
+            wfTry<Person>(`/people/${employment.person_id}`),
             /*
              * ตารางกะที่ผูกไว้จริง — ต้องอ่านกลับมาแสดง ไม่งั้นฟอร์มด้านล่างเป็น
              * แค่ช่องเปล่าที่เติมค่าเดาไว้ แล้วคนที่ตั้งใจมาแก้แค่วันเสาร์จะกด
@@ -275,9 +281,7 @@ export default async function EmployeeDetailPage({
          * ส่วนทะเบียนจ้างงานอยู่ฝั่ง workforce — จับคู่ด้วยอีเมล ค่าเดียวที่ทั้งสอง
          * ระบบมีและไม่ซ้ำ (ตัวเดียวกับที่ provisionPrincipal และหน้านำเข้าใช้)
          */
-        const email = (people?.items ?? [])
-          .find((row) => row.id === employment.person_id)
-          ?.email?.toLowerCase();
+        const email = person?.email?.toLowerCase();
         const now = new Date();
         const scoreFrom = new Date(now.getFullYear(), now.getMonth(), 1);
         const scorecard =
@@ -382,6 +386,58 @@ export default async function EmployeeDetailPage({
               )}
               <Row label="เขตเวลา" value={employment.time_zone} />
             </SectionCard>
+
+            {canManage && (
+              <SectionCard
+                title="แก้ไขชื่อ"
+                description="ชื่อที่แสดงทั้งระบบมาจากสามช่องนี้ — กรอกชื่อเล่นไว้จะใช้ชื่อเล่นแทนชื่อจริง"
+              >
+                {person === null ? (
+                  <EmptyState>
+                    อ่านข้อมูลบุคคลของคนนี้ไม่ได้ — แก้ชื่อจากหน้านี้ยังไม่ได้
+                  </EmptyState>
+                ) : (
+                  <form
+                    action={updateEmployeeNameAction}
+                    className="grid grid-cols-1 gap-3 sm:grid-cols-3"
+                  >
+                    <input type="hidden" name="employment_id" value={employment.id} />
+                    <input type="hidden" name="person_id" value={person.id} />
+                    <Field label="ชื่อ *">
+                      <input
+                        name="first_name"
+                        required
+                        maxLength={100}
+                        defaultValue={person.first_name}
+                        className={inputClass}
+                      />
+                    </Field>
+                    <Field label="นามสกุล *">
+                      <input
+                        name="last_name"
+                        required
+                        maxLength={100}
+                        defaultValue={person.last_name}
+                        className={inputClass}
+                      />
+                    </Field>
+                    <Field label="ชื่อเล่น">
+                      <input
+                        name="preferred_name"
+                        maxLength={100}
+                        defaultValue={person.preferred_name}
+                        className={inputClass}
+                      />
+                    </Field>
+                    <div className="sm:col-span-3">
+                      <Button type="submit" size="sm">
+                        บันทึกชื่อ
+                      </Button>
+                    </div>
+                  </form>
+                )}
+              </SectionCard>
+            )}
               </>
             )}
 
