@@ -86,7 +86,7 @@ export function DepartmentTopicsBoard({
     const unsorted = byTopic.get(UNSORTED_KEY);
 
     return unsorted
-      ? [...named, { id: UNSORTED_KEY, name: "ไม่มีหัวข้อ", tasks: sortTasksForDisplay(unsorted) }]
+      ? [...named, { id: UNSORTED_KEY, name: "อื่นๆ", tasks: sortTasksForDisplay(unsorted) }]
       : named;
   }, [departmentId, allTasks, topics, viewingAsUserId]);
 

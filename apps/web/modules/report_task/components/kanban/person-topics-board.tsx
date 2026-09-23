@@ -48,7 +48,7 @@ function bucketOf(t: Task): (typeof statusBuckets)[number]["key"] {
  * `?person=` in kanban-board.tsx). Every task that person is on, across the
  * whole board (not just whatever was filtered on the way in), laid out as
  * one column per project topic — same column/card look as the main board,
- * including a real (non-draggable) TaskCard per task — plus an "ไม่มีหัวข้อ"
+ * including a real (non-draggable) TaskCard per task — plus an "อื่นๆ"
  * column for tasks with none. Each column's header bar shows the same 4-way
  * status split as the main board's status view, merged into one bar instead
  * of one column each.
@@ -86,7 +86,7 @@ export function PersonTopicsBoard({
     const unsorted = byTopic.get(UNSORTED_KEY);
 
     return unsorted
-      ? [...named, { id: UNSORTED_KEY, name: "ไม่มีหัวข้อ", tasks: sortTasksForDisplay(unsorted) }]
+      ? [...named, { id: UNSORTED_KEY, name: "อื่นๆ", tasks: sortTasksForDisplay(unsorted) }]
       : named;
   }, [personId, allTasks, topics, viewingAsUserId]);
 

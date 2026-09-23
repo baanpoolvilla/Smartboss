@@ -23,7 +23,7 @@ export interface BoardColumn {
    * column gets its own celebratory copy instead. */
   emptyMessage?: string;
   /** Department grouping only — how many distinct project topics this
-   * department's tasks span (including an "ไม่มีหัวข้อ" bucket if any task
+   * department's tasks span (including an "อื่นๆ" bucket if any task
    * has none), shown in the summary body instead of every single card. */
   projectCount?: number;
   /** Skip listing every task card in the body — show just "N โปรเจค · M งาน"
