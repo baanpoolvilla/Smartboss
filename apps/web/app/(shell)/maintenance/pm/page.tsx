@@ -70,14 +70,17 @@ export default async function PmListPage({
   ]);
 
   // PM ที่มีใบงานค้างอยู่ (open/in_progress) — ใช้แยกสถานะ "เปิดใบงานแล้ว"
+  // เก็บ id ของใบงานไว้ด้วย ไม่ใช่แค่ว่า "มี" — ใบที่ค้างคือสิ่งที่บล็อกไม่ให้
+  // PM ออกรอบใหม่ คนอ่านการ์ดจึงต้องกดไปหามันเจอ ไม่ใช่ไปไล่หาเองในบอร์ดใบงาน
   const pendingWos = await prisma.workOrder.findMany({
     where: { orgId, status: { in: ["open", "in_progress"] } },
-    select: { pmScheduleId: true, pmScheduleIds: true },
+    select: { id: true, pmScheduleId: true, pmScheduleIds: true },
+    orderBy: { createdAt: "desc" },
   });
-  const pending = new Set<string>();
+  const pending = new Map<string, string>();
   for (const w of pendingWos) {
-    if (w.pmScheduleId) pending.add(w.pmScheduleId);
-    for (const id of w.pmScheduleIds) pending.add(id);
+    if (w.pmScheduleId) pending.set(w.pmScheduleId, w.id);
+    for (const id of w.pmScheduleIds) pending.set(id, w.id);
   }
 
   const rows: PmRow[] = schedules.map((s) => ({
@@ -104,6 +107,7 @@ export default async function PmListPage({
     assignedToName: s.assignedTo ? (names[s.assignedTo] ?? null) : null,
     requiresExpense: s.requiresExpense,
     hasPendingWorkOrder: pending.has(s.id),
+    pendingWorkOrderId: pending.get(s.id) ?? null,
   }));
 
   // รายชื่อสำหรับกล่องแก้ไข PM (เปลี่ยนผู้รับผิดชอบ)

@@ -102,6 +102,8 @@ export interface PmRow {
   assignedToName: string | null;
   requiresExpense: boolean;
   hasPendingWorkOrder: boolean;
+  /** ใบงานที่ค้างอยู่ของ PM นี้ (ล่าสุด) — ตัวที่บล็อกไม่ให้ออกรอบใหม่ */
+  pendingWorkOrderId: string | null;
 }
 
 /** ลิงก์สร้างใบงานจาก PM — คัดลอกรูปแบบ description ของเดิมทั้งหมด */
@@ -863,12 +865,25 @@ function PmDetailCard({
           </div>
         )}
       {canManage && status === "hasWorkOrder" && (
-        <p
-          className="mt-2 rounded-(--radius) px-3 py-2 text-center text-xs"
-          style={{ backgroundColor: "#1565C014", color: "#1565C0" }}
-        >
-          มีใบงานรอดำเนินการอยู่แล้ว
-        </p>
+        /* กดเข้าไปหาใบที่ค้างได้เลย — ตราบใดที่ใบนี้ยังไม่ถูกปิด/ยกเลิก PM จะ
+           ไม่ออกรอบใหม่ให้ (ดู generateWorkOrdersForDuePms) ป้ายเฉย ๆ บอกแค่
+           ว่า "มีอยู่" แล้วปล่อยให้ไปไล่หาเองในบอร์ดใบงานทั้งบริษัท */
+        s.pendingWorkOrderId ? (
+          <Link
+            href={`/maintenance/work-orders/${s.pendingWorkOrderId}`}
+            className="mt-2 block rounded-(--radius) px-3 py-2 text-center text-xs underline-offset-2 hover:underline"
+            style={{ backgroundColor: "#1565C014", color: "#1565C0" }}
+          >
+            มีใบงานรอดำเนินการอยู่แล้ว — เปิดดูใบงาน
+          </Link>
+        ) : (
+          <p
+            className="mt-2 rounded-(--radius) px-3 py-2 text-center text-xs"
+            style={{ backgroundColor: "#1565C014", color: "#1565C0" }}
+          >
+            มีใบงานรอดำเนินการอยู่แล้ว
+          </p>
+        )
       )}
 
       {canManage && (

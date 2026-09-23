@@ -29,7 +29,6 @@ import { createUploadLink } from "@/modules/maintenance/data/external-upload";
 import {
   completePmSchedule,
   completePmSchedulesByIds,
-  completePmSchedulesForAsset,
 } from "@/modules/maintenance/data/pm";
 
 /**
@@ -209,17 +208,27 @@ async function notifyStatusChanged(
   });
 }
 
-/** เดิน PM ที่ผูกกับใบงานไปรอบถัดไป — ลำดับเดียวกับของเดิม */
+/**
+ * เดิน PM ที่ "ผูกกับใบงานนี้จริง ๆ" ไปรอบถัดไป
+ *
+ * ⚠ เดิมมี fallback ชั้นสุดท้าย: ใบงานที่ไม่ได้ผูก PM เลยแต่ระบุอุปกรณ์ไว้
+ * จะไปปิดรอบ **ทุกแผน PM ของอุปกรณ์นั้น** ซึ่งเดาผิดมากกว่าถูก — งานซ่อม
+ * ธรรมดา (แอร์ไม่เย็น เปลี่ยนอะไหล่) ที่บังเอิญเลือกอุปกรณ์ไว้ พอปิดงานปุ๊บ
+ * PM ล้างแอร์ตามรอบก็ถูกนับว่าทำเสร็จไปด้วยทั้งที่ไม่มีใครล้าง แล้ววันกำหนด
+ * ถูกเลื่อนออกไปอีกรอบเต็ม ๆ โดยไม่มีร่องรอยว่าใครเลื่อน
+ *
+ * ใบงานที่มาจาก PM ทุกทางมี id ติดมาเสมออยู่แล้ว (cron ใส่ pmScheduleId,
+ * ปฏิทินส่งมาทาง query string, ใบรวมหลาย PM ใส่ pmScheduleIds) ⇒ ไม่มีเคสที่
+ * ต้องเดาจากอุปกรณ์ · ปิดรอบ PM เองยังทำได้ที่หน้า /maintenance/pm ตามเดิม
+ */
 async function advanceLinkedPm(
   orgId: string,
-  wo: { pmScheduleIds: string[]; pmScheduleId: string | null; assetId: string | null }
+  wo: { pmScheduleIds: string[]; pmScheduleId: string | null }
 ) {
   if (wo.pmScheduleIds.length > 0) {
     await completePmSchedulesByIds(orgId, wo.pmScheduleIds);
   } else if (wo.pmScheduleId) {
     await completePmSchedule(orgId, wo.pmScheduleId);
-  } else if (wo.assetId) {
-    await completePmSchedulesForAsset(orgId, wo.assetId);
   }
 }
 

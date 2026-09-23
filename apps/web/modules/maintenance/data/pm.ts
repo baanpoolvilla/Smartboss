@@ -97,15 +97,6 @@ export async function completePmSchedulesByIds(orgId: string, ids: string[]) {
   for (const id of ids) await completePmSchedule(orgId, id);
 }
 
-/** ปิดทุก PM ของอุปกรณ์ (fallback เมื่อใบงานไม่ได้ผูก PM ตรง ๆ) */
-export async function completePmSchedulesForAsset(orgId: string, assetId: string) {
-  const rows = await prisma.pmSchedule.findMany({
-    where: { orgId, assetId, isActive: true },
-    select: { id: true },
-  });
-  for (const r of rows) await completePmSchedule(orgId, r.id);
-}
-
 /** PM แรกของอุปกรณ์ — ใช้เติม pmScheduleId ให้ฟอร์มค่าใช้จ่ายอัตโนมัติ */
 export async function getPmScheduleIdForAsset(
   orgId: string,
