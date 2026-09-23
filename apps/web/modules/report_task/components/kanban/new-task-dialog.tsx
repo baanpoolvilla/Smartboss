@@ -36,7 +36,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/modules/report_task/components/ui/select";
-import { departmentIdsOf, getDepartment, getUser, users, canManage } from "@/modules/report_task/lib/directory";
+import { departmentIdsOf, departments, getDepartment, getUser, users, canManage } from "@/modules/report_task/lib/directory";
 import { departmentsLabel } from "@/modules/report_task/lib/department-label";
 import { taskPriorityOrder, priorityMeta } from "@/modules/report_task/lib/task-meta";
 import { useLeaveTypeStore } from "@/modules/report_task/store/leave-type-store";
@@ -295,39 +295,47 @@ export function NewTaskDialog({
   // keeps it open instead of hiding a value the user just typed.
   const [showDueTime, setShowDueTime] = useState(false);
   const derivedDepartmentIds = departmentIdsOf(assigneeIds);
+  // ตัวเลือก "แผนก" เองในตัวเลือกขั้นสูง (ดูด้านล่าง) — คนละเรื่องกับ
+  // derivedDepartmentIds ข้างบน: อันนั้นคือแผนกจริงของงาน (มาจากคนที่มอบหมาย
+  // ให้ ใช้ตอนบันทึกจริง ไม่แตะ) ส่วนอันนี้แค่ "จะเลือกดู/สร้างหัวข้อโปรเจคของ
+  // แผนกไหน" เผื่ออยากดูโปรเจคของแผนกอื่นก่อนจะรู้ว่าจะมอบหมายให้ใคร หรือยังไม่
+  // ได้เลือกคนเลยก็เลือกแผนกดูโปรเจคได้ก่อน ("เลือกแผนก แล้วเลือกข้อมูลในแผนก
+  // นั้น หรือจะสร้างโปรเจคใหม่ในแผนกนั้น") ไม่ตั้งค่า (null) = ใช้แผนกที่ derive
+  // จากคนที่เลือกไว้ตามเดิม
+  const [manualScopeDeptId, setManualScopeDeptId] = useState<string | null>(null);
+  const effectiveScopeDeptIds = manualScopeDeptId ? [manualScopeDeptId] : derivedDepartmentIds;
 
   // "หัวข้อโปรเจค" ในตัวเลือกขั้นสูงด้านล่าง — เดิมเป็นลิสต์รวมทั้งบริษัทเสมอ
   // ("PV-5th", "Sales Report -A/R", "MM", "tttt" ปนกันหมดไม่ว่าใครเปิดฟอร์ม)
   // ProjectTopic เองไม่มีฟิลด์แผนกให้ผูกไว้ (เป็น tag กลาง ใช้ข้ามแผนกได้ตั้งใจ
   // — ดู project-topic-store.ts) จึงต้องอนุมานว่า "หัวข้อนี้แผนกไหนเคยใช้บ้าง"
-  // จากงานที่มีอยู่จริงแทน: มีงานที่ departmentIds ตรงกับแผนกที่ derive มาจาก
-  // ผู้รับผิดชอบที่เลือกไว้ และหัวข้อนั้น ๆ ก็ถือว่า "อยู่ในแผนกนี้" ("เลือกก่อนว่า
-  // แผนกไหน แล้ว filter ว่าแผนกนั้นมีโปรเจคอะไร") ยังไม่เลือกผู้รับผิดชอบเลย
-  // (derivedDepartmentIds ว่าง) ก็โชว์ทุกหัวข้อเหมือนเดิม ไม่บังคับให้เลือกคนก่อน
+  // จากงานที่มีอยู่จริงแทน: มีงานที่ departmentIds ตรงกับแผนกที่เลือกไว้ (ไม่ว่า
+  // จะ derive มาจากคนหรือเลือกแผนกเองก็ตาม) และหัวข้อนั้น ๆ ก็ถือว่า "อยู่ในแผนก
+  // นี้" ("เลือกก่อนว่าแผนกไหน แล้ว filter ว่าแผนกนั้นมีโปรเจคอะไร") ยังไม่เลือก
+  // ทั้งคนและแผนกเลย (effectiveScopeDeptIds ว่าง) ก็โชว์ทุกหัวข้อเหมือนเดิม
   const allTasksForTopicScope = useTaskStore((s) => s.tasks);
   const departmentTopicIds = useMemo(() => {
-    if (derivedDepartmentIds.length === 0) return null;
+    if (effectiveScopeDeptIds.length === 0) return null;
     const ids = new Set<string>();
     for (const t of allTasksForTopicScope) {
-      if (t.projectTopicId && t.departmentIds.some((d) => derivedDepartmentIds.includes(d))) ids.add(t.projectTopicId);
+      if (t.projectTopicId && t.departmentIds.some((d) => effectiveScopeDeptIds.includes(d))) ids.add(t.projectTopicId);
     }
     return ids;
-    // derivedDepartmentIds is a fresh array every render (departmentIdsOf(assigneeIds)),
-    // but its contents only actually change when assigneeIds does — depend on that instead.
+    // effectiveScopeDeptIds is a fresh array every render — depend on its real
+    // sources (assigneeIds, manualScopeDeptId) instead, same as before.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assigneeIds, allTasksForTopicScope]);
-  // เผื่อคนเลือกหัวข้อไว้ก่อนแล้วค่อยเปลี่ยนผู้รับผิดชอบทีหลัง — ตัวที่เลือกไว้
-  // แล้วยังต้องโผล่ในลิสต์เสมอ ต่อให้ไม่ตรงแผนกใหม่แล้วก็ตาม ไม่งั้นค่าที่เลือกไว้
-  // จะหายไปจากตัวเลือกแบบไม่มีปี่มีขลุ่ย
+  }, [assigneeIds, manualScopeDeptId, allTasksForTopicScope]);
+  // เผื่อคนเลือกหัวข้อไว้ก่อนแล้วค่อยเปลี่ยนผู้รับผิดชอบ/แผนกทีหลัง — ตัวที่
+  // เลือกไว้แล้วยังต้องโผล่ในลิสต์เสมอ ต่อให้ไม่ตรงแผนกใหม่แล้วก็ตาม ไม่งั้นค่าที่
+  // เลือกไว้จะหายไปจากตัวเลือกแบบไม่มีปี่มีขลุ่ย
   const visibleProjectTopics = departmentTopicIds
     ? projectTopics.filter((t) => departmentTopicIds.has(t.id) || t.id === selectedTopicId)
     : projectTopics;
-  const departmentNamesForTopicHint =
-    "แผนก" +
-    derivedDepartmentIds
-      .map((id) => getDepartment(id)?.name)
-      .filter((name): name is string => !!name)
-      .join("/");
+  const scopeDeptNamesJoined = effectiveScopeDeptIds
+    .map((id) => getDepartment(id)?.name)
+    .filter((name): name is string => !!name)
+    .join("/");
+  const departmentNamesForTopicHint = "แผนก" + scopeDeptNamesJoined;
 
   // งานเดี่ยว/งานกลุ่ม — explicit, chosen at creation (not re-derived from
   // assigneeIds.length later). Individual locks the assignee picker to one
@@ -1315,6 +1323,37 @@ export function NewTaskDialog({
               {showAdvanced && (
                 <div className="space-y-3 border-t border-dashed border-[var(--line)] pt-3">
                   <p className="ml-[30px] text-[11px] font-semibold tracking-wide text-[var(--ink-soft)]">ตัวเลือกขั้นสูง</p>
+                  <Row icon={Building2}>
+                    <div className="space-y-1 flex-1">
+                      <Label className="text-xs text-[var(--ink-soft)]">แผนก (ดู/สร้างโปรเจคของแผนกไหน)</Label>
+                      <Select
+                        value={manualScopeDeptId ?? "auto"}
+                        onValueChange={(v) => {
+                          if (!v) return;
+                          setManualScopeDeptId(v === "auto" ? null : v);
+                        }}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="ตามผู้รับผิดชอบที่เลือก">
+                            {manualScopeDeptId
+                              ? (getDepartment(manualScopeDeptId)?.name ?? "ตามผู้รับผิดชอบที่เลือก")
+                              : derivedDepartmentIds.length > 0
+                                ? `ตามผู้รับผิดชอบ (${scopeDeptNamesJoined})`
+                                : "ทั้งบริษัท (ยังไม่เลือกแผนก)"}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="auto">ตามผู้รับผิดชอบที่เลือก</SelectItem>
+                          {departments.map((d) => (
+                            <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[11px] text-[var(--ink-soft)]">
+                        เลือกไว้เพื่อกรอง/สร้างหัวข้อโปรเจคของแผนกนั้นด้านล่าง — ไม่เปลี่ยนแผนกจริงของงาน (ยึดตามผู้รับผิดชอบที่มอบหมายเสมอ) ไม่เจอแผนกที่ต้องการ? ให้แอดมินไปสร้างที่ตั้งค่า &gt; แผนก
+                      </p>
+                    </div>
+                  </Row>
                   <Row icon={Tag}>
                     <div className="space-y-1 flex-1">
                       <Label className="text-xs text-[var(--ink-soft)]">หัวข้อโปรเจค</Label>
