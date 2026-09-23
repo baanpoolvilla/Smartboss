@@ -158,6 +158,18 @@ function peopleOf(r: RoundLike): string[] | null {
   return [...ids];
 }
 
+/**
+ * รอบที่ผู้ส่งไม่ใช่ "รายคน" กางรายชื่อที่นี่ไม่ได้ — mode "everyone"/"departments"/
+ * "groups" ต้องใช้ทะเบียนพนักงาน/กลุ่ม ซึ่งอยู่คนละสโตร์กับก้อนนี้ และระบบจริง
+ * ตีความ "everyone" ว่า *ทุกคนที่เห็นห้อง* ถ้าสคริปต์เดาเองแล้วเดาพลาด จะกลาย
+ * เป็นบังคับส่งคนที่ไม่ควรต้องส่ง (หรือหล่นคนที่ต้องส่ง) โดยไม่มีใครรู้ตัว
+ *
+ * จึงเลือกหยุดแทนการเดา: เจอรอบแบบนี้เมื่อไหร่ ให้คนตัดสินใจก่อนว่าจะเอายังไง
+ */
+function hasUnresolvableSubmitters(t: TopicLike): boolean {
+  return effectiveRounds(t).some((r) => (r.submitters?.mode ?? "everyone") !== "people");
+}
+
 function minutesOf(time: string): number {
   const [h, m] = time.split(":").map(Number) as [number, number];
   return h * 60 + m;
@@ -212,6 +224,22 @@ async function main() {
       const kind = mergeTargetOf(t);
       if (kind && !targets.has(kind)) targets.set(kind, t);
     }
+    // หยุดก่อนถ้ามีรอบที่กางรายชื่อผู้ส่งไม่ได้ — ดู hasUnresolvableSubmitters
+    const risky = topics.filter((t) => frequencyOf(t) !== null && !t.isCategory && hasUnresolvableSubmitters(t));
+    if (risky.length > 0) {
+      console.log(`\n⚠ หยุดไว้ก่อน — มีห้องที่รอบตั้งผู้ส่งแบบไม่ใช่ "รายคน" ${risky.length} ห้อง:`);
+      for (const t of risky) {
+        for (const r of effectiveRounds(t)) {
+          const mode = r.submitters?.mode ?? "(ไม่ระบุ)";
+          if (mode !== "people") console.log(`   - ${t.name} · รอบ "${r.label ?? r.id}" ${r.time ?? ""} · mode=${mode}`);
+        }
+      }
+      console.log(`\n  สคริปต์กางรายชื่อจากรอบพวกนี้เองไม่ได้ (ต้องใช้ทะเบียนพนักงาน/กลุ่ม)`);
+      console.log(`  แก้ที่หน้าตั้งค่าห้องให้เป็น "เฉพาะบุคคล" ก่อน แล้วค่อยรันใหม่`);
+      console.log(`  — หรือถ้ารู้อยู่แล้วว่าห้องพวกนี้ไม่มีคนต้องส่งจริง ก็ปลดผู้ส่งทิ้งได้เลย\n`);
+      continue;
+    }
+
     const missing = (["daily", "weekly", "monthly"] as Frequency[]).filter((k) => !targets.has(k));
     if (missing.length > 0) {
       console.log(`\nยังไม่มีห้องรวมสำหรับ: ${missing.join(", ")} — สร้างห้องชื่อ Daily-report / Weekly-report / Monthly-report ก่อน`);
@@ -416,8 +444,13 @@ async function main() {
           })),
         };
       }
-      if (sourceIds.has(t.id)) {
-        // ห้องเดิม: เก็บรอบไว้ทั้งหมด (ยังใช้จัดประเภทห้อง + ดูย้อนหลัง) แต่ไม่มีใครต้องส่งแล้ว
+      // ปลดผู้ส่งของ "ทุกห้องรายงานที่ไม่ใช่ห้องรวมเป้าหมาย" ไม่ใช่แค่ห้องต้นทาง —
+      // ห้องที่ชื่อซ้ำกับห้องรวม (ข้อมูลจริงมีห้อง daily-report ซ้ำอีกห้อง) ถูกกันออก
+      // จากฝั่งต้นทางไปแล้ว ถ้าไม่ปลดตรงนี้ด้วย มันจะยังบังคับส่งค้างอยู่เงียบ ๆ
+      // แล้วกลายเป็นภาระเกินที่ไม่มีใครรู้ที่มา
+      const isTarget = plannedByTargetId.has(t.id);
+      if (!isTarget && frequencyOf(t) !== null && !t.isCategory) {
+        // เก็บรอบไว้ทั้งหมด (ยังใช้จัดประเภทห้อง + ดูย้อนหลัง) แต่ไม่มีใครต้องส่งแล้ว
         const rounds = effectiveRounds(t).map((r) => ({ ...r, submitters: { mode: "people" as const, userIds: [] } }));
         return { ...t, submissionRounds: rounds };
       }

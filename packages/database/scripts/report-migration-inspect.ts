@@ -136,18 +136,43 @@ async function main() {
     // --- ห้องรวมปลายทาง ---
     console.log(`\n--- ห้องรวมปลายทาง ---`);
     for (const kind of ["daily", "weekly", "monthly"] as const) {
-      const target = topics.find((t) => mergeTargetOf(t) === kind);
-      if (!target) {
+      // ทุกห้องที่ "ชื่อเป็นห้องรวม" ไม่ใช่แค่ห้องแรกที่เจอ — ข้อมูลจริงมีห้องชื่อซ้ำ
+      // ซึ่งห้องที่ไม่ได้ถูกเลือกเป็นเป้าหมายจะกลายเป็นห้องที่ยังบังคับส่งค้างอยู่
+      const all = topics.filter((t) => mergeTargetOf(t) === kind);
+      if (all.length === 0) {
         console.log(`  ${kind.padEnd(8)} ยังไม่มีห้องชื่อ "${kind[0]!.toUpperCase()}${kind.slice(1)}-report" — ต้องสร้างก่อน`);
         continue;
       }
-      const own = postsByTopic.get(target.id) ?? [];
-      const rounds = effectiveRounds(target);
-      console.log(
-        `  ${kind.padEnd(8)} "${target.name}"  id=${target.id}` +
-          `\n           สร้างเมื่อ ${target.createdAt ?? "(ไม่ระบุ)"} · โพสต์ของตัวเอง ${own.length} · รอบ ${rounds.length}`
-      );
+      all.forEach((target, i) => {
+        const own = postsByTopic.get(target.id) ?? [];
+        const rounds = effectiveRounds(target);
+        const tag = i === 0 ? "[เป้าหมาย]" : "[ชื่อซ้ำ! ห้องนี้จะไม่ถูกย้ายเข้า และถ้าไม่ปลดผู้ส่งจะยังบังคับส่งค้างอยู่]";
+        console.log(
+          `  ${kind.padEnd(8)} "${target.name}" ${tag}` +
+            `\n           id ${target.id} · สร้าง ${target.createdAt?.slice(0, 10) ?? "-"} · โพสต์ของตัวเอง ${own.length}`
+        );
+        for (const r of rounds) {
+          console.log(
+            `           · รอบ "${r.label ?? "(ไม่มีชื่อ)"}" ${r.time ?? "--:--"} · ${describeSchedule(r)}` +
+              `\n                 ผู้ส่ง: ${describeSubmitters(r)} · เริ่มใช้ ${r.createdAt?.slice(0, 10) ?? "(ไม่ระบุ)"}`
+          );
+        }
+      });
     }
+
+    // รอบที่ตั้งผู้ส่งแบบไม่ใช่ "รายคน" — สคริปต์ย้ายอ่านรายชื่อออกมาตรง ๆ ไม่ได้
+    // และระบบจริงอาจตีความเป็น "ทุกคนในบริษัท" ซึ่งทำให้ภาระส่งบานปลายโดยไม่ตั้งใจ
+    const nonPeople: string[] = [];
+    for (const t of topics) {
+      if (frequencyOf(t) === null) continue;
+      for (const r of effectiveRounds(t)) {
+        const mode = r.submitters?.mode ?? "(ไม่ระบุ = ทุกคนที่เห็นห้อง)";
+        if (mode !== "people") nonPeople.push(`${t.name} · รอบ "${r.label ?? r.id}" ${r.time ?? ""} · mode=${mode}`);
+      }
+    }
+    console.log(`\n--- รอบที่ผู้ส่งไม่ใช่ "รายคน" (${nonPeople.length}) ---`);
+    if (nonPeople.length === 0) console.log(`  ไม่มี — ทุกรอบระบุรายคนหมด`);
+    for (const line of nonPeople) console.log(`  ⚠ ${line}`);
 
     // --- ห้องต้นทางแยกตามประเภท ---
     for (const kind of ["daily", "weekly", "monthly"] as const) {
