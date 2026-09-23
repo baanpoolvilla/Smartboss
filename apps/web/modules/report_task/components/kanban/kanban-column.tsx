@@ -7,6 +7,7 @@ import { useIsMobile } from "@/modules/report_task/hooks/use-is-mobile";
 import { statusMeta } from "@/modules/report_task/lib/task-meta";
 import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import { chartColors } from "@/modules/report_task/lib/chart-colors";
+import { cn } from "@/modules/report_task/lib/utils";
 import type { Task, TaskStatus } from "@/modules/report_task/types";
 import type { LucideIcon } from "lucide-react";
 
@@ -141,7 +142,23 @@ export function KanbanColumn({
       // lane sitting side-by-side with the others.
       className="flex h-full min-h-0 flex-1 basis-full min-w-full max-w-full sm:basis-[300px] sm:min-w-[280px] sm:max-w-[400px] shrink-0 flex-col snap-center sm:snap-none transition-shadow duration-500"
     >
-      <div className="shrink-0 rounded-xl bg-white border border-[var(--line)] shadow-[0_1px_2px_rgba(16,24,40,0.04)] px-3.5 py-3 mb-3">
+      {(() => {
+        // ทั้งการ์ดหัวคอลัมน์กดได้เลยตอนมี onHeaderClick (คนดูเรื่องผู้รับผิดชอบ/
+        // แผนก) — เดิมกดได้แค่ตรงชื่อเป็นตัวหนังสือเล็กๆ เท่านั้น เจอเป้าหมาย
+        // ยากไป ("ตอนนี้มันกดได้แค่ตรงชื่ออะ") จึงย้ายพฤติกรรมคลิกมาไว้ที่การ์ด
+        // ทั้งใบแทน — ไม่มีปุ่ม/ลิงก์อื่นซ้อนอยู่ข้างในการ์ดนี้เลย จึงสลับทั้ง
+        // การ์ดเป็น <button> ได้อย่างปลอดภัย (ไม่ใช่ interactive ซ้อน interactive)
+        const HeaderTag = onHeaderClick ? "button" : "div";
+        return (
+          <HeaderTag
+            type={onHeaderClick ? "button" : undefined}
+            onClick={onHeaderClick}
+            title={onHeaderClick ? (headerClickTitle ?? "ดูงานของคนนี้แยกตามหัวข้อโปรเจค") : undefined}
+            className={cn(
+              "shrink-0 w-full rounded-xl bg-white border border-[var(--line)] shadow-[0_1px_2px_rgba(16,24,40,0.04)] px-3.5 py-3 mb-3 text-left",
+              onHeaderClick && "cursor-pointer transition-colors hover:border-[var(--brand-green)] hover:bg-[color-mix(in_srgb,var(--brand-green)_4%,white)]"
+            )}
+          >
         <div className="flex items-center gap-2.5">
           {Icon && (
             <span
@@ -153,18 +170,7 @@ export function KanbanColumn({
           )}
           {/* จุดสี — a second, plainer color cue beyond the icon chip, right against the label. */}
           <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: accent }} />
-          {onHeaderClick ? (
-            <button
-              type="button"
-              onClick={onHeaderClick}
-              className="text-sm font-semibold truncate tracking-tight text-left hover:underline underline-offset-2 cursor-pointer"
-              title={headerClickTitle ?? "ดูงานของคนนี้แยกตามหัวข้อโปรเจค"}
-            >
-              {column.label}
-            </button>
-          ) : (
-            <h3 className="text-sm font-semibold truncate tracking-tight">{column.label}</h3>
-          )}
+          <h3 className="text-sm font-semibold truncate tracking-tight">{column.label}</h3>
 
           <span
             className="ml-auto text-[11px] font-semibold rounded-full h-5 min-w-5 px-1.5 flex items-center justify-center tabular-nums shrink-0"
@@ -246,7 +252,9 @@ export function KanbanColumn({
             )}
           </div>
         </div>
-      </div>
+          </HeaderTag>
+        );
+      })()}
 
       <div
         // Every column shares the exact same surface; columns are told

@@ -223,7 +223,7 @@ export function DepartmentTopicsBoard({
         />
       ) : (
         <>
-          <div className="relative flex-1">
+          <div className="relative min-h-0 flex-1">
             {canScrollLeft && (
               <>
                 <div className="pointer-events-none absolute top-0 left-0 z-10 h-24 w-10 bg-gradient-to-r from-[var(--bg)] to-transparent" />
@@ -255,7 +255,7 @@ export function DepartmentTopicsBoard({
               onPointerUp={endPan}
               onPointerCancel={endPan}
               className={cn(
-                "flex gap-4 overflow-x-auto pb-4 -mx-1 px-1",
+                "flex h-full items-stretch gap-4 overflow-x-auto pb-4 -mx-1 px-1",
                 isPanning ? "cursor-grabbing select-none" : "cursor-grab"
               )}
             >
@@ -265,7 +265,7 @@ export function DepartmentTopicsBoard({
                 count: column.tasks.filter((t) => bucketOf(t) === b.key).length,
               }));
               return (
-                <div key={column.id} className="flex flex-col flex-1 basis-[300px] min-w-[280px] max-w-[400px] shrink-0">
+                <div key={column.id} className="flex h-full min-h-0 flex-col flex-1 basis-[300px] min-w-[280px] max-w-[400px] shrink-0">
                   <div className="rounded-xl bg-white border border-[var(--line)] shadow-[0_1px_2px_rgba(16,24,40,0.04)] px-3.5 py-3 mb-3">
                     <div className="flex items-center gap-2.5">
                       <span className="h-7 w-7 rounded-lg flex items-center justify-center shrink-0 bg-[var(--accent)] text-[var(--brand-green-dark)]">
@@ -303,7 +303,7 @@ export function DepartmentTopicsBoard({
                     </div>
                   </div>
 
-                  <div className="flex-1 flex flex-col gap-3 p-2.5 rounded-xl min-h-[200px] bg-[var(--bg-soft)]/50">
+                  <div className="flex-1 flex min-h-[200px] flex-col gap-3 overflow-y-auto rounded-xl p-2.5 bg-[var(--bg-soft)]/50">
                     {column.tasks.map((t) => (
                       <TaskCard key={t.id} task={t} onOpen={onOpenTask} />
                     ))}
