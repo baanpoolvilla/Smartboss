@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ReportCard } from "@/modules/report_task/components/report-feed/report-card";
 import { DaySeparator } from "@/modules/report_task/components/report-feed/report-day-separator";
 import { reportDayLabel } from "@/modules/report_task/components/report-feed/report-day-label";
@@ -13,6 +13,10 @@ import { presetRange } from "@/modules/report_task/lib/date-filter";
 import { groupByDay } from "@/modules/report_task/lib/format";
 import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { Rows3, SlidersHorizontal, ChevronRight } from "lucide-react";
+
+/** ขนาดชุดที่กางต่อครั้ง — ตรงกับฟีดของห้องเดี่ยว (report-feed.tsx) ให้ความรู้สึกเหมือนกัน */
+const PAGE_SIZE = 25;
+const LOAD_OLDER_PX = 400;
 
 /** "ทีมพัฒนา › รายวัน › รายสัปดาห์" — walks the full parentId chain, not just
  * one hop, now that a sub-topic can itself have sub-topics (up to 3 tiers —
@@ -157,7 +161,43 @@ export function ReportAllPostsFeed({
     });
   }
 
+  // เรนเดอร์ทีละชุดเหมือนฟีดของห้องเดี่ยว (report-feed.tsx) — มุมมองนี้หนักกว่า
+  // ด้วยซ้ำ เพราะรวมโพสต์ของ "ทุกห้องทั้งบริษัท" ไว้ในลิสต์เดียว ยิ่งใช้ไปนาน ๆ
+  // ยิ่งโต ถ้ากางทั้งหมดทีเดียวหน้าจะค้างตอนเปิดเหมือนที่เคยเจอในห้อง Daily-report
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [countedLength, setCountedLength] = useState(items.length);
+  if (items.length !== countedLength) {
+    // โพสต์ใหม่เข้ามา → ขยายหน้าต่างตาม ขอบบนจะได้ไม่เลื่อนหนีสิ่งที่กำลังอ่าน
+    // ลิสต์หดเยอะ (เปลี่ยนตัวกรอง/ช่วงเวลา) → เริ่มนับชุดใหม่จากล่าสุด
+    if (items.length > countedLength) setVisibleCount((c) => c + (items.length - countedLength));
+    else if (countedLength - items.length > PAGE_SIZE) setVisibleCount(PAGE_SIZE);
+    setCountedLength(items.length);
+  }
+  const olderCount = Math.max(0, items.length - visibleCount);
+  const visibleItems = olderCount > 0 ? items.slice(olderCount) : items;
+
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // ต่อชุดเก่าแล้วเนื้อหาด้านบนงอกขึ้นมา — จำระยะห่างจากก้นฟีดไว้ก่อน แล้วเลื่อน
+  // กลับมาที่ระยะเดิมหลังวาดเสร็จ สายตาจึงค้างอยู่ที่โพสต์เดิม ไม่กระโดด
+  const anchorFromBottomRef = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    const anchor = anchorFromBottomRef.current;
+    if (!el || anchor == null) return;
+    el.scrollTop = el.scrollHeight - anchor;
+    anchorFromBottomRef.current = null;
+  }, [visibleCount]);
+
+  function handleScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (el.scrollTop < LOAD_OLDER_PX && olderCount > 0 && anchorFromBottomRef.current == null) {
+      anchorFromBottomRef.current = el.scrollHeight - el.scrollTop;
+      setVisibleCount((n) => n + PAGE_SIZE);
+    }
+  }
+
   // Lands on the newest post (bottom of the list) on open, same as a single
   // room's feed — otherwise "newest at the bottom" would mean opening this
   // view always shows the oldest post in the whole company first. Re-runs
@@ -295,6 +335,7 @@ export function ReportAllPostsFeed({
       ) : (
         <div
           ref={scrollRef}
+          onScroll={handleScroll}
           className="flex-1 overflow-y-auto bg-[var(--bg-soft)] py-3 scroll-pt-4"
         >
           {/* Full width, not capped — see report-feed.tsx's own comment on
@@ -302,7 +343,12 @@ export function ReportAllPostsFeed({
               Tinted ground + space-y-3 between cards, same as report-feed.tsx
               — each post is its own bordered card now, not a flat row. */}
           <div className="space-y-6 px-2 sm:px-3">
-            {groupByDay(items, (p) => p.createdAt).map((group) => (
+            {olderCount > 0 && (
+              <p className="py-2 text-center text-xs text-[var(--ink-soft)]">
+                เลื่อนขึ้นเพื่อดูโพสต์เก่ากว่านี้ · เหลืออีก {olderCount} โพสต์
+              </p>
+            )}
+            {groupByDay(visibleItems, (p) => p.createdAt).map((group) => (
               <div key={group.key} className="space-y-3">
                 <DaySeparator label={reportDayLabel(group.label)} />
                 {group.items.map((p) => {

@@ -334,7 +334,12 @@ function ReportFeedPageInner() {
     set("unread", filters.unreadOnly ? "1" : null);
     set("image", filters.hasImageOnly ? "1" : null);
     set("saved", filters.savedOnly ? "1" : null);
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    // history.replaceState ไม่ใช่ router.replace — ตรงนี้แค่ "จำค่าไว้ใน URL"
+    // ให้รีเฟรช/แชร์ลิงก์แล้วตัวกรองยังอยู่ ไม่ได้ต้องการนำทางไปไหน แต่
+    // router.replace ของ App Router ถือเป็นการนำทางจริง มันเลยรีเรนเดอร์ทั้ง
+    // route ทุกครั้งที่ติ๊กช่องเดียว หน้าค้างไปแวบหนึ่งทุกคลิก ("เวลาติ๊กตัวกรอง
+    // แล้วค้างไปแป๊บนึง") — เปลี่ยน URL ตรง ๆ แบบนี้ไม่มีค่าใช้จ่ายอะไรเลย
+    window.history.replaceState(null, "", `${pathname}?${params.toString()}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
@@ -388,7 +393,9 @@ function ReportFeedPageInner() {
     if (!activeId) return;
     const params = new URLSearchParams(searchParams.toString());
     params.set("topic", activeId);
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    // จำห้องที่เปิดไว้ใน URL เฉย ๆ เหมือนตัวกรองด้านบน — ไม่ใช่การนำทาง จึงไม่
+    // ควรจ่ายค่ารีเรนเดอร์ทั้ง route ทุกครั้งที่สลับห้อง
+    window.history.replaceState(null, "", `${pathname}?${params.toString()}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
 
