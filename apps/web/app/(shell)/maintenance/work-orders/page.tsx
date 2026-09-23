@@ -6,6 +6,7 @@ import {
   listWorkOrders,
   workOrderIdsWithExpenses,
 } from "@/modules/maintenance/data/work-orders";
+import { workOrderAccess } from "@/modules/maintenance/data/work-order-access";
 import {
   listProperties,
   propertyCategoryMap,
@@ -42,8 +43,11 @@ export default async function WorkOrdersPage({
   const orgId = session.orgId;
   const { propertyId, filter } = await searchParams;
 
-  const seeAll = hasPermission(session, MAINT_PERMS.workorderManage);
   const canCreate = hasPermission(session, MAINT_PERMS.workorderManage);
+  // ใครเห็นใบไหน — กติกากลางอยู่ที่ data/work-order-access.ts (หน้ารายละเอียด
+  // ใช้ตัวเดียวกัน) ผู้ดูแลบ้านต้องรู้ก่อนว่าดูแลบ้านหลังไหนบ้าง จึงต้อง await
+  // ก่อนจะ query ใบงาน
+  const access = await workOrderAccess(session);
 
   const [orders, properties, expenseSet, propCats] = await Promise.all([
     listWorkOrders(orgId, {
@@ -51,7 +55,7 @@ export default async function WorkOrdersPage({
       priority: filter === "urgent" ? "urgent" : undefined,
       statuses: filter === "urgent" ? ["open", "in_progress"] : undefined,
       createdToday: filter === "today" ? true : undefined,
-      restrictUserId: seeAll ? undefined : session.userId,
+      access,
     }),
     listProperties(orgId),
     workOrderIdsWithExpenses(orgId),

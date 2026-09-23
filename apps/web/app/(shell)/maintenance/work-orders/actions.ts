@@ -19,6 +19,10 @@ import {
   propertyCaretaker,
 } from "@/modules/maintenance/data/notify";
 import { getProperty } from "@/modules/maintenance/data/properties";
+import {
+  workOrderAccess,
+  canSeeWorkOrder,
+} from "@/modules/maintenance/data/work-order-access";
 import { fmtThaiDate } from "@/modules/maintenance/lib/format";
 import { putFile, putFiles } from "@/modules/maintenance/lib/storage";
 import { createUploadLink } from "@/modules/maintenance/data/external-upload";
@@ -144,6 +148,11 @@ export async function updateStatusAction(formData: FormData) {
   const wo = await getWorkOrder(s.orgId, id);
   if (!wo) return;
 
+  // เห็นใบนี้ไม่ได้ ก็แตะไม่ได้ — สิทธิ์ workorder.manage บอกแค่ว่า "จัดการ
+  // ใบงานเป็น" ไม่ได้แปลว่าเป็นเจ้าของทุกใบในบริษัท (ดู data/work-order-access.ts)
+  if (!canSeeWorkOrder(await workOrderAccess(s), wo)) {
+    throw new Error("ไม่มีสิทธิ์เปลี่ยนสถานะใบงานนี้");
+  }
   const canManage = hasPermission(s, MAINT_PERMS.workorderManage);
   const isOwnJob = wo.assignedTo === s.userId || wo.createdBy === s.userId;
   const canCompleteOwn =
@@ -226,6 +235,9 @@ export async function completeWorkOrderAction(formData: FormData) {
   const wo = await getWorkOrder(s.orgId, id);
   if (!wo) return;
 
+  if (!canSeeWorkOrder(await workOrderAccess(s), wo)) {
+    throw new Error("ไม่มีสิทธิ์ปิดใบงานนี้");
+  }
   const canManage = hasPermission(s, MAINT_PERMS.workorderManage);
   const isOwnJob = wo.assignedTo === s.userId || wo.createdBy === s.userId;
   const canCompleteOwn =
@@ -265,6 +277,12 @@ export async function completeWorkOrderAction(formData: FormData) {
 export async function addCommentAction(workOrderId: string, formData: FormData) {
   const s = await requireOrg();
   if (!hasPermission(s, MAINT_PERMS.workorderView)) return;
+  // อ่านใบงาน (และเช็คว่าเห็นใบนี้ได้จริง) **ก่อน** เขียนคอมเมนต์ — ของเดิม
+  // เขียนก่อนแล้วค่อยโหลดใบงานเพื่อส่งแจ้งเตือน ⇒ ใครก็ตามที่รู้ id ยิงคอมเมนต์
+  // ใส่ใบงานที่ตัวเองเปิดดูไม่ได้ได้เลย
+  const wo = await getWorkOrder(s.orgId, workOrderId);
+  if (!wo) return;
+  if (!canSeeWorkOrder(await workOrderAccess(s), wo)) return;
   const content = String(formData.get("content") ?? "").trim();
   const file = formData.get("image");
   const imageUrl =
@@ -282,8 +300,7 @@ export async function addCommentAction(workOrderId: string, formData: FormData) 
   );
 
   // แจ้งผู้เกี่ยวข้องเมื่อมีความคิดเห็นใหม่ (ยกเว้นคนที่พิมพ์เอง)
-  const wo = await getWorkOrder(s.orgId, workOrderId);
-  if (wo) {
+  {
     const targets = new Set<string>([
       ...(wo.assignedTo ? [wo.assignedTo] : []),
       ...(wo.createdBy ? [wo.createdBy] : []),
@@ -309,6 +326,7 @@ export async function updateCompletionNotesAction(
   const s = await requireOrg();
   const wo = await getWorkOrder(s.orgId, workOrderId);
   if (!wo) return;
+  if (!canSeeWorkOrder(await workOrderAccess(s), wo)) return;
   const canManage = hasPermission(s, MAINT_PERMS.workorderManage);
   const isOwnJob = wo.assignedTo === s.userId || wo.createdBy === s.userId;
   if (!canManage && !isOwnJob) return;
@@ -324,6 +342,10 @@ export async function generateUploadLinkAction(formData: FormData) {
   }
   const id = String(formData.get("id") ?? "");
   if (!id) return;
+  const wo = await getWorkOrder(s.orgId, id);
+  if (!wo || !canSeeWorkOrder(await workOrderAccess(s), wo)) {
+    throw new Error("ไม่มีสิทธิ์");
+  }
   await createUploadLink(s.orgId, id);
   revalidatePath(`/maintenance/work-orders/${id}`);
 }

@@ -19,6 +19,7 @@ import {
   recentWorkOrders,
 } from "@/modules/maintenance/data/dashboard";
 import { listExpensesForMonth } from "@/modules/maintenance/data/expenses";
+import { workOrderAccess } from "@/modules/maintenance/data/work-order-access";
 import {
   listProperties,
   propertyCategoryMap,
@@ -95,11 +96,13 @@ export default async function MaintenanceDashboardPage() {
   const orgId = session.orgId;
 
   const now = new Date();
+  // ใบงานบนแดชบอร์ดกรองด้วยกติกาเดียวกับหน้ารายการ (data/work-order-access.ts)
+  const access = await workOrderAccess(session);
   const [stats, noExpense, recent, properties, propCats, monthExpenses] =
     await Promise.all([
-      dashboardStats(orgId),
-      noExpenseWorkOrderCount(orgId),
-      recentWorkOrders(orgId, 5),
+      dashboardStats(orgId, access),
+      noExpenseWorkOrderCount(orgId, access),
+      recentWorkOrders(orgId, access, 5),
       listProperties(orgId),
       propertyCategoryMap(orgId),
       listExpensesForMonth(orgId, now.getFullYear(), now.getMonth() + 1),

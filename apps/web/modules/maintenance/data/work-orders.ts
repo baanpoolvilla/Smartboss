@@ -2,6 +2,10 @@ import "server-only";
 import { prisma, Prisma } from "@smartboss/database";
 
 import { nextWorkOrderCode } from "@/lib/document-code";
+import {
+  workOrderVisibilityWhere,
+  type WorkOrderAccess,
+} from "@/modules/maintenance/data/work-order-access";
 
 export interface WorkOrderFilters {
   status?: string;
@@ -10,8 +14,12 @@ export interface WorkOrderFilters {
   assignedTo?: string;
   priority?: string;
   createdToday?: boolean;
-  /** จำกัดให้เห็นเฉพาะงานของ user นี้ (ช่าง: งานที่ได้รับหรือสร้างเอง) */
-  restrictUserId?: string;
+  /**
+   * จำกัดให้เห็นเฉพาะงานที่คนคนนี้เกี่ยวข้องจริง — ได้รับมอบหมาย / สร้างเอง /
+   * ถูก CC / เป็นผู้ดูแลบ้านของงานนั้น (ดู data/work-order-access.ts)
+   * ไม่ส่งมา = ไม่กรอง ⇒ ทุกที่ที่แสดงใบงานให้คนดู **ต้องส่งค่านี้เสมอ**
+   */
+  access?: WorkOrderAccess;
 }
 
 function buildWhere(orgId: string, f: WorkOrderFilters): Prisma.WorkOrderWhereInput {
@@ -39,14 +47,8 @@ function buildWhere(orgId: string, f: WorkOrderFilters): Prisma.WorkOrderWhereIn
     and.push({ createdAt: { gte: start, lt: end } });
   }
 
-  if (f.restrictUserId) {
-    and.push({
-      OR: [
-        { assignedTo: f.restrictUserId },
-        { createdBy: f.restrictUserId },
-      ],
-    });
-  }
+  const visibility = f.access ? workOrderVisibilityWhere(f.access) : null;
+  if (visibility) and.push(visibility);
 
   return { AND: and };
 }

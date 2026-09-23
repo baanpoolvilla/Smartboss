@@ -22,6 +22,10 @@ import {
 } from "@/modules/maintenance/data/equipment-returns";
 import { createExpense } from "@/modules/maintenance/data/expenses";
 import { getWorkOrder } from "@/modules/maintenance/data/work-orders";
+import {
+  workOrderAccess,
+  canSeeWorkOrder,
+} from "@/modules/maintenance/data/work-order-access";
 import { notifyUser } from "@/modules/maintenance/data/notify";
 import { putFile, putFiles, deleteFiles } from "@/modules/maintenance/lib/storage";
 import {
@@ -84,12 +88,7 @@ export async function createPoAction(formData: FormData) {
   const woId = String(formData.get("workOrderId") ?? "");
   const wo = woId ? await getWorkOrder(s.orgId, woId) : null;
   const linkedWo =
-    wo &&
-    (hasPermission(s, MAINT_PERMS.workorderManage) ||
-      wo.assignedTo === s.userId ||
-      wo.createdBy === s.userId)
-      ? wo
-      : null;
+    wo && canSeeWorkOrder(await workOrderAccess(s), wo) ? wo : null;
 
   const isEmergency = formData.get("isEmergency") === "1";
   const wantsPo = formData.get("openAsPo") === "1";

@@ -28,6 +28,10 @@ import {
   listWorkOrderComments,
 } from "@/modules/maintenance/data/work-orders";
 import { listProperties } from "@/modules/maintenance/data/properties";
+import {
+  workOrderAccess,
+  canSeeWorkOrder,
+} from "@/modules/maintenance/data/work-order-access";
 import { getAsset } from "@/modules/maintenance/data/assets";
 import { userNameMap } from "@/modules/maintenance/data/users";
 import { listExpenses } from "@/modules/maintenance/data/expenses";
@@ -92,11 +96,15 @@ export default async function WorkOrderDetailPage({
   const wo = await getWorkOrder(orgId, id);
   if (!wo) notFound();
 
-  // row-level: ช่างเห็นเฉพาะงานตัวเอง
+  // row-level: เห็นเฉพาะใบที่ตัวเองเกี่ยวข้อง (คนเปิด/ผู้รับมอบหมาย/CC/
+  // ผู้ดูแลบ้านหลังนั้น) — กติกาเดียวกับที่หน้ารายการใช้กรอง ไม่งั้นจะเกิด
+  // "ไม่เห็นในลิสต์ แต่เปิดลิงก์ตรงเข้ามาดูได้"
+  const access = await workOrderAccess(session);
+  if (!canSeeWorkOrder(access, wo)) redirect("/maintenance/work-orders");
+
   const canManage = hasPermission(session, MAINT_PERMS.workorderManage);
   const isOwnJob =
     wo.assignedTo === session.userId || wo.createdBy === session.userId;
-  if (!canManage && !isOwnJob) redirect("/maintenance/work-orders");
 
   const canChangeStatus =
     canManage ||

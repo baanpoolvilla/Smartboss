@@ -5,6 +5,10 @@ import { listProperties, getProperty } from "@/modules/maintenance/data/properti
 import { listOrgUsers } from "@/modules/maintenance/data/users";
 import { getWorkOrder } from "@/modules/maintenance/data/work-orders";
 import {
+  workOrderAccess,
+  canSeeWorkOrder,
+} from "@/modules/maintenance/data/work-order-access";
+import {
   PoForm,
   type LinkedWorkOrder,
 } from "@/modules/maintenance/components/po-form";
@@ -39,14 +43,8 @@ export default async function NewPoPage({
    * (ช่างเห็นเฉพาะงานที่ได้รับมอบหรือสร้างเอง) ถ้าไม่ผ่านก็แค่ไม่ผูก
    * ไม่ต้องเด้งออก เพราะเปิด PR ลอย ๆ ยังเป็นสิ่งที่เขาทำได้อยู่แล้ว
    */
-  const canSeeAllWo = hasPermission(session, MAINT_PERMS.workorderManage);
   const linkable =
-    wo &&
-    (canSeeAllWo ||
-      wo.assignedTo === session.userId ||
-      wo.createdBy === session.userId)
-      ? wo
-      : null;
+    wo && canSeeWorkOrder(await workOrderAccess(session), wo) ? wo : null;
 
   const woProperty = linkable
     ? await getProperty(session.orgId, linkable.propertyId)
