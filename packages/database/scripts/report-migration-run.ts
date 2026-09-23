@@ -107,10 +107,26 @@ function mergeTargetOf(t: TopicLike): Frequency | null {
   return null;
 }
 
-/** คีย์จับกลุ่มรอบ "เวลาเดียวกัน ตารางวันเดียวกัน" = รอบเดียวกันหลังรวมห้อง */
+/** คีย์ตาราง "เวลาเดียวกัน ตารางวันเดียวกัน" — ใช้จับคู่กับรอบเดิมที่มีอยู่แล้วในห้องรวม */
 function scheduleKey(r: RoundLike): string {
   const days = r.dayOfMonth ? `m${r.dayOfMonth}` : (r.weekdays ?? []).slice().sort().join(",") || "all";
   return `${r.time ?? "--:--"}|${days}`;
+}
+
+/**
+ * คีย์จับกลุ่มรอบตอนรวมห้อง = ตาราง + "วันเริ่มใช้"
+ *
+ * จงใจแยกตามวันเริ่มด้วย ไม่ยุบรวมทุกห้องที่เวลาตรงกันเป็นรอบเดียว เพราะแต่ละ
+ * ห้องเริ่มใช้รอบคนละวัน (hk เย็นเริ่ม 15 ก.ย. แต่ sale เริ่ม 3 ก.ย. ฯลฯ) ถ้า
+ * ยุบเป็นรอบเดียวแล้วใช้วันเก่าสุด คนที่เพิ่งเริ่มทีหลังจะโดนนับ "ขาดส่ง"
+ * ย้อนหลังในช่วงที่ตัวเองยังไม่มีภาระต้องส่งด้วยซ้ำ (ประมาณ 29 วัน-คนจาก
+ * ข้อมูลจริง) — ซึ่งไปหักคะแนนคนจริง ๆ ไม่ใช่แค่เลขในแดชบอร์ด
+ *
+ * ผลคือห้องรวมจะมีหลายรอบที่เวลาเดียวกันแต่คนละกลุ่มคน/คนละวันเริ่ม ซึ่งถูก
+ * ต้องตามประวัติจริง — ยุบรวมทีหลังได้เสมอเมื่อประวัติช่วงนั้นผ่านไปแล้ว
+ */
+function groupKey(r: RoundLike): string {
+  return `${scheduleKey(r)}|${r.createdAt?.slice(0, 10) ?? "always"}`;
 }
 
 /** รายชื่อผู้ส่งของรอบ — เฉพาะ mode "people" ที่ระบุรายคนตรง ๆ เท่านั้นที่กาง
@@ -188,15 +204,18 @@ async function main() {
 
     for (const kind of ["daily", "weekly", "monthly"] as Frequency[]) {
       const target = targets.get(kind)!;
-      const sources = topics.filter((t) => frequencyOf(t) === kind && t.id !== target.id && !t.isCategory);
+      // กันห้องที่ "ชื่อเป็นห้องรวม" ออกจากฝั่งต้นทางทั้งหมด ไม่ใช่แค่ห้องที่ถูก
+      // เลือกเป็นเป้าหมาย — ข้อมูลจริงมีห้องชื่อ daily-report ซ้ำอีกห้อง (ว่างเปล่า)
+      // ถ้าไม่กัน มันจะโผล่มาเป็นต้นทางและลากรอบเปล่า ๆ เข้ามาปนในแผน
+      const sources = topics.filter((t) => frequencyOf(t) === kind && mergeTargetOf(t) === null && !t.isCategory);
       sourcesByFreq.set(kind, sources);
       movesByFreq.set(kind, posts.filter((p) => sources.some((s) => s.id === p.topicId)));
 
-      // จับกลุ่มรอบของห้องต้นทางตาม เวลา+ตารางวัน
+      // จับกลุ่มรอบของห้องต้นทางตาม เวลา + ตารางวัน + วันเริ่มใช้ (ดู groupKey)
       const groups = new Map<string, { rounds: { topic: TopicLike; round: RoundLike }[] }>();
       for (const s of sources) {
         for (const r of effectiveRounds(s)) {
-          const key = scheduleKey(r);
+          const key = groupKey(r);
           const g = groups.get(key) ?? { rounds: [] };
           g.rounds.push({ topic: s, round: r });
           groups.set(key, g);
@@ -204,18 +223,20 @@ async function main() {
       }
 
       const existingTargetRounds = effectiveRounds(target);
+      const usedExistingIds = new Set<string>();
       const planned: PlannedRound[] = [];
 
       for (const [key, g] of groups) {
         const first = g.rounds[0]!.round;
-        // รายชื่อผู้ส่ง = รวมของทุกห้องที่มีรอบเวลานี้
+        // รายชื่อผู้ส่ง = รวมของทุกห้องในกลุ่มนี้ (เวลา+ตาราง+วันเริ่ม ตรงกันหมด)
         const people = new Set<string>();
         for (const { round } of g.rounds) for (const id of peopleOf(round) ?? []) people.add(id);
-        // วันเริ่มใช้ = เก่าที่สุดในกลุ่ม (รอบไหนไม่ได้ตั้ง = ย้อนได้ไม่จำกัดอยู่แล้ว)
-        const createdAts = g.rounds.map(({ round }) => round.createdAt).filter((x): x is string => !!x);
-        const createdAt = createdAts.length === g.rounds.length ? createdAts.slice().sort()[0]! : "";
+        // ทุกรอบในกลุ่มมีวันเริ่มเดียวกันอยู่แล้ว (เป็นส่วนหนึ่งของคีย์)
+        const createdAt = first.createdAt ?? "";
         // ใช้ id ของรอบเดิมในห้องรวมถ้าตารางตรงกัน — โพสต์เดิมของห้องรวมจะได้ไม่หลุด
-        const reuse = existingTargetRounds.find((r) => scheduleKey(r) === key);
+        // ใช้ซ้ำได้รอบเดียวเท่านั้น กลุ่มที่เหลือของเวลาเดียวกันต้องเป็นรอบใหม่
+        const reuse = existingTargetRounds.find((r) => scheduleKey(r) === scheduleKey(first) && !usedExistingIds.has(r.id));
+        if (reuse) usedExistingIds.add(reuse.id);
 
         planned.push({
           key,
@@ -233,6 +254,18 @@ async function main() {
           })),
           reusedExistingId: !!reuse,
         });
+      }
+
+      // รอบที่เวลาเดียวกันแต่คนละกลุ่มวันเริ่ม จะมีหลายอันชื่อซ้ำกัน — ต่อท้าย
+      // ด้วยวันเริ่มให้แยกออกจากกันในหน้าตั้งค่า ไม่งั้นเห็น "Daily-report-Evening"
+      // 4 อันเรียงกันแล้วแยกไม่ออกว่าอันไหนของใคร
+      const labelCount = new Map<string, number>();
+      for (const p of planned) labelCount.set(p.label, (labelCount.get(p.label) ?? 0) + 1);
+      for (const p of planned) {
+        if ((labelCount.get(p.label) ?? 0) > 1 && p.createdAt) {
+          const d = new Date(p.createdAt);
+          p.label = `${p.label} · เริ่ม ${d.getDate()}/${d.getMonth() + 1}`;
+        }
       }
 
       // --morning-all : รอบที่ไม่ใช่รอบสุดท้ายของวัน (เช้า) ให้ใส่ทุกคนที่ส่งประเภทนี้
