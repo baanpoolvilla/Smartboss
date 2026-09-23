@@ -39,6 +39,19 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 const dryRun = process.argv.includes("--dry-run");
 const morningAll = process.argv.includes("--morning-all");
+/**
+ * --backdate = รอบในห้องรวมย้อนไปมีผลตั้งแต่วันที่รอบต้นทางเริ่มใช้ ทำให้ป้าย
+ * ตรงเวลา/สาย และสถิติย้อนหลังของเดือนนี้ยังอยู่ครบ แลกกับการที่รอบเวลาเดียวกัน
+ * ต้องแตกเป็นหลายรอบตามวันเริ่มของแต่ละห้อง (ไม่งั้นคนที่เริ่มทีหลังโดนนับ
+ * ขาดส่งย้อนหลังในช่วงที่ตัวเองยังไม่มีภาระ)
+ *
+ * ค่าเริ่มต้น (ไม่ใส่ flag) = รอบเริ่มนับ "วันนี้" ตามที่เจ้าของระบบเลือก
+ * ("ไม่ต้องซีเรียสรอบ ให้นับตั้งแต่วันที่ตั้งเลย ตัดปัญหา") — รอบสะอาด
+ * ไม่มีใครโดนหักย้อนหลัง แลกกับสถิติย้อนหลังของเดือนนี้ที่จะเริ่มนับใหม่
+ * (ตัวโพสต์ยังอยู่ครบทุกอัน หายเฉพาะตัวเลขสรุปที่คำนวณจากมัน)
+ */
+const backdate = process.argv.includes("--backdate");
+const TODAY_ISO = new Date().toISOString();
 
 type Frequency = "daily" | "weekly" | "monthly";
 
@@ -126,6 +139,9 @@ function scheduleKey(r: RoundLike): string {
  * ต้องตามประวัติจริง — ยุบรวมทีหลังได้เสมอเมื่อประวัติช่วงนั้นผ่านไปแล้ว
  */
 function groupKey(r: RoundLike): string {
+  // โหมดเริ่มนับวันนี้: ทุกรอบเริ่มพร้อมกันหมด วันเริ่มเดิมไม่มีความหมายแล้ว
+  // จับกลุ่มแค่ตาราง -> ได้รอบสะอาด 1 รอบต่อ 1 เวลา
+  if (!backdate) return scheduleKey(r);
   return `${scheduleKey(r)}|${r.createdAt?.slice(0, 10) ?? "always"}`;
 }
 
@@ -183,7 +199,12 @@ async function main() {
 
     console.log(`\n${"=".repeat(78)}`);
     console.log(`ORG ${store.orgId}   ${dryRun ? "[DRY-RUN — ยังไม่เขียนอะไร]" : "[เขียนจริง]"}`);
-    if (morningAll) console.log(`โหมด --morning-all : ใส่ทุกคนในรอบเช้า (ย้อนหลังด้วย)`);
+    console.log(
+      backdate
+        ? `โหมด --backdate : รอบย้อนไปมีผลตามวันเริ่มเดิมของแต่ละห้อง (ป้าย+สถิติย้อนหลังอยู่ครบ)`
+        : `โหมดปกติ : รอบเริ่มนับวันนี้ (${TODAY_ISO.slice(0, 10)}) — โพสต์เก่าอยู่ครบแต่ไม่มีป้าย/สถิติย้อนหลัง`
+    );
+    if (morningAll) console.log(`โหมด --morning-all : ใส่ทุกคนในรอบเช้า`);
     console.log("=".repeat(78));
 
     const targets = new Map<Frequency, TopicLike>();
@@ -231,8 +252,9 @@ async function main() {
         // รายชื่อผู้ส่ง = รวมของทุกห้องในกลุ่มนี้ (เวลา+ตาราง+วันเริ่ม ตรงกันหมด)
         const people = new Set<string>();
         for (const { round } of g.rounds) for (const id of peopleOf(round) ?? []) people.add(id);
-        // ทุกรอบในกลุ่มมีวันเริ่มเดียวกันอยู่แล้ว (เป็นส่วนหนึ่งของคีย์)
-        const createdAt = first.createdAt ?? "";
+        // โหมดย้อนหลัง: ทุกรอบในกลุ่มมีวันเริ่มเดียวกันอยู่แล้ว (เป็นส่วนหนึ่งของคีย์)
+        // โหมดปกติ: เริ่มนับวันนี้ทั้งหมด ไม่ตัดสินย้อนหลังเลยสักวัน
+        const createdAt = backdate ? (first.createdAt ?? "") : TODAY_ISO;
         // ใช้ id ของรอบเดิมในห้องรวมถ้าตารางตรงกัน — โพสต์เดิมของห้องรวมจะได้ไม่หลุด
         // ใช้ซ้ำได้รอบเดียวเท่านั้น กลุ่มที่เหลือของเวลาเดียวกันต้องเป็นรอบใหม่
         const reuse = existingTargetRounds.find((r) => scheduleKey(r) === scheduleKey(first) && !usedExistingIds.has(r.id));
@@ -262,7 +284,7 @@ async function main() {
       const labelCount = new Map<string, number>();
       for (const p of planned) labelCount.set(p.label, (labelCount.get(p.label) ?? 0) + 1);
       for (const p of planned) {
-        if ((labelCount.get(p.label) ?? 0) > 1 && p.createdAt) {
+        if (backdate && (labelCount.get(p.label) ?? 0) > 1 && p.createdAt) {
           const d = new Date(p.createdAt);
           p.label = `${p.label} · เริ่ม ${d.getDate()}/${d.getMonth() + 1}`;
         }
