@@ -51,6 +51,19 @@ const morningAll = process.argv.includes("--morning-all");
  * (ตัวโพสต์ยังอยู่ครบทุกอัน หายเฉพาะตัวเลขสรุปที่คำนวณจากมัน)
  */
 const backdate = process.argv.includes("--backdate");
+/**
+ * --copy-rounds = ให้สคริปต์สร้างรอบในห้องรวมให้เอง โดยลอกเวลา/ตาราง/รายชื่อ
+ * ผู้ส่งมาจากรอบของห้องต้นทาง
+ *
+ * ค่าเริ่มต้น (ไม่ใส่ flag) = ไม่ยุ่งกับรอบเลย ย้ายแต่โพสต์ แล้วปลดผู้ส่งของ
+ * ทุกห้องรายงานให้ว่าง — เจ้าของระบบจะเข้าไปตั้งรอบเองในหน้าจอ ("ผมเพิ่มรอบส่ง
+ * เองและให้จับจากวันนั้นเลย...เรายอมเสียการส่งอะไรรอบส่งอันเก่าแต่ข้อมูลเราอยู่")
+ *
+ * ที่เปลี่ยนมาเป็นค่าเริ่มต้นเพราะการลอกรอบอัตโนมัติคือต้นเหตุของรอบแรกที่ต้อง
+ * ย้อนกลับ: ห้องแต่ละห้องมีรอบ/ผู้ส่ง/วันเริ่มไม่เหมือนกันเลย พอยุบรวมแล้วภาระ
+ * ส่งของแต่ละคนเปลี่ยนไปในแบบที่เดาล่วงหน้าไม่ได้ ปล่อยให้คนตั้งเองชัดเจนกว่า
+ */
+const copyRounds = process.argv.includes("--copy-rounds");
 const TODAY_ISO = new Date().toISOString();
 
 type Frequency = "daily" | "weekly" | "monthly";
@@ -211,18 +224,39 @@ async function main() {
 
     console.log(`\n${"=".repeat(78)}`);
     console.log(`ORG ${store.orgId}   ${dryRun ? "[DRY-RUN — ยังไม่เขียนอะไร]" : "[เขียนจริง]"}`);
-    console.log(
-      backdate
-        ? `โหมด --backdate : รอบย้อนไปมีผลตามวันเริ่มเดิมของแต่ละห้อง (ป้าย+สถิติย้อนหลังอยู่ครบ)`
-        : `โหมดปกติ : รอบเริ่มนับวันนี้ (${TODAY_ISO.slice(0, 10)}) — โพสต์เก่าอยู่ครบแต่ไม่มีป้าย/สถิติย้อนหลัง`
-    );
-    if (morningAll) console.log(`โหมด --morning-all : ใส่ทุกคนในรอบเช้า`);
+    if (!copyRounds) {
+      console.log(`โหมดปกติ : ย้ายแต่โพสต์ — ไม่สร้างรอบให้ และปลดผู้ส่งของทุกห้องรายงานให้ว่าง`);
+      console.log(`           ตั้งรอบเองในหน้าจอหลังย้ายเสร็จ (รอบที่ตั้งวันนี้จะเริ่มนับจากคัทออฟวันนี้)`);
+    } else {
+      console.log(
+        backdate
+          ? `โหมด --copy-rounds --backdate : ลอกรอบมาให้ และย้อนไปมีผลตามวันเริ่มเดิมของแต่ละห้อง`
+          : `โหมด --copy-rounds : ลอกรอบมาให้ โดยเริ่มนับวันนี้ (${TODAY_ISO.slice(0, 10)})`
+      );
+      if (morningAll) console.log(`โหมด --morning-all : ใส่ทุกคนในรอบเช้า`);
+    }
     console.log("=".repeat(78));
 
+    // มีห้องชื่อซ้ำกันจริงในข้อมูล (daily-report / weekly-report / monthly-report
+    // ถูกสร้างซ้ำอีกชุดเมื่อ 22 ก.ย.) — เลือกห้องที่ "มีโพสต์เยอะสุด" เป็นเป้าหมาย
+    // แล้วถ้าเท่ากันเอาห้องที่เก่ากว่า ไม่ใช่เอาห้องแรกที่เจอในอาร์เรย์ ซึ่งขึ้นกับ
+    // ลำดับที่บังเอิญเป็นอยู่ และอาจได้ห้องเปล่าที่เพิ่งสร้างเป็นปลายทางแทน
+    const postCountOf = (id: string) => posts.filter((p) => p.topicId === id).length;
     const targets = new Map<Frequency, TopicLike>();
-    for (const t of topics) {
-      const kind = mergeTargetOf(t);
-      if (kind && !targets.has(kind)) targets.set(kind, t);
+    for (const kind of ["daily", "weekly", "monthly"] as Frequency[]) {
+      const candidates = topics.filter((t) => mergeTargetOf(t) === kind);
+      if (candidates.length === 0) continue;
+      const best = candidates.slice().sort((a, b) => {
+        const diff = postCountOf(b.id) - postCountOf(a.id);
+        if (diff !== 0) return diff;
+        return (a.createdAt ?? "").localeCompare(b.createdAt ?? "");
+      })[0]!;
+      targets.set(kind, best);
+      for (const other of candidates) {
+        if (other.id !== best.id) {
+          console.log(`  หมายเหตุ: ห้อง "${other.name}" (id ${other.id}) ชื่อซ้ำกับห้องรวม — จะไม่ย้ายเข้า และจะถูกปลดผู้ส่งออก`);
+        }
+      }
     }
     // หยุดก่อนถ้ามีรอบที่กางรายชื่อผู้ส่งไม่ได้ — ดู hasUnresolvableSubmitters
     const risky = topics.filter((t) => frequencyOf(t) !== null && !t.isCategory && hasUnresolvableSubmitters(t));
@@ -345,6 +379,20 @@ async function main() {
         if (n > 0) console.log(`     ${String(n).padStart(4)} โพสต์  จาก  ${s.name}`);
       }
 
+      if (!copyRounds) {
+        const existing = effectiveRounds(target);
+        console.log(`\n  รอบส่ง: ไม่แตะ — จะปลดผู้ส่งของรอบที่ห้องนี้มีอยู่ ${existing.length} รอบให้ว่าง`);
+        for (const r of existing) {
+          console.log(`     · "${r.label ?? r.id}" ${r.time ?? "--:--"} · ผู้ส่ง ${(peopleOf(r) ?? []).length} คน -> 0 คน`);
+        }
+        console.log(`     แล้วเข้าไปตั้งรอบใหม่เองในหน้าตั้งค่าห้อง`);
+        const neutralizeCount = sources.reduce((n, s) => n + effectiveRounds(s).length, 0);
+        if (neutralizeCount > 0) {
+          console.log(`\n  รอบของห้องเดิมที่จะถูกปลดผู้ส่งออก (ห้องยังอยู่): ${neutralizeCount} รอบ`);
+        }
+        continue;
+      }
+
       console.log(`\n  รอบที่จะมีในห้องรวม:`);
       for (const p of planned) {
         const sched = p.dayOfMonth
@@ -430,6 +478,13 @@ async function main() {
 
     const nextTopics = topics.map((t) => {
       const planned = plannedByTargetId.get(t.id);
+      if (planned && !copyRounds) {
+        // โหมดปกติ: ไม่สร้างรอบให้ ปลดผู้ส่งของรอบที่ห้องรวมมีอยู่เดิมให้ว่างด้วย
+        // เพื่อให้ห้องเริ่มจากศูนย์จริง ๆ แล้วเจ้าของระบบไปตั้งรอบเองในหน้าจอ
+        // (รอบที่ตั้งวันนี้จะเริ่มนับจากคัทออฟของวันนี้เป็นต้นไป ไม่ย้อนหลัง)
+        const rounds = effectiveRounds(t).map((r) => ({ ...r, submitters: { mode: "people" as const, userIds: [] } }));
+        return { ...t, submissionRounds: rounds };
+      }
       if (planned) {
         return {
           ...t,
