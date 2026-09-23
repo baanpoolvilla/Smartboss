@@ -18,6 +18,7 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canSeeTask } from "@/modules/report_task/lib/permissions";
 import { getDepartment } from "@/modules/report_task/lib/directory";
 import { dueUrgency, sortTasksForDisplay } from "@/modules/report_task/lib/task-flags";
+import { taskDepartmentIdsForBoard } from "@/modules/report_task/lib/task-department";
 import { statusMeta } from "@/modules/report_task/lib/task-meta";
 import { chartColors, statusColors as statusAccent } from "@/modules/report_task/lib/chart-colors";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -45,11 +46,12 @@ function bucketOf(t: Task): (typeof statusBuckets)[number]["key"] {
  * คลิกหัวคอลัมน์ตอนบอร์ดจัดกลุ่มตาม "แผนก" (ดู `?dept=` ใน kanban-board.tsx)
  * ("เลือกก่อนว่าแผนกไหน และพอเลือกก็ filter ว่าแผนกนั้นมีโปรเจคอะไร")
  *
- * งานหนึ่งอาจอยู่ได้หลายแผนกพร้อมกัน (Task.departmentIds เป็น array) — จึง
- * กรองด้วย .includes(departmentId) เหมือนที่ PersonTopicsBoard กรองด้วย
- * assigneeIds.includes(personId) ไม่ใช่ departmentId ตัวแรกเพียงอันเดียว
- * งานที่ครอบหลายแผนกจะโผล่ในบอร์ดของทุกแผนกที่เกี่ยวข้อง สอดคล้องกับที่บอร์ด
- * หลัก groupBy="department" ทำ (ดู kanban-board.tsx's columns)
+ * ใช้ taskDepartmentIdsForBoard แทน t.departmentIds ตรงๆ — ถ้าโปรเจคของงานนั้น
+ * แท็กแผนกของตัวเองไว้แล้ว ยึดตามแผนกของโปรเจค ไม่ใช่แผนกของผู้รับผิดชอบแต่ละคน
+ * (คนที่ถูกยืมตัวมาช่วยโปรเจคแผนกอื่นจะไม่โผล่ในบอร์ดแผนกตัวเอง) งานที่ยังไม่มี
+ * โปรเจค/โปรเจคเก่าที่ยังไม่ได้แท็กแผนก ยังคงกรองด้วย departmentIds เดิม (เป็น
+ * array — อยู่ได้หลายแผนกพร้อมกัน) สอดคล้องกับที่บอร์ดหลัก groupBy="department"
+ * ทำ (ดู kanban-board.tsx's columns + lib/task-department.ts's doc)
  */
 export function DepartmentTopicsBoard({
   departmentId,
@@ -67,7 +69,7 @@ export function DepartmentTopicsBoard({
 
   const columns = useMemo(() => {
     const inDept = allTasks
-      .filter((t) => t.departmentIds.includes(departmentId))
+      .filter((t) => taskDepartmentIdsForBoard(t, topics).includes(departmentId))
       .filter((t) => canSeeTask(t, viewingAsUserId));
 
     const byTopic = new Map<string, Task[]>();

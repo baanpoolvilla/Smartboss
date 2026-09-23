@@ -5,7 +5,7 @@ import { uuid } from "@/modules/report_task/lib/uuid";
 
 interface ProjectTopicStore {
   topics: ProjectTopic[];
-  addTopic: (name: string, color?: string) => string;
+  addTopic: (name: string, color?: string, departmentId?: string) => string;
   removeTopic: (id: string) => void;
   setTopics: (topics: ProjectTopic[]) => void;
 }
@@ -16,9 +16,9 @@ interface ProjectTopicStore {
 // tasks by project.
 export const useProjectTopicStore = create<ProjectTopicStore>()((set) => ({
   topics: [],
-  addTopic: (name, color) => {
+  addTopic: (name, color, departmentId) => {
     const id = `topic-${uuid()}`;
-    set((s) => ({ topics: [...s.topics, { id, name, color: color ?? chartColors.blue }] }));
+    set((s) => ({ topics: [...s.topics, { id, name, color: color ?? chartColors.blue, departmentId }] }));
     return id;
   },
   removeTopic: (id) => set((s) => ({ topics: s.topics.filter((t) => t.id !== id) })),

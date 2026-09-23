@@ -11,6 +11,8 @@ import { statusMeta, priorityMeta, priorityColorHex, taskPriorityOrder, statusIc
 import { matchesTaskFilters } from "@/modules/report_task/lib/task-filter";
 import { useTaskSheetParam } from "@/modules/report_task/hooks/use-task-sheet-param";
 import { statusColors, chartColors } from "@/modules/report_task/lib/chart-colors";
+import { taskDepartmentIdsForBoard } from "@/modules/report_task/lib/task-department";
+import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
 import { cn } from "@/modules/report_task/lib/utils";
 import { KanbanColumn, type BoardColumn } from "./kanban-column";
 import { TaskDetailSheet } from "./task-detail-sheet";
@@ -39,6 +41,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   const setFilters = useTaskStore((s) => s.setFilters);
   const resetFilters = useTaskStore((s) => s.resetFilters);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
+  const projectTopics = useProjectTopicStore((s) => s.topics);
   // A department head sees the whole board; everyone else only sees tasks
   // they're assigned to or created — a coworker's task no longer appears.
   const allTasks = useMemo(
@@ -248,14 +251,21 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
       }));
     }
     if (groupBy === "department") {
-      // งานที่มีหลายแผนก (departmentIds.length > 1) จะโผล่ในคอลัมน์ของทุกแผนกที่เกี่ยวข้อง
-      // — เดียวกับที่ groupBy "assignee" ทำกับงานที่มีผู้รับผิดชอบหลายคน (ดู sharedCount)
+      // งานที่นับว่าอยู่แผนกไหน มาจาก taskDepartmentIdsForBoard ไม่ใช่ departmentIds
+      // ตรงๆ — โปรเจคที่แท็กแผนกของตัวเองไว้แล้ว (ดู doc ของฟังก์ชันนี้) จะยึด
+      // ตามแผนกของโปรเจค ไม่ใช่แผนกของผู้รับผิดชอบแต่ละคน ("จับแค่ของเราตามแผนก
+      // เรา" — คนที่ถูกยืมตัวมาช่วยโปรเจคแผนกอื่นจะไม่ถูกนับว่างานนั้นเป็นของ
+      // แผนกตัวเอง) งานที่ยังไม่มีโปรเจค/โปรเจคเก่าที่ยังไม่ได้แท็กแผนก ก็ยังคง
+      // ยึดตาม departmentIds เดิม (อาจอยู่ได้หลายคอลัมน์พร้อมกัน เดียวกับที่
+      // groupBy "assignee" ทำกับงานที่มีผู้รับผิดชอบหลายคน — ดู sharedCount)
       // summaryOnly: ไม่ต้องแจกแจงทีละการ์ดในคอลัมน์นี้ — เนื้อหาจริงอยู่ที่
       // DepartmentTopicsBoard (คลิกหัวคอลัมน์/การ์ดสรุป) อยู่แล้ว แค่บอกว่ามี
       // กี่โปรเจคกี่งานพอ ("ให้บอกแค่ว่ามีกี่โปรเจคกี่งานอะไรแบบนั้น")
       return departments
         .map((d) => {
-          const deptTasks = sortTasksForDisplay(filtered.filter((t) => t.departmentIds.includes(d.id)));
+          const deptTasks = sortTasksForDisplay(
+            filtered.filter((t) => taskDepartmentIdsForBoard(t, projectTopics).includes(d.id))
+          );
           const projectCount = new Set(deptTasks.map((t) => t.projectTopicId ?? "__none__")).size;
           return {
             id: d.id,
@@ -277,7 +287,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
         tasks: sortTasksForDisplay(filtered.filter((t) => t.assigneeIds.includes(u.id))),
       }))
       .filter((c) => c.tasks.length > 0);
-  }, [groupBy, filtered, filters.penalty]);
+  }, [groupBy, filtered, filters.penalty, projectTopics]);
 
   // Columns can run wider than the viewport (grouping by assignee especially
   // — one column per employee) with nothing to hint that more sit off-screen
@@ -380,7 +390,10 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   }
 
   const sharedCount = useMemo(() => filtered.filter((t) => t.assigneeIds.length > 1).length, [filtered]);
-  const sharedDeptCount = useMemo(() => filtered.filter((t) => t.departmentIds.length > 1).length, [filtered]);
+  const sharedDeptCount = useMemo(
+    () => filtered.filter((t) => taskDepartmentIdsForBoard(t, projectTopics).length > 1).length,
+    [filtered, projectTopics]
+  );
 
   if (personBoardId) {
     return (

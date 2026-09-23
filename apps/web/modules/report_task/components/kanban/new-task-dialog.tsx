@@ -307,24 +307,31 @@ export function NewTaskDialog({
 
   // "หัวข้อโปรเจค" ในตัวเลือกขั้นสูงด้านล่าง — เดิมเป็นลิสต์รวมทั้งบริษัทเสมอ
   // ("PV-5th", "Sales Report -A/R", "MM", "tttt" ปนกันหมดไม่ว่าใครเปิดฟอร์ม)
-  // ProjectTopic เองไม่มีฟิลด์แผนกให้ผูกไว้ (เป็น tag กลาง ใช้ข้ามแผนกได้ตั้งใจ
-  // — ดู project-topic-store.ts) จึงต้องอนุมานว่า "หัวข้อนี้แผนกไหนเคยใช้บ้าง"
-  // จากงานที่มีอยู่จริงแทน: มีงานที่ departmentIds ตรงกับแผนกที่เลือกไว้ (ไม่ว่า
-  // จะ derive มาจากคนหรือเลือกแผนกเองก็ตาม) และหัวข้อนั้น ๆ ก็ถือว่า "อยู่ในแผนก
-  // นี้" ("เลือกก่อนว่าแผนกไหน แล้ว filter ว่าแผนกนั้นมีโปรเจคอะไร") ยังไม่เลือก
-  // ทั้งคนและแผนกเลย (effectiveScopeDeptIds ว่าง) ก็โชว์ทุกหัวข้อเหมือนเดิม
+  // โปรเจคที่สร้างใหม่ตอนนี้แท็กแผนกของตัวเองไว้แล้ว (ดู confirmCreateProjectTopic
+  // + ProjectTopic.departmentId's doc) จึงเช็คจากตรงนั้นก่อนได้เลย — ส่วนโปรเจค
+  // เก่าที่สร้างไว้ก่อนมีฟิลด์นี้ (departmentId ว่าง) ยังต้องอนุมานจากงานที่มีอยู่
+  // จริงเหมือนเดิม: มีงานที่ departmentIds ตรงกับแผนกที่เลือกไว้ (ไม่ว่าจะ derive
+  // มาจากคนหรือเลือกแผนกเองก็ตาม) ก็ถือว่าหัวข้อนั้น "อยู่ในแผนกนี้" ("เลือกก่อนว่า
+  // แผนกไหน แล้ว filter ว่าแผนกนั้นมีโปรเจคอะไร") ยังไม่เลือกทั้งคนและแผนกเลย
+  // (effectiveScopeDeptIds ว่าง) ก็โชว์ทุกหัวข้อเหมือนเดิม
   const allTasksForTopicScope = useTaskStore((s) => s.tasks);
   const departmentTopicIds = useMemo(() => {
     if (effectiveScopeDeptIds.length === 0) return null;
     const ids = new Set<string>();
+    for (const topic of projectTopics) {
+      if (topic.departmentId && effectiveScopeDeptIds.includes(topic.departmentId)) ids.add(topic.id);
+    }
     for (const t of allTasksForTopicScope) {
-      if (t.projectTopicId && t.departmentIds.some((d) => effectiveScopeDeptIds.includes(d))) ids.add(t.projectTopicId);
+      if (!t.projectTopicId) continue;
+      const topic = projectTopics.find((pt) => pt.id === t.projectTopicId);
+      if (topic?.departmentId) continue; // มีค่าจริงอยู่แล้ว ไม่ต้องเดาซ้ำจากงาน
+      if (t.departmentIds.some((d) => effectiveScopeDeptIds.includes(d))) ids.add(t.projectTopicId);
     }
     return ids;
     // effectiveScopeDeptIds is a fresh array every render — depend on its real
     // sources (assigneeIds, manualScopeDeptId) instead, same as before.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assigneeIds, manualScopeDeptId, allTasksForTopicScope]);
+  }, [assigneeIds, manualScopeDeptId, allTasksForTopicScope, projectTopics]);
   // เผื่อคนเลือกหัวข้อไว้ก่อนแล้วค่อยเปลี่ยนผู้รับผิดชอบ/แผนกทีหลัง — ตัวที่
   // เลือกไว้แล้วยังต้องโผล่ในลิสต์เสมอ ต่อให้ไม่ตรงแผนกใหม่แล้วก็ตาม ไม่งั้นค่าที่
   // เลือกไว้จะหายไปจากตัวเลือกแบบไม่มีปี่มีขลุ่ย
@@ -791,7 +798,12 @@ export function NewTaskDialog({
   function confirmCreateProjectTopic() {
     const name = newTopicName.trim();
     if (!name) return;
-    const id = addProjectTopic(name);
+    // แท็กแผนกให้โปรเจคใหม่นี้ (ถ้ารู้แน่ชัด) — เลือกแผนกเองไว้ (manualScopeDeptId)
+    // ใช้ตัวนั้นตรงๆ, ไม่งั้นถ้าผู้รับผิดชอบที่เลือกอยู่แผนกเดียวกันหมดก็ใช้แผนก
+    // นั้น แต่ถ้าคาบเกี่ยวหลายแผนก (งานนี้ไม่ใช่ตัวแทนที่ชัดว่าโปรเจคเป็นของ
+    // แผนกไหน) ปล่อยว่างไว้ดีกว่าเดา — ดู ProjectTopic.departmentId's doc
+    const topicDepartmentId = manualScopeDeptId ?? (derivedDepartmentIds.length === 1 ? derivedDepartmentIds[0] : undefined);
+    const id = addProjectTopic(name, undefined, topicDepartmentId);
     setSelectedTopicId(id);
     setNewTopicName("");
     setCreatingTopic(false);

@@ -12,10 +12,19 @@ export interface Department {
 }
 
 /** Optional grouping tag for tasks — no permission implications, purely a
- * label. Not every org uses these; a task with no `projectTopicId` is fine. */
+ * label. Not every org uses these; a task with no `projectTopicId` is fine.
+ * Cross-department by nature (a project can have tasks assigned to people in
+ * several departments — see Task.departmentIds), so `departmentId` here is
+ * only "which department does this PROJECT belong to" for board-grouping
+ * display purposes, set once at creation — it never feeds permissions/
+ * visibility (those stay on each task's own `departmentIds`, derived from who
+ * it's assigned to, untouched). Unset on a topic created before this field
+ * existed; the department board falls back to inferring from existing tasks
+ * for those (see kanban-board.tsx's topicDepartmentId). */
 export interface ProjectTopic {
   id: string;
   name: string;
+  departmentId?: string;
   color?: string;
 }
 
