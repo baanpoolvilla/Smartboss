@@ -34,12 +34,23 @@ export async function generateWorkOrdersForDuePms(): Promise<{
 
   let created = 0;
   for (const pm of duePms) {
-    // ข้ามถ้ามีใบงานที่ยังไม่ปิดผูก PM นี้อยู่แล้ว (กันสร้างซ้ำ)
+    /**
+     * ข้ามถ้ามีใบงานที่ยังไม่ปิดผูก PM นี้อยู่แล้ว (กันสร้างซ้ำ)
+     *
+     * ⚠ ต้องดู `pmScheduleIds` (ใบงานรวมหลาย PM ที่เปิดจากปฏิทิน) ด้วย ไม่ใช่
+     * แค่ `pmScheduleId` — ใบงานรวมเก็บ id ไว้ในอาร์เรย์เท่านั้น ส่วน
+     * pmScheduleId เป็น null ⇒ เช็คแบบเดิมมองไม่เห็น แล้ว cron จะเปิดใบงาน
+     * อัตโนมัติซ้อนขึ้นมาอีกใบทั้งที่คนกำลังทำรอบนั้นอยู่ ("ปิดแล้วเปิดมาใหม่")
+     * ใบซ้อนนั้นไม่มีใครปิดเพราะไม่ใช่ใบที่คนทำงานถืออยู่ แล้วมันจะค้างเป็น
+     * open ตลอด ⇒ รอบถัดไป ๆ cron เห็นว่า "มีใบค้างอยู่" แล้วข้ามตลอดไป
+     * (อาการ "PM ไม่นับรอบต่อไป") — หน้า /maintenance/pm เช็คทั้งสองช่องอยู่
+     * แล้ว (ตัวแปร `pending`) ตรงนี้คือที่เดียวที่ยังเช็คไม่ครบ
+     */
     const existing = await prisma.workOrder.findFirst({
       where: {
         orgId: pm.orgId,
-        pmScheduleId: pm.id,
         status: { in: ["open", "in_progress"] },
+        OR: [{ pmScheduleId: pm.id }, { pmScheduleIds: { has: pm.id } }],
       },
     });
     if (existing) continue;
