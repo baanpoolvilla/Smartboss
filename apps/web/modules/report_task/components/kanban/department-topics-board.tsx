@@ -18,7 +18,7 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canSeeTask } from "@/modules/report_task/lib/permissions";
 import { getDepartment } from "@/modules/report_task/lib/directory";
 import { dueUrgency, sortTasksForDisplay } from "@/modules/report_task/lib/task-flags";
-import { taskDepartmentIdsForBoard } from "@/modules/report_task/lib/task-department";
+import { taskDepartmentIdsForBoard, OTHER_DEPARTMENT_ID } from "@/modules/report_task/lib/task-department";
 import { statusMeta } from "@/modules/report_task/lib/task-meta";
 import { chartColors, statusColors as statusAccent } from "@/modules/report_task/lib/chart-colors";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -65,11 +65,17 @@ export function DepartmentTopicsBoard({
   const allTasks = useTaskStore((s) => s.tasks);
   const topics = useProjectTopicStore((s) => s.topics);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
-  const department = getDepartment(departmentId);
+  const isOther = departmentId === OTHER_DEPARTMENT_ID;
+  const department = isOther ? undefined : getDepartment(departmentId);
+  const deptName = isOther ? "อื่นๆ" : (department?.name ?? "—");
+  const deptColor = isOther ? "var(--ink-soft)" : (department?.color ?? "var(--ink-soft)");
 
   const columns = useMemo(() => {
+    // "อื่นๆ" ไม่ใช่แผนกจริง — เป็นที่กองงานที่ไม่มีโปรเจคเลย (ไม่เคยถูกเลือก
+    // แผนกให้อย่างจริงจัง ดู taskDepartmentIdsForBoard's doc) จึงกรองด้วยเงื่อนไข
+    // คนละแบบกับแผนกจริง (ซึ่งกรองด้วย .includes(departmentId) ตามปกติ)
     const inDept = allTasks
-      .filter((t) => taskDepartmentIdsForBoard(t, topics).includes(departmentId))
+      .filter((t) => (isOther ? taskDepartmentIdsForBoard(t, topics).length === 0 : taskDepartmentIdsForBoard(t, topics).includes(departmentId)))
       .filter((t) => canSeeTask(t, viewingAsUserId));
 
     const byTopic = new Map<string, Task[]>();
@@ -88,7 +94,7 @@ export function DepartmentTopicsBoard({
     return unsorted
       ? [...named, { id: UNSORTED_KEY, name: "อื่นๆ", tasks: sortTasksForDisplay(unsorted) }]
       : named;
-  }, [departmentId, allTasks, topics, viewingAsUserId]);
+  }, [departmentId, isOther, allTasks, topics, viewingAsUserId]);
 
   // Narrows which topic columns render — เดียวกับ PersonTopicsBoard
   const [topicFilter, setTopicFilter] = useState<string>("all");
@@ -170,10 +176,12 @@ export function DepartmentTopicsBoard({
         </button>
         <span
           className="h-7 w-7 rounded-lg shrink-0"
-          style={{ backgroundColor: department?.color ?? "var(--ink-soft)" }}
+          style={{ backgroundColor: deptColor }}
           aria-hidden="true"
         />
-        <h2 className="text-sm font-semibold truncate min-w-0 shrink">งานของแผนก{department?.name ?? "—"} แยกตามหัวข้อโปรเจค</h2>
+        <h2 className="text-sm font-semibold truncate min-w-0 shrink">
+          {isOther ? "งานที่ยังไม่มีโปรเจค" : `งานของแผนก${deptName}`} แยกตามหัวข้อโปรเจค
+        </h2>
 
         {columns.length > 1 && (
           <Select value={topicFilter} onValueChange={(v) => v && setTopicFilter(v)}>
@@ -204,8 +212,8 @@ export function DepartmentTopicsBoard({
       {columns.length === 0 ? (
         <EmptyState
           icon={SearchX}
-          title="ไม่มีงานในแผนกนี้"
-          description={`แผนก${department?.name ?? "นี้"}ยังไม่มีงานอยู่ตอนนี้`}
+          title={isOther ? "ไม่มีงานที่ยังไม่มีโปรเจค" : "ไม่มีงานในแผนกนี้"}
+          description={isOther ? "งานทุกอันมีโปรเจคกำหนดแผนกไว้แล้วตอนนี้" : `แผนก${deptName}ยังไม่มีงานอยู่ตอนนี้`}
         />
       ) : total === 0 ? (
         <EmptyState

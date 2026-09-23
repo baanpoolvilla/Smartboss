@@ -11,7 +11,7 @@ import { statusMeta, priorityMeta, priorityColorHex, taskPriorityOrder, statusIc
 import { matchesTaskFilters } from "@/modules/report_task/lib/task-filter";
 import { useTaskSheetParam } from "@/modules/report_task/hooks/use-task-sheet-param";
 import { statusColors, chartColors } from "@/modules/report_task/lib/chart-colors";
-import { taskDepartmentIdsForBoard } from "@/modules/report_task/lib/task-department";
+import { taskDepartmentIdsForBoard, OTHER_DEPARTMENT_ID } from "@/modules/report_task/lib/task-department";
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
 import { cn } from "@/modules/report_task/lib/utils";
 import { KanbanColumn, type BoardColumn } from "./kanban-column";
@@ -255,13 +255,13 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
       // ตรงๆ — โปรเจคที่แท็กแผนกของตัวเองไว้แล้ว (ดู doc ของฟังก์ชันนี้) จะยึด
       // ตามแผนกของโปรเจค ไม่ใช่แผนกของผู้รับผิดชอบแต่ละคน ("จับแค่ของเราตามแผนก
       // เรา" — คนที่ถูกยืมตัวมาช่วยโปรเจคแผนกอื่นจะไม่ถูกนับว่างานนั้นเป็นของ
-      // แผนกตัวเอง) งานที่ยังไม่มีโปรเจค/โปรเจคเก่าที่ยังไม่ได้แท็กแผนก ก็ยังคง
-      // ยึดตาม departmentIds เดิม (อาจอยู่ได้หลายคอลัมน์พร้อมกัน เดียวกับที่
-      // groupBy "assignee" ทำกับงานที่มีผู้รับผิดชอบหลายคน — ดู sharedCount)
+      // แผนกตัวเอง) งานที่มีโปรเจคแต่ยังไม่ได้แท็กแผนก ก็ยังคงยึดตาม
+      // departmentIds เดิม (อาจอยู่ได้หลายคอลัมน์พร้อมกัน เดียวกับที่ groupBy
+      // "assignee" ทำกับงานที่มีผู้รับผิดชอบหลายคน — ดู sharedCount)
       // summaryOnly: ไม่ต้องแจกแจงทีละการ์ดในคอลัมน์นี้ — เนื้อหาจริงอยู่ที่
       // DepartmentTopicsBoard (คลิกหัวคอลัมน์/การ์ดสรุป) อยู่แล้ว แค่บอกว่ามี
       // กี่โปรเจคกี่งานพอ ("ให้บอกแค่ว่ามีกี่โปรเจคกี่งานอะไรแบบนั้น")
-      return departments
+      const realDeptColumns = departments
         .map((d) => {
           const deptTasks = sortTasksForDisplay(
             filtered.filter((t) => taskDepartmentIdsForBoard(t, projectTopics).includes(d.id))
@@ -277,6 +277,27 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
           };
         })
         .filter((c) => c.tasks.length > 0);
+      // งานที่ไม่มีโปรเจคเลย ไม่เคยถูกเลือกแผนกให้อย่างจริงจัง — ไม่เดาแผนกจาก
+      // ผู้รับผิดชอบให้อีกต่อไป (taskDepartmentIdsForBoard คืน [] ให้) กองไว้ที่
+      // "อื่นๆ" แทน รอให้ตั้งโปรเจค+แผนกให้ทีหลัง ("ตรงนี้ต้องมีอื่นๆสิ ไว้เก็บ
+      // งานเก่าที่ยังไม่มีหัวข้อ")
+      const otherTasks = sortTasksForDisplay(
+        filtered.filter((t) => taskDepartmentIdsForBoard(t, projectTopics).length === 0)
+      );
+      const otherColumn =
+        otherTasks.length > 0
+          ? [
+              {
+                id: OTHER_DEPARTMENT_ID,
+                label: "อื่นๆ",
+                accent: chartColors.gray,
+                tasks: otherTasks,
+                projectCount: 0,
+                summaryOnly: true,
+              },
+            ]
+          : [];
+      return [...realDeptColumns, ...otherColumn];
     }
     // assignee — only people who actually have tasks in view
     return users
