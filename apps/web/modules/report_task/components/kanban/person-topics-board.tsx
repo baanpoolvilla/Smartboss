@@ -12,35 +12,17 @@ import {
 } from "@/modules/report_task/components/ui/select";
 import { EmptyState } from "@/modules/report_task/components/shared/empty-state";
 import { filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
-import { TaskCard } from "./task-card";
+import { TopicColumnCard } from "./topic-column-card";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canSeeTask } from "@/modules/report_task/lib/permissions";
 import { getUser } from "@/modules/report_task/lib/directory";
-import { dueUrgency, sortTasksForDisplay } from "@/modules/report_task/lib/task-flags";
-import { statusMeta } from "@/modules/report_task/lib/task-meta";
-import { chartColors, statusColors as statusAccent } from "@/modules/report_task/lib/chart-colors";
+import { sortTasksForDisplay } from "@/modules/report_task/lib/task-flags";
 import { cn } from "@/modules/report_task/lib/utils";
 import type { Task } from "@/modules/report_task/types";
 
 const UNSORTED_KEY = "__none__";
-
-// Same 4-way split as the main board's "จัดกลุ่มตามสถานะ" columns (see
-// kanban-board.tsx) — todo/in_progress/done plus a derived "เลยกำหนด"
-// bucket pulled out of whichever of the first two it came from, so every
-// task lands in exactly one bucket.
-const statusBuckets = [
-  { key: "todo" as const, label: statusMeta.todo.label, color: chartColors.gray },
-  { key: "in_progress" as const, label: statusMeta.in_progress.label, color: statusAccent.in_progress },
-  { key: "overdue" as const, label: "เลยกำหนด", color: chartColors.red },
-  { key: "done" as const, label: statusMeta.done.label, color: statusAccent.done },
-];
-
-function bucketOf(t: Task): (typeof statusBuckets)[number]["key"] {
-  if (t.status !== "done" && dueUrgency(t) === "overdue") return "overdue";
-  return t.status;
-}
 
 /**
  * Full-screen replacement for the board (not a popup) — reached by clicking
@@ -261,64 +243,9 @@ export function PersonTopicsBoard({
                 isPanning ? "cursor-grabbing select-none" : "cursor-grab"
               )}
             >
-            {visibleColumns.map((column) => {
-              const counts = statusBuckets.map((b) => ({
-                ...b,
-                count: column.tasks.filter((t) => bucketOf(t) === b.key).length,
-              }));
-              return (
-                <div key={column.id} className="flex h-full min-h-0 flex-col flex-1 basis-[300px] min-w-[280px] max-w-[400px] shrink-0">
-                  <div className="rounded-xl bg-white border border-[var(--line)] shadow-[0_1px_2px_rgba(16,24,40,0.04)] px-3.5 py-3 mb-3">
-                    <div className="flex items-center gap-2.5">
-                      <span className="h-7 w-7 rounded-lg flex items-center justify-center shrink-0 bg-[var(--accent)] text-[var(--brand-green-dark)]">
-                        <FolderKanban className="h-4 w-4" />
-                      </span>
-                      <h3 className="text-sm font-semibold truncate tracking-tight">{column.name}</h3>
-                      <span className="ml-auto text-[11px] font-semibold rounded-full h-5 min-w-5 px-1.5 flex items-center justify-center tabular-nums shrink-0 bg-[var(--accent)] text-[var(--brand-green-dark)]">
-                        {column.tasks.length}
-                      </span>
-                    </div>
-
-                    {/* 4-way status split, merged into one bar (see statusBuckets) — hover a
-                        segment for its label/count, legend row underneath spells it out. */}
-                    <div className="mt-2.5">
-                      <div className="h-1.5 rounded-full bg-[var(--bg-soft)] overflow-hidden flex">
-                        {counts.map((b) =>
-                          b.count > 0 ? (
-                            <div
-                              key={b.key}
-                              className="h-full"
-                              style={{ width: `${(b.count / column.tasks.length) * 100}%`, backgroundColor: b.color }}
-                              title={`${b.label} ${b.count}`}
-                            />
-                          ) : null
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                        {counts
-                          .filter((b) => b.count > 0)
-                          .map((b) => (
-                            <span key={b.key} className="flex items-center gap-1 text-[10px] text-[var(--ink-soft)]">
-                              <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: b.color }} />
-                              {b.label} {b.count}
-                            </span>
-                          ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div
-                    className={cn(
-                      "flex-1 flex min-h-[200px] flex-col gap-3 overflow-y-auto rounded-xl p-2.5 bg-[var(--bg-soft)]/50"
-                    )}
-                  >
-                    {column.tasks.map((t) => (
-                      <TaskCard key={t.id} task={t} onOpen={onOpenTask} />
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
+            {visibleColumns.map((column) => (
+              <TopicColumnCard key={column.id} column={column} onOpenTask={onOpenTask} />
+            ))}
             </div>
           </div>
         </>
