@@ -22,6 +22,16 @@ export interface BoardColumn {
   /** Overrides the generic empty-column message — the derived "เลยกำหนด"
    * column gets its own celebratory copy instead. */
   emptyMessage?: string;
+  /** Department grouping only — how many distinct project topics this
+   * department's tasks span (including an "ไม่มีหัวข้อ" bucket if any task
+   * has none), shown in the summary body instead of every single card. */
+  projectCount?: number;
+  /** Skip listing every task card in the body — show just "N โปรเจค · M งาน"
+   * instead, since department grouping's real content lives one click away
+   * (DepartmentTopicsBoard via onHeaderClick), not in this column itself.
+   * ("ให้บอกแค่ว่ามีกี่โปรเจคกี่งานอะไรแบบนั้น" — the full card list here
+   * duplicated what clicking through already shows, just more cluttered.) */
+  summaryOnly?: boolean;
 }
 
 const PAGE_SIZE = 6;
@@ -251,30 +261,48 @@ export function KanbanColumn({
         // scroll chain (AppScaffold, tasks/page.tsx, KanbanBoard's own row).
         className="flex-1 flex min-h-0 flex-col gap-3 p-2.5 rounded-xl overflow-y-auto transition-colors duration-200 bg-[var(--bg-soft)]/50"
       >
-        {visibleTasks.map((t) => (
-          <TaskCard
-            key={t.id}
-            task={t}
-            onOpen={onOpen}
-            showOriginalStatus={column.derived}
-            groupedByPriority={groupedByPriority}
-            // A done card fades so it visually "settles" next to open ones —
-            // only meaningful where a column actually mixes statuses
-            // (priority/assignee grouping). In the status-grouped board every
-            // column is one status already (a "รอตรวจสอบ"/"เสร็จสิ้น" column is
-            // 100% done by definition), so fading there just washes out the
-            // whole column for no comparative benefit — every other contrast
-            // fix on the card would fight this opacity for nothing.
-            dimWhenDone={!groupedByStatus}
-          />
-        ))}
+        {column.summaryOnly ? (
+          <button
+            type="button"
+            onClick={onHeaderClick}
+            disabled={!onHeaderClick}
+            className="flex-1 flex flex-col items-center justify-center gap-1.5 text-center rounded-lg border border-dashed border-[var(--line)] py-8 px-3 hover:border-[var(--brand-green)] hover:bg-white transition-colors disabled:hover:border-[var(--line)] disabled:hover:bg-transparent disabled:cursor-default"
+          >
+            <span className="text-sm font-semibold text-[var(--ink)]">
+              {column.projectCount ?? 0} โปรเจค · {column.tasks.length} งาน
+            </span>
+            {onHeaderClick && (
+              <span className="text-[11px] text-[var(--ink-soft)]">คลิกเพื่อดูรายละเอียด</span>
+            )}
+          </button>
+        ) : (
+          <>
+            {visibleTasks.map((t) => (
+              <TaskCard
+                key={t.id}
+                task={t}
+                onOpen={onOpen}
+                showOriginalStatus={column.derived}
+                groupedByPriority={groupedByPriority}
+                // A done card fades so it visually "settles" next to open ones —
+                // only meaningful where a column actually mixes statuses
+                // (priority/assignee grouping). In the status-grouped board every
+                // column is one status already (a "รอตรวจสอบ"/"เสร็จสิ้น" column is
+                // 100% done by definition), so fading there just washes out the
+                // whole column for no comparative benefit — every other contrast
+                // fix on the card would fight this opacity for nothing.
+                dimWhenDone={!groupedByStatus}
+              />
+            ))}
 
-        <ShowMoreToggle expanded={expanded} remaining={remaining} onToggle={toggle} />
+            <ShowMoreToggle expanded={expanded} remaining={remaining} onToggle={toggle} />
 
-        {column.tasks.length === 0 && (
-          <div className="flex-1 flex items-center justify-center text-xs text-[var(--ink-soft)] border border-dashed border-[var(--line)] rounded-lg py-8 text-center px-3">
-            {column.emptyMessage ?? "ยังไม่มีงานในสถานะนี้"}
-          </div>
+            {column.tasks.length === 0 && (
+              <div className="flex-1 flex items-center justify-center text-xs text-[var(--ink-soft)] border border-dashed border-[var(--line)] rounded-lg py-8 text-center px-3">
+                {column.emptyMessage ?? "ยังไม่มีงานในสถานะนี้"}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

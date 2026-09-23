@@ -250,13 +250,22 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
     if (groupBy === "department") {
       // งานที่มีหลายแผนก (departmentIds.length > 1) จะโผล่ในคอลัมน์ของทุกแผนกที่เกี่ยวข้อง
       // — เดียวกับที่ groupBy "assignee" ทำกับงานที่มีผู้รับผิดชอบหลายคน (ดู sharedCount)
+      // summaryOnly: ไม่ต้องแจกแจงทีละการ์ดในคอลัมน์นี้ — เนื้อหาจริงอยู่ที่
+      // DepartmentTopicsBoard (คลิกหัวคอลัมน์/การ์ดสรุป) อยู่แล้ว แค่บอกว่ามี
+      // กี่โปรเจคกี่งานพอ ("ให้บอกแค่ว่ามีกี่โปรเจคกี่งานอะไรแบบนั้น")
       return departments
-        .map((d) => ({
-          id: d.id,
-          label: d.name,
-          accent: d.color,
-          tasks: sortTasksForDisplay(filtered.filter((t) => t.departmentIds.includes(d.id))),
-        }))
+        .map((d) => {
+          const deptTasks = sortTasksForDisplay(filtered.filter((t) => t.departmentIds.includes(d.id)));
+          const projectCount = new Set(deptTasks.map((t) => t.projectTopicId ?? "__none__")).size;
+          return {
+            id: d.id,
+            label: d.name,
+            accent: d.color,
+            tasks: deptTasks,
+            projectCount,
+            summaryOnly: true,
+          };
+        })
         .filter((c) => c.tasks.length > 0);
     }
     // assignee — only people who actually have tasks in view
