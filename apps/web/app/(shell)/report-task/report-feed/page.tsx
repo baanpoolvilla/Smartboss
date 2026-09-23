@@ -715,6 +715,13 @@ function ReportFeedPageInner() {
     // name, gets "neutral" (no color) instead of a status that isn't theirs
     // to have.
     const myRoundIds = new Set(roundsForUserOnDay(activeTopic, viewingAsUserId, today, submitterGroups).map((r) => r.id));
+    // คนทั่วไปเห็นเฉพาะรอบที่ตัวเองต้องส่ง — รอบของคนอื่นไม่ใช่เรื่องที่เขาต้อง
+    // รู้ และยิ่งห้องรวมทุกแผนกมีหลายรอบ รายการยิ่งยาวจนหาของตัวเองไม่เจอ
+    // ("ให้เห็นแค่รอบส่งของตัวเองพอสิ") ส่วนคนที่ดูแลห้อง/ดูแลระบบยังเห็นครบ
+    // เพราะต้องใช้ตรวจว่าทั้งห้องตั้งไว้ถูกไหม
+    const canSeeEveryRound = canEditReportTopic(activeTopic.visibility, viewingAsUserId) || canManageTopics;
+    const visibleRounds = canSeeEveryRound ? rounds : rounds.filter((c) => myRoundIds.has(c.id));
+    if (visibleRounds.length === 0) return [];
     const allRoundsToday = effectiveRoundsOf(activeTopic);
     const myPostedRoundIds = new Set(
       posts
@@ -747,10 +754,10 @@ function ReportFeedPageInner() {
     // differing requirements, or rounds someone actually named stay spelled
     // out individually below instead, since collapsing those into a range
     // would misstate what's actually required.
-    const allSameRequirement = rounds.every((c) => requiredOf(c) === requiredOf(rounds[0]!));
-    const anyRealLabel = rounds.some((c) => c.label.trim().length > 2);
-    if (rounds.length === 2 && allSameRequirement && !anyRealLabel) {
-      const [a, b] = rounds;
+    const allSameRequirement = visibleRounds.every((c) => requiredOf(c) === requiredOf(visibleRounds[0]!));
+    const anyRealLabel = visibleRounds.some((c) => c.label.trim().length > 2);
+    if (visibleRounds.length === 2 && allSameRequirement && !anyRealLabel) {
+      const [a, b] = visibleRounds;
       const required = requiredOf(a!);
       return [
         {
@@ -768,7 +775,7 @@ function ReportFeedPageInner() {
     // room's first one) otherwise produced "กำหนดส่ง 13:00 น. · กำหนดส่ง
     // 14:00 น. · แนบอย่างน้อย 1 รูป", repeating the same word for no reason
     // ("ไม่สวยเลย").
-    return rounds.map((c) => {
+    return visibleRounds.map((c) => {
       const required = requiredOf(c);
       // A round label of a couple characters or less ("t", "00") is almost
       // always leftover placeholder text from setting the round up, not a
@@ -782,7 +789,7 @@ function ReportFeedPageInner() {
         status: statusOf(c),
       };
     });
-  }, [activeTopic, viewingAsUserId, posts, submitterGroups]);
+  }, [activeTopic, viewingAsUserId, posts, submitterGroups, canManageTopics]);
 
   // Who can actually see this room, from the same rule the sidebar and store
   // use to gate visibility — a real list, not a placeholder count.

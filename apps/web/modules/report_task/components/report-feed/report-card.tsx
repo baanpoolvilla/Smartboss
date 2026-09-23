@@ -1256,23 +1256,24 @@ export function ReportCard({
               <div className="flex items-center gap-1.5">
                 {post.pinned && <Pin className="h-3.5 w-3.5 text-[var(--brand-green-dark)] shrink-0" />}
                 <p className="text-sm font-semibold truncate">{author?.name}</p>
+                {authorDept && (
+                  // ฟ้า/น้ำเงิน ไม่ใช่เขียวแบรนด์ — ขอมาโดยตรง ("ขอเป็นพื้นหลัง
+                  // สีฟ้าได้ไหม") และยังแยกป้าย "แผนกของคนโพสต์" ออกจากป้าย
+                  // เขียว "ตรงเวลา/รอบ" ที่อยู่อีกบรรทัดด้วย
+                  //
+                  // leading-4 + py-0 ทำให้ป้ายสูงพอดี 16px ไม่เกินความสูงบรรทัด
+                  // ของแถวที่มันอยู่ — เดิมใช้ py-0.5 แล้วป้ายสูงกว่าบรรทัด เลย
+                  // ล้นลงไปชนป้ายของแถวถัดไป ("มันทับกันเห็นไหม") แก้ที่ขนาด
+                  // ป้ายตรง ๆ แบบนี้ประหยัดที่กว่าไปแยกบรรทัดเพิ่ม
+                  <span className="shrink-0 rounded-full px-1.5 py-0 text-[10px] leading-4 font-semibold bg-[#dbeafe] text-[var(--chart-blue,#2563eb)]">
+                    {authorDept.name}
+                  </span>
+                )}
                 {isUnread && (
                   <span className="h-1.5 w-1.5 rounded-full bg-[var(--chart-blue)] shrink-0" aria-label="ยังไม่อ่าน" />
                 )}
               </div>
-              {/* ป้ายเล็กทุกอันอยู่แถวนี้แถวเดียว (แผนก · เวลา · ตรงเวลา/สาย) —
-                  เดิมป้ายแผนกไปอยู่แถวชื่อ ซึ่งทั้งสองแถวมีป้ายที่สูงกว่าความสูง
-                  บรรทัดของตัวเอง เลยล้นมาชนกันพอดี ("มันทับกันเห็นไหม") อยู่แถว
-                  เดียวกันแล้วเรียงต่อกันตามปกติ ไม่มีอะไรล้นไปทับใคร */}
-              <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-[var(--ink-soft)]">
-                {authorDept && (
-                  // ฟ้า/น้ำเงิน ไม่ใช่เขียวแบรนด์ — ขอมาโดยตรง ("ขอเป็นพื้นหลัง
-                  // สีฟ้าได้ไหม") และยังแยกป้าย "แผนกของคนโพสต์" ออกจากป้าย
-                  // เขียว "ตรงเวลา/รอบ" ที่อยู่แถวเดียวกันด้วย
-                  <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold bg-[#dbeafe] text-[var(--chart-blue,#2563eb)]">
-                    {authorDept.name}
-                  </span>
-                )}
+              <p className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xs text-[var(--ink-soft)]">
                 {/* ตำแหน่งกับแผนกพูดเรื่องเดียวกันเกือบทุกครั้ง ("ผู้ดูแลบ้าน" คู่กับ
                     "ฝ่ายดูแลบ้านพัก") พอขึ้นทั้งคู่แถวนี้เลยอ่านยากโดยไม่ได้อะไรเพิ่ม —
                     ห้องไหนมีป้ายแผนกแล้วก็ไม่ต้องบอกตำแหน่งซ้ำ ส่วนห้องที่ล็อกแผนก
@@ -1310,7 +1311,7 @@ export function ReportCard({
                   // Visible marker so "why is there no ตรงเวลา/สาย badge
                   // here" has an obvious answer — the poster opted this one
                   // out on purpose.
-                  <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-[var(--bg-soft)] text-[var(--ink-soft)] border border-[var(--line)]">
+                  <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0 text-[10px] leading-4 font-medium bg-[var(--bg-soft)] text-[var(--ink-soft)] border border-[var(--line)]">
                     ไม่นับเป็นการส่งรีพอต
                   </span>
                 ) : postDayExempt && roundCandidates.length === 0 ? (
@@ -1322,12 +1323,12 @@ export function ReportCard({
                   // ห้องที่ไม่มีรอบให้ส่งเลยในวันนั้น (ยังไม่ได้ตั้งเวลา / ส่งแล้ว 0/0) ไม่ต้องบอกว่า "ไม่บังคับส่ง" —
                   // ไม่เคยมีอะไรให้บังคับอยู่แล้ว ป้ายนี้จะทำให้งงเปล่า ๆ (ขึ้นเฉพาะเมื่อวันนั้นห้องมีรอบที่ปกติต้องส่ง)
                   postDayCutoffs.length > 0 ? (
-                    <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-[var(--bg-soft)] text-[var(--ink-soft)] border border-[var(--line)]">
+                    <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0 text-[10px] leading-4 font-medium bg-[var(--bg-soft)] text-[var(--ink-soft)] border border-[var(--line)]">
                       หยุด/ลาวันนี้ · ไม่บังคับส่ง
                     </span>
                   ) : null
                 ) : lateCutoff && isFirstLateOfRound ? (
-                  <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                  <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0 text-[10px] leading-4 font-medium bg-amber-50 text-amber-700 border border-amber-200">
                     <TriangleAlert className="h-2.5 w-2.5" />
                     {/* "ส่งช้า (เลยรอบ t 14:00)" read as cryptic shorthand,
                         and a short/placeholder round label ("t", "00") made
@@ -1345,7 +1346,7 @@ export function ReportCard({
                   // The positive counterpart to "ส่งช้า" (C10) — without it,
                   // a room with a schedule only ever showed a warning badge,
                   // never confirmation that a post actually met it.
-                  <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-[var(--accent)] text-[var(--brand-green-dark)] border border-[var(--brand-green)]/20">
+                  <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0 text-[10px] leading-4 font-medium bg-[var(--accent)] text-[var(--brand-green-dark)] border border-[var(--brand-green)]/20">
                     <Check className="h-2.5 w-2.5" />
                     ตรงเวลา · รอบ{shortRoundLabel(onTimeCutoff.label, topic.name)}
                   </span>
