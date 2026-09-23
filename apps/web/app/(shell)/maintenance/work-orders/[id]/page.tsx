@@ -16,7 +16,6 @@ import {
   CloudUpload,
   MessageSquare,
   ReceiptText,
-  UserCircle2,
   RefreshCw,
   ShoppingCart,
 } from "lucide-react";
@@ -27,6 +26,7 @@ import {
   getWorkOrder,
   listWorkOrderComments,
 } from "@/modules/maintenance/data/work-orders";
+import { WorkOrderComment } from "@/modules/maintenance/components/work-order-comment";
 import { listProperties } from "@/modules/maintenance/data/properties";
 import {
   workOrderAccess,
@@ -59,6 +59,8 @@ import {
   updateStatusAction,
   completeWorkOrderAction,
   addCommentAction,
+  editCommentAction,
+  deleteCommentAction,
   deleteWorkOrderAction,
   generateUploadLinkAction,
 } from "../actions";
@@ -487,27 +489,19 @@ export default async function WorkOrderDetailPage({
                     : "py-2"
                 }
               >
-                <div className="flex items-center gap-1.5">
-                  <UserCircle2 className="h-4 w-4 text-(--ink-soft)" />
-                  <span className="text-[13px] font-bold text-(--ink)">
-                    {c.userId ? (names[c.userId] ?? "ผู้ใช้") : "ผู้ใช้"}
-                  </span>
-                  <span className="text-[11px] text-(--ink-soft)">
-                    {fmtThaiDateTime(c.createdAt)}
-                  </span>
-                </div>
-                <div className="mt-1 pl-[22px]">
-                  {c.content !== "📷" && (
-                    <p className="whitespace-pre-wrap text-sm text-(--ink)">
-                      {c.content}
-                    </p>
-                  )}
-                  {c.imageUrl && (
-                    <div className="mt-1.5">
-                      <PhotoStrip urls={[c.imageUrl]} size={160} />
-                    </div>
-                  )}
-                </div>
+                <WorkOrderComment
+                  commentId={c.id}
+                  authorName={c.userId ? (names[c.userId] ?? "ผู้ใช้") : "ผู้ใช้"}
+                  timeLabel={fmtThaiDateTime(c.createdAt)}
+                  content={c.content}
+                  imageUrl={c.imageUrl}
+                  // แก้ได้เฉพาะคำพูดของตัวเอง · ลบได้ทั้งของตัวเองและ (ถ้าคุม
+                  // ใบงานได้) ของคนอื่น — กติกาเดียวกับที่ action บังคับฝั่งเซิร์ฟเวอร์
+                  canEdit={c.userId === session.userId}
+                  canDelete={c.userId === session.userId || canManage}
+                  editAction={editCommentAction.bind(null, id)}
+                  deleteAction={deleteCommentAction.bind(null, id)}
+                />
               </div>
             ))
           )}

@@ -12,6 +12,8 @@ import {
   updateWorkOrderStatus,
   deleteWorkOrder,
   addWorkOrderComment,
+  updateWorkOrderComment,
+  deleteWorkOrderComment,
 } from "@/modules/maintenance/data/work-orders";
 import {
   notifyUser,
@@ -24,7 +26,7 @@ import {
   canSeeWorkOrder,
 } from "@/modules/maintenance/data/work-order-access";
 import { fmtThaiDate } from "@/modules/maintenance/lib/format";
-import { putFile, putFiles } from "@/modules/maintenance/lib/storage";
+import { putFile, putFiles, deleteFiles } from "@/modules/maintenance/lib/storage";
 import { createUploadLink } from "@/modules/maintenance/data/external-upload";
 import {
   completePmSchedule,
@@ -324,6 +326,46 @@ export async function addCommentAction(workOrderId: string, formData: FormData) 
       line: `💬 ความคิดเห็นใหม่\n📝 ${wo.title}\n${content || "📷 ส่งรูปภาพ"}`,
     });
   }
+
+  revalidatePath(`/maintenance/work-orders/${workOrderId}`);
+}
+
+/** แก้ข้อความคอมเมนต์ของตัวเอง (ดู updateWorkOrderComment ว่าทำไมเฉพาะเจ้าของ) */
+export async function editCommentAction(
+  workOrderId: string,
+  formData: FormData
+) {
+  const s = await requireOrg();
+  const commentId = String(formData.get("commentId") ?? "");
+  const content = String(formData.get("content") ?? "").trim();
+  if (!commentId || !content) return;
+
+  const wo = await getWorkOrder(s.orgId, workOrderId);
+  if (!wo || !canSeeWorkOrder(await workOrderAccess(s), wo)) return;
+
+  await updateWorkOrderComment(s.orgId, commentId, s.userId, content);
+  revalidatePath(`/maintenance/work-orders/${workOrderId}`);
+}
+
+/** ลบคอมเมนต์ — เจ้าของ หรือคนที่จัดการใบงานได้ · รูปที่แนบถูกลบจาก storage ด้วย */
+export async function deleteCommentAction(
+  workOrderId: string,
+  formData: FormData
+) {
+  const s = await requireOrg();
+  const commentId = String(formData.get("commentId") ?? "");
+  if (!commentId) return;
+
+  const wo = await getWorkOrder(s.orgId, workOrderId);
+  if (!wo || !canSeeWorkOrder(await workOrderAccess(s), wo)) return;
+
+  const images = await deleteWorkOrderComment(
+    s.orgId,
+    commentId,
+    s.userId,
+    hasPermission(s, MAINT_PERMS.workorderManage)
+  );
+  if (images.length > 0) await deleteFiles(images);
 
   revalidatePath(`/maintenance/work-orders/${workOrderId}`);
 }

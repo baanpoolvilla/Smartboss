@@ -17,6 +17,7 @@ import {
 import { Button } from "@smartboss/ui/components/button";
 import { Card } from "@smartboss/ui/components/card";
 import { Modal } from "./dialog";
+import { CommentTextarea } from "./comment-textarea";
 
 type Action = (formData: FormData) => void | Promise<void>;
 
@@ -438,12 +439,12 @@ export function CommentComposer({ action }: { action: Action }) {
             onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
           />
         </label>
-        <input
-          name="content"
-          maxLength={1000}
-          placeholder="เพิ่มความคิดเห็น..."
-          className="h-10 flex-1 rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm text-(--ink) focus-visible:border-(--brand-green) focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-(--brand-green)/30"
-        />
+        <div className="flex-1">
+          <CommentTextarea
+            placeholder="เพิ่มความคิดเห็น... (Shift+Enter ขึ้นบรรทัดใหม่)"
+            ariaLabel="เพิ่มความคิดเห็น"
+          />
+        </div>
         <Button type="submit" size="icon" aria-label="ส่งความคิดเห็น">
           <Send className="h-4 w-4" />
         </Button>

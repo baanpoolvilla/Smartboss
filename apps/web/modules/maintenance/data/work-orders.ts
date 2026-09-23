@@ -174,6 +174,48 @@ export function listWorkOrderComments(orgId: string, workOrderId: string) {
   });
 }
 
+/**
+ * แก้ข้อความคอมเมนต์ — **เจ้าของคอมเมนต์เท่านั้น**
+ *
+ * ต่างจากการลบที่คนจัดการใบงานทำแทนได้ (ดูข้างล่าง) การแก้คือการเปลี่ยน
+ * "คำพูดของคนอื่น" ให้กลายเป็นอย่างอื่นโดยไม่มีร่องรอย ซึ่งไม่ควรมีใครทำได้
+ * นอกจากคนพูดเอง · เช็คสิทธิ์ในเงื่อนไข where ไม่ใช่มาเทียบทีหลัง (กติกา
+ * เดียวกับ deletePoComment) — คืน true เมื่อแก้ได้จริง
+ */
+export async function updateWorkOrderComment(
+  orgId: string,
+  commentId: string,
+  userId: string,
+  content: string
+): Promise<boolean> {
+  const res = await prisma.workOrderComment.updateMany({
+    where: { id: commentId, orgId, userId },
+    data: { content },
+  });
+  return res.count > 0;
+}
+
+/**
+ * ลบคอมเมนต์ใบงาน — คืน url รูปที่ต้องเก็บกวาดใน storage ต่อ
+ *
+ * เจ้าของลบของตัวเองได้ คนที่จัดการใบงานได้ลบของใครก็ได้ (คอมเมนต์ที่พิมพ์ผิด
+ * หรือแนบรูปผิดใบ ปล่อยไว้แล้วคนอ่านสับสนกว่า) — กติกาเดียวกับคอมเมนต์ PO
+ */
+export async function deleteWorkOrderComment(
+  orgId: string,
+  commentId: string,
+  userId: string,
+  canManageAll: boolean
+): Promise<string[]> {
+  const row = await prisma.workOrderComment.findFirst({
+    where: { id: commentId, orgId, ...(canManageAll ? {} : { userId }) },
+    select: { id: true, imageUrl: true },
+  });
+  if (!row) return [];
+  await prisma.workOrderComment.delete({ where: { id: row.id } });
+  return row.imageUrl ? [row.imageUrl] : [];
+}
+
 export function addWorkOrderComment(
   orgId: string,
   workOrderId: string,
