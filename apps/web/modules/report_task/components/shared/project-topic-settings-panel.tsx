@@ -14,10 +14,18 @@ import {
 } from "@/modules/report_task/components/ui/alert-dialog";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Input } from "@/modules/report_task/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/modules/report_task/components/ui/select";
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { colorPalette } from "@/modules/report_task/store/event-color-store";
 import { chartColors } from "@/modules/report_task/lib/chart-colors";
+import { departments } from "@/modules/report_task/lib/directory";
 import type { ProjectTopic } from "@/modules/report_task/types";
 import { Plus, Trash2, Check, Save } from "lucide-react";
 import { toast } from "sonner";
@@ -54,12 +62,20 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (v: string)
 }
 
 /**
- * Manage project topics — rename/set color/delete, on top of the quick
- * "+ สร้างหัวข้อใหม่" creator already in new-task-dialog.tsx (that one stays;
- * this is for cleanup/upkeep once topics pile up). Deleting a topic here
- * clears `projectTopicId` off any task that still points to it, instead of
- * leaving tasks referencing a topic that no longer exists (they'd silently
- * vanish from the per-person topic board otherwise — see person-topics-board.tsx).
+ * Manage project topics — rename/set color/department/delete, on top of the
+ * quick "+ สร้างหัวข้อใหม่" creator already in new-task-dialog.tsx (that one
+ * stays; this is for cleanup/upkeep once topics pile up). Deleting a topic
+ * here clears `projectTopicId` off any task that still points to it, instead
+ * of leaving tasks referencing a topic that no longer exists (they'd
+ * silently vanish from the per-person topic board otherwise — see
+ * person-topics-board.tsx).
+ *
+ * The department field only exists here to let someone tag an OLD topic
+ * after the fact — a topic created after the department picker landed in
+ * new-task-dialog.tsx already got one at creation time and doesn't need
+ * fixing up here. Setting it changes which department's board column that
+ * topic's tasks group under (see lib/task-department.ts) — it never touches
+ * any task's own real departmentIds/permissions.
  */
 export function ProjectTopicSettingsPanel() {
   const storedTopics = useProjectTopicStore((s) => s.topics);
@@ -117,6 +133,20 @@ export function ProjectTopicSettingsPanel() {
           <div key={t.id} className="flex items-center gap-2 rounded-lg border border-[var(--line)] p-2">
             <ColorPicker value={t.color ?? chartColors.blue} onChange={(color) => updateDraft(t.id, { color })} />
             <Input value={t.name} onChange={(e) => updateDraft(t.id, { name: e.target.value })} className="flex-1" />
+            <Select
+              value={t.departmentId ?? "none"}
+              onValueChange={(v) => v && updateDraft(t.id, { departmentId: v === "none" ? undefined : v })}
+            >
+              <SelectTrigger className="w-[150px] shrink-0">
+                <SelectValue placeholder="ไม่ระบุแผนก" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">ไม่ระบุแผนก</SelectItem>
+                {departments.map((d) => (
+                  <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button
               variant="ghost"
               size="icon"
