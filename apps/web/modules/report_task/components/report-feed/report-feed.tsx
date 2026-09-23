@@ -59,22 +59,65 @@ export function ReportFeed({
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
 
+  // "ข้อความใหม่" divider position, frozen per room. Opening a room marks it
+  // read (page.tsx effect) which clears unreadFor almost immediately, so we
+  // capture the id of the first still-unread post on the very first render for
+  // this room — captured during render, before that read-clearing effect runs
+  // — and keep the line there until the room changes. null = nothing was
+  // unread when you arrived, so no line shows.
+  //
+  // เก็บเป็น state แล้วปรับระหว่างเรนเดอร์ (แพตเทิร์น "state ที่รีเซ็ตเมื่อ prop
+  // เปลี่ยน" ของ React) แทน ref — ได้จังหวะเดียวกันเป๊ะ แต่ค่าถูกอ่านได้อย่าง
+  // ปลอดภัยระหว่างเรนเดอร์ ซึ่งจำเป็นเพราะตัวคำนวณหน้าต่างด้านล่างต้องใช้ค่านี้
+  const firstUnreadId = () =>
+    topicPosts.find((p) => p.unreadFor.includes(viewingAsUserId) && p.authorId !== viewingAsUserId)?.id ?? null;
+  const [divider, setDivider] = useState<{ topicId: string; beforeId: string | null }>(() => ({
+    topicId: topic.id,
+    beforeId: firstUnreadId(),
+  }));
+  let newDividerBeforeId = divider.beforeId;
+  if (divider.topicId !== topic.id) {
+    const next = { topicId: topic.id, beforeId: firstUnreadId() };
+    setDivider(next);
+    // ใช้ค่าใหม่ในเรนเดอร์นี้เลย ไม่รอรอบถัดไป กันเส้นวางผิดที่ชั่วขณะ
+    newDividerBeforeId = next.beforeId;
+  }
+
   // จำนวนโพสต์ "ล่าสุด" ที่กางอยู่ตอนนี้ — เริ่มชุดเดียว แล้วโตทีละชุดเมื่อเลื่อนขึ้น
   // รีเซ็ตตอนสลับห้องด้วยการปรับ state ระหว่างเรนเดอร์ (แพตเทิร์นที่ React แนะนำ
   // สำหรับ "state ที่ต้องรีเซ็ตเมื่อ prop เปลี่ยน") ไม่ใช้ effect เพราะ effect จะ
   // วาดชุดเก่าของห้องก่อนหน้าทิ้งไปหนึ่งเฟรมก่อนรีเซ็ต
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [countedTopicId, setCountedTopicId] = useState(topic.id);
+  const [countedLength, setCountedLength] = useState(topicPosts.length);
+
   if (countedTopicId !== topic.id) {
     setCountedTopicId(topic.id);
+    setCountedLength(topicPosts.length);
     setVisibleCount(PAGE_SIZE);
+  } else if (topicPosts.length !== countedLength) {
+    // โพสต์ใหม่เข้ามาระหว่างเปิดห้องค้างไว้ — หน้าต่างนับจาก "ท้ายลิสต์" ถ้าไม่
+    // ขยายตาม ขอบบนจะเลื่อนตามไปด้วย แล้วโพสต์เก่าสุดที่กำลังอ่านค้างอยู่จะหลุด
+    // หายไปจากจอกลางคัน
+    if (topicPosts.length > countedLength) setVisibleCount((c) => c + (topicPosts.length - countedLength));
+    setCountedLength(topicPosts.length);
   }
 
-  // ลิงก์ที่ชี้มาที่โพสต์เก่าโดยตรง (deep link จากปุ่ม "คัดลอกลิงก์"/แจ้งเตือน)
-  // ต้องกางถึงโพสต์นั้นให้เห็น ไม่งั้นกดลิงก์แล้วเจอหน้าว่างเพราะมันอยู่นอกชุด
-  const highlightIdx = highlightPostId ? topicPosts.findIndex((p) => p.id === highlightPostId) : -1;
-  const neededForHighlight = highlightIdx >= 0 ? topicPosts.length - highlightIdx : 0;
-  const shownCount = Math.min(topicPosts.length, Math.max(visibleCount, neededForHighlight));
+  // ต้องกางให้ถึง 2 จุดนี้เสมอ ไม่งั้นฟีเจอร์เดิมพัง:
+  //  - โพสต์ที่ลิงก์ชี้มาตรง ๆ (ปุ่ม "คัดลอกลิงก์"/แจ้งเตือน) ไม่งั้นกดแล้วไม่เจอ
+  //  - เส้น "ข้อความใหม่" ไม่งั้นห้องที่ค้างอ่านไว้เยอะ ๆ จะไม่เห็นเส้นเลย
+  // ขยาย visibleCount จริง ๆ ไม่ใช่แค่คำนวณชั่วคราว เพราะ highlightPostId ถูก
+  // ล้างทิ้งหลัง 2.5 วิ (ดู page.tsx) ถ้าเป็นค่าชั่วคราว หน้าต่างจะหดกลับแล้ว
+  // โพสต์ที่เพิ่งกระโดดไปหาก็หายวับไปต่อหน้า
+  const reachOf = (postId: string | null | undefined) => {
+    if (!postId) return 0;
+    const i = topicPosts.findIndex((p) => p.id === postId);
+    return i >= 0 ? topicPosts.length - i : 0;
+  };
+  const mustReach = Math.max(reachOf(highlightPostId), reachOf(newDividerBeforeId));
+  if (mustReach > visibleCount) setVisibleCount(mustReach);
+
+  const shownCount = Math.min(topicPosts.length, visibleCount);
   const olderCount = topicPosts.length - shownCount;
   const visiblePosts = olderCount > 0 ? topicPosts.slice(olderCount) : topicPosts;
 
@@ -89,19 +132,6 @@ export function ReportFeed({
     el.scrollTop = el.scrollHeight - anchor;
     anchorFromBottomRef.current = null;
   }, [visibleCount]);
-
-  // "ข้อความใหม่" divider position, frozen per room. Opening a room marks it
-  // read (page.tsx effect) which clears unreadFor almost immediately, so we
-  // capture the id of the first still-unread post on the very first render for
-  // this room — refs update during render, before that read-clearing effect
-  // runs — and keep the line there until the room changes. null = nothing was
-  // unread when you arrived, so no line shows.
-  const dividerRef = useRef<{ topicId: string; beforeId: string | null }>({ topicId: "", beforeId: null });
-  if (dividerRef.current.topicId !== topic.id) {
-    const firstUnread = topicPosts.find((p) => p.unreadFor.includes(viewingAsUserId) && p.authorId !== viewingAsUserId);
-    dividerRef.current = { topicId: topic.id, beforeId: firstUnread ? firstUnread.id : null };
-  }
-  const newDividerBeforeId = dividerRef.current.beforeId;
 
   useEffect(() => {
     const el = scrollRef.current;
