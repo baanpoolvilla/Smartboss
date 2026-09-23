@@ -6,34 +6,7 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canManage } from "@/modules/report_task/lib/directory";
 import { useMaintenanceNotifStore } from "@/modules/notifications/use-maintenance-notifications";
 import { isRoomPost, reportCategoryFor, maintenanceCategoryFor, maintenanceHrefFor, moduleForCategory } from "@/modules/notifications/derive";
-import type { NotifCategory, UnifiedNotification } from "@/modules/notifications/types";
-
-/** "มีคนทำอะไรบางอย่างที่พาดพิงถึงฉันโดยตรง เมื่อกี้นี้" (แท็ก/มอบหมายงาน/
- * ตอบกลับ/ตั๋วปัญหา/นัดประชุม/ใบงานที่มอบหมายให้) เทียบกับแจ้งเตือนแบบ
- * "เตือนตามกำหนดเวลา" ที่ระบบสร้างเป็นชุดใหญ่ล่วงหน้า (แผนบำรุงรักษา,
- * ค่าใช้จ่าย, ใบสั่งซื้อ, เตือนส่งรายงาน) — PM เดียวสร้างเตือนล่วงหน้าได้
- * หลายรอบ (7 วัน/5 วัน/1 วันก่อนถึงกำหนด ฯลฯ) ต่อหนึ่งงาน คูณด้วยจำนวนงาน PM
- * ทั้งบริษัท ยอดรวมจึงมากกว่าจำนวนครั้งที่มีคนแท็ก/มอบหมายงานให้จริงๆ เป็นสิบ
- * เท่าได้ง่ายๆ — เรียงแค่ unread-first + ใหม่→เก่า อย่างเดียวเลยทำให้ของจริง
- * ที่ควรรีบเห็น (เพิ่งมีคนมอบหมายงานให้) จมหายไปในกองเตือน PM ที่ backfill
- * มาทีเดียวหลายสิบอัน แม้จะเพิ่งเกิดใหม่กว่าก็ตาม ("กระดิ่งไม่ขึ้น...เปิดใน
- * งาน/Kanban ถึงเห็น") จัดลำดับกลุ่มนี้ไว้ก่อนเสมอ ไม่ว่าฝั่งเตือนตามกำหนดจะมี
- * เยอะแค่ไหนหรือใหม่กว่าแค่ไหน */
-const PERSONAL_CATEGORIES = new Set<NotifCategory>([
-  "mention",
-  "reply",
-  "reaction",
-  "task",
-  "task_rejected",
-  "ticket",
-  "meeting",
-  "work_order",
-  "hr_leave",
-  "hr_attendance",
-]);
-function isPersonal(n: UnifiedNotification): boolean {
-  return PERSONAL_CATEGORIES.has(n.category);
-}
+import type { UnifiedNotification } from "@/modules/notifications/types";
 
 export interface UseUnifiedNotificationsOptions {
   /** รวมแจ้งเตือน "โพสต์ใหม่ในห้อง" (room_post) ด้วยไหม — โหมด "ทั้งหมด" ที่
@@ -133,16 +106,17 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
         })
       : [];
 
-    // unread-first, then "about me directly" ahead of scheduled/bulk
-    // reminders (see isPersonal's own doc comment), then newest→oldest
-    // within each bucket — org-activity items are always "read" so they
-    // naturally settle to the bottom, after everything the viewer still
-    // actually needs to act on themselves.
+    // unread-first, then purely newest→oldest by actual event time — no
+    // per-module/category grouping. ยืนยันจากเจ้าของระบบตรง ๆ ("ไม่เอาแบบแจ้ง
+    // เตือนโมดูลนี้อยู่บน แล้วต่อด้วยอีกโมดูล เอารวมกันเลย ไล่ตามระดับเวลา")
+    // — เคยมี isPersonal ดันหมวด "เกี่ยวกับฉันโดยตรง" ให้อยู่เหนือแจ้งเตือน
+    // ตามกำหนดเวลาเสมอไม่ว่าจะเก่าแค่ไหน (กันไม่ให้ PM ที่ backfill มาทีเดียว
+    // หลายสิบอันฝังของใหม่จริง) แต่พอ notifyDuePmSchedules มีเกณฑ์วันกันสแปม
+    // แล้ว (shouldNotifyPmToday ฝั่ง cron.ts) ปริมาณ PM ต่อวันจะน้อยลงมากจนไม่
+    // จำเป็นต้องกันแบบนี้อีก — org-activity อ่านแล้วเสมอจึงยังจมท้ายสุดตาม
+    // ธรรมชาติของการเรียงเวลาอยู่ดี ไม่ต้องมีเงื่อนไขพิเศษแยก
     return [...fromReport, ...fromMaintenance, ...fromOrgActivity].sort(
-      (a, b) =>
-        Number(a.read) - Number(b.read) ||
-        Number(isPersonal(b)) - Number(isPersonal(a)) ||
-        b.createdAt.localeCompare(a.createdAt)
+      (a, b) => Number(a.read) - Number(b.read) || b.createdAt.localeCompare(a.createdAt)
     );
   }, [reportNotifications, maintenanceItems, orgItems, viewingAsUserId, includeRoomPosts, includeOrgActivity]);
 

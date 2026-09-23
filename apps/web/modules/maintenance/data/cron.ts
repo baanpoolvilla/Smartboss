@@ -73,9 +73,29 @@ export async function generateWorkOrdersForDuePms(): Promise<{
   return { due: duePms.length, created };
 }
 
+/** true = วันนี้ควรแจ้งเตือน PM นี้ตามระยะห่างจากกำหนด — ไม่ใช่ "ถึงเกณฑ์แล้วเงียบ
+ * ไปเลย", เกณฑ์นี้กันสแปม (เดิมแจ้งซ้ำทุกวันไม่มีเงื่อนไขเลย ยิงทุก PM ที่ยัง
+ * ไม่ถึง/เลยกำหนดทุกครั้งที่ cron รัน — พอ cron หยุดทำงานไปพักหนึ่งแล้วกลับมา
+ * รันอีกที เลยเทกองแจ้งเตือนที่ค้างไว้ทั้งหมดออกมาพร้อมกันทีเดียว
+ * "เหมือนไม่มีแจ้ง...แล้วแจ้งทีเป็นชุดใหญ่ๆ") และกันเงียบหาย (ไม่แจ้งเฉพาะวันที่
+ * เพิ่งครบกำหนดแล้วปล่อยเลยไปเรื่อยๆ) — ยืนยันจากเจ้าของระบบ: เตือนล่วงหน้า
+ * 7/3/1 วัน + วันที่ถึงกำหนด แล้วพอเลยกำหนดไปแล้ว เตือนซ้ำทุก 3 วัน (1, 4, 7, ...
+ * วันที่เลยมา) แทนที่จะแจ้งทุกวันจนกว่าจะปิดงาน
+ *
+ * ขึ้นกับ cron งานนี้ถูกเรียกทุกวันจริง — ถ้าขาดไปวันใดวันหนึ่งพอดีกับวันที่
+ * ตรงเกณฑ์ ก็จะข้ามรอบนั้นไปเงียบๆ (ไม่มีการจำ "เคยแจ้งไปแล้วหรือยัง" แยกต่างหาก
+ * ในฐานข้อมูล) แต่ยังดีกว่าเดิมมาก เพราะไม่มีทางเทกองสแปมอีกต่อไป
+ */
+function shouldNotifyPmToday(daysUntilDue: number): boolean {
+  if (daysUntilDue >= 0) return [7, 3, 1, 0].includes(daysUntilDue);
+  const overdueDays = -daysUntilDue;
+  return (overdueDays - 1) % 3 === 0; // 1, 4, 7, 10 วันที่เลยกำหนดมา
+}
+
 /**
- * แจ้งเตือน PM ที่ใกล้ครบกำหนด/เกินกำหนด (ภายใน 7 วัน)
- * ส่งให้ช่างที่รับผิดชอบ + ผู้ดูแลบ้าน + ผู้จัดการ (port จาก notifyPmDueSoon)
+ * แจ้งเตือน PM ที่ใกล้ครบกำหนด/เกินกำหนด (ภายใน 7 วัน) — เฉพาะวันที่ตรงเกณฑ์
+ * ของ shouldNotifyPmToday เท่านั้น ไม่ใช่ทุกวันที่ยังไม่ถึง/เลยกำหนด
+ * ส่งให้ช่างที่รับผิดชอบ + ผู้ดูแลบ้าน (port จาก notifyPmDueSoon)
  */
 export async function notifyDuePmSchedules(): Promise<{ notified: number }> {
   const soon = new Date();
@@ -108,6 +128,8 @@ export async function notifyDuePmSchedules(): Promise<{ notified: number }> {
     const due = new Date(pm.nextDueDate);
     due.setHours(0, 0, 0, 0);
     const days = Math.round((due.getTime() - today.getTime()) / 86_400_000);
+
+    if (!shouldNotifyPmToday(days)) continue;
 
     const statusText =
       days < 0
