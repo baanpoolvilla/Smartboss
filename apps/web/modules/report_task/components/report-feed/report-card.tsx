@@ -1227,7 +1227,13 @@ export function ReportCard({
           <AvatarFallback className="rounded-xl text-xs font-semibold bg-[var(--accent)] text-[var(--brand-green-dark)]">{author?.avatar}</AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1">
-          <div className="flex items-start gap-2">
+          {/* กันที่ด้านขวาไว้ให้แถบปุ่มลอย (absolute top-2 right-3 ด้านบน) —
+              จอกว้างมีที่เหลือเลยไม่เคยชน แต่พอย่อจอ แถวชื่อ/เวลา/ป้ายยาวขึ้นมา
+              จนมุดอยู่ใต้ปุ่ม อ่านไม่ออก ("ย่อจาก pc มันซ้อนกัน") กันที่ตายตัวไว้
+              เลยดีกว่าไปขยับตอน hover ซึ่งจะทำให้บรรทัดกระโดดใส่หน้าคนอ่าน
+              เครื่องสัมผัสมีแค่ปุ่ม "⋯" ปุ่มเดียว (ดู [@media(hover:none)] ด้านบน)
+              เลยกันน้อยกว่ากันมาก */}
+          <div className="flex items-start gap-2 pr-8 [@media(hover:hover)]:pr-[120px]">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 {post.pinned && <Pin className="h-3.5 w-3.5 text-[var(--brand-green-dark)] shrink-0" />}
