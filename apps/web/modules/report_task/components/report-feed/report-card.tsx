@@ -1256,19 +1256,23 @@ export function ReportCard({
               <div className="flex items-center gap-1.5">
                 {post.pinned && <Pin className="h-3.5 w-3.5 text-[var(--brand-green-dark)] shrink-0" />}
                 <p className="text-sm font-semibold truncate">{author?.name}</p>
-                {authorDept && (
-                  // ฟ้า/น้ำเงิน ไม่ใช่เขียวแบรนด์ — ขอมาโดยตรง ("ขอเป็นพื้นหลัง
-                  // สีฟ้าได้ไหม") และยังช่วยแยกป้าย "แผนกของคนโพสต์" ออกจาก
-                  // ป้ายเขียว "ตรงเวลา/รอบ" ที่อยู่แถวเดียวกันด้วย
-                  <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold bg-[#dbeafe] text-[var(--chart-blue,#2563eb)]">
-                    {authorDept.name}
-                  </span>
-                )}
                 {isUnread && (
                   <span className="h-1.5 w-1.5 rounded-full bg-[var(--chart-blue)] shrink-0" aria-label="ยังไม่อ่าน" />
                 )}
               </div>
-              <p className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xs text-[var(--ink-soft)]">
+              {/* ป้ายเล็กทุกอันอยู่แถวนี้แถวเดียว (แผนก · เวลา · ตรงเวลา/สาย) —
+                  เดิมป้ายแผนกไปอยู่แถวชื่อ ซึ่งทั้งสองแถวมีป้ายที่สูงกว่าความสูง
+                  บรรทัดของตัวเอง เลยล้นมาชนกันพอดี ("มันทับกันเห็นไหม") อยู่แถว
+                  เดียวกันแล้วเรียงต่อกันตามปกติ ไม่มีอะไรล้นไปทับใคร */}
+              <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-[var(--ink-soft)]">
+                {authorDept && (
+                  // ฟ้า/น้ำเงิน ไม่ใช่เขียวแบรนด์ — ขอมาโดยตรง ("ขอเป็นพื้นหลัง
+                  // สีฟ้าได้ไหม") และยังแยกป้าย "แผนกของคนโพสต์" ออกจากป้าย
+                  // เขียว "ตรงเวลา/รอบ" ที่อยู่แถวเดียวกันด้วย
+                  <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold bg-[#dbeafe] text-[var(--chart-blue,#2563eb)]">
+                    {authorDept.name}
+                  </span>
+                )}
                 {/* ตำแหน่งกับแผนกพูดเรื่องเดียวกันเกือบทุกครั้ง ("ผู้ดูแลบ้าน" คู่กับ
                     "ฝ่ายดูแลบ้านพัก") พอขึ้นทั้งคู่แถวนี้เลยอ่านยากโดยไม่ได้อะไรเพิ่ม —
                     ห้องไหนมีป้ายแผนกแล้วก็ไม่ต้องบอกตำแหน่งซ้ำ ส่วนห้องที่ล็อกแผนก
