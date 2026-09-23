@@ -55,6 +55,7 @@ import {
   CommentComposer,
 } from "@/modules/maintenance/components/work-order-detail-actions";
 import { AppScaffold } from "@/modules/maintenance/components/app-scaffold";
+import { MarkReadOnView } from "@/modules/notifications/mark-read-on-view";
 import {
   updateStatusAction,
   completeWorkOrderAction,
@@ -171,6 +172,7 @@ export default async function WorkOrderDetailPage({
       width="max-w-3xl"
       backHref="/maintenance/work-orders"
     >
+      <MarkReadOnView referenceId={wo.id} />
 
       {/* ─── หัวข้อ + ข้อมูลใบงาน ─── */}
       <Card className="mb-4 p-4 sm:p-5">

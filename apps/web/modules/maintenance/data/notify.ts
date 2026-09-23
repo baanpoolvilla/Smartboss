@@ -148,6 +148,21 @@ export async function markRead(userId: string, id: string) {
   );
 }
 
+/**
+ * มาร์คอ่านทุกแจ้งเตือนของ `userId` ที่ชี้ไปเรื่องเดียวกัน (`referenceId`) —
+ * ใช้ตอนเปิดหน้ารายละเอียดของเรื่องนั้นตรงๆ (เช่น หน้าใบงาน) ที่ referenceId
+ * ก็คือ id ของหน้านั้นเอง ("เปิดเข้ามาหน้าที่มีแจ้งเตือนแล้ว แจ้งเตือนมันไม่หาย")
+ * — ผู้ใช้เห็นเนื้อหาที่แจ้งเตือนพูดถึงอยู่ตรงหน้าแล้ว ไม่ต้องรอให้กดที่กระดิ่งอีก
+ */
+export async function markReadByReference(userId: string, referenceId: string) {
+  await crossOrg("notification:recipient-scoped-not-org-scoped", () =>
+    prisma.notification.updateMany({
+      where: { referenceId, userId, readAt: null },
+      data: { readAt: new Date() },
+    })
+  );
+}
+
 // ─── LINE Messaging (per-org config) ─────────────────────
 
 export function getLineConfig(orgId: string) {

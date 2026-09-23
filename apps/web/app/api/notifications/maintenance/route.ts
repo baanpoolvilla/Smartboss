@@ -1,5 +1,5 @@
 import { requireAuth } from "@smartboss/auth";
-import { listNotifications, listOrgNotifications, markAllRead, markRead } from "@/modules/maintenance/data/notify";
+import { listNotifications, listOrgNotifications, markAllRead, markRead, markReadByReference } from "@/modules/maintenance/data/notify";
 import { listDirectory } from "@/modules/report_task/lib/db/employee-directory";
 
 export const dynamic = "force-dynamic";
@@ -44,14 +44,19 @@ export async function GET(request: Request) {
   }
 }
 
-/** body `{ id?: string }` — มี id = มาร์คอ่านรายการนั้น, ไม่มี = มาร์คอ่านทั้งหมด */
+/** body `{ id?: string }` มี id = มาร์คอ่านรายการนั้น, `{ referenceId?: string }` =
+ * มาร์คอ่านทุกรายการที่ชี้ไปเรื่องเดียวกัน (เช่น เปิดหน้าใบงานที่แจ้งเตือนพูดถึงตรงๆ),
+ * ไม่มีทั้งคู่ = มาร์คอ่านทั้งหมด */
 export async function POST(request: Request) {
   try {
     const session = await requireAuth();
-    const body = (await request.json().catch(() => ({}))) as { id?: unknown };
+    const body = (await request.json().catch(() => ({}))) as { id?: unknown; referenceId?: unknown };
     const id = typeof body.id === "string" ? body.id : undefined;
+    const referenceId = typeof body.referenceId === "string" ? body.referenceId : undefined;
     if (id) {
       await markRead(session.userId, id);
+    } else if (referenceId) {
+      await markReadByReference(session.userId, referenceId);
     } else {
       await markAllRead(session.userId);
     }

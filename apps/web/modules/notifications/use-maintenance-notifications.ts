@@ -24,6 +24,7 @@ interface MaintenanceNotifStore {
   loaded: boolean;
   refresh: (opts?: { includeOrgActivity?: boolean }) => Promise<void>;
   markRead: (id: string) => Promise<void>;
+  markReadByReference: (referenceId: string) => Promise<void>;
   markAllRead: () => Promise<void>;
 }
 
@@ -58,6 +59,25 @@ export const useMaintenanceNotifStore = create<MaintenanceNotifStore>()((set, ge
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
+      });
+    } catch {
+      set({ items: prev });
+    }
+  },
+  /** ใช้ตอนเปิดหน้ารายละเอียดของเรื่องที่แจ้งเตือนพูดถึงตรงๆ (เช่น หน้าใบงาน) —
+   * มาร์คอ่านทุกแจ้งเตือนที่ referenceId ตรงกันในคราวเดียว ไม่ต้องรอกดที่กระดิ่ง
+   * (ดู doc ของ markReadByReference ฝั่ง data/notify.ts) */
+  async markReadByReference(referenceId) {
+    const prev = get().items;
+    const now = new Date().toISOString();
+    set({
+      items: prev.map((n) => (n.referenceId === referenceId ? { ...n, readAt: n.readAt ?? now } : n)),
+    });
+    try {
+      await fetch("/api/notifications/maintenance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ referenceId }),
       });
     } catch {
       set({ items: prev });

@@ -43,6 +43,7 @@ import {
   ReturnLinkButton,
 } from "@/modules/maintenance/components/po-actions";
 import { AppScaffold } from "@/modules/maintenance/components/app-scaffold";
+import { MarkReadOnView } from "@/modules/notifications/mark-read-on-view";
 import {
   approveNormalAction,
   approveEmergencyAction,
@@ -139,6 +140,7 @@ export default async function PoDetailPage({
       width="max-w-3xl"
       backHref="/maintenance/purchase-orders"
     >
+      <MarkReadOnView referenceId={po.id} />
 
       {/* ─── หัวการ์ด ─── */}
       <Card className="mb-4 p-4 sm:p-5">

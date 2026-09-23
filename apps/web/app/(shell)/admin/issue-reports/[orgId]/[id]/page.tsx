@@ -11,6 +11,7 @@ import { canActOnTickets } from "@/modules/admin/support-org";
 import { classifyIssueSource } from "@/modules/admin/issue-source";
 import { moduleRegistry } from "@/module-registry";
 import { IssueTicketDetailClient, type TicketUserInfo } from "@/modules/admin/components/issue-reports/issue-ticket-detail-client";
+import { MarkReadOnView } from "@/modules/notifications/mark-read-on-view";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +78,7 @@ export default async function AdminIssueTicketDetailPage({
 
   return (
     <AppScaffold title={`ตั๋ว ${ticket.code}`} width="max-w-4xl" backHref="/admin/issue-reports">
+      <MarkReadOnView referenceId={`${orgId}:${id}`} />
       <IssueTicketDetailClient
         orgId={orgId}
         orgName={org.name}

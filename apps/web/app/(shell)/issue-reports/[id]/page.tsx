@@ -50,6 +50,7 @@ import { getUser, users } from "@/modules/report_task/lib/directory";
 import { relativeTime, formatDate } from "@/modules/report_task/lib/format";
 import { cn } from "@/modules/report_task/lib/utils";
 import { markMyIssueTicketRead, notifyIssueReplyFromReporter } from "@/modules/report_task/lib/issue-notify";
+import { useMaintenanceNotifStore } from "@/modules/notifications/use-maintenance-notifications";
 
 export default function IssueTicketDetailPage() {
   const params = useParams<{ id: string }>();
@@ -59,6 +60,7 @@ export default function IssueTicketDetailPage() {
   const config = useIssueDeskConfigStore((s) => s.config);
   const grants = useSettingsAccessStore((s) => s.grants);
   const markRead = useIssueReportStore((s) => s.markRead);
+  const markReferenceRead = useMaintenanceNotifStore((s) => s.markReadByReference);
 
   const ticket = tickets.find((t) => t.id === params.id);
 
@@ -74,9 +76,16 @@ export default function IssueTicketDetailPage() {
   const [tab, setTab] = useState<IssueAudience>("all");
 
   // เปิดดูตั๋วนี้แล้ว — แจ้งเตือนของตั๋วนี้ที่ยังไม่อ่านถือว่าอ่านแล้ว (ตัวเลขแดงลดลงเอง)
+  // — markMyIssueTicketRead มาร์คใน DB ตรงๆ (server action) ส่วน
+  // markReferenceRead อัปเดต store ฝั่ง client ด้วย ให้เลขที่ tile/เมนูอื่นๆ
+  // ลดลงทันทีในแท็บนี้เลยโดยไม่ต้องรอรีเฟรชหน้า (เดิมมีแต่ตัวแรก ทำให้ DB
+  // ถูกมาร์คอ่านจริง แต่ badge ที่ยังจำค่าเก่าจาก store ไว้ไม่รู้เรื่องด้วย)
   const ticketId = ticket?.id;
   useEffect(() => {
-    if (ticketId) void markMyIssueTicketRead(ticketId);
+    if (!ticketId) return;
+    void markMyIssueTicketRead(ticketId);
+    void markReferenceRead(ticketId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticketId]);
 
   const visibleMessages = useMemo(

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { maintenanceCategoryFor } from "./derive";
 import type { NotifCategory } from "./types";
+import { useMaintenanceNotifStore } from "./use-maintenance-notifications";
 
 /**
  * ตัวเลขแดงที่ tile หน้าแรกและเมนูข้างในโมดูล — เวอร์ชันทั่วไปของ
@@ -17,7 +18,15 @@ import type { NotifCategory } from "./types";
  *
  * ไม่ได้ผ่าน useUnifiedNotifications (นั่นต้องมี report_task's
  * useNotificationStore/useIdentityStore hydrate ก่อน ซึ่งหน้าแรก/โมดูลอื่นๆ
- * ไม่ได้ mount ให้) — ยิง fetch ของตัวเองตรงๆ เหมือนที่ AppTileReviewBadge ทำ
+ * ไม่ได้ mount ให้) — แต่ยังอ่านจาก useMaintenanceNotifStore ตัวเดียวกับที่
+ * bell popover/หน้าใบงานใช้ (ไม่ใช่ store เฉพาะ maintenance module — เก็บ
+ * แจ้งเตือนทุก category จาก core.notifications) แทนที่จะยิง fetch ของตัวเอง
+ * แยกต่างหากเหมือนเดิม — เดิมยิง fetch ครั้งเดียวตอน mount แล้วไม่ฟังอีกเลย
+ * พอมีคน markRead จากที่อื่น (กระดิ่ง, auto-mark ตอนเปิดหน้ารายละเอียด) เลข
+ * ที่นี่ไม่ขยับตาม ต้องรีเฟรชหน้าถึงจะหาย ("กดในกระดิ่งแล้วมามันหายแต่ต้อง
+ * รีเฟรชเลข 1 ตรงใบงานถึงจะหาย") — subscribe ตรงๆ แก้ปัญหานี้เพราะทุกที่ที่
+ * เขียน store (markRead/markReadByReference/markAllRead/refresh) แชร์
+ * instance เดียวกัน re-render ที่นี่ทันทีโดยไม่ต้อง fetch เพิ่ม
  */
 export function NotifCountBadge({
   categories,
@@ -31,27 +40,23 @@ export function NotifCountBadge({
   types?: string[];
   className?: string;
 }) {
-  const [count, setCount] = useState(0);
+  const items = useMaintenanceNotifStore((s) => s.items);
+  const loaded = useMaintenanceNotifStore((s) => s.loaded);
+  const refresh = useMaintenanceNotifStore((s) => s.refresh);
 
   useEffect(() => {
-    let cancelled = false;
-    fetch("/api/notifications/maintenance")
-      .then((res) => res.json())
-      .then((data: { items?: { type: string; readAt: string | null }[] }) => {
-        if (cancelled) return;
-        const n = (data.items ?? []).filter(
-          (it) => !it.readAt && categories.includes(maintenanceCategoryFor(it.type)) && (!types || types.includes(it.type))
-        ).length;
-        setCount(n);
-      })
-      .catch(() => {
-        // Best-effort — a failed fetch just leaves the badge hidden.
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categories.join(","), types?.join(",")]);
+    // ตัวแรกที่ mount เป็นคน fetch ให้ — ถ้ามีตัวอื่น (บนหน้าเดียวกัน หรือกระดิ่ง)
+    // fetch ไปแล้ว/กำลัง fetch อยู่ loaded จะยังไม่ true จนกว่าจะเสร็จ ไม่ยิงซ้ำ
+    if (!loaded) void refresh();
+  }, [loaded, refresh]);
+
+  const count = useMemo(
+    () =>
+      items.filter(
+        (it) => !it.readAt && categories.includes(maintenanceCategoryFor(it.type)) && (!types || types.includes(it.type))
+      ).length,
+    [items, categories, types]
+  );
 
   if (count === 0) return null;
   return (
