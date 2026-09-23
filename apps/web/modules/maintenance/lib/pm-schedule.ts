@@ -138,9 +138,68 @@ export function nextDueSlot(
   return addMonthsClamped(a, 12);
 }
 
-/** yyyy-mm-dd (UTC) สำหรับเก็บลง @db.Date */
+/** เวลาไทยเร็วกว่า UTC 7 ชั่วโมง — ค่าคงที่เดียวของโมดูล ไม่ใช่กฎธุรกิจ */
+const TH_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+/**
+ * วันแบบไม่มีเวลา **ตามปฏิทินไทย** สำหรับเก็บลง @db.Date
+ *
+ * ⚠ ต้องเลื่อนเป็นเวลาไทยก่อนตัดเวลาทิ้ง เพราะเซิร์ฟเวอร์ production รันด้วย
+ * เขตเวลา UTC — ช่างกดปิดงานตีสองของวันที่ 14 (= 19:00 UTC ของวันที่ 13)
+ * ถ้าตัดตรง ๆ จะถูกบันทึกว่าทำวันที่ 13 แล้วรอบถัดไปก็เคลื่อนตามไปด้วย
+ * (วันที่ผู้ใช้กรอกเองเป็นเที่ยงคืน UTC อยู่แล้ว บวก 7 ชม. ยังเป็นวันเดิม)
+ */
 export function toDateOnly(d: Date): Date {
-  return dateOnlyUTC(d);
+  return dateOnlyUTC(new Date(d.getTime() + TH_OFFSET_MS));
+}
+
+/** บวกความถี่ 1 ช่วง (สัปดาห์ = บวกวัน, ที่เหลือ = บวกเดือนแบบไม่ล้นเดือน) */
+export function addInterval(base: Date, frequency: string): Date {
+  const b = dateOnlyUTC(base);
+  const wd = freqWeekDays(frequency);
+  if (wd != null) return new Date(b.getTime() + wd * MS_PER_DAY);
+  return addMonthsClamped(b, freqMonths(frequency) ?? 1);
+}
+
+/**
+ * วันกำหนดของรอบถัดไป เมื่อรอบปัจจุบันเพิ่งถูกปิด (+ anchor ใหม่ที่ต้องเก็บ)
+ *
+ * ฐานนับ = วันที่ **ช้ากว่า** ระหว่างวันกำหนดของรอบที่เพิ่งจบ กับวันที่ปิดจริง
+ *   · ปิดช้า (เลยกำหนดมาแล้ว) ⇒ นับจากวันที่ทำจริง — "รอบ 1 เดือน" ต้องได้
+ *     เวลาทำงานเต็มเดือนจริง ๆ ของเดิมยึดช่องเวลาของ anchor อย่างเดียว
+ *     ⇒ ปิดงานวันที่ 14 แล้วรอบถัดไปมาเคาะวันที่ 22 (อีก 8 วัน) ทั้งที่รอบ
+ *     คือ 1 เดือน — คนทำเพิ่งทำเสร็จก็โดนทวงใหม่แทบจะทันที
+ *   · ปิดก่อนกำหนด ⇒ นับจากวันกำหนดเดิม ไม่ใช่วันที่ปิด — ไม่งั้นทำก่อน 5 วัน
+ *     ทุกครั้ง รอบจะคืบเข้ามาเรื่อย ๆ จนเพี้ยนไปทั้งปี (เจตนาเดิมของ anchor
+ *     ที่ยังต้องรักษาไว้)
+ *
+ * โหมด "รอบต่อปี" ไม่แตะเลย (เหมือนเดิมทุกประการ) — ทั้งโหมดคือการตรึงช่อง
+ * เวลาไว้กับปฏิทิน "3 รอบต่อปี" ต้องได้ 3 รอบในปีนั้นจริง ๆ ถ้าไปบังคับว่า
+ * ช่องถัดไปต้องห่างจากวันที่ทำอย่างน้อย 1 ช่วงความถี่ การปิดงานช้าไป 2 สัปดาห์
+ * จะทำให้ปีถัดไปหายไปทั้งรอบ ซึ่งผิดจากสิ่งที่บริษัทตกลงไว้ยิ่งกว่าเดิม
+ */
+export function nextDueAfterCompletion(
+  pm: {
+    anchorDate: Date | null;
+    nextDueDate: Date;
+    frequency: string;
+    roundsPerYear: number | null;
+  },
+  completedOn: Date
+): { nextDue: Date; anchor: Date } {
+  const due = dateOnlyUTC(pm.nextDueDate);
+  const done = toDateOnly(completedOn);
+  const base = isAfter(done, due) ? done : due;
+
+  if (pm.roundsPerYear == null || pm.roundsPerYear <= 0) {
+    return { nextDue: addInterval(base, pm.frequency), anchor: base };
+  }
+
+  const anchor = dateOnlyUTC(pm.anchorDate ?? pm.nextDueDate);
+  return {
+    nextDue: nextDueSlot(anchor, pm.frequency, pm.roundsPerYear, base),
+    anchor,
+  };
 }
 
 export type PmMode = "continuous" | "yearlyRounds" | "limitedCount";

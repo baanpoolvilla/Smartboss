@@ -1,6 +1,9 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
-import { nextDueSlot, toDateOnly } from "@/modules/maintenance/lib/pm-schedule";
+import {
+  nextDueAfterCompletion,
+  toDateOnly,
+} from "@/modules/maintenance/lib/pm-schedule";
 
 export interface PmInput {
   propertyId: string;
@@ -76,19 +79,17 @@ export async function completePmSchedule(orgId: string, id: string) {
     return;
   }
 
-  // continuous / yearlyRounds: เลื่อนวันกำหนดถัดไป (ยึด anchor)
-  const anchor = pm.anchorDate ?? pm.nextDueDate;
-
-  // ⚠ ต้องนับรอบถัดไปจาก "วันกำหนดของรอบที่เพิ่งจบ" ไม่ใช่วันที่กดจบงาน
-  //
-  // ระบบให้สร้างใบงาน PM ล่วงหน้าได้ ⇒ ช่างจบงานก่อนถึงกำหนดได้ 1–7 วัน
-  // ถ้าใช้วันที่กดจบ ช่องเวลาถัดไปที่ "อยู่หลังวันนั้น" ก็ยังเป็นวันกำหนดเดิม
-  // ผลคือ PM ค้างอยู่รอบเดิมตลอด แล้วจะเกิดใบงานซ้ำรอบเดียวกันไปเรื่อย ๆ
-  const after = pm.nextDueDate > now ? pm.nextDueDate : now;
-  const nextDue = nextDueSlot(anchor, pm.frequency, pm.roundsPerYear, after);
+  // continuous / yearlyRounds: เลื่อนวันกำหนดถัดไป
+  // กติกาการนับ (ปิดช้า = นับจากวันที่ทำจริง / ปิดก่อนกำหนด = นับจากวันกำหนด)
+  // อยู่ใน nextDueAfterCompletion พร้อมเหตุผลของแต่ละข้อ
+  const { nextDue, anchor } = nextDueAfterCompletion(pm, now);
   await prisma.pmSchedule.update({
     where: { id: pm.id },
-    data: { lastCompletedDate: toDateOnly(now), nextDueDate: toDateOnly(nextDue) },
+    data: {
+      lastCompletedDate: toDateOnly(now),
+      nextDueDate: toDateOnly(nextDue),
+      anchorDate: toDateOnly(anchor),
+    },
   });
 }
 
