@@ -1245,7 +1245,11 @@ export function ReportCard({
                 )}
               </div>
               <p className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xs text-[var(--ink-soft)]">
-                {author?.role && <span className="truncate">{author.role} ·</span>}
+                {/* ตำแหน่งกับแผนกพูดเรื่องเดียวกันเกือบทุกครั้ง ("ผู้ดูแลบ้าน" คู่กับ
+                    "ฝ่ายดูแลบ้านพัก") พอขึ้นทั้งคู่แถวนี้เลยอ่านยากโดยไม่ได้อะไรเพิ่ม —
+                    ห้องไหนมีป้ายแผนกแล้วก็ไม่ต้องบอกตำแหน่งซ้ำ ส่วนห้องที่ล็อกแผนก
+                    เดียว (ไม่มีป้ายแผนก) ยังเห็นตำแหน่งเหมือนเดิม ไม่เสียข้อมูลไป */}
+                {!authorDept && author?.role && <span className="truncate">{author.role} ·</span>}
                 {/* Teams-style absolute timestamp ("20/07 15:19") instead of a
                     relative "22 ชม. ที่แล้ว" — asked for explicitly so a
                     post's actual clock time is always readable at a glance,
