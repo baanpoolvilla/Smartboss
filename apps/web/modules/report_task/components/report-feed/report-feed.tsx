@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ReportCard } from "@/modules/report_task/components/report-feed/report-card";
 import { DaySeparator } from "@/modules/report_task/components/report-feed/report-day-separator";
 import { NewMessagesDivider } from "@/modules/report_task/components/report-feed/report-new-divider";
@@ -11,6 +11,19 @@ import { groupByDay } from "@/modules/report_task/lib/format";
 import { ArrowDown, MessageSquareText } from "lucide-react";
 
 const NEAR_BOTTOM_PX = 120;
+
+/**
+ * เรนเดอร์ทีละชุดแทนการกางทั้งห้องรวดเดียว — เริ่มที่ชุดล่าสุด แล้วต่อชุดเก่า
+ * ให้เองตอนเลื่อนขึ้นใกล้ยอด (แบบฟีดโซเชียล) ไม่มีปุ่มให้กด
+ *
+ * ที่มา: ห้องรวมหลังย้ายข้อมูล (สรุปงาน-รวมห้องรายงาน 2026-09-23) มีโพสต์
+ * 230+ อันในห้องเดียว จากเดิมห้องละ 20-78 อัน การ์ดแต่ละใบไม่ได้แค่วาด — มัน
+ * คิดรอบส่ง/ตรงเวลา-สาย/แท็ก/ความคิดเห็น ของตัวเองทุกใบ พอคูณ 230 ใบตอนเปิด
+ * ห้อง หน้าเลยค้างไปครู่หนึ่ง ("เปิดมาหน้า daily แล้วมันค้างไปแปปนึง")
+ */
+const PAGE_SIZE = 25;
+/** เลื่อนขึ้นใกล้ยอดแค่ไหนถึงต่อชุดถัดไป — เผื่อไว้พอให้ต่อทันก่อนถึงยอดจริง */
+const LOAD_OLDER_PX = 400;
 
 /** Scrollable post timeline for the active topic — Teams-style: chronological,
  * oldest at the top and new posts pushed in at the bottom (never reordered by
@@ -45,6 +58,37 @@ export function ReportFeed({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
+
+  // จำนวนโพสต์ "ล่าสุด" ที่กางอยู่ตอนนี้ — เริ่มชุดเดียว แล้วโตทีละชุดเมื่อเลื่อนขึ้น
+  // รีเซ็ตตอนสลับห้องด้วยการปรับ state ระหว่างเรนเดอร์ (แพตเทิร์นที่ React แนะนำ
+  // สำหรับ "state ที่ต้องรีเซ็ตเมื่อ prop เปลี่ยน") ไม่ใช้ effect เพราะ effect จะ
+  // วาดชุดเก่าของห้องก่อนหน้าทิ้งไปหนึ่งเฟรมก่อนรีเซ็ต
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [countedTopicId, setCountedTopicId] = useState(topic.id);
+  if (countedTopicId !== topic.id) {
+    setCountedTopicId(topic.id);
+    setVisibleCount(PAGE_SIZE);
+  }
+
+  // ลิงก์ที่ชี้มาที่โพสต์เก่าโดยตรง (deep link จากปุ่ม "คัดลอกลิงก์"/แจ้งเตือน)
+  // ต้องกางถึงโพสต์นั้นให้เห็น ไม่งั้นกดลิงก์แล้วเจอหน้าว่างเพราะมันอยู่นอกชุด
+  const highlightIdx = highlightPostId ? topicPosts.findIndex((p) => p.id === highlightPostId) : -1;
+  const neededForHighlight = highlightIdx >= 0 ? topicPosts.length - highlightIdx : 0;
+  const shownCount = Math.min(topicPosts.length, Math.max(visibleCount, neededForHighlight));
+  const olderCount = topicPosts.length - shownCount;
+  const visiblePosts = olderCount > 0 ? topicPosts.slice(olderCount) : topicPosts;
+
+  // ต่อชุดเก่าแล้วเนื้อหาด้านบนงอกขึ้นมา ถ้าไม่ทำอะไรหน้าจะกระโดด — จำ "ระยะ
+  // ห่างจากก้นฟีด" ไว้ก่อนต่อ แล้วเลื่อนกลับมาที่ระยะเดิมหลังวาดเสร็จ สายตา
+  // จึงค้างอยู่ที่โพสต์เดิมเป๊ะ
+  const anchorFromBottomRef = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    const anchor = anchorFromBottomRef.current;
+    if (!el || anchor == null) return;
+    el.scrollTop = el.scrollHeight - anchor;
+    anchorFromBottomRef.current = null;
+  }, [visibleCount]);
 
   // "ข้อความใหม่" divider position, frozen per room. Opening a room marks it
   // read (page.tsx effect) which clears unreadFor almost immediately, so we
@@ -85,6 +129,13 @@ export function ReportFeed({
     if (!el) return;
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX;
     if (nearBottom) setShowJumpToLatest(false);
+    // ใกล้ยอดแล้วและยังมีของเก่าเหลือ → ต่อชุดถัดไปให้เอง (anchorFromBottomRef
+    // ทำให้จอไม่กระโดด ดู useLayoutEffect ข้างบน) กันยิงซ้ำด้วย anchor ที่ยัง
+    // ไม่ถูกเคลียร์ ระหว่างที่ชุดก่อนหน้ายังวาดไม่เสร็จ
+    if (el.scrollTop < LOAD_OLDER_PX && olderCount > 0 && anchorFromBottomRef.current == null) {
+      anchorFromBottomRef.current = el.scrollHeight - el.scrollTop;
+      setVisibleCount((n) => n + PAGE_SIZE);
+    }
   }
 
   function jumpToLatest() {
@@ -130,7 +181,13 @@ export function ReportFeed({
           // so the gap between them has to be real whitespace, not just a
           // border each card leans on.
           <div className="space-y-6 px-2 sm:px-3">
-            {groupByDay(topicPosts, (p) => p.createdAt).map((group) => (
+            {olderCount > 0 && (
+              // ตัวบอกว่ายังมีของเก่าอยู่ข้างบน — เลื่อนขึ้นต่ออีกนิดแล้วมันต่อให้เอง
+              <p className="py-2 text-center text-xs text-[var(--ink-soft)]">
+                เลื่อนขึ้นเพื่อดูโพสต์เก่ากว่านี้ · เหลืออีก {olderCount} โพสต์
+              </p>
+            )}
+            {groupByDay(visiblePosts, (p) => p.createdAt).map((group) => (
               <div key={group.key} className="space-y-3">
                 <DaySeparator label={reportDayLabel(group.label)} />
                 {group.items.map((p) => {
