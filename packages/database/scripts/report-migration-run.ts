@@ -1,0 +1,390 @@
+import { PrismaClient } from "@prisma/client";
+
+/**
+ * ย้ายโพสต์ของห้องรายงานรายแผนก เข้าห้องรวม Daily/Weekly/Monthly-report
+ * (สรุปงาน-รวมห้องรายงาน 2026-09-23)
+ *
+ * ทำ 4 อย่างในทีเดียว — แยกทำไม่ได้ เพราะถ้าย้ายโพสต์ออกแต่ห้องเดิมยังมีรอบ+
+ * ผู้ส่งอยู่ ตัวคิดคะแนนจะเห็นเป็น "มีคนต้องส่งแต่ไม่มีโพสต์เลย" แล้วไล่หัก
+ * ขาดส่งย้อนหลังทุกวันทันที:
+ *
+ *  1. ย้ายโพสต์  topicId เดิม -> ห้องรวมตามประเภท (เวลาโพสต์เดิมไม่แตะ)
+ *  2. ล้าง roundId + roundTimeAtSubmission ของโพสต์ที่ย้าย — ผู้ใช้สั่งว่า
+ *     "ให้รอบส่งนั้นจับรอบใหม่หมดเลย" คือถือรอบใหม่เป็นตัวตัดสินอันเดียว
+ *     ไม่ลากการผูกรอบเก่าตามมา (ค่า snapshot เวลาเดิมก็ต้องทิ้งด้วย ไม่งั้น
+ *     โพสต์จะถูกตัดสินด้วยเวลาของรอบที่มันไม่ได้อยู่แล้ว)
+ *  3. สร้างรอบในห้องรวม โดย "ลอก" จากรอบของห้องต้นทาง: จับกลุ่มตามเวลา+ตาราง
+ *     วัน แล้วรวมรายชื่อผู้ส่งของทุกห้องที่มีรอบเวลานั้นเข้าด้วยกัน และตั้ง
+ *     วันเริ่มใช้ย้อนไปเท่ากับรอบที่เก่าที่สุดในกลุ่ม -> ประวัติย้อนหลังจึง
+ *     ออกมาตรงกับความจริงเดิม ไม่มีใครโดนตัดสินรอบที่ตัวเองไม่เคยต้องส่ง
+ *     (ถ้ารอบเวลาเดียวกันมีอยู่แล้วในห้องรวม จะใช้ id เดิมต่อ ไม่สร้างใหม่ —
+ *     โพสต์เดิมของห้องรวมที่ผูก id นั้นไว้จะได้ไม่หลุด)
+ *  4. ปลดผู้ส่งของรอบในห้องต้นทางให้ว่าง — ห้องยังอยู่ครบ ดูย้อนหลังได้
+ *     เหมือนเดิม แค่ไม่มีใครต้องส่งที่นั่นอีกแล้ว
+ *
+ * ไม่แตะ core.performance_events เลย — ledger คะแนนเป็นระบบ "เพิ่มอย่างเดียว
+ * ไม่ลบ" ตัว sweep (report-penalty-sweep.ts) จะไล่คืนของเก่าที่ไม่ตรงแล้ว
+ * ออก undo event ให้เอง และหักของใหม่ตามรอบในห้องรวม โดยยังมี enabledSince
+ * เป็นพื้นกันย้อนหลังเกินไปเหมือนเดิม
+ *
+ * คืนค่าเดิมได้ทุกเมื่อด้วย report-migration-restore.ts (backup ก่อนรันเสมอ)
+ *
+ * รัน (บนเซิร์ฟเวอร์ source /etc/smartboss/smartboss.env ก่อน):
+ *   set -a; . /etc/smartboss/smartboss.env; set +a
+ *   pnpm --filter @smartboss/database exec tsx scripts/report-migration-run.ts --dry-run
+ *      --morning-all   ใส่ทุกคนในรอบเช้า (ไม่ใช่แค่คนที่เคยมีรอบเช้าจริง)
+ *      เอา --dry-run ออกเพื่อเขียนจริง
+ */
+
+const prisma = new PrismaClient();
+const dryRun = process.argv.includes("--dry-run");
+const morningAll = process.argv.includes("--morning-all");
+
+type Frequency = "daily" | "weekly" | "monthly";
+
+interface SubmitterRule {
+  mode?: string;
+  userIds?: string[];
+  departmentIds?: string[];
+  groupIds?: string[];
+  addUserIds?: string[];
+  removeUserIds?: string[];
+}
+interface RoundLike {
+  id: string;
+  label?: string;
+  time?: string;
+  weekdays?: number[];
+  dayOfMonth?: number;
+  minImages?: number;
+  createdAt?: string;
+  submitters?: SubmitterRule;
+}
+interface TopicLike {
+  id: string;
+  name: string;
+  createdAt?: string;
+  isCategory?: boolean;
+  submissionRounds?: RoundLike[];
+  cutoffs?: RoundLike[];
+  requiredWeekdays?: number[];
+  visibility?: { departmentIds?: string[]; userIds?: string[]; exemptUserIds?: string[]; managerOnly?: boolean };
+}
+interface PostLike {
+  id: string;
+  topicId: string;
+  authorId: string;
+  createdAt: string;
+  roundId?: string;
+  roundTimeAtSubmission?: string;
+  excludeFromSubmission?: boolean;
+}
+interface ReportFeedSlice {
+  topics?: TopicLike[];
+  posts?: PostLike[];
+  [k: string]: unknown;
+}
+
+function effectiveRounds(t: TopicLike): RoundLike[] {
+  if (t.submissionRounds && t.submissionRounds.length > 0) return t.submissionRounds;
+  if (!t.cutoffs || t.cutoffs.length === 0) return [];
+  return t.cutoffs.map((c) => ({ ...c, weekdays: t.requiredWeekdays }));
+}
+
+function frequencyOf(t: TopicLike): Frequency | null {
+  const rounds = effectiveRounds(t);
+  if (rounds.length === 0) return null;
+  if (rounds.some((r) => r.dayOfMonth != null)) return "monthly";
+  if (rounds.some((r) => (r.weekdays?.length ?? 0) > 0 && (r.weekdays?.length ?? 0) < 7)) return "weekly";
+  return "daily";
+}
+
+function mergeTargetOf(t: TopicLike): Frequency | null {
+  const n = t.name.trim().toLowerCase();
+  if (n === "daily-report") return "daily";
+  if (n === "weekly-report") return "weekly";
+  if (n === "monthly-report") return "monthly";
+  return null;
+}
+
+/** คีย์จับกลุ่มรอบ "เวลาเดียวกัน ตารางวันเดียวกัน" = รอบเดียวกันหลังรวมห้อง */
+function scheduleKey(r: RoundLike): string {
+  const days = r.dayOfMonth ? `m${r.dayOfMonth}` : (r.weekdays ?? []).slice().sort().join(",") || "all";
+  return `${r.time ?? "--:--"}|${days}`;
+}
+
+/** รายชื่อผู้ส่งของรอบ — เฉพาะ mode "people" ที่ระบุรายคนตรง ๆ เท่านั้นที่กาง
+ * ออกมาได้ที่นี่ mode อื่น (แผนก/กลุ่ม/ทุกคน) ต้องอาศัยข้อมูลนอกสโตร์ จึงคง
+ * rule เดิมไว้ทั้งก้อนแทนการแปลง — ข้อมูลจริงตอนนี้เป็น mode people ทุกห้อง
+ * (ดูผล report-migration-inspect.ts) */
+function peopleOf(r: RoundLike): string[] | null {
+  const s = r.submitters;
+  if (!s || s.mode !== "people") return null;
+  const ids = new Set(s.userIds ?? []);
+  for (const id of s.addUserIds ?? []) ids.add(id);
+  for (const id of s.removeUserIds ?? []) ids.delete(id);
+  return [...ids];
+}
+
+function minutesOf(time: string): number {
+  const [h, m] = time.split(":").map(Number) as [number, number];
+  return h * 60 + m;
+}
+function postMinutes(iso: string): number {
+  const d = new Date(iso);
+  return d.getHours() * 60 + d.getMinutes();
+}
+function dayOf(iso: string): string {
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+interface PlannedRound {
+  key: string;
+  id: string;
+  label: string;
+  time: string;
+  weekdays?: number[];
+  dayOfMonth?: number;
+  createdAt: string;
+  people: string[];
+  fromRounds: { topicName: string; roundId: string; people: number }[];
+  reusedExistingId: boolean;
+}
+
+async function main() {
+  const stores = await prisma.reportTaskStore.findMany({ where: { key: "report-feed" } });
+  if (stores.length === 0) {
+    console.log("ไม่พบสโตร์ report-feed");
+    return;
+  }
+
+  for (const store of stores) {
+    const data = store.data as unknown as ReportFeedSlice;
+    const topics = data.topics ?? [];
+    const posts = data.posts ?? [];
+
+    console.log(`\n${"=".repeat(78)}`);
+    console.log(`ORG ${store.orgId}   ${dryRun ? "[DRY-RUN — ยังไม่เขียนอะไร]" : "[เขียนจริง]"}`);
+    if (morningAll) console.log(`โหมด --morning-all : ใส่ทุกคนในรอบเช้า (ย้อนหลังด้วย)`);
+    console.log("=".repeat(78));
+
+    const targets = new Map<Frequency, TopicLike>();
+    for (const t of topics) {
+      const kind = mergeTargetOf(t);
+      if (kind && !targets.has(kind)) targets.set(kind, t);
+    }
+    const missing = (["daily", "weekly", "monthly"] as Frequency[]).filter((k) => !targets.has(k));
+    if (missing.length > 0) {
+      console.log(`\nยังไม่มีห้องรวมสำหรับ: ${missing.join(", ")} — สร้างห้องชื่อ Daily-report / Weekly-report / Monthly-report ก่อน`);
+      continue;
+    }
+
+    // ---------- วางแผนต่อประเภท ----------
+    const plannedRoundsByFreq = new Map<Frequency, PlannedRound[]>();
+    const movesByFreq = new Map<Frequency, PostLike[]>();
+    const sourcesByFreq = new Map<Frequency, TopicLike[]>();
+
+    for (const kind of ["daily", "weekly", "monthly"] as Frequency[]) {
+      const target = targets.get(kind)!;
+      const sources = topics.filter((t) => frequencyOf(t) === kind && t.id !== target.id && !t.isCategory);
+      sourcesByFreq.set(kind, sources);
+      movesByFreq.set(kind, posts.filter((p) => sources.some((s) => s.id === p.topicId)));
+
+      // จับกลุ่มรอบของห้องต้นทางตาม เวลา+ตารางวัน
+      const groups = new Map<string, { rounds: { topic: TopicLike; round: RoundLike }[] }>();
+      for (const s of sources) {
+        for (const r of effectiveRounds(s)) {
+          const key = scheduleKey(r);
+          const g = groups.get(key) ?? { rounds: [] };
+          g.rounds.push({ topic: s, round: r });
+          groups.set(key, g);
+        }
+      }
+
+      const existingTargetRounds = effectiveRounds(target);
+      const planned: PlannedRound[] = [];
+
+      for (const [key, g] of groups) {
+        const first = g.rounds[0]!.round;
+        // รายชื่อผู้ส่ง = รวมของทุกห้องที่มีรอบเวลานี้
+        const people = new Set<string>();
+        for (const { round } of g.rounds) for (const id of peopleOf(round) ?? []) people.add(id);
+        // วันเริ่มใช้ = เก่าที่สุดในกลุ่ม (รอบไหนไม่ได้ตั้ง = ย้อนได้ไม่จำกัดอยู่แล้ว)
+        const createdAts = g.rounds.map(({ round }) => round.createdAt).filter((x): x is string => !!x);
+        const createdAt = createdAts.length === g.rounds.length ? createdAts.slice().sort()[0]! : "";
+        // ใช้ id ของรอบเดิมในห้องรวมถ้าตารางตรงกัน — โพสต์เดิมของห้องรวมจะได้ไม่หลุด
+        const reuse = existingTargetRounds.find((r) => scheduleKey(r) === key);
+
+        planned.push({
+          key,
+          id: reuse?.id ?? `round-${crypto.randomUUID()}`,
+          label: first.label ?? `รอบ ${first.time ?? ""}`.trim(),
+          time: first.time ?? "18:00",
+          weekdays: first.weekdays,
+          dayOfMonth: first.dayOfMonth,
+          createdAt,
+          people: [...people],
+          fromRounds: g.rounds.map(({ topic, round }) => ({
+            topicName: topic.name,
+            roundId: round.id,
+            people: (peopleOf(round) ?? []).length,
+          })),
+          reusedExistingId: !!reuse,
+        });
+      }
+
+      // --morning-all : รอบที่ไม่ใช่รอบสุดท้ายของวัน (เช้า) ให้ใส่ทุกคนที่ส่งประเภทนี้
+      if (morningAll && planned.length > 1) {
+        const everyone = new Set<string>();
+        for (const p of planned) for (const id of p.people) everyone.add(id);
+        const latest = planned.slice().sort((a, b) => minutesOf(b.time) - minutesOf(a.time))[0]!;
+        for (const p of planned) if (p.key !== latest.key) p.people = [...everyone];
+      }
+
+      planned.sort((a, b) => minutesOf(a.time) - minutesOf(b.time));
+      plannedRoundsByFreq.set(kind, planned);
+    }
+
+    // ---------- พิมพ์แผน ----------
+    for (const kind of ["daily", "weekly", "monthly"] as Frequency[]) {
+      const target = targets.get(kind)!;
+      const sources = sourcesByFreq.get(kind)!;
+      const moves = movesByFreq.get(kind)!;
+      const planned = plannedRoundsByFreq.get(kind)!;
+      const ownBefore = posts.filter((p) => p.topicId === target.id).length;
+
+      console.log(`\n--- ${kind.toUpperCase()}  ->  "${target.name}" ---`);
+      console.log(`  โพสต์เดิมของห้องรวม ${ownBefore} · จะย้ายเข้ามาอีก ${moves.length} · รวมเป็น ${ownBefore + moves.length}`);
+      for (const s of sources) {
+        const n = moves.filter((p) => p.topicId === s.id).length;
+        if (n > 0) console.log(`     ${String(n).padStart(4)} โพสต์  จาก  ${s.name}`);
+      }
+
+      console.log(`\n  รอบที่จะมีในห้องรวม:`);
+      for (const p of planned) {
+        const sched = p.dayOfMonth
+          ? `ทุกวันที่ ${p.dayOfMonth}`
+          : p.weekdays && p.weekdays.length > 0 && p.weekdays.length < 7
+            ? `ทุกวัน${p.weekdays.map((d) => ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"][d] ?? d).join("/")}`
+            : "ทุกวัน";
+        console.log(
+          `     · "${p.label}" ${p.time} · ${sched} · ผู้ส่ง ${p.people.length} คน` +
+            ` · เริ่มใช้ ${p.createdAt ? p.createdAt.slice(0, 10) : "(ไม่จำกัด = ย้อนหลังได้ทุกวัน)"}` +
+            `${p.reusedExistingId ? " · ใช้รอบเดิมของห้องรวมต่อ" : " · รอบใหม่"}`
+        );
+        for (const f of p.fromRounds) console.log(`         ลอกจาก ${f.topicName} (${f.people} คน)`);
+      }
+
+      // ประเมินผลการจับรอบของโพสต์ที่ย้าย — ตรงเวลา/สาย กี่อัน
+      if (moves.length > 0 && planned.length > 0) {
+        const byRound = new Map<string, { onTime: number; late: number }>();
+        for (const p of moves) {
+          if (p.excludeFromSubmission) continue;
+          const day = dayOf(p.createdAt);
+          const candidates = planned.filter((r) => {
+            if (r.createdAt && day < r.createdAt.slice(0, 10)) return false;
+            if (r.dayOfMonth) return new Date(`${day}T00:00:00`).getDate() === r.dayOfMonth;
+            if (r.weekdays && r.weekdays.length > 0 && r.weekdays.length < 7) {
+              return r.weekdays.includes(new Date(`${day}T00:00:00`).getDay());
+            }
+            return true;
+          });
+          if (candidates.length === 0) continue;
+          const mins = postMinutes(p.createdAt);
+          const hit = candidates.find((r) => minutesOf(r.time) >= mins) ?? candidates[candidates.length - 1]!;
+          const acc = byRound.get(hit.key) ?? { onTime: 0, late: 0 };
+          if (mins <= minutesOf(hit.time)) acc.onTime += 1;
+          else acc.late += 1;
+          byRound.set(hit.key, acc);
+        }
+        console.log(`\n  โพสต์ที่ย้ายมา จะถูกจับเข้ารอบใหม่แบบนี้:`);
+        for (const p of planned) {
+          const acc = byRound.get(p.key) ?? { onTime: 0, late: 0 };
+          console.log(`     · ${p.label} ${p.time} : ตรงเวลา ${acc.onTime} · สาย ${acc.late}`);
+        }
+        const judged = [...byRound.values()].reduce((n, a) => n + a.onTime + a.late, 0);
+        const skipped = moves.filter((p) => !p.excludeFromSubmission).length - judged;
+        if (skipped > 0) console.log(`     · ไม่เข้ารอบไหนเลย (วันนั้นไม่มีรอบวิ่ง) : ${skipped}`);
+      }
+
+      const neutralize = sources.flatMap((s) => effectiveRounds(s).map((r) => ({ topic: s.name, round: r.label ?? r.id })));
+      if (neutralize.length > 0) {
+        console.log(`\n  รอบของห้องเดิมที่จะถูกปลดผู้ส่งออก (ห้องยังอยู่ ดูย้อนหลังได้): ${neutralize.length} รอบ`);
+      }
+    }
+
+    if (dryRun) {
+      console.log(`\n[dry-run] ยังไม่เขียนอะไรลงฐานข้อมูล — เอา --dry-run ออกเพื่อทำจริง\n`);
+      continue;
+    }
+
+    // ---------- เขียนจริง ----------
+    const movedIds = new Map<string, string>(); // postId -> target topicId
+    for (const kind of ["daily", "weekly", "monthly"] as Frequency[]) {
+      const target = targets.get(kind)!;
+      for (const p of movesByFreq.get(kind)!) movedIds.set(p.id, target.id);
+    }
+
+    const nextPosts = posts.map((p) => {
+      const to = movedIds.get(p.id);
+      if (!to) return p;
+      const { roundId, roundTimeAtSubmission, ...rest } = p;
+      void roundId;
+      void roundTimeAtSubmission;
+      return { ...rest, topicId: to };
+    });
+
+    const plannedByTargetId = new Map<string, PlannedRound[]>();
+    for (const kind of ["daily", "weekly", "monthly"] as Frequency[]) {
+      plannedByTargetId.set(targets.get(kind)!.id, plannedRoundsByFreq.get(kind)!);
+    }
+    const sourceIds = new Set<string>();
+    for (const kind of ["daily", "weekly", "monthly"] as Frequency[]) {
+      for (const s of sourcesByFreq.get(kind)!) sourceIds.add(s.id);
+    }
+
+    const nextTopics = topics.map((t) => {
+      const planned = plannedByTargetId.get(t.id);
+      if (planned) {
+        return {
+          ...t,
+          submissionRounds: planned.map((p) => ({
+            id: p.id,
+            label: p.label,
+            time: p.time,
+            ...(p.weekdays && p.weekdays.length > 0 && p.weekdays.length < 7 ? { weekdays: p.weekdays } : {}),
+            ...(p.dayOfMonth ? { dayOfMonth: p.dayOfMonth } : {}),
+            ...(p.createdAt ? { createdAt: p.createdAt } : {}),
+            submitters: { mode: "people" as const, userIds: p.people },
+          })),
+        };
+      }
+      if (sourceIds.has(t.id)) {
+        // ห้องเดิม: เก็บรอบไว้ทั้งหมด (ยังใช้จัดประเภทห้อง + ดูย้อนหลัง) แต่ไม่มีใครต้องส่งแล้ว
+        const rounds = effectiveRounds(t).map((r) => ({ ...r, submitters: { mode: "people" as const, userIds: [] } }));
+        return { ...t, submissionRounds: rounds };
+      }
+      return t;
+    });
+
+    const nextData: ReportFeedSlice = { ...data, topics: nextTopics, posts: nextPosts };
+
+    await prisma.reportTaskStore.update({
+      where: { orgId_key: { orgId: store.orgId, key: "report-feed" } },
+      data: { data: nextData as never, version: { increment: 1 } },
+    });
+
+    console.log(`\nย้ายเรียบร้อย — โพสต์ ${movedIds.size} อันเข้าห้องรวมแล้ว`);
+    console.log(`บอกทุกคนรีเฟรชหน้าจอหนึ่งรอบ แล้วเช็คผลทันทีก่อนมีใครโพสต์ใหม่`);
+    console.log(`ไม่โอเคย้อนกลับได้ด้วย report-migration-restore.ts\n`);
+  }
+}
+
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exitCode = 1;
+  })
+  .finally(() => prisma.$disconnect());
