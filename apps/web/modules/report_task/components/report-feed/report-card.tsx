@@ -142,6 +142,23 @@ interface ReplyMentionItem {
  * (this editor sits inside a card inside a scrollable feed). Same helper
  * as openchat-feed.tsx's, duplicated rather than shared since each
  * composer's mention wiring is already its own local, self-contained block. */
+/**
+ * ชื่อรอบมักถูกตั้งซ้ำกับชื่อห้องไว้ข้างหน้า ("Daily-report-Morning" ในห้อง
+ * "daily-report") พอเอามาขึ้นป้ายทุกโพสต์ ส่วนที่ซ้ำกินที่ไปเปล่า ๆ จนแถวหัว
+ * โพสต์ตกบรรทัด ("มันกินพื้นที่มากเลยอะ เปลืองอะ") — ตัดส่วนที่ซ้ำกับชื่อห้อง
+ * ออก เหลือเฉพาะส่วนที่บอกว่าเป็นรอบไหนจริง ๆ
+ *
+ * ถ้าตัดแล้วไม่เหลืออะไร (ห้อง "Weekly-report" ที่รอบชื่อเดียวกันเป๊ะ) คืนชื่อ
+ * เต็มไปเหมือนเดิม ดีกว่าโชว์ป้ายเปล่า
+ */
+function shortRoundLabel(label: string, topicName: string): string {
+  const full = label.trim();
+  const room = topicName.trim();
+  if (!room || !full.toLowerCase().startsWith(room.toLowerCase())) return full;
+  const rest = full.slice(room.length).replace(/^[\s\-–—_:·.]+/, "").trim();
+  return rest || full;
+}
+
 function nearestScrollableBounds(el: HTMLElement): { top: number; bottom: number } {
   let node: HTMLElement | null = el.parentElement;
   while (node) {
@@ -942,7 +959,11 @@ export function ReportCard({
           message-action row got). */}
       <div
         className={cn(
-          "absolute top-2 right-3 z-10 flex items-center gap-0.5 rounded-lg border border-[var(--line)] bg-white shadow-sm p-0.5 opacity-0 pointer-events-none transition-opacity",
+          // ลอยคร่อมขอบบนของการ์ด (ติดลบ) ไม่ใช่วางทับเนื้อหาข้างใน — แบบเดียวกับ
+          // แถบปุ่มของแชทตัวอื่น ๆ ทำให้ไม่ต้องกันที่ว่างไว้ในแถวหัวโพสต์เลย
+          // (เคยกันไว้ 120px แล้วแถวชื่อ/เวลา/ป้าย ถูกดันตกบรรทัดทุกโพสต์
+          // "มันกินพื้นที่มากเลยอะ เปลืองอะ") ช่องไฟระหว่างการ์ดรับตัวแถบพอดี
+          "absolute -top-3.5 right-3 z-10 flex items-center gap-0.5 rounded-lg border border-[var(--line)] bg-white shadow-sm p-0.5 opacity-0 pointer-events-none transition-opacity",
           "[@media(hover:hover)]:group-hover/post:opacity-100 [@media(hover:hover)]:group-hover/post:pointer-events-auto",
           "[@media(hover:none)]:!hidden",
           (reactionPickerOpen || moreOpen) && "[@media(hover:hover)]:opacity-100 [@media(hover:hover)]:pointer-events-auto"
@@ -1227,13 +1248,10 @@ export function ReportCard({
           <AvatarFallback className="rounded-xl text-xs font-semibold bg-[var(--accent)] text-[var(--brand-green-dark)]">{author?.avatar}</AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1">
-          {/* กันที่ด้านขวาไว้ให้แถบปุ่มลอย (absolute top-2 right-3 ด้านบน) —
-              จอกว้างมีที่เหลือเลยไม่เคยชน แต่พอย่อจอ แถวชื่อ/เวลา/ป้ายยาวขึ้นมา
-              จนมุดอยู่ใต้ปุ่ม อ่านไม่ออก ("ย่อจาก pc มันซ้อนกัน") กันที่ตายตัวไว้
-              เลยดีกว่าไปขยับตอน hover ซึ่งจะทำให้บรรทัดกระโดดใส่หน้าคนอ่าน
-              เครื่องสัมผัสมีแค่ปุ่ม "⋯" ปุ่มเดียว (ดู [@media(hover:none)] ด้านบน)
-              เลยกันน้อยกว่ากันมาก */}
-          <div className="flex items-start gap-2 pr-8 [@media(hover:hover)]:pr-[120px]">
+          {/* กันที่ไว้เฉพาะปุ่ม "⋯" ของเครื่องสัมผัส ซึ่งโผล่อยู่ตลอดและยังวาง
+              ทับมุมขวาบนอยู่ (ดู [@media(hover:none)] ด้านบน) — ส่วนแถบปุ่ม 4 อัน
+              ของเครื่องที่ใช้เมาส์ ย้ายไปลอยคร่อมขอบบนการ์ดแล้ว ไม่ต้องกันที่ */}
+          <div className="flex items-start gap-2 pr-8 [@media(hover:hover)]:pr-0">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 {post.pinned && <Pin className="h-3.5 w-3.5 text-[var(--brand-green-dark)] shrink-0" />}
@@ -1313,7 +1331,11 @@ export function ReportCard({
                         actual fact plainly, with the round's name only when
                         it's long enough to actually mean something (same
                         rule the room-header metadata row uses). */}
-                    ส่งเกินกำหนด{lateCutoff.label.trim().length > 2 ? ` (${lateCutoff.label.trim()})` : ""} · กำหนด {lateCutoff.time}
+                    ส่งเกินกำหนด
+                    {shortRoundLabel(lateCutoff.label, topic.name).length > 2
+                      ? ` (${shortRoundLabel(lateCutoff.label, topic.name)})`
+                      : ""}{" "}
+                    · กำหนด {lateCutoff.time}
                   </span>
                 ) : !lateCutoff && onTimeCutoff && isFirstOnTimeOfRound ? (
                   // The positive counterpart to "ส่งช้า" (C10) — without it,
@@ -1321,7 +1343,7 @@ export function ReportCard({
                   // never confirmation that a post actually met it.
                   <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-[var(--accent)] text-[var(--brand-green-dark)] border border-[var(--brand-green)]/20">
                     <Check className="h-2.5 w-2.5" />
-                    ตรงเวลา · รอบ{onTimeCutoff.label}
+                    ตรงเวลา · รอบ{shortRoundLabel(onTimeCutoff.label, topic.name)}
                   </span>
                 ) : null}
               </p>
