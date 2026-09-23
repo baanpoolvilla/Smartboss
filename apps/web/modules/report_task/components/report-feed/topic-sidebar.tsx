@@ -951,9 +951,25 @@ export function TopicSidebar({
   // Posts in a room that count as unread for this viewer, after its notify
   // preference — the single source the dot, the bold, the count badge and the
   // collapsed-still-visible rule all read from, so they never disagree.
+  // จัดโพสต์เข้าตะกร้าตามห้องรอบเดียว แล้วแต่ละแถวค่อยหยิบของตัวเอง — เดิมทั้ง
+  // topicUnreadPosts และ topicAboutMeCount ไล่ `posts.filter(...)` ทั้งกองใหม่
+  // ทุกห้อง เท่ากับสแกนโพสต์ทั้งบริษัทซ้ำ 61 รอบต่อการเรนเดอร์หนึ่งครั้ง แถม
+  // hasUnreadDescendant ยังเรียกซ้ำลงไปอีกชั้นต่อห้องลูก พอโพสต์สะสมถึงหลักพัน
+  // งานตรงนี้จะโตจนหน่วงทุกครั้งที่แตะไซด์บาร์ (เคยเป็นสาเหตุที่ลากจัดลำดับห้อง
+  // แล้วค้างมาแล้ว) — ทำดัชนีทีเดียวแล้วเหลือแค่หยิบตามคีย์
+  const postsByTopic = useMemo(() => {
+    const byTopic = new Map<string, ReportPost[]>();
+    for (const post of posts) {
+      const bucket = byTopic.get(post.topicId);
+      if (bucket) bucket.push(post);
+      else byTopic.set(post.topicId, [post]);
+    }
+    return byTopic;
+  }, [posts]);
+
   const topicUnreadPosts = (t: ReportTopic) => {
     const pref = notifyPrefFor(t);
-    return posts.filter((post) => post.topicId === t.id && postCountsUnread(post, pref, t));
+    return (postsByTopic.get(t.id) ?? []).filter((post) => postCountsUnread(post, pref, t));
   };
   // Unread activity "about you" — @mentions (in a post or a reply) AND
   // comments someone left on your own posts — shown as Discord's red pill.
@@ -963,9 +979,7 @@ export function TopicSidebar({
   const topicAboutMeCount = (t: ReportTopic) =>
     notifyPrefFor(t) === "off"
       ? 0
-      : posts
-          .filter((post) => post.topicId === t.id)
-          .reduce((sum, post) => sum + aboutMeCountInPost(post, viewingAsUserId, t), 0);
+      : (postsByTopic.get(t.id) ?? []).reduce((sum, post) => sum + aboutMeCountInPost(post, viewingAsUserId, t), 0);
 
   const isMobile = useIsMobile();
 

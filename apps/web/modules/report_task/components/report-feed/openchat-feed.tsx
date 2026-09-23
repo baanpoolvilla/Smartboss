@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, useLayoutEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import {
@@ -46,6 +46,10 @@ const composerEmojis = [
   "👍", "👎", "❤️", "🔥", "🎉", "😂", "😮", "😢", "😡", "🙏",
   "👏", "🤔", "😴", "🥳", "😅", "🚀", "✅", "❌", "⭐", "💯",
 ];
+/** กางทีละชุดแทนที่จะกางทั้งห้อง — เหตุผลเดียวกับ report-feed.tsx
+ * ห้องโหมดแชทสะสมข้อความเร็วกว่าห้องรายงานด้วยซ้ำ */
+const PAGE_SIZE = 40;
+const LOAD_OLDER_PX = 400;
 const NEAR_BOTTOM_PX = 120;
 // Consecutive messages from the same author within this window collapse
 // into one visual group (Discord's own cutoff) — avatar/name/timestamp only
@@ -426,7 +430,40 @@ export function OpenchatFeed({
     setDeleteTarget(null);
   }
 
-  const dayGroups = groupByDay(messages, (m) => m.createdAt);
+  // เรนเดอร์เฉพาะชุดล่าสุด แล้วต่อชุดเก่าให้เองตอนเลื่อนขึ้นใกล้ยอด
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [countedTopicId, setCountedTopicId] = useState(topic.id);
+  const [countedLength, setCountedLength] = useState(messages.length);
+  if (countedTopicId !== topic.id) {
+    setCountedTopicId(topic.id);
+    setCountedLength(messages.length);
+    setVisibleCount(PAGE_SIZE);
+  } else if (messages.length !== countedLength) {
+    // ข้อความใหม่เข้ามา → ขยายตาม ขอบบนจะได้ไม่เลื่อนหนีสิ่งที่กำลังอ่าน
+    if (messages.length > countedLength) setVisibleCount((c) => c + (messages.length - countedLength));
+    setCountedLength(messages.length);
+  }
+  const olderCount = Math.max(0, messages.length - visibleCount);
+  const visibleMessages = olderCount > 0 ? messages.slice(olderCount) : messages;
+  const dayGroups = groupByDay(visibleMessages, (m) => m.createdAt);
+
+  const anchorFromBottomRef = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    const anchor = anchorFromBottomRef.current;
+    if (!el || anchor == null) return;
+    el.scrollTop = el.scrollHeight - anchor;
+    anchorFromBottomRef.current = null;
+  }, [visibleCount]);
+
+  function handleFeedScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (el.scrollTop < LOAD_OLDER_PX && olderCount > 0 && anchorFromBottomRef.current == null) {
+      anchorFromBottomRef.current = el.scrollHeight - el.scrollTop;
+      setVisibleCount((n) => n + PAGE_SIZE);
+    }
+  }
 
   // "ข้อความใหม่" divider, frozen per room (same idea as the Thread feed):
   // opening a room clears its unread almost immediately, so we snapshot the
@@ -445,7 +482,12 @@ export function OpenchatFeed({
 
   return (
     <div className="relative flex-1 flex flex-col min-h-0 rounded-b-2xl overflow-hidden bg-[var(--bg)]">
-      <div ref={scrollRef} className="flex-1 overflow-y-auto py-3">
+      <div ref={scrollRef} onScroll={handleFeedScroll} className="flex-1 overflow-y-auto py-3">
+        {olderCount > 0 && (
+          <p className="py-2 text-center text-xs text-[var(--ink-soft)]">
+            เลื่อนขึ้นเพื่อดูข้อความเก่ากว่านี้ · เหลืออีก {olderCount} ข้อความ
+          </p>
+        )}
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center gap-2 text-center px-6 text-[var(--ink-soft)]">
             <p className="text-sm font-semibold text-[var(--ink)]">ยินดีต้อนรับสู่ #{topic.name}</p>
