@@ -26,6 +26,10 @@ export interface BoardColumn {
    * department's tasks span (including an "อื่นๆ" bucket if any task
    * has none), shown in the summary body instead of every single card. */
   projectCount?: number;
+  /** Department grouping only — the actual project names behind projectCount
+   * ("อยากให้แสดงลูกที่เป็นชื่อโปรเจคอะ" — a bare count didn't say which
+   * projects, just how many), shown as chips in the summary body. */
+  projectNames?: string[];
   /** Skip listing every task card in the body — show just "N โปรเจค · M งาน"
    * instead, since department grouping's real content lives one click away
    * (DepartmentTopicsBoard via onHeaderClick), not in this column itself.
@@ -266,11 +270,30 @@ export function KanbanColumn({
             type="button"
             onClick={onHeaderClick}
             disabled={!onHeaderClick}
-            className="flex-1 flex flex-col items-center justify-center gap-1.5 text-center rounded-lg border border-dashed border-[var(--line)] py-8 px-3 hover:border-[var(--brand-green)] hover:bg-white transition-colors disabled:hover:border-[var(--line)] disabled:hover:bg-transparent disabled:cursor-default"
+            className="flex-1 flex flex-col items-center justify-center gap-2.5 text-center rounded-lg border border-dashed border-[var(--line)] py-6 px-3 hover:border-[var(--brand-green)] hover:bg-white transition-colors disabled:hover:border-[var(--line)] disabled:hover:bg-transparent disabled:cursor-default"
           >
             <span className="text-sm font-semibold text-[var(--ink)]">
               {column.projectCount ?? 0} โปรเจค · {column.tasks.length} งาน
             </span>
+            {!!column.projectNames?.length && (
+              <div className="flex flex-wrap items-center justify-center gap-1.5 px-1">
+                {column.projectNames.slice(0, 4).map((name) => (
+                  <span
+                    key={name}
+                    className="max-w-[150px] truncate rounded-full px-2 py-0.5 text-[11px] font-medium"
+                    style={{ backgroundColor: `color-mix(in srgb, ${accent} 14%, white)`, color: textAccent }}
+                    title={name}
+                  >
+                    {name}
+                  </span>
+                ))}
+                {column.projectNames.length > 4 && (
+                  <span className="text-[11px] font-medium text-[var(--ink-soft)]">
+                    +{column.projectNames.length - 4} อื่นๆ
+                  </span>
+                )}
+              </div>
+            )}
             {onHeaderClick && (
               <span className="text-[11px] text-[var(--ink-soft)]">คลิกเพื่อดูรายละเอียด</span>
             )}

@@ -266,13 +266,18 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
           const deptTasks = sortTasksForDisplay(
             filtered.filter((t) => taskDepartmentIdsForBoard(t, projectTopics).includes(d.id))
           );
-          const projectCount = new Set(deptTasks.map((t) => t.projectTopicId ?? "__none__")).size;
+          const topicIds = Array.from(new Set(deptTasks.map((t) => t.projectTopicId).filter((id): id is string => !!id)));
+          const projectNames = topicIds
+            .map((id) => projectTopics.find((pt) => pt.id === id)?.name)
+            .filter((name): name is string => !!name);
+          const projectCount = projectNames.length;
           return {
             id: d.id,
             label: d.name,
             accent: d.color,
             tasks: deptTasks,
             projectCount,
+            projectNames,
             summaryOnly: true,
           };
         })
