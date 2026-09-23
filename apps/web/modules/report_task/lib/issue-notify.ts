@@ -1,7 +1,7 @@
 "use server";
 
 import { requireOrg } from "@smartboss/auth";
-import { notifyUser } from "@/modules/maintenance/data/notify";
+import { notifyUser, notifyActorName } from "@/modules/maintenance/data/notify";
 import { getSession } from "@smartboss/auth";
 import { listIssueStaff } from "@/modules/admin/data/issue-staff";
 import { markTicketNotificationsRead } from "@/modules/admin/data/issue-notify-state";
@@ -49,11 +49,11 @@ export async function markMyIssueTicketRead(ticketId: string): Promise<void> {
 export async function notifyNewIssueTicket(ticketId: string, title: string, description: string): Promise<void> {
   try {
     const session = await requireOrg();
-    const admins = await superAdminIds();
+    const [admins, reporter] = await Promise.all([superAdminIds(), notifyActorName(session.userId)]);
     await Promise.all(
       admins.map((id) =>
         notifyUser(session.orgId, id, {
-          title: `มีแจ้งบัคใหม่: "${title}"`,
+          title: reporter ? `${reporter} แจ้งบัคใหม่: "${title}"` : `มีแจ้งบัคใหม่: "${title}"`,
           body: description || undefined,
           type: "issue_ticket_new",
           referenceId: `${session.orgId}:${ticketId}`,
@@ -72,11 +72,14 @@ export async function notifyNewIssueTicket(ticketId: string, title: string, desc
 export async function notifyIssueReplyFromReporter(ticketId: string, ticketTitle: string, assigneeId: string | null): Promise<void> {
   try {
     const session = await requireOrg();
-    const recipients = assigneeId ? [assigneeId] : await superAdminIds();
+    const [recipients, replier] = await Promise.all([
+      assigneeId ? Promise.resolve([assigneeId]) : superAdminIds(),
+      notifyActorName(session.userId),
+    ]);
     await Promise.all(
       recipients.map((id) =>
         notifyUser(session.orgId, id, {
-          title: `ผู้แจ้งตอบกลับตั๋ว "${ticketTitle}"`,
+          title: replier ? `${replier} ตอบกลับตั๋ว "${ticketTitle}"` : `ผู้แจ้งตอบกลับตั๋ว "${ticketTitle}"`,
           type: "issue_ticket_new",
           referenceId: `${session.orgId}:${ticketId}`,
         })

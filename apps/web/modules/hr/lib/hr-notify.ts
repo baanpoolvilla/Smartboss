@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
-import { notifyUser } from "@/modules/maintenance/data/notify";
+import { notifyUser, notifyActorName } from "@/modules/maintenance/data/notify";
 
 /**
  * แจ้งเตือนผู้มีสิทธิ์อนุมัติ ตอนมีคำขอ HR ใหม่เข้ามา (ลา/แก้เวลาเข้า-ออกงาน)
@@ -71,13 +71,24 @@ async function resolveApproverUserIds(orgId: string, permission: string): Promis
 export async function notifyApprovers(
   orgId: string,
   permission: string,
-  excludeUserId: string | undefined,
+  actorUserId: string | undefined,
   input: { title: string; body?: string; type: string; referenceId?: string }
 ): Promise<void> {
   try {
-    const approverIds = (await resolveApproverUserIds(orgId, permission)).filter((id) => id !== excludeUserId);
-    await Promise.all(approverIds.map((id) => notifyUser(orgId, id, input)));
+    const [approverIds, actorName] = await Promise.all([
+      resolveApproverUserIds(orgId, permission),
+      notifyActorName(actorUserId),
+    ]);
+    // ชื่อผู้ยื่นนำหน้าหัวข้อ — กระดิ่งของผู้อนุมัติมักมีคำขอค้างพร้อมกันหลายใบ
+    // ซึ่งหัวข้อเหมือนกันเป๊ะทุกใบ ("มีคำขอลาใหม่รออนุมัติ" เรียงกัน 7 บรรทัด)
+    // แยกไม่ออกว่าใบไหนของใคร ต้องกดเข้าไปดูทีละใบถึงจะรู้ ("อยากให้บอกด้วยว่า
+    // ใครเป็นคนขอ") ชื่อมาก่อนเพราะเป็นส่วนที่ต่างกันจริง ๆ กวาดตาหาได้เร็วสุด
+    const title = actorName ? `${actorName} · ${input.title}` : input.title;
+    await Promise.all(
+      approverIds.filter((id) => id !== actorUserId).map((id) => notifyUser(orgId, id, { ...input, title }))
+    );
   } catch (err) {
     console.error("[hr-notify] notifyApprovers failed", err);
   }
 }
+

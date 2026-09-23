@@ -13,6 +13,27 @@ export interface NotifyInput {
   line?: string;
 }
 
+/**
+ * ชื่อคนที่เป็นต้นเรื่องของการแจ้งเตือน ไว้เอาไปขึ้นต้นหัวข้อ
+ *
+ * กระดิ่งของคนที่ต้องอนุมัติ/ดูแลงาน มักมีเรื่องค้างพร้อมกันหลายอันที่หัวข้อ
+ * เหมือนกันเป๊ะ ("มีคำขอลาใหม่รออนุมัติ" เรียงกัน 7 บรรทัด) ถ้าไม่มีชื่อกำกับ
+ * ก็แยกไม่ออกว่าอันไหนของใคร ต้องกดเข้าไปดูทีละอัน ("อยากให้บอกด้วยว่าใคร
+ * เป็นคนขอ...รวมถึงอันอื่น ๆ ที่ไม่มีชื่อด้วย")
+ *
+ * คืน null เมื่อหาไม่เจอ/คิวรีพลาด แล้วให้ผู้เรียกกลับไปใช้หัวข้อแบบไม่มีชื่อ —
+ * แจ้งเตือนที่ไม่มีชื่อยังดีกว่าไม่ได้แจ้งเลย
+ */
+export async function notifyActorName(userId: string | null | undefined): Promise<string | null> {
+  if (!userId) return null;
+  try {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+    return user?.name?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 /** แจ้งเตือนผู้ใช้ 1 คน (in-app + LINE ถ้ามี line) */
 export async function notifyUser(
   orgId: string,
