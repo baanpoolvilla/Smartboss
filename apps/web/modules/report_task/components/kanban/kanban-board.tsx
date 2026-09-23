@@ -6,7 +6,7 @@ import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canSeeTask } from "@/modules/report_task/lib/permissions";
 import { sortTasksForDisplay } from "@/modules/report_task/lib/task-flags";
-import { getDepartment, users } from "@/modules/report_task/lib/directory";
+import { getDepartment, departments, users } from "@/modules/report_task/lib/directory";
 import { statusMeta, priorityMeta, priorityColorHex, taskPriorityOrder, statusIcon } from "@/modules/report_task/lib/task-meta";
 import { matchesTaskFilters } from "@/modules/report_task/lib/task-filter";
 import { useTaskSheetParam } from "@/modules/report_task/hooks/use-task-sheet-param";
@@ -15,17 +15,19 @@ import { cn } from "@/modules/report_task/lib/utils";
 import { KanbanColumn, type BoardColumn } from "./kanban-column";
 import { TaskDetailSheet } from "./task-detail-sheet";
 import { PersonTopicsBoard } from "./person-topics-board";
+import { DepartmentTopicsBoard } from "./department-topics-board";
 import { toast } from "sonner";
 import { useTaskBoardIntentStore } from "@/modules/report_task/store/task-board-intent-store";
 import { Info, SearchX, AlarmClockOff, Hourglass, ChevronLeft, ChevronRight } from "lucide-react";
 import { EmptyState } from "@/modules/report_task/components/shared/empty-state";
 
-export type GroupBy = "status" | "priority" | "assignee";
+export type GroupBy = "status" | "priority" | "assignee" | "department";
 
 export const groupByLabels: Record<GroupBy, string> = {
   status: "สถานะ",
   priority: "ความสำคัญ",
   assignee: "ผู้รับผิดชอบ",
+  department: "แผนก",
 };
 
 const statusAccent = statusColors;
@@ -72,6 +74,22 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   function closePersonBoard() {
     const params = new URLSearchParams(searchParams.toString());
     params.delete("person");
+    const query = params.toString();
+    router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
+  }
+
+  // Same pattern as personBoardId above, but for a department's column header
+  // (visible only when groupBy==="department") — swaps the board out for
+  // DepartmentTopicsBoard: "เลือกก่อนว่าแผนกไหน แล้วดูว่าแผนกนั้นมีโปรเจคอะไร"
+  const departmentBoardId = searchParams.get("dept");
+  function openDepartmentBoard(id: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("dept", id);
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+  function closeDepartmentBoard() {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("dept");
     const query = params.toString();
     router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
   }
@@ -229,6 +247,18 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
         tasks: sortTasksForDisplay(filtered.filter((t) => t.priority === p)),
       }));
     }
+    if (groupBy === "department") {
+      // งานที่มีหลายแผนก (departmentIds.length > 1) จะโผล่ในคอลัมน์ของทุกแผนกที่เกี่ยวข้อง
+      // — เดียวกับที่ groupBy "assignee" ทำกับงานที่มีผู้รับผิดชอบหลายคน (ดู sharedCount)
+      return departments
+        .map((d) => ({
+          id: d.id,
+          label: d.name,
+          accent: d.color,
+          tasks: sortTasksForDisplay(filtered.filter((t) => t.departmentIds.includes(d.id))),
+        }))
+        .filter((c) => c.tasks.length > 0);
+    }
     // assignee — only people who actually have tasks in view
     return users
       .map((u) => ({
@@ -315,7 +345,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   const [isPanning, setIsPanning] = useState(false);
 
   function handlePanPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
-    if (groupBy !== "assignee") return;
+    if (groupBy !== "assignee" && groupBy !== "department") return;
     if (e.button !== 0) return;
     const target = e.target as HTMLElement;
     if (target.closest('[id^="task-card-"], button, a, input, select, textarea, [role="button"]')) return;
@@ -341,11 +371,21 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   }
 
   const sharedCount = useMemo(() => filtered.filter((t) => t.assigneeIds.length > 1).length, [filtered]);
+  const sharedDeptCount = useMemo(() => filtered.filter((t) => t.departmentIds.length > 1).length, [filtered]);
 
   if (personBoardId) {
     return (
       <>
         <PersonTopicsBoard personId={personBoardId} onBack={closePersonBoard} onOpenTask={setOpenTaskId} />
+        <TaskDetailSheet taskId={openTaskId} onOpenChange={(open) => !open && closeTaskSheet()} />
+      </>
+    );
+  }
+
+  if (departmentBoardId) {
+    return (
+      <>
+        <DepartmentTopicsBoard departmentId={departmentBoardId} onBack={closeDepartmentBoard} onOpenTask={setOpenTaskId} />
         <TaskDetailSheet taskId={openTaskId} onOpenChange={(open) => !open && closeTaskSheet()} />
       </>
     );
@@ -362,6 +402,12 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
           <span className="flex items-center gap-1 text-[11px] text-[var(--ink-soft)]">
             <Info className="h-3 w-3" />
             งานที่มีผู้รับผิดชอบหลายคน ({sharedCount} งาน) จะแสดงในคอลัมน์ของทุกคน
+          </span>
+        )}
+        {groupBy === "department" && sharedDeptCount > 0 && (
+          <span className="flex items-center gap-1 text-[11px] text-[var(--ink-soft)]">
+            <Info className="h-3 w-3" />
+            งานที่มีหลายแผนก ({sharedDeptCount} งาน) จะแสดงในคอลัมน์ของทุกแผนก
           </span>
         )}
         <span className="ml-auto text-xs text-[var(--ink-soft)]">{filtered.length} งาน</span>
@@ -461,7 +507,8 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
               onPointerCancel={endPan}
               className={cn(
                 "flex h-full items-stretch gap-4 overflow-x-auto pb-1 -mx-1 px-1 snap-x snap-mandatory sm:snap-none",
-                groupBy === "assignee" && (isPanning ? "cursor-grabbing select-none" : "cursor-grab")
+                (groupBy === "assignee" || groupBy === "department") &&
+                  (isPanning ? "cursor-grabbing select-none" : "cursor-grab")
               )}
             >
               {columns.map((column) => (
@@ -470,7 +517,14 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
                   column={column}
                   boardTotal={filtered.length}
                   onOpen={setOpenTaskId}
-                  onHeaderClick={groupBy === "assignee" ? () => openPersonBoard(column.id) : undefined}
+                  onHeaderClick={
+                    groupBy === "assignee"
+                      ? () => openPersonBoard(column.id)
+                      : groupBy === "department"
+                        ? () => openDepartmentBoard(column.id)
+                        : undefined
+                  }
+                  headerClickTitle={groupBy === "department" ? "ดูงานของแผนกนี้แยกตามหัวข้อโปรเจค" : undefined}
                   groupedByPriority={groupBy === "priority"}
                   groupedByStatus={groupBy === "status"}
                 />

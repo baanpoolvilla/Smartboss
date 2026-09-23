@@ -35,6 +35,7 @@ export function KanbanColumn({
   boardTotal,
   onOpen,
   onHeaderClick,
+  headerClickTitle,
   groupedByPriority,
   groupedByStatus,
 }: {
@@ -42,10 +43,14 @@ export function KanbanColumn({
   /** Every task currently on the board (post-filter) — the denominator for this column's "N% ของบอร์ด" bar. */
   boardTotal: number;
   onOpen: (id: string) => void;
-  /** Set only when grouped by assignee — clicking the person's name opens
-   * their tasks broken down by project topic. Absent for status/priority
-   * columns, which don't map to a single person. */
+  /** Set only when grouped by assignee or department — clicking the header
+   * opens that person's/department's tasks broken down by project topic.
+   * Absent for status/priority columns, which don't map to either. */
   onHeaderClick?: () => void;
+  /** Tooltip for the clickable header — differs by what onHeaderClick drills
+   * into (a person vs a department), defaults to the person wording since
+   * that was the only case before department grouping existed. */
+  headerClickTitle?: string;
   /** Passed straight through to each card — see TaskCard's own doc. */
   groupedByPriority?: boolean;
   /** A normal (non-derived) status column is, by definition, 100% one status
@@ -139,7 +144,7 @@ export function KanbanColumn({
               type="button"
               onClick={onHeaderClick}
               className="text-sm font-semibold truncate tracking-tight text-left hover:underline underline-offset-2 cursor-pointer"
-              title="ดูงานของคนนี้แยกตามหัวข้อโปรเจค"
+              title={headerClickTitle ?? "ดูงานของคนนี้แยกตามหัวข้อโปรเจค"}
             >
               {column.label}
             </button>

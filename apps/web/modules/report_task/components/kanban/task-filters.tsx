@@ -41,6 +41,7 @@ const groupByIcon: Record<GroupBy, typeof CircleDot> = {
   status: CircleDot,
   priority: Flag,
   assignee: UserIcon,
+  department: Building2,
 };
 
 const defaultFilters = {
@@ -279,7 +280,7 @@ export function TaskFilters({
               <SelectValue placeholder="จัดกลุ่มตาม">{groupByLabels[groupBy]}</SelectValue>
             </SelectTrigger>
             <SelectContent alignItemWithTrigger={false}>
-              {(["status", "priority", "assignee"] as GroupBy[]).map((g) => {
+              {(["status", "priority", "assignee", "department"] as GroupBy[]).map((g) => {
                 const Icon = groupByIcon[g];
                 return (
                   <SelectItem key={g} value={g}>
@@ -424,7 +425,7 @@ export function TaskFilters({
             <MobileFieldValue active={groupBy !== "status"}>{groupByLabels[groupBy]}</MobileFieldValue>
           </SelectTrigger>
           <SelectContent alignItemWithTrigger={false}>
-            {(["status", "priority", "assignee"] as GroupBy[]).map((g) => {
+            {(["status", "priority", "assignee", "department"] as GroupBy[]).map((g) => {
               const Icon = groupByIcon[g];
               return (
                 <SelectItem key={g} value={g}>
