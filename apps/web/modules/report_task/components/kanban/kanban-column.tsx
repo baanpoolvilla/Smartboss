@@ -23,20 +23,41 @@ export interface BoardColumn {
   /** Overrides the generic empty-column message — the derived "เลยกำหนด"
    * column gets its own celebratory copy instead. */
   emptyMessage?: string;
-  /** Department grouping only — how many distinct project topics this
-   * department's tasks span (including an "อื่นๆ" bucket if any task
-   * has none), shown in the summary body instead of every single card. */
+  /** Department grouping: how many distinct project topics this department's
+   * tasks span (including an "อื่นๆ" bucket if any task has none). Assignee
+   * grouping: how many distinct *departments* this person's tasks span
+   * instead — same field, different unit (see summaryUnitLabel) — shown in
+   * the summary body instead of every single card. */
   projectCount?: number;
-  /** Department grouping only — the actual project names behind projectCount
-   * ("อยากให้แสดงลูกที่เป็นชื่อโปรเจคอะ" — a bare count didn't say which
-   * projects, just how many), shown as chips in the summary body. */
+  /** The actual names behind projectCount — project names for department
+   * grouping, department names for assignee grouping ("อยากให้แสดงลูกที่เป็น
+   * ชื่อโปรเจคอะ" — a bare count didn't say which ones, just how many),
+   * shown as chips in the summary body. */
   projectNames?: string[];
-  /** Skip listing every task card in the body — show just "N โปรเจค · M งาน"
-   * instead, since department grouping's real content lives one click away
-   * (DepartmentTopicsBoard via onHeaderClick), not in this column itself.
-   * ("ให้บอกแค่ว่ามีกี่โปรเจคกี่งานอะไรแบบนั้น" — the full card list here
-   * duplicated what clicking through already shows, just more cluttered.) */
+  /** Unit word for the summary body's "N {unit} · M งาน" line — "โปรเจค" for
+   * department grouping (the default, unset), "แผนก" for assignee grouping
+   * (คนคนหนึ่งมีงานอยู่ "กี่แผนก" ไม่ใช่ "กี่โปรเจค" — ระดับนี้ยังไม่ลงไปถึง
+   * โปรเจคจนกว่าจะเลือกแผนกก่อน ดู PersonDepartmentsBoard). */
+  summaryUnitLabel?: string;
+  /** Skip listing every task card in the body — show just "N โปรเจค/แผนก ·
+   * M งาน" instead, since this grouping's real content lives one click away
+   * (DepartmentTopicsBoard/PersonDepartmentsBoard via onHeaderClick), not in
+   * this column itself. ("ให้บอกแค่ว่ามีกี่โปรเจคกี่งานอะไรแบบนั้น" — the
+   * full card list here duplicated what clicking through already shows, just
+   * more cluttered — เดียวกันสำหรับคน: "โชว์เป็นการ์ดของแต่ละแผนก...กดเข้าไป
+   * ก็เป็นหน้างานของแผนกนั้น แล้วค่อยเป็นโปรเจคย่อย" ไม่ใช่ list งานทีละใบ
+   * ตรงคอลัมน์คนเลย) */
   summaryOnly?: boolean;
+  /** Assignee grouping only — this person's tasks broken down one row per
+   * department, each independently clickable (via onBreakdownClick), instead
+   * of the single combined "N แผนก · M งาน" button summaryOnly alone renders.
+   * ("อยากให้เป็นคอลัมแบบนี้ [รายการทีละใบ] แต่อยากให้คอลัมเป็นแผนกแทน [ไม่ใช่
+   * งาน] และกดเข้าไปจะเจองานโปรเจคของแผนกๆนั้นๆ [กดแถวนั้นตรงๆ ไม่ต้องผ่านหน้า
+   * รวมแผนกก่อน]" — เดิม summaryOnly เพียว ๆ ยุบทุกแผนกไว้ในปุ่มเดียว/ชิปเดียว
+   * กดได้จุดเดียวคือพาไปหน้า PersonDepartmentsBoard ก่อนเสมอ, breakdown นี้
+   * เพิ่มทางลัดกดตรงจากคอลัมน์คนได้เลย) เมื่อมี breakdown, summaryOnly's
+   * projectCount/projectNames chip style ไม่ถูกใช้ — breakdown แทนที่ทั้งหมด. */
+  breakdown?: { id: string; label: string; accent: string; count: number }[];
 }
 
 const PAGE_SIZE = 6;
@@ -51,6 +72,7 @@ export function KanbanColumn({
   onOpen,
   onHeaderClick,
   headerClickTitle,
+  onBreakdownClick,
   groupedByPriority,
   groupedByStatus,
 }: {
@@ -66,6 +88,10 @@ export function KanbanColumn({
    * into (a person vs a department), defaults to the person wording since
    * that was the only case before department grouping existed. */
   headerClickTitle?: string;
+  /** Assignee grouping only — clicking one row of column.breakdown jumps
+   * straight to that person+department's project topics, skipping the
+   * intermediate PersonDepartmentsBoard stop onHeaderClick goes through. */
+  onBreakdownClick?: (departmentId: string) => void;
   /** Passed straight through to each card — see TaskCard's own doc. */
   groupedByPriority?: boolean;
   /** A normal (non-derived) status column is, by definition, 100% one status
@@ -273,7 +299,26 @@ export function KanbanColumn({
         // scroll chain (AppScaffold, tasks/page.tsx, KanbanBoard's own row).
         className="flex-1 flex min-h-0 flex-col gap-3 p-2.5 rounded-xl overflow-y-auto transition-colors duration-200 bg-[var(--bg-soft)]/50"
       >
-        {column.summaryOnly ? (
+        {column.summaryOnly && column.breakdown?.length ? (
+          column.breakdown.map((row) => (
+            <button
+              key={row.id}
+              type="button"
+              onClick={() => onBreakdownClick?.(row.id)}
+              disabled={!onBreakdownClick}
+              className="flex items-center gap-2.5 rounded-lg border border-[var(--line)] bg-white px-3 py-2.5 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-colors hover:border-[var(--brand-green)] hover:bg-[color-mix(in_srgb,var(--brand-green)_4%,white)] disabled:hover:border-[var(--line)] disabled:hover:bg-white disabled:cursor-default"
+            >
+              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: row.accent }} />
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--ink)]">{row.label}</span>
+              <span
+                className="text-[11px] font-semibold rounded-full h-5 min-w-5 px-1.5 flex items-center justify-center tabular-nums shrink-0"
+                style={{ backgroundColor: `color-mix(in srgb, ${row.accent} 14%, white)`, color: `color-mix(in srgb, ${row.accent} 55%, black)` }}
+              >
+                {row.count}
+              </span>
+            </button>
+          ))
+        ) : column.summaryOnly ? (
           <button
             type="button"
             onClick={onHeaderClick}
@@ -281,7 +326,7 @@ export function KanbanColumn({
             className="flex-1 flex flex-col items-center justify-center gap-2.5 text-center rounded-lg border border-dashed border-[var(--line)] py-6 px-3 hover:border-[var(--brand-green)] hover:bg-white transition-colors disabled:hover:border-[var(--line)] disabled:hover:bg-transparent disabled:cursor-default"
           >
             <span className="text-sm font-semibold text-[var(--ink)]">
-              {column.projectCount ?? 0} โปรเจค · {column.tasks.length} งาน
+              {column.projectCount ?? 0} {column.summaryUnitLabel ?? "โปรเจค"} · {column.tasks.length} งาน
             </span>
             {!!column.projectNames?.length && (
               <div className="flex flex-wrap items-center justify-center gap-1.5 px-1">

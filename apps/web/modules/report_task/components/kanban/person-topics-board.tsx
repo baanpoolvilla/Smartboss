@@ -17,8 +17,9 @@ import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canSeeTask } from "@/modules/report_task/lib/permissions";
-import { getUser } from "@/modules/report_task/lib/directory";
+import { getUser, getDepartment } from "@/modules/report_task/lib/directory";
 import { sortTasksForDisplay } from "@/modules/report_task/lib/task-flags";
+import { taskDepartmentIdsForBoard, OTHER_DEPARTMENT_ID } from "@/modules/report_task/lib/task-department";
 import { cn } from "@/modules/report_task/lib/utils";
 import type { Task } from "@/modules/report_task/types";
 
@@ -26,21 +27,29 @@ const UNSORTED_KEY = "__none__";
 
 /**
  * Full-screen replacement for the board (not a popup) — reached by clicking
- * a person's column header while the board is grouped by "ผู้รับผิดชอบ" (see
- * `?person=` in kanban-board.tsx). Every task that person is on, across the
- * whole board (not just whatever was filtered on the way in), laid out as
- * one column per project topic — same column/card look as the main board,
- * including a real (non-draggable) TaskCard per task — plus an "อื่นๆ"
- * column for tasks with none. Each column's header bar shows the same 4-way
- * status split as the main board's status view, merged into one bar instead
- * of one column each.
+ * a person's column header while the board is grouped by "ผู้รับผิดชอบ", then
+ * a department card on PersonDepartmentsBoard (see `?person=&dept=` in
+ * kanban-board.tsx — person picks the department first now, this page never
+ * mixes departments together anymore: "อยากรู้ว่าบุคคลนั้นมีงานของแผนกอะไร
+ * และมีงานโปรเจคอะไรในแผนกนั้น ย้อยๆไปอีกที"). Every one of that person's
+ * tasks that falls in `departmentId` (via taskDepartmentIdsForBoard — same
+ * rule the main board's department grouping and PersonDepartmentsBoard use),
+ * laid out as one column per project topic — same column/card look as the
+ * main board, including a real (non-draggable) TaskCard per task — plus an
+ * "อื่นๆ" column for tasks with no topic. `departmentId` is required; there's
+ * no "all departments mixed together" mode anymore — PersonDepartmentsBoard
+ * is the step that picks one first. Each column's header bar shows the same
+ * 4-way status split as the main board's status view, merged into one bar
+ * instead of one column each.
  */
 export function PersonTopicsBoard({
   personId,
+  departmentId,
   onBack,
   onOpenTask,
 }: {
   personId: string;
+  departmentId: string;
   onBack: () => void;
   onOpenTask: (taskId: string) => void;
 }) {
@@ -48,10 +57,17 @@ export function PersonTopicsBoard({
   const topics = useProjectTopicStore((s) => s.topics);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const person = getUser(personId);
+  const isOtherDept = departmentId === OTHER_DEPARTMENT_ID;
+  const deptName = isOtherDept ? "อื่นๆ" : (getDepartment(departmentId)?.name ?? "—");
 
   const columns = useMemo(() => {
     const mine = allTasks
       .filter((t) => t.assigneeIds.includes(personId))
+      .filter((t) =>
+        isOtherDept
+          ? taskDepartmentIdsForBoard(t, topics).length === 0
+          : taskDepartmentIdsForBoard(t, topics).includes(departmentId)
+      )
       .filter((t) => canSeeTask(t, viewingAsUserId));
 
     const byTopic = new Map<string, Task[]>();
@@ -70,20 +86,20 @@ export function PersonTopicsBoard({
     return unsorted
       ? [...named, { id: UNSORTED_KEY, name: "อื่นๆ", tasks: sortTasksForDisplay(unsorted) }]
       : named;
-  }, [personId, allTasks, topics, viewingAsUserId]);
+  }, [personId, departmentId, isOtherDept, allTasks, topics, viewingAsUserId]);
 
   // Narrows which topic columns render — separate from the main board's
   // filters (removed from this page entirely, see tasks/page.tsx) since this
   // one only makes sense once you're already looking at one person's spread
   // across projects.
   const [topicFilter, setTopicFilter] = useState<string>("all");
-  // A different person's topic list can (and usually does) not include
+  // A different person/department pair can (and usually does) not include
   // whatever topic was picked for the last one — reset during render (not
   // an effect, per React's guidance for resetting state on a prop change)
   // rather than silently carrying a filter that no longer matches anything.
-  const [lastPersonId, setLastPersonId] = useState(personId);
-  if (personId !== lastPersonId) {
-    setLastPersonId(personId);
+  const [lastKey, setLastKey] = useState(`${personId}:${departmentId}`);
+  if (`${personId}:${departmentId}` !== lastKey) {
+    setLastKey(`${personId}:${departmentId}`);
     setTopicFilter("all");
   }
   const visibleColumns = topicFilter === "all" ? columns : columns.filter((c) => c.id === topicFilter);
@@ -156,8 +172,8 @@ export function PersonTopicsBoard({
           type="button"
           onClick={onBack}
           className="h-8 w-8 rounded-lg flex items-center justify-center text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)] transition-colors shrink-0"
-          aria-label="กลับไปบอร์ด"
-          title="กลับไปบอร์ด"
+          aria-label="กลับไปแผนกของคนนี้"
+          title="กลับไปแผนกของคนนี้"
         >
           <ArrowLeft className="h-4.5 w-4.5" />
         </button>
@@ -165,7 +181,9 @@ export function PersonTopicsBoard({
           <AvatarImage src={person?.avatarUrl ?? undefined} alt={person?.name} />
           <AvatarFallback className="text-[10px]">{person?.avatar}</AvatarFallback>
         </Avatar>
-        <h2 className="text-sm font-semibold truncate min-w-0 shrink">งานของ {person?.name ?? "—"} แยกตามหัวข้อโปรเจค</h2>
+        <h2 className="text-sm font-semibold truncate min-w-0 shrink">
+          งานของ {person?.name ?? "—"} แผนก{deptName} แยกตามหัวข้อโปรเจค
+        </h2>
 
         {columns.length > 1 && (
           <Select value={topicFilter} onValueChange={(v) => v && setTopicFilter(v)}>

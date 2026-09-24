@@ -17,6 +17,7 @@ import { cn } from "@/modules/report_task/lib/utils";
 import { KanbanColumn, type BoardColumn } from "./kanban-column";
 import { TaskDetailSheet } from "./task-detail-sheet";
 import { PersonTopicsBoard } from "./person-topics-board";
+import { PersonDepartmentsBoard } from "./person-departments-board";
 import { DepartmentTopicsBoard } from "./department-topics-board";
 import { toast } from "sonner";
 import { useTaskBoardIntentStore } from "@/modules/report_task/store/task-board-intent-store";
@@ -65,29 +66,41 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   // whether to open it themselves.
   const highlightTaskId = searchParams.get("highlight");
   // Set only when the board is grouped by assignee and someone clicks a
-  // person's column header — swaps the whole board out for PersonTopicsBoard
-  // (a real page-feeling nav via `?person=`, not a popup: pushed so the
-  // browser Back button returns to the board, same convention as `?task=`).
+  // person's column header — swaps the whole board out for
+  // PersonDepartmentsBoard first (a real page-feeling nav via `?person=`, not
+  // a popup: pushed so the browser Back button returns to the board, same
+  // convention as `?task=`). `dept` layers on top of `person` (see below) to
+  // drill one level further into that person's tasks for one department —
+  // clicking a different person's column always starts that person fresh at
+  // the department step, never carrying over the last person's `dept`.
   const personBoardId = searchParams.get("person");
   function openPersonBoard(id: string) {
     const params = new URLSearchParams(searchParams.toString());
     params.set("person", id);
+    params.delete("dept");
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   }
   function closePersonBoard() {
     const params = new URLSearchParams(searchParams.toString());
     params.delete("person");
+    params.delete("dept");
     const query = params.toString();
     router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
   }
 
   // Same pattern as personBoardId above, but for a department's column header
-  // (visible only when groupBy==="department") — swaps the board out for
-  // DepartmentTopicsBoard: "เลือกก่อนว่าแผนกไหน แล้วดูว่าแผนกนั้นมีโปรเจคอะไร"
+  // — two different meanings depending on whether `person` is already set:
+  // alone (groupBy==="department"), it swaps the board out for
+  // DepartmentTopicsBoard ("เลือกก่อนว่าแผนกไหน แล้วดูว่าแผนกนั้นมีโปรเจคอะไร");
+  // alongside `person` (from PersonDepartmentsBoard), it drills PersonTopicsBoard
+  // down to just that one person+department pair instead of every department
+  // that person touches ("บอกว่าบุคคลนั้นมีงานของแผนกอะไร กดเข้าไปแผนกนั้นค่อย
+  // ย้อยเป็นโปรเจค").
   const departmentBoardId = searchParams.get("dept");
   function openDepartmentBoard(id: string) {
     const params = new URLSearchParams(searchParams.toString());
     params.set("dept", id);
+    params.delete("person");
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   }
   function closeDepartmentBoard() {
@@ -95,6 +108,32 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
     params.delete("dept");
     const query = params.toString();
     router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
+  }
+  // Opens/closes just the `dept` layer while `person` stays put — used by
+  // PersonDepartmentsBoard's own department cards and by PersonTopicsBoard's
+  // own back button, which should land back on that board, not skip all the
+  // way past it to the main board.
+  function openPersonDepartmentBoard(id: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("dept", id);
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+  function closePersonDepartmentBoard() {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("dept");
+    const query = params.toString();
+    router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
+  }
+  // Sets `person` + `dept` in one shot — the shortcut a department row inside
+  // a person's own column on the MAIN board uses (KanbanColumn's breakdown,
+  // wired below) to jump straight to that person+department's project
+  // topics, skipping the PersonDepartmentsBoard stop that clicking the
+  // column's header still goes through first.
+  function openPersonDepartmentDirect(personId: string, departmentId: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("person", personId);
+    params.set("dept", departmentId);
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
   }
 
   const pendingDepartmentId = useTaskBoardIntentStore((s) => s.departmentId);
@@ -304,14 +343,51 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
           : [];
       return [...realDeptColumns, ...otherColumn];
     }
-    // assignee — only people who actually have tasks in view
+    // assignee — only people who actually have tasks in view. summaryOnly,
+    // same as department grouping above ("โชว์เป็นการ์ดของแต่ละแผนก...กดเข้า
+    // ไปก็เป็นหน้างานของแผนกนั้น แล้วค่อยเป็นโปรเจคย่อย" — เดิมคอลัมน์คนแต่ละ
+    // คนแจกแจงทีละงานตรงนี้เลย ทั้งที่มีชั้นแผนก/โปรเจคให้ย้อยลงไปอยู่แล้วผ่าน
+    // PersonDepartmentsBoard/PersonTopicsBoard, ดูรกซ้ำซ้อนกับที่กดเข้าไปดูได้
+    // อยู่แล้ว) แต่นับหน่วยเป็น "แผนก" ไม่ใช่ "โปรเจค" — ระดับนี้ยังไม่ลงไปถึง
+    // โปรเจคจนกว่าจะเลือกแผนกก่อน (ดู summaryUnitLabel ของ KanbanColumn)
     return users
-      .map((u) => ({
-        id: u.id,
-        label: u.name,
-        accent: chartColors.blue,
-        tasks: sortTasksForDisplay(filtered.filter((t) => t.assigneeIds.includes(u.id))),
-      }))
+      .map((u) => {
+        const tasks = sortTasksForDisplay(filtered.filter((t) => t.assigneeIds.includes(u.id)));
+        // นับต่อแผนก (ไม่ใช่แค่ dedupe รายชื่อ) — ให้ breakdown ด้านล่างมี
+        // ตัวเลขต่อแถวขึ้นมาด้วย งานที่แชร์หลายแผนกพร้อมกันจะถูกนับเข้าทุกแผนก
+        // ที่มันอยู่ (สอดคล้องกับ sharedDeptCount ด้านล่าง)
+        const counts = new Map<string, number>();
+        let noDeptCount = 0;
+        for (const t of tasks) {
+          const ids = taskDepartmentIdsForBoard(t, projectTopics);
+          if (ids.length === 0) {
+            noDeptCount += 1;
+            continue;
+          }
+          for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
+        }
+        // แต่ละแถว = การ์ดกดได้แยกต่างหาก ("กดเข้าไปจะเจองานโปรเจคของแผนกๆนั้นๆ"
+        // — เลี่ยงต้องผ่านหน้า PersonDepartmentsBoard ก่อนเสมอ ดู
+        // KanbanColumn.breakdown's doc) ไม่ใช่แค่สรุปเป็นชิปในปุ่มเดียวแบบ
+        // summaryOnly ธรรมดา
+        const breakdown = departments
+          .filter((d) => counts.has(d.id))
+          .map((d) => ({ id: d.id, label: d.name, accent: d.color, count: counts.get(d.id)! }));
+        if (noDeptCount > 0) {
+          breakdown.push({ id: OTHER_DEPARTMENT_ID, label: "อื่นๆ", accent: chartColors.gray, count: noDeptCount });
+        }
+        return {
+          id: u.id,
+          label: u.name,
+          accent: chartColors.blue,
+          tasks,
+          projectCount: breakdown.length,
+          projectNames: breakdown.map((b) => b.label),
+          summaryUnitLabel: "แผนก",
+          summaryOnly: true,
+          breakdown,
+        };
+      })
       .filter((c) => c.tasks.length > 0);
   }, [groupBy, filtered, filters.penalty, projectTopics]);
 
@@ -421,10 +497,28 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
     [filtered, projectTopics]
   );
 
+  if (personBoardId && departmentBoardId) {
+    return (
+      <>
+        <PersonTopicsBoard
+          personId={personBoardId}
+          departmentId={departmentBoardId}
+          onBack={closePersonDepartmentBoard}
+          onOpenTask={setOpenTaskId}
+        />
+        <TaskDetailSheet taskId={openTaskId} onOpenChange={(open) => !open && closeTaskSheet()} />
+      </>
+    );
+  }
+
   if (personBoardId) {
     return (
       <>
-        <PersonTopicsBoard personId={personBoardId} onBack={closePersonBoard} onOpenTask={setOpenTaskId} />
+        <PersonDepartmentsBoard
+          personId={personBoardId}
+          onBack={closePersonBoard}
+          onOpenDepartment={openPersonDepartmentBoard}
+        />
         <TaskDetailSheet taskId={openTaskId} onOpenChange={(open) => !open && closeTaskSheet()} />
       </>
     );
@@ -573,6 +667,9 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
                         : undefined
                   }
                   headerClickTitle={groupBy === "department" ? "ดูงานของแผนกนี้แยกตามหัวข้อโปรเจค" : undefined}
+                  onBreakdownClick={
+                    groupBy === "assignee" ? (deptId) => openPersonDepartmentDirect(column.id, deptId) : undefined
+                  }
                   groupedByPriority={groupBy === "priority"}
                   groupedByStatus={groupBy === "status"}
                 />
