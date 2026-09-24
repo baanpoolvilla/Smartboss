@@ -41,7 +41,25 @@ export interface TopicColumn {
  * the show-more paging here) only needs making once, not kept in sync by
  * hand across both files.
  */
-export function TopicColumnCard({ column, onOpenTask }: { column: TopicColumn; onOpenTask: (taskId: string) => void }) {
+export function TopicColumnCard({
+  column,
+  onOpenTask,
+  deptLabel,
+  deptColor,
+}: {
+  column: TopicColumn;
+  onOpenTask: (taskId: string) => void;
+  /** PersonTopicsBoard's flat (all-departments) mode only — which
+   * department this project belongs to, shown as a small tag above the
+   * topic name since every department's columns now sit in one shared row
+   * instead of their own section ("เรียงตามแนวนอน...ทุกแผนก+โปรเจคอยู่ใน
+   * แถวเดียวกัน" — the tag is what keeps "which department is this" legible
+   * once the section headers are gone). Omitted everywhere else
+   * (DepartmentTopicsBoard, a single already-picked department) since it'd
+   * just repeat what the page title already says. */
+  deptLabel?: string;
+  deptColor?: string;
+}) {
   const counts = statusBuckets.map((b) => ({
     ...b,
     count: column.tasks.filter((t) => bucketOf(t) === b.key).length,
@@ -50,8 +68,14 @@ export function TopicColumnCard({ column, onOpenTask }: { column: TopicColumn; o
   const { visible: visibleTasks, remaining, expanded, toggle } = useShowMore(column.tasks, isMobile ? MOBILE_PAGE_SIZE : PAGE_SIZE);
 
   return (
-    <div className="flex h-full min-h-0 flex-col flex-1 basis-[300px] min-w-[280px] max-w-[400px] shrink-0">
+    <div className="flex h-full min-h-0 flex-col flex-1 basis-[86vw] sm:basis-[300px] min-w-[240px] sm:min-w-[280px] max-w-[400px] shrink-0 snap-center sm:snap-none">
       <div className="rounded-xl bg-white border border-[var(--line)] shadow-[0_1px_2px_rgba(16,24,40,0.04)] px-3.5 py-3 mb-3">
+        {deptLabel && (
+          <div className="flex items-center gap-1.5 mb-1.5 min-w-0">
+            <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: deptColor }} />
+            <span className="text-[10px] font-medium text-[var(--ink-soft)] truncate">{deptLabel}</span>
+          </div>
+        )}
         <div className="flex items-center gap-2.5">
           <span className="h-7 w-7 rounded-lg flex items-center justify-center shrink-0 bg-[var(--accent)] text-[var(--brand-green-dark)]">
             <FolderKanban className="h-4 w-4" />

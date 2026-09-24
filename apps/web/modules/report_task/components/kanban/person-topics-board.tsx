@@ -56,12 +56,16 @@ function buildTopicColumns(tasks: Task[], topics: { id: string; name: string }[]
  * out as one column per project topic — same column/card look as the main
  * board, including a real (non-draggable) TaskCard per task — plus an
  * "อื่นๆ" column for tasks with no topic; the flat (all-departments) mode
- * additionally groups those columns under a department heading each, so a
- * head can see department → project → task in one page without clicking
- * further ("อยากให้ดูง่ายละครบหมดเลยว่าคนนี้กำลังทำงานแผนกอะไรและโปรเจค
- * อะไรในแผนก...ครบจบในหน้าเดียว"). Each column's header bar shows the same
- * 4-way status split as the main board's status view, merged into one bar
- * instead of one column each.
+ * additionally tags each column with which department it belongs to (see
+ * TopicColumnCard's deptLabel) so a head can see department → project →
+ * task in one page without clicking further ("อยากให้ดูง่ายละครบหมดเลยว่า
+ * คนนี้กำลังทำงานแผนกอะไรและโปรเจคอะไรในแผนก...ครบจบในหน้าเดียว") — every
+ * department's columns share ONE horizontally-scrolling row, not a row per
+ * department, so the whole page scrolls in a single direction
+ * ("เรียงตามแนวนอน...ทุกแผนก+โปรเจคอยู่ในแถวเดียวกัน เลื่อนหน้าจอไปทางขวา
+ * ดูต่อ"). Each column's header bar shows the same 4-way status split as
+ * the main board's status view, merged into one bar instead of one column
+ * each.
  */
 export function PersonTopicsBoard({
   personId,
@@ -70,8 +74,8 @@ export function PersonTopicsBoard({
   onOpenTask,
 }: {
   personId: string;
-  /** null/undefined = every department mixed together, grouped into
-   * department-headed sections (the card-click flat view). */
+  /** null/undefined = every department mixed together, one shared row with
+   * each column tagged by department (the card-click flat view). */
   departmentId?: string | null;
   onBack: () => void;
   onOpenTask: (taskId: string) => void;
@@ -135,18 +139,36 @@ export function PersonTopicsBoard({
     setLastKey(`${personId}:${departmentId}`);
     setTopicFilter("all");
   }
-  const visibleColumns = topicFilter === "all" ? columns : columns.filter((c) => c.id === topicFilter);
-  const total = visibleColumns.reduce((n, c) => n + c.tasks.length, 0);
-  const visibleSections = sections
-    ?.map((s) => ({ ...s, columns: topicFilter === "all" ? s.columns : s.columns.filter((c) => c.id === topicFilter) }))
-    .filter((s) => s.columns.length > 0);
+  // Flat (all-departments) mode: every department's columns tagged with
+  // that department's name/color and laid out in ONE shared row — not one
+  // row per department — so the whole thing scrolls in a single direction
+  // ("เรียงตามแนวนอน...ทุกแผนก+โปรเจคอยู่ในแถวเดียวกัน เลื่อนหน้าจอไปทาง
+  // ขวาดูต่อ" — a stacked-by-department layout read as going different
+  // directions at once). The department tag on each card (see
+  // TopicColumnCard's deptLabel) is what keeps "which department is this"
+  // legible without a section header of its own. Single-department mode
+  // needs no tag at all — the page title already says which one.
+  const flatColumns = useMemo(
+    () =>
+      sections
+        ? sections.flatMap((s) => s.columns.map((c) => ({ ...c, deptLabel: s.name, deptColor: s.color })))
+        : columns.map((c) => ({ ...c, deptLabel: undefined as string | undefined, deptColor: undefined as string | undefined })),
+    [sections, columns]
+  );
+  const visibleColumns = topicFilter === "all" ? flatColumns : flatColumns.filter((c) => c.id === topicFilter);
+  // Deduped total (not flatColumns' sum) — a task shared across departments
+  // shows up as more than one card above, but should still only count once
+  // here (same "N งาน" the header always meant).
+  const total = (topicFilter === "all" ? columns : columns.filter((c) => c.id === topicFilter)).reduce(
+    (n, c) => n + c.tasks.length,
+    0
+  );
 
   // One person can easily be on more projects than fit on screen — same
   // scroll-arrow + click-drag-to-pan treatment as the main board's assignee
-  // view (kanban-board.tsx). Only meaningful for the single-department flat
-  // row below — the sectioned (flat, all-departments) layout gives each
-  // department its own plain-scroll row instead, since a shared pan/arrow
-  // state can't sensibly track N independent rows at once.
+  // view (kanban-board.tsx), unconditional here since every visit to this
+  // page is already "one person, potentially many project columns" and
+  // (in flat mode) potentially several departments' worth in the same row.
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -161,7 +183,6 @@ export function PersonTopicsBoard({
   }
 
   useEffect(() => {
-    if (sections) return;
     updateScrollState();
     const el = scrollerRef.current;
     if (!el) return;
@@ -173,7 +194,7 @@ export function PersonTopicsBoard({
       el.removeEventListener("scroll", onScroll);
       observer.disconnect();
     };
-  }, [visibleColumns, sections]);
+  }, [visibleColumns]);
 
   function scrollBoard(direction: -1 | 1) {
     scrollerRef.current?.scrollBy({ left: direction * 316, behavior: "smooth" });
@@ -262,29 +283,37 @@ export function PersonTopicsBoard({
           title="ไม่พบงานในหัวข้อนี้"
           description="ลองเลือกหัวข้อโปรเจคอื่น หรือกดล้างตัวกรองเพื่อดูทุกหัวข้อ"
         />
-      ) : visibleSections ? (
-        <div className="min-h-0 flex-1 overflow-y-auto -mx-1 px-1">
-          <div className="flex flex-col gap-5 pb-4">
-            {visibleSections.map((section) => (
-              <div key={section.id}>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: section.color }} />
-                  <h3 className="text-sm font-semibold text-[var(--ink)]">{section.name}</h3>
-                  <span className="text-xs text-[var(--ink-soft)]">{section.tasks.length} งาน</span>
-                </div>
-                <div className="flex items-stretch gap-4 overflow-x-auto pb-1 -mx-1 px-1">
-                  {section.columns.map((column) => (
-                    <TopicColumnCard key={column.id} column={column} onOpenTask={onOpenTask} />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
       ) : (
         <div className="relative min-h-0 flex-1">
+          {/* <640px: small floating "‹"/"›" hints only, same as the main
+              board — the row itself always swipes natively regardless.
+              ≥640px keeps the full hover-shown arrow buttons below. */}
+          <button
+            type="button"
+            onClick={() => scrollBoard(-1)}
+            aria-label="เลื่อนไปทางซ้าย"
+            tabIndex={canScrollLeft ? 0 : -1}
+            className={cn(
+              "sm:hidden absolute left-1 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white text-[var(--ink-soft)] shadow-[0_4px_14px_rgba(0,0,0,0.18)] transition-opacity duration-300",
+              canScrollLeft ? "opacity-100" : "opacity-0 pointer-events-none"
+            )}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollBoard(1)}
+            aria-label="เลื่อนไปทางขวา"
+            tabIndex={canScrollRight ? 0 : -1}
+            className={cn(
+              "sm:hidden absolute right-1 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white text-[var(--ink-soft)] shadow-[0_4px_14px_rgba(0,0,0,0.18)] transition-opacity duration-300",
+              canScrollRight ? "opacity-100" : "opacity-0 pointer-events-none"
+            )}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
           {canScrollLeft && (
-            <>
+            <div className="hidden sm:block">
               <div className="pointer-events-none absolute top-0 left-0 z-10 h-24 w-10 bg-gradient-to-r from-[var(--bg)] to-transparent" />
               <button
                 onClick={() => scrollBoard(-1)}
@@ -293,10 +322,10 @@ export function PersonTopicsBoard({
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
-            </>
+            </div>
           )}
           {canScrollRight && (
-            <>
+            <div className="hidden sm:block">
               <div className="pointer-events-none absolute top-0 right-0 z-10 h-24 w-10 bg-gradient-to-l from-[var(--bg)] to-transparent" />
               <button
                 onClick={() => scrollBoard(1)}
@@ -305,7 +334,7 @@ export function PersonTopicsBoard({
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
-            </>
+            </div>
           )}
           <div
             ref={scrollerRef}
@@ -314,12 +343,18 @@ export function PersonTopicsBoard({
             onPointerUp={endPan}
             onPointerCancel={endPan}
             className={cn(
-              "flex h-full items-stretch gap-4 overflow-x-auto pb-4 -mx-1 px-1",
+              "flex h-full items-stretch gap-4 overflow-x-auto pb-4 -mx-1 px-1 snap-x snap-mandatory sm:snap-none",
               isPanning ? "cursor-grabbing select-none" : "cursor-grab"
             )}
           >
           {visibleColumns.map((column) => (
-            <TopicColumnCard key={column.id} column={column} onOpenTask={onOpenTask} />
+            <TopicColumnCard
+              key={`${column.deptLabel ?? ""}:${column.id}`}
+              column={column}
+              onOpenTask={onOpenTask}
+              deptLabel={column.deptLabel}
+              deptColor={column.deptColor}
+            />
           ))}
           </div>
         </div>
