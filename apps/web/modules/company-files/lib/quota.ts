@@ -48,6 +48,18 @@ export async function getOrgCompanyFilesUsage(orgId: string): Promise<number> {
   return agg._sum.size ?? 0;
 }
 
+/** พื้นที่ที่ไฟล์แชทของบริษัทนี้ใช้ (ไบต์) — นับจาก chat.files (ทุกไฟล์ที่อัปขึ้นแชท) */
+export async function getOrgChatUsage(orgId: string): Promise<number> {
+  const agg = await prisma.chatFile.aggregate({ _sum: { size: true }, where: { orgId } });
+  return agg._sum.size ?? 0;
+}
+
+/** พื้นที่รวมที่นับเข้าเพดานบริษัท = คลังไฟล์กลาง + แชท (เพดานเดียวต่อบริษัท ขายเป็นแพ็กเกจเดียว) */
+export async function getOrgStorageUsage(orgId: string): Promise<{ total: number; companyFiles: number; chat: number }> {
+  const [companyFiles, chat] = await Promise.all([getOrgCompanyFilesUsage(orgId), getOrgChatUsage(orgId)]);
+  return { total: companyFiles + chat, companyFiles, chat };
+}
+
 export interface QuotaCheck {
   ok: boolean;
   used: number;
@@ -57,8 +69,8 @@ export interface QuotaCheck {
 
 /** ตรวจก่อนอัปโหลด: (ใช้ไป + ไฟล์ใหม่) ต้องไม่เกินเพดาน */
 export async function checkOrgQuota(orgId: string, incomingBytes: number): Promise<QuotaCheck> {
-  const limit = await getOrgQuotaBytes(orgId);
-  const used = await getOrgCompanyFilesUsage(orgId);
+  const [limit, usage] = await Promise.all([getOrgQuotaBytes(orgId), getOrgStorageUsage(orgId)]);
+  const used = usage.total;
   return { ok: used + incomingBytes <= limit, used, limit, incoming: incomingBytes };
 }
 

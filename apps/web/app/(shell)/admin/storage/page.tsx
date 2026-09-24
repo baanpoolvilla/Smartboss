@@ -6,7 +6,7 @@ import { Button } from "@smartboss/ui/components/button";
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { EmptyState, Pill } from "@/modules/admin/components/ui";
 import { listAllOrganizations } from "@/modules/admin/data/orgs";
-import { getOrgCompanyFilesUsage, orgQuotaBytes, toGB } from "@/modules/company-files/lib/quota";
+import { getOrgStorageUsage, orgQuotaBytes, toGB } from "@/modules/company-files/lib/quota";
 import { setOrgStorageQuotaAction } from "./actions";
 
 /**
@@ -23,7 +23,8 @@ export default async function StorageAdminPage() {
 
   const orgs = await listAllOrganizations();
   const globalLimit = orgQuotaBytes();
-  const usages = await Promise.all(orgs.map((o) => getOrgCompanyFilesUsage(o.id)));
+  const breakdown = await Promise.all(orgs.map((o) => getOrgStorageUsage(o.id)));
+  const usages = breakdown.map((b) => b.total);
 
   const rows = orgs
     .map((o, i) => {
@@ -34,7 +35,8 @@ export default async function StorageAdminPage() {
       const over = used >= limit;
       const near = !over && used >= limit * 0.75;
       const customGb = custom ? (o.storageQuotaMb! / 1024).toString() : "";
-      return { ...o, used, limit, custom, customGb, pct, over, near };
+      const { companyFiles, chat } = breakdown[i] ?? { companyFiles: 0, chat: 0 };
+      return { ...o, used, companyFiles, chat, limit, custom, customGb, pct, over, near };
     })
     .sort((a, b) => b.used - a.used);
 
@@ -43,7 +45,7 @@ export default async function StorageAdminPage() {
   return (
     <AppScaffold title="พื้นที่จัดเก็บไฟล์ (ทุกบริษัท)" width="max-w-4xl" backHref="/admin">
       <p className="mb-4 text-sm text-(--ink-soft)">
-        ตั้งเพดานพื้นที่ไฟล์คลังกลาง (โมดูลไฟล์บริษัท) ได้รายบริษัท — เว้นว่างเพื่อใช้ค่ากลาง{" "}
+        ตั้งเพดานพื้นที่ไฟล์ (คลังไฟล์บริษัท + แชท) ได้รายบริษัท — เว้นว่างเพื่อใช้ค่ากลาง{" "}
         <span className="font-medium text-(--ink)">{toGB(globalLimit)} GB</span>{" "}
         (env <span className="font-mono text-(--ink)">COMPANY_FILES_ORG_QUOTA_GB</span>)
         เมื่อบริษัทใช้เต็มเพดาน การอัปโหลดไฟล์ใหม่จะถูกบล็อกทันที
@@ -111,6 +113,9 @@ export default async function StorageAdminPage() {
                       {toGB(r.limit)} GB ({r.pct}%){" "}
                       {r.custom ? "· เพดานเฉพาะบริษัท" : "· ใช้ค่ากลาง"}
                     </p>
+                    <p className="mt-0.5 text-[11px] text-(--ink-soft)">
+                      คลังไฟล์ {toGB(r.companyFiles)} GB · แชท {toGB(r.chat)} GB
+                    </p>
                   </div>
 
                   <div className="flex shrink-0 flex-col items-end gap-2">
@@ -145,8 +150,8 @@ export default async function StorageAdminPage() {
       )}
 
       <p className="mt-4 text-xs text-(--ink-soft)">
-        ตัวเลขนับเฉพาะไฟล์ในคลังไฟล์กลาง (company-files) ซึ่งเป็นตัวกินพื้นที่หลัก
-        — ยังไม่รวมรูปแนบในแชท/รายงาน/งานซ่อม กรอกช่อง GB แล้วกดบันทึกเพื่อตั้งเพดานเฉพาะบริษัท
+        ตัวเลขนับไฟล์ในคลังไฟล์กลาง (company-files) และไฟล์ในแชท
+        — ยังไม่รวมรูปแนบในรายงาน/งานซ่อม กรอกช่อง GB แล้วกดบันทึกเพื่อตั้งเพดานเฉพาะบริษัท
         เว้นว่างแล้วบันทึก = กลับไปใช้ค่ากลาง
       </p>
     </AppScaffold>

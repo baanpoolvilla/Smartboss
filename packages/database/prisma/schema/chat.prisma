@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════════
-//  schema "chat" — แชทองค์กร (MVP: ข้อความ + รูป/ไฟล์แนบ, ไม่มี websocket)
+//  schema "chat" — แชทองค์กรแบบ LINE: ข้อความ, ตอบกลับ, อีโมจิ, @แท็ก, อ่านแล้ว,
+//  รูป/ไฟล์/เสียง — ส่งสดผ่าน SSE (/api/realtime) ไม่ต้องโพล
 //
 //  ต่างจาก report_task.stores (ก้อน JSON เดียวต่อบริษัท) โดยตั้งใจ — แชทมีแนวโน้ม
 //  มีข้อความหลักพันแถวต่อบริษัท ต้องแบ่งหน้า/query เป็นแถวจริงตั้งแต่แรก ไม่ใช่โหลด
@@ -18,12 +19,19 @@ model ChatChannel {
   createdById String   @map("created_by_id")
   archived    Boolean  @default(false)
   createdAt   DateTime @default(now()) @map("created_at")
+  /// กลุ่มประจำแผนก (สร้าง/ซิงก์สมาชิกอัตโนมัติจาก core.users.department_id —
+  /// ดู syncDepartmentChannels) null = กลุ่มที่คนสร้างเอง
+  departmentId String? @map("department_id")
+  /// ข้อความที่ปักเป็น "ประกาศ" ไว้บนหัวห้อง (แบบ LINE) — ไม่ใช่ FK เพราะ
+  /// ข้อความถูก soft-delete ได้ ฝั่งอ่านเช็ค deletedAt เอง
+  announcementId String? @map("announcement_id")
 
   organization Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
   members      ChatChannelMember[]
   messages     ChatMessage[]
   readStates   ChatReadState[]
 
+  @@unique([orgId, departmentId])
   @@index([orgId, type])
   @@map("channels")
   @@schema("chat")
@@ -39,7 +47,10 @@ model ChatChannelMember {
   orgId String @map("org_id")
 
   joinedAt DateTime @default(now()) @map("joined_at")
+  /// เลิกใช้ — ปิดเสียงย้ายไป ChatReadState.muted (ห้อง org ไม่มีแถวในตารางนี้)
   muted    Boolean  @default(false)
+  /// "admin" | "member" — แอดมินกลุ่มเปลี่ยนชื่อ/เพิ่ม-ลบสมาชิก/ปักประกาศได้
+  role     String   @default("member")
 
   channel ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
@@ -66,6 +77,10 @@ model ChatReadState {
   /// เทียบกับ ChatMessage.seq (ไม่ใช่ createdAt — ดูเหตุผลที่ ChatMessage.seq)
   lastReadSeq BigInt?   @map("last_read_seq")
   lastReadAt  DateTime? @map("last_read_at")
+  /// ตั้งค่าส่วนตัวต่อห้อง — อยู่ที่นี่ไม่ใช่ ChatChannelMember เพราะห้อง org
+  /// ไม่มีแถว membership (เหตุผลเดียวกับสถานะอ่าน)
+  pinned Boolean @default(false)
+  muted  Boolean @default(false)
 
   channel ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
@@ -89,16 +104,59 @@ model ChatMessage {
   channelId String @map("channel_id")
   authorId  String @map("author_id")
 
+  /// "text" | "system" (เช่น "สมชายเพิ่มนภาเข้ากลุ่ม")
+  kind String  @default("text")
   body String?
-  /// [{ url, name, mime, size, kind }] — kind: "image" | "file"
+  /// [{ url, name, mime, size, kind, thumbUrl?, width?, height?, durationMs? }]
+  /// kind: "image" | "file" | "audio" | "video"
   attachments Json      @default("[]")
+  /// ข้อความที่ตอบกลับ (quote) — ไม่ใช่ FK เพราะต้นทางถูกยกเลิกได้
+  replyToId   String?   @map("reply_to_id")
+  /// userId ที่ถูก @แท็ก ("all" = ทุกคนในห้อง)
+  mentions    String[]  @default([])
+  /// รหัสที่เครื่องผู้ส่งสร้างเอง — ส่งซ้ำตอนเน็ตแย่แล้วได้ข้อความเดิม ไม่เด้งซ้ำ
+  clientId    String?   @map("client_id")
   deletedAt   DateTime? @map("deleted_at")
   createdAt   DateTime  @default(now()) @map("created_at")
 
-  channel ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  channel   ChatChannel    @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  reactions ChatReaction[]
 
+  @@unique([channelId, authorId, clientId])
   @@index([channelId, seq])
   @@index([orgId])
   @@map("messages")
+  @@schema("chat")
+}
+
+/// อีโมจิที่กดให้ข้อความ — คนละอีโมจิได้หลายอัน กดซ้ำ = เอาออก
+model ChatReaction {
+  messageId String   @map("message_id")
+  userId    String   @map("user_id")
+  orgId     String   @map("org_id")
+  emoji     String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  message ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, userId, emoji])
+  @@map("reactions")
+  @@schema("chat")
+}
+
+/// ทุกไฟล์ที่อัปขึ้นแชท — ใช้นับพื้นที่รวมเข้าเพดานบริษัท (company-files/lib/quota)
+/// และเป็นฐานของการลบไฟล์หมดอายุในอนาคต url = `/api/files/<orgId>/chat/...`
+model ChatFile {
+  id           String   @id @default(uuid())
+  orgId        String   @map("org_id")
+  uploadedById String   @map("uploaded_by_id")
+  url          String   @unique
+  size         Int
+  mime         String
+  kind         String
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([orgId])
+  @@map("files")
   @@schema("chat")
 }

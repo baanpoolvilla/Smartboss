@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Sans_Thai } from "next/font/google";
 import "./globals.css";
 
@@ -12,6 +12,18 @@ const plexThai = IBM_Plex_Sans_Thai({
 export const metadata: Metadata = {
   title: "Smartboss",
   description: "Smartboss — ระบบบริหารจัดการภายในองค์กร",
+  // เว็บแอป: เพิ่มลงหน้าจอหลักบน iPhone แล้วเปิดเต็มจอ (ดู app/manifest.ts)
+  appleWebApp: { capable: true, title: "SmartBoss", statusBarStyle: "default" },
+  icons: { icon: "/icon.png", apple: "/apple-touch-icon.png" },
+};
+
+// ไม่ใส่ viewport-fit=cover — เมนูล่างของ Shell ยังไม่ได้เว้นขอบ home indicator ของ iPhone
+// interactiveWidget: Android Chrome ย่อหน้าเว็บตามคีย์บอร์ด — ไม่งั้นช่องพิมพ์ที่อยู่ล่างจอ (แชท/ฟอร์ม) โดนคีย์บอร์ดบัง
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#ffffff",
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({

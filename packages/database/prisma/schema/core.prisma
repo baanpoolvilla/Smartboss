@@ -280,6 +280,23 @@ model Notification {
   @@schema("core")
 }
 
+/// เบราว์เซอร์ที่ผู้ใช้กดอนุญาตแจ้งเตือน (Web Push) — หนึ่งคนมีได้หลายเครื่อง
+/// endpoint ที่ push แล้วได้ 404/410 = ถอนสิทธิ์แล้ว ลบทิ้ง (lib/web-push.ts)
+model WebPushSubscription {
+  id        String   @id @default(uuid())
+  orgId     String   @map("org_id")
+  userId    String   @map("user_id")
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("web_push_subscriptions")
+  @@schema("core")
+}
+
 /// ตัวเดินเลขเอกสารให้คนอ่าน (WO-2569-0001 ฯลฯ)
 ///
 /// ทำไมต้องมีตาราง ไม่ใช้ MAX(code)+1: สองคนกดสร้างพร้อมกันจะอ่านค่าเดิมทั้งคู่

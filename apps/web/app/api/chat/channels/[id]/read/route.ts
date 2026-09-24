@@ -1,25 +1,15 @@
-import { hasPermission, requireOrg } from "@smartboss/auth";
-
-import { assertChannelMember, markChannelRead } from "@/modules/chat/data/channels";
-import { CHAT_PERMS } from "@/modules/chat/permissions";
+import { markChannelRead } from "@/modules/chat/data/channels";
+import { chatActor, chatErrorResponse } from "@/modules/chat/data/route-helpers";
 
 export const dynamic = "force-dynamic";
 
-/** ล้าง unread badge ของห้องนี้ — เรียกตอนเปิดห้อง/ห้องขึ้นมาเป็นห้องที่กำลังดูอยู่ */
-export async function POST(_request: Request, context: { params: Promise<{ id: string }> }) {
-  const { id } = await context.params;
+/** อ่านห้องนี้ถึงข้อความล่าสุดแล้ว (ล้างตัวเลข + ส่ง "อ่านแล้ว" ให้คนอื่นในห้อง) */
+export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const session = await requireOrg();
-    if (!hasPermission(session, CHAT_PERMS.access)) {
-      return Response.json({ error: "ไม่มีสิทธิ์ใช้งานโมดูลแชท" }, { status: 403 });
-    }
-    await assertChannelMember(session.orgId, id, session.userId);
-    await markChannelRead(id, session.userId, session.orgId);
-    return Response.json({ ok: true });
+    const actor = await chatActor();
+    const { id } = await params;
+    return Response.json({ lastReadSeq: await markChannelRead(actor, id) });
   } catch (err) {
-    const status = (err as Error & { status?: number })?.status ?? 500;
-    const message = err instanceof Error ? err.message : "เกิดข้อผิดพลาด";
-    if (status === 500) console.error("[chat/read]", err);
-    return Response.json({ error: message }, { status });
+    return chatErrorResponse(err, "read");
   }
 }

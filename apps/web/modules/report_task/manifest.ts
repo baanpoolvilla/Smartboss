@@ -7,6 +7,7 @@ import { CHAT_PERMS } from "@/modules/chat/permissions";
 import { ALL_REPORT_TASK_PERMS, REPORT_TASK_PERMS } from "./permissions";
 import { TaskReviewNavBadge } from "./components/shared/task-review-nav-badge";
 import { ReportActivityNavBadge } from "./components/shared/report-activity-nav-badge";
+import { ChatNavBadge } from "@/modules/chat/components/chat-nav-badge";
 
 /**
  * โมดูลรายงานและงาน — เดิมพอร์ตมาจากแอป easyboss-workspace ที่เคยรันเดี่ยว ๆ
@@ -43,7 +44,9 @@ const menus: ModuleMenuItem[] = navItems.map((item) => ({
       ? createElement(TaskReviewNavBadge)
       : item.href === `${REPORT_TASK_BASE}/report-feed`
         ? createElement(ReportActivityNavBadge)
-        : undefined,
+        : item.href === `${REPORT_TASK_BASE}/chat`
+          ? createElement(ChatNavBadge)
+          : undefined,
 }));
 
 export const reportTaskManifest: ModuleManifest = {

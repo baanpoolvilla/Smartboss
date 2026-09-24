@@ -1,16 +1,17 @@
-import { hasPermission, requireOrg } from "@smartboss/auth";
-
+import { onlineUserIds } from "@/lib/realtime/server";
 import { listOrgUsersForPicker } from "@/modules/chat/data/channels";
-import { CHAT_PERMS } from "@/modules/chat/permissions";
+import { chatActor, chatErrorResponse } from "@/modules/chat/data/route-helpers";
 
 export const dynamic = "force-dynamic";
 
-/** รายชื่อเพื่อนร่วมบริษัท — ตัวเลือกเริ่ม DM ใหม่ / สร้างกลุ่ม */
+/** พนักงานทั้งบริษัท (ชื่อ/รูป/แผนก) + ใครออนไลน์อยู่ — เครื่องดึงซ้ำทุก 60 วิเพื่ออัปเดตจุดเขียว */
 export async function GET() {
-  const session = await requireOrg();
-  if (!hasPermission(session, CHAT_PERMS.access)) {
-    return Response.json({ error: "ไม่มีสิทธิ์ใช้งานโมดูลแชท" }, { status: 403 });
+  try {
+    const actor = await chatActor();
+    const users = await listOrgUsersForPicker(actor.orgId);
+    const online = await onlineUserIds(users.map((u) => u.id));
+    return Response.json({ users, onlineIds: [...online] });
+  } catch (err) {
+    return chatErrorResponse(err, "users");
   }
-  const users = await listOrgUsersForPicker(session.orgId, session.userId);
-  return Response.json({ users });
 }

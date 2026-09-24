@@ -1,87 +1,106 @@
 import { randomUUID } from "node:crypto";
 
-import { hasPermission, requireOrg } from "@smartboss/auth";
+import { prisma } from "@smartboss/database";
+import { rateLimit } from "@smartboss/auth/ratelimit";
 
-import { putFile } from "@/modules/maintenance/lib/storage";
+import { putFile } from "@/lib/storage";
 import { sniffMime } from "@/modules/report_task/lib/upload-sniff";
-import { CHAT_PERMS } from "@/modules/chat/permissions";
+import { checkOrgQuota, toGB } from "@/modules/company-files/lib/quota";
+import { chatActor, chatErrorResponse } from "@/modules/chat/data/route-helpers";
+import type { ChatAttachmentKind } from "@/modules/chat/types";
 
 /**
- * อัปโหลดไฟล์แนบของแชท — ก็อปมาจาก apps/web/app/api/report-task/uploads/route.ts
- * เกือบทั้งดุ้น (putFile + sniffMime ตัวเดียวกัน) ต่างแค่ prefix ที่เก็บกับขนาด
- * จำกัดที่ตายตัวไว้ก่อน (ยังไม่มีหน้าตั้งค่าแยกต่อบริษัทแบบ report_task's
- * attachment-settings ใน MVP นี้)
+ * อัปโหลดไฟล์แนบของแชท — รูปถูกย่อในเครื่องก่อนส่งแล้ว (lib/image-compress.ts)
+ * จึงปกติเหลือไม่กี่ร้อย KB ส่วนรูปย่อ (thumbnail) ก็อัปผ่านทางนี้เป็นอีกไฟล์
  *
- * เหตุผลของทุกด่านตรวจดูคอมเมนต์ในไฟล์ต้นฉบับ — ที่นี่คงไว้ทั้งหมด: สนิฟฟ์เนื้อไฟล์
- * จริงแทนเชื่อ file.type, ตั้งชื่อไฟล์ใหม่จากนามสกุลที่ตรวจได้ ไม่ใช่ชื่อที่ client ส่งมา
+ * ด่านตรวจ: สนิฟฟ์เนื้อไฟล์จริงแทนเชื่อ file.type, ตั้งชื่อไฟล์ใหม่จากนามสกุลที่ตรวจได้,
+ * เช็คเพดานพื้นที่ของบริษัท (คลังไฟล์ + แชทรวมกัน), จำกัดจำนวนครั้งต่อคน
+ * ทุกไฟล์ลงแถว chat.files — ใช้นับพื้นที่ และตรวจตอนส่งข้อความว่าไฟล์เป็นของบริษัทนี้จริง
+ *
+ * ขนาดสูงสุด 25MB ตามเพดาน request ของ Caddy (deploy/Caddyfile)
  */
 export const dynamic = "force-dynamic";
 
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
-const MAX_FILE_BYTES = 25 * 1024 * 1024;
+const MB = 1024 * 1024;
 
-const ALLOWED_TYPES: Record<string, { ext: string; kind: "image" | "file" }> = {
-  "image/jpeg": { ext: "jpg", kind: "image" },
-  "image/png": { ext: "png", kind: "image" },
-  "image/webp": { ext: "webp", kind: "image" },
-  "image/gif": { ext: "gif", kind: "image" },
-  "application/pdf": { ext: "pdf", kind: "file" },
-  "text/plain": { ext: "txt", kind: "file" },
-  "application/zip": { ext: "zip", kind: "file" },
+const ALLOWED: Record<string, { ext: string; kind: ChatAttachmentKind; max: number }> = {
+  "image/jpeg": { ext: "jpg", kind: "image", max: 10 * MB },
+  "image/png": { ext: "png", kind: "image", max: 10 * MB },
+  "image/webp": { ext: "webp", kind: "image", max: 10 * MB },
+  "image/gif": { ext: "gif", kind: "image", max: 10 * MB },
+  "application/pdf": { ext: "pdf", kind: "file", max: 25 * MB },
+  "text/plain": { ext: "txt", kind: "file", max: 5 * MB },
+  "text/csv": { ext: "csv", kind: "file", max: 10 * MB },
+  "application/zip": { ext: "zip", kind: "file", max: 25 * MB },
+  "application/msword": { ext: "doc", kind: "file", max: 25 * MB },
+  "application/vnd.ms-excel": { ext: "xls", kind: "file", max: 25 * MB },
+  "application/vnd.ms-powerpoint": { ext: "ppt", kind: "file", max: 25 * MB },
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": { ext: "docx", kind: "file", max: 25 * MB },
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": { ext: "xlsx", kind: "file", max: 25 * MB },
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": { ext: "pptx", kind: "file", max: 25 * MB },
+  "video/mp4": { ext: "mp4", kind: "video", max: 25 * MB },
+  "video/webm": { ext: "webm", kind: "video", max: 25 * MB },
 };
 
-function maxBytesFor(kind: "image" | "file"): number {
-  return kind === "image" ? MAX_IMAGE_BYTES : MAX_FILE_BYTES;
-}
+/** ข้อความเสียงจาก MediaRecorder: Chrome = webm, Safari = mp4 — เนื้อไฟล์สนิฟฟ์ได้เป็น
+ * video/* (คอนเทนเนอร์เดียวกัน) จึงแยกด้วยชนิดที่เครื่องบอกมาว่าเป็น audio/* */
+const AUDIO_CONTAINER: Record<string, { ext: string; mime: string }> = {
+  "video/webm": { ext: "webm", mime: "audio/webm" },
+  "video/mp4": { ext: "mp4", mime: "audio/mp4" },
+};
+const MAX_AUDIO = 10 * MB;
 
 export async function POST(request: Request) {
   try {
-    const session = await requireOrg();
-    if (!hasPermission(session, CHAT_PERMS.access)) {
-      return Response.json({ error: "ไม่มีสิทธิ์ใช้งานโมดูลแชท" }, { status: 403 });
-    }
+    const actor = await chatActor();
+    const limited = await rateLimit(`chat:upload:${actor.userId}`, 60, 60);
+    if (!limited.allowed) return Response.json({ error: "อัปโหลดถี่เกินไป รอสักครู่แล้วลองใหม่" }, { status: 429 });
 
     const form = await request.formData().catch(() => null);
     const file = form?.get("file");
-    if (!(file instanceof File)) {
-      return Response.json({ error: "ต้องแนบไฟล์" }, { status: 400 });
-    }
+    if (!(file instanceof File) || file.size === 0) return Response.json({ error: "ต้องแนบไฟล์" }, { status: 400 });
+    if (file.size > 25 * MB) return Response.json({ error: "ไฟล์ใหญ่เกินไป (จำกัด 25MB)" }, { status: 413 });
 
-    const claimed = ALLOWED_TYPES[file.type];
-    if (!claimed) {
-      return Response.json({ error: `ไม่รองรับชนิดไฟล์นี้ (${file.type || "ไม่ทราบชนิด"})` }, { status: 400 });
-    }
-    if (file.size > maxBytesFor(claimed.kind)) {
-      const mb = Math.round(maxBytesFor(claimed.kind) / 1024 / 1024);
-      return Response.json({ error: `ไฟล์ใหญ่เกินไป (จำกัด ${mb}MB)` }, { status: 413 });
+    const quota = await checkOrgQuota(actor.orgId, file.size);
+    if (!quota.ok) {
+      return Response.json(
+        { error: `พื้นที่เก็บไฟล์ของบริษัทเต็มแล้ว (ใช้ไป ${toGB(quota.used)} จาก ${toGB(quota.limit)} GB) ติดต่อผู้ดูแลเพื่อเพิ่มพื้นที่` },
+        { status: 413 }
+      );
     }
 
     const bytes = new Uint8Array(await file.arrayBuffer());
+    const claimedAudio = file.type.startsWith("audio/");
     const sniffed = sniffMime(bytes, file.type);
-    const meta = sniffed ? ALLOWED_TYPES[sniffed] : null;
-    if (!sniffed || !meta) {
-      return Response.json({ error: "เนื้อไฟล์ไม่ตรงกับชนิดที่แจ้ง" }, { status: 400 });
+    if (!sniffed) return Response.json({ error: `ไม่รองรับชนิดไฟล์นี้ (${file.type || "ไม่ทราบชนิด"})` }, { status: 400 });
+
+    let meta: { ext: string; kind: ChatAttachmentKind; max: number; mime: string };
+    if (claimedAudio && AUDIO_CONTAINER[sniffed]) {
+      meta = { ...AUDIO_CONTAINER[sniffed]!, kind: "audio", max: MAX_AUDIO };
+    } else {
+      const allowed = ALLOWED[sniffed];
+      if (!allowed) return Response.json({ error: `ไม่รองรับชนิดไฟล์นี้ (${file.type || sniffed})` }, { status: 400 });
+      meta = { ...allowed, mime: sniffed };
     }
-    if (bytes.byteLength > maxBytesFor(meta.kind)) {
-      const mb = Math.round(maxBytesFor(meta.kind) / 1024 / 1024);
-      return Response.json({ error: `ไฟล์ใหญ่เกินไป (จำกัด ${mb}MB)` }, { status: 413 });
+    if (bytes.byteLength > meta.max) {
+      return Response.json({ error: `ไฟล์ใหญ่เกินไป (จำกัด ${Math.round(meta.max / MB)}MB)` }, { status: 413 });
     }
 
-    const url = await putFile(
-      `${session.orgId}/chat`,
-      new File([bytes], `${randomUUID()}.${meta.ext}`, { type: sniffed }),
-      { ext: meta.ext }
-    );
+    const url = await putFile(`${actor.orgId}/chat`, new File([bytes], `${randomUUID()}.${meta.ext}`, { type: meta.mime }), {
+      ext: meta.ext,
+    });
+    await prisma.chatFile.create({
+      data: { orgId: actor.orgId, uploadedById: actor.userId, url, size: bytes.byteLength, mime: meta.mime, kind: meta.kind },
+    });
+
     return Response.json({
       url,
-      mime: sniffed,
+      mime: meta.mime,
       size: bytes.byteLength,
-      name: file.name.slice(0, 200),
+      name: file.name.slice(0, 200) || `ไฟล์.${meta.ext}`,
       kind: meta.kind,
     });
   } catch (err) {
-    console.error("[chat/uploads] failed", err);
-    const detail = err instanceof Error ? err.message : String(err);
-    return Response.json({ error: `อัปโหลดไม่สำเร็จ: ${detail}` }, { status: 500 });
+    return chatErrorResponse(err, "uploads");
   }
 }

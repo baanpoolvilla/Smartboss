@@ -42,3 +42,39 @@ h1, h2, h3, h4, h5, h6 {
 * {
   border-color: var(--line);
 }
+
+/*
+ * แชท (modules/chat) — ชุดสีของตัวเอง ไม่อิง --brand-green เพราะหน้าแชทอยู่ใต้
+ * /report-task ซึ่งเปลี่ยน --brand-green เป็นสีเทาของโมดูล แต่แชทต้องเป็นเขียวแบบ LINE เสมอ
+ */
+.chat-ui {
+  --chat-accent: #2fa84f;
+  --chat-accent-strong: #218a3d;
+  --chat-accent-soft: #e5f6ea;
+  --chat-room-bg: #eaf0f6;
+  --chat-bubble-me: #c9f2b1;
+  --chat-bubble-me-ink: #12260f;
+  --chat-bubble-other: #ffffff;
+  --chat-meta: #7b8794;
+  --chat-mention: #1d6fd6;
+}
+
+/* ข้อความนอกจอไม่ต้องวาด — ห้องที่มีข้อความเป็นพันยังเลื่อนลื่น */
+.chat-ui .chat-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 64px;
+}
+
+@keyframes chat-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes chat-flash {
+  0%, 100% { background: transparent; }
+  30% { background: rgba(47, 168, 79, 0.18); }
+}
+.chat-ui .chat-enter { animation: chat-in 180ms ease-out; }
+.chat-ui .chat-flash { animation: chat-flash 1.6s ease-in-out; border-radius: 12px; }
+@media (prefers-reduced-motion: reduce) {
+  .chat-ui .chat-enter, .chat-ui .chat-flash { animation: none; }
+}
