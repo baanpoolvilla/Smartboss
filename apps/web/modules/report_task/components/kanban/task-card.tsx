@@ -21,7 +21,7 @@ import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { unreadTaskAttachmentCounts, unreadTaskCommentCounts } from "@/modules/report_task/lib/task-comment-activity";
-import { MessageSquare, Paperclip, History, SmilePlus, SearchCheck, Check, Circle, Star, Clock } from "lucide-react";
+import { MessageSquare, Paperclip, History, SmilePlus, SearchCheck, Check, Circle, Star, Clock, Eye } from "lucide-react";
 import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
 import { StickerConfirmDialog } from "@/modules/report_task/components/shared/sticker-confirm-dialog";
 import type { Sticker } from "@/modules/report_task/types";
@@ -60,6 +60,12 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
     () => unreadTaskAttachmentCounts(notifications, viewingAsUserId).get(task.id) ?? 0,
     [notifications, viewingAsUserId, task.id]
   );
+  // "ติ๊กติดตามไว้ก็ต้องเห็นด้วยว่าติดตามอะไรแบบนี้" — เดิมสถานะติดตามเห็น
+  // ได้แค่ตอนเปิดหน้ารายละเอียดงาน มองจากการ์ดบนบอร์ดเลยไม่รู้เลยว่าตัวเอง
+  // ติดตามงานไหนอยู่บ้าง เห็นเฉพาะของตัวเอง (viewingAsUserId) ไม่ใช่บอกว่ามี
+  // ใครติดตามอยู่บ้างทั้งหมด — ตรงกับที่ปุ่มติดตามในหน้ารายละเอียดก็ผูกกับ
+  // ตัวเองเป็นหลักเหมือนกัน
+  const isWatching = (task.watcherIds ?? []).includes(viewingAsUserId);
   const isDone = task.status === "done";
   // Strikethrough specifically means "confirmed finished" — a done-but-
   // unreviewed card ("รอตรวจสอบ") still needs someone to actually check it,
@@ -420,6 +426,14 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
             </span>
           )}
           <DueDateBadge task={task} />
+          {isWatching && (
+            <span
+              className="flex items-center justify-center h-5 w-5 rounded-full bg-[var(--brand-green-dark)]/12 text-[var(--brand-green-dark)] shrink-0"
+              title="กำลังติดตามงานนี้อยู่"
+            >
+              <Eye className="h-3 w-3" />
+            </span>
+          )}
           {onOpen && !isShared && <PenaltyChip task={task} variant="card" />}
           {onOpen && isShared && Object.keys(task.penalties ?? {}).length > 0 && (
             <span className="flex items-center gap-0.5 h-5 rounded-md px-1.5 text-[10px] font-semibold bg-red-600 text-white" title="มีคนถูกหักคะแนน">

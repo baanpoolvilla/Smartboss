@@ -497,15 +497,27 @@ export function TaskDetailSheet({
               {canEditMain ? "แก้ไขได้" : `สร้างโดย ${assignedBy?.name ?? "—"}`}
             </Badge>
             {canWatch && (
+              // เดิมใส่ fill="currentColor" ตอน active ให้ไอคอนดูเด่นขึ้น แต่
+              // ที่ขนาดเล็ก (16px) เส้น stroke กับพื้น fill สีเดียวกันมันกลืน
+              // กันจนเห็นเป็นจุดกลมทึบ ไม่เหลือรูปตาให้จำได้เลย ("กดติดตามแล้ว
+              // ทำไมเป็นแบบนี้") เปลี่ยนมาใช้ไอคอน outline เดิมเสมอ ให้พื้น
+              // หลังวงกลมสีอ่อน ๆ (เหมือนปุ่ม toggle ที่ active ที่อื่นในแอป
+              // ใช้กันอยู่แล้ว) เป็นตัวบอกสถานะแทน อ่านง่ายกว่าและไม่แตกที่
+              // ขนาดเล็ก
               <Button
                 variant="ghost"
                 size="icon-sm"
-                className={cn("shrink-0", isWatching ? "text-[var(--brand-green-dark)]" : "text-[var(--ink-soft)]")}
+                className={cn(
+                  "shrink-0 rounded-full transition-colors",
+                  isWatching
+                    ? "bg-[var(--brand-green-dark)]/12 text-[var(--brand-green-dark)] hover:bg-[var(--brand-green-dark)]/20"
+                    : "text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)]"
+                )}
                 title={isWatching ? "เลิกติดตามงานนี้" : "ติดตามงานนี้"}
                 aria-label={isWatching ? "เลิกติดตามงานนี้" : "ติดตามงานนี้"}
                 onClick={() => toggleWatcher(task.id, viewingAsUserId)}
               >
-                <Eye className="h-4 w-4" fill={isWatching ? "currentColor" : "none"} />
+                <Eye className="h-4 w-4" strokeWidth={isWatching ? 2.5 : 2} />
               </Button>
             )}
             {canEditMain && (
