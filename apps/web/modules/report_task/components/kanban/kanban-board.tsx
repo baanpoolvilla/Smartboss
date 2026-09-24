@@ -435,16 +435,18 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   }
 
   // Click-and-drag panning on empty board background — assignee grouping
-  // only (that's the view with by far the most columns, one per employee).
-  // Status/priority stay scroll-wheel/button-only since they rarely exceed
-  // 3-4 columns. Anything that's an actual card or a real control
-  // (button/link/header click) is left alone for its own onClick — panning
-  // only starts from a pointerdown that lands on genuinely empty background.
+  // only originally (that was the view with by far the most columns, one
+  // per employee) — status/priority were left scroll-wheel/button-only on
+  // the assumption they'd rarely overflow, but 4 fixed status columns
+  // already do on a narrower screen ("ให้กดเมาส์ค้างละลากไปซ้ายขวาได้แบบ
+  // หน้าผู้รับผิดชอบกับแผนก") so this is unconditional for every grouping
+  // now. Anything that's an actual card or a real control (button/link/
+  // header click) is left alone for its own onClick — panning only starts
+  // from a pointerdown that lands on genuinely empty background.
   const panRef = useRef<{ startX: number; startScrollLeft: number; pointerId: number } | null>(null);
   const [isPanning, setIsPanning] = useState(false);
 
   function handlePanPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
-    if (groupBy !== "assignee" && groupBy !== "department") return;
     if (e.button !== 0) return;
     const target = e.target as HTMLElement;
     if (target.closest('[id^="task-card-"], button, a, input, select, textarea, [role="button"]')) return;
@@ -614,8 +616,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
               onPointerCancel={endPan}
               className={cn(
                 "flex h-full items-stretch gap-4 overflow-x-auto pb-1 -mx-1 px-1 snap-x snap-mandatory sm:snap-none",
-                (groupBy === "assignee" || groupBy === "department") &&
-                  (isPanning ? "cursor-grabbing select-none" : "cursor-grab")
+                isPanning ? "cursor-grabbing select-none" : "cursor-grab"
               )}
             >
               {columns.map((column) => (
