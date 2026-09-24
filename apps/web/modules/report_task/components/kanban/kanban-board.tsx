@@ -36,6 +36,12 @@ export const groupByLabels: Record<GroupBy, string> = {
 const statusAccent = statusColors;
 const priorityAccent = priorityColorHex;
 
+// `?dept=` value meaning "no department filter" — used only alongside
+// `?person=` (clicking a person's name, see openPersonAllBoard) since a real
+// Department.id never looks like this. Never appears alone: `?dept=` without
+// `?person=` always means the top-level department-grouped view instead.
+const ALL_DEPARTMENTS_SENTINEL = "__all__";
+
 export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   const storeTasks = useTaskStore((s) => s.tasks);
   const filters = useTaskStore((s) => s.filters);
@@ -134,6 +140,23 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
     const params = new URLSearchParams(searchParams.toString());
     params.set("person", personId);
     params.set("dept", departmentId);
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+  // Clicking a person's NAME specifically (not the rest of their column
+  // card) — a deliberate second destination, straight to that person's
+  // tasks with every department mixed together, skipping both
+  // PersonDepartmentsBoard AND the per-department filter
+  // ("เอาคลิกชื่อเป็นแบบคลิกแล้วรู้เลยว่าคนนั้นมีงานอะไรบ้าง...จะได้
+  // แตกต่างกัน" — the rest of the card still goes to the department
+  // breakdown via openPersonDepartmentDirect/openPersonBoard). Reuses the
+  // `dept` param with a sentinel instead of a third param so PersonTopicsBoard's
+  // existing `?person=&dept=` plumbing (and router.back() from it) works
+  // unchanged — ALL_DEPARTMENTS_SENTINEL means "no department filter" to
+  // PersonTopicsBoard, same as passing `departmentId={null}` directly.
+  function openPersonAllBoard(personId: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("person", personId);
+    params.set("dept", ALL_DEPARTMENTS_SENTINEL);
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   }
 
@@ -503,7 +526,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
       <>
         <PersonTopicsBoard
           personId={personBoardId}
-          departmentId={departmentBoardId}
+          departmentId={departmentBoardId === ALL_DEPARTMENTS_SENTINEL ? null : departmentBoardId}
           onBack={closePersonDepartmentBoard}
           onOpenTask={setOpenTaskId}
         />
@@ -671,6 +694,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
                   onBreakdownClick={
                     groupBy === "assignee" ? (deptId) => openPersonDepartmentDirect(column.id, deptId) : undefined
                   }
+                  onNameClick={groupBy === "assignee" ? () => openPersonAllBoard(column.id) : undefined}
                   groupedByPriority={groupBy === "priority"}
                   groupedByStatus={groupBy === "status"}
                 />

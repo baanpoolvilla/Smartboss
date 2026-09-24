@@ -26,21 +26,24 @@ import type { Task } from "@/modules/report_task/types";
 const UNSORTED_KEY = "__none__";
 
 /**
- * Full-screen replacement for the board (not a popup) — reached by clicking
- * a person's column header while the board is grouped by "ผู้รับผิดชอบ", then
- * a department card on PersonDepartmentsBoard (see `?person=&dept=` in
- * kanban-board.tsx — person picks the department first now, this page never
- * mixes departments together anymore: "อยากรู้ว่าบุคคลนั้นมีงานของแผนกอะไร
- * และมีงานโปรเจคอะไรในแผนกนั้น ย้อยๆไปอีกที"). Every one of that person's
- * tasks that falls in `departmentId` (via taskDepartmentIdsForBoard — same
- * rule the main board's department grouping and PersonDepartmentsBoard use),
- * laid out as one column per project topic — same column/card look as the
- * main board, including a real (non-draggable) TaskCard per task — plus an
- * "อื่นๆ" column for tasks with no topic. `departmentId` is required; there's
- * no "all departments mixed together" mode anymore — PersonDepartmentsBoard
- * is the step that picks one first. Each column's header bar shows the same
- * 4-way status split as the main board's status view, merged into one bar
- * instead of one column each.
+ * Full-screen replacement for the board (not a popup) — reached two ways now:
+ * clicking a person's column header (the card, anywhere but the name) walks
+ * board → PersonDepartmentsBoard → here with one department picked (see
+ * `?person=&dept=` in kanban-board.tsx — "อยากรู้ว่าบุคคลนั้นมีงานของแผนก
+ * อะไร และมีงานโปรเจคอะไรในแผนกนั้น ย้อยๆไปอีกที"); clicking the person's
+ * *name* specifically (`?person=&dept=all`, KanbanColumn's onNameClick) skips
+ * straight here with every department mixed together instead — a quick "what
+ * does this person have going on" glance, deliberately a separate button
+ * from the card click ("เอาคลิกชื่อเป็นแบบคลิกแล้วรู้เลยว่าคนนั้นมีงานอะไร
+ * บ้าง...จะได้แตกต่างกัน"). `departmentId` null/omitted = that flat mode;
+ * a real id or OTHER_DEPARTMENT_ID = filtered to just that one (via
+ * taskDepartmentIdsForBoard — same rule the main board's department grouping
+ * and PersonDepartmentsBoard use). Laid out as one column per project topic
+ * either way — same column/card look as the main board, including a real
+ * (non-draggable) TaskCard per task — plus an "อื่นๆ" column for tasks with
+ * no topic. Each column's header bar shows the same 4-way status split as
+ * the main board's status view, merged into one bar instead of one column
+ * each.
  */
 export function PersonTopicsBoard({
   personId,
@@ -49,7 +52,8 @@ export function PersonTopicsBoard({
   onOpenTask,
 }: {
   personId: string;
-  departmentId: string;
+  /** null/undefined = every department mixed together (the name-click flat view). */
+  departmentId?: string | null;
   onBack: () => void;
   onOpenTask: (taskId: string) => void;
 }) {
@@ -58,16 +62,17 @@ export function PersonTopicsBoard({
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const person = getUser(personId);
   const isOtherDept = departmentId === OTHER_DEPARTMENT_ID;
-  const deptName = isOtherDept ? "อื่นๆ" : (getDepartment(departmentId)?.name ?? "—");
+  const deptName = departmentId == null ? null : isOtherDept ? "อื่นๆ" : (getDepartment(departmentId)?.name ?? "—");
 
   const columns = useMemo(() => {
     const mine = allTasks
       .filter((t) => t.assigneeIds.includes(personId))
-      .filter((t) =>
-        isOtherDept
+      .filter((t) => {
+        if (departmentId == null) return true;
+        return isOtherDept
           ? taskDepartmentIdsForBoard(t, topics).length === 0
-          : taskDepartmentIdsForBoard(t, topics).includes(departmentId)
-      )
+          : taskDepartmentIdsForBoard(t, topics).includes(departmentId);
+      })
       .filter((t) => canSeeTask(t, viewingAsUserId));
 
     const byTopic = new Map<string, Task[]>();
@@ -172,8 +177,8 @@ export function PersonTopicsBoard({
           type="button"
           onClick={onBack}
           className="h-8 w-8 rounded-lg flex items-center justify-center text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)] transition-colors shrink-0"
-          aria-label="กลับไปแผนกของคนนี้"
-          title="กลับไปแผนกของคนนี้"
+          aria-label="กลับไปบอร์ด"
+          title="กลับไปบอร์ด"
         >
           <ArrowLeft className="h-4.5 w-4.5" />
         </button>
@@ -182,7 +187,7 @@ export function PersonTopicsBoard({
           <AvatarFallback className="text-[10px]">{person?.avatar}</AvatarFallback>
         </Avatar>
         <h2 className="text-sm font-semibold truncate min-w-0 shrink">
-          งานของ {person?.name ?? "—"} แผนก{deptName} แยกตามหัวข้อโปรเจค
+          งานของ {person?.name ?? "—"} {deptName ? `แผนก${deptName} ` : ""}แยกตามหัวข้อโปรเจค
         </h2>
 
         {columns.length > 1 && (

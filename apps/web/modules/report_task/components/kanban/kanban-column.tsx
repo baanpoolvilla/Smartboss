@@ -73,6 +73,7 @@ export function KanbanColumn({
   onHeaderClick,
   headerClickTitle,
   onBreakdownClick,
+  onNameClick,
   groupedByPriority,
   groupedByStatus,
 }: {
@@ -92,6 +93,17 @@ export function KanbanColumn({
    * straight to that person+department's project topics, skipping the
    * intermediate PersonDepartmentsBoard stop onHeaderClick goes through. */
   onBreakdownClick?: (departmentId: string) => void;
+  /** Assignee grouping only — a second, deliberately different destination
+   * from onHeaderClick: clicking the name itself jumps straight to a flat
+   * "ทุกงานของคนนี้" list across every department (quick "what does this
+   * person have going on" glance), while clicking anywhere else on the same
+   * card still goes to the department breakdown onHeaderClick opens
+   * ("เอาคลิกชื่อเป็นแบบคลิกแล้วรู้เลยว่าคนนั้นมีงานอะไรบ้าง...จะได้แตกต่างกัน"
+   * — two distinct buttons on purpose this time, not the old single "whole
+   * card is one button" merge below, which stays for anywhere else on the
+   * card). Nested as a real `<button>` with stopPropagation inside the
+   * outer (now non-button) header container. */
+  onNameClick?: () => void;
   /** Passed straight through to each card — see TaskCard's own doc. */
   groupedByPriority?: boolean;
   /** A normal (non-derived) status column is, by definition, 100% one status
@@ -174,11 +186,31 @@ export function KanbanColumn({
         // ยากไป ("ตอนนี้มันกดได้แค่ตรงชื่ออะ") จึงย้ายพฤติกรรมคลิกมาไว้ที่การ์ด
         // ทั้งใบแทน — ไม่มีปุ่ม/ลิงก์อื่นซ้อนอยู่ข้างในการ์ดนี้เลย จึงสลับทั้ง
         // การ์ดเป็น <button> ได้อย่างปลอดภัย (ไม่ใช่ interactive ซ้อน interactive)
-        const HeaderTag = onHeaderClick ? "button" : "div";
+        //
+        // onNameClick เปลี่ยนสมการนี้ (เฉพาะจัดกลุ่มตามคน) — ตอนนี้อยากได้ปุ่ม
+        // แยกกันสองปุ่มจริง ๆ ("จะได้แตกต่างกัน") ไม่ใช่กดตรงไหนก็ไปที่เดียวกัน
+        // เหมือนเดิมอีกต่อไป จึงเลิกใช้ <button> ครอบทั้งใบ (ซ้อน <button> ไม่ได้
+        // อยู่แล้วตามหลัก HTML) เปลี่ยนเป็น <div role="button"> ครอบแทน แล้วฝัง
+        // ปุ่มจริงไว้เฉพาะตรงชื่อ พร้อม stopPropagation กันไม่ให้ event ทะลุไปที่
+        // onHeaderClick ของการ์ดรอบนอกด้วย
+        const HeaderTag = onNameClick ? "div" : onHeaderClick ? "button" : "div";
+        const outerClickable = !onNameClick && !!onHeaderClick;
         return (
           <HeaderTag
-            type={onHeaderClick ? "button" : undefined}
+            type={outerClickable ? "button" : undefined}
+            role={onNameClick && onHeaderClick ? "button" : undefined}
+            tabIndex={onNameClick && onHeaderClick ? 0 : undefined}
             onClick={onHeaderClick}
+            onKeyDown={
+              onNameClick && onHeaderClick
+                ? (e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onHeaderClick();
+                    }
+                  }
+                : undefined
+            }
             title={onHeaderClick ? (headerClickTitle ?? "ดูงานของคนนี้แยกตามหัวข้อโปรเจค") : undefined}
             className={cn(
               "shrink-0 w-full rounded-xl bg-white border border-[var(--line)] shadow-[0_1px_2px_rgba(16,24,40,0.04)] px-3.5 py-3 mb-3 text-left",
@@ -196,7 +228,21 @@ export function KanbanColumn({
           )}
           {/* จุดสี — a second, plainer color cue beyond the icon chip, right against the label. */}
           <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: accent }} />
-          <h3 className="text-sm font-semibold truncate tracking-tight">{column.label}</h3>
+          {onNameClick ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onNameClick();
+              }}
+              title="ดูทุกงานของคนนี้ (ทุกแผนกรวมกัน)"
+              className="min-w-0 truncate rounded text-sm font-semibold tracking-tight text-left hover:text-[var(--brand-green-dark)] hover:underline underline-offset-2"
+            >
+              {column.label}
+            </button>
+          ) : (
+            <h3 className="text-sm font-semibold truncate tracking-tight">{column.label}</h3>
+          )}
 
           <span
             className="ml-auto text-[11px] font-semibold rounded-full h-5 min-w-5 px-1.5 flex items-center justify-center tabular-nums shrink-0"

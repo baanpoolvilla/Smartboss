@@ -170,6 +170,11 @@ export function TaskFilters({
         : availableAssignees.filter((u) => u.departmentId === filters.departmentId),
     [availableAssignees, filters.departmentId]
   );
+  // "ของฉัน" pinned right under "ทุกคน" — เดิมต้องไล่หาชื่อตัวเองในลิสต์ยาวๆ
+  // ("อยากให้ชื่อเราเป็นคำว่าของฉันอยู่แถวรองจากทุกคน") ตัดตัวเองออกจากลิสต์
+  // เต็มด้านล่างไปด้วย ไม่งั้นจะเห็นชื่อตัวเองซ้ำสองที่ (ของฉัน + ชื่อจริงในลิสต์)
+  const viewerInScope = peopleInScope.some((u) => u.id === viewingAsUserId);
+  const restOfScope = viewerInScope ? peopleInScope.filter((u) => u.id !== viewingAsUserId) : peopleInScope;
 
   // Switching department while a specific person is selected: if that person
   // isn't in the newly-picked department, fall back to "ทุกคน" instead of
@@ -227,7 +232,8 @@ export function TaskFilters({
             </SelectTrigger>
             <SelectContent alignItemWithTrigger={false}>
               <SelectItem value="all">ทุกคน</SelectItem>
-              {peopleInScope.map((u) => (
+              {viewerInScope && <SelectItem value={viewingAsUserId}>ของฉัน</SelectItem>}
+              {restOfScope.map((u) => (
                 <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
               ))}
             </SelectContent>
@@ -360,7 +366,8 @@ export function TaskFilters({
           </SelectTrigger>
           <SelectContent alignItemWithTrigger={false}>
             <SelectItem value="all">ทุกคน</SelectItem>
-            {peopleInScope.map((u) => (
+            {viewerInScope && <SelectItem value={viewingAsUserId}>ของฉัน</SelectItem>}
+            {restOfScope.map((u) => (
               <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
             ))}
           </SelectContent>
