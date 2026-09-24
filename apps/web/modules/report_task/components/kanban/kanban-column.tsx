@@ -23,40 +23,30 @@ export interface BoardColumn {
   /** Overrides the generic empty-column message — the derived "เลยกำหนด"
    * column gets its own celebratory copy instead. */
   emptyMessage?: string;
-  /** Department grouping: how many distinct project topics this department's
-   * tasks span (including an "อื่นๆ" bucket if any task has none). Assignee
-   * grouping: how many distinct *departments* this person's tasks span
-   * instead — same field, different unit (see summaryUnitLabel) — shown in
-   * the summary body instead of every single card. */
+  /** Department grouping only — how many distinct project topics this
+   * department's tasks span (including an "อื่นๆ" bucket if any task has
+   * none), shown in the summary body instead of every single card. */
   projectCount?: number;
-  /** The actual names behind projectCount — project names for department
-   * grouping, department names for assignee grouping ("อยากให้แสดงลูกที่เป็น
-   * ชื่อโปรเจคอะ" — a bare count didn't say which ones, just how many),
-   * shown as chips in the summary body. */
+  /** Department grouping only — the actual project names behind projectCount
+   * ("อยากให้แสดงลูกที่เป็นชื่อโปรเจคอะ" — a bare count didn't say which
+   * ones, just how many), shown as chips in the summary body. */
   projectNames?: string[];
-  /** Unit word for the summary body's "N {unit} · M งาน" line — "โปรเจค" for
-   * department grouping (the default, unset), "แผนก" for assignee grouping
-   * (คนคนหนึ่งมีงานอยู่ "กี่แผนก" ไม่ใช่ "กี่โปรเจค" — ระดับนี้ยังไม่ลงไปถึง
-   * โปรเจคจนกว่าจะเลือกแผนกก่อน ดู PersonDepartmentsBoard). */
-  summaryUnitLabel?: string;
-  /** Skip listing every task card in the body — show just "N โปรเจค/แผนก ·
-   * M งาน" instead, since this grouping's real content lives one click away
-   * (DepartmentTopicsBoard/PersonDepartmentsBoard via onHeaderClick), not in
-   * this column itself. ("ให้บอกแค่ว่ามีกี่โปรเจคกี่งานอะไรแบบนั้น" — the
-   * full card list here duplicated what clicking through already shows, just
-   * more cluttered — เดียวกันสำหรับคน: "โชว์เป็นการ์ดของแต่ละแผนก...กดเข้าไป
-   * ก็เป็นหน้างานของแผนกนั้น แล้วค่อยเป็นโปรเจคย่อย" ไม่ใช่ list งานทีละใบ
-   * ตรงคอลัมน์คนเลย) */
+  /** Skip listing every task card in the body — show just "N โปรเจค · M งาน"
+   * instead, since department grouping's real content lives one click away
+   * (DepartmentTopicsBoard via onHeaderClick), not in this column itself.
+   * ("ให้บอกแค่ว่ามีกี่โปรเจคกี่งานอะไรแบบนั้น" — the full card list here
+   * duplicated what clicking through already shows, just more cluttered.)
+   * Assignee grouping doesn't use this chip style — it always has
+   * `breakdown` instead. */
   summaryOnly?: boolean;
   /** Assignee grouping only — this person's tasks broken down one row per
-   * department, each independently clickable (via onBreakdownClick), instead
-   * of the single combined "N แผนก · M งาน" button summaryOnly alone renders.
-   * ("อยากให้เป็นคอลัมแบบนี้ [รายการทีละใบ] แต่อยากให้คอลัมเป็นแผนกแทน [ไม่ใช่
-   * งาน] และกดเข้าไปจะเจองานโปรเจคของแผนกๆนั้นๆ [กดแถวนั้นตรงๆ ไม่ต้องผ่านหน้า
-   * รวมแผนกก่อน]" — เดิม summaryOnly เพียว ๆ ยุบทุกแผนกไว้ในปุ่มเดียว/ชิปเดียว
-   * กดได้จุดเดียวคือพาไปหน้า PersonDepartmentsBoard ก่อนเสมอ, breakdown นี้
-   * เพิ่มทางลัดกดตรงจากคอลัมน์คนได้เลย) เมื่อมี breakdown, summaryOnly's
-   * projectCount/projectNames chip style ไม่ถูกใช้ — breakdown แทนที่ทั้งหมด. */
+   * project topic, each independently clickable (via onBreakdownClick) to
+   * just that project's tasks. Clicking the card/header itself
+   * (onHeaderClick) goes to this person's full task list instead — every
+   * project mixed together, one page, no further clicks needed ("กดการ์ดนี้
+   * เป็นงานของคนนั้นเลยแบบงานทั้งหมด...ดูง่ายเลย"); a row here is the
+   * narrower, deliberate alternative ("แถวในตัวการ์ดอยากให้เป็นโปรเจค...กด
+   * เข้าไปดูก็จะเห็นแค่งานของโปรเจคนั้นๆ"). */
   breakdown?: { id: string; label: string; accent: string; count: number }[];
 }
 
@@ -73,7 +63,6 @@ export function KanbanColumn({
   onHeaderClick,
   headerClickTitle,
   onBreakdownClick,
-  onNameClick,
   groupedByPriority,
   groupedByStatus,
 }: {
@@ -81,29 +70,20 @@ export function KanbanColumn({
   /** Every task currently on the board (post-filter) — the denominator for this column's "N% ของบอร์ด" bar. */
   boardTotal: number;
   onOpen: (id: string) => void;
-  /** Set only when grouped by assignee or department — clicking the header
-   * opens that person's/department's tasks broken down by project topic.
-   * Absent for status/priority columns, which don't map to either. */
+  /** Set only when grouped by assignee or department — clicking anywhere on
+   * the card/header opens that person's full task list, or that
+   * department's tasks broken down by project topic. Absent for
+   * status/priority columns, which don't map to either. */
   onHeaderClick?: () => void;
   /** Tooltip for the clickable header — differs by what onHeaderClick drills
    * into (a person vs a department), defaults to the person wording since
    * that was the only case before department grouping existed. */
   headerClickTitle?: string;
   /** Assignee grouping only — clicking one row of column.breakdown jumps
-   * straight to that person+department's project topics, skipping the
-   * intermediate PersonDepartmentsBoard stop onHeaderClick goes through. */
-  onBreakdownClick?: (departmentId: string) => void;
-  /** Assignee grouping only — a second, deliberately different destination
-   * from onHeaderClick: clicking the name itself jumps straight to a flat
-   * "ทุกงานของคนนี้" list across every department (quick "what does this
-   * person have going on" glance), while clicking anywhere else on the same
-   * card still goes to the department breakdown onHeaderClick opens
-   * ("เอาคลิกชื่อเป็นแบบคลิกแล้วรู้เลยว่าคนนั้นมีงานอะไรบ้าง...จะได้แตกต่างกัน"
-   * — two distinct buttons on purpose this time, not the old single "whole
-   * card is one button" merge below, which stays for anywhere else on the
-   * card). Nested as a real `<button>` with stopPropagation inside the
-   * outer (now non-button) header container. */
-  onNameClick?: () => void;
+   * straight to just that one project topic's tasks for this person,
+   * narrower than what onHeaderClick opens (their full list, every project
+   * mixed together). */
+  onBreakdownClick?: (topicId: string) => void;
   /** Passed straight through to each card — see TaskCard's own doc. */
   groupedByPriority?: boolean;
   /** A normal (non-derived) status column is, by definition, 100% one status
@@ -186,31 +166,11 @@ export function KanbanColumn({
         // ยากไป ("ตอนนี้มันกดได้แค่ตรงชื่ออะ") จึงย้ายพฤติกรรมคลิกมาไว้ที่การ์ด
         // ทั้งใบแทน — ไม่มีปุ่ม/ลิงก์อื่นซ้อนอยู่ข้างในการ์ดนี้เลย จึงสลับทั้ง
         // การ์ดเป็น <button> ได้อย่างปลอดภัย (ไม่ใช่ interactive ซ้อน interactive)
-        //
-        // onNameClick เปลี่ยนสมการนี้ (เฉพาะจัดกลุ่มตามคน) — ตอนนี้อยากได้ปุ่ม
-        // แยกกันสองปุ่มจริง ๆ ("จะได้แตกต่างกัน") ไม่ใช่กดตรงไหนก็ไปที่เดียวกัน
-        // เหมือนเดิมอีกต่อไป จึงเลิกใช้ <button> ครอบทั้งใบ (ซ้อน <button> ไม่ได้
-        // อยู่แล้วตามหลัก HTML) เปลี่ยนเป็น <div role="button"> ครอบแทน แล้วฝัง
-        // ปุ่มจริงไว้เฉพาะตรงชื่อ พร้อม stopPropagation กันไม่ให้ event ทะลุไปที่
-        // onHeaderClick ของการ์ดรอบนอกด้วย
-        const HeaderTag = onNameClick ? "div" : onHeaderClick ? "button" : "div";
-        const outerClickable = !onNameClick && !!onHeaderClick;
+        const HeaderTag = onHeaderClick ? "button" : "div";
         return (
           <HeaderTag
-            type={outerClickable ? "button" : undefined}
-            role={onNameClick && onHeaderClick ? "button" : undefined}
-            tabIndex={onNameClick && onHeaderClick ? 0 : undefined}
+            type={onHeaderClick ? "button" : undefined}
             onClick={onHeaderClick}
-            onKeyDown={
-              onNameClick && onHeaderClick
-                ? (e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      onHeaderClick();
-                    }
-                  }
-                : undefined
-            }
             title={onHeaderClick ? (headerClickTitle ?? "ดูงานของคนนี้แยกตามหัวข้อโปรเจค") : undefined}
             className={cn(
               "shrink-0 w-full rounded-xl bg-white border border-[var(--line)] shadow-[0_1px_2px_rgba(16,24,40,0.04)] px-3.5 py-3 mb-3 text-left",
@@ -228,21 +188,7 @@ export function KanbanColumn({
           )}
           {/* จุดสี — a second, plainer color cue beyond the icon chip, right against the label. */}
           <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: accent }} />
-          {onNameClick ? (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onNameClick();
-              }}
-              title="ดูทุกงานของคนนี้ (ทุกแผนกรวมกัน)"
-              className="min-w-0 truncate rounded text-sm font-semibold tracking-tight text-left hover:text-[var(--brand-green-dark)] hover:underline underline-offset-2"
-            >
-              {column.label}
-            </button>
-          ) : (
-            <h3 className="text-sm font-semibold truncate tracking-tight">{column.label}</h3>
-          )}
+          <h3 className="text-sm font-semibold truncate tracking-tight">{column.label}</h3>
 
           <span
             className="ml-auto text-[11px] font-semibold rounded-full h-5 min-w-5 px-1.5 flex items-center justify-center tabular-nums shrink-0"
@@ -372,7 +318,7 @@ export function KanbanColumn({
             className="flex-1 flex flex-col items-center justify-center gap-2.5 text-center rounded-lg border border-dashed border-[var(--line)] py-6 px-3 hover:border-[var(--brand-green)] hover:bg-white transition-colors disabled:hover:border-[var(--line)] disabled:hover:bg-transparent disabled:cursor-default"
           >
             <span className="text-sm font-semibold text-[var(--ink)]">
-              {column.projectCount ?? 0} {column.summaryUnitLabel ?? "โปรเจค"} · {column.tasks.length} งาน
+              {column.projectCount ?? 0} โปรเจค · {column.tasks.length} งาน
             </span>
             {!!column.projectNames?.length && (
               <div className="flex flex-wrap items-center justify-center gap-1.5 px-1">
