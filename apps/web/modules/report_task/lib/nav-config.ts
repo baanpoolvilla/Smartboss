@@ -2,6 +2,7 @@ import {
   CalendarDays,
   KanbanSquare,
   LayoutDashboard,
+  MessageCircle,
   MessageSquareText,
   ScrollText,
   Settings,
@@ -39,6 +40,8 @@ export const navItems: NavItem[] = [
   { href: `${REPORT_TASK_BASE}/tasks`, label: "งาน / Kanban", icon: KanbanSquare, iconName: "KanbanSquare" },
   { href: `${REPORT_TASK_BASE}/calendar`, label: "ปฏิทิน", icon: CalendarDays, iconName: "CalendarDays" },
   { href: `${REPORT_TASK_BASE}/report-feed`, label: "รายงาน", icon: MessageSquareText, iconName: "MessageSquareText" },
+  // แชทองค์กร — โค้ดอยู่ที่ modules/chat แต่เมนูอยู่ใต้ "รายงานและงาน" (สิทธิ์ chat.access)
+  { href: `${REPORT_TASK_BASE}/chat`, label: "แชท", icon: MessageCircle, iconName: "MessageCircle" },
   // "แจ้งปัญหาระบบ" dropped from the main menu entirely — filing an issue is
   // only ever the 🐛 button anywhere in the app now (IssueReportBarButton),
   // not a page employees navigate to ("แจ้งปัญหาให้แยกเป็นข้างนอกเมนูหลัก

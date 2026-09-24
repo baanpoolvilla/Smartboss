@@ -3,6 +3,7 @@ import type { ModuleManifest, ModuleMenuItem } from "@/module-registry";
 
 import { REPORT_TASK_BASE, REPORT_TASK_CODE } from "./constants";
 import { navItems } from "./lib/nav-config";
+import { CHAT_PERMS } from "@/modules/chat/permissions";
 import { ALL_REPORT_TASK_PERMS, REPORT_TASK_PERMS } from "./permissions";
 import { TaskReviewNavBadge } from "./components/shared/task-review-nav-badge";
 import { ReportActivityNavBadge } from "./components/shared/report-activity-nav-badge";
@@ -24,6 +25,7 @@ const MENU_PERMISSION: Record<string, string> = {
   [`${REPORT_TASK_BASE}/tasks`]: REPORT_TASK_PERMS.taskView,
   [`${REPORT_TASK_BASE}/calendar`]: REPORT_TASK_PERMS.calendarView,
   [`${REPORT_TASK_BASE}/report-feed`]: REPORT_TASK_PERMS.reportView,
+  [`${REPORT_TASK_BASE}/chat`]: CHAT_PERMS.access,
   [`${REPORT_TASK_BASE}/activity-log`]: REPORT_TASK_PERMS.activityView,
   [`${REPORT_TASK_BASE}/settings`]: REPORT_TASK_PERMS.settingManage,
 };
