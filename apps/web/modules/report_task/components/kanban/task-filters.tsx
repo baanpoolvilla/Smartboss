@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, AlertTriangle, Building2, Users, Flag, CircleDot, User as UserIcon, Group, SlidersHorizontal, CalendarDays, Eye, Check } from "lucide-react";
+import { Plus, AlertTriangle, Building2, Users, Flag, CircleDot, User as UserIcon, Group, SlidersHorizontal, CalendarDays, Eye, Check, ChevronDown } from "lucide-react";
 import { Button } from "@/modules/report_task/components/ui/button";
 import {
   Select,
@@ -117,6 +117,13 @@ export function TaskFilters({
         ? "tracking"
         : "all";
   const personalViewLabel = personalView === "mine" ? "งานของฉัน" : personalView === "tracking" ? "งานที่กำลังติดตาม" : "ทั้งหมด";
+  // เดิม "งานของฉัน"/"งานที่กำลังติดตาม" โชว์อยู่ในลิสต์ตลอดเวลาใต้หัวข้อ
+  // "มุมมองของฉัน" — ส่วนใหญ่คนที่ใช้ (หัวหน้า) สนใจแค่นี้จริง ๆ ("อยากให้ดู
+  // ง่ายๆ งานที่เค้าเร่งติดตามแค่นั้นละ") ตัวเลือก 4 อันของ "จัดกลุ่มตาม" ที่
+  // ใช้บ่อยกว่าเลยถูกกลบด้วยของที่ใช้เฉพาะกลุ่ม — ซ่อนไว้ก่อน ต้องกด "มุมมอง
+  // ของฉัน" เองถึงจะกางออกมาเห็น 3 ตัวเลือก ("ต้องเลือกมุมมองของฉันก่อนนะ")
+  // ปิดกลับทุกครั้งที่ดรอปดาวน์ปิด ไม่ค้างไว้ข้ามรอบเปิด
+  const [personalViewOpen, setPersonalViewOpen] = useState(false);
   const quickTodayActive = filters.preset === "today";
   const quickOverdueActive = filters.penalty === "overdue";
   const quickCriticalActive = filters.priority === "critical";
@@ -307,6 +314,9 @@ export function TaskFilters({
         <FilterField label="จัดกลุ่มตาม">
           <Select
             value={groupBy}
+            onOpenChange={(isOpen: boolean) => {
+              if (!isOpen) setPersonalViewOpen(false);
+            }}
             onValueChange={(v: string | null) => {
               if (!v) return;
               if (v === "mine") setFilters({ assigneeId: viewingAsUserId, assignedById: "all" });
@@ -344,22 +354,42 @@ export function TaskFilters({
               </SelectGroup>
               <SelectSeparator />
               <SelectGroup>
-                <SelectLabel>มุมมองของฉัน</SelectLabel>
-                {(
-                  [
-                    { v: "view-all", key: "all", label: "ทั้งหมด" },
-                    { v: "mine", key: "mine", label: "งานของฉัน" },
-                    { v: "tracking", key: "tracking", label: "งานที่กำลังติดตาม" },
-                  ] as const
-                ).map((opt) => (
-                  <SelectItem key={opt.v} value={opt.v}>
-                    <span className="flex items-center gap-1.5">
-                      <Eye className="h-3.5 w-3.5 text-[var(--ink-soft)]" />
-                      {opt.label}
-                      {personalView === opt.key && <Check className="h-3.5 w-3.5 text-[var(--brand-green-dark)] ml-auto" />}
-                    </span>
-                  </SelectItem>
-                ))}
+                {/* ปุ่มธรรมดา ไม่ใช่ SelectItem — กดแล้วแค่กาง/หุบตัวเลือกข้าง
+                    ล่าง ไม่ได้ "เลือกค่า" ที่ทำให้ดรอปดาวน์ปิดตัวเองแบบ
+                    SelectItem ปกติ (Radix/base-ui ปิด popover เฉพาะตอนเลือก
+                    Item จริง ๆ เท่านั้น ปุ่มเปล่านี้เลยกดได้เรื่อย ๆ โดย
+                    ดรอปดาวน์ยังเปิดค้างอยู่) */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setPersonalViewOpen((v) => !v);
+                  }}
+                  className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1.5 text-xs text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+                >
+                  <Eye className="h-3 w-3 shrink-0" />
+                  <span className="flex-1 text-left">มุมมองของฉัน</span>
+                  {personalView !== "all" && (
+                    <span className="text-[var(--brand-green-dark)] font-medium">{personalViewLabel}</span>
+                  )}
+                  <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 transition-transform", personalViewOpen && "rotate-180")} />
+                </button>
+                {personalViewOpen &&
+                  (
+                    [
+                      { v: "view-all", key: "all", label: "ทั้งหมด" },
+                      { v: "mine", key: "mine", label: "งานของฉัน" },
+                      { v: "tracking", key: "tracking", label: "งานที่กำลังติดตาม" },
+                    ] as const
+                  ).map((opt) => (
+                    <SelectItem key={opt.v} value={opt.v} className="pl-6">
+                      <span className="flex items-center gap-1.5">
+                        {opt.label}
+                        {personalView === opt.key && <Check className="h-3.5 w-3.5 text-[var(--brand-green-dark)] ml-auto" />}
+                      </span>
+                    </SelectItem>
+                  ))}
               </SelectGroup>
             </SelectContent>
           </Select>
