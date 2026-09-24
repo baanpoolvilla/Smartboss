@@ -6,7 +6,7 @@ import { X } from "lucide-react";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { isOwner, canManage } from "@/modules/report_task/lib/directory";
-import { relativeTime } from "@/modules/report_task/lib/format";
+import { relativeTime, groupByDay } from "@/modules/report_task/lib/format";
 import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
 import { useUnifiedNotifications } from "@/modules/notifications/use-unified-notifications";
@@ -117,10 +117,24 @@ export function NotificationsPageClient() {
     setRange("all");
   }
 
-  const unread = filtered.filter((n) => !n.read);
-  const earlier = filtered.filter((n) => n.read);
-  const hasUnread = unread.length > 0;
+  const hasUnread = filtered.some((n) => !n.read);
   const empById = new Map(employees.map((e) => [e.id, e] as const));
+
+  // เรียงตามเวลาจริงล้วน ๆ (ใหม่→เก่า) แล้วค่อยแบ่งเป็น "วันนี้/เมื่อวาน/..."
+  // ด้วย groupByDay ตัวเดียวกับที่ report-feed ใช้ — items ที่ได้จาก
+  // useUnifiedNotifications เรียง unread-first มาก่อน (เอาไว้ให้กระดิ่งเล็ก
+  // ชี้ตัวที่ยังไม่อ่านโดยไม่ต้องแยกวัน) แต่หน้ารายการเต็มนี้อยากได้ไล่ตาม
+  // วันจริงแบบ Facebook/LINE feed ให้หาอะไรง่าย ไม่ใช่กระโดดวันไปมา — ตัวที่
+  // ยังไม่อ่านก็ยังเห็นได้จากจุดเขียว/พื้นหลังอ่อนต่อแถวอยู่แล้ว ไม่ต้องมีหัว
+  // ข้อ "ใหม่" แยกซ้ำอีกชั้น
+  const dayGroups = useMemo(
+    () =>
+      groupByDay(
+        [...filtered].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+        (n) => n.createdAt
+      ),
+    [filtered]
+  );
 
   function Row({ n }: { n: UnifiedNotification }) {
     const actor = n.byUserId ? empById.get(n.byUserId) : undefined;
@@ -318,26 +332,16 @@ export function NotificationsPageClient() {
         </p>
       ) : (
         <div className="flex flex-col gap-4">
-          {unread.length > 0 && (
-            <div>
-              <p className="mb-1 px-1 text-xs font-semibold text-(--ink)">ใหม่</p>
+          {dayGroups.map((g) => (
+            <div key={g.key}>
+              <p className="mb-1 px-1 text-xs font-semibold text-(--ink-soft)">{g.label}</p>
               <div className="flex flex-col gap-0.5">
-                {unread.map((n) => (
+                {g.items.map((n) => (
                   <Row key={n.id} n={n} />
                 ))}
               </div>
             </div>
-          )}
-          {earlier.length > 0 && (
-            <div>
-              <p className="mb-1 px-1 text-xs font-semibold text-(--ink-soft)">ก่อนหน้านี้</p>
-              <div className="flex flex-col gap-0.5">
-                {earlier.map((n) => (
-                  <Row key={n.id} n={n} />
-                ))}
-              </div>
-            </div>
-          )}
+          ))}
         </div>
       )}
     </div>
