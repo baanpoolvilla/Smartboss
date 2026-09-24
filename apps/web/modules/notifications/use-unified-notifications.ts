@@ -2,10 +2,11 @@
 
 import { useCallback, useMemo } from "react";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
+import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canManage } from "@/modules/report_task/lib/directory";
 import { useMaintenanceNotifStore } from "@/modules/notifications/use-maintenance-notifications";
-import { isRoomPost, reportCategoryFor, maintenanceCategoryFor, maintenanceHrefFor, moduleForCategory } from "@/modules/notifications/derive";
+import { isRoomPost, reportCategoryFor, maintenanceCategoryFor, maintenanceHrefFor, moduleForCategory, taskIdFromLink } from "@/modules/notifications/derive";
 import type { UnifiedNotification } from "@/modules/notifications/types";
 
 export interface UseUnifiedNotificationsOptions {
@@ -39,6 +40,13 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
   const reportNotifications = useNotificationStore((s) => s.notifications);
   const reportMarkRead = useNotificationStore((s) => s.markRead);
   const reportMarkAllRead = useNotificationStore((s) => s.markAllRead);
+  // เช็คสดว่างานที่แจ้งเตือนพูดถึงยังมีอยู่จริงไหม — removeTaskNotifications
+  // (notification-store.ts) เก็บกวาดแจ้งเตือนของงานที่ถูกลบก็จริง แต่ทำงาน
+  // "ตอนลบ" เท่านั้น ไม่ย้อนไปเก็บกวาดแจ้งเตือนเก่าที่ค้างมาจากงานที่ถูกลบไป
+  // ก่อนหน้านั้นแล้ว (เช่นก่อน fix นี้เอง) — กรองตรงนี้อีกชั้นเป็น safety net
+  // ที่ self-heal เองได้เสมอ ไม่ต้องพึ่ง migration/สคริปต์ล้างข้อมูลแยก
+  const tasks = useTaskStore((s) => s.tasks);
+  const taskIdSet = useMemo(() => new Set(tasks.map((t) => t.id)), [tasks]);
 
   const maintenanceItems = useMaintenanceNotifStore((s) => s.items);
   const orgItems = useMaintenanceNotifStore((s) => s.orgItems);
@@ -60,6 +68,13 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
   const items = useMemo<UnifiedNotification[]>(() => {
     const fromReport: UnifiedNotification[] = reportNotifications
       .filter((n) => n.userId === viewingAsUserId && (includeRoomPosts || !isRoomPost(n)))
+      // งานที่ถูกลบไปแล้วก่อนจะมี removeTaskNotifications ฉบับที่จับ link
+      // แบบ `?task=` ได้ (หรือกรณีอื่นที่หลุดรอดมา) — ไม่มี taskId/link ที่
+      // ชี้ไปงาน แปลว่าไม่ใช่แจ้งเตือนของงานเลย ปล่อยผ่านตามปกติ
+      .filter((n) => {
+        const tid = n.taskId ?? taskIdFromLink(n.link);
+        return !tid || taskIdSet.has(tid);
+      })
       .map((n) => ({
         id: `rt:${n.id}`,
         module: "report" as const,
@@ -118,7 +133,7 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
     return [...fromReport, ...fromMaintenance, ...fromOrgActivity].sort(
       (a, b) => Number(a.read) - Number(b.read) || b.createdAt.localeCompare(a.createdAt)
     );
-  }, [reportNotifications, maintenanceItems, orgItems, viewingAsUserId, includeRoomPosts, includeOrgActivity]);
+  }, [reportNotifications, maintenanceItems, orgItems, viewingAsUserId, includeRoomPosts, includeOrgActivity, taskIdSet]);
 
   const unreadCount = items.filter((n) => !n.read).length;
 

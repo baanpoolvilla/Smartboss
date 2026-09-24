@@ -19,6 +19,18 @@ import type { NotifCategory, NotifModule } from "@/modules/notifications/types";
 
 export type ActionMeta = { Icon: LucideIcon; color: string };
 
+/** ดึง taskId จาก link รูปแบบ `...?task=<id>` หรือ `...?highlight=<id>`
+ * (สองรูปแบบที่ report_task ใช้ชี้ไปงานหนึ่งงาน — ดู notification-store.ts's
+ * removeTaskNotifications) ใช้เช็คว่างานที่แจ้งเตือนนี้พูดถึงยังมีอยู่จริงไหม
+ * ตอนแสดงผล (ดู use-unified-notifications.ts) — เผื่อกรณีแจ้งเตือนถูกสร้าง
+ * ไว้ก่อนงานจะโดนลบ (removeTaskNotifications ทำงานตอนลบงานเท่านั้น ไม่ย้อน
+ * ไปเก็บกวาดของเก่าที่ค้างอยู่แล้วให้) */
+export function taskIdFromLink(link: string | null | undefined): string | null {
+  if (!link) return null;
+  const m = link.match(/[?&](?:task|highlight)=([^&]+)/);
+  return m ? decodeURIComponent(m[1]!) : null;
+}
+
 /** แจ้งเตือน "โพสต์ใหม่ในห้อง" — ปกติดูจาก kind "room_post" แต่ของเก่าที่สร้าง
  * ก่อนมี field นี้ยังไม่มี kind จึงเดาเพิ่มจากรูปแบบข้อความ (`โพสต์ใหม่ใน "…"`)
  * เพื่อให้คนทั่วไปไม่เห็นแจ้งเตือนโพสต์ข้ามแผนกที่ค้างอยู่ในระบบ */
