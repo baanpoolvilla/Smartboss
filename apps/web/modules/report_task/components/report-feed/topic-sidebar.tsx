@@ -74,6 +74,7 @@ import {
   Pencil,
   Plus,
   Rocket,
+  Settings,
   Settings2,
   ShoppingCart,
   Star,
@@ -1549,8 +1550,14 @@ export function TopicSidebar({
                 </DropdownMenuItem>
               )}
               {canEditReportTopic(t.visibility, viewingAsUserId) && onOpenSettings && (
+                // ไอคอนฟันเฟืองธรรมดา (Settings) — เดิมใช้ Settings2 (คนละ
+                // แบบกับฟันเฟืองที่ใช้ตอนอยู่ในห้องแล้ว) ให้ตรงกัน ("แถบเมนู
+                // ยังเป็น...แต่ในห้องเป็นฟันเฟือง เอาให้เหมือนกัน") — ตัว "..."
+                // ที่เปิดเมนูนี้ยังคงไว้ (MoreHorizontal) เพราะแถวห้องมีหลาย
+                // การกระทำให้เลือก ไม่ใช่แค่ตั้งค่าอย่างเดียว จุดที่ไม่ตรงกัน
+                // จริง ๆ คือไอคอนของตัวเลือก "ตั้งค่าห้อง" เอง
                 <DropdownMenuItem onClick={() => onOpenSettings(t.id)}>
-                  <Settings2 className="h-3.5 w-3.5" />
+                  <Settings className="h-3.5 w-3.5" />
                   ตั้งค่าห้อง
                 </DropdownMenuItem>
               )}
