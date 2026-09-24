@@ -40,13 +40,14 @@ export interface BoardColumn {
    * `breakdown` instead. */
   summaryOnly?: boolean;
   /** Assignee grouping only — this person's tasks broken down one row per
-   * project topic, each independently clickable (via onBreakdownClick) to
-   * just that project's tasks. Clicking the card/header itself
-   * (onHeaderClick) goes to this person's full task list instead — every
-   * project mixed together, one page, no further clicks needed ("กดการ์ดนี้
-   * เป็นงานของคนนั้นเลยแบบงานทั้งหมด...ดูง่ายเลย"); a row here is the
-   * narrower, deliberate alternative ("แถวในตัวการ์ดอยากให้เป็นโปรเจค...กด
-   * เข้าไปดูก็จะเห็นแค่งานของโปรเจคนั้นๆ"). */
+   * department, each independently clickable (via onBreakdownClick) to
+   * just that department's tasks (still landing on project-topic columns
+   * once there — PersonTopicsBoard always splits by topic). Clicking the
+   * card/header itself (onHeaderClick) goes to this person's full task list
+   * instead — every department mixed together, one page, no further clicks
+   * needed ("กดการ์ดนี้เป็นงานของคนนั้นเลยแบบงานทั้งหมด...ดูง่ายเลย"); a row
+   * here is the narrower, deliberate alternative ("ต้องเป็นแผนกด้วยสิ...
+   * แสดงแค่ของใครของมันที่ได้รับมอบหมายในแผนกนั้นๆ"). */
   breakdown?: { id: string; label: string; accent: string; count: number }[];
 }
 
@@ -80,10 +81,10 @@ export function KanbanColumn({
    * that was the only case before department grouping existed. */
   headerClickTitle?: string;
   /** Assignee grouping only — clicking one row of column.breakdown jumps
-   * straight to just that one project topic's tasks for this person,
-   * narrower than what onHeaderClick opens (their full list, every project
-   * mixed together). */
-  onBreakdownClick?: (topicId: string) => void;
+   * straight to just that one department's tasks for this person, narrower
+   * than what onHeaderClick opens (their full list, every department mixed
+   * together). */
+  onBreakdownClick?: (departmentId: string) => void;
   /** Passed straight through to each card — see TaskCard's own doc. */
   groupedByPriority?: boolean;
   /** A normal (non-derived) status column is, by definition, 100% one status

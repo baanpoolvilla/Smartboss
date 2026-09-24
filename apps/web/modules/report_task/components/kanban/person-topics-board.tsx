@@ -12,45 +12,67 @@ import {
 } from "@/modules/report_task/components/ui/select";
 import { EmptyState } from "@/modules/report_task/components/shared/empty-state";
 import { filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
-import { TopicColumnCard } from "./topic-column-card";
+import { TopicColumnCard, type TopicColumn } from "./topic-column-card";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canSeeTask } from "@/modules/report_task/lib/permissions";
-import { getUser } from "@/modules/report_task/lib/directory";
+import { getUser, getDepartment, departments } from "@/modules/report_task/lib/directory";
 import { sortTasksForDisplay } from "@/modules/report_task/lib/task-flags";
+import { taskDepartmentIdsForBoard, OTHER_DEPARTMENT_ID } from "@/modules/report_task/lib/task-department";
+import { chartColors } from "@/modules/report_task/lib/chart-colors";
 import { cn } from "@/modules/report_task/lib/utils";
 import type { Task } from "@/modules/report_task/types";
 
 const UNSORTED_KEY = "__none__";
 
+function buildTopicColumns(tasks: Task[], topics: { id: string; name: string }[]): TopicColumn[] {
+  const byTopic = new Map<string, Task[]>();
+  for (const t of tasks) {
+    const key = t.projectTopicId ?? UNSORTED_KEY;
+    const list = byTopic.get(key);
+    if (list) list.push(t);
+    else byTopic.set(key, [t]);
+  }
+  const named = topics
+    .filter((topic) => byTopic.has(topic.id))
+    .map((topic) => ({ id: topic.id, name: topic.name, tasks: sortTasksForDisplay(byTopic.get(topic.id)!) }));
+  const unsorted = byTopic.get(UNSORTED_KEY);
+  return unsorted
+    ? [...named, { id: UNSORTED_KEY, name: "อื่นๆ", tasks: sortTasksForDisplay(unsorted) }]
+    : named;
+}
+
 /**
- * Full-screen replacement for the board (not a popup) — reached by clicking
- * a person's column while the board is grouped by "ผู้รับผิดชอบ" (see
- * `?person=` in kanban-board.tsx). Every task that person is on, across the
- * whole board (not just whatever was filtered on the way in), laid out as
- * one column per project topic — same column/card look as the main board,
- * including a real (non-draggable) TaskCard per task — plus an "อื่นๆ"
- * column for tasks with none. Department was dropped from this flow
- * entirely ("กดการ์ดนี้เป็นงานของคนนั้นเลยแบบงานทั้งหมด...ดูง่ายเลย" — the
- * card/header always opens straight to every project mixed together; a
- * `?topic=` param, set only when a specific breakdown row on the card was
- * clicked instead, narrows `topicFilter` down to just that one project on
- * arrival via `initialTopicId`). Each column's header bar shows the same
+ * Full-screen replacement for the board (not a popup) — reached two ways:
+ * clicking a person's column card/header (anywhere on it) skips straight
+ * here with every department mixed together ("กดการ์ดนี้เป็นงานของคนนั้น
+ * เลยแบบงานทั้งหมด...ดูง่ายเลย" — `departmentId` null/omitted); clicking one
+ * department row on that same card (KanbanColumn's `breakdown`) narrows it
+ * to just that one department instead (`?person=&dept=` in kanban-board.tsx
+ * — "ต้องเป็นแผนกด้วยสิ...แสดงแค่ของใครของมันที่ได้รับมอบหมายในแผนกๆนั้นๆ",
+ * `departmentId` a real id or OTHER_DEPARTMENT_ID, via taskDepartmentIdsForBoard
+ * — same rule the main board's department grouping uses). Either way, laid
+ * out as one column per project topic — same column/card look as the main
+ * board, including a real (non-draggable) TaskCard per task — plus an
+ * "อื่นๆ" column for tasks with no topic; the flat (all-departments) mode
+ * additionally groups those columns under a department heading each, so a
+ * head can see department → project → task in one page without clicking
+ * further ("อยากให้ดูง่ายละครบหมดเลยว่าคนนี้กำลังทำงานแผนกอะไรและโปรเจค
+ * อะไรในแผนก...ครบจบในหน้าเดียว"). Each column's header bar shows the same
  * 4-way status split as the main board's status view, merged into one bar
  * instead of one column each.
  */
 export function PersonTopicsBoard({
   personId,
-  initialTopicId,
+  departmentId,
   onBack,
   onOpenTask,
 }: {
   personId: string;
-  /** Seeds `topicFilter` on arrival — set when a specific project-topic
-   * breakdown row was clicked (KanbanColumn's `breakdown`), null/undefined
-   * for "every project mixed together" (clicking the card/header itself). */
-  initialTopicId?: string | null;
+  /** null/undefined = every department mixed together, grouped into
+   * department-headed sections (the card-click flat view). */
+  departmentId?: string | null;
   onBack: () => void;
   onOpenTask: (taskId: string) => void;
 }) {
@@ -58,52 +80,73 @@ export function PersonTopicsBoard({
   const topics = useProjectTopicStore((s) => s.topics);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const person = getUser(personId);
+  const isOtherDept = departmentId === OTHER_DEPARTMENT_ID;
+  const deptName = departmentId == null ? null : isOtherDept ? "อื่นๆ" : (getDepartment(departmentId)?.name ?? "—");
 
-  const columns = useMemo(() => {
-    const mine = allTasks
-      .filter((t) => t.assigneeIds.includes(personId))
-      .filter((t) => canSeeTask(t, viewingAsUserId));
+  const mine = useMemo(
+    () =>
+      allTasks
+        .filter((t) => t.assigneeIds.includes(personId))
+        .filter((t) => {
+          if (departmentId == null) return true;
+          return isOtherDept
+            ? taskDepartmentIdsForBoard(t, topics).length === 0
+            : taskDepartmentIdsForBoard(t, topics).includes(departmentId);
+        })
+        .filter((t) => canSeeTask(t, viewingAsUserId)),
+    [personId, departmentId, isOtherDept, allTasks, topics, viewingAsUserId]
+  );
 
-    const byTopic = new Map<string, Task[]>();
-    for (const t of mine) {
-      const key = t.projectTopicId ?? UNSORTED_KEY;
-      const list = byTopic.get(key);
-      if (list) list.push(t);
-      else byTopic.set(key, [t]);
-    }
+  const columns = useMemo(() => buildTopicColumns(mine, topics), [mine, topics]);
 
-    const named = topics
-      .filter((topic) => byTopic.has(topic.id))
-      .map((topic) => ({ id: topic.id, name: topic.name, tasks: sortTasksForDisplay(byTopic.get(topic.id)!) }));
-    const unsorted = byTopic.get(UNSORTED_KEY);
-
-    return unsorted
-      ? [...named, { id: UNSORTED_KEY, name: "อื่นๆ", tasks: sortTasksForDisplay(unsorted) }]
-      : named;
-  }, [personId, allTasks, topics, viewingAsUserId]);
+  // Flat mode only — this person's departments, each with its own slice of
+  // topic columns, so the whole "department → project" picture reads at a
+  // glance without an extra click per department. A task with more than one
+  // department (taskDepartmentIdsForBoard) legitimately shows up under each
+  // one, same tolerance the main board's own department grouping already
+  // has (see kanban-board.tsx's sharedDeptCount note).
+  const sections = useMemo(() => {
+    if (departmentId != null) return null;
+    const real = departments
+      .map((d) => {
+        const deptTasks = mine.filter((t) => taskDepartmentIdsForBoard(t, topics).includes(d.id));
+        return { id: d.id, name: d.name, color: d.color, tasks: deptTasks, columns: buildTopicColumns(deptTasks, topics) };
+      })
+      .filter((s) => s.tasks.length > 0);
+    const otherTasks = mine.filter((t) => taskDepartmentIdsForBoard(t, topics).length === 0);
+    const other =
+      otherTasks.length > 0
+        ? [{ id: OTHER_DEPARTMENT_ID, name: "อื่นๆ", color: chartColors.gray, tasks: otherTasks, columns: buildTopicColumns(otherTasks, topics) }]
+        : [];
+    return [...real, ...other];
+  }, [departmentId, mine, topics]);
 
   // Narrows which topic columns render — separate from the main board's
   // filters (removed from this page entirely, see tasks/page.tsx) since this
   // one only makes sense once you're already looking at one person's spread
-  // across projects. Seeded from initialTopicId on first render.
-  const [topicFilter, setTopicFilter] = useState<string>(initialTopicId ?? "all");
-  // A different person, or a fresh initialTopicId (a different breakdown row
-  // clicked while already here), can carry a filter that no longer matches
-  // what's on screen — reset during render (not an effect, per React's
-  // guidance for resetting state on a prop change) rather than silently
-  // keeping a stale one.
-  const [lastKey, setLastKey] = useState(`${personId}:${initialTopicId ?? "all"}`);
-  if (`${personId}:${initialTopicId ?? "all"}` !== lastKey) {
-    setLastKey(`${personId}:${initialTopicId ?? "all"}`);
-    setTopicFilter(initialTopicId ?? "all");
+  // across projects.
+  const [topicFilter, setTopicFilter] = useState<string>("all");
+  // A different person/department pair can (and usually does) not include
+  // whatever topic was picked for the last one — reset during render (not
+  // an effect, per React's guidance for resetting state on a prop change)
+  // rather than silently carrying a filter that no longer matches anything.
+  const [lastKey, setLastKey] = useState(`${personId}:${departmentId}`);
+  if (`${personId}:${departmentId}` !== lastKey) {
+    setLastKey(`${personId}:${departmentId}`);
+    setTopicFilter("all");
   }
   const visibleColumns = topicFilter === "all" ? columns : columns.filter((c) => c.id === topicFilter);
   const total = visibleColumns.reduce((n, c) => n + c.tasks.length, 0);
+  const visibleSections = sections
+    ?.map((s) => ({ ...s, columns: topicFilter === "all" ? s.columns : s.columns.filter((c) => c.id === topicFilter) }))
+    .filter((s) => s.columns.length > 0);
 
   // One person can easily be on more projects than fit on screen — same
   // scroll-arrow + click-drag-to-pan treatment as the main board's assignee
-  // view (kanban-board.tsx), unconditional here since every visit to this
-  // page is already "one person, potentially many project columns."
+  // view (kanban-board.tsx). Only meaningful for the single-department flat
+  // row below — the sectioned (flat, all-departments) layout gives each
+  // department its own plain-scroll row instead, since a shared pan/arrow
+  // state can't sensibly track N independent rows at once.
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -118,6 +161,7 @@ export function PersonTopicsBoard({
   }
 
   useEffect(() => {
+    if (sections) return;
     updateScrollState();
     const el = scrollerRef.current;
     if (!el) return;
@@ -129,7 +173,7 @@ export function PersonTopicsBoard({
       el.removeEventListener("scroll", onScroll);
       observer.disconnect();
     };
-  }, [visibleColumns]);
+  }, [visibleColumns, sections]);
 
   function scrollBoard(direction: -1 | 1) {
     scrollerRef.current?.scrollBy({ left: direction * 316, behavior: "smooth" });
@@ -176,7 +220,9 @@ export function PersonTopicsBoard({
           <AvatarImage src={person?.avatarUrl ?? undefined} alt={person?.name} />
           <AvatarFallback className="text-[10px]">{person?.avatar}</AvatarFallback>
         </Avatar>
-        <h2 className="text-sm font-semibold truncate min-w-0 shrink">งานของ {person?.name ?? "—"} แยกตามหัวข้อโปรเจค</h2>
+        <h2 className="text-sm font-semibold truncate min-w-0 shrink">
+          งานของ {person?.name ?? "—"} {deptName ? `แผนก${deptName} ` : ""}แยกตามหัวข้อโปรเจค
+        </h2>
 
         {columns.length > 1 && (
           <Select value={topicFilter} onValueChange={(v) => v && setTopicFilter(v)}>
@@ -216,50 +262,67 @@ export function PersonTopicsBoard({
           title="ไม่พบงานในหัวข้อนี้"
           description="ลองเลือกหัวข้อโปรเจคอื่น หรือกดล้างตัวกรองเพื่อดูทุกหัวข้อ"
         />
-      ) : (
-        <>
-          <div className="relative min-h-0 flex-1">
-            {canScrollLeft && (
-              <>
-                <div className="pointer-events-none absolute top-0 left-0 z-10 h-24 w-10 bg-gradient-to-r from-[var(--bg)] to-transparent" />
-                <button
-                  onClick={() => scrollBoard(-1)}
-                  aria-label="เลื่อนไปทางซ้าย"
-                  className="absolute left-1 top-10 z-20 flex h-8 w-8 items-center justify-center rounded-full border border-[var(--line)] bg-white text-[var(--ink-soft)] shadow-md hover:text-[var(--ink)] hover:bg-[var(--bg-soft)] transition-colors"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-              </>
-            )}
-            {canScrollRight && (
-              <>
-                <div className="pointer-events-none absolute top-0 right-0 z-10 h-24 w-10 bg-gradient-to-l from-[var(--bg)] to-transparent" />
-                <button
-                  onClick={() => scrollBoard(1)}
-                  aria-label="เลื่อนไปทางขวา"
-                  className="absolute right-1 top-10 z-20 flex h-8 w-8 items-center justify-center rounded-full border border-[var(--line)] bg-white text-[var(--ink-soft)] shadow-md hover:text-[var(--ink)] hover:bg-[var(--bg-soft)] transition-colors"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </>
-            )}
-            <div
-              ref={scrollerRef}
-              onPointerDown={handlePanPointerDown}
-              onPointerMove={handlePanPointerMove}
-              onPointerUp={endPan}
-              onPointerCancel={endPan}
-              className={cn(
-                "flex h-full items-stretch gap-4 overflow-x-auto pb-4 -mx-1 px-1",
-                isPanning ? "cursor-grabbing select-none" : "cursor-grab"
-              )}
-            >
-            {visibleColumns.map((column) => (
-              <TopicColumnCard key={column.id} column={column} onOpenTask={onOpenTask} />
+      ) : visibleSections ? (
+        <div className="min-h-0 flex-1 overflow-y-auto -mx-1 px-1">
+          <div className="flex flex-col gap-5 pb-4">
+            {visibleSections.map((section) => (
+              <div key={section.id}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: section.color }} />
+                  <h3 className="text-sm font-semibold text-[var(--ink)]">{section.name}</h3>
+                  <span className="text-xs text-[var(--ink-soft)]">{section.tasks.length} งาน</span>
+                </div>
+                <div className="flex items-stretch gap-4 overflow-x-auto pb-1 -mx-1 px-1">
+                  {section.columns.map((column) => (
+                    <TopicColumnCard key={column.id} column={column} onOpenTask={onOpenTask} />
+                  ))}
+                </div>
+              </div>
             ))}
-            </div>
           </div>
-        </>
+        </div>
+      ) : (
+        <div className="relative min-h-0 flex-1">
+          {canScrollLeft && (
+            <>
+              <div className="pointer-events-none absolute top-0 left-0 z-10 h-24 w-10 bg-gradient-to-r from-[var(--bg)] to-transparent" />
+              <button
+                onClick={() => scrollBoard(-1)}
+                aria-label="เลื่อนไปทางซ้าย"
+                className="absolute left-1 top-10 z-20 flex h-8 w-8 items-center justify-center rounded-full border border-[var(--line)] bg-white text-[var(--ink-soft)] shadow-md hover:text-[var(--ink)] hover:bg-[var(--bg-soft)] transition-colors"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+            </>
+          )}
+          {canScrollRight && (
+            <>
+              <div className="pointer-events-none absolute top-0 right-0 z-10 h-24 w-10 bg-gradient-to-l from-[var(--bg)] to-transparent" />
+              <button
+                onClick={() => scrollBoard(1)}
+                aria-label="เลื่อนไปทางขวา"
+                className="absolute right-1 top-10 z-20 flex h-8 w-8 items-center justify-center rounded-full border border-[var(--line)] bg-white text-[var(--ink-soft)] shadow-md hover:text-[var(--ink)] hover:bg-[var(--bg-soft)] transition-colors"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </>
+          )}
+          <div
+            ref={scrollerRef}
+            onPointerDown={handlePanPointerDown}
+            onPointerMove={handlePanPointerMove}
+            onPointerUp={endPan}
+            onPointerCancel={endPan}
+            className={cn(
+              "flex h-full items-stretch gap-4 overflow-x-auto pb-4 -mx-1 px-1",
+              isPanning ? "cursor-grabbing select-none" : "cursor-grab"
+            )}
+          >
+          {visibleColumns.map((column) => (
+            <TopicColumnCard key={column.id} column={column} onOpenTask={onOpenTask} />
+          ))}
+          </div>
+        </div>
       )}
     </div>
   );

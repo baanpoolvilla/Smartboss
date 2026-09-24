@@ -35,12 +35,6 @@ export const groupByLabels: Record<GroupBy, string> = {
 const statusAccent = statusColors;
 const priorityAccent = priorityColorHex;
 
-// Matches PersonTopicsBoard's own UNSORTED_KEY — the "อื่นๆ" bucket for a
-// person's tasks that have no project topic at all. Kept in sync by hand
-// (string literal, not exported) since it only ever needs to round-trip
-// through this one `?topic=` param between here and that file.
-const NO_PROJECT_TOPIC_ID = "__none__";
-
 export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   const storeTasks = useTaskStore((s) => s.tasks);
   const filters = useTaskStore((s) => s.filters);
@@ -73,44 +67,48 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   // Set only when the board is grouped by assignee and someone clicks a
   // person's column (anywhere on it) — swaps the whole board out for
   // PersonTopicsBoard, that person's tasks across every project topic, every
-  // department mixed together (a real page-feeling nav via `?person=`, not a
-  // popup: pushed so the browser Back button returns to the board, same
-  // convention as `?task=`). Department was dropped from this flow entirely
-  // ("กดการ์ดนี้เป็นงานของคนนั้นเลยแบบงานทั้งหมด...ดูง่ายเลย" — the card's
-  // own project-topic breakdown rows below are what narrow further now, via
-  // `?topic=`, not a department step). Clicking a different person's column
-  // always starts that person fresh, never carrying over the last person's
-  // `topic`.
+  // department mixed together, one page, no further clicks needed
+  // ("กดการ์ดนี้เป็นงานของคนนั้นเลยแบบงานทั้งหมด...ดูง่ายเลย" — a real
+  // page-feeling nav via `?person=`, not a popup: pushed so the browser Back
+  // button returns to the board, same convention as `?task=`). A specific
+  // breakdown row on the same card (see `?dept=` below) narrows it down to
+  // one department instead — department wasn't dropped after all, it's the
+  // row-level drill-down, while the card/header itself stays the "see
+  // everything" shortcut. Clicking a different person's column always
+  // starts that person fresh, never carrying over the last person's `dept`.
   const personBoardId = searchParams.get("person");
-  const personTopicId = searchParams.get("topic");
+  const personDeptId = searchParams.get("dept");
   function openPersonAllBoard(id: string) {
     const params = new URLSearchParams(searchParams.toString());
     params.set("person", id);
-    params.delete("topic");
+    params.delete("dept");
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   }
-  // One row of a person's project-topic breakdown (KanbanColumn's
-  // `breakdown`, wired below) — jumps straight to just that project's tasks
-  // for this person, via the same PersonTopicsBoard pre-filtered with
-  // `initialTopicId`.
-  function openPersonTopicBoard(personId: string, topicId: string) {
+  // One row of a person's department breakdown (KanbanColumn's `breakdown`,
+  // wired below) — jumps straight to just that department's tasks for this
+  // person via the same PersonTopicsBoard, pre-filtered with
+  // `departmentId`. Still lands on project-topic columns once there
+  // (PersonTopicsBoard always splits by topic) — "เข้าก็ย้อยเป็นหัวข้อ" needs
+  // no extra click, it's just what that page already shows.
+  function openPersonDepartmentBoard(personId: string, departmentId: string) {
     const params = new URLSearchParams(searchParams.toString());
     params.set("person", personId);
-    params.set("topic", topicId);
+    params.set("dept", departmentId);
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   }
   // router.back() instead of stripping params ourselves — every open() above
   // is a real router.push, so back() always retraces exactly the one step
-  // that was actually taken, whether that was the person's card (no topic)
-  // or one specific breakdown row (with a topic).
+  // that was actually taken, whether that was the person's card (no dept)
+  // or one specific breakdown row (with a dept).
   function closePersonBoard() {
     router.back();
   }
 
   // Clicking a department's column header (groupBy==="department" only —
-  // unrelated to the person flow above) swaps the board out for
-  // DepartmentTopicsBoard ("เลือกก่อนว่าแผนกไหน แล้วดูว่าแผนกนั้นมีโปรเจคอะไร").
-  const departmentBoardId = searchParams.get("dept");
+  // unrelated to the person flow above, and to `?dept=` alongside
+  // `?person=`) swaps the board out for DepartmentTopicsBoard
+  // ("เลือกก่อนว่าแผนกไหน แล้วดูว่าแผนกนั้นมีโปรเจคอะไร").
+  const departmentBoardId = personBoardId ? null : searchParams.get("dept");
   function openDepartmentBoard(id: string) {
     const params = new URLSearchParams(searchParams.toString());
     params.set("dept", id);
@@ -328,34 +326,34 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
       return [...realDeptColumns, ...otherColumn];
     }
     // assignee — only people who actually have tasks in view. summaryOnly,
-    // same spirit as department grouping above, but the breakdown rows are
-    // this person's PROJECT TOPICS, not departments — department was dropped
-    // from this flow entirely ("กดการ์ดนี้เป็นงานของคนนั้นเลยแบบงานทั้งหมด...
-    // แถวในตัวการ์ดอยากให้เป็นโปรเจคโปรเจคไปกดเข้าไปดูก็จะเห็นแค่งานของ
-    // โปรเจคนั้นๆ" — the whole card/header now goes straight to that
-    // person's full task list (openPersonAllBoard), while each breakdown
-    // row jumps straight to just that one project's tasks
-    // (openPersonTopicBoard), skipping department as an in-between step).
+    // same spirit as department grouping above — breakdown rows are this
+    // person's DEPARTMENTS ("ต้องเป็นแผนกด้วยสิ...แสดงแค่ของใครของมันที่
+    // ได้รับมอบหมายในแผนกนั้นๆละก็ในโปรเจคนั้นๆ" — department stayed the
+    // row-level drill-down after all; only the card/header itself
+    // (openPersonAllBoard) became the "see everything, every department
+    // mixed" shortcut). Clicking a row jumps straight to just that
+    // department's tasks for this person (openPersonDepartmentBoard), which
+    // still lands on project-topic columns same as always.
     return users
       .map((u) => {
         const tasks = sortTasksForDisplay(filtered.filter((t) => t.assigneeIds.includes(u.id)));
         const counts = new Map<string, number>();
-        let noTopicCount = 0;
+        let noDeptCount = 0;
         for (const t of tasks) {
-          if (!t.projectTopicId) {
-            noTopicCount += 1;
+          const ids = taskDepartmentIdsForBoard(t, projectTopics);
+          if (ids.length === 0) {
+            noDeptCount += 1;
             continue;
           }
-          counts.set(t.projectTopicId, (counts.get(t.projectTopicId) ?? 0) + 1);
+          for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
         }
-        // แต่ละแถว = การ์ดกดได้แยกต่างหาก ("กดเข้าไปจะเห็นแค่งานของโปรเจคนั้นๆ"
-        // — ไม่ใช่แค่สรุปเป็นชิปในปุ่มเดียวแบบ summaryOnly ธรรมดา ดู
-        // KanbanColumn.breakdown's doc)
-        const breakdown: { id: string; label: string; accent: string; count: number }[] = projectTopics
-          .filter((pt) => counts.has(pt.id))
-          .map((pt) => ({ id: pt.id, label: pt.name, accent: chartColors.teal, count: counts.get(pt.id)! }));
-        if (noTopicCount > 0) {
-          breakdown.push({ id: NO_PROJECT_TOPIC_ID, label: "อื่นๆ", accent: chartColors.gray, count: noTopicCount });
+        // แต่ละแถว = การ์ดกดได้แยกต่างหาก ไม่ใช่แค่สรุปเป็นชิปในปุ่มเดียวแบบ
+        // summaryOnly ธรรมดา (ดู KanbanColumn.breakdown's doc)
+        const breakdown: { id: string; label: string; accent: string; count: number }[] = departments
+          .filter((d) => counts.has(d.id))
+          .map((d) => ({ id: d.id, label: d.name, accent: d.color, count: counts.get(d.id)! }));
+        if (noDeptCount > 0) {
+          breakdown.push({ id: OTHER_DEPARTMENT_ID, label: "อื่นๆ", accent: chartColors.gray, count: noDeptCount });
         }
         return {
           id: u.id,
@@ -482,7 +480,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
       <>
         <PersonTopicsBoard
           personId={personBoardId}
-          initialTopicId={personTopicId}
+          departmentId={personDeptId}
           onBack={closePersonBoard}
           onOpenTask={setOpenTaskId}
         />
@@ -641,7 +639,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
                         : undefined
                   }
                   onBreakdownClick={
-                    groupBy === "assignee" ? (topicId) => openPersonTopicBoard(column.id, topicId) : undefined
+                    groupBy === "assignee" ? (deptId) => openPersonDepartmentBoard(column.id, deptId) : undefined
                   }
                   groupedByPriority={groupBy === "priority"}
                   groupedByStatus={groupBy === "status"}
