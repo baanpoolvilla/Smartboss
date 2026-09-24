@@ -163,6 +163,27 @@ export async function markReadByReference(userId: string, referenceId: string) {
   );
 }
 
+/**
+ * ลบแจ้งเตือนทุกอันที่ชี้ไปเรื่องนี้ — เรียกตอนลบเรื่องต้นทาง (ใบงาน/PO/ตั๋ว)
+ * ไม่งั้นกระดิ่งค้างชี้ไปหน้าที่ไม่มีอยู่แล้ว ("ลบไปแล้วแต่ทำไมแจ้งเตือนยังขึ้น"
+ * — บั๊กคลาสเดียวกับที่ report_task เจอกับ removeTaskNotifications แต่ฝั่งนี้
+ * ไม่เคยมีการเก็บกวาดแบบนี้มาก่อนเลยสักจุด: deleteWorkOrderAction/deletePoAction/
+ * adminDeleteTicket ลบแถวต้นทางแล้วไม่เคยแตะ core.notifications เลย)
+ *
+ * ไม่ผูก orgId ตรง ๆ (เหตุผลเดียวกับ markReadByReference ข้างบน — referenceId
+ * เป็น cuid ที่ unique ทั้งระบบอยู่แล้ว ไม่มีทางชนข้ามบริษัท/ข้ามชนิดเรื่อง)
+ * `type` เป็นตัวเลือกไว้ให้แคบลงอีกชั้นเมื่อจำเป็น (เช่น "issue_ticket_new" ที่
+ * referenceId เก็บเป็น "orgId:ticketId" ไม่ใช่ referenceId เปล่า ๆ — ผู้เรียก
+ * ต้องรู้ตัวเองว่ารูปแบบไหนใช้กับ type ไหน ดู maintenanceHrefFor ใน derive.ts)
+ */
+export async function deleteNotificationsByReference(referenceId: string, type?: string | string[]) {
+  await crossOrg("notification:recipient-scoped-not-org-scoped", () =>
+    prisma.notification.deleteMany({
+      where: { referenceId, ...(type ? { type: Array.isArray(type) ? { in: type } : type } : {}) },
+    })
+  );
+}
+
 // ─── LINE Messaging (per-org config) ─────────────────────
 
 export function getLineConfig(orgId: string) {

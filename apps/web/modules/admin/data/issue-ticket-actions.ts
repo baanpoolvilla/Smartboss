@@ -16,7 +16,7 @@ import type {
   IssueTicket,
 } from "@/modules/report_task/types/issue";
 import { listUsersAcrossOrgs } from "./users";
-import { notifyUser } from "@/modules/maintenance/data/notify";
+import { notifyUser, deleteNotificationsByReference } from "@/modules/maintenance/data/notify";
 import { SYSTEM_USER_ID } from "@/modules/report_task/lib/task-penalty-sweep";
 import type { ActivityItem } from "@/modules/report_task/types";
 
@@ -330,6 +330,13 @@ export async function adminDeleteTicket(orgId: string, ticketId: string) {
   const admins = await listUsersAcrossOrgs();
   const deletedByName = admins.find((u) => u.id === session.userId)?.name ?? "ทีม Smartboss";
   await logTicketDeletion(orgId, ticket, deletedByName);
+
+  // เก็บกวาดแจ้งเตือนของตั๋วนี้ด้วย (ดู deleteNotificationsByReference's doc) —
+  // "issue_ticket_new" เก็บ referenceId เป็น "orgId:ticketId" (ไปทีม Smartboss
+  // เอง, ดู derive.ts's maintenanceHrefFor) ส่วนอีกสอง type (ไปผู้แจ้งตั๋วเอง)
+  // เก็บ referenceId เป็น ticketId เปล่า ๆ — คนละรูปแบบ ลบแยกกันสองครั้ง
+  await deleteNotificationsByReference(`${orgId}:${ticketId}`, "issue_ticket_new");
+  await deleteNotificationsByReference(ticketId, ["issue_ticket_reply_reporter", "issue_ticket_status_reporter"]);
 }
 
 /** Who a ticket can be assigned to — any active platform Super Admin plus the

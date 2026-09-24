@@ -19,6 +19,7 @@ import {
   notifyUser,
   notifyUsers,
   propertyCaretaker,
+  deleteNotificationsByReference,
 } from "@/modules/maintenance/data/notify";
 import { getProperty } from "@/modules/maintenance/data/properties";
 import {
@@ -410,6 +411,10 @@ export async function deleteWorkOrderAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   await deleteWorkOrder(s.orgId, id);
+  // เก็บกวาดแจ้งเตือนของใบงานนี้ด้วย ไม่งั้นกระดิ่งค้างชี้ไปใบงานที่ไม่มีแล้ว
+  // (ดู deleteNotificationsByReference's doc — บั๊กคลาสเดียวกับที่ report_task
+  // เจอกับ removeTaskNotifications)
+  await deleteNotificationsByReference(id, "work_order");
   revalidatePath("/maintenance/work-orders");
   redirect("/maintenance/work-orders");
 }

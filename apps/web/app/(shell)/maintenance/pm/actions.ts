@@ -14,6 +14,7 @@ import {
 } from "@/modules/maintenance/data/pm";
 import { getAsset } from "@/modules/maintenance/data/assets";
 import { roundsPerYearOptions } from "@/modules/maintenance/lib/pm-schedule";
+import { deleteNotificationsByReference } from "@/modules/maintenance/data/notify";
 
 function parseDate(s: string): Date {
   return new Date(s + "T00:00:00.000Z");
@@ -168,5 +169,11 @@ export async function deletePmAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   await deletePmSchedule(orgId, id);
+  // referenceId ของแจ้งเตือน "pm" ยังคือ pm.id เดิม (ดู cron.ts's
+  // notifyDuePmSchedules) แม้ลิงก์จะพาไปหน้ารายการรวมเสมอ (maintenanceHrefFor
+  // ไม่ได้ใช้ referenceId ของ "pm") ไม่ลบก็ไม่ถึงกับลิงก์พัง แต่ข้อความจะค้าง
+  // พูดถึงแผนที่ไม่มีอยู่แล้ว — เก็บกวาดไปด้วยกันเลย (ดู
+  // deleteNotificationsByReference's doc)
+  await deleteNotificationsByReference(id, "pm");
   revalidatePath("/maintenance/pm");
 }

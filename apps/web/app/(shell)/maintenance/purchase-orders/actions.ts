@@ -26,7 +26,7 @@ import {
   workOrderAccess,
   canSeeWorkOrder,
 } from "@/modules/maintenance/data/work-order-access";
-import { notifyUser } from "@/modules/maintenance/data/notify";
+import { notifyUser, deleteNotificationsByReference } from "@/modules/maintenance/data/notify";
 import { putFile, putFiles, deleteFiles } from "@/modules/maintenance/lib/storage";
 import {
   poItemsFromJson,
@@ -443,6 +443,9 @@ export async function deletePoAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   await deletePurchaseOrder(s.orgId, id);
+  // เก็บกวาดแจ้งเตือนของ PO นี้ด้วย เดียวกับที่ deleteWorkOrderAction ทำ (ดู
+  // deleteNotificationsByReference's doc)
+  await deleteNotificationsByReference(id, "purchase_order");
   revalidatePath("/maintenance/purchase-orders");
   redirect("/maintenance/purchase-orders");
 }
