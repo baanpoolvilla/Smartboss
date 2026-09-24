@@ -80,12 +80,19 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
     params.delete("dept");
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   }
+  // router.back() instead of stripping the param ourselves — PersonTopicsBoard's
+  // own onBack (closePersonDepartmentBoard, below) has to retrace whichever
+  // path actually got there: the normal 2-hop one (board → PersonDepartmentsBoard
+  // → PersonTopicsBoard, each its own router.push) or the 1-hop shortcut a
+  // department row on the main board takes straight into person+dept
+  // (openPersonDepartmentDirect below) — stripping params by hand can't tell
+  // those apart, so "←" from the shortcut still landed on
+  // PersonDepartmentsBoard (a stop that was never actually visited), needing
+  // an extra press to reach the real previous page ("กดย้อนกลับ 2 รอบ ถึงจะไป
+  // หน้ารายชื่อ"). Every open() below is a real push, so back() always undoes
+  // exactly the one step that was actually taken.
   function closePersonBoard() {
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete("person");
-    params.delete("dept");
-    const query = params.toString();
-    router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
+    router.back();
   }
 
   // Same pattern as personBoardId above, but for a department's column header
@@ -104,10 +111,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   }
   function closeDepartmentBoard() {
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete("dept");
-    const query = params.toString();
-    router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
+    router.back();
   }
   // Opens/closes just the `dept` layer while `person` stays put — used by
   // PersonDepartmentsBoard's own department cards and by PersonTopicsBoard's
@@ -119,10 +123,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   }
   function closePersonDepartmentBoard() {
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete("dept");
-    const query = params.toString();
-    router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
+    router.back();
   }
   // Sets `person` + `dept` in one shot — the shortcut a department row inside
   // a person's own column on the MAIN board uses (KanbanColumn's breakdown,
