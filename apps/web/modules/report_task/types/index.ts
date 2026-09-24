@@ -215,6 +215,18 @@ export interface Task {
   showChecklistOnCard: boolean;
   /** Optional grouping tag (see ProjectTopic) — most tasks have none. */
   projectTopicId?: string;
+  /** Anyone who's manually ticked "ติดตามงานนี้" — separate from
+   * assigneeIds/assignedById: someone can watch a task they're neither
+   * doing nor gave out, e.g. a head keeping an eye on a project their team
+   * is working ("มีให้ CEO เห็นและติ๊กว่าจะเอางานนี้มาอยู่ในติดตามด้วยได้
+   * ไหม"). The toggle itself is department-head/CEO only (canManage — see
+   * task-detail-sheet.tsx's canWatch, "ทาง 2 จะกดได้เฉพาะหัวหน้า ceo อย่าง
+   * เดียวพอ"); this field's shape stays a plain user-id array regardless, in
+   * case that gate ever loosens again. Filtered on together with
+   * assignedById under the one "กำลังติดตาม" filter (see task-filter.ts) —
+   * from that filter's point of view, being the assigner and being a manual
+   * watcher both just mean "this task is on my radar." */
+  watcherIds?: string[];
   createdAt: string;
   updatedAt: string;
 }

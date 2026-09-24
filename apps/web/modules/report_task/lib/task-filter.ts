@@ -5,6 +5,14 @@ import type { PenaltyFilter, QuickView } from "@/modules/report_task/store/task-
 
 export interface TaskFilterState {
   assigneeId: string | "all";
+  /** "กำลังติดตาม" — matches either the person who assigned the task out
+   * (assignedById, a different axis from assigneeId: about who handed the
+   * work out, not who's doing it) OR anyone who's manually ticked "ติดตาม
+   * งานนี้" on it (task.watcherIds — a task someone wants to keep an eye on
+   * without having assigned or being assigned to it at all). Named after
+   * the assigner axis since that was the first case, but reads as "is this
+   * person keeping tabs on this task, one way or another." */
+  assignedById: string | "all";
   departmentId: string | "all";
   priority: string;
   penalty: PenaltyFilter;
@@ -17,6 +25,12 @@ export interface TaskFilterState {
 /** Shared board/grid/penalty filter predicate — one source of truth. */
 export function matchesTaskFilters(task: Task, filters: TaskFilterState): boolean {
   if (filters.assigneeId !== "all" && !task.assigneeIds.includes(filters.assigneeId)) return false;
+  if (
+    filters.assignedById !== "all" &&
+    task.assignedById !== filters.assignedById &&
+    !task.watcherIds?.includes(filters.assignedById)
+  )
+    return false;
   if (filters.departmentId !== "all" && !task.departmentIds.includes(filters.departmentId)) return false;
   if (filters.priority !== "all" && task.priority !== filters.priority) return false;
   if (filters.penalty !== "all") {

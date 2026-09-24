@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, AlertTriangle, Building2, Users, Flag, CircleDot, User as UserIcon, Group, SlidersHorizontal, CalendarDays } from "lucide-react";
+import { Plus, AlertTriangle, Building2, Users, Flag, CircleDot, User as UserIcon, Group, SlidersHorizontal, CalendarDays, Eye, Check } from "lucide-react";
 import { Button } from "@/modules/report_task/components/ui/button";
 import {
   Select,
@@ -46,6 +46,7 @@ const groupByIcon: Record<GroupBy, typeof CircleDot> = {
 
 const defaultFilters = {
   assigneeId: "all",
+  assignedById: "all",
   departmentId: "all",
   priority: "all",
   penalty: "all",
@@ -78,15 +79,17 @@ export function TaskFilters({
   const isFiltered =
     filters.departmentId !== defaultFilters.departmentId ||
     filters.assigneeId !== defaultFilters.assigneeId ||
+    filters.assignedById !== defaultFilters.assignedById ||
     filters.priority !== defaultFilters.priority ||
     filters.penalty !== defaultFilters.penalty ||
     filters.preset !== defaultFilters.preset;
 
-  // Same 5 fields isFiltered already checks, just counted instead of
+  // Same fields isFiltered already checks, just counted instead of
   // collapsed to a bool — feeds the "ตัวกรอง (N)" badge on the mobile button.
   const activeFilterCount = [
     filters.departmentId !== defaultFilters.departmentId,
     filters.assigneeId !== defaultFilters.assigneeId,
+    filters.assignedById !== defaultFilters.assignedById,
     filters.priority !== defaultFilters.priority,
     filters.penalty !== defaultFilters.penalty,
     filters.preset !== defaultFilters.preset,
@@ -96,6 +99,24 @@ export function TaskFilters({
   // same real filter fields above (no separate state), for the handful of
   // filters used often enough to deserve a tap ahead of opening its own row.
   const quickMineActive = filters.assigneeId === viewingAsUserId;
+  // "งานที่กำลังติดตาม" — งานที่ตัวเองเป็นคนมอบหมาย (assignedById) ไม่ใช่คน
+  // ทำ (assigneeId) คนละแกนกับ quickMineActive ข้างบน: หัวหน้าอยากติดตามงาน
+  // ที่ตัวเองสั่งออกไป ไม่ว่าตอนนี้จะอยู่ในมือใคร
+  const quickTrackingActive = filters.assignedById === viewingAsUserId;
+  // Desktop's single "มุมมองของฉัน" dropdown — derives its displayed value
+  // from the same two fields instead of adding a third piece of state, so it
+  // can never drift out of sync with what quickMineActive/quickTrackingActive
+  // (or the mobile chips) already show. Falls back to "all" for any other
+  // combination (e.g. a specific teammate picked via "พนักงาน") — there's no
+  // "mine + tracking" combo to represent since setting one always clears the
+  // other (see its onValueChange).
+  const personalView: "all" | "mine" | "tracking" =
+    quickMineActive && filters.assignedById === "all"
+      ? "mine"
+      : quickTrackingActive && filters.assigneeId === "all"
+        ? "tracking"
+        : "all";
+  const personalViewLabel = personalView === "mine" ? "งานของฉัน" : personalView === "tracking" ? "งานที่กำลังติดตาม" : "ทั้งหมด";
   const quickTodayActive = filters.preset === "today";
   const quickOverdueActive = filters.penalty === "overdue";
   const quickCriticalActive = filters.priority === "critical";
@@ -273,30 +294,97 @@ export function TaskFilters({
         </Select>
       </FilterField>
 
-      {groupBy && onGroupByChange && (
+      {groupBy && onGroupByChange ? (
+        // "งานของฉัน"/"งานที่กำลังติดตาม" ยุบมารวมอยู่ในดรอปดาวน์เดียวกับ
+        // "จัดกลุ่มตาม" เลย ("อยู่ในนี้ไม่ได้หรอ" — เดิมแยกเป็นดรอปดาวน์ของ
+        // ตัวเองต่างหาก) คนละแกนกันจริง (จัดกลุ่มตามเปลี่ยนรูปแบบคอลัมน์ของ
+        // บอร์ด ส่วนมุมมองของฉันกรองว่าจะเห็นงานไหน) แต่ Select ตัวเดียวแสดง
+        // ค่าที่ "เลือกอยู่จริง" ได้แค่ทีละหนึ่ง — ให้ groupBy ยังเป็นค่าที่ผูก
+        // กับปุ่ม (checkmark ของ Radix ยังทำงานถูกต้องกับ 4 ตัวเลือกจัดกลุ่ม
+        // ตามเดิมทุกอย่าง) ส่วน 2 แถว "มุมมองของฉัน" ท้ายลิสต์มีเครื่องหมายถูก
+        // ของตัวเอง (คุมด้วย personalView โดยตรง ไม่พึ่ง Radix) และป้ายบนปุ่ม
+        // ต่อท้ายด้วยชื่อมุมมองถ้าเปิดอยู่ ให้เห็นสถานะทั้งสองอย่างพร้อมกันได้
         <FilterField label="จัดกลุ่มตาม">
-          <Select value={groupBy} onValueChange={(v) => v && onGroupByChange(v as GroupBy)}>
+          <Select
+            value={groupBy}
+            onValueChange={(v: string | null) => {
+              if (!v) return;
+              if (v === "mine") setFilters({ assigneeId: viewingAsUserId, assignedById: "all" });
+              else if (v === "tracking") setFilters({ assignedById: viewingAsUserId, assigneeId: "all" });
+              else if (v === "view-all") setFilters({ assigneeId: "all", assignedById: "all" });
+              else onGroupByChange(v as GroupBy);
+            }}
+          >
             {/* "สถานะ" is the resting default (matches the board's own
                 columns) — picking anything else counts as an active choice,
                 same as every other field here, so it should highlight the
                 same way. Hardcoded `false` before meant this one never lit
                 up green no matter what was picked ("เลือกแล้วทำไมไม่เขียว"). */}
-            <SelectTrigger className={filterFieldTriggerClass(groupBy !== "status", "min-w-[150px]")}>
+            <SelectTrigger className={filterFieldTriggerClass(groupBy !== "status" || personalView !== "all", "min-w-[170px]")}>
               <Group className="h-4 w-4 shrink-0" />
-              <SelectValue placeholder="จัดกลุ่มตาม">{groupByLabels[groupBy]}</SelectValue>
+              <SelectValue placeholder="จัดกลุ่มตาม">
+                {groupByLabels[groupBy]}
+                {personalView !== "all" ? ` · ${personalViewLabel}` : ""}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent alignItemWithTrigger={false}>
-              {(["status", "priority", "assignee", "department"] as GroupBy[]).map((g) => {
-                const Icon = groupByIcon[g];
-                return (
-                  <SelectItem key={g} value={g}>
+              <SelectGroup>
+                <SelectLabel>จัดกลุ่มตาม</SelectLabel>
+                {(["status", "priority", "assignee", "department"] as GroupBy[]).map((g) => {
+                  const Icon = groupByIcon[g];
+                  return (
+                    <SelectItem key={g} value={g}>
+                      <span className="flex items-center gap-1.5">
+                        <Icon className="h-3.5 w-3.5 text-[var(--ink-soft)]" />
+                        {groupByLabels[g]}
+                      </span>
+                    </SelectItem>
+                  );
+                })}
+              </SelectGroup>
+              <SelectSeparator />
+              <SelectGroup>
+                <SelectLabel>มุมมองของฉัน</SelectLabel>
+                {(
+                  [
+                    { v: "view-all", key: "all", label: "ทั้งหมด" },
+                    { v: "mine", key: "mine", label: "งานของฉัน" },
+                    { v: "tracking", key: "tracking", label: "งานที่กำลังติดตาม" },
+                  ] as const
+                ).map((opt) => (
+                  <SelectItem key={opt.v} value={opt.v}>
                     <span className="flex items-center gap-1.5">
-                      <Icon className="h-3.5 w-3.5 text-[var(--ink-soft)]" />
-                      {groupByLabels[g]}
+                      <Eye className="h-3.5 w-3.5 text-[var(--ink-soft)]" />
+                      {opt.label}
+                      {personalView === opt.key && <Check className="h-3.5 w-3.5 text-[var(--brand-green-dark)] ml-auto" />}
                     </span>
                   </SelectItem>
-                );
-              })}
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </FilterField>
+      ) : (
+        // ไม่มี "จัดกลุ่มตาม" ให้รวมด้วย (มุมมองตาราง/ภาระงาน) — คงดรอปดาวน์
+        // แยกไว้ ไม่งั้นมุมมองของฉันจะหายไปจากหน้าพวกนี้เลย
+        <FilterField label="มุมมองของฉัน">
+          <Select
+            value={personalView}
+            onValueChange={(v) => {
+              if (!v) return;
+              if (v === "mine") setFilters({ assigneeId: viewingAsUserId, assignedById: "all" });
+              else if (v === "tracking") setFilters({ assignedById: viewingAsUserId, assigneeId: "all" });
+              else setFilters({ assigneeId: "all", assignedById: "all" });
+            }}
+          >
+            <SelectTrigger className={filterFieldTriggerClass(personalView !== "all", "min-w-[150px]")}>
+              <Eye className="h-4 w-4 shrink-0" />
+              <SelectValue placeholder="มุมมองของฉัน">{personalViewLabel}</SelectValue>
+            </SelectTrigger>
+            <SelectContent alignItemWithTrigger={false}>
+              <SelectItem value="all">ทั้งหมด</SelectItem>
+              <SelectItem value="mine">งานของฉัน</SelectItem>
+              <SelectItem value="tracking">งานที่กำลังติดตาม</SelectItem>
             </SelectContent>
           </Select>
         </FilterField>
@@ -305,6 +393,12 @@ export function TaskFilters({
       <div className="flex flex-col gap-1">
         <span className={FILTER_FIELD_LABEL_CLASS}>&nbsp;</span>
         <button
+          // เดิมมีปุ่ม "งานของฉัน"/"กำลังติดตาม" แยกอยู่ตรงนี้ด้วย ซ้ำกับ
+          // dropdown "พนักงาน"/"มอบหมายโดย" ข้างบนที่ปักหมุด "ของฉัน" ไว้ให้
+          // อยู่แล้ว — สองปุ่มควบคุมค่าเดียวกันทำให้ดูรกและงงว่าต้องกดอันไหน
+          // ("ทำให้มันใช้งานง่ายสิ") ตัด toggle ซ้ำออก เหลือ dropdown เป็นทาง
+          // เดียวบนเดสก์ท็อป (มือถือยังมีชิปด่วนแยกอยู่ในหน้า bottom sheet —
+          // ไม่ซ้ำเพราะ field เต็มอยู่คนละจุด ต้องเลื่อนลงไปอีกทีถึงจะเจอ)
           // Clears quickView (the KPI chip row above) — the two used to AND
           // together, which could filter down to an impossible intersection
           // (e.g. "in-progress AND overdue") and show zero results even with
@@ -552,6 +646,7 @@ export function TaskFilters({
             <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">ตัวกรองด่วน</p>
             <div className="flex gap-2.5 overflow-x-auto pb-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <QuickFilterChip icon={UserIcon} label="งานของฉัน" active={quickMineActive} onClick={() => setFilters({ assigneeId: quickMineActive ? "all" : viewingAsUserId })} />
+              <QuickFilterChip icon={Eye} label="กำลังติดตาม" active={quickTrackingActive} onClick={() => setFilters({ assignedById: quickTrackingActive ? "all" : viewingAsUserId })} />
               <QuickFilterChip icon={CalendarDays} label="วันนี้" active={quickTodayActive} onClick={() => setFilters({ preset: quickTodayActive ? "all" : "today" })} />
               <QuickFilterChip icon={AlertTriangle} label="เลยกำหนด" warn active={quickOverdueActive} onClick={() => setFilters({ penalty: quickOverdueActive ? "all" : "overdue" })} />
               <QuickFilterChip icon={Flag} label="ด่วนมาก" active={quickCriticalActive} onClick={() => setFilters({ priority: quickCriticalActive ? "all" : "critical" })} />

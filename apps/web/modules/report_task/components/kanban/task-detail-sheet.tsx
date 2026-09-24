@@ -46,7 +46,7 @@ import { StickerManagerPanel } from "@/modules/report_task/components/shared/sti
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
-import { getUser, displayName, getDepartment, users, isOwner, departmentIdsOf } from "@/modules/report_task/lib/directory";
+import { getUser, displayName, getDepartment, users, isOwner, canManage, departmentIdsOf } from "@/modules/report_task/lib/directory";
 import { statusMeta, priorityMeta, taskStatusOrder, taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
 import { isTaskFullyDone, remainingChecklistCount } from "@/modules/report_task/lib/task-completion";
 import { formatDate, formatDateTime } from "@/modules/report_task/lib/format";
@@ -71,6 +71,7 @@ import {
   Upload,
   ChevronDown,
   MoreHorizontal,
+  Eye,
 } from "lucide-react";
 import type { Attachment, Sticker, TaskPriority, TaskStatus } from "@/modules/report_task/types";
 import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
@@ -205,6 +206,7 @@ export function TaskDetailSheet({
   const addReaction = useTaskStore((s) => s.addReaction);
   const removeReaction = useTaskStore((s) => s.removeReaction);
   const toggleEmojiReaction = useTaskStore((s) => s.toggleEmojiReaction);
+  const toggleWatcher = useTaskStore((s) => s.toggleWatcher);
   const stickers = useStickerStore((s) => s.stickers);
   // "อยากมีสติกเกอร์ธรรมดา...เอาไว้ชมให้กำลังใจเบื้องต้น" — เรียงตามความถี่
   // ใช้งานเหมือนในหน้ารายงาน (ดู sticker-usage-store.ts) ใช้ชุดคีย์เดียวกัน
@@ -314,6 +316,11 @@ export function TaskDetailSheet({
   // isn't without having to ask.
   const isShared = task.taskMode === "group";
   const iAmAssignee = task.assigneeIds.includes(viewingAsUserId);
+  // "ติดตามงานนี้" — จำกัดไว้แค่หัวหน้าแผนก/CEO (canManage) เท่านั้น
+  // ("ทาง 2 จะกดได้เฉพาะหัวหน้า ceo อย่างเดียวพอ" — เดิมเปิดให้ทุกคนกดได้
+  // ["ทำให้มันยืดหยุ่นก็ได้"] แต่ภายหลังขอให้จำกัดสิทธิ์กลับ)
+  const canWatch = canManage(viewingAsUserId);
+  const isWatching = (task.watcherIds ?? []).includes(viewingAsUserId);
   const completedCount = task.completedAssigneeIds?.length ?? 0;
   const assignedBy = getUser(task.assignedById);
   // "T-2569-0001 · เดี่ยว/กลุ่ม · <หัวข้อโปรเจค ถ้ามี>" instead of the raw uuid id —
@@ -489,6 +496,18 @@ export function TaskDetailSheet({
             <Badge variant="secondary" className="text-[10px] ml-auto">
               {canEditMain ? "แก้ไขได้" : `สร้างโดย ${assignedBy?.name ?? "—"}`}
             </Badge>
+            {canWatch && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className={cn("shrink-0", isWatching ? "text-[var(--brand-green-dark)]" : "text-[var(--ink-soft)]")}
+                title={isWatching ? "เลิกติดตามงานนี้" : "ติดตามงานนี้"}
+                aria-label={isWatching ? "เลิกติดตามงานนี้" : "ติดตามงานนี้"}
+                onClick={() => toggleWatcher(task.id, viewingAsUserId)}
+              >
+                <Eye className="h-4 w-4" fill={isWatching ? "currentColor" : "none"} />
+              </Button>
+            )}
             {canEditMain && (
               <Button
                 variant="ghost"

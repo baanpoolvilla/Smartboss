@@ -165,6 +165,9 @@ export type QuickView = "all" | "todo" | "inProgress" | "overdue" | "review" | "
 
 interface TaskFilters {
   assigneeId: string | "all";
+  /** Who assigned it — "งานที่กำลังติดตาม" ("งานที่ฉันมอบหมายให้คนอื่นทำ"),
+   * see TaskFilterState's own doc in lib/task-filter.ts. */
+  assignedById: string | "all";
   departmentId: string | "all";
   priority: TaskPriority | "all";
   /** Filter by missed-deadline docking status. */
@@ -267,6 +270,12 @@ interface TaskStore {
   /** Plain no-score reaction — anyone toggles their own id in/out of that
    * emoji's list, same shape/behavior as a report post's emoji reactions. */
   toggleEmojiReaction: (taskId: string, emoji: string, userId: string) => void;
+  /** "ติดตามงานนี้" — toggles the caller's own id in/out of watcherIds; the
+   * store itself doesn't gate who's allowed (that's task-detail-sheet.tsx's
+   * canWatch — department head/CEO only, see Task.watcherIds's own doc). No
+   * score effect, same spirit as toggleEmojiReaction just tracked separately
+   * from reactions. */
+  toggleWatcher: (taskId: string, userId: string) => void;
   /** Case-by-case missed-deadline dock, applied at a lead's discretion. */
   applyPenalty: (taskId: string, points: number, byUserId: string, reason?: string) => void;
   clearPenalty: (taskId: string) => void;
@@ -280,6 +289,7 @@ interface TaskStore {
 
 const defaultFilters: TaskFilters = {
   assigneeId: "all",
+  assignedById: "all",
   departmentId: "all",
   priority: "all",
   penalty: "all",
@@ -904,6 +914,22 @@ export const useTaskStore = create<TaskStore>((set) => ({
           const current = x.emojiReactions?.[emoji] ?? [];
           const next = current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId];
           return { ...x, emojiReactions: { ...x.emojiReactions, [emoji]: next } };
+        }),
+      };
+    }),
+  toggleWatcher: (taskId, userId) =>
+    set((s) => {
+      const t = s.tasks.find((x) => x.id === taskId);
+      if (t) {
+        const watching = !(t.watcherIds ?? []).includes(userId);
+        logActivity(userId, watching ? "ติดตามงาน" : "เลิกติดตามงาน", t.title, t.id);
+      }
+      return {
+        tasks: s.tasks.map((x) => {
+          if (x.id !== taskId) return x;
+          const current = x.watcherIds ?? [];
+          const next = current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId];
+          return { ...x, watcherIds: next };
         }),
       };
     }),
