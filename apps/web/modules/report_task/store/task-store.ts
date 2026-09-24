@@ -404,6 +404,14 @@ export const useTaskStore = create<TaskStore>((set) => ({
         if (t.id !== taskId) return t;
         const revisionNumber = t.revisions.length + 1;
         logActivity(revisedBy, "แก้ไขกำหนดส่ง", t.title, t.id, `${formatShortDate(t.dueDate)} → ${formatShortDate(newDate)} · ${reason}`);
+        // เดิมฟังก์ชันนี้ไม่แจ้งใครเลย ต่างจาก reviseAssigneeDueDate/
+        // reviseAllAssigneeDueDates (พี่น้องกันที่แก้ไขกำหนดส่งเหมือนกันแค่
+        // คนละระดับ) ที่แจ้งอยู่แล้ว — "หัวหน้ากดแก้ไขแต่ไม่เห็นแจ้งเตือนไปยัง
+        // ผู้ที่ได้รับมอบหมายเลย" คือจุดนี้เอง ไม่ใช่แค่ตกหล่นตอน reject review
+        const actorName = getUser(revisedBy)?.name ?? "มีคน";
+        useNotificationStore
+          .getState()
+          .notifyMany(t.assigneeIds, revisedBy, `${actorName} ปรับกำหนดส่งงาน "${t.title}" เป็น ${formatShortDate(newDate)} — ${reason}`);
         // Revising the due date on a task already marked "เสร็จสิ้น" means it
         // wasn't actually done — bounce it back to "กำลังทำ" as part of the
         // same edit instead of a separate "เปิดงานใหม่" step (removed —
