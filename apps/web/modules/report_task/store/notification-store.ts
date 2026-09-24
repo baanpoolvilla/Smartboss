@@ -63,9 +63,12 @@ interface NotificationStore {
   markTaskActivityRead: (userId: string, taskId: string) => void;
   /** ลบงานแล้วต้องเก็บกวาดแจ้งเตือนของงานนั้นทิ้งด้วย ไม่งั้นกระดิ่ง/badge เมนู
    * ค้างชี้ไปงานที่ไม่มีอยู่แล้ว ("ลบงานไปแล้วแต่ทำไมแจ้งเตือนยังขึ้น") จับคู่
-   * ด้วย taskId (แจ้งเตือนคอมเมนต์/ไฟล์แนบใหม่) หรือ link ที่พาไป highlight
-   * งานนั้นเป๊ะๆ (แจ้งเตือนงานแบบอื่น ๆ ที่เกิดก่อนมี field taskId — สถานะ
-   * เปลี่ยน/ตรวจงาน/ตั้งกำหนดส่งใหม่ ฯลฯ ไม่มี taskId ผูกมา มีแต่ link) */
+   * ด้วย taskId (แจ้งเตือนคอมเมนต์/ไฟล์แนบใหม่) หรือ link ที่พาไปงานนั้นเป๊ะๆ
+   * ไม่ว่าจะเป็น `highlight=` (แจ้งเตือนงานแบบอื่น ๆ ที่เกิดก่อนมี field taskId
+   * — สถานะเปลี่ยน/ตรวจงาน/ตั้งกำหนดส่งใหม่ ฯลฯ) หรือ `task=` (แจ้งเตือน
+   * "ใกล้ถึงกำหนดส่ง" จาก reminder-sweep.ts ซึ่งไม่มี taskId ผูกมาเหมือนกัน
+   * — เคยพลาดจุดนี้มาก่อน แจ้งเตือนใกล้ถึงกำหนดส่งเลยค้างอยู่ไม่หายแม้ลบงาน
+   * ไปแล้ว) */
   removeTaskNotifications: (taskId: string) => void;
 }
 
@@ -122,7 +125,9 @@ export const useNotificationStore = create<NotificationStore>()(
       removeTaskNotifications: (taskId) =>
         set((s) => ({
           notifications: s.notifications.filter(
-            (n) => n.taskId !== taskId && !(n.link && n.link.includes(`highlight=${taskId}`))
+            (n) =>
+              n.taskId !== taskId &&
+              !(n.link && (n.link.includes(`highlight=${taskId}`) || n.link.includes(`task=${taskId}`)))
           ),
         })),
     })
