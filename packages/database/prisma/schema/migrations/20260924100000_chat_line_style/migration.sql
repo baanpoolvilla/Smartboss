@@ -1,8 +1,6 @@
 -- แชทแบบ LINE: ตอบกลับ, @แท็ก, อีโมจิ, กันส่งซ้ำ (client_id), กลุ่มแผนก, ประกาศ,
 -- ปัก/ปิดเสียงต่อคน, ตารางไฟล์แชท (นับพื้นที่) และ Web Push — เพิ่มอย่างเดียว ไม่แตะข้อมูลเดิม
 
-warn The configuration property `package.json#prisma` is deprecated and will be removed in Prisma 7. Please migrate to a Prisma config file (e.g., `prisma.config.ts`).
-For more information, see: https://pris.ly/prisma-config
 
 -- AlterTable
 ALTER TABLE "chat"."channels" ADD COLUMN     "announcement_id" TEXT,
