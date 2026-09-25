@@ -829,10 +829,52 @@ export const useReportFeedStore = create<ReportFeedStore>()(
           }
         }
       },
-      editPost: (postId, data) =>
+      editPost: (postId, data) => {
+        const before = get().posts.find((p) => p.id === postId);
+        // คนที่เพิ่ง @แท็กเพิ่มตอนแก้ไข (ไม่มีในฉบับก่อน) ต้องได้แจ้งเตือนเหมือนตอนโพสต์ครั้งแรก
+        // ("กดแก้ไขแล้ว @ชื่อ มันไม่เด้งแจ้งเตือน") — คนที่ถูกแท็กอยู่แล้วไม่แจ้งซ้ำ
+        const textOf = (sections: { bullets: string[] }[] | undefined) => (sections ?? []).flatMap((x) => x.bullets).join("\n");
+        const oldText = textOf(before?.sections);
+        const newText = textOf(data.sections ?? before?.sections);
+        const authorId = before?.authorId ?? "";
+        const oldUsers = new Set(extractMentionedIds(oldText, "user"));
+        const addedUsers = extractMentionedIds(newText, "user").filter((id) => id !== authorId && !oldUsers.has(id));
+        const addedEveryone = extractMentionedIds(newText, "everyone").length > 0 && extractMentionedIds(oldText, "everyone").length === 0;
+        const topic = before ? get().topics.find((t) => t.id === before.topicId) : undefined;
+        const everyoneRecipients =
+          addedEveryone && topic
+            ? users
+                .filter((u) => u.id !== authorId && !addedUsers.includes(u.id) && canSeeReportTopic(topic.visibility, u.id))
+                .map((u) => u.id)
+            : [];
+
         set((s) => ({
-          posts: s.posts.map((p) => (p.id === postId ? { ...p, ...data, editedAt: new Date().toISOString() } : p)),
-        })),
+          posts: s.posts.map((p) =>
+            p.id === postId
+              ? {
+                  ...p,
+                  ...data,
+                  editedAt: new Date().toISOString(),
+                  // ให้ขึ้น "ยังไม่อ่าน" กับคนที่เพิ่งถูกแท็ก เหมือนโพสต์ใหม่
+                  unreadFor: [...new Set([...(p.unreadFor ?? []), ...addedUsers, ...everyoneRecipients])],
+                }
+              : p
+          ),
+        }));
+
+        if (!before) return;
+        const link = `/report-task/report-feed?topic=${before.topicId}&post=${postId}`;
+        const title = data.title ?? before.title;
+        const actorName = getUser(authorId)?.name ?? "มีคน";
+        if (addedUsers.length > 0) {
+          useNotificationStore.getState().notifyMany(addedUsers, authorId, `${actorName} แท็กคุณในโพสต์ "${title}"`, undefined, link, topic?.name);
+        }
+        if (everyoneRecipients.length > 0) {
+          useNotificationStore
+            .getState()
+            .notifyMany(everyoneRecipients, authorId, `${actorName} แท็ก @ทุกคน ในโพสต์ "${title}"`, undefined, link, topic?.name);
+        }
+      },
       removePost: (id) => set((s) => ({ posts: s.posts.filter((p) => p.id !== id) })),
       setPostLinkedTask: (postId, taskId) =>
         set((s) => ({ posts: s.posts.map((p) => (p.id === postId ? { ...p, linkedTaskId: taskId } : p)) })),
@@ -1013,7 +1055,9 @@ export const useReportFeedStore = create<ReportFeedStore>()(
             .notifyMany(everyoneMentionReplyRecipients, authorId, `${actorName} แท็ก @ทุกคน ในความคิดเห็นของโพสต์ "${post.title}"`, undefined, link, repliedTopic?.name);
         }
       },
-      editReply: (postId, replyId, data) =>
+      editReply: (postId, replyId, data) => {
+        const post = get().posts.find((p) => p.id === postId);
+        const reply = post?.replies.find((r) => r.id === replyId);
         set((s) => ({
           posts: s.posts.map((p) =>
             p.id !== postId
@@ -1025,7 +1069,24 @@ export const useReportFeedStore = create<ReportFeedStore>()(
                   ),
                 }
           ),
-        })),
+        }));
+        // แก้ความคิดเห็นแล้ว @แท็กคนเพิ่ม — แจ้งเฉพาะคนที่เพิ่งถูกแท็ก (เหมือนตอนตอบครั้งแรก)
+        if (!post || !reply) return;
+        const oldIds = new Set(extractMentionedIds(reply.body ?? "", "user"));
+        const added = extractMentionedIds(data.body, "user").filter((id) => id !== reply.authorId && !oldIds.has(id));
+        if (added.length === 0) return;
+        const actorName = getUser(reply.authorId)?.name ?? "มีคน";
+        useNotificationStore
+          .getState()
+          .notifyMany(
+            added,
+            reply.authorId,
+            `${actorName} แท็กคุณในความคิดเห็นของโพสต์ "${post.title}"`,
+            undefined,
+            `/report-task/report-feed?topic=${post.topicId}&post=${postId}`,
+            get().topics.find((t) => t.id === post.topicId)?.name
+          );
+      },
       deleteReply: (postId, replyId) =>
         set((s) => ({
           posts: s.posts.map((p) =>
