@@ -11,7 +11,6 @@ import {
   saveDepartmentOverlay,
 } from "@/modules/report_task/lib/db/departments";
 import { isValidStoreKey, readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
-import { announceNotification } from "@/lib/notify-push";
 import { recordReportStickerEvents, refundDeletedReportRoundEvents } from "@/modules/report_task/lib/db/report-feed-performance";
 import {
   listHolidayEvents,
@@ -191,9 +190,6 @@ async function put(request: NextRequest, key: string) {
   // ต้องอ่านก้อนเก่าไว้ก่อนเขียนทับ — หลังเขียนแล้วก้อนเก่าหายไปเลย ไม่มีทาง
   // ย้อนกลับมา diff ว่า reaction ไหนเพิ่งติดใหม่ หรือรอบส่งไหนถูกลบไป (เฉพาะคีย์ report-feed)
   const before = key === REPORT_FEED_KEY ? await readStore<{ posts?: unknown[]; topics?: unknown[] }>(session.orgId, key) : null;
-  // แจ้งเตือนของงาน/รายงานถูกเพิ่มโดยเครื่องของผู้ทำรายการ แล้วบันทึกทั้งก้อน — เทียบกับก้อนเก่า
-  // หาแถวที่เพิ่งเพิ่ม เพื่อเด้ง/มีเสียงให้ผู้รับทันที (ไม่ต้องรอเครื่องผู้รับดึงรอบถัดไป)
-  const notificationsBefore = key === "notifications" ? await readStore<unknown>(session.orgId, key) : null;
 
   const result = await writeStore(
     session.orgId,
@@ -224,53 +220,7 @@ async function put(request: NextRequest, key: string) {
     );
   }
 
-  if (key === "notifications") {
-    announceNewReportNotifications(session.orgId, session.userId, notificationsBefore?.data, body.data);
-  }
-
   return Response.json({ ok: true, version: result.version });
-}
-
-interface StoredNotification {
-  id?: unknown;
-  userId?: unknown;
-  byUserId?: unknown;
-  message?: unknown;
-  read?: unknown;
-  link?: unknown;
-  kind?: unknown;
-  topicName?: unknown;
-}
-
-/** แถวแจ้งเตือนที่เพิ่งเพิ่มในรอบนี้ → เด้งถึงผู้รับ (ไม่ใช่ตัวผู้ทำรายการเอง) */
-function announceNewReportNotifications(orgId: string, actorId: string, beforeData: unknown, afterData: unknown) {
-  if (!Array.isArray(afterData)) return;
-  const known = new Set(
-    (Array.isArray(beforeData) ? (beforeData as StoredNotification[]) : []).map((n) => n?.id).filter((id) => typeof id === "string")
-  );
-  // กันก้อนแปลก ๆ (เช่น โหลดเก่าแล้วบันทึกทับ) ยิงแจ้งเตือนเป็นร้อย — ของจริงต่อครั้งมีไม่กี่แถว
-  const fresh = (afterData as StoredNotification[])
-    .filter(
-      (n) =>
-        n &&
-        typeof n.id === "string" &&
-        !known.has(n.id) &&
-        typeof n.userId === "string" &&
-        n.userId !== actorId &&
-        n.read !== true &&
-        // "room_post" = สรุปทุกโพสต์ให้เจ้าของดูภาพรวม ไม่ใช่เรื่องถึงตัว — ไม่ต้องเด้ง
-        n.kind !== "room_post"
-    )
-    .slice(0, 50);
-  for (const n of fresh) {
-    const message = typeof n.message === "string" ? n.message : "มีแจ้งเตือนใหม่";
-    void announceNotification(orgId, [n.userId as string], {
-      title: typeof n.topicName === "string" && n.topicName ? n.topicName : "SmartBoss",
-      body: message.slice(0, 160),
-      url: typeof n.link === "string" && n.link.startsWith("/") ? n.link : "/notifications",
-      tag: `rn-${n.id as string}`,
-    });
-  }
 }
 
 export async function PUT(request: NextRequest, context: { params: Promise<{ key: string }> }) {

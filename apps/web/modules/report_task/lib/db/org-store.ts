@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
+import { announceNotification } from "@/lib/notify-push";
 
 import { fileForStoreKey, type StoreKey } from "./store-registry";
 
@@ -49,6 +50,69 @@ export type StoreWrite =
  * ถ้าแยกเป็น read-then-write สองคำขอที่มาพร้อมกันจะผ่านการตรวจทั้งคู่แล้วทับกัน
  */
 export async function writeStore(
+  orgId: string,
+  key: string,
+  data: unknown,
+  expectedVersion: number | null,
+  updatedBy?: string
+): Promise<StoreWrite> {
+  // แจ้งเตือนของงาน/รายงาน: เทียบก้อนเก่ากับก้อนใหม่ แล้วเด้ง/มีเสียงให้ผู้รับทันที — ทำที่นี่ที่เดียว
+  // เพราะมีหลายทางที่บันทึกคีย์นี้ (หน้าเว็บ PUT, ตัวเตือนใกล้ถึงกำหนด, สรุปงาน, คำขอแก้คะแนน ฯลฯ)
+  if (key === NOTIFICATIONS_KEY) {
+    const before = await readStore<unknown>(orgId, key);
+    const result = await writeStoreRaw(orgId, key, data, expectedVersion, updatedBy);
+    if (result.ok) announceNewNotifications(orgId, before.data, data);
+    return result;
+  }
+  return writeStoreRaw(orgId, key, data, expectedVersion, updatedBy);
+}
+
+const NOTIFICATIONS_KEY = "notifications";
+
+interface StoredNotification {
+  id?: unknown;
+  userId?: unknown;
+  byUserId?: unknown;
+  message?: unknown;
+  read?: unknown;
+  link?: unknown;
+  kind?: unknown;
+  topicName?: unknown;
+}
+
+/** แถวที่เพิ่งเพิ่มในรอบนี้ → เด้งถึงผู้รับ */
+function announceNewNotifications(orgId: string, beforeData: unknown, afterData: unknown) {
+  if (!Array.isArray(afterData)) return;
+  const known = new Set(
+    (Array.isArray(beforeData) ? (beforeData as StoredNotification[]) : []).map((n) => n?.id).filter((id) => typeof id === "string")
+  );
+  const fresh = (afterData as StoredNotification[])
+    .filter(
+      (n) =>
+        n &&
+        typeof n.id === "string" &&
+        !known.has(n.id) &&
+        typeof n.userId === "string" &&
+        // ตัวเองทำถึงตัวเอง = ไม่ต้องเด้ง (ตัวเตือนอัตโนมัติ byUserId = "system" ยังเด้งตามปกติ)
+        n.userId !== n.byUserId &&
+        n.read !== true &&
+        // "room_post" = สรุปทุกโพสต์ให้เจ้าของดูภาพรวม ไม่ใช่เรื่องถึงตัว — อยู่ในกระดิ่งแต่ไม่เด้ง
+        n.kind !== "room_post"
+    )
+    // กันก้อนแปลก ๆ (เช่น เครื่องเก่าบันทึกทับ) ยิงเป็นร้อย — ของจริงต่อครั้งมีไม่กี่แถว
+    .slice(0, 100);
+  for (const n of fresh) {
+    const message = typeof n.message === "string" ? n.message : "มีแจ้งเตือนใหม่";
+    void announceNotification(orgId, [n.userId as string], {
+      title: typeof n.topicName === "string" && n.topicName ? n.topicName : "SmartBoss",
+      body: message.slice(0, 160),
+      url: typeof n.link === "string" && n.link.startsWith("/") ? n.link : "/notifications",
+      tag: `rn-${n.id as string}`,
+    });
+  }
+}
+
+async function writeStoreRaw(
   orgId: string,
   key: string,
   data: unknown,
