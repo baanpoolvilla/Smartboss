@@ -19,8 +19,9 @@ export default async function ReportTaskChatPage() {
   });
 
   return (
-    // มือถือเต็มจอแบบแอปแชท (ไม่มีขอบ) · คอมมีขอบรอบกรอบ — ข้อความเลื่อนในกรอบของตัวเอง ไม่ใช่ทั้งหน้า
-    <div className="flex h-[calc(100dvh-68px)] flex-col lg:h-full lg:p-4">
+    // เต็มความสูงที่ AppScaffold (fill) จองไว้ — รายการห้อง/ข้อความเลื่อนในกรอบของตัวเอง
+    // ไม่ใช่ทั้งหน้า (ดู selfScrolling ใน report-task-scaffold.tsx)
+    <div className="flex h-full min-h-0 flex-col">
       <Suspense>
         <ChatApp currentUser={me} />
       </Suspense>

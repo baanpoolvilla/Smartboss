@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import { createPortal } from "react-dom";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { MessagesSquare } from "lucide-react";
 import { toast } from "sonner";
@@ -15,7 +22,25 @@ import { ChatRoom } from "./chat-room";
 import { NewChatDialog } from "./new-chat-dialog";
 
 function isDesktop(): boolean {
-  return typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches;
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia("(min-width: 768px)").matches
+  );
+}
+
+const MOBILE_QUERY = "(max-width: 767px)";
+function subscribeMobile(onChange: () => void) {
+  const mq = window.matchMedia(MOBILE_QUERY);
+  mq.addEventListener("change", onChange);
+  return () => mq.removeEventListener("change", onChange);
+}
+/** จอมือถือ (ต่ำกว่า md) — ติดตามตอนหมุนจอ/ย่อหน้าต่างด้วย */
+function useIsMobile(): boolean {
+  return useSyncExternalStore(
+    subscribeMobile,
+    () => window.matchMedia(MOBILE_QUERY).matches,
+    () => false,
+  );
 }
 
 /**
@@ -37,18 +62,22 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
   const users = useChatStore((s) => s.users);
   const onlineIds = useChatStore((s) => s.onlineIds);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const isMobile = useIsMobile();
   /** จำนวนยังไม่อ่านตอนเปิดห้อง (ก่อนถูกล้าง) — ใช้วางเส้น "ยังไม่ได้อ่าน" */
-  const [initialUnread, setInitialUnread] = useState<Record<string, number>>({});
+  const [initialUnread, setInitialUnread] = useState<Record<string, number>>(
+    {},
+  );
   const openedRef = useRef<string | null>(null);
 
   const navigateTo = useCallback(
     (id: string | null) => {
       const url = id ? `${pathname}?c=${encodeURIComponent(id)}` : pathname;
       // มือถือ push (ย้อนกลับ = กลับรายการ) · คอม replace (สลับห้องไม่ต้องสะสมประวัติ)
-      if (id && !isDesktop() && !urlChannel) router.push(url, { scroll: false });
+      if (id && !isDesktop() && !urlChannel)
+        router.push(url, { scroll: false });
       else router.replace(url, { scroll: false });
     },
-    [pathname, router, urlChannel]
+    [pathname, router, urlChannel],
   );
 
   // URL → ห้องที่เปิด
@@ -62,14 +91,17 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
     }
     if (openedRef.current === urlChannel) return;
     openedRef.current = urlChannel;
-    const unread = useChatStore.getState().channels.find((c) => c.id === urlChannel)?.unreadCount ?? 0;
+    const unread =
+      useChatStore.getState().channels.find((c) => c.id === urlChannel)
+        ?.unreadCount ?? 0;
     setInitialUnread((m) => ({ ...m, [urlChannel]: unread }));
     void openChannel(urlChannel);
   }, [urlChannel, setActive]);
 
   // คอม: ไม่ได้ระบุห้อง → เปิดห้องบนสุดให้เลย (มือถือให้เห็นรายการก่อน)
   useEffect(() => {
-    if (!urlChannel && loaded && channels.length > 0 && isDesktop()) navigateTo(channels[0]!.id);
+    if (!urlChannel && loaded && channels.length > 0 && isDesktop())
+      navigateTo(channels[0]!.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded]);
 
@@ -87,7 +119,7 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
       }
       navigateTo(id);
     },
-    [navigateTo]
+    [navigateTo],
   );
 
   const back = () => {
@@ -98,9 +130,17 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
   const activeChannel = channels.find((c) => c.id === activeChannelId) ?? null;
   // ถูกนำออกจากห้อง/ห้องถูกลบระหว่างเปิดอยู่
   useEffect(() => {
-    if (loaded && activeChannelId && !channels.some((c) => c.id === activeChannelId)) {
+    if (
+      loaded &&
+      activeChannelId &&
+      !channels.some((c) => c.id === activeChannelId)
+    ) {
       const t = setTimeout(() => {
-        if (!useChatStore.getState().channels.some((c) => c.id === activeChannelId)) {
+        if (
+          !useChatStore
+            .getState()
+            .channels.some((c) => c.id === activeChannelId)
+        ) {
           toast.message("คุณไม่ได้อยู่ในห้องนี้แล้ว");
           navigateTo(null);
         }
@@ -111,32 +151,62 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
 
   return (
     <div className="chat-ui flex h-full min-h-0 overflow-hidden bg-(--bg) md:rounded-2xl md:border md:border-(--line)">
-      <div className={cn("h-full min-h-0 w-full border-(--line) md:w-80 md:shrink-0 md:border-r lg:w-96", activeChannel ? "hidden md:block" : "block")}>
+      <div
+        className={cn(
+          "h-full min-h-0 w-full border-(--line) md:w-80 md:shrink-0 md:border-r lg:w-96",
+          activeChannel ? "hidden md:block" : "block",
+        )}
+      >
         <ChannelList onSelect={select} onStartNew={() => setDialogOpen(true)} />
       </div>
 
-      {/* มือถือ: เข้าห้องแล้วเต็มจอแบบ LINE — ทับแถบบนและเมนูล่างของระบบ (เมนูล่าง z-40) */}
-      <div
-        className={cn(
-          "h-full min-h-0 min-w-0 flex-1",
-          activeChannel
-            ? "chat-ui fixed inset-0 z-[45] flex h-dvh bg-(--bg) pt-[env(safe-area-inset-top)] md:static md:z-auto md:h-full md:pt-0"
-            : "hidden md:flex"
-        )}
-      >
-        {activeChannel ? (
-          <ChatRoom key={activeChannel.id} channel={activeChannel} initialUnread={initialUnread[activeChannel.id] ?? 0} onBack={back} />
-        ) : (
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-(--chat-room-bg) text-(--ink-soft)">
-            <MessagesSquare className="h-12 w-12 opacity-40" />
-            <p className="text-sm">{urlChannel && !loaded ? "กำลังโหลด…" : "เลือกห้องแชททางซ้าย หรือเริ่มแชทใหม่"}</p>
-          </div>
-        )}
-      </div>
+      {/* มือถือ: เข้าห้องแล้วเต็มจอแบบ LINE — ทับแถบบนและเมนูล่างของระบบ (เมนูล่าง z-40)
+          วาดออกไปที่ <body> (portal) เพราะกรอบของหน้า (AppScaffold fill = fixed z-0) ขังลำดับชั้นไว้
+          ถ้าวาดอยู่ข้างใน ต่อให้ตั้ง z สูงแค่ไหน เมนูล่างของระบบก็ยังทับห้องแชท */}
+      {activeChannel && isMobile ? (
+        createPortal(
+          <div className="chat-ui fixed inset-0 z-[45] flex h-dvh bg-(--bg) pt-[env(safe-area-inset-top)]">
+            <ChatRoom
+              key={activeChannel.id}
+              channel={activeChannel}
+              initialUnread={initialUnread[activeChannel.id] ?? 0}
+              onBack={back}
+            />
+          </div>,
+          document.body,
+        )
+      ) : (
+        <div
+          className={cn(
+            "h-full min-h-0 min-w-0 flex-1",
+            activeChannel ? "flex" : "hidden md:flex",
+          )}
+        >
+          {activeChannel ? (
+            <ChatRoom
+              key={activeChannel.id}
+              channel={activeChannel}
+              initialUnread={initialUnread[activeChannel.id] ?? 0}
+              onBack={back}
+            />
+          ) : (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-(--chat-room-bg) text-(--ink-soft)">
+              <MessagesSquare className="h-12 w-12 opacity-40" />
+              <p className="text-sm">
+                {urlChannel && !loaded
+                  ? "กำลังโหลด…"
+                  : "เลือกห้องแชททางซ้าย หรือเริ่มแชทใหม่"}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {dialogOpen && (
         <NewChatDialog
-          users={Object.values(users).sort((a, b) => a.name.localeCompare(b.name, "th"))}
+          users={Object.values(users).sort((a, b) =>
+            a.name.localeCompare(b.name, "th"),
+          )}
           meId={currentUser.id}
           onlineIds={onlineIds}
           onClose={() => setDialogOpen(false)}
@@ -151,7 +221,9 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
               await loadChannels();
               navigateTo(channelId);
             } catch (err) {
-              toast.error(err instanceof Error ? err.message : "สร้างกลุ่มไม่สำเร็จ");
+              toast.error(
+                err instanceof Error ? err.message : "สร้างกลุ่มไม่สำเร็จ",
+              );
             }
           }}
         />

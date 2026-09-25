@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, Search, Users, X } from "lucide-react";
 import { cn } from "@smartboss/ui/cn";
 
@@ -9,7 +10,8 @@ import { ChatAvatar } from "./chat-avatar";
 
 /** หน้าต่างลอยพื้นฐานของแชท — มือถือเต็มจอ, คอมเป็นกล่องกลางจอ */
 export function ChatModal({ title, onClose, children, footer }: { title: string; onClose: () => void; children: React.ReactNode; footer?: React.ReactNode }) {
-  return (
+  // วาดที่ <body> — กรอบของหน้าขังลำดับชั้นไว้ ไม่งั้นเมนูล่างของระบบบนมือถือทับปุ่มล่างของหน้าต่างนี้
+  return createPortal(
     <div className="chat-ui fixed inset-0 z-[70] flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={onClose}>
       <div
         className="flex h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-(--bg) shadow-2xl sm:h-auto sm:max-h-[80vh] sm:max-w-md sm:rounded-2xl"
@@ -27,7 +29,8 @@ export function ChatModal({ title, onClose, children, footer }: { title: string;
         <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
         {footer && <div className="border-t border-(--line) p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

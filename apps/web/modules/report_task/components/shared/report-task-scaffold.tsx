@@ -90,7 +90,10 @@ export function ReportTaskScaffold({
   // ทั้งหน้าเลื่อนยาวเป็นพรืด ("มีเยอะๆเลื่อนหาตายเลย")
   const isBoard = pathname.startsWith(`${REPORT_TASK_BASE}/tasks`);
   const isReportFeed = pathname.startsWith(`${REPORT_TASK_BASE}/report-feed`);
-  const selfScrolling = isBoard || isReportFeed;
+  // แชทก็เหมือนกัน — รายการห้องกับข้อความเลื่อนในกรอบตัวเอง กรอบต้องสูงเต็มจอ
+  // ไม่ใช่ยุบตามเนื้อหา ("ใน pc อยากให้เห็นเต็มหน้า ... ให้เลื่อนไปแค่ชื่อกับแชท")
+  const isChat = pathname.startsWith(`${REPORT_TASK_BASE}/chat`);
+  const selfScrolling = isBoard || isReportFeed || isChat;
 
   return (
     <AppBarLeadingProvider>
