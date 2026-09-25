@@ -22,7 +22,7 @@ import {
 } from "@/lib/day-off-quota";
 import { saveCommissionPool, saveCommissionWeights } from "@/modules/hr/lib/commission-data";
 import { syncAllUserNames, syncUserName } from "@/modules/hr/lib/name-sync";
-import { notifyApprovers } from "@/modules/hr/lib/hr-notify";
+import { notifyApprovers, notifyRequester } from "@/modules/hr/lib/hr-notify";
 
 /**
  * Server action ของโมดูลบุคคล — ทุกตัวยิงต่อไปที่ workforce API
@@ -1255,25 +1255,26 @@ export async function relabelLeaveAction(input: {
 
 /** อนุมัติ/ไม่อนุมัติคำขอลา — ต้องมี workforce.leave.approve (SUPERVISOR ขึ้นไป) */
 export async function decideLeaveAction(formData: FormData) {
-  await requireOrg();
+  const session = await requireOrg();
   const id = String(formData.get("requestId") ?? "");
   const outcome = String(formData.get("outcome") ?? "");
   if (!id) throw new Error("ไม่พบคำขอ");
   if (outcome !== "APPROVED" && outcome !== "REJECTED") throw new Error("ผลไม่ถูกต้อง");
 
+  const reason = String(formData.get("reason") ?? "").trim();
   try {
     await wfFetch(`/leave-requests/${id}/decide`, {
       method: "POST",
       body: {
         outcome,
-        reason:
-          String(formData.get("reason") ?? "").trim() ||
-          (outcome === "APPROVED" ? "อนุมัติจากปฏิทินวันหยุด" : "ไม่อนุมัติ"),
+        reason: reason || (outcome === "APPROVED" ? "อนุมัติจากปฏิทินวันหยุด" : "ไม่อนุมัติ"),
       },
     });
   } catch (error) {
     throw new Error(toMessage(error));
   }
+  // แจ้งผลกลับไปหาคนที่ยื่นลา (กระดิ่ง + เด้ง/เสียง) — ไม่รอ ไม่ให้ช้า
+  void notifyRequester(session.orgId, "leave", { id }, session.userId, outcome, { reason: reason || undefined });
   revalidatePath("/hr");
 }
 
@@ -1792,7 +1793,7 @@ export async function requestManualAttendanceAction(formData: FormData) {
  * ปุ่มเดียวกันทั้งสองครั้ง — workforce API เป็นคนตัดสินว่าตอนนี้เป็นรอบไหน
  */
 export async function approveAttendanceCorrectionAction(formData: FormData) {
-  await guard(HR_PERMS.employeeManage);
+  const session = await guard(HR_PERMS.employeeManage);
 
   const adjustmentId = String(formData.get("adjustment_id") ?? "");
   const reason = String(formData.get("reason") ?? "").trim();
@@ -1807,11 +1808,12 @@ export async function approveAttendanceCorrectionAction(formData: FormData) {
   } catch (error) {
     throw new Error(toMessage(error));
   }
+  void notifyRequester(session.orgId, "correction", { id: adjustmentId }, session.userId, "APPROVED", { reason });
   revalidatePath("/hr");
 }
 
 export async function rejectAttendanceCorrectionAction(formData: FormData) {
-  await guard(HR_PERMS.employeeManage);
+  const session = await guard(HR_PERMS.employeeManage);
 
   const adjustmentId = String(formData.get("adjustment_id") ?? "");
   const reason = String(formData.get("reason") ?? "").trim();
@@ -1826,6 +1828,7 @@ export async function rejectAttendanceCorrectionAction(formData: FormData) {
   } catch (error) {
     throw new Error(toMessage(error));
   }
+  void notifyRequester(session.orgId, "correction", { id: adjustmentId }, session.userId, "REJECTED", { reason });
   revalidatePath("/hr");
 }
 
@@ -1836,7 +1839,7 @@ export async function rejectAttendanceCorrectionAction(formData: FormData) {
  * ของแต่ละ <form> ไม่ใช่ formAction/value ของปุ่ม (ปุ่มกินค่าตัวเองจนฟอร์มพังเงียบ)
  */
 export async function decideOvertimeAction(formData: FormData) {
-  await guard(HR_PERMS.employeeManage);
+  const session = await guard(HR_PERMS.employeeManage);
 
   const employmentId = String(formData.get("employment_id") ?? "");
   const workDate = String(formData.get("work_date") ?? "");
@@ -1871,6 +1874,14 @@ export async function decideOvertimeAction(formData: FormData) {
   } catch (error) {
     throw new Error(toMessage(error));
   }
+  void notifyRequester(
+    session.orgId,
+    "overtime",
+    { employmentId, workDate },
+    session.userId,
+    decision === "APPROVE" ? "APPROVED" : "REJECTED",
+    { reason, approvedMinutes }
+  );
   revalidatePath("/hr");
 }
 

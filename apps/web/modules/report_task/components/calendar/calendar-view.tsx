@@ -14,7 +14,8 @@ import { useCalendarVisibilityStore } from "@/modules/report_task/store/calendar
 import { useGoogleCalendarStore } from "@/modules/report_task/store/google-calendar-store";
 import { useRoutineDayOffStore } from "@/modules/report_task/store/routine-dayoff-store";
 import { expandRule, quotaForDepartment, naturalOccurrenceFor } from "@/modules/report_task/lib/routine-dayoff";
-import { formatDate } from "@/modules/report_task/lib/format";
+import { formatDate, formatDateTimeShort } from "@/modules/report_task/lib/format";
+import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { Badge } from "@/modules/report_task/components/ui/badge";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
@@ -775,6 +776,18 @@ export function CalendarView() {
         return false;
       }
       updateMeeting(id, { start, end: end ?? start, allDay });
+      // ลากเลื่อนบนปฏิทิน — แจ้งผู้เข้าร่วมว่าเวลาเปลี่ยน
+      if (target) {
+        useNotificationStore
+          .getState()
+          .notifyMany(
+            target.attendeeIds ?? [],
+            viewingAsUserId,
+            `${getUser(viewingAsUserId)?.name ?? "ผู้จัด"} เลื่อนประชุม "${target.title}" เป็น ${formatDateTimeShort(start)}`,
+            target.id,
+            "/report-task/calendar"
+          );
+      }
       toast.success("เลื่อนประชุมแล้ว");
     } else if (type === "leave") {
       // `editable: false` already stops the drag from starting — re-checked

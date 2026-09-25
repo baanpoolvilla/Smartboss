@@ -39,7 +39,7 @@ import { useMeetingStore } from "@/modules/report_task/store/meeting-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useActivityLogStore } from "@/modules/report_task/store/activity-log-store";
-import { formatDate, addDays } from "@/modules/report_task/lib/format";
+import { formatDate, addDays, formatDateTimeShort } from "@/modules/report_task/lib/format";
 import type { CalendarEvent } from "@/modules/report_task/types";
 import { Calendar, MapPin, User, Trash2, Pencil, Clock, Building2, Paperclip, FileText } from "lucide-react";
 import { toast } from "sonner";
@@ -102,6 +102,14 @@ export function EventDetailDialog({
     // Only meetings reach here — see `editable`, which gates both footer buttons.
     removeMeeting(event.id);
     useActivityLogStore.getState().log({ userId: viewingAsUserId, action: "ลบประชุม", target: event.title });
+    // แจ้งผู้เข้าร่วมว่าประชุมถูกยกเลิก — ไม่งั้นยังเข้าใจว่ามีนัดอยู่
+    notifyMany(
+      event.attendeeIds ?? [],
+      viewingAsUserId,
+      `${getUser(viewingAsUserId)?.name ?? "ผู้จัด"} ยกเลิกประชุม "${event.title}" (${formatDateTimeShort(event.start)})`,
+      undefined,
+      "/report-task/calendar"
+    );
     toast.success("ลบรายการแล้ว");
     close(false);
   }
@@ -112,10 +120,32 @@ export function EventDetailDialog({
       updateMeeting(event.id, patch);
       useActivityLogStore.getState().log({ userId: viewingAsUserId, action: "แก้ไขประชุม", target: patch.title ?? event.title });
       const before = new Set(event.attendeeIds ?? []);
-      const newlyAdded = (patch.attendeeIds ?? []).filter((id) => !before.has(id));
+      const after = patch.attendeeIds ?? event.attendeeIds ?? [];
+      const afterSet = new Set(after);
+      const newlyAdded = after.filter((id) => !before.has(id));
+      const removed = [...before].filter((id) => !afterSet.has(id));
+      const stayed = after.filter((id) => before.has(id));
+      const actorName = getUser(viewingAsUserId)?.name ?? "ผู้จัด";
+      const title = patch.title ?? event.title;
       if (newlyAdded.length > 0) {
-        const actor = getUser(viewingAsUserId);
-        notifyMany(newlyAdded, viewingAsUserId, `${actor?.name} แท็กคุณในประชุม "${patch.title ?? event.title}"`, event.id);
+        notifyMany(newlyAdded, viewingAsUserId, `${actorName} แท็กคุณในประชุม "${title}"`, event.id, "/report-task/calendar");
+      }
+      if (removed.length > 0) {
+        notifyMany(removed, viewingAsUserId, `${actorName} นำคุณออกจากประชุม "${title}"`, undefined, "/report-task/calendar");
+      }
+      // คนที่อยู่ในประชุมเดิมต้องรู้ถ้าเวลา/สถานที่เปลี่ยน
+      const timeChanged = (patch.start && patch.start !== event.start) || (patch.end && patch.end !== event.end);
+      const placeChanged = patch.location !== undefined && patch.location !== event.location;
+      if (stayed.length > 0 && (timeChanged || placeChanged)) {
+        const when = formatDateTimeShort(patch.start ?? event.start);
+        const where = patch.location ?? event.location;
+        notifyMany(
+          stayed,
+          viewingAsUserId,
+          `${actorName} แก้ไขประชุม "${title}" — ${when}${where ? ` · ${where}` : ""}`,
+          event.id,
+          "/report-task/calendar"
+        );
       }
     }
     toast.success("บันทึกการแก้ไขแล้ว");

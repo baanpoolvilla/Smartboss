@@ -108,8 +108,11 @@ export function maintenanceCategoryFor(type: string): NotifCategory {
     case "purchase_order":
       return "purchase_order";
     case "hr_leave_submitted":
+    case "hr_leave_decided":
       return "hr_leave";
     case "hr_attendance_correction_submitted":
+    case "hr_attendance_correction_decided":
+    case "hr_overtime_decided":
       return "hr_attendance";
     case "issue_ticket_new":
     case "issue_ticket_reply_reporter":
@@ -236,6 +239,8 @@ export function maintenanceHrefFor(type: string, referenceId: string | null): st
   // รายการที่อนุมัติได้เลยแทน
   if (type === "hr_leave_submitted") return "/hr/leave";
   if (type === "hr_attendance_correction_submitted") return "/hr/attendance/corrections";
+  // ผลคำขอของพนักงานเอง → หน้าแรกของบุคคล (มีรายการลา/แก้เวลา/OT ของตัวเอง)
+  if (type === "hr_leave_decided" || type === "hr_attendance_correction_decided" || type === "hr_overtime_decided") return "/hr";
   // "issue_ticket_new" ไปทีมหลังบ้าน (Super Admin) เท่านั้น — referenceId
   // เก็บเป็น "orgId:ticketId" (ดู issue-notify.ts) เพราะคอนโซลข้ามบริษัทต้อง
   // รู้ทั้งสองอย่างถึงจะลิงก์ตรงตั๋วได้ ส่วน "..._reporter" กลับไปหน้าของผู้

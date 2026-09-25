@@ -92,3 +92,92 @@ export async function notifyApprovers(
   }
 }
 
+
+/* ═══════════════════ แจ้งผลกลับไปหาคนที่ยื่นคำขอ ═══════════════════ */
+
+export type HrRequestKind = "leave" | "correction" | "overtime";
+
+interface RequesterRow {
+  subject: string | null;
+  status: string | null;
+}
+
+/**
+ * หา core.users.id ของเจ้าของคำขอ + สถานะล่าสุด — เส้นเดียวกับปฏิทินวันลา
+ * (report_task/lib/db/workforce-calendar.ts): employment → person → principal.subject
+ * พนักงานที่ยังไม่ผูกบัญชี SmartBoss = ไม่มี subject → ไม่แจ้ง (ไม่ throw)
+ */
+async function resolveRequester(
+  orgId: string,
+  kind: HrRequestKind,
+  ref: { id?: string; employmentId?: string; workDate?: string }
+): Promise<RequesterRow | null> {
+  const rows = await withWorkforceTenant(orgId, (tx) => {
+    if (kind === "leave") {
+      return tx.$queryRaw<RequesterRow[]>`
+        SELECT p.subject, lr.status
+        FROM workforce.leave_requests lr
+        JOIN workforce.employments e ON e.id = lr.employment_id
+        LEFT JOIN workforce.principals p ON p.person_id = e.person_id
+        WHERE lr.id = ${ref.id}::uuid
+        LIMIT 1`;
+    }
+    if (kind === "correction") {
+      return tx.$queryRaw<RequesterRow[]>`
+        SELECT p.subject, a.status
+        FROM workforce.time_event_adjustments a
+        JOIN workforce.employments e ON e.id = a.employment_id
+        LEFT JOIN workforce.principals p ON p.person_id = e.person_id
+        WHERE a.id = ${ref.id}::uuid
+        LIMIT 1`;
+    }
+    return tx.$queryRaw<RequesterRow[]>`
+      SELECT p.subject, NULL::text AS status
+      FROM workforce.employments e
+      LEFT JOIN workforce.principals p ON p.person_id = e.person_id
+      WHERE e.id = ${ref.employmentId}::uuid
+      LIMIT 1`;
+  });
+  return rows[0] ?? null;
+}
+
+/**
+ * แจ้งผู้ยื่นว่าคำขอของตัวเองได้ผลแล้ว (อนุมัติ/ไม่อนุมัติ) — เรียกหลังตัดสินสำเร็จ
+ * ผ่าน notifyUser ⇒ ลงกระดิ่ง + เด้ง/มีเสียงให้ผู้ยื่นทันที (lib/notify-push.ts)
+ * ไม่แจ้งถ้าผู้ตัดสินเป็นเจ้าของคำขอเอง · เงียบเมื่อหาเจ้าของไม่เจอ
+ */
+export async function notifyRequester(
+  orgId: string,
+  kind: HrRequestKind,
+  ref: { id?: string; employmentId?: string; workDate?: string },
+  actorUserId: string,
+  outcome: "APPROVED" | "REJECTED",
+  detail?: { reason?: string; approvedMinutes?: number | null }
+): Promise<void> {
+  try {
+    const [row, actorName] = await Promise.all([resolveRequester(orgId, kind, ref), notifyActorName(actorUserId)]);
+    const userId = row?.subject;
+    if (!userId || userId === actorUserId) return;
+
+    const approved = outcome === "APPROVED";
+    // แก้เวลาต้องอนุมัติสองคน — คนแรกกดแล้วสถานะยังเป็น PENDING = ผ่านขั้นแรก ยังไม่มีผล
+    const firstOfTwo = kind === "correction" && approved && row?.status === "PENDING";
+    const what = kind === "leave" ? "คำขอลา" : kind === "correction" ? "คำขอแก้เวลาเข้า-ออกงาน" : `OT วันที่ ${ref.workDate ?? ""}`.trim();
+    const title = firstOfTwo
+      ? `${what}ของคุณผ่านการอนุมัติขั้นแรกแล้ว (รออีก 1 คน)`
+      : approved
+        ? `${what}ของคุณได้รับอนุมัติแล้ว${kind === "overtime" && detail?.approvedMinutes ? ` (${detail.approvedMinutes} นาที)` : ""}`
+        : `${what}ของคุณไม่ได้รับอนุมัติ`;
+    const by = actorName ? `โดย ${actorName}` : "";
+    const body = [by, detail?.reason ? `เหตุผล: ${detail.reason}` : ""].filter(Boolean).join(" · ") || undefined;
+
+    await notifyUser(orgId, userId, {
+      title,
+      body,
+      type: kind === "leave" ? "hr_leave_decided" : kind === "correction" ? "hr_attendance_correction_decided" : "hr_overtime_decided",
+      referenceId: ref.id ?? ref.employmentId ?? null,
+    });
+  } catch (err) {
+    console.error("[hr-notify] notifyRequester failed", err);
+  }
+}
