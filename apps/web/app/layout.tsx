@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   description: "Smartboss — ระบบบริหารจัดการภายในองค์กร",
   // เว็บแอป: เพิ่มลงหน้าจอหลักบน iPhone แล้วเปิดเต็มจอ (ดู app/manifest.ts)
   appleWebApp: { capable: true, title: "SmartBoss", statusBarStyle: "default" },
-  icons: { icon: "/icon.png", apple: "/apple-touch-icon.png" },
+  icons: { icon: [{ url: "/favicon-64.png", sizes: "64x64", type: "image/png" }, { url: "/icon.png", sizes: "192x192", type: "image/png" }], apple: "/apple-touch-icon.png" },
 };
 
 // ไม่ใส่ viewport-fit=cover — เมนูล่างของ Shell ยังไม่ได้เว้นขอบ home indicator ของ iPhone
