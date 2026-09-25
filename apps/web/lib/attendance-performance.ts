@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
+import { crossOrg } from "@smartboss/database/cross-org";
 
 import {
   ABSENCE_THRESHOLD_MINUTES,
@@ -100,10 +101,14 @@ export async function dockAttendance(): Promise<{
   if (rows.length === 0) return { scanned: 0, recorded: 0 };
 
   // subject คือ core.users.id — ยืนยันว่ายังมีอยู่จริงและอยู่บริษัทไหน
-  const users = await prisma.user.findMany({
-    where: { id: { in: [...new Set(rows.map((r) => r.user_id))] } },
-    select: { id: true, orgId: true },
-  });
+  // งานรายวันของทั้งแพลตฟอร์ม — orgId คือคำตอบที่ query นี้หา (แต่ละแถวลงบริษัทของคนนั้นเอง)
+  // ไม่ใช่เงื่อนไขกรอง จึงห่อ crossOrg แบบ cron ตัวอื่น (ไม่งั้นการ์ด tenant เตือนทุกเช้า 08:00)
+  const users = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.user.findMany({
+      where: { id: { in: [...new Set(rows.map((r) => r.user_id))] } },
+      select: { id: true, orgId: true },
+    })
+  );
   const orgByUser = new Map(users.map((u) => [u.id, u.orgId]));
 
   const events: PerformanceEventInput[] = [];
