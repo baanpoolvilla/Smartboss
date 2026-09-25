@@ -8,6 +8,7 @@ import { hiddenRecently, subscribeRealtime, type RealtimeEventMessage } from "@/
 import { pushSupport, serverPushConfigured, showLocalNotification } from "@/lib/push-client";
 import { useChatStore } from "../store/chat-store";
 import { fetchUnread } from "../lib/api";
+import { getChatPrefs, playChatSound, unlockChatAudio } from "../lib/prefs";
 import { attachmentLabel } from "../lib/format";
 import type { ChatRealtimeEvent } from "../types";
 
@@ -58,26 +59,9 @@ function refreshSoon(ms = 800) {
   }, ms);
 }
 
-let audioCtx: AudioContext | null = null;
-/** เสียง "ติ๊ง" สั้น ๆ — สร้างเสียงเอง ไม่ต้องโหลดไฟล์ (เบราว์เซอร์อนุญาตหลังผู้ใช้เคยคลิกหน้าเว็บแล้วเท่านั้น) */
+/** เสียงตามที่ผู้ใช้ตั้งไว้ในหน้าตั้งค่าแชท (lib/prefs.ts) */
 function ding() {
-  try {
-    audioCtx ??= new AudioContext();
-    if (audioCtx.state !== "running") return;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(1320, audioCtx.currentTime + 0.08);
-    gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.12, audioCtx.currentTime + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.25);
-    osc.connect(gain).connect(audioCtx.destination);
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.26);
-  } catch {
-    // ไม่มีเสียงก็ไม่เป็นไร
-  }
+  playChatSound();
 }
 
 function onEvent(raw: RealtimeEventMessage) {
@@ -138,6 +122,7 @@ function onEvent(raw: RealtimeEventMessage) {
     return;
   }
   ding();
+  if (!getChatPrefs().toast) return;
   toast(mentioned ? `${who} แท็กคุณ` : title, {
     description: body,
     duration: 5000,
@@ -165,15 +150,7 @@ export function useChatUnread(): number {
       // เทียบกับเซิร์ฟเวอร์เป็นระยะ กันตัวเลขเพี้ยนสะสม
       reconcileTimer = setInterval(() => refreshSoon(jitter(0, 30_000)), 3 * 60_000);
       // เบราว์เซอร์ให้เล่นเสียงได้หลังผู้ใช้แตะหน้าเว็บครั้งแรกเท่านั้น — ปลดล็อกไว้ตอนนั้น
-      const unlock = () => {
-        try {
-          audioCtx ??= new AudioContext();
-          void audioCtx.resume();
-        } catch {
-          // ไม่รองรับเสียง
-        }
-      };
-      document.addEventListener("pointerdown", unlock, { once: true });
+      document.addEventListener("pointerdown", unlockChatAudio, { once: true });
     }
     return () => {
       listeners.delete(setN);

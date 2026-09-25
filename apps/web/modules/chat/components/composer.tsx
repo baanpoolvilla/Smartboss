@@ -11,6 +11,7 @@ import { uploadAttachment } from "../lib/api";
 import { compressImage } from "../lib/image-compress";
 import { attachmentLabel, formatDuration, formatFileSize } from "../lib/format";
 import { notifyTyping, sendChatMessage } from "../lib/chat-actions";
+import { getChatPrefs } from "../lib/prefs";
 import { ChatAvatar } from "./chat-avatar";
 
 const MAX_FILES = 20;
@@ -555,7 +556,10 @@ export const Composer = forwardRef<
                 }
               }
               // คอม: Enter ส่ง, Shift+Enter ขึ้นบรรทัดใหม่ · มือถือ: Enter ขึ้นบรรทัด กดปุ่มส่งเอง
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !isTouchDevice()) {
+              if (e.key !== "Enter" || e.nativeEvent.isComposing || isTouchDevice()) return;
+              // ตั้งค่า "กด Enter เพื่อส่ง": เปิด = Enter ส่ง (Shift+Enter ขึ้นบรรทัด), ปิด = Ctrl/⌘+Enter ส่ง
+              const send = getChatPrefs().enterToSend ? !e.shiftKey : e.ctrlKey || e.metaKey;
+              if (send) {
                 e.preventDefault();
                 submit();
               }

@@ -423,7 +423,7 @@ export const MessageBubble = memo(function MessageBubble(props: MessageBubblePro
             {(m.body || m.replyTo) && (
               <div
                 className={cn(
-                  "min-w-0 rounded-2xl px-3 py-2 text-[14.5px] leading-relaxed shadow-[0_1px_1px_rgba(0,0,0,0.06)]",
+                  "min-w-0 rounded-2xl px-3 py-2 text-[length:var(--chat-text-size,14.5px)] leading-relaxed shadow-[0_1px_1px_rgba(0,0,0,0.06)]",
                   mine ? "rounded-tr-md bg-(--chat-bubble-me) text-(--chat-bubble-me-ink)" : "rounded-tl-md bg-(--chat-bubble-other) text-(--ink)",
                   !firstInGroup && (mine ? "rounded-tr-2xl" : "rounded-tl-2xl")
                 )}

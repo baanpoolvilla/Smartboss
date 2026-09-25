@@ -20,6 +20,7 @@ import { loadChannels, openChannel, useChatSync } from "../lib/chat-actions";
 import { ChannelList } from "./channel-list";
 import { ChatRoom } from "./chat-room";
 import { NewChatDialog } from "./new-chat-dialog";
+import { CHAT_BACKGROUNDS, CHAT_TEXT_SIZES, useChatPrefs } from "../lib/prefs";
 
 function isDesktop(): boolean {
   return (
@@ -63,6 +64,12 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
   const onlineIds = useChatStore((s) => s.onlineIds);
   const [dialogOpen, setDialogOpen] = useState(false);
   const isMobile = useIsMobile();
+  const prefs = useChatPrefs();
+  // ตั้งค่าหน้าตาของผู้ใช้ → ตัวแปรสีของแชท (ใช้ทั้งในหน้าและในห้องที่ถูกวาดออกไปที่ <body> บนมือถือ)
+  const themeStyle = {
+    "--chat-room-bg": CHAT_BACKGROUNDS[prefs.background].color,
+    "--chat-text-size": `${CHAT_TEXT_SIZES[prefs.textSize].px}px`,
+  } as React.CSSProperties;
   /** จำนวนยังไม่อ่านตอนเปิดห้อง (ก่อนถูกล้าง) — ใช้วางเส้น "ยังไม่ได้อ่าน" */
   const [initialUnread, setInitialUnread] = useState<Record<string, number>>(
     {},
@@ -150,7 +157,7 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
   }, [loaded, activeChannelId, channels, navigateTo]);
 
   return (
-    <div className="chat-ui flex h-full min-h-0 overflow-hidden bg-(--bg) md:rounded-2xl md:border md:border-(--line)">
+    <div style={themeStyle} className="chat-ui flex h-full min-h-0 overflow-hidden bg-(--bg) md:rounded-2xl md:border md:border-(--line)">
       <div
         className={cn(
           "h-full min-h-0 w-full border-(--line) md:w-80 md:shrink-0 md:border-r lg:w-96",
@@ -165,7 +172,7 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
           ถ้าวาดอยู่ข้างใน ต่อให้ตั้ง z สูงแค่ไหน เมนูล่างของระบบก็ยังทับห้องแชท */}
       {activeChannel && isMobile ? (
         createPortal(
-          <div className="chat-ui fixed inset-0 z-[45] flex h-dvh bg-(--bg) pt-[env(safe-area-inset-top)]">
+          <div style={themeStyle} className="chat-ui fixed inset-0 z-[45] flex h-dvh bg-(--bg) pt-[env(safe-area-inset-top)]">
             <ChatRoom
               key={activeChannel.id}
               channel={activeChannel}

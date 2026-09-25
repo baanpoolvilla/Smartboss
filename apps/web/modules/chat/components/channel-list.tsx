@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useMemo, useState } from "react";
-import { BellOff, Building2, MoreHorizontal, Pin, Search, SquarePen, Users } from "lucide-react";
+import { BellOff, Building2, MoreHorizontal, Pin, Search, Settings, SquarePen, Users } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
 
@@ -11,6 +11,7 @@ import { channelPreview, channelTitle, formatListTime } from "../lib/format";
 import { updateChannel } from "../lib/api";
 import { ChatAvatar } from "./chat-avatar";
 import { PushBanner } from "./push-banner";
+import { ChatSettings } from "./chat-settings";
 
 type Tab = "all" | "dm" | "group" | "unread";
 
@@ -169,6 +170,7 @@ export function ChannelList({ onSelect, onStartNew }: { onSelect: (id: string) =
   const meId = useChatStore((s) => s.meId);
   const [tab, setTab] = useState<Tab>("all");
   const [query, setQuery] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const q = query.trim().toLowerCase();
   const filtered = useMemo(
@@ -201,8 +203,17 @@ export function ChannelList({ onSelect, onStartNew }: { onSelect: (id: string) =
         {unreadTotal > 0 && <span className="rounded-full bg-(--chat-accent) px-2 text-[11px] font-semibold text-white">{unreadTotal > 99 ? "99+" : unreadTotal}</span>}
         <button
           type="button"
-          onClick={onStartNew}
+          onClick={() => setSettingsOpen(true)}
           className="ml-auto flex h-9 w-9 items-center justify-center rounded-full text-(--ink) hover:bg-(--bg-soft)"
+          aria-label="ตั้งค่าแชท"
+          title="ตั้งค่าแชท (เสียง แจ้งเตือน หน้าตา)"
+        >
+          <Settings className="h-5 w-5" />
+        </button>
+        <button
+          type="button"
+          onClick={onStartNew}
+          className="flex h-9 w-9 items-center justify-center rounded-full text-(--ink) hover:bg-(--bg-soft)"
           aria-label="เริ่มแชทใหม่ / สร้างกลุ่ม"
           title="เริ่มแชทใหม่ / สร้างกลุ่ม"
         >
@@ -239,6 +250,7 @@ export function ChannelList({ onSelect, onStartNew }: { onSelect: (id: string) =
       </div>
 
       <PushBanner />
+      {settingsOpen && <ChatSettings onClose={() => setSettingsOpen(false)} />}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {!loaded && (
