@@ -65,6 +65,21 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
     [maintenanceRefreshRaw, includeOrgActivity]
   );
 
+  // ชื่องาน → id (เฉพาะชื่อที่ไม่ซ้ำ) ไว้เติมลิงก์ให้แจ้งเตือนเก่าที่ไม่มีลิงก์
+  const taskIdByTitle = useMemo(() => {
+    const map = new Map<string, string | null>();
+    for (const t of tasks) map.set(t.title, map.has(t.title) ? null : t.id);
+    return map;
+  }, [tasks]);
+  const linkFromQuotedTaskTitle = useCallback(
+    (message: string): string | null => {
+      const m = /"([^"]+)"/.exec(message);
+      const id = m ? taskIdByTitle.get(m[1]!) : null;
+      return id ? `/report-task/tasks?task=${id}` : null;
+    },
+    [taskIdByTitle]
+  );
+
   const items = useMemo<UnifiedNotification[]>(() => {
     const fromReport: UnifiedNotification[] = reportNotifications
       .filter((n) => n.userId === viewingAsUserId && (includeRoomPosts || !isRoomPost(n)))
@@ -84,7 +99,9 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
         roomName: n.topicName,
         createdAt: n.createdAt,
         read: n.read,
-        link: n.link ?? null,
+        // แจ้งเตือนงานรุ่นเก่าที่ไม่ได้ใส่ลิงก์ (เช่น "ส่งงาน/ทำเครื่องหมาย "ชื่องาน" ว่าเสร็จ")
+        // — หางานจากชื่อในเครื่องหมายคำพูด ถ้าตรงงานเดียวก็กดเปิดงานนั้นได้
+        link: n.link ?? linkFromQuotedTaskTitle(n.message),
       }));
 
     const fromMaintenance: UnifiedNotification[] = maintenanceItems.map((n) => {
@@ -133,7 +150,7 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
     return [...fromReport, ...fromMaintenance, ...fromOrgActivity].sort(
       (a, b) => Number(a.read) - Number(b.read) || b.createdAt.localeCompare(a.createdAt)
     );
-  }, [reportNotifications, maintenanceItems, orgItems, viewingAsUserId, includeRoomPosts, includeOrgActivity, taskIdSet]);
+  }, [reportNotifications, maintenanceItems, orgItems, viewingAsUserId, includeRoomPosts, includeOrgActivity, taskIdSet, linkFromQuotedTaskTitle]);
 
   const unreadCount = items.filter((n) => !n.read).length;
 

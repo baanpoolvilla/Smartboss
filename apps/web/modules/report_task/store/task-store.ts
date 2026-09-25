@@ -7,6 +7,7 @@ import { useNotificationStore } from "@/modules/report_task/store/notification-s
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useActivityLogStore } from "@/modules/report_task/store/activity-log-store";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
+import { useTaskReviewSettingsStore } from "@/modules/report_task/store/task-review-settings-store";
 import { deriveCompletedAssigneeIds, isDoneByRule, isTaskFullyDone } from "@/modules/report_task/lib/task-completion";
 import { reactionRecipients } from "@/modules/report_task/lib/sticker-target";
 import type { Attachment, ChecklistItem, Task, TaskPriority, TaskStatus } from "@/modules/report_task/types";
@@ -29,30 +30,39 @@ function priorityLabel(p: TaskPriority): string {
 }
 
 /**
- * A task marked "done" while it's already near/at/past its due date is worth
- * a lead double-checking right away, not discovering weeks later — nudge
- * whoever heads a department the task touches, plus whoever assigned it.
- * Lives here (not at each UI call site) so every path that can complete a
- * task — drag, dropdown, checkbox, checklist auto-complete, bulk actions —
- * triggers it the same way, with nothing to forget wiring up per call site.
+ * งานเข้า "รอตรวจสอบ" (เสร็จแล้ว ยังไม่มีใครตรวจ) — แจ้งทุกคนที่กดตรวจงานนี้ได้จริง ทุกครั้ง
+ * ไม่ใช่เฉพาะงานที่ใกล้/เลยกำหนด ("พอรอมาตรวจสอบไม่เห็นเด้งแจ้งเตือนเลย")
+ * ผู้ตรวจ = วงเดียวกับปุ่ม "ผ่าน/ไม่ผ่าน" (canReviewTask): เจ้าของบริษัท + ผู้ตรวจเพิ่มเติม +
+ * หัวหน้าแผนกของงาน (ถ้าเปิดให้หัวหน้าตรวจ) และผู้มอบหมายงานรู้ด้วย
+ * กดแจ้งเตือนแล้วเปิดงานนั้นเลย (?task=) · อยู่ที่นี่ที่เดียว ทุกทางที่ทำให้งานเสร็จ
+ * (ลาก, เลือกสถานะ, ติ๊กเช็คลิสต์ครบ) เลยแจ้งเหมือนกันหมด
  */
-function notifyLateCompletion(task: Task) {
+function notifyReviewReady(task: Task) {
   const days = daysUntil(task.dueDate);
-  if (days > 2) return;
   const actorId = useIdentityStore.getState().viewingAsUserId;
   const actorName = getUser(actorId)?.name ?? "มีคน";
-  const heads = departments.filter((d) => task.departmentIds.includes(d.id)).map((d) => d.headId);
-  // CEO/company owner sees this too, not just the assigner/dept head — a
-  // near-deadline or late completion is exactly the kind of thing worth a
-  // second set of eyes on, and the owner can already reopen anything via
-  // reviseDueDate if it turns out not actually done (see its own doc).
+  const settings = useTaskReviewSettingsStore.getState().settings;
+  const heads = settings.headsCanReview
+    ? departments.filter((d) => task.departmentIds.includes(d.id)).map((d) => d.headId)
+    : [];
   const owners = users.filter((u) => u.isOwner).map((u) => u.id);
-  const recipients = Array.from(new Set([...heads, task.assignedById, ...owners]));
-  const label =
-    days < 0 ? `เลยกำหนดส่งไปแล้ว ${Math.abs(days)} วัน` : days === 0 ? "ถึงกำหนดส่งวันนี้พอดี" : `ใกล้ถึงกำหนดส่ง (เหลือ ${days} วัน)`;
+  const recipients = Array.from(
+    new Set([...heads, ...settings.extraReviewerIds, ...owners, task.assignedById].filter((id): id is string => Boolean(id)))
+  );
+  const late =
+    days < 0 ? ` — เลยกำหนดส่งไปแล้ว ${Math.abs(days)} วัน` : days === 0 ? " — ถึงกำหนดส่งวันนี้พอดี" : days <= 2 ? ` — ใกล้ถึงกำหนดส่ง (เหลือ ${days} วัน)` : "";
   useNotificationStore
     .getState()
-    .notifyMany(recipients, actorId, `${actorName} ทำเครื่องหมาย "${task.title}" ว่าเสร็จสิ้น — ${label} ลองตรวจงานให้แน่ใจว่าเรียบร้อยจริง`);
+    .notifyMany(
+      recipients,
+      actorId,
+      `${actorName} ส่งงาน "${task.title}" แล้ว รอคุณตรวจ${late}`,
+      undefined,
+      `/report-task/tasks?task=${task.id}`,
+      undefined,
+      undefined,
+      task.id
+    );
 }
 
 /**
@@ -111,7 +121,7 @@ function applyChecklistDerivedCompletion(t: Task, nextChecklist: ChecklistItem[]
       completedAt: now,
       updatedAt: now,
     };
-    notifyLateCompletion(updated);
+    notifyReviewReady(updated);
     return updated;
   }
   if (!allDone && t.status === "done") {
@@ -318,7 +328,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
         // applyChecklistDerivedCompletion). Callers check isTaskFullyDone
         // themselves first to show a toast; this is the backstop.
         if (status === "done" && !isTaskFullyDone(t.assigneeIds, t.checklist, t.completionRule)) return t;
-        if (status === "done") notifyLateCompletion(t);
+        if (status === "done") notifyReviewReady(t);
         logActivity(
           useIdentityStore.getState().viewingAsUserId,
           "เปลี่ยนสถานะ",
@@ -734,7 +744,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
               authorId,
               `${actorName} แท็กคุณในงาน "${t.title}": ${preview}`,
               undefined,
-              `/report-task/tasks?highlight=${t.id}`,
+              `/report-task/tasks?task=${t.id}`,
               undefined,
               "task_comment",
               t.id
@@ -747,7 +757,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
             authorId,
             `${actorName} แสดงความคิดเห็นในงาน "${t.title}": ${preview}`,
             undefined,
-            `/report-task/tasks?highlight=${t.id}`,
+            `/report-task/tasks?task=${t.id}`,
             undefined,
             "task_comment",
             t.id
@@ -788,7 +798,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
             attachment.uploadedBy,
             `${actorName} แนบไฟล์ "${attachment.name}" ในงาน "${t.title}"`,
             undefined,
-            `/report-task/tasks?highlight=${t.id}`,
+            `/report-task/tasks?task=${t.id}`,
             undefined,
             "task_attachment",
             t.id
@@ -836,7 +846,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
               userId: t.assignedById,
               byUserId: actorId,
               message: `${actorName} ทำ "${item.text}" ในเช็คลิสต์ของ "${t.title}" เสร็จแล้ว`,
-              link: `/report-task/tasks?highlight=${t.id}`,
+              link: `/report-task/tasks?task=${t.id}`,
             });
           }
           return updated;
