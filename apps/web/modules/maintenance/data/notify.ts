@@ -2,6 +2,9 @@ import "server-only";
 import { prisma } from "@smartboss/database";
 import { crossOrg } from "@smartboss/database/cross-org";
 
+import { announceNotification } from "@/lib/notify-push";
+import { maintenanceHrefFor } from "@/modules/notifications/derive";
+
 // ─── In-app notifications (core.notifications) ───────────
 
 export interface NotifyInput {
@@ -51,6 +54,17 @@ export async function notifyUser(
       referenceId: input.referenceId ?? null,
     },
   });
+  // เด้ง + เสียง ให้ผู้รับรู้ทันที (ทุกโมดูลที่แจ้งผ่านฟังก์ชันนี้) — ไม่รอ ไม่ให้ Web Push
+  // ที่ช้าไปถ่วงงานหลัก · แชทแจ้งเด้งของตัวเองอยู่แล้ว (chat/data/notify.ts) จึงข้าม
+  const type = input.type ?? "general";
+  if (!type.startsWith("chat_")) {
+    void announceNotification(orgId, [userId], {
+      title: input.title,
+      body: input.body,
+      url: maintenanceHrefFor(type, input.referenceId ?? null),
+      tag: input.referenceId ? `n-${type}-${input.referenceId}` : undefined,
+    });
+  }
   if (input.line) await sendLine(orgId, userId, input.line);
 }
 

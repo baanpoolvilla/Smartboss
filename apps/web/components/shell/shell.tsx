@@ -24,6 +24,7 @@ import { Toaster } from "@/modules/report_task/components/ui/sonner";
 import { LogoutButton } from "./logout-button";
 import { SaveFeedback } from "./save-feedback";
 import { SessionRefresher } from "./session-refresher";
+import { SystemNotify } from "./system-notify";
 import { ShellProvider, type ShellUser } from "./shell-context";
 
 export type { ShellUser };
@@ -72,6 +73,8 @@ export function Shell({
           + ข้อความ "บันทึกสำเร็จ" หลังกดส่งฟอร์มทุกฟอร์ม */}
       <Toaster position="top-center" closeButton />
       <SaveFeedback />
+      {/* เสียง + เด้งแจ้งเตือนของทุกโมดูล (ท่อสด notify.new) */}
+      <SystemNotify />
       {activeModule ? (
         <ModuleFrame module={activeModule} pathname={pathname}>
           {children}

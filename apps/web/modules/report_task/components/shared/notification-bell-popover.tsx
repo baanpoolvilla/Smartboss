@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Bell } from "lucide-react";
+import { Bell, Settings } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
@@ -12,6 +12,7 @@ import { relativeTime } from "@/modules/report_task/lib/format";
 import { metaForCategory, stripeColorFor, stripeLabelFor } from "@/modules/notifications/derive";
 import { useUnifiedNotifications } from "@/modules/notifications/use-unified-notifications";
 import type { UnifiedNotification } from "@/modules/notifications/types";
+import { ChatSettings } from "@/modules/chat/components/chat-settings";
 
 /** Same key notifications-page-client.tsx's own "เฉพาะฉัน/ภาพรวมทั้งหมด"
  * toggle uses — deliberately shared, so switching it here or on the full
@@ -35,6 +36,7 @@ const MAX_ITEMS = 10;
 
 export function NotificationBellPopover() {
   const [open, setOpen] = useState(false);
+  const [soundSettings, setSoundSettings] = useState(false);
   const employees = useEmployeeStore((s) => s.employees);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const owner = isOwner(viewingAsUserId);
@@ -116,11 +118,26 @@ export function NotificationBellPopover() {
         <div className="border-b border-(--line) px-4 py-3">
           <div className="flex items-center justify-between">
             <span className="text-base font-semibold text-(--ink)">การแจ้งเตือน</span>
-            {unreadCount > 0 && (
-              <button type="button" onClick={markAllRead} className="text-xs font-medium text-(--brand-green-dark) hover:underline">
-                อ่านทั้งหมด
+            <span className="flex items-center gap-2">
+              {unreadCount > 0 && (
+                <button type="button" onClick={markAllRead} className="text-xs font-medium text-(--brand-green-dark) hover:underline">
+                  อ่านทั้งหมด
+                </button>
+              )}
+              {/* เสียง/เด้งแจ้งเตือนของทุกระบบ — ทุกคนตั้งเองได้ต่อเครื่อง */}
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  setSoundSettings(true);
+                }}
+                className="rounded-full p-1 text-(--ink-soft) hover:bg-(--bg-soft) hover:text-(--ink)"
+                aria-label="ตั้งค่าเสียงแจ้งเตือน"
+                title="ตั้งค่าเสียงแจ้งเตือน"
+              >
+                <Settings className="h-4 w-4" />
               </button>
-            )}
+            </span>
           </div>
           {/* เฉพาะ owner/หัวหน้าแผนก — พนักงานทั่วไปไม่มีอะไรให้สลับ (ไม่มีทาง
               เห็น room_post อยู่แล้วไม่ว่าจะตั้งค่านี้เป็นอะไร) */}
@@ -238,6 +255,7 @@ export function NotificationBellPopover() {
           ดูทั้งหมด
         </Link>
       </PopoverContent>
+      {soundSettings && <ChatSettings scope="system" onClose={() => setSoundSettings(false)} />}
     </Popover>
   );
 }

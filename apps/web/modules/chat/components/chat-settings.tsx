@@ -5,7 +5,13 @@ import { Bell, Check, Download, Play } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
 
-import { enablePush, onInstallAvailable, promptInstall, pushSupport, type PushSupport } from "@/lib/push-client";
+import {
+  enablePush,
+  onInstallAvailable,
+  promptInstall,
+  pushSupport,
+  type PushSupport,
+} from "@/lib/push-client";
 import {
   CHAT_BACKGROUNDS,
   CHAT_TEXT_SIZES,
@@ -26,38 +32,81 @@ const SOUNDS: { id: ChatSound; label: string }[] = [
   { id: "none", label: "ปิดเสียง" },
 ];
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <section className="border-b border-(--line) px-4 py-4 last:border-b-0">
-      <h4 className="mb-3 text-[12px] font-semibold tracking-wide text-(--ink-soft)">{title}</h4>
+      <h4 className="mb-3 text-[12px] font-semibold tracking-wide text-(--ink-soft)">
+        {title}
+      </h4>
       <div className="space-y-4">{children}</div>
     </section>
   );
 }
 
-function Toggle({ id, label, hint, checked, onChange }: { id: string; label: string; hint?: string; checked: boolean; onChange: (v: boolean) => void }) {
+function Toggle({
+  id,
+  label,
+  hint,
+  checked,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  hint?: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
   return (
     <label htmlFor={id} className="flex cursor-pointer items-start gap-3">
       <span className="min-w-0 flex-1">
         <span className="block text-sm text-(--ink)">{label}</span>
-        {hint && <span className="block text-[12px] text-(--ink-soft)">{hint}</span>}
+        {hint && (
+          <span className="block text-[12px] text-(--ink-soft)">{hint}</span>
+        )}
       </span>
-      <input id={id} type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="peer sr-only" />
+      <input
+        id={id}
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="peer sr-only"
+      />
       <span
         aria-hidden
         className={cn(
           "relative mt-0.5 h-6 w-11 shrink-0 rounded-full transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-(--chat-accent)/40",
-          checked ? "bg-(--chat-accent)" : "bg-(--line)"
+          checked ? "bg-(--chat-accent)" : "bg-(--line)",
         )}
       >
-        <span className={cn("absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform", checked ? "translate-x-5.5" : "translate-x-0.5")} />
+        <span
+          className={cn(
+            "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform",
+            checked ? "translate-x-5.5" : "translate-x-0.5",
+          )}
+        />
       </span>
     </label>
   );
 }
 
-/** ตั้งค่าแชท — เสียง, แจ้งเตือน, หน้าตา (จำไว้ต่อเครื่อง) */
-export function ChatSettings({ onClose }: { onClose: () => void }) {
+/**
+ * ตั้งค่าแชท — เสียง, แจ้งเตือน, หน้าตา (จำไว้ต่อเครื่อง)
+ * scope "system" = เปิดจากกระดิ่ง (ทุกคน รวมคนที่ไม่มีสิทธิ์แชท) — เหลือแค่เสียง/แจ้งเตือน
+ * เสียงชุดเดียวกันใช้ทั้งแชทและแจ้งเตือนของทุกโมดูล (components/shell/system-notify.tsx)
+ */
+export function ChatSettings({
+  onClose,
+  scope = "chat",
+}: {
+  onClose: () => void;
+  scope?: "chat" | "system";
+}) {
   const prefs = useChatPrefs();
   const [support, setSupport] = useState<PushSupport | null>(null);
   const [canInstall, setCanInstall] = useState(false);
@@ -82,7 +131,10 @@ export function ChatSettings({ onClose }: { onClose: () => void }) {
             : "ยังไม่ได้เปิด";
 
   return (
-    <ChatModal title="ตั้งค่าแชท" onClose={onClose}>
+    <ChatModal
+      title={scope === "system" ? "ตั้งค่าเสียงแจ้งเตือน" : "ตั้งค่าแชท"}
+      onClose={onClose}
+    >
       <Section title="การแจ้งเตือน">
         <div className="flex items-start gap-3">
           <Bell className="mt-0.5 h-5 w-5 shrink-0 text-(--chat-accent-strong)" />
@@ -96,7 +148,10 @@ export function ChatSettings({ onClose }: { onClose: () => void }) {
               disabled={busy}
               onClick={async () => {
                 setBusy(true);
-                const r = await enablePush().catch(() => ({ ok: false, reason: "เปิดแจ้งเตือนไม่สำเร็จ" }));
+                const r = await enablePush().catch(() => ({
+                  ok: false,
+                  reason: "เปิดแจ้งเตือนไม่สำเร็จ",
+                }));
                 setBusy(false);
                 setSupport(pushSupport());
                 if (r.ok) toast.success("เปิดแจ้งเตือนแล้ว");
@@ -107,19 +162,24 @@ export function ChatSettings({ onClose }: { onClose: () => void }) {
               {busy ? "กำลังเปิด…" : "เปิด"}
             </button>
           )}
-          {support === "granted" && <Check className="h-5 w-5 shrink-0 text-(--chat-accent)" aria-label="เปิดอยู่" />}
+          {support === "granted" && (
+            <Check
+              className="h-5 w-5 shrink-0 text-(--chat-accent)"
+              aria-label="เปิดอยู่"
+            />
+          )}
         </div>
 
         <Toggle
           id="chat-pref-toast"
-          label="เด้งกล่องข้อความตอนอยู่หน้าอื่น"
-          hint="เช่น อยู่หน้า Kanban แล้วมีคนทัก"
+          label="เด้งกล่องแจ้งเตือนบนหน้าเว็บ"
+          hint="ข้อความแชท งาน รายงาน งานซ่อม HR — ตอนเปิดเว็บอยู่"
           checked={prefs.toast}
           onChange={(v) => setChatPrefs({ toast: v })}
         />
       </Section>
 
-      <Section title="เสียงข้อความใหม่ (ตอนเปิดเว็บอยู่)">
+      <Section title="เสียงแจ้งเตือน (ตอนเปิดเว็บอยู่ — ใช้ทั้งแชทและทุกระบบ)">
         <div className="grid grid-cols-4 gap-2">
           {SOUNDS.map((s) => (
             <button
@@ -134,7 +194,9 @@ export function ChatSettings({ onClose }: { onClose: () => void }) {
               aria-pressed={prefs.sound === s.id}
               className={cn(
                 "flex flex-col items-center gap-1 rounded-xl border py-2.5 text-[12.5px]",
-                prefs.sound === s.id ? "border-(--chat-accent) bg-(--chat-accent-soft) font-semibold text-(--chat-accent-strong)" : "border-(--line) text-(--ink-soft)"
+                prefs.sound === s.id
+                  ? "border-(--chat-accent) bg-(--chat-accent-soft) font-semibold text-(--chat-accent-strong)"
+                  : "border-(--line) text-(--ink-soft)",
               )}
             >
               {s.id !== "none" && <Play className="h-3.5 w-3.5" />}
@@ -143,7 +205,10 @@ export function ChatSettings({ onClose }: { onClose: () => void }) {
           ))}
         </div>
         {prefs.sound !== "none" && (
-          <label htmlFor="chat-pref-volume" className="flex items-center gap-3 text-sm text-(--ink)">
+          <label
+            htmlFor="chat-pref-volume"
+            className="flex items-center gap-3 text-sm text-(--ink)"
+          >
             ความดัง
             <input
               id="chat-pref-volume"
@@ -162,64 +227,77 @@ export function ChatSettings({ onClose }: { onClose: () => void }) {
           </label>
         )}
         <p className="text-[12px] leading-relaxed text-(--ink-soft)">
-          ตอนปิดเว็บหรือย่อเบราว์เซอร์ จะใช้เสียงแจ้งเตือนของเครื่อง เปลี่ยนได้ที่ตั้งค่าการแจ้งเตือนของมือถือ/คอม
+          ตอนปิดเว็บหรือย่อเบราว์เซอร์ จะใช้เสียงแจ้งเตือนของเครื่อง
+          เปลี่ยนได้ที่ตั้งค่าการแจ้งเตือนของมือถือ/คอม
         </p>
       </Section>
 
-      <Section title="หน้าตา">
-        <div>
-          <p className="mb-2 text-sm text-(--ink)">ขนาดตัวอักษรในแชท</p>
-          <div className="grid grid-cols-3 gap-2">
-            {(Object.keys(CHAT_TEXT_SIZES) as ChatTextSize[]).map((k) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setChatPrefs({ textSize: k })}
-                aria-pressed={prefs.textSize === k}
-                className={cn(
-                  "rounded-xl border py-2",
-                  prefs.textSize === k ? "border-(--chat-accent) bg-(--chat-accent-soft) font-semibold text-(--chat-accent-strong)" : "border-(--line) text-(--ink-soft)"
-                )}
-                style={{ fontSize: CHAT_TEXT_SIZES[k].px }}
-              >
-                {CHAT_TEXT_SIZES[k].label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div>
-          <p className="mb-2 text-sm text-(--ink)">พื้นหลังห้องแชท</p>
-          <div className="flex gap-3">
-            {(Object.keys(CHAT_BACKGROUNDS) as ChatBackground[]).map((k) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setChatPrefs({ background: k })}
-                aria-pressed={prefs.background === k}
-                className="flex flex-col items-center gap-1 text-[11.5px] text-(--ink-soft)"
-              >
-                <span
+      {scope === "chat" && (
+        <Section title="หน้าตา">
+          <div>
+            <p className="mb-2 text-sm text-(--ink)">ขนาดตัวอักษรในแชท</p>
+            <div className="grid grid-cols-3 gap-2">
+              {(Object.keys(CHAT_TEXT_SIZES) as ChatTextSize[]).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setChatPrefs({ textSize: k })}
+                  aria-pressed={prefs.textSize === k}
                   className={cn(
-                    "flex h-11 w-11 items-center justify-center rounded-full border-2",
-                    prefs.background === k ? "border-(--chat-accent)" : "border-(--line)"
+                    "rounded-xl border py-2",
+                    prefs.textSize === k
+                      ? "border-(--chat-accent) bg-(--chat-accent-soft) font-semibold text-(--chat-accent-strong)"
+                      : "border-(--line) text-(--ink-soft)",
                   )}
-                  style={{ backgroundColor: CHAT_BACKGROUNDS[k].color }}
+                  style={{ fontSize: CHAT_TEXT_SIZES[k].px }}
                 >
-                  {prefs.background === k && <Check className="h-4 w-4 text-(--chat-accent-strong)" />}
-                </span>
-                {CHAT_BACKGROUNDS[k].label}
-              </button>
-            ))}
+                  {CHAT_TEXT_SIZES[k].label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-        <Toggle
-          id="chat-pref-enter"
-          label="กด Enter เพื่อส่ง (คอม)"
-          hint={prefs.enterToSend ? "Shift+Enter = ขึ้นบรรทัดใหม่" : "Enter = ขึ้นบรรทัดใหม่ · Ctrl+Enter = ส่ง"}
-          checked={prefs.enterToSend}
-          onChange={(v) => setChatPrefs({ enterToSend: v })}
-        />
-      </Section>
+          <div>
+            <p className="mb-2 text-sm text-(--ink)">พื้นหลังห้องแชท</p>
+            <div className="flex gap-3">
+              {(Object.keys(CHAT_BACKGROUNDS) as ChatBackground[]).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setChatPrefs({ background: k })}
+                  aria-pressed={prefs.background === k}
+                  className="flex flex-col items-center gap-1 text-[11.5px] text-(--ink-soft)"
+                >
+                  <span
+                    className={cn(
+                      "flex h-11 w-11 items-center justify-center rounded-full border-2",
+                      prefs.background === k
+                        ? "border-(--chat-accent)"
+                        : "border-(--line)",
+                    )}
+                    style={{ backgroundColor: CHAT_BACKGROUNDS[k].color }}
+                  >
+                    {prefs.background === k && (
+                      <Check className="h-4 w-4 text-(--chat-accent-strong)" />
+                    )}
+                  </span>
+                  {CHAT_BACKGROUNDS[k].label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <Toggle
+            id="chat-pref-enter"
+            label="กด Enter เพื่อส่ง (คอม)"
+            hint={
+              prefs.enterToSend
+                ? "Shift+Enter = ขึ้นบรรทัดใหม่"
+                : "Enter = ขึ้นบรรทัดใหม่ · Ctrl+Enter = ส่ง"
+            }
+            checked={prefs.enterToSend}
+            onChange={(v) => setChatPrefs({ enterToSend: v })}
+          />
+        </Section>
+      )}
 
       {canInstall && (
         <Section title="แอป">
@@ -229,7 +307,9 @@ export function ChatSettings({ onClose }: { onClose: () => void }) {
             className="flex w-full items-center gap-3 rounded-xl border border-(--line) px-3 py-2.5 text-left hover:bg-(--bg-soft)"
           >
             <Download className="h-5 w-5 text-(--chat-accent-strong)" />
-            <span className="flex-1 text-sm text-(--ink)">ติดตั้ง SmartBoss ลงเครื่อง</span>
+            <span className="flex-1 text-sm text-(--ink)">
+              ติดตั้ง SmartBoss ลงเครื่อง
+            </span>
           </button>
         </Section>
       )}
