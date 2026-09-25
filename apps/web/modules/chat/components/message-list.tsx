@@ -196,7 +196,7 @@ export function MessageList({
 
   if (!room) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-(--chat-room-bg)">
+      <div className="chat-room-surface flex flex-1 items-center justify-center bg-(--chat-room-bg)">
         <Loader2 className="h-6 w-6 animate-spin text-(--chat-meta)" />
       </div>
     );
@@ -205,7 +205,7 @@ export function MessageList({
   const canPin = channelType === "dm" || canManage;
 
   return (
-    <div className="relative min-h-0 flex-1 bg-(--chat-room-bg)">
+    <div className="chat-room-surface relative min-h-0 flex-1 bg-(--chat-room-bg)">
       <div ref={scrollRef} onScroll={onScroll} className="h-full overflow-y-auto overscroll-contain" style={{ overflowAnchor: "none" }}>
         <div className="pb-3">
           <div ref={topRef} className="h-1" />

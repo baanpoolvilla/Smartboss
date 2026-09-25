@@ -60,6 +60,13 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* ข้อความนอกจอไม่ต้องวาด — ห้องที่มีข้อความเป็นพันยังเลื่อนลื่น */
+/* รูปพื้นหลังห้องที่ผู้ใช้เลือกเอง (ตั้งค่าแชท) — --chat-room-image ตั้งที่ ChatApp */
+.chat-ui .chat-room-surface {
+  background-image: var(--chat-room-image, none);
+  background-size: cover;
+  background-position: center;
+}
+
 .chat-ui .chat-row {
   content-visibility: auto;
   contain-intrinsic-size: auto 64px;

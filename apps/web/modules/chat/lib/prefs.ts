@@ -2,14 +2,18 @@
 
 import { useSyncExternalStore } from "react";
 
+import { loadLocalMedia } from "./local-media";
+
 /**
  * ตั้งค่าแชทส่วนตัว — เก็บในเครื่อง (localStorage) แยกต่อเครื่อง เช่น คอมที่ทำงานเปิดเสียง
  * มือถือปิดเสียงได้ อ่านได้ทั้งจากคอมโพเนนต์ (useChatPrefs) และโค้ดนอก React (getChatPrefs)
  */
 
-export type ChatSound = "ding" | "pop" | "bell" | "none";
+/** "custom" = ไฟล์เสียงที่ผู้ใช้เลือกเอง (เก็บในเครื่อง ดู local-media.ts) */
+export type ChatSound = "ding" | "pop" | "bell" | "custom" | "none";
 export type ChatTextSize = "sm" | "md" | "lg";
-export type ChatBackground = "blue" | "white" | "green" | "cream";
+/** "custom-color" = สีที่เลือกเอง (bgColor) · "custom-image" = รูปจากเครื่อง (local-media.ts) */
+export type ChatBackground = "blue" | "white" | "green" | "cream" | "custom-color" | "custom-image";
 
 export interface ChatPrefs {
   /** เสียงเมื่อมีข้อความใหม่ (ตอนเปิดเว็บอยู่) */
@@ -22,6 +26,14 @@ export interface ChatPrefs {
   enterToSend: boolean;
   textSize: ChatTextSize;
   background: ChatBackground;
+  /** สีพื้นหลังที่เลือกเอง (ใช้เมื่อ background = "custom-color") */
+  bgColor: string;
+  /** สีฟองข้อความของฉัน — null = สีเขียวมาตรฐาน */
+  bubbleColor: string | null;
+  /** ชื่อไฟล์เสียงที่เลือกไว้ (แสดงในหน้าตั้งค่า) */
+  customSoundName: string | null;
+  /** เพิ่มทุกครั้งที่เปลี่ยนไฟล์ — ให้ส่วนที่แคชไฟล์ไว้รู้ว่าต้องโหลดใหม่ */
+  mediaVersion: number;
 }
 
 export const DEFAULT_CHAT_PREFS: ChatPrefs = {
@@ -31,9 +43,13 @@ export const DEFAULT_CHAT_PREFS: ChatPrefs = {
   enterToSend: true,
   textSize: "md",
   background: "blue",
+  bgColor: "#e8eef5",
+  bubbleColor: null,
+  customSoundName: null,
+  mediaVersion: 0,
 };
 
-export const CHAT_BACKGROUNDS: Record<ChatBackground, { label: string; color: string }> = {
+export const CHAT_BACKGROUNDS: Record<"blue" | "white" | "green" | "cream", { label: string; color: string }> = {
   blue: { label: "ฟ้าเทา", color: "#eaf0f6" },
   white: { label: "ขาว", color: "#ffffff" },
   green: { label: "เขียวอ่อน", color: "#eef6ea" },
@@ -98,6 +114,33 @@ export function useChatPrefs(): ChatPrefs {
 // ─── เสียง (สร้างเองด้วย Web Audio ไม่ต้องโหลดไฟล์) ───
 
 let audioCtx: AudioContext | null = null;
+let customBuffer: { version: number; buffer: AudioBuffer } | null = null;
+let customLoading: number | null = null;
+
+/** โหลดไฟล์เสียงที่ผู้ใช้เลือกมาเตรียมไว้ (ถอดรหัสครั้งเดียว ใช้ซ้ำทุกครั้งที่เล่น) */
+async function ensureCustomBuffer(version: number): Promise<AudioBuffer | null> {
+  if (customBuffer?.version === version) return customBuffer.buffer;
+  if (customLoading === version) return null;
+  customLoading = version;
+  try {
+    const blob = await loadLocalMedia("sound");
+    if (!blob) return null;
+    audioCtx ??= new AudioContext();
+    const buffer = await audioCtx.decodeAudioData(await blob.arrayBuffer());
+    customBuffer = { version, buffer };
+    return buffer;
+  } catch {
+    return null;
+  } finally {
+    customLoading = null;
+  }
+}
+
+/** เรียกหลังเปลี่ยนไฟล์เสียง — โหลดล่วงหน้าไว้ ครั้งแรกที่มีแจ้งเตือนจะได้ดังทันที */
+export function preloadCustomSound(): void {
+  const prefs = read();
+  if (prefs.sound === "custom") void ensureCustomBuffer(prefs.mediaVersion);
+}
 
 /** เบราว์เซอร์ให้เล่นเสียงได้หลังผู้ใช้แตะหน้าเว็บแล้ว — เรียกตอนมีการแตะครั้งแรก */
 export function unlockChatAudio(): void {
@@ -134,6 +177,23 @@ export function playChatSound(sound?: ChatSound, volume?: number): void {
     if (audioCtx.state !== "running") return;
     const t = audioCtx.currentTime;
     const peak = 0.25 * v;
+    if (s === "custom") {
+      const version = prefs.mediaVersion;
+      const ctx = audioCtx;
+      const play = (buffer: AudioBuffer) => {
+        const src = ctx.createBufferSource();
+        const gain = ctx.createGain();
+        gain.gain.value = v;
+        src.buffer = buffer;
+        src.connect(gain).connect(ctx.destination);
+        src.start();
+        // เสียงแจ้งเตือนไม่ควรยาว — ตัดที่ 5 วิ
+        src.stop(ctx.currentTime + Math.min(buffer.duration, 5));
+      };
+      if (customBuffer?.version === version) play(customBuffer.buffer);
+      else void ensureCustomBuffer(version).then((b) => (b ? play(b) : tone(ctx, 880, ctx.currentTime, 0.28, peak, "sine", 1320)));
+      return;
+    }
     if (s === "ding") tone(audioCtx, 880, t, 0.28, peak, "sine", 1320);
     else if (s === "pop") tone(audioCtx, 520, t, 0.12, peak * 1.2, "triangle", 820);
     else {

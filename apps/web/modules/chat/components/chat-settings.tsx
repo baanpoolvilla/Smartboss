@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Bell, Check, Download, Play } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Bell, Check, Download, ImagePlus, Music, Palette, Play } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
 
@@ -16,14 +16,16 @@ import {
   CHAT_BACKGROUNDS,
   CHAT_TEXT_SIZES,
   playChatSound,
+  preloadCustomSound,
   setChatPrefs,
   unlockChatAudio,
   useChatPrefs,
-  type ChatBackground,
   type ChatSound,
   type ChatTextSize,
 } from "../lib/prefs";
 import { ChatModal } from "./new-chat-dialog";
+import { deleteLocalMedia, saveLocalMedia } from "../lib/local-media";
+import { compressImage } from "../lib/image-compress";
 
 const SOUNDS: { id: ChatSound; label: string }[] = [
   { id: "ding", label: "ติ๊ง" },
@@ -108,6 +110,37 @@ export function ChatSettings({
   scope?: "chat" | "system";
 }) {
   const prefs = useChatPrefs();
+  const soundInput = useRef<HTMLInputElement>(null);
+  const imageInput = useRef<HTMLInputElement>(null);
+
+  // ไฟล์ส่วนตัวเก็บในเครื่องนี้เท่านั้น (local-media.ts) — ไม่ขึ้นเซิร์ฟเวอร์ คนอื่นไม่เห็น
+  async function onSoundFile(file: File) {
+    if (!file.type.startsWith("audio/")) return toast.error("เลือกไฟล์เสียง (mp3, wav, m4a)");
+    if (file.size > 1024 * 1024) return toast.error("ไฟล์เสียงต้องไม่เกิน 1MB");
+    try {
+      await saveLocalMedia("sound", file);
+      setChatPrefs({ sound: "custom", customSoundName: file.name.slice(0, 60), mediaVersion: prefs.mediaVersion + 1 });
+      unlockChatAudio();
+      preloadCustomSound();
+      setTimeout(() => playChatSound("custom"), 250);
+      toast.success("ใช้เสียงของคุณแล้ว (เฉพาะเครื่องนี้)");
+    } catch {
+      toast.error("บันทึกไฟล์เสียงไม่สำเร็จ");
+    }
+  }
+
+  async function onImageFile(file: File) {
+    if (!file.type.startsWith("image/")) return toast.error("เลือกไฟล์รูปภาพ");
+    try {
+      const { full } = await compressImage(file);
+      if (full.size > 5 * 1024 * 1024) return toast.error("รูปใหญ่เกินไป");
+      await saveLocalMedia("background", full);
+      setChatPrefs({ background: "custom-image", mediaVersion: prefs.mediaVersion + 1 });
+      toast.success("ตั้งรูปพื้นหลังแล้ว (เฉพาะเครื่องนี้)");
+    } catch {
+      toast.error("ตั้งรูปพื้นหลังไม่สำเร็จ");
+    }
+  }
   const [support, setSupport] = useState<PushSupport | null>(null);
   const [canInstall, setCanInstall] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -180,7 +213,18 @@ export function ChatSettings({
       </Section>
 
       <Section title="เสียงแจ้งเตือน (ตอนเปิดเว็บอยู่ — ใช้ทั้งแชทและทุกระบบ)">
-        <div className="grid grid-cols-4 gap-2">
+        <input
+          ref={soundInput}
+          type="file"
+          accept="audio/*"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void onSoundFile(f);
+            e.target.value = "";
+          }}
+        />
+        <div className="grid grid-cols-5 gap-1.5">
           {SOUNDS.map((s) => (
             <button
               key={s.id}
@@ -203,7 +247,47 @@ export function ChatSettings({
               {s.label}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => {
+              if (!prefs.customSoundName) {
+                soundInput.current?.click();
+                return;
+              }
+              unlockChatAudio();
+              setChatPrefs({ sound: "custom" });
+              setTimeout(() => playChatSound("custom"), 60);
+            }}
+            aria-pressed={prefs.sound === "custom"}
+            className={cn(
+              "flex flex-col items-center gap-1 rounded-xl border py-2.5 text-[12.5px]",
+              prefs.sound === "custom"
+                ? "border-(--chat-accent) bg-(--chat-accent-soft) font-semibold text-(--chat-accent-strong)"
+                : "border-dashed border-(--line) text-(--ink-soft)",
+            )}
+          >
+            <Music className="h-3.5 w-3.5" />
+            ของฉัน
+          </button>
         </div>
+        {prefs.customSoundName && (
+          <p className="flex flex-wrap items-center gap-x-2 text-[12px] text-(--ink-soft)">
+            <span className="truncate">เสียงของฉัน: {prefs.customSoundName}</span>
+            <button type="button" onClick={() => soundInput.current?.click()} className="font-medium text-(--chat-accent-strong) hover:underline">
+              เปลี่ยนไฟล์
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void deleteLocalMedia("sound");
+                setChatPrefs({ customSoundName: null, sound: prefs.sound === "custom" ? "ding" : prefs.sound });
+              }}
+              className="text-(--danger) hover:underline"
+            >
+              ลบ
+            </button>
+          </p>
+        )}
         {prefs.sound !== "none" && (
           <label
             htmlFor="chat-pref-volume"
@@ -258,8 +342,19 @@ export function ChatSettings({
           </div>
           <div>
             <p className="mb-2 text-sm text-(--ink)">พื้นหลังห้องแชท</p>
-            <div className="flex gap-3">
-              {(Object.keys(CHAT_BACKGROUNDS) as ChatBackground[]).map((k) => (
+            <input
+              ref={imageInput}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void onImageFile(f);
+                e.target.value = "";
+              }}
+            />
+            <div className="flex flex-wrap gap-3">
+              {(Object.keys(CHAT_BACKGROUNDS) as (keyof typeof CHAT_BACKGROUNDS)[]).map((k) => (
                 <button
                   key={k}
                   type="button"
@@ -283,8 +378,86 @@ export function ChatSettings({
                   {CHAT_BACKGROUNDS[k].label}
                 </button>
               ))}
+              {/* สีที่เลือกเอง */}
+              <label className="flex cursor-pointer flex-col items-center gap-1 text-[11.5px] text-(--ink-soft)">
+                <span
+                  className={cn(
+                    "relative flex h-11 w-11 items-center justify-center rounded-full border-2",
+                    prefs.background === "custom-color" ? "border-(--chat-accent)" : "border-dashed border-(--line)",
+                  )}
+                  style={{ backgroundColor: prefs.background === "custom-color" ? prefs.bgColor : undefined }}
+                >
+                  {prefs.background === "custom-color" ? (
+                    <Check className="h-4 w-4 text-(--chat-accent-strong)" />
+                  ) : (
+                    <Palette className="h-4 w-4" />
+                  )}
+                  <input
+                    type="color"
+                    value={prefs.bgColor}
+                    onChange={(e) => setChatPrefs({ background: "custom-color", bgColor: e.target.value })}
+                    className="absolute inset-0 cursor-pointer opacity-0"
+                    aria-label="เลือกสีพื้นหลังเอง"
+                  />
+                </span>
+                เลือกสี
+              </label>
+              {/* รูปจากเครื่อง */}
+              <button
+                type="button"
+                onClick={() => imageInput.current?.click()}
+                aria-pressed={prefs.background === "custom-image"}
+                className="flex flex-col items-center gap-1 text-[11.5px] text-(--ink-soft)"
+              >
+                <span
+                  className={cn(
+                    "flex h-11 w-11 items-center justify-center rounded-full border-2",
+                    prefs.background === "custom-image" ? "border-(--chat-accent) bg-(--chat-accent-soft)" : "border-dashed border-(--line)",
+                  )}
+                >
+                  {prefs.background === "custom-image" ? (
+                    <Check className="h-4 w-4 text-(--chat-accent-strong)" />
+                  ) : (
+                    <ImagePlus className="h-4 w-4" />
+                  )}
+                </span>
+                {prefs.background === "custom-image" ? "เปลี่ยนรูป" : "ใส่รูป"}
+              </button>
             </div>
+            {prefs.background === "custom-image" && (
+              <button
+                type="button"
+                onClick={() => {
+                  void deleteLocalMedia("background");
+                  setChatPrefs({ background: "blue" });
+                }}
+                className="mt-2 text-[12px] text-(--danger) hover:underline"
+              >
+                ลบรูปพื้นหลัง
+              </button>
+            )}
           </div>
+          <div className="flex items-center gap-3">
+            <p className="flex-1 text-sm text-(--ink)">สีฟองข้อความของฉัน</p>
+            <label
+              className="relative h-8 w-14 cursor-pointer overflow-hidden rounded-full border border-(--line)"
+              style={{ backgroundColor: prefs.bubbleColor ?? "#c9f2b1" }}
+            >
+              <input
+                type="color"
+                value={prefs.bubbleColor ?? "#c9f2b1"}
+                onChange={(e) => setChatPrefs({ bubbleColor: e.target.value })}
+                className="absolute inset-0 cursor-pointer opacity-0"
+                aria-label="เลือกสีฟองข้อความของฉัน"
+              />
+            </label>
+            {prefs.bubbleColor && (
+              <button type="button" onClick={() => setChatPrefs({ bubbleColor: null })} className="text-[12px] text-(--ink-soft) hover:underline">
+                ค่าเริ่มต้น
+              </button>
+            )}
+          </div>
+          <p className="text-[12px] text-(--ink-soft)">เสียงและรูปที่เลือกเองเก็บไว้ในเครื่องนี้เท่านั้น คนอื่นไม่เห็น</p>
           <Toggle
             id="chat-pref-enter"
             label="กด Enter เพื่อส่ง (คอม)"

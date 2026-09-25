@@ -20,7 +20,38 @@ import { loadChannels, openChannel, useChatSync } from "../lib/chat-actions";
 import { ChannelList } from "./channel-list";
 import { ChatRoom } from "./chat-room";
 import { NewChatDialog } from "./new-chat-dialog";
-import { CHAT_BACKGROUNDS, CHAT_TEXT_SIZES, useChatPrefs } from "../lib/prefs";
+import { CHAT_BACKGROUNDS, CHAT_TEXT_SIZES, useChatPrefs, type ChatPrefs } from "../lib/prefs";
+import { loadLocalMedia } from "../lib/local-media";
+
+/** สีตัวอักษรที่อ่านออกบนสีฟองที่ผู้ใช้เลือก (สีเข้ม → ตัวขาว) */
+function inkFor(hex: string): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return "#12260f";
+  const n = parseInt(m[1]!, 16);
+  const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+  return lum < 0.6 ? "#ffffff" : "#1b2537";
+}
+
+/** รูปพื้นหลังที่ผู้ใช้เลือก (เก็บในเครื่อง) → object URL — ล้างทิ้งเมื่อเปลี่ยน/ปิดหน้า */
+function useCustomBackground(prefs: ChatPrefs): string | null {
+  const [url, setUrl] = useState<string | null>(null);
+  const enabled = prefs.background === "custom-image";
+  useEffect(() => {
+    if (!enabled) return;
+    let objectUrl: string | null = null;
+    let cancelled = false;
+    void loadLocalMedia("background").then((blob) => {
+      if (cancelled || !blob) return;
+      objectUrl = URL.createObjectURL(blob);
+      setUrl(objectUrl);
+    });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [enabled, prefs.mediaVersion]);
+  return enabled ? url : null;
+}
 
 function isDesktop(): boolean {
   return (
@@ -66,9 +97,19 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
   const isMobile = useIsMobile();
   const prefs = useChatPrefs();
   // ตั้งค่าหน้าตาของผู้ใช้ → ตัวแปรสีของแชท (ใช้ทั้งในหน้าและในห้องที่ถูกวาดออกไปที่ <body> บนมือถือ)
+  const bgImage = useCustomBackground(prefs);
+  const roomBg =
+    prefs.background === "custom-color"
+      ? prefs.bgColor
+      : prefs.background === "custom-image"
+        ? "#e8eef5"
+        : CHAT_BACKGROUNDS[prefs.background].color;
   const themeStyle = {
-    "--chat-room-bg": CHAT_BACKGROUNDS[prefs.background].color,
+    "--chat-room-bg": roomBg,
     "--chat-text-size": `${CHAT_TEXT_SIZES[prefs.textSize].px}px`,
+    // รูปจางลงนิดหน่อย — ข้อความระบบ/เวลาที่วางบนรูปจะได้ยังอ่านออก
+    "--chat-room-image": bgImage ? `linear-gradient(rgba(255,255,255,.3), rgba(255,255,255,.3)), url("${bgImage}")` : "none",
+    ...(prefs.bubbleColor ? { "--chat-bubble-me": prefs.bubbleColor, "--chat-bubble-me-ink": inkFor(prefs.bubbleColor) } : {}),
   } as React.CSSProperties;
   /** จำนวนยังไม่อ่านตอนเปิดห้อง (ก่อนถูกล้าง) — ใช้วางเส้น "ยังไม่ได้อ่าน" */
   const [initialUnread, setInitialUnread] = useState<Record<string, number>>(
@@ -197,7 +238,7 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
               onBack={back}
             />
           ) : (
-            <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-(--chat-room-bg) text-(--ink-soft)">
+            <div className="chat-room-surface flex flex-1 flex-col items-center justify-center gap-3 bg-(--chat-room-bg) text-(--ink-soft)">
               <MessagesSquare className="h-12 w-12 opacity-40" />
               <p className="text-sm">
                 {urlChannel && !loaded
