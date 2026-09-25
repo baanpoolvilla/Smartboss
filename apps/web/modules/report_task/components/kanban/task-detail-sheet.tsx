@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -112,7 +112,14 @@ function toLightboxImage(a: Attachment): ReportPostImage {
 
 /** Highlight @mentions inside a comment so tagged people stand out. */
 function renderMentions(text: string) {
-  return text.split(/(@\S+)/g).map((part, i) =>
+  // ชื่อพนักงานจริง (ยาวก่อน) ให้ชื่อที่มีเว้นวรรคเป็นสีทั้งชื่อ ไม่ใช่แค่คำแรก
+  const names = users
+    .map((u) => u.name)
+    .filter((n) => n && text.includes(`@${n}`))
+    .sort((a, b) => b.length - a.length)
+    .map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const re = new RegExp(`(@(?:${[...names, "\\S+"].join("|")}))`, "g");
+  return text.split(re).map((part, i) =>
     part.startsWith("@") ? (
       <span key={i} className="font-medium text-[var(--brand-green-dark)]">{part}</span>
     ) : (
@@ -226,6 +233,61 @@ export function TaskDetailSheet({
   }, [taskId, viewingAsUserId, markTaskActivityRead]);
 
   const [comment, setComment] = useState("");
+  const allTasks = useTaskStore((s) => s.tasks);
+  /** @แท็ก: ตำแหน่ง @ ที่กำลังพิมพ์ + คำค้น */
+  const [mentionQuery, setMentionQuery] = useState<{ start: number; query: string } | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const commentRef = useRef<HTMLTextAreaElement>(null);
+  const mentionPicked = useRef(new Map<string, string>());
+  // คนที่ @แท็กได้ = คนในโปรเจคเดียวกัน (ผู้รับผิดชอบ/ผู้มอบหมาย/ผู้ติดตามของทุกงานในโปรเจค)
+  // + คนในงานนี้ (รวมคนที่เคยคอมเมนต์) — งานที่ไม่อยู่ในโปรเจคใช้แค่คนในงานนี้
+  const mentionPeople = useMemo(() => {
+    if (!task) return [];
+    const ids = new Set<string>([task.assignedById, ...task.assigneeIds, ...(task.watcherIds ?? []), ...task.comments.map((c) => c.authorId)]);
+    if (task.projectTopicId) {
+      for (const t of allTasks) {
+        if (t.projectTopicId !== task.projectTopicId) continue;
+        ids.add(t.assignedById);
+        t.assigneeIds.forEach((id) => ids.add(id));
+        (t.watcherIds ?? []).forEach((id) => ids.add(id));
+      }
+    }
+    ids.delete(viewingAsUserId);
+    return [...ids]
+      .map((id) => getUser(id))
+      .filter((u): u is NonNullable<typeof u> => Boolean(u))
+      .sort((a, b) => a.name.localeCompare(b.name, "th"));
+  }, [task, allTasks, viewingAsUserId]);
+  const mentionCandidates = useMemo(() => {
+    if (!mentionQuery) return [];
+    const q = mentionQuery.query.toLowerCase();
+    return mentionPeople.filter((u) => !q || u.name.toLowerCase().includes(q)).slice(0, 8);
+  }, [mentionQuery, mentionPeople]);
+
+  function detectMention(value: string, caret: number) {
+    const m = /(^|\s)@([^\s@]{0,30})$/.exec(value.slice(0, caret));
+    if (m) {
+      setMentionQuery({ start: caret - m[2]!.length - 1, query: m[2]! });
+      setMentionIndex(0);
+    } else {
+      setMentionQuery(null);
+    }
+  }
+
+  function pickMention(u: { id: string; name: string }) {
+    const el = commentRef.current;
+    if (!el || !mentionQuery) return;
+    const caret = el.selectionStart ?? comment.length;
+    const insert = `@${u.name} `;
+    setComment(comment.slice(0, mentionQuery.start) + insert + comment.slice(caret));
+    mentionPicked.current.set(u.name, u.id);
+    const pos = mentionQuery.start + insert.length;
+    setMentionQuery(null);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(pos, pos);
+    });
+  }
   const [commentAttachments, setCommentAttachments] = useState<Attachment[]>([]);
   const [attachmentViewer, setAttachmentViewer] = useState<{ images: ReportPostImage[]; index: number } | null>(null);
   // <md only — the comment rail is a permanent side column on desktop
@@ -432,9 +494,16 @@ export function TaskDetailSheet({
 
   function submitComment() {
     if ((!comment.trim() && commentAttachments.length === 0) || !task) return;
-    addComment(task.id, comment.trim(), viewingAsUserId, commentAttachments);
+    const text = comment.trim();
+    // คนที่ถูกแท็ก: เลือกจากรายชื่อ หรือพิมพ์ @ชื่อ ตรงกับคนในโปรเจคเอง
+    const mentionIds = new Set<string>();
+    for (const [name, id] of mentionPicked.current) if (text.includes(`@${name}`)) mentionIds.add(id);
+    for (const u of mentionPeople) if (text.includes(`@${u.name}`)) mentionIds.add(u.id);
+    addComment(task.id, text, viewingAsUserId, commentAttachments, [...mentionIds]);
     setComment("");
     setCommentAttachments([]);
+    mentionPicked.current.clear();
+    setMentionQuery(null);
   }
 
   async function handleCommentFilesSelected(files: File[]) {
@@ -1734,13 +1803,77 @@ export function TaskDetailSheet({
                   วิดีโอสูงสุด {attachmentSettings.maxVideoMB}MB · แนบได้สูงสุด {attachmentSettings.maxFilesPerComment} ไฟล์ต่อความคิดเห็น
                 </TooltipContent>
               </Tooltip>
-              <Textarea
-                placeholder="แสดงความคิดเห็น..."
-                rows={1}
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                className="min-h-9 resize-none bg-white"
-              />
+              <div className="relative min-w-0 flex-1">
+                {mentionQuery && mentionCandidates.length > 0 && (
+                  <div className="absolute bottom-full left-0 right-0 z-30 mb-1 max-h-56 overflow-y-auto rounded-lg border border-[var(--line)] bg-white p-1 shadow-lg">
+                    {mentionCandidates.map((u, i) => (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          pickMention(u);
+                        }}
+                        className={cn(
+                          "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm",
+                          i === mentionIndex ? "bg-[var(--accent)]" : "hover:bg-[var(--bg-soft)]"
+                        )}
+                      >
+                        <Avatar className="h-6 w-6 shrink-0">
+                          <AvatarImage src={u.avatarUrl ?? undefined} alt={u.name} />
+                          <AvatarFallback className="text-[9px]">{u.avatar}</AvatarFallback>
+                        </Avatar>
+                        <span className="truncate">{u.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <Textarea
+                  ref={commentRef}
+                  placeholder="แสดงความคิดเห็น... (@ เพื่อแท็กคนในโปรเจค)"
+                  rows={1}
+                  value={comment}
+                  onChange={(e) => {
+                    setComment(e.target.value);
+                    detectMention(e.target.value, e.target.selectionStart ?? e.target.value.length);
+                  }}
+                  onKeyDown={(e) => {
+                    if (mentionQuery && mentionCandidates.length > 0) {
+                      if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        setMentionIndex((i) => (i + 1) % mentionCandidates.length);
+                        return;
+                      }
+                      if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        setMentionIndex((i) => (i - 1 + mentionCandidates.length) % mentionCandidates.length);
+                        return;
+                      }
+                      if (e.key === "Enter" || e.key === "Tab") {
+                        e.preventDefault();
+                        pickMention(mentionCandidates[mentionIndex]!);
+                        return;
+                      }
+                      if (e.key === "Escape") {
+                        setMentionQuery(null);
+                        return;
+                      }
+                    }
+                    // Enter = ส่ง · Shift+Enter = ขึ้นบรรทัดใหม่ (ไม่ส่งระหว่างกำลังเลือกคำในแป้นพิมพ์ไทย/IME)
+                    // มือถือ: Enter ขึ้นบรรทัด แล้วกดปุ่มส่งเอง เหมือนแอปแชททั่วไป
+                    if (
+                      e.key === "Enter" &&
+                      !e.shiftKey &&
+                      !e.nativeEvent.isComposing &&
+                      !window.matchMedia("(pointer: coarse)").matches
+                    ) {
+                      e.preventDefault();
+                      submitComment();
+                    }
+                  }}
+                  className="min-h-9 w-full resize-none bg-white"
+                />
+              </div>
               <Button
                 size="icon"
                 className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white shrink-0"

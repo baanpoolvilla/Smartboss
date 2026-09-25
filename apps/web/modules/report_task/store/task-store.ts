@@ -241,7 +241,8 @@ interface TaskStore {
    * no effect on edit/see permissions (those come from assignedById/dept
    * head). No-op if userId isn't actually assigned to the task. */
   setMainAssignee: (taskId: string, userId: string) => void;
-  addComment: (taskId: string, message: string, authorId: string, attachments?: Attachment[]) => void;
+  /** mentionIds: คนที่ถูก @แท็กในความคิดเห็น — ได้แจ้งเตือน "แท็กคุณ" แทนแจ้งเตือนความคิดเห็นทั่วไป */
+  addComment: (taskId: string, message: string, authorId: string, attachments?: Attachment[], mentionIds?: string[]) => void;
   removeComment: (taskId: string, commentId: string) => void;
   addAttachment: (taskId: string, attachment: Attachment) => void;
   removeAttachment: (taskId: string, attachmentId: string) => void;
@@ -711,7 +712,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
         ),
       };
     }),
-  addComment: (taskId, message, authorId, attachments) =>
+  addComment: (taskId, message, authorId, attachments, mentionIds) =>
     set((s) => ({
       tasks: s.tasks.map((t) => {
         if (t.id !== taskId) return t;
@@ -719,9 +720,26 @@ export const useTaskStore = create<TaskStore>((set) => ({
         // assignee(s), whoever assigned it, and anyone who's commented
         // before — same "someone replied" spirit as report_task's own
         // comment notifications. notifyMany skips the author themselves.
-        const recipients = Array.from(new Set([...t.assigneeIds, t.assignedById, ...t.comments.map((c) => c.authorId)]));
+        const mentioned = new Set((mentionIds ?? []).filter((id) => id !== authorId));
+        const recipients = Array.from(new Set([...t.assigneeIds, t.assignedById, ...t.comments.map((c) => c.authorId)])).filter(
+          (id) => !mentioned.has(id)
+        );
         const actorName = getUser(authorId)?.name ?? "มีคน";
         const preview = message.length > 60 ? `${message.slice(0, 60)}…` : message;
+        if (mentioned.size > 0) {
+          useNotificationStore
+            .getState()
+            .notifyMany(
+              [...mentioned],
+              authorId,
+              `${actorName} แท็กคุณในงาน "${t.title}": ${preview}`,
+              undefined,
+              `/report-task/tasks?highlight=${t.id}`,
+              undefined,
+              "task_comment",
+              t.id
+            );
+        }
         useNotificationStore
           .getState()
           .notifyMany(
