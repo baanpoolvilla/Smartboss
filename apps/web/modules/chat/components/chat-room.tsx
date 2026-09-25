@@ -42,7 +42,7 @@ function SearchBar({ channelId, onClose }: { channelId: string; onClose: () => v
     <div className="relative border-b border-(--line) bg-(--bg) px-3 py-2">
       <div className="flex items-center gap-2 rounded-xl bg-(--bg-soft) px-3 py-1.5">
         <Search className="h-4 w-4 text-(--ink-soft)" />
-        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="ค้นหาข้อความในห้องนี้" className="min-w-0 flex-1 bg-transparent text-sm focus:outline-none" />
+        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="ค้นหาข้อความในห้องนี้" className="min-w-0 flex-1 bg-transparent text-base focus:outline-none sm:text-sm" />
         {loading && <Loader2 className="h-4 w-4 animate-spin text-(--ink-soft)" />}
         <button type="button" onClick={onClose} className="rounded-full p-0.5 text-(--ink-soft) hover:bg-(--line)" aria-label="ปิดการค้นหา">
           <X className="h-4 w-4" />

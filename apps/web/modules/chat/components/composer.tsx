@@ -560,7 +560,7 @@ export const Composer = forwardRef<
                 submit();
               }
             }}
-            className="max-h-40 min-h-10 flex-1 resize-none rounded-[20px] border border-(--line) bg-(--bg-soft) px-4 py-2 text-[15px] leading-6 text-(--ink) placeholder:text-(--ink-soft) focus-visible:border-(--chat-accent) focus-visible:outline-none"
+            className="max-h-40 min-h-10 flex-1 resize-none rounded-[20px] border border-(--line) bg-(--bg-soft) px-4 py-2 text-base leading-6 sm:text-[15px] text-(--ink) placeholder:text-(--ink-soft) focus-visible:border-(--chat-accent) focus-visible:outline-none"
           />
 
           {canSend || text.trim() || uploading ? (

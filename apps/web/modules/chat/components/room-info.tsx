@@ -220,7 +220,7 @@ export function RoomInfo({
                 if (name.trim() && name.trim() !== channel.name) void run(() => api.updateChannel(channel.id, { name: name.trim() }), "เปลี่ยนชื่อแล้ว");
               }}
             >
-              <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={100} className="min-w-0 flex-1 rounded-lg border border-(--line) px-2 py-1 text-sm" />
+              <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={100} className="min-w-0 flex-1 rounded-lg border border-(--line) px-2 py-1 text-base sm:text-sm" />
               <button type="submit" className="rounded-lg bg-(--chat-accent) px-3 text-sm text-white">
                 บันทึก
               </button>
