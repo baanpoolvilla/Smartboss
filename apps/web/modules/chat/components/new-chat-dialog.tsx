@@ -70,11 +70,10 @@ export function MemberPicker({
         <label className="flex items-center gap-2 rounded-xl bg-(--bg-soft) px-3 py-2">
           <Search className="h-4 w-4 text-(--ink-soft)" />
           <input
-            autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="ค้นหาชื่อ"
-            className="min-w-0 flex-1 bg-transparent text-sm focus:outline-none"
+            className="min-w-0 flex-1 bg-transparent text-base focus:outline-none sm:text-sm"
           />
         </label>
         {departments.length > 0 && (
@@ -181,7 +180,7 @@ export function NewChatDialog({
               onChange={(e) => setGroupName(e.target.value)}
               placeholder="ตั้งชื่อกลุ่ม"
               maxLength={100}
-              className="w-full rounded-xl border border-(--line) bg-(--bg-soft) px-3 py-2 text-sm focus:border-(--chat-accent) focus:outline-none"
+              className="w-full rounded-xl border border-(--line) bg-(--bg-soft) px-3 py-2 text-base focus:border-(--chat-accent) focus:outline-none sm:text-sm"
             />
             <button
               type="button"

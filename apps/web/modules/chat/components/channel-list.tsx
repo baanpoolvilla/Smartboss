@@ -217,7 +217,7 @@ export function ChannelList({ onSelect, onStartNew }: { onSelect: (id: string) =
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="ค้นหาชื่อคนหรือกลุ่ม"
-            className="min-w-0 flex-1 bg-transparent text-sm text-(--ink) placeholder:text-(--ink-soft) focus:outline-none"
+            className="min-w-0 flex-1 bg-transparent text-base text-(--ink) placeholder:text-(--ink-soft) focus:outline-none sm:text-sm"
           />
         </label>
       </div>
