@@ -37,7 +37,7 @@ export async function DELETE(request: Request) {
   const body = await request.json().catch(() => null);
   const endpoint = typeof body?.endpoint === "string" ? body.endpoint : "";
   if (endpoint) {
-    await prisma.webPushSubscription.deleteMany({ where: { endpoint, userId: session.userId } });
+    await prisma.webPushSubscription.deleteMany({ where: { orgId: session.orgId, endpoint, userId: session.userId } });
   }
   return Response.json({ ok: true });
 }

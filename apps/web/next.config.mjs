@@ -50,6 +50,14 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: "25mb",
     },
+    /*
+     * Next 16: เมื่อมี proxy.ts (middleware) ทุก request ที่ผ่านมันถูกพักไว้ในหน่วยความจำ
+     * แล้วตัดทิ้งที่ 10MB เป็นค่าเริ่มต้น — ชั้นนี้อยู่ "ก่อน" bodySizeLimit ด้านบน จึงทำให้
+     * ฟอร์มใบงานซ่อม/PR/PO และไฟล์แชทพังที่ 10MB ทั้งที่ตั้ง 25mb แล้ว (log บนเครื่องจริง:
+     * "Request body exceeded 10MB for /maintenance/work-orders/new" → "Unexpected end of form")
+     * ตั้งให้เท่ากับเพดานของ Caddy (deploy/Caddyfile request_body max_size 25MB)
+     */
+    proxyClientMaxBodySize: "25mb",
   },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];

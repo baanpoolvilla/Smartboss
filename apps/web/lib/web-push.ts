@@ -99,12 +99,12 @@ function encrypt(p256dh: string, authSecret: string, payload: Buffer): Buffer {
  * ส่งแจ้งเตือนถึงทุกเครื่องที่ผู้ใช้เหล่านี้สมัครไว้ — ไม่ throw; เครื่องที่ถอนสิทธิ์แล้ว
  * (404/410) ลบทิ้งให้เอง
  */
-export async function sendWebPush(userIds: string[], payload: WebPushPayload): Promise<void> {
+export async function sendWebPush(orgId: string, userIds: string[], payload: WebPushPayload): Promise<void> {
   if (!isWebPushConfigured() || userIds.length === 0) return;
   let subs: { id: string; endpoint: string; p256dh: string; auth: string }[];
   try {
     subs = await prisma.webPushSubscription.findMany({
-      where: { userId: { in: userIds } },
+      where: { orgId, userId: { in: userIds } },
       select: { id: true, endpoint: true, p256dh: true, auth: true },
     });
   } catch (err) {
@@ -138,6 +138,6 @@ export async function sendWebPush(userIds: string[], payload: WebPushPayload): P
   );
 
   if (gone.length > 0) {
-    await prisma.webPushSubscription.deleteMany({ where: { id: { in: gone } } }).catch(() => {});
+    await prisma.webPushSubscription.deleteMany({ where: { orgId, id: { in: gone } } }).catch(() => {});
   }
 }

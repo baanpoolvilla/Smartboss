@@ -76,7 +76,7 @@ export async function notifyNewMessage(
       const groupTitle = channel?.name ?? "แชท";
       if (others.length > 0) {
         pushes.push(
-          sendWebPush(others, {
+          sendWebPush(actor.orgId, others, {
             title: isDm ? authorName : groupTitle,
             body: isDm ? preview : `${authorName}: ${preview}`,
             url,
@@ -86,7 +86,7 @@ export async function notifyNewMessage(
       }
       if (mentioned.length > 0) {
         pushes.push(
-          sendWebPush(mentioned, {
+          sendWebPush(actor.orgId, mentioned, {
             title: `${authorName} แท็กคุณ${isDm ? "" : ` ใน ${groupTitle}`}`,
             body: preview,
             url,

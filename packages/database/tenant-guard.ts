@@ -28,10 +28,11 @@ export const TENANT_SCOPED_MODELS = new Set<string>([
   "User", "Role", "Department", "Notification", "OrgModule", "SecuritySetting",
   "PerformanceEvent", "PerformanceSetting", "DocumentCounter", "ExampleItem",
   "DayOffQuotaSetting", "EmployeeDayOffQuota", "EmployeeDayOffQuotaDefault",
+  "WebPushSubscription",
   // report_task
   "ReportTask", "ReportTaskCollection", "ReportTaskStore",
   // chat
-  "ChatChannel", "ChatChannelMember", "ChatMessage", "ChatReadState",
+  "ChatChannel", "ChatChannelMember", "ChatMessage", "ChatReadState", "ChatReaction", "ChatFile",
   // company_files
   "CompanyFolder", "CompanyFile", "CompanyFileActivity",
   // maintenance

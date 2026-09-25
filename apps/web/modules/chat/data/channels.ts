@@ -101,8 +101,8 @@ async function activeOrgUserIds(orgId: string, ids: string[]): Promise<string[]>
   return rows.map((r) => r.id);
 }
 
-async function userNames(ids: string[]): Promise<Map<string, string>> {
-  const rows = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } });
+async function userNames(orgId: string, ids: string[]): Promise<Map<string, string>> {
+  const rows = await prisma.user.findMany({ where: { orgId, id: { in: ids } }, select: { id: true, name: true } });
   return new Map(rows.map((r) => [r.id, r.name]));
 }
 
@@ -404,7 +404,7 @@ export async function createGroup(orgId: string, callerId: string, name: string,
       members: { create: allIds.map((userId) => ({ userId, orgId, role: userId === callerId ? "admin" : "member" })) },
     },
   });
-  const names = await userNames([callerId]);
+  const names = await userNames(orgId, [callerId]);
   await postSystemMessage(orgId, created.id, callerId, `${names.get(callerId) ?? "ผู้ใช้"} สร้างกลุ่ม "${created.name}"`);
   publishToUsers(allIds, { type: "chat.channel", channelId: created.id });
   return created.id;
@@ -428,7 +428,7 @@ export async function renameChannel(actor: ChatActor, channelId: string, name: s
   const clean = name.trim().slice(0, 100);
   if (!clean) throw new ChatError("ตั้งชื่อกลุ่มก่อน", 400);
   await prisma.chatChannel.update({ where: { id: channelId }, data: { name: clean } });
-  const names = await userNames([actor.userId]);
+  const names = await userNames(actor.orgId, [actor.userId]);
   await postSystemMessage(actor.orgId, channelId, actor.userId, `${names.get(actor.userId) ?? "ผู้ใช้"} เปลี่ยนชื่อกลุ่มเป็น "${clean}"`);
   await broadcastToChannel(actor.orgId, channelId, { type: "chat.channel", channelId });
 }
@@ -446,7 +446,7 @@ export async function addMembers(actor: ChatActor, channelId: string, userIds: s
     data: toAdd.map((userId) => ({ channelId, userId, orgId: actor.orgId })),
     skipDuplicates: true,
   });
-  const names = await userNames([actor.userId, ...toAdd]);
+  const names = await userNames(actor.orgId, [actor.userId, ...toAdd]);
   const added = toAdd.map((id) => names.get(id) ?? "ผู้ใช้").join(", ");
   await postSystemMessage(actor.orgId, channelId, actor.userId, `${names.get(actor.userId) ?? "ผู้ใช้"} เพิ่ม ${added} เข้ากลุ่ม`);
   await broadcastToChannel(actor.orgId, channelId, { type: "chat.channel", channelId });
@@ -472,7 +472,7 @@ export async function removeMember(actor: ChatActor, channelId: string, userId: 
     if (next) await prisma.chatChannelMember.update({ where: { channelId_userId: { channelId, userId: next.userId } }, data: { role: "admin" } });
   }
 
-  const names = await userNames([actor.userId, userId]);
+  const names = await userNames(actor.orgId, [actor.userId, userId]);
   const text = leaving
     ? `${names.get(userId) ?? "ผู้ใช้"} ออกจากกลุ่ม`
     : `${names.get(actor.userId) ?? "ผู้ใช้"} นำ ${names.get(userId) ?? "ผู้ใช้"} ออกจากกลุ่ม`;

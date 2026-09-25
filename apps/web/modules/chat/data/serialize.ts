@@ -59,9 +59,9 @@ function groupReactions(rows: { messageId: string; userId: string; emoji: string
   return out;
 }
 
-export async function reactionsFor(messageId: string): Promise<ChatReactionDTO[]> {
+export async function reactionsFor(orgId: string, messageId: string): Promise<ChatReactionDTO[]> {
   const rows = await prisma.chatReaction.findMany({
-    where: { messageId },
+    where: { orgId, messageId },
     orderBy: { createdAt: "asc" },
     select: { messageId: true, userId: true, emoji: true },
   });

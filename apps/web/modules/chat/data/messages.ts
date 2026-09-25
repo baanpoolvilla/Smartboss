@@ -204,8 +204,8 @@ export async function deleteMessage(actor: ChatActor, channelId: string, message
 
   await prisma.$transaction([
     prisma.chatMessage.update({ where: { id: messageId }, data: { deletedAt: new Date() } }),
-    prisma.chatReaction.deleteMany({ where: { messageId } }),
-    prisma.chatChannel.updateMany({ where: { id: channelId, announcementId: messageId }, data: { announcementId: null } }),
+    prisma.chatReaction.deleteMany({ where: { orgId: actor.orgId, messageId } }),
+    prisma.chatChannel.updateMany({ where: { orgId: actor.orgId, id: channelId, announcementId: messageId }, data: { announcementId: null } }),
   ]);
   await broadcastToChannel(actor.orgId, channelId, { type: "chat.message.deleted", channelId, messageId });
 }
@@ -225,7 +225,7 @@ export async function toggleReaction(actor: ChatActor, channelId: string, messag
   if (existing) await prisma.chatReaction.delete({ where: key });
   else await prisma.chatReaction.create({ data: { messageId, userId: actor.userId, orgId: actor.orgId, emoji } }).catch(() => {});
 
-  const reactions = await reactionsFor(messageId);
+  const reactions = await reactionsFor(actor.orgId, messageId);
   await broadcastToChannel(actor.orgId, channelId, { type: "chat.reaction", channelId, messageId, reactions });
   return reactions;
 }
