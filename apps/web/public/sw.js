@@ -18,9 +18,9 @@ self.addEventListener("push", (event) => {
       body: data.body || "",
       tag: data.tag || undefined,
       renotify: Boolean(data.tag),
-      icon: "/icon.png",
+      icon: "/icon-v2.png",
       // Android: ไอคอนเล็กบนแถบสถานะต้องเป็นรูปขาวบนพื้นใส (ใช้รูปสีจะเห็นเป็นก้อนขาว)
-      badge: "/badge.png",
+      badge: "/badge-v2.png",
       // Android: สั่นสองจังหวะสั้น (iPhone/คอมไม่สนค่านี้)
       vibrate: [180, 80, 180],
       data: { url: data.url || "/" },
