@@ -32,6 +32,8 @@ import { createUploadLink } from "@/modules/maintenance/data/external-upload";
 import {
   completePmSchedule,
   completePmSchedulesByIds,
+  skipPmSchedule,
+  skipPmSchedulesByIds,
 } from "@/modules/maintenance/data/pm";
 
 /**
@@ -166,6 +168,8 @@ export async function updateStatusAction(formData: FormData) {
   await updateWorkOrderStatus(s.orgId, id, status);
   // ปิดงาน = เดิน PM ที่ผูกไว้ไปรอบถัดไป (batch → single → fallback ตามอุปกรณ์)
   if (status === "completed") await advanceLinkedPm(s.orgId, wo);
+  // ยกเลิกใบงานจาก PM = ข้ามรอบนั้น ไม่งั้น cron สร้างใบเดิมขึ้นมาใหม่ทุกเช้า (ดู skipPmSchedule)
+  if (status === "cancelled" && wo.status !== "cancelled") await skipLinkedPm(s.orgId, wo);
   await notifyStatusChanged(s.orgId, wo, status, s.userId);
 
   revalidatePath(`/maintenance/work-orders/${id}`);
@@ -232,6 +236,18 @@ async function advanceLinkedPm(
     await completePmSchedulesByIds(orgId, wo.pmScheduleIds);
   } else if (wo.pmScheduleId) {
     await completePmSchedule(orgId, wo.pmScheduleId);
+  }
+}
+
+/** ใบงานจาก PM ถูกยกเลิก/ลบ → ข้ามรอบ PM ที่ผูกไว้ (ไม่นับว่าทำ) — ดู skipPmSchedule */
+async function skipLinkedPm(
+  orgId: string,
+  wo: { pmScheduleIds: string[]; pmScheduleId: string | null }
+) {
+  if (wo.pmScheduleIds.length > 0) {
+    await skipPmSchedulesByIds(orgId, wo.pmScheduleIds);
+  } else if (wo.pmScheduleId) {
+    await skipPmSchedule(orgId, wo.pmScheduleId);
   }
 }
 
@@ -410,6 +426,9 @@ export async function deleteWorkOrderAction(formData: FormData) {
   }
   const id = String(formData.get("id") ?? "");
   if (!id) return;
+  // ลบใบงานที่ยังเปิดอยู่จาก PM = ข้ามรอบนั้นด้วย (เหตุผลเดียวกับยกเลิก)
+  const wo = await getWorkOrder(s.orgId, id);
+  if (wo && (wo.status === "open" || wo.status === "in_progress")) await skipLinkedPm(s.orgId, wo);
   await deleteWorkOrder(s.orgId, id);
   // เก็บกวาดแจ้งเตือนของใบงานนี้ด้วย ไม่งั้นกระดิ่งค้างชี้ไปใบงานที่ไม่มีแล้ว
   // (ดู deleteNotificationsByReference's doc — บั๊กคลาสเดียวกับที่ report_task

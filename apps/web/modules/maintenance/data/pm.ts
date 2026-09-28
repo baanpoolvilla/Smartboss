@@ -93,6 +93,43 @@ export async function completePmSchedule(orgId: string, id: string) {
   });
 }
 
+/**
+ * ข้ามรอบ PM นี้ (ไม่นับว่าทำเสร็จ) — เรียกเมื่อใบงานที่ผูก PM ถูกยกเลิกหรือลบ
+ *
+ * เดิมมีแค่ "ปิดงาน" ที่เดิน PM ไปรอบถัดไป ยกเลิก/ลบใบงานไม่แตะ PM ⇒ PM ยังค้างที่วันเดิม
+ * เช้าวันถัดมา cron (generateWorkOrdersForDuePms) เห็นว่าไม่มีใบงานเปิดอยู่ ก็สร้างใบงาน
+ * อัตโนมัติใบเดิมขึ้นมาใหม่ ยกเลิกอีกก็มาอีกทุกวัน ("ดึงข้อมูลเก่ามาแสดงซ้ำ ๆ พวกใบงาน PM
+ * อัตโนมัติ") — ข้ามรอบ = เลื่อนไปรอบถัดไปที่ยังไม่ถึง (ไม่บันทึก lastCompletedDate)
+ *
+ * แบบนับครั้ง (limitedCount): ไม่นับรอบ แต่กลับไป "รอนัดวัน" ให้คนตั้งวันใหม่เอง
+ */
+export async function skipPmSchedule(orgId: string, id: string) {
+  const pm = await prisma.pmSchedule.findFirst({ where: { orgId, id } });
+  if (!pm || !pm.isActive) return;
+
+  if (pm.totalRounds != null) {
+    await prisma.pmSchedule.update({ where: { id: pm.id }, data: { awaitingSchedule: true } });
+    return;
+  }
+
+  // เดินไปทีละรอบจากวันกำหนดเดิม จนได้รอบที่ยังไม่ผ่าน (วันนี้หรืออนาคต)
+  const today = toDateOnly(new Date());
+  let cursor = { ...pm };
+  let next = nextDueAfterCompletion(cursor, cursor.nextDueDate);
+  for (let guard = 0; next.nextDue < today && guard < 400; guard++) {
+    cursor = { ...cursor, nextDueDate: next.nextDue, anchorDate: next.anchor };
+    next = nextDueAfterCompletion(cursor, cursor.nextDueDate);
+  }
+  await prisma.pmSchedule.update({
+    where: { id: pm.id },
+    data: { nextDueDate: toDateOnly(next.nextDue), anchorDate: toDateOnly(next.anchor) },
+  });
+}
+
+export async function skipPmSchedulesByIds(orgId: string, ids: string[]) {
+  for (const id of ids) await skipPmSchedule(orgId, id);
+}
+
 /** ปิดหลาย PM พร้อมกัน (ใบงานรวมหลาย PM — port จาก completePmSchedulesByIds) */
 export async function completePmSchedulesByIds(orgId: string, ids: string[]) {
   for (const id of ids) await completePmSchedule(orgId, id);
