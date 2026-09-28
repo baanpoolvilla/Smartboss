@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarClock, CalendarDays, CalendarX2 } from "lucide-react";
-import { dueUrgency } from "@/modules/report_task/lib/task-flags";
+import { dueUrgency, effectiveDueDate } from "@/modules/report_task/lib/task-flags";
 import { formatShortDate, daysUntil } from "@/modules/report_task/lib/format";
 import { cn } from "@/modules/report_task/lib/utils";
 import type { Task } from "@/modules/report_task/types";
@@ -13,7 +13,7 @@ import type { Task } from "@/modules/report_task/types";
  */
 export function DueDateBadge({ task, className }: { task: Task; className?: string }) {
   const urgency = dueUrgency(task);
-  const date = formatShortDate(task.dueDate);
+  const date = formatShortDate(effectiveDueDate(task));
 
   if (urgency === "normal") {
     // "กำหนดส่ง" spelled out here, unlike the soon/overdue chips below — those
@@ -30,7 +30,7 @@ export function DueDateBadge({ task, className }: { task: Task; className?: stri
   }
 
   if (urgency === "soon") {
-    const left = daysUntil(task.dueDate);
+    const left = daysUntil(effectiveDueDate(task));
     return (
       <span
         className={cn(
@@ -47,7 +47,7 @@ export function DueDateBadge({ task, className }: { task: Task; className?: stri
   }
 
   // overdue
-  const over = Math.abs(daysUntil(task.dueDate));
+  const over = Math.abs(daysUntil(effectiveDueDate(task)));
   return (
     <span
       className={cn(

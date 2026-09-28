@@ -26,6 +26,7 @@ import { StickerConfirmDialog } from "@/modules/report_task/components/shared/st
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/modules/report_task/components/ui/tooltip";
 import { AlertOctagon, Info } from "lucide-react";
 import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
+import { effectiveDueDate } from "@/modules/report_task/lib/task-flags";
 
 export function EscalationsPanel() {
   const tasks = useVisibleTasks();
@@ -137,7 +138,7 @@ export function EscalationsPanel() {
         <div className={cn(expanded && scope.length > 5 && "max-h-[420px] overflow-y-auto -mx-1 px-1")}>
           {visible.map((t) => {
           const assignee = getUser(t.assigneeIds[0] ?? "");
-          const days = Math.abs(daysUntil(t.dueDate));
+          const days = Math.abs(daysUntil(effectiveDueDate(t)));
           const angryCount = t.reactions.filter((r) => r.stickerId === "angry").length;
           return (
             <div

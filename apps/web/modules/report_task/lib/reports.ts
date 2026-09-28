@@ -3,6 +3,7 @@ import { defaultStickers } from "@/modules/report_task/data/stickers";
 import { daysUntil } from "@/modules/report_task/lib/format";
 import type { DepartmentReport, ScoreBreakdown, Sticker, Task, UserReport } from "@/modules/report_task/types";
 import { reactionCountsFor } from "@/modules/report_task/lib/sticker-target";
+import { effectiveDueDate } from "@/modules/report_task/lib/task-flags";
 
 export function isLate(task: Task) {
   if (task.status === "done") return false;
@@ -12,7 +13,7 @@ export function isLate(task: Task) {
   // (once the UTC-midnight due timestamp had passed in the local timezone),
   // hours before the day was actually over, and disagreed with dueUrgency()
   // in task-flags.ts which already did this correctly.
-  return daysUntil(task.dueDate) < 0;
+  return daysUntil(effectiveDueDate(task)) < 0;
 }
 
 export function completionHours(task: Task) {

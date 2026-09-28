@@ -9,9 +9,26 @@ export type DueUrgency = "overdue" | "soon" | "normal";
  * soon: due within the next 0-2 days — amber.
  * normal: everything else, including any completed task.
  */
+/**
+ * กำหนดส่งที่ "ใช้จริง" ของงาน — งานเดี่ยว = dueDate · งานกลุ่ม = กำหนดที่เร็วที่สุด
+ * ของคนที่ **ยังไม่เสร็จ** (ใช้กำหนดรายคนใน assigneeDueDates ถ้ามี)
+ *
+ * เลื่อนกำหนดรายคน ("แก้ไขกำหนดส่ง"/"แก้ไขทั้งหมด" ของงานกลุ่ม) เขียนแค่
+ * assigneeDueDates ไม่แตะ dueDate ของทั้งงาน เดิมทุกจุดที่ตัดสิน "เลยกำหนด" อ่าน
+ * dueDate ตรง ๆ ⇒ เลื่อนให้ทุกคนแล้ว บอร์ด/ตัวกรอง/ตัวนับยังขึ้นเลยกำหนดอยู่ดี
+ * (เจอจริง: T-2569-0028 เลื่อน 25/09 → 02/10) — ทุกที่ให้อ่านผ่านฟังก์ชันนี้
+ */
+export function effectiveDueDate(task: Pick<Task, "taskMode" | "dueDate" | "assigneeIds" | "assigneeDueDates" | "completedAssigneeIds">): string {
+  if (task.taskMode !== "group" || !task.assigneeDueDates) return task.dueDate;
+  const done = new Set(task.completedAssigneeIds ?? []);
+  const pending = task.assigneeIds.filter((id) => !done.has(id));
+  const dates = (pending.length > 0 ? pending : task.assigneeIds).map((id) => task.assigneeDueDates?.[id] ?? task.dueDate);
+  return dates.reduce((a, b) => (daysUntil(b) < daysUntil(a) ? b : a), dates[0] ?? task.dueDate);
+}
+
 export function dueUrgency(task: Task): DueUrgency {
   if (task.status === "done") return "normal";
-  const days = daysUntil(task.dueDate);
+  const days = daysUntil(effectiveDueDate(task));
   if (days < 0) return "overdue";
   if (days <= 2) return "soon";
   return "normal";
