@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireOrg } from "@smartboss/auth";
-import { AppScaffold } from "@/components/module/app-scaffold";
+import { LauncherPage } from "@/components/shell/launcher-page";
 import { SectionCard } from "@/modules/admin/components/ui";
 import { buildMyWorkOverview } from "@/modules/report_task/lib/server/my-work-overview";
 import { AccountTabs } from "../account-tabs";
@@ -20,7 +20,7 @@ export default async function MyWorkPage() {
   const overview = await buildMyWorkOverview(session.orgId, session.userId);
 
   return (
-    <AppScaffold title="บัญชีของฉัน" width="max-w-2xl" backHref="/" hideDefaultActions>
+    <LauncherPage title="บัญชีของฉัน" width="max-w-2xl">
       <AccountTabs active="/account/work" />
 
       <SectionCard
@@ -92,6 +92,6 @@ export default async function MyWorkPage() {
           ดูงานทั้งหมด ›
         </Link>
       </SectionCard>
-    </AppScaffold>
+    </LauncherPage>
   );
 }

@@ -3,7 +3,7 @@ import { prisma } from "@smartboss/database";
 import { Card } from "@smartboss/ui/components/card";
 import { Button } from "@smartboss/ui/components/button";
 import { Avatar } from "@smartboss/ui/components/avatar";
-import { AppScaffold } from "@/components/module/app-scaffold";
+import { LauncherPage } from "@/components/shell/launcher-page";
 import { Field, SectionCard, inputClass } from "@/modules/admin/components/ui";
 import { loadSecuritySettings } from "@/lib/security-settings";
 import { AccountTabs } from "./account-tabs";
@@ -45,7 +45,7 @@ export default async function AccountPage() {
   const { passwordMinLength } = await loadSecuritySettings(session.orgId ?? null);
 
   return (
-    <AppScaffold title="บัญชีของฉัน" width="max-w-2xl" backHref="/" hideDefaultActions>
+    <LauncherPage title="บัญชีของฉัน" width="max-w-2xl">
       <AccountTabs active="/account" />
 
       <SectionCard title="ข้อมูลบัญชี">
@@ -168,6 +168,6 @@ export default async function AccountPage() {
           </Button>
         </SectionCard>
       </form>
-    </AppScaffold>
+    </LauncherPage>
   );
 }
