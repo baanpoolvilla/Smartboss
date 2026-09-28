@@ -3,6 +3,7 @@ import { HrPage } from "@/modules/hr/components/hr-page";
 import { HR_PERMS } from "@/modules/hr/permissions";
 import { EmptyState } from "@/modules/hr/components/ui";
 import { buildScorecards } from "@/lib/performance";
+import { monthDisplay, monthKey, monthRange } from "@/lib/performance-month";
 import { MissedReportsList } from "./missed-reports-list";
 
 /**
@@ -21,15 +22,16 @@ export default async function MyScorePage() {
       width="max-w-2xl"
       load={async () => {
         const session = await requireOrg();
-        const to = new Date();
-        const from = new Date(to);
-        from.setDate(from.getDate() - 30);
+        // เดือนนี้ (1 ถึงสิ้นเดือน) ตรงกับเกรด/ค่าคอมที่ตัดรอบรายเดือน — เดิม 30 วันล่าสุด วันที่ 1
+        // คะแนนเลยไม่เริ่มใหม่ ยังเห็นที่โดนหักปลายเดือนก่อน
+        const month = monthKey(new Date());
+        const { from, to } = monthRange(month);
 
         const { settings, cards } = await buildScorecards(session.orgId, from, to);
         const card = cards.find((c) => c.userId === session.userId);
 
         if (!card) {
-          return <EmptyState>ยังไม่มีข้อมูลคะแนนผลงานในช่วง 30 วันล่าสุด</EmptyState>;
+          return <EmptyState>ยังไม่มีข้อมูลคะแนนผลงานของเดือนนี้</EmptyState>;
         }
 
         return (
@@ -37,14 +39,14 @@ export default async function MyScorePage() {
             <div className="rounded-2xl border border-(--line) bg-white p-5">
               <div className="flex items-end justify-between">
                 <div>
-                  <p className="text-xs text-(--ink-soft)">คะแนนของคุณ (30 วันล่าสุด)</p>
+                  <p className="text-xs text-(--ink-soft)">คะแนนของคุณ เดือน {monthDisplay(month)}</p>
                   <p className="mt-1 text-3xl font-bold text-(--ink)">{card.score}</p>
                 </div>
                 <span className="rounded-full bg-(--bg-soft) px-3 py-1 text-sm font-bold text-(--ink)">
                   เกรด {card.grade}
                 </span>
               </div>
-              <p className="mt-2 text-xs text-(--ink-soft)">คะแนนตั้งต้น {settings.baseScore} ทุกคนเริ่มเท่ากัน</p>
+              <p className="mt-2 text-xs text-(--ink-soft)">คะแนนตั้งต้น {settings.baseScore} ทุกคนเริ่มใหม่ทุกวันที่ 1</p>
             </div>
 
             <div className="rounded-2xl border border-(--line) bg-white p-5">

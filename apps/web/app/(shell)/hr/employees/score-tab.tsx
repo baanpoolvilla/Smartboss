@@ -13,15 +13,16 @@ import {
   Td,
 } from "@/modules/hr/components/ui";
 import { buildScorecards } from "@/lib/performance";
+import { monthDisplay, monthKey, monthRange, resolveMonthParam, shiftMonth } from "@/lib/performance-month";
 import { CategoryChipsRow } from "./category-chips-row";
 
-const RANGES = {
-  "30": { days: 30, label: "30 วันล่าสุด" },
-  "90": { days: 90, label: "90 วันล่าสุด" },
-  "365": { days: 365, label: "1 ปีล่าสุด" },
-} as const;
-
-type RangeKey = keyof typeof RANGES;
+/**
+ * ดูเป็นเดือนปฏิทิน (1 ถึงสิ้นเดือน) ไม่ใช่ "30 วันล่าสุด" — เกรดและค่าคอมตัดรอบรายเดือน
+ * (commission-tab, หน้าพนักงานรายคน) ถ้าหน้านี้เป็นช่วงเลื่อน 30 วัน วันที่ 1 คะแนนจะไม่เริ่มใหม่
+ * ยังโชว์ที่โดนหักปลายเดือนก่อน แล้วไม่ตรงกับเกรดที่ใช้คิดเงิน ("อยากให้แต่ละเดือนแยกกัน")
+ * ?range= รับ YYYY-MM · ค่าเก่า 30/90/365 ตกเป็นเดือนนี้
+ */
+const MONTHS_BACK = 12;
 
 /**
  * สีของเกรดเลือกจาก **อันดับ** ไม่ใช่ตัวอักษร
@@ -46,10 +47,9 @@ export async function renderScoreTab(
     return <NoPermission what="คะแนน & เกรด" />;
   }
 
-  const key: RangeKey = rangeParam === "90" || rangeParam === "365" ? rangeParam : "30";
-  const to = new Date();
-  const from = new Date(to);
-  from.setDate(from.getDate() - RANGES[key].days);
+  const month = resolveMonthParam(rangeParam);
+  const thisMonth = monthKey(new Date());
+  const { from, to } = monthRange(month);
 
   const { settings, cards } = await buildScorecards(session.orgId, from, to);
   const gradeOrder = settings.gradeThresholds.map(([g]) => g);
@@ -104,19 +104,19 @@ export async function renderScoreTab(
 
       <SectionCard
         title="คะแนนและเกรด"
-        description="คิดรวมจากงานซ่อมบำรุง งานในบอร์ด และการลงเวลา — เรียงจากคะแนนน้อยไปมาก"
+        description={`${monthDisplay(month)} · คิดรวมจากงานซ่อมบำรุง งานในบอร์ด และการลงเวลา — ทุกคนเริ่มใหม่ที่คะแนนตั้งต้นทุกวันที่ 1 · เรียงจากคะแนนน้อยไปมาก`}
         action={
           <div className="flex flex-wrap items-center gap-2">
             <form method="GET" action="/hr/employees" className="flex items-center gap-2">
               <input type="hidden" name="tab" value="score" />
               <select
                 name="range"
-                defaultValue={key}
+                defaultValue={month}
                 className="h-9 rounded-(--radius) border border-(--line) bg-(--bg) px-2 text-xs"
               >
-                {Object.entries(RANGES).map(([value, r]) => (
-                  <option key={value} value={value}>
-                    {r.label}
+                {Array.from({ length: MONTHS_BACK }, (_, i) => shiftMonth(thisMonth, -i)).map((m) => (
+                  <option key={m} value={m}>
+                    {m === thisMonth ? `เดือนนี้ (${monthDisplay(m)})` : monthDisplay(m)}
                   </option>
                 ))}
               </select>
