@@ -240,6 +240,20 @@ describe('missing and duplicate punches', () => {
     expect(result.workedMinutes).toBe(480);
   });
 
+  it('treats an in/out pair seconds apart as one double-registered scan, not a zero-minute day', () => {
+    // เครื่องสแกนนิ้วเด้ง 2 ที: กดครั้งเดียวได้ IN 08:00 + OUT 08:01 แล้วเย็นสแกนออก 17:00
+    const result = run({
+      punches: [
+        punch('08:00', { intent: 'CLOCK_IN' }),
+        punch('08:01', { intent: 'CLOCK_OUT' }),
+        punch('17:00', { intent: 'CLOCK_OUT' }),
+      ],
+    });
+    expect(codes(result)).toContain('DUPLICATE_PUNCH');
+    expect(result.workedMinutes).toBe(480);
+    expect(result.absenceMinutes).toBe(0);
+  });
+
   it('does not treat a different intent inside the window as a duplicate', () => {
     const result = run({
       punches: [

@@ -44,6 +44,10 @@ async function main() {
   const from = arg("from");
   const to = arg("to");
   const reason = arg("reason");
+  // --only=absent / --only=late — คืนเฉพาะหมวดเดียว (เช่นขาดงานเพราะเครื่องสแกน "เด้ง 2 ที" แต่มาสายจริง)
+  const only = arg("only");
+  const categories =
+    only === "absent" ? ["attendance_absent"] : only === "late" ? ["attendance_late"] : ["attendance_late", "attendance_absent"];
   const isDay = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d);
   if (
     (dates.length === 0 && !userArg) ||
@@ -78,7 +82,7 @@ async function main() {
   const originals = await prisma.performanceEvent.findMany({
     where: {
       source: "workforce",
-      category: { in: ["attendance_late", "attendance_absent"] },
+      category: { in: categories },
       refType: "attendance_day",
       ...(orgId ? { orgId } : {}),
       ...(userId ? { userId } : {}),

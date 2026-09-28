@@ -218,6 +218,10 @@ function roleOf(punch: Punch, workOpen: boolean, breakOpen: boolean): Role {
  * เก็บอันแรกไว้เสมอ: คนสแกนสองครั้งเพราะเครื่องไม่ตอบสนอง เวลาจริงคือครั้งแรก
  * punch ที่มีเจตนาต่างกันไม่ถือว่าซ้ำ แม้จะอยู่ในหน้าต่างเดียวกัน
  */
+function isWorkBoundary(intent: Punch['intent']): boolean {
+  return intent === 'AUTO' || intent === 'CLOCK_IN' || intent === 'CLOCK_OUT';
+}
+
 function dropDuplicates(
   punches: readonly Punch[],
   windowMinutes: number,
@@ -234,8 +238,12 @@ function dropDuplicates(
 
     const gapMinutes = (punch.at.getTime() - previous.at.getTime()) / 60_000;
     const sameIntent = previous.intent === punch.intent;
+    // เข้า/ออกงานสลับกันภายในไม่กี่นาทีไม่ใช่ช่วงทำงานจริง — เครื่องสแกนนิ้ว "เด้ง 2 ที"
+    // บันทึกกดครั้งเดียวเป็น IN แล้ว OUT ทันที ⇒ วันนั้นทำงาน 0 นาที กลายเป็น "ขาดงาน"
+    // ทั้งที่มาทำงาน · พัก (BREAK_*) ยังแยกเหมือนเดิม — เข้างานแล้วกดพักทันทีมีได้จริง
+    const bothWorkBoundary = isWorkBoundary(previous.intent) && isWorkBoundary(punch.intent);
 
-    if (gapMinutes <= windowMinutes && sameIntent) {
+    if (gapMinutes <= windowMinutes && (sameIntent || bothWorkBoundary)) {
       exceptions.push({
         code: 'DUPLICATE_PUNCH',
         blocking: false,
