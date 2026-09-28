@@ -125,6 +125,12 @@ async function main() {
   await auditPmWorkOrders(since);
 }
 
+/** ที่มาของใบงาน: เลข WO-2568-* มาจากการดึงข้อมูล ChangYai รอบสอง (deploy/reimport-changyai-diff.sql) */
+function describe(w: { code: string; status: string; createdAt: Date; completedAt: Date | null; autoCreated: boolean; createdBy: string | null; pmScheduleIds: string[] }) {
+  const origin = w.code.startsWith("WO-2568-") ? "ChangYai" : w.autoCreated ? "ระบบสร้างเอง" : w.pmScheduleIds.length > 0 ? "คนเปิดจากปฏิทิน(รวมหลายหลัง)" : "คนเปิดเอง";
+  return `${w.code} · ${origin} · สร้าง ${day(w.createdAt)} · ${w.status}${w.completedAt ? ` ปิด ${day(w.completedAt)}` : ""}`;
+}
+
 /** ใบงาน PM ซ้อน (เปิดค้างหลายใบพร้อมกัน) และรอบที่ห่างกันสั้นกว่าความถี่ของ PM */
 async function auditPmWorkOrders(since: Date) {
   const cycleDays: Record<string, number> = { weekly: 7, biweekly: 14, triweekly: 21 };
@@ -134,7 +140,7 @@ async function auditPmWorkOrders(since: Date) {
   };
   const wos = await prisma.workOrder.findMany({
     where: { OR: [{ pmScheduleId: { not: null } }, { pmScheduleIds: { isEmpty: false } }], createdAt: { gte: since } },
-    select: { code: true, status: true, createdAt: true, autoCreated: true, pmScheduleId: true, pmScheduleIds: true },
+    select: { code: true, status: true, createdAt: true, completedAt: true, autoCreated: true, createdBy: true, pmScheduleId: true, pmScheduleIds: true },
     orderBy: { createdAt: "asc" },
   });
   const byPm = new Map<string, typeof wos>();
@@ -159,7 +165,10 @@ async function auditPmWorkOrders(since: Date) {
     const live = list.filter((w) => w.status !== "cancelled");
     for (let i = 1; i < live.length; i++) {
       const gap = Math.round((live[i]!.createdAt.getTime() - live[i - 1]!.createdAt.getTime()) / 86_400_000);
-      if (gap < minDays) tooSoon.push(`  ${label}: ${live[i - 1]!.code} → ${live[i]!.code} ห่าง ${gap} วัน (รอบ ${minDays})`);
+      if (gap < minDays) {
+        tooSoon.push(`  ${label}: ห่าง ${gap} วัน (รอบ ${minDays})`);
+        for (const w of [live[i - 1]!, live[i]!]) tooSoon.push(`      ${describe(w)}`);
+      }
     }
   }
   // แผน PM ซ้ำ: บ้าน/อุปกรณ์เดียวกัน ชื่อเดียวกัน ยังใช้งานอยู่ทั้งคู่ — ต่างคนต่างเปิดใบงาน
