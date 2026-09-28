@@ -84,6 +84,38 @@ async function main() {
   if (!rows.some((r) => r.subject === user.id)) {
     console.log(`\n⚠ ไม่มีใบลาไหนโยงกับบัญชีนี้ (id=${user.id}) เลยในวันนั้น`);
   }
+
+  // ตัวหักคะแนนรายงานดูเฉพาะวันที่ >= enabledSince (วันที่เปิดสวิตช์ครั้งล่าสุด)
+  // ทั้งตอนหักและตอนคืน — ถ้าวันที่ที่ถามเก่ากว่านี้ จะไม่ถูกแตะอีกเลย
+  const stores = await prisma.reportTaskStore.findMany({
+    where: { orgId: user.orgId, key: { in: ["report-penalty-enabled-since", "report-penalty-settings"] } },
+    select: { key: true, data: true, updatedAt: true },
+  });
+  console.log("\nตั้งค่าหักคะแนนรายงาน:");
+  for (const s of stores) {
+    console.log(`  ${s.key} = ${JSON.stringify(s.data)}  (แก้ล่าสุด ${s.updatedAt.toISOString()})`);
+  }
+  const since = stores.find((s) => s.key === "report-penalty-enabled-since")?.data;
+  if (typeof since === "string" && since > date) {
+    console.log(`  ⚠ enabledSince (${since}) ใหม่กว่าวันที่ ${date} — ตัวหักคะแนนจะไม่หักและไม่คืนของวันนี้อีกแล้ว`);
+  }
+
+  const events = await prisma.performanceEvent.findMany({
+    where: {
+      orgId: user.orgId,
+      userId: user.id,
+      source: "report_task",
+      refId: { startsWith: `${date}:` },
+    },
+    select: { category: true, refType: true, refId: true, points: true, note: true, createdAt: true },
+    orderBy: { createdAt: "asc" },
+  });
+  console.log(`\nคะแนนรายงานของคนนี้วันที่ ${date}: ${events.length} รายการ`);
+  for (const e of events) {
+    console.log(
+      `  ${e.createdAt.toISOString()}  ${e.refType}  ${e.category}  ${Number(e.points)}  ${e.refId}${e.note ? `  (${e.note})` : ""}`,
+    );
+  }
 }
 
 main()
