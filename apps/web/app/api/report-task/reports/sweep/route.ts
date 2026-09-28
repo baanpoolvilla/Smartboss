@@ -5,6 +5,7 @@ import { loadPerformanceSettings, type PerformanceEventInput } from "@/lib/perfo
 import { readStore } from "@/modules/report_task/lib/db/org-store";
 import { listDirectory } from "@/modules/report_task/lib/db/employee-directory";
 import { buildDateExemptions } from "@/modules/report_task/lib/report-feed-exemptions";
+import { listHolidayEvents, listLeaveEvents } from "@/modules/report_task/lib/db/workforce-calendar";
 import { computeReportPenaltyCandidates } from "@/modules/report_task/lib/report-penalty-sweep";
 import { thaiHolidayEvents } from "@/modules/report_task/data/thai-holidays";
 import type { ReportPost, ReportTopic, SubmitterGroup } from "@/modules/report_task/store/report-feed-store";
@@ -57,7 +58,19 @@ export async function POST() {
   const session = await requireOrg();
   const orgId = session.orgId;
 
-  const [settings, { data: featureEnabled }, { data: enabledSince }, { data: graceDaysRaw }, { data: reportFeed }, users, { data: leaves }, { data: holidaysSlice }, { data: routine }, { data: reminderSettingsRaw }] =
+  // การลา/Day-Off และวันหยุดบริษัทอยู่ในโมดูลบุคคล (workforce) — ต้องอ่านจาก
+  // ที่นั่น เหมือนที่ปฏิทินอ่านผ่าน /api/report-task/store/[key] (WORKFORCE_KEYS)
+  // เดิมที่นี่ readStore("leaves"/"holidays") ซึ่งเป็น store เก่าก่อนย้ายไป HR
+  // (ว่าง/ค้าง) ⇒ Day-Off ที่ลงใน HR ไม่ถูกยกเว้น คนหยุดยังโดนหัก "ส่งรายงานสาย"
+  // ช่วงวันที่: ครอบคลุมทุกวันที่ sweep ย้อนดู (LOOKBACK) บวกเผื่อ
+  const rangeFrom = new Date();
+  rangeFrom.setDate(rangeFrom.getDate() - REPORT_PENALTY_LOOKBACK_DAYS - 7);
+  const rangeTo = new Date();
+  rangeTo.setDate(rangeTo.getDate() + 7);
+  const fromStr = rangeFrom.toISOString().slice(0, 10);
+  const toStr = rangeTo.toISOString().slice(0, 10);
+
+  const [settings, { data: featureEnabled }, { data: enabledSince }, { data: graceDaysRaw }, { data: reportFeed }, users, leaves, workforceHolidays, { data: routine }, { data: reminderSettingsRaw }] =
     await Promise.all([
       loadPerformanceSettings(orgId),
       readStore<boolean>(orgId, "report-penalty-settings"),
@@ -65,8 +78,8 @@ export async function POST() {
       readStore<number>(orgId, "report-penalty-grace-days"),
       readStore<{ topics: ReportTopic[]; posts: ReportPost[]; submitterGroups?: SubmitterGroup[] }>(orgId, "report-feed"),
       listDirectory(orgId),
-      readStore<CalendarEvent[]>(orgId, "leaves"),
-      readStore<{ holidays: CalendarEvent[] }>(orgId, "holidays"),
+      listLeaveEvents(orgId, fromStr, toStr),
+      listHolidayEvents(orgId, fromStr, toStr),
       readStore<RoutineDayOffSlice>(orgId, "routine-dayoff"),
       readStore<Partial<ReminderSettings>>(orgId, "reminder-settings"),
     ]);
@@ -95,13 +108,13 @@ export async function POST() {
 
   // เหมือน store-hydrator.tsx's "holidays" apply — วันหยุดของบริษัทที่บันทึกไว้
   // อาจเก่ากว่าโค้ด (ยังไม่มีวันหยุดไทยปีล่าสุด) เติมของที่ขาดกลับเข้าไปเสมอ
-  const existingHolidayIds = new Set((holidaysSlice?.holidays ?? []).map((h) => h.id));
+  const existingHolidayIds = new Set(workforceHolidays.map((h) => h.id));
   const mergedHolidays = [
-    ...(holidaysSlice?.holidays ?? []),
+    ...workforceHolidays,
     ...thaiHolidayEvents.filter((h) => !existingHolidayIds.has(h.id)),
   ];
 
-  const exemptions = buildDateExemptions(leaves ?? [], mergedHolidays, {
+  const exemptions = buildDateExemptions(leaves, mergedHolidays, {
     pickedDates: routine?.pickedDates ?? {},
     rules: routine?.rules ?? [],
     ruleExceptions: routine?.ruleExceptions ?? {},
