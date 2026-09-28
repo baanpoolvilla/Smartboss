@@ -2,7 +2,7 @@ import { requireOrg } from "@smartboss/auth";
 import { prisma } from "@smartboss/database";
 
 import { loadPerformanceSettings, type PerformanceEventInput } from "@/lib/performance";
-import { readStore } from "@/modules/report_task/lib/db/org-store";
+import { createStoreIfAbsent, readStore } from "@/modules/report_task/lib/db/org-store";
 import { listDirectory } from "@/modules/report_task/lib/db/employee-directory";
 import { buildDateExemptions } from "@/modules/report_task/lib/report-feed-exemptions";
 import { listHolidayEvents, listLeaveEvents } from "@/modules/report_task/lib/db/workforce-calendar";
@@ -96,9 +96,25 @@ export async function POST() {
   if (!settings.enabled || featureEnabled !== true) {
     return Response.json({ ok: true, changed: false, skipped: "disabled" });
   }
-  // ไม่ควรเกิด (ตั้งค่า setEnabled(true) เขียนคู่กันเสมอ) แต่ถ้าไม่มี anchor
-  // จริง ๆ ห้ามหักย้อนหลังเด็ดขาด — จำกัดแค่วันนี้วันเดียวไว้ก่อน (ปลอดภัยสุด)
-  const notBeforeDay = enabledSince ?? new Date().toISOString().slice(0, 10);
+  /*
+   * ไม่มี enabledSince (ควรถูกเขียนคู่กับสวิตช์เสมอ แต่เจอจริงว่าบริษัทที่เปิดไว้ก่อน
+   * มีค่านี้ไม่มีแถวเลย) ห้ามหักย้อนหลัง จึงเริ่มนับวันนี้ — **และบันทึกเก็บไว้**
+   *
+   * เดิมแค่ใช้ "วันนี้" ชั่วคราวทุกรอบโดยไม่เคยบันทึก ⇒ เพดานเลื่อนตามวันไปเรื่อย ๆ
+   * sweep ตัดสินได้แค่วันปัจจุบัน วันไหนจบลงโดยไม่ส่งไม่เคยถูกตัดสินเป็น "ไม่ส่ง −2"
+   * (ต้องรอให้วันผ่านไปก่อน ซึ่งพอถึงตอนนั้นวันนั้นก็หลุดเพดานไปแล้ว) ค้างเป็น "สาย −1"
+   * ตลอด (เจอจริง: ไม่ส่งรอบเย็นเลยแต่โดนแค่ −1) บันทึกครั้งเดียวแล้วเพดานอยู่กับที่
+   * วันนี้จะถูกตัดสินครบในวันพรุ่งนี้ตามปกติ — createStoreIfAbsent กันหลายแท็บแข่งกันเขียน
+   */
+  let notBeforeDay = enabledSince;
+  if (!notBeforeDay) {
+    notBeforeDay = localDateStr(new Date());
+    const created = await createStoreIfAbsent(orgId, "report-penalty-enabled-since", notBeforeDay, session.userId);
+    if (!created.ok) {
+      const { data: raced } = await readStore<string>(orgId, "report-penalty-enabled-since");
+      if (typeof raced === "string") notBeforeDay = raced;
+    }
+  }
   /*
    * "คืนคะแนน" ย้อนดูได้ไกลกว่า notBeforeDay — ถึงเต็ม LOOKBACK เสมอ
    *
