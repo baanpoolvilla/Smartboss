@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import {
   detectDevice,
+  forgetInstalled,
   installedHint,
   isStandalone,
   lineExternalUrl,
@@ -43,7 +44,28 @@ export function InstallGate() {
   const [canPrompt, setCanPrompt] = useState(false);
   const [installed, setInstalled] = useState(false);
 
-  useEffect(() => onInstallAvailable(setCanPrompt), []);
+  useEffect(
+    () =>
+      onInstallAvailable((available) => {
+        setCanPrompt(available);
+        // Chrome ส่ง beforeinstallprompt เฉพาะตอนที่เครื่องนี้ **ยังไม่มี** แอปติดตั้งอยู่
+        // ⇒ ถ้าเคยจำว่าติดตั้งแล้วแต่ยังได้เหตุการณ์นี้ แปลว่าลบแอปไปแล้ว — ลืมค่าเดิม
+        // แล้วขึ้นหน้าจอติดตั้งอีกครั้ง ("ถ้าลบจะขึ้นติดตั้งใหม่ไหม") ใช้ได้กับ Android/
+        // Chrome เท่านั้น iPhone ไม่มีสัญญาณแบบนี้
+        if (!available || isStandalone()) return;
+        forgetInstalled();
+        const d = detectDevice();
+        if (d.os === "desktop" || d.inApp) return;
+        try {
+          if (sessionStorage.getItem(SKIP_KEY) === "1") return;
+        } catch {
+          // ขึ้นตามปกติ
+        }
+        setDevice(d);
+        setOpen(true);
+      }),
+    [],
+  );
 
   useEffect(() => {
     // อ่านข้อมูลเครื่องได้หลังโหลดหน้าเท่านั้น (ฝั่งเซิร์ฟเวอร์ไม่มี) — ตั้ง state ในนี้ตั้งใจ
