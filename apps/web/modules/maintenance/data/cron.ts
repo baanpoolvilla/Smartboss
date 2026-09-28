@@ -373,6 +373,7 @@ export async function dockOverdueMaintenance(): Promise<{
   // คืนคะแนนที่ไม่ถูกต้องแล้ว "ก่อน" หักรอบนี้ — ใบงานที่ย้ายคนรับผิดชอบจะถูกถอนจาก
   // คนเดิมแล้วหักคนปัจจุบันได้ในรอบเดียวกัน (unique key ไม่มี userId ถ้าหักก่อน
   // แถวของคนเดิมจะกันไว้)
+  await cancelTwinWorkOrders();
   const revoked = await revokeInvalidMaintenanceDocks(settingsByOrg);
   const minPmGraceDays = Math.min(...activeSettings.map((s) => s.pmGraceDays));
   const minWorkOrderGraceDays = Math.min(
@@ -501,6 +502,64 @@ export async function dockOverdueMaintenance(): Promise<{
 
   const recorded = await recordPerformanceEvents(events);
   return { workOrders: overdue.length, pmSchedules: latePms.length, recorded, revoked };
+}
+
+/** ใบงานที่สร้างห่างกันไม่เกินนี้ โดยคนเดียวกัน บ้านเดียวกัน หัวข้อเดียวกัน = กดบันทึกซ้ำ */
+const TWIN_WINDOW_MS = 2 * 60_000;
+
+/**
+ * ยกเลิกใบงานแฝด — กดบันทึกสองทีตอนเน็ตช้าได้ใบงานสองใบเหมือนกันเป๊ะ (ก่อนมีตัวกันใน
+ * SaveFeedback) คนทำปิดไปใบหนึ่ง อีกใบค้าง open จนเลยกำหนดแล้วโดนหัก "ใบงานเกินกำหนด"
+ * ทั้งที่งานเสร็จแล้ว ("ปิดไปแล้วแต่ใบงานซ้ำ")
+ *
+ * ใบที่ยัง open และมีแฝด: ถ้าแฝดปิดเสร็จแล้ว → ยกเลิกใบนี้ · ถ้าแฝดยังเปิดทั้งคู่ → เก็บใบเก่าสุด
+ * ยกเลิกใบที่เหลือ — ใบที่ถูกยกเลิก คะแนนที่หักไปจะถูกคืนใน revokeInvalidMaintenanceDocks
+ */
+async function cancelTwinWorkOrders(): Promise<void> {
+  const open = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.workOrder.findMany({
+      where: { status: { in: ["open", "in_progress"] }, autoCreated: false, createdBy: { not: null } },
+      select: { id: true, orgId: true, propertyId: true, title: true, createdBy: true, createdAt: true },
+    })
+  );
+  if (open.length === 0) return;
+  const siblings = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.workOrder.findMany({
+      where: {
+        status: { in: ["open", "in_progress", "completed"] },
+        autoCreated: false,
+        propertyId: { in: [...new Set(open.map((w) => w.propertyId))] },
+        createdBy: { in: [...new Set(open.map((w) => w.createdBy!))] },
+      },
+      select: { id: true, orgId: true, propertyId: true, title: true, createdBy: true, createdAt: true, status: true },
+    })
+  );
+
+  const key = (w: { orgId: string; propertyId: string; title: string; createdBy: string | null }) =>
+    `${w.orgId}|${w.propertyId}|${w.createdBy}|${w.title.trim().toLowerCase()}`;
+  const byKey = new Map<string, typeof siblings>();
+  for (const s of siblings) byKey.set(key(s), [...(byKey.get(key(s)) ?? []), s]);
+
+  for (const wo of open) {
+    const twins = (byKey.get(key(wo)) ?? []).filter(
+      (s) => s.id !== wo.id && Math.abs(s.createdAt.getTime() - wo.createdAt.getTime()) <= TWIN_WINDOW_MS,
+    );
+    const doneTwin = twins.some((s) => s.status === "completed");
+    const olderOpenTwin = twins.some(
+      (s) => (s.status === "open" || s.status === "in_progress") && (s.createdAt < wo.createdAt || (s.createdAt.getTime() === wo.createdAt.getTime() && s.id < wo.id)),
+    );
+    if (!doneTwin && !olderOpenTwin) continue;
+    await prisma.workOrder.updateMany({
+      where: { orgId: wo.orgId, id: wo.id, status: { in: ["open", "in_progress"] } },
+      data: {
+        status: "cancelled",
+        completionNotes: "ยกเลิกอัตโนมัติ — ใบงานซ้ำ (บันทึกซ้ำ) มีอีกใบที่เหมือนกันอยู่แล้ว",
+      },
+    });
+    // ใบที่ยกเลิกไปแล้วต้องไม่ถูกนับเป็นแฝดที่ "ยังเปิด" ของใบถัดไปในรอบเดียวกัน
+    const self = siblings.find((s) => s.id === wo.id);
+    if (self) self.status = "cancelled";
+  }
 }
 
 /**
