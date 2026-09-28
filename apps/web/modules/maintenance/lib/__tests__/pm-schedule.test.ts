@@ -114,3 +114,17 @@ test("ปิดงานตีสองตามเวลาไทย ต้อ�
   // 13 ก.ย. 19:00Z = 14 ก.ย. 02:00 ตามเวลาไทย
   assert.equal(iso(toDateOnly(new Date(Date.UTC(2026, 8, 13, 19)))), "2026-09-14");
 });
+
+test("รอบต่อปี: วันกำหนดไม่ตรงช่องของ anchor — ปิดงานแล้วรอบถัดไปต้องไม่มาในอีกไม่กี่วัน", () => {
+  // กำหนด 23/09 แต่ช่องของ anchor ตกวันที่ 28 (ทุก 3 เดือน 2 รอบต่อปี: 28/03, 28/06, ..)
+  const r = nextDueAfterCompletion(
+    {
+      anchorDate: new Date("2025-09-28T00:00:00Z"),
+      nextDueDate: new Date("2026-09-23T00:00:00Z"),
+      frequency: "quarterly",
+      roundsPerYear: 3,
+    },
+    new Date("2026-09-25T03:00:00Z"),
+  );
+  assert.ok(r.nextDue.getTime() >= Date.parse("2026-11-07T00:00:00Z"), r.nextDue.toISOString());
+});

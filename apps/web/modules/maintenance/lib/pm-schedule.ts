@@ -196,8 +196,16 @@ export function nextDueAfterCompletion(
   }
 
   const anchor = dateOnlyUTC(pm.anchorDate ?? pm.nextDueDate);
+  // ช่องถัดไปต้องห่างจากวันกำหนดของรอบที่เพิ่งจบอย่างน้อยครึ่งช่วงความถี่ — วันกำหนดไม่ตรง
+  // ช่องของ anchor ได้ (แก้วันเอง / ดึงวันจาก ChangYai มาแต่ anchor เป็นของเดิม) เช่นกำหนด
+  // 23/09 แต่ช่องอยู่ 28/09: ปิดงาน 25/09 เดิมได้รอบถัดไป 28/09 อีก 3 วัน ทั้งที่รอบคือ
+  // 3 เดือน ("ล้างแอร์ประจำปี" เปิดใบใหม่ 3 วันหลังปิด) ช่อง 28/09 คือรอบเดียวกับที่เพิ่งทำ
+  // ปิดช้าเกินครึ่งช่วงยังนับจากวันที่ทำจริงเหมือนเดิม (base ชนะ)
+  const halfSpan = Math.floor((addInterval(due, pm.frequency).getTime() - due.getTime()) / 2);
+  const floor = new Date(due.getTime() + halfSpan);
+  const after = isAfter(base, floor) ? base : floor;
   return {
-    nextDue: nextDueSlot(anchor, pm.frequency, pm.roundsPerYear, base),
+    nextDue: nextDueSlot(anchor, pm.frequency, pm.roundsPerYear, after),
     anchor,
   };
 }

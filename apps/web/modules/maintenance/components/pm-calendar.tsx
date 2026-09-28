@@ -610,6 +610,8 @@ export function PmCalendar({
         >
           <form id="pm-edit" action={updateAction} className="flex flex-col gap-3">
             <input type="hidden" name="id" value={editing.id} />
+            {/* วันที่เห็นตอนเปิดฟอร์ม — เซิร์ฟเวอร์เปลี่ยนวันกำหนดเฉพาะเมื่อผู้ใช้แก้ช่องนี้จริง (ดู updatePmAction) */}
+            <input type="hidden" name="originalNextDueDate" value={editing.nextDueInput} />
             <label className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-(--ink)">ชื่องาน PM</span>
               <input

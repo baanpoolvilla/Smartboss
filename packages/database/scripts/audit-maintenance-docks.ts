@@ -151,14 +151,14 @@ async function auditPmWorkOrders(since: Date) {
   }
   const pms = await prisma.pmSchedule.findMany({
     where: { id: { in: [...byPm.keys()] } },
-    select: { id: true, title: true, frequency: true, property: { select: { name: true } } },
+    select: { id: true, title: true, frequency: true, roundsPerYear: true, anchorDate: true, nextDueDate: true, lastCompletedDate: true, property: { select: { name: true } } },
   });
 
   const overlap: string[] = [];
   const tooSoon: string[] = [];
   for (const pm of pms) {
     const list = byPm.get(pm.id) ?? [];
-    const label = `${pm.title} · ${pm.property?.name ?? ""} (${pm.frequency})`;
+    const label = `${pm.title} · ${pm.property?.name ?? ""} (${pm.frequency}${pm.roundsPerYear ? ` · ${pm.roundsPerYear} รอบ/ปี anchor ${day(pm.anchorDate)}` : ""} · ตอนนี้ครบ ${day(pm.nextDueDate)} · ทำล่าสุด ${day(pm.lastCompletedDate)})`;
     const open = list.filter((w) => w.status === "open" || w.status === "in_progress");
     if (open.length > 1) overlap.push(`  ${label}: ${open.map((w) => `${w.code}${w.autoCreated ? "[อัตโนมัติ]" : ""}`).join(", ")}`);
     const minDays = cycleDays[pm.frequency] ?? (monthsOf[pm.frequency] ?? 1) * 28;

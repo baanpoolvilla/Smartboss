@@ -129,13 +129,19 @@ export async function updatePmAction(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const frequency = String(formData.get("frequency") ?? "").trim();
   const nextDueDate = String(formData.get("nextDueDate") ?? "").trim();
+  // ฟอร์มส่งวันกำหนดมาทุกครั้ง แม้คนแก้แค่ผู้รับผิดชอบ — ถ้าเปิดหน้าไว้ก่อนมีคนปิดรอบ วันเก่า
+  // บนจอจะถูกบันทึกทับวันที่ระบบเพิ่งเลื่อนให้ ⇒ PM ถึงกำหนดอีกรอบ เช้าวันถัดไประบบเปิดใบงาน
+  // ซ้ำ ("รอบ 14 วันแต่มาก่อน") จึงเปลี่ยนวันเฉพาะเมื่อช่องนี้ถูกแก้ต่างจากที่เห็นตอนเปิดฟอร์ม
+  const originalNextDueDate = formData.get("originalNextDueDate");
+  const dueChanged =
+    !!nextDueDate && (originalNextDueDate === null || nextDueDate !== String(originalNextDueDate).trim());
   const description = String(formData.get("description") ?? "").trim();
   const assignedTo = String(formData.get("assignedTo") ?? "").trim();
 
   await updatePmSchedule(orgId, id, {
     ...(title ? { title } : {}),
     ...(frequency ? { frequency } : {}),
-    ...(nextDueDate
+    ...(dueChanged
       ? { nextDueDate: parseDate(nextDueDate), anchorDate: parseDate(nextDueDate) }
       : {}),
     // ช่องนี้อยู่ในฟอร์มเสมอ ค่าว่าง = ตั้งใจถอนมอบหมาย ไม่ใช่ "ไม่ได้ส่งมา"
