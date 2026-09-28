@@ -8,6 +8,7 @@ import { buildDateExemptions } from "@/modules/report_task/lib/report-feed-exemp
 import { listHolidayEvents, listLeaveEvents } from "@/modules/report_task/lib/db/workforce-calendar";
 import { computeReportPenaltyCandidates } from "@/modules/report_task/lib/report-penalty-sweep";
 import { thaiHolidayEvents } from "@/modules/report_task/data/thai-holidays";
+import { localDateStr } from "@/modules/report_task/lib/now";
 import type { ReportPost, ReportTopic, SubmitterGroup } from "@/modules/report_task/store/report-feed-store";
 import type { RoutineDayOffRule } from "@/modules/report_task/store/routine-dayoff-store";
 import { defaultReminderSettings, type ReminderSettings } from "@/modules/report_task/store/reminder-settings-store";
@@ -98,6 +99,19 @@ export async function POST() {
   // ไม่ควรเกิด (ตั้งค่า setEnabled(true) เขียนคู่กันเสมอ) แต่ถ้าไม่มี anchor
   // จริง ๆ ห้ามหักย้อนหลังเด็ดขาด — จำกัดแค่วันนี้วันเดียวไว้ก่อน (ปลอดภัยสุด)
   const notBeforeDay = enabledSince ?? new Date().toISOString().slice(0, 10);
+  /*
+   * "คืนคะแนน" ย้อนดูได้ไกลกว่า notBeforeDay — ถึงเต็ม LOOKBACK เสมอ
+   *
+   * notBeforeDay กันแค่ "หักใหม่ย้อนหลัง" (ห้ามหักวันก่อนเปิดฟีเจอร์) แต่เดิมใช้
+   * เป็นเพดานของการคืนคะแนนด้วย ⇒ บริษัทที่ไม่มีค่า enabledSince (fallback =
+   * วันนี้) sweep ตัดสินได้แค่ "วันนี้" ทุกรอบ ของเมื่อวานที่หักผิดไปแล้ว (เช่นหัก
+   * ตอนยังอ่าน Day-Off จาก HR ไม่ได้) ไม่มีวันถูกตรวจซ้ำอีก ค้าง −1 ตลอดไป
+   * (เจอจริง: ส่งรายงานสายวันที่ 27/09 ทั้งที่ Day-Off)
+   *
+   * วันที่อยู่ก่อน notBeforeDay: คืนได้อย่างเดียว เฉพาะเมื่อวันนั้นไม่ควรถูกหัก
+   * เลยแล้ว (exempt/ส่งทัน) — ไม่หักใหม่ ไม่สลับ พลาด<->สาย
+   */
+  const reconcileFloorDay = localDateStr(new Date(Date.now() - REPORT_PENALTY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000));
 
   const topics = reportFeed?.topics ?? [];
   const posts = reportFeed?.posts ?? [];
@@ -129,7 +143,8 @@ export async function POST() {
     submissionLock,
     weeklyMonthlyGraceDays,
     REPORT_PENALTY_LOOKBACK_DAYS,
-    notBeforeDay
+    // ตัดสินทั้งช่วง lookback เพื่อใช้ "คืน" — การหักใหม่ยังกรองด้วย notBeforeDay ในลูปข้างล่าง
+    reconcileFloorDay < notBeforeDay ? reconcileFloorDay : notBeforeDay
   );
 
   // "สถานะที่ควร active อยู่ตอนนี้" ต่อ refId — มาจาก candidates (พลาด/สาย)
@@ -173,7 +188,7 @@ export async function POST() {
         orgId,
         source: "report_task",
         refType: { in: ["report_round", "report_round_undo"] },
-        refId: { gte: notBeforeDay },
+        refId: { gte: reconcileFloorDay < notBeforeDay ? reconcileFloorDay : notBeforeDay },
       },
       select: { refId: true, category: true, refType: true, points: true },
     });
@@ -206,9 +221,12 @@ export async function POST() {
       const prior = priorByRefId.get(refId) ?? [];
       const originals = prior.filter((p) => p.refType === "report_round");
       const targetCategory = targetCategoryByRefId.get(refId) ?? null;
+      // ก่อนวันเริ่มนับ: คืนได้อย่างเดียว (ดูคอมเมนต์ reconcileFloorDay)
+      const beforeStart = parsed.day < notBeforeDay;
 
       for (const original of originals) {
         if (original.category === targetCategory) continue; // ตรงกับสถานะปัจจุบันอยู่แล้ว
+        if (beforeStart && targetCategory !== null) continue;
         const alreadyUndone = prior.some((p) => p.category === original.category && p.refType === "report_round_undo");
         if (alreadyUndone) continue;
         events.push({
@@ -227,7 +245,7 @@ export async function POST() {
         });
       }
 
-      if (targetCategory && !originals.some((o) => o.category === targetCategory)) {
+      if (!beforeStart && targetCategory && !originals.some((o) => o.category === targetCategory)) {
         events.push({
           orgId,
           userId: parsed.userId,
