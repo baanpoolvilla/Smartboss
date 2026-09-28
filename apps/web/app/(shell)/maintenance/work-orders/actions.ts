@@ -30,6 +30,7 @@ import { fmtThaiDate } from "@/modules/maintenance/lib/format";
 import { putFile, putFiles, deleteFiles } from "@/modules/maintenance/lib/storage";
 import { createUploadLink } from "@/modules/maintenance/data/external-upload";
 import {
+  closeAutoWorkOrdersOfPm,
   completePmSchedule,
   completePmSchedulesByIds,
   skipPmSchedule,
@@ -113,6 +114,15 @@ export async function createWorkOrderAction(formData: FormData) {
     requiresExpense: formData.get("noExpense") !== "1",
   });
 
+  // เปิดใบงานให้ PM ที่ระบบเปิดใบอัตโนมัติไว้แล้ว (หน้าปฏิทินซ่อนปุ่มนี้ แต่หน้าที่เปิดค้าง
+  // ไว้ก่อน cron สร้างใบตอนเช้ายังกดได้) ⇒ ใบที่คนเปิดเองแทนใบอัตโนมัติ ไม่ให้ซ้อนกันสองใบ
+  await closeAutoWorkOrdersOfPm(
+    s.orgId,
+    linkedPmIds({ pmScheduleId: d.pmScheduleId || null, pmScheduleIds }),
+    "replaced",
+    wo.id,
+  );
+
   // แจ้งเตือนผู้รับผิดชอบ + CC (in-app + LINE)
   const notifyTargets = new Set<string>([...(assignedTo ? [assignedTo] : []), ...cc]);
   for (const uid of notifyTargets) {
@@ -167,7 +177,8 @@ export async function updateStatusAction(formData: FormData) {
 
   await updateWorkOrderStatus(s.orgId, id, status);
   // ปิดงาน = เดิน PM ที่ผูกไว้ไปรอบถัดไป (batch → single → fallback ตามอุปกรณ์)
-  if (status === "completed") await advanceLinkedPm(s.orgId, wo);
+  // ใบที่ปิดไปแล้วถูกกดปิดซ้ำ ต้องไม่เดิน PM ซ้ำ ไม่งั้นรอบกระโดดข้ามไปอีกช่วง
+  if (status === "completed" && wo.status !== "completed") await advanceLinkedPm(s.orgId, wo);
   // ยกเลิกใบงานจาก PM = ข้ามรอบนั้น ไม่งั้น cron สร้างใบเดิมขึ้นมาใหม่ทุกเช้า (ดู skipPmSchedule)
   if (status === "cancelled" && wo.status !== "cancelled") await skipLinkedPm(s.orgId, wo);
   await notifyStatusChanged(s.orgId, wo, status, s.userId);
@@ -230,13 +241,20 @@ async function notifyStatusChanged(
  */
 async function advanceLinkedPm(
   orgId: string,
-  wo: { pmScheduleIds: string[]; pmScheduleId: string | null }
+  wo: { id: string; pmScheduleIds: string[]; pmScheduleId: string | null }
 ) {
   if (wo.pmScheduleIds.length > 0) {
     await completePmSchedulesByIds(orgId, wo.pmScheduleIds);
   } else if (wo.pmScheduleId) {
     await completePmSchedule(orgId, wo.pmScheduleId);
   }
+  // ใบอัตโนมัติอีกใบของ PM เดียวกันที่ยังเปิดค้าง (ใบซ้อน) = รอบเดียวกันที่เพิ่งทำเสร็จ
+  // ถ้าปล่อยไว้ มันโผล่เหมือนรอบใหม่ทั้งที่ยังไม่ถึงรอบ แล้วพอปิด PM ก็เดินซ้ำอีกช่วง
+  await closeAutoWorkOrdersOfPm(orgId, linkedPmIds(wo), "done", wo.id);
+}
+
+function linkedPmIds(wo: { pmScheduleIds: string[]; pmScheduleId: string | null }): string[] {
+  return [...new Set([...(wo.pmScheduleId ? [wo.pmScheduleId] : []), ...wo.pmScheduleIds])];
 }
 
 /** ใบงานจาก PM ถูกยกเลิก/ลบ → ข้ามรอบ PM ที่ผูกไว้ (ไม่นับว่าทำ) — ดู skipPmSchedule */
@@ -295,7 +313,7 @@ export async function completeWorkOrderAction(formData: FormData) {
     ...(notes ? { completionNotes: notes } : {}),
   });
   await updateWorkOrderStatus(s.orgId, id, "completed");
-  await advanceLinkedPm(s.orgId, wo);
+  if (wo.status !== "completed") await advanceLinkedPm(s.orgId, wo);
   await notifyStatusChanged(s.orgId, wo, "completed", s.userId);
 
   revalidatePath(`/maintenance/work-orders/${id}`);

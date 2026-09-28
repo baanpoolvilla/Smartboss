@@ -64,25 +64,31 @@ export async function updatePmSchedule(
  */
 export async function closeAutoWorkOrdersOfPm(
   orgId: string,
-  pmId: string,
-  outcome: "done" | "cancelled",
+  pmIds: string | string[],
+  outcome: "done" | "cancelled" | "replaced",
+  exceptWorkOrderId?: string,
 ) {
+  const ids = Array.isArray(pmIds) ? pmIds : [pmIds];
+  if (ids.length === 0) return;
   await prisma.workOrder.updateMany({
     where: {
       orgId,
-      pmScheduleId: pmId,
+      pmScheduleId: { in: ids },
       autoCreated: true,
       status: { in: ["open", "in_progress"] },
+      ...(exceptWorkOrderId ? { id: { not: exceptWorkOrderId } } : {}),
     },
     data:
       outcome === "done"
         ? {
             status: "completed",
             completedAt: new Date(),
-            completionNotes: "ปิดอัตโนมัติ — ปิดรอบที่หน้าแผน PM แล้ว",
+            completionNotes: "ปิดอัตโนมัติ — รอบนี้ปิดไปแล้ว (ที่หน้าแผน PM หรือจากใบงานอื่น)",
             requiresExpense: false,
           }
-        : { status: "cancelled", completionNotes: "ยกเลิกอัตโนมัติ — แผน PM ถูกลบ" },
+        : outcome === "replaced"
+          ? { status: "cancelled", completionNotes: "ยกเลิกอัตโนมัติ — มีใบงานที่เปิดเองทำรอบนี้แทน" }
+          : { status: "cancelled", completionNotes: "ยกเลิกอัตโนมัติ — แผน PM ถูกลบ" },
   });
 }
 

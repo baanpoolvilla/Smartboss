@@ -64,7 +64,19 @@ export async function generateWorkOrdersForDuePms(): Promise<{
     if (existing) continue;
 
     // ใบงานที่ระบบสร้างเองก็ต้องมีเลขที่เหมือนใบที่คนสร้าง ไม่งั้นช่างอ้างถึงไม่ได้
-    await prisma.$transaction(async (tx) => {
+    const made = await prisma.$transaction(async (tx) => {
+      // กันสองรอบของ cron ที่วิ่งทับกัน (หรือคนเปิดใบเองพร้อมกัน) เห็น "ยังไม่มีใบ" พร้อมกัน
+      // แล้วสร้างซ้อนสองใบ — ล็อกต่อ PM แล้วเช็คซ้ำในทรานแซกชันเดียวกัน
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`pm-auto-wo:${pm.id}`}))`;
+      const again = await tx.workOrder.findFirst({
+        where: {
+          orgId: pm.orgId,
+          status: { in: ["open", "in_progress"] },
+          OR: [{ pmScheduleId: pm.id }, { pmScheduleIds: { has: pm.id } }],
+        },
+        select: { id: true },
+      });
+      if (again) return false;
       const code = await nextWorkOrderCode(tx, pm.orgId);
       await tx.workOrder.create({
         data: {
@@ -85,8 +97,9 @@ export async function generateWorkOrdersForDuePms(): Promise<{
           autoCreated: true,
         },
       });
+      return true;
     });
-    created++;
+    if (made) created++;
   }
 
   return { due: duePms.length, created };
@@ -96,6 +109,7 @@ export async function generateWorkOrdersForDuePms(): Promise<{
  * เก็บกวาดใบงานอัตโนมัติที่ค้าง open ทั้งที่รอบของมันจบไปแล้ว — ของเก่าก่อนมี
  * closeAutoWorkOrdersOfPm (data/pm.ts) ที่ยังโผล่ในรายการใบงานซ้ำ ๆ
  *
+ *   PM เดียวมีใบเปิดซ้อนหลายใบ                   → เก็บใบเดียว ที่เหลือยกเลิก
  *   PM ถูกลบ/ปิดใช้งาน                          → ยกเลิก
  *   PM ถูกปิดรอบ (lastCompletedDate) หลังเปิดใบนี้ → ปิดเป็นเสร็จ (รอบนั้นทำแล้ว)
  */
@@ -107,15 +121,45 @@ async function closeStaleAutoWorkOrders(): Promise<void> {
     })
   );
   if (open.length === 0) return;
+
+  // ใบซ้อน: PM เดียวมีใบเปิดค้างหลายใบ (cron วิ่งทับกัน / คนเปิดใบเองทับใบอัตโนมัติ)
+  // เก็บไว้ใบเดียว — ใบที่คนเปิดเองก่อน ไม่มีก็ใบอัตโนมัติที่เก่าสุด ที่เหลือยกเลิก
+  const pmIds = [...new Set(open.map((w) => w.pmScheduleId!))];
+  const manual = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.workOrder.findMany({
+      where: {
+        autoCreated: false,
+        status: { in: ["open", "in_progress"] },
+        OR: [{ pmScheduleId: { in: pmIds } }, { pmScheduleIds: { hasSome: pmIds } }],
+      },
+      select: { pmScheduleId: true, pmScheduleIds: true },
+    })
+  );
+  const hasManual = new Set(manual.flatMap((w) => [...(w.pmScheduleId ? [w.pmScheduleId] : []), ...w.pmScheduleIds]));
+  const keptAuto = new Set<string>();
+  const duplicates: typeof open = [];
+  for (const wo of [...open].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())) {
+    if (hasManual.has(wo.pmScheduleId!) || keptAuto.has(wo.pmScheduleId!)) duplicates.push(wo);
+    else keptAuto.add(wo.pmScheduleId!);
+  }
+  for (const wo of duplicates) {
+    await prisma.workOrder.updateMany({
+      where: { orgId: wo.orgId, id: wo.id, status: { in: ["open", "in_progress"] } },
+      data: { status: "cancelled", completionNotes: "ยกเลิกอัตโนมัติ — ใบซ้อน PM รอบเดียวกันมีใบงานอื่นเปิดอยู่แล้ว" },
+    });
+  }
+  const dupIds = new Set(duplicates.map((w) => w.id));
+
   const pms = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
     prisma.pmSchedule.findMany({
-      where: { id: { in: [...new Set(open.map((w) => w.pmScheduleId!))] } },
+      where: { id: { in: pmIds } },
       select: { id: true, isActive: true, lastCompletedDate: true },
     })
   );
   const pmById = new Map(pms.map((p) => [p.id, p]));
 
   for (const wo of open) {
+    if (dupIds.has(wo.id)) continue;
     const pm = pmById.get(wo.pmScheduleId!);
     // lastCompletedDate เก็บเป็นวันล้วน — เทียบระดับวัน (ปิดรอบวันเดียวกับที่เปิดใบก็นับ)
     const doneAfter =

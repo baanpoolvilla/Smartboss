@@ -121,6 +121,51 @@ async function main() {
 
   console.log(`\nรายการที่ควรดู: ${flagged.length}`);
   for (const line of flagged) console.log(line);
+
+  await auditPmWorkOrders(since);
+}
+
+/** ใบงาน PM ซ้อน (เปิดค้างหลายใบพร้อมกัน) และรอบที่ห่างกันสั้นกว่าความถี่ของ PM */
+async function auditPmWorkOrders(since: Date) {
+  const cycleDays: Record<string, number> = { weekly: 7, biweekly: 14, triweekly: 21 };
+  const monthsOf: Record<string, number> = {
+    monthly: 1, bimonthly: 2, quarterly: 3, month4: 4, month5: 5, semiannual: 6,
+    month7: 7, month8: 8, month9: 9, month10: 10, month11: 11, annual: 12,
+  };
+  const wos = await prisma.workOrder.findMany({
+    where: { OR: [{ pmScheduleId: { not: null } }, { pmScheduleIds: { isEmpty: false } }], createdAt: { gte: since } },
+    select: { code: true, status: true, createdAt: true, autoCreated: true, pmScheduleId: true, pmScheduleIds: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const byPm = new Map<string, typeof wos>();
+  for (const w of wos) {
+    for (const id of new Set([...(w.pmScheduleId ? [w.pmScheduleId] : []), ...w.pmScheduleIds])) {
+      byPm.set(id, [...(byPm.get(id) ?? []), w]);
+    }
+  }
+  const pms = await prisma.pmSchedule.findMany({
+    where: { id: { in: [...byPm.keys()] } },
+    select: { id: true, title: true, frequency: true, property: { select: { name: true } } },
+  });
+
+  const overlap: string[] = [];
+  const tooSoon: string[] = [];
+  for (const pm of pms) {
+    const list = byPm.get(pm.id) ?? [];
+    const label = `${pm.title} · ${pm.property?.name ?? ""} (${pm.frequency})`;
+    const open = list.filter((w) => w.status === "open" || w.status === "in_progress");
+    if (open.length > 1) overlap.push(`  ${label}: ${open.map((w) => `${w.code}${w.autoCreated ? "[อัตโนมัติ]" : ""}`).join(", ")}`);
+    const minDays = cycleDays[pm.frequency] ?? (monthsOf[pm.frequency] ?? 1) * 28;
+    const live = list.filter((w) => w.status !== "cancelled");
+    for (let i = 1; i < live.length; i++) {
+      const gap = Math.round((live[i]!.createdAt.getTime() - live[i - 1]!.createdAt.getTime()) / 86_400_000);
+      if (gap < minDays) tooSoon.push(`  ${label}: ${live[i - 1]!.code} → ${live[i]!.code} ห่าง ${gap} วัน (รอบ ${minDays})`);
+    }
+  }
+  console.log(`\nPM ที่มีใบงานเปิดซ้อนกันตอนนี้: ${overlap.length}`);
+  for (const l of overlap) console.log(l);
+  console.log(`\nใบงาน PM ที่เปิดเร็วกว่ารอบ: ${tooSoon.length}`);
+  for (const l of tooSoon) console.log(l);
 }
 
 main()
