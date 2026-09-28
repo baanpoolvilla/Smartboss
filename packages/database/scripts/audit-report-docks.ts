@@ -213,6 +213,21 @@ async function main() {
       }
     }
 
+    // โพสต์ที่ไม่ได้เลือกรอบ (ไม่มี roundId) ในห้องที่มีหลายรอบ — ระบบเดารอบจากเวลา: โพสต์ที่
+    // เลยรอบหนึ่งไปแล้วจะถูกนับเป็นรอบ "ถัดไป" (09:03 → รอบเย็น) รอบที่เลยไปจึงกลายเป็น
+    // "ไม่ส่ง" แทน "สาย" — นับไว้ให้รู้ก่อนตัดสินย้อนหลัง
+    const ambiguous = posts.filter((p) => {
+      if (p.roundId) return false;
+      const rounds = topicById.get(p.topicId)?.submissionRounds ?? [];
+      if (rounds.length < 2) return false;
+      const d = new Date(p.createdAt);
+      if (localDay(d) < sinceDay) return false;
+      const pool = rounds.filter((r) => runsOnDay(r, localDay(d)));
+      const passed = pool.filter((r) => toMin(r.time) < minutesOf(d));
+      const upcoming = pool.filter((r) => toMin(r.time) >= minutesOf(d));
+      return passed.length > 0 && upcoming.length > 0; // อยู่ระหว่างสองรอบ = กำกวม
+    });
+
     const wrong = findings.filter((f) => f.wrong);
     const perUser = new Map<string, number>();
     for (const e of active) {
@@ -225,6 +240,12 @@ async function main() {
     console.log(`\n✗ น่าจะหักผิด: ${wrong.length} รายการ`);
     for (const f of wrong.sort((a, b) => a.user.localeCompare(b.user) || a.day.localeCompare(b.day))) {
       console.log(`  ${f.day}  ${f.user}  ${f.dock}  [${f.where}]  — ${f.why}`);
+    }
+    console.log(`
+โพสต์ที่ไม่ได้เลือกรอบ และส่งหลังรอบหนึ่งแต่ก่อนรอบถัดไป (กำกวม): ${ambiguous.length} โพสต์`);
+    for (const p of ambiguous.slice(0, 30)) {
+      const d = new Date(p.createdAt);
+      console.log(`  ${localDay(d)} ${pad(d.getHours())}:${pad(d.getMinutes())}  ${nameOf.get(p.authorId) ?? p.authorId}  ห้อง ${topicById.get(p.topicId)?.name ?? p.topicId}`);
     }
     const info = findings.filter((f) => !f.wrong);
     if (info.length > 0) {
