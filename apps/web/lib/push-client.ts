@@ -102,6 +102,23 @@ function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
 }
 
 /**
+ * แปลงข้อผิดพลาดตอนสมัคร Web Push เป็นคำอธิบายที่ผู้ใช้ทำตามได้ — เดิมทุกกรณีกลายเป็น
+ * "เปิดแจ้งเตือนไม่สำเร็จ" เฉย ๆ (ผู้เรียก catch ทิ้ง) บอกไม่ได้เลยว่าต้องแก้ที่ไหน
+ * ("โหลดลงคอมมันขึ้น เปิดแจ้งเตือนไม่สำเร็จ")
+ */
+function pushErrorReason(err: unknown): string {
+  const name = (err as { name?: string })?.name ?? "";
+  const message = (err as { message?: string })?.message ?? String(err);
+  if (name === "NotAllowedError") {
+    return "เครื่องนี้ไม่อนุญาตการแจ้งเตือน — Windows: ตั้งค่า → ระบบ → การแจ้งเตือน → เปิดให้ Chrome/Edge, Mac: การตั้งค่าระบบ → การแจ้งเตือน";
+  }
+  if (name === "AbortError" || /push service/i.test(message)) {
+    return "เบราว์เซอร์ติดต่อบริการแจ้งเตือนไม่ได้ — ถ้าใช้ Brave ให้เปิด “Use Google services for push messaging” ใน brave://settings/privacy หรือลองใช้ Chrome/Edge (เครือข่ายบางที่บล็อกไว้)";
+  }
+  return `เปิดแจ้งเตือนไม่สำเร็จ (${name || "Error"}: ${message})`;
+}
+
+/**
  * ขออนุญาต (ถ้ายังไม่เคย) แล้วส่งการสมัครไปเก็บที่เซิร์ฟเวอร์
  * ต้องเรียกจากการกดปุ่มของผู้ใช้ — เบราว์เซอร์ไม่ให้ถามสิทธิ์เองโดยไม่มีการกด
  */
@@ -123,7 +140,22 @@ export async function enablePush(): Promise<{ ok: boolean; reason?: string }> {
   await navigator.serviceWorker.ready;
   let sub = await reg.pushManager.getSubscription();
   if (!sub) {
-    sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) });
+    const options = { userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) };
+    try {
+      sub = await reg.pushManager.subscribe(options);
+    } catch (err) {
+      // การสมัครเก่าที่ผูกกับกุญแจเซิร์ฟเวอร์คนละชุดค้างอยู่ — ถอนแล้วสมัครใหม่ครั้งเดียว
+      if ((err as { name?: string })?.name === "InvalidStateError") {
+        try {
+          await (await reg.pushManager.getSubscription())?.unsubscribe();
+          sub = await reg.pushManager.subscribe(options);
+        } catch (retryErr) {
+          return { ok: false, reason: pushErrorReason(retryErr) };
+        }
+      } else {
+        return { ok: false, reason: pushErrorReason(err) };
+      }
+    }
   }
   const saved = await fetch("/api/push/subscribe", {
     method: "POST",

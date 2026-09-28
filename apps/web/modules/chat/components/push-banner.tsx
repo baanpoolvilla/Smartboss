@@ -87,7 +87,10 @@ export function PushBanner() {
               disabled={busy}
               onClick={async () => {
                 setBusy(true);
-                const r = await enablePush().catch(() => ({ ok: false, reason: "เปิดแจ้งเตือนไม่สำเร็จ" }));
+                const r = await enablePush().catch((err: unknown) => ({
+                  ok: false,
+                  reason: `เปิดแจ้งเตือนไม่สำเร็จ (${(err as Error)?.message ?? String(err)})`,
+                }));
                 setBusy(false);
                 setSupport(pushSupport());
                 if (r.ok) toast.success("เปิดแจ้งเตือนแล้ว");

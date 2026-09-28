@@ -181,9 +181,9 @@ export function ChatSettings({
               disabled={busy}
               onClick={async () => {
                 setBusy(true);
-                const r = await enablePush().catch(() => ({
+                const r = await enablePush().catch((err: unknown) => ({
                   ok: false,
-                  reason: "เปิดแจ้งเตือนไม่สำเร็จ",
+                  reason: `เปิดแจ้งเตือนไม่สำเร็จ (${(err as Error)?.message ?? String(err)})`,
                 }));
                 setBusy(false);
                 setSupport(pushSupport());
