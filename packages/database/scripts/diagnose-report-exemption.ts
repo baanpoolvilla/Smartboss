@@ -110,11 +110,42 @@ async function main() {
     select: { category: true, refType: true, refId: true, points: true, note: true, createdAt: true },
     orderBy: { createdAt: "asc" },
   });
+  // ห้อง/รอบ ตามชื่อ + โพสต์ของคนนี้วันนั้น — ตัวหักคะแนนเทียบเวลาโพสต์กับเวลารอบ
+  // ด้วยนาฬิกาท้องถิ่นของเซิร์ฟเวอร์ (localDateStr / minutesOfDay) จึงพิมพ์ timezone ด้วย
+  const feedRow = await prisma.reportTaskStore.findUnique({
+    where: { orgId_key: { orgId: user.orgId, key: "report-feed" } },
+    select: { data: true },
+  });
+  type Round = { id: string; label: string; time: string; weekdays?: number[]; dayOfMonth?: number; createdAt?: string };
+  type Topic = { id: string; name: string; submissionRounds?: Round[] };
+  type Post = { id: string; topicId: string; authorId: string; createdAt: string; title?: string; lateBadgeHidden?: boolean };
+  const feed = (feedRow?.data ?? {}) as { topics?: Topic[]; posts?: Post[] };
+  const topicById = new Map((feed.topics ?? []).map((t) => [t.id, t]));
+  const nameOf = (refId: string | null) => {
+    const [, topicId, roundId] = (refId ?? "").split(":");
+    const t = topicId ? topicById.get(topicId) : undefined;
+    const r = t?.submissionRounds?.find((x) => x.id === roundId);
+    return `${t?.name ?? topicId} · ${r ? `${r.label} (${r.time})` : roundId}`;
+  };
+
   console.log(`\nคะแนนรายงานของคนนี้วันที่ ${date}: ${events.length} รายการ`);
   for (const e of events) {
     console.log(
-      `  ${e.createdAt.toISOString()}  ${e.refType}  ${e.category}  ${Number(e.points)}  ${e.refId}${e.note ? `  (${e.note})` : ""}`,
+      `  ${e.createdAt.toISOString()}  ${e.refType}  ${e.category}  ${Number(e.points)}  [${nameOf(e.refId)}]${e.note ? `  (${e.note})` : ""}`,
     );
+  }
+
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const local = (iso: string) => {
+    const d = new Date(iso);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  };
+  const posts = (feed.posts ?? []).filter((p) => p.authorId === user.id && local(p.createdAt).startsWith(date));
+  console.log(`\nโพสต์ของคนนี้วันที่ ${date} (เวลาตามนาฬิกาเซิร์ฟเวอร์ timezone=${tz}, TZ=${process.env.TZ ?? "-"}): ${posts.length} โพสต์`);
+  for (const p of posts) {
+    const t = topicById.get(p.topicId);
+    const rounds = (t?.submissionRounds ?? []).map((r) => `${r.label} ${r.time}`).join(", ");
+    console.log(`  ${local(p.createdAt)}  (UTC ${p.createdAt})  ห้อง ${t?.name ?? p.topicId}  รอบของห้อง: ${rounds || "-"}${p.lateBadgeHidden ? "  [ซ่อนป้ายสาย]" : ""}`);
   }
 }
 
