@@ -96,6 +96,60 @@ describe("sweepAutoPenalties", () => {
     expect(result.logs).toHaveLength(0);
   });
 
+  describe("due-date extensions", () => {
+    const ext = (revisedAtDays: number, from: number, to: number) => ({
+      revisionNumber: 1,
+      previousDate: daysFromNow(from),
+      newDate: daysFromNow(to),
+      reason: ".",
+      revisedBy: "usr-01",
+      revisedAt: daysFromNow(revisedAtDays),
+    });
+
+    it("does not dock a task extended before its original deadline passed", () => {
+      const result = sweepAutoPenalties([
+        makeTask({ originalDueDate: daysFromNow(-3), dueDate: daysFromNow(4), revisions: [ext(-3, -3, 4)] }),
+      ]);
+      expect(result.changed).toBe(false);
+      expect(result.tasks[0]!.penalty).toBeFalsy();
+    });
+
+    it("still docks a task extended only after it was already late", () => {
+      const result = sweepAutoPenalties([
+        makeTask({ originalDueDate: daysFromNow(-3), dueDate: daysFromNow(4), revisions: [ext(-1, -3, 4)] }),
+      ]);
+      expect(result.tasks[0]!.penalty?.byUserId).toBe(SYSTEM_USER_ID);
+    });
+
+    it("takes back an automatic dock that an in-time extension made wrong", () => {
+      const result = sweepAutoPenalties([
+        makeTask({
+          originalDueDate: daysFromNow(-3),
+          dueDate: daysFromNow(4),
+          revisions: [ext(-3, -3, 4)],
+          missedDeadlineOnce: true,
+          penalty: { points: 3, byUserId: SYSTEM_USER_ID, appliedAt: daysFromNow(-2) },
+        }),
+      ]);
+      expect(result.changed).toBe(true);
+      expect(result.tasks[0]!.penalty).toBeNull();
+      expect(result.tasks[0]!.missedDeadlineOnce).toBe(false);
+      expect(result.revokedRefIds).toEqual(["t1"]);
+    });
+
+    it("leaves a manual dock alone", () => {
+      const result = sweepAutoPenalties([
+        makeTask({
+          originalDueDate: daysFromNow(-3),
+          revisions: [ext(-3, -3, 4)],
+          missedDeadlineOnce: true,
+          penalty: { points: 3, byUserId: "usr-01", appliedAt: daysFromNow(-2) },
+        }),
+      ]);
+      expect(result.changed).toBe(false);
+    });
+  });
+
   describe("group tasks", () => {
     it("only docks the assignee whose own effective due date passed", () => {
       const result = sweepAutoPenalties([

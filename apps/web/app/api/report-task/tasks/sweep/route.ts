@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { requireOrg } from "@smartboss/auth";
 
-import { recordPerformanceEvents, type PerformanceEventInput } from "@/lib/performance";
+import { recordPerformanceEvents, revokePerformanceEvents, type PerformanceEventInput } from "@/lib/performance";
 import { readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
 import { readTasks, writeTasks } from "@/modules/report_task/lib/db/task-repo";
 import { LATE_PENALTY_POINTS, sweepAutoPenalties } from "@/modules/report_task/lib/task-penalty-sweep";
@@ -141,11 +141,22 @@ export async function POST() {
   }
   const dockedCount = await recordPerformanceEvents(dockEvents);
 
+  // การหักอัตโนมัติที่ sweep รอบนี้คืนให้ (เลื่อนกำหนดส่งก่อนครบกำหนด) —
+  // ลบคะแนนในระบบกลางตามด้วย ไม่งั้นหน้าผู้บริหารยังติดลบอยู่
+  const revokedCount = await revokePerformanceEvents({
+    orgId,
+    source: "report_task",
+    category: "task_late",
+    refType: "task",
+    refIds: result.revokedRefIds,
+  });
+
   return Response.json({
     ok: true,
     changed: true,
     version: saved.version,
     performanceEvents: dockedCount,
+    revokedPerformanceEvents: revokedCount,
   });
 }
 

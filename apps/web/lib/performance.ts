@@ -248,6 +248,31 @@ export async function recordPerformanceEvents(
   return result.count;
 }
 
+/**
+ * ลบเหตุการณ์ที่ระบบบันทึกเองตามต้นเรื่อง — ใช้ตอนที่การหักอัตโนมัติกลายเป็น
+ * ไม่ถูกต้อง (เช่น เลื่อนกำหนดส่งก่อนครบกำหนด) ไม่แตะรายการที่คนกดหักเอง
+ */
+export async function revokePerformanceEvents(input: {
+  orgId: string;
+  source: string;
+  category: string;
+  refType: string;
+  refIds: string[];
+}): Promise<number> {
+  if (input.refIds.length === 0) return 0;
+  const result = await prisma.performanceEvent.deleteMany({
+    where: {
+      orgId: input.orgId,
+      source: input.source,
+      category: input.category,
+      refType: input.refType,
+      refId: { in: input.refIds },
+      createdBy: null,
+    },
+  });
+  return result.count;
+}
+
 /** บันทึกเหตุการณ์เดียว */
 export async function recordPerformanceEvent(input: PerformanceEventInput): Promise<void> {
   await recordPerformanceEvents([input]);
