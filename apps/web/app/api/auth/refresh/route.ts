@@ -14,15 +14,20 @@ import { clientIp, userAgent, jsonError } from "../_lib";
 
 export const runtime = "nodejs";
 
-export async function POST(req: NextRequest) {
+/**
+ * ต่ออายุ session ด้วย refresh token — คืน null = สำเร็จ, ไม่งั้นคืนข้อความเหตุผล
+ * ใช้ทั้ง POST (หน้าเว็บที่เปิดอยู่ต่ออายุเงียบ ๆ — SessionRefresher) และ GET (proxy ส่ง
+ * มาตอนเปิดหน้าใหม่ด้วย access token ที่หมดอายุแล้ว ดู proxy.ts)
+ */
+const GRACE = "grace" as const;
+
+async function refreshSession(req: NextRequest): Promise<string | typeof GRACE | null> {
   const ip = clientIp(req);
   const ua = userAgent(req);
   const store = await cookies();
 
   const raw = store.get(COOKIE_REFRESH)?.value;
-  if (!raw) {
-    return jsonError("ไม่พบ session", 401);
-  }
+  if (!raw) return "ไม่พบ session";
 
   const result = await rotateRefreshToken(raw, ua);
 
@@ -34,19 +39,23 @@ export async function POST(req: NextRequest) {
       ip,
       userAgent: ua,
     });
-    return jsonError("session ไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่", 401);
+    return "session ไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่";
   }
 
   if (result.status === "invalid") {
     clearAuthCookies(store);
-    return jsonError("session หมดอายุ กรุณาเข้าสู่ระบบใหม่", 401);
+    return "session หมดอายุ กรุณาเข้าสู่ระบบใหม่";
   }
+
+  // อีกคำขอเพิ่งต่ออายุไปพร้อมกัน — cookie ชุดใหม่ถึงเบราว์เซอร์จากคำขอนั้นแล้ว
+  // ห้ามล้าง cookie (จะไปลบของใหม่ทิ้ง) ถือว่าสำเร็จ
+  if (result.status === "grace") return GRACE;
 
   // rotation สำเร็จ → ออก access ใหม่
   const authUser = await loadAuthUser(result.userId);
   if (!authUser) {
     clearAuthCookies(store);
-    return jsonError("ไม่พบบัญชีผู้ใช้", 401);
+    return "ไม่พบบัญชีผู้ใช้";
   }
 
   const accessToken = await signAccessToken({
@@ -60,6 +69,43 @@ export async function POST(req: NextRequest) {
   setRefreshCookie(store, result.raw);
 
   await audit({ userId: authUser.id, action: "TOKEN_REFRESH", ip, userAgent: ua });
+  return null;
+}
 
+export async function POST(req: NextRequest) {
+  const error = await refreshSession(req);
+  if (error && error !== GRACE) return jsonError(error, 401);
   return NextResponse.json({ ok: true });
+}
+
+/** ปลายทางภายในเว็บเท่านั้น — กัน open redirect (//evil.com, https://...) */
+function safeNext(next: string | null): string {
+  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) return "/";
+  return next;
+}
+
+/**
+ * GET ?next=/path — เปิดแอปใหม่หลังปิดไปนานกว่าอายุ access token (15 นาที) proxy ส่งมา
+ * ที่นี่ก่อนแทนที่จะเด้งไปหน้า login ทันที: ต่ออายุด้วย refresh token (7 วัน) แล้วพากลับ
+ * หน้าเดิม ต่ออายุไม่ได้ค่อยไปหน้า login ("เข้าใหม่ก็ต้องล็อกอินทุกครั้ง")
+ *
+ * refresh cookie ผูก path ไว้ที่ /api/auth/refresh เท่านั้น proxy จึงมองไม่เห็นเอง
+ * ต้องพามาที่ path นี้ถึงจะอ่านได้
+ */
+export async function GET(req: NextRequest) {
+  const next = safeNext(req.nextUrl.searchParams.get("next"));
+  const retried = req.nextUrl.searchParams.get("retry") === "1";
+  const error = await refreshSession(req);
+  if (!error) return NextResponse.redirect(new URL(next, req.url));
+  // คำขอที่วิ่งพร้อมกันต่ออายุไปก่อน — ลองอีกรอบเดียว (ตอนนั้นเบราว์เซอร์ควรได้ cookie ใหม่แล้ว)
+  // ถ้ายังไม่ได้อีก ไปหน้า login แทนที่จะวนไม่จบ
+  if (error === GRACE && !retried) {
+    const again = new URL("/api/auth/refresh", req.url);
+    again.searchParams.set("next", next);
+    again.searchParams.set("retry", "1");
+    return NextResponse.redirect(again);
+  }
+  const login = new URL("/login", req.url);
+  if (next !== "/") login.searchParams.set("next", next);
+  return NextResponse.redirect(login);
 }

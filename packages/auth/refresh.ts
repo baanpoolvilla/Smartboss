@@ -27,7 +27,18 @@ export async function issueRefreshToken(
 export type RotationResult =
   | { status: "ok"; userId: string; raw: string }
   | { status: "reuse"; userId: string }
+  /** token นี้เพิ่งถูกหมุนไปโดยคำขอที่วิ่งพร้อมกัน (ภายใน REUSE_GRACE_MS) — ไม่ใช่การขโมย
+   * คำขอที่ชนะได้ cookie ชุดใหม่ไปแล้ว ผู้เรียกไม่ต้องทำอะไรและห้ามล้าง cookie */
+  | { status: "grace"; userId: string }
   | { status: "invalid" };
+
+/**
+ * เปิดแอปใหม่หลัง access token หมดอายุ อาจมีหลายคำขอ (หลายแท็บ / หน้า + ตัวต่ออายุ)
+ * ใช้ refresh token ใบเดียวกันพร้อมกัน ใบแรกหมุนสำเร็จ ใบถัดไปเห็นว่าถูก revoke แล้ว —
+ * เดิมตีเป็น "ถูกขโมย" ทันที แล้ว revoke ทุก session ของคนนั้น = ถูกเตะออกทุกเครื่องเอง
+ * ทั้งที่ไม่มีอะไรผิด ช่วงสั้น ๆ หลังหมุนจึงถือเป็นการแข่งกันปกติ เลยจากนี้ยังถือว่าขโมย
+ */
+const REUSE_GRACE_MS = 30_000;
 
 /**
  * Rotation: ตรวจ refresh token เดิม → revoke → ออกใบใหม่
@@ -46,7 +57,10 @@ export async function rotateRefreshToken(
     return { status: "invalid" };
   }
 
-  // ถูกใช้ซ้ำหลัง revoke = สัญญาณ token ถูกขโมย
+  // ถูกใช้ซ้ำหลัง revoke = สัญญาณ token ถูกขโมย — ยกเว้นเพิ่งหมุนไปไม่กี่วินาที (แข่งกันปกติ)
+  if (existing.revokedAt && Date.now() - existing.revokedAt.getTime() < REUSE_GRACE_MS) {
+    return { status: "grace", userId: existing.userId };
+  }
   if (existing.revokedAt) {
     await revokeAllForUser(existing.userId);
     return { status: "reuse", userId: existing.userId };

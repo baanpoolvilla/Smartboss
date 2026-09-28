@@ -73,6 +73,18 @@ export async function proxy(req: NextRequest) {
   const claims = token ? await verifyAccessToken(token) : null;
 
   if (!claims) {
+    /*
+     * เปิดหน้าเว็บ (ไม่ใช่ /api) ด้วย access token ที่หมดอายุ — ลองต่ออายุด้วย refresh
+     * token ก่อน (อายุยาวกว่ามาก) แทนที่จะเด้งไปหน้า login ทันที เดิมเปิดแอปใหม่หลังปิดไป
+     * เกิน 15 นาทีต้อง login ใหม่ทุกครั้ง ทั้งที่ session จริงยังไม่หมด เพราะตัวต่ออายุฝั่ง
+     * หน้าเว็บ (SessionRefresher) ยังไม่ทันได้ทำงาน /api/auth/refresh ต่ออายุไม่ได้ค่อยพาไป
+     * หน้า login เอง · คำขอ /api ปล่อยให้ตัวต่ออายุฝั่งหน้าเว็บจัดการเหมือนเดิม
+     */
+    if (!pathname.startsWith("/api/")) {
+      const refreshUrl = new URL("/api/auth/refresh", req.url);
+      refreshUrl.searchParams.set("next", pathname + search);
+      return withFrameProtection(NextResponse.redirect(refreshUrl), pathname);
+    }
     const loginUrl = new URL("/login", req.url);
     loginUrl.searchParams.set("next", pathname + search);
     const res = NextResponse.redirect(loginUrl);
