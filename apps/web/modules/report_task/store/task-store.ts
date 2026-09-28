@@ -98,8 +98,13 @@ function notifyPenaltyChange(task: Task, byUserId: string, message: string) {
  * `removeChecklistItem`/`toggleAssigneeChecklist` all transition identically
  * instead of four slightly-different copies of this logic.
  */
-function applyChecklistDerivedCompletion(t: Task, nextChecklist: ChecklistItem[], actorUserId: string): Task {
-  const nextCompleted = deriveCompletedAssigneeIds(t.assigneeIds, nextChecklist);
+function applyChecklistDerivedCompletion(
+  t: Task,
+  nextChecklist: ChecklistItem[],
+  actorUserId: string,
+  manuallyDone: string[] = t.completedAssigneeIds ?? [],
+): Task {
+  const nextCompleted = deriveCompletedAssigneeIds(t.assigneeIds, nextChecklist, manuallyDone);
   const prevCompleted = t.completedAssigneeIds ?? [];
   const rule = t.completionRule ?? "all";
   const allDone = isDoneByRule(t.assigneeIds, nextCompleted, rule);
@@ -327,7 +332,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
         // out of step with the automatic completion path (see
         // applyChecklistDerivedCompletion). Callers check isTaskFullyDone
         // themselves first to show a toast; this is the backstop.
-        if (status === "done" && !isTaskFullyDone(t.assigneeIds, t.checklist, t.completionRule)) return t;
+        if (status === "done" && !isTaskFullyDone(t.assigneeIds, t.checklist, t.completionRule, t.completedAssigneeIds)) return t;
         if (status === "done") notifyReviewReady(t);
         logActivity(
           useIdentityStore.getState().viewingAsUserId,
@@ -869,7 +874,14 @@ export const useTaskStore = create<TaskStore>((set) => ({
       tasks: s.tasks.map((t) => {
         if (t.id !== taskId) return t;
         const mine = t.checklist.filter((c) => c.ownerId === userId);
-        if (mine.length === 0) return t;
+        if (mine.length === 0) {
+          // No items of their own to tick (a group task where only others got
+          // checklist items) — flip their part done/undone by hand instead.
+          if (!t.assigneeIds.includes(userId) || t.checklist.length === 0) return t;
+          const prev = t.completedAssigneeIds ?? [];
+          const manual = prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId];
+          return applyChecklistDerivedCompletion(t, t.checklist, userId, manual);
+        }
         const allMineDone = mine.every((c) => c.done);
         const nextChecklist = t.checklist.map((c) => (c.ownerId === userId ? { ...c, done: !allMineDone } : c));
         return applyChecklistDerivedCompletion(t, nextChecklist, userId);

@@ -264,7 +264,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
                       if (iAmAssignee) toggleAssigneeChecklist(task.id, viewingAsUserId);
                     } else if (isDone) {
                       moveTask(task.id, "todo");
-                    } else if (!isTaskFullyDone(task.assigneeIds, task.checklist, task.completionRule)) {
+                    } else if (!isTaskFullyDone(task.assigneeIds, task.checklist, task.completionRule, task.completedAssigneeIds)) {
                       toast.error(`ยังติ๊ก checklist ไม่ครบ ${remainingChecklistCount(task.checklist)} ข้อ — ทำให้ครบก่อนถึงจะปิดงานได้`);
                     } else {
                       moveTask(task.id, "done");

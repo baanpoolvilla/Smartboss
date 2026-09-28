@@ -18,10 +18,22 @@ export function isDoneByRule(assigneeIds: string[], completedIds: string[], rule
   return rule === "any" ? assigneeIds.some((id) => completedIds.includes(id)) : assigneeIds.every((id) => completedIds.includes(id));
 }
 
-export function deriveCompletedAssigneeIds(assigneeIds: string[], checklist: ChecklistItem[]): string[] {
+/**
+ * `manuallyDone` — ids (usually the task's current completedAssigneeIds) who
+ * marked their part done by hand. Only honoured for an assignee who owns zero
+ * checklist items: in a group task where only some people were given items,
+ * the rest had nothing to tick and so could never finish their part — the
+ * task could never close ("กดปิดงานไม่ได้เพราะผมไม่มีเช็คลิส").
+ */
+export function deriveCompletedAssigneeIds(
+  assigneeIds: string[],
+  checklist: ChecklistItem[],
+  manuallyDone: string[] = [],
+): string[] {
   return assigneeIds.filter((id) => {
     const mine = checklist.filter((c) => c.ownerId === id);
-    return mine.length > 0 && mine.every((c) => c.done);
+    if (mine.length === 0) return manuallyDone.includes(id);
+    return mine.every((c) => c.done);
   });
 }
 
@@ -33,11 +45,16 @@ export function deriveCompletedAssigneeIds(assigneeIds: string[], checklist: Che
  * status actions) — without this, those could mark a task done with an
  * incomplete checklist, out of step with the automatic completion path.
  */
-export function isTaskFullyDone(assigneeIds: string[], checklist: ChecklistItem[], rule: CompletionRule = "all"): boolean {
+export function isTaskFullyDone(
+  assigneeIds: string[],
+  checklist: ChecklistItem[],
+  rule: CompletionRule = "all",
+  manuallyDone: string[] = [],
+): boolean {
   if (assigneeIds.length === 0) return false;
   // งานที่ไม่มีเช็คลิสต์เลย (เช็คลิสต์ไม่บังคับแล้ว) ไม่มีอะไรให้ติ๊กเป็นเงื่อนไข — เลื่อนเป็น "เสร็จสิ้น" เองได้
   if (checklist.length === 0) return true;
-  return isDoneByRule(assigneeIds, deriveCompletedAssigneeIds(assigneeIds, checklist), rule);
+  return isDoneByRule(assigneeIds, deriveCompletedAssigneeIds(assigneeIds, checklist, manuallyDone), rule);
 }
 
 /** How many checklist items are still unchecked across every assignee — for

@@ -209,6 +209,7 @@ export function TaskDetailSheet({
   const removeAttachment = useTaskStore((s) => s.removeAttachment);
   const addChecklistItem = useTaskStore((s) => s.addChecklistItem);
   const toggleChecklistItem = useTaskStore((s) => s.toggleChecklistItem);
+  const toggleAssigneeChecklist = useTaskStore((s) => s.toggleAssigneeChecklist);
   const removeChecklistItem = useTaskStore((s) => s.removeChecklistItem);
   const addReaction = useTaskStore((s) => s.addReaction);
   const removeReaction = useTaskStore((s) => s.removeReaction);
@@ -679,7 +680,7 @@ export function TaskDetailSheet({
                 value={task.status}
                 onValueChange={(v) => {
                   if (!v) return;
-                  if (v === "done" && !isTaskFullyDone(task.assigneeIds, task.checklist, task.completionRule)) {
+                  if (v === "done" && !isTaskFullyDone(task.assigneeIds, task.checklist, task.completionRule, task.completedAssigneeIds)) {
                     toast.error(`ยังติ๊ก checklist ไม่ครบ ${remainingChecklistCount(task.checklist)} ข้อ — ทำให้ครบก่อนถึงจะปิดงานได้`);
                     return;
                   }
@@ -1502,14 +1503,36 @@ export function TaskDetailSheet({
                     const ownerName = getUser(ownerId)?.name ?? ownerId;
                     return (
                       <div key={ownerId} className="space-y-0.5 py-1.5 first:pt-0 last:pb-0">
-                        {items.length === 0 ? (
-                          <div className="flex items-center gap-2 px-1 pl-7">
-                            <span className="max-w-[8rem] shrink-0 truncate rounded-full bg-[var(--bg-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--ink-soft)]" title={ownerName}>
-                              {ownerName}
-                            </span>
-                            <span className="text-xs text-[var(--ink-soft)]">ยังไม่มีรายการ</span>
-                          </div>
-                        ) : (
+                        {items.length === 0 ? (() => {
+                          // No items of their own — they mark their part done
+                          // by hand instead, otherwise a group task where only
+                          // some people got items could never close.
+                          const manualDone = (task.completedAssigneeIds ?? []).includes(ownerId);
+                          const canToggleMine = ownerId === viewingAsUserId;
+                          return (
+                            <div className="flex items-center gap-2 rounded-md px-1 py-0.5">
+                              <button
+                                onClick={() => canToggleMine && toggleAssigneeChecklist(task.id, ownerId)}
+                                disabled={!canToggleMine}
+                                className={cn(
+                                  "h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors",
+                                  manualDone ? "bg-[var(--chart-green)] border-[var(--chart-green)]" : "border-[var(--line)]",
+                                  canToggleMine ? "hover:border-[var(--brand-green)]" : "opacity-50 cursor-not-allowed"
+                                )}
+                                title={!canToggleMine ? "ติ๊กได้เฉพาะเจ้าของส่วนนี้" : undefined}
+                                aria-label={manualDone ? "ทำเครื่องหมายว่าส่วนของฉันยังไม่เสร็จ" : "ทำเครื่องหมายว่าส่วนของฉันเสร็จแล้ว"}
+                              >
+                                {manualDone && <Check className="h-3 w-3 text-white" />}
+                              </button>
+                              <span className="max-w-[8rem] shrink-0 truncate rounded-full bg-[var(--bg-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--ink-soft)]" title={ownerName}>
+                                {ownerName}
+                              </span>
+                              <span className={cn("text-xs", manualDone ? "text-[var(--brand-green-dark)] font-medium" : "text-[var(--ink-soft)]")}>
+                                {manualDone ? "ส่วนนี้เสร็จแล้ว" : canToggleMine ? "ไม่มีรายการ — ติ๊กเมื่อทำส่วนของคุณเสร็จ" : "ไม่มีรายการ · ยังไม่เสร็จ"}
+                              </span>
+                            </div>
+                          );
+                        })() : (
                           items.map((c) => renderItem(c, true))
                         )}
                       </div>
