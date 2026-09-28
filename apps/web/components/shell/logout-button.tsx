@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { LogOut, Loader2 } from "lucide-react";
 import { cn } from "@smartboss/ui/cn";
 
@@ -12,7 +11,6 @@ export function LogoutButton({
   className?: string;
   variant?: "sidebar" | "menu";
 }) {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   async function onLogout() {
@@ -20,8 +18,10 @@ export function LogoutButton({
     try {
       await fetch("/api/auth/logout", { method: "POST" });
     } finally {
-      router.replace("/login");
-      router.refresh();
+      // โหลดหน้าใหม่ทั้งหน้า ไม่ใช่ router.replace — หน้าที่มีตัวซิงก์เบื้องหลัง
+      // (Kanban: TaskSync/realtime) ค้างสถานะฝั่ง client และ router cache ไว้
+      // ทำให้ออกจากระบบแล้วยังเด้งกลับหน้าเดิม ล้างทุกอย่างด้วย hard navigation
+      window.location.replace("/login");
     }
   }
 

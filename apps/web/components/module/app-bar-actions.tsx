@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Loader2, LogOut } from "lucide-react";
 import { Button } from "@smartboss/ui/components/button";
 import { Modal } from "./dialog";
@@ -16,7 +15,6 @@ import { NotificationBellPopover } from "@/modules/report_task/components/shared
  * เลยไม่ต้องรับเลข unread จาก ShellProvider มาบวกเพิ่มอีกที
  */
 export function AppBarActions() {
-  const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -25,8 +23,10 @@ export function AppBarActions() {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
     } finally {
-      router.replace("/login");
-      router.refresh();
+      // โหลดหน้าใหม่ทั้งหน้า ไม่ใช่ router.replace — หน้าที่มีตัวซิงก์เบื้องหลัง
+      // (Kanban: TaskSync/realtime) ค้างสถานะฝั่ง client และ router cache ไว้
+      // ทำให้ออกจากระบบแล้วยังเด้งกลับหน้าเดิม ล้างทุกอย่างด้วย hard navigation
+      window.location.replace("/login");
     }
   }
 
