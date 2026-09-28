@@ -13,6 +13,11 @@ self.addEventListener("push", (event) => {
     data = { title: "SmartBoss", body: event.data ? event.data.text() : "" };
   }
   const title = data.title || "SmartBoss";
+  // จุดบนไอคอนแอปตอนปิดแอปอยู่ (ไม่รู้ตัวเลขที่นี่) — เปิดแอปแล้วหน้าเว็บตั้งเป็นตัวเลขจริงแทน
+  // (notification-bell-popover.tsx) เครื่องที่ไม่มี Badging API ข้าม
+  if (self.navigator && typeof self.navigator.setAppBadge === "function") {
+    self.navigator.setAppBadge().catch(() => {});
+  }
   event.waitUntil(
     self.registration.showNotification(title, {
       body: data.body || "",
