@@ -1,4 +1,6 @@
 import { PrismaClient } from "@prisma/client";
+// วันหยุดราชการไทยชุดเดียวกับที่แอปใช้ (import type ในไฟล์นั้นถูกตัดทิ้งตอนรัน)
+import { thaiHolidayEvents } from "../../../apps/web/modules/report_task/data/thai-holidays";
 
 /**
  * อ่านอย่างเดียว — ไล่คะแนนหักรายงาน (report_missed / report_late) ที่ยัง active อยู่
@@ -6,7 +8,10 @@ import { PrismaClient } from "@prisma/client";
  *
  *   ✗ "ไม่ส่ง" แต่มีโพสต์ของรอบนั้นในวันนั้น
  *   ✗ "ส่งสาย" แต่มีโพสต์ของรอบนั้นที่ส่งทันเวลา (หรือซ่อนป้ายสายไว้)
- *   ✗ วันนั้นมีวันลา/Day-Off ที่อนุมัติแล้ว (รอบรายวัน)
+ *   ✗ วันนั้นเป็นวันหยุด/วันลาของคนนั้น (รอบรายวันเท่านั้น — รอบรายสัปดาห์/รายเดือน
+ *     ไม่ยกเว้นให้วันหยุดโดยตั้งใจ ตามกติกาของแอป) ครอบคลุม: วันลาทุกประเภทที่อนุมัติแล้ว
+ *     ในระบบบุคคล (ยกเว้นประเภท "ยังต้องส่งรายงาน" เช่น WFH), วันหยุดบริษัทในระบบ
+ *     บุคคล, วันหยุดราชการ, และ "วันหยุดประจำ" ที่ตั้งไว้ในโมดูลรายงาน
  *   ? "ส่งสาย" แต่ไม่มีโพสต์รอบนั้นเลย (ควรเป็น "ไม่ส่ง" — ไม่ใช่หักเกิน แค่ผิดหมวด)
  *
  * จับคู่โพสต์กับรอบแบบเดียวกับแอป (apps/web/modules/report_task/lib/submission-rounds.ts
@@ -86,26 +91,81 @@ async function main() {
 
     // วันลาที่อนุมัติแล้ว (workforce — ต้องตั้ง tenant context ให้ RLS)
     type LeaveRow = { subject: string | null; starts_on: Date; ends_on: Date; leave_type: string | null };
+    type HolidayRow = { holiday_date: Date; name: string };
     let leaves: LeaveRow[] = [];
+    let wfHolidays: HolidayRow[] = [];
     try {
-      leaves = await prisma.$transaction(async (tx) => {
+      [leaves, wfHolidays] = await prisma.$transaction(async (tx) => {
         await tx.$executeRawUnsafe("SET LOCAL ROLE workforce_app");
         await tx.$executeRaw`SELECT set_config('workforce.tenant_id', ${orgId}, true)`;
-        return tx.$queryRaw<LeaveRow[]>`
+        const l = await tx.$queryRaw<LeaveRow[]>`
           SELECT p.subject, lr.starts_on, lr.ends_on, lt.name AS leave_type
           FROM workforce.leave_requests lr
           LEFT JOIN workforce.employments e ON e.id = lr.employment_id
           LEFT JOIN workforce.principals  p ON p.person_id = e.person_id
           LEFT JOIN workforce.leave_types lt ON lt.id = lr.leave_type_id
           WHERE lr.status = 'APPROVED' AND lr.ends_on >= ${sinceDay}::date
+            AND lt.requires_reports IS NOT TRUE
         `;
+        const h = await tx.$queryRaw<HolidayRow[]>`
+          SELECT holiday_date, name FROM workforce.holiday_dates WHERE holiday_date >= ${sinceDay}::date
+        `;
+        return [l, h] as const;
       });
     } catch (error) {
-      console.warn(`[${orgId}] อ่านวันลาไม่ได้ — ข้ามการตรวจวันลา:`, (error as Error).message);
+      console.warn(`[${orgId}] อ่านวันลา/วันหยุดจากระบบบุคคลไม่ได้ — ข้ามส่วนนี้:`, (error as Error).message);
     }
     const iso = (d: Date) => new Date(d).toISOString().slice(0, 10);
-    const onLeave = (userId: string, day: string) =>
-      leaves.find((l) => l.subject === userId && iso(l.starts_on) <= day && iso(l.ends_on) >= day);
+
+    // วันหยุดบริษัท (ทุกคน): ระบบบุคคล + วันหยุดราชการ
+    const companyHoliday = new Map<string, string>();
+    for (const h of wfHolidays) companyHoliday.set(iso(h.holiday_date), h.name);
+    for (const h of thaiHolidayEvents) {
+      for (let d = new Date(`${h.start}T00:00:00`); localDay(d) < h.end; d.setDate(d.getDate() + 1)) {
+        if (!companyHoliday.has(localDay(d))) companyHoliday.set(localDay(d), h.title);
+      }
+    }
+
+    // "วันหยุดประจำ" ที่ตั้งในโมดูลรายงาน: วันที่เลือกเอง + กฎรายสัปดาห์ (มีข้อยกเว้นย้าย/ยกเลิก)
+    const routineRow = await prisma.reportTaskStore.findUnique({
+      where: { orgId_key: { orgId, key: "routine-dayoff" } },
+      select: { data: true },
+    });
+    type Rule = { id: string; userId: string; weekday: number; startDate: string; endDate?: string };
+    const routine = (routineRow?.data ?? {}) as {
+      pickedDates?: Record<string, string[]>;
+      rules?: Rule[];
+      ruleExceptions?: Record<string, string>;
+    };
+    const routineOff = (userId: string, day: string): boolean => {
+      if (routine.pickedDates?.[userId]?.includes(day)) return true;
+      for (const r of routine.rules ?? []) {
+        if (r.userId !== userId) continue;
+        const cursor = new Date(`${r.startDate}T00:00:00`);
+        cursor.setDate(cursor.getDate() + ((r.weekday - cursor.getDay() + 7) % 7));
+        for (; localDay(cursor) <= day; cursor.setDate(cursor.getDate() + 7)) {
+          const natural = localDay(cursor);
+          if (r.endDate && natural >= r.endDate) break;
+          const ex = routine.ruleExceptions?.[`${r.id}:${natural}`];
+          const effective = ex === "cancelled" ? null : (ex ?? natural);
+          if (effective === day) return true;
+        }
+        // ถูกย้ายมาลงวันนี้จากสัปดาห์หลังจากวันนี้
+        for (const [key, moved] of Object.entries(routine.ruleExceptions ?? {})) {
+          if (key.startsWith(`${r.id}:`) && moved === day) return true;
+        }
+      }
+      return false;
+    };
+
+    const offReason = (userId: string, day: string): string | null => {
+      const leave = leaves.find((l) => l.subject === userId && iso(l.starts_on) <= day && iso(l.ends_on) >= day);
+      if (leave) return `วันลาอนุมัติแล้ว (${leave.leave_type ?? "ลา"})`;
+      const hol = companyHoliday.get(day);
+      if (hol) return `วันหยุดบริษัท (${hol})`;
+      if (routineOff(userId, day)) return "วันหยุดประจำ (ตั้งในโมดูลรายงาน)";
+      return null;
+    };
 
     type Finding = { user: string; day: string; where: string; dock: string; why: string; wrong: boolean };
     const findings: Finding[] = [];
@@ -120,10 +180,11 @@ async function main() {
       const dock = `${e.category === "report_missed" ? "ไม่ส่ง" : "ส่งสาย"} ${Number(e.points)}`;
       const user = nameOf.get(userId) ?? userId;
 
-      const leave = onLeave(userId, day);
-      const daily = round ? !round.dayOfMonth && !(round.weekdays && round.weekdays.length > 0 && round.weekdays.length < 7) : true;
-      if (leave && daily) {
-        findings.push({ user, day, where, dock, why: `วันนั้นมีวันลาอนุมัติแล้ว (${leave.leave_type ?? "ลา"})`, wrong: true });
+      // รอบรายวันเท่านั้นที่ยกเว้นวันหยุด (roundFrequencyOf ของแอป: ไม่มี weekdays และ dayOfMonth)
+      const daily = round ? !round.dayOfMonth && !(round.weekdays && round.weekdays.length > 0) : true;
+      const off = daily ? offReason(userId, day) : null;
+      if (off) {
+        findings.push({ user, day, where, dock, why: `วันนั้นเป็น${off}`, wrong: true });
         continue;
       }
       if (!round) {
