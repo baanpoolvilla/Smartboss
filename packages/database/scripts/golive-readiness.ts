@@ -55,13 +55,15 @@ async function main() {
     // ── HR: ผูกทะเบียน + กะ + ประเภทลา (ต้องตั้ง tenant context ให้ RLS) ──
     type LinkRow = { subject: string; employment_id: string };
     type ShiftRow = { subject: string; days: number; published: number };
+    type PatternRow = { subject: string; days: number };
     type LeaveTypeRow = { name: string; auto_approve: boolean; requires_reports: boolean | null; paid: boolean };
     let links: LinkRow[] = [];
     let shifts: ShiftRow[] = [];
+    let patterns: PatternRow[] = [];
     let leaveTypes: LeaveTypeRow[] = [];
     let hrError: string | null = null;
     try {
-      [links, shifts, leaveTypes] = await prisma.$transaction(async (tx) => {
+      [links, shifts, leaveTypes, patterns] = await prisma.$transaction(async (tx) => {
         await tx.$executeRawUnsafe("SET LOCAL ROLE workforce_app");
         await tx.$executeRaw`SELECT set_config('workforce.tenant_id', ${org.id}, true)`;
         const l = await tx.$queryRaw<LinkRow[]>`
@@ -83,13 +85,29 @@ async function main() {
         const t = await tx.$queryRaw<LeaveTypeRow[]>`
           SELECT name, auto_approve, requires_reports, paid FROM workforce.leave_types ORDER BY name
         `;
-        return [l, s, t] as const;
+        // กะจาก "รูปแบบประจำสัปดาห์" (recurring_work_patterns) — ตัวคำนวณลงเวลาใช้เมื่อวันนั้น
+        // ไม่มีตารางกะที่เผยแพร่ (attendance.repository.ts resolveShiftId) นับวันที่มีกะในช่วง
+        const pt = await tx.$queryRaw<PatternRow[]>`
+          SELECT p.subject, COUNT(*)::int AS days
+          FROM generate_series(${from}::date, ${to}::date, interval '1 day') AS g(d)
+          JOIN workforce.recurring_work_patterns rp
+            ON rp.effective_from <= g.d::date AND (rp.effective_to IS NULL OR rp.effective_to >= g.d::date)
+          JOIN workforce.employments e ON e.id = rp.employment_id
+          JOIN workforce.principals p ON p.person_id = e.person_id
+          WHERE (CASE EXTRACT(DOW FROM g.d)::int
+                   WHEN 0 THEN rp.sunday_shift_id WHEN 1 THEN rp.monday_shift_id WHEN 2 THEN rp.tuesday_shift_id
+                   WHEN 3 THEN rp.wednesday_shift_id WHEN 4 THEN rp.thursday_shift_id WHEN 5 THEN rp.friday_shift_id
+                   ELSE rp.saturday_shift_id END) IS NOT NULL
+          GROUP BY p.subject
+        `;
+        return [l, s, t, pt] as const;
       });
     } catch (error) {
       hrError = (error as Error).message.split("\n")[0] ?? "error";
     }
     const linked = new Set(links.map((l) => l.subject));
     const shiftBy = new Map(shifts.map((s) => [s.subject, s]));
+    const patternBy = new Map(patterns.map((p) => [p.subject, p.days]));
 
     // ── รายงาน: ใครอยู่ในรายชื่อผู้ต้องส่งของรอบรายวัน ──
     const feed = (
@@ -145,7 +163,8 @@ async function main() {
     const problems = new Map<string, string[]>();
     for (const u of users) {
       const s = shiftBy.get(u.id);
-      const shiftTxt = s ? (s.published < s.days ? `${s.published}/${s.days} ร่าง` : `${s.days}`) : "0";
+      const pat = patternBy.get(u.id) ?? 0;
+      const shiftTxt = s && s.published > 0 ? `${s.published} ตาราง` : pat > 0 ? `${pat} ประจำ` : s ? `0 (${s.days} ร่าง)` : "0";
       const row = [
         u.name,
         mark(linked.has(u.id)),
@@ -160,7 +179,7 @@ async function main() {
       const add = (k: string) => problems.set(k, [...(problems.get(k) ?? []), u.name]);
       if (!linked.has(u.id)) add("ไม่ผูกทะเบียนพนักงาน (ลงเวลา/ลา/Day-Off ไม่นับเป็นของคนนี้)");
       if (!u.departmentId) add("ไม่มีแผนก");
-      if (linked.has(u.id) && (!s || s.published === 0)) add(`ไม่มีกะที่เผยแพร่ในช่วง ${from}..${to} (ตัดสินสาย/ขาดไม่ได้)`);
+      if (linked.has(u.id) && (!s || s.published === 0) && pat === 0) add(`ไม่มีกะที่เผยแพร่ในช่วง ${from}..${to} (ตัดสินสาย/ขาดไม่ได้)`);
       if (!reportRooms.has(u.id)) add("ไม่อยู่ในรอบรายงานรายวันใดเลย (ถ้าคนนี้ต้องส่ง = ตั้งห้องไม่ครบ)");
       if (!push.has(u.id)) add("ยังไม่เปิดแจ้งเตือนบนเครื่องไหนเลย");
     }
