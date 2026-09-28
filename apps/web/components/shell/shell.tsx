@@ -24,6 +24,7 @@ import { Toaster } from "@/modules/report_task/components/ui/sonner";
 import { LogoutButton } from "./logout-button";
 import { InstallAppButton, InstallGate } from "./app-install";
 import { AppUpdateNotice } from "./app-update-notice";
+import { NotificationSetup } from "./notification-setup";
 import { SaveFeedback } from "./save-feedback";
 import { SessionRefresher } from "./session-refresher";
 import { SystemNotify } from "./system-notify";
@@ -80,6 +81,8 @@ export function Shell({
       {/* ชวนติดตั้งเป็นแอป (มือถือ) + แจ้งเมื่อมีเวอร์ชันใหม่ — ทุกหน้า ทุกโมดูล */}
       <InstallGate />
       <AppUpdateNotice />
+      {/* ชวนเปิดการแจ้งเตือนตอนเปิดแอปที่ติดตั้ง/บนคอม — ทุกหน้า */}
+      <NotificationSetup />
       {activeModule ? (
         <ModuleFrame module={activeModule} pathname={pathname}>
           {children}
