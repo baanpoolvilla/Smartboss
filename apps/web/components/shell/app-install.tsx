@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, Copy, Download, EllipsisVertical, ExternalLink, Share, SquarePlus } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { BellRing, Check, Copy, Download, EllipsisVertical, ExternalLink, Share, SquarePlus, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -18,7 +19,7 @@ import {
   useIsClient,
   type DeviceInfo,
 } from "@/lib/app-install";
-import { onInstallAvailable, promptInstall } from "@/lib/push-client";
+import { enablePush, onInstallAvailable, promptInstall, pushSupport, serverPushConfigured } from "@/lib/push-client";
 
 /**
  * ชวนติดตั้ง SmartBoss เป็นแอป ("อยากให้คนใช้เข้ามาและโหลดมาง่ายเลย")
@@ -115,6 +116,23 @@ export function InstallGate() {
     };
   }, []);
 
+  // ย้อนกลับ/กดลิงก์ไปหน้าอื่น = ปิดหน้าจอนี้ด้วย ("กดย้อนกลับอะไรก็เป็นแต่หน้านี้") —
+  // เดิมหน้าข้างหลังเปลี่ยนแต่หน้าจอติดตั้งยังค้างทับอยู่ ต้องรีเฟรชถึงจะหาย
+  const pathname = usePathname();
+  const [openedAt, setOpenedAt] = useState(pathname);
+  if (openedAt !== pathname) {
+    setOpenedAt(pathname);
+    if (open) setOpen(false);
+  }
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
   if (!isClient || !open || !device) return null;
 
   const skip = () => {
@@ -133,7 +151,16 @@ export function InstallGate() {
 
   return createPortal(
     <div className="fixed inset-0 z-[120] overflow-y-auto bg-(--bg)" role="dialog" aria-modal="true" aria-labelledby="install-title">
-      <div className="mx-auto flex min-h-full max-w-sm flex-col px-6 pt-[max(3rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+      <button
+        type="button"
+        onClick={skip}
+        aria-label="ปิด"
+        title="ปิด (ใช้งานในเบราว์เซอร์ไปก่อน)"
+        className="fixed right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-10 rounded-full p-2 text-(--ink-soft) hover:bg-(--bg-soft) hover:text-(--ink)"
+      >
+        <X className="h-5 w-5" />
+      </button>
+      <div className="mx-auto flex max-w-sm flex-col px-6 pt-[max(3rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         <div className="flex flex-col items-center text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/icon-512-v3.png" alt="" className="h-20 w-20 rounded-[22px] shadow-(--shadow-card) ring-1 ring-black/[0.06]" />
@@ -147,11 +174,16 @@ export function InstallGate() {
           </p>
         </div>
 
-        <div className="mt-8 flex-1">
+        <div className="mt-8">
           {installed ? null : (
             <InstallSteps device={device} canPrompt={canPrompt} onInstalled={() => setInstalled(true)} />
           )}
         </div>
+
+        {/* เปิดการแจ้งเตือนได้จากหน้านี้เลย — Android/คอม สิทธิ์แจ้งเตือนผูกกับเว็บ แอปที่ติดตั้ง
+            ใช้ร่วมกับเบราว์เซอร์ อนุญาตตรงนี้ครั้งเดียวได้ทั้งคู่ · iPhone แอปบนหน้าจอโฮมแยกสิทธิ์
+            จาก Safari ต้องไปเปิดในแอป (NotificationSetup ขึ้นให้เองตอนเปิดแอป) */}
+        {device.os !== "ios" && !device.inApp && <GateNotifyButton />}
 
         <div className="mt-8 flex flex-col items-center gap-3">
           {/* iPhone: Safari ไม่มีทางรู้เองว่าติดตั้งแล้ว (แยก storage) · Android: ติดตั้งไว้
@@ -172,6 +204,60 @@ export function InstallGate() {
       </div>
     </div>,
     document.body,
+  );
+}
+
+function GateNotifyButton() {
+  const [state, setState] = useState<"hidden" | "ask" | "busy" | "done" | "denied">("hidden");
+
+  useEffect(() => {
+    if (pushSupport() !== "default") return;
+    let cancelled = false;
+    void serverPushConfigured().then((ok) => {
+      if (ok && !cancelled) setState("ask");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (state === "hidden") return null;
+
+  return (
+    <div className="mt-4 flex items-center gap-3 rounded-xl border border-(--line) px-4 py-3">
+      <BellRing className="h-5 w-5 shrink-0 text-[#4cb93f]" />
+      <p className="min-w-0 flex-1 text-sm text-(--ink)">
+        {state === "done"
+          ? "เปิดการแจ้งเตือนแล้ว"
+          : state === "denied"
+            ? "การแจ้งเตือนถูกบล็อก — เปิดได้ที่ไอคอนแม่กุญแจข้างชื่อเว็บ"
+            : "เปิดการแจ้งเตือนไว้เลย รับงาน/แชทใหม่ทันที"}
+      </p>
+      {(state === "ask" || state === "busy") && (
+        <button
+          type="button"
+          disabled={state === "busy"}
+          onClick={async () => {
+            setState("busy");
+            const r = await enablePush().catch((err: unknown) => ({ ok: false, reason: (err as Error)?.message }));
+            if (r.ok) {
+              setState("done");
+              return;
+            }
+            if (pushSupport() === "denied") {
+              setState("denied");
+              return;
+            }
+            setState("ask");
+            toast.error(r.reason ?? "เปิดแจ้งเตือนไม่สำเร็จ");
+          }}
+          className="shrink-0 rounded-lg bg-[#4cb93f] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-60"
+        >
+          {state === "busy" ? "กำลังเปิด…" : "เปิด"}
+        </button>
+      )}
+      {state === "done" && <Check className="h-5 w-5 shrink-0 text-[#4cb93f]" />}
+    </div>
   );
 }
 
