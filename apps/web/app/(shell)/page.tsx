@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import type { LucideIcon } from "lucide-react";
+import { TrendingUp, type LucideIcon } from "lucide-react";
 import { MODULE_CARDS, PRIMARY_MODULE_CODES } from "@/lib/modules";
 import { iconByName } from "@/lib/icons";
 import { loadShellNav } from "@/lib/nav";
@@ -71,6 +71,18 @@ export default async function HomePage() {
       href: m.basePath,
     });
   }
+
+  // รวมลิงก์เว็บภายนอกของทีมขาย/การตลาด (lib/external-apps.ts) — ไม่ใช่โมดูล
+  // ไม่ต้องเปิดใช้ต่อบริษัท ทุกคนที่ login เห็น
+  tiles.push({
+    code: "sales_marketing_links",
+    name: "Sale & Marketing",
+    description: "รวมลิงก์เว็บของทีมขายและการตลาด",
+    icon: TrendingUp,
+    color: "var(--mod-sale)",
+    colorBg: "var(--mod-sale-bg)",
+    href: "/sales-marketing",
+  });
 
   // ฝั่งซ้าย = โมดูลหลัก เรียงตามลำดับที่ตั้งไว้ (ไม่ใช่ลำดับใน tiles)
   const byCode = new Map(tiles.map((t) => [t.code, t]));
