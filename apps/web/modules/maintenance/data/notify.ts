@@ -44,16 +44,23 @@ export async function notifyUser(
   input: NotifyInput
 ) {
   if (!userId) return;
-  await prisma.notification.create({
-    data: {
-      orgId,
-      userId,
-      title: input.title,
-      body: input.body ?? null,
-      type: input.type ?? "general",
-      referenceId: input.referenceId ?? null,
-    },
-  });
+  // แจ้งเตือนพลาดต้องไม่ทำให้การบันทึกพลาดตาม — ผู้เรียกส่วนใหญ่แจ้ง "หลัง" บันทึกข้อมูล
+  // เสร็จแล้ว ถ้าโยนต่อ action จะตอบ 500 แล้วหน้าจอขึ้น "บันทึกไม่สำเร็จ" ทั้งที่ข้อมูลเข้าแล้ว
+  try {
+    await prisma.notification.create({
+      data: {
+        orgId,
+        userId,
+        title: input.title,
+        body: input.body ?? null,
+        type: input.type ?? "general",
+        referenceId: input.referenceId ?? null,
+      },
+    });
+  } catch (error) {
+    console.error("[notify] notification.create failed:", error);
+    return;
+  }
   // เด้ง + เสียง ให้ผู้รับรู้ทันที (ทุกโมดูลที่แจ้งผ่านฟังก์ชันนี้) — ไม่รอ ไม่ให้ Web Push
   // ที่ช้าไปถ่วงงานหลัก · แชทแจ้งเด้งของตัวเองอยู่แล้ว (chat/data/notify.ts) จึงข้าม
   const type = input.type ?? "general";
@@ -249,6 +256,8 @@ export async function sendLine(
         to: user.lineUserId,
         messages: [{ type: "text", text: message }],
       }),
+      // LINE ช้า/ค้างต้องไม่ถ่วงการกดบันทึกจนหมดเวลา
+      signal: AbortSignal.timeout(8000),
     });
     await prisma.lineNotificationLog.create({
       data: {

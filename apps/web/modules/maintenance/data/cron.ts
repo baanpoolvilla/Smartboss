@@ -9,7 +9,13 @@ import {
   loadPerformanceSettingsMap,
   recordPerformanceEvents,
   type PerformanceEventInput,
+  type PerformanceSettings,
 } from "@/lib/performance";
+import {
+  addDays,
+  pmDockRevokeReason,
+  workOrderDockRevokeReason,
+} from "@/modules/maintenance/lib/dock-validity";
 
 /**
  * สร้างใบงานอัตโนมัติจาก PM ที่ถึงกำหนด (แทน DB trigger เดิมของ ChangYai)
@@ -31,6 +37,8 @@ export async function generateWorkOrdersForDuePms(): Promise<{
       },
     })
   );
+
+  await closeStaleAutoWorkOrders();
 
   let created = 0;
   for (const pm of duePms) {
@@ -82,6 +90,50 @@ export async function generateWorkOrdersForDuePms(): Promise<{
   }
 
   return { due: duePms.length, created };
+}
+
+/**
+ * เก็บกวาดใบงานอัตโนมัติที่ค้าง open ทั้งที่รอบของมันจบไปแล้ว — ของเก่าก่อนมี
+ * closeAutoWorkOrdersOfPm (data/pm.ts) ที่ยังโผล่ในรายการใบงานซ้ำ ๆ
+ *
+ *   PM ถูกลบ/ปิดใช้งาน                          → ยกเลิก
+ *   PM ถูกปิดรอบ (lastCompletedDate) หลังเปิดใบนี้ → ปิดเป็นเสร็จ (รอบนั้นทำแล้ว)
+ */
+async function closeStaleAutoWorkOrders(): Promise<void> {
+  const open = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.workOrder.findMany({
+      where: { autoCreated: true, status: { in: ["open", "in_progress"] }, pmScheduleId: { not: null } },
+      select: { id: true, orgId: true, pmScheduleId: true, createdAt: true },
+    })
+  );
+  if (open.length === 0) return;
+  const pms = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.pmSchedule.findMany({
+      where: { id: { in: [...new Set(open.map((w) => w.pmScheduleId!))] } },
+      select: { id: true, isActive: true, lastCompletedDate: true },
+    })
+  );
+  const pmById = new Map(pms.map((p) => [p.id, p]));
+
+  for (const wo of open) {
+    const pm = pmById.get(wo.pmScheduleId!);
+    // lastCompletedDate เก็บเป็นวันล้วน — เทียบระดับวัน (ปิดรอบวันเดียวกับที่เปิดใบก็นับ)
+    const doneAfter =
+      pm?.lastCompletedDate &&
+      pm.lastCompletedDate.toISOString().slice(0, 10) >= wo.createdAt.toISOString().slice(0, 10);
+    if (pm && pm.isActive && !doneAfter) continue;
+    await prisma.workOrder.updateMany({
+      where: { orgId: wo.orgId, id: wo.id },
+      data: doneAfter
+        ? {
+            status: "completed",
+            completedAt: new Date(),
+            completionNotes: "ปิดอัตโนมัติ — รอบนี้ถูกปิดที่หน้าแผน PM แล้ว",
+            requiresExpense: false,
+          }
+        : { status: "cancelled", completionNotes: "ยกเลิกอัตโนมัติ — แผน PM ถูกลบหรือปิดใช้งาน" },
+    });
+  }
 }
 
 /** true = วันนี้ควรแจ้งเตือน PM นี้ตามระยะห่างจากกำหนด — ไม่ใช่ "ถึงเกณฑ์แล้วเงียบ
@@ -256,6 +308,7 @@ export async function dockOverdueMaintenance(): Promise<{
   workOrders: number;
   pmSchedules: number;
   recorded: number;
+  revoked: number;
 }> {
   const now = new Date();
   const events: PerformanceEventInput[] = [];
@@ -269,8 +322,13 @@ export async function dockOverdueMaintenance(): Promise<{
   const settingsByOrg = await loadPerformanceSettingsMap(orgs.map((o) => o.id));
   const activeSettings = [...settingsByOrg.values()].filter((s) => s.enabled);
   if (activeSettings.length === 0) {
-    return { workOrders: 0, pmSchedules: 0, recorded: 0 };
+    return { workOrders: 0, pmSchedules: 0, recorded: 0, revoked: 0 };
   }
+
+  // คืนคะแนนที่ไม่ถูกต้องแล้ว "ก่อน" หักรอบนี้ — ใบงานที่ย้ายคนรับผิดชอบจะถูกถอนจาก
+  // คนเดิมแล้วหักคนปัจจุบันได้ในรอบเดียวกัน (unique key ไม่มี userId ถ้าหักก่อน
+  // แถวของคนเดิมจะกันไว้)
+  const revoked = await revokeInvalidMaintenanceDocks(settingsByOrg);
   const minPmGraceDays = Math.min(...activeSettings.map((s) => s.pmGraceDays));
   const minWorkOrderGraceDays = Math.min(
     ...activeSettings.map((s) => s.workOrderGraceDays),
@@ -306,9 +364,11 @@ export async function dockOverdueMaintenance(): Promise<{
     if (wo.dueDate === null) continue; // where: { lt: ... } กันไว้แล้วจริง ๆ ไม่มีทางเข้า แต่ TS ไม่รู้
 
     // กรองอีกชั้นด้วยระยะผ่อนผันของบริษัทนั้นจริง ๆ (ข้างบนดึงมาด้วยระยะสั้นสุดก่อน)
-    const orgWorkOrderGrace = new Date(now);
-    orgWorkOrderGrace.setDate(orgWorkOrderGrace.getDate() - woSt.workOrderGraceDays);
-    if (wo.dueDate >= orgWorkOrderGrace) continue;
+    const lapse = addDays(wo.dueDate, woSt.workOrderGraceDays);
+    if (lapse >= now) continue;
+    // เลยกำหนดไปตั้งแต่ก่อนวันเริ่มนับคะแนน = งานค้างเก่า ไม่ใช่การปล่อยปละในช่วงที่นับ —
+    // เดิม occurredAt = วันที่ตรวจพบ (หลังวันเริ่มนับเสมอ) งานค้างเก่าเลยโดนหักทั้งกอง
+    if (woSt.scoringStartDate && lapse < woSt.scoringStartDate) continue;
 
     const responsible = wo.assignedTo ?? wo.property?.caretakerId;
     if (!responsible) continue; // ไม่มีใครรับผิดชอบเลย — หักใครไม่ได้
@@ -332,7 +392,9 @@ export async function dockOverdueMaintenance(): Promise<{
 
   const latePms = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
     prisma.pmSchedule.findMany({
-      where: { isActive: true, nextDueDate: { lt: graceDate } },
+      // awaitingSchedule = ครบจำนวนรอบแล้ว รอนัดวันใหม่ — ปฏิทิน/แดชบอร์ด/ตัวสร้างใบงาน
+      // ไม่นับว่าค้าง มีแต่ตรงนี้ที่เคยหัก "ไม่ทำตามรอบ" ทั้งที่ไม่มีรอบให้ทำ
+      where: { isActive: true, awaitingSchedule: false, nextDueDate: { lt: graceDate } },
       select: {
         id: true,
         orgId: true,
@@ -344,14 +406,36 @@ export async function dockOverdueMaintenance(): Promise<{
     })
   );
 
+  // PM ที่มีใบงานเปิดอยู่และใบนั้นมีวันครบกำหนดของตัวเอง — วันของใบงานคือกำหนดจริง
+  // (ผู้จัดการนัดไว้แล้ว) ถ้าเลยก็โดน "ใบงานเกินกำหนด" อยู่แล้ว ไม่หัก "ไม่ทำตามรอบ" ซ้อน
+  const pmIdsWithDatedWo = new Set<string>();
+  if (latePms.length > 0) {
+    const ids = latePms.map((p) => p.id);
+    const dated = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+      prisma.workOrder.findMany({
+        where: {
+          status: { in: ["open", "in_progress"] },
+          dueDate: { not: null },
+          OR: [{ pmScheduleId: { in: ids } }, { pmScheduleIds: { hasSome: ids } }],
+        },
+        select: { pmScheduleId: true, pmScheduleIds: true },
+      })
+    );
+    for (const w of dated) {
+      if (w.pmScheduleId) pmIdsWithDatedWo.add(w.pmScheduleId);
+      for (const id of w.pmScheduleIds) pmIdsWithDatedWo.add(id);
+    }
+  }
+
   for (const pm of latePms) {
     const st = settingsByOrg.get(pm.orgId);
     if (!st || !st.enabled) continue;
+    if (pmIdsWithDatedWo.has(pm.id)) continue;
 
     // กรองอีกชั้นด้วยระยะผ่อนผันของบริษัทนั้นจริง ๆ
-    const orgGrace = new Date(now);
-    orgGrace.setDate(orgGrace.getDate() - st.pmGraceDays);
-    if (pm.nextDueDate >= orgGrace) continue;
+    const lapse = addDays(pm.nextDueDate, st.pmGraceDays);
+    if (lapse >= now) continue;
+    if (st.scoringStartDate && lapse < st.scoringStartDate) continue;
 
     const responsible = pm.assignedTo ?? pm.property?.caretakerId;
     if (!responsible) continue;
@@ -369,5 +453,102 @@ export async function dockOverdueMaintenance(): Promise<{
   }
 
   const recorded = await recordPerformanceEvents(events);
-  return { workOrders: overdue.length, pmSchedules: latePms.length, recorded };
+  return { workOrders: overdue.length, pmSchedules: latePms.length, recorded, revoked };
+}
+
+/**
+ * คืนคะแนนงานซ่อมที่หักไปแล้วแต่ไม่ถูกต้องอีกต่อไป — เดิมหักแล้วไม่เคยคืนเลย
+ * (ต่างจากรายงาน/ลงเวลาที่คืนเองได้) ยกเลิก/ลบใบงาน ย้ายคน เลื่อนกำหนด ก็ยังค้าง
+ * เป็นคะแนนติดลบตลอด ("ตัดคะแนนเละเทะ ทั้งที่เค้าเคลียแล้ว")
+ *
+ * ลบเฉพาะรายการที่ระบบหักเอง (createdBy = null) ไม่แตะที่หัวหน้ากดหักเอง
+ * ทุกเงื่อนไขตรงข้ามกับเงื่อนไขการหักด้านบน — ถ้ายังเข้าเกณฑ์หัก (เช่นย้ายคนแล้ว
+ * แต่งานยังค้าง) รอบหักถัดไปจะหักคนที่รับผิดชอบตอนนี้แทน ไม่มีการคืน-หักวนไปมา
+ *
+ *   ใบงานเกินกำหนด  ใบงานถูกลบ/ยกเลิก · กำหนดส่งถูกเลื่อนไปหลังวันที่โดนหัก ·
+ *                  ปิดงานทันกำหนด · เลยกำหนดตั้งแต่ก่อนวันเริ่มนับคะแนน ·
+ *                  งานยังค้างแต่ย้ายไปคนอื่นแล้ว
+ *   ไม่ทำตามรอบ     แผน PM ถูกลบ/ปิดใช้งาน · รอบนั้นเลยกำหนดตั้งแต่ก่อนวันเริ่มนับ ·
+ *                  PM อยู่ในสถานะรอนัดรอบใหม่ · รอบยังค้างแต่ย้ายไปคนอื่นแล้ว ·
+ *                  ซ้อนกับ "ใบงานเกินกำหนด" ของใบงานที่ผูก PM เดียวกันในรอบนั้น
+ */
+async function revokeInvalidMaintenanceDocks(
+  settingsByOrg: Map<string, PerformanceSettings>,
+): Promise<number> {
+  const docks = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.performanceEvent.findMany({
+      where: {
+        source: "maintenance",
+        category: { in: ["workorder_overdue", "pm_missed"] },
+        createdBy: null,
+      },
+      select: { id: true, orgId: true, userId: true, category: true, refId: true, occurredAt: true },
+    }),
+  );
+  if (docks.length === 0) return 0;
+
+  const woIds = docks.filter((d) => d.category === "workorder_overdue" && d.refId).map((d) => d.refId!);
+  const pmIds = [
+    ...new Set(docks.filter((d) => d.category === "pm_missed" && d.refId).map((d) => d.refId!.split(":")[0]!)),
+  ];
+
+  const [wos, pms, linkedWos] = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    Promise.all([
+      prisma.workOrder.findMany({
+        where: { id: { in: woIds } },
+        select: {
+          id: true, status: true, dueDate: true, completedAt: true, assignedTo: true,
+          property: { select: { caretakerId: true } },
+        },
+      }),
+      prisma.pmSchedule.findMany({
+        where: { id: { in: pmIds } },
+        select: {
+          id: true, isActive: true, awaitingSchedule: true, nextDueDate: true, assignedTo: true,
+          property: { select: { caretakerId: true } },
+        },
+      }),
+      prisma.workOrder.findMany({
+        where: { OR: [{ pmScheduleId: { in: pmIds } }, { pmScheduleIds: { hasSome: pmIds } }] },
+        select: { id: true, createdAt: true, completedAt: true, pmScheduleId: true, pmScheduleIds: true },
+      }),
+    ]),
+  );
+  const woById = new Map(wos.map((w) => [w.id, w]));
+  const pmById = new Map(pms.map((p) => [p.id, p]));
+  const woDockedBy = new Map(
+    docks.filter((d) => d.category === "workorder_overdue" && d.refId).map((d) => [d.refId!, d.userId]),
+  );
+
+  const toRevoke: string[] = [];
+  for (const d of docks) {
+    const st = settingsByOrg.get(d.orgId);
+    if (!st || !st.enabled || !d.refId) continue;
+
+    let reason: string | null;
+    if (d.category === "workorder_overdue") {
+      const wo = woById.get(d.refId);
+      reason = workOrderDockRevokeReason(
+        d,
+        wo && { ...wo, caretakerId: wo.property?.caretakerId ?? null },
+        st,
+      );
+    } else {
+      const pm = pmById.get(d.refId.split(":")[0]!);
+      reason = pmDockRevokeReason(
+        { ...d, refId: d.refId },
+        pm && { ...pm, caretakerId: pm.property?.caretakerId ?? null },
+        linkedWos,
+        woDockedBy,
+        st,
+      );
+    }
+    if (reason) toRevoke.push(d.id);
+  }
+
+  if (toRevoke.length === 0) return 0;
+  const result = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.performanceEvent.deleteMany({ where: { id: { in: toRevoke }, createdBy: null } }),
+  );
+  return result.count;
 }

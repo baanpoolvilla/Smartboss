@@ -15,6 +15,7 @@ import { toast } from "sonner";
  *   2. ครอบ fetch — คำขอ server action ของ Next มี header `next-action` เสมอ
  *      และถ้า action โยน error ฝั่งเซิร์ฟเวอร์ Next ตอบ 500
  *      (next/dist/server/app-render/action-handler.js) ⇒ res.ok = สำเร็จจริง
+ *      ยกเว้น action ที่จบด้วย redirect() ตอบ 303 + x-action-redirect ก็นับเป็นสำเร็จ
  *   เงื่อนไขต้องครบทั้งสองข้อ — action ที่ถูกเรียกจากโค้ดเฉย ๆ (ไม่ได้มาจากการกดฟอร์ม)
  *   และคำขอ fetch อื่นทั้งหมดไม่ถูกแตะ ส่งผ่านตรง ๆ ไม่อ่าน body
  *
@@ -80,7 +81,11 @@ export function SaveFeedback() {
       const id = toast.loading("กำลังบันทึก…");
       try {
         const res = await original(input, init);
-        if (res.ok) toast.success(claim.label, { id });
+        // action ที่จบด้วย redirect() (เช่น สร้างใบงานแล้วเด้งไปหน้าใบงาน) Next ตอบ 303 +
+        // header x-action-redirect ไม่ใช่ 200 — บันทึกสำเร็จแล้วจริง เดิมนับเป็น !res.ok
+        // เลยขึ้น "บันทึกไม่สำเร็จ" ทั้งที่ข้อมูลเข้าแล้ว
+        const redirected = res.status === 303 || res.headers.has("x-action-redirect");
+        if (res.ok || redirected) toast.success(claim.label, { id });
         else toast.error("บันทึกไม่สำเร็จ", { id, description: "ข้อมูลยังไม่ถูกบันทึก ลองใหม่อีกครั้ง" });
         return res;
       } catch (error) {

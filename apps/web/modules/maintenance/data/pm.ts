@@ -51,6 +51,41 @@ export async function updatePmSchedule(
   await prisma.pmSchedule.updateMany({ where: { orgId, id }, data });
 }
 
+/**
+ * ปิดใบงานอัตโนมัติที่ระบบเปิดไว้ให้รอบของ PM นี้ แต่รอบนั้นจบไปทางอื่นแล้ว
+ *
+ * กด "ทำแล้ว" ที่หน้าแผน PM เดินรอบไปข้างหน้า แต่ไม่แตะใบงานที่ cron เปิดไว้ ⇒ ใบเก่า
+ * ค้าง open ตลอด โผล่ในรายการใบงานซ้ำ ๆ และ cron เห็นว่า "มีใบค้างอยู่" เลยไม่เปิดใบ
+ * ให้รอบถัดไปด้วย ลบแผน PM ก็ทิ้งใบอัตโนมัติไว้เป็นใบกำพร้าแบบเดียวกัน
+ *
+ * แตะเฉพาะใบที่ระบบสร้างเอง (autoCreated) ของ PM ตัวเดียว — ใบที่คนเปิดเอง/ใบรวม
+ * หลาย PM มีคนถืออยู่ ให้คนปิดเอง · done = ปิดเป็นเสร็จ (ไม่ทวงค่าใช้จ่าย เพราะปิดรอบ
+ * ที่หน้า PM ก็ไม่ทวงอยู่แล้ว) · ไม่งั้นยกเลิก
+ */
+export async function closeAutoWorkOrdersOfPm(
+  orgId: string,
+  pmId: string,
+  outcome: "done" | "cancelled",
+) {
+  await prisma.workOrder.updateMany({
+    where: {
+      orgId,
+      pmScheduleId: pmId,
+      autoCreated: true,
+      status: { in: ["open", "in_progress"] },
+    },
+    data:
+      outcome === "done"
+        ? {
+            status: "completed",
+            completedAt: new Date(),
+            completionNotes: "ปิดอัตโนมัติ — ปิดรอบที่หน้าแผน PM แล้ว",
+            requiresExpense: false,
+          }
+        : { status: "cancelled", completionNotes: "ยกเลิกอัตโนมัติ — แผน PM ถูกลบ" },
+  });
+}
+
 export async function deletePmSchedule(orgId: string, id: string) {
   await prisma.pmSchedule.deleteMany({ where: { orgId, id } });
 }

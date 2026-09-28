@@ -7,6 +7,7 @@ import { requireOrg, hasPermission } from "@smartboss/auth";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import {
   createPmSchedule,
+  closeAutoWorkOrdersOfPm,
   completePmSchedule,
   deletePmSchedule,
   schedulePmNextVisit,
@@ -152,7 +153,9 @@ export async function completePmAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   await completePmSchedule(orgId, id);
+  await closeAutoWorkOrdersOfPm(orgId, id, "done");
   revalidatePath("/maintenance/pm");
+  revalidatePath("/maintenance/work-orders");
 }
 
 export async function scheduleNextAction(formData: FormData) {
@@ -168,7 +171,9 @@ export async function deletePmAction(formData: FormData) {
   const orgId = await requirePmManage();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
+  await closeAutoWorkOrdersOfPm(orgId, id, "cancelled");
   await deletePmSchedule(orgId, id);
+  revalidatePath("/maintenance/work-orders");
   // referenceId ของแจ้งเตือน "pm" ยังคือ pm.id เดิม (ดู cron.ts's
   // notifyDuePmSchedules) แม้ลิงก์จะพาไปหน้ารายการรวมเสมอ (maintenanceHrefFor
   // ไม่ได้ใช้ referenceId ของ "pm") ไม่ลบก็ไม่ถึงกับลิงก์พัง แต่ข้อความจะค้าง
