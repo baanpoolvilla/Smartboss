@@ -42,6 +42,7 @@ export class LeaveService {
     auto_approve: boolean;
     monthly_quota_days: number;
     show_on_calendar: boolean;
+    requires_reports: boolean;
     effective_from: string;
   }): Promise<Record<string, unknown>> {
     return this.uow.run(async (uow) => {
@@ -61,6 +62,7 @@ export class LeaveService {
         attachmentRequired: input.attachment_required,
         allowNegative: input.allow_negative,
         showOnCalendar: input.show_on_calendar,
+        requiresReports: input.requires_reports,
         effectiveFrom: input.effective_from,
       });
 
@@ -811,6 +813,7 @@ export class LeaveService {
           auto_approve: row.autoApprove,
           monthly_quota_days: row.monthlyQuotaDays,
           show_on_calendar: row.showOnCalendar,
+          requires_reports: row.requiresReports,
         })),
       };
     });

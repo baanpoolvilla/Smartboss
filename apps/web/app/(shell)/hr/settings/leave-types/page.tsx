@@ -73,6 +73,7 @@ export default async function LeaveTypesSettingsPage() {
                             {t.auto_approve
                               ? ` · สิทธิ์${t.monthly_quota_days > 0 ? ` ${t.monthly_quota_days} วัน/เดือน` : ""}`
                               : " · ต้องอนุมัติ"}
+                            {t.requires_reports ? " · ยังต้องส่งรายงาน" : ""}
                           </Pill>
                           {/* แก้คำสะกดผิดในชื่อจริงได้ตรงนี้ — ค่าอื่น ๆ (โควตา,
                               ต้องอนุมัติหรือไม่) ยังตั้งได้ครั้งเดียวตอนสร้างเท่านั้น */}
@@ -122,6 +123,12 @@ export default async function LeaveTypesSettingsPage() {
                         เป็นสิทธิ์ ไม่ต้องอนุมัติ (เลือกวันแล้วมีผลทันที)
                       </label>
                     </div>
+                    <div className="flex items-end pb-3 text-sm sm:col-span-3">
+                      <label className="flex items-center gap-2">
+                        <input type="checkbox" name="requires_reports" value="1" className="h-4 w-4" />
+                        ยังต้องส่งรายงานตามปกติ (เช่น Work From Home — ไม่ต้องลงเวลา แต่ยังทำงาน)
+                      </label>
+                    </div>
                     <div className="flex items-end gap-2">
                       <select name="paid" defaultValue="1" className={inputClass}>
                         <option value="1">ได้ค่าจ้าง</option>
@@ -134,7 +141,8 @@ export default async function LeaveTypesSettingsPage() {
                     ประเภทที่ติ๊ก &ldquo;เป็นสิทธิ์&rdquo;
                     พนักงานคลิกวันในปฏิทินแล้วหยุดได้ทันทีไม่ต้องรอใคร ·
                     ประเภทที่ไม่ติ๊กจะค้างเป็นคำขอ และ
-                    <strong> ยังถูกนับเป็นขาดงานจนกว่าจะอนุมัติ</strong>
+                    <strong> ยังถูกนับเป็นขาดงานจนกว่าจะอนุมัติ</strong> ·
+                    ทุกประเภทไม่ต้องลงเวลา ส่วนการส่งรายงานยกเว้นให้ เว้นแต่ติ๊ก &ldquo;ยังต้องส่งรายงาน&rdquo;
                   </p>
                 </SectionCard>
               )}

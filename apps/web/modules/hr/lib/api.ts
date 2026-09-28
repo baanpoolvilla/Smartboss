@@ -151,6 +151,8 @@ export interface LeaveType {
    * ตั้งค่าได้รายบริษัทที่หน้า /hr/settings — ไม่ใช่กฎฝังในโค้ด
    */
   show_on_calendar: boolean;
+  /** true = ยังต้องส่งรายงานตามปกติในวันที่ลาประเภทนี้ (Work From Home) */
+  requires_reports?: boolean;
 }
 
 /**

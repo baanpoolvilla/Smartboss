@@ -24,6 +24,8 @@ export const createLeaveTypeSchema = z.object({
    * ใช้กับประเภทที่บริษัทถือว่าเป็นเรื่องส่วนตัว เช่นลาป่วย
    */
   show_on_calendar: z.boolean().default(true),
+  /** true = ยังต้องส่งรายงานตามปกติในวันที่ลาประเภทนี้ (Work From Home) */
+  requires_reports: z.boolean().default(false),
   effective_from: isoDateSchema,
 });
 

@@ -261,6 +261,11 @@ export interface CalendarEvent {
    * เฉย ๆ) ยังต้องเติมให้เหมือนเดิม ไม่งั้นบอกไม่ได้ว่าเป็นวันลาของใคร
    */
   authoredTitle?: boolean;
+  /**
+   * วันลาประเภทที่ยังต้องส่งรายงานตามปกติ (leave_types.requires_reports เช่น
+   * Work From Home) — report-feed-exemptions.ts ไม่ยกเว้นวันนี้ให้
+   */
+  requiresReports?: boolean;
   taskId?: string;
   location?: string;
   description?: string;

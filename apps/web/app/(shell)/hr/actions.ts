@@ -1299,6 +1299,7 @@ export async function createLeaveTypeAction(formData: FormData) {
         quota_minutes_per_year: Number(formData.get("quota_days") ?? 0) * 480,
         auto_approve: formData.get("auto_approve") === "1",
         monthly_quota_days: Number(formData.get("monthly_quota_days") ?? 0),
+        requires_reports: formData.get("requires_reports") === "1",
         /*
          * ตัวควบคุมคือ "ต้องได้รับอนุมัติ" ไม่ใช่โควตา
          *

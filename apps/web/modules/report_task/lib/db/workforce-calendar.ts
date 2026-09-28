@@ -30,6 +30,7 @@ interface LeaveRow {
   half_day_start: boolean | null;
   half_day_end: boolean | null;
   auto_approve: boolean | null;
+  requires_reports: boolean | null;
 }
 
 interface HolidayRow {
@@ -103,7 +104,8 @@ export async function listLeaveEvents(
              lr.display_label,
              lr.half_day_start,
              lr.half_day_end,
-             lt.auto_approve  AS auto_approve
+             lt.auto_approve  AS auto_approve,
+             lt.requires_reports AS requires_reports
       FROM workforce.leave_requests lr
       LEFT JOIN workforce.employments e ON e.id = lr.employment_id
       LEFT JOIN workforce.principals  p ON p.person_id = e.person_id
@@ -137,7 +139,9 @@ export async function listLeaveEvents(
     // report-feed-exemptions.ts's `leaves` param doesn't branch on `.type`
     // at all (just start/end/userId), so compliance exemption keeps working
     // unchanged either way.
-    const isDayOff = r.auto_approve === true;
+    // WFH-style types (requires_reports) are workdays, not days off — keep
+    // them in the "ลา" bucket with their own type chip rather than "วันหยุดประจำ".
+    const isDayOff = r.auto_approve === true && r.requires_reports !== true;
     return {
       id: `wf-leave-${r.id}`,
       title: authored !== "" ? authored : (r.leave_type_name ?? "ลา"),
@@ -154,6 +158,7 @@ export async function listLeaveEvents(
       end: endExclusive(r.ends_on),
       allDay: !half,
       ...(r.user_id ? { userId: r.user_id } : {}),
+      ...(r.requires_reports ? { requiresReports: true } : {}),
       description: half ? "ลาครึ่งวัน" : undefined,
     } satisfies CalendarEvent;
   });

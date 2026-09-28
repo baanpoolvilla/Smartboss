@@ -56,6 +56,8 @@ export function buildDateExemptions(
   }
 
   for (const leave of leaves) {
+    // Work From Home and similar: no clock-in, but reports are still due.
+    if (leave.requiresReports) continue;
     for (const date of eachDateExclusiveEnd(leave.start, leave.end)) addPersonal(leave.userId, date);
   }
 
