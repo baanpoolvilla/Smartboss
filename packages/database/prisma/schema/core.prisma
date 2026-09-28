@@ -297,6 +297,26 @@ model WebPushSubscription {
   @@schema("core")
 }
 
+/// เครื่องที่ผู้ใช้เปิด SmartBoss จาก "แอปที่ติดตั้ง" (PWA, display-mode standalone)
+/// หนึ่งแถวต่อ (คน, ระบบ ios/android/desktop) — lastSeenAt ขยับทุกวันที่เปิดจากแอป
+/// ใช้ตัดสินว่าเบราว์เซอร์ควรชวนติดตั้งไหม: iPhone แยกข้อมูลระหว่าง Safari กับแอปบน
+/// หน้าจอโฮม Safari จึงรู้เองไม่ได้ ต้องถามผ่านบัญชีที่นี่ (components/shell/app-install.tsx)
+/// และให้หลังบ้านเห็นว่าใครติดตั้งแล้วบ้าง
+model AppInstall {
+  id          String   @id @default(uuid())
+  orgId       String   @map("org_id")
+  userId      String   @map("user_id")
+  platform    String
+  userAgent   String?  @map("user_agent")
+  firstSeenAt DateTime @default(now()) @map("first_seen_at")
+  lastSeenAt  DateTime @default(now()) @map("last_seen_at")
+
+  @@unique([userId, platform])
+  @@index([orgId])
+  @@map("app_installs")
+  @@schema("core")
+}
+
 /// ตัวเดินเลขเอกสารให้คนอ่าน (WO-2569-0001 ฯลฯ)
 ///
 /// ทำไมต้องมีตาราง ไม่ใช้ MAX(code)+1: สองคนกดสร้างพร้อมกันจะอ่านค่าเดิมทั้งคู่

@@ -52,16 +52,21 @@ export function detectDevice(): DeviceInfo {
   return { os: ios ? "ios" : android ? "android" : "desktop", inApp };
 }
 
+/** ถือว่า "ยังติดตั้งอยู่" ถ้าเปิดจากแอปภายในช่วงนี้ — เลยจากนี้ (ลบแอปไปแล้ว/ไม่ได้ใช้)
+ * เบราว์เซอร์จะกลับมาชวนติดตั้งใหม่เอง */
+export const INSTALLED_FRESH_MS = 14 * 24 * 60 * 60 * 1000;
+
 /**
- * เคยติดตั้ง/เปิดจากแอปบนเครื่องนี้แล้วหรือยัง — จำไว้ใน localStorage
+ * เครื่องนี้เพิ่งยืนยันว่าติดตั้งแล้ว (ภายใน INSTALLED_FRESH_MS) — จำเวลาไว้ใน localStorage
  *
- * Android/Chrome บนคอม: แอปที่ติดตั้งใช้ storage ร่วมกับเบราว์เซอร์ จึงรู้ได้จากในแท็บปกติ
- * iPhone: แอปบนหน้าจอโฮมแยก storage จาก Safari ⇒ Safari ไม่มีทางรู้เอง ต้องให้ผู้ใช้กด
- * "ติดตั้งแล้ว" (markInstalled) บนหน้าจอแนะนำ
+ * Android/Chrome บนคอม: แอปใช้ storage ร่วมกับเบราว์เซอร์ เปิดจากแอปแล้วเบราว์เซอร์รู้ด้วย
+ * iPhone: แอปบนหน้าจอโฮมแยก storage จาก Safari — ตัวตัดสินหลักจึงเป็นบัญชี
+ * (installedOnAccount / /api/app-install) ค่านี้เป็นแค่ตัวช่วยตอนกด "ติดตั้งแล้ว" เอง
  */
 export function installedHint(): boolean {
   try {
-    return localStorage.getItem(INSTALLED_KEY) === "1";
+    const at = Number(localStorage.getItem(INSTALLED_KEY));
+    return Number.isFinite(at) && at > 0 && Date.now() - at < INSTALLED_FRESH_MS;
   } catch {
     return false;
   }
@@ -69,10 +74,43 @@ export function installedHint(): boolean {
 
 export function markInstalled(): void {
   try {
-    localStorage.setItem(INSTALLED_KEY, "1");
+    localStorage.setItem(INSTALLED_KEY, String(Date.now()));
   } catch {
     // โหมดส่วนตัว — ไม่จำ
   }
+}
+
+/** บัญชีนี้เปิดจากแอปบนเครื่องระบบเดียวกันภายใน INSTALLED_FRESH_MS ไหม (ถามเซิร์ฟเวอร์) */
+export async function installedOnAccount(os: DeviceInfo["os"]): Promise<boolean> {
+  try {
+    const res = await fetch("/api/app-install", { cache: "no-store" });
+    if (!res.ok) return false;
+    const seen = (await res.json()) as Partial<Record<DeviceInfo["os"], string>>;
+    const at = seen[os] ? Date.parse(seen[os]!) : NaN;
+    return Number.isFinite(at) && Date.now() - at < INSTALLED_FRESH_MS;
+  } catch {
+    return false;
+  }
+}
+
+const PING_KEY = "sb-app-install-ping";
+/** แอปที่ติดตั้งแจ้งเซิร์ฟเวอร์ว่ายังใช้อยู่ — วันละครั้งต่อเครื่องพอ */
+export function pingInstalled(os: DeviceInfo["os"]): void {
+  const today = new Date().toISOString().slice(0, 10);
+  try {
+    if (localStorage.getItem(PING_KEY) === today) return;
+  } catch {
+    // ส่งทุกครั้ง
+  }
+  void fetch("/api/app-install", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ platform: os }),
+  })
+    .then((res) => {
+      if (res.ok) localStorage.setItem(PING_KEY, today);
+    })
+    .catch(() => undefined);
 }
 
 /** ลืมว่าเคยติดตั้ง — เรียกเมื่อรู้แน่ว่าเครื่องนี้ไม่มีแอปแล้ว (Chrome บอกว่าติดตั้งได้อีก) */

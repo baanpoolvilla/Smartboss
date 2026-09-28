@@ -9,9 +9,11 @@ import {
   detectDevice,
   forgetInstalled,
   installedHint,
+  installedOnAccount,
   isStandalone,
   lineExternalUrl,
   markInstalled,
+  pingInstalled,
   recordStandaloneLaunch,
   useIsClient,
   type DeviceInfo,
@@ -69,11 +71,14 @@ export function InstallGate() {
 
   useEffect(() => {
     // อ่านข้อมูลเครื่องได้หลังโหลดหน้าเท่านั้น (ฝั่งเซิร์ฟเวอร์ไม่มี) — ตั้ง state ในนี้ตั้งใจ
+    const d = detectDevice();
     if (isStandalone()) {
       recordStandaloneLaunch();
+      // บอกเซิร์ฟเวอร์ว่าบัญชีนี้ใช้แอปบนเครื่องระบบนี้อยู่ — Safari ของ iPhone เครื่องเดียวกัน
+      // (คนละ storage) จะถามจากตรงนี้แทน แล้วไม่ชวนติดตั้งซ้ำ
+      pingInstalled(d.os);
       return;
     }
-    const d = detectDevice();
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDevice(d);
     if (d.os === "desktop" || installedHint()) return;
@@ -82,7 +87,15 @@ export function InstallGate() {
     } catch {
       // โหมดส่วนตัว — ขึ้นตามปกติ
     }
-    setOpen(true);
+    // บัญชีนี้เพิ่งเปิดจากแอปบนเครื่องระบบเดียวกัน (ภายใน 14 วัน) = ติดตั้งแล้ว ไม่ต้องชวน
+    // ลบแอปแล้วไม่ได้เปิดอีก เลย 14 วันจะกลับมาชวนเอง
+    let cancelled = false;
+    void installedOnAccount(d.os).then((installed) => {
+      if (!cancelled && !installed) setOpen(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
