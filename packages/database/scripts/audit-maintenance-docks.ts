@@ -162,6 +162,23 @@ async function auditPmWorkOrders(since: Date) {
       if (gap < minDays) tooSoon.push(`  ${label}: ${live[i - 1]!.code} → ${live[i]!.code} ห่าง ${gap} วัน (รอบ ${minDays})`);
     }
   }
+  // แผน PM ซ้ำ: บ้าน/อุปกรณ์เดียวกัน ชื่อเดียวกัน ยังใช้งานอยู่ทั้งคู่ — ต่างคนต่างเปิดใบงาน
+  const active = await prisma.pmSchedule.findMany({
+    where: { isActive: true },
+    select: { id: true, title: true, propertyId: true, assetId: true, frequency: true, nextDueDate: true, createdAt: true, property: { select: { name: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+  const groups = new Map<string, typeof active>();
+  for (const p of active) {
+    const key = `${p.propertyId}|${p.assetId ?? "-"}|${p.title.trim().toLowerCase()}`;
+    groups.set(key, [...(groups.get(key) ?? []), p]);
+  }
+  const dupPms = [...groups.values()].filter((g) => g.length > 1);
+  console.log(`\nแผน PM ซ้ำ (บ้าน/อุปกรณ์/ชื่อเดียวกัน ยังใช้งานทั้งคู่): ${dupPms.length} กลุ่ม`);
+  for (const g of dupPms) {
+    console.log(`  ${g[0]!.title} · ${g[0]!.property?.name ?? ""}: ${g.map((p) => `${p.id.slice(0, 8)} (${p.frequency}, ครบ ${p.nextDueDate.toISOString().slice(0, 10)}, สร้าง ${p.createdAt.toISOString().slice(0, 10)})`).join(" / ")}`);
+  }
+
   console.log(`\nPM ที่มีใบงานเปิดซ้อนกันตอนนี้: ${overlap.length}`);
   for (const l of overlap) console.log(l);
   console.log(`\nใบงาน PM ที่เปิดเร็วกว่ารอบ: ${tooSoon.length}`);

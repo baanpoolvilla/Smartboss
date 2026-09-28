@@ -22,7 +22,22 @@ export interface PmInput {
   createdBy?: string | null;
 }
 
-export function createPmSchedule(orgId: string, data: PmInput) {
+/**
+ * สร้างแผน PM — ถ้ามีแผนที่ยังใช้งานอยู่ของบ้าน/อุปกรณ์เดียวกัน ชื่อเดียวกันแล้ว คืนแผนเดิม
+ * ไม่สร้างซ้ำ (กดบันทึกสองทีบนมือถือที่เน็ตช้า หรือสร้างซ้ำโดยไม่รู้ว่ามีแล้ว ⇒ ได้สองแผน
+ * แต่ละแผนเปิดใบงานอัตโนมัติของตัวเอง กลายเป็นใบงานหน้าตาเหมือนกันโผล่ซ้ำ ๆ)
+ */
+export async function createPmSchedule(orgId: string, data: PmInput) {
+  const existing = await prisma.pmSchedule.findFirst({
+    where: {
+      orgId,
+      isActive: true,
+      propertyId: data.propertyId,
+      assetId: data.assetId ?? null,
+      title: { equals: data.title.trim(), mode: "insensitive" },
+    },
+  });
+  if (existing) return existing;
   return prisma.pmSchedule.create({
     data: {
       orgId,

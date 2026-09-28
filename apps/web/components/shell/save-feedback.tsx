@@ -29,7 +29,17 @@ const SUBMIT_TO_ACTION_MS = 3000;
 const MAX_LABEL_LENGTH = 30;
 const FALLBACK_LABEL = "บันทึกสำเร็จ";
 
-let pending: { at: number; label: string } | null = null;
+let pending: { at: number; label: string; form: HTMLFormElement } | null = null;
+
+/**
+ * ฟอร์มที่กดส่งไปแล้วและยังรอผลอยู่ — กดซ้ำระหว่างนี้ถูกทิ้ง
+ *
+ * เดิมกดบันทึกสองทีติดกัน (มือถือเน็ตช้า กดแล้วไม่เห็นอะไรเปลี่ยนเลยกดอีก) ได้ข้อมูล
+ * สองชุดเหมือนกันเป๊ะ — ใบงานซ้ำ แผน PM ซ้ำ ฯลฯ กันที่เดียวตรงนี้ครอบทุกฟอร์ม
+ * ปลดล็อกเมื่อเซิร์ฟเวอร์ตอบ หรือครบ INFLIGHT_MAX_MS กันล็อกค้างถ้าจับคู่คำขอไม่ได้
+ */
+const inflight = new WeakMap<HTMLFormElement, number>();
+const INFLIGHT_MAX_MS = 20_000;
 
 function submitterLabel(form: HTMLFormElement, submitter: HTMLElement | null): string | null {
   const override = submitter?.dataset.saveToast ?? form.dataset.saveToast;
@@ -66,7 +76,39 @@ export function SaveFeedback() {
       const submitter = event.submitter instanceof HTMLElement ? event.submitter : null;
       if (!targetsServerAction(form, submitter)) return;
       const label = submitterLabel(form, submitter);
-      pending = label === null ? null : { at: Date.now(), label };
+      // ฟอร์มที่ปิดข้อความไว้ (useActionState จัดการเอง) ไม่ล็อก — จับคู่คำขอกับฟอร์มไม่ได้
+      if (label === null) {
+        pending = null;
+        return;
+      }
+      // ล็อกเฉพาะฟอร์มที่ผูก server action จริง — ฟอร์มจาก server component มีช่องซ่อน
+      // $ACTION_ID_..., ฟอร์มใน client component React ใส่ action="javascript:..." ให้
+      // ฟอร์มที่จัดการเองฝั่งเครื่อง เช่นช่องพิมพ์แชท ต้องกดส่งติดกันได้
+      const actionAttr = submitter?.getAttribute("formaction") ?? form.getAttribute("action") ?? "";
+      const isActionForm =
+        actionAttr.startsWith("javascript:") || form.querySelector('input[name^="$ACTION_"]') !== null;
+      if (!isActionForm) {
+        pending = { at: Date.now(), label, form };
+        return;
+      }
+      const since = inflight.get(form);
+      if (since !== undefined && Date.now() - since < INFLIGHT_MAX_MS) {
+        // capture บน document มาก่อน listener ของ React ที่ root — หยุดตรงนี้ action ไม่ถูกยิง
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      const at = Date.now();
+      inflight.set(form, at);
+      pending = { at, label, form };
+      // ฟอร์มที่จัดการเองฝั่งเครื่อง (onSubmit + preventDefault) ไม่ยิง action — ไม่มีคำขอมาปลดล็อก
+      // ถ้าไม่มีใครรับคำขอภายในเวลาที่จับคู่ได้ ปลดทันที ไม่ให้ค้าง 20 วินาที
+      window.setTimeout(() => {
+        if (pending?.form === form && pending.at === at) {
+          pending = null;
+          if (inflight.get(form) === at) inflight.delete(form);
+        }
+      }, SUBMIT_TO_ACTION_MS);
     };
 
     const original = window.fetch;
@@ -91,6 +133,8 @@ export function SaveFeedback() {
       } catch (error) {
         toast.error("บันทึกไม่สำเร็จ", { id, description: "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจอินเทอร์เน็ตแล้วลองใหม่" });
         throw error;
+      } finally {
+        inflight.delete(claim.form);
       }
     };
 
