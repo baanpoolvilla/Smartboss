@@ -8,6 +8,7 @@ import { prisma } from "@smartboss/database";
 import { loadSecuritySettings } from "@/lib/security-settings";
 import { deleteFile, putFile } from "@/lib/storage";
 import { linePushConfigured, pushLineText } from "@/lib/line";
+import { notifyUser } from "@/modules/maintenance/data/notify";
 import { sniffMime } from "@/modules/report_task/lib/upload-sniff";
 
 /**
@@ -73,14 +74,24 @@ export async function changeOwnPasswordAction(formData: FormData) {
     targetId: user.id,
   });
 
-  // ไม่ต้องกรอกรหัสเดิมแล้ว — แจ้งเจ้าของบัญชีทาง LINE ให้รู้ตัวถ้าไม่ได้เปลี่ยนเอง
-  // ส่งไม่ได้ก็ไม่เป็นไร การเปลี่ยนรหัสสำเร็จไปแล้ว
+  // ไม่ต้องกรอกรหัสเดิมแล้ว — แจ้งเจ้าของบัญชีให้รู้ตัวถ้าไม่ได้เปลี่ยนเอง ส่งไม่ได้ก็ไม่เป็นไร
+  // การเปลี่ยนรหัสสำเร็จไปแล้ว
+  const when = new Intl.DateTimeFormat("th-TH", {
+    dateStyle: "short",
+    timeStyle: "short",
+    timeZone: "Asia/Bangkok",
+  }).format(new Date());
+  // 1) ในแอปเอง: กระดิ่ง + เด้งแจ้งเตือนเข้ามือถือ/คอมทุกเครื่องที่เปิดแจ้งเตือนไว้ — ถึงทุกคน
+  //    (Web Push ยังส่งถึงเครื่องได้แม้ถูกออกจากระบบไปแล้ว เพราะผูกกับเครื่อง ไม่ใช่ session)
+  if (user.orgId) {
+    await notifyUser(user.orgId, user.id, {
+      title: "รหัสผ่านของคุณถูกเปลี่ยนแล้ว",
+      body: `เปลี่ยนเมื่อ ${when} และออกจากระบบทุกเครื่องแล้ว — ถ้าคุณไม่ได้เปลี่ยนเอง ติดต่อแอดมินทันที`,
+      type: "account_security",
+    }).catch(() => undefined);
+  }
+  // 2) LINE: สำรองอีกทาง เผื่อเครื่องไม่ได้เปิดแจ้งเตือนของแอปไว้
   if (user.lineUserId && linePushConfigured()) {
-    const when = new Intl.DateTimeFormat("th-TH", {
-      dateStyle: "short",
-      timeStyle: "short",
-      timeZone: "Asia/Bangkok",
-    }).format(new Date());
     await pushLineText(
       user.lineUserId,
       `SmartBoss: รหัสผ่านของคุณถูกเปลี่ยนเมื่อ ${when} และออกจากระบบทุกเครื่องแล้ว\nถ้าคุณไม่ได้เปลี่ยนเอง ติดต่อแอดมินทันที`,

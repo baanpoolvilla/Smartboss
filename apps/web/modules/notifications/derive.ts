@@ -252,5 +252,7 @@ export function maintenanceHrefFor(type: string, referenceId: string | null): st
   if ((type === "issue_ticket_reply_reporter" || type === "issue_ticket_status_reporter") && referenceId) return `/issue-reports/${referenceId}`;
   // แชท — referenceId = ห้อง ("chat_message" คือแถวเก่าก่อนเลิกแจ้งทุกข้อความเข้ากระดิ่ง)
   if ((type === "chat_mention" || type === "chat_message") && referenceId) return `/report-task/chat?c=${encodeURIComponent(referenceId)}`;
+  // แจ้งความปลอดภัยของบัญชี (เช่น รหัสผ่านถูกเปลี่ยน) → หน้าบัญชีของฉัน
+  if (type === "account_security") return "/account";
   return null;
 }
