@@ -43,7 +43,8 @@ import {
   type ReportTopic,
 } from "@/modules/report_task/store/report-feed-store";
 import { cutoffsOnDay, lateCutoffFor, minImagesNow, onTimeCutoffFor } from "@/modules/report_task/lib/report-cutoff";
-import { roundIgnoresDateExemptions, roundsForUserOnDay, attributePostToRound } from "@/modules/report_task/lib/submission-rounds";
+import { roundIgnoresDateExemptions, roundsForUserOnDay, attributePostToRound, effectiveRoundsOf, roundFrequencyOf } from "@/modules/report_task/lib/submission-rounds";
+import { useReportPenaltySettingsStore } from "@/modules/report_task/store/report-penalty-settings-store";
 import { isExemptDate } from "@/modules/report_task/lib/report-feed-exemptions";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { localDateStr } from "@/modules/report_task/lib/now";
@@ -311,6 +312,42 @@ export function ReportCard({
   const lateCutoff = post.lateBadgeHidden ? null : rawLateCutoff;
   const onTimeCutoff = !lateCutoff && !post.lateBadgeHidden ? onTimeCutoffFor(post.createdAt, roundCandidatesAtSubmission) : null;
   const allPosts = useReportFeedStore((s) => s.posts);
+  const weeklyMonthlyGraceDays = useReportPenaltySettingsStore((s) => s.weeklyMonthlyGraceDays);
+  /*
+   * รายงานรายสัปดาห์/รายเดือนที่ส่งตามหลังวันครบกำหนด (ภายใน "เผื่อเวลา") — วันที่โพสต์
+   * ไม่มีรอบนั้นวิ่ง (Weekly ครบวันพฤหัส โพสต์วันเสาร์) ป้ายด้านบนเลยไม่เจอรอบให้เทียบ โพสต์
+   * ไม่มีป้ายอะไรเลย ทั้งที่แดชบอร์ด/คะแนนนับเป็น "ส่งช้า" ("ส่งรีพอตวีคลี่ช้า แต่ไม่ขึ้น
+   * เลยกำหนด") — หาวันครบกำหนดย้อนหลังในช่วงเผื่อเวลา แบบเดียวกับตัวตัดสินใน
+   * report-feed-compliance.ts (roundComplianceStatus) และตัวหักคะแนนฝั่งเซิร์ฟเวอร์
+   */
+  const graceLate = (() => {
+    if (lateCutoff || onTimeCutoff || post.lateBadgeHidden || post.excludeFromSubmission) return null;
+    if (weeklyMonthlyGraceDays <= 0) return null;
+    const topicRounds = effectiveRoundsOf(topic);
+    for (let back = 1; back <= weeklyMonthlyGraceDays; back++) {
+      const d = new Date(`${postDay}T00:00:00`);
+      d.setDate(d.getDate() - back);
+      const dueDay = localDateStr(d);
+      const due = roundsForUserOnDay(topic, post.authorId, dueDay, submitterGroups).find(
+        (r) => roundFrequencyOf(r) !== "daily" && (post.roundId ? post.roundId === r.id : topicRounds.length === 1)
+      );
+      if (!due) continue;
+      // มีโพสต์ของรอบนี้ก่อนหน้าแล้ว (ตั้งแต่วันครบกำหนดจนถึงก่อนโพสต์นี้) = โพสต์นั้นเป็นตัวที่นับ ไม่ต้องขึ้นซ้ำ
+      const earlier = allPosts.some(
+        (p) =>
+          p.id !== post.id &&
+          p.topicId === post.topicId &&
+          p.authorId === post.authorId &&
+          !p.excludeFromSubmission &&
+          localDateStr(new Date(p.createdAt)) >= dueDay &&
+          p.createdAt < post.createdAt
+      );
+      if (earlier) return null;
+      const [, m, dd] = dueDay.split("-");
+      return { round: due, dueLabel: `${dd}/${m}` };
+    }
+    return null;
+  })();
   // Once you're past a cutoff, *every* post you make that day gets flagged
   // "ส่งช้า" — technically true of each one, but posting twice just repeated
   // the same fact back and read as if something new had gone wrong each
@@ -1341,6 +1378,16 @@ export function ReportCard({
                       ? ` (${shortRoundLabel(lateCutoff.label, topic.name)})`
                       : ""}{" "}
                     · กำหนด {lateCutoff.time}
+                  </span>
+                ) : graceLate ? (
+                  // ส่งตามหลังวันครบกำหนดของรอบรายสัปดาห์/รายเดือน (ภายในเผื่อเวลา) — ดู graceLate
+                  <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0 text-[10px] leading-4 font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                    <TriangleAlert className="h-2.5 w-2.5" />
+                    ส่งเกินกำหนด
+                    {shortRoundLabel(graceLate.round.label, topic.name).length > 2
+                      ? ` (${shortRoundLabel(graceLate.round.label, topic.name)})`
+                      : ""}{" "}
+                    · กำหนด {graceLate.dueLabel} {graceLate.round.time}
                   </span>
                 ) : !lateCutoff && onTimeCutoff && isFirstOnTimeOfRound ? (
                   // The positive counterpart to "ส่งช้า" (C10) — without it,
