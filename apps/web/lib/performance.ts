@@ -291,6 +291,18 @@ export interface UserScorecard {
   eventCount: number;
 }
 
+/**
+ * วันของเหตุการณ์ตามปฏิทินไทย (YYYY-MM-DD) — ใช้แสดงผล
+ *
+ * occurredAt มีสองแบบในระบบ: ลงเวลาเก็บเที่ยงคืน UTC ของวันทำงาน, รายงานเก็บเที่ยงคืน
+ * **เวลาไทย** (= 17:00 UTC ของวันก่อน) เดิมหน้าเว็บใช้ toISOString().slice(0, 10) ⇒
+ * คะแนนรายงานทุกรายการโชว์ "เร็วไปหนึ่งวัน" (เจอจริง: −2 ของวันที่ 26 ขึ้นเป็นวันที่ 25
+ * ทั้งที่วันที่ 25 ส่งครบ) อ่านเป็นวันไทยได้ถูกทั้งสองแบบ
+ */
+export function eventDay(at: Date): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(at);
+}
+
 /** เกรดจากคะแนนตามเกณฑ์ของบริษัท — ต่ำกว่าเกณฑ์สุดท้ายได้ F */
 export function gradeOf(score: number, thresholds: [string, number][]): string {
   for (const [grade, min] of thresholds) {

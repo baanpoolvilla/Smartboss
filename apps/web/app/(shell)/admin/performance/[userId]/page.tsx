@@ -6,7 +6,7 @@ import { Card } from "@smartboss/ui/components/card";
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { ADMIN_PERMS } from "@/modules/admin/permissions";
 import { EmptyState } from "@/modules/admin/components/ui";
-import { buildScorecards, gradeColor, listUserEvents, PERFORMANCE_CATEGORIES } from "@/lib/performance";
+import { buildScorecards, eventDay, gradeColor, listUserEvents, PERFORMANCE_CATEGORIES } from "@/lib/performance";
 import { monthDisplay, monthRange, resolveMonthParam } from "@/lib/performance-month";
 
 /**
@@ -88,7 +88,7 @@ export default async function PerformanceUserDetailPage({
               PERFORMANCE_CATEGORIES[ev.category as keyof typeof PERFORMANCE_CATEGORIES] ??
               ev.category;
             const points = Number(ev.points);
-            const workDate = ev.occurredAt.toISOString().slice(0, 10);
+            const workDate = eventDay(ev.occurredAt);
             // work_order เชื่อมไปดูใบงานจริงได้ตรงๆ — refType อื่น (attendance_day,
             // pm_schedule, task) ยังไม่มีหน้ารายละเอียดที่ลิงก์ตรงได้ปลอดภัย แต่
             // note ที่บันทึกไว้ตอนหักคะแนนมีรายละเอียดพอที่จะตอบว่า "ทำไม" อยู่แล้ว

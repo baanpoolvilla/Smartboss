@@ -43,7 +43,7 @@ import { AssignShiftForm, type CurrentPattern } from "../../settings/assign-shif
 import { EmployeeDaysOff } from "./employee-days-off";
 import { EnrollFingerprintForm } from "../../settings/devices/enroll-fingerprint-form";
 import { DayOffQuotaForm } from "./day-off-quota-form";
-import { buildScorecards, listUserEvents, PERFORMANCE_CATEGORIES } from "@/lib/performance";
+import { buildScorecards, eventDay, listUserEvents, PERFORMANCE_CATEGORIES } from "@/lib/performance";
 import { monthDisplay, resolveMonthParam } from "@/lib/performance-month";
 import { formatSatang } from "@/modules/hr/lib/commission";
 import { loadCommissionMonth } from "@/modules/hr/lib/commission-data";
@@ -520,7 +520,7 @@ export default async function EmployeeDetailPage({
                     const label =
                       PERFORMANCE_CATEGORIES[ev.category as keyof typeof PERFORMANCE_CATEGORIES] ??
                       ev.category;
-                    const workDate = ev.occurredAt.toISOString().slice(0, 10);
+                    const workDate = eventDay(ev.occurredAt);
                     return (
                       <tr key={ev.id} className="hover:bg-(--bg-soft)">
                         <Td>{formatDate(workDate)}</Td>
