@@ -7,8 +7,10 @@ import {
   effectiveRoundsOf,
   resolveRoundSubmitters,
   attributePostToRound,
+  roundFrequencyOf,
 } from "@/modules/report_task/lib/submission-rounds";
 import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
+import { useReportPenaltySettingsStore } from "@/modules/report_task/store/report-penalty-settings-store";
 import { photoCount } from "@/modules/report_task/lib/report-attachment-kind";
 import { lateCutoffFor } from "@/modules/report_task/lib/report-cutoff";
 import { localDateStr, now, todayIso } from "@/modules/report_task/lib/now";
@@ -229,7 +231,32 @@ export function roundComplianceStatus(
     return onTime ? "on-time" : "late";
   }
   const todayStr = todayIso();
-  if (day < todayStr) return "missed";
+  if (day < todayStr) {
+    /*
+     * รอบรายสัปดาห์/รายเดือนส่งย้อนหลังได้ภายใน "เผื่อเวลา" (weeklyMonthlyGraceDays,
+     * ตั้งค่า → ห้อง Report → หักคะแนน HR) = สาย ไม่ใช่ไม่ส่ง — ตัวหักคะแนนฝั่ง
+     * เซิร์ฟเวอร์ (report-penalty-sweep.ts roundComplianceStatusServer) ทำแบบนี้อยู่แล้ว
+     * แต่แดชบอร์ดไม่ ⇒ ส่ง Weekly ช้าไปวันสองวัน คะแนนบอก "สาย" แดชบอร์ดบอก "ไม่ส่ง"
+     */
+    if (roundFrequencyOf(round) !== "daily") {
+      const grace = useReportPenaltySettingsStore.getState().weeklyMonthlyGraceDays;
+      if (grace > 0) {
+        const end = new Date(`${day}T00:00:00`);
+        end.setDate(end.getDate() + grace);
+        const graceEnd = localDateStr(end);
+        const rounds = effectiveRoundsOf(topic);
+        const late = posts.some((p) => {
+          if (p.topicId !== topic.id || p.authorId !== userId || p.excludeFromSubmission) return false;
+          const d = localDateStr(new Date(p.createdAt));
+          if (d < day || d > graceEnd) return false;
+          return p.roundId ? p.roundId === round.id : rounds.length === 1;
+        });
+        if (late) return "late";
+        if (todayStr <= graceEnd) return "pending";
+      }
+    }
+    return "missed";
+  }
   return minutesOfDay(now().toISOString()) > cutoff ? "missed" : "pending";
 }
 
