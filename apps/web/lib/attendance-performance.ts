@@ -52,6 +52,7 @@ interface AttendanceRow {
 export async function dockAttendance(): Promise<{
   scanned: number;
   recorded: number;
+  refunded?: number;
 }> {
   const orgs = await prisma.organization.findMany({
     where: { isActive: true },
@@ -122,12 +123,8 @@ export async function dockAttendance(): Promise<{
 
     const day = new Date(r.work_date).toISOString().slice(0, 10);
 
-    // สแกนแค่ครั้งเดียว = ขาดงานเต็มกะในผลลงเวลา แต่จะนับเป็นขาดงานไหมแล้วแต่บริษัทตั้ง
-    // ไม่นับ = ตกไปเช็คมาสายตามเวลาที่สแกนเข้าต่อ
-    const absent =
-      Number(r.absence_minutes) > ABSENCE_THRESHOLD_MINUTES &&
-      (!r.missing_punch || st.missingPunchCountsAsAbsent);
-    if (absent) {
+    const verdict = classifyAttendanceDay(r, st);
+    if (verdict === "attendance_absent") {
       events.push({
         orgId,
         userId: r.user_id,
@@ -141,7 +138,7 @@ export async function dockAttendance(): Promise<{
       continue; // ขาดงานแล้วไม่ต้องหักเรื่องสายซ้ำอีก
     }
 
-    if (Number(r.late_minutes) > st.lateThresholdMinutes) {
+    if (verdict === "attendance_late") {
       events.push({
         orgId,
         userId: r.user_id,
@@ -156,5 +153,127 @@ export async function dockAttendance(): Promise<{
   }
 
   const recorded = await recordPerformanceEvents(events);
-  return { scanned: rows.length, recorded };
+  const refunded = await refundNoLongerValidDocks(from, todayInThailand, settingsByOrg);
+  return { scanned: rows.length, recorded, refunded };
+}
+
+type OrgSettings = { enabled: boolean; lateThresholdMinutes: number; missingPunchCountsAsAbsent: boolean };
+
+/** วันหนึ่งของคนหนึ่งควรโดนหักหมวดไหน ตามค่าลงเวลา "ตอนนี้" — ใช้ทั้งตอนหักและตอนคืน */
+function classifyAttendanceDay(
+  r: Pick<AttendanceRow, "late_minutes" | "absence_minutes" | "missing_punch">,
+  st: OrgSettings,
+): "attendance_absent" | "attendance_late" | null {
+  // สแกนแค่ครั้งเดียว = ขาดงานเต็มกะในผลลงเวลา แต่จะนับเป็นขาดงานไหมแล้วแต่บริษัทตั้ง
+  // ไม่นับ = ตกไปเช็คมาสายตามเวลาที่สแกนเข้าต่อ
+  const absent =
+    Number(r.absence_minutes) > ABSENCE_THRESHOLD_MINUTES &&
+    (!r.missing_punch || st.missingPunchCountsAsAbsent);
+  if (absent) return "attendance_absent";
+  if (Number(r.late_minutes) > st.lateThresholdMinutes) return "attendance_late";
+  return null;
+}
+
+/**
+ * คืนคะแนนมาสาย/ขาดงานที่หักไปแล้ว แต่ตอนนี้ไม่ควรหักแล้ว — เช่นใบลา (WFH,
+ * ลาป่วย) ที่อนุมัติ **หลัง** cron บันทึกคะแนนของวันนั้นไปแล้ว หรือวันหยุดที่เพิ่ง
+ * ใส่ย้อนหลัง เดิมเหตุการณ์ที่บันทึกแล้วไม่มีทางถูกแก้เอง (กันซ้ำด้วย unique key
+ * ถาวร) ต้องรันสคริปต์ reconcile ด้วยมือ — ตอนนี้ cron ทำให้ทุกรอบ ในช่วง lookback
+ *
+ * คืนเฉพาะเมื่อ "รู้แน่" ว่าวันนั้นเปลี่ยนไปแล้ว: HR บอกว่าเป็นวันลา/วันหยุด/วันหยุด
+ * ประจำ หรือเป็นวันทำงานที่ค่าปัจจุบันไม่เข้าเกณฑ์หมวดเดิมแล้ว — แถวที่หาไม่เจอ
+ * (กำลังคำนวณใหม่, ยังไม่ผูกคน ฯลฯ) ข้ามไป ไม่เดา เพราะคืนแล้วหักกลับไม่ได้
+ *
+ * แก้ด้วยเหตุการณ์หักล้าง (attendance_day_correction, refId = id ของเดิม) แบบ
+ * เดียวกับ packages/database/scripts/reconcile-wrong-attendance-events.ts —
+ * unique key เดียวกัน รันซ้ำ/รันคู่กับสคริปต์ไม่คืนซ้ำ
+ */
+async function refundNoLongerValidDocks(
+  from: Date,
+  todayInThailand: string,
+  settingsByOrg: Map<string, OrgSettings>,
+): Promise<number> {
+  const fromDay = from.toISOString().slice(0, 10);
+
+  // สถานะวัน (WORKING/OFF/LEAVE/HOLIDAY/NO_SHIFT) — ฟังก์ชันนี้ติดตั้งด้วย
+  // packages/workforce/db/sql/05-report-working-days.sql ถ้ายังไม่ได้ติดตั้ง
+  // ข้ามขั้นคืนคะแนนไปทั้งหมด ไม่ให้ cron ทั้งตัวล้ม
+  let states: { subject: string; work_date: Date; state: string }[];
+  try {
+    states = await prisma.$queryRaw`
+      SELECT subject, work_date, state FROM workforce.report_working_days(${fromDay}::date, ${todayInThailand}::date)
+    `;
+  } catch (error) {
+    console.warn("[attendance] skip refund — workforce.report_working_days unavailable:", error);
+    return 0;
+  }
+  const stateByKey = new Map(
+    states.map((r) => [`${r.subject}:${new Date(r.work_date).toISOString().slice(0, 10)}`, r.state]),
+  );
+
+  // ค่าดิบทุกวันทำงาน (เกณฑ์ -1 = ไม่กรอง) เพื่อตัดสินใหม่ด้วยเกณฑ์ปัจจุบันของบริษัท
+  const current = await prisma.$queryRaw<AttendanceRow[]>`
+    SELECT subject AS user_id, work_date, late_minutes, absence_minutes, missing_punch
+    FROM workforce.performance_attendance(${fromDay}::date, -1::int, -1::int)
+  `;
+  const currentByKey = new Map(
+    current.map((r) => [`${r.user_id}:${new Date(r.work_date).toISOString().slice(0, 10)}`, r]),
+  );
+
+  const originals = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.performanceEvent.findMany({
+      where: {
+        source: "workforce",
+        category: { in: ["attendance_late", "attendance_absent"] },
+        refType: "attendance_day",
+        occurredAt: { gte: new Date(`${fromDay}T00:00:00.000Z`) },
+      },
+      select: { id: true, orgId: true, userId: true, category: true, points: true, occurredAt: true },
+    }),
+  );
+  if (originals.length === 0) return 0;
+
+  const corrected = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.performanceEvent.findMany({
+      where: { source: "workforce", refType: "attendance_day_correction", refId: { in: originals.map((o) => o.id) } },
+      select: { refId: true },
+    }),
+  );
+  const correctedIds = new Set(corrected.map((c) => c.refId));
+
+  const refunds: PerformanceEventInput[] = [];
+  for (const o of originals) {
+    if (correctedIds.has(o.id)) continue;
+    const st = settingsByOrg.get(o.orgId);
+    if (!st || !st.enabled) continue;
+    const day = o.occurredAt.toISOString().slice(0, 10);
+    if (day >= todayInThailand) continue;
+    const key = `${o.userId}:${day}`;
+    const state = stateByKey.get(key);
+
+    let reason: string | null = null;
+    if (state === "LEAVE" || state === "HOLIDAY" || state === "OFF") {
+      reason = state === "LEAVE" ? "วันลาที่อนุมัติทีหลัง" : state === "HOLIDAY" ? "วันหยุดที่ใส่ทีหลัง" : "วันหยุดประจำที่ตั้งทีหลัง";
+    } else if (state === "WORKING") {
+      const row = currentByKey.get(key);
+      if (!row) continue;
+      if (classifyAttendanceDay(row, st) !== o.category) reason = "ค่าลงเวลาปัจจุบันไม่เข้าเกณฑ์แล้ว";
+    }
+    if (!reason) continue;
+
+    refunds.push({
+      orgId: o.orgId,
+      userId: o.userId,
+      source: "workforce",
+      category: o.category as "attendance_absent" | "attendance_late",
+      points: -Number(o.points),
+      // วันเดียวกับเหตุการณ์เดิม — ไม่งั้นแต้มที่คืนไปโผล่ผิดเดือน
+      occurredAt: o.occurredAt,
+      refType: "attendance_day_correction",
+      refId: o.id,
+      note: `คืนคะแนน ${day}: ${reason}`,
+    });
+  }
+
+  return recordPerformanceEvents(refunds);
 }
