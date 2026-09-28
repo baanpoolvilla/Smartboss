@@ -240,6 +240,19 @@ describe('missing and duplicate punches', () => {
     expect(result.workedMinutes).toBe(480);
   });
 
+  it('a lone scan after mid-shift is a clock-out (morning scan failed), not a very late arrival', () => {
+    const result = run({ punches: [punch('17:05')] });
+    expect(result.lateMinutes).toBe(0);
+    expect(result.actualInAt).toBeNull();
+    expect(codes(result)).toContain('MISSING_IN');
+  });
+
+  it('a lone scan before mid-shift is still a clock-in (forgot to scan out)', () => {
+    const result = run({ punches: [punch('08:20')] });
+    expect(result.lateMinutes).toBeGreaterThan(0);
+    expect(codes(result)).toContain('MISSING_OUT');
+  });
+
   it('treats an in/out pair seconds apart as one double-registered scan, not a zero-minute day', () => {
     // เครื่องสแกนนิ้วเด้ง 2 ที: กดครั้งเดียวได้ IN 08:00 + OUT 08:01 แล้วเย็นสแกนออก 17:00
     const result = run({

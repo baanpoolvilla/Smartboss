@@ -45,7 +45,7 @@ export function calculateAttendance(input: AttendanceInput): AttendanceResult {
   }
 
   const policy = input.policy;
-  const pairing = pairPunches(input.punches, {
+  const pairing = pairPunches(inferLoneExitPunch(input), {
     duplicateWindowMinutes: policy.duplicatePunchWindowMinutes,
     maxShiftMinutes: policy.maxShiftMinutes,
   });
@@ -178,6 +178,34 @@ function emptyResult(
     pairs: [],
     exceptions,
   };
+}
+
+/**
+ * สแกนครั้งเดียวของวันที่เกิด "หลังครึ่งกะ" และเครื่องไม่ได้บอกเจตนา (AUTO) = สแกนออก
+ *
+ * เช้าสแกนนิ้วไม่ติด แล้วเย็นมาสแกนออก — เดิม AUTO ตัวแรกของวันถูกนับเป็นเข้างานเสมอ
+ * ระบบเลยเข้าใจว่า "เพิ่งมาตอนเย็น" แล้วหักมาสายหลายชั่วโมง ทั้งที่มาทำงานตั้งแต่เช้า
+ * ถือเป็นสแกนออกแทน ⇒ วันนั้นเป็น "สแกนไม่ครบ" (MISSING_IN) ให้ HR แก้เวลาเข้า ไม่ใช่มาสาย
+ * สแกนครั้งเดียวก่อนครึ่งกะยังเป็นเข้างานเหมือนเดิม (ลืมสแกนออก)
+ */
+function inferLoneExitPunch(input: AttendanceInput): AttendanceInput['punches'] {
+  const shift = input.shift;
+  if (shift === null || shift.restDay) return input.punches;
+  const work = input.punches.filter(
+    (p) =>
+      !p.ignored &&
+      !p.pendingReview &&
+      (p.intent === 'AUTO' || p.intent === 'CLOCK_IN' || p.intent === 'CLOCK_OUT'),
+  );
+  const only = work.length === 1 ? work[0] : undefined;
+  if (only === undefined || only.intent !== 'AUTO') return input.punches;
+  const midpoint = zonedTimeToUtc(
+    input.workDate,
+    Math.round((shift.startMinutes + shift.endMinutes) / 2),
+    input.timeZone,
+  );
+  if (only.at.getTime() < midpoint.getTime()) return input.punches;
+  return input.punches.map((p) => (p === only ? { ...p, intent: 'CLOCK_OUT' as const } : p));
 }
 
 function firstIn(pairs: readonly PunchPair[]): Date | null {
