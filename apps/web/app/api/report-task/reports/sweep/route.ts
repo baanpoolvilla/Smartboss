@@ -55,7 +55,16 @@ function parseRefId(refId: string): { day: string; topicId: string; roundId: str
   return { day, topicId, roundId, userId };
 }
 
-export async function POST() {
+export async function POST(request?: Request) {
+  /*
+   * ?dryRun=1&since=YYYY-MM-DD — ดูล่วงหน้าว่าถ้าตั้ง "วันเริ่มนับ" เป็นวันนั้น คะแนนจะเปลี่ยน
+   * อะไรบ้าง โดย **ไม่เขียนอะไรเลย** (ทั้งคะแนนและค่า enabledSince) ใช้ก่อนรัน
+   * scripts/set-report-penalty-start.ts ให้เห็นผลกับทุกคนก่อนตัดสินใจ
+   */
+  const params = request ? new URL(request.url).searchParams : null;
+  const dryRun = params?.get("dryRun") === "1";
+  const sinceParam = params?.get("since") ?? "";
+  const previewSince = dryRun && /^\d{4}-\d{2}-\d{2}$/.test(sinceParam) ? sinceParam : null;
   const session = await requireOrg();
   const orgId = session.orgId;
 
@@ -106,7 +115,8 @@ export async function POST() {
    * ตลอด (เจอจริง: ไม่ส่งรอบเย็นเลยแต่โดนแค่ −1) บันทึกครั้งเดียวแล้วเพดานอยู่กับที่
    * วันนี้จะถูกตัดสินครบในวันพรุ่งนี้ตามปกติ — createStoreIfAbsent กันหลายแท็บแข่งกันเขียน
    */
-  let notBeforeDay = enabledSince;
+  let notBeforeDay = previewSince ?? enabledSince;
+  if (!notBeforeDay && dryRun) notBeforeDay = localDateStr(new Date());
   if (!notBeforeDay) {
     notBeforeDay = localDateStr(new Date());
     const created = await createStoreIfAbsent(orgId, "report-penalty-enabled-since", notBeforeDay, session.userId);
@@ -275,7 +285,7 @@ export async function POST() {
     }
 
     if (events.length === 0) {
-      return { changed: false };
+      return dryRun ? { changed: false, dryRun: true, since: notBeforeDay, preview: [] } : { changed: false };
     }
 
     // เขียนตรงในทรานแซกชันนี้เอง ไม่ผ่าน recordPerformanceEvents (ซึ่งเปิด
@@ -296,6 +306,29 @@ export async function POST() {
         note: e.note ?? null,
         createdBy: e.createdBy ?? null,
       }));
+    if (dryRun) {
+      const nameOf = new Map(users.map((u) => [u.id, u.name] as const));
+      const topicName = new Map(topics.map((t) => [t.id, t] as const));
+      return {
+        changed: false,
+        dryRun: true,
+        since: notBeforeDay,
+        preview: rows.map((r) => {
+          const parsed = parseRefId(r.refId ?? "");
+          const topic = parsed ? topicName.get(parsed.topicId) : undefined;
+          const round = topic?.submissionRounds?.find((x) => x.id === parsed?.roundId);
+          return {
+            day: parsed?.day,
+            user: nameOf.get(r.userId) ?? r.userId,
+            room: topic?.name ?? parsed?.topicId,
+            round: round ? `${round.label} (${round.time})` : parsed?.roundId,
+            change: r.refType === "report_round_undo" ? "คืนคะแนน" : "หักใหม่",
+            category: r.category === "report_missed" ? "ไม่ส่ง" : "ส่งสาย",
+            points: Number(r.points),
+          };
+        }),
+      };
+    }
     if (rows.length === 0) return { changed: false };
 
     const recorded = await tx.performanceEvent.createMany({ data: rows, skipDuplicates: true });
@@ -306,6 +339,6 @@ export async function POST() {
 }
 
 // เผื่อ client ฝั่งไหนยิง GET แทน POST มา (เช่นเดียวกับ tasks/sweep, reminders/sweep)
-export async function GET() {
-  return POST();
+export async function GET(request: Request) {
+  return POST(request);
 }
