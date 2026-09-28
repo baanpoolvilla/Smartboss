@@ -10,6 +10,7 @@ import { listAllOrganizations } from "@/modules/admin/data/orgs";
 import { Field, inputClass, selectClass } from "@/modules/admin/components/ui";
 import { loadSecuritySettings } from "@/lib/security-settings";
 import { createUserAction } from "../../actions";
+import { PasswordInput } from "@/components/password-input";
 
 export default async function NewUserPage({
   searchParams,
@@ -97,8 +98,7 @@ export default async function NewUserPage({
           </Field>
 
           <Field label="รหัสผ่านเริ่มต้น *" hint={`อย่างน้อย ${passwordMinLength} ตัวอักษร`}>
-            <input
-              type="password"
+            <PasswordInput
               name="password"
               required
               minLength={passwordMinLength}

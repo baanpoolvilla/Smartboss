@@ -13,6 +13,7 @@ import {
   updateOwnAvatarAction,
   updateOwnProfileAction,
 } from "./actions";
+import { PasswordInput } from "@/components/password-input";
 
 /**
  * บัญชีของฉัน — ทุกคนที่ล็อกอินได้เข้าหน้านี้ได้ ไม่ต้องมีสิทธิ์อะไรเพิ่ม
@@ -135,8 +136,7 @@ export default async function AccountPage() {
         >
           <div className="grid gap-3">
             <Field label="รหัสผ่านปัจจุบัน">
-              <input
-                type="password"
+              <PasswordInput
                 name="currentPassword"
                 required
                 autoComplete="current-password"
@@ -144,8 +144,7 @@ export default async function AccountPage() {
               />
             </Field>
             <Field label="รหัสผ่านใหม่" hint={`อย่างน้อย ${passwordMinLength} ตัวอักษร`}>
-              <input
-                type="password"
+              <PasswordInput
                 name="newPassword"
                 required
                 minLength={passwordMinLength}
@@ -154,8 +153,7 @@ export default async function AccountPage() {
               />
             </Field>
             <Field label="ยืนยันรหัสผ่านใหม่">
-              <input
-                type="password"
+              <PasswordInput
                 name="confirmPassword"
                 required
                 minLength={passwordMinLength}

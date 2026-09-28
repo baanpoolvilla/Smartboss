@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CalendarDays, Clock } from "lucide-react";
 import { DaysOff } from "./days-off";
 import { Today } from "./today";
+import { PasswordInput } from "@/components/password-input";
 
 /**
  * ตัวควบคุมตัวตนของ Mini App
@@ -410,8 +411,7 @@ function CredentialForm({
         onChange={(e) => setEmail(e.target.value)}
         className={inputClass}
       />
-      <input
-        type="password"
+      <PasswordInput
         autoComplete="current-password"
         placeholder="รหัสผ่าน"
         required

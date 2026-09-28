@@ -29,6 +29,7 @@ import {
   unlockUserAction,
   updateUserAction,
 } from "../../actions";
+import { PasswordInput } from "@/components/password-input";
 
 function fmt(d: Date): string {
   return new Intl.DateTimeFormat("th-TH", {
@@ -324,8 +325,7 @@ export default async function AdminUserDetailPage({
               <form action={resetPasswordAction} className="flex flex-col gap-3">
                 <input type="hidden" name="userId" value={user.id} />
                 <Field label="รหัสผ่านใหม่" hint={`อย่างน้อย ${passwordMinLength} ตัวอักษร`}>
-                  <input
-                    type="password"
+                  <PasswordInput
                     name="password"
                     required
                     minLength={passwordMinLength}
