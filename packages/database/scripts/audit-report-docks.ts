@@ -1,6 +1,16 @@
 import { PrismaClient } from "@prisma/client";
-// วันหยุดราชการไทยชุดเดียวกับที่แอปใช้ (import type ในไฟล์นั้นถูกตัดทิ้งตอนรัน)
-import { thaiHolidayEvents } from "../../../apps/web/modules/report_task/data/thai-holidays";
+
+/**
+ * วันหยุดราชการไทยชุดเดียวกับที่แอปใช้ — โหลดตอนรัน (ไม่ import ตรง) เพราะไฟล์นั้นอยู่ใน
+ * apps/web และอ้าง alias "@/..." ที่ typecheck ของแพ็กเกจนี้หาไม่เจอ (tsx ตัด import type
+ * ทิ้งตอนรันจึงใช้ได้จริง แต่ tsc ของ @smartboss/database จะล้ม)
+ */
+type HolidayEvent = { start: string; end: string; title: string };
+async function loadThaiHolidays(): Promise<HolidayEvent[]> {
+  const path = "../../../apps/web/modules/report_task/data/thai-holidays";
+  const mod = (await import(path)) as { thaiHolidayEvents: HolidayEvent[] };
+  return mod.thaiHolidayEvents;
+}
 
 /**
  * อ่านอย่างเดียว — ไล่คะแนนหักรายงาน (report_missed / report_late) ที่ยัง active อยู่
@@ -70,6 +80,7 @@ async function main() {
   const sinceDay = localDay(since);
 
   const orgs = await prisma.reportTaskStore.findMany({ where: { key: "report-feed" }, select: { orgId: true, data: true } });
+  const thaiHolidayEvents = await loadThaiHolidays();
 
   for (const { orgId, data } of orgs) {
     const feed = (data ?? {}) as { topics?: Topic[]; posts?: Post[] };

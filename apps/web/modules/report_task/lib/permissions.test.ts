@@ -1,11 +1,23 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { canEditRecord, canEditReportTopic, canSeeReportTopic, canToggleOwnChecklistItem } from "@/modules/report_task/lib/permissions";
+import { useDepartmentStore } from "@/modules/report_task/store/department-store";
+import type { Department } from "@/modules/report_task/types";
 
 // Fixtures from src/data/mock.ts: usr-01 heads dep-eng, usr-15 is the owner.
 const ENG_HEAD = "usr-01";
 const OTHER_ENG = "usr-02";
 const DESIGN_HEAD = "usr-04";
 const OWNER = "usr-15";
+
+// แผนกโหลดจากเซิร์ฟเวอร์แล้ว (store เริ่มว่าง) — ใส่แผนกที่เทสต์อ้างถึงเอง
+beforeAll(() => {
+  useDepartmentStore.setState({
+    departments: [
+      { id: "dep-eng", name: "Engineering", headId: ENG_HEAD },
+      { id: "dep-design", name: "Design", headId: DESIGN_HEAD },
+    ] as Department[],
+  });
+});
 
 describe("canEditRecord", () => {
   it("lets the owner edit anything", () => {

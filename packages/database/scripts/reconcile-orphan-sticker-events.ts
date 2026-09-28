@@ -59,7 +59,7 @@ async function main() {
 
     const orphans = events.filter((e) => {
       if (e.orgId !== orgId || !e.refId) return false;
-      const reactionId = e.refId.split(":")[0];
+      const reactionId = e.refId.split(":")[0] ?? "";
       return !alive.has(reactionId) && !undone.has(`${orgId}|${e.refId}`);
     });
     if (orphans.length === 0) continue;

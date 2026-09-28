@@ -29,6 +29,8 @@ const GUARD_PATTERNS = [
   /requirePermission\s*\(/,
   /getSession\s*\(/,
   /CRON_SECRET/,
+  // แชท: modules/chat/data/route-helpers.ts chatActor() = requireOrg() + สิทธิ์ chat.access
+  /chatActor\s*\(/,
 ];
 
 /** route ที่ตั้งใจไม่มี guard ตัวไหนเลยข้างบน — ต้องมีเหตุผลกำกับทุกตัว เพิ่ม
@@ -45,6 +47,8 @@ const PUBLIC_OR_SECRET_ROUTES: Record<string, string> = {
     "proxy ไป public API ของบุคคลที่สาม ไม่มีข้อมูลบริษัทเลย — ยังต้อง login ผ่าน proxy.ts อยู่ดี (ไม่อยู่ใต้ /api/auth|cron|webhooks) แค่ไม่ต้องเช็คสิทธิ์เพิ่มในนี้",
   "report-task/holidays/countries/route.ts":
     "เหตุผลเดียวกับ holidays/route.ts ข้างบน",
+  "version/route.ts":
+    "คืนแค่รหัส build ของเว็บ (ไม่มีข้อมูลบริษัท/ผู้ใช้) — ยังต้อง login ผ่าน proxy.ts อยู่ดี",
 };
 
 function listRouteFiles(dir: string, base = ""): string[] {
