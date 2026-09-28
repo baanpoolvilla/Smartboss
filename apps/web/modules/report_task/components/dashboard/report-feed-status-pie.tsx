@@ -3,6 +3,7 @@
 import { reportKpiBuckets } from "@/modules/report_task/lib/kpi-buckets";
 import {
   trackedTopicsOf,
+  reportMissedItemsByUser,
   reportStatusCountsByUser,
   scopedUserIds,
 } from "@/modules/report_task/lib/report-feed-compliance";
@@ -57,6 +58,8 @@ export function ReportFeedStatusPie() {
   const hasTrackedRooms = trackedTopicsOf(topics).length > 0;
   const byUser = reportStatusCountsByUser(topics, posts, range, exemptions);
   const inScope = scopedUserIds({ personId, departmentId });
+  // กดชื่อในอันดับ "ยังไม่ส่ง เลยกำหนด" แล้วเห็นว่าวันไหน ห้องไหน รอบไหน
+  const missedItems = reportMissedItemsByUser(topics, posts, range, exemptions);
 
   // Same previous-period comparison as the KPI card's own successRate trend
   // — null (no comparison shown) for the unbounded "ทั้งหมด" preset.
@@ -90,7 +93,7 @@ export function ReportFeedStatusPie() {
         onTime: rankedPeople(countsFor(byUser, inScope, "onTime")),
         lateDone: rankedPeople(countsFor(byUser, inScope, "lateDone")),
         pending: rankedPeople(countsFor(byUser, inScope, "pending")),
-        overdue: rankedPeople(countsFor(byUser, inScope, "missed")),
+        overdue: rankedPeople(countsFor(byUser, inScope, "missed"), missedItems),
       }}
     />
   );

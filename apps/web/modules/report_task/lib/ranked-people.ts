@@ -5,6 +5,8 @@ const MAX_SHOWN = 6;
 export interface RankedPerson {
   name: string;
   count: number;
+  /** รายการที่ถูกนับ (กดชื่อแล้วกางดูได้) — มีเฉพาะที่ผู้เรียกส่งมา */
+  details?: string[];
 }
 
 /**
@@ -15,10 +17,10 @@ export interface RankedPerson {
  * Overview donuts' drill-down ranked list so a busy bucket doesn't turn
  * into an endless list.
  */
-export function rankedPeople(counts: Map<string, number>): RankedPerson[] {
-  const entries = [...counts.entries()]
+export function rankedPeople(counts: Map<string, number>, detailsById?: Map<string, string[]>): RankedPerson[] {
+  const entries: RankedPerson[] = [...counts.entries()]
     .filter(([, n]) => n > 0)
-    .map(([id, n]) => ({ name: displayName(id), count: n }))
+    .map(([id, n]) => ({ name: displayName(id), count: n, details: detailsById?.get(id) }))
     .sort((a, b) => b.count - a.count);
   if (entries.length <= MAX_SHOWN + 1) return entries;
   const rest = entries.slice(MAX_SHOWN);

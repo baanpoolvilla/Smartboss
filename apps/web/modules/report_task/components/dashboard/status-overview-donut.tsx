@@ -116,6 +116,7 @@ export function StatusOverviewDonut({
   // to the overview; "ดูรายละเอียด" inside the drilled-in center is what
   // actually navigates now.
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [expandedPerson, setExpandedPerson] = useState<string | null>(null);
   const chartRef = useRef<HTMLDivElement>(null);
   function selectSegment(key: string) {
     setSelectedKey((prev) => (prev === key ? null : key));
@@ -292,22 +293,52 @@ export function StatusOverviewDonut({
                   <div className="flex flex-col gap-2">
                     <p className="text-[11px] font-semibold text-[var(--ink-soft)] uppercase tracking-wide px-1">
                       {selected.label} — เรียงมากไปน้อย
+                      {peopleByBucket[selected.key as keyof typeof peopleByBucket]!.some((p) => p.details?.length) && " · กดชื่อเพื่อดูวันที่"}
                     </p>
                     {(() => {
                       const people = peopleByBucket[selected.key as keyof typeof peopleByBucket]!;
                       const max = people[0]?.count || 1;
-                      return people.map((p, i) => (
-                        <div key={p.name} className="flex items-center gap-2 px-1">
-                          <span className="text-[11px] font-semibold text-[var(--ink-soft)] w-4 text-right shrink-0">{i + 1}.</span>
-                          <span className="text-[12.5px] text-[var(--ink)] w-20 truncate shrink-0">{p.name}</span>
-                          <div className="flex-1 h-2.5 rounded-full bg-[var(--bg-soft)] overflow-hidden">
-                            <div className="h-full rounded-full" style={{ width: `${(p.count / max) * 100}%`, backgroundColor: selected.color }} />
+                      return people.map((p, i) => {
+                        const canExpand = (p.details?.length ?? 0) > 0;
+                        const expanded = canExpand && expandedPerson === p.name;
+                        const row = (
+                          <>
+                            <span className="text-[11px] font-semibold text-[var(--ink-soft)] w-4 text-right shrink-0">{i + 1}.</span>
+                            <span className="text-[12.5px] text-[var(--ink)] w-20 truncate shrink-0">{p.name}</span>
+                            <div className="flex-1 h-2.5 rounded-full bg-[var(--bg-soft)] overflow-hidden">
+                              <div className="h-full rounded-full" style={{ width: `${(p.count / max) * 100}%`, backgroundColor: selected.color }} />
+                            </div>
+                            <span className="text-[11.5px] font-semibold w-14 text-right tabular-nums shrink-0" style={{ color: selected.color }}>
+                              {p.count} {unitLabel}
+                            </span>
+                          </>
+                        );
+                        return (
+                          <div key={p.name}>
+                            {canExpand ? (
+                              // กดชื่อแล้วกางดูว่านับรายการไหนบ้าง (วัน · ห้อง · รอบ) — ตรวจเองได้ว่านับถูกไหม
+                              <button
+                                type="button"
+                                onClick={() => setExpandedPerson(expanded ? null : p.name)}
+                                aria-expanded={expanded}
+                                title="กดเพื่อดูว่าวันไหน รอบไหน"
+                                className="w-full flex items-center gap-2 px-1 rounded-md hover:bg-[var(--bg-soft)] text-left"
+                              >
+                                {row}
+                              </button>
+                            ) : (
+                              <div className="flex items-center gap-2 px-1">{row}</div>
+                            )}
+                            {expanded && (
+                              <ul className="mt-1 mb-1.5 ml-7 space-y-0.5 rounded-md bg-[var(--bg-soft)] px-2.5 py-1.5 text-[11.5px] text-[var(--ink)] max-h-40 overflow-y-auto">
+                                {p.details!.map((d) => (
+                                  <li key={d} className="tabular-nums">{d}</li>
+                                ))}
+                              </ul>
+                            )}
                           </div>
-                          <span className="text-[11.5px] font-semibold w-14 text-right tabular-nums shrink-0" style={{ color: selected.color }}>
-                            {p.count} {unitLabel}
-                          </span>
-                        </div>
-                      ));
+                        );
+                      });
                     })()}
                     <button
                       onClick={() => setSelectedKey(null)}

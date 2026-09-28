@@ -516,6 +516,40 @@ export function reportStatusCountsByUser(
   return out;
 }
 
+/**
+ * รายการ "ยังไม่ส่ง เลยกำหนด" ของแต่ละคน (วัน · ห้อง · รอบ) — ตัวเดียวกับที่
+ * reportStatusCountsByUser นับเป็น missed ทุกรายการ ให้แดชบอร์ดกดดูได้ว่านับอะไรบ้าง
+ * แทนที่จะเห็นแค่ตัวเลข ("ทำไมในแดชบอดเป็นแบบนี้ ทั้งที่เค้าส่งกันครบหมด")
+ */
+export function reportMissedItemsByUser(
+  topics: ReportTopic[],
+  posts: ReportPost[],
+  range: { from: Date; to: Date } | null,
+  exemptions?: DateExemptions
+): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  for (const topic of trackedTopicsOf(topics)) {
+    const { startStr, endStr } = iterationBounds(topic, range);
+    const days = eachDay(startStr, endStr);
+    const rounds = effectiveRoundsOf(topic);
+    for (const u of users) {
+      if (!mustSubmitToTopic(topic, u.id)) continue;
+      for (const day of days) {
+        for (const round of rounds) {
+          if (roundComplianceStatus(topic, u.id, round, day, posts, exemptions) !== "missed") continue;
+          const [y, m, d] = day.split("-");
+          const list = out.get(u.id) ?? [];
+          list.push(`${d}/${m}/${y} · ${topic.name} · ${round.label} (${round.time})`);
+          out.set(u.id, list);
+        }
+      }
+    }
+  }
+  // ล่าสุดขึ้นก่อน
+  for (const list of out.values()) list.reverse();
+  return out;
+}
+
 export function scopedUserIds(scope: { personId: string; departmentId: string }): Set<string> {
   return new Set(
     users
