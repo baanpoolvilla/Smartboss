@@ -1711,7 +1711,12 @@ export function TaskDetailSheet({
             everything else instead, where "always visible" meant every
             sheet opened into a long scroll even for a single comment —
             collapsed by default there, toggled by the header itself. */}
-        <div className="w-full md:w-[320px] shrink-0 border-t md:border-t-0 md:border-l border-[var(--line)] flex flex-col overflow-hidden min-h-0 bg-[var(--bg-soft)]/30">
+        {/* max-h on mobile: without a cap this shrink-0 column grew to its
+            full content height once opened — it squeezed the task details
+            above to a sliver and, never overflowing its own box, left the
+            comment list below unscrollable (both halves stuck). Capped, the
+            list scrolls inside it and the details keep the rest. */}
+        <div className="w-full md:w-[320px] shrink-0 max-h-[55vh] md:max-h-none border-t md:border-t-0 md:border-l border-[var(--line)] flex flex-col overflow-hidden min-h-0 bg-[var(--bg-soft)]/30">
           <button
             type="button"
             onClick={() => setMobileCommentsOpen((v) => !v)}
