@@ -132,17 +132,9 @@ export default async function AccountPage() {
       <form action={changeOwnPasswordAction} className="mt-4">
         <SectionCard
           title="เปลี่ยนรหัสผ่าน"
-          description="ต้องกรอกรหัสผ่านปัจจุบันเพื่อยืนยันว่าเป็นเจ้าของบัญชี"
+          description="ลืมรหัสเดิมก็ตั้งใหม่ได้เลย ไม่ต้องกรอกรหัสผ่านปัจจุบัน"
         >
           <div className="grid gap-3">
-            <Field label="รหัสผ่านปัจจุบัน">
-              <PasswordInput
-                name="currentPassword"
-                required
-                autoComplete="current-password"
-                className={inputClass}
-              />
-            </Field>
             <Field label="รหัสผ่านใหม่" hint={`อย่างน้อย ${passwordMinLength} ตัวอักษร`}>
               <PasswordInput
                 name="newPassword"

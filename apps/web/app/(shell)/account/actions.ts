@@ -3,19 +3,22 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireAuth, hashPassword, verifyPassword, audit } from "@smartboss/auth";
+import { requireAuth, hashPassword, audit } from "@smartboss/auth";
 import { prisma } from "@smartboss/database";
 import { loadSecuritySettings } from "@/lib/security-settings";
 import { deleteFile, putFile } from "@/lib/storage";
+import { linePushConfigured, pushLineText } from "@/lib/line";
 import { sniffMime } from "@/modules/report_task/lib/upload-sniff";
 
 /**
  * บัญชีของตัวเอง — ทุกคนที่ล็อกอินได้ใช้หน้านี้ได้ ไม่ต้องมีสิทธิ์อะไรเพิ่ม
  *
- * ต่างจาก resetPasswordAction ใน /admin ตรงที่ **ต้องกรอกรหัสผ่านเดิม** ก่อน
- * — ที่ /admin เป็นแอดมินช่วยรีเซ็ตให้คนที่ลืมรหัส จึงไม่มีรหัสเดิมให้กรอกอยู่แล้ว
- * ส่วนที่นี่คือเจ้าของบัญชีเปลี่ยนเอง ถ้าไม่ถามรหัสเดิม ใครที่เดินมาเจอ
- * เครื่องที่เปิดค้างไว้ก็ยึดบัญชีได้ทันที
+ * เปลี่ยนรหัสผ่านของตัวเอง **ไม่ต้องกรอกรหัสเดิม** — เดิมบังคับกรอก แต่คนที่ลืมรหัส
+ * ทั้งที่ยัง login อยู่เปลี่ยนเองไม่ได้ ต้องไปขอแอดมินทุกครั้ง ("ถ้าเราเข้าอยู่แล้ว
+ * กดเปลี่ยนรหัสเลยได้ไหม") รหัสเก็บเป็น argon2 hash แสดงรหัสเดิมให้ดูไม่ได้ จึงให้
+ * ตั้งใหม่แทน — เจ้าของระบบเลือกเองโดยรู้ว่าแลกกับ: ใครเจอเครื่องที่ login ค้างไว้
+ * ก็เปลี่ยนรหัสได้ กันไว้ด้วย (1) audit ทุกครั้ง (2) เตะออกทุกเครื่อง (3) แจ้ง LINE
+ * ของเจ้าของบัญชี (ถ้าผูกไว้) ให้รู้ตัวทันทีถ้าไม่ได้เปลี่ยนเอง
  */
 
 /**
@@ -25,7 +28,6 @@ import { sniffMime } from "@/modules/report_task/lib/upload-sniff";
 function changePasswordSchema(minLength: number) {
   return z
     .object({
-      currentPassword: z.string().min(1, "กรุณากรอกรหัสผ่านปัจจุบัน"),
       newPassword: z
         .string()
         .min(minLength, `รหัสผ่านใหม่ต้องยาวอย่างน้อย ${minLength} ตัวอักษร`),
@@ -34,10 +36,6 @@ function changePasswordSchema(minLength: number) {
     .refine((v) => v.newPassword === v.confirmPassword, {
       message: "รหัสผ่านใหม่ทั้งสองช่องไม่ตรงกัน",
       path: ["confirmPassword"],
-    })
-    .refine((v) => v.newPassword !== v.currentPassword, {
-      message: "รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสเดิม",
-      path: ["newPassword"],
     });
 }
 
@@ -46,20 +44,12 @@ export async function changeOwnPasswordAction(formData: FormData) {
   const security = await loadSecuritySettings(session.orgId ?? null);
 
   const parsed = changePasswordSchema(security.passwordMinLength).parse({
-    currentPassword: String(formData.get("currentPassword") ?? ""),
     newPassword: String(formData.get("newPassword") ?? ""),
     confirmPassword: String(formData.get("confirmPassword") ?? ""),
   });
 
   const user = await prisma.user.findUnique({ where: { id: session.userId } });
   if (!user) throw new Error("ไม่พบบัญชีผู้ใช้");
-
-  if (!(await verifyPassword(user.passwordHash, parsed.currentPassword))) {
-    // ไม่บอกว่าผิดตรงไหน และไม่นับรวมกับตัวนับล็อกบัญชีตอน login
-    // — คนที่ผ่านมาถึงหน้านี้ได้คือคนที่ล็อกอินอยู่แล้ว การล็อกบัญชีตัวเอง
-    // จากการพิมพ์รหัสเดิมผิดไม่กี่ครั้งสร้างปัญหามากกว่าที่ป้องกันได้
-    throw new Error("รหัสผ่านปัจจุบันไม่ถูกต้อง");
-  }
 
   await prisma.user.update({
     where: { id: user.id },
@@ -82,6 +72,20 @@ export async function changeOwnPasswordAction(formData: FormData) {
     action: "USER_PASSWORD_CHANGED",
     targetId: user.id,
   });
+
+  // ไม่ต้องกรอกรหัสเดิมแล้ว — แจ้งเจ้าของบัญชีทาง LINE ให้รู้ตัวถ้าไม่ได้เปลี่ยนเอง
+  // ส่งไม่ได้ก็ไม่เป็นไร การเปลี่ยนรหัสสำเร็จไปแล้ว
+  if (user.lineUserId && linePushConfigured()) {
+    const when = new Intl.DateTimeFormat("th-TH", {
+      dateStyle: "short",
+      timeStyle: "short",
+      timeZone: "Asia/Bangkok",
+    }).format(new Date());
+    await pushLineText(
+      user.lineUserId,
+      `SmartBoss: รหัสผ่านของคุณถูกเปลี่ยนเมื่อ ${when} และออกจากระบบทุกเครื่องแล้ว\nถ้าคุณไม่ได้เปลี่ยนเอง ติดต่อแอดมินทันที`,
+    ).catch(() => false);
+  }
 
   redirect("/login?changed=1");
 }
