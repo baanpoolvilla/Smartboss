@@ -21,6 +21,10 @@ import { PrismaClient, Prisma } from "@prisma/client";
  *   pnpm --filter @smartboss/database exec tsx scripts/excuse-attendance-dates.ts \
  *     --dates=2026-09-26,2026-09-27 --dry-run
  *   ตัด --dry-run ออกเพื่อเขียนจริง · เติม --org=<orgId> เพื่อจำกัดบริษัทเดียว
+ *
+ *   คนเดียว ทุกวัน (หรือช่วง --from/--to) พร้อมเหตุผลที่จะขึ้นในรายการคืนคะแนน:
+ *     ... excuse-attendance-dates.ts --user=surin@baanpoolvilla.com \
+ *       --reason="ตอนนั้นยังตั้งค่ากะ/ทะเบียนพนักงานไม่เสร็จ" --dry-run
  */
 
 const prisma = new PrismaClient();
@@ -36,12 +40,38 @@ async function main() {
     .split(",")
     .map((d) => d.trim())
     .filter(Boolean);
-  if (dates.length === 0 || dates.some((d) => !/^\d{4}-\d{2}-\d{2}$/.test(d))) {
-    console.error("ต้องระบุ --dates=YYYY-MM-DD[,YYYY-MM-DD...]");
+  const userArg = arg("user");
+  const from = arg("from");
+  const to = arg("to");
+  const reason = arg("reason");
+  const isDay = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d);
+  if (
+    (dates.length === 0 && !userArg) ||
+    dates.some((d) => !isDay(d)) ||
+    (from && !isDay(from)) ||
+    (to && !isDay(to))
+  ) {
+    console.error("ต้องระบุ --dates=YYYY-MM-DD[,...] หรือ --user=<อีเมล> (เลือกช่วงได้ด้วย --from/--to)");
     process.exitCode = 1;
     return;
   }
   const orgId = arg("org");
+
+  // --user: คืนคะแนนลงเวลาของคนเดียว (ทุกวัน หรือช่วง --from..--to) — เช่นคนที่ตอนนั้นยังตั้งค่า
+  // กะ/ผูกทะเบียนพนักงานไม่เสร็จ เลยโดน "ขาดงาน" ทุกวันทั้งที่มาทำงาน
+  let userId: string | undefined;
+  if (userArg) {
+    const u = await prisma.user.findFirst({
+      where: { OR: [{ email: { equals: userArg, mode: "insensitive" } }, { name: userArg }] },
+      select: { id: true },
+    });
+    if (!u) {
+      console.error(`ไม่พบผู้ใช้ ${userArg}`);
+      process.exitCode = 1;
+      return;
+    }
+    userId = u.id;
+  }
 
   // occurredAt ของเหตุการณ์ลงเวลา = new Date(work_date) = เที่ยงคืน UTC ของวันนั้น
   // (ดู apps/web/lib/attendance-performance.ts) จึงเทียบแบบวัน UTC ได้ตรง ๆ
@@ -51,15 +81,27 @@ async function main() {
       category: { in: ["attendance_late", "attendance_absent"] },
       refType: "attendance_day",
       ...(orgId ? { orgId } : {}),
-      OR: dates.map((d) => ({
-        occurredAt: { gte: new Date(`${d}T00:00:00.000Z`), lt: new Date(`${d}T23:59:59.999Z`) },
-      })),
+      ...(userId ? { userId } : {}),
+      ...(dates.length > 0
+        ? {
+            OR: dates.map((d) => ({
+              occurredAt: { gte: new Date(`${d}T00:00:00.000Z`), lt: new Date(`${d}T23:59:59.999Z`) },
+            })),
+          }
+        : from || to
+          ? {
+              occurredAt: {
+                ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}),
+                ...(to ? { lte: new Date(`${to}T23:59:59.999Z`) } : {}),
+              },
+            }
+          : {}),
     },
     orderBy: [{ occurredAt: "asc" }, { userId: "asc" }],
   });
 
   if (originals.length === 0) {
-    console.log(`ไม่มีคะแนนมาสาย/ขาดงานของวันที่ ${dates.join(", ")} ให้ยกเว้น`);
+    console.log("ไม่มีคะแนนมาสาย/ขาดงานตามเงื่อนไขนี้ให้ยกเว้น");
     return;
   }
 
@@ -106,7 +148,7 @@ async function main() {
       occurredAt: o.occurredAt,
       refType: "attendance_day_correction",
       refId: o.id,
-      note: `ยกเว้นการลงเวลาวันที่ ${o.occurredAt.toISOString().slice(0, 10)} (บริษัทประกาศไม่ต้องลงเวลา)`,
+      note: `ยกเว้นการลงเวลาวันที่ ${o.occurredAt.toISOString().slice(0, 10)} (${reason ?? "บริษัทประกาศไม่ต้องลงเวลา"})`,
     })),
     skipDuplicates: true,
   });
