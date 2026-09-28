@@ -46,6 +46,22 @@ function localDay(iso: string): number {
 }
 
 /**
+ * เสร็จทันกำหนดไหม — เทียบระดับ "วัน" (เสร็จวันไหนก็ได้ของวันครบกำหนด) และถ้างาน
+ * ตั้งเวลาส่ง (dueTime "HH:mm") ไว้ วันครบกำหนดต้องเสร็จไม่เกินเวลานั้น
+ * เดิมเทียบ timestamp ตรง ๆ กับวันครบกำหนด (เที่ยงคืน) ⇒ เสร็จ "ในวัน" ครบกำหนดก็นับว่าเลย
+ */
+function finishedOnTime(finishedAt: string, due: string, dueTime?: string): boolean {
+  const finDay = localDay(finishedAt);
+  const due0 = dueDay(due);
+  if (finDay < due0) return true;
+  if (finDay > due0) return false;
+  if (!dueTime || !/^\d{1,2}:\d{2}$/.test(dueTime)) return true;
+  const [h, m] = dueTime.split(":").map(Number) as [number, number];
+  const f = new Date(finishedAt);
+  return f.getHours() * 60 + f.getMinutes() <= h * 60 + m;
+}
+
+/**
  * The due date a task is actually held to for the late-penalty check.
  *
  * Pushing the date out *before* it passed is a legitimate extension — the
@@ -127,11 +143,30 @@ export function sweepAutoPenalties(
 
     if (t.status === "done") {
       const finishedAt = t.completedAt ?? t.updatedAt;
-      const onTime = new Date(finishedAt).getTime() <= new Date(heldTo).getTime();
+      // งานกลุ่มเลื่อนกำหนดได้รายคน (assigneeDueDates — "แก้ไขทั้งหมด"/รายคน) เดิมที่นี่
+      // ดูแค่กำหนดของทั้งงาน ⇒ เลื่อนให้ทุกคนแล้วส่งทันกำหนดใหม่ ก็ยังโดนตีตรา
+      // "เลยกำหนด" ถาวร (เจอจริง: T-2569-0028 เลื่อน 25/09 → 02/10 เสร็จ 25/09)
+      // ใช้กำหนดที่ช้าที่สุดของทุกคน — งานปิดเมื่อทุกคนเสร็จ จึงเทียบกับคนสุดท้าย
+      const deadline =
+        t.taskMode === "group"
+          ? t.assigneeIds
+              .map((id) => t.assigneeDueDates?.[id] ?? heldTo)
+              .reduce((a, b) => (dueDay(b) > dueDay(a) ? b : a), heldTo)
+          : heldTo;
+      const onTime = finishedOnTime(finishedAt, deadline, t.dueTime);
       if (onTime && t.taskMode !== "group" && t.penalty?.byUserId === SYSTEM_USER_ID) {
         return revoke(t);
       }
-      if (t.missedDeadlineOnce || onTime) return t;
+      if (onTime) {
+        // ตีตราผิดไว้แล้วจากกฎเดิม — เอาออก เฉพาะเมื่อไม่มีการหักคะแนนค้างอยู่
+        const docked = !!t.penalty || Object.keys(t.penalties ?? {}).length > 0;
+        if (t.missedDeadlineOnce && !docked) {
+          changed = true;
+          return { ...t, missedDeadlineOnce: false };
+        }
+        return t;
+      }
+      if (t.missedDeadlineOnce) return t;
       changed = true;
       return { ...t, missedDeadlineOnce: true };
     }

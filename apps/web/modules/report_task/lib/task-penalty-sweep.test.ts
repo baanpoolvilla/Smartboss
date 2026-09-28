@@ -150,6 +150,41 @@ describe("sweepAutoPenalties", () => {
     });
   });
 
+  describe("done tasks", () => {
+    it("is on time when finished on the due day itself", () => {
+      const due = new Date();
+      due.setUTCHours(0, 0, 0, 0);
+      const result = sweepAutoPenalties([
+        makeTask({ status: "done", originalDueDate: due.toISOString(), completedAt: new Date().toISOString() }),
+      ]);
+      expect(result.tasks[0]!.missedDeadlineOnce).toBeFalsy();
+    });
+
+    it("honours per-assignee extensions on a finished group task and clears a wrong flag", () => {
+      const result = sweepAutoPenalties([
+        makeTask({
+          taskMode: "group",
+          status: "done",
+          assigneeIds: ["usr-02", "usr-03"],
+          originalDueDate: daysFromNow(-3),
+          assigneeDueDates: { "usr-02": daysFromNow(4), "usr-03": daysFromNow(4) },
+          completedAt: daysFromNow(-1),
+          missedDeadlineOnce: true,
+        }),
+      ]);
+      expect(result.changed).toBe(true);
+      expect(result.tasks[0]!.missedDeadlineOnce).toBe(false);
+    });
+
+    it("keeps the flag when a finished task was really late", () => {
+      const result = sweepAutoPenalties([
+        makeTask({ status: "done", originalDueDate: daysFromNow(-5), completedAt: daysFromNow(-1), missedDeadlineOnce: true }),
+      ]);
+      expect(result.changed).toBe(false);
+      expect(result.tasks[0]!.missedDeadlineOnce).toBe(true);
+    });
+  });
+
   describe("group tasks", () => {
     it("only docks the assignee whose own effective due date passed", () => {
       const result = sweepAutoPenalties([
