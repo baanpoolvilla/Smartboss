@@ -3,7 +3,8 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireOrg, hasPermission } from "@smartboss/auth";
+import { requireOrg, hasPermission, audit } from "@smartboss/auth";
+import { prisma } from "@smartboss/database";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import {
   createPmSchedule,
@@ -137,6 +138,10 @@ export async function updatePmAction(formData: FormData) {
     !!nextDueDate && (originalNextDueDate === null || nextDueDate !== String(originalNextDueDate).trim());
   const description = String(formData.get("description") ?? "").trim();
   const assignedTo = String(formData.get("assignedTo") ?? "").trim();
+  const before = await prisma.pmSchedule.findFirst({
+    where: { orgId, id },
+    select: { nextDueDate: true, frequency: true, assignedTo: true },
+  });
 
   await updatePmSchedule(orgId, id, {
     ...(title ? { title } : {}),
@@ -151,6 +156,26 @@ export async function updatePmAction(formData: FormData) {
     description: description || null,
   });
 
+  // เก็บว่าใครเปลี่ยนวันกำหนด/ความถี่/ผู้รับผิดชอบ จากอะไรเป็นอะไร — เดิมไม่มีร่องรอยเลย
+  // PM ถูกเลื่อนวันแล้วระบบเปิดใบงานใหม่ ไล่ย้อนไม่ได้ว่าใครตั้ง (ดู /admin/audit)
+  const session = await requireOrg();
+  await audit({
+    userId: session.userId,
+    action: "PM_UPDATED",
+    targetId: id,
+    detail: {
+      title,
+      nextDueDate: dueChanged
+        ? { from: before?.nextDueDate.toISOString().slice(0, 10) ?? null, to: nextDueDate }
+        : undefined,
+      frequency: frequency && frequency !== before?.frequency ? { from: before?.frequency ?? null, to: frequency } : undefined,
+      assignedTo:
+        (assignedTo || null) !== (before?.assignedTo ?? null)
+          ? { from: before?.assignedTo ?? null, to: assignedTo || null }
+          : undefined,
+    },
+  });
+
   revalidatePath("/maintenance/pm");
 }
 
@@ -160,6 +185,8 @@ export async function completePmAction(formData: FormData) {
   if (!id) return;
   await completePmSchedule(orgId, id);
   await closeAutoWorkOrdersOfPm(orgId, id, "done");
+  const session = await requireOrg();
+  await audit({ userId: session.userId, action: "PM_ROUND_CLOSED", targetId: id });
   revalidatePath("/maintenance/pm");
   revalidatePath("/maintenance/work-orders");
 }
