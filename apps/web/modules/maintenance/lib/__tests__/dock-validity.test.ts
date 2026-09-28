@@ -83,3 +83,15 @@ test("ใบงานของ PM เดียวกันโดน 'ใบง�
   const old = { ...wo, completedAt: new Date("2026-08-15T00:00:00Z") };
   assert.equal(pmDockRevokeReason(pmDock, pm, [old], new Map([["wo1", "sujita"]]), st), null);
 });
+
+test("งานค้างเก่า: โดนหักหลังเลยกำหนดไปแล้วหลายวัน (ตอนเปิดระบบคะแนน) — คืน แม้ไม่ได้ตั้งวันเริ่มนับ", () => {
+  const bulk = { ...docked, occurredAt: new Date("2026-09-20T02:00:00Z") };
+  assert.equal(workOrderDockRevokeReason(bulk, openWo, st), "งานค้างเก่า (เลยกำหนดก่อนระบบคะแนนเห็น)");
+  const pmBulk = { ...pmDock, occurredAt: new Date("2026-09-25T02:00:00Z") };
+  assert.equal(pmDockRevokeReason(pmBulk, pm, [], new Map(), st), "งานค้างเก่า (เลยกำหนดก่อนระบบคะแนนเห็น)");
+});
+
+test("หักภายใน 3 วันหลังเลยกำหนด — ยังนับว่าหักถูก", () => {
+  const onTime = { ...docked, occurredAt: new Date("2026-09-13T10:00:00Z") };
+  assert.equal(workOrderDockRevokeReason(onTime, openWo, st), null);
+});

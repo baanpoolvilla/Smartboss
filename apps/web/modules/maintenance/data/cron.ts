@@ -13,6 +13,7 @@ import {
 } from "@/lib/performance";
 import {
   addDays,
+  isBacklog,
   pmDockRevokeReason,
   workOrderDockRevokeReason,
 } from "@/modules/maintenance/lib/dock-validity";
@@ -413,6 +414,7 @@ export async function dockOverdueMaintenance(): Promise<{
     // เลยกำหนดไปตั้งแต่ก่อนวันเริ่มนับคะแนน = งานค้างเก่า ไม่ใช่การปล่อยปละในช่วงที่นับ —
     // เดิม occurredAt = วันที่ตรวจพบ (หลังวันเริ่มนับเสมอ) งานค้างเก่าเลยโดนหักทั้งกอง
     if (woSt.scoringStartDate && lapse < woSt.scoringStartDate) continue;
+    if (isBacklog(lapse, now)) continue; // ค้างมาก่อนระบบเห็น — ดู BACKLOG_DAYS
 
     const responsible = wo.assignedTo ?? wo.property?.caretakerId;
     if (!responsible) continue; // ไม่มีใครรับผิดชอบเลย — หักใครไม่ได้
@@ -480,6 +482,7 @@ export async function dockOverdueMaintenance(): Promise<{
     const lapse = addDays(pm.nextDueDate, st.pmGraceDays);
     if (lapse >= now) continue;
     if (st.scoringStartDate && lapse < st.scoringStartDate) continue;
+    if (isBacklog(lapse, now)) continue;
 
     const responsible = pm.assignedTo ?? pm.property?.caretakerId;
     if (!responsible) continue;
