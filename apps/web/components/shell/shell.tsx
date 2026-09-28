@@ -22,6 +22,8 @@ import { NotificationBellPopover } from "@/modules/report_task/components/shared
 import type { ModuleManifest, ModuleMenuItem } from "@/module-registry";
 import { Toaster } from "@/modules/report_task/components/ui/sonner";
 import { LogoutButton } from "./logout-button";
+import { InstallAppButton, InstallGate } from "./app-install";
+import { AppUpdateNotice } from "./app-update-notice";
 import { SaveFeedback } from "./save-feedback";
 import { SessionRefresher } from "./session-refresher";
 import { SystemNotify } from "./system-notify";
@@ -75,6 +77,9 @@ export function Shell({
       <SaveFeedback />
       {/* เสียง + เด้งแจ้งเตือนของทุกโมดูล (ท่อสด notify.new) */}
       <SystemNotify />
+      {/* ชวนติดตั้งเป็นแอป (มือถือ) + แจ้งเมื่อมีเวอร์ชันใหม่ — ทุกหน้า ทุกโมดูล */}
+      <InstallGate />
+      <AppUpdateNotice />
       {activeModule ? (
         <ModuleFrame module={activeModule} pathname={pathname}>
           {children}
@@ -119,6 +124,7 @@ function LauncherFrame({
               this explicitly ("ทุกหน้าต้องมีให้กดตัวแมลงเพื่อแจ้งนะ ทั้ง
               ระบบ"). Same reasoning applies to the report_task notification
               count below — this header needs its own copy of both. */}
+          <InstallAppButton />
           <IssueReportBarButton />
           <ReportNotificationSync />
           <NotificationBellPopover />

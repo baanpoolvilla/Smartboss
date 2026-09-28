@@ -1,3 +1,20 @@
+import { execSync } from "node:child_process";
+
+/**
+ * รหัสของ build นี้ — ฝังลงทั้งฝั่ง client และ server ตอน build (NEXT_PUBLIC_BUILD_ID)
+ * หน้าเว็บที่เปิดค้างไว้เทียบกับ /api/version เป็นระยะ ถ้าไม่ตรง = มีการ deploy ใหม่แล้ว
+ * แต่แท็บ/แอปนี้ยังรันโค้ดเก่า → ขึ้นแถบ "มีเวอร์ชันใหม่" (components/shell/app-update-notice.tsx)
+ */
+function buildId() {
+  let sha = "dev";
+  try {
+    sha = execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+  } catch {
+    // ไม่มี git (เช่น build ใน container) — ใช้เวลาอย่างเดียว
+  }
+  return `${sha}-${Date.now().toString(36)}`;
+}
+
 /** @type {import('next').NextConfig} */
 /*
  * X-Frame-Options ไม่อยู่ในนี้แล้ว — ย้ายไปตั้งใน proxy.ts (middleware) แทน
@@ -15,6 +32,9 @@ const NATIVE_EXTERNALS = ["argon2", "@prisma/client", ".prisma/client", "ioredis
 
 const nextConfig = {
   reactStrictMode: true,
+  env: {
+    NEXT_PUBLIC_BUILD_ID: buildId(),
+  },
   /*
    * เครื่อง dev รัน Next อยู่ในบ WSL แล้วเปิดเว็บจาก Windows จึงต้อง bind 0.0.0.0
    * Next 16 ถือว่าการเข้าผ่านโฮสต์ที่ไม่ใช่ตัวเองเป็น cross-origin แล้ว **บล็อก

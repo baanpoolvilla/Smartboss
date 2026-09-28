@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Loader2, LogOut } from "lucide-react";
 import { Button } from "@smartboss/ui/components/button";
 import { Modal } from "./dialog";
+import { InstallAppButton } from "@/components/shell/app-install";
 import { IssueReportBarButton } from "@/modules/report_task/components/issue-report/issue-report-bar-button";
 import { ReportNotificationSync } from "@/modules/report_task/components/shared/report-notification-sync";
 import { NotificationBellPopover } from "@/modules/report_task/components/shared/notification-bell-popover";
@@ -32,6 +33,9 @@ export function AppBarActions() {
 
   return (
     <>
+      {/* มือถือในเบราว์เซอร์มีหน้าจอติดตั้งเต็มจออยู่แล้ว (InstallGate) — แถบบนของโมดูล
+          บนจอแคบมีไอคอนแน่นอยู่แล้ว ใส่เพิ่มจะเบียดชื่อหน้า จึงโชว์ตั้งแต่จอกลางขึ้นไป */}
+      <InstallAppButton className="hidden sm:inline-flex" />
       <IssueReportBarButton />
       <ReportNotificationSync />
 
