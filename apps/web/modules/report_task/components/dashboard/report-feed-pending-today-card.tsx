@@ -20,6 +20,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/modules/report_task/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/modules/report_task/components/ui/dialog";
+import { formatDate } from "@/modules/report_task/lib/format";
 import { reportBacklogEntries, type ReportBacklogEntry } from "@/modules/report_task/lib/report-feed-compliance";
 import { useVisibleReportTopics } from "@/modules/report_task/hooks/use-visible-report-topics";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
@@ -32,7 +34,7 @@ import { previousPeriodRange, periodTrend } from "@/modules/report_task/lib/dash
 import { TrendText } from "@/modules/report_task/components/shared/trend-badge";
 import { localDateStr, todayIso } from "@/modules/report_task/lib/now";
 import { getUser, getDepartment, canManage } from "@/modules/report_task/lib/directory";
-import { Bell, FileClock } from "lucide-react";
+import { Bell, ChevronRight, FileClock } from "lucide-react";
 
 /**
  * "รายงานที่ยังไม่ส่ง" — daily-check-in model: today's misses are still
@@ -54,6 +56,8 @@ export function ReportFeedPendingTodayCard() {
   const customTo = useDashboardFilterStore((s) => s.customTo);
   const range = presetRange(preset, customFrom, customTo);
   const [pendingNudge, setPendingNudge] = useState<ReportBacklogEntry | null>(null);
+  // กด "เลยกำหนด N ครั้ง" ของคนไหน = เปิดดูเฉพาะของคนนั้นว่าพลาดวันไหน ห้องไหน รอบไหน
+  const [missedUserId, setMissedUserId] = useState<string | null>(null);
 
   // "today" only shows up as postable inside `pending` (see
   // reportBacklogEntries) when the filter's range actually reaches today —
@@ -92,6 +96,17 @@ export function ReportFeedPendingTodayCard() {
     }
     return Array.from(counts.values()).sort((a, b) => b.count - a.count);
   }, [missed]);
+
+  const missedOfUser = useMemo(
+    () =>
+      missedUserId
+        ? missed
+            .filter((e) => e.userId === missedUserId)
+            .sort((a, b) => b.day.localeCompare(a.day) || a.topicName.localeCompare(b.topicName, "th"))
+        : [],
+    [missed, missedUserId]
+  );
+  const missedUser = missedByUser.find((r) => r.userId === missedUserId) ?? null;
 
   const pendingShowMore = useShowMore(pending, 5);
   const missedShowMore = useShowMore(missedByUser, 5);
@@ -196,9 +211,11 @@ export function ReportFeedPendingTodayCard() {
               {rangeHasToday ? "ประวัติเลยกำหนด" : "รายงานที่เลยกำหนด"} ({missed.length})
             </p>
             {missedShowMore.visible.map((row) => (
-              <div
+              <button
+                type="button"
                 key={row.userId}
-                className="flex items-center gap-2 py-2 border-b last:border-0 border-[var(--line)] -mx-1 px-1"
+                onClick={() => setMissedUserId(row.userId)}
+                className="flex w-full items-center gap-2 py-2 border-b last:border-0 border-[var(--line)] -mx-1 px-1 text-left rounded-lg cursor-pointer hover:bg-[var(--bg-soft)] transition-colors"
               >
                 <Avatar className="h-7 w-7 shrink-0">
                   <AvatarImage src={row.userAvatarUrl ?? undefined} alt={row.userName} />
@@ -208,13 +225,55 @@ export function ReportFeedPendingTodayCard() {
                 <Badge variant="outline" className="text-[10px] bg-red-50 text-[var(--chart-red)] border-red-200 shrink-0">
                   เลยกำหนด {row.count} ครั้ง
                 </Badge>
-              </div>
+                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[var(--ink-soft)]" />
+              </button>
             ))}
             <ShowMoreToggle expanded={missedShowMore.expanded} remaining={missedShowMore.remaining} onToggle={missedShowMore.toggle} />
             <p className="text-[11px] text-[var(--ink-soft)] mt-2 px-1">เลยกำหนดแล้ว ถูกตัดคะแนน แต่ยังสามารถส่งได้</p>
           </div>
         )}
       </CardContent>
+
+      <Dialog open={!!missedUserId} onOpenChange={(open) => !open && setMissedUserId(null)}>
+        <DialogContent className="max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {missedUser && (
+                <Avatar className="h-7 w-7 shrink-0">
+                  <AvatarImage src={missedUser.userAvatarUrl ?? undefined} alt={missedUser.userName} />
+                  <AvatarFallback className="text-[10px] bg-[var(--bg-soft)] text-[var(--ink)]">{missedUser.userAvatar}</AvatarFallback>
+                </Avatar>
+              )}
+              {missedUser?.userName} · เลยกำหนด {missedOfUser.length} ครั้ง
+            </DialogTitle>
+            <DialogDescription>
+              รายงานที่ไม่ได้ส่งภายในเวลาปิดรับ ตามช่วงเวลาที่เลือกบนแดชบอร์ด · ยังส่งย้อนหลังได้ กดรายการเพื่อไปที่ห้องรายงาน
+            </DialogDescription>
+          </DialogHeader>
+          <div className="-mx-1 overflow-y-auto">
+            {missedOfUser.map((e) => (
+              <button
+                type="button"
+                key={`${e.topicId}-${e.day}-${e.roundId}`}
+                onClick={() => {
+                  setMissedUserId(null);
+                  router.push(`/report-task/report-feed?topic=${e.topicId}`);
+                }}
+                className="flex w-full items-start gap-3 rounded-lg px-2 py-2.5 text-left border-b last:border-0 border-[var(--line)] hover:bg-[var(--bg-soft)] transition-colors"
+              >
+                <span className="w-20 shrink-0 text-sm font-medium tabular-nums text-[var(--chart-red)]">{formatDate(e.day)}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm text-[var(--ink)] truncate">{e.topicName}</span>
+                  <span className="block text-[11px] text-[var(--ink-soft)]">
+                    {e.roundLabel} · ปิดรับ {e.roundTime}
+                  </span>
+                </span>
+                <ChevronRight className="mt-1 h-3.5 w-3.5 shrink-0 text-[var(--ink-soft)]" />
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={!!pendingNudge} onOpenChange={(open) => !open && setPendingNudge(null)}>
         <AlertDialogContent>
