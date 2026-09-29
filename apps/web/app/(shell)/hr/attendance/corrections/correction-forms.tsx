@@ -19,6 +19,16 @@ const STAGE_LABEL: Record<AttendanceCorrection["approval_stage"], { text: string
   CANCELLED: { text: "ยกเลิก", tone: "var(--tone-muted)" },
 };
 
+/** วันที่มีปัญหาของพนักงานหนึ่งคน — มาจาก home-corrections.tsx */
+export interface AttendanceIssue {
+  day: string;
+  kind: "late" | "absent" | "no_in" | "no_out";
+  intent: "CLOCK_IN" | "CLOCK_OUT";
+  label: string;
+  /** เวลาเข้าที่ระบบจับได้ (กรณีสาย) */
+  actualIn?: string;
+}
+
 const INTENT_LABEL: Record<string, string> = {
   CLOCK_IN: "เข้างาน",
   CLOCK_OUT: "ออกงาน",
@@ -94,11 +104,31 @@ function CorrectionDiff({ correction }: { correction: AttendanceCorrection }) {
   );
 }
 
-export function ManualAttendanceForm({ employees }: { employees: Employment[] }) {
+export function ManualAttendanceForm({
+  employees,
+  issues = {},
+}: {
+  employees: Employment[];
+  issues?: Record<string, AttendanceIssue[]>;
+}) {
+  const [employmentId, setEmploymentId] = useState("");
+  const [workDate, setWorkDate] = useState("");
+  const [intent, setIntent] = useState<"CLOCK_IN" | "CLOCK_OUT">("CLOCK_IN");
+  const personIssues = employmentId ? (issues[employmentId] ?? []) : [];
+
   return (
     <form action={requestManualAttendanceAction} className="grid grid-cols-1 gap-3 sm:grid-cols-6">
       <Field label="พนักงาน *">
-        <select name="employment_id" required className={inputClass}>
+        <select
+          name="employment_id"
+          required
+          className={inputClass}
+          value={employmentId}
+          onChange={(e) => {
+            setEmploymentId(e.target.value);
+            setWorkDate("");
+          }}
+        >
           <option value="">— เลือกพนักงาน —</option>
           {employees.map((employee) => (
             <option key={employee.id} value={employee.id}>
@@ -108,12 +138,49 @@ export function ManualAttendanceForm({ employees }: { employees: Employment[] })
         </select>
       </Field>
 
+      {employmentId && (
+        <div className="sm:col-span-6">
+          <p className="mb-1.5 text-xs font-medium text-(--ink-soft)">
+            {personIssues.length > 0
+              ? "วันที่มีปัญหาใน 31 วันล่าสุด — กดเพื่อเลือก (วันที่และประเภทจะถูกกรอกให้)"
+              : "ไม่พบวันที่สาย/ขาด/ลืมสแกนใน 31 วันล่าสุด — กรอกวันที่เองได้ด้านล่าง"}
+          </p>
+          {personIssues.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {personIssues.map((issue) => {
+                const selected = workDate === issue.day && intent === issue.intent;
+                return (
+                  <button
+                    key={`${issue.day}-${issue.kind}`}
+                    type="button"
+                    onClick={() => {
+                      setWorkDate(issue.day);
+                      setIntent(issue.intent);
+                    }}
+                    className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                      selected
+                        ? "border-(--app-strong) bg-(--app-strong) text-white"
+                        : "border-(--line) bg-(--bg) text-(--ink) hover:bg-(--bg-soft)"
+                    }`}
+                  >
+                    {formatDate(issue.day)} · {issue.label}
+                    {issue.actualIn ? ` (เข้า ${formatTime(issue.actualIn)})` : ""}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       <Field label="วันที่ *">
         {/* max = วันนี้: กันพิมพ์ปี พ.ศ. (2569) ลงช่องที่เป็น ค.ศ. — ได้วันที่ในอีก 543 ปี ซึ่งไม่มีผลกับวันจริง */}
         <input
           type="date"
           name="work_date"
           required
+          value={workDate}
+          onChange={(e) => setWorkDate(e.target.value)}
           max={new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date())}
           className={inputClass}
         />
@@ -124,7 +191,13 @@ export function ManualAttendanceForm({ employees }: { employees: Employment[] })
       </Field>
 
       <Field label="ประเภท *">
-        <select name="event_intent" required className={inputClass} defaultValue="CLOCK_IN">
+        <select
+          name="event_intent"
+          required
+          className={inputClass}
+          value={intent}
+          onChange={(e) => setIntent(e.target.value === "CLOCK_OUT" ? "CLOCK_OUT" : "CLOCK_IN")}
+        >
           <option value="CLOCK_IN">เข้างาน</option>
           <option value="CLOCK_OUT">ออกงาน</option>
         </select>

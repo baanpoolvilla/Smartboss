@@ -4,13 +4,19 @@ import { useState } from "react";
 import { Button } from "@smartboss/ui/components/button";
 import { Modal } from "@/components/module/dialog";
 import type { Employment } from "@/modules/hr/lib/api";
-import { ManualAttendanceForm } from "./correction-forms";
+import { ManualAttendanceForm, type AttendanceIssue } from "./correction-forms";
 
 /**
  * ฟอร์มส่งคำขอลงเวลาใหม่ — เดิมกางอยู่ตลอดเวลาทั้งที่งานหลักของหน้านี้คือ
  * "ตรวจ" ไม่ใช่ "สร้าง" (สเปคข้อ 4.2) ยุบเป็นปุ่ม + Modal แทน
  */
-export function NewCorrectionButton({ employees }: { employees: Employment[] }) {
+export function NewCorrectionButton({
+  employees,
+  issues = {},
+}: {
+  employees: Employment[];
+  issues?: Record<string, AttendanceIssue[]>;
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -20,7 +26,7 @@ export function NewCorrectionButton({ employees }: { employees: Employment[] }) 
       </Button>
       {open && (
         <Modal title="ส่งคำขอลงเวลาใหม่" onClose={() => setOpen(false)} wide>
-          <ManualAttendanceForm employees={employees} />
+          <ManualAttendanceForm employees={employees} issues={issues} />
         </Modal>
       )}
     </>
