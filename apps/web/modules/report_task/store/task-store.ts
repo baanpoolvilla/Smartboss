@@ -83,6 +83,23 @@ function clearedChecklist(checklist: ChecklistItem[]): ChecklistItem[] {
   return checklist.map((c) => ({ ...c, done: false }));
 }
 
+/**
+ * แก้กำหนดส่งของงานที่ "ส่งแล้ว" แล้วหัวหน้าเลือก "ส่งกลับให้แก้ไข" — กลับไป "กำลังทำ"
+ * เหมือน rejectReview (ล้างเช็คลิสต์ ล้างการตรวจ) · `onlyAssigneeId` = ส่งกลับเฉพาะส่วน
+ * ของคนนั้นในงานกลุ่ม (คนอื่นที่ทำเสร็จแล้วไม่ต้องทำซ้ำ)
+ */
+function sendBackPatch(t: Task, onlyAssigneeId?: string): Partial<Task> {
+  const reopen = { status: "in_progress" as const, completedAt: undefined, reviewedBy: undefined, reviewedAt: undefined };
+  if (onlyAssigneeId) {
+    return {
+      ...reopen,
+      checklist: t.checklist.map((c) => (c.ownerId === onlyAssigneeId ? { ...c, done: false } : c)),
+      completedAssigneeIds: (t.completedAssigneeIds ?? []).filter((id) => id !== onlyAssigneeId),
+    };
+  }
+  return { ...reopen, checklist: clearedChecklist(t.checklist), completedAssigneeIds: [] };
+}
+
 function notifyPenaltyChange(task: Task, byUserId: string, message: string) {
   const heads = departments.filter((d) => task.departmentIds.includes(d.id)).map((d) => d.headId);
   const recipients = Array.from(new Set([...task.assigneeIds, ...heads]));
@@ -206,20 +223,25 @@ interface TaskStore {
   /** Sign-off on a "เสร็จสิ้น" task — see the field's own doc in types/index.ts.
    * No-op if the task isn't currently done (nothing to sign off on). */
   markReviewed: (taskId: string, actorId: string) => void;
-  reviseDueDate: (taskId: string, newDate: string, reason: string, revisedBy: string) => void;
+  /**
+   * `sendBack` ใช้กับงานที่ส่งแล้ว (status "done") เท่านั้น: true = ส่งกลับให้แก้ไข
+   * (กลับไป "กำลังทำ" กติกาส่งช้าเดียวกับ rejectReview), false = แค่เปลี่ยนวัน คงสถานะไว้
+   * ไม่ส่ง = true (พฤติกรรมเดิม)
+   */
+  reviseDueDate: (taskId: string, newDate: string, reason: string, revisedBy: string, sendBack?: boolean) => void;
   /**
    * Adjusts one assignee's own due-date override on a group task (see
    * `assigneeDueDates`) — logged into `assigneeDueDateRevisions` (first date
    * + latest, not every round) and notifies that assignee, distinct from
    * `reviseDueDate` which revises the shared task-level due date.
    */
-  reviseAssigneeDueDate: (taskId: string, assigneeId: string, newDate: string, revisedBy: string) => void;
+  reviseAssigneeDueDate: (taskId: string, assigneeId: string, newDate: string, revisedBy: string, sendBack?: boolean) => void;
   /** Same revision as reviseAssigneeDueDate, applied to every current
    * assignee at once with a single log entry instead of one per person —
    * for the "set everyone to the same date" case rather than adjusting one
    * person. Assignees already on that date are left untouched (no-op entry,
    * no spurious revision/notification). */
-  reviseAllAssigneeDueDates: (taskId: string, newDate: string, revisedBy: string) => void;
+  reviseAllAssigneeDueDates: (taskId: string, newDate: string, revisedBy: string, sendBack?: boolean) => void;
   /**
    * The "ไม่ผ่าน" counterpart to markReviewed — a deliberate "this was marked
    * done but wasn't actually finished" correction, distinct from a normal
@@ -424,7 +446,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
         };
       }),
     })),
-  reviseDueDate: (taskId, newDate, reason, revisedBy) =>
+  reviseDueDate: (taskId, newDate, reason, revisedBy, sendBack = true) =>
     set((s) => ({
       tasks: s.tasks.map((t) => {
         if (t.id !== taskId) return t;
@@ -438,26 +460,19 @@ export const useTaskStore = create<TaskStore>((set) => ({
         useNotificationStore
           .getState()
           .notifyMany(t.assigneeIds, revisedBy, `${actorName} ปรับกำหนดส่งงาน "${t.title}" เป็น ${formatShortDate(newDate)} — ${reason}`);
-        // Revising the due date on a task already marked "เสร็จสิ้น" means it
-        // wasn't actually done — bounce it back to "กำลังทำ" as part of the
-        // same edit instead of a separate "เปิดงานใหม่" step (removed —
-        // this replaces it).
-        const wasDone = t.status === "done";
+        // งานที่ส่งแล้ว: หัวหน้าเลือกเองว่า "ส่งกลับให้แก้ไข" (กลับไป "กำลังทำ") หรือ
+        // "แค่เปลี่ยนวัน" (คงสถานะรอตรวจ — เดิมเด้งกลับเสมอ ลูกน้องต้องติ๊กเช็คลิสต์
+        // แล้วกดส่งใหม่ทั้งที่ไม่ได้มีงานเพิ่ม)
+        //
+        // ส่งกลับ + ส่งครั้งแรกทันกำหนด ⇒ ยึดวันใหม่ (originalDueDate) เหมือน rejectReview
+        // เดิมทางนี้ไม่ย้าย ⇒ กดหลังกำหนดเดิมผ่านไปแล้ว sweep เห็นงานเปิดอยู่เลยกำหนดเดิม
+        // แล้วหักคะแนนคนที่ส่งทันตั้งแต่แรก · ส่งครั้งแรกช้าอยู่แล้วยังยึดวันเดิม (ความช้ายังอยู่)
+        const bounce = t.status === "done" && sendBack;
         return {
           ...t,
           dueDate: newDate,
-          ...(wasDone
-            ? {
-                status: "in_progress" as const,
-                completedAt: undefined,
-                reviewedBy: undefined,
-                reviewedAt: undefined,
-                // Same reasoning as moveTask/rejectReview — otherwise every
-                // box stays ticked on a task that just got reopened.
-                checklist: clearedChecklist(t.checklist),
-                completedAssigneeIds: [],
-              }
-            : {}),
+          ...(bounce ? sendBackPatch(t) : {}),
+          ...(bounce && !t.missedDeadlineOnce ? { originalDueDate: newDate } : {}),
           revisions: [
             ...t.revisions,
             {
@@ -473,12 +488,15 @@ export const useTaskStore = create<TaskStore>((set) => ({
         };
       }),
     })),
-  reviseAssigneeDueDate: (taskId, assigneeId, newDate, revisedBy) =>
+  reviseAssigneeDueDate: (taskId, assigneeId, newDate, revisedBy, sendBack = false) =>
     set((s) => ({
       tasks: s.tasks.map((t) => {
         if (t.id !== taskId) return t;
         const previousEffective = t.assigneeDueDates?.[assigneeId] ?? t.dueDate;
-        if (previousEffective === newDate) return t;
+        // ส่งกลับให้แก้ไขได้แม้วันไม่เปลี่ยน — ตัวเลือกนี้ไม่ใช่แค่เรื่องวัน
+        const partSubmitted = t.status === "done" || (t.completedAssigneeIds ?? []).includes(assigneeId);
+        const bounce = sendBack && partSubmitted;
+        if (previousEffective === newDate && !bounce) return t;
         const now = new Date().toISOString();
         const existing = t.assigneeDueDateRevisions?.[assigneeId];
         const name = getUser(assigneeId)?.name ?? "มีคน";
@@ -487,7 +505,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
           "แก้ไขกำหนดส่งรายบุคคล",
           t.title,
           t.id,
-          `${name}: ${formatShortDate(previousEffective)} → ${formatShortDate(newDate)}`
+          `${name}: ${formatShortDate(previousEffective)} → ${formatShortDate(newDate)}${bounce ? " · ส่งกลับให้แก้ไข" : ""}`
         );
         if (revisedBy !== assigneeId) {
           const actorName = getUser(revisedBy)?.name ?? "มีคน";
@@ -496,11 +514,16 @@ export const useTaskStore = create<TaskStore>((set) => ({
             .notifyMany(
               [assigneeId],
               revisedBy,
-              `${actorName} ปรับกำหนดส่งของคุณในงาน "${t.title}" เป็น ${formatShortDate(newDate)}`
+              bounce
+                ? `${actorName} ส่งงาน "${t.title}" (ส่วนของคุณ) กลับให้แก้ไข — กำหนดส่งใหม่ ${formatShortDate(newDate)}`
+                : `${actorName} ปรับกำหนดส่งของคุณในงาน "${t.title}" เป็น ${formatShortDate(newDate)}`
             );
         }
+        // งานกลุ่ม: sweep ตัดสินรายคนด้วย assigneeDueDates ของคนนั้นอยู่แล้ว ⇒ ส่งกลับแล้ว
+        // ยึดวันใหม่นี้เอง ไม่ต้องขยับ originalDueDate ของทั้งงาน
         return {
           ...t,
+          ...(bounce ? sendBackPatch(t, assigneeId) : {}),
           assigneeDueDates: { ...(t.assigneeDueDates ?? {}), [assigneeId]: newDate },
           assigneeDueDateRevisions: {
             ...(t.assigneeDueDateRevisions ?? {}),
@@ -515,7 +538,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
         };
       }),
     })),
-  reviseAllAssigneeDueDates: (taskId, newDate, revisedBy) =>
+  reviseAllAssigneeDueDates: (taskId, newDate, revisedBy, sendBack = false) =>
     set((s) => ({
       tasks: s.tasks.map((t) => {
         if (t.id !== taskId) return t;
@@ -536,17 +559,31 @@ export const useTaskStore = create<TaskStore>((set) => ({
             revisedAt: now,
           };
         }
-        if (changedIds.length === 0) return t;
-        logActivity(revisedBy, "แก้ไขกำหนดส่งทั้งหมด", t.title, t.id, `ทุกคน (${changedIds.length} คน) → ${formatShortDate(newDate)}`);
-        const recipients = changedIds.filter((uid) => uid !== revisedBy);
+        const bounce = sendBack && t.status === "done";
+        if (changedIds.length === 0 && !bounce) return t;
+        logActivity(
+          revisedBy,
+          "แก้ไขกำหนดส่งทั้งหมด",
+          t.title,
+          t.id,
+          `ทุกคน (${changedIds.length} คน) → ${formatShortDate(newDate)}${bounce ? " · ส่งกลับให้แก้ไข" : ""}`
+        );
+        const recipients = (bounce ? t.assigneeIds : changedIds).filter((uid) => uid !== revisedBy);
         if (recipients.length > 0) {
           const actorName = getUser(revisedBy)?.name ?? "มีคน";
           useNotificationStore
             .getState()
-            .notifyMany(recipients, revisedBy, `${actorName} ปรับกำหนดส่งของคุณในงาน "${t.title}" เป็น ${formatShortDate(newDate)}`);
+            .notifyMany(
+              recipients,
+              revisedBy,
+              bounce
+                ? `${actorName} ส่งงาน "${t.title}" กลับให้แก้ไข — กำหนดส่งใหม่ ${formatShortDate(newDate)}`
+                : `${actorName} ปรับกำหนดส่งของคุณในงาน "${t.title}" เป็น ${formatShortDate(newDate)}`
+            );
         }
         return {
           ...t,
+          ...(bounce ? sendBackPatch(t) : {}),
           assigneeDueDates: nextDates,
           assigneeDueDateRevisions: nextRevisions,
           updatedAt: now,

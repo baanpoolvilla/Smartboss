@@ -472,13 +472,13 @@ export function TaskDetailSheet({
     setTaskAttachUploading(false);
   }
 
-  function submitRevision() {
+  function submitRevision(sendBack: boolean) {
     // Re-checked here, not just at the button that opens this form — the
     // form can outlive the permission that opened it (e.g. the viewer
     // switches identity mid-edit without closing the sheet), and a hidden
     // button alone doesn't stop a submit that's already on screen.
     if (!newDate || !reason.trim() || !task || !canEditMain) return;
-    reviseDueDate(task.id, new Date(newDate).toISOString(), reason.trim(), viewingAsUserId);
+    reviseDueDate(task.id, new Date(newDate).toISOString(), reason.trim(), viewingAsUserId, sendBack);
     setRevising(false);
     setNewDate("");
     setReason("");
@@ -1272,20 +1272,16 @@ export function TaskDetailSheet({
                   <Label className="text-xs">กำหนดส่งใหม่ (ใช้กับทุกคน)</Label>
                   <DatePickerField value={bulkDate} minDate={toDateInput(task.startDate)} onChange={setBulkDate} />
                 </div>
-                <div className="flex gap-2 justify-end">
-                  <Button size="sm" variant="ghost" onClick={() => setBulkRevising(false)}>ยกเลิก</Button>
-                  <Button
-                    size="sm"
-                    className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
-                    disabled={!bulkDate}
-                    onClick={() => {
-                      reviseAllAssigneeDueDates(task.id, bulkDate, viewingAsUserId);
-                      setBulkRevising(false);
-                    }}
-                  >
-                    ใช้กับทุกคน ({task.assigneeIds.length} คน)
-                  </Button>
-                </div>
+                <DueDateSaveButtons
+                  submitted={task.status === "done"}
+                  disabled={!bulkDate}
+                  label={`ใช้กับทุกคน (${task.assigneeIds.length} คน)`}
+                  onCancel={() => setBulkRevising(false)}
+                  onSave={(sendBack) => {
+                    reviseAllAssigneeDueDates(task.id, bulkDate, viewingAsUserId, sendBack);
+                    setBulkRevising(false);
+                  }}
+                />
               </div>
             )}
 
@@ -1316,20 +1312,16 @@ export function TaskDetailSheet({
                   <Label className="text-xs">กำหนดส่งใหม่</Label>
                   <DatePickerField value={perPersonDate} minDate={toDateInput(task.startDate)} onChange={setPerPersonDate} />
                 </div>
-                <div className="flex gap-2 justify-end">
-                  <Button size="sm" variant="ghost" onClick={() => setPerPersonRevising(false)}>ยกเลิก</Button>
-                  <Button
-                    size="sm"
-                    className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
-                    disabled={!perPersonTargetId || !perPersonDate}
-                    onClick={() => {
-                      reviseAssigneeDueDate(task.id, perPersonTargetId, perPersonDate, viewingAsUserId);
-                      setPerPersonRevising(false);
-                    }}
-                  >
-                    ยืนยัน
-                  </Button>
-                </div>
+                <DueDateSaveButtons
+                  submitted={task.status === "done" || (task.completedAssigneeIds ?? []).includes(perPersonTargetId)}
+                  disabled={!perPersonTargetId || !perPersonDate}
+                  label="ยืนยัน"
+                  onCancel={() => setPerPersonRevising(false)}
+                  onSave={(sendBack) => {
+                    reviseAssigneeDueDate(task.id, perPersonTargetId, perPersonDate, viewingAsUserId, sendBack);
+                    setPerPersonRevising(false);
+                  }}
+                />
               </div>
             )}
 
@@ -1406,17 +1398,13 @@ export function TaskDetailSheet({
                   <Label htmlFor="rev-reason" className="text-xs">เหตุผล</Label>
                   <Textarea id="rev-reason" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="ทำไมกำหนดส่งถึงเปลี่ยน?" />
                 </div>
-                <div className="flex gap-2 justify-end">
-                  <Button size="sm" variant="ghost" onClick={() => setRevising(false)}>ยกเลิก</Button>
-                  <Button
-                    size="sm"
-                    className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
-                    onClick={submitRevision}
-                    disabled={!newDate || !reason.trim()}
-                  >
-                    บันทึกการแก้ไข
-                  </Button>
-                </div>
+                <DueDateSaveButtons
+                  submitted={task.status === "done"}
+                  disabled={!newDate || !reason.trim()}
+                  label="บันทึกการแก้ไข"
+                  onCancel={() => setRevising(false)}
+                  onSave={submitRevision}
+                />
               </div>
             )}
           </div>
@@ -1978,5 +1966,53 @@ export function TaskDetailSheet({
       />
     )}
     </>
+  );
+}
+
+/**
+ * ปุ่มบันทึกของฟอร์มแก้กำหนดส่ง — งานที่ยังไม่ส่งมีปุ่มเดียวเหมือนเดิม งานที่ส่งแล้ว
+ * (รอตรวจ/เสร็จสิ้น) ให้หัวหน้าเลือกว่าแก้วันเพราะอะไร: ส่งกลับให้แก้ไข = กลับไป "กำลังทำ"
+ * เหมือนตรวจไม่ผ่าน · แค่เปลี่ยนวัน = คงสถานะไว้ ลูกน้องไม่ต้องทำอะไรเพิ่ม
+ * ทั้งสองทาง: ส่งครั้งแรกทันกำหนด ไม่นับว่าช้า (ดู reviseDueDate ใน task-store.ts)
+ */
+function DueDateSaveButtons({
+  submitted,
+  disabled,
+  label,
+  onCancel,
+  onSave,
+}: {
+  submitted: boolean;
+  disabled: boolean;
+  label: string;
+  onCancel: () => void;
+  onSave: (sendBack: boolean) => void;
+}) {
+  const primary = "bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white";
+  if (!submitted) {
+    return (
+      <div className="flex gap-2 justify-end">
+        <Button size="sm" variant="ghost" onClick={onCancel}>ยกเลิก</Button>
+        <Button size="sm" className={primary} disabled={disabled} onClick={() => onSave(false)}>
+          {label}
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      <p className="rounded-md bg-[var(--bg-soft)] px-2.5 py-2 text-xs text-[var(--ink-soft)]">
+        งานนี้ส่งแล้ว — แก้วันเพราะให้กลับไปแก้งาน หรือแค่ปรับวันให้ถูก?
+      </p>
+      <div className="flex flex-wrap gap-2 justify-end">
+        <Button size="sm" variant="ghost" onClick={onCancel}>ยกเลิก</Button>
+        <Button size="sm" variant="outline" disabled={disabled} onClick={() => onSave(false)}>
+          แค่เปลี่ยนวัน
+        </Button>
+        <Button size="sm" className={primary} disabled={disabled} onClick={() => onSave(true)}>
+          ส่งกลับให้แก้ไข
+        </Button>
+      </div>
+    </div>
   );
 }
