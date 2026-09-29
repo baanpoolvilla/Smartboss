@@ -186,9 +186,14 @@ export async function updateStatusAction(formData: FormData) {
   const changed = await updateWorkOrderStatus(s.orgId, id, status);
   // ปิดงาน = เดิน PM ที่ผูกไว้ไปรอบถัดไป (batch → single → fallback ตามอุปกรณ์)
   // ใบที่ปิดไปแล้วถูกกดปิดซ้ำ ต้องไม่เดิน PM ซ้ำ ไม่งั้นรอบกระโดดข้ามไปอีกช่วง
-  if (changed && status === "completed") await advanceLinkedPm(s.orgId, wo);
+  //
+  // ⚠ completedAt ติดใบงานไว้ตั้งแต่ปิดครั้งแรก (เปิดกลับไม่ล้าง) ⇒ ใบที่เคยปิดแล้ว = รอบ PM
+  // ของมันถูกเดินไปแล้ว: เปิดกลับมาแก้แล้วปิดอีก ห้ามเดินซ้ำ (รอบกระโดดข้ามหนึ่งช่วง)
+  // และเปลี่ยนเป็น "ยกเลิก" ห้ามข้ามรอบซ้ำ (รอบถัดไปที่ยังไม่ได้ทำจะหายไปเฉย ๆ)
+  const pmAlreadyAdvanced = wo.completedAt !== null;
+  if (changed && status === "completed" && !pmAlreadyAdvanced) await advanceLinkedPm(s.orgId, wo);
   // ยกเลิกใบงานจาก PM = ข้ามรอบนั้น ไม่งั้น cron สร้างใบเดิมขึ้นมาใหม่ทุกเช้า (ดู skipPmSchedule)
-  if (changed && status === "cancelled") await skipLinkedPm(s.orgId, wo);
+  if (changed && status === "cancelled" && !pmAlreadyAdvanced) await skipLinkedPm(s.orgId, wo);
   if (changed) await notifyStatusChanged(s.orgId, wo, status, s.userId);
 
   revalidatePath(`/maintenance/work-orders/${id}`);
@@ -322,7 +327,8 @@ export async function completeWorkOrderAction(formData: FormData) {
   });
   const changed = await updateWorkOrderStatus(s.orgId, id, "completed");
   if (changed) {
-    await advanceLinkedPm(s.orgId, wo);
+    // เคยปิดแล้วถูกเปิดกลับ = รอบ PM เดินไปแล้วตอนปิดครั้งแรก (ดู updateStatusAction)
+    if (wo.completedAt === null) await advanceLinkedPm(s.orgId, wo);
     await notifyStatusChanged(s.orgId, wo, "completed", s.userId);
   }
 
@@ -456,7 +462,7 @@ export async function deleteWorkOrderAction(formData: FormData) {
   if (!id) return;
   // ลบใบงานที่ยังเปิดอยู่จาก PM = ข้ามรอบนั้นด้วย (เหตุผลเดียวกับยกเลิก)
   const wo = await getWorkOrder(s.orgId, id);
-  if (wo && (wo.status === "open" || wo.status === "in_progress")) await skipLinkedPm(s.orgId, wo);
+  if (wo && (wo.status === "open" || wo.status === "in_progress") && wo.completedAt === null) await skipLinkedPm(s.orgId, wo);
   await deleteWorkOrder(s.orgId, id);
   // เก็บกวาดแจ้งเตือนของใบงานนี้ด้วย ไม่งั้นกระดิ่งค้างชี้ไปใบงานที่ไม่มีแล้ว
   // (ดู deleteNotificationsByReference's doc — บั๊กคลาสเดียวกับที่ report_task

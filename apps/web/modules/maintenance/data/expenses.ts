@@ -79,15 +79,37 @@ export function createExpense(orgId: string, data: ExpenseInput) {
 }
 
 /** สร้าง expense หลายรายการพร้อมกัน (ใบงานหลายบ้าน = 1 รายการ/บ้าน) */
+/**
+ * คืน false เมื่อเป็นคำขอซ้ำ (ไม่ได้บันทึก): คนเดิมเพิ่งบันทึกรายการเดียวกันเป๊ะ
+ * (ใบงาน/PM เดิม ยอดเดิม คำอธิบายเดิม) ภายใน 2 นาที — กดบันทึกซ้ำตอนอัปโหลดใบเสร็จช้า
+ * แล้วยอดค่าใช้จ่ายเบิ้ล
+ */
 export async function createExpensesForProperties(
   orgId: string,
   propertyIds: (string | null)[],
   base: Omit<ExpenseInput, "propertyId">
-) {
+): Promise<boolean> {
   const ids = propertyIds.length > 0 ? propertyIds : [null];
-  await prisma.$transaction(
-    ids.map((pid) =>
-      prisma.expense.create({
+  return prisma.$transaction(async (tx) => {
+    if (base.createdBy) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`expense-create:${orgId}:${base.createdBy}`}))`;
+      const recent = await tx.expense.findFirst({
+        where: {
+          orgId,
+          createdBy: base.createdBy,
+          workOrderId: base.workOrderId ?? null,
+          pmScheduleId: base.pmScheduleId ?? null,
+          amount: base.amount,
+          description: base.description ?? null,
+          isNoExpense: base.isNoExpense ?? false,
+          createdAt: { gte: new Date(Date.now() - 2 * 60 * 1000) },
+        },
+        select: { id: true },
+      });
+      if (recent) return false;
+    }
+    for (const pid of ids) {
+      await tx.expense.create({
         data: {
           orgId,
           workOrderId: base.workOrderId ?? null,
@@ -104,9 +126,10 @@ export async function createExpensesForProperties(
           expenseDate: base.expenseDate ?? new Date(),
           createdBy: base.createdBy ?? null,
         },
-      })
-    )
-  );
+      });
+    }
+    return true;
+  });
 }
 
 export async function deleteExpense(orgId: string, id: string) {

@@ -10,6 +10,7 @@ import {
   createPurchaseOrder,
   getPurchaseOrder,
   updatePurchaseOrder,
+  transitionPurchaseOrder,
   deletePurchaseOrder,
   addPoComment,
   deletePoComment,
@@ -104,7 +105,7 @@ export async function createPoAction(formData: FormData) {
   );
   const now = new Date();
 
-  await createPurchaseOrder(s.orgId, {
+  const { duplicate } = await createPurchaseOrder(s.orgId, {
     title: d.title,
     description: d.description ?? null,
     // เปิดจากใบงาน = ใช้บ้านของใบงานนั้นเสมอ ไม่ให้เลือกใหม่ให้ขัดกัน
@@ -122,6 +123,7 @@ export async function createPoAction(formData: FormData) {
     poCreatedBy: openPo ? s.userId : null,
     poCreatedAt: openPo ? now : null,
   });
+  if (duplicate && prImageUrls.length > 0) await deleteFiles(prImageUrls).catch(() => 0);
 
   revalidatePath("/maintenance/purchase-orders");
   if (linkedWo) {
@@ -202,13 +204,13 @@ export async function approveNormalAction(formData: FormData) {
   const assignee = String(formData.get("assignee") ?? "") || null;
   if (!id) return;
   const po = await getPurchaseOrder(s.orgId, id);
-  await updatePurchaseOrder(s.orgId, id, {
+  const changed = await transitionPurchaseOrder(s.orgId, id, ["pending"], {
     status: "approved",
     poAssignedTo: assignee,
     poCreatedBy: s.userId,
     poCreatedAt: new Date(),
   });
-  if (assignee && po) {
+  if (changed && assignee && po) {
     await notifyUser(s.orgId, assignee, {
       title: `📦 ได้รับมอบ PO: ${po.title}`,
       body: "กรุณาดำเนินการสั่งซื้อและกรอกราคาตอนรับของ",
@@ -228,12 +230,12 @@ export async function approveEmergencyAction(formData: FormData) {
   if (!id) return;
   const po = await getPurchaseOrder(s.orgId, id);
   if (!po) return;
-  await updatePurchaseOrder(s.orgId, id, {
+  const changed = await transitionPurchaseOrder(s.orgId, id, ["pending"], {
     status: "received",
     receivedBy: s.userId,
     receivedAt: new Date(),
   });
-  await poExpense(s.orgId, po, Number(po.totalPrice), s.userId, "(ฉุกเฉิน)");
+  if (changed) await poExpense(s.orgId, po, Number(po.totalPrice), s.userId, "(ฉุกเฉิน)");
   revalidatePath(`/maintenance/purchase-orders/${id}`);
   redirect("/maintenance/purchase-orders");
 }
@@ -242,7 +244,8 @@ export async function rejectAction(formData: FormData) {
   const s = await ceoOnly();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
-  await updatePurchaseOrder(s.orgId, id, { status: "cancelled" });
+  // ปฏิเสธได้เฉพาะที่ยังไม่ได้ซื้อ — ใบที่สั่งซื้อ/รับของไปแล้วมีค่าใช้จ่ายผูกอยู่
+  await transitionPurchaseOrder(s.orgId, id, ["pending", "approved"], { status: "cancelled" });
   revalidatePath(`/maintenance/purchase-orders/${id}`);
   redirect("/maintenance/purchase-orders");
 }
@@ -304,7 +307,7 @@ export async function confirmOrderAction(formData: FormData) {
     String(formData.get("receiverAssignedTo") ?? "") || null
   );
 
-  await updatePurchaseOrder(s.orgId, id, {
+  const changed = await transitionPurchaseOrder(s.orgId, id, ["approved"], {
     status: "ordered",
     items: poItemsToJson(items),
     totalPrice: total,
@@ -315,6 +318,11 @@ export async function confirmOrderAction(formData: FormData) {
     orderedBy: s.userId,
     orderedAt: new Date(),
   });
+  // กดซ้ำ/ใบนี้ผ่านขั้นนี้ไปแล้ว — ไม่ลงค่าใช้จ่ายซ้ำ ไม่แจ้งซ้ำ รูปที่เพิ่งอัปโหลดทิ้งไป
+  if (!changed) {
+    if (urls.length > 0) await deleteFiles(urls).catch(() => 0);
+    redirect("/maintenance/purchase-orders");
+  }
   await poExpense(s.orgId, po, total, s.userId);
 
   // แจ้งคนรับของ เว้นแต่เขาคือคนกดสั่งซื้อเอง (จะได้ไม่เตือนตัวเอง)
@@ -348,12 +356,13 @@ export async function receiveAction(formData: FormData) {
   );
   const all = [...po.receiptImageUrls, ...urls];
 
-  await updatePurchaseOrder(s.orgId, id, {
+  const changed = await transitionPurchaseOrder(s.orgId, id, ["ordered"], {
     status: "received",
     ...(all.length > 0 ? { receiptImageUrl: all[0], receiptImageUrls: all } : {}),
     receivedBy: s.userId,
     receivedAt: new Date(),
   });
+  if (!changed && urls.length > 0) await deleteFiles(urls).catch(() => 0);
   revalidatePath(`/maintenance/purchase-orders/${id}`);
   redirect("/maintenance/purchase-orders");
 }
@@ -381,7 +390,7 @@ export async function selfReceiveAction(formData: FormData) {
   );
   const all = [...po.receiptImageUrls, ...urls];
 
-  await updatePurchaseOrder(s.orgId, id, {
+  const changed = await transitionPurchaseOrder(s.orgId, id, ["approved", "ordered"], {
     status: "received",
     items: poItemsToJson(items),
     totalPrice: total,
@@ -389,7 +398,8 @@ export async function selfReceiveAction(formData: FormData) {
     receivedBy: s.userId,
     receivedAt: new Date(),
   });
-  await poExpense(s.orgId, po, total, s.userId, "(ซื้อเอง)");
+  if (changed) await poExpense(s.orgId, po, total, s.userId, "(ซื้อเอง)");
+  else if (urls.length > 0) await deleteFiles(urls).catch(() => 0);
   revalidatePath(`/maintenance/purchase-orders/${id}`);
   redirect("/maintenance/purchase-orders");
 }

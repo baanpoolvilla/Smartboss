@@ -44,11 +44,30 @@ export interface PoInput {
   poCreatedAt?: Date | null;
 }
 
-/** จองเลขที่กับสร้างใบสั่งซื้อใน transaction เดียว — ดู lib/document-code.ts */
+/**
+ * จองเลขที่กับสร้างใบสั่งซื้อใน transaction เดียว — ดู lib/document-code.ts
+ *
+ * กันกดเปิด PR ซ้ำ: คนเดิม หัวข้อเดิม ใบงานเดิม ภายใน 2 นาที = คำขอซ้ำ คืนใบเดิม
+ * (`duplicate: true`) แทนการเปิดใบใหม่ — กติกาเดียวกับ createWorkOrder
+ */
 export function createPurchaseOrder(orgId: string, data: PoInput) {
   return prisma.$transaction(async (tx) => {
+    if (data.createdBy) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`po-create:${orgId}:${data.createdBy}`}))`;
+      const recent = await tx.purchaseOrder.findFirst({
+        where: {
+          orgId,
+          createdBy: data.createdBy,
+          title: data.title,
+          workOrderId: data.workOrderId ?? null,
+          status: { not: "cancelled" },
+          createdAt: { gte: new Date(Date.now() - 2 * 60 * 1000) },
+        },
+      });
+      if (recent) return { purchaseOrder: recent, duplicate: true as const };
+    }
     const code = await nextPurchaseOrderCode(tx, orgId);
-    return tx.purchaseOrder.create({
+    const purchaseOrder = await tx.purchaseOrder.create({
       data: {
         orgId,
         code,
@@ -70,6 +89,7 @@ export function createPurchaseOrder(orgId: string, data: PoInput) {
         poCreatedAt: data.poCreatedAt ?? null,
       },
     });
+    return { purchaseOrder, duplicate: false as const };
   });
 }
 
@@ -79,6 +99,23 @@ export async function updatePurchaseOrder(
   data: Record<string, unknown>
 ) {
   await prisma.purchaseOrder.updateMany({ where: { orgId, id }, data });
+}
+
+/**
+ * เปลี่ยนสถานะ PR/PO เฉพาะเมื่อยังอยู่ในสถานะ `from` — คืน true เมื่อคำขอนี้เป็นคนเปลี่ยนจริง
+ *
+ * ขั้นที่ลงค่าใช้จ่าย (ยืนยันสั่งซื้อ / อนุมัติฉุกเฉิน / ซื้อเอง) ต้องใช้ตัวนี้แล้วลงค่าใช้จ่าย
+ * เฉพาะเมื่อได้ true: เดิมกดซ้ำหรือสองคนกดพร้อมกัน = ลงค่าใช้จ่ายสองก้อน ยอดเงินเบิ้ล
+ * และกดขั้นเดิมกับใบที่ผ่านขั้นนั้นไปแล้วได้ (ไม่มีการเช็คสถานะเลย)
+ */
+export async function transitionPurchaseOrder(
+  orgId: string,
+  id: string,
+  from: string[],
+  data: Record<string, unknown>
+): Promise<boolean> {
+  const res = await prisma.purchaseOrder.updateMany({ where: { orgId, id, status: { in: from } }, data });
+  return res.count > 0;
 }
 
 export async function deletePurchaseOrder(orgId: string, id: string) {

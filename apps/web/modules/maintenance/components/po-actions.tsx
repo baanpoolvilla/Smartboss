@@ -1,5 +1,7 @@
 "use client";
 
+import { SubmitButton } from "./submit-button";
+
 import { useState } from "react";
 import {
   Check,
@@ -224,9 +226,9 @@ export function ApproveEmergencyButton({
               </Button>
               <form action={action}>
                 <input type="hidden" name="id" value={id} />
-                <Button type="submit" variant="danger" size="sm">
+                <SubmitButton variant="danger" size="sm">
                   อนุมัติ (จบงาน)
-                </Button>
+                </SubmitButton>
               </form>
             </>
           }
@@ -443,12 +445,12 @@ export function RejectButton({ id, action }: { id: string; action: Action }) {
   return (
     <form action={action} className="flex-1">
       <input type="hidden" name="id" value={id} />
-      <button
-        type="submit"
-        className="flex h-11 w-full items-center justify-center gap-2 rounded-(--radius) border border-[#DC2626] text-sm font-medium text-[#DC2626] hover:bg-[#FEF2F2]"
+      <SubmitButton
+        raw
+        className="flex h-11 w-full items-center justify-center gap-2 rounded-(--radius) border border-[#DC2626] text-sm font-medium text-[#DC2626] hover:bg-[#FEF2F2] disabled:opacity-60"
       >
         <X className="h-4 w-4" /> ปฏิเสธ
-      </button>
+      </SubmitButton>
     </form>
   );
 }

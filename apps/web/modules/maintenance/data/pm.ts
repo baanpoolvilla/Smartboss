@@ -28,33 +28,38 @@ export interface PmInput {
  * แต่ละแผนเปิดใบงานอัตโนมัติของตัวเอง กลายเป็นใบงานหน้าตาเหมือนกันโผล่ซ้ำ ๆ)
  */
 export async function createPmSchedule(orgId: string, data: PmInput) {
-  const existing = await prisma.pmSchedule.findFirst({
-    where: {
-      orgId,
-      isActive: true,
-      propertyId: data.propertyId,
-      assetId: data.assetId ?? null,
-      title: { equals: data.title.trim(), mode: "insensitive" },
-    },
-  });
-  if (existing) return existing;
-  return prisma.pmSchedule.create({
-    data: {
-      orgId,
-      propertyId: data.propertyId,
-      assetId: data.assetId ?? null,
-      title: data.title,
-      description: data.description ?? null,
-      frequency: data.frequency,
-      nextDueDate: toDateOnly(data.nextDueDate),
-      anchorDate: toDateOnly(data.anchorDate ?? data.nextDueDate),
-      roundsPerYear: data.roundsPerYear ?? null,
-      totalRounds: data.totalRounds ?? null,
-      assignedTo: data.assignedTo ?? null,
-      ccUserIds: data.ccUserIds ?? [],
-      requiresExpense: data.requiresExpense ?? true,
-      createdBy: data.createdBy ?? null,
-    },
+  // เช็คซ้ำแล้วค่อยสร้าง ต้องล็อกก่อน — ไม่งั้นกดบันทึกสองทีพร้อมกันผ่านการเช็คทั้งคู่
+  // แล้วได้แผนซ้ำ ⇒ cron เปิดใบงานเบิ้ลให้ทุกรอบตลอดไป (แยกไม่ออกว่าแผนไหนตัวจริง)
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`pm-create:${orgId}:${data.propertyId}:${data.assetId ?? ""}:${data.title.trim().toLowerCase()}`}))`;
+    const existing = await tx.pmSchedule.findFirst({
+      where: {
+        orgId,
+        isActive: true,
+        propertyId: data.propertyId,
+        assetId: data.assetId ?? null,
+        title: { equals: data.title.trim(), mode: "insensitive" },
+      },
+    });
+    if (existing) return existing;
+    return tx.pmSchedule.create({
+      data: {
+        orgId,
+        propertyId: data.propertyId,
+        assetId: data.assetId ?? null,
+        title: data.title,
+        description: data.description ?? null,
+        frequency: data.frequency,
+        nextDueDate: toDateOnly(data.nextDueDate),
+        anchorDate: toDateOnly(data.anchorDate ?? data.nextDueDate),
+        roundsPerYear: data.roundsPerYear ?? null,
+        totalRounds: data.totalRounds ?? null,
+        assignedTo: data.assignedTo ?? null,
+        ccUserIds: data.ccUserIds ?? [],
+        requiresExpense: data.requiresExpense ?? true,
+        createdBy: data.createdBy ?? null,
+      },
+    });
   });
 }
 

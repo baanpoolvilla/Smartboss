@@ -1,5 +1,7 @@
 "use client";
 
+import { SubmitButton } from "./submit-button";
+
 import { useState } from "react";
 import {
   CheckCircle2,
@@ -33,12 +35,12 @@ export function StartJobButton({
     <form action={action}>
       <input type="hidden" name="id" value={id} />
       <input type="hidden" name="status" value="in_progress" />
-      <button
-        type="submit"
-        className="flex h-[52px] w-full items-center justify-center gap-2 rounded-(--radius) bg-[#2E7D32] text-base font-bold text-white hover:brightness-95"
+      <SubmitButton
+        raw
+        className="flex h-[52px] w-full items-center justify-center gap-2 rounded-(--radius) bg-[#2E7D32] text-base font-bold text-white hover:brightness-95 disabled:opacity-60"
       >
         <PlayCircle className="h-6 w-6" /> รับงาน — เริ่มดำเนินการ
-      </button>
+      </SubmitButton>
     </form>
   );
 }
@@ -456,9 +458,9 @@ export function CommentComposer({ action }: { action: Action }) {
             ariaLabel="เพิ่มความคิดเห็น"
           />
         </div>
-        <Button type="submit" size="icon" aria-label="ส่งความคิดเห็น">
+        <SubmitButton size="icon" aria-label="ส่งความคิดเห็น" pendingText={<Send className="h-4 w-4 opacity-50" />}>
           <Send className="h-4 w-4" />
-        </Button>
+        </SubmitButton>
       </div>
     </form>
   );

@@ -11,7 +11,7 @@ import {
 } from "@/modules/maintenance/data/expenses";
 import { getWorkOrder } from "@/modules/maintenance/data/work-orders";
 import { getPmSchedule } from "@/modules/maintenance/data/pm";
-import { putFile } from "@/modules/maintenance/lib/storage";
+import { putFile, deleteFiles } from "@/modules/maintenance/lib/storage";
 
 const schema = z.object({
   costType: z.enum(["work_order", "pm"]),
@@ -65,7 +65,7 @@ export async function createExpenseAction(formData: FormData) {
       ? await putFile(`${s.orgId}/maintenance/receipts`, file)
       : null;
 
-  await createExpensesForProperties(s.orgId, propertyIds, {
+  const saved = await createExpensesForProperties(s.orgId, propertyIds, {
     workOrderId,
     pmScheduleId,
     amount,
@@ -78,6 +78,8 @@ export async function createExpenseAction(formData: FormData) {
     isNoExpense,
     createdBy: s.userId,
   });
+  // คำขอซ้ำ — รูปใบเสร็จที่เพิ่งอัปโหลดมากับคำขอนี้ไม่มีรายการไหนใช้
+  if (!saved && receiptUrl) await deleteFiles([receiptUrl]).catch(() => 0);
 
   revalidatePath("/maintenance/expenses");
   redirect("/maintenance/expenses");
