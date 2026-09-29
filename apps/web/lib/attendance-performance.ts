@@ -162,9 +162,47 @@ export async function dockAttendance(): Promise<{
     }
   }
 
+  const reactivated = await reactivateAutoRefunds(events);
   const recorded = await recordPerformanceEvents(events);
   const refunded = await refundNoLongerValidDocks(from, todayInThailand, settingsByOrg);
-  return { scanned: rows.length, recorded, refunded, recalculated };
+  return { scanned: rows.length, recorded: recorded + reactivated, refunded, recalculated };
+}
+
+/**
+ * วันที่ระบบเคย "คืนคะแนนอัตโนมัติ" ไปแล้ว แต่ตอนนี้กลับมาเข้าเกณฑ์อีก (เช่น เปลี่ยนเกณฑ์ไปมา,
+ * ใบลาถูกยกเลิกทีหลัง, แก้เวลากลับ) — หักใหม่ไม่ได้ เพราะรายการหักเดิมยังอยู่ (unique key) แค่มีรายการ
+ * คืนหักล้างไว้ ⇒ ลบรายการคืนนั้นทิ้ง รายการหักเดิมจึงกลับมามีผล (เจอจริง: เกณฑ์ 0 → 16 → 0
+ * คืนไป 9 ครั้งแล้วหักกลับไม่ได้)
+ *
+ * เฉพาะการคืนที่ระบบทำเอง (หมายเหตุขึ้นต้น "คืนคะแนน " จาก refundNoLongerValidDocks) — การยกเว้นที่
+ * HR สั่ง (สคริปต์ excuse/reconcile: "ยกเว้น…", "แก้ไขค่าที่บันทึกผิด…") ไม่แตะเด็ดขาด
+ * หมวดต้องตรงกัน (สายเดิม → วันนี้ยังสาย) ถ้าเปลี่ยนหมวด (สาย → ขาด) หมวดใหม่ถูกหักเป็นรายการใหม่เองอยู่แล้ว
+ */
+async function reactivateAutoRefunds(events: PerformanceEventInput[]): Promise<number> {
+  if (events.length === 0) return 0;
+  const originals = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.performanceEvent.findMany({
+      where: {
+        source: "workforce",
+        refType: "attendance_day",
+        OR: events.map((e) => ({ orgId: e.orgId, category: e.category, refId: e.refId })),
+      },
+      select: { id: true },
+    })
+  );
+  if (originals.length === 0) return 0;
+  const res = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.performanceEvent.deleteMany({
+      where: {
+        source: "workforce",
+        refType: "attendance_day_correction",
+        refId: { in: originals.map((o) => o.id) },
+        note: { startsWith: "คืนคะแนน " },
+        createdBy: null,
+      },
+    })
+  );
+  return res.count;
 }
 
 type OrgSettings = { enabled: boolean; lateThresholdMinutes: number; missingPunchCountsAsAbsent: boolean };
