@@ -62,6 +62,21 @@ function withFrameProtection(res: NextResponse, pathname: string): NextResponse 
   return res;
 }
 
+/**
+ * redirect ไปโดเมนที่ผู้ใช้เปิดอยู่จริง (Host / X-Forwarded-Host ที่ Caddy ส่งต่อมา)
+ * ห้ามใช้ new URL(path, req.url) ตรง ๆ: บนเซิร์ฟเวอร์ Next รันหลัง Caddy ที่ 127.0.0.1:3000
+ * req.url จึงอาจเป็น https://localhost:3000/... ผู้ใช้โดนพาไป localhost แล้วเข้าไม่ได้
+ * (เกิดตอน access token หมดอายุแล้วเปิดแอป/กดแจ้งเตือน — login ใหม่แล้วหาย)
+ * ใช้ path ล้วนเป็น Location ไม่ได้ — proxy ของ Next โยน "Invalid URL"
+ */
+function redirectTo(req: NextRequest, url: URL): NextResponse {
+  const first = (v: string | null) => v?.split(",")[0]?.trim() || null;
+  const host = first(req.headers.get("x-forwarded-host")) ?? first(req.headers.get("host"));
+  const proto = first(req.headers.get("x-forwarded-proto")) ?? req.nextUrl.protocol.replace(":", "");
+  const origin = host ? `${proto}://${host}` : req.nextUrl.origin;
+  return NextResponse.redirect(new URL(url.pathname + url.search, origin));
+}
+
 export async function proxy(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
 
@@ -83,11 +98,11 @@ export async function proxy(req: NextRequest) {
     if (!pathname.startsWith("/api/")) {
       const refreshUrl = new URL("/api/auth/refresh", req.url);
       refreshUrl.searchParams.set("next", pathname + search);
-      return withFrameProtection(NextResponse.redirect(refreshUrl), pathname);
+      return withFrameProtection(redirectTo(req, refreshUrl), pathname);
     }
     const loginUrl = new URL("/login", req.url);
     loginUrl.searchParams.set("next", pathname + search);
-    const res = NextResponse.redirect(loginUrl);
+    const res = redirectTo(req, loginUrl);
     // ล้าง access cookie ที่หมดอายุทิ้ง
     if (token) res.cookies.delete(COOKIE_ACCESS);
     return withFrameProtection(res, pathname);

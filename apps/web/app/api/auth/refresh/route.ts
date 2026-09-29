@@ -78,6 +78,21 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true });
 }
 
+/**
+ * redirect ไปโดเมนที่ผู้ใช้เปิดอยู่จริง (Host / X-Forwarded-Host ที่ Caddy ส่งต่อมา)
+ * ห้ามใช้ new URL(path, req.url) ตรง ๆ: บนเซิร์ฟเวอร์ Next รันหลัง Caddy ที่ 127.0.0.1:3000
+ * req.url จึงอาจเป็น https://localhost:3000/... ผู้ใช้โดนพาไป localhost แล้วเข้าไม่ได้
+ * (เกิดตอน access token หมดอายุแล้วเปิดแอป/กดแจ้งเตือน — login ใหม่แล้วหาย)
+ * ใช้ path ล้วนเป็น Location ไม่ได้ — proxy ของ Next โยน "Invalid URL"
+ */
+function redirectTo(req: NextRequest, url: URL): NextResponse {
+  const first = (v: string | null) => v?.split(",")[0]?.trim() || null;
+  const host = first(req.headers.get("x-forwarded-host")) ?? first(req.headers.get("host"));
+  const proto = first(req.headers.get("x-forwarded-proto")) ?? req.nextUrl.protocol.replace(":", "");
+  const origin = host ? `${proto}://${host}` : req.nextUrl.origin;
+  return NextResponse.redirect(new URL(url.pathname + url.search, origin));
+}
+
 /** ปลายทางภายในเว็บเท่านั้น — กัน open redirect (//evil.com, https://...) */
 function safeNext(next: string | null): string {
   if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) return "/";
@@ -96,16 +111,16 @@ export async function GET(req: NextRequest) {
   const next = safeNext(req.nextUrl.searchParams.get("next"));
   const retried = req.nextUrl.searchParams.get("retry") === "1";
   const error = await refreshSession(req);
-  if (!error) return NextResponse.redirect(new URL(next, req.url));
+  if (!error) return redirectTo(req, new URL(next, req.url));
   // คำขอที่วิ่งพร้อมกันต่ออายุไปก่อน — ลองอีกรอบเดียว (ตอนนั้นเบราว์เซอร์ควรได้ cookie ใหม่แล้ว)
   // ถ้ายังไม่ได้อีก ไปหน้า login แทนที่จะวนไม่จบ
   if (error === GRACE && !retried) {
     const again = new URL("/api/auth/refresh", req.url);
     again.searchParams.set("next", next);
     again.searchParams.set("retry", "1");
-    return NextResponse.redirect(again);
+    return redirectTo(req, again);
   }
   const login = new URL("/login", req.url);
   if (next !== "/") login.searchParams.set("next", next);
-  return NextResponse.redirect(login);
+  return redirectTo(req, login);
 }
