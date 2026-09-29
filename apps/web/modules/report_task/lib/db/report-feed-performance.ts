@@ -104,6 +104,21 @@ export async function recordReportStickerEvents(
   // ยกเลิกได้เฉพาะคนที่มีสิทธิ์ให้ตั้งแต่แรก (isOwner) — ตรวจจาก session.userId
   // ที่ route.ts ส่งมา (`removedBy`) ไม่ใช่จาก request body ที่แก้เองได้
   if (removedBy && owners.has(removedBy)) {
+    // คืนคะแนนลงวันเดียวกับที่หักไป — แบบเดียวกับสติกเกอร์บนงาน (task-repo.ts)
+    const originals =
+      removals.length > 0
+        ? await prisma.performanceEvent.findMany({
+            where: {
+              orgId,
+              source: "report_task",
+              category: "task_manual_dock",
+              refType: "report_post_reaction",
+              refId: { in: removals.map((r) => r.reaction.id) },
+            },
+            select: { refId: true, occurredAt: true },
+          })
+        : [];
+    const originalAt = new Map(originals.map((o) => [o.refId, o.occurredAt] as const));
     for (const { post, reaction } of removals) {
       const points = pointsById.get(reaction.stickerId);
       if (points === undefined || points === 0) continue;
@@ -113,7 +128,7 @@ export async function recordReportStickerEvents(
         userId: post.authorId,
         source: "report_task",
         category: "task_manual_dock",
-        occurredAt: new Date(),
+        occurredAt: originalAt.get(reaction.id) ?? new Date(),
         points: -points,
         refType: "report_post_reaction_undo",
         refId: reaction.id,

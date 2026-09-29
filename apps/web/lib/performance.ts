@@ -221,6 +221,10 @@ export async function recordPerformanceEvents(
 
   const rows = events
     .filter((e) => {
+      // การคืนคะแนน (…_undo / …_correction) ต้องผ่านเสมอ — มันลงวันเดียวกับรายการที่หักไป
+      // ถ้ารายการนั้นอยู่ก่อนวันเริ่มนับ (ตั้งวันเริ่มนับทีหลัง) หรือบริษัทปิดระบบคะแนนไว้
+      // แล้วกรองทิ้ง = หักค้างตลอดไป คืนไม่ได้ (กติกาเดียวกับคำร้องขอแก้ไขคะแนน)
+      if (isReversalEvent(e)) return true;
       const st = settingsByOrg.get(e.orgId);
       if (st?.enabled === false) return false;
       // จุดเดียวที่ทุก cron/โมดูลผ่าน — กันทั้ง cron ลงเวลาที่ย้อนดู 45 วัน และ sweep
@@ -288,7 +292,7 @@ export async function recordPerformanceEvent(input: PerformanceEventInput): Prom
 type ReversibleEvent = { id: string; userId: string; category: string; refType: string | null; refId: string | null };
 
 /** เหตุการณ์นี้เป็นตัวยกเลิก/คืนคะแนนของอีกรายการหรือเปล่า */
-export function isReversalEvent(e: Pick<ReversibleEvent, "refType">): boolean {
+export function isReversalEvent(e: { refType?: string | null }): boolean {
   return Boolean(e.refType && (e.refType.endsWith("_undo") || e.refType.endsWith("_correction")));
 }
 

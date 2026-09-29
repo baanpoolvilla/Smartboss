@@ -216,12 +216,12 @@ export async function POST(request?: Request) {
         refType: { in: ["report_round", "report_round_undo"] },
         refId: { gte: reconcileFloorDay < notBeforeDay ? reconcileFloorDay : notBeforeDay },
       },
-      select: { refId: true, category: true, refType: true, points: true },
+      select: { refId: true, category: true, refType: true, points: true, occurredAt: true },
     });
-    const priorByRefId = new Map<string, { category: string; refType: string; points: number }[]>();
+    const priorByRefId = new Map<string, { category: string; refType: string; points: number; occurredAt: Date }[]>();
     for (const e of dayRangeEvents) {
       const list = priorByRefId.get(e.refId!) ?? [];
-      list.push({ category: e.category, refType: e.refType!, points: Number(e.points) });
+      list.push({ category: e.category, refType: e.refType!, points: Number(e.points), occurredAt: e.occurredAt });
       priorByRefId.set(e.refId!, list);
     }
 
@@ -261,7 +261,9 @@ export async function POST(request?: Request) {
           source: "report_task",
           category: original.category as "report_missed" | "report_late",
           points: -original.points,
-          occurredAt: new Date(),
+          // วันเดียวกับที่หักไป — คะแนนนับตามเดือนของ occurredAt ถ้าใส่วันนี้ การคืนคะแนนข้ามเดือน
+          // ไปโผล่เดือนใหม่ (+2 ลอย ๆ "0 ครั้ง") ส่วนเดือนเดิมยังโดนหักค้าง
+          occurredAt: original.occurredAt,
           refType: "report_round_undo",
           refId,
           note:
@@ -293,7 +295,8 @@ export async function POST(request?: Request) {
     // เช็คแล้วผ่านตั้งแต่ต้นฟังก์ชัน, scoringStartDate กรองย้อนหลังเผื่อบริษัท
     // ตั้งวันเริ่มนับคะแนนไว้เหมือนที่ recordPerformanceEvents ทำ
     const rows = events
-      .filter((e) => !settings.scoringStartDate || e.occurredAt >= settings.scoringStartDate)
+      // การคืนคะแนนลงวันเดียวกับที่หักไป — ห้ามกรองด้วยวันเริ่มนับ (ดู recordPerformanceEvents)
+      .filter((e) => e.refType === "report_round_undo" || !settings.scoringStartDate || e.occurredAt >= settings.scoringStartDate)
       .map((e) => ({
         orgId: e.orgId,
         userId: e.userId,

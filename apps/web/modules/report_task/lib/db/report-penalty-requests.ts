@@ -163,6 +163,12 @@ export async function decidePenaltyRequest(
     if (!result.ok) continue; // ชนกับคนอื่น — อ่านใหม่แล้วลองอีกรอบ
 
     if (decision === "approved") {
+      // คืนคะแนนลงวันเดียวกับที่หักไป (ดู reports/sweep) — ไม่งั้นอนุมัติเดือนถัดไปแล้ว
+      // เดือนที่โดนหักยังติดลบ ส่วนเดือนนี้ได้ +คะแนนลอย ๆ
+      const original = await prisma.performanceEvent.findFirst({
+        where: { orgId, source: "report_task", category: updated.category, refType: "report_round", refId: updated.refId },
+        select: { occurredAt: true },
+      });
       // ไม่ใช้ recordPerformanceEvents (ซึ่งเช็ค performance_settings.enabled
       // และแทนที่ points ด้วยค่า rulePoints ปัจจุบันถ้าไม่ระบุ) — ตรงนี้ต้อง
       // คืนคะแนน "เท่าที่หักไปจริง" เสมอ ไม่ว่าตอนนี้บริษัทจะปิดระบบคะแนนไว้
@@ -175,7 +181,7 @@ export async function decidePenaltyRequest(
             source: "report_task",
             category: updated.category,
             points: -updated.points,
-            occurredAt: new Date(),
+            occurredAt: original?.occurredAt ?? new Date(),
             refType: "report_round_undo",
             refId: updated.refId,
             note: `อนุมัติคำร้อง: ${updated.reason}`,
