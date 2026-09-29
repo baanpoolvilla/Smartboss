@@ -278,6 +278,32 @@ export async function recordPerformanceEvent(input: PerformanceEventInput): Prom
   await recordPerformanceEvents([input]);
 }
 
+/*
+ * การยกเลิก/คืนคะแนนไม่ลบเหตุการณ์เดิม แต่ออกเหตุการณ์ใหม่ที่แต้มหักล้างกัน:
+ *   "<refType>_undo"          refId เดียวกับของเดิม (สติกเกอร์, รอบรายงาน)
+ *   "attendance_day_correction" refId = id ของเหตุการณ์เดิม
+ * แต้มรวมถูกอยู่แล้วเพราะบวกลบกันเอง แต่ "จำนวนครั้ง" ต้องไม่นับทั้งคู่ — ไม่งั้นโดนหัก 1 ครั้ง
+ * แล้วยกเลิก ขึ้นเป็น "2 ครั้ง 0 คะแนน" (เจอจริง: "มาสาย 2 · 0")
+ */
+type ReversibleEvent = { id: string; userId: string; refType: string | null; refId: string | null };
+
+/** เหตุการณ์นี้เป็นตัวยกเลิก/คืนคะแนนของอีกรายการหรือเปล่า */
+export function isReversalEvent(e: Pick<ReversibleEvent, "refType">): boolean {
+  return Boolean(e.refType && (e.refType.endsWith("_undo") || e.refType.endsWith("_correction")));
+}
+
+/** คืนตัวเช็คว่ารายการไหน "ถูกยกเลิกไปแล้ว" จากเหตุการณ์ชุดเดียวกัน */
+export function reversedChecker(events: ReversibleEvent[]): (e: ReversibleEvent) => boolean {
+  const keys = new Set<string>();
+  for (const e of events) {
+    if (!e.refType || !e.refId) continue;
+    if (e.refType.endsWith("_undo")) keys.add(`${e.userId}|${e.refType.slice(0, -"_undo".length)}|${e.refId}`);
+    else if (e.refType.endsWith("_correction")) keys.add(`${e.userId}|id|${e.refId}`);
+  }
+  return (e) =>
+    keys.has(`${e.userId}|id|${e.id}`) || Boolean(e.refType && e.refId && keys.has(`${e.userId}|${e.refType}|${e.refId}`));
+}
+
 export interface UserScorecard {
   userId: string;
   name: string;
@@ -286,8 +312,9 @@ export interface UserScorecard {
   score: number;
   grade: string;
   bySource: Record<PerformanceSource, number>;
-  /** แยกตามชนิดเหตุการณ์ — ไว้บอกว่าเสียคะแนนเพราะอะไรมากสุด */
+  /** แยกตามชนิดเหตุการณ์ — ไว้บอกว่าเสียคะแนนเพราะอะไรมากสุด · count = ครั้งที่โดนจริง ไม่รวมที่ยกเลิกแล้ว */
   byCategory: { category: string; label: string; points: number; count: number }[];
+  /** จำนวนครั้งที่โดนจริง (ไม่รวมที่ยกเลิก/คืนคะแนนแล้ว และไม่นับตัวรายการยกเลิกเอง) */
   eventCount: number;
 }
 
@@ -346,9 +373,10 @@ export async function buildScorecards(
     }),
     prisma.performanceEvent.findMany({
       where: { orgId, occurredAt: { gte: start, lte: to } },
-      select: { userId: true, source: true, category: true, points: true },
+      select: { id: true, userId: true, source: true, category: true, points: true, refType: true, refId: true },
     }),
   ]);
+  const isReversed = reversedChecker(events);
 
   const byUser = new Map<string, UserScorecard>();
   for (const u of users) {
@@ -371,8 +399,9 @@ export async function buildScorecards(
     if (!card) continue; // ผู้ใช้ถูกปิดใช้งาน/ลบไปแล้ว — ไม่แสดงในรายงาน
 
     const points = Number(e.points);
+    const counts = !isReversalEvent(e) && !isReversed(e);
     card.score += points;
-    card.eventCount += 1;
+    if (counts) card.eventCount += 1;
     if (e.source in card.bySource) {
       card.bySource[e.source as PerformanceSource] += points;
     }
@@ -380,7 +409,7 @@ export async function buildScorecards(
     if (!catTotals.has(e.userId)) catTotals.set(e.userId, new Map());
     const cats = catTotals.get(e.userId)!;
     const prev = cats.get(e.category) ?? { points: 0, count: 0 };
-    cats.set(e.category, { points: prev.points + points, count: prev.count + 1 });
+    cats.set(e.category, { points: prev.points + points, count: prev.count + (counts ? 1 : 0) });
   }
 
   for (const [userId, cats] of catTotals) {
@@ -394,6 +423,8 @@ export async function buildScorecards(
         points: v.points,
         count: v.count,
       }))
+      // โดนแล้วยกเลิกหมดทั้งหมวด (0 ครั้ง 0 คะแนน) — ไม่ต้องโชว์ให้งง
+      .filter((row) => row.count !== 0 || row.points !== 0)
       // เรียงจากที่เสียคะแนนมากสุดขึ้นก่อน — เป็นสิ่งที่ผู้บริหารอยากเห็นก่อน
       .sort((a, b) => a.points - b.points);
   }

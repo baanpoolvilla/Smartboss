@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 
-import { eventDay } from "@/lib/performance";
+import { eventDay, isReversalEvent } from "@/lib/performance";
 import { formatDate } from "@/modules/hr/lib/labels";
 
 /**
@@ -23,12 +23,38 @@ export interface BreakdownRow {
 
 export interface BreakdownEvent {
   id: string;
+  userId: string;
   category: string;
   occurredAt: Date;
   points: unknown;
   note: string | null;
   refType: string | null;
   refId: string | null;
+}
+
+/** จับคู่รายการที่ถูกยกเลิก ↔ รายการยกเลิกของมัน (กติกาเดียวกับ reversedChecker ใน lib/performance) */
+function pairReversals(events: BreakdownEvent[]) {
+  const reversalByKey = new Map<string, BreakdownEvent>();
+  for (const e of events) {
+    if (!e.refType || !e.refId || !isReversalEvent(e)) continue;
+    const key = e.refType.endsWith("_undo")
+      ? `${e.refType.slice(0, -"_undo".length)}|${e.refId}`
+      : `id|${e.refId}`;
+    reversalByKey.set(key, e);
+  }
+  const reversalOf = new Map<string, BreakdownEvent>();
+  const matched = new Set<string>();
+  for (const e of events) {
+    if (isReversalEvent(e)) continue;
+    const r =
+      reversalByKey.get(`id|${e.id}`) ??
+      (e.refType && e.refId ? reversalByKey.get(`${e.refType}|${e.refId}`) : undefined);
+    if (r) {
+      reversalOf.set(e.id, r);
+      matched.add(r.id);
+    }
+  }
+  return { reversalOf, matched };
 }
 
 function signed(points: number): string {
@@ -49,8 +75,10 @@ export function ScoreBreakdown({
   /** ลิงก์ "ดูวันนั้น" ของเหตุการณ์ลงเวลา — ไม่ส่ง = ไม่มีลิงก์ (คนที่ไม่มีสิทธิ์ดูหน้าลงเวลารวม) */
   attendanceHref?: (workDate: string) => string;
 }) {
+  const { reversalOf, matched } = pairReversals(events);
   const byCategory = new Map<string, BreakdownEvent[]>();
-  for (const ev of events) {
+  // รายการยกเลิกที่จับคู่กับของเดิมได้ ไม่ต้องขึ้นแยกบรรทัด — ของเดิมจะขีดฆ่าแทน
+  for (const ev of events.filter((e) => !matched.has(e.id))) {
     const list = byCategory.get(ev.category) ?? [];
     list.push(ev);
     byCategory.set(ev.category, list);
@@ -84,6 +112,7 @@ export function ScoreBreakdown({
               {list.map((ev) => {
                 const points = Number(ev.points);
                 const workDate = eventDay(ev.occurredAt);
+                const reversal = reversalOf.get(ev.id);
                 const href =
                   ev.refType === "work_order" && ev.refId
                     ? `/maintenance/work-orders/${ev.refId}`
@@ -94,15 +123,25 @@ export function ScoreBreakdown({
                   <li key={ev.id} className="flex items-start gap-3 px-4 py-2 pl-11 text-sm">
                     <span className="w-24 shrink-0 text-(--ink-soft)">{formatDate(workDate)}</span>
                     <span className="min-w-0 flex-1 text-(--ink)">
-                      {ev.note || (points > 0 ? "คืนคะแนน" : "—")}
+                      <span className={reversal ? "text-(--ink-soft) line-through" : undefined}>
+                        {ev.note || (points > 0 ? "คืนคะแนน" : "—")}
+                      </span>
+                      {reversal && (
+                        <span className="mt-0.5 block text-xs text-(--tone-ok)">
+                          ยกเลิกแล้ว · ไม่นับ{reversal.note ? ` — ${reversal.note}` : ""}
+                        </span>
+                      )}
                       {href && (
                         <Link href={href} className="ml-2 text-xs text-(--app-strong,var(--ink)) hover:underline">
                           ดู →
                         </Link>
                       )}
                     </span>
-                    <span className="w-14 shrink-0 text-right font-medium" style={{ color: pointsColor(points) }}>
-                      {signed(points)}
+                    <span
+                      className="w-14 shrink-0 text-right font-medium"
+                      style={{ color: reversal ? "var(--ink-soft)" : pointsColor(points) }}
+                    >
+                      {reversal ? "0" : signed(points)}
                     </span>
                   </li>
                 );
