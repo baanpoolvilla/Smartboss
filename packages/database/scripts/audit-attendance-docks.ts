@@ -14,6 +14,9 @@ import { PrismaClient } from "@prisma/client";
  *   ก่อนวันเริ่มนับ     ก่อน performance_settings.scoring_start_date
  *   ระบบคะแนนปิด      performance_settings.enabled = false
  *   ยังไม่ถึงรอบ       วันนี้/เมื่อวานที่ cron ยังไม่ได้เก็บ (cron เก็บวันที่จบแล้วเท่านั้น)
+ *   ยังไม่คำนวณผล     มีสแกนแต่ไม่มีผลลงเวลาของวันนั้นเลย — ผลลงเวลาถูกคำนวณเฉพาะตอนมีคนเปิด
+ *                     แท็บ "วันนี้" ที่ /hr (ย้อน 30 วัน) ไม่มี cron คำนวณให้ ⇒ ถ้าไม่มีใครเปิด
+ *                     วันนั้นไม่มีทั้งสาย/ขาด ให้หัก (ส่วนนี้แยกแสดงต่างหาก เพราะไม่มีแถวผลให้ไล่)
  *   ❌ ควรหักแต่ไม่มี   ผ่านทุกเงื่อนไขแต่ไม่มีรายการหัก — cron ไม่ได้รัน หรือมีบั๊ก
  *
  * รัน:
@@ -66,10 +69,28 @@ async function main() {
     const startDay = st?.scoringStartDate ? st.scoringStartDate.toISOString().slice(0, 10) : null;
     const missingAbsent = st?.missingPunchCountsAsAbsent ?? false;
 
-    const rows = await prisma.$transaction(async (tx) => {
+    const { rows, lastCalc, uncalculated } = await prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe("SET LOCAL ROLE workforce_app");
       await tx.$executeRaw`SELECT set_config('workforce.tenant_id', ${org.id}, true)`;
-      return tx.$queryRaw<Row[]>`
+      const lastCalc = await tx.$queryRaw<{ at: Date | null }[]>`SELECT max(calculated_at) AS at FROM workforce.attendance_results`;
+      // วันที่มีสแกนเข้ามา แต่ไม่มีผลลงเวลา (ฉบับปัจจุบัน) ของวันนั้นเลย — ยังไม่เคยถูกคำนวณ
+      const uncalculated = await tx.$queryRaw<{ name: string; day: string }[]>`
+        SELECT trim(p.first_name || ' ' || p.last_name) AS name, to_char(d.day, 'YYYY-MM-DD') AS day
+        FROM (
+          SELECT DISTINCT r.employment_id, (r.captured_at AT TIME ZONE 'Asia/Bangkok')::date AS day
+          FROM workforce.raw_time_events r
+          WHERE r.captured_at >= ${from}::date
+        ) d
+        JOIN workforce.employments e ON e.id = d.employment_id
+        JOIN workforce.people p ON p.id = e.person_id
+        WHERE d.day < ${todayTh}::date
+          AND NOT EXISTS (
+            SELECT 1 FROM workforce.attendance_results ar
+            WHERE ar.employment_id = d.employment_id AND ar.work_date = d.day AND ar.is_current
+          )
+        ORDER BY d.day, name
+      `;
+      const rows = await tx.$queryRaw<Row[]>`
         SELECT e.id AS employment_id, e.employee_code,
                trim(p.first_name || ' ' || p.last_name || CASE WHEN p.preferred_name <> '' THEN ' (' || p.preferred_name || ')' ELSE '' END) AS name,
                p.email AS person_email,
@@ -86,8 +107,24 @@ async function main() {
           AND (ar.late_minutes > 0 OR ar.absence_minutes > ${ABSENCE_THRESHOLD_MINUTES})
         ORDER BY name, ar.work_date
       `;
+      return { rows, lastCalc: lastCalc[0]?.at ?? null, uncalculated };
     });
-    if (rows.length === 0) continue;
+
+    const lastCalcTh = lastCalc
+      ? new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Bangkok", dateStyle: "short", timeStyle: "short" }).format(lastCalc)
+      : "ไม่เคยเลย";
+    const calcStale = lastCalc ? Math.floor((Date.now() - lastCalc.getTime()) / 86400_000) : Infinity;
+    console.log(`══ ${org.name} ══`);
+    console.log(`  คำนวณผลลงเวลาล่าสุด: ${lastCalcTh}${calcStale >= 2 ? `  ⚠ ผ่านมา ${calcStale} วัน — ผลลงเวลาคำนวณเฉพาะตอนมีคนเปิดแท็บ "วันนี้" ที่ /hr` : ""}`);
+    if (uncalculated.length > 0) {
+      console.log(`  ⚠ มีสแกนแต่ยังไม่มีผลลงเวลา ${uncalculated.length} วัน-คน (ไม่มีทางถูกหักจนกว่าจะคำนวณ):`);
+      for (const u of uncalculated.slice(0, 40)) console.log(`    ${u.day}  ${u.name}`);
+      if (uncalculated.length > 40) console.log(`    … อีก ${uncalculated.length - 40} รายการ`);
+    }
+    if (rows.length === 0) {
+      console.log("");
+      continue;
+    }
 
     const refIds = rows.filter((r) => r.subject).map((r) => `${r.subject}:${r.work_date.toISOString().slice(0, 10)}`);
     const docks = await prisma.performanceEvent.findMany({
@@ -133,7 +170,7 @@ async function main() {
       if (showAll || !status.startsWith("หักแล้ว")) lines.push(`  ${day}  ${r.name.padEnd(28)} ${what.padEnd(14)} ${status}`);
     }
 
-    console.log(`══ ${org.name} · ระบบคะแนน ${enabled ? "เปิด" : "ปิด"} · เกณฑ์สาย > ${lateThreshold} นาที · เริ่มนับ ${startDay ?? "ทั้งหมด"} ══`);
+    console.log(`  ระบบคะแนน ${enabled ? "เปิด" : "ปิด"} · เกณฑ์สาย > ${lateThreshold} นาที · เริ่มนับ ${startDay ?? "ทั้งหมด"}`);
     console.log("  สรุป: " + [...tally.entries()].map(([k, v]) => `${k} ${v}`).join(" · "));
     if (unlinked.size > 0) {
       console.log(`\n  ⚠ ทะเบียนพนักงานที่ยังไม่ผูกกับบัญชี Smartboss (${unlinked.size} คน) — มาสาย/ขาดงานกี่วันก็ไม่ถูกหัก:`);
