@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { usePathname } from "next/navigation";
 import { RefreshCw, Smartphone, X } from "lucide-react";
 
 import { APP_INSTALL_VERSION, detectDevice, isStandalone, recordStandaloneLaunch, useIsClient } from "@/lib/app-install";
@@ -12,7 +13,10 @@ import { APP_INSTALL_VERSION, detectDevice, isStandalone, recordStandaloneLaunch
  * 1. **โค้ดเว็บเก่า** (เกิดทุกครั้งที่ deploy): แท็บหรือแอปที่เปิดค้างไว้ยังรัน JS ชุดเดิม
  *    จนกว่าจะโหลดใหม่ → แถบ "มีเวอร์ชันใหม่" กด "อัปเดต" = โหลดหน้าใหม่ **ไม่ต้องลบแอป**
  *    (service worker ของเราไม่ cache หน้าเว็บ โหลดใหม่ได้ของล่าสุดเสมอ — public/sw.js)
- *    ไม่โหลดใหม่ให้เอง เพราะอาจมีข้อความ/ฟอร์มที่พิมพ์ค้างอยู่
+ *    และ**อัปเดตให้เอง**ในจังหวะที่ไม่มีอะไรหาย (มือถือแทบไม่มีใครกดแถบนี้):
+ *    - กลับเข้าแอป/แท็บ (สลับแอปกลับมา) แล้วเจอเวอร์ชันใหม่ + ไม่มีฟอร์มที่กรอกค้าง
+ *    - เปลี่ยนหน้าในแอปหลังรู้ว่ามีเวอร์ชันใหม่ (หน้าเดิมถูกทิ้งอยู่แล้ว)
+ *    ถ้ามีข้อความ/ไฟล์ค้างในฟอร์มจะไม่โหลดใหม่ ขึ้นแถบให้กดเองเหมือนเดิม
  *
  * 2. **ตัวแอปบนหน้าจอเก่า** (นาน ๆ ครั้ง): เปลี่ยนชื่อ/ไอคอน/start_url แล้ว iPhone ไม่
  *    อัปเดตให้เอง ต้องลบแล้วติดตั้งใหม่ — ขึ้นเฉพาะแอปบน iPhone/iPad ที่ติดตั้งก่อน
@@ -24,22 +28,54 @@ const POLL_MS = 5 * 60 * 1000;
 const DISMISS_UPDATE_KEY = "sb-update-dismissed";
 const DISMISS_REINSTALL_KEY = "sb-reinstall-dismissed";
 
+/** มีช่องกรอกที่ผู้ใช้พิมพ์/แนบไฟล์ค้างไว้ไหม — ถ้ามี ห้ามโหลดหน้าใหม่เอง */
+function hasUnsavedInput(): boolean {
+  for (const el of document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea")) {
+    if (el instanceof HTMLInputElement) {
+      if (el.type === "hidden" || el.type === "submit" || el.type === "button") continue;
+      if (el.type === "file") {
+        if (el.files && el.files.length > 0) return true;
+        continue;
+      }
+      if (el.type === "checkbox" || el.type === "radio") {
+        if (el.checked !== el.defaultChecked) return true;
+        continue;
+      }
+    }
+    if (el.value !== el.defaultValue) return true;
+  }
+  return Boolean(document.querySelector('[contenteditable="true"]:not(:empty)'));
+}
+
 export function AppUpdateNotice() {
   const isClient = useIsClient();
   const [newBuild, setNewBuild] = useState<string | null>(null);
   const [needsReinstall, setNeedsReinstall] = useState(false);
+  const pathname = usePathname();
+  const lastPath = useRef(pathname);
+
+  // รู้แล้วว่ามีเวอร์ชันใหม่ + ผู้ใช้กดไปหน้าอื่น → โหลดหน้าปลายทางแบบเต็มแทน ได้โค้ดล่าสุดเลย
+  useEffect(() => {
+    if (pathname === lastPath.current) return;
+    lastPath.current = pathname;
+    if (newBuild) window.location.reload();
+  }, [pathname, newBuild]);
 
   useEffect(() => {
     if (!CLIENT_BUILD_ID) return;
     let stopped = false;
 
-    async function check() {
+    async function check(resumed = false) {
       if (document.visibilityState !== "visible") return;
       try {
         const res = await fetch("/api/version", { cache: "no-store" });
         if (!res.ok) return;
         const { buildId } = (await res.json()) as { buildId: string | null };
         if (stopped || !buildId || buildId === CLIENT_BUILD_ID) return;
+        if (resumed && !hasUnsavedInput()) {
+          window.location.reload();
+          return;
+        }
         let dismissed: string | null = null;
         try {
           dismissed = sessionStorage.getItem(DISMISS_UPDATE_KEY);
@@ -52,10 +88,10 @@ export function AppUpdateNotice() {
       }
     }
 
-    const first = window.setTimeout(check, 20_000);
-    const timer = window.setInterval(check, POLL_MS);
-    // กลับมาที่แท็บ/แอป (มือถือสลับแอปกลับมา) = จังหวะที่ควรเช็คที่สุด
-    const onVisible = () => void check();
+    const first = window.setTimeout(() => void check(), 20_000);
+    const timer = window.setInterval(() => void check(), POLL_MS);
+    // กลับมาที่แท็บ/แอป (มือถือสลับแอปกลับมา) = จังหวะที่ควรเช็คที่สุด และโหลดใหม่เองได้
+    const onVisible = () => void check(true);
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("online", onVisible);
     return () => {

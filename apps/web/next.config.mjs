@@ -43,7 +43,7 @@ const nextConfig = {
    *
    * มีผลเฉพาะ dev — production ไม่ใช้ค่านี้
    */
-  allowedDevOrigins: ["127.0.0.1", "localhost", "172.18.6.210"],
+  allowedDevOrigins: ["127.0.0.1", "localhost", "172.18.6.210", "192.168.1.120"],
   transpilePackages: ["@smartboss/ui", "@smartboss/auth", "@smartboss/database"],
   /*
    * argon2 / prisma / ioredis เป็น native module — bundle ไม่ได้ ต้องให้ Node require เอง
