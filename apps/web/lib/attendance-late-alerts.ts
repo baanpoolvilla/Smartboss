@@ -4,7 +4,6 @@ import { crossOrg } from "@smartboss/database/cross-org";
 
 import { bangkokDay, recalculateAttendanceAllOrgs } from "@/lib/attendance-recalc";
 import { notifyUser } from "@/modules/maintenance/data/notify";
-import { notifyApprovers } from "@/modules/hr/lib/hr-notify";
 
 /**
  * แจ้งเตือนทันทีเมื่อมาสาย — แบบที่ระบบลงเวลาทั่วไปทำ (When I Work / "Late IN" alert)
@@ -13,8 +12,7 @@ import { notifyApprovers } from "@/modules/hr/lib/hr-notify";
  * ต่อรอบ: คำนวณผลลงเวลาของ "วันนี้" ให้ทุกคน (เบา — วันเดียว) แล้วหาใครที่สาย (สายหลังหักผ่อนผันของกะ
  * แล้ว > 0 นาที = ขึ้นป้าย "สาย" ในหน้าลงเวลา) ที่ยังไม่เคยแจ้ง แจ้ง:
  *   - ตัวพนักงาน   "คุณเข้างานสาย 8 นาที"                     (hr_late_self)
- *   - CEO / HR     "กระต่าย · เข้างานสาย 8 นาที"             (hr_late_team) — ทุกคนที่ถือสิทธิ์ดูการลงเวลา
- *                  ของทุกคน (workforce.attendance.read.all) ในระบบ HR ไม่แจ้งตัวเองถ้าคนสายถือสิทธิ์นี้เอง
+ * แจ้งเฉพาะตัวพนักงาน — ตัดสินใจแล้วว่าไม่ส่งให้ CEO/HR (คนดูภาพรวมดูได้ที่กระดานลงเวลาอยู่แล้ว)
  * กันแจ้งซ้ำด้วยแถวแจ้งเตือนเดิม (referenceId = "วันที่:userId") ⇒ วันละครั้งต่อคน รันซ้ำกี่รอบก็ได้
  * วันลา/วันหยุด ไม่แจ้ง (ฟังก์ชัน performance_attendance ตัดออกให้แล้ว)
  */
@@ -70,13 +68,6 @@ export async function notifyLateArrivals(): Promise<{ late: number; notified: nu
       referenceId: ref,
     });
 
-    // notifyApprovers ใส่ชื่อคนสายนำหน้าหัวข้อให้เอง และข้ามตัวคนสาย
-    await notifyApprovers(user.orgId, "workforce.attendance.read.all", user.id, {
-      title: `เข้างานสาย ${minutes} นาที`,
-      body: "นับหลังหักเวลาผ่อนผันของกะแล้ว",
-      type: "hr_late_team",
-      referenceId: ref,
-    });
     notified++;
   }
   return { late: late.length, notified };
