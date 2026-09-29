@@ -6,6 +6,7 @@ import {
   notifyMissingExpenses,
 } from "@/modules/maintenance/data/cron";
 import { dockAttendance } from "@/lib/attendance-performance";
+import { purgeExpiredChatMedia } from "@/modules/chat/data/media-retention";
 
 export const runtime = "nodejs";
 
@@ -15,6 +16,7 @@ export const runtime = "nodejs";
  *   - แจ้งเตือน PM ใกล้ครบกำหนด (?task=pm-notify)
  *   - เตือนใบงานที่ยังไม่บันทึกค่าใช้จ่าย (?task=expense-reminder)
  *   - หักคะแนนงานที่ปล่อยค้าง + ผลลงเวลา (?task=performance) → หน้าสรุปรายคนของผู้บริหาร
+ *   - ลบรูป/วิดีโอ/เสียงในแชทที่หมดอายุ ไม่อยู่ในอัลบั้ม (?task=chat-media, &dryRun=1 ดูอย่างเดียว)
  *   - ?task=all รันทั้งหมด
  * เรียกด้วย header `Authorization: Bearer $CRON_SECRET` หรือ `?key=$CRON_SECRET`
  * route นี้อยู่นอก auth ของ proxy จึงกันด้วย CRON_SECRET เท่านั้น →
@@ -47,6 +49,9 @@ export async function GET(req: NextRequest) {
   }
   if (task === "expense-reminder" || task === "all") {
     Object.assign(result, await notifyMissingExpenses());
+  }
+  if (task === "chat-media" || task === "all") {
+    Object.assign(result, { chatMedia: await purgeExpiredChatMedia({ dryRun: url.searchParams.get("dryRun") === "1" }) });
   }
   if (task === "performance" || task === "all") {
     // สองแหล่ง: งานซ่อมบำรุงที่ปล่อยค้าง และผลลงเวลาจาก workforce

@@ -1,6 +1,8 @@
 "use client";
 
 import type {
+  ChatAlbumDTO,
+  ChatAlbumItemDTO,
   ChatAttachment,
   ChatChannelDetail,
   ChatChannelSummary,
@@ -142,4 +144,44 @@ export function uploadAttachment(
     form.append("file", file);
     xhr.send(form);
   });
+}
+
+// ─── อัลบั้ม ───────────────────────────────────────────────────────────────
+const album = (id: string) => `/api/chat/albums/${encodeURIComponent(id)}`;
+
+export function fetchAlbums(channelId: string): Promise<{ albums: ChatAlbumDTO[] }> {
+  return fetch(`${ch(channelId)}/albums`).then((r) => json(r));
+}
+
+export function createAlbum(channelId: string, name: string): Promise<{ id: string }> {
+  return send(`${ch(channelId)}/albums`, "POST", { name });
+}
+
+export function fetchAlbum(albumId: string): Promise<{ album: ChatAlbumDTO; items: ChatAlbumItemDTO[]; canManage: boolean }> {
+  return fetch(album(albumId)).then((r) => json(r));
+}
+
+export function renameAlbum(albumId: string, name: string): Promise<{ ok: true }> {
+  return send(album(albumId), "PATCH", { name });
+}
+
+export function deleteAlbum(albumId: string): Promise<{ ok: true }> {
+  return send(album(albumId), "DELETE");
+}
+
+export interface AlbumItemInput {
+  url: string;
+  thumbUrl?: string;
+  name?: string;
+  width?: number;
+  height?: number;
+  sourceMessageId?: string;
+}
+
+export function addAlbumItems(albumId: string, items: AlbumItemInput[]): Promise<{ added: number }> {
+  return send(`${album(albumId)}/items`, "POST", { items });
+}
+
+export function removeAlbumItem(albumId: string, itemId: string): Promise<{ ok: true }> {
+  return send(`${album(albumId)}/items/${encodeURIComponent(itemId)}`, "DELETE");
 }

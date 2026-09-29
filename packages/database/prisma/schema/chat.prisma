@@ -30,6 +30,7 @@ model ChatChannel {
   members      ChatChannelMember[]
   messages     ChatMessage[]
   readStates   ChatReadState[]
+  albums       ChatAlbum[]
 
   @@unique([orgId, departmentId])
   @@index([orgId, type])
@@ -158,5 +159,51 @@ model ChatFile {
 
   @@index([orgId])
   @@map("files")
+  @@schema("chat")
+}
+
+/// อัลบั้มของห้อง (แบบ LINE) — รูป/วิดีโอในแชทหมดอายุเมื่อครบกำหนด (ดู modules/chat/lib/retention.ts)
+/// ยกเว้นที่ถูกบันทึกลงอัลบั้ม ⇒ อยากเก็บรูปไหนไว้ถาวร ใส่อัลบั้ม
+model ChatAlbum {
+  orgId       String   @map("org_id")
+  id          String   @id @default(uuid())
+  channelId   String   @map("channel_id")
+  name        String
+  createdById String   @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  channel ChatChannel     @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  items   ChatAlbumItem[]
+
+  @@index([orgId, channelId])
+  @@map("albums")
+  @@schema("chat")
+}
+
+/// รูป/วิดีโอในอัลบั้ม — ชี้ไปที่ไฟล์เดิม (chat.files.url) ไม่ได้ก๊อปซ้ำ ไม่เปลืองพื้นที่เพิ่ม
+/// ไฟล์ที่มีแถวที่นี่ (url หรือ thumbUrl) = ห้ามลบตอนเก็บกวาดไฟล์หมดอายุ
+model ChatAlbumItem {
+  orgId           String   @map("org_id")
+  id              String   @id @default(uuid())
+  albumId         String   @map("album_id")
+  url             String
+  thumbUrl        String?  @map("thumb_url")
+  kind            String
+  mime            String
+  name            String
+  width           Int?
+  height          Int?
+  /// ข้อความต้นทางในแชท (บันทึกจากแชท) — null = อัปโหลดเข้าอัลบั้มตรง
+  sourceMessageId String?  @map("source_message_id")
+  addedById       String   @map("added_by_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  album ChatAlbum @relation(fields: [albumId], references: [id], onDelete: Cascade)
+
+  @@unique([albumId, url])
+  @@index([orgId, url])
+  @@index([orgId, thumbUrl])
+  @@map("album_items")
   @@schema("chat")
 }

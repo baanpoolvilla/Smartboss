@@ -19,6 +19,35 @@ export interface ChatAttachment {
   height?: number;
   /** ความยาวข้อความเสียง */
   durationMs?: number;
+  /** หมดอายุแล้ว — ไฟล์ถูกลบ เหลือแค่ร่องรอย (url ว่าง) ดู lib/retention.ts */
+  expired?: boolean;
+  /** วันหมดอายุ (รูป/วิดีโอ/เสียง ที่ยังไม่อยู่ในอัลบั้ม) — ไม่มี = ไม่หมดอายุ */
+  expiresAt?: string;
+}
+
+export interface ChatAlbumDTO {
+  id: string;
+  channelId: string;
+  name: string;
+  createdById: string;
+  itemCount: number;
+  cover: { url: string; thumbUrl: string | null; kind: string } | null;
+  updatedAt: string;
+}
+
+export interface ChatAlbumItemDTO {
+  id: string;
+  url: string;
+  thumbUrl: string | null;
+  kind: "image" | "video";
+  mime: string;
+  name: string;
+  width: number | null;
+  height: number | null;
+  addedById: string;
+  createdAt: string;
+  /** ลบออกจากอัลบั้มได้ (คนเพิ่ม หรือแอดมินห้อง) */
+  canRemove: boolean;
 }
 
 export interface ChatReactionDTO {

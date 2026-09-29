@@ -2,7 +2,7 @@
 
 import { memo, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertCircle, Clock, Copy, CornerUpLeft, Download, FileText, Megaphone, MoreHorizontal, Pause, Play, RotateCw, SmilePlus, Trash2, X } from "lucide-react";
+import { AlertCircle, Clock, Copy, CornerUpLeft, Download, FileText, Hourglass, ImageOff, Megaphone, MicOff, MoreHorizontal, Pause, Play, RotateCw, SmilePlus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
 
@@ -11,6 +11,7 @@ import { CHAT_REACTION_EMOJIS, type ChatAttachment, type ChatUser } from "../typ
 import { attachmentLabel, firstName, formatClock, formatDuration, formatFileSize } from "../lib/format";
 import { ChatAvatar } from "./chat-avatar";
 import { downloadUrl } from "./lightbox";
+import { daysUntilExpiry } from "../lib/retention";
 import { MessageText } from "./message-text";
 
 // ─── ไฟล์แนบ ───────────────────────────────────────────────────────────────
@@ -38,9 +39,34 @@ function RetryImage({ src, alt, className, style }: { src: string; alt: string; 
   );
 }
 
+/** ช่องแทนรูป/วิดีโอที่หมดอายุแล้ว (ไฟล์ถูกลบ) — แบบ LINE */
+function ExpiredTile({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <span className={cn("flex flex-col items-center justify-center gap-1 bg-black/5 text-(--ink-soft)", className)} style={style}>
+      <ImageOff className="h-5 w-5" />
+      <span className="text-[11px]">หมดอายุแล้ว</span>
+    </span>
+  );
+}
+
+/** ป้ายเตือนก่อนหมดอายุ — ขึ้นเมื่อเหลือไม่เกิน 7 วัน ให้ทันบันทึกลงอัลบั้ม */
+function ExpiryBadge({ items }: { items: ChatAttachment[] }) {
+  const at = items.find((a) => a.expiresAt && !a.expired)?.expiresAt;
+  if (!at) return null;
+  const days = daysUntilExpiry(at);
+  if (days > 7) return null;
+  return (
+    <span className="pointer-events-none absolute bottom-1.5 left-1.5 flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10.5px] text-white">
+      <Hourglass className="h-3 w-3" />
+      {days === 0 ? "หมดอายุวันนี้" : `หมดอายุใน ${days} วัน`}
+    </span>
+  );
+}
+
 function MediaGrid({ items, onOpen }: { items: ChatAttachment[]; onOpen: (index: number) => void }) {
   if (items.length === 1) {
     const a = items[0]!;
+    if (a.expired) return <ExpiredTile className="h-28 w-44 rounded-2xl" />;
     const ratio = a.width && a.height ? a.width / a.height : 4 / 3;
     // จองพื้นที่ตามสัดส่วนจริงก่อนรูปโหลด — ข้อความไม่กระโดดตอนรูปมา
     const w = Math.min(260, ratio >= 1 ? 260 : 260 * Math.max(ratio, 0.6));
@@ -53,6 +79,7 @@ function MediaGrid({ items, onOpen }: { items: ChatAttachment[]; onOpen: (index:
         style={{ width: w, height: h, maxWidth: "100%" }}
         aria-label={a.kind === "video" ? "เปิดวิดีโอ" : "ดูรูปเต็ม"}
       >
+        <ExpiryBadge items={items} />
         {a.kind === "video" ? (
           <>
             <video src={`${a.url}#t=0.1`} preload="metadata" muted playsInline className="h-full w-full object-cover" />
@@ -72,8 +99,12 @@ function MediaGrid({ items, onOpen }: { items: ChatAttachment[]; onOpen: (index:
   const shown = items.slice(0, 4);
   const extra = items.length - shown.length;
   return (
-    <div className="grid w-[260px] max-w-full grid-cols-2 gap-0.5 overflow-hidden rounded-2xl">
-      {shown.map((a, i) => (
+    <div className="relative grid w-[260px] max-w-full grid-cols-2 gap-0.5 overflow-hidden rounded-2xl">
+      <ExpiryBadge items={items} />
+      {shown.map((a, i) =>
+        a.expired ? (
+          <ExpiredTile key={`x-${i}`} className={cn("aspect-square", shown.length === 3 && i === 0 && "col-span-2 aspect-[2/1]")} />
+        ) : (
         <button
           key={a.url}
           type="button"
@@ -93,12 +124,24 @@ function MediaGrid({ items, onOpen }: { items: ChatAttachment[]; onOpen: (index:
             <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-lg font-semibold text-white">+{extra}</span>
           )}
         </button>
-      ))}
+        )
+      )}
     </div>
   );
 }
 
 function VoicePlayer({ a, mine }: { a: ChatAttachment; mine: boolean }) {
+  if (a.expired) {
+    return (
+      <span className={cn("flex items-center gap-1.5 rounded-2xl px-3 py-2 text-[13px]", mine ? "bg-(--chat-bubble-me) text-(--chat-bubble-me-ink) opacity-70" : "bg-(--chat-bubble-other) text-(--ink-soft)")}>
+        <MicOff className="h-4 w-4" /> ข้อความเสียงหมดอายุแล้ว
+      </span>
+    );
+  }
+  return <LiveVoicePlayer a={a} mine={mine} />;
+}
+
+function LiveVoicePlayer({ a, mine }: { a: ChatAttachment; mine: boolean }) {
   const ref = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [pos, setPos] = useState(0);
@@ -449,7 +492,17 @@ export const MessageBubble = memo(function MessageBubble(props: MessageBubblePro
                 )}
               </div>
             )}
-            {media.length > 0 && <MediaGrid items={media} onOpen={(i) => props.onOpenMedia(media, i)} />}
+            {media.length > 0 && (
+              <MediaGrid
+                items={media}
+                onOpen={(i) => {
+                  // หน้าดูรูปเต็มจอได้เฉพาะรูปที่ยังไม่หมดอายุ + id ข้อความไว้ "บันทึกลงอัลบั้ม"
+                  const live = media.filter((a) => !a.expired).map((a) => ({ ...a, messageId: m.id }));
+                  const idx = live.findIndex((a) => a.url === media[i]?.url);
+                  if (idx >= 0) props.onOpenMedia(live, idx);
+                }}
+              />
+            )}
             {audios.map((a) => (
               <VoicePlayer key={a.url} a={a} mine={mine} />
             ))}

@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@smartboss/database";
 
 import type { ChatAttachment, ChatAttachmentKind, ChatMessageDTO, ChatReactionDTO, ChatReplyPreview } from "../types";
+import { EXPIRING_KINDS, mediaExpiresAt } from "../lib/retention";
 
 /** ข้อผิดพลาดที่มีสถานะ HTTP — route แปลงเป็นคำตอบให้เอง (ดู lib/respond.ts) */
 export class ChatError extends Error {
@@ -92,6 +93,20 @@ export async function hydrateMessages(orgId: string, rows: MessageRow[]): Promis
   ]);
 
   const reactions = groupReactions(reactionRows);
+
+  // ไฟล์ที่บันทึกลงอัลบั้มแล้วไม่หมดอายุ — ไม่ต้องขึ้นป้ายเตือน
+  const expiringUrls = rows.flatMap((r) =>
+    ((r.attachments as ChatAttachment[] | null) ?? []).filter((a) => EXPIRING_KINDS.has(a.kind) && !a.expired).map((a) => a.url)
+  );
+  const kept = new Set(
+    expiringUrls.length > 0
+      ? (await prisma.chatAlbumItem.findMany({ where: { orgId, url: { in: expiringUrls } }, select: { url: true } })).map((i) => i.url)
+      : []
+  );
+  const withExpiry = (row: MessageRow): ChatAttachment[] =>
+    ((row.attachments as ChatAttachment[] | null) ?? []).map((a) =>
+      EXPIRING_KINDS.has(a.kind) && !a.expired && !kept.has(a.url) ? { ...a, expiresAt: mediaExpiresAt(row.createdAt).toISOString() } : a
+    );
   const replies = new Map<string, ChatReplyPreview>(
     replyRows.map((r) => [
       r.id,
@@ -114,7 +129,7 @@ export async function hydrateMessages(orgId: string, rows: MessageRow[]): Promis
       authorId: row.authorId,
       kind: row.kind,
       body: deleted ? null : row.body,
-      attachments: deleted ? [] : ((row.attachments as ChatAttachment[] | null) ?? []),
+      attachments: deleted ? [] : withExpiry(row),
       replyTo: deleted || !row.replyToId ? null : (replies.get(row.replyToId) ?? null),
       mentions: deleted ? [] : row.mentions,
       reactions: deleted ? [] : (reactions.get(row.id) ?? []),

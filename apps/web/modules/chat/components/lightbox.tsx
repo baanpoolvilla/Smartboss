@@ -1,8 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Download, X } from "lucide-react";
+import { BookImage, ChevronLeft, ChevronRight, Download, X } from "lucide-react";
 import type { ChatAttachment } from "../types";
+import { daysUntilExpiry } from "../lib/retention";
+
+/** รูปในหน้าดูเต็มจอ — messageId มีเมื่อเปิดจากแชท (ใช้ตอนบันทึกลงอัลบั้ม) */
+export type LightboxItem = ChatAttachment & { messageId?: string };
 
 /** ลิงก์ดาวน์โหลดไฟล์ด้วยชื่อเดิม (/api/files รองรับ ?download=<ชื่อไฟล์>) */
 export function downloadUrl(a: Pick<ChatAttachment, "url" | "name">): string {
@@ -10,7 +14,18 @@ export function downloadUrl(a: Pick<ChatAttachment, "url" | "name">): string {
 }
 
 /** ดูรูป/วิดีโอเต็มจอ — ปัดซ้าย/ขวา (หรือปุ่มลูกศร) ดูรูปอื่นในชุดเดียวกัน, Esc ปิด */
-export function Lightbox({ items, index, onClose }: { items: ChatAttachment[]; index: number; onClose: () => void }) {
+export function Lightbox({
+  items,
+  index,
+  onClose,
+  onSaveToAlbum,
+}: {
+  items: LightboxItem[];
+  index: number;
+  onClose: () => void;
+  /** ไม่ส่ง = ไม่มีปุ่มบันทึกลงอัลบั้ม (เช่น ดูรูปที่อยู่ในอัลบั้มอยู่แล้ว) */
+  onSaveToAlbum?: (item: LightboxItem) => void;
+}) {
   const [i, setI] = useState(index);
   const [touchX, setTouchX] = useState<number | null>(null);
   const item = items[i];
@@ -49,9 +64,24 @@ export function Lightbox({ items, index, onClose }: { items: ChatAttachment[]; i
     >
       <div className="flex items-center gap-2 px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
         <span className="text-sm opacity-80">{items.length > 1 ? `${i + 1} / ${items.length}` : ""}</span>
+        {item.expiresAt && (
+          <span className="text-xs opacity-70">
+            {daysUntilExpiry(item.expiresAt) === 0 ? "หมดอายุวันนี้" : `หมดอายุใน ${daysUntilExpiry(item.expiresAt)} วัน`}
+          </span>
+        )}
+        {onSaveToAlbum && (
+          <button
+            type="button"
+            onClick={() => onSaveToAlbum(item)}
+            className="ml-auto flex h-10 items-center gap-1.5 rounded-full px-3 text-sm hover:bg-white/10"
+            title="บันทึกลงอัลบั้ม — ไม่หมดอายุ"
+          >
+            <BookImage className="h-5 w-5" /> <span className="hidden sm:inline">บันทึกลงอัลบั้ม</span>
+          </button>
+        )}
         <a
           href={downloadUrl(item)}
-          className="ml-auto flex h-10 w-10 items-center justify-center rounded-full hover:bg-white/10"
+          className={`${onSaveToAlbum ? "" : "ml-auto "}flex h-10 w-10 items-center justify-center rounded-full hover:bg-white/10`}
           aria-label="ดาวน์โหลด"
           title="ดาวน์โหลด"
         >

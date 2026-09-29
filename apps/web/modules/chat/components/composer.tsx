@@ -44,7 +44,8 @@ function isTouchDevice(): boolean {
   return typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
 }
 
-async function uploadOne(file: File, kind: ChatAttachment["kind"], onProgress: (f: number) => void): Promise<ChatAttachment> {
+/** อัปโหลดไฟล์แนบหนึ่งไฟล์ (รูป = ย่อ + รูปย่อ) — ใช้ทั้งช่องพิมพ์และการเพิ่มรูปเข้าอัลบั้ม */
+export async function uploadChatMedia(file: File, kind: ChatAttachment["kind"], onProgress: (f: number) => void): Promise<ChatAttachment> {
   if (kind === "image") {
     const c = await compressImage(file);
     const [full, thumb] = await Promise.all([
@@ -151,7 +152,7 @@ export const Composer = forwardRef<
   const startUpload = useCallback((item: PendingFile) => {
     const update = (patch: Partial<PendingFile>) => setPending((list) => list.map((p) => (p.id === item.id ? { ...p, ...patch } : p)));
     update({ status: "uploading", progress: 0, error: undefined });
-    uploadOne(item.file, item.kind, (f) => update({ progress: f }))
+    uploadChatMedia(item.file, item.kind, (f) => update({ progress: f }))
       .then((result) => update({ status: "done", progress: 1, result }))
       .catch((err) => update({ status: "error", error: err instanceof Error ? err.message : "อัปโหลดไม่สำเร็จ" }));
   }, []);

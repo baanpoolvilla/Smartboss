@@ -13,7 +13,8 @@ import { jumpToMessage } from "../lib/chat-actions";
 import { ChannelAvatar } from "./channel-list";
 import { ChatAvatar } from "./chat-avatar";
 import { Composer, type ComposerHandle } from "./composer";
-import { Lightbox } from "./lightbox";
+import { Lightbox, type LightboxItem } from "./lightbox";
+import { AlbumPicker } from "./album-picker";
 import { MessageList } from "./message-list";
 import { ChatModal } from "./new-chat-dialog";
 import { RoomInfo } from "./room-info";
@@ -119,7 +120,8 @@ export function ChatRoom({ channel, initialUnread, onBack }: { channel: ChatChan
   const detail = useChatStore((s) => s.details[channel.id]);
   const typing = useChatStore((s) => s.typing[channel.id]);
   const [replyTo, setReplyTo] = useState<RoomMessage | null>(null);
-  const [lightbox, setLightbox] = useState<{ items: ChatAttachment[]; index: number } | null>(null);
+  const [lightbox, setLightbox] = useState<{ items: LightboxItem[]; index: number } | null>(null);
+  const [saveToAlbum, setSaveToAlbum] = useState<LightboxItem | null>(null);
   const [readers, setReaders] = useState<RoomMessage | null>(null);
   const [searching, setSearching] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -249,7 +251,30 @@ export function ChatRoom({ channel, initialUnread, onBack }: { channel: ChatChan
         </div>
       )}
 
-      {lightbox && <Lightbox items={lightbox.items} index={lightbox.index} onClose={() => setLightbox(null)} />}
+      {lightbox && (
+        <Lightbox
+          items={lightbox.items}
+          index={lightbox.index}
+          onClose={() => setLightbox(null)}
+          onSaveToAlbum={lightbox.items.some((a) => a.messageId) ? setSaveToAlbum : undefined}
+        />
+      )}
+      {saveToAlbum && (
+        <AlbumPicker
+          channelId={channel.id}
+          items={[
+            {
+              url: saveToAlbum.url,
+              thumbUrl: saveToAlbum.thumbUrl,
+              name: saveToAlbum.name,
+              width: saveToAlbum.width,
+              height: saveToAlbum.height,
+              sourceMessageId: saveToAlbum.messageId,
+            },
+          ]}
+          onClose={() => setSaveToAlbum(null)}
+        />
+      )}
 
       {readers && (
         <ChatModal title="ผู้ที่อ่านแล้ว" onClose={() => setReaders(null)}>

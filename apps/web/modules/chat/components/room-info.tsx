@@ -14,8 +14,9 @@ import { ChatAvatar } from "./chat-avatar";
 import { ChannelAvatar } from "./channel-list";
 import { downloadUrl } from "./lightbox";
 import { ChatModal, MemberPicker } from "./new-chat-dialog";
+import { AlbumsTab } from "./albums-tab";
 
-type Tab = "members" | "media" | "file" | "link";
+type Tab = "members" | "album" | "media" | "file" | "link";
 
 const URL_RE = /https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]]/g;
 
@@ -64,7 +65,10 @@ function MediaTab({ channelId, kind, onOpenMedia }: { channelId: string; kind: "
   );
 
   if (kind === "media") {
-    const items = messages.flatMap((m) => m.attachments.filter((a) => a.kind === "image" || a.kind === "video"));
+    // หมดอายุแล้วไม่มีไฟล์ให้ดู — ไม่ต้องโชว์ในคลัง (ในแชทยังเห็นร่องรอย "หมดอายุแล้ว")
+    const items = messages.flatMap((m) =>
+      m.attachments.filter((a) => (a.kind === "image" || a.kind === "video") && !a.expired).map((a) => ({ ...a, messageId: m.id }))
+    );
     if (items.length === 0) return <p className="py-10 text-center text-sm text-(--ink-soft)">ยังไม่มีรูปหรือวิดีโอ</p>;
     return (
       <>
@@ -86,7 +90,7 @@ function MediaTab({ channelId, kind, onOpenMedia }: { channelId: string; kind: "
   }
 
   if (kind === "file") {
-    const items = messages.flatMap((m) => m.attachments.filter((a) => a.kind === "file" || a.kind === "audio").map((a) => ({ a, m })));
+    const items = messages.flatMap((m) => m.attachments.filter((a) => (a.kind === "file" || a.kind === "audio") && !a.expired).map((a) => ({ a, m })));
     if (items.length === 0) return <p className="py-10 text-center text-sm text-(--ink-soft)">ยังไม่มีไฟล์</p>;
     return (
       <div className="py-1">
@@ -191,6 +195,7 @@ export function RoomInfo({
 
   const tabs: { id: Tab; label: string }[] = [
     ...(channel.type === "dm" ? [] : [{ id: "members" as const, label: `สมาชิก ${members.length}` }]),
+    { id: "album", label: "อัลบั้ม" },
     { id: "media", label: "รูป/วิดีโอ" },
     { id: "file", label: "ไฟล์" },
     { id: "link", label: "ลิงก์" },
@@ -338,7 +343,8 @@ export function RoomInfo({
             })}
           </div>
         )}
-        {tab !== "members" && <MediaTab key={`${channel.id}-${tab}`} channelId={channel.id} kind={tab} onOpenMedia={onOpenMedia} />}
+        {tab === "album" && <AlbumsTab key={channel.id} channelId={channel.id} onOpenMedia={onOpenMedia} />}
+        {tab !== "members" && tab !== "album" && <MediaTab key={`${channel.id}-${tab}`} channelId={channel.id} kind={tab} onOpenMedia={onOpenMedia} />}
 
         {editableMembers && (
           <div className="border-t border-(--line) p-4">
