@@ -285,7 +285,7 @@ export async function recordPerformanceEvent(input: PerformanceEventInput): Prom
  * แต้มรวมถูกอยู่แล้วเพราะบวกลบกันเอง แต่ "จำนวนครั้ง" ต้องไม่นับทั้งคู่ — ไม่งั้นโดนหัก 1 ครั้ง
  * แล้วยกเลิก ขึ้นเป็น "2 ครั้ง 0 คะแนน" (เจอจริง: "มาสาย 2 · 0")
  */
-type ReversibleEvent = { id: string; userId: string; refType: string | null; refId: string | null };
+type ReversibleEvent = { id: string; userId: string; category: string; refType: string | null; refId: string | null };
 
 /** เหตุการณ์นี้เป็นตัวยกเลิก/คืนคะแนนของอีกรายการหรือเปล่า */
 export function isReversalEvent(e: Pick<ReversibleEvent, "refType">): boolean {
@@ -293,15 +293,21 @@ export function isReversalEvent(e: Pick<ReversibleEvent, "refType">): boolean {
 }
 
 /** คืนตัวเช็คว่ารายการไหน "ถูกยกเลิกไปแล้ว" จากเหตุการณ์ชุดเดียวกัน */
+//
+// ⚠ จับคู่ต้องรวมหมวด (category) ด้วย — รอบรายงานเดียวกันมีได้ทั้ง "ไม่ส่ง" และ "ส่งสาย"
+// ใต้ refId เดียวกัน แล้ว sweep ของรายงานคืนคะแนนทีละหมวด (reports/sweep/route.ts
+// "บันทึกคะแนนซ้ำสองสถานะ") · เดิมไม่ดูหมวด ⇒ คืน "ส่งสาย" แล้วฝั่ง "ไม่ส่ง" ถูกขีดฆ่าตามไปด้วย
+// ขึ้น "0 ครั้ง −2" ทั้งที่ −2 นั้นยังหักอยู่จริง
 export function reversedChecker(events: ReversibleEvent[]): (e: ReversibleEvent) => boolean {
   const keys = new Set<string>();
   for (const e of events) {
     if (!e.refType || !e.refId) continue;
-    if (e.refType.endsWith("_undo")) keys.add(`${e.userId}|${e.refType.slice(0, -"_undo".length)}|${e.refId}`);
-    else if (e.refType.endsWith("_correction")) keys.add(`${e.userId}|id|${e.refId}`);
+    if (e.refType.endsWith("_undo")) keys.add(`${e.userId}|${e.category}|${e.refType.slice(0, -"_undo".length)}|${e.refId}`);
+    else if (e.refType.endsWith("_correction")) keys.add(`${e.userId}|${e.category}|id|${e.refId}`);
   }
   return (e) =>
-    keys.has(`${e.userId}|id|${e.id}`) || Boolean(e.refType && e.refId && keys.has(`${e.userId}|${e.refType}|${e.refId}`));
+    keys.has(`${e.userId}|${e.category}|id|${e.id}`) ||
+    Boolean(e.refType && e.refId && keys.has(`${e.userId}|${e.category}|${e.refType}|${e.refId}`));
 }
 
 export interface UserScorecard {

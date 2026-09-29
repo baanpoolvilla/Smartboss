@@ -32,14 +32,15 @@ export interface BreakdownEvent {
   refId: string | null;
 }
 
-/** จับคู่รายการที่ถูกยกเลิก ↔ รายการยกเลิกของมัน (กติกาเดียวกับ reversedChecker ใน lib/performance) */
+/** จับคู่รายการที่ถูกยกเลิก ↔ รายการยกเลิกของมัน — กติกาเดียวกับ reversedChecker ใน lib/performance
+ * (หมวดต้องตรงกันด้วย: รอบรายงานเดียวกันมีทั้ง "ไม่ส่ง" และ "ส่งสาย" ใต้ refId เดียวกัน) */
 function pairReversals(events: BreakdownEvent[]) {
   const reversalByKey = new Map<string, BreakdownEvent>();
   for (const e of events) {
     if (!e.refType || !e.refId || !isReversalEvent(e)) continue;
     const key = e.refType.endsWith("_undo")
-      ? `${e.refType.slice(0, -"_undo".length)}|${e.refId}`
-      : `id|${e.refId}`;
+      ? `${e.category}|${e.refType.slice(0, -"_undo".length)}|${e.refId}`
+      : `${e.category}|id|${e.refId}`;
     reversalByKey.set(key, e);
   }
   const reversalOf = new Map<string, BreakdownEvent>();
@@ -47,8 +48,8 @@ function pairReversals(events: BreakdownEvent[]) {
   for (const e of events) {
     if (isReversalEvent(e)) continue;
     const r =
-      reversalByKey.get(`id|${e.id}`) ??
-      (e.refType && e.refId ? reversalByKey.get(`${e.refType}|${e.refId}`) : undefined);
+      reversalByKey.get(`${e.category}|id|${e.id}`) ??
+      (e.refType && e.refId ? reversalByKey.get(`${e.category}|${e.refType}|${e.refId}`) : undefined);
     if (r) {
       reversalOf.set(e.id, r);
       matched.add(r.id);
