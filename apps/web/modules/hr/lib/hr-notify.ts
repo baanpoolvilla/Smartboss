@@ -93,6 +93,31 @@ export async function notifyApprovers(
 }
 
 
+/**
+ * ลบแจ้งเตือน "มีคำขอ…รออนุมัติ" ของคำขอนี้ออกจากกระดิ่ง — เมื่อคำขอถูกตัดสินแล้ว ไม่มีอะไรให้ทำ
+ * เดิมแจ้งเตือนค้างอยู่ในกระดิ่งของผู้อนุมัติทุกคนตลอดไป แม้คนอื่นอนุมัติไปแล้ว ("มีคำขอลาใหม่รออนุมัติ"
+ * เรียงกันเต็มกระดิ่งทั้งที่ไม่มีอะไรต้องทำ)
+ *
+ * referenceId ของแจ้งเตือนเก็บ id คำขอ (ลาหลายวันทีเดียว = หลาย id คั่น ",") จึงหาด้วย contains
+ * `onlyUserId` = ลบเฉพาะของคนนั้น (เช่น แก้เวลาที่ต้องอนุมัติ 2 คน — คนแรกกดแล้ว ของเขาหายไป
+ * แต่ของคนอื่นยังอยู่ เพราะยังต้องมีคนที่ 2) · ไม่ throw
+ */
+export async function clearApprovalNotifications(
+  orgId: string,
+  type: string,
+  requestId: string,
+  onlyUserId?: string
+): Promise<void> {
+  if (!requestId) return;
+  try {
+    await prisma.notification.deleteMany({
+      where: { orgId, type, referenceId: { contains: requestId }, ...(onlyUserId ? { userId: onlyUserId } : {}) },
+    });
+  } catch (err) {
+    console.error("[hr-notify] clearApprovalNotifications failed", err);
+  }
+}
+
 /* ═══════════════════ แจ้งผลกลับไปหาคนที่ยื่นคำขอ ═══════════════════ */
 
 export type HrRequestKind = "leave" | "correction" | "overtime";

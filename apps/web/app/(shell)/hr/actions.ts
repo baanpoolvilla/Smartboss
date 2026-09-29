@@ -22,7 +22,7 @@ import {
 } from "@/lib/day-off-quota";
 import { saveCommissionPool, saveCommissionWeights } from "@/modules/hr/lib/commission-data";
 import { syncAllUserNames, syncUserName } from "@/modules/hr/lib/name-sync";
-import { notifyApprovers, notifyRequester } from "@/modules/hr/lib/hr-notify";
+import { clearApprovalNotifications, notifyApprovers, notifyRequester } from "@/modules/hr/lib/hr-notify";
 
 /**
  * Server action ของโมดูลบุคคล — ทุกตัวยิงต่อไปที่ workforce API
@@ -1096,9 +1096,12 @@ export async function submitLeaveAction(
    */
   let failed = 0;
   let lastError: string | undefined;
+  // คำขอที่ยัง "รออนุมัติ" จริง — ประเภทลาที่ตั้งอนุมัติอัตโนมัติ (auto_approve) ได้ APPROVED ทันที
+  // ไม่มีอะไรให้ใครอนุมัติ จึงไม่ต้องแจ้ง (เดิมแจ้ง "รออนุมัติ" ทุกใบ แม้ใบที่อนุมัติไปแล้ว)
+  const pendingIds: string[] = [];
   for (const day of dates) {
     try {
-      await wfFetch("/leave-requests", {
+      const created = await wfFetch<{ id?: string; status?: string }>("/leave-requests", {
         method: "POST",
         body: {
           employment_id: employmentId,
@@ -1110,6 +1113,7 @@ export async function submitLeaveAction(
           display_label: displayLabel,
         },
       });
+      if (created?.status !== "APPROVED" && created?.id) pendingIds.push(created.id);
     } catch (error) {
       failed += 1;
       lastError = leaveErrorMessage(toMessage(error));
@@ -1123,12 +1127,15 @@ export async function submitLeaveAction(
 
   const submitted = dates.length - failed;
   // ครั้งเดียวต่อการยื่นทั้งชุด ไม่ใช่ต่อวัน — ลาทีเดียว 5 วันไม่ควรได้ 5
-  // แจ้งเตือนแยกกันในกระดิ่งของผู้อนุมัติ
-  void notifyApprovers(session.orgId, "workforce.leave.approve", session.userId, {
-    title: submitted > 1 ? `มีคำขอลาใหม่ ${submitted} วันรออนุมัติ` : "มีคำขอลาใหม่รออนุมัติ",
-    body: reason || undefined,
-    type: "hr_leave_submitted",
-  });
+  // แจ้งเตือนแยกกันในกระดิ่งของผู้อนุมัติ · referenceId = id ทุกใบ ไว้ลบออกตอนตัดสินแล้ว
+  if (pendingIds.length > 0) {
+    void notifyApprovers(session.orgId, "workforce.leave.approve", session.userId, {
+      title: pendingIds.length > 1 ? `มีคำขอลาใหม่ ${pendingIds.length} วันรออนุมัติ` : "มีคำขอลาใหม่รออนุมัติ",
+      body: reason || undefined,
+      type: "hr_leave_submitted",
+      referenceId: pendingIds.join(","),
+    });
+  }
 
   revalidatePath("/hr");
   return { ok: true, days: submitted };
@@ -1191,8 +1198,9 @@ export async function swapLeaveAction(input: {
   if (!input.fromDate || !input.toDate) return { error: "ไม่ได้เลือกวัน" };
   if (input.fromDate === input.toDate) return { error: "เลือกวันใหม่ให้ต่างจากวันเดิม" };
 
+  let swapped: { id?: string } | null = null;
   try {
-    await wfFetch("/leave-requests", {
+    swapped = await wfFetch<{ id?: string }>("/leave-requests", {
       method: "POST",
       body: {
         employment_id: input.employmentId,
@@ -1216,6 +1224,7 @@ export async function swapLeaveAction(input: {
     title: "มีคำขอสลับวันลาใหม่รออนุมัติ",
     body: input.reason.trim() || undefined,
     type: "hr_leave_submitted",
+    ...(swapped?.id ? { referenceId: swapped.id } : {}),
   });
 
   revalidatePath("/hr");
@@ -1273,6 +1282,8 @@ export async function decideLeaveAction(formData: FormData) {
   } catch (error) {
     throw new Error(toMessage(error));
   }
+  // ตัดสินแล้ว ไม่มีอะไรให้ใครอนุมัติ — เอาออกจากกระดิ่งของผู้อนุมัติทุกคน
+  void clearApprovalNotifications(session.orgId, "hr_leave_submitted", id);
   // แจ้งผลกลับไปหาคนที่ยื่นลา (กระดิ่ง + เด้ง/เสียง) — ไม่รอ ไม่ให้ช้า
   void notifyRequester(session.orgId, "leave", { id }, session.userId, outcome, { reason: reason || undefined });
   revalidatePath("/hr");
@@ -1761,8 +1772,9 @@ export async function requestManualAttendanceAction(formData: FormData) {
   if (intent !== "CLOCK_IN" && intent !== "CLOCK_OUT") throw new Error("กรุณาเลือกประเภทเวลา");
   if (!reason) throw new Error("กรุณาระบุเหตุผล — ใช้เป็นหลักฐานประกอบตอนตรวจสอบภายหลัง");
 
+  let correction: { id?: string } | null = null;
   try {
-    await wfFetch("/attendance-correction-requests", {
+    correction = await wfFetch<{ id?: string }>("/attendance-correction-requests", {
       method: "POST",
       body: {
         employment_id: employmentId,
@@ -1783,6 +1795,7 @@ export async function requestManualAttendanceAction(formData: FormData) {
     title: "มีคำขอแก้ไขเวลาเข้า-ออกงานใหม่รออนุมัติ",
     body: reason || undefined,
     type: "hr_attendance_correction_submitted",
+    ...(correction?.id ? { referenceId: correction.id } : {}),
   });
 
   revalidatePath("/hr");
@@ -1801,14 +1814,23 @@ export async function approveAttendanceCorrectionAction(formData: FormData) {
   if (!adjustmentId) throw new Error("ไม่พบคำขอ");
   if (!reason) throw new Error("กรุณาระบุเหตุผลที่อนุมัติ");
 
+  let approved: { status?: string } | null = null;
   try {
-    await wfFetch(`/attendance-correction-requests/${adjustmentId}/approve`, {
+    approved = await wfFetch<{ status?: string }>(`/attendance-correction-requests/${adjustmentId}/approve`, {
       method: "POST",
       body: { reason },
     });
   } catch (error) {
     throw new Error(toMessage(error));
   }
+  // ต้องอนุมัติ 2 คน: คนแรกกดแล้ว = ของเขาหายจากกระดิ่ง (ยังต้องมีคนที่ 2 — ของคนอื่นยังอยู่)
+  // ครบแล้ว (APPROVED) = ไม่มีอะไรให้ใครทำ เอาออกจากทุกคน
+  void clearApprovalNotifications(
+    session.orgId,
+    "hr_attendance_correction_submitted",
+    adjustmentId,
+    approved?.status === "APPROVED" ? undefined : session.userId
+  );
   void notifyRequester(session.orgId, "correction", { id: adjustmentId }, session.userId, "APPROVED", { reason });
   revalidatePath("/hr");
 }
@@ -1829,6 +1851,7 @@ export async function rejectAttendanceCorrectionAction(formData: FormData) {
   } catch (error) {
     throw new Error(toMessage(error));
   }
+  void clearApprovalNotifications(session.orgId, "hr_attendance_correction_submitted", adjustmentId);
   void notifyRequester(session.orgId, "correction", { id: adjustmentId }, session.userId, "REJECTED", { reason });
   revalidatePath("/hr");
 }
