@@ -23,6 +23,16 @@ import {
 import { saveCommissionPool, saveCommissionWeights } from "@/modules/hr/lib/commission-data";
 import { syncAllUserNames, syncUserName } from "@/modules/hr/lib/name-sync";
 import { clearApprovalNotifications, notifyApprovers, notifyRequester } from "@/modules/hr/lib/hr-notify";
+import { dockAttendance } from "@/lib/attendance-performance";
+
+/**
+ * อนุมัติลา / แก้เวลาแล้ว → คำนวณผลลงเวลาใหม่และคืนคะแนนที่หักไปแล้วทันที ไม่ต้องรอ cron 08:00/17:00
+ * (เจอจริง: อนุมัติ WFH ย้อนหลังแล้วหน้าคะแนนยังขึ้น "ขาดงาน" อยู่จนรอบถัดไป)
+ * ทำเบื้องหลัง ไม่ให้ผู้อนุมัติต้องรอ · รันซ้ำกับ cron ได้ปลอดภัย (หัก/คืน ไม่ซ้ำด้วย unique key)
+ */
+function refreshAttendanceScores() {
+  void dockAttendance().catch((err) => console.error("[hr] refresh attendance scores failed", err));
+}
 
 /**
  * Server action ของโมดูลบุคคล — ทุกตัวยิงต่อไปที่ workforce API
@@ -1284,6 +1294,7 @@ export async function decideLeaveAction(formData: FormData) {
   }
   // ตัดสินแล้ว ไม่มีอะไรให้ใครอนุมัติ — เอาออกจากกระดิ่งของผู้อนุมัติทุกคน
   void clearApprovalNotifications(session.orgId, "hr_leave_submitted", id);
+  if (outcome === "APPROVED") refreshAttendanceScores();
   // แจ้งผลกลับไปหาคนที่ยื่นลา (กระดิ่ง + เด้ง/เสียง) — ไม่รอ ไม่ให้ช้า
   void notifyRequester(session.orgId, "leave", { id }, session.userId, outcome, { reason: reason || undefined });
   revalidatePath("/hr");
@@ -1831,6 +1842,7 @@ export async function approveAttendanceCorrectionAction(formData: FormData) {
     adjustmentId,
     approved?.status === "APPROVED" ? undefined : session.userId
   );
+  if (approved?.status === "APPROVED") refreshAttendanceScores();
   void notifyRequester(session.orgId, "correction", { id: adjustmentId }, session.userId, "APPROVED", { reason });
   revalidatePath("/hr");
 }
