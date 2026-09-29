@@ -109,7 +109,14 @@ export function ManualAttendanceForm({ employees }: { employees: Employment[] })
       </Field>
 
       <Field label="วันที่ *">
-        <input type="date" name="work_date" required className={inputClass} />
+        {/* max = วันนี้: กันพิมพ์ปี พ.ศ. (2569) ลงช่องที่เป็น ค.ศ. — ได้วันที่ในอีก 543 ปี ซึ่งไม่มีผลกับวันจริง */}
+        <input
+          type="date"
+          name="work_date"
+          required
+          max={new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date())}
+          className={inputClass}
+        />
       </Field>
 
       <Field label="เวลา *">

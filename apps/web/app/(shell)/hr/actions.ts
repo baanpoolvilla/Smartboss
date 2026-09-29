@@ -1768,17 +1768,31 @@ function bangkokIso(dateStr: string, timeStr: string): string {
   return `${dateStr}T${timeStr}:00+07:00`;
 }
 
+/**
+ * วันที่จาก <input type="date"> ที่คนพิมพ์ปี พ.ศ. ลงไป ("2569-09-27") — เบราว์เซอร์รับเป็น ค.ศ. 2569
+ * คำขอเลยไปลงวันในอีก 543 ปี ไม่มีผลกับวันจริงเลย (เจอจริง: ขอแก้เวลา 27–28 ก.ย. อนุมัติครบแล้ว
+ * แต่ยังโดนหักมาสาย หน้ารายการขึ้น "27 ก.ย. 3112") ⇒ ปีเกิน 2400 = พ.ศ. แปลงกลับเป็น ค.ศ.
+ */
+function normalizeWorkDate(value: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!m) return value;
+  const year = Number(m[1]);
+  return year >= 2400 ? `${year - 543}-${m[2]}-${m[3]}` : value;
+}
+
 export async function requestManualAttendanceAction(formData: FormData) {
   const session = await guard(HR_PERMS.employeeManage);
 
   const employmentId = String(formData.get("employment_id") ?? "");
-  const workDate = String(formData.get("work_date") ?? "");
+  const workDate = normalizeWorkDate(String(formData.get("work_date") ?? ""));
   const time = String(formData.get("time") ?? "");
   const intent = String(formData.get("event_intent") ?? "");
   const reason = String(formData.get("reason") ?? "").trim();
 
   if (!employmentId) throw new Error("กรุณาเลือกพนักงาน");
   if (!workDate) throw new Error("กรุณาเลือกวันที่");
+  const todayTh = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
+  if (workDate > todayTh) throw new Error("ขอแก้เวลาล่วงหน้าไม่ได้ — เลือกวันที่ผ่านมาแล้วหรือวันนี้");
   if (!time) throw new Error("กรุณาเลือกเวลา");
   if (intent !== "CLOCK_IN" && intent !== "CLOCK_OUT") throw new Error("กรุณาเลือกประเภทเวลา");
   if (!reason) throw new Error("กรุณาระบุเหตุผล — ใช้เป็นหลักฐานประกอบตอนตรวจสอบภายหลัง");
