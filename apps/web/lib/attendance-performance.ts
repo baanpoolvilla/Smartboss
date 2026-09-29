@@ -9,6 +9,7 @@ import {
   recordPerformanceEvents,
   type PerformanceEventInput,
 } from "@/lib/performance";
+import { recalculateAttendanceAllOrgs } from "@/lib/attendance-recalc";
 
 /**
  * ดึงผลลงเวลาจาก workforce มาเป็นคะแนนผลงาน
@@ -53,7 +54,15 @@ export async function dockAttendance(): Promise<{
   scanned: number;
   recorded: number;
   refunded?: number;
+  recalculated?: Awaited<ReturnType<typeof recalculateAttendanceAllOrgs>>;
 }> {
+  // คำนวณผลลงเวลาให้ครบก่อนตัดสิน — ไม่ต้องรอให้มีคนเปิดหน้า /hr (ดู lib/attendance-recalc.ts)
+  // พลาดก็หักต่อจากผลเท่าที่มี ไม่หยุดทั้งงาน
+  const recalculated = await recalculateAttendanceAllOrgs().catch((err) => {
+    console.error("[attendance] recalc before docking failed", err);
+    return undefined;
+  });
+
   const orgs = await prisma.organization.findMany({
     where: { isActive: true },
     select: { id: true },
@@ -100,7 +109,7 @@ export async function dockAttendance(): Promise<{
     (r) => new Date(r.work_date).toISOString().slice(0, 10) < todayInThailand,
   );
 
-  if (rows.length === 0) return { scanned: 0, recorded: 0 };
+  if (rows.length === 0) return { scanned: 0, recorded: 0, recalculated };
 
   // subject คือ core.users.id — ยืนยันว่ายังมีอยู่จริงและอยู่บริษัทไหน
   // งานรายวันของทั้งแพลตฟอร์ม — orgId คือคำตอบที่ query นี้หา (แต่ละแถวลงบริษัทของคนนั้นเอง)
@@ -155,7 +164,7 @@ export async function dockAttendance(): Promise<{
 
   const recorded = await recordPerformanceEvents(events);
   const refunded = await refundNoLongerValidDocks(from, todayInThailand, settingsByOrg);
-  return { scanned: rows.length, recorded, refunded };
+  return { scanned: rows.length, recorded, refunded, recalculated };
 }
 
 type OrgSettings = { enabled: boolean; lateThresholdMinutes: number; missingPunchCountsAsAbsent: boolean };
