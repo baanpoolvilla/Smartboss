@@ -2,7 +2,8 @@ import { requireOrg } from "@smartboss/auth";
 import { HrPage } from "@/modules/hr/components/hr-page";
 import { HR_PERMS } from "@/modules/hr/permissions";
 import { EmptyState } from "@/modules/hr/components/ui";
-import { buildScorecards } from "@/lib/performance";
+import { buildScorecards, listUserEvents } from "@/lib/performance";
+import { ScoreBreakdown } from "@/components/performance/score-breakdown";
 import { monthDisplay, monthKey, monthRange } from "@/lib/performance-month";
 import { MissedReportsList } from "./missed-reports-list";
 
@@ -33,6 +34,8 @@ export default async function MyScorePage() {
         if (!card) {
           return <EmptyState>ยังไม่มีข้อมูลคะแนนผลงานของเดือนนี้</EmptyState>;
         }
+        // ช่วงเดียวกับที่คิดคะแนนเดือนนี้ — จำนวนในแต่ละหมวดกับรายการข้างในจึงตรงกัน
+        const events = card.byCategory.length > 0 ? await listUserEvents(session.orgId, session.userId, { from, to, limit: 1000 }) : [];
 
         return (
           <div className="flex flex-col gap-4">
@@ -54,17 +57,7 @@ export default async function MyScorePage() {
               {card.byCategory.length === 0 ? (
                 <p className="text-sm text-(--ink-soft)">ไม่มีเลย — คะแนนเต็มอยู่</p>
               ) : (
-                <div className="flex flex-wrap gap-1.5">
-                  {card.byCategory.map((row) => (
-                    <span
-                      key={row.category}
-                      className="rounded-full border border-(--line) px-2.5 py-1 text-xs text-(--ink-soft)"
-                    >
-                      {row.label} <span style={{ color: "var(--danger)" }}>{row.points}</span>
-                      {row.count > 1 ? ` ×${row.count}` : ""}
-                    </span>
-                  ))}
-                </div>
+                <ScoreBreakdown rows={card.byCategory} events={events} />
               )}
             </div>
 

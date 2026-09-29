@@ -48,6 +48,7 @@ import { monthDisplay, resolveMonthParam } from "@/lib/performance-month";
 import { formatSatang } from "@/modules/hr/lib/commission";
 import { loadCommissionMonth } from "@/modules/hr/lib/commission-data";
 import { loadDayOffQuota } from "@/lib/day-off-quota";
+import { ScoreBreakdown } from "@/components/performance/score-breakdown";
 
 interface CompensationRate {
   id: string;
@@ -302,6 +303,11 @@ export default async function EmployeeDetailPage({
           tab === "score" && scorecard !== null
             ? await listUserEvents(session.orgId, scorecard.userId, { limit: 15 })
             : [];
+        // ทุกเหตุการณ์ของเดือนนี้ — ให้กดขยายแต่ละหมวดใน "เสียคะแนนเพราะ" แล้วเห็นครบทุกวัน
+        const monthEvents =
+          tab === "score" && scorecard !== null
+            ? await listUserEvents(session.orgId, scorecard.userId, { from: scoreFrom, to: now, limit: 1000 })
+            : [];
 
         // ค่าคอมเดือนนี้ของคนนี้ — คิดจากชุดเดียวกับแท็บค่าคอม ยอดจึงตรงกันเสมอ
         const commissionMonth = resolveMonthParam(undefined);
@@ -485,27 +491,11 @@ export default async function EmployeeDetailPage({
 
                 {scorecard.byCategory.length > 0 && (
                   <div className="mt-3">
-                    <DataTable head={["เสียคะแนนเพราะ", "จำนวนครั้ง", "คะแนน"]}>
-                      {scorecard.byCategory.map((row) => (
-                        <tr key={row.category} className="hover:bg-(--bg-soft)">
-                          <Td>{row.label}</Td>
-                          <Td align="right">{row.count}</Td>
-                          <Td
-                            align="right"
-                            className="font-medium"
-                            // แต้มติดลบคือสิ่งที่ต้องสังเกต ไม่ใช่ตัวเลขเฉย ๆ
-                          >
-                            <span
-                              style={{
-                                color: row.points < 0 ? "var(--danger)" : "var(--tone-ok)",
-                              }}
-                            >
-                              {row.points > 0 ? `+${row.points}` : row.points}
-                            </span>
-                          </Td>
-                        </tr>
-                      ))}
-                    </DataTable>
+                    <ScoreBreakdown
+                      rows={scorecard.byCategory}
+                      events={monthEvents}
+                      attendanceHref={(d) => `/hr?date=${d}`}
+                    />
                   </div>
                 )}
               </SectionCard>
