@@ -1,7 +1,9 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
 
-import { publishToOrg, publishToUsers } from "@/lib/realtime/server";
+import { activeUserIds, publishToOrg, publishToUsers } from "@/lib/realtime/server";
+import { sendWebPush } from "@/lib/web-push";
+import { notifyUsers } from "@/modules/maintenance/data/notify";
 import { CHAT_ORG_CHANNEL_NAME } from "../constants";
 import type { ChatChannelDetail, ChatChannelSummary, ChatRealtimeEvent } from "../types";
 import { ChatError, firstAttachmentKind, hydrateMessages, type ChatActor } from "./serialize";
@@ -389,6 +391,28 @@ export async function getOrCreateDm(orgId: string, userAId: string, userBId: str
   return created.id;
 }
 
+/**
+ * แจ้งคนที่ถูกเพิ่มเข้ากลุ่ม — ข้อความระบบ "สร้างกลุ่ม/เพิ่มเข้ากลุ่ม" ไม่เด้ง (notifyNewMessage
+ * แจ้งเฉพาะข้อความที่คนพิมพ์) ⇒ เดิมคนที่ไม่ได้เปิดเว็บอยู่ไม่รู้เลยว่ามีกลุ่มใหม่จนกว่าจะเปิดแชทเอง
+ * ลงกระดิ่ง (กดแล้วเปิดกลุ่ม) + เด้งเข้าเครื่องคนที่ไม่ได้ดูหน้าจอ · ไม่ throw
+ */
+async function notifyAddedToGroup(orgId: string, channelId: string, groupName: string, actorId: string, userIds: string[]) {
+  const ids = userIds.filter((id) => id !== actorId);
+  if (ids.length === 0) return;
+  try {
+    const actorName = (await userNames(orgId, [actorId])).get(actorId) ?? "เพื่อนร่วมงาน";
+    const title = `${actorName} เพิ่มคุณเข้ากลุ่ม "${groupName}"`;
+    await notifyUsers(orgId, ids, { title, type: "chat_message", referenceId: channelId });
+    const active = await activeUserIds(ids);
+    const offline = ids.filter((id) => !active.has(id));
+    if (offline.length > 0) {
+      await sendWebPush(orgId, offline, { title, body: "แตะเพื่อเปิดกลุ่ม", url: `/report-task/chat?c=${encodeURIComponent(channelId)}`, tag: `chat-${channelId}` });
+    }
+  } catch (err) {
+    console.error("[chat] notify added-to-group failed", err);
+  }
+}
+
 export async function createGroup(orgId: string, callerId: string, name: string, memberIds: string[]): Promise<string> {
   const valid = await activeOrgUserIds(orgId, memberIds.filter((id) => id !== callerId));
   const allIds = Array.from(new Set([callerId, ...valid]));
@@ -407,6 +431,7 @@ export async function createGroup(orgId: string, callerId: string, name: string,
   const names = await userNames(orgId, [callerId]);
   await postSystemMessage(orgId, created.id, callerId, `${names.get(callerId) ?? "ผู้ใช้"} สร้างกลุ่ม "${created.name}"`);
   publishToUsers(allIds, { type: "chat.channel", channelId: created.id });
+  await notifyAddedToGroup(orgId, created.id, created.name ?? "กลุ่ม", callerId, allIds);
   return created.id;
 }
 
@@ -450,6 +475,8 @@ export async function addMembers(actor: ChatActor, channelId: string, userIds: s
   const added = toAdd.map((id) => names.get(id) ?? "ผู้ใช้").join(", ");
   await postSystemMessage(actor.orgId, channelId, actor.userId, `${names.get(actor.userId) ?? "ผู้ใช้"} เพิ่ม ${added} เข้ากลุ่ม`);
   await broadcastToChannel(actor.orgId, channelId, { type: "chat.channel", channelId });
+  const channel = await prisma.chatChannel.findFirst({ where: { id: channelId, orgId: actor.orgId }, select: { name: true } });
+  await notifyAddedToGroup(actor.orgId, channelId, channel?.name ?? "กลุ่ม", actor.userId, toAdd);
 }
 
 /** ลบสมาชิก (แอดมิน) หรือออกจากกลุ่มเอง (userId = ตัวเอง) */

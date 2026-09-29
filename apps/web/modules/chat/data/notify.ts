@@ -15,8 +15,11 @@ import type { ChatActor } from "./serialize";
  *  3. ถูก @แท็ก → ลงกระดิ่งรวมด้วย (core.notifications) กันหลุด
  *
  * แชททั่วไปไม่ลงกระดิ่ง (เหมือน LINE) — เดิมลงทุกข้อความ กระดิ่งเต็มไปด้วยแชทจนแจ้งเตือนอื่นจม
- * ห้องที่ปิดเสียงไว้ไม่เด้ง ยกเว้นถูกแท็กชื่อตัวเอง
- * ห้องรวมทั้งบริษัทไม่เด้งทุกข้อความ (คนเป็นพัน) — เด้งเฉพาะคนที่ถูกแท็ก และ @ทุกคน จากแอดมินแชท
+ *
+ * แบบ LINE: ทุกห้องเด้งทุกข้อความ รวมห้องรวมทั้งบริษัท (เดิมห้องรวมเด้งเฉพาะคนถูกแท็ก
+ * — ข้อความในห้องรวมเงียบหายไม่มีใครรู้) ใครไม่อยากได้ ปิดเสียงห้องนั้นเอง
+ * ห้องที่ปิดเสียงไว้ยังเด้งเมื่อ "เรื่องนั้นเกี่ยวกับเรา": ถูกแท็กชื่อ, @ทุกคน, ตอบกลับข้อความของเรา
+ * @ทุกคน ในห้องรวมยังจำกัดเฉพาะแอดมินแชท (ทะลุการปิดเสียงของทั้งบริษัท)
  *
  * ไม่ throw — แจ้งเตือนพลาดต้องไม่ทำให้ส่งข้อความพลาด
  */
@@ -31,13 +34,15 @@ export async function notifyNewMessage(
     if (message.kind !== "text") return;
     const mentionAll = message.mentions.includes("all") && (channelType !== "org" || actor.isChatAdmin);
     const directMentions = new Set(message.mentions.filter((m) => m !== "all" && m !== actor.userId));
+    // ตอบกลับข้อความของใคร = เรื่องนี้เกี่ยวกับคนนั้น เด้งแม้ปิดเสียงห้องไว้ (แบบ LINE)
+    const repliedTo =
+      message.replyTo && !message.replyTo.deleted && message.replyTo.authorId !== actor.userId ? message.replyTo.authorId : null;
+    const aboutMe = (id: string) => directMentions.has(id) || mentionAll || id === repliedTo;
 
-    let candidates: string[];
-    if (channelType === "org") {
-      candidates = mentionAll ? await otherMemberIds(actor.orgId, channelId, actor.userId) : [...directMentions];
-    } else {
-      candidates = memberIds.filter((id) => id !== actor.userId);
-    }
+    const candidates =
+      channelType === "org"
+        ? await otherMemberIds(actor.orgId, channelId, actor.userId)
+        : memberIds.filter((id) => id !== actor.userId);
     if (candidates.length === 0) return;
 
     const [prefs, channel, author] = await Promise.all([
@@ -49,7 +54,7 @@ export async function notifyNewMessage(
       prisma.user.findUnique({ where: { id: actor.userId }, select: { name: true } }),
     ]);
     const muted = new Set(prefs.map((p) => p.userId));
-    const recipients = candidates.filter((id) => !muted.has(id) || directMentions.has(id));
+    const recipients = candidates.filter((id) => !muted.has(id) || aboutMe(id));
     if (recipients.length === 0) return;
 
     const authorName = author?.name ?? "เพื่อนร่วมงาน";
@@ -72,13 +77,24 @@ export async function notifyNewMessage(
     const pushes: Promise<void>[] = [];
     if (offline.length > 0) {
       const mentioned = offline.filter((id) => directMentions.has(id) || mentionAll);
-      const others = offline.filter((id) => !mentioned.includes(id));
+      const replied = offline.filter((id) => id === repliedTo && !mentioned.includes(id));
+      const others = offline.filter((id) => !mentioned.includes(id) && !replied.includes(id));
       const groupTitle = channel?.name ?? "แชท";
       if (others.length > 0) {
         pushes.push(
           sendWebPush(actor.orgId, others, {
             title: isDm ? authorName : groupTitle,
             body: isDm ? preview : `${authorName}: ${preview}`,
+            url,
+            tag: `chat-${channelId}`,
+          })
+        );
+      }
+      if (replied.length > 0) {
+        pushes.push(
+          sendWebPush(actor.orgId, replied, {
+            title: `${authorName} ตอบกลับข้อความของคุณ${isDm ? "" : ` ใน ${groupTitle}`}`,
+            body: preview,
             url,
             tag: `chat-${channelId}`,
           })

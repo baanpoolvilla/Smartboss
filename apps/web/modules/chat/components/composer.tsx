@@ -66,6 +66,9 @@ export interface ComposerHandle {
   focus: () => void;
 }
 
+/** รายชื่อ @แท็กยาวสุดเท่านี้ — เกินจากนี้ให้พิมพ์ชื่อค้นหา (ห้องที่คนเยอะมาก) */
+const MAX_MENTION_OPTIONS = 200;
+
 export const Composer = forwardRef<
   ComposerHandle,
   {
@@ -187,17 +190,25 @@ export const Composer = forwardRef<
   useImperativeHandle(ref, () => ({ addFiles, focus: () => textareaRef.current?.focus() }), [addFiles]);
 
   // ─── @แท็ก ───
-  const candidates = useMemo(() => {
-    if (!mentionQuery) return [];
+  // แสดงทุกคนที่แท็กได้ในห้องนี้ (ห้องรวม = ทั้งบริษัท, กลุ่ม = สมาชิก) รายการเลื่อนดูได้
+  // เดิมตัดที่ 8 รายการ ⇒ ห้องรวมเห็นแค่ 7 คนแรก คนอื่นต้องรู้ชื่อแล้วพิมพ์ค้นเอง
+  // เพดานไว้กันเฉพาะห้องใหญ่มาก ๆ — เกินแล้วขึ้นคำแนะนำให้พิมพ์ชื่อค้นหา
+  const { candidates, truncated } = useMemo(() => {
+    if (!mentionQuery) return { candidates: [], truncated: false };
     const q = mentionQuery.query.toLowerCase();
     const list: { id: string; name: string; user?: ChatUser }[] = [];
     if (channelType !== "dm" && "ทุกคน".includes(q)) list.push({ id: "all", name: "ทุกคน" });
+    let more = false;
     for (const u of mentionable) {
       if (u.id === meId) continue;
-      if (!q || u.name.toLowerCase().includes(q)) list.push({ id: u.id, name: u.name, user: u });
-      if (list.length >= 8) break;
+      if (q && !u.name.toLowerCase().includes(q)) continue;
+      if (list.length >= MAX_MENTION_OPTIONS) {
+        more = true;
+        break;
+      }
+      list.push({ id: u.id, name: u.name, user: u });
     }
-    return list;
+    return { candidates: list, truncated: more };
   }, [mentionQuery, mentionable, meId, channelType]);
 
   const detectMention = (value: string, caret: number) => {
@@ -338,6 +349,7 @@ export const Composer = forwardRef<
               {c.user?.departmentName && <span className="shrink-0 truncate text-[11px] text-(--ink-soft)">{c.user.departmentName}</span>}
             </button>
           ))}
+          {truncated && <p className="px-2 py-1.5 text-[11px] text-(--ink-soft)">พิมพ์ชื่อต่อจาก @ เพื่อหาคนอื่น</p>}
         </div>
       )}
 

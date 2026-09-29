@@ -87,17 +87,18 @@ function onEvent(raw: RealtimeEventMessage) {
   const onChatPage = currentPath.startsWith(CHAT_PATH);
   const viewingRoom = onChatPage && useChatStore.getState().activeChannelId === event.channelId && document.visibilityState === "visible";
   // นับเพิ่มเองในเครื่อง ไม่ถามเซิร์ฟเวอร์ทุกข้อความ (ภาระจะเท่ากับคนออนไลน์ คูณ จำนวนข้อความ)
-  const mentionedHere = message.mentions.includes(state.meId) || message.mentions.includes("all");
+  // เรื่องนี้เกี่ยวกับเรา (ถูกแท็ก/@ทุกคน/ตอบกลับข้อความเรา) — เด้งแม้ปิดเสียงห้องไว้ แบบ LINE
+  const mentionedHere =
+    message.mentions.includes(state.meId) || message.mentions.includes("all") || message.replyTo?.authorId === state.meId;
   if (!viewingRoom && (!state.muted.has(event.channelId) || mentionedHere)) setUnread(state.unread + 1);
 
   // ─── เด้งแจ้งเตือน ───
   if (viewingRoom || notified.has(message.id)) return;
   notified.add(message.id);
   if (notified.size > 200) notified.clear();
-  const mentioned = message.mentions.includes(state.meId) || message.mentions.includes("all");
+  const mentioned = mentionedHere;
+  // ทุกห้องเด้ง รวมห้องรวมทั้งบริษัท (แบบ LINE) — ไม่อยากได้ให้ปิดเสียงห้องเอง
   if (state.muted.has(event.channelId) && !mentioned) return;
-  // ห้องรวมทั้งบริษัท (คนเป็นพัน) — เด้งเฉพาะเมื่อถูกแท็ก
-  if (event.channelType === "org" && !mentioned) return;
 
   const who = event.authorName ?? "ข้อความใหม่";
   const preview = message.body?.slice(0, 120) || attachmentLabel(message.attachments[0]?.kind ?? null);
