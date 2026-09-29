@@ -90,6 +90,32 @@ export function penaltyDueDate(task: Pick<Task, "originalDueDate" | "revisions">
 }
 
 /**
+ * งานที่ปิดแล้ว (status "done") เสร็จทันกำหนดไหม — กติกาเดียวทั้งระบบ ใช้ทั้งตอนหักคะแนน
+ * (sweep ด้านล่าง) และตอนนับ "เสร็จ ตรงเวลา / เสร็จช้า" บนแดชบอร์ด (kpi-buckets.ts)
+ *
+ * เดิมแดชบอร์ดเทียบ completedAt กับ dueDate ของทั้งงานตรง ๆ ⇒ งานที่เลื่อนกำหนดรายคน
+ * แล้วส่งทันกำหนดใหม่ (T-2569-0028: 25/09 → 02/10) ขึ้น "เสร็จช้าแต่เลยกำหนด" ทั้งที่
+ * sweep ไม่หักคะแนน และส่ง "ในวัน" ครบกำหนดหลัง 7 โมงเช้าก็นับว่าช้า (dueDate = เที่ยงคืน UTC)
+ */
+export function finishedTaskOnTime(
+  t: Pick<Task, "taskMode" | "assigneeIds" | "assigneeDueDates" | "completedAt" | "updatedAt" | "dueTime" | "originalDueDate" | "revisions">,
+): boolean {
+  const heldTo = penaltyDueDate(t);
+  const finishedAt = t.completedAt ?? t.updatedAt;
+  // งานกลุ่มเลื่อนกำหนดได้รายคน (assigneeDueDates — "แก้ไขทั้งหมด"/รายคน) เดิมที่นี่
+  // ดูแค่กำหนดของทั้งงาน ⇒ เลื่อนให้ทุกคนแล้วส่งทันกำหนดใหม่ ก็ยังโดนตีตรา
+  // "เลยกำหนด" ถาวร (เจอจริง: T-2569-0028 เลื่อน 25/09 → 02/10 เสร็จ 25/09)
+  // ใช้กำหนดที่ช้าที่สุดของทุกคน — งานปิดเมื่อทุกคนเสร็จ จึงเทียบกับคนสุดท้าย
+  const deadline =
+    t.taskMode === "group"
+      ? t.assigneeIds
+          .map((id) => t.assigneeDueDates?.[id] ?? heldTo)
+          .reduce((a, b) => (dueDay(b) > dueDay(a) ? b : a), heldTo)
+      : heldTo;
+  return finishedOnTime(finishedAt, deadline, t.dueTime);
+}
+
+/**
  * Sweep every task: flag `missedDeadlineOnce` the moment it's first overdue
  * (kept forever as history), and dock `latePenaltyPoints` immediately — every
  * task is strict, so no lead has to click anything. Safe to call repeatedly;
@@ -142,18 +168,7 @@ export function sweepAutoPenalties(
     const heldTo = penaltyDueDate(t);
 
     if (t.status === "done") {
-      const finishedAt = t.completedAt ?? t.updatedAt;
-      // งานกลุ่มเลื่อนกำหนดได้รายคน (assigneeDueDates — "แก้ไขทั้งหมด"/รายคน) เดิมที่นี่
-      // ดูแค่กำหนดของทั้งงาน ⇒ เลื่อนให้ทุกคนแล้วส่งทันกำหนดใหม่ ก็ยังโดนตีตรา
-      // "เลยกำหนด" ถาวร (เจอจริง: T-2569-0028 เลื่อน 25/09 → 02/10 เสร็จ 25/09)
-      // ใช้กำหนดที่ช้าที่สุดของทุกคน — งานปิดเมื่อทุกคนเสร็จ จึงเทียบกับคนสุดท้าย
-      const deadline =
-        t.taskMode === "group"
-          ? t.assigneeIds
-              .map((id) => t.assigneeDueDates?.[id] ?? heldTo)
-              .reduce((a, b) => (dueDay(b) > dueDay(a) ? b : a), heldTo)
-          : heldTo;
-      const onTime = finishedOnTime(finishedAt, deadline, t.dueTime);
+      const onTime = finishedTaskOnTime(t);
       if (onTime && t.taskMode !== "group" && t.penalty?.byUserId === SYSTEM_USER_ID) {
         return revoke(t);
       }

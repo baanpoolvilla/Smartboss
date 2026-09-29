@@ -1,4 +1,6 @@
 import { isLate } from "@/modules/report_task/lib/reports";
+import { finishedTaskOnTime } from "@/modules/report_task/lib/task-penalty-sweep";
+import { daysUntil } from "@/modules/report_task/lib/format";
 import { reportStatusCountsForScope } from "@/modules/report_task/lib/report-feed-compliance";
 import type { DateExemptions } from "@/modules/report_task/lib/report-feed-exemptions";
 import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
@@ -65,10 +67,38 @@ export type KpiBucketKey = "onTime" | "lateDone" | "pending" | "overdue";
  * lands. */
 export function taskBucketOf(t: Task): KpiBucketKey {
   if (t.status === "done") {
-    const late = t.completedAt ? new Date(t.completedAt).getTime() > new Date(t.dueDate).getTime() : false;
-    return late ? "lateDone" : "onTime";
+    // กติกาเดียวกับตอนหักคะแนนส่งช้า (เลื่อนกำหนดรายคน/เลื่อนก่อนครบกำหนด/ส่งในวันครบกำหนด)
+    // ไม่งั้นกราฟบอก "เสร็จช้า" ทั้งที่ระบบไม่หักคะแนน · งานกลุ่ม: มีใครสักคนโดนหักส่งช้า = ทั้งงานเสร็จช้า
+    if (t.taskMode === "group" && hasLateDock(t)) return "lateDone";
+    return finishedTaskOnTime(t) ? "onTime" : "lateDone";
   }
   return isLate(t) ? "overdue" : "pending";
+}
+
+function hasLateDock(t: Task): boolean {
+  return Object.keys(t.penalties ?? {}).length > 0;
+}
+
+/**
+ * กลุ่มของ "คนหนึ่งคน" ในงานนั้น — งานเดี่ยวเท่ากับของทั้งงาน งานกลุ่มตัดสินรายคน
+ *
+ * เดิมงานกลุ่มทุกคนได้ผลเดียวกับทั้งงาน ⇒ คนเดียวส่งช้า (ภีม) ทั้งทีมขึ้น "เสร็จช้า" หมด
+ * ทั้งที่คนอื่นเลื่อนกำหนดกันไว้แล้ว (T-2569-0028) · ไม่มีเวลาที่แต่ละคนกดเสร็จเก็บไว้
+ * จึงใช้คำตัดสินรายคนที่ sweep บันทึกไว้แล้ว: `penalties[คนนั้น]` = เลยกำหนดของตัวเอง
+ * ขณะส่วนของตัวเองยังไม่เสร็จ (sweep เทียบกับกำหนดรายคน assigneeDueDates ทุก 60 วินาที)
+ */
+export function taskAssigneeBucketOf(t: Task, assigneeId: string): KpiBucketKey {
+  if (t.taskMode !== "group") return taskBucketOf(t);
+  const docked = !!t.penalties?.[assigneeId];
+  const partDone = t.status === "done" || (t.completedAssigneeIds ?? []).includes(assigneeId);
+  if (partDone) {
+    if (docked) return "lateDone";
+    // ข้อมูลเก่าก่อนมีการหักรายคน: ไม่มีใครโดนหักเลยแต่ทั้งงานปิดช้า — ใช้ผลของทั้งงาน
+    if (t.status === "done" && !hasLateDock(t) && !finishedTaskOnTime(t)) return "lateDone";
+    return "onTime";
+  }
+  if (docked) return "overdue";
+  return daysUntil(t.assigneeDueDates?.[assigneeId] ?? t.dueDate) < 0 ? "overdue" : "pending";
 }
 
 /**
@@ -96,9 +126,8 @@ export function taskKpiBuckets(tasks: Task[]): KpiBuckets {
 
 /** Same 4 groups as `taskKpiBuckets`, but split by assignee instead of
  * summed — one count per person per group. A group task counts once for
- * *each* of its assignees (not split fractionally) since the task's single
- * status/dueDate is shared by the whole group, same simplification
- * `taskKpiBuckets` already makes by not modeling per-assignee completion. */
+ * *each* of its assignees (not split fractionally), each judged on their own
+ * part — see `taskAssigneeBucketOf`. */
 export function taskBucketsByAssignee(tasks: Task[]): Record<KpiBucketKey, Map<string, number>> {
   const out: Record<KpiBucketKey, Map<string, number>> = {
     onTime: new Map(),
@@ -107,8 +136,8 @@ export function taskBucketsByAssignee(tasks: Task[]): Record<KpiBucketKey, Map<s
     overdue: new Map(),
   };
   for (const t of tasks) {
-    const bucket = taskBucketOf(t);
     for (const assigneeId of t.assigneeIds) {
+      const bucket = taskAssigneeBucketOf(t, assigneeId);
       out[bucket].set(assigneeId, (out[bucket].get(assigneeId) ?? 0) + 1);
     }
   }
