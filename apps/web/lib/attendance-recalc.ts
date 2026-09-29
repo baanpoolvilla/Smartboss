@@ -50,20 +50,21 @@ async function targetsFor(orgId: string): Promise<OrgTarget> {
   });
 }
 
-function bangkokDay(offsetDays: number): string {
+export function bangkokDay(offsetDays: number): string {
   const d = new Date(Date.now() + offsetDays * 86_400_000);
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(d);
 }
 
-export async function recalculateAttendanceAllOrgs(): Promise<{
+/** range ไม่ส่ง = ย้อน RECALC_DAYS วันถึงวันนี้ (ใช้ก่อนหักคะแนน) · แจ้งเตือนมาสายส่งแค่วันนี้ (เบา รันถี่ได้) */
+export async function recalculateAttendanceAllOrgs(range?: { from: string; to: string }): Promise<{
   orgs: number;
   employments: number;
   failed: number;
   skippedOrgs: number;
 }> {
   const result = { orgs: 0, employments: 0, failed: 0, skippedOrgs: 0 };
-  const from = bangkokDay(-RECALC_DAYS);
-  const to = bangkokDay(0);
+  const from = range?.from ?? bangkokDay(-RECALC_DAYS);
+  const to = range?.to ?? bangkokDay(0);
 
   const orgs = await prisma.organization.findMany({ where: { isActive: true }, select: { id: true } });
   for (const org of orgs) {
