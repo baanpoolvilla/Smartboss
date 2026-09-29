@@ -168,6 +168,19 @@ export function useChatUnread(): number {
   return n;
 }
 
+/**
+ * ตัวรับข้อความแชทสด (เสียง + กล่องเด้ง) ที่วางไว้ใน Shell ทุกหน้า — ไม่วาดอะไร
+ *
+ * เดิมการรับข้อความสดผูกอยู่กับ ChatNavBadge (ตัวเลขข้างเมนู "แชท") ซึ่งมีแค่ในเมนูของโมดูล
+ * "งานและรายงาน" ⇒ อยู่หน้า HR/งานซ่อม/หน้าหลัก ไม่มีตัวเลขนั้นบนจอ = ไม่มีใครฟัง แชทเข้า
+ * ไม่มีเสียงไม่มีเด้งเลย (แจ้งเตือนระบบอื่นไม่เป็นเพราะ SystemNotify อยู่ใน Shell อยู่แล้ว)
+ * นับการ mount ร่วมกับ ChatNavBadge (state.mounted) — อยู่พร้อมกันก็ต่อท่อสดท่อเดียว ไม่เด้งซ้ำ
+ */
+export function ChatNotifyListener() {
+  useChatUnread();
+  return null;
+}
+
 export function ChatNavBadge() {
   const n = useChatUnread();
   if (n <= 0) return null;

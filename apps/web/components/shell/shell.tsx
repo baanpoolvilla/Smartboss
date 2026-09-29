@@ -28,6 +28,7 @@ import { NotificationSetup } from "./notification-setup";
 import { SaveFeedback } from "./save-feedback";
 import { SessionRefresher } from "./session-refresher";
 import { SystemNotify } from "./system-notify";
+import { ChatNotifyListener } from "@/modules/chat/components/chat-nav-badge";
 import { ShellProvider, type ShellUser } from "./shell-context";
 
 export type { ShellUser };
@@ -68,6 +69,8 @@ export function Shell({
 }) {
   const pathname = usePathname();
   const activeModule = findActiveModule(modules, pathname);
+  // เข้าแชทได้ = มีเมนูแชทในโมดูลที่เห็น (รายการโมดูล/เมนูถูกกรองตามสิทธิ์มาแล้ว)
+  const hasChat = modules.some((m) => m.menus.some((i) => i.path.endsWith("/chat")));
 
   return (
     <ShellProvider user={user} unread={unread}>
@@ -78,6 +81,8 @@ export function Shell({
       <SaveFeedback />
       {/* เสียง + เด้งแจ้งเตือนของทุกโมดูล (ท่อสด notify.new) */}
       <SystemNotify />
+      {/* แชทเข้า → เสียง + เด้ง ทุกหน้า ทุกโมดูล (ไม่ใช่แค่ตอนเห็นเมนูแชท) */}
+      {hasChat && <ChatNotifyListener />}
       {/* ชวนติดตั้งเป็นแอป (มือถือ) + แจ้งเมื่อมีเวอร์ชันใหม่ — ทุกหน้า ทุกโมดูล */}
       <InstallGate />
       <AppUpdateNotice />
