@@ -286,7 +286,10 @@ function computeLate(
   if (shift === null || shift.restDay) return 0;
   if (scheduledInAt === null || actualInAt === null) return 0;
 
-  const differenceMinutes = (actualInAt.getTime() - scheduledInAt.getTime()) / 60_000;
+  // นับเป็น "นาทีเต็มตามนาฬิกา" ตัดวินาทีทิ้ง — เข้า 08:15:40 คนเห็นว่า "08:15" ทั้งบนเครื่องสแกนและ
+  // หน้าลงเวลา ต้องไม่สาย (ผ่อนผันถึง 08:15) · เดิมเทียบเป็นเศษนาที 15.67 > 15 ⇒ สาย แล้วปัดขึ้นเป็น
+  // "สาย 1 นาที" ทั้งที่หน้าจอบอก 08:15 (และ 08:24:30 ขึ้นสาย 10 นาที แต่หน้าจอคิดได้ 9)
+  const differenceMinutes = Math.floor((actualInAt.getTime() - scheduledInAt.getTime()) / 60_000);
   if (differenceMinutes <= 0) return 0;
 
   switch (policy.lateMode) {

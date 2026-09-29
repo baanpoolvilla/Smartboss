@@ -174,6 +174,17 @@ describe('late policy modes', () => {
     expect(result.lateMinutes).toBe(0);
   });
 
+  it('GRACE counts whole clock minutes — 08:15:40 is still inside a 15-minute window', () => {
+    const at = (hhmmss: string) => {
+      const p = punch(hhmmss.slice(0, 5));
+      const [, , ss] = hhmmss.split(':').map(Number);
+      return { ...p, eventId: `evt-${hhmmss}`, at: new Date(p.at.getTime() + (ss ?? 0) * 1000) };
+    };
+    expect(run({ punches: [at('08:15:40'), punch('17:00')] }).lateMinutes).toBe(0);
+    expect(run({ punches: [at('08:16:00'), punch('17:00')] }).lateMinutes).toBe(1);
+    expect(run({ punches: [at('08:24:30'), punch('17:00')] }).lateMinutes).toBe(9);
+  });
+
   it('GRACE with EXCESS_OVER_GRACE charges only the minutes beyond the window', () => {
     const result = run({ punches: arriveAt0820 });
     expect(result.lateMinutes).toBe(5);
