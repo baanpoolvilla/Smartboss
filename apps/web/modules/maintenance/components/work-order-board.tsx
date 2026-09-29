@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Home as HomeIcon,
@@ -363,6 +363,43 @@ function FilterChip({
   );
 }
 
+/*
+ * บ้าน/หมวดที่เลือกไว้ต้องอยู่รอดตอนกดเข้าใบงานแล้วกดกลับ — เดิมเป็น useState ล้วน
+ * กลับมาทีไรเด้งไป "ทุกบ้าน" ต้องเลือกใหม่ทุกครั้ง ปุ่มกลับของหน้ารายละเอียดเป็นลิงก์ตายตัว
+ * (/maintenance/work-orders) จึงจำไว้สองที่: URL (รีเฟรช/แชร์ลิงก์ได้) + sessionStorage
+ * (กลับมาจากลิงก์ที่ไม่มี query) · sessionStorage = ต่อแท็บ ปิดแท็บแล้วลืมเอง
+ */
+const FILTER_KEY = "sb-wo-board-filter";
+type BoardFilter = { group: string | null; house: string | null; tab: number };
+
+function readSavedFilter(): BoardFilter | null {
+  const q = new URLSearchParams(window.location.search);
+  if (q.has("group") || q.has("house") || q.has("tab")) {
+    return { group: q.get("group"), house: q.get("house"), tab: Number(q.get("tab")) || 0 };
+  }
+  try {
+    const raw = sessionStorage.getItem(FILTER_KEY);
+    return raw ? (JSON.parse(raw) as BoardFilter) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveFilter(f: BoardFilter) {
+  const url = new URL(window.location.href);
+  for (const [k, v] of [["group", f.group], ["house", f.house], ["tab", f.tab ? String(f.tab) : null]] as const) {
+    if (v) url.searchParams.set(k, v);
+    else url.searchParams.delete(k);
+  }
+  // replaceState ไม่ทำให้ Next โหลดหน้าใหม่ และไม่เพิ่มประวัติ (กดกลับไม่ต้องไล่ทีละชิป)
+  window.history.replaceState(window.history.state, "", url);
+  try {
+    sessionStorage.setItem(FILTER_KEY, JSON.stringify(f));
+  } catch {
+    // โหมดส่วนตัว — จำได้แค่ใน URL
+  }
+}
+
 export function WorkOrderBoard({
   orders,
   propertyNames,
@@ -383,6 +420,7 @@ export function WorkOrderBoard({
   const [group, setGroup] = useState<string | null>(null);
   const [houseId, setHouseId] = useState<string | null>(null);
   const [tab, setTab] = useState(0);
+  const restored = useRef(false);
 
   // เฉพาะบ้านที่มีใบงานจริง
   const { groups, housesInGroup } = useMemo(() => {
@@ -412,6 +450,26 @@ export function WorkOrderBoard({
       housesInGroup: group ? (map.get(group) ?? []) : [],
     };
   }, [orders, propertyNames, propertyCategories, group]);
+
+  // คืนค่าที่เลือกไว้ — อ่านได้หลังโหลดหน้าเท่านั้น (URL/sessionStorage ไม่มีฝั่ง server)
+  // ข้ามหมวด/บ้านที่ไม่มีบนกระดานนี้แล้ว (เช่น เปิดจากแดชบอร์ดแบบกรอง) ไม่งั้นกระดานว่างเปล่า
+  useEffect(() => {
+    if (restored.current) return;
+    restored.current = true;
+    const saved = readSavedFilter();
+    if (!saved) return;
+    const g = saved.group && groups.includes(saved.group) ? saved.group : null;
+    const h = g && saved.house && propertyNames[saved.house] && (propertyCategories[saved.house] ?? NO_CATEGORY) === g ? saved.house : null;
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setGroup(g);
+    setHouseId(h);
+    setTab(saved.tab >= 0 && saved.tab < COLUMNS.length ? saved.tab : 0);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [groups, propertyNames, propertyCategories]);
+
+  useEffect(() => {
+    if (restored.current) saveFilter({ group, house: houseId, tab });
+  }, [group, houseId, tab]);
 
   const visible = useMemo(() => {
     if (houseId) {
