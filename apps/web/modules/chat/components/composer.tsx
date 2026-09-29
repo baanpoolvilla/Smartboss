@@ -86,6 +86,7 @@ export const Composer = forwardRef<
   const [pending, setPending] = useState<PendingFile[]>([]);
   const [mentionQuery, setMentionQuery] = useState<{ start: number; query: string } | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
+  const mentionListRef = useRef<HTMLDivElement>(null);
   const [plusOpen, setPlusOpen] = useState(false);
   /** มือถือ: กด ">" ตอนกำลังพิมพ์ เพื่อกางปุ่มกล้อง/รูปกลับมา (แบบ LINE) */
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -211,6 +212,13 @@ export const Composer = forwardRef<
     return { candidates: list, truncated: more };
   }, [mentionQuery, mentionable, meId, channelType]);
 
+  // กดลูกศรขึ้น/ลง — เลื่อนรายการตามแถวที่เลือกอยู่ ไม่งั้นแถวที่เลือกหลุดขอบกล่องไปมองไม่เห็น
+  useEffect(() => {
+    mentionListRef.current
+      ?.querySelector<HTMLElement>(`[data-mention-index="${mentionIndex}"]`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [mentionIndex]);
+
   const detectMention = (value: string, caret: number) => {
     const before = value.slice(0, caret);
     const m = /(^|\s)@([^\s@]{0,30})$/.exec(before);
@@ -329,11 +337,12 @@ export const Composer = forwardRef<
     >
       {/* รายชื่อ @แท็ก */}
       {mentionQuery && candidates.length > 0 && (
-        <div className="absolute bottom-full left-2 right-2 z-20 mb-1 max-h-64 overflow-y-auto rounded-xl border border-(--line) bg-(--bg) p-1 shadow-xl sm:left-3 sm:right-auto sm:w-72">
+        <div ref={mentionListRef} className="absolute bottom-full left-2 right-2 z-20 mb-1 max-h-64 overflow-y-auto rounded-xl border border-(--line) bg-(--bg) p-1 shadow-xl sm:left-3 sm:right-auto sm:w-72">
           {candidates.map((c, i) => (
             <button
               key={c.id}
               type="button"
+              data-mention-index={i}
               onMouseDown={(e) => {
                 e.preventDefault();
                 pickMention(c);
