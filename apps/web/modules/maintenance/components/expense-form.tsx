@@ -1,9 +1,10 @@
 "use client";
 
+import { SubmitButton } from "./submit-button";
+
 import { useState } from "react";
 import { Info, Receipt, MinusCircle } from "lucide-react";
 import { Card } from "@smartboss/ui/components/card";
-import { Button } from "@smartboss/ui/components/button";
 
 const inputClass =
   "h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm text-(--ink) focus-visible:border-(--brand-green) focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-(--brand-green)/30";
@@ -167,8 +168,7 @@ export function ExpenseForm({
         )}
 
         <div className="flex gap-3">
-          <Button
-            type="submit"
+          <SubmitButton
             variant="outline"
             formAction={action}
             name="isNoExpense"
@@ -176,10 +176,10 @@ export function ExpenseForm({
             className="flex-1"
           >
             <MinusCircle className="h-4 w-4" /> ไม่มีค่าใช้จ่าย
-          </Button>
-          <Button type="submit" formAction={action} className="flex-1">
+          </SubmitButton>
+          <SubmitButton formAction={action} className="flex-1">
             บันทึกค่าใช้จ่าย
-          </Button>
+          </SubmitButton>
         </div>
       </form>
     </Card>

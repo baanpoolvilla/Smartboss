@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 import { Card } from "@smartboss/ui/components/card";
-import { Button } from "@smartboss/ui/components/button";
 import { Input } from "@smartboss/ui/components/input";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { listProperties } from "@/modules/maintenance/data/properties";
@@ -18,6 +17,7 @@ import {
   AssigneeAndCc,
 } from "@/modules/maintenance/components/multi-picker";
 import { createWorkOrderAction } from "../actions";
+import { SubmitButton } from "@/modules/maintenance/components/submit-button";
 
 const ROLE_LABEL: Record<string, string> = {
   SUPER_ADMIN: "ผู้ดูแลระบบ",
@@ -206,9 +206,7 @@ export default async function NewWorkOrderPage({
           )}
 
           <div>
-            <Button type="submit" className="w-full sm:w-48">
-              บันทึกใบงาน
-            </Button>
+            <SubmitButton className="w-full sm:w-48">บันทึกใบงาน</SubmitButton>
           </div>
         </form>
       </Card>

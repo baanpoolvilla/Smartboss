@@ -67,6 +67,17 @@ export function CompleteJobButton({
     { name: "", price: "" },
   ]);
   const [photoCount, setPhotoCount] = useState(0);
+  // อัปโหลดรูปหลังแก้ใช้เวลา — ล็อกปุ่มไว้ ไม่งั้นกดซ้ำแล้วรูปถูกแนบซ้ำ
+  // (ปุ่มอยู่นอก <form> ใช้ useFormStatus ไม่ได้)
+  const [submitting, setSubmitting] = useState(false);
+  const submit = async (fd: FormData) => {
+    setSubmitting(true);
+    try {
+      await action(fd);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const hasValidItem = !requiresExpense || items.some((i) => i.name.trim() !== "");
   const photoOk = photoCount > 0 || externalPhotoCount > 0;
@@ -100,14 +111,14 @@ export function CompleteJobButton({
                 type="submit"
                 form="complete-wo-form"
                 size="sm"
-                disabled={!hasValidItem || !photoOk}
+                disabled={!hasValidItem || !photoOk || submitting}
               >
-                ยืนยันเสร็จ
+                {submitting ? "กำลังบันทึก…" : "ยืนยันเสร็จ"}
               </Button>
             </>
           }
         >
-          <form id="complete-wo-form" action={action} className="flex flex-col gap-3">
+          <form id="complete-wo-form" action={submit} className="flex flex-col gap-3">
             <input type="hidden" name="id" value={id} />
             <p className="text-sm text-(--ink-soft)">
               {!requiresExpense

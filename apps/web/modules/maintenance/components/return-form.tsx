@@ -1,5 +1,7 @@
 "use client";
 
+import { SubmitButton } from "./submit-button";
+
 import { useState } from "react";
 import { Camera, Images, Undo2 } from "lucide-react";
 import { Card } from "@smartboss/ui/components/card";
@@ -160,12 +162,12 @@ export function ReturnForm({
           )}
         </div>
 
-        <button
-          type="submit"
-          className="flex h-11 w-full items-center justify-center gap-2 rounded-(--radius) bg-(--brand-green) text-sm font-medium text-white hover:brightness-95"
+        <SubmitButton
+          raw
+          className="flex h-11 w-full items-center justify-center gap-2 rounded-(--radius) bg-(--brand-green) text-sm font-medium text-white hover:brightness-95 disabled:opacity-60"
         >
           <Undo2 className="h-4 w-4" /> แจ้งคืน / ปัญหา
-        </button>
+        </SubmitButton>
       </form>
     </Card>
   );

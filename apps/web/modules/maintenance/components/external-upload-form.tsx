@@ -1,8 +1,9 @@
 "use client";
 
+import { SubmitButton } from "./submit-button";
+
 import { useRef, useState } from "react";
 import { Camera, ClipboardPaste } from "lucide-react";
-import { Button } from "@smartboss/ui/components/button";
 
 /** ตัดข้อความที่ 500 ตัว — ต้องตรงกับ NOTE_MAX ฝั่งเซิร์ฟเวอร์ */
 const NOTE_MAX = 500;
@@ -104,9 +105,9 @@ export function ExternalUploadForm({
         {count > 0 && ` · เลือกไว้ ${count} รูป`}
       </p>
 
-      <Button type="submit" disabled={nothingToSend}>
+      <SubmitButton disabled={nothingToSend} pendingText="กำลังส่ง…">
         {count === 0 && note.trim() !== "" ? "ส่งข้อความ" : "ส่งรูป"}
-      </Button>
+      </SubmitButton>
       {nothingToSend && (
         <p className="text-xs text-(--ink-soft)">
           แนบรูปหรือพิมพ์ข้อความอย่างน้อยอย่างใดอย่างหนึ่ง

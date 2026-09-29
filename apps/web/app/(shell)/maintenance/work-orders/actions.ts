@@ -95,7 +95,7 @@ export async function createWorkOrderAction(formData: FormData) {
   const photoFiles = formData.getAll("photos").filter((f): f is File => f instanceof File);
   const photoUrls = await putFiles(`${s.orgId}/maintenance/work-orders`, photoFiles);
 
-  const wo = await createWorkOrder(s.orgId, {
+  const { workOrder: wo, duplicate } = await createWorkOrder(s.orgId, {
     propertyId: primary!,
     additionalPropertyIds: additional,
     title: d.title,
@@ -113,6 +113,13 @@ export async function createWorkOrderAction(formData: FormData) {
     // ⚠ ใบงานที่เกิดจาก PM ใช้ค่าจากแผน PM แทน (ดู modules/maintenance/data/cron.ts)
     requiresExpense: formData.get("noExpense") !== "1",
   });
+
+  // กดบันทึกซ้ำ / PM รอบนี้มีใบงานเปิดอยู่แล้ว ⇒ ไม่สร้างใหม่ พาไปใบที่มีอยู่
+  // รูปที่เพิ่งอัปโหลดมากับคำขอซ้ำนี้ไม่มีใบไหนใช้ — ลบทิ้ง ไม่ให้ค้างใน storage
+  if (duplicate) {
+    if (photoUrls.length > 0) await deleteFiles(photoUrls).catch(() => 0);
+    redirect(`/maintenance/work-orders/${wo.id}`);
+  }
 
   // เปิดใบงานให้ PM ที่ระบบเปิดใบอัตโนมัติไว้แล้ว (หน้าปฏิทินซ่อนปุ่มนี้ แต่หน้าที่เปิดค้าง
   // ไว้ก่อน cron สร้างใบตอนเช้ายังกดได้) ⇒ ใบที่คนเปิดเองแทนใบอัตโนมัติ ไม่ให้ซ้อนกันสองใบ
@@ -175,13 +182,14 @@ export async function updateStatusAction(formData: FormData) {
     throw new Error("ไม่มีสิทธิ์เปลี่ยนสถานะใบงานนี้");
   }
 
-  await updateWorkOrderStatus(s.orgId, id, status);
+  // changed = คำขอนี้เป็นคนเปลี่ยนสถานะจริง — กดซ้ำ/กดพร้อมกันได้ false (ดู updateWorkOrderStatus)
+  const changed = await updateWorkOrderStatus(s.orgId, id, status);
   // ปิดงาน = เดิน PM ที่ผูกไว้ไปรอบถัดไป (batch → single → fallback ตามอุปกรณ์)
   // ใบที่ปิดไปแล้วถูกกดปิดซ้ำ ต้องไม่เดิน PM ซ้ำ ไม่งั้นรอบกระโดดข้ามไปอีกช่วง
-  if (status === "completed" && wo.status !== "completed") await advanceLinkedPm(s.orgId, wo);
+  if (changed && status === "completed") await advanceLinkedPm(s.orgId, wo);
   // ยกเลิกใบงานจาก PM = ข้ามรอบนั้น ไม่งั้น cron สร้างใบเดิมขึ้นมาใหม่ทุกเช้า (ดู skipPmSchedule)
-  if (status === "cancelled" && wo.status !== "cancelled") await skipLinkedPm(s.orgId, wo);
-  await notifyStatusChanged(s.orgId, wo, status, s.userId);
+  if (changed && status === "cancelled") await skipLinkedPm(s.orgId, wo);
+  if (changed) await notifyStatusChanged(s.orgId, wo, status, s.userId);
 
   revalidatePath(`/maintenance/work-orders/${id}`);
   revalidatePath("/maintenance/work-orders");
@@ -312,9 +320,11 @@ export async function completeWorkOrderAction(formData: FormData) {
       : {}),
     ...(notes ? { completionNotes: notes } : {}),
   });
-  await updateWorkOrderStatus(s.orgId, id, "completed");
-  if (wo.status !== "completed") await advanceLinkedPm(s.orgId, wo);
-  await notifyStatusChanged(s.orgId, wo, "completed", s.userId);
+  const changed = await updateWorkOrderStatus(s.orgId, id, "completed");
+  if (changed) {
+    await advanceLinkedPm(s.orgId, wo);
+    await notifyStatusChanged(s.orgId, wo, "completed", s.userId);
+  }
 
   revalidatePath(`/maintenance/work-orders/${id}`);
   revalidatePath("/maintenance/work-orders");

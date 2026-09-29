@@ -1,6 +1,6 @@
+import { SubmitButton } from "./submit-button";
 import { Card } from "@smartboss/ui/components/card";
 import { Input } from "@smartboss/ui/components/input";
-import { Button } from "@smartboss/ui/components/button";
 
 export const selectClass =
   "flex h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 py-2 text-sm text-(--ink) focus-visible:border-(--brand-green) focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-(--brand-green)/30";
@@ -110,9 +110,7 @@ export function PropertyForm({
         </Field>
 
         <div className="flex gap-2 pt-1">
-          <Button type="submit" className="sm:w-40">
-            {submitLabel}
-          </Button>
+          <SubmitButton className="sm:w-40">{submitLabel}</SubmitButton>
         </div>
       </form>
     </Card>

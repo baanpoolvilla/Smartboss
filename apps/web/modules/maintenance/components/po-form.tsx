@@ -1,5 +1,7 @@
 "use client";
 
+import { SubmitButton } from "./submit-button";
+
 import { useState } from "react";
 import {
   ReceiptText,
@@ -397,9 +399,9 @@ export function PoForm({
             </div>
           )}
 
-          <button
-            type="submit"
-            className="flex h-11 w-full items-center justify-center gap-2 rounded-(--radius) text-sm font-medium text-white hover:brightness-95"
+          <SubmitButton
+            raw
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-(--radius) text-sm font-medium text-white hover:brightness-95 disabled:opacity-60"
             style={{
               backgroundColor:
                 isEmergency && !openAsPo ? "#B91C1C" : "var(--brand-green)",
@@ -418,7 +420,7 @@ export function PoForm({
                 <Send className="h-4 w-4" /> เปิด PR — ส่งให้ CEO อนุมัติ
               </>
             )}
-          </button>
+          </SubmitButton>
         </form>
       </Card>
     </>

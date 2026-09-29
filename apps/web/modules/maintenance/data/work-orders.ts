@@ -111,16 +111,60 @@ export interface WorkOrderInput {
   afterPhotoUrls?: string[];
 }
 
+/** ส่งฟอร์มเดิมซ้ำภายในช่วงนี้ (คนเดิม หัวข้อเดิม บ้านเดิม) = กดเบิ้ล ไม่ใช่งานใหม่ */
+const DUPLICATE_WINDOW_MS = 2 * 60 * 1000;
+
 /**
  * จองเลขที่ใบงานกับสร้างใบงานใน transaction เดียวกัน
  *
  * ถ้าแยกกัน แล้วการสร้างล้มทีหลัง เลขจะถูกกินไปเปล่า ๆ เกิดช่องว่าง
  * (WO-0001 แล้วข้ามไป WO-0003) ซึ่งคนอ่านจะนึกว่าใบงานหาย
+ *
+ * ── กันใบงานเบิ้ล ── คืน `duplicate: true` พร้อมใบเดิมแทนการสร้างใหม่ เมื่อ
+ *   1. กดบันทึกซ้ำ: คนเดิมเพิ่งสร้างหัวข้อเดิมให้บ้านเดิมภายใน 2 นาที (อัปโหลดรูปช้า
+ *      บนมือถือ คนนึกว่าไม่ติดเลยกดอีก — ทุกครั้งที่กดคือส่งฟอร์มใหม่)
+ *   2. PM รอบนี้มีใบงานที่คนเปิดเองค้างอยู่แล้ว (สองคนกดเปิดจากปฏิทิน/หน้าอุปกรณ์
+ *      พร้อมกัน หรือหน้าที่เปิดค้างไว้ยังโชว์ปุ่มอยู่) — ใบอัตโนมัติไม่นับ ตัวเรียก
+ *      จะยกเลิกให้เอง (closeAutoWorkOrdersOfPm "replaced")
+ * ล็อกก่อนเช็ค ไม่งั้นสองคำขอที่มาพร้อมกันเห็น "ยังไม่มี" ทั้งคู่ · ล็อก PM ใช้คีย์
+ * เดียวกับ cron (generateWorkOrdersForDuePms) ⇒ คนเปิดเองกับ cron ก็ไม่ชนกันด้วย
  */
 export function createWorkOrder(orgId: string, data: WorkOrderInput) {
   return prisma.$transaction(async (tx) => {
+    const pmIds = [...new Set([...(data.pmScheduleId ? [data.pmScheduleId] : []), ...(data.pmScheduleIds ?? [])])].sort();
+    for (const pmId of pmIds) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`pm-auto-wo:${pmId}`}))`;
+    }
+    if (pmIds.length > 0) {
+      const openForPm = await tx.workOrder.findFirst({
+        where: {
+          orgId,
+          autoCreated: false,
+          status: { in: ["open", "in_progress"] },
+          OR: [{ pmScheduleId: { in: pmIds } }, { pmScheduleIds: { hasSome: pmIds } }],
+        },
+      });
+      if (openForPm) return { workOrder: openForPm, duplicate: true as const };
+    }
+
+    if (data.createdBy) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`wo-create:${orgId}:${data.createdBy}`}))`;
+      const recent = await tx.workOrder.findFirst({
+        where: {
+          orgId,
+          createdBy: data.createdBy,
+          title: data.title,
+          propertyId: data.propertyId,
+          status: { not: "cancelled" },
+          createdAt: { gte: new Date(Date.now() - DUPLICATE_WINDOW_MS) },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      if (recent) return { workOrder: recent, duplicate: true as const };
+    }
+
     const code = await nextWorkOrderCode(tx, orgId);
-    return tx.workOrder.create({
+    const workOrder = await tx.workOrder.create({
       data: {
         orgId,
         code,
@@ -141,6 +185,7 @@ export function createWorkOrder(orgId: string, data: WorkOrderInput) {
         photoUrls: data.photoUrls ?? [],
       },
     });
+    return { workOrder, duplicate: false as const };
   });
 }
 
@@ -152,14 +197,23 @@ export async function updateWorkOrder(
   await prisma.workOrder.updateMany({ where: { orgId, id }, data });
 }
 
+/**
+ * เปลี่ยนสถานะ — คืน true เฉพาะเมื่อสถานะเปลี่ยนจริง
+ *
+ * ตัวเรียกใช้ค่านี้ตัดสินว่าจะเดิน/ข้ามรอบ PM หรือไม่ ห้ามใช้สถานะที่อ่านไว้ก่อนหน้า:
+ * กด "ยืนยันเสร็จ" สองทีติดกัน (หรือสองคนกดพร้อมกัน) ทั้งสองคำขออ่านได้ "กำลังทำ"
+ * แล้วต่างคนต่างเดิน PM ⇒ รอบกระโดดข้ามไปหนึ่งช่วงเต็ม ๆ · เงื่อนไขอยู่ใน WHERE
+ * Postgres จึงให้แค่คำขอเดียวที่เปลี่ยนได้
+ */
 export async function updateWorkOrderStatus(
   orgId: string,
   id: string,
   status: string
-) {
+): Promise<boolean> {
   const data: Prisma.WorkOrderUpdateManyMutationInput = { status };
   if (status === "completed") data.completedAt = new Date();
-  await prisma.workOrder.updateMany({ where: { orgId, id }, data });
+  const res = await prisma.workOrder.updateMany({ where: { orgId, id, status: { not: status } }, data });
+  return res.count > 0;
 }
 
 export async function deleteWorkOrder(orgId: string, id: string) {

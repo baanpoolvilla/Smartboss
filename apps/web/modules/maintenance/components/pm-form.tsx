@@ -1,8 +1,9 @@
 "use client";
 
+import { SubmitButton } from "./submit-button";
+
 import { useState } from "react";
 import { Card } from "@smartboss/ui/components/card";
-import { Button } from "@smartboss/ui/components/button";
 import { MultiPicker, type PickOption } from "./multi-picker";
 
 const inputClass =
@@ -266,9 +267,7 @@ export function PmForm({
           />
         </label>
 
-        <Button type="submit" className="w-full sm:w-40">
-          สร้าง PM
-        </Button>
+        <SubmitButton className="w-full sm:w-40">สร้าง PM</SubmitButton>
       </form>
     </Card>
   );
