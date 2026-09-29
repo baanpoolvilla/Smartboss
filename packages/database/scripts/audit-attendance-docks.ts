@@ -158,7 +158,7 @@ async function main() {
       else if (!enabled) status = "ระบบคะแนนปิด";
       else if (startDay && day < startDay) status = "ก่อนวันเริ่มนับ";
       else if (day >= todayTh) status = "ยังไม่ถึงรอบ (วันนี้)";
-      else if (!absent && Number(r.late_minutes) <= lateThreshold) status = "ต่ำกว่าเกณฑ์";
+      else if (!absent && Number(r.late_minutes) <= (day >= "2026-09-30" ? 0 : lateThreshold)) status = "ต่ำกว่าเกณฑ์";
       else {
         const d = dockByRef.get(`${r.subject}:${day}`);
         if (!d) status = "❌ ควรหักแต่ไม่มี";
@@ -170,7 +170,7 @@ async function main() {
       if (showAll || !status.startsWith("หักแล้ว")) lines.push(`  ${day}  ${r.name.padEnd(28)} ${what.padEnd(14)} ${status}`);
     }
 
-    console.log(`  ระบบคะแนน ${enabled ? "เปิด" : "ปิด"} · เกณฑ์สาย > ${lateThreshold} นาที · เริ่มนับ ${startDay ?? "ทั้งหมด"}`);
+    console.log(`  ระบบคะแนน ${enabled ? "เปิด" : "ปิด"} · เกณฑ์สาย (หลังหักผ่อนผันของกะ) > ${lateThreshold} นาที ก่อน 30 ก.ย. / > 0 ตั้งแต่ 30 ก.ย. · เริ่มนับ ${startDay ?? "ทั้งหมด"}`);
     console.log("  สรุป: " + [...tally.entries()].map(([k, v]) => `${k} ${v}`).join(" · "));
     if (unlinked.size > 0) {
       console.log(`\n  ⚠ ทะเบียนพนักงานที่ยังไม่ผูกกับบัญชี Smartboss (${unlinked.size} คน) — มาสาย/ขาดงานกี่วันก็ไม่ถูกหัก:`);

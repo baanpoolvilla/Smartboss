@@ -717,7 +717,7 @@ export async function updateOrganizationAction(formData: FormData) {
  */
 const perfNumbers = z.object({
   baseScore: z.number().int().min(0).max(1000),
-  lateThresholdMinutes: z.number().int().min(0).max(480),
+  // ผ่อนผันการมาสายไม่ได้ตั้งที่นี่แล้ว — ใช้ของนโยบายการลงเวลาที่เดียว (ดู lib/attendance-performance.ts)
   pmGraceDays: z.number().int().min(0).max(365),
   workOrderGraceDays: z.number().int().min(0).max(365),
 });
@@ -736,7 +736,6 @@ export async function savePerformanceSettingsAction(formData: FormData) {
 
   const numbers = perfNumbers.parse({
     baseScore: Number(formData.get("baseScore")),
-    lateThresholdMinutes: Number(formData.get("lateThresholdMinutes")),
     pmGraceDays: Number(formData.get("pmGraceDays")),
     workOrderGraceDays: Number(formData.get("workOrderGraceDays")),
   });

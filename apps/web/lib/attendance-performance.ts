@@ -64,7 +64,8 @@ export async function dockAttendance(): Promise<{
   const active = [...settingsByOrg.values()].filter((s) => s.enabled);
   if (active.length === 0) return { scanned: 0, recorded: 0 };
 
-  const minLate = Math.min(...active.map((s) => s.lateThresholdMinutes));
+  // ดึงทุกวันที่สาย > 0 แล้วค่อยตัดสินรายวันด้วย lateThresholdFor (วันก่อนรวมเกณฑ์ยังใช้ค่าเดิมของบริษัท)
+  const minLate = Math.min(0, ...active.map((s) => s.lateThresholdMinutes));
 
   const from = new Date();
   from.setDate(from.getDate() - ATTENDANCE_LOOKBACK_DAYS);
@@ -123,7 +124,7 @@ export async function dockAttendance(): Promise<{
 
     const day = new Date(r.work_date).toISOString().slice(0, 10);
 
-    const verdict = classifyAttendanceDay(r, st);
+    const verdict = classifyAttendanceDay(r, st, day);
     if (verdict === "attendance_absent") {
       events.push({
         orgId,
@@ -159,10 +160,26 @@ export async function dockAttendance(): Promise<{
 
 type OrgSettings = { enabled: boolean; lateThresholdMinutes: number; missingPunchCountsAsAbsent: boolean };
 
+/**
+ * ผ่อนผันการมาสายเหลือที่เดียว: นโยบายการลงเวลาของ HR (เช่น เข้า 08:00 ผ่อนผัน 15 นาที)
+ * late_minutes ที่ได้มาหักผ่อนผันของกะออกแล้ว ⇒ สาย > 0 = สาย = หักคะแนน ตรงกับป้าย "สาย" ในหน้าลงเวลา
+ *
+ * เดิมมีช่อง "ผ่อนผันเพิ่ม" ในตั้งค่าคะแนนอีกชั้น (performance_settings.late_threshold_minutes)
+ * บริษัทตั้งไว้ 16 ทับผ่อนผันของกะ 15 ⇒ เข้า 08:30 ยังไม่โดนหัก ทั้งที่หน้าลงเวลาขึ้น "สาย"
+ * เอาช่องนั้นออกจากหน้าตั้งค่าแล้ว (ง่ายต่อคนใช้จริง: ตั้งผ่อนผันที่เดียว) ค่าที่เคยเก็บไว้ยังใช้กับ
+ * วันก่อน LATE_GRACE_UNIFIED_FROM เท่านั้น — ไม่หักย้อนหลังเป็นกองทั้งเดือนตอนเปลี่ยนกติกา
+ */
+const LATE_GRACE_UNIFIED_FROM = "2026-09-30";
+
+function lateThresholdFor(day: string, st: OrgSettings): number {
+  return day >= LATE_GRACE_UNIFIED_FROM ? 0 : st.lateThresholdMinutes;
+}
+
 /** วันหนึ่งของคนหนึ่งควรโดนหักหมวดไหน ตามค่าลงเวลา "ตอนนี้" — ใช้ทั้งตอนหักและตอนคืน */
 function classifyAttendanceDay(
   r: Pick<AttendanceRow, "late_minutes" | "absence_minutes" | "missing_punch">,
   st: OrgSettings,
+  day: string,
 ): "attendance_absent" | "attendance_late" | null {
   // สแกนแค่ครั้งเดียว = ขาดงานเต็มกะในผลลงเวลา แต่จะนับเป็นขาดงานไหมแล้วแต่บริษัทตั้ง
   // ไม่นับ = ตกไปเช็คมาสายตามเวลาที่สแกนเข้าต่อ
@@ -170,7 +187,7 @@ function classifyAttendanceDay(
     Number(r.absence_minutes) > ABSENCE_THRESHOLD_MINUTES &&
     (!r.missing_punch || st.missingPunchCountsAsAbsent);
   if (absent) return "attendance_absent";
-  if (Number(r.late_minutes) > st.lateThresholdMinutes) return "attendance_late";
+  if (Number(r.late_minutes) > lateThresholdFor(day, st)) return "attendance_late";
   return null;
 }
 
@@ -257,7 +274,7 @@ async function refundNoLongerValidDocks(
     } else if (state === "WORKING") {
       const row = currentByKey.get(key);
       if (!row) continue;
-      if (classifyAttendanceDay(row, st) !== o.category) reason = "ค่าลงเวลาปัจจุบันไม่เข้าเกณฑ์แล้ว";
+      if (classifyAttendanceDay(row, st, day) !== o.category) reason = "ค่าลงเวลาปัจจุบันไม่เข้าเกณฑ์แล้ว";
     }
     if (!reason) continue;
 

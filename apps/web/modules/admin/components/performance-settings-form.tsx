@@ -138,23 +138,9 @@ export function PerformanceSettingsForm({ settings: s }: { settings: Performance
 
       <SectionCard
         title="เกณฑ์การนับ"
-        description="เวลาเข้างาน กะ และการผ่อนผันสาย ตั้งที่ ตั้งค่า → การลงเวลา — ตรงนี้คือผ่อนผันเพิ่มเฉพาะตอนคิดคะแนนเท่านั้น"
+        description="เวลาเข้างานและผ่อนผันการมาสาย ตั้งที่เดียวที่ ตั้งค่า → การลงเวลา — ใครขึ้นป้าย “สาย” ในหน้าลงเวลาก็หักคะแนนตามนั้น"
       >
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field
-            label="ผ่อนผันการมาสายเพิ่มอีกกี่นาที"
-            hint="ปกติใส่ 0 — เวลาผ่อนผันของกะ (เช่น 15 นาที) ถูกหักให้แล้วจากการลงเวลา ใส่เลขที่นี่คือผ่อนผันซ้ำอีกชั้น"
-          >
-            <input
-              type="number"
-              name="lateThresholdMinutes"
-              defaultValue={s.lateThresholdMinutes}
-              min={0}
-              max={480}
-              required
-              className={inputClass}
-            />
-          </Field>
           <Field
             label="เริ่มนับคะแนนตั้งแต่วันที่"
             hint="เว้นว่าง = นับทั้งหมด — เหตุการณ์ก่อนวันนี้จะไม่ถูกบันทึกและไม่ถูกนับ"
