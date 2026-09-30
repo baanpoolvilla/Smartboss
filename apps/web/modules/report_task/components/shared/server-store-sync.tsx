@@ -63,6 +63,13 @@ export function ServerStoreSync<T, S>({
   // doesn't get mistaken for a local edit and echoed straight back — which
   // would otherwise bounce identical no-op writes between tabs every poll.
   const applyingRemoteRef = useRef(false);
+  // บันทึกที่กำลังส่งอยู่ + ตัวนับที่ขยับทุกครั้งที่เริ่ม/จบการบันทึก — ให้รอบดึงข้อมูล (poll)
+  // รู้ว่ามีการบันทึกเกิดขึ้นระหว่างที่มันรอคำตอบ แล้วทิ้งข้อมูลชุดนั้นไป
+  // ("กดโพสแล้วหาย": poll ยิงก่อนโพสต์ถึงเซิร์ฟเวอร์ ได้ข้อมูลชุดที่ยังไม่มีโพสต์ใหม่
+  // แต่คำตอบมาถึงหลังบันทึกเสร็จ เลยเอาชุดเก่ามาทับ — แล้วแก้อะไรต่อ ชุดเก่านั้นจะถูก
+  // ส่งกลับขึ้นไปทับบนเซิร์ฟเวอร์ด้วย)
+  const savingRef = useRef(0);
+  const saveSeqRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -136,6 +143,17 @@ export function ServerStoreSync<T, S>({
         return;
       }
 
+      savingRef.current++;
+      saveSeqRef.current++;
+      try {
+        await putWithMerge(snapshot);
+      } finally {
+        savingRef.current--;
+        saveSeqRef.current++;
+      }
+    }
+
+    async function putWithMerge(snapshot: S) {
       let mine = snapshot;
       // Bounded retry: in the split second between our merge and our retry
       // someone else could save again. A few passes converge; the cap keeps a
@@ -223,7 +241,7 @@ export function ServerStoreSync<T, S>({
         ? null
         : setInterval(() => {
             if (!loadedRef.current) return;
-            if (pendingRef.current || timerRef.current) return;
+            if (pendingRef.current || timerRef.current || savingRef.current > 0) return;
             // Some edits are staged locally and haven't been written to the
             // store yet, so the two guards above can't see them — see
             // holdServerSync's own comment for why landing a poll on top of
@@ -231,11 +249,16 @@ export function ServerStoreSync<T, S>({
             if (isServerSyncHeld()) return;
             if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
             void (async () => {
+              const seqAtStart = saveSeqRef.current;
               try {
                 const res = await fetch(`/api/report-task/store/${apiKey}`, { cache: "no-store" });
                 const version = Number(res.headers.get("X-Data-Version")) || null;
                 if (version === versionRef.current) return; // nothing new
                 if (pendingRef.current || timerRef.current) return; // user started editing meanwhile
+                // มีการบันทึกเริ่ม/จบระหว่างรอคำตอบ — ข้อมูลชุดนี้อาจเก่ากว่าที่เพิ่งบันทึก ทิ้งไป รอบหน้าค่อยดึงใหม่
+                if (savingRef.current > 0 || saveSeqRef.current !== seqAtStart) return;
+                // เก่ากว่าที่เรารู้อยู่แล้ว (เลขเวอร์ชันเพิ่มขึ้นทุกครั้งที่บันทึก) — ไม่เอามาทับ
+                if (version != null && versionRef.current != null && version < versionRef.current) return;
                 const slice = (await res.json()) as S | null;
                 if (cancelled) return;
                 versionRef.current = version;

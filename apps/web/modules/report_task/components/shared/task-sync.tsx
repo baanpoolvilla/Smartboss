@@ -51,6 +51,10 @@ export function TaskSync() {
   const pendingRef = useRef<Task[] | null>(null);
   // Server's last-known version for this collection (optimistic concurrency).
   const versionRef = useRef<number | null>(null);
+  // บันทึกที่กำลังส่ง + ตัวนับเริ่ม/จบการบันทึก — กันรอบ poll เอาข้อมูลชุดที่ดึงมาก่อนบันทึกเสร็จ
+  // มาทับของที่เพิ่งบันทึก ("ส่งข้อมูลแล้วเด้งหาย") ดู server-store-sync.tsx ตัวเดียวกัน
+  const savingRef = useRef(0);
+  const saveSeqRef = useRef(0);
   // The task list as the server last confirmed it — the common ancestor for
   // the 3-way merge on conflict (and for reconciling a poll). Kept in sync
   // on every load, reload, successful save, and poll.
@@ -114,6 +118,17 @@ export function TaskSync() {
         return;
       }
 
+      savingRef.current++;
+      saveSeqRef.current++;
+      try {
+        await putWithMerge(snapshot);
+      } finally {
+        savingRef.current--;
+        saveSeqRef.current++;
+      }
+    }
+
+    async function putWithMerge(snapshot: Task[]) {
       let mine = snapshot;
       // Bounded retry: in the split second between our merge and our retry
       // someone else could save again. A few passes converge; the cap keeps
@@ -328,9 +343,10 @@ export function TaskSync() {
     const pollTimer = ENABLE_TASK_POLL
       ? setInterval(() => {
           if (!loadedRef.current) return;
-          if (pendingRef.current || timerRef.current) return; // edit in flight — don't overwrite it
+          if (pendingRef.current || timerRef.current || savingRef.current > 0) return; // edit in flight — don't overwrite it
           if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
           void (async () => {
+            const seqAtStart = saveSeqRef.current;
             try {
               // R1 — check the lightweight version-only endpoint first
               // (a few dozen bytes, no task rows touched) before paying for
@@ -343,6 +359,8 @@ export function TaskSync() {
               const res = await fetch("/api/report-task/tasks", { cache: "no-store" });
               const tasks = (await res.json()) as Task[];
               if (cancelled || !Array.isArray(tasks)) return;
+              // บันทึกเริ่ม/จบระหว่างรอ — ชุดนี้อาจเก่ากว่าที่เพิ่งบันทึก ทิ้งไป รอบหน้าค่อยดึงใหม่
+              if (pendingRef.current || timerRef.current || savingRef.current > 0 || saveSeqRef.current !== seqAtStart) return;
               versionRef.current = Number(res.headers.get("X-Data-Version")) || version;
               applyRemoteTasks(tasks);
               baseRef.current = tasks;
