@@ -2,6 +2,7 @@ import { uploadCompressedImage } from "@/modules/report_task/lib/image-resize";
 import type { IssueAttachment } from "@/modules/report_task/types/issue";
 import { uuid } from "@/modules/report_task/lib/uuid";
 
+import { fileTooLargeMessage } from "@/lib/file-limits";
 /** Client-side quota mirrored from the server's per-request limits (see
  * /api/uploads) — checked before the request fires so the user gets an
  * instant, specific error instead of a generic 413 after a slow upload. */
@@ -24,7 +25,7 @@ export async function uploadIssueAttachment(file: File, uploadedBy: string): Pro
   const isImage = file.type.startsWith("image/");
   const maxBytes = maxBytesFor(file.type);
   if (!isImage && file.size > maxBytes) {
-    throw new Error(`ไฟล์ใหญ่เกินไป (จำกัด ${Math.round(maxBytes / 1024 / 1024)}MB)`);
+    throw new Error(fileTooLargeMessage(file, maxBytes));
   }
 
   let url: string;

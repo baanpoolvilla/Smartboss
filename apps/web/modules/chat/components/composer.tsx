@@ -14,6 +14,7 @@ import { notifyTyping, sendChatMessage } from "../lib/chat-actions";
 import { getChatPrefs } from "../lib/prefs";
 import { ChatAvatar } from "./chat-avatar";
 
+import { fileTooLargeMessage } from "@/lib/file-limits";
 const MAX_FILES = 20;
 const MAX_BYTES = 25 * 1024 * 1024;
 const ACCEPT_FILES =
@@ -46,6 +47,8 @@ function isTouchDevice(): boolean {
 
 /** อัปโหลดไฟล์แนบหนึ่งไฟล์ (รูป = ย่อ + รูปย่อ) — ใช้ทั้งช่องพิมพ์และการเพิ่มรูปเข้าอัลบั้ม */
 export async function uploadChatMedia(file: File, kind: ChatAttachment["kind"], onProgress: (f: number) => void): Promise<ChatAttachment> {
+  // รูปถูกย่อก่อนส่ง (ไม่ต้องเช็คไฟล์ดิบ) — วิดีโอ/ไฟล์อื่นเช็คก่อน (อัลบั้ม/โน้ตเรียกตรงนี้ ไม่ผ่านตัวเช็คของช่องพิมพ์)
+  if (kind !== "image" && file.size > MAX_BYTES) throw new Error(fileTooLargeMessage(file, MAX_BYTES));
   if (kind === "image") {
     const c = await compressImage(file);
     const [full, thumb] = await Promise.all([
@@ -169,7 +172,7 @@ export const Composer = forwardRef<
       const accepted: PendingFile[] = [];
       for (const file of files.slice(0, room)) {
         if (file.size > MAX_BYTES) {
-          toast.error(`"${file.name}" ใหญ่เกิน 25MB`);
+          toast.error(fileTooLargeMessage(file, MAX_BYTES));
           continue;
         }
         const kind = kindOf(file);

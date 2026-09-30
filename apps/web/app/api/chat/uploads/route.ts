@@ -9,6 +9,7 @@ import { checkOrgQuota, toGB } from "@/modules/company-files/lib/quota";
 import { chatActor, chatErrorResponse } from "@/modules/chat/data/route-helpers";
 import type { ChatAttachmentKind } from "@/modules/chat/types";
 
+import { fileTooLargeMessage } from "@/lib/file-limits";
 /**
  * อัปโหลดไฟล์แนบของแชท — รูปถูกย่อในเครื่องก่อนส่งแล้ว (lib/image-compress.ts)
  * จึงปกติเหลือไม่กี่ร้อย KB ส่วนรูปย่อ (thumbnail) ก็อัปผ่านทางนี้เป็นอีกไฟล์
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
     const form = await request.formData().catch(() => null);
     const file = form?.get("file");
     if (!(file instanceof File) || file.size === 0) return Response.json({ error: "ต้องแนบไฟล์" }, { status: 400 });
-    if (file.size > 25 * MB) return Response.json({ error: "ไฟล์ใหญ่เกินไป (จำกัด 25MB)" }, { status: 413 });
+    if (file.size > 25 * MB) return Response.json({ error: fileTooLargeMessage(file, 25 * MB) }, { status: 413 });
 
     const quota = await checkOrgQuota(actor.orgId, file.size);
     if (!quota.ok) {
@@ -83,7 +84,7 @@ export async function POST(request: Request) {
       meta = { ...allowed, mime: sniffed };
     }
     if (bytes.byteLength > meta.max) {
-      return Response.json({ error: `ไฟล์ใหญ่เกินไป (จำกัด ${Math.round(meta.max / MB)}MB)` }, { status: 413 });
+      return Response.json({ error: fileTooLargeMessage({ name: file.name, size: bytes.byteLength }, meta.max) }, { status: 413 });
     }
 
     const url = await putFile(`${actor.orgId}/chat`, new File([bytes], `${randomUUID()}.${meta.ext}`, { type: meta.mime }), {

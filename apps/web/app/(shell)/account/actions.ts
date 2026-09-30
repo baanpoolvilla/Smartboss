@@ -11,6 +11,7 @@ import { linePushConfigured, pushLineText } from "@/lib/line";
 import { notifyUser } from "@/modules/maintenance/data/notify";
 import { sniffMime } from "@/modules/report_task/lib/upload-sniff";
 
+import { fileTooLargeMessage } from "@/lib/file-limits";
 /**
  * บัญชีของตัวเอง — ทุกคนที่ล็อกอินได้ใช้หน้านี้ได้ ไม่ต้องมีสิทธิ์อะไรเพิ่ม
  *
@@ -156,7 +157,7 @@ export async function updateOwnAvatarAction(formData: FormData): Promise<{ error
     return { error: "กรุณาเลือกไฟล์รูปภาพ" };
   }
   if (file.size > AVATAR_MAX_BYTES) {
-    return { error: `ไฟล์ใหญ่เกินไป (จำกัด ${AVATAR_MAX_BYTES / 1024 / 1024}MB)` };
+    return { error: fileTooLargeMessage(file, AVATAR_MAX_BYTES) };
   }
 
   const bytes = new Uint8Array(await file.arrayBuffer());

@@ -27,6 +27,7 @@ import { ChatModal } from "./new-chat-dialog";
 import { deleteLocalMedia, saveLocalMedia } from "../lib/local-media";
 import { compressImage } from "../lib/image-compress";
 
+import { MB, fileTooLargeMessage } from "@/lib/file-limits";
 const SOUNDS: { id: ChatSound; label: string }[] = [
   { id: "ding", label: "ติ๊ง" },
   { id: "pop", label: "ป๊อป" },
@@ -116,7 +117,7 @@ export function ChatSettings({
   // ไฟล์ส่วนตัวเก็บในเครื่องนี้เท่านั้น (local-media.ts) — ไม่ขึ้นเซิร์ฟเวอร์ คนอื่นไม่เห็น
   async function onSoundFile(file: File) {
     if (!file.type.startsWith("audio/")) return toast.error("เลือกไฟล์เสียง (mp3, wav, m4a)");
-    if (file.size > 1024 * 1024) return toast.error("ไฟล์เสียงต้องไม่เกิน 1MB");
+    if (file.size > MB) return toast.error(fileTooLargeMessage(file, MB));
     try {
       await saveLocalMedia("sound", file);
       setChatPrefs({ sound: "custom", customSoundName: file.name.slice(0, 60), mediaVersion: prefs.mediaVersion + 1 });
@@ -133,7 +134,7 @@ export function ChatSettings({
     if (!file.type.startsWith("image/")) return toast.error("เลือกไฟล์รูปภาพ");
     try {
       const { full } = await compressImage(file);
-      if (full.size > 5 * 1024 * 1024) return toast.error("รูปใหญ่เกินไป");
+      if (full.size > 5 * MB) return toast.error(fileTooLargeMessage({ name: file.name, size: full.size }, 5 * MB));
       await saveLocalMedia("background", full);
       setChatPrefs({ background: "custom-image", mediaVersion: prefs.mediaVersion + 1 });
       toast.success("ตั้งรูปพื้นหลังแล้ว (เฉพาะเครื่องนี้)");

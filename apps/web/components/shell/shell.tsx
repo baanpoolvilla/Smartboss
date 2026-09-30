@@ -27,6 +27,7 @@ import { AppUpdateNotice } from "./app-update-notice";
 import { NotificationSetup } from "./notification-setup";
 import { SaveFeedback } from "./save-feedback";
 import { SessionRefresher } from "./session-refresher";
+import { FileSizeGuard } from "./file-size-guard";
 import { SystemNotify } from "./system-notify";
 import { ChatNotifyListener } from "@/modules/chat/components/chat-nav-badge";
 import { MarkReadOnRoute } from "@/modules/notifications/mark-read-on-route";
@@ -76,6 +77,8 @@ export function Shell({
   return (
     <ShellProvider user={user} unread={unread}>
       <SessionRefresher />
+      {/* ไฟล์ใหญ่เกิน — เตือนขนาดจริง/เพดาน ก่อนส่งฟอร์มที่แนบไฟล์ทุกหน้า */}
+      <FileSizeGuard />
       {/* เปิดหน้าที่แจ้งเตือนชี้มาเอง (ไม่ได้กดจากกระดิ่ง) ก็นับว่าอ่านแล้ว */}
       <Suspense fallback={null}>
         <MarkReadOnRoute />

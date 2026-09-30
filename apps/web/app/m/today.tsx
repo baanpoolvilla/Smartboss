@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { MapBoundary } from "./map-boundary";
 
+import { MB, fileTooLargeMessage } from "@/lib/file-limits";
 /**
  * ต้องโหลดแบบ `ssr: false` เท่านั้น — ห้ามเปลี่ยนเป็น static import เด็ดขาด
  *
@@ -87,6 +88,8 @@ function getPosition(): Promise<GeolocationPosition> {
     });
   });
 }
+
+const CHECKIN_PHOTO_MAX_BYTES = 8 * MB;
 
 /** อ่านไฟล์รูปเป็น base64 ล้วน (ตัดส่วนหัว data: ออก เพราะ API รับเฉพาะตัวข้อมูล) */
 function toBase64(file: File): Promise<string> {
@@ -174,6 +177,12 @@ export function Today({
           accuracyM: position?.coords.accuracy ?? null,
         };
         if (photo) {
+          // ระบบลงเวลารับรูปไม่เกิน 8MB (workforce checkin.service MAX_PHOTO_BYTES) — บอกก่อนส่ง รูปแบบเดียวกับทั้งระบบ
+          if (photo.size > CHECKIN_PHOTO_MAX_BYTES) {
+            setState("idle");
+            setMessage({ tone: "bad", text: `${fileTooLargeMessage(photo, CHECKIN_PHOTO_MAX_BYTES)} — ลองถ่ายใหม่ด้วยความละเอียดต่ำลง` });
+            return;
+          }
           body.photoBase64 = await toBase64(photo);
           body.photoContentType = photo.type === "image/png" ? "image/png" : "image/jpeg";
         }

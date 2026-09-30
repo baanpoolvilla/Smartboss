@@ -8,6 +8,7 @@ import { COMPANY_FILES_PERMS } from "@/modules/company-files/permissions";
 import { MAX_FILE_MB } from "@/modules/company-files/constants";
 import { checkOrgQuota, toGB } from "@/modules/company-files/lib/quota";
 
+import { fileTooLargeMessage } from "@/lib/file-limits";
 /**
  * อัปโหลดไฟล์ของโมดูล "ไฟล์บริษัท" — เก็บผ่านชั้นเก็บไฟล์กลางเดียวกับ
  * report-task/chat/maintenance (apps/web/lib/storage) คนละ prefix
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
       return Response.json({ error: `ไม่รองรับชนิดไฟล์นี้ (${file.type || "ไม่ทราบชนิด"})` }, { status: 400 });
     }
     if (file.size > MAX_BYTES) {
-      return Response.json({ error: `ไฟล์ใหญ่เกินไป (จำกัด ${MAX_FILE_MB}MB)` }, { status: 413 });
+      return Response.json({ error: fileTooLargeMessage({ name: originalName ?? file.name, size: file.size }, MAX_BYTES) }, { status: 413 });
     }
 
     const bytes = new Uint8Array(await file.arrayBuffer());
@@ -67,7 +68,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "เนื้อไฟล์ไม่ตรงกับชนิดที่แจ้ง" }, { status: 400 });
     }
     if (bytes.byteLength > MAX_BYTES) {
-      return Response.json({ error: `ไฟล์ใหญ่เกินไป (จำกัด ${MAX_FILE_MB}MB)` }, { status: 413 });
+      return Response.json({ error: fileTooLargeMessage({ name: originalName ?? file.name, size: bytes.byteLength }, MAX_BYTES) }, { status: 413 });
     }
 
     // เพดานความจุต่อบริษัท (safety ceiling) — กันค่า storage วิ่งหนี

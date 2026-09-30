@@ -1,5 +1,6 @@
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 
+import { fileTooLargeMessage } from "@/lib/file-limits";
 /** Shared canvas downscale step — draws `file` onto a canvas at most
  * `maxWidth` wide, used by both the upload path and the legacy inline path.
  *
@@ -145,8 +146,7 @@ export async function uploadReportMedia(file: File): Promise<UploadedReportMedia
   if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
     const maxFileMB = useAttachmentSettingsStore.getState().settings.maxFileMB;
     if (file.size > maxFileMB * 1024 * 1024) {
-      const actualMb = (file.size / 1024 / 1024).toFixed(1);
-      throw new Error(`ไฟล์ใหญ่เกินไป (ไฟล์นี้ ${actualMb}MB ต้องไม่เกิน ${maxFileMB}MB)`);
+      throw new Error(fileTooLargeMessage(file, maxFileMB * 1024 * 1024));
     }
     return uploadRaw(file, "อัปโหลดไฟล์ไม่สำเร็จ");
   }
@@ -164,8 +164,7 @@ export async function uploadReportMedia(file: File): Promise<UploadedReportMedia
     const maxVideoMB = useAttachmentSettingsStore.getState().settings.maxVideoMB;
     const maxBytes = maxVideoMB * 1024 * 1024;
     if (file.size > maxBytes) {
-      const actualMb = (file.size / 1024 / 1024).toFixed(1);
-      throw new Error(`ไฟล์วิดีโอใหญ่เกินไป (ไฟล์นี้ ${actualMb}MB ต้องไม่เกิน ${maxVideoMB}MB)`);
+      throw new Error(fileTooLargeMessage(file, maxBytes));
     }
     return uploadRaw(file, "อัปโหลดวิดีโอไม่สำเร็จ");
   }

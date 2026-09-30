@@ -27,4 +27,9 @@ export const ALLOWED_MIME_TYPES = [
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 ] as const;
 
-export const MAX_FILE_MB = 50;
+/**
+ * เพดานต่อไฟล์ — ต้องไม่เกินที่ทั้งระบบรับได้จริงต่อคำขอ (Caddy request_body + next.config
+ * proxyClientMaxBodySize = 25MB) เดิมตั้ง 50 แต่ไฟล์ 25–50MB โดนตัดก่อนถึงโค้ดเรา ได้ error ไม่บอกอะไร
+ * จะเพิ่มต้องขยายสองที่นั้นก่อน (deploy/Caddyfile + next.config.mjs)
+ */
+export const MAX_FILE_MB = 25;

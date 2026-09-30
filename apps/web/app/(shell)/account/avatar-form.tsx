@@ -48,6 +48,8 @@ export function AvatarForm() {
         ref={inputRef}
         type="file"
         name="avatar"
+        // ย่อรูปในเครื่องก่อนส่งอยู่แล้ว — รูปกล้องมือถือใหญ่ ๆ ใช้ได้ ไม่ต้องให้ตัวกันไฟล์ใหญ่ของ Shell บล็อก
+        data-file-guard="off"
         accept="image/jpeg,image/png,image/webp,image/gif"
         required
         className="block w-full text-sm text-(--ink-soft) file:mr-3 file:rounded-(--radius) file:border-0 file:bg-(--bg-soft) file:px-3 file:py-2 file:text-sm file:font-medium file:text-(--ink) hover:file:bg-(--line)"

@@ -11,6 +11,7 @@ import {
   type AttachmentSettings,
 } from "@/modules/report_task/store/attachment-settings-store";
 
+import { fileTooLargeMessage } from "@/lib/file-limits";
 /**
  * อัปโหลดไฟล์แนบของโมดูลรายงานและงาน
  *
@@ -104,9 +105,7 @@ export async function POST(request: Request) {
     const claimed = ALLOWED_TYPES[file.type];
     const claimedMaxBytes = maxBytesFor(claimed?.kind ?? "file", settings);
     if (file.size > claimedMaxBytes) {
-      const mb = Math.round(claimedMaxBytes / 1024 / 1024);
-      const actualMb = (file.size / 1024 / 1024).toFixed(1);
-      return Response.json({ error: `ไฟล์ใหญ่เกินไป (ไฟล์นี้ ${actualMb}MB ต้องไม่เกิน ${mb}MB)` }, { status: 413 });
+      return Response.json({ error: fileTooLargeMessage(file, claimedMaxBytes) }, { status: 413 });
     }
 
     const bytes = new Uint8Array(await file.arrayBuffer());
@@ -124,9 +123,7 @@ export async function POST(request: Request) {
     const mime = sniffed ?? "application/octet-stream";
     const sniffedMaxBytes = maxBytesFor(kind, settings);
     if (bytes.byteLength > sniffedMaxBytes) {
-      const mb = Math.round(sniffedMaxBytes / 1024 / 1024);
-      const actualMb = (bytes.byteLength / 1024 / 1024).toFixed(1);
-      return Response.json({ error: `ไฟล์ใหญ่เกินไป (ไฟล์นี้ ${actualMb}MB ต้องไม่เกิน ${mb}MB)` }, { status: 413 });
+      return Response.json({ error: fileTooLargeMessage({ name: file.name, size: bytes.byteLength }, sniffedMaxBytes) }, { status: 413 });
     }
 
     /*

@@ -13,6 +13,7 @@ import type {
   ChatUser,
 } from "../types";
 
+import { MB, fileTooLargeMessage } from "@/lib/file-limits";
 async function json<T>(res: Response): Promise<T> {
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body?.error ?? `${res.status} ${res.statusText}`);
@@ -137,7 +138,7 @@ export function uploadAttachment(
     xhr.onload = () => {
       const body = xhr.response ?? {};
       if (xhr.status >= 200 && xhr.status < 300) resolve(body as ChatAttachment);
-      else reject(new Error(body?.error ?? (xhr.status === 413 ? "ไฟล์ใหญ่เกินไป" : "อัปโหลดไม่สำเร็จ")));
+      else reject(new Error(body?.error ?? (xhr.status === 413 ? fileTooLargeMessage(file, 25 * MB) : "อัปโหลดไม่สำเร็จ")));
     };
     xhr.onerror = () => reject(new Error("อัปโหลดไม่สำเร็จ — ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่"));
     xhr.onabort = () => reject(new DOMException("ยกเลิกแล้ว", "AbortError"));

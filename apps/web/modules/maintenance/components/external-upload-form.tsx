@@ -5,6 +5,8 @@ import { SubmitButton } from "./submit-button";
 import { useRef, useState } from "react";
 import { Camera, ClipboardPaste } from "lucide-react";
 
+import { FORM_UPLOAD_MAX_BYTES, firstTooLarge, totalTooLargeMessage } from "@/lib/file-limits";
+
 /** ตัดข้อความที่ 500 ตัว — ต้องตรงกับ NOTE_MAX ฝั่งเซิร์ฟเวอร์ */
 const NOTE_MAX = 500;
 
@@ -29,6 +31,21 @@ export function ExternalUploadForm({
   const [count, setCount] = useState(0);
   const [note, setNote] = useState("");
   const [pasted, setPasted] = useState(0);
+  // หน้านี้เปิดสาธารณะ อยู่นอก Shell (ไม่มีกล่องเด้ง/ตัวกันไฟล์ใหญ่ของ Shell) — เตือนในฟอร์มเอง รูปแบบเดียวกัน
+  const [sizeError, setSizeError] = useState<string | null>(null);
+
+  function checkInput(input: HTMLInputElement) {
+    const message = firstTooLarge(Array.from(input.files ?? []), FORM_UPLOAD_MAX_BYTES);
+    setSizeError(message);
+    if (message) input.value = "";
+    return !message;
+  }
+
+  function checkTotal(form: HTMLFormElement): string | null {
+    const files = Array.from(form.querySelectorAll<HTMLInputElement>('input[type="file"]')).flatMap((i) => Array.from(i.files ?? []));
+    const total = files.reduce((n, f) => n + f.size, 0);
+    return firstTooLarge(files, FORM_UPLOAD_MAX_BYTES) ?? (total > FORM_UPLOAD_MAX_BYTES ? totalTooLargeMessage(total, FORM_UPLOAD_MAX_BYTES) : null);
+  }
 
   /** เอาไฟล์ที่วางมาต่อเข้า input เดิม — DataTransfer เป็นทางเดียวที่ตั้ง input.files ได้ */
   function onPaste(e: React.ClipboardEvent) {
@@ -47,6 +64,10 @@ export function ExternalUploadForm({
       dt.items.add(f);
     }
     input.files = dt.files;
+    if (!checkInput(input)) {
+      setCount(0);
+      return;
+    }
     setCount(dt.files.length);
     setPasted((n) => n + images.length);
   }
@@ -54,7 +75,17 @@ export function ExternalUploadForm({
   const nothingToSend = count === 0 && note.trim() === "";
 
   return (
-    <form action={action} onPaste={onPaste} className="flex flex-col gap-3">
+    <form
+      action={action}
+      onPaste={onPaste}
+      onSubmit={(e) => {
+        const message = checkTotal(e.currentTarget);
+        if (!message) return;
+        e.preventDefault();
+        setSizeError(message);
+      }}
+      className="flex flex-col gap-3"
+    >
       <label className="flex cursor-pointer items-center justify-center gap-2 rounded-(--radius) border border-[#0D9488] py-2.5 text-sm text-[#0F766E]">
         <Camera className="h-4 w-4" /> ถ่ายรูป
         <input
@@ -62,6 +93,7 @@ export function ExternalUploadForm({
           name="photos"
           accept="image/*"
           capture="environment"
+          onChange={(e) => checkInput(e.currentTarget)}
           className="hidden"
         />
       </label>
@@ -72,7 +104,7 @@ export function ExternalUploadForm({
         name="photos"
         multiple
         accept="image/*"
-        onChange={(e) => setCount(e.target.files?.length ?? 0)}
+        onChange={(e) => setCount(checkInput(e.currentTarget) ? (e.currentTarget.files?.length ?? 0) : 0)}
         className="text-sm text-(--ink) file:mr-3 file:rounded-(--radius) file:border file:border-(--line) file:bg-(--bg-soft) file:px-3 file:py-1.5 file:text-sm"
       />
 
@@ -99,6 +131,12 @@ export function ExternalUploadForm({
           {note.length}/{NOTE_MAX}
         </span>
       </label>
+
+      {sizeError && (
+        <p role="alert" className="rounded-(--radius) bg-(--danger)/10 px-3 py-2 text-sm text-(--danger)">
+          {sizeError}
+        </p>
+      )}
 
       <p className="text-xs text-(--ink-soft)">
         เลือกได้อีกสูงสุด {remaining} รูป

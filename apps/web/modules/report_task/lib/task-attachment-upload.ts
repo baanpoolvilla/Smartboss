@@ -4,6 +4,7 @@ import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachme
 import type { Attachment } from "@/modules/report_task/types";
 import { uuid } from "@/modules/report_task/lib/uuid";
 
+import { fileTooLargeMessage } from "@/lib/file-limits";
 /** Short Thai label for the attachment list — shown next to the size, e.g. "PDF · 1.2 MB". */
 function labelFor(mime: string): string {
   if (mime.startsWith("image/")) return "รูปภาพ";
@@ -32,8 +33,7 @@ export async function uploadTaskAttachment(file: File, uploadedBy: string): Prom
   const maxMB = isImage ? settings.maxImageMB : isVideo ? settings.maxVideoMB : settings.maxFileMB;
   const maxBytes = maxMB * 1024 * 1024;
   if (!isImage && file.size > maxBytes) {
-    const actualMb = (file.size / 1024 / 1024).toFixed(1);
-    throw new Error(`ไฟล์ใหญ่เกินไป (ไฟล์นี้ ${actualMb}MB ต้องไม่เกิน ${maxMB}MB)`);
+    throw new Error(fileTooLargeMessage(file, maxBytes));
   }
 
   let url: string;
