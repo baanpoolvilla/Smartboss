@@ -1,15 +1,17 @@
 "use client"
 
-import { useTheme } from "next-themes"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
 
+/**
+ * เว็บมีแต่ธีมสว่าง (ไม่มี ThemeProvider) — เดิมส่ง theme จาก next-themes ซึ่งได้ "system"
+ * เครื่องที่ตั้งโหมดมืดไว้ sonner เลยใช้สีตัวหนังสือของธีมมืด (เทาอ่อนมาก) บนพื้นขาวของเรา
+ * ข้อความในกล่องเด้งแจ้งเตือนเกือบมองไม่เห็น — ล็อกเป็นสว่าง + กำหนดสีรายละเอียดให้เข้มเอง
+ */
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
-
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme="light"
       className="toaster group"
       icons={{
         success: (
@@ -39,6 +41,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
       toastOptions={{
         classNames: {
           toast: "cn-toast",
+          title: "!text-[#111827] !font-semibold",
+          description: "!text-[#374151]",
         },
       }}
       {...props}
