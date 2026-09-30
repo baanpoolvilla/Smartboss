@@ -46,7 +46,9 @@ function authorName(users: Record<string, { name: string }>, id: string, meId: s
 
 export function NoteCard({ message, mine }: { message: ChatMessageDTO; mine: boolean }) {
   const { open } = useNoteParam(message.channelId);
+  const users = useChatStore((s) => s.users);
   const note = message.note;
+  const who = mine ? "คุณ" : (users[message.authorId]?.name ?? "สมาชิก");
   return (
     <button
       type="button"
@@ -58,7 +60,7 @@ export function NoteCard({ message, mine }: { message: ChatMessageDTO; mine: boo
       )}
     >
       <div className="flex items-center gap-1.5 border-b border-(--line) px-3 py-2 text-[12px] font-semibold text-(--chat-accent-strong)">
-        <NotebookPen className="h-3.5 w-3.5" /> โน้ต
+        <NotebookPen className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{who} เพิ่มโน้ต</span>
       </div>
       {note ? (
         <div className="flex gap-2.5 px-3 py-2.5">
@@ -93,7 +95,8 @@ export function NoteEditor({
   /** มี = แก้โน้ตเดิม */
   note?: ChatNoteDTO;
   onClose: () => void;
-  onSaved?: (noteId: string) => void;
+  /** message = การ์ดโน้ตที่เพิ่งโพสต์ (สร้างใหม่เท่านั้น) */
+  onSaved?: (noteId: string, message?: ChatMessageDTO) => void;
 }) {
   const [body, setBody] = useState(note?.body ?? "");
   const [images, setImages] = useState<ChatAttachment[]>(note?.attachments ?? []);
@@ -127,9 +130,9 @@ export function NoteEditor({
         toast.success("แก้ไขโน้ตแล้ว");
         onSaved?.(note.id);
       } else {
-        const { id } = await api.createNote(channelId, body, images);
+        const { id, message } = await api.createNote(channelId, body, images);
         toast.success("โพสต์โน้ตแล้ว");
-        onSaved?.(id);
+        onSaved?.(id, message);
       }
       onClose();
     } catch (err) {

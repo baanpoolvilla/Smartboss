@@ -108,7 +108,11 @@ export async function getNote(actor: ChatActor, noteId: string): Promise<{ note:
 }
 
 /** สร้างโน้ต + โพสต์การ์ดลงห้อง + แจ้งเตือนสมาชิก */
-export async function createNote(actor: ChatActor, channelId: string, input: { body?: unknown; attachments?: unknown }): Promise<{ id: string }> {
+export async function createNote(
+  actor: ChatActor,
+  channelId: string,
+  input: { body?: unknown; attachments?: unknown }
+): Promise<{ id: string; message: ChatMessageDTO }> {
   const access = await getChannelAccess(actor, channelId);
   const limited = await rateLimit(`chat:note:${actor.userId}`, NOTE_LIMIT.count, NOTE_LIMIT.windowSeconds);
   if (!limited.allowed) throw new ChatError("สร้างโน้ตเร็วเกินไป รอสักครู่แล้วลองใหม่", 429);
@@ -145,7 +149,8 @@ export async function createNote(actor: ChatActor, channelId: string, input: { b
     memberIds
   );
   void notifyNewMessage(actor, channelId, access.type, memberIds, message as ChatMessageDTO);
-  return { id: note.id };
+  // การ์ดกลับไปให้เครื่องคนสร้างใส่ห้องเองทันที — ไม่พึ่งท่อสดอย่างเดียว (ท่อสดหลุดชั่วคราว = การ์ดไม่ขึ้นจนรีเฟรช)
+  return { id: note.id, message: message as ChatMessageDTO };
 }
 
 export async function updateNote(actor: ChatActor, noteId: string, input: { body?: unknown; attachments?: unknown }): Promise<void> {

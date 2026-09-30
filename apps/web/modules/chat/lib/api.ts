@@ -196,7 +196,7 @@ export function fetchNotes(channelId: string): Promise<{ notes: ChatNoteDTO[] }>
   return fetch(`${ch(channelId)}/notes`).then((r) => json(r));
 }
 
-export function createNote(channelId: string, body: string, attachments: ChatAttachment[]): Promise<{ id: string }> {
+export function createNote(channelId: string, body: string, attachments: ChatAttachment[]): Promise<{ id: string; message: ChatMessageDTO }> {
   return send(`${ch(channelId)}/notes`, "POST", { body, attachments });
 }
 

@@ -128,7 +128,7 @@ export function ChatRoom({ channel, initialUnread, onBack }: { channel: ChatChan
   const [infoOpen, setInfoOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [creatingNote, setCreatingNote] = useState(false);
-  const { noteId, open: openNote, close: closeNote } = useNoteParam(channel.id);
+  const { noteId, close: closeNote } = useNoteParam(channel.id);
   const composerRef = useRef<ComposerHandle>(null);
   const dragDepth = useRef(0);
 
@@ -255,7 +255,18 @@ export function ChatRoom({ channel, initialUnread, onBack }: { channel: ChatChan
         </div>
       )}
 
-      {creatingNote && <NoteEditor channelId={channel.id} onClose={() => setCreatingNote(false)} onSaved={openNote} />}
+      {creatingNote && (
+        <NoteEditor
+          channelId={channel.id}
+          onClose={() => setCreatingNote(false)}
+          // แบบ LINE: โพสต์แล้วการ์ดขึ้นท้ายห้องทันที (ห้องเลื่อนลงให้เองเพราะเป็นข้อความของเรา)
+          onSaved={(_id, message) => {
+            if (message) useChatStore.getState().receiveMessage(message, false);
+            // มือถือ/จอแคบ ข้อมูลห้องทับห้องแชทอยู่ — ปิดให้เห็นการ์ด (คอมอยู่ข้าง ๆ เห็นอยู่แล้ว)
+            if (!window.matchMedia("(min-width: 1024px)").matches) setInfoOpen(false);
+          }}
+        />
+      )}
       {noteId && !creatingNote && <NoteViewer key={noteId} noteId={noteId} onClose={closeNote} onOpenMedia={onOpenMedia} />}
 
       {lightbox && (
