@@ -8,6 +8,7 @@ import {
 import { dockAttendance } from "@/lib/attendance-performance";
 import { purgeExpiredChatMedia } from "@/modules/chat/data/media-retention";
 import { notifyLateArrivals } from "@/lib/attendance-late-alerts";
+import { notifyPendingOvertime } from "@/modules/hr/lib/hr-notify";
 
 export const runtime = "nodejs";
 
@@ -19,6 +20,7 @@ export const runtime = "nodejs";
  *   - หักคะแนนงานที่ปล่อยค้าง + ผลลงเวลา (?task=performance) → หน้าสรุปรายคนของผู้บริหาร
  *   - ลบรูป/วิดีโอ/เสียงในแชทที่หมดอายุ ไม่อยู่ในอัลบั้ม (?task=chat-media, &dryRun=1 ดูอย่างเดียว)
  *   - แจ้งเตือนมาสายของวันนี้ ให้ตัวพนักงาน (?task=late-alerts — ต้องมีบรรทัด crontab แยก ทุก 5 นาทีช่วงเช้า ดู docs/deploy.md)
+ *   - แจ้งผู้อนุมัติว่ามี OT ค้างรออนุมัติกี่รายการ (?task=ot-pending — วันละครั้ง อยู่ใน all ตอน 08:00)
  *   - ?task=all รันทั้งหมด
  * เรียกด้วย header `Authorization: Bearer $CRON_SECRET` หรือ `?key=$CRON_SECRET`
  * route นี้อยู่นอก auth ของ proxy จึงกันด้วย CRON_SECRET เท่านั้น →
@@ -66,6 +68,11 @@ export async function GET(req: NextRequest) {
         attendance: await dockAttendance(),
       },
     });
+  }
+
+  // หลัง performance — ผลลงเวลาเพิ่งคำนวณใหม่ OT ของเมื่อวานเย็นจึงนับครบ
+  if (task === "ot-pending" || task === "all") {
+    Object.assign(result, { otPending: await notifyPendingOvertime() });
   }
 
   return NextResponse.json(result);

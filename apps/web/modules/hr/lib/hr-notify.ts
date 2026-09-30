@@ -206,3 +206,92 @@ export async function notifyRequester(
     console.error("[hr-notify] notifyRequester failed", err);
   }
 }
+
+/* ═══════════════════ OT รออนุมัติ (สรุปรายวัน) ═══════════════════ */
+
+/** ย้อนดูกี่วัน — เท่ากับแท็บ "OT รออนุมัติ" (app/(shell)/hr/home-overtime.tsx LOOKBACK_DAYS) */
+const OT_LOOKBACK_DAYS = 45;
+
+interface PendingOtRow {
+  subject: string | null;
+  display_name: string | null;
+}
+
+/**
+ * แจ้งผู้มีสิทธิ์อนุมัติ OT ว่ามี OT ค้างรออนุมัติกี่รายการ — วันละครั้งจาก cron (?task=ot-pending / all)
+ *
+ * OT ไม่มีใครกด "ยื่นคำขอ" (ระบบตรวจพบเองจากเวลาสแกน) จึงไม่มีจังหวะให้แจ้งแบบลา/แก้เวลา —
+ * เดิมผู้อนุมัติต้องเข้าไปเปิดแท็บ OT เองถึงจะรู้ ใช้เงื่อนไขเดียวกับแท็บนั้น: มีนาทีที่ตรวจพบ,
+ * ก่อนวันนี้ (วันนี้ยังไม่จบ), ยังไม่ถูกอนุมัติ/ไม่อนุมัติ
+ *
+ * แจ้งใหม่ทุกวันที่ยังค้าง (ลบอันเมื่อวานทิ้งก่อน ไม่ให้กระดิ่งเต็ม) · ไม่ค้างแล้ว = ลบทิ้ง ไม่แจ้ง
+ * OT ของตัวผู้อนุมัติเองไม่นับ (อนุมัติของตัวเองไม่ได้) · รันซ้ำวันเดียวกันไม่แจ้งซ้ำ · ไม่ throw
+ */
+export async function notifyPendingOvertime(): Promise<{ orgs: number; notified: number }> {
+  const result = { orgs: 0, notified: 0 };
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
+  const from = new Date(Date.parse(`${today}T00:00:00Z`) - OT_LOOKBACK_DAYS * 86_400_000).toISOString().slice(0, 10);
+  const type = "hr_overtime_pending";
+
+  const orgs = await prisma.organization.findMany({ where: { isActive: true }, select: { id: true } });
+  for (const { id: orgId } of orgs) {
+    try {
+      const [pending, approverIds] = await Promise.all([
+        withWorkforceTenant(orgId, (tx) =>
+          tx.$queryRaw<PendingOtRow[]>`
+            SELECT p.subject, p.display_name
+            FROM workforce.attendance_results ar
+            JOIN workforce.employments e ON e.id = ar.employment_id
+            LEFT JOIN workforce.principals p ON p.person_id = e.person_id
+            WHERE ar.is_current
+              AND ar.ot_candidate_minutes > 0
+              AND ar.work_date >= ${from}::date
+              AND ar.work_date < ${today}::date
+              AND NOT EXISTS (
+                SELECT 1 FROM workforce.overtime_requests o
+                WHERE o.employment_id = ar.employment_id
+                  AND o.work_date = ar.work_date
+                  AND o.status IN ('FINAL_APPROVED', 'REJECTED')
+              )`
+        ),
+        resolveApproverUserIds(orgId, "workforce.overtime.approve"),
+      ]);
+
+      const existing = await prisma.notification.findMany({
+        where: { orgId, type },
+        select: { id: true, userId: true, referenceId: true },
+      });
+      // ของวันก่อน ๆ ล้าสมัยแล้ว (ตัวเลขเปลี่ยน) — ลบ เหลือแต่ของวันนี้
+      const stale = existing.filter((n) => n.referenceId !== today).map((n) => n.id);
+      if (stale.length > 0) await prisma.notification.deleteMany({ where: { orgId, id: { in: stale } } });
+      const doneToday = new Set(existing.filter((n) => n.referenceId === today).map((n) => n.userId));
+
+      if (pending.length === 0 || approverIds.length === 0) continue;
+      result.orgs++;
+
+      for (const approverId of approverIds) {
+        if (doneToday.has(approverId)) continue;
+        const mine = pending.filter((r) => r.subject !== approverId);
+        if (mine.length === 0) continue;
+        const names = Array.from(new Set(mine.map((r) => r.display_name?.trim()).filter((n): n is string => !!n)));
+        const body =
+          names.length === 0
+            ? undefined
+            : names.length <= 3
+              ? names.join(", ")
+              : `${names.slice(0, 3).join(", ")} และอีก ${names.length - 3} คน`;
+        await notifyUser(orgId, approverId, {
+          title: `มี OT รออนุมัติ ${mine.length} รายการ`,
+          body,
+          type,
+          referenceId: today,
+        });
+        result.notified++;
+      }
+    } catch (err) {
+      // บริษัทที่ยังไม่มีข้อมูลฝั่ง HR — ข้าม
+      console.error("[hr-notify] notifyPendingOvertime failed", orgId, err);
+    }
+  }
+  return result;
+}

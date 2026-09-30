@@ -113,6 +113,7 @@ export function maintenanceCategoryFor(type: string): NotifCategory {
     case "hr_attendance_correction_submitted":
     case "hr_attendance_correction_decided":
     case "hr_overtime_decided":
+    case "hr_overtime_pending":
       return "hr_attendance";
     case "issue_ticket_new":
     case "issue_ticket_reply_reporter":
@@ -239,6 +240,7 @@ export function maintenanceHrefFor(type: string, referenceId: string | null): st
   // รายการที่อนุมัติได้เลยแทน
   if (type === "hr_leave_submitted") return "/hr/leave";
   if (type === "hr_attendance_correction_submitted") return "/hr/attendance/corrections";
+  if (type === "hr_overtime_pending") return "/hr?tab=overtime";
   // ผลคำขอของพนักงานเอง → หน้าแรกของบุคคล (มีรายการลา/แก้เวลา/OT ของตัวเอง)
   if (type === "hr_leave_decided" || type === "hr_attendance_correction_decided" || type === "hr_overtime_decided") return "/hr";
   // "issue_ticket_new" ไปทีมหลังบ้าน (Super Admin) เท่านั้น — referenceId
