@@ -39,10 +39,15 @@ const Toaster = ({ ...props }: ToasterProps) => {
         } as React.CSSProperties
       }
       toastOptions={{
+        // การ์ดอ่านง่าย: หัวข้อเข้ม ตัวหนา · รายละเอียดเทาเข้ม ไม่เกิน 3 บรรทัด · ปุ่ม "เปิด" สีแบรนด์
+        // (Tailwind v4 — "!" ท้ายคลาส = !important ชนะสไตล์ตั้งต้นของ sonner)
         classNames: {
-          toast: "cn-toast",
-          title: "!text-[#111827] !font-semibold",
-          description: "!text-[#374151]",
+          toast:
+            "cn-toast rounded-2xl! border-[#e5e7eb]! bg-white! px-4! py-3.5! shadow-[0_12px_32px_rgba(15,23,42,0.14)]!",
+          title: "text-[14.5px]! font-semibold! leading-snug! text-[#0f172a]!",
+          description: "mt-0.5! line-clamp-3 text-[13.5px]! leading-relaxed! text-[#334155]!",
+          actionButton:
+            "h-8! rounded-lg! bg-[#16a34a]! px-3.5! text-[13px]! font-semibold! text-white! hover:bg-[#15803d]!",
         },
       }}
       {...props}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { NOTIFY_TOAST_CLASSES, NotifyToastIcon } from "@/components/shell/notify-toast-icon";
 
 import { hiddenRecently, subscribeRealtime, type RealtimeEventMessage } from "@/lib/realtime-client";
 import { pushSupport, serverPushConfigured, showLocalNotification } from "@/lib/push-client";
@@ -130,6 +131,8 @@ function onEvent(raw: RealtimeEventMessage) {
   if (!getChatPrefs().toast) return;
   toast(mentioned ? `${who} แท็กคุณ` : title, {
     description: body,
+    icon: <NotifyToastIcon kind="chat" />,
+    classNames: NOTIFY_TOAST_CLASSES,
     duration: 5000,
     action: { label: "เปิด", onClick: () => navigate?.(url) },
   });

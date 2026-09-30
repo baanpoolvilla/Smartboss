@@ -8,6 +8,7 @@ import { hiddenRecently, subscribeRealtime, type RealtimeEventMessage } from "@/
 import { pushSupport, serverPushConfigured, showLocalNotification } from "@/lib/push-client";
 import { useMaintenanceNotifStore } from "@/modules/notifications/use-maintenance-notifications";
 import { getChatPrefs, playChatSound, unlockChatAudio } from "@/modules/chat/lib/prefs";
+import { NOTIFY_TOAST_CLASSES, NotifyToastIcon } from "./notify-toast-icon";
 
 /**
  * เสียง + เด้งแจ้งเตือนของ "ทุกโมดูล" (งาน, รายงาน, งานซ่อม, HR, แจ้งบัค) — วางครั้งเดียวที่ Shell
@@ -50,6 +51,8 @@ export function SystemNotify() {
       if (!getChatPrefs().toast) return;
       toast(title, {
         description: body || undefined,
+        icon: <NotifyToastIcon kind="notify" />,
+        classNames: NOTIFY_TOAST_CLASSES,
         duration: 6000,
         action: { label: "เปิด", onClick: () => router.push(url) },
       });
