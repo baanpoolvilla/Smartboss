@@ -13,7 +13,6 @@ import { ReportComplianceBar } from "@/modules/report_task/components/report-fee
 import { RoomSettingsSheet } from "@/modules/report_task/components/report-feed/room-settings-sheet";
 import { ReportTopicPanels, collectFiles, collectLinks, filesCutoffMs, fileFilterForLegacyTab } from "@/modules/report_task/components/report-feed/report-topic-panels";
 import { PostFilterBar, PostFilterButton, ActiveFilterChips, filterPosts, emptyPostFilters, postFiltersActiveCount, type PostFilters } from "@/modules/report_task/components/report-feed/post-filter-bar";
-import { filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
 import { useSetAppBarLeading } from "@/modules/report_task/components/shared/app-bar-leading";
 import { TaskDetailSheet } from "@/modules/report_task/components/kanban/task-detail-sheet";
 import { Button, buttonVariants } from "@/modules/report_task/components/ui/button";
@@ -39,7 +38,7 @@ import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions
 import { safeLocalStorage } from "@/modules/report_task/lib/safe-storage";
 import { lateToastDismissKey, isLateToastDismissed, dismissLateToast } from "@/modules/report_task/lib/late-toast-dismiss";
 import { toast } from "sonner";
-import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronDown, ChevronRight, Clock, FolderOpen, Hash, Lock, MessageSquareText, Pin, Search, Settings, SlidersHorizontal, TriangleAlert, Users, X } from "lucide-react";
+import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronDown, ChevronRight, Clock, FolderOpen, Hash, Lock, MessageSquareText, Pin, Search, Settings, TriangleAlert, Users, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 
 // Beyond this many pinned posts, the rest move into the "+N เพิ่มเติม"
@@ -822,8 +821,93 @@ function ReportFeedPageInner() {
   const [roomInfoOpen, setRoomInfoOpen] = useState(false);
   const inRoom = !!activeTopic && !showAllPosts && !showPending && !showMentions && !todayStatusFilter;
   const activeFilterCount = postFiltersActiveCount(filters);
-  const topicSwitcherLeading = useMemo(
-    () => (
+  // ปุ่ม "เวลาส่ง" (ย้ายมาจากแถวแท็บเดิม ไม่แก้เนื้อใน)
+  const submitTimesControl = activeTopic ? (
+    <>
+                  {requirementParts.length > 0 && (() => {
+                    // Trigger itself picks up the worst status too, not just
+                    // the popover contents — worth knowing "am I covered"
+                    // before even opening it. late > pending > done, and
+                    // stays the default neutral gray if every round here is
+                    // "neutral" (nothing this viewer personally owes today).
+                    const anyLate = requirementParts.some((r) => r.status === "late");
+                    const anyPending = !anyLate && requirementParts.some((r) => r.status === "pending");
+                    const allDone = !anyLate && !anyPending && requirementParts.some((r) => r.status === "done");
+                    return (
+                      <div className="shrink-0 my-1.5">
+                        <Popover>
+                          <PopoverTrigger
+                            render={
+                              <button
+                                className={cn(
+                                  "flex items-center gap-1 rounded-full border bg-white px-2 py-1 text-[11px] font-medium hover:bg-[var(--bg-soft)]",
+                                  anyLate
+                                    ? "border-red-200 text-[var(--chart-red)]"
+                                    : anyPending
+                                      ? "border-amber-200 text-amber-700"
+                                      : allDone
+                                        ? "border-[var(--brand-green)]/30 text-[var(--brand-green-dark)]"
+                                        : "border-[var(--line)] text-[var(--ink-soft)]"
+                                )}
+                              >
+                                <Clock className="h-3 w-3" />
+                                เวลาส่ง
+                                <ChevronDown className="h-3 w-3" />
+                              </button>
+                            }
+                          />
+                          <PopoverContent align="start" className="w-72 p-3">
+                            {/* One row per round instead of one run-on
+                                inline line — asked for explicitly
+                                ("แก้ให้อ่านได้ง่ายเวลากดไปดู") after the old
+                                "เวลาส่ง Weekly-report 09:22 น. · Daily-report
+                                09:27 น." wrapped text read as one indistinct
+                                blob. The colored dot + status word next to
+                                each round is this viewer's own coverage for
+                                it today (red = missed, amber = still open,
+                                green = already sent) — blank for a round
+                                they aren't actually a submitter of, so it
+                                never claims a status that isn't theirs to
+                                have. */}
+                            <p className="flex items-center gap-1.5 text-xs font-semibold text-[var(--ink)] mb-2">
+                              <Clock className="h-3.5 w-3.5 text-[var(--ink-soft)]" />
+                              เวลาส่งวันนี้
+                            </p>
+                            <div className="space-y-1.5">
+                              {requirementParts.map((r, i) => {
+                                const dotColor =
+                                  r.status === "late"
+                                    ? "bg-[var(--chart-red)]"
+                                    : r.status === "pending"
+                                      ? "bg-amber-400"
+                                      : r.status === "done"
+                                        ? "bg-[var(--brand-green)]"
+                                        : "bg-[var(--ink-faint)]";
+                                const statusLabel =
+                                  r.status === "late" ? "ยังไม่ส่ง (เลยกำหนด)" : r.status === "pending" ? "ยังไม่ส่ง" : r.status === "done" ? "ส่งแล้ว" : null;
+                                const statusTextColor =
+                                  r.status === "late" ? "text-[var(--chart-red)]" : r.status === "pending" ? "text-amber-600" : "text-[var(--brand-green-dark)]";
+                                return (
+                                  <div key={i} className="flex items-center gap-2">
+                                    <span className={cn("h-2 w-2 rounded-full shrink-0", dotColor)} aria-hidden />
+                                    <span className={cn("text-xs flex-1 min-w-0", r.active ? "font-medium text-[var(--ink)]" : "text-[var(--ink-soft)]")}>
+                                      {r.text}
+                                    </span>
+                                    {statusLabel && <span className={cn("text-[10px] font-medium shrink-0", statusTextColor)}>{statusLabel}</span>}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    );
+                  })()}
+    </>
+  ) : null;
+  // ไม่ memo — มีค่าที่ใช้หลายสิบตัว พลาด dependency ตัวเดียวแถบบนจะค้างค่าเก่า
+  // (useSetAppBarLeading แค่ส่งต่อให้ AppBar วาดใหม่ หน้าไม่ได้ re-render ตาม ไม่วนลูป)
+  const topicSwitcherLeading = (
       <div className="flex min-w-0 flex-1 items-center gap-0.5">
         <button
           type="button"
@@ -843,7 +927,7 @@ function ReportFeedPageInner() {
             type="button"
             onClick={() => inRoom && setRoomInfoOpen(true)}
             disabled={!inRoom}
-            className="flex min-w-0 flex-1 flex-col items-start rounded-lg px-1 py-0.5 text-left disabled:cursor-default lg:pointer-events-none"
+            className="flex min-w-0 flex-1 flex-col items-start rounded-lg px-1 py-0.5 text-left disabled:cursor-default lg:pointer-events-none lg:max-w-[240px] lg:flex-none"
           >
             <span className="flex min-w-0 max-w-full items-center gap-1 text-[var(--ink)]">
               <Hash className="h-4 w-4 shrink-0 text-[var(--ink-soft)]" />
@@ -867,9 +951,81 @@ function ReportFeedPageInner() {
             {activeFilterCount > 0 && <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-[var(--brand-green)] ring-2 ring-white" aria-hidden />}
           </button>
         )}
+        {/* คอม: หัวห้องทั้งแถวอยู่บนแถบบนแถวเดียว (แบบ Discord) — แท็บ · สมาชิก · ส่งแล้ว ·
+            เวลาส่ง · มุมมอง · กรอง · ⚙ แทนหัวห้องสองแถวที่เคยซ้อนอยู่ใต้แถบบน */}
+        {inRoom && activeTopic && (
+          <div className="hidden min-w-0 flex-1 items-center gap-2 lg:flex">
+            <span className="h-5 w-px shrink-0 bg-[var(--line)]" aria-hidden />
+            <div role="tablist" aria-label="ส่วนของหัวข้อ" className="flex shrink-0 items-center gap-0.5">
+              {topicTabs.map((t) => {
+                const Icon = t.icon;
+                const active = activeTab === t.id;
+                const count = tabCounts[t.id];
+                return (
+                  <button
+                    key={t.id}
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => setActiveTab(t.id)}
+                    title={t.label}
+                    className={cn(
+                      "flex h-8 items-center gap-1.5 rounded-md px-2 text-[13px] font-medium transition-colors",
+                      active ? "bg-[#dde3eb] text-[var(--ink)]" : "text-[var(--ink-soft)] hover:bg-[#e9edf2] hover:text-[var(--ink)]"
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span className="hidden xl:inline">{t.label}</span>
+                    {count != null && count > 0 && <span className="tabular-nums text-[11px] text-[var(--ink-soft)]">{count > 99 ? "99+" : count}</span>}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="min-w-0 flex-1" />
+            <button
+              type="button"
+              data-tour="member-count"
+              onClick={() => setMembersDialogOpen(true)}
+              className="flex h-8 shrink-0 items-center gap-1 rounded-md px-2 text-xs tabular-nums text-[var(--ink-soft)] transition-colors hover:bg-[#e9edf2] hover:text-[var(--ink)]"
+              title={canManageMembers ? "จัดการสมาชิกในหัวข้อนี้" : "ดูรายชื่อสมาชิกในหัวข้อนี้"}
+            >
+              {activeTopic.visibility?.managerOnly && <Lock className="h-3.5 w-3.5" />}
+              <Users className="h-3.5 w-3.5" />
+              {topicMembers.length}
+            </button>
+            <div className="flex shrink-0 items-center">
+              <ReportComplianceBar
+                variant="mini"
+                visibleTopics={[activeTopic]}
+                onJumpToPost={(topicId, postId) => {
+                  selectView(topicId);
+                  setHighlightPostId(postId);
+                }}
+                onShowTodayStatus={setTodayStatusFilter}
+              />
+            </div>
+            {submitTimesControl}
+            <div className="shrink-0">
+              <ReportViewSwitcher activeId={activeId} onSelect={selectView} pendingCount={viewPendingCount} mentionCount={viewMentionCount} />
+            </div>
+            {activeTab === "posts" && (
+              <div className="shrink-0">
+                <PostFilterButton filters={filters} onChange={setFilters} authorOptions={topicMembers.map((m) => m.id)} tagOptions={reportTags} />
+              </div>
+            )}
+            {canEditReportTopic(activeTopic.visibility, viewingAsUserId) && (
+              <button
+                onClick={() => setRoomSettingsOpen(true)}
+                aria-label="ตั้งค่าห้อง"
+                title="ตั้งค่าห้อง"
+                className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "h-8 w-8 shrink-0")}
+              >
+                <Settings className="h-4 w-4 text-[var(--ink-soft)]" />
+              </button>
+            )}
+            <span className="h-5 w-px shrink-0 bg-[var(--line)]" aria-hidden />
+          </div>
+        )}
       </div>
-    ),
-    [activeViewLabel, inRoom, viewMentionCount, topicMembers.length, activeFilterCount]
   );
   useSetAppBarLeading(topicSwitcherLeading);
 
@@ -1036,314 +1192,17 @@ function ReportFeedPageInner() {
           ) : activeTopic ? (
             <div className="flex-1 min-h-0 bg-white overflow-hidden flex flex-col">
               <div className="shrink-0">
-                {/* Row 1 — identity: logo/name/description on the left,
-                    member count + settings gear on the right (R1/R4: two
-                    fixed rows instead of everything wrapping together with
-                    the tabs into whatever fits). flex-wrap (not a strict
-                    single line) — member count + mode pill + mini compliance
-                    bar + gear all have their own minimum width that doesn't
-                    shrink, and on a narrow phone (~375-414px) that add up to
-                    more than the screen has even with the name truncated to
-                    nothing; without a wrap the rest just ran off-screen with
-                    no way to reach it ("มุมมอง: Thread" was literally
-                    unreachable, cut off past the right edge). */}
-                <div className="hidden lg:flex px-5 py-1.5 flex-wrap items-center gap-x-2.5 gap-y-1.5">
-                  <TopicLogo topic={activeTopic} size="h-7 w-7" />
-                  {/* Name + description share one line now (not stacked) —
-                      matches the reference layout ("# test1
-                      รายงานประจำวันของทีม") and keeps row 1 to its single
-                      line even with a description present. Still hidden
-                      below sm: on a narrow phone this pair plus the mode
-                      pill/compliance bar/round row below it stacked into the
-                      header eating close to a third of the screen before any
-                      actual post came into view
-                      ("วงมันเปลืองพื้นที่ไป 1/3 ของหน้าจอ"). */}
-                  <div className="min-w-0 flex-1 flex items-baseline gap-2">
-                    <h2 className="text-[16px] font-semibold truncate shrink-0 max-w-[60%]">{activeTopic.name}</h2>
-                    {activeTopic.description && (
-                      <p className="hidden sm:block text-xs text-[var(--ink-soft)] truncate min-w-0">{activeTopic.description}</p>
-                    )}
-                  </div>
-                  {/* Anyone can open this to browse who's in the room — same
-                      trigger/dialog for every room. RoomMembersDialog itself
-                      downgrades to a read-only view (no checkboxes, no Save,
-                      just Close) whenever canManage is false or the mode has
-                      no per-person list to edit, so a regular employee can
-                      look but has no controls to change anything. */}
-                  <button
-                    data-tour="member-count"
-                    onClick={() => setMembersDialogOpen(true)}
-                    className="flex items-center gap-1 text-xs text-[var(--ink-soft)] tabular-nums shrink-0 hover:text-[var(--ink)] rounded-full px-1.5 py-0.5 hover:bg-[var(--bg-soft)] transition-colors"
-                    title={canManageMembers ? "จัดการสมาชิกในหัวข้อนี้" : "ดูรายชื่อสมาชิกในหัวข้อนี้"}
-                  >
-                    {activeTopic.visibility?.managerOnly && <Lock className="h-3 w-3" />}
-                    <Users className="h-3 w-3" />
-                    {topicMembers.length} คน
-                  </button>
-                  <RoomMembersDialog
-                    open={membersDialogOpen}
-                    onOpenChange={setMembersDialogOpen}
-                    topic={activeTopic}
-                    updateTopicSettings={updateTopicSettings}
-                    canManage={canManageMembers}
-                  />
-                  {/* Room mode pill — moved up here from the filter row below
-                      (R1, next to the member count/gear it's most related
-                      to). Visible to everyone (it's informational — same as
-                      before), but only clickable into room settings for
-                      whoever can actually edit them; a viewer without that
-                      right gets the plain label so hovering doesn't imply a
-                      control that isn't there for them. Plain text now for
-                      everyone, editor included — clicking it to jump into
-                      room settings was one more way into settings besides
-                      the ⚙ gear, and that's the one and only door in
-                      ("บอกทุกตัวให้กดตั้งค่าได้ที่ฟันเฟืองเท่านั้น"). Not a
-                      real <select> either way — the mode itself is locked
-                      for any room created after FEED_VIEW_MODE_LOCK_CUTOFF
-                      (see room-settings-sheet.tsx). */}
-                  {/* Round 2, explicit instruction: dropped from the header
-                      entirely, not just reworded — it's already reachable in
-                      room settings ("รูปแบบการแสดงโพสต์", see
-                      room-settings-sheet.tsx), and the header should only
-                      carry what's needed to actually use the room right now. */}
-                  {/* Today's compliance stats — pushed to the row's own far
-                      right (ml-auto carries the gear after it along too)
-                      instead of sitting packed right after the mode pill, so
-                      it reads as its own distinct "here's what matters right
-                      now" block in the corner rather than one more chip in a
-                      row of chips ("แถวหัวห้อง มุมขวา แยกเด่นออกมา"). */}
-                  <div className="hidden sm:flex items-center gap-1 ml-auto">
-                    <ReportComplianceBar
-                      variant="mini"
-                      visibleTopics={activeTopic ? [activeTopic] : []}
-                      onJumpToPost={(topicId, postId) => {
-                        selectView(topicId);
-                        setHighlightPostId(postId);
-                      }}
-                      onShowTodayStatus={setTodayStatusFilter}
-                    />
-                  </div>
-                  {canEditReportTopic(activeTopic.visibility, viewingAsUserId) && (
-                    <button
-                      onClick={() => setRoomSettingsOpen(true)}
-                      aria-label="ตั้งค่าห้อง"
-                      className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "shrink-0 h-7 w-7")}
-                    >
-                      <Settings className="h-4 w-4 text-[var(--ink-soft)]" />
-                    </button>
-                  )}
-                  <RoomSettingsSheet open={roomSettingsOpen} onOpenChange={setRoomSettingsOpen} topic={activeTopic} />
-                </div>
+                {/* หัวห้องทั้งแถวย้ายขึ้นไปอยู่บนแถบบน (topicSwitcherLeading) แบบแถบเดียวของ Discord
+                    เหลือไว้ตรงนี้แค่หน้าต่างที่ปุ่มบนแถบนั้นเปิด */}
+                <RoomMembersDialog
+                  open={membersDialogOpen}
+                  onOpenChange={setMembersDialogOpen}
+                  topic={activeTopic}
+                  updateTopicSettings={updateTopicSettings}
+                  canManage={canManageMembers}
+                />
+                <RoomSettingsSheet open={roomSettingsOpen} onOpenChange={setRoomSettingsOpen} topic={activeTopic} />
 
-                {/* Row 1.5 — submission-round info, on its own wrapping row
-                    instead of squeezed into Row 1's single non-wrapping line
-                    with the member count/mode pill/gear. A room with 2+
-                    rounds (or just a long custom round label) had nowhere to
-                    go there but to overflow or get clipped — plain text, not
-                    a button (the old "+1 hidden behind a hover" version read
-                    as cryptic, "ดูแล้วงง"), one pill per round so a run-on
-                    string of every round's text isn't one indecipherable
-                    blob either ("ดูยาก งง"). Changing the rounds themselves
-                    is the ⚙ gear's job, not this row's. */}
-                {/* Row 3 — tabs, full-width so the underline (`border-b` on
-                    the container, `-mb-px` per tab) actually connects to a
-                    real line instead of floating (R2), with counts (R5) and
-                    proper tab semantics (R6). The tablist itself is
-                    `flex-1 min-w-0` with its own overflow-x-auto — tabs
-                    scroll on a narrow phone rather than wrapping, so the
-                    "ตัวกรอง" button stays pinned on the same line instead of
-                    getting shoved onto its own orphan row below (which just
-                    looked like disconnected clutter, "งง...จัดให้มันดีๆสิ"). */}
-                <div className="hidden lg:flex px-5 items-center gap-2 border-b border-[var(--line)]">
-                {/* Labels show at lg+ only — asked again explicitly to go
-                    back to icon-only below that ("โพส ไฟล์ เอารูปแทน...ไม่เอา
-                    คำมา") after a prior round had asked for labels at every
-                    width. `title` on the button still carries the label for
-                    a11y/hover on every width. Icon+count alone is also what
-                    lets all 5 tabs fit on a narrow phone with nothing to
-                    scroll — labels only come back once lg has the room. */}
-                <div role="tablist" aria-label="ส่วนของหัวข้อ" className="no-scrollbar flex flex-1 min-w-0 items-center gap-3 lg:gap-4 overflow-x-auto">
-                  {topicTabs.map((t) => {
-                    const Icon = t.icon;
-                    const active = activeTab === t.id;
-                    const count = tabCounts[t.id];
-                    return (
-                      <button
-                        key={t.id}
-                        role="tab"
-                        aria-selected={active}
-                        tabIndex={active ? 0 : -1}
-                        onClick={() => setActiveTab(t.id)}
-                        onKeyDown={(e) => {
-                          if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-                          e.preventDefault();
-                          const i = topicTabs.findIndex((x) => x.id === t.id);
-                          const next = topicTabs[(i + (e.key === "ArrowRight" ? 1 : -1) + topicTabs.length) % topicTabs.length]!;
-                          setActiveTab(next.id);
-                        }}
-                        title={t.label}
-                        className={cn(
-                          "shrink-0 flex items-center gap-1.5 pb-2 -mb-px border-b-2 text-xs font-medium transition-colors duration-200",
-                          active
-                            ? "border-[var(--brand-green)] text-[var(--brand-green-dark)]"
-                            : "border-transparent text-[var(--ink-soft)] hover:text-[var(--ink)]"
-                        )}
-                      >
-                        <Icon className="h-3.5 w-3.5" />
-                        <span className="hidden lg:inline">{t.label}</span>
-                        {/* Capped the same way the notification bell/bug-icon
-                            badges already are (99+) — a room with thousands
-                            of posts otherwise stretched this pill into an
-                            oval with 5+ digits in it instead of staying a
-                            small round badge. */}
-                        {count != null && count > 0 && (
-                          <span className="tabular-nums text-[10px] text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-1.5 py-0.5">
-                            {count > 99 ? "99+" : count}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-                  {/* "เวลาส่ง" collapsed trigger — moved into this same tab
-                      row instead of its own row above (desktop used to keep
-                      an always-visible inline version there, on top of
-                      mobile's own collapsed-row version) so the header is
-                      down to 2 rows before the feed starts on *every* width,
-                      not just mobile ("แก้ของ pc ด้วยสิ...อยากได้แนวสูง
-                      เพิ่มขึ้นด้วย" — desktop wanted the same vertical space
-                      back). Stays a collapsed popover rather than inline
-                      text even on a wide screen — the full "Weekly-report
-                      09:22 น. · Daily-report 09:27 น." text has nowhere
-                      fixed-width to sit without either crowding the tabs or
-                      forcing this row to wrap on a 2+ round room. */}
-                  {requirementParts.length > 0 && (() => {
-                    // Trigger itself picks up the worst status too, not just
-                    // the popover contents — worth knowing "am I covered"
-                    // before even opening it. late > pending > done, and
-                    // stays the default neutral gray if every round here is
-                    // "neutral" (nothing this viewer personally owes today).
-                    const anyLate = requirementParts.some((r) => r.status === "late");
-                    const anyPending = !anyLate && requirementParts.some((r) => r.status === "pending");
-                    const allDone = !anyLate && !anyPending && requirementParts.some((r) => r.status === "done");
-                    return (
-                      <div className="shrink-0 my-1.5">
-                        <Popover>
-                          <PopoverTrigger
-                            render={
-                              <button
-                                className={cn(
-                                  "flex items-center gap-1 rounded-full border bg-white px-2 py-1 text-[11px] font-medium hover:bg-[var(--bg-soft)]",
-                                  anyLate
-                                    ? "border-red-200 text-[var(--chart-red)]"
-                                    : anyPending
-                                      ? "border-amber-200 text-amber-700"
-                                      : allDone
-                                        ? "border-[var(--brand-green)]/30 text-[var(--brand-green-dark)]"
-                                        : "border-[var(--line)] text-[var(--ink-soft)]"
-                                )}
-                              >
-                                <Clock className="h-3 w-3" />
-                                เวลาส่ง
-                                <ChevronDown className="h-3 w-3" />
-                              </button>
-                            }
-                          />
-                          <PopoverContent align="start" className="w-72 p-3">
-                            {/* One row per round instead of one run-on
-                                inline line — asked for explicitly
-                                ("แก้ให้อ่านได้ง่ายเวลากดไปดู") after the old
-                                "เวลาส่ง Weekly-report 09:22 น. · Daily-report
-                                09:27 น." wrapped text read as one indistinct
-                                blob. The colored dot + status word next to
-                                each round is this viewer's own coverage for
-                                it today (red = missed, amber = still open,
-                                green = already sent) — blank for a round
-                                they aren't actually a submitter of, so it
-                                never claims a status that isn't theirs to
-                                have. */}
-                            <p className="flex items-center gap-1.5 text-xs font-semibold text-[var(--ink)] mb-2">
-                              <Clock className="h-3.5 w-3.5 text-[var(--ink-soft)]" />
-                              เวลาส่งวันนี้
-                            </p>
-                            <div className="space-y-1.5">
-                              {requirementParts.map((r, i) => {
-                                const dotColor =
-                                  r.status === "late"
-                                    ? "bg-[var(--chart-red)]"
-                                    : r.status === "pending"
-                                      ? "bg-amber-400"
-                                      : r.status === "done"
-                                        ? "bg-[var(--brand-green)]"
-                                        : "bg-[var(--ink-faint)]";
-                                const statusLabel =
-                                  r.status === "late" ? "ยังไม่ส่ง (เลยกำหนด)" : r.status === "pending" ? "ยังไม่ส่ง" : r.status === "done" ? "ส่งแล้ว" : null;
-                                const statusTextColor =
-                                  r.status === "late" ? "text-[var(--chart-red)]" : r.status === "pending" ? "text-amber-600" : "text-[var(--brand-green-dark)]";
-                                return (
-                                  <div key={i} className="flex items-center gap-2">
-                                    <span className={cn("h-2 w-2 rounded-full shrink-0", dotColor)} aria-hidden />
-                                    <span className={cn("text-xs flex-1 min-w-0", r.active ? "font-medium text-[var(--ink)]" : "text-[var(--ink-soft)]")}>
-                                      {r.text}
-                                    </span>
-                                    {statusLabel && <span className={cn("text-[10px] font-medium shrink-0", statusTextColor)}>{statusLabel}</span>}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                    );
-                  })()}
-                  {/* "มุมมอง" (ทุกห้องรวมกัน) อยู่แถวเดียวกับ "กรอง" — ไม่กินแถวเพิ่ม */}
-                  <div className="shrink-0 my-1.5">
-                    <ReportViewSwitcher
-                      activeId={activeId}
-                      onSelect={selectView}
-                      pendingCount={viewPendingCount}
-                      mentionCount={viewMentionCount}
-                    />
-                  </div>
-                  {/* Desktop: compact search + the single filter button,
-                      right-aligned on the tab row. `hidden`, not just
-                      invisible, on every other tab — "ไฟล์"/"สรุป" have no
-                      filter of this kind at all (their own search/filter
-                      lives inside the panel body instead), so reserving its
-                      width here just left "มุมมอง" stranded with a dead gap
-                      to its right instead of sitting flush against the edge
-                      ("อยากให้ขยับมุมมองไว้ชิดริม"). The row's own height
-                      still holds steady across tabs regardless — it's set by
-                      the tab buttons/มุมมอง sharing this same flex line, not
-                      by this filter button. */}
-                  <div className={cn("hidden lg:flex items-center gap-2 my-1.5", activeTab !== "posts" && "!hidden")}>
-                    <PostFilterButton
-                      filters={filters}
-                      onChange={setFilters}
-                      authorOptions={topicMembers.map((m) => m.id)}
-                      tagOptions={reportTags}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => activeTab === "posts" && setMobileFilterOpen(true)}
-                    tabIndex={activeTab === "posts" ? 0 : -1}
-                    className={cn(
-                      filterFieldTriggerClass(postFiltersActiveCount(filters) > 0),
-                      "lg:hidden ml-auto my-1.5 !h-8 shrink-0",
-                      // `hidden`, not invisible — see the desktop filter's own
-                      // comment above ("อยากให้ขยับมุมมองไว้ชิดริม"). Without
-                      // this the (invisible but still occupying its width)
-                      // button left "มุมมอง" stranded away from the edge on
-                      // mobile's "ไฟล์"/"สรุป" tabs too.
-                      activeTab !== "posts" && "hidden"
-                    )}
-                  >
-                    <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
-                    กรอง
-                    {postFiltersActiveCount(filters) > 0 && <span className="tabular-nums">({postFiltersActiveCount(filters)})</span>}
-                  </button>
-                </div>
 
                 {/* มือถือ: แท็บย้ายเข้าแผ่นข้อมูลห้องแล้ว — อยู่ที่ไฟล์/สรุป ต้องรู้ตัวและกลับได้ในแตะเดียว */}
                 {activeTab !== "posts" && (

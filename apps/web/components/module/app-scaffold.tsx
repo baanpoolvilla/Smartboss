@@ -59,7 +59,7 @@ export function AppScaffold({
   hideDefaultActions?: boolean;
   /**
    * true = แบบ Discord (หน้ารายงาน): แถบบนเตี้ยลง (48px), เนื้อหาชิดขอบไม่เว้นระยะ,
-   * และมือถือซ่อนชื่อหน้ากลางแถบ ให้ `leading` (ชื่อห้อง) ใช้พื้นที่เต็ม
+   * และไม่มีชื่อหน้ากลางแถบ ให้ `leading` (หัวห้อง แบบแถบเดียวของ Discord) ใช้พื้นที่เต็ม
    * ("กินพื้นที่ให้เต็ม ... ลดขนาด header") — ใช้คู่กับ fill เท่านั้น
    */
   flush?: boolean;
@@ -81,11 +81,11 @@ export function AppScaffold({
             ))}
         </div>
 
-        <h1 className={`truncate px-1 text-center font-bold text-(--ink) ${flush ? "hidden text-base lg:block" : "text-lg sm:text-xl"}`}>
+        <h1 className={`truncate px-1 text-center font-bold text-(--ink) ${flush ? "hidden" : "text-lg sm:text-xl"}`}>
           {title}
         </h1>
 
-        <div className={`flex min-w-[44px] items-center justify-end gap-0.5 sm:min-w-[110px] ${flush ? "shrink-0 lg:flex-1" : "flex-1"}`}>
+        <div className={`flex min-w-[44px] items-center justify-end gap-0.5 sm:min-w-[110px] ${flush ? "shrink-0" : "flex-1"}`}>
           {actions}
           {!hideDefaultActions && <AppBarActions />}
         </div>
