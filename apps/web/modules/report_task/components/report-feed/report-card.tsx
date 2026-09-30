@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { textMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
@@ -247,6 +248,13 @@ export function ReportCard({
   const isOwn = post.authorId === viewingAsUserId;
   const isSaved = post.savedBy.includes(viewingAsUserId);
   const isUnread = post.unreadFor.includes(viewingAsUserId);
+  // Mentioned by someone else — in the post body or any reply under it.
+  const mentionsMe = useMemo(
+    () =>
+      (!isOwn && post.sections.some((s) => s.bullets.some((b) => textMentionsUser(b, viewingAsUserId, topic)))) ||
+      post.replies.some((r) => r.authorId !== viewingAsUserId && textMentionsUser(r.body, viewingAsUserId, topic)),
+    [isOwn, post.sections, post.replies, viewingAsUserId, topic]
+  );
   const postDay = localDateStr(new Date(post.createdAt));
   // Scoped to this post's own author, not just "some cutoff was active that
   // day" — a round only obligates the people it actually names as
@@ -979,7 +987,12 @@ export function ReportCard({
         // (px-5 py-6, rounded-2xl) was applied unconditionally, so on a
         // ~360px screen a single card's own chrome ate a real slice of the
         // width before any content even started ("ใหญ่มากจนมองได้แค่นี้เอง").
-        "group/post relative rounded-xl sm:rounded-2xl border border-[var(--line)] bg-[var(--bg)] px-3.5 py-3.5 sm:px-5 sm:py-5 md:py-6 shadow-sm transition-shadow duration-150 hover:shadow-md",
+        // Discord-style: tighter padding ("ไม่เอาเปลืองพื้นที่") and the post
+        // under the pointer gets a clearly darker border + tint, so it's
+        // obvious which post you're in without a heavier frame at rest.
+        "group/post relative rounded-xl sm:rounded-2xl border border-[var(--line)] bg-[var(--bg)] px-3.5 py-3 sm:px-4 sm:py-3.5 shadow-sm transition-colors duration-150 hover:border-[#b8c2d0] hover:bg-[#fafbfc]",
+        // @mention ถึงเรา — แถบเหลืองซ้าย + พื้นเหลืองอ่อน แบบ Discord
+        mentionsMe && "border-l-4 border-l-amber-400 bg-amber-50 hover:bg-amber-50 hover:border-l-amber-400",
         (highlighted || flashTargetId === post.id) && "bg-[var(--accent)] border-[var(--brand-green)]/40",
         // Unread keeps its own accent, now as a ring around the whole card
         // (a plain border-l reads oddly once the corners are rounded).

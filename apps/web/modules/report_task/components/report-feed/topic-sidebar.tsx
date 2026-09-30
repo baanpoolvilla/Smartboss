@@ -1158,7 +1158,8 @@ export function TopicSidebar({
           // that `draggable` itself is reorder-mode-only. A row's text is
           // never meant to be selected/copied on its own anyway.
           "group relative flex items-center gap-2 rounded-xl pr-2 cursor-pointer select-none transition-colors duration-200 w-full",
-          depth > 0 ? "pl-2 py-1.5 text-[13px]" : "pl-1.5 py-2 text-sm",
+          // Discord's channel list size — 16px rooms, 15px sub-rooms.
+          depth > 0 ? "pl-2 py-1.5 text-[15px]" : "pl-1.5 py-2 text-base",
           // Hidden-for-me stays in the tree (so its own "..." menu is always
           // reachable to un-hide it) but reads as clearly dimmed either way.
           // Archived (Phase 6) reads the same way, for the same reason —
@@ -1166,13 +1167,13 @@ export function TopicSidebar({
           (hiddenForMe || t.archived || (muted && !active)) && "opacity-50",
           editingOrder && draggedTopicId === t.id && "opacity-40",
           dropIndicator?.id === t.id && dropIndicator.position === "into" && "ring-2 ring-[var(--brand-green)] bg-[var(--accent)]",
+          // Discord-strength fills: the old accent/white fills sat within a
+          // shade of this sidebar's own near-white background, so neither
+          // hovering nor the open room read clearly ("hover สีชัดเจนหน่อย").
           active
-            ? "bg-[var(--accent)] font-semibold"
+            ? "bg-[#dde3eb] text-[var(--ink)] font-semibold"
             : cn(
-                // bg-white, not bg-soft — bg-soft is close enough to this
-                // sidebar's own new tinted background (see the outer wrapper
-                // above) that hovering barely read as a state change anymore.
-                "hover:bg-white",
+                "hover:bg-[#e9edf2] hover:text-[var(--ink)]",
                 // Unread reads as full-strength ink regardless of depth — a
                 // sub-topic with something new to see shouldn't be stuck at
                 // the same muted gray as one nobody's posted in for weeks,
@@ -1301,8 +1302,7 @@ export function TopicSidebar({
         <span
           className={cn(
             "truncate flex-1 leading-none [&::first-letter]:uppercase",
-            depth === 0 || hasUnread ? "font-semibold" : "font-normal",
-            active && "text-[var(--brand-green-dark)]"
+            depth === 0 || hasUnread ? "font-semibold" : "font-medium"
           )}
         >
           {t.name}
