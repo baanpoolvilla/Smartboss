@@ -459,6 +459,9 @@ sudo crontab -e
 # งานประจำวันของโมดูลซ่อมบำรุง + คะแนนผลงาน — 08:00 เวลาไทย
 0 8 * * * bash /opt/smartboss/deploy/cron-run.sh all >> /var/log/smartboss-cron.log 2>&1
 
+# แจ้งเตือนมาสายให้ตัวพนักงาน — ทุก 5 นาที 07:00–12:55 (วันละครั้งต่อคน รันซ้ำได้)
+*/5 7-12 * * * bash /opt/smartboss/deploy/cron-run.sh late-alerts >> /var/log/smartboss-cron.log 2>&1
+
 # กวาดคะแนนผลงานอีกรอบตอนเย็น ให้ผู้บริหารเห็นของวันนี้ก่อนเลิกงาน
 0 17 * * * bash /opt/smartboss/deploy/cron-run.sh performance >> /var/log/smartboss-cron.log 2>&1
 

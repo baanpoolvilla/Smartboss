@@ -18,7 +18,7 @@ export const runtime = "nodejs";
  *   - เตือนใบงานที่ยังไม่บันทึกค่าใช้จ่าย (?task=expense-reminder)
  *   - หักคะแนนงานที่ปล่อยค้าง + ผลลงเวลา (?task=performance) → หน้าสรุปรายคนของผู้บริหาร
  *   - ลบรูป/วิดีโอ/เสียงในแชทที่หมดอายุ ไม่อยู่ในอัลบั้ม (?task=chat-media, &dryRun=1 ดูอย่างเดียว)
- *   - แจ้งเตือนมาสายของวันนี้ ให้ตัวพนักงาน + CEO/HR (?task=late-alerts — รันถี่ช่วงเช้า)
+ *   - แจ้งเตือนมาสายของวันนี้ ให้ตัวพนักงาน (?task=late-alerts — ต้องมีบรรทัด crontab แยก ทุก 5 นาทีช่วงเช้า ดู docs/deploy.md)
  *   - ?task=all รันทั้งหมด
  * เรียกด้วย header `Authorization: Bearer $CRON_SECRET` หรือ `?key=$CRON_SECRET`
  * route นี้อยู่นอก auth ของ proxy จึงกันด้วย CRON_SECRET เท่านั้น →
