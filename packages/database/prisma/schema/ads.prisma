@@ -1,0 +1,241 @@
+// ═══════════════════════════════════════════════════════════════════════
+//  schema "ads" — โมดูล Google Ads Report (spec: google-ads-report-module-spec.md §4)
+//
+//  ชื่อตาราง/คอลัมน์ตาม spec ทุกตัว ต่างกันแค่:
+//    - `tenant_id INT` ของ spec = `org_id` ของ Smartboss และมีทุกตาราง (ไม่ใช่แค่
+//      ads_accounts) — ตาม module contract ของระบบ ทุก query กรองด้วย orgId แล้ว
+//      tenant-guard ตรวจซ้ำได้
+//    - ENUM / AUTO_INCREMENT ของ MySQL → String ตรวจค่าในโค้ด / autoincrement()
+//  orgId เป็นคอลัมน์ธรรมดาไม่ผูก @relation ข้าม schema — สไตล์เดียวกับ
+//  company_files.prisma และ maintenance.prisma
+// ═══════════════════════════════════════════════════════════════════════
+
+/// บัญชีโฆษณา
+model AdsAccount {
+  customerId    String    @id @map("customer_id") @db.VarChar(20)
+  orgId         String    @map("org_id")
+  name          String?   @db.VarChar(255)
+  currencyCode  String?   @map("currency_code") @db.Char(3)
+  timeZone      String?   @map("time_zone") @db.VarChar(64)
+  syncEnabled   Boolean   @default(true) @map("sync_enabled")
+  lastSyncedAt  DateTime? @map("last_synced_at")
+
+  @@index([orgId])
+  @@map("ads_accounts")
+  @@schema("ads")
+}
+
+/// ข้อมูลแคมเปญ (dimension)
+model AdsCampaign {
+  campaignId  BigInt    @id @map("campaign_id")
+  orgId       String    @map("org_id")
+  customerId  String    @map("customer_id") @db.VarChar(20)
+  name        String?   @db.VarChar(255)
+  status      String?   @db.VarChar(20)
+  channelType String?   @map("channel_type") @db.VarChar(40)
+  dailyBudget Decimal?  @map("daily_budget") @db.Decimal(14, 2)
+  updatedAt   DateTime? @map("updated_at")
+
+  @@index([orgId, customerId])
+  @@map("ads_campaigns")
+  @@schema("ads")
+}
+
+/// ข้อมูลกลุ่มโฆษณา (dimension)
+model AdsAdGroup {
+  adGroupId  BigInt    @id @map("ad_group_id")
+  orgId      String    @map("org_id")
+  campaignId BigInt    @map("campaign_id")
+  name       String?   @db.VarChar(255)
+  status     String?   @db.VarChar(20)
+  updatedAt  DateTime? @map("updated_at")
+
+  @@index([orgId, campaignId])
+  @@map("ads_ad_groups")
+  @@schema("ads")
+}
+
+/// ผลรายวันระดับแคมเปญ (fact) — เก็บเฉพาะค่าดิบ (§3.3) · impression share
+/// เป็นอัตราส่วนรายวัน สรุปหลายวันด้วยค่าเฉลี่ยถ่วงน้ำหนักด้วย impressions
+model AdsCampaignDaily {
+  campaignId         BigInt   @map("campaign_id")
+  date               DateTime @db.Date
+  orgId              String   @map("org_id")
+  impressions        BigInt?
+  clicks             BigInt?
+  cost               Decimal? @db.Decimal(14, 2)
+  conversions        Decimal? @db.Decimal(14, 4)
+  conversionsValue   Decimal? @map("conversions_value") @db.Decimal(14, 2)
+  searchImprShare    Decimal? @map("search_impr_share") @db.Decimal(6, 4)
+  searchBudgetLostIs Decimal? @map("search_budget_lost_is") @db.Decimal(6, 4)
+  searchRankLostIs   Decimal? @map("search_rank_lost_is") @db.Decimal(6, 4)
+  topImprPct         Decimal? @map("top_impr_pct") @db.Decimal(6, 4)
+  absTopImprPct      Decimal? @map("abs_top_impr_pct") @db.Decimal(6, 4)
+
+  @@id([campaignId, date])
+  @@index([orgId, date])
+  @@map("ads_campaign_daily")
+  @@schema("ads")
+}
+
+/// ผลรายวันระดับกลุ่มโฆษณา (fact)
+model AdsAdGroupDaily {
+  adGroupId        BigInt   @map("ad_group_id")
+  date             DateTime @db.Date
+  orgId            String   @map("org_id")
+  impressions      BigInt?
+  clicks           BigInt?
+  cost             Decimal? @db.Decimal(14, 2)
+  conversions      Decimal? @db.Decimal(14, 4)
+  conversionsValue Decimal? @map("conversions_value") @db.Decimal(14, 2)
+  topImprPct       Decimal? @map("top_impr_pct") @db.Decimal(6, 4)
+  absTopImprPct    Decimal? @map("abs_top_impr_pct") @db.Decimal(6, 4)
+
+  @@id([adGroupId, date])
+  @@index([orgId, date])
+  @@map("ads_ad_group_daily")
+  @@schema("ads")
+}
+
+/// ผลรายวันระดับคีย์เวิร์ด
+model AdsKeywordDaily {
+  criterionId BigInt   @map("criterion_id")
+  adGroupId   BigInt   @map("ad_group_id")
+  date        DateTime @db.Date
+  orgId       String   @map("org_id")
+  keywordText String?  @map("keyword_text") @db.VarChar(255)
+  matchType   String?  @map("match_type") @db.VarChar(20)
+  impressions BigInt?
+  clicks      BigInt?
+  cost        Decimal? @db.Decimal(14, 2)
+  conversions Decimal? @db.Decimal(14, 4)
+
+  @@id([adGroupId, criterionId, date])
+  @@index([orgId, date])
+  @@map("ads_keyword_daily")
+  @@schema("ads")
+}
+
+/// คำค้นหาจริงรายวัน
+model AdsSearchTermDaily {
+  id          BigInt   @id @default(autoincrement())
+  orgId       String   @map("org_id")
+  adGroupId   BigInt   @map("ad_group_id")
+  date        DateTime @db.Date
+  searchTerm  String?  @map("search_term") @db.VarChar(500)
+  impressions BigInt?
+  clicks      BigInt?
+  cost        Decimal? @db.Decimal(14, 2)
+  conversions Decimal? @db.Decimal(14, 4)
+
+  @@unique([adGroupId, date, searchTerm])
+  @@index([orgId, date])
+  @@map("ads_search_term_daily")
+  @@schema("ads")
+}
+
+/// เกณฑ์ KPI (แก้ได้จากหน้าตั้งค่า) — customerId = null คือค่าเริ่มต้นทุกบัญชีของบริษัท
+/// direction: "higher_better" | "lower_better" — ตรวจในโค้ด
+model AdsKpiBenchmark {
+  id            Int     @id @default(autoincrement())
+  orgId         String  @map("org_id")
+  customerId    String? @map("customer_id") @db.VarChar(20)
+  metric        String  @db.VarChar(40)
+  direction     String  @db.VarChar(20)
+  poorThreshold Decimal @map("poor_threshold") @db.Decimal(12, 4)
+  goodThreshold Decimal @map("good_threshold") @db.Decimal(12, 4)
+
+  @@index([orgId, customerId])
+  @@map("ads_kpi_benchmarks")
+  @@schema("ads")
+}
+
+/// กฎตรวจสอบก่อนส่งให้ AI และเป้าหมายธุรกิจ (รายบัญชี)
+/// primaryGoal: "lead" | "sales" — ตรวจในโค้ด
+model AdsAnalysisSetting {
+  customerId           String   @id @map("customer_id") @db.VarChar(20)
+  orgId                String   @map("org_id")
+  minClicksToJudge     Int      @default(50) @map("min_clicks_to_judge")
+  minBudgetUtilToScale Decimal  @default(80) @map("min_budget_util_to_scale") @db.Decimal(5, 2)
+  budgetLostIsLimit    Decimal  @default(10) @map("budget_lost_is_limit") @db.Decimal(5, 2)
+  rankLostIsLimit      Decimal  @default(30) @map("rank_lost_is_limit") @db.Decimal(5, 2)
+  /// เกณฑ์ "คำค้นหาใช้เงินแต่ไม่มี conversion" (§5.4 ค่าเริ่มต้น 10 คลิก) — spec
+  /// ไม่มีคอลัมน์นี้ แต่เกณฑ์ธุรกิจต้องเป็นการตั้งค่า ไม่ใช่เลขฝังในโค้ด
+  wastedTermMinClicks  Int      @default(10) @map("wasted_term_min_clicks")
+  primaryGoal          String   @default("lead") @map("primary_goal") @db.VarChar(10)
+  targetCpa            Decimal? @map("target_cpa") @db.Decimal(12, 2)
+  avgLeadValue         Decimal? @map("avg_lead_value") @db.Decimal(12, 2)
+  businessContext      String?  @map("business_context")
+  /// ผู้รับอีเมลสรุปรายสัปดาห์ (§11 ข้อ 5) คั่นด้วย , หรือขึ้นบรรทัดใหม่
+  emailRecipients      String?  @map("email_recipients")
+
+  @@index([orgId])
+  @@map("ads_analysis_settings")
+  @@schema("ads")
+}
+
+/// รายงานที่ AI สร้าง (เก็บเป็นประวัติ) · createdBy = "schedule" หรือ user id
+model AdsAiReport {
+  id            BigInt    @id @default(autoincrement())
+  orgId         String    @map("org_id")
+  customerId    String    @map("customer_id") @db.VarChar(20)
+  periodFrom    DateTime  @map("period_from") @db.Date
+  periodTo      DateTime  @map("period_to") @db.Date
+  compareFrom   DateTime? @map("compare_from") @db.Date
+  compareTo     DateTime? @map("compare_to") @db.Date
+  inputJson     Json?     @map("input_json")
+  outputJson    Json?     @map("output_json")
+  promptVersion String?   @map("prompt_version") @db.VarChar(20)
+  model         String?   @db.VarChar(60)
+  createdAt     DateTime? @default(now()) @map("created_at")
+  createdBy     String?   @map("created_by") @db.VarChar(40)
+
+  actions AdsAiAction[]
+
+  @@index([orgId, customerId, createdAt])
+  @@map("ads_ai_reports")
+  @@schema("ads")
+}
+
+/// แผนปฏิบัติการที่ AI แนะนำ (ติดตามสถานะได้)
+/// impact: high|medium|low · urgency: now|this_week|this_month
+/// status: pending|in_progress|done|skipped — ตรวจในโค้ด
+model AdsAiAction {
+  id         BigInt    @id @default(autoincrement())
+  orgId      String    @map("org_id")
+  reportId   BigInt    @map("report_id")
+  seq        Int?
+  title      String?   @db.VarChar(255)
+  rationale  String?
+  impact     String?   @db.VarChar(10)
+  urgency    String?   @db.VarChar(20)
+  entityType String?   @map("entity_type") @db.VarChar(20)
+  entityId   BigInt?   @map("entity_id")
+  status     String    @default("pending") @db.VarChar(20)
+  updatedAt  DateTime? @map("updated_at")
+
+  report AdsAiReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, reportId])
+  @@map("ads_ai_actions")
+  @@schema("ads")
+}
+
+/// log การซิงค์ · jobType: daily|manual|backfill · status: success|retried|failed
+model AdsSyncLog {
+  id           BigInt    @id @default(autoincrement())
+  orgId        String    @map("org_id")
+  customerId   String?   @map("customer_id") @db.VarChar(20)
+  jobType      String?   @map("job_type") @db.VarChar(10)
+  rangeFrom    DateTime? @map("range_from") @db.Date
+  rangeTo      DateTime? @map("range_to") @db.Date
+  rowsUpserted Int?      @map("rows_upserted")
+  durationMs   Int?      @map("duration_ms")
+  status       String?   @db.VarChar(10)
+  errorMessage String?   @map("error_message")
+  startedAt    DateTime? @map("started_at")
+
+  @@index([orgId, customerId, startedAt])
+  @@map("ads_sync_logs")
+  @@schema("ads")
+}

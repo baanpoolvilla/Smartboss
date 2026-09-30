@@ -41,6 +41,10 @@ export const TENANT_SCOPED_MODELS = new Set<string>([
   "LineConfig", "LineNotificationLog", "PmSchedule", "Property", "PropertyCategory",
   "PurchaseOrder", "PurchaseOrderComment", "WorkOrder", "WorkOrderComment",
   "WorkOrderExternalPhoto", "WorkOrderUploadLink",
+  // ads (Google Ads Report)
+  "AdsAccount", "AdsCampaign", "AdsAdGroup", "AdsCampaignDaily", "AdsAdGroupDaily",
+  "AdsKeywordDaily", "AdsSearchTermDaily", "AdsKpiBenchmark", "AdsAnalysisSetting",
+  "AdsAiReport", "AdsAiAction", "AdsSyncLog",
 ]);
 
 /** operation ที่ "ต้อง" มี where ผูก orgId (list/bulk) — findUnique/update/delete

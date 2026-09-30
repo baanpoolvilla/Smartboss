@@ -467,6 +467,12 @@ sudo crontab -e
 
 # สำรองฐานข้อมูล 02:30 ทุกคืน
 30 2 * * * bash /opt/smartboss/deploy/backup.sh >> /var/log/smartboss-backup.log 2>&1
+
+# Google Ads Report (google-ads-report-module-spec.md §3.1 / §6.6)
+# ซิงค์ย้อนหลัง 30 วันทุกเช้า · สรุปรายสัปดาห์ + อีเมลวันจันทร์ · รายงานรอบครึ่งเดือนวันที่ 1 และ 16
+0 6 * * * bash /opt/smartboss/deploy/cron-run.sh sync ads >> /var/log/smartboss-cron.log 2>&1
+0 7 * * 1 bash /opt/smartboss/deploy/cron-run.sh weekly ads >> /var/log/smartboss-cron.log 2>&1
+0 7 1,16 * * bash /opt/smartboss/deploy/cron-run.sh half-month ads >> /var/log/smartboss-cron.log 2>&1
 ```
 
 ทดสอบเลยโดยไม่ต้องรอพรุ่งนี้

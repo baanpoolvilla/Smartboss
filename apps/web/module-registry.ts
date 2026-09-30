@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { resolvePermission } from "@smartboss/auth/permissions";
 
 import { adminManifest } from "@/modules/admin/manifest";
+import { adsManifest } from "@/modules/ads/manifest";
 import { adminIssueReportManifest } from "@/modules/admin/issue-report-manifest";
 import { chatManifest } from "@/modules/chat/manifest";
 import { companyFilesManifest } from "@/modules/company-files/manifest";
@@ -82,6 +83,8 @@ export const moduleRegistry: ModuleManifest[] = [
   chatManifest,
   // ที่เก็บไฟล์กลางแบบ SharePoint/Teams Files — ปิดใช้งานทุกบริษัทโดยดีฟอลต์เหมือนแชท
   companyFilesManifest,
+  // รายงาน Google Ads — ใช้ภายในบริษัท ปิดใช้งานโดยดีฟอลต์ เปิดที่ /admin/modules
+  adsManifest,
 ];
 
 export interface VisibleModulesInput {
