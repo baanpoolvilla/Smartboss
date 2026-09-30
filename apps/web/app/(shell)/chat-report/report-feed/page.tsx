@@ -39,7 +39,7 @@ import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions
 import { safeLocalStorage } from "@/modules/report_task/lib/safe-storage";
 import { lateToastDismissKey, isLateToastDismissed, dismissLateToast } from "@/modules/report_task/lib/late-toast-dismiss";
 import { toast } from "sonner";
-import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronDown, ChevronRight, Clock, FolderOpen, Hash, Lock, Menu, MessageSquareText, Pin, Settings, SlidersHorizontal, TriangleAlert, Users, X } from "lucide-react";
+import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronDown, ChevronRight, Clock, FolderOpen, Hash, Lock, MessageSquareText, Pin, Search, Settings, SlidersHorizontal, TriangleAlert, Users, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 
 // Beyond this many pinned posts, the rest move into the "+N เพิ่มเติม"
@@ -150,18 +150,14 @@ export default function ReportFeedPage() {
  *  room panel) so the switch to real content doesn't jump the page around. */
 function ReportFeedSkeleton() {
   return (
-    <div className="flex flex-col gap-6 h-full animate-pulse" aria-hidden>
-      <div className="space-y-2">
-        <div className="h-7 w-56 rounded-lg bg-[var(--bg-soft)]" />
-        <div className="h-4 w-96 max-w-full rounded bg-[var(--bg-soft)]" />
-      </div>
-      <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 flex-1 min-h-0">
+    <div className="flex flex-col h-full animate-pulse" aria-hidden>
+      <div className="flex flex-col lg:flex-row flex-1 min-h-0">
         {/* Matches the real layout's now-flat panels (no border/rounded/
             white-card) — this skeleton is what actually renders for the
             first moment of every page load, so leaving the old bordered-card
             look here would flash the "gรอบซ้อนกัน" look right back on every
             visit even after the real content underneath was already fixed. */}
-        <div className="hidden lg:block w-64 shrink-0 bg-[color-mix(in_srgb,var(--bg-soft)_55%,white)]" />
+        <div className="hidden lg:block w-[280px] shrink-0 border-r border-[var(--line)] bg-[color-mix(in_srgb,var(--bg-soft)_55%,white)]" />
         <div className="flex-1 bg-white" />
       </div>
     </div>
@@ -418,28 +414,6 @@ function ReportFeedPageInner() {
       : showMentions
         ? "กล่าวถึงฉัน"
         : activeTopic?.name ?? "";
-  const topicSwitcherLeading = useMemo(
-    () => (
-      <div className="flex min-w-0 items-center gap-1.5">
-        <button
-          type="button"
-          onClick={() => setMobileTopicsOpen(true)}
-          aria-label="เปิดรายการหัวข้อ"
-          className="lg:hidden rounded-full p-2 text-[var(--ink)] transition-colors hover:bg-[var(--bg-soft)]"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
-        {activeViewLabel && (
-          <span className="flex min-w-0 items-center gap-1 text-[var(--ink)]">
-            <Hash className="h-4 w-4 shrink-0 text-[var(--ink-soft)]" />
-            <span className="truncate text-[15px] font-semibold">{activeViewLabel}</span>
-          </span>
-        )}
-      </div>
-    ),
-    [activeViewLabel]
-  );
-  useSetAppBarLeading(topicSwitcherLeading);
   const exemptions = useReportComplianceExemptions();
   // "ที่ฉันต้องส่ง" — same pendingToday() the sidebar badge counts, filtered
   // down to just this viewer, for the actual room list underneath the badge.
@@ -839,13 +813,73 @@ function ReportFeedPageInner() {
     setRoomSettingsOpen(true);
   }
 
+  // ─── แถบบนแบบ Discord ("อยากได้หน้ารายงานเป็นแบบนี้เลย ให้มันดูง่ายและไม่รก") ───
+  // มือถือ: [← รายการห้อง (เลขแดง = แท็กถึงเรา)] [# ชื่อห้อง › / สมาชิก N คน] [🔍 ค้นหา/กรอง]
+  //  - กดชื่อห้อง = แผ่นข้อมูลห้อง (แท็บ โพสต์/ไฟล์/สรุป, เวลาส่ง, สมาชิก, ตั้งค่า, มุมมอง)
+  //    แทนแถวหัวห้อง + แถวแท็บที่เคยกินพื้นที่บนจอมือถือ
+  //  - ตัวกรองย้ายไปอยู่ที่ไอคอนแว่นขยาย
+  // คอม: ชื่อห้องอย่างเดียวเหมือนเดิม (หัวห้อง/แท็บยังอยู่ในแผงห้อง)
+  const [roomInfoOpen, setRoomInfoOpen] = useState(false);
+  const inRoom = !!activeTopic && !showAllPosts && !showPending && !showMentions && !todayStatusFilter;
+  const activeFilterCount = postFiltersActiveCount(filters);
+  const topicSwitcherLeading = useMemo(
+    () => (
+      <div className="flex min-w-0 flex-1 items-center gap-0.5">
+        <button
+          type="button"
+          onClick={() => setMobileTopicsOpen(true)}
+          aria-label="เปิดรายการห้อง"
+          className="relative shrink-0 rounded-full p-2 text-[var(--ink)] transition-colors hover:bg-[var(--bg-soft)] lg:hidden"
+        >
+          <ArrowLeft className="h-5 w-5" />
+          {viewMentionCount > 0 && (
+            <span className="absolute right-0 top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[var(--chart-red)] px-1 text-[10px] font-bold text-white ring-2 ring-white">
+              {viewMentionCount > 99 ? "99+" : viewMentionCount}
+            </span>
+          )}
+        </button>
+        {activeViewLabel && (
+          <button
+            type="button"
+            onClick={() => inRoom && setRoomInfoOpen(true)}
+            disabled={!inRoom}
+            className="flex min-w-0 flex-1 flex-col items-start rounded-lg px-1 py-0.5 text-left disabled:cursor-default lg:pointer-events-none"
+          >
+            <span className="flex min-w-0 max-w-full items-center gap-1 text-[var(--ink)]">
+              <Hash className="h-4 w-4 shrink-0 text-[var(--ink-soft)]" />
+              <span className="truncate text-[16px] font-semibold lg:text-[15px]">{activeViewLabel}</span>
+              {inRoom && <ChevronRight className="h-4 w-4 shrink-0 text-[var(--ink-soft)] lg:hidden" />}
+            </span>
+            {inRoom && <span className="text-xs leading-tight text-[var(--ink-soft)] lg:hidden">สมาชิก {topicMembers.length} คน</span>}
+          </button>
+        )}
+        {inRoom && (
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("posts");
+              setMobileFilterOpen(true);
+            }}
+            aria-label="ค้นหาและกรองโพสต์"
+            className="relative shrink-0 rounded-full p-2 text-[var(--ink)] transition-colors hover:bg-[var(--bg-soft)] lg:hidden"
+          >
+            <Search className="h-5 w-5" />
+            {activeFilterCount > 0 && <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-[var(--brand-green)] ring-2 ring-white" aria-hidden />}
+          </button>
+        )}
+      </div>
+    ),
+    [activeViewLabel, inRoom, viewMentionCount, topicMembers.length, activeFilterCount]
+  );
+  useSetAppBarLeading(topicSwitcherLeading);
+
   return (
     // No more top banner above the columns (used to be a full-width
     // PageHeader row with the room name + these same pills) — the sidebar
     // and room panel now start right under the page's own top bar, and the
     // pills moved into the sidebar header (headerExtra below), which is the
     // one thing that's always on screen no matter which room is open.
-    <div className="flex flex-col gap-1.5 lg:gap-4 h-full">
+    <div className="flex flex-col h-full">
       {/* Below `lg`, "☰ หัวข้อ" opens the topic tree as a full-screen Sheet
           instead of squeezing it into a fixed h-64 block above the feed with
           its own internal scroll (3.5.5) — the `lg:flex` sidebar right below
@@ -887,7 +921,7 @@ function ReportFeedPageInner() {
           would grow the whole page instead of scrolling inside its own
           `lg:h-full` + overflow-y-auto (both panels already opt into that,
           it just had nothing to resolve against without a stretched parent). */}
-      <div className="relative flex flex-col lg:flex-row gap-4 lg:gap-6 items-stretch flex-1 min-h-0 lg:min-h-[420px]">
+      <div className="relative flex flex-col lg:flex-row items-stretch flex-1 min-h-0 lg:min-h-[420px]">
         {topicSidebarCollapsed ? (
           // Icon-only affix at rest, pinned to the feed's own left edge —
           // the labeled pill this used to always be read as too wide sitting
@@ -911,7 +945,7 @@ function ReportFeedPageInner() {
             </span>
           </button>
         ) : (
-          <div className="hidden lg:flex lg:shrink-0">
+          <div className="hidden lg:flex lg:shrink-0 lg:border-r lg:border-[var(--line)]">
             <TopicSidebar
               topics={visibleTopics}
               activeId={activeId}
@@ -1013,8 +1047,8 @@ function ReportFeedPageInner() {
                     nothing; without a wrap the rest just ran off-screen with
                     no way to reach it ("มุมมอง: Thread" was literally
                     unreachable, cut off past the right edge). */}
-                <div className="px-4 sm:px-5 pt-2.5 sm:pt-3 pb-1.5 sm:pb-2 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
-                  <TopicLogo topic={activeTopic} size="h-8 w-8" />
+                <div className="hidden lg:flex px-5 py-1.5 flex-wrap items-center gap-x-2.5 gap-y-1.5">
+                  <TopicLogo topic={activeTopic} size="h-7 w-7" />
                   {/* Name + description share one line now (not stacked) —
                       matches the reference layout ("# test1
                       รายงานประจำวันของทีม") and keeps row 1 to its single
@@ -1120,7 +1154,7 @@ function ReportFeedPageInner() {
                     "ตัวกรอง" button stays pinned on the same line instead of
                     getting shoved onto its own orphan row below (which just
                     looked like disconnected clutter, "งง...จัดให้มันดีๆสิ"). */}
-                <div className="px-4 sm:px-5 flex items-center gap-2 border-b border-[var(--line)]">
+                <div className="hidden lg:flex px-5 items-center gap-2 border-b border-[var(--line)]">
                 {/* Labels show at lg+ only — asked again explicitly to go
                     back to icon-only below that ("โพส ไฟล์ เอารูปแทน...ไม่เอา
                     คำมา") after a prior round had asked for labels at every
@@ -1311,6 +1345,26 @@ function ReportFeedPageInner() {
                   </button>
                 </div>
 
+                {/* มือถือ: แท็บย้ายเข้าแผ่นข้อมูลห้องแล้ว — อยู่ที่ไฟล์/สรุป ต้องรู้ตัวและกลับได้ในแตะเดียว */}
+                {activeTab !== "posts" && (
+                  <div className="flex items-center justify-between gap-2 border-b border-[var(--line)] px-4 py-2 lg:hidden">
+                    <span className="flex items-center gap-1.5 text-sm font-semibold">
+                      {(() => {
+                        const t = topicTabs.find((x) => x.id === activeTab);
+                        const Icon = t?.icon ?? MessageSquareText;
+                        return (
+                          <>
+                            <Icon className="h-4 w-4 text-[var(--ink-soft)]" />
+                            {t?.label}
+                          </>
+                        );
+                      })()}
+                    </span>
+                    <button type="button" onClick={() => setActiveTab("posts")} className="text-sm font-medium text-[var(--brand-green-dark)]">
+                      กลับไปที่โพสต์
+                    </button>
+                  </div>
+                )}
                 {/* Active-filter chips — only when something's actually
                     filtered, right under the tab row, desktop only (mobile's
                     "ตัวกรอง (N)" button + the sheet's own "ล้างตัวกรอง"
@@ -1357,6 +1411,129 @@ function ReportFeedPageInner() {
                         แสดง {filteredTopicPosts.length} โพสต์
                       </Button>
                     </SheetFooter>
+                  </SheetContent>
+                </Sheet>
+
+                {/* มือถือ: กดชื่อห้องบนแถบบน → ข้อมูลห้องทั้งหมดรวมที่นี่ (แบบกดชื่อห้องใน Discord)
+                    แทนแถวหัวห้อง/แถวแท็บที่เคยอยู่เหนือโพสต์ตลอดเวลา */}
+                <Sheet open={roomInfoOpen} onOpenChange={setRoomInfoOpen}>
+                  <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl lg:hidden">
+                    <SheetHeader className="pb-1 pr-11">
+                      <div className="flex items-center gap-3">
+                        <TopicLogo topic={activeTopic} size="h-10 w-10" />
+                        <div className="min-w-0">
+                          <SheetTitle className="truncate text-lg">{activeTopic.name}</SheetTitle>
+                          {activeTopic.description && <p className="text-sm text-[var(--ink-soft)]">{activeTopic.description}</p>}
+                        </div>
+                      </div>
+                    </SheetHeader>
+                    <div className="flex flex-col gap-5 px-4 pb-6">
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRoomInfoOpen(false);
+                            setMembersDialogOpen(true);
+                          }}
+                          className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--line)] py-3 text-sm font-medium"
+                        >
+                          {activeTopic.visibility?.managerOnly && <Lock className="h-4 w-4" />}
+                          <Users className="h-4 w-4" />
+                          สมาชิก {topicMembers.length} คน
+                        </button>
+                        {canEditReportTopic(activeTopic.visibility, viewingAsUserId) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRoomInfoOpen(false);
+                              setRoomSettingsOpen(true);
+                            }}
+                            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--line)] py-3 text-sm font-medium"
+                          >
+                            <Settings className="h-4 w-4" />
+                            ตั้งค่าห้อง
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <p className="px-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">ในห้องนี้</p>
+                        {topicTabs.map((t) => {
+                          const Icon = t.icon;
+                          const count = tabCounts[t.id];
+                          return (
+                            <button
+                              key={t.id}
+                              type="button"
+                              onClick={() => {
+                                setActiveTab(t.id);
+                                setRoomInfoOpen(false);
+                              }}
+                              className={cn(
+                                "flex items-center gap-3 rounded-xl px-3 py-3 text-left text-[15px] font-medium",
+                                activeTab === t.id ? "bg-[#dde3eb]" : "active:bg-[var(--bg-soft)]"
+                              )}
+                            >
+                              <Icon className="h-5 w-5 text-[var(--ink-soft)]" />
+                              <span className="flex-1">{t.label}</span>
+                              {count != null && count > 0 && <span className="text-sm tabular-nums text-[var(--ink-soft)]">{count > 99 ? "99+" : count}</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {requirementParts.length > 0 && (
+                        <div className="flex flex-col gap-2">
+                          <p className="flex items-center gap-1.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">
+                            <Clock className="h-3.5 w-3.5" />
+                            เวลาส่งวันนี้
+                          </p>
+                          <div className="flex flex-col gap-2 rounded-xl border border-[var(--line)] px-3 py-3">
+                            {requirementParts.map((r, i) => (
+                              <div key={i} className="flex items-center gap-2">
+                                <span
+                                  className={cn(
+                                    "h-2 w-2 shrink-0 rounded-full",
+                                    r.status === "late"
+                                      ? "bg-[var(--chart-red)]"
+                                      : r.status === "pending"
+                                        ? "bg-amber-400"
+                                        : r.status === "done"
+                                          ? "bg-[var(--brand-green)]"
+                                          : "bg-[var(--ink-faint)]"
+                                  )}
+                                  aria-hidden
+                                />
+                                <span className={cn("min-w-0 flex-1 text-sm", r.active ? "font-medium" : "text-[var(--ink-soft)]")}>{r.text}</span>
+                                {r.status !== "neutral" && (
+                                  <span
+                                    className={cn(
+                                      "shrink-0 text-xs font-medium",
+                                      r.status === "late" ? "text-[var(--chart-red)]" : r.status === "pending" ? "text-amber-600" : "text-[var(--brand-green-dark)]"
+                                    )}
+                                  >
+                                    {r.status === "late" ? "เลยกำหนด" : r.status === "pending" ? "ยังไม่ส่ง" : "ส่งแล้ว"}
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="px-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">ดูรวมทุกห้อง</p>
+                        <ReportViewSwitcher
+                          activeId={activeId}
+                          onSelect={(id) => {
+                            setRoomInfoOpen(false);
+                            selectView(id);
+                          }}
+                          pendingCount={viewPendingCount}
+                          mentionCount={viewMentionCount}
+                        />
+                      </div>
+                    </div>
                   </SheetContent>
                 </Sheet>
 

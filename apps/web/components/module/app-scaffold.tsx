@@ -20,6 +20,7 @@ export function AppScaffold({
   fill = false,
   fillMaxWidth = false,
   hideDefaultActions = false,
+  flush = false,
   children,
 }: {
   title: string;
@@ -56,12 +57,18 @@ export function AppScaffold({
    * ตรงนี้เป็นทางเดียว ไม่ส่ง prop นี้เข้ามา (ค่าเริ่มต้น false).
    */
   hideDefaultActions?: boolean;
+  /**
+   * true = แบบ Discord (หน้ารายงาน): แถบบนเตี้ยลง (48px), เนื้อหาชิดขอบไม่เว้นระยะ,
+   * และมือถือซ่อนชื่อหน้ากลางแถบ ให้ `leading` (ชื่อห้อง) ใช้พื้นที่เต็ม
+   * ("กินพื้นที่ให้เต็ม ... ลดขนาด header") — ใช้คู่กับ fill เท่านั้น
+   */
+  flush?: boolean;
   children: React.ReactNode;
 }) {
   const header = (
     <header className="shrink-0 border-b border-(--line) bg-(--bg)">
-      <div className="flex h-[60px] items-center gap-1 px-2 sm:px-3">
-        <div className="flex min-w-[44px] flex-1 items-center justify-start sm:min-w-[110px]">
+      <div className={`flex items-center gap-1 px-2 sm:px-3 ${flush ? "h-[52px] lg:h-12" : "h-[60px]"}`}>
+        <div className={`flex min-w-[44px] flex-1 items-center justify-start sm:min-w-[110px] ${flush ? "min-w-0" : ""}`}>
           {leading ??
             (backHref && (
               <Link
@@ -74,11 +81,11 @@ export function AppScaffold({
             ))}
         </div>
 
-        <h1 className="truncate px-1 text-center text-lg font-bold text-(--ink) sm:text-xl">
+        <h1 className={`truncate px-1 text-center font-bold text-(--ink) ${flush ? "hidden text-base lg:block" : "text-lg sm:text-xl"}`}>
           {title}
         </h1>
 
-        <div className="flex min-w-[44px] flex-1 items-center justify-end gap-0.5 sm:min-w-[110px]">
+        <div className={`flex min-w-[44px] items-center justify-end gap-0.5 sm:min-w-[110px] ${flush ? "shrink-0 lg:flex-1" : "flex-1"}`}>
           {actions}
           {!hideDefaultActions && <AppBarActions />}
         </div>
@@ -103,7 +110,15 @@ export function AppScaffold({
       <div className="fixed inset-0 z-0 flex flex-col pb-[68px] lg:static lg:z-auto lg:min-h-0 lg:flex-1 lg:pb-0">
         {header}
         <div className="min-h-0 flex-1 overflow-hidden">
-          <div className={fillMaxWidth ? `mx-auto h-full w-full ${width} px-4 py-4 sm:px-6 sm:py-5` : "h-full px-4 py-4 sm:px-6 sm:py-5"}>
+          <div
+            className={
+              flush
+                ? "h-full"
+                : fillMaxWidth
+                  ? `mx-auto h-full w-full ${width} px-4 py-4 sm:px-6 sm:py-5`
+                  : "h-full px-4 py-4 sm:px-6 sm:py-5"
+            }
+          >
             {children}
           </div>
         </div>

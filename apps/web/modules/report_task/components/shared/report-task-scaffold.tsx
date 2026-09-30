@@ -108,7 +108,7 @@ export function ReportTaskScaffold({
       {/* <Toaster /> ย้ายไปอยู่ที่ Shell แล้ว (components/shell/shell.tsx) — ครอบทุกโมดูล
           ห้ามวางซ้ำที่นี่ ไม่งั้นทุก toast ในโมดูลนี้จะเด้งขึ้นสองอัน */}
 
-      <ScaffoldBody title={title} selfScrolling={selfScrolling} backHref={backHref}>
+      <ScaffoldBody title={title} selfScrolling={selfScrolling} flush={isReportFeed} backHref={backHref}>
         {children}
       </ScaffoldBody>
     </AppBarLeadingProvider>
@@ -121,17 +121,19 @@ export function ReportTaskScaffold({
 function ScaffoldBody({
   title,
   selfScrolling,
+  flush,
   backHref,
   children,
 }: {
   title: string;
   selfScrolling: boolean;
+  flush?: boolean;
   backHref?: string;
   children: React.ReactNode;
 }) {
   const leading = useAppBarLeading();
   return (
-    <AppScaffold title={title} leading={leading} backHref={backHref} width="max-w-none" fill={selfScrolling} fillMaxWidth={selfScrolling}>
+    <AppScaffold title={title} leading={leading} backHref={backHref} width="max-w-none" fill={selfScrolling} fillMaxWidth={selfScrolling && !flush} flush={flush}>
       {children}
     </AppScaffold>
   );
