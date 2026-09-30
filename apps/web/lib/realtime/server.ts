@@ -32,7 +32,8 @@ const orgKey = (orgId: string) => `o:${orgId}`;
 const PRESENCE_PREFIX = "rt:online:";
 /** กำลังดูหน้าเว็บอยู่จริง (แท็บอยู่หน้าจอ) — ต่างจากออนไลน์: มือถือที่ย่อเบราว์เซอร์ยังค้างการเชื่อมต่อ
  * ไว้ได้สักพัก แต่ผู้ใช้ไม่เห็นหน้าจอแล้ว ต้องส่งแจ้งเตือนเด้งทันที ไม่ใช่รอให้หลุด */
-const ACTIVE_PREFIX = "rt:active:";
+// เดิม "rt:active:" เป็น string ต่อคน — เปลี่ยนเป็น hash ต่อแท็บ จึงใช้ชื่อใหม่ ไม่ชนค่าเก่าที่ค้างใน Redis
+const ACTIVE_PREFIX = "rt:tabs:";
 const ACTIVE_TTL_SECONDS = 45;
 /** SSE ส่ง heartbeat ทุก 25 วิ แล้วต่ออายุสถานะออนไลน์ — เผื่อพลาดไปหนึ่งรอบ */
 const PRESENCE_TTL_SECONDS = 70;
@@ -45,8 +46,8 @@ interface Hub {
   refCount: Map<string, number>;
   /** สถานะออนไลน์ตอนไม่มี Redis: userId → หมดอายุเมื่อไร (ms) */
   presence: Map<string, number>;
-  /** สถานะ "กำลังดูหน้าจอ" ตอนไม่มี Redis */
-  active: Map<string, number>;
+  /** สถานะ "กำลังดูหน้าจอ" ตอนไม่มี Redis: userId → tabId → { หมดอายุ (ms), endpoint Web Push ของเครื่อง } */
+  active: Map<string, Map<string, { until: number; endpoint: string }>>;
 }
 
 // เก็บบน globalThis — Next dev โหลดโมดูลซ้ำตอนแก้ไฟล์ ไม่งั้นจะเปิดคอนเนกชัน Redis เพิ่มทุกครั้ง
@@ -167,14 +168,14 @@ export function clearPresenceIfIdle(userId: string): void {
   if (h.pub && h.pub.status === "ready") h.pub.del(PRESENCE_PREFIX + userId, ACTIVE_PREFIX + userId).catch(() => {});
 }
 
-async function readFlags(prefix: string, local: Map<string, number>, userIds: string[]): Promise<Set<string>> {
+/** ใครในรายชื่อนี้ออนไลน์อยู่บ้าง (จุดเขียว) */
+export async function onlineUserIds(userIds: string[]): Promise<Set<string>> {
   const h = hub();
-  const now = Date.now();
   const found = new Set<string>();
   if (userIds.length === 0) return found;
   if (h.pub && h.pub.status === "ready") {
     try {
-      const values = await h.pub.mget(userIds.map((id) => prefix + id));
+      const values = await h.pub.mget(userIds.map((id) => PRESENCE_PREFIX + id));
       values.forEach((v, i) => {
         if (v) found.add(userIds[i]!);
       });
@@ -183,32 +184,85 @@ async function readFlags(prefix: string, local: Map<string, number>, userIds: st
       // ตกไปใช้ค่าในโปรเซสด้านล่าง
     }
   }
+  const now = Date.now();
   for (const id of userIds) {
-    const until = local.get(id);
+    const until = h.presence.get(id);
     if (until && until > now) found.add(id);
   }
   return found;
 }
 
-/** ใครในรายชื่อนี้ออนไลน์อยู่บ้าง (จุดเขียว) */
-export function onlineUserIds(userIds: string[]): Promise<Set<string>> {
-  return readFlags(PRESENCE_PREFIX, hub().presence, userIds);
+/**
+ * แท็บที่กำลังอยู่หน้าจอของแต่ละคน → endpoint Web Push ของเครื่องนั้น ("" = เครื่องที่ไม่ได้เปิดแจ้งเตือน)
+ * เก็บแยก "ต่อแท็บ" ใน hash เดียวต่อคน (rt:active:<userId>, field = tabId, ค่า = "<หมดอายุ ms>|<endpoint>")
+ * ⇒ ย่อแอปในมือถือไม่ไปล้างสถานะของคอมที่ยังเปิดดูอยู่ และรู้ว่า "เครื่องไหน" ดูจออยู่
+ */
+async function viewingTabs(userIds: string[]): Promise<Map<string, string[]>> {
+  const h = hub();
+  const now = Date.now();
+  const out = new Map<string, string[]>();
+  if (userIds.length === 0) return out;
+  if (h.pub && h.pub.status === "ready") {
+    try {
+      const pipe = h.pub.pipeline();
+      for (const id of userIds) pipe.hgetall(ACTIVE_PREFIX + id);
+      const results = (await pipe.exec()) ?? [];
+      results.forEach(([err, value], i) => {
+        if (err || !value) return;
+        const endpoints: string[] = [];
+        for (const raw of Object.values(value as Record<string, string>)) {
+          const sep = raw.indexOf("|");
+          if (Number(raw.slice(0, sep)) > now) endpoints.push(raw.slice(sep + 1));
+        }
+        if (endpoints.length > 0) out.set(userIds[i]!, endpoints);
+      });
+      return out;
+    } catch {
+      // ตกไปใช้ค่าในโปรเซสด้านล่าง
+    }
+  }
+  for (const id of userIds) {
+    const endpoints = [...(h.active.get(id)?.values() ?? [])].filter((t) => t.until > now).map((t) => t.endpoint);
+    if (endpoints.length > 0) out.set(id, endpoints);
+  }
+  return out;
 }
 
-/** ใครกำลังดูหน้าเว็บอยู่จริง — คนที่ไม่อยู่ในนี้ต้องได้แจ้งเตือนเด้ง (Web Push) */
-export function activeUserIds(userIds: string[]): Promise<Set<string>> {
-  return readFlags(ACTIVE_PREFIX, hub().active, userIds);
+/** ใครกำลังดูหน้าเว็บอยู่ (เครื่องไหนก็ได้) — ใช้กับแชทกลุ่มทั่วไป: ดูที่คอมอยู่แล้ว มือถือไม่ต้องเด้ง */
+export async function activeUserIds(userIds: string[]): Promise<Set<string>> {
+  return new Set((await viewingTabs(userIds)).keys());
 }
 
-/** เครื่องบอกว่าหน้าเว็บอยู่หน้าจอ (true, ส่งซ้ำทุก ~30 วิ) หรือถูกย่อ/สลับแอป (false) */
-export function setUserActive(userId: string, active: boolean): void {
+/** endpoint Web Push ของ "เครื่องที่กำลังดูหน้าจออยู่" — เครื่องพวกนี้เด้งในแอปเองแล้ว ไม่ต้องส่ง Push ซ้ำ */
+export async function viewingEndpoints(userIds: string[]): Promise<Set<string>> {
+  const found = new Set<string>();
+  for (const endpoints of (await viewingTabs(userIds)).values()) {
+    for (const e of endpoints) if (e) found.add(e);
+  }
+  return found;
+}
+
+/** แท็บบอกว่าอยู่หน้าจอ (true, ส่งซ้ำทุก ~30 วิ) หรือถูกย่อ/สลับแอป (false) — ต่อแท็บ ไม่กระทบแท็บ/เครื่องอื่น */
+export function setTabActive(userId: string, tabId: string, endpoint: string, active: boolean): void {
   const h = hub();
   const ready = h.pub && h.pub.status === "ready";
+  const key = ACTIVE_PREFIX + userId;
+  let tabs = h.active.get(userId);
   if (active) {
-    h.active.set(userId, Date.now() + ACTIVE_TTL_SECONDS * 1000);
-    if (ready) h.pub!.set(ACTIVE_PREFIX + userId, "1", "EX", ACTIVE_TTL_SECONDS).catch(() => {});
+    const until = Date.now() + ACTIVE_TTL_SECONDS * 1000;
+    if (!tabs) h.active.set(userId, (tabs = new Map()));
+    tabs.set(tabId, { until, endpoint });
+    if (ready) {
+      h.pub!
+        .multi()
+        .hset(key, tabId, `${until}|${endpoint}`)
+        .expire(key, ACTIVE_TTL_SECONDS)
+        .exec()
+        .catch(() => {});
+    }
   } else {
-    h.active.delete(userId);
-    if (ready) h.pub!.del(ACTIVE_PREFIX + userId).catch(() => {});
+    tabs?.delete(tabId);
+    if (tabs?.size === 0) h.active.delete(userId);
+    if (ready) h.pub!.hdel(key, tabId).catch(() => {});
   }
 }

@@ -2,6 +2,8 @@ import "server-only";
 import { createECDH, createHmac, createCipheriv, createPrivateKey, randomBytes, sign } from "node:crypto";
 import { prisma } from "@smartboss/database";
 
+import { viewingEndpoints } from "@/lib/realtime/server";
+
 /**
  * Web Push (แจ้งเตือนเด้งแม้ปิดเว็บ) — เขียนเองด้วย node:crypto ตามมาตรฐาน
  * RFC 8291 (เข้ารหัส aes128gcm) + RFC 8292 (VAPID) ไม่พึ่งแพ็กเกจ web-push
@@ -96,8 +98,9 @@ function encrypt(p256dh: string, authSecret: string, payload: Buffer): Buffer {
 }
 
 /**
- * ส่งแจ้งเตือนถึงทุกเครื่องที่ผู้ใช้เหล่านี้สมัครไว้ — ไม่ throw; เครื่องที่ถอนสิทธิ์แล้ว
- * (404/410) ลบทิ้งให้เอง
+ * ส่งแจ้งเตือนถึงทุกเครื่องที่ผู้ใช้เหล่านี้สมัครไว้ — ยกเว้นเครื่องที่กำลังดูหน้าจออยู่ (เครื่องนั้น
+ * เด้งในแอปเองทางท่อสดแล้ว) ⇒ เปิดดูในมือถืออยู่ คอมยังเด้ง และกลับกัน
+ * ไม่ throw; เครื่องที่ถอนสิทธิ์แล้ว (404/410) ลบทิ้งให้เอง
  */
 export async function sendWebPush(orgId: string, userIds: string[], payload: WebPushPayload): Promise<void> {
   if (!isWebPushConfigured() || userIds.length === 0) return;
@@ -111,6 +114,9 @@ export async function sendWebPush(orgId: string, userIds: string[], payload: Web
     console.error("[web-push] load subscriptions failed", err);
     return;
   }
+  const viewing = await viewingEndpoints(userIds).catch(() => new Set<string>());
+  subs = subs.filter((s) => !viewing.has(s.endpoint));
+  if (subs.length === 0) return;
   const data = Buffer.from(JSON.stringify(payload));
   const gone: string[] = [];
 

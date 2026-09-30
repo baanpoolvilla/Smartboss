@@ -11,7 +11,7 @@ import type { ChatActor } from "./serialize";
 /**
  * แจ้งเตือนข้อความใหม่ — ลำดับจากถูกไปแพง (ดูแผนแชท):
  *  1. คนที่กำลังดูหน้าเว็บอยู่ → ได้ทางท่อสดไปแล้ว (หน้าเว็บเด้งและมีเสียงเอง)
- *  2. คนที่ไม่ได้ดูหน้าจอ (ปิดเว็บ, ย่อเบราว์เซอร์, ล็อกจอ) → Web Push (ฟรี) เสียงแจ้งเตือนของเครื่อง
+ *  2. เครื่องที่ไม่ได้ดูหน้าจอ (ปิดเว็บ, ย่อเบราว์เซอร์, ล็อกจอ) → Web Push (ฟรี) เสียงแจ้งเตือนของเครื่อง
  *  3. ถูก @แท็ก → ลงกระดิ่งรวมด้วย (core.notifications) กันหลุด
  *
  * แชททั่วไปไม่ลงกระดิ่ง (เหมือน LINE) — เดิมลงทุกข้อความ กระดิ่งเต็มไปด้วยแชทจนแจ้งเตือนอื่นจม
@@ -70,46 +70,47 @@ export async function notifyNewMessage(
     const url = `/report-task/chat?c=${encodeURIComponent(channelId)}`;
     const isDm = channelType === "dm";
 
-    // ส่งเด้งให้ทุกคนที่ "ไม่ได้ดูหน้าจอ" — รวมคนที่เปิดเว็บค้างไว้แต่ย่อเบราว์เซอร์/ล็อกจอ
-    // (คนที่ดูหน้าจออยู่ได้ทางท่อสดแล้ว หน้าเว็บเด้งให้เอง)
-    const active = await activeUserIds(recipients);
-    const offline = recipients.filter((id) => !active.has(id));
+    // เด้งเข้าเครื่องที่ไม่ได้ดูหน้าจอ (sendWebPush ข้ามเครื่องที่ดูอยู่ให้เอง — เครื่องนั้นเด้งในแอปแล้ว)
+    //  - เรื่องของเรา (แชทส่วนตัว, ถูกแท็ก, ตอบกลับเรา) → ทุกเครื่องที่ไม่ได้ดูจอ แม้กำลังใช้อีกเครื่องอยู่
+    //  - แชทกลุ่มทั่วไป → เฉพาะคนที่ไม่ได้ดูหน้าจอเครื่องไหนเลย (ดูในคอมอยู่แล้ว มือถือไม่ต้องสั่นทุกข้อความ)
+    const mentioned = recipients.filter((id) => directMentions.has(id) || mentionAll);
+    const replied = recipients.filter((id) => id === repliedTo && !mentioned.includes(id));
+    let others = recipients.filter((id) => !mentioned.includes(id) && !replied.includes(id));
+    if (!isDm && others.length > 0) {
+      const active = await activeUserIds(others);
+      others = others.filter((id) => !active.has(id));
+    }
+    const groupTitle = channel?.name ?? "แชท";
     const pushes: Promise<void>[] = [];
-    if (offline.length > 0) {
-      const mentioned = offline.filter((id) => directMentions.has(id) || mentionAll);
-      const replied = offline.filter((id) => id === repliedTo && !mentioned.includes(id));
-      const others = offline.filter((id) => !mentioned.includes(id) && !replied.includes(id));
-      const groupTitle = channel?.name ?? "แชท";
-      if (others.length > 0) {
-        pushes.push(
-          sendWebPush(actor.orgId, others, {
-            title: isDm ? authorName : groupTitle,
-            body: isDm ? preview : `${authorName}: ${preview}`,
-            url,
-            tag: `chat-${channelId}`,
-          })
-        );
-      }
-      if (replied.length > 0) {
-        pushes.push(
-          sendWebPush(actor.orgId, replied, {
-            title: `${authorName} ตอบกลับข้อความของคุณ${isDm ? "" : ` ใน ${groupTitle}`}`,
-            body: preview,
-            url,
-            tag: `chat-${channelId}`,
-          })
-        );
-      }
-      if (mentioned.length > 0) {
-        pushes.push(
-          sendWebPush(actor.orgId, mentioned, {
-            title: `${authorName} แท็กคุณ${isDm ? "" : ` ใน ${groupTitle}`}`,
-            body: preview,
-            url,
-            tag: `chat-${channelId}`,
-          })
-        );
-      }
+    if (others.length > 0) {
+      pushes.push(
+        sendWebPush(actor.orgId, others, {
+          title: isDm ? authorName : groupTitle,
+          body: isDm ? preview : `${authorName}: ${preview}`,
+          url,
+          tag: `chat-${channelId}`,
+        })
+      );
+    }
+    if (replied.length > 0) {
+      pushes.push(
+        sendWebPush(actor.orgId, replied, {
+          title: `${authorName} ตอบกลับข้อความของคุณ${isDm ? "" : ` ใน ${groupTitle}`}`,
+          body: preview,
+          url,
+          tag: `chat-${channelId}`,
+        })
+      );
+    }
+    if (mentioned.length > 0) {
+      pushes.push(
+        sendWebPush(actor.orgId, mentioned, {
+          title: `${authorName} แท็กคุณ${isDm ? "" : ` ใน ${groupTitle}`}`,
+          body: preview,
+          url,
+          tag: `chat-${channelId}`,
+        })
+      );
     }
 
     const bell = recipients.filter((id) => directMentions.has(id) || mentionAll);

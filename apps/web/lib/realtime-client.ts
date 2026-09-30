@@ -36,12 +36,30 @@ const PRESENCE_URL = "/api/realtime/presence";
 let presenceTimer: ReturnType<typeof setInterval> | null = null;
 let presenceInstalled = false;
 
+// เซิร์ฟเวอร์จำ "ดูจออยู่" แยกต่อแท็บ + รู้ endpoint Web Push ของเครื่องนี้ ⇒ ข้าม Push เฉพาะเครื่องที่ดูอยู่
+// (เปิดดูในมือถือ คอมยังเด้ง และกลับกัน) — ไม่มี endpoint (ยังไม่เปิดแจ้งเตือน) ก็ส่งค่าว่าง
+const TAB_ID = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+
+async function pushEndpoint(): Promise<string> {
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration("/");
+    return (await reg?.pushManager.getSubscription())?.endpoint ?? "";
+  } catch {
+    return "";
+  }
+}
+
 function reportVisible() {
-  fetch(PRESENCE_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: '{"visible":true}', keepalive: true }).catch(() => {});
+  void pushEndpoint().then((endpoint) => {
+    // ย่อไประหว่างรอ endpoint — ไม่ส่ง ไม่งั้นไปถึงหลัง "ย่อแล้ว" แล้วค้างว่าดูอยู่
+    if (document.visibilityState !== "visible") return;
+    const body = JSON.stringify({ visible: true, tab: TAB_ID, endpoint });
+    fetch(PRESENCE_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
+  });
 }
 
 function reportHidden() {
-  const body = '{"visible":false}';
+  const body = JSON.stringify({ visible: false, tab: TAB_ID });
   // sendBeacon ส่งได้แม้หน้ากำลังถูกพักหรือปิด
   if (!navigator.sendBeacon?.(PRESENCE_URL, new Blob([body], { type: "application/json" }))) {
     fetch(PRESENCE_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});

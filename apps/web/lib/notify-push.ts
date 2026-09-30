@@ -1,6 +1,6 @@
 import "server-only";
 
-import { activeUserIds, publishToUsers } from "@/lib/realtime/server";
+import { publishToUsers } from "@/lib/realtime/server";
 import { sendWebPush } from "@/lib/web-push";
 
 /**
@@ -9,7 +9,8 @@ import { sendWebPush } from "@/lib/web-push";
  *
  *  - กำลังดูเว็บอยู่ → ส่งทางท่อสด ({ type: "notify.new" }) หน้าเว็บเล่นเสียง + เด้งกล่อง +
  *    รีเฟรชกระดิ่ง (components/shell/system-notify.tsx)
- *  - ไม่ได้ดูหน้าจอ (ปิดเว็บ/ย่อเบราว์เซอร์/ล็อกจอ) → Web Push พร้อมเสียงของเครื่อง
+ *  - เครื่องอื่นของคนเดียวกันที่ไม่ได้ดูหน้าจอ (ปิดเว็บ/ย่อ/ล็อกจอ) → Web Push พร้อมเสียงของเครื่อง
+ *    (ตัดสินรายเครื่องใน sendWebPush — ดูในคอมอยู่ มือถือก็ยังเด้ง)
  *
  * ไม่ throw — แจ้งเตือนเด้งพลาดต้องไม่ทำให้งานหลัก (บันทึกใบงาน/อนุมัติลา ฯลฯ) พลาดตาม
  */
@@ -23,11 +24,7 @@ export async function announceNotification(
   try {
     const url = input.url ?? "/notifications";
     publishToUsers(ids, { type: "notify.new", title: input.title, body: input.body ?? "", url });
-    const active = await activeUserIds(ids);
-    const away = ids.filter((id) => !active.has(id));
-    if (away.length > 0) {
-      await sendWebPush(orgId, away, { title: input.title, body: input.body ?? undefined, url, tag: input.tag });
-    }
+    await sendWebPush(orgId, ids, { title: input.title, body: input.body ?? undefined, url, tag: input.tag });
   } catch (err) {
     console.error("[notify-push] announce failed", err);
   }

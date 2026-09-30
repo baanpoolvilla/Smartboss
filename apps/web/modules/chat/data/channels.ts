@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
 
-import { activeUserIds, publishToOrg, publishToUsers } from "@/lib/realtime/server";
+import { publishToOrg, publishToUsers } from "@/lib/realtime/server";
 import { sendWebPush } from "@/lib/web-push";
 import { notifyUsers } from "@/modules/maintenance/data/notify";
 import { CHAT_ORG_CHANNEL_NAME } from "../constants";
@@ -403,11 +403,7 @@ async function notifyAddedToGroup(orgId: string, channelId: string, groupName: s
     const actorName = (await userNames(orgId, [actorId])).get(actorId) ?? "เพื่อนร่วมงาน";
     const title = `${actorName} เพิ่มคุณเข้ากลุ่ม "${groupName}"`;
     await notifyUsers(orgId, ids, { title, type: "chat_message", referenceId: channelId });
-    const active = await activeUserIds(ids);
-    const offline = ids.filter((id) => !active.has(id));
-    if (offline.length > 0) {
-      await sendWebPush(orgId, offline, { title, body: "แตะเพื่อเปิดกลุ่ม", url: `/report-task/chat?c=${encodeURIComponent(channelId)}`, tag: `chat-${channelId}` });
-    }
+    await sendWebPush(orgId, ids, { title, body: "แตะเพื่อเปิดกลุ่ม", url: `/report-task/chat?c=${encodeURIComponent(channelId)}`, tag: `chat-${channelId}` });
   } catch (err) {
     console.error("[chat] notify added-to-group failed", err);
   }
