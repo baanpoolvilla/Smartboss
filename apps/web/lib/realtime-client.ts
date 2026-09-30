@@ -28,6 +28,13 @@ let retryTimer: ReturnType<typeof setTimeout> | null = null;
 let retryDelay = 2000;
 let closeTimer: ReturnType<typeof setTimeout> | null = null;
 let hiddenAt: number | null = null;
+/** ได้ยินอะไรจากท่อล่าสุดเมื่อไร (ready/ping/ข้อความ) — ใช้จับท่อที่ค้างเงียบ */
+let lastHeard = 0;
+let watchdog: ReturnType<typeof setInterval> | null = null;
+/** เซิร์ฟเวอร์ ping ทุก 25 วิ — เงียบเกินนี้ถือว่าท่อตาย */
+const SILENT_LIMIT_MS = 65_000;
+/** ย่อ/สลับไปนานเกินนี้แล้วกลับมา → ดึงของที่อาจพลาดไปทันที ไม่รอท่อบอก */
+const RESYNC_AFTER_HIDDEN_MS = 5_000;
 
 // ─── บอกเซิร์ฟเวอร์ว่ากำลังดูหน้าจออยู่ไหม ───
 // มือถือที่ย่อเบราว์เซอร์ยังค้างการเชื่อมต่อไว้ได้สักพัก — ถ้าไม่บอก เซิร์ฟเวอร์จะคิดว่ายังเห็นจออยู่
@@ -68,8 +75,12 @@ function reportHidden() {
 
 function onVisibility() {
   if (document.visibilityState === "visible") {
+    // มือถือ/เบราว์เซอร์พักแท็บที่ย่อไว้ได้ — ท่อดูเหมือนยังต่ออยู่แต่ข้อความระหว่างนั้นอาจไม่มา
+    // กลับมาหน้าจอแล้วให้ทุกตัวฟังดึงส่วนที่พลาดเอง (แชทดึงข้อความใหม่, ตัวเลขยังไม่อ่าน)
+    const wasHiddenFor = hiddenAt != null ? Date.now() - hiddenAt : 0;
     hiddenAt = null;
     reportVisible();
+    if (wasHiddenFor >= RESYNC_AFTER_HIDDEN_MS && status === "open") emit({ type: "realtime.reconnected" });
   } else {
     hiddenAt = Date.now();
     reportHidden();
@@ -125,14 +136,32 @@ function open() {
   installPresence();
   const es = new EventSource("/api/realtime");
   source = es;
+  lastHeard = Date.now();
+  if (!watchdog) {
+    // ท่อที่ค้างเงียบ (ไม่หลุดให้เห็น แต่ไม่มีอะไรมา) — EventSource ไม่รู้ตัวเอง ต้องปิดแล้วต่อใหม่
+    // ต่อใหม่ได้ "ready" → emit realtime.reconnected → ทุกตัวฟังดึงของที่พลาดไป
+    watchdog = setInterval(() => {
+      if (!source || Date.now() - lastHeard < SILENT_LIMIT_MS) return;
+      console.warn("[realtime] stream silent — reconnecting");
+      source.close();
+      source = null;
+      setStatus("offline");
+      open();
+    }, 15_000);
+  }
 
+  es.addEventListener("ping", () => {
+    lastHeard = Date.now();
+  });
   es.addEventListener("ready", () => {
+    lastHeard = Date.now();
     retryDelay = 2000;
     setStatus("open");
     if (everOpened) emit({ type: "realtime.reconnected" });
     everOpened = true;
   });
   es.onmessage = (e) => {
+    lastHeard = Date.now();
     try {
       emit(JSON.parse(e.data));
     } catch {
@@ -161,6 +190,8 @@ function open() {
 function close() {
   source?.close();
   source = null;
+  if (watchdog) clearInterval(watchdog);
+  watchdog = null;
   uninstallPresence();
   if (retryTimer) clearTimeout(retryTimer);
   retryTimer = null;

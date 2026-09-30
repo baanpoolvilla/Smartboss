@@ -41,9 +41,11 @@ export async function GET(request: Request) {
       const unsubscribe = subscribeUser(userId, session.orgId, (event: RealtimeEvent) => {
         send(`data: ${JSON.stringify(event)}\n\n`);
       });
+      // เป็น event จริง (ไม่ใช่ comment) ให้เบราว์เซอร์เห็น — เงียบเกิน ~60 วิ = ท่อตาย/ค้าง
+      // (เช่น proxy พักข้อมูลไว้) ฝั่งเครื่องจะต่อใหม่แล้วดึงของที่พลาดเอง (lib/realtime-client.ts)
       const heartbeat = setInterval(() => {
         touchPresence(userId);
-        send(`: ping\n\n`);
+        send(`event: ping\ndata: {}\n\n`);
       }, HEARTBEAT_MS);
 
       cleanup = () => {

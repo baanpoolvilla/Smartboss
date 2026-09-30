@@ -85,6 +85,15 @@ function hub(): Hub {
     h.pub.on("error", onError);
     h.sub.on("error", onError);
     h.pub.on("ready", () => (failures = 0));
+    // ต่อ Redis ติด (ครั้งแรก/ต่อใหม่หลังหลุด) → subscribe ทุกช่องที่มีคนฟังอยู่ในโปรเซสนี้
+    // เดิม subscribe ครั้งเดียวตอนคนแรกเข้ามา ถ้าตอนนั้น Redis ยังไม่พร้อม (เช่น เพิ่งรีสตาร์ตหลัง
+    // deploy แล้วทุกเครื่องต่อกลับพร้อมกัน) คำสั่งถูกปฏิเสธเงียบ ๆ (enableOfflineQueue: false)
+    // ช่องนั้นไม่ได้ subscribe อีกเลยจนรีสตาร์ต ⇒ ข้อความสดไม่มา ต้องรีเฟรชเอง
+    h.sub.on("ready", () => {
+      failures = 0;
+      const channels = [...h.refCount.keys()].map((k) => CHANNEL_PREFIX + k);
+      if (channels.length > 0) h.sub?.subscribe(...channels).catch((err: Error) => console.warn("[realtime] resubscribe failed:", err.message));
+    });
     h.sub.on("message", (channel: string, raw: string) => {
       if (!channel.startsWith(CHANNEL_PREFIX)) return;
       try {
@@ -102,7 +111,9 @@ function hub(): Hub {
 function publishKey(key: string, event: RealtimeEvent, payload: string) {
   const h = hub();
   const channel = CHANNEL_PREFIX + key;
-  if (h.pub && h.pub.status === "ready") {
+  // ส่งผ่าน Redis ต่อเมื่อฝั่งรับ (sub) พร้อมด้วย — pub พร้อมแต่ sub ยังต่อไม่ติด ข้อความจะไปถึง
+  // Redis แต่ไม่มีใครในโปรเซสนี้ได้รับ (ตอนนี้รันโปรเซสเดียว ส่งในโปรเซสตรง ๆ ถึงครบ)
+  if (h.pub && h.pub.status === "ready" && h.sub && h.sub.status === "ready") {
     h.pub.publish(channel, payload).catch(() => h.local.emit(channel, event));
   } else {
     h.local.emit(channel, event);
@@ -127,7 +138,10 @@ function listen(key: string, listener: Listener): () => void {
   h.local.on(channel, listener);
   const count = (h.refCount.get(key) ?? 0) + 1;
   h.refCount.set(key, count);
-  if (count === 1 && h.sub) h.sub.subscribe(channel).catch(() => {});
+  // ยังไม่พร้อม = ไม่ต้องสั่งตอนนี้ ตัวฟัง "ready" ด้านบน subscribe ให้ทุกช่องตอนต่อติด
+  if (count === 1 && h.sub && h.sub.status === "ready") {
+    h.sub.subscribe(channel).catch((err: Error) => console.warn("[realtime] subscribe failed:", channel, err.message));
+  }
   return () => {
     h.local.off(channel, listener);
     const left = (h.refCount.get(key) ?? 1) - 1;
