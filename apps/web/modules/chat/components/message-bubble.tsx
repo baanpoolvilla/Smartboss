@@ -285,7 +285,7 @@ function ActionMenu({
       <div
         className={cn(
           "fixed inset-x-0 bottom-0 z-[61] rounded-t-2xl bg-(--bg) p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-2xl",
-          "sm:inset-x-auto sm:bottom-auto sm:w-64 sm:rounded-xl sm:border sm:border-(--line) sm:p-1.5"
+          "sm:inset-x-auto sm:bottom-auto sm:w-[320px] sm:rounded-xl sm:border sm:border-(--line) sm:p-1.5"
         )}
         style={style}
         role="menu"
@@ -300,7 +300,7 @@ function ActionMenu({
                 onReact(e);
                 onClose();
               }}
-              className="flex h-9 w-9 items-center justify-center rounded-full text-xl transition-transform hover:scale-125 hover:bg-(--bg-soft) sm:h-7 sm:w-7 sm:text-base"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-2xl leading-none transition-transform hover:scale-125 hover:bg-(--bg-soft) sm:h-9 sm:w-9 sm:text-[22px]"
               aria-label={`กด ${e}`}
             >
               {e}
@@ -560,11 +560,11 @@ export const MessageBubble = memo(function MessageBubble(props: MessageBubblePro
                   onClick={() => props.onReact(m, r.emoji)}
                   title={names}
                   className={cn(
-                    "flex h-6 items-center gap-1 rounded-full border px-2 text-[12px] shadow-sm transition-colors",
+                    "flex h-8 items-center gap-1.5 rounded-full border pl-2 pr-2.5 text-sm font-medium shadow-sm transition-colors",
                     mineReact ? "border-(--chat-accent) bg-(--chat-accent-soft) text-(--chat-accent-strong)" : "border-(--line) bg-(--bg) text-(--ink-soft)"
                   )}
                 >
-                  <span>{r.emoji}</span>
+                  <span className="text-[20px] leading-none">{r.emoji}</span>
                   <span className="tabular-nums">{r.userIds.length}</span>
                 </button>
               );

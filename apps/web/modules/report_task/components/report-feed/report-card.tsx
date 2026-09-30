@@ -1013,7 +1013,7 @@ export function ReportCard({
           // แถบปุ่มของแชทตัวอื่น ๆ ทำให้ไม่ต้องกันที่ว่างไว้ในแถวหัวโพสต์เลย
           // (เคยกันไว้ 120px แล้วแถวชื่อ/เวลา/ป้าย ถูกดันตกบรรทัดทุกโพสต์
           // "มันกินพื้นที่มากเลยอะ เปลืองอะ") ช่องไฟระหว่างการ์ดรับตัวแถบพอดี
-          "absolute -top-3.5 right-3 z-10 flex items-center gap-0.5 rounded-lg border border-[var(--line)] bg-white shadow-sm p-0.5 opacity-0 pointer-events-none transition-opacity",
+          "absolute -top-4 right-3 z-10 flex items-center gap-0.5 rounded-lg border border-[var(--line)] bg-white shadow-sm p-0.5 opacity-0 pointer-events-none transition-opacity",
           "[@media(hover:hover)]:group-hover/post:opacity-100 [@media(hover:hover)]:group-hover/post:pointer-events-auto",
           "[@media(hover:none)]:!hidden",
           (reactionPickerOpen || moreOpen) && "[@media(hover:hover)]:opacity-100 [@media(hover:hover)]:pointer-events-auto"
@@ -1022,8 +1022,8 @@ export function ReportCard({
         <Popover open={reactionPickerOpen} onOpenChange={setReactionPickerOpen}>
           <PopoverTrigger
             render={
-              <button className="h-7 w-7 flex items-center justify-center rounded-md text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]" aria-label="เพิ่มปฏิกิริยา">
-                <SmilePlus className="h-4 w-4" />
+              <button className="h-8 w-8 flex items-center justify-center rounded-md text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]" aria-label="เพิ่มปฏิกิริยา">
+                <SmilePlus className="h-5 w-5" />
               </button>
             }
           />
@@ -1040,7 +1040,7 @@ export function ReportCard({
               เส้นบางๆ เฉพาะตอนที่แถวสติกเกอร์โผล่จริง (คนไม่มีสิทธิเห็นแค่
               แถวอีโมจิแถวเดียว เหมือนเดิมทุกอย่าง ไม่รู้ด้วยซ้ำว่ามีแถวที่สอง
               ซ่อนอยู่ — "คนมีสิทธิจะเห็น...ไม่มีสิทธิจะไม่เห็น") */}
-          <PopoverContent className={cn("flex flex-col gap-1 p-1.5", stickerEditorOpen ? "w-[300px]" : "w-auto max-w-[232px]")}>
+          <PopoverContent className={cn("flex flex-col gap-1 p-1.5", stickerEditorOpen ? "w-[300px]" : "w-auto max-w-[290px]")}>
             {stickerEditorOpen ? (
               <div className="flex flex-col gap-2 max-h-[420px] overflow-y-auto">
                 <div className="flex items-center justify-between px-1">
@@ -1076,7 +1076,7 @@ export function ReportCard({
                         setReactionPickerOpen(false);
                       }}
                       className={cn(
-                        "h-8 w-8 flex items-center justify-center rounded-md text-base hover:bg-[var(--bg-soft)] transition-transform hover:scale-110",
+                        "h-10 w-10 flex items-center justify-center rounded-md text-[24px] leading-none hover:bg-[var(--bg-soft)] transition-transform hover:scale-110",
                         (post.reactions[emoji] ?? []).includes(viewingAsUserId) && "bg-[var(--accent)]"
                       )}
                     >
@@ -1110,7 +1110,7 @@ export function ReportCard({
                             bumpStickerUsage(`sticker:${s.id}`);
                             setReactionPickerOpen(false);
                           }}
-                          className="h-8 w-8 flex items-center justify-center rounded-md text-base hover:bg-white transition-transform hover:scale-110"
+                          className="h-10 w-10 flex items-center justify-center rounded-md text-[24px] leading-none hover:bg-white transition-transform hover:scale-110"
                           title={`${s.label} (${s.points > 0 ? `+${s.points}` : s.points})`}
                         >
                           {s.emoji}
@@ -1140,26 +1140,26 @@ export function ReportCard({
             setThreadOpen(true);
             requestAnimationFrame(() => replyEditorRef.current?.focus());
           }}
-          className="h-7 w-7 flex items-center justify-center rounded-md text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+          className="h-8 w-8 flex items-center justify-center rounded-md text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
           aria-label="ตอบกลับ"
           title="ตอบกลับ"
         >
-          <MessageCircle className="h-4 w-4" />
+          <MessageCircle className="h-5 w-5" />
         </button>
         {isOwn && (
           <button
             onClick={() => setEditing(true)}
-            className="h-7 w-7 flex items-center justify-center rounded-md text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+            className="h-8 w-8 flex items-center justify-center rounded-md text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
             aria-label="แก้ไขโพสต์"
           >
-            <Pencil className="h-4 w-4" />
+            <Pencil className="h-5 w-5" />
           </button>
         )}
         <Popover open={moreOpen} onOpenChange={setMoreOpen}>
           <PopoverTrigger
             render={
-              <button className="h-7 w-7 flex items-center justify-center rounded-md text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]" aria-label="ตัวเลือกเพิ่มเติม">
-                <MoreHorizontal className="h-4 w-4" />
+              <button className="h-8 w-8 flex items-center justify-center rounded-md text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]" aria-label="ตัวเลือกเพิ่มเติม">
+                <MoreHorizontal className="h-5 w-5" />
               </button>
             }
           />
@@ -1185,7 +1185,7 @@ export function ReportCard({
               </button>
             }
           />
-          <PopoverContent className={cn("flex flex-col min-w-44 p-1", stickerEditorOpen ? "w-[280px]" : "w-auto max-w-[232px]")} align="end">
+          <PopoverContent className={cn("flex flex-col min-w-44 p-1", stickerEditorOpen ? "w-[280px]" : "w-auto max-w-[290px]")} align="end">
             {stickerEditorOpen ? (
               <div className="flex flex-col gap-2 max-h-[420px] overflow-y-auto p-0.5">
                 <div className="flex items-center justify-between px-1">
@@ -1217,7 +1217,7 @@ export function ReportCard({
                         setTouchMenuOpen(false);
                       }}
                       className={cn(
-                        "h-8 w-8 flex items-center justify-center rounded-md text-base hover:bg-[var(--bg-soft)]",
+                        "h-10 w-10 flex items-center justify-center rounded-md text-[24px] leading-none hover:bg-[var(--bg-soft)]",
                         (post.reactions[emoji] ?? []).includes(viewingAsUserId) && "bg-[var(--accent)]"
                       )}
                     >
@@ -1517,9 +1517,9 @@ export function ReportCard({
               >
                 <button
                   onClick={() => setReactionListEmoji(emoji)}
-                  className={cn("flex items-center gap-1.5 pl-2.5 pr-2.5 py-1", !active && "hover:bg-white")}
+                  className={cn("flex items-center gap-1.5 pl-2 pr-2.5 h-8", !active && "hover:bg-white")}
                 >
-                  <span className="text-base leading-none">{emoji}</span>
+                  <span className="text-[20px] leading-none">{emoji}</span>
                   <span className="tabular-nums font-medium">{users.length}</span>
                 </button>
                 {!active && (
@@ -1528,7 +1528,7 @@ export function ReportCard({
                     aria-label={`รีแอค ${emoji}`}
                     className="flex items-center px-1 border-l border-[var(--line)] hover:bg-[var(--accent)] hover:text-[var(--brand-green-dark)] transition-colors"
                   >
-                    <Plus className="h-2 w-2" />
+                    <Plus className="h-3 w-3" />
                   </button>
                 )}
               </div>
@@ -1566,12 +1566,12 @@ export function ReportCard({
                     : `${sticker.label} (${sticker.points > 0 ? `+${sticker.points}` : sticker.points})`
                 }
                 className={cn(
-                  "text-xs px-1.5 py-0.5 rounded-full bg-[var(--bg-soft)] flex items-center gap-0.5",
+                  "h-8 text-sm font-medium tabular-nums pl-2 pr-2.5 rounded-full border border-[var(--line)] bg-[var(--bg-soft)] flex items-center gap-1.5",
                   canUndo && "hover:bg-red-50 cursor-pointer group/sticker"
                 )}
                 onClick={canUndo && latest ? () => removeStickerReaction(post.id, latest.id, viewingAsUserId) : undefined}
               >
-                <span>{sticker.emoji}</span>
+                <span className="text-[20px] leading-none">{sticker.emoji}</span>
                 {count > 1 && <span className="text-[var(--ink-soft)]">{count}</span>}
                 {canUndo && <X className="h-3 w-3 text-[var(--ink-faint)] group-hover/sticker:text-[var(--chart-red)]" />}
               </span>
