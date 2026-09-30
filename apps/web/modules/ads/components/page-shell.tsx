@@ -16,7 +16,8 @@ export function AdsPage({
   children: React.ReactNode;
 }) {
   return (
-    <AppScaffold title={title} width="max-w-6xl">
+    // เต็มความกว้างจอ — ตารางแคมเปญ/กลุ่มโฆษณามีหลายคอลัมน์ ยิ่งกว้างยิ่งไม่ต้องเลื่อนแนวนอน
+    <AppScaffold title={title} width="max-w-none">
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <SyncStamp at={lastSynced} />
