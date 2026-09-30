@@ -2,16 +2,19 @@ import Link from "next/link";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 import { HrPage } from "@/modules/hr/components/hr-page";
 import { HR_PERMS } from "@/modules/hr/permissions";
+import { NotifCountBadge } from "@/modules/notifications/notif-count-badge";
 import { renderTodayTab } from "./home-today";
 import { renderCorrectionsTab } from "./home-corrections";
 import { renderCalendarTab } from "./home-calendar";
 import { renderOvertimeTab } from "./home-overtime";
 
+/** notifTypes = แจ้งเตือนที่ลิงก์มาแท็บนี้ (ดู derive.ts) — ตัวเลขแดงบนแท็บบอกว่าเลข
+ * บนเมนู "หน้าหลัก" มาจากแท็บไหน ("เปิดมาไม่รู้เลยมาจากอันไหน") */
 const TABS = [
-  { id: "today", label: "วันนี้" },
-  { id: "corrections", label: "คำขอแก้เวลา" },
-  { id: "overtime", label: "OT รออนุมัติ" },
-  { id: "calendar", label: "ปฏิทินทีม" },
+  { id: "today", label: "วันนี้", notifTypes: ["hr_leave_decided", "hr_attendance_correction_decided", "hr_overtime_decided"] },
+  { id: "corrections", label: "คำขอแก้เวลา", notifTypes: ["hr_attendance_correction_submitted"] },
+  { id: "overtime", label: "OT รออนุมัติ", notifTypes: ["hr_overtime_pending"] },
+  { id: "calendar", label: "ปฏิทินทีม", notifTypes: ["hr_leave_submitted"] },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -63,13 +66,18 @@ export default async function HrOverviewPage({
               <Link
                 key={t.id}
                 href={t.id === "today" ? "/hr" : `/hr?tab=${t.id}`}
-                className={`border-b-2 px-3 py-2 text-sm font-medium ${
+                className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium ${
                   tab === t.id
                     ? "border-(--app-strong,var(--ink)) text-(--ink)"
                     : "border-transparent text-(--ink-soft) hover:text-(--ink)"
                 }`}
               >
                 {t.label}
+                <NotifCountBadge
+                  categories={["hr_leave", "hr_attendance"]}
+                  types={[...t.notifTypes]}
+                  className="flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-(--danger) px-1 text-[10px] font-bold text-white"
+                />
               </Link>
             ))}
           </div>

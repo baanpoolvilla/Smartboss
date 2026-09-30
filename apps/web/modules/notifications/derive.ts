@@ -239,8 +239,10 @@ export function maintenanceHrefFor(type: string, referenceId: string | null): st
   // HR ไม่มีหน้ารายละเอียดต่อคำขอแยกให้ลิงก์ตรง (และคำขอลาหลายวันในครั้ง
   // เดียวก็กลายเป็นหลาย request id แยกกันอยู่แล้ว — ดู hr-notify.ts) พาไปหน้า
   // รายการที่อนุมัติได้เลยแทน
-  if (type === "hr_leave_submitted") return "/hr/leave";
-  if (type === "hr_attendance_correction_submitted") return "/hr/attendance/corrections";
+  // ชี้แท็บตรง ๆ (พาธเดิม /hr/leave, /hr/attendance/corrections แค่ redirect มาแท็บ) —
+  // เปิดแท็บแล้วแจ้งเตือนหาย (MarkReadOnRoute เทียบ ?tab=) และตัวเลขบนแท็บตรงกัน
+  if (type === "hr_leave_submitted") return "/hr?tab=calendar";
+  if (type === "hr_attendance_correction_submitted") return "/hr?tab=corrections";
   if (type === "hr_overtime_pending") return "/hr?tab=overtime";
   // ผลคำขอของพนักงานเอง → หน้าแรกของบุคคล (มีรายการลา/แก้เวลา/OT ของตัวเอง)
   if (type === "hr_leave_decided" || type === "hr_attendance_correction_decided" || type === "hr_overtime_decided") return "/hr";
