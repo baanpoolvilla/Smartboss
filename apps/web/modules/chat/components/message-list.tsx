@@ -11,6 +11,7 @@ import { updateChannel } from "../lib/api";
 import { MessageBubble } from "./message-bubble";
 import { toast } from "sonner";
 
+import { NewDivider } from "@/components/new-divider";
 const GROUP_GAP_MS = 5 * 60 * 1000;
 const EMPTY: RoomMessage[] = [];
 const NEAR_BOTTOM_PX = 120;
@@ -236,10 +237,8 @@ export function MessageList({
                   </div>
                 )}
                 {m.id === unreadMarkerId && (
-                  <div data-unread-marker className="my-2 flex items-center gap-2 px-4">
-                    <span className="h-px flex-1 bg-(--chat-accent)/40" />
-                    <span className="text-[11px] font-medium text-(--chat-accent-strong)">ยังไม่ได้อ่าน</span>
-                    <span className="h-px flex-1 bg-(--chat-accent)/40" />
+                  <div data-unread-marker className="my-2 px-3">
+                    <NewDivider />
                   </div>
                 )}
                 <div className={i >= items.length - 3 ? "chat-enter" : undefined}>

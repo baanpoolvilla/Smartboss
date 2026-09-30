@@ -13,6 +13,7 @@ import { ChatAvatar } from "./chat-avatar";
 import { PushBanner } from "./push-banner";
 import { ChatSettings } from "./chat-settings";
 
+import { NewMentionsScroll } from "@/components/new-mentions-scroll";
 type Tab = "all" | "dm" | "group" | "unread";
 
 const TABS: { id: Tab; label: string }[] = [
@@ -91,7 +92,8 @@ const ChannelRow = memo(function ChannelRow({
   };
 
   return (
-    <div className="group relative">
+    // ห้องที่มีคนแท็กเรา — ปุ่ม "NEW MENTIONS" (NewMentionsScroll) พามาที่นี่ตอนเลื่อนหลุดจอ
+    <div className="group relative" data-mention-row={channel.mentionCount > 0 && !active ? "" : undefined}>
       <button
         type="button"
         onClick={() => onSelect(channel.id)}
@@ -252,7 +254,7 @@ export function ChannelList({ onSelect, onStartNew }: { onSelect: (id: string) =
       <PushBanner />
       {settingsOpen && <ChatSettings onClose={() => setSettingsOpen(false)} />}
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <NewMentionsScroll className="min-h-0 flex-1 overflow-y-auto">
         {!loaded && (
           <div className="space-y-1 px-3 py-2">
             {Array.from({ length: 6 }, (_, i) => (
@@ -308,7 +310,7 @@ export function ChannelList({ onSelect, onStartNew }: { onSelect: (id: string) =
             ))}
           </>
         )}
-      </div>
+      </NewMentionsScroll>
     </div>
   );
 }

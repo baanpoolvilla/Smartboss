@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { NewMentionsScroll } from "@/components/new-mentions-scroll";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Label } from "@/modules/report_task/components/ui/label";
@@ -1038,6 +1039,12 @@ export function TopicSidebar({
     // Red pill count (Discord) — unread activity about this viewer: @mentions
     // plus comments on their own posts; suppressed when the room is muted.
     const aboutMeCountHere = editingOrder ? 0 : topicAboutMeCount(t);
+    // ปุ่ม "NEW MENTIONS" (NewMentionsScroll) — ห้องนี้มีเรื่องที่เกี่ยวกับเรา หรือพับไว้แต่ห้องย่อยข้างในมี
+    function hasAboutMeDescendant(topic: ReportTopic): boolean {
+      return childrenOf(topic.id).some((c) => topicAboutMeCount(c) > 0 || hasAboutMeDescendant(c));
+    }
+    const mentionRow =
+      !editingOrder && t.id !== activeId && (aboutMeCountHere > 0 || (collapsed && hasChildren && hasAboutMeDescendant(t)));
     // A parent topic almost never has posts of its own (it's an organizing
     // folder), so its own unreadCount is normally 0 even when a child
     // sub-topic underneath it has something new. Collapsed, that new post
@@ -1124,6 +1131,7 @@ export function TopicSidebar({
         data-tour="topic-row"
         data-topic-id={t.id}
         data-topic-name={t.name}
+        data-mention-row={mentionRow ? "" : undefined}
         // Pointer-events drag, not native HTML5 draggable — see
         // dragCandidateRef's own doc comment (near the other reorder state,
         // above) for why. Only arms a *candidate*; the window-level
@@ -1762,7 +1770,7 @@ export function TopicSidebar({
       </div>
 
 
-      <div className="flex-1 overflow-y-auto px-2.5 pb-2.5 space-y-1">
+      <NewMentionsScroll className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-2.5 space-y-1">
         {favoriteTopics.length > 0 && (
           <>
             <p className="px-2.5 pt-1 pb-1 text-[11px] font-semibold text-[var(--ink-soft)] uppercase tracking-wide">รายการโปรด</p>
@@ -1783,7 +1791,7 @@ export function TopicSidebar({
         {topics.length === 0 && (
           <p className="text-xs text-[var(--ink-soft)] px-2.5 py-3">ยังไม่มีหัวข้อ กด + หัวข้อใหม่ เพื่อเริ่มต้น</p>
         )}
-      </div>
+      </NewMentionsScroll>
       </div>
 
       {onCollapse && (
