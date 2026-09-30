@@ -143,29 +143,34 @@ const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
  * ในระบบใช้ (ดู apps/web/app/api/chat/uploads/route.ts) — ไม่งั้นใครอัปโหลด
  * ไฟล์ .html ที่ตั้งชื่อ .jpg จะได้ URL ที่เสิร์ฟ HTML กลับมาจริง ๆ
  */
-export async function updateOwnAvatarAction(formData: FormData) {
+/**
+ * คืน { error } แทนการ throw — throw จาก server action บน production ขึ้นหน้า "This page couldn't
+ * load" ทั้งหน้า ผู้ใช้ไม่รู้ว่าผิดอะไร (เจอจริงตอนอัปรูปจากมือถือที่ใหญ่เกิน 5MB) · ฟอร์มย่อรูป
+ * ในเครื่องก่อนส่งแล้ว (avatar-form.tsx) ขนาดจึงไม่ควรเกินอีก
+ */
+export async function updateOwnAvatarAction(formData: FormData): Promise<{ error?: string }> {
   const session = await requireAuth();
 
   const file = formData.get("avatar");
   if (!(file instanceof File) || file.size === 0) {
-    throw new Error("กรุณาเลือกไฟล์รูปภาพ");
+    return { error: "กรุณาเลือกไฟล์รูปภาพ" };
   }
   if (file.size > AVATAR_MAX_BYTES) {
-    throw new Error(`ไฟล์ใหญ่เกินไป (จำกัด ${AVATAR_MAX_BYTES / 1024 / 1024}MB)`);
+    return { error: `ไฟล์ใหญ่เกินไป (จำกัด ${AVATAR_MAX_BYTES / 1024 / 1024}MB)` };
   }
 
   const bytes = new Uint8Array(await file.arrayBuffer());
   const sniffed = sniffMime(bytes, file.type);
   const ext = sniffed ? AVATAR_ALLOWED[sniffed] : undefined;
   if (!ext) {
-    throw new Error("รองรับเฉพาะไฟล์รูปภาพ (JPG, PNG, WEBP, GIF)");
+    return { error: "รองรับเฉพาะไฟล์รูปภาพ (JPG, PNG, WEBP, GIF)" };
   }
 
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
     select: { avatarUrl: true },
   });
-  if (!user) throw new Error("ไม่พบบัญชีผู้ใช้");
+  if (!user) return { error: "ไม่พบบัญชีผู้ใช้" };
 
   // แยก prefix ตามบริษัท เหมือนไฟล์แนบอื่น ๆ ในระบบ — ผู้ใช้แพลตฟอร์ม (orgId
   // เป็น null เช่น SUPER_ADMIN) ไม่มีบริษัทให้แยก จึงรวมไว้ใต้ "platform"
@@ -191,6 +196,7 @@ export async function updateOwnAvatarAction(formData: FormData) {
     targetId: session.userId,
   });
   revalidatePath("/account");
+  return {};
 }
 
 /** เอารูปโปรไฟล์ออก — กลับไปแสดงตัวอักษรย่อชื่อแทน */
