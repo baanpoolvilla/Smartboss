@@ -251,11 +251,16 @@ function ModuleRail({
         <Logo size="md" />
       </Link>
 
-      {/* หัวข้อโมดูล ใต้โลโก้ — แค่ป้ายบอกว่าอยู่โมดูลไหน ไม่ใช่ลิงก์ (เดิมกด
-          กลับหน้ารวมแอปได้เหมือนโลโก้ด้านบน ซึ่งซ้ำซ้อนกันเอง "ตอนแรกกดได้
-          ตอนนี้ต้องกดไม่ได้แล้วเพราะกดที่โลโก้แทน" — โลโก้ทำหน้าที่นั้นแทนตัว
-          เดียวพอ) เส้นขอบล่างปิดท้ายก่อนเข้าเมนู */}
-      <div className="flex h-[56px] shrink-0 items-center gap-2.5 border-b border-(--line) px-4">
+      {/* หัวข้อโมดูล ใต้โลโก้ — กดแล้วกลับหน้าแรกของโมดูลนี้ (โลโก้ด้านบน = กลับหน้ารวมแอป
+          คนละหน้าที่กัน ไม่ซ้ำซ้อนแบบเดิมที่ทั้งคู่พากลับหน้ารวมแอป) ไปเมนูแรกที่ผู้ใช้คนนี้เห็น
+          ไม่ใช่ basePath ตรง ๆ — คนที่ไม่มีสิทธิ์หน้าแรก (เช่น แดชบอร์ด) จะได้ไม่โดนเด้งออก
+          เส้นขอบล่างปิดท้ายก่อนเข้าเมนู */}
+      <Link
+        href={module.menus[0]?.path ?? module.basePath}
+        prefetch={false}
+        title={`หน้าแรกของ${module.name}`}
+        className="flex h-[56px] shrink-0 items-center gap-2.5 border-b border-(--line) px-4 transition-colors hover:bg-(--bg-soft)"
+      >
         <span
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]"
           style={{ backgroundColor: module.colorBg }}
@@ -265,7 +270,7 @@ function ModuleRail({
         <span className="truncate text-sm font-bold text-(--ink)">
           {module.name}
         </span>
-      </div>
+      </Link>
 
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
         {module.menus.map((menu) => (
