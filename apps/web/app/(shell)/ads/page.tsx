@@ -70,8 +70,13 @@ export default async function AdsDashboardPage({
         <KpiCard label="Conversion Rate" metric="conv_rate" value={t.conv_rate} status={t.conv_rate_status} change={t.change.conv_rate} />
         <KpiCard label="Impr. (Top) %" metric="top_impr_pct" value={t.top_impr_pct} status={t.top_impr_pct_status} />
         <KpiCard label="Impr. (Abs. Top) %" metric="abs_top_impr_pct" value={t.abs_top_impr_pct} status={t.abs_top_impr_pct_status} />
-        {t.roas != null && <KpiCard label="ROAS" metric="roas" value={t.roas} change={t.change.roas} />}
+        {/* ROAS แสดงเฉพาะเมื่อมี conversion value (spec §5.1) — 0.00x ไม่ช่วยตัดสินใจ */}
+        {t.roas != null && t.roas > 0 && <KpiCard label="ROAS" metric="roas" value={t.roas} change={t.change.roas} />}
       </div>
+
+      <Section title="แคมเปญ">
+        <CampaignTable rows={r.campaigns} currency={cur} />
+      </Section>
 
       <Section title="ผลรายวัน">
         <DailyCharts data={r.daily} currency={cur} />
@@ -103,10 +108,6 @@ export default async function AdsDashboardPage({
           findings={r.findings}
           entityName={(type, id) => (type === "campaign" ? campaignName.get(id) : adGroupName.get(id)) ?? null}
         />
-      </Section>
-
-      <Section title="แคมเปญ">
-        <CampaignTable rows={r.campaigns} currency={cur} />
       </Section>
 
       <Section
