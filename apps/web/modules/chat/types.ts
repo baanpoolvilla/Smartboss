@@ -63,14 +63,54 @@ export interface ChatReplyPreview {
   deleted: boolean;
 }
 
+/** การ์ดโน้ตในห้อง (ChatMessage kind "note") — ย่อจากโน้ตจริง กดแล้วเปิดโน้ตเต็ม */
+export interface ChatNotePreview {
+  id: string;
+  excerpt: string;
+  thumbUrl: string | null;
+  imageCount: number;
+}
+
+export interface ChatNoteDTO {
+  id: string;
+  channelId: string;
+  authorId: string;
+  body: string;
+  attachments: ChatAttachment[];
+  createdAt: string;
+  updatedAt: string;
+  /** แก้ไขหลังโพสต์ */
+  edited: boolean;
+  likeUserIds: string[];
+  commentCount: number;
+  /** แก้/ลบได้ (คนเขียน หรือแอดมินห้อง) */
+  canEdit: boolean;
+}
+
+export interface ChatNoteCommentDTO {
+  id: string;
+  authorId: string;
+  body: string;
+  createdAt: string;
+  /** ลบได้ (คนคอมเมนต์ คนเขียนโน้ต หรือแอดมินห้อง) */
+  canDelete: boolean;
+}
+
+/** ข้อความที่คนพิมพ์/โพสต์ (ไม่ใช่ข้อความระบบ) — นับยังไม่อ่าน เด้งแจ้งเตือน มีเสียง */
+export function isUserMessageKind(kind: string): boolean {
+  return kind === "text" || kind === "note";
+}
+
 export interface ChatMessageDTO {
   id: string;
   /** ChatMessage.seq (bigint) เป็นสตริง — ใช้เป็น cursor (?after=/?before=) และนับ "อ่านแล้ว" */
   seq: string;
   channelId: string;
   authorId: string;
-  /** "text" | "system" */
+  /** "text" | "system" | "note" (การ์ดโน้ต — ดู note) */
   kind: string;
+  /** kind "note" เท่านั้น — null = โน้ตถูกลบไปแล้ว */
+  note?: ChatNotePreview | null;
   body: string | null;
   attachments: ChatAttachment[];
   replyTo: ChatReplyPreview | null;
@@ -151,6 +191,8 @@ export type ChatRealtimeEvent =
   | { type: "chat.reaction"; channelId: string; messageId: string; reactions: ChatReactionDTO[] }
   | { type: "chat.read"; channelId: string; userId: string; lastReadSeq: string }
   | { type: "chat.typing"; channelId: string; userId: string }
-  | { type: "chat.channel"; channelId: string };
+  | { type: "chat.channel"; channelId: string }
+  /** โน้ตเปลี่ยน (แก้ไข / คอมเมนต์ / ถูกใจ) — preview ใหม่ไว้อัปเดตการ์ดในห้อง */
+  | { type: "chat.note"; channelId: string; noteId: string; preview?: ChatNotePreview };
 
 export const CHAT_REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏", "✅", "🎉"] as const;

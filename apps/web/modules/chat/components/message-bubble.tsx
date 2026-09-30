@@ -12,6 +12,7 @@ import { attachmentLabel, firstName, formatClock, formatDuration, formatFileSize
 import { ChatAvatar } from "./chat-avatar";
 import { downloadUrl } from "./lightbox";
 import { daysUntilExpiry } from "../lib/retention";
+import { NoteCard } from "./notes";
 import { MessageText } from "./message-text";
 
 // ─── ไฟล์แนบ ───────────────────────────────────────────────────────────────
@@ -330,6 +331,7 @@ function ActionMenu({
           </button>
         )}
         {(mine || canManage) &&
+          message.kind !== "note" &&
           (confirmUnsend ? (
             <button type="button" className={cn(item, "font-medium text-(--danger)")} onClick={() => { onUnsend(); onClose(); }}>
               <Trash2 className="h-4 w-4" /> กดอีกครั้งเพื่อยืนยันยกเลิกข้อความ
@@ -463,7 +465,9 @@ export const MessageBubble = memo(function MessageBubble(props: MessageBubblePro
             onTouchEnd={cancelPress}
             onTouchMove={cancelPress}
           >
-            {(m.body || m.replyTo) && (
+            {m.kind === "note" ? (
+              <NoteCard message={m} mine={mine} />
+            ) : (m.body || m.replyTo) && (
               <div
                 className={cn(
                   "min-w-0 rounded-2xl px-3 py-2 text-[length:var(--chat-text-size,14.5px)] leading-relaxed shadow-[0_1px_1px_rgba(0,0,0,0.06)]",

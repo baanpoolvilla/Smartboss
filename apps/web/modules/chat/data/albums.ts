@@ -173,10 +173,10 @@ export async function deleteAlbum(actor: ChatActor, albumId: string): Promise<vo
 }
 
 /**
- * ลบไฟล์ที่ไม่มีใครใช้แล้ว — ไม่อยู่ในอัลบั้มไหน และไม่ได้แนบในข้อความไหนเลย (รูปที่อัปโหลด
- * เข้าอัลบั้มตรง) ไฟล์ที่ยังแนบในแชทอยู่ปล่อยให้งานเก็บกวาดไฟล์หมดอายุจัดการตามอายุ
+ * ลบไฟล์ที่ไม่มีใครใช้แล้ว — ไม่อยู่ในอัลบั้มไหน ไม่อยู่ในโน้ตไหน และไม่ได้แนบในข้อความไหนเลย
+ * (รูปที่อัปโหลดเข้าอัลบั้ม/โน้ตตรง) ไฟล์ที่ยังแนบในแชทอยู่ปล่อยให้งานเก็บกวาดไฟล์หมดอายุจัดการตามอายุ
  */
-async function deleteOrphanFiles(orgId: string, urls: string[]): Promise<void> {
+export async function deleteOrphanFiles(orgId: string, urls: string[]): Promise<void> {
   if (urls.length === 0) return;
   const stillInAlbum = new Set(
     (await prisma.chatAlbumItem.findMany({ where: { orgId, OR: [{ url: { in: urls } }, { thumbUrl: { in: urls } }] }, select: { url: true, thumbUrl: true } }))
@@ -185,11 +185,12 @@ async function deleteOrphanFiles(orgId: string, urls: string[]): Promise<void> {
   const orphans: string[] = [];
   for (const url of urls) {
     if (stillInAlbum.has(url)) continue;
-    const inMessage = await prisma.chatMessage.findFirst({
-      where: { orgId, OR: [{ attachments: { array_contains: [{ url }] } }, { attachments: { array_contains: [{ thumbUrl: url }] } }] },
-      select: { id: true },
-    });
-    if (!inMessage) orphans.push(url);
+    const used = { OR: [{ attachments: { array_contains: [{ url }] } }, { attachments: { array_contains: [{ thumbUrl: url }] } }] };
+    const [inMessage, inNote] = await Promise.all([
+      prisma.chatMessage.findFirst({ where: { orgId, ...used }, select: { id: true } }),
+      prisma.chatNote.findFirst({ where: { orgId, ...used }, select: { id: true } }),
+    ]);
+    if (!inMessage && !inNote) orphans.push(url);
   }
   if (orphans.length === 0) return;
   await deleteFiles(orphans);

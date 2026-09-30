@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
 
-import type { ChatAttachment, ChatAttachmentKind, ChatMessageDTO, ChatReactionDTO, ChatReplyPreview } from "../types";
+import type { ChatAttachment, ChatAttachmentKind, ChatMessageDTO, ChatNotePreview, ChatReactionDTO, ChatReplyPreview } from "../types";
 import { EXPIRING_KINDS, mediaExpiresAt } from "../lib/retention";
 
 /** ข้อผิดพลาดที่มีสถานะ HTTP — route แปลงเป็นคำตอบให้เอง (ดู lib/respond.ts) */
@@ -34,6 +34,21 @@ export interface MessageRow {
   clientId: string | null;
   deletedAt: Date | null;
   createdAt: Date;
+}
+
+/** ข้อความย่อของโน้ต (บรรทัดแรก ๆ) — ใช้เป็นเนื้อการ์ดในห้อง, รายการห้อง, แจ้งเตือน */
+export function noteExcerpt(body: string): string {
+  return body.replace(/\s+/g, " ").trim().slice(0, 140);
+}
+
+export function notePreview(note: { id: string; body: string; attachments: unknown }): ChatNotePreview {
+  const images = ((note.attachments as ChatAttachment[] | null) ?? []).filter((a) => a.kind === "image");
+  return {
+    id: note.id,
+    excerpt: noteExcerpt(note.body),
+    thumbUrl: images[0] ? (images[0].thumbUrl ?? images[0].url) : null,
+    imageCount: images.length,
+  };
 }
 
 export function firstAttachmentKind(attachments: unknown): ChatAttachmentKind | null {
@@ -78,7 +93,8 @@ export async function hydrateMessages(orgId: string, rows: MessageRow[]): Promis
   const ids = rows.map((r) => r.id);
   const replyIds = Array.from(new Set(rows.map((r) => r.replyToId).filter((id): id is string => Boolean(id))));
 
-  const [reactionRows, replyRows] = await Promise.all([
+  const noteMessageIds = rows.filter((r) => r.kind === "note").map((r) => r.id);
+  const [reactionRows, replyRows, noteRows] = await Promise.all([
     prisma.chatReaction.findMany({
       where: { orgId, messageId: { in: ids } },
       orderBy: { createdAt: "asc" },
@@ -90,7 +106,14 @@ export async function hydrateMessages(orgId: string, rows: MessageRow[]): Promis
           select: { id: true, authorId: true, body: true, attachments: true, deletedAt: true },
         })
       : Promise.resolve([]),
+    noteMessageIds.length > 0
+      ? prisma.chatNote.findMany({
+          where: { orgId, messageId: { in: noteMessageIds } },
+          select: { id: true, body: true, attachments: true, messageId: true },
+        })
+      : Promise.resolve([]),
   ]);
+  const noteByMessage = new Map(noteRows.map((n) => [n.messageId!, notePreview(n)]));
 
   const reactions = groupReactions(reactionRows);
 
@@ -128,6 +151,7 @@ export async function hydrateMessages(orgId: string, rows: MessageRow[]): Promis
       channelId: row.channelId,
       authorId: row.authorId,
       kind: row.kind,
+      ...(row.kind === "note" ? { note: deleted ? null : (noteByMessage.get(row.id) ?? null) } : {}),
       body: deleted ? null : row.body,
       attachments: deleted ? [] : withExpiry(row),
       replyTo: deleted || !row.replyToId ? null : (replies.get(row.replyToId) ?? null),

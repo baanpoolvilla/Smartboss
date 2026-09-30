@@ -90,6 +90,7 @@ export function channelPreview(channel: ChatChannelSummary, meId: string, users:
   if (last.kind === "system") return last.body ?? "";
   const who = last.authorId === meId ? "คุณ" : firstName(users[last.authorId]?.name) || "สมาชิก";
   if (last.deleted) return `${who} ยกเลิกข้อความ`;
+  if (last.kind === "note") return `${who} สร้างโน้ต: ${last.body?.replace(/\s+/g, " ") ?? ""}`;
   const text = last.body?.replace(/\s+/g, " ") || attachmentLabel(last.attachmentKind);
   return channel.type === "dm" && last.authorId !== meId ? text : `${who}: ${text}`;
 }

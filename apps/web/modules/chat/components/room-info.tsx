@@ -15,8 +15,9 @@ import { ChannelAvatar } from "./channel-list";
 import { downloadUrl } from "./lightbox";
 import { ChatModal, MemberPicker } from "./new-chat-dialog";
 import { AlbumsTab } from "./albums-tab";
+import { NotesTab } from "./notes";
 
-type Tab = "members" | "album" | "media" | "file" | "link";
+type Tab = "members" | "note" | "album" | "media" | "file" | "link";
 
 const URL_RE = /https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]]/g;
 
@@ -138,11 +139,13 @@ export function RoomInfo({
   onClose,
   onOpenMedia,
   onLeft,
+  onCreateNote,
 }: {
   channel: ChatChannelSummary;
   onClose: () => void;
   onOpenMedia: (items: ChatAttachment[], i: number) => void;
   onLeft: () => void;
+  onCreateNote: () => void;
 }) {
   const detail = useChatStore((s) => s.details[channel.id]);
   const users = useChatStore((s) => s.users);
@@ -195,6 +198,7 @@ export function RoomInfo({
 
   const tabs: { id: Tab; label: string }[] = [
     ...(channel.type === "dm" ? [] : [{ id: "members" as const, label: `สมาชิก ${members.length}` }]),
+    { id: "note", label: "โน้ต" },
     { id: "album", label: "อัลบั้ม" },
     { id: "media", label: "รูป/วิดีโอ" },
     { id: "file", label: "ไฟล์" },
@@ -343,8 +347,9 @@ export function RoomInfo({
             })}
           </div>
         )}
+        {tab === "note" && <NotesTab key={channel.id} channelId={channel.id} onCreate={onCreateNote} />}
         {tab === "album" && <AlbumsTab key={channel.id} channelId={channel.id} onOpenMedia={onOpenMedia} />}
-        {tab !== "members" && tab !== "album" && <MediaTab key={`${channel.id}-${tab}`} channelId={channel.id} kind={tab} onOpenMedia={onOpenMedia} />}
+        {tab !== "members" && tab !== "album" && tab !== "note" && <MediaTab key={`${channel.id}-${tab}`} channelId={channel.id} kind={tab} onOpenMedia={onOpenMedia} />}
 
         {editableMembers && (
           <div className="border-t border-(--line) p-4">

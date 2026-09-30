@@ -16,7 +16,7 @@ import { useUnifiedNotifications } from "./use-unified-notifications";
  * พารามิเตอร์ที่เจาะลึกกว่านั้น (post=, reply=) ไม่ต้องตรง — เปิดห้องนั้นก็ถือว่าเห็นแล้ว
  * แจ้งเตือนที่มาระหว่างเปิดหน้านั้นอยู่ก็อ่านทันที (เห็นอยู่ตรงหน้า)
  */
-const IDENTITY_PARAMS = ["c", "task", "topic", "tab", "date"] as const;
+const IDENTITY_PARAMS = ["c", "note", "task", "topic", "tab", "date"] as const;
 /** หน้ารวม — เปิดแล้วไม่ใช่ว่าอ่านทุกอันที่ลิงก์มาที่นี่ */
 const NEVER_MATCH = new Set(["/", "/notifications"]);
 

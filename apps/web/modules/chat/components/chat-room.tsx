@@ -18,6 +18,7 @@ import { AlbumPicker } from "./album-picker";
 import { MessageList } from "./message-list";
 import { ChatModal } from "./new-chat-dialog";
 import { RoomInfo } from "./room-info";
+import { NoteEditor, NoteViewer, useNoteParam } from "./notes";
 
 function SearchBar({ channelId, onClose }: { channelId: string; onClose: () => void }) {
   const users = useChatStore((s) => s.users);
@@ -126,6 +127,8 @@ export function ChatRoom({ channel, initialUnread, onBack }: { channel: ChatChan
   const [searching, setSearching] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [creatingNote, setCreatingNote] = useState(false);
+  const { noteId, open: openNote, close: closeNote } = useNoteParam(channel.id);
   const composerRef = useRef<ComposerHandle>(null);
   const dragDepth = useRef(0);
 
@@ -235,6 +238,7 @@ export function ChatRoom({ channel, initialUnread, onBack }: { channel: ChatChan
           users={users}
           replyTo={replyTo}
           onCancelReply={() => setReplyTo(null)}
+          onCreateNote={() => setCreatingNote(true)}
         />
 
         {dragging && (
@@ -247,9 +251,12 @@ export function ChatRoom({ channel, initialUnread, onBack }: { channel: ChatChan
 
       {infoOpen && (
         <div className="fixed inset-0 z-50 lg:static lg:z-auto lg:w-80 lg:shrink-0 lg:border-l lg:border-(--line)">
-          <RoomInfo channel={channel} onClose={() => setInfoOpen(false)} onOpenMedia={onOpenMedia} onLeft={onBack} />
+          <RoomInfo channel={channel} onClose={() => setInfoOpen(false)} onOpenMedia={onOpenMedia} onLeft={onBack} onCreateNote={() => setCreatingNote(true)} />
         </div>
       )}
+
+      {creatingNote && <NoteEditor channelId={channel.id} onClose={() => setCreatingNote(false)} onSaved={openNote} />}
+      {noteId && !creatingNote && <NoteViewer key={noteId} noteId={noteId} onClose={closeNote} onOpenMedia={onOpenMedia} />}
 
       {lightbox && (
         <Lightbox

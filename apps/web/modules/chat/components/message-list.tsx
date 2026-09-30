@@ -4,7 +4,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { ArrowDown, Loader2 } from "lucide-react";
 
 import { useChatStore, type RoomMessage } from "../store/chat-store";
-import type { ChatAttachment } from "../types";
+import { isUserMessageKind, type ChatAttachment } from "../types";
 import { backToLatest, discardFailed, jumpToMessage, loadOlder, reactToMessage, retrySend, unsendMessage } from "../lib/chat-actions";
 import { formatDayLabel, sameDay } from "../lib/format";
 import { updateChannel } from "../lib/api";
@@ -69,7 +69,7 @@ export function MessageList({
     let remaining = initialUnread;
     for (let i = items.length - 1; i >= 0; i--) {
       const m = items[i]!;
-      if (m.authorId !== meId && m.kind === "text" && !m.deleted) {
+      if (m.authorId !== meId && isUserMessageKind(m.kind) && !m.deleted) {
         remaining--;
         if (remaining === 0) return m.id;
       }
@@ -133,7 +133,7 @@ export function MessageList({
       if (atBottomRef.current || lastMsg.authorId === meId) {
         el.scrollTo({ top: el.scrollHeight, behavior: prev.last ? "smooth" : "auto" });
         setNewCount(0);
-      } else if (lastMsg.authorId !== meId && lastMsg.kind === "text") {
+      } else if (lastMsg.authorId !== meId && isUserMessageKind(lastMsg.kind)) {
         // ตัวเลข "ข้อความใหม่" ขึ้นกับตำแหน่งเลื่อนจริงบนจอ (วัดได้หลังวาดเท่านั้น) จึงต้องตั้งในนี้
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setNewCount((n) => n + 1);

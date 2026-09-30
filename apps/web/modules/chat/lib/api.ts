@@ -7,6 +7,8 @@ import type {
   ChatChannelDetail,
   ChatChannelSummary,
   ChatMessageDTO,
+  ChatNoteCommentDTO,
+  ChatNoteDTO,
   ChatReactionDTO,
   ChatUser,
 } from "../types";
@@ -184,4 +186,40 @@ export function addAlbumItems(albumId: string, items: AlbumItemInput[]): Promise
 
 export function removeAlbumItem(albumId: string, itemId: string): Promise<{ ok: true }> {
   return send(`${album(albumId)}/items/${encodeURIComponent(itemId)}`, "DELETE");
+}
+
+// ─── โน้ต ────────────────────────────────────────────────────────────────
+
+const note = (id: string) => `/api/chat/notes/${encodeURIComponent(id)}`;
+
+export function fetchNotes(channelId: string): Promise<{ notes: ChatNoteDTO[] }> {
+  return fetch(`${ch(channelId)}/notes`).then((r) => json(r));
+}
+
+export function createNote(channelId: string, body: string, attachments: ChatAttachment[]): Promise<{ id: string }> {
+  return send(`${ch(channelId)}/notes`, "POST", { body, attachments });
+}
+
+export function fetchNote(noteId: string): Promise<{ note: ChatNoteDTO; comments: ChatNoteCommentDTO[] }> {
+  return fetch(note(noteId)).then((r) => json(r));
+}
+
+export function updateNote(noteId: string, body: string, attachments: ChatAttachment[]): Promise<{ ok: true }> {
+  return send(note(noteId), "PATCH", { body, attachments });
+}
+
+export function deleteNote(noteId: string): Promise<{ ok: true }> {
+  return send(note(noteId), "DELETE");
+}
+
+export function addNoteComment(noteId: string, body: string): Promise<{ comment: ChatNoteCommentDTO }> {
+  return send(`${note(noteId)}/comments`, "POST", { body });
+}
+
+export function deleteNoteComment(noteId: string, commentId: string): Promise<{ ok: true }> {
+  return send(`${note(noteId)}/comments/${encodeURIComponent(commentId)}`, "DELETE");
+}
+
+export function toggleNoteLike(noteId: string): Promise<{ likeUserIds: string[] }> {
+  return send(`${note(noteId)}/like`, "POST");
 }

@@ -4,7 +4,7 @@ import { prisma } from "@smartboss/database";
 import { activeUserIds } from "@/lib/realtime/server";
 import { sendWebPush } from "@/lib/web-push";
 import { notifyUsers } from "@/modules/maintenance/data/notify";
-import type { ChatMessageDTO } from "../types";
+import { isUserMessageKind, type ChatMessageDTO } from "../types";
 import { otherMemberIds } from "./messages";
 import type { ChatActor } from "./serialize";
 
@@ -31,7 +31,7 @@ export async function notifyNewMessage(
   message: ChatMessageDTO
 ): Promise<void> {
   try {
-    if (message.kind !== "text") return;
+    if (!isUserMessageKind(message.kind)) return;
     const mentionAll = message.mentions.includes("all") && (channelType !== "org" || actor.isChatAdmin);
     const directMentions = new Set(message.mentions.filter((m) => m !== "all" && m !== actor.userId));
     // ตอบกลับข้อความของใคร = เรื่องนี้เกี่ยวกับคนนั้น เด้งแม้ปิดเสียงห้องไว้ (แบบ LINE)
@@ -59,6 +59,7 @@ export async function notifyNewMessage(
 
     const authorName = author?.name ?? "เพื่อนร่วมงาน";
     const preview =
+      (message.kind === "note" ? `📝 โน้ต: ${message.body ?? ""}`.slice(0, 140) : null) ||
       message.body?.slice(0, 140) ||
       (message.attachments[0]?.kind === "image"
         ? "ส่งรูปภาพ"

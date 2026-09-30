@@ -5,7 +5,7 @@ import { toast } from "sonner";
 
 import { onRealtimeStatus, subscribeRealtime, type RealtimeEventMessage } from "@/lib/realtime-client";
 import { useChatStore, type RoomMessage } from "../store/chat-store";
-import type { ChatAttachment, ChatRealtimeEvent } from "../types";
+import { isUserMessageKind, type ChatAttachment, type ChatRealtimeEvent } from "../types";
 import * as api from "./api";
 
 /*
@@ -315,7 +315,7 @@ function handleEvent(raw: RealtimeEventMessage) {
       const known = s.channels.some((c) => c.id === event.channelId);
       const fromOther = message.authorId !== s.meId;
       const viewing = isViewing(event.channelId);
-      s.receiveMessage(message, fromOther && message.kind === "text" && !viewing);
+      s.receiveMessage(message, fromOther && isUserMessageKind(message.kind) && !viewing);
       if (!known) refreshChannelsSoon();
       if (fromOther && viewing) markReadSoon(event.channelId);
       if (message.kind === "system" && s.details[event.channelId]) void loadDetail(event.channelId);
@@ -332,6 +332,10 @@ function handleEvent(raw: RealtimeEventMessage) {
       break;
     case "chat.typing":
       if (event.userId !== s.meId) s.setTyping(event.channelId, event.userId);
+      break;
+    case "chat.note":
+      // การ์ดโน้ตในห้องอัปเดตตามโน้ตที่ถูกแก้ (หน้าต่างโน้ตที่เปิดอยู่ฟังท่อสดเองแล้วโหลดใหม่)
+      if (event.preview) s.setNotePreview(event.channelId, event.noteId, event.preview);
       break;
     case "chat.channel":
       refreshChannelsSoon();

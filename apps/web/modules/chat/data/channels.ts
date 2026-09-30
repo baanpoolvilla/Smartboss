@@ -262,7 +262,7 @@ export async function listChannelsForUser(orgId: string, userId: string): Promis
           WHERE m.org_id = ${orgId}
             AND m.channel_id = ANY(${channelIds})
             AND m.deleted_at IS NULL
-            AND m.kind = 'text'
+            AND m.kind IN ('text', 'note')
             AND m.author_id <> ${userId}
             AND (r.last_read_seq IS NULL OR m.seq > r.last_read_seq)
           GROUP BY m.channel_id`
@@ -518,7 +518,7 @@ export async function setAnnouncement(actor: ChatActor, channelId: string, messa
   if (access.type !== "dm") requireManage(access);
   if (messageId) {
     const msg = await prisma.chatMessage.findFirst({
-      where: { id: messageId, orgId: actor.orgId, channelId, deletedAt: null, kind: "text" },
+      where: { id: messageId, orgId: actor.orgId, channelId, deletedAt: null, kind: { in: ["text", "note"] } },
       select: { id: true },
     });
     if (!msg) throw new ChatError("ไม่พบข้อความนี้", 404);

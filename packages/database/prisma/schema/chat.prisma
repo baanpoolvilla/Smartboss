@@ -31,6 +31,7 @@ model ChatChannel {
   messages     ChatMessage[]
   readStates   ChatReadState[]
   albums       ChatAlbum[]
+  notes        ChatNote[]
 
   @@unique([orgId, departmentId])
   @@index([orgId, type])
@@ -205,5 +206,59 @@ model ChatAlbumItem {
   @@index([orgId, url])
   @@index([orgId, thumbUrl])
   @@map("album_items")
+  @@schema("chat")
+}
+
+/// โน้ตของห้องแชท (แบบ LINE) — ข้อความยาว + รูป ถาวร (ไม่หมดอายุแบบรูปในแชท)
+/// สร้างแล้วโพสต์ "การ์ดโน้ต" (chat.messages kind = "note") ลงห้อง ⇒ แจ้งเตือน/ยังไม่อ่านใช้ทางเดียวกับข้อความ
+model ChatNote {
+  orgId       String   @map("org_id")
+  id          String   @id @default(uuid())
+  channelId   String   @map("channel_id")
+  authorId    String   @map("author_id")
+  body        String
+  /// [{ url, name, mime, size, kind: "image", thumbUrl?, width?, height? }] — ไฟล์ใน chat.files
+  attachments Json     @default("[]")
+  /// การ์ดโน้ตในห้อง
+  messageId   String?  @unique @map("message_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  channel  ChatChannel       @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  comments ChatNoteComment[]
+  likes    ChatNoteLike[]
+
+  @@index([orgId, channelId, createdAt])
+  @@map("notes")
+  @@schema("chat")
+}
+
+model ChatNoteComment {
+  orgId     String   @map("org_id")
+  id        String   @id @default(uuid())
+  noteId    String   @map("note_id")
+  authorId  String   @map("author_id")
+  body      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  note ChatNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@index([noteId, createdAt])
+  @@index([orgId])
+  @@map("note_comments")
+  @@schema("chat")
+}
+
+model ChatNoteLike {
+  orgId     String   @map("org_id")
+  noteId    String   @map("note_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  note ChatNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@id([noteId, userId])
+  @@index([orgId])
+  @@map("note_likes")
   @@schema("chat")
 }

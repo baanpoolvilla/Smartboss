@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { Camera, ChevronRight, FileText, Image as ImageIcon, Loader2, Mic, Paperclip, Plus, RotateCw, SendHorizontal, Square, Trash2, X } from "lucide-react";
+import { Camera, ChevronRight, FileText, Image as ImageIcon, Loader2, Mic, NotebookPen, Paperclip, Plus, RotateCw, SendHorizontal, Square, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
 
@@ -81,8 +81,10 @@ export const Composer = forwardRef<
     users: Record<string, ChatUser>;
     replyTo: RoomMessage | null;
     onCancelReply: () => void;
+    /** เมนู "+" → สร้างโน้ต (แบบ LINE) */
+    onCreateNote?: () => void;
   }
->(function Composer({ channelId, channelType, mentionable, meId, users, replyTo, onCancelReply }, ref) {
+>(function Composer({ channelId, channelType, mentionable, meId, users, replyTo, onCancelReply, onCreateNote }, ref) {
   const [text, setText] = useState(() => drafts.get(channelId) ?? "");
   const [pending, setPending] = useState<PendingFile[]>([]);
   const [mentionQuery, setMentionQuery] = useState<{ start: number; query: string } | null>(null);
@@ -505,6 +507,18 @@ export const Composer = forwardRef<
                   >
                     <Paperclip className="h-4 w-4 text-(--chat-accent)" /> ไฟล์เอกสาร
                   </button>
+                  {onCreateNote && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPlusOpen(false);
+                        onCreateNote();
+                      }}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-(--bg-soft)"
+                    >
+                      <NotebookPen className="h-4 w-4 text-(--chat-accent)" /> โน้ต
+                    </button>
+                  )}
                 </div>
               </>
             )}

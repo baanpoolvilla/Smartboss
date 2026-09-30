@@ -59,7 +59,7 @@ export async function listMessages(
 
 /** ไฟล์แนบต้องเป็นไฟล์ที่อัปขึ้นแชทของบริษัทนี้จริง (มีแถวใน chat.files) — กันแนบ URL
  * มั่ว ๆ หรือไฟล์ของบริษัทอื่น ข้อมูลขนาด/ชนิดเชื่อจากฐานข้อมูล ไม่เชื่อ client */
-async function validateAttachments(orgId: string, input: unknown): Promise<ChatAttachment[]> {
+export async function validateAttachments(orgId: string, input: unknown): Promise<ChatAttachment[]> {
   if (!Array.isArray(input) || input.length === 0) return [];
   if (input.length > MAX_ATTACHMENTS) throw new ChatError(`แนบได้ครั้งละไม่เกิน ${MAX_ATTACHMENTS} ไฟล์`, 400);
   const items = input.filter((a): a is ChatAttachment => typeof a?.url === "string");
@@ -199,6 +199,7 @@ export async function deleteMessage(actor: ChatActor, channelId: string, message
   const access = await getChannelAccess(actor, channelId);
   const message = await prisma.chatMessage.findFirst({ where: { id: messageId, orgId: actor.orgId, channelId } });
   if (!message || message.deletedAt) throw new ChatError("ไม่พบข้อความนี้", 404);
+  if (message.kind === "note") throw new ChatError("ลบโน้ตได้จากหน้าโน้ต", 400);
   if (message.kind !== "text") throw new ChatError("ลบข้อความระบบไม่ได้", 400);
   if (message.authorId !== actor.userId && !access.canManage) throw new ChatError("ลบได้เฉพาะข้อความที่ตัวเองส่ง", 403);
 
@@ -215,7 +216,7 @@ export async function toggleReaction(actor: ChatActor, channelId: string, messag
   await getChannelAccess(actor, channelId);
   if (!(CHAT_REACTION_EMOJIS as readonly string[]).includes(emoji)) throw new ChatError("อีโมจินี้ใช้ไม่ได้", 400);
   const message = await prisma.chatMessage.findFirst({
-    where: { id: messageId, orgId: actor.orgId, channelId, deletedAt: null, kind: "text" },
+    where: { id: messageId, orgId: actor.orgId, channelId, deletedAt: null, kind: { in: ["text", "note"] } },
     select: { id: true },
   });
   if (!message) throw new ChatError("ไม่พบข้อความนี้", 404);

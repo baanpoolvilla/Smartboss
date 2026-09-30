@@ -10,7 +10,7 @@ import { useChatStore } from "../store/chat-store";
 import { fetchUnread } from "../lib/api";
 import { getChatPrefs, playChatSound, unlockChatAudio } from "../lib/prefs";
 import { attachmentLabel } from "../lib/format";
-import type { ChatRealtimeEvent } from "../types";
+import { isUserMessageKind, type ChatRealtimeEvent } from "../types";
 
 /*
  * ตัวเลขบนเมนู "แชท" + เด้งแจ้งเตือนในเว็บตอนอยู่หน้าอื่น
@@ -82,7 +82,7 @@ function onEvent(raw: RealtimeEventMessage) {
   }
   if (event.type !== "chat.message") return;
   const { message } = event;
-  if (message.authorId === state.meId || message.kind !== "text") return;
+  if (message.authorId === state.meId || !isUserMessageKind(message.kind)) return;
 
   const onChatPage = currentPath.startsWith(CHAT_PATH);
   const viewingRoom = onChatPage && useChatStore.getState().activeChannelId === event.channelId && document.visibilityState === "visible";
@@ -101,7 +101,10 @@ function onEvent(raw: RealtimeEventMessage) {
   if (state.muted.has(event.channelId) && !mentioned) return;
 
   const who = event.authorName ?? "ข้อความใหม่";
-  const preview = message.body?.slice(0, 120) || attachmentLabel(message.attachments[0]?.kind ?? null);
+  const preview =
+    (message.kind === "note" ? `📝 โน้ต: ${message.body ?? ""}`.slice(0, 120) : null) ||
+    message.body?.slice(0, 120) ||
+    attachmentLabel(message.attachments[0]?.kind ?? null);
   const title = event.channelType === "dm" || !event.channelName ? who : `${event.channelName}`;
   const body = event.channelType === "dm" || !event.channelName ? preview : `${who}: ${preview}`;
   const url = `${CHAT_PATH}?c=${encodeURIComponent(event.channelId)}`;

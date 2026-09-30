@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import type { ChatChannelDetail, ChatChannelSummary, ChatMessageDTO, ChatReactionDTO, ChatUser } from "../types";
+import type { ChatChannelDetail, ChatChannelSummary, ChatMessageDTO, ChatNotePreview, ChatReactionDTO, ChatUser } from "../types";
 
 /** ข้อความบนจอ — ข้อความที่เรากำลังส่งมี status (id = "local-<clientId>", seq = "") */
 export type RoomMessage = ChatMessageDTO & { status?: "sending" | "failed" };
@@ -72,6 +72,7 @@ interface ChatState {
   removeLocal: (channelId: string, clientId: string) => void;
   markDeleted: (channelId: string, messageId: string) => void;
   setReactions: (channelId: string, messageId: string, reactions: ChatReactionDTO[]) => void;
+  setNotePreview: (channelId: string, noteId: string, preview: ChatNotePreview) => void;
   setDetail: (channelId: string, detail: ChatChannelDetail) => void;
   applyRead: (channelId: string, userId: string, seq: string) => void;
   setTyping: (channelId: string, userId: string) => void;
@@ -177,6 +178,14 @@ export const useChatStore = create<ChatState>((set) => ({
       const room = s.rooms[channelId];
       if (!room) return s;
       const items = room.items.map((m) => (m.id === messageId ? { ...m, reactions } : m));
+      return { rooms: { ...s.rooms, [channelId]: { ...room, items } } };
+    }),
+
+  setNotePreview: (channelId, noteId, preview) =>
+    set((s) => {
+      const room = s.rooms[channelId];
+      if (!room) return s;
+      const items = room.items.map((m) => (m.note?.id === noteId ? { ...m, note: preview, body: preview.excerpt } : m));
       return { rooms: { ...s.rooms, [channelId]: { ...room, items } } };
     }),
 
