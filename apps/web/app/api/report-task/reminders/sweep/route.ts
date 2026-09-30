@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { requireOrg } from "@smartboss/auth";
 
-import { readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
+import { createStoreIfAbsent, readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
 import { readTasks } from "@/modules/report_task/lib/db/task-repo";
 import { computeReminders } from "@/modules/report_task/lib/reminder-sweep";
 import { defaultReminderSettings, type ReminderSettings } from "@/modules/report_task/store/reminder-settings-store";
@@ -82,10 +82,17 @@ export async function POST() {
   }
 
   const nextSentLog = [...result.newSentKeys, ...(sentLog ?? [])].slice(0, MAX_SENT_KEYS);
-  await writeStore(orgId, SENT_LOG_KEY, nextSentLog, sentVersion, session.userId);
+  // "จอง" ว่ารอบนี้เป็นคนส่ง — ทุกแท็บที่เปิดอยู่ (คอม + มือถือ) ยิง route นี้ทุก 60 วิ สองคำขอที่มาพร้อมกัน
+  // อ่าน sent-log ชุดเดียวกัน คิดได้แจ้งเตือนชุดเดียวกัน เดิมไม่ดูผลการเขียน ⇒ ทั้งคู่ส่ง = แจ้งเตือนซ้ำ
+  // ตอนนี้เขียนแบบตรวจ version: แพ้ (อีกคำขอเขียนไปก่อน) = ไม่ส่ง ให้คำขอนั้นส่งไปแล้ว
+  // ยังไม่เคยมีแถว (version 0) — writeStore ตอนนั้นเป็น upsert ไม่ตรวจ version ใช้สร้างแบบใครมาก่อนชนะแทน
+  const claimed =
+    sentVersion === 0
+      ? await createStoreIfAbsent(orgId, SENT_LOG_KEY, nextSentLog, session.userId)
+      : await writeStore(orgId, SENT_LOG_KEY, nextSentLog, sentVersion, session.userId);
+  if (!claimed.ok) return Response.json({ ok: true, sent: 0, raced: true });
 
   if (result.notifications.length > 0) {
-    const { data: existing, version: v } = await readStore<AppNotification[]>(orgId, NOTIFICATIONS_KEY);
     const fresh: AppNotification[] = result.notifications.flatMap((n) =>
       n.recipients.map((userId) => ({
         id: `notif-${randomUUID()}`,
@@ -97,7 +104,12 @@ export async function POST() {
         read: false,
       }))
     );
-    await writeStore(orgId, NOTIFICATIONS_KEY, [...fresh, ...(existing ?? [])], v, session.userId);
+    // ก้อนแจ้งเตือนมีคนเขียนตลอด (กดอ่าน, คอมเมนต์ ฯลฯ) — ชนแล้วอ่านใหม่ต่อท้ายใหม่ ไม่ทิ้งแจ้งเตือนที่จองไว้แล้ว
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { data: existing, version: v } = await readStore<AppNotification[]>(orgId, NOTIFICATIONS_KEY);
+      const written = await writeStore(orgId, NOTIFICATIONS_KEY, [...fresh, ...(existing ?? [])], v, session.userId);
+      if (written.ok) break;
+    }
   }
 
   return Response.json({ ok: true, sent: result.notifications.length });

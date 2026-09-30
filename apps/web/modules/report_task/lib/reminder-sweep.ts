@@ -64,6 +64,30 @@ export interface ReminderSweepResult {
  * for keeping this callable from a stateless server route without wiring up
  * the exemptions store there too.
  */
+/**
+ * ช่วงเตือนที่ "เข้ามาแล้ว" (เหลือเวลา ≤ ช่วงนั้น) เรียงจากใกล้สุดก่อน — ใช้ตัดสินว่ารอบนี้ต้องเตือนไหม
+ *
+ * เดิมวนทุกช่วงแล้วเตือนทุกช่วงที่ยังไม่เคยส่ง — งานที่สร้างตอนใกล้กำหนดอยู่แล้ว (เหลือ 9 ชม.) อยู่ใน
+ * ทั้งช่วง 3 วันและ 1 วันพร้อมกัน ได้แจ้งเตือนข้อความเดียวกัน 2 อันในรอบเดียว ("ทำไมแจ้งเตือนซ้ำ 2 รอบ")
+ * ตอนนี้: เตือนครั้งเดียวตามช่วงที่ใกล้สุด แล้วนับช่วงที่ใหญ่กว่า (เลยมาแล้ว) ว่าส่งแล้วด้วย
+ */
+function crossedLeads(leads: number[], minutesUntil: number): number[] {
+  return [...new Set(leads)].filter((lead) => minutesUntil <= lead).sort((a, b) => a - b);
+}
+
+/**
+ * ช่วงที่เข้ามาแล้วแต่ยังไม่บันทึกว่าส่ง → บันทึกทั้งหมด · คืน true = ต้องเตือนรอบนี้ (ช่วงใกล้สุดยังไม่เคยส่ง)
+ * ช่วงใกล้สุดส่งไปแล้ว เหลือแค่ช่วงใหญ่ที่เพิ่งเพิ่มในตั้งค่า (เลยไปแล้ว) = บันทึกเฉย ๆ ไม่เตือนย้อนหลัง
+ */
+function claimLeads(crossed: number[], keyOf: (lead: number) => string, alreadySent: Set<string>, newSentKeys: string[]): boolean {
+  const nearest = crossed[0];
+  if (nearest === undefined) return false;
+  const unsent = crossed.filter((lead) => !alreadySent.has(keyOf(lead)));
+  if (unsent.length === 0) return false;
+  for (const lead of unsent) newSentKeys.push(keyOf(lead));
+  return !alreadySent.has(keyOf(nearest));
+}
+
 export function computeReminders(input: {
   tasks: Task[];
   meetings: CalendarEvent[];
@@ -89,10 +113,9 @@ export function computeReminders(input: {
       const dueMs = new Date(`${calendarDateOf(t.dueDate)}T${t.dueTime || "23:59"}:00`).getTime();
       const minutesUntil = (dueMs - nowMs) / 60_000;
       if (minutesUntil < 0) continue; // already overdue — that's task-penalty-sweep's job, not this one
-      for (const lead of settings.task.leadMinutes) {
-        if (minutesUntil > lead) continue;
-        const key = `task:${t.id}:${lead}`;
-        if (alreadySent.has(key)) continue;
+      {
+        const crossed = crossedLeads(settings.task.leadMinutes, minutesUntil);
+        if (!claimLeads(crossed, (lead) => `task:${t.id}:${lead}`, alreadySent, newSentKeys)) continue;
         const recipients = new Set<string>();
         if (settings.task.notifyAssignee) for (const id of t.assigneeIds) recipients.add(id);
         if (settings.task.notifyAssigner) recipients.add(t.assignedById);
@@ -101,7 +124,6 @@ export function computeReminders(input: {
             if (t.departmentIds.includes(d.id)) recipients.add(d.headId);
           }
         }
-        newSentKeys.push(key);
         if (recipients.size === 0) continue;
         // Whole days read as "3 วัน", not "4320 นาที" — anything shorter than
         // a day falls back to the same ชม./นาที phrasing the meeting
@@ -128,10 +150,10 @@ export function computeReminders(input: {
       // company-wide default — same "room override, company default"
       // relationship as `ReportTopic.remindBeforeCutoffMinutes` below.
       const leadOptions = m.reminderMinutes != null ? [m.reminderMinutes] : settings.meeting.leadMinutes;
-      for (const lead of leadOptions) {
-        if (minutesUntil > lead) continue;
-        const key = `meeting:${m.id}:${lead}`;
-        if (alreadySent.has(key)) continue;
+      {
+        const crossed = crossedLeads(leadOptions, minutesUntil);
+        if (!claimLeads(crossed, (lead) => `meeting:${m.id}:${lead}`, alreadySent, newSentKeys)) continue;
+        const lead = crossed[0]!;
         const recipients = settings.meeting.notifyAttendees
           ? m.attendeeIds?.length
             ? m.attendeeIds
@@ -139,7 +161,6 @@ export function computeReminders(input: {
               ? [m.createdById]
               : []
           : [];
-        newSentKeys.push(key);
         if (recipients.length === 0) continue;
         notifications.push({
           recipients,
@@ -213,17 +234,18 @@ export function computeReminders(input: {
       // existing single-round rooms keep their exact old wording.
       const namesRound = effectiveRoundsOf(topic).length > 1;
       const roundPhrase = namesRound ? ` "${first.roundLabel}"` : "";
-      for (const lead of leadOptions) {
-        // Whole-day leads (1440+, e.g. "1 วันก่อน") are handled by the
-        // day-ahead block right below this loop instead — a same-day
-        // countdown can't express "the day before a Friday-only weekly
-        // round" since that round isn't even due today.
-        if (lead <= 0 || lead >= DAY_MINUTES || minutesUntilCutoff > lead) continue;
+      // Whole-day leads (1440+, e.g. "1 วันก่อน") are handled by the
+      // day-ahead block right below instead — a same-day countdown can't
+      // express "the day before a Friday-only weekly round" since that round
+      // isn't even due today. เตือนครั้งเดียวตามช่วงที่ใกล้สุด (ดู crossedLeads)
+      const crossed = crossedLeads(
+        leadOptions.filter((lead) => lead > 0 && lead < DAY_MINUTES),
+        minutesUntilCutoff
+      );
+      if (crossed.length > 0) {
         if (settings.report.notifyPending) {
           for (const entry of entries) {
-            const key = `report:${groupKey}:${entry.userId}:${today}:${lead}`;
-            if (alreadySent.has(key)) continue;
-            newSentKeys.push(key);
+            if (!claimLeads(crossed, (lead) => `report:${groupKey}:${entry.userId}:${today}:${lead}`, alreadySent, newSentKeys)) continue;
             notifications.push({
               recipients: [entry.userId],
               byUserId: SYSTEM_USER_ID,
@@ -233,9 +255,7 @@ export function computeReminders(input: {
           }
         }
         if (settings.report.notifyManagerSummary) {
-          const summaryKey = `report-summary:${groupKey}:${today}:${lead}`;
-          if (!alreadySent.has(summaryKey)) {
-            newSentKeys.push(summaryKey);
+          if (claimLeads(crossed, (lead) => `report-summary:${groupKey}:${today}:${lead}`, alreadySent, newSentKeys)) {
             // Department heads of this room's own department(s), plus every
             // company owner regardless of which room this is — an owner has
             // no single department to be "head" of, so without this they
