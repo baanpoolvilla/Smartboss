@@ -200,6 +200,12 @@ export function InstallGate() {
           <button type="button" onClick={skip} className="text-sm text-(--ink-soft) underline-offset-4 hover:underline">
             {installed ? "ใช้งานในเบราว์เซอร์ต่อ" : "ใช้งานในเบราว์เซอร์ไปก่อน"}
           </button>
+          {/* คู่มือแบบมีภาพทุกเครื่อง (public/guide.html เปิดได้โดยไม่ต้องล็อกอิน) — ติดขั้นไหนเปิดดูได้ */}
+          {!installed && (
+            <a href="/guide.html" target="_blank" rel="noopener" className="text-sm font-medium text-[#3fa535] underline-offset-4 hover:underline">
+              ดูคู่มือแบบมีรูป
+            </a>
+          )}
         </div>
       </div>
     </div>,

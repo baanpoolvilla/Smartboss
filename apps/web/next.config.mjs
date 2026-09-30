@@ -91,6 +91,9 @@ const nextConfig = {
   async redirects() {
     return [
       { source: "/report-feed", destination: "/chat-report/report-feed", permanent: false },
+      // คู่มือติดตั้งแอป (public/guide.html — เปิดได้โดยไม่ต้องล็อกอิน) ลิงก์สั้นไว้ส่งให้พนักงาน
+      { source: "/guide", destination: "/guide.html", permanent: false },
+      { source: "/install", destination: "/guide.html", permanent: false },
       // แชท + รายงาน ย้ายออกจาก "รายงานและงาน" มาเป็นโมดูล "Chat & Report" — แจ้งเตือน/Web Push/
       // ลิงก์ในโพสต์ที่เก็บพาธเดิมไว้ ยังเปิดถูกหน้า (query เช่น ?c= ?topic= &post= ติดไปด้วย)
       { source: "/report-task/chat", destination: "/chat-report/chat", permanent: false },

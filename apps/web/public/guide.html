@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>คู่มือติดตั้ง SmartBoss</title>
+<link rel="icon" href="/favicon-64-v3.png">
+<!-- คู่มือติดตั้งแอปสำหรับพนักงาน — เปิดได้โดยไม่ต้องล็อกอิน (ไฟล์ใน public/ ผ่าน proxy โดยไม่เช็ค session)
+     ลิงก์สั้น /guide และ /install redirect มาที่นี่ (next.config.mjs) · ภาพในหน้าเป็นภาพประกอบที่วาดตามหน้าจอจริง -->
+<style>html,body{margin:0}body{-webkit-text-size-adjust:100%}img{max-width:100%}[hidden]{display:none!important}</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap">
+<style>
+/* Layout: one reading column; each step = text beside (or above, on phones) a drawn screen of what the viewer will see */
+:root {
+  --bg: #f6f7f4;
+  --surface: #ffffff;
+  --ink: #17221c;
+  --ink-soft: #55615a;
+  --line: #dfe4dc;
+  --brand: #3fa535;
+  --brand-ink: #ffffff;
+  --brand-soft: #e8f5e5;
+  --navy: #1f2a3a;
+  --screen: #ffffff;
+  --screen-soft: #f1f4f0;
+  --device: #1b1f1d;
+  --warn-bg: #fff4dc;
+  --warn-ink: #7a4d00;
+  --font-display: "Anuphan", "IBM Plex Sans Thai", "Noto Sans Thai", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans Thai", "Noto Sans Thai", "Leelawadee UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111613; --surface: #1a211d; --ink: #e8efe9; --ink-soft: #a3b0a7; --line: #2c3530;
+    --brand: #5ec653; --brand-ink: #0c1a0a; --brand-soft: #1f3320; --navy: #dbe3ee;
+    --screen: #f7f8f6; --screen-soft: #e9ede8; --device: #050706; --warn-bg: #3a2f14; --warn-ink: #f3d79a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111613; --surface: #1a211d; --ink: #e8efe9; --ink-soft: #a3b0a7; --line: #2c3530;
+  --brand: #5ec653; --brand-ink: #0c1a0a; --brand-soft: #1f3320; --navy: #dbe3ee;
+  --screen: #f7f8f6; --screen-soft: #e9ede8; --device: #050706; --warn-bg: #3a2f14; --warn-ink: #f3d79a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.65; }
+.wrap { max-width: 880px; margin: 0 auto; padding-inline: 20px; padding-block: 32px 64px; }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.25; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(28px, 6vw, 40px); font-weight: 700; }
+h2 { font-size: 24px; font-weight: 700; }
+h3 { font-size: 17px; font-weight: 600; }
+p { margin: 0; }
+a { color: var(--brand); }
+.lead { color: var(--ink-soft); font-size: 17px; max-width: 60ch; }
+.hero { display: flex; flex-direction: column; gap: 14px; padding-bottom: 28px; border-bottom: 1px solid var(--line); }
+.app-mark { display: flex; align-items: center; gap: 12px; }
+.app-icon { width: 52px; height: 52px; border-radius: 14px; background: var(--navy); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.urlbox { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; max-width: 520px; }
+.urlbox code { font-size: 17px; font-weight: 600; color: var(--ink); flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+button.copy { font: 600 14px var(--font-body); background: var(--brand); color: var(--brand-ink); border: 0; border-radius: 10px; padding: 8px 14px; cursor: pointer; }
+button.copy:focus-visible, .jump a:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+.jump { display: flex; flex-wrap: wrap; gap: 8px; }
+.jump a { text-decoration: none; font-weight: 600; font-size: 15px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 8px 16px; }
+.jump a:hover { border-color: var(--brand); }
+section.device { padding-block: 40px 8px; display: flex; flex-direction: column; gap: 24px; }
+.device-head { display: flex; flex-direction: column; gap: 6px; }
+.tag { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; color: var(--brand); }
+.step { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 24px; align-items: start; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+.step-text { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.num { width: 30px; height: 30px; border-radius: 999px; background: var(--brand); color: var(--brand-ink); font-weight: 700; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; }
+.step-title { display: flex; align-items: center; gap: 10px; }
+.note { background: var(--warn-bg); color: var(--warn-ink); border-radius: 10px; padding: 8px 12px; font-size: 14px; }
+.hint { font-size: 14px; color: var(--ink-soft); }
+kbd { font-family: var(--font-body); font-size: 13px; background: var(--screen-soft); color: #17221c; border: 1px solid #cfd6cd; border-radius: 6px; padding: 1px 6px; }
+@media (max-width: 640px) {
+  .step { grid-template-columns: minmax(0, 1fr); }
+  .shot { justify-self: center; }
+}
+
+/* ----- drawn screens (always light, like the real app) ----- */
+.shot { width: 240px; max-width: 100%; }
+.phone { background: var(--device); border-radius: 30px; padding: 9px; box-shadow: 0 10px 28px rgba(0,0,0,0.18); }
+.phone .scr { background: var(--screen); border-radius: 22px; height: 420px; overflow: hidden; position: relative; color: #17221c; font-size: 12px; line-height: 1.5; display: flex; flex-direction: column; }
+.desk { background: var(--device); border-radius: 12px; padding: 6px; box-shadow: 0 10px 28px rgba(0,0,0,0.18); }
+.desk .scr { background: var(--screen); border-radius: 8px; height: 180px; overflow: hidden; position: relative; color: #17221c; font-size: 11px; line-height: 1.45; display: flex; flex-direction: column; }
+.bar { display: flex; align-items: center; gap: 6px; background: #e6eae4; padding: 6px 8px; color: #3a4640; font-size: 10.5px; }
+.bar .addr { flex: 1; background: #fff; border-radius: 999px; padding: 3px 8px; color: #55615a; min-width: 0; overflow: hidden; white-space: nowrap; }
+.inst { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 26px 16px 12px; gap: 6px; }
+.inst .ic { width: 50px; height: 50px; border-radius: 14px; background: #1f2a3a; display: flex; align-items: center; justify-content: center; }
+.inst b { font-size: 14px; }
+.inst .sub { color: #55615a; font-size: 11px; }
+.btn-green { background: #4cb93f; color: #fff; font-weight: 600; border-radius: 10px; padding: 9px; text-align: center; font-size: 13px; margin: 6px 16px 0; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.row { display: flex; align-items: center; gap: 8px; border: 1px solid #dfe4dc; border-radius: 10px; margin: 10px 16px 0; padding: 8px 10px; font-size: 11px; }
+.row .mini { background: #4cb93f; color: #fff; border-radius: 7px; padding: 3px 8px; font-weight: 600; margin-left: auto; }
+.link-soft { color: #55615a; text-align: center; font-size: 11px; margin-top: 10px; text-decoration: underline; }
+.ghost { border: 1px solid #dfe4dc; border-radius: 10px; margin: 12px 16px 0; padding: 7px; text-align: center; font-size: 11.5px; font-weight: 500; }
+.steps-mini { display: flex; flex-direction: column; gap: 6px; margin: 4px 14px 0; }
+.steps-mini div { background: #f1f4f0; border-radius: 9px; padding: 6px 8px; display: flex; gap: 6px; font-size: 10.5px; text-align: left; }
+.steps-mini span.n { background: #4cb93f; color: #fff; border-radius: 999px; width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; flex-shrink: 0; }
+.dim { position: absolute; inset: 0; background: rgba(0,0,0,0.38); }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; background: #f7f7f7; border-radius: 16px 16px 0 0; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.sheet .item { background: #fff; border-radius: 10px; padding: 8px 10px; display: flex; align-items: center; justify-content: space-between; font-size: 12px; }
+.sheet .item.hl { outline: 2px solid #f0a020; font-weight: 600; }
+.dialog { position: absolute; left: 14px; right: 14px; top: 34%; background: #fff; border-radius: 14px; padding: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); display: flex; flex-direction: column; gap: 8px; }
+.dialog .acts { display: flex; justify-content: flex-end; gap: 14px; font-weight: 600; color: #1a73e8; font-size: 12.5px; }
+.dialog .acts .hl { outline: 2px solid #f0a020; border-radius: 6px; padding: 0 6px; }
+.home { background: linear-gradient(160deg, #2e4a3b, #152219); flex: 1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 36px 14px; align-content: start; }
+.home .app { display: flex; flex-direction: column; align-items: center; gap: 3px; color: #fff; font-size: 9px; }
+.home .app i { width: 38px; height: 38px; border-radius: 10px; background: rgba(255,255,255,0.16); display: block; }
+.home .app.sb i { background: #1f2a3a; outline: 2px solid #f0a020; outline-offset: 2px; display: flex; align-items: center; justify-content: center; }
+.topbar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid #e3e7e1; }
+.topbar .logo { font-weight: 700; font-size: 13px; margin-right: auto; }
+.topbar .logo span { color: #3fa535; }
+.topbar .ico { width: 22px; height: 22px; border-radius: 999px; display: flex; align-items: center; justify-content: center; position: relative; }
+.topbar .ico.hl { outline: 2px solid #f0a020; }
+.badge { position: absolute; top: -4px; right: -5px; background: #dc2626; color: #fff; border-radius: 999px; font-size: 8px; font-weight: 700; padding: 0 4px; }
+.banner { margin: 10px; border: 1px solid #cfe7c9; background: #f3fbf1; border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.banner .acts { display: flex; gap: 8px; align-items: center; }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 12px 12px 0; }
+.tile { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 9.5px; text-align: center; }
+.tile i { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+.tile.hl i { outline: 2px solid #f0a020; outline-offset: 2px; }
+.cap { font-size: 12.5px; color: var(--ink-soft); text-align: center; margin-top: 8px; }
+.after { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+.after .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 6px; }
+.faq { display: flex; flex-direction: column; gap: 10px; }
+.faq details { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; }
+.faq summary { font-weight: 600; cursor: pointer; }
+.faq details p { margin-top: 8px; color: var(--ink-soft); }
+.foot { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--ink-soft); font-size: 14px; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+html { scroll-behavior: smooth; }
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header class="hero">
+    <div class="app-mark">
+      <div class="app-icon" aria-hidden="true">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="13" r="6.5" fill="#fff"/><circle cx="9" cy="11.5" r="1.1" fill="#4cb93f"/><circle cx="12.6" cy="11.5" r="1.1" fill="#4cb93f"/><path d="M7.6 14.2l2.7 2.6 7.6-7.7" stroke="#1f2a3a" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.6 14.2l2.7 2.6 7.6-7.7" stroke="#4cb93f" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <h1>ติดตั้ง SmartBoss</h1>
+    </div>
+    <p class="lead">ติดตั้งครั้งเดียว ใช้ได้เหมือนแอปทั่วไป เปิดจากไอคอนบนหน้าจอ และรับแจ้งเตือนงาน แชท รายงาน ได้ทันที ใช้เวลาไม่ถึง 2 นาที</p>
+    <div class="urlbox">
+      <code id="app-url">https://app.smartboss.in.th</code>
+      <button type="button" class="copy" id="copy-url">คัดลอกลิงก์</button>
+    </div>
+    <p class="hint">เลือกเครื่องที่ใช้ แล้วทำตามทีละขั้น ใช้หลายเครื่อง (มือถือ + คอม) ให้ทำทุกเครื่อง</p>
+    <nav class="jump" aria-label="เลือกเครื่อง">
+      <a href="#android">Android</a>
+      <a href="#iphone">iPhone / iPad</a>
+      <a href="#computer">คอมพิวเตอร์</a>
+      <a href="#line">เปิดลิงก์จาก LINE</a>
+      <a href="#after">ติดตั้งแล้วเจออะไร</a>
+    </nav>
+  </header>
+
+  <!-- ================= ANDROID ================= -->
+  <section class="device" id="android">
+    <div class="device-head">
+      <span class="tag">ANDROID · ใช้ Chrome</span>
+      <h2>มือถือ Android</h2>
+    </div>
+
+    <div class="step">
+      <div class="step-text">
+        <div class="step-title"><span class="num">1</span><h3>เปิดลิงก์ใน Chrome แล้วล็อกอิน</h3></div>
+        <p>พิมพ์ <b>app.smartboss.in.th</b> ในแอป Chrome แล้วเข้าสู่ระบบด้วยอีเมลและรหัสผ่านของตัวเอง</p>
+        <p>พอล็อกอินเสร็จ จะขึ้นหน้าจอ <b>"ติดตั้งแอป SmartBoss"</b> ให้อัตโนมัติ</p>
+      </div>
+      <div class="shot">
+        <div class="phone"><div class="scr">
+          <div class="bar"><span class="addr">app.smartboss.in.th</span></div>
+          <div class="inst">
+            <div class="ic"><svg width="28" height="28" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="13" r="6.5" fill="#fff"/><path d="M7.6 14.2l2.7 2.6 7.6-7.7" stroke="#4cb93f" stroke-width="2.2" stroke-linecap="round"/></svg></div>
+            <b>ติดตั้งแอป SmartBoss</b>
+            <span class="sub">เปิดจากไอคอนบนหน้าจอได้ทันที เต็มจอเหมือนแอปทั่วไป และรับแจ้งเตือนงาน/แชทได้</span>
+          </div>
+          <div class="btn-green">⬇ ติดตั้งแอป</div>
+          <div class="row">🔔 เปิดการแจ้งเตือนไว้เลย รับงาน/แชทใหม่ทันที <span class="mini">เปิด</span></div>
+          <div class="ghost">ติดตั้งแล้ว — ไม่ต้องแสดงอีก</div>
+          <div class="link-soft">ใช้งานในเบราว์เซอร์ไปก่อน</div>
+        </div></div>
+        <p class="cap">หน้าจอที่จะเห็นหลังล็อกอิน</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-text">
+        <div class="step-title"><span class="num">2</span><h3>กด "เปิด" การแจ้งเตือน แล้วกด "ติดตั้งแอป"</h3></div>
+        <p>กดปุ่มเขียว <b>เปิด</b> ในแถว 🔔 ก่อน แล้วกด <b>อนุญาต</b> ในกล่องที่เด้งขึ้นมา</p>
+        <p>จากนั้นกดปุ่มเขียวใหญ่ <b>"ติดตั้งแอป"</b> แล้วกด <b>ติดตั้ง</b> ในหน้าต่างที่เด้งขึ้น</p>
+        <p class="note">ไม่เห็นปุ่ม "ติดตั้งแอป" ให้กด <kbd>⋮</kbd> มุมขวาบนของ Chrome → <b>ติดตั้งแอป</b> หรือ <b>เพิ่มลงในหน้าจอหลัก</b></p>
+      </div>
+      <div class="shot">
+        <div class="phone"><div class="scr">
+          <div class="bar"><span class="addr">app.smartboss.in.th</span></div>
+          <div class="inst"><b>ติดตั้งแอป SmartBoss</b></div>
+          <div class="dim"></div>
+          <div class="dialog">
+            <b style="font-size:13px">ติดตั้งแอปไหม</b>
+            <span style="color:#55615a">SmartBoss<br>app.smartboss.in.th</span>
+            <div class="acts"><span>ยกเลิก</span><span class="hl">ติดตั้ง</span></div>
+          </div>
+        </div></div>
+        <p class="cap">กด "ติดตั้ง" (กรอบส้ม)</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-text">
+        <div class="step-title"><span class="num">3</span><h3>เปิดจากไอคอน SmartBoss บนหน้าจอ</h3></div>
+        <p>ไอคอน <b>SmartBoss</b> จะอยู่บนหน้าจอหลักหรือในหน้ารวมแอป ต่อไปเปิดจากไอคอนนี้ตลอด ไม่ต้องเข้าผ่าน Chrome</p>
+      </div>
+      <div class="shot">
+        <div class="phone"><div class="scr">
+          <div class="home">
+            <div class="app"><i></i>กล้อง</div><div class="app"><i></i>LINE</div><div class="app"><i></i>Chrome</div>
+            <div class="app sb"><i><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="13" r="6.5" fill="#fff"/><path d="M7.6 14.2l2.7 2.6 7.6-7.7" stroke="#4cb93f" stroke-width="2.2" stroke-linecap="round"/></svg></i>SmartBoss</div>
+            <div class="app"><i></i>รูปภาพ</div><div class="app"><i></i>ปฏิทิน</div>
+          </div>
+        </div></div>
+        <p class="cap">ไอคอนบนหน้าจอหลัก</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= IPHONE ================= -->
+  <section class="device" id="iphone">
+    <div class="device-head">
+      <span class="tag">IPHONE / IPAD · ต้องใช้ SAFARI เท่านั้น</span>
+      <h2>iPhone / iPad</h2>
+      <p class="note">iPhone รับแจ้งเตือนได้<b>เฉพาะตอนเปิดจากไอคอนบนหน้าจอโฮม</b>เท่านั้น ถ้าใช้ผ่าน Safari หรือ Chrome ตรงๆ จะไม่ได้แจ้งเตือนเลย</p>
+    </div>
+
+    <div class="step">
+      <div class="step-text">
+        <div class="step-title"><span class="num">1</span><h3>เปิดลิงก์ใน Safari แล้วล็อกอิน</h3></div>
+        <p>เปิด <b>Safari</b> (ไม่ใช่ Chrome หรือ LINE) พิมพ์ <b>app.smartboss.in.th</b> แล้วเข้าสู่ระบบ</p>
+        <p>จะขึ้นหน้าจอ <b>"ติดตั้งแอป SmartBoss"</b> พร้อมขั้นตอน 3 ข้อ</p>
+      </div>
+      <div class="shot">
+        <div class="phone"><div class="scr">
+          <div class="inst" style="padding-top:22px">
+            <div class="ic"><svg width="28" height="28" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="13" r="6.5" fill="#fff"/><path d="M7.6 14.2l2.7 2.6 7.6-7.7" stroke="#4cb93f" stroke-width="2.2" stroke-linecap="round"/></svg></div>
+            <b>ติดตั้งแอป SmartBoss</b>
+          </div>
+          <div class="steps-mini">
+            <div><span class="n">1</span><span>กดปุ่มแชร์ ⬆ ด้านล่างหรือด้านบนของจอ</span></div>
+            <div><span class="n">2</span><span>เลื่อนลงแล้วกด <b>เพิ่มไปยังหน้าจอโฮม</b></span></div>
+            <div><span class="n">3</span><span>กด <b>เพิ่ม</b> แล้วเปิด SmartBoss จากไอคอน</span></div>
+          </div>
+          <div class="ghost">ติดตั้งแล้ว — ไม่ต้องแสดงอีก</div>
+          <div class="link-soft">ใช้งานในเบราว์เซอร์ไปก่อน</div>
+          <div style="margin-top:auto; background:#f1f1f1; padding:8px; display:flex; justify-content:space-around; font-size:15px"><span>‹</span><span>›</span><span style="outline:2px solid #f0a020;border-radius:6px;padding:0 4px">⬆</span><span>▢</span></div>
+        </div></div>
+        <p class="cap">ปุ่มแชร์ ⬆ อยู่แถบล่างของ Safari</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-text">
+        <div class="step-title"><span class="num">2</span><h3>กดปุ่มแชร์ ⬆ → "เพิ่มไปยังหน้าจอโฮม"</h3></div>
+        <p>กดปุ่ม <b>แชร์</b> (สี่เหลี่ยมมีลูกศรชี้ขึ้น) แล้ว<b>เลื่อนลง</b>จนเจอ <b>"เพิ่มไปยังหน้าจอโฮม"</b></p>
+        <p class="hint">iPhone บางรุ่นปุ่มแชร์อยู่ในปุ่ม <kbd>⋯</kbd> มุมล่างขวา</p>
+      </div>
+      <div class="shot">
+        <div class="phone"><div class="scr">
+          <div class="dim"></div>
+          <div class="sheet">
+            <div class="item">คัดลอก <span>⧉</span></div>
+            <div class="item">เพิ่มในรายการอ่าน <span>👓</span></div>
+            <div class="item hl">เพิ่มไปยังหน้าจอโฮม <span>⊞</span></div>
+            <div class="item">พิมพ์ <span>🖨</span></div>
+          </div>
+        </div></div>
+        <p class="cap">กดแถวในกรอบส้ม</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-text">
+        <div class="step-title"><span class="num">3</span><h3>กด "เพิ่ม" แล้วเปิดจากไอคอน</h3></div>
+        <p>กด <b>เพิ่ม</b> มุมขวาบน ไอคอน SmartBoss จะอยู่บนหน้าจอโฮม</p>
+        <p><b>ปิด Safari แล้วเปิดจากไอคอนนี้</b> ล็อกอินอีกครั้ง (ครั้งเดียว)</p>
+      </div>
+      <div class="shot">
+        <div class="phone"><div class="scr">
+          <div class="home">
+            <div class="app"><i></i>กล้อง</div><div class="app"><i></i>LINE</div><div class="app"><i></i>Safari</div>
+            <div class="app sb"><i><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="13" r="6.5" fill="#fff"/><path d="M7.6 14.2l2.7 2.6 7.6-7.7" stroke="#4cb93f" stroke-width="2.2" stroke-linecap="round"/></svg></i>SmartBoss</div>
+          </div>
+        </div></div>
+        <p class="cap">เปิดจากไอคอนนี้ทุกครั้ง</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-text">
+        <div class="step-title"><span class="num">4</span><h3>กด "เปิดการแจ้งเตือน" → "อนุญาต"</h3></div>
+        <p>เปิดแอปจากไอคอนแล้ว จะมีกล่อง <b>"เปิดการแจ้งเตือน"</b> ขึ้นมา กดปุ่มนั้น แล้วกด <b>อนุญาต</b></p>
+        <p class="note">เผลอกด "ไม่อนุญาต" ไปแล้ว: เปิดแอป <b>ตั้งค่า</b> ของ iPhone → <b>การแจ้งเตือน</b> → <b>SmartBoss</b> → เปิด <b>อนุญาตการแจ้งเตือน</b></p>
+      </div>
+      <div class="shot">
+        <div class="phone"><div class="scr">
+          <div class="topbar"><span class="logo"><span>Smart</span>Boss</span></div>
+          <div class="banner">
+            <b>เปิดการแจ้งเตือน</b>
+            <span style="color:#55615a">รับแจ้งเตือนงาน แชท และรายงานทันที แม้ไม่ได้เปิดแอปอยู่</span>
+            <div class="acts"><span class="mini" style="background:#4cb93f;color:#fff;border-radius:8px;padding:4px 10px;font-weight:600;outline:2px solid #f0a020">เปิดการแจ้งเตือน</span><span style="color:#55615a">ไว้ทีหลัง</span></div>
+          </div>
+          <div class="dim" style="top:56%"></div>
+          <div class="dialog" style="top:58%">
+            <b style="font-size:12.5px; text-align:center">"SmartBoss" ต้องการส่งการแจ้งเตือนถึงคุณ</b>
+            <div class="acts" style="justify-content:space-around"><span>ไม่อนุญาต</span><span class="hl">อนุญาต</span></div>
+          </div>
+        </div></div>
+        <p class="cap">กด "อนุญาต"</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= COMPUTER ================= -->
+  <section class="device" id="computer">
+    <div class="device-head">
+      <span class="tag">WINDOWS / MAC · CHROME หรือ EDGE</span>
+      <h2>คอมพิวเตอร์</h2>
+    </div>
+
+    <div class="step">
+      <div class="step-text">
+        <div class="step-title"><span class="num">1</span><h3>เปิดลิงก์ ล็อกอิน แล้วกดไอคอนติดตั้ง</h3></div>
+        <p>เปิด <b>app.smartboss.in.th</b> ใน Chrome หรือ Edge แล้วล็อกอิน</p>
+        <p>กดไอคอน <b>ติดตั้ง</b> <kbd>⬇</kbd> ท้ายช่องที่อยู่เว็บ (หรือปุ่ม ⬇ บนแถบบนของ SmartBoss) → กด <b>ติดตั้ง</b></p>
+        <p class="hint">Mac + Safari: เมนู <b>ไฟล์</b> → <b>เพิ่มไปยัง Dock</b></p>
+      </div>
+      <div class="shot">
+        <div class="desk"><div class="scr">
+          <div class="bar"><span>‹ ›</span><span class="addr">app.smartboss.in.th</span><span style="outline:2px solid #f0a020;border-radius:5px;padding:0 3px">⬇</span></div>
+          <div class="dialog" style="top:30%; left:30%; right:6%; padding:10px">
+            <b>ติดตั้งแอปไหม</b>
+            <span style="color:#55615a">SmartBoss</span>
+            <div class="acts"><span class="hl">ติดตั้ง</span><span>ยกเลิก</span></div>
+          </div>
+        </div></div>
+        <p class="cap">ไอคอนติดตั้งท้ายช่องที่อยู่เว็บ</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-text">
+        <div class="step-title"><span class="num">2</span><h3>อนุญาตการแจ้งเตือน</h3></div>
+        <p>กด <b>เปิดการแจ้งเตือน</b> ในแอป แล้วกด <b>อนุญาต</b> ที่เบราว์เซอร์ถาม</p>
+        <p class="note">ไม่เด้งเลยทั้งที่อนุญาตแล้ว: Windows → <b>ตั้งค่า</b> → <b>ระบบ</b> → <b>การแจ้งเตือน</b> → เปิดให้ Chrome หรือ Edge และปิด <b>ห้ามรบกวน (Focus)</b></p>
+      </div>
+      <div class="shot">
+        <div class="desk"><div class="scr">
+          <div class="bar"><span class="addr">app.smartboss.in.th</span></div>
+          <div class="dialog" style="top:14%; left:4%; right:40%; padding:10px">
+            <span>app.smartboss.in.th ต้องการ</span>
+            <b>🔔 แสดงการแจ้งเตือน</b>
+            <div class="acts" style="justify-content:flex-start"><span class="hl">อนุญาต</span><span>บล็อก</span></div>
+          </div>
+        </div></div>
+        <p class="cap">กด "อนุญาต"</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= LINE ================= -->
+  <section class="device" id="line">
+    <div class="device-head">
+      <span class="tag">กดลิงก์จากในแชท LINE / Facebook</span>
+      <h2>เปิดลิงก์จาก LINE</h2>
+    </div>
+    <div class="step">
+      <div class="step-text">
+        <div class="step-title"><span class="num">!</span><h3>ต้องออกไปเปิดใน Safari หรือ Chrome ก่อน</h3></div>
+        <p>กดลิงก์ในแชท LINE แล้วมันเปิด<b>ในหน้าต่างของ LINE</b> ตรงนั้นติดตั้งแอปไม่ได้ SmartBoss จะบอกให้ออกไปเปิดข้างนอก</p>
+        <p>กดปุ่มเขียว <b>"เปิดใน Safari"</b> (iPhone) หรือ <b>"เปิดใน Chrome"</b> (Android) แล้วทำตามขั้นตอนของเครื่องตัวเองด้านบน</p>
+      </div>
+      <div class="shot">
+        <div class="phone"><div class="scr">
+          <div class="bar" style="background:#06c755;color:#fff"><span>✕</span><span class="addr">app.smartboss.in.th</span></div>
+          <div class="inst"><b>ติดตั้งแอป SmartBoss</b></div>
+          <div style="margin:0 14px; background:#f1f4f0; border-radius:10px; padding:8px; font-size:11px">ตอนนี้เปิดอยู่ใน LINE ซึ่งติดตั้งแอปไม่ได้ ต้องเปิดใน Safari ก่อน</div>
+          <div class="btn-green" style="outline:2px solid #f0a020">↗ เปิดใน Safari</div>
+          <div class="link-soft">ใช้งานในเบราว์เซอร์ไปก่อน</div>
+        </div></div>
+        <p class="cap">กดปุ่มเขียว</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= AFTER ================= -->
+  <section class="device" id="after">
+    <div class="device-head">
+      <span class="tag">ติดตั้งเสร็จแล้ว</span>
+      <h2>เปิดแอปแล้วเจออะไร</h2>
+    </div>
+
+    <div class="step">
+      <div class="step-text">
+        <div class="step-title"><h3>หน้าแรก: เลือกโมดูลที่จะใช้</h3></div>
+        <p><b>Chat &amp; Report</b> = แชท คุยงาน และส่งรายงานประจำวัน</p>
+        <p><b>รายงานและงาน</b> = งานที่ได้รับมอบหมาย (Kanban) ปฏิทิน</p>
+        <p><b>ระบบบุคคล</b> = ลงเวลา ขอลา ขอแก้เวลา</p>
+        <p><b>แจ้งซ่อมบำรุง</b> = ใบงานซ่อม</p>
+        <p class="hint">เห็นโมดูลไหนบ้างขึ้นกับตำแหน่งงานของแต่ละคน</p>
+      </div>
+      <div class="shot">
+        <div class="phone"><div class="scr">
+          <div class="topbar"><span class="logo"><span>Smart</span>Boss</span>
+            <span class="ico">🐛</span>
+            <span class="ico">🔔<span class="badge">3</span></span>
+            <span class="ico" style="background:#1f2a3a;color:#fff;font-size:8px">ฉัน</span>
+          </div>
+          <div style="text-align:center; padding-top:12px"><b style="font-size:13px">สวัสดี, สมชาย</b></div>
+          <div class="tiles">
+            <div class="tile"><i style="background:#f1f4f8">📋</i>รายงานและงาน</div>
+            <div class="tile"><i style="background:#eff5ff">👥</i>ระบบบุคคล</div>
+            <div class="tile"><i style="background:#ecfbf6">🔧</i>แจ้งซ่อมบำรุง</div>
+            <div class="tile hl"><i style="background:#f0fdf4">💬</i>Chat &amp; Report</div>
+          </div>
+        </div></div>
+        <p class="cap">หน้าแรก (ตัวอย่าง)</p>
+      </div>
+    </div>
+
+    <div class="after">
+      <div class="card"><h3>🔔 กระดิ่ง (มุมขวาบน)</h3><p>รวมแจ้งเตือนทั้งหมด ตัวเลขแดง = ยังไม่ได้อ่าน กดแล้วพาไปหน้านั้นทันที พลาดอะไรย้อนดูได้ที่นี่</p></div>
+      <div class="card"><h3>🐛 แจ้งบัค (ข้างกระดิ่ง)</h3><p>เจอปัญหาอะไรกดตรงนี้ เล่าว่าเจออะไร แนบรูปหน้าจอได้ ทีม IT จะตามเรื่องให้</p></div>
+      <div class="card"><h3>👤 รูปโปรไฟล์ (มุมขวาสุด)</h3><p>กด → <b>บัญชีของฉัน</b> เปลี่ยนรูป เปลี่ยนรหัสผ่านได้ (ไม่ต้องกรอกรหัสเดิม)</p></div>
+      <div class="card"><h3>💬 แชท</h3><p>Chat &amp; Report → แชท มีห้องรวมทั้งบริษัท กลุ่มแผนก และแชทส่วนตัว</p></div>
+    </div>
+  </section>
+
+  <!-- ================= FAQ ================= -->
+  <section class="device" id="faq">
+    <div class="device-head"><h2>เจอปัญหา</h2></div>
+    <div class="faq">
+      <details><summary>ไม่เห็นหน้าจอ "ติดตั้งแอป"</summary><p>กดปุ่ม <b>⬇</b> บนแถบบนของ SmartBoss (ข้างปุ่มแจ้งบัค) หน้าจอติดตั้งจะเปิดขึ้นมา หรือถ้าเคยกด "ติดตั้งแล้ว — ไม่ต้องแสดงอีก" ไปแล้ว ให้ทำตามขั้นตอนของเครื่องตัวเองด้านบนได้เลย</p></details>
+      <details><summary>ติดตั้งแล้วแต่ไม่มีแจ้งเตือนเด้ง</summary><p>เช็ค 3 อย่าง: เปิดจาก<b>ไอคอน SmartBoss</b> (ไม่ใช่เบราว์เซอร์) · กด<b>เปิดการแจ้งเตือน</b>และ<b>อนุญาต</b>แล้ว · มือถือไม่ได้เปิดโหมดห้ามรบกวน ถ้ายังไม่เด้ง กดแจ้งบัคหรือทักทีม IT</p></details>
+      <details><summary>ใช้ทั้งมือถือและคอม ต้องทำกี่รอบ</summary><p>ทำทุกเครื่องที่ใช้ เครื่องละครั้ง การแจ้งเตือนเปิดแยกกันทีละเครื่อง</p></details>
+      <details><summary>ลืมรหัสผ่าน</summary><p>ยังล็อกอินค้างอยู่ในเครื่องไหน: รูปโปรไฟล์ → บัญชีของฉัน → เปลี่ยนรหัสผ่าน · ล็อกอินไม่ได้เลย: ทักทีม IT ให้ตั้งรหัสใหม่ให้ (ไม่มีใครดูรหัสเดิมได้ เพราะรหัสถูกเข้ารหัสเก็บไว้)</p></details>
+    </div>
+  </section>
+
+  <p class="foot">ติดปัญหาตรงไหน ทักแชทหาทีม IT ได้เลย: <b>กาย-IT-Pacharapol</b> หรือ <b>ภีม-Katawut</b> · ภาพในหน้านี้เป็นภาพประกอบ หน้าจอจริงอาจต่างเล็กน้อยตามรุ่นมือถือ</p>
+</div>
+
+<script>
+(function () {
+  var btn = document.getElementById("copy-url");
+  var url = document.getElementById("app-url");
+  btn.addEventListener("click", function () {
+    var text = url.textContent.trim();
+    function done() { btn.textContent = "คัดลอกแล้ว"; setTimeout(function () { btn.textContent = "คัดลอกลิงก์"; }, 2000); }
+    try {
+      navigator.clipboard.writeText(text).then(done, function () { selectIt(); });
+    } catch (e) { selectIt(); }
+    function selectIt() {
+      var r = document.createRange(); r.selectNodeContents(url);
+      var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      btn.textContent = "กด Ctrl+C เพื่อคัดลอก";
+    }
+  });
+})();
+</script>
+
+</body>
+</html>
