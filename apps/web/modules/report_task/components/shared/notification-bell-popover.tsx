@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Bell, Settings } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
@@ -273,9 +274,27 @@ export function NotificationBellPopover() {
   );
 }
 
+/** กล่องแจ้งเตือนปิดจบ (แอนิเมชัน 100ms + คืนโฟกัสให้ปุ่มกระดิ่ง) ก่อนค่อยเปลี่ยนหน้า */
+const NAVIGATE_AFTER_CLOSE_MS = 160;
+
 function NotificationRow({ n, onPick, children }: { n: UnifiedNotification; onPick: (id: string) => void; children: ReactNode }) {
-  return n.link ? (
-    <Link href={n.link} onClick={() => onPick(n.id)} className="block">
+  const router = useRouter();
+  const link = n.link;
+  return link ? (
+    <Link
+      href={link}
+      onClick={(e) => {
+        onPick(n.id);
+        // เปิดแท็บใหม่ (Ctrl/Cmd/Shift/คลิกกลาง) ปล่อยให้เบราว์เซอร์ทำเอง
+        if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        // ไม่เปลี่ยนหน้าทันที — ถ้าเปิดหน้าต่างงาน (?task=) ตอนกล่องแจ้งเตือนยังปิดไม่จบ
+        // กล่องจะคืนโฟกัสให้ปุ่มกระดิ่งซึ่งอยู่นอกหน้าต่างงาน หน้าต่างงานถือว่ากดข้างนอก
+        // แล้วปิดตัวเองทันที ("เด้งแล้วหายเลย ต้องกดแจ้งเตือนซ้ำอีกที")
+        e.preventDefault();
+        setTimeout(() => router.push(link), NAVIGATE_AFTER_CLOSE_MS);
+      }}
+      className="block"
+    >
       {children}
     </Link>
   ) : (
