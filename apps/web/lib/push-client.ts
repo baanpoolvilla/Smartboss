@@ -191,7 +191,7 @@ export async function showLocalNotification(title: string, options: { body?: str
   await reg?.showNotification(title, {
     body: options.body,
     tag: options.tag,
-    icon: "/icon-v3.png",
+    icon: "/icon-v4.png",
     badge: "/badge-v2.png",
     // @ts-expect-error vibrate ยังไม่อยู่ใน NotificationOptions ของ TypeScript แต่ Chrome บน Android รองรับ
     vibrate: [180, 80, 180],

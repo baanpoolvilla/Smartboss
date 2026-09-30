@@ -19,9 +19,11 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: "#ffffff",
     lang: "th",
     icons: [
-      { src: "/icon-v3.png", sizes: "192x192", type: "image/png", purpose: "any" },
-      { src: "/icon-512-v3.png", sizes: "512x512", type: "image/png", purpose: "any" },
-      { src: "/apple-touch-icon-v3.png", sizes: "180x180", type: "image/png" },
+      { src: "/icon-v4.png", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/icon-512-v4.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      // พื้นเขียวเต็มกรอบ วงกลมอยู่ในเขตปลอดภัย 80% — Android ตัดเป็นวงกลม/สี่เหลี่ยมมนได้ ไม่มีขอบขาว
+      { src: "/icon-512-v4.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+      { src: "/apple-touch-icon-v4.png", sizes: "180x180", type: "image/png" },
     ],
   };
 }

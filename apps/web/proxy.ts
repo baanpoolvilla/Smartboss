@@ -19,7 +19,8 @@ const COOKIE_ACCESS = "sb_access";
  * ปลอดภัย เพราะตัวหน้าไม่ได้แสดงข้อมูลอะไรเอง — ข้อมูลทั้งหมดมาจาก `/api/m/*`
  * ซึ่งยังอยู่ใต้ `/api/` ที่ยังต้องมี session ตามเดิม
  */
-const PUBLIC_PATHS = ["/login", "/m"];
+// "/guide", "/install" = ลิงก์สั้นของคู่มือติดตั้ง (redirect ไป /guide.html ใน next.config) — พนักงานเปิดก่อนล็อกอิน
+const PUBLIC_PATHS = ["/login", "/m", "/guide", "/install"];
 
 function isPublic(pathname: string): boolean {
   if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {

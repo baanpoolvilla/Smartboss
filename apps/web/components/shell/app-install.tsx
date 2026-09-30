@@ -163,7 +163,7 @@ export function InstallGate() {
       <div className="mx-auto flex max-w-sm flex-col px-6 pt-[max(3rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         <div className="flex flex-col items-center text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/icon-512-v3.png" alt="" className="h-20 w-20 rounded-[22px] shadow-(--shadow-card) ring-1 ring-black/[0.06]" />
+          <img src="/icon-512-v4.png" alt="" className="h-20 w-20 rounded-[22px] shadow-(--shadow-card) ring-1 ring-black/[0.06]" />
           <h1 id="install-title" className="mt-5 text-xl font-semibold text-(--ink)">
             {installed ? "ติดตั้ง SmartBoss แล้ว" : "ติดตั้งแอป SmartBoss"}
           </h1>
