@@ -463,7 +463,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
       tasks: s.tasks.map((t) => {
         if (t.id !== taskId) return t;
         const revisionNumber = t.revisions.length + 1;
-        logActivity(revisedBy, "แก้ไขกำหนดส่ง", t.title, t.id, `${formatShortDate(t.dueDate)} → ${formatShortDate(newDate)} · ${reason}`);
+        logActivity(revisedBy, "แก้ไขกำหนดส่ง", t.title, t.id, `${formatShortDate(t.dueDate)} → ${formatShortDate(newDate)}${reason ? ` · ${reason}` : ""}`);
         // เดิมฟังก์ชันนี้ไม่แจ้งใครเลย ต่างจาก reviseAssigneeDueDate/
         // reviseAllAssigneeDueDates (พี่น้องกันที่แก้ไขกำหนดส่งเหมือนกันแค่
         // คนละระดับ) ที่แจ้งอยู่แล้ว — "หัวหน้ากดแก้ไขแต่ไม่เห็นแจ้งเตือนไปยัง
@@ -471,7 +471,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
         const actorName = getUser(revisedBy)?.name ?? "มีคน";
         useNotificationStore
           .getState()
-          .notifyMany(t.assigneeIds, revisedBy, `${actorName} ปรับกำหนดส่งงาน "${t.title}" เป็น ${formatShortDate(newDate)} — ${reason}`);
+          .notifyMany(t.assigneeIds, revisedBy, `${actorName} ปรับกำหนดส่งงาน "${t.title}" เป็น ${formatShortDate(newDate)}${reason ? ` — ${reason}` : ""}`);
         // งานที่ส่งแล้ว: หัวหน้าเลือกเองว่า "ส่งกลับให้แก้ไข" (กลับไป "กำลังทำ") หรือ
         // "แค่เปลี่ยนวัน" (คงสถานะรอตรวจ — เดิมเด้งกลับเสมอ ลูกน้องต้องติ๊กเช็คลิสต์
         // แล้วกดส่งใหม่ทั้งที่ไม่ได้มีงานเพิ่ม)
@@ -510,11 +510,18 @@ export const useTaskStore = create<TaskStore>((set) => ({
         const others = (t.dueDateRequests ?? []).filter((r) => !(r.requestedBy === requesterId && r.status === "pending"));
         const name = getUser(requesterId)?.name ?? "มีคน";
         logActivity(requesterId, "ขอเลื่อนกำหนดส่ง", t.title, t.id, `${formatShortDate(previousDate)} → ${formatShortDate(newDate)} · ${reason}`);
-        const ceoIds = users.filter((u) => u.isOwner).map((u) => u.id);
+        // คนที่อนุมัติได้: CEO + ผู้มอบหมาย + หัวหน้าแผนกของงาน (ตรงกับ canEditRecord) — ไม่รวมคนขอเอง
+        const approverIds = [
+          ...new Set([
+            ...users.filter((u) => u.isOwner).map((u) => u.id),
+            ...(t.assignedById ? [t.assignedById] : []),
+            ...departments.filter((d) => d.headId && t.departmentIds.includes(d.id)).map((d) => d.headId as string),
+          ]),
+        ].filter((id) => id !== requesterId);
         useNotificationStore
           .getState()
           .notifyMany(
-            ceoIds,
+            approverIds,
             requesterId,
             `${name} ขอเลื่อนกำหนดส่งงาน "${t.title}" จาก ${formatShortDate(previousDate)} เป็น ${formatShortDate(newDate)} — ${reason}`,
             undefined,
@@ -564,7 +571,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
       ),
     }));
     const requesterName = getUser(request.requestedBy)?.name ?? "ผู้ขอ";
-    const deciderName = getUser(deciderId)?.name ?? "CEO";
+    const deciderName = getUser(deciderId)?.name ?? "หัวหน้า";
     if (approve) {
       // เปลี่ยนวันจริงด้วยทางเดิมของการแก้กำหนดส่ง — ประวัติ/บันทึกกิจกรรม/แจ้งผู้รับผิดชอบเหมือนแก้ตรง
       // sendBack = false: แค่เลื่อนวัน ไม่ดึงงานที่ส่งแล้วกลับไปแก้

@@ -499,7 +499,7 @@ export function CalendarView() {
           createdById: t.assignedById,
           colorHint: colors.task,
           mine: t.assigneeIds.includes(viewingAsUserId),
-          editable: canEditRecord(t.assignedById, t.departmentIds, viewingAsUserId),
+          editable: isOwner(viewingAsUserId), // ลากเลื่อนกำหนดส่งได้เฉพาะ CEO
         })),
     [tasks, hiddenUserIds, viewingAsUserId, taskScope, canBroadenScope, colors.task]
   );
@@ -760,8 +760,9 @@ export function CalendarView() {
     if (type === "task") {
       const taskId = id.replace("taskevt-", "");
       const target = tasks.find((t) => t.id === taskId);
-      if (target && !canEditRecord(target.assignedById, target.departmentIds, viewingAsUserId)) {
-        toast.error(`แก้ไขกำหนดส่งได้เฉพาะผู้สร้างงานหรือหัวหน้าแผนก "${target.title}"`);
+      // เลื่อนกำหนดส่งเองได้เฉพาะ CEO — คนอื่นกด "ขอเลื่อนกำหนดส่ง" ในหน้างาน
+      if (target && !isOwner(viewingAsUserId)) {
+        toast.error(`เลื่อนกำหนดส่งเองได้เฉพาะ CEO — เปิดงาน "${target.title}" แล้วกด "ขอเลื่อนกำหนดส่ง"`);
         return false;
       }
       updateTask(taskId, { dueDate: new Date(start).toISOString() });

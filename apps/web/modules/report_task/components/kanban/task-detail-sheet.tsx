@@ -421,12 +421,14 @@ export function TaskDetailSheet({
   // remaining assignee handing it back. Only checked for non-owners; the
   // owner can always edit/see it.
   const owner = isOwner(viewingAsUserId);
-  // ขอเลื่อนกำหนดส่ง: ผู้รับผิดชอบที่ไม่มีสิทธิ์แก้ตรง (CEO/คนมอบหมาย/หัวหน้าแผนก แก้ได้เลยเหมือนเดิม)
+  // เลื่อนกำหนดส่ง: CEO แก้เองได้คนเดียว · ผู้รับผิดชอบคนอื่นกด "ขอเลื่อน" ·
+  // CEO/คนมอบหมาย/หัวหน้าแผนก (canEditMain) อนุมัติได้ — ยกเว้นคำขอของตัวเอง
+  // (ตรวจงานไม่ผ่านยังใส่วันใหม่ได้ตามเดิมที่ปุ่ม "ไม่ผ่าน")
   const dueRequests = task.dueDateRequests ?? [];
   const pendingDueRequests = dueRequests.filter((r) => r.status === "pending");
   const decidedDueRequests = dueRequests.filter((r) => r.status === "approved" || r.status === "rejected");
   const myPendingDueRequest = pendingDueRequests.find((r) => r.requestedBy === viewingAsUserId);
-  const canRequestDueDate = !canEditMain && task.assigneeIds.includes(viewingAsUserId) && task.status !== "done";
+  const canRequestDueDate = !owner && task.assigneeIds.includes(viewingAsUserId) && task.status !== "done";
   const removingAssigneeWouldLockMeOut = (nextAssigneeIds: string[]) =>
     !owner && !canEditRecord(task.assignedById, departmentIdsOf(nextAssigneeIds), viewingAsUserId);
   // Only the owner (CEO) can hand out any sticker — the whole picker block
@@ -491,7 +493,8 @@ export function TaskDetailSheet({
     // form can outlive the permission that opened it (e.g. the viewer
     // switches identity mid-edit without closing the sheet), and a hidden
     // button alone doesn't stop a submit that's already on screen.
-    if (!newDate || !reason.trim() || !task || !canEditMain) return;
+    // เหตุผลไม่บังคับ — คนแก้ตรงคือ CEO/คนมอบหมาย/หัวหน้าแผนก (ต้องใส่เหตุผลเหมือนคนมาขอดูแปลก)
+    if (!newDate || !task || !owner) return;
     reviseDueDate(task.id, new Date(newDate).toISOString(), reason.trim(), viewingAsUserId, sendBack);
     setRevising(false);
     setNewDate("");
@@ -1252,7 +1255,7 @@ export function TaskDetailSheet({
               <h4 className="text-sm font-semibold flex items-center gap-1.5">
                 <History className="h-4 w-4" /> ประวัติการแก้ไขกำหนดส่ง
               </h4>
-              {!isShared && !revising && canEditMain && (
+              {!isShared && !revising && owner && (
                 <Button size="sm" variant="outline" onClick={() => setRevising(true)}>แก้ไขกำหนดส่ง</Button>
               )}
               {canRequestDueDate && !myPendingDueRequest && !requesting && (
@@ -1268,7 +1271,7 @@ export function TaskDetailSheet({
                   ขอเลื่อนกำหนดส่ง
                 </Button>
               )}
-              {isShared && canEditMain && (
+              {isShared && owner && (
                 <div className="flex items-center gap-1.5">
                   {!perPersonRevising && (
                     <Button
@@ -1295,7 +1298,7 @@ export function TaskDetailSheet({
 
             {requesting && canRequestDueDate && (
               <div className="rounded-lg border border-[var(--line)] p-3 space-y-2.5">
-                <p className="text-xs text-[var(--ink-soft)]">ส่งคำขอให้ CEO อนุมัติ — กำหนดส่งจะเปลี่ยนเมื่ออนุมัติแล้ว</p>
+                <p className="text-xs text-[var(--ink-soft)]">ส่งคำขอให้ CEO / ผู้มอบหมาย / หัวหน้าแผนก อนุมัติ — กำหนดส่งจะเปลี่ยนเมื่ออนุมัติแล้ว</p>
                 <div className="space-y-1.5">
                   <Label className="text-xs">ขอเลื่อนเป็นวันที่</Label>
                   <DatePickerField value={requestDate} minDate={toDateInput(task.startDate)} onChange={setRequestDate} />
@@ -1319,7 +1322,7 @@ export function TaskDetailSheet({
                       if (!requestDate || !requestReason.trim() || !canRequestDueDate) return;
                       requestDueDateChange(task.id, viewingAsUserId, requestDate, requestReason.trim());
                       setRequesting(false);
-                      toast.success("ส่งคำขอเลื่อนกำหนดส่งแล้ว รอ CEO อนุมัติ");
+                      toast.success("ส่งคำขอเลื่อนกำหนดส่งแล้ว รออนุมัติ");
                     }}
                   >
                     ส่งคำขอ
@@ -1339,7 +1342,7 @@ export function TaskDetailSheet({
                   {formatDate(r.previousDate)} → <span className="font-semibold">{formatDate(r.newDate)}</span>
                 </p>
                 <p className="text-xs text-[var(--ink-soft)] italic">&quot;{r.reason}&quot;</p>
-                {owner && (
+                {canEditMain && r.requestedBy !== viewingAsUserId && (
                   <div className="space-y-2 pt-1">
                     <Textarea
                       rows={2}
@@ -1371,9 +1374,9 @@ export function TaskDetailSheet({
                     </div>
                   </div>
                 )}
-                {!owner && r.requestedBy === viewingAsUserId && (
+                {r.requestedBy === viewingAsUserId && (
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs text-[var(--ink-soft)]">รอ CEO อนุมัติ</span>
+                    <span className="text-xs text-[var(--ink-soft)]">รออนุมัติ</span>
                     <Button size="sm" variant="outline" onClick={() => cancelDueDateRequest(task.id, r.id, viewingAsUserId)}>
                       ยกเลิกคำขอ
                     </Button>
@@ -1382,7 +1385,7 @@ export function TaskDetailSheet({
               </div>
             ))}
 
-            {isShared && bulkRevising && canEditMain && (
+            {isShared && bulkRevising && owner && (
               <div className="rounded-lg border border-[var(--line)] p-3 space-y-2.5">
                 <div className="space-y-1.5">
                   <Label className="text-xs">กำหนดส่งใหม่ (ใช้กับทุกคน)</Label>
@@ -1405,7 +1408,7 @@ export function TaskDetailSheet({
                 of a live date picker sitting open on every row, which just
                 repeated the same date the read-only list below already
                 shows and got noisy on a task with several people. */}
-            {isShared && perPersonRevising && canEditMain && (
+            {isShared && perPersonRevising && owner && (
               <div className="rounded-lg border border-[var(--line)] p-3 space-y-2.5">
                 <div className="space-y-1.5">
                   <Label className="text-xs">คน</Label>
@@ -1479,7 +1482,7 @@ export function TaskDetailSheet({
                 <p className="text-xs text-[var(--ink-soft)]">
                   {formatDate(r.previousDate)} → <span className="font-medium text-[var(--ink)]">{formatDate(r.newDate)}</span>
                 </p>
-                <p className="text-xs text-[var(--ink-soft)] italic">&quot;{r.reason}&quot; — {getUser(r.revisedBy)?.name}</p>
+                <p className="text-xs text-[var(--ink-soft)] italic">{r.reason ? <>&quot;{r.reason}&quot; — </> : "แก้โดย "}{getUser(r.revisedBy)?.name}</p>
               </div>
             ))}
 
@@ -1536,12 +1539,12 @@ export function TaskDetailSheet({
                   <DatePickerField value={newDate} minDate={task ? toDateInput(task.startDate) : undefined} onChange={setNewDate} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="rev-reason" className="text-xs">เหตุผล</Label>
+                  <Label htmlFor="rev-reason" className="text-xs">เหตุผล <span className="font-normal text-[var(--ink-soft)]">(ไม่บังคับ)</span></Label>
                   <Textarea id="rev-reason" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="ทำไมกำหนดส่งถึงเปลี่ยน?" />
                 </div>
                 <DueDateSaveButtons
                   submitted={task.status === "done"}
-                  disabled={!newDate || !reason.trim()}
+                  disabled={!newDate}
                   label="บันทึกการแก้ไข"
                   onCancel={() => setRevising(false)}
                   onSave={submitRevision}
