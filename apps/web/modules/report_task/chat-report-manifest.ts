@@ -18,7 +18,7 @@ import { ReportActivityNavBadge } from "./components/shared/report-activity-nav-
  */
 export const chatReportManifest: ModuleManifest = {
   id: CHAT_REPORT_CODE,
-  name: "Chat & Report",
+  name: "แชท & รีพอต",
   color: "#16A34A",
   colorBg: "#F0FDF4",
   basePath: CHAT_REPORT_BASE,

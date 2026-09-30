@@ -22,7 +22,7 @@ export interface ModuleCard {
 export const MODULE_CARDS: ModuleCard[] = [
   {
     code: "report_task",
-    name: "รายงานและงาน",
+    name: "Project Management",
     description: "ติดตามงานและสรุปรายงานประจำวัน",
     colorVar: "--mod-report",
     colorBgVar: "--mod-report-bg",
@@ -83,4 +83,6 @@ export const PRIMARY_MODULE_CODES: readonly string[] = [
   "maintenance",
   // แถวที่ 2 ใต้รายงานและงาน (ตาราง 3 คอลัมน์)
   "chat_report",
+  // ลิงก์รวมของทีมขาย/การตลาด (ไม่ใช่โมดูล — tile สร้างในหน้าโฮม)
+  "sales_marketing_links",
 ];

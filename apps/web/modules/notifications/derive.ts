@@ -156,7 +156,7 @@ function moduleColorVar(mod: NotifModule): string {
 }
 
 const MODULE_LABEL: Record<NotifModule, string> = {
-  report: "รายงานและงาน",
+  report: "Project Management",
   maintenance: "แจ้งซ่อมบำรุง",
   hr: "ระบบบุคคล",
 };

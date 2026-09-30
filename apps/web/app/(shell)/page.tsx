@@ -77,7 +77,7 @@ export default async function HomePage() {
   // ไม่ต้องเปิดใช้ต่อบริษัท ทุกคนที่ login เห็น
   tiles.push({
     code: "sales_marketing_links",
-    name: "Sale & Marketing",
+    name: "ขาย & การตลาด",
     description: "รวมลิงก์เว็บของทีมขายและการตลาด",
     icon: TrendingUp,
     color: "var(--mod-sale)",

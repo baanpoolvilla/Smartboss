@@ -16,7 +16,7 @@ import { createOrganizationAction } from "../../actions";
 export const dynamic = "force-dynamic";
 
 const MODULE_LABELS: Record<string, string> = {
-  report_task: "รายงานและงาน",
+  report_task: "Project Management",
   hr: "ระบบบุคคล",
   maintenance: "แจ้งซ่อมบำรุง",
 };

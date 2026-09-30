@@ -39,7 +39,7 @@ const menus: ModuleMenuItem[] = navItems.map((item) => ({
 
 export const reportTaskManifest: ModuleManifest = {
   id: REPORT_TASK_CODE,
-  name: "รายงานและงาน",
+  name: "Project Management",
   color: "#64748B",
   colorBg: "#F4F6F9",
   basePath: REPORT_TASK_BASE,

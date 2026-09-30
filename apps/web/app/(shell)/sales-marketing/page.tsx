@@ -24,7 +24,7 @@ export default async function SalesMarketingPage() {
       </Link>
 
       <header className="mt-4 mb-8 text-center sm:mb-10">
-        <h1 className="text-2xl font-semibold text-(--ink)">Sale &amp; Marketing</h1>
+        <h1 className="text-2xl font-semibold text-(--ink)">ขาย &amp; การตลาด</h1>
         <p className="mt-1 text-sm text-(--ink-soft)">รวมเว็บของทีมขายและการตลาด · กดเพื่อเปิดในแท็บใหม่</p>
       </header>
 
