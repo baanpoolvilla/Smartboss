@@ -256,6 +256,18 @@ interface TaskStore {
    * isn't currently done or is already reviewed (nothing to reject).
    */
   rejectReview: (taskId: string, newDate: string, reason: string, actorId: string) => void;
+  /**
+   * ผู้รับผิดชอบขอเลื่อนกำหนดส่ง (คนที่แก้เองไม่ได้) — แจ้ง CEO ทุกคน ยังไม่เปลี่ยนวันจนกว่าจะอนุมัติ
+   * ขอซ้ำระหว่างรออยู่ = แทนคำขอเดิมของคนนั้น (ไม่กองหลายใบ) · newDate = YYYY-MM-DD
+   */
+  requestDueDateChange: (taskId: string, requesterId: string, newDate: string, reason: string) => void;
+  /** ผู้ขอยกเลิกคำขอที่ยังรออยู่ */
+  cancelDueDateRequest: (taskId: string, requestId: string, actorId: string) => void;
+  /**
+   * CEO อนุมัติ/ไม่อนุมัติ — อนุมัติ = เปลี่ยนวันจริงผ่าน reviseDueDate (งานเดี่ยว) หรือ
+   * reviseAssigneeDueDate (งานกลุ่ม: วันของผู้ขอ) แจ้งผลกลับผู้ขอทั้งสองกรณี · note ไม่บังคับ
+   */
+  decideDueDateRequest: (taskId: string, requestId: string, deciderId: string, approve: boolean, note?: string) => void;
   selectTask: (id: string | null) => void;
   addTask: (task: Task) => void;
   removeTask: (taskId: string) => void;
@@ -488,6 +500,105 @@ export const useTaskStore = create<TaskStore>((set) => ({
         };
       }),
     })),
+  requestDueDateChange: (taskId, requesterId, newDate, reason) =>
+    set((s) => ({
+      tasks: s.tasks.map((t) => {
+        if (t.id !== taskId) return t;
+        const now = new Date().toISOString();
+        const previousDate = t.taskMode === "group" ? (t.assigneeDueDates?.[requesterId] ?? t.dueDate) : t.dueDate;
+        const request = { id: `ddr-${uuid()}`, requestedBy: requesterId, requestedAt: now, newDate, previousDate, reason, status: "pending" as const };
+        const others = (t.dueDateRequests ?? []).filter((r) => !(r.requestedBy === requesterId && r.status === "pending"));
+        const name = getUser(requesterId)?.name ?? "มีคน";
+        logActivity(requesterId, "ขอเลื่อนกำหนดส่ง", t.title, t.id, `${formatShortDate(previousDate)} → ${formatShortDate(newDate)} · ${reason}`);
+        const ceoIds = users.filter((u) => u.isOwner).map((u) => u.id);
+        useNotificationStore
+          .getState()
+          .notifyMany(
+            ceoIds,
+            requesterId,
+            `${name} ขอเลื่อนกำหนดส่งงาน "${t.title}" จาก ${formatShortDate(previousDate)} เป็น ${formatShortDate(newDate)} — ${reason}`,
+            undefined,
+            `/report-task/tasks?task=${t.id}`,
+            undefined,
+            "task_due_request",
+            t.id
+          );
+        return { ...t, dueDateRequests: [...others, request], updatedAt: now };
+      }),
+    })),
+
+  cancelDueDateRequest: (taskId, requestId, actorId) =>
+    set((s) => ({
+      tasks: s.tasks.map((t) => {
+        if (t.id !== taskId) return t;
+        const now = new Date().toISOString();
+        return {
+          ...t,
+          dueDateRequests: (t.dueDateRequests ?? []).map((r) =>
+            r.id === requestId && r.status === "pending" && r.requestedBy === actorId ? { ...r, status: "cancelled" as const, decidedAt: now } : r
+          ),
+          updatedAt: now,
+        };
+      }),
+    })),
+
+  decideDueDateRequest: (taskId, requestId, deciderId, approve, note) => {
+    const task = useTaskStore.getState().tasks.find((t) => t.id === taskId);
+    const request = task?.dueDateRequests?.find((r) => r.id === requestId);
+    if (!task || !request || request.status !== "pending") return;
+    const now = new Date().toISOString();
+    const cleanNote = note?.trim() || undefined;
+    set((s) => ({
+      tasks: s.tasks.map((t) =>
+        t.id !== taskId
+          ? t
+          : {
+              ...t,
+              dueDateRequests: (t.dueDateRequests ?? []).map((r) =>
+                r.id === requestId
+                  ? { ...r, status: approve ? ("approved" as const) : ("rejected" as const), decidedBy: deciderId, decidedAt: now, ...(cleanNote ? { decisionNote: cleanNote } : {}) }
+                  : r
+              ),
+              updatedAt: now,
+            }
+      ),
+    }));
+    const requesterName = getUser(request.requestedBy)?.name ?? "ผู้ขอ";
+    const deciderName = getUser(deciderId)?.name ?? "CEO";
+    if (approve) {
+      // เปลี่ยนวันจริงด้วยทางเดิมของการแก้กำหนดส่ง — ประวัติ/บันทึกกิจกรรม/แจ้งผู้รับผิดชอบเหมือนแก้ตรง
+      // sendBack = false: แค่เลื่อนวัน ไม่ดึงงานที่ส่งแล้วกลับไปแก้
+      if (task.taskMode === "group") {
+        useTaskStore.getState().reviseAssigneeDueDate(taskId, request.requestedBy, request.newDate, deciderId, false);
+      } else {
+        useTaskStore
+          .getState()
+          .reviseDueDate(taskId, new Date(request.newDate).toISOString(), `อนุมัติคำขอของ ${requesterName}: ${request.reason}`, deciderId, false);
+      }
+    }
+    logActivity(
+      deciderId,
+      approve ? "อนุมัติคำขอเลื่อนกำหนดส่ง" : "ไม่อนุมัติคำขอเลื่อนกำหนดส่ง",
+      task.title,
+      taskId,
+      `${requesterName}: ${formatShortDate(request.previousDate)} → ${formatShortDate(request.newDate)}${cleanNote ? ` · ${cleanNote}` : ""}`
+    );
+    useNotificationStore
+      .getState()
+      .notifyMany(
+        [request.requestedBy],
+        deciderId,
+        approve
+          ? `${deciderName} อนุมัติให้เลื่อนกำหนดส่งงาน "${task.title}" เป็น ${formatShortDate(request.newDate)}${cleanNote ? ` — ${cleanNote}` : ""}`
+          : `${deciderName} ไม่อนุมัติการเลื่อนกำหนดส่งงาน "${task.title}"${cleanNote ? ` — ${cleanNote}` : ""} (กำหนดส่งเดิม ${formatShortDate(request.previousDate)})`,
+        undefined,
+        `/report-task/tasks?task=${taskId}`,
+        undefined,
+        "task_due_request",
+        taskId
+      );
+  },
+
   reviseAssigneeDueDate: (taskId, assigneeId, newDate, revisedBy, sendBack = false) =>
     set((s) => ({
       tasks: s.tasks.map((t) => {

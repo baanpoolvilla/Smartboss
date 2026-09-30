@@ -201,6 +201,9 @@ export function TaskDetailSheet({
   const setAssignees = useTaskStore((s) => s.setAssignees);
   const setMainAssignee = useTaskStore((s) => s.setMainAssignee);
   const reviseDueDate = useTaskStore((s) => s.reviseDueDate);
+  const requestDueDateChange = useTaskStore((s) => s.requestDueDateChange);
+  const cancelDueDateRequest = useTaskStore((s) => s.cancelDueDateRequest);
+  const decideDueDateRequest = useTaskStore((s) => s.decideDueDateRequest);
   const reviseAssigneeDueDate = useTaskStore((s) => s.reviseAssigneeDueDate);
   const reviseAllAssigneeDueDates = useTaskStore((s) => s.reviseAllAssigneeDueDates);
   const addComment = useTaskStore((s) => s.addComment);
@@ -311,6 +314,11 @@ export function TaskDetailSheet({
   const [perPersonTargetId, setPerPersonTargetId] = useState("");
   const [perPersonDate, setPerPersonDate] = useState("");
   const [revising, setRevising] = useState(false);
+  // คำขอเลื่อนกำหนดส่ง (ผู้รับผิดชอบที่แก้เองไม่ได้) + เหตุผลของ CEO ต่อคำขอ (ไม่บังคับ)
+  const [requesting, setRequesting] = useState(false);
+  const [requestDate, setRequestDate] = useState("");
+  const [requestReason, setRequestReason] = useState("");
+  const [decisionNotes, setDecisionNotes] = useState<Record<string, string>>({});
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   // Once set, a group task's "หัวหน้าหลัก" (lead) is meant to stick —
   // changing it reassigns accountability, not just a label — so re-picking
@@ -413,6 +421,12 @@ export function TaskDetailSheet({
   // remaining assignee handing it back. Only checked for non-owners; the
   // owner can always edit/see it.
   const owner = isOwner(viewingAsUserId);
+  // ขอเลื่อนกำหนดส่ง: ผู้รับผิดชอบที่ไม่มีสิทธิ์แก้ตรง (CEO/คนมอบหมาย/หัวหน้าแผนก แก้ได้เลยเหมือนเดิม)
+  const dueRequests = task.dueDateRequests ?? [];
+  const pendingDueRequests = dueRequests.filter((r) => r.status === "pending");
+  const decidedDueRequests = dueRequests.filter((r) => r.status === "approved" || r.status === "rejected");
+  const myPendingDueRequest = pendingDueRequests.find((r) => r.requestedBy === viewingAsUserId);
+  const canRequestDueDate = !canEditMain && task.assigneeIds.includes(viewingAsUserId) && task.status !== "done";
   const removingAssigneeWouldLockMeOut = (nextAssigneeIds: string[]) =>
     !owner && !canEditRecord(task.assignedById, departmentIdsOf(nextAssigneeIds), viewingAsUserId);
   // Only the owner (CEO) can hand out any sticker — the whole picker block
@@ -1241,6 +1255,19 @@ export function TaskDetailSheet({
               {!isShared && !revising && canEditMain && (
                 <Button size="sm" variant="outline" onClick={() => setRevising(true)}>แก้ไขกำหนดส่ง</Button>
               )}
+              {canRequestDueDate && !myPendingDueRequest && !requesting && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setRequesting(true);
+                    setRequestDate("");
+                    setRequestReason("");
+                  }}
+                >
+                  ขอเลื่อนกำหนดส่ง
+                </Button>
+              )}
               {isShared && canEditMain && (
                 <div className="flex items-center gap-1.5">
                   {!perPersonRevising && (
@@ -1265,6 +1292,95 @@ export function TaskDetailSheet({
                 </div>
               )}
             </div>
+
+            {requesting && canRequestDueDate && (
+              <div className="rounded-lg border border-[var(--line)] p-3 space-y-2.5">
+                <p className="text-xs text-[var(--ink-soft)]">ส่งคำขอให้ CEO อนุมัติ — กำหนดส่งจะเปลี่ยนเมื่ออนุมัติแล้ว</p>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">ขอเลื่อนเป็นวันที่</Label>
+                  <DatePickerField value={requestDate} minDate={toDateInput(task.startDate)} onChange={setRequestDate} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="due-request-reason" className="text-xs">เหตุผล</Label>
+                  <Textarea
+                    id="due-request-reason"
+                    rows={2}
+                    value={requestReason}
+                    onChange={(e) => setRequestReason(e.target.value)}
+                    placeholder="ทำไมต้องเลื่อน? เช่น รออะไหล่ ลูกค้าเลื่อนนัด"
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setRequesting(false)}>ยกเลิก</Button>
+                  <Button
+                    size="sm"
+                    disabled={!requestDate || !requestReason.trim()}
+                    onClick={() => {
+                      if (!requestDate || !requestReason.trim() || !canRequestDueDate) return;
+                      requestDueDateChange(task.id, viewingAsUserId, requestDate, requestReason.trim());
+                      setRequesting(false);
+                      toast.success("ส่งคำขอเลื่อนกำหนดส่งแล้ว รอ CEO อนุมัติ");
+                    }}
+                  >
+                    ส่งคำขอ
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {pendingDueRequests.map((r) => (
+              <div key={r.id} className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="rounded-full bg-amber-600 px-2 py-0.5 text-[11px] font-semibold text-white">รออนุมัติ</span>
+                  <span className="text-xs text-[var(--ink-soft)]">{formatDate(r.requestedAt)}</span>
+                </div>
+                <p className="text-sm">
+                  <span className="font-medium">{r.requestedBy === viewingAsUserId ? "คุณ" : displayName(r.requestedBy)}</span> ขอเลื่อนกำหนดส่ง{" "}
+                  {formatDate(r.previousDate)} → <span className="font-semibold">{formatDate(r.newDate)}</span>
+                </p>
+                <p className="text-xs text-[var(--ink-soft)] italic">&quot;{r.reason}&quot;</p>
+                {owner && (
+                  <div className="space-y-2 pt-1">
+                    <Textarea
+                      rows={2}
+                      value={decisionNotes[r.id] ?? ""}
+                      onChange={(e) => setDecisionNotes((m) => ({ ...m, [r.id]: e.target.value }))}
+                      placeholder="เหตุผล (ไม่บังคับ)"
+                      className="bg-white"
+                    />
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          decideDueDateRequest(task.id, r.id, viewingAsUserId, false, decisionNotes[r.id]);
+                          toast.success("ไม่อนุมัติแล้ว แจ้งผู้ขอให้แล้ว");
+                        }}
+                      >
+                        ไม่อนุมัติ
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          decideDueDateRequest(task.id, r.id, viewingAsUserId, true, decisionNotes[r.id]);
+                          toast.success(`อนุมัติแล้ว กำหนดส่งใหม่ ${formatDate(r.newDate)}`);
+                        }}
+                      >
+                        อนุมัติ
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {!owner && r.requestedBy === viewingAsUserId && (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-[var(--ink-soft)]">รอ CEO อนุมัติ</span>
+                    <Button size="sm" variant="outline" onClick={() => cancelDueDateRequest(task.id, r.id, viewingAsUserId)}>
+                      ยกเลิกคำขอ
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ))}
 
             {isShared && bulkRevising && canEditMain && (
               <div className="rounded-lg border border-[var(--line)] p-3 space-y-2.5">
@@ -1384,7 +1500,32 @@ export function TaskDetailSheet({
               </div>
             ))}
 
-            {(isShared || task.revisions.length === 0) && Object.keys(task.assigneeDueDateRevisions ?? {}).length === 0 && !revising && !bulkRevising && (
+            {decidedDueRequests.map((r) => (
+              <div key={r.id} className="text-sm rounded-lg border border-[var(--line)] px-3 py-2 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium">คำขอเลื่อนของ {displayName(r.requestedBy)}</span>
+                  <span
+                    className={
+                      r.status === "approved"
+                        ? "rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-800"
+                        : "rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-800"
+                    }
+                  >
+                    {r.status === "approved" ? "อนุมัติแล้ว" : "ไม่อนุมัติ"}
+                  </span>
+                </div>
+                <p className="text-xs text-[var(--ink-soft)]">
+                  ขอ {formatDate(r.previousDate)} → <span className="font-medium text-[var(--ink)]">{formatDate(r.newDate)}</span> · &quot;{r.reason}&quot;
+                </p>
+                <p className="text-xs text-[var(--ink-soft)] italic">
+                  {r.status === "approved" ? "อนุมัติ" : "ไม่อนุมัติ"}โดย {r.decidedBy ? displayName(r.decidedBy) : "-"}
+                  {r.decidedAt ? ` · ${formatDate(r.decidedAt)}` : ""}
+                  {r.decisionNote ? ` — "${r.decisionNote}"` : ""}
+                </p>
+              </div>
+            ))}
+
+            {(isShared || task.revisions.length === 0) && Object.keys(task.assigneeDueDateRevisions ?? {}).length === 0 && dueRequests.length === 0 && !revising && !bulkRevising && !requesting && (
               <p className="text-xs text-[var(--ink-soft)]">ยังไม่มีการแก้ไขกำหนดส่ง</p>
             )}
 

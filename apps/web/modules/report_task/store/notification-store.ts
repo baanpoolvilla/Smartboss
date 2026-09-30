@@ -30,8 +30,9 @@ export interface AppNotification {
    * ออกจากแจ้งเตือนที่เจาะจงถึงผู้รับโดยตรง (ถูกแท็ก/ตอบกลับ/รีแอ็กชัน/งาน/
    * ตั๋วปัญหา). "task_comment"/"task_attachment" = มีคนคอมเมนต์/แนบไฟล์ใหม่ใน
    * งาน, "task_assigned" = มีคนมอบหมาย/เพิ่มคุณเป็นผู้รับผิดชอบงานนี้ (ดู
-   * taskId) ไม่มีค่า = เป็นแจ้งเตือนส่วนตัวของผู้รับแบบอื่น ๆ */
-  kind?: "room_post" | "task_comment" | "task_attachment" | "task_assigned" | "sticker_settings";
+   * taskId), "task_due_request" = คำขอเลื่อนกำหนดส่ง/ผลอนุมัติ (ดู DueDateRequest)
+   * ไม่มีค่า = เป็นแจ้งเตือนส่วนตัวของผู้รับแบบอื่น ๆ */
+  kind?: "room_post" | "task_comment" | "task_attachment" | "task_assigned" | "task_due_request" | "sticker_settings";
   /** งานที่แจ้งเตือนนี้พูดถึง — ใส่เฉพาะ kind "task_comment"/"task_attachment"/
    * "task_assigned" ไว้นับ unread ต่อการ์ดบน Kanban (ดู task-comment-activity.ts)
    * ตัวข้อความ/ลิงก์เองไม่พอให้ parse เพราะรูปแบบข้อความเปลี่ยนได้ */
@@ -49,7 +50,7 @@ interface NotificationStore {
     meetingId?: string,
     link?: string,
     topicName?: string,
-    kind?: "room_post" | "task_comment" | "task_attachment" | "task_assigned" | "sticker_settings",
+    kind?: "room_post" | "task_comment" | "task_attachment" | "task_assigned" | "task_due_request" | "sticker_settings",
     taskId?: string
   ) => void;
   markAllRead: (userId: string) => void;

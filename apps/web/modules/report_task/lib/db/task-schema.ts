@@ -13,6 +13,20 @@ const revisionEntrySchema = z.object({
   revisedAt: z.string(),
 });
 
+// ต้องมีในนี้ ไม่งั้น zod ตัด field ที่ไม่รู้จักทิ้งตอนบันทึก — คำขอหายหลังรีเฟรช (แบบที่ reviewedBy เคยโดน)
+const dueDateRequestSchema = z.object({
+  id: z.string(),
+  requestedBy: z.string(),
+  requestedAt: z.string(),
+  newDate: z.string(),
+  previousDate: z.string(),
+  reason: z.string(),
+  status: z.enum(["pending", "approved", "rejected", "cancelled"]),
+  decidedBy: z.string().optional(),
+  decidedAt: z.string().optional(),
+  decisionNote: z.string().optional(),
+});
+
 const attachmentSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -97,6 +111,7 @@ export const taskSchema = z.object({
   attachments: z.array(attachmentSchema),
   comments: z.array(commentSchema),
   revisions: z.array(revisionEntrySchema),
+  dueDateRequests: z.array(dueDateRequestSchema).optional(),
   reactions: z.array(taskReactionSchema),
   penalty: taskPenaltySchema.nullable().optional(),
   penalties: z.record(z.string(), taskPenaltySchema).optional(),

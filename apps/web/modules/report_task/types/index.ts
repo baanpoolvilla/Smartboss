@@ -42,6 +42,27 @@ export interface User {
   isOwner?: boolean;
 }
 
+/**
+ * คำขอเลื่อนกำหนดส่ง — ผู้รับผิดชอบที่แก้กำหนดส่งเองไม่ได้ (ไม่ใช่ CEO/คนมอบหมาย/หัวหน้าแผนก)
+ * ขอพร้อมเหตุผล แล้ว CEO อนุมัติ/ไม่อนุมัติ อนุมัติแล้วถึงจะเปลี่ยนวันจริง (ผ่าน reviseDueDate /
+ * reviseAssigneeDueDate ตามปกติ ประวัติ/บันทึกกิจกรรมเหมือนแก้ตรง)
+ */
+export interface DueDateRequest {
+  id: string;
+  requestedBy: string;
+  requestedAt: string;
+  /** วันที่ขอ (YYYY-MM-DD) */
+  newDate: string;
+  /** กำหนดส่งตอนที่ขอ — ไว้แสดง "เดิม → ขอ" แม้วันจะถูกแก้ทางอื่นทีหลัง */
+  previousDate: string;
+  reason: string;
+  status: "pending" | "approved" | "rejected" | "cancelled";
+  decidedBy?: string;
+  decidedAt?: string;
+  /** เหตุผลของ CEO (ไม่บังคับ) */
+  decisionNote?: string;
+}
+
 export interface RevisionEntry {
   revisionNumber: number;
   previousDate: string;
@@ -195,6 +216,8 @@ export interface Task {
   attachments: Attachment[];
   comments: Comment[];
   revisions: RevisionEntry[];
+  /** คำขอเลื่อนกำหนดส่ง (ดู DueDateRequest) — ไม่มี = ยังไม่เคยขอ */
+  dueDateRequests?: DueDateRequest[];
   reactions: TaskReaction[];
   /** Plain, no-score-effect reactions — anyone can drop one, same idea as a
    * report post's emoji row (see ReportPost.reactions in report-feed-store.ts).
