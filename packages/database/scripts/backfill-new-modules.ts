@@ -28,6 +28,7 @@ const dryRun = process.argv.includes("--dry-run");
 const MODULE_DEFS = [
   { code: "chat", name: "แชท", color: "#7C3AED", sortOrder: 7 },
   { code: "company_files", name: "ไฟล์บริษัท", color: "#0EA5E9", sortOrder: 8 },
+  { code: "ads", name: "Google Ads Report", color: "#1A73E8", sortOrder: 9 },
 ] as const;
 
 async function main() {

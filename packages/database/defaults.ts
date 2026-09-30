@@ -113,6 +113,17 @@ export const CHAT_PERMS = ["chat.access", "chat.manage"];
 export const COMPANY_FILES_PERMS = ["company_files.access", "company_files.upload", "company_files.manage"];
 
 /**
+ * ต้องตรงกับ ADS_PERMS ใน apps/web/modules/ads/permissions.ts — โมดูล Google Ads
+ * Report (google-ads-report-module-spec.md §7 สิทธิ์การเข้าถึง)
+ *   access          = หน้า 1–3 (แดชบอร์ด / อีเมล / AI วิเคราะห์) ฝ่ายการตลาดและผู้บริหาร
+ *   setting.manage  = หน้า 5 เกณฑ์ KPI และกฎ — ผู้ดูแลระบบ + หัวหน้าการตลาด
+ *                     (มอบให้หัวหน้าการตลาดเองที่ /admin/roles)
+ *   admin           = หน้า 4 การเชื่อมต่อ Google Ads API — ผู้ดูแลระบบ
+ * ไม่อยู่ใน BASELINE_PERMS — ข้อมูลงบโฆษณาไม่ใช่ของทุกคน
+ */
+export const ADS_PERMS = ["ads.access", "ads.setting.manage", "ads.admin"];
+
+/**
  * สิทธิ์พื้นฐานที่ **ทุกบทบาทได้รับ** — คือคำตอบของกติกา "ทุกคนเห็นและเข้าถึงได้
  * ทุกโมดูล แต่สิทธิ์การใช้งานในแต่ละโมดูลต่างกัน"
  *
@@ -171,7 +182,7 @@ export const BASELINE_PERMS = [
  * (ประกอบร่างใน ROLE_GRANTS ข้างล่าง) บริษัทปรับเองได้ที่ /admin/roles
  */
 const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
-  ADMIN: [...CORE_PERMS, ...HR_PERMS, ...MAINT_PERMS, ...REPORT_TASK_PERMS, ...CHAT_PERMS, ...COMPANY_FILES_PERMS],
+  ADMIN: [...CORE_PERMS, ...HR_PERMS, ...MAINT_PERMS, ...REPORT_TASK_PERMS, ...CHAT_PERMS, ...COMPANY_FILES_PERMS, ...ADS_PERMS],
   CEO: [
     "core.admin", "core.user.view", "core.role.view", "core.audit.view",
     // ผู้บริหารเป็นคนกำหนดว่าบริษัทนี้ถือว่าอะไรคือ "ทำงานได้ดี"
@@ -186,6 +197,8 @@ const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
     ...HR_PERMS,
     ...MAINT_PERMS.filter((p) => p !== "maintenance.admin"),
     ...REPORT_TASK_PERMS,
+    // ผู้บริหารดูรายงาน Google Ads (spec §7 หน้า 1–3)
+    "ads.access",
   ],
   // หัวหน้างานเข้าหลังบ้านได้ แต่ได้แค่ "ดูแลคน" ไม่ใช่ "ตั้งค่าระบบ" —
   // จัดการผู้ใช้และดูบทบาทได้ แต่แก้บทบาท/สิทธิ์ เปิดปิดโมดูล ตั้งค่าบริษัท
@@ -225,9 +238,10 @@ const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
     "maintenance.po.view", "maintenance.expense.view",
   ],
   TECHNICIAN: ["maintenance.workorder.complete"],
-  // SALE_ADMIN / MARKETING / STAFF ยังไม่มีโมดูลของตัวเอง — ได้ชุดพื้นฐานล้วน
+  // SALE_ADMIN / STAFF ยังไม่มีโมดูลของตัวเอง — ได้ชุดพื้นฐานล้วน
   SALE_ADMIN: [],
-  MARKETING: [],
+  // ฝ่ายการตลาดดูรายงาน Google Ads (spec §7 หน้า 1–3)
+  MARKETING: ["ads.access"],
   STAFF: [],
 };
 

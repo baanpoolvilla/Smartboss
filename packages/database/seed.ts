@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { PrismaClient } from "@prisma/client";
 import argon2 from "argon2";
 import {
+  ADS_PERMS,
   CHAT_PERMS,
   COMPANY_FILES_PERMS,
   CORE_PERMS,
@@ -163,11 +164,21 @@ async function main() {
   });
   moduleIdByCode.set("company_files", companyFilesModule.id);
 
+  // โมดูล Google Ads Report — ใช้ภายในบริษัทเท่านั้น (spec แบบ A) อยู่ในแคตตาล็อก
+  // แต่ไม่เปิดใช้ให้บริษัทไหนโดยอัตโนมัติ เปิดทีละบริษัทที่ /admin/modules
+  const adsModule = await prisma.module.upsert({
+    where: { code: "ads" },
+    update: { name: "Google Ads Report", color: "#1A73E8", isEnabled: false, sortOrder: 9 },
+    create: { code: "ads", name: "Google Ads Report", color: "#1A73E8", isEnabled: false, sortOrder: 9 },
+  });
+  moduleIdByCode.set("ads", adsModule.id);
+
   await registerModulePerms("example", ["example.view", "example.manage"]);
   await registerModulePerms("maintenance", MAINT_PERMS);
   await registerModulePerms("hr", HR_PERMS);
   await registerModulePerms("chat", CHAT_PERMS);
   await registerModulePerms("company_files", COMPANY_FILES_PERMS);
+  await registerModulePerms("ads", ADS_PERMS);
   // รายงานและงานเคยตกหล่นจากแคตตาล็อก ทำให้ /admin/roles ไม่มีสิทธิ์กลุ่มนี้ให้ติ๊กเลย
   await registerModulePerms("report_task", REPORT_TASK_PERMS);
   console.log(
