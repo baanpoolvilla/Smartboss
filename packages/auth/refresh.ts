@@ -26,23 +26,47 @@ export async function issueRefreshToken(
 
 export type RotationResult =
   | { status: "ok"; userId: string; raw: string }
+  /** ใบที่หมุนไปนานแล้วถูกเอามาใช้อีก — ตัดเฉพาะเครื่องนี้ (บันทึก audit ไว้) */
   | { status: "reuse"; userId: string }
-  /** token นี้เพิ่งถูกหมุนไปโดยคำขอที่วิ่งพร้อมกัน (ภายใน REUSE_GRACE_MS) — ไม่ใช่การขโมย
-   * คำขอที่ชนะได้ cookie ชุดใหม่ไปแล้ว ผู้เรียกไม่ต้องทำอะไรและห้ามล้าง cookie */
-  | { status: "grace"; userId: string }
   | { status: "invalid" };
 
 /**
- * เปิดแอปใหม่หลัง access token หมดอายุ อาจมีหลายคำขอ (หลายแท็บ / หน้า + ตัวต่ออายุ)
- * ใช้ refresh token ใบเดียวกันพร้อมกัน ใบแรกหมุนสำเร็จ ใบถัดไปเห็นว่าถูก revoke แล้ว —
- * เดิมตีเป็น "ถูกขโมย" ทันที แล้ว revoke ทุก session ของคนนั้น = ถูกเตะออกทุกเครื่องเอง
- * ทั้งที่ไม่มีอะไรผิด ช่วงสั้น ๆ หลังหมุนจึงถือเป็นการแข่งกันปกติ เลยจากนี้ยังถือว่าขโมย
+ * ช่วงที่ยังกู้ใบที่เพิ่งหมุนไปได้ — การหมุนสำเร็จฝั่งเซิร์ฟเวอร์แต่ "คำตอบไปไม่ถึงเครื่อง" เกิดบ่อย:
+ * แอปถูกพัก/โหลดหน้าใหม่ (ตัว auto-reload) กลางคำขอ, เน็ตมือถือสะดุด, หลายแท็บแข่งกัน, เซิร์ฟเวอร์
+ * รีสตาร์ทตอน deploy — เครื่องยังถือใบเก่าอยู่โดยไม่ผิดอะไร
  */
-const REUSE_GRACE_MS = 30_000;
+const ROTATION_RECOVERY_MS = 5 * 60_000;
+
+async function issueSuccessor(existing: { id: string; userId: string; deviceInfo: string | null }, deviceInfo?: string | null, markRotated = true) {
+  return prisma.$transaction(async (tx) => {
+    // เวลาเดียวกันทั้งคู่ — rotateRefreshToken เช็ค "ใบลูก createdAt >= rotatedAt" นาฬิกาต่างกันนิดเดียวก็พลาด
+    const now = new Date();
+    if (markRotated) {
+      await tx.refreshToken.update({ where: { id: existing.id }, data: { revokedAt: now, rotatedAt: now } });
+    }
+    const next = generateRefreshToken();
+    await tx.refreshToken.create({
+      data: {
+        userId: existing.userId,
+        tokenHash: next.hash,
+        deviceInfo: deviceInfo ?? existing.deviceInfo,
+        expiresAt: new Date(now.getTime() + ttlToSeconds(REFRESH_TOKEN_TTL) * 1000),
+        createdAt: now,
+      },
+    });
+    return next.raw;
+  });
+}
 
 /**
  * Rotation: ตรวจ refresh token เดิม → revoke → ออกใบใหม่
- * - reuse detection: ถ้า token เคยถูก revoke แล้วถูกนำมาใช้ซ้ำ → revoke ทุก token ของ user
+ *
+ * เดิมใบที่ revoke แล้วถูกใช้ซ้ำเกิน 30 วิ = "ถูกขโมย" → revoke ทุกใบของคนนั้น ⇒ เตะออกทุกเครื่อง
+ * แต่ของจริงแทบทั้งหมดคือคำตอบหาย (ดู ROTATION_RECOVERY_MS) และแย่กว่านั้น: หลังโดนเตะ เครื่องอื่นที่
+ * ยังถือใบที่ "ถูกเตะ" อยู่ พอตื่นมาต่ออายุก็ถูกนับว่าขโมยอีก → เตะเครื่องที่เพิ่งล็อกอินใหม่ วนไม่จบ
+ * (audit TOKEN_REUSE_DETECTED 5 ครั้งใน 23 นาทีของคนเดียว) ตอนนี้:
+ *  - หมุนไปไม่เกิน 5 นาที และสายนั้นยังไม่ถูกตัด → ออกใบใหม่ให้ (กู้คำตอบที่หาย)
+ *  - นอกนั้น (หมุนไปนานแล้ว / ออกจากระบบ / เปลี่ยนรหัส / แอดมินตัด) → ใช้ไม่ได้ เฉพาะเครื่องนี้
  */
 export async function rotateRefreshToken(
   rawToken: string,
@@ -53,44 +77,28 @@ export async function rotateRefreshToken(
     where: { tokenHash: hash },
   });
 
-  if (!existing) {
+  if (!existing || existing.expiresAt.getTime() <= Date.now()) {
     return { status: "invalid" };
   }
 
-  // ถูกใช้ซ้ำหลัง revoke = สัญญาณ token ถูกขโมย — ยกเว้นเพิ่งหมุนไปไม่กี่วินาที (แข่งกันปกติ)
-  if (existing.revokedAt && Date.now() - existing.revokedAt.getTime() < REUSE_GRACE_MS) {
-    return { status: "grace", userId: existing.userId };
-  }
-  if (existing.revokedAt) {
-    await revokeAllForUser(existing.userId);
-    return { status: "reuse", userId: existing.userId };
+  if (!existing.revokedAt) {
+    return { status: "ok", userId: existing.userId, raw: await issueSuccessor(existing, deviceInfo) };
   }
 
-  if (existing.expiresAt.getTime() <= Date.now()) {
+  if (!existing.rotatedAt) return { status: "invalid" };
+
+  if (Date.now() - existing.rotatedAt.getTime() < ROTATION_RECOVERY_MS) {
+    // สายนี้ยังมีใบที่ใช้ได้อยู่ไหม — ถ้าเปลี่ยนรหัส/แอดมินตัด/ออกจากระบบหลังหมุน ใบลูกถูกตัดไปด้วย ห้ามกู้
+    const alive = await prisma.refreshToken.count({
+      where: { userId: existing.userId, revokedAt: null, createdAt: { gte: existing.rotatedAt } },
+    });
+    if (alive > 0) {
+      return { status: "ok", userId: existing.userId, raw: await issueSuccessor(existing, deviceInfo, false) };
+    }
     return { status: "invalid" };
   }
 
-  const raw = await prisma.$transaction(async (tx) => {
-    await tx.refreshToken.update({
-      where: { id: existing.id },
-      data: { revokedAt: new Date() },
-    });
-    const next = generateRefreshToken();
-    const expiresAt = new Date(
-      Date.now() + ttlToSeconds(REFRESH_TOKEN_TTL) * 1000
-    );
-    await tx.refreshToken.create({
-      data: {
-        userId: existing.userId,
-        tokenHash: next.hash,
-        deviceInfo: deviceInfo ?? existing.deviceInfo,
-        expiresAt,
-      },
-    });
-    return next.raw;
-  });
-
-  return { status: "ok", userId: existing.userId, raw };
+  return { status: "reuse", userId: existing.userId };
 }
 
 export async function revokeRefreshToken(rawToken: string): Promise<void> {

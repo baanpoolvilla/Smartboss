@@ -1,16 +1,19 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { installAuthFetch, needsRefresh, refreshSession } from "@/lib/auth-fetch";
 import { isServerSyncHeld } from "@/modules/report_task/lib/sync-pause";
 
 /**
  * ต่ออายุ session แบบเงียบ ๆ:
- * - เรียก /api/auth/refresh ทุก ๆ ~13 นาที (ก่อน access token 15 นาทีหมดอายุ)
- * - เรียกอีกครั้งเมื่อผู้ใช้กลับมาโฟกัสหน้าจอ
- * - ถ้า refresh ล้มเหลว (401) → เด้งไป /login
+ * - เช็คทุกนาที + ตอนกลับมาที่แท็บ แต่ต่ออายุจริงเฉพาะตอน access token (15 นาที) เหลือไม่ถึง 3 นาที
+ *   — เดิมต่ออายุทุกครั้งที่สลับกลับมาที่แท็บ หมุน refresh token ถี่จนคำตอบหายบ่อย แล้วโดนนับว่า
+ *   "token ถูกขโมย" เตะออกทุกเครื่อง (ดู lib/auth-fetch.ts, packages/auth/refresh.ts)
+ * - คำขอ /api ที่ได้ 401 ต่ออายุแล้วลองใหม่เอง (installAuthFetch)
+ * - ต่ออายุไม่ได้จริง (session หมด) → เด้งไป /login
  */
-const REFRESH_INTERVAL_MS = 13 * 60 * 1000;
+const CHECK_INTERVAL_MS = 60 * 1000;
 /** ตอน session หมดอายุจริง ๆ ระหว่างที่ isServerSyncHeld() ค้างอยู่ (เช่นแผง
  * "จัดลำดับห้อง" เปิดอยู่) — รอสักพักแล้วเช็คใหม่ แทนที่จะ router.replace()
  * ทันที ซึ่งคือ full navigation ที่ unmount ทั้งหน้ากลางที่ browser กำลังลาก
@@ -22,33 +25,31 @@ const HELD_RETRY_MS = 5000;
 
 export function SessionRefresher() {
   const router = useRouter();
-  const refreshing = useRef(false);
 
   useEffect(() => {
-    async function refresh() {
-      if (refreshing.current) return;
-      refreshing.current = true;
-      try {
-        const res = await fetch("/api/auth/refresh", { method: "POST" });
-        if (res.status === 401) {
-          if (isServerSyncHeld()) {
-            setTimeout(refresh, HELD_RETRY_MS);
-          } else {
-            router.replace("/login");
-          }
-        }
-      } catch {
-        // เงียบไว้ — ปล่อยให้ interval รอบถัดไปหรือ proxy จัดการ
-      } finally {
-        refreshing.current = false;
+    function toLogin() {
+      if (isServerSyncHeld()) {
+        setTimeout(toLogin, HELD_RETRY_MS);
+      } else {
+        router.replace("/login");
       }
     }
+    installAuthFetch(toLogin);
 
-    const interval = setInterval(refresh, REFRESH_INTERVAL_MS);
+    async function check() {
+      if (!needsRefresh()) return;
+      // เงียบไว้ถ้าเน็ต/เซิร์ฟเวอร์พลาด — รอบถัดไปลองใหม่
+      if ((await refreshSession()) === "expired") toLogin();
+    }
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") void check();
+    }, CHECK_INTERVAL_MS);
     function onVisible() {
-      if (document.visibilityState === "visible") void refresh();
+      if (document.visibilityState === "visible") void check();
     }
     document.addEventListener("visibilitychange", onVisible);
+    void check();
 
     return () => {
       clearInterval(interval);

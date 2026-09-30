@@ -19,9 +19,7 @@ export const runtime = "nodejs";
  * ใช้ทั้ง POST (หน้าเว็บที่เปิดอยู่ต่ออายุเงียบ ๆ — SessionRefresher) และ GET (proxy ส่ง
  * มาตอนเปิดหน้าใหม่ด้วย access token ที่หมดอายุแล้ว ดู proxy.ts)
  */
-const GRACE = "grace" as const;
-
-async function refreshSession(req: NextRequest): Promise<string | typeof GRACE | null> {
+async function refreshSession(req: NextRequest): Promise<string | null> {
   const ip = clientIp(req);
   const ua = userAgent(req);
   const store = await cookies();
@@ -47,10 +45,6 @@ async function refreshSession(req: NextRequest): Promise<string | typeof GRACE |
     return "session หมดอายุ กรุณาเข้าสู่ระบบใหม่";
   }
 
-  // อีกคำขอเพิ่งต่ออายุไปพร้อมกัน — cookie ชุดใหม่ถึงเบราว์เซอร์จากคำขอนั้นแล้ว
-  // ห้ามล้าง cookie (จะไปลบของใหม่ทิ้ง) ถือว่าสำเร็จ
-  if (result.status === "grace") return GRACE;
-
   // rotation สำเร็จ → ออก access ใหม่
   const authUser = await loadAuthUser(result.userId);
   if (!authUser) {
@@ -74,7 +68,7 @@ async function refreshSession(req: NextRequest): Promise<string | typeof GRACE |
 
 export async function POST(req: NextRequest) {
   const error = await refreshSession(req);
-  if (error && error !== GRACE) return jsonError(error, 401);
+  if (error) return jsonError(error, 401);
   return NextResponse.json({ ok: true });
 }
 
@@ -109,17 +103,8 @@ function safeNext(next: string | null): string {
  */
 export async function GET(req: NextRequest) {
   const next = safeNext(req.nextUrl.searchParams.get("next"));
-  const retried = req.nextUrl.searchParams.get("retry") === "1";
   const error = await refreshSession(req);
   if (!error) return redirectTo(req, new URL(next, req.url));
-  // คำขอที่วิ่งพร้อมกันต่ออายุไปก่อน — ลองอีกรอบเดียว (ตอนนั้นเบราว์เซอร์ควรได้ cookie ใหม่แล้ว)
-  // ถ้ายังไม่ได้อีก ไปหน้า login แทนที่จะวนไม่จบ
-  if (error === GRACE && !retried) {
-    const again = new URL("/api/auth/refresh", req.url);
-    again.searchParams.set("next", next);
-    again.searchParams.set("retry", "1");
-    return redirectTo(req, again);
-  }
   const login = new URL("/login", req.url);
   if (next !== "/") login.searchParams.set("next", next);
   return redirectTo(req, login);

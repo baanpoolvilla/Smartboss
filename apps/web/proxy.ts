@@ -95,17 +95,19 @@ export async function proxy(req: NextRequest) {
      * หน้าเว็บ (SessionRefresher) ยังไม่ทันได้ทำงาน /api/auth/refresh ต่ออายุไม่ได้ค่อยพาไป
      * หน้า login เอง · คำขอ /api ปล่อยให้ตัวต่ออายุฝั่งหน้าเว็บจัดการเหมือนเดิม
      */
-    if (!pathname.startsWith("/api/")) {
+    // เปิดลิงก์ /api ตรง ๆ ในเบราว์เซอร์ (เช่น ดาวน์โหลดไฟล์) ก็ต่ออายุแล้วพากลับมาเหมือนหน้าเว็บ
+    if (!pathname.startsWith("/api/") || req.headers.get("sec-fetch-mode") === "navigate") {
       const refreshUrl = new URL("/api/auth/refresh", req.url);
       refreshUrl.searchParams.set("next", pathname + search);
       return withFrameProtection(redirectTo(req, refreshUrl), pathname);
     }
-    const loginUrl = new URL("/login", req.url);
-    loginUrl.searchParams.set("next", pathname + search);
-    const res = redirectTo(req, loginUrl);
-    // ล้าง access cookie ที่หมดอายุทิ้ง
-    if (token) res.cookies.delete(COOKIE_ACCESS);
-    return withFrameProtection(res, pathname);
+    // /api ตอบ 401 เป็น JSON — เดิม redirect ไปหน้า login: fetch ตามไปได้ HTML แล้ว .json() พัง
+    // หน้าเว็บขึ้น "โหลดข้อมูลไม่สำเร็จ" ทุกอันตอนกลับมาที่แท็บที่เปิดทิ้งไว้เกิน 15 นาที
+    // ตอนนี้หน้าเว็บเห็น 401 → ต่ออายุแล้วลองใหม่เอง (lib/auth-fetch.ts)
+    return withFrameProtection(
+      NextResponse.json({ error: "session หมดอายุ" }, { status: 401 }),
+      pathname
+    );
   }
 
   return withFrameProtection(NextResponse.next(), pathname);
