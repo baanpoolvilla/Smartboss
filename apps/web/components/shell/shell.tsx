@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LayoutGrid, MoreHorizontal, X } from "lucide-react";
@@ -29,6 +29,7 @@ import { SaveFeedback } from "./save-feedback";
 import { SessionRefresher } from "./session-refresher";
 import { SystemNotify } from "./system-notify";
 import { ChatNotifyListener } from "@/modules/chat/components/chat-nav-badge";
+import { MarkReadOnRoute } from "@/modules/notifications/mark-read-on-route";
 import { ShellProvider, type ShellUser } from "./shell-context";
 
 export type { ShellUser };
@@ -75,6 +76,10 @@ export function Shell({
   return (
     <ShellProvider user={user} unread={unread}>
       <SessionRefresher />
+      {/* เปิดหน้าที่แจ้งเตือนชี้มาเอง (ไม่ได้กดจากกระดิ่ง) ก็นับว่าอ่านแล้ว */}
+      <Suspense fallback={null}>
+        <MarkReadOnRoute />
+      </Suspense>
       {/* ตัวแสดง toast ของทั้งแอป (ย้ายมาจาก report-task-scaffold ที่มีแค่โมดูลเดียว)
           + ข้อความ "บันทึกสำเร็จ" หลังกดส่งฟอร์มทุกฟอร์ม */}
       <Toaster position="top-center" closeButton />
