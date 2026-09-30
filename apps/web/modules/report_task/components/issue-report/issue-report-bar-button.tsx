@@ -12,6 +12,7 @@ import { reporterStatusGroup } from "@/modules/report_task/lib/issue-meta";
 import { ServerStoreSync } from "@/modules/report_task/components/shared/server-store-sync";
 import type { User } from "@/modules/report_task/types";
 
+import { usesReportTaskScaffold } from "@/modules/report_task/constants";
 /**
  * App-wide "แจ้งปัญหา" entry point — an icon button in the shared AppBar,
  * right next to the notification bell (see app-bar-actions.tsx). Reachable
@@ -45,7 +46,7 @@ export function IssueReportBarButton() {
   // this, "who's reporting" would resolve to nobody and any ticket filed
   // from outside report_task would only ever exist in this tab's memory,
   // gone on refresh.
-  const isReportTaskPage = pathname.startsWith("/report-task");
+  const isReportTaskPage = usesReportTaskScaffold(pathname);
   useEffect(() => {
     if (isReportTaskPage) return;
     let cancelled = false;

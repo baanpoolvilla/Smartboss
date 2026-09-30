@@ -305,7 +305,7 @@ function SettingsPageInner() {
                   <p className="text-sm text-[var(--ink)]">ตั้งค่าห้อง Report แต่ละห้องได้จากไอคอน ⚙ ในห้องนั้นๆ โดยตรง</p>
                   <p className="text-xs text-[var(--ink-soft)] mt-1">เข้าห้องที่ต้องการ แล้วกดไอคอนรูปเฟืองมุมขวาบนของห้อง</p>
                   <Link
-                    href="/report-task/report-feed"
+                    href="/chat-report/report-feed"
                     className="inline-flex items-center gap-1.5 mt-3 rounded-lg bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white text-sm font-medium px-3.5 py-2 transition-colors"
                   >
                     ไปที่หน้า Report

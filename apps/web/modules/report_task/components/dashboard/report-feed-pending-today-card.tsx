@@ -142,7 +142,7 @@ export function ReportFeedPendingTodayCard() {
       userId: pendingNudge.userId,
       byUserId: viewingAsUserId,
       message: `คุณยังไม่ส่งรายงาน "${pendingNudge.topicName}" วันนี้`,
-      link: `/report-task/report-feed?topic=${pendingNudge.topicId}`,
+      link: `/chat-report/report-feed?topic=${pendingNudge.topicId}`,
       topicName: pendingNudge.topicName,
     });
     setPendingNudge(null);
@@ -196,7 +196,7 @@ export function ReportFeedPendingTodayCard() {
                   key={`${e.userId}-${e.topicId}-${e.day}-${e.roundId}`}
                   entry={e}
                   canNudge={canManage(viewingAsUserId)}
-                  onOpen={() => router.push(`/report-task/report-feed?topic=${e.topicId}`)}
+                  onOpen={() => router.push(`/chat-report/report-feed?topic=${e.topicId}`)}
                   onNudge={() => setPendingNudge(e)}
                 />
               );
@@ -257,7 +257,7 @@ export function ReportFeedPendingTodayCard() {
                 key={`${e.topicId}-${e.day}-${e.roundId}`}
                 onClick={() => {
                   setMissedUserId(null);
-                  router.push(`/report-task/report-feed?topic=${e.topicId}`);
+                  router.push(`/chat-report/report-feed?topic=${e.topicId}`);
                 }}
                 className="flex w-full items-start gap-3 rounded-lg px-2 py-2.5 text-left border-b last:border-0 border-[var(--line)] hover:bg-[var(--bg-soft)] transition-colors"
               >

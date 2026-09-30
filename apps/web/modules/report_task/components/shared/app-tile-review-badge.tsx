@@ -27,7 +27,16 @@ import type { User, Department } from "@/modules/report_task/types";
  * populated. One-shot on mount, not polled — same as the rest of this tile,
  * good enough for a snapshot on page load.
  */
-export function AppTileReviewBadge() {
+export function AppTileReviewBadge({
+  part = "tasks",
+  extra = 0,
+}: {
+  /** "tasks" = tile รายงานและงาน (งานรอตรวจ + ความเคลื่อนไหวของงาน) · "reports" = tile Chat & Report
+   * (ความเคลื่อนไหวในรายงานที่เกี่ยวกับเรา) — แชท/รายงานแยกเป็นโมดูลของตัวเองแล้ว ห้ามนับซ้ำสอง tile */
+  part?: "tasks" | "reports";
+  /** นับเพิ่มจากที่อื่น (tile Chat & Report ส่งจำนวนแชทยังไม่อ่านมา) */
+  extra?: number;
+} = {}) {
   const [count, setCount] = useState(0);
 
   useEffect(() => {
@@ -91,7 +100,7 @@ export function AppTileReviewBadge() {
           0
         );
 
-        setCount(reviewCount + unreadActivityCount + activityCount);
+        setCount(part === "tasks" ? reviewCount + unreadActivityCount : activityCount);
       } catch {
         // Best-effort — a failed fetch just leaves the tile without a badge.
       }
@@ -100,16 +109,17 @@ export function AppTileReviewBadge() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [part]);
 
-  if (count === 0) return null;
+  const total = count + extra;
+  if (total === 0) return null;
   return (
     <span
       className="absolute -right-1 -top-1 flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-(--danger) px-1 text-[10px] font-bold text-white ring-2 ring-(--bg)"
-      aria-label={`มีเรื่องรอคุณ ${count} รายการ`}
-      title={`มีเรื่องรอคุณ ${count} รายการ`}
+      aria-label={`มีเรื่องรอคุณ ${total} รายการ`}
+      title={`มีเรื่องรอคุณ ${total} รายการ`}
     >
-      {count > 9 ? "9+" : count}
+      {total > 9 ? "9+" : total}
     </span>
   );
 }

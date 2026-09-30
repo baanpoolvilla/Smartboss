@@ -8,10 +8,10 @@ import { ChatApp } from "@/modules/chat/components/chat-app";
 
 export const dynamic = "force-dynamic";
 
-/** แชทองค์กรแบบ LINE — อยู่ใต้ "รายงานและงาน" (ตัวโค้ด/API เป็นของ modules/chat) */
-export default async function ReportTaskChatPage() {
+/** แชทองค์กรแบบ LINE — อยู่ในโมดูล "Chat & Report" (ตัวโค้ด/API เป็นของ modules/chat) */
+export default async function ChatPage() {
   const session = await requireOrg();
-  if (!hasPermission(session, CHAT_PERMS.access)) redirect("/report-task");
+  if (!hasPermission(session, CHAT_PERMS.access)) redirect("/");
 
   const me = await prisma.user.findUniqueOrThrow({
     where: { id: session.userId },

@@ -2,8 +2,6 @@ import {
   CalendarDays,
   KanbanSquare,
   LayoutDashboard,
-  MessageCircle,
-  MessageSquareText,
   ScrollText,
   Settings,
   type LucideIcon,
@@ -37,13 +35,8 @@ export interface NavItem {
  */
 export const navItems: NavItem[] = [
   { href: REPORT_TASK_BASE, label: "แดชบอร์ด", icon: LayoutDashboard, iconName: "LayoutDashboard" },
-  // แชทองค์กร — โค้ดอยู่ที่ modules/chat แต่เมนูอยู่ใต้ "รายงานและงาน" (สิทธิ์ chat.access)
-  // อันดับ 2 โดยตั้งใจ: มือถือแสดงแค่ 4 เมนูแรกบนแถบล่าง (ที่เหลือยุบเข้า "เพิ่มเติม" ซึ่งไม่มี
-  // ตัวเลขยังไม่อ่าน) เดิมแชทอยู่อันดับ 5 ⇒ บนมือถือถูกซ่อนใน "เพิ่มเติม" มีข้อความใหม่ก็ไม่เห็น
-  // ส่วนปฏิทินใช้น้อยกว่า ย้ายลงไปอยู่ใน "เพิ่มเติม" แทน
-  { href: `${REPORT_TASK_BASE}/chat`, label: "แชท", icon: MessageCircle, iconName: "MessageCircle" },
+  // แชท + รายงาน ย้ายไปเป็นโมดูล "Chat & Report" ของตัวเองแล้ว (chat-report-manifest.ts)
   { href: `${REPORT_TASK_BASE}/tasks`, label: "งาน / Kanban", icon: KanbanSquare, iconName: "KanbanSquare" },
-  { href: `${REPORT_TASK_BASE}/report-feed`, label: "รายงาน", icon: MessageSquareText, iconName: "MessageSquareText" },
   { href: `${REPORT_TASK_BASE}/calendar`, label: "ปฏิทิน", icon: CalendarDays, iconName: "CalendarDays" },
   // "แจ้งปัญหาระบบ" dropped from the main menu entirely — filing an issue is
   // only ever the 🐛 button anywhere in the app now (IssueReportBarButton),

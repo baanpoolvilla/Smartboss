@@ -10,6 +10,7 @@ import { broadcastToChannel, channelMemberIds, getChannelAccess } from "./channe
 import { validateAttachments } from "./messages";
 import { notifyNewMessage } from "./notify";
 import { ChatError, hydrateMessages, noteExcerpt, notePreview, type ChatActor } from "./serialize";
+import { CHAT_PAGE_PATH } from "../constants";
 
 /**
  * โน้ตของห้องแชท (แบบ LINE) — ข้อความยาว + รูป เก็บถาวร มีคอมเมนต์และถูกใจ
@@ -210,7 +211,7 @@ export async function addComment(actor: ChatActor, noteId: string, bodyInput: un
       await announceNotification(actor.orgId, [...new Set(to)], {
         title,
         body: body.slice(0, 140),
-        url: `/report-task/chat?c=${encodeURIComponent(note.channelId)}&note=${encodeURIComponent(noteId)}`,
+        url: `${CHAT_PAGE_PATH}?c=${encodeURIComponent(note.channelId)}&note=${encodeURIComponent(noteId)}`,
         tag: `note-${noteId}`,
       });
     } catch (err) {

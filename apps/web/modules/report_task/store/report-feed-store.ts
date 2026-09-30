@@ -709,7 +709,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
           );
           if (notices.length > 0) {
             const actorId = useIdentityStore.getState().viewingAsUserId;
-            const link = `/report-task/report-feed?topic=${id}`;
+            const link = `/chat-report/report-feed?topic=${id}`;
             for (const n of notices) {
               if (n.userId === actorId) continue; // ไม่ต้องแจ้งคนที่เพิ่งแก้เอง
               useNotificationStore.getState().notify({
@@ -750,7 +750,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         // call below) so a notification can deep-link straight to this exact
         // post — same ?topic=&post= shape ReportCard's own "copy link" uses.
         const postId = nextId("post");
-        const link = `/report-task/report-feed?topic=${topicId}&post=${postId}`;
+        const link = `/chat-report/report-feed?topic=${topicId}&post=${postId}`;
         const topic = get().topics.find((t) => t.id === topicId);
         // Everyone who can see this room, minus the poster themselves — same
         // set the "new post" notification below reaches. `unreadFor` is what
@@ -863,7 +863,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         }));
 
         if (!before) return;
-        const link = `/report-task/report-feed?topic=${before.topicId}&post=${postId}`;
+        const link = `/chat-report/report-feed?topic=${before.topicId}&post=${postId}`;
         const title = data.title ?? before.title;
         const actorName = getUser(authorId)?.name ?? "มีคน";
         if (addedUsers.length > 0) {
@@ -913,7 +913,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
           userId: post.authorId,
           byUserId: userId,
           message: `${actorName} ทำเครื่องหมาย ${emoji} ให้โพสต์ของคุณ "${post.title}"`,
-          link: `/report-task/report-feed?topic=${post.topicId}&post=${postId}`,
+          link: `/chat-report/report-feed?topic=${post.topicId}&post=${postId}`,
           topicName: get().topics.find((t) => t.id === post.topicId)?.name,
         });
       },
@@ -1007,7 +1007,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         if (!post) return;
         const actorName = getUser(authorId)?.name ?? "มีคน";
         const preview = mentionMarkersToPlainText(body.split("\n")[0] ?? "").slice(0, 60);
-        const link = `/report-task/report-feed?topic=${post.topicId}&post=${postId}&reply=${replyId}`;
+        const link = `/chat-report/report-feed?topic=${post.topicId}&post=${postId}&reply=${replyId}`;
         const quotedAuthorId = extra?.replyToId ? post.replies.find((r) => r.id === extra.replyToId)?.authorId : undefined;
         if (quotedAuthorId && quotedAuthorId !== authorId) {
           useNotificationStore.getState().notify({
@@ -1083,7 +1083,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
             reply.authorId,
             `${actorName} แท็กคุณในความคิดเห็นของโพสต์ "${post.title}"`,
             undefined,
-            `/report-task/report-feed?topic=${post.topicId}&post=${postId}`,
+            `/chat-report/report-feed?topic=${post.topicId}&post=${postId}`,
             get().topics.find((t) => t.id === post.topicId)?.name
           );
       },
@@ -1121,7 +1121,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
           userId: reply.authorId,
           byUserId: userId,
           message: `${actorName} ทำเครื่องหมาย ${emoji} ให้ความคิดเห็นของคุณใน "${post.title}"`,
-          link: `/report-task/report-feed?topic=${post.topicId}&post=${postId}&reply=${replyId}`,
+          link: `/chat-report/report-feed?topic=${post.topicId}&post=${postId}&reply=${replyId}`,
           topicName: get().topics.find((t) => t.id === post.topicId)?.name,
         });
       },

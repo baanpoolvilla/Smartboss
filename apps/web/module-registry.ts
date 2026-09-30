@@ -9,6 +9,7 @@ import { exampleManifest } from "@/modules/example/manifest";
 import { hrManifest } from "@/modules/hr/manifest";
 import { maintenanceManifest } from "@/modules/maintenance/manifest";
 import { reportTaskManifest } from "@/modules/report_task/manifest";
+import { chatReportManifest } from "@/modules/report_task/chat-report-manifest";
 import { issueReportSelfManifest } from "@/modules/report_task/issue-report-self-manifest";
 
 export interface ModuleMenuItem {
@@ -73,6 +74,8 @@ export const moduleRegistry: ModuleManifest[] = [
   hrManifest,
   // พอร์ตมาจากแอป easyboss-workspace ที่เคยรันเดี่ยว ๆ
   reportTaskManifest,
+  // แชท + รายงาน — แยกออกจากรายงานและงานเป็นโมดูลหลักของตัวเอง (เปิดตาม report_task)
+  chatReportManifest,
   // "แจ้งบัค" ของ user ทั่วไป — โมดูลของตัวเอง เมนูเดียว "ตั๋วของฉัน" (ไม่ปนรายงานและงาน)
   issueReportSelfManifest,
   // MVP แชทองค์กร — ปิดใช้งานทุกบริษัทโดยดีฟอลต์ เปิดทีละบริษัทได้ที่ /admin/modules

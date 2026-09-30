@@ -4,5 +4,8 @@ export const CHAT_CODE = "chat";
 
 export const CHAT_BASE = "/chat";
 
+/** หน้าแชทจริง — อยู่ในโมดูล "Chat & Report" (ลิงก์ในแจ้งเตือน/Web Push ใช้ค่านี้) */
+export const CHAT_PAGE_PATH = "/chat-report/chat";
+
 /** ห้องรวมทั้งบริษัท — สร้างครั้งเดียวต่อบริษัทตอนเข้าเพจครั้งแรก (ดู data/channels.ts) */
 export const CHAT_ORG_CHANNEL_NAME = "ห้องรวมทั้งบริษัท";

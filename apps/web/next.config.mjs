@@ -90,7 +90,11 @@ const nextConfig = {
    */
   async redirects() {
     return [
-      { source: "/report-feed", destination: "/report-task/report-feed", permanent: false },
+      { source: "/report-feed", destination: "/chat-report/report-feed", permanent: false },
+      // แชท + รายงาน ย้ายออกจาก "รายงานและงาน" มาเป็นโมดูล "Chat & Report" — แจ้งเตือน/Web Push/
+      // ลิงก์ในโพสต์ที่เก็บพาธเดิมไว้ ยังเปิดถูกหน้า (query เช่น ?c= ?topic= &post= ติดไปด้วย)
+      { source: "/report-task/chat", destination: "/chat-report/chat", permanent: false },
+      { source: "/report-task/report-feed", destination: "/chat-report/report-feed", permanent: false },
       // "แจ้งบัค" ของ user ย้ายออกจากรายงานและงานมาเป็นโมดูลของตัวเอง — แจ้งเตือน/
       // ลิงก์เก่าที่ยังเก็บพาธเดิมไว้ให้ไปหน้าใหม่ (รวมหน้ารายละเอียดตั๋ว)
       { source: "/report-task/issue-reports", destination: "/issue-reports", permanent: false },

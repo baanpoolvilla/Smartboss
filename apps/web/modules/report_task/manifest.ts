@@ -3,11 +3,8 @@ import type { ModuleManifest, ModuleMenuItem } from "@/module-registry";
 
 import { REPORT_TASK_BASE, REPORT_TASK_CODE } from "./constants";
 import { navItems } from "./lib/nav-config";
-import { CHAT_PERMS } from "@/modules/chat/permissions";
 import { ALL_REPORT_TASK_PERMS, REPORT_TASK_PERMS } from "./permissions";
 import { TaskReviewNavBadge } from "./components/shared/task-review-nav-badge";
-import { ReportActivityNavBadge } from "./components/shared/report-activity-nav-badge";
-import { ChatNavBadge } from "@/modules/chat/components/chat-nav-badge";
 
 /**
  * โมดูลรายงานและงาน — เดิมพอร์ตมาจากแอป easyboss-workspace ที่เคยรันเดี่ยว ๆ
@@ -25,8 +22,6 @@ const MENU_PERMISSION: Record<string, string> = {
   [REPORT_TASK_BASE]: REPORT_TASK_PERMS.access,
   [`${REPORT_TASK_BASE}/tasks`]: REPORT_TASK_PERMS.taskView,
   [`${REPORT_TASK_BASE}/calendar`]: REPORT_TASK_PERMS.calendarView,
-  [`${REPORT_TASK_BASE}/report-feed`]: REPORT_TASK_PERMS.reportView,
-  [`${REPORT_TASK_BASE}/chat`]: CHAT_PERMS.access,
   [`${REPORT_TASK_BASE}/activity-log`]: REPORT_TASK_PERMS.activityView,
   [`${REPORT_TASK_BASE}/settings`]: REPORT_TASK_PERMS.settingManage,
 };
@@ -36,17 +31,10 @@ const menus: ModuleMenuItem[] = navItems.map((item) => ({
   path: item.href,
   permission: MENU_PERMISSION[item.href] ?? REPORT_TASK_PERMS.access,
   icon: item.iconName,
-  // Discord-style "someone's waiting on you" pill. Tasks/Kanban counts work
-  // sitting in "รอตรวจ" (TaskReviewNavBadge); รายงาน counts unread activity
-  // about the viewer — @mentions + replies on their posts (ReportActivityNavBadge).
-  badge:
-    item.href === `${REPORT_TASK_BASE}/tasks`
-      ? createElement(TaskReviewNavBadge)
-      : item.href === `${REPORT_TASK_BASE}/report-feed`
-        ? createElement(ReportActivityNavBadge)
-        : item.href === `${REPORT_TASK_BASE}/chat`
-          ? createElement(ChatNavBadge)
-          : undefined,
+  // Discord-style "someone's waiting on you" pill — Tasks/Kanban counts work
+  // sitting in "รอตรวจ" (TaskReviewNavBadge). แชท/รายงานมีตัวเลขของตัวเองในโมดูล
+  // "Chat & Report" (chat-report-manifest.ts)
+  badge: item.href === `${REPORT_TASK_BASE}/tasks` ? createElement(TaskReviewNavBadge) : undefined,
 }));
 
 export const reportTaskManifest: ModuleManifest = {

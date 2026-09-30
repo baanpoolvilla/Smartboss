@@ -7,6 +7,7 @@ import { notifyUsers } from "@/modules/maintenance/data/notify";
 import { isUserMessageKind, type ChatMessageDTO } from "../types";
 import { otherMemberIds } from "./messages";
 import type { ChatActor } from "./serialize";
+import { CHAT_PAGE_PATH } from "../constants";
 
 /**
  * แจ้งเตือนข้อความใหม่ — ลำดับจากถูกไปแพง (ดูแผนแชท):
@@ -68,7 +69,7 @@ export async function notifyNewMessage(
           : message.attachments[0]?.kind === "video"
             ? "ส่งวิดีโอ"
             : "ส่งไฟล์");
-    const url = `/report-task/chat?c=${encodeURIComponent(channelId)}`;
+    const url = `${CHAT_PAGE_PATH}?c=${encodeURIComponent(channelId)}`;
     const isDm = channelType === "dm";
 
     // เด้งเข้าเครื่องที่ไม่ได้ดูหน้าจอ (sendWebPush ข้ามเครื่องที่ดูอยู่ให้เอง — เครื่องนั้นเด้งในแอปแล้ว)

@@ -7,6 +7,7 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { ServerStoreSync } from "@/modules/report_task/components/shared/server-store-sync";
 import type { User } from "@/modules/report_task/types";
+import { usesReportTaskScaffold } from "@/modules/report_task/constants";
 
 /**
  * Keeps report_task's own notifications (@mentions, replies, task reviews,
@@ -22,7 +23,7 @@ import type { User } from "@/modules/report_task/types";
  */
 export function ReportNotificationSync() {
   const pathname = usePathname();
-  const isReportTaskPage = pathname.startsWith("/report-task");
+  const isReportTaskPage = usesReportTaskScaffold(pathname);
 
   // viewingAsUserId/employees are what useReportTaskUnreadCount needs to know
   // *whose* notifications to count — same bootstrap IssueReportBarButton

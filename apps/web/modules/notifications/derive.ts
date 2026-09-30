@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import type { AppNotification } from "@/modules/report_task/store/notification-store";
 import type { NotifCategory, NotifModule } from "@/modules/notifications/types";
+import { CHAT_PAGE_PATH } from "@/modules/chat/constants";
 
 export type ActionMeta = { Icon: LucideIcon; color: string };
 
@@ -253,11 +254,11 @@ export function maintenanceHrefFor(type: string, referenceId: string | null): st
   }
   if ((type === "issue_ticket_reply_reporter" || type === "issue_ticket_status_reporter") && referenceId) return `/issue-reports/${referenceId}`;
   // แชท — referenceId = ห้อง ("chat_message" คือแถวเก่าก่อนเลิกแจ้งทุกข้อความเข้ากระดิ่ง)
-  if ((type === "chat_mention" || type === "chat_message") && referenceId) return `/report-task/chat?c=${encodeURIComponent(referenceId)}`;
+  if ((type === "chat_mention" || type === "chat_message") && referenceId) return `${CHAT_PAGE_PATH}?c=${encodeURIComponent(referenceId)}`;
   // คอมเมนต์ในโน้ตแชท — referenceId = "channelId|noteId" (chat/data/notes.ts)
   if (type === "chat_note_comment" && referenceId?.includes("|")) {
     const [channelId, noteId] = referenceId.split("|");
-    return `/report-task/chat?c=${encodeURIComponent(channelId!)}&note=${encodeURIComponent(noteId!)}`;
+    return `${CHAT_PAGE_PATH}?c=${encodeURIComponent(channelId!)}&note=${encodeURIComponent(noteId!)}`;
   }
   // มาสาย (lib/attendance-late-alerts.ts) — referenceId = "YYYY-MM-DD:userId"
   // ตัวพนักงานเอง → หน้าแรกของบุคคล (เห็นการลงเวลาของตัวเอง) · หัวหน้า → กระดานลงเวลาของวันนั้น

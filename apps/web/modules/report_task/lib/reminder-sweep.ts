@@ -228,7 +228,7 @@ export function computeReminders(input: {
               recipients: [entry.userId],
               byUserId: SYSTEM_USER_ID,
               message: `ยังไม่ได้ส่งรีพอต${roundPhrase} ห้อง "${topic.name}" วันนี้ ใกล้ถึงรอบตัดยอดแล้ว`,
-              link: `/report-task/report-feed?topic=${topic.id}`,
+              link: `/chat-report/report-feed?topic=${topic.id}`,
             });
           }
         }
@@ -254,7 +254,7 @@ export function computeReminders(input: {
                 recipients: [...headIds],
                 byUserId: SYSTEM_USER_ID,
                 message: `ห้อง "${topic.name}" ยังมี ${entries.length} คนไม่ได้ส่งรีพอต${roundPhrase}วันนี้ ใกล้ถึงรอบตัดยอดแล้ว`,
-                link: `/report-task/report-feed?topic=${topic.id}`,
+                link: `/chat-report/report-feed?topic=${topic.id}`,
               });
             }
           }
@@ -293,7 +293,7 @@ export function computeReminders(input: {
                 recipients: [userId],
                 byUserId: SYSTEM_USER_ID,
                 message: `รีพอต${roundPhrase} ห้อง "${topic.name}" ใกล้ถึงกำหนดส่งในอีก ${dayLead} วัน (${targetDate})`,
-                link: `/report-task/report-feed?topic=${topic.id}`,
+                link: `/chat-report/report-feed?topic=${topic.id}`,
               });
             }
           }
@@ -313,7 +313,7 @@ export function computeReminders(input: {
                   recipients: [...headIds],
                   byUserId: SYSTEM_USER_ID,
                   message: `ห้อง "${topic.name}" มีรีพอต${roundPhrase} ถึงกำหนดส่งในอีก ${dayLead} วัน (${targetDate}) — ${recipients.length} คนต้องส่ง`,
-                  link: `/report-task/report-feed?topic=${topic.id}`,
+                  link: `/chat-report/report-feed?topic=${topic.id}`,
                 });
               }
             }

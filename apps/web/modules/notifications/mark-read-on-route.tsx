@@ -20,6 +20,17 @@ const IDENTITY_PARAMS = ["c", "note", "task", "topic", "tab", "date"] as const;
 /** หน้ารวม — เปิดแล้วไม่ใช่ว่าอ่านทุกอันที่ลิงก์มาที่นี่ */
 const NEVER_MATCH = new Set(["/", "/notifications"]);
 
+/**
+ * พาธเก่าที่ย้ายไปแล้ว (redirect ใน next.config) — แจ้งเตือนที่สร้างก่อนย้ายยังเก็บพาธเดิม
+ * กดแล้ว redirect ไปถูกหน้า แต่ต้องเทียบเป็นพาธใหม่ตรงนี้ด้วย ไม่งั้นเปิดหน้านั้นแล้วกระดิ่งไม่หาย
+ */
+const MOVED_PATHS: Record<string, string> = {
+  "/report-task/chat": "/chat-report/chat",
+  "/report-task/report-feed": "/chat-report/report-feed",
+  "/report-feed": "/chat-report/report-feed",
+  "/chat": "/chat-report/chat",
+};
+
 function pointsHere(link: string, pathname: string, search: URLSearchParams): boolean {
   let target: URL;
   try {
@@ -27,7 +38,8 @@ function pointsHere(link: string, pathname: string, search: URLSearchParams): bo
   } catch {
     return false;
   }
-  if (NEVER_MATCH.has(target.pathname) || target.pathname !== pathname) return false;
+  const targetPath = MOVED_PATHS[target.pathname] ?? target.pathname;
+  if (NEVER_MATCH.has(targetPath) || targetPath !== pathname) return false;
   return IDENTITY_PARAMS.every((k) => !target.searchParams.has(k) || target.searchParams.get(k) === search.get(k));
 }
 

@@ -5,6 +5,7 @@ import { MODULE_CARDS, PRIMARY_MODULE_CODES } from "@/lib/modules";
 import { iconByName } from "@/lib/icons";
 import { loadShellNav } from "@/lib/nav";
 import { AppTileReviewBadge } from "@/modules/report_task/components/shared/app-tile-review-badge";
+import { ChatReportTileBadge } from "@/modules/report_task/components/shared/chat-report-tile-badge";
 import { NotifCountBadge } from "@/modules/notifications/notif-count-badge";
 
 interface AppTile {
@@ -168,7 +169,8 @@ function AppIcon({ tile, size = "md" }: { tile: AppTile; size?: "md" | "lg" }) {
             opacity: href ? 1 : 0.4,
           }}
         />
-        {href && tile.code === "report_task" && <AppTileReviewBadge />}
+        {href && tile.code === "report_task" && <AppTileReviewBadge part="tasks" />}
+        {href && tile.code === "chat_report" && <ChatReportTileBadge />}
         {/* "อยากให้เห็นว่าตรงไหนมีแจ้งเตือนอะไรบ้าง...ทำให้หมดกับทุก module"
             — report_task's own badge above มีตรรกะพิเศษของตัวเอง (สแกน
             tasks/posts ตรงๆ ไม่ใช่แค่นับแจ้งเตือน) สองอันนี้ใช้ตัวนับแจ้งเตือน

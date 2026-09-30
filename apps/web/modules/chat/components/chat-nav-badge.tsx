@@ -11,6 +11,7 @@ import { fetchUnread } from "../lib/api";
 import { getChatPrefs, playChatSound, unlockChatAudio } from "../lib/prefs";
 import { attachmentLabel } from "../lib/format";
 import { isUserMessageKind, type ChatRealtimeEvent } from "../types";
+import { CHAT_PAGE_PATH } from "../constants";
 
 /*
  * ตัวเลขบนเมนู "แชท" + เด้งแจ้งเตือนในเว็บตอนอยู่หน้าอื่น
@@ -19,7 +20,7 @@ import { isUserMessageKind, type ChatRealtimeEvent } from "../types";
  * ของกลางระดับโมดูล ฟังท่อสดครั้งเดียว และเด้งแจ้งเตือนแค่ครั้งเดียวต่อข้อความ
  */
 
-const CHAT_PATH = "/report-task/chat";
+const CHAT_PATH = CHAT_PAGE_PATH;
 
 const state = { unread: 0, meId: "", muted: new Set<string>(), mounted: 0 };
 const listeners = new Set<(n: number) => void>();

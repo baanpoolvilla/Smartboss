@@ -5,7 +5,9 @@ import { usePathname } from "next/navigation";
 
 import { AppScaffold } from "@/components/module/app-scaffold";
 
-import { ISSUE_REPORTS_BASE, REPORT_TASK_BASE } from "../../constants";
+import { CHAT_PAGE_PATH } from "@/modules/chat/constants";
+import { ISSUE_REPORTS_BASE, REPORT_FEED_PATH, REPORT_TASK_BASE } from "../../constants";
+import { chatReportManifest } from "../../chat-report-manifest";
 import { reportTaskManifest } from "../../manifest";
 import { useEmployeeStore } from "../../store/employee-store";
 import { useIdentityStore } from "../../store/identity-store";
@@ -68,7 +70,8 @@ export function ReportTaskScaffold({
 
   // เลือกเมนูที่ path ยาวที่สุดที่ยังเป็นคำนำหน้าของ pathname
   // ⇒ หน้าลูก (ถ้ามีในอนาคต) ยังได้ชื่อของหมวดตัวเอง ไม่ตกไปใช้ชื่อแดชบอร์ด
-  const match = reportTaskManifest.menus
+  // แชท/รายงาน (/chat-report) อยู่ในโมดูล "Chat & Report" แต่ใช้ scaffold นี้ห่อ — หาชื่อจากเมนูทั้งสองโมดูล
+  const match = [...reportTaskManifest.menus, ...chatReportManifest.menus]
     .filter((m) => pathname === m.path || pathname.startsWith(`${m.path}/`))
     .sort((a, b) => b.path.length - a.path.length)[0];
 
@@ -89,10 +92,10 @@ export function ReportTaskScaffold({
   // รายงาน: แทนที่แผงหัวข้อ/ฟีดโพสต์จะเลื่อนอยู่ในกรอบตัวเอง กลับกลายเป็น
   // ทั้งหน้าเลื่อนยาวเป็นพรืด ("มีเยอะๆเลื่อนหาตายเลย")
   const isBoard = pathname.startsWith(`${REPORT_TASK_BASE}/tasks`);
-  const isReportFeed = pathname.startsWith(`${REPORT_TASK_BASE}/report-feed`);
+  const isReportFeed = pathname.startsWith(REPORT_FEED_PATH);
   // แชทก็เหมือนกัน — รายการห้องกับข้อความเลื่อนในกรอบตัวเอง กรอบต้องสูงเต็มจอ
   // ไม่ใช่ยุบตามเนื้อหา ("ใน pc อยากให้เห็นเต็มหน้า ... ให้เลื่อนไปแค่ชื่อกับแชท")
-  const isChat = pathname.startsWith(`${REPORT_TASK_BASE}/chat`);
+  const isChat = pathname.startsWith(CHAT_PAGE_PATH);
   const selfScrolling = isBoard || isReportFeed || isChat;
 
   return (

@@ -17,7 +17,7 @@ export const chatManifest: ModuleManifest = {
   colorBg: "#F0FDF4",
   basePath: CHAT_BASE,
   icon: "MessageCircle",
-  // เมนูย้ายไปอยู่ใต้ "รายงานและงาน" (report_task/lib/nav-config.ts → /report-task/chat)
+  // เมนูแชทอยู่ในโมดูล "Chat & Report" (report_task/chat-report-manifest.ts → /chat-report/chat)
   // เหลือ manifest นี้ไว้เพื่อสิทธิ์ chat.* กับสวิตช์เปิดโมดูล — menus ว่าง = ไม่โผล่ใน sidebar/launcher
   menus: [],
   permissions: ALL_CHAT_PERMS,

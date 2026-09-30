@@ -34,7 +34,7 @@ export default async function MyWorkPage() {
             {overview.reportRooms.map((room) => (
               <Link
                 key={room.topicId}
-                href={`/report-task/report-feed?topic=${room.topicId}`}
+                href={`/chat-report/report-feed?topic=${room.topicId}`}
                 className="rounded-(--radius) border border-(--line) px-3 py-2.5 transition-colors hover:bg-(--bg-soft)"
               >
                 <p className="text-sm font-semibold text-(--ink)"># {room.topicName}</p>

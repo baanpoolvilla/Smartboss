@@ -1081,7 +1081,7 @@ export function ReportTopicPanels({
                         <span className="font-medium">{author?.name ?? "ไม่ทราบชื่อ"}</span>
                         {" · บนโพสต์ "}
                         <Link
-                          href={`/report-task/report-feed?topic=${topic.id}&post=${e.post.id}`}
+                          href={`/chat-report/report-feed?topic=${topic.id}&post=${e.post.id}`}
                           className="text-[var(--brand-green-dark)] hover:underline"
                         >
                           &ldquo;{e.post.title || "(ไม่มีหัวข้อ)"}&rdquo;
