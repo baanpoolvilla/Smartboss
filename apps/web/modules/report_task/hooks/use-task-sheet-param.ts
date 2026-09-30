@@ -3,6 +3,8 @@
 import { useCallback, useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
+import { useTaskStore } from "@/modules/report_task/store/task-store";
+
 /**
  * Keeps the currently-open Task Detail Sheet's id mirrored in the `?task=`
  * URL param — `openTaskId` is derived straight from the param (no local
@@ -48,6 +50,23 @@ export function useTaskSheetParam(initialFallback?: string | null) {
     if (initialFallback && !paramTaskId) open(initialFallback);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // `?taskTitle=` — แจ้งเตือนรุ่นเก่าที่ไม่ได้เก็บลิงก์ กดจากกระดิ่งนอกหน้างาน (ตอนนั้นยังไม่รู้ id)
+  // โหลดงานเสร็จแล้วหาจากชื่อ ชื่อซ้ำเลือกงานล่าสุด แล้วแทนเป็น `?task=<id>` เปิดงานนั้น
+  const titleParam = searchParams.get("taskTitle");
+  const tasks = useTaskStore((s) => s.tasks);
+  const tasksLoaded = useTaskStore((s) => s.loaded);
+  useEffect(() => {
+    if (!titleParam || !tasksLoaded) return;
+    const match = tasks
+      .filter((t) => t.title === titleParam)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("taskTitle");
+    if (match) params.set("task", match.id);
+    const query = params.toString();
+    router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
+  }, [titleParam, tasksLoaded, tasks, searchParams, pathname, router]);
 
   return { openTaskId: paramTaskId, open, close };
 }

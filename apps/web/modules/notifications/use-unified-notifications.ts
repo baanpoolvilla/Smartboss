@@ -47,6 +47,9 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
   // ที่ self-heal เองได้เสมอ ไม่ต้องพึ่ง migration/สคริปต์ล้างข้อมูลแยก
   const tasks = useTaskStore((s) => s.tasks);
   const taskIdSet = useMemo(() => new Set(tasks.map((t) => t.id)), [tasks]);
+  // นอกหน้างาน (หน้าแรก, HR ฯลฯ) ยังไม่ได้โหลดรายการงาน — ห้ามใช้ taskIdSet ตัดสินว่างานถูกลบ
+  // ไม่งั้นแจ้งเตือนงานทุกอันหายจากกระดิ่งนอกหน้างาน
+  const tasksLoaded = useTaskStore((s) => s.loaded);
 
   const maintenanceItems = useMaintenanceNotifStore((s) => s.items);
   const orgItems = useMaintenanceNotifStore((s) => s.orgItems);
@@ -75,7 +78,11 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
     (message: string): string | null => {
       const m = /"([^"]+)"/.exec(message);
       const id = m ? taskIdByTitle.get(m[1]!) : null;
-      return id ? `/report-task/tasks?task=${id}` : null;
+      if (id) return `/report-task/tasks?task=${id}`;
+      // ยังไม่ได้โหลดงาน (กดจากกระดิ่งนอกหน้างาน) — ส่งชื่องานไปให้หน้างานหาเองตอนโหลดเสร็จ
+      // (use-task-sheet-param.ts) แทนที่จะกดแล้วไม่ไปไหน ("กดแล้วอยู่หน้าเดิม")
+      const t = /งาน "([^"]+)"/.exec(message);
+      return t ? `/report-task/tasks?taskTitle=${encodeURIComponent(t[1]!)}` : null;
     },
     [taskIdByTitle]
   );
@@ -88,7 +95,7 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
       // ชี้ไปงาน แปลว่าไม่ใช่แจ้งเตือนของงานเลย ปล่อยผ่านตามปกติ
       .filter((n) => {
         const tid = n.taskId ?? taskIdFromLink(n.link);
-        return !tid || taskIdSet.has(tid);
+        return !tid || !tasksLoaded || taskIdSet.has(tid);
       })
       .map((n) => ({
         id: `rt:${n.id}`,
@@ -150,7 +157,7 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
     return [...fromReport, ...fromMaintenance, ...fromOrgActivity].sort(
       (a, b) => Number(a.read) - Number(b.read) || b.createdAt.localeCompare(a.createdAt)
     );
-  }, [reportNotifications, maintenanceItems, orgItems, viewingAsUserId, includeRoomPosts, includeOrgActivity, taskIdSet, linkFromQuotedTaskTitle]);
+  }, [reportNotifications, maintenanceItems, orgItems, viewingAsUserId, includeRoomPosts, includeOrgActivity, taskIdSet, tasksLoaded, linkFromQuotedTaskTitle]);
 
   const unreadCount = items.filter((n) => !n.read).length;
 

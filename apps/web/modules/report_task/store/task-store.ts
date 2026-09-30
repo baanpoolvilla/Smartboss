@@ -103,7 +103,7 @@ function sendBackPatch(t: Task, onlyAssigneeId?: string): Partial<Task> {
 function notifyPenaltyChange(task: Task, byUserId: string, message: string) {
   const heads = departments.filter((d) => task.departmentIds.includes(d.id)).map((d) => d.headId);
   const recipients = Array.from(new Set([...task.assigneeIds, ...heads]));
-  useNotificationStore.getState().notifyMany(recipients, byUserId, message);
+  useNotificationStore.getState().notifyMany(recipients, byUserId, message, undefined, `/report-task/tasks?task=${task.id}`);
 }
 
 /**
@@ -402,7 +402,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
         logActivity(actorId, "ตรวจสอบแล้วผ่าน", t.title, t.id);
         useNotificationStore
           .getState()
-          .notifyMany(t.assigneeIds, actorId, `${getUser(actorId)?.name ?? "หัวหน้า"} ตรวจงาน "${t.title}" แล้วผ่าน`);
+          .notifyMany(t.assigneeIds, actorId, `${getUser(actorId)?.name ?? "หัวหน้า"} ตรวจงาน "${t.title}" แล้วผ่าน`, undefined, `/report-task/tasks?task=${t.id}`);
         return { ...t, reviewedBy: actorId, reviewedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
       }),
     })),
@@ -424,7 +424,9 @@ export const useTaskStore = create<TaskStore>((set) => ({
           .notifyMany(
             t.assigneeIds,
             actorId,
-            `${getUser(actorId)?.name ?? "หัวหน้า"} ตรวจงาน "${t.title}" แล้วไม่ผ่าน — ${reason} (เลื่อนกำหนดเป็น ${formatShortDate(newDate)})`
+            `${getUser(actorId)?.name ?? "หัวหน้า"} ตรวจงาน "${t.title}" แล้วไม่ผ่าน — ${reason} (เลื่อนกำหนดเป็น ${formatShortDate(newDate)})`,
+            undefined,
+            `/report-task/tasks?task=${t.id}`
           );
         return {
           ...t,
@@ -471,7 +473,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
         const actorName = getUser(revisedBy)?.name ?? "มีคน";
         useNotificationStore
           .getState()
-          .notifyMany(t.assigneeIds, revisedBy, `${actorName} ปรับกำหนดส่งงาน "${t.title}" เป็น ${formatShortDate(newDate)}${reason ? ` — ${reason}` : ""}`);
+          .notifyMany(t.assigneeIds, revisedBy, `${actorName} ปรับกำหนดส่งงาน "${t.title}" เป็น ${formatShortDate(newDate)}${reason ? ` — ${reason}` : ""}`, undefined, `/report-task/tasks?task=${t.id}`);
         // งานที่ส่งแล้ว: หัวหน้าเลือกเองว่า "ส่งกลับให้แก้ไข" (กลับไป "กำลังทำ") หรือ
         // "แค่เปลี่ยนวัน" (คงสถานะรอตรวจ — เดิมเด้งกลับเสมอ ลูกน้องต้องติ๊กเช็คลิสต์
         // แล้วกดส่งใหม่ทั้งที่ไม่ได้มีงานเพิ่ม)
@@ -634,7 +636,9 @@ export const useTaskStore = create<TaskStore>((set) => ({
               revisedBy,
               bounce
                 ? `${actorName} ส่งงาน "${t.title}" (ส่วนของคุณ) กลับให้แก้ไข — กำหนดส่งใหม่ ${formatShortDate(newDate)}`
-                : `${actorName} ปรับกำหนดส่งของคุณในงาน "${t.title}" เป็น ${formatShortDate(newDate)}`
+                : `${actorName} ปรับกำหนดส่งของคุณในงาน "${t.title}" เป็น ${formatShortDate(newDate)}`,
+              undefined,
+              `/report-task/tasks?task=${t.id}`
             );
         }
         // งานกลุ่ม: sweep ตัดสินรายคนด้วย assigneeDueDates ของคนนั้นอยู่แล้ว ⇒ ส่งกลับแล้ว
@@ -696,7 +700,9 @@ export const useTaskStore = create<TaskStore>((set) => ({
               revisedBy,
               bounce
                 ? `${actorName} ส่งงาน "${t.title}" กลับให้แก้ไข — กำหนดส่งใหม่ ${formatShortDate(newDate)}`
-                : `${actorName} ปรับกำหนดส่งของคุณในงาน "${t.title}" เป็น ${formatShortDate(newDate)}`
+                : `${actorName} ปรับกำหนดส่งของคุณในงาน "${t.title}" เป็น ${formatShortDate(newDate)}`,
+              undefined,
+              `/report-task/tasks?task=${t.id}`
             );
         }
         return {
@@ -1060,7 +1066,9 @@ export const useTaskStore = create<TaskStore>((set) => ({
           .notifyMany(
             reactionRecipients(t.assigneeIds, targetUserId),
             byUserId,
-            `${actorName} ติดสติกเกอร์ "${sticker?.emoji ?? "🏷️"} ${label}" ให้งาน "${t.title}"${targetUserId ? " (เฉพาะคุณ)" : t.taskMode === "group" ? " (ทั้งกลุ่ม)" : ""}${pts !== 0 ? ` (${pts > 0 ? `+${pts}` : pts} คะแนน)` : ""}`
+            `${actorName} ติดสติกเกอร์ "${sticker?.emoji ?? "🏷️"} ${label}" ให้งาน "${t.title}"${targetUserId ? " (เฉพาะคุณ)" : t.taskMode === "group" ? " (ทั้งกลุ่ม)" : ""}${pts !== 0 ? ` (${pts > 0 ? `+${pts}` : pts} คะแนน)` : ""}`,
+            undefined,
+            `/report-task/tasks?task=${t.id}`
           );
       }
       return {
@@ -1101,7 +1109,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
       // การกดเข้า-ออกซ้ำๆ ("อีโมจิพวกนี้มีการแจ้งเตือนใช่ไหม")
       if (t && !(t.emojiReactions?.[emoji] ?? []).includes(userId)) {
         const actorName = getUser(userId)?.name ?? "มีคน";
-        useNotificationStore.getState().notifyMany(t.assigneeIds, userId, `${actorName} ส่ง ${emoji} ให้งาน "${t.title}"`);
+        useNotificationStore.getState().notifyMany(t.assigneeIds, userId, `${actorName} ส่ง ${emoji} ให้งาน "${t.title}"`, undefined, `/report-task/tasks?task=${t.id}`);
       }
       return {
         tasks: s.tasks.map((x) => {
