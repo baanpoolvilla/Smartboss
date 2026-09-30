@@ -27,10 +27,9 @@ import { enablePush, onInstallAvailable, promptInstall, pushSupport, serverPushC
  * - มือถือที่เปิดในเบราว์เซอร์และยังไม่เคยติดตั้ง → หน้าจอเต็มบังคับขึ้นทุกครั้งที่เปิด
  *   บอกขั้นตอนตรงกับเครื่อง (Android กดปุ่มเดียว / iPhone ทำตามขั้นตอน / LINE,
  *   Facebook ฯลฯ ต้องออกไปเปิดในเบราว์เซอร์จริงก่อน เพราะติดตั้งจากในแอปพวกนั้นไม่ได้)
- * - มือถือใช้งานในเบราว์เซอร์ไม่ได้เลย ("จะไม่ให้เข้าในบราวเซอร์ จะให้ดาวโหลดให้หมด") —
- *   ไม่มีปุ่มปิด/ข้าม · ติดตั้งแล้วแต่เปิดจากเบราว์เซอร์ → บอกให้เปิดจากไอคอนบนหน้าจอแทน
- *   (LINE Mini App อยู่ที่ /m นอก Shell ไม่โดนหน้านี้)
- * - คอมพิวเตอร์ → ไม่บังคับ มีปุ่มติดตั้งบนแถบบนแทน
+ * - มีทางออก "ใช้งานในเบราว์เซอร์ไปก่อน" ซ่อนแค่รอบนี้ (sessionStorage) เปิดใหม่ขึ้นอีก —
+ *   บังคับแบบไม่มีทางออกเลยไม่ได้ เพราะบางเบราว์เซอร์ติดตั้งไม่ได้จริง จะเข้าระบบไม่ได้เลย
+ * - เปิดจากแอปที่ติดตั้งแล้ว / เคยติดตั้งแล้ว / คอมพิวเตอร์ → ไม่บังคับ มีปุ่มติดตั้งบนแถบบนแทน
  */
 
 const OPEN_EVENT = "sb:open-install-guide";
@@ -60,8 +59,12 @@ export function InstallGate() {
         forgetInstalled();
         const d = detectDevice();
         if (d.os === "desktop" || d.inApp) return;
+        try {
+          if (sessionStorage.getItem(SKIP_KEY) === "1") return;
+        } catch {
+          // ขึ้นตามปกติ
+        }
         setDevice(d);
-        setInstalled(false);
         setOpen(true);
       }),
     [],
@@ -79,14 +82,17 @@ export function InstallGate() {
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDevice(d);
-    if (d.os === "desktop") return;
-    // มือถือในเบราว์เซอร์ = บังคับเสมอ · ติดตั้งไว้แล้ว (เครื่องนี้/บัญชีนี้เพิ่งเปิดจากแอป)
-    // แค่เปลี่ยนข้อความเป็น "เปิดจากไอคอนบนหน้าจอ" แทนขั้นตอนติดตั้ง
-    setInstalled(installedHint());
-    setOpen(true);
+    if (d.os === "desktop" || installedHint()) return;
+    try {
+      if (sessionStorage.getItem(SKIP_KEY) === "1") return;
+    } catch {
+      // โหมดส่วนตัว — ขึ้นตามปกติ
+    }
+    // บัญชีนี้เพิ่งเปิดจากแอปบนเครื่องระบบเดียวกัน (ภายใน 14 วัน) = ติดตั้งแล้ว ไม่ต้องชวน
+    // ลบแอปแล้วไม่ได้เปิดอีก เลย 14 วันจะกลับมาชวนเอง
     let cancelled = false;
-    void installedOnAccount(d.os).then((onAccount) => {
-      if (!cancelled && onAccount) setInstalled(true);
+    void installedOnAccount(d.os).then((installed) => {
+      if (!cancelled && !installed) setOpen(true);
     });
     return () => {
       cancelled = true;
@@ -114,19 +120,18 @@ export function InstallGate() {
   // เดิมหน้าข้างหลังเปลี่ยนแต่หน้าจอติดตั้งยังค้างทับอยู่ ต้องรีเฟรชถึงจะหาย
   const pathname = usePathname();
   const [openedAt, setOpenedAt] = useState(pathname);
-  const forced = device !== null && device.os !== "desktop";
   if (openedAt !== pathname) {
     setOpenedAt(pathname);
-    if (open && !forced) setOpen(false);
+    if (open) setOpen(false);
   }
   useEffect(() => {
-    if (!open || forced) return;
+    if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, forced]);
+  }, [open]);
 
   if (!isClient || !open || !device) return null;
 
@@ -141,13 +146,11 @@ export function InstallGate() {
 
   const alreadyInstalled = () => {
     markInstalled();
-    if (forced) setInstalled(true);
-    else setOpen(false);
+    setOpen(false);
   };
 
   return createPortal(
     <div className="fixed inset-0 z-[120] overflow-y-auto bg-(--bg)" role="dialog" aria-modal="true" aria-labelledby="install-title">
-      {!forced && (
       <button
         type="button"
         onClick={skip}
@@ -157,7 +160,6 @@ export function InstallGate() {
       >
         <X className="h-5 w-5" />
       </button>
-      )}
       <div className="mx-auto flex max-w-sm flex-col px-6 pt-[max(3rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         <div className="flex flex-col items-center text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -167,12 +169,8 @@ export function InstallGate() {
           </h1>
           <p className="mt-1.5 text-sm text-(--ink-soft)">
             {installed
-              ? forced
-                ? "ปิดหน้านี้ แล้วเปิด SmartBoss จากไอคอนบนหน้าจอโฮม — บนมือถือใช้งานผ่านเบราว์เซอร์ไม่ได้"
-                : "เปิด SmartBoss จากไอคอนบนหน้าจอได้เลย"
-              : forced
-                ? "บนมือถือต้องติดตั้งแอปก่อนใช้งาน — ได้แจ้งเตือนงาน/แชทครบ เปิดจากไอคอนบนหน้าจอได้ทันที"
-                : "เปิดจากไอคอนบนหน้าจอได้ทันที เต็มจอเหมือนแอปทั่วไป และรับแจ้งเตือนงาน/แชทได้"}
+              ? "เปิด SmartBoss จากไอคอนบนหน้าจอได้เลย"
+              : "เปิดจากไอคอนบนหน้าจอได้ทันที เต็มจอเหมือนแอปทั่วไป และรับแจ้งเตือนงาน/แชทได้"}
           </p>
         </div>
 
@@ -196,20 +194,12 @@ export function InstallGate() {
               onClick={alreadyInstalled}
               className="w-full rounded-xl border border-(--line) px-4 py-3 text-sm font-medium text-(--ink) transition-colors hover:bg-(--bg-soft)"
             >
-              {forced ? "ติดตั้งแล้ว" : "ติดตั้งแล้ว — ไม่ต้องแสดงอีก"}
+              ติดตั้งแล้ว — ไม่ต้องแสดงอีก
             </button>
           )}
-          {!forced && (
-            <button type="button" onClick={skip} className="text-sm text-(--ink-soft) underline-offset-4 hover:underline">
-              {installed ? "ใช้งานในเบราว์เซอร์ต่อ" : "ใช้งานในเบราว์เซอร์ไปก่อน"}
-            </button>
-          )}
-          {/* ลบแอปไปแล้ว / กดว่าติดตั้งแล้วแต่ยังไม่ได้ติดตั้งจริง — กลับไปดูขั้นตอนได้ */}
-          {forced && installed && (
-            <button type="button" onClick={() => setInstalled(false)} className="text-sm text-(--ink-soft) underline-offset-4 hover:underline">
-              ยังไม่มีไอคอนบนหน้าจอ? ดูขั้นตอนติดตั้ง
-            </button>
-          )}
+          <button type="button" onClick={skip} className="text-sm text-(--ink-soft) underline-offset-4 hover:underline">
+            {installed ? "ใช้งานในเบราว์เซอร์ต่อ" : "ใช้งานในเบราว์เซอร์ไปก่อน"}
+          </button>
           {/* คู่มือแบบมีภาพทุกเครื่อง (public/guide.html เปิดได้โดยไม่ต้องล็อกอิน) — ติดขั้นไหนเปิดดูได้ */}
           {!installed && (
             <a href="/guide.html" target="_blank" rel="noopener" className="text-sm font-medium text-[#3fa535] underline-offset-4 hover:underline">
