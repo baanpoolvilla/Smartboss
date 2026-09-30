@@ -75,8 +75,12 @@ export function ReportView({ report, interactive }: { report: AiReportView; inte
         <KpiCard label="Conversion Rate" metric="conv_rate" value={t.conv_rate} status={t.conv_rate_status} change={t.conv_rate_change_pct} />
         <KpiCard label="Impr. (Top) %" metric="top_impr_pct" value={t.top_impr_pct} status={t.top_impr_pct_status} />
         <KpiCard label="Impr. (Abs. Top) %" metric="abs_top_impr_pct" value={t.abs_top_impr_pct} status={t.abs_top_impr_pct_status} />
-        {t.roas != null && <KpiCard label="ROAS" metric="roas" value={t.roas} change={t.roas_change_pct} />}
+        {t.roas != null && t.roas > 0 && <KpiCard label="ROAS" metric="roas" value={t.roas} change={t.roas_change_pct} />}
       </div>
+
+      <Section title="แคมเปญ">
+        <CampaignTable rows={input.campaigns} currency={cur} />
+      </Section>
 
       {(output.top_performers.length > 0 || output.underperformers.length > 0) && (
         <div className="grid gap-4 md:grid-cols-2">
@@ -103,10 +107,6 @@ export function ReportView({ report, interactive }: { report: AiReportView; inte
           </Section>
         </div>
       )}
-
-      <Section title="แคมเปญ">
-        <CampaignTable rows={input.campaigns} currency={cur} />
-      </Section>
 
       <Section title="กลุ่มโฆษณา" description={input.ad_groups.length >= 50 ? "แสดง 50 กลุ่มที่ใช้เงินมากที่สุด" : undefined}>
         <AdGroupTable rows={input.ad_groups} campaignName={campaignName} currency={cur} />
