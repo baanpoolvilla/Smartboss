@@ -26,6 +26,11 @@ ExecStart=/usr/bin/node node_modules/next/dist/bin/next start -H 127.0.0.1 -p 30
 
 Restart=always
 RestartSec=5
+# ตอนสั่งหยุด Next รอให้ทุกการเชื่อมต่อปิดก่อน แต่ท่อสด (SSE /api/realtime) เปิดค้างตลอด
+# ไม่มีวันปิดเอง ⇒ ค่าเริ่มต้น 90 วิ systemd รอจนหมดเวลาแล้วค่อยฆ่า ("Failed with result
+# 'timeout'") ระหว่างนั้นเว็บไม่รับคนใหม่ = ล่มเกือบ 2 นาทีทุกครั้งที่ deploy
+# 10 วิพอให้คำขอปกติที่ค้างอยู่ทำจบ เบราว์เซอร์ต่อท่อสดใหม่เองหลังเว็บขึ้น
+TimeoutStopSec=10
 # ล้มติดกัน 5 ครั้งใน 60 วิ = มีอะไรผิดจริง หยุดแล้วรอคนดู ดีกว่า restart วนกิน CPU
 StartLimitBurst=5
 StartLimitIntervalSec=60
