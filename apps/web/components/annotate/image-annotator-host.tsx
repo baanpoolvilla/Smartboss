@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Pencil, Trash2, Type, Undo2, X } from "lucide-react";
+import { Check, Download, Pencil, Trash2, Type, Undo2, X } from "lucide-react";
 import { closeAnnotator, useAnnotatorStore } from "@/lib/annotate/annotate";
 
 /**
@@ -126,6 +126,23 @@ function Annotator({ file }: { file: File }) {
     setTextValue("");
   }
 
+  // บันทึกรูปที่วาดแล้วลงเครื่อง — หน้าต่างยังเปิดอยู่ วาดต่อหรือกด "เสร็จ" ได้ตามปกติ
+  async function download() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const type = file.type === "image/png" ? "image/png" : "image/jpeg";
+    const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, type, 0.92));
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${file.name.replace(/\.[^.]+$/, "") || "image"}-edited.${type === "image/png" ? "png" : "jpg"}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   async function save() {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -208,9 +225,17 @@ function Annotator({ file }: { file: File }) {
         </button>
         <button
           type="button"
+          onClick={() => void download()}
+          disabled={!img}
+          className="ml-auto inline-flex items-center gap-1 rounded-lg border border-(--line) px-3 py-1.5 text-sm text-(--ink) hover:bg-(--bg-soft) disabled:opacity-50"
+        >
+          <Download className="h-4 w-4" /> บันทึกลงเครื่อง
+        </button>
+        <button
+          type="button"
           onClick={() => void save()}
           disabled={!img || saving}
-          className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-(--brand-green) px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-(--brand-green) px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
         >
           <Check className="h-4 w-4" /> {saving ? "กำลังบันทึก…" : "เสร็จ"}
         </button>
