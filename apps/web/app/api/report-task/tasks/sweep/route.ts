@@ -8,6 +8,7 @@ import { readTasks, writeTasks } from "@/modules/report_task/lib/db/task-repo";
 import { LATE_PENALTY_POINTS, sweepAutoPenalties } from "@/modules/report_task/lib/task-penalty-sweep";
 import type { ActivityItem, Task } from "@/modules/report_task/types";
 import type { AppNotification } from "@/modules/report_task/store/notification-store";
+import { claimSweep, releaseSweep } from "@/modules/report_task/lib/server/sweep-throttle";
 
 /**
  * หักคะแนนงานที่เลยกำหนด — คำนวณและเขียนที่เซิร์ฟเวอร์ครั้งเดียว
@@ -24,7 +25,7 @@ const ACTIVITY_KEY = "activity-log";
 const NOTIFICATIONS_KEY = "notifications";
 const MAX_ACTIVITY_ENTRIES = 1000;
 
-export async function POST() {
+async function sweep() {
   const session = await requireOrg();
   const orgId = session.orgId;
 
@@ -167,4 +168,15 @@ export async function POST() {
 // ตัวเอง ไม่ใช่ route นี้ ดู docs/deploy.md §10 + deploy/cron-run.sh)
 export async function GET() {
   return POST();
+}
+
+export async function POST() {
+  const session = await requireOrg();
+  // ทุกแท็บสั่งทุก 60 วิ — รันจริงไม่เกิน 1 ครั้ง/30 วิ/บริษัท (ดู sweep-throttle.ts)
+  if (!claimSweep("tasks", session.orgId)) return Response.json({ ok: true, changed: false, throttled: true });
+  try {
+    return await sweep();
+  } finally {
+    releaseSweep("tasks", session.orgId);
+  }
 }

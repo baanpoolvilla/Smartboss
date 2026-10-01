@@ -9,6 +9,7 @@ import { defaultReminderSettings, type ReminderSettings } from "@/modules/report
 import type { ReportAlbum, ReportPost, ReportTopic, SubmitterGroup } from "@/modules/report_task/store/report-feed-store";
 import type { AppNotification } from "@/modules/report_task/store/notification-store";
 import type { CalendarEvent, TodoItem } from "@/modules/report_task/types";
+import { claimSweep, releaseSweep } from "@/modules/report_task/lib/server/sweep-throttle";
 
 /**
  * แจ้งเตือน "ใกล้ถึงกำหนด" (งาน/ประชุม/รอบส่งรีพอต) — คนละงานกับ
@@ -35,7 +36,7 @@ const REPORT_FEED_KEY = "report-feed";
 // underlying task/day is long gone by then anyway.
 const MAX_SENT_KEYS = 20_000;
 
-export async function POST() {
+async function sweep() {
   const session = await requireOrg();
   const orgId = session.orgId;
 
@@ -118,4 +119,15 @@ export async function POST() {
 // เผื่ออนาคตต่อ cron ได้ (ต้องแก้ requireOrg ให้รับ secret ก่อน — ดูคอมเมนต์บนสุด)
 export async function GET() {
   return POST();
+}
+
+export async function POST() {
+  const session = await requireOrg();
+  // ทุกแท็บสั่งทุก 60 วิ — รันจริงไม่เกิน 1 ครั้ง/30 วิ/บริษัท (ดู sweep-throttle.ts)
+  if (!claimSweep("reminders", session.orgId)) return Response.json({ ok: true, sent: 0, throttled: true });
+  try {
+    return await sweep();
+  } finally {
+    releaseSweep("reminders", session.orgId);
+  }
 }

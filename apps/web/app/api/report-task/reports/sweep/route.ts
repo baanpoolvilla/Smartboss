@@ -13,6 +13,7 @@ import type { ReportPost, ReportTopic, SubmitterGroup } from "@/modules/report_t
 import type { RoutineDayOffRule } from "@/modules/report_task/store/routine-dayoff-store";
 import { defaultReminderSettings, type ReminderSettings } from "@/modules/report_task/store/reminder-settings-store";
 import type { CalendarEvent } from "@/modules/report_task/types";
+import { claimSweep, releaseSweep } from "@/modules/report_task/lib/server/sweep-throttle";
 
 /**
  * หักคะแนน HR เมื่อพลาด/ส่งช้ารอบส่งรายงาน (category `report_missed`/`report_late`)
@@ -55,7 +56,7 @@ function parseRefId(refId: string): { day: string; topicId: string; roundId: str
   return { day, topicId, roundId, userId };
 }
 
-export async function POST(request?: Request) {
+async function sweep(request?: Request) {
   /*
    * ?dryRun=1&since=YYYY-MM-DD — ดูล่วงหน้าว่าถ้าตั้ง "วันเริ่มนับ" เป็นวันนั้น คะแนนจะเปลี่ยน
    * อะไรบ้าง โดย **ไม่เขียนอะไรเลย** (ทั้งคะแนนและค่า enabledSince) ใช้ก่อนรัน
@@ -344,4 +345,17 @@ export async function POST(request?: Request) {
 // เผื่อ client ฝั่งไหนยิง GET แทน POST มา (เช่นเดียวกับ tasks/sweep, reminders/sweep)
 export async function GET(request: Request) {
   return POST(request);
+}
+
+export async function POST(request?: Request) {
+  // dryRun (ดูผลล่วงหน้าจากสคริปต์/แอดมิน) ไม่นับ ไม่ถูกข้าม
+  if (request && new URL(request.url).searchParams.get("dryRun") === "1") return sweep(request);
+  const session = await requireOrg();
+  // ทุกแท็บสั่งทุก 60 วิ — รันจริงไม่เกิน 1 ครั้ง/30 วิ/บริษัท (ดู sweep-throttle.ts)
+  if (!claimSweep("reports", session.orgId)) return Response.json({ ok: true, changed: false, throttled: true });
+  try {
+    return await sweep(request);
+  } finally {
+    releaseSweep("reports", session.orgId);
+  }
 }

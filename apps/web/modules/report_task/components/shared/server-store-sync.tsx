@@ -251,7 +251,13 @@ export function ServerStoreSync<T, S>({
             void (async () => {
               const seqAtStart = saveSeqRef.current;
               try {
-                const res = await fetch(`/api/report-task/store/${apiKey}`, { cache: "no-store" });
+                // บอก version ที่ถืออยู่ — ไม่มีอะไรใหม่เซิร์ฟเวอร์ตอบ 204 ไม่มี body (ไม่ต้องดึงทั้งก้อนทุก 4 วินาที)
+                const res = await fetch(`/api/report-task/store/${apiKey}`, {
+                  cache: "no-store",
+                  headers: versionRef.current != null ? { "X-Known-Version": String(versionRef.current) } : undefined,
+                });
+                if (res.status === 204) return; // nothing new
+                if (!res.ok) return;
                 const version = Number(res.headers.get("X-Data-Version")) || null;
                 if (version === versionRef.current) return; // nothing new
                 if (pendingRef.current || timerRef.current) return; // user started editing meanwhile

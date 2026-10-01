@@ -10,7 +10,7 @@ import {
   listDepartmentsWithOverlay,
   saveDepartmentOverlay,
 } from "@/modules/report_task/lib/db/departments";
-import { isValidStoreKey, readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
+import { isValidStoreKey, readStore, readStoreVersion, writeStore } from "@/modules/report_task/lib/db/org-store";
 import { recordReportStickerEvents, refundDeletedReportRoundEvents } from "@/modules/report_task/lib/db/report-feed-performance";
 import {
   listHolidayEvents,
@@ -83,11 +83,38 @@ function defaultRange(): { from: string; to: string } {
   return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
 }
 
-export async function GET(_request: NextRequest, context: { params: Promise<{ key: string }> }) {
+/**
+ * ตอบ poll ที่ไม่มีอะไรใหม่ — ไม่มี body มีแต่เลข version
+ *
+ * ทุกแท็บที่เปิดค้างไว้ poll ทุกคีย์ทุก 4 วินาที (ServerStoreSync) เดิมได้ข้อมูล
+ * ทั้งก้อนกลับไปทุกครั้งแล้วค่อยทิ้งถ้า version เท่าเดิม — ฟีดรายงานหลาย MB ต้อง
+ * อ่าน/แปลง JSON/บีบอัดซ้ำ ๆ และคีย์ลา/วันหยุด/OT/รายชื่อ (version คงที่ 1)
+ * ยังไปคิวรีฐานข้อมูล HR ใหม่ทุกรอบทั้งที่ client ทิ้งผลทุกครั้ง
+ * ⇒ CPU ของ next-server เต็มทั้งสองคอร์ เว็บค้าง/502 (2026-10-01)
+ */
+function unchanged(version: number | string) {
+  return new Response(null, { status: 204, headers: { "Cache-Control": "no-store", "X-Data-Version": String(version) } });
+}
+
+export async function GET(request: NextRequest, context: { params: Promise<{ key: string }> }) {
   const { key } = await context.params;
   if (!isValidStoreKey(key)) return notFound();
 
   const session = await requireOrg();
+
+  // client ส่ง version ที่ถืออยู่มา (เฉพาะตอน poll) — คีย์ที่ version คงที่ 1 ตอบได้เลย
+  // (poll ไม่เคยเอาผลของคีย์พวกนี้ไปใช้อยู่แล้ว เพราะ version ไม่เคยเปลี่ยน)
+  const known = request.headers.get("x-known-version");
+  if (known !== null) {
+    const fixedVersionKey =
+      key === DIRECTORY_KEY || key === DEPARTMENTS_KEY || key === LEAVE_TYPE_CATALOG_KEY || WORKFORCE_KEYS.has(key);
+    if (fixedVersionKey) {
+      if (known === "1") return unchanged(1);
+    } else {
+      const current = await readStoreVersion(session.orgId, key);
+      if (String(current) === known) return unchanged(current);
+    }
+  }
 
   if (key === DIRECTORY_KEY) {
     const users = await listDirectory(session.orgId);

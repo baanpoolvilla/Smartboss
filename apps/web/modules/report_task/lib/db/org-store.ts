@@ -36,6 +36,16 @@ export async function readStore<T>(orgId: string, key: string): Promise<StoreRea
   return row ? { data: row.data as T, version: row.version } : { data: null, version: 0 };
 }
 
+/** แค่เลข version ของคีย์ (0 = ยังไม่เคยบันทึก) — ให้ poll เช็คว่ามีอะไรใหม่ไหม
+ * โดยไม่ต้องดึง data ทั้งก้อน (ฟีดรายงานใหญ่หลาย MB) */
+export async function readStoreVersion(orgId: string, key: string): Promise<number> {
+  const row = await prisma.reportTaskStore.findUnique({
+    where: { orgId_key: { orgId, key } },
+    select: { version: true },
+  });
+  return row?.version ?? 0;
+}
+
 export type StoreWrite =
   | { ok: true; version: number }
   | { ok: false; conflict: true; currentVersion: number };
