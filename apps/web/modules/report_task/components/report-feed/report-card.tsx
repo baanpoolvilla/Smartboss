@@ -61,6 +61,8 @@ import {
   type MentionType,
 } from "@/modules/report_task/lib/report-feed-rich-text";
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
+import { dropZoneProps, openAnnotator, originalFor } from "@/lib/annotate/annotate";
+import { AnnotateButton } from "@/components/annotate/image-annotator-host";
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
 import { REPORT_ATTACHMENT_ACCEPT, attachmentKind, fileKindOf } from "@/modules/report_task/lib/report-attachment-kind";
@@ -790,7 +792,7 @@ export function ReportCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [highlightReplyId, repliesExpanded]);
 
-  async function handleReplyFiles(files: FileList | null) {
+  async function handleReplyFiles(files: FileList | File[] | null) {
     if (!files || files.length === 0) return;
     const available = Math.max(0, maxImages - replyImages.length);
     if (files.length > available) {
@@ -811,6 +813,25 @@ export function ReportCard({
       if (next.length > 0) setReplyImages((prev) => [...prev, ...next]);
       setReplyUploading(false);
       if (replyFileInputRef.current) replyFileInputRef.current.value = "";
+    }
+  }
+
+  // ปากกา: วาดบนรูปที่แนบในช่องตอบกลับ แล้วอัปโหลดรูปที่วาดแทนรูปเดิม
+  async function annotateReplyImage(id: string, url: string) {
+    const original = originalFor(url);
+    if (!original) return;
+    const edited = await openAnnotator(original);
+    if (!edited) return;
+    setReplyUploading(true);
+    try {
+      const media = await uploadReportMedia(edited);
+      setReplyImages((prev) =>
+        prev.map((i) => (i.id === id ? { ...i, url: media.url, name: edited.name, mime: media.mime, size: media.size, thumbUrl: media.thumbUrl ?? undefined } : i))
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "บันทึกรูปที่วาดไม่สำเร็จ");
+    } finally {
+      setReplyUploading(false);
     }
   }
 
@@ -1796,6 +1817,9 @@ export function ReportCard({
                 {replyImages.map((img) => (
                   <div key={img.id} className="relative h-12 w-12 rounded-md overflow-hidden border border-[var(--line)]">
                     <ReportMediaThumb media={img} fileChipVariant="icon" className="h-full w-full object-cover" />
+                    {originalFor(img.url) && (
+                      <AnnotateButton className="absolute bottom-0.5 left-0.5 h-5 w-5" onClick={() => void annotateReplyImage(img.id, img.url ?? "")} />
+                    )}
                     <button
                       onClick={() => setReplyImages((prev) => prev.filter((i) => i.id !== img.id))}
                       className="absolute top-0 right-0 h-4 w-4 flex items-center justify-center bg-black/60 text-white rounded-bl-md"
@@ -1809,6 +1833,8 @@ export function ReportCard({
             )}
 
             <div
+              // ลากไฟล์มาวางที่ช่องตอบกลับได้ (วางรูปด้วย Ctrl+V มีอยู่แล้ว — handleReplyImagePaste)
+              {...dropZoneProps((files) => void handleReplyFiles(files))}
               className={cn(
                 "flex items-center gap-1 border bg-white pl-1 pr-1 py-1 focus-within:border-[var(--brand-green)]/50 transition-colors",
                 // Collapsed at rest ("[avatar] [input] 📎 ➤") stays a plain

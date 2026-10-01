@@ -16,6 +16,7 @@ import {
 } from "@smartboss/ui/components/dropdown-menu";
 import { Logo } from "@/components/logo";
 import { NavigationProgress } from "@/components/shell/navigation-progress";
+import { ImageAnnotatorHost } from "@/components/annotate/image-annotator-host";
 import { Icon } from "@/components/icon";
 import { IssueReportBarButton } from "@/modules/report_task/components/issue-report/issue-report-bar-button";
 import { ReportNotificationSync } from "@/modules/report_task/components/shared/report-notification-sync";
@@ -82,6 +83,8 @@ export function Shell({
       <Suspense fallback={null}>
         <NavigationProgress />
       </Suspense>
+      {/* หน้าต่างวาด/เขียนบนรูปก่อนส่ง — เปิดจากปุ่มปากกาในทุกช่องพิมพ์ */}
+      <ImageAnnotatorHost />
       {/* ไฟล์ใหญ่เกิน — เตือนขนาดจริง/เพดาน ก่อนส่งฟอร์มที่แนบไฟล์ทุกหน้า */}
       <FileSizeGuard />
       {/* เปิดหน้าที่แจ้งเตือนชี้มาเอง (ไม่ได้กดจากกระดิ่ง) ก็นับว่าอ่านแล้ว */}

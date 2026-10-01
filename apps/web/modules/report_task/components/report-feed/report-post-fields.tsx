@@ -27,6 +27,8 @@ import { Bold, Building2, Code, Hash, Italic, List, ListOrdered, Minus, Square, 
 import { LinkInsertPopover } from "@/modules/report_task/components/report-feed/link-insert-popover";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
 import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
+import { dropZoneProps, openAnnotator, originalFor } from "@/lib/annotate/annotate";
+import { AnnotateButton } from "@/components/annotate/image-annotator-host";
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
 import { toast } from "sonner";
 import { uuid } from "@/modules/report_task/lib/uuid";
@@ -403,6 +405,22 @@ export function ReportPostFields({
     syncFromEditor(sectionId, el);
   }
 
+  // ปากกา: วาดบนรูปที่แนบ แล้วอัปโหลดรูปที่วาดแทนรูปเดิม (ไม่ต้องเซฟลงเครื่องก่อน)
+  async function annotateImage(id: string, url: string) {
+    const original = originalFor(url);
+    if (!original) return;
+    const edited = await openAnnotator(original);
+    if (!edited) return;
+    try {
+      const media = await uploadReportMedia(edited);
+      onImagesChange(
+        images.map((x) => (x.id === id ? { ...x, url: media.url, name: edited.name, mime: media.mime, thumbUrl: media.thumbUrl ?? undefined } : x))
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "บันทึกรูปที่วาดไม่สำเร็จ");
+    }
+  }
+
   async function handleImagePaste(e: React.ClipboardEvent<HTMLDivElement>) {
     const item = Array.from(e.clipboardData.items).find((it) => it.kind === "file" && it.type.startsWith("image/"));
     if (!item) return; // no pasted image — let default paste (text, a pasted link) proceed as before
@@ -642,7 +660,8 @@ export function ReportPostFields({
   }
 
   return (
-    <div className="space-y-3">
+    // ลากไฟล์มาวางตรงไหนของฟอร์มก็ได้ (ลากห้องมาแท็กยังทำงานแยกในช่องเนื้อหา — ตัวนั้นไม่ยุ่งกับไฟล์)
+    <div className="space-y-3" {...dropZoneProps((files) => onFilesSelected(files))}>
       <Input
         aria-label="หัวข้อรีพอต"
         placeholder="หัวข้อรีพอต เช่น สรุปอัปเดตประจำสัปดาห์"
@@ -830,6 +849,9 @@ export function ReportPostFields({
           {images.map((img) => (
             <div key={img.id} className="relative h-16 w-16 rounded-lg overflow-hidden border border-[var(--line)]">
               <ReportMediaThumb media={img} fileChipVariant="compact" className="h-full w-full object-cover" />
+              {originalFor(img.url) && (
+                <AnnotateButton className="absolute bottom-1 left-1" onClick={() => void annotateImage(img.id, img.url ?? "")} />
+              )}
               <button
                 onClick={() => onImagesChange(images.filter((x) => x.id !== img.id))}
                 className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition-colors"

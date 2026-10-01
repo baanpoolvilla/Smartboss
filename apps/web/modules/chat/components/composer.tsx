@@ -15,6 +15,8 @@ import { getChatPrefs } from "../lib/prefs";
 import { ChatAvatar } from "./chat-avatar";
 
 import { fileTooLargeMessage } from "@/lib/file-limits";
+import { openAnnotator } from "@/lib/annotate/annotate";
+import { AnnotateButton } from "@/components/annotate/image-annotator-host";
 const MAX_FILES = 20;
 const MAX_BYTES = 25 * 1024 * 1024;
 const ACCEPT_FILES =
@@ -192,6 +194,24 @@ export const Composer = forwardRef<
       accepted.forEach(startUpload);
     },
     [pending.length, startUpload]
+  );
+
+  // ปากกา: วาดบนรูปที่รอส่ง แล้วอัปโหลดรูปที่วาดแทน (ไฟล์อยู่ในเครื่องอยู่แล้ว ไม่ต้องเซฟก่อน)
+  const annotatePending = useCallback(
+    async (item: PendingFile) => {
+      const edited = await openAnnotator(item.file);
+      if (!edited) return;
+      if (item.previewUrl) {
+        URL.revokeObjectURL(item.previewUrl);
+        previewsRef.current.delete(item.previewUrl);
+      }
+      const previewUrl = URL.createObjectURL(edited);
+      previewsRef.current.add(previewUrl);
+      const next: PendingFile = { ...item, file: edited, previewUrl, progress: 0, status: "uploading", result: undefined, error: undefined };
+      setPending((list) => list.map((x) => (x.id === item.id ? next : x)));
+      startUpload(next);
+    },
+    [startUpload]
   );
 
   useImperativeHandle(ref, () => ({ addFiles, focus: () => textareaRef.current?.focus() }), [addFiles]);
@@ -389,7 +409,11 @@ export const Composer = forwardRef<
               {p.previewUrl && p.kind === "image" ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={p.previewUrl} alt={p.file.name} className="h-full w-full object-cover" />
-              ) : p.previewUrl && p.kind === "video" ? (
+              ) : null}
+              {p.kind === "image" && p.file.type !== "image/gif" && p.status !== "uploading" && (
+                <AnnotateButton className="absolute bottom-1 left-1" onClick={() => void annotatePending(p)} />
+              )}
+              {p.previewUrl && p.kind === "image" ? null : p.previewUrl && p.kind === "video" ? (
                 <video src={p.previewUrl} muted className="h-full w-full object-cover" />
               ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-1 px-1 text-center">

@@ -1,6 +1,7 @@
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 
 import { fileTooLargeMessage } from "@/lib/file-limits";
+import { rememberOriginal } from "@/lib/annotate/annotate";
 /** Shared canvas downscale step — draws `file` onto a canvas at most
  * `maxWidth` wide, used by both the upload path and the legacy inline path.
  *
@@ -169,5 +170,7 @@ export async function uploadReportMedia(file: File): Promise<UploadedReportMedia
     return uploadRaw(file, "อัปโหลดวิดีโอไม่สำเร็จ");
   }
   const { url, size } = await uploadCompressedImage(file);
+  // จำไฟล์ต้นฉบับไว้ให้ปุ่มปากกา (วาดบนรูปก่อนส่ง) — ดู lib/annotate/annotate.ts
+  rememberOriginal(url, file);
   return { url, mime: "image/jpeg", name: file.name, size };
 }

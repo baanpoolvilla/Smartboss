@@ -81,6 +81,8 @@ import { ReportImageLightbox } from "@/modules/report_task/components/report-fee
 import type { ReportPostImage } from "@/modules/report_task/store/report-feed-store";
 import { mimeFromLegacyTaskLabel } from "@/modules/report_task/lib/report-attachment-kind";
 import { uploadTaskAttachment } from "@/modules/report_task/lib/task-attachment-upload";
+import { dropZoneProps, filesFromDataTransfer, openAnnotator, originalFor } from "@/lib/annotate/annotate";
+import { AnnotateButton } from "@/components/annotate/image-annotator-host";
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { toast } from "sonner";
 import { TimeAgo } from "@/modules/report_task/components/shared/time-ago";
@@ -563,6 +565,23 @@ export function TaskDetailSheet({
       }
     }
     setCommentUploading(false);
+  }
+
+  // ปากกา: วาดบนรูปที่แนบไว้ แล้วอัปโหลดรูปที่วาดแทนรูปเดิม (ไม่ต้องเซฟลงเครื่องก่อน)
+  async function annotateCommentAttachment(id: string, url: string) {
+    const original = originalFor(url);
+    if (!original) return;
+    const edited = await openAnnotator(original);
+    if (!edited) return;
+    setCommentUploading(true);
+    try {
+      const att = await uploadTaskAttachment(edited, viewingAsUserId);
+      setCommentAttachments((prev) => prev.map((x) => (x.id === id ? att : x)));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "บันทึกรูปที่วาดไม่สำเร็จ");
+    } finally {
+      setCommentUploading(false);
+    }
   }
 
   function removeCommentAttachment(id: string) {
@@ -1945,12 +1964,35 @@ export function TaskDetailSheet({
             )}
           </div>
 
-          <div className={cn("border-t border-[var(--line)] p-3 flex-col gap-2 shrink-0 bg-white", mobileCommentsOpen ? "flex" : "hidden md:flex")}>
+          <div
+            className={cn("border-t border-[var(--line)] p-3 flex-col gap-2 shrink-0 bg-white", mobileCommentsOpen ? "flex" : "hidden md:flex")}
+            // วางรูปที่แคป (Ctrl+V) / ลากไฟล์มาวาง ได้ทั้งกล่องคอมเมนต์
+            onPaste={(e) => {
+              const files = filesFromDataTransfer(e.clipboardData);
+              if (files.length === 0) return;
+              e.preventDefault();
+              void handleCommentFilesSelected(files);
+            }}
+            {...dropZoneProps((files) => void handleCommentFilesSelected(files))}
+          >
             {commentAttachments.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {commentAttachments.map((a) => (
-                  <span key={a.id} className="flex items-center gap-1.5 text-xs bg-[var(--bg-soft)] rounded-md pl-2 pr-1 py-1">
-                    <FileText className="h-3.5 w-3.5 shrink-0 text-[var(--ink-soft)]" />
+                  <span key={a.id} className="flex items-center gap-1.5 text-xs bg-[var(--bg-soft)] rounded-md pl-1 pr-1 py-1">
+                    {a.url && a.mime?.startsWith("image/") ? (
+                      <span className="relative shrink-0">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={a.url} alt="" className="h-10 w-10 rounded object-cover" />
+                        {originalFor(a.url) && (
+                          <AnnotateButton
+                            className="absolute -right-1.5 -top-1.5"
+                            onClick={() => void annotateCommentAttachment(a.id, a.url!)}
+                          />
+                        )}
+                      </span>
+                    ) : (
+                      <FileText className="ml-1 h-3.5 w-3.5 shrink-0 text-[var(--ink-soft)]" />
+                    )}
                     <span className="truncate max-w-[140px]">{a.name}</span>
                     <button
                       onClick={() => removeCommentAttachment(a.id)}

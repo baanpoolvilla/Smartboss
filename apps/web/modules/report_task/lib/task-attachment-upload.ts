@@ -5,6 +5,7 @@ import type { Attachment } from "@/modules/report_task/types";
 import { uuid } from "@/modules/report_task/lib/uuid";
 
 import { fileTooLargeMessage } from "@/lib/file-limits";
+import { rememberOriginal } from "@/lib/annotate/annotate";
 /** Short Thai label for the attachment list — shown next to the size, e.g. "PDF · 1.2 MB". */
 function labelFor(mime: string): string {
   if (mime.startsWith("image/")) return "รูปภาพ";
@@ -58,6 +59,8 @@ export async function uploadTaskAttachment(file: File, uploadedBy: string): Prom
     size = data.size;
   }
 
+  // จำไฟล์ต้นฉบับไว้ให้ปุ่มปากกา (วาดบนรูปก่อนส่ง) — ดู lib/annotate/annotate.ts
+  rememberOriginal(url, file);
   return {
     id: `att-${uuid()}`,
     name: file.name || "ไฟล์แนบ",
