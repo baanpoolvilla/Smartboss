@@ -207,7 +207,21 @@ export function MessageList({
 
   return (
     <div className="chat-room-surface relative min-h-0 flex-1 bg-(--chat-room-bg)">
-      <div ref={scrollRef} onScroll={onScroll} className="h-full overflow-y-auto overscroll-contain" style={{ overflowAnchor: "none" }}>
+      <div
+        ref={scrollRef}
+        onScroll={onScroll}
+        // ผู้ใช้เลื่อนขึ้นเอง (ลูกกลิ้ง/นิ้ว) = เลิกยึดล่างสุดทันที — ไม่งั้นระยะ 120px ของ "ยังอยู่ล่าง"
+        // ทำให้รูป/ข้อความที่สูงขึ้นระหว่างนั้นดึงจอกลับลงไป เด้งไปมา
+        onWheel={(e) => {
+          if (e.deltaY < 0) atBottomRef.current = false;
+        }}
+        onTouchMove={() => {
+          const el = scrollRef.current;
+          if (el && el.scrollHeight - el.scrollTop - el.clientHeight > 4) atBottomRef.current = false;
+        }}
+        className="h-full overflow-y-auto overscroll-contain"
+        style={{ overflowAnchor: "none" }}
+      >
         <div className="pb-3">
           <div ref={topRef} className="h-1" />
           {room.hasMore ? (

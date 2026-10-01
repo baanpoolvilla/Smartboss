@@ -67,9 +67,12 @@ h1, h2, h3, h4, h5, h6 {
   background-position: center;
 }
 
+/* เดิมใส่ content-visibility: auto (ไม่วาดแถวนอกจอ เดาสูง 64px) — เลื่อนขึ้นแล้วแถวที่เพิ่งวาด
+   สูงไม่เท่าที่เดา ("." ~38px, ข้อความยาว 150px+) ความสูงรวมเปลี่ยนระหว่างเลื่อน แล้วตัวยึดล่างสุด
+   (message-list.tsx) ดึงกลับลงไป ⇒ หมุนลูกกลิ้งขึ้นแล้วเด้งไปมา ห้องโหลดข้อความทีละหน้าอยู่แล้ว
+   วาดทุกแถวตามจริงไม่หนัก */
 .chat-ui .chat-row {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 64px;
+  overflow-anchor: none;
 }
 
 @keyframes chat-in {
