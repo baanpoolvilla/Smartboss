@@ -23,6 +23,26 @@ const SIZES = [
 /** รูปใหญ่มาก (กล้องมือถือ 4000px) ย่อลงก่อนวาด — ส่งเร็ว วาดลื่น */
 const MAX_EDGE = 2560;
 
+/**
+ * ปุ่มในหน้าต่างวาดทำงานทันทีที่ยกนิ้ว (pointerup แบบสัมผัส) ไม่รอ click — หลังลากนิ้ววาดบน
+ * canvas (touch-action: none) บางครั้ง browser ไม่ส่ง click ตามมา กด "เสร็จ" แล้วไม่ไปไหน
+ * เมาส์/คีย์บอร์ดยังใช้ click ตามปกติ — click ที่ตามหลังการแตะไม่เกิน 600ms ถูกข้าม (กันทำซ้ำ)
+ */
+let lastTouchActivation = 0;
+function tap(fn: () => void) {
+  return {
+    onPointerUp: (e: React.PointerEvent) => {
+      if (e.pointerType === "mouse") return;
+      lastTouchActivation = Date.now();
+      fn();
+    },
+    onClick: () => {
+      if (Date.now() - lastTouchActivation < 600) return;
+      fn();
+    },
+  };
+}
+
 export function ImageAnnotatorHost() {
   const file = useAnnotatorStore((s) => s.file);
   if (!file) return null;
@@ -125,6 +145,8 @@ function Annotator({ file }: { file: File }) {
     op.points.push(toCanvas(e));
     redraw(op);
   }
+  // เก็บเส้นทุกทางที่นิ้ว/เมาส์หลุด — มือถือบางครั้งส่ง pointercancel / lostpointercapture
+  // แทน pointerup เส้นที่เห็นบนจอเลยไม่ถูกเก็บ กดเสร็จแล้วได้รูปเดิม
   function onPointerUp() {
     const op = drawing.current;
     drawing.current = null;
@@ -159,7 +181,13 @@ function Annotator({ file }: { file: File }) {
   async function save() {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    if (ops.length === 0 && scale === 1) {
+    const pending = drawing.current; // เส้นที่ยังไม่ถูกเก็บ (นิ้วยังไม่หลุดตามปกติ)
+    drawing.current = null;
+    if (pending) {
+      redraw(pending);
+      setOps((o) => [...o, pending]);
+    }
+    if (ops.length === 0 && !pending && scale === 1) {
       closeAnnotator(null); // ไม่ได้วาดอะไร — ใช้รูปเดิม
       return;
     }
@@ -177,12 +205,12 @@ function Annotator({ file }: { file: File }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[1000] flex flex-col bg-black/85" role="dialog" aria-modal="true" aria-label="วาด/เขียนบนรูป">
+    <div className="fixed inset-0 z-[1000] flex flex-col bg-black" role="dialog" aria-modal="true" aria-label="วาด/เขียนบนรูป">
       {/* แถบเครื่องมือ */}
       <div className="flex flex-wrap items-center gap-2 bg-(--bg) px-3 py-2" style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}>
         <button
           type="button"
-          onClick={() => closeAnnotator(null)}
+          {...tap(() => closeAnnotator(null))}
           className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm text-(--ink-soft) hover:bg-(--bg-soft)"
         >
           <X className="h-4 w-4" /> ยกเลิก
@@ -199,7 +227,7 @@ function Annotator({ file }: { file: File }) {
               role="radio"
               aria-checked={color === c}
               aria-label={`สี ${c}`}
-              onClick={() => setColor(c)}
+              {...tap(() => setColor(c))}
               className="h-6 w-6 rounded-full border-2 transition-transform"
               style={{ backgroundColor: c, borderColor: color === c ? "var(--ink)" : "var(--line)", transform: color === c ? "scale(1.15)" : undefined }}
             />
@@ -212,7 +240,7 @@ function Annotator({ file }: { file: File }) {
               type="button"
               role="radio"
               aria-checked={sizeIdx === i}
-              onClick={() => setSizeIdx(i)}
+              {...tap(() => setSizeIdx(i))}
               className={`rounded-md px-2 py-1 text-xs ${sizeIdx === i ? "bg-(--ink) text-(--bg)" : "text-(--ink-soft) hover:bg-(--bg-soft)"}`}
             >
               {s.label}
@@ -222,7 +250,7 @@ function Annotator({ file }: { file: File }) {
         <span className="mx-1 h-6 w-px bg-(--line)" />
         <button
           type="button"
-          onClick={undo}
+          {...tap(undo)}
           disabled={ops.length === 0}
           className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm text-(--ink-soft) hover:bg-(--bg-soft) disabled:opacity-40"
         >
@@ -230,7 +258,7 @@ function Annotator({ file }: { file: File }) {
         </button>
         <button
           type="button"
-          onClick={() => setOps([])}
+          {...tap(() => setOps([]))}
           disabled={ops.length === 0}
           className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm text-(--ink-soft) hover:bg-(--bg-soft) disabled:opacity-40"
         >
@@ -238,7 +266,7 @@ function Annotator({ file }: { file: File }) {
         </button>
         <button
           type="button"
-          onClick={() => void download()}
+          {...tap(() => void download())}
           disabled={!img}
           className="ml-auto inline-flex items-center gap-1 rounded-lg border border-(--line) px-3 py-1.5 text-sm text-(--ink) hover:bg-(--bg-soft) disabled:opacity-50"
         >
@@ -246,7 +274,7 @@ function Annotator({ file }: { file: File }) {
         </button>
         <button
           type="button"
-          onClick={() => void save()}
+          {...tap(() => void save())}
           disabled={!img || saving}
           className="inline-flex items-center gap-1.5 rounded-lg bg-(--brand-green) px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
         >
@@ -270,6 +298,7 @@ function Annotator({ file }: { file: File }) {
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
               onPointerCancel={onPointerUp}
+              onLostPointerCapture={onPointerUp}
               className="block max-h-[calc(100dvh-7rem)] max-w-full bg-white shadow-2xl"
               style={{ touchAction: "none", cursor: tool === "text" ? "text" : "crosshair" }}
             />
@@ -303,7 +332,7 @@ function ToolButton({ active, onClick, label, icon }: { active: boolean; onClick
     <button
       type="button"
       aria-pressed={active}
-      onClick={onClick}
+      {...tap(onClick)}
       className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm ${active ? "bg-(--ink) text-(--bg)" : "text-(--ink-soft) hover:bg-(--bg-soft)"}`}
     >
       {icon} {label}
