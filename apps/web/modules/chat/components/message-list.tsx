@@ -88,9 +88,30 @@ export function MessageList({
     return seqs.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   }, [detail?.readSeqs, meId]);
 
+  // รูปจิ๋ว "อ่านถึงตรงนี้" แบบ LINE/Messenger — แต่ละคนอยู่ใต้ข้อความล่าสุดที่เขาอ่านถึง
+  const seenAt = useMemo(() => {
+    const map = new Map<string, string[]>();
+    const readSeqs = detail?.readSeqs;
+    if (!readSeqs) return map;
+    const withSeq = items.filter((m) => m.seq && !m.deleted && isUserMessageKind(m.kind));
+    for (const [uid, seq] of Object.entries(readSeqs)) {
+      if (uid === meId || !seq) continue;
+      const r = BigInt(seq);
+      for (let i = withSeq.length - 1; i >= 0; i--) {
+        const m = withSeq[i]!;
+        if (BigInt(m.seq!) <= r) {
+          map.set(m.id, [...(map.get(m.id) ?? []), uid]);
+          break;
+        }
+      }
+    }
+    return map;
+  }, [items, detail?.readSeqs, meId]);
+
   const readLabelFor = useCallback(
     (m: RoomMessage): string | null => {
-      if (m.authorId !== meId || !m.seq || channelType === "org") return null;
+      // ห้องรวมทั้งบริษัทก็แสดง "อ่านแล้ว N" ด้วย (เดิมซ่อน)
+      if (m.authorId !== meId || !m.seq) return null;
       const n = countAtLeast(readSorted, BigInt(m.seq));
       if (n === 0) return null;
       return channelType === "dm" ? "อ่านแล้ว" : `อ่านแล้ว ${n}`;
@@ -262,6 +283,7 @@ export function MessageList({
                     users={users}
                     firstInGroup={firstInGroup}
                     readLabel={readLabelFor(m)}
+                    seenBy={seenAt.get(m.id)}
                     canManage={canManage}
                     canPin={canPin}
                     highlighted={highlight?.channelId === channelId && highlight.messageId === m.id}

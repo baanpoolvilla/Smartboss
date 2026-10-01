@@ -360,6 +360,8 @@ export interface MessageBubbleProps {
   firstInGroup: boolean;
   /** "อ่านแล้ว" / "อ่านแล้ว 3" ใต้ข้อความของเรา (null = ยังไม่มีใครอ่าน) */
   readLabel: string | null;
+  /** คนที่อ่านล่าสุดถึงข้อความนี้ — โชว์เป็นรูปจิ๋วใต้ข้อความ (ไม่ใส่ = ไม่มีใคร) */
+  seenBy?: string[];
   canManage: boolean;
   canPin: boolean;
   highlighted: boolean;
@@ -372,6 +374,123 @@ export interface MessageBubbleProps {
   onRetry: (clientId: string) => void;
   onDiscard: (clientId: string) => void;
   onShowReaders: (m: RoomMessage) => void;
+}
+
+/**
+ * ปุ่มอีโมจิใต้ข้อความ + กล่องเล็ก "ใครกดบ้าง"
+ * คอม: ชี้ค้าง = เห็นรายชื่อ, คลิก = กด/ยกเลิกอีโมจิของเรา (เหมือนเดิม)
+ * มือถือ (ไม่มี hover): แตะ = เปิดรายชื่อ ในกล่องมีปุ่มกด/ยกเลิกของเรา แตะที่อื่นปิด
+ */
+function ReactionChip({
+  emoji,
+  userIds,
+  meId,
+  users,
+  alignEnd,
+  onToggle,
+}: {
+  emoji: string;
+  userIds: string[];
+  meId: string;
+  users: Record<string, ChatUser>;
+  alignEnd: boolean;
+  onToggle: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const lastPointer = useRef<string>("mouse");
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const mineReact = userIds.includes(meId);
+  // เราขึ้นก่อน แล้วคนอื่นตามลำดับที่กด
+  const people = [...userIds].sort((a, b) => (a === meId ? -1 : b === meId ? 1 : 0));
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: PointerEvent) => {
+      if (!boxRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [open]);
+  useEffect(() => () => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+  }, []);
+
+  return (
+    <div
+      ref={boxRef}
+      className="relative"
+      onPointerEnter={(e) => {
+        if (e.pointerType !== "mouse") return;
+        if (hoverTimer.current) clearTimeout(hoverTimer.current);
+        hoverTimer.current = setTimeout(() => setOpen(true), 250);
+      }}
+      onPointerLeave={(e) => {
+        if (e.pointerType !== "mouse") return;
+        if (hoverTimer.current) clearTimeout(hoverTimer.current);
+        hoverTimer.current = setTimeout(() => setOpen(false), 120);
+      }}
+    >
+      <button
+        type="button"
+        onPointerDown={(e) => {
+          lastPointer.current = e.pointerType;
+        }}
+        onClick={() => {
+          if (lastPointer.current === "mouse") onToggle();
+          else setOpen((v) => !v);
+        }}
+        aria-label={`${emoji} ${userIds.length} คน — ดูว่าใครกด`}
+        aria-expanded={open}
+        className={cn(
+          "flex h-8 items-center gap-1.5 rounded-full border pl-2 pr-2.5 text-sm font-medium shadow-sm transition-colors",
+          mineReact ? "border-(--chat-accent) bg-(--chat-accent-soft) text-(--chat-accent-strong)" : "border-(--line) bg-(--bg) text-(--ink-soft)"
+        )}
+      >
+        <span className="text-[20px] leading-none">{emoji}</span>
+        <span className="tabular-nums">{userIds.length}</span>
+      </button>
+
+      {open && (
+        <div
+          role="dialog"
+          aria-label={`คนที่กด ${emoji}`}
+          className={cn(
+            "absolute bottom-full z-30 mb-1.5 w-max min-w-36 max-w-56 rounded-xl border border-(--line) bg-(--bg) py-1.5 shadow-lg",
+            alignEnd ? "right-0" : "left-0"
+          )}
+        >
+          <p className="px-3 pb-1 text-[11px] text-(--ink-soft)">
+            <span className="text-sm">{emoji}</span> · {userIds.length} คน
+          </p>
+          <ul className="max-h-48 overflow-y-auto">
+            {people.map((id) => {
+              const u = users[id];
+              const name = id === meId ? "คุณ" : (u?.name ?? "สมาชิก");
+              return (
+                <li key={id} className="flex items-center gap-2 px-3 py-1">
+                  <ChatAvatar name={u?.name ?? name} src={u?.avatarUrl} colorKey={id} className="h-5 w-5 text-[9px]" />
+                  <span className="truncate text-[12.5px] text-(--ink)">{name}</span>
+                </li>
+              );
+            })}
+          </ul>
+          {lastPointer.current !== "mouse" && (
+            <button
+              type="button"
+              onClick={() => {
+                onToggle();
+                setOpen(false);
+              }}
+              className="mx-1.5 mt-1 w-[calc(100%-0.75rem)] rounded-lg px-2 py-1.5 text-left text-[12px] text-(--chat-accent-strong) hover:bg-(--bg-soft)"
+            >
+              {mineReact ? `ยกเลิก ${emoji} ของฉัน` : `กด ${emoji} ด้วย`}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export const MessageBubble = memo(function MessageBubble(props: MessageBubbleProps) {
@@ -555,26 +674,41 @@ export const MessageBubble = memo(function MessageBubble(props: MessageBubblePro
 
         {m.reactions.length > 0 && (
           <div className={cn("mt-1 flex flex-wrap gap-1", mine && "justify-end")}>
-            {m.reactions.map((r) => {
-              const mineReact = r.userIds.includes(meId);
-              const names = r.userIds.map((id) => (id === meId ? "คุณ" : (users[id]?.name ?? "สมาชิก"))).join(", ");
-              return (
-                <button
-                  key={r.emoji}
-                  type="button"
-                  onClick={() => props.onReact(m, r.emoji)}
-                  title={names}
-                  className={cn(
-                    "flex h-8 items-center gap-1.5 rounded-full border pl-2 pr-2.5 text-sm font-medium shadow-sm transition-colors",
-                    mineReact ? "border-(--chat-accent) bg-(--chat-accent-soft) text-(--chat-accent-strong)" : "border-(--line) bg-(--bg) text-(--ink-soft)"
-                  )}
-                >
-                  <span className="text-[20px] leading-none">{r.emoji}</span>
-                  <span className="tabular-nums">{r.userIds.length}</span>
-                </button>
-              );
-            })}
+            {m.reactions.map((r) => (
+              <ReactionChip
+                key={r.emoji}
+                emoji={r.emoji}
+                userIds={r.userIds}
+                meId={meId}
+                users={users}
+                alignEnd={mine}
+                onToggle={() => props.onReact(m, r.emoji)}
+              />
+            ))}
           </div>
+        )}
+
+        {props.seenBy && props.seenBy.length > 0 && (
+          <button
+            type="button"
+            onClick={() => props.onShowReaders(m)}
+            title={`อ่านถึงตรงนี้: ${props.seenBy.map((id) => users[id]?.name ?? "สมาชิก").join(", ")}`}
+            aria-label={`อ่านถึงตรงนี้ ${props.seenBy.length} คน`}
+            className={cn("mt-1 flex items-center", mine ? "self-end" : "self-start")}
+          >
+            <span className="flex -space-x-1">
+              {props.seenBy.slice(0, 5).map((id) => (
+                <ChatAvatar
+                  key={id}
+                  name={users[id]?.name ?? "?"}
+                  src={users[id]?.avatarUrl}
+                  colorKey={id}
+                  className="h-4 w-4 text-[7px] ring-[1.5px] ring-white"
+                />
+              ))}
+            </span>
+            {props.seenBy.length > 5 && <span className="ml-1 text-[10px] text-(--chat-meta)">+{props.seenBy.length - 5}</span>}
+          </button>
         )}
 
         {m.status === "failed" && (
