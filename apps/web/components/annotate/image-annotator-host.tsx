@@ -16,9 +16,11 @@ type Op =
 
 const COLORS = ["#ef4444", "#facc15", "#22c55e", "#3b82f6", "#111827", "#ffffff"];
 const SIZES = [
-  { label: "เล็ก", factor: 0.004 },
-  { label: "กลาง", factor: 0.008 },
-  { label: "ใหญ่", factor: 0.016 },
+  // สัดส่วนของด้านยาวของรูป — เส้น (pen) กับตัวหนังสือ (text) แยกกัน
+  // รูปแคปจอ 1920px: เส้น ~4/8/13px · ตัวหนังสือ ~23/35/50px (เดิมใหญ่สุด เส้น 31px ตัวหนังสือ 123px)
+  { label: "เล็ก", pen: 0.002, text: 0.012 },
+  { label: "กลาง", pen: 0.004, text: 0.018 },
+  { label: "ใหญ่", pen: 0.007, text: 0.026 },
 ];
 /** รูปใหญ่มาก (กล้องมือถือ 4000px) ย่อลงก่อนวาด — ส่งเร็ว วาดลื่น */
 const MAX_EDGE = 2560;
@@ -114,8 +116,8 @@ function Annotator({ file }: { file: File }) {
   const width = img ? Math.round(img.naturalWidth * scale) : 0;
   const height = img ? Math.round(img.naturalHeight * scale) : 0;
   const longEdge = Math.max(width, height);
-  const strokeWidth = Math.max(2, Math.round(longEdge * SIZES[sizeIdx]!.factor));
-  const fontSize = Math.max(14, Math.round(longEdge * SIZES[sizeIdx]!.factor * 4));
+  const strokeWidth = Math.max(2, Math.round(longEdge * SIZES[sizeIdx]!.pen));
+  const fontSize = Math.max(12, Math.round(longEdge * SIZES[sizeIdx]!.text));
 
   // วาดใหม่ทั้งหมดทุกครั้งที่เปลี่ยน (ย้อนกลับ = ตัด op สุดท้ายแล้ววาดใหม่)
   function redraw(extra?: Op | null) {

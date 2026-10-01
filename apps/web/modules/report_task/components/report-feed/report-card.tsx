@@ -449,6 +449,16 @@ export function ReportCard({
   const [replyColorPickerOpen, setReplyColorPickerOpen] = useState(false);
   const replyEditorRef = useRef<HTMLDivElement>(null);
   const replyFileInputRef = useRef<HTMLInputElement>(null);
+  // รูปจากปุ่มดินสอ (หน้าดูรูป) เพิ่งเข้ามาในช่องตอบกลับ — เลื่อนไปให้เห็น + กะพริบกรอบ
+  const [replyAttachFlash, setReplyAttachFlash] = useState(false);
+  function revealReplyAttachment() {
+    setReplyAttachFlash(true);
+    setTimeout(() => setReplyAttachFlash(false), 1900);
+    requestAnimationFrame(() => {
+      replyEditorRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+      replyEditorRef.current?.focus({ preventScroll: true });
+    });
+  }
   // @mention in the reply box — this composer never got the trigger/insert
   // mechanics the main post composer and Openchat's flat composer both have
   // (report-post-fields.tsx, openchat-feed.tsx), so typing "@" here did
@@ -1500,7 +1510,7 @@ export function ReportCard({
           index={lightboxIndex}
           onIndexChange={setLightboxIndex}
           onClose={() => setLightboxIndex(null)}
-          onEditImage={topic.commentsDisabled ? undefined : (file) => void handleReplyFiles([file])}
+          onEditImage={topic.commentsDisabled ? undefined : (file) => { revealReplyAttachment(); void handleReplyFiles([file]); }}
           imageMeta={() => ({ authorId: post.authorId, at: post.createdAt })}
         />
       )}
@@ -1813,10 +1823,10 @@ export function ReportCard({
               </div>
             )}
 
-            {replyImages.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 pl-1">
+            {(replyImages.length > 0 || replyUploading) && (
+              <div className={cn("flex flex-wrap items-center gap-2 p-1", replyAttachFlash && "attach-flash")}>
                 {replyImages.map((img) => (
-                  <div key={img.id} className="relative h-12 w-12 rounded-md overflow-hidden border border-[var(--line)]">
+                  <div key={img.id} className="relative h-16 w-16 rounded-md overflow-hidden border border-[var(--line)]">
                     <ReportMediaThumb media={img} fileChipVariant="icon" className="h-full w-full object-cover" />
                     {originalFor(img.url) && (
                       <AnnotateButton className="absolute bottom-0.5 left-0.5 h-5 w-5" onClick={() => void annotateReplyImage(img.id, img.url ?? "")} />
@@ -1830,6 +1840,9 @@ export function ReportCard({
                     </button>
                   </div>
                 ))}
+                <span className="text-xs text-[var(--ink-soft)]">
+                  {replyUploading ? "กำลังแนบรูป…" : `แนบแล้ว ${replyImages.length} ไฟล์ · พิมพ์ข้อความแล้วกดส่งได้เลย`}
+                </span>
               </div>
             )}
 
@@ -2075,7 +2088,7 @@ export function ReportCard({
             index={replyLightbox.index}
             onIndexChange={(index) => setReplyLightbox((cur) => (cur ? { ...cur, index } : cur))}
             onClose={() => setReplyLightbox(null)}
-            onEditImage={topic.commentsDisabled ? undefined : (file) => void handleReplyFiles([file])}
+            onEditImage={topic.commentsDisabled ? undefined : (file) => { revealReplyAttachment(); void handleReplyFiles([file]); }}
             imageMeta={() => ({ authorId: replyLightbox.authorId, at: replyLightbox.createdAt })}
           />
         )}

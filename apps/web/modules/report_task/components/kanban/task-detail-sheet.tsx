@@ -251,6 +251,17 @@ export function TaskDetailSheet({
   const [mentionQuery, setMentionQuery] = useState<{ start: number; query: string } | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
   const commentRef = useRef<HTMLTextAreaElement>(null);
+  // รูปจากปุ่มดินสอ (หน้าดูรูป) เพิ่งเข้ามาในคอมเมนต์ — กางแผง (มือถือ) เลื่อนไปให้เห็น + กะพริบ
+  const [commentAttachFlash, setCommentAttachFlash] = useState(false);
+  function revealCommentAttachment() {
+    setMobileCommentsOpen(true);
+    setCommentAttachFlash(true);
+    setTimeout(() => setCommentAttachFlash(false), 1900);
+    requestAnimationFrame(() => {
+      commentRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+      commentRef.current?.focus({ preventScroll: true });
+    });
+  }
   const mentionPicked = useRef(new Map<string, string>());
   // คนที่ @แท็กได้ = คนในโปรเจคเดียวกัน (ผู้รับผิดชอบ/ผู้มอบหมาย/ผู้ติดตามของทุกงานในโปรเจค)
   // + คนในงานนี้ (รวมคนที่เคยคอมเมนต์) — งานที่ไม่อยู่ในโปรเจคใช้แค่คนในงานนี้
@@ -1990,8 +2001,9 @@ export function TaskDetailSheet({
               void handleCommentFilesSelected(files);
             }}
           >
-            {commentAttachments.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
+            {(commentAttachments.length > 0 || commentUploading) && (
+              <div className={cn("flex flex-wrap items-center gap-1.5", commentAttachFlash && "attach-flash")}>
+                {commentUploading && <span className="text-xs text-[var(--ink-soft)]">กำลังแนบไฟล์…</span>}
                 {commentAttachments.map((a) => (
                   <span key={a.id} className="flex items-center gap-1.5 text-xs bg-[var(--bg-soft)] rounded-md pl-1 pr-1 py-1">
                     {a.url && a.mime?.startsWith("image/") ? (
@@ -2185,7 +2197,10 @@ export function TaskDetailSheet({
         index={attachmentViewer.index}
         onIndexChange={(i) => setAttachmentViewer((v) => (v ? { ...v, index: i } : v))}
         onClose={() => setAttachmentViewer(null)}
-        onEditImage={(file) => void handleCommentFilesSelected([file])}
+        onEditImage={(file) => {
+          revealCommentAttachment();
+          void handleCommentFilesSelected([file]);
+        }}
       />
     )}
     </>
