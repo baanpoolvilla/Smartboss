@@ -81,7 +81,7 @@ export default async function HomePage() {
       icon: iconByName(m.icon),
       color: m.color,
       colorBg: m.colorBg,
-      href: m.basePath,
+      href: landingPath(m),
     });
   }
 
