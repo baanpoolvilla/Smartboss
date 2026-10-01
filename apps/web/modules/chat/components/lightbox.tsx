@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { fileForEditing, openAnnotator } from "@/lib/annotate/annotate";
 import type { ChatAttachment } from "../types";
 import { daysUntilExpiry } from "../lib/retention";
+import { useBackToClose } from "@/lib/back-to-close";
 
 /** รูปในหน้าดูเต็มจอ — messageId มีเมื่อเปิดจากแชท (ใช้ตอนบันทึกลงอัลบั้ม) */
 export type LightboxItem = ChatAttachment & { messageId?: string };
@@ -32,6 +33,7 @@ export function Lightbox({
   onEditImage?: (file: File) => void;
 }) {
   const [i, setI] = useState(index);
+  useBackToClose(true, onClose);
   const [touchX, setTouchX] = useState<number | null>(null);
   const item = items[i];
   const [editing, setEditing] = useState(false);

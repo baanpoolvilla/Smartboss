@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useBackToClose } from "@/lib/back-to-close";
 
 /** AlertDialog/SimpleDialog แบบเดียวกับของเดิม — พื้นขาว มุมโค้ง 20 ทับทั้งจอ */
 export function Modal({
@@ -17,6 +18,7 @@ export function Modal({
   actions?: React.ReactNode;
   wide?: boolean;
 }) {
+  useBackToClose(true, onClose);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();

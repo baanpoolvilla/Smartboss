@@ -7,6 +7,7 @@ import { cn } from "@smartboss/ui/cn";
 
 import type { ChatUser } from "../types";
 import { ChatAvatar } from "./chat-avatar";
+import { useBackToClose } from "@/lib/back-to-close";
 
 /** หน้าต่างลอยพื้นฐานของแชท — มือถือเต็มจอ, คอมเป็นกล่องกลางจอ */
 export function ChatModal({
@@ -23,6 +24,7 @@ export function ChatModal({
   /** "top" = ทับหน้าดูรูปเต็มจอ (z-80) ได้ เช่น เลือกอัลบั้มตอนดูรูป */
   layer?: "top";
 }) {
+  useBackToClose(true, onClose);
   // วาดที่ <body> — กรอบของหน้าขังลำดับชั้นไว้ ไม่งั้นเมนูล่างของระบบบนมือถือทับปุ่มล่างของหน้าต่างนี้
   return createPortal(
     <div className={`chat-ui fixed inset-0 ${layer === "top" ? "z-[90]" : "z-[70]"} flex items-end justify-center bg-black/40 sm:items-center sm:p-4`} onClick={onClose}>

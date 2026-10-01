@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Download, Hand, Minus, Pencil, Plus, Trash2, Type, Undo2, X } from "lucide-react";
 import { closeAnnotator, useAnnotatorStore } from "@/lib/annotate/annotate";
+import { useBackToClose } from "@/lib/back-to-close";
 
 /**
  * หน้าต่างวาด/เขียนบนรูปก่อนส่ง — วางไว้ครั้งเดียวที่ Shell เปิดด้วย openAnnotator(file)
@@ -49,6 +50,7 @@ function tap(fn: () => void) {
 
 export function ImageAnnotatorHost() {
   const file = useAnnotatorStore((s) => s.file);
+  useBackToClose(file !== null, () => closeAnnotator(null));
   // ปล่อยไฟล์พลาดนอกกล่องที่รับ — เดิม browser เปิดไฟล์นั้นแทนหน้า SmartBoss (สิ่งที่พิมพ์ค้างหาย)
   // ทำในช่วง bubble: กล่องรับไฟล์จัดการไปก่อนแล้ว ตรงนี้กันแค่ที่ไม่มีใครรับ
   useEffect(() => {

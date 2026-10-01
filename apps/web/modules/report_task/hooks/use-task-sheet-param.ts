@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { useTaskStore } from "@/modules/report_task/store/task-store";
@@ -23,24 +23,38 @@ export function useTaskSheetParam(initialFallback?: string | null) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const paramTaskId = searchParams.get("task");
+  // เปิดงานด้วย push จากหน้านี้เอง → ปิดด้วยการถอยกลับ (ไม่ใช่ replace) ประวัติจะไม่ค้าง
+  // "หน้าบอร์ดซ้ำ" ที่ทำให้กดปุ่มย้อนกลับของมือถือแล้วเหมือนไม่เกิดอะไร
+  const pushedRef = useRef(false);
 
   const open = useCallback(
     (id: string | null) => {
+      pushedRef.current = !!id && !paramTaskId;
       const params = new URLSearchParams(searchParams.toString());
       if (id) params.set("task", id);
       else params.delete("task");
       const query = params.toString();
       router.push(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
     },
-    [pathname, router, searchParams]
+    [pathname, router, searchParams, paramTaskId]
   );
 
   const close = useCallback(() => {
+    // ไม่ล้าง pushedRef ตรงนี้ — หน้าต่างอาจเรียก close ซ้ำระหว่างถอย (ปุ่มย้อนกลับปิดหน้าต่างด้วย)
+    // ล้างตอน ?task= หายไปจาก URL จริงแทน (effect ข้างล่าง)
+    if (pushedRef.current) {
+      router.back();
+      return;
+    }
     const params = new URLSearchParams(searchParams.toString());
     params.delete("task");
     const query = params.toString();
     router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
   }, [pathname, router, searchParams]);
+
+  useEffect(() => {
+    if (!paramTaskId) pushedRef.current = false;
+  }, [paramTaskId]);
 
   // One-shot: fold a navigation-intent-sourced initial task (e.g. clicking a
   // dashboard widget that jumps here with "open this task") into the URL too,

@@ -30,11 +30,24 @@ export function useNoteParam(channelId: string) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const noteId = searchParams.get("note");
+  // เปิดโน้ตเป็นอีกหน้า (push) — ปุ่มย้อนกลับของมือถือพากลับห้องแชท ไม่ใช่หลุดออกจากแชท
+  const pushedRef = useRef(false);
+  useEffect(() => {
+    if (!noteId) pushedRef.current = false;
+  }, [noteId]);
   const open = useCallback(
-    (id: string) => router.replace(`${pathname}?c=${encodeURIComponent(channelId)}&note=${encodeURIComponent(id)}`, { scroll: false }),
-    [router, pathname, channelId]
+    (id: string) => {
+      const url = `${pathname}?c=${encodeURIComponent(channelId)}&note=${encodeURIComponent(id)}`;
+      if (noteId) return router.replace(url, { scroll: false });
+      pushedRef.current = true;
+      router.push(url, { scroll: false });
+    },
+    [router, pathname, channelId, noteId]
   );
-  const close = useCallback(() => router.replace(`${pathname}?c=${encodeURIComponent(channelId)}`, { scroll: false }), [router, pathname, channelId]);
+  const close = useCallback(() => {
+    if (pushedRef.current) return router.back();
+    router.replace(`${pathname}?c=${encodeURIComponent(channelId)}`, { scroll: false });
+  }, [router, pathname, channelId]);
   return { noteId, open, close };
 }
 

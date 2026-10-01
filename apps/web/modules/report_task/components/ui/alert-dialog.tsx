@@ -1,13 +1,25 @@
 "use client"
 
 import * as React from "react"
+import { useBackToClose } from "@/lib/back-to-close"
 import { AlertDialog as AlertDialogPrimitive } from "@base-ui/react/alert-dialog"
 
 import { cn } from "@/modules/report_task/lib/utils"
 import { Button } from "@/modules/report_task/components/ui/button"
 
-function AlertDialog({ ...props }: AlertDialogPrimitive.Root.Props) {
-  return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />
+// กดปุ่มย้อนกลับของมือถือ = ปิดหน้าต่างนี้ (ไม่ออกจากหน้า) — ดู lib/back-to-close.ts
+function AlertDialog({ open, defaultOpen, onOpenChange, ...props }: AlertDialogPrimitive.Root.Props) {
+  const [innerOpen, setInnerOpen] = React.useState(defaultOpen ?? false)
+  const isOpen = open ?? innerOpen
+  const change = React.useCallback<NonNullable<AlertDialogPrimitive.Root.Props["onOpenChange"]>>(
+    (next, details) => {
+      if (open === undefined) setInnerOpen(next)
+      onOpenChange?.(next, details)
+    },
+    [open, onOpenChange]
+  )
+  useBackToClose(isOpen, () => change(false, undefined as never))
+  return <AlertDialogPrimitive.Root data-slot="alert-dialog" open={isOpen} onOpenChange={change} {...props} />
 }
 
 function AlertDialogTrigger({ ...props }: AlertDialogPrimitive.Trigger.Props) {

@@ -14,6 +14,7 @@ import { downloadUrl } from "./lightbox";
 import { daysUntilExpiry } from "../lib/retention";
 import { NoteCard } from "./notes";
 import { MessageText } from "./message-text";
+import { useBackToClose } from "@/lib/back-to-close";
 
 // ─── ไฟล์แนบ ───────────────────────────────────────────────────────────────
 
@@ -268,6 +269,7 @@ function ActionMenu({
   onPin: () => void;
 }) {
   const [confirmUnsend, setConfirmUnsend] = useState(false);
+  useBackToClose(true, onClose);
   const item = "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-(--ink) hover:bg-(--bg-soft)";
   const desktop = typeof window !== "undefined" && window.matchMedia("(min-width: 640px)").matches;
   // คอม: วางใต้ฟอง ถ้าที่ข้างล่างไม่พอก็วางเหนือฟองแทน

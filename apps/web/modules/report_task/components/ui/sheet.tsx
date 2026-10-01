@@ -1,14 +1,26 @@
 "use client"
 
 import * as React from "react"
+import { useBackToClose } from "@/lib/back-to-close"
 import { Dialog as SheetPrimitive } from "@base-ui/react/dialog"
 
 import { cn } from "@/modules/report_task/lib/utils"
 import { Button } from "@/modules/report_task/components/ui/button"
 import { XIcon } from "lucide-react"
 
-function Sheet({ ...props }: SheetPrimitive.Root.Props) {
-  return <SheetPrimitive.Root data-slot="sheet" {...props} />
+// กดปุ่มย้อนกลับของมือถือ = ปิดหน้าต่างนี้ (ไม่ออกจากหน้า) — ดู lib/back-to-close.ts
+function Sheet({ open, defaultOpen, onOpenChange, ...props }: SheetPrimitive.Root.Props) {
+  const [innerOpen, setInnerOpen] = React.useState(defaultOpen ?? false)
+  const isOpen = open ?? innerOpen
+  const change = React.useCallback<NonNullable<SheetPrimitive.Root.Props["onOpenChange"]>>(
+    (next, details) => {
+      if (open === undefined) setInnerOpen(next)
+      onOpenChange?.(next, details)
+    },
+    [open, onOpenChange]
+  )
+  useBackToClose(isOpen, () => change(false, undefined as never))
+  return <SheetPrimitive.Root data-slot="sheet" open={isOpen} onOpenChange={change} {...props} />
 }
 
 function SheetTrigger({ ...props }: SheetPrimitive.Trigger.Props) {

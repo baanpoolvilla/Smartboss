@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Bell, Settings } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
+import { useBackToClose } from "@/lib/back-to-close";
 import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
@@ -37,6 +38,7 @@ const MAX_ITEMS = 10;
 
 export function NotificationBellPopover() {
   const [open, setOpen] = useState(false);
+  useBackToClose(open, () => setOpen(false));
   const [soundSettings, setSoundSettings] = useState(false);
   const employees = useEmployeeStore((s) => s.employees);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);

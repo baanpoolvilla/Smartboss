@@ -34,6 +34,7 @@ import { SystemNotify } from "./system-notify";
 import { ChatNotifyListener } from "@/modules/chat/components/chat-nav-badge";
 import { MarkReadOnRoute } from "@/modules/notifications/mark-read-on-route";
 import { ShellProvider, type ShellUser } from "./shell-context";
+import { useBackToClose } from "@/lib/back-to-close";
 
 export type { ShellUser };
 
@@ -330,6 +331,7 @@ function ModuleBottomNav({
   overflow: ModuleMenuItem[];
 }) {
   const [sheetOpen, setSheetOpen] = useState(false);
+  useBackToClose(sheetOpen, () => setSheetOpen(false));
   const overflowActive = overflow.some((m) =>
     isMenuActive(pathname, m.path, module.basePath)
   );

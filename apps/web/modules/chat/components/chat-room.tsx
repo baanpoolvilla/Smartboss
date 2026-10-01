@@ -19,6 +19,7 @@ import { MessageList } from "./message-list";
 import { ChatModal } from "./new-chat-dialog";
 import { RoomInfo } from "./room-info";
 import { NoteEditor, NoteViewer, useNoteParam } from "./notes";
+import { useBackToClose } from "@/lib/back-to-close";
 
 function SearchBar({ channelId, onClose }: { channelId: string; onClose: () => void }) {
   const users = useChatStore((s) => s.users);
@@ -126,6 +127,7 @@ export function ChatRoom({ channel, initialUnread, onBack }: { channel: ChatChan
   const [readers, setReaders] = useState<RoomMessage | null>(null);
   const [searching, setSearching] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
+  useBackToClose(infoOpen, () => setInfoOpen(false));
   const [dragging, setDragging] = useState(false);
   const [creatingNote, setCreatingNote] = useState(false);
   const { noteId, close: closeNote } = useNoteParam(channel.id);

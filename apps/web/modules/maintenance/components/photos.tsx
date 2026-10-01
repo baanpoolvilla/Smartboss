@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { X } from "lucide-react";
+import { useBackToClose } from "@/lib/back-to-close";
 
 /**
  * แถวรูปเลื่อนแนวนอน + แตะเพื่อดูเต็มจอ
@@ -15,6 +16,7 @@ export function PhotoStrip({
   size?: number;
 }) {
   const [open, setOpen] = useState<string | null>(null);
+  useBackToClose(open !== null, () => setOpen(null));
   if (urls.length === 0) return null;
 
   return (

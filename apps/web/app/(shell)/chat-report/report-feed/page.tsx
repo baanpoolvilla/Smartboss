@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { TopicSidebar, TopicLogo, ALL_TOPICS_ID, PENDING_ID, MENTIONS_ID } from "@/modules/report_task/components/report-feed/topic-sidebar";
 import { ReportComposer } from "@/modules/report_task/components/report-feed/report-composer";
@@ -40,6 +40,7 @@ import { lateToastDismissKey, isLateToastDismissed, dismissLateToast } from "@/m
 import { toast } from "sonner";
 import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronDown, ChevronRight, Clock, FolderOpen, Hash, Lock, MessageSquareText, Pin, Search, Settings, TriangleAlert, Users, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
+import { overlayHistoryState, pushUrlAfterOverlays } from "@/lib/back-to-close";
 
 // Beyond this many pinned posts, the rest move into the "+N เพิ่มเติม"
 // popover instead of forcing the bar to scroll horizontally.
@@ -234,6 +235,8 @@ function ReportFeedPageInner() {
   // ขับผลของการ render โดยตรง (backRoomName ด้านล่าง) การอ่าน ref.current ตอน
   // render ไม่ปลอดภัย (react-hooks/refs) เท่าไหร่ค่าที่ผูกกับ UI ควรเป็น state
   const [lastRoomId, setLastRoomId] = useState("");
+  // ผู้ใช้กดเลือกห้องเอง (selectView) — ให้ effect เขียน ?topic= ดันประวัติแทนการแทนที่
+  const switchedByUserRef = useRef(false);
   // A dashboard chart (e.g. "อัตราการส่งรายงานแยกตามแผนก") can deep-link
   // straight into a room's "สถิติ" tab with `?tab=stats`, same pattern as
   // `?post=`/`?reply=` — falls back to "posts" for anything else/missing.
@@ -334,7 +337,7 @@ function ReportFeedPageInner() {
     // router.replace ของ App Router ถือเป็นการนำทางจริง มันเลยรีเรนเดอร์ทั้ง
     // route ทุกครั้งที่ติ๊กช่องเดียว หน้าค้างไปแวบหนึ่งทุกคลิก ("เวลาติ๊กตัวกรอง
     // แล้วค้างไปแป๊บนึง") — เปลี่ยน URL ตรง ๆ แบบนี้ไม่มีค่าใช้จ่ายอะไรเลย
-    window.history.replaceState(null, "", `${pathname}?${params.toString()}`);
+    window.history.replaceState(overlayHistoryState(), "", `${pathname}?${params.toString()}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
@@ -387,10 +390,17 @@ function ReportFeedPageInner() {
   useEffect(() => {
     if (!activeId) return;
     const params = new URLSearchParams(searchParams.toString());
+    const prevTopic = params.get("topic");
     params.set("topic", activeId);
-    // จำห้องที่เปิดไว้ใน URL เฉย ๆ เหมือนตัวกรองด้านบน — ไม่ใช่การนำทาง จึงไม่
-    // ควรจ่ายค่ารีเรนเดอร์ทั้ง route ทุกครั้งที่สลับห้อง
-    window.history.replaceState(null, "", `${pathname}?${params.toString()}`);
+    const url = `${pathname}?${params.toString()}`;
+    // จำห้องที่เปิดไว้ใน URL ด้วย history API ตรง ๆ ไม่ใช่ router — ไม่ควรจ่ายค่า
+    // รีเรนเดอร์ทั้ง route ทุกครั้งที่สลับห้อง · ผู้ใช้กดเปลี่ยนห้องเอง = push (ปุ่มย้อนกลับของ
+    // มือถือพากลับห้องก่อนหน้า แทนที่จะเด้งออกไปเมนูของโมดูลเลย) · แก้ id ที่ใช้ไม่ได้/เติม
+    // ห้องแรกให้เอง = replace
+    const userSwitch = switchedByUserRef.current;
+    switchedByUserRef.current = false;
+    if (userSwitch && prevTopic && prevTopic !== activeId) pushUrlAfterOverlays(url);
+    else window.history.replaceState(overlayHistoryState(), "", url);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
 
@@ -795,6 +805,7 @@ function ReportFeedPageInner() {
   // drops whatever header-pill filter was active — otherwise picking a room
   // out of "ยังไม่ส่ง"'s list would still show the pill panel underneath it.
   function selectView(id: string) {
+    switchedByUserRef.current = id !== activeId;
     const isSentinel = id === ALL_TOPICS_ID || id === PENDING_ID || id === MENTIONS_ID;
     const curIsRoom = selectedId && selectedId !== ALL_TOPICS_ID && selectedId !== PENDING_ID && selectedId !== MENTIONS_ID;
     // กำลังจะเข้ามุมมองรวม และตอนนี้อยู่ในห้องจริง → จำห้องนั้นไว้ให้ปุ่มย้อนกลับ

@@ -11,6 +11,7 @@ import { formatDateTimeFull, formatDateTimeShort } from "@/modules/report_task/l
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Download, Link2, Loader2, Minus, Pencil, Plus, X } from "lucide-react";
 import { downloadFile, fileForEditing, openAnnotator } from "@/lib/annotate/annotate";
+import { useBackToClose } from "@/lib/back-to-close";
 
 const SWIPE_THRESHOLD_PX = 80;
 const MIN_SCALE = 1;
@@ -48,6 +49,7 @@ export function ReportImageLightbox({
   onEditImage?: (file: File) => void;
 }) {
   const hasMultiple = images.length > 1;
+  useBackToClose(true, onClose);
   const [dragOffset, setDragOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
   const dragStartX = useRef(0);
