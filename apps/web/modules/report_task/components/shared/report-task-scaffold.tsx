@@ -81,7 +81,12 @@ export function ReportTaskScaffold({
   // หัวหน้าจอแยกไว้ตรงนี้ ไม่งั้นจะตกไปใช้ชื่อ "รายงานและงาน"
   const isIssueReports = pathname.startsWith(ISSUE_REPORTS_BASE);
 
-  const title = isIssueReports ? "แจ้งบัค" : (match?.label ?? reportTaskManifest.name);
+  // หน้าแรกของ /chat-report (แค่ตัวเด้งต่อไปแชท/รายงาน) ไม่ตรงเมนูไหน — เดิมตกไปใช้ชื่อ
+  // "Project Management" ของอีกโมดูลแวบหนึ่งระหว่างเด้ง ให้ใช้ชื่อโมดูลตัวเองแทน
+  const isChatReport = pathname === chatReportManifest.basePath || pathname.startsWith(`${chatReportManifest.basePath}/`);
+  const title = isIssueReports
+    ? "แจ้งบัค"
+    : (match?.label ?? (isChatReport ? chatReportManifest.name : reportTaskManifest.name));
   // หน้ารายละเอียดตั๋ว (/issue-reports/[id]) มีลูกศรย้อนกลับที่มุมซ้ายของแถบบน กลับไปหน้ารายการ
   const backHref = pathname.startsWith(`${ISSUE_REPORTS_BASE}/`) ? ISSUE_REPORTS_BASE : undefined;
 
