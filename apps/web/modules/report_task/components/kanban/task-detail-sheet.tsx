@@ -81,7 +81,8 @@ import { ReportImageLightbox } from "@/modules/report_task/components/report-fee
 import type { ReportPostImage } from "@/modules/report_task/store/report-feed-store";
 import { mimeFromLegacyTaskLabel } from "@/modules/report_task/lib/report-attachment-kind";
 import { uploadTaskAttachment } from "@/modules/report_task/lib/task-attachment-upload";
-import { dropZoneProps, filesFromDataTransfer, openAnnotator, originalFor } from "@/lib/annotate/annotate";
+import { filesFromDataTransfer, openAnnotator, originalFor } from "@/lib/annotate/annotate";
+import { FileDropZone } from "@/components/annotate/file-drop-zone";
 import { AnnotateButton } from "@/components/annotate/image-annotator-host";
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { toast } from "sonner";
@@ -1844,7 +1845,12 @@ export function TaskDetailSheet({
 
             return (
               <div className="space-y-4">
-                <div className="space-y-2">
+                <FileDropZone
+                  enabled={canAddBrief && !taskAttachUploading}
+                  onFiles={(files) => void handleTaskFilesSelected(files, "brief")}
+                  label="ปล่อยเพื่อแนบเป็นไฟล์ตอนสั่งงาน"
+                  className="space-y-2"
+                >
                   <div className="flex items-center justify-between gap-2">
                     <h4 className="text-sm font-semibold flex items-center gap-1.5">
                       <Paperclip className="h-4 w-4" /> ไฟล์แนบตอนสั่งงาน ({briefFiles.length}) {limitsTip}
@@ -1854,9 +1860,14 @@ export function TaskDetailSheet({
                   <p className="text-[11px] text-[var(--ink-soft)]">ไฟล์ที่ผู้สั่งงานแนบมาให้ — ตอนเปิดงานหรือเพิ่มทีหลัง</p>
                   {briefFiles.length === 0 && <p className="text-xs text-[var(--ink-soft)]">ไม่มีไฟล์แนบ</p>}
                   {briefFiles.map(renderFile)}
-                </div>
+                </FileDropZone>
 
-                <div className="space-y-2 border-t border-[var(--line)] pt-4">
+                <FileDropZone
+                  enabled={canSubmit && !taskAttachUploading}
+                  onFiles={(files) => void handleTaskFilesSelected(files, "submission")}
+                  label="ปล่อยเพื่อส่งเป็นไฟล์งาน"
+                  className="space-y-2 border-t border-[var(--line)] pt-4"
+                >
                   <div className="flex items-center justify-between gap-2">
                     <h4 className="text-sm font-semibold flex items-center gap-1.5">
                       <Upload className="h-4 w-4" /> ไฟล์ส่งงาน ({submittedFiles.length})
@@ -1868,7 +1879,7 @@ export function TaskDetailSheet({
                   </p>
                   {submittedFiles.length === 0 && <p className="text-xs text-[var(--ink-soft)]">ยังไม่มีใครส่งไฟล์งาน</p>}
                   {submittedFiles.map(renderFile)}
-                </div>
+                </FileDropZone>
               </div>
             );
           })()}
@@ -1888,7 +1899,12 @@ export function TaskDetailSheet({
             above to a sliver and, never overflowing its own box, left the
             comment list below unscrollable (both halves stuck). Capped, the
             list scrolls inside it and the details keep the rest. */}
-        <div className="w-full md:w-[320px] shrink-0 max-h-[55vh] md:max-h-none border-t md:border-t-0 md:border-l border-[var(--line)] flex flex-col overflow-hidden min-h-0 bg-[var(--bg-soft)]/30">
+        <FileDropZone
+          enabled
+          onFiles={(files) => void handleCommentFilesSelected(files)}
+          label="ปล่อยเพื่อแนบในความคิดเห็น"
+          className="w-full md:w-[320px] shrink-0 max-h-[55vh] md:max-h-none border-t md:border-t-0 md:border-l border-[var(--line)] flex flex-col overflow-hidden min-h-0 bg-[var(--bg-soft)]/30"
+        >
           <button
             type="button"
             onClick={() => setMobileCommentsOpen((v) => !v)}
@@ -1973,7 +1989,6 @@ export function TaskDetailSheet({
               e.preventDefault();
               void handleCommentFilesSelected(files);
             }}
-            {...dropZoneProps((files) => void handleCommentFilesSelected(files))}
           >
             {commentAttachments.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
@@ -2107,7 +2122,7 @@ export function TaskDetailSheet({
               </Button>
             </div>
           </div>
-        </div>
+        </FileDropZone>
         </div>
       </DialogContent>
 

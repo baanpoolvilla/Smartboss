@@ -47,6 +47,23 @@ function tap(fn: () => void) {
 
 export function ImageAnnotatorHost() {
   const file = useAnnotatorStore((s) => s.file);
+  // ปล่อยไฟล์พลาดนอกกล่องที่รับ — เดิม browser เปิดไฟล์นั้นแทนหน้า SmartBoss (สิ่งที่พิมพ์ค้างหาย)
+  // ทำในช่วง bubble: กล่องรับไฟล์จัดการไปก่อนแล้ว ตรงนี้กันแค่ที่ไม่มีใครรับ
+  useEffect(() => {
+    const isFiles = (e: DragEvent) => !!e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files");
+    const onOver = (e: DragEvent) => {
+      if (isFiles(e)) e.preventDefault();
+    };
+    const onDrop = (e: DragEvent) => {
+      if (isFiles(e)) e.preventDefault();
+    };
+    window.addEventListener("dragover", onOver);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("dragover", onOver);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, []);
   if (!file) return null;
   return <Annotator key={`${file.name}-${file.size}-${file.lastModified}`} file={file} />;
 }
