@@ -145,7 +145,7 @@ export function AttendanceRoster({
                     </span>
                   )}
                   {row.category === "noshift" && (
-                    <Link
+                    <Link prefetch={false}
                       href={`/hr/employees/${row.employmentId}`}
                       className="rounded-full px-2 py-px text-[10px] font-medium hover:underline"
                       style={{ color: def.tone, backgroundColor: `color-mix(in srgb, ${def.tone} 14%, transparent)` }}

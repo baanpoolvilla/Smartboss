@@ -185,7 +185,7 @@ export default async function DevicesPage() {
               >
                 <p className="text-sm text-(--ink-soft)">
                   ผูกลายนิ้วมือย้ายไปอยู่ในหน้าของพนักงานแต่ละคนแล้ว —{" "}
-                  <Link
+                  <Link prefetch={false}
                     href="/hr/employees"
                     className="text-(--app-strong) hover:underline"
                   >

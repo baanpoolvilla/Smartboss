@@ -161,7 +161,7 @@ export default async function HolidaysPage({
               title="วันหยุดของพนักงานรายคน"
               description="ย้ายไปอยู่ในหน้าของพนักงานแต่ละคนแล้ว — ตั้งค่าของคนหนึ่งคนจบในหน้าเดียว"
             >
-              <Link
+              <Link prefetch={false}
                 href="/hr/employees"
                 className="text-sm text-(--app-strong) hover:underline"
               >
@@ -182,7 +182,7 @@ export default async function HolidaysPage({
               action={
                 <div className="flex gap-1">
                   {[year - 1, year, year + 1].map((y) => (
-                    <Link key={y} href={`/hr/settings/holidays?year=${y}`}>
+                    <Link prefetch={false} key={y} href={`/hr/settings/holidays?year=${y}`}>
                       <Button size="sm" variant={y === year ? "primary" : "outline"}>
                         {formatBuddhistYear(y)}
                       </Button>

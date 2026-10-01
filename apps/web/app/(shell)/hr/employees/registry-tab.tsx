@@ -87,7 +87,7 @@ export async function renderRegistryTab(
       )}
 
       {missing > 0 && (
-        <Link
+        <Link prefetch={false}
           href="/hr/employees/import"
           className="mb-3 flex items-center justify-between gap-3 rounded-(--radius) border border-(--app) bg-(--app-pale) p-3 transition-colors hover:bg-(--app-soft)"
         >
@@ -107,7 +107,7 @@ export async function renderRegistryTab(
       )}
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Link
+        <Link prefetch={false}
           href="/hr/employees"
           className="rounded-full border px-3 py-1 text-xs transition-colors"
           style={
@@ -123,7 +123,7 @@ export async function renderRegistryTab(
           ทั้งหมด ({all.length})
         </Link>
         {statuses.map((s) => (
-          <Link
+          <Link prefetch={false}
             key={s}
             href={`/hr/employees?status=${s}`}
             className="rounded-full border px-3 py-1 text-xs transition-colors"
@@ -147,7 +147,7 @@ export async function renderRegistryTab(
           {all.length === 0 && canManage ? (
             <>
               ยังไม่มีพนักงานในทะเบียน —{" "}
-              <Link
+              <Link prefetch={false}
                 href="/hr/employees/import"
                 className="text-(--app-strong) hover:underline"
               >
@@ -175,7 +175,7 @@ export async function renderRegistryTab(
             <tr key={e.id} className="hover:bg-(--bg-soft)">
               <Td className="font-mono text-xs">{e.employee_code}</Td>
               <Td>
-                <Link
+                <Link prefetch={false}
                   href={`/hr/employees/${e.id}`}
                   className="font-medium hover:underline"
                 >
@@ -213,7 +213,7 @@ export async function renderRegistryTab(
                 <StatusBadge value={e.status} />
               </Td>
               <Td align="right">
-                <Link href={`/hr/employees/${e.id}`}>
+                <Link prefetch={false} href={`/hr/employees/${e.id}`}>
                   <ChevronRight className="inline h-4 w-4 text-(--ink-soft)" />
                 </Link>
               </Td>

@@ -128,7 +128,7 @@ export default async function PayrollPage() {
                     ควรเคลียร์ให้ครบก่อนปิดงวด — ไม่งั้นตัวเลขที่ตรึงไว้จะไม่รวมการแก้ไขล่าสุด
                   </p>
                 </div>
-                <Link href="/hr?tab=corrections" className="ml-auto shrink-0">
+                <Link prefetch={false} href="/hr?tab=corrections" className="ml-auto shrink-0">
                   <Button size="sm" variant="outline">ไปที่คำขอแก้เวลา</Button>
                 </Link>
               </Card>
@@ -173,7 +173,7 @@ export default async function PayrollPage() {
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-(--line) pt-3">
                       <span className="text-xs text-(--ink-soft)">ปิดแล้ว — แก้ไขไม่ได้</span>
                       {canViewPayroll && run && (
-                        <Link href={`/hr/payroll/${run.id}`} className="flex items-center gap-1 text-sm text-(--app-strong,var(--ink)) hover:underline">
+                        <Link prefetch={false} href={`/hr/payroll/${run.id}`} className="flex items-center gap-1 text-sm text-(--app-strong,var(--ink)) hover:underline">
                           ดูรายละเอียดงวดเงินเดือน <ChevronRight className="h-3.5 w-3.5" />
                         </Link>
                       )}

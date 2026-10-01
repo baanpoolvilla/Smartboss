@@ -218,7 +218,7 @@ export default async function HrSettingsPage() {
               </form>
               <p className="mt-3 text-xs text-(--ink-soft)">
                 สร้างกะแล้วยังไม่พอ — ต้องไป
-                <Link
+                <Link prefetch={false}
                   href="/hr/employees"
                   className="mx-1 text-(--app-strong) hover:underline"
                 >
@@ -371,7 +371,7 @@ export default async function HrSettingsPage() {
             >
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {ELSEWHERE.map((item) => (
-                  <Link
+                  <Link prefetch={false}
                     key={item.href}
                     href={item.href}
                     className="rounded-(--radius) border border-(--line) p-3 transition-colors hover:bg-(--bg-soft)"

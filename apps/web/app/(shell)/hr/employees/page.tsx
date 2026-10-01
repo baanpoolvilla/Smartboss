@@ -56,7 +56,7 @@ export default async function EmployeesPage({
       fab={tab === "registry" && canManage ? <Fab href="/hr/employees/new" label="เพิ่มพนักงาน" /> : null}
       actions={
         tab === "registry" && canManage ? (
-          <Link
+          <Link prefetch={false}
             href="/hr/employees/import"
             className="text-sm text-(--app-strong) hover:underline"
           >
@@ -69,7 +69,7 @@ export default async function EmployeesPage({
           visibleTabs.length > 1 ? (
             <div className="mb-4 flex gap-1 overflow-x-auto border-b border-(--line)">
               {visibleTabs.map((t) => (
-                <Link
+                <Link prefetch={false}
                   key={t}
                   href={t === "registry" ? "/hr/employees" : `/hr/employees?tab=${t}`}
                   className={`shrink-0 border-b-2 px-3 py-2 text-sm font-medium ${

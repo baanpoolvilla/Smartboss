@@ -49,7 +49,7 @@ export async function renderCommissionTab(
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
-        <Link href={monthLink(shiftMonth(month, -1))}>
+        <Link prefetch={false} href={monthLink(shiftMonth(month, -1))}>
           <Button size="sm" variant="outline" aria-label="เดือนก่อน">
             ‹
           </Button>
@@ -62,14 +62,14 @@ export async function renderCommissionTab(
             ›
           </Button>
         ) : (
-          <Link href={monthLink(shiftMonth(month, 1))}>
+          <Link prefetch={false} href={monthLink(shiftMonth(month, 1))}>
             <Button size="sm" variant="outline" aria-label="เดือนถัดไป">
               ›
             </Button>
           </Link>
         )}
         {!isCurrent && (
-          <Link href={monthLink(thisMonth)} className="text-xs text-(--app-strong) hover:underline">
+          <Link prefetch={false} href={monthLink(thisMonth)} className="text-xs text-(--app-strong) hover:underline">
             กลับเดือนนี้
           </Link>
         )}
