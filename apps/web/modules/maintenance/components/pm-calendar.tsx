@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { todayBangkok } from "@/modules/maintenance/lib/no-past-date";
 import {
   AlertCircle,
   AlertTriangle,
@@ -580,6 +581,7 @@ export function PmCalendar({
                 type="date"
                 name="date"
                 required
+                min={todayBangkok()}
                 className="h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm text-(--ink)"
               />
             </label>
@@ -646,6 +648,8 @@ export function PmCalendar({
                 type="date"
                 name="nextDueDate"
                 defaultValue={editing.nextDueInput}
+                // PM ที่เลยกำหนดอยู่แล้วต้องบันทึกวันเดิมได้ (แก้แค่ผู้รับผิดชอบ) — ห้ามแค่เลือกวันในอดีตใหม่
+                min={editing.nextDueInput < todayBangkok() ? editing.nextDueInput : todayBangkok()}
                 className="h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm text-(--ink)"
               />
             </label>

@@ -30,6 +30,10 @@ function isLaterDay(a: string, b: string): boolean {
   return a.slice(0, 10) > b.slice(0, 10);
 }
 
+function isEarlierDay(a: string, b: string): boolean {
+  return a.slice(0, 10) < b.slice(0, 10);
+}
+
 function priorityLabel(p: TaskPriority): string {
   return priorityMeta[p]?.label ?? p;
 }
@@ -415,6 +419,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
     set((s) => ({
       tasks: s.tasks.map((t) => {
         if (t.id !== taskId || t.status !== "done" || t.reviewedBy) return t;
+        if (isEarlierDay(newDate, t.dueDate)) return t;
         const previousDate = t.dueDate;
         const revisionNumber = t.revisions.length + 1;
         logActivity(
@@ -469,6 +474,9 @@ export const useTaskStore = create<TaskStore>((set) => ({
     set((s) => ({
       tasks: s.tasks.map((t) => {
         if (t.id !== taskId) return t;
+        // กำหนดส่งย้อนไปก่อนวันเดิมไม่ได้ (ทั้งหัวหน้าแก้ตรงและอนุมัติคำขอ) — เคยพิมพ์ผิด
+        // 30/09 → 04/09 แล้วกำหนดส่งไปอยู่ในอดีต ⇒ โดนหักคะแนนทันที
+        if (isEarlierDay(newDate, t.dueDate)) return t;
         const revisionNumber = t.revisions.length + 1;
         logActivity(revisedBy, "แก้ไขกำหนดส่ง", t.title, t.id, `${formatShortDate(t.dueDate)} → ${formatShortDate(newDate)}${reason ? ` · ${reason}` : ""}`);
         // เดิมฟังก์ชันนี้ไม่แจ้งใครเลย ต่างจาก reviseAssigneeDueDate/
@@ -622,6 +630,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
       tasks: s.tasks.map((t) => {
         if (t.id !== taskId) return t;
         const previousEffective = t.assigneeDueDates?.[assigneeId] ?? t.dueDate;
+        if (isEarlierDay(newDate, previousEffective)) return t;
         // ส่งกลับให้แก้ไขได้แม้วันไม่เปลี่ยน — ตัวเลือกนี้ไม่ใช่แค่เรื่องวัน
         const partSubmitted = t.status === "done" || (t.completedAssigneeIds ?? []).includes(assigneeId);
         const bounce = sendBack && partSubmitted;
@@ -680,6 +689,8 @@ export const useTaskStore = create<TaskStore>((set) => ({
         for (const uid of t.assigneeIds) {
           const previousEffective = t.assigneeDueDates?.[uid] ?? t.dueDate;
           if (previousEffective === newDate) continue;
+          // ไม่ร่นวันของใครย้อนหลัง (หน้าจอกันไว้แล้ว — คนที่วันเดิมช้ากว่าคงไว้)
+          if (isEarlierDay(newDate, previousEffective)) continue;
           changedIds.push(uid);
           nextDates[uid] = newDate;
           const existing = t.assigneeDueDateRevisions?.[uid];

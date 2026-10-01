@@ -17,6 +17,7 @@ import {
 import { getAsset } from "@/modules/maintenance/data/assets";
 import { roundsPerYearOptions } from "@/modules/maintenance/lib/pm-schedule";
 import { deleteNotificationsByReference } from "@/modules/maintenance/data/notify";
+import { isPastDay } from "@/modules/maintenance/lib/no-past-date";
 
 function parseDate(s: string): Date {
   return new Date(s + "T00:00:00.000Z");
@@ -80,6 +81,7 @@ export async function createPmAction(formData: FormData) {
     totalRounds = Number.isFinite(t) && t >= 2 ? t : 6;
   }
 
+  if (isPastDay(d.nextDueDate)) throw new Error("วันกำหนดรอบแรกย้อนหลังไม่ได้");
   const due = parseDate(d.nextDueDate);
   const session = await requireOrg();
   const ccUserIds = formData.getAll("ccUserIds").map(String).filter(Boolean);
@@ -136,6 +138,8 @@ export async function updatePmAction(formData: FormData) {
   const originalNextDueDate = formData.get("originalNextDueDate");
   const dueChanged =
     !!nextDueDate && (originalNextDueDate === null || nextDueDate !== String(originalNextDueDate).trim());
+  // เลื่อนวันกำหนดไปอยู่ในอดีตไม่ได้ (วันเดิมที่เลยไปแล้วส่งกลับมาเหมือนเดิมได้ — dueChanged = false)
+  if (dueChanged && isPastDay(nextDueDate)) throw new Error("วันกำหนดถัดไปย้อนหลังไม่ได้");
   const description = String(formData.get("description") ?? "").trim();
   const assignedTo = String(formData.get("assignedTo") ?? "").trim();
   const before = await prisma.pmSchedule.findFirst({
@@ -196,6 +200,7 @@ export async function scheduleNextAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const date = String(formData.get("date") ?? "");
   if (!id || !date) return;
+  if (isPastDay(date)) throw new Error("วันนัดครั้งถัดไปย้อนหลังไม่ได้");
   await schedulePmNextVisit(orgId, id, parseDate(date));
   revalidatePath("/maintenance/pm");
 }

@@ -28,6 +28,7 @@ import {
 } from "@/modules/maintenance/data/work-order-access";
 import { fmtThaiDate } from "@/modules/maintenance/lib/format";
 import { putFile, putFiles, deleteFiles } from "@/modules/maintenance/lib/storage";
+import { isPastDay } from "@/modules/maintenance/lib/no-past-date";
 import { createUploadLink } from "@/modules/maintenance/data/external-upload";
 import {
   closeAutoWorkOrdersOfPm,
@@ -90,6 +91,9 @@ export async function createWorkOrderAction(formData: FormData) {
   const cc = (d.ccUserIds ?? []).filter((id) => id !== assignedTo);
   const [primary, ...additional] = d.propertyIds;
 
+  if (d.dueDate && isPastDay(d.dueDate)) {
+    throw new Error("วันครบกำหนดย้อนหลังไม่ได้ — ตั้งเป็นวันนี้หรือหลังจากนี้");
+  }
   const dueDate = parseDueDate(d.dueDate);
 
   const photoFiles = formData.getAll("photos").filter((f): f is File => f instanceof File);

@@ -152,4 +152,16 @@ describe("คำขอเลื่อนกำหนดส่ง", () => {
     useTaskStore.getState().decideDueDateRequest("t1", "ddr-old", CEO, false);
     expect(getTask().dueDateRequests![0]!.status).toBe("rejected");
   });
+  it("หัวหน้าแก้กำหนดส่งตรง/รายคน/ทั้งหมด ย้อนไปก่อนวันเดิมไม่ได้", () => {
+    useTaskStore.getState().reviseDueDate("t1", "2026-09-04T00:00:00.000Z", "พิมพ์ผิด", CEO, false);
+    expect(getTask().dueDate).toBe("2026-09-30T00:00:00.000Z");
+    expect(getTask().revisions).toHaveLength(0);
+    useTaskStore.setState({ tasks: [task({ taskMode: "group", assigneeIds: [STAFF, BOSS] })] });
+    useTaskStore.getState().reviseAssigneeDueDate("t1", STAFF, "2026-09-04", CEO, false);
+    expect(getTask().assigneeDueDates?.[STAFF]).toBeUndefined();
+    useTaskStore.setState({ tasks: [task({ taskMode: "group", assigneeIds: [STAFF, BOSS], assigneeDueDates: { [BOSS]: "2026-10-10" } })] });
+    useTaskStore.getState().reviseAllAssigneeDueDates("t1", "2026-10-05", CEO, false);
+    expect(getTask().assigneeDueDates?.[STAFF]).toBe("2026-10-05");
+    expect(getTask().assigneeDueDates?.[BOSS]).toBe("2026-10-10");
+  });
 });

@@ -17,6 +17,7 @@ import {
   AssigneeAndCc,
 } from "@/modules/maintenance/components/multi-picker";
 import { createWorkOrderAction } from "../actions";
+import { todayBangkok } from "@/modules/maintenance/lib/no-past-date";
 import { SubmitButton } from "@/modules/maintenance/components/submit-button";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -149,7 +150,7 @@ export default async function NewWorkOrderPage({
           </Field>
 
           <Field label="วันครบกำหนด" hint="(ไม่ใส่ก็ได้)">
-            <Input name="dueDate" type="date" defaultValue={sp.dueDate ?? ""} />
+            <Input name="dueDate" type="date" min={todayBangkok()} defaultValue={sp.dueDate ?? ""} />
             <span className="text-xs font-normal text-(--ink-soft)">
               ใส่แล้วถ้าเลยวันนี้ยังไม่ปิดงาน ใบงานจะขึ้นแดงว่าเลยกำหนด
               และถูกนับเป็นงานค้างของผู้รับผิดชอบในรายงานผลงาน

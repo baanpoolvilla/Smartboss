@@ -440,6 +440,13 @@ export function TaskDetailSheet({
   const minRequestDate = dayAfterInput(
     toDateInput(task.taskMode === "group" ? (task.assigneeDueDates?.[viewingAsUserId] ?? task.dueDate) : task.dueDate)
   );
+  // ฝั่งหัวหน้าก็แก้กำหนดส่งย้อนไปก่อนวันเดิมไม่ได้ (เลือกวันเดิมได้ — ใช้ตอน "ส่งกลับให้แก้ไข")
+  const minReviseDate = toDateInput(task.dueDate);
+  const minBulkDate = task.assigneeIds
+    .map((uid) => toDateInput(task.assigneeDueDates?.[uid] ?? task.dueDate))
+    .reduce((a, b) => (b > a ? b : a), minReviseDate);
+  const minPerPersonDate = perPersonTargetId ? toDateInput(task.assigneeDueDates?.[perPersonTargetId] ?? task.dueDate) : minReviseDate;
+  const minRejectDate = todayIso() > minReviseDate ? todayIso() : minReviseDate;
   const removingAssigneeWouldLockMeOut = (nextAssigneeIds: string[]) =>
     !owner && !canEditRecord(task.assignedById, departmentIdsOf(nextAssigneeIds), viewingAsUserId);
   // Only the owner (CEO) can hand out any sticker — the whole picker block
@@ -812,7 +819,7 @@ export function TaskDetailSheet({
                 <div className="rounded-lg border border-[var(--line)] p-2.5 space-y-2">
                   <div className="space-y-1">
                     <Label className="text-xs">กำหนดส่งใหม่</Label>
-                    <DatePickerField value={rejectDate} minDate={todayIso()} onChange={setRejectDate} />
+                    <DatePickerField value={rejectDate} minDate={minRejectDate} onChange={setRejectDate} />
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="reject-reason" className="text-xs">เหตุผลที่ไม่ผ่าน</Label>
@@ -830,7 +837,7 @@ export function TaskDetailSheet({
                       size="sm"
                       className="bg-[var(--chart-red)] hover:bg-[var(--chart-red-dark)] text-white"
                       onClick={submitReject}
-                      disabled={!rejectDate || !rejectReason.trim()}
+                      disabled={!rejectDate || rejectDate < minRejectDate || !rejectReason.trim()}
                     >
                       ยืนยันไม่ผ่าน
                     </Button>
@@ -1403,11 +1410,11 @@ export function TaskDetailSheet({
               <div className="rounded-lg border border-[var(--line)] p-3 space-y-2.5">
                 <div className="space-y-1.5">
                   <Label className="text-xs">กำหนดส่งใหม่ (ใช้กับทุกคน)</Label>
-                  <DatePickerField value={bulkDate} minDate={toDateInput(task.startDate)} onChange={setBulkDate} />
+                  <DatePickerField value={bulkDate} minDate={minBulkDate} onChange={setBulkDate} />
                 </div>
                 <DueDateSaveButtons
                   submitted={task.status === "done"}
-                  disabled={!bulkDate}
+                  disabled={!bulkDate || bulkDate < minBulkDate}
                   label={`ใช้กับทุกคน (${task.assigneeIds.length} คน)`}
                   onCancel={() => setBulkRevising(false)}
                   onSave={(sendBack) => {
@@ -1443,11 +1450,11 @@ export function TaskDetailSheet({
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">กำหนดส่งใหม่</Label>
-                  <DatePickerField value={perPersonDate} minDate={toDateInput(task.startDate)} onChange={setPerPersonDate} />
+                  <DatePickerField value={perPersonDate} minDate={minPerPersonDate} onChange={setPerPersonDate} />
                 </div>
                 <DueDateSaveButtons
                   submitted={task.status === "done" || (task.completedAssigneeIds ?? []).includes(perPersonTargetId)}
-                  disabled={!perPersonTargetId || !perPersonDate}
+                  disabled={!perPersonTargetId || !perPersonDate || perPersonDate < minPerPersonDate}
                   label="ยืนยัน"
                   onCancel={() => setPerPersonRevising(false)}
                   onSave={(sendBack) => {
@@ -1550,7 +1557,7 @@ export function TaskDetailSheet({
               <div className="rounded-lg border border-[var(--line)] p-3 space-y-2.5">
                 <div className="space-y-1.5">
                   <Label className="text-xs">กำหนดส่งใหม่</Label>
-                  <DatePickerField value={newDate} minDate={task ? toDateInput(task.startDate) : undefined} onChange={setNewDate} />
+                  <DatePickerField value={newDate} minDate={minReviseDate} onChange={setNewDate} />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="rev-reason" className="text-xs">เหตุผล <span className="font-normal text-[var(--ink-soft)]">(ไม่บังคับ)</span></Label>
@@ -1558,7 +1565,7 @@ export function TaskDetailSheet({
                 </div>
                 <DueDateSaveButtons
                   submitted={task.status === "done"}
-                  disabled={!newDate}
+                  disabled={!newDate || newDate < minReviseDate}
                   label="บันทึกการแก้ไข"
                   onCancel={() => setRevising(false)}
                   onSave={submitRevision}

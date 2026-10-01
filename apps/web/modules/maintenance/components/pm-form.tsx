@@ -1,6 +1,7 @@
 "use client";
 
 import { SubmitButton } from "./submit-button";
+import { todayBangkok } from "@/modules/maintenance/lib/no-past-date";
 
 import { useState } from "react";
 import { Card } from "@smartboss/ui/components/card";
@@ -231,7 +232,7 @@ export function PmForm({
           <span className="text-sm font-medium text-(--ink)">
             วันกำหนดรอบแรก *
           </span>
-          <input name="nextDueDate" type="date" required className={inputClass} />
+          <input name="nextDueDate" type="date" required min={todayBangkok()} className={inputClass} />
         </label>
 
         <label className="flex flex-col gap-1.5">
