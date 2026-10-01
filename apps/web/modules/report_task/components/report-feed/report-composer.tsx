@@ -201,6 +201,19 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   // acceptance criterion) — only 2+ rounds is genuinely ambiguous enough to
   // ask "ส่งของรอบไหน?" for.
   const showRoundPicker = todayCutoffs.length >= 2;
+  // คำเตือนเรื่องรอบ (ไม่ได้เปลี่ยนว่าระบบเลือกรอบไหนให้ — ยังเป็นรอบถัดไปที่ยังไม่ปิด
+  // เหมือนเดิม คนเลือกเอง) แต่ต้องเห็นชัดว่ากำลังจะนับเป็นอะไร:
+  //  - รอบที่เลือกเลยเวลาแล้ว ⇒ โพสต์นี้นับเป็นส่งสาย
+  //  - มีรอบก่อนหน้าที่เลยเวลาแล้วแต่ยังไม่ได้ส่ง ⇒ อาจเป็นรายงานของรอบนั้น (เจอจริง:
+  //    รายงานเช้าโพสต์ 9:37 ระบบเลือกรอบ Evening ให้ คนโพสต์ไม่ทันเห็น — รอบเช้าเลย
+  //    กลายเป็นขาดส่ง ทั้งที่ส่งแล้ว) — มีปุ่มสลับไปรอบนั้นได้ทันที
+  const activeRoundLate = !!activeRound && !excludeFromSubmission && nowMinutes > roundMinutesOf(activeRound.time);
+  const missedEarlierRounds =
+    activeRound && !excludeFromSubmission
+      ? todayCutoffs.filter(
+          (r) => r.id !== activeRound.id && roundMinutesOf(r.time) < roundMinutesOf(activeRound.time) && nowMinutes > roundMinutesOf(r.time)
+        )
+      : [];
   // Opting a post out of counting as the daily submission also drops the
   // round's own photo requirement — that requirement exists to make sure
   // "the report" actually has evidence attached, and this post was just
@@ -358,6 +371,35 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
               );
             })}
             {minImagesRequired > 0 && <span className="text-xs text-[var(--ink-soft)]">· ต้องแนบรูปอย่างน้อย {minImagesRequired} รูป</span>}
+          </div>
+        )}
+
+        {(missedEarlierRounds.length > 0 || activeRoundLate) && activeRound && (
+          <div role="status" className="flex flex-col gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            {missedEarlierRounds.map((r) => (
+              <div key={r.id} className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
+                <span>
+                  ยังไม่ได้ส่ง <b>&quot;{r.label}&quot;</b> ({r.time}) — ถ้าโพสต์นี้เป็นรายงานของรอบนั้น
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedRoundId(r.id)}
+                  className="rounded-full border border-amber-400 bg-white px-2 py-0.5 font-semibold text-amber-900 hover:bg-amber-100"
+                >
+                  เลือก &quot;{r.label}&quot;
+                </button>
+                <span className="text-amber-800/80">(จะนับเป็นส่งสาย)</span>
+              </div>
+            ))}
+            {activeRoundLate && (
+              <div className="flex items-center gap-1.5">
+                <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
+                <span>
+                  โพสต์นี้จะนับเป็น<b>ส่งสาย</b>ของ &quot;{activeRound.label}&quot; — เลยเวลา {activeRound.time} แล้ว
+                </span>
+              </div>
+            )}
           </div>
         )}
 
