@@ -37,6 +37,18 @@ function thaiToday(): string {
  * แบ่งสองฝั่ง: ซ้าย = โมดูลหลักที่บริษัทใช้ทุกวัน (ไอคอนใหญ่กว่า) /
  * ขวา = โมดูลและเครื่องมือที่เหลือ
  */
+/**
+ * ลิงก์ของการ์ดโมดูล — โมดูลที่หน้าแรกเป็นแค่ตัวเด้งต่อ (แชท & รีพอต: /chat-report
+ * เด้งไปแชทหรือรายงานตามสิทธิ์) ลิงก์ตรงไปเมนูแรกที่คนนี้เห็นเลย ไม่ต้องรอเซิร์ฟเวอร์
+ * สองรอบ (รอบแรกได้แค่ "ไปที่อื่น") — เมนูถูกกรองตามสิทธิ์มาแล้วใน loadShellNav
+ */
+const REDIRECT_ONLY_BASES = new Set(["chat_report"]);
+function landingPath(m: { id: string; basePath: string; menus: { path: string }[] } | undefined): string | undefined {
+  if (!m) return undefined;
+  if (REDIRECT_ONLY_BASES.has(m.id) && m.menus[0]) return m.menus[0].path;
+  return m.basePath;
+}
+
 export default async function HomePage() {
   const nav = await loadShellNav();
   if (!nav) redirect("/login");
@@ -52,7 +64,7 @@ export default async function HomePage() {
     icon: mod.icon,
     color: `var(${mod.colorVar})`,
     colorBg: `var(${mod.colorBgVar})`,
-    href: visible.get(mod.code)?.basePath,
+    href: landingPath(visible.get(mod.code)),
   }));
 
   // โมดูลที่ติดตั้งเพิ่มภายหลัง (ไม่อยู่ใน 6 การ์ด) — ดึงหน้าตาจาก manifest
