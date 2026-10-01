@@ -2170,6 +2170,7 @@ export function TaskDetailSheet({
         index={attachmentViewer.index}
         onIndexChange={(i) => setAttachmentViewer((v) => (v ? { ...v, index: i } : v))}
         onClose={() => setAttachmentViewer(null)}
+        onEditImage={(file) => void handleCommentFilesSelected([file])}
       />
     )}
     </>

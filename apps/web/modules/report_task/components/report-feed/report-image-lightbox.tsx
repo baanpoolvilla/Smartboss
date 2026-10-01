@@ -9,7 +9,8 @@ import { fileKindOf, isDocAttachment, isVideoAttachment } from "@/modules/report
 import { getUser } from "@/modules/report_task/lib/directory";
 import { formatDateTimeFull, formatDateTimeShort } from "@/modules/report_task/lib/format";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Download, Link2, Minus, Plus, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Link2, Loader2, Minus, Pencil, Plus, X } from "lucide-react";
+import { downloadFile, fileForEditing, openAnnotator } from "@/lib/annotate/annotate";
 
 const SWIPE_THRESHOLD_PX = 80;
 const MIN_SCALE = 1;
@@ -30,6 +31,7 @@ export function ReportImageLightbox({
   onIndexChange,
   onClose,
   imageMeta,
+  onEditImage,
 }: {
   images: ReportPostImage[];
   index: number;
@@ -41,6 +43,9 @@ export function ReportImageLightbox({
    * มา (undefined) = ไม่โชว์ชิปนี้เลย เหมือนของเดิม (เช่น ไฟล์แนบของงาน Kanban
    * ที่ไม่มีแนวคิด "โพสต์" ให้ผูก). */
   imageMeta?: (image: ReportPostImage, index: number) => { authorId: string; at: string } | null | undefined;
+  /** ปุ่มดินสอ: วาด/เขียนบนรูปนี้ แล้วส่งไฟล์ที่วาดแล้วกลับไปให้ผู้เรียกแนบเข้าช่องพิมพ์ของห้อง/งานนั้น
+   * ไม่ใส่ = วาดเสร็จแล้วดาวน์โหลดลงเครื่องแทน (หน้าที่ไม่มีช่องพิมพ์ให้แนบ) */
+  onEditImage?: (file: File) => void;
 }) {
   const hasMultiple = images.length > 1;
   const [dragOffset, setDragOffset] = useState(0);
@@ -137,6 +142,28 @@ export function ReportImageLightbox({
   }, []);
 
   const image = images[index];
+  const [editing, setEditing] = useState(false);
+  // ดินสอ: ดึงรูปนี้มาเป็นไฟล์ในเครื่อง → หน้าต่างวาด → แนบเข้าช่องพิมพ์ (หรือดาวน์โหลด)
+  async function editImage() {
+    if (!image?.url) return;
+    setEditing(true);
+    try {
+      const file = await fileForEditing(image.url, image.name);
+      const edited = await openAnnotator(file);
+      if (!edited) return;
+      if (onEditImage) {
+        onClose();
+        onEditImage(edited);
+        toast.success("แนบรูปที่แก้แล้วในช่องพิมพ์ — กดส่งได้เลย");
+      } else {
+        downloadFile(edited);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "แก้ไขรูปนี้ไม่ได้");
+    } finally {
+      setEditing(false);
+    }
+  }
   if (!image) return null;
 
   const meta = imageMeta?.(image, index);
@@ -334,6 +361,17 @@ export function ReportImageLightbox({
               aria-label="คัดลอกลิงก์รูป"
             >
               <Link2 className="h-5 w-5" />
+            </button>
+          )}
+          {!isVideo && !isDoc && image.url && (
+            <button
+              onClick={() => void editImage()}
+              disabled={editing}
+              className="h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer disabled:opacity-50"
+              aria-label="วาด/เขียนบนรูปนี้"
+              title={onEditImage ? "วาด/เขียนบนรูปนี้ แล้วแนบส่ง" : "วาด/เขียนบนรูปนี้ แล้วบันทึกลงเครื่อง"}
+            >
+              {editing ? <Loader2 className="h-5 w-5 animate-spin" /> : <Pencil className="h-5 w-5" />}
             </button>
           )}
           {!isVideo && !isDoc && (

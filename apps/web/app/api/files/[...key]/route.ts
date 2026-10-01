@@ -71,6 +71,23 @@ export async function GET(
   }
 
   const signedUrl = await getSignedFileUrl(joined, { downloadFileName });
+
+  /*
+   * ?proxy=1 — ส่งไฟล์รูปผ่านเซิร์ฟเวอร์นี้เอง แทนการเด้งไปโดเมนไฟล์ ใช้ตอนกด "แก้ไข/วาด"
+   * บนรูปที่ส่งไปแล้ว (lib/annotate) — รูปจากโดเมนอื่นวาดลง canvas แล้วส่งออกไม่ได้
+   * (เบราว์เซอร์กันข้อมูลข้ามโดเมน) ดูรูปปกติยังเด้งไป presigned URL เหมือนเดิม ไม่เปลืองเครื่อง
+   * จำกัดแค่ไฟล์รูป ≤ 25MB
+   */
+  if (signedUrl && url.searchParams.get("proxy") === "1") {
+    const upstream = await fetch(signedUrl).catch(() => null);
+    const type = upstream?.headers.get("content-type") ?? "";
+    const size = Number(upstream?.headers.get("content-length") ?? 0);
+    if (!upstream?.ok || !type.startsWith("image/") || size > 25 * 1024 * 1024) {
+      return new NextResponse("Not an editable image", { status: 415 });
+    }
+    return new NextResponse(upstream.body, { headers: { "Content-Type": type, "Cache-Control": "private, no-store" } });
+  }
+
   if (signedUrl) {
     return NextResponse.redirect(signedUrl, {
       status: 302,

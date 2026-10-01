@@ -1500,6 +1500,7 @@ export function ReportCard({
           index={lightboxIndex}
           onIndexChange={setLightboxIndex}
           onClose={() => setLightboxIndex(null)}
+          onEditImage={topic.commentsDisabled ? undefined : (file) => void handleReplyFiles([file])}
           imageMeta={() => ({ authorId: post.authorId, at: post.createdAt })}
         />
       )}
@@ -2074,6 +2075,7 @@ export function ReportCard({
             index={replyLightbox.index}
             onIndexChange={(index) => setReplyLightbox((cur) => (cur ? { ...cur, index } : cur))}
             onClose={() => setReplyLightbox(null)}
+            onEditImage={topic.commentsDisabled ? undefined : (file) => void handleReplyFiles([file])}
             imageMeta={() => ({ authorId: replyLightbox.authorId, at: replyLightbox.createdAt })}
           />
         )}

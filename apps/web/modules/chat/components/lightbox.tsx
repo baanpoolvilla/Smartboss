@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BookImage, ChevronLeft, ChevronRight, Download, X } from "lucide-react";
+import { BookImage, ChevronLeft, ChevronRight, Download, Loader2, Pencil, X } from "lucide-react";
+import { toast } from "sonner";
+import { fileForEditing, openAnnotator } from "@/lib/annotate/annotate";
 import type { ChatAttachment } from "../types";
 import { daysUntilExpiry } from "../lib/retention";
 
@@ -19,16 +21,35 @@ export function Lightbox({
   index,
   onClose,
   onSaveToAlbum,
+  onEditImage,
 }: {
   items: LightboxItem[];
   index: number;
   onClose: () => void;
   /** ไม่ส่ง = ไม่มีปุ่มบันทึกลงอัลบั้ม (เช่น ดูรูปที่อยู่ในอัลบั้มอยู่แล้ว) */
   onSaveToAlbum?: (item: LightboxItem) => void;
+  /** ดินสอ: วาด/เขียนบนรูปนี้ แล้วส่งไฟล์ใหม่ให้ผู้เรียกแนบเข้าช่องพิมพ์ (รูปเดิมไม่เปลี่ยน) */
+  onEditImage?: (file: File) => void;
 }) {
   const [i, setI] = useState(index);
   const [touchX, setTouchX] = useState<number | null>(null);
   const item = items[i];
+  const [editing, setEditing] = useState(false);
+  async function editImage() {
+    if (!item || !onEditImage) return;
+    setEditing(true);
+    try {
+      const edited = await openAnnotator(await fileForEditing(item.url, item.name));
+      if (!edited) return;
+      onClose();
+      onEditImage(edited);
+      toast.success("แนบรูปที่วาดแล้วในช่องพิมพ์ — กดส่งได้เลย");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "วาดบนรูปนี้ไม่ได้");
+    } finally {
+      setEditing(false);
+    }
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -79,9 +100,21 @@ export function Lightbox({
             <BookImage className="h-5 w-5" /> <span className="hidden sm:inline">บันทึกลงอัลบั้ม</span>
           </button>
         )}
+        {onEditImage && item.kind === "image" && (
+          <button
+            type="button"
+            onClick={() => void editImage()}
+            disabled={editing}
+            className={`${onSaveToAlbum ? "" : "ml-auto "}flex h-10 items-center gap-1.5 rounded-full px-3 text-sm hover:bg-white/10 disabled:opacity-50`}
+            title="วาด/เขียนบนรูปนี้ แล้วแนบส่ง"
+          >
+            {editing ? <Loader2 className="h-5 w-5 animate-spin" /> : <Pencil className="h-5 w-5" />}
+            <span className="hidden sm:inline">วาด</span>
+          </button>
+        )}
         <a
           href={downloadUrl(item)}
-          className={`${onSaveToAlbum ? "" : "ml-auto "}flex h-10 w-10 items-center justify-center rounded-full hover:bg-white/10`}
+          className={`${onSaveToAlbum || (onEditImage && item.kind === "image") ? "" : "ml-auto "}flex h-10 w-10 items-center justify-center rounded-full hover:bg-white/10`}
           aria-label="ดาวน์โหลด"
           title="ดาวน์โหลด"
         >

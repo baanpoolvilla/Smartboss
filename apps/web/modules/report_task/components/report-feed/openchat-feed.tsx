@@ -808,6 +808,7 @@ export function OpenchatFeed({
           index={lightbox.index}
           onIndexChange={(index) => setLightbox((cur) => (cur ? { ...cur, index } : cur))}
           onClose={() => setLightbox(null)}
+          onEditImage={(file) => void handleComposerFiles([file])}
           imageMeta={() => ({ authorId: lightbox.authorId, at: lightbox.createdAt })}
         />
       )}

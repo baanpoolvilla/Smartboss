@@ -275,6 +275,7 @@ export function ChatRoom({ channel, initialUnread, onBack }: { channel: ChatChan
           index={lightbox.index}
           onClose={() => setLightbox(null)}
           onSaveToAlbum={lightbox.items.some((a) => a.messageId) ? setSaveToAlbum : undefined}
+          onEditImage={(file) => composerRef.current?.addFiles([file])}
         />
       )}
       {saveToAlbum && (

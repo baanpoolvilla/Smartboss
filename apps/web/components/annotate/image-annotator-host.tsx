@@ -32,7 +32,15 @@ export function ImageAnnotatorHost() {
 function Annotator({ file }: { file: File }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [img, setImg] = useState<HTMLImageElement | null>(null);
-  const [ops, setOps] = useState<Op[]>([]);
+  // ประวัติวาด: ops = ที่เห็นอยู่, redo = ที่เพิ่งย้อนไป (Ctrl+Y คืนได้ วาดใหม่แล้วล้างทิ้ง)
+  const [hist, setHist] = useState<{ ops: Op[]; redo: Op[] }>({ ops: [], redo: [] });
+  const ops = hist.ops;
+  const setOps = (next: Op[] | ((o: Op[]) => Op[])) =>
+    setHist((h) => ({ ops: typeof next === "function" ? next(h.ops) : next, redo: [] }));
+  const undo = () =>
+    setHist((h) => (h.ops.length === 0 ? h : { ops: h.ops.slice(0, -1), redo: [...h.redo, h.ops[h.ops.length - 1]!] }));
+  const redoLast = () =>
+    setHist((h) => (h.redo.length === 0 ? h : { ops: [...h.ops, h.redo[h.redo.length - 1]!], redo: h.redo.slice(0, -1) }));
   const drawing = useRef<Op | null>(null);
   const [tool, setTool] = useState<"pen" | "text">("pen");
   const [color, setColor] = useState(COLORS[0]!);
@@ -76,9 +84,14 @@ function Annotator({ file }: { file: File }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !textAt) closeAnnotator(null);
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !textAt) {
+      if (textAt || !(e.ctrlKey || e.metaKey)) return;
+      // ดูตำแหน่งปุ่ม (e.code) ไม่ใช่ตัวอักษร — แป้นภาษาไทย ปุ่ม Z ส่ง e.key = "ผ"
+      if (e.code === "KeyZ" && !e.shiftKey) {
         e.preventDefault();
-        setOps((o) => o.slice(0, -1));
+        undo();
+      } else if (e.code === "KeyY" || (e.code === "KeyZ" && e.shiftKey)) {
+        e.preventDefault();
+        redoLast();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -209,7 +222,7 @@ function Annotator({ file }: { file: File }) {
         <span className="mx-1 h-6 w-px bg-(--line)" />
         <button
           type="button"
-          onClick={() => setOps((o) => o.slice(0, -1))}
+          onClick={undo}
           disabled={ops.length === 0}
           className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm text-(--ink-soft) hover:bg-(--bg-soft) disabled:opacity-40"
         >
@@ -279,7 +292,7 @@ function Annotator({ file }: { file: File }) {
         )}
       </div>
       <p className="pb-2 text-center text-xs text-white/60" style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}>
-        {tool === "pen" ? "ลากเพื่อวาด/วงตรงที่ต้องการ" : "แตะบนรูปตรงที่จะเขียนข้อความ"} · Ctrl+Z ย้อนกลับ
+        {tool === "pen" ? "ลากเพื่อวาด/วงตรงที่ต้องการ" : "แตะบนรูปตรงที่จะเขียนข้อความ"} · Ctrl+Z ย้อน · Ctrl+Y ทำซ้ำ
       </p>
     </div>
   );

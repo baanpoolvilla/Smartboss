@@ -53,6 +53,35 @@ export function originalFor(url: string | undefined | null): File | null {
   return url ? (originals.get(url) ?? null) : null;
 }
 
+/**
+ * รูปที่ส่งไปแล้ว (URL /api/files/...) → ไฟล์ในเครื่องสำหรับวาด — ขอผ่าน ?proxy=1 ให้เซิร์ฟเวอร์
+ * ส่งไบต์มาเอง (โดเมนเดียวกัน) ไม่งั้น canvas ส่งออกไม่ได้ ไฟล์ที่เพิ่งอัปโหลดในแท็บนี้ใช้ต้นฉบับเลย
+ */
+export async function fileForEditing(url: string, name?: string): Promise<File> {
+  const remembered = originalFor(url);
+  if (remembered) return remembered;
+  const proxied = url.startsWith("/api/files/") ? `${url}${url.includes("?") ? "&" : "?"}proxy=1` : url;
+  const res = await fetch(proxied, { cache: "no-store" });
+  if (!res.ok) throw new Error("เปิดรูปนี้เพื่อแก้ไขไม่ได้");
+  const blob = await res.blob();
+  if (!blob.type.startsWith("image/")) throw new Error("แก้ไขได้เฉพาะรูปภาพ");
+  const ext = blob.type === "image/png" ? "png" : "jpg";
+  const base = (name ?? "image").replace(/\.[^.]+$/, "") || "image";
+  return new File([blob], `${base}.${ext}`, { type: blob.type });
+}
+
+/** ดาวน์โหลดไฟล์ลงเครื่อง (ใช้ตอนแก้รูปจากที่ที่ไม่มีช่องพิมพ์ให้แนบ) */
+export function downloadFile(file: File) {
+  const url = URL.createObjectURL(file);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = file.name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 /** ไฟล์ที่ลากมาวาง / วางจากคลิปบอร์ด — ใช้ร่วมกันทุกช่องพิมพ์ */
 export function filesFromDataTransfer(dt: DataTransfer | null): File[] {
   if (!dt) return [];
