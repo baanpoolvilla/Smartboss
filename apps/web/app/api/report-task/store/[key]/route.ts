@@ -10,7 +10,14 @@ import {
   listDepartmentsWithOverlay,
   saveDepartmentOverlay,
 } from "@/modules/report_task/lib/db/departments";
-import { isValidStoreKey, readStore, readStoreVersion, writeStore } from "@/modules/report_task/lib/db/org-store";
+import {
+  isValidStoreKey,
+  ownNotifications,
+  readStore,
+  readStoreVersion,
+  writeOwnNotifications,
+  writeStore,
+} from "@/modules/report_task/lib/db/org-store";
 import { recordReportStickerEvents, refundDeletedReportRoundEvents } from "@/modules/report_task/lib/db/report-feed-performance";
 import {
   listHolidayEvents,
@@ -61,6 +68,9 @@ const DEPARTMENTS_KEY = "departments";
  * writeTasks ของ Kanban ทำกับ task.reactions อยู่แล้ว
  */
 const REPORT_FEED_KEY = "report-feed";
+
+/** แจ้งเตือน — ส่ง/รับเฉพาะของเจ้าของเครื่อง (ดู ownNotifications / writeOwnNotifications) */
+const NOTIFICATIONS_KEY = "notifications";
 
 /*
  * การลากับวันหยุดเป็นของโมดูลบุคคล (workforce) — อ่านอย่างเดียวที่นี่
@@ -146,7 +156,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ key
   }
 
   const { data, version } = await readStore<unknown>(session.orgId, key);
-  return Response.json(data, { headers: { "Cache-Control": "no-store", "X-Data-Version": String(version) } });
+  // แจ้งเตือนเก็บรวมทั้งบริษัท แต่ส่งให้แต่ละคนเฉพาะของตัวเอง — เดิมทุกเครื่องได้ทั้งก้อน
+  // (ของคนอื่นถูกซ่อนแค่ที่หน้าจอ แต่เปิด DevTools ก็อ่านได้ และโหลด 1.6 MB ทุกครั้ง)
+  const payload = key === NOTIFICATIONS_KEY ? ownNotifications(data, session.userId) : data;
+  return Response.json(payload, { headers: { "Cache-Control": "no-store", "X-Data-Version": String(version) } });
 }
 
 async function put(request: NextRequest, key: string) {
@@ -210,6 +223,23 @@ async function put(request: NextRequest, key: string) {
       session.userId
     );
     return Response.json({ ok: true, version: 1 });
+  }
+
+  // เครื่องถือแค่แจ้งเตือนของตัวเอง — รวมกับของคนอื่นที่เซิร์ฟเวอร์ (ดู writeOwnNotifications)
+  if (key === NOTIFICATIONS_KEY) {
+    const merged = await writeOwnNotifications(
+      session.orgId,
+      session.userId,
+      body.data,
+      typeof body.expectedVersion === "number" ? body.expectedVersion : null
+    );
+    if (!merged.ok) {
+      return Response.json(
+        { error: "ข้อมูลถูกแก้ไขโดยผู้ใช้อื่นแล้ว กรุณาโหลดใหม่", currentVersion: merged.currentVersion },
+        { status: 409 }
+      );
+    }
+    return Response.json({ ok: true, version: merged.version });
   }
 
   const expectedVersion = typeof body.expectedVersion === "number" ? body.expectedVersion : null;

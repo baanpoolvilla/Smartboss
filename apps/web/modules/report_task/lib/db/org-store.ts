@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
 import { announceNotification } from "@/lib/notify-push";
-import { publishToOrg } from "@/lib/realtime/server";
+import { publishToOrg, publishToUsers } from "@/lib/realtime/server";
 
 import { fileForStoreKey, type StoreKey } from "./store-registry";
 
@@ -71,10 +71,17 @@ export async function writeStore(
   // เพราะมีหลายทางที่บันทึกคีย์นี้ (หน้าเว็บ PUT, ตัวเตือนใกล้ถึงกำหนด, สรุปงาน, คำขอแก้คะแนน ฯลฯ)
   if (key === NOTIFICATIONS_KEY) {
     const before = await readStore<unknown>(orgId, key);
-    const result = await writeStoreRaw(orgId, key, data, expectedVersion, updatedBy);
+    const pruned = pruneNotifications(data);
+    const result = await writeStoreRaw(orgId, key, pruned, expectedVersion, updatedBy);
     if (result.ok) {
-      announceNewNotifications(orgId, before.data, data);
-      announceStoreChanged(orgId, key, result.version);
+      announceNewNotifications(orgId, before.data, pruned);
+      // แจ้งเตือนเป็นของรายคน — บอกเฉพาะคนที่ของตัวเองเปลี่ยน ไม่ปลุกทั้งบริษัท
+      try {
+        const changed = changedNotificationOwners(before.data, pruned);
+        if (changed.length > 0) publishToUsers(changed, { type: "store.changed", key, version: result.version });
+      } catch {
+        // ท่อสดพลาดต้องไม่ทำให้การบันทึกพลาดตาม
+      }
     }
     return result;
   }
@@ -97,6 +104,112 @@ function announceStoreChanged(orgId: string, key: string, version: number) {
 }
 
 const NOTIFICATIONS_KEY = "notifications";
+
+/** เก็บแจ้งเตือนไว้กี่วัน / กี่รายการต่อคน — ก่อนหน้านี้ไม่เคยลบเลย ก้อนโตถึง 1.6 MB */
+const NOTIFICATION_RETENTION_DAYS = 60;
+const NOTIFICATION_MAX_PER_USER = 300;
+
+interface OwnedNotification {
+  id?: unknown;
+  userId?: unknown;
+  createdAt?: unknown;
+  read?: unknown;
+}
+
+/** ตัดแจ้งเตือนเก่าเกินกำหนด + เกินโควตาต่อคน (เก็บรายการใหม่สุด) — ของที่ไม่ใช่อาร์เรย์คืนเดิม */
+export function pruneNotifications(data: unknown, now: number = Date.now()): unknown {
+  if (!Array.isArray(data)) return data;
+  const cutoff = now - NOTIFICATION_RETENTION_DAYS * 86_400_000;
+  const sorted = [...(data as OwnedNotification[])].sort((a, b) =>
+    String(b?.createdAt ?? "").localeCompare(String(a?.createdAt ?? ""))
+  );
+  const perUser = new Map<string, number>();
+  return sorted.filter((n) => {
+    const t = Date.parse(String(n?.createdAt ?? ""));
+    if (Number.isFinite(t) && t < cutoff) return false;
+    const owner = String(n?.userId ?? "");
+    const count = (perUser.get(owner) ?? 0) + 1;
+    perUser.set(owner, count);
+    return count <= NOTIFICATION_MAX_PER_USER;
+  });
+}
+
+/** userId ที่แจ้งเตือนของตัวเองเพิ่ม/หาย/เปลี่ยนสถานะอ่าน ระหว่างก้อนเก่ากับใหม่ */
+function changedNotificationOwners(beforeData: unknown, afterData: unknown): string[] {
+  const sig = (data: unknown) => {
+    const m = new Map<string, string>();
+    for (const n of Array.isArray(data) ? (data as OwnedNotification[]) : []) {
+      if (typeof n?.id === "string") m.set(n.id, `${String(n.userId)}|${n.read === true}`);
+    }
+    return m;
+  };
+  const a = sig(beforeData);
+  const b = sig(afterData);
+  const owners = new Set<string>();
+  for (const [id, v] of a) if (b.get(id) !== v) owners.add(v.split("|")[0]!);
+  for (const [id, v] of b) if (a.get(id) !== v) owners.add(v.split("|")[0]!);
+  return [...owners].filter((u) => u && u !== "undefined");
+}
+
+/**
+ * บันทึกแจ้งเตือนจากเครื่องของผู้ใช้คนหนึ่ง — เครื่องถือแค่ของตัวเอง (GET ส่งให้เฉพาะ
+ * ของเจ้าของ) จึงเขียนทับทั้งก้อนตรง ๆ ไม่ได้ ไม่งั้นของคนอื่นหายหมด รวมให้ที่นี่:
+ *   - ของตัวเอง: ใช้ตามที่เครื่องส่งมา (อ่านแล้ว/ลบ/ใหม่)
+ *   - ของคนอื่นที่เครื่องเพิ่งสร้าง (มอบหมายงาน แท็ก ตอบกลับ ...): เพิ่มเข้าไป
+ *   - ของคนอื่นที่มีอยู่แล้ว: คงไว้ แก้จากเครื่องคนอื่นไม่ได้
+ * เครื่องที่ถือรุ่นล่าสุด (expectedVersion ตรง) = ของตัวเองใช้ตามที่ส่งมาทั้งหมด รวมการลบ
+ * เครื่องที่ถือรุ่นเก่ากว่า (มีแจ้งเตือนใหม่เข้ามาหลังเครื่องนั้นโหลด หรือเปิดอีกเครื่อง) =
+ * ไม่ลบอะไรเลย แค่เพิ่ม/อัปเดต และ "อ่านแล้ว" ไม่ย้อนกลับ — กันแจ้งเตือนที่เครื่องยังไม่เคย
+ * เห็นหายไปเพราะเครื่องนั้นส่งรายการเก่ากลับมา ไม่ตอบ 409 ให้เครื่อง (รวมรายคนแล้วไม่มีทาง
+ * ทับของคนอื่น) อ่าน-รวม-เขียนพร้อมตรวจรุ่นเอง ชนกันก็ลองใหม่
+ */
+export async function writeOwnNotifications(
+  orgId: string,
+  userId: string,
+  incoming: unknown,
+  expectedVersion: number | null
+): Promise<StoreWrite> {
+  const sent = (Array.isArray(incoming) ? (incoming as OwnedNotification[]) : []).filter(
+    (n) => n && typeof n.id === "string" && typeof n.userId === "string"
+  );
+  const sentMine = sent.filter((n) => n.userId === userId);
+  let last: StoreWrite = { ok: false, conflict: true, currentVersion: 0 };
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const current = await readStore<OwnedNotification[]>(orgId, NOTIFICATIONS_KEY);
+    const stored = Array.isArray(current.data) ? current.data : [];
+    const storedIds = new Set(stored.map((n) => n?.id));
+    const storedMine = stored.filter((n) => n?.userId === userId);
+
+    let myItems: OwnedNotification[];
+    if (expectedVersion !== null && expectedVersion === current.version) {
+      myItems = sentMine;
+    } else {
+      const storedById = new Map(storedMine.map((n) => [n.id, n]));
+      const sentIds = new Set(sentMine.map((n) => n.id));
+      myItems = [
+        ...sentMine.map((n) => {
+          const prev = storedById.get(n.id);
+          return prev?.read === true && n.read !== true ? { ...n, read: true } : n;
+        }),
+        ...storedMine.filter((n) => !sentIds.has(n.id)),
+      ];
+    }
+
+    const merged = [
+      ...myItems,
+      ...sent.filter((n) => n.userId !== userId && !storedIds.has(n.id)),
+      ...stored.filter((n) => n?.userId !== userId),
+    ];
+    last = await writeStore(orgId, NOTIFICATIONS_KEY, merged, current.version || null, userId);
+    if (last.ok) return last;
+  }
+  return last;
+}
+
+/** แจ้งเตือนเฉพาะของผู้ใช้คนนี้ — ให้ GET ส่งไปที่เครื่อง (ของคนอื่นไม่ออกจากเซิร์ฟเวอร์) */
+export function ownNotifications(data: unknown, userId: string): unknown {
+  return Array.isArray(data) ? (data as OwnedNotification[]).filter((n) => n?.userId === userId) : data;
+}
 
 interface StoredNotification {
   id?: unknown;
