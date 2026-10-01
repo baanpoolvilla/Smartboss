@@ -65,11 +65,13 @@ interface FetchOptions {
   method?: "GET" | "POST" | "PATCH" | "DELETE";
   body?: unknown;
   idempotencyKey?: string;
+  /** ส่ง token เอง — ใช้กับงานที่รันหลังส่งหน้าไปแล้ว (after()) ซึ่งอ่าน cookies() ไม่ได้ */
+  token?: string;
 }
 
 export async function wfFetch<T>(path: string, options: FetchOptions = {}): Promise<T> {
   const method = options.method ?? "GET";
-  const token = (await cookies()).get(COOKIE_ACCESS)?.value;
+  const token = options.token ?? (await cookies()).get(COOKIE_ACCESS)?.value;
 
   const headers: Record<string, string> = {};
   if (token) headers.authorization = `Bearer ${token}`;
@@ -115,9 +117,9 @@ export async function wfFetch<T>(path: string, options: FetchOptions = {}): Prom
  * หน้าภาพรวมดึงหลายอย่างพร้อมกัน ผู้ใช้บางคนมีสิทธิ์แค่บางส่วน
  * ถ้าปล่อยให้ 403 ล้มทั้งหน้า คนที่มีสิทธิ์บางส่วนจะเข้าหน้าไม่ได้เลย
  */
-export async function wfTry<T>(path: string): Promise<T | null> {
+export async function wfTry<T>(path: string, token?: string): Promise<T | null> {
   try {
-    return await wfFetch<T>(path);
+    return await wfFetch<T>(path, token ? { token } : {});
   } catch {
     return null;
   }

@@ -1,4 +1,6 @@
 import "server-only";
+import { after } from "next/server";
+import { cookies } from "next/headers";
 import { getSession } from "@smartboss/auth";
 import { wfFetch, wfTry, type Employment, type Paged } from "./api";
 
@@ -28,7 +30,9 @@ import { wfFetch, wfTry, type Employment, type Paged } from "./api";
  */
 
 /** ยิงคำนวณพร้อมกันได้กี่คน — ต่ำกว่า pool ของ workforce API (10) ไว้เผื่อหน้าอื่น */
-const MAX_PARALLEL = 3;
+// ทีละคน — เป็นงานเบื้องหลังล้วน ๆ ช้าลงหน่อยไม่มีใครรอ แต่ยิงพร้อมกันหลายคนแย่ง
+// เครื่อง 2 คอร์กับหน้าที่ผู้ใช้กดอยู่
+const MAX_PARALLEL = 1;
 
 /** ภายในกี่มิลลิวินาทีถือว่า "เพิ่งคำนวณไปแล้ว" ไม่ต้องทำซ้ำ */
 const THROTTLE_MS = 5 * 60_000;
@@ -82,22 +86,34 @@ export async function autoRecalculateAttendance(from: string, to: string): Promi
 
   if (coveredByRecentRun(orgId, from, to)) return;
 
-  const employments = await wfTry<Paged<Pick<Employment, "id" | "terminated_on">>>(
-    "/employments",
-  );
-  if (employments === null) return; // ไม่มีสิทธิ์อ่าน — ปล่อยผ่าน หน้าเดิมซ่อนส่วนที่เกี่ยวข้องเอง
-
   // จองคิวก่อนเริ่มจริง ไม่ใช่หลังเสร็จ — งานนี้ใช้เวลาหลายวินาที ถ้ารอจนจบ
   // ค่อยบันทึก คนที่เปิดหน้าระหว่างนั้นจะยิงซ้ำซ้อนกันอีกหลายรอบ
   lastRunByOrg.set(orgId, { at: Date.now(), from, to });
 
-  const active = employments.items.filter((e) => e.terminated_on === null);
-  await runWithLimit(active, MAX_PARALLEL, (e) =>
-    wfFetch("/attendance-results:recalculate", {
-      method: "POST",
-      body: { employment_id: e.id, from, to },
-    }).catch(() => null),
-  );
+  // รันหลังส่งหน้าให้ผู้ใช้แล้ว (after) — เดิมเริ่มพร้อมกับตอนหน้ากำลังโหลด แล้วแย่ง
+  // workforce API/ฐานข้อมูลกับคำขอของหน้าเอง เข้าโมดูลบุคคลครั้งแรก (รอบที่ต้องคำนวณ)
+  // เลยช้า 2.6–3.3 วิ ส่วนกดต่อในหน้าเดิม 0.2–0.6 วิ — token อ่านไว้ก่อน เพราะใน
+  // after() ของ Server Component อ่าน cookies() ไม่ได้แล้ว
+  const token = (await cookies()).get("sb_access")?.value;
+  after(async () => {
+    try {
+      const employments = await wfTry<Paged<Pick<Employment, "id" | "terminated_on">>>("/employments", token);
+      if (employments === null) {
+        lastRunByOrg.delete(orgId); // ไม่มีสิทธิ์อ่าน — ให้คนที่มีสิทธิ์เปิดแล้วได้คำนวณ
+        return;
+      }
+      const active = employments.items.filter((e) => e.terminated_on === null);
+      await runWithLimit(active, MAX_PARALLEL, (e) =>
+        wfFetch("/attendance-results:recalculate", {
+          method: "POST",
+          body: { employment_id: e.id, from, to },
+          token,
+        }).catch(() => null),
+      );
+    } catch {
+      lastRunByOrg.delete(orgId);
+    }
+  });
 }
 
 /**
