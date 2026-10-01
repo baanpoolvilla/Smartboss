@@ -34,7 +34,7 @@ export default async function SalesMarketingPage() {
           return (
             <li key={app.url}>
               <a
-                href={app.url}
+                href={app.sso ? `/sales-marketing/open/${app.sso.key}` : app.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="group flex items-center gap-4 rounded-2xl bg-(--bg) p-5 shadow-(--shadow-card) ring-1 ring-black/[0.04] outline-hidden transition-all duration-150 hover:-translate-y-0.5 hover:ring-black/[0.08] focus-visible:ring-2 focus-visible:ring-(--brand-green)/40 active:scale-[0.99]"
