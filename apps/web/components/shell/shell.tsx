@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@smartboss/ui/components/dropdown-menu";
 import { Logo } from "@/components/logo";
+import { NavigationProgress } from "@/components/shell/navigation-progress";
 import { Icon } from "@/components/icon";
 import { IssueReportBarButton } from "@/modules/report_task/components/issue-report/issue-report-bar-button";
 import { ReportNotificationSync } from "@/modules/report_task/components/shared/report-notification-sync";
@@ -77,6 +78,10 @@ export function Shell({
   return (
     <ShellProvider user={user} unread={unread}>
       <SessionRefresher />
+      {/* แถบโหลดด้านบนทันทีที่กดลิงก์ — ไม่งั้นจอนิ่งจนหน้าใหม่เสร็จ ดูเหมือนกดไม่ติด */}
+      <Suspense fallback={null}>
+        <NavigationProgress />
+      </Suspense>
       {/* ไฟล์ใหญ่เกิน — เตือนขนาดจริง/เพดาน ก่อนส่งฟอร์มที่แนบไฟล์ทุกหน้า */}
       <FileSizeGuard />
       {/* เปิดหน้าที่แจ้งเตือนชี้มาเอง (ไม่ได้กดจากกระดิ่ง) ก็นับว่าอ่านแล้ว */}
