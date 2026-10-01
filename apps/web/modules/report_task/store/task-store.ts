@@ -25,6 +25,11 @@ function logActivity(userId: string, action: string, target: string, taskId: str
   useActivityLogStore.getState().log({ userId, action, target, taskId, detail });
 }
 
+/** a/b เป็นวันที่ ("YYYY-MM-DD" หรือ ISO) — a อยู่หลัง b ระดับวัน */
+function isLaterDay(a: string, b: string): boolean {
+  return a.slice(0, 10) > b.slice(0, 10);
+}
+
 function priorityLabel(p: TaskPriority): string {
   return priorityMeta[p]?.label ?? p;
 }
@@ -508,6 +513,8 @@ export const useTaskStore = create<TaskStore>((set) => ({
         if (t.id !== taskId) return t;
         const now = new Date().toISOString();
         const previousDate = t.taskMode === "group" ? (t.assigneeDueDates?.[requesterId] ?? t.dueDate) : t.dueDate;
+        // ขอเลื่อนได้แค่ไปข้างหน้า (หน้าจอกันไว้แล้ว — กันซ้ำตรงนี้)
+        if (!isLaterDay(newDate, previousDate)) return t;
         const request = { id: `ddr-${uuid()}`, requestedBy: requesterId, requestedAt: now, newDate, previousDate, reason, status: "pending" as const };
         const others = (t.dueDateRequests ?? []).filter((r) => !(r.requestedBy === requesterId && r.status === "pending"));
         const name = getUser(requesterId)?.name ?? "มีคน";
@@ -555,6 +562,8 @@ export const useTaskStore = create<TaskStore>((set) => ({
     const task = useTaskStore.getState().tasks.find((t) => t.id === taskId);
     const request = task?.dueDateRequests?.find((r) => r.id === requestId);
     if (!task || !request || request.status !== "pending") return;
+    // คำขอที่ย้อนวันกลับ (สร้างก่อนมีตัวกันในหน้าจอ) อนุมัติไม่ได้ — ปฏิเสธได้อย่างเดียว
+    if (approve && !isLaterDay(request.newDate, request.previousDate)) return;
     const now = new Date().toISOString();
     const cleanNote = note?.trim() || undefined;
     set((s) => ({

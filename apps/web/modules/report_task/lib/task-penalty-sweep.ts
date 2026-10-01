@@ -78,6 +78,10 @@ export function penaltyDueDate(task: Pick<Task, "originalDueDate" | "revisions">
   const start = revisions[0]?.previousDate ?? task.originalDueDate;
   let due = start;
   for (const r of revisions) {
+    // ตั้งกำหนดส่งเป็นวันที่ผ่านไปแล้ว ณ ตอนแก้ = พิมพ์ผิด ไม่ใช่เส้นตายจริง — ข้ามไป
+    // (เจอจริง: ขอเลื่อน 30/09 → 04/09 ตั้งใจ 04/10 แก้กลับเป็น 04/10 วันเดียวกัน
+    // แต่ chain หยุดที่ 04/09 ⇒ โดนหัก −3 ทั้งที่ไม่เคยเลยกำหนดจริง)
+    if (dueDay(r.newDate) < localDay(r.revisedAt)) continue;
     if (localDay(r.revisedAt) > dueDay(due)) break;
     due = r.newDate;
   }

@@ -137,6 +137,21 @@ describe("sweepAutoPenalties", () => {
       expect(result.revokedRefIds).toEqual(["t1"]);
     });
 
+    it("ignores a revision that set the date into the past (typo) and returns the dock", () => {
+      // จริง: 30/09 → 04/09 (ตั้งใจ 04/10) แล้วแก้เป็น 04/10 — ไม่เคยเลยกำหนดจริง
+      const result = sweepAutoPenalties([
+        makeTask({
+          originalDueDate: daysFromNow(-1),
+          dueDate: daysFromNow(3),
+          revisions: [ext(-2, -1, -27), { ...ext(-1, -27, 3), revisionNumber: 2 }],
+          missedDeadlineOnce: true,
+          penalty: { points: 3, byUserId: SYSTEM_USER_ID, appliedAt: daysFromNow(-1) },
+        }),
+      ]);
+      expect(result.tasks[0]!.penalty).toBeNull();
+      expect(result.revokedRefIds).toEqual(["t1"]);
+    });
+
     it("leaves a manual dock alone", () => {
       const result = sweepAutoPenalties([
         makeTask({

@@ -87,6 +87,12 @@ import { TimeAgo } from "@/modules/report_task/components/shared/time-ago";
 import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
 
 const toDateInput = (iso: string) => iso.slice(0, 10);
+/** "YYYY-MM-DD" ของวันถัดไป (คิดแบบ UTC ให้ตรงกับ toDateInput) */
+const dayAfterInput = (ymd: string) => {
+  const d = new Date(`${ymd}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+};
 
 // "อยากมีสติกเกอร์ธรรมดา...เอาไว้ชมให้กำลังใจเบื้องต้น" — ปฏิกิริยาธรรมดา
 // ไม่มีผลคะแนน ใครก็กดได้ (ไม่ต้อง owner เหมือนแถวสติกเกอร์มีคะแนนด้านล่าง)
@@ -429,6 +435,11 @@ export function TaskDetailSheet({
   const decidedDueRequests = dueRequests.filter((r) => r.status === "approved" || r.status === "rejected");
   const myPendingDueRequest = pendingDueRequests.find((r) => r.requestedBy === viewingAsUserId);
   const canRequestDueDate = !owner && task.assigneeIds.includes(viewingAsUserId) && task.status !== "done";
+  // ขอเลื่อนได้แค่ "ไปข้างหน้า" — เดิมเลือกวันก่อนกำหนดปัจจุบันได้ (เจอจริง: ขอ 30/09 → 04/09
+  // ตั้งใจพิมพ์ 04/10) อนุมัติแล้วกำหนดส่งย้อนไปอยู่ในอดีต ⇒ โดนหักคะแนนทันที
+  const minRequestDate = dayAfterInput(
+    toDateInput(task.taskMode === "group" ? (task.assigneeDueDates?.[viewingAsUserId] ?? task.dueDate) : task.dueDate)
+  );
   const removingAssigneeWouldLockMeOut = (nextAssigneeIds: string[]) =>
     !owner && !canEditRecord(task.assignedById, departmentIdsOf(nextAssigneeIds), viewingAsUserId);
   // Only the owner (CEO) can hand out any sticker — the whole picker block
@@ -1301,7 +1312,8 @@ export function TaskDetailSheet({
                 <p className="text-xs text-[var(--ink-soft)]">ส่งคำขอให้ CEO / ผู้มอบหมาย / หัวหน้าแผนก อนุมัติ — กำหนดส่งจะเปลี่ยนเมื่ออนุมัติแล้ว</p>
                 <div className="space-y-1.5">
                   <Label className="text-xs">ขอเลื่อนเป็นวันที่</Label>
-                  <DatePickerField value={requestDate} minDate={toDateInput(task.startDate)} onChange={setRequestDate} />
+                  <DatePickerField value={requestDate} minDate={minRequestDate} onChange={setRequestDate} />
+                  <p className="text-[11px] text-[var(--ink-soft)]">เลือกได้ตั้งแต่ {formatDate(minRequestDate)} — ขอเลื่อนได้เฉพาะไปหลังกำหนดเดิม</p>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="due-request-reason" className="text-xs">เหตุผล</Label>
@@ -1317,9 +1329,9 @@ export function TaskDetailSheet({
                   <Button size="sm" variant="outline" onClick={() => setRequesting(false)}>ยกเลิก</Button>
                   <Button
                     size="sm"
-                    disabled={!requestDate || !requestReason.trim()}
+                    disabled={!requestDate || requestDate < minRequestDate || !requestReason.trim()}
                     onClick={() => {
-                      if (!requestDate || !requestReason.trim() || !canRequestDueDate) return;
+                      if (!requestDate || requestDate < minRequestDate || !requestReason.trim() || !canRequestDueDate) return;
                       requestDueDateChange(task.id, viewingAsUserId, requestDate, requestReason.trim());
                       setRequesting(false);
                       toast.success("ส่งคำขอเลื่อนกำหนดส่งแล้ว รออนุมัติ");
@@ -1364,6 +1376,8 @@ export function TaskDetailSheet({
                       </Button>
                       <Button
                         size="sm"
+                        disabled={r.newDate.slice(0, 10) <= r.previousDate.slice(0, 10)}
+                        title={r.newDate.slice(0, 10) <= r.previousDate.slice(0, 10) ? "วันที่ขอไม่ได้อยู่หลังกำหนดเดิม — อนุมัติไม่ได้" : undefined}
                         onClick={() => {
                           decideDueDateRequest(task.id, r.id, viewingAsUserId, true, decisionNotes[r.id]);
                           toast.success(`อนุมัติแล้ว กำหนดส่งใหม่ ${formatDate(r.newDate)}`);

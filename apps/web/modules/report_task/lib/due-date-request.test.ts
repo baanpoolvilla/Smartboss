@@ -136,4 +136,20 @@ describe("คำขอเลื่อนกำหนดส่ง", () => {
     useTaskStore.getState().cancelDueDateRequest("t1", id, STAFF);
     expect(getTask().dueDateRequests![0]!.status).toBe("cancelled");
   });
+  it("ขอเลื่อนย้อนหลัง (ก่อน/เท่ากำหนดเดิม) ไม่ได้ — ไม่มีคำขอ ไม่แจ้งใคร", () => {
+    useTaskStore.getState().requestDueDateChange("t1", STAFF, "2026-09-04", "พิมพ์ผิด");
+    useTaskStore.getState().requestDueDateChange("t1", STAFF, "2026-09-30", "วันเดิม");
+    expect(getTask().dueDateRequests ?? []).toHaveLength(0);
+    expect(notificationsFor(CEO)).toHaveLength(0);
+  });
+
+  it("คำขอย้อนหลังที่ค้างอยู่ (ข้อมูลเก่า) อนุมัติไม่ได้ แต่ปฏิเสธได้", () => {
+    const old = { id: "ddr-old", requestedBy: STAFF, requestedAt: "2026-09-30T01:00:00.000Z", newDate: "2026-09-04", previousDate: "2026-09-30T00:00:00.000Z", reason: "x", status: "pending" as const };
+    useTaskStore.setState({ tasks: [task({ dueDateRequests: [old] })] });
+    useTaskStore.getState().decideDueDateRequest("t1", "ddr-old", CEO, true);
+    expect(getTask().dueDate).toBe("2026-09-30T00:00:00.000Z");
+    expect(getTask().dueDateRequests![0]!.status).toBe("pending");
+    useTaskStore.getState().decideDueDateRequest("t1", "ddr-old", CEO, false);
+    expect(getTask().dueDateRequests![0]!.status).toBe("rejected");
+  });
 });
