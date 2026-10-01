@@ -452,7 +452,9 @@ export const MessageBubble = memo(function MessageBubble(props: MessageBubblePro
       <div className={cn("flex min-w-0 max-w-[78%] flex-col sm:max-w-[65%]", mine && "items-end")}>
         {!mine && firstInGroup && <span className="mb-0.5 px-1 text-[11.5px] text-(--ink-soft)">{author?.name ?? "สมาชิก"}</span>}
 
-        <div className={cn("flex items-end gap-1.5", mine && "flex-row-reverse")}>
+        {/* min-w-0 max-w-full: ไม่งั้นแถวนี้ยืดตามข้อความยาวติดกันไม่มีเว้นวรรค (ttttt…)
+            จนกรอบข้อความล้นออกนอกจอ ทั้งที่คอลัมน์ข้างนอกจำกัดไว้ 65–78% */}
+        <div className={cn("flex min-w-0 max-w-full items-end gap-1.5", mine && "flex-row-reverse")}>
           <div
             ref={bubbleRef}
             className="relative flex min-w-0 flex-col gap-1"
@@ -490,7 +492,10 @@ export const MessageBubble = memo(function MessageBubble(props: MessageBubblePro
                   </button>
                 )}
                 {m.body && (
-                  <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                  <p
+                    // anywhere อย่างเดียว — ใส่ break-words ซ้อนแล้วตัวนั้นชนะ ตัดสตริงยาวไม่มีเว้นวรรคไม่ได้
+                    className="whitespace-pre-wrap [overflow-wrap:anywhere]"
+                  >
                     <MessageText body={m.body} mentions={m.mentions} users={users} meId={meId} />
                   </p>
                 )}
