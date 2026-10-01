@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Download, Pencil, Trash2, Type, Undo2, X } from "lucide-react";
+import { Check, Download, Hand, Minus, Pencil, Plus, Trash2, Type, Undo2, X } from "lucide-react";
 import { closeAnnotator, useAnnotatorStore } from "@/lib/annotate/annotate";
 
 /**
@@ -22,6 +22,8 @@ const SIZES = [
 ];
 /** รูปใหญ่มาก (กล้องมือถือ 4000px) ย่อลงก่อนวาด — ส่งเร็ว วาดลื่น */
 const MAX_EDGE = 2560;
+/** ซูมได้สุดกี่เท่าของขนาดพอดีจอ */
+const MAX_ZOOM = 6;
 
 /**
  * ปุ่มในหน้าต่างวาดทำงานทันทีที่ยกนิ้ว (pointerup แบบสัมผัส) ไม่รอ click — หลังลากนิ้ววาดบน
@@ -52,17 +54,28 @@ export function ImageAnnotatorHost() {
 function Annotator({ file }: { file: File }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [img, setImg] = useState<HTMLImageElement | null>(null);
-  // ประวัติวาด: ops = ที่เห็นอยู่, redo = ที่เพิ่งย้อนไป (Ctrl+Y คืนได้ วาดใหม่แล้วล้างทิ้ง)
-  const [hist, setHist] = useState<{ ops: Op[]; redo: Op[] }>({ ops: [], redo: [] });
+  // ประวัติแบบภาพรวมทั้งชุด — ย้อน/ทำซ้ำได้ทุกอย่าง (วาด เขียน ย้ายข้อความ ล้าง)
+  // past = ชุดก่อนหน้า, redo = ชุดที่เพิ่งย้อนไป (ทำอะไรใหม่แล้วล้างทิ้ง)
+  const [hist, setHist] = useState<{ past: Op[][]; ops: Op[]; redo: Op[][] }>({ past: [], ops: [], redo: [] });
   const ops = hist.ops;
   const setOps = (next: Op[] | ((o: Op[]) => Op[])) =>
-    setHist((h) => ({ ops: typeof next === "function" ? next(h.ops) : next, redo: [] }));
+    setHist((h) => ({ past: [...h.past, h.ops], ops: typeof next === "function" ? next(h.ops) : next, redo: [] }));
   const undo = () =>
-    setHist((h) => (h.ops.length === 0 ? h : { ops: h.ops.slice(0, -1), redo: [...h.redo, h.ops[h.ops.length - 1]!] }));
+    setHist((h) => (h.past.length === 0 ? h : { past: h.past.slice(0, -1), ops: h.past[h.past.length - 1]!, redo: [...h.redo, h.ops] }));
   const redoLast = () =>
-    setHist((h) => (h.redo.length === 0 ? h : { ops: [...h.ops, h.redo[h.redo.length - 1]!], redo: h.redo.slice(0, -1) }));
+    setHist((h) => (h.redo.length === 0 ? h : { past: [...h.past, h.ops], ops: h.redo[h.redo.length - 1]!, redo: h.redo.slice(0, -1) }));
+  /** กำลังลากย้ายข้อความ: index ของข้อความ + ระยะห่างจากจุดที่จับ */
+  const textDrag = useRef<{ i: number; dx: number; dy: number; x: number; y: number } | null>(null);
   const drawing = useRef<Op | null>(null);
-  const [tool, setTool] = useState<"pen" | "text">("pen");
+  const [tool, setTool] = useState<"pen" | "text" | "hand">("pen");
+  // ซูม/เลื่อนมุมมอง (ไม่กระทบรูปที่บันทึก) — z = เท่าของขนาดพอดีจอ, x/y = เลื่อน (px บนจอ)
+  const [view, setView] = useState({ z: 1, x: 0, y: 0 });
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const areaRef = useRef<HTMLDivElement>(null);
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ d0: number; z0: number; mid0: { x: number; y: number }; t0: { x: number; y: number } } | null>(null);
+  const panDrag = useRef<{ sx: number; sy: number; t0: { x: number; y: number } } | null>(null);
   const [color, setColor] = useState(COLORS[0]!);
   const [sizeIdx, setSizeIdx] = useState(1);
   const [textAt, setTextAt] = useState<{ x: number; y: number; left: number; top: number } | null>(null);
@@ -95,7 +108,24 @@ function Annotator({ file }: { file: File }) {
     if (!ctx) return;
     ctx.clearRect(0, 0, width, height);
     ctx.drawImage(img, 0, 0, width, height);
-    for (const op of extra ? [...ops, extra] : ops) drawOp(ctx, op);
+    const td = textDrag.current;
+    const shown = td ? ops.map((op, i) => (i === td.i && op.kind === "text" ? { ...op, x: td.x, y: td.y } : op)) : ops;
+    for (const op of extra ? [...shown, extra] : shown) drawOp(ctx, op);
+  }
+
+  /** ข้อความที่อยู่ใต้จุด (x, y บนรูป) — หาจากบนสุดลงมา คืน index หรือ -1 */
+  function textAtPoint(x: number, y: number): number {
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx) return -1;
+    for (let i = ops.length - 1; i >= 0; i--) {
+      const op = ops[i]!;
+      if (op.kind !== "text") continue;
+      ctx.font = `bold ${op.size}px "Noto Sans Thai", "Segoe UI", sans-serif`;
+      const w = ctx.measureText(op.text).width;
+      const pad = op.size * 0.35;
+      if (x >= op.x - pad && x <= op.x + w + pad && y >= op.y - op.size / 2 - pad && y <= op.y + op.size / 2 + pad) return i;
+    }
+    return -1;
   }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => redraw(), [img, ops]);
@@ -118,28 +148,143 @@ function Annotator({ file }: { file: File }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [textAt]);
 
-  function toCanvas(e: React.PointerEvent): [number, number] {
+  function toCanvas(e: { clientX: number; clientY: number }): [number, number] {
     const rect = canvasRef.current!.getBoundingClientRect();
     return [((e.clientX - rect.left) / rect.width) * width, ((e.clientY - rect.top) / rect.height) * height];
   }
 
-  function onPointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
+  /** ซูมโดยให้จุด (px, py) บนจอค้างอยู่ที่เดิม — ลูกกลิ้ง/ทัชแพด/ปุ่ม +/- */
+  function zoomAt(px: number, py: number, nextZ: number) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const v = viewRef.current;
+    const z = Math.min(MAX_ZOOM, Math.max(1, nextZ));
+    if (z === 1) {
+      setView({ z: 1, x: 0, y: 0 });
+      return;
+    }
+    const r = canvas.getBoundingClientRect();
+    const k = z / v.z;
+    setView({ z, x: v.x + (px - (r.left + r.width / 2)) * (1 - k), y: v.y + (py - (r.top + r.height / 2)) * (1 - k) });
+  }
+  function zoomBy(factor: number) {
+    const a = areaRef.current?.getBoundingClientRect();
+    if (a) zoomAt(a.left + a.width / 2, a.top + a.height / 2, viewRef.current.z * factor);
+  }
+
+  // ลูกกลิ้งเมาส์ / ถ่างนิ้วบนทัชแพด (= wheel + ctrlKey) = ซูม — passive:false ถึงกันหน้าเว็บซูมตามได้
+  useEffect(() => {
+    const el = areaRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      zoomAt(e.clientX, e.clientY, viewRef.current.z * Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)));
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [img]);
+
+  function overCanvas(e: { clientX: number; clientY: number }): boolean {
+    const r = canvasRef.current?.getBoundingClientRect();
+    return !!r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+  }
+  function twoPointers() {
+    return [...pointers.current.values()].slice(0, 2) as [{ x: number; y: number }, { x: number; y: number }];
+  }
+
+  function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (!img) return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* บางเครื่องไม่ยอม — ไม่เป็นไร */
+    }
+    // สองนิ้ว = ซูม/เลื่อน — ทิ้งเส้นที่นิ้วแรกเพิ่งเริ่มลาก (ไม่ได้ตั้งใจวาด)
+    if (pointers.current.size === 2) {
+      drawing.current = null;
+      redraw();
+      panDrag.current = null;
+      const [a, b] = twoPointers();
+      pinch.current = {
+        d0: Math.hypot(a.x - b.x, a.y - b.y) || 1,
+        z0: viewRef.current.z,
+        mid0: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+        t0: { x: viewRef.current.x, y: viewRef.current.y },
+      };
+      return;
+    }
+    if (pointers.current.size > 2) return;
+    // เครื่องมือ "เลื่อน" หรือปุ่มกลางเมาส์ = ลากเลื่อนรูป
+    if (tool === "hand" || e.button === 1) {
+      panDrag.current = { sx: e.clientX, sy: e.clientY, t0: { x: viewRef.current.x, y: viewRef.current.y } };
+      return;
+    }
+    if (!overCanvas(e)) return;
+    // จับที่ข้อความที่เขียนไว้แล้ว = ลากย้าย (ทั้งตอนใช้ปากกาและข้อความ)
+    {
+      const [px, py] = toCanvas(e);
+      const hit = textAtPoint(px, py);
+      if (hit >= 0) {
+        e.preventDefault();
+        if (textAt) commitText();
+        const op = ops[hit] as Extract<Op, { kind: "text" }>;
+        textDrag.current = { i: hit, dx: px - op.x, dy: py - op.y, x: op.x, y: op.y };
+        return;
+      }
+    }
     if (tool === "text") {
       // กันคลิกบนรูปดึงโฟกัสออกจากช่องพิมพ์ที่เพิ่งโผล่ (ไม่งั้นช่องหายทันทีก่อนพิมพ์ได้)
       e.preventDefault();
       if (textAt) commitText();
       const [x, y] = toCanvas(e);
-      const rect = canvasRef.current!.getBoundingClientRect();
-      setTextAt({ x, y, left: e.clientX - rect.left, top: e.clientY - rect.top });
+      setTextAt({ x, y, left: e.clientX, top: e.clientY });
       setTextValue("");
       return;
     }
-    e.currentTarget.setPointerCapture(e.pointerId);
     drawing.current = { kind: "path", color, width: strokeWidth, points: [toCanvas(e)] };
     redraw(drawing.current);
   }
-  function onPointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
+  function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!pointers.current.has(e.pointerId)) return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const pz = pinch.current;
+    if (pz && pointers.current.size >= 2) {
+      const [a, b] = twoPointers();
+      const z = Math.min(MAX_ZOOM, Math.max(1, pz.z0 * (Math.hypot(a.x - b.x, a.y - b.y) / pz.d0)));
+      if (z === 1) {
+        setView({ z: 1, x: 0, y: 0 });
+        return;
+      }
+      // ซูมรอบจุดกึ่งกลางนิ้วตอนเริ่ม แล้วเลื่อนตามที่นิ้วขยับ
+      const r = canvasRef.current!.getBoundingClientRect();
+      const v = viewRef.current;
+      const c0x = r.left + r.width / 2 - v.x + pz.t0.x;
+      const c0y = r.top + r.height / 2 - v.y + pz.t0.y;
+      const k = z / pz.z0;
+      const mx = (a.x + b.x) / 2;
+      const my = (a.y + b.y) / 2;
+      setView({
+        z,
+        x: pz.t0.x + (pz.mid0.x - c0x) * (1 - k) + (mx - pz.mid0.x),
+        y: pz.t0.y + (pz.mid0.y - c0y) * (1 - k) + (my - pz.mid0.y),
+      });
+      return;
+    }
+    const pd = panDrag.current;
+    if (pd) {
+      setView((v) => ({ ...v, x: pd.t0.x + (e.clientX - pd.sx), y: pd.t0.y + (e.clientY - pd.sy) }));
+      return;
+    }
+    const td = textDrag.current;
+    if (td) {
+      const [px, py] = toCanvas(e);
+      td.x = px - td.dx;
+      td.y = py - td.dy;
+      redraw();
+      return;
+    }
     const op = drawing.current;
     if (!op || op.kind !== "path") return;
     op.points.push(toCanvas(e));
@@ -147,7 +292,24 @@ function Annotator({ file }: { file: File }) {
   }
   // เก็บเส้นทุกทางที่นิ้ว/เมาส์หลุด — มือถือบางครั้งส่ง pointercancel / lostpointercapture
   // แทน pointerup เส้นที่เห็นบนจอเลยไม่ถูกเก็บ กดเสร็จแล้วได้รูปเดิม
-  function onPointerUp() {
+  function onPointerUp(e?: React.PointerEvent<HTMLDivElement>) {
+    if (e) pointers.current.delete(e.pointerId);
+    if (pinch.current) {
+      if (pointers.current.size < 2) pinch.current = null;
+      return; // ยกนิ้วหลังซูม ไม่ได้เริ่มวาดต่อ
+    }
+    panDrag.current = null;
+    const td = textDrag.current;
+    if (td) {
+      textDrag.current = null;
+      const moved = ops[td.i];
+      if (moved?.kind === "text" && (moved.x !== td.x || moved.y !== td.y)) {
+        setOps((o) => o.map((op, i) => (i === td.i && op.kind === "text" ? { ...op, x: td.x, y: td.y } : op)));
+      } else {
+        redraw();
+      }
+      return;
+    }
     const op = drawing.current;
     drawing.current = null;
     if (op) setOps((o) => [...o, op]);
@@ -218,6 +380,18 @@ function Annotator({ file }: { file: File }) {
         <span className="mx-1 h-6 w-px bg-(--line)" />
         <ToolButton active={tool === "pen"} onClick={() => setTool("pen")} label="ปากกา" icon={<Pencil className="h-4 w-4" />} />
         <ToolButton active={tool === "text"} onClick={() => setTool("text")} label="ข้อความ" icon={<Type className="h-4 w-4" />} />
+        <ToolButton active={tool === "hand"} onClick={() => setTool("hand")} label="เลื่อน" icon={<Hand className="h-4 w-4" />} />
+        <div className="flex items-center rounded-lg border border-(--line)" role="group" aria-label="ซูม">
+          <button type="button" {...tap(() => zoomBy(1 / 1.25))} disabled={view.z <= 1} aria-label="ซูมออก" className="px-2 py-1.5 text-(--ink-soft) disabled:opacity-40">
+            <Minus className="h-4 w-4" />
+          </button>
+          <button type="button" {...tap(() => setView({ z: 1, x: 0, y: 0 }))} title="พอดีจอ" className="min-w-12 px-1 py-1.5 text-xs tabular-nums text-(--ink)">
+            {Math.round(view.z * 100)}%
+          </button>
+          <button type="button" {...tap(() => zoomBy(1.25))} disabled={view.z >= MAX_ZOOM} aria-label="ซูมเข้า" className="px-2 py-1.5 text-(--ink-soft) disabled:opacity-40">
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
         <span className="mx-1 h-6 w-px bg-(--line)" />
         <div className="flex items-center gap-1.5" role="radiogroup" aria-label="สี">
           {COLORS.map((c) => (
@@ -251,7 +425,7 @@ function Annotator({ file }: { file: File }) {
         <button
           type="button"
           {...tap(undo)}
-          disabled={ops.length === 0}
+          disabled={hist.past.length === 0}
           className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm text-(--ink-soft) hover:bg-(--bg-soft) disabled:opacity-40"
         >
           <Undo2 className="h-4 w-4" /> ย้อน
@@ -283,7 +457,16 @@ function Annotator({ file }: { file: File }) {
       </div>
 
       {/* พื้นที่วาด */}
-      <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-3">
+      <div
+        ref={areaRef}
+        className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-3"
+        style={{ touchAction: "none", cursor: tool === "hand" ? "grab" : tool === "text" ? "text" : "crosshair" }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onLostPointerCapture={onPointerUp}
+      >
         {failed ? (
           <p className="text-sm text-white">เปิดรูปนี้ไม่ได้</p>
         ) : !img ? (
@@ -294,13 +477,12 @@ function Annotator({ file }: { file: File }) {
               ref={canvasRef}
               width={width}
               height={height}
-              onPointerDown={onPointerDown}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-              onPointerCancel={onPointerUp}
-              onLostPointerCapture={onPointerUp}
-              className="block max-h-[calc(100dvh-7rem)] max-w-full bg-white shadow-2xl"
-              style={{ touchAction: "none", cursor: tool === "text" ? "text" : "crosshair" }}
+              className="block max-h-[calc(100dvh-9rem)] max-w-full bg-white shadow-2xl"
+              style={{
+                transform: `translate(${view.x}px, ${view.y}px) scale(${view.z})`,
+                transformOrigin: "center center",
+                willChange: "transform",
+              }}
             />
             {textAt && (
               <input
@@ -313,7 +495,7 @@ function Annotator({ file }: { file: File }) {
                 }}
                 onBlur={commitText}
                 placeholder="พิมพ์ข้อความ แล้วกด Enter"
-                className="absolute min-w-40 rounded border-2 bg-white/90 px-1.5 py-0.5 text-sm outline-none"
+                className="fixed z-10 min-w-40 rounded border-2 bg-white/90 px-1.5 py-0.5 text-sm outline-none"
                 style={{ left: textAt.left, top: textAt.top - 14, borderColor: color, color: color === "#ffffff" ? "#111827" : color }}
               />
             )}
@@ -321,7 +503,7 @@ function Annotator({ file }: { file: File }) {
         )}
       </div>
       <p className="pb-2 text-center text-xs text-white/60" style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}>
-        {tool === "pen" ? "ลากเพื่อวาด/วงตรงที่ต้องการ" : "แตะบนรูปตรงที่จะเขียนข้อความ"} · Ctrl+Z ย้อน · Ctrl+Y ทำซ้ำ
+        {tool === "pen" ? "ลากเพื่อวาด/วง" : tool === "text" ? "แตะบนรูปตรงที่จะเขียนข้อความ" : "ลากเพื่อเลื่อนรูป"} · ซูม: ลูกกลิ้ง / ถ่าง 2 นิ้ว · Ctrl+Z ย้อน · Ctrl+Y ทำซ้ำ
       </p>
     </div>
   );
