@@ -5,11 +5,14 @@ import { toast } from "sonner";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import type { Task } from "@/modules/report_task/types";
 import { mergeThreeWay } from "./store-merge";
+import { realtimeStatus, subscribeRealtime } from "@/lib/realtime-client";
 
 // Task collides often (everyone works the same board at once), so it polls
 // tighter than ServerStoreSync's default 4s — matches report-feed's own
 // tuning for a store people actually fight over.
 const TASK_POLL_MS = 5000;
+/** Realtime pipe connected = saves arrive as signals; the poll only backs that up. */
+const REALTIME_FALLBACK_MS = 60_000;
 
 // Rollback switches (R10) — this rewrite touches Task's core save path in
 // production use, so both new behaviors can be killed independently without
@@ -340,34 +343,68 @@ export function TaskSync() {
     // same board converge on their own, instead of only finding out on the
     // next reload/save. Skip while the user has an unsaved edit in flight
     // (don't yank their work mid-type) or the tab is hidden.
+    // Teammates' saves arrive as a realtime signal (task-repo.ts writeTasks
+    // publishes { type: "store.changed", key: "tasks", version }) and this tab
+    // pulls right away — the interval is only a safety net: every
+    // TASK_POLL_MS while the pipe is down, once a minute while it's up.
+    // Skip while an edit is in flight (don't overwrite it) or the tab is
+    // hidden; a signal that lands then is remembered and pulled when safe.
+    const signalRef = { current: false };
+    let lastPull = Date.now();
+    function canPullNow(): boolean {
+      if (!loadedRef.current) return false;
+      if (pendingRef.current || timerRef.current || savingRef.current > 0) return false; // edit in flight — don't overwrite it
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return false;
+      return true;
+    }
+    async function pullTasks() {
+      lastPull = Date.now();
+      signalRef.current = false;
+      const seqAtStart = saveSeqRef.current;
+      try {
+        // R1 — check the lightweight version-only endpoint first
+        // (a few dozen bytes, no task rows touched) before paying for
+        // a full GET of the company's whole task collection. Most
+        // ticks find nothing changed, so this is the common case.
+        const versionRes = await fetch("/api/report-task/tasks/version", { cache: "no-store" });
+        const version = Number(versionRes.headers.get("X-Data-Version")) || null;
+        if (version === versionRef.current) return; // nothing new
+        if (pendingRef.current || timerRef.current) { signalRef.current = true; return; } // user started editing while we were checking
+        const res = await fetch("/api/report-task/tasks", { cache: "no-store" });
+        const tasks = (await res.json()) as Task[];
+        if (cancelled || !Array.isArray(tasks)) return;
+        // บันทึกเริ่ม/จบระหว่างรอ — ชุดนี้อาจเก่ากว่าที่เพิ่งบันทึก ทิ้งไป รอบหน้าค่อยดึงใหม่
+        if (pendingRef.current || timerRef.current || savingRef.current > 0 || saveSeqRef.current !== seqAtStart) {
+        signalRef.current = true;
+        return;
+      }
+        versionRef.current = Number(res.headers.get("X-Data-Version")) || version;
+        applyRemoteTasks(tasks);
+        baseRef.current = tasks;
+      } catch {
+        signalRef.current = true; // transient — next tick tries again
+      }
+    }
+    const offRealtime = subscribeRealtime((event) => {
+      const relevant =
+        event.type === "realtime.reconnected" ||
+        (event.type === "store.changed" &&
+          event.key === "tasks" &&
+          !(typeof event.version === "number" && versionRef.current != null && event.version <= versionRef.current));
+      if (!relevant) return;
+      if (canPullNow()) void pullTasks();
+      else signalRef.current = true;
+    });
+    function onVisibleForSignal() {
+      if (document.visibilityState === "visible" && signalRef.current && canPullNow()) void pullTasks();
+    }
+    document.addEventListener("visibilitychange", onVisibleForSignal);
     const pollTimer = ENABLE_TASK_POLL
       ? setInterval(() => {
-          if (!loadedRef.current) return;
-          if (pendingRef.current || timerRef.current || savingRef.current > 0) return; // edit in flight — don't overwrite it
-          if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-          void (async () => {
-            const seqAtStart = saveSeqRef.current;
-            try {
-              // R1 — check the lightweight version-only endpoint first
-              // (a few dozen bytes, no task rows touched) before paying for
-              // a full GET of the company's whole task collection. Most
-              // ticks find nothing changed, so this is the common case.
-              const versionRes = await fetch("/api/report-task/tasks/version", { cache: "no-store" });
-              const version = Number(versionRes.headers.get("X-Data-Version")) || null;
-              if (version === versionRef.current) return; // nothing new
-              if (pendingRef.current || timerRef.current) return; // user started editing while we were checking
-              const res = await fetch("/api/report-task/tasks", { cache: "no-store" });
-              const tasks = (await res.json()) as Task[];
-              if (cancelled || !Array.isArray(tasks)) return;
-              // บันทึกเริ่ม/จบระหว่างรอ — ชุดนี้อาจเก่ากว่าที่เพิ่งบันทึก ทิ้งไป รอบหน้าค่อยดึงใหม่
-              if (pendingRef.current || timerRef.current || savingRef.current > 0 || saveSeqRef.current !== seqAtStart) return;
-              versionRef.current = Number(res.headers.get("X-Data-Version")) || version;
-              applyRemoteTasks(tasks);
-              baseRef.current = tasks;
-            } catch {
-              // transient — next tick tries again
-            }
-          })();
+          if (!canPullNow()) return;
+          const fallbackMs = realtimeStatus() === "open" ? REALTIME_FALLBACK_MS : TASK_POLL_MS;
+          if (!signalRef.current && Date.now() - lastPull < fallbackMs) return;
+          void pullTasks();
         }, TASK_POLL_MS)
       : null;
 
@@ -403,6 +440,8 @@ export function TaskSync() {
       unsub();
       clearInterval(sweepTimer);
       if (pollTimer) clearInterval(pollTimer);
+      offRealtime();
+      document.removeEventListener("visibilitychange", onVisibleForSignal);
       if (timerRef.current) clearTimeout(timerRef.current);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("pagehide", flushOnUnload);

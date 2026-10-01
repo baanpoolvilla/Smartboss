@@ -5,6 +5,7 @@ import { nextTaskCode } from "@/lib/document-code";
 import { recordPerformanceEvents, type PerformanceEventInput } from "@/lib/performance";
 import { defaultStickers } from "../../data/stickers";
 import { readStore } from "./org-store";
+import { publishToOrg } from "@/lib/realtime/server";
 import { listDirectory } from "./employee-directory";
 import type { Sticker, Task, TaskReaction } from "../../types";
 import { reactionRecipients } from "@/modules/report_task/lib/sticker-target";
@@ -328,6 +329,8 @@ export async function writeTasks(
   // schema เขียนผ่าน prisma client ตัวหลัก ไม่ใช่ tx ของธุรกรรมนี้ ผูกกันไม่ได้
   // จริง ๆ อยู่แล้ว (เหมือน cron.ts ที่หักคะแนน PM/ใบงานเป็นขั้นแยกต่างหาก)
   if (result.ok) {
+    // บอกทุกแท็บในบริษัททันทีว่างานเปลี่ยน (ส่งแค่เลขรุ่น ไม่มีข้อมูล) — แทนการรอ poll
+    publishToOrg(orgId, { type: "store.changed", key: "tasks", version: result.version });
     await recordStickerEvents(orgId, stickerChanges);
     await recordStickerUndoEvents(orgId, removedReactions, userId);
   }

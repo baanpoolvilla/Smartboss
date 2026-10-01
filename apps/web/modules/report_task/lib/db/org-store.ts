@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
 import { announceNotification } from "@/lib/notify-push";
+import { publishToOrg } from "@/lib/realtime/server";
 
 import { fileForStoreKey, type StoreKey } from "./store-registry";
 
@@ -71,10 +72,28 @@ export async function writeStore(
   if (key === NOTIFICATIONS_KEY) {
     const before = await readStore<unknown>(orgId, key);
     const result = await writeStoreRaw(orgId, key, data, expectedVersion, updatedBy);
-    if (result.ok) announceNewNotifications(orgId, before.data, data);
+    if (result.ok) {
+      announceNewNotifications(orgId, before.data, data);
+      announceStoreChanged(orgId, key, result.version);
+    }
     return result;
   }
-  return writeStoreRaw(orgId, key, data, expectedVersion, updatedBy);
+  const result = await writeStoreRaw(orgId, key, data, expectedVersion, updatedBy);
+  if (result.ok) announceStoreChanged(orgId, key, result.version);
+  return result;
+}
+
+/**
+ * บอกทุกแท็บในบริษัททันทีว่าคีย์นี้เปลี่ยนเป็นรุ่นไหน (ผ่านท่อสด /api/realtime) —
+ * ส่งแค่ชื่อคีย์กับเลขรุ่น ไม่มีข้อมูล แท็บที่ถือรุ่นเก่ากว่าค่อยดึงเอง (ServerStoreSync)
+ * แทนการให้ทุกแท็บถามซ้ำทุก 4 วินาที — ส่งไม่ถึงก็ไม่เป็นไร poll สำรองยังเก็บตกให้
+ */
+function announceStoreChanged(orgId: string, key: string, version: number) {
+  try {
+    publishToOrg(orgId, { type: "store.changed", key, version });
+  } catch {
+    // ท่อสดพลาดต้องไม่ทำให้การบันทึกพลาดตาม
+  }
 }
 
 const NOTIFICATIONS_KEY = "notifications";

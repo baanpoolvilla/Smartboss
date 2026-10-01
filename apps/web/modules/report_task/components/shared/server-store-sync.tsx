@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import type { StoreApi, UseBoundStore } from "zustand";
 import type { StoreKey } from "@/modules/report_task/lib/db/store-registry";
 import { isServerSyncHeld } from "@/modules/report_task/lib/sync-pause";
+import { realtimeStatus, subscribeRealtime } from "@/lib/realtime-client";
 import { mergeThreeWay } from "./store-merge";
 
 type AnyStore<T> = UseBoundStore<StoreApi<T>>;
@@ -12,6 +13,10 @@ type AnyStore<T> = UseBoundStore<StoreApi<T>>;
 /** Default for `pollMs` when a caller doesn't pass one — matches the old
  * always-4s behavior for anything not yet tuned. */
 const DEFAULT_POLL_MS = 4000;
+
+/** While the realtime pipe is connected, saves arrive as signals — the poll is
+ * only a safety net for a missed one, so it backs off to this. */
+const REALTIME_FALLBACK_MS = 60_000;
 
 /** Same value per field by reference (one level deep) — a cheap "definitely
  * unchanged" check for immutable store slices before falling back to a full
@@ -251,53 +256,101 @@ export function ServerStoreSync<T, S>({
       timerRef.current = setTimeout(flushPending, 500);
     });
 
-    // Pull in teammates' saves on a light poll so several people viewing the
-    // same board converge on their own. Skip while the user has an unsaved edit
-    // in flight (don't yank their work) or the tab is hidden. `pollMs: false`
-    // opts a store out entirely — a conflicting save still merges correctly
-    // via the 409 path in flush() either way, this only affects whether
-    // someone else's save (with no conflict of your own) shows up live.
+    // Pull in teammates' saves. Primary path is the realtime pipe: every save
+    // on the server announces { type: "store.changed", key, version } to the
+    // whole company (org-store.ts announceStoreChanged), so this tab fetches
+    // the moment something changes — like Facebook/LINE, instead of every tab
+    // asking "anything new?" every few seconds. The interval below is only a
+    // safety net: full speed while the pipe is down, once a minute while it's
+    // up (a missed event can't leave a tab stale for long).
+    //
+    // Skip while the user has an unsaved edit in flight (don't yank their
+    // work) or the tab is hidden — a signal that lands then is remembered
+    // (`signalRef`) and pulled as soon as it's safe. `pollMs: false` opts a
+    // store out of the fallback poll; realtime signals still apply.
+    const signalRef = { current: false };
+    let lastPull = Date.now();
+
+    function canPullNow(): boolean {
+      if (!loadedRef.current) return false;
+      if (pendingRef.current || timerRef.current || savingRef.current > 0) return false;
+      // Some edits are staged locally and haven't been written to the
+      // store yet, so the two guards above can't see them — see
+      // holdServerSync's own comment for why landing a poll on top of
+      // one of those (an in-progress drag reorder) breaks it outright.
+      if (isServerSyncHeld()) return false;
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return false;
+      return true;
+    }
+
+    async function pull() {
+      lastPull = Date.now();
+      signalRef.current = false;
+      const seqAtStart = saveSeqRef.current;
+      try {
+        // บอก version ที่ถืออยู่ — ไม่มีอะไรใหม่เซิร์ฟเวอร์ตอบ 204 ไม่มี body
+        const res = await fetch(`/api/report-task/store/${apiKey}`, {
+          cache: "no-store",
+          headers: versionRef.current != null ? { "X-Known-Version": String(versionRef.current) } : undefined,
+        });
+        if (res.status === 204) return; // nothing new
+        if (!res.ok) return;
+        const version = Number(res.headers.get("X-Data-Version")) || null;
+        if (version === versionRef.current) return; // nothing new
+        if (pendingRef.current || timerRef.current) {
+          signalRef.current = true; // user started editing meanwhile — try again after
+          return;
+        }
+        // มีการบันทึกเริ่ม/จบระหว่างรอคำตอบ — ข้อมูลชุดนี้อาจเก่ากว่าที่เพิ่งบันทึก ทิ้งไป รอบหน้าค่อยดึงใหม่
+        if (savingRef.current > 0 || saveSeqRef.current !== seqAtStart) {
+          signalRef.current = true;
+          return;
+        }
+        // เก่ากว่าที่เรารู้อยู่แล้ว (เลขเวอร์ชันเพิ่มขึ้นทุกครั้งที่บันทึก) — ไม่เอามาทับ
+        if (version != null && versionRef.current != null && version < versionRef.current) return;
+        const slice = (await res.json()) as S | null;
+        if (cancelled) return;
+        versionRef.current = version;
+        if (slice != null) {
+          applyRemoteState((s) => apply(s, slice));
+          baseRef.current = select(store.getState());
+        }
+      } catch {
+        signalRef.current = true; // transient — next tick will retry
+      }
+    }
+
+    const offRealtime = subscribeRealtime((event) => {
+      if (event.type === "realtime.reconnected") {
+        // หลุดไปช่วงหนึ่ง อาจพลาดสัญญาณ — ดึงเช็คทันที
+        if (canPullNow()) void pull();
+        else signalRef.current = true;
+        return;
+      }
+      if (event.type !== "store.changed" || event.key !== apiKey) return;
+      const version = typeof event.version === "number" ? event.version : null;
+      if (version != null && versionRef.current != null && version <= versionRef.current) return; // มีแล้ว (มักเป็นที่ตัวเองเพิ่งบันทึก)
+      if (canPullNow()) void pull();
+      else signalRef.current = true;
+    });
+
+    function onVisible() {
+      if (document.visibilityState === "visible" && signalRef.current && canPullNow()) void pull();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+
     const poll =
       pollMs === false
-        ? null
+        ? setInterval(() => {
+            if (signalRef.current && canPullNow()) void pull();
+          }, DEFAULT_POLL_MS)
         : setInterval(() => {
-            if (!loadedRef.current) return;
-            if (pendingRef.current || timerRef.current || savingRef.current > 0) return;
-            // Some edits are staged locally and haven't been written to the
-            // store yet, so the two guards above can't see them — see
-            // holdServerSync's own comment for why landing a poll on top of
-            // one of those (an in-progress drag reorder) breaks it outright.
-            if (isServerSyncHeld()) return;
-            if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-            void (async () => {
-              const seqAtStart = saveSeqRef.current;
-              try {
-                // บอก version ที่ถืออยู่ — ไม่มีอะไรใหม่เซิร์ฟเวอร์ตอบ 204 ไม่มี body (ไม่ต้องดึงทั้งก้อนทุก 4 วินาที)
-                const res = await fetch(`/api/report-task/store/${apiKey}`, {
-                  cache: "no-store",
-                  headers: versionRef.current != null ? { "X-Known-Version": String(versionRef.current) } : undefined,
-                });
-                if (res.status === 204) return; // nothing new
-                if (!res.ok) return;
-                const version = Number(res.headers.get("X-Data-Version")) || null;
-                if (version === versionRef.current) return; // nothing new
-                if (pendingRef.current || timerRef.current) return; // user started editing meanwhile
-                // มีการบันทึกเริ่ม/จบระหว่างรอคำตอบ — ข้อมูลชุดนี้อาจเก่ากว่าที่เพิ่งบันทึก ทิ้งไป รอบหน้าค่อยดึงใหม่
-                if (savingRef.current > 0 || saveSeqRef.current !== seqAtStart) return;
-                // เก่ากว่าที่เรารู้อยู่แล้ว (เลขเวอร์ชันเพิ่มขึ้นทุกครั้งที่บันทึก) — ไม่เอามาทับ
-                if (version != null && versionRef.current != null && version < versionRef.current) return;
-                const slice = (await res.json()) as S | null;
-                if (cancelled) return;
-                versionRef.current = version;
-                if (slice != null) {
-                  applyRemoteState((s) => apply(s, slice));
-                  baseRef.current = select(store.getState());
-                }
-              } catch {
-                /* transient — next tick will retry */
-              }
-            })();
-          }, pollMs);
+            if (!canPullNow()) return;
+            // ท่อสดต่ออยู่ = สัญญาณมาเองแล้ว เช็คสำรองนาทีละครั้งพอ (เว้นมีสัญญาณค้าง)
+            const fallbackMs = realtimeStatus() === "open" ? Math.max(pollMs, REALTIME_FALLBACK_MS) : pollMs;
+            if (!signalRef.current && Date.now() - lastPull < fallbackMs) return;
+            void pull();
+          }, Math.min(pollMs, DEFAULT_POLL_MS));
 
     function flushOnUnload() {
       void flush(pendingRef.current, true);
@@ -307,7 +360,9 @@ export function ServerStoreSync<T, S>({
     return () => {
       cancelled = true;
       unsub();
-      if (poll) clearInterval(poll);
+      offRealtime();
+      document.removeEventListener("visibilitychange", onVisible);
+      clearInterval(poll);
       if (timerRef.current) clearTimeout(timerRef.current);
       window.removeEventListener("pagehide", flushOnUnload);
       flushPending();
