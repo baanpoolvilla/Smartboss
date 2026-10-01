@@ -13,6 +13,22 @@ type AnyStore<T> = UseBoundStore<StoreApi<T>>;
  * always-4s behavior for anything not yet tuned. */
 const DEFAULT_POLL_MS = 4000;
 
+/** Same value per field by reference (one level deep) — a cheap "definitely
+ * unchanged" check for immutable store slices before falling back to a full
+ * serialized compare. */
+function sameFields(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    return a.every((v, i) => Object.is(v, b[i]));
+  }
+  const ka = Object.keys(a);
+  const kb = Object.keys(b);
+  if (ka.length !== kb.length) return false;
+  return ka.every((k) => Object.is((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
+}
+
 /**
  * Generic server-backed replacement for zustand's `persist` + localStorage,
  * for state that's shared across teammates (not per-user view prefs — those
@@ -221,10 +237,15 @@ export function ServerStoreSync<T, S>({
       if (!loadedRef.current) return;
       if (applyingRemoteRef.current) return; // server-originated, not a user edit
       const next = select(state);
+      const before = select(prev);
       // `select` typically returns a fresh object/array literal on every call,
       // so a reference compare to `select(prev)` is always unequal even when
-      // nothing changed. Compare serialized contents so a no-op is skipped.
-      if (JSON.stringify(next) === JSON.stringify(select(prev))) return;
+      // nothing changed. Fast path first: every field the same reference (the
+      // stores update immutably) = nothing changed, without serializing the
+      // whole slice — the report feed is several MB and stringifying it twice
+      // on the main thread on every store update was visible as UI lag.
+      if (sameFields(next, before)) return;
+      if (JSON.stringify(next) === JSON.stringify(before)) return;
       if (timerRef.current) clearTimeout(timerRef.current);
       pendingRef.current = next;
       timerRef.current = setTimeout(flushPending, 500);
