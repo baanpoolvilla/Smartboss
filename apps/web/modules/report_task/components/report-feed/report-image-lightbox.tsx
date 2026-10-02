@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Download, Link2, Loader2, Minus, Pencil, Plus, X } from "lucide-react";
 import { downloadFile, fileForEditing, openAnnotator } from "@/lib/annotate/annotate";
 import { useBackToClose } from "@/lib/back-to-close";
+import { useBlackSystemBars } from "@/lib/black-system-bars";
 import { slideStyle, useSwipePager } from "@/lib/swipe-pager";
 
 const MIN_SCALE = 1;
@@ -53,6 +54,7 @@ export function ReportImageLightbox({
   const [rootEl, setRootEl] = useState<HTMLDivElement | null>(null);
   const [chromeHidden, setChromeHidden] = useState(false);
   useBackToClose(true, onClose);
+  useBlackSystemBars();
   const activeThumbRef = useRef<HTMLButtonElement>(null);
 
   // Zoom — double-click/double-tap, scroll wheel, and pinch all land here
@@ -322,16 +324,16 @@ export function ReportImageLightbox({
             attachment lightbox, which has no "post" concept). */}
         {author && (
           <div
-            className="absolute top-4 left-4 z-10 flex items-center gap-2 rounded-full bg-black/40 py-1 pl-1 pr-3 transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none"
+            className={`absolute left-4 z-10 flex max-w-[calc(100%-2rem)] items-center gap-2.5 rounded-2xl bg-black/55 py-1.5 pl-1.5 pr-3.5 backdrop-blur-sm ${hasMultiple ? "bottom-[5.25rem]" : "bottom-[max(1rem,env(safe-area-inset-bottom))]"} transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none`}
             onClick={(e) => e.stopPropagation()}
           >
-            <Avatar className="h-7 w-7 shrink-0">
+            <Avatar className="h-10 w-10 shrink-0">
               <AvatarImage src={author.avatarUrl ?? undefined} alt={author.name} />
-              <AvatarFallback className="text-[10px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{author.avatar}</AvatarFallback>
+              <AvatarFallback className="text-xs bg-[var(--accent)] text-[var(--brand-green-dark)]">{author.avatar}</AvatarFallback>
             </Avatar>
             <div className="flex flex-col items-start leading-tight">
-              <span className="text-[12.5px] font-semibold text-white">{author.name}</span>
-              <span className="text-[10px] text-white/60" title={meta ? formatDateTimeFull(meta.at) : undefined}>
+              <span className="truncate text-[15px] font-semibold text-white">{author.name}</span>
+              <span className="text-xs text-white/65" title={meta ? formatDateTimeFull(meta.at) : undefined}>
                 {meta ? formatDateTimeShort(meta.at) : ""}
               </span>
             </div>
@@ -344,9 +346,22 @@ export function ReportImageLightbox({
             เพื่อเปิดที่ให้ชิปคนโพสต์ด้านซ้าย ("มุมขวาบน" ของจริงใน discord ก็มี
             ปุ่มปิดอยู่ท้ายแถบเดียวกันนี้เหมือนกัน). Zoom %/+/- ของเดิมยังอยู่
             ครบ ไม่ตัดออก แค่ย้ายมารวมพวงเดียวกับปุ่มอื่น. */}
-        <div className="absolute top-4 right-4 z-10 flex items-center gap-2 transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none" onClick={(e) => e.stopPropagation()}>
+        {/* ✕ มุมซ้ายบน ปุ่มอื่นมุมขวาบน — ตำแหน่งเดียวกับ Discord (ปุ่มพื้นเข้ม อ่านออกบนรูปสว่าง) */}
+        {!isDoc && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+            className="transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none absolute left-4 top-[max(1rem,env(safe-area-inset-top))] z-10 flex h-11 w-11 cursor-pointer items-center justify-center rounded-2xl bg-black/55 text-white backdrop-blur-sm hover:bg-black/75"
+            aria-label="ปิด"
+          >
+            <X className="h-6 w-6" />
+          </button>
+        )}
+        <div className="absolute top-[max(1rem,env(safe-area-inset-top))] right-4 z-10 flex items-center gap-2 transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none" onClick={(e) => e.stopPropagation()}>
           {!isVideo && !isDoc && (
-            <div className="flex items-center gap-0.5 rounded-full bg-white/10 p-0.5">
+            <div className="flex items-center gap-0.5 rounded-full bg-black/55 p-0.5 backdrop-blur-sm">
               <button
                 onClick={() => zoomBy(-0.75)}
                 disabled={scale <= MIN_SCALE}
@@ -369,7 +384,7 @@ export function ReportImageLightbox({
           {!isVideo && !isDoc && image.url && (
             <button
               onClick={copyImageLink}
-              className="h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
+              className="h-10 w-10 rounded-full bg-black/55 hover:bg-black/75 backdrop-blur-sm text-white flex items-center justify-center cursor-pointer"
               aria-label="คัดลอกลิงก์รูป"
             >
               <Link2 className="h-5 w-5" />
@@ -379,7 +394,7 @@ export function ReportImageLightbox({
             <button
               onClick={() => void editImage()}
               disabled={editing}
-              className="h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer disabled:opacity-50"
+              className="h-10 w-10 rounded-full bg-black/55 hover:bg-black/75 backdrop-blur-sm text-white flex items-center justify-center cursor-pointer disabled:opacity-50"
               aria-label="วาด/เขียนบนรูปนี้"
               title={onEditImage ? "วาด/เขียนบนรูปนี้ แล้วแนบส่ง" : "วาด/เขียนบนรูปนี้ แล้วบันทึกลงเครื่อง"}
             >
@@ -390,7 +405,7 @@ export function ReportImageLightbox({
             <a
               href={downloadHref}
               download={image.url ? undefined : image.name}
-              className="h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
+              className="h-10 w-10 rounded-full bg-black/55 hover:bg-black/75 backdrop-blur-sm text-white flex items-center justify-center cursor-pointer"
               aria-label="ดาวน์โหลด"
             >
               <Download className="h-5 w-5" />
@@ -403,15 +418,6 @@ export function ReportImageLightbox({
               button ends up sitting on the panel's white background instead
               — a white icon on white is effectively invisible
               ("กากบาทเวลากดเปิดไฟล์และมันไม่ชัดเจนอะ"). */}
-          {!isDoc && (
-            <button
-              onClick={onClose}
-              className="h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
-              aria-label="ปิด"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          )}
         </div>
 
         {hasMultiple && (
@@ -420,7 +426,7 @@ export function ReportImageLightbox({
               e.stopPropagation();
               go(-1);
             }}
-            className="transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
+            className="transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 h-10 w-10 rounded-full bg-black/55 hover:bg-black/75 backdrop-blur-sm text-white flex items-center justify-center cursor-pointer"
             aria-label="รูปก่อนหน้า"
           >
             <ChevronLeft className="h-6 w-6" />
@@ -596,7 +602,7 @@ export function ReportImageLightbox({
                     // while letting our own handlers own horizontal swipe.
                     touchAction: zoomed ? "none" : "pan-y",
                   }}
-                  className={`max-w-full max-h-full object-contain select-none ${
+                  className={`max-w-full max-h-full object-contain select-none [@media(pointer:coarse)]:h-full [@media(pointer:coarse)]:w-full ${
                     zoomed ? (isPanning.current ? "cursor-grabbing" : "cursor-zoom-out") : hasMultiple ? "cursor-grab" : "cursor-zoom-in"
                   }`}
                 />
@@ -612,7 +618,7 @@ export function ReportImageLightbox({
               e.stopPropagation();
               go(1);
             }}
-            className="transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none absolute right-4 top-1/2 z-10 -translate-y-1/2 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
+            className="transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none absolute right-4 top-1/2 z-10 -translate-y-1/2 h-10 w-10 rounded-full bg-black/55 hover:bg-black/75 backdrop-blur-sm text-white flex items-center justify-center cursor-pointer"
             aria-label="รูปถัดไป"
           >
             <ChevronRight className="h-6 w-6" />
@@ -673,6 +679,6 @@ function neighborPreview(media: ReportPostImage) {
   if (!src) return <div className="h-40 w-64 max-w-[80vw] rounded-2xl bg-white/10" />;
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt="" draggable={false} decoding="async" className="max-w-full max-h-full object-contain select-none" />
+    <img src={src} alt="" draggable={false} decoding="async" className="max-w-full max-h-full object-contain select-none [@media(pointer:coarse)]:h-full [@media(pointer:coarse)]:w-full" />
   );
 }

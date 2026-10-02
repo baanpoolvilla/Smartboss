@@ -7,10 +7,21 @@ import { fileForEditing, openAnnotator } from "@/lib/annotate/annotate";
 import type { ChatAttachment } from "../types";
 import { daysUntilExpiry } from "../lib/retention";
 import { useBackToClose } from "@/lib/back-to-close";
+import { useBlackSystemBars } from "@/lib/black-system-bars";
+import { ChatAvatar } from "./chat-avatar";
 import { slideStyle, useSwipePager } from "@/lib/swipe-pager";
 
 /** รูปในหน้าดูเต็มจอ — messageId มีเมื่อเปิดจากแชท (ใช้ตอนบันทึกลงอัลบั้ม) */
 export type LightboxItem = ChatAttachment & { messageId?: string };
+
+export interface LightboxInfo {
+  name: string;
+  avatarUrl?: string | null;
+  colorKey: string;
+  /** เวลาที่แสดง (จัดรูปแบบมาแล้ว) */
+  when: string;
+  text?: string | null;
+}
 
 /** ลิงก์ดาวน์โหลดไฟล์ด้วยชื่อเดิม (/api/files รองรับ ?download=<ชื่อไฟล์>) */
 export function downloadUrl(a: Pick<ChatAttachment, "url" | "name">): string {
@@ -24,18 +35,26 @@ export function Lightbox({
   onClose,
   onSaveToAlbum,
   onEditImage,
+  infoFor,
+  onTop = false,
 }: {
   items: LightboxItem[];
   index: number;
   onClose: () => void;
   /** ไม่ส่ง = ไม่มีปุ่มบันทึกลงอัลบั้ม (เช่น ดูรูปที่อยู่ในอัลบั้มอยู่แล้ว) */
   onSaveToAlbum?: (item: LightboxItem) => void;
+  /** วางเหนือหน้าต่างป๊อปอัปอื่น (เปิดจากในป๊อปอัป เช่น รูปในใบงานซ่อม) — ปกติอยู่ใต้ป๊อปอัปของแชท (เลือกอัลบั้ม) */
+  onTop?: boolean;
+  /** ข้อมูลใต้รูปแบบ Discord — ใครส่ง เมื่อไร และข้อความที่ส่งมาด้วย (ไม่ส่ง/คืน null = ไม่แสดง) */
+  infoFor?: (item: LightboxItem) => LightboxInfo | null;
   /** ดินสอ: วาด/เขียนบนรูปนี้ แล้วส่งไฟล์ใหม่ให้ผู้เรียกแนบเข้าช่องพิมพ์ (รูปเดิมไม่เปลี่ยน) */
   onEditImage?: (file: File) => void;
 }) {
   const [i, setI] = useState(index);
   useBackToClose(true, onClose);
   const item = items[i];
+  const info = item && infoFor ? infoFor(item) : null;
+  useBlackSystemBars();
   // กรอบนอกสุด — ระบบปัดใช้จางพื้นดำตอนลากเพื่อปิด (callback ref เป็น state ส่งเข้า hook ได้)
   const [rootEl, setRootEl] = useState<HTMLDivElement | null>(null);
   // มือถือ: แตะรูป = ซ่อน/โชว์ปุ่ม แบบแอปรูป/Discord (ปิดด้วย ✕, ปุ่มย้อนกลับ หรือปัดขึ้น/ลง)
@@ -93,53 +112,64 @@ export function Lightbox({
     <div
       ref={setRootEl}
       data-chrome-hidden={chromeHidden || undefined}
-      className="group fixed inset-0 z-[80] flex flex-col bg-black text-white"
+      className={`group fixed inset-0 ${onTop ? "z-[110]" : "z-[80]"} flex flex-col bg-black text-white`}
       role="dialog"
       aria-modal="true"
       aria-label="ดูรูปภาพ"
     >
-      {/* ลอยทับรูปแบบ Discord (รูปเต็มจอ) — ไล่เงาดำด้านบนให้ปุ่มขาวอ่านออกบนรูปสีอ่อน */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center gap-2 bg-gradient-to-b from-black/70 via-black/35 to-transparent px-3 pb-8 pt-[max(0.5rem,env(safe-area-inset-top))] [&>*]:pointer-events-auto group-data-[chrome-hidden]:[&>*]:pointer-events-none transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none">
-        <span className="text-sm opacity-80">{items.length > 1 ? `${i + 1} / ${items.length}` : ""}</span>
-        {item.expiresAt && (
-          <span className="text-xs opacity-70">
-            {daysUntilExpiry(item.expiresAt) === 0 ? "หมดอายุวันนี้" : `หมดอายุใน ${daysUntilExpiry(item.expiresAt)} วัน`}
+      {/* แถบบนแบบ Discord: ✕ ซ้าย · ปุ่มอื่นขวา เป็นปุ่มพื้นเข้มมุมมน ลอยทับรูป (อ่านออกทั้งบนรูปสว่าง/มืด) */}
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] [&>*]:pointer-events-auto group-data-[chrome-hidden]:[&>*]:pointer-events-none transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none"
+      >
+        <button type="button" onClick={onClose} className="flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-2xl bg-black/55 px-2.5 text-sm text-white backdrop-blur-sm hover:bg-black/75 disabled:opacity-50" aria-label="ปิด">
+          <X className="h-6 w-6" />
+        </button>
+        {items.length > 1 && (
+          <span className="rounded-full bg-black/55 px-2.5 py-1 text-xs tabular-nums backdrop-blur-sm">
+            {i + 1} / {items.length}
           </span>
         )}
+        <span className="ml-auto" />
         {onSaveToAlbum && (
-          <button
-            type="button"
-            onClick={() => onSaveToAlbum(item)}
-            className="ml-auto flex h-10 items-center gap-1.5 rounded-full px-3 text-sm hover:bg-white/10"
-            title="บันทึกลงอัลบั้ม — ไม่หมดอายุ"
-          >
+          <button type="button" onClick={() => onSaveToAlbum(item)} className="flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-2xl bg-black/55 px-2.5 text-sm text-white backdrop-blur-sm hover:bg-black/75 disabled:opacity-50" title="บันทึกลงอัลบั้ม — ไม่หมดอายุ" aria-label="บันทึกลงอัลบั้ม">
             <BookImage className="h-5 w-5" /> <span className="hidden sm:inline">บันทึกลงอัลบั้ม</span>
           </button>
         )}
         {onEditImage && item.kind === "image" && (
-          <button
-            type="button"
-            onClick={() => void editImage()}
-            disabled={editing}
-            className={`${onSaveToAlbum ? "" : "ml-auto "}flex h-10 items-center gap-1.5 rounded-full px-3 text-sm hover:bg-white/10 disabled:opacity-50`}
-            title="วาด/เขียนบนรูปนี้ แล้วแนบส่ง"
-          >
+          <button type="button" onClick={() => void editImage()} disabled={editing} className="flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-2xl bg-black/55 px-2.5 text-sm text-white backdrop-blur-sm hover:bg-black/75 disabled:opacity-50" title="วาด/เขียนบนรูปนี้ แล้วแนบส่ง" aria-label="วาดบนรูป">
             {editing ? <Loader2 className="h-5 w-5 animate-spin" /> : <Pencil className="h-5 w-5" />}
             <span className="hidden sm:inline">วาด</span>
           </button>
         )}
-        <a
-          href={downloadUrl(item)}
-          className={`${onSaveToAlbum || (onEditImage && item.kind === "image") ? "" : "ml-auto "}flex h-10 w-10 items-center justify-center rounded-full hover:bg-white/10`}
-          aria-label="ดาวน์โหลด"
-          title="ดาวน์โหลด"
-        >
+        <a href={downloadUrl(item)} className="flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-2xl bg-black/55 px-2.5 text-sm text-white backdrop-blur-sm hover:bg-black/75 disabled:opacity-50" aria-label="ดาวน์โหลด" title="ดาวน์โหลด">
           <Download className="h-5 w-5" />
         </a>
-        <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-white/10" aria-label="ปิด">
-          <X className="h-6 w-6" />
-        </button>
       </div>
+
+      {/* แถบล่างแบบ Discord: ใครส่ง · เมื่อไร · ข้อความที่ส่งมากับรูป — ไล่เงาดำให้อ่านออกบนรูป */}
+      {(info || item.expiresAt) && (
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/85 via-black/55 to-transparent px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-12 transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none"
+        >
+          <div className="mx-auto flex max-w-3xl items-start gap-3">
+            {info && <ChatAvatar name={info.name} src={info.avatarUrl} colorKey={info.colorKey} className="h-10 w-10 shrink-0" />}
+            <div className="min-w-0 flex-1">
+              {info && (
+                <p className="flex flex-wrap items-baseline gap-x-2 text-[15px] font-semibold leading-tight">
+                  <span className="truncate">{info.name}</span>
+                  <span className="text-xs font-normal text-white/65">{info.when}</span>
+                </p>
+              )}
+              {info?.text && <p className="mt-0.5 line-clamp-3 whitespace-pre-wrap break-words text-[15px] leading-snug text-white/90">{info.text}</p>}
+              {item.expiresAt && (
+                <p className="mt-1 text-xs text-white/60">
+                  {daysUntilExpiry(item.expiresAt) === 0 ? "หมดอายุวันนี้" : `หมดอายุใน ${daysUntilExpiry(item.expiresAt)} วัน`}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div
         ref={viewportRef}
@@ -183,7 +213,7 @@ export function Lightbox({
                     alt={it.name}
                     draggable={false}
                     decoding="async"
-                    className="max-h-full max-w-full object-contain"
+                    className="max-h-full max-w-full object-contain [@media(pointer:coarse)]:h-full [@media(pointer:coarse)]:w-full"
                     style={it.thumbUrl ? { backgroundImage: `url(${it.thumbUrl})`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center" } : undefined}
                   />
                 )}

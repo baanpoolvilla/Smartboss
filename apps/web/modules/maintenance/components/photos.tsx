@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X } from "lucide-react";
-import { useBackToClose } from "@/lib/back-to-close";
+import { Lightbox } from "@/modules/chat/components/lightbox";
 
 /**
  * แถวรูปเลื่อนแนวนอน + แตะเพื่อดูเต็มจอ
@@ -15,8 +14,7 @@ export function PhotoStrip({
   urls: string[];
   size?: number;
 }) {
-  const [open, setOpen] = useState<string | null>(null);
-  useBackToClose(open !== null, () => setOpen(null));
+  const [open, setOpen] = useState<number | null>(null);
   if (urls.length === 0) return null;
 
   return (
@@ -26,7 +24,7 @@ export function PhotoStrip({
           <button
             key={`${url}-${i}`}
             type="button"
-            onClick={() => setOpen(url)}
+            onClick={() => setOpen(i)}
             className="shrink-0 overflow-hidden rounded-(--radius) border border-(--line)"
             style={{ width: size, height: size }}
           >
@@ -40,29 +38,14 @@ export function PhotoStrip({
         ))}
       </div>
 
-      {open && (
-        <div
-          className="fixed inset-0 z-100 flex items-center justify-center bg-black/70 p-4"
-          onClick={() => setOpen(null)}
-          role="dialog"
-          aria-modal="true"
-        >
-          <button
-            type="button"
-            onClick={() => setOpen(null)}
-            className="absolute right-4 top-4 rounded-full bg-black/60 p-2 text-white"
-            aria-label="ปิด"
-          >
-            <X className="h-5 w-5" />
-          </button>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={open}
-            alt="รูปขยาย"
-            className="max-h-full max-w-full rounded-(--radius) object-contain"
-            onClick={(e) => e.stopPropagation()}
-          />
-        </div>
+      {/* หน้าดูรูปตัวเดียวกับแชท/รายงาน — เต็มจอ ปัดซ้ายขวาเปลี่ยนรูป ปัดขึ้น/ลงเพื่อปิด ดาวน์โหลดได้ */}
+      {open !== null && (
+        <Lightbox
+          onTop
+          items={urls.map((url, i) => ({ url, name: `รูปที่ ${i + 1}`, mime: "image/jpeg", size: 0, kind: "image" as const }))}
+          index={open}
+          onClose={() => setOpen(null)}
+        />
       )}
     </>
   );

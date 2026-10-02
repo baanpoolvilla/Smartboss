@@ -8,7 +8,7 @@ import { cn } from "@smartboss/ui/cn";
 import { useChatStore, type RoomMessage } from "../store/chat-store";
 import type { ChatAttachment, ChatChannelSummary, ChatMessageDTO } from "../types";
 import * as api from "../lib/api";
-import { attachmentLabel, channelTitle, formatDayLabel, formatClock } from "../lib/format";
+import { attachmentLabel, channelTitle, formatDayLabel, formatClock, formatMessageTime } from "../lib/format";
 import { jumpToMessage } from "../lib/chat-actions";
 import { ChannelAvatar } from "./channel-list";
 import { ChatAvatar } from "./chat-avatar";
@@ -278,6 +278,19 @@ export function ChatRoom({ channel, initialUnread, onBack }: { channel: ChatChan
           onClose={() => setLightbox(null)}
           onSaveToAlbum={lightbox.items.some((a) => a.messageId) ? setSaveToAlbum : undefined}
           onEditImage={(file) => composerRef.current?.addFiles([file])}
+          // ใต้รูป: ใครส่ง เมื่อไร และข้อความที่ส่งมากับรูป (แบบ Discord)
+          infoFor={(it) => {
+            const m = it.messageId ? useChatStore.getState().rooms[channel.id]?.items.find((x) => x.id === it.messageId) : undefined;
+            if (!m) return null;
+            const author = users[m.authorId];
+            return {
+              name: author?.name ?? "สมาชิก",
+              avatarUrl: author?.avatarUrl,
+              colorKey: m.authorId,
+              when: formatMessageTime(m.createdAt),
+              text: m.body,
+            };
+          }}
         />
       )}
       {saveToAlbum && (
