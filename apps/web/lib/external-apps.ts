@@ -24,6 +24,8 @@ export interface ExternalApp {
     secretEnv: string;
     /** ปลายทางที่รับ token — `{token}` ถูกแทนด้วย token จริง */
     entry: string;
+    /** ต่อท้ายลิงก์ตอนเปิดในกรอบข้างใน SmartBoss — แอปใช้เลือกชนิด cookie ที่ใช้ในกรอบได้ (ดู lib/external-apps-sso.ts) */
+    embedParam?: string;
   };
 }
 
@@ -33,7 +35,14 @@ export const SALES_MARKETING_APPS: ExternalApp[] = [
     description: "โพสต์ลงหลายช่องทางพร้อมกัน",
     url: "https://multipost-nu.vercel.app/",
     // เซิร์ฟเวอร์อ่านแล้วตั้ง cookie เอง จึงส่งใน query ได้ (อายุ 60 วินาที)
-    sso: { key: "multipost", secretEnv: "SSO_MULTIPOST_SECRET", entry: "https://multipost-nu.vercel.app/sso?token={token}" },
+    // embed=1 → Multi Post ตั้ง session cookie แบบ SameSite=None; Partitioned (services/sessionCookie.js
+    // ของ Multi Post) ไม่ใส่ = cookie แบบ Lax ที่เบราว์เซอร์ไม่ส่งในกรอบ ล็อกอินแล้วหลุดทันที
+    sso: {
+      key: "multipost",
+      secretEnv: "SSO_MULTIPOST_SECRET",
+      entry: "https://multipost-nu.vercel.app/sso?token={token}",
+      embedParam: "embed=1",
+    },
     icon: Send,
     color: "var(--mod-marketing)",
     colorBg: "var(--mod-marketing-bg)",
@@ -43,6 +52,7 @@ export const SALES_MARKETING_APPS: ExternalApp[] = [
     description: "แชทลูกค้า Baanpool",
     url: "https://baanpoolchat.vercel.app/login",
     // หน้าเว็บอ่านเองฝั่ง browser — ใส่หลัง # ไม่ให้ token ไปอยู่ใน log ของเซิร์ฟเวอร์
+    // เก็บ session ใน localStorage + ส่ง Bearer (ไม่ใช้ cookie) — ในกรอบใช้ได้เลย ไม่ต้องมี embedParam
     sso: { key: "chat", secretEnv: "SSO_CHAT_SECRET", entry: "https://baanpoolchat.vercel.app/sso#token={token}" },
     icon: MessageCircle,
     color: "var(--mod-sale)",
