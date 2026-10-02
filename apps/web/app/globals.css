@@ -22,10 +22,23 @@ body {
   height: 100%;
 }
 
+:root {
+  --font-ui: "Segoe UI", "Leelawadee UI", -apple-system, BlinkMacSystemFont, "Sukhumvit Set", Thonburi, Roboto,
+    "Noto Sans Thai", "Helvetica Neue", Arial, sans-serif;
+}
+
+/* คลาส font-sans ของ Tailwind ใช้ฟอนต์เดียวกัน */
+@theme inline {
+  --font-sans: var(--font-ui);
+}
+
 body {
   background: var(--bg);
   color: var(--ink);
-  font-family: var(--font-plex-thai), system-ui, sans-serif;
+  /* ฟอนต์ของระบบแบบ Microsoft Teams/Office บนเว็บ — ไม่ต้องโหลดฟอนต์ เปิดเร็ว แต่ละเครื่องใช้ฟอนต์ของตัวเอง:
+     Windows = Segoe UI (อังกฤษ) + Leelawadee UI (ไทย) · iPhone/Mac = San Francisco + ฟอนต์ไทยของ Apple
+     · Android = Roboto + Noto Sans Thai (Segoe UI ไม่มีตัวไทย browser จึงไปหยิบตัวไทยจาก Leelawadee UI ต่อเอง) */
+  font-family: var(--font-ui);
   line-height: var(--lh-body);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;

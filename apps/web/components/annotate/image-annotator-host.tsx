@@ -143,7 +143,7 @@ function Annotator({ file }: { file: File }) {
     for (let i = ops.length - 1; i >= 0; i--) {
       const op = ops[i]!;
       if (op.kind !== "text") continue;
-      ctx.font = `bold ${op.size}px "Noto Sans Thai", "Segoe UI", sans-serif`;
+      ctx.font = `bold ${op.size}px "Segoe UI", "Leelawadee UI", -apple-system, "Noto Sans Thai", sans-serif`;
       const w = ctx.measureText(op.text).width;
       const pad = op.size * 0.35;
       if (x >= op.x - pad && x <= op.x + w + pad && y >= op.y - op.size / 2 - pad && y <= op.y + op.size / 2 + pad) return i;
@@ -634,7 +634,7 @@ function drawOp(ctx: CanvasRenderingContext2D, op: Op) {
     ctx.stroke();
     return;
   }
-  ctx.font = `bold ${op.size}px "Noto Sans Thai", "Segoe UI", sans-serif`;
+  ctx.font = `bold ${op.size}px "Segoe UI", "Leelawadee UI", -apple-system, "Noto Sans Thai", sans-serif`;
   ctx.textBaseline = "middle";
   // ขอบตัวหนังสือสีตรงข้าม — อ่านออกทั้งบนพื้นสว่างและพื้นมืด
   ctx.lineWidth = Math.max(2, op.size / 7);
