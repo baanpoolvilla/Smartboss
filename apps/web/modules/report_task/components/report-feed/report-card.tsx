@@ -1770,11 +1770,11 @@ export function ReportCard({
               {roundBadge && <span className="flex min-w-0 sm:hidden">{roundBadge}</span>}
             </div>
           ) : !threadOpen ? (
-            <div className="flex items-center justify-between gap-2">
             /* Teams-style — the link sits after the last reply (or alone,
                with none yet), not up by the reactions row, and is the only
                thing standing between a quiet post and a compose box for
                every single one of them. */
+            <div className="flex items-center justify-between gap-2">
             <button
               onClick={() => {
                 setThreadOpen(true);
