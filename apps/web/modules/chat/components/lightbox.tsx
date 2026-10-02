@@ -7,6 +7,7 @@ import { fileForEditing, openAnnotator } from "@/lib/annotate/annotate";
 import type { ChatAttachment } from "../types";
 import { daysUntilExpiry } from "../lib/retention";
 import { useBackToClose } from "@/lib/back-to-close";
+import { slideStyle, useSwipePager } from "@/lib/swipe-pager";
 
 /** รูปในหน้าดูเต็มจอ — messageId มีเมื่อเปิดจากแชท (ใช้ตอนบันทึกลงอัลบั้ม) */
 export type LightboxItem = ChatAttachment & { messageId?: string };
@@ -34,8 +35,19 @@ export function Lightbox({
 }) {
   const [i, setI] = useState(index);
   useBackToClose(true, onClose);
-  const [touchX, setTouchX] = useState<number | null>(null);
   const item = items[i];
+  // ปัดซ้าย/ขวา — รูปเลื่อนตามนิ้ว/เมาส์ รูปข้าง ๆ โหลดรอไว้ (ดู lib/swipe-pager.ts)
+  const {
+    viewportRef,
+    onPointerDown: swipeDown,
+    onPointerMove: swipeMove,
+    onPointerUp: swipeUp,
+    onClickCapture: swipeClickCapture,
+    onWheel: swipeWheel,
+    trackStyle,
+    slides,
+    go,
+  } = useSwipePager({ count: items.length, index: i, onIndexChange: setI });
   const [editing, setEditing] = useState(false);
   async function editImage() {
     if (!item || !onEditImage) return;
@@ -56,17 +68,19 @@ export function Lightbox({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
-      if (e.key === "ArrowLeft") setI((v) => Math.max(0, v - 1));
-      if (e.key === "ArrowRight") setI((v) => Math.min(items.length - 1, v + 1));
+      if (e.key === "ArrowLeft") go(-1);
+      if (e.key === "ArrowRight") go(1);
     };
     window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [go, onClose]);
+  useEffect(() => {
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
-      window.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
     };
-  }, [items.length, onClose]);
+  }, []);
 
   if (!item) return null;
 
@@ -76,14 +90,6 @@ export function Lightbox({
       role="dialog"
       aria-modal="true"
       aria-label="ดูรูปภาพ"
-      onTouchStart={(e) => setTouchX(e.touches[0]?.clientX ?? null)}
-      onTouchEnd={(e) => {
-        if (touchX == null) return;
-        const dx = (e.changedTouches[0]?.clientX ?? touchX) - touchX;
-        if (dx > 60) setI((v) => Math.max(0, v - 1));
-        if (dx < -60) setI((v) => Math.min(items.length - 1, v + 1));
-        setTouchX(null);
-      }}
     >
       <div className="flex items-center gap-2 px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
         <span className="text-sm opacity-80">{items.length > 1 ? `${i + 1} / ${items.length}` : ""}</span>
@@ -127,28 +133,55 @@ export function Lightbox({
         </button>
       </div>
 
-      <div className="relative flex min-h-0 flex-1 items-center justify-center p-2" onClick={onClose}>
-        {item.kind === "video" ? (
-          <video src={item.url} controls autoPlay playsInline className="max-h-full max-w-full" onClick={(e) => e.stopPropagation()} />
-        ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            key={item.url}
-            src={item.url}
-            alt={item.name}
-            className="max-h-full max-w-full object-contain"
-            style={item.thumbUrl ? { backgroundImage: `url(${item.thumbUrl})`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center" } : undefined}
-            onClick={(e) => e.stopPropagation()}
-          />
-        )}
+      <div
+        ref={viewportRef}
+        onPointerDown={swipeDown}
+        onPointerMove={swipeMove}
+        onPointerUp={swipeUp}
+        onPointerCancel={swipeUp}
+        onClickCapture={swipeClickCapture}
+        onWheel={swipeWheel}
+        className="relative min-h-0 flex-1 select-none overflow-hidden"
+        style={{ touchAction: "none", cursor: items.length > 1 ? "grab" : undefined }}
+      >
+        <div className="absolute inset-0" style={trackStyle}>
+          {slides.map((sl) => {
+            const it = items[sl.index]!;
+            return (
+              <div key={sl.key} className="absolute inset-0 flex items-center justify-center p-2" style={slideStyle(sl.rel)} onClick={onClose}>
+                {it.kind === "video" ? (
+                  sl.rel === 0 ? (
+                    <video src={it.url} controls autoPlay playsInline className="max-h-full max-w-full" onClick={(e) => e.stopPropagation()} />
+                  ) : it.thumbUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={it.thumbUrl} alt="" draggable={false} className="max-h-full max-w-full object-contain opacity-80" />
+                  ) : (
+                    <div className="h-40 w-64 max-w-full rounded-xl bg-white/10" />
+                  )
+                ) : (
+                  // <img> ตัวเดิมตามสไลด์ — เลื่อนเข้ากลางแล้วไม่ต้องโหลด/วาดใหม่
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={it.url}
+                    alt={it.name}
+                    draggable={false}
+                    className="max-h-full max-w-full object-contain"
+                    style={it.thumbUrl ? { backgroundImage: `url(${it.thumbUrl})`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center" } : undefined}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
         {i > 0 && (
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              setI(i - 1);
+              go(-1);
             }}
-            className="absolute left-2 hidden h-11 w-11 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 sm:flex"
+            className="absolute left-2 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 sm:flex"
             aria-label="รูปก่อนหน้า"
           >
             <ChevronLeft className="h-6 w-6" />
@@ -159,9 +192,9 @@ export function Lightbox({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              setI(i + 1);
+              go(1);
             }}
-            className="absolute right-2 hidden h-11 w-11 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 sm:flex"
+            className="absolute right-2 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 sm:flex"
             aria-label="รูปถัดไป"
           >
             <ChevronRight className="h-6 w-6" />

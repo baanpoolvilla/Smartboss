@@ -12,8 +12,8 @@ import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Download, Link2, Loader2, Minus, Pencil, Plus, X } from "lucide-react";
 import { downloadFile, fileForEditing, openAnnotator } from "@/lib/annotate/annotate";
 import { useBackToClose } from "@/lib/back-to-close";
+import { slideStyle, useSwipePager } from "@/lib/swipe-pager";
 
-const SWIPE_THRESHOLD_PX = 80;
 const MIN_SCALE = 1;
 const MAX_SCALE = 4;
 const DOUBLE_TAP_SCALE = 2.5;
@@ -50,9 +50,6 @@ export function ReportImageLightbox({
 }) {
   const hasMultiple = images.length > 1;
   useBackToClose(true, onClose);
-  const [dragOffset, setDragOffset] = useState(0);
-  const [dragging, setDragging] = useState(false);
-  const dragStartX = useRef(0);
   const activeThumbRef = useRef<HTMLButtonElement>(null);
 
   // Zoom — double-click/double-tap, scroll wheel, and pinch all land here
@@ -63,6 +60,24 @@ export function ReportImageLightbox({
   const [scale, setScale] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const zoomed = scale > 1;
+  // ปัดซ้าย/ขวา — รูปเลื่อนตามนิ้ว รูปข้าง ๆ โหลดรอไว้ (ดู lib/swipe-pager.ts) · ซูมอยู่ = ลากเลื่อนรูปแทน
+  const {
+    viewportRef,
+    onPointerDown: swipeDown,
+    onPointerMove: swipeMove,
+    onPointerUp: swipeUp,
+    onClickCapture: swipeClickCapture,
+    onWheel: swipeWheel,
+    trackStyle,
+    slides,
+    go,
+  } = useSwipePager({
+    count: images.length,
+    index,
+    onIndexChange,
+    loop: true,
+    enabled: !zoomed,
+  });
   // Single-pointer drag-to-pan while zoomed; the existing swipe-to-next-image
   // drag above only makes sense at 1x, where there's nothing to pan.
   const panStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
@@ -105,7 +120,6 @@ export function ReportImageLightbox({
   const [lastIndex, setLastIndex] = useState(index);
   if (lastIndex !== index) {
     setLastIndex(index);
-    setDragOffset(0);
     setScale(1);
     setPan({ x: 0, y: 0 });
   }
@@ -115,8 +129,8 @@ export function ReportImageLightbox({
   // back out, so a normal bubble-phase window listener never sees it.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "ArrowLeft" && hasMultiple) onIndexChange((index - 1 + images.length) % images.length);
-      if (e.key === "ArrowRight" && hasMultiple) onIndexChange((index + 1) % images.length);
+      if (e.key === "ArrowLeft" && hasMultiple) go(-1);
+      if (e.key === "ArrowRight" && hasMultiple) go(1);
       if (e.key === "Escape") onClose();
       // Ctrl+Plus/Minus/0 is the keyboard route to the same native page-zoom
       // this lightbox otherwise blocks via wheel+ctrlKey below — same reason
@@ -125,7 +139,7 @@ export function ReportImageLightbox({
     }
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [index, images.length, hasMultiple, onIndexChange, onClose]);
+  }, [hasMultiple, go, onClose]);
 
   // Block native browser/OS page zoom (Ctrl+wheel — also how Windows/Chrome
   // report trackpad pinch) for as long as this lightbox is open, everywhere
@@ -198,6 +212,8 @@ export function ReportImageLightbox({
 
   function handleWheel(e: React.WheelEvent<HTMLElement>) {
     if (isVideo || isDoc) return;
+    // ทัชแพดปัดสองนิ้วแนวนอน = เปลี่ยนรูป (ตัวปัดที่กรอบรับต่อ) ไม่ใช่ซูม
+    if (!e.ctrlKey && !zoomed && Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
     e.preventDefault();
     e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
@@ -223,14 +239,13 @@ export function ReportImageLightbox({
     // without hijacking every pointer-down on it — same reason it skips the
     // click-to-close/swipe/zoom handling entirely below.
     if (isVideo || isDoc) return;
-    e.stopPropagation();
+    // ไม่ stopPropagation — ให้ตัวปัดรูปที่กรอบเห็นนิ้วเดียวกันด้วย (นิ้วที่สอง = ซูม มันจะหยุดปัดเอง)
     e.currentTarget.setPointerCapture(e.pointerId);
     activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
     if (activePointers.current.size === 2) {
       // Second finger landed — this becomes a pinch, not a pan/swipe.
       isPanning.current = false;
-      setDragging(false);
       const [p1, p2] = [...activePointers.current.values()];
       pinchStart.current = { dist: distanceBetween(p1!, p2!), scale };
       return;
@@ -239,9 +254,6 @@ export function ReportImageLightbox({
     if (zoomed) {
       isPanning.current = true;
       panStart.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
-    } else if (hasMultiple) {
-      setDragging(true);
-      dragStartX.current = e.clientX;
     }
   }
 
@@ -260,8 +272,6 @@ export function ReportImageLightbox({
 
     if (isPanning.current) {
       setPan({ x: panStart.current.panX + (e.clientX - panStart.current.x), y: panStart.current.panY + (e.clientY - panStart.current.y) });
-    } else if (dragging) {
-      setDragOffset(e.clientX - dragStartX.current);
     }
   }
 
@@ -271,15 +281,6 @@ export function ReportImageLightbox({
     if (activePointers.current.size > 0) return; // one finger still down mid-pinch
 
     isPanning.current = false;
-    if (!dragging) return;
-    setDragging(false);
-    if (dragOffset > SWIPE_THRESHOLD_PX) {
-      onIndexChange((index - 1 + images.length) % images.length);
-    } else if (dragOffset < -SWIPE_THRESHOLD_PX) {
-      onIndexChange((index + 1) % images.length);
-    } else {
-      setDragOffset(0);
-    }
   }
 
   return (
@@ -408,7 +409,7 @@ export function ReportImageLightbox({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              onIndexChange((index - 1 + images.length) % images.length);
+              go(-1);
             }}
             className="absolute left-4 top-1/2 z-10 -translate-y-1/2 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
             aria-label="รูปก่อนหน้า"
@@ -417,162 +418,188 @@ export function ReportImageLightbox({
           </button>
         )}
 
-        {isPreviewablePdf ? (
-          /* pdf จริงมีตัวเรนเดอร์ในตัว browser เอง — ฝังตรงนี้เลยแทนที่จะ
-             บังคับเปิดแท็บใหม่ก่อนถึงจะเห็นเนื้อไฟล์ ("ใน pc มันต้องโหลดก่อน
-             ถึงจะดู") ปุ่มดาวน์โหลดยังแยกไว้ต่างหากสำหรับคนที่อยากได้ไฟล์
-             ไปเก็บในเครื่องจริง ๆ */
-          <div
-            onClick={(e) => e.stopPropagation()}
-            // เกือบเต็มจอ — ก่อนหน้านี้จำกัดกว้างไว้แค่ 56rem แม้จอกว้างแค่ไหน
-            // ทำให้เหลือพื้นที่ดำโล่งซ้ายขวาเยอะทั้งที่เนื้อหาคือเอกสารที่
-            // ควรได้พื้นที่อ่านมากสุด ("แสดงให้เต็มหน้าหน่อยสิ")
-            className="flex h-[94vh] w-[97vw] cursor-default flex-col overflow-hidden rounded-2xl bg-white"
-          >
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--line)] px-4 py-2.5">
-              <span className="min-w-0 truncate text-sm font-medium text-[var(--ink)]" title={image.name}>
-                {image.name}
-              </span>
-              <div className="flex shrink-0 items-center gap-2">
-                <a
-                  href={downloadHref}
-                  download={image.url ? undefined : image.name}
-                  className="flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--brand-green)] px-3 py-1.5 text-xs font-medium text-[var(--ink)] transition-colors hover:bg-[var(--brand-green-dark)] hover:text-white"
+        <div
+          ref={viewportRef}
+          onPointerDown={swipeDown}
+          onPointerMove={swipeMove}
+          onPointerUp={swipeUp}
+          onPointerCancel={swipeUp}
+          onClickCapture={swipeClickCapture}
+          onWheel={swipeWheel}
+          className="absolute inset-0 overflow-hidden"
+        >
+          <div className="absolute inset-0" style={trackStyle}>
+            {slides.map((sl) => (
+              <div
+                key={sl.key}
+                className="absolute inset-0 flex items-center justify-center"
+                style={slideStyle(sl.rel)}
+                onClick={(e) => {
+                  if (e.target === e.currentTarget) onClose();
+                }}
+              >
+                {sl.rel !== 0
+                  ? neighborPreview(images[sl.index]!)
+                  : isPreviewablePdf ? (
+                /* pdf จริงมีตัวเรนเดอร์ในตัว browser เอง — ฝังตรงนี้เลยแทนที่จะ
+                   บังคับเปิดแท็บใหม่ก่อนถึงจะเห็นเนื้อไฟล์ ("ใน pc มันต้องโหลดก่อน
+                   ถึงจะดู") ปุ่มดาวน์โหลดยังแยกไว้ต่างหากสำหรับคนที่อยากได้ไฟล์
+                   ไปเก็บในเครื่องจริง ๆ */
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  // เกือบเต็มจอ — ก่อนหน้านี้จำกัดกว้างไว้แค่ 56rem แม้จอกว้างแค่ไหน
+                  // ทำให้เหลือพื้นที่ดำโล่งซ้ายขวาเยอะทั้งที่เนื้อหาคือเอกสารที่
+                  // ควรได้พื้นที่อ่านมากสุด ("แสดงให้เต็มหน้าหน่อยสิ")
+                  className="flex h-[94vh] w-[97vw] cursor-default flex-col overflow-hidden rounded-2xl bg-white"
                 >
-                  <Download className="h-3.5 w-3.5" />
-                  ดาวน์โหลด
-                </a>
-                {/* Dark icon on this panel's own white header — the global
-                    black-backdrop close button (white-on-white here) was the
-                    "มันไม่ชัดเจน" close button this replaces for pdf/doc panels. */}
-                <button
-                  onClick={onClose}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)] cursor-pointer"
-                  aria-label="ปิด"
+                  <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--line)] px-4 py-2.5">
+                    <span className="min-w-0 truncate text-sm font-medium text-[var(--ink)]" title={image.name}>
+                      {image.name}
+                    </span>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <a
+                        href={downloadHref}
+                        download={image.url ? undefined : image.name}
+                        className="flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--brand-green)] px-3 py-1.5 text-xs font-medium text-[var(--ink)] transition-colors hover:bg-[var(--brand-green-dark)] hover:text-white"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        ดาวน์โหลด
+                      </a>
+                      {/* Dark icon on this panel's own white header — the global
+                          black-backdrop close button (white-on-white here) was the
+                          "มันไม่ชัดเจน" close button this replaces for pdf/doc panels. */}
+                      <button
+                        onClick={onClose}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)] cursor-pointer"
+                        aria-label="ปิด"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                  {/* #zoom=page-width — "open parameters" ที่ Chrome/Edge/Firefox
+                      ตัว viewer ในตัวรองรับ (มาตรฐานเดิมของ Adobe Acrobat) สั่งให้
+                      เปิดมาแล้วพอดีความกว้างเลย ไม่ต้องมาไล่ซูมเองทุกครั้งที่เปิด
+                      ("ให้เวลาเปิดมาเริ่มมาแบบจอประมาณนี้เลย อ่านง่าย ไม่ต้องขยาย") */}
+                  <iframe src={src ? `${src}#zoom=page-width` : src} title={image.name} className="min-h-0 flex-1" />
+                </div>
+              ) : isDoc && image.thumbUrl ? (
+                /* word/excel/ppt ไม่มีตัวเรนเดอร์ live ในตัว browser แต่มี thumbUrl
+                   (ภาพหน้าแรกจริงที่ server สร้างไว้ตอนอัปโหลด — ดู
+                   generate-doc-thumbnail.ts) ก็โชว์ภาพนิ่งนั้นขยายใหญ่แทนการ์ด
+                   ไอคอนเฉย ๆ — ดีกว่าเดิมชัดเจนแม้จะไม่ใช่เอกสารที่เลื่อนดูได้จริง
+                   แบบ pdf ก็ตาม */
+                <div onClick={(e) => e.stopPropagation()} className="flex max-h-[88vh] w-[min(92vw,32rem)] cursor-default flex-col overflow-hidden rounded-2xl bg-white">
+                  <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--line)] px-4 py-2.5">
+                    <span className="min-w-0 truncate text-sm font-medium text-[var(--ink)]" title={image.name}>
+                      {image.name}
+                    </span>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <a
+                        href={downloadHref}
+                        download={image.url ? undefined : image.name}
+                        className="flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--brand-green)] px-3 py-1.5 text-xs font-medium text-[var(--ink)] transition-colors hover:bg-[var(--brand-green-dark)] hover:text-white"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        ดาวน์โหลด
+                      </a>
+                      <button
+                        onClick={onClose}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)] cursor-pointer"
+                        aria-label="ปิด"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={image.thumbUrl} alt={image.name} className="min-h-0 flex-1 object-contain bg-[var(--bg-soft)]" />
+                </div>
+              ) : isDoc ? (
+                /* ไม่มีทั้ง live renderer และ thumbUrl (แปลงไม่สำเร็จ/ไม่ติดตั้ง
+                   soffice บนเซิร์ฟเวอร์/zip ที่ดูเป็นภาพไม่ได้จริง) — เหลือแค่การ์ด
+                   ไอคอน + ปุ่มดาวน์โหลดเหมือนเดิม */
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="relative flex w-[min(86vw,26rem)] cursor-default flex-col items-center gap-4 rounded-2xl bg-white px-6 py-7 text-center sm:px-8"
                 >
-                  <X className="h-4 w-4" />
-                </button>
+                  {/* This card is small enough to leave real backdrop around it, so
+                      unlike the pdf/thumb panels above it doesn't need its own
+                      close button purely for contrast — but the global one was
+                      removed for every isDoc case, so it still needs one of its
+                      own to stay closeable at all. */}
+                  <button
+                    onClick={onClose}
+                    className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)] cursor-pointer"
+                    aria-label="ปิด"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                  {/* Width-capped so a long filename truncates inside the card
+                      instead of stretching it past a phone's screen. */}
+                  <ReportFileChip media={image} className="w-full border-0 p-0" />
+                  <a
+                    href={downloadHref}
+                    download={image.url ? undefined : image.name}
+                    className="flex items-center gap-1.5 rounded-full bg-[var(--brand-green)] px-4 py-2 text-sm font-medium text-[var(--ink)] transition-colors hover:bg-[var(--brand-green-dark)] hover:text-white"
+                  >
+                    <Download className="h-4 w-4" />
+                    ดาวน์โหลดไฟล์
+                  </a>
+                </div>
+              ) : isVideo ? (
+                // eslint-disable-next-line jsx-a11y/media-has-caption
+                <video
+                  key={image.id}
+                  src={image.url ?? image.dataUrl}
+                  controls
+                  autoPlay
+                  playsInline
+                  onClick={(e) => e.stopPropagation()}
+                  className="max-w-[92vw] max-h-[88vh]"
+                />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={image.url ?? image.dataUrl}
+                  alt={image.name}
+                  draggable={false}
+                  onDragStart={(e) => e.preventDefault()}
+                  onClick={(e) => e.stopPropagation()}
+                  onWheel={handleWheel}
+                  onDoubleClick={handleDoubleClick}
+                  onPointerDown={handlePointerDown}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  onPointerCancel={handlePointerUp}
+                  style={{
+                    // Pan/zoom compose with the swipe-to-next-image offset — at 1x
+                    // pan is always {0,0} so this collapses to the old
+                    // translateX-only behavior exactly.
+                    transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
+                    transition: isPanning.current ? "none" : "transform 200ms ease",
+                    // "none" while zoomed — the browser's own native pinch/pan
+                    // would otherwise fight the pointer-based zoom/pan above.
+                    // "pan-y" at 1x keeps vertical scroll gestures (nothing to
+                    // scroll here, but this matches the pre-existing behavior)
+                    // while letting our own handlers own horizontal swipe.
+                    touchAction: zoomed ? "none" : "pan-y",
+                  }}
+                  className={`max-w-[92vw] max-h-[88vh] object-contain select-none ${
+                    zoomed ? (isPanning.current ? "cursor-grabbing" : "cursor-zoom-out") : hasMultiple ? "cursor-grab" : "cursor-zoom-in"
+                  }`}
+                />
+              )}
               </div>
-            </div>
-            {/* #zoom=page-width — "open parameters" ที่ Chrome/Edge/Firefox
-                ตัว viewer ในตัวรองรับ (มาตรฐานเดิมของ Adobe Acrobat) สั่งให้
-                เปิดมาแล้วพอดีความกว้างเลย ไม่ต้องมาไล่ซูมเองทุกครั้งที่เปิด
-                ("ให้เวลาเปิดมาเริ่มมาแบบจอประมาณนี้เลย อ่านง่าย ไม่ต้องขยาย") */}
-            <iframe src={src ? `${src}#zoom=page-width` : src} title={image.name} className="min-h-0 flex-1" />
+            ))}
           </div>
-        ) : isDoc && image.thumbUrl ? (
-          /* word/excel/ppt ไม่มีตัวเรนเดอร์ live ในตัว browser แต่มี thumbUrl
-             (ภาพหน้าแรกจริงที่ server สร้างไว้ตอนอัปโหลด — ดู
-             generate-doc-thumbnail.ts) ก็โชว์ภาพนิ่งนั้นขยายใหญ่แทนการ์ด
-             ไอคอนเฉย ๆ — ดีกว่าเดิมชัดเจนแม้จะไม่ใช่เอกสารที่เลื่อนดูได้จริง
-             แบบ pdf ก็ตาม */
-          <div onClick={(e) => e.stopPropagation()} className="flex max-h-[88vh] w-[min(92vw,32rem)] cursor-default flex-col overflow-hidden rounded-2xl bg-white">
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--line)] px-4 py-2.5">
-              <span className="min-w-0 truncate text-sm font-medium text-[var(--ink)]" title={image.name}>
-                {image.name}
-              </span>
-              <div className="flex shrink-0 items-center gap-2">
-                <a
-                  href={downloadHref}
-                  download={image.url ? undefined : image.name}
-                  className="flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--brand-green)] px-3 py-1.5 text-xs font-medium text-[var(--ink)] transition-colors hover:bg-[var(--brand-green-dark)] hover:text-white"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  ดาวน์โหลด
-                </a>
-                <button
-                  onClick={onClose}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)] cursor-pointer"
-                  aria-label="ปิด"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={image.thumbUrl} alt={image.name} className="min-h-0 flex-1 object-contain bg-[var(--bg-soft)]" />
-          </div>
-        ) : isDoc ? (
-          /* ไม่มีทั้ง live renderer และ thumbUrl (แปลงไม่สำเร็จ/ไม่ติดตั้ง
-             soffice บนเซิร์ฟเวอร์/zip ที่ดูเป็นภาพไม่ได้จริง) — เหลือแค่การ์ด
-             ไอคอน + ปุ่มดาวน์โหลดเหมือนเดิม */
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="relative flex w-[min(86vw,26rem)] cursor-default flex-col items-center gap-4 rounded-2xl bg-white px-6 py-7 text-center sm:px-8"
-          >
-            {/* This card is small enough to leave real backdrop around it, so
-                unlike the pdf/thumb panels above it doesn't need its own
-                close button purely for contrast — but the global one was
-                removed for every isDoc case, so it still needs one of its
-                own to stay closeable at all. */}
-            <button
-              onClick={onClose}
-              className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)] cursor-pointer"
-              aria-label="ปิด"
-            >
-              <X className="h-4 w-4" />
-            </button>
-            {/* Width-capped so a long filename truncates inside the card
-                instead of stretching it past a phone's screen. */}
-            <ReportFileChip media={image} className="w-full border-0 p-0" />
-            <a
-              href={downloadHref}
-              download={image.url ? undefined : image.name}
-              className="flex items-center gap-1.5 rounded-full bg-[var(--brand-green)] px-4 py-2 text-sm font-medium text-[var(--ink)] transition-colors hover:bg-[var(--brand-green-dark)] hover:text-white"
-            >
-              <Download className="h-4 w-4" />
-              ดาวน์โหลดไฟล์
-            </a>
-          </div>
-        ) : isVideo ? (
-          // eslint-disable-next-line jsx-a11y/media-has-caption
-          <video
-            key={image.id}
-            src={image.url ?? image.dataUrl}
-            controls
-            autoPlay
-            playsInline
-            onClick={(e) => e.stopPropagation()}
-            className="max-w-[92vw] max-h-[88vh]"
-          />
-        ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={image.url ?? image.dataUrl}
-            alt={image.name}
-            draggable={false}
-            onDragStart={(e) => e.preventDefault()}
-            onClick={(e) => e.stopPropagation()}
-            onWheel={handleWheel}
-            onDoubleClick={handleDoubleClick}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
-            style={{
-              // Pan/zoom compose with the swipe-to-next-image offset — at 1x
-              // pan is always {0,0} so this collapses to the old
-              // translateX-only behavior exactly.
-              transform: `translate(${pan.x + dragOffset}px, ${pan.y}px) scale(${scale})`,
-              transition: dragging || isPanning.current ? "none" : "transform 200ms ease",
-              // "none" while zoomed — the browser's own native pinch/pan
-              // would otherwise fight the pointer-based zoom/pan above.
-              // "pan-y" at 1x keeps vertical scroll gestures (nothing to
-              // scroll here, but this matches the pre-existing behavior)
-              // while letting our own handlers own horizontal swipe.
-              touchAction: zoomed ? "none" : "pan-y",
-            }}
-            className={`max-w-[92vw] max-h-[88vh] object-contain select-none ${
-              zoomed ? (isPanning.current ? "cursor-grabbing" : "cursor-zoom-out") : hasMultiple ? (dragging ? "cursor-grabbing" : "cursor-grab") : "cursor-zoom-in"
-            }`}
-          />
-        )}
+        </div>
 
         {hasMultiple && (
           <button
             onClick={(e) => {
               e.stopPropagation();
-              onIndexChange((index + 1) % images.length);
+              go(1);
             }}
             className="absolute right-4 top-1/2 z-10 -translate-y-1/2 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
             aria-label="รูปถัดไป"
@@ -625,5 +652,16 @@ export function ReportImageLightbox({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** รูปข้าง ๆ ที่วางรอไว้ตอนปัด — เป็น <img> แบบเดียวกับรูปกลาง เลื่อนเข้ากลางแล้วใช้ตัวเดิม ไม่โหลดใหม่ */
+function neighborPreview(media: ReportPostImage) {
+  const isDocOrVideo = isDocAttachment(media.mime) || isVideoAttachment(media.mime);
+  const src = isDocOrVideo ? media.thumbUrl : (media.url ?? media.dataUrl);
+  if (!src) return <div className="h-40 w-64 max-w-[80vw] rounded-2xl bg-white/10" />;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={src} alt="" draggable={false} className="max-w-[92vw] max-h-[88vh] object-contain select-none" />
   );
 }
