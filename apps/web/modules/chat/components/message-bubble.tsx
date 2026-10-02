@@ -449,11 +449,11 @@ function ReactionChip({
         aria-expanded={open}
         className={cn(
           // ป้ายเล็กลอยเกาะมุมบับเบิล แบบ LINE/Messenger — ไม่มีกรอบแข็ง ใช้เงานุ่ม ๆ แทน
-          "flex h-6 items-center gap-1 rounded-full px-1.5 text-[11px] font-semibold shadow-[0_1px_4px_rgba(0,0,0,0.15)] ring-2 ring-(--bg) transition-transform active:scale-95",
+          "flex h-8 items-center gap-1 rounded-full px-2 text-[13px] font-semibold shadow-[0_1px_4px_rgba(0,0,0,0.15)] ring-2 ring-(--bg) transition-transform active:scale-95",
           mineReact ? "bg-(--chat-accent-soft) text-(--chat-accent-strong)" : "bg-(--bg) text-(--ink-soft)"
         )}
       >
-        <span className="text-[15px] leading-none">{emoji}</span>
+        <span className="text-[20px] leading-none">{emoji}</span>
         {userIds.length > 1 && <span className="tabular-nums">{userIds.length}</span>}
       </button>
 
@@ -679,7 +679,7 @@ export const MessageBubble = memo(function MessageBubble(props: MessageBubblePro
         </div>
 
         {m.reactions.length > 0 && (
-          <div className={cn("relative z-10 -mt-2.5 flex flex-wrap gap-1", mine ? "justify-end pr-2" : "pl-2")}>
+          <div className={cn("relative z-10 -mt-3 flex flex-wrap gap-1.5", mine ? "justify-end pr-2" : "pl-2")}>
             {m.reactions.map((r) => (
               <ReactionChip
                 key={r.emoji}
