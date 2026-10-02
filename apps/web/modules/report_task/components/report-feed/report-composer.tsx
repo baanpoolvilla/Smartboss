@@ -18,7 +18,7 @@ import { localDateStr, now } from "@/modules/report_task/lib/now";
 import { cn } from "@/modules/report_task/lib/utils";
 import { ReportPostFields, newSection, type DraftSection } from "@/modules/report_task/components/report-feed/report-post-fields";
 import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
-import { Check, Clock, Lock, Send, SquarePen, TriangleAlert } from "lucide-react";
+import { Check, Clock, Lock, Maximize2, Minimize2, Send, SquarePen, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { uuid } from "@/modules/report_task/lib/uuid";
 
@@ -70,6 +70,8 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
 
   const savedDraft = loadDraft(topic.id);
   const [expanded, setExpanded] = useState(() => !!savedDraft);
+  // ขยายฟอร์มเกือบเต็มจอ — รายงานยาว ๆ ในกรอบครึ่งจอ (ค่าเริ่ม) ต้องเลื่อนไปมาเยอะกว่าจะแก้ได้
+  const [tall, setTall] = useState(false);
   const [title, setTitle] = useState(() => savedDraft?.title ?? "");
   const [sections, setSections] = useState<DraftSection[]>(() => savedDraft?.sections ?? initialSections(topic));
   const [images, setImages] = useState<ReportPostImage[]>(() => savedDraft?.images ?? []);
@@ -114,6 +116,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
     setSelectedRoundId(null);
     setExcludeFromSubmission(false);
     setExpanded(false);
+    setTall(false);
     if (typeof window !== "undefined") {
       try {
         window.sessionStorage.removeItem(draftStorageKey(topic.id));
@@ -306,7 +309,13 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
         }
       }}
     >
-      <div className="max-h-[50vh] overflow-y-auto px-5 pt-4 space-y-3">
+      <div
+        className={cn(
+          "overflow-y-auto overscroll-contain px-5 pt-4 space-y-3",
+          // เต็มจอ: เหลือที่ให้แถบบน + แถบปุ่มของฟอร์ม + เมนูล่างของมือถือ (dvh = หดตามคีย์บอร์ด)
+          tall ? "h-[calc(100dvh-13rem)] lg:h-[calc(100dvh-9rem)]" : "max-h-[50vh]"
+        )}
+      >
         <div className="flex items-center gap-2.5">
           <Avatar className="h-8 w-8 shrink-0">
             <AvatarImage src={viewer.avatarUrl ?? undefined} alt={viewer.name} />
@@ -448,9 +457,22 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
       </div>
 
       <div className="flex items-center justify-end gap-2.5 px-5 py-3 mt-1 border-t border-[var(--line)]/60 bg-[var(--bg-soft)]/40">
+        {/* อยู่แถบล่างที่มองเห็นตลอด (หัวฟอร์มเลื่อนหายได้) */}
+        <button
+          type="button"
+          onClick={() => setTall((v) => !v)}
+          aria-pressed={tall}
+          aria-label={tall ? "ย่อฟอร์ม" : "ขยายฟอร์มเต็มจอ"}
+          title={tall ? "ย่อฟอร์ม" : "ขยายฟอร์มเต็มจอ — เห็นข้อความได้มากขึ้น"}
+          className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)]"
+        >
+          {tall ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          <span className="hidden sm:inline">{tall ? "ย่อ" : "ขยาย"}</span>
+        </button>
+        <span className="mr-auto" />
         {/* P3 — why the button's disabled, not just that it is. */}
         {!busy && (!title.trim() || missingRequiredImage || submissionLocked) && (
-          <p className="text-xs text-[var(--ink-soft)] mr-auto">
+          <p className="min-w-0 truncate text-xs text-[var(--ink-soft)]">
             {submissionLocked
               ? `ปิดรับรายงานของวันนี้แล้ว (หลัง ${hardCutoff} น.) — ส่งได้อีกทีพรุ่งนี้`
               : !title.trim()
