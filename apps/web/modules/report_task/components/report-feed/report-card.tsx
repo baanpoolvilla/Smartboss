@@ -980,6 +980,64 @@ export function ReportCard({
     );
   }
 
+  // ป้ายรอบส่ง (ตรงเวลา/ส่งเกินกำหนด/ไม่นับ/หยุด-ลา) — คอมวางต่อท้ายแถวชื่อ·แผนก·เวลา
+  // มือถือย้ายไปมุมขวาล่างแถวเดียวกับ "ตอบกลับ": ชื่อ+แผนก+เวลา+ป้ายรวมกัน ~340px
+  // แต่จอมือถือเหลือที่ ~300px ล้น ส่วนแถว "ตอบกลับ" มีที่ว่างฝั่งขวาอยู่แล้ว
+  const roundBadge = post.excludeFromSubmission ? (
+      // Visible marker so "why is there no ตรงเวลา/สาย badge
+      // here" has an obvious answer — the poster opted this one
+      // out on purpose.
+      <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0 text-[10px] leading-4 font-medium bg-[var(--bg-soft)] text-[var(--ink-soft)] border border-[var(--line)]">
+        ไม่นับเป็นการส่งรีพอต
+      </span>
+    ) : postDayExempt && roundCandidates.length === 0 ? (
+      // Same "why no badge" answer, for the other reason one can
+      // be missing: the poster was off/on leave that day, so
+      // this post was never obligated in the first place —
+      // posted anyway, just not tracked, same as
+      // excludeFromSubmission above.
+      // ห้องที่ไม่มีรอบให้ส่งเลยในวันนั้น (ยังไม่ได้ตั้งเวลา / ส่งแล้ว 0/0) ไม่ต้องบอกว่า "ไม่บังคับส่ง" —
+      // ไม่เคยมีอะไรให้บังคับอยู่แล้ว ป้ายนี้จะทำให้งงเปล่า ๆ (ขึ้นเฉพาะเมื่อวันนั้นห้องมีรอบที่ปกติต้องส่ง)
+      postDayCutoffs.length > 0 ? (
+        <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0 text-[10px] leading-4 font-medium bg-[var(--bg-soft)] text-[var(--ink-soft)] border border-[var(--line)]">
+          หยุด/ลาวันนี้ · ไม่บังคับส่ง
+        </span>
+      ) : null
+    ) : lateCutoff && isFirstLateOfRound ? (
+      <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0 text-[10px] leading-4 font-medium bg-amber-50 text-amber-700 border border-amber-200">
+        <TriangleAlert className="h-2.5 w-2.5" />
+        {/* "ส่งช้า (เลยรอบ t 14:00)" read as cryptic shorthand,
+            and a short/placeholder round label ("t", "00") made
+            it worse — "ส่งเกินกำหนด · กำหนด 14:00" states the
+            actual fact plainly, with the round's name only when
+            it's long enough to actually mean something (same
+            rule the room-header metadata row uses). */}
+        ส่งเกินกำหนด
+        {shortRoundLabel(lateCutoff.label, topic.name).length > 2
+          ? ` (${shortRoundLabel(lateCutoff.label, topic.name)})`
+          : ""}{" "}
+        · กำหนด {lateCutoff.time}
+      </span>
+    ) : graceLate ? (
+      // ส่งตามหลังวันครบกำหนดของรอบรายสัปดาห์/รายเดือน (ภายในเผื่อเวลา) — ดู graceLate
+      <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0 text-[10px] leading-4 font-medium bg-amber-50 text-amber-700 border border-amber-200">
+        <TriangleAlert className="h-2.5 w-2.5" />
+        ส่งเกินกำหนด
+        {shortRoundLabel(graceLate.round.label, topic.name).length > 2
+          ? ` (${shortRoundLabel(graceLate.round.label, topic.name)})`
+          : ""}{" "}
+        · กำหนด {graceLate.dueLabel} {graceLate.round.time}
+      </span>
+    ) : !lateCutoff && onTimeCutoff && isFirstOnTimeOfRound ? (
+      // The positive counterpart to "ส่งช้า" (C10) — without it,
+      // a room with a schedule only ever showed a warning badge,
+      // never confirmation that a post actually met it.
+      <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0 text-[10px] leading-4 font-medium bg-[var(--accent)] text-[var(--brand-green-dark)] border border-[var(--brand-green)]/20">
+        <Check className="h-2.5 w-2.5" />
+        ตรงเวลา · รอบ{shortRoundLabel(onTimeCutoff.label, topic.name)}
+      </span>
+    ) : null;
+
   return (
     <div
       id={`report-post-${post.id}`}
@@ -1316,7 +1374,7 @@ export function ReportCard({
             {/* คอม (sm ขึ้นไป): ชื่อ · แผนก · เวลา · ป้ายตรงเวลา อยู่แถวเดียวกัน ประหยัดที่
                 ("ให้แสดงต่อจากชื่อแผนกเลย") — ชื่อยาว/หน้าต่างแคบ เวลาขึ้นบรรทัดใหม่เอง (flex-wrap) ไม่ทับกัน
                 มือถือ: ยังสองบรรทัดเหมือนเดิม — แถวเดียวยาว ~400px แต่จอมือถือเหลือที่ ~300px ล้นแน่ */}
-            <div className="min-w-0 flex-1 sm:flex sm:flex-wrap sm:items-center sm:gap-x-2 sm:gap-y-0.5">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5">
               <div className="flex min-w-0 max-w-full items-center gap-1.5">
                 {post.pinned && <Pin className="h-3.5 w-3.5 text-[var(--brand-green-dark)] shrink-0" />}
                 <p className="text-sm font-semibold truncate">{author?.name}</p>
@@ -1371,60 +1429,8 @@ export function ReportCard({
                     flex-wrap item in this row, so it drops to its own line
                     on a narrow phone rather than clipping or squeezing the
                     name/time next to it. */}
-                {post.excludeFromSubmission ? (
-                  // Visible marker so "why is there no ตรงเวลา/สาย badge
-                  // here" has an obvious answer — the poster opted this one
-                  // out on purpose.
-                  <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0 text-[10px] leading-4 font-medium bg-[var(--bg-soft)] text-[var(--ink-soft)] border border-[var(--line)]">
-                    ไม่นับเป็นการส่งรีพอต
-                  </span>
-                ) : postDayExempt && roundCandidates.length === 0 ? (
-                  // Same "why no badge" answer, for the other reason one can
-                  // be missing: the poster was off/on leave that day, so
-                  // this post was never obligated in the first place —
-                  // posted anyway, just not tracked, same as
-                  // excludeFromSubmission above.
-                  // ห้องที่ไม่มีรอบให้ส่งเลยในวันนั้น (ยังไม่ได้ตั้งเวลา / ส่งแล้ว 0/0) ไม่ต้องบอกว่า "ไม่บังคับส่ง" —
-                  // ไม่เคยมีอะไรให้บังคับอยู่แล้ว ป้ายนี้จะทำให้งงเปล่า ๆ (ขึ้นเฉพาะเมื่อวันนั้นห้องมีรอบที่ปกติต้องส่ง)
-                  postDayCutoffs.length > 0 ? (
-                    <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0 text-[10px] leading-4 font-medium bg-[var(--bg-soft)] text-[var(--ink-soft)] border border-[var(--line)]">
-                      หยุด/ลาวันนี้ · ไม่บังคับส่ง
-                    </span>
-                  ) : null
-                ) : lateCutoff && isFirstLateOfRound ? (
-                  <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0 text-[10px] leading-4 font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                    <TriangleAlert className="h-2.5 w-2.5" />
-                    {/* "ส่งช้า (เลยรอบ t 14:00)" read as cryptic shorthand,
-                        and a short/placeholder round label ("t", "00") made
-                        it worse — "ส่งเกินกำหนด · กำหนด 14:00" states the
-                        actual fact plainly, with the round's name only when
-                        it's long enough to actually mean something (same
-                        rule the room-header metadata row uses). */}
-                    ส่งเกินกำหนด
-                    {shortRoundLabel(lateCutoff.label, topic.name).length > 2
-                      ? ` (${shortRoundLabel(lateCutoff.label, topic.name)})`
-                      : ""}{" "}
-                    · กำหนด {lateCutoff.time}
-                  </span>
-                ) : graceLate ? (
-                  // ส่งตามหลังวันครบกำหนดของรอบรายสัปดาห์/รายเดือน (ภายในเผื่อเวลา) — ดู graceLate
-                  <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0 text-[10px] leading-4 font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                    <TriangleAlert className="h-2.5 w-2.5" />
-                    ส่งเกินกำหนด
-                    {shortRoundLabel(graceLate.round.label, topic.name).length > 2
-                      ? ` (${shortRoundLabel(graceLate.round.label, topic.name)})`
-                      : ""}{" "}
-                    · กำหนด {graceLate.dueLabel} {graceLate.round.time}
-                  </span>
-                ) : !lateCutoff && onTimeCutoff && isFirstOnTimeOfRound ? (
-                  // The positive counterpart to "ส่งช้า" (C10) — without it,
-                  // a room with a schedule only ever showed a warning badge,
-                  // never confirmation that a post actually met it.
-                  <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0 text-[10px] leading-4 font-medium bg-[var(--accent)] text-[var(--brand-green-dark)] border border-[var(--brand-green)]/20">
-                    <Check className="h-2.5 w-2.5" />
-                    ตรงเวลา · รอบ{shortRoundLabel(onTimeCutoff.label, topic.name)}
-                  </span>
-                ) : null}
+                {/* ป้ายรอบ: คอมอยู่แถวนี้ · มือถืออยู่มุมขวาล่างข้าง "ตอบกลับ" (ดู roundBadge) */}
+                {roundBadge && <span className="hidden sm:contents">{roundBadge}</span>}
               </p>
             </div>
             {topicBadge && (
@@ -1756,11 +1762,15 @@ export function ReportCard({
 
           {/* ปิดคอมเมนต์ (Phase 6) — existing replies above stay visible (read-only history), just no way to add a new one. */}
           {topic.commentsDisabled ? (
-            <p className="flex items-center gap-1.5 text-xs text-[var(--ink-soft)]">
-              <Lock className="h-3 w-3 shrink-0" />
-              ห้องนี้ปิดการแสดงความคิดเห็น
-            </p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="flex items-center gap-1.5 text-xs text-[var(--ink-soft)]">
+                <Lock className="h-3 w-3 shrink-0" />
+                ห้องนี้ปิดการแสดงความคิดเห็น
+              </p>
+              {roundBadge && <span className="flex min-w-0 sm:hidden">{roundBadge}</span>}
+            </div>
           ) : !threadOpen ? (
+            <div className="flex items-center justify-between gap-2">
             /* Teams-style — the link sits after the last reply (or alone,
                with none yet), not up by the reactions row, and is the only
                thing standing between a quiet post and a compose box for
@@ -1775,8 +1785,11 @@ export function ReportCard({
               <MessageCircle className="h-3.5 w-3.5" />
               ตอบกลับ
             </button>
+            {roundBadge && <span className="flex min-w-0 sm:hidden">{roundBadge}</span>}
+            </div>
           ) : (
           <>
+            {roundBadge && <div className="flex justify-end sm:hidden">{roundBadge}</div>}
             {replyingTo && (
               <div className="flex items-start gap-2 pl-2.5 pr-2 py-2 rounded-lg bg-[var(--accent)] border-l-4 border-[var(--brand-green)]">
                 <Quote className="h-3.5 w-3.5 shrink-0 mt-0.5 text-[var(--brand-green-dark)]" />
