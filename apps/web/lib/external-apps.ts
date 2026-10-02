@@ -24,6 +24,12 @@ export interface ExternalApp {
     secretEnv: string;
     /** ปลายทางที่รับ token — `{token}` ถูกแทนด้วย token จริง */
     entry: string;
+    /**
+     * เปิดอยู่ในหน้าต่าง SmartBoss เลย (iframe ที่ /sales-marketing/app/<key>) แทนการเด้งแท็บใหม่
+     * ("อยากให้มาอยู่ในแผ่นเดียวกับสมาทบอส") — แอปปลายทางต้องยอมให้ SmartBoss ครอบได้
+     * (frame-ancestors) และออกคุกกี้แบบ Partitioned เมื่อเปิดผ่านทางนี้ · `{token}` เหมือน entry
+     */
+    embedEntry?: string;
   };
 }
 
@@ -33,7 +39,12 @@ export const SALES_MARKETING_APPS: ExternalApp[] = [
     description: "โพสต์ลงหลายช่องทางพร้อมกัน",
     url: "https://multipost-nu.vercel.app/",
     // เซิร์ฟเวอร์อ่านแล้วตั้ง cookie เอง จึงส่งใน query ได้ (อายุ 60 วินาที)
-    sso: { key: "multipost", secretEnv: "SSO_MULTIPOST_SECRET", entry: "https://multipost-nu.vercel.app/sso?token={token}" },
+    sso: {
+      key: "multipost",
+      secretEnv: "SSO_MULTIPOST_SECRET",
+      entry: "https://multipost-nu.vercel.app/sso?token={token}",
+      embedEntry: "https://multipost-nu.vercel.app/sso?token={token}&embed=1&next=%2Fjob-queue",
+    },
     icon: Send,
     color: "var(--mod-marketing)",
     colorBg: "var(--mod-marketing-bg)",

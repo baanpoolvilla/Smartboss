@@ -232,9 +232,9 @@ export function labelForCategory(cat: NotifCategory): string {
 /** เดิม hrefFor() ใน app/(shell)/notifications/page.tsx — ย้ายมาไว้ตรงกลาง
  * ให้ทั้ง server component เดิมและตัวรวมแจ้งเตือนฝั่ง client เรียกใช้ร่วมกัน */
 export function maintenanceHrefFor(type: string, referenceId: string | null): string | null {
-  // Multi Post (เว็บภายนอก) แจ้งผลงานโพสของผู้ใช้เอง — กดแล้วพาเข้า Multi Post ผ่าน SSO
+  // Multi Post (เว็บภายนอก) แจ้งผลงานโพสของผู้ใช้เอง — กดแล้วเปิด Multi Post ในหน้าต่าง SmartBoss
   // (apps/web/app/api/webhooks/multipost/notify/route.ts เป็นคนเขียนแถวนี้)
-  if (type === "multipost") return "/sales-marketing/open/multipost";
+  if (type === "multipost") return "/sales-marketing/app/multipost";
   if (type === "work_order" && referenceId) return `/maintenance/work-orders/${referenceId}`;
   if (type === "purchase_order" && referenceId) return `/maintenance/purchase-orders/${referenceId}`;
   if (type === "pm") return "/maintenance/pm";
