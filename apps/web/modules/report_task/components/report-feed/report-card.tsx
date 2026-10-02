@@ -1313,8 +1313,11 @@ export function ReportCard({
               ทับมุมขวาบนอยู่ (ดู [@media(hover:none)] ด้านบน) — ส่วนแถบปุ่ม 4 อัน
               ของเครื่องที่ใช้เมาส์ ย้ายไปลอยคร่อมขอบบนการ์ดแล้ว ไม่ต้องกันที่ */}
           <div className="flex items-start gap-2 pr-8 [@media(hover:hover)]:pr-0">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
+            {/* คอม (sm ขึ้นไป): ชื่อ · แผนก · เวลา · ป้ายตรงเวลา อยู่แถวเดียวกัน ประหยัดที่
+                ("ให้แสดงต่อจากชื่อแผนกเลย") — ชื่อยาว/หน้าต่างแคบ เวลาขึ้นบรรทัดใหม่เอง (flex-wrap) ไม่ทับกัน
+                มือถือ: ยังสองบรรทัดเหมือนเดิม — แถวเดียวยาว ~400px แต่จอมือถือเหลือที่ ~300px ล้นแน่ */}
+            <div className="min-w-0 flex-1 sm:flex sm:flex-wrap sm:items-center sm:gap-x-2 sm:gap-y-0.5">
+              <div className="flex min-w-0 max-w-full items-center gap-1.5">
                 {post.pinned && <Pin className="h-3.5 w-3.5 text-[var(--brand-green-dark)] shrink-0" />}
                 <p className="text-sm font-semibold truncate">{author?.name}</p>
                 {authorDept && (
