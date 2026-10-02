@@ -49,3 +49,8 @@ export const SALES_MARKETING_APPS: ExternalApp[] = [
     colorBg: "var(--mod-sale-bg)",
   },
 ];
+
+/** ชื่อในลิงก์ของแอป — /sales-marketing/app/<key> (หน้าที่เปิดแอปไว้ข้างใน SmartBoss) */
+export function appKey(app: ExternalApp): string {
+  return app.sso?.key ?? new URL(app.url).host.split(".")[0]!;
+}
