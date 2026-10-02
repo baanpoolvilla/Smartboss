@@ -327,13 +327,11 @@ export async function getChannelDetail(actor: ChatActor, channelId: string): Pro
           select: { userId: true, role: true },
           orderBy: { joinedAt: "asc" },
         }),
-    // ห้องรวมทั้งบริษัทไม่แสดง "อ่านแล้ว N" (คนเป็นพัน ไม่มีประโยชน์และหนัก) เหมือน OpenChat ของ LINE
-    access.type === "org"
-      ? Promise.resolve([])
-      : prisma.chatReadState.findMany({
-          where: { orgId: actor.orgId, channelId, lastReadSeq: { not: null } },
-          select: { userId: true, lastReadSeq: true },
-        }),
+    // ทุกห้อง รวมห้องรวมทั้งบริษัท แสดง "อ่านแล้ว N" แบบกลุ่ม LINE
+    prisma.chatReadState.findMany({
+      where: { orgId: actor.orgId, channelId, lastReadSeq: { not: null } },
+      select: { userId: true, lastReadSeq: true },
+    }),
   ]);
   if (!channel) throw new ChatError("ไม่พบห้องนี้", 404);
 
@@ -561,9 +559,8 @@ export async function markChannelRead(actor: ChatActor, channelId: string): Prom
   });
   if (latest) {
     const event = { type: "chat.read" as const, channelId, userId: actor.userId, lastReadSeq: latest.seq.toString() };
-    // ห้อง org: ส่งแค่ถึงเครื่องอื่นของเจ้าตัว (ล้างตัวเลข) ไม่กระจายทั้งบริษัททุกครั้งที่มีคนเปิดอ่าน
-    if (access.type === "org") publishToUsers([actor.userId], event);
-    else await broadcastToChannel(actor.orgId, channelId, event);
+    // ห้อง org ก็กระจายทั้งบริษัท — คนส่งเห็น "อ่านแล้ว N" ขึ้นสด ๆ
+    await broadcastToChannel(actor.orgId, channelId, event);
   }
   return latest?.seq.toString() ?? null;
 }
