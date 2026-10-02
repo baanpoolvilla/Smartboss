@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Download, Hand, Minus, Pencil, Plus, Trash2, Type, Undo2, X } from "lucide-react";
+import { Check, Download, Hand, Minus, Pencil, Plus, Redo2, Trash2, Type, Undo2, X } from "lucide-react";
 import { closeAnnotator, useAnnotatorStore } from "@/lib/annotate/annotate";
 import { useBackToClose } from "@/lib/back-to-close";
 
@@ -94,6 +94,8 @@ function Annotator({ file }: { file: File }) {
   const viewRef = useRef(view);
   viewRef.current = view;
   const areaRef = useRef<HTMLDivElement>(null);
+  // ขนาดพื้นที่วาด — ให้รูปขยายเต็มช่องระหว่างแถบบนกับแถบล่างพอดี
+  const [area, setArea] = useState<{ w: number; h: number } | null>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<{ d0: number; z0: number; mid0: { x: number; y: number }; t0: { x: number; y: number } } | null>(null);
   const panDrag = useRef<{ sx: number; sy: number; t0: { x: number; y: number } } | null>(null);
@@ -192,6 +194,16 @@ function Annotator({ file }: { file: File }) {
     const a = areaRef.current?.getBoundingClientRect();
     if (a) zoomAt(a.left + a.width / 2, a.top + a.height / 2, viewRef.current.z * factor);
   }
+
+  useEffect(() => {
+    const el = areaRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      if (entry) setArea({ w: entry.contentRect.width, h: entry.contentRect.height });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // ลูกกลิ้งเมาส์ / ถ่างนิ้วบนทัชแพด (= wheel + ctrlKey) = ซูม — passive:false ถึงกันหน้าเว็บซูมตามได้
   useEffect(() => {
@@ -388,99 +400,83 @@ function Annotator({ file }: { file: File }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[1000] flex flex-col bg-black" role="dialog" aria-modal="true" aria-label="วาด/เขียนบนรูป">
-      {/* แถบเครื่องมือ */}
-      <div className="flex flex-wrap items-center gap-2 bg-(--bg) px-3 py-2" style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}>
-        <button
-          type="button"
-          {...tap(() => closeAnnotator(null))}
-          className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm text-(--ink-soft) hover:bg-(--bg-soft)"
-        >
-          <X className="h-4 w-4" /> ยกเลิก
-        </button>
-        <span className="mx-1 h-6 w-px bg-(--line)" />
-        <ToolButton active={tool === "pen"} onClick={() => setTool("pen")} label="ปากกา" icon={<Pencil className="h-4 w-4" />} />
-        <ToolButton active={tool === "text"} onClick={() => setTool("text")} label="ข้อความ" icon={<Type className="h-4 w-4" />} />
-        <ToolButton active={tool === "hand"} onClick={() => setTool("hand")} label="เลื่อน" icon={<Hand className="h-4 w-4" />} />
-        <div className="flex items-center rounded-lg border border-(--line)" role="group" aria-label="ซูม">
-          <button type="button" {...tap(() => zoomBy(1 / 1.25))} disabled={view.z <= 1} aria-label="ซูมออก" className="px-2 py-1.5 text-(--ink-soft) disabled:opacity-40">
+    <div className="fixed inset-0 z-[1000] flex select-none flex-col bg-neutral-950 text-white" role="dialog" aria-modal="true" aria-label="วาด/เขียนบนรูป">
+      {/* แถบบน — แบบหน้า Markup ของ iPhone: ปิด · ย้อน/ทำซ้ำ · (ซูม) · บันทึกลงเครื่อง · เสร็จ */}
+      <div className="flex items-center gap-2 px-3 pb-2" style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}>
+        <RoundButton label="ยกเลิก" onTap={() => closeAnnotator(null)}>
+          <X className="h-5 w-5" />
+        </RoundButton>
+        <div className="flex items-center rounded-full bg-white/10">
+          <button
+            type="button"
+            {...tap(undo)}
+            disabled={hist.past.length === 0}
+            aria-label="ย้อน"
+            title="ย้อน (Ctrl+Z)"
+            className="flex h-11 w-12 items-center justify-center rounded-l-full disabled:opacity-35"
+          >
+            <Undo2 className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            {...tap(redoLast)}
+            disabled={hist.redo.length === 0}
+            aria-label="ทำซ้ำ"
+            title="ทำซ้ำ (Ctrl+Y)"
+            className="flex h-11 w-12 items-center justify-center rounded-r-full disabled:opacity-35"
+          >
+            <Redo2 className="h-5 w-5" />
+          </button>
+        </div>
+        {/* ซูม: มือถือถ่าง 2 นิ้ว — โชว์ % เฉพาะตอนซูมอยู่ (แตะ = พอดีจอ), คอมมีปุ่ม +/- */}
+        <div className="mx-auto flex items-center rounded-full bg-white/10" role="group" aria-label="ซูม">
+          <button
+            type="button"
+            {...tap(() => zoomBy(1 / 1.25))}
+            disabled={view.z <= 1}
+            aria-label="ซูมออก"
+            className="hidden h-11 w-10 items-center justify-center rounded-l-full disabled:opacity-35 sm:flex"
+          >
             <Minus className="h-4 w-4" />
           </button>
-          <button type="button" {...tap(() => setView({ z: 1, x: 0, y: 0 }))} title="พอดีจอ" className="min-w-12 px-1 py-1.5 text-xs tabular-nums text-(--ink)">
+          <button
+            type="button"
+            {...tap(() => setView({ z: 1, x: 0, y: 0 }))}
+            title="พอดีจอ"
+            className={`h-11 min-w-14 px-2 text-xs tabular-nums ${view.z === 1 ? "max-sm:hidden" : ""}`}
+          >
             {Math.round(view.z * 100)}%
           </button>
-          <button type="button" {...tap(() => zoomBy(1.25))} disabled={view.z >= MAX_ZOOM} aria-label="ซูมเข้า" className="px-2 py-1.5 text-(--ink-soft) disabled:opacity-40">
+          <button
+            type="button"
+            {...tap(() => zoomBy(1.25))}
+            disabled={view.z >= MAX_ZOOM}
+            aria-label="ซูมเข้า"
+            className="hidden h-11 w-10 items-center justify-center rounded-r-full disabled:opacity-35 sm:flex"
+          >
             <Plus className="h-4 w-4" />
           </button>
         </div>
-        <span className="mx-1 h-6 w-px bg-(--line)" />
-        <div className="flex items-center gap-1.5" role="radiogroup" aria-label="สี">
-          {COLORS.map((c) => (
-            <button
-              key={c}
-              type="button"
-              role="radio"
-              aria-checked={color === c}
-              aria-label={`สี ${c}`}
-              {...tap(() => setColor(c))}
-              className="h-6 w-6 rounded-full border-2 transition-transform"
-              style={{ backgroundColor: c, borderColor: color === c ? "var(--ink)" : "var(--line)", transform: color === c ? "scale(1.15)" : undefined }}
-            />
-          ))}
-        </div>
-        <div className="flex items-center gap-1" role="radiogroup" aria-label="ขนาด">
-          {SIZES.map((s, i) => (
-            <button
-              key={s.label}
-              type="button"
-              role="radio"
-              aria-checked={sizeIdx === i}
-              {...tap(() => setSizeIdx(i))}
-              className={`rounded-md px-2 py-1 text-xs ${sizeIdx === i ? "bg-(--ink) text-(--bg)" : "text-(--ink-soft) hover:bg-(--bg-soft)"}`}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-        <span className="mx-1 h-6 w-px bg-(--line)" />
-        <button
-          type="button"
-          {...tap(undo)}
-          disabled={hist.past.length === 0}
-          className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm text-(--ink-soft) hover:bg-(--bg-soft) disabled:opacity-40"
-        >
-          <Undo2 className="h-4 w-4" /> ย้อน
-        </button>
-        <button
-          type="button"
-          {...tap(() => setOps([]))}
-          disabled={ops.length === 0}
-          className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm text-(--ink-soft) hover:bg-(--bg-soft) disabled:opacity-40"
-        >
-          <Trash2 className="h-4 w-4" /> ล้าง
-        </button>
-        <button
-          type="button"
-          {...tap(() => void download())}
-          disabled={!img}
-          className="ml-auto inline-flex items-center gap-1 rounded-lg border border-(--line) px-3 py-1.5 text-sm text-(--ink) hover:bg-(--bg-soft) disabled:opacity-50"
-        >
-          <Download className="h-4 w-4" /> บันทึกลงเครื่อง
-        </button>
+        <RoundButton label="บันทึกลงเครื่อง" onTap={() => void download()} disabled={!img}>
+          <Download className="h-5 w-5" />
+        </RoundButton>
         <button
           type="button"
           {...tap(() => void save())}
           disabled={!img || saving}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-(--brand-green) px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+          aria-label="เสร็จ"
+          title="เสร็จ"
+          className="flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-white px-3 font-semibold text-neutral-900 disabled:opacity-50"
         >
-          <Check className="h-4 w-4" /> {saving ? "กำลังบันทึก…" : "เสร็จ"}
+          <Check className="h-5 w-5" strokeWidth={2.5} />
+          <span className="text-sm max-sm:sr-only">{saving ? "กำลังบันทึก…" : "เสร็จ"}</span>
         </button>
       </div>
 
       {/* พื้นที่วาด */}
       <div
         ref={areaRef}
-        className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-3"
+        className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden"
         style={{ touchAction: "none", cursor: tool === "hand" ? "grab" : tool === "text" ? "text" : "crosshair" }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -493,13 +489,16 @@ function Annotator({ file }: { file: File }) {
         ) : !img ? (
           <p className="text-sm text-white/70">กำลังเปิดรูป…</p>
         ) : (
-          <div className="relative max-h-full max-w-full">
+          <div className="relative">
             <canvas
               ref={canvasRef}
               width={width}
               height={height}
-              className="block max-h-[calc(100dvh-9rem)] max-w-full bg-white shadow-2xl"
+              className="block rounded-md bg-white shadow-2xl"
               style={{
+                // รูปเต็มช่องระหว่างแถบบนกับแถบเครื่องมือล่าง (เว้นขอบ 12px) ทุกขนาดจอ
+                maxWidth: area ? area.w - 24 : "100%",
+                maxHeight: area ? area.h - 24 : "100%",
                 transform: `translate(${view.x}px, ${view.y}px) scale(${view.z})`,
                 transformOrigin: "center center",
                 willChange: "transform",
@@ -523,22 +522,99 @@ function Annotator({ file }: { file: File }) {
           </div>
         )}
       </div>
-      <p className="pb-2 text-center text-xs text-white/60" style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}>
-        {tool === "pen" ? "ลากเพื่อวาด/วง" : tool === "text" ? "แตะบนรูปตรงที่จะเขียนข้อความ" : "ลากเพื่อเลื่อนรูป"} · ซูม: ลูกกลิ้ง / ถ่าง 2 นิ้ว · Ctrl+Z ย้อน · Ctrl+Y ทำซ้ำ
-      </p>
+
+      {/* แถบเครื่องมือล่าง — การ์ดโค้งมนแบบ iPhone: เครื่องมือ / ขนาด / สี */}
+      <div className="px-3 pt-2" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
+        <p className="mb-1.5 hidden text-center text-xs text-white/50 sm:block">
+          {tool === "pen" ? "ลากเพื่อวาด/วง" : tool === "text" ? "คลิกบนรูปตรงที่จะเขียนข้อความ" : "ลากเพื่อเลื่อนรูป"} · ซูม: ลูกกลิ้ง · Ctrl+Z ย้อน · Ctrl+Y ทำซ้ำ
+        </p>
+        <div className="mx-auto flex max-w-xl flex-col gap-2.5 rounded-[1.75rem] bg-white/10 p-3">
+          <div className="flex items-end justify-around">
+            <ToolButton active={tool === "pen"} onTap={() => setTool("pen")} label="ปากกา" icon={<Pencil className="h-6 w-6" />} />
+            <ToolButton active={tool === "text"} onTap={() => setTool("text")} label="ข้อความ" icon={<Type className="h-6 w-6" />} />
+            <ToolButton active={tool === "hand"} onTap={() => setTool("hand")} label="เลื่อน" icon={<Hand className="h-6 w-6" />} />
+            <ToolButton active={false} disabled={ops.length === 0} onTap={() => setOps([])} label="ล้าง" icon={<Trash2 className="h-6 w-6" />} />
+          </div>
+          <div className="flex items-center justify-between gap-2 border-t border-white/10 pt-2.5">
+            <div className="flex items-center" role="radiogroup" aria-label="ขนาด">
+              {SIZES.map((s, i) => (
+                <button
+                  key={s.label}
+                  type="button"
+                  role="radio"
+                  aria-checked={sizeIdx === i}
+                  aria-label={`ขนาด${s.label}`}
+                  title={s.label}
+                  {...tap(() => setSizeIdx(i))}
+                  className={`flex h-9 w-9 items-center justify-center rounded-full ${sizeIdx === i ? "bg-white/20" : ""}`}
+                >
+                  <span className="rounded-full bg-white" style={{ width: 5 + i * 4, height: 5 + i * 4 }} />
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-1 sm:gap-2" role="radiogroup" aria-label="สี">
+              {COLORS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  role="radio"
+                  aria-checked={color === c}
+                  aria-label={`สี ${c}`}
+                  {...tap(() => setColor(c))}
+                  className="flex h-8 w-8 items-center justify-center rounded-full"
+                  style={{ boxShadow: color === c ? "0 0 0 2px #fff" : undefined }}
+                >
+                  <span className="h-6 w-6 rounded-full border border-white/30" style={{ backgroundColor: c }} />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
-function ToolButton({ active, onClick, label, icon }: { active: boolean; onClick: () => void; label: string; icon: React.ReactNode }) {
+function RoundButton({ label, onTap, disabled, children }: { label: string; onTap: () => void; disabled?: boolean; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      {...tap(onTap)}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/10 hover:bg-white/15 disabled:opacity-35"
+    >
+      {children}
+    </button>
+  );
+}
+
+function ToolButton({
+  active,
+  onTap,
+  label,
+  icon,
+  disabled,
+}: {
+  active: boolean;
+  onTap: () => void;
+  label: string;
+  icon: React.ReactNode;
+  disabled?: boolean;
+}) {
   return (
     <button
       type="button"
       aria-pressed={active}
-      {...tap(onClick)}
-      className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm ${active ? "bg-(--ink) text-(--bg)" : "text-(--ink-soft) hover:bg-(--bg-soft)"}`}
+      disabled={disabled}
+      {...tap(onTap)}
+      className={`flex w-16 flex-col items-center gap-1 rounded-2xl py-1.5 text-[11px] transition-transform disabled:opacity-35 ${
+        active ? "-translate-y-1 bg-white/20 text-white" : "text-white/70"
+      }`}
     >
-      {icon} {label}
+      {icon}
+      {label}
     </button>
   );
 }
