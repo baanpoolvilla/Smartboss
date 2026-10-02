@@ -38,6 +38,10 @@ export function fetchChannelDetail(id: string): Promise<{ channel: ChatChannelDe
   return fetch(ch(id)).then((r) => json(r));
 }
 
+export function fetchReactionUsage(): Promise<{ usage: Record<string, { n: number; last: string }> }> {
+  return fetch("/api/chat/reactions").then((r) => json(r));
+}
+
 export function fetchOrgUsers(): Promise<{ users: ChatUser[]; onlineIds: string[] }> {
   return fetch("/api/chat/users").then((r) => json(r));
 }

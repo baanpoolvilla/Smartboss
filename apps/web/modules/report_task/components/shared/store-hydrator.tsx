@@ -8,7 +8,7 @@ import { useEmailNotificationSettingsStore } from "@/modules/report_task/store/e
 import { useWhatsNewStore } from "@/modules/report_task/store/whats-new-store";
 import { useRoomSettingsIntroStore } from "@/modules/report_task/store/room-settings-intro-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { useStickerUsageStore } from "@/modules/report_task/store/sticker-usage-store";
+import { syncStickerUsageFromServer, useStickerUsageStore } from "@/modules/report_task/store/sticker-usage-store";
 
 import { ServerStoreSync } from "./server-store-sync";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
@@ -75,7 +75,7 @@ export function StoreHydrator() {
     useWhatsNewStore.persist.rehydrate();
     useRoomSettingsIntroStore.persist.rehydrate();
     useIdentityStore.persist.rehydrate();
-    useStickerUsageStore.persist.rehydrate();
+    void Promise.resolve(useStickerUsageStore.persist.rehydrate()).then(syncStickerUsageFromServer);
   }, []);
 
   return (

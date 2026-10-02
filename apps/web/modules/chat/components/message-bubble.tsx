@@ -6,7 +6,7 @@ import { AlertCircle, Clock, Copy, CornerUpLeft, Download, FileText, Hourglass, 
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
 
-import type { RoomMessage } from "../store/chat-store";
+import { sortReactionEmojis, useChatStore, type RoomMessage } from "../store/chat-store";
 import { CHAT_REACTION_EMOJIS, type ChatAttachment, type ChatUser } from "../types";
 import { attachmentLabel, firstName, formatClock, formatDuration, formatFileSize } from "../lib/format";
 import { ChatAvatar } from "./chat-avatar";
@@ -270,6 +270,9 @@ function ActionMenu({
 }) {
   const [confirmUnsend, setConfirmUnsend] = useState(false);
   useBackToClose(true, onClose);
+  // อีโมจิที่ฉันกดบ่อย/ล่าสุดขึ้นก่อน (นับจากเซิร์ฟเวอร์ — ข้ามเครื่อง/ออกเข้าใหม่ก็จำ)
+  const reactionUsage = useChatStore((s) => s.reactionUsage);
+  const reactionEmojis = sortReactionEmojis(CHAT_REACTION_EMOJIS, reactionUsage);
   const item = "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-(--ink) hover:bg-(--bg-soft)";
   const desktop = typeof window !== "undefined" && window.matchMedia("(min-width: 640px)").matches;
   // คอม: วางใต้ฟอง ถ้าที่ข้างล่างไม่พอก็วางเหนือฟองแทน
@@ -294,7 +297,7 @@ function ActionMenu({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-1 flex justify-between gap-1 border-b border-(--line) px-1 pb-2">
-          {CHAT_REACTION_EMOJIS.map((e) => (
+          {reactionEmojis.map((e) => (
             <button
               key={e}
               type="button"

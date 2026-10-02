@@ -59,7 +59,12 @@ interface ChatState {
   typing: Record<string, Record<string, number>>;
   /** ข้อความที่ต้องเลื่อนไปหาและไฮไลต์ (กดผลค้นหา/กดข้อความที่ถูกตอบ) */
   highlight: { channelId: string; messageId: string; at: number } | null;
+  /** อีโมจิที่ฉันกด: กี่ครั้ง + ล่าสุด (ISO) — เรียงแถบกดอีโมจิ ของที่ใช้บ่อยอยู่หน้า */
+  reactionUsage: Record<string, { n: number; last: string }>;
 
+  setReactionUsage: (usage: Record<string, { n: number; last: string }>) => void;
+  /** กดเพิ่ม (+1) / เอาออก (-1) — ขยับลำดับทันทีไม่ต้องรอเซิร์ฟเวอร์ */
+  bumpReaction: (emoji: string, delta: 1 | -1) => void;
   setMe: (id: string) => void;
   setChannels: (channels: ChatChannelSummary[]) => void;
   setUsers: (users: ChatUser[], onlineIds: string[]) => void;
@@ -95,7 +100,15 @@ export const useChatStore = create<ChatState>((set) => ({
   activeChannelId: null,
   typing: {},
   highlight: null,
+  reactionUsage: {},
 
+  setReactionUsage: (usage) => set({ reactionUsage: usage }),
+  bumpReaction: (emoji, delta) =>
+    set((s) => {
+      const cur = s.reactionUsage[emoji] ?? { n: 0, last: "" };
+      const next = { n: Math.max(0, cur.n + delta), last: delta > 0 ? new Date().toISOString() : cur.last };
+      return { reactionUsage: { ...s.reactionUsage, [emoji]: next } };
+    }),
   setMe: (id) => set({ meId: id }),
   setChannels: (channels) => set({ channels: sortChannels(channels), channelsLoaded: true }),
   setUsers: (users, onlineIds) =>
@@ -259,3 +272,11 @@ export const useChatStore = create<ChatState>((set) => ({
 
   setHighlight: (channelId, messageId) => set({ highlight: { channelId, messageId, at: Date.now() } }),
 }));
+
+/** แถบกดอีโมจิ: ใช้บ่อยสุดก่อน เท่ากันเอาที่ใช้ล่าสุดก่อน ยังไม่เคยใช้ = ลำดับตั้งต้น */
+export function sortReactionEmojis<T extends string>(emojis: readonly T[], usage: Record<string, { n: number; last: string }>): T[] {
+  return emojis
+    .map((e, i) => ({ e, i, n: usage[e]?.n ?? 0, last: usage[e]?.last ?? "" }))
+    .sort((a, b) => b.n - a.n || b.last.localeCompare(a.last) || a.i - b.i)
+    .map((x) => x.e);
+}

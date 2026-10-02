@@ -231,6 +231,20 @@ export async function toggleReaction(actor: ChatActor, channelId: string, messag
   return reactions;
 }
 
+/**
+ * อีโมจิที่คนนี้กด: กี่ครั้ง + ล่าสุดเมื่อไร — นับจากที่กดจริงในฐานข้อมูล ไม่ได้เก็บในเครื่อง
+ * เลยตามไปทุกเครื่อง ออกจากระบบ/ปิด LINE แล้วเข้าใหม่ก็ไม่หาย
+ */
+export async function myReactionUsage(actor: ChatActor): Promise<Record<string, { n: number; last: string }>> {
+  const rows = await prisma.chatReaction.groupBy({
+    by: ["emoji"],
+    where: { orgId: actor.orgId, userId: actor.userId },
+    _count: { _all: true },
+    _max: { createdAt: true },
+  });
+  return Object.fromEntries(rows.map((r) => [r.emoji, { n: r._count._all, last: r._max.createdAt?.toISOString() ?? "" }]));
+}
+
 /** ค้นหาข้อความในห้อง (ล่าสุดก่อน) */
 export async function searchMessages(actor: ChatActor, channelId: string, q: string): Promise<ChatMessageDTO[]> {
   await getChannelAccess(actor, channelId);

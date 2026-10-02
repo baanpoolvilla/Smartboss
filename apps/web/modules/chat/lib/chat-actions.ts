@@ -272,6 +272,7 @@ export async function reactToMessage(channelId: string, messageId: string, emoji
   const msg = s.rooms[channelId]?.items.find((m) => m.id === messageId);
   if (msg) {
     const mine = msg.reactions.find((r) => r.emoji === emoji)?.userIds.includes(s.meId);
+    s.bumpReaction(emoji, mine ? -1 : 1);
     const next = mine
       ? msg.reactions.map((r) => (r.emoji === emoji ? { ...r, userIds: r.userIds.filter((u) => u !== s.meId) } : r)).filter((r) => r.userIds.length > 0)
       : msg.reactions.some((r) => r.emoji === emoji)
@@ -350,6 +351,10 @@ export function useChatSync(meId: string): void {
     get().setMe(meId);
     void loadChannels();
     void loadUsers();
+    void api
+      .fetchReactionUsage()
+      .then(({ usage }) => get().setReactionUsage(usage))
+      .catch(() => {});
 
     const offEvents = subscribeRealtime(handleEvent);
     // ท่อสดล่ม → ดึงเองทุก 30 วิจนกว่าจะกลับมา
