@@ -528,14 +528,14 @@ function Annotator({ file }: { file: File }) {
         <p className="mb-1.5 hidden text-center text-xs text-white/50 sm:block">
           {tool === "pen" ? "ลากเพื่อวาด/วง" : tool === "text" ? "คลิกบนรูปตรงที่จะเขียนข้อความ" : "ลากเพื่อเลื่อนรูป"} · ซูม: ลูกกลิ้ง · Ctrl+Z ย้อน · Ctrl+Y ทำซ้ำ
         </p>
-        <div className="mx-auto flex max-w-xl flex-col gap-2.5 rounded-[1.75rem] bg-white/10 p-3">
+        <div className="mx-auto flex max-w-xl flex-col gap-2.5 rounded-[1.75rem] bg-white/10 p-2.5 sm:p-3">
           <div className="flex items-end justify-around">
             <ToolButton active={tool === "pen"} onTap={() => setTool("pen")} label="ปากกา" icon={<Pencil className="h-6 w-6" />} />
             <ToolButton active={tool === "text"} onTap={() => setTool("text")} label="ข้อความ" icon={<Type className="h-6 w-6" />} />
             <ToolButton active={tool === "hand"} onTap={() => setTool("hand")} label="เลื่อน" icon={<Hand className="h-6 w-6" />} />
             <ToolButton active={false} disabled={ops.length === 0} onTap={() => setOps([])} label="ล้าง" icon={<Trash2 className="h-6 w-6" />} />
           </div>
-          <div className="flex items-center justify-between gap-2 border-t border-white/10 pt-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 border-t border-white/10 pt-2.5 max-[359px]:justify-center">
             <div className="flex items-center" role="radiogroup" aria-label="ขนาด">
               {SIZES.map((s, i) => (
                 <button
@@ -546,13 +546,13 @@ function Annotator({ file }: { file: File }) {
                   aria-label={`ขนาด${s.label}`}
                   title={s.label}
                   {...tap(() => setSizeIdx(i))}
-                  className={`flex h-9 w-9 items-center justify-center rounded-full ${sizeIdx === i ? "bg-white/20" : ""}`}
+                  className={`flex h-8 w-8 items-center justify-center rounded-full sm:h-9 sm:w-9 ${sizeIdx === i ? "bg-white/20" : ""}`}
                 >
                   <span className="rounded-full bg-white" style={{ width: 5 + i * 4, height: 5 + i * 4 }} />
                 </button>
               ))}
             </div>
-            <div className="flex items-center gap-1 sm:gap-2" role="radiogroup" aria-label="สี">
+            <div className="flex items-center gap-0.5 sm:gap-2" role="radiogroup" aria-label="สี">
               {COLORS.map((c) => (
                 <button
                   key={c}
@@ -562,7 +562,7 @@ function Annotator({ file }: { file: File }) {
                   aria-label={`สี ${c}`}
                   {...tap(() => setColor(c))}
                   className="flex h-8 w-8 items-center justify-center rounded-full"
-                  style={{ boxShadow: color === c ? "0 0 0 2px #fff" : undefined }}
+                  style={{ boxShadow: color === c ? "inset 0 0 0 2px #fff" : undefined }}
                 >
                   <span className="h-6 w-6 rounded-full border border-white/30" style={{ backgroundColor: c }} />
                 </button>

@@ -103,8 +103,15 @@ export function useSwipePager({
     }
     busy.current = true;
     const w = (viewport?.clientWidth ?? window.innerWidth) + GAP;
+    const startV = latest.current.v;
     moveTrack(-dir * w, true);
     timer.current = setTimeout(() => {
+      // ระหว่างเลื่อนมีการกระโดดไปรูปอื่นจากข้างนอก (กดรูปย่อ) — ยกเลิกการเลื่อนนี้ ไม่งั้นเลยไปอีกรูป
+      if (latest.current.v !== startV) {
+        moveTrack(0, false);
+        busy.current = false;
+        return;
+      }
       const nv = latest.current.v + dir;
       const ni = mod(nv, latest.current.count);
       // ย้ายสไลด์ให้เสร็จใน render นี้ก่อน (flushSync) แล้วค่อยดึง track กลับ 0 — เฟรมเดียวกัน ไม่เห็นกระตุก

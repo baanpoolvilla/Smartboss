@@ -21,6 +21,7 @@ interface StickerUsageStore {
 }
 
 const API = "/api/report-task/me/sticker-usage";
+const MIGRATED_KEY = "eb-sticker-usage-migrated";
 
 function post(body: unknown): Promise<Record<string, number> | null> {
   return fetch(API, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
@@ -57,7 +58,9 @@ export async function syncStickerUsageFromServer(): Promise<void> {
     if (!res.ok) return;
     const { counts } = (await res.json()) as { counts: Record<string, number> };
     const local = useStickerUsageStore.getState().counts;
-    if (Object.keys(counts).length === 0 && Object.keys(local).length > 0) {
+    // ย้ายของเดิมในเครื่องขึ้นเซิร์ฟเวอร์ครั้งเดียวต่อเครื่อง — คนอื่นที่มาล็อกอินเครื่องนี้ทีหลังจะไม่ได้ลำดับของคนก่อนไป
+    if (Object.keys(counts).length === 0 && Object.keys(local).length > 0 && !safeLocalStorage.getItem(MIGRATED_KEY)) {
+      safeLocalStorage.setItem(MIGRATED_KEY, "1");
       const merged = await post({ merge: local });
       if (merged) useStickerUsageStore.getState().setCounts(merged);
       return;
