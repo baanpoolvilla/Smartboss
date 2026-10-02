@@ -1070,9 +1070,15 @@ function ReportFeedPageInner() {
           thing ("เอาออกแล้วขยับขึ้น"). Removed outright; only the Sheet
           itself still needs to be mounted somewhere, with no visual row of
           its own now that its one trigger lives in the AppBar. */}
-      <Sheet open={mobileTopicsOpen} onOpenChange={setMobileTopicsOpen}>
+      {/* modal={false} + เว้นแถบเมนูล่าง (68px ของ Shell) — แถบ "แชท / รายงาน / เพิ่มเติม" ยังเห็นและกดได้
+          ระหว่างเลือกห้อง แบบ Discord: กดแท็บอื่น = ไปหน้านั้นเลย, กด "รายงาน" = ปิดรายการกลับเข้าห้องเดิม */}
+      <Sheet open={mobileTopicsOpen} onOpenChange={setMobileTopicsOpen} modal={false}>
         {/* เต็มจอแบบรายการห้องของ Discord — เดิมกว้าง 85% เหลือหน้าห้องมัว ๆ ข้างหลัง */}
-        <SheetContent side="left" className="p-0 data-[side=left]:w-full data-[side=left]:sm:max-w-none flex flex-col">
+        <SheetContent
+          side="left"
+          overlayClassName="hidden"
+          className="p-0 data-[side=left]:top-0 data-[side=left]:bottom-[68px]! data-[side=left]:h-auto data-[side=left]:w-full data-[side=left]:sm:max-w-none data-[side=left]:border-r-0 data-[side=left]:shadow-none flex flex-col"
+        >
           <SheetHeader className="px-4 py-3 border-b border-[var(--line)]/60">
             <SheetTitle>หัวข้อทั้งหมด</SheetTitle>
           </SheetHeader>
