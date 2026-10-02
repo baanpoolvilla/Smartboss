@@ -68,6 +68,7 @@ export function ReportImageLightbox({
     onPointerUp: swipeUp,
     onClickCapture: swipeClickCapture,
     onWheel: swipeWheel,
+    trackRef,
     trackStyle,
     slides,
     go,
@@ -428,7 +429,7 @@ export function ReportImageLightbox({
           onWheel={swipeWheel}
           className="absolute inset-0 overflow-hidden"
         >
-          <div className="absolute inset-0" style={trackStyle}>
+          <div ref={trackRef} className="absolute inset-0" style={trackStyle}>
             {slides.map((sl) => (
               <div
                 key={sl.key}
@@ -564,6 +565,7 @@ export function ReportImageLightbox({
                   src={image.url ?? image.dataUrl}
                   alt={image.name}
                   draggable={false}
+                  decoding="async"
                   onDragStart={(e) => e.preventDefault()}
                   onClick={(e) => e.stopPropagation()}
                   onWheel={handleWheel}
@@ -662,6 +664,6 @@ function neighborPreview(media: ReportPostImage) {
   if (!src) return <div className="h-40 w-64 max-w-[80vw] rounded-2xl bg-white/10" />;
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt="" draggable={false} className="max-w-[92vw] max-h-[88vh] object-contain select-none" />
+    <img src={src} alt="" draggable={false} decoding="async" className="max-w-[92vw] max-h-[88vh] object-contain select-none" />
   );
 }

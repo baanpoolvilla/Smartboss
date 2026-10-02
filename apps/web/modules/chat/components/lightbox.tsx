@@ -44,6 +44,7 @@ export function Lightbox({
     onPointerUp: swipeUp,
     onClickCapture: swipeClickCapture,
     onWheel: swipeWheel,
+    trackRef,
     trackStyle,
     slides,
     go,
@@ -144,7 +145,7 @@ export function Lightbox({
         className="relative min-h-0 flex-1 select-none overflow-hidden"
         style={{ touchAction: "none", cursor: items.length > 1 ? "grab" : undefined }}
       >
-        <div className="absolute inset-0" style={trackStyle}>
+        <div ref={trackRef} className="absolute inset-0" style={trackStyle}>
           {slides.map((sl) => {
             const it = items[sl.index]!;
             return (
@@ -154,7 +155,7 @@ export function Lightbox({
                     <video src={it.url} controls autoPlay playsInline className="max-h-full max-w-full" onClick={(e) => e.stopPropagation()} />
                   ) : it.thumbUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={it.thumbUrl} alt="" draggable={false} className="max-h-full max-w-full object-contain opacity-80" />
+                    <img src={it.thumbUrl} alt="" draggable={false} decoding="async" className="max-h-full max-w-full object-contain opacity-80" />
                   ) : (
                     <div className="h-40 w-64 max-w-full rounded-xl bg-white/10" />
                   )
@@ -165,6 +166,7 @@ export function Lightbox({
                     src={it.url}
                     alt={it.name}
                     draggable={false}
+                    decoding="async"
                     className="max-h-full max-w-full object-contain"
                     style={it.thumbUrl ? { backgroundImage: `url(${it.thumbUrl})`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center" } : undefined}
                     onClick={(e) => e.stopPropagation()}
