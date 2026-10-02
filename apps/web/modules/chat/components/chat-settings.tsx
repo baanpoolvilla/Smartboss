@@ -28,6 +28,7 @@ import { deleteLocalMedia, saveLocalMedia } from "../lib/local-media";
 import { compressImage } from "../lib/image-compress";
 
 import { MB, fileTooLargeMessage } from "@/lib/file-limits";
+import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 const SOUNDS: { id: ChatSound; label: string }[] = [
   { id: "ding", label: "ติ๊ง" },
   { id: "pop", label: "ป๊อป" },
@@ -169,6 +170,7 @@ export function ChatSettings({
       title={scope === "system" ? "ตั้งค่าเสียงแจ้งเตือน" : "ตั้งค่าแชท"}
       onClose={onClose}
     >
+      <PasteDropFiles label="ปล่อยเพื่อเปลี่ยนรูปห้อง / เสียงแจ้งเตือน">
       <Section title="การแจ้งเตือน">
         <div className="flex items-start gap-3">
           <Bell className="mt-0.5 h-5 w-5 shrink-0 text-(--chat-accent-strong)" />
@@ -487,6 +489,7 @@ export function ChatSettings({
           </button>
         </Section>
       )}
+      </PasteDropFiles>
     </ChatModal>
   );
 }

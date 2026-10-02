@@ -8,6 +8,7 @@ import { cn } from "@smartboss/ui/cn";
 import * as api from "../lib/api";
 import type { ChatAlbumDTO, ChatAlbumItemDTO, ChatAttachment } from "../types";
 import { uploadChatMedia } from "./composer";
+import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 
 /**
  * แท็บ "อัลบั้ม" ในข้อมูลห้อง — ที่เก็บรูป/วิดีโอถาวรของห้อง (ในแชทหมดอายุ ดู lib/retention.ts)
@@ -220,6 +221,7 @@ function AlbumView({
   const anyRemovable = items.some((i) => i.canRemove);
 
   return (
+    <PasteDropFiles label="ปล่อยเพื่อเพิ่มรูป/วิดีโอลงอัลบั้ม">
     <div>
       <div className="flex items-center gap-1 border-b border-(--line) px-2 py-2">
         <button type="button" onClick={onBack} className="rounded-full p-1.5 text-(--ink-soft) hover:bg-(--bg-soft)" aria-label="กลับ">
@@ -367,5 +369,6 @@ function AlbumView({
         </div>
       )}
     </div>
+    </PasteDropFiles>
   );
 }

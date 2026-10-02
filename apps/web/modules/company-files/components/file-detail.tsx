@@ -18,6 +18,7 @@ import { uploadCompanyFile } from "@/modules/company-files/lib/upload";
 import { formatFileSize, fileIconKind, isPreviewable, fileKindOf } from "@/modules/company-files/lib/file-meta";
 import { SHARE_LINK_ROLE_LABELS, SHARE_LINK_SCOPE_LABELS, type ShareLinkRole, type ShareLinkScope } from "@/modules/company-files/types";
 import type { CompanyFile, CompanyFileVersion, CompanyFileShareLink } from "@prisma/client";
+import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 
 export function FileDetail({
   file,
@@ -103,6 +104,7 @@ export function FileDetail({
   }
 
   return (
+    <PasteDropFiles label="ปล่อยเพื่ออัปโหลดเป็นเวอร์ชันใหม่ของไฟล์นี้">
     <div className="flex flex-col gap-4">
       <Card className="p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -300,6 +302,7 @@ export function FileDetail({
         )}
       </Card>
     </div>
+    </PasteDropFiles>
   );
 }
 

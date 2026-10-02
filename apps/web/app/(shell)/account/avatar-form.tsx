@@ -7,6 +7,7 @@ import { Button } from "@smartboss/ui/components/button";
 
 import { compressImage } from "@/modules/chat/lib/image-compress";
 import { updateOwnAvatarAction } from "./actions";
+import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 
 /**
  * อัปโหลดรูปโปรไฟล์ — ย่อรูปในเครื่องก่อนส่ง รูปจากกล้องมือถือ (5–12MB) เดิมเกินเพดาน 5MB แล้ว
@@ -43,6 +44,7 @@ export function AvatarForm() {
   }
 
   return (
+    <PasteDropFiles label="ปล่อยเพื่อเปลี่ยนรูปโปรไฟล์">
     <form onSubmit={onSubmit} className="flex flex-col gap-2 sm:flex-row sm:items-center">
       <input
         ref={inputRef}
@@ -58,5 +60,6 @@ export function AvatarForm() {
         {busy ? "กำลังอัปโหลด…" : "อัปโหลด"}
       </Button>
     </form>
+    </PasteDropFiles>
   );
 }

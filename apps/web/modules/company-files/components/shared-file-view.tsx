@@ -9,6 +9,7 @@ import { addFileVersionViaShareLink, verifyShareLinkPassword } from "@/modules/c
 import { uploadCompanyFile } from "@/modules/company-files/lib/upload";
 import { formatFileSize, fileIconKind, isPreviewable, fileKindOf } from "@/modules/company-files/lib/file-meta";
 import type { CompanyFile } from "@prisma/client";
+import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 
 export function SharedFileView({ token, file, role, needsPassword = false }: { token: string; file: CompanyFile; role: string; needsPassword?: boolean }) {
   const router = useRouter();
@@ -50,6 +51,7 @@ export function SharedFileView({ token, file, role, needsPassword = false }: { t
   }
 
   return (
+    <PasteDropFiles label="ปล่อยเพื่อแทนที่ไฟล์นี้">
     <Card className="p-5 sm:p-6">
       <p className="text-xs text-(--ink-soft)">
         {fileIconKind(file.mimeType)} · {formatFileSize(file.size)} · {role === "edit" ? "แชร์แบบแก้ไขได้" : "แชร์แบบดูอย่างเดียว"}
@@ -103,5 +105,6 @@ export function SharedFileView({ token, file, role, needsPassword = false }: { t
       {done && <p className="text-sm text-green-700 mt-3">อัปโหลดเวอร์ชันใหม่แล้ว</p>}
       {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
     </Card>
+    </PasteDropFiles>
   );
 }
