@@ -48,7 +48,7 @@ export function Lightbox({
     trackStyle,
     slides,
     go,
-  } = useSwipePager({ count: items.length, index: i, onIndexChange: setI });
+  } = useSwipePager({ count: items.length, index: i, onIndexChange: setI, onSwipeDown: onClose });
   const [editing, setEditing] = useState(false);
   async function editImage() {
     if (!item || !onEditImage) return;
@@ -87,12 +87,13 @@ export function Lightbox({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex flex-col bg-black/92 text-white"
+      className="fixed inset-0 z-[80] flex flex-col bg-black text-white"
       role="dialog"
       aria-modal="true"
       aria-label="ดูรูปภาพ"
     >
-      <div className="flex items-center gap-2 px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
+      {/* ลอยทับรูปแบบ Discord (รูปเต็มจอ) — ไล่เงาดำด้านบนให้ปุ่มขาวอ่านออกบนรูปสีอ่อน */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center gap-2 bg-gradient-to-b from-black/70 via-black/35 to-transparent px-3 pb-8 pt-[max(0.5rem,env(safe-area-inset-top))] [&>*]:pointer-events-auto">
         <span className="text-sm opacity-80">{items.length > 1 ? `${i + 1} / ${items.length}` : ""}</span>
         {item.expiresAt && (
           <span className="text-xs opacity-70">
@@ -149,7 +150,7 @@ export function Lightbox({
           {slides.map((sl) => {
             const it = items[sl.index]!;
             return (
-              <div key={sl.key} className="absolute inset-0 flex items-center justify-center p-2" style={slideStyle(sl.rel)} onClick={onClose}>
+              <div key={sl.key} className="absolute inset-0 flex items-center justify-center" style={slideStyle(sl.rel)} onClick={onClose}>
                 {it.kind === "video" ? (
                   sl.rel === 0 ? (
                     <video src={it.url} controls autoPlay playsInline className="max-h-full max-w-full" onClick={(e) => e.stopPropagation()} />

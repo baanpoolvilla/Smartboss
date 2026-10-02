@@ -78,6 +78,8 @@ export function ReportImageLightbox({
     onIndexChange,
     loop: true,
     enabled: !zoomed,
+    // ปัดลงเพื่อปิด (มือถือ) — ตอนซูมอยู่ไม่ทำงาน (ลากเลื่อนรูปแทน)
+    onSwipeDown: onClose,
   });
   // Single-pointer drag-to-pan while zoomed; the existing swipe-to-next-image
   // drag above only makes sense at 1x, where there's nothing to pan.
@@ -302,7 +304,7 @@ export function ReportImageLightbox({
         // pinch-to-zoom themselves already — this only turns off the
         // browser's *default* gesture handling, not our own JS.
         style={{ touchAction: "none" }}
-        className="inset-0 top-0 left-0 right-0 bottom-0 translate-x-0 translate-y-0 max-w-none sm:max-w-none w-screen h-screen max-h-screen bg-black/95 border-none ring-0 rounded-none p-0 gap-0 flex items-center justify-center cursor-zoom-out overflow-hidden"
+        className="inset-0 top-0 left-0 right-0 bottom-0 translate-x-0 translate-y-0 max-w-none sm:max-w-none w-screen h-dvh max-h-dvh bg-black border-none ring-0 rounded-none p-0 gap-0 flex items-center justify-center cursor-zoom-out overflow-hidden"
       >
         {/* Discord-style identity chip, top-left — who posted this image and
             when, so the picture doesn't lose its context once it fills the
@@ -557,7 +559,7 @@ export function ReportImageLightbox({
                   autoPlay
                   playsInline
                   onClick={(e) => e.stopPropagation()}
-                  className="max-w-[92vw] max-h-[88vh]"
+                  className="max-w-full max-h-full"
                 />
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -587,7 +589,7 @@ export function ReportImageLightbox({
                     // while letting our own handlers own horizontal swipe.
                     touchAction: zoomed ? "none" : "pan-y",
                   }}
-                  className={`max-w-[92vw] max-h-[88vh] object-contain select-none ${
+                  className={`max-w-full max-h-full object-contain select-none ${
                     zoomed ? (isPanning.current ? "cursor-grabbing" : "cursor-zoom-out") : hasMultiple ? "cursor-grab" : "cursor-zoom-in"
                   }`}
                 />
@@ -664,6 +666,6 @@ function neighborPreview(media: ReportPostImage) {
   if (!src) return <div className="h-40 w-64 max-w-[80vw] rounded-2xl bg-white/10" />;
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt="" draggable={false} decoding="async" className="max-w-[92vw] max-h-[88vh] object-contain select-none" />
+    <img src={src} alt="" draggable={false} decoding="async" className="max-w-full max-h-full object-contain select-none" />
   );
 }

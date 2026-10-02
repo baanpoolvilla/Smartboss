@@ -25,7 +25,7 @@ const EASE = "cubic-bezier(0.22, 0.61, 0.36, 1)";
 
 export type PagerSlide = { key: number; index: number; rel: -1 | 0 | 1 };
 
-type Drag = { id: number; x0: number; y0: number; axis: "x" | "y" | null; px: number; pt: number; vx: number; dx: number };
+type Drag = { id: number; x0: number; y0: number; axis: "x" | "y" | null; px: number; py: number; pt: number; vx: number; vy: number; dx: number; dy: number; touch: boolean };
 
 const mod = (n: number, c: number) => ((n % c) + c) % c;
 
@@ -38,6 +38,7 @@ export function useSwipePager({
   onIndexChange,
   loop = false,
   enabled = true,
+  onSwipeDown,
 }: {
   count: number;
   index: number;
@@ -46,6 +47,8 @@ export function useSwipePager({
   loop?: boolean;
   /** false = ไม่รับการปัด (เช่น ตอนซูมรูปอยู่) */
   enabled?: boolean;
+  /** จอสัมผัส: ปัดรูปลงแรง ๆ / ลากลงไกลพอ = ปิดหน้าดูรูป (แบบ Discord / รูปในมือถือ) */
+  onSwipeDown?: () => void;
 }) {
   // v = ตำแหน่งแบบไม่วน (ใช้เป็น key ของสไลด์ ให้ DOM รูปเดิมอยู่ต่อหลังเลื่อน) · synced = index ล่าสุดที่รู้
   const [pos, setPos] = useState({ v: index, synced: index });
@@ -66,9 +69,9 @@ export function useSwipePager({
   const pointers = useRef(new Set<number>());
   const suppressClick = useRef(false);
   const wheel = useRef({ acc: 0, until: 0 });
-  const latest = useRef({ v: pos.v, count, loop, onIndexChange });
+  const latest = useRef({ v: pos.v, count, loop, onIndexChange, onSwipeDown });
   useEffect(() => {
-    latest.current = { v: pos.v, count, loop, onIndexChange };
+    latest.current = { v: pos.v, count, loop, onIndexChange, onSwipeDown };
   });
   useEffect(
     () => () => {
@@ -83,8 +86,19 @@ export function useSwipePager({
     cancelAnimationFrame(frame.current);
     const el = trackEl.current;
     if (!el) return;
-    el.style.transition = animate ? `transform ${DURATION}ms ${EASE}` : "none";
+    el.style.transition = animate ? `transform ${DURATION}ms ${EASE}, opacity ${DURATION}ms ${EASE}` : "none";
     el.style.transform = `translate3d(${x}px, 0, 0)`;
+    el.style.opacity = "";
+  }
+
+  /** ลากลงเพื่อปิด — รูปเลื่อนตามนิ้วลงมา ย่อนิด ๆ และจางลงตามระยะ */
+  function paintDismiss(dy: number) {
+    const el = trackEl.current;
+    if (!el) return;
+    const k = Math.min(1, Math.max(0, dy) / 400);
+    el.style.transition = "none";
+    el.style.transform = `translate3d(0, ${Math.max(0, dy)}px, 0) scale(${1 - k * 0.15})`;
+    el.style.opacity = String(1 - k * 0.6);
   }
 
   function canGo(dir: 1 | -1): boolean {
@@ -133,11 +147,25 @@ export function useSwipePager({
       drag.current = null;
       return;
     }
-    if (!enabled || busy.current || latest.current.count < 2) return;
+    // รูปเดียวก็ยังปัดลงเพื่อปิดได้ (ถ้ามี onSwipeDown) — แค่ปัดซ้าย/ขวาไม่ไปไหน
+    if (!enabled || busy.current || (latest.current.count < 2 && !latest.current.onSwipeDown)) return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
     // วิดีโอ (แถบเลื่อนเวลา) / pdf / ปุ่ม — ปล่อยให้ทำงานของมันเอง
     if ((e.target as HTMLElement).closest("video, iframe, button, a, input, textarea, [data-no-swipe]")) return;
-    drag.current = { id: e.pointerId, x0: e.clientX, y0: e.clientY, axis: null, px: e.clientX, pt: e.timeStamp, vx: 0, dx: 0 };
+    drag.current = {
+      id: e.pointerId,
+      x0: e.clientX,
+      y0: e.clientY,
+      axis: null,
+      px: e.clientX,
+      py: e.clientY,
+      pt: e.timeStamp,
+      vx: 0,
+      vy: 0,
+      dx: 0,
+      dy: 0,
+      touch: e.pointerType !== "mouse",
+    };
   }
 
   function onPointerMove(e: React.PointerEvent<HTMLElement>) {
@@ -148,7 +176,8 @@ export function useSwipePager({
     if (!d.axis) {
       if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
       d.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
-      if (d.axis === "y") {
+      // แนวตั้ง: จอสัมผัส + ลากลง + หน้านั้นรับ "ปัดลงเพื่อปิด" → ลากรูปลง · อื่น ๆ ไม่ใช่เรื่องของเรา
+      if (d.axis === "y" && !(d.touch && dy > 0 && latest.current.onSwipeDown)) {
         drag.current = null;
         return;
       }
@@ -161,9 +190,24 @@ export function useSwipePager({
       }
     }
     const dt = e.timeStamp - d.pt;
-    if (dt > 0) d.vx = (e.clientX - d.px) / dt;
+    if (dt > 0) {
+      d.vx = (e.clientX - d.px) / dt;
+      d.vy = (e.clientY - d.py) / dt;
+    }
     d.px = e.clientX;
+    d.py = e.clientY;
     d.pt = e.timeStamp;
+    if (d.axis === "y") {
+      d.dy = dy;
+      if (!frame.current) {
+        frame.current = requestAnimationFrame(() => {
+          frame.current = 0;
+          const cur = drag.current;
+          if (cur) paintDismiss(cur.dy);
+        });
+      }
+      return;
+    }
     // สุดทางแล้ว: ยืดได้นิดเดียว (หนืด) ให้รู้ว่าไม่มีรูปต่อ
     d.dx = canGo(dx > 0 ? -1 : 1) ? dx : dx * 0.3;
     // รวบ pointermove ที่ถี่กว่าจอ (เมาส์ 1000Hz / จอ 120Hz) ให้เหลือเขียน DOM เฟรมละครั้ง
@@ -185,6 +229,27 @@ export function useSwipePager({
     const d = drag.current;
     if (!d || d.id !== e.pointerId) return;
     drag.current = null;
+    if (d.axis === "y") {
+      cancelAnimationFrame(frame.current);
+      frame.current = 0;
+      suppressClick.current = true;
+      const dy = e.clientY - d.y0;
+      const vy = e.timeStamp - d.pt > 80 ? 0 : d.vy;
+      const h = viewport?.clientHeight ?? window.innerHeight;
+      // ลากลงเกิน ~1/5 จอ หรือสะบัดลงเร็ว ๆ = ปิด · ไม่ถึง = เด้งกลับที่เดิม
+      if (dy > Math.min(160, h * 0.2) || (vy > 0.6 && dy > 40)) {
+        const el = trackEl.current;
+        if (el) {
+          el.style.transition = `transform 180ms ${EASE}, opacity 180ms ${EASE}`;
+          el.style.transform = `translate3d(0, ${h}px, 0) scale(0.85)`;
+          el.style.opacity = "0";
+        }
+        setTimeout(() => latest.current.onSwipeDown?.(), 160);
+      } else {
+        moveTrack(0, true);
+      }
+      return;
+    }
     if (d.axis !== "x") return;
     frame.current = 0;
     suppressClick.current = true; // ปัดจบแล้วอย่าให้นับเป็นคลิก (คลิกพื้นหลัง = ปิด)
