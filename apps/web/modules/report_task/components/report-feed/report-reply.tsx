@@ -101,11 +101,11 @@ export function ReportReply({
   return (
     <div
       id={`report-reply-${reply.id}`}
-      className="group/reply flex items-start gap-1.5 sm:gap-2"
+      className="group/reply flex items-start gap-2 sm:gap-3"
     >
-      <Avatar className="h-5 w-5 sm:h-6 sm:w-6 shrink-0 mt-0.5">
+      <Avatar className="h-8 w-8 sm:h-10 sm:w-10 shrink-0 mt-0.5">
         <AvatarImage src={author?.avatarUrl ?? undefined} alt={author?.name} />
-        <AvatarFallback className="text-[9px] sm:text-[10px] bg-[var(--bg-soft)]">{author?.avatar}</AvatarFallback>
+        <AvatarFallback className="text-[11px] sm:text-xs bg-[var(--bg-soft)]">{author?.avatar}</AvatarFallback>
       </Avatar>
       <div
         className={cn(
@@ -122,9 +122,9 @@ export function ReportReply({
         style={reply.highlightColor ? { borderLeft: `3px solid ${reply.highlightColor}`, paddingLeft: "9px" } : undefined}
       >
         <div className="flex items-center justify-between gap-2">
-          <p className="text-[11px] sm:text-xs font-medium">
+          <p className="text-sm sm:text-[15px] font-semibold">
             {author?.name}{" "}
-            <span className="font-normal text-[var(--ink-soft)]" title={formatDateTimeFull(reply.createdAt)}>
+            <span className="text-xs font-normal text-[var(--ink-soft)]" title={formatDateTimeFull(reply.createdAt)}>
               · {formatDateTimeShort(reply.createdAt)}
             </span>
             {reply.editedAt && (
@@ -349,7 +349,7 @@ export function ReportReply({
                 Without this the browser's default white-space:normal collapsed
                 every line break into a space, so a two-line comment always
                 rendered as one line ("พิม test shift+enter 111 แต่แสดงแถวเดียวกัน"). */}
-            {reply.body && <p className="text-[13px] sm:text-sm mt-0.5 whitespace-pre-wrap">{renderRichBulletText(reply.body)}</p>}
+            {reply.body && <p className="text-[15px] sm:text-base leading-relaxed mt-0.5 whitespace-pre-wrap">{renderRichBulletText(reply.body)}</p>}
             {!!reply.images?.length && (
               <div className="flex flex-wrap gap-1.5 mt-1.5">
                 {reply.images.map((img, i) => (

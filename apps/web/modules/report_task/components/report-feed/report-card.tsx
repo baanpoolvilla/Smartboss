@@ -1405,8 +1405,8 @@ export function ReportCard({
           avatar is a rounded square, the same shape the room icons and status
           tiles use elsewhere in the module, so a person reads as a person and
           not as one more round chip in a row of round chips. */}
-      <div className="flex items-start gap-2.5 sm:gap-3.5">
-        <Avatar className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 rounded-xl after:rounded-xl">
+      <div className="flex items-start gap-2.5 sm:gap-4">
+        <Avatar className="h-9 w-9 sm:h-10 sm:w-10 shrink-0 rounded-xl after:rounded-xl">
           <AvatarImage src={author?.avatarUrl ?? undefined} alt={author?.name} />
           <AvatarFallback className="rounded-xl text-xs font-semibold bg-[var(--accent)] text-[var(--brand-green-dark)]">{author?.avatar}</AvatarFallback>
         </Avatar>
@@ -1421,7 +1421,7 @@ export function ReportCard({
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5">
               <div className="flex min-w-0 max-w-full items-center gap-1.5">
                 {post.pinned && <Pin className="h-3.5 w-3.5 text-[var(--brand-green-dark)] shrink-0" />}
-                <p className="text-sm font-semibold truncate">{author?.name}</p>
+                <p className="text-[15px] sm:text-base font-semibold truncate">{author?.name}</p>
                 {authorDept && (
                   // ฟ้า/น้ำเงิน ไม่ใช่เขียวแบรนด์ — ขอมาโดยตรง ("ขอเป็นพื้นหลัง
                   // สีฟ้าได้ไหม") และยังแยกป้าย "แผนกของคนโพสต์" ออกจากป้าย
@@ -1508,7 +1508,7 @@ export function ReportCard({
       </div>
 
       {visibleSections.length > 0 && (
-        <div className="space-y-3 pl-[42px] sm:pl-14 mt-2.5">
+        <div className="space-y-3 pl-[46px] sm:pl-14 mt-2.5">
           {visibleSections.map((s) => (
             <div key={s.id}>
               {s.heading && <p className="text-sm sm:text-base font-semibold mb-1">{s.heading}</p>}
@@ -1521,14 +1521,14 @@ export function ReportCard({
       {isLong && (
         <button
           onClick={() => setShowFull((v) => !v)}
-          className="pl-[42px] sm:pl-14 mt-1.5 text-xs font-medium text-[var(--brand-green-dark)] hover:underline"
+          className="pl-[46px] sm:pl-14 mt-1.5 text-xs font-medium text-[var(--brand-green-dark)] hover:underline"
         >
           {showFull ? "ย่อ" : "ดูเพิ่มเติม"}
         </button>
       )}
 
       {post.images.length > 0 && (
-        <div className="pl-[42px] sm:pl-14 mt-3.5">
+        <div className="pl-[46px] sm:pl-14 mt-3.5">
           <PostImageCollage
             images={post.images.slice(0, MAX_VISIBLE_IMAGES)}
             remaining={Math.max(0, post.images.length - MAX_VISIBLE_IMAGES)}
@@ -1558,7 +1558,7 @@ export function ReportCard({
           allowed to hand one out (that's the picker button above, isOwner-
           gated) — same split Kanban's own task card already uses. */}
       {(activeReactions.length > 0 || post.stickerReactions.length > 0) && (
-        <div className="pl-[42px] sm:pl-14 flex items-center gap-1.5 pt-3 flex-wrap">
+        <div className="pl-[46px] sm:pl-14 flex items-center gap-1.5 pt-3 flex-wrap">
           {activeReactions.map(({ emoji, users }) => {
             const active = users.includes(viewingAsUserId);
             return (
