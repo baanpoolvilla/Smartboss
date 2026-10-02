@@ -10,6 +10,7 @@ import { cn } from "@/modules/report_task/lib/utils";
 import { isCoarsePointer } from "@/modules/report_task/lib/device";
 import { formatDateTimeFull, formatDateTimeShort } from "@/modules/report_task/lib/format";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
+import { sortByUsage, useStickerUsageStore } from "@/modules/report_task/store/sticker-usage-store";
 
 const reactionEmojis = ["👍", "❤️", "🎉", "😂", "😮", "😢"];
 
@@ -78,6 +79,14 @@ export function ReportReply({
   const [touchMenuOpen, setTouchMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editBody, setEditBody] = useState(reply.body);
+  // แถบเลือก: อิโมจิที่ฉันใช้บ่อยขึ้นก่อน (ตัวนับเดียวกับโพสต์/งาน — เก็บที่เซิร์ฟเวอร์ ข้ามเครื่องได้)
+  const usageCounts = useStickerUsageStore((s) => s.counts);
+  const bumpUsage = useStickerUsageStore((s) => s.bump);
+  const pickerEmojis = sortByUsage(reactionEmojis, (e) => `emoji:${e}`, usageCounts);
+  function pickReaction(emoji: string) {
+    if (!(reply.reactions?.[emoji] ?? []).length) bumpUsage(`emoji:${emoji}`);
+    onToggleReaction(emoji);
+  }
   const activeReactions = reactionEmojis
     .map((emoji) => ({ emoji, users: reply.reactions?.[emoji] ?? [] }))
     .filter((r) => r.users.length > 0);
@@ -151,12 +160,12 @@ export function ReportReply({
                   flex-col, and twMerge only drops a class when the override
                   names its replacement, so without this the emoji row rendered
                   as an unclickable-looking vertical stack. */}
-              <PopoverContent className="w-auto p-1.5 flex flex-row gap-1" align="end">
-                {reactionEmojis.map((emoji) => (
+              <PopoverContent className="w-auto max-w-[calc(100vw-1.5rem)] p-1.5 flex flex-row flex-wrap gap-1" align="end">
+                {pickerEmojis.map((emoji) => (
                   <button
                     key={emoji}
                     onClick={() => {
-                      onToggleReaction(emoji);
+                      pickReaction(emoji);
                       setReactionPickerOpen(false);
                     }}
                     className={cn(
@@ -219,18 +228,18 @@ export function ReportReply({
             <Popover open={touchMenuOpen} onOpenChange={setTouchMenuOpen}>
               <PopoverTrigger
                 render={
-                  <button className="h-8 w-8 flex items-center justify-center rounded-md text-[var(--ink-soft)]" aria-label="ตัวเลือกความคิดเห็น">
+                  <button className="-my-1 h-9 w-9 flex items-center justify-center rounded-md text-[var(--ink-soft)] active:bg-[var(--bg-soft)]" aria-label="ตัวเลือกความคิดเห็น">
                     <MoreHorizontal className="h-5 w-5" />
                   </button>
                 }
               />
-              <PopoverContent className="w-auto p-1 flex flex-col min-w-40" align="end">
-                <div className="flex flex-row gap-0.5 p-0.5">
-                  {reactionEmojis.map((emoji) => (
+              <PopoverContent className="w-auto max-w-[calc(100vw-1.5rem)] p-1 flex flex-col min-w-40" align="end">
+                <div className="flex flex-row flex-wrap justify-center gap-0.5 p-0.5">
+                  {pickerEmojis.map((emoji) => (
                     <button
                       key={emoji}
                       onClick={() => {
-                        onToggleReaction(emoji);
+                        pickReaction(emoji);
                         setTouchMenuOpen(false);
                       }}
                       className={cn(
@@ -361,7 +370,7 @@ export function ReportReply({
                   <button
                     key={emoji}
                     onClick={() => onToggleReaction(emoji)}
-                    className="flex h-7 items-center gap-1 rounded-full bg-[var(--bg)] px-2 text-xs font-semibold text-[var(--ink-soft)] shadow-[0_1px_3px_rgba(0,0,0,0.12)] hover:bg-[var(--bg-soft)] transition-colors"
+                    className="flex h-7 [@media(hover:none)]:h-8 items-center gap-1 rounded-full bg-[var(--bg)] px-2 active:scale-95 text-xs font-semibold text-[var(--ink-soft)] shadow-[0_1px_3px_rgba(0,0,0,0.12)] hover:bg-[var(--bg-soft)] transition-colors"
                   >
                     <span className="text-base leading-none">{emoji}</span>
                     <span className="tabular-nums">{users.length}</span>
