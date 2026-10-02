@@ -83,6 +83,5 @@ export const PRIMARY_MODULE_CODES: readonly string[] = [
   "maintenance",
   // แถวที่ 2 ใต้รายงานและงาน (ตาราง 3 คอลัมน์)
   "chat_report",
-  // ลิงก์รวมของทีมขาย/การตลาด (ไม่ใช่โมดูล — tile สร้างในหน้าโฮม)
-  "sales_marketing_links",
+  // "ขาย & การตลาด" (sales_marketing_links) อยู่ฝั่ง "อื่น ๆ" — เป็นเว็บที่ใช้ภายในทีม ไม่ใช่โมดูลหลัก
 ];
