@@ -2,13 +2,12 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 
 import { hiddenRecently, subscribeRealtime, type RealtimeEventMessage } from "@/lib/realtime-client";
 import { pushSupport, serverPushConfigured, showLocalNotification } from "@/lib/push-client";
 import { useMaintenanceNotifStore } from "@/modules/notifications/use-maintenance-notifications";
 import { getChatPrefs, playChatSound, unlockChatAudio } from "@/modules/chat/lib/prefs";
-import { NOTIFY_TOAST_CLASSES, NotifyToastIcon } from "./notify-toast-icon";
+import { showNotifyToast } from "./notify-toast-icon";
 
 /**
  * เสียง + เด้งแจ้งเตือนของ "ทุกโมดูล" (งาน, รายงาน, งานซ่อม, HR, แจ้งบัค) — วางครั้งเดียวที่ Shell
@@ -26,6 +25,15 @@ export function SystemNotify() {
 
   useEffect(() => {
     document.addEventListener("pointerdown", unlockChatAudio, { once: true });
+    // กดแจ้งเตือนของเครื่อง (public/sw.js) ตอนหน้าต่างนี้เปิดอยู่ — service worker ส่ง URL มาให้เปิดในหน้านี้
+    // (เปลี่ยนหน้าแบบในแอป ไม่โหลดใหม่ทั้งหน้า และได้ผลแม้ service worker สั่ง navigate หน้าต่างไม่ได้)
+    const onSwMessage = (e: MessageEvent) => {
+      const data = e.data as { type?: unknown; url?: unknown } | null;
+      if (data?.type !== "sb-open" || typeof data.url !== "string" || !data.url.startsWith("/")) return;
+      e.ports[0]?.postMessage("ok"); // ตอบรับ — ไม่งั้น service worker จะสั่งโหลดหน้าใหม่ทับ
+      router.push(data.url);
+    };
+    navigator.serviceWorker?.addEventListener("message", onSwMessage);
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
     const off = subscribeRealtime((raw: RealtimeEventMessage) => {
@@ -49,17 +57,12 @@ export function SystemNotify() {
 
       playChatSound();
       if (!getChatPrefs().toast) return;
-      toast(title, {
-        description: body || undefined,
-        icon: <NotifyToastIcon kind="notify" />,
-        classNames: NOTIFY_TOAST_CLASSES,
-        duration: 6000,
-        action: { label: "เปิด", onClick: () => router.push(url) },
-      });
+      showNotifyToast({ title, body, kind: "notify", onOpen: () => router.push(url) });
     });
 
     return () => {
       off();
+      navigator.serviceWorker?.removeEventListener("message", onSwMessage);
       if (refreshTimer) clearTimeout(refreshTimer);
       document.removeEventListener("pointerdown", unlockChatAudio);
     };

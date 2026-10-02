@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { toast } from "sonner";
-import { NOTIFY_TOAST_CLASSES, NotifyToastIcon } from "@/components/shell/notify-toast-icon";
+import { showNotifyToast } from "@/components/shell/notify-toast-icon";
 
 import { hiddenRecently, subscribeRealtime, type RealtimeEventMessage } from "@/lib/realtime-client";
 import { pushSupport, serverPushConfigured, showLocalNotification } from "@/lib/push-client";
@@ -129,13 +128,7 @@ function onEvent(raw: RealtimeEventMessage) {
   }
   ding();
   if (!getChatPrefs().toast) return;
-  toast(mentioned ? `${who} แท็กคุณ` : title, {
-    description: body,
-    icon: <NotifyToastIcon kind="chat" />,
-    classNames: NOTIFY_TOAST_CLASSES,
-    duration: 5000,
-    action: { label: "เปิด", onClick: () => navigate?.(url) },
-  });
+  showNotifyToast({ title: mentioned ? `${who} แท็กคุณ` : title, body, kind: "chat", duration: 6000, onOpen: () => navigate?.(url) });
 }
 
 /** ตัวเลขยังไม่อ่านของแชท (ติดตามแบบสด) */

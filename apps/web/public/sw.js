@@ -41,8 +41,27 @@ self.addEventListener("notificationclick", (event) => {
       // มีแท็บ SmartBoss เปิดอยู่แล้ว → ใช้แท็บนั้น ไม่เปิดแท็บใหม่ซ้อน
       for (const w of wins) {
         if (new URL(w.url).origin === self.location.origin && "focus" in w) {
-          w.navigate(url).catch(() => {});
-          return w.focus();
+          // บอกหน้าที่เปิดอยู่ให้เปิด URL เอง (components/shell/system-notify.tsx — เปลี่ยนหน้าในแอป ไม่โหลดใหม่)
+          // เดิมสั่ง w.navigate() อย่างเดียว ถ้าสั่งไม่ได้ (หน้าต่างที่ service worker ยังไม่ได้คุม)
+          // จะแค่ดึงหน้าต่างขึ้นมาเฉย ๆ ไม่ไปหน้าที่แจ้งเตือนชี้ — "กดแล้วไม่มาที่หน้านี้"
+          // หน้านั้นไม่ตอบรับ (หน้าที่ไม่มีตัวรับ เช่น หน้า login / โค้ดรุ่นเก่า) → สั่ง navigate แบบเดิม
+          // สั่งไม่ได้อีก → เปิดหน้าต่างใหม่ ยังไงก็ต้องไปถึงหน้าที่แจ้งเตือนชี้
+          const path = url.slice(self.location.origin.length) || "/";
+          const askPage = () =>
+            new Promise((resolve) => {
+              const ch = new MessageChannel();
+              const timer = setTimeout(() => resolve(false), 800);
+              ch.port1.onmessage = () => {
+                clearTimeout(timer);
+                resolve(true);
+              };
+              w.postMessage({ type: "sb-open", url: path }, [ch.port2]);
+            });
+          return w
+            .focus()
+            .catch(() => w)
+            .then(askPage)
+            .then((handled) => (handled ? undefined : w.navigate(url).catch(() => self.clients.openWindow(url))));
         }
       }
       return self.clients.openWindow(url);
