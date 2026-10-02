@@ -8,6 +8,8 @@
  * (iOS 16.4+) — pushSupport() บอกสถานะนี้ให้ UI แสดงคำแนะนำที่ถูกต้อง
  */
 
+import { detectDevice, installedOnAccount, isStandalone as isInstalledApp } from "@/lib/app-install";
+
 export type PushSupport =
   | "unsupported" // เบราว์เซอร์ไม่รองรับเลย
   | "ios-needs-install" // iPhone ที่ยังไม่ได้เพิ่มลงหน้าจอหลัก
@@ -58,6 +60,27 @@ export function onInstallAvailable(listener: (available: boolean) => void): () =
   installListeners.add(listener);
   listener(installPrompt !== null);
   return () => installListeners.delete(listener);
+}
+
+/**
+ * รอสัญญาณ "ติดตั้งได้" (beforeinstallprompt) ไม่เกิน ms — true = เบราว์เซอร์ตัวนี้ยังไม่มีแอป
+ * (Chrome ที่ติดตั้งแอปไว้แล้วจะไม่ส่งสัญญาณนี้ / iPhone ไม่มีสัญญาณนี้เลย = false)
+ */
+function installableWithin(ms: number): Promise<boolean> {
+  if (installPrompt) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(() => {
+      installListeners.delete(listener);
+      resolve(false);
+    }, ms);
+    const listener = (available: boolean) => {
+      if (!available) return;
+      window.clearTimeout(timer);
+      installListeners.delete(listener);
+      resolve(true);
+    };
+    installListeners.add(listener);
+  });
 }
 
 /** เปิดหน้าต่างติดตั้งของเบราว์เซอร์ — ต้องเรียกจากการกดปุ่ม */
@@ -173,6 +196,29 @@ export async function refreshPushSubscription(): Promise<void> {
   if (pushSupport() !== "granted") return;
   const reg = await registerServiceWorker();
   const sub = await reg?.pushManager.getSubscription();
+  // มือถือ เปิดในเบราว์เซอร์ (ไม่ใช่แอป) + บัญชีนี้ใช้แอปที่ติดตั้งบนเครื่องระบบเดียวกันอยู่ + เบราว์เซอร์
+  // ตัวนี้เองไม่ได้เป็นตัวที่ติดตั้งแอป (ยัง "ติดตั้งได้") → เลิกรับแจ้งเตือนทางเบราว์เซอร์ตัวนี้
+  // ไม่งั้นแจ้งเตือนมาซ้ำสองทาง และอันที่มาจากเบราว์เซอร์กดแล้วเปิดเป็นแท็บเบราว์เซอร์แทนแอป
+  // (เจอกับ Samsung Internet บน Android ขณะที่แอปติดตั้งจาก Chrome)
+  // ห้ามยกเลิกใน Chrome ที่ติดตั้งแอปไว้เอง — แอปกับ Chrome ใช้การสมัครรับแจ้งเตือนอันเดียวกัน
+  // ยกเลิกตรงนั้น = แอปเงียบไปด้วย (เช็กด้วย installableWithin: Chrome ที่มีแอปแล้วไม่ส่งสัญญาณ)
+  const device = detectDevice();
+  if (
+    !isInstalledApp() &&
+    device.os === "android" &&
+    (await installedOnAccount(device.os)) &&
+    (await installableWithin(4000))
+  ) {
+    if (sub) {
+      await fetch("/api/push/subscribe", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint: sub.endpoint }),
+      }).catch(() => undefined);
+      await sub.unsubscribe().catch(() => undefined);
+    }
+    return;
+  }
   if (!sub) {
     await enablePush().catch(() => undefined);
     return;

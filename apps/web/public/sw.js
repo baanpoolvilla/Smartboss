@@ -36,6 +36,11 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const url = new URL((event.notification.data && event.notification.data.url) || "/", self.location.origin).href;
+  // หน้าต่างใหม่ที่เปิดจากแจ้งเตือน — ติดป้ายไว้ ให้หน้าเว็บรู้ว่าไม่ต้องขึ้นหน้าชวนติดตั้งแอปมาบัง
+  // (Android: แจ้งเตือนของเบราว์เซอร์ เช่น Samsung Internet เปิดเป็นแท็บเบราว์เซอร์ ไม่ใช่ในแอป)
+  const fresh = new URL(url);
+  fresh.searchParams.set("sb_from", "push");
+  const freshUrl = fresh.href;
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
       // มีแท็บ SmartBoss เปิดอยู่แล้ว → ใช้แท็บนั้น ไม่เปิดแท็บใหม่ซ้อน
@@ -61,10 +66,10 @@ self.addEventListener("notificationclick", (event) => {
             .focus()
             .catch(() => w)
             .then(askPage)
-            .then((handled) => (handled ? undefined : w.navigate(url).catch(() => self.clients.openWindow(url))));
+            .then((handled) => (handled ? undefined : w.navigate(url).catch(() => self.clients.openWindow(freshUrl))));
         }
       }
-      return self.clients.openWindow(url);
+      return self.clients.openWindow(freshUrl);
     })
   );
 });

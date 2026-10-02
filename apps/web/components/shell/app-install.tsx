@@ -64,11 +64,32 @@ export function InstallGate() {
         } catch {
           // ขึ้นตามปกติ
         }
-        setDevice(d);
-        setOpen(true);
+        // "ติดตั้งได้" แค่แปลว่าเบราว์เซอร์ *ตัวนี้* ยังไม่มีแอป — บนเครื่องเดียวกันอาจติดตั้งไว้แล้วจาก
+        // เบราว์เซอร์อื่น (เช่น ติดตั้งจาก Chrome แต่ตอนนี้เปิดอยู่ใน Samsung Internet) ถามบัญชีก่อน
+        // เดิมข้ามขั้นนี้ หน้าชวนติดตั้งเลยเด้งทุกครั้งที่กดแจ้งเตือนแล้วไปเปิดใน Samsung Internet
+        void installedOnAccount(d.os).then((onAccount) => {
+          if (onAccount) return;
+          setDevice(d);
+          setOpen(true);
+        });
       }),
     [],
   );
+
+  useEffect(() => {
+    // เปิดมาจากกดแจ้งเตือน (public/sw.js ติด ?sb_from=push) — คนกดอยากอ่านเรื่องนั้น ไม่ใช่ติดตั้งแอป
+    // จำไว้ทั้งแท็บนี้ แล้วลบป้ายออกจากแถบที่อยู่
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("sb_from") === "push") {
+        sessionStorage.setItem(SKIP_KEY, "1");
+        url.searchParams.delete("sb_from");
+        window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+      }
+    } catch {
+      // ไม่เป็นไร
+    }
+  }, []);
 
   useEffect(() => {
     // อ่านข้อมูลเครื่องได้หลังโหลดหน้าเท่านั้น (ฝั่งเซิร์ฟเวอร์ไม่มี) — ตั้ง state ในนี้ตั้งใจ
@@ -146,6 +167,9 @@ export function InstallGate() {
 
   const alreadyInstalled = () => {
     markInstalled();
+    // บอกเซิร์ฟเวอร์ด้วย — จำไว้ที่บัญชี ไม่ใช่แค่เบราว์เซอร์ตัวนี้ (เดิมจำแค่ในเครื่อง แล้วสัญญาณ
+    // "ติดตั้งได้" ของเบราว์เซอร์ลบความจำนั้นทิ้ง กดแล้วก็ยังเด้งกลับมาทุกครั้ง)
+    pingInstalled(device.os);
     setOpen(false);
   };
 
