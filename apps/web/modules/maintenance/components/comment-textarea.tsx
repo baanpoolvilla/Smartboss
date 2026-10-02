@@ -30,8 +30,11 @@ export function CommentTextarea({
 
   /** สูงตามจำนวนบรรทัดจริง แต่ไม่เกิน max-h (CSS) แล้วค่อยเลื่อนเอา */
   function autoGrow(el: HTMLTextAreaElement) {
+    // คืนตำแหน่งเลื่อนเดิมหลังวัดความสูง — ไม่งั้นข้อความยาวเกินช่องจะเด้งกลับบนสุดทุกตัวอักษรที่พิมพ์
+    const top = el.scrollTop;
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
+    el.scrollTop = top;
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {

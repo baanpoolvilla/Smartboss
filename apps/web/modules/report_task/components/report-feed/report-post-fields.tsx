@@ -773,7 +773,7 @@ export function ReportPostFields({
                 }}
                 onDragOver={handleMentionDragOver}
                 onDrop={(e) => handleMentionDrop(s.id, e)}
-                className="min-h-16 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground"
+                className="min-h-16 max-h-[45vh] overflow-y-auto overscroll-contain w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground"
               />
               {mentionMenu?.sectionId === s.id && (() => {
                 const matches = mentionMatches(mentionMenu.query, mentionMenu.symbol);

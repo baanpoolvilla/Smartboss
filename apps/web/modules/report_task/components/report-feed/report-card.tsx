@@ -1948,7 +1948,8 @@ export function ReportCard({
                   setReplyMentionMenu(null);
                 }}
                 onPaste={handleReplyImagePaste}
-                className="flex-1 min-w-[100px] bg-transparent text-sm outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-[var(--ink-soft)]"
+                // สูงสุด ~7 บรรทัดแล้วเลื่อนในช่อง — คอมเมนต์ยาว ๆ ไม่ดันหน้าจนมองไม่เห็นโพสต์ที่กำลังตอบ
+                className="flex-1 min-w-[100px] max-h-40 overflow-y-auto overscroll-contain bg-transparent text-sm outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-[var(--ink-soft)]"
                 onKeyDown={(e) => {
                   if (replyMentionMenu) {
                     const matches = replyMentionMatches(replyMentionMenu.query);

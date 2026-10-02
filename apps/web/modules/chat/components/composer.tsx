@@ -125,11 +125,24 @@ export const Composer = forwardRef<
   }, [channelId, text]);
 
   // ความสูงช่องพิมพ์ยืดตามข้อความ (สูงสุด ~6 บรรทัด)
+  // เดิมยุบเป็น 0 แล้ววัดใหม่ทุกตัวอักษร — ข้อความยาวเกินช่อง (ต้องเลื่อน) ตำแหน่งที่เลื่อนอยู่เด้งกลับ
+  // บนสุดทุกครั้งที่พิมพ์ แก้คำกลาง/ท้ายข้อความไม่ได้ และรายการแชทข้างบนกระตุกตาม
+  // ตอนนี้: พิมพ์เพิ่ม = ขยายอย่างเดียวไม่ยุบ · ลบข้อความ/ส่งแล้ว = วัดใหม่โดยคืนตำแหน่งเลื่อนเดิม
+  const prevTextLen = useRef(0);
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
+    const MAX = 160;
+    const shrinking = text.length < prevTextLen.current;
+    prevTextLen.current = text.length;
+    if (!shrinking) {
+      if (el.scrollHeight > el.clientHeight && el.clientHeight < MAX) el.style.height = `${Math.min(el.scrollHeight, MAX)}px`;
+      return;
+    }
+    const top = el.scrollTop;
     el.style.height = "0px";
-    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+    el.style.height = `${Math.min(el.scrollHeight, MAX)}px`;
+    el.scrollTop = top;
   }, [text]);
 
   useEffect(() => {
