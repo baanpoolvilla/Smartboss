@@ -922,6 +922,9 @@ export const useTaskStore = create<TaskStore>((set) => ({
         );
         const actorName = getUser(authorId)?.name ?? "มีคน";
         const preview = message.length > 60 ? `${message.slice(0, 60)}…` : message;
+        // สร้าง id ก่อน — ลิงก์แจ้งเตือนชี้ตรงคอมเมนต์นี้ (?task=&comment=) หน้าต่างงานเลื่อนไปหา + กะพริบ
+        const commentId = `${taskId}-cmt-${uuid()}`;
+        const commentLink = `/report-task/tasks?task=${t.id}&comment=${encodeURIComponent(commentId)}`;
         if (mentioned.size > 0) {
           useNotificationStore
             .getState()
@@ -930,7 +933,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
               authorId,
               `${actorName} แท็กคุณในงาน "${t.title}": ${preview}`,
               undefined,
-              `/report-task/tasks?task=${t.id}`,
+              commentLink,
               undefined,
               "task_comment",
               t.id
@@ -943,7 +946,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
             authorId,
             `${actorName} แสดงความคิดเห็นในงาน "${t.title}": ${preview}`,
             undefined,
-            `/report-task/tasks?task=${t.id}`,
+            commentLink,
             undefined,
             "task_comment",
             t.id
@@ -953,7 +956,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
           comments: [
             ...t.comments,
             {
-              id: `${taskId}-cmt-${uuid()}`,
+              id: commentId,
               authorId,
               message,
               createdAt: new Date().toISOString(),

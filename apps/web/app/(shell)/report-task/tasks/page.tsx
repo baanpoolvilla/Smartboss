@@ -22,6 +22,9 @@ import type { TaskPriority } from "@/modules/report_task/types";
 
 type TaskView = "board" | "grid" | "workload";
 
+/** คีย์ใน URL ที่หน้านี้เป็นเจ้าของ (ตัวกรอง + มุมมอง) — คีย์อื่น (task, taskTitle, บอร์ดรายคน/แผนก ฯลฯ) ห้ามแตะ */
+const FILTER_URL_KEYS = ["dept", "assignee", "priority", "penalty", "preset", "from", "to", "view"] as const;
+
 export default function TasksPage() {
   return (
     <Suspense fallback={<BoardSkeleton />}>
@@ -78,8 +81,14 @@ function TasksPageContent() {
   // Mirror filters + view into the URL (replace — no history entry per
   // keystroke) so a refresh doesn't silently reset the board and a filtered
   // view can be shared with a teammate via the link.
+  //
+  // แก้เฉพาะคีย์ของตัวกรอง/มุมมอง — คีย์อื่นใน URL ต้องอยู่ครบ โดยเฉพาะ ?task= (เปิดหน้าต่างงาน
+  // จากแจ้งเตือน/ลิงก์) เดิมสร้าง URL ใหม่จากตัวกรองล้วน ๆ ทันทีที่หน้าเปิด ?task= เลยหาย
+  // หน้าต่างงานปิด ("กดแจ้งเตือนแล้วเด้งมาหน้าบอร์ด ต้องกดอีกทีถึงขึ้นงาน" — ครั้งที่สองได้เพราะ
+  // อยู่บนบอร์ดแล้ว ตัวกรองไม่เปลี่ยน effect นี้ไม่ทำงาน)
   useEffect(() => {
-    const params = new URLSearchParams();
+    const params = new URLSearchParams(window.location.search);
+    for (const key of FILTER_URL_KEYS) params.delete(key);
     if (filters.departmentId !== "all") params.set("dept", filters.departmentId);
     if (filters.assigneeId !== "all") params.set("assignee", filters.assigneeId);
     if (filters.priority !== "all") params.set("priority", filters.priority);
@@ -93,6 +102,8 @@ function TasksPageContent() {
     }
     if (view !== "board") params.set("view", view);
     const query = params.toString();
+    // ไม่มีอะไรเปลี่ยน = ไม่ต้องเขียนทับ (ไม่ไปกวนการนำทางที่กำลังเกิดขึ้น)
+    if (query === window.location.search.replace(/^\?/, "")) return;
     router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
   }, [filters, view, pathname, router]);
 

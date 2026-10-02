@@ -320,6 +320,27 @@ export function TaskDetailSheet({
   // the count next to "ความคิดเห็น" is still shown un-collapsed so there's a
   // visible cue a conversation exists without forcing it open.
   const [mobileCommentsOpen, setMobileCommentsOpen] = useState(false);
+  // เปิดจากแจ้งเตือนคอมเมนต์ (?task=…&comment=<id>) — กางแผงคอมเมนต์ (มือถือพับไว้) เลื่อนไปหา แล้วกะพริบ
+  // อ่านจาก URL ตรง ๆ (ไม่ใช้ useSearchParams — หน้าต่างนี้ถูกใช้หลายหน้า บางหน้าไม่มี Suspense ครอบ)
+  const [flashCommentId, setFlashCommentId] = useState<string | null>(null);
+  const taskLoaded = !!task;
+  useEffect(() => {
+    if (!taskId || !taskLoaded) return;
+    const target = new URLSearchParams(window.location.search).get("comment");
+    if (!target) return;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    timers.push(
+      setTimeout(() => {
+        setMobileCommentsOpen(true);
+        setFlashCommentId(target);
+        timers.push(
+          setTimeout(() => document.getElementById(`task-comment-${target}`)?.scrollIntoView({ block: "center", behavior: "smooth" }), 60)
+        );
+        timers.push(setTimeout(() => setFlashCommentId((cur) => (cur === target ? null : cur)), 2400));
+      }, 0)
+    );
+    return () => timers.forEach(clearTimeout);
+  }, [taskId, taskLoaded]);
   const [commentUploading, setCommentUploading] = useState(false);
   const [taskAttachUploading, setTaskAttachUploading] = useState(false);
   const [newChecklistItem, setNewChecklistItem] = useState("");
@@ -1918,7 +1939,15 @@ export function TaskDetailSheet({
               const author = getUser(c.authorId);
               const mine = c.authorId === viewingAsUserId;
               return (
-                <div key={c.id} className={cn("flex gap-2.5 group", mine && "flex-row-reverse")}>
+                <div
+                  key={c.id}
+                  id={`task-comment-${c.id}`}
+                  className={cn(
+                    "flex gap-2.5 group rounded-xl transition-colors duration-700",
+                    mine && "flex-row-reverse",
+                    flashCommentId === c.id && "bg-amber-100/80 ring-2 ring-amber-300/70"
+                  )}
+                >
                   <Avatar className="h-7 w-7 shrink-0">
                     <AvatarImage src={author?.avatarUrl ?? undefined} alt={author?.name} />
                     <AvatarFallback className={cn("text-[10px]", mine ? "bg-[var(--brand-green)] text-[var(--ink)]" : "bg-[var(--bg-soft)]")}>

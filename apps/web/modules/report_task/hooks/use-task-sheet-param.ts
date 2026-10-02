@@ -31,6 +31,7 @@ export function useTaskSheetParam(initialFallback?: string | null) {
     (id: string | null) => {
       pushedRef.current = !!id && !paramTaskId;
       const params = new URLSearchParams(searchParams.toString());
+      params.delete("comment"); // คอมเมนต์ที่ชี้ไว้เป็นของงานเดิม — เปิดงานอื่นไม่ต้องเลื่อนหา
       if (id) params.set("task", id);
       else params.delete("task");
       const query = params.toString();
@@ -48,6 +49,7 @@ export function useTaskSheetParam(initialFallback?: string | null) {
     }
     const params = new URLSearchParams(searchParams.toString());
     params.delete("task");
+    params.delete("comment");
     const query = params.toString();
     router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
   }, [pathname, router, searchParams]);
