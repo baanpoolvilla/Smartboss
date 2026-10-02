@@ -91,6 +91,10 @@ export function ServerStoreSync<T, S>({
   // ส่งกลับขึ้นไปทับบนเซิร์ฟเวอร์ด้วย)
   const savingRef = useRef(0);
   const saveSeqRef = useRef(0);
+  // มีการแก้ไขในเครื่องที่ยังไม่ถึงเซิร์ฟเวอร์ (แก้เพิ่มระหว่างกำลังบันทึก / บันทึกไม่สำเร็จรอลองใหม่)
+  const dirtyRef = useRef(false);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const failuresRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -132,54 +136,28 @@ export function ServerStoreSync<T, S>({
       }
     }
 
-    async function flush(snapshot: S | null, isUnload = false) {
-      if (!snapshot) return;
-      pendingRef.current = null;
-      // The debounce timer that scheduled this flush has now fired and is
-      // spent — clear the id too, not just pendingRef. Left set, the poll
-      // guard below (`if (pendingRef.current || timerRef.current) return`)
-      // reads this stale, already-consumed setTimeout id as "an edit is
-      // still in flight" forever, permanently skipping every future poll
-      // tick for the life of this mount. Any local edit (even just opening
-      // a room with an unread post, which calls markTopicRead) arms this —
-      // matches "ต้องรีเฟรชถึงจะเปลี่ยน / ย้ายห้องไปมาแล้วกลับมา" exactly:
-      // both remount ServerStoreSync, which resets timerRef fresh.
-      timerRef.current = null;
+    /*
+     * การบันทึก — หลักการ: "ห้ามทิ้งสิ่งที่ผู้ใช้เพิ่งทำ" และ "ห้ามเขียนทับของคนอื่น"
+     *
+     * บั๊ก "ส่งรีพอตพร้อมกันแล้วบางคนโพสต์หาย" มาจากของเดิม 3 จุด:
+     *  1. ส่ง *สำเนาที่ถ่ายไว้ตอนแก้ไข* ไม่ใช่ข้อมูลปัจจุบัน — ถ้าระหว่างกำลังบันทึกมีการแก้ไขในเครื่อง
+     *     อีกครั้ง (แค่ระบบทำเครื่องหมาย "อ่านแล้ว" ก็นับ) สำเนานั้นถ่ายก่อนที่ของคนอื่นจะถูกรวมเข้ามา
+     *     พอส่งขึ้นไปด้วยเลขเวอร์ชันล่าสุด เซิร์ฟเวอร์รับ → โพสต์ของคนอื่นหายสำหรับทุกคน
+     *     (หรือถ้าชน 409 ตัวรวมจะมองว่า "ฉันลบโพสต์นั้น" เพราะ base มีแต่ของฉันไม่มี)
+     *  2. แพ้การแย่งบันทึกครบ 4 รอบ → load() ทับ = ทิ้งโพสต์ที่เพิ่งกดส่ง เงียบ ๆ
+     *  3. เน็ตสะดุดตอนส่ง → load() ทับทันที = โพสต์หาย
+     *
+     * ตอนนี้: บันทึกทีละรอบเดียว (ไม่ซ้อน) · ส่งข้อมูล *ปัจจุบันของ store* เสมอ · ตอนชน 409 รวมจาก
+     * ข้อมูลปัจจุบัน (รวมที่แก้ระหว่างรอ) · ไม่สำเร็จ = เก็บไว้ในเครื่องแล้วลองใหม่เรื่อย ๆ ไม่ทิ้ง
+     */
+    const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-      // On page unload we get a single keepalive shot and can't do the
-      // fetch/merge/retry dance — send optimistically and let a surviving tab
-      // (or the next load) reconcile. `keepalive` bodies are hard-capped at
-      // ~64KB by Chromium, so this stays off for every normal in-page save.
-      if (isUnload) {
-        try {
-          await fetch(`/api/report-task/store/${apiKey}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ data: snapshot, expectedVersion: versionRef.current }),
-            keepalive: true,
-          });
-        } catch {
-          /* best effort on the way out */
-        }
-        return;
-      }
-
-      savingRef.current++;
-      saveSeqRef.current++;
-      try {
-        await putWithMerge(snapshot);
-      } finally {
-        savingRef.current--;
-        saveSeqRef.current++;
-      }
-    }
-
-    async function putWithMerge(snapshot: S) {
-      let mine = snapshot;
-      // Bounded retry: in the split second between our merge and our retry
-      // someone else could save again. A few passes converge; the cap keeps a
-      // very hot board from spinning.
-      for (let attempt = 0; attempt < 4; attempt++) {
+    /** true = เซิร์ฟเวอร์ตรงกับเครื่องแล้ว (หรือกู้ไม่ได้และโหลดของเซิร์ฟเวอร์กลับมาแล้ว) · false = ยังไม่ได้ ต้องลองใหม่ */
+    async function putWithMerge(): Promise<boolean> {
+      let mine = select(store.getState());
+      // ชนกันได้หลายรอบตอนหลายคนส่งพร้อมกัน (ทั้งก้อนใหญ่ ส่ง/ดึงใช้เวลา) — ให้โอกาสมากพอ + เว้นจังหวะสุ่ม
+      // ไม่ให้ทุกเครื่องยิงซ้ำพร้อมกันอีก ครบแล้วยังไม่ได้ก็ "ลองใหม่ทีหลัง" ไม่ใช่ทิ้ง
+      for (let attempt = 0; attempt < 8; attempt++) {
         let res: Response;
         try {
           res = await fetch(`/api/report-task/store/${apiKey}`, {
@@ -188,52 +166,124 @@ export function ServerStoreSync<T, S>({
             body: JSON.stringify({ data: mine, expectedVersion: versionRef.current }),
           });
         } catch {
-          toast.error("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ การเปลี่ยนแปลงอาจหายไปเมื่อรีเฟรช", { id: `storesync-network-error-${apiKey}` });
-          await load();
-          return;
+          return false; // เน็ตสะดุด — เก็บของในเครื่องไว้ ลองใหม่
         }
 
         if (res.status === 409) {
-          // Someone saved first. Pull their latest, merge our changes on top,
-          // reflect the merge in the UI, and retry — no popup, nothing lost.
+          // มีคนบันทึกก่อน — ดึงของล่าสุด รวมสิ่งที่เครื่องนี้เปลี่ยนทับลงไป แล้วส่งใหม่
           let latest: { slice: S | null; version: number | null };
           try {
             latest = await fetchServer();
           } catch {
-            await load();
-            return;
+            return false;
           }
-          const merged = mergeThreeWay(baseRef.current, mine, latest.slice) as NonNullable<S>;
-          if (!cancelled) applyRemoteState((s) => apply(s, merged));
+          // รวมจากข้อมูล "ปัจจุบัน" ของ store (ไม่ใช่ชุดที่ส่งไปเมื่อกี้) — สิ่งที่ผู้ใช้แก้เพิ่มระหว่างรอ
+          // ต้องอยู่ครบ และของคนอื่นที่เพิ่งมาต้องไม่ถูกมองว่า "ฉันลบ"
+          const current = select(store.getState());
+          const merged = mergeThreeWay(baseRef.current, current, latest.slice) as NonNullable<S>;
+          applyRemoteState((s) => apply(s, merged));
           versionRef.current = latest.version;
           baseRef.current = latest.slice; // what the server had when we merged
-          mine = merged;
+          mine = select(store.getState());
+          await sleep(40 + Math.random() * 120 * (attempt + 1));
           continue; // retry PUT with merged data + the latest version
         }
 
         if (!res.ok) {
-          // A real failure (not a concurrency race) — roll the UI back to what
-          // the server actually has instead of leaving it stuck on an edit that
-          // never saved. `id` is namespaced per store so a repeat replaces its
-          // own toast instead of stacking.
-          toast.error("บันทึกข้อมูลไม่สำเร็จ กำลังโหลดข้อมูลล่าสุดกลับมา", { id: `storesync-save-error-${apiKey}` });
+          // เซิร์ฟเวอร์ล่มชั่วคราว / ถูกจำกัดความถี่ — ลองใหม่ได้ ไม่ทิ้งของในเครื่อง
+          if (res.status >= 500 || res.status === 429 || res.status === 408) return false;
+          // ปฏิเสธจริง (ข้อมูลผิดรูป / ใหญ่เกิน / ไม่มีสิทธิ์) — ส่งซ้ำก็ไม่ผ่าน ให้หน้าจอตรงกับเซิร์ฟเวอร์
+          toast.error(
+            res.status === 413
+              ? "ข้อมูลใหญ่เกินกว่าที่บันทึกได้ — แจ้งผู้ดูแลระบบ (การเปลี่ยนแปลงล่าสุดไม่ถูกบันทึก)"
+              : "บันทึกข้อมูลไม่สำเร็จ กำลังโหลดข้อมูลล่าสุดกลับมา",
+            { id: `storesync-save-error-${apiKey}` }
+          );
           await load();
-          return;
+          return true;
         }
 
         const data = (await res.json().catch(() => null)) as { version?: number } | null;
         if (typeof data?.version === "number") versionRef.current = data.version;
         baseRef.current = mine; // this snapshot is now the server truth
-        return;
+        return true;
       }
-
-      // Merge kept losing the race every pass — vanishingly unlikely. Fall back
-      // to a silent reload so the UI at least matches the server.
-      await load();
+      return false; // แย่งไม่ทันทุกรอบ — ลองใหม่ทีหลัง ไม่ทิ้ง
     }
 
+    /** บันทึกทีละรอบเดียว — มีการแก้ไขเข้ามาระหว่างบันทึก = วนส่งอีกรอบด้วยข้อมูลล่าสุด */
+    async function runSave() {
+      if (savingRef.current > 0) {
+        dirtyRef.current = true;
+        return;
+      }
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+      savingRef.current++;
+      saveSeqRef.current++;
+      try {
+        do {
+          dirtyRef.current = false;
+          const ok = await putWithMerge();
+          if (!ok) {
+            // ยังไม่ถึงเซิร์ฟเวอร์ — เก็บไว้ ลองใหม่ห่างขึ้นเรื่อย ๆ (2, 4, 8 … สูงสุด 30 วิ)
+            dirtyRef.current = true;
+            failuresRef.current++;
+            const wait = Math.min(30_000, 2000 * 2 ** Math.min(failuresRef.current - 1, 4));
+            if (failuresRef.current >= 2) {
+              toast.error("ยังบันทึกไม่สำเร็จ — ระบบกำลังลองใหม่ให้อัตโนมัติ อย่าเพิ่งปิดหน้านี้", {
+                id: `storesync-retrying-${apiKey}`,
+                duration: 60_000,
+              });
+            }
+            retryTimerRef.current = setTimeout(() => {
+              retryTimerRef.current = null;
+              void runSave();
+            }, wait);
+            return;
+          }
+          if (failuresRef.current >= 2) {
+            toast.success("บันทึกเรียบร้อยแล้ว", { id: `storesync-retrying-${apiKey}`, duration: 3000 });
+          }
+          failuresRef.current = 0;
+        } while (dirtyRef.current);
+      } finally {
+        savingRef.current--;
+        saveSeqRef.current++;
+      }
+    }
+
+    /** ตัวหน่วง 500ms ครบ / ออกจากหน้า (in-page) — เริ่มบันทึกข้อมูลปัจจุบัน */
     function flushPending() {
-      void flush(pendingRef.current);
+      const hadEdit = pendingRef.current != null || dirtyRef.current;
+      pendingRef.current = null;
+      // The debounce timer that scheduled this flush has now fired and is
+      // spent — clear the id too, not just pendingRef. Left set, the poll
+      // guard (`canPullNow`) reads this stale, already-consumed setTimeout id
+      // as "an edit is still in flight" forever, permanently skipping every
+      // future poll tick for the life of this mount.
+      timerRef.current = null;
+      if (!hadEdit) return;
+      void runSave();
+    }
+
+    /** ปิดแท็บ/ออกจากหน้า — ยิงครั้งเดียวแบบ keepalive (รอผล/รวม/ลองใหม่ไม่ได้) ให้แท็บอื่นหรือการเปิดครั้งหน้ารวมให้
+     * `keepalive` รับ body ได้ ~64KB ใน Chromium ก้อนใหญ่กว่านั้นเบราว์เซอร์จะไม่ส่ง — การบันทึกปกติจึงไม่ใช้ทางนี้ */
+    function flushOnUnload() {
+      if (pendingRef.current == null && !dirtyRef.current) return;
+      pendingRef.current = null;
+      try {
+        void fetch(`/api/report-task/store/${apiKey}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ data: select(store.getState()), expectedVersion: versionRef.current }),
+          keepalive: true,
+        }).catch(() => undefined);
+      } catch {
+        /* best effort on the way out */
+      }
     }
 
     void load();
@@ -274,6 +324,8 @@ export function ServerStoreSync<T, S>({
     function canPullNow(): boolean {
       if (!loadedRef.current) return false;
       if (pendingRef.current || timerRef.current || savingRef.current > 0) return false;
+      // ยังมีของในเครื่องที่ไม่ถึงเซิร์ฟเวอร์ (รอลองบันทึกใหม่) — ห้ามดึงของเซิร์ฟเวอร์มาทับ
+      if (dirtyRef.current || retryTimerRef.current) return false;
       // Some edits are staged locally and haven't been written to the
       // store yet, so the two guards above can't see them — see
       // holdServerSync's own comment for why landing a poll on top of
@@ -297,7 +349,7 @@ export function ServerStoreSync<T, S>({
         if (!res.ok) return;
         const version = Number(res.headers.get("X-Data-Version")) || null;
         if (version === versionRef.current) return; // nothing new
-        if (pendingRef.current || timerRef.current) {
+        if (pendingRef.current || timerRef.current || dirtyRef.current || retryTimerRef.current) {
           signalRef.current = true; // user started editing meanwhile — try again after
           return;
         }
@@ -352,9 +404,6 @@ export function ServerStoreSync<T, S>({
             void pull();
           }, Math.min(pollMs, DEFAULT_POLL_MS));
 
-    function flushOnUnload() {
-      void flush(pendingRef.current, true);
-    }
     window.addEventListener("pagehide", flushOnUnload);
 
     return () => {
@@ -364,6 +413,11 @@ export function ServerStoreSync<T, S>({
       document.removeEventListener("visibilitychange", onVisible);
       clearInterval(poll);
       if (timerRef.current) clearTimeout(timerRef.current);
+      if (retryTimerRef.current) {
+        // คอมโพเนนต์ถูกถอด (เปลี่ยนหน้าในแอป) ระหว่างรอลองใหม่ — ลองส่งอีกครั้งตอนนี้เลย
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
       window.removeEventListener("pagehide", flushOnUnload);
       flushPending();
     };
