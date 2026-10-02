@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
-import { MODULE_CARDS, PRIMARY_MODULE_CODES } from "@/lib/modules";
+import { MODULE_CARDS, PRIMARY_MODULE_CODES, SECONDARY_FIRST_CODES } from "@/lib/modules";
 import { EXTERNAL_APP_GROUPS, appsInGroup, type ExternalAppGroup } from "@/lib/external-apps";
 import { iconByName } from "@/lib/icons";
 import { loadShellNav } from "@/lib/nav";
@@ -101,7 +101,12 @@ export default async function HomePage() {
     (t): t is AppTile => t !== undefined,
   );
   const primaryCodes = new Set(primary.map((t) => t.code));
-  const secondary = tiles.filter((t) => !primaryCodes.has(t.code));
+  const rank = (code: string) => {
+    const i = SECONDARY_FIRST_CODES.indexOf(code);
+    return i < 0 ? SECONDARY_FIRST_CODES.length : i;
+  };
+  // sort ของ JS คงลำดับเดิมของตัวที่เท่ากัน — ตัวที่ไม่อยู่ในรายการยังเรียงเหมือนเดิม
+  const secondary = tiles.filter((t) => !primaryCodes.has(t.code)).sort((a, b) => rank(a.code) - rank(b.code));
 
   return (
     <div className="mx-auto max-w-5xl">

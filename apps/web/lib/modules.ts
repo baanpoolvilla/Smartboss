@@ -84,3 +84,9 @@ export const PRIMARY_MODULE_CODES: readonly string[] = [
   // แถวที่ 2 ใต้รายงานและงาน (ตาราง 3 คอลัมน์)
   "chat_report",
 ];
+
+/**
+ * ลำดับต้น ๆ ของฝั่ง "อื่น ๆ" ในหน้าหลัก — โค้ดในนี้ขึ้นก่อนตามลำดับ ที่เหลือเรียงตามเดิม
+ * (การ์ดโมดูลที่วางแผนไว้ → โมดูลที่ติดตั้งเพิ่ม)
+ */
+export const SECONDARY_FIRST_CODES: readonly string[] = ["ads"];

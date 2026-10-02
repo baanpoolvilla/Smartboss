@@ -34,7 +34,7 @@ import { SystemNotify } from "./system-notify";
 import { ChatNotifyListener } from "@/modules/chat/components/chat-nav-badge";
 import { MarkReadOnRoute } from "@/modules/notifications/mark-read-on-route";
 import { ShellProvider, type ShellUser } from "./shell-context";
-import { useBackToClose, useBackToCloseOnTouch } from "@/lib/back-to-close";
+import { useBackToClose, useBackToCloseOnTouch, whenHistorySettled } from "@/lib/back-to-close";
 
 export type { ShellUser };
 
@@ -175,7 +175,9 @@ function LauncherFrame({
                 <button> เป็น HTML ที่ผิด เบราว์เซอร์จะจัดโครงสร้างใหม่เอง
                 แล้ว React hydrate ไม่ตรงกับที่ server ส่งมา
               */}
-              <DropdownMenuItem onSelect={() => router.push("/account")}>
+              {/* รอให้เมนูปิด (และถอยช่องประวัติของปุ่มย้อนกลับ) เสร็จก่อนค่อยเปลี่ยนหน้า — บนมือถือ
+                  การถอยนั้นเคยยกเลิกการไปหน้าบัญชี "กดบัญชีของฉันไม่ได้" */}
+              <DropdownMenuItem onSelect={() => whenHistorySettled(() => router.push("/account"))}>
                 บัญชีของฉัน
               </DropdownMenuItem>
               <DropdownMenuSeparator />

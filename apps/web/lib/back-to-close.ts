@@ -45,6 +45,8 @@ function flushWaiters() {
 /** ถอยไปแล้วกี่ช่องที่ยังรอ popstate — ระหว่างนี้งานดันต้องรอ */
 let backsInFlight = 0;
 let backsTimer: ReturnType<typeof setTimeout> | null = null;
+/** ที่อยู่หน้าเว็บตอนสั่งถอย — ถอยแล้วที่อยู่เท่าเดิม = เป็นแค่ช่องของหน้าต่าง Next ไม่ต้องรู้ */
+let hrefBeforeBack = "";
 /** เวลาที่เพิ่งกดลิงก์ไปหน้าอื่น — หน้าต่างที่ปิดตามมาไม่ต้องถอยประวัติ */
 let linkNavUntil = 0;
 
@@ -75,6 +77,7 @@ function settle() {
       return;
     }
     backsInFlight = retract;
+    hrefBeforeBack = window.location.href;
     window.history.go(-retract);
     // กันค้าง — ถ้า popstate ไม่มา (ถอยไม่ได้) ก็ทำงานที่รออยู่ต่อเลย
     if (backsTimer) clearTimeout(backsTimer);
@@ -105,8 +108,12 @@ function settle() {
 export function whenHistorySettled(fn: () => void) {
   if (typeof window === "undefined") return fn();
   install();
-  settledWaiters.push(fn);
-  scheduleSettle();
+  // เว้นจังหวะสั้น ๆ ให้หน้าต่างที่กำลังปิดลงทะเบียน "ขอถอยช่อง" ก่อน (เกิดหลัง React render รอบนี้)
+  // ไม่งั้นรอบ settle แรกยังไม่เห็นอะไรให้ถอย แล้วปล่อย fn ไปก่อน — กลับไปเจอปัญหาเดิม
+  setTimeout(() => {
+    settledWaiters.push(fn);
+    scheduleSettle();
+  }, 30);
 }
 
 function install() {
@@ -125,9 +132,15 @@ function install() {
     },
     true
   );
-  window.addEventListener("popstate", () => {
+  // capture + stopImmediatePropagation: popstate ของ "การถอยที่เราสั่งเอง" (ลบช่องของหน้าต่างที่ปิด)
+  // ต้องไม่ไปถึงตัวจัดการของ Next — Next เห็น popstate แล้วถือว่าผู้ใช้กดย้อนกลับ จะยกเลิกการเปลี่ยนหน้า
+  // ที่เพิ่งสั่งไป (router.push จากปุ่มในเมนู) ผลคือ "กดเมนูแล้วไม่ไปไหน" บนมือถือ
+  // (ช่องของหน้าต่างเป็น URL เดียวกับหน้าที่ Next อยู่ — Next ไม่ต้องรู้เรื่องช่องพวกนี้เลย)
+  window.addEventListener("popstate", (ev) => {
     if (backsInFlight > 0) {
       // popstate ของการถอยที่เราสั่งเอง — ไม่ใช่ผู้ใช้กดย้อนกลับ
+      // ที่อยู่ไม่เปลี่ยน = ซ่อนจาก Next · ที่อยู่เปลี่ยนจริง (หน้าเขียน URL ทับช่องของหน้าต่างไว้) ให้ Next รับรู้ตามปกติ
+      if (window.location.href === hrefBeforeBack) ev.stopImmediatePropagation();
       backsInFlight = 0;
       if (backsTimer) clearTimeout(backsTimer);
       backsTimer = null;
@@ -142,7 +155,7 @@ function install() {
       stack.splice(i, 1);
       e.close();
     }
-  });
+  }, true);
 }
 
 /**
