@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { requireAuth } from "@smartboss/auth";
-import { SALES_MARKETING_APPS, appKey } from "@/lib/external-apps";
+import { EXTERNAL_APP_GROUPS, SALES_MARKETING_APPS, appKey } from "@/lib/external-apps";
 import { ssoTarget } from "@/lib/external-apps-sso";
 import { EmbeddedApp } from "./embedded-app";
 
@@ -28,6 +28,8 @@ export default async function EmbeddedAppPage({ params }: { params: Promise<{ ke
       // ลิงก์ใหม่ (token ใหม่) = ประกอบหน้าใหม่ทั้งอัน สถานะโหลด/หมดอายุเริ่มใหม่เอง
       key={target.issuedAt}
       name={app.name}
+      backHref={`/sales-marketing/${app.group}`}
+      backLabel={EXTERNAL_APP_GROUPS[app.group].title}
       host={new URL(app.url).host}
       src={target.url}
       issuedAt={target.issuedAt}

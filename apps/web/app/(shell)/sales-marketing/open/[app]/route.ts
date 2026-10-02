@@ -13,11 +13,11 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest, { params }: { params: Promise<{ app: string }> }) {
   const { app: key } = await params;
   const app = SALES_MARKETING_APPS.find((a) => a.sso?.key === key);
-  if (!app?.sso) return NextResponse.redirect(new URL("/sales-marketing", req.url));
+  if (!app?.sso) return NextResponse.redirect(new URL("/", req.url));
 
   const target = await ssoTarget(app, { embed: false });
   if (target.kind === "login") {
-    return NextResponse.redirect(new URL(`/login?next=${encodeURIComponent("/sales-marketing")}`, req.url));
+    return NextResponse.redirect(new URL(`/login?next=${encodeURIComponent(`/sales-marketing/${app.group}`)}`, req.url));
   }
   const res = NextResponse.redirect(target.url);
   res.headers.set("Cache-Control", "no-store");

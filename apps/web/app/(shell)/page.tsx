@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { TrendingUp, type LucideIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { MODULE_CARDS, PRIMARY_MODULE_CODES } from "@/lib/modules";
+import { EXTERNAL_APP_GROUPS, appsInGroup, type ExternalAppGroup } from "@/lib/external-apps";
 import { iconByName } from "@/lib/icons";
 import { loadShellNav } from "@/lib/nav";
 import { AppTileReviewBadge } from "@/modules/report_task/components/shared/app-tile-review-badge";
@@ -43,6 +44,12 @@ function thaiToday(): string {
  * สองรอบ (รอบแรกได้แค่ "ไปที่อื่น") — เมนูถูกกรองตามสิทธิ์มาแล้วใน loadShellNav
  */
 const REDIRECT_ONLY_BASES = new Set(["chat_report"]);
+
+/** การ์ดโมดูล "งานขาย" / "การตลาด" → หน้ารายการเว็บของทีมนั้น (ถ้ามีเว็บอยู่ในกลุ่ม) */
+function externalAppsHref(moduleCode: string): string | undefined {
+  const group = (Object.keys(EXTERNAL_APP_GROUPS) as ExternalAppGroup[]).find((g) => EXTERNAL_APP_GROUPS[g].moduleCode === moduleCode);
+  return group && appsInGroup(group).length > 0 ? `/sales-marketing/${group}` : undefined;
+}
 function landingPath(m: { id: string; basePath: string; menus: { path: string }[] } | undefined): string | undefined {
   if (!m) return undefined;
   if (REDIRECT_ONLY_BASES.has(m.id) && m.menus[0]) return m.menus[0].path;
@@ -64,7 +71,9 @@ export default async function HomePage() {
     icon: mod.icon,
     color: `var(${mod.colorVar})`,
     colorBg: `var(${mod.colorBgVar})`,
-    href: landingPath(visible.get(mod.code)),
+    // "งานขาย" / "การตลาด": ยังไม่มีโมดูลจริง = เปิดรายการเว็บของทีมนั้น (Baanpool-Chat / Multi Post
+    // — lib/external-apps.ts) แทนการ์ด "เร็ว ๆ นี้" · บริษัทที่เปิดโมดูลจริงแล้ว การ์ดพาไปโมดูลตามเดิม
+    href: landingPath(visible.get(mod.code)) ?? externalAppsHref(mod.code),
   }));
 
   // โมดูลที่ติดตั้งเพิ่มภายหลัง (ไม่อยู่ใน 6 การ์ด) — ดึงหน้าตาจาก manifest
@@ -85,17 +94,6 @@ export default async function HomePage() {
     });
   }
 
-  // รวมลิงก์เว็บภายนอกของทีมขาย/การตลาด (lib/external-apps.ts) — ไม่ใช่โมดูล
-  // ไม่ต้องเปิดใช้ต่อบริษัท ทุกคนที่ login เห็น
-  tiles.push({
-    code: "sales_marketing_links",
-    name: "ขาย & การตลาด",
-    description: "รวมลิงก์เว็บของทีมขายและการตลาด",
-    icon: TrendingUp,
-    color: "var(--mod-sale)",
-    colorBg: "var(--mod-sale-bg)",
-    href: "/sales-marketing",
-  });
 
   // ฝั่งซ้าย = โมดูลหลัก เรียงตามลำดับที่ตั้งไว้ (ไม่ใช่ลำดับใน tiles)
   const byCode = new Map(tiles.map((t) => [t.code, t]));

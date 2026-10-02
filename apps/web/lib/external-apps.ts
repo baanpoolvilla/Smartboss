@@ -10,7 +10,16 @@ import { MessageCircle, Send, type LucideIcon } from "lucide-react";
  *
  * เพิ่ม/แก้ลิงก์ที่นี่แล้ว deploy — หน้า /sales-marketing อ่านจากรายการนี้
  */
+/** แอปอยู่การ์ดไหนในหน้าหลัก — "งานขาย" (/sales-marketing/sale) หรือ "การตลาด" (/sales-marketing/marketing) */
+export type ExternalAppGroup = "sale" | "marketing";
+
+export const EXTERNAL_APP_GROUPS: Record<ExternalAppGroup, { title: string; subtitle: string; moduleCode: string }> = {
+  sale: { title: "งานขาย", subtitle: "เว็บของทีมขาย", moduleCode: "sale_admin" },
+  marketing: { title: "การตลาด", subtitle: "เว็บของทีมการตลาด", moduleCode: "marketing" },
+};
+
 export interface ExternalApp {
+  group: ExternalAppGroup;
   name: string;
   description: string;
   url: string;
@@ -31,6 +40,7 @@ export interface ExternalApp {
 
 export const SALES_MARKETING_APPS: ExternalApp[] = [
   {
+    group: "marketing",
     name: "Multi Post System",
     description: "โพสต์ลงหลายช่องทางพร้อมกัน",
     url: "https://multipost-nu.vercel.app/",
@@ -48,6 +58,7 @@ export const SALES_MARKETING_APPS: ExternalApp[] = [
     colorBg: "var(--mod-marketing-bg)",
   },
   {
+    group: "sale",
     name: "Baanpool-Chat",
     description: "แชทลูกค้า Baanpool",
     url: "https://baanpoolchat.vercel.app/login",
@@ -63,4 +74,8 @@ export const SALES_MARKETING_APPS: ExternalApp[] = [
 /** ชื่อในลิงก์ของแอป — /sales-marketing/app/<key> (หน้าที่เปิดแอปไว้ข้างใน SmartBoss) */
 export function appKey(app: ExternalApp): string {
   return app.sso?.key ?? new URL(app.url).host.split(".")[0]!;
+}
+
+export function appsInGroup(group: ExternalAppGroup): ExternalApp[] {
+  return SALES_MARKETING_APPS.filter((a) => a.group === group);
 }

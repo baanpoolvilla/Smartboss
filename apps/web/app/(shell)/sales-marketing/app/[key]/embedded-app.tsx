@@ -11,12 +11,17 @@ const TOKEN_FRESH_MS = 45_000;
 /** แถบเครื่องมือบาง ๆ + เว็บปลายทางเต็มพื้นที่ที่เหลือใต้แถบบนของ SmartBoss */
 export function EmbeddedApp({
   name,
+  backHref,
+  backLabel,
   host,
   src,
   issuedAt,
   newTabHref,
 }: {
   name: string;
+  /** ปุ่ม ← กลับหน้ารายการของการ์ดนั้น ("งานขาย" / "การตลาด") */
+  backHref: string;
+  backLabel: string;
   host: string;
   /** ลิงก์ล็อกอินของแอป (มี token) — เปลี่ยนทุกครั้งที่หน้า render ใหม่ */
   src: string;
@@ -39,12 +44,12 @@ export function EmbeddedApp({
     <div className="-m-6 flex h-[calc(100dvh-60px)] flex-col bg-(--bg)">
       <div className="flex h-11 shrink-0 items-center gap-1 border-b border-(--line) px-2 sm:px-3">
         <Link
-          href="/sales-marketing"
+          href={backHref}
           className="flex h-9 shrink-0 items-center gap-1 rounded-lg px-2 text-sm text-(--ink-soft) hover:bg-(--bg-soft) hover:text-(--ink)"
-          aria-label="กลับไปหน้า ขาย & การตลาด"
+          aria-label={`กลับไปหน้า ${backLabel}`}
         >
           <ArrowLeft className="h-4 w-4" />
-          <span className="hidden sm:inline">ขาย &amp; การตลาด</span>
+          <span className="hidden sm:inline">{backLabel}</span>
         </Link>
         <div className="flex min-w-0 flex-1 items-baseline gap-2 px-1">
           <span className="truncate text-sm font-semibold text-(--ink)">{name}</span>
