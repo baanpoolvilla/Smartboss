@@ -453,6 +453,9 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
           minImages={minImagesRequired}
           busy={busy}
           onFilesSelected={handleFiles}
+          onEnterSubmit={() => {
+            if (!busy) handleSubmit();
+          }}
         />
       </div>
 
@@ -469,7 +472,8 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
           {tall ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           <span className="hidden sm:inline">{tall ? "ย่อ" : "ขยาย"}</span>
         </button>
-        <span className="mr-auto" />
+        {/* คอมเท่านั้น (มือถือ Enter = ขึ้นบรรทัด) — บอกให้รู้ว่า Enter โพสต์เลย */}
+        <span className="mr-auto hidden min-w-0 truncate text-[11px] text-[var(--ink-faint)] [@media(hover:hover)]:inline">Enter โพสต์ · Shift+Enter ขึ้นบรรทัดใหม่</span>
         {/* P3 — why the button's disabled, not just that it is. */}
         {!busy && (!title.trim() || missingRequiredImage || submissionLocked) && (
           <p className="min-w-0 truncate text-xs text-[var(--ink-soft)]">

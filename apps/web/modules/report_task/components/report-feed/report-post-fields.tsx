@@ -31,6 +31,7 @@ import { dropZoneProps, hasClipboardText } from "@/lib/annotate/annotate";
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
 import { toast } from "sonner";
 import { uuid } from "@/modules/report_task/lib/uuid";
+import { isCoarsePointer } from "@/modules/report_task/lib/device";
 
 interface MentionItem {
   type: MentionType;
@@ -92,6 +93,7 @@ export function ReportPostFields({
   minImages,
   busy,
   onFilesSelected,
+  onEnterSubmit,
 }: {
   /** Which room's albums the whole-post album picker offers — see AlbumPickerButton. */
   topicId: string;
@@ -108,6 +110,9 @@ export function ReportPostFields({
   minImages: number;
   busy: boolean;
   onFilesSelected: (files: File[]) => void;
+  /** ส่งมา = กด Enter ในช่องเนื้อหา/หัวข้อแล้ว "โพสต์เลย" · Shift+Enter = ขึ้นบรรทัดใหม่ (ต่อบูลเล็ตเหมือนเดิม)
+   * เฉพาะคอม — มือถือไม่มี Shift บนแป้น Enter ยังขึ้นบรรทัดใหม่ตามเดิม · ไม่ส่ง (ฟอร์มแก้ไขโพสต์) = Enter ขึ้นบรรทัด */
+  onEnterSubmit?: () => void;
 }) {
   const maxVideoMB = useAttachmentSettingsStore((s) => s.settings.maxVideoMB);
   const maxImages = useAttachmentSettingsStore((s) => s.settings.maxImagesPerReportPost);
@@ -582,7 +587,17 @@ export function ReportPostFields({
       }
     }
 
-    if (e.key !== "Enter" || e.shiftKey) return;
+    if (e.key !== "Enter") return;
+    // กำลังเลือกคำของแป้นภาษา (IME) — Enter คือยืนยันคำ ไม่ใช่โพสต์/ขึ้นบรรทัด
+    if (e.nativeEvent.isComposing) return;
+    const enterPosts = !!onEnterSubmit && !isCoarsePointer();
+    if (enterPosts && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      onEnterSubmit!();
+      return;
+    }
+    // ไม่ได้ตั้งให้ Enter โพสต์: Shift+Enter ปล่อยให้เบราว์เซอร์ขึ้นบรรทัดเองแบบเดิม
+    if (!enterPosts && e.shiftKey) return;
     e.preventDefault();
     const el = e.currentTarget;
 
@@ -650,6 +665,11 @@ export function ReportPostFields({
         placeholder="หัวข้อรีพอต เช่น สรุปอัปเดตประจำสัปดาห์"
         value={title}
         onChange={(e) => onTitleChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing || !onEnterSubmit || isCoarsePointer()) return;
+          e.preventDefault();
+          onEnterSubmit();
+        }}
         className="font-medium"
       />
 

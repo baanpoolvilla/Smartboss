@@ -1049,6 +1049,32 @@ export const useReportFeedStore = create<ReportFeedStore>()(
           // you" notification is specific to a mention.
           useNotificationStore.getState().notifyMany(mentionedInReply, authorId, `${actorName} แท็กคุณในความคิดเห็นของโพสต์ "${post.title}"`, undefined, link, repliedTopic?.name);
         }
+        // คนที่เคยแสดงความคิดเห็นในโพสต์นี้ — ให้รู้ว่ามีคนตอบต่อในกระทู้ แม้ไม่ได้ถูกแท็ก
+        // (เดิมแจ้งแค่เจ้าของโพสต์/คนที่ถูกตอบตรง ๆ คนอื่นในกระทู้เก่าไม่รู้เลย ต้องไล่หาจากเวลาเอง)
+        // ข้ามคนที่ได้แจ้งเตือนแบบเจาะจงกว่าในข้อความนี้แล้ว และคนที่มองห้องนี้ไม่เห็นแล้ว
+        const alreadyNotified = new Set<string>([
+          authorId,
+          post.authorId,
+          ...(quotedAuthorId ? [quotedAuthorId] : []),
+          ...mentionedInReply,
+          ...everyoneMentionReplyRecipients,
+        ]);
+        const canStillSee = new Set(otherReplyMemberIds);
+        const threadParticipants = [
+          ...new Set(post.replies.filter((r) => r.id !== replyId).map((r) => r.authorId)),
+        ].filter((id) => !alreadyNotified.has(id) && canStillSee.has(id));
+        if (threadParticipants.length > 0) {
+          useNotificationStore
+            .getState()
+            .notifyMany(
+              threadParticipants,
+              authorId,
+              `${actorName} ตอบกลับในโพสต์ที่คุณแสดงความคิดเห็น "${post.title}"${preview ? `: ${preview}` : ""}`,
+              undefined,
+              link,
+              repliedTopic?.name
+            );
+        }
         if (everyoneMentionReplyRecipients.length > 0) {
           useNotificationStore
             .getState()

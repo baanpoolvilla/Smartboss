@@ -8,7 +8,7 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { reportDayLabel } from "@/modules/report_task/components/report-feed/report-day-label";
 import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { groupByDay } from "@/modules/report_task/lib/format";
-import { ArrowDown, MessageSquareText } from "lucide-react";
+import { ArrowDown, ArrowUp, MessageSquareText, MessagesSquare } from "lucide-react";
 
 const NEAR_BOTTOM_PX = 120;
 
@@ -71,16 +71,53 @@ export function ReportFeed({
   // ปลอดภัยระหว่างเรนเดอร์ ซึ่งจำเป็นเพราะตัวคำนวณหน้าต่างด้านล่างต้องใช้ค่านี้
   const firstUnreadId = () =>
     topicPosts.find((p) => p.unreadFor.includes(viewingAsUserId) && p.authorId !== viewingAsUserId)?.id ?? null;
-  const [divider, setDivider] = useState<{ topicId: string; beforeId: string | null }>(() => ({
+  // "ตอบกลับใหม่ในโพสต์เก่า" — คอมเมนต์ที่คนอื่นตอบในโพสต์ (มักอยู่ไกลขึ้นไปข้างบน และเธรดพับไว้)
+  // ไม่มีอะไรบอกเลย ต้องไล่ดูเวลาเอาเอง จดไว้ตอนเปิดห้องเหมือนเส้น "ข้อความใหม่" (เปิดห้องแล้ว
+  // unreadFor ถูกล้างเกือบทันที) + คอมเมนต์ที่ไม่อยู่ในชุดที่เห็นตอนเปิดห้อง = เข้ามาระหว่างเปิดค้างไว้
+  const unreadReplyIds = () =>
+    topicPosts.flatMap((p) =>
+      p.replies.filter((r) => r.authorId !== viewingAsUserId && (r.unreadFor ?? []).includes(viewingAsUserId)).map((r) => r.id)
+    );
+  const allReplyIds = () => new Set(topicPosts.flatMap((p) => p.replies.map((r) => r.id)));
+  const [divider, setDivider] = useState<{
+    topicId: string;
+    beforeId: string | null;
+    unreadReplies: string[];
+    knownReplies: Set<string>;
+  }>(() => ({
     topicId: topic.id,
     beforeId: firstUnreadId(),
+    unreadReplies: unreadReplyIds(),
+    knownReplies: allReplyIds(),
   }));
   let newDividerBeforeId = divider.beforeId;
+  let replySnapshot = divider;
   if (divider.topicId !== topic.id) {
-    const next = { topicId: topic.id, beforeId: firstUnreadId() };
+    const next = { topicId: topic.id, beforeId: firstUnreadId(), unreadReplies: unreadReplyIds(), knownReplies: allReplyIds() };
+    replySnapshot = next;
     setDivider(next);
     // ใช้ค่าใหม่ในเรนเดอร์นี้เลย ไม่รอรอบถัดไป กันเส้นวางผิดที่ชั่วขณะ
     newDividerBeforeId = next.beforeId;
+  }
+  // คอมเมนต์ที่กดไปดูแล้วจากปุ่มนี้ (id ของคนละห้องไม่ชนกัน ไม่ต้องล้างตอนเปลี่ยนห้อง)
+  const [visitedReplies, setVisitedReplies] = useState<Set<string>>(() => new Set());
+  const [replyJump, setReplyJump] = useState<{ postId: string; replyId: string } | null>(null);
+  const snapshotUnread = new Set(replySnapshot.unreadReplies);
+  // เรียงโพสต์เก่า → ใหม่ (ลำดับของ topicPosts) — โพสต์ละ 1 จุด ชี้คอมเมนต์ใหม่อันแรกของโพสต์นั้น
+  const newReplyTargets = topicPosts.flatMap((p) => {
+    const fresh = p.replies.filter(
+      (r) =>
+        r.authorId !== viewingAsUserId &&
+        !visitedReplies.has(r.id) &&
+        (snapshotUnread.has(r.id) || !replySnapshot.knownReplies.has(r.id))
+    );
+    return fresh.length > 0 ? [{ postId: p.id, replyIds: fresh.map((r) => r.id) }] : [];
+  });
+  function jumpToNextNewReply() {
+    const target = newReplyTargets[0];
+    if (!target) return;
+    setVisitedReplies((prev) => new Set([...prev, ...target.replyIds]));
+    setReplyJump({ postId: target.postId, replyId: target.replyIds[0]! });
   }
 
   // จำนวนโพสต์ "ล่าสุด" ที่กางอยู่ตอนนี้ — เริ่มชุดเดียว แล้วโตทีละชุดเมื่อเลื่อนขึ้น
@@ -114,7 +151,7 @@ export function ReportFeed({
     const i = topicPosts.findIndex((p) => p.id === postId);
     return i >= 0 ? topicPosts.length - i : 0;
   };
-  const mustReach = Math.max(reachOf(highlightPostId), reachOf(newDividerBeforeId));
+  const mustReach = Math.max(reachOf(highlightPostId), reachOf(newDividerBeforeId), reachOf(replyJump?.postId));
   if (mustReach > visibleCount) setVisibleCount(mustReach);
 
   const shownCount = Math.min(topicPosts.length, visibleCount);
@@ -230,7 +267,8 @@ export function ReportFeed({
                         post={p}
                         topic={postTopic}
                         highlighted={p.id === highlightPostId}
-                        highlightReplyId={highlightReplyId}
+                        // ปุ่ม "ตอบกลับใหม่ในโพสต์เก่า" — กางเธรด เลื่อนไปหาคอมเมนต์ แล้วกะพริบ (กลไกเดียวกับลิงก์ ?reply=)
+                        highlightReplyId={replyJump && replyJump.postId === p.id ? replyJump.replyId : highlightReplyId}
                         onOpenTask={onOpenTask}
                         topicBadge={
                           fromAnotherRoom && onJumpToTopic
@@ -246,6 +284,20 @@ export function ReportFeed({
           </div>
         )}
       </div>
+
+      {newReplyTargets.length > 0 && (
+        <button
+          type="button"
+          onClick={jumpToNextNewReply}
+          className="absolute top-3 left-1/2 z-10 -translate-x-1/2 flex max-w-[calc(100%-1.5rem)] items-center gap-1.5 rounded-full bg-[var(--brand-green-dark)] px-3.5 py-2 text-xs font-semibold text-white shadow-lg transition-transform hover:scale-[1.03] active:scale-95"
+          title="ไปที่คอมเมนต์ใหม่ในโพสต์เก่า (กดซ้ำเพื่อไปโพสต์ถัดไป)"
+        >
+          <MessagesSquare className="h-4 w-4 shrink-0" />
+          <span className="truncate">ตอบกลับใหม่ในโพสต์เก่า</span>
+          <span className="shrink-0 rounded-full bg-white/25 px-1.5 tabular-nums">{newReplyTargets.length}</span>
+          <ArrowUp className="h-3.5 w-3.5 shrink-0" />
+        </button>
+      )}
 
       {showJumpToLatest && (
         <button
