@@ -50,6 +50,8 @@ const PIN_CHIP_LIMIT = 3;
  * localStorage, not a server-synced store field (see topicSidebarCollapsed's
  * own comment in ReportFeedPageInner). */
 const TOPIC_SIDEBAR_COLLAPSED_KEY = "report_task.topicSidebarCollapsed";
+/** ห้องที่เปิดล่าสุด — กดเมนู "รายงาน" (ลิงก์ไม่มี ?topic=) แล้วกลับมาห้องเดิม ไม่เด้งไปห้องแรกของรายการ */
+const LAST_TOPIC_KEY = "report_task.lastTopicId";
 
 function scrollToPost(postId: string) {
   document.getElementById(`report-post-${postId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -229,7 +231,7 @@ function ReportFeedPageInner() {
   // ("กดแจ้งเตือน...ไม่เห็นเด้งไปอยู่หน้าเดิม" — happened to work for whoever
   // wasn't already on this page, since a real navigation *into* it mounts
   // fresh and reads the URL correctly; nothing to do with permissions).
-  const [selectedId, setSelectedId] = useState(() => searchParams.get("topic") ?? "");
+  const [selectedId, setSelectedId] = useState(() => searchParams.get("topic") ?? (safeLocalStorage.getItem(LAST_TOPIC_KEY) as string | null) ?? "");
   // จำห้อง/รายงานล่าสุดที่เปิดอยู่ก่อนสลับไป "มุมมองรวม" (ทั้งหมด/รอส่ง/กล่าวถึง)
   // เพื่อให้มีปุ่ม "ย้อนกลับ" พากลับไปห้องเดิมได้ — state ไม่ใช่ ref เพราะค่านี้
   // ขับผลของการ render โดยตรง (backRoomName ด้านล่าง) การอ่าน ref.current ตอน
@@ -274,7 +276,15 @@ function ReportFeedPageInner() {
   // Below `lg`, the topic tree moves into a full-screen Sheet instead of a
   // squeezed inline block with its own internal scroll (3.5.5) — the desktop
   // sidebar (TopicSidebar, still rendered as-is at `lg:`) is unaffected.
-  const [mobileTopicsOpen, setMobileTopicsOpen] = useState(false);
+  // มือถือ: เข้าหน้ารายงานจากเมนู (ไม่ได้มาจากลิงก์ห้อง/โพสต์) = เปิดรายการห้องเต็มจอก่อนแบบ Discord
+  // ให้เลือกห้อง · มาจากลิงก์แจ้งเตือน/คัดลอกลิงก์ = เข้าห้องนั้นตรง ๆ เหมือนเดิม
+  const [mobileTopicsOpen, setMobileTopicsOpen] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 1023px)").matches &&
+      !searchParams.get("topic") &&
+      !searchParams.get("post")
+  );
   // Desktop-only: collapse the topic sidebar down to just a floating "»" edge
   // affix, freeing width for the feed. Per-viewer, not shared team state —
   // localStorage, not the server-synced store — and safe to read straight in
@@ -401,6 +411,7 @@ function ReportFeedPageInner() {
     switchedByUserRef.current = false;
     if (userSwitch && prevTopic && prevTopic !== activeId) pushUrlAfterOverlays(url);
     else window.history.replaceState(overlayHistoryState(), "", url);
+    safeLocalStorage.setItem(LAST_TOPIC_KEY, activeId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
 
@@ -1060,7 +1071,8 @@ function ReportFeedPageInner() {
           itself still needs to be mounted somewhere, with no visual row of
           its own now that its one trigger lives in the AppBar. */}
       <Sheet open={mobileTopicsOpen} onOpenChange={setMobileTopicsOpen}>
-        <SheetContent side="left" className="p-0 w-[85vw] max-w-sm flex flex-col">
+        {/* เต็มจอแบบรายการห้องของ Discord — เดิมกว้าง 85% เหลือหน้าห้องมัว ๆ ข้างหลัง */}
+        <SheetContent side="left" className="p-0 data-[side=left]:w-full data-[side=left]:sm:max-w-none flex flex-col">
           <SheetHeader className="px-4 py-3 border-b border-[var(--line)]/60">
             <SheetTitle>หัวข้อทั้งหมด</SheetTitle>
           </SheetHeader>
