@@ -81,7 +81,7 @@ import { ReportImageLightbox } from "@/modules/report_task/components/report-fee
 import type { ReportPostImage } from "@/modules/report_task/store/report-feed-store";
 import { mimeFromLegacyTaskLabel } from "@/modules/report_task/lib/report-attachment-kind";
 import { uploadTaskAttachment } from "@/modules/report_task/lib/task-attachment-upload";
-import { filesFromDataTransfer } from "@/lib/annotate/annotate";
+import { filesFromDataTransfer, hasClipboardText } from "@/lib/annotate/annotate";
 import { FileDropZone } from "@/components/annotate/file-drop-zone";
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { toast } from "sonner";
@@ -1977,6 +1977,7 @@ export function TaskDetailSheet({
             className={cn("border-t border-[var(--line)] p-3 flex-col gap-2 shrink-0 bg-white", mobileCommentsOpen ? "flex" : "hidden md:flex")}
             // วางรูปที่แคป (Ctrl+V) / ลากไฟล์มาวาง ได้ทั้งกล่องคอมเมนต์
             onPaste={(e) => {
+              if (hasClipboardText(e.clipboardData)) return; // ตารางจาก Excel ฯลฯ = วางเป็นข้อความ
               const files = filesFromDataTransfer(e.clipboardData);
               if (files.length === 0) return;
               e.preventDefault();

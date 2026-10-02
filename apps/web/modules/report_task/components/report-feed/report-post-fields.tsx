@@ -27,7 +27,7 @@ import { Bold, Building2, Code, Hash, Italic, List, ListOrdered, Minus, Square, 
 import { LinkInsertPopover } from "@/modules/report_task/components/report-feed/link-insert-popover";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
 import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
-import { dropZoneProps } from "@/lib/annotate/annotate";
+import { dropZoneProps, hasClipboardText } from "@/lib/annotate/annotate";
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
 import { toast } from "sonner";
 import { uuid } from "@/modules/report_task/lib/uuid";
@@ -764,7 +764,8 @@ export function ReportPostFields({
                 onMouseUp={(e) => syncActiveFormat(s.id, e.currentTarget)}
                 onBlur={(e) => autoLinkifyMentions(s.id, e.currentTarget)}
                 onPaste={(e) => {
-                  if (Array.from(e.clipboardData.items).some((it) => it.kind === "file" && it.type.startsWith("image/"))) {
+                  // ตารางจาก Excel / ข้อความจาก Word มีรูปติดมาด้วย — มีข้อความ = วางเป็นข้อความ
+                  if (!hasClipboardText(e.clipboardData) && Array.from(e.clipboardData.items).some((it) => it.kind === "file" && it.type.startsWith("image/"))) {
                     handleImagePaste(e);
                   } else {
                     handleTextPaste(s.id, e);

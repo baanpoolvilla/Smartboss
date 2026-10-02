@@ -15,6 +15,7 @@ import { getChatPrefs } from "../lib/prefs";
 import { ChatAvatar } from "./chat-avatar";
 
 import { fileTooLargeMessage } from "@/lib/file-limits";
+import { hasClipboardText } from "@/lib/annotate/annotate";
 const MAX_FILES = 20;
 const MAX_BYTES = 25 * 1024 * 1024;
 const ACCEPT_FILES =
@@ -334,6 +335,7 @@ export const Composer = forwardRef<
     <div
       className="relative border-t border-(--line) bg-(--bg) px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 sm:px-3"
       onPaste={(e) => {
+        if (hasClipboardText(e.clipboardData)) return; // ตารางจาก Excel ฯลฯ = วางเป็นข้อความ
         const files = Array.from(e.clipboardData.files);
         if (files.length > 0) {
           e.preventDefault();

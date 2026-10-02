@@ -7,6 +7,7 @@ import { uploadIssueAttachment } from "@/modules/report_task/lib/attachment-uplo
 import type { IssueAttachment } from "@/modules/report_task/types/issue";
 import { cn } from "@/modules/report_task/lib/utils";
 import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
+import { hasClipboardText } from "@/lib/annotate/annotate";
 
 const MAX_FILES = 10;
 
@@ -72,7 +73,7 @@ export function AttachmentPicker({
         if (!disabled && e.dataTransfer.files.length) void addFiles(e.dataTransfer.files);
       }}
       onPaste={(e) => {
-        if (disabled) return;
+        if (disabled || hasClipboardText(e.clipboardData)) return;
         const files = Array.from(e.clipboardData?.files ?? []);
         if (files.length) void addFiles(files);
       }}

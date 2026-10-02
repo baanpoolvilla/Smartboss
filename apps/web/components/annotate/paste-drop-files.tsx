@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { Upload } from "lucide-react";
 import { toast } from "sonner";
-import { filesFromDataTransfer } from "@/lib/annotate/annotate";
+import { filesFromDataTransfer, hasClipboardText } from "@/lib/annotate/annotate";
 
 /**
  * ครอบส่วนไหนก็ได้ที่มี <input type="file"> อยู่ข้างใน — วางรูปที่แคป (Ctrl+V) หรือลากไฟล์มาวาง
@@ -44,7 +44,13 @@ export function PasteDropFiles({
       toast.error("ไฟล์ชนิดนี้แนบตรงนี้ไม่ได้");
       return true;
     }
-    const dt = new DataTransfer();
+    let dt: DataTransfer;
+    try {
+      dt = new DataTransfer();
+    } catch {
+      toast.error("เบราว์เซอร์นี้วาง/ลากไฟล์ไม่ได้ — กดเลือกไฟล์แทน");
+      return true;
+    }
     if (target.multiple && target.name) for (const f of Array.from(target.files ?? [])) dt.items.add(f);
     for (const f of target.multiple ? files : files.slice(0, 1)) dt.items.add(f);
     target.files = dt.files;
@@ -64,8 +70,9 @@ export function PasteDropFiles({
       onPaste={(e) => {
         if (e.defaultPrevented) return; // กรอบข้างในรับไปแล้ว (ครอบซ้อนกัน)
         const target = e.target as HTMLElement;
+        if (hasClipboardText(e.clipboardData)) return; // วางข้อความตามปกติ (รวมตารางจาก Excel)
         const files = filesFromDataTransfer(e.clipboardData);
-        if (files.length === 0) return; // วางข้อความตามปกติ
+        if (files.length === 0) return;
         // ช่องพิมพ์ที่จัดการรูปเองอยู่แล้ว (เช่น ช่องข้อความแบบ rich text) ไม่ต้องแย่ง
         if (target.closest("[data-own-paste]")) return;
         if (deliver(files)) e.preventDefault();

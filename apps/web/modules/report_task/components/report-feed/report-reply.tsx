@@ -39,6 +39,7 @@ export function ReportReply({
   postQuote,
   flashed,
   isOwn,
+  viewerId,
   onOpenLightbox,
   onReplyTo,
   onJumpToQuote,
@@ -56,6 +57,8 @@ export function ReportReply({
   flashed?: boolean;
   /** Only the reply's own author gets edit/delete — same "yours only" gate the post itself already applies. */
   isOwn?: boolean;
+  /** คนที่ดูอยู่ — นับ "อิโมจิที่ฉันใช้บ่อย" เฉพาะตอนฉันกดเพิ่ม (ไม่ใช่ตอนกดเอาออก) */
+  viewerId?: string;
   onOpenLightbox: (images: ReportPostImage[], index: number, authorId: string, createdAt: string) => void;
   onReplyTo: (reply: ReportPostReply) => void;
   /** Scrolls to and flashes whatever `id` (a reply id, or the post id) this reply is quoting. */
@@ -84,7 +87,7 @@ export function ReportReply({
   const bumpUsage = useStickerUsageStore((s) => s.bump);
   const pickerEmojis = sortByUsage(reactionEmojis, (e) => `emoji:${e}`, usageCounts);
   function pickReaction(emoji: string) {
-    if (!(reply.reactions?.[emoji] ?? []).length) bumpUsage(`emoji:${emoji}`);
+    if (!viewerId || !(reply.reactions?.[emoji] ?? []).includes(viewerId)) bumpUsage(`emoji:${emoji}`);
     onToggleReaction(emoji);
   }
   const activeReactions = reactionEmojis

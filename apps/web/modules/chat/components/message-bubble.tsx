@@ -679,7 +679,7 @@ export const MessageBubble = memo(function MessageBubble(props: MessageBubblePro
         </div>
 
         {m.reactions.length > 0 && (
-          <div className={cn("relative z-10 -mt-3 flex flex-wrap gap-1.5", mine ? "justify-end pr-2" : "pl-2")}>
+          <div className={cn("relative z-10 -mt-2 flex flex-wrap gap-1.5", mine ? "justify-end pr-2" : "pl-2")}>
             {m.reactions.map((r) => (
               <ReactionChip
                 key={r.emoji}

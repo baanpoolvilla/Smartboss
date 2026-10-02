@@ -28,7 +28,7 @@ import {
   type MentionType,
 } from "@/modules/report_task/lib/report-feed-rich-text";
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
-import { dropZoneProps } from "@/lib/annotate/annotate";
+import { dropZoneProps, hasClipboardText } from "@/lib/annotate/annotate";
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
 import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
@@ -323,6 +323,7 @@ export function OpenchatFeed({
   // that htmlEditorToBulletsText has no case for and just drops on save),
   // so route it through the real upload path instead.
   async function handleComposerImagePaste(e: React.ClipboardEvent<HTMLDivElement>) {
+    if (hasClipboardText(e.clipboardData)) return; // ตารางจาก Excel ฯลฯ = วางเป็นข้อความ
     const item = Array.from(e.clipboardData.items).find((it) => it.kind === "file" && it.type.startsWith("image/"));
     if (!item) return;
     e.preventDefault();

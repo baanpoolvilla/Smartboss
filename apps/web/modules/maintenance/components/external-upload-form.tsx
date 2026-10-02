@@ -6,6 +6,7 @@ import { useRef, useState } from "react";
 import { Camera, ClipboardPaste } from "lucide-react";
 
 import { FORM_UPLOAD_MAX_BYTES, firstTooLarge, totalTooLargeMessage } from "@/lib/file-limits";
+import { hasClipboardText } from "@/lib/annotate/annotate";
 
 /** ตัดข้อความที่ 500 ตัว — ต้องตรงกับ NOTE_MAX ฝั่งเซิร์ฟเวอร์ */
 const NOTE_MAX = 500;
@@ -49,6 +50,7 @@ export function ExternalUploadForm({
 
   /** เอาไฟล์ที่วางมาต่อเข้า input เดิม — DataTransfer เป็นทางเดียวที่ตั้ง input.files ได้ */
   function onPaste(e: React.ClipboardEvent) {
+    if (hasClipboardText(e.clipboardData)) return; // ตารางจาก Excel ฯลฯ = วางเป็นข้อความ
     const images = Array.from(e.clipboardData.files).filter((f) =>
       f.type.startsWith("image/")
     );

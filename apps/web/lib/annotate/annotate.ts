@@ -93,6 +93,19 @@ export function filesFromDataTransfer(dt: DataTransfer | null): File[] {
     .filter((f): f is File => !!f);
 }
 
+/**
+ * คลิปบอร์ดมีข้อความไหม — คัดลอกเซลล์จาก Excel / ข้อความจาก Word จะได้ทั้งข้อความและ "รูปของตาราง"
+ * มาพร้อมกัน ถ้ามีข้อความให้วางเป็นข้อความตามปกติ ไม่ใช่แนบรูปตาราง (แคปจอ / คัดลอกรูปจากเว็บ
+ * ไม่มีข้อความติดมา ยังแนบเป็นรูปเหมือนเดิม)
+ */
+export function hasClipboardText(dt: DataTransfer | null): boolean {
+  try {
+    return !!dt && dt.getData("text/plain").trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
 /** props สำหรับ div ที่รับไฟล์ลากมาวาง — onFiles ได้ไฟล์ทั้งหมดที่ปล่อยลงมา */
 export function dropZoneProps(onFiles: (files: File[]) => void) {
   return {
