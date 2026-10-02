@@ -36,6 +36,10 @@ export function Lightbox({
   const [i, setI] = useState(index);
   useBackToClose(true, onClose);
   const item = items[i];
+  // กรอบนอกสุด — ระบบปัดใช้จางพื้นดำตอนลากเพื่อปิด (callback ref เป็น state ส่งเข้า hook ได้)
+  const [rootEl, setRootEl] = useState<HTMLDivElement | null>(null);
+  // มือถือ: แตะรูป = ซ่อน/โชว์ปุ่ม แบบแอปรูป/Discord (ปิดด้วย ✕, ปุ่มย้อนกลับ หรือปัดขึ้น/ลง)
+  const [chromeHidden, setChromeHidden] = useState(false);
   // ปัดซ้าย/ขวา — รูปเลื่อนตามนิ้ว/เมาส์ รูปข้าง ๆ โหลดรอไว้ (ดู lib/swipe-pager.ts)
   const {
     viewportRef,
@@ -48,7 +52,7 @@ export function Lightbox({
     trackStyle,
     slides,
     go,
-  } = useSwipePager({ count: items.length, index: i, onIndexChange: setI, onSwipeDown: onClose });
+  } = useSwipePager({ count: items.length, index: i, onIndexChange: setI, onSwipeDismiss: onClose, dismissBackdrop: rootEl });
   const [editing, setEditing] = useState(false);
   async function editImage() {
     if (!item || !onEditImage) return;
@@ -87,13 +91,15 @@ export function Lightbox({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex flex-col bg-black text-white"
+      ref={setRootEl}
+      data-chrome-hidden={chromeHidden || undefined}
+      className="group fixed inset-0 z-[80] flex flex-col bg-black text-white"
       role="dialog"
       aria-modal="true"
       aria-label="ดูรูปภาพ"
     >
       {/* ลอยทับรูปแบบ Discord (รูปเต็มจอ) — ไล่เงาดำด้านบนให้ปุ่มขาวอ่านออกบนรูปสีอ่อน */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center gap-2 bg-gradient-to-b from-black/70 via-black/35 to-transparent px-3 pb-8 pt-[max(0.5rem,env(safe-area-inset-top))] [&>*]:pointer-events-auto">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center gap-2 bg-gradient-to-b from-black/70 via-black/35 to-transparent px-3 pb-8 pt-[max(0.5rem,env(safe-area-inset-top))] [&>*]:pointer-events-auto group-data-[chrome-hidden]:[&>*]:pointer-events-none transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none">
         <span className="text-sm opacity-80">{items.length > 1 ? `${i + 1} / ${items.length}` : ""}</span>
         {item.expiresAt && (
           <span className="text-xs opacity-70">
@@ -150,7 +156,16 @@ export function Lightbox({
           {slides.map((sl) => {
             const it = items[sl.index]!;
             return (
-              <div key={sl.key} className="absolute inset-0 flex items-center justify-center" style={slideStyle(sl.rel)} onClick={onClose}>
+              <div
+                key={sl.key}
+                className="absolute inset-0 flex items-center justify-center"
+                style={slideStyle(sl.rel)}
+                onClick={(e) => {
+                  // จอสัมผัส: แตะตรงไหนก็ได้ = ซ่อน/โชว์ปุ่ม · เมาส์: คลิกพื้นนอกรูป = ปิด (แบบ Discord บนเว็บ)
+                  if (window.matchMedia("(pointer: coarse)").matches) setChromeHidden((v) => !v);
+                  else if (e.target === e.currentTarget) onClose();
+                }}
+              >
                 {it.kind === "video" ? (
                   sl.rel === 0 ? (
                     <video src={it.url} controls autoPlay playsInline className="max-h-full max-w-full" onClick={(e) => e.stopPropagation()} />
@@ -170,7 +185,6 @@ export function Lightbox({
                     decoding="async"
                     className="max-h-full max-w-full object-contain"
                     style={it.thumbUrl ? { backgroundImage: `url(${it.thumbUrl})`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center" } : undefined}
-                    onClick={(e) => e.stopPropagation()}
                   />
                 )}
               </div>
@@ -184,7 +198,7 @@ export function Lightbox({
               e.stopPropagation();
               go(-1);
             }}
-            className="absolute left-2 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 sm:flex"
+            className="absolute left-2 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 sm:flex transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none"
             aria-label="รูปก่อนหน้า"
           >
             <ChevronLeft className="h-6 w-6" />
@@ -197,7 +211,7 @@ export function Lightbox({
               e.stopPropagation();
               go(1);
             }}
-            className="absolute right-2 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 sm:flex"
+            className="absolute right-2 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 sm:flex transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none"
             aria-label="รูปถัดไป"
           >
             <ChevronRight className="h-6 w-6" />

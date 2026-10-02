@@ -49,6 +49,9 @@ export function ReportImageLightbox({
   onEditImage?: (file: File) => void;
 }) {
   const hasMultiple = images.length > 1;
+  // กรอบนอกสุด (พื้นดำ) — ระบบปัดใช้จางพื้นตอนลากเพื่อปิด · มือถือแตะรูป = ซ่อน/โชว์ปุ่ม (แบบแอปรูป/Discord)
+  const [rootEl, setRootEl] = useState<HTMLDivElement | null>(null);
+  const [chromeHidden, setChromeHidden] = useState(false);
   useBackToClose(true, onClose);
   const activeThumbRef = useRef<HTMLButtonElement>(null);
 
@@ -78,8 +81,9 @@ export function ReportImageLightbox({
     onIndexChange,
     loop: true,
     enabled: !zoomed,
-    // ปัดลงเพื่อปิด (มือถือ) — ตอนซูมอยู่ไม่ทำงาน (ลากเลื่อนรูปแทน)
-    onSwipeDown: onClose,
+    // ปัดขึ้น/ลงเพื่อปิด (มือถือ) — ตอนซูมอยู่ไม่ทำงาน (ลากเลื่อนรูปแทน)
+    onSwipeDismiss: onClose,
+    dismissBackdrop: rootEl,
   });
   // Single-pointer drag-to-pan while zoomed; the existing swipe-to-next-image
   // drag above only makes sense at 1x, where there's nothing to pan.
@@ -289,6 +293,8 @@ export function ReportImageLightbox({
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent
+        ref={setRootEl}
+        data-chrome-hidden={chromeHidden || undefined}
         showCloseButton={false}
         // Clicking the backdrop (anywhere that isn't the image or a control)
         // closes it, same as every other image viewer.
@@ -304,7 +310,7 @@ export function ReportImageLightbox({
         // pinch-to-zoom themselves already — this only turns off the
         // browser's *default* gesture handling, not our own JS.
         style={{ touchAction: "none" }}
-        className="inset-0 top-0 left-0 right-0 bottom-0 translate-x-0 translate-y-0 max-w-none sm:max-w-none w-screen h-dvh max-h-dvh bg-black border-none ring-0 rounded-none p-0 gap-0 flex items-center justify-center cursor-zoom-out overflow-hidden"
+        className="group inset-0 top-0 left-0 right-0 bottom-0 translate-x-0 translate-y-0 max-w-none sm:max-w-none w-screen h-dvh max-h-dvh bg-black border-none ring-0 rounded-none p-0 gap-0 flex items-center justify-center cursor-zoom-out overflow-hidden"
       >
         {/* Discord-style identity chip, top-left — who posted this image and
             when, so the picture doesn't lose its context once it fills the
@@ -316,7 +322,7 @@ export function ReportImageLightbox({
             attachment lightbox, which has no "post" concept). */}
         {author && (
           <div
-            className="absolute top-4 left-4 z-10 flex items-center gap-2 rounded-full bg-black/40 py-1 pl-1 pr-3"
+            className="absolute top-4 left-4 z-10 flex items-center gap-2 rounded-full bg-black/40 py-1 pl-1 pr-3 transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none"
             onClick={(e) => e.stopPropagation()}
           >
             <Avatar className="h-7 w-7 shrink-0">
@@ -338,7 +344,7 @@ export function ReportImageLightbox({
             เพื่อเปิดที่ให้ชิปคนโพสต์ด้านซ้าย ("มุมขวาบน" ของจริงใน discord ก็มี
             ปุ่มปิดอยู่ท้ายแถบเดียวกันนี้เหมือนกัน). Zoom %/+/- ของเดิมยังอยู่
             ครบ ไม่ตัดออก แค่ย้ายมารวมพวงเดียวกับปุ่มอื่น. */}
-        <div className="absolute top-4 right-4 z-10 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+        <div className="absolute top-4 right-4 z-10 flex items-center gap-2 transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none" onClick={(e) => e.stopPropagation()}>
           {!isVideo && !isDoc && (
             <div className="flex items-center gap-0.5 rounded-full bg-white/10 p-0.5">
               <button
@@ -414,7 +420,7 @@ export function ReportImageLightbox({
               e.stopPropagation();
               go(-1);
             }}
-            className="absolute left-4 top-1/2 z-10 -translate-y-1/2 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
+            className="transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
             aria-label="รูปก่อนหน้า"
           >
             <ChevronLeft className="h-6 w-6" />
@@ -438,7 +444,9 @@ export function ReportImageLightbox({
                 className="absolute inset-0 flex items-center justify-center"
                 style={slideStyle(sl.rel)}
                 onClick={(e) => {
-                  if (e.target === e.currentTarget) onClose();
+                  // จอสัมผัส: แตะรูป/พื้น = ซ่อน/โชว์ปุ่ม · เมาส์: คลิกพื้นนอกรูป = ปิด
+                  if (window.matchMedia("(pointer: coarse)").matches) setChromeHidden((v) => !v);
+                  else if (e.target === e.currentTarget) onClose();
                 }}
               >
                 {sl.rel !== 0
@@ -569,7 +577,6 @@ export function ReportImageLightbox({
                   draggable={false}
                   decoding="async"
                   onDragStart={(e) => e.preventDefault()}
-                  onClick={(e) => e.stopPropagation()}
                   onWheel={handleWheel}
                   onDoubleClick={handleDoubleClick}
                   onPointerDown={handlePointerDown}
@@ -605,7 +612,7 @@ export function ReportImageLightbox({
               e.stopPropagation();
               go(1);
             }}
-            className="absolute right-4 top-1/2 z-10 -translate-y-1/2 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
+            className="transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none absolute right-4 top-1/2 z-10 -translate-y-1/2 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
             aria-label="รูปถัดไป"
           >
             <ChevronRight className="h-6 w-6" />
@@ -621,7 +628,7 @@ export function ReportImageLightbox({
           // to, same as Discord's own lightbox strip
           // ("ให้กดง่ายหน่อยได้ไหมใหญ่กว่านี้ หรือแสดงเป็นภาพ").
           <div
-            className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 flex items-center gap-2.5 max-w-[92vw]"
+            className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 flex items-center gap-2.5 max-w-[92vw] transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none"
             onClick={(e) => e.stopPropagation()}
           >
             <span className="text-xs text-white/80 tabular-nums shrink-0">

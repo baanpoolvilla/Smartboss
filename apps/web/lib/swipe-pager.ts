@@ -38,7 +38,8 @@ export function useSwipePager({
   onIndexChange,
   loop = false,
   enabled = true,
-  onSwipeDown,
+  onSwipeDismiss,
+  dismissBackdrop,
 }: {
   count: number;
   index: number;
@@ -47,8 +48,11 @@ export function useSwipePager({
   loop?: boolean;
   /** false = ไม่รับการปัด (เช่น ตอนซูมรูปอยู่) */
   enabled?: boolean;
-  /** จอสัมผัส: ปัดรูปลงแรง ๆ / ลากลงไกลพอ = ปิดหน้าดูรูป (แบบ Discord / รูปในมือถือ) */
-  onSwipeDown?: () => void;
+  /** จอสัมผัส: ปัดรูปขึ้น/ลง (ไกลพอหรือสะบัดเร็ว) = ปิดหน้าดูรูป — แบบมาตรฐานของแอปรูปในมือถือ/Discord */
+  onSwipeDismiss?: () => void;
+  /** กรอบนอกสุดของหน้าดูรูป (พื้นดำ) — ระหว่างลากเพื่อปิด พื้นดำจางลงจนเห็นหน้าเดิมข้างหลัง
+   * และติด data-dismissing ให้ปุ่มต่าง ๆ ซ่อนตัว (group-data-[dismissing]:opacity-0) */
+  dismissBackdrop?: HTMLElement | null;
 }) {
   // v = ตำแหน่งแบบไม่วน (ใช้เป็น key ของสไลด์ ให้ DOM รูปเดิมอยู่ต่อหลังเลื่อน) · synced = index ล่าสุดที่รู้
   const [pos, setPos] = useState({ v: index, synced: index });
@@ -62,6 +66,25 @@ export function useSwipePager({
   useEffect(() => {
     trackEl.current = track;
   }, [track]);
+  const backdropEl = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    backdropEl.current = dismissBackdrop ?? null;
+  }, [dismissBackdrop]);
+
+  /** พื้นหลังระหว่างลากเพื่อปิด — progress 0..1 · null = คืนสภาพ (เด้งกลับ) */
+  function paintBackdrop(progress: number | null) {
+    const el = backdropEl.current;
+    if (!el) return;
+    if (progress === null) {
+      el.style.transition = `background-color ${DURATION}ms ${EASE}`;
+      el.style.backgroundColor = "";
+      el.removeAttribute("data-dismissing");
+      return;
+    }
+    el.style.transition = "none";
+    el.style.backgroundColor = `rgba(0, 0, 0, ${1 - progress * 0.95})`;
+    el.setAttribute("data-dismissing", "");
+  }
   const busy = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const frame = useRef(0);
@@ -69,9 +92,9 @@ export function useSwipePager({
   const pointers = useRef(new Set<number>());
   const suppressClick = useRef(false);
   const wheel = useRef({ acc: 0, until: 0 });
-  const latest = useRef({ v: pos.v, count, loop, onIndexChange, onSwipeDown });
+  const latest = useRef({ v: pos.v, count, loop, onIndexChange, onSwipeDismiss });
   useEffect(() => {
-    latest.current = { v: pos.v, count, loop, onIndexChange, onSwipeDown };
+    latest.current = { v: pos.v, count, loop, onIndexChange, onSwipeDismiss };
   });
   useEffect(
     () => () => {
@@ -86,19 +109,19 @@ export function useSwipePager({
     cancelAnimationFrame(frame.current);
     const el = trackEl.current;
     if (!el) return;
-    el.style.transition = animate ? `transform ${DURATION}ms ${EASE}, opacity ${DURATION}ms ${EASE}` : "none";
+    el.style.transition = animate ? `transform ${DURATION}ms ${EASE}` : "none";
     el.style.transform = `translate3d(${x}px, 0, 0)`;
-    el.style.opacity = "";
   }
 
-  /** ลากลงเพื่อปิด — รูปเลื่อนตามนิ้วลงมา ย่อนิด ๆ และจางลงตามระยะ */
-  function paintDismiss(dy: number) {
+  /** ลากเพื่อปิด — รูปลอยตามนิ้วทุกทิศ ย่อลงตามระยะ (รูปไม่จาง — พื้นดำของหน้าดูรูปจางแทน ดู paintBackdrop) */
+  function paintDismiss(dx: number, dy: number) {
     const el = trackEl.current;
     if (!el) return;
-    const k = Math.min(1, Math.max(0, dy) / 400);
+    const h = viewport?.clientHeight ?? window.innerHeight;
+    const k = Math.min(1, Math.abs(dy) / (h * 0.6));
     el.style.transition = "none";
-    el.style.transform = `translate3d(0, ${Math.max(0, dy)}px, 0) scale(${1 - k * 0.15})`;
-    el.style.opacity = String(1 - k * 0.6);
+    el.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(${1 - k * 0.25})`;
+    paintBackdrop(k);
   }
 
   function canGo(dir: 1 | -1): boolean {
@@ -147,8 +170,8 @@ export function useSwipePager({
       drag.current = null;
       return;
     }
-    // รูปเดียวก็ยังปัดลงเพื่อปิดได้ (ถ้ามี onSwipeDown) — แค่ปัดซ้าย/ขวาไม่ไปไหน
-    if (!enabled || busy.current || (latest.current.count < 2 && !latest.current.onSwipeDown)) return;
+    // รูปเดียวก็ยังปัดขึ้น/ลงเพื่อปิดได้ (ถ้ามี onSwipeDismiss) — แค่ปัดซ้าย/ขวาไม่ไปไหน
+    if (!enabled || busy.current || (latest.current.count < 2 && !latest.current.onSwipeDismiss)) return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
     // วิดีโอ (แถบเลื่อนเวลา) / pdf / ปุ่ม — ปล่อยให้ทำงานของมันเอง
     if ((e.target as HTMLElement).closest("video, iframe, button, a, input, textarea, [data-no-swipe]")) return;
@@ -176,8 +199,8 @@ export function useSwipePager({
     if (!d.axis) {
       if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
       d.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
-      // แนวตั้ง: จอสัมผัส + ลากลง + หน้านั้นรับ "ปัดลงเพื่อปิด" → ลากรูปลง · อื่น ๆ ไม่ใช่เรื่องของเรา
-      if (d.axis === "y" && !(d.touch && dy > 0 && latest.current.onSwipeDown)) {
+      // แนวตั้ง: จอสัมผัส + หน้านั้นรับ "ปัดเพื่อปิด" → ลากรูปขึ้น/ลง · อื่น ๆ ไม่ใช่เรื่องของเรา
+      if (d.axis === "y" && !(d.touch && latest.current.onSwipeDismiss)) {
         drag.current = null;
         return;
       }
@@ -198,12 +221,13 @@ export function useSwipePager({
     d.py = e.clientY;
     d.pt = e.timeStamp;
     if (d.axis === "y") {
+      d.dx = dx;
       d.dy = dy;
       if (!frame.current) {
         frame.current = requestAnimationFrame(() => {
           frame.current = 0;
           const cur = drag.current;
-          if (cur) paintDismiss(cur.dy);
+          if (cur) paintDismiss(cur.dx, cur.dy);
         });
       }
       return;
@@ -233,20 +257,26 @@ export function useSwipePager({
       cancelAnimationFrame(frame.current);
       frame.current = 0;
       suppressClick.current = true;
+      const dx = e.clientX - d.x0;
       const dy = e.clientY - d.y0;
       const vy = e.timeStamp - d.pt > 80 ? 0 : d.vy;
       const h = viewport?.clientHeight ?? window.innerHeight;
-      // ลากลงเกิน ~1/5 จอ หรือสะบัดลงเร็ว ๆ = ปิด · ไม่ถึง = เด้งกลับที่เดิม
-      if (dy > Math.min(160, h * 0.2) || (vy > 0.6 && dy > 40)) {
+      // ลากขึ้น/ลงเกิน ~1/6 จอ หรือสะบัดเร็ว ๆ ไปทางเดียวกับที่ลาก = ปิด · ไม่ถึง = เด้งกลับที่เดิม
+      const far = Math.abs(dy) > Math.min(140, h * 0.17);
+      const flick = Math.abs(vy) > 0.6 && Math.abs(dy) > 30 && Math.sign(vy) === Math.sign(dy);
+      if (far || flick) {
+        // รูปพุ่งออกไปทางที่ปัด แล้วค่อยปิด
         const el = trackEl.current;
+        const dir = dy < 0 ? -1 : 1;
         if (el) {
-          el.style.transition = `transform 180ms ${EASE}, opacity 180ms ${EASE}`;
-          el.style.transform = `translate3d(0, ${h}px, 0) scale(0.85)`;
-          el.style.opacity = "0";
+          el.style.transition = `transform 200ms ${EASE}`;
+          el.style.transform = `translate3d(${dx}px, ${dir * h}px, 0) scale(0.75)`;
         }
-        setTimeout(() => latest.current.onSwipeDown?.(), 160);
+        paintBackdrop(1);
+        setTimeout(() => latest.current.onSwipeDismiss?.(), 170);
       } else {
         moveTrack(0, true);
+        paintBackdrop(null);
       }
       return;
     }
