@@ -16,7 +16,6 @@ import { ChatAvatar } from "./chat-avatar";
 
 import { fileTooLargeMessage } from "@/lib/file-limits";
 import { openAnnotator } from "@/lib/annotate/annotate";
-import { AnnotateButton } from "@/components/annotate/image-annotator-host";
 const MAX_FILES = 20;
 const MAX_BYTES = 25 * 1024 * 1024;
 const ACCEPT_FILES =
@@ -407,12 +406,23 @@ export const Composer = forwardRef<
           {pending.map((p) => (
             <div key={p.id} className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-(--line) bg-(--bg-soft)">
               {p.previewUrl && p.kind === "image" ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={p.previewUrl} alt={p.file.name} className="h-full w-full object-cover" />
+                // แตะรูป = เปิดหน้าต่างวาด/เขียน (ไม่มีปุ่มปากกาทับรูปแล้ว)
+                p.file.type !== "image/gif" && p.status !== "uploading" ? (
+                  <button
+                    type="button"
+                    onClick={() => void annotatePending(p)}
+                    title="แตะเพื่อวาด/เขียนบนรูป"
+                    aria-label="วาด/เขียนบนรูปนี้"
+                    className="block h-full w-full cursor-pointer"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={p.previewUrl} alt={p.file.name} className="h-full w-full object-cover" />
+                  </button>
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={p.previewUrl} alt={p.file.name} className="h-full w-full object-cover" />
+                )
               ) : null}
-              {p.kind === "image" && p.file.type !== "image/gif" && p.status !== "uploading" && (
-                <AnnotateButton className="absolute bottom-1 left-1" onClick={() => void annotatePending(p)} />
-              )}
               {p.previewUrl && p.kind === "image" ? null : p.previewUrl && p.kind === "video" ? (
                 <video src={p.previewUrl} muted className="h-full w-full object-cover" />
               ) : (
