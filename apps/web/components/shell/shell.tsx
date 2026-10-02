@@ -34,7 +34,7 @@ import { SystemNotify } from "./system-notify";
 import { ChatNotifyListener } from "@/modules/chat/components/chat-nav-badge";
 import { MarkReadOnRoute } from "@/modules/notifications/mark-read-on-route";
 import { ShellProvider, type ShellUser } from "./shell-context";
-import { useBackToClose } from "@/lib/back-to-close";
+import { useBackToClose, useBackToCloseOnTouch } from "@/lib/back-to-close";
 
 export type { ShellUser };
 
@@ -128,6 +128,9 @@ function LauncherFrame({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  // มือถือ: ปุ่มย้อนกลับปิดเมนูโปรไฟล์ก่อน
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  useBackToCloseOnTouch(userMenuOpen, () => setUserMenuOpen(false));
 
   return (
     <div className="flex min-h-dvh flex-col bg-(--bg-soft)">
@@ -154,7 +157,7 @@ function LauncherFrame({
           <ReportNotificationSync />
           <NotificationBellPopover />
 
-          <DropdownMenu>
+          <DropdownMenu open={userMenuOpen} onOpenChange={setUserMenuOpen}>
             <DropdownMenuTrigger className="gap-2 rounded-full outline-hidden focus-visible:ring-2 focus-visible:ring-(--brand-green)/40">
               <Avatar name={user.name} src={user.avatarUrl} />
             </DropdownMenuTrigger>

@@ -164,3 +164,13 @@ export function useBackToClose(open: boolean, onClose: () => void) {
     };
   }, [open]);
 }
+
+/**
+ * แบบเดียวกับ useBackToClose แต่เฉพาะเครื่องจอสัมผัส — ใช้กับป๊อปอัปเล็ก/เมนู/ช่องตัวเลือก
+ * มาตรฐาน Android: ปุ่มย้อนกลับปิดสิ่งที่เปิดซ้อนอยู่บนสุดก่อนเสมอ ส่วนคอมไม่มีปุ่มย้อนกลับของเครื่อง
+ * (เมนูเปิด/ปิดถี่ ๆ ด้วยเมาส์ ไม่ควรไปแตะประวัติของเบราว์เซอร์)
+ */
+export function useBackToCloseOnTouch(open: boolean, onClose: () => void) {
+  const touch = typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+  useBackToClose(open && touch, onClose);
+}

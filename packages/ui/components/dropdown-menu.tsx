@@ -15,8 +15,25 @@ function useDropdown(): DropdownContextValue {
   return ctx;
 }
 
-export function DropdownMenu({ children }: { children: React.ReactNode }) {
-  const [open, setOpen] = React.useState(false);
+export function DropdownMenu({
+  children,
+  open: controlledOpen,
+  onOpenChange,
+}: {
+  children: React.ReactNode;
+  /** ไม่ส่ง = เมนูเก็บสถานะเปิด/ปิดเอง · ส่งคู่กับ onOpenChange = ผู้ใช้คุมเอง (เช่น ให้ปุ่มย้อนกลับของมือถือปิดเมนู) */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const [innerOpen, setInnerOpen] = React.useState(false);
+  const open = controlledOpen ?? innerOpen;
+  const setOpen = React.useCallback(
+    (v: boolean) => {
+      if (controlledOpen === undefined) setInnerOpen(v);
+      onOpenChange?.(v);
+    },
+    [controlledOpen, onOpenChange]
+  );
   const ref = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -33,7 +50,7 @@ export function DropdownMenu({ children }: { children: React.ReactNode }) {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, setOpen]);
 
   return (
     <DropdownContext.Provider value={{ open, setOpen }}>

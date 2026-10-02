@@ -16,6 +16,7 @@ import { ChatAvatar } from "./chat-avatar";
 
 import { fileTooLargeMessage } from "@/lib/file-limits";
 import { hasClipboardText } from "@/lib/annotate/annotate";
+import { useBackToCloseOnTouch } from "@/lib/back-to-close";
 const MAX_FILES = 20;
 const MAX_BYTES = 25 * 1024 * 1024;
 const ACCEPT_FILES =
@@ -95,6 +96,7 @@ export const Composer = forwardRef<
   const [mentionIndex, setMentionIndex] = useState(0);
   const mentionListRef = useRef<HTMLDivElement>(null);
   const [plusOpen, setPlusOpen] = useState(false);
+  useBackToCloseOnTouch(plusOpen, () => setPlusOpen(false)); // มือถือ: ปุ่มย้อนกลับปิดเมนู "+" ก่อน
   /** มือถือ: กด ">" ตอนกำลังพิมพ์ เพื่อกางปุ่มกล้อง/รูปกลับมา (แบบ LINE) */
   const [toolsOpen, setToolsOpen] = useState(false);
   const [recording, setRecording] = useState<{ startedAt: number } | null>(null);

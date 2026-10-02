@@ -2,12 +2,24 @@
 
 import * as React from "react"
 import { Menu as MenuPrimitive } from "@base-ui/react/menu"
+import { useBackToCloseOnTouch } from "@/lib/back-to-close"
 
 import { cn } from "@/modules/report_task/lib/utils"
 import { ChevronRightIcon, CheckIcon } from "lucide-react"
 
-function DropdownMenu({ ...props }: MenuPrimitive.Root.Props) {
-  return <MenuPrimitive.Root data-slot="dropdown-menu" {...props} />
+// มือถือ: กดปุ่มย้อนกลับ = ปิดเมนูนี้ก่อน (ไม่ย้อนหน้า) — ดู lib/back-to-close.ts
+function DropdownMenu({ open, defaultOpen, onOpenChange, ...props }: MenuPrimitive.Root.Props) {
+  const [innerOpen, setInnerOpen] = React.useState(defaultOpen ?? false)
+  const isOpen = open ?? innerOpen
+  const change = React.useCallback<NonNullable<MenuPrimitive.Root.Props["onOpenChange"]>>(
+    (next, details) => {
+      if (open === undefined) setInnerOpen(next)
+      onOpenChange?.(next, details)
+    },
+    [open, onOpenChange]
+  )
+  useBackToCloseOnTouch(isOpen, () => change(false, undefined as never))
+  return <MenuPrimitive.Root data-slot="dropdown-menu" open={isOpen} onOpenChange={change} {...props} />
 }
 
 function DropdownMenuPortal({ ...props }: MenuPrimitive.Portal.Props) {

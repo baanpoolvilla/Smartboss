@@ -2,11 +2,23 @@
 
 import * as React from "react"
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover"
+import { useBackToCloseOnTouch } from "@/lib/back-to-close"
 
 import { cn } from "@/modules/report_task/lib/utils"
 
-function Popover({ ...props }: PopoverPrimitive.Root.Props) {
-  return <PopoverPrimitive.Root data-slot="popover" {...props} />
+// มือถือ: กดปุ่มย้อนกลับ = ปิดป๊อปอัปนี้ก่อน (ไม่ย้อนหน้า) — ดู lib/back-to-close.ts
+function Popover({ open, defaultOpen, onOpenChange, ...props }: PopoverPrimitive.Root.Props) {
+  const [innerOpen, setInnerOpen] = React.useState(defaultOpen ?? false)
+  const isOpen = open ?? innerOpen
+  const change = React.useCallback<NonNullable<PopoverPrimitive.Root.Props["onOpenChange"]>>(
+    (next, details) => {
+      if (open === undefined) setInnerOpen(next)
+      onOpenChange?.(next, details)
+    },
+    [open, onOpenChange]
+  )
+  useBackToCloseOnTouch(isOpen, () => change(false, undefined as never))
+  return <PopoverPrimitive.Root data-slot="popover" open={isOpen} onOpenChange={change} {...props} />
 }
 
 function PopoverTrigger({ ...props }: PopoverPrimitive.Trigger.Props) {

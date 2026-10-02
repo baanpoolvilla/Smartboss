@@ -14,7 +14,7 @@ import { downloadUrl } from "./lightbox";
 import { daysUntilExpiry } from "../lib/retention";
 import { NoteCard } from "./notes";
 import { MessageText } from "./message-text";
-import { useBackToClose } from "@/lib/back-to-close";
+import { useBackToClose, useBackToCloseOnTouch } from "@/lib/back-to-close";
 
 // ─── ไฟล์แนบ ───────────────────────────────────────────────────────────────
 
@@ -402,6 +402,7 @@ function ReactionChip({
   onToggle: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  useBackToCloseOnTouch(open, () => setOpen(false)); // มือถือ: ปุ่มย้อนกลับปิดรายชื่อคนกดอิโมจิก่อน
   const lastPointer = useRef<string>("mouse");
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);

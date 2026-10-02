@@ -2,11 +2,30 @@
 
 import * as React from "react"
 import { Select as SelectPrimitive } from "@base-ui/react/select"
+import { useBackToCloseOnTouch } from "@/lib/back-to-close"
 
 import { cn } from "@/modules/report_task/lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
-const Select = SelectPrimitive.Root
+// มือถือ: กดปุ่มย้อนกลับ = ปิดรายการตัวเลือกก่อน (ไม่ย้อนหน้า) — ดู lib/back-to-close.ts
+function Select<Value, Multiple extends boolean | undefined = false>({
+  open,
+  defaultOpen,
+  onOpenChange,
+  ...props
+}: SelectPrimitive.Root.Props<Value, Multiple>) {
+  const [innerOpen, setInnerOpen] = React.useState(defaultOpen ?? false)
+  const isOpen = open ?? innerOpen
+  const change = React.useCallback<NonNullable<SelectPrimitive.Root.Props<Value, Multiple>["onOpenChange"]>>(
+    (next, details) => {
+      if (open === undefined) setInnerOpen(next)
+      onOpenChange?.(next, details)
+    },
+    [open, onOpenChange]
+  )
+  useBackToCloseOnTouch(isOpen, () => change(false, undefined as never))
+  return <SelectPrimitive.Root open={isOpen} onOpenChange={change} {...props} />
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (
