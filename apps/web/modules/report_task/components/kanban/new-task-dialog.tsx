@@ -87,6 +87,7 @@ import {
 import { toast } from "sonner";
 import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
 import { uuid } from "@/modules/report_task/lib/uuid";
+import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 
 type ItemType = "task" | "meeting" | "leave" | "dayoff";
 
@@ -1027,6 +1028,7 @@ export function NewTaskDialog({
   return (
     <Dialog open={open} onOpenChange={requestClose}>
       <DialogContent className="sm:max-w-lg max-h-[92vh] overflow-y-auto overflow-x-hidden p-0 gap-0">
+        <PasteDropFiles label="ปล่อยเพื่อแนบไฟล์/รูป">
         <DialogHeader className="px-5 pt-5 pb-3 space-y-3">
           <DialogTitle>
             {allowedTypes.length === 1
@@ -1833,6 +1835,7 @@ export function NewTaskDialog({
                   : "บันทึกวันลา"}
           </Button>
         </DialogFooter>
+        </PasteDropFiles>
       </DialogContent>
 
       <AlertDialog open={confirmDiscardOpen} onOpenChange={setConfirmDiscardOpen}>

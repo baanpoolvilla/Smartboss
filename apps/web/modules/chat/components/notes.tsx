@@ -15,6 +15,7 @@ import { ChatAvatar } from "./chat-avatar";
 import { uploadChatMedia } from "./composer";
 import { MessageText } from "./message-text";
 import { ChatModal } from "./new-chat-dialog";
+import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 
 /**
  * โน้ตของห้องแชท (แบบ LINE) — การ์ดในห้อง, หน้าดูโน้ต (คอมเมนต์/ถูกใจ), หน้าเขียน/แก้, แท็บ "โน้ต"
@@ -180,6 +181,7 @@ export function NoteEditor({
         </div>
       }
     >
+      <PasteDropFiles label="ปล่อยเพื่อแนบรูปในโน้ต">
       <div className="flex flex-col gap-3 p-4">
         <textarea
           autoFocus
@@ -226,6 +228,7 @@ export function NoteEditor({
           }}
         />
       </div>
+      </PasteDropFiles>
     </ChatModal>
   );
 }

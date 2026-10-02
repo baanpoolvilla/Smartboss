@@ -20,6 +20,7 @@ import { userNameMap } from "@/modules/maintenance/data/users";
 import { createAssetAction } from "../../assets/actions";
 import { deletePropertyAction } from "../actions";
 import { AppScaffold } from "@/modules/maintenance/components/app-scaffold";
+import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 
 function fmtDate(d: Date | null | undefined): string {
   if (!d) return "-";
@@ -187,6 +188,7 @@ function AddAssetForm({ propertyId }: { propertyId: string }) {
         <Plus className="h-4 w-4" /> อุปกรณ์ที่จะ PM
       </summary>
       <Card className="p-4">
+        <PasteDropFiles label="ปล่อยเพื่อแนบรูป">
         <form action={action} className="flex flex-col gap-3">
           <Input name="name" placeholder="ชื่ออุปกรณ์ *" required />
           <textarea
@@ -223,6 +225,7 @@ function AddAssetForm({ propertyId }: { propertyId: string }) {
             เพิ่มอุปกรณ์
           </Button>
         </form>
+        </PasteDropFiles>
       </Card>
     </details>
   );

@@ -5,6 +5,7 @@ import { SubmitButton } from "./submit-button";
 import { useState } from "react";
 import { Info, Receipt, MinusCircle } from "lucide-react";
 import { Card } from "@smartboss/ui/components/card";
+import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 
 const inputClass =
   "h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm text-(--ink) focus-visible:border-(--brand-green) focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-(--brand-green)/30";
@@ -41,6 +42,7 @@ export function ExpenseForm({
 
   return (
     <Card className="p-5">
+      <PasteDropFiles label="ปล่อยเพื่อแนบรูปใบเสร็จ">
       <form className="flex flex-col gap-4">
         {propertyCount > 1 && (
           <div
@@ -182,6 +184,7 @@ export function ExpenseForm({
           </SubmitButton>
         </div>
       </form>
+      </PasteDropFiles>
     </Card>
   );
 }

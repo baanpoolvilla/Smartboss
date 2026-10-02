@@ -10,6 +10,7 @@ import { createFolder, createFile, type FolderPathEntry } from "@/modules/compan
 import { uploadCompanyFile } from "@/modules/company-files/lib/upload";
 import { formatFileSize, fileIconKind } from "@/modules/company-files/lib/file-meta";
 import type { CompanyFile, CompanyFolder } from "@prisma/client";
+import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 
 /**
  * Folder browser for "ไฟล์บริษัท" — plain URL-driven navigation (`?folder=id`,
@@ -87,6 +88,7 @@ export function FileBrowser({
   }
 
   return (
+    <PasteDropFiles label="ปล่อยเพื่ออัปโหลดไฟล์">
     <div className="flex flex-col gap-4">
       {/* Breadcrumb */}
       <div className="flex items-center gap-1 text-sm text-(--ink-soft) flex-wrap">
@@ -195,5 +197,6 @@ export function FileBrowser({
         </div>
       )}
     </div>
+    </PasteDropFiles>
   );
 }

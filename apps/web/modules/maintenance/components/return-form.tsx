@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Camera, Images, Undo2 } from "lucide-react";
 import { Card } from "@smartboss/ui/components/card";
 import { RETURN_PROBLEM_OPTIONS } from "@/modules/maintenance/lib/returns";
+import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 
 const inputClass =
   "h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm text-(--ink) focus-visible:border-(--brand-green) focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-(--brand-green)/30";
@@ -34,6 +35,7 @@ export function ReturnForm({
 
   return (
     <Card className="p-5">
+      <PasteDropFiles label="ปล่อยเพื่อแนบรูป">
       <form action={action} className="flex flex-col gap-4">
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-medium text-(--ink)">
@@ -169,6 +171,7 @@ export function ReturnForm({
           <Undo2 className="h-4 w-4" /> แจ้งคืน / ปัญหา
         </SubmitButton>
       </form>
+      </PasteDropFiles>
     </Card>
   );
 }

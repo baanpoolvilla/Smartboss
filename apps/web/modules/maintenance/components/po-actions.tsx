@@ -17,6 +17,7 @@ import {
 import { Button } from "@smartboss/ui/components/button";
 import { Modal } from "./dialog";
 import type { PickOption } from "./multi-picker";
+import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 
 type Action = (formData: FormData) => void | Promise<void>;
 
@@ -298,6 +299,7 @@ export function ConfirmOrderButton({
             </>
           }
         >
+          <PasteDropFiles label="ปล่อยเพื่อแนบรูปใบเสร็จ">
           <form id="confirm-order-form" action={action} className="flex flex-col gap-4">
             <input type="hidden" name="id" value={id} />
             <p className="text-xs text-(--ink-soft)">
@@ -329,6 +331,7 @@ export function ConfirmOrderButton({
 
             <ImagePickerRow />
           </form>
+          </PasteDropFiles>
         </Modal>
       )}
     </>
@@ -372,6 +375,7 @@ export function ReceiveButton({
             </>
           }
         >
+          <PasteDropFiles label="ปล่อยเพื่อแนบรูปใบเสร็จ">
           <form id="receive-form" action={action} className="flex flex-col gap-4">
             <input type="hidden" name="id" value={id} />
             {receiverName && (
@@ -387,6 +391,7 @@ export function ReceiveButton({
             </p>
             <ImagePickerRow />
           </form>
+          </PasteDropFiles>
         </Modal>
       )}
     </>
@@ -429,11 +434,13 @@ export function SelfReceiveButton({
             </>
           }
         >
+          <PasteDropFiles label="ปล่อยเพื่อแนบรูปใบเสร็จ">
           <form id="self-receive-form" action={action} className="flex flex-col gap-4">
             <input type="hidden" name="id" value={id} />
             <PricingRows items={items} />
             <ImagePickerRow />
           </form>
+          </PasteDropFiles>
         </Modal>
       )}
     </>

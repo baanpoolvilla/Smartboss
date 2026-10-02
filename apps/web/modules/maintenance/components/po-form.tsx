@@ -17,6 +17,7 @@ import {
 import { Card } from "@smartboss/ui/components/card";
 import { Input } from "@smartboss/ui/components/input";
 import type { PickOption } from "./multi-picker";
+import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 
 const inputClass =
   "h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm text-(--ink) focus-visible:border-(--brand-green) focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-(--brand-green)/30";
@@ -67,6 +68,7 @@ export function PoForm({
       </h1>
 
       <Card className="p-5">
+        <PasteDropFiles label="ปล่อยเพื่อแนบรูป">
         <form action={action} className="flex flex-col gap-4">
           <input type="hidden" name="openAsPo" value={openAsPo ? "1" : "0"} />
           <input type="hidden" name="isEmergency" value={isEmergency ? "1" : "0"} />
@@ -422,6 +424,7 @@ export function PoForm({
             )}
           </SubmitButton>
         </form>
+        </PasteDropFiles>
       </Card>
     </>
   );

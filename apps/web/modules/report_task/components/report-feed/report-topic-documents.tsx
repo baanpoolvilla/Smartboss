@@ -10,6 +10,7 @@ import { formatFileSize, fileIconKind } from "@/modules/company-files/lib/file-m
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
 import { attachmentKind } from "@/modules/report_task/lib/report-attachment-kind";
 import type { CompanyFile } from "@prisma/client";
+import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 
 /**
  * The room's permanent file library (company-files) — a separate pool from
@@ -75,6 +76,7 @@ export function ReportTopicDocuments({
   }
 
   return (
+    <PasteDropFiles label="ปล่อยเพื่ออัปโหลดไฟล์">
     <div className="rounded-xl border border-[var(--line)] p-3.5">
       <div className="flex items-center justify-between gap-2 mb-2.5">
         <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)]">
@@ -128,5 +130,6 @@ export function ReportTopicDocuments({
         </div>
       )}
     </div>
+    </PasteDropFiles>
   );
 }

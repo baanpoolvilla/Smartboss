@@ -19,6 +19,7 @@ import {
 import { createWorkOrderAction } from "../actions";
 import { todayBangkok } from "@/modules/maintenance/lib/no-past-date";
 import { SubmitButton } from "@/modules/maintenance/components/submit-button";
+import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 
 const ROLE_LABEL: Record<string, string> = {
   SUPER_ADMIN: "ผู้ดูแลระบบ",
@@ -94,6 +95,7 @@ export default async function NewWorkOrderPage({
       backHref="/maintenance/work-orders"
     >
       <Card className="p-5">
+        <PasteDropFiles label="ปล่อยเพื่อแนบรูป">
         <form action={createWorkOrderAction} className="flex flex-col gap-4">
           {sp.assetId && <input type="hidden" name="assetId" value={sp.assetId} />}
           {sp.pmScheduleId && (
@@ -210,6 +212,7 @@ export default async function NewWorkOrderPage({
             <SubmitButton className="w-full sm:w-48">บันทึกใบงาน</SubmitButton>
           </div>
         </form>
+        </PasteDropFiles>
       </Card>
     </AppScaffold>
   );

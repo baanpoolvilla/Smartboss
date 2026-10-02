@@ -20,6 +20,7 @@ import { Button } from "@smartboss/ui/components/button";
 import { Card } from "@smartboss/ui/components/card";
 import { Modal } from "./dialog";
 import { CommentTextarea } from "./comment-textarea";
+import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 
 type Action = (formData: FormData) => void | Promise<void>;
 
@@ -120,6 +121,7 @@ export function CompleteJobButton({
             </>
           }
         >
+          <PasteDropFiles label="ปล่อยเพื่อแนบรูปหลังซ่อม">
           <form id="complete-wo-form" action={submit} className="flex flex-col gap-3">
             <input type="hidden" name="id" value={id} />
             <p className="text-sm text-(--ink-soft)">
@@ -220,6 +222,7 @@ export function CompleteJobButton({
               </p>
             )}
           </form>
+          </PasteDropFiles>
         </Modal>
       )}
     </>
@@ -410,6 +413,7 @@ export function CommentComposer({ action }: { action: Action }) {
   const [fileName, setFileName] = useState<string | null>(null);
 
   return (
+    <PasteDropFiles label="ปล่อยเพื่อแนบรูป">
     <form action={action} className="flex flex-col gap-2">
       {fileName && (
         <div
@@ -463,6 +467,7 @@ export function CommentComposer({ action }: { action: Action }) {
         </SubmitButton>
       </div>
     </form>
+    </PasteDropFiles>
   );
 }
 

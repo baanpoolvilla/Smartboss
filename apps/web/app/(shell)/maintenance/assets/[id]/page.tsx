@@ -19,6 +19,7 @@ import { freqLabel } from "@/modules/maintenance/lib/pm-schedule";
 import { updateAssetAction, deleteAssetAction } from "../actions";
 import { deletePmAction } from "../../pm/actions";
 import { AppScaffold } from "@/modules/maintenance/components/app-scaffold";
+import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 
 function fmtDate(d: Date | null | undefined): string {
   if (!d) return "-";
@@ -131,6 +132,7 @@ export default async function AssetDetailPage({
             <Pencil className="h-4 w-4" /> แก้ไขอุปกรณ์
           </summary>
           <Card className="p-4">
+            <PasteDropFiles label="ปล่อยเพื่อแนบรูป">
             <form
               action={updateAssetAction.bind(null, id)}
               className="flex flex-col gap-3"
@@ -165,6 +167,7 @@ export default async function AssetDetailPage({
               </label>
               <Button type="submit" className="sm:w-40">บันทึก</Button>
             </form>
+            </PasteDropFiles>
           </Card>
         </details>
       )}
