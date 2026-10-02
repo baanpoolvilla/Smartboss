@@ -132,6 +132,8 @@ const reactionEmojis = [
 ];
 /** คอลัมน์ของตารางอิโมจิในช่องตอบกลับ — 8 × 40px พอดีมือถือจอเล็ก */
 const EMOJI_GRID_COLS = 8;
+/** แถวหัวโพสต์ต้องกว้างเท่านี้ (px) ถึงใส่ ชื่อ · แผนก · เวลา · ป้ายรอบ ได้ในแถวเดียว — มือถือได้ ~260-300 */
+const HEADER_BADGE_MIN_WIDTH = 340;
 const LONG_POST_BULLET_THRESHOLD = 8;
 const MAX_VISIBLE_IMAGES = 5;
 
@@ -450,6 +452,19 @@ export function ReportCard({
   const [replyUploading, setReplyUploading] = useState(false);
   const [replyColorPickerOpen, setReplyColorPickerOpen] = useState(false);
   const replyEditorRef = useRef<HTMLDivElement>(null);
+  // ป้ายรอบ (ตรงเวลา ฯลฯ) อยู่แถวหัวโพสต์เมื่อแถวนั้นกว้างพอ ไม่งั้นย้ายไปมุมขวาล่าง — วัดจาก
+  // ความกว้างของแถวจริง ไม่ใช่ความกว้างหน้าต่าง: คอมที่ย่อหน้าต่าง/เปิดแถบข้างยังมีที่เหลือพอ
+  // (เดิมใช้ breakpoint sm ของหน้าต่าง ย่อหน้าต่างบนคอมแล้วป้ายเด้งลงล่างทั้งที่แถวบนว่าง)
+  const [headerRow, setHeaderRow] = useState<HTMLDivElement | null>(null);
+  const [badgeInHeader, setBadgeInHeader] = useState(() => typeof window === "undefined" || window.innerWidth >= 500);
+  useEffect(() => {
+    if (!headerRow) return;
+    const ro = new ResizeObserver(([entry]) => {
+      if (entry) setBadgeInHeader(entry.contentRect.width >= HEADER_BADGE_MIN_WIDTH);
+    });
+    ro.observe(headerRow);
+    return () => ro.disconnect();
+  }, [headerRow]);
   // อิโมจิในช่องตอบกลับ (ปุ่ม 😊 หรือ Ctrl+E) — จำตำแหน่งเคอร์เซอร์ไว้ก่อนโฟกัสย้ายไปที่ป็อปอัป
   const [replyEmojiOpen, setReplyEmojiOpen] = useState(false);
   const replySelRef = useRef<Range | null>(null);
@@ -1415,7 +1430,7 @@ export function ReportCard({
           {/* กันที่ไว้เฉพาะปุ่ม "⋯" ของเครื่องสัมผัส ซึ่งโผล่อยู่ตลอดและยังวาง
               ทับมุมขวาบนอยู่ (ดู [@media(hover:none)] ด้านบน) — ส่วนแถบปุ่ม 4 อัน
               ของเครื่องที่ใช้เมาส์ ย้ายไปลอยคร่อมขอบบนการ์ดแล้ว ไม่ต้องกันที่ */}
-          <div className="flex items-start gap-2 pr-8 [@media(hover:hover)]:pr-0">
+          <div ref={setHeaderRow} className="flex items-start gap-2 pr-8 [@media(hover:hover)]:pr-0">
             {/* คอม (sm ขึ้นไป): ชื่อ · แผนก · เวลา · ป้ายตรงเวลา อยู่แถวเดียวกัน ประหยัดที่
                 ("ให้แสดงต่อจากชื่อแผนกเลย") — ชื่อยาว/หน้าต่างแคบ เวลาขึ้นบรรทัดใหม่เอง (flex-wrap) ไม่ทับกัน
                 มือถือ: ยังสองบรรทัดเหมือนเดิม — แถวเดียวยาว ~400px แต่จอมือถือเหลือที่ ~300px ล้นแน่ */}
@@ -1474,8 +1489,8 @@ export function ReportCard({
                     flex-wrap item in this row, so it drops to its own line
                     on a narrow phone rather than clipping or squeezing the
                     name/time next to it. */}
-                {/* ป้ายรอบ: คอมอยู่แถวนี้ · มือถืออยู่มุมขวาล่างข้าง "ตอบกลับ" (ดู roundBadge) */}
-                {roundBadge && <span className="hidden sm:contents">{roundBadge}</span>}
+                {/* ป้ายรอบ: แถวกว้างพออยู่ตรงนี้ · แคบ (มือถือ) อยู่มุมขวาล่างข้าง "ตอบกลับ" (ดู badgeInHeader) */}
+                {badgeInHeader && roundBadge}
               </p>
             </div>
             {topicBadge && (
@@ -1814,7 +1829,7 @@ export function ReportCard({
                 <Lock className="h-3 w-3 shrink-0" />
                 ห้องนี้ปิดการแสดงความคิดเห็น
               </p>
-              {roundBadge && <span className="flex min-w-0 sm:hidden">{roundBadge}</span>}
+              {roundBadge && !badgeInHeader && <span className="flex min-w-0">{roundBadge}</span>}
             </div>
           ) : !threadOpen ? (
             /* Teams-style — the link sits after the last reply (or alone,
@@ -1832,11 +1847,11 @@ export function ReportCard({
               <MessageCircle className="h-3.5 w-3.5" />
               ตอบกลับ
             </button>
-            {roundBadge && <span className="flex min-w-0 sm:hidden">{roundBadge}</span>}
+            {roundBadge && !badgeInHeader && <span className="flex min-w-0">{roundBadge}</span>}
             </div>
           ) : (
           <>
-            {roundBadge && <div className="flex justify-end sm:hidden">{roundBadge}</div>}
+            {roundBadge && !badgeInHeader && <div className="flex justify-end">{roundBadge}</div>}
             {replyingTo && (
               <div className="flex items-start gap-2 pl-2.5 pr-2 py-2 rounded-lg bg-[var(--accent)] border-l-4 border-[var(--brand-green)]">
                 <Quote className="h-3.5 w-3.5 shrink-0 mt-0.5 text-[var(--brand-green-dark)]" />
