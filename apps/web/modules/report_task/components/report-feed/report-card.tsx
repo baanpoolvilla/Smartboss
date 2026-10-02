@@ -105,6 +105,7 @@ import {
   Share2,
   Shield,
   ShieldOff,
+  Smile,
   SmilePlus,
   Trash2,
   TriangleAlert,
@@ -129,6 +130,8 @@ const reactionEmojis = [
   "🥰", "😎", "😅", "😴", "🤯", "👌", "💪", "🤝",
   "🫡", "😱", "🤗", "😆", "🙄", "😏",
 ];
+/** คอลัมน์ของตารางอิโมจิในช่องตอบกลับ — 8 × 40px พอดีมือถือจอเล็ก */
+const EMOJI_GRID_COLS = 8;
 const LONG_POST_BULLET_THRESHOLD = 8;
 const MAX_VISIBLE_IMAGES = 5;
 
@@ -447,6 +450,9 @@ export function ReportCard({
   const [replyUploading, setReplyUploading] = useState(false);
   const [replyColorPickerOpen, setReplyColorPickerOpen] = useState(false);
   const replyEditorRef = useRef<HTMLDivElement>(null);
+  // อิโมจิในช่องตอบกลับ (ปุ่ม 😊 หรือ Ctrl+E) — จำตำแหน่งเคอร์เซอร์ไว้ก่อนโฟกัสย้ายไปที่ป็อปอัป
+  const [replyEmojiOpen, setReplyEmojiOpen] = useState(false);
+  const replySelRef = useRef<Range | null>(null);
   const replyFileInputRef = useRef<HTMLInputElement>(null);
   // รูปจากปุ่มดินสอ (หน้าดูรูป) เพิ่งเข้ามาในช่องตอบกลับ — เลื่อนไปให้เห็น + กะพริบกรอบ
   const [replyAttachFlash, setReplyAttachFlash] = useState(false);
@@ -707,6 +713,44 @@ export function ReportCard({
     el.focus();
     document.execCommand("insertText", false, url);
     setReplyText(htmlEditorToBulletsText(el));
+  }
+
+  function saveReplySelection() {
+    const el = replyEditorRef.current;
+    const sel = window.getSelection();
+    if (el && sel && sel.rangeCount > 0 && el.contains(sel.anchorNode)) replySelRef.current = sel.getRangeAt(0).cloneRange();
+  }
+
+  /** ใส่อิโมจิตรงเคอร์เซอร์เดิม (ไม่เคยคลิกช่องพิมพ์ = ต่อท้าย) */
+  function insertReplyEmoji(emoji: string) {
+    const el = replyEditorRef.current;
+    if (!el) return;
+    el.focus();
+    const sel = window.getSelection();
+    let range = replySelRef.current;
+    if (!range || !el.contains(range.startContainer)) {
+      range = document.createRange();
+      range.selectNodeContents(el);
+      range.collapse(false);
+    }
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+    document.execCommand("insertText", false, emoji);
+    saveReplySelection();
+    setReplyText(htmlEditorToBulletsText(el));
+    bumpStickerUsage(`emoji:${emoji}`);
+    setReplyEmojiOpen(false);
+  }
+
+  /** ลูกศรเลื่อนในตารางอิโมจิ (Enter = เลือก, Esc = ปิด) — ใช้คีย์บอร์ดล้วนได้หลังกด Ctrl+E */
+  function onEmojiGridKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    const buttons = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>("button[data-emoji]"));
+    const i = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    const step = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: EMOJI_GRID_COLS, ArrowUp: -EMOJI_GRID_COLS }[e.key];
+    if (step === undefined) return;
+    e.preventDefault();
+    const next = i < 0 ? 0 : Math.min(buttons.length - 1, Math.max(0, i + step));
+    buttons[next]?.focus();
   }
 
   function submitReply() {
@@ -1913,6 +1957,13 @@ export function ReportCard({
                       return;
                     }
                   }
+                  // Ctrl+E (Mac: ⌘E) = เปิดตารางอิโมจิ — ดูตำแหน่งปุ่ม (e.code) แป้นไทยก็ใช้ได้
+                  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.code === "KeyE") {
+                    e.preventDefault();
+                    saveReplySelection();
+                    setReplyEmojiOpen(true);
+                    return;
+                  }
                   if (e.key === "Enter" && !e.shiftKey && !isCoarsePointer()) {
                     e.preventDefault();
                     if (!replyUploading) submitReply();
@@ -2012,6 +2063,46 @@ export function ReportCard({
                 className="hidden"
                 onChange={(e) => handleReplyFiles(e.target.files)}
               />
+              <Popover open={replyEmojiOpen} onOpenChange={setReplyEmojiOpen}>
+                <PopoverTrigger
+                  render={
+                    <button
+                      // ไม่ดึงโฟกัส/เคอร์เซอร์ออกจากช่องพิมพ์ตอนกด
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        saveReplySelection();
+                      }}
+                      aria-label="ใส่อิโมจิ (Ctrl+E)"
+                      title="ใส่อิโมจิ (Ctrl+E)"
+                      className="h-7 w-7 shrink-0 flex items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+                    >
+                      <Smile className="h-4 w-4" />
+                    </button>
+                  }
+                />
+                <PopoverContent className="w-auto max-w-[calc(100vw-1.5rem)] p-1.5" side="top" align="end" finalFocus={replyEditorRef} onKeyDown={onEmojiGridKeyDown}>
+                  <div
+                    role="grid"
+                    aria-label="เลือกอิโมจิ"
+                    className="grid max-h-64 gap-0.5 overflow-y-auto"
+                    style={{ gridTemplateColumns: `repeat(${EMOJI_GRID_COLS}, minmax(0, 2.5rem))` }}
+                  >
+                    {sortedReactionEmojis.map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        data-emoji
+                        onClick={() => insertReplyEmoji(emoji)}
+                        aria-label={`ใส่ ${emoji}`}
+                        className="h-10 w-10 flex items-center justify-center rounded-lg text-2xl leading-none hover:bg-[var(--bg-soft)] focus-visible:bg-[var(--accent)] focus-visible:outline-none transition-transform hover:scale-110"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="hidden px-1 pt-1 text-[11px] text-[var(--ink-soft)] [@media(hover:hover)]:block">ลูกศรเลือก · Enter ใส่ · Esc ปิด</p>
+                </PopoverContent>
+              </Popover>
               <button
                 onClick={() => replyFileInputRef.current?.click()}
                 disabled={replyUploading || replyImages.length >= maxImages}

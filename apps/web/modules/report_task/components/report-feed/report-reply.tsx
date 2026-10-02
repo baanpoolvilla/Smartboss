@@ -143,16 +143,16 @@ export function ReportReply({
               wasn't actually bigger, the name just had nowhere to go.
               hidden (not opacity-0) on touch removes it from layout
               entirely; the single "⋯" below replaces it there. */}
-          <span className="hidden shrink-0 items-center gap-0.5 opacity-0 transition-opacity [@media(hover:hover)]:flex [@media(hover:hover)]:group-hover/reply:opacity-100 [@media(hover:hover)]:focus-within:opacity-100">
+          <span className="-my-1.5 hidden shrink-0 items-center gap-0.5 opacity-0 transition-opacity [@media(hover:hover)]:flex [@media(hover:hover)]:group-hover/reply:opacity-100 [@media(hover:hover)]:focus-within:opacity-100">
             <Popover open={reactionPickerOpen} onOpenChange={setReactionPickerOpen}>
               <PopoverTrigger
                 render={
                   <button
-                    className="flex h-7 min-w-7 items-center justify-center gap-1 rounded-md px-1 text-xs font-medium text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--brand-green-dark)]"
+                    className="flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-lg px-1.5 text-[13px] font-medium text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--brand-green-dark)]"
                     aria-label={`ทำเครื่องหมายความคิดเห็นของ ${author?.name ?? "ผู้ใช้"}`}
                     title="ทำเครื่องหมาย"
                   >
-                    <SmilePlus className="h-[18px] w-[18px]" />
+                    <SmilePlus className="h-[22px] w-[22px]" />
                   </button>
                 }
               />
@@ -180,18 +180,18 @@ export function ReportReply({
             </Popover>
             <button
               onClick={onCopyLink}
-              className="flex h-7 min-w-7 items-center justify-center gap-1 rounded-md px-1 text-xs font-medium text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--brand-green-dark)]"
+              className="flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-lg px-1.5 text-[13px] font-medium text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--brand-green-dark)]"
               aria-label={`คัดลอกลิงก์ความคิดเห็นของ ${author?.name ?? "ผู้ใช้"}`}
               title="คัดลอกลิงก์"
             >
-              <Link2 className="h-4 w-4" />
+              <Link2 className="h-5 w-5" />
             </button>
             <button
               onClick={() => onReplyTo(reply)}
-              className="flex h-7 min-w-7 items-center justify-center gap-1 rounded-md px-1 text-xs font-medium text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--brand-green-dark)]"
+              className="flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-lg px-1.5 text-[13px] font-medium text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--brand-green-dark)]"
               aria-label={`ตอบกลับ ${author?.name ?? "ความคิดเห็นนี้"}`}
             >
-              <ReplyIcon className="h-4 w-4" />
+              <ReplyIcon className="h-5 w-5" />
               ตอบกลับ
             </button>
             {isOwn && (
@@ -201,19 +201,19 @@ export function ReportReply({
                     setEditBody(reply.body);
                     setEditing(true);
                   }}
-                  className="flex h-7 min-w-7 items-center justify-center gap-1 rounded-md px-1 text-xs font-medium text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--brand-green-dark)]"
+                  className="flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-lg px-1.5 text-[13px] font-medium text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--brand-green-dark)]"
                   aria-label="แก้ไขความคิดเห็น"
                   title="แก้ไข"
                 >
-                  <Pencil className="h-4 w-4" />
+                  <Pencil className="h-5 w-5" />
                 </button>
                 <button
                   onClick={onDelete}
-                  className="flex h-7 min-w-7 items-center justify-center gap-1 rounded-md px-1 text-xs font-medium text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--chart-red)]"
+                  className="flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-lg px-1.5 text-[13px] font-medium text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--chart-red)]"
                   aria-label="ลบความคิดเห็น"
                   title="ลบ"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-5 w-5" />
                 </button>
               </>
             )}
@@ -370,9 +370,9 @@ export function ReportReply({
                   <button
                     key={emoji}
                     onClick={() => onToggleReaction(emoji)}
-                    className="flex h-7 [@media(hover:none)]:h-8 items-center gap-1 rounded-full bg-[var(--bg)] px-2 active:scale-95 text-xs font-semibold text-[var(--ink-soft)] shadow-[0_1px_3px_rgba(0,0,0,0.12)] hover:bg-[var(--bg-soft)] transition-colors"
+                    className="flex h-9 items-center gap-1.5 rounded-full bg-[var(--bg)] px-2.5 active:scale-95 text-sm font-semibold text-[var(--ink-soft)] shadow-[0_1px_3px_rgba(0,0,0,0.12)] hover:bg-[var(--bg-soft)] transition-colors"
                   >
-                    <span className="text-base leading-none">{emoji}</span>
+                    <span className="text-[22px] leading-none">{emoji}</span>
                     <span className="tabular-nums">{users.length}</span>
                   </button>
                 ))}
