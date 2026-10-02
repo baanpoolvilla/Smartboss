@@ -31,6 +31,17 @@ const toRetract: Entry[] = [];
 const toPush: Entry[] = [];
 let urlToPush: string | null = null;
 let settleTimer: ReturnType<typeof setTimeout> | null = null;
+/** งานที่รอให้ประวัติ "นิ่ง" ก่อน (ถอยช่องของหน้าต่างที่ปิดเสร็จแล้ว) — ดู whenHistorySettled */
+const settledWaiters: (() => void)[] = [];
+function flushWaiters() {
+  for (const fn of settledWaiters.splice(0)) {
+    try {
+      fn();
+    } catch (err) {
+      console.error("[back-to-close] waiter failed", err);
+    }
+  }
+}
 /** ถอยไปแล้วกี่ช่องที่ยังรอ popstate — ระหว่างนี้งานดันต้องรอ */
 let backsInFlight = 0;
 let backsTimer: ReturnType<typeof setTimeout> | null = null;
@@ -60,6 +71,7 @@ function settle() {
       // ช่องของแผงเลย ประวัติเป็น [ห้องเดิม, ห้องใหม่] พอดี และไม่มี popstate ให้หน้าสับสน
       window.history.replaceState(null, "", urlToPush);
       urlToPush = null;
+      flushWaiters();
       return;
     }
     backsInFlight = retract;
@@ -81,6 +93,20 @@ function settle() {
     stack.push(e);
     window.history.pushState({ __btc: e.id }, "");
   }
+  flushWaiters();
+}
+
+/**
+ * รอให้การถอยประวัติของหน้าต่างที่เพิ่งปิด "เสร็จจริง" ก่อนค่อยทำ fn — ใช้ก่อน router.push ไปหน้าอื่น
+ * ทันทีหลังปิดป๊อปอัป (เช่น กดแจ้งเตือนในกระดิ่ง): history.go(-1) ของการปิดเป็นงาน async ถ้ามันมา
+ * ทีหลัง router.push มันจะถอยทับการนำทางนั้น หน้าเปลี่ยนแล้วเด้งกลับ / ?task= หาย หน้าต่างงานปิด
+ * ("กดแจ้งเตือนแล้วเด้งมาหน้าบอร์ด กดอีกทีถึงจะเปิดงาน")
+ */
+export function whenHistorySettled(fn: () => void) {
+  if (typeof window === "undefined") return fn();
+  install();
+  settledWaiters.push(fn);
+  scheduleSettle();
 }
 
 function install() {

@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Bell, Settings } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
-import { useBackToClose } from "@/lib/back-to-close";
+import { useBackToClose, whenHistorySettled } from "@/lib/back-to-close";
 import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
@@ -111,13 +111,23 @@ export function NotificationBellPopover() {
   const recent = items.slice(0, MAX_ITEMS);
   const empById = new Map(employees.map((e) => [e.id, e] as const));
 
+  // กดแจ้งเตือนแล้วกำลังพาไปหน้าอื่น — กล่องปิดแล้วไม่ต้องคืนโฟกัสให้ปุ่มกระดิ่ง (โฟกัสที่คืนมาช้า
+  // จะดึงออกจากหน้าต่างงานที่เพิ่งเปิด แล้วหน้าต่างนั้นปิดตัวเองทันที)
+  const pickedRef = useRef(false);
   function onPick(id: string) {
+    pickedRef.current = true;
     markRead(id);
     setOpen(false);
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        if (next) pickedRef.current = false;
+        setOpen(next);
+      }}
+    >
       <PopoverTrigger
         aria-label="การแจ้งเตือน"
         className="relative rounded-full p-2 text-(--app-strong) transition-colors hover:bg-(--bg-soft)"
@@ -130,7 +140,7 @@ export function NotificationBellPopover() {
         )}
       </PopoverTrigger>
 
-      <PopoverContent align="end" sideOffset={8} className="w-[22rem] gap-0 p-0">
+      <PopoverContent align="end" sideOffset={8} className="w-[22rem] gap-0 p-0" finalFocus={() => !pickedRef.current}>
         <div className="border-b border-(--line) px-4 py-3">
           <div className="flex items-center justify-between">
             <span className="text-base font-semibold text-(--ink)">การแจ้งเตือน</span>
@@ -293,7 +303,9 @@ function NotificationRow({ n, onPick, children }: { n: UnifiedNotification; onPi
         // กล่องจะคืนโฟกัสให้ปุ่มกระดิ่งซึ่งอยู่นอกหน้าต่างงาน หน้าต่างงานถือว่ากดข้างนอก
         // แล้วปิดตัวเองทันที ("เด้งแล้วหายเลย ต้องกดแจ้งเตือนซ้ำอีกที")
         e.preventDefault();
-        setTimeout(() => router.push(link), NAVIGATE_AFTER_CLOSE_MS);
+        // แล้วรอให้ประวัติของกล่องที่ปิดถอยเสร็จจริงก่อน (whenHistorySettled) — ไม่งั้นการถอยที่มาช้า
+        // จะทับการไปหน้างานนี้ ต้องกดแจ้งเตือนซ้ำอีกที
+        setTimeout(() => whenHistorySettled(() => router.push(link)), NAVIGATE_AFTER_CLOSE_MS);
       }}
       className="block"
     >
