@@ -15,7 +15,6 @@ import { getChatPrefs } from "../lib/prefs";
 import { ChatAvatar } from "./chat-avatar";
 
 import { fileTooLargeMessage } from "@/lib/file-limits";
-import { openAnnotator } from "@/lib/annotate/annotate";
 const MAX_FILES = 20;
 const MAX_BYTES = 25 * 1024 * 1024;
 const ACCEPT_FILES =
@@ -193,24 +192,6 @@ export const Composer = forwardRef<
       accepted.forEach(startUpload);
     },
     [pending.length, startUpload]
-  );
-
-  // ปากกา: วาดบนรูปที่รอส่ง แล้วอัปโหลดรูปที่วาดแทน (ไฟล์อยู่ในเครื่องอยู่แล้ว ไม่ต้องเซฟก่อน)
-  const annotatePending = useCallback(
-    async (item: PendingFile) => {
-      const edited = await openAnnotator(item.file);
-      if (!edited) return;
-      if (item.previewUrl) {
-        URL.revokeObjectURL(item.previewUrl);
-        previewsRef.current.delete(item.previewUrl);
-      }
-      const previewUrl = URL.createObjectURL(edited);
-      previewsRef.current.add(previewUrl);
-      const next: PendingFile = { ...item, file: edited, previewUrl, progress: 0, status: "uploading", result: undefined, error: undefined };
-      setPending((list) => list.map((x) => (x.id === item.id ? next : x)));
-      startUpload(next);
-    },
-    [startUpload]
   );
 
   useImperativeHandle(ref, () => ({ addFiles, focus: () => textareaRef.current?.focus() }), [addFiles]);
@@ -406,22 +387,8 @@ export const Composer = forwardRef<
           {pending.map((p) => (
             <div key={p.id} className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-(--line) bg-(--bg-soft)">
               {p.previewUrl && p.kind === "image" ? (
-                // แตะรูป = เปิดหน้าต่างวาด/เขียน (ไม่มีปุ่มปากกาทับรูปแล้ว)
-                p.file.type !== "image/gif" && p.status !== "uploading" ? (
-                  <button
-                    type="button"
-                    onClick={() => void annotatePending(p)}
-                    title="แตะเพื่อวาด/เขียนบนรูป"
-                    aria-label="วาด/เขียนบนรูปนี้"
-                    className="block h-full w-full cursor-pointer"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={p.previewUrl} alt={p.file.name} className="h-full w-full object-cover" />
-                  </button>
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.previewUrl} alt={p.file.name} className="h-full w-full object-cover" />
-                )
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={p.previewUrl} alt={p.file.name} className="h-full w-full object-cover" />
               ) : null}
               {p.previewUrl && p.kind === "image" ? null : p.previewUrl && p.kind === "video" ? (
                 <video src={p.previewUrl} muted className="h-full w-full object-cover" />

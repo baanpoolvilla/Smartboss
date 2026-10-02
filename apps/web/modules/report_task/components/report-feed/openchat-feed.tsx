@@ -28,8 +28,7 @@ import {
   type MentionType,
 } from "@/modules/report_task/lib/report-feed-rich-text";
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
-import { dropZoneProps, openAnnotator, originalFor } from "@/lib/annotate/annotate";
-import { AnnotateButton } from "@/components/annotate/image-annotator-host";
+import { dropZoneProps } from "@/lib/annotate/annotate";
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
 import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
@@ -323,25 +322,6 @@ export function OpenchatFeed({
   // used to fall through to the browser's default paste (a raw inline <img>
   // that htmlEditorToBulletsText has no case for and just drops on save),
   // so route it through the real upload path instead.
-  // ปากกา: วาดบนรูปที่แนบ แล้วอัปโหลดรูปที่วาดแทนรูปเดิม
-  async function annotateComposerImage(id: string, url: string) {
-    const original = originalFor(url);
-    if (!original) return;
-    const edited = await openAnnotator(original);
-    if (!edited) return;
-    setUploading(true);
-    try {
-      const media = await uploadReportMedia(edited);
-      setComposerImages((prev) =>
-        prev.map((i) => (i.id === id ? { ...i, url: media.url, name: edited.name, mime: media.mime, size: media.size, thumbUrl: media.thumbUrl ?? undefined } : i))
-      );
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "บันทึกรูปที่วาดไม่สำเร็จ");
-    } finally {
-      setUploading(false);
-    }
-  }
-
   async function handleComposerImagePaste(e: React.ClipboardEvent<HTMLDivElement>) {
     const item = Array.from(e.clipboardData.items).find((it) => it.kind === "file" && it.type.startsWith("image/"));
     if (!item) return;
@@ -840,9 +820,6 @@ export function OpenchatFeed({
             {composerImages.map((img) => (
               <div key={img.id} className="relative h-14 w-14 rounded-md overflow-hidden border border-[var(--line)]">
                 <ReportMediaThumb media={img} className="h-full w-full object-cover" />
-                {originalFor(img.url) && (
-                  <AnnotateButton className="absolute bottom-0.5 left-0.5 h-5 w-5" onClick={() => void annotateComposerImage(img.id, img.url ?? "")} />
-                )}
                 <button
                   onClick={() => setComposerImages((prev) => prev.filter((i) => i.id !== img.id))}
                   className="absolute top-0 right-0 h-4 w-4 flex items-center justify-center bg-black/60 text-white rounded-bl-md"

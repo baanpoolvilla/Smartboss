@@ -81,9 +81,8 @@ import { ReportImageLightbox } from "@/modules/report_task/components/report-fee
 import type { ReportPostImage } from "@/modules/report_task/store/report-feed-store";
 import { mimeFromLegacyTaskLabel } from "@/modules/report_task/lib/report-attachment-kind";
 import { uploadTaskAttachment } from "@/modules/report_task/lib/task-attachment-upload";
-import { filesFromDataTransfer, openAnnotator, originalFor } from "@/lib/annotate/annotate";
+import { filesFromDataTransfer } from "@/lib/annotate/annotate";
 import { FileDropZone } from "@/components/annotate/file-drop-zone";
-import { AnnotateButton } from "@/components/annotate/image-annotator-host";
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { toast } from "sonner";
 import { TimeAgo } from "@/modules/report_task/components/shared/time-ago";
@@ -577,23 +576,6 @@ export function TaskDetailSheet({
       }
     }
     setCommentUploading(false);
-  }
-
-  // ปากกา: วาดบนรูปที่แนบไว้ แล้วอัปโหลดรูปที่วาดแทนรูปเดิม (ไม่ต้องเซฟลงเครื่องก่อน)
-  async function annotateCommentAttachment(id: string, url: string) {
-    const original = originalFor(url);
-    if (!original) return;
-    const edited = await openAnnotator(original);
-    if (!edited) return;
-    setCommentUploading(true);
-    try {
-      const att = await uploadTaskAttachment(edited, viewingAsUserId);
-      setCommentAttachments((prev) => prev.map((x) => (x.id === id ? att : x)));
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "บันทึกรูปที่วาดไม่สำเร็จ");
-    } finally {
-      setCommentUploading(false);
-    }
   }
 
   function removeCommentAttachment(id: string) {
@@ -2010,12 +1992,6 @@ export function TaskDetailSheet({
                       <span className="relative shrink-0">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={a.url} alt="" className="h-10 w-10 rounded object-cover" />
-                        {originalFor(a.url) && (
-                          <AnnotateButton
-                            className="absolute -right-1.5 -top-1.5"
-                            onClick={() => void annotateCommentAttachment(a.id, a.url!)}
-                          />
-                        )}
                       </span>
                     ) : (
                       <FileText className="ml-1 h-3.5 w-3.5 shrink-0 text-[var(--ink-soft)]" />

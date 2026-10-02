@@ -643,22 +643,3 @@ function drawOp(ctx: CanvasRenderingContext2D, op: Op) {
   ctx.fillStyle = op.color;
   ctx.fillText(op.text, op.x, op.y);
 }
-
-/** ปุ่มปากกาเล็ก ๆ วางทับมุมรูปที่แนบ — กดแล้วเปิดหน้าต่างวาด */
-export function AnnotateButton({ onClick, className = "" }: { onClick: () => void; className?: string }) {
-  return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        onClick();
-      }}
-      aria-label="วาด/เขียนบนรูปนี้"
-      title="วาด/เขียนบนรูปนี้"
-      className={`inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 ${className}`}
-    >
-      <Pencil className="h-3.5 w-3.5" />
-    </button>
-  );
-}
