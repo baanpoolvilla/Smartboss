@@ -22,25 +22,17 @@ export function formatListTime(iso: string): string {
   return d.toLocaleDateString("th-TH", { day: "numeric", month: "short", ...(d.getFullYear() !== now.getFullYear() ? { year: "2-digit" } : {}) });
 }
 
-/** ป้ายคั่นวันในห้องแชท — "วันนี้", "เมื่อวาน", "พ. 24 ก.ย." */
+/**
+ * ป้ายคั่นวันในห้องแชท — วันที่จริงเสมอ "ศ. 2 ต.ค. 2569" (มีปีด้วย)
+ * เดิมเป็น "วันนี้" / "เมื่อวาน" — แคปหน้าจอไปแล้วดูทีหลังไม่รู้ว่าวันไหน
+ */
 export function formatDayLabel(iso: string): string {
-  const d = new Date(iso);
-  const now = new Date();
-  if (d.toDateString() === now.toDateString()) return "วันนี้";
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  if (d.toDateString() === yesterday.toDateString()) return "เมื่อวาน";
-  return d.toLocaleDateString("th-TH", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    ...(d.getFullYear() !== now.getFullYear() ? { year: "numeric" } : {}),
-  });
+  return new Date(iso).toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 }
 
-/** เดิมใช้ใต้ข้อความ — คงไว้ให้ที่อื่นที่ยังเรียกอยู่ */
+/** วันที่ + เวลา — "ศ. 2 ต.ค. 2569 10:32" */
 export function formatMessageTime(iso: string): string {
-  return `${formatDayLabel(iso) === "วันนี้" ? "" : `${formatDayLabel(iso)} `}${formatClock(iso)}`;
+  return `${formatDayLabel(iso)} ${formatClock(iso)}`;
 }
 
 export function formatFileSize(bytes: number): string {
