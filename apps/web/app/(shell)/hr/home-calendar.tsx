@@ -2,10 +2,12 @@ import Link from "next/link";
 import { Button } from "@smartboss/ui/components/button";
 import { currentMonth, todayIso } from "@/modules/hr/lib/date";
 import { formatBuddhistYear } from "@/modules/hr/lib/labels";
+import { HelpPopover } from "@/modules/hr/components/design-kit-client";
 import {
   wfFetch,
   wfTry,
   type Employment,
+  type HolidayAllowance,
   type LeaveCalendarEntry,
   type LeaveRequest,
   type LeaveType,
@@ -59,7 +61,7 @@ export async function renderCalendarTab(monthParam: string | undefined): Promise
   const from = `${month}-01`;
   const to = `${month}-${String(daysInMonth).padStart(2, "0")}`;
 
-  const [me, employments, types, calendar, requests, mine, everyone] = await Promise.all([
+  const [me, employments, types, calendar, requests, mine, everyone, allowances] = await Promise.all([
     wfFetch<Me>("/me"),
     // พนักงานทั่วไปอ่าน /employments ไม่ได้ (ต้องมี people.read) — ปฏิทิน
     // จึงพึ่งชื่อจาก /leave-calendar แทน อันนี้ใช้แค่ตารางอนุมัติ
@@ -74,7 +76,21 @@ export async function renderCalendarTab(monthParam: string | undefined): Promise
     wfTry<{ items: LeaveRequest[] }>(`/me/leave-requests?from=${from}&to=${to}`),
     // ใบของทุกคน — อ่านได้เฉพาะคนที่จัดการการลาได้ (คนอื่นได้ null) ใช้ผูกปุ่ม "ยกเลิกให้" ของผู้อนุมัติ
     wfTry<Paged<LeaveRequest>>(`/leave-requests?from=${from}&to=${to}`),
+    // ยอด Holiday ที่ตัวเองยังลงได้ในเดือนนี้ (เฉพาะประเภทที่ทบยอด) — หมดแล้วไม่ขึ้นให้เลือก
+    wfTry<{ items: HolidayAllowance[] }>(`/me/holiday-allowances?from=${month}&to=${month}`),
   ]);
+  const availableByType = new Map(
+    (allowances?.items ?? []).map((a) => [a.leave_type_id, a.months[0]?.available_days ?? 0]),
+  );
+  // ยอด Holiday ของตัวเองในเดือนที่ดูอยู่ — ขึ้นข้างชื่อเดือน (ส่วนที่ต้องใช้ภายในเดือนนี้บอกแยก)
+  const holidayBalances = (allowances?.items ?? []).map((a) => ({
+    id: a.leave_type_id,
+    name: types?.items.find((t) => t.id === a.leave_type_id)?.name ?? "Holiday",
+    available: a.months[0]?.available_days ?? 0,
+    expiring: (a.months[0]?.buckets ?? [])
+      .filter((b) => b.expires_month === month)
+      .reduce((sum, b) => sum + b.remaining_days, 0),
+  }));
 
   /*
    * พนักงานทั่วไปอ่าน /companies ไม่ได้ (ต้องมี people.read) — ห้ามใช้
@@ -148,8 +164,23 @@ export async function renderCalendarTab(monthParam: string | undefined): Promise
   return (
     <div className="flex flex-col gap-4">
       <SectionCard
-        title={`${THAI_MONTH[m! - 1]} ${formatBuddhistYear(y!)}`}
-        description="กดวันไหนก็ได้เพื่อลงวันหยุด เลือกประเภท และตั้งชื่อที่จะขึ้นบนปฏิทิน · กดวันหยุดของตัวเองซ้ำเพื่อแก้ชื่อ สลับวัน หรือยกเลิก · แถบจางมีจุดนำหน้า = รออนุมัติ"
+        // คำอธิบายวิธีใช้ย้ายไปอยู่ในปุ่ม ? ข้างชื่อเดือน และลดขอบในของการ์ด — คืนพื้นที่แนวตั้งให้ปฏิทิน
+        className="p-3! sm:p-3.5!"
+        title={
+          <>
+            {`${THAI_MONTH[m! - 1]} ${formatBuddhistYear(y!)}`}
+            <HelpPopover label="วิธีใช้ปฏิทินทีม">
+              กดวันไหนก็ได้เพื่อลงวันหยุด เลือกประเภท และตั้งชื่อที่จะขึ้นบนปฏิทิน · กดวันหยุดของตัวเองซ้ำเพื่อแก้ชื่อ สลับวัน
+              หรือยกเลิก · แถบจางมีจุดนำหน้า = รออนุมัติ
+            </HelpPopover>
+            {holidayBalances.map((b) => (
+              <Pill key={b.id} tone={b.available > 0 ? "var(--app-strong)" : "var(--tone-muted)"}>
+                {b.name} ของฉันเหลือ {b.available} วัน
+                {b.expiring > 0 ? ` · ${b.expiring} วันต้องใช้ในเดือนนี้` : ""}
+              </Pill>
+            ))}
+          </>
+        }
         action={
           <div className="flex gap-1">
             <Link href={`/hr?tab=calendar&month=${shiftMonth(month, -1)}`}>
@@ -172,6 +203,7 @@ export async function renderCalendarTab(monthParam: string | undefined): Promise
             label: `${t.name}${t.paid ? "" : " (ไม่ได้ค่าจ้าง)"}`,
             autoApprove: t.auto_approve,
             monthlyQuotaDays: t.monthly_quota_days,
+            availableDays: t.accrues_from_holidays ? (availableByType.get(t.id) ?? 0) : null,
           }))}
           entriesByDate={entriesByDate}
           people={legend}

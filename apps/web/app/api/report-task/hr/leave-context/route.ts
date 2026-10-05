@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { requireOrg } from "@smartboss/auth";
-import { wfFetch, wfTry, type Me, type LeaveType, type LeaveRequest, type Paged } from "@/modules/hr/lib/api";
+import { wfFetch, wfTry, type HolidayAllowance, type Me, type LeaveType, type LeaveRequest, type Paged } from "@/modules/hr/lib/api";
 
 export const dynamic = "force-dynamic";
 
@@ -30,13 +30,24 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const { from, to } = defaultRange();
 
-    const [me, types, myRequests] = await Promise.all([
+    // ยอด Holiday รายเดือน ครอบช่วงเดียวกับที่ยื่น/สลับได้ — ฟอร์มเลือกวันข้ามเดือนได้ จึงต้องมีทุกเดือน
+    const monthFrom = (searchParams.get("from") ?? from).slice(0, 7);
+    const monthTo = (searchParams.get("to") ?? to).slice(0, 7);
+
+    const [me, types, myRequests, allowances] = await Promise.all([
       wfFetch<Me>("/me"),
       wfTry<Paged<LeaveType>>("/leave-types"),
       wfTry<{ items: LeaveRequest[] }>(
         `/me/leave-requests?from=${searchParams.get("from") ?? from}&to=${searchParams.get("to") ?? to}`
       ),
+      wfTry<{ items: HolidayAllowance[] }>(`/me/holiday-allowances?from=${monthFrom}&to=${monthTo}`),
     ]);
+    const availableByType = new Map(
+      (allowances?.items ?? []).map((a) => [
+        a.leave_type_id,
+        Object.fromEntries(a.months.map((m) => [m.month, m.available_days])),
+      ]),
+    );
 
     return Response.json({
       employmentId: me.employment_id,
@@ -46,6 +57,8 @@ export async function GET(request: NextRequest) {
         label: `${t.name}${t.paid ? "" : " (ไม่ได้ค่าจ้าง)"}`,
         autoApprove: t.auto_approve,
         monthlyQuotaDays: t.monthly_quota_days,
+        // มีเฉพาะ Holiday ที่ทบยอด — เดือนที่ไม่มีในนี้ = ลงไม่ได้
+        ...(t.accrues_from_holidays ? { availableByMonth: availableByType.get(t.id) ?? {} } : {}),
       })),
       myRequests: (myRequests?.items ?? [])
         .filter((r) => r.status === "SUBMITTED" || r.status === "APPROVED")

@@ -138,6 +138,36 @@ export interface Me {
   roles: { code: string; company_id: string | null }[];
 }
 
+/** ยอด Holiday ที่ตัวเองยังลงได้ รายเดือน (GET /me/holiday-allowances) — มีเฉพาะประเภทที่นับสิทธิ์จากวันหยุดบริษัท */
+export interface HolidayAllowance {
+  leave_type_id: string;
+  months: {
+    month: string;
+    available_days: number;
+    buckets: { month: string; remaining_days: number; expires_month: string }[];
+  }[];
+}
+
+/** ยอด Holiday คงเหลือของพนักงานคนหนึ่ง ณ เดือนหนึ่ง (GET /leave-types/:id/holiday-balances) */
+export interface HolidayBalanceRow {
+  employment_id: string;
+  available_days: number;
+  /** ส่วนที่ต้องใช้ภายในเดือนนั้น ไม่งั้นถูกตัดทิ้ง */
+  expiring_days: number;
+  used_days: number;
+  buckets: { month: string; remaining_days: number; expires_month: string }[];
+}
+
+/** สิทธิ์ Holiday ของเดือนหนึ่ง (GET /leave-types/:id/month-allowances) */
+export interface MonthAllowance {
+  month: string;
+  holiday_count: number;
+  holidays: { date: string; name: string }[];
+  /** null = ไม่ได้กำหนดทับ ใช้จำนวนวันหยุดบริษัท */
+  override_days: number | null;
+  days: number;
+}
+
 export interface LeaveType {
   /** มีเฉพาะตอนขอ ?include_archived=true — true = ลบออกจากรายการแล้ว */
   archived?: boolean;
@@ -152,6 +182,10 @@ export interface LeaveType {
   auto_approve: boolean;
   /** 0 = ไม่จำกัดรายเดือน */
   monthly_quota_days: number;
+  /** true = สิทธิ์ต่อเดือนนับจากวันหยุดบริษัท (HR แก้ทับได้) ใช้ได้ภายใน 3 เดือน — ไม่ใช้ monthly_quota_days */
+  accrues_from_holidays?: boolean;
+  /** เดือนแรกที่เริ่มนับสิทธิ์สะสม (YYYY-MM-01) — ก่อนหน้านี้ไม่นับย้อนหลัง · null = ยังไม่เคยเปิดใช้ */
+  accrual_starts_on?: string | null;
   /**
    * false = ปฏิทินรวมไม่บอกว่าเป็นประเภทนี้ (คนอื่นเห็นแค่ "ลา")
    * ตั้งค่าได้รายบริษัทที่หน้า /hr/settings — ไม่ใช่กฎฝังในโค้ด

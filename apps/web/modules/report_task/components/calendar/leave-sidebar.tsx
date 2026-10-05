@@ -11,6 +11,7 @@ import { getUser, getDepartment, departmentIdsOf } from "@/modules/report_task/l
 import { useLeaveStore } from "@/modules/report_task/store/leave-store";
 import { useLeaveTypeStore } from "@/modules/report_task/store/leave-type-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
+import { HolidayBalanceTile, useHolidayBalance } from "./holiday-balance-tile";
 import { useCalendarVisibilityStore } from "@/modules/report_task/store/calendar-visibility-store";
 import { useRoutineDayOffStore, type DayOffOrigin } from "@/modules/report_task/store/routine-dayoff-store";
 import {
@@ -125,6 +126,8 @@ export function LeaveSidebar({
   }
 
   const targetMonth = newRoutineDate.slice(0, 7);
+  // โหลดใหม่เมื่อเปลี่ยนเดือน และหลังปิดฟอร์มยื่นวันลา (เพิ่งใช้สิทธิ์ไป)
+  const holidayBalances = useHolidayBalance(rangeMonthKey, submitLeaveOpen);
   const myQuota = quotaForDepartment(getUser(viewingAsUserId)?.departmentId, companyMonthlyQuota, departmentQuotas, useDepartmentOverrides);
 
   // Manual picks + every rule's expanded occurrences, both scoped to
@@ -526,7 +529,7 @@ export function LeaveSidebar({
           <p className="text-xs text-[var(--ink-soft)]">{rangeLabel(range)}</p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-2">
+          <div className={`grid gap-2 ${holidayBalances.length > 0 ? "grid-cols-3" : "grid-cols-2"}`}>
             <div className="rounded-lg bg-[var(--bg-soft)] px-3 py-2 text-center">
               <p className="text-lg font-semibold tabular-nums">{myLeave.length}</p>
               <p className="text-[11px] text-[var(--ink-soft)]">วันลา</p>
@@ -535,6 +538,10 @@ export function LeaveSidebar({
               <p className="text-lg font-semibold tabular-nums">{usedThisMonth}/{myQuota}</p>
               <p className="text-[11px] text-[var(--ink-soft)]">วันหยุดประจำ</p>
             </div>
+            {/* Holiday แบบสะสม — ยอดของตัวเองจากฝ่ายบุคคล มีเฉพาะบริษัทที่เปิดใช้ */}
+            {holidayBalances.map((b) => (
+              <HolidayBalanceTile key={b.leaveTypeId} balance={b} />
+            ))}
           </div>
 
           <div className="space-y-1.5">

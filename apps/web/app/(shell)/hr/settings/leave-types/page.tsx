@@ -5,16 +5,47 @@ import {
   wfFetch,
   wfTry,
   type Company,
+  type Employment,
+  type HolidayBalanceRow,
   type LeaveType,
   type Me,
+  type MonthAllowance,
   type Paged,
 } from "@/modules/hr/lib/api";
 import { Field, NotProvisioned, Pill, SectionCard, inputClass } from "@/modules/hr/components/ui";
-import { createLeaveTypeAction, renameLeaveTypeAction, seedLeaveTypesAction } from "../../actions";
+import {
+  createLeaveTypeAction,
+  renameLeaveTypeAction,
+  seedLeaveTypesAction,
+  setHolidayModeAction,
+} from "../../actions";
+import { HolidayAllowances } from "./holiday-allowances";
+import { HolidayModeForm } from "./holiday-mode-form";
+import { HolidayBalances } from "./holiday-balances";
 import { Button } from "@smartboss/ui/components/button";
 import { DeleteLeaveTypeButton, MoveLeftoverEntries } from "./delete-leave-type-button";
 
-export default async function LeaveTypesSettingsPage() {
+const MONTH_NAMES = [
+  "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+  "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
+];
+
+/** "2026-10-01" → "ตุลาคม 2569" */
+function monthLabel(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  return MONTH_NAMES[Number(iso.slice(5, 7)) - 1] + " " + String(Number(iso.slice(0, 4)) + 543);
+}
+
+export default async function LeaveTypesSettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ year?: string; month?: string }>;
+}) {
+  const sp = await searchParams;
+  const year = /^\d{4}$/.test(sp.year ?? "") ? Number(sp.year) : new Date().getFullYear();
+  // เดือนของตารางยอดคงเหลือรายคน — ค่าเริ่มต้นคือเดือนนี้ตามเวลาไทย
+  const thisMonth = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date()).slice(0, 7);
+  const balanceMonth = /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.month ?? "") ? sp.month! : thisMonth;
   return (
     <HrPage
       title="ประเภทการลา"
@@ -34,6 +65,22 @@ export default async function LeaveTypesSettingsPage() {
         const leaveTypes = allTypes ? { ...allTypes, items: allTypes.items.filter((t) => !t.archived) } : null;
         // ลบแล้วแต่ยังมีใบเป็นประเภทนี้ = ยังขึ้นเป็นชิปในปฏิทินทีม จนกว่าจะย้ายใบไปประเภทอื่น
         const leftovers = (allTypes?.items ?? []).filter((t) => t.archived && (t.request_count ?? 0) > 0);
+        // ประเภทที่นับสิทธิ์จากวันหยุดบริษัท (Holiday) — แต่ละอันมีตารางสิทธิ์รายเดือนให้ HR แก้
+        const accruing = (leaveTypes?.items ?? []).filter((t) => t.accrues_from_holidays);
+        // ยอดคงเหลือรายคนของประเภทที่สะสม — ชื่อพนักงานจับคู่จากทะเบียน (API คืนแค่ employment_id)
+        const [balances, employments] = accruing[0]
+          ? await Promise.all([
+              wfTry<{ items: HolidayBalanceRow[] }>(`/leave-types/${accruing[0].id}/holiday-balances?month=${balanceMonth}`),
+              wfTry<Paged<Employment>>("/employments"),
+            ])
+          : [null, null];
+        const personOf = new Map((employments?.items ?? []).map((e) => [e.id, e]));
+        const allowanceTables = await Promise.all(
+          accruing.map(async (t) => ({
+            type: t,
+            months: (await wfTry<{ items: MonthAllowance[] }>(`/leave-types/${t.id}/month-allowances?year=${year}`))?.items ?? [],
+          })),
+        );
         const activeChoices = (leaveTypes?.items ?? []).map((o) => ({ id: o.id, name: o.name }));
 
         /*
@@ -45,7 +92,7 @@ export default async function LeaveTypesSettingsPage() {
         return (
           <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
             <SettingsSubnav active="/hr/settings/leave-types" />
-            <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 flex-1 flex-col gap-4">
               {!canManage ? (
                 <SectionCard title="ประเภทการลา">
                   <p className="text-sm text-(--ink-soft)">
@@ -76,9 +123,12 @@ export default async function LeaveTypesSettingsPage() {
                         <div key={t.id} className="flex flex-wrap items-center gap-1.5">
                           <Pill tone={t.auto_approve ? "var(--app-strong)" : "var(--tone-ok)"}>
                             {t.name}
-                            {t.auto_approve
-                              ? ` · สิทธิ์${t.monthly_quota_days > 0 ? ` ${t.monthly_quota_days} วัน/เดือน` : ""}`
-                              : " · ต้องอนุมัติ"}
+                            {t.auto_approve ? " · สิทธิ์" : " · ต้องอนุมัติ"}
+                            {t.accrues_from_holidays
+                              ? " · Holiday สะสม ใช้ได้ภายใน 3 เดือน"
+                              : t.auto_approve && t.monthly_quota_days > 0
+                                ? ` ${t.monthly_quota_days} วัน/เดือน`
+                                : ""}
                             {t.requires_reports ? " · ยังต้องส่งรายงาน" : ""}
                           </Pill>
                           {/* แก้คำสะกดผิดในชื่อจริงได้ตรงนี้ — ค่าอื่น ๆ (โควตา,
@@ -167,6 +217,30 @@ export default async function LeaveTypesSettingsPage() {
                     ทุกประเภทไม่ต้องลงเวลา ส่วนการส่งรายงานยกเว้นให้ เว้นแต่ติ๊ก &ldquo;ยังต้องส่งรายงาน&rdquo;
                   </p>
                 </SectionCard>
+              )}
+              {canManage && activeChoices.length > 0 && (
+                <HolidayModeForm
+                  action={setHolidayModeAction}
+                  types={activeChoices}
+                  currentId={accruing[0]?.id ?? null}
+                  startsLabel={monthLabel(accruing[0]?.accrual_starts_on)}
+                />
+              )}
+              {canManage &&
+                allowanceTables.map(({ type, months }) => (
+                  <HolidayAllowances key={type.id} leaveTypeId={type.id} leaveTypeName={type.name} year={year} months={months} />
+                ))}
+              {canManage && accruing[0] && balances && (
+                <HolidayBalances
+                  leaveTypeName={accruing[0].name}
+                  month={balanceMonth}
+                  year={year}
+                  rows={balances.items.map((b) => ({
+                    ...b,
+                    name: personOf.get(b.employment_id)?.display_name || personOf.get(b.employment_id)?.full_name || "ไม่ทราบชื่อ",
+                    code: personOf.get(b.employment_id)?.employee_code ?? "",
+                  }))}
+                />
               )}
             </div>
           </div>

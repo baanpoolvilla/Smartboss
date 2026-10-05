@@ -5,6 +5,13 @@ import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { UnitOfWork } from '../infrastructure/unit-of-work';
 import { RequestContextService } from '../shared/request-context';
 import { CLOCK } from '../shared/tokens';
+import {
+  holidayAvailability,
+  monthIndex,
+  monthOfIndex,
+  type HolidayBucket,
+  type HolidayLedgerInput,
+} from './holiday-accrual';
 
 export interface LeaveBalance {
   leave_type_id: string;
@@ -295,6 +302,411 @@ export class LeaveService {
   }
 
   /**
+   * เปิด/ปิดให้ประเภทลานับสิทธิ์ต่อเดือนจากวันหยุดบริษัทและทบยอดได้ (Holiday)
+   * เปิดแล้วไม่ใช้ monthly_quota_days ของประเภทนั้นอีก — ปิดก็กลับไปใช้ตามเดิม ไม่มีข้อมูลหาย
+   */
+  async setHolidayAccrual(leaveTypeId: string, enabled: boolean): Promise<Record<string, unknown>> {
+    return this.uow.run(async (uow) => {
+      const types = await uow.tx
+        .select()
+        .from(schema.leaveTypes)
+        .where(eq(schema.leaveTypes.id, leaveTypeId))
+        .limit(1);
+      const type = types[0];
+      if (type === undefined) throw AppError.notFound('leave type');
+
+      if (enabled && type.archivedAt !== null) throw AppError.validation('this leave type is no longer available');
+      // บริษัทหนึ่งมี Holiday แบบสะสมได้ประเภทเดียว — เปิดตัวใหม่ = ย้ายมาใช้ตัวนี้แทนตัวเดิม
+      if (enabled) {
+        await uow.tx
+          .update(schema.leaveTypes)
+          .set({ accruesFromHolidays: false })
+          .where(and(eq(schema.leaveTypes.companyId, type.companyId), eq(schema.leaveTypes.accruesFromHolidays, true)));
+      }
+      // เริ่มนับจากเดือนที่เปิดใช้ครั้งแรก ไม่ย้อนหลัง — ปิดแล้วเปิดใหม่ยังนับต่อจากเดือนเดิม
+      let startsOn = type.accrualStartsOn;
+      if (enabled && startsOn === null) {
+        const companies = await uow.tx
+          .select({ timeZone: schema.companies.timeZone })
+          .from(schema.companies)
+          .where(eq(schema.companies.id, type.companyId))
+          .limit(1);
+        const today = LocalDate.fromInstant(this.clock.now(), companies[0]?.timeZone ?? 'Asia/Bangkok');
+        startsOn = today.firstDayOfMonth().toString();
+      }
+      await uow.tx
+        .update(schema.leaveTypes)
+        .set({ accruesFromHolidays: enabled, accrualStartsOn: startsOn })
+        .where(eq(schema.leaveTypes.id, leaveTypeId));
+
+      await uow.audit({
+        action: 'leave.type.holiday_accrual',
+        resourceType: 'leave_type',
+        resourceId: leaveTypeId,
+        outcome: 'SUCCESS',
+        companyId: type.companyId,
+        before: { accrues_from_holidays: type.accruesFromHolidays },
+        after: { accrues_from_holidays: enabled },
+      });
+
+      return { id: leaveTypeId, accrues_from_holidays: enabled };
+    });
+  }
+
+  /** วันหยุดบริษัทในช่วงเดือน จัดกลุ่มรายเดือน — วันเดียวกันที่อยู่หลายปฏิทินนับครั้งเดียว */
+  private async companyHolidaysByMonth(
+    tx: Tx,
+    companyId: string,
+    fromMonth: string,
+    toMonth: string,
+  ): Promise<Map<string, { date: string; name: string }[]>> {
+    const fromDate = `${fromMonth}-01`;
+    const beforeDate = `${monthOfIndex(monthIndex(toMonth) + 1)}-01`;
+    const rows = await tx
+      .select({ date: schema.holidayDates.holidayDate, name: schema.holidayDates.name })
+      .from(schema.holidayDates)
+      .innerJoin(schema.holidayCalendars, eq(schema.holidayCalendars.id, schema.holidayDates.calendarId))
+      .where(
+        and(
+          eq(schema.holidayCalendars.companyId, companyId),
+          sql`${schema.holidayDates.holidayDate} >= ${fromDate}`,
+          sql`${schema.holidayDates.holidayDate} < ${beforeDate}`,
+        ),
+      );
+    const byMonth = new Map<string, { date: string; name: string }[]>();
+    for (const row of [...rows].sort((a, b) => a.date.localeCompare(b.date))) {
+      const list = byMonth.get(row.date.slice(0, 7)) ?? [];
+      if (!list.some((item) => item.date === row.date)) list.push({ date: row.date, name: row.name });
+      byMonth.set(row.date.slice(0, 7), list);
+    }
+    return byMonth;
+  }
+
+  /** สิทธิ์ Holiday ต่อเดือนของบริษัท: จำนวนที่ HR กำหนดทับ ถ้าไม่มีใช้จำนวนวันหยุดบริษัทของเดือนนั้น */
+  private async holidayGrants(
+    tx: Tx,
+    companyId: string,
+    leaveTypeId: string,
+    fromMonth: string,
+    toMonth: string,
+  ): Promise<Map<string, number>> {
+    const holidays = await this.companyHolidaysByMonth(tx, companyId, fromMonth, toMonth);
+    const overrides = await tx
+      .select({ month: schema.leaveMonthAllowances.month, days: schema.leaveMonthAllowances.days })
+      .from(schema.leaveMonthAllowances)
+      .where(eq(schema.leaveMonthAllowances.leaveTypeId, leaveTypeId));
+    const grants = new Map<string, number>();
+    for (const [month, list] of holidays) grants.set(month, list.length);
+    for (const row of overrides) grants.set(row.month.slice(0, 7), row.days);
+    return grants;
+  }
+
+  /**
+   * ข้อมูลตั้งต้นของการคิดยอด Holiday ของคนหนึ่ง (ดู holiday-accrual.ts)
+   *
+   * เริ่มนับจากเดือนที่เริ่มงาน แต่ย้อนไม่เกิน 12 เดือนก่อนเดือนที่ถาม — สิทธิ์เก่ากว่านั้นหมดอายุไปนานแล้ว
+   * excludeRequestId = ใบที่กำลังจะถูกแทนที่ (สลับวัน) ไม่นับเป็นการใช้
+   */
+  private async holidayLedger(
+    tx: Tx,
+    employment: { id: string; companyId: string; hiredOn: string },
+    leaveType: { id: string; accrualStartsOn: string | null },
+    fromMonth: string,
+    toMonth: string,
+    excludeRequestId?: string,
+  ): Promise<HolidayLedgerInput> {
+    const leaveTypeId = leaveType.id;
+    const start = monthOfIndex(
+      Math.max(
+        monthIndex(employment.hiredOn.slice(0, 7)),
+        monthIndex(fromMonth) - 12,
+        // ก่อนเดือนที่เปิดใช้ไม่นับทั้งสิทธิ์และการใช้ — เริ่มนับใหม่จากเดือนนั้น
+        leaveType.accrualStartsOn === null ? 0 : monthIndex(leaveType.accrualStartsOn.slice(0, 7)),
+      ),
+    );
+    const startDate = `${start}-01`;
+    const requests = await tx
+      .select({
+        id: schema.leaveRequests.id,
+        startsOn: schema.leaveRequests.startsOn,
+        totalMinutes: schema.leaveRequests.totalMinutes,
+      })
+      .from(schema.leaveRequests)
+      .where(
+        and(
+          eq(schema.leaveRequests.employmentId, employment.id),
+          eq(schema.leaveRequests.leaveTypeId, leaveTypeId),
+          // นับทั้งใบที่รออนุมัติ — กันสิทธิ์ไว้แล้ว เหมือนโควตารายเดือน
+          inArray(schema.leaveRequests.status, ['SUBMITTED', 'APPROVED']),
+          sql`${schema.leaveRequests.startsOn} >= ${startDate}`,
+        ),
+      );
+    const usage = new Map<string, number>();
+    let end = toMonth;
+    for (const request of requests) {
+      if (request.id === excludeRequestId) continue;
+      const month = request.startsOn.slice(0, 7);
+      usage.set(month, (usage.get(month) ?? 0) + request.totalMinutes / 480);
+      if (month > end) end = month;
+    }
+    const grants = await this.holidayGrants(tx, employment.companyId, leaveTypeId, start, end);
+    return { from: start, to: end, grants, usage };
+  }
+
+  /**
+   * ยอด Holiday ที่ตัวเองลงได้ในแต่ละเดือนของช่วงที่ถาม — หน้าลงวันหยุดใช้ซ่อนประเภทที่สิทธิ์หมด
+   * คืนเฉพาะประเภทที่เปิดนับสิทธิ์จากวันหยุดบริษัท ประเภทอื่นไม่มีในผลลัพธ์ (= ไม่ได้คุมด้วยกฎนี้)
+   */
+  async myHolidayAllowances(
+    fromMonth: string,
+    toMonth: string,
+  ): Promise<{
+    items: {
+      leave_type_id: string;
+      months: { month: string; available_days: number; buckets: HolidayBucket[] }[];
+    }[];
+  }> {
+    if (monthIndex(toMonth) < monthIndex(fromMonth) || monthIndex(toMonth) - monthIndex(fromMonth) > 23) {
+      throw AppError.validation('month range must be 1-24 months');
+    }
+    return this.uow.run(async (uow) => {
+      const employmentId = this.requestContext.requirePrincipal().employmentId;
+      if (employmentId === null) return { items: [] };
+      const employments = await uow.tx
+        .select()
+        .from(schema.employments)
+        .where(eq(schema.employments.id, employmentId))
+        .limit(1);
+      const employment = employments[0];
+      if (employment === undefined) return { items: [] };
+
+      const types = await uow.tx
+        .select()
+        .from(schema.leaveTypes)
+        .where(
+          and(
+            eq(schema.leaveTypes.companyId, employment.companyId),
+            eq(schema.leaveTypes.accruesFromHolidays, true),
+            isNull(schema.leaveTypes.archivedAt),
+          ),
+        );
+
+      const items = [];
+      for (const type of types) {
+        const ledger = await this.holidayLedger(uow.tx, employment, type, fromMonth, toMonth);
+        const months = [];
+        for (let index = monthIndex(fromMonth); index <= monthIndex(toMonth); index += 1) {
+          months.push({ month: monthOfIndex(index), ...holidayAvailability(ledger, monthOfIndex(index)) });
+        }
+        items.push({ leave_type_id: type.id, months });
+      }
+      return { items };
+    });
+  }
+
+  /**
+   * ยอด Holiday คงเหลือของพนักงานทุกคนในบริษัท ณ เดือนหนึ่ง — ให้ HR เห็นว่าใครเหลือกี่วัน
+   * และใครมีวันที่ต้องใช้ภายในเดือนนั้น (ไม่งั้นถูกตัดทิ้ง)
+   *
+   * คิดด้วยกฎเดียวกับ myHolidayAllowances ทุกประการ แต่ดึงสิทธิ์รายเดือนและใบของทุกคนครั้งเดียว
+   * ไม่วนถามฐานข้อมูลทีละคน · คืนเฉพาะ employment_id — ชื่อให้ฝั่งเรียกจับคู่จาก /employments
+   */
+  async listHolidayBalances(
+    leaveTypeId: string,
+    month: string,
+  ): Promise<{
+    items: {
+      employment_id: string;
+      available_days: number;
+      expiring_days: number;
+      used_days: number;
+      buckets: HolidayBucket[];
+    }[];
+  }> {
+    return this.uow.run(async (uow) => {
+      const types = await uow.tx
+        .select()
+        .from(schema.leaveTypes)
+        .where(eq(schema.leaveTypes.id, leaveTypeId))
+        .limit(1);
+      const type = types[0];
+      if (type === undefined) throw AppError.notFound('leave type');
+
+      const firstMonth = monthOfIndex(
+        Math.max(
+          monthIndex(month) - 12,
+          type.accrualStartsOn === null ? 0 : monthIndex(type.accrualStartsOn.slice(0, 7)),
+        ),
+      );
+      const firstDate = `${firstMonth}-01`;
+      const monthStart = `${month}-01`;
+
+      const employments = await uow.tx
+        .select({
+          id: schema.employments.id,
+          hiredOn: schema.employments.hiredOn,
+          terminatedOn: schema.employments.terminatedOn,
+        })
+        .from(schema.employments)
+        .where(and(eq(schema.employments.companyId, type.companyId), eq(schema.employments.status, 'ACTIVE')));
+
+      const requests = await uow.tx
+        .select({
+          employmentId: schema.leaveRequests.employmentId,
+          startsOn: schema.leaveRequests.startsOn,
+          totalMinutes: schema.leaveRequests.totalMinutes,
+        })
+        .from(schema.leaveRequests)
+        .where(
+          and(
+            eq(schema.leaveRequests.leaveTypeId, leaveTypeId),
+            inArray(schema.leaveRequests.status, ['SUBMITTED', 'APPROVED']),
+            sql`${schema.leaveRequests.startsOn} >= ${firstDate}`,
+          ),
+        );
+      let lastMonth = month;
+      const usageOf = new Map<string, Map<string, number>>();
+      for (const request of requests) {
+        const requestMonth = request.startsOn.slice(0, 7);
+        const usage = usageOf.get(request.employmentId) ?? new Map<string, number>();
+        usage.set(requestMonth, (usage.get(requestMonth) ?? 0) + request.totalMinutes / 480);
+        usageOf.set(request.employmentId, usage);
+        if (requestMonth > lastMonth) lastMonth = requestMonth;
+      }
+      const grants = await this.holidayGrants(uow.tx, type.companyId, leaveTypeId, firstMonth, lastMonth);
+
+      const items = [];
+      for (const employment of employments) {
+        // ออกจากงานก่อนเดือนนี้แล้ว — ไม่มีสิทธิ์ให้ดู
+        if (employment.terminatedOn !== null && employment.terminatedOn < monthStart) continue;
+        const from = monthOfIndex(
+          Math.max(monthIndex(firstMonth), monthIndex(employment.hiredOn.slice(0, 7))),
+        );
+        // ใบที่ลงไว้ก่อนเดือนเริ่มนับของคนนี้ไม่นำมาคิด เหมือน holidayLedger
+        const usage = new Map([...(usageOf.get(employment.id) ?? [])].filter(([usedIn]) => usedIn >= from));
+        const { available_days, buckets } = holidayAvailability({ from, to: lastMonth, grants, usage }, month);
+        items.push({
+          employment_id: employment.id,
+          available_days,
+          expiring_days: buckets
+            .filter((bucket) => bucket.expires_month === month)
+            .reduce((sum, bucket) => sum + bucket.remaining_days, 0),
+          used_days: usage.get(month) ?? 0,
+          buckets,
+        });
+      }
+      return { items };
+    });
+  }
+
+  /**
+   * ตารางสิทธิ์ Holiday รายเดือนของปีหนึ่ง — ให้ HR เห็นว่าเดือนไหนมีวันหยุดบริษัทกี่วัน
+   * และเดือนไหนถูกกำหนดจำนวนทับไว้
+   */
+  async listMonthAllowances(
+    leaveTypeId: string,
+    year: number,
+  ): Promise<{
+    items: {
+      month: string;
+      holiday_count: number;
+      holidays: { date: string; name: string }[];
+      override_days: number | null;
+      days: number;
+    }[];
+  }> {
+    return this.uow.run(async (uow) => {
+      const types = await uow.tx
+        .select()
+        .from(schema.leaveTypes)
+        .where(eq(schema.leaveTypes.id, leaveTypeId))
+        .limit(1);
+      const type = types[0];
+      if (type === undefined) throw AppError.notFound('leave type');
+
+      const first = `${String(year)}-01`;
+      const last = `${String(year)}-12`;
+      const holidays = await this.companyHolidaysByMonth(uow.tx, type.companyId, first, last);
+      const overrides = await uow.tx
+        .select({ month: schema.leaveMonthAllowances.month, days: schema.leaveMonthAllowances.days })
+        .from(schema.leaveMonthAllowances)
+        .where(eq(schema.leaveMonthAllowances.leaveTypeId, leaveTypeId));
+      const overrideOf = new Map(overrides.map((row) => [row.month.slice(0, 7), row.days]));
+
+      const items = [];
+      for (let index = monthIndex(first); index <= monthIndex(last); index += 1) {
+        const month = monthOfIndex(index);
+        const list = holidays.get(month) ?? [];
+        const override = overrideOf.get(month) ?? null;
+        items.push({
+          month,
+          holiday_count: list.length,
+          holidays: list,
+          override_days: override,
+          days: override ?? list.length,
+        });
+      }
+      return { items };
+    });
+  }
+
+  /** HR กำหนดจำนวนวัน Holiday ของเดือนหนึ่งทับ — days = null ลบค่าทับ กลับไปนับจากวันหยุดบริษัท */
+  async setMonthAllowance(
+    leaveTypeId: string,
+    month: string,
+    days: number | null,
+  ): Promise<Record<string, unknown>> {
+    return this.uow.run(async (uow) => {
+      const types = await uow.tx
+        .select()
+        .from(schema.leaveTypes)
+        .where(eq(schema.leaveTypes.id, leaveTypeId))
+        .limit(1);
+      const type = types[0];
+      if (type === undefined) throw AppError.notFound('leave type');
+
+      const monthStart = `${month}-01`;
+      const scope = and(
+        eq(schema.leaveMonthAllowances.leaveTypeId, leaveTypeId),
+        eq(schema.leaveMonthAllowances.month, monthStart),
+      );
+      const existing = await uow.tx.select().from(schema.leaveMonthAllowances).where(scope).limit(1);
+      const updatedBy = this.requestContext.requirePrincipal().principalId;
+
+      if (days === null) {
+        await uow.tx.delete(schema.leaveMonthAllowances).where(scope);
+      } else if (existing[0] === undefined) {
+        await uow.tx.insert(schema.leaveMonthAllowances).values({
+          id: uuidv7(),
+          tenantId: uow.tenantId,
+          companyId: type.companyId,
+          leaveTypeId,
+          month: monthStart,
+          days,
+          updatedBy,
+        });
+      } else {
+        await uow.tx
+          .update(schema.leaveMonthAllowances)
+          .set({ days, updatedAt: this.clock.now(), updatedBy })
+          .where(scope);
+      }
+
+      await uow.audit({
+        action: 'leave.type.month_allowance',
+        resourceType: 'leave_type',
+        resourceId: leaveTypeId,
+        outcome: 'SUCCESS',
+        companyId: type.companyId,
+        before: { month, days: existing[0]?.days ?? null },
+        after: { month, days },
+      });
+
+      return { leave_type_id: leaveTypeId, month, days };
+    });
+  }
+
+  /**
    * ยื่นใบลา — จองสิทธิ์ทันที (RESERVE) ยังไม่ตัด (CONSUME)
    *
    * แยกจองกับตัดออกจากกันเพื่อให้ยกเลิกใบลาที่ยังไม่อนุมัติแล้วคืนสิทธิ์ได้
@@ -389,7 +801,28 @@ export class LeaveService {
        * นับทั้ง SUBMITTED และ APPROVED — ใบที่รออนุมัติกันโควตาไว้แล้ว
        * ไม่งั้นจะส่งค้างไว้เกินโควตาแล้วรอให้อนุมัติทีเดียวทั้งหมด
        */
-      if (leaveType.monthlyQuotaDays > 0) {
+      if (leaveType.accruesFromHolidays) {
+        /*
+         * Holiday — สิทธิ์ต่อเดือนมาจากวันหยุดบริษัทและทบยอดได้ ไม่ใช่เลขเดียวทุกเดือน
+         * (ดู holiday-accrual.ts) ใบที่กำลังถูกสลับออกไม่นับเป็นการใช้ เหมือนโควตารายเดือนด้านล่าง
+         */
+        const month = input.starts_on.slice(0, 7);
+        const ledger = await this.holidayLedger(
+          uow.tx,
+          employment,
+          leaveType,
+          month,
+          month,
+          swapFromRequest?.id,
+        );
+        const { available_days: availableDays } = holidayAvailability(ledger, month);
+        const requestedDays = input.total_minutes / 480;
+        if (requestedDays > availableDays) {
+          throw AppError.validation('holiday balance exceeded', {
+            meta: { available_days: availableDays, requested_days: requestedDays },
+          });
+        }
+      } else if (leaveType.monthlyQuotaDays > 0) {
         const monthStart = startsOn.firstDayOfMonth().toString();
         const monthEnd = startsOn.lastDayOfMonth().toString();
 
@@ -906,6 +1339,8 @@ export class LeaveService {
           quota_minutes_per_year: row.quotaMinutesPerYear,
           auto_approve: row.autoApprove,
           monthly_quota_days: row.monthlyQuotaDays,
+          accrues_from_holidays: row.accruesFromHolidays,
+          accrual_starts_on: row.accrualStartsOn,
           show_on_calendar: row.showOnCalendar,
           requires_reports: row.requiresReports,
           ...(includeArchived

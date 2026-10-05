@@ -3,6 +3,7 @@
 import { useActionState, useMemo, useState, useTransition } from "react";
 import { Button } from "@smartboss/ui/components/button";
 import { Modal } from "@/components/module/dialog";
+import { leaveTypeHint, usableLeaveTypes, type LeaveTypeChoice } from "@/modules/hr/lib/leave-type-choice";
 import {
   cancelLeaveAction,
   cancelLeaveForAction,
@@ -45,12 +46,7 @@ export interface PersonLegend {
   name: string;
 }
 
-export interface LeaveTypeChoice {
-  id: string;
-  label: string;
-  autoApprove: boolean;
-  monthlyQuotaDays: number;
-}
+export type { LeaveTypeChoice };
 
 /**
  * สีประจำตัวคน — คำนวณจาก id ให้คงที่ ไม่ใช่สุ่มหรือไล่ตามลำดับในลิสต์
@@ -657,7 +653,7 @@ function DayDialog({
   entries,
   mine,
   employmentId,
-  leaveTypes,
+  leaveTypes: allLeaveTypes,
   canRequest,
   busy,
   submitting,
@@ -682,6 +678,8 @@ function DayDialog({
   onCancelDay: (requestId: string) => void;
   onRelabel: (requestId: string, label: string) => void;
 }) {
+  // Holiday ที่สิทธิ์หมดแล้วไม่ขึ้นให้เลือก
+  const leaveTypes = usableLeaveTypes(allLeaveTypes);
   const [typeId, setTypeId] = useState(leaveTypes[0]?.id ?? "");
   const [endDate, setEndDate] = useState(date);
   /** ผู้ใช้แตะช่องชื่อแล้วหรือยัง — ถ้ายัง ให้ชื่อวิ่งตามประเภทที่เลือกไปเรื่อย ๆ */
@@ -773,14 +771,16 @@ function DayDialog({
   }
 
   // ── ดูอย่างเดียว: ลงวันหยุดเองไม่ได้ ──
-  if (!canRequest) {
+  if (!canRequest || leaveTypes.length === 0) {
     return (
       <Modal title={`วันที่ ${date}`} onClose={onClose}>
         <OthersOnDay entries={entries} />
         <p className="mt-3 text-sm text-(--ink-soft)">
           {employmentId === null
             ? "บัญชีนี้ยังไม่ถูกผูกกับทะเบียนพนักงาน จึงลงวันหยุดเองไม่ได้"
-            : "ยังไม่มีประเภทการลาในระบบ"}
+            : allLeaveTypes.length > 0
+              ? "สิทธิ์วันหยุดของเดือนนี้ใช้หมดแล้ว"
+              : "ยังไม่มีประเภทการลาในระบบ"}
         </p>
         <ModalActions onClose={onClose} confirm={null} />
       </Modal>
@@ -819,9 +819,7 @@ function DayDialog({
             {leaveTypes.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.label}
-                {t.autoApprove
-                  ? ` — ไม่ต้องอนุมัติ${t.monthlyQuotaDays > 0 ? ` (${t.monthlyQuotaDays} วัน/เดือน)` : ""}`
-                  : " — ต้องรออนุมัติ"}
+                {leaveTypeHint(t)}
               </option>
             ))}
           </select>

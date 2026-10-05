@@ -12,12 +12,15 @@ import {
   preApproveOvertimeSchema,
   renameLeaveTypeSchema,
   archiveLeaveTypeSchema,
+  setHolidayAccrualSchema,
+  setMonthAllowanceSchema,
   reopenTimesheetPeriodSchema,
   submitLeaveSchema,
   submitOvertimeSchema,
   type SubmitLeaveInput,
   type SubmitOvertimeInput,
 } from '@workforce/contracts';
+import { AppError } from '@workforce/domain';
 import type { z } from 'zod';
 import { requireUuid } from '../organization/organization.controller';
 import { Idempotent, RequirePermissions } from '../shared/decorators';
@@ -25,6 +28,21 @@ import { zodPipe } from '../shared/zod-validation.pipe';
 import { LeaveService, type LeaveBalance } from './leave.service';
 import { OvertimeService } from './overtime.service';
 import { TimesheetService } from './timesheet.service';
+
+function requireMonth(value: string | undefined, field: string): string {
+  if (value === undefined || !/^\d{4}-(0[1-9]|1[0-2])$/.test(value)) {
+    throw AppError.validation(`${field} must be a month in YYYY-MM format`);
+  }
+  return value;
+}
+
+function requireYear(value: string | undefined): number {
+  const year = Number(value);
+  if (!Number.isInteger(year) || year < 2000 || year > 2200) {
+    throw AppError.validation('year must be a 4-digit year');
+  }
+  return year;
+}
 
 @Controller()
 export class LeaveController {
@@ -92,6 +110,63 @@ export class LeaveController {
     @Body(zodPipe(archiveLeaveTypeSchema)) body: z.infer<typeof archiveLeaveTypeSchema>,
   ): Promise<Record<string, unknown>> {
     return this.service.archiveLeaveType(requireUuid(leaveTypeId, 'leaveTypeId'), body.merge_into);
+  }
+
+  /** เปิด/ปิดให้ประเภทลานับสิทธิ์จากวันหยุดบริษัทรายเดือนและทบยอดได้ (Holiday) */
+  @Post('leave-types/:leaveTypeId/holiday-accrual')
+  @HttpCode(200)
+  @RequirePermissions('workforce.leave.manage')
+  @Idempotent()
+  async setHolidayAccrual(
+    @Param('leaveTypeId') leaveTypeId: string,
+    @Body(zodPipe(setHolidayAccrualSchema)) body: z.infer<typeof setHolidayAccrualSchema>,
+  ): Promise<Record<string, unknown>> {
+    return this.service.setHolidayAccrual(requireUuid(leaveTypeId, 'leaveTypeId'), body.enabled);
+  }
+
+  /** ตารางสิทธิ์ Holiday รายเดือนของปีหนึ่ง — วันหยุดบริษัทของแต่ละเดือน และจำนวนที่ HR กำหนดทับ */
+  @Get('leave-types/:leaveTypeId/month-allowances')
+  @RequirePermissions('workforce.leave.manage')
+  async listMonthAllowances(
+    @Param('leaveTypeId') leaveTypeId: string,
+    @Query('year') year: string,
+  ): Promise<{ items: Record<string, unknown>[] }> {
+    return this.service.listMonthAllowances(requireUuid(leaveTypeId, 'leaveTypeId'), requireYear(year));
+  }
+
+  /** ยอด Holiday คงเหลือของพนักงานทุกคน ณ เดือนหนึ่ง (month เป็น YYYY-MM) — สำหรับ HR */
+  @Get('leave-types/:leaveTypeId/holiday-balances')
+  @RequirePermissions('workforce.leave.manage')
+  async listHolidayBalances(
+    @Param('leaveTypeId') leaveTypeId: string,
+    @Query('month') month: string,
+  ): Promise<{ items: Record<string, unknown>[] }> {
+    return this.service.listHolidayBalances(requireUuid(leaveTypeId, 'leaveTypeId'), requireMonth(month, 'month'));
+  }
+
+  /** HR กำหนดจำนวนวัน Holiday ของเดือนหนึ่งทับ (days = null กลับไปนับจากวันหยุดบริษัท) */
+  @Post('leave-types/:leaveTypeId/month-allowances')
+  @HttpCode(200)
+  @RequirePermissions('workforce.leave.manage')
+  @Idempotent()
+  async setMonthAllowance(
+    @Param('leaveTypeId') leaveTypeId: string,
+    @Body(zodPipe(setMonthAllowanceSchema)) body: z.infer<typeof setMonthAllowanceSchema>,
+  ): Promise<Record<string, unknown>> {
+    return this.service.setMonthAllowance(requireUuid(leaveTypeId, 'leaveTypeId'), body.month, body.days);
+  }
+
+  /**
+   * ยอด Holiday ที่ตัวเองยังลงได้ในแต่ละเดือน (from/to เป็น YYYY-MM) — เห็นแค่ของตัวเอง
+   * หน้าลงวันหยุดใช้ซ่อนประเภทที่สิทธิ์หมดแล้ว
+   */
+  @Get('me/holiday-allowances')
+  @RequirePermissions('workforce.leave.request')
+  async myHolidayAllowances(
+    @Query('from') from: string,
+    @Query('to') to: string,
+  ): Promise<{ items: Record<string, unknown>[] }> {
+    return this.service.myHolidayAllowances(requireMonth(from, 'from'), requireMonth(to, 'to'));
   }
 
   /**

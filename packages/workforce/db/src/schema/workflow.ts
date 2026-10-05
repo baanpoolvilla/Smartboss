@@ -29,6 +29,13 @@ export const leaveTypes = workforce.table('leave_types', {
    * ไม่ต้องลงเวลา แต่ยังทำงาน) · false = ลาแล้วไม่ต้องส่งรายงาน (ค่าเดิม)
    */
   requiresReports: boolean('requires_reports').notNull().default(false),
+  /**
+   * true = สิทธิ์ต่อเดือนมาจากจำนวนวันหยุดบริษัทของเดือนนั้น (HR แก้ทับรายเดือนได้) และทบยอดได้
+   * ไม่ใช้ monthlyQuotaDays (ดู migration 0019 และ LeaveService.holidayLedger)
+   */
+  accruesFromHolidays: boolean('accrues_from_holidays').notNull().default(false),
+  /** เดือนแรกที่เริ่มนับสิทธิ์สะสม (วันแรกของเดือน) — ตั้งตอนเปิดใช้ครั้งแรก ก่อนหน้านี้ไม่นับย้อนหลัง */
+  accrualStartsOn: date('accrual_starts_on'),
   /** ลบออกจากรายการแล้ว (ดู migration 0018) — NULL = ยังใช้งาน · ใบเก่ายังอ้างประเภทนี้ได้ */
   archivedAt: timestamp('archived_at', { withTimezone: true }),
   attachmentRequired: boolean('attachment_required').notNull().default(false),
@@ -40,6 +47,23 @@ export const leaveTypes = workforce.table('leave_types', {
   effectiveTo: date('effective_to'),
   ...auditColumns,
 });
+
+/** จำนวนวัน Holiday ที่ HR กำหนดทับสำหรับเดือนหนึ่ง — ไม่มีแถว = ใช้จำนวนวันหยุดบริษัทของเดือนนั้น */
+export const leaveMonthAllowances = workforce.table(
+  'leave_month_allowances',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id').notNull(),
+    companyId: uuid('company_id').notNull(),
+    leaveTypeId: uuid('leave_type_id').notNull(),
+    /** วันแรกของเดือน */
+    month: date('month').notNull(),
+    days: integer('days').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedBy: uuid('updated_by'),
+  },
+  (table) => [uniqueIndex('leave_month_allowances_key').on(table.tenantId, table.leaveTypeId, table.month)],
+);
 
 export const leaveBalanceLedger = workforce.table(
   'leave_balance_ledger',
@@ -266,6 +290,7 @@ export const timesheetDaySnapshots = workforce.table(
 
 export const workflowTables = {
   leaveTypes,
+  leaveMonthAllowances,
   leaveBalanceLedger,
   leaveRequests,
   overtimeRequests,

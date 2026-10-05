@@ -64,10 +64,11 @@ export default async function HrOverviewPage({
       title={TAB_TITLE[tab]}
       permission={HR_PERMS.access}
       // ปฏิทินทีมใช้ความกว้างเต็มหน้า ("ดันพื้นที่ให้แสดงให้เต็ม") — แท็บอื่นเป็นรายการ อ่านง่ายกว่าในคอลัมน์แคบ
-      {...(tab === "calendar" ? { width: "max-w-none" } : {})}
+      // และลดขอบบนของหน้า ("ดึงขึ้นไปอีก") — ปฏิทินได้ความสูงเพิ่ม เห็นครบเดือนโดยไม่ต้องเลื่อน
+      {...(tab === "calendar" ? { width: "max-w-none pt-1.5! sm:pt-2!" } : {})}
       load={async () => {
         const tabBar = (
-          <div className="mb-4 flex gap-1 border-b border-(--line)">
+          <div className={`${tab === "calendar" ? "mb-2" : "mb-4"} flex gap-1 border-b border-(--line)`}>
             {TABS.filter((t) => !MANAGE_TABS.includes(t.id) || canManage).map((t) => (
               <Link
                 key={t.id}

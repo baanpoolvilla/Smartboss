@@ -262,11 +262,31 @@ export class AttendanceRepository {
     return { shiftId: byDay[dayOfWeek] ?? null, source: 'PATTERN' };
   }
 
+  /**
+   * วันหยุดบริษัทของวันนั้น — เฉพาะบริษัทที่ "หยุดตามวัน"
+   *
+   * บริษัทที่ใช้ Holiday แบบสะสม (มีประเภทลาที่ accrues_from_holidays) พนักงานเลือกวันหยุดเอง
+   * วันหยุดบริษัทจึงเป็นแค่ตัวนับสิทธิ์ ไม่ใช่วันหยุดจริง: วันนั้นเป็นวันทำงานปกติ
+   * ถ้ายังนับเป็นวันหยุดด้วย คนจะได้ทั้งวันหยุดตรงวัน (หรือ OT วันหยุด) และสิทธิ์ไปหยุดวันอื่นซ้ำสองต่อ
+   */
   async findHoliday(
     tx: Tx,
     companyId: string,
     workDate: string,
   ): Promise<typeof schema.holidayDates.$inferSelect | undefined> {
+    const floating = await tx
+      .select({ id: schema.leaveTypes.id })
+      .from(schema.leaveTypes)
+      .where(
+        and(
+          eq(schema.leaveTypes.companyId, companyId),
+          eq(schema.leaveTypes.accruesFromHolidays, true),
+          isNull(schema.leaveTypes.archivedAt),
+        ),
+      )
+      .limit(1);
+    if (floating.length > 0) return undefined;
+
     const rows = await tx
       .select({ holiday: schema.holidayDates })
       .from(schema.holidayDates)

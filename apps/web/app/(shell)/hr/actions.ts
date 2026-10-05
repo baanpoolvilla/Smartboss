@@ -84,6 +84,9 @@ function leaveErrorMessage(raw: string): string {
       "แล้วเลือกประเภทที่สร้างใหม่แทน"
     );
   }
+  if (raw.includes("holiday balance exceeded")) {
+    return "สิทธิ์ Holiday ของเดือนนี้ไม่พอ (รวมที่ทบมาแล้ว) — ลดจำนวนวัน หรือใช้ประเภทการลาอื่น";
+  }
   if (raw.includes("monthly quota exceeded")) {
     return "เดือนนี้ใช้สิทธิ์ครบแล้ว — เลือกวันในเดือนถัดไป หรือใช้ประเภทการลาอื่น";
   }
@@ -1401,6 +1404,59 @@ export async function renameLeaveTypeAction(formData: FormData) {
     await wfFetch(`/leave-types/${leaveTypeId}/rename`, {
       method: "POST",
       body: { name },
+    });
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+  revalidatePath("/hr");
+  revalidatePath("/hr/settings");
+}
+
+/**
+ * เปิด/ปิดให้ประเภทลานับสิทธิ์ต่อเดือนจากวันหยุดบริษัท ใช้ได้ภายใน 3 เดือน (Holiday)
+ * เปิดแล้วโควตา "วัน/เดือน" ของประเภทนั้นไม่ถูกใช้ — ปิดก็กลับไปใช้ตามเดิม
+ */
+export async function setHolidayModeAction(formData: FormData) {
+  await guard(HR_PERMS.settingManage);
+  // fixed = หยุดตามวันหยุดบริษัท (ทุกคนหยุดตรงวัน) · floating = สะสมสิทธิ์ เลือกวันหยุดเอง
+  const floating = formData.get("mode") === "floating";
+  const leaveTypeId = String(formData.get("leave_type_id") ?? "");
+  const currentId = String(formData.get("current_id") ?? "");
+  if (floating && !leaveTypeId) throw new Error("เลือกประเภทการลาที่จะใช้เป็น Holiday ก่อน");
+
+  try {
+    if (floating) {
+      // เซิร์ฟเวอร์ปิดประเภทเดิมให้เอง — บริษัทหนึ่งมี Holiday แบบสะสมได้ประเภทเดียว
+      await wfFetch(`/leave-types/${leaveTypeId}/holiday-accrual`, { method: "POST", body: { enabled: true } });
+    } else if (currentId) {
+      await wfFetch(`/leave-types/${currentId}/holiday-accrual`, { method: "POST", body: { enabled: false } });
+    }
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+  revalidatePath("/hr");
+  revalidatePath("/hr/settings");
+}
+
+/**
+ * HR กำหนดจำนวนวัน Holiday ของเดือนหนึ่งทับจำนวนวันหยุดบริษัท (บริษัทให้ไม่ตรงกับปฏิทิน)
+ * ช่องว่าง = ลบค่าทับ กลับไปนับจากปฏิทินวันหยุดบริษัท
+ */
+export async function setMonthAllowanceAction(formData: FormData) {
+  await guard(HR_PERMS.settingManage);
+  const leaveTypeId = String(formData.get("leave_type_id") ?? "");
+  const month = String(formData.get("month") ?? "");
+  const raw = formData.get("reset") === "1" ? "" : String(formData.get("days") ?? "").trim();
+  if (!leaveTypeId || !month) throw new Error("ไม่พบเดือนที่จะแก้");
+  const days = raw === "" ? null : Number(raw);
+  if (days !== null && (!Number.isInteger(days) || days < 0 || days > 31)) {
+    throw new Error("จำนวนวันต้องเป็นเลข 0–31");
+  }
+
+  try {
+    await wfFetch(`/leave-types/${leaveTypeId}/month-allowances`, {
+      method: "POST",
+      body: { month, days },
     });
   } catch (error) {
     throw new Error(toMessage(error));

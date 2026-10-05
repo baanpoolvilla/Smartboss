@@ -39,6 +39,17 @@ export const archiveLeaveTypeSchema = z.object({
   merge_into: uuidSchema.nullable().default(null),
 });
 
+/** เปิด/ปิดให้ประเภทลานับสิทธิ์ต่อเดือนจากวันหยุดบริษัท + ทบยอด (Holiday) */
+export const setHolidayAccrualSchema = z.object({
+  enabled: z.boolean(),
+});
+
+/** จำนวนวัน Holiday ของเดือนหนึ่งที่ HR กำหนดทับ — days = null คือกลับไปนับจากปฏิทินวันหยุดบริษัท */
+export const setMonthAllowanceSchema = z.object({
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+  days: z.number().int().min(0).max(31).nullable(),
+});
+
 export const grantLeaveBalanceSchema = z.object({
   employment_id: uuidSchema,
   leave_type_id: uuidSchema,

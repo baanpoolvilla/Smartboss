@@ -17,12 +17,15 @@ import { DatePickerField } from "@/modules/report_task/components/shared/date-pi
 import { X } from "lucide-react";
 import { toast } from "sonner";
 import { submitLeaveAction, type LeaveState } from "@/app/(shell)/hr/actions";
+import { leaveTypeHint, usableLeaveTypes } from "@/modules/hr/lib/leave-type-choice";
 
 interface LeaveTypeChoice {
   id: string;
   label: string;
   autoApprove: boolean;
   monthlyQuotaDays: number;
+  /** Holiday ที่ทบยอดได้: ยอดที่ยังลงได้รายเดือน (คีย์ YYYY-MM) — ไม่มี = ไม่ได้คุมด้วยยอดสะสม */
+  availableByMonth?: Record<string, number>;
 }
 
 interface LeaveContext {
@@ -129,7 +132,21 @@ export function SubmitLeaveDialog({
     () => datesInclusive(startDate, endDate < startDate ? startDate : endDate),
     [startDate, endDate]
   );
-  const leaveTypes = ctx?.leaveTypes ?? [];
+  // ยอด Holiday ขึ้นกับเดือนของวันที่เลือก — สิทธิ์หมดแล้วไม่ขึ้นให้เลือก
+  const leaveTypes = useMemo(
+    () =>
+      usableLeaveTypes(
+        (ctx?.leaveTypes ?? []).map((t) => ({
+          ...t,
+          availableDays: t.availableByMonth ? (t.availableByMonth[startDate.slice(0, 7)] ?? 0) : null,
+        }))
+      ),
+    [ctx, startDate]
+  );
+  // ประเภทที่เลือกไว้ลงไม่ได้ในเดือนนี้ (เปิดฟอร์มใหม่/เปลี่ยนเดือน) → ใช้ประเภทแรกที่ยังลงได้แทน
+  const activeType = leaveTypes.find((t) => t.id === typeId) ?? leaveTypes[0];
+  const activeTypeId = activeType?.id ?? "";
+  const shownLabel = labelTouched || !ctx ? label : firstWord(ctx.myName) + "-" + (activeType?.label ?? "หยุด");
   const canSubmit = !!ctx?.employmentId && leaveTypes.length > 0;
 
   return (
@@ -158,14 +175,16 @@ export function SubmitLeaveDialog({
         )}
         {ctx && ctx.employmentId && leaveTypes.length === 0 && (
           <p className="text-sm text-(--ink-soft)">
-            ยังไม่มีประเภทการลาในระบบ — ฝ่ายบุคคลต้องสร้างก่อนอย่างน้อยหนึ่งประเภท
+            {ctx.leaveTypes.length > 0
+              ? "สิทธิ์วันหยุดของเดือนนี้ใช้หมดแล้ว — เลือกวันในเดือนอื่น"
+              : "ยังไม่มีประเภทการลาในระบบ — ฝ่ายบุคคลต้องสร้างก่อนอย่างน้อยหนึ่งประเภท"}
           </p>
         )}
 
         {canSubmit && ctx && (
           <form id="report-task-leave-form" action={formAction} className="flex flex-col gap-4">
             <input type="hidden" name="employment_id" value={ctx.employmentId ?? ""} />
-            <input type="hidden" name="leave_type_id" value={typeId} />
+            <input type="hidden" name="leave_type_id" value={activeTypeId} />
             {dates.map((d) => (
               <input key={d} type="hidden" name="day" value={d} />
             ))}
@@ -173,7 +192,7 @@ export function SubmitLeaveDialog({
             <div className="flex flex-col gap-1.5">
               <Label>ประเภทการลา *</Label>
               <Select
-                value={typeId}
+                value={activeTypeId}
                 onValueChange={(v) => {
                   if (!v) return;
                   setTypeId(v);
@@ -184,15 +203,13 @@ export function SubmitLeaveDialog({
                 }}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue>{leaveTypes.find((t) => t.id === typeId)?.label ?? "เลือกประเภท"}</SelectValue>
+                  <SelectValue>{activeType?.label ?? "เลือกประเภท"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {leaveTypes.map((t) => (
                     <SelectItem key={t.id} value={t.id}>
                       {t.label}
-                      {t.autoApprove
-                        ? ` — ไม่ต้องอนุมัติ${t.monthlyQuotaDays > 0 ? ` (${t.monthlyQuotaDays} วัน/เดือน)` : ""}`
-                        : " — ต้องรออนุมัติ"}
+                      {leaveTypeHint(t)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -203,7 +220,7 @@ export function SubmitLeaveDialog({
               <Label>ชื่อที่แสดงบนปฏิทิน</Label>
               <Input
                 name="display_label"
-                value={label}
+                value={shownLabel}
                 onChange={(e) => {
                   setLabelTouched(true);
                   setLabel(e.target.value);
@@ -251,7 +268,7 @@ export function SubmitLeaveDialog({
             ปิด
           </Button>
           {canSubmit && (
-            <Button type="submit" form="report-task-leave-form" disabled={pending || !typeId}>
+            <Button type="submit" form="report-task-leave-form" disabled={pending || !activeTypeId}>
               {pending ? "กำลังบันทึก…" : dates.length === 1 ? "ยื่นวันลา" : `ยื่นวันลา ${dates.length} วัน`}
             </Button>
           )}
