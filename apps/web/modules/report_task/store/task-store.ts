@@ -831,12 +831,21 @@ export const useTaskStore = create<TaskStore>((set) => ({
       const t = s.tasks.find((x) => x.id === taskId);
       if (t && JSON.stringify([...t.assigneeIds].sort()) !== JSON.stringify([...assigneeIds].sort())) {
         const actorId = useIdentityStore.getState().viewingAsUserId;
-        const names = assigneeIds.map((id) => getUser(id)?.name).filter(Boolean).join(", ");
-        logActivity(actorId, "เปลี่ยนผู้รับผิดชอบ", t.title, t.id, names ? `เป็น ${names}` : "ไม่มีผู้รับผิดชอบ");
+        const nameList = (ids: string[]) => ids.map((id) => getUser(id)?.name ?? id).join(", ");
+        const remaining = assigneeIds.length > 0 ? `เหลือ ${nameList(assigneeIds)}` : "ไม่เหลือผู้รับผิดชอบ";
+        const newlyAdded = assigneeIds.filter((id) => !t.assigneeIds.includes(id));
+        const removed = t.assigneeIds.filter((id) => !assigneeIds.includes(id));
+        // แยกบรรทัด "เอาออก" กับ "เพิ่ม" — เดิมบันทึกแค่รายชื่อหลังเปลี่ยน ("เป็น A, B") อ่านแล้ว
+        // ไม่รู้ว่าใครถูกเอาออก ต้องเทียบกับบรรทัดก่อนหน้าเอง · คนที่กดคือ userId ของบรรทัดนั้น
+        if (removed.length > 0) {
+          logActivity(actorId, "เอาผู้รับผิดชอบออก", t.title, t.id, `${nameList(removed)} · ${remaining}`);
+        }
+        if (newlyAdded.length > 0) {
+          logActivity(actorId, "เพิ่มผู้รับผิดชอบ", t.title, t.id, `${nameList(newlyAdded)} · รวมเป็น ${nameList(assigneeIds)}`);
+        }
         // แจ้งเฉพาะคนที่เพิ่ง "เพิ่มเข้ามาใหม่" ไม่ใช่ทั้งลิสต์ — คนที่รับผิดชอบ
         // อยู่แล้วไม่ต้องเตือนซ้ำแค่เพราะมีคนอื่นถูกเพิ่ม/เอาออก เหมือนตอนสร้าง
         // งานใหม่ (addTask) ที่เพิ่งเพิ่มแจ้งเตือนไปด้วยกัน
-        const newlyAdded = assigneeIds.filter((id) => !t.assigneeIds.includes(id));
         if (newlyAdded.length > 0) {
           const actorName = getUser(actorId)?.name ?? "หัวหน้า";
           useNotificationStore

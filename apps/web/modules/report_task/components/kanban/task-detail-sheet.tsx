@@ -50,6 +50,7 @@ import { getUser, displayName, getDepartment, users, isOwner, canManage, departm
 import { statusMeta, priorityMeta, taskStatusOrder, taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
 import { isTaskFullyDone, remainingChecklistCount } from "@/modules/report_task/lib/task-completion";
 import { formatDate, formatDateTime } from "@/modules/report_task/lib/format";
+import { AssigneeHistory } from "./assignee-history";
 import { cn } from "@/modules/report_task/lib/utils";
 import {
   Calendar,
@@ -1100,6 +1101,9 @@ export function TaskDetailSheet({
               <span className="font-medium text-[var(--ink)]">{departmentNames.join(", ")}</span>
             </span>
           </div>
+
+          {/* ใครเอาใครออก/เพิ่มใครเข้า — ไม่มีประวัติก็ไม่แสดง */}
+          <AssigneeHistory taskId={task.id} />
 
           {/* Dates (start date: creator only) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
