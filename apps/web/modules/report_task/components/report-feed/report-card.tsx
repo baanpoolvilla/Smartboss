@@ -894,7 +894,16 @@ export function ReportCard({
   // inline <img>, which htmlEditorToBulletsText has no case for and just
   // drops), so route it through the real upload path instead.
   async function handleReplyImagePaste(e: React.ClipboardEvent<HTMLDivElement>) {
-    if (hasClipboardText(e.clipboardData)) return; // ตารางจาก Excel ฯลฯ = วางเป็นข้อความ
+    if (hasClipboardText(e.clipboardData)) {
+      // วางเป็นข้อความล้วน (ตารางจาก Excel ฯลฯ ก็เช่นกัน) — ปล่อยให้เบราว์เซอร์วางเอง มันพา margin/ความกว้าง
+      // ของต้นทางมาด้วย: ข้อความเยื้องเข้าไปครึ่งกล่อง กว้างเกินจนต้องเลื่อนซ้ายขวา ตัวอักษรแรกหลุดขอบ
+      const text = e.clipboardData.getData("text/plain");
+      if (!text) return;
+      e.preventDefault();
+      document.execCommand("insertText", false, text);
+      setReplyText(htmlEditorToBulletsText(e.currentTarget));
+      return;
+    }
     const item = Array.from(e.clipboardData.items).find((it) => it.kind === "file" && it.type.startsWith("image/"));
     if (!item) return;
     e.preventDefault();
@@ -1925,7 +1934,9 @@ export function ReportCard({
               )}
               style={replyHighlight ? { borderColor: replyHighlight } : { borderColor: "var(--line)" }}
             >
-              <Avatar className="h-6 w-6 shrink-0">
+              {/* จอสัมผัสตอนกำลังพิมพ์: ช่องพิมพ์ได้ทั้งบรรทัด (ไม่มีรูปโปรไฟล์ทางซ้าย ไม่มีคอลัมน์ปุ่มทางขวา)
+                  ปุ่มแนบ/ส่งลงไปอยู่บรรทัดล่างชิดขวา — เดิมปุ่มสองปุ่มกินคอลัมน์ทั้งความสูงของข้อความ */}
+              <Avatar className={cn("h-6 w-6 shrink-0", replyFocused && "[@media(pointer:coarse)]:hidden")}>
                 <AvatarImage src={viewer?.avatarUrl ?? undefined} alt={viewer?.name} />
                 <AvatarFallback className="text-[9px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{viewer?.avatar}</AvatarFallback>
               </Avatar>
@@ -1956,7 +1967,13 @@ export function ReportCard({
                 }}
                 onPaste={handleReplyImagePaste}
                 // สูงสุด ~7 บรรทัดแล้วเลื่อนในช่อง — คอมเมนต์ยาว ๆ ไม่ดันหน้าจนมองไม่เห็นโพสต์ที่กำลังตอบ
-                className="flex-1 min-w-[100px] max-h-40 overflow-y-auto overscroll-contain bg-transparent text-sm outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-[var(--ink-soft)]"
+                className={cn(
+                  "flex-1 min-w-[100px] max-h-40 overflow-y-auto overflow-x-hidden break-words overscroll-contain bg-transparent text-sm outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-[var(--ink-soft)]",
+                  // iPhone ซูมหน้าเข้าเองเมื่อแตะช่องพิมพ์ที่ตัวอักษรเล็กกว่า 16px — หน้าล้นขอบขวา ปุ่มส่งหลุดจอ
+                  // ⇒ จอสัมผัสใช้ 16px พอดี จะไม่ซูม
+                  "[@media(pointer:coarse)]:text-base",
+                  replyFocused && "[@media(pointer:coarse)]:basis-full [@media(pointer:coarse)]:px-1.5"
+                )}
                 onKeyDown={(e) => {
                   if (replyMentionMenu) {
                     const matches = replyMentionMatches(replyMentionMenu.query);
@@ -2135,7 +2152,10 @@ export function ReportCard({
                 onClick={() => replyFileInputRef.current?.click()}
                 disabled={replyUploading || replyImages.length >= maxImages}
                 aria-label="แนบรูป"
-                className="h-7 w-7 shrink-0 flex items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] disabled:opacity-40"
+                className={cn(
+                  "h-7 w-7 shrink-0 flex items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] disabled:opacity-40",
+                  replyFocused && "[@media(pointer:coarse)]:ml-auto"
+                )}
               >
                 {replyUploading ? <ImagePlus className="h-4 w-4 animate-pulse" /> : <Paperclip className="h-4 w-4" />}
               </button>

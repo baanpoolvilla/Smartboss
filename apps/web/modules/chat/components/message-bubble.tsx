@@ -583,7 +583,9 @@ export const MessageBubble = memo(function MessageBubble(props: MessageBubblePro
         <div className={cn("flex min-w-0 max-w-full items-end gap-1.5", mine && "flex-row-reverse")}>
           <div
             ref={bubbleRef}
-            className="relative flex min-w-0 flex-col gap-1"
+            // ของตัวเอง = ทุกชิ้นชิดขวา — ไม่ใส่แล้วรูปที่แคบกว่ากรอบข้อความข้างบนไปเกาะขอบซ้ายของกรอบ
+            // ดูเหมือนรูปลอยไม่ติดขอบ (ข้อความ + รูปในข้อความเดียวกัน)
+            className={cn("relative flex min-w-0 flex-col gap-1", mine && "items-end")}
             onContextMenu={(e) => {
               if (local) return;
               e.preventDefault();
