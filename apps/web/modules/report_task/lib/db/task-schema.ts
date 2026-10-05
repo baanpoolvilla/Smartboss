@@ -37,6 +37,8 @@ const attachmentSchema = z.object({
   dataUrl: z.string().optional(),
   url: z.string().optional(),
   role: z.enum(["brief", "submission"]).optional(),
+  // ไม่ใส่ = zod ตัดทิ้งตอนบันทึก สติกเกอร์ในความคิดเห็นจะกลายเป็นรูปธรรมดาหลังโหลดใหม่
+  sticker: z.boolean().optional(),
 });
 
 const commentSchema = z.object({

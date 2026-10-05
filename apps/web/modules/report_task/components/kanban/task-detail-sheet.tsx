@@ -54,6 +54,7 @@ import { cn } from "@/modules/report_task/lib/utils";
 import {
   Calendar,
   Paperclip,
+  Smile,
   History,
   Send,
   FileText,
@@ -87,6 +88,9 @@ import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachme
 import { toast } from "sonner";
 import { TimeAgo } from "@/modules/report_task/components/shared/time-ago";
 import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
+import { uuid } from "@/modules/report_task/lib/uuid";
+import { EmojiStickerPicker, StickerImage } from "@/components/sticker-panel";
+import type { Sticker as CompanySticker } from "@/lib/stickers-client";
 
 const toDateInput = (iso: string) => iso.slice(0, 10);
 /** "YYYY-MM-DD" ของวันถัดไป (คิดแบบ UTC ให้ตรงกับ toDateInput) */
@@ -250,6 +254,7 @@ export function TaskDetailSheet({
   const [mentionQuery, setMentionQuery] = useState<{ start: number; query: string } | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
   const commentRef = useRef<HTMLTextAreaElement>(null);
+  const [commentEmojiOpen, setCommentEmojiOpen] = useState(false);
   // รูปจากปุ่มดินสอ (หน้าดูรูป) เพิ่งเข้ามาในคอมเมนต์ — กางแผง (มือถือ) เลื่อนไปให้เห็น + กะพริบ
   const [commentAttachFlash, setCommentAttachFlash] = useState(false);
   function revealCommentAttachment() {
@@ -574,6 +579,37 @@ export function TaskDetailSheet({
     setCommentAttachments([]);
     mentionPicked.current.clear();
     setMentionQuery(null);
+  }
+
+  /** อิโมจิลงตรงเคอร์เซอร์ในช่องความคิดเห็น */
+  function insertCommentEmoji(emoji: string) {
+    const el = commentRef.current;
+    const start = el?.selectionStart ?? comment.length;
+    const end = el?.selectionEnd ?? start;
+    setComment(comment.slice(0, start) + emoji + comment.slice(end));
+    setCommentEmojiOpen(false);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(start + emoji.length, start + emoji.length);
+    });
+  }
+
+  /** สติกเกอร์บริษัทส่งเป็นความคิดเห็นทันที (แบบ LINE) — ข้อความที่พิมพ์ค้างไว้ยังอยู่ในช่อง */
+  function sendCommentSticker(s: CompanySticker) {
+    if (!task) return;
+    setCommentEmojiOpen(false);
+    addComment(task.id, "", viewingAsUserId, [
+      {
+        id: `stk-${uuid()}`,
+        name: s.name,
+        size: "",
+        type: "สติกเกอร์",
+        uploadedBy: viewingAsUserId,
+        uploadedAt: new Date().toISOString(),
+        url: s.url,
+        sticker: true,
+      },
+    ]);
   }
 
   async function handleCommentFilesSelected(files: File[]) {
@@ -1966,6 +2002,7 @@ export function TaskDetailSheet({
                           const src = a.url ?? a.dataUrl;
                           const openViewer = () =>
                             setAttachmentViewer({ images: c.attachments!.map(toLightboxImage), index: attIndex });
+                          if (a.sticker && src) return <StickerImage key={a.id} url={src} name={a.name} className="h-28 w-28" />;
                           return a.type === "รูปภาพ" && src ? (
                             <button key={a.id} type="button" onClick={openViewer} className="block cursor-pointer">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -2046,6 +2083,23 @@ export function TaskDetailSheet({
                 aria-label="แนบไฟล์/รูปภาพ"
                 className="shrink-0 inline-flex items-center justify-center size-9 rounded-md border border-input shadow-xs disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground"
               />
+              <Popover open={commentEmojiOpen} onOpenChange={setCommentEmojiOpen}>
+                <PopoverTrigger
+                  render={
+                    <button
+                      type="button"
+                      aria-label="อิโมจิและสติกเกอร์ (Ctrl+E)"
+                      title="อิโมจิและสติกเกอร์ (Ctrl+E)"
+                      className="shrink-0 inline-flex items-center justify-center size-9 rounded-md border border-input shadow-xs hover:bg-accent hover:text-accent-foreground"
+                    >
+                      <Smile className="h-4 w-4" />
+                    </button>
+                  }
+                />
+                <PopoverContent side="top" align="start" className="w-auto max-w-[calc(100vw-1.5rem)] p-2" finalFocus={commentRef}>
+                  <EmojiStickerPicker onPickEmoji={insertCommentEmoji} onPickSticker={sendCommentSticker} />
+                </PopoverContent>
+              </Popover>
               <Tooltip>
                 <TooltipTrigger
                   render={
@@ -2094,6 +2148,12 @@ export function TaskDetailSheet({
                     detectMention(e.target.value, e.target.selectionStart ?? e.target.value.length);
                   }}
                   onKeyDown={(e) => {
+                    // Ctrl+E (Mac: ⌘E) = เปิดอิโมจิ/สติกเกอร์ — ดูตำแหน่งปุ่ม (e.code) แป้นไทยก็ใช้ได้
+                    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.code === "KeyE") {
+                      e.preventDefault();
+                      setCommentEmojiOpen(true);
+                      return;
+                    }
                     if (mentionQuery && mentionCandidates.length > 0) {
                       if (e.key === "ArrowDown") {
                         e.preventDefault();

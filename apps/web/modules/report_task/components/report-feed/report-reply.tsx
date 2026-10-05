@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { REACTION_CHIP_CLASS, ReactionPicker } from "@/components/emoji-picker";
+import { StickerImage } from "@/components/sticker-panel";
 import { activeReactionList } from "@/lib/emoji";
 import { Check, CornerUpLeft, Link2, MoreHorizontal, Pencil, Reply as ReplyIcon, SmilePlus, Trash2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
@@ -343,9 +344,16 @@ export function ReportReply({
                 every line break into a space, so a two-line comment always
                 rendered as one line ("พิม test shift+enter 111 แต่แสดงแถวเดียวกัน"). */}
             {reply.body && <p className="text-[15px] sm:text-base leading-relaxed mt-0.5 whitespace-pre-wrap">{renderRichBulletText(reply.body)}</p>}
-            {!!reply.images?.length && (
+            {!!reply.images?.some((img) => img.sticker) && (
+              <div className="flex flex-wrap gap-1 mt-1">
+                {reply.images.filter((img) => img.sticker).map((img) => (
+                  <StickerImage key={img.id} url={img.url ?? ""} name={img.name} className="h-28 w-28" />
+                ))}
+              </div>
+            )}
+            {!!reply.images?.some((img) => !img.sticker) && (
               <div className="flex flex-wrap gap-1.5 mt-1.5">
-                {reply.images.map((img, i) => (
+                {reply.images.map((img, i) => img.sticker ? null : (
                   <button
                     key={img.id}
                     onClick={() => onOpenLightbox(reply.images!, i, reply.authorId, reply.createdAt)}

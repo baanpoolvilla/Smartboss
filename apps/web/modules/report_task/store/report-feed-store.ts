@@ -56,6 +56,8 @@ export interface ReportPostImage {
    * = แสดงเป็นการ์ดไอคอนแทน ไม่เกี่ยวกับรูปภาพจริง (kind "image") ซึ่งใช้
    * `url`/`dataUrl` ของตัวเองแสดงตรง ๆ อยู่แล้ว */
   thumbUrl?: string;
+  /** สติกเกอร์ของบริษัท (components/sticker-panel.tsx) — แสดงเป็นรูปลอยไม่มีกรอบ ไม่เปิดตัวดูรูป */
+  sticker?: boolean;
 }
 
 /** A named photo collection scoped to one room — e.g. "ทริปดูงาน ส.ค." — so a
@@ -1006,7 +1008,12 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         const post = get().posts.find((p) => p.id === postId);
         if (!post) return;
         const actorName = getUser(authorId)?.name ?? "มีคน";
-        const preview = mentionMarkersToPlainText(body.split("\n")[0] ?? "").slice(0, 60);
+        // ตอบด้วยสติกเกอร์/รูปอย่างเดียว ไม่มีข้อความ — บอกว่าส่งอะไรมา แทนแจ้งเตือนเปล่า ๆ
+        const preview = body.trim()
+          ? mentionMarkersToPlainText(body.split("\n")[0] ?? "").slice(0, 60)
+          : extra?.images?.some((img) => img.sticker)
+            ? "ส่งสติกเกอร์"
+            : "ส่งรูป";
         const link = `/chat-report/report-feed?topic=${post.topicId}&post=${postId}&reply=${replyId}`;
         const quotedAuthorId = extra?.replyToId ? post.replies.find((r) => r.id === extra.replyToId)?.authorId : undefined;
         if (quotedAuthorId && quotedAuthorId !== authorId) {

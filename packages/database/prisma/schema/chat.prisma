@@ -262,3 +262,45 @@ model ChatNoteLike {
   @@map("note_likes")
   @@schema("chat")
 }
+
+/// หมวดสติกเกอร์ของบริษัท (แบบชุดสติกเกอร์ของ LINE) — แอดมินแชทตั้งชื่อ/เรียงลำดับเอง
+model ChatStickerPack {
+  orgId       String   @map("org_id")
+  id          String   @id @default(uuid())
+  name        String
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdById String   @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  stickers ChatSticker[]
+
+  @@index([orgId, sortOrder])
+  @@map("sticker_packs")
+  @@schema("chat")
+}
+
+/// สติกเกอร์ของบริษัท (แบบ LINE แต่ทำเองภายใน) — แอดมินแชทเพิ่ม/ลบ/เรียง ทุกคนในบริษัทใช้ได้ทั้งแชทและรายงาน
+/// ไฟล์อยู่ใน chat.files (kind "sticker") ไม่หมดอายุ · ลบสติกเกอร์ = เอาออกจากชุด ไฟล์ยังอยู่
+/// ให้ข้อความเก่าที่เคยส่งไปยังแสดงได้ · packId null = ยังไม่ได้จัดหมวด ("ทั่วไป")
+model ChatSticker {
+  orgId       String   @map("org_id")
+  id          String   @id @default(uuid())
+  packId      String?  @map("pack_id")
+  name        String
+  /// คำค้นเพิ่มเติม คั่นด้วยช่องว่าง (ชื่อค้นได้อยู่แล้ว)
+  keywords    String   @default("")
+  url         String
+  mime        String
+  size        Int
+  width       Int?
+  height      Int?
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdById String   @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  pack ChatStickerPack? @relation(fields: [packId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, packId, sortOrder])
+  @@map("stickers")
+  @@schema("chat")
+}

@@ -23,6 +23,7 @@ import { ReportNotificationSync } from "@/modules/report_task/components/shared/
 import { NotificationBellPopover } from "@/modules/report_task/components/shared/notification-bell-popover";
 import type { ModuleManifest, ModuleMenuItem } from "@/module-registry";
 import { Toaster } from "@/modules/report_task/components/ui/sonner";
+import { StickerManagerHost } from "@/components/sticker-manager";
 import { LogoutButton } from "./logout-button";
 import { InstallAppButton, InstallGate } from "./app-install";
 import { AppUpdateNotice } from "./app-update-notice";
@@ -100,6 +101,8 @@ export function Shell({
       <SystemNotify />
       {/* แชทเข้า → เสียง + เด้ง ทุกหน้า ทุกโมดูล (ไม่ใช่แค่ตอนเห็นเมนูแชท) */}
       {hasChat && <ChatNotifyListener />}
+      {/* หน้าจัดการสติกเกอร์บริษัท — เปิดจากตัวเลือกสติกเกอร์ในแชท/รายงาน (components/sticker-manager.tsx) */}
+      {hasChat && <StickerManagerHost />}
       {/* ชวนติดตั้งเป็นแอป (มือถือ) + แจ้งเมื่อมีเวอร์ชันใหม่ — ทุกหน้า ทุกโมดูล */}
       <InstallGate />
       <AppUpdateNotice />

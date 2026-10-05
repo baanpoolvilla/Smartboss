@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bell, Check, Download, ImagePlus, Music, Palette, Play } from "lucide-react";
+import { Bell, Check, ChevronRight, Download, ImagePlus, Music, Palette, Play, Sticker as StickerIcon } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
 
@@ -29,6 +29,8 @@ import { compressImage } from "../lib/image-compress";
 
 import { MB, fileTooLargeMessage } from "@/lib/file-limits";
 import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
+import { StickerManager } from "@/components/sticker-manager";
+import { useStickers } from "@/lib/stickers-client";
 const SOUNDS: { id: ChatSound; label: string }[] = [
   { id: "ding", label: "ติ๊ง" },
   { id: "pop", label: "ป๊อป" },
@@ -144,6 +146,8 @@ export function ChatSettings({
     }
   }
   const [support, setSupport] = useState<PushSupport | null>(null);
+  const stickerSet = useStickers();
+  const [stickersOpen, setStickersOpen] = useState(false);
   const [canInstall, setCanInstall] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -475,6 +479,25 @@ export function ChatSettings({
         </Section>
       )}
 
+      {scope === "chat" && stickerSet.canManage && (
+        <Section title="สติกเกอร์บริษัท">
+          <button
+            type="button"
+            onClick={() => setStickersOpen(true)}
+            className="flex w-full items-center gap-3 rounded-xl border border-(--line) px-3 py-2.5 text-left hover:bg-(--bg-soft)"
+          >
+            <StickerIcon className="h-5 w-5 text-(--chat-accent-strong)" />
+            <span className="flex-1 text-sm text-(--ink)">
+              จัดการสติกเกอร์
+              <span className="block text-xs text-(--ink-soft)">
+                {stickerSet.stickers.length} ตัว · {stickerSet.packs.length} หมวด — เพิ่มรูป จัดหมวด เรียงลำดับ ลบ
+              </span>
+            </span>
+            <ChevronRight className="h-4 w-4 text-(--ink-soft)" />
+          </button>
+        </Section>
+      )}
+
       {canInstall && (
         <Section title="แอป">
           <button
@@ -490,6 +513,11 @@ export function ChatSettings({
         </Section>
       )}
       </PasteDropFiles>
+      {stickersOpen && (
+        <ChatModal title="จัดการสติกเกอร์บริษัท" onClose={() => setStickersOpen(false)} layer="top">
+          <StickerManager />
+        </ChatModal>
+      )}
     </ChatModal>
   );
 }

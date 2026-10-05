@@ -921,7 +921,14 @@ export const useTaskStore = create<TaskStore>((set) => ({
           (id) => !mentioned.has(id)
         );
         const actorName = getUser(authorId)?.name ?? "มีคน";
-        const preview = message.length > 60 ? `${message.slice(0, 60)}…` : message;
+        // ส่งสติกเกอร์/ไฟล์อย่างเดียว ไม่มีข้อความ — บอกว่าส่งอะไรมา แทนแจ้งเตือนเปล่า ๆ
+        const preview = message
+          ? message.length > 60
+            ? `${message.slice(0, 60)}…`
+            : message
+          : attachments?.some((a) => a.sticker)
+            ? "ส่งสติกเกอร์"
+            : "แนบไฟล์";
         // สร้าง id ก่อน — ลิงก์แจ้งเตือนชี้ตรงคอมเมนต์นี้ (?task=&comment=) หน้าต่างงานเลื่อนไปหา + กะพริบ
         const commentId = `${taskId}-cmt-${uuid()}`;
         const commentLink = `/report-task/tasks?task=${t.id}&comment=${encodeURIComponent(commentId)}`;

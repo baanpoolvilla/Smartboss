@@ -74,7 +74,9 @@ import { ReportImageLightbox } from "@/modules/report_task/components/report-fee
 import { ReportReply } from "@/modules/report_task/components/report-feed/report-reply";
 import { LinkInsertPopover } from "@/modules/report_task/components/report-feed/link-insert-popover";
 import { cn } from "@/modules/report_task/lib/utils";
-import { EmojiPicker, REACTION_CHIP_CLASS, ReactionPicker } from "@/components/emoji-picker";
+import { REACTION_CHIP_CLASS, ReactionPicker } from "@/components/emoji-picker";
+import { EmojiStickerPicker, StickerImage } from "@/components/sticker-panel";
+import type { Sticker as CompanySticker } from "@/lib/stickers-client";
 import { activeReactionList } from "@/lib/emoji";
 import { toast } from "sonner";
 import { formatDateTimeFull, formatDateTimeShort } from "@/modules/report_task/lib/format";
@@ -777,6 +779,17 @@ export function ReportCard({
     setQuoteKind(null);
     // The editor is uncontrolled (like the composer's), so clear its DOM too.
     if (replyEditorRef.current) replyEditorRef.current.innerHTML = "";
+  }
+
+  /** สติกเกอร์บริษัทส่งเป็นความคิดเห็นทันที (แบบ LINE) — ข้อความที่พิมพ์ค้างไว้ยังอยู่ในช่อง */
+  function sendReplySticker(s: CompanySticker) {
+    setReplyEmojiOpen(false);
+    addReply(post.id, viewingAsUserId, "", {
+      images: [{ id: `stk-${uuid()}`, url: s.url, name: s.name, mime: "image/webp", sticker: true }],
+      replyToId: replyingTo?.id,
+    });
+    setReplyingTo(null);
+    setQuoteKind(null);
   }
 
   function startReplyTo(reply: ReportPostReply) {
@@ -1511,7 +1524,14 @@ export function ReportCard({
         </button>
       )}
 
-      {post.images.length > 0 && (
+      {post.images.some((i) => i.sticker) && (
+        <div className="pl-[46px] sm:pl-14 mt-2 flex flex-wrap gap-1">
+          {post.images.filter((i) => i.sticker).map((i) => (
+            <StickerImage key={i.id} url={i.url ?? ""} name={i.name} />
+          ))}
+        </div>
+      )}
+      {post.images.length > 0 && !post.images.every((i) => i.sticker) && (
         <div className="pl-[46px] sm:pl-14 mt-3.5">
           <PostImageCollage
             images={post.images.slice(0, MAX_VISIBLE_IMAGES)}
@@ -2072,16 +2092,16 @@ export function ReportCard({
                         e.preventDefault();
                         saveReplySelection();
                       }}
-                      aria-label="ใส่อิโมจิ (Ctrl+E)"
-                      title="ใส่อิโมจิ (Ctrl+E)"
-                      className={REPLY_FORMAT_BTN}
+                      aria-label="อิโมจิและสติกเกอร์ (Ctrl+E)"
+                      title="อิโมจิและสติกเกอร์ (Ctrl+E)"
+                      className={REPLY_FORMAT_BTN.replace(" [@media(pointer:coarse)]:hidden", "")}
                     >
                       <Smile className="h-4 w-4" />
                     </button>
                   }
                 />
                 <PopoverContent className="w-auto max-w-[calc(100vw-1.5rem)] p-2" side="top" align="end" finalFocus={replyEditorRef}>
-                  <EmojiPicker onPick={insertReplyEmoji} />
+                  <EmojiStickerPicker onPickEmoji={insertReplyEmoji} onPickSticker={sendReplySticker} />
                 </PopoverContent>
               </Popover>
               <button

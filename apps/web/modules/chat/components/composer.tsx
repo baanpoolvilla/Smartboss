@@ -17,7 +17,8 @@ import { ChatAvatar } from "./chat-avatar";
 import { fileTooLargeMessage } from "@/lib/file-limits";
 import { hasClipboardText } from "@/lib/annotate/annotate";
 import { useBackToCloseOnTouch } from "@/lib/back-to-close";
-import { EmojiPicker } from "@/components/emoji-picker";
+import { EmojiStickerPicker } from "@/components/sticker-panel";
+import type { Sticker } from "@/lib/stickers-client";
 const MAX_FILES = 20;
 const MAX_BYTES = 25 * 1024 * 1024;
 const ACCEPT_FILES =
@@ -100,7 +101,7 @@ export const Composer = forwardRef<
   useBackToCloseOnTouch(plusOpen, () => setPlusOpen(false)); // มือถือ: ปุ่มย้อนกลับปิดเมนู "+" ก่อน
   /** มือถือ: กด ">" ตอนกำลังพิมพ์ เพื่อกางปุ่มกล้อง/รูปกลับมา (แบบ LINE) */
   const [toolsOpen, setToolsOpen] = useState(false);
-  /** ตัวเลือกอิโมจิ (ปุ่มหน้ายิ้ม / Ctrl+E) — คอมเท่านั้น มือถือใช้อิโมจิจากคีย์บอร์ดของเครื่อง */
+  /** ตัวเลือกอิโมจิ + สติกเกอร์บริษัท (ปุ่มหน้ายิ้ม / Ctrl+E) — มือถือเปิดที่แท็บสติกเกอร์ (อิโมจิใช้จากคีย์บอร์ด) */
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [recording, setRecording] = useState<{ startedAt: number } | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -284,6 +285,16 @@ export const Composer = forwardRef<
     });
   };
 
+  /** สติกเกอร์ส่งทันทีเป็นข้อความของตัวเอง (แบบ LINE) — ข้อความที่พิมพ์ค้างไว้ยังอยู่ในช่อง */
+  const sendSticker = (s: Sticker) => {
+    setEmojiOpen(false);
+    sendChatMessage(channelId, {
+      attachments: [{ url: s.url, name: s.name, mime: "image/webp", size: 0, kind: "sticker", ...(s.width ? { width: s.width } : {}), ...(s.height ? { height: s.height } : {}) }],
+      replyTo,
+    });
+    onCancelReply();
+  };
+
   // ─── ส่ง ───
   const uploading = pending.some((p) => p.status === "uploading");
   const failed = pending.some((p) => p.status === "error");
@@ -413,7 +424,7 @@ export const Composer = forwardRef<
               textareaRef.current?.focus();
             }}
           >
-            <EmojiPicker onPick={insertEmoji} />
+            <EmojiStickerPicker onPickEmoji={insertEmoji} onPickSticker={sendSticker} />
           </div>
         </>
       )}
@@ -668,9 +679,9 @@ export const Composer = forwardRef<
             // ไม่ดึงโฟกัส/เคอร์เซอร์ออกจากช่องพิมพ์ตอนกด
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => setEmojiOpen((v) => !v)}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-(--ink-soft) hover:bg-(--bg-soft) [@media(pointer:coarse)]:hidden"
-            aria-label="ใส่อิโมจิ (Ctrl+E)"
-            title="ใส่อิโมจิ (Ctrl+E)"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-(--ink-soft) hover:bg-(--bg-soft)"
+            aria-label="อิโมจิและสติกเกอร์ (Ctrl+E)"
+            title="อิโมจิและสติกเกอร์ (Ctrl+E)"
             aria-expanded={emojiOpen}
           >
             <Smile className="h-5 w-5" />

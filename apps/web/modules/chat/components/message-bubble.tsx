@@ -6,6 +6,7 @@ import { AlertCircle, Clock, Copy, CornerUpLeft, Download, FileText, Hourglass, 
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
 import { REACTION_CHIP_CLASS, ReactionPicker } from "@/components/emoji-picker";
+import { StickerImage } from "@/components/sticker-panel";
 
 import { sortReactionEmojis, useChatStore, type RoomMessage } from "../store/chat-store";
 import { CHAT_REACTION_EMOJIS, type ChatAttachment, type ChatUser } from "../types";
@@ -548,6 +549,7 @@ export const MessageBubble = memo(function MessageBubble(props: MessageBubblePro
   const media = m.attachments.filter((a) => a.kind === "image" || a.kind === "video");
   const audios = m.attachments.filter((a) => a.kind === "audio");
   const files = m.attachments.filter((a) => a.kind === "file");
+  const stickers = m.attachments.filter((a) => a.kind === "sticker");
   const local = Boolean(m.status);
   const clientId = m.clientId ?? "";
 
@@ -653,6 +655,9 @@ export const MessageBubble = memo(function MessageBubble(props: MessageBubblePro
                 }}
               />
             )}
+            {stickers.map((a) => (
+              <StickerImage key={a.url} url={a.url} name={a.name} />
+            ))}
             {audios.map((a) => (
               <VoicePlayer key={a.url} a={a} mine={mine} />
             ))}

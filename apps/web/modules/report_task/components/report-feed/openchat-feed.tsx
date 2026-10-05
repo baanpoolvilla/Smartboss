@@ -34,7 +34,9 @@ import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/r
 import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
 import { DRAG_MENTION_TOPIC_MIME } from "@/modules/report_task/components/report-feed/report-post-fields";
 import { cn } from "@/modules/report_task/lib/utils";
-import { EmojiPicker, REACTION_CHIP_CLASS, ReactionPicker } from "@/components/emoji-picker";
+import { REACTION_CHIP_CLASS, ReactionPicker } from "@/components/emoji-picker";
+import { EmojiStickerPicker, StickerImage } from "@/components/sticker-panel";
+import type { Sticker } from "@/lib/stickers-client";
 import { activeReactionList } from "@/lib/emoji";
 import { toast } from "sonner";
 import { Building2, Check, Hash, ImagePlus, MoreHorizontal, Pencil, Plus, Send, SmilePlus, Trash2, User, Users, X } from "lucide-react";
@@ -368,6 +370,17 @@ export function OpenchatFeed({
     setSending(false);
   }
 
+  /** สติกเกอร์บริษัทส่งเป็นข้อความทันที (แบบ LINE) — ข้อความที่พิมพ์ค้างไว้ยังอยู่ในช่อง */
+  function sendSticker(s: Sticker) {
+    setEmojiOpen(false);
+    addPost(topic.id, viewingAsUserId, {
+      title: "",
+      sections: [],
+      images: [{ id: `stk-${uuid()}`, url: s.url, name: s.name, mime: "image/webp", sticker: true }],
+      tagIds: [],
+    });
+  }
+
   function handleComposerKeyDown(e: KeyboardEvent<HTMLDivElement>) {
     // Ctrl+E (Mac: ⌘E) = เปิดตารางอิโมจิ — ดูตำแหน่งปุ่ม (e.code) แป้นไทยก็ใช้ได้
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.code === "KeyE") {
@@ -585,9 +598,16 @@ export function OpenchatFeed({
                           {m.body && (
                             <p className="text-[13.5px] leading-snug mt-0.5 text-[var(--ink)] whitespace-pre-wrap">{renderRichBulletText(m.body)}</p>
                           )}
-                          {!!m.images?.length && (
+                          {!!m.images?.some((img) => img.sticker) && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {m.images.filter((img) => img.sticker).map((img) => (
+                                <StickerImage key={img.id} url={img.url ?? ""} name={img.name} className="h-28 w-28" />
+                              ))}
+                            </div>
+                          )}
+                          {!!m.images?.some((img) => !img.sticker) && (
                             <div className="flex flex-wrap gap-1.5 mt-1.5">
-                              {m.images.map((img, i) => (
+                              {m.images.map((img, i) => img.sticker ? null : (
                                 <button
                                   key={img.id}
                                   onClick={() => setLightbox({ images: m.images!, index: i, authorId: m.authorId, createdAt: m.createdAt })}
@@ -868,7 +888,7 @@ export function OpenchatFeed({
               }
             />
             <PopoverContent className="w-auto max-w-[calc(100vw-1.5rem)] p-2" align="end">
-              <EmojiPicker onPick={insertEmoji} />
+              <EmojiStickerPicker onPickEmoji={insertEmoji} onPickSticker={sendSticker} />
             </PopoverContent>
           </Popover>
           <button

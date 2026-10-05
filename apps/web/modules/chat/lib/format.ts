@@ -56,6 +56,8 @@ export function attachmentLabel(kind: ChatAttachmentKind | null): string {
       return "ส่งข้อความเสียง";
     case "file":
       return "ส่งไฟล์";
+    case "sticker":
+      return "ส่งสติกเกอร์";
     default:
       return "";
   }

@@ -62,7 +62,9 @@ export async function notifyNewMessage(
     const preview =
       (message.kind === "note" ? `📝 โน้ต: ${message.body ?? ""}`.slice(0, 140) : null) ||
       message.body?.slice(0, 140) ||
-      (message.attachments[0]?.kind === "image"
+      (message.attachments[0]?.kind === "sticker"
+        ? "ส่งสติกเกอร์"
+        : message.attachments[0]?.kind === "image"
         ? "ส่งรูปภาพ"
         : message.attachments[0]?.kind === "audio"
           ? "ส่งข้อความเสียง"

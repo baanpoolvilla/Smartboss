@@ -4,7 +4,8 @@
  * store/components ฝั่ง client import ชนิดเดียวกันได้ ไม่ต้องประกาศซ้ำสองที่
  */
 
-export type ChatAttachmentKind = "image" | "file" | "audio" | "video";
+/** "sticker" = สติกเกอร์บริษัท (chat.stickers) — ไม่หมดอายุ ไม่นับเป็นรูปในแท็บสื่อ */
+export type ChatAttachmentKind = "image" | "file" | "audio" | "video" | "sticker";
 
 export interface ChatAttachment {
   url: string;
@@ -23,6 +24,24 @@ export interface ChatAttachment {
   expired?: boolean;
   /** วันหมดอายุ (รูป/วิดีโอ/เสียง ที่ยังไม่อยู่ในอัลบั้ม) — ไม่มี = ไม่หมดอายุ */
   expiresAt?: string;
+}
+
+/** สติกเกอร์ของบริษัท (modules/chat/data/stickers.ts) */
+export interface ChatStickerDTO {
+  id: string;
+  /** null = ยังไม่ได้จัดหมวด ("ทั่วไป") */
+  packId: string | null;
+  name: string;
+  keywords: string;
+  url: string;
+  width?: number;
+  height?: number;
+}
+
+/** หมวดสติกเกอร์ — เรียงตามลำดับที่แอดมินจัด */
+export interface ChatStickerPackDTO {
+  id: string;
+  name: string;
 }
 
 export interface ChatAlbumDTO {
