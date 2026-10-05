@@ -198,6 +198,11 @@ function detectMentionTrigger(el: HTMLElement): { query: string; rect: DOMRect; 
   return { query: match[1]!, rect, containerTop: bounds.top, containerBottom: bounds.bottom };
 }
 
+// ปุ่มจัดรูปแบบในช่องตอบกลับ (ตัวหนา/เอียง/ขีดเส้นใต้/ลิงก์/อิโมจิ) — ซ่อนบนจอสัมผัส: บนมือถือมันกินที่
+// ของข้อความที่กำลังพิมพ์จนเหลือกว้างไม่กี่คำ และคีย์บอร์ดมือถือมีอิโมจิของตัวเองอยู่แล้ว
+const REPLY_FORMAT_BTN =
+  "h-7 w-7 shrink-0 flex items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] [@media(pointer:coarse)]:hidden";
+
 export function ReportCard({
   post,
   topic,
@@ -1932,6 +1937,8 @@ export function ReportCard({
                   if (el && el.innerHTML === "" && replyText !== "") el.innerHTML = bulletsTextToHtml(replyText);
                 }}
                 contentEditable
+                // globals.css ซ่อนเมนูล่าง + แถบ "เขียนรายงาน..." ระหว่างที่ช่องนี้ถูกโฟกัสบนมือถือ
+                data-reply-editor
                 role="textbox"
                 aria-label="พิมพ์ความคิดเห็น"
                 aria-multiline="true"
@@ -2044,7 +2051,7 @@ export function ReportCard({
                     onClick={() => execReplyFormat("bold")}
                     aria-label="ตัวหนา"
                     title="ตัวหนา"
-                    className="h-7 w-7 shrink-0 flex items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+                    className={REPLY_FORMAT_BTN}
                   >
                     <Bold className="h-3.5 w-3.5" />
                   </button>
@@ -2054,7 +2061,7 @@ export function ReportCard({
                     onClick={() => execReplyFormat("italic")}
                     aria-label="ตัวเอียง"
                     title="ตัวเอียง"
-                    className="h-7 w-7 shrink-0 flex items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+                    className={REPLY_FORMAT_BTN}
                   >
                     <Italic className="h-3.5 w-3.5" />
                   </button>
@@ -2064,13 +2071,13 @@ export function ReportCard({
                     onClick={() => execReplyFormat("underline")}
                     aria-label="ขีดเส้นใต้"
                     title="ขีดเส้นใต้"
-                    className="h-7 w-7 shrink-0 flex items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+                    className={REPLY_FORMAT_BTN}
                   >
                     <Underline className="h-3.5 w-3.5" />
                   </button>
                   <LinkInsertPopover
                     onInsert={insertReplyLink}
-                    className="h-7 w-7 shrink-0 flex items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+                    className={REPLY_FORMAT_BTN}
                   />
                 </>
               )}
@@ -2093,7 +2100,7 @@ export function ReportCard({
                       }}
                       aria-label="ใส่อิโมจิ (Ctrl+E)"
                       title="ใส่อิโมจิ (Ctrl+E)"
-                      className="h-7 w-7 shrink-0 flex items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+                      className={REPLY_FORMAT_BTN}
                     >
                       <Smile className="h-4 w-4" />
                     </button>
@@ -2123,6 +2130,8 @@ export function ReportCard({
                 </PopoverContent>
               </Popover>
               <button
+                // ไม่ให้โฟกัสหลุดจากช่องพิมพ์ — หลุดแล้วเมนูล่างกลับมา หน้าขยับ แตะพลาดปุ่ม
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => replyFileInputRef.current?.click()}
                 disabled={replyUploading || replyImages.length >= maxImages}
                 aria-label="แนบรูป"
@@ -2137,7 +2146,7 @@ export function ReportCard({
                       <button
                         onMouseDown={(e) => e.preventDefault()}
                         aria-label="ไฮไลต์สี"
-                        className="h-7 w-7 shrink-0 flex items-center justify-center rounded-full hover:bg-[var(--bg-soft)]"
+                        className="h-7 w-7 shrink-0 flex items-center justify-center rounded-full hover:bg-[var(--bg-soft)] [@media(pointer:coarse)]:hidden"
                         style={{ color: replyHighlight ?? "var(--ink-soft)" }}
                       >
                         <Palette className="h-4 w-4" />
@@ -2173,6 +2182,7 @@ export function ReportCard({
                 </Popover>
               )}
               <button
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={submitReply}
                 disabled={replyUploading || (!replyText.trim() && replyImages.length === 0)}
                 aria-label="ส่งข้อความ"

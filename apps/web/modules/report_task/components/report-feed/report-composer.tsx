@@ -281,7 +281,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
     // does anywhere else, with the brand color kept just on the leading
     // icon and the send affordance — not painted across the whole bar.
     return (
-      <div className="shrink-0 border-t border-[var(--line)]/60 bg-white px-5 py-3">
+      <div data-hide-while-replying className="shrink-0 border-t border-[var(--line)]/60 bg-white px-5 py-3">
         <button
           data-tour="composer-trigger"
           onClick={() => setExpanded(true)}

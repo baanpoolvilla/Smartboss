@@ -107,7 +107,7 @@ export function AppScaffold({
     // `lg:static` hands control straight back to Shell's own `lg:h-dvh` at
     // desktop width, unchanged from before.
     return (
-      <div className="fixed inset-0 z-0 flex flex-col pb-[68px] lg:static lg:z-auto lg:min-h-0 lg:flex-1 lg:pb-0">
+      <div data-bottom-nav-pad className="fixed inset-0 z-0 flex flex-col pb-[68px] lg:static lg:z-auto lg:min-h-0 lg:flex-1 lg:pb-0">
         {header}
         <div className="min-h-0 flex-1 overflow-hidden">
           <div

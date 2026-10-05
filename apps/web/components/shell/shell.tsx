@@ -224,7 +224,7 @@ function ModuleFrame({
           scroll เอง (AppScaffold's `fill`) ซึ่งแก้ให้ล็อกที่ตัวมันเองแทน ไม่ใช่
           ที่นี่ — เปลี่ยนตรงนี้ตรงๆ จะกระทบทุกหน้าที่ยังไม่ได้ตรวจว่ามี scroll
           chain ของตัวเองรองรับมือถือหรือเปล่า */}
-      <div className="flex min-w-0 flex-1 flex-col pb-[68px] lg:h-dvh lg:overflow-hidden lg:pb-0">
+      <div data-bottom-nav-pad className="flex min-w-0 flex-1 flex-col pb-[68px] lg:h-dvh lg:overflow-hidden lg:pb-0">
         {children}
       </div>
 
@@ -343,7 +343,7 @@ function ModuleBottomNav({
 
   return (
     <>
-      <nav className="fixed inset-x-0 bottom-0 z-40 flex h-[68px] items-stretch border-t border-(--line) bg-(--bg) shadow-[0_-1px_8px_rgba(23,51,47,0.06)] lg:hidden">
+      <nav data-bottom-nav className="fixed inset-x-0 bottom-0 z-40 flex h-[68px] items-stretch border-t border-(--line) bg-(--bg) shadow-[0_-1px_8px_rgba(23,51,47,0.06)] lg:hidden">
         {primary.map((menu) => (
           <BottomNavItem
             key={menu.path}
