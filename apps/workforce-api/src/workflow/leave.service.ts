@@ -129,14 +129,18 @@ export class LeaveService {
         .limit(1);
       const type = types[0];
       if (type === undefined) throw AppError.notFound('leave type');
-      if (type.archivedAt !== null) return { id: leaveTypeId, archived: true };
+      // ลบไปแล้วแต่ยังไม่ได้ย้ายใบ (ตอนลบเลือก "คงชื่อเดิม") — เรียกซ้ำพร้อม mergeInto เพื่อย้ายใบที่เหลือทีหลังได้
+      const alreadyArchived = type.archivedAt !== null;
+      if (alreadyArchived && mergeInto === null) return { id: leaveTypeId, archived: true, moved_requests: 0 };
 
-      const active = await uow.tx
+      const active = alreadyArchived
+        ? []
+        : await uow.tx
         .select({ id: schema.leaveTypes.id })
         .from(schema.leaveTypes)
         .where(and(eq(schema.leaveTypes.companyId, type.companyId), isNull(schema.leaveTypes.archivedAt)))
         .limit(2);
-      if (active.length <= 1) {
+      if (!alreadyArchived && active.length <= 1) {
         throw AppError.validation('at least one leave type must remain');
       }
 
@@ -160,10 +164,12 @@ export class LeaveService {
         moved = rows.length;
       }
 
-      await uow.tx
-        .update(schema.leaveTypes)
-        .set({ archivedAt: new Date(), code: `${type.code}~${leaveTypeId.slice(0, 8)}` })
-        .where(eq(schema.leaveTypes.id, leaveTypeId));
+      if (!alreadyArchived) {
+        await uow.tx
+          .update(schema.leaveTypes)
+          .set({ archivedAt: new Date(), code: `${type.code}~${leaveTypeId.slice(0, 8)}` })
+          .where(eq(schema.leaveTypes.id, leaveTypeId));
+      }
 
       await uow.audit({
         action: 'leave.type.archive',
@@ -865,18 +871,29 @@ export class LeaveService {
    * เดิมมีแต่ POST — สร้างประเภทการลาไปแล้วไม่มีทางอ่านกลับ พนักงานจึงเลือก
    * ประเภทตอนขอลาไม่ได้เลย ซึ่งเท่ากับระบบลาใช้งานจริงไม่ได้ทั้งระบบ
    */
-  async listTypes(companyId?: string): Promise<{ items: Record<string, unknown>[] }> {
+  async listTypes(
+    companyId?: string,
+    includeArchived = false,
+  ): Promise<{ items: Record<string, unknown>[] }> {
     return this.uow.run(async (uow) => {
+      const scope = [
+        ...(companyId === undefined ? [] : [eq(schema.leaveTypes.companyId, companyId)]),
+        // ปกติเฉพาะประเภทที่ยังใช้งาน — หน้าตั้งค่าขอรวมที่ลบแล้วด้วย เพื่อย้ายใบที่ยังค้างอยู่ใต้ประเภทนั้น
+        ...(includeArchived ? [] : [isNull(schema.leaveTypes.archivedAt)]),
+      ];
+      // จำนวนใบที่ยังชี้มาที่ประเภทที่ลบแล้ว — บอกว่ายังมีอะไรให้ย้ายไหม
+      const usage = includeArchived
+        ? await uow.tx
+            .select({ leaveTypeId: schema.leaveRequests.leaveTypeId, n: sql<number>`count(*)::int` })
+            .from(schema.leaveRequests)
+            .groupBy(schema.leaveRequests.leaveTypeId)
+        : [];
+      const usedBy = new Map(usage.map((u) => [u.leaveTypeId, Number(u.n)]));
       const rows = await uow.tx
         .select()
         .from(schema.leaveTypes)
-        // เฉพาะประเภทที่ยังใช้งาน — ที่ลบออกจากรายการแล้ว (archived) ไม่ให้เลือกและไม่ขึ้นหน้าตั้งค่า
-        .where(
-          companyId === undefined
-            ? isNull(schema.leaveTypes.archivedAt)
-            : and(eq(schema.leaveTypes.companyId, companyId), isNull(schema.leaveTypes.archivedAt)),
-        )
-        .limit(200);
+        .where(scope.length === 0 ? undefined : and(...scope))
+        .limit(400);
 
       return {
         items: rows.map((row) => ({
@@ -891,6 +908,9 @@ export class LeaveService {
           monthly_quota_days: row.monthlyQuotaDays,
           show_on_calendar: row.showOnCalendar,
           requires_reports: row.requiresReports,
+          ...(includeArchived
+            ? { archived: row.archivedAt !== null, request_count: usedBy.get(row.id) ?? 0 }
+            : {}),
         })),
       };
     });

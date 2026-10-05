@@ -102,9 +102,12 @@ export class LeaveController {
   @RequirePermissions()
   async listLeaveTypes(
     @Query('company_id') companyId?: string,
+    // include_archived=true — หน้าตั้งค่าใช้ดูประเภทที่ลบแล้วแต่ยังมีใบค้าง (ย้ายใบทีหลังได้)
+    @Query('include_archived') includeArchived?: string,
   ): Promise<{ items: Record<string, unknown>[] }> {
     return this.service.listTypes(
       companyId === undefined ? undefined : requireUuid(companyId, 'company_id'),
+      includeArchived === 'true',
     );
   }
 

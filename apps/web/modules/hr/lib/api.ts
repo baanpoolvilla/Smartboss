@@ -139,6 +139,10 @@ export interface Me {
 }
 
 export interface LeaveType {
+  /** มีเฉพาะตอนขอ ?include_archived=true — true = ลบออกจากรายการแล้ว */
+  archived?: boolean;
+  /** มีเฉพาะตอนขอ ?include_archived=true — จำนวนใบที่ยังเป็นประเภทนี้ */
+  request_count?: number;
   id: string;
   code: string;
   name: string;

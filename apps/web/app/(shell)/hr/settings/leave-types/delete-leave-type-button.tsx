@@ -76,3 +76,53 @@ export function DeleteLeaveTypeButton({
     </span>
   );
 }
+
+/**
+ * ประเภทที่ลบไปแล้วแต่ยังมีใบค้างอยู่ (ตอนลบเลือก "คงชื่อเดิม") — ย้ายใบที่เหลือไปประเภทอื่นทีหลัง
+ * ย้ายแล้วชิปของประเภทนี้จะหายจากปฏิทินทีม เพราะไม่มีรายการเหลือใต้ชื่อนี้
+ */
+export function MoveLeftoverEntries({
+  id,
+  name,
+  count,
+  others,
+}: {
+  id: string;
+  name: string;
+  count: number;
+  others: { id: string; name: string }[];
+}) {
+  const [target, setTarget] = useState(others[0]?.id ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, start] = useTransition();
+  return (
+    <span className="flex flex-wrap items-center gap-1.5 text-xs">
+      <span className="text-(--ink)">
+        “{name}” <span className="text-(--ink-soft)">· ยังมี {count} ใบ</span>
+      </span>
+      <select value={target} onChange={(e) => setTarget(e.target.value)} className={`${inputClass} h-7 w-auto text-xs`} aria-label={`ย้ายใบของ ${name} ไปประเภท`}>
+        {others.map((o) => (
+          <option key={o.id} value={o.id}>
+            ย้ายไปเป็น “{o.name}”
+          </option>
+        ))}
+      </select>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="h-7 px-2 text-xs"
+        disabled={busy || !target}
+        onClick={() =>
+          start(async () => {
+            const result = await deleteLeaveTypeAction(id, target);
+            if (result.error) setError(result.error);
+          })
+        }
+      >
+        {busy ? "กำลังย้าย…" : "ย้ายใบที่เหลือ"}
+      </Button>
+      {error && <span className="basis-full text-(--danger)">{error}</span>}
+    </span>
+  );
+}

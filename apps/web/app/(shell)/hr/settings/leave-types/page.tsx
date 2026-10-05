@@ -12,7 +12,7 @@ import {
 import { Field, NotProvisioned, Pill, SectionCard, inputClass } from "@/modules/hr/components/ui";
 import { createLeaveTypeAction, renameLeaveTypeAction, seedLeaveTypesAction } from "../../actions";
 import { Button } from "@smartboss/ui/components/button";
-import { DeleteLeaveTypeButton } from "./delete-leave-type-button";
+import { DeleteLeaveTypeButton, MoveLeftoverEntries } from "./delete-leave-type-button";
 
 export default async function LeaveTypesSettingsPage() {
   return (
@@ -26,10 +26,15 @@ export default async function LeaveTypesSettingsPage() {
           return <NotProvisioned what="ตั้งค่าประเภทการลา" />;
         }
 
-        const [me, leaveTypes] = await Promise.all([
+        const [me, allTypes] = await Promise.all([
           wfFetch<Me>("/me"),
-          wfTry<Paged<LeaveType>>("/leave-types"),
+          // รวมประเภทที่ลบแล้ว — ใช้หาตัวที่ยังมีใบค้างอยู่ (ย้ายทีหลังได้ที่ท้ายหน้า)
+          wfTry<Paged<LeaveType>>("/leave-types?include_archived=true"),
         ]);
+        const leaveTypes = allTypes ? { ...allTypes, items: allTypes.items.filter((t) => !t.archived) } : null;
+        // ลบแล้วแต่ยังมีใบเป็นประเภทนี้ = ยังขึ้นเป็นชิปในปฏิทินทีม จนกว่าจะย้ายใบไปประเภทอื่น
+        const leftovers = (allTypes?.items ?? []).filter((t) => t.archived && (t.request_count ?? 0) > 0);
+        const activeChoices = (leaveTypes?.items ?? []).map((o) => ({ id: o.id, name: o.name }));
 
         /*
          * สิทธิ์ของ workforce ไม่ใช่ชุดเดียวกับของ Smartboss — คนที่เข้าหน้านี้ได้
@@ -96,6 +101,17 @@ export default async function LeaveTypesSettingsPage() {
                             others={(leaveTypes?.items ?? []).filter((o) => o.id !== t.id).map((o) => ({ id: o.id, name: o.name }))}
                           />
                         </div>
+                      ))}
+                    </div>
+                  )}
+                  {leftovers.length > 0 && activeChoices.length > 0 && (
+                    <div className="mb-3 flex flex-col gap-1.5 rounded-(--radius) border border-(--line) bg-(--bg-soft) px-3 py-2">
+                      <p className="text-xs font-semibold text-(--ink)">ประเภทที่ลบแล้ว แต่ยังมีใบค้างอยู่</p>
+                      <p className="text-xs text-(--ink-soft)">
+                        ใบเหล่านี้ยังขึ้นในปฏิทินทีมใต้ชื่อประเภทเดิม — ย้ายไปประเภทที่ใช้อยู่เพื่อรวมให้เป็นประเภทเดียว (ย้ายแล้วย้อนกลับไม่ได้)
+                      </p>
+                      {leftovers.map((t) => (
+                        <MoveLeftoverEntries key={t.id} id={t.id} name={t.name} count={t.request_count ?? 0} others={activeChoices} />
                       ))}
                     </div>
                   )}
