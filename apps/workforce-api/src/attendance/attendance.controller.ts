@@ -316,6 +316,30 @@ export class AttendanceController {
     });
   }
 
+  /** คำขอแก้เวลาของตัวเอง — ตามดูสถานะได้โดยไม่ต้องมีสิทธิ์อนุมัติ */
+  @Get('me/attendance-correction-requests')
+  @RequirePermissions('workforce.attendance.correct.request')
+  async listMyAdjustments(
+    @Query(zodPipe(listAdjustmentsQuerySchema))
+    query: z.infer<typeof listAdjustmentsQuerySchema>,
+  ): Promise<{ items: Record<string, unknown>[] }> {
+    return this.service.listMyAdjustments({
+      ...(query.status === undefined ? {} : { status: query.status }),
+      ...(query.from === undefined ? {} : { from: query.from }),
+      ...(query.to === undefined ? {} : { to: query.to }),
+    });
+  }
+
+  /** ผลลงเวลาของตัวเอง — `/attendance-results` ต้องมี read.all ซึ่งพนักงานทั่วไปไม่มี */
+  @Get('me/attendance-results')
+  @RequirePermissions('workforce.attendance.read.self')
+  async listMyResults(
+    @Query(zodPipe(listAttendanceResultsQuerySchema))
+    query: z.infer<typeof listAttendanceResultsQuerySchema>,
+  ): Promise<{ items: Record<string, unknown>[] }> {
+    return this.service.listMyResults({ from: query.from, to: query.to });
+  }
+
   @Post('attendance-correction-requests')
   @HttpCode(201)
   @RequirePermissions('workforce.attendance.correct.request')

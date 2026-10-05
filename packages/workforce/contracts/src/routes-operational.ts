@@ -20,6 +20,23 @@ export const OPERATIONAL_ROUTES: readonly Omit<RouteDefinition, 'response'>[] = 
     permissions: ['workforce.attendance.correct.approve'] as Permission[],
   },
   {
+    operationId: 'listMyAdjustments_get',
+    method: 'get',
+    path: '/me/attendance-correction-requests',
+    summary: 'GET /me/attendance-correction-requests',
+    tag: 'attendance',
+    // เห็นแค่ของตัวเอง — ไม่ต้องมี workforce.attendance.correct.approve
+    permissions: ['workforce.attendance.correct.request'] as Permission[],
+  },
+  {
+    operationId: 'listMyResults_get',
+    method: 'get',
+    path: '/me/attendance-results',
+    summary: 'GET /me/attendance-results',
+    tag: 'attendance',
+    permissions: ['workforce.attendance.read.self'] as Permission[],
+  },
+  {
     operationId: 'requestAdjustment_post',
     method: 'post',
     path: '/attendance-correction-requests',

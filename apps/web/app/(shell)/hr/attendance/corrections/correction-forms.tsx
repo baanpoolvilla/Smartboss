@@ -106,37 +106,44 @@ function CorrectionDiff({ correction }: { correction: AttendanceCorrection }) {
 
 export function ManualAttendanceForm({
   employees,
+  selfEmploymentId,
   issues = {},
 }: {
   employees: Employment[];
+  /** พนักงานยื่นให้ตัวเอง — ไม่มีช่องเลือกพนักงาน (action ฝั่ง server ล็อกเป็นของตัวเองอีกชั้น) */
+  selfEmploymentId?: string;
   issues?: Record<string, AttendanceIssue[]>;
 }) {
-  const [employmentId, setEmploymentId] = useState("");
+  const [employmentId, setEmploymentId] = useState(selfEmploymentId ?? "");
   const [workDate, setWorkDate] = useState("");
   const [intent, setIntent] = useState<"CLOCK_IN" | "CLOCK_OUT">("CLOCK_IN");
   const personIssues = employmentId ? (issues[employmentId] ?? []) : [];
 
   return (
     <form action={requestManualAttendanceAction} className="grid grid-cols-1 gap-3 sm:grid-cols-6">
-      <Field label="พนักงาน *">
-        <select
-          name="employment_id"
-          required
-          className={inputClass}
-          value={employmentId}
-          onChange={(e) => {
-            setEmploymentId(e.target.value);
-            setWorkDate("");
-          }}
-        >
-          <option value="">— เลือกพนักงาน —</option>
-          {employees.map((employee) => (
-            <option key={employee.id} value={employee.id}>
-              {employee.employee_code} · {employee.full_name}
-            </option>
-          ))}
-        </select>
-      </Field>
+      {selfEmploymentId ? (
+        <input type="hidden" name="employment_id" value={selfEmploymentId} />
+      ) : (
+        <Field label="พนักงาน *">
+          <select
+            name="employment_id"
+            required
+            className={inputClass}
+            value={employmentId}
+            onChange={(e) => {
+              setEmploymentId(e.target.value);
+              setWorkDate("");
+            }}
+          >
+            <option value="">— เลือกพนักงาน —</option>
+            {employees.map((employee) => (
+              <option key={employee.id} value={employee.id}>
+                {employee.employee_code} · {employee.full_name}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
 
       {employmentId && (
         <div className="sm:col-span-6">
@@ -218,8 +225,14 @@ export function ManualAttendanceForm({
       </div>
 
       <p className="text-xs text-(--ink-soft) sm:col-span-6">
-        คำขอนี้ยังไม่มีผลทันที — ต้องมีผู้จัดการขึ้นไป <strong>สองคนที่ไม่ซ้ำกัน</strong> กดอนุมัติ
-        ที่ตารางด้านล่างก่อน ระบบถึงจะคำนวณเวลาทำงานใหม่
+        {selfEmploymentId ? (
+          <>คำขอนี้ยังไม่มีผลทันที — หัวหน้าหรือฝ่ายบุคคลต้องอนุมัติก่อน ระบบถึงจะคำนวณเวลาทำงานใหม่</>
+        ) : (
+          <>
+            คำขอนี้ยังไม่มีผลทันที — ต้องมีผู้จัดการขึ้นไป <strong>สองคนที่ไม่ซ้ำกัน</strong> กดอนุมัติ
+            ที่ตารางด้านล่างก่อน ระบบถึงจะคำนวณเวลาทำงานใหม่
+          </>
+        )}
       </p>
     </form>
   );
@@ -231,7 +244,14 @@ export function ManualAttendanceForm({
  * ซึ่งเป็นแหล่งบั๊กที่โปรเจกต์นี้เคยเจอมาแล้ว — และเหตุผลอนุมัติ/ปฏิเสธก็เป็น
  * ข้อความคนละความหมายกันจริง ๆ ด้วย ไม่ใช่แค่กันบั๊ก)
  */
-export function CorrectionCard({ correction }: { correction: AttendanceCorrection }) {
+export function CorrectionCard({
+  correction,
+  canDecide = true,
+}: {
+  correction: AttendanceCorrection;
+  /** false = ผู้ขอมาดูสถานะของตัวเอง ไม่มีปุ่มอนุมัติ/ปฏิเสธ */
+  canDecide?: boolean;
+}) {
   const [showApprove, setShowApprove] = useState(false);
   const [showReject, setShowReject] = useState(false);
   const pending =
@@ -281,7 +301,7 @@ export function CorrectionCard({ correction }: { correction: AttendanceCorrectio
         </p>
       )}
 
-      {pending && (
+      {pending && canDecide && (
         <div className="mt-3 flex flex-wrap gap-2">
           <Button type="button" variant="outline" onClick={() => setShowApprove((v) => !v)}>
             อนุมัติ

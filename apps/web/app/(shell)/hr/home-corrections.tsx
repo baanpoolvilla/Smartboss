@@ -3,6 +3,7 @@ import {
   wfTry,
   type AttendanceCorrection,
   type Employment,
+  type Me,
   type Paged,
 } from "@/modules/hr/lib/api";
 import { EmptyState, SectionCard } from "@/modules/hr/components/ui";
@@ -58,10 +59,74 @@ function issuesByEmployment(results: ResultRow[], corrections: AttendanceCorrect
   return out;
 }
 
+/**
+ * มุมของพนักงานที่ไม่มีสิทธิ์จัดการ — ยื่นคำขอแก้เวลาของตัวเองและตามดูสถานะ
+ * ไม่เห็นของคนอื่น ไม่มีปุ่มอนุมัติ (workforce API บังคับซ้ำอีกชั้น)
+ */
+async function renderMyCorrections(today: string, from: string): Promise<React.ReactNode> {
+  const me = await wfFetch<Me>("/me");
+  if (me.employment_id === null) {
+    return (
+      <SectionCard title="คำขอแก้เวลาของฉัน">
+        <EmptyState>
+          บัญชีนี้ยังไม่ได้ผูกกับทะเบียนพนักงาน จึงยื่นคำขอแก้เวลาไม่ได้ — แจ้งฝ่ายบุคคลให้ผูกบัญชีก่อน
+        </EmptyState>
+      </SectionCard>
+    );
+  }
+
+  const [corrections, results] = await Promise.all([
+    wfFetch<{ items: AttendanceCorrection[] }>("/me/attendance-correction-requests"),
+    wfTry<{ items: ResultRow[] }>(`/me/attendance-results?from=${from}&to=${today}`),
+  ]);
+  const issues = issuesByEmployment(results?.items ?? [], corrections.items, today);
+  const pending = corrections.items.filter((c) => c.status === "PENDING");
+  const decided = corrections.items.filter((c) => c.status !== "PENDING");
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="flex items-center gap-1.5 text-sm font-medium text-(--ink-soft)">
+          ลืมสแกนหรือเวลาไม่ตรง ยื่นขอแก้ได้ที่นี่
+          <HelpPopover label="คำขอมีผลเมื่อไหร่">
+            คำขอ<strong>ยังไม่มีผลทันที</strong> — หัวหน้าหรือฝ่ายบุคคลต้องอนุมัติก่อน
+            ระบบถึงจะคำนวณเวลาทำงานใหม่ · ติดตามสถานะได้ในรายการด้านล่าง
+          </HelpPopover>
+        </h2>
+        <NewCorrectionButton selfEmploymentId={me.employment_id} issues={issues} />
+      </div>
+
+      <SectionCard title={`รออนุมัติ (${pending.length})`}>
+        {pending.length === 0 ? (
+          <EmptyState>ไม่มีคำขอที่รออนุมัติ</EmptyState>
+        ) : (
+          <div className="space-y-3">
+            {pending.map((correction) => (
+              <CorrectionCard key={correction.id} correction={correction} canDecide={false} />
+            ))}
+          </div>
+        )}
+      </SectionCard>
+
+      {decided.length > 0 && (
+        <SectionCard title={`ประวัติ (${decided.length})`}>
+          <div className="space-y-3">
+            {decided.map((correction) => (
+              <CorrectionCard key={correction.id} correction={correction} canDecide={false} />
+            ))}
+          </div>
+        </SectionCard>
+      )}
+    </div>
+  );
+}
+
 /** เนื้อหาแท็บ "คำขอแก้เวลา" ของหน้าหลัก — เดิมคือหน้า /hr/attendance/corrections */
-export async function renderCorrectionsTab(): Promise<React.ReactNode> {
+export async function renderCorrectionsTab(canManage: boolean): Promise<React.ReactNode> {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
   const from = new Date(Date.parse(`${today}T00:00:00Z`) - ISSUE_DAYS * 86_400_000).toISOString().slice(0, 10);
+  if (!canManage) return renderMyCorrections(today, from);
+
   const [corrections, employments, results] = await Promise.all([
     // ไม่กรอง status — คิวต้องเห็นทั้งที่รอคนที่ 1/2 พร้อมกัน และเก็บ
     // ประวัติที่อนุมัติ/ปฏิเสธแล้วไว้ตรวจสอบย้อนหลังในหน้าเดียว

@@ -9,6 +9,7 @@ import {
   WorkforceError,
   WorkforceUnavailableError,
   type Company,
+  type Me,
   type Paged,
   type Person,
 } from "@/modules/hr/lib/api";
@@ -1781,9 +1782,23 @@ function normalizeWorkDate(value: string): string {
 }
 
 export async function requestManualAttendanceAction(formData: FormData) {
-  const session = await guard(HR_PERMS.employeeManage);
+  const session = await guard(HR_PERMS.access);
 
-  const employmentId = String(formData.get("employment_id") ?? "");
+  // ไม่มีสิทธิ์จัดการ = ยื่นได้เฉพาะเวลาของตัวเอง ไม่เชื่อ employment_id จากฟอร์ม
+  // (workforce API บังคับกติกาเดียวกันอีกชั้น)
+  let employmentId = String(formData.get("employment_id") ?? "");
+  if (!hasPermission(session, HR_PERMS.employeeManage)) {
+    let me: Me;
+    try {
+      me = await wfFetch<Me>("/me");
+    } catch (error) {
+      throw new Error(toMessage(error));
+    }
+    if (me.employment_id === null) {
+      throw new Error("บัญชีนี้ยังไม่ได้ผูกกับทะเบียนพนักงาน — แจ้งฝ่ายบุคคลก่อนยื่นคำขอแก้เวลา");
+    }
+    employmentId = me.employment_id;
+  }
   const workDate = normalizeWorkDate(String(formData.get("work_date") ?? ""));
   const time = String(formData.get("time") ?? "");
   const intent = String(formData.get("event_intent") ?? "");

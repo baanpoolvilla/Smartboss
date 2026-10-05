@@ -828,6 +828,34 @@ export class AttendanceService {
     });
   }
 
+  private requireOwnEmployment(): string {
+    const employmentId = this.requestContext.requirePrincipal().employmentId;
+    if (employmentId === null) {
+      throw AppError.validation('this account is not linked to an employment record');
+    }
+    return employmentId;
+  }
+
+  /**
+   * คำขอแก้เวลาของตัวเอง — พนักงานยื่นแล้วต้องตามดูได้ว่าอนุมัติหรือยัง โดยไม่ต้องมี
+   * workforce.attendance.correct.approve (ตัวนั้นเห็นคิวของทุกคน เกินความจำเป็น)
+   */
+  async listMyAdjustments(query: {
+    status?: string;
+    from?: string;
+    to?: string;
+  }): Promise<{ items: Record<string, unknown>[] }> {
+    return this.listAdjustments({ ...query, employmentId: this.requireOwnEmployment() });
+  }
+
+  /** ผลลงเวลาของตัวเอง — ให้ฟอร์มขอแก้เวลาชี้วันที่สาย/ขาด/ลืมสแกนให้เลือกได้เลย */
+  async listMyResults(query: {
+    from: string;
+    to: string;
+  }): Promise<{ items: Record<string, unknown>[] }> {
+    return this.listResults({ ...query, employmentId: this.requireOwnEmployment() });
+  }
+
   async requestAdjustment(input: {
     employment_id: string;
     work_date: string;
@@ -838,6 +866,16 @@ export class AttendanceService {
     reason: string;
     comment: string;
   }): Promise<Record<string, unknown>> {
+    // สิทธิ์ขอ (correct.request) มีทุกคน — คนที่ไม่มีสิทธิ์อนุมัติขอได้เฉพาะเวลาของตัวเอง
+    // กรอกแทนคนอื่นเป็นงานของหัวหน้า/HR ที่ถือ correct.approve อยู่แล้ว
+    const principal = this.requestContext.requirePrincipal();
+    if (
+      !principal.permissions.has('workforce.attendance.correct.approve') &&
+      input.employment_id !== principal.employmentId
+    ) {
+      throw AppError.forbidden('correction requests are limited to your own attendance');
+    }
+
     return this.uow.run(async (uow) => {
       const employments = await uow.tx
         .select()

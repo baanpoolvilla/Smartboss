@@ -19,8 +19,12 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
-/** แท็บที่ต้องมีสิทธิ์จัดการพนักงาน — แก้เวลาและ OT กระทบเงินเดือนตรง ๆ */
-const MANAGE_TABS: readonly TabId[] = ["corrections", "overtime"];
+/**
+ * แท็บที่ต้องมีสิทธิ์จัดการพนักงาน — อนุมัติ OT กระทบเงินเดือนตรง ๆ
+ * "คำขอแก้เวลา" เปิดให้ทุกคน: คนไม่มีสิทธิ์จัดการเห็น/ยื่นได้เฉพาะของตัวเอง
+ * ไม่มีปุ่มอนุมัติ (ดู renderCorrectionsTab)
+ */
+const MANAGE_TABS: readonly TabId[] = ["overtime"];
 
 const TAB_TITLE: Record<TabId, string> = {
   today: "การลงเวลา",
@@ -33,11 +37,10 @@ const TAB_TITLE: Record<TabId, string> = {
  * หน้าหลักของโมดูลบุคคล — รวม 3 อย่างที่เคยเป็นเมนูแยกกัน (การลงเวลา/
  * ลงเวลาแบบ manual/ปฏิทินวันหยุด) เป็น tab เดียวกันตาม IA ใหม่ (ยุบเมนู 15 → 5)
  *
- * "คำขอแก้เวลา" เดิมต้องมี HR_PERMS.employeeManage ถึงเข้าได้ (แก้เวลากระทบ
- * เงินเดือนตรง ๆ) ส่วน "วันนี้"/"ปฏิทินทีม" เปิดด้วย HR_PERMS.access เหมือนกัน
- * — เพราะ HrPage เช็คสิทธิ์ได้แค่ระดับหน้า ไม่ใช่ระดับ tab จึงต้องเช็คสิทธิ์
- * ของ tab "คำขอแก้เวลา" เองตรงนี้ แล้วเด้งกลับไป "วันนี้" เงียบ ๆ ถ้าไม่มีสิทธิ์
- * (ไม่ใช่ 403 เพราะ tab อื่นในหน้าเดียวกันเข้าได้อยู่แล้ว)
+ * "OT รออนุมัติ" ต้องมี HR_PERMS.employeeManage ถึงเข้าได้ (กระทบเงินเดือนตรง ๆ)
+ * ส่วนแท็บอื่นเปิดด้วย HR_PERMS.access เหมือนกัน — เพราะ HrPage เช็คสิทธิ์ได้แค่
+ * ระดับหน้า ไม่ใช่ระดับ tab จึงต้องเช็คสิทธิ์ของ tab เองตรงนี้ แล้วเด้งกลับไป
+ * "วันนี้" เงียบ ๆ ถ้าไม่มีสิทธิ์ (ไม่ใช่ 403 เพราะ tab อื่นในหน้าเดียวกันเข้าได้อยู่แล้ว)
  */
 export default async function HrOverviewPage({
   searchParams,
@@ -48,7 +51,8 @@ export default async function HrOverviewPage({
   // ปุ่ม export เรียก /attendance-results ซึ่งต้องมีสิทธิ์อ่านผลลงเวลาของทุกคน
   // ฝั่ง workforce — hr.employee.manage คือสิทธิ์ที่ถูกแปลงเป็นบทบาทนั้นตอน sync
   // (ดู mapSmartbossRoles) ⇒ ใช้ตัวเดียวกันคุมว่าจะโชว์การ์ดไหน จะได้ไม่มีปุ่ม
-  // ที่กดแล้วได้ 403 ให้คนงง — และคุมว่าเข้าแท็บ "คำขอแก้เวลา" ได้ไหมด้วย
+  // ที่กดแล้วได้ 403 ให้คนงง — และคุมว่าแท็บ "คำขอแก้เวลา" เป็นคิวอนุมัติของทุกคน
+  // หรือแค่คำขอของตัวเอง
   const canManage = hasPermission(session, HR_PERMS.employeeManage);
 
   const sp = await searchParams;
@@ -85,7 +89,7 @@ export default async function HrOverviewPage({
 
         let body: React.ReactNode;
         if (tab === "corrections") {
-          body = await renderCorrectionsTab();
+          body = await renderCorrectionsTab(canManage);
         } else if (tab === "overtime") {
           body = await renderOvertimeTab();
         } else if (tab === "calendar") {
