@@ -1,8 +1,9 @@
 import "server-only";
+import { isSingleEmoji } from "@/lib/emoji";
 import { prisma } from "@smartboss/database";
 import { rateLimit } from "@smartboss/auth/ratelimit";
 
-import { CHAT_REACTION_EMOJIS, type ChatAttachment, type ChatMessageDTO, type ChatReactionDTO } from "../types";
+import { type ChatAttachment, type ChatMessageDTO, type ChatReactionDTO } from "../types";
 import { broadcastToChannel, channelMemberIds, getChannelAccess, orgChannelId } from "./channels";
 import { ChatError, hydrateMessages, reactionsFor, type ChatActor } from "./serialize";
 
@@ -214,7 +215,8 @@ export async function deleteMessage(actor: ChatActor, channelId: string, message
 /** กดอีโมจิ — กดซ้ำอันเดิม = เอาออก */
 export async function toggleReaction(actor: ChatActor, channelId: string, messageId: string, emoji: string): Promise<ChatReactionDTO[]> {
   await getChannelAccess(actor, channelId);
-  if (!(CHAT_REACTION_EMOJIS as readonly string[]).includes(emoji)) throw new ChatError("อีโมจินี้ใช้ไม่ได้", 400);
+  // แถบด่วน (CHAT_REACTION_EMOJIS) + ตัวเลือกชุดเต็ม — รับอิโมจิตัวเดียวอะไรก็ได้ ไม่รับข้อความ
+  if (!isSingleEmoji(emoji)) throw new ChatError("อีโมจินี้ใช้ไม่ได้", 400);
   const message = await prisma.chatMessage.findFirst({
     where: { id: messageId, orgId: actor.orgId, channelId, deletedAt: null, kind: { in: ["text", "note"] } },
     select: { id: true },

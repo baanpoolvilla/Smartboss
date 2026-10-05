@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { Camera, ChevronRight, FileText, Image as ImageIcon, Loader2, Mic, NotebookPen, Paperclip, Plus, RotateCw, SendHorizontal, Square, Trash2, X } from "lucide-react";
+import { Camera, ChevronRight, FileText, Image as ImageIcon, Loader2, Mic, NotebookPen, Paperclip, Plus, RotateCw, SendHorizontal, Smile, Square, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
 
@@ -17,6 +17,7 @@ import { ChatAvatar } from "./chat-avatar";
 import { fileTooLargeMessage } from "@/lib/file-limits";
 import { hasClipboardText } from "@/lib/annotate/annotate";
 import { useBackToCloseOnTouch } from "@/lib/back-to-close";
+import { EmojiPicker } from "@/components/emoji-picker";
 const MAX_FILES = 20;
 const MAX_BYTES = 25 * 1024 * 1024;
 const ACCEPT_FILES =
@@ -99,6 +100,8 @@ export const Composer = forwardRef<
   useBackToCloseOnTouch(plusOpen, () => setPlusOpen(false)); // มือถือ: ปุ่มย้อนกลับปิดเมนู "+" ก่อน
   /** มือถือ: กด ">" ตอนกำลังพิมพ์ เพื่อกางปุ่มกล้อง/รูปกลับมา (แบบ LINE) */
   const [toolsOpen, setToolsOpen] = useState(false);
+  /** ตัวเลือกอิโมจิ (ปุ่มหน้ายิ้ม / Ctrl+E) — คอมเท่านั้น มือถือใช้อิโมจิจากคีย์บอร์ดของเครื่อง */
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const [recording, setRecording] = useState<{ startedAt: number } | null>(null);
   const [now, setNow] = useState(Date.now());
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -268,6 +271,19 @@ export const Composer = forwardRef<
     });
   };
 
+  /** ใส่อิโมจิตรงเคอร์เซอร์ (ทับข้อความที่เลือกอยู่) แล้วพาเคอร์เซอร์ไปต่อท้ายอิโมจิ */
+  const insertEmoji = (emoji: string) => {
+    const el = textareaRef.current;
+    const start = el?.selectionStart ?? text.length;
+    const end = el?.selectionEnd ?? start;
+    setText(text.slice(0, start) + emoji + text.slice(end));
+    setEmojiOpen(false);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(start + emoji.length, start + emoji.length);
+    });
+  };
+
   // ─── ส่ง ───
   const uploading = pending.some((p) => p.status === "uploading");
   const failed = pending.some((p) => p.status === "error");
@@ -383,6 +399,23 @@ export const Composer = forwardRef<
           ))}
           {truncated && <p className="px-2 py-1.5 text-[11px] text-(--ink-soft)">พิมพ์ชื่อต่อจาก @ เพื่อหาคนอื่น</p>}
         </div>
+      )}
+
+      {emojiOpen && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setEmojiOpen(false)} />
+          <div
+            className="absolute bottom-full right-2 z-30 mb-1 max-w-[calc(100%-1rem)] rounded-xl border border-(--line) bg-(--bg) p-2 shadow-xl sm:right-3"
+            onKeyDown={(e) => {
+              if (e.key !== "Escape") return;
+              e.stopPropagation();
+              setEmojiOpen(false);
+              textareaRef.current?.focus();
+            }}
+          >
+            <EmojiPicker onPick={insertEmoji} />
+          </div>
+        </>
       )}
 
       {replyTo && (
@@ -612,6 +645,12 @@ export const Composer = forwardRef<
                   return;
                 }
               }
+              // Ctrl+E (Mac: ⌘E) = เปิด/ปิดตารางอิโมจิ — ดูตำแหน่งปุ่ม (e.code) แป้นไทยก็ใช้ได้
+              if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.code === "KeyE") {
+                e.preventDefault();
+                setEmojiOpen((v) => !v);
+                return;
+              }
               // คอม: Enter ส่ง, Shift+Enter ขึ้นบรรทัดใหม่ · มือถือ: Enter ขึ้นบรรทัด กดปุ่มส่งเอง
               if (e.key !== "Enter" || e.nativeEvent.isComposing || isTouchDevice()) return;
               // ตั้งค่า "กด Enter เพื่อส่ง": เปิด = Enter ส่ง (Shift+Enter ขึ้นบรรทัด), ปิด = Ctrl/⌘+Enter ส่ง
@@ -623,6 +662,19 @@ export const Composer = forwardRef<
             }}
             className="max-h-40 min-h-10 flex-1 resize-none rounded-[20px] border border-(--line) bg-(--bg-soft) px-4 py-2 text-base leading-6 sm:text-[15px] text-(--ink) placeholder:text-(--ink-soft) focus-visible:border-(--chat-accent) focus-visible:outline-none"
           />
+
+          <button
+            type="button"
+            // ไม่ดึงโฟกัส/เคอร์เซอร์ออกจากช่องพิมพ์ตอนกด
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => setEmojiOpen((v) => !v)}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-(--ink-soft) hover:bg-(--bg-soft) [@media(pointer:coarse)]:hidden"
+            aria-label="ใส่อิโมจิ (Ctrl+E)"
+            title="ใส่อิโมจิ (Ctrl+E)"
+            aria-expanded={emojiOpen}
+          >
+            <Smile className="h-5 w-5" />
+          </button>
 
           {canSend || text.trim() || uploading ? (
             <button

@@ -34,19 +34,14 @@ import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/r
 import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
 import { DRAG_MENTION_TOPIC_MIME } from "@/modules/report_task/components/report-feed/report-post-fields";
 import { cn } from "@/modules/report_task/lib/utils";
+import { EmojiPicker, ReactionPicker } from "@/components/emoji-picker";
+import { activeReactionList } from "@/lib/emoji";
 import { toast } from "sonner";
 import { Building2, Check, Hash, ImagePlus, MoreHorizontal, Pencil, Plus, Send, SmilePlus, Trash2, User, Users, X } from "lucide-react";
 import { uuid } from "@/modules/report_task/lib/uuid";
 import { isCoarsePointer } from "@/modules/report_task/lib/device";
 
 const reactionEmojis = ["👍", "❤️", "🎉", "😂", "😮", "😢"];
-// A wider set than the 6-emoji reaction bar — this one's for *writing*, not
-// reacting, so it leans on the same common picks any chat app's picker opens
-// with rather than trying to be a full emoji keyboard.
-const composerEmojis = [
-  "👍", "👎", "❤️", "🔥", "🎉", "😂", "😮", "😢", "😡", "🙏",
-  "👏", "🤔", "😴", "🥳", "😅", "🚀", "✅", "❌", "⭐", "💯",
-];
 /** กางทีละชุดแทนที่จะกางทั้งห้อง — เหตุผลเดียวกับ report-feed.tsx
  * ห้องโหมดแชทสะสมข้อความเร็วกว่าห้องรายงานด้วยซ้ำ */
 const PAGE_SIZE = 40;
@@ -374,6 +369,12 @@ export function OpenchatFeed({
   }
 
   function handleComposerKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    // Ctrl+E (Mac: ⌘E) = เปิดตารางอิโมจิ — ดูตำแหน่งปุ่ม (e.code) แป้นไทยก็ใช้ได้
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.code === "KeyE") {
+      e.preventDefault();
+      setEmojiOpen(true);
+      return;
+    }
     if (mentionMenu) {
       const matches = mentionMatches(mentionMenu.query, mentionMenu.symbol);
       if (e.key === "ArrowDown") {
@@ -506,7 +507,7 @@ export function OpenchatFeed({
               {group.items.map((m, i) => {
                 const author = getUser(m.authorId);
                 const isOwn = m.authorId === viewingAsUserId;
-                const activeReactions = reactionEmojis.map((emoji) => ({ emoji, users: m.reactions?.[emoji] ?? [] })).filter((r) => r.users.length > 0);
+                const activeReactions = activeReactionList(m.reactions, reactionEmojis);
                 const isEditing = editing?.id === m.id;
                 const prev = group.items[i - 1];
                 const grouped =
@@ -669,19 +670,17 @@ export function OpenchatFeed({
                               when the override names its replacement, so without
                               this the emoji row rendered as an unclickable-looking
                               vertical stack ("ไม่เห็นกดได้เลยอีโมจิ"). */}
-                          <PopoverContent className="w-auto p-1 flex flex-row gap-0.5" align="end">
-                            {reactionEmojis.map((emoji) => (
-                              <button
-                                key={emoji}
-                                onClick={() => {
-                                  toggleMessageReaction(m, emoji);
-                                  setOpenReactionFor(null);
-                                }}
-                                className="h-7 w-7 flex items-center justify-center rounded-md text-sm hover:bg-[var(--bg-soft)] transition-transform hover:scale-110"
-                              >
-                                {emoji}
-                              </button>
-                            ))}
+                          <PopoverContent className="w-auto max-w-[calc(100vw-1.5rem)] p-1" align="end">
+                            <ReactionPicker
+                              quick={reactionEmojis}
+                              isActive={(emoji) => (m.reactions?.[emoji] ?? []).includes(viewingAsUserId)}
+                              onPick={(emoji) => {
+                                toggleMessageReaction(m, emoji);
+                                setOpenReactionFor(null);
+                              }}
+                              buttonClassName="h-8 w-8 text-lg"
+                              activeClassName="bg-[var(--accent)]"
+                            />
                           </PopoverContent>
                         </Popover>
                         {isOwn && (
@@ -873,16 +872,8 @@ export function OpenchatFeed({
                 </button>
               }
             />
-            <PopoverContent className="w-64 p-2 grid grid-cols-8 gap-0.5" align="end">
-              {composerEmojis.map((emoji) => (
-                <button
-                  key={emoji}
-                  onClick={() => insertEmoji(emoji)}
-                  className="h-7 w-7 flex items-center justify-center rounded-md text-base hover:bg-[var(--bg-soft)] transition-transform hover:scale-110"
-                >
-                  {emoji}
-                </button>
-              ))}
+            <PopoverContent className="w-auto max-w-[calc(100vw-1.5rem)] p-2" align="end">
+              <EmojiPicker onPick={insertEmoji} />
             </PopoverContent>
           </Popover>
           <button

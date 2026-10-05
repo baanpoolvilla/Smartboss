@@ -74,6 +74,8 @@ import { ReportImageLightbox } from "@/modules/report_task/components/report-fee
 import { ReportReply } from "@/modules/report_task/components/report-feed/report-reply";
 import { LinkInsertPopover } from "@/modules/report_task/components/report-feed/link-insert-popover";
 import { cn } from "@/modules/report_task/lib/utils";
+import { EmojiPicker, ReactionPicker } from "@/components/emoji-picker";
+import { activeReactionList } from "@/lib/emoji";
 import { toast } from "sonner";
 import { formatDateTimeFull, formatDateTimeShort } from "@/modules/report_task/lib/format";
 import {
@@ -131,7 +133,6 @@ const reactionEmojis = [
   "🫡", "😱", "🤗", "😆", "🙄", "😏",
 ];
 /** คอลัมน์ของตารางอิโมจิในช่องตอบกลับ — 8 × 40px พอดีมือถือจอเล็ก */
-const EMOJI_GRID_COLS = 8;
 /** แถวหัวโพสต์ต้องกว้างเท่านี้ (px) ถึงใส่ ชื่อ · แผนก · เวลา · ป้ายรอบ ได้ในแถวเดียว — มือถือได้ ~260-300 */
 const HEADER_BADGE_MIN_WIDTH = 340;
 const LONG_POST_BULLET_THRESHOLD = 8;
@@ -588,12 +589,12 @@ export function ReportCard({
     () => sortByUsage(stickers, (s) => `sticker:${s.id}`, stickerUsageCounts),
     [stickers, stickerUsageCounts]
   );
-  // ปกติโชว์แค่ไม่กี่อันแรก (เรียงตามความถี่แล้ว) ต้องกด "เพิ่มเติม" ถึงจะ
-  // กางเต็มชุด — เดิมกางโชว์ทั้ง 38 อันพร้อมสกรอลล์ค้างไว้ตลอด ("อยากให้มีกด
-  // แล้วคลิกเอาแทนไม่ใช่เปิดหมดแบบนี้")
-  const [emojiExpanded, setEmojiExpanded] = useState(false);
+  // โชว์แค่ไม่กี่อันแรก (เรียงตามความถี่แล้ว) — ปุ่ม "…" ท้ายแถวกางตัวเลือกอิโมจิชุดเต็มในที่เดิม
+  // (ReactionPicker) เดิม "…" กางได้แค่รายการ 38 อันของหน้านี้
   const REACTION_COLLAPSED_COUNT = 10;
-  const visibleReactionEmojis = emojiExpanded ? sortedReactionEmojis : sortedReactionEmojis.slice(0, REACTION_COLLAPSED_COUNT);
+  const visibleReactionEmojis = sortedReactionEmojis.slice(0, REACTION_COLLAPSED_COUNT);
+  // สติกเกอร์มีคะแนนมีแถวของตัวเอง — ไม่ให้โผล่ในชุดเต็มอีก (กดแล้วมีผลไม่เท่ากัน จะงง)
+  const stickerEmojis = useMemo(() => stickers.map((s) => s.emoji), [stickers]);
   // "แก้ได้เลยจากหน้านี้เป็นการแก้แบบเต็มๆเลย" — ทั้งปุ่มเฟืองและช่องว่าง "+"
   // เปิดตัวแก้ไขสติกเกอร์แบบเต็ม (StickerManagerPanel ตัวเดียวกับหน้าตั้งค่า)
   // ฝังอยู่ในป็อปอัปนี้ตรงๆ แทนที่ฟอร์มเพิ่มอย่างเดียวแบบย่อเดิม (บ่นว่า "มัน
@@ -618,6 +619,8 @@ export function ReportCard({
   // shows once the input actually has focus — attach/send stay visible
   // either way so the box still reads as "you can reply here" at rest.
   const [replyFocused, setReplyFocused] = useState(false);
+  // กล่องตอบ "กาง" = กำลังพิมพ์อยู่ หรือมีข้อความค้างไว้ (รูปทรง/การจัดวางต้องเหมือนกันทั้งสองกรณี)
+  const replyExpanded = replyFocused || replyText.trim() !== "";
   const [repliesExpanded, setRepliesExpanded] = useState(false);
   // "ข้อความใหม่" divider for replies — frozen at mount, same reasoning as
   // ReportFeed's own post-level divider (opening the room marks everything
@@ -682,9 +685,7 @@ export function ReportCard({
     return result;
   }, [isLong, showFull, post.sections]);
 
-  const activeReactions = reactionEmojis
-    .map((emoji) => ({ emoji, users: post.reactions[emoji] ?? [] }))
-    .filter((r) => r.users.length > 0);
+  const activeReactions = activeReactionList(post.reactions, reactionEmojis);
   const reactionListUsers = activeReactions.find((r) => r.emoji === reactionListEmoji)?.users ?? [];
   const viewerInReactionList = reactionListEmoji !== null && reactionListUsers.includes(viewingAsUserId);
 
@@ -760,17 +761,6 @@ export function ReportCard({
     setReplyText(htmlEditorToBulletsText(el));
     bumpStickerUsage(`emoji:${emoji}`);
     setReplyEmojiOpen(false);
-  }
-
-  /** ลูกศรเลื่อนในตารางอิโมจิ (Enter = เลือก, Esc = ปิด) — ใช้คีย์บอร์ดล้วนได้หลังกด Ctrl+E */
-  function onEmojiGridKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
-    const buttons = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>("button[data-emoji]"));
-    const i = buttons.indexOf(document.activeElement as HTMLButtonElement);
-    const step = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: EMOJI_GRID_COLS, ArrowUp: -EMOJI_GRID_COLS }[e.key];
-    if (step === undefined) return;
-    e.preventDefault();
-    const next = i < 0 ? 0 : Math.min(buttons.length - 1, Math.max(0, i + step));
-    buttons[next]?.focus();
   }
 
   function submitReply() {
@@ -1205,38 +1195,18 @@ export function ReportCard({
               </div>
             ) : (
               <>
-                <div className="flex flex-row flex-wrap items-center gap-0.5">
-                  {/* เดิมกางโชว์ทั้ง 38 อันพร้อมสกรอลล์ค้างไว้ตลอด — ตอนนี้
-                      โชว์แค่ไม่กี่อันแรก (เรียงตามความถี่ใช้งานเงียบๆ ไม่มี
-                      ตัวเลขกำกับ) ต้องกด "เพิ่มเติม" ก่อนถึงจะกางเต็มชุด
-                      ("อยากให้มีกดแล้วคลิกเอาแทนไม่ใช่เปิดหมดแบบนี้") */}
-                  {visibleReactionEmojis.map((emoji) => (
-                    <button
-                      key={emoji}
-                      onClick={() => {
-                        toggleReaction(post.id, emoji, viewingAsUserId);
-                        bumpStickerUsage(`emoji:${emoji}`);
-                        setReactionPickerOpen(false);
-                      }}
-                      className={cn(
-                        "h-10 w-10 flex items-center justify-center rounded-md text-[24px] leading-none hover:bg-[var(--bg-soft)] transition-transform hover:scale-110",
-                        (post.reactions[emoji] ?? []).includes(viewingAsUserId) && "bg-[var(--accent)]"
-                      )}
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                  {sortedReactionEmojis.length > REACTION_COLLAPSED_COUNT && (
-                    <button
-                      onClick={() => setEmojiExpanded((v) => !v)}
-                      className="h-8 w-8 flex items-center justify-center rounded-md text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
-                      aria-label={emojiExpanded ? "ย่อรายการอีโมจิ" : "ดูอีโมจิเพิ่มเติม"}
-                      title={emojiExpanded ? "ย่อ" : "เพิ่มเติม"}
-                    >
-                      <MoreHorizontal className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
+                <ReactionPicker
+                  quick={visibleReactionEmojis}
+                  exclude={stickerEmojis}
+                  isActive={(emoji) => (post.reactions[emoji] ?? []).includes(viewingAsUserId)}
+                  onPick={(emoji) => {
+                    toggleReaction(post.id, emoji, viewingAsUserId);
+                    bumpStickerUsage(`emoji:${emoji}`);
+                    setReactionPickerOpen(false);
+                  }}
+                  buttonClassName="text-[24px]"
+                  activeClassName="bg-[var(--accent)]"
+                />
                 {/* แถวสติกเกอร์มีคะแนน — แยกให้เห็นชัดจากอีโมจิธรรมดาด้านบนด้วย
                     ป้ายกำกับ + พื้นสีต่างกัน ไม่ใช่แค่มีเส้นคั่นเฉยๆ ("อยากให้
                     แสดงให้รู้ว่าอันไหนที่มีผลต่อคะแนน") คนไม่มีสิทธิ์ไม่เห็นแถวนี้
@@ -1350,34 +1320,18 @@ export function ReportCard({
               </div>
             ) : (
               <>
-                <div className="flex flex-row flex-wrap gap-0.5 p-0.5">
-                  {visibleReactionEmojis.map((emoji) => (
-                    <button
-                      key={emoji}
-                      onClick={() => {
-                        toggleReaction(post.id, emoji, viewingAsUserId);
-                        bumpStickerUsage(`emoji:${emoji}`);
-                        setTouchMenuOpen(false);
-                      }}
-                      className={cn(
-                        "h-10 w-10 flex items-center justify-center rounded-md text-[24px] leading-none hover:bg-[var(--bg-soft)]",
-                        (post.reactions[emoji] ?? []).includes(viewingAsUserId) && "bg-[var(--accent)]"
-                      )}
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                  {sortedReactionEmojis.length > REACTION_COLLAPSED_COUNT && (
-                    <button
-                      onClick={() => setEmojiExpanded((v) => !v)}
-                      className="h-8 w-8 flex items-center justify-center rounded-md text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
-                      aria-label={emojiExpanded ? "ย่อรายการอีโมจิ" : "ดูอีโมจิเพิ่มเติม"}
-                      title={emojiExpanded ? "ย่อ" : "เพิ่มเติม"}
-                    >
-                      <MoreHorizontal className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
+                <ReactionPicker
+                  quick={visibleReactionEmojis}
+                  exclude={stickerEmojis}
+                  isActive={(emoji) => (post.reactions[emoji] ?? []).includes(viewingAsUserId)}
+                  onPick={(emoji) => {
+                    toggleReaction(post.id, emoji, viewingAsUserId);
+                    bumpStickerUsage(`emoji:${emoji}`);
+                    setTouchMenuOpen(false);
+                  }}
+                  buttonClassName="text-[24px]"
+                  activeClassName="bg-[var(--accent)]"
+                />
                 {isOwner(viewingAsUserId) && (
                   <div className="rounded-md bg-[var(--bg-soft)] p-1 mx-0.5 mt-0.5">
                     <p className="px-1 pb-1 text-[10px] font-semibold text-[var(--ink-soft)]">มีผลต่อคะแนน</p>
@@ -1930,13 +1884,15 @@ export function ReportCard({
                 // its own second line there instead of stealing the input's
                 // width; rounded-2xl (not rounded-full) is what actually
                 // looks right once this row can be two lines tall.
-                replyFocused || replyColorPickerOpen ? "flex-wrap rounded-2xl" : "rounded-full"
+                // มีข้อความค้างอยู่ก็นับว่ากาง — ไม่งั้นพอแตะออก กล่องหลายบรรทัดกลับไปเป็นแคปซูล (rounded-full)
+                // ขอบโค้งเป็นวงรีตัดมุมข้อความ
+                replyExpanded || replyColorPickerOpen ? "flex-wrap rounded-2xl" : "rounded-full"
               )}
               style={replyHighlight ? { borderColor: replyHighlight } : { borderColor: "var(--line)" }}
             >
               {/* จอสัมผัสตอนกำลังพิมพ์: ช่องพิมพ์ได้ทั้งบรรทัด (ไม่มีรูปโปรไฟล์ทางซ้าย ไม่มีคอลัมน์ปุ่มทางขวา)
                   ปุ่มแนบ/ส่งลงไปอยู่บรรทัดล่างชิดขวา — เดิมปุ่มสองปุ่มกินคอลัมน์ทั้งความสูงของข้อความ */}
-              <Avatar className={cn("h-6 w-6 shrink-0", replyFocused && "[@media(pointer:coarse)]:hidden")}>
+              <Avatar className={cn("h-6 w-6 shrink-0", replyExpanded && "[@media(pointer:coarse)]:hidden")}>
                 <AvatarImage src={viewer?.avatarUrl ?? undefined} alt={viewer?.name} />
                 <AvatarFallback className="text-[9px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{viewer?.avatar}</AvatarFallback>
               </Avatar>
@@ -1972,7 +1928,7 @@ export function ReportCard({
                   // iPhone ซูมหน้าเข้าเองเมื่อแตะช่องพิมพ์ที่ตัวอักษรเล็กกว่า 16px — หน้าล้นขอบขวา ปุ่มส่งหลุดจอ
                   // ⇒ จอสัมผัสใช้ 16px พอดี จะไม่ซูม
                   "[@media(pointer:coarse)]:text-base",
-                  replyFocused && "[@media(pointer:coarse)]:basis-full [@media(pointer:coarse)]:px-1.5"
+                  replyExpanded && "[@media(pointer:coarse)]:basis-full [@media(pointer:coarse)]:px-1.5"
                 )}
                 onKeyDown={(e) => {
                   if (replyMentionMenu) {
@@ -2123,27 +2079,8 @@ export function ReportCard({
                     </button>
                   }
                 />
-                <PopoverContent className="w-auto max-w-[calc(100vw-1.5rem)] p-1.5" side="top" align="end" finalFocus={replyEditorRef} onKeyDown={onEmojiGridKeyDown}>
-                  <div
-                    role="grid"
-                    aria-label="เลือกอิโมจิ"
-                    className="grid max-h-64 gap-0.5 overflow-y-auto"
-                    style={{ gridTemplateColumns: `repeat(${EMOJI_GRID_COLS}, minmax(0, 2.5rem))` }}
-                  >
-                    {sortedReactionEmojis.map((emoji) => (
-                      <button
-                        key={emoji}
-                        type="button"
-                        data-emoji
-                        onClick={() => insertReplyEmoji(emoji)}
-                        aria-label={`ใส่ ${emoji}`}
-                        className="h-10 w-10 flex items-center justify-center rounded-lg text-2xl leading-none hover:bg-[var(--bg-soft)] focus-visible:bg-[var(--accent)] focus-visible:outline-none transition-transform hover:scale-110"
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="hidden px-1 pt-1 text-[11px] text-[var(--ink-soft)] [@media(hover:hover)]:block">ลูกศรเลือก · Enter ใส่ · Esc ปิด</p>
+                <PopoverContent className="w-auto max-w-[calc(100vw-1.5rem)] p-2" side="top" align="end" finalFocus={replyEditorRef}>
+                  <EmojiPicker onPick={insertReplyEmoji} />
                 </PopoverContent>
               </Popover>
               <button
@@ -2154,7 +2091,7 @@ export function ReportCard({
                 aria-label="แนบรูป"
                 className={cn(
                   "h-7 w-7 shrink-0 flex items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] disabled:opacity-40",
-                  replyFocused && "[@media(pointer:coarse)]:ml-auto"
+                  replyExpanded && "[@media(pointer:coarse)]:ml-auto"
                 )}
               >
                 {replyUploading ? <ImagePlus className="h-4 w-4 animate-pulse" /> : <Paperclip className="h-4 w-4" />}

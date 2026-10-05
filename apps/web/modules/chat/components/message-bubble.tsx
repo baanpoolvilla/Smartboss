@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { AlertCircle, Clock, Copy, CornerUpLeft, Download, FileText, Hourglass, ImageOff, Megaphone, MicOff, MoreHorizontal, Pause, Play, RotateCw, SmilePlus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
+import { ReactionPicker } from "@/components/emoji-picker";
 
 import { sortReactionEmojis, useChatStore, type RoomMessage } from "../store/chat-store";
 import { CHAT_REACTION_EMOJIS, type ChatAttachment, type ChatUser } from "../types";
@@ -63,6 +64,20 @@ function ExpiryBadge({ items }: { items: ChatAttachment[] }) {
       {days === 0 ? "หมดอายุวันนี้" : `หมดอายุใน ${days} วัน`}
     </span>
   );
+}
+
+/**
+ * ข้อความที่มีแต่อิโมจิ 1–3 ตัว (ไม่มีตัวอักษรอื่น) — แสดงตัวใหญ่ ไม่มีกรอบข้อความ แบบแอปแชททั่วไป
+ * นับเป็น "ตัว" ตามที่ตาเห็น (👨‍👩‍👧 หรือ 👍🏽 = 1 ตัว) เบราว์เซอร์ที่ไม่มี Intl.Segmenter = แสดงแบบปกติ
+ */
+const EMOJI_ONLY_RE = /^(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|\p{Emoji_Modifier}|[‍️])+$/u;
+function isJumboEmoji(body: string): boolean {
+  const text = body.replace(/\s+/g, "");
+  if (!text || text.length > 40 || !EMOJI_ONLY_RE.test(text)) return false;
+  if (typeof Intl === "undefined" || !("Segmenter" in Intl)) return false;
+  let count = 0;
+  for (const _ of new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text)) if (++count > 3) return false;
+  return true;
 }
 
 function MediaGrid({ items, onOpen }: { items: ChatAttachment[]; onOpen: (index: number) => void }) {
@@ -280,7 +295,7 @@ function ActionMenu({
     desktop && anchor
       ? {
           position: "fixed",
-          ...(window.innerHeight - anchor.bottom > 320 ? { top: anchor.bottom + 4 } : { bottom: window.innerHeight - anchor.top + 4 }),
+          ...(window.innerHeight - anchor.bottom > 440 ? { top: anchor.bottom + 4 } : { bottom: window.innerHeight - anchor.top + 4 }),
           ...(mine ? { right: Math.max(8, window.innerWidth - anchor.right) } : { left: Math.max(8, anchor.left) }),
         }
       : undefined;
@@ -296,21 +311,16 @@ function ActionMenu({
         role="menu"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-1 flex justify-between gap-1 border-b border-(--line) px-1 pb-2">
-          {reactionEmojis.map((e) => (
-            <button
-              key={e}
-              type="button"
-              onClick={() => {
-                onReact(e);
-                onClose();
-              }}
-              className="flex h-9 w-9 items-center justify-center rounded-full text-2xl leading-none transition-transform hover:scale-125 hover:bg-(--bg-soft) sm:h-9 sm:w-9 sm:text-[22px]"
-              aria-label={`กด ${e}`}
-            >
-              {e}
-            </button>
-          ))}
+        <div className="mb-1 border-b border-(--line) px-1 pb-2">
+          <ReactionPicker
+            quick={reactionEmojis}
+            onPick={(e) => {
+              onReact(e);
+              onClose();
+            }}
+            className="justify-between gap-0"
+            buttonClassName="h-9 w-9 rounded-full sm:h-8 sm:w-8 sm:text-[21px]"
+          />
         </div>
         <button type="button" className={item} onClick={() => { onReply(); onClose(); }}>
           <CornerUpLeft className="h-4 w-4 text-(--ink-soft)" /> ตอบกลับ
@@ -597,6 +607,8 @@ export const MessageBubble = memo(function MessageBubble(props: MessageBubblePro
           >
             {m.kind === "note" ? (
               <NoteCard message={m} mine={mine} />
+            ) : m.body && !m.replyTo && isJumboEmoji(m.body) ? (
+              <p className="px-1 text-[44px] leading-tight">{m.body.trim()}</p>
             ) : (m.body || m.replyTo) && (
               <div
                 className={cn(

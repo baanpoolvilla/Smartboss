@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { ReactionPicker } from "@/components/emoji-picker";
+import { activeReactionList } from "@/lib/emoji";
 import { Check, CornerUpLeft, Link2, MoreHorizontal, Pencil, Reply as ReplyIcon, SmilePlus, Trash2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Button } from "@/modules/report_task/components/ui/button";
@@ -90,9 +92,7 @@ export function ReportReply({
     if (!viewerId || !(reply.reactions?.[emoji] ?? []).includes(viewerId)) bumpUsage(`emoji:${emoji}`);
     onToggleReaction(emoji);
   }
-  const activeReactions = reactionEmojis
-    .map((emoji) => ({ emoji, users: reply.reactions?.[emoji] ?? [] }))
-    .filter((r) => r.users.length > 0);
+  const activeReactions = activeReactionList(reply.reactions, reactionEmojis);
 
   function saveEdit() {
     const trimmed = editBody.trim();
@@ -163,22 +163,16 @@ export function ReportReply({
                   flex-col, and twMerge only drops a class when the override
                   names its replacement, so without this the emoji row rendered
                   as an unclickable-looking vertical stack. */}
-              <PopoverContent className="w-auto max-w-[calc(100vw-1.5rem)] p-1.5 flex flex-row flex-wrap gap-1" align="end">
-                {pickerEmojis.map((emoji) => (
-                  <button
-                    key={emoji}
-                    onClick={() => {
-                      pickReaction(emoji);
-                      setReactionPickerOpen(false);
-                    }}
-                    className={cn(
-                      "h-10 w-10 flex items-center justify-center rounded-lg text-2xl leading-none hover:bg-[var(--bg-soft)] transition-transform hover:scale-125",
-                      (reply.reactions?.[emoji] ?? []).length > 0 && "bg-[var(--accent)]"
-                    )}
-                  >
-                    {emoji}
-                  </button>
-                ))}
+              <PopoverContent className="w-auto max-w-[calc(100vw-1.5rem)] p-1.5" align="end">
+                <ReactionPicker
+                  quick={pickerEmojis}
+                  isActive={(emoji) => (reply.reactions?.[emoji] ?? []).length > 0}
+                  onPick={(emoji) => {
+                    pickReaction(emoji);
+                    setReactionPickerOpen(false);
+                  }}
+                  activeClassName="bg-[var(--accent)]"
+                />
               </PopoverContent>
             </Popover>
             <button
@@ -237,22 +231,18 @@ export function ReportReply({
                 }
               />
               <PopoverContent className="w-auto max-w-[calc(100vw-1.5rem)] p-1 flex flex-col min-w-40" align="end">
-                <div className="flex flex-row flex-wrap justify-center gap-0.5 p-0.5">
-                  {pickerEmojis.map((emoji) => (
-                    <button
-                      key={emoji}
-                      onClick={() => {
-                        pickReaction(emoji);
-                        setTouchMenuOpen(false);
-                      }}
-                      className={cn(
-                        "h-11 w-11 flex items-center justify-center rounded-lg text-[26px] leading-none hover:bg-[var(--bg-soft)] active:scale-110 transition-transform",
-                        (reply.reactions?.[emoji] ?? []).length > 0 && "bg-[var(--accent)]"
-                      )}
-                    >
-                      {emoji}
-                    </button>
-                  ))}
+                <div className="p-0.5">
+                  <ReactionPicker
+                    quick={pickerEmojis}
+                    isActive={(emoji) => (reply.reactions?.[emoji] ?? []).length > 0}
+                    onPick={(emoji) => {
+                      pickReaction(emoji);
+                      setTouchMenuOpen(false);
+                    }}
+                    className="justify-center"
+                    buttonClassName="h-11 w-11 text-[26px]"
+                    activeClassName="bg-[var(--accent)]"
+                  />
                 </div>
                 <div className="h-px bg-[var(--line)] mx-1 my-0.5" />
                 <button
