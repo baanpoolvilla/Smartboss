@@ -54,8 +54,6 @@ interface ChatState {
   onlineIds: Record<string, true>;
   /** คนที่หยุดวันนี้ + หยุดแบบไหน (ใบลา/วันหยุดที่อนุมัติแล้ว) — ป้ายปฏิทินบนรูปโปรไฟล์ */
   offIds: Record<string, ChatOffToday>;
-  /** วันนี้เป็นวันหยุดในปฏิทินวันหยุดของบริษัท (ชื่อวันหยุด) — null = วันทำงานปกติ */
-  holidayToday: string | null;
   rooms: Record<string, RoomState>;
   details: Record<string, ChatChannelDetail>;
   activeChannelId: string | null;
@@ -71,7 +69,7 @@ interface ChatState {
   bumpReaction: (emoji: string, delta: 1 | -1) => void;
   setMe: (id: string) => void;
   setChannels: (channels: ChatChannelSummary[]) => void;
-  setUsers: (users: ChatUser[], onlineIds: string[], off?: Record<string, ChatOffToday>, holiday?: string | null) => void;
+  setUsers: (users: ChatUser[], onlineIds: string[], off?: Record<string, ChatOffToday>) => void;
   setActive: (id: string | null) => void;
   setRoom: (channelId: string, messages: ChatMessageDTO[], hasMore: boolean, detached?: boolean) => void;
   prependOlder: (channelId: string, messages: ChatMessageDTO[], hasMore: boolean) => void;
@@ -100,7 +98,6 @@ export const useChatStore = create<ChatState>((set) => ({
   users: {},
   onlineIds: {},
   offIds: {},
-  holidayToday: null,
   rooms: {},
   details: {},
   activeChannelId: null,
@@ -117,12 +114,11 @@ export const useChatStore = create<ChatState>((set) => ({
     }),
   setMe: (id) => set({ meId: id }),
   setChannels: (channels) => set({ channels: sortChannels(channels), channelsLoaded: true }),
-  setUsers: (users, onlineIds, off = {}, holiday = null) =>
+  setUsers: (users, onlineIds, off = {}) =>
     set({
       users: Object.fromEntries(users.map((u) => [u.id, u])),
       onlineIds: Object.fromEntries(onlineIds.map((id) => [id, true as const])),
       offIds: off,
-      holidayToday: holiday,
     }),
   setActive: (id) => set({ activeChannelId: id }),
 

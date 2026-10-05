@@ -40,7 +40,7 @@ export function ChannelAvatar({
 }) {
   // คนที่หยุดวันนี้: ป้าย OFF อยู่ตำแหน่งเดียวกับจุดเขียว — ขึ้นป้ายแทน ไม่ซ้อนกัน
   const dmOtherId = channel.type === "dm" ? (channel.memberIds.find((id) => id !== meId) ?? channel.id) : "";
-  const off = useChatStore((s) => Boolean(dmOtherId && (s.offIds[dmOtherId] || s.holidayToday)));
+  const off = useChatStore((s) => Boolean(dmOtherId && s.offIds[dmOtherId]));
   if (channel.type === "dm") {
     const otherId = dmOtherId;
     const other = users[otherId];
@@ -174,7 +174,6 @@ export function ChannelList({ onSelect, onStartNew }: { onSelect: (id: string) =
   const users = useChatStore((s) => s.users);
   const onlineIds = useChatStore((s) => s.onlineIds);
   const offIds = useChatStore((s) => s.offIds);
-  const holidayToday = useChatStore((s) => s.holidayToday);
   const meId = useChatStore((s) => s.meId);
   const [tab, setTab] = useState<Tab>("all");
   const [query, setQuery] = useState("");
@@ -306,7 +305,7 @@ export function ChannelList({ onSelect, onStartNew }: { onSelect: (id: string) =
               >
                 <div className="relative">
                   <ChatAvatar name={u.name} src={u.avatarUrl} colorKey={u.id} className="h-10 w-10" />
-                  {onlineIds[u.id] && !offIds[u.id] && !holidayToday && <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-(--bg) bg-[#22c55e]" />}
+                  {onlineIds[u.id] && !offIds[u.id] && <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-(--bg) bg-[#22c55e]" />}
                   <OffBadge userId={u.id} />
                 </div>
                 <div className="min-w-0">

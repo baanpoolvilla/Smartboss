@@ -23,7 +23,7 @@ export default function CalendarPage() {
     // ~24px margins. The negative x-margins reclaim the side padding; the
     // negative top pull-up lets FullCalendarView's height math (which measures
     // from its own top down to the viewport bottom) grow the grid taller too.
-    <div className="flex flex-col gap-4 lg:gap-6 -mx-4 -mt-4 px-2 pt-2 pb-4 sm:-mx-6 sm:-mt-5 sm:px-3 sm:pt-3">
+    <div className="flex flex-col gap-2 -mx-4 -mt-4 px-1 pt-1 pb-2 sm:-mx-6 sm:-mt-5 sm:px-1.5 sm:pt-1.5">
       <TaskDataGate fallback={<CalendarSkeleton />}>
         <CalendarView />
       </TaskDataGate>

@@ -73,6 +73,9 @@ interface FullCalendarViewProps {
   addHint?: string;
 }
 
+/** ช่องว่างใต้ปฏิทินถึงขอบล่างของจอ — ใช้ค่าเดียวกับแถบรายชื่อ (calendar-rail.tsx) ให้ขอบล่างเสมอกัน */
+export const BOTTOM_GAP = 8;
+
 export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarViewProps>(function FullCalendarView({
   events,
   onSelectEvent,
@@ -205,8 +208,9 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
       // 24px left the calendar's own bottom edge flush against the browser/
       // taskbar edge with no breathing room — same "ไม่ติดพื้นล่าง...เว้นไว้
       // สักนิด" feedback as the rail's own bottom margin got, so it gets the
-      // same 32px here too.
-      setCalendarHeight(Math.max(360, Math.round(window.innerHeight - top - 32 - bottomNavHeight)));
+      // same 32px here too. · ต่อมาขอให้ปฏิทินเต็มจอ ("แสดงให้เต็มตามที่ลูกศรชี้") จึงเหลือ 8px
+      // (BOTTOM_GAP) — ยังไม่ชิดขอบล่างสนิท แต่ไม่เสียพื้นที่ไปทั้งแถบ
+      setCalendarHeight(Math.max(360, Math.round(window.innerHeight - top - BOTTOM_GAP - bottomNavHeight)));
       setIsNarrowViewport(window.innerWidth < 640);
       setIsLaptopViewport(window.innerWidth >= 1024 && window.innerWidth < 1536);
       // 7 equal-width day columns; each dot (6px) plus its gap (1px) is
@@ -228,7 +232,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
         // is what actually guarantees the two cards land on the same
         // bottom edge instead of merely being similar heights.
         const cardTop = cardRef.current?.getBoundingClientRect().top ?? 0;
-        const desktopCardHeight = Math.max(360, Math.round(window.innerHeight - cardTop - 32));
+        const desktopCardHeight = Math.max(360, Math.round(window.innerHeight - cardTop - BOTTOM_GAP));
         setCardHeight(desktopCardHeight);
         // The grid gets what's left of the card *after everything else in it*
         // — and "everything else" is more than the two rows' own boxes: the

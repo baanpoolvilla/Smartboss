@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { PeopleCalendarList } from "./people-calendar-list";
 
+/** ช่องว่างใต้กล่องถึงขอบล่างของจอ — ต้องเท่ากับ BOTTOM_GAP ใน full-calendar-view.tsx ให้ขอบล่างของสองกล่องเสมอกัน */
+const BOTTOM_GAP = 8;
+
 /**
  * Outlook/Teams-style left rail — always visible on desktop (≥lg), unlike
  * the "คนในองค์กร" list which used to live behind the "เพิ่มปฏิทิน" dialog.
@@ -28,7 +31,7 @@ export function CalendarRail() {
       // edge — technically not overflowing anymore, but with zero breathing
       // room it still read as cramped/uncomfortable ("ให้เหลือเว้นไว้สักนิด").
       // A bit more slack below settles it clearly inside the fold.
-      setBoxHeight(Math.max(240, Math.round(window.innerHeight - top - 32)));
+      setBoxHeight(Math.max(240, Math.round(window.innerHeight - top - BOTTOM_GAP)));
     }
     computeBoxHeight();
     window.addEventListener("resize", computeBoxHeight);
@@ -54,7 +57,7 @@ export function CalendarRail() {
           internally on the rare org too big to fit at all. */}
       <div
         ref={boxRef}
-        className="rounded-xl border border-[var(--line)] bg-white p-4 overflow-y-auto"
+        className="rounded-xl border border-[var(--line)] bg-white p-3 overflow-y-auto"
         style={{ height: boxHeight }}
       >
         <PeopleCalendarList singleColumn alwaysExpanded />

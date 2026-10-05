@@ -49,8 +49,8 @@ const refreshChannelsSoon = debounce(() => void loadChannels(), 400);
 
 export async function loadUsers(): Promise<void> {
   try {
-    const { users, onlineIds, off, holiday } = await api.fetchOrgUsers();
-    get().setUsers(users, onlineIds, off ?? {}, holiday ?? null);
+    const { users, onlineIds, off } = await api.fetchOrgUsers();
+    get().setUsers(users, onlineIds, off ?? {});
   } catch {
     // ไม่เป็นไร — ใช้รายชื่อเดิมไปก่อน
   }

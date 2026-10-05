@@ -63,6 +63,25 @@ function hueOf(id: string): number {
   return hash >= 55 && hash <= 75 ? (hash + 40) % 360 : hash;
 }
 
+/**
+ * สีประจำประเภท — รายการบนปฏิทินและชิปกรองใช้สีเดียวกัน (แบบปฏิทินของโมดูลรายงาน/งาน)
+ * เดาจากชื่อประเภทที่ HR ตั้ง: ชื่อที่ไม่เข้าเค้าไหนเลยได้สีจากชื่อ (คงที่ ไม่สุ่ม)
+ */
+function typeHue(name: string | null, autoApprove: boolean): number {
+  const n = (name ?? "").toLowerCase();
+  if (/holiday|ฮอลิเดย์|นักขัตฤกษ์/.test(n)) return 215; // น้ำเงิน
+  if (/day.?off|หยุดประจำ|^off$/.test(n)) return 150; // เขียว
+  if (/ป่วย|sick/.test(n)) return 0; // แดง
+  if (/กิจ|personal/.test(n)) return 175; // เขียวอมฟ้า
+  if (/พักร้อน|vacation|annual/.test(n)) return 38; // เหลืองส้ม
+  if (/home|wfh/.test(n)) return 18; // ส้ม
+  if (/ค่าจ้าง|unpaid/.test(n)) return 280; // ม่วง
+  return name ? hueOf(name) : autoApprove ? 150 : 215;
+}
+
+/** ชื่อประเภทที่ไม่รู้ (HR ตั้งให้ไม่แสดงประเภทบนปฏิทินรวม) — กลุ่มของมันในตัวกรอง */
+const UNNAMED_TYPE = "__unnamed__";
+
 function toISO(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
@@ -95,6 +114,77 @@ function labelOf(entry: DayEntry): string {
   return entry.leaveTypeName ? `${entry.name} - ${entry.leaveTypeName}` : entry.name;
 }
 
+/** รายการที่โชว์ต่อช่องวัน — ที่เหลือรวมเป็นป้าย "+N รายการ" (กดวันนั้นเพื่อดูทั้งหมด) */
+const MAX_PER_DAY = 2;
+
+/** ชิปกรองแบบเปิด/ปิด — เปิด = ขอบและตัวหนังสือสีของประเภท · ปิด = เทา ขีดฆ่า */
+function FilterChip({
+  label,
+  hue,
+  off,
+  onClick,
+  count,
+  dot = false,
+}: {
+  label: string;
+  hue: number;
+  off: boolean;
+  onClick: () => void;
+  count?: number;
+  dot?: boolean;
+}) {
+  const color = `hsl(${hue} 65% 40%)`;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={!off}
+      className="flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-medium transition-colors"
+      style={
+        off
+          ? { borderColor: "var(--line)", color: "var(--ink-soft)", textDecoration: "line-through" }
+          : { borderColor: color, color, backgroundColor: `hsl(${hue} 80% 97%)` }
+      }
+    >
+      {dot && <span className="h-2 w-2 rounded-full" style={{ backgroundColor: off ? "var(--line)" : color }} />}
+      {label}
+      {count !== undefined && <span className="tabular-nums opacity-70">{count}</span>}
+    </button>
+  );
+}
+
+/** แถวคนในแถบซ้าย — ช่องติ๊ก + จุดสีประจำตัว + ตัวย่อชื่อ + ชื่อ */
+function PersonToggle({ id, name, off, onToggle }: { id: string; name: string; off: boolean; onToggle: (id: string) => void }) {
+  const hue = hueOf(id);
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(id)}
+      aria-pressed={!off}
+      className="flex w-full items-center gap-2 rounded-(--radius) px-1.5 py-1 text-left text-xs transition-colors hover:bg-(--bg-soft)"
+    >
+      <span
+        className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border text-[10px] font-bold text-white"
+        style={off ? { borderColor: "var(--line)" } : { borderColor: "var(--app)", backgroundColor: "var(--app)" }}
+        aria-hidden
+      >
+        {off ? "" : "✓"}
+      </span>
+      <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: `hsl(${hue} 60% 50%)` }} aria-hidden />
+      <span
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
+        style={{ backgroundColor: `hsl(${hue} 70% 90%)`, color: `hsl(${hue} 55% 30%)` }}
+        aria-hidden
+      >
+        {name.trim().slice(0, 2)}
+      </span>
+      <span className="truncate" style={{ color: off ? "var(--ink-soft)" : "var(--ink)" }}>
+        {name}
+      </span>
+    </button>
+  );
+}
+
 export function LeaveCalendar({
   month,
   today,
@@ -115,9 +205,57 @@ export function LeaveCalendar({
 }) {
   const [state, formAction, pending] = useActionState(submitLeaveAction, EMPTY);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
-  // "ทั้งหมด" ปนกันไว้ก่อน — วันหยุดประจำ (สิทธิ์) กับลา (ต้องอนุมัติ) เป็นคนละ
-  // เรื่องกัน คนดูปฏิทินอยากรู้บ่อย ๆ ว่า "ใครลาจริง" แยกจาก "ใครหยุดประจำ"
-  const [typeFilter, setTypeFilter] = useState<"all" | "dayoff" | "leave">("all");
+  /*
+   * ตัวกรองแบบเดียวกับปฏิทินของโมดูลรายงาน/งาน: ชิปเปิด/ปิดได้ทีละอัน เปิดอยู่ทั้งหมดเป็นค่าเริ่มต้น
+   *   "แสดง:"   = กลุ่ม — วันหยุดประจำ (ประเภทที่ไม่ต้องอนุมัติ เช่น Day-Off, Holiday) กับ ลา (ต้องอนุมัติ)
+   *   "ประเภท:" = ประเภทจริงที่ HR ตั้งไว้ทีละตัว (เดิมมีแค่สองกลุ่ม แยก Day-Off กับ Holiday ไม่ได้)
+   * เก็บเป็น "ชื่อประเภทที่ซ่อนอยู่" — ประเภทใหม่ที่ HR เพิ่มทีหลังจึงแสดงเองโดยไม่ต้องไปเปิด
+   */
+  const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
+  const [personQuery, setPersonQuery] = useState("");
+  // ประเภทของบริษัท (จากฟอร์ม) + ประเภทที่มีอยู่จริงบนปฏิทินเดือนนี้ (เผื่อประเภทที่เราเองยื่นไม่ได้)
+  const types = useMemo(() => {
+    const byName = new Map<string, { name: string; autoApprove: boolean; count: number }>();
+    // ชื่อในฟอร์มมี " (ไม่ได้ค่าจ้าง)" ต่อท้าย — ตัดออกให้ตรงกับชื่อประเภทบนรายการ
+    for (const t of leaveTypes) {
+      const name = t.label.replace(/\s*\(ไม่ได้ค่าจ้าง\)$/, "");
+      byName.set(name, { name, autoApprove: t.autoApprove, count: 0 });
+    }
+    for (const [day, list] of Object.entries(entriesByDate)) {
+      for (const e of list) {
+        const name = e.leaveTypeName ?? UNNAMED_TYPE;
+        const row = byName.get(name) ?? { name, autoApprove: e.autoApprove, count: 0 };
+        if (day.startsWith(month)) row.count += 1;
+        byName.set(name, row);
+      }
+    }
+    // ประเภทที่ไม่รู้ชื่อ ขึ้นเป็นชิปก็ต่อเมื่อมีรายการจริง
+    return [...byName.values()].filter((t) => t.name !== UNNAMED_TYPE || t.count > 0);
+  }, [leaveTypes, entriesByDate, month]);
+  const groupOff = (auto: boolean) => {
+    const names = types.filter((t) => t.autoApprove === auto).map((t) => t.name);
+    return names.length > 0 && names.every((n) => hiddenTypes.has(n));
+  };
+  function toggleType(name: string) {
+    setHiddenTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
+  function toggleGroup(auto: boolean) {
+    const names = types.filter((t) => t.autoApprove === auto).map((t) => t.name);
+    const allOff = names.every((n) => hiddenTypes.has(n));
+    setHiddenTypes((prev) => {
+      const next = new Set(prev);
+      for (const n of names) {
+        if (allOff) next.delete(n);
+        else next.add(n);
+      }
+      return next;
+    });
+  }
 
   /** วันที่กดเปิดหน้าต่างอยู่ — null = ปิดอยู่ */
   const [picked, setPicked] = useState<string | null>(null);
@@ -209,69 +347,74 @@ export function LeaveCalendar({
         </p>
       )}
 
-      <div className="flex items-center gap-1.5 text-xs">
-        <span className="text-(--ink-soft)">แสดง:</span>
-        {(
-          [
-            ["all", "ทั้งหมด"],
-            ["dayoff", "วันหยุดประจำ"],
-            ["leave", "ลา"],
-          ] as const
-        ).map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setTypeFilter(key)}
-            className="rounded-full border px-2.5 py-1 font-medium transition-colors"
-            style={
-              typeFilter === key
-                ? { borderColor: "var(--app)", backgroundColor: "var(--app-soft)", color: "var(--app)" }
-                : { borderColor: "var(--line)", color: "var(--ink-soft)" }
-            }
-          >
-            {label}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-(--ink-soft)">แสดง:</span>
+          {(
+            [
+              [true, "วันหยุดประจำ", 150],
+              [false, "ลา", 215],
+            ] as const
+          )
+            .filter(([auto]) => types.some((t) => t.autoApprove === auto))
+            .map(([auto, label, hue]) => (
+              <FilterChip key={label} label={label} hue={hue} off={groupOff(auto)} onClick={() => toggleGroup(auto)} dot />
+            ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-(--ink-soft)">ประเภท:</span>
+          {types.map((t) => (
+            <FilterChip
+              key={t.name}
+              label={t.name === UNNAMED_TYPE ? "ไม่ระบุประเภท" : t.name}
+              count={t.count}
+              hue={typeHue(t.name === UNNAMED_TYPE ? null : t.name, t.autoApprove)}
+              off={hiddenTypes.has(t.name)}
+              onClick={() => toggleType(t.name)}
+            />
+          ))}
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[200px_1fr]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[230px_minmax(0,1fr)]">
         {/* ── แถบซ้าย: ใครหยุดบ้าง เปิด/ปิดดูรายคนได้ ── */}
         <aside className="order-2 lg:order-1">
-          <p className="mb-2 text-xs font-semibold text-(--ink)">ปฏิทินของทีม</p>
-          <div className="flex flex-col gap-0.5">
-            {people.length === 0 && (
-              <p className="text-xs text-(--ink-soft)">ยังไม่มีใครลงวันหยุดเดือนนี้</p>
+          {employmentId !== null && (
+            <>
+              <p className="mb-1.5 text-xs font-semibold text-(--ink)">ปฏิทินของฉัน</p>
+              <PersonToggle id={employmentId} name={`${myName} (ฉัน)`} off={hidden.has(employmentId)} onToggle={toggle} />
+              <div className="my-3 border-t border-(--line)" />
+            </>
+          )}
+          <div className="mb-1.5 flex items-center justify-between">
+            <p className="text-xs font-semibold text-(--ink)">คนในทีม</p>
+            {people.length > 0 && (
+              <button
+                type="button"
+                className="text-[11px] font-medium text-(--app) hover:underline"
+                onClick={() => setHidden(hidden.size > 0 ? new Set() : new Set(people.map((p) => p.id)))}
+              >
+                {hidden.size > 0 ? "แสดงทั้งหมด" : "ซ่อนทั้งหมด"}
+              </button>
             )}
-            {people.map((person) => {
-              const off = hidden.has(person.id);
-              return (
-                <button
-                  key={person.id}
-                  type="button"
-                  onClick={() => toggle(person.id)}
-                  aria-pressed={!off}
-                  className="flex items-center gap-2 rounded-(--radius) px-1.5 py-1 text-left text-xs transition-colors hover:bg-(--bg-soft)"
-                >
-                  <span
-                    className="h-3 w-3 shrink-0 rounded-full border-2"
-                    style={{
-                      borderColor: `hsl(${hueOf(person.id)} 60% 50%)`,
-                      backgroundColor: off ? "transparent" : `hsl(${hueOf(person.id)} 60% 50%)`,
-                    }}
-                  />
-                  <span
-                    className="truncate"
-                    style={{
-                      color: off ? "var(--ink-soft)" : "var(--ink)",
-                      textDecoration: off ? "line-through" : "none",
-                    }}
-                  >
-                    {person.name}
-                    {person.id === employmentId ? " (คุณ)" : ""}
-                  </span>
-                </button>
-              );
-            })}
+          </div>
+          <p className="mb-2 text-[11px] leading-snug text-(--ink-soft)">ติ๊กเพื่อแสดง/ซ่อนวันหยุดและวันลาของแต่ละคนในปฏิทิน</p>
+          {people.length > 6 && (
+            <input
+              value={personQuery}
+              onChange={(e) => setPersonQuery(e.target.value)}
+              placeholder="ค้นหาชื่อ"
+              aria-label="ค้นหาชื่อ"
+              className="mb-2 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-2.5 py-1.5 text-xs outline-none focus:border-(--app) [@media(pointer:coarse)]:text-base"
+            />
+          )}
+          <div className="flex flex-col gap-0.5">
+            {people.length === 0 && <p className="text-xs text-(--ink-soft)">ยังไม่มีใครลงวันหยุดเดือนนี้</p>}
+            {people
+              .filter((p) => p.id !== employmentId && p.name.toLowerCase().includes(personQuery.trim().toLowerCase()))
+              .map((person) => (
+                <PersonToggle key={person.id} id={person.id} name={person.name} off={hidden.has(person.id)} onToggle={toggle} />
+              ))}
           </div>
         </aside>
 
@@ -295,8 +438,7 @@ export function LeaveCalendar({
                 const all = entriesByDate[cell.iso] ?? [];
                 const entries = all.filter(
                   (e) =>
-                    !hidden.has(e.employmentId) &&
-                    (typeFilter === "all" || (typeFilter === "dayoff") === e.autoApprove),
+                    !hidden.has(e.employmentId) && !hiddenTypes.has(e.leaveTypeName ?? UNNAMED_TYPE),
                 );
                 const iAmOff = all.some((e) => e.mine);
                 const isToday = cell.iso === today;
@@ -306,7 +448,7 @@ export function LeaveCalendar({
 
                 const body = (
                   <span
-                    className="flex h-full min-h-24 flex-col gap-0.5 border-b border-r border-(--line) p-1 text-left"
+                    className="flex h-full min-h-24 flex-col gap-0.5 border-b border-r border-(--line) p-1 text-left lg:min-h-[7.5rem]"
                     style={{
                       opacity: cell.inMonth ? 1 : 0.4,
                       boxShadow: heavy ? "inset 0 0 0 1.5px var(--tone-warn)" : undefined,
@@ -334,38 +476,33 @@ export function LeaveCalendar({
                       </span>
                     </span>
 
-                    {entries.slice(0, 3).map((entry, index) => {
-                      const hue = hueOf(entry.employmentId);
+                    {entries.slice(0, MAX_PER_DAY).map((entry, index) => {
+                      // สีตามประเภท (ชิปกรองด้านบนใช้สีเดียวกัน) — ใครหยุดดูจากชื่อบนรายการและรายชื่อทางซ้าย
+                      const hue = typeHue(entry.leaveTypeName, entry.autoApprove);
+                      const waiting = !entry.autoApprove && entry.status === "PENDING";
                       return (
                         <span
                           key={`${entry.employmentId}-${index}`}
                           title={`${labelOf(entry)} · ${entry.autoApprove ? "วันหยุดประจำ (สิทธิ์)" : entry.status === "APPROVED" ? "ลา · อนุมัติแล้ว" : "ลา · รออนุมัติ"}`}
-                          className="truncate rounded-sm px-1 text-[10px] leading-4"
+                          className="truncate rounded-sm px-1.5 text-[10.5px] leading-[18px]"
                           style={{
-                            // สิทธิ์ (วันหยุดประจำ) ได้กรอบเส้นประแทนเส้นทึบ — ตัดกับ
-                            // ลาจริงให้เห็นชัดว่าเป็นคนละหมวดแม้จะเห็นสีคนเดียวกัน
-                            // (ยังคงสีตามตัวคนไว้ เพราะจุดประสงค์หลักของปฏิทินนี้คือ
-                            // "ใครหยุด" ไม่ใช่แค่ "หยุดประเภทไหน")
-                            borderLeft: entry.autoApprove
-                              ? `2px dashed hsl(${hue} 60% 50%)`
-                              : `2px solid hsl(${hue} 60% 50%)`,
-                            backgroundColor: `hsl(${hue} 85% 94%)`,
-                            color: `hsl(${hue} 55% 30%)`,
-                            fontWeight: entry.mine ? 700 : 400,
+                            borderLeft: `3px solid hsl(${hue} 65% 45%)`,
+                            backgroundColor: `hsl(${hue} 80% 93%)`,
+                            color: `hsl(${hue} 60% 28%)`,
+                            fontWeight: entry.mine ? 700 : 500,
                             // รออนุมัติ = จาง + มีจุด ต่างจากอนุมัติแล้วให้เห็นชัด
-                            // (สิทธิ์อนุมัติทันทีอยู่แล้ว ไม่มีสถานะรออนุมัติ)
-                            opacity: entry.autoApprove || entry.status === "APPROVED" ? 1 : 0.65,
+                            opacity: waiting ? 0.6 : 1,
                           }}
                         >
-                          {!entry.autoApprove && entry.status === "PENDING" ? "• " : ""}
+                          {waiting ? "• " : ""}
                           {labelOf(entry)}
                         </span>
                       );
                     })}
 
-                    {entries.length > 3 && (
-                      <span className="px-1 text-[10px] text-(--ink-soft)">
-                        +{entries.length - 3} คน
+                    {entries.length > MAX_PER_DAY && (
+                      <span className="mt-0.5 self-start rounded-full bg-(--ink) px-2 text-[10px] font-semibold leading-[18px] text-(--bg)">
+                        +{entries.length - MAX_PER_DAY} รายการ
                       </span>
                     )}
                   </span>

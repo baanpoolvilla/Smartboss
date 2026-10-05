@@ -841,7 +841,9 @@ export function CalendarView() {
   }
 
   return (
-    <div className="flex flex-col gap-4 lg:gap-6">
+    // ระยะห่างระหว่างแถบกรอง / แถบรายชื่อ / ปฏิทิน แคบลง (เดิม 16–24px) — ให้ปฏิทินกินพื้นที่จอมากที่สุด
+    // ("แสดงให้เต็ม...จะได้มองวันหยุดง่าย ๆ")
+    <div className="flex flex-col gap-2 lg:gap-2.5">
       <StickyFilterBar>
         {/* ≥640px: unchanged, one wrapping row (tabs + add-calendar + create).
             <640px gets its own 2-row layout below instead — tabs alone here
@@ -1390,9 +1392,9 @@ export function CalendarView() {
         </Sheet>
       </StickyFilterBar>
 
-      <div className="flex items-start gap-5">
+      <div className="flex items-start gap-2.5">
         <CalendarRail />
-        <div className="flex-1 min-w-0 flex flex-col gap-4 lg:gap-6">
+        <div className="flex-1 min-w-0 flex flex-col gap-2.5">
           <FullCalendarView
             ref={fullCalendarRef}
             events={events}

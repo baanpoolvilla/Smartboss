@@ -63,6 +63,8 @@ export default async function HrOverviewPage({
     <HrPage
       title={TAB_TITLE[tab]}
       permission={HR_PERMS.access}
+      // ปฏิทินทีมใช้ความกว้างเต็มหน้า ("ดันพื้นที่ให้แสดงให้เต็ม") — แท็บอื่นเป็นรายการ อ่านง่ายกว่าในคอลัมน์แคบ
+      {...(tab === "calendar" ? { width: "max-w-none" } : {})}
       load={async () => {
         const tabBar = (
           <div className="mb-4 flex gap-1 border-b border-(--line)">

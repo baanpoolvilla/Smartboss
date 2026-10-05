@@ -1,6 +1,6 @@
 import { onlineUserIds } from "@/lib/realtime/server";
 import { listOrgUsersForPicker } from "@/modules/chat/data/channels";
-import { holidayToday, offTodayByUser } from "@/modules/chat/data/off-today";
+import { offTodayByUser } from "@/modules/chat/data/off-today";
 import { chatActor, chatErrorResponse } from "@/modules/chat/data/route-helpers";
 
 export const dynamic = "force-dynamic";
@@ -10,14 +10,9 @@ export async function GET() {
   try {
     const actor = await chatActor();
     const users = await listOrgUsersForPicker(actor.orgId);
-    const [online, off, holiday] = await Promise.all([
-      onlineUserIds(users.map((u) => u.id)),
-      offTodayByUser(actor.orgId),
-      holidayToday(actor.orgId),
-    ]);
+    const [online, off] = await Promise.all([onlineUserIds(users.map((u) => u.id)), offTodayByUser(actor.orgId)]);
     // off = คนที่หยุดวันนี้ + หยุดแบบไหน (ใบลา/วันหยุดที่อนุมัติแล้ว) — ป้ายปฏิทินบนรูปโปรไฟล์
-    // holiday = วันนี้เป็นวันหยุดของบริษัท (ชื่อวันหยุด) — ทุกคนที่ไม่มีใบหยุด/ลาของตัวเองขึ้นป้าย HOL
-    return Response.json({ users, onlineIds: [...online], off, holiday });
+    return Response.json({ users, onlineIds: [...online], off });
   } catch (err) {
     return chatErrorResponse(err, "users");
   }

@@ -43,7 +43,7 @@ export function fetchReactionUsage(): Promise<{ usage: Record<string, { n: numbe
   return fetch("/api/chat/reactions").then((r) => json(r));
 }
 
-export function fetchOrgUsers(): Promise<{ users: ChatUser[]; onlineIds: string[]; off?: Record<string, ChatOffToday>; holiday?: string | null }> {
+export function fetchOrgUsers(): Promise<{ users: ChatUser[]; onlineIds: string[]; off?: Record<string, ChatOffToday> }> {
   return fetch("/api/chat/users").then((r) => json(r));
 }
 

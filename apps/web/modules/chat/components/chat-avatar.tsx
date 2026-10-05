@@ -48,7 +48,7 @@ export function ChatAvatar({
  * ป้ายวันหยุดเกาะมุมขวาล่างของรูปโปรไฟล์ — คนนี้หยุดวันนี้ (ใบลา/วันหยุดที่อนุมัติแล้ว, ดู data/off-today.ts)
  * เป็นรูปปฏิทินตั้งโต๊ะเล็ก ๆ ("มีสัญลักษณ์นี้ติดไว้ ก็ดีนะ รู้เลยวันนี้วันหยุด") หยุดเหมือนกันแต่คนละแบบ
  * จึงต่างกันที่สีหัวปฏิทินกับคำ: วันหยุดประจำ (Day-Off) = แดง "OFF" · วันลา (ป่วย/กิจ/พักร้อน/ไม่รับค่าจ้าง) = ส้ม "ลา"
- * · Holiday (วันหยุดของเดือนที่ HR ตั้งในปฏิทินวันหยุด) = น้ำเงิน "HOL"
+ * · Holiday (ประเภท Holiday ในปฏิทินทีม — HR ตั้งโควตาเป็นรายเดือน) = น้ำเงิน "HOL"
  * วางในกรอบ `relative` เดียวกับรูปโปรไฟล์ อ่านค่าจาก store เอง ที่เรียกใช้ส่งแค่ userId
  */
 const OFF_STYLE = {
@@ -58,10 +58,7 @@ const OFF_STYLE = {
 } as const;
 
 export function OffBadge({ userId }: { userId: string | undefined }) {
-  const own = useChatStore((s) => (userId ? s.offIds[userId] : undefined));
-  const holiday = useChatStore((s) => s.holidayToday);
-  // ใบหยุด/ลาของตัวเองมาก่อน · ไม่มี แต่วันนี้เป็นวันหยุดของบริษัท = Holiday
-  const off = own ?? (userId && holiday ? ({ kind: "holiday", name: holiday } as const) : undefined);
+  const off = useChatStore((s) => (userId ? s.offIds[userId] : undefined));
   if (!off) return null;
   const style = OFF_STYLE[off.kind] ?? OFF_STYLE.off;
   const label = `หยุดวันนี้ · ${off.name || style.hint}`;
