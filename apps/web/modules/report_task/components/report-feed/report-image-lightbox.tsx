@@ -326,15 +326,15 @@ export function ReportImageLightbox({
             attachment lightbox, which has no "post" concept). */}
         {author && (
           <div
-            className={`absolute left-4 z-10 flex max-w-[calc(100%-2rem)] items-center gap-2.5 rounded-2xl bg-black/65 ring-1 ring-white/25 py-1.5 pl-1.5 pr-3.5 backdrop-blur-sm ${hasMultiple ? "bottom-[5.25rem]" : "bottom-[max(1rem,env(safe-area-inset-bottom))]"} transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none`}
+            className={`absolute left-4 top-[max(1rem,env(safe-area-inset-top))] z-10 flex min-h-11 max-w-[calc(100%-12.5rem)] items-center gap-2.5 rounded-2xl bg-black/65 ring-1 ring-white/25 py-1.5 pl-1.5 pr-3.5 backdrop-blur-sm sm:max-w-[min(26rem,calc(100%-27rem))] transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none`}
             onClick={(e) => e.stopPropagation()}
           >
-            <Avatar className="h-10 w-10 shrink-0">
+            <Avatar className="h-8 w-8 shrink-0">
               <AvatarImage src={author.avatarUrl ?? undefined} alt={author.name} />
               <AvatarFallback className="text-xs bg-[var(--accent)] text-[var(--brand-green-dark)]">{author.avatar}</AvatarFallback>
             </Avatar>
-            <div className="flex flex-col items-start leading-tight">
-              <span className="truncate text-[15px] font-semibold text-white">{author.name}</span>
+            <div className="flex min-w-0 flex-col items-start leading-tight">
+              <span className="max-w-full truncate text-sm font-semibold text-white">{author.name}</span>
               <span className="text-xs text-white/65" title={meta ? formatDateTimeFull(meta.at) : undefined}>
                 {meta ? formatDateTimeShort(meta.at) : ""}
               </span>

@@ -51,7 +51,7 @@ interface OvertimeRow {
 type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
 /** อ่านโดยตั้ง tenant context ให้ RLS บังคับตามปกติ */
-async function withWorkforceTenant<T>(
+export async function withWorkforceTenant<T>(
   orgId: string,
   run: (tx: PrismaTx) => Promise<T>
 ): Promise<T> {

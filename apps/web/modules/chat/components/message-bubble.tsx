@@ -11,7 +11,7 @@ import { StickerImage } from "@/components/sticker-panel";
 import { sortReactionEmojis, useChatStore, type RoomMessage } from "../store/chat-store";
 import { CHAT_REACTION_EMOJIS, type ChatAttachment, type ChatUser } from "../types";
 import { attachmentLabel, firstName, formatClock, formatDuration, formatFileSize } from "../lib/format";
-import { ChatAvatar } from "./chat-avatar";
+import { ChatAvatar, OffBadge } from "./chat-avatar";
 import { downloadUrl } from "./lightbox";
 import { daysUntilExpiry } from "../lib/retention";
 import { NoteCard } from "./notes";
@@ -583,8 +583,9 @@ export const MessageBubble = memo(function MessageBubble(props: MessageBubblePro
       className={cn("chat-row group flex gap-2 px-3", firstInGroup ? "pt-2.5" : "pt-0.5", mine && "flex-row-reverse", highlighted && "chat-flash")}
     >
       {!mine && (
-        <div className="w-9 shrink-0">
+        <div className="relative w-9 shrink-0">
           {firstInGroup && <ChatAvatar name={author?.name ?? "?"} src={author?.avatarUrl} colorKey={m.authorId} className="h-9 w-9" />}
+          {firstInGroup && <OffBadge userId={m.authorId} />}
         </div>
       )}
 

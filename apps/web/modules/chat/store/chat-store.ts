@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import type { ChatChannelDetail, ChatChannelSummary, ChatMessageDTO, ChatNotePreview, ChatReactionDTO, ChatUser } from "../types";
+import type { ChatChannelDetail, ChatChannelSummary, ChatMessageDTO, ChatNotePreview, ChatOffToday, ChatReactionDTO, ChatUser } from "../types";
 
 /** ข้อความบนจอ — ข้อความที่เรากำลังส่งมี status (id = "local-<clientId>", seq = "") */
 export type RoomMessage = ChatMessageDTO & { status?: "sending" | "failed" };
@@ -52,6 +52,10 @@ interface ChatState {
   channelsLoaded: boolean;
   users: Record<string, ChatUser>;
   onlineIds: Record<string, true>;
+  /** คนที่หยุดวันนี้ + หยุดแบบไหน (ใบลา/วันหยุดที่อนุมัติแล้ว) — ป้ายปฏิทินบนรูปโปรไฟล์ */
+  offIds: Record<string, ChatOffToday>;
+  /** วันนี้เป็นวันหยุดในปฏิทินวันหยุดของบริษัท (ชื่อวันหยุด) — null = วันทำงานปกติ */
+  holidayToday: string | null;
   rooms: Record<string, RoomState>;
   details: Record<string, ChatChannelDetail>;
   activeChannelId: string | null;
@@ -67,7 +71,7 @@ interface ChatState {
   bumpReaction: (emoji: string, delta: 1 | -1) => void;
   setMe: (id: string) => void;
   setChannels: (channels: ChatChannelSummary[]) => void;
-  setUsers: (users: ChatUser[], onlineIds: string[]) => void;
+  setUsers: (users: ChatUser[], onlineIds: string[], off?: Record<string, ChatOffToday>, holiday?: string | null) => void;
   setActive: (id: string | null) => void;
   setRoom: (channelId: string, messages: ChatMessageDTO[], hasMore: boolean, detached?: boolean) => void;
   prependOlder: (channelId: string, messages: ChatMessageDTO[], hasMore: boolean) => void;
@@ -95,6 +99,8 @@ export const useChatStore = create<ChatState>((set) => ({
   channelsLoaded: false,
   users: {},
   onlineIds: {},
+  offIds: {},
+  holidayToday: null,
   rooms: {},
   details: {},
   activeChannelId: null,
@@ -111,10 +117,12 @@ export const useChatStore = create<ChatState>((set) => ({
     }),
   setMe: (id) => set({ meId: id }),
   setChannels: (channels) => set({ channels: sortChannels(channels), channelsLoaded: true }),
-  setUsers: (users, onlineIds) =>
+  setUsers: (users, onlineIds, off = {}, holiday = null) =>
     set({
       users: Object.fromEntries(users.map((u) => [u.id, u])),
       onlineIds: Object.fromEntries(onlineIds.map((id) => [id, true as const])),
+      offIds: off,
+      holidayToday: holiday,
     }),
   setActive: (id) => set({ activeChannelId: id }),
 

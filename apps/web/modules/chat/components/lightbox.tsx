@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { BookImage, ChevronLeft, ChevronRight, Download, Loader2, MoreHorizontal, Pencil, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { BookImage, ChevronLeft, ChevronRight, Download, Loader2, Minus, MoreHorizontal, Pencil, Play, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { fileForEditing, openAnnotator } from "@/lib/annotate/annotate";
 import type { ChatAttachment } from "../types";
@@ -10,6 +10,7 @@ import { useBackToClose } from "@/lib/back-to-close";
 import { useBlackSystemBars } from "@/lib/black-system-bars";
 import { ChatAvatar } from "./chat-avatar";
 import { slideStyle, useSwipePager } from "@/lib/swipe-pager";
+import { MAX_ZOOM, MIN_ZOOM, useImageZoom } from "@/lib/use-image-zoom";
 
 /** รูปในหน้าดูเต็มจอ — messageId มีเมื่อเปิดจากแชท (ใช้ตอนบันทึกลงอัลบั้ม) */
 export type LightboxItem = ChatAttachment & { messageId?: string };
@@ -60,6 +61,8 @@ export function Lightbox({
   // มือถือ: แตะรูป = ซ่อน/โชว์ปุ่ม แบบแอปรูป/Discord (ปิดด้วย ✕, ปุ่มย้อนกลับ หรือปัดขึ้น/ลง)
   const [chromeHidden, setChromeHidden] = useState(false);
   // ปัดซ้าย/ขวา — รูปเลื่อนตามนิ้ว/เมาส์ รูปข้าง ๆ โหลดรอไว้ (ดู lib/swipe-pager.ts)
+  // ซูม: ล้อเมาส์ · ดับเบิลคลิก/แตะสองครั้ง · ถ่างสองนิ้ว · ปุ่ม +/- (คอม) — เหมือนตัวดูรูปของรายงาน
+  const zoom = useImageZoom();
   const {
     viewportRef,
     onPointerDown: swipeDown,
@@ -71,7 +74,18 @@ export function Lightbox({
     trackStyle,
     slides,
     go,
-  } = useSwipePager({ count: items.length, index: i, onIndexChange: setI, onSwipeDismiss: onClose, dismissBackdrop: rootEl });
+  } = useSwipePager({ count: items.length, index: i, onIndexChange: setI, enabled: !zoom.zoomed, onSwipeDismiss: onClose, dismissBackdrop: rootEl });
+  // เปลี่ยนรูป = กลับ 1x (ปรับ state ระหว่าง render ตามแนวทางของ React สำหรับการรีเซ็ตเมื่อค่าเปลี่ยน)
+  const [zoomIndex, setZoomIndex] = useState(i);
+  if (zoomIndex !== i) {
+    setZoomIndex(i);
+    zoom.reset();
+  }
+  // รูปย่อของรูปที่เปิดอยู่เลื่อนมาอยู่ในแถบเสมอ (ชุดที่รูปเยอะจนแถบเลื่อนได้)
+  const activeThumbRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    activeThumbRef.current?.scrollIntoView({ block: "nearest", inline: "center" });
+  }, [i]);
   const [editing, setEditing] = useState(false);
   /** มือถือ: เมนู "⋯" มุมขวาบน (รวมปุ่มที่บนคอมเรียงเต็มแถว) */
   const [moreOpen, setMoreOpen] = useState(false);
@@ -119,37 +133,64 @@ export function Lightbox({
       aria-modal="true"
       aria-label="ดูรูปภาพ"
     >
-      {/* แถบบน: ลำดับรูปซ้าย · ปุ่มอื่น ๆ ขวา · ✕ ขวาสุด (ที่เดียวกันทุกหน้าดูรูป) — ปุ่มพื้นเข้มมุมมน ลอยทับรูป
-          (อ่านออกทั้งบนรูปสว่าง/มืด) */}
+      {/* หน้าตาเดียวกันทุกตัวดูรูป (แชท/ซ่อมบำรุง = ไฟล์นี้, รายงาน/งาน = report-image-lightbox.tsx):
+          ซ้ายบน = ใครส่ง เมื่อไร · ขวาบน = ปุ่ม (✕ ขวาสุด) · ล่างกลาง = ลำดับ + รูปย่อ — ทุกอย่างลอยทับรูป
+          บนพื้นเข้มมีเส้นขอบ อ่านออกทั้งบนรูปสว่าง/มืด · มือถือแตะรูปเพื่อซ่อน/โชว์ทั้งหมด */}
       <div
-        className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] [&>*]:pointer-events-auto group-data-[chrome-hidden]:[&>*]:pointer-events-none transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none"
+        className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] [&>*]:pointer-events-auto group-data-[chrome-hidden]:[&>*]:pointer-events-none transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none"
       >
-        {items.length > 1 && (
-          <span className="rounded-full bg-black/65 ring-1 ring-white/25 px-2.5 py-1 text-xs tabular-nums backdrop-blur-sm">
-            {i + 1} / {items.length}
-          </span>
+        {(info || item.expiresAt) && (
+          <div className="flex min-w-0 max-w-[26rem] shrink items-center gap-2.5 rounded-2xl bg-black/65 py-1.5 pl-1.5 pr-3.5 ring-1 ring-white/25 backdrop-blur-sm">
+            {info && <ChatAvatar name={info.name} src={info.avatarUrl} colorKey={info.colorKey} className="h-8 w-8 shrink-0" />}
+            <div className="min-w-0 leading-tight">
+              {info && (
+                <p className="truncate text-sm font-semibold">
+                  {info.name} <span className="text-xs font-normal text-white/65">{info.when}</span>
+                </p>
+              )}
+              {info?.text && <p className="truncate text-xs text-white/85">{info.text}</p>}
+              {item.expiresAt && (
+                <p className="truncate text-[11px] text-white/60">
+                  {daysUntilExpiry(item.expiresAt) === 0 ? "หมดอายุวันนี้" : `หมดอายุใน ${daysUntilExpiry(item.expiresAt)} วัน`}
+                </p>
+              )}
+            </div>
+          </div>
         )}
         <span className="ml-auto" />
-        {/* คอม: ปุ่มเรียงเต็มแถว · มือถือ: ดินสอ · "⋯" · ✕ แบบ Discord */}
-        <div className="hidden items-center gap-2 sm:flex">
-        {onSaveToAlbum && (
-          <button type="button" onClick={() => onSaveToAlbum(item)} className="flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-2xl bg-black/65 ring-1 ring-white/25 px-2.5 text-sm text-white backdrop-blur-sm hover:bg-black/75 disabled:opacity-50" title="บันทึกลงอัลบั้ม — ไม่หมดอายุ" aria-label="บันทึกลงอัลบั้ม">
-            <BookImage className="h-5 w-5" /> <span className="hidden sm:inline">บันทึกลงอัลบั้ม</span>
-          </button>
-        )}
-        <a href={downloadUrl(item)} className="flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-2xl bg-black/65 ring-1 ring-white/25 px-2.5 text-sm text-white backdrop-blur-sm hover:bg-black/75 disabled:opacity-50" aria-label="ดาวน์โหลด" title="ดาวน์โหลด">
-          <Download className="h-5 w-5" />
-        </a>
+        {/* กลุ่มปุ่มไม่หด — จอแคบให้ป้ายชื่อทางซ้ายเป็นฝ่ายตัดข้อความ (…) แทน ปุ่มกับป้ายจึงไม่ทับกัน */}
+        {/* คอม: ปุ่มเรียงเต็มแถว · มือถือ: ดินสอ · "⋯" · ✕ แบบ Discord (ซูมด้วยการถ่างนิ้ว) */}
+        <div className="hidden shrink-0 items-center gap-2 sm:flex">
+          {item.kind === "image" && (
+            <div className="flex items-center gap-0.5 rounded-full bg-black/65 p-0.5 ring-1 ring-white/25 backdrop-blur-sm">
+              <button type="button" onClick={() => zoom.zoomBy(-0.75)} disabled={zoom.scale <= MIN_ZOOM} className="flex h-9 w-9 items-center justify-center rounded-full text-white hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-transparent" aria-label="ย่อรูป">
+                <Minus className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={zoom.reset} title="พอดีจอ" className="w-11 select-none text-center text-xs tabular-nums text-white/80">
+                {Math.round(zoom.scale * 100)}%
+              </button>
+              <button type="button" onClick={() => zoom.zoomBy(0.75)} disabled={zoom.scale >= MAX_ZOOM} className="flex h-9 w-9 items-center justify-center rounded-full text-white hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-transparent" aria-label="ขยายรูป">
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+          {onSaveToAlbum && (
+            <button type="button" onClick={() => onSaveToAlbum(item)} className="flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-2xl bg-black/65 px-2.5 text-sm text-white ring-1 ring-white/25 backdrop-blur-sm hover:bg-black/75 disabled:opacity-50" title="บันทึกลงอัลบั้ม — ไม่หมดอายุ" aria-label="บันทึกลงอัลบั้ม">
+              <BookImage className="h-5 w-5" />
+            </button>
+          )}
+          <a href={downloadUrl(item)} className="flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-2xl bg-black/65 px-2.5 text-sm text-white ring-1 ring-white/25 backdrop-blur-sm hover:bg-black/75 disabled:opacity-50" aria-label="ดาวน์โหลด" title="ดาวน์โหลด">
+            <Download className="h-5 w-5" />
+          </a>
         </div>
         {/* ดินสอแสดงตลอดทั้งคอมและมือถือ — แก้รูปง่าย ๆ เป็นงานที่ใช้บ่อย ไม่ซ่อนใน "⋯" */}
         {onEditImage && item.kind === "image" && (
-          <button type="button" onClick={() => void editImage()} disabled={editing} className="flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-2xl bg-black/65 ring-1 ring-white/25 px-2.5 text-sm text-white backdrop-blur-sm hover:bg-black/75 disabled:opacity-50" title="วาด/เขียนบนรูปนี้ แล้วแนบส่ง" aria-label="วาดบนรูป">
+          <button type="button" onClick={() => void editImage()} disabled={editing} className="flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-2xl bg-black/65 px-2.5 text-sm text-white ring-1 ring-white/25 backdrop-blur-sm hover:bg-black/75 disabled:opacity-50" title="วาด/เขียนบนรูปนี้ แล้วแนบส่ง" aria-label="วาดบนรูป">
             {editing ? <Loader2 className="h-5 w-5 animate-spin" /> : <Pencil className="h-5 w-5" />}
-            <span className="hidden sm:inline">วาด</span>
           </button>
         )}
-        <div className="relative sm:hidden">
-          <button type="button" onClick={() => setMoreOpen((v) => !v)} className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-2xl bg-black/65 text-white ring-1 ring-white/25 backdrop-blur-sm hover:bg-black/75" aria-label="ตัวเลือกเพิ่มเติม" aria-expanded={moreOpen}>
+        <div className="relative shrink-0 sm:hidden">
+          <button type="button" onClick={() => setMoreOpen((v) => !v)} className="flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-2xl bg-black/65 px-2.5 text-sm text-white ring-1 ring-white/25 backdrop-blur-sm hover:bg-black/75 disabled:opacity-50" aria-label="ตัวเลือกเพิ่มเติม" aria-expanded={moreOpen}>
             <MoreHorizontal className="h-6 w-6" />
           </button>
           {moreOpen && (
@@ -173,32 +214,38 @@ export function Lightbox({
             </div>
           )}
         </div>
-        <button type="button" onClick={onClose} className="flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-2xl bg-black/65 ring-1 ring-white/25 px-2.5 text-sm text-white backdrop-blur-sm hover:bg-black/75 disabled:opacity-50" aria-label="ปิด">
+        <button type="button" onClick={onClose} className="flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-2xl bg-black/65 px-2.5 text-sm text-white ring-1 ring-white/25 backdrop-blur-sm hover:bg-black/75 disabled:opacity-50" aria-label="ปิด">
           <X className="h-6 w-6" />
         </button>
       </div>
 
-      {/* แถบล่างแบบ Discord: ใครส่ง · เมื่อไร · ข้อความที่ส่งมากับรูป — ไล่เงาดำให้อ่านออกบนรูป */}
-      {(info || item.expiresAt) && (
+      {/* ล่างกลาง: ลำดับ + รูปย่อ กดข้ามไปรูปไหนก็ได้ (เดิมมีแค่ตัวเลข 2 / 5 ที่มุมบน) */}
+      {items.length > 1 && (
         <div
-          className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/85 via-black/55 to-transparent px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-12 transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none"
+          className="absolute bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-10 flex max-w-[92vw] -translate-x-1/2 items-center gap-2.5 rounded-2xl bg-black/65 px-2.5 py-1 ring-1 ring-white/25 backdrop-blur-sm transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none"
+          onClick={(e) => e.stopPropagation()}
         >
-          <div className="mx-auto flex max-w-3xl items-start gap-3">
-            {info && <ChatAvatar name={info.name} src={info.avatarUrl} colorKey={info.colorKey} className="h-10 w-10 shrink-0" />}
-            <div className="min-w-0 flex-1">
-              {info && (
-                <p className="flex flex-wrap items-baseline gap-x-2 text-[15px] font-semibold leading-tight">
-                  <span className="truncate">{info.name}</span>
-                  <span className="text-xs font-normal text-white/65">{info.when}</span>
-                </p>
-              )}
-              {info?.text && <p className="mt-0.5 line-clamp-3 whitespace-pre-wrap break-words text-[15px] leading-snug text-white/90">{info.text}</p>}
-              {item.expiresAt && (
-                <p className="mt-1 text-xs text-white/60">
-                  {daysUntilExpiry(item.expiresAt) === 0 ? "หมดอายุวันนี้" : `หมดอายุใน ${daysUntilExpiry(item.expiresAt)} วัน`}
-                </p>
-              )}
-            </div>
+          <span className="shrink-0 text-xs tabular-nums text-white">
+            {i + 1} / {items.length}
+          </span>
+          <div className="flex max-w-[70vw] items-center gap-1.5 overflow-x-auto px-0.5 py-1 [scrollbar-width:none] sm:max-w-[60vw]">
+            {items.map((it, k) => (
+              <button
+                key={`${it.url}-${k}`}
+                ref={k === i ? activeThumbRef : undefined}
+                type="button"
+                onClick={() => setI(k)}
+                className={`relative h-11 w-11 shrink-0 overflow-hidden rounded-md bg-white/10 transition-opacity ${k === i ? "ring-2 ring-white" : "opacity-50 hover:opacity-80"}`}
+                aria-label={`ไปที่รูปที่ ${k + 1}`}
+              >
+                {it.kind === "video" && !it.thumbUrl ? (
+                  <Play className="absolute inset-0 m-auto h-4 w-4 text-white" fill="currentColor" />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={it.thumbUrl ?? it.url} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+                )}
+              </button>
+            ))}
           </div>
         </div>
       )}
@@ -212,7 +259,7 @@ export function Lightbox({
         onClickCapture={swipeClickCapture}
         onWheel={swipeWheel}
         className="relative min-h-0 flex-1 select-none overflow-hidden"
-        style={{ touchAction: "none", cursor: items.length > 1 ? "grab" : undefined }}
+        style={{ touchAction: "none", cursor: items.length > 1 && !zoom.zoomed ? "grab" : undefined }}
       >
         <div ref={trackRef} className="absolute inset-0" style={trackStyle}>
           {slides.map((sl) => {
@@ -245,8 +292,15 @@ export function Lightbox({
                     alt={it.name}
                     draggable={false}
                     decoding="async"
-                    className="max-h-full max-w-full object-contain [@media(pointer:coarse)]:h-full [@media(pointer:coarse)]:w-full"
-                    style={it.thumbUrl ? { backgroundImage: `url(${it.thumbUrl})`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center" } : undefined}
+                    // ซูม/ลากเลื่อนเฉพาะรูปที่เปิดอยู่ — รูปข้าง ๆ เป็นแค่ตัวรอ
+                    {...(sl.rel === 0 ? zoom.imageProps : {})}
+                    className={`max-h-full max-w-full select-none object-contain [@media(pointer:coarse)]:h-full [@media(pointer:coarse)]:w-full ${
+                      sl.rel === 0 && zoom.zoomed ? (zoom.panning ? "cursor-grabbing" : "cursor-zoom-out") : ""
+                    }`}
+                    style={{
+                      ...(sl.rel === 0 ? zoom.imageProps.style : {}),
+                      ...(it.thumbUrl ? { backgroundImage: `url(${it.thumbUrl})`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center" } : {}),
+                    }}
                   />
                 )}
               </div>

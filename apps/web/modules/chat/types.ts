@@ -187,6 +187,12 @@ export interface ChatChannelDetail {
   canManage: boolean;
 }
 
+/** หยุดวันนี้แบบไหน (data/off-today.ts) — name = ชื่อประเภทจากโมดูลบุคคล ใช้เป็นคำอธิบายตอนชี้ */
+export interface ChatOffToday {
+  kind: "off" | "holiday" | "leave";
+  name: string;
+}
+
 export interface ChatUser {
   id: string;
   name: string;

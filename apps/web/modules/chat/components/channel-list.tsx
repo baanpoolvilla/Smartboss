@@ -9,7 +9,7 @@ import { useChatStore } from "../store/chat-store";
 import type { ChatChannelSummary, ChatUser } from "../types";
 import { channelPreview, channelTitle, formatListTime } from "../lib/format";
 import { updateChannel } from "../lib/api";
-import { ChatAvatar } from "./chat-avatar";
+import { ChatAvatar, OffBadge } from "./chat-avatar";
 import { PushBanner } from "./push-banner";
 import { ChatSettings } from "./chat-settings";
 
@@ -38,13 +38,17 @@ export function ChannelAvatar({
   online?: boolean;
   size?: string;
 }) {
+  // คนที่หยุดวันนี้: ป้าย OFF อยู่ตำแหน่งเดียวกับจุดเขียว — ขึ้นป้ายแทน ไม่ซ้อนกัน
+  const dmOtherId = channel.type === "dm" ? (channel.memberIds.find((id) => id !== meId) ?? channel.id) : "";
+  const off = useChatStore((s) => Boolean(dmOtherId && (s.offIds[dmOtherId] || s.holidayToday)));
   if (channel.type === "dm") {
-    const otherId = channel.memberIds.find((id) => id !== meId) ?? channel.id;
+    const otherId = dmOtherId;
     const other = users[otherId];
     return (
       <div className="relative shrink-0">
         <ChatAvatar name={other?.name ?? "?"} src={other?.avatarUrl} colorKey={otherId} className={size} />
-        {online && <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-(--bg) bg-[#22c55e]" aria-label="ออนไลน์" />}
+        {online && !off && <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-(--bg) bg-[#22c55e]" aria-label="ออนไลน์" />}
+        <OffBadge userId={otherId} />
       </div>
     );
   }
@@ -169,6 +173,8 @@ export function ChannelList({ onSelect, onStartNew }: { onSelect: (id: string) =
   const activeChannelId = useChatStore((s) => s.activeChannelId);
   const users = useChatStore((s) => s.users);
   const onlineIds = useChatStore((s) => s.onlineIds);
+  const offIds = useChatStore((s) => s.offIds);
+  const holidayToday = useChatStore((s) => s.holidayToday);
   const meId = useChatStore((s) => s.meId);
   const [tab, setTab] = useState<Tab>("all");
   const [query, setQuery] = useState("");
@@ -300,7 +306,8 @@ export function ChannelList({ onSelect, onStartNew }: { onSelect: (id: string) =
               >
                 <div className="relative">
                   <ChatAvatar name={u.name} src={u.avatarUrl} colorKey={u.id} className="h-10 w-10" />
-                  {onlineIds[u.id] && <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-(--bg) bg-[#22c55e]" />}
+                  {onlineIds[u.id] && !offIds[u.id] && !holidayToday && <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-(--bg) bg-[#22c55e]" />}
+                  <OffBadge userId={u.id} />
                 </div>
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-(--ink)">{u.name}</p>
