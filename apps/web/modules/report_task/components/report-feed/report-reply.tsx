@@ -363,7 +363,7 @@ export function ReportReply({
                   <button
                     key={emoji}
                     onClick={() => onToggleReaction(emoji)}
-                    className={cn(REACTION_CHIP_CLASS, viewerId && users.includes(viewerId) ? "bg-[var(--accent)] text-[var(--brand-green-dark)]" : "bg-[var(--bg)] text-[var(--ink-soft)]")}
+                    className={cn(REACTION_CHIP_CLASS, viewerId && users.includes(viewerId) ? "bg-[var(--accent)] text-[var(--brand-green-dark)] ring-1 ring-[var(--brand-green)]/40" : "bg-[var(--bg-soft)] text-[var(--ink-soft)] ring-1 ring-[var(--line)]")}
                   >
                     <span className="text-[20px] leading-none">{emoji}</span>
                     {users.length > 1 && <span className="tabular-nums">{users.length}</span>}

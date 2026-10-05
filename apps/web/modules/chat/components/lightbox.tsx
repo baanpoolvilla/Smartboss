@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BookImage, ChevronLeft, ChevronRight, Download, Loader2, Pencil, X } from "lucide-react";
+import { BookImage, ChevronLeft, ChevronRight, Download, Loader2, MoreHorizontal, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 import { fileForEditing, openAnnotator } from "@/lib/annotate/annotate";
 import type { ChatAttachment } from "../types";
@@ -73,6 +73,8 @@ export function Lightbox({
     go,
   } = useSwipePager({ count: items.length, index: i, onIndexChange: setI, onSwipeDismiss: onClose, dismissBackdrop: rootEl });
   const [editing, setEditing] = useState(false);
+  /** มือถือ: เมนู "⋯" มุมขวาบน (รวมปุ่มที่บนคอมเรียงเต็มแถว) */
+  const [moreOpen, setMoreOpen] = useState(false);
   async function editImage() {
     if (!item || !onEditImage) return;
     setEditing(true);
@@ -123,26 +125,55 @@ export function Lightbox({
         className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] [&>*]:pointer-events-auto group-data-[chrome-hidden]:[&>*]:pointer-events-none transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none"
       >
         {items.length > 1 && (
-          <span className="rounded-full bg-black/55 px-2.5 py-1 text-xs tabular-nums backdrop-blur-sm">
+          <span className="rounded-full bg-black/65 ring-1 ring-white/25 px-2.5 py-1 text-xs tabular-nums backdrop-blur-sm">
             {i + 1} / {items.length}
           </span>
         )}
         <span className="ml-auto" />
+        {/* คอม: ปุ่มเรียงเต็มแถว · มือถือ: ดินสอ · "⋯" · ✕ แบบ Discord */}
+        <div className="hidden items-center gap-2 sm:flex">
         {onSaveToAlbum && (
-          <button type="button" onClick={() => onSaveToAlbum(item)} className="flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-2xl bg-black/55 px-2.5 text-sm text-white backdrop-blur-sm hover:bg-black/75 disabled:opacity-50" title="บันทึกลงอัลบั้ม — ไม่หมดอายุ" aria-label="บันทึกลงอัลบั้ม">
+          <button type="button" onClick={() => onSaveToAlbum(item)} className="flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-2xl bg-black/65 ring-1 ring-white/25 px-2.5 text-sm text-white backdrop-blur-sm hover:bg-black/75 disabled:opacity-50" title="บันทึกลงอัลบั้ม — ไม่หมดอายุ" aria-label="บันทึกลงอัลบั้ม">
             <BookImage className="h-5 w-5" /> <span className="hidden sm:inline">บันทึกลงอัลบั้ม</span>
           </button>
         )}
+        <a href={downloadUrl(item)} className="flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-2xl bg-black/65 ring-1 ring-white/25 px-2.5 text-sm text-white backdrop-blur-sm hover:bg-black/75 disabled:opacity-50" aria-label="ดาวน์โหลด" title="ดาวน์โหลด">
+          <Download className="h-5 w-5" />
+        </a>
+        </div>
+        {/* ดินสอแสดงตลอดทั้งคอมและมือถือ — แก้รูปง่าย ๆ เป็นงานที่ใช้บ่อย ไม่ซ่อนใน "⋯" */}
         {onEditImage && item.kind === "image" && (
-          <button type="button" onClick={() => void editImage()} disabled={editing} className="flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-2xl bg-black/55 px-2.5 text-sm text-white backdrop-blur-sm hover:bg-black/75 disabled:opacity-50" title="วาด/เขียนบนรูปนี้ แล้วแนบส่ง" aria-label="วาดบนรูป">
+          <button type="button" onClick={() => void editImage()} disabled={editing} className="flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-2xl bg-black/65 ring-1 ring-white/25 px-2.5 text-sm text-white backdrop-blur-sm hover:bg-black/75 disabled:opacity-50" title="วาด/เขียนบนรูปนี้ แล้วแนบส่ง" aria-label="วาดบนรูป">
             {editing ? <Loader2 className="h-5 w-5 animate-spin" /> : <Pencil className="h-5 w-5" />}
             <span className="hidden sm:inline">วาด</span>
           </button>
         )}
-        <a href={downloadUrl(item)} className="flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-2xl bg-black/55 px-2.5 text-sm text-white backdrop-blur-sm hover:bg-black/75 disabled:opacity-50" aria-label="ดาวน์โหลด" title="ดาวน์โหลด">
-          <Download className="h-5 w-5" />
-        </a>
-        <button type="button" onClick={onClose} className="flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-2xl bg-black/55 px-2.5 text-sm text-white backdrop-blur-sm hover:bg-black/75 disabled:opacity-50" aria-label="ปิด">
+        <div className="relative sm:hidden">
+          <button type="button" onClick={() => setMoreOpen((v) => !v)} className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-2xl bg-black/65 text-white ring-1 ring-white/25 backdrop-blur-sm hover:bg-black/75" aria-label="ตัวเลือกเพิ่มเติม" aria-expanded={moreOpen}>
+            <MoreHorizontal className="h-6 w-6" />
+          </button>
+          {moreOpen && (
+            <div role="menu" className="absolute right-0 top-full z-20 mt-2 w-60 overflow-hidden rounded-2xl bg-neutral-900/95 py-1 text-white shadow-xl ring-1 ring-white/15 backdrop-blur">
+              {onSaveToAlbum && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-center gap-3 px-4 py-3 text-left text-[15px] active:bg-white/10 disabled:opacity-50"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    onSaveToAlbum(item);
+                  }}
+                >
+                  <BookImage className="h-5 w-5 shrink-0" /> บันทึกลงอัลบั้ม
+                </button>
+              )}
+              <a role="menuitem" href={downloadUrl(item)} className="flex w-full items-center gap-3 px-4 py-3 text-left text-[15px] active:bg-white/10 disabled:opacity-50" onClick={() => setMoreOpen(false)}>
+                <Download className="h-5 w-5 shrink-0" /> ดาวน์โหลด
+              </a>
+            </div>
+          )}
+        </div>
+        <button type="button" onClick={onClose} className="flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-2xl bg-black/65 ring-1 ring-white/25 px-2.5 text-sm text-white backdrop-blur-sm hover:bg-black/75 disabled:opacity-50" aria-label="ปิด">
           <X className="h-6 w-6" />
         </button>
       </div>
@@ -229,7 +260,7 @@ export function Lightbox({
               e.stopPropagation();
               go(-1);
             }}
-            className="absolute left-2 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 sm:flex transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none"
+            className="absolute left-2 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/65 text-white ring-1 ring-white/25 backdrop-blur-sm hover:bg-black/75 sm:flex transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none"
             aria-label="รูปก่อนหน้า"
           >
             <ChevronLeft className="h-6 w-6" />
@@ -242,7 +273,7 @@ export function Lightbox({
               e.stopPropagation();
               go(1);
             }}
-            className="absolute right-2 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 sm:flex transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none"
+            className="absolute right-2 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/65 text-white ring-1 ring-white/25 backdrop-blur-sm hover:bg-black/75 sm:flex transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none"
             aria-label="รูปถัดไป"
           >
             <ChevronRight className="h-6 w-6" />

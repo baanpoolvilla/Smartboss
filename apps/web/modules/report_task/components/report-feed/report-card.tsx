@@ -1561,7 +1561,7 @@ export function ReportCard({
                   // หน้าตาเดียวกับป้ายรีแอคชันของแชท (REACTION_CHIP_CLASS) — ตัวป้ายแบ่งสองซีก จึงย้าย padding ไปไว้ที่ปุ่มข้างใน
                   REACTION_CHIP_CLASS,
                   "items-stretch gap-0 overflow-hidden px-0",
-                  active ? "bg-[var(--accent)] text-[var(--brand-green-dark)]" : "bg-[var(--bg)] text-[var(--ink-soft)]"
+                  active ? "bg-[var(--accent)] text-[var(--brand-green-dark)] ring-1 ring-[var(--brand-green)]/40" : "bg-[var(--bg-soft)] text-[var(--ink-soft)] ring-1 ring-[var(--line)]"
                 )}
               >
                 <button
@@ -1616,7 +1616,7 @@ export function ReportCard({
                 }
                 className={cn(
                   REACTION_CHIP_CLASS,
-                  "tabular-nums bg-[var(--bg-soft)] text-[var(--ink-soft)]",
+                  "tabular-nums bg-[var(--bg-soft)] text-[var(--ink-soft)] ring-1 ring-[var(--line)]",
                   canUndo && "hover:bg-red-50 cursor-pointer group/sticker"
                 )}
                 onClick={canUndo && latest ? () => removeStickerReaction(post.id, latest.id, viewingAsUserId) : undefined}

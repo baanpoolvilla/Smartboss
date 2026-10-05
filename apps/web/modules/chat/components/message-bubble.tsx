@@ -123,7 +123,7 @@ function MediaGrid({ items, onOpen }: { items: ChatAttachment[]; onOpen: (index:
           <ExpiredTile key={`x-${i}`} className={cn("aspect-square", shown.length === 3 && i === 0 && "col-span-2 aspect-[2/1]")} />
         ) : (
         <button
-          key={a.url}
+          key={`${a.url}-${i}`}
           type="button"
           onClick={() => onOpen(i)}
           className={cn("relative aspect-square bg-black/5", shown.length === 3 && i === 0 && "col-span-2 aspect-[2/1]")}
@@ -461,6 +461,7 @@ function ReactionChip({
         className={cn(
           // ป้ายเล็กลอยเกาะมุมบับเบิล แบบ LINE/Messenger — ไม่มีกรอบแข็ง ใช้เงานุ่ม ๆ แทน
           REACTION_CHIP_CLASS,
+          "ring-2 ring-(--bg)",
           mineReact ? "bg-(--chat-accent-soft) text-(--chat-accent-strong)" : "bg-(--bg) text-(--ink-soft)"
         )}
       >

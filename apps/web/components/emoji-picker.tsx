@@ -281,7 +281,8 @@ export function ReactionPicker({
 
 /**
  * หน้าตาป้ายรีแอคชันใต้ข้อความ/โพสต์ — แบบเดียวกับแชททุกโมดูล: ป้ายมนลอย ไม่มีกรอบแข็ง ใช้เงานุ่ม ๆ
- * (สีพื้น/ตัวอักษรของ "ฉันกดแล้ว" กับ "ยังไม่กด" ให้แต่ละโมดูลใส่เองตามธีมของตัวเอง)
+ * (สีพื้น/ตัวอักษร/เส้นขอบของ "ฉันกดแล้ว" กับ "ยังไม่กด" ให้แต่ละโมดูลใส่เองตามพื้นหลังของตัวเอง:
+ * แชทป้ายขาวลอยบนพื้นเทา ใช้ขอบขาวหนา · รายงานป้ายอยู่บนการ์ดขาว ต้องมีพื้นเทาอ่อน + เส้นขอบ ไม่งั้นกลืนหาย)
  */
 export const REACTION_CHIP_CLASS =
-  "flex h-8 items-center gap-1 rounded-full px-2 text-[13px] font-semibold shadow-[0_1px_4px_rgba(0,0,0,0.15)] ring-2 ring-(--bg) transition-transform active:scale-95";
+  "flex h-8 items-center gap-1 rounded-full px-2 text-[13px] font-semibold shadow-[0_1px_4px_rgba(0,0,0,0.15)] transition-transform active:scale-95";

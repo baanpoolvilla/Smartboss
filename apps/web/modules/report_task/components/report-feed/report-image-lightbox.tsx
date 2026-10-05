@@ -9,7 +9,7 @@ import { fileKindOf, isDocAttachment, isVideoAttachment } from "@/modules/report
 import { getUser } from "@/modules/report_task/lib/directory";
 import { formatDateTimeFull, formatDateTimeShort } from "@/modules/report_task/lib/format";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Download, Link2, Loader2, Minus, Pencil, Plus, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Link2, Loader2, Minus, MoreHorizontal, Pencil, Plus, X } from "lucide-react";
 import { downloadFile, fileForEditing, openAnnotator } from "@/lib/annotate/annotate";
 import { useBackToClose } from "@/lib/back-to-close";
 import { useBlackSystemBars } from "@/lib/black-system-bars";
@@ -168,6 +168,8 @@ export function ReportImageLightbox({
 
   const image = images[index];
   const [editing, setEditing] = useState(false);
+  /** มือถือ: เมนู "⋯" มุมขวาบน (รวมปุ่มที่บนคอมเรียงเต็มแถว) */
+  const [moreOpen, setMoreOpen] = useState(false);
   // ดินสอ: ดึงรูปนี้มาเป็นไฟล์ในเครื่อง → หน้าต่างวาด → แนบเข้าช่องพิมพ์ (หรือดาวน์โหลด)
   async function editImage() {
     if (!image?.url) return;
@@ -324,7 +326,7 @@ export function ReportImageLightbox({
             attachment lightbox, which has no "post" concept). */}
         {author && (
           <div
-            className={`absolute left-4 z-10 flex max-w-[calc(100%-2rem)] items-center gap-2.5 rounded-2xl bg-black/55 py-1.5 pl-1.5 pr-3.5 backdrop-blur-sm ${hasMultiple ? "bottom-[5.25rem]" : "bottom-[max(1rem,env(safe-area-inset-bottom))]"} transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none`}
+            className={`absolute left-4 z-10 flex max-w-[calc(100%-2rem)] items-center gap-2.5 rounded-2xl bg-black/65 ring-1 ring-white/25 py-1.5 pl-1.5 pr-3.5 backdrop-blur-sm ${hasMultiple ? "bottom-[5.25rem]" : "bottom-[max(1rem,env(safe-area-inset-bottom))]"} transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none`}
             onClick={(e) => e.stopPropagation()}
           >
             <Avatar className="h-10 w-10 shrink-0">
@@ -348,8 +350,11 @@ export function ReportImageLightbox({
             ครบ ไม่ตัดออก แค่ย้ายมารวมพวงเดียวกับปุ่มอื่น. */}
         {/* ✕ มุมซ้ายบน ปุ่มอื่นมุมขวาบน — ตำแหน่งเดียวกับ Discord (ปุ่มพื้นเข้ม อ่านออกบนรูปสว่าง) */}
         <div className="absolute top-[max(1rem,env(safe-area-inset-top))] right-4 z-10 flex items-center gap-2 transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none" onClick={(e) => e.stopPropagation()}>
+          {/* คอม: ปุ่มเรียงเต็มแถว · มือถือ: ดินสอ · "⋯" · ✕ แบบ Discord — เดิมซูม/ลิงก์/วาด/ดาวน์โหลด/ปิด
+              เบียดกัน 5 กลุ่มบนจอแคบ (มือถือซูมด้วยการถ่างนิ้วอยู่แล้ว ไม่ต้องมีปุ่ม) */}
+          <div className="hidden items-center gap-2 sm:flex">
           {!isVideo && !isDoc && (
-            <div className="flex items-center gap-0.5 rounded-full bg-black/55 p-0.5 backdrop-blur-sm">
+            <div className="flex items-center gap-0.5 rounded-full bg-black/65 ring-1 ring-white/25 p-0.5 backdrop-blur-sm">
               <button
                 onClick={() => zoomBy(-0.75)}
                 disabled={scale <= MIN_SCALE}
@@ -372,17 +377,29 @@ export function ReportImageLightbox({
           {!isVideo && !isDoc && image.url && (
             <button
               onClick={copyImageLink}
-              className="h-10 w-10 rounded-full bg-black/55 hover:bg-black/75 backdrop-blur-sm text-white flex items-center justify-center cursor-pointer"
+              className="h-10 w-10 rounded-full bg-black/65 ring-1 ring-white/25 hover:bg-black/75 backdrop-blur-sm text-white flex items-center justify-center cursor-pointer"
               aria-label="คัดลอกลิงก์รูป"
             >
               <Link2 className="h-5 w-5" />
             </button>
           )}
+          {!isVideo && !isDoc && (
+            <a
+              href={downloadHref}
+              download={image.url ? undefined : image.name}
+              className="h-10 w-10 rounded-full bg-black/65 ring-1 ring-white/25 hover:bg-black/75 backdrop-blur-sm text-white flex items-center justify-center cursor-pointer"
+              aria-label="ดาวน์โหลด"
+            >
+              <Download className="h-5 w-5" />
+            </a>
+          )}
+          </div>
+          {/* ดินสอแสดงตลอดทั้งคอมและมือถือ — แก้รูปง่าย ๆ เป็นงานที่ใช้บ่อย ไม่ซ่อนใน "⋯" */}
           {!isVideo && !isDoc && image.url && (
             <button
               onClick={() => void editImage()}
               disabled={editing}
-              className="h-10 w-10 rounded-full bg-black/55 hover:bg-black/75 backdrop-blur-sm text-white flex items-center justify-center cursor-pointer disabled:opacity-50"
+              className="h-10 w-10 rounded-full bg-black/65 ring-1 ring-white/25 hover:bg-black/75 backdrop-blur-sm text-white flex items-center justify-center cursor-pointer disabled:opacity-50"
               aria-label="วาด/เขียนบนรูปนี้"
               title={onEditImage ? "วาด/เขียนบนรูปนี้ แล้วแนบส่ง" : "วาด/เขียนบนรูปนี้ แล้วบันทึกลงเครื่อง"}
             >
@@ -390,14 +407,41 @@ export function ReportImageLightbox({
             </button>
           )}
           {!isVideo && !isDoc && (
-            <a
-              href={downloadHref}
-              download={image.url ? undefined : image.name}
-              className="h-10 w-10 rounded-full bg-black/55 hover:bg-black/75 backdrop-blur-sm text-white flex items-center justify-center cursor-pointer"
-              aria-label="ดาวน์โหลด"
-            >
-              <Download className="h-5 w-5" />
-            </a>
+            <div className="relative sm:hidden">
+              <button
+                onClick={() => setMoreOpen((v) => !v)}
+                className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-2xl bg-black/65 text-white ring-1 ring-white/25 backdrop-blur-sm hover:bg-black/75"
+                aria-label="ตัวเลือกเพิ่มเติม"
+                aria-expanded={moreOpen}
+              >
+                <MoreHorizontal className="h-6 w-6" />
+              </button>
+              {moreOpen && (
+                <div role="menu" className="absolute right-0 top-full z-20 mt-2 w-60 overflow-hidden rounded-2xl bg-neutral-900/95 py-1 text-white shadow-xl ring-1 ring-white/15 backdrop-blur">
+                  {image.url && (
+                    <button
+                      role="menuitem"
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left text-[15px] active:bg-white/10 disabled:opacity-50"
+                      onClick={() => {
+                        setMoreOpen(false);
+                        copyImageLink();
+                      }}
+                    >
+                      <Link2 className="h-5 w-5 shrink-0" /> คัดลอกลิงก์รูป
+                    </button>
+                  )}
+                  <a
+                    role="menuitem"
+                    href={downloadHref}
+                    download={image.url ? undefined : image.name}
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left text-[15px] active:bg-white/10 disabled:opacity-50"
+                    onClick={() => setMoreOpen(false)}
+                  >
+                    <Download className="h-5 w-5 shrink-0" /> ดาวน์โหลด
+                  </a>
+                </div>
+              )}
+            </div>
           )}
           {!isDoc && (
             <button
@@ -405,7 +449,7 @@ export function ReportImageLightbox({
                 e.stopPropagation();
                 onClose();
               }}
-              className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-2xl bg-black/55 text-white backdrop-blur-sm hover:bg-black/75"
+              className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-2xl bg-black/65 ring-1 ring-white/25 text-white backdrop-blur-sm hover:bg-black/75"
               aria-label="ปิด"
             >
               <X className="h-6 w-6" />
@@ -426,7 +470,7 @@ export function ReportImageLightbox({
               e.stopPropagation();
               go(-1);
             }}
-            className="transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 h-10 w-10 rounded-full bg-black/55 hover:bg-black/75 backdrop-blur-sm text-white flex items-center justify-center cursor-pointer"
+            className="transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 h-10 w-10 rounded-full bg-black/65 ring-1 ring-white/25 hover:bg-black/75 backdrop-blur-sm text-white flex items-center justify-center cursor-pointer"
             aria-label="รูปก่อนหน้า"
           >
             <ChevronLeft className="h-6 w-6" />
@@ -618,7 +662,7 @@ export function ReportImageLightbox({
               e.stopPropagation();
               go(1);
             }}
-            className="transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none absolute right-4 top-1/2 z-10 -translate-y-1/2 h-10 w-10 rounded-full bg-black/55 hover:bg-black/75 backdrop-blur-sm text-white flex items-center justify-center cursor-pointer"
+            className="transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none absolute right-4 top-1/2 z-10 -translate-y-1/2 h-10 w-10 rounded-full bg-black/65 ring-1 ring-white/25 hover:bg-black/75 backdrop-blur-sm text-white flex items-center justify-center cursor-pointer"
             aria-label="รูปถัดไป"
           >
             <ChevronRight className="h-6 w-6" />
@@ -634,10 +678,10 @@ export function ReportImageLightbox({
           // to, same as Discord's own lightbox strip
           // ("ให้กดง่ายหน่อยได้ไหมใหญ่กว่านี้ หรือแสดงเป็นภาพ").
           <div
-            className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 flex items-center gap-2.5 max-w-[92vw] transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none"
+            className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 flex items-center gap-2.5 max-w-[92vw] rounded-2xl bg-black/65 px-2.5 py-1 ring-1 ring-white/25 backdrop-blur-sm transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none"
             onClick={(e) => e.stopPropagation()}
           >
-            <span className="text-xs text-white/80 tabular-nums shrink-0">
+            <span className="text-xs text-white tabular-nums shrink-0">
               {index + 1} / {images.length}
             </span>
             <div className="flex items-center gap-1.5 overflow-x-auto py-1 px-0.5 max-w-[70vw] sm:max-w-[60vw]">
