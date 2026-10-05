@@ -5,6 +5,29 @@
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
 
+/* ตัวเลขบนไอคอนแอปตอนแอปปิด/พักอยู่ = จำนวนที่ยังไม่ได้ดูตอนหน้าเว็บรายงานครั้งล่าสุด (base)
+ * + แจ้งเตือนที่เด้งเข้ามาหลังจากนั้น (extra) — ทุกแจ้งเตือนคือของใหม่ที่ยังไม่ได้ดูหนึ่งอย่าง
+ * (ข้อความแชท, แท็ก, งาน, อนุมัติ ฯลฯ) จึงนับได้ครบทุกโมดูลโดยไม่ต้องถามเซิร์ฟเวอร์
+ * เปิดแอปแล้วหน้าเว็บเขียนตัวเลขจริงทับและล้าง extra (lib/app-badge.ts ใช้ที่เก็บเดียวกัน)
+ * เครื่องที่ไม่มี Badging API ข้าม (Android ขึ้นจุดเองจากแจ้งเตือนที่ค้างอยู่) */
+const BADGE_CACHE = "sb-app-badge-v1";
+async function bumpAppBadge() {
+  if (!self.navigator || typeof self.navigator.setAppBadge !== "function") return;
+  try {
+    const cache = await caches.open(BADGE_CACHE);
+    const read = async (key) => {
+      const res = await cache.match("/__badge/" + key);
+      return res ? Number(await res.text()) || 0 : 0;
+    };
+    const extra = (await read("extra")) + 1;
+    await cache.put("/__badge/extra", new Response(String(extra)));
+    await self.navigator.setAppBadge((await read("base")) + extra);
+  } catch {
+    // ที่เก็บใช้ไม่ได้ — อย่างน้อยให้มีจุดบนไอคอน
+    await self.navigator.setAppBadge().catch(() => {});
+  }
+}
+
 self.addEventListener("push", (event) => {
   let data = {};
   try {
@@ -13,11 +36,7 @@ self.addEventListener("push", (event) => {
     data = { title: "SmartBoss", body: event.data ? event.data.text() : "" };
   }
   const title = data.title || "SmartBoss";
-  // จุดบนไอคอนแอปตอนปิดแอปอยู่ (ไม่รู้ตัวเลขที่นี่) — เปิดแอปแล้วหน้าเว็บตั้งเป็นตัวเลขจริงแทน
-  // (notification-bell-popover.tsx) เครื่องที่ไม่มี Badging API ข้าม
-  if (self.navigator && typeof self.navigator.setAppBadge === "function") {
-    self.navigator.setAppBadge().catch(() => {});
-  }
+  event.waitUntil(bumpAppBadge());
   event.waitUntil(
     self.registration.showNotification(title, {
       body: data.body || "",

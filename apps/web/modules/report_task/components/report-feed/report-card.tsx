@@ -74,7 +74,7 @@ import { ReportImageLightbox } from "@/modules/report_task/components/report-fee
 import { ReportReply } from "@/modules/report_task/components/report-feed/report-reply";
 import { LinkInsertPopover } from "@/modules/report_task/components/report-feed/link-insert-popover";
 import { cn } from "@/modules/report_task/lib/utils";
-import { EmojiPicker, ReactionPicker } from "@/components/emoji-picker";
+import { EmojiPicker, REACTION_CHIP_CLASS, ReactionPicker } from "@/components/emoji-picker";
 import { activeReactionList } from "@/lib/emoji";
 import { toast } from "sonner";
 import { formatDateTimeFull, formatDateTimeShort } from "@/modules/report_task/lib/format";
@@ -1558,18 +1558,18 @@ export function ReportCard({
               <div
                 key={emoji}
                 className={cn(
-                  "flex items-stretch rounded-full border text-sm transition-colors overflow-hidden",
-                  active
-                    ? "bg-[var(--accent)] border-[var(--brand-green)]/40 text-[var(--brand-green-dark)]"
-                    : "border-[var(--line)] text-[var(--ink-soft)]"
+                  // หน้าตาเดียวกับป้ายรีแอคชันของแชท (REACTION_CHIP_CLASS) — ตัวป้ายแบ่งสองซีก จึงย้าย padding ไปไว้ที่ปุ่มข้างใน
+                  REACTION_CHIP_CLASS,
+                  "items-stretch gap-0 overflow-hidden px-0",
+                  active ? "bg-[var(--accent)] text-[var(--brand-green-dark)]" : "bg-[var(--bg)] text-[var(--ink-soft)]"
                 )}
               >
                 <button
                   onClick={() => setReactionListEmoji(emoji)}
-                  className={cn("flex items-center gap-1.5 pl-2 pr-2.5 h-8", !active && "hover:bg-white")}
+                  className={cn("flex h-8 items-center gap-1 px-2", !active && "hover:bg-[var(--bg-soft)]")}
                 >
                   <span className="text-[20px] leading-none">{emoji}</span>
-                  <span className="tabular-nums font-medium">{users.length}</span>
+                  {users.length > 1 && <span className="tabular-nums">{users.length}</span>}
                 </button>
                 {!active && (
                   <button
@@ -1615,7 +1615,8 @@ export function ReportCard({
                     : `${sticker.label} (${sticker.points > 0 ? `+${sticker.points}` : sticker.points})`
                 }
                 className={cn(
-                  "h-8 text-sm font-medium tabular-nums pl-2 pr-2.5 rounded-full border border-[var(--line)] bg-[var(--bg-soft)] flex items-center gap-1.5",
+                  REACTION_CHIP_CLASS,
+                  "tabular-nums bg-[var(--bg-soft)] text-[var(--ink-soft)]",
                   canUndo && "hover:bg-red-50 cursor-pointer group/sticker"
                 )}
                 onClick={canUndo && latest ? () => removeStickerReaction(post.id, latest.id, viewingAsUserId) : undefined}

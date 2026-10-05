@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ReactionPicker } from "@/components/emoji-picker";
+import { REACTION_CHIP_CLASS, ReactionPicker } from "@/components/emoji-picker";
 import { activeReactionList } from "@/lib/emoji";
 import { Check, CornerUpLeft, Link2, MoreHorizontal, Pencil, Reply as ReplyIcon, SmilePlus, Trash2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
@@ -363,10 +363,10 @@ export function ReportReply({
                   <button
                     key={emoji}
                     onClick={() => onToggleReaction(emoji)}
-                    className="flex h-9 items-center gap-1.5 rounded-full bg-[var(--bg)] px-2.5 active:scale-95 text-sm font-semibold text-[var(--ink-soft)] shadow-[0_1px_3px_rgba(0,0,0,0.12)] hover:bg-[var(--bg-soft)] transition-colors"
+                    className={cn(REACTION_CHIP_CLASS, viewerId && users.includes(viewerId) ? "bg-[var(--accent)] text-[var(--brand-green-dark)]" : "bg-[var(--bg)] text-[var(--ink-soft)]")}
                   >
-                    <span className="text-[22px] leading-none">{emoji}</span>
-                    <span className="tabular-nums">{users.length}</span>
+                    <span className="text-[20px] leading-none">{emoji}</span>
+                    {users.length > 1 && <span className="tabular-nums">{users.length}</span>}
                   </button>
                 ))}
               </div>

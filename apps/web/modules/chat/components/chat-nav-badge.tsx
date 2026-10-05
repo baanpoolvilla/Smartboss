@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { showNotifyToast } from "@/components/shell/notify-toast-icon";
+import { setAppBadgePart } from "@/lib/app-badge";
 
 import { hiddenRecently, subscribeRealtime, type RealtimeEventMessage } from "@/lib/realtime-client";
 import { pushSupport, serverPushConfigured, showLocalNotification } from "@/lib/push-client";
@@ -33,6 +34,8 @@ const notified = new Set<string>();
 
 function setUnread(n: number) {
   state.unread = n;
+  // ตัวเลขบนไอคอนแอปรวมแชทที่ยังไม่อ่านด้วย (เดิมนับแค่กระดิ่ง)
+  setAppBadgePart("chat", n);
   for (const l of listeners) l(n);
 }
 

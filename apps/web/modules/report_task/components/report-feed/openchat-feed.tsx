@@ -34,7 +34,7 @@ import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/r
 import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
 import { DRAG_MENTION_TOPIC_MIME } from "@/modules/report_task/components/report-feed/report-post-fields";
 import { cn } from "@/modules/report_task/lib/utils";
-import { EmojiPicker, ReactionPicker } from "@/components/emoji-picker";
+import { EmojiPicker, REACTION_CHIP_CLASS, ReactionPicker } from "@/components/emoji-picker";
 import { activeReactionList } from "@/lib/emoji";
 import { toast } from "sonner";
 import { Building2, Check, Hash, ImagePlus, MoreHorizontal, Pencil, Plus, Send, SmilePlus, Trash2, User, Users, X } from "lucide-react";
@@ -610,15 +610,10 @@ export function OpenchatFeed({
                                   <div key={emoji} className="relative group/reaction">
                                     <button
                                       onClick={() => toggleMessageReaction(m, emoji)}
-                                      className={cn(
-                                        "flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] border transition-colors",
-                                        mine
-                                          ? "bg-[var(--accent)] border-[var(--brand-green)]/40 text-[var(--brand-green-dark)]"
-                                          : "bg-[var(--bg-soft)] border-[var(--line)] text-[var(--ink-soft)]"
-                                      )}
+                                      className={cn(REACTION_CHIP_CLASS, mine ? "bg-[var(--accent)] text-[var(--brand-green-dark)]" : "bg-[var(--bg)] text-[var(--ink-soft)]")}
                                     >
-                                      <span>{emoji}</span>
-                                      <span className="tabular-nums">{users.length}</span>
+                                      <span className="text-[20px] leading-none">{emoji}</span>
+                                      {users.length > 1 && <span className="tabular-nums">{users.length}</span>}
                                     </button>
                                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/reaction:block z-20 pointer-events-none">
                                       <div className="rounded-lg bg-[var(--ink)] text-white text-[11px] px-2.5 py-1.5 shadow-lg whitespace-nowrap max-w-56">

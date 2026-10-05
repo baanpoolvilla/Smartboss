@@ -401,11 +401,9 @@ function Annotator({ file }: { file: File }) {
 
   return (
     <div className="fixed inset-0 z-[1000] flex select-none flex-col bg-neutral-950 text-white" role="dialog" aria-modal="true" aria-label="วาด/เขียนบนรูป">
-      {/* แถบบน — แบบหน้า Markup ของ iPhone: ปิด · ย้อน/ทำซ้ำ · (ซูม) · บันทึกลงเครื่อง · เสร็จ */}
+      {/* แถบบน: ย้อน/ทำซ้ำ · (ซูม) · บันทึกลงเครื่อง · เสร็จ · ปิด — ปุ่มปิดอยู่ขวาบนสุดเหมือนทุกหน้าดูรูป
+          ("ย้ายปุ่มไปอยู่ที่มันสะดวก คือขวามือ") เดิมอยู่ซ้ายบนแบบหน้า Markup ของ iPhone */}
       <div className="flex items-center gap-2 px-3 pb-2" style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}>
-        <RoundButton label="ยกเลิก" onTap={() => closeAnnotator(null)}>
-          <X className="h-5 w-5" />
-        </RoundButton>
         <div className="flex items-center rounded-full bg-white/10">
           <button
             type="button"
@@ -471,6 +469,9 @@ function Annotator({ file }: { file: File }) {
           <Check className="h-5 w-5" strokeWidth={2.5} />
           <span className="text-sm max-sm:sr-only">{saving ? "กำลังบันทึก…" : "เสร็จ"}</span>
         </button>
+        <RoundButton label="ยกเลิก" onTap={() => closeAnnotator(null)}>
+          <X className="h-5 w-5" />
+        </RoundButton>
       </div>
 
       {/* พื้นที่วาด */}

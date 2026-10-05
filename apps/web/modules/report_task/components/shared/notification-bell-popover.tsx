@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { setAppBadgePart } from "@/lib/app-badge";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Bell, Settings } from "lucide-react";
@@ -81,13 +82,9 @@ export function NotificationBellPopover() {
   // ("มีแจ้งเตือนก็ได้ยินเสียงแล้ว แต่ไอคอนไม่ขึ้น") — Badging API ใช้ได้กับแอปที่ติดตั้ง
   // บน Chrome/Edge (คอม) และ iPhone/iPad 16.4+ ที่อนุญาตแจ้งเตือนแล้ว; Android ไม่มี API นี้
   // แต่ตัวเครื่องขึ้นจุดบนไอคอนเองจากแจ้งเตือนที่ค้างอยู่ · เครื่องที่ไม่รองรับข้ามเงียบ ๆ
+  // (รวมกับแชทที่ยังไม่อ่านใน lib/app-badge.ts — กระดิ่งรายงานแค่ส่วนของตัวเอง)
   useEffect(() => {
-    const nav = navigator as Navigator & {
-      setAppBadge?: (n?: number) => Promise<void>;
-      clearAppBadge?: () => Promise<void>;
-    };
-    if (!nav.setAppBadge) return;
-    void (unreadCount > 0 ? nav.setAppBadge(unreadCount) : nav.clearAppBadge?.())?.catch(() => undefined);
+    setAppBadgePart("bell", unreadCount);
   }, [unreadCount]);
 
   // โหลดแจ้งเตือนซ่อมบำรุงรอบแรกตอน mount แล้วรีเฟรชอีกทีทุกครั้งที่เปิด

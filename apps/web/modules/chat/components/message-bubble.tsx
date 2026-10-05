@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { AlertCircle, Clock, Copy, CornerUpLeft, Download, FileText, Hourglass, ImageOff, Megaphone, MicOff, MoreHorizontal, Pause, Play, RotateCw, SmilePlus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
-import { ReactionPicker } from "@/components/emoji-picker";
+import { REACTION_CHIP_CLASS, ReactionPicker } from "@/components/emoji-picker";
 
 import { sortReactionEmojis, useChatStore, type RoomMessage } from "../store/chat-store";
 import { CHAT_REACTION_EMOJIS, type ChatAttachment, type ChatUser } from "../types";
@@ -460,7 +460,7 @@ function ReactionChip({
         aria-expanded={open}
         className={cn(
           // ป้ายเล็กลอยเกาะมุมบับเบิล แบบ LINE/Messenger — ไม่มีกรอบแข็ง ใช้เงานุ่ม ๆ แทน
-          "flex h-8 items-center gap-1 rounded-full px-2 text-[13px] font-semibold shadow-[0_1px_4px_rgba(0,0,0,0.15)] ring-2 ring-(--bg) transition-transform active:scale-95",
+          REACTION_CHIP_CLASS,
           mineReact ? "bg-(--chat-accent-soft) text-(--chat-accent-strong)" : "bg-(--bg) text-(--ink-soft)"
         )}
       >

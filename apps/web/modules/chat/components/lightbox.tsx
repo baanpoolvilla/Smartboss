@@ -117,13 +117,11 @@ export function Lightbox({
       aria-modal="true"
       aria-label="ดูรูปภาพ"
     >
-      {/* แถบบนแบบ Discord: ✕ ซ้าย · ปุ่มอื่นขวา เป็นปุ่มพื้นเข้มมุมมน ลอยทับรูป (อ่านออกทั้งบนรูปสว่าง/มืด) */}
+      {/* แถบบน: ลำดับรูปซ้าย · ปุ่มอื่น ๆ ขวา · ✕ ขวาสุด (ที่เดียวกันทุกหน้าดูรูป) — ปุ่มพื้นเข้มมุมมน ลอยทับรูป
+          (อ่านออกทั้งบนรูปสว่าง/มืด) */}
       <div
         className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] [&>*]:pointer-events-auto group-data-[chrome-hidden]:[&>*]:pointer-events-none transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none"
       >
-        <button type="button" onClick={onClose} className="flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-2xl bg-black/55 px-2.5 text-sm text-white backdrop-blur-sm hover:bg-black/75 disabled:opacity-50" aria-label="ปิด">
-          <X className="h-6 w-6" />
-        </button>
         {items.length > 1 && (
           <span className="rounded-full bg-black/55 px-2.5 py-1 text-xs tabular-nums backdrop-blur-sm">
             {i + 1} / {items.length}
@@ -144,6 +142,9 @@ export function Lightbox({
         <a href={downloadUrl(item)} className="flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-2xl bg-black/55 px-2.5 text-sm text-white backdrop-blur-sm hover:bg-black/75 disabled:opacity-50" aria-label="ดาวน์โหลด" title="ดาวน์โหลด">
           <Download className="h-5 w-5" />
         </a>
+        <button type="button" onClick={onClose} className="flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-2xl bg-black/55 px-2.5 text-sm text-white backdrop-blur-sm hover:bg-black/75 disabled:opacity-50" aria-label="ปิด">
+          <X className="h-6 w-6" />
+        </button>
       </div>
 
       {/* แถบล่างแบบ Discord: ใครส่ง · เมื่อไร · ข้อความที่ส่งมากับรูป — ไล่เงาดำให้อ่านออกบนรูป */}

@@ -347,18 +347,6 @@ export function ReportImageLightbox({
             ปุ่มปิดอยู่ท้ายแถบเดียวกันนี้เหมือนกัน). Zoom %/+/- ของเดิมยังอยู่
             ครบ ไม่ตัดออก แค่ย้ายมารวมพวงเดียวกับปุ่มอื่น. */}
         {/* ✕ มุมซ้ายบน ปุ่มอื่นมุมขวาบน — ตำแหน่งเดียวกับ Discord (ปุ่มพื้นเข้ม อ่านออกบนรูปสว่าง) */}
-        {!isDoc && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onClose();
-            }}
-            className="transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none absolute left-4 top-[max(1rem,env(safe-area-inset-top))] z-10 flex h-11 w-11 cursor-pointer items-center justify-center rounded-2xl bg-black/55 text-white backdrop-blur-sm hover:bg-black/75"
-            aria-label="ปิด"
-          >
-            <X className="h-6 w-6" />
-          </button>
-        )}
         <div className="absolute top-[max(1rem,env(safe-area-inset-top))] right-4 z-10 flex items-center gap-2 transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none" onClick={(e) => e.stopPropagation()}>
           {!isVideo && !isDoc && (
             <div className="flex items-center gap-0.5 rounded-full bg-black/55 p-0.5 backdrop-blur-sm">
@@ -410,6 +398,18 @@ export function ReportImageLightbox({
             >
               <Download className="h-5 w-5" />
             </a>
+          )}
+          {!isDoc && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
+              className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-2xl bg-black/55 text-white backdrop-blur-sm hover:bg-black/75"
+              aria-label="ปิด"
+            >
+              <X className="h-6 w-6" />
+            </button>
           )}
           {/* isDoc (pdf/word/excel/ppt) gets its own close button inside its
               white panel's header below — this white/10-on-black styling
