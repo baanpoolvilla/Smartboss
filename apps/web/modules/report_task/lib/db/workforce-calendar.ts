@@ -125,7 +125,13 @@ export async function listLeaveEvents(
      * — ตั้งได้ที่ปฏิทินของโมดูลบุคคล และเป็นภาษาที่ทีมนี้ใช้กันมาตั้งแต่อยู่บน
      * Teams · ว่าง = ยังไม่ได้ตั้ง ใช้ชื่อประเภทแล้วให้ปฏิทินเติมชื่อคนให้เอง
      */
-    const authored = (r.display_label ?? "").trim();
+    // ชื่อที่ฟอร์มเติมให้เอง ("<ชื่อ>-<ประเภท>") ไม่นับเป็นชื่อที่เจ้าตัวตั้ง — แต่ละหน้าเติมชื่อคนคนละแบบ
+    // ("Nok-Day-Off" / "Waratta-Nok-Day-Off") คนเดียวกันเลยขึ้นไม่เหมือนกัน ⇒ ลงท้ายด้วยชื่อประเภทพอดี
+    // = ปล่อยให้ปฏิทินประกอบชื่อ + ประเภทเองแบบเดียวกันทุกใบ (เกณฑ์เดียวกับ hr/leave/leave-calendar.tsx)
+    const rawLabel = (r.display_label ?? "").trim();
+    const normLabel = (v: string) => v.toLowerCase().replace(/[\s_–—-]+/g, "");
+    const typeKey = normLabel(r.leave_type_name ?? "");
+    const authored = typeKey !== "" && normLabel(rawLabel).endsWith(typeKey) ? "" : rawLabel;
     // A leave type flagged `autoApprove` in HR is an entitlement someone
     // gets automatically (the standing example: "วันหยุดประจำเดือน"), not a
     // real request needing a decision — see the column's own comment in

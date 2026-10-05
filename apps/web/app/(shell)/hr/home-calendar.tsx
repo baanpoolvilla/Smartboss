@@ -59,7 +59,7 @@ export async function renderCalendarTab(monthParam: string | undefined): Promise
   const from = `${month}-01`;
   const to = `${month}-${String(daysInMonth).padStart(2, "0")}`;
 
-  const [me, employments, types, calendar, requests, mine] = await Promise.all([
+  const [me, employments, types, calendar, requests, mine, everyone] = await Promise.all([
     wfFetch<Me>("/me"),
     // พนักงานทั่วไปอ่าน /employments ไม่ได้ (ต้องมี people.read) — ปฏิทิน
     // จึงพึ่งชื่อจาก /leave-calendar แทน อันนี้ใช้แค่ตารางอนุมัติ
@@ -72,6 +72,8 @@ export async function renderCalendarTab(monthParam: string | undefined): Promise
     // ใบของตัวเอง — เอา id มาผูกกับปุ่มยกเลิก ปฏิทินรวม (/leave-calendar)
     // ไม่คืน id ให้เพราะทุกคนอ่านได้ (จะเห็น id ใบของคนอื่นไม่ควรเกิดขึ้น)
     wfTry<{ items: LeaveRequest[] }>(`/me/leave-requests?from=${from}&to=${to}`),
+    // ใบของทุกคน — อ่านได้เฉพาะคนที่จัดการการลาได้ (คนอื่นได้ null) ใช้ผูกปุ่ม "ยกเลิกให้" ของผู้อนุมัติ
+    wfTry<Paged<LeaveRequest>>(`/leave-requests?from=${from}&to=${to}`),
   ]);
 
   /*
@@ -98,6 +100,15 @@ export async function renderCalendarTab(monthParam: string | undefined): Promise
   const myRequestIdByDate = new Map(myActiveRequests.map((r) => [r.starts_on, r.id]));
   // ใช้ตอนสลับวันหยุด — ต้องรู้ว่าวันเดิมเป็นประเภทการลาอะไรถึงจะยื่นสลับแทนที่ถูกใบ
   const myLeaveTypeIdByDate = new Map(myActiveRequests.map((r) => [r.starts_on, r.leave_type_id]));
+  // ผู้อนุมัติ: id ใบที่ยังมีผลของทุกคน คีย์ "employment:วัน" — ทุกวันในช่วงของใบชี้ไปใบเดียวกัน
+  const canCancelFor = me.permissions.includes("workforce.leave.approve");
+  const requestIdByPersonDate = new Map<string, string>();
+  if (canCancelFor) {
+    for (const r of everyone?.items ?? []) {
+      if (r.status !== "SUBMITTED" && r.status !== "APPROVED") continue;
+      for (const d of datesBetween(r.starts_on, r.ends_on)) requestIdByPersonDate.set(`${r.employment_id}:${d}`, r.id);
+    }
+  }
 
   // วางคำขอลงปฏิทินรายวัน — endpoint คืนเฉพาะใบที่ยังมีผล (PENDING/APPROVED)
   const entriesByDate: Record<string, DayEntry[]> = {};
@@ -112,7 +123,7 @@ export async function renderCalendarTab(monthParam: string | undefined): Promise
         displayLabel: entry.display_label,
         status: entry.status,
         mine: isMine,
-        requestId: isMine ? myRequestIdByDate.get(date) : undefined,
+        requestId: isMine ? myRequestIdByDate.get(date) : requestIdByPersonDate.get(`${entry.employment_id}:${date}`),
         leaveTypeId: isMine ? myLeaveTypeIdByDate.get(date) : undefined,
         // สิทธิ์ (เช่น "วันหยุดประจำเดือน") ไม่ใช่การลา — ให้ปฏิทินแยกมันออก
         // จากลาจริงแทนที่จะปนกันเป็น "ลา" เหมือนเดิม

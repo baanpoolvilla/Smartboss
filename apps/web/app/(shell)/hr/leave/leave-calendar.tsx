@@ -5,6 +5,7 @@ import { Button } from "@smartboss/ui/components/button";
 import { Modal } from "@/components/module/dialog";
 import {
   cancelLeaveAction,
+  cancelLeaveForAction,
   relabelLeaveAction,
   submitLeaveAction,
   swapLeaveAction,
@@ -30,7 +31,8 @@ export interface DayEntry {
   displayLabel: string;
   status: "PENDING" | "APPROVED";
   mine: boolean;
-  /** มีค่าเฉพาะแถวของตัวเอง (mine) — ใช้กดยกเลิก คนอื่นไม่เห็น id ใบของคนอื่น */
+  /** มีค่าในแถวของตัวเอง (กดยกเลิกเอง) และ — เฉพาะผู้อนุมัติ — แถวของคนอื่น (ปุ่ม "ยกเลิกให้")
+   *  พนักงานทั่วไปไม่เห็น id ใบของคนอื่น */
   requestId?: string;
   /** มีค่าเฉพาะแถวของตัวเอง — ใช้ตอนสลับ (ต้องยื่นใบใหม่เป็นประเภทเดียวกับใบเดิม) */
   leaveTypeId?: string;
@@ -110,8 +112,21 @@ function firstWord(name: string): string {
  * ถ้ายังไม่ได้ตั้ง ค่อยประกอบจากชื่อ + ประเภทให้เอง
  */
 function labelOf(entry: DayEntry): string {
-  if (entry.displayLabel.trim() !== "") return entry.displayLabel;
-  return entry.leaveTypeName ? `${entry.name} - ${entry.leaveTypeName}` : entry.name;
+  const standard = entry.leaveTypeName ? `${entry.name} - ${entry.leaveTypeName}` : entry.name;
+  const custom = entry.displayLabel.trim();
+  if (custom === "") return standard;
+  // ชื่อที่ฟอร์มเติมให้เอง ("<ชื่อ>-<ประเภท>") ไม่ใช่ชื่อที่เจ้าตัวตั้งใจตั้ง — แต่ละหน้าที่ลงวันหยุดได้เติมชื่อคน
+  // คนละแบบ ("Nok-Day-Off" / "Waratta-Nok-Day-Off") คนเดียวกันเลยขึ้นไม่เหมือนกันบนปฏิทิน
+  // ⇒ ถ้าลงท้ายด้วยชื่อประเภทพอดี ใช้รูปแบบมาตรฐานเดียวกันหมด · ชื่อที่ตั้งเองจริง ๆ ("Bee-Off", "Aui-V3/6") คงไว้
+  if (entry.leaveTypeName && endsWithTypeName(custom, entry.leaveTypeName)) return standard;
+  return custom;
+}
+
+/** "Waratta-Nok-Day-Off" ลงท้ายด้วยประเภท "Day-Off" ไหม — ไม่สนตัวพิมพ์/ช่องว่าง/ขีด */
+function endsWithTypeName(label: string, typeName: string): boolean {
+  const norm = (v: string) => v.toLowerCase().replace(/[\s_–—-]+/g, "");
+  const t = norm(typeName);
+  return t.length > 0 && norm(label).endsWith(t);
 }
 
 /** รายการที่โชว์ต่อช่องวัน — ที่เหลือรวมเป็นป้าย "+N รายการ" (กดวันนั้นเพื่อดูทั้งหมด) */
@@ -153,9 +168,11 @@ function FilterChip({
   );
 }
 
-/** แถวคนในแถบซ้าย — ช่องติ๊ก + จุดสีประจำตัว + ตัวย่อชื่อ + ชื่อ */
+/**
+ * แถวคนในแถบซ้าย — ช่องติ๊ก + ตัวย่อชื่อ + ชื่อ · ไม่ใช้สีประจำตัวแล้ว: รายการบนปฏิทินใช้สีตามประเภท
+ * สีรายคนตรงนี้จึงไม่ได้โยงกับอะไร และพอคนเยอะสีจะซ้ำกันจนงง
+ */
 function PersonToggle({ id, name, off, onToggle }: { id: string; name: string; off: boolean; onToggle: (id: string) => void }) {
-  const hue = hueOf(id);
   return (
     <button
       type="button"
@@ -170,10 +187,8 @@ function PersonToggle({ id, name, off, onToggle }: { id: string; name: string; o
       >
         {off ? "" : "✓"}
       </span>
-      <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: `hsl(${hue} 60% 50%)` }} aria-hidden />
       <span
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
-        style={{ backgroundColor: `hsl(${hue} 70% 90%)`, color: `hsl(${hue} 55% 30%)` }}
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-(--bg-soft) text-[10px] font-semibold text-(--ink-soft)"
         aria-hidden
       >
         {name.trim().slice(0, 2)}
@@ -874,6 +889,9 @@ function DayDialog({
 
 /** ใครหยุดวันนี้บ้าง — ทุกโหมดของหน้าต่างใช้ร่วมกัน */
 function OthersOnDay({ entries }: { entries: DayEntry[] }) {
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [busy, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
   if (entries.length === 0) {
     return <p className="text-sm text-(--ink-soft)">วันนี้ยังไม่มีใครหยุด</p>;
   }
@@ -881,15 +899,58 @@ function OthersOnDay({ entries }: { entries: DayEntry[] }) {
     <div className="flex flex-col gap-1">
       <p className="text-xs font-medium text-(--ink-soft)">วันนี้หยุด {entries.length} คน</p>
       {entries.map((e, i) => (
-        <p key={`${e.employmentId}-${i}`} className="text-sm">
-          <span
-            className="mr-1.5 inline-block h-2 w-2 rounded-full align-middle"
-            style={{ backgroundColor: `hsl(${hueOf(e.employmentId)} 60% 50%)` }}
-          />
-          {labelOf(e)}
-          {e.status === "PENDING" && <span className="text-(--ink-soft)"> · รออนุมัติ</span>}
-        </p>
+        <div key={`${e.employmentId}-${i}`} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+          <span className="min-w-0 flex-1">
+            <span
+              className="mr-1.5 inline-block h-2 w-2 rounded-full align-middle"
+              style={{ backgroundColor: `hsl(${typeHue(e.leaveTypeName, e.autoApprove)} 65% 45%)` }}
+            />
+            {labelOf(e)}
+            {e.status === "PENDING" && <span className="text-(--ink-soft)"> · รออนุมัติ</span>}
+          </span>
+          {/* ผู้อนุมัติยกเลิกแทนเจ้าของใบได้ (ลงเกินโควตา/ลงผิดวัน) — ของตัวเองใช้ปุ่มยกเลิกของตัวเองด้านบน */}
+          {!e.mine &&
+            e.requestId &&
+            (confirming === e.requestId ? (
+              <span className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="danger"
+                  className="h-7 px-2 text-xs"
+                  disabled={busy}
+                  onClick={() => {
+                    const id = e.requestId!;
+                    start(async () => {
+                      const result = await cancelLeaveForAction(id, "");
+                      if (result.error) setError(result.error);
+                      else setConfirming(null);
+                    });
+                  }}
+                >
+                  {busy ? "กำลังยกเลิก…" : "ยืนยันยกเลิก"}
+                </Button>
+                <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-xs" disabled={busy} onClick={() => setConfirming(null)}>
+                  ไม่ยกเลิก
+                </Button>
+              </span>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 px-2 text-xs text-(--danger)"
+                onClick={() => {
+                  setError(null);
+                  setConfirming(e.requestId!);
+                }}
+              >
+                ยกเลิกให้
+              </Button>
+            ))}
+        </div>
       ))}
+      {error && <p className="text-xs text-(--danger)">{error}</p>}
     </div>
   );
 }

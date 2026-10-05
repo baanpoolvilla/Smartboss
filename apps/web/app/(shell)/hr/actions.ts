@@ -1177,6 +1177,25 @@ export async function cancelLeaveAction(formData: FormData) {
   revalidatePath("/hr");
 }
 
+/**
+ * ผู้อนุมัติ (หัวหน้า/HR) ยกเลิกวันหยุด/วันลาแทนเจ้าของใบ — เช่นลงเกินโควตา หรือลงผิดวัน
+ * เส้นทางคนละเส้นกับ /cancel ของเจ้าตัว: ฝั่ง workforce ต้องมีสิทธิ์ workforce.leave.approve
+ */
+export async function cancelLeaveForAction(requestId: string, reason: string): Promise<{ error?: string }> {
+  await requireOrg();
+  if (!requestId) return { error: "ไม่พบใบนี้" };
+  try {
+    await wfFetch(`/leave-requests/${requestId}/cancel-for`, {
+      method: "POST",
+      body: { reason: reason.trim() || "ผู้อนุมัติยกเลิกจากปฏิทินทีม" },
+    });
+  } catch (error) {
+    return { error: toMessage(error) };
+  }
+  revalidatePath("/hr");
+  return {};
+}
+
 export interface SwapLeaveState {
   ok?: boolean;
   error?: string;
