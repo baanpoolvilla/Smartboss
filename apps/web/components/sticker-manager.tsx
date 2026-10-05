@@ -13,7 +13,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Check, GripVertical, ImagePlus, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, CheckSquare, GripVertical, ImagePlus, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
 
@@ -23,7 +23,9 @@ import {
   addStickers,
   createPack,
   deletePack,
+  moveStickers,
   removeSticker,
+  removeStickers,
   renamePack,
   reorderPacks,
   reorderStickersIn,
@@ -52,6 +54,10 @@ export function StickerManager({ initialPackId }: { initialPackId?: string | nul
   const [renaming, setRenaming] = useState<string | null>(null);
   const [newPack, setNewPack] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // โหมดเลือกหลายตัว — null = ปิดอยู่ (แตะ = แก้ทีละตัว ลาก = เรียง) · เปิดแล้วแตะ = ติ๊กเลือก ลากไม่ได้
+  const [picked, setPicked] = useState<Set<string> | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -116,6 +122,43 @@ export function StickerManager({ initialPackId }: { initialPackId?: string | nul
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "สร้างหมวดไม่สำเร็จ");
     }
+  }
+
+  // นับเฉพาะตัวที่ยังอยู่ในหมวดที่เปิดอยู่ — เปลี่ยนหมวดกลางคันแล้วของหมวดเก่าไม่ติดมาโดน
+  const pickedIds = picked ? list.filter((s) => picked.has(s.id)).map((s) => s.id) : [];
+
+  function closePicking() {
+    setPicked(null);
+    setConfirmBulkDelete(false);
+  }
+
+  function togglePicked(id: string) {
+    setConfirmBulkDelete(false);
+    setPicked((prev) => {
+      const next = new Set(prev ?? []);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function bulkDelete() {
+    setBulkBusy(true);
+    const r = await removeStickers(pickedIds);
+    setBulkBusy(false);
+    closePicking();
+    if (r.done > 0) toast.success(`ลบสติกเกอร์ ${r.done} ตัวแล้ว`);
+    if (r.failed > 0) toast.error(`ลบไม่สำเร็จ ${r.failed} ตัว`);
+  }
+
+  async function bulkMove(target: string) {
+    setBulkBusy(true);
+    const r = await moveStickers(pickedIds, packOf(target));
+    setBulkBusy(false);
+    closePicking();
+    const name = target === GENERAL ? "ทั่วไป" : (packs.find((p) => p.id === target)?.name ?? "");
+    if (r.done > 0) toast.success(`ย้าย ${r.done} ตัวไปหมวด "${name}" แล้ว`);
+    if (r.failed > 0) toast.error(`ย้ายไม่สำเร็จ ${r.failed} ตัว`);
   }
 
   const currentName = currentPack === null ? "ทั่วไป" : (packs.find((p) => p.id === currentPack)?.name ?? "ทั่วไป");
@@ -207,6 +250,20 @@ export function StickerManager({ initialPackId }: { initialPackId?: string | nul
               e.target.value = "";
             }}
           />
+          {list.length > 0 && (
+            <button
+              type="button"
+              onClick={() => (picked ? closePicking() : setPicked(new Set()))}
+              aria-pressed={picked !== null}
+              className={cn(
+                "ml-auto flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-(--line) px-2.5 text-sm font-medium text-(--ink) hover:bg-(--bg-soft)",
+                picked && "bg-(--bg-soft)"
+              )}
+            >
+              {picked ? <X className="h-4 w-4" /> : <CheckSquare className="h-4 w-4" />}
+              {picked ? "เสร็จ" : "เลือกหลายตัว"}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
@@ -218,8 +275,73 @@ export function StickerManager({ initialPackId }: { initialPackId?: string | nul
           </button>
         </div>
         <p className="text-[11px] leading-relaxed text-(--ink-soft)">
-          เลือกได้หลายรูปพร้อมกัน ไม่ต้องตั้งชื่อ · PNG/WebP พื้นใสดีที่สุด ระบบย่อเหลือ 320 px (ราว 20–80 KB ต่อตัว) · GIF เคลื่อนไหวไม่เกิน 1 MB · ลากเพื่อเรียง แตะเพื่อแก้ชื่อ/ย้ายหมวด/ลบ
+          เลือกได้หลายรูปพร้อมกัน ไม่ต้องตั้งชื่อ · PNG/WebP พื้นใสดีที่สุด ระบบย่อเหลือ 320 px (ราว 20–80 KB ต่อตัว) · GIF เคลื่อนไหวไม่เกิน 1 MB · ลากเพื่อเรียง แตะเพื่อแก้ชื่อ/ย้ายหมวด/ลบ · กด “เลือกหลายตัว” เพื่อลบหรือย้ายหมวดทีละหลายตัว
         </p>
+
+        {picked && (
+          <div className="sticky top-0 z-20 flex flex-wrap items-center gap-1.5 rounded-xl border border-(--line) bg-(--bg) px-2.5 py-2 text-xs shadow-sm">
+            <span className="font-semibold text-(--ink)">เลือกแล้ว {pickedIds.length} ตัว</span>
+            <button
+              type="button"
+              onClick={() => setPicked(pickedIds.length === list.length ? new Set() : new Set(list.map((s) => s.id)))}
+              className="rounded-md px-1.5 py-1 font-medium text-(--chat-accent-strong,var(--ink)) hover:bg-(--bg-soft)"
+            >
+              {pickedIds.length === list.length ? "ไม่เลือกเลย" : "เลือกทั้งหมวด"}
+            </button>
+            <span className="ml-auto flex flex-wrap items-center gap-1.5">
+              {confirmBulkDelete ? (
+                <>
+                  <span className="text-(--danger)">ลบ {pickedIds.length} ตัวถาวร?</span>
+                  <button
+                    type="button"
+                    disabled={bulkBusy}
+                    onClick={() => void bulkDelete()}
+                    className="h-8 rounded-lg bg-(--danger) px-2.5 font-semibold text-white disabled:opacity-60"
+                  >
+                    {bulkBusy ? "กำลังลบ…" : "ยืนยันลบ"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={bulkBusy}
+                    onClick={() => setConfirmBulkDelete(false)}
+                    className="h-8 rounded-lg border border-(--line) px-2.5 text-(--ink)"
+                  >
+                    ยกเลิก
+                  </button>
+                </>
+              ) : (
+                <>
+                  <select
+                    value=""
+                    disabled={bulkBusy || pickedIds.length === 0}
+                    onChange={(e) => {
+                      if (e.target.value) void bulkMove(e.target.value);
+                    }}
+                    aria-label="ย้ายที่เลือกไปหมวด"
+                    className="h-8 max-w-40 rounded-lg border border-(--line) bg-(--bg-soft) px-2 text-(--ink) disabled:opacity-50 [@media(pointer:coarse)]:text-base"
+                  >
+                    <option value="">{bulkBusy ? "กำลังย้าย…" : "ย้ายไปหมวด…"}</option>
+                    {[{ id: GENERAL, name: "ทั่วไป" }, ...packs]
+                      .filter((p) => p.id !== validCurrent)
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={bulkBusy || pickedIds.length === 0}
+                    onClick={() => setConfirmBulkDelete(true)}
+                    className="flex h-8 items-center gap-1 rounded-lg px-2.5 font-semibold text-(--danger) hover:bg-(--bg-soft) disabled:opacity-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> ลบ
+                  </button>
+                </>
+              )}
+            </span>
+          </div>
+        )}
 
         {list.length === 0 ? (
           <button
@@ -234,7 +356,12 @@ export function StickerManager({ initialPackId }: { initialPackId?: string | nul
             <SortableContext items={list.map((s) => s.id)} strategy={rectSortingStrategy}>
               <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">
                 {list.map((s) => (
-                  <SortableSticker key={s.id} sticker={s} onOpen={() => setEditing(s)} />
+                  <SortableSticker
+                    key={s.id}
+                    sticker={s}
+                    picked={picked ? picked.has(s.id) : null}
+                    onOpen={() => (picked ? togglePicked(s.id) : setEditing(s))}
+                  />
                 ))}
               </div>
             </SortableContext>
@@ -360,8 +487,20 @@ function SortablePack({
   );
 }
 
-function SortableSticker({ sticker, onOpen }: { sticker: Sticker; onOpen: () => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: sticker.id });
+function SortableSticker({
+  sticker,
+  picked,
+  onOpen,
+}: {
+  sticker: Sticker;
+  /** null = ไม่ได้อยู่ในโหมดเลือกหลายตัว · true/false = ติ๊กอยู่หรือไม่ (โหมดนี้ลากเรียงไม่ได้) */
+  picked: boolean | null;
+  onOpen: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: sticker.id,
+    disabled: picked !== null,
+  });
   return (
     <button
       ref={setNodeRef}
@@ -370,13 +509,31 @@ function SortableSticker({ sticker, onOpen }: { sticker: Sticker; onOpen: () => 
       {...listeners}
       onClick={onOpen}
       title={sticker.name}
-      aria-label={`${sticker.name} — แตะเพื่อแก้ ลากเพื่อเรียง`}
+      aria-label={
+        picked === null
+          ? `${sticker.name} — แตะเพื่อแก้ ลากเพื่อเรียง`
+          : `${sticker.name} — แตะเพื่อ${picked ? "เลิกเลือก" : "เลือก"}`
+      }
+      aria-pressed={picked ?? undefined}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
-        "flex aspect-square touch-manipulation items-center justify-center rounded-xl border border-(--line) bg-(--bg-soft) p-1.5 hover:border-(--ink-soft)",
-        isDragging && "relative z-10 opacity-80 shadow-lg"
+        "relative flex aspect-square touch-manipulation items-center justify-center rounded-xl border border-(--line) bg-(--bg-soft) p-1.5 hover:border-(--ink-soft)",
+        picked && "border-(--chat-accent,var(--accent)) ring-2 ring-(--chat-accent,var(--accent))",
+        picked === false && "opacity-70",
+        isDragging && "z-10 opacity-80 shadow-lg"
       )}
     >
+      {picked !== null && (
+        <span
+          aria-hidden
+          className={cn(
+            "absolute left-1 top-1 flex h-5 w-5 items-center justify-center rounded-md border",
+            picked ? "border-(--chat-accent,var(--accent)) bg-(--chat-accent,var(--accent)) text-white" : "border-(--ink-soft) bg-(--bg)"
+          )}
+        >
+          {picked && <Check className="h-3.5 w-3.5" />}
+        </span>
+      )}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={sticker.url} alt={sticker.name} draggable={false} loading="lazy" className="pointer-events-none max-h-full max-w-full object-contain" />
     </button>

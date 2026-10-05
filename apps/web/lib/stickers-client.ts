@@ -141,6 +141,30 @@ export async function removeSticker(id: string): Promise<void> {
   emit({ stickers: state.stickers.filter((s) => s.id !== id) });
 }
 
+/** ลบหลายตัวรวด — ทีละตัวผ่าน endpoint เดิม (ตัวไหนพลาดไม่ทำให้ตัวอื่นค้าง) คืนจำนวนที่สำเร็จ/ไม่สำเร็จ */
+export async function removeStickers(ids: string[]): Promise<{ done: number; failed: number }> {
+  let done = 0;
+  for (const id of ids) {
+    await removeSticker(id).then(
+      () => done++,
+      () => undefined
+    );
+  }
+  return { done, failed: ids.length - done };
+}
+
+/** ย้ายหลายตัวไปหมวดเดียวกัน (null = "ทั่วไป") — ไปต่อท้ายหมวดปลายทางตามลำดับที่เรียงอยู่ */
+export async function moveStickers(ids: string[], packId: string | null): Promise<{ done: number; failed: number }> {
+  let done = 0;
+  for (const id of ids) {
+    await updateSticker(id, { packId }).then(
+      () => done++,
+      () => undefined
+    );
+  }
+  return { done, failed: ids.length - done };
+}
+
 export async function createPack(name: string): Promise<StickerPack> {
   const { pack } = await call<{ pack: StickerPack }>("/api/chat/sticker-packs", json("POST", { name }), "สร้างหมวดไม่สำเร็จ");
   emit({ packs: [...state.packs, pack] });
