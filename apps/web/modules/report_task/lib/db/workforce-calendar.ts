@@ -181,6 +181,8 @@ export async function listLeaveTypeCatalog(orgId: string): Promise<string[]> {
       SELECT name
       FROM workforce.leave_types
       WHERE auto_approve IS NOT TRUE
+        -- ประเภทที่ลบออกจากรายการแล้ว (migration 0018) ไม่ขึ้นเป็นตัวกรอง
+        AND archived_at IS NULL
       ORDER BY name
     `
   );

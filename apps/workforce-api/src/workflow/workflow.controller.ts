@@ -11,6 +11,7 @@ import {
   grantLeaveBalanceSchema,
   preApproveOvertimeSchema,
   renameLeaveTypeSchema,
+  archiveLeaveTypeSchema,
   reopenTimesheetPeriodSchema,
   submitLeaveSchema,
   submitOvertimeSchema,
@@ -75,6 +76,22 @@ export class LeaveController {
     @Body(zodPipe(renameLeaveTypeSchema)) body: z.infer<typeof renameLeaveTypeSchema>,
   ): Promise<Record<string, unknown>> {
     return this.service.renameLeaveType(requireUuid(leaveTypeId, 'leaveTypeId'), body.name);
+  }
+
+  /**
+   * ลบประเภทลาออกจากรายการ (archive) — เลือกใช้ใหม่ไม่ได้อีก · ใบเก่าคงประเภทเดิมไว้ หรือย้ายไป
+   * ประเภทอื่นด้วย merge_into (ใช้รวมประเภทที่สร้างซ้ำ เช่น "วันหยุดประจำเดือน" กับ "Day-Off")
+   * ไม่ใช่ DELETE เพราะแถวไม่ได้หายไปจริง (ดู LeaveService.archiveLeaveType)
+   */
+  @Post('leave-types/:leaveTypeId/archive')
+  @HttpCode(200)
+  @RequirePermissions('workforce.leave.manage')
+  @Idempotent()
+  async archiveType(
+    @Param('leaveTypeId') leaveTypeId: string,
+    @Body(zodPipe(archiveLeaveTypeSchema)) body: z.infer<typeof archiveLeaveTypeSchema>,
+  ): Promise<Record<string, unknown>> {
+    return this.service.archiveLeaveType(requireUuid(leaveTypeId, 'leaveTypeId'), body.merge_into);
   }
 
   /**

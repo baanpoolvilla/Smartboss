@@ -12,6 +12,7 @@ import {
 import { Field, NotProvisioned, Pill, SectionCard, inputClass } from "@/modules/hr/components/ui";
 import { createLeaveTypeAction, renameLeaveTypeAction, seedLeaveTypesAction } from "../../actions";
 import { Button } from "@smartboss/ui/components/button";
+import { DeleteLeaveTypeButton } from "./delete-leave-type-button";
 
 export default async function LeaveTypesSettingsPage() {
   return (
@@ -89,6 +90,11 @@ export default async function LeaveTypesSettingsPage() {
                               บันทึกชื่อ
                             </Button>
                           </form>
+                          <DeleteLeaveTypeButton
+                            id={t.id}
+                            name={t.name}
+                            others={(leaveTypes?.items ?? []).filter((o) => o.id !== t.id).map((o) => ({ id: o.id, name: o.name }))}
+                          />
                         </div>
                       ))}
                     </div>

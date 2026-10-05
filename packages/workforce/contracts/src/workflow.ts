@@ -34,6 +34,11 @@ export const renameLeaveTypeSchema = z.object({
   name: z.string().trim().min(1).max(120),
 });
 
+/** ลบประเภทลาออกจากรายการ — merge_into = ย้ายใบที่ลงไว้ไปประเภทนี้ก่อน (รวมประเภทที่ซ้ำกัน) */
+export const archiveLeaveTypeSchema = z.object({
+  merge_into: uuidSchema.nullable().default(null),
+});
+
 export const grantLeaveBalanceSchema = z.object({
   employment_id: uuidSchema,
   leave_type_id: uuidSchema,

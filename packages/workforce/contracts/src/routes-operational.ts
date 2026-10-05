@@ -1036,6 +1036,16 @@ export const OPERATIONAL_ROUTES: readonly Omit<RouteDefinition, 'response'>[] = 
     successStatus: 201,
   },
   {
+    operationId: 'archiveType_post',
+    method: 'post',
+    path: '/leave-types/{leaveTypeId}/archive',
+    summary: 'POST /leave-types/{leaveTypeId}/archive',
+    tag: 'workflow',
+    permissions: ['workforce.leave.manage'] as Permission[],
+    idempotent: true,
+    successStatus: 200,
+  },
+  {
     operationId: 'renameType_post',
     method: 'post',
     path: '/leave-types/{leaveTypeId}/rename',

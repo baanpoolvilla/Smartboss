@@ -1347,6 +1347,27 @@ export async function createLeaveTypeAction(formData: FormData) {
 }
 
 /**
+ * ลบประเภทการลาออกจากรายการ — ฝั่ง workforce เป็นการเก็บเข้ากรุ (archive): เลือกใช้ใหม่ไม่ได้
+ * ใบที่ลงด้วยประเภทนี้ไปแล้วยังอยู่ — คงชื่อเดิม หรือย้ายไปประเภทอื่นตาม mergeInto
+ * คืน error เป็นข้อความให้ปุ่มแสดงในที่เดิม
+ */
+export async function deleteLeaveTypeAction(leaveTypeId: string, mergeInto: string | null = null): Promise<{ error?: string }> {
+  await guard(HR_PERMS.settingManage);
+  if (!leaveTypeId) return { error: "ไม่พบประเภทการลานี้" };
+  try {
+    // mergeInto = ย้ายใบที่ลงไว้ไปประเภทนั้นก่อนลบ (รวมประเภทที่ซ้ำกัน)
+    await wfFetch(`/leave-types/${leaveTypeId}/archive`, { method: "POST", body: { merge_into: mergeInto } });
+  } catch (error) {
+    const message = toMessage(error);
+    return { error: /at least one leave type/i.test(message) ? "ต้องเหลือประเภทการลาอย่างน้อยหนึ่งประเภท" : message };
+  }
+  revalidatePath("/hr");
+  revalidatePath("/hr/settings");
+  revalidatePath("/hr/settings/leave-types");
+  return {};
+}
+
+/**
  * แก้ชื่อประเภทลาที่มีอยู่แล้ว (เช่นแก้คำสะกดผิดตอนสร้าง) — ค่าอื่น ๆ ของ
  * ประเภทลา (โควตา, ต้องอนุมัติหรือไม่ ฯลฯ) ยังตั้งได้ครั้งเดียวตอนสร้างเท่านั้น
  */

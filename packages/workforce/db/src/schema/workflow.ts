@@ -29,6 +29,8 @@ export const leaveTypes = workforce.table('leave_types', {
    * ไม่ต้องลงเวลา แต่ยังทำงาน) · false = ลาแล้วไม่ต้องส่งรายงาน (ค่าเดิม)
    */
   requiresReports: boolean('requires_reports').notNull().default(false),
+  /** ลบออกจากรายการแล้ว (ดู migration 0018) — NULL = ยังใช้งาน · ใบเก่ายังอ้างประเภทนี้ได้ */
+  archivedAt: timestamp('archived_at', { withTimezone: true }),
   attachmentRequired: boolean('attachment_required').notNull().default(false),
   minDurationMinutes: integer('min_duration_minutes').notNull().default(0),
   maxDurationMinutes: integer('max_duration_minutes'),

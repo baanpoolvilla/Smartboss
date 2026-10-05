@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { schema, type Tx } from '@workforce/db';
 import { AppError, LocalDate, uuidv7, type Clock } from '@workforce/domain';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { UnitOfWork } from '../infrastructure/unit-of-work';
 import { RequestContextService } from '../shared/request-context';
 import { CLOCK } from '../shared/tokens';
@@ -106,6 +106,76 @@ export class LeaveService {
       });
 
       return { id: leaveTypeId, name };
+    });
+  }
+
+  /**
+   * ลบประเภทลาออกจากรายการ — archive ไม่ใช่ลบแถว (ใบลาเก่าและบัญชีสิทธิ์วันลาที่ห้ามแก้ย้อนหลัง
+   * ยังชี้มาที่ประเภทนี้) หลังจากนี้เลือกประเภทนี้ลงวันหยุด/ลาใหม่ไม่ได้ ใบที่มีอยู่แล้วไม่เปลี่ยน
+   *
+   * code ถูกต่อท้ายด้วย id — ปล่อย code เดิมให้ประเภทใหม่ชื่อเดียวกันใช้ได้ (สร้างผิดแล้วลบ สร้างใหม่)
+   * ต้องเหลือประเภทที่ใช้งานอย่างน้อยหนึ่งประเภท ไม่งั้นพนักงานลงวันหยุดเองไม่ได้เลย
+   *
+   * mergeInto = รวมเข้าประเภทอื่น: ใบทุกใบของประเภทนี้ย้ายไปประเภทปลายทางก่อน (ปฏิทิน/โควตารายเดือน
+   * นับรวมกันเป็นประเภทเดียว) — ใช้กับประเภทที่สร้างซ้ำกัน · บัญชีสิทธิ์วันลา (ledger) แก้ย้อนหลังไม่ได้
+   * จึงคงอยู่ใต้ประเภทเดิมที่ถูกเก็บเข้ากรุ ซึ่งไม่กระทบประเภทที่เป็นสิทธิ์รายเดือน (นับจากใบโดยตรง)
+   */
+  async archiveLeaveType(leaveTypeId: string, mergeInto: string | null = null): Promise<Record<string, unknown>> {
+    return this.uow.run(async (uow) => {
+      const types = await uow.tx
+        .select()
+        .from(schema.leaveTypes)
+        .where(eq(schema.leaveTypes.id, leaveTypeId))
+        .limit(1);
+      const type = types[0];
+      if (type === undefined) throw AppError.notFound('leave type');
+      if (type.archivedAt !== null) return { id: leaveTypeId, archived: true };
+
+      const active = await uow.tx
+        .select({ id: schema.leaveTypes.id })
+        .from(schema.leaveTypes)
+        .where(and(eq(schema.leaveTypes.companyId, type.companyId), isNull(schema.leaveTypes.archivedAt)))
+        .limit(2);
+      if (active.length <= 1) {
+        throw AppError.validation('at least one leave type must remain');
+      }
+
+      let moved = 0;
+      if (mergeInto !== null) {
+        if (mergeInto === leaveTypeId) throw AppError.validation('cannot merge a leave type into itself');
+        const targets = await uow.tx
+          .select()
+          .from(schema.leaveTypes)
+          .where(eq(schema.leaveTypes.id, mergeInto))
+          .limit(1);
+        const target = targets[0];
+        if (target === undefined || target.companyId !== type.companyId || target.archivedAt !== null) {
+          throw AppError.notFound('leave type');
+        }
+        const rows = await uow.tx
+          .update(schema.leaveRequests)
+          .set({ leaveTypeId: mergeInto })
+          .where(eq(schema.leaveRequests.leaveTypeId, leaveTypeId))
+          .returning({ id: schema.leaveRequests.id });
+        moved = rows.length;
+      }
+
+      await uow.tx
+        .update(schema.leaveTypes)
+        .set({ archivedAt: new Date(), code: `${type.code}~${leaveTypeId.slice(0, 8)}` })
+        .where(eq(schema.leaveTypes.id, leaveTypeId));
+
+      await uow.audit({
+        action: 'leave.type.archive',
+        resourceType: 'leave_type',
+        resourceId: leaveTypeId,
+        outcome: 'SUCCESS',
+        companyId: type.companyId,
+        before: { name: type.name, code: type.code },
+        after: mergeInto === null ? {} : { merged_into: mergeInto, moved_requests: moved },
+      });
+
+      return { id: leaveTypeId, archived: true, moved_requests: moved };
     });
   }
 
@@ -252,6 +322,8 @@ export class LeaveService {
         .limit(1);
       const leaveType = types[0];
       if (leaveType === undefined) throw AppError.notFound('leave type');
+      // ประเภทที่ถูกลบออกจากรายการแล้ว — ใบเก่ายังอยู่ แต่ยื่นใบใหม่ไม่ได้
+      if (leaveType.archivedAt !== null) throw AppError.validation('this leave type is no longer available');
 
       // สลับวันหยุด — ใบเดิมต้องยังมีผลอยู่ตอนนี้ ไม่งั้นไม่รู้จะสลับจากอะไร
       let swapFromRequest: typeof schema.leaveRequests.$inferSelect | undefined;
@@ -798,7 +870,12 @@ export class LeaveService {
       const rows = await uow.tx
         .select()
         .from(schema.leaveTypes)
-        .where(companyId === undefined ? undefined : eq(schema.leaveTypes.companyId, companyId))
+        // เฉพาะประเภทที่ยังใช้งาน — ที่ลบออกจากรายการแล้ว (archived) ไม่ให้เลือกและไม่ขึ้นหน้าตั้งค่า
+        .where(
+          companyId === undefined
+            ? isNull(schema.leaveTypes.archivedAt)
+            : and(eq(schema.leaveTypes.companyId, companyId), isNull(schema.leaveTypes.archivedAt)),
+        )
         .limit(200);
 
       return {
