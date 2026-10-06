@@ -128,6 +128,78 @@ function endsWithTypeName(label: string, typeName: string): boolean {
 /** รายการที่โชว์ต่อช่องวัน — ที่เหลือรวมเป็นป้าย "+N รายการ" (กดวันนั้นเพื่อดูทั้งหมด) */
 const MAX_PER_DAY = 2;
 
+const escapeHtml = (text: string) =>
+  text.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch] ?? ch);
+
+/**
+ * พิมพ์ปฏิทินทีมของเดือนที่ดูอยู่ (หรือบันทึกเป็น PDF จากหน้าต่างพิมพ์) — A4 แนวนอน หนึ่งหน้า
+ *
+ * สร้างเป็นเอกสารแยกในกรอบซ่อน แล้วสั่งพิมพ์กรอบนั้น ไม่ได้พิมพ์หน้าเว็บตรง ๆ: หน้าเว็บมีเมนูซ้าย แถบหัว
+ * และช่องวันที่ตัดเหลือ 2 รายการ + "+N" ซึ่งบนกระดาษกดดูต่อไม่ได้ ⇒ ฉบับพิมพ์แสดง "ครบทุกรายการ" ของทุกวัน
+ * ใช้ตัวกรองคน/ประเภทที่เลือกอยู่บนจอ (ซ่อนใครไว้ก็ไม่ออกในกระดาษ)
+ */
+function printMonth(
+  title: string,
+  grid: { iso: string; day: number; inMonth: boolean }[],
+  entriesOf: (iso: string) => DayEntry[],
+) {
+  const cellHtml = (cell: { iso: string; day: number; inMonth: boolean }) => {
+    const rows = entriesOf(cell.iso)
+      .map((entry) => {
+        const hue = typeHue(entry.leaveTypeName, entry.autoApprove);
+        const waiting = !entry.autoApprove && entry.status === "PENDING";
+        return `<div class="e${waiting ? " w" : ""}" style="border-left-color:hsl(${hue} 65% 45%);background:hsl(${hue} 80% 93%);color:hsl(${hue} 60% 22%)">${waiting ? "• " : ""}${escapeHtml(labelOf(entry))}</div>`;
+      })
+      .join("");
+    return `<td class="${cell.inMonth ? "" : "out"}"><div class="d">${cell.day}</div>${rows}</td>`;
+  };
+  // ตารางบนจอมี 6 สัปดาห์เสมอ — สัปดาห์ที่ไม่มีวันของเดือนนี้เลยไม่ต้องพิมพ์ (ช่วยให้จบในหน้าเดียว)
+  const weeks: (typeof grid)[] = [];
+  for (let index = 0; index < grid.length; index += 7) weeks.push(grid.slice(index, index + 7));
+  const cells = weeks
+    .filter((week) => week.some((cell) => cell.inMonth))
+    .map((week) => `<tr>${week.map(cellHtml).join("")}</tr>`)
+    .join("");
+  const printedAt = new Date().toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
+  const html = `<!doctype html><html lang="th"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>
+@page{size:A4 landscape;margin:7mm}
+*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{margin:0;font-family:"Noto Sans Thai","Sarabun","Leelawadee UI",Tahoma,sans-serif;color:#17332f}
+h1{margin:0 0 1mm;font-size:13pt}
+p{margin:0 0 2mm;font-size:8pt;color:#55627a}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+th{font-size:9pt;font-weight:600;padding:1mm;border:1px solid #9aa5a2;background:#eef2f0}
+td{vertical-align:top;height:24mm;padding:.8mm;border:1px solid #9aa5a2}
+td.out{background:#f6f7f7;color:#9aa5a2}
+.d{text-align:right;font-size:8.5pt;font-weight:600;line-height:1.1;margin-bottom:.4mm}
+.e{font-size:7pt;line-height:1.22;padding:0 .8mm;margin-bottom:.25mm;border-left:2.5px solid;border-radius:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.e.w{opacity:.65}
+tr{break-inside:avoid}
+</style></head><body><h1>ปฏิทินทีม · ${escapeHtml(title)}</h1><p>แถบจางมีจุดนำหน้า = รออนุมัติ · พิมพ์เมื่อ ${escapeHtml(printedAt)}</p><table><thead><tr>${DOW_FULL.map((d) => `<th>${d}</th>`).join("")}</tr></thead><tbody>${cells}</tbody></table></body></html>`;
+
+  const frame = document.createElement("iframe");
+  frame.setAttribute("aria-hidden", "true");
+  frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0";
+  document.body.appendChild(frame);
+  const doc = frame.contentDocument;
+  if (!doc || !frame.contentWindow) {
+    frame.remove();
+    return;
+  }
+  doc.open();
+  doc.write(html);
+  doc.close();
+  const target = frame.contentWindow;
+  // รอให้กรอบจัดหน้าเสร็จก่อนสั่งพิมพ์ แล้วเก็บกรอบทิ้งเมื่อปิดหน้าต่างพิมพ์ (หรือครบเวลา ถ้าเบราว์เซอร์ไม่แจ้ง)
+  const cleanup = () => frame.remove();
+  target.addEventListener("afterprint", cleanup);
+  setTimeout(() => {
+    target.focus();
+    target.print();
+    setTimeout(cleanup, 60_000);
+  }, 150);
+}
+
 /** ชิปกรองแบบเปิด/ปิด — เปิด = ขอบและตัวหนังสือสีของประเภท · ปิด = เทา ขีดฆ่า */
 function FilterChip({
   label,
@@ -392,6 +464,25 @@ export function LeaveCalendar({
             />
           ))}
         </div>
+        {/* พิมพ์/บันทึก PDF ของเดือนนี้ — ตามตัวกรองที่เลือกอยู่ และแสดงครบทุกรายการของแต่ละวัน */}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="ml-auto shrink-0"
+          onClick={() =>
+            printMonth(
+              new Date(`${month}-01T00:00:00`).toLocaleDateString("th-TH", { month: "long", year: "numeric" }),
+              grid,
+              (iso) =>
+                (entriesByDate[iso] ?? []).filter(
+                  (e) => !hidden.has(e.employmentId) && !hiddenTypes.has(e.leaveTypeName ?? UNNAMED_TYPE),
+                ),
+            )
+          }
+        >
+          พิมพ์ / PDF
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[230px_minmax(0,1fr)]">
