@@ -45,7 +45,8 @@ export function calculateAttendance(input: AttendanceInput): AttendanceResult {
   }
 
   const policy = input.policy;
-  const pairing = pairPunches(inferLoneExitPunch(input), {
+  const punches = dropLateScanAfterCorrectedIn(input);
+  const pairing = pairPunches(inferLoneExitPunch({ ...input, punches }), {
     duplicateWindowMinutes: policy.duplicatePunchWindowMinutes,
     maxShiftMinutes: policy.maxShiftMinutes,
   });
@@ -206,6 +207,42 @@ function inferLoneExitPunch(input: AttendanceInput): AttendanceInput['punches'] 
   );
   if (only.at.getTime() < midpoint.getTime()) return input.punches;
   return input.punches.map((p) => (p === only ? { ...p, intent: 'CLOCK_OUT' as const } : p));
+}
+
+/**
+ * แก้เวลาเข้างานแล้ว (คำขอแก้เวลาที่อนุมัติ) สแกนเช้าที่ตามมาคือ "การมาถึงครั้งเดียวกัน" ไม่ใช่สแกนออก
+ *
+ * ลืมสแกนตอนมาถึง 08:10 นึกได้เลยไปสแกน 08:20 แล้วยื่นขอแก้เป็น 08:10 — พออนุมัติ วันนั้นมี
+ * เข้า 08:10 (แก้) + AUTO 08:20 + AUTO 17:05 ⇒ AUTO สลับเข้า/ออก: 08:20 กลายเป็น "ออก" และ 17:05 เป็น
+ * "เข้า" ค้าง = ทำงาน 10 นาที ขาดงานเกือบทั้งกะ (เจอจริง: อนุมัติแก้เวลาแล้วโดนหัก "ขาดงาน 9 ชั่วโมง")
+ *
+ * ตัดสแกนนั้นทิ้งเฉพาะเมื่อชัดว่าไม่ใช่การออกจริง: อยู่ก่อนครึ่งกะ และจำนวนสแกนที่เหลือทำให้วันจบด้วย
+ * "เข้า" ค้าง (เลขคู่) หรือมีสแกนนั้นอยู่อันเดียว · ออกไปแล้วกลับมาช่วงเช้าจริง (ออก-เข้า-ออก = เลขคี่)
+ * จับคู่ลงตัวอยู่แล้ว ไม่แตะ
+ */
+function dropLateScanAfterCorrectedIn(input: AttendanceInput): AttendanceInput['punches'] {
+  const shift = input.shift;
+  if (shift === null || shift.restDay) return input.punches;
+  const work = input.punches
+    .filter(
+      (p) =>
+        !p.ignored &&
+        !p.pendingReview &&
+        (p.intent === 'AUTO' || p.intent === 'CLOCK_IN' || p.intent === 'CLOCK_OUT'),
+    )
+    .sort((left, right) => left.at.getTime() - right.at.getTime());
+  const [first, next, ...later] = work;
+  if (first === undefined || next === undefined) return input.punches;
+  if (!first.adjusted || first.intent !== 'CLOCK_IN') return input.punches;
+  if (next.intent !== 'AUTO' || later.some((p) => p.intent !== 'AUTO')) return input.punches;
+  const midpoint = zonedTimeToUtc(
+    input.workDate,
+    Math.round((shift.startMinutes + shift.endMinutes) / 2),
+    input.timeZone,
+  );
+  if (next.at.getTime() >= midpoint.getTime()) return input.punches;
+  if (later.length > 0 && later.length % 2 === 0) return input.punches;
+  return input.punches.map((p) => (p === next ? { ...p, ignored: true } : p));
 }
 
 function firstIn(pairs: readonly PunchPair[]): Date | null {

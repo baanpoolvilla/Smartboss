@@ -264,6 +264,34 @@ describe('missing and duplicate punches', () => {
     expect(codes(result)).toContain('MISSING_OUT');
   });
 
+  it('a corrected clock-in makes the late morning scan the same arrival, not a clock-out', () => {
+    // ลืมสแกนตอนมาถึง สแกน 08:20 แล้วขอแก้เป็น 08:10 — เดิม 08:20 กลายเป็น "ออก" ทั้งวันเหลือ 10 นาที
+    const result = run({
+      punches: [
+        punch('08:10', { intent: 'CLOCK_IN', adjusted: true, trustedIntent: true }),
+        punch('08:20'),
+        punch('17:10'),
+      ],
+    });
+    expect(result.actualInAt?.toISOString()).toBe(zonedTimeToUtc(WORK_DATE, 490, TZ).toISOString());
+    expect(result.lateMinutes).toBe(0);
+    expect(result.absenceMinutes).toBe(0);
+    expect(codes(result)).not.toContain('MISSING_OUT');
+  });
+
+  it('a corrected clock-in keeps a real morning exit and return', () => {
+    const result = run({
+      punches: [
+        punch('08:10', { intent: 'CLOCK_IN', adjusted: true, trustedIntent: true }),
+        punch('10:00'),
+        punch('11:00'),
+        punch('17:00'),
+      ],
+    });
+    expect(result.workedMinutes).toBe(110 + 300);
+    expect(codes(result)).not.toContain('MISSING_OUT');
+  });
+
   it('treats an in/out pair seconds apart as one double-registered scan, not a zero-minute day', () => {
     // เครื่องสแกนนิ้วเด้ง 2 ที: กดครั้งเดียวได้ IN 08:00 + OUT 08:01 แล้วเย็นสแกนออก 17:00
     const result = run({
