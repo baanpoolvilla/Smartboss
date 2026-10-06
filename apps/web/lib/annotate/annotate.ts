@@ -97,10 +97,21 @@ export function filesFromDataTransfer(dt: DataTransfer | null): File[] {
  * คลิปบอร์ดมีข้อความไหม — คัดลอกเซลล์จาก Excel / ข้อความจาก Word จะได้ทั้งข้อความและ "รูปของตาราง"
  * มาพร้อมกัน ถ้ามีข้อความให้วางเป็นข้อความตามปกติ ไม่ใช่แนบรูปตาราง (แคปจอ / คัดลอกรูปจากเว็บ
  * ไม่มีข้อความติดมา ยังแนบเป็นรูปเหมือนเดิม)
+ *
+ * แต่ "มีข้อความ + มีรูป" ไม่ได้แปลว่าเป็นตารางเสมอ — รูปที่คัดลอกจาก Finder บน Mac / โปรแกรมแคปจอ /
+ * แอปแชตบางตัว พกชื่อไฟล์หรือลิงก์มาเป็นข้อความด้วย เดิมเคสพวกนี้ถูกมองเป็น "วางข้อความ" รูปเลยไม่แนบ
+ * และไม่มีอะไรเตือน ("บางคนแคปรูปมาวางไม่ได้") ⇒ มีรูปมาด้วยจะนับเป็นข้อความก็ต่อเมื่อเป็นเนื้อหาจัดรูปแบบ
+ * (text/html หรือ text/rtf — สิ่งที่ Excel/Word ใส่มาเสมอ) เท่านั้น
  */
 export function hasClipboardText(dt: DataTransfer | null): boolean {
   try {
-    return !!dt && dt.getData("text/plain").trim().length > 0;
+    if (!dt || dt.getData("text/plain").trim().length === 0) return false;
+    const hasImage =
+      Array.from(dt.files ?? []).some((f) => f.type.startsWith("image/")) ||
+      Array.from(dt.items ?? []).some((it) => it.kind === "file" && it.type.startsWith("image/"));
+    if (!hasImage) return true;
+    const types = Array.from(dt.types ?? []);
+    return types.includes("text/html") || types.includes("text/rtf");
   } catch {
     return false;
   }

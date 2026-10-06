@@ -659,7 +659,18 @@ export function ReportPostFields({
 
   return (
     // ลากไฟล์มาวางตรงไหนของฟอร์มก็ได้ (ลากห้องมาแท็กยังทำงานแยกในช่องเนื้อหา — ตัวนั้นไม่ยุ่งกับไฟล์)
-    <div className="space-y-3" {...dropZoneProps((files) => onFilesSelected(files))}>
+    <div
+      className="space-y-3"
+      {...dropZoneProps((files) => onFilesSelected(files))}
+      // วางรูปตอนเคอร์เซอร์อยู่ช่องหัวข้อ (หรือช่องอื่นในฟอร์ม) ก็แนบได้ — เดิมรับเฉพาะตอนอยู่ในช่องเนื้อหา
+      // วางที่อื่นแล้วเงียบ ไม่มีอะไรเกิดขึ้น · ช่องเนื้อหาจัดการเองแล้ว (defaultPrevented) ไม่ทำซ้ำ
+      onPaste={(e) => {
+        if (e.defaultPrevented || hasClipboardText(e.clipboardData)) return;
+        if (Array.from(e.clipboardData.items).some((it) => it.kind === "file" && it.type.startsWith("image/"))) {
+          void handleImagePaste(e);
+        }
+      }}
+    >
       <Input
         aria-label="หัวข้อรีพอต"
         placeholder="หัวข้อรีพอต เช่น สรุปอัปเดตประจำสัปดาห์"
