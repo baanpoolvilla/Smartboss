@@ -136,6 +136,7 @@ function FilterChip({
   onClick,
   count,
   dot = false,
+  className = "",
 }: {
   label: string;
   hue: number;
@@ -143,6 +144,7 @@ function FilterChip({
   onClick: () => void;
   count?: number;
   dot?: boolean;
+  className?: string;
 }) {
   const color = `hsl(${hue} 65% 40%)`;
   return (
@@ -150,7 +152,7 @@ function FilterChip({
       type="button"
       onClick={onClick}
       aria-pressed={!off}
-      className="flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-medium transition-colors"
+      className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 font-medium transition-colors ${className}`}
       style={
         off
           ? { borderColor: "var(--line)", color: "var(--ink-soft)", textDecoration: "line-through" }
@@ -358,9 +360,13 @@ export function LeaveCalendar({
         </p>
       )}
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-(--ink-soft)">แสดง:</span>
+      {/*
+        <640px: ชิปกรองทั้งหมดอยู่แถวเดียว เลื่อนซ้ายขวาได้ ไม่ตกเป็นสามบรรทัด และไม่แสดงประเภทที่เดือนนี้
+        ไม่มีใครลงเลย (จำนวน 0 — ไม่มีอะไรให้กรอง) หัวปฏิทินบนมือถือเดิมกินที่เกือบเท่าตัวปฏิทิน ("ตรงหัวมันรก")
+      */}
+      <div className="-mx-1 flex flex-nowrap items-center gap-x-3 gap-y-2 overflow-x-auto px-1 text-xs [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:flex-wrap sm:gap-x-4 sm:overflow-visible sm:px-0">
+        <div className="flex shrink-0 items-center gap-1.5 sm:shrink sm:flex-wrap">
+          <span className="hidden text-(--ink-soft) sm:inline">แสดง:</span>
           {(
             [
               [true, "วันหยุดประจำ", 150],
@@ -372,11 +378,12 @@ export function LeaveCalendar({
               <FilterChip key={label} label={label} hue={hue} off={groupOff(auto)} onClick={() => toggleGroup(auto)} dot />
             ))}
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-(--ink-soft)">ประเภท:</span>
+        <div className="flex shrink-0 items-center gap-1.5 sm:shrink sm:flex-wrap">
+          <span className="hidden text-(--ink-soft) sm:inline">ประเภท:</span>
           {types.map((t) => (
             <FilterChip
               key={t.name}
+              className={t.count === 0 ? "hidden sm:flex" : ""}
               label={t.name === UNNAMED_TYPE ? "ไม่ระบุประเภท" : t.name}
               count={t.count}
               hue={typeHue(t.name === UNNAMED_TYPE ? null : t.name, t.autoApprove)}
@@ -430,8 +437,10 @@ export function LeaveCalendar({
         </aside>
 
         {/* ── ตารางเดือน ── */}
-        <div className="order-1 min-w-0 overflow-x-auto lg:order-2">
-          <div className="min-w-[38rem]">
+        {/* <640px: เจ็ดวันพอดีจอ ไม่ต้องเลื่อนข้าง — เดิมตารางกว้างขั้นต่ำ 608px บนมือถือเลยเห็นแค่ จ–ศ
+            เสาร์/อาทิตย์หลุดขอบขวา ดูเหมือนปฏิทินไม่มีวันหยุดสุดสัปดาห์ ("ใน mobile ไม่เป็นแบบนี้") */}
+        <div className="order-1 min-w-0 lg:order-2">
+          <div className="sm:min-w-[38rem]">
             <div className="grid grid-cols-7 border-b border-(--line) pb-1">
               {DOW.map((d, i) => (
                 <span
@@ -459,7 +468,7 @@ export function LeaveCalendar({
 
                 const body = (
                   <span
-                    className="flex h-full min-h-24 flex-col gap-0.5 border-b border-r border-(--line) p-1 text-left lg:min-h-[7.5rem]"
+                    className="flex h-full min-h-[4.75rem] min-w-0 flex-col gap-0.5 border-b border-r border-(--line) p-0.5 text-left sm:min-h-24 sm:p-1 lg:min-h-[7.5rem]"
                     style={{
                       opacity: cell.inMonth ? 1 : 0.4,
                       boxShadow: heavy ? "inset 0 0 0 1.5px var(--tone-warn)" : undefined,
@@ -495,7 +504,7 @@ export function LeaveCalendar({
                         <span
                           key={`${entry.employmentId}-${index}`}
                           title={`${labelOf(entry)} · ${entry.autoApprove ? "วันหยุดประจำ (สิทธิ์)" : entry.status === "APPROVED" ? "ลา · อนุมัติแล้ว" : "ลา · รออนุมัติ"}`}
-                          className="truncate rounded-sm px-1.5 text-[10.5px] leading-[18px]"
+                          className="truncate rounded-sm px-0.5 text-[9.5px] leading-[15px] sm:px-1.5 sm:text-[10.5px] sm:leading-[18px]"
                           style={{
                             borderLeft: `3px solid hsl(${hue} 65% 45%)`,
                             backgroundColor: `hsl(${hue} 80% 93%)`,
@@ -506,14 +515,17 @@ export function LeaveCalendar({
                           }}
                         >
                           {waiting ? "• " : ""}
-                          {labelOf(entry)}
+                          {/* ช่องวันบนมือถือกว้างราว 50px — พอแค่ชื่อคน (ประเภทดูจากสี กดวันเพื่อดูเต็ม) */}
+                          <span className="sm:hidden">{entry.name}</span>
+                          <span className="hidden sm:inline">{labelOf(entry)}</span>
                         </span>
                       );
                     })}
 
                     {entries.length > MAX_PER_DAY && (
-                      <span className="mt-0.5 self-start rounded-full bg-(--ink) px-2 text-[10px] font-semibold leading-[18px] text-(--bg)">
-                        +{entries.length - MAX_PER_DAY} รายการ
+                      <span className="mt-0.5 self-start rounded-full bg-(--ink) px-1.5 text-[9.5px] font-semibold leading-[15px] text-(--bg) sm:px-2 sm:text-[10px] sm:leading-[18px]">
+                        +{entries.length - MAX_PER_DAY}
+                        <span className="hidden sm:inline"> รายการ</span>
                       </span>
                     )}
                   </span>
