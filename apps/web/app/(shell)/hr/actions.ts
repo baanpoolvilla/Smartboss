@@ -1090,7 +1090,11 @@ export async function setDayOffQuotaAction(
   if (!employmentId) return { error: "กรุณาเลือกพนักงาน" };
   if (scope === "month" && !/^\d{4}-\d{2}$/.test(month)) return { error: "เดือนไม่ถูกต้อง" };
 
-  const raw = String(formData.get(scope === "standing" ? "standing_days" : "month_days") ?? "").trim();
+  // ปุ่ม "กลับไปใช้ N วัน" ของเดือน = ล้างแถวของเดือนนั้น ไม่สนค่าที่ค้างอยู่ในช่อง
+  const raw =
+    formData.get("reset") === "1"
+      ? ""
+      : String(formData.get(scope === "standing" ? "standing_days" : "month_days") ?? "").trim();
   const note = String(formData.get(scope === "standing" ? "standing_note" : "note") ?? "").slice(0, 200);
 
   /*
