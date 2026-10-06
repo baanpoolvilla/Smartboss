@@ -49,6 +49,7 @@ export default async function PurchaseOrdersPage({
       ...orders.flatMap((o) => [
         o.createdBy,
         o.poAssignedTo,
+        o.receiverAssignedTo,
         o.poCreatedBy,
         o.orderedBy,
         o.receivedBy,
@@ -108,6 +109,9 @@ export default async function PurchaseOrdersPage({
       receiverName: o.receiverAssignedTo
         ? (names[o.receiverAssignedTo] ?? null)
         : null,
+      assigneeIds: [...new Set([o.poAssignedTo, o.receiverAssignedTo].filter((id): id is string => !!id))].map(
+        (id) => ({ id, name: names[id] ?? "ไม่ทราบชื่อ" })
+      ),
       isEmergency: o.isEmergencyPurchase,
       workOrderCode: o.workOrderId ? (woCodes[o.workOrderId]?.code ?? null) : null,
       phase: phaseOf(o),

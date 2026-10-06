@@ -65,9 +65,10 @@ export default async function WorkOrdersPage({
   const propNames: Record<string, string> = Object.fromEntries(
     properties.map((p) => [p.id, p.name])
   );
+  // ชื่อทั้งผู้เปิดและผู้ได้รับมอบหมาย — ใช้ตารางเดียวกัน (การ์ด + ตัวกรองผู้รับผิดชอบ)
   const creatorNames = await userNameMap(
     orgId,
-    orders.map((o) => o.createdBy)
+    orders.flatMap((o) => [o.createdBy, o.assignedTo])
   );
 
   const rows: BoardOrder[] = orders
@@ -88,6 +89,7 @@ export default async function WorkOrdersPage({
       propertyId: o.propertyId,
       additionalPropertyIds: o.additionalPropertyIds,
       createdBy: o.createdBy,
+      assignedTo: o.assignedTo,
       autoCreated: o.autoCreated,
       createdAtLabel: fmtThaiDate(o.createdAt),
       hasExpense: expenseSet.has(o.id),

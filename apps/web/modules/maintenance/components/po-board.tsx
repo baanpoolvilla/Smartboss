@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { PersonFilter, UNASSIGNED } from "./person-filter";
 import Link from "next/link";
 import {
   ReceiptText,
@@ -33,6 +34,8 @@ export interface BoardPo {
   assigneeName: string | null;
   /** คนที่ถูกมอบหมายให้รับของ (ตั้งตอนกดดำเนินการซื้อ) */
   receiverName: string | null;
+  /** ผู้ได้รับมอบหมาย (ผู้ซื้อ + ผู้รับของ) เป็น id — ใช้กรองตามคน */
+  assigneeIds: { id: string; name: string }[];
   isEmergency: boolean;
   /** เลขที่ใบงานต้นทาง ถ้าเปิดมาจากใบงาน (null = เปิดลอย ๆ) */
   workOrderCode: string | null;
@@ -204,8 +207,8 @@ function returnsOf(returns: BoardReturn[], columnKey: string): BoardReturn[] {
 }
 
 export function PoBoard({
-  orders,
-  returns,
+  orders: allOrders,
+  returns: allReturns,
   initialTab,
 }: {
   orders: BoardPo[];
@@ -215,6 +218,21 @@ export function PoBoard({
   // ?tab=returns มาจากตอนเพิ่ง "แจ้งคืน" เสร็จ (ดู actions.ts) — คืนของที่เพิ่ง
   // แจ้งยังไม่จบเรื่อง จึงอยู่แท็บ "ดำเนินการ" ไม่ใช่แท็บที่ 5 ที่ไม่มีแล้ว
   const [tab, setTab] = useState(initialTab === "returns" ? 2 : 0);
+  // กรองตามผู้ได้รับมอบหมาย (ผู้ซื้อ หรือ ผู้รับของ) — null = ทุกคน · UNASSIGNED = ยังไม่มอบหมาย
+  const [person, setPerson] = useState<string | null>(null);
+  const people = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const o of allOrders) for (const p of o.assigneeIds) byId.set(p.id, p.name);
+    return [...byId].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, "th"));
+  }, [allOrders]);
+  const orders =
+    person === null
+      ? allOrders
+      : allOrders.filter((o) =>
+          person === UNASSIGNED ? o.assigneeIds.length === 0 : o.assigneeIds.some((p) => p.id === person)
+        );
+  // คืนของไม่มีผู้ได้รับมอบหมาย — ตอนกรองตามคนจึงไม่แสดง (ไม่งั้นกรองแล้วยังเห็นของทุกคนปนอยู่)
+  const returns = person === null ? allReturns : [];
 
   const buckets: Record<string, BoardPo[]> = {
     pending: orders.filter((o) => o.status === "pending"),
@@ -229,6 +247,17 @@ export function PoBoard({
 
   return (
     <div>
+      {people.length > 0 && (
+        <div className="mb-3 flex gap-2 overflow-x-auto">
+          <PersonFilter
+            label="ผู้รับผิดชอบ"
+            value={person}
+            onChange={setPerson}
+            people={people}
+            showUnassigned={allOrders.some((o) => o.assigneeIds.length === 0)}
+          />
+        </div>
+      )}
       {/* ─── มือถือ: 4 แท็บ ─── */}
       <div className="xl:hidden">
         <div className="mb-3 flex gap-1 overflow-x-auto border-b border-(--line)">

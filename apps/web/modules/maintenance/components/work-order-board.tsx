@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { PersonFilter, UNASSIGNED } from "./person-filter";
 import Link from "next/link";
 import {
   Home as HomeIcon,
@@ -29,6 +30,8 @@ export interface BoardOrder {
   propertyId: string;
   additionalPropertyIds: string[];
   createdBy: string | null;
+  /** ผู้ได้รับมอบหมาย (core.users.id) · null = ยังไม่มอบหมาย */
+  assignedTo: string | null;
   autoCreated: boolean;
   createdAtLabel: string;
   hasExpense: boolean;
@@ -122,10 +125,13 @@ function OrderCard({
   wo,
   propertyName,
   creatorName,
+  assigneeName,
 }: {
   wo: BoardOrder;
   propertyName: string;
   creatorName?: string;
+  /** ผู้ได้รับมอบหมาย — โชว์ต่อจากผู้เปิดเมื่อเป็นคนละคน */
+  assigneeName?: string;
 }) {
   const isNew = wo.status === "open";
   return (
@@ -167,9 +173,14 @@ function OrderCard({
             <span className="truncate">{propertyName}</span>
           </span>
           {creatorName && (
-            <span className="inline-flex items-center gap-1">
+            <span className="inline-flex items-center gap-1" title="ผู้เปิดใบงาน">
               <User className="h-3 w-3" />
               {creatorName}
+            </span>
+          )}
+          {assigneeName && assigneeName !== creatorName && (
+            <span className="inline-flex items-center gap-1" title="ผู้รับผิดชอบ">
+              → {assigneeName}
             </span>
           )}
         </div>
@@ -241,6 +252,7 @@ export function WorkOrderFilteredList({
             wo={wo}
             propertyName={propertyNames[wo.propertyId] ?? ""}
             creatorName={wo.createdBy ? creatorNames[wo.createdBy] : undefined}
+            assigneeName={wo.assignedTo ? creatorNames[wo.assignedTo] : undefined}
           />
         ))}
       </div>
@@ -293,6 +305,7 @@ function ColumnList({
       wo={wo}
       propertyName={propertyNames[wo.propertyId] ?? ""}
       creatorName={wo.createdBy ? creatorNames[wo.createdBy] : undefined}
+            assigneeName={wo.assignedTo ? creatorNames[wo.assignedTo] : undefined}
     />
   );
 
@@ -370,12 +383,12 @@ function FilterChip({
  * (กลับมาจากลิงก์ที่ไม่มี query) · sessionStorage = ต่อแท็บ ปิดแท็บแล้วลืมเอง
  */
 const FILTER_KEY = "sb-wo-board-filter";
-type BoardFilter = { group: string | null; house: string | null; tab: number };
+type BoardFilter = { group: string | null; house: string | null; tab: number; who?: string | null };
 
 function readSavedFilter(): BoardFilter | null {
   const q = new URLSearchParams(window.location.search);
   if (q.has("group") || q.has("house") || q.has("tab")) {
-    return { group: q.get("group"), house: q.get("house"), tab: Number(q.get("tab")) || 0 };
+    return { group: q.get("group"), house: q.get("house"), tab: Number(q.get("tab")) || 0, who: q.get("who") };
   }
   try {
     const raw = sessionStorage.getItem(FILTER_KEY);
@@ -387,7 +400,7 @@ function readSavedFilter(): BoardFilter | null {
 
 function saveFilter(f: BoardFilter) {
   const url = new URL(window.location.href);
-  for (const [k, v] of [["group", f.group], ["house", f.house], ["tab", f.tab ? String(f.tab) : null]] as const) {
+  for (const [k, v] of [["group", f.group], ["house", f.house], ["tab", f.tab ? String(f.tab) : null], ["who", f.who ?? null]] as const) {
     if (v) url.searchParams.set(k, v);
     else url.searchParams.delete(k);
   }
@@ -420,6 +433,15 @@ export function WorkOrderBoard({
   const [group, setGroup] = useState<string | null>(null);
   const [houseId, setHouseId] = useState<string | null>(null);
   const [tab, setTab] = useState(0);
+  // กรองตามผู้ได้รับมอบหมาย — null = ทุกคน · UNASSIGNED = ใบที่ยังไม่มอบหมายให้ใคร
+  const [assignee, setAssignee] = useState<string | null>(null);
+  const assigneeOptions = useMemo(() => {
+    const ids = new Set(orders.map((w) => w.assignedTo).filter((id): id is string => !!id));
+    return [...ids]
+      .map((id) => ({ id, name: creatorNames[id] ?? "ไม่ทราบชื่อ" }))
+      .sort((a, b) => a.name.localeCompare(b.name, "th"));
+  }, [orders, creatorNames]);
+  const hasUnassigned = orders.some((w) => !w.assignedTo);
   const restored = useRef(false);
 
   // เฉพาะบ้านที่มีใบงานจริง
@@ -464,26 +486,31 @@ export function WorkOrderBoard({
     setGroup(g);
     setHouseId(h);
     setTab(saved.tab >= 0 && saved.tab < COLUMNS.length ? saved.tab : 0);
+    setAssignee(saved.who ?? null);
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [groups, propertyNames, propertyCategories]);
 
   useEffect(() => {
-    if (restored.current) saveFilter({ group, house: houseId, tab });
-  }, [group, houseId, tab]);
+    if (restored.current) saveFilter({ group, house: houseId, tab, who: assignee });
+  }, [group, houseId, tab, assignee]);
 
   const visible = useMemo(() => {
+    const byPerson =
+      assignee === null
+        ? orders
+        : orders.filter((w) => (assignee === UNASSIGNED ? !w.assignedTo : w.assignedTo === assignee));
     if (houseId) {
-      return orders.filter(
+      return byPerson.filter(
         (w) => w.propertyId === houseId || w.additionalPropertyIds.includes(houseId)
       );
     }
-    if (!group) return orders;
-    return orders.filter((w) =>
+    if (!group) return byPerson;
+    return byPerson.filter((w) =>
       [w.propertyId, ...w.additionalPropertyIds].some(
         (id) => (propertyCategories[id] ?? NO_CATEGORY) === group
       )
     );
-  }, [orders, group, houseId, propertyCategories]);
+  }, [orders, group, houseId, propertyCategories, assignee]);
 
   const buckets: Record<string, BoardOrder[]> = {
     open: visible.filter((w) => w.status === "open"),
@@ -518,9 +545,19 @@ export function WorkOrderBoard({
      */
     <div className="flex h-full flex-col">
       {/* ─── กรองตามบ้าน: แถวบน = หมวด, แถวล่าง = บ้านในหมวด ─── */}
-      {groups.length > 1 && (
+      {(groups.length > 1 || assigneeOptions.length > 0) && (
         <div className="shrink-0">
           <div className="flex gap-2 overflow-x-auto px-3 py-1.5">
+            {assigneeOptions.length > 0 && (
+              <PersonFilter
+                label="ผู้รับผิดชอบ"
+                value={assignee}
+                onChange={setAssignee}
+                people={assigneeOptions}
+                showUnassigned={hasUnassigned}
+              />
+            )}
+            {groups.length > 1 && (
             <FilterChip
               selected={group === null && houseId === null}
               onClick={() => {
@@ -530,7 +567,8 @@ export function WorkOrderBoard({
             >
               ทุกบ้าน
             </FilterChip>
-            {groups.map((g) => (
+            )}
+            {groups.length > 1 && groups.map((g) => (
               <FilterChip
                 key={g}
                 selected={group === g}
