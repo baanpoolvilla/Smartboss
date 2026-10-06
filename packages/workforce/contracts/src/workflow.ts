@@ -77,6 +77,12 @@ export const submitLeaveSchema = z.object({
    * บังคับ SUBMITTED เสมอแม้ประเภทการลาจะ auto_approve (ดู leave.service)
    */
   swap_from_date: isoDateSchema.optional(),
+  /**
+   * วันหยุดต่อเดือนของ "คนนี้ในเดือนนี้" — ใช้แทนโควตา วัน/เดือน ของประเภทวันหยุดตามสิทธิ์ (Day-Off)
+   * ข้อตกลงรายคน/รายเดือนเก็บฝั่ง Smartboss (lib/day-off-quota.ts) เซิร์ฟเวอร์ของเว็บคำนวณแล้วส่งมา
+   * ไม่ได้มาจากเบราว์เซอร์ · ไม่ส่ง = ใช้โควตาของประเภทตามเดิม · ไม่มีผลกับประเภทการลาอื่น
+   */
+  monthly_quota_days_override: z.number().int().min(0).max(31).optional(),
 });
 
 export const decideLeaveSchema = z.object({

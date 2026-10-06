@@ -1167,8 +1167,17 @@ export async function submitLeaveAction(
   // คำขอที่ยัง "รออนุมัติ" จริง — ประเภทลาที่ตั้งอนุมัติอัตโนมัติ (auto_approve) ได้ APPROVED ทันที
   // ไม่มีอะไรให้ใครอนุมัติ จึงไม่ต้องแจ้ง (เดิมแจ้ง "รออนุมัติ" ทุกใบ แม้ใบที่อนุมัติไปแล้ว)
   const pendingIds: string[] = [];
+  // วันหยุดต่อเดือนของคนนี้ (ทับเฉพาะเดือน > ค่าประจำของคน > ค่าตั้งต้น 6 วัน) — workforce ใช้เฉพาะกับ
+  // ประเภทวันหยุดตามสิทธิ์ (Day-Off) ประเภทการลาอื่นไม่สนใจค่านี้ · เลือกวันข้ามเดือนได้ จึงหาแยกรายเดือน
+  const quotaByMonth = new Map<string, number>();
   for (const day of dates) {
     try {
+      const month = day.slice(0, 7);
+      let monthlyQuota = quotaByMonth.get(month);
+      if (monthlyQuota === undefined) {
+        monthlyQuota = (await loadDayOffQuota(session.orgId, employmentId, month)).daysPerMonth;
+        quotaByMonth.set(month, monthlyQuota);
+      }
       const created = await wfFetch<{ id?: string; status?: string }>("/leave-requests", {
         method: "POST",
         body: {
@@ -1179,6 +1188,7 @@ export async function submitLeaveAction(
           total_minutes: 480,
           reason,
           display_label: displayLabel,
+          monthly_quota_days_override: monthlyQuota,
         },
       });
       if (created?.status !== "APPROVED" && created?.id) pendingIds.push(created.id);
@@ -1298,6 +1308,9 @@ export async function swapLeaveAction(input: {
         reason: input.reason.trim() || `สลับวันหยุดจากวันที่ ${input.fromDate}`,
         display_label: (input.displayLabel ?? "").trim().slice(0, 60),
         swap_from_date: input.fromDate,
+        monthly_quota_days_override: (
+          await loadDayOffQuota(session.orgId, input.employmentId, input.toDate.slice(0, 7))
+        ).daysPerMonth,
       },
     });
   } catch (error) {

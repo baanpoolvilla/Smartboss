@@ -737,6 +737,7 @@ export class LeaveService {
     reason: string;
     display_label: string;
     swap_from_date?: string;
+    monthly_quota_days_override?: number | undefined;
   }): Promise<Record<string, unknown>> {
     return this.uow.run(async (uow) => {
       const employments = await uow.tx
@@ -841,7 +842,12 @@ export class LeaveService {
         const monthEnd = startsOn.lastDayOfMonth().toString();
 
         const existing = await uow.tx
-          .select({ id: schema.leaveRequests.id, totalMinutes: schema.leaveRequests.totalMinutes })
+          .select({
+            id: schema.leaveRequests.id,
+            totalMinutes: schema.leaveRequests.totalMinutes,
+            status: schema.leaveRequests.status,
+            swapFromDate: schema.leaveRequests.swapFromDate,
+          })
           .from(schema.leaveRequests)
           .where(
             and(
@@ -857,13 +863,20 @@ export class LeaveService {
         // ไม่งั้นคนที่ใช้โควตาเต็มเดือนอยู่แล้วจะสลับวันไม่ได้ทั้งที่ไม่ได้ขอเพิ่มวัน
         const usedDays =
           existing
-            .filter((row) => row.id !== swapFromRequest?.id)
+            .filter((row) => row.id !== swapFromRequest?.id && !isPendingSwap(row))
             .reduce((sum, row) => sum + row.totalMinutes, 0) / 480;
         const requestedDays = input.total_minutes / 480;
-        if (usedDays + requestedDays > leaveType.monthlyQuotaDays) {
+        // วันหยุดตามสิทธิ์ (อนุมัติอัตโนมัติ ไม่ต้องส่งรายงาน) ใช้จำนวนวันของคนนี้ในเดือนนี้ถ้าเว็บส่งมา —
+        // บางคนตกลงกันไว้ 6 วัน บางคน 4 และบางเดือนให้เพิ่มเป็นพิเศษ โควตาของประเภทเป็นเลขเดียวทั้งบริษัท
+        const isDayOffType = leaveType.autoApprove && !leaveType.requiresReports;
+        const monthlyQuota =
+          isDayOffType && input.monthly_quota_days_override !== undefined
+            ? input.monthly_quota_days_override
+            : leaveType.monthlyQuotaDays;
+        if (usedDays + requestedDays > monthlyQuota) {
           throw AppError.validation('monthly quota exceeded', {
             meta: {
-              monthly_quota_days: leaveType.monthlyQuotaDays,
+              monthly_quota_days: monthlyQuota,
               used_days: usedDays,
               requested_days: requestedDays,
             },

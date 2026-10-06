@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { requireOrg } from "@smartboss/auth";
+import { loadDayOffQuota } from "@/lib/day-off-quota";
 import { Button } from "@smartboss/ui/components/button";
 import { currentMonth, todayIso } from "@/modules/hr/lib/date";
 import { formatBuddhistYear } from "@/modules/hr/lib/labels";
@@ -82,6 +84,16 @@ export async function renderCalendarTab(monthParam: string | undefined): Promise
   const availableByType = new Map(
     (allowances?.items ?? []).map((a) => [a.leave_type_id, a.months[0]?.available_days ?? 0]),
   );
+  // วันหยุดตามสิทธิ์ (Day-Off) ของ "ตัวเองในเดือนที่ดูอยู่" — ตั้งรายคน/รายเดือนได้ที่หน้าพนักงาน
+  // ตัวเลขที่โชว์ต้องเป็นตัวเดียวกับที่ใช้ตัดสินตอนกดลง (submitLeaveAction) ไม่ใช่โควตากลางของประเภท
+  const session = await requireOrg();
+  const myDayOffQuota = me.employment_id
+    ? (await loadDayOffQuota(session.orgId, me.employment_id, month)).daysPerMonth
+    : null;
+  const quotaDaysOf = (t: LeaveType): number =>
+    myDayOffQuota !== null && t.auto_approve && !t.requires_reports && t.monthly_quota_days > 0
+      ? myDayOffQuota
+      : t.monthly_quota_days;
   // ยอด Holiday ของตัวเองในเดือนที่ดูอยู่ — ขึ้นข้างชื่อเดือน (ส่วนที่ต้องใช้ภายในเดือนนี้บอกแยก)
   const holidayBalances = (allowances?.items ?? []).map((a) => ({
     id: a.leave_type_id,
@@ -202,7 +214,7 @@ export async function renderCalendarTab(monthParam: string | undefined): Promise
             id: t.id,
             label: `${t.name}${t.paid ? "" : " (ไม่ได้ค่าจ้าง)"}`,
             autoApprove: t.auto_approve,
-            monthlyQuotaDays: t.monthly_quota_days,
+            monthlyQuotaDays: quotaDaysOf(t),
             availableDays: t.accrues_from_holidays ? (availableByType.get(t.id) ?? 0) : null,
           }))}
           entriesByDate={entriesByDate}
@@ -286,7 +298,7 @@ export async function renderCalendarTab(monthParam: string | undefined): Promise
                 >
                   {t.name}
                   {t.auto_approve
-                    ? ` · สิทธิ์${t.monthly_quota_days > 0 ? ` ${t.monthly_quota_days} วัน/เดือน` : ""}`
+                    ? ` · สิทธิ์${t.monthly_quota_days > 0 ? ` ${quotaDaysOf(t)} วัน/เดือน` : ""}`
                     : " · ต้องอนุมัติ"}
                 </Pill>
               ))

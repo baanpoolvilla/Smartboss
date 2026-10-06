@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { requireOrg } from "@smartboss/auth";
+import { loadDayOffQuota } from "@/lib/day-off-quota";
 import { wfFetch, wfTry, type HolidayAllowance, type Me, type LeaveType, type LeaveRequest, type Paged } from "@/modules/hr/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +27,7 @@ function defaultRange(): { from: string; to: string } {
  */
 export async function GET(request: NextRequest) {
   try {
-    await requireOrg();
+    const session = await requireOrg();
     const { searchParams } = new URL(request.url);
     const { from, to } = defaultRange();
 
@@ -49,6 +50,12 @@ export async function GET(request: NextRequest) {
       ]),
     );
 
+    // วันหยุดตามสิทธิ์ (Day-Off) ของตัวเองในเดือนนี้ — ตัวเลขเดียวกับที่ใช้ตัดสินตอนกดลง (ดู lib/day-off-quota.ts)
+    const thisMonth = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date()).slice(0, 7);
+    const myDayOffQuota = me.employment_id
+      ? (await loadDayOffQuota(session.orgId, me.employment_id, thisMonth)).daysPerMonth
+      : null;
+
     return Response.json({
       employmentId: me.employment_id,
       myName: me.display_name,
@@ -56,7 +63,10 @@ export async function GET(request: NextRequest) {
         id: t.id,
         label: `${t.name}${t.paid ? "" : " (ไม่ได้ค่าจ้าง)"}`,
         autoApprove: t.auto_approve,
-        monthlyQuotaDays: t.monthly_quota_days,
+        monthlyQuotaDays:
+          myDayOffQuota !== null && t.auto_approve && !t.requires_reports && t.monthly_quota_days > 0
+            ? myDayOffQuota
+            : t.monthly_quota_days,
         // มีเฉพาะ Holiday ที่ทบยอด — เดือนที่ไม่มีในนี้ = ลงไม่ได้
         ...(t.accrues_from_holidays ? { availableByMonth: availableByType.get(t.id) ?? {} } : {}),
       })),
