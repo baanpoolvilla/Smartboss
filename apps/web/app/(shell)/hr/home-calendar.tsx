@@ -194,18 +194,21 @@ export async function renderCalendarTab(monthParam: string | undefined): Promise
           </>
         }
         action={
-          // มือถือ: ลูกศรเล็ก ◀ ▶ แถวเดียวกับชื่อเดือน แทนปุ่มตัวหนังสือสองปุ่มที่กินที่หัวการ์ด ("หัวไม่สวย รก")
-          <div className="flex gap-1">
-            <Link href={`/hr?tab=calendar&month=${shiftMonth(month, -1)}`} aria-label="เดือนก่อนหน้า">
-              <Button size="sm" variant="outline" className="h-8 w-8 p-0 sm:w-auto sm:px-3">
-                <ChevronLeft className="h-4 w-4 sm:hidden" />
-                <span className="hidden sm:inline">ก่อนหน้า</span>
+          // แถบเครื่องมือแบบปฏิทิน Teams/Outlook: "วันนี้" + ลูกศร ‹ › เล็ก ๆ ทุกขนาดจอ แทนปุ่มตัวหนังสือสองปุ่มใหญ่
+          <div className="flex items-center gap-1">
+            {month !== currentMonth() && (
+              <Link href="/hr?tab=calendar">
+                <Button size="sm" variant="outline" className="h-8 px-3">วันนี้</Button>
+              </Link>
+            )}
+            <Link href={`/hr?tab=calendar&month=${shiftMonth(month, -1)}`} aria-label="เดือนก่อนหน้า" title="เดือนก่อนหน้า">
+              <Button size="sm" variant="outline" className="h-8 w-8 p-0">
+                <ChevronLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <Link href={`/hr?tab=calendar&month=${shiftMonth(month, 1)}`} aria-label="เดือนถัดไป">
-              <Button size="sm" variant="outline" className="h-8 w-8 p-0 sm:w-auto sm:px-3">
-                <ChevronRight className="h-4 w-4 sm:hidden" />
-                <span className="hidden sm:inline">ถัดไป</span>
+            <Link href={`/hr?tab=calendar&month=${shiftMonth(month, 1)}`} aria-label="เดือนถัดไป" title="เดือนถัดไป">
+              <Button size="sm" variant="outline" className="h-8 w-8 p-0">
+                <ChevronRight className="h-4 w-4" />
               </Button>
             </Link>
           </div>

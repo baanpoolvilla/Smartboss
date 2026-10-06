@@ -458,7 +458,7 @@ export function LeaveCalendar({
           type="button"
           onClick={() => setPeopleOpen((v) => !v)}
           aria-expanded={peopleOpen}
-          className="flex h-8 items-center gap-1.5 rounded-full border border-(--line) px-3 text-xs font-medium text-(--ink) sm:hidden"
+          className="flex h-8 items-center gap-1.5 rounded-full border border-(--line) px-3 text-xs font-medium text-(--ink)"
           style={peopleOpen || hidden.size + hiddenTypes.size > 0 ? { backgroundColor: "var(--app-soft)" } : undefined}
         >
           <SlidersHorizontal className="h-3.5 w-3.5" />
@@ -467,7 +467,7 @@ export function LeaveCalendar({
             <span className="rounded-full bg-(--app) px-1.5 text-[10px] font-bold text-white">{hidden.size + hiddenTypes.size}</span>
           )}
         </button>
-        <div className="hidden shrink-0 items-center gap-1.5 sm:flex sm:shrink sm:flex-wrap">
+        <div className={`${peopleOpen ? "hidden sm:flex" : "hidden"} order-last shrink-0 flex-wrap items-center gap-1.5`}>
           <span className="hidden text-(--ink-soft) sm:inline">แสดง:</span>
           {(
             [
@@ -480,7 +480,7 @@ export function LeaveCalendar({
               <FilterChip key={label} label={label} hue={hue} off={groupOff(auto)} onClick={() => toggleGroup(auto)} dot />
             ))}
         </div>
-        <div className={`${peopleOpen ? "order-last flex w-full flex-wrap" : "hidden"} items-center gap-1.5 sm:order-none sm:flex sm:w-auto sm:shrink`}>
+        <div className={`${peopleOpen ? "order-last flex flex-wrap max-sm:w-full" : "hidden"} items-center gap-1.5`}>
           <span className="hidden text-(--ink-soft) sm:inline">ประเภท:</span>
           {types.map((t) => (
             <FilterChip
@@ -502,7 +502,7 @@ export function LeaveCalendar({
           aria-label="พิมพ์ / บันทึก PDF"
           title="พิมพ์ / บันทึก PDF"
           // มือถือ: ไอคอนเครื่องพิมพ์อย่างเดียว ขนาดเท่าชิป ไม่เป็นปุ่มใหญ่ตกบรรทัด
-          className="ml-auto h-7 w-7 shrink-0 p-0 sm:h-8 sm:w-auto sm:px-3"
+          className="ml-auto h-8 w-8 shrink-0 p-0"
           onClick={() =>
             printMonth(
               new Date(`${month}-01T00:00:00`).toLocaleDateString("th-TH", { month: "long", year: "numeric" }),
@@ -514,12 +514,12 @@ export function LeaveCalendar({
             )
           }
         >
-          <Printer className="h-4 w-4 sm:mr-1" />
-          <span className="hidden sm:inline">พิมพ์ / PDF</span>
+          <Printer className="h-4 w-4" />
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[230px_minmax(0,1fr)]">
+      {/* รายชื่อคน (ตัวกรอง) พับเก็บทุกขนาดจอแบบปฏิทิน Teams — ปิดอยู่ ปฏิทินได้ความกว้างเต็ม เปิดแล้วค่อยมีแถบซ้าย */}
+      <div className={`grid grid-cols-1 gap-4 ${peopleOpen ? "lg:grid-cols-[230px_minmax(0,1fr)]" : ""}`}>
         {/* มือถือ: รายชื่อของวันที่เลือก ใต้ตารางเดือน */}
         {(() => {
           const dayEntries = (entriesByDate[selectedDay] ?? []).filter(
@@ -574,8 +574,8 @@ export function LeaveCalendar({
           );
         })()}
         {/* ── แถบซ้าย: ใครหยุดบ้าง เปิด/ปิดดูรายคนได้ ── */}
-        <aside className={`${peopleOpen ? "order-first" : "order-3"} lg:order-1`}>
-          <div className={peopleOpen ? "" : "hidden sm:block"}>
+        <aside className={peopleOpen ? "order-first lg:order-1" : "hidden"}>
+          <div>
           {employmentId !== null && (
             <>
               <p className="mb-1.5 text-xs font-semibold text-(--ink)">ปฏิทินของฉัน</p>
