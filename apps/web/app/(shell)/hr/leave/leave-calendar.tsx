@@ -347,6 +347,14 @@ export function LeaveCalendar({
 
   /** วันที่กดเปิดหน้าต่างอยู่ — null = ปิดอยู่ */
   const [picked, setPicked] = useState<string | null>(null);
+  /*
+   * มือถือ: แบบเดียวกับปฏิทินในมือถือที่คนคุ้น (Google Calendar / ปฏิทินของ iPhone) — ตารางเดือนมีแค่จุด
+   * แตะวันแล้ว "รายชื่อของวันนั้น" ขึ้นใต้ตารางทันที ไม่เด้งหน้าต่าง เลื่อนดูวันอื่นได้ต่อเนื่องด้วยการแตะวันถัดไป
+   * ค่าเริ่มต้น = วันนี้ (ถ้าอยู่ในเดือนที่ดู) ไม่งั้นวันที่ 1 · จอใหญ่ยังแตะแล้วเปิดหน้าต่างเหมือนเดิม
+   */
+  const [selectedDay, setSelectedDay] = useState(() => (today.startsWith(month) ? today : `${month}-01`));
+  // มือถือ: รายชื่อคนในทีม (ตัวกรอง) พับเก็บไว้ — กดเปิดเมื่อจะซ่อน/แสดงบางคน
+  const [peopleOpen, setPeopleOpen] = useState(false);
 
   // สลับวันหยุด — เลือกวันเดิมก่อน (กด "สลับ") แล้วเข้าโหมดคลิกเลือกวันใหม่
   const [swapFrom, setSwapFrom] = useState<
@@ -493,8 +501,75 @@ export function LeaveCalendar({
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[230px_minmax(0,1fr)]">
+        {/* มือถือ: รายชื่อของวันที่เลือก ใต้ตารางเดือน */}
+        {(() => {
+          const dayEntries = (entriesByDate[selectedDay] ?? []).filter(
+            (e) => !hidden.has(e.employmentId) && !hiddenTypes.has(e.leaveTypeName ?? UNNAMED_TYPE),
+          );
+          const d = new Date(`${selectedDay}T00:00:00Z`);
+          const dayLabel = `${DOW_FULL[(d.getUTCDay() + 6) % 7]} ${d.getUTCDate()}`;
+          return (
+            <div className="order-2 flex flex-col gap-1.5 rounded-(--radius) border border-(--line) p-2.5 sm:hidden">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold text-(--ink)">
+                  {dayLabel}
+                  <span className="ml-1.5 text-xs font-normal text-(--ink-soft)">
+                    {dayEntries.length === 0 ? "ไม่มีใครหยุด" : `หยุด ${dayEntries.length} คน`}
+                  </span>
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="ml-auto h-8 shrink-0"
+                  onClick={() => {
+                    setRowError(null);
+                    setSwapResult(null);
+                    setPicked(selectedDay);
+                  }}
+                >
+                  {dayEntries.some((e) => e.mine) ? "จัดการวันหยุด" : canRequest ? "+ ลงวันหยุด" : "ดูรายละเอียด"}
+                </Button>
+              </div>
+              {dayEntries.map((entry, index) => {
+                const hue = typeHue(entry.leaveTypeName, entry.autoApprove);
+                const waiting = !entry.autoApprove && entry.status === "PENDING";
+                return (
+                  <div
+                    key={`${entry.employmentId}-${index}`}
+                    className="flex items-center gap-2 rounded-sm px-2 py-1 text-sm"
+                    style={{
+                      borderLeft: `3px solid hsl(${hue} 65% 45%)`,
+                      backgroundColor: `hsl(${hue} 80% 95%)`,
+                      color: `hsl(${hue} 60% 24%)`,
+                      fontWeight: entry.mine ? 700 : 500,
+                      opacity: waiting ? 0.65 : 1,
+                    }}
+                  >
+                    <span className="min-w-0 flex-1 truncate">{labelOf(entry)}</span>
+                    {waiting && <span className="shrink-0 text-[11px] font-normal">รออนุมัติ</span>}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
         {/* ── แถบซ้าย: ใครหยุดบ้าง เปิด/ปิดดูรายคนได้ ── */}
-        <aside className="order-2 lg:order-1">
+        <aside className="order-3 lg:order-1">
+          {/* มือถือ: ตัวกรองรายคนพับเก็บ — เปิดเมื่อจะซ่อน/แสดงบางคน */}
+          <button
+            type="button"
+            onClick={() => setPeopleOpen((v) => !v)}
+            aria-expanded={peopleOpen}
+            className="flex w-full items-center justify-between rounded-(--radius) border border-(--line) px-3 py-2 text-sm font-medium text-(--ink) sm:hidden"
+          >
+            <span>
+              กรองคน
+              {hidden.size > 0 && <span className="ml-1 text-xs text-(--ink-soft)">(ซ่อนอยู่ {hidden.size} คน)</span>}
+            </span>
+            <span className="text-(--ink-soft)">{peopleOpen ? "▲" : "▼"}</span>
+          </button>
+          <div className={peopleOpen ? "mt-3 sm:mt-0" : "hidden sm:block"}>
           {employmentId !== null && (
             <>
               <p className="mb-1.5 text-xs font-semibold text-(--ink)">ปฏิทินของฉัน</p>
@@ -532,6 +607,7 @@ export function LeaveCalendar({
               .map((person) => (
                 <PersonToggle key={person.id} id={person.id} name={person.name} off={hidden.has(person.id)} onToggle={toggle} />
               ))}
+          </div>
           </div>
         </aside>
 
@@ -704,9 +780,13 @@ export function LeaveCalendar({
                     onClick={() => {
                       setRowError(null);
                       setSwapResult(null);
-                      setPicked(cell.iso);
+                      if (window.matchMedia("(max-width: 639px)").matches) setSelectedDay(cell.iso);
+                      else setPicked(cell.iso);
                     }}
-                    className="block w-full text-left transition-colors enabled:hover:bg-(--bg-soft)"
+                    aria-pressed={cell.iso === selectedDay}
+                    className={`block w-full text-left transition-colors enabled:hover:bg-(--bg-soft) ${
+                      cell.iso === selectedDay ? "max-sm:bg-(--app-soft)" : ""
+                    }`}
                   >
                     {body}
                   </button>
@@ -717,7 +797,6 @@ export function LeaveCalendar({
         </div>
       </div>
 
-      <p className="text-[11px] text-(--ink-soft) sm:hidden">จุด = คนที่หยุดวันนั้น สีตามประเภท · แตะวันเพื่อดูชื่อหรือลงวันหยุด</p>
 
       {!canRequest && (
         <p className="border-t border-(--line) pt-3 text-sm text-(--ink-soft)">
