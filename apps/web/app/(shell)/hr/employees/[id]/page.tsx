@@ -13,6 +13,8 @@ import {
   type Device,
   type Employment,
   type Paged,
+  type LeaveRequest,
+  type LeaveType,
   type Person,
   type RecurringPattern,
 } from "@/modules/hr/lib/api";
@@ -40,7 +42,7 @@ import {
   updateEmployeeNameAction,
 } from "../../actions";
 import { AssignShiftForm, type CurrentPattern } from "../../settings/assign-shift-form";
-import { EmployeeDaysOff } from "./employee-days-off";
+import { EmployeeDayOffCalendar } from "./employee-day-off-calendar";
 import { EnrollFingerprintForm } from "../../settings/devices/enroll-fingerprint-form";
 import { DayOffQuotaForm } from "./day-off-quota-form";
 import { buildScorecards, eventDay, listUserEvents, PERFORMANCE_CATEGORIES } from "@/lib/performance";
@@ -161,6 +163,8 @@ export default async function EmployeeDetailPage({
           patterns,
           assigned,
           quota,
+          leaveTypes,
+          leaveRequests,
         ] = await Promise.all([
             // อัตราค่าจ้างเป็นข้อมูลอ่อนไหว — คนที่ไม่มีสิทธิ์จะได้ null
             wfTry<Paged<CompensationRate>>(`/compensation-rates?employment_id=${id}`),
@@ -188,7 +192,26 @@ export default async function EmployeeDetailPage({
               `/shift-assignments?from=${monthFrom}&to=${monthTo}&employment_id=${id}`,
             ),
             loadDayOffQuota(session.orgId, id, month),
+            // วันหยุดตามสิทธิ์ (Day-Off) ของคนนี้ในเดือนที่ดู — ชุดเดียวกับที่พนักงานลงเองในปฏิทินทีม
+            wfTry<Paged<LeaveType>>("/leave-types"),
+            wfTry<Paged<LeaveRequest>>(`/leave-requests?employment_id=${id}&from=${monthFrom}&to=${monthTo}`),
           ]);
+
+        const typeOf = new Map((leaveTypes?.items ?? []).map((t) => [t.id, t]));
+        // "วันหยุดตามสิทธิ์" = อนุมัติอัตโนมัติ ไม่ต้องส่งรายงาน มีโควตารายเดือน — เกณฑ์เดียวกับที่ workforce
+        // ใช้จำนวนวันรายคนของเดือน (leave.service submitRequest) Holiday แบบสะสมมีกติกาของตัวเอง ไม่นับที่นี่
+        const isDayOffType = (t: LeaveType | undefined) =>
+          t !== undefined && t.auto_approve && !t.requires_reports && !t.accrues_from_holidays && t.monthly_quota_days > 0;
+        const dayOffTypes = (leaveTypes?.items ?? []).filter(isDayOffType).map((t) => ({ id: t.id, name: t.name }));
+        const dayOffEntries = (leaveRequests?.items ?? [])
+          .filter((r) => r.status === "APPROVED" || r.status === "SUBMITTED")
+          .map((r) => ({
+            id: r.id,
+            date: r.starts_on,
+            typeName: typeOf.get(r.leave_type_id)?.name ?? "ลา",
+            isDayOff: isDayOffType(typeOf.get(r.leave_type_id)),
+            pending: r.status === "SUBMITTED",
+          }));
 
         const companyId = companies?.items[0]?.id;
         const shiftItems = shifts?.items ?? [];
@@ -656,7 +679,7 @@ export default async function EmployeeDetailPage({
             {/* วันหยุดรายคน — ย้ายมาจาก /hr/holidays เดิม ที่นี่เป็นเจ้าของแหล่งเดียว */}
             <SectionCard
               title="วันหยุดของคนนี้"
-              description="ที่เดียวที่กำหนดว่าคนนี้หยุดวันไหน — เดือนที่ไม่ได้ลงไว้ ระบบถือว่าทำงานทุกวัน"
+              description="เดือนนี้หยุดได้กี่วัน และลงวันไหนไว้แล้ว — วันหยุดชุดเดียวกับที่พนักงานลงเองในปฏิทินทีม"
               action={
                 <div className="flex items-center gap-1">
                   <Link href={`/hr/employees/${id}?month=${prevMonth}`}>
@@ -689,18 +712,20 @@ export default async function EmployeeDetailPage({
                       ยังไม่มีบริษัทในระบบบุคคล จึงลงวันหยุดรายคนไม่ได้
                     </p>
                   ) : (
-                    <EmployeeDaysOff
-                      companyId={companyId}
+                    <EmployeeDayOffCalendar
+                      // เปลี่ยนเดือน/ข้อมูล = เริ่มสถานะใหม่ (ข้อความ error ของเดือนก่อนไม่ค้าง)
+                      key={month}
                       employmentId={id}
                       month={month}
-                      initialOff={initialOff}
-                      workShifts={shiftOptions
-                        .filter((sh) => !sh.restDay)
-                        .map((sh) => ({ id: sh.id, label: sh.label }))}
-                      restShiftId={restShiftId}
                       quota={quota.daysPerMonth}
-                      quotaSource={quota.source}
-                      boundShiftId={boundShiftId}
+                      dayOffTypes={dayOffTypes}
+                      entries={dayOffEntries}
+                      legacyOff={initialOff}
+                      legacyClear={
+                        restShiftId !== null && boundShiftId !== null
+                          ? { companyId, restShiftId, workShiftId: boundShiftId }
+                          : null
+                      }
                     />
                   )}
                 </div>
