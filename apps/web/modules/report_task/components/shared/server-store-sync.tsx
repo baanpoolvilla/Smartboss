@@ -6,6 +6,7 @@ import type { StoreApi, UseBoundStore } from "zustand";
 import type { StoreKey } from "@/modules/report_task/lib/db/store-registry";
 import { isServerSyncHeld } from "@/modules/report_task/lib/sync-pause";
 import { realtimeStatus, subscribeRealtime } from "@/lib/realtime-client";
+import { registerSyncProbe } from "@/lib/unsaved-work";
 import { mergeThreeWay } from "./store-merge";
 
 type AnyStore<T> = UseBoundStore<StoreApi<T>>;
@@ -190,9 +191,12 @@ export function ServerStoreSync<T, S>({
         }
 
         if (!res.ok) {
-          // เซิร์ฟเวอร์ล่มชั่วคราว / ถูกจำกัดความถี่ — ลองใหม่ได้ ไม่ทิ้งของในเครื่อง
-          if (res.status >= 500 || res.status === 429 || res.status === 408) return false;
-          // ปฏิเสธจริง (ข้อมูลผิดรูป / ใหญ่เกิน / ไม่มีสิทธิ์) — ส่งซ้ำก็ไม่ผ่าน ให้หน้าจอตรงกับเซิร์ฟเวอร์
+          // ทิ้งของในเครื่องเฉพาะเมื่อเซิร์ฟเวอร์ "ปฏิเสธข้อมูลนี้จริง" (ผิดรูป 400 / ใหญ่เกิน 413) ที่เหลือลองใหม่หมด:
+          // เซิร์ฟเวอร์ล่ม/กำลังรีสตาร์ต (5xx) · ถูกจำกัดความถี่ · session ต่ออายุไม่ทัน (401) · และ 404 ซึ่งคีย์ที่
+          // ถูกต้องเจอได้เฉพาะตอนกำลัง deploy (build ทับไฟล์ของตัวที่รันอยู่) — เดิมเคสพวกนี้ตกไป "โหลดของ
+          // เซิร์ฟเวอร์กลับมาทับ" โพสต์ที่เพิ่งกดส่งระหว่าง deploy เลยหาย
+          if (res.status !== 400 && res.status !== 413) return false;
+          // ปฏิเสธจริง — ส่งซ้ำก็ไม่ผ่าน ให้หน้าจอตรงกับเซิร์ฟเวอร์
           toast.error(
             res.status === 413
               ? "ข้อมูลใหญ่เกินกว่าที่บันทึกได้ — แจ้งผู้ดูแลระบบ (การเปลี่ยนแปลงล่าสุดไม่ถูกบันทึก)"
@@ -204,7 +208,10 @@ export function ServerStoreSync<T, S>({
         }
 
         const data = (await res.json().catch(() => null)) as { version?: number } | null;
-        if (typeof data?.version === "number") versionRef.current = data.version;
+        // 200 แต่ไม่ใช่คำตอบของ API นี้ (หน้า HTML ของ proxy ตอนเซิร์ฟเวอร์กำลังขึ้น ฯลฯ) = ยังไม่ได้บันทึก
+        // ถ้านับว่าสำเร็จ รอบดึงข้อมูลถัดไปจะเอาของเซิร์ฟเวอร์มาทับสิ่งที่ผู้ใช้เพิ่งทำ
+        if (typeof data?.version !== "number") return false;
+        versionRef.current = data.version;
         baseRef.current = mine; // this snapshot is now the server truth
         return true;
       }
@@ -287,6 +294,17 @@ export function ServerStoreSync<T, S>({
     }
 
     void load();
+
+    // ให้ส่วนอื่นของแอป (ตัวโหลดหน้าใหม่เมื่อมีเวอร์ชันใหม่) รู้ว่ายังมีของที่ไม่ถึงเซิร์ฟเวอร์ — ดู lib/unsaved-work.ts
+    const unregisterProbe = registerSyncProbe(
+      apiKey,
+      () =>
+        pendingRef.current != null ||
+        timerRef.current != null ||
+        savingRef.current > 0 ||
+        dirtyRef.current ||
+        retryTimerRef.current != null
+    );
 
     const unsub = store.subscribe((state, prev) => {
       if (!loadedRef.current) return;
@@ -408,6 +426,7 @@ export function ServerStoreSync<T, S>({
 
     return () => {
       cancelled = true;
+      unregisterProbe();
       unsub();
       offRealtime();
       document.removeEventListener("visibilitychange", onVisible);

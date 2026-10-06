@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import { RefreshCw, Smartphone, X } from "lucide-react";
 
+import { hasPendingSync, whenSyncIdle } from "@/lib/unsaved-work";
 import { APP_INSTALL_VERSION, detectDevice, isStandalone, recordStandaloneLaunch, useIsClient } from "@/lib/app-install";
 
 /**
@@ -28,9 +29,17 @@ const POLL_MS = 5 * 60 * 1000;
 const DISMISS_UPDATE_KEY = "sb-update-dismissed";
 const DISMISS_REINSTALL_KEY = "sb-reinstall-dismissed";
 
+/**
+ * ช่องที่ผู้ใช้พิมพ์เองในหน้านี้ — ช่องของ React (controlled) เทียบ value กับ defaultValue ไม่ได้
+ * เพราะ React เขียน defaultValue ตาม value ตลอด สองค่าเท่ากันเสมอ ⇒ เดิมรีพอตที่พิมพ์ค้างไว้ในช่องโพสต์
+ * ถูกมองว่า "ไม่มีอะไรค้าง" พอ deploy แล้วสลับกลับมาที่แท็บ หน้าโหลดใหม่เอง ข้อความหายหมด
+ */
+const typedInto = new WeakSet<Element>();
+
 /** มีช่องกรอกที่ผู้ใช้พิมพ์/แนบไฟล์ค้างไว้ไหม — ถ้ามี ห้ามโหลดหน้าใหม่เอง */
 function hasUnsavedInput(): boolean {
   for (const el of document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea")) {
+    if (typedInto.has(el) && el.value !== "" && el.type !== "checkbox" && el.type !== "radio") return true;
     if (el instanceof HTMLInputElement) {
       if (el.type === "hidden" || el.type === "submit" || el.type === "button") continue;
       if (el.type === "file") {
@@ -58,8 +67,17 @@ export function AppUpdateNotice() {
   useEffect(() => {
     if (pathname === lastPath.current) return;
     lastPath.current = pathname;
-    if (newBuild) window.location.reload();
+    // ยังบันทึกไม่ถึงเซิร์ฟเวอร์ (เพิ่งกดโพสต์แล้วเปลี่ยนหน้า) — ยังไม่โหลดใหม่ รอการเปลี่ยนหน้าครั้งถัดไป
+    if (newBuild && !hasPendingSync()) window.location.reload();
   }, [pathname, newBuild]);
+
+  useEffect(() => {
+    const onInput = (event: Event) => {
+      if (event.target instanceof Element) typedInto.add(event.target);
+    };
+    document.addEventListener("input", onInput, true);
+    return () => document.removeEventListener("input", onInput, true);
+  }, []);
 
   useEffect(() => {
     if (!CLIENT_BUILD_ID) return;
@@ -72,7 +90,7 @@ export function AppUpdateNotice() {
         if (!res.ok) return;
         const { buildId } = (await res.json()) as { buildId: string | null };
         if (stopped || !buildId || buildId === CLIENT_BUILD_ID) return;
-        if (resumed && !hasUnsavedInput()) {
+        if (resumed && !hasUnsavedInput() && !hasPendingSync()) {
           window.location.reload();
           return;
         }
@@ -167,7 +185,8 @@ export function AppUpdateNotice() {
           </p>
           <button
             type="button"
-            onClick={() => window.location.reload()}
+            // รอให้ของที่เพิ่งกดบันทึกถึงเซิร์ฟเวอร์ก่อน — โหลดใหม่ทันทีคือทิ้งมัน
+            onClick={() => void whenSyncIdle(8000).then(() => window.location.reload())}
             className="shrink-0 rounded-xl bg-[#4cb93f] px-3.5 py-2 text-sm font-semibold text-white hover:brightness-105"
           >
             อัปเดต
