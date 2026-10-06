@@ -1,6 +1,6 @@
 import { TriangleAlert } from "lucide-react";
 import { ACTION_STATUS_LABEL, IMPACT_LABEL, URGENCY_LABEL } from "../constants";
-import { fmtDateTime } from "../lib/format";
+import { fmtDateTime, fmtNum } from "../lib/format";
 import { formatPeriod } from "../lib/periods";
 import type { AiReportView } from "../data/ai";
 import { ActionStatusSelect, AskAi } from "./ai-controls";
@@ -40,6 +40,7 @@ export function ReportView({ report, interactive }: { report: AiReportView; inte
         {input.account.name} · {formatPeriod(report.period)}
         {report.compare ? ` เทียบ ${formatPeriod(report.compare)}` : ""} · วิเคราะห์เมื่อ {fmtDateTime(report.createdAt)}
         {report.createdBy === "schedule" ? " (ตามตารางเวลา)" : ""} · {report.model} · prompt v{report.promptVersion}
+        {output.usage ? ` · โทเคน ${fmtNum(output.usage.input_tokens)} เข้า / ${fmtNum(output.usage.output_tokens)} ออก` : ""}
       </div>
 
       {hidden.length > 0 && (
