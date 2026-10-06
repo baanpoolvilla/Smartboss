@@ -102,8 +102,24 @@ export class AttendanceService {
           workDate,
         );
 
+        // เวลาเข้างานที่แก้แล้ว (คำขอแก้เวลาที่อนุมัติ) มาก่อนสแกนจริง — ไม่งั้นคนที่ลืมสแกนตอนมาถึง
+        // แล้วแก้เวลาเรียบร้อย ยังขึ้น "สาย" ตามเวลาที่ไปสแกนทีหลังอยู่บนกระดานนี้
+        const adjustments = await this.repository.listApprovedAdjustments(
+          uow.tx,
+          row.employmentId,
+          workDate,
+        );
+        let firstAt = row.firstAt;
+        for (const adjustment of adjustments) {
+          if (adjustment.adjustmentType !== 'ADD_PUNCH' || adjustment.eventIntent !== 'CLOCK_IN') continue;
+          if (adjustment.punchAt === null) continue;
+          if (adjustment.punchAt.getTime() < new Date(firstAt).getTime()) {
+            firstAt = adjustment.punchAt.toISOString();
+          }
+        }
+
         // นาทีจากเที่ยงคืนของเวลาที่สแกนครั้งแรก เทียบกับเวลาเข้างานตามกะ
-        const local = new Date(row.firstAt);
+        const local = new Date(firstAt);
         const parts = new Intl.DateTimeFormat('en-GB', {
           timeZone: row.timeZone,
           hour: '2-digit',
@@ -136,7 +152,7 @@ export class AttendanceService {
           employment_id: row.employmentId,
           display_name: row.displayName,
           employee_code: row.employeeCode,
-          first_scan_at: row.firstAt,
+          first_scan_at: firstAt,
           last_scan_at: row.lastAt,
           scan_count: row.scanCount,
           scheduled_start_minutes: shift?.shift.startMinutes ?? null,
@@ -145,7 +161,13 @@ export class AttendanceService {
         });
       }
 
-      return { items: items.sort((a, b) => String(a['first_scan_at']).localeCompare(String(b['first_scan_at']))) };
+      // เทียบเป็นเวลา ไม่ใช่ข้อความ — เวลาที่แก้แล้วเป็น ISO คนละรูปแบบกับที่ฐานข้อมูลคืนมา
+      return {
+        items: items.sort(
+          (a, b) =>
+            new Date(String(a['first_scan_at'])).getTime() - new Date(String(b['first_scan_at'])).getTime(),
+        ),
+      };
     });
   }
 
