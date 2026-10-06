@@ -125,13 +125,10 @@ function OrderCard({
   wo,
   propertyName,
   creatorName,
-  assigneeName,
 }: {
   wo: BoardOrder;
   propertyName: string;
   creatorName?: string;
-  /** ผู้ได้รับมอบหมาย — โชว์ต่อจากผู้เปิดเมื่อเป็นคนละคน */
-  assigneeName?: string;
 }) {
   const isNew = wo.status === "open";
   return (
@@ -173,14 +170,9 @@ function OrderCard({
             <span className="truncate">{propertyName}</span>
           </span>
           {creatorName && (
-            <span className="inline-flex items-center gap-1" title="ผู้เปิดใบงาน">
+            <span className="inline-flex items-center gap-1">
               <User className="h-3 w-3" />
               {creatorName}
-            </span>
-          )}
-          {assigneeName && assigneeName !== creatorName && (
-            <span className="inline-flex items-center gap-1" title="ผู้รับผิดชอบ">
-              → {assigneeName}
             </span>
           )}
         </div>
@@ -252,7 +244,6 @@ export function WorkOrderFilteredList({
             wo={wo}
             propertyName={propertyNames[wo.propertyId] ?? ""}
             creatorName={wo.createdBy ? creatorNames[wo.createdBy] : undefined}
-            assigneeName={wo.assignedTo ? creatorNames[wo.assignedTo] : undefined}
           />
         ))}
       </div>
@@ -305,7 +296,6 @@ function ColumnList({
       wo={wo}
       propertyName={propertyNames[wo.propertyId] ?? ""}
       creatorName={wo.createdBy ? creatorNames[wo.createdBy] : undefined}
-            assigneeName={wo.assignedTo ? creatorNames[wo.assignedTo] : undefined}
     />
   );
 
