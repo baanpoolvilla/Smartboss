@@ -1090,11 +1090,32 @@ export async function setDayOffQuotaAction(
   if (!employmentId) return { error: "กรุณาเลือกพนักงาน" };
   if (scope === "month" && !/^\d{4}-\d{2}$/.test(month)) return { error: "เดือนไม่ถูกต้อง" };
 
-  const raw = String(formData.get(scope === "standing" ? "standing_days" : "days_per_month") ?? "").trim();
+  const raw = String(formData.get(scope === "standing" ? "standing_days" : "extra_days") ?? "").trim();
   const note = String(formData.get(scope === "standing" ? "standing_note" : "note") ?? "").slice(0, 200);
 
+  /*
+   * ช่องของเดือนกรอกเป็น "เพิ่ม/ลดจากค่าประจำกี่วัน" (ใส่ 1 = 6 + 1 = 7 วัน) — บวกกับค่าประจำของคนนี้
+   * ที่นี่แล้วเก็บเป็นยอดรวมของเดือนเหมือนเดิม (ตัวอ่านทุกที่ใช้ยอดรวม ไม่ต้องแก้ตาม)
+   * เพิ่ม 0 = ไม่ต่างจากค่าประจำ ⇒ ล้างแถวของเดือนทิ้ง เหมือนปล่อยว่าง
+   */
+  let monthTotal: number | null = null;
+  if (scope === "month" && raw !== "") {
+    const extra = Number(raw);
+    if (!Number.isInteger(extra)) return { error: "จำนวนวันที่เพิ่ม/ลดต้องเป็นจำนวนเต็ม" };
+    const current = await loadDayOffQuota(session.orgId, employmentId, month);
+    const base = current.employeeStanding ?? current.companyDefault;
+    if (extra !== 0) {
+      monthTotal = base + extra;
+      if (monthTotal < DAYS_OFF_LIMITS.min || monthTotal > DAYS_OFF_LIMITS.max) {
+        return {
+          error: `ค่าประจำ ${base} วัน ${extra < 0 ? `ลด ${-extra}` : `เพิ่ม ${extra}`} = ${monthTotal} วัน — ต้องอยู่ระหว่าง ${DAYS_OFF_LIMITS.min}–${DAYS_OFF_LIMITS.max} วัน`,
+        };
+      }
+    }
+  }
+
   // ว่าง = กลับไปใช้ชั้นที่กว้างกว่า ไม่ใช่ 0 วัน — สองอย่างนี้ต่างกันคนละเรื่อง
-  if (raw === "") {
+  if (raw === "" || (scope === "month" && monthTotal === null)) {
     if (scope === "standing") {
       await saveEmployeeDayOffStanding(session.orgId, employmentId, null, "", session.userId);
     } else {
@@ -1104,7 +1125,7 @@ export async function setDayOffQuotaAction(
     return { ok: true, cleared: true, scope };
   }
 
-  const days = Number(raw);
+  const days = monthTotal ?? Number(raw);
   if (!Number.isInteger(days) || days < DAYS_OFF_LIMITS.min || days > DAYS_OFF_LIMITS.max) {
     return {
       error: `วันหยุดต่อเดือนต้องเป็นจำนวนเต็ม ${DAYS_OFF_LIMITS.min}–${DAYS_OFF_LIMITS.max} วัน`,
