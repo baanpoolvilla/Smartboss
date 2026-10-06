@@ -228,7 +228,7 @@ export default async function LeaveTypesSettingsPage({
               )}
               {canManage &&
                 allowanceTables.map(({ type, months }) => (
-                  <HolidayAllowances key={type.id} leaveTypeId={type.id} leaveTypeName={type.name} year={year} months={months} />
+                  <HolidayAllowances key={type.id} companyId={companyId} leaveTypeId={type.id} leaveTypeName={type.name} year={year} months={months} />
                 ))}
               {canManage && accruing[0] && balances && (
                 <HolidayBalances

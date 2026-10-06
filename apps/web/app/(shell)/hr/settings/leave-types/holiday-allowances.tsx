@@ -3,7 +3,7 @@ import { Button } from "@smartboss/ui/components/button";
 import { DataTable, Pill, SectionCard, Td, inputClass } from "@/modules/hr/components/ui";
 import { formatBuddhistYear, formatDate } from "@/modules/hr/lib/labels";
 import type { MonthAllowance } from "@/modules/hr/lib/api";
-import { setMonthAllowanceAction } from "../../actions";
+import { importThaiHolidaysAction, setMonthAllowanceAction } from "../../actions";
 
 const MONTH_NAMES = [
   "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
@@ -17,11 +17,13 @@ const MONTH_NAMES = [
  * บางเดือนบริษัทให้ไม่ตรงกับปฏิทิน ⇒ HR ใส่จำนวนทับได้ทีละเดือน · แก้ย้อนหลังแล้วยอดของทุกคนคิดใหม่เอง
  */
 export function HolidayAllowances({
+  companyId,
   leaveTypeId,
   leaveTypeName,
   year,
   months,
 }: {
+  companyId: string;
   leaveTypeId: string;
   leaveTypeName: string;
   year: number;
@@ -33,7 +35,19 @@ export function HolidayAllowances({
       title={`สิทธิ์ ${leaveTypeName} รายเดือน · ปี ${formatBuddhistYear(year)}`}
       description={`แต่ละเดือนได้สิทธิ์เท่าจำนวนวันหยุดบริษัทของเดือนนั้น แก้จำนวนทับได้ถ้าบริษัทให้ไม่ตรง · สิทธิ์ของแต่ละเดือนใช้ได้ภายใน 3 เดือน (เช่น ก.ค. ใช้ได้ถึงสิ้น ก.ย.) เกินนั้นตัดทิ้ง · รวมทั้งปี ${total} วัน`}
       action={
-        <div className="flex gap-1">
+        <div className="flex flex-wrap justify-end gap-1">
+          <form action={importThaiHolidaysAction}>
+            <input type="hidden" name="company_id" value={companyId} />
+            <input type="hidden" name="year" value={year} />
+            <Button
+              type="submit"
+              size="sm"
+              variant="outline"
+              title="เพิ่มวันหยุดราชการไทยของปีนี้เป็นวันหยุดบริษัท — วันที่มีอยู่แล้วไม่ซ้ำ"
+            >
+              นำเข้าวันหยุดราชการไทย
+            </Button>
+          </form>
           <Link href={`/hr/settings/leave-types?year=${year - 1}`}>
             <Button size="sm" variant="outline">ปีก่อน</Button>
           </Link>

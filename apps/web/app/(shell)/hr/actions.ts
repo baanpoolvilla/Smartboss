@@ -25,6 +25,7 @@ import { saveCommissionPool, saveCommissionWeights } from "@/modules/hr/lib/comm
 import { syncAllUserNames, syncUserName } from "@/modules/hr/lib/name-sync";
 import { clearApprovalNotifications, notifyApprovers, notifyRequester } from "@/modules/hr/lib/hr-notify";
 import { dockAttendance } from "@/lib/attendance-performance";
+import { thaiHolidayEvents } from "@/modules/report_task/data/thai-holidays";
 
 /**
  * อนุมัติลา / แก้เวลาแล้ว → คำนวณผลลงเวลาใหม่และคืนคะแนนที่หักไปแล้วทันที ไม่ต้องรอ cron 08:00/17:00
@@ -846,19 +847,7 @@ export async function addHolidayAction(
   if (!name) return { error: "กรุณาตั้งชื่อวันหยุด" };
 
   try {
-    const existing = await wfFetch<Paged<{ id: string; company_id: string }>>(
-      `/holiday-calendars?company_id=${companyId}`,
-    );
-    let calendarId = existing.items[0]?.id;
-
-    if (calendarId === undefined) {
-      const created = await wfFetch<{ id: string }>("/holiday-calendars", {
-        method: "POST",
-        body: { company_id: companyId, code: "MAIN", name: "วันหยุดบริษัท" },
-      });
-      calendarId = created.id;
-    }
-
+    const calendarId = await mainHolidayCalendarId(companyId);
     await wfFetch(`/holiday-calendars/${calendarId}/dates`, {
       method: "POST",
       body: {
@@ -873,6 +862,71 @@ export async function addHolidayAction(
 
   revalidatePath("/hr/settings/holidays");
   return { ok: true, added: date };
+}
+
+/** ปฏิทินวันหยุดใบเดียวของบริษัท — ยังไม่มีก็สร้างให้ */
+async function mainHolidayCalendarId(companyId: string): Promise<string> {
+  const existing = await wfFetch<Paged<{ id: string; company_id: string }>>(
+    `/holiday-calendars?company_id=${companyId}`,
+  );
+  const calendarId = existing.items[0]?.id;
+  if (calendarId !== undefined) return calendarId;
+
+  const created = await wfFetch<{ id: string }>("/holiday-calendars", {
+    method: "POST",
+    body: { company_id: companyId, code: "MAIN", name: "วันหยุดบริษัท" },
+  });
+  return created.id;
+}
+
+/**
+ * นำเข้าวันหยุดราชการไทยของปีหนึ่งเป็นวันหยุดบริษัท
+ *
+ * ปฏิทินทีมโชว์วันหยุดราชการไทยจากชุดในตัว (data/thai-holidays.ts) แต่สิทธิ์ Holiday
+ * นับจากวันหยุดบริษัทของโมดูลบุคคล ซึ่งเริ่มต้นว่างเปล่า ⇒ HR เห็นวันหยุดบนปฏิทิน
+ * แต่ตารางสิทธิ์ขึ้น "ไม่มี" ทุกเดือน ปุ่มนี้คัดลอกชุดเดียวกันมาให้ในคลิกเดียว
+ * วันที่มีอยู่แล้วข้ามไป (กดซ้ำได้ ไม่ทับชื่อที่ตั้งไว้) · ลบ/เพิ่มรายวันต่อได้ที่หน้าวันหยุดบริษัท
+ */
+export async function importThaiHolidaysAction(formData: FormData) {
+  await guard(HR_PERMS.settingManage);
+  const companyId = String(formData.get("company_id") ?? "");
+  const year = Number(formData.get("year"));
+  if (!companyId) throw new Error("ยังไม่มีบริษัทในระบบ workforce");
+  if (!Number.isInteger(year)) throw new Error("ไม่พบปีที่จะนำเข้า");
+
+  // end ของชุดในตัวเป็นแบบไม่รวมวันนั้น — แตกวันหยุดหลายวัน (สงกรานต์) ออกเป็นรายวัน
+  const nameOf = new Map<string, string>();
+  for (const event of thaiHolidayEvents) {
+    for (let day = event.start.slice(0, 10); day < event.end.slice(0, 10); ) {
+      if (day.startsWith(`${year}-`) && !nameOf.has(day)) nameOf.set(day, event.title);
+      const next = new Date(`${day}T00:00:00Z`);
+      next.setUTCDate(next.getUTCDate() + 1);
+      day = next.toISOString().slice(0, 10);
+    }
+  }
+  if (nameOf.size === 0) throw new Error(`ยังไม่มีข้อมูลวันหยุดราชการไทยของปี ${year + 543}`);
+
+  try {
+    const existing = await wfFetch<Paged<{ dates: { holiday_date: string }[] }>>(
+      `/holiday-calendars?company_id=${companyId}&from=${year}-01-01&to=${year}-12-31`,
+    );
+    for (const calendar of existing.items) {
+      for (const date of calendar.dates) nameOf.delete(date.holiday_date);
+    }
+    if (nameOf.size > 0) {
+      const calendarId = await mainHolidayCalendarId(companyId);
+      await wfFetch(`/holiday-calendars/${calendarId}/dates`, {
+        method: "POST",
+        body: {
+          dates: [...nameOf].map(([holiday_date, name]) => ({ holiday_date, name, paid: true })),
+        },
+      });
+    }
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+  revalidatePath("/hr");
+  revalidatePath("/hr/settings");
 }
 
 export async function deleteHolidayAction(formData: FormData) {
