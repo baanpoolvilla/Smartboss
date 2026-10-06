@@ -133,7 +133,8 @@ export default async function LeaveTypesSettingsPage({
                             {t.accrues_from_holidays
                               ? " · Holiday สะสม ใช้ได้ภายใน 3 เดือน"
                               : t.auto_approve && t.monthly_quota_days > 0
-                                ? ` ${t.monthly_quota_days} วัน/เดือน`
+                                ? // วันหยุดตามสิทธิ์ (Day-Off) ใช้เลขของบริษัทจากการ์ดด้านล่าง ไม่ใช่โควตาที่ตั้งตอนสร้างประเภท
+                                  ` ${t.requires_reports ? t.monthly_quota_days : companyDayOffDefault} วัน/เดือน`
                                 : ""}
                             {t.requires_reports ? " · ยังต้องส่งรายงาน" : ""}
                           </Pill>
