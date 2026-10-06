@@ -2079,44 +2079,12 @@ export function TaskDetailSheet({
                 ))}
               </div>
             )}
-            <div className="flex items-end gap-2">
-              <AttachMenu
-                onFiles={(files) => void handleCommentFilesSelected(files)}
-                disabled={commentUploading}
-                trigger={commentUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
-                aria-label="แนบไฟล์/รูปภาพ"
-                className="shrink-0 inline-flex items-center justify-center size-9 rounded-md border border-input shadow-xs disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground"
-              />
-              <Popover open={commentEmojiOpen} onOpenChange={setCommentEmojiOpen}>
-                <PopoverTrigger
-                  render={
-                    <button
-                      type="button"
-                      aria-label="อิโมจิและสติกเกอร์ (Ctrl+E)"
-                      title="อิโมจิและสติกเกอร์ (Ctrl+E)"
-                      className="shrink-0 inline-flex items-center justify-center size-9 rounded-md border border-input shadow-xs hover:bg-accent hover:text-accent-foreground"
-                    >
-                      <Smile className="h-4 w-4" />
-                    </button>
-                  }
-                />
-                <PopoverContent side="top" align="start" className="w-auto max-w-[calc(100vw-1.5rem)] p-2" finalFocus={commentRef}>
-                  <EmojiStickerPicker onPickEmoji={insertCommentEmoji} onPickSticker={sendCommentSticker} />
-                </PopoverContent>
-              </Popover>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <button type="button" className="shrink-0 text-[var(--ink-soft)] hover:text-[var(--ink)]" aria-label="เงื่อนไขการแนบไฟล์">
-                      <Info className="h-3.5 w-3.5" />
-                    </button>
-                  }
-                />
-                <TooltipContent>
-                  รูปภาพสูงสุด {attachmentSettings.maxImageMB}MB · เอกสารสูงสุด {attachmentSettings.maxFileMB}MB ·
-                  วิดีโอสูงสุด {attachmentSettings.maxVideoMB}MB · แนบได้สูงสุด {attachmentSettings.maxFilesPerComment} ไฟล์ต่อความคิดเห็น
-                </TooltipContent>
-              </Tooltip>
+            {/*
+              กล่องพิมพ์แบบแอปแชท/บอร์ดงานทั่วไป (Slack, Linear, GitHub): ช่องพิมพ์เต็มความกว้างอยู่บน
+              แถบเครื่องมือ (แนบไฟล์ · อิโมจิ · ส่ง) อยู่ล่างในกรอบเดียวกัน — เดิมปุ่มสามตัวเรียงหน้าช่องพิมพ์ในแถวเดียว
+              ช่องเหลือกว้างนิดเดียว ข้อความตกบรรทัดทุกสองสามคำ ("ไม่สวย ให้พื้นที่พิมพ์แชทเยอะกว่านี้")
+            */}
+            <div className="flex flex-col rounded-xl border border-input bg-white transition-colors focus-within:border-[var(--brand-green)] focus-within:ring-2 focus-within:ring-[var(--brand-green)]/20">
               <div className="relative min-w-0 flex-1">
                 {mentionQuery && mentionCandidates.length > 0 && (
                   <div className="absolute bottom-full left-0 right-0 z-30 mb-1 max-h-56 overflow-y-auto rounded-lg border border-[var(--line)] bg-white p-1 shadow-lg">
@@ -2144,8 +2112,8 @@ export function TaskDetailSheet({
                 )}
                 <Textarea
                   ref={commentRef}
-                  placeholder="แสดงความคิดเห็น... (@ เพื่อแท็กคนในโปรเจค)"
-                  rows={1}
+                  placeholder="เขียนความคิดเห็น… พิมพ์ @ เพื่อแท็กคน"
+                  rows={3}
                   value={comment}
                   onChange={(e) => {
                     setComment(e.target.value);
@@ -2191,17 +2159,57 @@ export function TaskDetailSheet({
                       submitComment();
                     }
                   }}
-                  className="min-h-9 w-full resize-none bg-white"
+                  // ช่องพิมพ์เต็มความกว้าง สูง 3 บรรทัด ขยายตามข้อความได้ถึงราว 8 บรรทัด — ไม่มีกรอบของตัวเอง ใช้กรอบของกล่องรวม
+                  className="max-h-48 min-h-[4.5rem] w-full resize-none border-0 bg-transparent px-3 pt-2.5 pb-1 text-sm shadow-none [field-sizing:content] focus-visible:ring-0"
                 />
               </div>
+              <div className="flex items-center gap-0.5 px-1.5 pb-1.5">
+              <AttachMenu
+                onFiles={(files) => void handleCommentFilesSelected(files)}
+                disabled={commentUploading}
+                trigger={commentUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+                aria-label="แนบไฟล์/รูปภาพ"
+                className="shrink-0 inline-flex items-center justify-center size-8 rounded-lg text-[var(--ink-soft)] disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground"
+              />
+              <Popover open={commentEmojiOpen} onOpenChange={setCommentEmojiOpen}>
+                <PopoverTrigger
+                  render={
+                    <button
+                      type="button"
+                      aria-label="อิโมจิและสติกเกอร์ (Ctrl+E)"
+                      title="อิโมจิและสติกเกอร์ (Ctrl+E)"
+                      className="shrink-0 inline-flex items-center justify-center size-8 rounded-lg text-[var(--ink-soft)] hover:bg-accent hover:text-accent-foreground"
+                    >
+                      <Smile className="h-4 w-4" />
+                    </button>
+                  }
+                />
+                <PopoverContent side="top" align="start" className="w-auto max-w-[calc(100vw-1.5rem)] p-2" finalFocus={commentRef}>
+                  <EmojiStickerPicker onPickEmoji={insertCommentEmoji} onPickSticker={sendCommentSticker} />
+                </PopoverContent>
+              </Popover>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button type="button" className="shrink-0 text-[var(--ink-soft)] hover:text-[var(--ink)]" aria-label="เงื่อนไขการแนบไฟล์">
+                      <Info className="h-3.5 w-3.5" />
+                    </button>
+                  }
+                />
+                <TooltipContent>
+                  รูปภาพสูงสุด {attachmentSettings.maxImageMB}MB · เอกสารสูงสุด {attachmentSettings.maxFileMB}MB ·
+                  วิดีโอสูงสุด {attachmentSettings.maxVideoMB}MB · แนบได้สูงสุด {attachmentSettings.maxFilesPerComment} ไฟล์ต่อความคิดเห็น
+                </TooltipContent>
+              </Tooltip>
               <Button
                 size="icon"
-                className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white shrink-0"
+                className="ml-auto size-8 shrink-0 rounded-lg bg-[var(--brand-green)] text-[var(--ink)] hover:bg-[var(--brand-green-dark)] hover:text-white"
                 onClick={submitComment}
                 aria-label="ส่งความคิดเห็น"
               >
                 <Send className="h-4 w-4" />
               </Button>
+              </div>
             </div>
           </div>
         </FileDropZone>
