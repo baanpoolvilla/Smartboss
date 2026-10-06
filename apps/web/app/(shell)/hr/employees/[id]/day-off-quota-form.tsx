@@ -95,7 +95,9 @@ export function DayOffQuotaForm({
               max={31}
               step={1}
               inputMode="numeric"
-              defaultValue={employeeStanding === null ? "" : String(employeeStanding)}
+              // ยังไม่เคยตั้งรายคน = โชว์ค่าตั้งต้นของบริษัทเป็นตัวเลขในช่องเลย (ไม่ใช่ช่องว่างกับตัวอักษรจาง)
+              // HR เห็นว่า "ตอนนี้คือ 6 วัน แก้ได้" · กดบันทึกทั้งอย่างนั้นก็แค่ตั้งค่าประจำของคนนี้เท่ากับค่าเดิม
+              defaultValue={String(employeeStanding ?? companyDefault)}
               placeholder={String(companyDefault)}
               className={inputClass}
             />
