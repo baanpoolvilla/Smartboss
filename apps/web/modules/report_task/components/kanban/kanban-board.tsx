@@ -389,6 +389,15 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   // มือถือ (<640px): คอลัมน์ละเต็มจอ แถบแท็บด้านบนบอกว่ากำลังดูคอลัมน์ไหน — หาจากคอลัมน์ที่กึ่งกลาง
   // อยู่ใกล้กึ่งกลางของตัวเลื่อนที่สุด (ปัดเองหรือแตะแท็บก็อัปเดตจากที่เดียวกัน)
   const [activeColumnId, setActiveColumnId] = useState<string | null>(null);
+  const tabStripRef = useRef<HTMLDivElement>(null);
+  // ปัดบอร์ดไปคอลัมน์ไหน ชิปของคอลัมน์นั้นเลื่อนเข้ามาให้เห็นในแถวด้วย (ไม่หลุดขอบจอ)
+  useEffect(() => {
+    const strip = tabStripRef.current;
+    if (!strip || activeColumnId === null) return;
+    const tab = strip.querySelector<HTMLElement>(`[data-column-tab="${CSS.escape(activeColumnId)}"]`);
+    if (!tab) return;
+    strip.scrollTo({ left: tab.offsetLeft - (strip.clientWidth - tab.offsetWidth) / 2, behavior: "smooth" });
+  }, [activeColumnId]);
 
   function updateScrollState() {
     const el = scrollerRef.current;
@@ -521,10 +530,16 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
       {/* <640px: แถบแท็บคอลัมน์ ชิดใต้แถบหัว — รวมหน้าที่ของชิปตัวเลข + การ์ดหัวคอลัมน์ + แถวคำใบ้เดิม
           ไว้ในแถวเดียว 44px เพื่อให้การ์ดงานได้พื้นที่ที่เหลือทั้งจอ */}
       {filtered.length > 0 && columns.length > 0 && (
+        /*
+          ชิปทรงเม็ดยาแบบแอปบอร์ดงานบนมือถือ (Trello / Jira / Linear / Asana) — ปุ่มสูง 36px กดง่าย
+          ตัวที่เลือกถมสีของคอลัมน์ ตัวเลขเป็นป้ายกลม · ตัวที่เลือกเลื่อนเข้ากลางแถวเองเมื่อปัดบอร์ดไปคอลัมน์อื่น
+          (เดิมเป็นแท็บขีดเส้นใต้ ตัวหนังสือเล็ก กดยาก และตัวท้ายหลุดขอบจอโดยไม่รู้ว่ามีต่อ)
+        */
         <div
+          ref={tabStripRef}
           role="tablist"
           aria-label="คอลัมน์ของบอร์ด"
-          className="flex h-11 shrink-0 items-stretch overflow-x-auto border-b border-[var(--line)] bg-white [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:hidden"
+          className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-[var(--line)] bg-white px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:hidden"
         >
           {columns.map((column) => {
             const active = (activeColumnId ?? columns[0]?.id) === column.id;
@@ -534,17 +549,29 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
                 type="button"
                 role="tab"
                 aria-selected={active}
+                data-column-tab={column.id}
                 onClick={() => scrollToColumn(column.id)}
                 className={cn(
-                  "flex shrink-0 items-center gap-1.5 border-b-[3px] px-3 text-[13px] transition-colors",
-                  active
-                    ? "border-[var(--brand-green-dark)] font-bold text-[var(--ink)]"
-                    : "border-transparent font-medium text-[var(--ink-soft)]"
+                  "flex h-9 shrink-0 items-center gap-2 rounded-full border px-3.5 text-[13px] transition-colors",
+                  active ? "font-bold text-[var(--ink)]" : "border-[var(--line)] bg-white font-medium text-[var(--ink-soft)]"
                 )}
+                style={
+                  active
+                    ? { borderColor: column.accent, backgroundColor: `color-mix(in srgb, ${column.accent} 14%, white)` }
+                    : undefined
+                }
               >
-                <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: column.accent }} />
                 <span className="max-w-[140px] truncate">{column.label}</span>
-                <span className="font-bold tabular-nums text-[var(--ink)]">{column.tasks.length}</span>
+                <span
+                  className="flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold tabular-nums"
+                  style={
+                    active
+                      ? { backgroundColor: column.accent, color: "white" }
+                      : { backgroundColor: "var(--bg-soft)", color: "var(--ink)" }
+                  }
+                >
+                  {column.tasks.length}
+                </span>
               </button>
             );
           })}
@@ -631,7 +658,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
               onPointerUp={endPan}
               onPointerCancel={endPan}
               className={cn(
-                "flex h-full items-stretch gap-4 overflow-x-auto pb-1 -mx-1 px-1 snap-x snap-mandatory sm:snap-none",
+                "flex h-full items-stretch gap-4 overflow-x-auto pb-1 -mx-1 px-1 snap-x snap-mandatory sm:snap-none max-sm:[scrollbar-width:none] max-sm:[&::-webkit-scrollbar]:hidden",
                 isPanning ? "cursor-grabbing select-none" : "cursor-grab"
               )}
             >
