@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useMemo, useState, useTransition } from "react";
-import { Printer } from "lucide-react";
+import { Printer, SlidersHorizontal } from "lucide-react";
 import { Button } from "@smartboss/ui/components/button";
 import { Modal } from "@/components/module/dialog";
 import { leaveTypeHint, usableLeaveTypes, type LeaveTypeChoice } from "@/modules/hr/lib/leave-type-choice";
@@ -447,7 +447,24 @@ export function LeaveCalendar({
         <640px: ชิปกรองทั้งหมดอยู่แถวเดียว เลื่อนซ้ายขวาได้ ไม่ตกเป็นสามบรรทัด และไม่แสดงประเภทที่เดือนนี้
         ไม่มีใครลงเลย (จำนวน 0 — ไม่มีอะไรให้กรอง) หัวปฏิทินบนมือถือเดิมกินที่เกือบเท่าตัวปฏิทิน ("ตรงหัวมันรก")
       */}
-      <div className="-mx-1 flex flex-nowrap items-center gap-x-3 gap-y-2 overflow-x-auto px-1 text-xs [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:flex-wrap sm:gap-x-4 sm:overflow-visible sm:px-0">
+      {/*
+        มือถือ: ชิปกรองทั้งหมดพับไว้หลังปุ่ม "ตัวกรอง" (เหมือนแอปทั่วไป) — กดแล้วชิปประเภท + รายชื่อคนในทีมกางออก
+        ไม่กินแถวบนหัวปฏิทินตลอดเวลา · จอใหญ่เหมือนเดิม
+      */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs sm:gap-x-4">
+        <button
+          type="button"
+          onClick={() => setPeopleOpen((v) => !v)}
+          aria-expanded={peopleOpen}
+          className="flex h-8 items-center gap-1.5 rounded-full border border-(--line) px-3 text-xs font-medium text-(--ink) sm:hidden"
+          style={peopleOpen || hidden.size + hiddenTypes.size > 0 ? { backgroundColor: "var(--app-soft)" } : undefined}
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+          ตัวกรอง
+          {hidden.size + hiddenTypes.size > 0 && (
+            <span className="rounded-full bg-(--app) px-1.5 text-[10px] font-bold text-white">{hidden.size + hiddenTypes.size}</span>
+          )}
+        </button>
         <div className="hidden shrink-0 items-center gap-1.5 sm:flex sm:shrink sm:flex-wrap">
           <span className="hidden text-(--ink-soft) sm:inline">แสดง:</span>
           {(
@@ -461,7 +478,7 @@ export function LeaveCalendar({
               <FilterChip key={label} label={label} hue={hue} off={groupOff(auto)} onClick={() => toggleGroup(auto)} dot />
             ))}
         </div>
-        <div className="flex shrink-0 items-center gap-1.5 sm:shrink sm:flex-wrap">
+        <div className={`${peopleOpen ? "order-last flex w-full flex-wrap" : "hidden"} items-center gap-1.5 sm:order-none sm:flex sm:w-auto sm:shrink`}>
           <span className="hidden text-(--ink-soft) sm:inline">ประเภท:</span>
           {types.map((t) => (
             <FilterChip
@@ -555,21 +572,8 @@ export function LeaveCalendar({
           );
         })()}
         {/* ── แถบซ้าย: ใครหยุดบ้าง เปิด/ปิดดูรายคนได้ ── */}
-        <aside className="order-3 lg:order-1">
-          {/* มือถือ: ตัวกรองรายคนพับเก็บ — เปิดเมื่อจะซ่อน/แสดงบางคน */}
-          <button
-            type="button"
-            onClick={() => setPeopleOpen((v) => !v)}
-            aria-expanded={peopleOpen}
-            className="flex w-full items-center justify-between rounded-(--radius) border border-(--line) px-3 py-2 text-sm font-medium text-(--ink) sm:hidden"
-          >
-            <span>
-              กรองคน
-              {hidden.size > 0 && <span className="ml-1 text-xs text-(--ink-soft)">(ซ่อนอยู่ {hidden.size} คน)</span>}
-            </span>
-            <span className="text-(--ink-soft)">{peopleOpen ? "▲" : "▼"}</span>
-          </button>
-          <div className={peopleOpen ? "mt-3 sm:mt-0" : "hidden sm:block"}>
+        <aside className={`${peopleOpen ? "order-first" : "order-3"} lg:order-1`}>
+          <div className={peopleOpen ? "" : "hidden sm:block"}>
           {employmentId !== null && (
             <>
               <p className="mb-1.5 text-xs font-semibold text-(--ink)">ปฏิทินของฉัน</p>
