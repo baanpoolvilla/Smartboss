@@ -155,13 +155,36 @@ ${RULES}
 
 type Msg = { role: "system" | "user" | "assistant"; content: string };
 
-async function complete(messages: Msg[]): Promise<string> {
+/** โทเคนที่ใช้จริง รวมทุกครั้งที่เรียก AI ของรายงานหนึ่งฉบับ (รวมรอบขอใหม่/ขอแก้) */
+export interface TokenUsage {
+  input_tokens: number;
+  output_tokens: number;
+}
+
+/**
+ * รุ่นตระกูล gpt-4* เป็นรุ่นไม่ใช้ reasoning — รับ temperature ได้ ตั้งต่ำไว้ให้คำตอบนิ่ง
+ * รุ่น reasoning (gpt-5 / gpt-6 / o-series) ไม่รับ temperature ที่ไม่ใช่ค่าเริ่มต้น จึงไม่ส่ง
+ * และคุมความลึกของการคิดด้วย ADS_AI_REASONING_EFFORT แทน (ไม่ตั้ง = ค่าเริ่มต้นของรุ่น)
+ */
+function modelParams(name: string) {
+  if (/^gpt-4/.test(name)) return { temperature: 0.2 };
+  const effort = process.env.ADS_AI_REASONING_EFFORT;
+  return effort ? { reasoning_effort: effort as "low" | "medium" | "high" } : {};
+}
+
+async function complete(messages: Msg[], usage?: TokenUsage): Promise<string> {
+  const name = model();
   const res = await client().chat.completions.create({
-    model: model(),
+    model: name,
     response_format: { type: "json_object" },
-    temperature: 0.2,
     messages,
+    ...modelParams(name),
   });
+  if (usage) {
+    usage.input_tokens += res.usage?.prompt_tokens ?? 0;
+    // รุ่น reasoning: completion_tokens รวมโทเคนที่ใช้คิดแล้ว (คิดเงินเป็น output)
+    usage.output_tokens += res.usage?.completion_tokens ?? 0;
+  }
   return res.choices[0]?.message?.content ?? "";
 }
 
@@ -209,6 +232,8 @@ export interface StoredOutput extends AiOutput {
     /** ส่วนที่ยังไม่ผ่านหลังแก้แล้ว — ซ่อนและแจ้งผู้ใช้ */
     hidden: HiddenPart[];
   };
+  /** โทเคนที่ใช้จริงของรายงานนี้ — รายงานที่สร้างก่อนมีฟิลด์นี้จะไม่มีค่า */
+  usage?: TokenUsage;
 }
 
 async function analyze(input: AiInput): Promise<StoredOutput> {
@@ -218,12 +243,13 @@ async function analyze(input: AiInput): Promise<StoredOutput> {
   ];
 
   // 1) parse ไม่ผ่าน → เรียกใหม่ 1 ครั้ง
-  let raw = await complete(messages);
+  const usage: TokenUsage = { input_tokens: 0, output_tokens: 0 };
+  let raw = await complete(messages, usage);
   let out = parseAiOutput(raw);
   let parseRetried = false;
   if (!out) {
     parseRetried = true;
-    raw = await complete(messages);
+    raw = await complete(messages, usage);
     out = parseAiOutput(raw);
     if (!out) throw new Error("AI ตอบกลับไม่ใช่ JSON ตามรูปแบบที่กำหนด (ลองแล้ว 2 ครั้ง)");
   }
@@ -234,17 +260,20 @@ async function analyze(input: AiInput): Promise<StoredOutput> {
   let fixRound = false;
   if (issues.length > 0) {
     fixRound = true;
-    const fixRaw = await complete([
-      ...messages,
-      { role: "assistant", content: raw },
-      {
-        role: "user",
-        content:
-          "คำตอบมีจุดที่ไม่ผ่านการตรวจ:\n" +
-          issues.map((i) => `- ${i.message}`).join("\n") +
-          "\nแก้ให้ถูกต้องตามกฎ แล้วตอบ JSON ใหม่ทั้งก้อนตาม schema เดิม",
-      },
-    ]);
+    const fixRaw = await complete(
+      [
+        ...messages,
+        { role: "assistant", content: raw },
+        {
+          role: "user",
+          content:
+            "คำตอบมีจุดที่ไม่ผ่านการตรวจ:\n" +
+            issues.map((i) => `- ${i.message}`).join("\n") +
+            "\nแก้ให้ถูกต้องตามกฎ แล้วตอบ JSON ใหม่ทั้งก้อนตาม schema เดิม",
+        },
+      ],
+      usage
+    );
     const fixed = parseAiOutput(fixRaw);
     if (fixed) {
       out = fixed;
@@ -254,7 +283,7 @@ async function analyze(input: AiInput): Promise<StoredOutput> {
 
   // 5) ยังไม่ผ่าน → ซ่อนส่วนนั้น
   const { output, hidden } = hideFailed(out, issues);
-  return { ...output, validation: { parse_retried: parseRetried, fix_round: fixRound, hidden } };
+  return { ...output, validation: { parse_retried: parseRetried, fix_round: fixRound, hidden }, usage };
 }
 
 // ─── สร้าง / อ่านรายงาน ───
