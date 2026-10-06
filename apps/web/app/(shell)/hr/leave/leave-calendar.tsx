@@ -128,6 +128,8 @@ function endsWithTypeName(label: string, typeName: string): boolean {
 
 /** รายการที่โชว์ต่อช่องวัน — ที่เหลือรวมเป็นป้าย "+N รายการ" (กดวันนั้นเพื่อดูทั้งหมด) */
 const MAX_PER_DAY = 2;
+/** จอกว้าง (xl): ช่องวันสูงพอสำหรับ 4 รายการ — เห็นครบเกือบทุกวันโดยไม่ต้องกด */
+const MAX_PER_DAY_WIDE = 4;
 /** มือถือ: จุดสูงสุดต่อวัน — ช่องกว้างราว 50px วางจุด 6px ได้ 5 จุดพอดี (เกินแล้วเหลือ 4 จุด + "+N") */
 const MOBILE_DOT_CAP = 5;
 
@@ -633,7 +635,8 @@ export function LeaveCalendar({
             </div>
 
             <div className="grid grid-cols-7">
-              {grid.map((cell) => {
+              {/* สัปดาห์ที่ไม่มีวันของเดือนนี้เลย (แถวท้ายที่เป็นเดือนหน้าทั้งแถว) ไม่ต้องแสดง — คืนพื้นที่ให้แถวที่ใช้จริง */}
+              {grid.filter((_, index) => grid.slice(index - (index % 7), index - (index % 7) + 7).some((c) => c.inMonth)).map((cell) => {
                 const all = entriesByDate[cell.iso] ?? [];
                 const entries = all.filter(
                   (e) =>
@@ -647,10 +650,11 @@ export function LeaveCalendar({
 
                 const body = (
                   <span
-                    className="flex h-full min-h-[3.25rem] min-w-0 flex-col gap-0.5 border-b border-r border-(--line) p-0.5 text-left sm:min-h-24 sm:p-1 lg:min-h-[7.5rem]"
+                    className="flex h-full min-h-[3.25rem] min-w-0 flex-col gap-0.5 border-b border-r border-(--line)/70 p-0.5 text-left sm:min-h-24 sm:p-1 lg:min-h-[7.5rem] xl:min-h-[8.75rem] xl:gap-1 xl:p-1.5"
                     style={{
                       opacity: cell.inMonth ? 1 : 0.4,
-                      boxShadow: heavy ? "inset 0 0 0 1.5px var(--tone-warn)" : undefined,
+                      // วันที่คนหยุดเยอะ: พื้นส้มจาง ๆ แทนกรอบส้มหนา — ยังสังเกตได้แต่ไม่ตัดกันทั้งตาราง
+                      backgroundColor: heavy ? "color-mix(in srgb, var(--tone-warn) 7%, transparent)" : undefined,
                     }}
                   >
                     <span className="flex items-center justify-between">
@@ -701,7 +705,7 @@ export function LeaveCalendar({
                     )}
 
                     <span className="hidden sm:contents">
-                    {entries.slice(0, MAX_PER_DAY).map((entry, index) => {
+                    {entries.slice(0, MAX_PER_DAY_WIDE).map((entry, index) => {
                       // สีตามประเภท (ชิปกรองด้านบนใช้สีเดียวกัน) — ใครหยุดดูจากชื่อบนรายการและรายชื่อทางซ้าย
                       const hue = typeHue(entry.leaveTypeName, entry.autoApprove);
                       const waiting = !entry.autoApprove && entry.status === "PENDING";
@@ -709,7 +713,7 @@ export function LeaveCalendar({
                         <span
                           key={`${entry.employmentId}-${index}`}
                           title={`${labelOf(entry)} · ${entry.autoApprove ? "วันหยุดประจำ (สิทธิ์)" : entry.status === "APPROVED" ? "ลา · อนุมัติแล้ว" : "ลา · รออนุมัติ"}`}
-                          className="truncate rounded-sm px-1.5 text-[10.5px] leading-[18px]"
+                          className={`truncate rounded-sm px-1.5 text-[10.5px] leading-[18px] ${index >= MAX_PER_DAY ? "hidden xl:block" : ""}`}
                           style={{
                             borderLeft: `3px solid hsl(${hue} 65% 45%)`,
                             backgroundColor: `hsl(${hue} 80% 93%)`,
@@ -725,9 +729,11 @@ export function LeaveCalendar({
                       );
                     })}
 
+                    {/* "+N เพิ่มเติม" เป็นตัวหนังสือธรรมดาแบบปฏิทิน Teams/Outlook ไม่ใช่ป้ายดำ — จอกว้างโชว์ได้ 4 รายการก่อนตัด */}
                     {entries.length > MAX_PER_DAY && (
-                      <span className="mt-0.5 self-start rounded-full bg-(--ink) px-2 text-[10px] font-semibold leading-[18px] text-(--bg)">
-                        +{entries.length - MAX_PER_DAY} รายการ
+                      <span className={`self-start px-1.5 text-[11px] font-semibold text-(--app-strong) ${entries.length > MAX_PER_DAY_WIDE ? "" : "xl:hidden"}`}>
+                        <span className="xl:hidden">+{entries.length - MAX_PER_DAY}</span>
+                        <span className="hidden xl:inline">+{entries.length - MAX_PER_DAY_WIDE}</span> เพิ่มเติม
                       </span>
                     )}
                     </span>
