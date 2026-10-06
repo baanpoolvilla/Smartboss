@@ -692,7 +692,7 @@ export default async function EmployeeDetailPage({
             {/* วันหยุดรายคน — ย้ายมาจาก /hr/holidays เดิม ที่นี่เป็นเจ้าของแหล่งเดียว */}
             <SectionCard
               title="วันหยุดของคนนี้"
-              description="เดือนนี้หยุดได้กี่วัน และลงวันไหนไว้แล้ว — วันหยุดชุดเดียวกับที่พนักงานลงเองในปฏิทินทีม"
+              description="เดือนนี้หยุดได้กี่วัน และลงวันไหนไว้แล้ว — วันหยุดชุดเดียวกับที่พนักงานลงเองในปฏิทินทีม · ไม่แก้ = ใช้จำนวนของทั้งบริษัท (ตั้งที่ ตั้งค่า › ประเภทการลา)"
               action={
                 <div className="flex items-center gap-1">
                   <Link href={`/hr/employees/${id}?month=${prevMonth}`}>

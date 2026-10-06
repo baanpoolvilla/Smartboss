@@ -1404,6 +1404,7 @@ export async function createLeaveTypeAction(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   if (!companyId) throw new Error("ยังไม่มีบริษัทในระบบ workforce");
   if (!name) throw new Error("กรุณากรอกชื่อประเภทการลา");
+  const kind = String(formData.get("kind") ?? "");
 
   try {
     const existing = await wfFetch<Paged<{ code: string }>>("/leave-types");
@@ -1416,9 +1417,11 @@ export async function createLeaveTypeAction(formData: FormData) {
         paid: formData.get("paid") !== "0",
         unit: "DAY",
         quota_minutes_per_year: Number(formData.get("quota_days") ?? 0) * 480,
-        auto_approve: formData.get("auto_approve") === "1",
+        // ฟอร์มให้เลือก "แบบ" เป็นคำเดียว: วันหยุดตามสิทธิ์ / การลา ต้องอนุมัติ / ทำงานนอกสถานที่
+        // (ยังรับช่องติ๊กแบบเดิมไว้ด้วย เผื่อฟอร์มเก่าที่เปิดค้างอยู่ตอน deploy)
+        auto_approve: kind === "" ? formData.get("auto_approve") === "1" : kind !== "leave",
         monthly_quota_days: Number(formData.get("monthly_quota_days") ?? 0),
-        requires_reports: formData.get("requires_reports") === "1",
+        requires_reports: kind === "" ? formData.get("requires_reports") === "1" : kind === "remote",
         /*
          * ตัวควบคุมคือ "ต้องได้รับอนุมัติ" ไม่ใช่โควตา
          *

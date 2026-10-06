@@ -122,15 +122,17 @@ export default async function LeaveTypesSettingsPage({
                     <div className="mb-3 flex flex-col gap-1.5">
                       {(leaveTypes?.items ?? []).map((t) => (
                         <div key={t.id} className="flex flex-wrap items-center gap-1.5">
+                          {/* ป้ายบอก "แบบ" ของประเภทเป็นคำเดียวกับตัวเลือกตอนสร้าง — คนอ่านไม่ต้องแปลเองจากคำว่า
+                              สิทธิ์/อนุมัติ/ส่งรายงาน ว่ามันคือวันหยุดหรือการลา */}
                           <Pill tone={t.auto_approve ? "var(--app-strong)" : "var(--tone-ok)"}>
                             {t.name}
-                            {t.auto_approve ? " · สิทธิ์" : " · ต้องอนุมัติ"}
                             {t.accrues_from_holidays
                               ? " · Holiday สะสม ใช้ได้ภายใน 3 เดือน"
-                              : t.auto_approve && t.monthly_quota_days > 0
-                                ? ` ${t.monthly_quota_days} วัน/เดือน`
-                                : ""}
-                            {t.requires_reports ? " · ยังต้องส่งรายงาน" : ""}
+                              : !t.auto_approve
+                                ? " · การลา ต้องอนุมัติ"
+                                : t.requires_reports
+                                  ? " · ทำงานนอกสถานที่ ยังส่งรายงาน"
+                                  : ` · วันหยุดตามสิทธิ์ ${t.monthly_quota_days > 0 ? `${t.monthly_quota_days} วัน/เดือน` : "ไม่จำกัด"}`}
                           </Pill>
                           {/* แก้คำสะกดผิดในชื่อจริงได้ตรงนี้ — ค่าอื่น ๆ (โควตา,
                               ต้องอนุมัติหรือไม่) ยังตั้งได้ครั้งเดียวตอนสร้างเท่านั้น */}
@@ -202,7 +204,7 @@ export default async function LeaveTypesSettingsPage({
                         className={inputClass}
                       />
                     </Field>
-                    <Field label="โควตา (วัน/เดือน)" hint="0 = ไม่จำกัด">
+                    <Field label="ได้เดือนละกี่วัน" hint="0 = ไม่จำกัด · แก้ทีหลังได้">
                       <input
                         type="number"
                         name="monthly_quota_days"
@@ -212,18 +214,44 @@ export default async function LeaveTypesSettingsPage({
                         className={inputClass}
                       />
                     </Field>
-                    <div className="flex items-end pb-3 text-sm sm:col-span-2">
-                      <label className="flex items-center gap-2">
-                        <input type="checkbox" name="auto_approve" value="1" className="h-4 w-4" />
-                        เป็นสิทธิ์ ไม่ต้องอนุมัติ (เลือกวันแล้วมีผลทันที)
+                    {/*
+                      เลือก "แบบ" เป็นคำที่คนใช้จริง แทนช่องติ๊กสองช่อง (เป็นสิทธิ์ / ยังต้องส่งรายงาน) ที่ต้องรู้เองว่า
+                      ติ๊กแบบไหนถึงได้วันหยุดที่แก้จำนวนวันรายคนได้ — บริษัทที่เพิ่งเริ่มใช้อ่านแล้วเลือกถูกเลย
+                    */}
+                    <fieldset className="flex flex-col gap-1.5 text-sm sm:col-span-3">
+                      <legend className="mb-1 text-xs font-medium text-(--ink-soft)">ประเภทนี้เป็นแบบไหน *</legend>
+                      <label className="flex items-start gap-2 rounded-(--radius) border border-(--line) px-3 py-2">
+                        <input type="radio" name="kind" value="dayoff" defaultChecked className="mt-0.5 h-4 w-4" />
+                        <span>
+                          <span className="font-semibold text-(--ink)">วันหยุดตามสิทธิ์</span>{" "}
+                          <span className="text-(--ink-soft)">(เช่น Day-Off, วันหยุดประจำเดือน)</span>
+                          <span className="block text-xs text-(--ink-soft)">
+                            พนักงานเลือกวันเองในปฏิทินทีม มีผลทันทีไม่ต้องรออนุมัติ · ลงได้ไม่เกินจำนวนวันต่อเดือน ·
+                            แก้จำนวนวันของแต่ละคนในแต่ละเดือนได้ที่หน้าพนักงาน
+                          </span>
+                        </span>
                       </label>
-                    </div>
-                    <div className="flex items-end pb-3 text-sm sm:col-span-3">
-                      <label className="flex items-center gap-2">
-                        <input type="checkbox" name="requires_reports" value="1" className="h-4 w-4" />
-                        ยังต้องส่งรายงานตามปกติ (เช่น Work From Home — ไม่ต้องลงเวลา แต่ยังทำงาน)
+                      <label className="flex items-start gap-2 rounded-(--radius) border border-(--line) px-3 py-2">
+                        <input type="radio" name="kind" value="leave" className="mt-0.5 h-4 w-4" />
+                        <span>
+                          <span className="font-semibold text-(--ink)">การลา ต้องอนุมัติ</span>{" "}
+                          <span className="text-(--ink-soft)">(เช่น ลาป่วย, ลากิจ, ลาพักร้อน)</span>
+                          <span className="block text-xs text-(--ink-soft)">
+                            พนักงานยื่นแล้วรอหัวหน้าอนุมัติ · ยังนับเป็นขาดงานจนกว่าจะอนุมัติ
+                          </span>
+                        </span>
                       </label>
-                    </div>
+                      <label className="flex items-start gap-2 rounded-(--radius) border border-(--line) px-3 py-2">
+                        <input type="radio" name="kind" value="remote" className="mt-0.5 h-4 w-4" />
+                        <span>
+                          <span className="font-semibold text-(--ink)">ทำงานนอกสถานที่</span>{" "}
+                          <span className="text-(--ink-soft)">(เช่น Work From Home)</span>
+                          <span className="block text-xs text-(--ink-soft)">
+                            พนักงานลงเองได้ทันที ไม่ต้องลงเวลา แต่เป็นวันทำงาน ยังต้องส่งรายงานตามปกติ
+                          </span>
+                        </span>
+                      </label>
+                    </fieldset>
                     <div className="flex items-end gap-2">
                       <select name="paid" defaultValue="1" className={inputClass}>
                         <option value="1">ได้ค่าจ้าง</option>
@@ -232,15 +260,16 @@ export default async function LeaveTypesSettingsPage({
                       <Button type="submit">เพิ่ม</Button>
                     </div>
                   </form>
-                  <p className="mt-3 text-xs text-(--ink-soft)">
-                    ประเภทที่ติ๊ก &ldquo;เป็นสิทธิ์&rdquo;
-                    พนักงานคลิกวันในปฏิทินแล้วหยุดได้ทันทีไม่ต้องรอใคร ·
-                    ประเภทที่ไม่ติ๊กจะค้างเป็นคำขอ และ
-                    <strong> ยังถูกนับเป็นขาดงานจนกว่าจะอนุมัติ</strong> ·
-                    ทุกประเภทไม่ต้องลงเวลา ส่วนการส่งรายงานยกเว้นให้ เว้นแต่ติ๊ก &ldquo;ยังต้องส่งรายงาน&rdquo; ·
-                    <strong> วัน/เดือน</strong> คือจำนวนที่ทุกคนได้ในแต่ละเดือน (0 = ไม่จำกัด) แก้ได้ทุกเมื่อ —
-                    เดือนไหนให้ใครต่างจากนี้ แก้รายคนที่ พนักงาน › เลือกคน › กะและวันหยุด
-                  </p>
+                  <div className="mt-3 rounded-(--radius) border border-(--line) bg-(--bg-soft) px-3 py-2 text-xs text-(--ink-soft)">
+                    <p className="font-semibold text-(--ink)">จำนวนวันหยุดของพนักงาน ตั้งได้ 2 ชั้น</p>
+                    <p>
+                      1. <strong>ของทั้งบริษัท</strong> — ช่อง วัน/เดือน ของแต่ละประเภทในรายการด้านบน ทุกคนได้เท่านี้ทุกเดือน
+                    </p>
+                    <p>
+                      2. <strong>ของคนใดคนหนึ่ง เฉพาะเดือน</strong> — ที่ พนักงาน › เลือกคน › กะและวันหยุด
+                      เดือนที่ไม่ได้ไปแก้ก็ใช้ค่าของทั้งบริษัท
+                    </p>
+                  </div>
                 </SectionCard>
               )}
               {canManage && activeChoices.length > 0 && (
