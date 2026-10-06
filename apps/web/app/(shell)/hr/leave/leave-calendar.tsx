@@ -127,6 +127,8 @@ function endsWithTypeName(label: string, typeName: string): boolean {
 
 /** รายการที่โชว์ต่อช่องวัน — ที่เหลือรวมเป็นป้าย "+N รายการ" (กดวันนั้นเพื่อดูทั้งหมด) */
 const MAX_PER_DAY = 2;
+/** มือถือ: จุดสูงสุดต่อวัน — ช่องกว้างราว 50px วางจุด 6px ได้ 5 จุดพอดี (เกินแล้วเหลือ 4 จุด + "+N") */
+const MOBILE_DOT_CAP = 5;
 
 const escapeHtml = (text: string) =>
   text.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch] ?? ch);
@@ -559,7 +561,7 @@ export function LeaveCalendar({
 
                 const body = (
                   <span
-                    className="flex h-full min-h-[4.75rem] min-w-0 flex-col gap-0.5 border-b border-r border-(--line) p-0.5 text-left sm:min-h-24 sm:p-1 lg:min-h-[7.5rem]"
+                    className="flex h-full min-h-[3.25rem] min-w-0 flex-col gap-0.5 border-b border-r border-(--line) p-0.5 text-left sm:min-h-24 sm:p-1 lg:min-h-[7.5rem]"
                     style={{
                       opacity: cell.inMonth ? 1 : 0.4,
                       boxShadow: heavy ? "inset 0 0 0 1.5px var(--tone-warn)" : undefined,
@@ -587,6 +589,32 @@ export function LeaveCalendar({
                       </span>
                     </span>
 
+                    {/*
+                      <640px: จุดสีแถวเดียวใต้เลขวัน แบบเดียวกับปฏิทินของ Project Management บนมือถือ
+                      (full-calendar-view.tsx) — จุดละหนึ่งคนที่หยุด สีตามประเภท เกินที่วางได้ขึ้น "+N"
+                      แตะวันเพื่อดูว่าใครหยุด · ช่องวันกว้างราว 50px ใส่ชื่อแล้วอ่านยากและรก ("ลอกมาเลย")
+                    */}
+                    {entries.length > 0 && (
+                      <span className="flex max-w-full flex-nowrap items-center justify-center gap-px overflow-hidden px-0.5 pb-0.5 sm:hidden">
+                        {entries.slice(0, entries.length > MOBILE_DOT_CAP ? MOBILE_DOT_CAP - 1 : MOBILE_DOT_CAP).map((entry, index) => (
+                          <span
+                            key={`${entry.employmentId}-${index}`}
+                            className="h-1.5 w-1.5 shrink-0 rounded-full"
+                            style={{
+                              backgroundColor: `hsl(${typeHue(entry.leaveTypeName, entry.autoApprove)} 65% 45%)`,
+                              opacity: !entry.autoApprove && entry.status === "PENDING" ? 0.45 : 1,
+                            }}
+                          />
+                        ))}
+                        {entries.length > MOBILE_DOT_CAP && (
+                          <span className="shrink-0 rounded-full bg-(--ink) px-[3px] text-[7px] font-extrabold leading-[1.35] text-(--bg)">
+                            +{entries.length - (MOBILE_DOT_CAP - 1)}
+                          </span>
+                        )}
+                      </span>
+                    )}
+
+                    <span className="hidden sm:contents">
                     {entries.slice(0, MAX_PER_DAY).map((entry, index) => {
                       // สีตามประเภท (ชิปกรองด้านบนใช้สีเดียวกัน) — ใครหยุดดูจากชื่อบนรายการและรายชื่อทางซ้าย
                       const hue = typeHue(entry.leaveTypeName, entry.autoApprove);
@@ -595,7 +623,7 @@ export function LeaveCalendar({
                         <span
                           key={`${entry.employmentId}-${index}`}
                           title={`${labelOf(entry)} · ${entry.autoApprove ? "วันหยุดประจำ (สิทธิ์)" : entry.status === "APPROVED" ? "ลา · อนุมัติแล้ว" : "ลา · รออนุมัติ"}`}
-                          className="truncate rounded-sm px-0.5 text-[9.5px] leading-[15px] sm:px-1.5 sm:text-[10.5px] sm:leading-[18px]"
+                          className="truncate rounded-sm px-1.5 text-[10.5px] leading-[18px]"
                           style={{
                             borderLeft: `3px solid hsl(${hue} 65% 45%)`,
                             backgroundColor: `hsl(${hue} 80% 93%)`,
@@ -606,19 +634,17 @@ export function LeaveCalendar({
                           }}
                         >
                           {waiting ? "• " : ""}
-                          {/* ช่องวันบนมือถือกว้างราว 50px — พอแค่ชื่อคน (ประเภทดูจากสี กดวันเพื่อดูเต็ม) */}
-                          <span className="sm:hidden">{entry.name}</span>
-                          <span className="hidden sm:inline">{labelOf(entry)}</span>
+                          {labelOf(entry)}
                         </span>
                       );
                     })}
 
                     {entries.length > MAX_PER_DAY && (
-                      <span className="mt-0.5 self-start rounded-full bg-(--ink) px-1.5 text-[9.5px] font-semibold leading-[15px] text-(--bg) sm:px-2 sm:text-[10px] sm:leading-[18px]">
-                        +{entries.length - MAX_PER_DAY}
-                        <span className="hidden sm:inline"> รายการ</span>
+                      <span className="mt-0.5 self-start rounded-full bg-(--ink) px-2 text-[10px] font-semibold leading-[18px] text-(--bg)">
+                        +{entries.length - MAX_PER_DAY} รายการ
                       </span>
                     )}
+                    </span>
                   </span>
                 );
 
@@ -684,6 +710,8 @@ export function LeaveCalendar({
           </div>
         </div>
       </div>
+
+      <p className="text-[11px] text-(--ink-soft) sm:hidden">จุด = คนที่หยุดวันนั้น สีตามประเภท · แตะวันเพื่อดูชื่อหรือลงวันหยุด</p>
 
       {!canRequest && (
         <p className="border-t border-(--line) pt-3 text-sm text-(--ink-soft)">
