@@ -17,8 +17,11 @@ import {
   createLeaveTypeAction,
   renameLeaveTypeAction,
   seedLeaveTypesAction,
+  setCompanyDayOffDefaultAction,
   setHolidayModeAction,
 } from "../../actions";
+import { requireOrg } from "@smartboss/auth";
+import { loadCompanyDayOffDefault } from "@/lib/day-off-quota";
 import { HolidayAllowances } from "./holiday-allowances";
 import { HolidayModeForm } from "./holiday-mode-form";
 import { HolidayBalances } from "./holiday-balances";
@@ -82,6 +85,9 @@ export default async function LeaveTypesSettingsPage({
           })),
         );
         const activeChoices = (leaveTypes?.items ?? []).map((o) => ({ id: o.id, name: o.name }));
+        // วันหยุดต่อเดือนของบริษัท (Day-Off) — เก็บฝั่ง Smartboss ไม่ใช่ workforce (ดู lib/day-off-quota.ts)
+        const session = await requireOrg();
+        const companyDayOffDefault = await loadCompanyDayOffDefault(session.orgId);
 
         /*
          * สิทธิ์ของ workforce ไม่ใช่ชุดเดียวกับของ Smartboss — คนที่เข้าหน้านี้ได้
@@ -218,6 +224,31 @@ export default async function LeaveTypesSettingsPage({
                   </p>
                 </SectionCard>
               )}
+              <SectionCard
+                title="วันหยุดต่อเดือนของบริษัท (Day-Off)"
+                description="จำนวนวันหยุดตามสิทธิ์ที่ทุกคนได้ในแต่ละเดือน — เดือนไหนให้ใครต่างจากนี้ แก้รายคนได้ที่ พนักงาน › เลือกคน › กะและวันหยุด"
+              >
+                <form action={setCompanyDayOffDefaultAction} className="flex flex-wrap items-end gap-2">
+                  <Field label="วัน/เดือน">
+                    <input
+                      type="number"
+                      name="default_days"
+                      min={0}
+                      max={31}
+                      step={1}
+                      required
+                      inputMode="numeric"
+                      defaultValue={companyDayOffDefault}
+                      className={`${inputClass} w-24`}
+                    />
+                  </Field>
+                  <Button type="submit">บันทึก</Button>
+                </form>
+                <p className="mt-3 text-xs text-(--ink-soft)">
+                  เปลี่ยนแล้วมีผลกับทุกคนในทุกเดือนที่ไม่ได้แก้รายคน (รวมเดือนที่ผ่านมา) · เดือนที่แก้รายคนไว้แล้วไม่เปลี่ยน ·
+                  วันหยุดที่ลงไปแล้วไม่หาย
+                </p>
+              </SectionCard>
               {canManage && activeChoices.length > 0 && (
                 <HolidayModeForm
                   action={setHolidayModeAction}

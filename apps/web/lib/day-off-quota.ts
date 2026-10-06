@@ -55,6 +55,15 @@ export async function loadCompanyDayOffDefault(orgId: string | null): Promise<nu
   return row?.defaultDaysPerMonth ?? DEFAULT_DAYS_OFF_PER_MONTH;
 }
 
+/** ตั้งค่าตั้งต้นของบริษัท — มีผลกับทุกคนในทุกเดือนที่ไม่ได้แก้รายคน (เดือนที่แก้ไว้แล้วไม่เปลี่ยน) */
+export async function saveCompanyDayOffDefault(orgId: string, daysPerMonth: number, updatedBy: string): Promise<void> {
+  await prisma.dayOffQuotaSetting.upsert({
+    where: { orgId },
+    create: { orgId, defaultDaysPerMonth: daysPerMonth, updatedBy },
+    update: { defaultDaysPerMonth: daysPerMonth, updatedBy },
+  });
+}
+
 /**
  * โควตาของพนักงานหนึ่งคนในเดือนหนึ่งเดือน — สามชั้น เจาะจงกว่าชนะ
  *

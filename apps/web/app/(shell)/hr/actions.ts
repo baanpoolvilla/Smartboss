@@ -18,6 +18,7 @@ import { todayIso } from "@/modules/hr/lib/date";
 import {
   DAYS_OFF_LIMITS,
   loadDayOffQuota,
+  saveCompanyDayOffDefault,
   saveDayOffQuota,
   saveEmployeeDayOffStanding,
 } from "@/lib/day-off-quota";
@@ -1144,6 +1145,21 @@ export async function setDayOffQuotaAction(
   }
   revalidatePath(`/hr/employees/${employmentId}`);
   return { ok: true, daysPerMonth: days, scope };
+}
+
+/**
+ * ตั้ง "วันหยุดต่อเดือนของบริษัท" — เลขที่ทุกคนได้ในเดือนที่ไม่ได้แก้รายคน (เดิมฝังในโค้ด แก้จากหน้าจอไม่ได้)
+ * เดือนที่แก้รายคนไว้แล้วไม่เปลี่ยน · วันหยุดที่ลงไปแล้วไม่ถูกแตะ
+ */
+export async function setCompanyDayOffDefaultAction(formData: FormData) {
+  const session = await guard(HR_PERMS.settingManage);
+  const days = Number(String(formData.get("default_days") ?? "").trim());
+  if (!Number.isInteger(days) || days < DAYS_OFF_LIMITS.min || days > DAYS_OFF_LIMITS.max) {
+    throw new Error(`วันหยุดต่อเดือนต้องเป็นจำนวนเต็ม ${DAYS_OFF_LIMITS.min}–${DAYS_OFF_LIMITS.max} วัน`);
+  }
+  await saveCompanyDayOffDefault(session.orgId, days, session.userId);
+  revalidatePath("/hr");
+  revalidatePath("/hr/settings");
 }
 
 /* ═══════════════════ วันลา / วันหยุดของพนักงาน ═══════════════════ */
