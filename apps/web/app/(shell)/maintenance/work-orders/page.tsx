@@ -133,6 +133,7 @@ export default async function WorkOrdersPage({
           propertyNames={propNames}
           propertyCategories={propCats}
           creatorNames={creatorNames}
+          currentUserId={session.userId}
         />
       )}
     </AppScaffold>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { PersonFilter, UNASSIGNED } from "./person-filter";
+import { ASSIGNED_BY_ME, ASSIGNED_TO_ME, PersonFilter, UNASSIGNED } from "./person-filter";
 import Link from "next/link";
 import {
   ReceiptText,
@@ -36,6 +36,8 @@ export interface BoardPo {
   receiverName: string | null;
   /** ผู้ได้รับมอบหมาย (ผู้ซื้อ + ผู้รับของ) เป็น id — ใช้กรองตามคน */
   assigneeIds: { id: string; name: string }[];
+  /** คนที่มอบหมายงานในใบนี้: ผู้สร้าง PO (มอบผู้ซื้อ) และผู้กดดำเนินการซื้อ (มอบผู้รับของ) */
+  assignerIds: string[];
   isEmergency: boolean;
   /** เลขที่ใบงานต้นทาง ถ้าเปิดมาจากใบงาน (null = เปิดลอย ๆ) */
   workOrderCode: string | null;
@@ -210,10 +212,13 @@ export function PoBoard({
   orders: allOrders,
   returns: allReturns,
   initialTab,
+  currentUserId,
 }: {
   orders: BoardPo[];
   returns: BoardReturn[];
   initialTab?: string;
+  /** ผู้ใช้ที่ล็อกอิน — ตัวเลือก "งานที่ฉันได้รับมอบหมาย / ฉันมอบหมาย" */
+  currentUserId?: string;
 }) {
   // ?tab=returns มาจากตอนเพิ่ง "แจ้งคืน" เสร็จ (ดู actions.ts) — คืนของที่เพิ่ง
   // แจ้งยังไม่จบเรื่อง จึงอยู่แท็บ "ดำเนินการ" ไม่ใช่แท็บที่ 5 ที่ไม่มีแล้ว
@@ -228,9 +233,17 @@ export function PoBoard({
   const orders =
     person === null
       ? allOrders
-      : allOrders.filter((o) =>
-          person === UNASSIGNED ? o.assigneeIds.length === 0 : o.assigneeIds.some((p) => p.id === person)
-        );
+      : allOrders.filter((o) => {
+          if (person === UNASSIGNED) return o.assigneeIds.length === 0;
+          if (person === ASSIGNED_TO_ME) return !!currentUserId && o.assigneeIds.some((p) => p.id === currentUserId);
+          if (person === ASSIGNED_BY_ME)
+            return (
+              !!currentUserId &&
+              o.assignerIds.includes(currentUserId) &&
+              o.assigneeIds.some((p) => p.id !== currentUserId)
+            );
+          return o.assigneeIds.some((p) => p.id === person);
+        });
   // คืนของไม่มีผู้ได้รับมอบหมาย — ตอนกรองตามคนจึงไม่แสดง (ไม่งั้นกรองแล้วยังเห็นของทุกคนปนอยู่)
   const returns = person === null ? allReturns : [];
 
@@ -247,7 +260,7 @@ export function PoBoard({
 
   return (
     <div>
-      {people.length > 0 && (
+      {(people.length > 0 || !!currentUserId) && (
         <div className="mb-3 flex gap-2 overflow-x-auto">
           <PersonFilter
             label="ผู้รับผิดชอบ"
@@ -255,6 +268,7 @@ export function PoBoard({
             onChange={setPerson}
             people={people}
             showUnassigned={allOrders.some((o) => o.assigneeIds.length === 0)}
+            showMine={!!currentUserId}
           />
         </div>
       )}

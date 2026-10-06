@@ -109,6 +109,9 @@ export default async function PurchaseOrdersPage({
       receiverName: o.receiverAssignedTo
         ? (names[o.receiverAssignedTo] ?? null)
         : null,
+      assignerIds: [o.poAssignedTo ? o.poCreatedBy : null, o.receiverAssignedTo ? o.orderedBy : null].filter(
+        (id): id is string => !!id
+      ),
       assigneeIds: [...new Set([o.poAssignedTo, o.receiverAssignedTo].filter((id): id is string => !!id))].map(
         (id) => ({ id, name: names[id] ?? "ไม่ทราบชื่อ" })
       ),
@@ -153,7 +156,7 @@ export default async function PurchaseOrdersPage({
         ) : null
       }
     >
-      <PoBoard orders={boardOrders} returns={boardReturns} initialTab={tab} />
+      <PoBoard orders={boardOrders} returns={boardReturns} initialTab={tab} currentUserId={session.userId} />
     </AppScaffold>
   );
 }

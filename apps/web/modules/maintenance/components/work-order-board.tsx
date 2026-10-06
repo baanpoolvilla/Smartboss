@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { PersonFilter, UNASSIGNED } from "./person-filter";
+import { ASSIGNED_BY_ME, ASSIGNED_TO_ME, PersonFilter, UNASSIGNED } from "./person-filter";
 import Link from "next/link";
 import {
   Home as HomeIcon,
@@ -408,6 +408,7 @@ export function WorkOrderBoard({
   propertyNames,
   propertyCategories,
   creatorNames,
+  currentUserId,
 }: {
   orders: BoardOrder[];
   propertyNames: Record<string, string>;
@@ -419,6 +420,8 @@ export function WorkOrderBoard({
    */
   propertyCategories: Record<string, string>;
   creatorNames: Record<string, string>;
+  /** ผู้ใช้ที่ล็อกอิน — ใช้กับตัวเลือก "งานที่ฉันได้รับมอบหมาย / ฉันมอบหมาย" */
+  currentUserId?: string;
 }) {
   const [group, setGroup] = useState<string | null>(null);
   const [houseId, setHouseId] = useState<string | null>(null);
@@ -488,7 +491,14 @@ export function WorkOrderBoard({
     const byPerson =
       assignee === null
         ? orders
-        : orders.filter((w) => (assignee === UNASSIGNED ? !w.assignedTo : w.assignedTo === assignee));
+        : orders.filter((w) => {
+            if (assignee === UNASSIGNED) return !w.assignedTo;
+            // ได้รับมอบหมาย = เป็นผู้รับผิดชอบ · ฉันมอบหมาย = เปิดใบงานแล้วให้คนอื่นรับผิดชอบ
+            if (assignee === ASSIGNED_TO_ME) return !!currentUserId && w.assignedTo === currentUserId;
+            if (assignee === ASSIGNED_BY_ME)
+              return !!currentUserId && w.createdBy === currentUserId && !!w.assignedTo && w.assignedTo !== currentUserId;
+            return w.assignedTo === assignee;
+          });
     if (houseId) {
       return byPerson.filter(
         (w) => w.propertyId === houseId || w.additionalPropertyIds.includes(houseId)
@@ -500,7 +510,7 @@ export function WorkOrderBoard({
         (id) => (propertyCategories[id] ?? NO_CATEGORY) === group
       )
     );
-  }, [orders, group, houseId, propertyCategories, assignee]);
+  }, [orders, group, houseId, propertyCategories, assignee, currentUserId]);
 
   const buckets: Record<string, BoardOrder[]> = {
     open: visible.filter((w) => w.status === "open"),
@@ -535,16 +545,17 @@ export function WorkOrderBoard({
      */
     <div className="flex h-full flex-col">
       {/* ─── กรองตามบ้าน: แถวบน = หมวด, แถวล่าง = บ้านในหมวด ─── */}
-      {(groups.length > 1 || assigneeOptions.length > 0) && (
+      {(groups.length > 1 || assigneeOptions.length > 0 || !!currentUserId) && (
         <div className="shrink-0">
           <div className="flex gap-2 overflow-x-auto px-3 py-1.5">
-            {assigneeOptions.length > 0 && (
+            {(assigneeOptions.length > 0 || !!currentUserId) && (
               <PersonFilter
                 label="ผู้รับผิดชอบ"
                 value={assignee}
                 onChange={setAssignee}
                 people={assigneeOptions}
                 showUnassigned={hasUnassigned}
+                showMine={!!currentUserId}
               />
             )}
             {groups.length > 1 && (
