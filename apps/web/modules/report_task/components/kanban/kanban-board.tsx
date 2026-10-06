@@ -386,30 +386,39 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
     return () => mq.removeEventListener("change", onChange);
   }, []);
 
+  // มือถือ (<640px): คอลัมน์ละเต็มจอ แถบแท็บด้านบนบอกว่ากำลังดูคอลัมน์ไหน — หาจากคอลัมน์ที่กึ่งกลาง
+  // อยู่ใกล้กึ่งกลางของตัวเลื่อนที่สุด (ปัดเองหรือแตะแท็บก็อัปเดตจากที่เดียวกัน)
+  const [activeColumnId, setActiveColumnId] = useState<string | null>(null);
+
   function updateScrollState() {
     const el = scrollerRef.current;
     if (!el) return;
     setCanScrollLeft(el.scrollLeft > 4);
     setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+    const center = el.scrollLeft + el.clientWidth / 2;
+    let nearestId: string | null = null;
+    let nearestDistance = Infinity;
+    for (const child of Array.from(el.children) as HTMLElement[]) {
+      if (!child.id.startsWith("kanban-col-")) continue;
+      const distance = Math.abs(child.offsetLeft + child.offsetWidth / 2 - center);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestId = child.id.slice("kanban-col-".length);
+      }
+    }
+    setActiveColumnId(nearestId);
   }
 
-  // <640px only — the single floating "›" hint button. Each column is
-  // exactly one viewport wide there, so `clientWidth * 0.92` (not the full
-  // width) lands just past the snap point of the next column instead of
-  // relying on an exact 100% jump the browser's own scroll-snap then nudges
-  // the rest of the way. No pager/dots by design — a lone arrow that fades
-  // out at the last column reads as "swipe for more", a row of ‹›+dots that
-  // jump on tap reads as a whole extra thing to learn.
-  function scrollMobileNext() {
+  // <640px only — แตะแท็บ = เลื่อนไปคอลัมน์นั้น (ปัดซ้ายขวายังใช้ได้เหมือนเดิม) แทนลูกศรลอย ‹ › เดิม
+  // ที่ทับการ์ดและบอกไม่ได้ว่าคอลัมน์ถัดไปคืออะไร/มีกี่งาน
+  function scrollToColumn(columnId: string) {
     const el = scrollerRef.current;
-    if (!el) return;
-    el.scrollBy({ left: el.clientWidth * 0.92, behavior: prefersReducedMotionRef.current ? "auto" : "smooth" });
-  }
-
-  function scrollMobilePrev() {
-    const el = scrollerRef.current;
-    if (!el) return;
-    el.scrollBy({ left: -el.clientWidth * 0.92, behavior: prefersReducedMotionRef.current ? "auto" : "smooth" });
+    const target = document.getElementById(`kanban-col-${columnId}`);
+    if (!el || !target) return;
+    el.scrollTo({
+      left: target.offsetLeft - (el.clientWidth - target.offsetWidth) / 2,
+      behavior: prefersReducedMotionRef.current ? "auto" : "smooth",
+    });
   }
 
   useEffect(() => {
@@ -480,12 +489,15 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   if (personBoardId) {
     return (
       <>
-        <PersonTopicsBoard
-          personId={personBoardId}
-          departmentId={personDeptId}
-          onBack={closePersonBoard}
-          onOpenTask={setOpenTaskId}
-        />
+        {/* มือถือ: กรอบนอกไม่มีขอบแล้ว (บอร์ดเต็มพื้นที่) — หน้าเจาะรายคน/รายแผนกเว้นขอบเอง */}
+        <div className="flex min-h-0 flex-1 flex-col px-3 pt-3 sm:p-0">
+          <PersonTopicsBoard
+            personId={personBoardId}
+            departmentId={personDeptId}
+            onBack={closePersonBoard}
+            onOpenTask={setOpenTaskId}
+          />
+        </div>
         <TaskDetailSheet taskId={openTaskId} onOpenChange={(open) => !open && closeTaskSheet()} />
       </>
     );
@@ -494,7 +506,9 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   if (departmentBoardId) {
     return (
       <>
-        <DepartmentTopicsBoard departmentId={departmentBoardId} onBack={closeDepartmentBoard} onOpenTask={setOpenTaskId} />
+        <div className="flex min-h-0 flex-1 flex-col px-3 pt-3 sm:p-0">
+          <DepartmentTopicsBoard departmentId={departmentBoardId} onBack={closeDepartmentBoard} onOpenTask={setOpenTaskId} />
+        </div>
         <TaskDetailSheet taskId={openTaskId} onOpenChange={(open) => !open && closeTaskSheet()} />
       </>
     );
@@ -504,7 +518,40 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
     <div className="flex min-h-0 flex-1 flex-col">
       {/* จัดกลุ่มตามอยู่ในแถบตัวกรองด้านบนแล้ว (TaskFilters) — เหลือแค่บริบท
           ที่ผูกกับตัวเลือกนั้นโดยตรง: หมายเหตุตอนจัดกลุ่มตามคน + ยอดรวม */}
-      <div className="flex shrink-0 items-center gap-2 pb-2">
+      {/* <640px: แถบแท็บคอลัมน์ ชิดใต้แถบหัว — รวมหน้าที่ของชิปตัวเลข + การ์ดหัวคอลัมน์ + แถวคำใบ้เดิม
+          ไว้ในแถวเดียว 44px เพื่อให้การ์ดงานได้พื้นที่ที่เหลือทั้งจอ */}
+      {filtered.length > 0 && columns.length > 0 && (
+        <div
+          role="tablist"
+          aria-label="คอลัมน์ของบอร์ด"
+          className="flex h-11 shrink-0 items-stretch overflow-x-auto border-b border-[var(--line)] bg-white [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:hidden"
+        >
+          {columns.map((column) => {
+            const active = (activeColumnId ?? columns[0]?.id) === column.id;
+            return (
+              <button
+                key={column.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => scrollToColumn(column.id)}
+                className={cn(
+                  "flex shrink-0 items-center gap-1.5 border-b-[3px] px-3 text-[13px] transition-colors",
+                  active
+                    ? "border-[var(--brand-green-dark)] font-bold text-[var(--ink)]"
+                    : "border-transparent font-medium text-[var(--ink-soft)]"
+                )}
+              >
+                <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: column.accent }} />
+                <span className="max-w-[140px] truncate">{column.label}</span>
+                <span className="font-bold tabular-nums text-[var(--ink)]">{column.tasks.length}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="hidden shrink-0 items-center gap-2 pb-2 sm:flex">
         {/* Grouping by person shows a shared task under each assignee, so the
             column counts add up to more than the task total — say so. */}
         {groupBy === "assignee" && sharedCount > 0 && (
@@ -543,38 +590,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
               scroll area — a column can run to dozens of cards tall, and
               centering across that would push the button far from the
               header, off in the middle of someone's card list. */}
-          <div className="relative min-h-0 flex-1">
-            {/* <640px only — small floating "‹"/"›" hints on both edges, not
-                a ‹›+dots pager (a pager reads as a whole extra control to
-                learn; a lone arrow that fades out at the last column reads
-                as "swipe for more", closer to how the rest of the phone
-                already behaves). Kept small (h-8) so it reads as a hint, not
-                a primary control — swiping the board directly always works
-                regardless of these buttons. */}
-            <button
-              type="button"
-              onClick={scrollMobilePrev}
-              aria-label="ดูคอลัมน์ก่อนหน้า"
-              tabIndex={canScrollLeft ? 0 : -1}
-              className={cn(
-                "sm:hidden absolute left-2 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white text-[var(--ink-soft)] shadow-[0_4px_14px_rgba(0,0,0,0.18)] transition-opacity duration-300",
-                canScrollLeft ? "opacity-100" : "opacity-0 pointer-events-none"
-              )}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={scrollMobileNext}
-              aria-label="ดูคอลัมน์ถัดไป"
-              tabIndex={canScrollRight ? 0 : -1}
-              className={cn(
-                "sm:hidden absolute right-2 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white text-[var(--ink-soft)] shadow-[0_4px_14px_rgba(0,0,0,0.18)] transition-opacity duration-300",
-                canScrollRight ? "opacity-100" : "opacity-0 pointer-events-none"
-              )}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
+          <div className="relative min-h-0 flex-1 bg-[var(--bg-soft)] px-2 pt-2 sm:bg-transparent sm:p-0">
 
             {canScrollLeft && (
               <div className="hidden sm:block">
@@ -644,6 +660,8 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
                   }
                   groupedByPriority={groupBy === "priority"}
                   groupedByStatus={groupBy === "status"}
+                  // แท็บด้านบนบอกชื่อ+จำนวนแล้ว — หัวคอลัมน์ที่กดเจาะต่อไม่ได้ (สถานะ/ความสำคัญ) ไม่ต้องกินที่ซ้ำบนมือถือ
+                  hideHeaderOnMobile={groupBy === "status" || groupBy === "priority"}
                 />
               ))}
             </div>

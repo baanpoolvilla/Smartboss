@@ -21,6 +21,7 @@ export function AppScaffold({
   fillMaxWidth = false,
   hideDefaultActions = false,
   flush = false,
+  flushMobile = false,
   children,
 }: {
   title: string;
@@ -63,12 +64,18 @@ export function AppScaffold({
    * ("กินพื้นที่ให้เต็ม ... ลดขนาด header") — ใช้คู่กับ fill เท่านั้น
    */
   flush?: boolean;
+  /**
+   * true = เต็มพื้นที่แบบ flush เฉพาะมือถือ (<640px) — แถบบนเตี้ยลง ไม่มีชื่อหน้ากลางแถบ (หน้าใส่ชื่อ/ตัวควบคุม
+   * เองผ่าน `leading`) และเนื้อหาชิดขอบ · ตั้งแต่ 640px ขึ้นไปเหมือนหน้า fill ปกติทุกอย่าง (บอร์ดงาน:
+   * "task ในมือถือ พื้นที่ดูน้อยมาก ... เอาให้เต็มพื้นที่เลย") — ใช้คู่กับ fill เท่านั้น
+   */
+  flushMobile?: boolean;
   children: React.ReactNode;
 }) {
   const header = (
     <header className="shrink-0 border-b border-(--line) bg-(--bg)">
-      <div className={`flex items-center gap-1 px-2 sm:px-3 ${flush ? "h-[52px] lg:h-12" : "h-[60px]"}`}>
-        <div className={`flex min-w-[44px] flex-1 items-center justify-start sm:min-w-[110px] ${flush ? "min-w-0" : ""}`}>
+      <div className={`flex items-center gap-1 px-2 sm:px-3 ${flush ? "h-[52px] lg:h-12" : flushMobile ? "h-[52px] sm:h-[60px]" : "h-[60px]"}`}>
+        <div className={`flex min-w-[44px] flex-1 items-center justify-start sm:min-w-[110px] ${flush || flushMobile ? "min-w-0" : ""}`}>
           {leading ??
             (backHref && (
               <Link
@@ -81,11 +88,11 @@ export function AppScaffold({
             ))}
         </div>
 
-        <h1 className={`truncate px-1 text-center font-bold text-(--ink) ${flush ? "hidden" : "text-lg sm:text-xl"}`}>
+        <h1 className={`truncate px-1 text-center font-bold text-(--ink) ${flush ? "hidden" : flushMobile ? "hidden text-xl sm:block" : "text-lg sm:text-xl"}`}>
           {title}
         </h1>
 
-        <div className={`flex min-w-[44px] items-center justify-end gap-0.5 sm:min-w-[110px] ${flush ? "shrink-0" : "flex-1"}`}>
+        <div className={`flex min-w-[44px] items-center justify-end gap-0.5 sm:min-w-[110px] ${flush ? "shrink-0" : flushMobile ? "shrink-0 sm:flex-1" : "flex-1"}`}>
           {actions}
           {!hideDefaultActions && <AppBarActions />}
         </div>
@@ -115,8 +122,8 @@ export function AppScaffold({
               flush
                 ? "h-full"
                 : fillMaxWidth
-                  ? `mx-auto h-full w-full ${width} px-4 py-4 sm:px-6 sm:py-5`
-                  : "h-full px-4 py-4 sm:px-6 sm:py-5"
+                  ? `mx-auto h-full w-full ${width} ${flushMobile ? "" : "px-4 py-4"} sm:px-6 sm:py-5`
+                  : `h-full ${flushMobile ? "" : "px-4 py-4"} sm:px-6 sm:py-5`
             }
           >
             {children}

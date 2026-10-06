@@ -2,8 +2,9 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { LayoutGrid, Table2, Users } from "lucide-react";
-import { TaskFilters } from "@/modules/report_task/components/kanban/task-filters";
+import { LayoutGrid, Plus, SlidersHorizontal, Table2, Users } from "lucide-react";
+import { TaskFilters, countActiveTaskFilters } from "@/modules/report_task/components/kanban/task-filters";
+import { useSetAppBarLeading } from "@/modules/report_task/components/shared/app-bar-leading";
 import { TaskBoardKpis } from "@/modules/report_task/components/kanban/task-board-kpis";
 import { KanbanBoard, type GroupBy } from "@/modules/report_task/components/kanban/kanban-board";
 import { TaskGridView } from "@/modules/report_task/components/kanban/task-grid-view";
@@ -147,9 +148,71 @@ function TasksPageContent() {
   // sitting above it. PersonTopicsBoard has its own back button + header.
   const personBoardId = searchParams.get("person");
 
+  /*
+   * มือถือ (<640px) — บอร์ดเต็มพื้นที่แบบแชท/รายงาน: ทุกอย่างที่เคยเป็นแถวของตัวเองเหนือการ์ดงาน
+   * (ปุ่มสลับมุมมอง · ตัวกรอง · สร้างงานใหม่ · ชิปตัวเลข) ย้ายไปอยู่บนแถบหัว/ปุ่มลอย เหลือใต้แถบหัว
+   * แค่แถบแท็บคอลัมน์ของบอร์ด (kanban-board.tsx) แล้วเป็นการ์ดงานทั้งจอ · ≥640px เหมือนเดิมทุกอย่าง
+   * หน้าเป็นคนถือสถานะเปิด/ปิดของแผ่นตัวกรองกับหน้าต่างสร้างงาน เพราะปุ่มอยู่บนแถบหัว คนละต้นไม้กับ TaskFilters
+   */
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const [newTaskOpen, setNewTaskOpen] = useState(false);
+  const activeFilterCount = countActiveTaskFilters(filters);
+  const mobileLeading = useMemo(
+    () => (
+      <div className="flex w-full min-w-0 items-center gap-2 pl-1 sm:hidden">
+        <span className="text-[17px] font-bold text-(--ink)">Tasks</span>
+        {!personBoardId && (
+          <>
+            <div className="flex items-center gap-0.5 rounded-[10px] bg-[var(--bg-soft)] p-[3px]">
+              {tabs.map((t) => {
+                const TabIcon = t.icon;
+                const activeTab = view === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setView(t.id)}
+                    aria-label={`มุมมอง${t.label}`}
+                    aria-pressed={activeTab}
+                    title={t.label}
+                    className={cn(
+                      "flex h-[38px] w-10 items-center justify-center rounded-lg transition-colors",
+                      activeTab ? "bg-white text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)]"
+                    )}
+                  >
+                    <TabIcon className="h-[18px] w-[18px]" />
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              onClick={() => setMobileFilterOpen(true)}
+              aria-label={activeFilterCount > 0 ? `ตัวกรอง ใช้อยู่ ${activeFilterCount} รายการ` : "ตัวกรอง"}
+              className="relative ml-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-(--app-strong) transition-colors hover:bg-(--bg-soft)"
+            >
+              <SlidersHorizontal className="h-5 w-5" />
+              {activeFilterCount > 0 && (
+                <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--brand-green-dark)] px-1 text-[10.5px] font-bold text-white tabular-nums">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+          </>
+        )}
+      </div>
+    ),
+    // tabs สร้างใหม่ทุกครั้งที่ render แต่ขึ้นกับ isHead อย่างเดียว
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [view, isHead, personBoardId, activeFilterCount]
+  );
+  useSetAppBarLeading(mobileLeading);
+
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 pb-6 lg:pb-4">
+    <div className="flex h-full min-h-0 flex-col sm:gap-4 sm:pb-6 lg:pb-4">
       {!personBoardId && (
+        // <640px ซ่อนทั้งแถบ (ตัวควบคุมอยู่บนแถบหัวแล้ว) — แผ่นตัวกรอง/หน้าต่างสร้างงานข้างในเป็น portal ยังเปิดได้ปกติ
+        <div className="hidden sm:block">
         <StickyFilterBar
           actions={
             // View switcher — same task data: Board (Kanban) ↔ Grid ↔ Workload
@@ -175,8 +238,19 @@ function TasksPageContent() {
             </div>
           }
         >
-          <TaskFilters groupBy={view === "board" ? groupBy : undefined} onGroupByChange={setGroupBy} resultCount={filteredTaskCount} />
+          <TaskFilters
+            groupBy={view === "board" ? groupBy : undefined}
+            onGroupByChange={setGroupBy}
+            resultCount={filteredTaskCount}
+            mobile={{
+              sheetOpen: mobileFilterOpen,
+              onSheetOpenChange: setMobileFilterOpen,
+              newTaskOpen,
+              onNewTaskOpenChange: setNewTaskOpen,
+            }}
+          />
         </StickyFilterBar>
+        </div>
       )}
 
       {/* Hidden under "เลยกำหนดเท่านั้น" — every number here would just
@@ -184,7 +258,8 @@ function TasksPageContent() {
           board itself is already narrowed to nothing but overdue tasks, see
           kanban-board.tsx's matching column collapse for the same filter. */}
       {!personBoardId && loaded && view === "board" && filters.penalty !== "overdue" && (
-        <div className="mt-1">
+        // <640px ไม่แสดง — แถบแท็บคอลัมน์ของบอร์ดบอกจำนวนต่อสถานะแทนแล้ว ("เลยกำหนด" อยู่ในตัวกรองด่วน)
+        <div className="mt-1 hidden sm:block">
           <TaskBoardKpis tasks={kpiTasks} />
         </div>
       )}
@@ -200,10 +275,22 @@ function TasksPageContent() {
           <KanbanBoard groupBy={groupBy} />
         </div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 pt-3 pb-24 sm:p-0">
           {view === "grid" && <TaskGridView />}
           {view === "workload" && <WorkloadView />}
         </div>
+      )}
+
+      {/* <640px: "สร้างงานใหม่" เป็นปุ่มลอยเหนือแถบเมนูล่าง แทนแถวปุ่มเต็มความกว้างเดิม */}
+      {!personBoardId && (
+        <button
+          type="button"
+          onClick={() => setNewTaskOpen(true)}
+          aria-label="สร้างงานใหม่"
+          className="fixed bottom-[82px] right-3.5 z-30 flex h-14 w-14 items-center justify-center rounded-[18px] bg-[var(--brand-green-dark)] text-white shadow-[0_6px_16px_rgba(23,51,47,0.28)] transition-transform active:scale-95 sm:hidden"
+        >
+          <Plus className="h-6 w-6" />
+        </button>
       )}
     </div>
   );
@@ -212,7 +299,7 @@ function TasksPageContent() {
 /** Column-shaped placeholder shown while the file-backed task data loads. */
 function BoardSkeleton() {
   return (
-    <div className="flex gap-4 overflow-hidden pt-4 lg:pt-6">
+    <div className="flex gap-4 overflow-hidden px-3 pt-4 sm:px-0 lg:pt-6">
       {Array.from({ length: 4 }).map((_, col) => (
         <div key={col} className="flex-1 min-w-[280px] max-w-[400px] flex flex-col gap-2.5">
           <Skeleton className="h-9 w-full rounded-xl" />

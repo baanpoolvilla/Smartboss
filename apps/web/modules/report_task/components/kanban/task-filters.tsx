@@ -55,10 +55,23 @@ const defaultFilters = {
   customTo: "",
 } as const;
 
+/** จำนวนตัวกรองที่ตั้งอยู่ — เลขบนปุ่ม "ตัวกรอง" ของมือถือ (ปุ่มอยู่บนแถบหัวของหน้า ไม่ได้อยู่ในคอมโพเนนต์นี้) */
+export function countActiveTaskFilters(filters: Record<keyof typeof defaultFilters, unknown>): number {
+  return [
+    filters.departmentId !== defaultFilters.departmentId,
+    filters.assigneeId !== defaultFilters.assigneeId,
+    filters.assignedById !== defaultFilters.assignedById,
+    filters.priority !== defaultFilters.priority,
+    filters.penalty !== defaultFilters.penalty,
+    filters.preset !== defaultFilters.preset,
+  ].filter(Boolean).length;
+}
+
 export function TaskFilters({
   groupBy,
   onGroupByChange,
   resultCount,
+  mobile,
 }: {
   /** ตัวเลือก "จัดกลุ่มตาม" ของบอร์ด Kanban — ไม่ส่งมา (มุมมองตาราง/ภาระงาน) แล้วช่องนี้จะไม่โชว์เลย */
   groupBy?: GroupBy;
@@ -66,15 +79,29 @@ export function TaskFilters({
   /** จำนวนงานที่ตรงตัวกรองปัจจุบัน — ขึ้นบนปุ่มท้าย bottom sheet ("แสดง N งาน")
    * แทน "ใช้ตัวกรอง" เฉยๆ ไม่ส่งมาก็ยัง fallback เป็นข้อความเดิมได้ */
   resultCount?: number;
+  /**
+   * มือถือ (<640px): ปุ่ม "ตัวกรอง" กับ "สร้างงานใหม่" ย้ายไปอยู่บนแถบหัว/ปุ่มลอยของหน้า (บอร์ดเต็มพื้นที่)
+   * หน้าจึงเป็นคนถือสถานะเปิด/ปิด — ส่งมาแล้วแถวปุ่มของมือถือในนี้จะไม่แสดง เหลือแต่แผ่นตัวกรองกับหน้าต่างสร้างงาน
+   */
+  mobile?: {
+    sheetOpen: boolean;
+    onSheetOpenChange: (open: boolean) => void;
+    newTaskOpen: boolean;
+    onNewTaskOpenChange: (open: boolean) => void;
+  };
 }) {
   const filters = useTaskStore((s) => s.filters);
   const setFilters = useTaskStore((s) => s.setFilters);
   const resetFilters = useTaskStore((s) => s.resetFilters);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
-  const [newTaskOpen, setNewTaskOpen] = useState(false);
+  const [ownNewTaskOpen, setOwnNewTaskOpen] = useState(false);
   // Mobile-only (<640px) — the 5 fields below collapse into this one button,
   // opened as a bottom sheet, instead of the full row (see the render below).
-  const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
+  const [ownSheetOpen, setOwnSheetOpen] = useState(false);
+  const newTaskOpen = mobile ? mobile.newTaskOpen : ownNewTaskOpen;
+  const setNewTaskOpen = mobile ? mobile.onNewTaskOpenChange : setOwnNewTaskOpen;
+  const mobileSheetOpen = mobile ? mobile.sheetOpen : ownSheetOpen;
+  const setMobileSheetOpen = mobile ? mobile.onSheetOpenChange : setOwnSheetOpen;
 
   const isFiltered =
     filters.departmentId !== defaultFilters.departmentId ||
@@ -86,14 +113,7 @@ export function TaskFilters({
 
   // Same fields isFiltered already checks, just counted instead of
   // collapsed to a bool — feeds the "ตัวกรอง (N)" badge on the mobile button.
-  const activeFilterCount = [
-    filters.departmentId !== defaultFilters.departmentId,
-    filters.assigneeId !== defaultFilters.assigneeId,
-    filters.assignedById !== defaultFilters.assignedById,
-    filters.priority !== defaultFilters.priority,
-    filters.penalty !== defaultFilters.penalty,
-    filters.preset !== defaultFilters.preset,
-  ].filter(Boolean).length;
+  const activeFilterCount = countActiveTaskFilters(filters);
 
   // One-tap shortcuts in the mobile sheet — each just sets/clears one of the
   // same real filter fields above (no separate state), for the handful of
@@ -623,7 +643,7 @@ export function TaskFilters({
       {/* <640px: the 5 fields collapse into one button that opens a bottom
           sheet, freeing up vertical space so the header doesn't eat most of
           a phone screen before a single task card is visible. */}
-      <div className="flex sm:hidden items-center gap-2">
+      <div className={cn("sm:hidden items-center gap-2", mobile ? "hidden" : "flex")}>
         {/* Same green circular count badge as the Dashboard's full-width
             filter button (that one has no second control to share the row
             with, so it can go full-width — this one still shares the row

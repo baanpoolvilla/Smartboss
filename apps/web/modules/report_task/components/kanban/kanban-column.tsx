@@ -66,6 +66,7 @@ export function KanbanColumn({
   onBreakdownClick,
   groupedByPriority,
   groupedByStatus,
+  hideHeaderOnMobile,
 }: {
   column: BoardColumn;
   /** Every task currently on the board (post-filter) — the denominator for this column's "N% ของบอร์ด" bar. */
@@ -95,6 +96,8 @@ export function KanbanColumn({
    * still shown for the derived "รอตรวจสอบ" column and for priority/assignee
    * grouping, where a column can genuinely mix statuses. */
   groupedByStatus?: boolean;
+  /** มือถือ (<640px): ซ่อนการ์ดหัวคอลัมน์ — แถบแท็บของบอร์ดบอกชื่อ+จำนวนแทนแล้ว (ดู kanban-board.tsx) */
+  hideHeaderOnMobile?: boolean;
 }) {
   const Icon = column.icon;
   const accent = column.accent;
@@ -175,6 +178,7 @@ export function KanbanColumn({
             title={onHeaderClick ? (headerClickTitle ?? "ดูงานของคนนี้แยกตามหัวข้อโปรเจค") : undefined}
             className={cn(
               "shrink-0 w-full rounded-xl bg-white border border-[var(--line)] shadow-[0_1px_2px_rgba(16,24,40,0.04)] px-3.5 py-3 mb-3 text-left",
+              hideHeaderOnMobile && "hidden sm:block",
               onHeaderClick && "cursor-pointer transition-colors hover:border-[var(--brand-green)] hover:bg-[color-mix(in_srgb,var(--brand-green)_4%,white)]"
             )}
           >
@@ -290,7 +294,8 @@ export function KanbanColumn({
         // paging between columns ("กดเลื่อนไปแล้ว...ไม่เอาอยู่ตำแหน่งเดิม").
         // Unconditional now, matching every other level of this board's
         // scroll chain (AppScaffold, tasks/page.tsx, KanbanBoard's own row).
-        className="flex-1 flex min-h-0 flex-col gap-3 p-2.5 rounded-xl overflow-y-auto transition-colors duration-200 bg-[var(--bg-soft)]/50"
+        // <640px: ไม่มีกรอบ/ขอบในของคอลัมน์ (การ์ดชิดขอบจอ) + เว้นท้ายรายการให้พ้นปุ่ม + ลอย
+        className="flex-1 flex min-h-0 flex-col gap-2 pb-24 rounded-xl overflow-y-auto transition-colors duration-200 sm:gap-3 sm:p-2.5 sm:bg-[var(--bg-soft)]/50"
       >
         {column.summaryOnly && column.breakdown?.length ? (
           column.breakdown.map((row) => (
