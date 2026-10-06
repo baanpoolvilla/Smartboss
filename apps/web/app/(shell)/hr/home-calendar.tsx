@@ -175,45 +175,7 @@ export async function renderCalendarTab(monthParam: string | undefined): Promise
 
   return (
     <div className="flex flex-col gap-4">
-      <SectionCard
-        // คำอธิบายวิธีใช้ย้ายไปอยู่ในปุ่ม ? ข้างชื่อเดือน และลดขอบในของการ์ด — คืนพื้นที่แนวตั้งให้ปฏิทิน
-        className="p-3! sm:p-3.5!"
-        title={
-          <>
-            {`${THAI_MONTH[m! - 1]} ${formatBuddhistYear(y!)}`}
-            <HelpPopover label="วิธีใช้ปฏิทินทีม">
-              กดวันไหนก็ได้เพื่อลงวันหยุด เลือกประเภท และตั้งชื่อที่จะขึ้นบนปฏิทิน · กดวันหยุดของตัวเองซ้ำเพื่อแก้ชื่อ สลับวัน
-              หรือยกเลิก · แถบจางมีจุดนำหน้า = รออนุมัติ
-            </HelpPopover>
-            {holidayBalances.map((b) => (
-              <Pill key={b.id} tone={b.available > 0 ? "var(--app-strong)" : "var(--tone-muted)"}>
-                {b.name} ของฉันเหลือ {b.available} วัน
-                {b.expiring > 0 ? ` · ${b.expiring} วันต้องใช้ในเดือนนี้` : ""}
-              </Pill>
-            ))}
-          </>
-        }
-        action={
-          // แถบเครื่องมือแบบปฏิทิน Teams/Outlook: "วันนี้" + ลูกศร ‹ › เล็ก ๆ ทุกขนาดจอ แทนปุ่มตัวหนังสือสองปุ่มใหญ่
-          <div className="flex items-center gap-1">
-            {month !== currentMonth() && (
-              <Link href="/hr?tab=calendar">
-                <Button size="sm" variant="outline" className="h-8 px-3">วันนี้</Button>
-              </Link>
-            )}
-            <Link href={`/hr?tab=calendar&month=${shiftMonth(month, -1)}`} aria-label="เดือนก่อนหน้า" title="เดือนก่อนหน้า">
-              <Button size="sm" variant="outline" className="h-8 w-8 p-0">
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-            </Link>
-            <Link href={`/hr?tab=calendar&month=${shiftMonth(month, 1)}`} aria-label="เดือนถัดไป" title="เดือนถัดไป">
-              <Button size="sm" variant="outline" className="h-8 w-8 p-0">
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </Link>
-          </div>
-        }
-      >
+      <SectionCard className="p-3! sm:p-3.5!">
         <LeaveCalendar
           key={month}
           month={month}
@@ -229,6 +191,41 @@ export async function renderCalendarTab(monthParam: string | undefined): Promise
           }))}
           entriesByDate={entriesByDate}
           people={legend}
+          // แถบเครื่องมือแถวเดียวแบบ Google Calendar / Teams: วันนี้ ‹ › ชื่อเดือน ทางซ้าย · ตัวกรอง/พิมพ์ ทางขวา (ใน LeaveCalendar)
+          toolbarStart={
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1">
+                <Link href="/hr?tab=calendar">
+                  <Button size="sm" variant="outline" className="h-8 px-3" disabled={month === currentMonth()}>
+                    วันนี้
+                  </Button>
+                </Link>
+                <Link href={`/hr?tab=calendar&month=${shiftMonth(month, -1)}`} aria-label="เดือนก่อนหน้า" title="เดือนก่อนหน้า">
+                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                </Link>
+                <Link href={`/hr?tab=calendar&month=${shiftMonth(month, 1)}`} aria-label="เดือนถัดไป" title="เดือนถัดไป">
+                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </Link>
+              </div>
+              <h2 className="flex items-center gap-1.5 text-base font-semibold text-(--ink)">
+                {`${THAI_MONTH[m! - 1]} ${formatBuddhistYear(y!)}`}
+                <HelpPopover label="วิธีใช้ปฏิทินทีม">
+                  กดวันไหนก็ได้เพื่อลงวันหยุด เลือกประเภท และตั้งชื่อที่จะขึ้นบนปฏิทิน · กดวันหยุดของตัวเองซ้ำเพื่อแก้ชื่อ สลับวัน
+                  หรือยกเลิก · แถบจางมีจุดนำหน้า = รออนุมัติ
+                </HelpPopover>
+              </h2>
+              {holidayBalances.map((b) => (
+                <Pill key={b.id} tone={b.available > 0 ? "var(--app-strong)" : "var(--tone-muted)"}>
+                  {b.name} ของฉันเหลือ {b.available} วัน
+                  {b.expiring > 0 ? ` · ${b.expiring} วันต้องใช้ในเดือนนี้` : ""}
+                </Pill>
+              ))}
+            </div>
+          }
         />
       </SectionCard>
 

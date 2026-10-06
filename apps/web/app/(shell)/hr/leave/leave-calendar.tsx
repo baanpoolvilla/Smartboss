@@ -283,7 +283,10 @@ export function LeaveCalendar({
   leaveTypes,
   entriesByDate,
   people,
+  toolbarStart,
 }: {
+  /** ซ้ายของแถบเครื่องมือ (วันนี้ ‹ › ชื่อเดือน) — หน้าฝั่งเซิร์ฟเวอร์ประกอบมาให้ ตัวกรอง/พิมพ์อยู่ขวาแถวเดียวกัน */
+  toolbarStart?: React.ReactNode;
   month: string;
   today: string;
   employmentId: string | null;
@@ -454,11 +457,12 @@ export function LeaveCalendar({
         ไม่กินแถวบนหัวปฏิทินตลอดเวลา · จอใหญ่เหมือนเดิม
       */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs sm:gap-x-4">
+        {toolbarStart}
         <button
           type="button"
           onClick={() => setPeopleOpen((v) => !v)}
           aria-expanded={peopleOpen}
-          className="flex h-8 items-center gap-1.5 rounded-full border border-(--line) px-3 text-xs font-medium text-(--ink)"
+          className="ml-auto flex h-8 items-center gap-1.5 rounded-lg border border-(--line) px-3 text-xs font-medium text-(--ink) hover:bg-(--bg-soft)"
           style={peopleOpen || hidden.size + hiddenTypes.size > 0 ? { backgroundColor: "var(--app-soft)" } : undefined}
         >
           <SlidersHorizontal className="h-3.5 w-3.5" />
@@ -480,7 +484,7 @@ export function LeaveCalendar({
               <FilterChip key={label} label={label} hue={hue} off={groupOff(auto)} onClick={() => toggleGroup(auto)} dot />
             ))}
         </div>
-        <div className={`${peopleOpen ? "order-last flex flex-wrap max-sm:w-full" : "hidden"} items-center gap-1.5`}>
+        <div className={`${peopleOpen ? "order-last flex flex-wrap" : "hidden"} items-center gap-1.5`}>
           <span className="hidden text-(--ink-soft) sm:inline">ประเภท:</span>
           {types.map((t) => (
             <FilterChip
@@ -494,6 +498,8 @@ export function LeaveCalendar({
             />
           ))}
         </div>
+        {/* ตอนกางตัวกรอง: ชิปทั้งหมดขึ้นบรรทัดใหม่ใต้แถบเครื่องมือ */}
+        {peopleOpen && <span className="order-[90] basis-full" aria-hidden="true" />}
         {/* พิมพ์/บันทึก PDF ของเดือนนี้ — ตามตัวกรองที่เลือกอยู่ และแสดงครบทุกรายการของแต่ละวัน */}
         <Button
           type="button"
@@ -502,7 +508,7 @@ export function LeaveCalendar({
           aria-label="พิมพ์ / บันทึก PDF"
           title="พิมพ์ / บันทึก PDF"
           // มือถือ: ไอคอนเครื่องพิมพ์อย่างเดียว ขนาดเท่าชิป ไม่เป็นปุ่มใหญ่ตกบรรทัด
-          className="ml-auto h-8 w-8 shrink-0 p-0"
+          className="h-8 w-8 shrink-0 p-0"
           onClick={() =>
             printMonth(
               new Date(`${month}-01T00:00:00`).toLocaleDateString("th-TH", { month: "long", year: "numeric" }),
