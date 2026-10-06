@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { requireOrg } from "@smartboss/auth";
 import { loadDayOffOverrides, overrideDaysFor } from "@/lib/day-off-quota";
 import { Button } from "@smartboss/ui/components/button";
@@ -193,12 +194,19 @@ export async function renderCalendarTab(monthParam: string | undefined): Promise
           </>
         }
         action={
+          // มือถือ: ลูกศรเล็ก ◀ ▶ แถวเดียวกับชื่อเดือน แทนปุ่มตัวหนังสือสองปุ่มที่กินที่หัวการ์ด ("หัวไม่สวย รก")
           <div className="flex gap-1">
-            <Link href={`/hr?tab=calendar&month=${shiftMonth(month, -1)}`}>
-              <Button size="sm" variant="outline">ก่อนหน้า</Button>
+            <Link href={`/hr?tab=calendar&month=${shiftMonth(month, -1)}`} aria-label="เดือนก่อนหน้า">
+              <Button size="sm" variant="outline" className="h-8 w-8 p-0 sm:w-auto sm:px-3">
+                <ChevronLeft className="h-4 w-4 sm:hidden" />
+                <span className="hidden sm:inline">ก่อนหน้า</span>
+              </Button>
             </Link>
-            <Link href={`/hr?tab=calendar&month=${shiftMonth(month, 1)}`}>
-              <Button size="sm" variant="outline">ถัดไป</Button>
+            <Link href={`/hr?tab=calendar&month=${shiftMonth(month, 1)}`} aria-label="เดือนถัดไป">
+              <Button size="sm" variant="outline" className="h-8 w-8 p-0 sm:w-auto sm:px-3">
+                <ChevronRight className="h-4 w-4 sm:hidden" />
+                <span className="hidden sm:inline">ถัดไป</span>
+              </Button>
             </Link>
           </div>
         }

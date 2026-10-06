@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useMemo, useState, useTransition } from "react";
+import { Printer } from "lucide-react";
 import { Button } from "@smartboss/ui/components/button";
 import { Modal } from "@/components/module/dialog";
 import { leaveTypeHint, usableLeaveTypes, type LeaveTypeChoice } from "@/modules/hr/lib/leave-type-choice";
@@ -439,7 +440,7 @@ export function LeaveCalendar({
         ไม่มีใครลงเลย (จำนวน 0 — ไม่มีอะไรให้กรอง) หัวปฏิทินบนมือถือเดิมกินที่เกือบเท่าตัวปฏิทิน ("ตรงหัวมันรก")
       */}
       <div className="-mx-1 flex flex-nowrap items-center gap-x-3 gap-y-2 overflow-x-auto px-1 text-xs [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:flex-wrap sm:gap-x-4 sm:overflow-visible sm:px-0">
-        <div className="flex shrink-0 items-center gap-1.5 sm:shrink sm:flex-wrap">
+        <div className="hidden shrink-0 items-center gap-1.5 sm:flex sm:shrink sm:flex-wrap">
           <span className="hidden text-(--ink-soft) sm:inline">แสดง:</span>
           {(
             [
@@ -471,7 +472,10 @@ export function LeaveCalendar({
           type="button"
           size="sm"
           variant="outline"
-          className="ml-auto shrink-0"
+          aria-label="พิมพ์ / บันทึก PDF"
+          title="พิมพ์ / บันทึก PDF"
+          // มือถือ: ไอคอนเครื่องพิมพ์อย่างเดียว ขนาดเท่าชิป ไม่เป็นปุ่มใหญ่ตกบรรทัด
+          className="ml-auto h-7 w-7 shrink-0 p-0 sm:h-8 sm:w-auto sm:px-3"
           onClick={() =>
             printMonth(
               new Date(`${month}-01T00:00:00`).toLocaleDateString("th-TH", { month: "long", year: "numeric" }),
@@ -483,7 +487,8 @@ export function LeaveCalendar({
             )
           }
         >
-          พิมพ์ / PDF
+          <Printer className="h-4 w-4 sm:mr-1" />
+          <span className="hidden sm:inline">พิมพ์ / PDF</span>
         </Button>
       </div>
 
