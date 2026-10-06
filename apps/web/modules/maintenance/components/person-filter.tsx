@@ -22,6 +22,7 @@ export function PersonFilter({
   people,
   showUnassigned = false,
   showMine = false,
+  showPeople = true,
 }: {
   /** เช่น "ผู้รับผิดชอบ" */
   label: string;
@@ -32,6 +33,11 @@ export function PersonFilter({
   showUnassigned?: boolean;
   /** แสดงตัวเลือกด่วน "ได้รับมอบหมาย (ฉัน)" / "ฉันมอบหมาย" ไว้บนสุด */
   showMine?: boolean;
+  /**
+   * false = ไม่มีรายชื่อรายคน เหลือแค่ "ของฉัน" — สำหรับพนักงานทั่วไป (ไม่ใช่ผู้ดูแล/เห็นทั้งบริษัท)
+   * เลือกดูงานของคนอื่นทีละคนเป็นมุมมองของหัวหน้า พนักงานต้องการแค่ "ของฉัน" กับ "ฉันมอบหมาย"
+   */
+  showPeople?: boolean;
 }) {
   const active = value !== null;
   return (
@@ -58,14 +64,16 @@ export function PersonFilter({
             <option value={ASSIGNED_BY_ME}>งานที่ฉันมอบหมายให้คนอื่น</option>
           </optgroup>
         )}
-        <optgroup label="รายคน">
-          {showUnassigned && <option value={UNASSIGNED}>ยังไม่มอบหมาย</option>}
-          {people.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </optgroup>
+        {showPeople && (
+          <optgroup label="รายคน">
+            {showUnassigned && <option value={UNASSIGNED}>ยังไม่มอบหมาย</option>}
+            {people.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </optgroup>
+        )}
       </select>
     </label>
   );

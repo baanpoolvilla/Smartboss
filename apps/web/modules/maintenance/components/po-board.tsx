@@ -213,12 +213,15 @@ export function PoBoard({
   returns: allReturns,
   initialTab,
   currentUserId,
+  canPickPeople = true,
 }: {
   orders: BoardPo[];
   returns: BoardReturn[];
   initialTab?: string;
   /** ผู้ใช้ที่ล็อกอิน — ตัวเลือก "งานที่ฉันได้รับมอบหมาย / ฉันมอบหมาย" */
   currentUserId?: string;
+  /** true = ผู้ดูแล/เห็นทั้งบริษัท — เลือกดูรายคนได้ · false = พนักงานทั่วไป มีแค่ "ของฉัน" */
+  canPickPeople?: boolean;
 }) {
   // ?tab=returns มาจากตอนเพิ่ง "แจ้งคืน" เสร็จ (ดู actions.ts) — คืนของที่เพิ่ง
   // แจ้งยังไม่จบเรื่อง จึงอยู่แท็บ "ดำเนินการ" ไม่ใช่แท็บที่ 5 ที่ไม่มีแล้ว
@@ -260,7 +263,7 @@ export function PoBoard({
 
   return (
     <div>
-      {(people.length > 0 || !!currentUserId) && (
+      {((canPickPeople && people.length > 0) || !!currentUserId) && (
         <div className="mb-3 flex gap-2 overflow-x-auto">
           <PersonFilter
             label="ผู้รับผิดชอบ"
@@ -269,6 +272,7 @@ export function PoBoard({
             people={people}
             showUnassigned={allOrders.some((o) => o.assigneeIds.length === 0)}
             showMine={!!currentUserId}
+            showPeople={canPickPeople}
           />
         </div>
       )}

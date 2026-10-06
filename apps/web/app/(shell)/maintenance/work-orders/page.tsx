@@ -134,6 +134,8 @@ export default async function WorkOrdersPage({
           propertyCategories={propCats}
           creatorNames={creatorNames}
           currentUserId={session.userId}
+          // พนักงานทั่วไปเห็นเฉพาะใบงานของตัวเองอยู่แล้ว (work-order-access.ts) — ตัวกรองจึงมีแค่ "ของฉัน"
+          canPickPeople={access.seeAll}
         />
       )}
     </AppScaffold>

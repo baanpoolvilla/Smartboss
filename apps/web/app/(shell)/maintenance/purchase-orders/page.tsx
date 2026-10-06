@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { Undo2 } from "lucide-react";
-import { requireOrg, hasPermission } from "@smartboss/auth";
+import { requireOrg, hasPermission, canViewAll } from "@smartboss/auth";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { listPurchaseOrders } from "@/modules/maintenance/data/purchase-orders";
 import {
@@ -156,7 +156,7 @@ export default async function PurchaseOrdersPage({
         ) : null
       }
     >
-      <PoBoard orders={boardOrders} returns={boardReturns} initialTab={tab} currentUserId={session.userId} />
+      <PoBoard orders={boardOrders} returns={boardReturns} initialTab={tab} currentUserId={session.userId} canPickPeople={canViewAll(session)} />
     </AppScaffold>
   );
 }

@@ -409,6 +409,7 @@ export function WorkOrderBoard({
   propertyCategories,
   creatorNames,
   currentUserId,
+  canPickPeople = true,
 }: {
   orders: BoardOrder[];
   propertyNames: Record<string, string>;
@@ -422,6 +423,8 @@ export function WorkOrderBoard({
   creatorNames: Record<string, string>;
   /** ผู้ใช้ที่ล็อกอิน — ใช้กับตัวเลือก "งานที่ฉันได้รับมอบหมาย / ฉันมอบหมาย" */
   currentUserId?: string;
+  /** true = ผู้ดูแล/เห็นทั้งบริษัท — เลือกดูงานรายคนได้ · false = พนักงานทั่วไป มีแค่ "ของฉัน" */
+  canPickPeople?: boolean;
 }) {
   const [group, setGroup] = useState<string | null>(null);
   const [houseId, setHouseId] = useState<string | null>(null);
@@ -548,7 +551,7 @@ export function WorkOrderBoard({
       {(groups.length > 1 || assigneeOptions.length > 0 || !!currentUserId) && (
         <div className="shrink-0">
           <div className="flex gap-2 overflow-x-auto px-3 py-1.5">
-            {(assigneeOptions.length > 0 || !!currentUserId) && (
+            {((canPickPeople && assigneeOptions.length > 0) || !!currentUserId) && (
               <PersonFilter
                 label="ผู้รับผิดชอบ"
                 value={assignee}
@@ -556,6 +559,7 @@ export function WorkOrderBoard({
                 people={assigneeOptions}
                 showUnassigned={hasUnassigned}
                 showMine={!!currentUserId}
+                showPeople={canPickPeople}
               />
             )}
             {groups.length > 1 && (
