@@ -1090,25 +1090,26 @@ export async function setDayOffQuotaAction(
   if (!employmentId) return { error: "กรุณาเลือกพนักงาน" };
   if (scope === "month" && !/^\d{4}-\d{2}$/.test(month)) return { error: "เดือนไม่ถูกต้อง" };
 
-  const raw = String(formData.get(scope === "standing" ? "standing_days" : "extra_days") ?? "").trim();
+  const raw = String(formData.get(scope === "standing" ? "standing_days" : "month_days") ?? "").trim();
   const note = String(formData.get(scope === "standing" ? "standing_note" : "note") ?? "").slice(0, 200);
 
   /*
-   * ช่องของเดือนกรอกเป็น "เพิ่ม/ลดจากค่าประจำกี่วัน" (ใส่ 1 = 6 + 1 = 7 วัน) — บวกกับค่าประจำของคนนี้
-   * ที่นี่แล้วเก็บเป็นยอดรวมของเดือนเหมือนเดิม (ตัวอ่านทุกที่ใช้ยอดรวม ไม่ต้องแก้ตาม)
-   * เพิ่ม 0 = ไม่ต่างจากค่าประจำ ⇒ ล้างแถวของเดือนทิ้ง เหมือนปล่อยว่าง
+   * ช่องของเดือนเลือกได้ "เพิ่ม" (ใส่ 1 = 6 + 1 = 7 วัน) · "ลด" (ใส่ 2 = 4 วัน) · "กำหนดเป็น" (ใส่ 4 = 4 วัน)
+   * เลขที่กรอกเป็นบวกเสมอ — คิดกับค่าประจำของคนนี้ที่นี่ แล้วเก็บเป็นยอดรวมของเดือนเหมือนเดิม
+   * (ตัวอ่านทุกที่ใช้ยอดรวม ไม่ต้องแก้ตาม) · เพิ่ม/ลด 0 = ไม่ต่างจากค่าประจำ ⇒ ล้างแถวของเดือนทิ้ง เหมือนปล่อยว่าง
    */
   let monthTotal: number | null = null;
   if (scope === "month" && raw !== "") {
-    const extra = Number(raw);
-    if (!Number.isInteger(extra)) return { error: "จำนวนวันที่เพิ่ม/ลดต้องเป็นจำนวนเต็ม" };
+    const amount = Number(raw);
+    if (!Number.isInteger(amount) || amount < 0) return { error: "จำนวนวันต้องเป็นจำนวนเต็ม ไม่ติดลบ" };
+    const mode = String(formData.get("month_mode") ?? "add");
     const current = await loadDayOffQuota(session.orgId, employmentId, month);
     const base = current.employeeStanding ?? current.companyDefault;
-    if (extra !== 0) {
-      monthTotal = base + extra;
+    if (mode === "set" || amount !== 0) {
+      monthTotal = mode === "set" ? amount : mode === "sub" ? base - amount : base + amount;
       if (monthTotal < DAYS_OFF_LIMITS.min || monthTotal > DAYS_OFF_LIMITS.max) {
         return {
-          error: `ค่าประจำ ${base} วัน ${extra < 0 ? `ลด ${-extra}` : `เพิ่ม ${extra}`} = ${monthTotal} วัน — ต้องอยู่ระหว่าง ${DAYS_OFF_LIMITS.min}–${DAYS_OFF_LIMITS.max} วัน`,
+          error: `ได้ ${monthTotal} วัน (ค่าประจำ ${base} วัน) — ต้องอยู่ระหว่าง ${DAYS_OFF_LIMITS.min}–${DAYS_OFF_LIMITS.max} วัน`,
         };
       }
     }

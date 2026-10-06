@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { Button } from "@smartboss/ui/components/button";
 import { Field, inputClass } from "@/modules/hr/components/ui";
 import { setDayOffQuotaAction, type QuotaState } from "../../actions";
@@ -20,9 +20,10 @@ const EMPTY: QuotaState = {};
  * ── ทับเฉพาะเดือนนี้ ──
  * เดือนที่ตกลงกันเป็นพิเศษ (เช่นปิดกิจการชั่วคราว) ต้องไม่ทำให้เดือนอื่นของ
  * คนนั้นเปลี่ยนตามไปด้วย จึงแยกเป็นอีกชั้นที่ผูกกับเดือนที่กำลังดูอยู่
- * ช่องนี้กรอกเป็น "เพิ่ม/ลดจากค่าประจำกี่วัน" (ใส่ 1 = ค่าประจำ 6 + 1 = 7 วัน) ไม่ใช่ยอดรวม —
- * HR คิดเป็น "เดือนนี้ให้เพิ่มอีกวัน" พอช่องรับยอดรวม ใส่ 1 แล้วเดือนนั้นเหลือหยุดได้วันเดียว
- * ที่เก็บจริงยังเป็นยอดรวมของเดือนนั้น (เซิร์ฟเวอร์บวกให้) ⇒ แก้ค่าประจำทีหลัง ยอดของเดือนที่ตั้งไว้แล้วไม่ขยับตาม
+ * เลือกได้สามแบบ แล้วใส่เลขบวกธรรมดาเสมอ: "เพิ่ม" (ใส่ 1 = ค่าประจำ 6 + 1 = 7 วัน) · "ลด" (ใส่ 2 = 4 วัน)
+ * · "กำหนดเป็น" (ใส่ 4 = 4 วัน) — HR คิดเป็น "เดือนนี้ให้เพิ่มอีกวัน" พอช่องรับแต่ยอดรวม ใส่ 1 แล้วเดือนนั้น
+ * เหลือหยุดได้วันเดียว และให้ใส่เลขติดลบเพื่อลดก็ไม่สะดวก ("ใส่ - คิดว่าไม่น่าจะสะดวก")
+ * ที่เก็บจริงยังเป็นยอดรวมของเดือนนั้น (เซิร์ฟเวอร์คิดให้) ⇒ แก้ค่าประจำทีหลัง ยอดของเดือนที่ตั้งไว้แล้วไม่ขยับตาม
  *
  * ทั้งสองช่อง ปล่อยว่าง = กลับไปใช้ชั้นที่กว้างกว่า ไม่ใช่ 0 วัน — "ยังไม่ได้
  * ตกลงอะไรเป็นพิเศษ" กับ "ตกลงว่าไม่ได้หยุดเลย" คนละความหมาย
@@ -50,6 +51,18 @@ export function DayOffQuotaForm({
   // ฐานที่ช่อง "เพิ่ม/ลด" ของเดือนบวกเข้าไป = ค่าประจำของคนนี้ ถ้าไม่มีใช้ค่าตั้งต้นของบริษัท
   const base = employeeStanding ?? companyDefault;
   const extra = source === "month" ? daysPerMonth - base : null;
+  const [mode, setMode] = useState<"add" | "sub" | "set">(extra !== null && extra < 0 ? "sub" : "add");
+  const [amount, setAmount] = useState(extra === null ? "" : String(Math.abs(extra)));
+  // ยอดที่เดือนนี้จะได้ถ้ากดบันทึกตอนนี้ — โชว์ใต้ช่องให้เห็นก่อนกด ไม่ต้องบวกลบในใจ
+  const typed = amount.trim() === "" ? null : Number(amount);
+  const preview =
+    typed === null || !Number.isInteger(typed) || typed < 0
+      ? null
+      : mode === "add"
+        ? base + typed
+        : mode === "sub"
+          ? base - typed
+          : typed;
 
   const originLabel =
     source === "month"
@@ -107,20 +120,41 @@ export function DayOffQuotaForm({
           <input type="hidden" name="scope" value="month" />
           <p className="text-xs font-semibold text-(--ink)">เพิ่ม/ลดเฉพาะเดือน {month}</p>
           <Field
-            label={`เพิ่มวันหยุดของเดือน ${month} อีกกี่วัน`}
-            hint={`บวกจากค่าประจำ ${base} วัน — ใส่ 1 = เดือนนี้ได้ ${base + 1} วัน · ใส่ติดลบเพื่อลด · ปล่อยว่างเพื่อใช้ค่าประจำ`}
+            label={`วันหยุดของเดือน ${month}`}
+            hint={
+              preview === null
+                ? `ค่าประจำ ${base} วัน — เลือกเพิ่ม/ลด/กำหนดเป็น แล้วใส่จำนวนวัน · ปล่อยว่างเพื่อใช้ค่าประจำ`
+                : preview < 0 || preview > 31
+                  ? `ได้ ${preview} วัน — ต้องอยู่ระหว่าง 0–31 วัน`
+                  : `เดือนนี้จะได้หยุด ${preview} วัน (ค่าประจำ ${base} วัน)`
+            }
           >
-            <input
-              name="extra_days"
-              type="number"
-              min={-base}
-              max={31 - base}
-              step={1}
-              inputMode="numeric"
-              defaultValue={extra === null ? "" : String(extra)}
-              placeholder="0"
-              className={inputClass}
-            />
+            <div className="flex gap-2">
+              <select
+                name="month_mode"
+                value={mode}
+                onChange={(e) => setMode(e.target.value as "add" | "sub" | "set")}
+                className={`${inputClass} w-auto shrink-0`}
+                aria-label="วิธีตั้งวันหยุดของเดือนนี้"
+              >
+                <option value="add">เพิ่ม</option>
+                <option value="sub">ลด</option>
+                <option value="set">กำหนดเป็น</option>
+              </select>
+              <input
+                name="month_days"
+                type="number"
+                min={0}
+                max={31}
+                step={1}
+                inputMode="numeric"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder={mode === "set" ? String(base) : "0"}
+                aria-label="จำนวนวัน"
+                className={inputClass}
+              />
+            </div>
           </Field>
           <Field label="หมายเหตุ" hint="เช่น ปิดกิจการชั่วคราว">
             <input
