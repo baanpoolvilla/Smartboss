@@ -519,7 +519,8 @@ export function LeaveCalendar({
               className="mb-2 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-2.5 py-1.5 text-xs outline-none focus:border-(--app) [@media(pointer:coarse)]:text-base"
             />
           )}
-          <div className="flex flex-col gap-0.5">
+          {/* <640px: รายชื่อสูงพอเห็นราว 5 คน ที่เหลือเลื่อนนิ้วในกล่อง — ไม่ดันทั้งหน้ายาวลงไปเป็นสิบแถว */}
+          <div className="flex max-h-[11.5rem] flex-col gap-0.5 overflow-y-auto overscroll-contain rounded-(--radius) border border-(--line) p-1 sm:max-h-none sm:overflow-visible sm:border-0 sm:p-0">
             {people.length === 0 && <p className="text-xs text-(--ink-soft)">ยังไม่มีใครลงวันหยุดเดือนนี้</p>}
             {people
               .filter((p) => p.id !== employmentId && p.name.toLowerCase().includes(personQuery.trim().toLowerCase()))
