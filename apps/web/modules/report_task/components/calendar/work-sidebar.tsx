@@ -19,7 +19,7 @@ import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import { canManage } from "@/modules/report_task/lib/directory";
 import { canSeeTask, canSeeTaskOnCalendar, canSeeMeetingOnCalendar } from "@/modules/report_task/lib/permissions";
 import { cn } from "@/modules/report_task/lib/utils";
-import { User, Check, Plus } from "lucide-react";
+import { User, Check, Plus, CalendarOff } from "lucide-react";
 import type { CalendarEvent, Task, TodoItem } from "@/modules/report_task/types";
 
 /** Right rail for the work calendar: the visible range's tasks (by due date) + meetings. */
@@ -29,8 +29,15 @@ export function WorkSidebar({
   onToggleTodo,
   onEditTodo,
   onAddTodo,
+  scheduleEvents,
+  scheduleSeeAll = false,
 }: {
   range: ViewRange;
+  /** วันหยุด · ลา ที่ปฏิทินกำลังแสดง (กรองสิทธิ์/ประเภท/คน และลงสีมาแล้ว) —
+   *  `undefined` = ติ๊ก "วันหยุด · ลา" ออก ไม่ต้องมีการ์ดนี้ */
+  scheduleEvents?: CalendarEvent[];
+  /** เห็นของคนอื่นด้วย (เจ้าของ/หัวหน้า) — ใช้แค่ตั้งหัวการ์ด */
+  scheduleSeeAll?: boolean;
   onOpenTask: (id: string) => void;
   /** สิ่งที่ต้องทำ now lives inside "งานที่ฉันรับ" (asked for explicitly:
    *  "สิ่งที่ต้องทำ จะเอาเข้ามาอยู่ด้วย ในงานที่ฉันรับ") instead of its own
@@ -273,6 +280,18 @@ export function WorkSidebar({
     ...otherTodos.map((t): CrowdItem => ({ kind: "todo", date: t.date, todo: t })),
   ].sort((a, b) => a.date.localeCompare(b.date));
 
+  // ใบลาหลายวันที่เริ่มก่อนช่วงนี้ยังต้องขึ้น — เทียบแบบคาบเกี่ยว (`end` ไม่รวมวันนั้น)
+  const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const rangeStartYmd = ymd(range.start);
+  const rangeEndYmd = ymd(range.end);
+  const periodSchedule = (scheduleEvents ?? [])
+    .filter((e) => {
+      const s0 = e.start.slice(0, 10);
+      return s0 < rangeEndYmd && (s0 >= rangeStartYmd || (e.end ?? "").slice(0, 10) > rangeStartYmd);
+    })
+    .sort((a, b) => a.start.localeCompare(b.start));
+  const scheduleHeading = `${scheduleSeeAll ? "วันหยุด · ลาของทีม" : "วันหยุด · ลาของฉัน"}${period}`;
+
   return (
     <>
       {/* งานที่ฉันได้รับ — งาน/ประชุม/สิ่งที่ต้องทำ all merged into one
@@ -303,6 +322,50 @@ export function WorkSidebar({
           )}
         </CardContent>
       </Card>
+
+      {/* วันหยุด · ลา — มาพร้อมช่องติ๊กบนแถบกรอง: ติ๊กออกแล้วการ์ดนี้หายไปด้วย
+          คนทั่วไปเห็นแค่ของตัวเอง เจ้าของ/หัวหน้าเห็นของคนที่ดูแล (calendar-view.tsx) */}
+      {scheduleEvents && (
+        <Card className="border-[var(--line)] shadow-none">
+          <CardHeader>
+            <CardTitle className="text-base font-semibold flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1.5">
+                <CalendarOff className="h-3.5 w-3.5 text-[var(--ink-soft)]" /> {scheduleHeading}
+                {periodSchedule.length > 0 && (
+                  <span className="text-xs font-normal text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2 py-0.5">
+                    {periodSchedule.length} รายการ
+                  </span>
+                )}
+              </span>
+            </CardTitle>
+            <p className="text-xs text-[var(--ink-soft)]">{rangeLabel(range)}</p>
+          </CardHeader>
+          <CardContent className="space-y-1.5 max-h-80 overflow-y-auto">
+            {periodSchedule.length === 0 && <p className="text-sm text-[var(--ink-soft)]">ไม่มีวันหยุดหรือวันลา{period}</p>}
+            {periodSchedule.map((e) => {
+              const owner = scheduleSeeAll && e.userId ? getUser(e.userId) : undefined;
+              return (
+                <div
+                  key={e.id}
+                  className="flex items-center gap-2.5 rounded-md px-2 py-1.5"
+                  style={{ borderLeft: `3px solid ${e.colorHint ?? "var(--line)"}`, backgroundColor: e.colorHint ? `${e.colorHint}14` : undefined }}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium truncate">{e.title}</p>
+                    <p className="text-xs text-[var(--ink-soft)]">{formatDate(e.start)}</p>
+                  </div>
+                  {owner && (
+                    <Avatar className="h-6 w-6 shrink-0" title={owner.name}>
+                      <AvatarImage src={owner.avatarUrl ?? undefined} alt={owner.name} />
+                      <AvatarFallback className="text-[9px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{owner.avatar}</AvatarFallback>
+                    </Avatar>
+                  )}
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
 
       {/* งานทั้งหมด — a head/owner's crowd view, only when they've actually
           broadened scope to "all". Moved to last (was first) so it never

@@ -72,9 +72,9 @@ export const whatsNewItems: WhatsNewItem[] = [
   {
     id: "calendar-tab-schedule",
     page: "/calendar",
-    title: "แยกดูวันหยุด/วันลาต่างหาก",
-    description: "แท็บ \"วันหยุด · ลา\" สลับไปดูปฏิทินวันหยุดประจำและวันลาแยกจากปฏิทินงาน/ประชุม",
-    tourTarget: "calendar-tab-schedule",
+    title: "ดูวันหยุด/วันลาบนปฏิทินเดียวกับงาน",
+    description: "ติ๊ก \"วันหยุด · ลา\" เพื่อแสดงวันหยุดและวันลาปนกับงาน ติ๊กออกเพื่อดูแค่งาน",
+    tourTarget: "calendar-schedule-toggle",
   },
   {
     id: "calendar-view-switch",

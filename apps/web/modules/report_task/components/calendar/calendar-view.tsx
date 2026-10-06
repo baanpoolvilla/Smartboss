@@ -23,7 +23,6 @@ import { StickyFilterBar } from "@/modules/report_task/components/shared/sticky-
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/modules/report_task/components/ui/sheet";
 import { Switch } from "@/modules/report_task/components/ui/switch";
 import { filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
-import { CalendarFilters } from "./calendar-filters";
 import { FullCalendarView, type ViewKey, type FullCalendarViewHandle } from "./full-calendar-view";
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { CalendarRail } from "./calendar-rail";
@@ -36,22 +35,29 @@ import { EventPreviewCard } from "./event-preview-card";
 import { RangeSummaryDialog, type SummaryRange } from "./range-summary-dialog";
 import { SubmitLeaveDialog } from "./submit-leave-dialog";
 import { TaskDetailSheet } from "@/modules/report_task/components/kanban/task-detail-sheet";
-import { NewTaskDialog } from "@/modules/report_task/components/kanban/new-task-dialog";
 import { useEventColorStore } from "@/modules/report_task/store/event-color-store";
 import { useCalendarScopeStore } from "@/modules/report_task/store/calendar-scope-store";
-import { chartColors, leaveTypeColorOrder } from "@/modules/report_task/lib/chart-colors";
+import { chartColors } from "@/modules/report_task/lib/chart-colors";
 import { canEditRecord, canSeeTask, canSeeTaskOnCalendar, canSeeMeetingOnCalendar } from "@/modules/report_task/lib/permissions";
-import { getUser, canManage, isOwner } from "@/modules/report_task/lib/directory";
+import { getUser, canManage, isOwner, scopedUsers } from "@/modules/report_task/lib/directory";
 import { eventTypeLabels } from "@/modules/report_task/lib/calendar-colors";
-import { leaveIconOf, leaveTypePresetFor } from "@/modules/report_task/lib/leave-icons";
-import type { LeaveTypeDef } from "@/modules/report_task/store/leave-type-store";
+import { typeHex } from "@/lib/leave-type-hue";
 import { cn } from "@/modules/report_task/lib/utils";
-import { Bell, ListChecks, CalendarOff, Plus, Settings2, User, Users, SlidersHorizontal } from "lucide-react";
+import { Bell, CalendarOff, ChevronDown, Plus, Settings2, User, Users, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { now } from "@/modules/report_task/lib/now";
 import type { CalendarEvent, CalendarEventType, TodoItem } from "@/modules/report_task/types";
 
-type CalendarTab = "work" | "schedule";
+/** จำว่าติ๊ก "วันหยุด · ลา" ไว้หรือไม่ — ต่อเครื่อง */
+const SHOW_SCHEDULE_KEY = "pm-calendar-show-schedule";
+
+/** กลุ่มประเภทของวันหยุด/ลา 1 กลุ่ม — หนึ่งแถวในเมนูเลือกประเภท */
+interface ScheduleGroup {
+  key: string;
+  label: string;
+  color: string;
+  count: number;
+}
 
 /** Mobile filter sheet's "วันที่" quick-jump — a navigation shortcut, not a
  * real data filter (see the `dateJump` state's own comment). */
@@ -64,11 +70,6 @@ const dateJumpLabels: Record<DateJump, string> = {
   month: "เดือนนี้",
   custom: "กำหนดช่วงวันที่",
 };
-
-// Work calendar = task deadlines (flat task-type color) + meetings.
-// Schedule calendar = leaves (live from store) + holidays (opted-in per
-// country, see holiday-store) + routine days off.
-const scheduleTypes: CalendarEventType[] = ["leave", "dayoff", "holiday", "ot"];
 
 function monthKeysInRange(start: Date, end: Date): string[] {
   const keys: string[] = [];
@@ -95,24 +96,99 @@ function nextDayIso(dateStr: string) {
   return d.toISOString().slice(0, 10);
 }
 
-// Beyond this many leave types, the rest move into the "+N เพิ่มเติม" popover
-// instead of wrapping the filter row onto extra lines.
-const LEAVE_TYPE_CHIP_LIMIT = 4;
-
-function leaveTypeChip(lt: LeaveTypeDef, hiddenIds: Set<string>, onToggle: (id: string) => void) {
-  const Icon = leaveIconOf(lt.icon);
-  const isActive = !hiddenIds.has(lt.id);
+/** ช่องติ๊กของประเภทเดียว — ใช้ทั้งในเมนู ▾ (PC) และแผงตัวกรอง (มือถือ) */
+function ScheduleGroupRow({ group, checked, onToggle, roomy }: { group: ScheduleGroup; checked: boolean; onToggle: () => void; roomy?: boolean }) {
   return (
-    <button key={lt.id} onClick={() => onToggle(lt.id)} title={isActive ? "คลิกเพื่อซ่อน" : "คลิกเพื่อแสดง"}>
-      <Badge
-        variant="outline"
-        className={cn("gap-1.5 cursor-pointer select-none transition-opacity", !isActive && "opacity-40")}
-        style={{ borderColor: lt.color, color: lt.color }}
-      >
-        <Icon className="h-3 w-3" style={{ color: lt.color }} />
-        {lt.label}
-      </Badge>
-    </button>
+    <label
+      className={cn(
+        "flex cursor-pointer items-center gap-2.5 rounded-lg px-2 text-sm hover:bg-[var(--bg-soft)]",
+        roomy ? "py-2.5" : "py-1.5",
+        !checked && "text-[var(--ink-soft)]"
+      )}
+    >
+      <input type="checkbox" checked={checked} onChange={onToggle} className="h-4 w-4 shrink-0" style={{ accentColor: group.color }} />
+      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: group.color }} />
+      <span className="min-w-0 flex-1 truncate">{group.label}</span>
+      <span className="text-xs tabular-nums text-[var(--ink-soft)]">{group.count}</span>
+    </label>
+  );
+}
+
+/**
+ * ปุ่มเดียวของ "วันหยุด · ลา": ช่องติ๊กซ้าย = เปิด/ปิดทั้งหมด · ▾ ขวา = เลือกทีละประเภท
+ * จะมีกี่ประเภทปุ่มก็ยาวเท่าเดิม (เดิมเป็นชิปเรียงทีละประเภทจนแถวล้น)
+ */
+function ScheduleToggle({
+  checked,
+  onCheckedChange,
+  groups,
+  hiddenKeys,
+  onToggleKey,
+  onShowAll,
+  shownCount,
+}: {
+  checked: boolean;
+  onCheckedChange: (next: boolean) => void;
+  groups: ScheduleGroup[];
+  hiddenKeys: Set<string>;
+  onToggleKey: (key: string) => void;
+  onShowAll: () => void;
+  shownCount: number;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-stretch overflow-hidden rounded-full border text-xs font-semibold transition-colors",
+        checked
+          ? "border-[var(--brand-green-dark)] bg-[var(--accent)] text-[var(--brand-green-dark)]"
+          : "border-[var(--line)] text-[var(--ink-soft)]"
+      )}
+    >
+      <label data-tour="calendar-schedule-toggle" className="flex cursor-pointer items-center gap-1.5 py-1 pl-2.5 pr-2">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onCheckedChange(e.target.checked)}
+          className="h-3.5 w-3.5 accent-[var(--brand-green-dark)]"
+        />
+        <CalendarOff className="h-3.5 w-3.5" />
+        วันหยุด · ลา
+      </label>
+      {checked && groups.length > 0 && (
+        <Popover>
+          <PopoverTrigger
+            render={
+              <button
+                type="button"
+                className="flex items-center gap-1 border-l border-[var(--brand-green-dark)]/30 py-1 pl-2 pr-2.5 hover:bg-white/50"
+                aria-label="เลือกประเภทวันหยุด/ลา"
+                title="เลือกประเภทวันหยุด/ลา"
+              >
+                <span className="rounded-full bg-[var(--brand-green-dark)] px-1.5 text-[10px] tabular-nums text-white">
+                  {shownCount}/{groups.length}
+                </span>
+                <ChevronDown className="h-3 w-3" />
+              </button>
+            }
+          />
+          <PopoverContent align="start" className="w-64 p-1.5">
+            <div className="flex items-center justify-between px-2 pb-1 pt-0.5 text-[11px] text-[var(--ink-soft)]">
+              <span>ประเภทวันหยุด/ลา · จำนวนในช่วงนี้</span>
+              {hiddenKeys.size > 0 && (
+                <button type="button" onClick={onShowAll} className="font-semibold text-[var(--brand-green-dark)] hover:underline">
+                  เลือกทั้งหมด
+                </button>
+              )}
+            </div>
+            <div className="max-h-72 overflow-y-auto">
+              {groups.map((g) => (
+                <ScheduleGroupRow key={g.key} group={g} checked={!hiddenKeys.has(g.key)} onToggle={() => onToggleKey(g.key)} />
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
+      )}
+    </span>
   );
 }
 
@@ -138,36 +214,6 @@ export function CalendarView() {
   const routineCompanyQuota = useRoutineDayOffStore((s) => s.companyMonthlyQuota);
   const routineUseDeptOverrides = useRoutineDayOffStore((s) => s.useDepartmentOverrides);
   const routineDeptQuotas = useRoutineDayOffStore((s) => s.departmentQuotas);
-  // ประเภทลาที่แสดง/กรองในปฏิทินนี้มาจาก HR (workforce) ล้วน ๆ — ไม่ใช่ค่าคงที่
-  // ที่เดาไว้ในโค้ด เพราะ HR เป็นเจ้าของรายชื่อประเภทลาจริง (แอดมินเพิ่ม/
-  // เปลี่ยนชื่อได้ที่ /hr/settings) ชื่อทุกประเภทที่ HR ตั้งไว้ขึ้นเป็นตัวเลือก
-  // กรองที่นี่เสมอ ไม่ใช่แค่ประเภทที่บังเอิญมีคนลาในช่วงที่กำลังดูอยู่ —
-  // เดิมกรองจากรายการลาจริงในช่วงนี้เท่านั้น ผลคือประเภทที่ไม่มีคนใช้เดือนนั้น
-  // (เช่น "ลากิจ") จะหายไปจากแถบตัวกรองไปเลย ทั้งที่ HR มีประเภทนี้ตั้งไว้อยู่
-  const leaveTypes = useMemo<LeaveTypeDef[]>(() => {
-    const byId = new Map<string, LeaveTypeDef>();
-    let cycleIndex = 0;
-    function ensure(id: string) {
-      if (byId.has(id)) return;
-      // HR's own standard names get a fixed color+icon (leave-icons.ts) so
-      // "ลาป่วย" always reads the same red/thermometer everywhere; a custom
-      // type an admin added themselves falls back to the old cycling colors.
-      const preset = leaveTypePresetFor(id);
-      byId.set(id, {
-        id,
-        label: id,
-        color: preset?.color ?? leaveTypeColorOrder[cycleIndex++ % leaveTypeColorOrder.length] ?? chartColors.gray,
-        icon: preset?.icon ?? "umbrella",
-        quotaMode: "none",
-      });
-    }
-    for (const name of leaveTypeCatalog) ensure(name);
-    for (const l of leaves) {
-      if (l.type !== "leave") continue;
-      ensure(l.leaveType ?? l.title ?? "ลา");
-    }
-    return [...byId.values()];
-  }, [leaves, leaveTypeCatalog]);
   const colors = useEventColorStore((s) => s.colors);
   const hiddenUserIds = useCalendarVisibilityStore((s) => s.hiddenUserIds);
   const toggleUserVisible = useCalendarVisibilityStore((s) => s.toggle);
@@ -193,7 +239,25 @@ export function CalendarView() {
     () => allHolidays.filter((h) => isSourceSelected(holidaySelections, viewingAsUserId, holidaySource(h))),
     [allHolidays, holidaySelections, viewingAsUserId]
   );
-  const [tab, setTab] = useState<CalendarTab>("work");
+  // ปฏิทินเดียว: งาน/ประชุม/สิ่งที่ต้องทำ + วันหยุด · ลา ซ้อนกัน (เดิมแยกเป็น 2 แท็บ)
+  // ติ๊กออก = เหลือแค่งาน · เริ่มต้นติ๊กไว้ แล้วจำค่าที่เลือกไว้ต่อเครื่อง
+  const [showSchedule, setShowScheduleState] = useState(true);
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- อ่านค่าที่จำไว้หลัง mount (server ไม่มี localStorage)
+      if (localStorage.getItem(SHOW_SCHEDULE_KEY) === "0") setShowScheduleState(false);
+    } catch {
+      // private mode / storage ถูกปิด — ใช้ค่าเริ่มต้น
+    }
+  }, []);
+  function setShowSchedule(next: boolean) {
+    setShowScheduleState(next);
+    try {
+      localStorage.setItem(SHOW_SCHEDULE_KEY, next ? "1" : "0");
+    } catch {
+      // จำไม่ได้ก็ไม่เป็นไร
+    }
+  }
   // Color now encodes type only (task/meeting/สิ่งที่ต้องทำ), not priority —
   // priority filtering by chip is gone with it, replaced by the same
   // show/hide-by-type toggle every other work-tab item already has.
@@ -205,7 +269,6 @@ export function CalendarView() {
   // only place to see them at all. The switch stays (not just always-on) so
   // someone who wants a quieter งาน view can still hide the overlay.
   const [showTodosInWork, setShowTodosInWork] = useState(true);
-  const [scheduleActive, setScheduleActive] = useState<Set<CalendarEventType>>(new Set(scheduleTypes));
   // "ของฉัน" vs "ทั้งหมด" — view-only, everyone can flip it (not gated to
   // heads/owners like the work tab's scope, since a to-do isn't a
   // manage-level record) so anyone can peek at the team's list. Only its OWN
@@ -217,12 +280,12 @@ export function CalendarView() {
   // who'd otherwise see both.
   const [todoScope, setTodoScope] = useState<"mine" | "all">("mine");
   const effectiveTodoScope = canBroadenScope ? taskScope : todoScope;
-  // Empty = everything visible — tracking hidden ids (not active ids) means a
+  // Empty = everything visible — tracking hidden keys (not active ones) means a
   // newly-added leave type shows up by default instead of needing to be
-  // explicitly opted in.
-  const [hiddenLeaveTypeIds, setHiddenLeaveTypeIds] = useState<Set<string>>(new Set());
-  function toggleLeaveType(id: string) {
-    setHiddenLeaveTypeIds((prev) => {
+  // explicitly opted in. Key = ScheduleGroup.key.
+  const [hiddenScheduleKeys, setHiddenScheduleKeys] = useState<Set<string>>(new Set());
+  function toggleScheduleKey(id: string) {
+    setHiddenScheduleKeys((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -271,17 +334,10 @@ export function CalendarView() {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [previewEvent, setPreviewEvent] = useState<{ event: CalendarEvent; rect: DOMRect } | null>(null);
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [createDate, setCreateDate] = useState<string | undefined>(undefined);
-  // Real ลา submission (goes through workforce, unlike createOpen's local
-  // "วันหยุดประจำ" picker above) — separate open/date state since it's a
-  // completely different dialog (SubmitLeaveDialog), not another mode of
-  // NewTaskDialog.
+  // Real ลา submission (goes through workforce) — opened from a day's summary.
   const [submitLeaveDate, setSubmitLeaveDate] = useState<string | null>(null);
-  // The To Do add/edit dialog has its own tiny state, separate from
-  // createOpen/createDate above (those still drive NewTaskDialog for
-  // meetings/leaves) — `todo` present means "editing this one", absent
-  // means "creating new".
+  // The To Do add/edit dialog — `todo` present means "editing this one",
+  // absent means "creating new".
   const [todoDialogState, setTodoDialogState] = useState<{ date?: string; todo?: TodoItem } | null>(null);
   function openTodoDialog(target: { date?: string; todo?: TodoItem }) {
     setTodoDialogState(target);
@@ -372,49 +428,32 @@ export function CalendarView() {
   // Feeds the mobile filter button's "(N)" badge — counts how many of the
   // CURRENT tab's fields differ from their "show everything" default,
   // not every field that merely exists (an untouched tab should read as 0).
-  const mobileActiveFilterCount = useMemo(() => {
-    const dateJumpCount = dateJump !== "all" ? 1 : 0;
-    if (tab === "work") {
-      return (
-        dateJumpCount +
-        (canBroadenScope && taskScope !== "mine" ? 1 : 0) +
-        (showTasksInWork ? 0 : 1) +
-        (showMeetings ? 0 : 1) +
-        // On by default now (see showTodosInWork's own comment) — turning it
-        // *off* is the deviation from default, not on.
-        (showTodosInWork ? 0 : 1) +
-        // Not double-counted against taskScope above — canBroadenScope rides
-        // that one instead of having its own (see effectiveTodoScope).
-        (showTodosInWork && !canBroadenScope && todoScope !== "mine" ? 1 : 0) +
-        (workGoogleOwnerIds.some((id) => hiddenGoogleOwnerIds.includes(id)) ? 1 : 0)
-      );
-    }
-    return (
-      dateJumpCount +
-      (scheduleActive.size !== scheduleTypes.length ? 1 : 0) +
-      (hiddenLeaveTypeIds.size > 0 ? 1 : 0)
-    );
-  }, [tab, dateJump, canBroadenScope, taskScope, showTasksInWork, showMeetings, showTodosInWork, todoScope, workGoogleOwnerIds, hiddenGoogleOwnerIds, scheduleActive, hiddenLeaveTypeIds]);
-
+  const mobileActiveFilterCount = useMemo(
+    () =>
+      (dateJump !== "all" ? 1 : 0) +
+      (canBroadenScope && taskScope !== "mine" ? 1 : 0) +
+      (showTasksInWork ? 0 : 1) +
+      (showMeetings ? 0 : 1) +
+      // On by default now (see showTodosInWork's own comment) — turning it
+      // *off* is the deviation from default, not on.
+      (showTodosInWork ? 0 : 1) +
+      // Not double-counted against taskScope above — canBroadenScope rides
+      // that one instead of having its own (see effectiveTodoScope).
+      (showTodosInWork && !canBroadenScope && todoScope !== "mine" ? 1 : 0) +
+      (workGoogleOwnerIds.some((id) => hiddenGoogleOwnerIds.includes(id)) ? 1 : 0) +
+      (showSchedule && hiddenScheduleKeys.size > 0 ? 1 : 0),
+    [dateJump, canBroadenScope, taskScope, showTasksInWork, showMeetings, showTodosInWork, todoScope, workGoogleOwnerIds, hiddenGoogleOwnerIds, showSchedule, hiddenScheduleKeys]
+  );
 
   function clearMobileFilters() {
     setDateJump("all");
     setCustomJumpDate("");
-    if (tab === "work") {
-      setTaskScope("mine");
-      setShowTasksInWork(true);
-      setShowMeetings(true);
-      setShowTodosInWork(true);
-      setTodoScope("mine");
-    } else {
-      setScheduleActive(new Set(scheduleTypes));
-      setHiddenLeaveTypeIds(new Set());
-    }
-  }
-
-  function openCreate(date?: string) {
-    setCreateDate(date);
-    setCreateOpen(true);
+    setTaskScope("mine");
+    setShowTasksInWork(true);
+    setShowMeetings(true);
+    setShowTodosInWork(true);
+    setTodoScope("mine");
+    setHiddenScheduleKeys(new Set());
   }
 
   // A single-day click always shows what's already on that day first (popup)
@@ -425,11 +464,6 @@ export function CalendarView() {
     setSummaryRange({ start: date, end: nextDayIso(date) });
   }
 
-  function openAddFromSummary(date: string) {
-    setSummaryRange(null);
-    openCreate(date);
-  }
-
   function openSubmitLeaveFromSummary(date: string) {
     setSummaryRange(null);
     setSubmitLeaveDate(date);
@@ -438,16 +472,6 @@ export function CalendarView() {
   function handleToggleTodo(eventId: string) {
     toggleTodo(eventId.replace("todoevt-", ""));
   }
-
-  function toggleSchedule(type: CalendarEventType) {
-    setScheduleActive((prev) => {
-      const next = new Set(prev);
-      if (next.has(type)) next.delete(type);
-      else next.add(type);
-      return next;
-    });
-  }
-
 
   // One legend chip per person who has a connected calendar feeding this
   // tab — its own toggle (hiddenGoogleOwnerIds), independent from that
@@ -522,13 +546,22 @@ export function CalendarView() {
       }),
     [meetings, hiddenUserIds, viewingAsUserId, taskScope, canBroadenScope]
   );
+  // ใครเห็นวันหยุด/ลาของใคร: เจ้าของบริษัทเห็นทุกคน · หัวหน้าเห็นคนในแผนกที่ดูแล
+  // (scopedUsers) · คนทั่วไปเห็นแค่ของตัวเอง — `null` = ไม่จำกัด
+  const scheduleSeeAll = canManage(viewingAsUserId);
+  const scheduleUserScope = useMemo<Set<string> | null>(() => {
+    if (isOwner(viewingAsUserId)) return null;
+    return new Set([viewingAsUserId, ...scopedUsers(viewingAsUserId).map((u) => u.id)]);
+  }, [viewingAsUserId]);
+  const canSeeScheduleOf = (userId: string | undefined) =>
+    !userId || ((!scheduleUserScope || scheduleUserScope.has(userId)) && !hiddenUserIds.includes(userId));
   const visibleLeaves = useMemo(
-    () => leaves.filter((l) => !l.userId || !hiddenUserIds.includes(l.userId)),
-    [leaves, hiddenUserIds]
+    () => leaves.filter((l) => !l.userId || ((!scheduleUserScope || scheduleUserScope.has(l.userId)) && !hiddenUserIds.includes(l.userId))),
+    [leaves, hiddenUserIds, scheduleUserScope]
   );
   const visibleOvertime = useMemo(
-    () => overtime.filter((o) => !o.userId || !hiddenUserIds.includes(o.userId)),
-    [overtime, hiddenUserIds]
+    () => overtime.filter((o) => !o.userId || ((!scheduleUserScope || scheduleUserScope.has(o.userId)) && !hiddenUserIds.includes(o.userId))),
+    [overtime, hiddenUserIds, scheduleUserScope]
   );
 
   // Everyone's routine days off (manual picks + expanded recurring rules,
@@ -541,7 +574,7 @@ export function CalendarView() {
     const monthSet = new Set(months);
     const items: CalendarEvent[] = [];
     for (const [userId, dates] of Object.entries(routinePickedDates)) {
-      if (hiddenUserIds.includes(userId)) continue;
+      if (!canSeeScheduleOf(userId)) continue;
       const name = getUser(userId)?.name.split(" ")[0] ?? "";
       for (const date of dates) {
         if (!monthSet.has(date.slice(0, 7))) continue;
@@ -561,7 +594,7 @@ export function CalendarView() {
       }
     }
     for (const rule of routineRules) {
-      if (hiddenUserIds.includes(rule.userId)) continue;
+      if (!canSeeScheduleOf(rule.userId)) continue;
       const name = getUser(rule.userId)?.name.split(" ")[0] ?? "";
       for (const month of months) {
         for (const date of expandRule(rule, routineRuleExceptions, month)) {
@@ -580,7 +613,9 @@ export function CalendarView() {
       }
     }
     return items;
-  }, [routinePickedDates, routineRules, routineRuleExceptions, hiddenUserIds, activeRange, viewingAsUserId, todayYmd]);
+    // canSeeScheduleOf อ่านแค่ scheduleUserScope + hiddenUserIds ที่อยู่ใน deps แล้ว
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routinePickedDates, routineRules, routineRuleExceptions, hiddenUserIds, scheduleUserScope, activeRange, viewingAsUserId, todayYmd]);
 
   // Each to-do renders as a checkable chip on its own date. "all" scope
   // prefixes someone else's item with their first name so it's still clear
@@ -611,93 +646,98 @@ export function CalendarView() {
     [todos, effectiveTodoScope, hiddenUserIds, viewingAsUserId]
   );
 
+  // วันหยุด · ลา ทุกชนิด ลงสีตามประเภทแบบเดียวกับปฏิทินทีม (/hr) — ยังไม่กรองตามประเภท
+  // ที่ติ๊กออก (ตัวนับในเมนูเลือกประเภทต้องเห็นครบ)
+  const scheduleEvents = useMemo(() => {
+    const groupOf = (e: CalendarEvent): { key: string; label: string; color: string } => {
+      if (e.type === "holiday") return { key: "holiday", label: eventTypeLabels.holiday, color: colors.holiday };
+      if (e.type === "ot") return { key: "ot", label: eventTypeLabels.ot, color: colors.ot };
+      // วันหยุดประจำที่เลือกเองในโมดูลนี้ (routine-dayoff-store) ไม่ใช่ใบจาก HR
+      if (e.type === "dayoff" && e.id.startsWith("dayoff-")) return { key: "routine", label: "วันหยุดประจำ", color: colors.dayoff };
+      const name = e.typeName ?? e.leaveType ?? (e.type === "dayoff" ? "Day-Off" : "ลา");
+      return { key: `wf:${name}`, label: name, color: typeHex(name, e.type === "dayoff") };
+    };
+    // Whose day off it is goes in the chip itself ("กตาวุฒิ - ลาป่วย") — unless
+    // the person named it themselves ("Bee-Off", `authoredTitle`), which
+    // already carries the name: prefixing would read "Bee - Bee-Off".
+    const withOwner = (e: CalendarEvent) => {
+      const owner = e.userId ? getUser(e.userId)?.name.split(" ")[0] : undefined;
+      return owner && !e.authoredTitle ? `${owner} - ${e.title}` : e.title;
+    };
+    return [...visibleLeaves, ...visibleOvertime, ...holidays, ...dayoffEvents].map((e) => {
+      const g = groupOf(e);
+      const own = e.id.startsWith("dayoff-");
+      return {
+        event: {
+          ...e,
+          // วันหยุดประจำของโมดูลนี้ใส่ชื่อคนมาใน title แล้ว
+          title: own ? e.title : withOwner(e),
+          colorHint: g.color,
+          mine: e.userId === viewingAsUserId,
+          // ลา/OT จาก HR ลากย้ายไม่ได้ — ต้องไปทำที่ /hr (ดู handleEventDrop)
+          editable: own ? e.editable : false,
+        } satisfies CalendarEvent,
+        group: g,
+      };
+    });
+  }, [visibleLeaves, visibleOvertime, holidays, dayoffEvents, colors.holiday, colors.ot, colors.dayoff, viewingAsUserId]);
+
+  // หนึ่งแถวต่อประเภทในเมนู ▾ — ประเภทที่มีในเดือนนี้ก่อน (มากไปน้อย) แล้วตามด้วย
+  // ประเภทลาที่ HR ตั้งไว้แต่เดือนนี้ไม่มีใครใช้ (ให้กรองไว้ล่วงหน้าได้)
+  const scheduleGroups = useMemo<ScheduleGroup[]>(() => {
+    const startYmd = viewRange.start.toLocaleDateString("en-CA");
+    const endYmd = viewRange.end.toLocaleDateString("en-CA");
+    const byKey = new Map<string, ScheduleGroup>();
+    for (const { event, group } of scheduleEvents) {
+      const s0 = event.start.slice(0, 10);
+      const inView = s0 < endYmd && (s0 >= startYmd || (event.end ?? "").slice(0, 10) > startYmd);
+      const cur = byKey.get(group.key) ?? { ...group, count: 0 };
+      if (inView) cur.count += 1;
+      byKey.set(group.key, cur);
+    }
+    for (const name of leaveTypeCatalog) {
+      const key = `wf:${name}`;
+      if (!byKey.has(key)) byKey.set(key, { key, label: name, color: typeHex(name, false), count: 0 });
+    }
+    return [...byKey.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "th"));
+  }, [scheduleEvents, leaveTypeCatalog, viewRange]);
+  const shownGroupCount = scheduleGroups.filter((g) => !hiddenScheduleKeys.has(g.key)).length;
+
+  const visibleScheduleEvents = useMemo(
+    () => scheduleEvents.filter(({ group }) => !hiddenScheduleKeys.has(group.key)).map(({ event }) => event),
+    [scheduleEvents, hiddenScheduleKeys]
+  );
+
   const events = useMemo(() => {
     // Past events just fade — same category color, paler, not a different
     // gray. Keeps the "already happened" cue without losing what it was.
     const gray = (e: CalendarEvent): CalendarEvent =>
       isPastEvent(e, nowTs, todayYmd) ? { ...e, muted: true } : e;
-    if (tab === "work") {
-      const markMeeting = (m: CalendarEvent): CalendarEvent => ({
-        ...m,
-        mine: (m.attendeeIds ?? []).includes(viewingAsUserId) || m.createdById === viewingAsUserId,
-        // No recorded creator (meetings seeded before this field existed)
-        // used to mean "anyone can edit" — that left every seed meeting wide
-        // open. Falls through to canEditRecord's department-head check
-        // instead, same as a meeting that does have a creator.
-        editable: canEditRecord(m.createdById, m.departmentIds ?? [m.departmentId], viewingAsUserId),
-      });
-      return [
-        ...(showTasksInWork ? taskEvents : []),
-        ...(showMeetings ? visibleMeetings.map(markMeeting) : []),
-        ...workGoogleEvents,
-        ...(showTodosInWork ? todoEvents : []),
-      ].map(gray);
-    }
-    // Color leaves by type (past ones still gray via `gray`).
-    const leaveColorById = new Map(leaveTypes.map((t) => [t.id, t.color]));
-    const coloredLeaves = visibleLeaves.map((l) => {
-      // Whose day off it is goes in the chip itself ("กตาวุฒิ - ลาป่วย"), same
-      // shape as a routine day off's own title. The leave chip used to read
-      // just "ลาป่วย": on a team calendar that says a leave happened but not
-      // whose, and the per-person color legend is no help once several people
-      // are off in the same week. `l.title` is the leave type's name straight
-      // from workforce (see lib/db/workforce-calendar.ts) — unless the person
-      // named the day off themselves ("Bee-Off"), in which case `authoredTitle`
-      // is set and the name is already in there: prefixing would read
-      // "Bee - Bee-Off".
-      const owner = l.userId ? getUser(l.userId)?.name.split(" ")[0] : undefined;
-      return {
-        ...l,
-        title: owner && !l.authoredTitle ? `${owner} - ${l.title}` : l.title,
-        // An HR Day-Off (l.type === "dayoff") never has `leaveType` set (see
-        // workforce-calendar.ts — it's deliberately not a leave-type chip
-        // anymore), so it fell through to the "unknown leave type" gray
-        // fallback below. It isn't unknown, it's just not a leave — give it
-        // the same green as the "วันหยุดประจำ" category dot instead.
-        colorHint:
-          l.type === "dayoff"
-            ? colors.dayoff
-            : (l.leaveType && leaveColorById.get(l.leaveType)) ?? chartColors.gray,
-        mine: l.userId === viewingAsUserId,
-        // Never draggable — leave lives in workforce and this store is a
-        // read-only mirror of it (see lib/db/workforce-calendar.ts). A drag
-        // used to show "เลื่อนวันลาแล้ว" and then quietly revert at the next
-        // poll, because the save came back 409 and the sync layer treats 409
-        // as a lost write race rather than a refusal.
-        editable: false,
-      };
+    const markMeeting = (m: CalendarEvent): CalendarEvent => ({
+      ...m,
+      mine: (m.attendeeIds ?? []).includes(viewingAsUserId) || m.createdById === viewingAsUserId,
+      // No recorded creator (meetings seeded before this field existed)
+      // used to mean "anyone can edit" — that left every seed meeting wide
+      // open. Falls through to canEditRecord's department-head check
+      // instead, same as a meeting that does have a creator.
+      editable: canEditRecord(m.createdById, m.departmentIds ?? [m.departmentId], viewingAsUserId),
     });
-    // OT เหมือน leave ทุกอย่าง — read-only mirror ของ workforce, เติมชื่อคนให้
-    // เพราะ title จาก workforce-calendar.ts เป็นแค่ "OT 2 ชม." เฉยๆ ไม่มีชื่อคน
-    const coloredOvertime = visibleOvertime.map((o) => {
-      const owner = o.userId ? getUser(o.userId)?.name.split(" ")[0] : undefined;
-      return {
-        ...o,
-        title: owner ? `${owner} - ${o.title}` : o.title,
-        colorHint: colors.ot,
-        mine: o.userId === viewingAsUserId,
-        editable: false,
-      };
-    });
-    return [...coloredLeaves, ...coloredOvertime, ...holidays, ...dayoffEvents]
-      .filter((e) => scheduleActive.has(e.type))
-      .filter((e) => e.type !== "leave" || !e.leaveType || !hiddenLeaveTypeIds.has(e.leaveType))
-      .map(gray);
+    return [
+      ...(showTasksInWork ? taskEvents : []),
+      ...(showMeetings ? visibleMeetings.map(markMeeting) : []),
+      ...workGoogleEvents,
+      ...(showTodosInWork ? todoEvents : []),
+      ...(showSchedule ? visibleScheduleEvents : []),
+    ].map(gray);
   }, [
-    tab,
     taskEvents,
     showTasksInWork,
     showMeetings,
     showTodosInWork,
-    scheduleActive,
-    hiddenLeaveTypeIds,
+    showSchedule,
+    visibleScheduleEvents,
     visibleMeetings,
-    visibleLeaves,
-    visibleOvertime,
-    holidays,
-    dayoffEvents,
     todoEvents,
-    leaveTypes,
     nowTs,
     todayYmd,
     viewingAsUserId,
@@ -851,35 +891,6 @@ export function CalendarView() {
             phone it wrapped across 3 separate lines instead of reading as a
             single header. */}
         <div className="hidden sm:flex flex-wrap items-center gap-2">
-          <div className="inline-flex items-center gap-1.5 rounded-xl bg-[var(--bg-soft)] p-1.5">
-            <button
-              data-tour="calendar-tab-work"
-              onClick={() => setTab("work")}
-              className={cn(
-                "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all",
-                tab === "work"
-                  ? "bg-[var(--brand-green)] text-[var(--ink)] shadow-md"
-                  : "bg-white text-[var(--ink-soft)] border border-[var(--line)] hover:text-[var(--ink)]"
-              )}
-            >
-              <ListChecks className="h-4 w-4" />
-              งาน
-            </button>
-            <button
-              data-tour="calendar-tab-schedule"
-              onClick={() => setTab("schedule")}
-              className={cn(
-                "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all",
-                tab === "schedule"
-                  ? "bg-[var(--brand-green)] text-[var(--ink)] shadow-md"
-                  : "bg-white text-[var(--ink-soft)] border border-[var(--line)] hover:text-[var(--ink)]"
-              )}
-            >
-              <CalendarOff className="h-4 w-4" />
-              วันหยุด · ลา
-            </button>
-          </div>
-
           {/* "คนในองค์กร" no longer needs its own desktop button — it's the
               always-visible CalendarRail on the left now (≥lg). Still opened
               from here on <lg (rail hidden, no room for it yet), which is why
@@ -904,16 +915,14 @@ export function CalendarView() {
               chain and leave-balance ledger this module never had. This
               calendar is display-only for วันหยุด-ลา going forward
               ("หน้าของเราจะไม่ได้ให้ลงแล้ว จะให้ลงใน HR"). */}
-          {tab === "work" && (
-            <Button
-              size="lg"
-              className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white lg:ml-auto"
-              onClick={() => openTodoDialog({})}
-            >
-              <Plus className="h-4 w-4" />
-              เพิ่มสิ่งที่ต้องทำ
-            </Button>
-          )}
+          <Button
+            size="lg"
+            className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white lg:ml-auto"
+            onClick={() => openTodoDialog({})}
+          >
+            <Plus className="h-4 w-4" />
+            เพิ่มสิ่งที่ต้องทำ
+          </Button>
         </div>
 
         {/* <640px: tabs on their own row, filter + create below — cramming
@@ -921,31 +930,6 @@ export function CalendarView() {
             to edge with the create button clipped on real phone widths.
             Still 2 rows like the original, just without the "เพิ่มปฏิทิน"
             globe button (desktop-only now) so there's room to breathe. */}
-        <div className="flex sm:hidden items-center gap-1.5 rounded-xl bg-[var(--bg-soft)] p-1.5">
-          <button
-            data-tour="calendar-tab-work"
-            onClick={() => setTab("work")}
-            className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition-all",
-              tab === "work" ? "bg-[var(--brand-green)] text-[var(--ink)] shadow-md" : "bg-white text-[var(--ink-soft)] border border-[var(--line)]"
-            )}
-          >
-            <ListChecks className="h-3.5 w-3.5" />
-            งาน
-          </button>
-          <button
-            data-tour="calendar-tab-schedule"
-            onClick={() => setTab("schedule")}
-            className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition-all",
-              tab === "schedule" ? "bg-[var(--brand-green)] text-[var(--ink)] shadow-md" : "bg-white text-[var(--ink-soft)] border border-[var(--line)]"
-            )}
-          >
-            <CalendarOff className="h-3.5 w-3.5" />
-            หยุด
-          </button>
-        </div>
-
         <div className="flex sm:hidden items-center gap-2">
           <button
             type="button"
@@ -967,6 +951,22 @@ export function CalendarView() {
             {mobileActiveFilterCount > 0 && <span className="tabular-nums">({mobileActiveFilterCount})</span>}
           </button>
 
+          {/* ติ๊กวันหยุดอยู่นอกแผงตัวกรอง — ใช้บ่อยสุด กดทีเดียวจบ ส่วนเลือกทีละประเภทอยู่ในแผง */}
+          <label
+            className={cn(
+              filterFieldTriggerClass(showSchedule),
+              "!h-10 shrink-0 cursor-pointer gap-1.5"
+            )}
+          >
+            <input
+              type="checkbox"
+              checked={showSchedule}
+              onChange={(e) => setShowSchedule(e.target.checked)}
+              className="h-4 w-4 accent-[var(--brand-green-dark)]"
+            />
+            วันหยุด
+          </label>
+
           {/* min-w-0 + truncate: the row above already has a fixed-width
               icon button and a "กรอง (N)" pill ahead of this one — Button's
               own `whitespace-nowrap` means its label can't wrap, so on the
@@ -978,15 +978,14 @@ export function CalendarView() {
               against it — inside the real viewport at any width.
               "เพิ่มวันลา" removed here too, same reason as the desktop button
               above — ลา/Day-Off entry moved to /hr. */}
-          {tab === "work" && (
-            <Button
-              className="ml-auto min-w-0 max-w-[46%] bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
-              onClick={() => openTodoDialog({})}
-            >
-              <Plus className="h-4 w-4 shrink-0" />
-              <span className="truncate">เพิ่มสิ่งที่ต้องทำ</span>
-            </Button>
-          )}
+          <Button
+            className="ml-auto min-w-0 bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+            onClick={() => openTodoDialog({})}
+            aria-label="เพิ่มสิ่งที่ต้องทำ"
+          >
+            <Plus className="h-4 w-4 shrink-0" />
+            <span className="truncate">เพิ่ม</span>
+          </Button>
         </div>
 
         {/* ≥640px: unchanged. <640px gets a button + bottom sheet below
@@ -994,7 +993,6 @@ export function CalendarView() {
             type toggles + N Google-owner chips on the work tab alone) never
             fit one line on a phone and just wrapped across 2-3 rows. */}
         <div className="hidden sm:block">
-        {tab === "work" ? (
           <div className="flex flex-wrap items-center gap-2">
             {/* Whichever scope toggle applies goes first, same slot either
                 way — a head/owner gets the task-scope one (broader: every
@@ -1113,6 +1111,16 @@ export function CalendarView() {
               </Badge>
             </button>
             {workGoogleOwnerIds.map(googleOwnerChip)}
+            <span className="h-4 w-px bg-[var(--line)] mx-1" />
+            <ScheduleToggle
+              checked={showSchedule}
+              onCheckedChange={setShowSchedule}
+              groups={scheduleGroups}
+              hiddenKeys={hiddenScheduleKeys}
+              onToggleKey={toggleScheduleKey}
+              onShowAll={() => setHiddenScheduleKeys(new Set())}
+              shownCount={shownGroupCount}
+            />
             <span className="flex items-center gap-1.5 text-[11px] text-[var(--ink-soft)] ml-1 opacity-60">
               <span className="h-2 w-2 rounded-full bg-[var(--chart-red)]" />
               ผ่านไปแล้ว = สีจางลง
@@ -1122,32 +1130,6 @@ export function CalendarView() {
                 <span className="h-2 w-2 rounded-full border-[1.5px] border-[var(--chart-red)]" />
                 จุดกลวง = งานของคนอื่น
               </span>
-            )}
-          </div>
-        ) : (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <CalendarFilters types={scheduleTypes} active={scheduleActive} onToggle={toggleSchedule} />
-            <span className="h-4 w-px bg-[var(--line)]" />
-            <span className="text-xs text-[var(--ink-soft)]">ประเภทลา:</span>
-            {leaveTypes.slice(0, LEAVE_TYPE_CHIP_LIMIT).map((lt) => leaveTypeChip(lt, hiddenLeaveTypeIds, toggleLeaveType))}
-            {leaveTypes.length > LEAVE_TYPE_CHIP_LIMIT && (
-              <Popover>
-                <PopoverTrigger
-                  render={
-                    <button
-                      className="flex items-center gap-1 text-[11px] font-medium text-[var(--ink-soft)] hover:text-[var(--ink)] rounded-full border border-[var(--line)] px-2 py-0.5 hover:bg-[var(--bg-soft)] transition-colors"
-                      title="ประเภทลาเพิ่มเติม"
-                    >
-                      +{leaveTypes.length - LEAVE_TYPE_CHIP_LIMIT} เพิ่มเติม
-                    </button>
-                  }
-                />
-                <PopoverContent align="start" className="w-auto p-2">
-                  <div className="flex flex-col gap-1.5">
-                    {leaveTypes.slice(LEAVE_TYPE_CHIP_LIMIT).map((lt) => leaveTypeChip(lt, hiddenLeaveTypeIds, toggleLeaveType))}
-                  </div>
-                </PopoverContent>
-              </Popover>
             )}
             {/* Leave types + routine day-off quotas moved to /settings
                 (บริษัท) — company-wide config, same place as sticker/penalty
@@ -1177,7 +1159,6 @@ export function CalendarView() {
               </Link>
             )}
           </div>
-        )}
         </div>
 
 
@@ -1197,8 +1178,7 @@ export function CalendarView() {
             </SheetHeader>
 
             <div className="flex flex-col gap-4 px-4">
-              {tab === "work" && (
-                <>
+              <>
                   {canBroadenScope && (
                     <div>
                       <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">มุมมอง</p>
@@ -1294,48 +1274,35 @@ export function CalendarView() {
                       </div>
                     </div>
                   )}
-                </>
-              )}
+              </>
 
-              {tab === "schedule" && (
-                <>
-                  <div>
-                    <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">ประเภท</p>
-                    <div className="flex flex-col rounded-xl border border-[var(--line)] divide-y divide-[var(--line)]">
-                      {scheduleTypes.map((t) => {
-                        const color = t === "leave" ? "var(--ink-soft)" : colors[t];
-                        return (
-                          <label key={t} className="flex items-center justify-between gap-2 px-3 py-2.5">
-                            <span className="flex items-center gap-2 text-sm">
-                              <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                              {eventTypeLabels[t]}
-                            </span>
-                            <Switch checked={scheduleActive.has(t)} onCheckedChange={() => toggleSchedule(t)} />
-                          </label>
-                        );
-                      })}
+              <div>
+                <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">วันหยุด · ลา</p>
+                <div className="flex flex-col rounded-xl border border-[var(--line)]">
+                  <label className="flex items-center justify-between gap-2 px-3 py-2.5">
+                    <span className="flex items-center gap-2 text-sm">
+                      <CalendarOff className="h-4 w-4 text-[var(--ink-soft)]" />
+                      แสดงวันหยุด · ลาบนปฏิทิน
+                    </span>
+                    <Switch checked={showSchedule} onCheckedChange={setShowSchedule} />
+                  </label>
+                  {showSchedule && scheduleGroups.length > 0 && (
+                    <div className="border-t border-[var(--line)] px-1 py-1">
+                      <div className="flex items-center justify-between px-2 py-1 text-[11px] text-[var(--ink-soft)]">
+                        <span>เลือกประเภท ({shownGroupCount}/{scheduleGroups.length})</span>
+                        {hiddenScheduleKeys.size > 0 && (
+                          <button type="button" onClick={() => setHiddenScheduleKeys(new Set())} className="font-semibold text-[var(--brand-green-dark)]">
+                            เลือกทั้งหมด
+                          </button>
+                        )}
+                      </div>
+                      {scheduleGroups.map((g) => (
+                        <ScheduleGroupRow key={g.key} group={g} checked={!hiddenScheduleKeys.has(g.key)} onToggle={() => toggleScheduleKey(g.key)} roomy />
+                      ))}
                     </div>
-                  </div>
-
-                  <div>
-                    <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">ประเภทลา</p>
-                    <div className="flex flex-col rounded-xl border border-[var(--line)] divide-y divide-[var(--line)]">
-                      {leaveTypes.map((lt) => {
-                        const Icon = leaveIconOf(lt.icon);
-                        return (
-                          <label key={lt.id} className="flex items-center justify-between gap-2 px-3 py-2.5">
-                            <span className="flex items-center gap-2 text-sm">
-                              <Icon className="h-4 w-4" style={{ color: lt.color }} />
-                              {lt.label}
-                            </span>
-                            <Switch checked={!hiddenLeaveTypeIds.has(lt.id)} onCheckedChange={() => toggleLeaveType(lt.id)} />
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </>
-              )}
+                  )}
+                </div>
+              </div>
 
               {/* Navigation shortcut, not a real filter — jumps the calendar
                   underneath to a date/view. Same for every tab since it's
@@ -1404,7 +1371,7 @@ export function CalendarView() {
             onDateClick={handleDateClick}
             onEventDrop={handleEventDrop}
             onSelectRange={setSummaryRange}
-            onCreate={tab === "work" ? () => openTodoDialog({}) : () => openCreate()}
+            onCreate={() => openTodoDialog({})}
             onToggleTodo={handleToggleTodo}
             onEditTodo={(eventId) => {
               const todoId = eventId.replace("todoevt-", "");
@@ -1414,24 +1381,20 @@ export function CalendarView() {
             addHint="คลิกวันเพื่อดูรายการ · ลากคลุมหลายวันเพื่อดูสรุป"
           />
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
-            {tab === "work" ? (
-              <>
-                {/* TodoSidebar (everyone else's to-dos, its own card) used to
-                    render here too — now redundant since WorkSidebar's
-                    "งานทั้งหมดเดือนนี้" card already folds otherTodos in
-                    (see that card's own comment), so it was just showing the
-                    same to-dos twice on the page. */}
-                <WorkSidebar
-                  range={viewRange}
-                  onOpenTask={setOpenTaskId}
-                  onToggleTodo={toggleTodo}
-                  onEditTodo={(t) => openTodoDialog({ todo: t, date: t.date })}
-                  onAddTodo={() => openTodoDialog({})}
-                />
-              </>
-            ) : (
-              <LeaveSidebar range={viewRange} holidays={holidays} />
-            )}
+            {/* TodoSidebar (everyone else's to-dos, its own card) used to
+                render here too — now redundant since WorkSidebar's
+                "งานทั้งหมดเดือนนี้" card already folds otherTodos in. */}
+            <WorkSidebar
+              range={viewRange}
+              onOpenTask={setOpenTaskId}
+              onToggleTodo={toggleTodo}
+              onEditTodo={(t) => openTodoDialog({ todo: t, date: t.date })}
+              onAddTodo={() => openTodoDialog({})}
+              scheduleEvents={showSchedule ? visibleScheduleEvents : undefined}
+              scheduleSeeAll={scheduleSeeAll}
+            />
+            {/* โควตา/ยื่นลา/วันหยุดประจำของตัวเอง — มากับช่องติ๊กเดียวกัน */}
+            {showSchedule && <LeaveSidebar range={viewRange} holidays={holidays} personalOnly />}
           </div>
         </div>
       </div>
@@ -1449,8 +1412,7 @@ export function CalendarView() {
       <AddCalendarDialog open={addCalendarOpen} onOpenChange={setAddCalendarOpen} />
       <RangeSummaryDialog
         range={summaryRange}
-        tab={tab}
-        dayoffs={dayoffEvents}
+        scheduleEvents={showSchedule ? visibleScheduleEvents : undefined}
         todoScope={effectiveTodoScope}
         onOpenChange={(open) => !open && setSummaryRange(null)}
         onOpenTask={setOpenTaskId}
@@ -1458,25 +1420,10 @@ export function CalendarView() {
         onEditTodo={(t) => { setSummaryRange(null); openTodoDialog({ todo: t, date: t.date }); }}
         onRemoveTodo={removeTodo}
         showTodos={showTodosInWork}
-        onAddSchedule={openAddFromSummary}
         onSubmitLeave={openSubmitLeaveFromSummary}
         onAddTodo={(date) => { setSummaryRange(null); openTodoDialog({ date }); }}
       />
       <TaskDetailSheet taskId={openTaskId} onOpenChange={(open) => !open && setOpenTaskId(null)} />
-      {/* Only ever opened from the schedule tab now — meeting creation moved
-          into AddTodoDialog's "เป็นการประชุม" switch below, alongside to-dos. */}
-      <NewTaskDialog
-        key={`${tab}-${createDate ?? "new"}`}
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        // No "ลา" here — a leave saved from this module never persisted (the
-        // leaves store is a read-only mirror of workforce). Real ลา submission
-        // now goes through SubmitLeaveDialog below instead (same workforce
-        // action /hr's own calendar uses) — this dialog stays "วันหยุดประจำ" only.
-        defaultType="dayoff"
-        allowedTypes={["dayoff"]}
-        defaultDate={createDate}
-      />
       <AddTodoDialog
         open={!!todoDialogState}
         onOpenChange={(open) => !open && setTodoDialogState(null)}

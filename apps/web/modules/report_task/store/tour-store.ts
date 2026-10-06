@@ -59,10 +59,10 @@ const calendarTourSteps: TourStep[] = [
   },
   {
     page: "/calendar",
-    target: "calendar-tab-schedule",
-    title: "แยกดูวันหยุด/วันลาต่างหาก",
-    description: "แท็บ \"วันหยุด · ลา\" สลับไปดูปฏิทินวันหยุดประจำและวันลาแยกจากปฏิทินงาน/ประชุม",
-    demo: { type: "toggle-click", revertTarget: "calendar-tab-work" },
+    target: "calendar-schedule-toggle",
+    title: "ดูวันหยุด/วันลาบนปฏิทินเดียวกับงาน",
+    description: "ติ๊ก \"วันหยุด · ลา\" เพื่อแสดงวันหยุดและวันลาปนกับงาน ติ๊กออกเพื่อดูแค่งาน กด ▾ ข้าง ๆ เพื่อเลือกทีละประเภท",
+    demo: { type: "toggle-click" },
   },
   {
     page: "/calendar",

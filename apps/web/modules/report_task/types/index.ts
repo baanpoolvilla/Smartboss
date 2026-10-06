@@ -278,6 +278,8 @@ export interface CalendarEvent {
   /** Who created this meeting — only they can edit/delete it (leave uses `userId` for the same purpose). */
   createdById?: string;
   leaveType?: LeaveType;
+  /** ชื่อประเภทวันหยุด/ลาจาก HR — มีทั้งใบลาและ Day-Off (ต่างจาก `leaveType` ที่ไม่มีใน Day-Off) */
+  typeName?: string;
   /**
    * true = `title` เป็นชื่อที่คนพิมพ์เอง ห้ามเอาอะไรไปต่อหน้าอีก
    *

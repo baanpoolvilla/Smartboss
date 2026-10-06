@@ -51,9 +51,13 @@ function entryKey(e: EffectiveDayOff): string {
 export function LeaveSidebar({
   range,
   holidays,
+  personalOnly = false,
 }: {
   range: ViewRange;
   holidays: CalendarEvent[];
+  /** แสดงแค่การ์ด "วันหยุดของฉัน" — ปฏิทินรวมงาน+วันหยุดมีการ์ดรายการวันหยุด/ลาของตัวเอง
+   *  (กรองตามสิทธิ์แล้ว) อยู่ใน WorkSidebar แทน "ทีมที่ลา" กับ "วันหยุดนักขัตฤกษ์" */
+  personalOnly?: boolean;
 }) {
   const leaves = useLeaveStore((s) => s.leaves);
   const leaveTypes = useLeaveTypeStore((s) => s.types);
@@ -442,6 +446,8 @@ export function LeaveSidebar({
 
   return (
     <>
+      {!personalOnly && (
+      <>
       <Card className="border-[var(--line)] shadow-none">
         <CardHeader>
           <CardTitle className="text-base font-semibold flex items-center justify-between gap-2">
@@ -520,6 +526,8 @@ export function LeaveSidebar({
           })}
         </CardContent>
       </Card>
+      </>
+      )}
 
       <Card className="border-[var(--line)] shadow-none">
         <CardHeader>

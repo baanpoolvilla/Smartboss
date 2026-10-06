@@ -160,6 +160,9 @@ export async function listLeaveEvents(
       // has without this module having to mirror HR's config by hand.
       // Left unset for a dayoff row — it's not a "leave type" chip anymore.
       ...(isDayOff ? {} : { leaveType: r.leave_type_name ?? undefined }),
+      // ชื่อประเภทจริงของทั้งสองกลุ่ม (Day-Off ด้วย) — ปฏิทินรวมงาน+วันหยุดใช้แยกประเภท/ลงสี
+      // แบบเดียวกับปฏิทินทีม · `leaveType` ข้างบนยังว่างสำหรับ dayoff เหมือนเดิม
+      ...(r.leave_type_name ? { typeName: r.leave_type_name } : {}),
       start: iso(r.starts_on),
       end: endExclusive(r.ends_on),
       allDay: !half,

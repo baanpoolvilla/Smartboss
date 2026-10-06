@@ -12,16 +12,11 @@ import {
 import { getUser, canManage } from "@/modules/report_task/lib/directory";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useMeetingStore } from "@/modules/report_task/store/meeting-store";
-import { useLeaveStore } from "@/modules/report_task/store/leave-store";
-import { useOvertimeStore } from "@/modules/report_task/store/overtime-store";
-import { useHolidayStore } from "@/modules/report_task/store/holiday-store";
 import { useTodoStore } from "@/modules/report_task/store/todo-store";
 import { useCalendarVisibilityStore } from "@/modules/report_task/store/calendar-visibility-store";
-import { useLeaveTypeStore } from "@/modules/report_task/store/leave-type-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useCalendarScopeStore } from "@/modules/report_task/store/calendar-scope-store";
 import { useEventColorStore } from "@/modules/report_task/store/event-color-store";
-import { eventTypeLabels } from "@/modules/report_task/lib/calendar-colors";
 import { priorityMeta, statusMeta } from "@/modules/report_task/lib/task-meta";
 import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import { canSeeTask, canSeeTaskOnCalendar, canSeeMeetingOnCalendar } from "@/modules/report_task/lib/permissions";
@@ -29,7 +24,7 @@ import { formatDate, formatDateTime } from "@/modules/report_task/lib/format";
 import { nowMs } from "@/modules/report_task/lib/now";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Button } from "@/modules/report_task/components/ui/button";
-import { Users, CalendarDays, Plane, PartyPopper, CalendarOff, Clock, ListChecks, ListTodo, CalendarPlus, Check, X, Trash2 } from "lucide-react";
+import { Users, CalendarOff, ListChecks, ListTodo, CalendarPlus, Check, X, Trash2 } from "lucide-react";
 import type { CalendarEvent, TodoItem } from "@/modules/report_task/types";
 
 export type SummaryRange = { start: string; end: string }; // end exclusive (YYYY-MM-DD)
@@ -51,8 +46,7 @@ function Stat({ label, value, tone = "neutral" }: { label: string; value: number
 
 export function RangeSummaryDialog({
   range,
-  tab,
-  dayoffs = [],
+  scheduleEvents,
   todoScope = "mine",
   onOpenChange,
   onOpenTask,
@@ -60,17 +54,13 @@ export function RangeSummaryDialog({
   onEditTodo,
   onRemoveTodo,
   showTodos = true,
-  onAddSchedule,
   onSubmitLeave,
   onAddTodo,
 }: {
   range: SummaryRange | null;
-  tab: "work" | "schedule";
-  /** Already-expanded routine-day-off events for the visible calendar range
-   *  (see calendar-view.tsx's `dayoffEvents`) — reused here instead of
-   *  re-reading the store and re-running `expandRule`, since any range this
-   *  dialog can show is always a subset of what's currently on screen. */
-  dayoffs?: CalendarEvent[];
+  /** วันหยุด · ลา ที่ปฏิทินกำลังแสดงอยู่ (กรองสิทธิ์/ประเภท/คน และลงสีมาแล้ว)
+   *  — `undefined` = ผู้ใช้ติ๊ก "วันหยุด · ลา" ออก ไม่ต้องแสดงส่วนนี้ */
+  scheduleEvents?: CalendarEvent[];
   /** Mirrors calendar-view.tsx's own effective todoScope — "mine" vs "all". */
   todoScope?: "mine" | "all";
   onOpenChange: (open: boolean) => void;
@@ -82,9 +72,6 @@ export function RangeSummaryDialog({
   /** Mirrors calendar-view.tsx's showTodosInWork overlay switch — hides the
    *  to-do section from the work-tab summary when the user turned it off. */
   showTodos?: boolean;
-  /** Same idea, for the schedule tab's "เพิ่มวันหยุดประจำ" button (the local
-   *  routine day-off picker — not a real leave submission, see its own doc). */
-  onAddSchedule?: (date: string) => void;
   /** Opens SubmitLeaveDialog for this date — the real ลา submission that goes
    *  through the same workforce action HR's own calendar uses, distinct from
    *  onAddSchedule's local "วันหยุดประจำ" picker above. */
@@ -95,17 +82,12 @@ export function RangeSummaryDialog({
 }) {
   const tasks = useTaskStore((s) => s.tasks);
   const meetings = useMeetingStore((s) => s.meetings);
-  const leaves = useLeaveStore((s) => s.leaves);
-  const overtime = useOvertimeStore((s) => s.overtime);
-  const holidays = useHolidayStore((s) => s.holidays);
   const todos = useTodoStore((s) => s.todos);
   const hiddenUserIds = useCalendarVisibilityStore((s) => s.hiddenUserIds);
-  const leaveTypes = useLeaveTypeStore((s) => s.types);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const taskScope = useCalendarScopeStore((s) => s.scope);
   const canBroadenScope = canManage(viewingAsUserId);
   const meetingColor = useEventColorStore((s) => s.colors.meeting);
-  const otColor = useEventColorStore((s) => s.colors.ot);
 
   const data = useMemo(() => {
     if (!range) return null;
@@ -126,39 +108,26 @@ export function RangeSummaryDialog({
         return unattributed || (taskScope === "all" && canBroadenScope) || canSeeMeetingOnCalendar(m, viewingAsUserId);
       })
       .sort((a, b) => a.start.localeCompare(b.start));
-    // "leaves" จาก workforce ปนสองแบบมาด้วยกัน (ดู workforce-calendar.ts's
-    // isDayOff): ลาจริงที่ต้องอนุมัติ (type "leave") กับสิทธิ์วันหยุดประจำแบบ
-    // auto-approve (type "dayoff", เช่น "วันหยุดประจำเดือน") — ก่อนหน้านี้ตัว
-    // ไดอะล็อกนี้ไม่ได้แยกสองอย่างนี้เลย เอาทุกอันไปกอง "วันลา" หมด แถวที่จริง
-    // เป็นวันหยุดประจำเลยทั้งถูกนับผิดหมวดและโชว์ป้ายว่า "ลา" เฉย ๆ (ไม่มีชื่อ
-    // ประเภทให้แสดง เพราะแถวแบบนี้ตั้งใจไม่ผูก leaveType มาตั้งแต่ต้น — ดู
-    // comment เดียวกัน) แยกออกมารวมกับ dayoffs (รอบวันหยุดประจำที่ตั้งเอง)
-    // แทน ให้ตรงกับที่ calendar-view.tsx เองก็แยกสองอย่างนี้อยู่แล้ว
-    const rangeLeaves = leaves
-      .filter((l) => l.type !== "dayoff" && inRange(l.start, start, end))
-      .sort((a, b) => a.start.localeCompare(b.start));
-    const rangeHolidays = holidays.filter((h) => inRange(h.start, start, end)).sort((a, b) => a.start.localeCompare(b.start));
-    const rangeDayoffs = [
-      ...dayoffs.filter((d) => inRange(d.start, start, end)),
-      ...leaves.filter((l) => l.type === "dayoff" && inRange(l.start, start, end)),
-    ].sort((a, b) => a.start.localeCompare(b.start));
+    // ใบลาหลายวันต้องขึ้นทุกวันที่คาบเกี่ยว ไม่ใช่แค่วันแรก (`end` ไม่รวมวันนั้น)
+    const rangeSchedule = (scheduleEvents ?? [])
+      .filter((e) => {
+        const s0 = e.start.slice(0, 10);
+        return s0 < end && (s0 >= start || (e.end ?? "").slice(0, 10) > start);
+      })
+      .sort((x, y) => x.start.localeCompare(y.start));
     const rangeTodos = todos
       .filter((t) => inRange(t.date, start, end))
       .filter((t) => (todoScope === "mine" ? t.userId === viewingAsUserId : !hiddenUserIds.includes(t.userId)))
       .sort((a, b) => Number(a.done) - Number(b.done) || a.date.localeCompare(b.date));
-    const rangeOvertime = overtime.filter((o) => inRange(o.start, start, end)).sort((a, b) => a.start.localeCompare(b.start));
     return {
       tasks: rangeTasks,
       meetings: rangeMeetings,
-      leaves: rangeLeaves,
-      holidays: rangeHolidays,
-      dayoffs: rangeDayoffs,
-      overtime: rangeOvertime,
+      schedule: rangeSchedule,
       todos: rangeTodos,
       done: rangeTasks.filter((t) => t.status === "done").length,
       overdue: rangeTasks.filter((t) => dueUrgency(t) === "overdue").length,
     };
-  }, [range, tasks, meetings, leaves, overtime, holidays, dayoffs, todos, todoScope, hiddenUserIds, viewingAsUserId, taskScope, canBroadenScope]);
+  }, [range, tasks, meetings, scheduleEvents, todos, todoScope, hiddenUserIds, viewingAsUserId, taskScope, canBroadenScope]);
 
   if (!range || !data) return null;
 
@@ -187,8 +156,7 @@ export function RangeSummaryDialog({
           )}
         </DialogHeader>
 
-        {tab === "work" ? (
-          <>
+        <>
             {/* Task/meeting stats only — a day with only to-dos (a separate
                 category, not counted here) used to show all four tiles at a
                 flat 0 right above a list that clearly had items in it, which
@@ -205,8 +173,8 @@ export function RangeSummaryDialog({
             </div>
 
             <div className="max-h-72 overflow-y-auto space-y-3 mt-1">
-              {data.tasks.length === 0 && data.meetings.length === 0 && (!showTodos || data.todos.length === 0) && (
-                <p className="text-sm text-[var(--ink-soft)] text-center py-4">ไม่มีงาน/ประชุมในช่วงนี้</p>
+              {data.tasks.length === 0 && data.meetings.length === 0 && (!showTodos || data.todos.length === 0) && data.schedule.length === 0 && (
+                <p className="text-sm text-[var(--ink-soft)] text-center py-4">{scheduleEvents ? "ไม่มีงาน/ประชุม/วันหยุดในช่วงนี้" : "ไม่มีงาน/ประชุมในช่วงนี้"}</p>
               )}
 
               {data.tasks.length > 0 && (
@@ -328,103 +296,44 @@ export function RangeSummaryDialog({
                   })}
                 </div>
               )}
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <Stat label="วันลา" value={data.leaves.length} />
-              <Stat label={eventTypeLabels.holiday} value={data.holidays.length} />
-              <Stat label="วันหยุดประจำ" value={data.dayoffs.length} />
-              <Stat label={eventTypeLabels.ot} value={data.overtime.length} />
-            </div>
-            <div className="max-h-72 overflow-y-auto space-y-1.5 mt-1">
-              {data.leaves.length === 0 && data.holidays.length === 0 && data.dayoffs.length === 0 && data.overtime.length === 0 && (
-                <p className="text-sm text-[var(--ink-soft)] text-center py-4">ไม่มีวันลา/วันหยุดในช่วงนี้</p>
-              )}
-              {data.leaves.map((l) => {
-                const user = l.userId ? getUser(l.userId) : undefined;
-                const lt = leaveTypes.find((t) => t.id === l.leaveType);
-                return (
-                  <div key={l.id} className="flex items-center gap-2 px-2 py-1.5 text-sm">
-                    <Plane className="h-3.5 w-3.5 shrink-0" style={{ color: lt?.color ?? "var(--ink-soft)" }} />
-                    <span className="min-w-0 flex-1 truncate">{user?.name} · {lt?.label ?? l.leaveType ?? "ลา"}</span>
-                    <span className="text-[11px] text-[var(--ink-soft)] shrink-0 whitespace-nowrap">{formatDate(l.start)}</span>
-                  </div>
-                );
-              })}
-              {data.holidays.map((h) => (
-                <div key={h.id} className="flex items-center gap-2 px-2 py-1.5 text-sm">
-                  <PartyPopper className="h-3.5 w-3.5 text-[var(--chart-gray)] shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">{h.title}</span>
-                  <span className="text-[11px] text-[var(--ink-soft)] shrink-0 whitespace-nowrap">{formatDate(h.start)}</span>
+
+              {data.schedule.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium text-[var(--ink-soft)] px-2 flex items-center gap-1">
+                    <CalendarOff className="h-3 w-3" /> วันหยุด · ลา ({data.schedule.length})
+                  </p>
+                  {data.schedule.map((e) => (
+                    <div
+                      key={e.id}
+                      className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm"
+                      style={{ borderLeft: `3px solid ${e.colorHint ?? "var(--line)"}`, backgroundColor: e.colorHint ? `${e.colorHint}14` : undefined }}
+                    >
+                      <span className="min-w-0 flex-1 truncate">{e.title}</span>
+                      <span className="text-[11px] text-[var(--ink-soft)] shrink-0 whitespace-nowrap">{formatDate(e.start)}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-              {data.dayoffs.map((d) => {
-                const user = d.userId ? getUser(d.userId) : undefined;
-                // "Name · Type" เหมือนแถวลาด้านบน — เดิมโชว์แค่ user?.name ??
-                // d.title เฉยๆ พอ user resolve ได้ (เคสส่วนใหญ่) ก็เห็นแค่ชื่อ
-                // คน ไม่รู้เลยว่าเป็นวันหยุดประเภทไหน ("ไม่เห็นมีเลย") ต่อท้าย
-                // ด้วย title เฉพาะตอนยังไม่ใช่ authoredTitle (คนไม่ได้ตั้งชื่อ
-                // เองรวมชื่อตัวเองไว้แล้ว — ไม่งั้นจะซ้ำแบบ "Bee - Bee-Off")
-                const label = user ? (d.authoredTitle ? user.name : `${user.name} · ${d.title}`) : d.title;
-                return (
-                  <div key={d.id} className="flex items-center gap-2 px-2 py-1.5 text-sm">
-                    <CalendarOff className="h-3.5 w-3.5 text-teal-600 shrink-0" />
-                    <span className="min-w-0 flex-1 truncate">{label}</span>
-                    <span className="text-[11px] text-[var(--ink-soft)] shrink-0 whitespace-nowrap">{formatDate(d.start)}</span>
-                  </div>
-                );
-              })}
-              {data.overtime.map((o) => {
-                const user = o.userId ? getUser(o.userId) : undefined;
-                return (
-                  <div key={o.id} className="flex items-center gap-2 px-2 py-1.5 text-sm">
-                    <Clock className="h-3.5 w-3.5 shrink-0" style={{ color: otColor }} />
-                    <span className="min-w-0 flex-1 truncate">{user ? `${user.name} · ${o.title}` : o.title}</span>
-                    <span className="text-[11px] text-[var(--ink-soft)] shrink-0 whitespace-nowrap">{formatDate(o.start)}</span>
-                  </div>
-                );
-              })}
+              )}
             </div>
-          </>
-        )}
+        </>
 
-        {tab === "work" && isSingleDay && onAddTodo && (
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => onAddTodo(range.start)}
-          >
-            <CalendarPlus className="h-4 w-4" /> เพิ่มสิ่งที่ต้องทำ / สร้างประชุม
-          </Button>
-        )}
-
-        {tab === "schedule" && isSingleDay && (onAddSchedule || onSubmitLeave) && (
-          <div className="flex gap-2">
-            {onSubmitLeave && (
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => onSubmitLeave(range.start)}
-              >
-                <CalendarPlus className="h-4 w-4" /> ยื่นวันลา
+        {isSingleDay && (onAddTodo || onSubmitLeave) && (
+          <div className="flex flex-wrap gap-2">
+            {onAddTodo && (
+              <Button variant="outline" className="flex-1" onClick={() => onAddTodo(range.start)}>
+                <CalendarPlus className="h-4 w-4" /> เพิ่มสิ่งที่ต้องทำ / สร้างประชุม
               </Button>
             )}
-            {onAddSchedule && (
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => onAddSchedule(range.start)}
-              >
-                <CalendarPlus className="h-4 w-4" /> เพิ่มวันหยุดประจำ
+            {scheduleEvents && onSubmitLeave && (
+              <Button variant="outline" className="flex-1" onClick={() => onSubmitLeave(range.start)}>
+                <CalendarPlus className="h-4 w-4" /> ยื่นวันลา
               </Button>
             )}
           </div>
         )}
 
         <p className="flex items-center gap-1.5 text-[11px] text-[var(--ink-soft)] pt-1">
-          {tab === "work" ? <ListChecks className="h-3 w-3" /> : <CalendarDays className="h-3 w-3" />}
+          <ListChecks className="h-3 w-3" />
           ลากคลุมหลายวันบนปฏิทินเพื่อดูสรุปช่วงเวลา
         </p>
       </DialogContent>

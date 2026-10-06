@@ -4,6 +4,7 @@ import { useActionState, useMemo, useState, useTransition } from "react";
 import { Printer, SlidersHorizontal } from "lucide-react";
 import { Button } from "@smartboss/ui/components/button";
 import { Modal } from "@/components/module/dialog";
+import { typeHue } from "@/lib/leave-type-hue";
 import { leaveTypeHint, usableLeaveTypes, type LeaveTypeChoice } from "@/modules/hr/lib/leave-type-choice";
 import {
   cancelLeaveAction,
@@ -48,35 +49,6 @@ export interface PersonLegend {
 }
 
 export type { LeaveTypeChoice };
-
-/**
- * สีประจำตัวคน — คำนวณจาก id ให้คงที่ ไม่ใช่สุ่มหรือไล่ตามลำดับในลิสต์
- * ถ้าไล่ตามลำดับ พอมีคนลาออกสีของทุกคนจะเลื่อนหมด จำกันไม่ได้
- */
-function hueOf(id: string): number {
-  let hash = 0;
-  for (let i = 0; i < id.length; i += 1) {
-    hash = (hash * 31 + id.charCodeAt(i)) % 360;
-  }
-  // เลี่ยงช่วง 55-75 (เหลืองอ่อน) ที่อ่านบนพื้นขาวไม่ออก
-  return hash >= 55 && hash <= 75 ? (hash + 40) % 360 : hash;
-}
-
-/**
- * สีประจำประเภท — รายการบนปฏิทินและชิปกรองใช้สีเดียวกัน (แบบปฏิทินของโมดูลรายงาน/งาน)
- * เดาจากชื่อประเภทที่ HR ตั้ง: ชื่อที่ไม่เข้าเค้าไหนเลยได้สีจากชื่อ (คงที่ ไม่สุ่ม)
- */
-function typeHue(name: string | null, autoApprove: boolean): number {
-  const n = (name ?? "").toLowerCase();
-  if (/holiday|ฮอลิเดย์|นักขัตฤกษ์/.test(n)) return 215; // น้ำเงิน
-  if (/day.?off|หยุดประจำ|^off$/.test(n)) return 150; // เขียว
-  if (/ป่วย|sick/.test(n)) return 0; // แดง
-  if (/กิจ|personal/.test(n)) return 175; // เขียวอมฟ้า
-  if (/พักร้อน|vacation|annual/.test(n)) return 38; // เหลืองส้ม
-  if (/home|wfh/.test(n)) return 18; // ส้ม
-  if (/ค่าจ้าง|unpaid/.test(n)) return 280; // ม่วง
-  return name ? hueOf(name) : autoApprove ? 150 : 215;
-}
 
 /** ชื่อประเภทที่ไม่รู้ (HR ตั้งให้ไม่แสดงประเภทบนปฏิทินรวม) — กลุ่มของมันในตัวกรอง */
 const UNNAMED_TYPE = "__unnamed__";
