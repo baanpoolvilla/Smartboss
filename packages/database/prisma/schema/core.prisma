@@ -628,6 +628,11 @@ model EmployeeDayOffQuota {
   employmentId String @map("employment_id")
   /** "YYYY-MM" — โควตานี้มีผลกับเดือนนี้เดือนเดียว */
   month        String
+  /**
+   * ประเภทวันหยุดตามสิทธิ์ที่แถวนี้ตั้งให้ (workforce.leave_types.id) — "" = แถวที่ตั้งไว้ก่อนแยกตามประเภท
+   * ใช้กับทุกประเภทที่ยังไม่ได้ตั้งแยก (ดู apps/web/lib/day-off-quota.ts)
+   */
+  leaveTypeId  String @default("") @map("leave_type_id")
 
   /**
    * วันหยุดของเดือนนี้สำหรับคนนี้ เช่น 6 สำหรับเดือนที่ตกลงกันว่าได้มากกว่ามาตรฐาน
@@ -641,7 +646,7 @@ model EmployeeDayOffQuota {
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
-  @@id([orgId, employmentId, month])
+  @@id([orgId, employmentId, month, leaveTypeId])
   @@map("employee_day_off_quotas")
   @@schema("core")
 }

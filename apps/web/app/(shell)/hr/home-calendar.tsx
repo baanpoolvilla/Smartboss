@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireOrg } from "@smartboss/auth";
-import { loadDayOffQuota } from "@/lib/day-off-quota";
+import { loadDayOffOverrides, overrideDaysFor } from "@/lib/day-off-quota";
 import { Button } from "@smartboss/ui/components/button";
 import { currentMonth, todayIso } from "@/modules/hr/lib/date";
 import { formatBuddhistYear } from "@/modules/hr/lib/labels";
@@ -87,13 +87,12 @@ export async function renderCalendarTab(monthParam: string | undefined): Promise
   // วันหยุดตามสิทธิ์ (Day-Off) ของ "ตัวเองในเดือนที่ดูอยู่" — ตั้งรายคน/รายเดือนได้ที่หน้าพนักงาน
   // ตัวเลขที่โชว์ต้องเป็นตัวเดียวกับที่ใช้ตัดสินตอนกดลง (submitLeaveAction) ไม่ใช่โควตากลางของประเภท
   const session = await requireOrg();
-  const myDayOffQuota = me.employment_id
-    ? (await loadDayOffQuota(session.orgId, me.employment_id, month)).daysPerMonth
-    : null;
-  const quotaDaysOf = (t: LeaveType): number =>
-    myDayOffQuota !== null && t.auto_approve && !t.requires_reports && t.monthly_quota_days > 0
-      ? myDayOffQuota
-      : t.monthly_quota_days;
+  const myOverrides = me.employment_id ? await loadDayOffOverrides(session.orgId, me.employment_id, month) : null;
+  const quotaDaysOf = (t: LeaveType): number => {
+    const isDayOffType = t.auto_approve && !t.requires_reports && !t.accrues_from_holidays;
+    const mine = myOverrides !== null && isDayOffType ? overrideDaysFor(myOverrides, t.id) : null;
+    return mine ?? t.monthly_quota_days;
+  };
   // ยอด Holiday ของตัวเองในเดือนที่ดูอยู่ — ขึ้นข้างชื่อเดือน (ส่วนที่ต้องใช้ภายในเดือนนี้บอกแยก)
   const holidayBalances = (allowances?.items ?? []).map((a) => ({
     id: a.leave_type_id,
@@ -298,7 +297,7 @@ export async function renderCalendarTab(monthParam: string | undefined): Promise
                 >
                   {t.name}
                   {t.auto_approve
-                    ? ` · สิทธิ์${t.monthly_quota_days > 0 ? ` ${quotaDaysOf(t)} วัน/เดือน` : ""}`
+                    ? ` · สิทธิ์${quotaDaysOf(t) > 0 ? ` ${quotaDaysOf(t)} วัน/เดือน` : ""}`
                     : " · ต้องอนุมัติ"}
                 </Pill>
               ))

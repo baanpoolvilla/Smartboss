@@ -34,6 +34,14 @@ export const renameLeaveTypeSchema = z.object({
   name: z.string().trim().min(1).max(120),
 });
 
+/**
+ * แก้ วัน/เดือน ของประเภทลา — จำนวนวันหยุดตามสิทธิ์ที่ทุกคนได้ในแต่ละเดือน (0 = ไม่จำกัด)
+ * เดิมตั้งได้ครั้งเดียวตอนสร้าง บริษัทจะเปลี่ยนนโยบายทีต้องลบแล้วสร้างประเภทใหม่
+ */
+export const setLeaveTypeMonthlyQuotaSchema = z.object({
+  monthly_quota_days: z.number().int().min(0).max(31),
+});
+
 /** ลบประเภทลาออกจากรายการ — merge_into = ย้ายใบที่ลงไว้ไปประเภทนี้ก่อน (รวมประเภทที่ซ้ำกัน) */
 export const archiveLeaveTypeSchema = z.object({
   merge_into: uuidSchema.nullable().default(null),
@@ -81,6 +89,7 @@ export const submitLeaveSchema = z.object({
    * วันหยุดต่อเดือนของ "คนนี้ในเดือนนี้" — ใช้แทนโควตา วัน/เดือน ของประเภทวันหยุดตามสิทธิ์ (Day-Off)
    * ข้อตกลงรายคน/รายเดือนเก็บฝั่ง Smartboss (lib/day-off-quota.ts) เซิร์ฟเวอร์ของเว็บคำนวณแล้วส่งมา
    * ไม่ได้มาจากเบราว์เซอร์ · ไม่ส่ง = ใช้โควตาของประเภทตามเดิม · ไม่มีผลกับประเภทการลาอื่น
+   * ส่งมาแล้วมีผลแม้ประเภทตั้งไว้ไม่จำกัด (0) — HR จำกัดเฉพาะคนได้
    */
   monthly_quota_days_override: z.number().int().min(0).max(31).optional(),
 });

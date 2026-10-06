@@ -2,23 +2,23 @@ import "server-only";
 import { prisma } from "@smartboss/database";
 
 /**
- * โควตาวันหยุดต่อเดือน
+ * วันหยุดตามสิทธิ์ต่อเดือน — แยกตาม "ประเภทวันหยุด" และแก้รายคนรายเดือนได้
  *
- * บางคนได้หยุดเดือนละ 6 วัน บางคนได้ 4 — เป็นข้อตกลงจ้างงานรายคน ไม่ใช่
- * ตัวเลขเดียวของทั้งระบบ จึงเก็บเป็นค่าตั้งต้นระดับบริษัท แล้วให้ทับรายคนได้
+ * แต่ละบริษัทสร้างประเภทวันหยุดตามสิทธิ์เองได้ (Day-Off, หยุดชดเชย ฯลฯ ที่ ตั้งค่า › ประเภทการลา)
+ * จำนวนวันมีสองชั้น เจาะจงกว่าชนะ:
+ *   1. ของคนนี้ ในเดือนนี้ สำหรับประเภทนี้ — แถวในตารางนี้ (HR แก้ที่หน้าพนักงาน)
+ *   2. วัน/เดือน ของประเภทนั้น — เก็บที่ตัวประเภทฝั่ง workforce (leave_types.monthly_quota_days)
+ * เดือนที่ไม่ได้มาแก้ = ใช้ชั้นที่ 2 เสมอ ("เอาเป็นเดือน ๆ ไป แต่ถ้าไม่มาแก้ของเดือนนั้นก็เป็นค่าเดิม")
  *
- * โควตารายคนผูกกับ "เดือน" ด้วยเสมอ ไม่ใช่ทับตลอดกาล — เดือนที่ตกลงกันให้
- * หยุดพิเศษ (เช่นปิดกิจการชั่วคราว) ไม่ควรทำให้เดือนอื่น ๆ ของคนนั้นเปลี่ยน
- * ตามไปด้วยโดยไม่ตั้งใจ ไม่ตั้งไว้ = ใช้ค่าตั้งต้นของบริษัทของเดือนนั้น
+ * ใช้ตอนลงวันหยุดตามสิทธิ์ — ทั้งที่พนักงานลงเองในปฏิทินทีมและที่ HR ลงให้จากหน้าพนักงาน: เว็บส่งเลขของ
+ * ชั้นที่ 1 (ถ้ามี) ไปให้ workforce ใช้แทนโควตาของประเภท (submitLeaveAction → monthly_quota_days_override)
+ * เครื่องคำนวณผลลงเวลาไม่รู้จักตัวเลขนี้ ⇒ เป็นกติกาตอนลงวันหยุด ไม่ใช่กติกาตอนคิดเงิน
  *
- * ใช้สองที่: ตอน HR "บันทึกวันหยุดของเดือนนี้" ในหน้าพนักงาน และตอนพนักงานลงวันหยุดตามสิทธิ์
- * (Day-Off) เองในปฏิทินทีม — ที่หลังส่งตัวเลขนี้ไปให้ workforce ใช้แทนโควตา วัน/เดือน ของประเภท
- * (submitLeaveAction) เดิมที่นั่นใช้เลขเดียวทั้งบริษัท ตั้งรายคนในหน้านี้แล้วไม่มีผลกับการลงเอง
- * เครื่องคำนวณผลลงเวลาไม่รู้จักโควตานี้ ⇒ เป็นกติกาตอนลงวันหยุด ไม่ใช่กติกาตอนคิดเงิน
+ * ── ข้อมูลเดิม (ก่อนแยกตามประเภท) ──
+ * แถวรายเดือนเดิมไม่มีประเภท (leave_type_id = '') และมี "ค่าประจำของคน" อีกตาราง — ทั้งสองยังใช้เป็น
+ * ชั้นสำรองของทุกประเภทที่ยังไม่ได้ตั้งแยก ค่าที่ HR ตั้งไว้แล้วจึงไม่หายตอนอัปเดต · บันทึก/ล้างของประเภทใด
+ * ในเดือนนั้นแล้ว แถวเดิมของเดือนนั้นถูกลบทิ้ง (ไม่งั้นกด "กลับไปใช้ค่าของประเภท" แล้วยังได้เลขเก่าอยู่)
  */
-
-/** ค่าที่ใช้เมื่อบริษัทยังไม่เคยตั้งค่า — เปลี่ยนตรงนี้เท่ากับเปลี่ยนให้ทุกบริษัทที่ยังไม่ตั้ง */
-export const DEFAULT_DAYS_OFF_PER_MONTH = 6;
 
 /**
  * ขอบเขตที่ยอมให้ตั้ง — บังคับฝั่งเซิร์ฟเวอร์ ไม่ใช่แค่ min/max ในฟอร์ม
@@ -28,141 +28,87 @@ export const DEFAULT_DAYS_OFF_PER_MONTH = 6;
  */
 export const DAYS_OFF_LIMITS = { min: 0, max: 31 } as const;
 
-/**
- * ตัวเลขที่ใช้จริงมาจากชั้นไหน — เรียงจากเจาะจงที่สุดไปกว้างที่สุด
- *
- * `month` ทับ `employee` ทับ `company` เสมอ
- */
-export type DayOffQuotaSource = 'month' | 'employee' | 'company';
+/** leave_type_id ของแถวที่ตั้งไว้ก่อนแยกตามประเภท */
+const LEGACY_TYPE = "";
 
-export interface DayOffQuota {
-  /** วันหยุดต่อเดือนที่คนนี้ได้ในเดือนที่ขอ */
-  daysPerMonth: number;
-  /** ตัวเลขนี้มาจากชั้นไหน */
-  source: DayOffQuotaSource;
-  /** ค่าประจำของคนนี้ (ตามสัญญาจ้าง) — `null` = ยังไม่เคยตั้ง */
-  employeeStanding: number | null;
-  /** ค่าตั้งต้นของบริษัท ไว้แสดงว่าคนนี้ต่างจากมาตรฐานตรงไหน */
-  companyDefault: number;
-  /** หมายเหตุของชั้นที่ถูกใช้จริง */
-  note: string;
+/** ตัวเลขที่ใช้จริงมาจากไหน — `month` = แก้ไว้เฉพาะคน/เดือน/ประเภทนี้ · `legacy` = ค่าที่ตั้งไว้ก่อนแยกตามประเภท · `type` = ค่าของประเภท */
+export type DayOffQuotaSource = "month" | "legacy" | "type";
+
+export interface DayOffOverrides {
+  byType: Map<string, { days: number; note: string }>;
+  legacyMonth: { days: number; note: string } | null;
+  legacyStanding: number | null;
 }
 
-/** ค่าตั้งต้นของบริษัท — `null` orgId คือผู้ใช้ระดับแพลตฟอร์มที่ไม่สังกัดบริษัท */
-export async function loadCompanyDayOffDefault(orgId: string | null): Promise<number> {
-  if (!orgId) return DEFAULT_DAYS_OFF_PER_MONTH;
-  const row = await prisma.dayOffQuotaSetting.findUnique({ where: { orgId } });
-  return row?.defaultDaysPerMonth ?? DEFAULT_DAYS_OFF_PER_MONTH;
-}
+const NO_OVERRIDES: DayOffOverrides = { byType: new Map(), legacyMonth: null, legacyStanding: null };
 
-/** ตั้งค่าตั้งต้นของบริษัท — มีผลกับทุกคนในทุกเดือนที่ไม่ได้แก้รายคน (เดือนที่แก้ไว้แล้วไม่เปลี่ยน) */
-export async function saveCompanyDayOffDefault(orgId: string, daysPerMonth: number, updatedBy: string): Promise<void> {
-  await prisma.dayOffQuotaSetting.upsert({
-    where: { orgId },
-    create: { orgId, defaultDaysPerMonth: daysPerMonth, updatedBy },
-    update: { defaultDaysPerMonth: daysPerMonth, updatedBy },
-  });
-}
-
-/**
- * โควตาของพนักงานหนึ่งคนในเดือนหนึ่งเดือน — สามชั้น เจาะจงกว่าชนะ
- *
- * 1. แถวของ (คน, เดือน) — ข้อตกลงเฉพาะเดือนนั้น เช่นเดือนที่ปิดกิจการชั่วคราว
- * 2. ค่าประจำของคนนั้น — ข้อตกลงจ้างงาน (บางคน 4 บางคน 6) มีผลทุกเดือน
- * 3. ค่าตั้งต้นของบริษัท
- *
- * ชั้นที่ 2 เพิ่มทีหลัง: เดิมมีแต่ 1 กับ 3 ⇒ คนที่ตกลงกันว่าได้ 6 วันจะถูก
- * ตัดกลับไปเหลือค่ามาตรฐานของบริษัทเงียบ ๆ ทันทีที่ขึ้นเดือนใหม่
- */
-export async function loadDayOffQuota(
+/** ทุกค่าที่ HR แก้ไว้ของคนหนึ่งในเดือนหนึ่ง — `null` orgId คือผู้ใช้ระดับแพลตฟอร์มที่ไม่สังกัดบริษัท */
+export async function loadDayOffOverrides(
   orgId: string | null,
   employmentId: string,
   month: string,
-): Promise<DayOffQuota> {
-  const companyDefault = await loadCompanyDayOffDefault(orgId);
-  const fallback: DayOffQuota = {
-    daysPerMonth: companyDefault,
-    source: "company",
-    employeeStanding: null,
-    companyDefault,
-    note: "",
-  };
-  if (!orgId) return fallback;
-
-  const [monthRow, standingRow] = await Promise.all([
-    prisma.employeeDayOffQuota.findUnique({
-      where: { orgId_employmentId_month: { orgId, employmentId, month } },
-    }),
-    prisma.employeeDayOffQuotaDefault.findUnique({
-      where: { orgId_employmentId: { orgId, employmentId } },
-    }),
+): Promise<DayOffOverrides> {
+  if (!orgId) return NO_OVERRIDES;
+  const [rows, standing] = await Promise.all([
+    prisma.employeeDayOffQuota.findMany({ where: { orgId, employmentId, month } }),
+    prisma.employeeDayOffQuotaDefault.findUnique({ where: { orgId_employmentId: { orgId, employmentId } } }),
   ]);
-
-  const employeeStanding = standingRow?.daysPerMonth ?? null;
-
-  if (monthRow !== null) {
-    return {
-      daysPerMonth: monthRow.daysPerMonth,
-      source: "month",
-      employeeStanding,
-      companyDefault,
-      note: monthRow.note,
-    };
+  const byType = new Map<string, { days: number; note: string }>();
+  let legacyMonth: DayOffOverrides["legacyMonth"] = null;
+  for (const row of rows) {
+    const value = { days: row.daysPerMonth, note: row.note };
+    if (row.leaveTypeId === LEGACY_TYPE) legacyMonth = value;
+    else byType.set(row.leaveTypeId, value);
   }
-  if (standingRow !== null) {
-    return {
-      daysPerMonth: standingRow.daysPerMonth,
-      source: "employee",
-      employeeStanding,
-      companyDefault,
-      note: standingRow.note,
-    };
-  }
-  return fallback;
+  return { byType, legacyMonth, legacyStanding: standing?.daysPerMonth ?? null };
 }
 
-/** ตั้งโควตารายคนของเดือนหนึ่ง — `daysPerMonth: null` คือกลับไปใช้ค่าตั้งต้นของบริษัทเฉพาะเดือนนั้น */
+/** เลขที่ HR แก้ไว้สำหรับประเภทนี้ — `null` = ไม่ได้แก้ ใช้ วัน/เดือน ของประเภท */
+export function overrideDaysFor(overrides: DayOffOverrides, leaveTypeId: string): number | null {
+  return overrides.byType.get(leaveTypeId)?.days ?? overrides.legacyMonth?.days ?? overrides.legacyStanding;
+}
+
+/** จำนวนวันที่ใช้จริงของประเภทหนึ่ง พร้อมที่มา — ให้หน้าจอบอกได้ว่าเลขนี้มาจากไหน */
+export function resolveDayOffDays(
+  overrides: DayOffOverrides,
+  leaveTypeId: string,
+  typeDefault: number,
+): { days: number; source: DayOffQuotaSource; note: string } {
+  const own = overrides.byType.get(leaveTypeId);
+  if (own) return { days: own.days, source: "month", note: own.note };
+  if (overrides.legacyMonth) return { days: overrides.legacyMonth.days, source: "legacy", note: overrides.legacyMonth.note };
+  if (overrides.legacyStanding !== null) return { days: overrides.legacyStanding, source: "legacy", note: "" };
+  return { days: typeDefault, source: "type", note: "" };
+}
+
+/**
+ * ตั้งจำนวนวันของคนหนึ่ง เดือนหนึ่ง ประเภทหนึ่ง — `daysPerMonth: null` = กลับไปใช้ วัน/เดือน ของประเภท
+ * แถวเดิมที่ไม่มีประเภทของเดือนเดียวกันถูกลบไปด้วยทั้งสองกรณี (ดูหัวไฟล์)
+ */
 export async function saveDayOffQuota(
   orgId: string,
   employmentId: string,
   month: string,
+  leaveTypeId: string,
   daysPerMonth: number | null,
   note: string,
   updatedBy: string,
 ): Promise<void> {
-  if (daysPerMonth === null) {
-    await prisma.employeeDayOffQuota.deleteMany({ where: { orgId, employmentId, month } });
-    return;
-  }
-
-  await prisma.employeeDayOffQuota.upsert({
-    where: { orgId_employmentId_month: { orgId, employmentId, month } },
-    create: { orgId, employmentId, month, daysPerMonth, note, updatedBy },
-    update: { daysPerMonth, note, updatedBy },
+  await prisma.$transaction(async (tx) => {
+    await tx.employeeDayOffQuota.deleteMany({ where: { orgId, employmentId, month, leaveTypeId: LEGACY_TYPE } });
+    if (daysPerMonth === null) {
+      await tx.employeeDayOffQuota.deleteMany({ where: { orgId, employmentId, month, leaveTypeId } });
+      return;
+    }
+    await tx.employeeDayOffQuota.upsert({
+      where: { orgId_employmentId_month_leaveTypeId: { orgId, employmentId, month, leaveTypeId } },
+      create: { orgId, employmentId, month, leaveTypeId, daysPerMonth, note, updatedBy },
+      update: { daysPerMonth, note, updatedBy },
+    });
   });
 }
 
-/**
- * ตั้งโควตา "ประจำ" ของพนักงานหนึ่งคน — มีผลทุกเดือนจนกว่าจะแก้
- *
- * `daysPerMonth: null` = ลบข้อตกลงรายคนทิ้ง กลับไปใช้ค่าตั้งต้นของบริษัท
- * (ต่างจากการตั้ง 0 ซึ่งแปลว่า "ตกลงกันว่าไม่ได้หยุดเลย")
- */
-export async function saveEmployeeDayOffStanding(
-  orgId: string,
-  employmentId: string,
-  daysPerMonth: number | null,
-  note: string,
-  updatedBy: string,
-): Promise<void> {
-  if (daysPerMonth === null) {
-    await prisma.employeeDayOffQuotaDefault.deleteMany({ where: { orgId, employmentId } });
-    return;
-  }
-
-  await prisma.employeeDayOffQuotaDefault.upsert({
-    where: { orgId_employmentId: { orgId, employmentId } },
-    create: { orgId, employmentId, daysPerMonth, note, updatedBy },
-    update: { daysPerMonth, note, updatedBy },
-  });
+/** ล้าง "ค่าประจำของคน" ที่ตั้งไว้ก่อนเปลี่ยนเป็นรายเดือน — ตั้งใหม่ไม่ได้แล้ว เหลือแต่ทางล้าง */
+export async function clearEmployeeDayOffStanding(orgId: string, employmentId: string): Promise<void> {
+  await prisma.employeeDayOffQuotaDefault.deleteMany({ where: { orgId, employmentId } });
 }

@@ -44,12 +44,12 @@ import {
 import { AssignShiftForm, type CurrentPattern } from "../../settings/assign-shift-form";
 import { EmployeeDayOffCalendar } from "./employee-day-off-calendar";
 import { EnrollFingerprintForm } from "../../settings/devices/enroll-fingerprint-form";
-import { DayOffQuotaForm } from "./day-off-quota-form";
+import { DayOffQuotaForm, LegacyStandingNotice } from "./day-off-quota-form";
 import { buildScorecards, eventDay, listUserEvents, PERFORMANCE_CATEGORIES } from "@/lib/performance";
 import { monthDisplay, resolveMonthParam } from "@/lib/performance-month";
 import { formatSatang } from "@/modules/hr/lib/commission";
 import { loadCommissionMonth } from "@/modules/hr/lib/commission-data";
-import { loadDayOffQuota } from "@/lib/day-off-quota";
+import { loadDayOffOverrides, resolveDayOffDays } from "@/lib/day-off-quota";
 import { ScoreBreakdown } from "@/components/performance/score-breakdown";
 
 interface CompensationRate {
@@ -162,7 +162,7 @@ export default async function EmployeeDetailPage({
           person,
           patterns,
           assigned,
-          quota,
+          dayOffOverrides,
           leaveTypes,
           leaveRequests,
         ] = await Promise.all([
@@ -191,27 +191,40 @@ export default async function EmployeeDetailPage({
             wfTry<{ items: { work_date: string; shift_id: string | null }[] }>(
               `/shift-assignments?from=${monthFrom}&to=${monthTo}&employment_id=${id}`,
             ),
-            loadDayOffQuota(session.orgId, id, month),
+            loadDayOffOverrides(session.orgId, id, month),
             // วันหยุดตามสิทธิ์ (Day-Off) ของคนนี้ในเดือนที่ดู — ชุดเดียวกับที่พนักงานลงเองในปฏิทินทีม
             wfTry<Paged<LeaveType>>("/leave-types"),
             wfTry<Paged<LeaveRequest>>(`/leave-requests?employment_id=${id}&from=${monthFrom}&to=${monthTo}`),
           ]);
 
         const typeOf = new Map((leaveTypes?.items ?? []).map((t) => [t.id, t]));
-        // "วันหยุดตามสิทธิ์" = อนุมัติอัตโนมัติ ไม่ต้องส่งรายงาน มีโควตารายเดือน — เกณฑ์เดียวกับที่ workforce
-        // ใช้จำนวนวันรายคนของเดือน (leave.service submitRequest) Holiday แบบสะสมมีกติกาของตัวเอง ไม่นับที่นี่
-        const isDayOffType = (t: LeaveType | undefined) =>
-          t !== undefined && t.auto_approve && !t.requires_reports && !t.accrues_from_holidays && t.monthly_quota_days > 0;
-        const dayOffTypes = (leaveTypes?.items ?? []).filter(isDayOffType).map((t) => ({ id: t.id, name: t.name }));
+        // "วันหยุดตามสิทธิ์" = อนุมัติอัตโนมัติ ไม่ต้องส่งรายงาน — เกณฑ์เดียวกับที่ workforce ใช้จำนวนวัน
+        // รายคนของเดือน (leave.service submitRequest) Holiday แบบสะสมมีกติกาของตัวเอง ไม่นับที่นี่
+        const isDayOffType = (t: LeaveType | undefined): t is LeaveType =>
+          t !== undefined && t.auto_approve && !t.requires_reports && !t.accrues_from_holidays;
         const dayOffEntries = (leaveRequests?.items ?? [])
           .filter((r) => r.status === "APPROVED" || r.status === "SUBMITTED")
           .map((r) => ({
             id: r.id,
             date: r.starts_on,
             typeName: typeOf.get(r.leave_type_id)?.name ?? "ลา",
+            leaveTypeId: r.leave_type_id,
             isDayOff: isDayOffType(typeOf.get(r.leave_type_id)),
             pending: r.status === "SUBMITTED",
           }));
+        // หนึ่งแถวต่อประเภทวันหยุดตามสิทธิ์ของบริษัท — จำนวนของเดือนนี้ (แก้รายคน > วัน/เดือน ของประเภท) กับที่ลงไปแล้ว
+        const dayOffTypes = (leaveTypes?.items ?? []).filter(isDayOffType).map((t) => {
+          const resolved = resolveDayOffDays(dayOffOverrides, t.id, t.monthly_quota_days);
+          return {
+            id: t.id,
+            name: t.name,
+            typeDefault: t.monthly_quota_days,
+            ...resolved,
+            // 0 จากค่าของประเภท = ไม่จำกัด · 0 ที่ HR ตั้งให้คนนี้ = ไม่ให้หยุดเลย
+            limit: resolved.source === "type" && t.monthly_quota_days === 0 ? null : resolved.days,
+            used: dayOffEntries.filter((e) => e.leaveTypeId === t.id).length,
+          };
+        });
 
         const companyId = companies?.items[0]?.id;
         const shiftItems = shifts?.items ?? [];
@@ -698,15 +711,23 @@ export default async function EmployeeDetailPage({
             >
               {canManage ? (
                 <div className="flex flex-col gap-4">
-                  <DayOffQuotaForm
-                    employmentId={id}
-                    month={month}
-                    daysPerMonth={quota.daysPerMonth}
-                    source={quota.source}
-                    employeeStanding={quota.employeeStanding}
-                    companyDefault={quota.companyDefault}
-                    note={quota.note}
-                  />
+                  {dayOffTypes.map((t) => (
+                    <DayOffQuotaForm
+                      key={t.id}
+                      employmentId={id}
+                      month={month}
+                      leaveTypeId={t.id}
+                      typeName={t.name}
+                      days={t.days}
+                      source={t.source}
+                      typeDefault={t.typeDefault}
+                      used={t.used}
+                      note={t.note}
+                    />
+                  ))}
+                  {dayOffOverrides.legacyStanding !== null && (
+                    <LegacyStandingNotice employmentId={id} standing={dayOffOverrides.legacyStanding} />
+                  )}
                   {companyId === undefined ? (
                     <p className="text-sm text-(--ink-soft)">
                       ยังไม่มีบริษัทในระบบบุคคล จึงลงวันหยุดรายคนไม่ได้
@@ -717,8 +738,7 @@ export default async function EmployeeDetailPage({
                       key={month}
                       employmentId={id}
                       month={month}
-                      quota={quota.daysPerMonth}
-                      dayOffTypes={dayOffTypes}
+                      dayOffTypes={dayOffTypes.map((t) => ({ id: t.id, name: t.name, days: t.limit }))}
                       entries={dayOffEntries}
                       legacyOff={initialOff}
                       legacyClear={

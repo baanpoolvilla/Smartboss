@@ -11,6 +11,7 @@ import {
   grantLeaveBalanceSchema,
   preApproveOvertimeSchema,
   renameLeaveTypeSchema,
+  setLeaveTypeMonthlyQuotaSchema,
   archiveLeaveTypeSchema,
   setHolidayAccrualSchema,
   setMonthAllowanceSchema,
@@ -94,6 +95,18 @@ export class LeaveController {
     @Body(zodPipe(renameLeaveTypeSchema)) body: z.infer<typeof renameLeaveTypeSchema>,
   ): Promise<Record<string, unknown>> {
     return this.service.renameLeaveType(requireUuid(leaveTypeId, 'leaveTypeId'), body.name);
+  }
+
+  /** แก้ วัน/เดือน ของประเภทลา (จำนวนวันหยุดตามสิทธิ์ต่อเดือนของทั้งบริษัท · 0 = ไม่จำกัด) */
+  @Post('leave-types/:leaveTypeId/monthly-quota')
+  @HttpCode(200)
+  @RequirePermissions('workforce.leave.manage')
+  @Idempotent()
+  async setTypeMonthlyQuota(
+    @Param('leaveTypeId') leaveTypeId: string,
+    @Body(zodPipe(setLeaveTypeMonthlyQuotaSchema)) body: z.infer<typeof setLeaveTypeMonthlyQuotaSchema>,
+  ): Promise<Record<string, unknown>> {
+    return this.service.setLeaveTypeMonthlyQuota(requireUuid(leaveTypeId, 'leaveTypeId'), body.monthly_quota_days);
   }
 
   /**

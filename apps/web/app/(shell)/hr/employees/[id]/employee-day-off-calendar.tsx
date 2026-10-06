@@ -13,6 +13,7 @@ export interface DayOffEntry {
   id: string;
   date: string;
   typeName: string;
+  leaveTypeId: string;
   /** true = วันหยุดตามสิทธิ์ (Day-Off) ที่นับในโควตาของเดือน · false = การลาประเภทอื่น (แสดงเฉย ๆ) */
   isDayOff: boolean;
   pending: boolean;
@@ -31,7 +32,6 @@ export interface DayOffEntry {
 export function EmployeeDayOffCalendar({
   employmentId,
   month,
-  quota,
   dayOffTypes,
   entries,
   legacyOff,
@@ -40,10 +40,8 @@ export function EmployeeDayOffCalendar({
   employmentId: string;
   /** "YYYY-MM" */
   month: string;
-  /** เดือนนี้คนนี้หยุดได้กี่วัน (ช่องด้านบนของการ์ด) */
-  quota: number;
-  /** ประเภทวันหยุดตามสิทธิ์ที่ลงได้ — ปกติมีอันเดียว (Day-Off) */
-  dayOffTypes: { id: string; name: string }[];
+  /** ประเภทวันหยุดตามสิทธิ์ที่ลงได้ — ปกติมีอันเดียว (Day-Off) · days = จำนวนของเดือนนี้ (null = ไม่จำกัด) */
+  dayOffTypes: { id: string; name: string; days: number | null }[];
   entries: DayOffEntry[];
   /** วันที่เคยลงเป็นวันหยุดในตารางกะแบบเดิม */
   legacyOff: string[];
@@ -61,7 +59,7 @@ export function EmployeeDayOffCalendar({
   const leading = new Date(Date.UTC(year!, mon! - 1, 1)).getUTCDay();
   const entryOf = new Map(entries.map((e) => [e.date, e]));
   const legacySet = new Set(legacyOff);
-  const used = entries.filter((e) => e.isDayOff).length;
+  const usedOf = (id: string) => entries.filter((e) => e.isDayOff && e.leaveTypeId === id).length;
   const typeName = dayOffTypes.find((t) => t.id === typeId)?.name ?? "Day-Off";
 
   function add(date: string) {
@@ -88,6 +86,41 @@ export function EmployeeDayOffCalendar({
     });
   }
 
+  /**
+   * ย้ายวันหยุดแบบเดิม (ตารางกะ) มาเป็นวันหยุดตามสิทธิ์ในคลิกเดียว: ล้างของเดิมก่อน แล้วลงวันเดียวกันเป็น
+   * ประเภทที่เลือก — HR ไม่ต้องจำวันแล้วกดลงใหม่เอง · ลงไม่ผ่านบางวัน (เช่น เกินจำนวนของเดือน) จะบอกให้เห็น
+   * วันนั้นกลับเป็นวันทำงาน ไม่ค้างเป็นวันหยุดสองระบบ
+   */
+  function convertLegacy() {
+    if (!legacyClear) return;
+    setError(null);
+    startTransition(async () => {
+      const clear = new FormData();
+      clear.set("company_id", legacyClear.companyId);
+      clear.set("employment_id", employmentId);
+      clear.set("month", month);
+      clear.set("rest_shift_id", legacyClear.restShiftId);
+      clear.set("work_shift_id", legacyClear.workShiftId);
+      const cleared = await setEmployeeDaysOffAction({}, clear);
+      if (cleared.error) {
+        setError(cleared.error);
+        return;
+      }
+      const form = new FormData();
+      form.set("employment_id", employmentId);
+      form.set("leave_type_id", typeId);
+      for (const date of legacyOff) form.append("day", date);
+      form.set("reason", "ย้ายจากวันหยุดแบบเดิมในตารางกะ");
+      const result = await submitLeaveAction({}, form);
+      if (result.error) {
+        setError(`ล้างวันหยุดแบบเดิมแล้ว แต่ลงเป็น ${typeName} ไม่ได้: ${result.error}`);
+      } else if ((result.days ?? 0) < legacyOff.length) {
+        setError(`ย้ายได้ ${result.days ?? 0} จาก ${legacyOff.length} วัน — วันที่เหลือลงไม่ได้ (น่าจะเกินจำนวนของเดือนนี้) กดลงเองในปฏิทินหลังปรับจำนวนวัน`);
+      }
+      router.refresh();
+    });
+  }
+
   if (dayOffTypes.length === 0) {
     return (
       <p className="text-sm text-(--ink-soft)">
@@ -99,18 +132,24 @@ export function EmployeeDayOffCalendar({
 
   return (
     <div className="flex flex-col gap-3">
-      <p
-        className="rounded-(--radius) border p-2.5 text-sm"
-        style={{
-          borderColor: used > quota ? "var(--danger)" : "var(--line)",
-          backgroundColor: "var(--bg-soft)",
-          color: used > quota ? "var(--danger)" : "var(--ink)",
-        }}
-      >
-        ลงวันหยุดไว้ <strong>{used}</strong> วัน จาก <strong>{quota}</strong> วันของเดือนนี้
-        <span className="ml-1 text-(--ink-soft)">(รวมที่พนักงานลงเองในปฏิทินทีม)</span>
-        {used > quota && <span className="ml-1 font-medium">— เกินจำนวนของเดือนนี้</span>}
-      </p>
+      <div className="rounded-(--radius) border border-(--line) bg-(--bg-soft) p-2.5 text-sm">
+        {dayOffTypes.map((t) => {
+          const used = usedOf(t.id);
+          const over = t.days !== null && used > t.days;
+          return (
+            <p key={t.id} style={{ color: over ? "var(--danger)" : "var(--ink)" }}>
+              {t.name}: ลงไว้ <strong>{used}</strong> วัน
+              {t.days === null ? " (ไม่จำกัด)" : (
+                <>
+                  {" "}จาก <strong>{t.days}</strong> วันของเดือนนี้
+                </>
+              )}
+              {over && <span className="ml-1 font-medium">— เกินจำนวนของเดือนนี้</span>}
+            </p>
+          );
+        })}
+        <p className="text-xs text-(--ink-soft)">รวมที่พนักงานลงเองในปฏิทินทีม</p>
+      </div>
 
       {dayOffTypes.length > 1 && (
         <label className="flex max-w-md flex-col gap-1">
@@ -237,13 +276,17 @@ export function EmployeeDayOffCalendar({
               <input type="hidden" name="month" value={month} />
               <input type="hidden" name="rest_shift_id" value={legacyClear.restShiftId} />
               <input type="hidden" name="work_shift_id" value={legacyClear.workShiftId} />
-              <div>
-                <Button type="submit" size="sm" variant="outline" disabled={legacyPending}>
-                  {legacyPending ? "กำลังล้าง…" : "ล้างวันหยุดแบบเดิมของเดือนนี้"}
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" size="sm" disabled={legacyPending || busy} onClick={convertLegacy}>
+                  ย้ายมาเป็น {typeName}
+                </Button>
+                <Button type="submit" size="sm" variant="outline" disabled={legacyPending || busy}>
+                  {legacyPending ? "กำลังล้าง…" : "ล้างทิ้ง (กลับเป็นวันทำงาน)"}
                 </Button>
               </div>
               <p className="text-xs text-(--ink-soft)">
-                ล้างแล้ววันเหล่านั้นกลับเป็นวันทำงาน — ถ้ายังต้องหยุด กดลงเป็น {typeName} ในปฏิทินด้านบนแทน
+                ยังต้องหยุดวันเหล่านั้น = กด “ย้ายมาเป็น {typeName}” (ขึ้นในปฏิทินทีมและนับในจำนวนของเดือน) ·
+                ไม่ต้องหยุดแล้ว = กด “ล้างทิ้ง”
               </p>
             </>
           ) : (

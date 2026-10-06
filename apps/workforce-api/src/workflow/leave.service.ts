@@ -125,6 +125,39 @@ export class LeaveService {
   }
 
   /**
+   * แก้ วัน/เดือน ของประเภทลา — มีผลกับการลงวันหยุดครั้งถัดไปเท่านั้น ใบที่ลงไว้แล้วไม่ถูกแตะ
+   * (ลดเลขลงแล้วคนที่ลงเกินไปแล้วไม่ถูกยกเลิกให้ แค่ลงเพิ่มไม่ได้)
+   */
+  async setLeaveTypeMonthlyQuota(leaveTypeId: string, monthlyQuotaDays: number): Promise<Record<string, unknown>> {
+    return this.uow.run(async (uow) => {
+      const types = await uow.tx
+        .select()
+        .from(schema.leaveTypes)
+        .where(eq(schema.leaveTypes.id, leaveTypeId))
+        .limit(1);
+      const type = types[0];
+      if (type === undefined) throw AppError.notFound('leave type');
+
+      await uow.tx
+        .update(schema.leaveTypes)
+        .set({ monthlyQuotaDays })
+        .where(eq(schema.leaveTypes.id, leaveTypeId));
+
+      await uow.audit({
+        action: 'leave.type.monthly_quota',
+        resourceType: 'leave_type',
+        resourceId: leaveTypeId,
+        outcome: 'SUCCESS',
+        companyId: type.companyId,
+        before: { monthly_quota_days: type.monthlyQuotaDays },
+        after: { monthly_quota_days: monthlyQuotaDays },
+      });
+
+      return { id: leaveTypeId, monthly_quota_days: monthlyQuotaDays };
+    });
+  }
+
+  /**
    * ลบประเภทลาออกจากรายการ — archive ไม่ใช่ลบแถว (ใบลาเก่าและบัญชีสิทธิ์วันลาที่ห้ามแก้ย้อนหลัง
    * ยังชี้มาที่ประเภทนี้) หลังจากนี้เลือกประเภทนี้ลงวันหยุด/ลาใหม่ไม่ได้ ใบที่มีอยู่แล้วไม่เปลี่ยน
    *
@@ -837,7 +870,11 @@ export class LeaveService {
             meta: { available_days: availableDays, requested_days: requestedDays },
           });
         }
-      } else if (leaveType.monthlyQuotaDays > 0) {
+      } else if (
+        leaveType.monthlyQuotaDays > 0 ||
+        // HR ตั้งจำนวนวันเฉพาะคนไว้ — จำกัดคนนั้นแม้ประเภทจะไม่จำกัด (0)
+        (leaveType.autoApprove && !leaveType.requiresReports && input.monthly_quota_days_override !== undefined)
+      ) {
         const monthStart = startsOn.firstDayOfMonth().toString();
         const monthEnd = startsOn.lastDayOfMonth().toString();
 

@@ -17,11 +17,9 @@ import {
   createLeaveTypeAction,
   renameLeaveTypeAction,
   seedLeaveTypesAction,
-  setCompanyDayOffDefaultAction,
   setHolidayModeAction,
+  setLeaveTypeMonthlyQuotaAction,
 } from "../../actions";
-import { requireOrg } from "@smartboss/auth";
-import { loadCompanyDayOffDefault } from "@/lib/day-off-quota";
 import { HolidayAllowances } from "./holiday-allowances";
 import { HolidayModeForm } from "./holiday-mode-form";
 import { HolidayBalances } from "./holiday-balances";
@@ -85,9 +83,6 @@ export default async function LeaveTypesSettingsPage({
           })),
         );
         const activeChoices = (leaveTypes?.items ?? []).map((o) => ({ id: o.id, name: o.name }));
-        // วันหยุดต่อเดือนของบริษัท (Day-Off) — เก็บฝั่ง Smartboss ไม่ใช่ workforce (ดู lib/day-off-quota.ts)
-        const session = await requireOrg();
-        const companyDayOffDefault = await loadCompanyDayOffDefault(session.orgId);
 
         /*
          * สิทธิ์ของ workforce ไม่ใช่ชุดเดียวกับของ Smartboss — คนที่เข้าหน้านี้ได้
@@ -133,8 +128,7 @@ export default async function LeaveTypesSettingsPage({
                             {t.accrues_from_holidays
                               ? " · Holiday สะสม ใช้ได้ภายใน 3 เดือน"
                               : t.auto_approve && t.monthly_quota_days > 0
-                                ? // วันหยุดตามสิทธิ์ (Day-Off) ใช้เลขของบริษัทจากการ์ดด้านล่าง ไม่ใช่โควตาที่ตั้งตอนสร้างประเภท
-                                  ` ${t.requires_reports ? t.monthly_quota_days : companyDayOffDefault} วัน/เดือน`
+                                ? ` ${t.monthly_quota_days} วัน/เดือน`
                                 : ""}
                             {t.requires_reports ? " · ยังต้องส่งรายงาน" : ""}
                           </Pill>
@@ -152,6 +146,28 @@ export default async function LeaveTypesSettingsPage({
                               บันทึกชื่อ
                             </Button>
                           </form>
+                          {/* วัน/เดือน ของประเภท — จำนวนที่ทุกคนได้ในเดือนที่ไม่ได้แก้รายคน (แก้รายคนที่หน้าพนักงาน)
+                              Holiday แบบสะสมไม่ใช้ช่องนี้ (นับจากวันหยุดบริษัท) */}
+                          {!t.accrues_from_holidays && (
+                            <form action={setLeaveTypeMonthlyQuotaAction} className="flex items-center gap-1">
+                              <input type="hidden" name="leave_type_id" value={t.id} />
+                              <input
+                                type="number"
+                                name="monthly_quota_days"
+                                min={0}
+                                max={31}
+                                step={1}
+                                required
+                                defaultValue={t.monthly_quota_days}
+                                className={`${inputClass} h-7 w-16 text-xs`}
+                                aria-label={`วันต่อเดือนของ ${t.name} (0 = ไม่จำกัด)`}
+                                title="วัน/เดือน · 0 = ไม่จำกัด"
+                              />
+                              <Button type="submit" size="sm" variant="outline" className="h-7 px-2 text-xs">
+                                บันทึก วัน/เดือน
+                              </Button>
+                            </form>
+                          )}
                           <DeleteLeaveTypeButton
                             id={t.id}
                             name={t.name}
@@ -221,35 +237,12 @@ export default async function LeaveTypesSettingsPage({
                     พนักงานคลิกวันในปฏิทินแล้วหยุดได้ทันทีไม่ต้องรอใคร ·
                     ประเภทที่ไม่ติ๊กจะค้างเป็นคำขอ และ
                     <strong> ยังถูกนับเป็นขาดงานจนกว่าจะอนุมัติ</strong> ·
-                    ทุกประเภทไม่ต้องลงเวลา ส่วนการส่งรายงานยกเว้นให้ เว้นแต่ติ๊ก &ldquo;ยังต้องส่งรายงาน&rdquo;
+                    ทุกประเภทไม่ต้องลงเวลา ส่วนการส่งรายงานยกเว้นให้ เว้นแต่ติ๊ก &ldquo;ยังต้องส่งรายงาน&rdquo; ·
+                    <strong> วัน/เดือน</strong> คือจำนวนที่ทุกคนได้ในแต่ละเดือน (0 = ไม่จำกัด) แก้ได้ทุกเมื่อ —
+                    เดือนไหนให้ใครต่างจากนี้ แก้รายคนที่ พนักงาน › เลือกคน › กะและวันหยุด
                   </p>
                 </SectionCard>
               )}
-              <SectionCard
-                title="วันหยุดต่อเดือนของบริษัท (Day-Off)"
-                description="จำนวนวันหยุดตามสิทธิ์ที่ทุกคนได้ในแต่ละเดือน — เดือนไหนให้ใครต่างจากนี้ แก้รายคนได้ที่ พนักงาน › เลือกคน › กะและวันหยุด"
-              >
-                <form action={setCompanyDayOffDefaultAction} className="flex flex-wrap items-end gap-2">
-                  <Field label="วัน/เดือน">
-                    <input
-                      type="number"
-                      name="default_days"
-                      min={0}
-                      max={31}
-                      step={1}
-                      required
-                      inputMode="numeric"
-                      defaultValue={companyDayOffDefault}
-                      className={`${inputClass} w-24`}
-                    />
-                  </Field>
-                  <Button type="submit">บันทึก</Button>
-                </form>
-                <p className="mt-3 text-xs text-(--ink-soft)">
-                  เปลี่ยนแล้วมีผลกับทุกคนในทุกเดือนที่ไม่ได้แก้รายคน (รวมเดือนที่ผ่านมา) · เดือนที่แก้รายคนไว้แล้วไม่เปลี่ยน ·
-                  วันหยุดที่ลงไปแล้วไม่หาย
-                </p>
-              </SectionCard>
               {canManage && activeChoices.length > 0 && (
                 <HolidayModeForm
                   action={setHolidayModeAction}

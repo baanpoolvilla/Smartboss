@@ -17,10 +17,10 @@ import { isDisplayNameFormat } from "@workforce/domain";
 import { todayIso } from "@/modules/hr/lib/date";
 import {
   DAYS_OFF_LIMITS,
-  loadDayOffQuota,
-  saveCompanyDayOffDefault,
+  clearEmployeeDayOffStanding,
+  loadDayOffOverrides,
+  overrideDaysFor,
   saveDayOffQuota,
-  saveEmployeeDayOffStanding,
 } from "@/lib/day-off-quota";
 import { saveCommissionPool, saveCommissionWeights } from "@/modules/hr/lib/commission-data";
 import { syncAllUserNames, syncUserName } from "@/modules/hr/lib/name-sync";
@@ -987,24 +987,12 @@ export async function setEmployeeDaysOffAction(
   if (!restShiftId) return { error: "ต้องมีกะประเภทวันหยุดก่อน — สร้างที่หน้า “กะทำงาน”" };
 
   /*
-   * โควตาวันหยุดต่อเดือนเป็นข้อตกลงรายคน (บางคน 4 บางคน 6) — ตรวจที่นี่
-   * ไม่ใช่แค่ในหน้าจอ เพราะหน้าจอเตือนได้อย่างเดียว ส่วนคนที่ยิง action ตรง ๆ
-   * หรือเปิดสองแท็บแล้วกดพร้อมกันจะข้ามการเตือนนั้นไปทั้งหมด
+   * ทางนี้ (ลงวันหยุดลงตารางกะ) เลิกใช้ลงวันหยุดใหม่แล้ว — วันหยุดลงเป็นใบวันหยุดตามสิทธิ์ (Day-Off) ที่เดียว
+   * ทั้งที่พนักงานลงเองและที่ HR ลงให้ (employee-day-off-calendar.tsx) สองทางนับจำนวนวันแยกกัน ลงคู่กันได้
+   * วันหยุดเกิน เหลือไว้แค่ "ล้าง" ของเดือนที่เคยลงไว้
    */
-  const quota = await loadDayOffQuota(session.orgId, employmentId, month);
-  if (offDays.length > quota.daysPerMonth) {
-    const origin =
-      quota.source === "month"
-        ? " (ตั้งไว้เฉพาะเดือนนี้)"
-        : quota.source === "employee"
-          ? " (ค่าประจำของคนนี้)"
-          : " (ค่าตั้งต้นของบริษัท)";
-    return {
-      error:
-        `เลือกวันหยุดไว้ ${offDays.length} วัน แต่คนนี้ได้เดือนละ ${quota.daysPerMonth} วัน` +
-        origin +
-        " — เอาวันที่เกินออก หรือแก้โควตาที่ช่อง “วันหยุดต่อเดือน” ด้านบนก่อน",
-    };
+  if (offDays.length > 0) {
+    return { error: "ลงวันหยุดใหม่ที่ปฏิทินวันหยุดของหน้านี้ (เป็น Day-Off) — ทางนี้ใช้ล้างวันหยุดแบบเดิมอย่างเดียว" };
   }
 
   const [year, mon] = month.split("-").map(Number);
@@ -1048,23 +1036,22 @@ export async function setEmployeeDaysOffAction(
 
   revalidatePath("/hr/settings/holidays");
   revalidatePath(`/hr/employees/${employmentId}`);
-  return { ok: true, offDays: offDays.length, quota: quota.daysPerMonth };
+  return { ok: true, offDays: offDays.length };
 }
 
-/* ═══════════════════ โควตาวันหยุดรายคน ═══════════════════ */
+/* ═══════════════════ วันหยุดตามสิทธิ์รายคน ═══════════════════ */
 
 /**
- * ตั้งว่าคนนี้ได้หยุดกี่วันต่อเดือน
+ * ตั้งว่าคนนี้ได้วันหยุดตามสิทธิ์ (Day-Off ฯลฯ) กี่วันในเดือนหนึ่ง — แยกตามประเภท
  *
- * เก็บฝั่ง Smartboss ไม่ใช่ workforce — workforce ไม่มีที่เก็บโควตาแบบนี้
- * และเครื่องคำนวณผลลงเวลาก็ไม่ได้ใช้ตัวเลขนี้ มันมีผลตอน "บันทึกวันหยุดของ
- * เดือนนี้" อย่างเดียว: กันไม่ให้ลงวันหยุดเกินสิทธิ์ที่ตกลงกันไว้
+ * เก็บฝั่ง Smartboss (lib/day-off-quota.ts) แล้วส่งให้ workforce ตอนลงวันหยุด (submitLeaveAction)
+ * เดือนที่ไม่ได้แก้ใช้ วัน/เดือน ของประเภท (ตั้งที่ ตั้งค่า › ประเภทการลา)
  */
 export interface QuotaState {
   ok?: boolean;
   daysPerMonth?: number;
   cleared?: boolean;
-  /** ตั้งค่าประจำ (ทุกเดือน) หรือทับเฉพาะเดือนที่กำลังดูอยู่ */
+  /** month = ของเดือน/ประเภทที่กำลังดู · standing = ล้างค่าประจำเดิมของคนนี้ */
   scope?: "standing" | "month";
   error?: string;
 }
@@ -1081,83 +1068,59 @@ export async function setDayOffQuotaAction(
   }
 
   const employmentId = String(formData.get("employment_id") ?? "");
-  const month = String(formData.get("month") ?? "");
-  /*
-   * "standing" = ข้อตกลงจ้างงานของคนนี้ มีผลทุกเดือน (บางคน 4 บางคน 6)
-   * "month"    = ทับเฉพาะเดือนที่กำลังดูอยู่ เช่นเดือนที่ปิดกิจการชั่วคราว
-   * ฟอร์มเดียวมีสองปุ่ม จึงต้องบอกมาว่ากดปุ่มไหน ไม่ใช่เดาจากค่าที่กรอก
-   */
-  const scope = formData.get("scope") === "standing" ? "standing" : "month";
   if (!employmentId) return { error: "กรุณาเลือกพนักงาน" };
-  if (scope === "month" && !/^\d{4}-\d{2}$/.test(month)) return { error: "เดือนไม่ถูกต้อง" };
 
-  // ปุ่ม "กลับไปใช้ N วัน" ของเดือน = ล้างแถวของเดือนนั้น ไม่สนค่าที่ค้างอยู่ในช่อง
-  const raw =
-    formData.get("reset") === "1"
-      ? ""
-      : String(formData.get(scope === "standing" ? "standing_days" : "month_days") ?? "").trim();
-  const note = String(formData.get(scope === "standing" ? "standing_note" : "note") ?? "").slice(0, 200);
-
-  /*
-   * ช่องของเดือนเลือกได้ "เพิ่ม" (ใส่ 1 = 6 + 1 = 7 วัน) · "ลด" (ใส่ 2 = 4 วัน) · "กำหนดเป็น" (ใส่ 4 = 4 วัน)
-   * เลขที่กรอกเป็นบวกเสมอ — คิดกับค่าประจำของคนนี้ที่นี่ แล้วเก็บเป็นยอดรวมของเดือนเหมือนเดิม
-   * (ตัวอ่านทุกที่ใช้ยอดรวม ไม่ต้องแก้ตาม) · เพิ่ม/ลด 0 = ไม่ต่างจากค่าประจำ ⇒ ล้างแถวของเดือนทิ้ง เหมือนปล่อยว่าง
-   */
-  let monthTotal: number | null = null;
-  if (scope === "month" && raw !== "") {
-    const amount = Number(raw);
-    if (!Number.isInteger(amount) || amount < 0) return { error: "จำนวนวันต้องเป็นจำนวนเต็ม ไม่ติดลบ" };
-    const mode = String(formData.get("month_mode") ?? "add");
-    const current = await loadDayOffQuota(session.orgId, employmentId, month);
-    const base = current.employeeStanding ?? current.companyDefault;
-    if (mode === "set" || amount !== 0) {
-      monthTotal = mode === "set" ? amount : mode === "sub" ? base - amount : base + amount;
-      if (monthTotal < DAYS_OFF_LIMITS.min || monthTotal > DAYS_OFF_LIMITS.max) {
-        return {
-          error: `ได้ ${monthTotal} วัน (ค่าประจำ ${base} วัน) — ต้องอยู่ระหว่าง ${DAYS_OFF_LIMITS.min}–${DAYS_OFF_LIMITS.max} วัน`,
-        };
-      }
-    }
-  }
-
-  // ว่าง = กลับไปใช้ชั้นที่กว้างกว่า ไม่ใช่ 0 วัน — สองอย่างนี้ต่างกันคนละเรื่อง
-  if (raw === "" || (scope === "month" && monthTotal === null)) {
-    if (scope === "standing") {
-      await saveEmployeeDayOffStanding(session.orgId, employmentId, null, "", session.userId);
-    } else {
-      await saveDayOffQuota(session.orgId, employmentId, month, null, "", session.userId);
-    }
+  // ค่าประจำของคน (ระบบเดิม) ตั้งใหม่ไม่ได้แล้ว — เหลือแต่ล้างทิ้ง ให้กลับไปใช้ค่าของประเภท
+  if (formData.get("scope") === "standing") {
+    await clearEmployeeDayOffStanding(session.orgId, employmentId);
     revalidatePath(`/hr/employees/${employmentId}`);
-    return { ok: true, cleared: true, scope };
+    return { ok: true, cleared: true, scope: "standing" };
   }
 
-  const days = monthTotal ?? Number(raw);
-  if (!Number.isInteger(days) || days < DAYS_OFF_LIMITS.min || days > DAYS_OFF_LIMITS.max) {
-    return {
-      error: `วันหยุดต่อเดือนต้องเป็นจำนวนเต็ม ${DAYS_OFF_LIMITS.min}–${DAYS_OFF_LIMITS.max} วัน`,
-    };
+  const month = String(formData.get("month") ?? "");
+  const leaveTypeId = String(formData.get("leave_type_id") ?? "");
+  if (!/^\d{4}-\d{2}$/.test(month)) return { error: "เดือนไม่ถูกต้อง" };
+  if (!leaveTypeId) return { error: "ไม่พบประเภทวันหยุด" };
+  const note = String(formData.get("note") ?? "").slice(0, 200);
+
+  // ปุ่ม "กลับไปใช้ N วัน" = ล้างของเดือนนี้ ไม่สนค่าที่ค้างอยู่ในช่อง
+  if (formData.get("reset") === "1") {
+    await saveDayOffQuota(session.orgId, employmentId, month, leaveTypeId, null, "", session.userId);
+    revalidatePath(`/hr/employees/${employmentId}`);
+    return { ok: true, cleared: true, scope: "month" };
   }
 
-  if (scope === "standing") {
-    await saveEmployeeDayOffStanding(session.orgId, employmentId, days, note, session.userId);
-  } else {
-    await saveDayOffQuota(session.orgId, employmentId, month, days, note, session.userId);
+  const raw = String(formData.get("month_days") ?? "").trim();
+  const days = Number(raw);
+  if (raw === "" || !Number.isInteger(days) || days < DAYS_OFF_LIMITS.min || days > DAYS_OFF_LIMITS.max) {
+    return { error: `จำนวนวันต้องเป็นจำนวนเต็ม ${DAYS_OFF_LIMITS.min}–${DAYS_OFF_LIMITS.max} วัน` };
   }
+
+  await saveDayOffQuota(session.orgId, employmentId, month, leaveTypeId, days, note, session.userId);
   revalidatePath(`/hr/employees/${employmentId}`);
-  return { ok: true, daysPerMonth: days, scope };
+  return { ok: true, daysPerMonth: days, scope: "month" };
 }
 
 /**
- * ตั้ง "วันหยุดต่อเดือนของบริษัท" — เลขที่ทุกคนได้ในเดือนที่ไม่ได้แก้รายคน (เดิมฝังในโค้ด แก้จากหน้าจอไม่ได้)
- * เดือนที่แก้รายคนไว้แล้วไม่เปลี่ยน · วันหยุดที่ลงไปแล้วไม่ถูกแตะ
+ * แก้ วัน/เดือน ของประเภทวันหยุด/ลา — จำนวนที่ทุกคนได้ในเดือนที่ไม่ได้แก้รายคน (0 = ไม่จำกัด)
+ * เดิมตั้งได้ครั้งเดียวตอนสร้างประเภท · ใบที่ลงไว้แล้วไม่ถูกแตะ
  */
-export async function setCompanyDayOffDefaultAction(formData: FormData) {
-  const session = await guard(HR_PERMS.settingManage);
-  const days = Number(String(formData.get("default_days") ?? "").trim());
+export async function setLeaveTypeMonthlyQuotaAction(formData: FormData) {
+  await guard(HR_PERMS.settingManage);
+  const leaveTypeId = String(formData.get("leave_type_id") ?? "");
+  const days = Number(String(formData.get("monthly_quota_days") ?? "").trim());
+  if (!leaveTypeId) throw new Error("ไม่พบประเภทการลานี้");
   if (!Number.isInteger(days) || days < DAYS_OFF_LIMITS.min || days > DAYS_OFF_LIMITS.max) {
-    throw new Error(`วันหยุดต่อเดือนต้องเป็นจำนวนเต็ม ${DAYS_OFF_LIMITS.min}–${DAYS_OFF_LIMITS.max} วัน`);
+    throw new Error(`วัน/เดือน ต้องเป็นจำนวนเต็ม ${DAYS_OFF_LIMITS.min}–${DAYS_OFF_LIMITS.max} (0 = ไม่จำกัด)`);
   }
-  await saveCompanyDayOffDefault(session.orgId, days, session.userId);
+  try {
+    await wfFetch(`/leave-types/${leaveTypeId}/monthly-quota`, {
+      method: "POST",
+      body: { monthly_quota_days: days },
+    });
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
   revalidatePath("/hr");
   revalidatePath("/hr/settings");
 }
@@ -1209,15 +1172,15 @@ export async function submitLeaveAction(
   // คำขอที่ยัง "รออนุมัติ" จริง — ประเภทลาที่ตั้งอนุมัติอัตโนมัติ (auto_approve) ได้ APPROVED ทันที
   // ไม่มีอะไรให้ใครอนุมัติ จึงไม่ต้องแจ้ง (เดิมแจ้ง "รออนุมัติ" ทุกใบ แม้ใบที่อนุมัติไปแล้ว)
   const pendingIds: string[] = [];
-  // วันหยุดต่อเดือนของคนนี้ (ทับเฉพาะเดือน > ค่าประจำของคน > ค่าตั้งต้น 6 วัน) — workforce ใช้เฉพาะกับ
-  // ประเภทวันหยุดตามสิทธิ์ (Day-Off) ประเภทการลาอื่นไม่สนใจค่านี้ · เลือกวันข้ามเดือนได้ จึงหาแยกรายเดือน
-  const quotaByMonth = new Map<string, number>();
+  // จำนวนวันที่ HR แก้ไว้ให้คนนี้ สำหรับประเภทนี้ ในเดือนนั้น (ไม่ได้แก้ = ไม่ส่ง ให้ workforce ใช้ วัน/เดือน ของประเภท)
+  // workforce ใช้เฉพาะกับประเภทวันหยุดตามสิทธิ์ ประเภทการลาอื่นไม่สนใจค่านี้ · เลือกวันข้ามเดือนได้ จึงหาแยกรายเดือน
+  const quotaByMonth = new Map<string, number | null>();
   for (const day of dates) {
     try {
       const month = day.slice(0, 7);
       let monthlyQuota = quotaByMonth.get(month);
       if (monthlyQuota === undefined) {
-        monthlyQuota = (await loadDayOffQuota(session.orgId, employmentId, month)).daysPerMonth;
+        monthlyQuota = overrideDaysFor(await loadDayOffOverrides(session.orgId, employmentId, month), leaveTypeId);
         quotaByMonth.set(month, monthlyQuota);
       }
       const created = await wfFetch<{ id?: string; status?: string }>("/leave-requests", {
@@ -1230,7 +1193,7 @@ export async function submitLeaveAction(
           total_minutes: 480,
           reason,
           display_label: displayLabel,
-          monthly_quota_days_override: monthlyQuota,
+          ...(monthlyQuota === null ? {} : { monthly_quota_days_override: monthlyQuota }),
         },
       });
       if (created?.status !== "APPROVED" && created?.id) pendingIds.push(created.id);
@@ -1337,6 +1300,10 @@ export async function swapLeaveAction(input: {
   if (!input.fromDate || !input.toDate) return { error: "ไม่ได้เลือกวัน" };
   if (input.fromDate === input.toDate) return { error: "เลือกวันใหม่ให้ต่างจากวันเดิม" };
 
+  const swapQuota = overrideDaysFor(
+    await loadDayOffOverrides(session.orgId, input.employmentId, input.toDate.slice(0, 7)),
+    input.leaveTypeId,
+  );
   let swapped: { id?: string } | null = null;
   try {
     swapped = await wfFetch<{ id?: string }>("/leave-requests", {
@@ -1350,9 +1317,7 @@ export async function swapLeaveAction(input: {
         reason: input.reason.trim() || `สลับวันหยุดจากวันที่ ${input.fromDate}`,
         display_label: (input.displayLabel ?? "").trim().slice(0, 60),
         swap_from_date: input.fromDate,
-        monthly_quota_days_override: (
-          await loadDayOffQuota(session.orgId, input.employmentId, input.toDate.slice(0, 7))
-        ).daysPerMonth,
+        ...(swapQuota === null ? {} : { monthly_quota_days_override: swapQuota }),
       },
     });
   } catch (error) {
