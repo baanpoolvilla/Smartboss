@@ -28,6 +28,14 @@ export interface LeaveBalance {
  * ยอดคงเหลือคือผลรวมของรายการใน ledger ไม่ใช่ตัวเลขที่ถูกเขียนทับ
  * จึงตอบได้เสมอว่าสิทธิ์หายไปกับใบไหนและเมื่อไร
  */
+/**
+ * คำขอสลับวันที่ยังรออนุมัติ — ใบเดิมยังมีผลและถูกนับอยู่แล้ว อนุมัติเมื่อไรใบเดิมถูกยกเลิกพร้อมกัน
+ * นับใบนี้ด้วยจะกลายเป็นใช้สิทธิ์ Holiday สองวันจากวันหยุดวันเดียว (ได้ 2 วันแต่ขึ้นว่าใช้ไป 3)
+ */
+function isPendingSwap(request: { status: string; swapFromDate: string | null }): boolean {
+  return request.status === 'SUBMITTED' && request.swapFromDate !== null;
+}
+
 @Injectable()
 export class LeaveService {
   constructor(
@@ -430,6 +438,8 @@ export class LeaveService {
         id: schema.leaveRequests.id,
         startsOn: schema.leaveRequests.startsOn,
         totalMinutes: schema.leaveRequests.totalMinutes,
+        status: schema.leaveRequests.status,
+        swapFromDate: schema.leaveRequests.swapFromDate,
       })
       .from(schema.leaveRequests)
       .where(
@@ -445,6 +455,7 @@ export class LeaveService {
     let end = toMonth;
     for (const request of requests) {
       if (request.id === excludeRequestId) continue;
+      if (isPendingSwap(request)) continue;
       const month = request.startsOn.slice(0, 7);
       usage.set(month, (usage.get(month) ?? 0) + request.totalMinutes / 480);
       if (month > end) end = month;
@@ -555,6 +566,8 @@ export class LeaveService {
           employmentId: schema.leaveRequests.employmentId,
           startsOn: schema.leaveRequests.startsOn,
           totalMinutes: schema.leaveRequests.totalMinutes,
+          status: schema.leaveRequests.status,
+          swapFromDate: schema.leaveRequests.swapFromDate,
         })
         .from(schema.leaveRequests)
         .where(
@@ -567,6 +580,7 @@ export class LeaveService {
       let lastMonth = month;
       const usageOf = new Map<string, Map<string, number>>();
       for (const request of requests) {
+        if (isPendingSwap(request)) continue;
         const requestMonth = request.startsOn.slice(0, 7);
         const usage = usageOf.get(request.employmentId) ?? new Map<string, number>();
         usage.set(requestMonth, (usage.get(requestMonth) ?? 0) + request.totalMinutes / 480);
