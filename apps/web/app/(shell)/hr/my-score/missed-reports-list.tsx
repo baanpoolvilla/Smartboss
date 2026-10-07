@@ -35,8 +35,8 @@ export function MissedReportsList({ userId }: { userId: string }) {
     (async () => {
       try {
         const [missed, late] = await Promise.all([
-          fetch(`/api/report-task/reports/penalty-events?userId=${userId}&category=report_missed`).then((r) => r.json()),
-          fetch(`/api/report-task/reports/penalty-events?userId=${userId}&category=report_late`).then((r) => r.json()),
+          fetch(`/api/report-task/reports/penalty-events?userId=${userId}&category=report_missed&includeResolved=1`).then((r) => r.json()),
+          fetch(`/api/report-task/reports/penalty-events?userId=${userId}&category=report_late&includeResolved=1`).then((r) => r.json()),
         ]);
         if (cancelled) return;
         const missedRows: Row[] = ((missed.items ?? []) as PenaltyEventItem[]).map((i) => ({ ...i, category: "report_missed" as const }));
@@ -63,14 +63,30 @@ export function MissedReportsList({ userId }: { userId: string }) {
         >
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-(--ink)">
-              {CATEGORY_LABEL[row.category]} <span style={{ color: "var(--danger)" }}>{row.points}</span>
+              {CATEGORY_LABEL[row.category]}{" "}
+              {row.restored ? (
+                <span className="text-(--ink-soft) line-through">{row.points}</span>
+              ) : (
+                <span style={{ color: "var(--danger)" }}>{row.points}</span>
+              )}
             </p>
             <p className="truncate text-xs text-(--ink-soft)">
               {row.topicName} · {row.roundLabel} · วันที่ {row.day ?? "-"}
             </p>
           </div>
-          {row.hasPendingRequest ? (
+          {row.restored ? (
+            <span className="shrink-0 rounded-full bg-(--tone-ok)/10 px-2 py-0.5 text-xs font-semibold text-(--tone-ok)">
+              {row.requestStatus === "approved" ? "อนุมัติแล้ว · คืนคะแนน" : "คืนคะแนนแล้ว"}
+            </span>
+          ) : row.hasPendingRequest ? (
             <span className="shrink-0 text-xs font-medium text-(--tone-warn)">รอ CEO พิจารณา</span>
+          ) : row.requestStatus === "rejected" ? (
+            <span className="flex shrink-0 items-center gap-2">
+              <span className="text-xs font-medium text-(--danger)">ไม่อนุมัติ</span>
+              <Button size="sm" variant="outline" onClick={() => setOpenRow(row)}>
+                ขอแก้ไขอีกครั้ง
+              </Button>
+            </span>
           ) : (
             <Button size="sm" variant="outline" className="shrink-0" onClick={() => setOpenRow(row)}>
               ขอแก้ไข

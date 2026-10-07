@@ -21,6 +21,9 @@ export async function GET(request: Request) {
 
   const params = new URL(request.url).searchParams;
   const userId = params.get("userId");
+  // includeResolved=1 (หน้า "คะแนนของฉัน") — เอารายการที่คืนคะแนนไปแล้วมาด้วย พร้อมสถานะคำร้อง
+  // เดิมคืนแล้วหายไปเฉย ๆ ไม่มีร่องรอยว่าเคยถูกแก้ ("คืนคะแนนแล้วหน้านี้ยังไม่ขึ้นว่ามีการแก้ไข")
+  const includeResolved = params.get("includeResolved") === "1";
   const category = params.get("category");
   if (!userId || (category !== "report_missed" && category !== "report_late")) {
     return Response.json({ error: "ข้อมูลไม่ครบ" }, { status: 400 });
@@ -49,9 +52,16 @@ export async function GET(request: Request) {
   const topics = reportFeed?.topics ?? [];
   const topicById = new Map(topics.map((t) => [t.id, t] as const));
   const pendingRefIds = new Set(requests.filter((r) => r.status === "pending").map((r) => r.refId));
+  // คำร้องล่าสุดของแต่ละรอบ (ของคนนี้ หมวดนี้)
+  const latestRequest = new Map<string, (typeof requests)[number]>();
+  for (const r of requests) {
+    if (r.userId !== userId || r.category !== category) continue;
+    const prev = latestRequest.get(r.refId);
+    if (!prev || (r.decidedAt ?? r.createdAt ?? "") > (prev.decidedAt ?? prev.createdAt ?? "")) latestRequest.set(r.refId, r);
+  }
 
   const items = events
-    .filter((e) => e.refId && !undoRefIds.has(e.refId))
+    .filter((e) => e.refId && (includeResolved || !undoRefIds.has(e.refId)))
     .map((e) => {
       const parts = e.refId!.split(":");
       const [day, topicId, roundId] = parts.length === 4 ? parts : [null, null, null];
@@ -64,6 +74,8 @@ export async function GET(request: Request) {
         topicName: topic?.name ?? topicId ?? "-",
         roundLabel: round?.label ?? roundId ?? "-",
         hasPendingRequest: pendingRefIds.has(e.refId!),
+        restored: undoRefIds.has(e.refId!),
+        requestStatus: latestRequest.get(e.refId!)?.status ?? null,
       };
     });
 

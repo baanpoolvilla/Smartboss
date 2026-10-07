@@ -5,7 +5,8 @@ import { HrPage } from "@/modules/hr/components/hr-page";
 import { HR_PERMS } from "@/modules/hr/permissions";
 import { EmptyState } from "@/modules/hr/components/ui";
 import { buildScorecards, buildUserMonthlyScores, gradeColor, listUserEvents } from "@/lib/performance";
-import { ScoreBreakdown } from "@/components/performance/score-breakdown";
+import { hasBreakdown, ScoreBreakdown } from "@/components/performance/score-breakdown";
+import { buildMyEventDetails } from "@/lib/performance-details";
 import { monthDisplay, monthKey, monthRange, resolveMonthParam, shiftMonth } from "@/lib/performance-month";
 import { MissedReportsList } from "./missed-reports-list";
 
@@ -119,7 +120,9 @@ export default async function MyScorePage({
           );
         }
         // ช่วงเดียวกับที่คิดคะแนนเดือนนี้ — จำนวนในแต่ละหมวดกับรายการข้างในจึงตรงกัน
-        const events = card.byCategory.length > 0 ? await listUserEvents(session.orgId, session.userId, { from, to, limit: 1000 }) : [];
+        // ดึงเสมอ (ไม่ใช่แค่ตอนมีหมวดที่ติดลบ) — หมวดที่ได้คืนคะแนนหมดแล้วยังต้องเห็นว่า "คืนแล้ว"
+        const events = await listUserEvents(session.orgId, session.userId, { from, to, limit: 1000 });
+        const details = await buildMyEventDetails(session.orgId, events);
 
         return (
           <div className="flex flex-col gap-4">
@@ -139,10 +142,13 @@ export default async function MyScorePage({
 
             <div className="rounded-2xl border border-(--line) bg-white p-5">
               <p className="mb-3 text-sm font-semibold text-(--ink)">เสียคะแนนเพราะ</p>
-              {card.byCategory.length === 0 ? (
+              {!hasBreakdown(card.byCategory, events) ? (
                 <p className="text-sm text-(--ink-soft)">ไม่มีเลย — คะแนนเต็มอยู่</p>
               ) : (
-                <ScoreBreakdown rows={card.byCategory} events={events} />
+                <>
+                  <p className="-mt-2 mb-3 text-xs text-(--ink-soft)">กดหมวดเพื่อดูวันที่ แล้วกดรายการเพื่อดูว่าหักจากอะไร</p>
+                  <ScoreBreakdown rows={card.byCategory} events={events} details={details} />
+                </>
               )}
             </div>
 

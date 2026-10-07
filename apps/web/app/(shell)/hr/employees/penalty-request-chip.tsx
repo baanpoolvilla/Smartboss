@@ -59,6 +59,10 @@ export interface PenaltyEventItem {
   topicName: string;
   roundLabel: string;
   hasPendingRequest: boolean;
+  /** คืนคะแนนไปแล้ว (อนุมัติคำร้อง หรือระบบคืนเอง) — มีเฉพาะตอนขอ includeResolved=1 */
+  restored?: boolean;
+  /** สถานะคำร้องล่าสุดของรอบนี้ */
+  requestStatus?: "pending" | "approved" | "rejected" | null;
 }
 
 /**
