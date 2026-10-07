@@ -38,7 +38,7 @@ import { TaskDetailSheet } from "@/modules/report_task/components/kanban/task-de
 import { useEventColorStore } from "@/modules/report_task/store/event-color-store";
 import { useCalendarScopeStore } from "@/modules/report_task/store/calendar-scope-store";
 import { canEditRecord, canSeeTask, canSeeTaskOnCalendar, canSeeMeetingOnCalendar } from "@/modules/report_task/lib/permissions";
-import { getUser, canManage, isOwner, scopedUsers } from "@/modules/report_task/lib/directory";
+import { getUser, canManage, isOwner } from "@/modules/report_task/lib/directory";
 import { eventTypeLabels } from "@/modules/report_task/lib/calendar-colors";
 import { typeHex } from "@/lib/leave-type-hue";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -567,13 +567,17 @@ export function CalendarView() {
       }),
     [meetings, hiddenUserIds, viewingAsUserId, taskScope, canBroadenScope]
   );
-  // ใครเห็นวันหยุด/ลาของใคร: เจ้าของบริษัทเห็นทุกคน · หัวหน้าเห็นคนในแผนกที่ดูแล
-  // (scopedUsers) · คนทั่วไปเห็นแค่ของตัวเอง — `null` = ไม่จำกัด
-  const scheduleSeeAll = canManage(viewingAsUserId);
-  const scheduleUserScope = useMemo<Set<string> | null>(() => {
-    if (isOwner(viewingAsUserId)) return null;
-    return new Set([viewingAsUserId, ...scopedUsers(viewingAsUserId).map((u) => u.id)]);
-  }, [viewingAsUserId]);
+  // ใครเห็นวันหยุด/ลาของใคร — ตามปุ่ม "มุมมอง: ของฉัน / ทั้งหมด" ตัวเดียวกับงานและสิ่งที่ต้องทำ:
+  // ของฉัน = เฉพาะของตัวเอง · ทั้งหมด = ทุกคนในบริษัท (`null` = ไม่จำกัด) ซ่อนรายคนได้จากรายชื่อด้านซ้าย
+  //
+  // เดิมผูกกับตำแหน่ง (เจ้าของเห็นทุกคน / หัวหน้าเห็นแผนก / คนทั่วไปเห็นแค่ตัวเอง) ไม่ขึ้นกับปุ่ม ⇒ พนักงาน
+  // กด "ทั้งหมด" แล้วยังเห็นแค่ของตัวเอง ("กดทั้งหมดขึ้นแค่ของฉัน") ทั้งที่วันหยุดของทุกคนเห็นได้อยู่แล้วใน
+  // ปฏิทินทีมของ HR และป้าย OFF/HOL/ลา บนรูปโปรไฟล์ในแชท — ซ่อนเฉพาะที่นี่ไม่ได้ปกปิดอะไร มีแต่ทำให้งง
+  const scheduleSeeAll = effectiveTodoScope === "all";
+  const scheduleUserScope = useMemo<Set<string> | null>(
+    () => (scheduleSeeAll ? null : new Set([viewingAsUserId])),
+    [viewingAsUserId, scheduleSeeAll]
+  );
   const canSeeScheduleOf = (userId: string | undefined) =>
     !userId || ((!scheduleUserScope || scheduleUserScope.has(userId)) && !hiddenUserIds.includes(userId));
   const visibleLeaves = useMemo(
@@ -1061,13 +1065,14 @@ export function CalendarView() {
                 <span className="h-4 w-px bg-[var(--line)] mx-1" />
               </>
             ) : (
-              showTodosInWork && (
+              // โชว์เสมอ (เดิมซ่อนเมื่อปิด "สิ่งที่ต้องทำ") — ปุ่มนี้คุมวันหยุด · ลาด้วยแล้ว
+              (
                 <>
-                  <span className="text-xs text-[var(--ink-soft)]">มุมมองสิ่งที่ต้องทำ:</span>
+                  <span className="text-xs text-[var(--ink-soft)]">มุมมอง:</span>
                   <div className="flex items-center gap-1 bg-[var(--bg-soft)] rounded-lg p-1">
                     <button
                       onClick={() => setTodoScope("mine")}
-                      title="แสดงเฉพาะสิ่งที่ต้องทำของฉัน"
+                      title="แสดงเฉพาะสิ่งที่ต้องทำและวันหยุด · ลาของฉัน"
                       className={cn(
                         "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer",
                         todoScope === "mine"
@@ -1080,7 +1085,7 @@ export function CalendarView() {
                     </button>
                     <button
                       onClick={() => setTodoScope("all")}
-                      title="แสดงสิ่งที่ต้องทำของทุกคน"
+                      title="แสดงสิ่งที่ต้องทำและวันหยุด · ลาของทุกคน"
                       className={cn(
                         "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer",
                         todoScope === "all"
@@ -1295,7 +1300,7 @@ export function CalendarView() {
                       instead of a confusing second "ของฉัน/ทั้งหมด" pair. */}
                   {showTodosInWork && !canBroadenScope && (
                     <div>
-                      <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">มุมมองสิ่งที่ต้องทำ</p>
+                      <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">มุมมอง (สิ่งที่ต้องทำ · วันหยุด)</p>
                       <div className="flex items-center gap-1 bg-[var(--bg-soft)] rounded-xl p-1">
                         <button
                           onClick={() => setTodoScope("mine")}
