@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Clock } from "lucide-react";
 import { CLOCK_CHANGED_EVENT, clockState } from "@/modules/hr/lib/clock-state";
 
@@ -44,6 +44,44 @@ function hhmm(iso: string): string {
 const lastKnown = new Map<string, ClockState>();
 
 /**
+ * จำไว้ในเครื่องด้วย — ปัดแอปทิ้งแล้วเปิดใหม่ หน่วยความจำข้างบนหายหมด ปุ่มเลยหายไปแวบหนึ่ง
+ * จนกว่า /api/m/today จะตอบ ("ออกแอปปัดทิ้งเข้ามา มีแปปนึงไม่เห็น")
+ * สถานะเข้า/ออกใช้ได้เฉพาะวันเดียวกัน — ข้ามวันแล้วรู้แค่ว่า "คนนี้ต้องลงเวลา" ขึ้นปุ่มกลาง ๆ ไว้ก่อน
+ */
+const STORAGE_PREFIX = "smartboss:clock-state:";
+
+function todayKey(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
+}
+
+function readStoredRaw(userId: string): string | null {
+  try {
+    return window.localStorage.getItem(STORAGE_PREFIX + userId);
+  } catch {
+    return null;
+  }
+}
+
+function parseStored(raw: string | null): ClockState | null {
+  try {
+    if (!raw) return null;
+    const { day, state } = JSON.parse(raw) as { day: string; state: ClockState };
+    if (state.kind === "hidden") return state;
+    return day === todayKey() ? state : { kind: "unknown" };
+  } catch {
+    return null;
+  }
+}
+
+function writeStored(userId: string, state: ClockState) {
+  try {
+    window.localStorage.setItem(STORAGE_PREFIX + userId, JSON.stringify({ day: todayKey(), state }));
+  } catch {
+    // เก็บไม่ได้ (โหมดส่วนตัว ฯลฯ) — แค่กลับไปรอคำตอบเหมือนเดิม
+  }
+}
+
+/**
  * ยิงถาม /api/m/today ครั้งเดียวต่อรอบ แม้ไอคอนในหน้าแรกกับปุ่มกลางของแถบเมนูล่างจะขอพร้อมกัน
  * (คำขอที่ยังค้างอยู่ใช้ร่วมกัน · เสร็จแล้วรอบถัดไปค่อยถามใหม่)
  * null = ถามไม่สำเร็จด้วยเหตุชั่วคราว
@@ -75,8 +113,19 @@ function loadClockState(userId: string): Promise<ClockState | null> {
 }
 
 /** สถานะลงเวลาของวันนี้ — ใช้ทั้งไอคอนในหน้าแรกและปุ่มกลางของแถบเมนูล่าง (HomeBottomNav ใน components/shell/shell.tsx) */
+const noopSubscribe = () => () => {};
+
 export function useClockState(userId: string): ClockState {
-  const [state, setState] = useState<ClockState>(() => lastKnown.get(userId) ?? { kind: "loading" });
+  const [fetched, setState] = useState<ClockState>(() => lastKnown.get(userId) ?? { kind: "loading" });
+  // ยังไม่มีคำตอบ (เพิ่งเปิดแอป) → ใช้ที่จำไว้ในเครื่องไปก่อน
+  // useSyncExternalStore: ฝั่งเซิร์ฟเวอร์ไม่มี localStorage (null) แล้วเครื่องค่อยสลับเป็นค่าที่จำไว้ก่อนวาดจอ
+  const storedRaw = useSyncExternalStore(
+    noopSubscribe,
+    () => readStoredRaw(userId),
+    () => null,
+  );
+  const stored = useMemo(() => parseStored(storedRaw), [storedRaw]);
+  const state: ClockState = fetched.kind === "loading" && stored ? stored : fetched;
 
   useEffect(() => {
     let cancelled = false;
@@ -85,11 +134,14 @@ export function useClockState(userId: string): ClockState {
         if (cancelled) return;
         if (next === null) {
           // มีคำตอบเดิมอยู่แล้วก็คงไว้ — เน็ตสะดุดไม่ควรทำให้ไอคอนเปลี่ยนเป็นสีเทา
-          if (!lastKnown.has(userId)) setState({ kind: "unknown" });
+          if (!lastKnown.has(userId) && !parseStored(readStoredRaw(userId))) setState({ kind: "unknown" });
           return;
         }
         // โหลดพลาดชั่วคราว (unknown) ไม่ทับคำตอบดีที่จำไว้
-        if (next.kind !== "unknown") lastKnown.set(userId, next);
+        if (next.kind !== "unknown") {
+          lastKnown.set(userId, next);
+          writeStored(userId, next);
+        }
         setState(next);
       });
     load();
