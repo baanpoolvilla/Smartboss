@@ -9,7 +9,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/modules/report_task/components/ui/dialog";
-import { getUser, canManage } from "@/modules/report_task/lib/directory";
+import { getUser, canManage, canSeeTodoOf } from "@/modules/report_task/lib/directory";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useMeetingStore } from "@/modules/report_task/store/meeting-store";
 import { useTodoStore } from "@/modules/report_task/store/todo-store";
@@ -117,7 +117,11 @@ export function RangeSummaryDialog({
       .sort((x, y) => x.start.localeCompare(y.start));
     const rangeTodos = todos
       .filter((t) => inRange(t.date, start, end))
-      .filter((t) => (todoScope === "mine" ? t.userId === viewingAsUserId : !hiddenUserIds.includes(t.userId)))
+      .filter((t) =>
+        todoScope === "mine"
+          ? t.userId === viewingAsUserId
+          : canSeeTodoOf(viewingAsUserId, t.userId) && !hiddenUserIds.includes(t.userId)
+      )
       .sort((a, b) => Number(a.done) - Number(b.done) || a.date.localeCompare(b.date));
     return {
       tasks: rangeTasks,

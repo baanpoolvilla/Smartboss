@@ -16,7 +16,7 @@ import { formatDate, formatDateTime } from "@/modules/report_task/lib/format";
 import { todayIso } from "@/modules/report_task/lib/now";
 import { rangeLabel, inRange, inRangeLocal, type ViewRange } from "@/modules/report_task/lib/date-filter";
 import { dueUrgency } from "@/modules/report_task/lib/task-flags";
-import { canManage } from "@/modules/report_task/lib/directory";
+import { canManage, canSeeTodoOf } from "@/modules/report_task/lib/directory";
 import { canSeeTask, canSeeTaskOnCalendar, canSeeMeetingOnCalendar } from "@/modules/report_task/lib/permissions";
 import { cn } from "@/modules/report_task/lib/utils";
 import { User, Check, Plus, CalendarOff } from "lucide-react";
@@ -95,7 +95,12 @@ export function WorkSidebar({
   // explicitly: "งานทั้งเดือนนี้ให้มีสิ่งที่ต้องทำของคนอื่นเข้ามา รวมกันเลย").
   const otherTodos = todos
     .filter(
-      (t) => t.userId !== viewingAsUserId && inRange(t.date, range) && !hiddenUserIds.includes(t.userId) && notStaleDone(t)
+      (t) =>
+        t.userId !== viewingAsUserId &&
+        canSeeTodoOf(viewingAsUserId, t.userId) &&
+        inRange(t.date, range) &&
+        !hiddenUserIds.includes(t.userId) &&
+        notStaleDone(t)
     )
     .sort((a, b) => a.date.localeCompare(b.date));
 

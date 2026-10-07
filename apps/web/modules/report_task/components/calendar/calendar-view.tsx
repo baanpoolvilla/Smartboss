@@ -38,7 +38,7 @@ import { TaskDetailSheet } from "@/modules/report_task/components/kanban/task-de
 import { useEventColorStore } from "@/modules/report_task/store/event-color-store";
 import { useCalendarScopeStore } from "@/modules/report_task/store/calendar-scope-store";
 import { canEditRecord, canSeeTask, canSeeTaskOnCalendar, canSeeMeetingOnCalendar } from "@/modules/report_task/lib/permissions";
-import { getUser, canManage, isOwner } from "@/modules/report_task/lib/directory";
+import { getUser, canManage, canSeeTodoOf, isOwner } from "@/modules/report_task/lib/directory";
 import { eventTypeLabels } from "@/modules/report_task/lib/calendar-colors";
 import { typeHex } from "@/lib/leave-type-hue";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -648,7 +648,12 @@ export function CalendarView() {
   const todoEvents: CalendarEvent[] = useMemo(
     () =>
       todos
-        .filter((t) => (effectiveTodoScope === "mine" ? t.userId === viewingAsUserId : !hiddenUserIds.includes(t.userId)))
+        // "ทั้งหมด" = เท่าที่มีสิทธิ์เห็น (canSeeTodoOf) — พนักงานทั่วไปได้แค่ของตัวเองอยู่ดี
+        .filter((t) =>
+          effectiveTodoScope === "mine"
+            ? t.userId === viewingAsUserId
+            : canSeeTodoOf(viewingAsUserId, t.userId) && !hiddenUserIds.includes(t.userId)
+        )
         .map((t) => {
           const mine = t.userId === viewingAsUserId;
           const owner = !mine && effectiveTodoScope === "all" ? getUser(t.userId)?.name.split(" ")[0] : undefined;
@@ -1072,7 +1077,7 @@ export function CalendarView() {
                   <div className="flex items-center gap-1 bg-[var(--bg-soft)] rounded-lg p-1">
                     <button
                       onClick={() => setTodoScope("mine")}
-                      title="แสดงเฉพาะสิ่งที่ต้องทำและวันหยุด · ลาของฉัน"
+                      title="แสดงเฉพาะวันหยุด · ลาของฉัน"
                       className={cn(
                         "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer",
                         todoScope === "mine"
@@ -1085,7 +1090,7 @@ export function CalendarView() {
                     </button>
                     <button
                       onClick={() => setTodoScope("all")}
-                      title="แสดงสิ่งที่ต้องทำและวันหยุด · ลาของทุกคน"
+                      title="แสดงวันหยุด · ลาของทุกคน (งานและสิ่งที่ต้องทำยังเห็นเฉพาะของฉัน)"
                       className={cn(
                         "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer",
                         todoScope === "all"

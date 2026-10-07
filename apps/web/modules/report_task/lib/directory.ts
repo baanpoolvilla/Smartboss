@@ -76,6 +76,14 @@ export function scopedUsers(userId: string): User[] {
   const headed = headedDepartmentIds(userId);
   return users.filter((u) => headed.has(u.departmentId));
 }
+/**
+ * ใครเห็น "สิ่งที่ต้องทำ" ของใคร — ของตัวเองเสมอ · เจ้าของบริษัทเห็นทุกคน · หัวหน้าเห็นคนในแผนกที่ดูแล
+ * พนักงานทั่วไปเห็นแค่ของตัวเอง (กติกาเดียวกับงานบนปฏิทิน — เจ้าของงานตัดสิน 2026-10-07:
+ * เดิมกด "ทั้งหมด" แล้วทุกคนเห็นสิ่งที่ต้องทำของทุกคน ทั้งที่เป็นรายการส่วนตัว)
+ */
+export function canSeeTodoOf(viewerId: string, ownerId: string): boolean {
+  return viewerId === ownerId || scopedUsers(viewerId).some((u) => u.id === ownerId);
+}
 export function headOfDepartment(departmentId: string) {
   const dept = departments.find((d) => d.id === departmentId);
   return dept ? dept.headId : users[0]?.id;
