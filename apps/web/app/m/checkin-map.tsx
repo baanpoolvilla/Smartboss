@@ -154,14 +154,19 @@ export function CheckinMap() {
     });
     mapRef.current = map;
 
-    // CARTO Positron — โทนเทาอ่อนเรียบ ไม่มีสี ไม่มีป้ายรก ให้หมุด/วงรัศมีของเรา
-    // เป็นจุดเด่นแทน (ฟรี ไม่ต้องมี API key เหมาะกับปริมาณเรียกระดับนี้)
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>',
+    // แผนที่มาตรฐานของ OpenStreetMap — ไม่ต้องมี API key
+    // เดิมใช้ CARTO Positron (โทนเทาอ่อน) แต่ CARTO เปลี่ยนเป็นต้องมี key แผ่นแผนที่เลยขึ้นลายน้ำ
+    // "API KEY REQUIRED" ทั้งจอ (เจอจริงบน production 2026-10-07)
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       maxZoom: 19,
     }).addTo(map);
 
+    // ซูมให้เห็นแค่ "ตัวเรา + สถานที่ที่ใกล้ที่สุด" — เดิมรวมทุกสถานที่ของบริษัท พอมีสาขาอยู่ไกล ๆ
+    // แผนที่ซูมออกจนจุดเรากับหมุดซ้อนกัน ดูไม่ออกว่าห่างเท่าไหร่ (สถานที่อื่นยังวาดอยู่ เลื่อนดูได้)
     const bounds = L.latLngBounds([me]);
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    let nearestBounds: L.LatLngBounds | null = null;
 
     L.marker(me, { icon: meIcon(), zIndexOffset: 1000 }).addTo(map);
     // วงบอกความแม่นของ GPS เอง — โปร่งกว่าวงรัศมีสถานที่ชัดเจน กันสับสนว่าเป็นวงเดียวกัน
@@ -186,7 +191,10 @@ export function CheckinMap() {
         weight: 2,
         fillOpacity: 0.12,
       }).addTo(map);
-      bounds.extend(circle.getBounds());
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestBounds = circle.getBounds();
+      }
 
       L.marker([site.latitude, site.longitude], { icon: siteIcon(color) })
         .addTo(map)
@@ -197,6 +205,7 @@ export function CheckinMap() {
         });
     }
 
+    if (nearestBounds) bounds.extend(nearestBounds);
     map.fitBounds(bounds, { padding: [28, 28], maxZoom: 17 });
 
     return () => {
