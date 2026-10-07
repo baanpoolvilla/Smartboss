@@ -116,14 +116,17 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
     {},
   );
   const openedRef = useRef<string | null>(null);
+  /** มือถือ: ห้องนี้เปิดจากรายการในหน้านี้เอง (push) — ปุ่มย้อนกลับถึงจะ router.back() ได้ */
+  const pushedFromListRef = useRef(false);
 
   const navigateTo = useCallback(
     (id: string | null) => {
       const url = id ? `${pathname}?c=${encodeURIComponent(id)}` : pathname;
       // มือถือ push (ย้อนกลับ = กลับรายการ) · คอม replace (สลับห้องไม่ต้องสะสมประวัติ)
-      if (id && !isDesktop() && !urlChannel)
+      if (id && !isDesktop() && !urlChannel) {
+        pushedFromListRef.current = true;
         router.push(url, { scroll: false });
-      else router.replace(url, { scroll: false });
+      } else router.replace(url, { scroll: false });
     },
     [pathname, router, urlChannel],
   );
@@ -131,10 +134,11 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
   // URL → ห้องที่เปิด
   useEffect(() => {
     if (!urlChannel) {
-      if (openedRef.current) {
-        openedRef.current = null;
-        setActive(null);
-      }
+      openedRef.current = null;
+      pushedFromListRef.current = false;
+      // ห้องที่ค้างจากรอบก่อน (ออกไปหน้ารายงานแล้วกดแท็บแชทกลับมา) — ไม่งั้นมือถือเปิดห้องเดิมทับรายการทันที
+      // แล้วย้อนกลับเด้งไปหน้ารายงาน เลือกแชทคนอื่นไม่ได้
+      if (useChatStore.getState().activeChannelId) setActive(null);
       return;
     }
     if (openedRef.current === urlChannel) return;
@@ -171,8 +175,12 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
   );
 
   const back = () => {
-    if (!isDesktop() && window.history.length > 1) router.back();
-    else navigateTo(null);
+    // ย้อนกลับในประวัติเฉพาะตอนเปิดห้องจากรายการในหน้านี้ — เปิดจากลิงก์/แจ้งเตือน/หน้าอื่น
+    // ย้อนกลับแล้วต้องไปรายการแชท ไม่ใช่เด้งออกไปหน้าก่อนหน้า (เช่น หน้ารายงาน)
+    if (!isDesktop() && pushedFromListRef.current) {
+      pushedFromListRef.current = false;
+      router.back();
+    } else navigateTo(null);
   };
 
   const activeChannel = channels.find((c) => c.id === activeChannelId) ?? null;
