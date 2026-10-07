@@ -175,6 +175,9 @@ export function LeaveSidebar({
   // in one long scroll. Reuses `myEffectiveThisMonth` when it's the same
   // month as the quota card to avoid computing it twice.
   const pillMonthEntries = pillMonth === targetMonth ? myEffectiveThisMonth : effectiveDatesForMonth(viewingAsUserId, pillMonth);
+  // ยังมีวันหยุดประจำแบบเดิม (ตั้งเองในโมดูลนี้) อยู่ไหม — กฎทำซ้ำ หรือวันที่เลือกไว้ในเดือนที่ดูอยู่
+  const hasOwnRoutine =
+    myEffectiveThisMonth.length > 0 || pillMonthEntries.length > 0 || rules.some((r) => r.userId === viewingAsUserId);
 
   function addRoutineDayOff() {
     if (usedThisMonth >= myQuota) {
@@ -356,6 +359,17 @@ export function LeaveSidebar({
   const myLeave = leaves
     .filter((e) => e.type !== "dayoff" && inRange(e.start, range) && e.userId === viewingAsUserId)
     .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+
+  // Day-Off ของตัวเองจากฝ่ายบุคคลในช่วงที่ดูอยู่ (นับเป็นวัน — ใบหนึ่งอาจคลุมหลายวัน, `end` ไม่รวมวันนั้น)
+  // ช่อง "วันหยุดประจำ" ของการ์ดนี้เดิมนับเฉพาะวันหยุดประจำที่ตั้งเองในโมดูลนี้ ซึ่งเลิกใช้แล้ว (ลง Day-Off ที่ HR)
+  // เลยขึ้น 0/4 ทั้งที่ในปฏิทินมี Day-Off อยู่ ("มันต้องดึงมาจาก hr สิ")
+  const myHrDayOffDays = leaves
+    .filter((e) => e.type === "dayoff" && e.userId === viewingAsUserId && inRange(e.start, range))
+    .reduce((sum, e) => {
+      const start = new Date(`${e.start.slice(0, 10)}T00:00:00`).getTime();
+      const end = e.end ? new Date(`${e.end.slice(0, 10)}T00:00:00`).getTime() : start + 86_400_000;
+      return sum + Math.max(1, Math.round((end - start) / 86_400_000));
+    }, 0);
 
   const leaveHeading = range.viewType === "timeGridDay" ? "ทีมที่ลาวันนี้" : range.viewType === "timeGridWeek" ? "ทีมที่ลาสัปดาห์นี้" : "ทีมที่ลา";
   const holidayHeading = range.viewType === "timeGridDay" ? "วันหยุดนักขัตฤกษ์วันนี้" : range.viewType === "timeGridWeek" ? "วันหยุดนักขัตฤกษ์สัปดาห์นี้" : "วันหยุดนักขัตฤกษ์ในเดือนนี้";
@@ -543,8 +557,10 @@ export function LeaveSidebar({
               <p className="text-[11px] text-[var(--ink-soft)]">วันลา</p>
             </div>
             <div className="rounded-lg bg-[var(--bg-soft)] px-3 py-2 text-center">
-              <p className="text-lg font-semibold tabular-nums">{usedThisMonth}/{myQuota}</p>
-              <p className="text-[11px] text-[var(--ink-soft)]">วันหยุดประจำ</p>
+              {/* Day-Off จาก HR + วันหยุดประจำที่ตั้งเองในโมดูลนี้ (ถ้ายังมีของเก่าค้าง) — ไม่มีตัวหาร:
+                  โควตารายเดือนเดิมเป็นของระบบวันหยุดประจำในโมดูลนี้ ไม่ใช่สิทธิ์ Day-Off ของ HR */}
+              <p className="text-lg font-semibold tabular-nums">{myHrDayOffDays + usedThisMonth}</p>
+              <p className="text-[11px] text-[var(--ink-soft)]">วันหยุดประจำ (Day-Off)</p>
             </div>
             {/* Holiday แบบสะสม — ยอดของตัวเองจากฝ่ายบุคคล มีเฉพาะบริษัทที่เปิดใช้ */}
             {holidayBalances.map((b) => (
@@ -626,6 +642,10 @@ export function LeaveSidebar({
             )}
           </div>
 
+          {/* วันหยุดประจำที่ตั้งเองในโมดูลนี้ (ระบบเดิม) — โชว์เฉพาะคนที่ยังมีของเก่าอยู่ ให้ลบ/ย้ายได้
+              คนอื่นไม่ต้องเห็น: วันหยุดประจำลงที่ HR เป็น Day-Off แล้ว และขึ้นอยู่ในการ์ด "วันหยุด · ลา" ข้าง ๆ
+              อยู่แล้ว ส่วนนี้เลยมีแต่ข้อความ "ยังไม่ได้เลือกวันหยุดประจำ" ซ้ำซ้อนเปล่า ๆ */}
+          {hasOwnRoutine && (
           <div className="space-y-1.5 pt-2 border-t border-[var(--line)]">
             <div className="flex items-center justify-between">
               <button
@@ -756,6 +776,7 @@ export function LeaveSidebar({
               <div className="flex flex-wrap gap-1.5">{pillMonthEntries.map(renderPill)}</div>
             )}
           </div>
+          )}
         </CardContent>
       </Card>
       <SubmitLeaveDialog open={submitLeaveOpen} onOpenChange={setSubmitLeaveOpen} />

@@ -236,7 +236,19 @@ export function CalendarView() {
   // Each country (Thailand included) only shows on the calendar of whoever
   // personally selected it — see holidaySource/isSourceSelected.
   const holidays = useMemo(
-    () => allHolidays.filter((h) => isSourceSelected(holidaySelections, viewingAsUserId, holidaySource(h))),
+    () => {
+      // วันเดียวกัน ชื่อเดียวกัน = วันหยุดเดียวกัน แม้มาจากสองแหล่ง (ปฏิทินวันหยุดของประเทศ + วันหยุดที่ HR ตั้ง)
+      // — ไม่ตัดซ้ำ รายการ "วันหยุด · ลา" ขึ้นวันเดียวกันสองบรรทัด (เจอจริง: วันคล้ายวันสวรรคต ร.9 13 ต.ค.)
+      const seen = new Set<string>();
+      return allHolidays
+        .filter((h) => isSourceSelected(holidaySelections, viewingAsUserId, holidaySource(h)))
+        .filter((h) => {
+          const key = `${h.start.slice(0, 10)}|${h.title.trim().toLowerCase()}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+    },
     [allHolidays, holidaySelections, viewingAsUserId]
   );
   // ปฏิทินเดียว: งาน/ประชุม/สิ่งที่ต้องทำ + วันหยุด · ลา ซ้อนกัน (เดิมแยกเป็น 2 แท็บ)
