@@ -255,6 +255,10 @@ export function Today({
   const nextIntent: "CLOCK_IN" | "CLOCK_OUT" =
     lastIntent === "CLOCK_IN" ? "CLOCK_OUT" : "CLOCK_IN";
   const busy = state !== "idle" || noEmployment;
+  // เวลาเข้า/ออกของวันนี้ไว้โชว์ตัวใหญ่เหนือปุ่ม — เข้างาน = ครั้งแรก, ออกงาน = ครั้งล่าสุด
+  // (ลงเข้า-ออกหลายรอบในวันเดียวได้ รายละเอียดทุกครั้งยังอยู่ในรายการด้านล่าง)
+  const firstIn = events.find((e) => e.intent === "CLOCK_IN") ?? null;
+  const lastOut = [...events].reverse().find((e) => e.intent === "CLOCK_OUT") ?? null;
 
   return (
     <div className="flex flex-1 flex-col gap-5 p-5 pt-8">
@@ -275,6 +279,21 @@ export function Today({
       <MapBoundary>
         <CheckinMap />
       </MapBoundary>
+
+      <div className="grid grid-cols-2 gap-3">
+        {[
+          { label: "เข้างาน", event: firstIn },
+          { label: "ออกงาน", event: lastOut },
+        ].map(({ label, event }) => (
+          <div key={label} className="rounded-2xl border border-(--line) bg-(--bg-soft) p-3 text-center">
+            <p className="text-xs text-(--ink-soft)">{label}</p>
+            <p className="mt-1 text-3xl font-bold tabular-nums">{event ? timeOf(event.capturedAt) : "--:--"}</p>
+            {event && event.lateMinutes > 0 && (
+              <p className="mt-0.5 text-xs text-(--tone-warn)">สาย {event.lateMinutes} นาที</p>
+            )}
+          </div>
+        ))}
+      </div>
 
       <button
         type="button"

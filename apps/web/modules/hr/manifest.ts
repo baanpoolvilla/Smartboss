@@ -38,6 +38,8 @@ export const hrManifest: ModuleManifest = {
           "ml-auto flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-(--danger) px-1 text-[10px] font-bold text-white",
       }),
     },
+    // ลงเวลาเข้า/ออกของตัวเอง — หน้าจอเดียวกับใน LINE Mini App (ดู hr/clock/page.tsx)
+    { label: "ลงเวลา", path: "/hr/clock", permission: HR_PERMS.access, icon: "Clock" },
     { label: "พนักงาน", path: "/hr/employees", permission: HR_PERMS.employeeView, icon: "Users" },
     { label: "รอบจ่าย", path: "/hr/payroll", permission: HR_PERMS.payrollView, icon: "Wallet" },
     { label: "ตั้งค่า", path: "/hr/settings", permission: HR_PERMS.settingManage, icon: "Settings" },

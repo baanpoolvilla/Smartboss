@@ -8,6 +8,7 @@ import { loadShellNav } from "@/lib/nav";
 import { AppTileReviewBadge } from "@/modules/report_task/components/shared/app-tile-review-badge";
 import { ChatReportTileBadge } from "@/modules/report_task/components/shared/chat-report-tile-badge";
 import { NotifCountBadge } from "@/modules/notifications/notif-count-badge";
+import { ClockTile } from "@/components/home/clock-tile";
 
 interface AppTile {
   code: string;
@@ -122,6 +123,9 @@ export default async function HomePage() {
         <section className="md:pr-8">
           <SectionLabel>โมดูลหลัก</SectionLabel>
           <div className="grid grid-cols-3 gap-x-2 gap-y-7 sm:gap-x-4">
+            {/* ลงเวลา — ช่องแรก เปิดแอปมาเห็นก่อนอย่างอื่น (เฉพาะคนที่เข้าระบบบุคคลได้ ·
+                คนที่ไม่อยู่ในทะเบียนพนักงาน ไอคอนซ่อนตัวเอง ดู ClockTile) */}
+            {visible.has("hr") && <ClockTile />}
             {primary.map((tile) => (
               <AppIcon key={tile.code} tile={tile} size="lg" />
             ))}

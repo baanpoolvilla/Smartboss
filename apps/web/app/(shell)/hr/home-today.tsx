@@ -247,6 +247,8 @@ export async function renderTodayTab(
             : "ok") as RosterRow["category"],
       scheduledStartMinutes: a.scheduled_start_minutes,
       firstScanAt: a.first_scan_at,
+      // สแกนครั้งเดียว = ยังไม่ออก · ครั้งล่าสุดถือเป็นเวลาออก (เครื่องสแกนนิ้วไม่ได้บอกว่าเข้าหรือออก)
+      lastScanAt: a.scan_count > 1 ? a.last_scan_at : undefined,
       lateMinutes: a.late_minutes,
       offLabel: a.status === "REST_DAY" ? "วันหยุดตามกะ" : undefined,
       sourceType: latestEventByEmployment.get(a.employment_id)?.source_type ?? null,

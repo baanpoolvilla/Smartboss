@@ -18,6 +18,8 @@ export interface RosterRow {
   category: RosterCategory;
   scheduledStartMinutes: number | null;
   firstScanAt?: string;
+  /** สแกนครั้งล่าสุดของวัน (เมื่อสแกนมากกว่าหนึ่งครั้ง) = เวลาออกงาน */
+  lastScanAt?: string;
   lateMinutes?: number;
   offLabel?: string;
   sourceType?: string | null;
@@ -108,18 +110,19 @@ export function AttendanceRoster({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {row.category === "ok" && row.firstScanAt && (
-                    <span className="font-mono text-sm tabular-nums text-(--ink)">
-                      เข้า {formatTime(row.firstScanAt)}
-                    </span>
+                  {(row.category === "ok" || row.category === "late") && row.firstScanAt && (
+                    <>
+                      <span className="font-mono text-sm tabular-nums text-(--ink)">
+                        เข้า {formatTime(row.firstScanAt)}
+                      </span>
+                      {/* ยังสแกนครั้งเดียว = ยังไม่ออก ขึ้น --:-- จาง ๆ ให้รู้ว่ายังอยู่ */}
+                      <span className={`font-mono text-sm tabular-nums ${row.lastScanAt ? "text-(--ink)" : "text-(--ink-soft)"}`}>
+                        · ออก {row.lastScanAt ? formatTime(row.lastScanAt) : "--:--"}
+                      </span>
+                    </>
                   )}
                   {row.category === "late" && (
                     <>
-                      {row.firstScanAt && (
-                        <span className="font-mono text-sm tabular-nums text-(--ink)">
-                          เข้า {formatTime(row.firstScanAt)}
-                        </span>
-                      )}
                       <span
                         className="rounded-full px-2 py-px text-[10px] font-medium"
                         style={{ color: def.tone, backgroundColor: `color-mix(in srgb, ${def.tone} 14%, transparent)` }}
