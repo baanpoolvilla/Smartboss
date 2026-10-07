@@ -516,27 +516,27 @@ function BottomNavItem({
 }
 
 /**
- * แถบเมนูล่างแบบลอย (มือถือ) — การ์ดขาวมุมมน มีเงา เว้นขอบซ้าย/ขวา/ล่าง ("ของเราไม่ดูไม่มีมิติเลย")
- * พื้นที่รวมยังสูง 68px เท่าเดิม (แถบ 60px + ขอบล่าง 8px) — หน้าต่าง ๆ เว้นที่ด้วย pb-[68px]
+ * แถบเมนูล่าง (มือถือ) — ติดขอบล่างเต็มความกว้าง ("ชิดขอบล่างเลย จะได้ประหยัดพื้นที่") มุมบนมน เงาขึ้นด้านบน
+ * สูง 68px เท่าเดิม — หน้าต่าง ๆ เว้นที่ด้วย pb-[68px]
  * และปฏิทินคำนวณความสูงจาก 68 อยู่แล้ว เปลี่ยนตัวเลขนี้ต้องไล่แก้ที่พวกนั้นด้วย
  * ช่องว่างรอบแถบปล่อยให้กดทะลุถึงเนื้อหาข้างหลัง (pointer-events-none ที่กรอบนอก)
  */
 function BottomBar({ children, notch = false }: { children: React.ReactNode; notch?: boolean }) {
   return (
-    <nav data-bottom-nav className="pointer-events-none fixed inset-x-0 bottom-0 z-40 h-[68px] px-2.5 pb-2 lg:hidden">
+    <nav data-bottom-nav className="pointer-events-none fixed inset-x-0 bottom-0 z-40 h-[68px] lg:hidden">
       {notch ? (
         // แถบเว้าโค้งรับปุ่มกลาง: ตัดวงกลมออกจากพื้นขาวด้วย mask — เงาต้องใช้ drop-shadow ที่ชั้นนอก
         // (box-shadow โดน mask ตัดไปด้วย)
-        <div className="pointer-events-auto relative flex h-full items-stretch [filter:drop-shadow(0_8px_14px_rgba(27,37,55,0.12))_drop-shadow(0_1px_2px_rgba(27,37,55,0.08))]">
+        <div className="pointer-events-auto relative flex h-full items-stretch [filter:drop-shadow(0_-4px_12px_rgba(27,37,55,0.10))_drop-shadow(0_-1px_1px_rgba(27,37,55,0.05))]">
           <div
             aria-hidden
-            className="absolute inset-0 rounded-[22px] bg-(--bg)"
+            className="absolute inset-0 rounded-t-[22px] bg-(--bg)"
             style={{ maskImage: NOTCH_MASK, WebkitMaskImage: NOTCH_MASK }}
           />
           {children}
         </div>
       ) : (
-        <div className="pointer-events-auto flex h-full items-stretch rounded-[22px] bg-(--bg) shadow-[0_10px_24px_rgba(15,30,60,0.16),0_2px_6px_rgba(15,30,60,0.08)] ring-1 ring-black/[0.04]">
+        <div className="pointer-events-auto flex h-full items-stretch rounded-t-[22px] bg-(--bg) shadow-[0_-4px_16px_rgba(15,30,60,0.10),0_-1px_2px_rgba(15,30,60,0.05)]">
           {children}
         </div>
       )}
