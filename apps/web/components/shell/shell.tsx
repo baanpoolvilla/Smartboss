@@ -463,12 +463,15 @@ function BottomNavItem({
   active,
   onClick,
   badge,
+  dot = false,
 }: {
   label: string;
   icon?: string;
   href?: string;
   active: boolean;
   onClick?: () => void;
+  /** แถบของหน้าแรก: เมนูที่อยู่เป็นตัวน้ำเงินเข้ม + จุดเขียวข้างใต้ แทนพื้นสีอ่อน */
+  dot?: boolean;
   /** Optional count/dot pill from the module manifest. Overlaid on the icon's
    * top-right corner (absolute) so it never widens the already-tight bottom
    * bar — see manifest.ts's ModuleMenuItem.badge. */
@@ -479,7 +482,7 @@ function BottomNavItem({
       <span
         className={cn(
           "relative flex h-7 w-14 items-center justify-center rounded-full transition-colors",
-          active && "bg-(--app-soft,#CCFBF1)"
+          active && !dot && "bg-(--app-soft,#CCFBF1)"
         )}
       >
         {icon ? <Icon name={icon} className="h-5 w-5" /> : <MoreHorizontal className="h-5 w-5" />}
@@ -488,13 +491,16 @@ function BottomNavItem({
         ) : null}
       </span>
       <span className="mt-0.5 truncate text-[11px] leading-tight">{label}</span>
+      {dot && active && <span className="absolute bottom-1 h-[5px] w-[5px] rounded-full bg-(--brand-green)" />}
     </>
   );
 
   const className = cn(
-    "flex min-w-0 flex-1 flex-col items-center justify-center px-1",
+    "relative flex min-w-0 flex-1 flex-col items-center justify-center px-1",
     active
-      ? "font-bold text-(--app-strong,var(--ink))"
+      ? dot
+        ? "font-bold text-(--brand-navy)"
+        : "font-bold text-(--app-strong,var(--ink))"
       : "text-(--ink-soft)"
   );
 
@@ -515,20 +521,44 @@ function BottomNavItem({
  * และปฏิทินคำนวณความสูงจาก 68 อยู่แล้ว เปลี่ยนตัวเลขนี้ต้องไล่แก้ที่พวกนั้นด้วย
  * ช่องว่างรอบแถบปล่อยให้กดทะลุถึงเนื้อหาข้างหลัง (pointer-events-none ที่กรอบนอก)
  */
-function BottomBar({ children }: { children: React.ReactNode }) {
+function BottomBar({ children, notch = false }: { children: React.ReactNode; notch?: boolean }) {
   return (
     <nav data-bottom-nav className="pointer-events-none fixed inset-x-0 bottom-0 z-40 h-[68px] px-2.5 pb-2 lg:hidden">
-      <div className="pointer-events-auto flex h-full items-stretch rounded-[22px] bg-(--bg) shadow-[0_10px_24px_rgba(15,30,60,0.16),0_2px_6px_rgba(15,30,60,0.08)] ring-1 ring-black/[0.04]">
-        {children}
-      </div>
+      {notch ? (
+        // แถบเว้าโค้งรับปุ่มกลาง: ตัดวงกลมออกจากพื้นขาวด้วย mask — เงาต้องใช้ drop-shadow ที่ชั้นนอก
+        // (box-shadow โดน mask ตัดไปด้วย)
+        <div className="pointer-events-auto relative flex h-full items-stretch [filter:drop-shadow(0_8px_14px_rgba(27,37,55,0.12))_drop-shadow(0_1px_2px_rgba(27,37,55,0.08))]">
+          <div
+            aria-hidden
+            className="absolute inset-0 rounded-[22px] bg-(--bg)"
+            style={{ maskImage: NOTCH_MASK, WebkitMaskImage: NOTCH_MASK }}
+          />
+          {children}
+        </div>
+      ) : (
+        <div className="pointer-events-auto flex h-full items-stretch rounded-[22px] bg-(--bg) shadow-[0_10px_24px_rgba(15,30,60,0.16),0_2px_6px_rgba(15,30,60,0.08)] ring-1 ring-black/[0.04]">
+          {children}
+        </div>
+      )}
     </nav>
   );
 }
 
+/** วงที่เว้าออกจากขอบบนตรงกลางแถบ — ใหญ่กว่าปุ่ม (50px) นิดหน่อยให้เห็นขอบโค้งรอบปุ่ม */
+const NOTCH_MASK = "radial-gradient(circle 32px at 50% -4px, transparent 31px, #000 32px)";
+
+/** สีปุ่มลงเวลา — สีจากโลโก้เท่านั้น: เขียว "Smart" = เข้างาน · น้ำเงินเข้ม "Boss" = ออกงาน · เขียวอ่อน = ลงครบแล้ว */
+const CLOCK_LOOK = {
+  in: { bg: "linear-gradient(155deg,#6fcf63,#3a9a2f)", icon: "#fff", text: "#3a9a2f", glow: "rgba(76,185,63,0.35)" },
+  out: { bg: "linear-gradient(155deg,#34435e,var(--brand-navy))", icon: "#fff", text: "var(--brand-navy)", glow: "rgba(27,37,55,0.30)" },
+  done: { bg: "linear-gradient(155deg,#eaf7e7,#d6efd1)", icon: "#3a9a2f", text: "var(--ink-soft)", glow: "rgba(27,37,55,0.10)" },
+} as const;
+
 /**
  * แถบเมนูล่างของหน้าแรก (มือถือ) — หน้าหลัก · แชท · [ลงเวลา] · แจ้งเตือน · บัญชี
  * ปุ่มกลาง "ลงเวลา" ยกขึ้นเป็นวงกลม มีเฉพาะคนที่ต้องลงเวลา (สถานะเดียวกับไอคอนลงเวลาในหน้าแรก)
- * สีบอกว่ากดเข้าไปจะได้ทำอะไร: เขียว เข้างาน · ส้ม ออกงาน · เทา ลงครบแล้ว
+ * สีบอกว่ากดเข้าไปจะได้ทำอะไร (CLOCK_LOOK): เขียว เข้างาน · น้ำเงินเข้ม ออกงาน · เขียวอ่อน ลงครบแล้ว
+ * แถบเว้าโค้งรับปุ่มกลาง ใต้ปุ่มบอกเวลาเข้า (แทนไอคอนลงเวลาบนหน้าแรกที่ซ่อนไว้บนมือถือ)
  * หน้าในโมดูลไม่มีปุ่มกลาง ("หน้าอื่นๆไม่ต้องมีตัวกลาง") — ใช้ ModuleBottomNav
  */
 function HomeBottomNav({
@@ -545,31 +575,27 @@ function HomeBottomNav({
   const { unread } = useShell();
   const clock = useClockState(userId);
   const clockVisible = showClock && clock.kind !== "hidden" && clock.kind !== "loading";
-  const clockColor =
-    clock.kind === "in" ? "var(--tone-ok, #16a34a)" : clock.kind === "out" ? "var(--tone-warn, #ea580c)" : "var(--ink-soft)";
-  const clockLabel = clock.kind === "in" ? "เข้างาน" : clock.kind === "out" ? "ออกงาน" : "ลงเวลา";
+  const look = clock.kind === "in" ? CLOCK_LOOK.in : clock.kind === "out" ? CLOCK_LOOK.out : CLOCK_LOOK.done;
+  const clockLabel = clock.kind === "in" ? "เข้างาน" : clock.kind === "out" ? "ออกงาน" : clock.kind === "done" ? "ลงเวลาแล้ว" : "ลงเวลา";
+  const clockSub =
+    clock.kind === "out" && clock.since
+      ? `เข้า ${clock.since}`
+      : clock.kind === "done"
+        ? clock.since
+          ? `${clock.since}–${clock.at}`
+          : `ออก ${clock.at}`
+        : null;
 
-  return (
-    <BottomBar>
-      <BottomNavItem label="หน้าหลัก" icon="Home" href="/" active={pathname === "/"} />
-      {chatPath && <BottomNavItem label="แชท" icon="MessageCircle" href={chatPath} active={false} />}
-      {clockVisible && (
-        <Link
-          href="/hr/clock"
-          prefetch={false}
-          className="flex min-w-0 flex-1 flex-col items-center justify-end pb-1.5 text-[11px] font-bold leading-tight"
-          style={{ color: clockColor }}
-        >
-          <span
-            className="-mt-7 mb-0.5 flex h-[52px] w-[52px] items-center justify-center rounded-full text-white shadow-[0_8px_18px_rgba(15,30,60,0.25)] ring-[5px] ring-(--bg-soft) transition-transform active:scale-95"
-            style={{ backgroundColor: clockColor }}
-          >
-            <Clock className="h-6 w-6" />
-          </span>
-          {clockLabel}
-        </Link>
-      )}
+  const left = (
+    <>
+      <BottomNavItem dot label="หน้าหลัก" icon="Home" href="/" active={pathname === "/"} />
+      {chatPath && <BottomNavItem dot label="แชท" icon="MessageCircle" href={chatPath} active={false} />}
+    </>
+  );
+  const right = (
+    <>
       <BottomNavItem
+        dot
         label="แจ้งเตือน"
         icon="Bell"
         href="/notifications"
@@ -582,7 +608,36 @@ function HomeBottomNav({
           ) : null
         }
       />
-      <BottomNavItem label="บัญชี" icon="User" href="/account" active={pathname.startsWith("/account")} />
+      <BottomNavItem dot label="บัญชี" icon="User" href="/account" active={pathname.startsWith("/account")} />
+    </>
+  );
+
+  if (!clockVisible) return <BottomBar>{left}{right}</BottomBar>;
+
+  return (
+    <BottomBar notch>
+      {/* ซ้าย/ขวากว้างเท่ากันเสมอ ปุ่มกลางจะตรงกับรอยเว้าพอดี แม้ฝั่งซ้ายไม่มีแชท */}
+      <div className="relative flex flex-1">{left}</div>
+      <div className="w-[76px] shrink-0" />
+      <div className="relative flex flex-1">{right}</div>
+      <Link
+        href="/hr/clock"
+        prefetch={false}
+        className="absolute left-1/2 top-[-25px] flex w-[76px] -translate-x-1/2 flex-col items-center"
+      >
+        <span
+          className="flex h-[50px] w-[50px] items-center justify-center rounded-full transition-transform active:scale-95"
+          style={{ background: look.bg, color: look.icon, boxShadow: `0 8px 16px ${look.glow}, inset 0 1px 0 rgba(255,255,255,0.3)` }}
+        >
+          <Clock className="h-6 w-6" />
+        </span>
+        <span className="mt-[3px] whitespace-nowrap text-[10px] font-bold leading-tight" style={{ color: look.text }}>
+          {clockLabel}
+        </span>
+        {clockSub && (
+          <span className="whitespace-nowrap text-[9px] leading-tight tabular-nums text-(--ink-soft)">{clockSub}</span>
+        )}
+      </Link>
     </BottomBar>
   );
 }
