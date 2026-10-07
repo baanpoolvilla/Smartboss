@@ -171,7 +171,7 @@ async function postForOrg(orgId: string): Promise<number> {
       JOIN workforce.employments em ON em.id = e.employment_id
       JOIN workforce.principals  p  ON p.person_id = em.person_id
       WHERE e.status = 'ACCEPTED'
-        AND e.captured_at >= now() - make_interval(hours => ${LOOKBACK_HOURS})
+        AND e.captured_at >= now() - make_interval(hours => ${LOOKBACK_HOURS}::int)
         -- HR กด "ไม่นับรายการนี้" = เหมือนไม่เคยลง (ตรงกับตัวคิดชั่วโมงและกระดานของระบบบุคคล)
         AND NOT EXISTS (
           SELECT 1 FROM workforce.mobile_risk_assessments ra
