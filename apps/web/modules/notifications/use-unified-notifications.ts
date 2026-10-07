@@ -3,6 +3,7 @@
 import { useCallback, useMemo } from "react";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
+import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canManage } from "@/modules/report_task/lib/directory";
 import { useMaintenanceNotifStore } from "@/modules/notifications/use-maintenance-notifications";
@@ -87,6 +88,17 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
     [taskIdByTitle]
   );
 
+  // "เพิ่มคุณเข้าห้อง Report" รุ่นก่อนใส่ลิงก์ (กดแล้วไม่ไปไหน) — หาห้องจากชื่อ ไม่เจอก็พาไปหน้ารีพอต
+  const topics = useReportFeedStore((s) => s.topics);
+  const linkFromRoomAdd = useCallback(
+    (message: string, topicName: string | undefined): string | null => {
+      if (!message.includes("เพิ่มคุณเข้าห้อง")) return null;
+      const id = topicName ? topics.find((t) => t.name === topicName)?.id : undefined;
+      return id ? `/chat-report/report-feed?topic=${id}` : "/chat-report/report-feed";
+    },
+    [topics]
+  );
+
   const items = useMemo<UnifiedNotification[]>(() => {
     const fromReport: UnifiedNotification[] = reportNotifications
       .filter((n) => n.userId === viewingAsUserId && (includeRoomPosts || !isRoomPost(n)))
@@ -108,7 +120,7 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
         read: n.read,
         // แจ้งเตือนงานรุ่นเก่าที่ไม่ได้ใส่ลิงก์ (เช่น "ส่งงาน/ทำเครื่องหมาย "ชื่องาน" ว่าเสร็จ")
         // — หางานจากชื่อในเครื่องหมายคำพูด ถ้าตรงงานเดียวก็กดเปิดงานนั้นได้
-        link: n.link ?? linkFromQuotedTaskTitle(n.message),
+        link: n.link ?? linkFromRoomAdd(n.message, n.topicName) ?? linkFromQuotedTaskTitle(n.message),
       }));
 
     const fromMaintenance: UnifiedNotification[] = maintenanceItems.map((n) => {
@@ -157,7 +169,7 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
     return [...fromReport, ...fromMaintenance, ...fromOrgActivity].sort(
       (a, b) => Number(a.read) - Number(b.read) || b.createdAt.localeCompare(a.createdAt)
     );
-  }, [reportNotifications, maintenanceItems, orgItems, viewingAsUserId, includeRoomPosts, includeOrgActivity, taskIdSet, tasksLoaded, linkFromQuotedTaskTitle]);
+  }, [reportNotifications, maintenanceItems, orgItems, viewingAsUserId, includeRoomPosts, includeOrgActivity, taskIdSet, tasksLoaded, linkFromQuotedTaskTitle, linkFromRoomAdd]);
 
   const unreadCount = items.filter((n) => !n.read).length;
 

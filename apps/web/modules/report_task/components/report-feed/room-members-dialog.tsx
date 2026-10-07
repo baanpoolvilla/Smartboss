@@ -335,7 +335,7 @@ export function RoomMembersDialog({
     }
     if (newlyAdded.length > 0) {
       const actorName = getUser(viewingAsUserId)?.name ?? "มีคน";
-      useNotificationStore.getState().notifyMany(newlyAdded, viewingAsUserId, `${actorName} เพิ่มคุณเข้าห้อง Report "${topic.name}"`, undefined, undefined, topic.name);
+      useNotificationStore.getState().notifyMany(newlyAdded, viewingAsUserId, `${actorName} เพิ่มคุณเข้าห้อง Report "${topic.name}"`, undefined, `/chat-report/report-feed?topic=${topic.id}`, topic.name);
     }
     onOpenChange(false);
   }
