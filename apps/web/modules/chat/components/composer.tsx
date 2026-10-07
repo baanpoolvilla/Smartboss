@@ -12,6 +12,7 @@ import { compressImage } from "../lib/image-compress";
 import { attachmentLabel, formatDuration, formatFileSize } from "../lib/format";
 import { notifyTyping, sendChatMessage } from "../lib/chat-actions";
 import { getChatPrefs } from "../lib/prefs";
+import { DEPT_MENTION_PREFIX } from "../constants";
 import { ChatAvatar } from "./chat-avatar";
 
 import { fileTooLargeMessage } from "@/lib/file-limits";
@@ -223,8 +224,22 @@ export const Composer = forwardRef<
   const { candidates, truncated } = useMemo(() => {
     if (!mentionQuery) return { candidates: [], truncated: false };
     const q = mentionQuery.query.toLowerCase();
-    const list: { id: string; name: string; user?: ChatUser }[] = [];
+    const list: { id: string; name: string; user?: ChatUser; sub?: string }[] = [];
     if (channelType !== "dm" && "ทุกคน".includes(q)) list.push({ id: "all", name: "ทุกคน" });
+    // @แผนก — แผนกของคนที่อยู่ในห้องนี้ แท็กแล้วทุกคนในแผนกนั้น (ที่อยู่ในห้อง) ได้แจ้งเตือน
+    if (channelType !== "dm") {
+      const depts = new Map<string, { name: string; count: number }>();
+      for (const u of mentionable) {
+        if (!u.departmentId || !u.departmentName) continue;
+        const d = depts.get(u.departmentId) ?? { name: u.departmentName, count: 0 };
+        d.count += 1;
+        depts.set(u.departmentId, d);
+      }
+      for (const [id, d] of depts) {
+        if (q && !d.name.toLowerCase().includes(q)) continue;
+        list.push({ id: `${DEPT_MENTION_PREFIX}${id}`, name: d.name, sub: `แผนก · ${d.count} คน` });
+      }
+    }
     let more = false;
     for (const u of mentionable) {
       if (u.id === meId) continue;
@@ -405,7 +420,7 @@ export const Composer = forwardRef<
                 <span className="flex h-7 w-7 items-center justify-center rounded-full bg-(--chat-accent) text-xs font-bold text-white">@</span>
               )}
               <span className="min-w-0 flex-1 truncate">{c.name}</span>
-              {c.user?.departmentName && <span className="shrink-0 truncate text-[11px] text-(--ink-soft)">{c.user.departmentName}</span>}
+              {(c.sub ?? c.user?.departmentName) && <span className="shrink-0 truncate text-[11px] text-(--ink-soft)">{c.sub ?? c.user?.departmentName}</span>}
             </button>
           ))}
           {truncated && <p className="px-2 py-1.5 text-[11px] text-(--ink-soft)">พิมพ์ชื่อต่อจาก @ เพื่อหาคนอื่น</p>}

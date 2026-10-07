@@ -1,4 +1,5 @@
 import "server-only";
+import { DEPT_MENTION_PREFIX } from "../constants";
 import { isSingleEmoji } from "@/lib/emoji";
 import { prisma } from "@smartboss/database";
 import { rateLimit } from "@smartboss/auth/ratelimit";
@@ -139,12 +140,32 @@ export async function createMessage(
   if (Array.isArray(input.mentions) && body) {
     const wanted = Array.from(new Set(input.mentions.filter((m): m is string => typeof m === "string"))).slice(0, 50);
     const all = wanted.includes("all") && access.type !== "dm";
-    const userIds = wanted.filter((m) => m !== "all" && m !== actor.userId);
+    const userIds = wanted.filter((m) => m !== "all" && !m.startsWith(DEPT_MENTION_PREFIX) && m !== actor.userId);
     const valid =
       access.type === "org"
         ? (await prisma.user.findMany({ where: { orgId: actor.orgId, isActive: true, id: { in: userIds } }, select: { id: true } })).map((u) => u.id)
         : userIds.filter((id) => memberIds.includes(id));
-    mentions = [...(all ? ["all"] : []), ...valid];
+    // @แผนก — เก็บป้าย "dept:<id>" ไว้แสดงชื่อแผนก + กางเป็นรายชื่อคนในแผนกที่อยู่ในห้องนี้
+    // (ทุกอย่างที่อ่าน mentions อยู่แล้ว — แจ้งเตือน, ตัวนับ "ถูกแท็ก", เด้งแม้ปิดเสียง — ใช้ได้เลย)
+    const deptIds = access.type === "dm" ? [] : wanted.filter((m) => m.startsWith(DEPT_MENTION_PREFIX)).map((m) => m.slice(DEPT_MENTION_PREFIX.length));
+    const deptMembers =
+      deptIds.length === 0
+        ? []
+        : await prisma.user.findMany({
+            where: {
+              orgId: actor.orgId,
+              isActive: true,
+              departmentId: { in: deptIds },
+              ...(access.type === "org" ? {} : { id: { in: memberIds } }),
+            },
+            select: { id: true, departmentId: true },
+          });
+    const tagged = new Set(deptMembers.map((u) => u.departmentId));
+    mentions = [
+      ...(all ? ["all"] : []),
+      ...deptIds.filter((id) => tagged.has(id)).map((id) => `${DEPT_MENTION_PREFIX}${id}`),
+      ...new Set([...valid, ...deptMembers.map((u) => u.id).filter((id) => id !== actor.userId)]),
+    ];
   }
 
   let row;

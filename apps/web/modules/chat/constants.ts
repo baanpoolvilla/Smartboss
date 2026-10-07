@@ -9,3 +9,6 @@ export const CHAT_PAGE_PATH = "/chat-report/chat";
 
 /** ห้องรวมทั้งบริษัท — สร้างครั้งเดียวต่อบริษัทตอนเข้าเพจครั้งแรก (ดู data/channels.ts) */
 export const CHAT_ORG_CHANNEL_NAME = "ห้องรวมทั้งบริษัท";
+
+/** ป้ายแท็กแผนกใน mentions ของข้อความแชท: "dept:<departmentId>" (ฝั่งเซิร์ฟเวอร์กางเป็นรายชื่อคนในแผนกให้ด้วย) */
+export const DEPT_MENTION_PREFIX = "dept:";

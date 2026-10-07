@@ -2,6 +2,7 @@
 
 import { Fragment, type ReactNode } from "react";
 import type { ChatUser } from "../types";
+import { DEPT_MENTION_PREFIX } from "../constants";
 
 const URL_RE = /(https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]])/g;
 
@@ -49,8 +50,18 @@ export function MessageText({
   users: Record<string, ChatUser>;
   meId: string;
 }) {
+  const myDept = users[meId]?.departmentId ?? null;
   const names = mentions
-    .map((id) => (id === "all" ? { id, name: "ทุกคน" } : users[id] ? { id, name: users[id]!.name } : null))
+    .map((id) => {
+      if (id === "all") return { id, name: "ทุกคน" };
+      if (id.startsWith(DEPT_MENTION_PREFIX)) {
+        // ชื่อแผนกหาจากคนในรายชื่อที่อยู่แผนกนั้น — ไม่ต้องโหลดรายชื่อแผนกแยก
+        const deptId = id.slice(DEPT_MENTION_PREFIX.length);
+        const name = Object.values(users).find((u) => u.departmentId === deptId)?.departmentName;
+        return name ? { id: deptId === myDept ? meId : id, name } : null;
+      }
+      return users[id] ? { id, name: users[id]!.name } : null;
+    })
     .filter((x): x is { id: string; name: string } => Boolean(x))
     .sort((a, b) => b.name.length - a.name.length);
 
