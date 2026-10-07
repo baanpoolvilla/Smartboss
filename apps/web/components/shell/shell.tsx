@@ -621,7 +621,7 @@ function HomeBottomNav({
       <div className="w-[76px] shrink-0" />
       <div className="relative flex flex-1">{right}</div>
       <Link
-        href="/hr/clock"
+        href="/clock"
         prefetch={false}
         className="absolute left-1/2 top-[-25px] flex w-[76px] -translate-x-1/2 flex-col items-center"
       >

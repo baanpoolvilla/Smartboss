@@ -39,8 +39,8 @@ export const hrManifest: ModuleManifest = {
           "ml-auto flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-(--danger) px-1 text-[10px] font-bold text-white",
       }),
     },
-    // ลงเวลาเข้า/ออกของตัวเอง — หน้าจอเดียวกับใน LINE Mini App (ดู hr/clock/page.tsx)
-    ...(APP_CLOCK_ENABLED ? [{ label: "ลงเวลา", path: "/hr/clock", permission: HR_PERMS.access, icon: "Clock" }] : []),
+    // ลงเวลาเข้า/ออกของตัวเอง — หน้าจอเดียวกับใน LINE Mini App (ดู app/(shell)/clock/page.tsx)
+    ...(APP_CLOCK_ENABLED ? [{ label: "ลงเวลา", path: "/clock", permission: HR_PERMS.access, icon: "Clock" }] : []),
     // ลงเวลาจากมือถือที่ GPS ผ่านแต่มีข้อสังเกต — นับเวลาแล้ว มีไว้ให้ HR เห็นแล้วไปถามเอง
     { label: "ลงเวลาผิดปกติ", path: "/hr/checkin-review", permission: HR_PERMS.employeeManage, icon: "ShieldCheck" },
     { label: "พนักงาน", path: "/hr/employees", permission: HR_PERMS.employeeView, icon: "Users" },

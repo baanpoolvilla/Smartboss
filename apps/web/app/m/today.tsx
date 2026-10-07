@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { MapBoundary } from "./map-boundary";
 import { checkinFlagLabel } from "@/modules/hr/lib/checkin-flags";
-import { clockState } from "@/modules/hr/lib/clock-state";
+import { CLOCK_CHANGED_EVENT, clockState } from "@/modules/hr/lib/clock-state";
 import { DesktopQr, useIsDesktop } from "./desktop-qr";
 /**
  * ต้องโหลดแบบ `ssr: false` เท่านั้น — ห้ามเปลี่ยนเป็น static import เด็ดขาด
@@ -254,6 +254,9 @@ export function Today({
           typeof payload.distanceM === "number"
             ? ` (ห่างจากจุดที่ตั้งไว้ ${Math.round(payload.distanceM)} ม.)`
             : "";
+
+        // แถบล่าง (ปุ่มลงเวลาตรงกลาง) อยู่บนจอเดียวกัน — บอกให้อ่านสถานะใหม่
+        window.dispatchEvent(new Event(CLOCK_CHANGED_EVENT));
 
         // มีข้อสังเกตก็นับเวลาแล้ว (HR ไปถามเองถ้าแปลก ดูหน้า "ลงเวลาผิดปกติ") — พนักงานเห็นว่าบันทึกสำเร็จ
         if (payload.decision === "ACCEPTED" || payload.decision === "ACCEPTED_WITH_WARNING") {

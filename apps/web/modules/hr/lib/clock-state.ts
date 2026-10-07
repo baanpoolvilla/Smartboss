@@ -39,3 +39,6 @@ export function clockState<E extends ClockEventLike>(
 
 /** กะดึก: ยังอยู่ในงานจากเมื่อวาน ถ้าเข้ามาไม่เกินกี่ชั่วโมง (เกินนี้ = ลืมกดออก ไม่ใช่กะข้ามคืน) */
 export const CARRY_OVER_HOURS = 14;
+
+/** หน้าลงเวลายิงเหตุการณ์นี้หลังกดลงเวลา — ปุ่มกลางของแถบล่างที่ค้างอยู่บนจออัปเดตตามทันที */
+export const CLOCK_CHANGED_EVENT = "smartboss:clock-changed";

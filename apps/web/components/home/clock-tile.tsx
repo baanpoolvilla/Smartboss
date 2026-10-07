@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Clock } from "lucide-react";
-import { clockState } from "@/modules/hr/lib/clock-state";
+import { CLOCK_CHANGED_EVENT, clockState } from "@/modules/hr/lib/clock-state";
 
 /**
- * ไอคอน "ลงเวลา" บนหน้าแรก — กดแล้วเปิดหน้าลงเวลา (/hr/clock) ที่มีปุ่มใหญ่ให้กดอีกที
+ * ไอคอน "ลงเวลา" บนหน้าแรก — กดแล้วเปิดหน้าลงเวลา (/clock) ที่มีปุ่มใหญ่ให้กดอีกที
  * (สองแตะโดยตั้งใจ — แตะไอคอนพลาดต้องไม่กลายเป็นลงเวลาไปแล้ว)
  *
  * สี/ข้อความใต้ไอคอนบอกว่าเข้าไปแล้วจะได้กดอะไร: เขียว "เข้างาน" · ส้ม "ออกงาน" (เข้าแล้ว)
@@ -80,19 +80,24 @@ export function useClockState(userId: string): ClockState {
 
   useEffect(() => {
     let cancelled = false;
-    loadClockState(userId).then((next) => {
-      if (cancelled) return;
-      if (next === null) {
-        // มีคำตอบเดิมอยู่แล้วก็คงไว้ — เน็ตสะดุดไม่ควรทำให้ไอคอนเปลี่ยนเป็นสีเทา
-        if (!lastKnown.has(userId)) setState({ kind: "unknown" });
-        return;
-      }
-      // โหลดพลาดชั่วคราว (unknown) ไม่ทับคำตอบดีที่จำไว้
-      if (next.kind !== "unknown") lastKnown.set(userId, next);
-      setState(next);
-    });
+    const load = () =>
+      loadClockState(userId).then((next) => {
+        if (cancelled) return;
+        if (next === null) {
+          // มีคำตอบเดิมอยู่แล้วก็คงไว้ — เน็ตสะดุดไม่ควรทำให้ไอคอนเปลี่ยนเป็นสีเทา
+          if (!lastKnown.has(userId)) setState({ kind: "unknown" });
+          return;
+        }
+        // โหลดพลาดชั่วคราว (unknown) ไม่ทับคำตอบดีที่จำไว้
+        if (next.kind !== "unknown") lastKnown.set(userId, next);
+        setState(next);
+      });
+    load();
+    // เพิ่งกดลงเวลาในหน้าลงเวลา — แถบล่างอยู่บนจอต่อ ไม่ได้โหลดใหม่ ต้องถามสถานะใหม่เอง
+    window.addEventListener(CLOCK_CHANGED_EVENT, load);
     return () => {
       cancelled = true;
+      window.removeEventListener(CLOCK_CHANGED_EVENT, load);
     };
   }, [userId]);
 
@@ -116,7 +121,7 @@ export function ClockTile({ userId }: { userId: string }) {
   return (
     // มือถือ: ซ่อน — ปุ่มกลางของแถบเมนูล่างทำหน้าที่เดียวกันแล้ว ("ถ้ามีล่างแล้วข้างบนไม่มีก็ได้")
     // จอใหญ่ไม่มีแถบล่าง (lg:hidden) เลยยังต้องมีไอคอนนี้
-    <Link prefetch={false} href="/hr/clock" className="group hidden flex-col items-center lg:flex">
+    <Link prefetch={false} href="/clock" className="group hidden flex-col items-center lg:flex">
       <span
         className="relative flex h-[80px] w-[80px] items-center justify-center rounded-[26px] shadow-(--shadow-card) ring-1 ring-black/[0.04] transition-transform duration-150 group-hover:-translate-y-0.5 group-active:scale-95 sm:h-[92px] sm:w-[92px]"
         style={{ backgroundColor: look.bg }}
