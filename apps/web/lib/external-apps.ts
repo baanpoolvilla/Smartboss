@@ -1,4 +1,4 @@
-import { MessageCircle, Send, type LucideIcon } from "lucide-react";
+import { Car, MessageCircle, Send, type LucideIcon } from "lucide-react";
 
 /**
  * เว็บภายนอกที่บริษัททำไว้เอง (ไม่ได้อยู่ใน SmartBoss) — รวมลิงก์ไว้ให้กดเปิด
@@ -18,8 +18,14 @@ export const EXTERNAL_APP_GROUPS: Record<ExternalAppGroup, { title: string; subt
   marketing: { title: "การตลาด", subtitle: "เว็บของทีมการตลาด", moduleCode: "marketing" },
 };
 
+/**
+ * "home" = ไม่อยู่ใต้การ์ดทีมไหน — ขึ้นเป็นไอคอนของตัวเองฝั่งขวา ("อื่น ๆ") ของหน้าแรก
+ * (เว็บใช้ภายในทั้งบริษัท เช่น ระบบใช้รถ — ไม่ใช่ของทีมขาย/การตลาด)
+ */
+export type ExternalAppPlacement = ExternalAppGroup | "home";
+
 export interface ExternalApp {
-  group: ExternalAppGroup;
+  group: ExternalAppPlacement;
   name: string;
   description: string;
   url: string;
@@ -69,6 +75,24 @@ export const SALES_MARKETING_APPS: ExternalApp[] = [
     color: "var(--mod-sale)",
     colorBg: "var(--mod-sale-bg)",
   },
+  {
+    group: "home",
+    name: "ใช้รถบริษัท",
+    description: "ขอใช้รถ อนุมัติ ตรวจสภาพรถก่อน–หลัง",
+    url: "https://carapprove.vercel.app/",
+    // ล็อกอินให้เลยแบบ Multi Post — ฝั่งเว็บรถต้องมีหน้า /sso ตาม docs/carapprove-sso.md
+    // ยังไม่ตั้ง SSO_CARAPPROVE_SECRET = เปิดหน้าเว็บรถธรรมดา (ล็อกอินเองในกรอบ) ไม่พัง
+    // embed=1 → เว็บรถต้องตั้ง cookie แบบ SameSite=None; Secure; Partitioned ไม่งั้นในกรอบล็อกอินแล้วหลุด
+    sso: {
+      key: "carapprove",
+      secretEnv: "SSO_CARAPPROVE_SECRET",
+      entry: "https://carapprove.vercel.app/sso?token={token}",
+      embedParam: "embed=1",
+    },
+    icon: Car,
+    color: "#1d4ed8",
+    colorBg: "#dbeafe",
+  },
 ];
 
 /** ชื่อในลิงก์ของแอป — /sales-marketing/app/<key> (หน้าที่เปิดแอปไว้ข้างใน SmartBoss) */
@@ -76,6 +100,6 @@ export function appKey(app: ExternalApp): string {
   return app.sso?.key ?? new URL(app.url).host.split(".")[0]!;
 }
 
-export function appsInGroup(group: ExternalAppGroup): ExternalApp[] {
+export function appsInGroup(group: ExternalAppPlacement): ExternalApp[] {
   return SALES_MARKETING_APPS.filter((a) => a.group === group);
 }

@@ -17,7 +17,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ app:
 
   const target = await ssoTarget(app, { embed: false });
   if (target.kind === "login") {
-    return NextResponse.redirect(new URL(`/login?next=${encodeURIComponent(`/sales-marketing/${app.group}`)}`, req.url));
+    return NextResponse.redirect(new URL(`/login?next=${encodeURIComponent(app.group === "home" ? `/sales-marketing/app/${key}` : `/sales-marketing/${app.group}`)}`, req.url));
   }
   const res = NextResponse.redirect(target.url);
   res.headers.set("Cache-Control", "no-store");

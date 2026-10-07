@@ -28,8 +28,8 @@ export default async function EmbeddedAppPage({ params }: { params: Promise<{ ke
       // ลิงก์ใหม่ (token ใหม่) = ประกอบหน้าใหม่ทั้งอัน สถานะโหลด/หมดอายุเริ่มใหม่เอง
       key={target.issuedAt}
       name={app.name}
-      backHref={`/sales-marketing/${app.group}`}
-      backLabel={EXTERNAL_APP_GROUPS[app.group].title}
+      backHref={app.group === "home" ? "/" : `/sales-marketing/${app.group}`}
+      backLabel={app.group === "home" ? "หน้าแรก" : EXTERNAL_APP_GROUPS[app.group].title}
       host={new URL(app.url).host}
       src={target.url}
       issuedAt={target.issuedAt}
