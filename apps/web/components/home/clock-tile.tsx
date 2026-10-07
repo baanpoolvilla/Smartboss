@@ -36,8 +36,20 @@ function hhmm(iso: string): string {
   return new Date(iso).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
 }
 
-export function ClockTile() {
-  const [state, setState] = useState<ClockState>({ kind: "loading" });
+/**
+ * คำตอบล่าสุดของแต่ละคน (จำในหน้าต่างนี้) — กลับมาหน้าแรกแล้วไอคอนขึ้นทันทีเหมือนเดิม แล้วค่อยอัปเดตเงียบ ๆ
+ * เดิมเริ่มจาก "ยังไม่รู้" ทุกครั้งที่เปิดหน้าแรก ไอคอนเลยหายไปแวบหนึ่งแล้วโผล่ ดันไอคอนอื่นขยับไปมา
+ * (ผูกกับ userId — สลับบัญชีในหน้าต่างเดิมต้องไม่เห็นของคนก่อน)
+ */
+const lastKnown = new Map<string, ClockState>();
+
+export function ClockTile({ userId }: { userId: string }) {
+  const [state, setStateRaw] = useState<ClockState>(() => lastKnown.get(userId) ?? { kind: "loading" });
+  const setState = (next: ClockState) => {
+    // โหลดพลาดชั่วคราว (unknown) ไม่ทับคำตอบดีที่จำไว้
+    if (next.kind !== "unknown") lastKnown.set(userId, next);
+    setStateRaw(next);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -60,13 +72,16 @@ export function ClockTile() {
         else if (lastOut) setState({ kind: "done", since: firstIn ? hhmm(firstIn.capturedAt) : null, at: hhmm(lastOut.capturedAt) });
         else setState({ kind: "in" });
       } catch {
-        if (!cancelled) setState({ kind: "unknown" });
+        // มีคำตอบเดิมอยู่แล้วก็คงไว้ — เน็ตสะดุดไม่ควรทำให้ไอคอนเปลี่ยนเป็นสีเทา
+        if (!cancelled && !lastKnown.has(userId)) setState({ kind: "unknown" });
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+    // setState เป็นฟังก์ชันธรรมดาที่อ้าง userId ตัวเดียวกับ dependency ข้างล่าง
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
   // ยังไม่รู้ว่าต้องลงเวลาไหม = ยังไม่โชว์ — ไม่ให้คนที่ไม่ต้องลงเห็นไอคอนแวบขึ้นมาแล้วหายไป
   if (state.kind === "hidden" || state.kind === "loading") return null;
