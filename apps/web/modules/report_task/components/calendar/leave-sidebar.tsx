@@ -364,7 +364,15 @@ export function LeaveSidebar({
   // ช่อง "วันหยุดประจำ" ของการ์ดนี้เดิมนับเฉพาะวันหยุดประจำที่ตั้งเองในโมดูลนี้ ซึ่งเลิกใช้แล้ว (ลง Day-Off ที่ HR)
   // เลยขึ้น 0/4 ทั้งที่ในปฏิทินมี Day-Off อยู่ ("มันต้องดึงมาจาก hr สิ")
   const myHrDayOffDays = leaves
-    .filter((e) => e.type === "dayoff" && e.userId === viewingAsUserId && inRange(e.start, range))
+    // ใบประเภท Holiday ก็เป็น "dayoff" (อนุมัติอัตโนมัติ) เหมือนกัน แต่มีช่อง "Holiday เหลือ" ของตัวเองข้าง ๆ
+    // — ไม่นับปนใน Day-Off (เกณฑ์ชื่อเดียวกับป้ายบนรูปโปรไฟล์ในแชท modules/chat/data/off-today.ts)
+    .filter(
+      (e) =>
+        e.type === "dayoff" &&
+        e.userId === viewingAsUserId &&
+        inRange(e.start, range) &&
+        !/holiday|ฮอลิเดย์|นักขัตฤกษ์/i.test(`${e.typeName ?? ""} ${e.title}`)
+    )
     .reduce((sum, e) => {
       const start = new Date(`${e.start.slice(0, 10)}T00:00:00`).getTime();
       const end = e.end ? new Date(`${e.end.slice(0, 10)}T00:00:00`).getTime() : start + 86_400_000;
