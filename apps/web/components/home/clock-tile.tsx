@@ -114,7 +114,9 @@ export function ClockTile({ userId }: { userId: string }) {
           : { bg: "var(--ink-soft)", label: "ลงเวลา", sub: "" };
 
   return (
-    <Link prefetch={false} href="/hr/clock" className="group flex flex-col items-center">
+    // มือถือ: ซ่อน — ปุ่มกลางของแถบเมนูล่างทำหน้าที่เดียวกันแล้ว ("ถ้ามีล่างแล้วข้างบนไม่มีก็ได้")
+    // จอใหญ่ไม่มีแถบล่าง (lg:hidden) เลยยังต้องมีไอคอนนี้
+    <Link prefetch={false} href="/hr/clock" className="group hidden flex-col items-center lg:flex">
       <span
         className="relative flex h-[80px] w-[80px] items-center justify-center rounded-[26px] shadow-(--shadow-card) ring-1 ring-black/[0.04] transition-transform duration-150 group-hover:-translate-y-0.5 group-active:scale-95 sm:h-[92px] sm:w-[92px]"
         style={{ backgroundColor: look.bg }}
