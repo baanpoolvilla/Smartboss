@@ -631,8 +631,9 @@ export function LeaveCalendar({
                     className="flex h-full min-h-[3.25rem] min-w-0 flex-col gap-0.5 border-b border-r border-(--line)/70 p-0.5 text-left sm:min-h-24 sm:p-1 lg:min-h-[7.5rem] xl:min-h-[8.75rem] xl:gap-1 xl:p-1.5"
                     style={{
                       opacity: cell.inMonth ? 1 : 0.4,
-                      // วันที่คนหยุดเยอะ: พื้นส้มจาง ๆ แทนกรอบส้มหนา — ยังสังเกตได้แต่ไม่ตัดกันทั้งตาราง
-                      backgroundColor: heavy ? "color-mix(in srgb, var(--tone-warn) 7%, transparent)" : undefined,
+                      // พื้นสีมีไว้บอก "วันนี้" อย่างเดียว — วันที่คนหยุดเยอะเหลือแค่ ⚠ มุมซ้าย
+                      // (เดิมพื้นส้มจาง ๆ ทั้งช่อง พอหลายวันติดกันทั้งตารางเป็นส้มจนหาวันนี้ไม่เจอ)
+                      backgroundColor: isToday ? "var(--app-soft)" : undefined,
                     }}
                   >
                     <span className="flex items-center justify-between">
