@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { users, getUser, isOwner, departments } from "@/modules/report_task/lib/directory";
 import { canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { extractMentionedIds, mentionMarkersToPlainText } from "@/modules/report_task/lib/report-feed-rich-text";
+import { taggedUserIds } from "@/modules/report_task/lib/report-feed-mentions";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useActivityLogStore } from "@/modules/report_task/store/activity-log-store";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
@@ -743,7 +744,8 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         // not require a separate manual "mark as unread" first (see
         // markPostsRead, cleared once they actually open ที่กล่าวถึงฉัน).
         const postText = data.sections.flatMap((s) => s.bullets).join("\n");
-        const mentionedUserIds = extractMentionedIds(postText, "user").filter((id) => id !== authorId);
+        const topicForTags = get().topics.find((t) => t.id === topicId);
+        const mentionedUserIds = taggedUserIds(postText, topicForTags).filter((id) => id !== authorId);
         // "@ทุกคน" — scoped to whoever can actually see *this* room, not the
         // whole company (ดู textMentionsUser/canSeeReportTopic) — resolved
         // right below once `topic` is known.
@@ -839,8 +841,9 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         const oldText = textOf(before?.sections);
         const newText = textOf(data.sections ?? before?.sections);
         const authorId = before?.authorId ?? "";
-        const oldUsers = new Set(extractMentionedIds(oldText, "user"));
-        const addedUsers = extractMentionedIds(newText, "user").filter((id) => id !== authorId && !oldUsers.has(id));
+        const tagTopic = before ? get().topics.find((t) => t.id === before.topicId) : undefined;
+        const oldUsers = new Set(taggedUserIds(oldText, tagTopic));
+        const addedUsers = taggedUserIds(newText, tagTopic).filter((id) => id !== authorId && !oldUsers.has(id));
         const addedEveryone = extractMentionedIds(newText, "everyone").length > 0 && extractMentionedIds(oldText, "everyone").length === 0;
         const topic = before ? get().topics.find((t) => t.id === before.topicId) : undefined;
         const everyoneRecipients =
@@ -1038,7 +1041,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         // new post — skip whoever already got notified above as the
         // quoted-reply author or the post author, so a comment doesn't
         // double-notify someone who's both @mentioned and being replied to.
-        const mentionedInReply = extractMentionedIds(body, "user").filter(
+        const mentionedInReply = taggedUserIds(body, repliedTopic).filter(
           (id) => id !== authorId && id !== quotedAuthorId && id !== post.authorId
         );
         // "@ทุกคน" in a reply — same room-scoped resolution as addPost above,
