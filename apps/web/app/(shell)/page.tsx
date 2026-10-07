@@ -99,6 +99,11 @@ export default async function HomePage() {
   // เว็บใช้ภายในที่ไม่อยู่ใต้การ์ดทีมไหน (lib/external-apps.ts group "home") — ไอคอนของตัวเอง
   // ฝั่งขวา กดแล้วเปิดไว้ข้างใน SmartBoss (/sales-marketing/app/<key>) แบบเดียวกับเว็บของทีมขาย/การตลาด
   for (const app of appsInGroup("home")) {
+    // เปิดในกรอบข้างใน SmartBoss ได้ก็ต่อเมื่อ "ล็อกอินให้เลย" พร้อมแล้ว (ตั้ง secret ของแอปนั้น = ฝั่งแอปทำ /sso
+    // + cookie สำหรับกรอบแล้ว) — ยังไม่พร้อม เปิดเว็บนั้นในหน้าต่างของมันเองแทน: ล็อกอินเองในกรอบไม่ติด
+    // เพราะเบราว์เซอร์ (โดยเฉพาะ iPhone) ไม่ส่ง cookie แบบปกติของเว็บอื่นในกรอบ ⇒ ล็อกอินผ่านแล้วเด้งกลับ
+    // หน้าล็อกอินวนไป (เจอจริงกับ "ใช้รถบริษัท" 2026-10-07)
+    const ssoReady = Boolean(app.sso && process.env[app.sso.secretEnv]);
     tiles.push({
       code: `ext:${appKey(app)}`,
       name: app.name,
@@ -106,7 +111,7 @@ export default async function HomePage() {
       icon: app.icon,
       color: app.color,
       colorBg: app.colorBg,
-      href: `/sales-marketing/app/${appKey(app)}`,
+      href: ssoReady ? `/sales-marketing/app/${appKey(app)}` : app.url,
     });
   }
 
@@ -240,6 +245,21 @@ function AppIcon({ tile, size = "md" }: { tile: AppTile; size?: "md" | "lg" }) {
       >
         {body}
       </div>
+    );
+  }
+
+  // ลิงก์ออกนอก SmartBoss (เว็บภายนอกที่ยังเปิดในกรอบไม่ได้) — เปิดหน้าต่างใหม่ ไม่พาออกจากแอป
+  if (/^https?:\/\//.test(href)) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={tile.description}
+        className="group flex flex-col items-center rounded-xl outline-hidden focus-visible:ring-2 focus-visible:ring-(--brand-green)/40"
+      >
+        {body}
+      </a>
     );
   }
 
