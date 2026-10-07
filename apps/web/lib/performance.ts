@@ -479,3 +479,52 @@ export async function listUserEvents(
     take: opts.limit ?? 100,
   });
 }
+
+/**
+ * คะแนน/เกรดรายเดือนย้อนหลังของคนคนเดียว (หน้า "คะแนนของฉัน") — คิดแบบเดียวกับ
+ * buildScorecards ทุกอย่าง (baseScore + ผลรวม points ของเดือนนั้น, ตัดที่ scoringStartDate)
+ * แต่ดึงเหตุการณ์ของคนเดียวรวดเดียวทั้งช่วง ไม่ต้องคิดทั้งบริษัททีละเดือน
+ *
+ * `months` = รายการ YYYY-MM (ขอบเดือนแบบ UTC เดียวกับ monthRange) · เดือนที่จบก่อน
+ * scoringStartDate ได้ score = null (ยังไม่เริ่มนับคะแนน — ไม่ใช่ "คะแนนเต็ม")
+ */
+export async function buildUserMonthlyScores(
+  orgId: string,
+  userId: string,
+  months: string[],
+): Promise<{ month: string; score: number | null; grade: string | null; eventCount: number }[]> {
+  if (months.length === 0) return [];
+  const settings = await loadPerformanceSettings(orgId);
+  const bounds = (m: string) => {
+    const [y, mo] = m.split("-").map(Number);
+    return { from: new Date(Date.UTC(y!, mo! - 1, 1)), to: new Date(Date.UTC(y!, mo!, 1) - 1) };
+  };
+  const sorted = [...months].sort();
+  const from = bounds(sorted[0]!).from;
+  const to = bounds(sorted[sorted.length - 1]!).to;
+  const start = settings.scoringStartDate && settings.scoringStartDate > from ? settings.scoringStartDate : from;
+  const events = await prisma.performanceEvent.findMany({
+    where: { orgId, userId, occurredAt: { gte: start, lte: to } },
+    select: { id: true, userId: true, category: true, occurredAt: true, points: true, refType: true, refId: true },
+  });
+  const isReversed = reversedChecker(events);
+
+  const sum = new Map<string, { points: number; count: number }>();
+  for (const e of events) {
+    const d = e.occurredAt;
+    const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    const cur = sum.get(key) ?? { points: 0, count: 0 };
+    cur.points += Number(e.points);
+    if (!isReversalEvent(e) && !isReversed(e)) cur.count += 1;
+    sum.set(key, cur);
+  }
+
+  return months.map((month) => {
+    if (settings.scoringStartDate && bounds(month).to < settings.scoringStartDate) {
+      return { month, score: null, grade: null, eventCount: 0 };
+    }
+    const s = sum.get(month) ?? { points: 0, count: 0 };
+    const score = settings.baseScore + s.points;
+    return { month, score, grade: gradeOf(score, settings.gradeThresholds), eventCount: s.count };
+  });
+}
