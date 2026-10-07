@@ -112,12 +112,15 @@ export function RoomMembersDialog({
   topic,
   updateTopicSettings,
   canManage,
+  staged = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   topic: ReportTopic;
   updateTopicSettings: (id: string, patch: Partial<ReportTopic>) => void;
   canManage: boolean;
+  /** true = แค่เลือกเข้า draft ของหน้าต่างตั้งค่าห้อง (ยังไม่บันทึก) — ปุ่มเป็น "ตกลง" และยังไม่แจ้งเตือนคนที่ถูกเพิ่ม */
+  staged?: boolean;
 }) {
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   // Reactive roster — see RoomMembersSummaryCard for why. Until the real
@@ -333,7 +336,7 @@ export function RoomMembersDialog({
       if (checked.size === 0) return;
       updateTopicSettings(topic.id, { visibility: { userIds: [...checked], exemptUserIds } });
     }
-    if (newlyAdded.length > 0) {
+    if (newlyAdded.length > 0 && !staged) {
       const actorName = getUser(viewingAsUserId)?.name ?? "มีคน";
       useNotificationStore.getState().notifyMany(newlyAdded, viewingAsUserId, `${actorName} เพิ่มคุณเข้าห้อง Report "${topic.name}"`, undefined, `/chat-report/report-feed?topic=${topic.id}`, topic.name);
     }
@@ -440,7 +443,7 @@ export function RoomMembersDialog({
           {editable ? (
             <div className="flex gap-2">
               <Button data-tour="member-dialog-close" variant="outline" onClick={() => onOpenChange(false)}>ยกเลิก</Button>
-              <Button onClick={handleSave} disabled={!canSave}>บันทึก</Button>
+              <Button onClick={handleSave} disabled={!canSave}>{staged ? "ตกลง" : "บันทึก"}</Button>
             </div>
           ) : (
             <Button data-tour="member-dialog-close" variant="outline" onClick={() => onOpenChange(false)}>ปิด</Button>

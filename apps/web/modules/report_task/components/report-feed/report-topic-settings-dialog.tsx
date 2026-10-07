@@ -139,7 +139,7 @@ const modeOptions: { mode: VisibilityMode; label: string; icon: typeof Globe }[]
   { mode: "manager", label: "หัวหน้า/ผู้บริหาร", icon: Lock },
 ];
 
-/** One room's settings — lives on the settings page (src/app/settings/page.tsx), with a room picker above it since it's per-topic, not company-wide (there, every change still saves instantly — `onUpdate` isn't passed). Also reused inside room-settings-sheet.tsx, which batches everything into its own draft/Save-Cancel bar instead — passes `onUpdate` so visibility/min-images/cutoff changes land in that draft rather than the store directly, and `hideHeading` drops this component's own duplicate "ตั้งค่าห้อง X" line there. Member management (RoomMembersDialog below) always saves instantly either way — its own dialog, own explicit add/remove actions, not a form field to batch. */
+/** One room's settings — lives on the settings page (src/app/settings/page.tsx), with a room picker above it since it's per-topic, not company-wide (there, every change still saves instantly — `onUpdate` isn't passed). Also reused inside room-settings-sheet.tsx, which batches everything into its own draft/Save-Cancel bar instead — passes `onUpdate` so visibility/min-images/cutoff changes land in that draft rather than the store directly, and `hideHeading` drops this component's own duplicate "ตั้งค่าห้อง X" line there. Member management (RoomMembersDialog below) follows the same rule — instant here, staged into the sheet draft there (its button reads "ตกลง"). */
 export function ReportTopicSettingsPanel({
   topic,
   hideHeading,
@@ -193,7 +193,8 @@ export function ReportTopicSettingsPanel({
   // The owner has no such restriction; every mode/department stays theirs.
   function setMode(next: VisibilityMode) {
     if (!owner && next !== "department") return;
-    updateTopicSettings(topic.id, {
+    // apply = เข้า draft ในหน้าต่างตั้งค่าห้อง (ติดเมื่อกด "บันทึก") / เซฟทันทีที่ /settings
+    apply({
       visibility:
         next === "open"
           ? undefined
@@ -219,7 +220,7 @@ export function ReportTopicSettingsPanel({
     // silently lock everyone but the owner out with no way back short of
     // reopening this dialog and re-adding one.
     if (next.length === 0) return;
-    updateTopicSettings(topic.id, {
+    apply({
       visibility: {
         departmentIds: next,
         extraUserIds: visibility?.extraUserIds,
@@ -405,7 +406,10 @@ export function ReportTopicSettingsPanel({
               open={membersDialogOpen}
               onOpenChange={setMembersDialogOpen}
               topic={memberTopic}
-              updateTopicSettings={updateTopicSettings}
+              // หน้าต่างตั้งค่าห้อง (มี onUpdate): เลือกสมาชิกแล้วเข้า draft รอกด "บันทึก" ด้านล่างเหมือนช่องอื่น
+              // ("กดแล้วเลือก แล้วมากดบันทึกถึงจะเปลี่ยน") — แจ้งเตือน "เพิ่มคุณเข้าห้อง" ส่งตอนบันทึกจริง
+              updateTopicSettings={onUpdate ? (_id, patch) => apply(patch) : updateTopicSettings}
+              staged={!!onUpdate}
               canManage={owner || mode === "department"}
             />
           </div>

@@ -24,7 +24,9 @@ import { UNLIMITED_FILES_RETENTION_DAYS } from "@/modules/report_task/components
 import { useReportFeedStore, FEED_VIEW_MODE_LOCK_CUTOFF, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useActivityLogStore } from "@/modules/report_task/store/activity-log-store";
-import { canManage } from "@/modules/report_task/lib/directory";
+import { canManage, getUser, users } from "@/modules/report_task/lib/directory";
+import { canSeeReportTopic } from "@/modules/report_task/lib/permissions";
+import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { toast } from "sonner";
 import { Archive, ArchiveRestore, Info, Lock } from "lucide-react";
 
@@ -103,9 +105,8 @@ function describeChange(key: string, before: unknown, after: unknown): string {
 /**
  * Room settings, opened straight from the room's own ⚙ (Phase 6) — replaces
  * the old "gear ⚙ → whole-page navigation to /settings, pick this same room
- * again from a dropdown" round trip (G1/G2). Everything below except member
- * management (its own dialog, own explicit actions) and archive (its own
- * confirm step) batches into a local `draft` and only actually saves on
+ * again from a dropdown" round trip (G1/G2). Everything below except archive
+ * (its own confirm step) batches into a local `draft` and only actually saves on
  * "บันทึก" — reopening for a different room, or this same one again later,
  * resets the draft straight from the real topic, which is all "ยกเลิก"
  * needs to do too (nothing was ever written until Save was clicked).
@@ -148,12 +149,21 @@ export function RoomSettingsSheet({
   }
 
   function handleSave() {
-    // `visibility` (mode/department/member picks) always saves itself
-    // instantly now — see ReportTopicSettingsPanel's own comment — so
-    // draft.visibility is never a real edit to preserve, just a stale
-    // snapshot from whenever this sheet last reset. Always write back the
-    // live value instead, or this save would undo whatever's changed since.
-    updateTopicSettings(topic.id, { ...draft, visibility: topic.visibility });
+    // สิทธิ์การมองเห็น (โหมด/แผนก/สมาชิก) อยู่ใน draft เหมือนช่องอื่น — ติดตอนกด "บันทึก" นี้
+    // ("กดแล้วเลือก แล้วมากดบันทึกเหมือนอันอื่นๆ ถึงจะเปลี่ยน")
+    updateTopicSettings(topic.id, draft);
+    // คนที่เพิ่งมองเห็นห้องนี้ได้ — แจ้ง "เพิ่มคุณเข้าห้อง" ตอนบันทึกจริง (ไม่ใช่ตอนติ๊กในหน้าต่างสมาชิก)
+    if (dirtyKeys.has("visibility")) {
+      const added = users
+        .filter((u) => u.id !== viewingAsUserId && !canSeeReportTopic(topic.visibility, u.id) && canSeeReportTopic(draft.visibility, u.id))
+        .map((u) => u.id);
+      if (added.length > 0) {
+        const actorName = getUser(viewingAsUserId)?.name ?? "มีคน";
+        useNotificationStore
+          .getState()
+          .notifyMany(added, viewingAsUserId, `${actorName} เพิ่มคุณเข้าห้อง Report "${draft.name}"`, undefined, `/chat-report/report-feed?topic=${topic.id}`, draft.name);
+      }
+    }
     const before = topic as unknown as Record<string, unknown>;
     const after = draft as unknown as Record<string, unknown>;
     const changes = [...dirtyKeys].map((key) => describeChange(key, before[key], after[key]));
@@ -231,18 +241,11 @@ export function RoomSettingsSheet({
               ReportTopicSettingsPanel ที่ใช้ร่วมกับหน้า /settings ด้วย จึงคง
               โครงสร้างภายในไว้ตามเดิม แค่ครอบหัวข้อกลุ่มไว้จากภายนอกให้สอดคล้อง
               กับหมวดอื่นๆ ใน Sheet นี้ — ส่ง draft + patchDraft ผ่าน onUpdate
-              แทนการเซฟทันที (onUpdate ไม่ระบุ = เซฟทันทีเหมือนเดิมที่ /settings).
-              `visibility` เป็นข้อยกเว้นครึ่งหนึ่ง — ปุ่มโหมด/เลือกแผนกยังแก้ผ่าน
-              draft ตามปกติ (ต้องกด "บันทึก" ถึงจะติด) แต่ RoomMembersDialog
-              ข้างในเซฟตรงเข้า store ทันที ไม่ผ่าน draft เลย จึงส่ง
-              `liveVisibility` แยกไปให้เฉพาะส่วนสมาชิกอ่านค่าจริงปัจจุบัน ไม่งั้น
-              เพิ่มสมาชิกในไดอะล็อกไปแล้วการ์ดสรุปด้านในจะยังโชว์ค่าเก่า
-              เหมือนกดบันทึกแล้วไม่ติด (ห้ามเอา `topic.visibility` ไปแทนที่
-              `draft.visibility` ตรงๆ — จะทำให้กดเปลี่ยนโหมด/แผนกไม่ติดแทน
-              เพราะ draft ที่เพิ่งแก้จะโดนทับด้วยค่าเก่าจาก store ทุก render). */}
+              แทนการเซฟทันที (onUpdate ไม่ระบุ = เซฟทันทีเหมือนเดิมที่ /settings)
+              รวมโหมด/แผนก/สมาชิกด้วย — ทุกอย่างติดตอนกด "บันทึก" ด้านล่างเท่านั้น */}
           <section className="space-y-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)]">สิทธิ์การมองเห็น &amp; กติกาการส่งรายงาน</p>
-            <ReportTopicSettingsPanel topic={draft} hideHeading onUpdate={patchDraft} liveVisibility={topic.visibility} />
+            <ReportTopicSettingsPanel topic={draft} hideHeading onUpdate={patchDraft} />
           </section>
 
           {/* การแจ้งเตือน */}
