@@ -785,9 +785,11 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
   // (/hr) แทนการล็อก 2 อันแล้วที่เหลือเป็นช่องว่าง ("อยากให้มีพื้นที่ดูเยอะๆ เหมือนของ HR")
   const monthRowsAreDense = usesFixedRows;
   // จำนวน chip ต่อวัน = เท่าที่ความสูงแถวรับได้ (คิดจากขนาด dense ใน theme.css):
-  // เลขวัน ~22px · "+N รายการ" ~18px · ช่องหายใจท้ายช่อง ~6px · chip ละ ~19px
+  // เลขวัน ~24px · "+N รายการ" ~20px · ช่องหายใจท้ายช่อง ~6px · chip ละ ~24px
+  // (เดิมคิด chip ละ 19px แต่ที่วาดจริงสูง ~23.5px ⇒ ได้เกินไป 1 อัน แล้วป้าย "+N รายการ" โดนตัดครึ่ง
+  // "เพิ่มเติมมันโดนกินไปครึ่งนึง" — ปัดขึ้นเผื่อฟอนต์แต่ละเบราว์เซอร์)
   // คิดจากความสูงแถวอย่างเดียว (ไม่ใช่จากของในช่อง) ⇒ ทุกวันในเดือนได้จำนวนเท่ากัน ไม่หดไม่ขยาย
-  const monthChipCap = Math.max(1, Math.floor((monthRowHeight - 22 - 18 - 6) / 19));
+  const monthChipCap = Math.max(1, Math.floor((monthRowHeight - 24 - 20 - 6) / 24));
 
   // FullCalendar measures each day-row's own height once (on mount, and
   // whenever the earlier resize/ResizeObserver effect calls updateSize()) and
