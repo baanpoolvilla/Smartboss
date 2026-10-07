@@ -577,6 +577,64 @@ export const MessageBubble = memo(function MessageBubble(props: MessageBubblePro
     </div>
   );
 
+  // ชิ้นส่วนของข้อความเรียงบนลงล่าง (ตัวหนังสือ → รูป → สติกเกอร์ → เสียง → ไฟล์) — เวลา/อ่านแล้ว (meta)
+  // เกาะข้าง "ชิ้นสุดท้าย" เสมอ · เดิม meta เกาะข้างทั้งคอลัมน์ ซึ่งกว้างเท่าชิ้นที่กว้างสุด: ข้อความยาว + รูปแคบ
+  // ⇒ เวลาไปอยู่ชิดขอบของตัวหนังสือ ห่างจากรูปเป็นคืบ ดูเหมือนเวลาลอยหลุดออกไป
+  const parts: React.ReactNode[] = [
+    m.kind === "note" ? (
+              <NoteCard key="note" message={m} mine={mine} />
+            ) : m.body && !m.replyTo && isJumboEmoji(m.body) ? (
+              <p key="emoji" className="px-1 text-[44px] leading-tight">{m.body.trim()}</p>
+            ) : (m.body || m.replyTo) && (
+              <div
+                key="text"
+                className={cn(
+                  "min-w-0 rounded-2xl px-3 py-2 text-[length:var(--chat-text-size,14.5px)] leading-relaxed shadow-[0_1px_1px_rgba(0,0,0,0.06)]",
+                  mine ? "rounded-tr-md bg-(--chat-bubble-me) text-(--chat-bubble-me-ink)" : "rounded-tl-md bg-(--chat-bubble-other) text-(--ink)",
+                  !firstInGroup && (mine ? "rounded-tr-2xl" : "rounded-tl-2xl")
+                )}
+              >
+                {m.replyTo && (
+                  <button
+                    type="button"
+                    onClick={() => m.replyTo && !m.replyTo.deleted && props.onJump(m.replyTo.id)}
+                    className="mb-1.5 block w-full rounded-lg border-l-[3px] border-(--chat-accent) bg-black/5 px-2 py-1 text-left text-[12px]"
+                  >
+                    <span className="block font-semibold text-(--chat-accent-strong)">
+                      {m.replyTo.authorId === meId ? "คุณ" : (users[m.replyTo.authorId]?.name ?? "สมาชิก")}
+                    </span>
+                    <span className="line-clamp-2 opacity-75">
+                      {m.replyTo.deleted ? "ข้อความถูกยกเลิกแล้ว" : m.replyTo.body || attachmentLabel(m.replyTo.attachmentKind)}
+                    </span>
+                  </button>
+                )}
+                {m.body && (
+                  <p
+                    // anywhere อย่างเดียว — ใส่ break-words ซ้อนแล้วตัวนั้นชนะ ตัดสตริงยาวไม่มีเว้นวรรคไม่ได้
+                    className="whitespace-pre-wrap [overflow-wrap:anywhere]"
+                  >
+                    <MessageText body={m.body} mentions={m.mentions} users={users} meId={meId} />
+                  </p>
+                )}
+              </div>
+            ),
+    media.length > 0 && (
+              <MediaGrid
+                key="media"
+                items={media}
+                onOpen={(i) => {
+                  // หน้าดูรูปเต็มจอได้เฉพาะรูปที่ยังไม่หมดอายุ + id ข้อความไว้ "บันทึกลงอัลบั้ม"
+                  const live = media.filter((a) => !a.expired).map((a) => ({ ...a, messageId: m.id }));
+                  const idx = live.findIndex((a) => a.url === media[i]?.url);
+                  if (idx >= 0) props.onOpenMedia(live, idx);
+                }}
+              />
+            ),
+    ...stickers.map((a) => <StickerImage key={a.url} url={a.url} name={a.name} />),
+    ...audios.map((a) => <VoicePlayer key={a.url} a={a} mine={mine} />),
+    ...files.map((a) => <FileCard key={a.url} a={a} />),
+  ].filter(Boolean);
+
   return (
     <div
       ref={rowRef}
@@ -608,62 +666,17 @@ export const MessageBubble = memo(function MessageBubble(props: MessageBubblePro
             onTouchEnd={cancelPress}
             onTouchMove={cancelPress}
           >
-            {m.kind === "note" ? (
-              <NoteCard message={m} mine={mine} />
-            ) : m.body && !m.replyTo && isJumboEmoji(m.body) ? (
-              <p className="px-1 text-[44px] leading-tight">{m.body.trim()}</p>
-            ) : (m.body || m.replyTo) && (
-              <div
-                className={cn(
-                  "min-w-0 rounded-2xl px-3 py-2 text-[length:var(--chat-text-size,14.5px)] leading-relaxed shadow-[0_1px_1px_rgba(0,0,0,0.06)]",
-                  mine ? "rounded-tr-md bg-(--chat-bubble-me) text-(--chat-bubble-me-ink)" : "rounded-tl-md bg-(--chat-bubble-other) text-(--ink)",
-                  !firstInGroup && (mine ? "rounded-tr-2xl" : "rounded-tl-2xl")
-                )}
-              >
-                {m.replyTo && (
-                  <button
-                    type="button"
-                    onClick={() => m.replyTo && !m.replyTo.deleted && props.onJump(m.replyTo.id)}
-                    className="mb-1.5 block w-full rounded-lg border-l-[3px] border-(--chat-accent) bg-black/5 px-2 py-1 text-left text-[12px]"
-                  >
-                    <span className="block font-semibold text-(--chat-accent-strong)">
-                      {m.replyTo.authorId === meId ? "คุณ" : (users[m.replyTo.authorId]?.name ?? "สมาชิก")}
-                    </span>
-                    <span className="line-clamp-2 opacity-75">
-                      {m.replyTo.deleted ? "ข้อความถูกยกเลิกแล้ว" : m.replyTo.body || attachmentLabel(m.replyTo.attachmentKind)}
-                    </span>
-                  </button>
-                )}
-                {m.body && (
-                  <p
-                    // anywhere อย่างเดียว — ใส่ break-words ซ้อนแล้วตัวนั้นชนะ ตัดสตริงยาวไม่มีเว้นวรรคไม่ได้
-                    className="whitespace-pre-wrap [overflow-wrap:anywhere]"
-                  >
-                    <MessageText body={m.body} mentions={m.mentions} users={users} meId={meId} />
-                  </p>
-                )}
-              </div>
+            {parts.map((part, i) =>
+              i === parts.length - 1 ? (
+                <div key="last" className={cn("flex min-w-0 max-w-full items-end gap-1.5", mine && "flex-row-reverse")}>
+                  {part}
+                  {meta}
+                </div>
+              ) : (
+                part
+              )
             )}
-            {media.length > 0 && (
-              <MediaGrid
-                items={media}
-                onOpen={(i) => {
-                  // หน้าดูรูปเต็มจอได้เฉพาะรูปที่ยังไม่หมดอายุ + id ข้อความไว้ "บันทึกลงอัลบั้ม"
-                  const live = media.filter((a) => !a.expired).map((a) => ({ ...a, messageId: m.id }));
-                  const idx = live.findIndex((a) => a.url === media[i]?.url);
-                  if (idx >= 0) props.onOpenMedia(live, idx);
-                }}
-              />
-            )}
-            {stickers.map((a) => (
-              <StickerImage key={a.url} url={a.url} name={a.name} />
-            ))}
-            {audios.map((a) => (
-              <VoicePlayer key={a.url} a={a} mine={mine} />
-            ))}
-            {files.map((a) => (
-              <FileCard key={a.url} a={a} />
-            ))}
+            {parts.length === 0 && meta}
 
             {menuOpen && (
               <ActionMenu
@@ -680,8 +693,6 @@ export const MessageBubble = memo(function MessageBubble(props: MessageBubblePro
               />
             )}
           </div>
-
-          {meta}
 
           {/* ปุ่มลัดตอนชี้เมาส์ (คอม) — มือถือใช้กดค้างแทน */}
           {!local && (
