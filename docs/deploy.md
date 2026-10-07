@@ -462,6 +462,9 @@ sudo crontab -e
 # แจ้งเตือนมาสายให้ตัวพนักงาน — ทุก 5 นาที 07:00–12:55 (วันละครั้งต่อคน รันซ้ำได้)
 */5 7-12 * * * bash /opt/smartboss/deploy/cron-run.sh late-alerts >> /var/log/smartboss-cron.log 2>&1
 
+# เด้งเวลาเข้า/ออกงานเข้าห้องแชท "🕐 ระบบลงเวลา" ของแต่ละคน — ทุกนาที (ไม่มีอะไรใหม่ = จบเร็ว)
+* * * * * bash /opt/smartboss/deploy/cron-run.sh attendance-chat >> /var/log/smartboss-cron.log 2>&1
+
 # กวาดคะแนนผลงานอีกรอบตอนเย็น ให้ผู้บริหารเห็นของวันนี้ก่อนเลิกงาน
 0 17 * * * bash /opt/smartboss/deploy/cron-run.sh performance >> /var/log/smartboss-cron.log 2>&1
 

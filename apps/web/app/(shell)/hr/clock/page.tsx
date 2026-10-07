@@ -1,4 +1,6 @@
+import { redirect } from "next/navigation";
 import { requireOrg } from "@smartboss/auth";
+import { APP_CLOCK_ENABLED } from "@/modules/hr/lib/app-clock";
 import { prisma } from "@smartboss/database";
 import { HrPage } from "@/modules/hr/components/hr-page";
 import { HR_PERMS } from "@/modules/hr/permissions";
@@ -15,6 +17,8 @@ import { Today } from "@/app/m/today";
  * โดยตั้งใจ กันแตะไอคอนพลาดแล้วกลายเป็นลงเวลาไปแล้ว
  */
 export default async function ClockPage() {
+  // ปิดลงเวลาในแอปอยู่ (ใช้สแกนนิ้วอย่างเดียว) — ลิงก์เก่าที่ยังจำไว้พาไปหน้าหลักของบุคคลแทน
+  if (!APP_CLOCK_ENABLED) redirect("/hr");
   return (
     <HrPage
       title="ลงเวลา"

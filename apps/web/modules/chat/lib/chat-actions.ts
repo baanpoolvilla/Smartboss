@@ -5,7 +5,7 @@ import { toast } from "sonner";
 
 import { onRealtimeStatus, subscribeRealtime, type RealtimeEventMessage } from "@/lib/realtime-client";
 import { useChatStore, type RoomMessage } from "../store/chat-store";
-import { isUserMessageKind, type ChatAttachment, type ChatRealtimeEvent } from "../types";
+import { countsAsUnread, type ChatAttachment, type ChatRealtimeEvent } from "../types";
 import * as api from "./api";
 
 /*
@@ -316,7 +316,7 @@ function handleEvent(raw: RealtimeEventMessage) {
       const known = s.channels.some((c) => c.id === event.channelId);
       const fromOther = message.authorId !== s.meId;
       const viewing = isViewing(event.channelId);
-      s.receiveMessage(message, fromOther && isUserMessageKind(message.kind) && !viewing);
+      s.receiveMessage(message, fromOther && countsAsUnread(message.kind, event.channelId) && !viewing);
       if (!known) refreshChannelsSoon();
       if (fromOther && viewing) markReadSoon(event.channelId);
       if (message.kind === "system" && s.details[event.channelId]) void loadDetail(event.channelId);

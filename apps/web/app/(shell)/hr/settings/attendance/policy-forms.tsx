@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@smartboss/ui/components/button";
 import { Field, inputClass } from "@/modules/hr/components/ui";
 import type { CheckinPolicyGroup } from "@/modules/hr/lib/api";
+import { CHECKIN_PHOTO_ENABLED } from "@/modules/hr/lib/app-clock";
 import {
   assignCheckinPolicyAction,
   assignUnassignedToCheckinPolicyAction,
@@ -95,24 +96,31 @@ export function CreatePolicyForm({ companyId }: { companyId: string }) {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Field label="การถ่ายรูป">
-          <select
-            name="photo_required"
-            value={photoRequired}
-            onChange={(e) => setPhotoRequired(e.target.value)}
-            className={inputClass}
-          >
-            <option value="DISABLED">ไม่ต้องถ่ายรูป</option>
-            <option value="ALWAYS">บังคับถ่ายทุกครั้ง</option>
-            <option value="RISK_BASED">ถ่ายเมื่อพบความเสี่ยง</option>
-          </select>
+          {CHECKIN_PHOTO_ENABLED ? (
+            <select
+              name="photo_required"
+              value={photoRequired}
+              onChange={(e) => setPhotoRequired(e.target.value)}
+              className={inputClass}
+            >
+              <option value="DISABLED">ไม่ต้องถ่ายรูป</option>
+              <option value="ALWAYS">บังคับถ่ายทุกครั้ง</option>
+              <option value="RISK_BASED">ถ่ายเมื่อพบความเสี่ยง</option>
+            </select>
+          ) : (
+            // ปิดกล้องทั้งระบบอยู่ (modules/hr/lib/app-clock.ts) — ลงเวลาด้วย GPS อย่างเดียว
+            <>
+              <input type="hidden" name="photo_required" value="DISABLED" />
+              <p className="flex h-11 items-center text-sm text-(--ink-soft)">ไม่ถ่ายรูป · ใช้ GPS อย่างเดียว</p>
+            </>
+          )}
         </Field>
 
-        <Field label="เมื่อพบความเสี่ยง">
-          <select name="risk_action" defaultValue="REVIEW" className={inputClass}>
-            <option value="REVIEW">บันทึกไว้ แล้วส่งให้ HR ตรวจ</option>
-            <option value="WARN">บันทึกไว้ แค่เตือน</option>
-            <option value="REJECT">ปฏิเสธไปเลย</option>
-          </select>
+        {/* ไม่มีคิวรอตรวจแล้ว (เจ้าของงานตัดสิน 2026-10-07): GPS ไม่ตรง = ลงไม่ได้ตั้งแต่หน้าแอป
+            ผ่านแล้วมีข้อสังเกต = นับเวลาเลย ขึ้นในหน้า "ลงเวลาผิดปกติ" ให้ HR ไปถามเอง */}
+        <Field label="เมื่อพบข้อสังเกต">
+          <input type="hidden" name="risk_action" value="WARN" />
+          <p className="flex h-11 items-center text-sm text-(--ink-soft)">นับเวลาเลย · ขึ้นรายการให้ HR ดู</p>
         </Field>
 
         <Field label="เก็บรูปไว้กี่วัน" hint="ลบอัตโนมัติเมื่อครบ">

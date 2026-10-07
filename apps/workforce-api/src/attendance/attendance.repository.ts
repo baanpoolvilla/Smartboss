@@ -2,6 +2,18 @@ import { Injectable } from '@nestjs/common';
 import { schema, type Tx } from '@workforce/db';
 import { and, asc, desc, eq, gte, inArray, isNull, lte, or, sql, type SQL } from 'drizzle-orm';
 
+/**
+ * ตัดการลงเวลาที่ HR กด "ไม่นับรายการนี้" (ผลตรวจ REJECTED ใน mobile_risk_assessments) ออกจากกระดาน/
+ * Timeline — ตัวคิดชั่วโมงไม่นับแล้ว (attendance.service collectPunches) ถ้ากระดานยังโชว์ เวลาเข้า/สาย
+ * บนหน้าการลงเวลากับกล่องเวลาของพนักงานจะไม่ตรงกับผลที่ใช้คิดเงิน/คะแนน
+ */
+function notRejectedByHr(): SQL {
+  return sql`not exists (
+    select 1 from ${schema.mobileRiskAssessments} ra
+    where ra.raw_time_event_id = ${schema.rawTimeEvents.id} and ra.review_outcome = 'REJECTED'
+  )`;
+}
+
 @Injectable()
 export class AttendanceRepository {
   /**
@@ -55,6 +67,7 @@ export class AttendanceRepository {
           sql`${schema.rawTimeEvents.employmentId} is not null`,
           // แถวที่ถูกกักไว้ยังไม่ผ่านการตรวจ ไม่ควรโผล่บนกระดานที่ทุกคนเห็น
           eq(schema.rawTimeEvents.status, 'ACCEPTED'),
+          notRejectedByHr(),
         ),
       )
       // ใหม่สุดอยู่บน — คนเปิดดูอยากรู้ว่า "เมื่อกี้ใครเพิ่งตอก" ก่อนเรื่องเช้านี้
@@ -126,6 +139,7 @@ export class AttendanceRepository {
           sql`${schema.rawTimeEvents.capturedAt} >= ${`${workDate}T00:00:00Z`}`,
           sql`${schema.rawTimeEvents.capturedAt} <= ${`${workDate}T23:59:59Z`}`,
           sql`${schema.rawTimeEvents.employmentId} is not null`,
+          notRejectedByHr(),
         ),
       )
       .groupBy(
@@ -328,6 +342,31 @@ export class AttendanceRepository {
         ),
       )
       .orderBy(asc(schema.rawTimeEvents.capturedAt));
+  }
+
+  /**
+   * ผลตรวจหลักฐานลงเวลาจากมือถือของ event เหล่านี้ — raw_time_event_id → APPROVED / REJECTED
+   * (ยังไม่ตรวจ = ไม่อยู่ใน map) · ใช้ตัดสินว่า event ที่ "รอตรวจ" นับเป็นเวลาทำงานแล้วหรือยัง
+   */
+  async listReviewOutcomesForEvents(
+    tx: Tx,
+    eventIds: readonly string[],
+  ): Promise<Map<string, string>> {
+    if (eventIds.length === 0) return new Map();
+    const rows = await tx
+      .select({
+        rawTimeEventId: schema.mobileRiskAssessments.rawTimeEventId,
+        reviewOutcome: schema.mobileRiskAssessments.reviewOutcome,
+      })
+      .from(schema.mobileRiskAssessments)
+      .where(inArray(schema.mobileRiskAssessments.rawTimeEventId, [...eventIds]));
+    const out = new Map<string, string>();
+    for (const row of rows) {
+      if (row.rawTimeEventId !== null && row.reviewOutcome !== null) {
+        out.set(row.rawTimeEventId, row.reviewOutcome);
+      }
+    }
+    return out;
   }
 
   async listApprovedAdjustments(

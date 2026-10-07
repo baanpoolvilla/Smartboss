@@ -1,4 +1,5 @@
 import { createElement } from "react";
+import { APP_CLOCK_ENABLED } from "./lib/app-clock";
 import type { ModuleManifest } from "@/module-registry";
 import { HR_PERMS } from "./permissions";
 import { NotifCountBadge } from "@/modules/notifications/notif-count-badge";
@@ -39,7 +40,9 @@ export const hrManifest: ModuleManifest = {
       }),
     },
     // ลงเวลาเข้า/ออกของตัวเอง — หน้าจอเดียวกับใน LINE Mini App (ดู hr/clock/page.tsx)
-    { label: "ลงเวลา", path: "/hr/clock", permission: HR_PERMS.access, icon: "Clock" },
+    ...(APP_CLOCK_ENABLED ? [{ label: "ลงเวลา", path: "/hr/clock", permission: HR_PERMS.access, icon: "Clock" }] : []),
+    // ลงเวลาจากมือถือที่ GPS ผ่านแต่มีข้อสังเกต — นับเวลาแล้ว มีไว้ให้ HR เห็นแล้วไปถามเอง
+    { label: "ลงเวลาผิดปกติ", path: "/hr/checkin-review", permission: HR_PERMS.employeeManage, icon: "ShieldCheck" },
     { label: "พนักงาน", path: "/hr/employees", permission: HR_PERMS.employeeView, icon: "Users" },
     { label: "รอบจ่าย", path: "/hr/payroll", permission: HR_PERMS.payrollView, icon: "Wallet" },
     { label: "ตั้งค่า", path: "/hr/settings", permission: HR_PERMS.settingManage, icon: "Settings" },

@@ -175,7 +175,9 @@ export function CheckinMap() {
 
     for (const site of state.sites) {
       const distance = map.distance(me, [site.latitude, site.longitude]);
-      const inRange = distance <= site.radius_m;
+      // เผื่อความคลาดของ GPS แบบเดียวกับด่านตอนกดลงเวลา (api/m/checkin gpsGate) — ไม่งั้นแผนที่บอก
+      // "นอกเขต" ทั้งที่กดแล้วผ่าน หรือกลับกัน
+      const inRange = distance <= site.radius_m + state.me.accuracy;
       const color = inRange ? COLOR_OK : COLOR_WARN;
 
       const circle = L.circle([site.latitude, site.longitude], {
@@ -209,6 +211,7 @@ export function CheckinMap() {
           .map((site) => ({
             site,
             distance: haversine(state.me.latitude, state.me.longitude, site.latitude, site.longitude),
+            accuracy: state.me.accuracy,
           }))
           .sort((a, b) => a.distance - b.distance)[0]
       : undefined;
@@ -256,12 +259,12 @@ export function CheckinMap() {
       {nearest && (
         <div
           className="flex items-center gap-2 px-3 py-2 text-sm"
-          style={{ color: nearest.distance <= nearest.site.radius_m ? "var(--tone-ok)" : "var(--tone-warn)" }}
+          style={{ color: nearest.distance <= nearest.site.radius_m + nearest.accuracy ? "var(--tone-ok)" : "var(--tone-warn)" }}
         >
           <LocateFixed className="h-4 w-4 shrink-0" />
           <span className="min-w-0 truncate">
-            {nearest.distance <= nearest.site.radius_m
-              ? `อยู่ในระยะของ ${nearest.site.name}`
+            {nearest.distance <= nearest.site.radius_m + nearest.accuracy
+              ? `อยู่ในระยะของ ${nearest.site.name} — กดลงเวลาได้`
               : `ห่างจาก ${nearest.site.name} ${metersLabel(nearest.distance)} (รัศมี ${metersLabel(nearest.site.radius_m)})`}
           </span>
         </div>

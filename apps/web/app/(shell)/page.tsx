@@ -2,13 +2,14 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import { MODULE_CARDS, PRIMARY_MODULE_CODES, SECONDARY_FIRST_CODES } from "@/lib/modules";
-import { EXTERNAL_APP_GROUPS, appsInGroup, type ExternalAppGroup } from "@/lib/external-apps";
+import { EXTERNAL_APP_GROUPS, appKey, appsInGroup, type ExternalAppGroup } from "@/lib/external-apps";
 import { iconByName } from "@/lib/icons";
 import { loadShellNav } from "@/lib/nav";
 import { AppTileReviewBadge } from "@/modules/report_task/components/shared/app-tile-review-badge";
 import { ChatReportTileBadge } from "@/modules/report_task/components/shared/chat-report-tile-badge";
 import { NotifCountBadge } from "@/modules/notifications/notif-count-badge";
 import { ClockTile } from "@/components/home/clock-tile";
+import { APP_CLOCK_ENABLED } from "@/modules/hr/lib/app-clock";
 
 interface AppTile {
   code: string;
@@ -95,6 +96,19 @@ export default async function HomePage() {
     });
   }
 
+  // เว็บใช้ภายในที่ไม่อยู่ใต้การ์ดทีมไหน (lib/external-apps.ts group "home") — ไอคอนของตัวเอง
+  // ฝั่งขวา กดแล้วเปิดไว้ข้างใน SmartBoss (/sales-marketing/app/<key>) แบบเดียวกับเว็บของทีมขาย/การตลาด
+  for (const app of appsInGroup("home")) {
+    tiles.push({
+      code: `ext:${appKey(app)}`,
+      name: app.name,
+      description: app.description,
+      icon: app.icon,
+      color: app.color,
+      colorBg: app.colorBg,
+      href: `/sales-marketing/app/${appKey(app)}`,
+    });
+  }
 
   // ฝั่งซ้าย = โมดูลหลัก เรียงตามลำดับที่ตั้งไว้ (ไม่ใช่ลำดับใน tiles)
   const byCode = new Map(tiles.map((t) => [t.code, t]));
@@ -125,7 +139,7 @@ export default async function HomePage() {
           <div className="grid grid-cols-3 gap-x-2 gap-y-7 sm:gap-x-4">
             {/* ลงเวลา — ช่องแรก เปิดแอปมาเห็นก่อนอย่างอื่น (เฉพาะคนที่เข้าระบบบุคคลได้ ·
                 คนที่ไม่อยู่ในทะเบียนพนักงาน ไอคอนซ่อนตัวเอง ดู ClockTile) */}
-            {visible.has("hr") && <ClockTile />}
+            {APP_CLOCK_ENABLED && visible.has("hr") && <ClockTile />}
             {primary.map((tile) => (
               <AppIcon key={tile.code} tile={tile} size="lg" />
             ))}

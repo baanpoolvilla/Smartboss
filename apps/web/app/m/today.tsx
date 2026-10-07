@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { MapBoundary } from "./map-boundary";
-
-import { MB, fileTooLargeMessage } from "@/lib/file-limits";
+import { checkinFlagLabel } from "@/modules/hr/lib/checkin-flags";
+import { clockState } from "@/modules/hr/lib/clock-state";
+import { DesktopQr, useIsDesktop } from "./desktop-qr";
 /**
  * ต้องโหลดแบบ `ssr: false` เท่านั้น — ห้ามเปลี่ยนเป็น static import เด็ดขาด
  *
@@ -43,6 +44,8 @@ interface TodayData {
   date: string;
   displayName: string;
   events: DayEvent[];
+  /** กะข้ามคืน: เข้าไว้ตั้งแต่เมื่อวานแล้วยังไม่ออก (ดู /api/m/today) */
+  carriedIn?: DayEvent | null;
 }
 
 type Submitting = "idle" | "locating" | "sending";
@@ -55,18 +58,7 @@ const INTENT_LABEL: Record<string, string> = {
   AUTO: "ลงเวลา",
 };
 
-/** แปลงธงความเสี่ยงเป็นภาษาที่พนักงานอ่านแล้วรู้ว่าต้องทำอะไรต่อ */
-const RISK_LABEL: Record<string, string> = {
-  LOCATION_MISSING: "ไม่ได้ส่งตำแหน่งมาด้วย",
-  LOCATION_ACCURACY_POOR: "สัญญาณตำแหน่งไม่แม่นพอ ลองออกไปที่โล่งแล้วลองใหม่",
-  GEOFENCE_OUTSIDE: "อยู่นอกบริเวณสถานที่ทำงาน",
-  NO_SITE_MATCHED: "ไม่พบสถานที่ทำงานใกล้เคียง",
-  MOCK_LOCATION: "ตรวจพบการปลอมตำแหน่ง",
-  DEVICE_NOT_ENROLLED: "เครื่องนี้ยังไม่ได้รับอนุมัติ",
-  PHOTO_MISSING: "ไม่มีรูปประกอบ",
-  NOT_LIVE_CAPTURE: "รูปไม่ได้ถ่ายสด",
-  CLOCK_SKEW: "เวลาในเครื่องคลาดจากเวลาจริง",
-};
+// คำอธิบายธงความเสี่ยงอยู่ที่ modules/hr/lib/checkin-flags.ts (ใช้ร่วมกับหน้าคิวตรวจของ HR)
 
 function timeOf(iso: string): string {
   return new Date(iso).toLocaleTimeString("th-TH", {
@@ -75,34 +67,76 @@ function timeOf(iso: string): string {
   });
 }
 
-function getPosition(): Promise<GeolocationPosition> {
+function readPosition(options: PositionOptions): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
-      reject(new Error("เครื่องนี้ไม่รองรับการระบุตำแหน่ง"));
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
-      enableHighAccuracy: true,
-      timeout: 20_000,
-      maximumAge: 0,
-    });
+    navigator.geolocation.getCurrentPosition(resolve, reject, options);
   });
 }
 
-const CHECKIN_PHOTO_MAX_BYTES = 8 * MB;
+/**
+ * หาตำแหน่งแบบมีทางสำรอง — คืน `denied` แยกไว้ เพื่อบอกวิธีเปิดสิทธิ์ (ไม่ใช่ส่งไปแบบไม่มีพิกัดเงียบ ๆ)
+ *
+ * รอบแรกขอ GPS แม่น ๆ 12 วิ · ในอาคาร/ใต้หลังคา GPS มักหาไม่ทันเวลา ⇒ รอบสองยอมรับตำแหน่งจาก
+ * Wi-Fi/เสาสัญญาณ หรือที่เครื่องเพิ่งหาไว้ไม่เกิน 1 นาที (แผนที่บนจอเพิ่งหาไปก่อนกดพอดี)
+ * — พิกัดหยาบยังดีกว่าไม่มีเลย ตัวตัดสินฝั่งระบบบุคคลเผื่อความคลาดเคลื่อนให้อยู่แล้ว
+ */
+async function getPosition(): Promise<{ position: GeolocationPosition | null; denied: boolean }> {
+  if (!navigator.geolocation) return { position: null, denied: false };
+  try {
+    return { position: await readPosition({ enableHighAccuracy: true, timeout: 12_000, maximumAge: 0 }), denied: false };
+  } catch (error) {
+    if ((error as GeolocationPositionError).code === 1) return { position: null, denied: true };
+  }
+  try {
+    return { position: await readPosition({ enableHighAccuracy: false, timeout: 10_000, maximumAge: 60_000 }), denied: false };
+  } catch (error) {
+    return { position: null, denied: (error as GeolocationPositionError).code === 1 };
+  }
+}
 
-/** อ่านไฟล์รูปเป็น base64 ล้วน (ตัดส่วนหัว data: ออก เพราะ API รับเฉพาะตัวข้อมูล) */
-function toBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = String(reader.result);
-      const comma = result.indexOf(",");
-      resolve(comma === -1 ? result : result.slice(comma + 1));
-    };
-    reader.onerror = () => reject(new Error("อ่านไฟล์รูปไม่สำเร็จ"));
-    reader.readAsDataURL(file);
-  });
+/** ข้อความสอนเปิดสิทธิ์ตำแหน่ง — แยก iPhone / Android เพราะเมนูอยู่คนละที่ */
+function locationHelp(): string {
+  const ua = typeof navigator === "undefined" ? "" : navigator.userAgent;
+  if (/iPhone|iPad|iPod/i.test(ua)) {
+    return "ยังไม่ได้อนุญาตให้ใช้ตำแหน่ง — เปิดที่ การตั้งค่า › ความเป็นส่วนตัวและความปลอดภัย › บริการหาตำแหน่ง › Safari หรือ LINE › ขณะใช้แอป แล้วลองใหม่";
+  }
+  if (/Android/i.test(ua)) {
+    return "ยังไม่ได้อนุญาตให้ใช้ตำแหน่ง — แตะไอคอนแม่กุญแจข้างช่องที่อยู่เว็บ › สิทธิ์ › ตำแหน่ง › อนุญาต (ถ้าใช้ใน LINE: ตั้งค่าเครื่อง › แอป › LINE › สิทธิ์ › ตำแหน่ง) แล้วลองใหม่";
+  }
+  return "ยังไม่ได้อนุญาตให้ใช้ตำแหน่ง — อนุญาตตำแหน่งให้เว็บนี้ในการตั้งค่าเบราว์เซอร์ แล้วลองใหม่ (แนะนำให้ลงเวลาจากมือถือ)";
+}
+
+/**
+ * ย่อรูปก่อนส่ง — ระบบบุคคลรับคำขอได้ไม่เกิน 1MB (workforce bootstrap bodyLimit) แต่รูปจากกล้องมือถือ
+ * 2–5MB (เป็น base64 ใหญ่ขึ้นอีกหนึ่งในสาม) ⇒ ไม่ย่อ = ลงเวลาแบบบังคับรูปล้มทุกครั้ง
+ * ย่อด้านยาวเหลือ 1280px JPEG แล้วลดทีละขั้นจนต่ำกว่า ~600KB (หน้าคนยังชัดพอให้ HR ตรวจ)
+ */
+const PHOTO_TARGET_BYTES = 600 * 1024;
+async function compressPhoto(file: File): Promise<string> {
+  const url = URL.createObjectURL(file);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("อ่านไฟล์รูปไม่สำเร็จ"));
+      img.src = url;
+    });
+    const steps = [[1280, 0.8], [1024, 0.7], [800, 0.6], [640, 0.5]] as const;
+    let base64 = "";
+    for (const [maxSide, quality] of steps) {
+      const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+      canvas.getContext("2d")!.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/jpeg", quality);
+      base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
+      if (base64.length * 0.75 <= PHOTO_TARGET_BYTES) break;
+    }
+    return base64;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 export function Today({
@@ -128,7 +162,14 @@ export function Today({
   );
   const photoInput = useRef<HTMLInputElement>(null);
   /** เก็บเจตนาไว้ระหว่างที่ผู้ใช้ไปเปิดกล้อง แล้วยิงใหม่ทั้งก้อนตอนได้รูป */
-  const pendingIntent = useRef<"CLOCK_IN" | "CLOCK_OUT">("CLOCK_IN");
+  // state ไม่ใช่ ref — ข้อความบนปุ่ม "ถ่ายรูปเพื่อ…" อ่านค่านี้ตอน render
+  const [pendingIntent, setPendingIntent] = useState<"CLOCK_IN" | "CLOCK_OUT">("CLOCK_IN");
+  /**
+   * บริษัทบังคับรูป — โชว์ปุ่ม "ถ่ายรูป" ให้ผู้ใช้กดเอง แทนสั่งเปิดกล้องจากโค้ด
+   * iPhone (Safari/LINE) ยอมเปิดกล้องเฉพาะเมื่อมาจากการแตะของผู้ใช้โดยตรง — เดิมสั่ง `.click()`
+   * หลังรอเซิร์ฟเวอร์ตอบ ซึ่ง iOS ไม่นับว่าเป็นการแตะแล้ว กล้องไม่เปิด ลงเวลาไม่ได้เลย
+   */
+  const [needsPhoto, setNeedsPhoto] = useState(false);
 
   const reload = useCallback(async () => {
     try {
@@ -159,14 +200,10 @@ export function Today({
       setMessage(null);
       setState("locating");
 
-      let position: GeolocationPosition | null = null;
-      try {
-        position = await getPosition();
-      } catch {
-        // ไม่ได้พิกัดก็ยังส่งไป — ให้ *นโยบายของบริษัท* เป็นคนตัดสินว่ารับหรือไม่รับ
-        // ไม่ใช่ให้หน้าจอตัดสินแทน (บางบริษัทไม่ได้บังคับพิกัด)
-        position = null;
-      }
+      // ไม่ได้พิกัดก็ยังส่งไป — เซิร์ฟเวอร์เป็นคนตัดสิน (api/m/checkin gpsGate: ไม่มีพิกัด/นอกเขต = ลงไม่ได้
+      // พร้อมเหตุผล) หน้าจอไม่ตัดสินเอง · ถ้าโดนปฏิเสธสิทธิ์ตำแหน่ง ต่อท้ายข้อความด้วยวิธีเปิด
+      const { position, denied } = await getPosition();
+      const help = denied ? ` — ${locationHelp()}` : "";
 
       setState("sending");
       try {
@@ -177,14 +214,13 @@ export function Today({
           accuracyM: position?.coords.accuracy ?? null,
         };
         if (photo) {
-          // ระบบลงเวลารับรูปไม่เกิน 8MB (workforce checkin.service MAX_PHOTO_BYTES) — บอกก่อนส่ง รูปแบบเดียวกับทั้งระบบ
-          if (photo.size > CHECKIN_PHOTO_MAX_BYTES) {
-            setState("idle");
-            setMessage({ tone: "bad", text: `${fileTooLargeMessage(photo, CHECKIN_PHOTO_MAX_BYTES)} — ลองถ่ายใหม่ด้วยความละเอียดต่ำลง` });
+          try {
+            body.photoBase64 = await compressPhoto(photo);
+            body.photoContentType = "image/jpeg";
+          } catch {
+            setMessage({ tone: "bad", text: "อ่านรูปไม่สำเร็จ ลองถ่ายใหม่อีกครั้ง" });
             return;
           }
-          body.photoBase64 = await toBase64(photo);
-          body.photoContentType = photo.type === "image/png" ? "image/png" : "image/jpeg";
         }
 
         const response = await fetch("/api/m/checkin", {
@@ -201,40 +237,36 @@ export function Today({
         };
 
         if (payload.code === "PHOTO_REQUIRED") {
-          pendingIntent.current = intent;
-          setState("idle");
-          setMessage({ tone: "warn", text: "บริษัทกำหนดให้ถ่ายรูปตอนลงเวลา — เปิดกล้อง…" });
-          photoInput.current?.click();
+          setPendingIntent(intent);
+          setNeedsPhoto(true);
+          setMessage({ tone: "warn", text: "บริษัทกำหนดให้ถ่ายรูปตอนลงเวลา — กดปุ่ม \"ถ่ายรูป\" ด้านบน" });
           return;
         }
+        setNeedsPhoto(false);
 
         if (!response.ok) {
-          setMessage({ tone: "bad", text: payload.error ?? "ลงเวลาไม่สำเร็จ" });
+          setMessage({ tone: "bad", text: (payload.error ?? "ลงเวลาไม่สำเร็จ") + help });
           return;
         }
 
-        const flags = (payload.riskFlags ?? []).map((f) => RISK_LABEL[f] ?? f);
+        const flags = (payload.riskFlags ?? []).map((f) => checkinFlagLabel(f));
         const distance =
           typeof payload.distanceM === "number"
             ? ` (ห่างจากจุดที่ตั้งไว้ ${Math.round(payload.distanceM)} ม.)`
             : "";
 
-        if (payload.decision === "ACCEPTED") {
-          setMessage({ tone: "ok", text: `บันทึก${INTENT_LABEL[intent]}เรียบร้อย` });
-        } else if (payload.decision === "ACCEPTED_WITH_WARNING") {
-          setMessage({
-            tone: "warn",
-            text: `บันทึกแล้ว แต่มีข้อสังเกต: ${flags.join(" · ")}${distance}`,
-          });
+        // มีข้อสังเกตก็นับเวลาแล้ว (HR ไปถามเองถ้าแปลก ดูหน้า "ลงเวลาผิดปกติ") — พนักงานเห็นว่าบันทึกสำเร็จ
+        if (payload.decision === "ACCEPTED" || payload.decision === "ACCEPTED_WITH_WARNING") {
+          setMessage({ tone: "ok", text: `บันทึก${INTENT_LABEL[intent]}เรียบร้อย${help}` });
         } else if (payload.decision === "PENDING_REVIEW") {
           setMessage({
             tone: "warn",
-            text: `บันทึกแล้ว รอฝ่ายบุคคลตรวจสอบ: ${flags.join(" · ")}${distance}`,
+            text: `บันทึกแล้ว รอฝ่ายบุคคลตรวจสอบ: ${flags.join(" · ")}${distance}${help}`,
           });
         } else {
           setMessage({
             tone: "bad",
-            text: `ลงเวลาไม่ผ่าน: ${flags.join(" · ")}${distance}`,
+            text: `ลงเวลาไม่ผ่าน: ${flags.join(" · ")}${distance}${help}`,
           });
         }
 
@@ -251,14 +283,12 @@ export function Today({
   const events = data?.events ?? [];
   // เข้าแล้วยังไม่ออก = ปุ่มถัดไปควรเป็น "ออกงาน" — เดาให้ถูกตั้งแต่แรก
   // ดีกว่าให้พนักงานต้องเลือกเองทุกครั้งแล้วมีโอกาสกดผิด
-  const lastIntent = events.length > 0 ? events[events.length - 1]!.intent : null;
-  const nextIntent: "CLOCK_IN" | "CLOCK_OUT" =
-    lastIntent === "CLOCK_IN" ? "CLOCK_OUT" : "CLOCK_IN";
+  // นับสแกนนิ้ว (AUTO) และกะข้ามคืนด้วย — ดู modules/hr/lib/clock-state.ts
+  // เวลาเข้า/ออกที่โชว์ตัวใหญ่ = เข้าครั้งแรก / ออกครั้งล่าสุด (ทุกครั้งอยู่ในรายการด้านล่าง)
+  const { open, firstIn, lastOut } = clockState(events, data?.carriedIn ?? null);
+  const nextIntent: "CLOCK_IN" | "CLOCK_OUT" = open ? "CLOCK_OUT" : "CLOCK_IN";
   const busy = state !== "idle" || noEmployment;
-  // เวลาเข้า/ออกของวันนี้ไว้โชว์ตัวใหญ่เหนือปุ่ม — เข้างาน = ครั้งแรก, ออกงาน = ครั้งล่าสุด
-  // (ลงเข้า-ออกหลายรอบในวันเดียวได้ รายละเอียดทุกครั้งยังอยู่ในรายการด้านล่าง)
-  const firstIn = events.find((e) => e.intent === "CLOCK_IN") ?? null;
-  const lastOut = [...events].reverse().find((e) => e.intent === "CLOCK_OUT") ?? null;
+  const isDesktop = useIsDesktop();
 
   return (
     <div className="flex flex-1 flex-col gap-5 p-5 pt-8">
@@ -274,11 +304,17 @@ export function Today({
         </p>
       )}
 
+      {/* คอมพิวเตอร์: QR ไปลงเวลาบนมือถือแทนแผนที่ + ปุ่ม (คอมไม่มี GPS ลงไม่ผ่านอยู่แล้ว)
+          ยังไม่รู้ว่าเครื่องอะไร (null) = ยังไม่โชว์ทั้งสองแบบ กันกระพริบ */}
+      {isDesktop && <DesktopQr />}
+
       {/* ดูก่อนกดว่าอยู่ในระยะไหม — ไม่ได้บังคับ แค่ให้เห็นก่อนเสียเวลากดแล้วไม่ผ่าน
           ครอบด้วย boundary เพราะแผนที่พังต้องไม่ลากปุ่มลงเวลาตายไปด้วย */}
-      <MapBoundary>
-        <CheckinMap />
-      </MapBoundary>
+      {isDesktop === false && (
+        <MapBoundary>
+          <CheckinMap />
+        </MapBoundary>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         {[
@@ -288,6 +324,7 @@ export function Today({
           <div key={label} className="rounded-2xl border border-(--line) bg-(--bg-soft) p-3 text-center">
             <p className="text-xs text-(--ink-soft)">{label}</p>
             <p className="mt-1 text-3xl font-bold tabular-nums">{event ? timeOf(event.capturedAt) : "--:--"}</p>
+            {event && event === data?.carriedIn && <p className="mt-0.5 text-xs text-(--ink-soft)">เมื่อวาน</p>}
             {event && event.lateMinutes > 0 && (
               <p className="mt-0.5 text-xs text-(--tone-warn)">สาย {event.lateMinutes} นาที</p>
             )}
@@ -295,20 +332,43 @@ export function Today({
         ))}
       </div>
 
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => void submit(nextIntent)}
-        className="h-32 w-full rounded-2xl bg-(--app) text-2xl font-bold text-white disabled:opacity-60"
-      >
-        {noEmployment
-          ? "ยังลงเวลาไม่ได้"
-          : state === "locating"
-            ? "กำลังหาตำแหน่ง…"
-            : state === "sending"
-              ? "กำลังบันทึก…"
-              : INTENT_LABEL[nextIntent]}
-      </button>
+      {isDesktop !== false ? null : needsPhoto && state === "idle" ? (
+        // แตะปุ่มนี้ = เปิดกล้องจากการแตะโดยตรง (iPhone ยอม) แล้วส่งรูปพร้อมลงเวลาทั้งก้อน
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => photoInput.current?.click()}
+            className="h-32 w-full rounded-2xl bg-(--app) text-2xl font-bold text-white"
+          >
+            📷 ถ่ายรูปเพื่อ{INTENT_LABEL[pendingIntent]}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setNeedsPhoto(false);
+              setMessage(null);
+            }}
+            className="text-sm text-(--ink-soft) underline"
+          >
+            ยกเลิก
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void submit(nextIntent)}
+          className="h-32 w-full rounded-2xl bg-(--app) text-2xl font-bold text-white disabled:opacity-60"
+        >
+          {noEmployment
+            ? "ยังลงเวลาไม่ได้"
+            : state === "locating"
+              ? "กำลังหาตำแหน่ง…"
+              : state === "sending"
+                ? "กำลังบันทึก…"
+                : INTENT_LABEL[nextIntent]}
+        </button>
+      )}
 
       {/* กล้องเปิดเมื่อ *นโยบายบริษัท* สั่งเท่านั้น ไม่ได้ขอรูปทุกครั้ง */}
       <input
@@ -320,7 +380,7 @@ export function Today({
         onChange={(event) => {
           const file = event.target.files?.[0];
           event.target.value = "";
-          if (file) void submit(pendingIntent.current, file);
+          if (file) void submit(pendingIntent, file);
         }}
       />
 

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@smartboss/auth";
 import { wfFetch, WorkforceError, WorkforceUnavailableError } from "@/modules/hr/lib/api";
-import { todayIso } from "@/modules/hr/lib/date";
+import { localDateStr, todayIso } from "@/modules/hr/lib/date";
+import { CARRY_OVER_HOURS, clockState } from "@/modules/hr/lib/clock-state";
 
 export const runtime = "nodejs";
 
@@ -50,21 +51,38 @@ export async function GET() {
       );
     }
 
-    const timeline = await wfFetch<{ items: TimeEvent[] }>(`/time-events?date=${date}`);
-    const mine = timeline.items
-      .filter((event) => event.employment_id === me.employment_id)
-      .sort((a, b) => a.captured_at.localeCompare(b.captured_at));
+    const yesterday = localDateStr(new Date(Date.now() - 86_400_000));
+    const [timeline, prevTimeline] = await Promise.all([
+      wfFetch<{ items: TimeEvent[] }>(`/time-events?date=${date}`),
+      // กะดึก: เข้าเมื่อวานแล้วจะออกหลังเที่ยงคืน — ไม่ดูเมื่อวานด้วย ปุ่มจะขึ้น "เข้างาน" ให้กดผิด
+      wfFetch<{ items: TimeEvent[] }>(`/time-events?date=${yesterday}`).catch(() => ({ items: [] as TimeEvent[] })),
+    ]);
+    const toEvent = (event: TimeEvent) => ({
+      id: event.id,
+      capturedAt: event.captured_at,
+      intent: event.event_intent,
+      sourceType: event.source_type,
+      lateMinutes: event.late_minutes,
+    });
+    const mineOf = (items: TimeEvent[]) =>
+      items
+        .filter((event) => event.employment_id === me.employment_id)
+        .sort((a, b) => a.captured_at.localeCompare(b.captured_at))
+        .map(toEvent);
+    const mine = mineOf(timeline.items);
+    const prev = clockState(mineOf(prevTimeline.items));
+    // ยังค้างอยู่ในงานจากเมื่อวาน และเข้ามาไม่นานเกินกะหนึ่ง = กะข้ามคืน (นานกว่านั้น = ลืมกดออก)
+    const carriedIn =
+      prev.openedBy !== null &&
+      Date.now() - new Date(prev.openedBy.capturedAt).getTime() < CARRY_OVER_HOURS * 3_600_000
+        ? prev.openedBy
+        : null;
 
     return NextResponse.json({
       date,
       displayName: me.display_name,
-      events: mine.map((event) => ({
-        id: event.id,
-        capturedAt: event.captured_at,
-        intent: event.event_intent,
-        sourceType: event.source_type,
-        lateMinutes: event.late_minutes,
-      })),
+      events: mine,
+      carriedIn,
     });
   } catch (error) {
     if (error instanceof WorkforceUnavailableError) {

@@ -31,11 +31,15 @@ const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
 /**
  * นโยบายเริ่มต้นเมื่อพนักงานยังไม่ถูกจัดเข้ากลุ่มใด
  *
- * เข้มไว้ก่อน: บังคับพิกัด ส่งเข้าคิวตรวจเมื่อพบความเสี่ยง แต่ไม่ปฏิเสธ
- * เพราะการตั้งค่ายังไม่ครบไม่ควรทำให้พนักงานลงเวลาไม่ได้
+ * บังคับพิกัด ส่งเข้าคิวตรวจเมื่อพบความเสี่ยง แต่ไม่ปฏิเสธ — การตั้งค่ายังไม่ครบไม่ควรทำให้พนักงานลงเวลาไม่ได้
+ *
+ * ใช้ GPS อย่างเดียว ไม่บังคับรูป ไม่บังคับเครื่องที่อนุมัติ (เจ้าของงานตัดสิน 2026-10-07) — เดิมเข้มกว่านี้
+ * (รูปทุกครั้ง + เครื่องที่อนุมัติ) ซึ่งบนมือถือทั่วไป/LINE ไม่มีทางผ่าน: คนที่ HR ยังไม่ได้จัดเข้ากลุ่ม
+ * นโยบายจะติด "เครื่องยังไม่ได้รับอนุมัติ" ทุกครั้งแล้วค้างรอตรวจ ไม่ถูกนับเวลา · ตรงกับค่าตั้งต้นของ
+ * ฟอร์มสร้างนโยบายฝั่งเว็บ (apps/web/app/(shell)/hr/settings/attendance/policy-forms.tsx)
  */
 const DEFAULT_POLICY: PhotoPolicy = {
-  photoRequired: 'ALWAYS',
+  photoRequired: 'DISABLED',
   photoRandomPercent: 0,
   locationRequired: true,
   allowedSiteIds: [],
@@ -44,9 +48,11 @@ const DEFAULT_POLICY: PhotoPolicy = {
   captureDeadlineSeconds: 30,
   allowOfflineCapture: false,
   offlineMaxAgeMinutes: 120,
-  requireEnrolledDevice: true,
+  requireEnrolledDevice: false,
   requireLiveCapture: true,
-  riskAction: 'REVIEW',
+  // บันทึก + นับเวลาเลย แค่ติดข้อสังเกตไว้ให้ HR ไปถามเอง (ไม่มีคิวรออนุมัติ) — ตำแหน่งที่ไม่ตรง
+  // ถูกกันตั้งแต่หน้าแอปแล้ว (apps/web/app/api/m/checkin gpsGate) ไม่มาถึงตรงนี้
+  riskAction: 'WARN',
 };
 
 @Injectable()

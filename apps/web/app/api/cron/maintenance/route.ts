@@ -8,6 +8,7 @@ import {
 import { dockAttendance } from "@/lib/attendance-performance";
 import { purgeExpiredChatMedia } from "@/modules/chat/data/media-retention";
 import { notifyLateArrivals } from "@/lib/attendance-late-alerts";
+import { postAttendanceToChat } from "@/lib/attendance-chat";
 import { notifyPendingOvertime } from "@/modules/hr/lib/hr-notify";
 
 export const runtime = "nodejs";
@@ -21,6 +22,8 @@ export const runtime = "nodejs";
  *   - ลบรูป/วิดีโอ/เสียงในแชทที่หมดอายุ ไม่อยู่ในอัลบั้ม (?task=chat-media, &dryRun=1 ดูอย่างเดียว)
  *   - แจ้งเตือนมาสายของวันนี้ ให้ตัวพนักงาน (?task=late-alerts — ต้องมีบรรทัด crontab แยก ทุก 5 นาทีช่วงเช้า ดู docs/deploy.md)
  *   - แจ้งผู้อนุมัติว่ามี OT ค้างรออนุมัติกี่รายการ (?task=ot-pending — วันละครั้ง อยู่ใน all ตอน 08:00)
+ *   - เด้งเวลาเข้า/ออกงานเข้าห้องแชท "ระบบลงเวลา" ของแต่ละคน (?task=attendance-chat — crontab ทุกนาที
+ *     แยกบรรทัด ดู docs/deploy.md · ไม่อยู่ใน all เพราะ all รันวันละครั้ง)
  *   - ?task=all รันทั้งหมด
  * เรียกด้วย header `Authorization: Bearer $CRON_SECRET` หรือ `?key=$CRON_SECRET`
  * route นี้อยู่นอก auth ของ proxy จึงกันด้วย CRON_SECRET เท่านั้น →
@@ -56,6 +59,9 @@ export async function GET(req: NextRequest) {
   }
   if (task === "late-alerts" || task === "all") {
     Object.assign(result, { lateAlerts: await notifyLateArrivals() });
+  }
+  if (task === "attendance-chat") {
+    Object.assign(result, { attendanceChat: await postAttendanceToChat() });
   }
   if (task === "chat-media" || task === "all") {
     Object.assign(result, { chatMedia: await purgeExpiredChatMedia({ dryRun: url.searchParams.get("dryRun") === "1" }) });

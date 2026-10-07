@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Clock } from "lucide-react";
+import { clockState } from "@/modules/hr/lib/clock-state";
 
 /**
  * ไอคอน "ลงเวลา" บนหน้าแรก — กดแล้วเปิดหน้าลงเวลา (/hr/clock) ที่มีปุ่มใหญ่ให้กดอีกที
@@ -26,6 +27,7 @@ type ClockState =
 interface TodayPayload {
   code?: string;
   events?: { capturedAt: string; intent: string }[];
+  carriedIn?: { capturedAt: string; intent: string } | null;
 }
 
 function hhmm(iso: string): string {
@@ -46,14 +48,10 @@ export function ClockTile() {
           setState(payload.code === "NO_EMPLOYMENT" ? { kind: "hidden" } : { kind: "unknown" });
           return;
         }
-        const events = payload.events ?? [];
-        const last = events[events.length - 1];
-        // กติกาเดียวกับปุ่มในหน้าลงเวลา (app/m/today.tsx): ล่าสุดเป็น "เข้างาน" ⇒ กดต่อไปคือออกงาน
-        if (last?.intent === "CLOCK_IN") setState({ kind: "out", since: hhmm(last.capturedAt) });
-        else if (last?.intent === "CLOCK_OUT") {
-          const firstIn = events.find((e) => e.intent === "CLOCK_IN");
-          setState({ kind: "done", since: firstIn ? hhmm(firstIn.capturedAt) : null, at: hhmm(last.capturedAt) });
-        }
+        // ตรรกะเดียวกับปุ่มในหน้าลงเวลา (นับสแกนนิ้ว + กะข้ามคืน) — modules/hr/lib/clock-state.ts
+        const { open, firstIn, lastOut } = clockState(payload.events ?? [], payload.carriedIn ?? null);
+        if (open) setState({ kind: "out", since: firstIn ? hhmm(firstIn.capturedAt) : "" });
+        else if (lastOut) setState({ kind: "done", since: firstIn ? hhmm(firstIn.capturedAt) : null, at: hhmm(lastOut.capturedAt) });
         else setState({ kind: "in" });
       } catch {
         if (!cancelled) setState({ kind: "unknown" });

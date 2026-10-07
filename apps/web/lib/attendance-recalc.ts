@@ -50,6 +50,21 @@ async function targetsFor(orgId: string): Promise<OrgTarget> {
   });
 }
 
+/**
+ * token อายุสั้นของระบบบุคคล ในนามคนในบริษัทที่อ่านผลลงเวลาได้ทั้งบริษัทอยู่แล้ว — ใช้กับงานเบื้องหลัง
+ * ที่ต้องอ่านค่าที่ระบบบุคคลคำนวณ (เช่น สายกี่นาที) แบบเดียวกับหน้า /hr (ดูเหตุผลที่หัวไฟล์)
+ * คืน null เมื่อบริษัทนั้นยังไม่มีข้อมูลฝั่ง HR หรือไม่มีใครมีสิทธิ์
+ */
+export async function workforceReadToken(orgId: string): Promise<string | null> {
+  try {
+    const target = await targetsFor(orgId);
+    if (!target.subject) return null;
+    return await signAccessToken({ sub: target.subject, orgId, roles: [], permissions: [] });
+  } catch {
+    return null;
+  }
+}
+
 export function bangkokDay(offsetDays: number): string {
   const d = new Date(Date.now() + offsetDays * 86_400_000);
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(d);

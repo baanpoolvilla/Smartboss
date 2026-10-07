@@ -584,18 +584,29 @@ export class AttendanceService {
         .map((adjustment) => [adjustment.targetEventId, adjustment.eventIntent]),
     );
 
+    // ลงเวลาจากมือถือที่ "รอตรวจ" — เดิมดูแค่ธง requires_review บน raw event ซึ่งไม่เคยถูกแก้
+    // (raw event ห้ามแก้ spec §7.4) ⇒ HR กดอนุมัติในคิวตรวจแล้วก็ยังไม่นับเป็นเวลาทำงานตลอดไป
+    // ผลตรวจอยู่ที่ mobile_risk_assessments: APPROVED = นับ, REJECTED = ไม่นับ (เหมือน IGNORE_EVENT)
+    // ทุก event (ไม่ใช่แค่ที่รอตรวจ) — HR กด "ไม่นับรายการนี้" ได้กับรายการที่นับไปแล้วด้วย
+    // (หน้า "ลงเวลาผิดปกติ" ของ SmartBoss: ถามแล้วพบว่าฝากกดแทน ฯลฯ)
+    const reviewOutcomes = await this.repository.listReviewOutcomesForEvents(
+      tx,
+      events.map((event) => event.id),
+    );
+
     const punches: Punch[] = events.map((event) => {
       const evidence = event.evidence as Record<string, unknown>;
       const changedIntent = intentChanges.get(event.id);
+      const reviewOutcome = reviewOutcomes.get(event.id);
       return {
         eventId: event.id,
         at: event.capturedAt,
         intent: (changedIntent ?? event.eventIntent) as EventIntent,
         adjusted: changedIntent !== undefined,
         trustedIntent: event.eventIntent !== 'AUTO',
-        ignored: ignored.has(event.id),
-        // check-in ที่รอตรวจหลักฐานยังไม่นับเป็นเวลาทำงาน (Phase 3 → Phase 4)
-        pendingReview: evidence['requires_review'] === true,
+        ignored: ignored.has(event.id) || reviewOutcome === 'REJECTED',
+        // check-in ที่รอตรวจหลักฐานยังไม่นับเป็นเวลาทำงาน จนกว่า HR จะอนุมัติ
+        pendingReview: evidence['requires_review'] === true && reviewOutcome !== 'APPROVED',
       };
     });
 

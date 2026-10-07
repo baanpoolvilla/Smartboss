@@ -120,6 +120,17 @@ export function isUserMessageKind(kind: string): boolean {
   return kind === "text" || kind === "note";
 }
 
+/** ห้อง "🕐 ระบบลงเวลา" ส่วนตัวของแต่ละคน (lib/attendance-chat.ts) — id ขึ้นต้นด้วยนี้ */
+export const CLOCK_CHANNEL_PREFIX = "clock-";
+
+/**
+ * ข้อความนี้นับเป็น "ยังไม่อ่าน" ไหม — ปกติเฉพาะข้อความที่คนพิมพ์ (ข้อความระบบเช่น "เพิ่มสมาชิก" ไม่นับ)
+ * ยกเว้นห้องระบบลงเวลา ที่ทั้งห้องเป็นข้อความระบบ (เข้า/ออกงาน) — ไม่นับ = ไม่มีตัวเลขแดง ไม่มีใครรู้ว่ามีของใหม่
+ */
+export function countsAsUnread(kind: string, channelId: string): boolean {
+  return isUserMessageKind(kind) || (kind === "system" && channelId.startsWith(CLOCK_CHANNEL_PREFIX));
+}
+
 export interface ChatMessageDTO {
   id: string;
   /** ChatMessage.seq (bigint) เป็นสตริง — ใช้เป็น cursor (?after=/?before=) และนับ "อ่านแล้ว" */
