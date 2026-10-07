@@ -16,7 +16,7 @@ import { clockState } from "@/modules/hr/lib/clock-state";
  * หรืออยู่ในทะเบียนแต่ไม่ได้ผูกกะทำงาน (mustClock = false จาก /api/m/today) · โหลดไม่สำเร็จด้วยเหตุอื่นยังโชว์ไอคอนเฉย ๆ ให้เข้าไปลองได้
  */
 
-type ClockState =
+export type ClockState =
   | { kind: "loading" }
   | { kind: "hidden" }
   | { kind: "unknown" }
@@ -43,46 +43,64 @@ function hhmm(iso: string): string {
  */
 const lastKnown = new Map<string, ClockState>();
 
-export function ClockTile({ userId }: { userId: string }) {
-  const [state, setStateRaw] = useState<ClockState>(() => lastKnown.get(userId) ?? { kind: "loading" });
-  const setState = (next: ClockState) => {
-    // โหลดพลาดชั่วคราว (unknown) ไม่ทับคำตอบดีที่จำไว้
-    if (next.kind !== "unknown") lastKnown.set(userId, next);
-    setStateRaw(next);
-  };
+/**
+ * ยิงถาม /api/m/today ครั้งเดียวต่อรอบ แม้ไอคอนในหน้าแรกกับปุ่มกลางของแถบเมนูล่างจะขอพร้อมกัน
+ * (คำขอที่ยังค้างอยู่ใช้ร่วมกัน · เสร็จแล้วรอบถัดไปค่อยถามใหม่)
+ * null = ถามไม่สำเร็จด้วยเหตุชั่วคราว
+ */
+const inflight = new Map<string, Promise<ClockState | null>>();
+
+function loadClockState(userId: string): Promise<ClockState | null> {
+  const pending = inflight.get(userId);
+  if (pending) return pending;
+  const run = (async (): Promise<ClockState | null> => {
+    try {
+      const response = await fetch("/api/m/today", { cache: "no-store" });
+      const payload = (await response.json().catch(() => ({}))) as TodayPayload;
+      if (!response.ok) return payload.code === "NO_EMPLOYMENT" ? { kind: "hidden" } : { kind: "unknown" };
+      if (payload.mustClock === false) return { kind: "hidden" };
+      // ตรรกะเดียวกับปุ่มในหน้าลงเวลา (นับสแกนนิ้ว + กะข้ามคืน) — modules/hr/lib/clock-state.ts
+      const { open, firstIn, lastOut } = clockState(payload.events ?? [], payload.carriedIn ?? null);
+      if (open) return { kind: "out", since: firstIn ? hhmm(firstIn.capturedAt) : "" };
+      if (lastOut) return { kind: "done", since: firstIn ? hhmm(firstIn.capturedAt) : null, at: hhmm(lastOut.capturedAt) };
+      return { kind: "in" };
+    } catch {
+      return null;
+    } finally {
+      inflight.delete(userId);
+    }
+  })();
+  inflight.set(userId, run);
+  return run;
+}
+
+/** สถานะลงเวลาของวันนี้ — ใช้ทั้งไอคอนในหน้าแรกและปุ่มกลางของแถบเมนูล่าง (HomeBottomNav ใน components/shell/shell.tsx) */
+export function useClockState(userId: string): ClockState {
+  const [state, setState] = useState<ClockState>(() => lastKnown.get(userId) ?? { kind: "loading" });
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        const response = await fetch("/api/m/today", { cache: "no-store" });
-        const payload = (await response.json().catch(() => ({}))) as TodayPayload;
-        if (cancelled) return;
-        if (!response.ok) {
-          setState(payload.code === "NO_EMPLOYMENT" ? { kind: "hidden" } : { kind: "unknown" });
-          return;
-        }
-        if (payload.mustClock === false) {
-          setState({ kind: "hidden" });
-          return;
-        }
-        // ตรรกะเดียวกับปุ่มในหน้าลงเวลา (นับสแกนนิ้ว + กะข้ามคืน) — modules/hr/lib/clock-state.ts
-        const { open, firstIn, lastOut } = clockState(payload.events ?? [], payload.carriedIn ?? null);
-        if (open) setState({ kind: "out", since: firstIn ? hhmm(firstIn.capturedAt) : "" });
-        else if (lastOut) setState({ kind: "done", since: firstIn ? hhmm(firstIn.capturedAt) : null, at: hhmm(lastOut.capturedAt) });
-        else setState({ kind: "in" });
-      } catch {
+    loadClockState(userId).then((next) => {
+      if (cancelled) return;
+      if (next === null) {
         // มีคำตอบเดิมอยู่แล้วก็คงไว้ — เน็ตสะดุดไม่ควรทำให้ไอคอนเปลี่ยนเป็นสีเทา
-        if (!cancelled && !lastKnown.has(userId)) setState({ kind: "unknown" });
+        if (!lastKnown.has(userId)) setState({ kind: "unknown" });
+        return;
       }
-    })();
+      // โหลดพลาดชั่วคราว (unknown) ไม่ทับคำตอบดีที่จำไว้
+      if (next.kind !== "unknown") lastKnown.set(userId, next);
+      setState(next);
+    });
     return () => {
       cancelled = true;
     };
-    // setState เป็นฟังก์ชันธรรมดาที่อ้าง userId ตัวเดียวกับ dependency ข้างล่าง
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
+  return state;
+}
+
+export function ClockTile({ userId }: { userId: string }) {
+  const state = useClockState(userId);
   // ยังไม่รู้ว่าต้องลงเวลาไหม = ยังไม่โชว์ — ไม่ให้คนที่ไม่ต้องลงเห็นไอคอนแวบขึ้นมาแล้วหายไป
   if (state.kind === "hidden" || state.kind === "loading") return null;
 

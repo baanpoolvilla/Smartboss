@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutGrid, MoreHorizontal, X } from "lucide-react";
+import { Clock, LayoutGrid, MoreHorizontal, X } from "lucide-react";
 import { cn } from "@smartboss/ui/cn";
 import { Avatar } from "@smartboss/ui/components/avatar";
 import {
@@ -35,7 +35,9 @@ import { FileSizeGuard } from "./file-size-guard";
 import { SystemNotify } from "./system-notify";
 import { ChatNotifyListener } from "@/modules/chat/components/chat-nav-badge";
 import { MarkReadOnRoute } from "@/modules/notifications/mark-read-on-route";
-import { ShellProvider, type ShellUser } from "./shell-context";
+import { ShellProvider, useShell, type ShellUser } from "./shell-context";
+import { useClockState } from "@/components/home/clock-tile";
+import { APP_CLOCK_ENABLED } from "@/modules/hr/lib/app-clock";
 import { useBackToClose, useBackToCloseOnTouch, whenHistorySettled } from "@/lib/back-to-close";
 
 export type { ShellUser };
@@ -116,7 +118,15 @@ export function Shell({
           {children}
         </ModuleFrame>
       ) : (
-        <LauncherFrame user={user}>{children}</LauncherFrame>
+        <LauncherFrame
+          user={user}
+          pathname={pathname}
+          chatPath={modules.flatMap((m) => m.menus).find((i) => i.path.endsWith("/chat"))?.path ?? null}
+          // เงื่อนไขเดียวกับไอคอนลงเวลาในหน้าแรก (app/(shell)/page.tsx)
+          showClock={APP_CLOCK_ENABLED && modules.some((m) => m.id === "hr")}
+        >
+          {children}
+        </LauncherFrame>
       )}
     </ShellProvider>
   );
@@ -128,9 +138,15 @@ export function Shell({
    ══════════════════════════════════════════════════════════════════ */
 function LauncherFrame({
   user,
+  pathname,
+  chatPath,
+  showClock,
   children,
 }: {
   user: ShellUser;
+  pathname: string;
+  chatPath: string | null;
+  showClock: boolean;
   children: React.ReactNode;
 }) {
   const router = useRouter();
@@ -195,7 +211,10 @@ function LauncherFrame({
         </div>
       </header>
 
-      <main className="min-w-0 flex-1 p-6">{children}</main>
+      {/* มือถือ: เว้นที่ด้านล่างให้แถบเมนูลอย (68px) + ระยะหายใจเดิม 24px */}
+      <main data-bottom-nav-pad className="min-w-0 flex-1 p-6 pb-[92px] lg:pb-6">{children}</main>
+
+      <HomeBottomNav userId={user.id} pathname={pathname} chatPath={chatPath} showClock={showClock} />
     </div>
   );
 }
@@ -349,7 +368,7 @@ function ModuleBottomNav({
 
   return (
     <>
-      <nav data-bottom-nav className="fixed inset-x-0 bottom-0 z-40 flex h-[68px] items-stretch border-t border-(--line) bg-(--bg) shadow-[0_-1px_8px_rgba(23,51,47,0.06)] lg:hidden">
+      <BottomBar>
         {primary.map((menu) => (
           <BottomNavItem
             key={menu.path}
@@ -373,7 +392,7 @@ function ModuleBottomNav({
           active={overflowActive}
           onClick={() => setSheetOpen(true)}
         />
-      </nav>
+      </BottomBar>
 
       {sheetOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
@@ -459,7 +478,7 @@ function BottomNavItem({
     <>
       <span
         className={cn(
-          "relative flex h-8 w-16 items-center justify-center rounded-full transition-colors",
+          "relative flex h-7 w-14 items-center justify-center rounded-full transition-colors",
           active && "bg-(--app-soft,#CCFBF1)"
         )}
       >
@@ -473,7 +492,7 @@ function BottomNavItem({
   );
 
   const className = cn(
-    "flex min-w-0 flex-1 flex-col items-center justify-center px-1 pt-2",
+    "flex min-w-0 flex-1 flex-col items-center justify-center px-1",
     active
       ? "font-bold text-(--app-strong,var(--ink))"
       : "text-(--ink-soft)"
@@ -487,5 +506,83 @@ function BottomNavItem({
     <button type="button" onClick={onClick} className={className}>
       {body}
     </button>
+  );
+}
+
+/**
+ * แถบเมนูล่างแบบลอย (มือถือ) — การ์ดขาวมุมมน มีเงา เว้นขอบซ้าย/ขวา/ล่าง ("ของเราไม่ดูไม่มีมิติเลย")
+ * พื้นที่รวมยังสูง 68px เท่าเดิม (แถบ 60px + ขอบล่าง 8px) — หน้าต่าง ๆ เว้นที่ด้วย pb-[68px]
+ * และปฏิทินคำนวณความสูงจาก 68 อยู่แล้ว เปลี่ยนตัวเลขนี้ต้องไล่แก้ที่พวกนั้นด้วย
+ * ช่องว่างรอบแถบปล่อยให้กดทะลุถึงเนื้อหาข้างหลัง (pointer-events-none ที่กรอบนอก)
+ */
+function BottomBar({ children }: { children: React.ReactNode }) {
+  return (
+    <nav data-bottom-nav className="pointer-events-none fixed inset-x-0 bottom-0 z-40 h-[68px] px-2.5 pb-2 lg:hidden">
+      <div className="pointer-events-auto flex h-full items-stretch rounded-[22px] bg-(--bg) shadow-[0_10px_24px_rgba(15,30,60,0.16),0_2px_6px_rgba(15,30,60,0.08)] ring-1 ring-black/[0.04]">
+        {children}
+      </div>
+    </nav>
+  );
+}
+
+/**
+ * แถบเมนูล่างของหน้าแรก (มือถือ) — หน้าหลัก · แชท · [ลงเวลา] · แจ้งเตือน · บัญชี
+ * ปุ่มกลาง "ลงเวลา" ยกขึ้นเป็นวงกลม มีเฉพาะคนที่ต้องลงเวลา (สถานะเดียวกับไอคอนลงเวลาในหน้าแรก)
+ * สีบอกว่ากดเข้าไปจะได้ทำอะไร: เขียว เข้างาน · ส้ม ออกงาน · เทา ลงครบแล้ว
+ * หน้าในโมดูลไม่มีปุ่มกลาง ("หน้าอื่นๆไม่ต้องมีตัวกลาง") — ใช้ ModuleBottomNav
+ */
+function HomeBottomNav({
+  userId,
+  pathname,
+  chatPath,
+  showClock,
+}: {
+  userId: string;
+  pathname: string;
+  chatPath: string | null;
+  showClock: boolean;
+}) {
+  const { unread } = useShell();
+  const clock = useClockState(userId);
+  const clockVisible = showClock && clock.kind !== "hidden" && clock.kind !== "loading";
+  const clockColor =
+    clock.kind === "in" ? "var(--tone-ok, #16a34a)" : clock.kind === "out" ? "var(--tone-warn, #ea580c)" : "var(--ink-soft)";
+  const clockLabel = clock.kind === "in" ? "เข้างาน" : clock.kind === "out" ? "ออกงาน" : "ลงเวลา";
+
+  return (
+    <BottomBar>
+      <BottomNavItem label="หน้าหลัก" icon="Home" href="/" active={pathname === "/"} />
+      {chatPath && <BottomNavItem label="แชท" icon="MessageCircle" href={chatPath} active={false} />}
+      {clockVisible && (
+        <Link
+          href="/hr/clock"
+          prefetch={false}
+          className="flex min-w-0 flex-1 flex-col items-center justify-end pb-1.5 text-[11px] font-bold leading-tight"
+          style={{ color: clockColor }}
+        >
+          <span
+            className="-mt-7 mb-0.5 flex h-[52px] w-[52px] items-center justify-center rounded-full text-white shadow-[0_8px_18px_rgba(15,30,60,0.25)] ring-[5px] ring-(--bg-soft) transition-transform active:scale-95"
+            style={{ backgroundColor: clockColor }}
+          >
+            <Clock className="h-6 w-6" />
+          </span>
+          {clockLabel}
+        </Link>
+      )}
+      <BottomNavItem
+        label="แจ้งเตือน"
+        icon="Bell"
+        href="/notifications"
+        active={pathname.startsWith("/notifications")}
+        badge={
+          unread > 0 ? (
+            <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[#ef4444] px-1 text-[10px] font-bold leading-none text-white">
+              {unread > 99 ? "99+" : unread}
+            </span>
+          ) : null
+        }
+      />
+      <BottomNavItem label="บัญชี" icon="User" href="/account" active={pathname.startsWith("/account")} />
+    </BottomBar>
   );
 }

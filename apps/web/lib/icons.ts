@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   Award,
+  Bell,
   Boxes,
   Bug,
   Building,
@@ -56,6 +57,7 @@ import {
  */
 const ICONS: Record<string, LucideIcon> = {
   Award,
+  Bell,
   Boxes,
   Bug,
   Building,
