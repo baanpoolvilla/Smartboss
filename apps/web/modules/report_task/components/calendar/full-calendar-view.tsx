@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type CSSProperties } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
@@ -71,6 +71,9 @@ interface FullCalendarViewProps {
   /** Clicking a to-do chip's title (not its checkbox) opens it for editing. */
   onEditTodo?: (id: string) => void;
   addHint?: string;
+  /** แถบด้านซ้ายของตาราง (≥lg) — รายชื่อ "คนในองค์กร" อยู่ในการ์ดเดียวกับปฏิทินแบบปฏิทินทีมของ
+   *  HR: หัว (เลื่อนเดือน) กับท้าย (คำแนะนำ) ยาวเต็มการ์ดคลุมทั้งแถบนี้และตาราง */
+  rail?: ReactNode;
 }
 
 /** ช่องว่างใต้ปฏิทินถึงขอบล่างของจอ — ใช้ค่าเดียวกับแถบรายชื่อ (calendar-rail.tsx) ให้ขอบล่างเสมอกัน */
@@ -89,6 +92,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
   onToggleTodo,
   onEditTodo,
   addHint = "คลิกวันเพื่อเพิ่มรายการ",
+  rail,
 }, ref) {
   const calendarRef = useRef<FullCalendar | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -351,6 +355,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
         .filter((e) => !(view === "dayGridMonth" && (e.type === "holiday" || isNarrowViewport)))
         .map((e) => {
         const color = e.colorHint ?? colors[e.type];
+        const off = e.type === "leave" || e.type === "dayoff" || e.type === "ot";
         return {
           id: e.id,
           title: e.title,
@@ -381,7 +386,8 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
             // margin now (see theme.css).
             ...(view === "dayGridMonth" && !isNarrowViewport ? ["ebw-event-plain"] : []),
           ],
-          extendedProps: { type: e.type, color, isTask: e.type === "task", muted: !!e.muted, mine: e.mine, leaveType: e.leaveType, done: !!e.done },
+          // offRank — งานขึ้นก่อนวันหยุด/ลาในช่องวันเดียวกัน (ดู eventOrder)
+          extendedProps: { offRank: off ? 1 : 0, type: e.type, color, isTask: e.type === "task", muted: !!e.muted, mine: e.mine, leaveType: e.leaveType, done: !!e.done },
         };
       }),
     [events, colors, view, isNarrowViewport]
@@ -774,7 +780,14 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
   // earlier costs nothing extra visually (dense only trims spacing, not text
   // size) but guarantees the two chips + link always have real room to
   // spare rather than landing exactly on the edge.
-  const monthRowsAreDense = usesFixedRows && monthRowHeight < 118;
+  //
+  // ⚠ ตอนนี้ใช้ dense เสมอบนเดือนแบบจอใหญ่ — ให้ช่องวันโชว์ได้หลายรายการเหมือนปฏิทินทีม
+  // (/hr) แทนการล็อก 2 อันแล้วที่เหลือเป็นช่องว่าง ("อยากให้มีพื้นที่ดูเยอะๆ เหมือนของ HR")
+  const monthRowsAreDense = usesFixedRows;
+  // จำนวน chip ต่อวัน = เท่าที่ความสูงแถวรับได้ (คิดจากขนาด dense ใน theme.css):
+  // เลขวัน ~22px · "+N รายการ" ~18px · ช่องหายใจท้ายช่อง ~6px · chip ละ ~19px
+  // คิดจากความสูงแถวอย่างเดียว (ไม่ใช่จากของในช่อง) ⇒ ทุกวันในเดือนได้จำนวนเท่ากัน ไม่หดไม่ขยาย
+  const monthChipCap = Math.max(1, Math.floor((monthRowHeight - 22 - 18 - 6) / 19));
 
   // FullCalendar measures each day-row's own height once (on mount, and
   // whenever the earlier resize/ResizeObserver effect calls updateSize()) and
@@ -875,8 +888,18 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           every event with no cap — one day with a dozen+ test entries made
           that row balloon far past the others, so back to capped + equal
           rows + "+N รายการ". */}
+      <div className="lg:flex lg:flex-1 lg:min-h-0">
+      {rail && (
+        // สูงเท่าตาราง (gridHeight) — ยาวกว่านั้นเลื่อนในตัวเอง ไม่ดันการ์ดให้สูงขึ้น
+        <aside
+          className="hidden lg:block lg:w-52 xl:w-56 2xl:w-60 shrink-0 overflow-y-auto border-r border-[var(--line)] pr-3 mr-3"
+          style={isDesktop && gridHeight ? { height: gridHeight } : undefined}
+        >
+          {rail}
+        </aside>
+      )}
       <div
-        className={cn("ebw-calendar lg:flex-1 lg:min-h-0 lg:overflow-hidden", monthRowsAreDense && "ebw-dense")}
+        className={cn("ebw-calendar lg:flex-1 lg:min-w-0 lg:min-h-0 lg:overflow-hidden", monthRowsAreDense && "ebw-dense")}
         ref={wrapperRef}
         style={usesFixedRows ? ({ "--ebw-row-height": `${monthRowHeight}px` } as CSSProperties) : undefined}
       >
@@ -902,6 +925,8 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           // gets narrower ones, instead of every month eating a wasted 6th row.
           fixedWeekCount={false}
           events={fcEvents}
+          // งานก่อน วันหยุด/ลาไว้ท้าย — ช่องที่ล้นจนเหลือ "+N รายการ" จะได้ซ่อนวันหยุด ไม่ใช่งาน
+          eventOrder="offRank,start,-duration,allDay,title"
           eventClick={handleEventClick}
           dateClick={handleDateClick}
           eventDrop={handleEventDrop}
@@ -948,7 +973,9 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           // ("Kanitha-Aui..." — ข้อมูลมันหาย). One fewer chip shown gives the
           // rest more of the column's width; the dropped one still reaches
           // the same "+N" popup as always.
-          dayMaxEvents={view === "dayGridMonth" ? (isNarrowViewport ? 3 : isLaptopViewport ? 1 : 2) : true}
+          // จอใหญ่: ตามความสูงแถว (monthChipCap) — เดิมล็อก 2 (laptop 1) ทั้งที่ช่องยังว่างอีกครึ่ง
+          // chip แบบ block กว้างเต็มช่องเสมอ จำนวนไม่ได้ทำให้ชื่อสั้นลง
+          dayMaxEvents={view === "dayGridMonth" ? (isNarrowViewport ? 3 : monthChipCap) : true}
           eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
           // "+N more" opens the same day popup as clicking the date itself
           // instead of FullCalendar's own bare popover — one consistent
@@ -963,6 +990,7 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
           initialDate={todayIso()}
           datesSet={handleDatesSet}
         />
+      </div>
       </div>
 
       {/* Keyboard-shortcut hints are dead weight on a touch device with no

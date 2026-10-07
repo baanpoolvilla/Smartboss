@@ -7,8 +7,13 @@ export const eventTypeColors: Record<CalendarEventType, string> = {
   // elsewhere) — punchier versions asked for explicitly ("ปรับสี... ให้
   // ชัดเจนมากกว่านี้"), chartColors.violet in particular read as a dark,
   // muted navy at dot size rather than a clearly "purple" meeting marker.
-  task: "#2563eb",
-  meeting: "#7c3aed",
+  //
+  // งาน/ประชุม/สิ่งที่ต้องทำ ต้องหลบสีประเภทวันหยุด/ลา (lib/leave-type-hue.ts) ที่วางทับ
+  // ปฏิทินเดียวกัน — สีลาห้ามเปลี่ยน ต้องตรงกับปฏิทินทีมใน /hr ⇒ ฝั่งงานเป็นคนหลบ:
+  // ลาใช้ hue 0/18/38/150/175/215/280 จึงเหลือ คราม (~243) ชมพู (~330) เขียวมะนาว (~85)
+  // (เดิมน้ำเงิน/ม่วง/เหลืองอำพัน ชนกับ Holiday/ลาไม่รับค่าจ้าง/ลาพักร้อนพอดี)
+  task: "#4f46e5",
+  meeting: "#db2777",
   // Neutral gray — "ลา" covers several sub-types each already colored on
   // their own chip (see leave-icons.ts's presets), so the umbrella category
   // itself stays out of the way rather than competing with them.
@@ -23,9 +28,8 @@ export const eventTypeColors: Record<CalendarEventType, string> = {
   // from both a requested/approved "leave" (blue) and a company-declared
   // "holiday" (violet), since it's neither: pre-approved and recurring.
   dayoff: chartColors.green,
-  // Its own hue (amber) — distinct from every other type so a checked-off
-  // to-do reads as "done" the same amber-to-gray way a checklist item does.
-  todo: chartColors.amber,
+  // เขียวมะนาว — ไม่ใช่เหลืองอำพันแล้ว (ชนกับลาพักร้อน/Work From Home) ดูหมายเหตุที่ task
+  todo: "#65a30d",
   // Orange — OT ที่อนุมัติแล้วจาก workforce, คนละเรื่องกับลา/วันหยุดประจำเลย
   // ไม่มีสีไหนข้างบนที่ยังไม่ถูกใช้ใกล้เคียงพอจะสับสนกัน
   ot: chartColors.orange,

@@ -25,7 +25,7 @@ import { Switch } from "@/modules/report_task/components/ui/switch";
 import { filterFieldTriggerClass } from "@/modules/report_task/components/shared/filter-field";
 import { FullCalendarView, type ViewKey, type FullCalendarViewHandle } from "./full-calendar-view";
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
-import { CalendarRail } from "./calendar-rail";
+import { PeopleCalendarList } from "./people-calendar-list";
 import { LeaveSidebar } from "./leave-sidebar";
 import { WorkSidebar } from "./work-sidebar";
 import { EventDetailDialog } from "./event-detail-dialog";
@@ -37,19 +37,19 @@ import { SubmitLeaveDialog } from "./submit-leave-dialog";
 import { TaskDetailSheet } from "@/modules/report_task/components/kanban/task-detail-sheet";
 import { useEventColorStore } from "@/modules/report_task/store/event-color-store";
 import { useCalendarScopeStore } from "@/modules/report_task/store/calendar-scope-store";
-import { chartColors } from "@/modules/report_task/lib/chart-colors";
 import { canEditRecord, canSeeTask, canSeeTaskOnCalendar, canSeeMeetingOnCalendar } from "@/modules/report_task/lib/permissions";
 import { getUser, canManage, isOwner, scopedUsers } from "@/modules/report_task/lib/directory";
 import { eventTypeLabels } from "@/modules/report_task/lib/calendar-colors";
 import { typeHex } from "@/lib/leave-type-hue";
 import { cn } from "@/modules/report_task/lib/utils";
-import { Bell, CalendarOff, ChevronDown, Plus, Settings2, User, Users, SlidersHorizontal } from "lucide-react";
+import { Bell, CalendarOff, ChevronDown, PanelLeftClose, PanelLeftOpen, Plus, Settings2, User, Users, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { now } from "@/modules/report_task/lib/now";
 import type { CalendarEvent, CalendarEventType, TodoItem } from "@/modules/report_task/types";
 
 /** จำว่าติ๊ก "วันหยุด · ลา" ไว้หรือไม่ — ต่อเครื่อง */
 const SHOW_SCHEDULE_KEY = "pm-calendar-show-schedule";
+const RAIL_OPEN_KEY = "pm-calendar-rail-open";
 
 /** กลุ่มประเภทของวันหยุด/ลา 1 กลุ่ม — หนึ่งแถวในเมนูเลือกประเภท */
 interface ScheduleGroup {
@@ -257,6 +257,27 @@ export function CalendarView() {
     } catch {
       // จำไม่ได้ก็ไม่เป็นไร
     }
+  }
+  // แถบ "คนในองค์กร" ด้านซ้าย (≥lg) พับเก็บได้ — ปฏิทินกว้างเต็มจอแบบปฏิทินทีมของ HR
+  // ตัวกรองคนยังอยู่ กดปุ่มเดิมก็กางกลับมา · จำค่าต่อเครื่อง
+  const [railOpen, setRailOpenState] = useState(true);
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- อ่านค่าที่จำไว้หลัง mount (server ไม่มี localStorage)
+      if (localStorage.getItem(RAIL_OPEN_KEY) === "0") setRailOpenState(false);
+    } catch {
+      // private mode / storage ถูกปิด — ใช้ค่าเริ่มต้น
+    }
+  }, []);
+  function toggleRail() {
+    setRailOpenState((prev) => {
+      try {
+        localStorage.setItem(RAIL_OPEN_KEY, prev ? "0" : "1");
+      } catch {
+        // จำไม่ได้ก็ไม่เป็นไร
+      }
+      return !prev;
+    });
   }
   // Color now encodes type only (task/meeting/สิ่งที่ต้องทำ), not priority —
   // priority filtering by chip is gone with it, replaced by the same
@@ -890,7 +911,7 @@ export function CalendarView() {
             already ran 3 buttons wide, plus 2 more action buttons, so on a
             phone it wrapped across 3 separate lines instead of reading as a
             single header. */}
-        <div className="hidden sm:flex flex-wrap items-center gap-2">
+        <div className="hidden sm:flex lg:hidden flex-wrap items-center gap-2">
           {/* "คนในองค์กร" no longer needs its own desktop button — it's the
               always-visible CalendarRail on the left now (≥lg). Still opened
               from here on <lg (rail hidden, no room for it yet), which is why
@@ -1104,9 +1125,9 @@ export function CalendarView() {
               <Badge
                 variant="outline"
                 className={cn("gap-1.5 cursor-pointer select-none transition-opacity", !showTodosInWork && "opacity-40")}
-                style={{ borderColor: chartColors.amber, color: chartColors.amber }}
+                style={{ borderColor: colors.todo, color: colors.todo }}
               >
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: chartColors.amber }} />
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: colors.todo }} />
                 {eventTypeLabels.todo}
               </Badge>
             </button>
@@ -1158,6 +1179,29 @@ export function CalendarView() {
                 <Bell className="h-3 w-3" /> แจ้งเตือน
               </Link>
             )}
+            {/* ≥lg: ปุ่มพับแถบคนในองค์กร + ปุ่มเพิ่ม อยู่แถวเดียวกับตัวกรอง (แถวบนแยกของปุ่มเพิ่ม
+                ซ่อนที่ lg แล้ว) — แถบเครื่องมือเหลือแถวเดียว ปฏิทินได้ความสูงคืนมา แบบหน้า HR */}
+            <div className="ml-auto hidden lg:flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn("text-[var(--ink-soft)]", hiddenUserIds.length > 0 && "border-[var(--brand-green-dark)] text-[var(--brand-green-dark)]")}
+                onClick={toggleRail}
+                title={railOpen ? "พับแถบคนในองค์กร ให้ปฏิทินกว้างเต็มจอ" : "แสดงแถบคนในองค์กร"}
+              >
+                {railOpen ? <PanelLeftClose className="h-3.5 w-3.5" /> : <PanelLeftOpen className="h-3.5 w-3.5" />}
+                คนในองค์กร
+                {!railOpen && hiddenUserIds.length > 0 && <span className="tabular-nums">(ซ่อน {hiddenUserIds.length})</span>}
+              </Button>
+              <Button
+                size="sm"
+                className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+                onClick={() => openTodoDialog({})}
+              >
+                <Plus className="h-4 w-4" />
+                เพิ่มสิ่งที่ต้องทำ
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -1224,7 +1268,7 @@ export function CalendarView() {
                       </label>
                       <label className="flex items-center justify-between gap-2 px-3 py-2.5">
                         <span className="flex items-center gap-2 text-sm">
-                          <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: chartColors.amber }} />
+                          <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: colors.todo }} />
                           {eventTypeLabels.todo}
                         </span>
                         <Switch checked={showTodosInWork} onCheckedChange={setShowTodosInWork} />
@@ -1360,7 +1404,6 @@ export function CalendarView() {
       </StickyFilterBar>
 
       <div className="flex items-start gap-2.5">
-        <CalendarRail />
         <div className="flex-1 min-w-0 flex flex-col gap-2.5">
           <FullCalendarView
             ref={fullCalendarRef}
@@ -1379,6 +1422,7 @@ export function CalendarView() {
               if (target) openTodoDialog({ todo: target, date: target.date });
             }}
             addHint="คลิกวันเพื่อดูรายการ · ลากคลุมหลายวันเพื่อดูสรุป"
+            rail={railOpen ? <PeopleCalendarList singleColumn alwaysExpanded /> : undefined}
           />
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
             {/* TodoSidebar (everyone else's to-dos, its own card) used to
