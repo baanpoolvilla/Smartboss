@@ -3,6 +3,7 @@ import { getSession } from "@smartboss/auth";
 import { wfFetch, WorkforceError, WorkforceUnavailableError } from "@/modules/hr/lib/api";
 import { localDateStr, todayIso } from "@/modules/hr/lib/date";
 import { CARRY_OVER_HOURS, clockState } from "@/modules/hr/lib/clock-state";
+import { withWorkforceTenant } from "@/modules/report_task/lib/db/workforce-calendar";
 
 export const runtime = "nodejs";
 
@@ -18,6 +19,38 @@ interface TimeEvent {
   event_intent: string;
   source_type: string;
   late_minutes: number;
+}
+
+/**
+ * คนนี้ผูกกะทำงานไว้ไหม = "ต้องลงเวลาเข้า-ออก" (เจ้าของงานตัดสิน 2026-10-07: ไอคอนลงเวลาขึ้นเฉพาะคนที่ต้องสแกน)
+ * นับทั้งตารางประจำสัปดาห์ที่ยังมีผล และตารางที่ประกาศรายวันช่วง ±7 วัน — คนในทะเบียนพนักงานที่ไม่ได้ผูกกะเลย
+ * (เช่น ผู้บริหาร) ระบบบุคคลไม่คิดสาย/ขาดให้อยู่แล้ว จึงไม่ต้องเห็นปุ่ม
+ * อ่านไม่ได้ = ถือว่าต้องลง (โชว์ไอคอนไว้ก่อน ดีกว่าคนที่ต้องลงหาปุ่มไม่เจอ)
+ */
+async function hasShift(orgId: string | null | undefined, employmentId: string, today: string): Promise<boolean> {
+  if (!orgId) return true;
+  try {
+    const rows = await withWorkforceTenant(orgId, (tx) =>
+      tx.$queryRaw<{ tracked: boolean }[]>`
+        SELECT (
+          EXISTS (
+            SELECT 1 FROM workforce.recurring_work_patterns p
+            WHERE p.employment_id = ${employmentId}::uuid
+              AND p.effective_from <= ${today}::date
+              AND (p.effective_to IS NULL OR p.effective_to >= ${today}::date)
+          ) OR EXISTS (
+            SELECT 1 FROM workforce.shift_assignments a
+            WHERE a.employment_id = ${employmentId}::uuid
+              AND a.work_date BETWEEN ${today}::date - 7 AND ${today}::date + 7
+          )
+        ) AS tracked
+      `
+    );
+    return rows[0]?.tracked ?? true;
+  } catch (error) {
+    console.error("[m/today] hasShift lookup failed", error);
+    return true;
+  }
 }
 
 /**
@@ -83,6 +116,8 @@ export async function GET() {
       displayName: me.display_name,
       events: mine,
       carriedIn,
+      // คนนี้ "ต้องลงเวลา" ไหม — ไอคอนลงเวลาบนหน้าแรกโชว์เฉพาะคนที่ต้องลง (components/home/clock-tile.tsx)
+      mustClock: mine.length > 0 || carriedIn !== null || (await hasShift(session.orgId, me.employment_id, date)),
     });
   } catch (error) {
     if (error instanceof WorkforceUnavailableError) {

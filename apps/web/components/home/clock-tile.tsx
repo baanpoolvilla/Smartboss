@@ -12,8 +12,8 @@ import { clockState } from "@/modules/hr/lib/clock-state";
  * สี/ข้อความใต้ไอคอนบอกว่าเข้าไปแล้วจะได้กดอะไร: เขียว "เข้างาน" · ส้ม "ออกงาน" (เข้าแล้ว)
  * · เทา "ออกงานแล้ว" — อ่านจาก /api/m/today ตัวเดียวกับหน้าลงเวลาใน LINE Mini App
  *
- * ไม่โชว์เลยเมื่อบัญชีนี้ไม่ได้อยู่ในทะเบียนพนักงาน (NO_EMPLOYMENT — เช่น ผู้ดูแลระบบ)
- * เพราะเข้าไปก็ลงเวลาไม่ได้ · โหลดไม่สำเร็จด้วยเหตุอื่นยังโชว์ไอคอนเฉย ๆ ให้เข้าไปลองได้
+ * โชว์เฉพาะคนที่ "ต้องลงเวลา": ไม่โชว์เมื่อบัญชีนี้ไม่ได้อยู่ในทะเบียนพนักงาน (NO_EMPLOYMENT — เช่น ผู้ดูแลระบบ)
+ * หรืออยู่ในทะเบียนแต่ไม่ได้ผูกกะทำงาน (mustClock = false จาก /api/m/today) · โหลดไม่สำเร็จด้วยเหตุอื่นยังโชว์ไอคอนเฉย ๆ ให้เข้าไปลองได้
  */
 
 type ClockState =
@@ -28,6 +28,8 @@ interface TodayPayload {
   code?: string;
   events?: { capturedAt: string; intent: string }[];
   carriedIn?: { capturedAt: string; intent: string } | null;
+  /** false = อยู่ในทะเบียนพนักงานแต่ไม่ได้ผูกกะ (ไม่ต้องลงเวลา) — ไม่โชว์ไอคอน */
+  mustClock?: boolean;
 }
 
 function hhmm(iso: string): string {
@@ -48,6 +50,10 @@ export function ClockTile() {
           setState(payload.code === "NO_EMPLOYMENT" ? { kind: "hidden" } : { kind: "unknown" });
           return;
         }
+        if (payload.mustClock === false) {
+          setState({ kind: "hidden" });
+          return;
+        }
         // ตรรกะเดียวกับปุ่มในหน้าลงเวลา (นับสแกนนิ้ว + กะข้ามคืน) — modules/hr/lib/clock-state.ts
         const { open, firstIn, lastOut } = clockState(payload.events ?? [], payload.carriedIn ?? null);
         if (open) setState({ kind: "out", since: firstIn ? hhmm(firstIn.capturedAt) : "" });
@@ -62,7 +68,8 @@ export function ClockTile() {
     };
   }, []);
 
-  if (state.kind === "hidden") return null;
+  // ยังไม่รู้ว่าต้องลงเวลาไหม = ยังไม่โชว์ — ไม่ให้คนที่ไม่ต้องลงเห็นไอคอนแวบขึ้นมาแล้วหายไป
+  if (state.kind === "hidden" || state.kind === "loading") return null;
 
   const look =
     state.kind === "in"
@@ -71,7 +78,7 @@ export function ClockTile() {
         ? { bg: "var(--tone-warn, #ea580c)", label: "ออกงาน", sub: `เข้า ${state.since}` }
         : state.kind === "done"
           ? { bg: "var(--ink-soft)", label: "ลงเวลาแล้ว", sub: state.since ? `${state.since}–${state.at}` : `ออก ${state.at}` }
-          : { bg: "var(--ink-soft)", label: "ลงเวลา", sub: state.kind === "loading" ? "…" : "" };
+          : { bg: "var(--ink-soft)", label: "ลงเวลา", sub: "" };
 
   return (
     <Link prefetch={false} href="/hr/clock" className="group flex flex-col items-center">
