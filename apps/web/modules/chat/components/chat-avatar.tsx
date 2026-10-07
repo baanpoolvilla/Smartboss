@@ -47,14 +47,16 @@ export function ChatAvatar({
 /**
  * ป้ายวันหยุดเกาะมุมขวาล่างของรูปโปรไฟล์ — คนนี้หยุดวันนี้ (ใบลา/วันหยุดที่อนุมัติแล้ว, ดู data/off-today.ts)
  * เป็นรูปปฏิทินตั้งโต๊ะเล็ก ๆ ("มีสัญลักษณ์นี้ติดไว้ ก็ดีนะ รู้เลยวันนี้วันหยุด") หยุดเหมือนกันแต่คนละแบบ
- * จึงต่างกันที่สีหัวปฏิทินกับคำ: วันหยุดประจำ (Day-Off) = แดง "OFF" · วันลา (ป่วย/กิจ/พักร้อน/ไม่รับค่าจ้าง) = ส้ม "ลา"
- * · Holiday (ประเภท Holiday ในปฏิทินทีม — HR ตั้งโควตาเป็นรายเดือน) = น้ำเงิน "HOL"
+ * ทุกแบบเป็นปฏิทินแดง-ขาวเหมือนกัน (เจ้าของงานตัดสิน 2026-10-07: สีเดียวทั้งหมด ต่างกันแค่คำ)
+ * วันหยุดประจำ (Day-Off) = "OFF" · วันลา (ป่วย/กิจ/พักร้อน/ไม่รับค่าจ้าง) = "ลา"
+ * · Holiday (ประเภท Holiday ในปฏิทินทีม — HR ตั้งโควตาเป็นรายเดือน) = "HOL"
  * วางในกรอบ `relative` เดียวกับรูปโปรไฟล์ อ่านค่าจาก store เอง ที่เรียกใช้ส่งแค่ userId
  */
+const OFF_RED = "#ef4444";
 const OFF_STYLE = {
-  off: { color: "#ef4444", text: "OFF", size: 7.2, hint: "Day-Off" },
-  holiday: { color: "#2563eb", text: "HOL", size: 7.2, hint: "Holiday" },
-  leave: { color: "#f59e0b", text: "ลา", size: 8.5, hint: "ลา" },
+  off: { text: "OFF", size: 7.2, hint: "Day-Off" },
+  holiday: { text: "HOL", size: 7.2, hint: "Holiday" },
+  leave: { text: "ลา", size: 8.5, hint: "ลา" },
 } as const;
 
 export function OffBadge({ userId }: { userId: string | undefined }) {
@@ -70,12 +72,12 @@ export function OffBadge({ userId }: { userId: string | undefined }) {
       className="pointer-events-none absolute -bottom-1.5 -right-2 h-[22px] w-[22px] drop-shadow-[0_1px_1.5px_rgba(0,0,0,0.3)]"
     >
       <title>{label}</title>
-      {/* ตัวปฏิทิน (ขาว) + หัวสีตามชนิด + ห่วงสองอัน */}
+      {/* ตัวปฏิทิน (ขาว) + หัวแดง + ห่วงสองอัน · คำบอกชนิดเป็นตัวแดง */}
       <rect x="1.5" y="3.5" width="21" height="19" rx="3.5" fill="#ffffff" stroke="#e5e7eb" strokeWidth="1" />
-      <path d="M1.5 7a3.5 3.5 0 0 1 3.5-3.5h14A3.5 3.5 0 0 1 22.5 7v3.5h-21z" fill={style.color} />
+      <path d="M1.5 7a3.5 3.5 0 0 1 3.5-3.5h14A3.5 3.5 0 0 1 22.5 7v3.5h-21z" fill={OFF_RED} />
       <rect x="6.5" y="1" width="2.2" height="6" rx="1.1" fill="#374151" />
       <rect x="15.3" y="1" width="2.2" height="6" rx="1.1" fill="#374151" />
-      <text x="12" y="19.4" textAnchor="middle" fontSize={style.size} fontWeight="800" fill="#1f2937" style={{ fontFamily: "system-ui, sans-serif", letterSpacing: "0.2px" }}>
+      <text x="12" y="19.4" textAnchor="middle" fontSize={style.size} fontWeight="800" fill={OFF_RED} style={{ fontFamily: "system-ui, sans-serif", letterSpacing: "0.2px" }}>
         {style.text}
       </text>
     </svg>
