@@ -20,6 +20,7 @@ import {
   getEquipmentReturn,
   updateEquipmentReturnStatus,
   deleteEquipmentReturn,
+  returnStatusMeta,
 } from "@/modules/maintenance/data/equipment-returns";
 import { createExpense } from "@/modules/maintenance/data/expenses";
 import { getWorkOrder } from "@/modules/maintenance/data/work-orders";
@@ -27,7 +28,13 @@ import {
   workOrderAccess,
   canSeeWorkOrder,
 } from "@/modules/maintenance/data/work-order-access";
-import { notifyUser, deleteNotificationsByReference } from "@/modules/maintenance/data/notify";
+import {
+  notifyUser,
+  notifyUsers,
+  notifyActorName,
+  usersWithPermission,
+  deleteNotificationsByReference,
+} from "@/modules/maintenance/data/notify";
 import { putFile, putFiles, deleteFiles } from "@/modules/maintenance/lib/storage";
 import {
   poItemsFromJson,
@@ -105,7 +112,11 @@ export async function createPoAction(formData: FormData) {
   );
   const now = new Date();
 
-  const { duplicate } = await createPurchaseOrder(s.orgId, {
+  const poAssignedTo = openPo
+    ? await orgUserId(s.orgId, String(formData.get("poAssignedTo") ?? "") || null)
+    : null;
+
+  const { purchaseOrder: created, duplicate } = await createPurchaseOrder(s.orgId, {
     title: d.title,
     description: d.description ?? null,
     // เปิดจากใบงาน = ใช้บ้านของใบงานนั้นเสมอ ไม่ให้เลือกใหม่ให้ขัดกัน
@@ -119,11 +130,42 @@ export async function createPoAction(formData: FormData) {
     createdBy: s.userId,
     prImageUrls,
     status: openPo ? "approved" : "pending",
-    poAssignedTo: openPo ? (String(formData.get("poAssignedTo") ?? "") || null) : null,
+    poAssignedTo,
     poCreatedBy: openPo ? s.userId : null,
     poCreatedAt: openPo ? now : null,
   });
   if (duplicate && prImageUrls.length > 0) await deleteFiles(prImageUrls).catch(() => 0);
+
+  // กดซ้ำ = ใบเดิม แจ้งไปแล้วตอนเปิดครั้งแรก
+  if (!duplicate) {
+    if (openPo) {
+      // เปิด PO เลย = ข้ามขั้นอนุมัติ ⇒ ไม่มี approveNormalAction มาแจ้งคนไปซื้อแทน
+      // ต้องแจ้งตรงนี้ — เดิมเงียบ คนที่ถูกมอบไม่รู้ว่ามีงาน
+      if (poAssignedTo && poAssignedTo !== s.userId) {
+        await notifyUser(s.orgId, poAssignedTo, {
+          title: `📦 ได้รับมอบ PO: ${d.title}`,
+          body: "กรุณาดำเนินการสั่งซื้อและกรอกราคาตอนรับของ",
+          type: "purchase_order",
+          referenceId: created.id,
+          line: `📦 คุณได้รับมอบ PO: ${d.title}\nเข้าดำเนินการในระบบ Smartboss`,
+        });
+      }
+    } else {
+      // PR ใหม่รออนุมัติ — แจ้งคนที่อนุมัติได้ ไม่งั้น PR ค้างจนกว่าจะมีคนเปิดบอร์ดเจอเอง
+      const approvers = (await usersWithPermission(s.orgId, MAINT_PERMS.poApprove)).filter(
+        (id) => id !== s.userId
+      );
+      const who = await notifyActorName(s.userId);
+      const kind = isEmergency ? "PR ฉุกเฉิน (ซื้อแล้ว)" : "PR ใหม่";
+      await notifyUsers(s.orgId, approvers, {
+        title: `${who ? `${who} · ` : ""}🧾 ${kind} รออนุมัติ: ${d.title}`,
+        body: isEmergency ? `ยอด ฿${poItemsTotal(items).toLocaleString()}` : undefined,
+        type: "purchase_order",
+        referenceId: created.id,
+        line: `🧾 ${kind} รออนุมัติ\n📝 ${d.title}${who ? `\n👤 ${who}` : ""}\nเข้าอนุมัติในระบบ Smartboss`,
+      });
+    }
+  }
 
   revalidatePath("/maintenance/purchase-orders");
   if (linkedWo) {
@@ -150,6 +192,27 @@ async function orgUserId(
     select: { id: true },
   });
   return found ? found.id : null;
+}
+
+/**
+ * แจ้งคนที่เกี่ยวกับใบนี้ (คนเปิด PR / CEO ที่มอบหมาย / คนไปซื้อ — ผู้เรียกเลือกเอง)
+ * ตัดคนที่เพิ่งกดเองออก ไม่ต้องแจ้งตัวเอง
+ */
+async function notifyPoParties(
+  orgId: string,
+  po: { id: string; title: string },
+  targets: (string | null | undefined)[],
+  actorId: string,
+  msg: { emoji: string; text: string; body?: string }
+) {
+  const ids = targets.filter((x): x is string => !!x && x !== actorId);
+  await notifyUsers(orgId, ids, {
+    title: `${msg.emoji} ${msg.text}: ${po.title}`,
+    body: msg.body,
+    type: "purchase_order",
+    referenceId: po.id,
+    line: `${msg.emoji} ${msg.text}\n📝 ${po.title}${msg.body ? `\n${msg.body}` : ""}`,
+  });
 }
 
 async function ceoOnly() {
@@ -219,6 +282,15 @@ export async function approveNormalAction(formData: FormData) {
       line: `📦 คุณได้รับมอบ PO: ${po.title}\nเข้าดำเนินการในระบบ Smartboss`,
     });
   }
+  // คนเปิด PR ต้องรู้ว่าอนุมัติแล้ว (คนไปซื้อได้ข้อความของตัวเองข้างบนแล้ว)
+  if (changed && po && po.createdBy !== assignee) {
+    const assigneeName = assignee ? await notifyActorName(assignee) : null;
+    await notifyPoParties(s.orgId, po, [po.createdBy], s.userId, {
+      emoji: "✅",
+      text: "PR อนุมัติแล้ว",
+      body: assigneeName ? `มอบให้ ${assigneeName} ไปสั่งซื้อ` : undefined,
+    });
+  }
   revalidatePath(`/maintenance/purchase-orders/${id}`);
   redirect("/maintenance/purchase-orders");
 }
@@ -235,7 +307,13 @@ export async function approveEmergencyAction(formData: FormData) {
     receivedBy: s.userId,
     receivedAt: new Date(),
   });
-  if (changed) await poExpense(s.orgId, po, Number(po.totalPrice), s.userId, "(ฉุกเฉิน)");
+  if (changed) {
+    await poExpense(s.orgId, po, Number(po.totalPrice), s.userId, "(ฉุกเฉิน)");
+    await notifyPoParties(s.orgId, po, [po.createdBy], s.userId, {
+      emoji: "✅",
+      text: "PR ฉุกเฉินอนุมัติแล้ว",
+    });
+  }
   revalidatePath(`/maintenance/purchase-orders/${id}`);
   redirect("/maintenance/purchase-orders");
 }
@@ -244,8 +322,20 @@ export async function rejectAction(formData: FormData) {
   const s = await ceoOnly();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
+  const po = await getPurchaseOrder(s.orgId, id);
   // ปฏิเสธได้เฉพาะที่ยังไม่ได้ซื้อ — ใบที่สั่งซื้อ/รับของไปแล้วมีค่าใช้จ่ายผูกอยู่
-  await transitionPurchaseOrder(s.orgId, id, ["pending", "approved"], { status: "cancelled" });
+  const changed = await transitionPurchaseOrder(s.orgId, id, ["pending", "approved"], {
+    status: "cancelled",
+  });
+  // ยกเลิก = แจ้งคนเปิด PR + คนที่ถูกมอบให้ไปซื้อ (ถ้าอนุมัติไปแล้ว) — เดิมเงียบ
+  // คนซื้ออาจออกไปซื้อของที่ถูกยกเลิกไปแล้ว
+  if (changed && po) {
+    await notifyPoParties(s.orgId, po, [po.createdBy, po.poAssignedTo], s.userId, {
+      emoji: "❌",
+      text: po.status === "pending" ? "PR ไม่ได้รับอนุมัติ" : "PO ถูกยกเลิก",
+      body: po.poAssignedTo ? "ไม่ต้องดำเนินการสั่งซื้อรายการนี้แล้ว" : undefined,
+    });
+  }
   revalidatePath(`/maintenance/purchase-orders/${id}`);
   redirect("/maintenance/purchase-orders");
 }
@@ -336,6 +426,14 @@ export async function confirmOrderAction(formData: FormData) {
 กดยืนยันรับของในระบบ Smartboss เมื่อของมาถึง`,
     });
   }
+  // คนเปิด PR + CEO ที่มอบหมาย — รู้ว่าสั่งซื้อแล้ว (กำลังดำเนินการ)
+  await notifyPoParties(
+    s.orgId,
+    po,
+    [po.createdBy, po.poCreatedBy].filter((x) => x !== receiver),
+    s.userId,
+    { emoji: "🚚", text: "สั่งซื้อแล้ว รอรับของ", body: `ยอด ฿${total.toLocaleString()}` }
+  );
 
   revalidatePath(`/maintenance/purchase-orders/${id}`);
   redirect("/maintenance/purchase-orders");
@@ -363,6 +461,12 @@ export async function receiveAction(formData: FormData) {
     receivedAt: new Date(),
   });
   if (!changed && urls.length > 0) await deleteFiles(urls).catch(() => 0);
+  if (changed) {
+    await notifyPoParties(s.orgId, po, [po.createdBy, po.poCreatedBy, po.poAssignedTo], s.userId, {
+      emoji: "📥",
+      text: "รับของแล้ว",
+    });
+  }
   revalidatePath(`/maintenance/purchase-orders/${id}`);
   redirect("/maintenance/purchase-orders");
 }
@@ -398,8 +502,14 @@ export async function selfReceiveAction(formData: FormData) {
     receivedBy: s.userId,
     receivedAt: new Date(),
   });
-  if (changed) await poExpense(s.orgId, po, total, s.userId, "(ซื้อเอง)");
-  else if (urls.length > 0) await deleteFiles(urls).catch(() => 0);
+  if (changed) {
+    await poExpense(s.orgId, po, total, s.userId, "(ซื้อเอง)");
+    await notifyPoParties(s.orgId, po, [po.createdBy, po.poCreatedBy, po.poAssignedTo], s.userId, {
+      emoji: "📥",
+      text: "ซื้อและรับของแล้ว",
+      body: `ยอด ฿${total.toLocaleString()}`,
+    });
+  } else if (urls.length > 0) await deleteFiles(urls).catch(() => 0);
   revalidatePath(`/maintenance/purchase-orders/${id}`);
   redirect("/maintenance/purchase-orders");
 }
@@ -479,15 +589,24 @@ export async function createReturnAction(formData: FormData) {
     formData.getAll("images").filter((f): f is File => f instanceof File)
   );
 
+  const itemName = String(formData.get("itemName") ?? "") || null;
   await createEquipmentReturn(s.orgId, {
     purchaseOrderId,
     propertyId: po.propertyId,
-    itemName: String(formData.get("itemName") ?? "") || null,
+    itemName,
     qty: Math.max(1, Number(formData.get("qty") ?? "1") || 1),
     problemType: String(formData.get("problemType") ?? "other"),
     reason,
     imageUrls,
     createdBy: s.userId,
+  });
+
+  // คืนของ = คนที่ซื้อของชิ้นนี้มาต้องรู้ เขาเป็นคนติดต่อร้าน/เคลมกับร้าน
+  // (poAssignedTo = คนที่ถูกมอบไปซื้อ, orderedBy = คนกดสั่งซื้อจริง) + คนเปิด PR
+  await notifyPoParties(s.orgId, po, [po.poAssignedTo, po.orderedBy, po.createdBy], s.userId, {
+    emoji: "↩️",
+    text: "แจ้งคืนของ / ของมีปัญหา",
+    body: `${itemName ? `${itemName} · ` : ""}${reason}`,
   });
 
   revalidatePath("/maintenance/purchase-orders");
@@ -513,10 +632,22 @@ export async function setReturnStatusAction(formData: FormData) {
   if (!id || !status) return;
   const s = await assertCanManageReturn(session.orgId, id);
   const note = String(formData.get("resolutionNote") ?? "").trim() || null;
+  const before = await getEquipmentReturn(s.orgId, id);
   await updateEquipmentReturnStatus(s.orgId, id, status, {
     resolvedBy: s.userId,
     resolutionNote: note,
   });
+  // สถานะเรื่องคืนของเปลี่ยนจริง → แจ้งผู้แจ้งคืน + คนที่ซื้อของมา
+  if (before && before.status !== status) {
+    const po = await getPurchaseOrder(s.orgId, before.purchaseOrderId);
+    if (po) {
+      await notifyPoParties(s.orgId, po, [before.createdBy, po.poAssignedTo, po.orderedBy], s.userId, {
+        emoji: status === "cancelled" ? "❌" : status === "resolved" ? "✅" : "↩️",
+        text: `เรื่องคืนของ: ${returnStatusMeta(status).label}`,
+        body: [before.itemName, note].filter(Boolean).join(" · ") || undefined,
+      });
+    }
+  }
   revalidatePath(`/maintenance/purchase-orders/returns/${id}`);
   revalidatePath("/maintenance/purchase-orders");
 }

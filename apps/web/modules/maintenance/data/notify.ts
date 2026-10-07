@@ -105,6 +105,29 @@ export async function propertyCaretaker(
   return prop?.caretakerId ? [prop.caretakerId] : [];
 }
 
+/**
+ * คนในบริษัทที่ถือสิทธิ์นี้ผ่าน role จริง ๆ (เช่น maintenance.po.approve = คนอนุมัติ PR)
+ *
+ * ไม่นับ SUPER_ADMIN ที่ข้ามการเช็คสิทธิ์ได้ทุกอย่าง — นั่นคือทีมหลังบ้าน ไม่ใช่
+ * คนที่ต้องกดอนุมัติงานประจำวันของบริษัท ถ้าแจ้งไปด้วยกระดิ่งเขาจะเต็มทุกบริษัท
+ */
+export async function usersWithPermission(orgId: string, permission: string): Promise<string[]> {
+  try {
+    const rows = await prisma.user.findMany({
+      where: {
+        orgId,
+        isActive: true,
+        roles: { some: { role: { permissions: { some: { permission: { code: permission } } } } } },
+      },
+      select: { id: true },
+    });
+    return rows.map((r) => r.id);
+  } catch (error) {
+    console.error("[notify] usersWithPermission failed:", error);
+    return [];
+  }
+}
+
 // Notification.orgId คือ metadata ว่า "เรื่องนี้เกี่ยวกับบริษัทไหน" ไม่ใช่เส้น
 // แบ่งว่าใครอ่านได้ — เส้นแบ่งจริงคือ userId ที่ทุก query ด้านล่างผูกไว้แล้ว
 // (ผู้รับคนเดียว) การกรองซ้ำด้วย orgId ของผู้รับจะพังกับ platform user ที่
