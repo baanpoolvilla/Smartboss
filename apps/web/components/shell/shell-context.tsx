@@ -3,6 +3,7 @@
 import { createContext, useContext } from "react";
 
 export interface ShellUser {
+  id: string;
   name: string;
   email: string;
   avatarUrl: string | null;

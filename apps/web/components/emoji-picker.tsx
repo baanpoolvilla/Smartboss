@@ -29,7 +29,18 @@ const CATEGORIES: { id: string; icon: string; label: string }[] = [
 ];
 
 const COLS = 8;
-const RECENT_KEY = "sb_emoji_recent_v1";
+const RECENT_KEY_BASE = "sb_emoji_recent_v1";
+/**
+ * "ใช้ล่าสุด" จำแยกรายบัญชี (ไม่ใช่รายเครื่อง) — เครื่องกลางที่หลายคนผลัดกันใช้ต้องไม่เห็นอีโมจิของคนอื่นขึ้นหน้าแถว
+ * Shell ตั้งค่าเจ้าของตอนล็อกอินอยู่ (setEmojiRecentOwner) · ยังไม่รู้ว่าใคร = ใช้ key กลางแบบเดิม
+ */
+let recentOwner: string | null = null;
+export function setEmojiRecentOwner(userId: string | null): void {
+  recentOwner = userId;
+}
+function recentKey(): string {
+  return recentOwner ? `${RECENT_KEY_BASE}:${recentOwner}` : RECENT_KEY_BASE;
+}
 const RECENT_MAX = 24;
 const SEARCH_MAX = 120;
 
@@ -47,7 +58,7 @@ function loadEmojiData(): Promise<EmojiData> {
 function readRecent(): string[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]");
+    const raw = JSON.parse(localStorage.getItem(recentKey()) ?? "[]");
     return Array.isArray(raw) ? raw.filter((e): e is string => typeof e === "string").slice(0, RECENT_MAX) : [];
   } catch {
     return [];
@@ -56,7 +67,7 @@ function readRecent(): string[] {
 
 function pushRecent(emoji: string): void {
   try {
-    localStorage.setItem(RECENT_KEY, JSON.stringify([emoji, ...readRecent().filter((e) => e !== emoji)].slice(0, RECENT_MAX)));
+    localStorage.setItem(recentKey(), JSON.stringify([emoji, ...readRecent().filter((e) => e !== emoji)].slice(0, RECENT_MAX)));
   } catch {
     // localStorage ใช้ไม่ได้ (โหมดส่วนตัว ฯลฯ) — แค่ไม่จำ "ใช้ล่าสุด"
   }
@@ -230,8 +241,15 @@ export function ReactionPicker({
   className,
   buttonClassName,
   activeClassName,
+  promoteRecent = 3,
 }: {
   quick: readonly string[];
+  /**
+   * อีโมจิที่ใช้ล่าสุดกี่ตัวดันขึ้นหน้าแถวด่วนเสมอ (แม้ไม่อยู่ในรายการ `quick` — เช่น 🆗 ที่เลือกจากชุดเต็ม)
+   * แถวยาวเท่าเดิม ตัวท้ายถูกดันออก · เดิมแถวเรียงแค่ "ใช้บ่อย" จากรายการตั้งต้น ตัวที่เพิ่งใช้จากชุดเต็มไม่เคยขึ้น
+   * ("ปกติอิโมจิล่าสุดมันจะขึ้นไปอยู่ด้านบน แต่ ok ที่เพิ่งใช้ไม่ไป") · 0 = ปิด
+   */
+  promoteRecent?: number;
   /** อิโมจินี้ถูกกดอยู่แล้ว (เน้นพื้นหลัง) */
   isActive?: (emoji: string) => boolean;
   onPick: (emoji: string) => void;
@@ -242,14 +260,26 @@ export function ReactionPicker({
   activeClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
+  // อ่านครั้งเดียวตอนเปิดแถว — กดแล้วแถวไม่ขยับใต้นิ้ว (ครั้งหน้าที่เปิดค่อยเห็นลำดับใหม่)
+  const [recent] = useState<string[]>(readRecent);
+  const row = useMemo(() => {
+    if (promoteRecent <= 0) return quick;
+    const skip = new Set(exclude ?? []);
+    const front = recent.filter((e) => !skip.has(e)).slice(0, promoteRecent);
+    return Array.from(new Set([...front, ...quick])).slice(0, quick.length);
+  }, [quick, recent, exclude, promoteRecent]);
+  const pick = (emoji: string) => {
+    pushRecent(emoji);
+    onPick(emoji);
+  };
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <div className={cn("flex flex-row flex-wrap items-center gap-0.5", className)}>
-        {quick.map((emoji) => (
+        {row.map((emoji) => (
           <button
             key={emoji}
             type="button"
-            onClick={() => onPick(emoji)}
+            onClick={() => pick(emoji)}
             aria-label={`กด ${emoji}`}
             className={cn(
               "flex h-10 w-10 items-center justify-center rounded-md text-2xl leading-none transition-transform hover:scale-110 hover:bg-(--bg-soft)",
@@ -274,6 +304,7 @@ export function ReactionPicker({
           <MoreHorizontal className="h-4 w-4" />
         </button>
       </div>
+      {/* EmojiPicker บันทึก "ใช้ล่าสุด" เองแล้ว — ส่ง onPick ตรง ไม่ผ่าน pick (ไม่งั้นนับซ้ำสองรอบ) */}
       {open && <EmojiPicker onPick={onPick} exclude={exclude} className="border-t border-(--line) pt-1.5" />}
     </div>
   );

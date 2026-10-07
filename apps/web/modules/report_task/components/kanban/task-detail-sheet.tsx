@@ -1,5 +1,6 @@
 "use client";
 
+import { ReactionPicker } from "@/components/emoji-picker";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
@@ -72,7 +73,6 @@ import {
   Clock,
   Upload,
   ChevronDown,
-  MoreHorizontal,
   Eye,
 } from "lucide-react";
 import type { Attachment, Sticker, TaskPriority, TaskStatus } from "@/modules/report_task/types";
@@ -402,7 +402,6 @@ export function TaskDetailSheet({
   const [pendingSticker, setPendingSticker] = useState<Sticker | null>(null);
   // เหมือนหน้ารายงาน: อีโมจิธรรมดาพับเก็บก่อน กด "···" ถึงกางเพิ่ม, ปุ่ม "+"
   // ท้ายแถวมีผลต่อคะแนนเปิดตัวแก้ไขสติกเกอร์แบบเต็มฝังในหน้านี้เลย
-  const [emojiExpanded, setEmojiExpanded] = useState(false);
   const [stickerEditorOpen, setStickerEditorOpen] = useState(false);
   if (task?.id !== lastTaskId) {
     setLastTaskId(task?.id);
@@ -494,7 +493,6 @@ export function TaskDetailSheet({
   const pickableStickers = stickers;
   const sortedPickableStickers = sortByUsage(pickableStickers, (s) => `sticker:${s.id}`, stickerUsageCounts);
   const sortedPlainEmojis = sortByUsage(plainTaskEmojis, (e) => `emoji:${e}`, stickerUsageCounts);
-  const visiblePlainEmojis = emojiExpanded ? sortedPlainEmojis : sortedPlainEmojis.slice(0, PLAIN_EMOJI_COLLAPSED_COUNT);
   const activeEmojiReactions = Object.entries(task.emojiReactions ?? {}).filter(([, ids]) => ids.length > 0);
 
   function confirmDelete() {
@@ -1196,33 +1194,19 @@ export function TaskDetailSheet({
           <div className="space-y-3">
             <h4 className="text-sm font-semibold">ให้สติกเกอร์งานนี้</h4>
 
-            <div className="flex flex-wrap items-center gap-1">
-              {visiblePlainEmojis.map((emoji) => (
-                <button
-                  key={emoji}
-                  onClick={() => {
-                    toggleEmojiReaction(task.id, emoji, viewingAsUserId);
-                    bumpStickerUsage(`emoji:${emoji}`);
-                  }}
-                  className={cn(
-                    "h-8 w-8 flex items-center justify-center rounded-md text-base hover:bg-[var(--bg-soft)] transition-transform hover:scale-110",
-                    (task.emojiReactions?.[emoji] ?? []).includes(viewingAsUserId) && "bg-[var(--accent)]"
-                  )}
-                >
-                  {emoji}
-                </button>
-              ))}
-              {sortedPlainEmojis.length > PLAIN_EMOJI_COLLAPSED_COUNT && (
-                <button
-                  onClick={() => setEmojiExpanded((v) => !v)}
-                  className="h-8 w-8 flex items-center justify-center rounded-md text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
-                  aria-label={emojiExpanded ? "ย่อรายการอีโมจิ" : "ดูอีโมจิเพิ่มเติม"}
-                  title={emojiExpanded ? "ย่อ" : "เพิ่มเติม"}
-                >
-                  <MoreHorizontal className="h-4 w-4" />
-                </button>
-              )}
-            </div>
+            {/* แถวเดียวกับรีแอคชันในหน้ารายงาน/แชท (ReactionPicker): ใช้ล่าสุด 3 ตัวขึ้นหน้าแถวเสมอ ตามด้วยใช้บ่อย
+                "…" กางอีโมจิชุดเต็ม — เดิมแถวนี้เรียงแค่ใช้บ่อยจาก 38 ตัวของหน้านี้ ตัวที่เพิ่งใช้ไม่ขึ้นหน้า */}
+            <ReactionPicker
+              quick={sortedPlainEmojis.slice(0, PLAIN_EMOJI_COLLAPSED_COUNT)}
+              exclude={stickers.map((st) => st.emoji)}
+              isActive={(emoji) => (task.emojiReactions?.[emoji] ?? []).includes(viewingAsUserId)}
+              onPick={(emoji) => {
+                toggleEmojiReaction(task.id, emoji, viewingAsUserId);
+                bumpStickerUsage(`emoji:${emoji}`);
+              }}
+              buttonClassName="h-8 w-8 text-base"
+              activeClassName="bg-[var(--accent)]"
+            />
             {activeEmojiReactions.length > 0 && (
               <div className="flex flex-wrap gap-1">
                 {activeEmojiReactions.map(([emoji, ids]) => (

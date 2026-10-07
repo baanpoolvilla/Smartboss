@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LayoutGrid, MoreHorizontal, X } from "lucide-react";
@@ -24,6 +24,7 @@ import { NotificationBellPopover } from "@/modules/report_task/components/shared
 import type { ModuleManifest, ModuleMenuItem } from "@/module-registry";
 import { Toaster } from "@/modules/report_task/components/ui/sonner";
 import { StickerManagerHost } from "@/components/sticker-manager";
+import { setEmojiRecentOwner } from "@/components/emoji-picker";
 import { LogoutButton } from "./logout-button";
 import { InstallAppButton, InstallGate } from "./app-install";
 import { AppUpdateNotice } from "./app-update-notice";
@@ -75,6 +76,8 @@ export function Shell({
 }) {
   const pathname = usePathname();
   const activeModule = findActiveModule(modules, pathname);
+  // "อีโมจิที่ใช้ล่าสุด" จำแยกรายบัญชีในเครื่องเดียวกัน (ดู components/emoji-picker.tsx)
+  useEffect(() => setEmojiRecentOwner(user.id), [user.id]);
   // เข้าแชทได้ = มีเมนูแชทในโมดูลที่เห็น (รายการโมดูล/เมนูถูกกรองตามสิทธิ์มาแล้ว)
   const hasChat = modules.some((m) => m.menus.some((i) => i.path.endsWith("/chat")));
 

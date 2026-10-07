@@ -8,6 +8,8 @@ import { getIssueConsoleAccess } from "@/modules/admin/data/issue-console-access
 import { ADMIN_ISSUE_REPORT_CODE } from "@/modules/admin/issue-report-manifest";
 
 export interface ShellNavUser {
+  /** ใช้ฝั่งเบราว์เซอร์แยกของที่จำในเครื่องรายคน (เช่น อีโมจิที่ใช้ล่าสุด) — ไม่ใช่เส้นแบ่งสิทธิ์ */
+  id: string;
   name: string;
   email: string;
   avatarUrl: string | null;
@@ -50,6 +52,7 @@ export const loadShellNav = cache(async (): Promise<ShellNav | null> => {
 
   return {
     user: {
+      id: user.id,
       name: user.name,
       email: user.email,
       avatarUrl: user.avatarUrl,
