@@ -23,8 +23,10 @@ export default async function ClockPage() {
   const session = await requireOrg();
   if (!hasPermission(session, HR_PERMS.access)) redirect("/");
   const me = await prisma.user.findUnique({ where: { id: session.userId }, select: { name: true } });
+  // data-app="hr" ให้ --app ที่ปุ่มใหญ่ใช้ (bg-(--app)) มีค่า — หน้านี้อยู่นอกโมดูล (LauncherFrame)
+  // ไม่มีใครตั้งให้ ปุ่มเลยโปร่งใส ตัวหนังสือขาวบนพื้นขาว ("ปุ่มออกงานเป็นสีขาว") — แบบเดียวกับ app/m/layout.tsx
   return (
-    <div className="mx-auto w-full max-w-lg">
+    <div data-app="hr" className="mx-auto w-full max-w-lg">
       <Today userName={me?.name ?? ""} showFriendHint={false} />
     </div>
   );
