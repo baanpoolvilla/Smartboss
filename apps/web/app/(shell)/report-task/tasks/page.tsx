@@ -23,6 +23,35 @@ import type { TaskPriority } from "@/modules/report_task/types";
 
 type TaskView = "board" | "grid" | "workload";
 
+/**
+ * จำตัวกรอง + จัดกลุ่มตาม + แท็บ (บอร์ด/ตาราง/ภาระงาน) ไว้ในเครื่อง แยกตามคน — ออกไปหน้าอื่นแล้วกลับมา
+ * ยังเป็นแบบที่เลือกไว้ ("เวลาไปหน้าไหน ๆ ฟิลเตอร์ก็ยังเป็นอันที่เราเลือก") · เดิมล้างทิ้งทุกครั้งที่ออกจากหน้า
+ * ลิงก์ที่มีตัวกรองใน URL (แชร์มา/รีเฟรช/กดจากแดชบอร์ด) ชนะค่าที่จำไว้เสมอ
+ */
+const SAVED_KEY = "sb.tasks.view.v1";
+type TaskFiltersState = ReturnType<typeof useTaskStore.getState>["filters"];
+interface SavedTaskView {
+  filters: Partial<TaskFiltersState>;
+  groupBy: GroupBy;
+  view: TaskView;
+}
+function readSaved(userId: string): SavedTaskView | null {
+  try {
+    const raw = localStorage.getItem(`${SAVED_KEY}:${userId}`);
+    return raw ? (JSON.parse(raw) as SavedTaskView) : null;
+  } catch {
+    return null;
+  }
+}
+function writeSaved(userId: string, value: SavedTaskView) {
+  try {
+    localStorage.setItem(`${SAVED_KEY}:${userId}`, JSON.stringify(value));
+  } catch {
+    /* private mode ฯลฯ — แค่ไม่จำ */
+  }
+}
+const GROUP_BYS: GroupBy[] = ["status", "priority", "assignee", "department"];
+
 /** คีย์ใน URL ที่หน้านี้เป็นเจ้าของ (ตัวกรอง + มุมมอง) — คีย์อื่น (task, taskTitle, บอร์ดรายคน/แผนก ฯลฯ) ห้ามแตะ */
 const FILTER_URL_KEYS = ["dept", "assignee", "priority", "penalty", "preset", "from", "to", "view"] as const;
 
@@ -55,9 +84,10 @@ function TasksPageContent() {
   const isHead = canManage(viewingAsUserId);
 
   // Seed filters from the URL once on mount (a shared link or a refresh mid-
-  // visit should restore them) — still cleared on the way out, same as
-  // before, so the board starts fresh on the *next* visit rather than
-  // staying silently filtered until a hard refresh.
+  // visit should restore them) · ไม่มีตัวกรองใน URL = ใช้ที่จำไว้ในเครื่อง (ดู SAVED_KEY)
+  // ไม่ล้างตอนออกจากหน้าแล้ว — ค่าที่เลือกไว้ต้องอยู่ต่อตอนกลับมา
+  const [restored, setRestored] = useState(false);
+  const [urlHadFilters, setUrlHadFilters] = useState<boolean | null>(null);
   useEffect(() => {
     const dept = searchParams.get("dept");
     const assignee = searchParams.get("assignee");
@@ -75,9 +105,37 @@ function TasksPageContent() {
     if (from) patch.customFrom = from;
     if (to) patch.customTo = to;
     if (Object.keys(patch).length > 0) setFilters(patch);
-    return resetFilters;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setUrlHadFilters(Object.keys(patch).length > 0 || !!searchParams.get("view"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // กู้ค่าที่จำไว้ — รอให้รู้ก่อนว่าเป็นใคร (identity โหลดจากเครื่องช้ากว่าหน้านี้นิดหนึ่ง ไม่งั้นอ่านของอีกคน)
+  const [identityReady, setIdentityReady] = useState(() => useIdentityStore.persist.hasHydrated());
+  useEffect(() => {
+    if (identityReady) return;
+    return useIdentityStore.persist.onFinishHydration(() => setIdentityReady(true));
+  }, [identityReady]);
+  useEffect(() => {
+    if (restored || urlHadFilters === null || !identityReady || !viewingAsUserId) return;
+    if (!urlHadFilters) {
+      const saved = readSaved(viewingAsUserId);
+      if (saved) {
+        // เริ่มจากค่าเริ่มต้นก่อน แล้วค่อยทับด้วยที่จำไว้ — ช่องที่เพิ่มทีหลัง/ค่าที่เสียไม่ค้าง
+        resetFilters();
+        if (saved.filters && typeof saved.filters === "object") setFilters(saved.filters);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        if (GROUP_BYS.includes(saved.groupBy)) setGroupBy(saved.groupBy);
+        if (saved.view === "grid" || saved.view === "workload") setView(saved.view);
+      }
+    }
+    setRestored(true);
+  }, [restored, urlHadFilters, identityReady, viewingAsUserId, resetFilters, setFilters]);
+
+  // จำทุกครั้งที่เปลี่ยน (หลังกู้ค่าเดิมเสร็จแล้วเท่านั้น ไม่งั้นค่าเริ่มต้นทับของที่จำไว้)
+  useEffect(() => {
+    if (restored) writeSaved(viewingAsUserId, { filters, groupBy, view });
+  }, [restored, viewingAsUserId, filters, groupBy, view]);
 
   // Mirror filters + view into the URL (replace — no history entry per
   // keystroke) so a refresh doesn't silently reset the board and a filtered
