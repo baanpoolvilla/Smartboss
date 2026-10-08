@@ -572,6 +572,15 @@ export async function deletePoAction(formData: FormData) {
 
 // ═══════════════ คืนของ / ของมีปัญหา ═══════════════
 
+/**
+ * ผู้ซื้อของใบนี้ — คนที่ถูกมอบให้ไปซื้อ (ที่การ์ดขึ้นว่า "ผู้ซื้อ") + คนกดสั่งซื้อ
+ * ใบ "ซื้อเอง" ไม่มีสองช่องนี้ คนที่ซื้อจริงถูกบันทึกเป็นคนรับของ (selfReceiveAction) — ใช้แทน
+ * ไม่งั้นแจ้งคืนของใบซื้อเองไม่ถึงคนซื้อเลย
+ */
+function poBuyers(po: { poAssignedTo: string | null; orderedBy: string | null; receivedBy: string | null }) {
+  return po.poAssignedTo || po.orderedBy ? [po.poAssignedTo, po.orderedBy] : [po.receivedBy];
+}
+
 export async function createReturnAction(formData: FormData) {
   const s = await requireOrg();
   if (!hasPermission(s, MAINT_PERMS.poView)) {
@@ -603,7 +612,7 @@ export async function createReturnAction(formData: FormData) {
 
   // คืนของ = คนที่ซื้อของชิ้นนี้มาต้องรู้ เขาเป็นคนติดต่อร้าน/เคลมกับร้าน
   // (poAssignedTo = คนที่ถูกมอบไปซื้อ, orderedBy = คนกดสั่งซื้อจริง) + คนเปิด PR
-  await notifyPoParties(s.orgId, po, [po.poAssignedTo, po.orderedBy, po.createdBy], s.userId, {
+  await notifyPoParties(s.orgId, po, [...poBuyers(po), po.createdBy], s.userId, {
     emoji: "↩️",
     text: "แจ้งคืนของ / ของมีปัญหา",
     body: `${itemName ? `${itemName} · ` : ""}${reason}`,
@@ -641,7 +650,7 @@ export async function setReturnStatusAction(formData: FormData) {
   if (before && before.status !== status) {
     const po = await getPurchaseOrder(s.orgId, before.purchaseOrderId);
     if (po) {
-      await notifyPoParties(s.orgId, po, [before.createdBy, po.poAssignedTo, po.orderedBy], s.userId, {
+      await notifyPoParties(s.orgId, po, [before.createdBy, ...poBuyers(po)], s.userId, {
         emoji: status === "cancelled" ? "❌" : status === "resolved" ? "✅" : "↩️",
         text: `เรื่องคืนของ: ${returnStatusMeta(status).label}`,
         body: [before.itemName, note].filter(Boolean).join(" · ") || undefined,
