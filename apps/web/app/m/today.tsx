@@ -6,7 +6,7 @@ import { MapBoundary } from "./map-boundary";
 import { checkinFlagLabel } from "@/modules/hr/lib/checkin-flags";
 import { CLOCK_CHANGED_EVENT, clockState } from "@/modules/hr/lib/clock-state";
 import { DesktopQr, useIsDesktop } from "./desktop-qr";
-import { recentPosition } from "./last-position";
+import { recentPosition, rememberPosition } from "./last-position";
 /**
  * ต้องโหลดแบบ `ssr: false` เท่านั้น — ห้ามเปลี่ยนเป็น static import เด็ดขาด
  *
@@ -87,12 +87,16 @@ async function getPosition(): Promise<{ position: GeolocationPosition | null; de
   const recent = recentPosition();
   if (recent) return { position: recent, denied: false };
   try {
-    return { position: await readPosition({ enableHighAccuracy: true, timeout: 12_000, maximumAge: 0 }), denied: false };
+    const position = await readPosition({ enableHighAccuracy: true, timeout: 12_000, maximumAge: 0 });
+    rememberPosition(position); // แผนที่ที่รอสิทธิ์อยู่วาดตาม (checkin-map.tsx)
+    return { position, denied: false };
   } catch (error) {
     if ((error as GeolocationPositionError).code === 1) return { position: null, denied: true };
   }
   try {
-    return { position: await readPosition({ enableHighAccuracy: false, timeout: 10_000, maximumAge: 60_000 }), denied: false };
+    const position = await readPosition({ enableHighAccuracy: false, timeout: 10_000, maximumAge: 60_000 });
+    rememberPosition(position);
+    return { position, denied: false };
   } catch (error) {
     return { position: null, denied: (error as GeolocationPositionError).code === 1 };
   }

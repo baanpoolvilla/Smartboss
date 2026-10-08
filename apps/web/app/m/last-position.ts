@@ -8,9 +8,17 @@
 const MAX_AGE_MS = 60_000;
 
 let last: { position: GeolocationPosition; at: number } | null = null;
+const listeners = new Set<(position: GeolocationPosition) => void>();
 
+/** จำตำแหน่ง + บอกคนที่รออยู่ (แผนที่ที่ยังไม่ได้ขอตำแหน่งเอง วาดตามได้ทันทีหลังกดลงเวลา) */
 export function rememberPosition(position: GeolocationPosition): void {
   last = { position, at: Date.now() };
+  for (const fn of listeners) fn(position);
+}
+
+export function onPosition(fn: (position: GeolocationPosition) => void): () => void {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
 }
 
 export function recentPosition(): GeolocationPosition | null {
