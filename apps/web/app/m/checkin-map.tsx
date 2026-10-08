@@ -228,7 +228,9 @@ export function CheckinMap() {
   return (
     <div className="overflow-hidden rounded-(--radius) border border-(--line)">
       <div className="relative h-56 w-full bg-(--bg-soft)">
-        {state.kind === "ready" && <div ref={containerRef} className="h-full w-full" />}
+        {/* isolate = เก็บชั้นของ Leaflet (z-index 400–1000) ไว้ในกล่องแผนที่ ไม่งั้นแผนที่ลอยทับป๊อปอัป
+            กระดิ่ง/เมนูของแอปที่เปิดทับหน้านี้ ("เวลาเปิดเข้าออกงานแล้วกดแจ้งเตือน" แผนที่ขึ้นมาบังรายการ) */}
+        {state.kind === "ready" && <div ref={containerRef} className="isolate h-full w-full" />}
 
         {state.kind === "loading" && (
           <div className="flex h-full items-center justify-center text-sm text-(--ink-soft)">

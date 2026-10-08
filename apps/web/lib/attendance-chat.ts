@@ -5,6 +5,7 @@ import { crossOrg } from "@smartboss/database/cross-org";
 
 import { withWorkforceTenant } from "@/modules/report_task/lib/db/workforce-calendar";
 import { broadcastToChannel } from "@/modules/chat/data/channels";
+import { notifyUser } from "@/modules/maintenance/data/notify";
 import { hydrateMessages } from "@/modules/chat/data/serialize";
 import { CLOCK_CHANNEL_PREFIX } from "@/modules/chat/types";
 import { CARRY_OVER_HOURS } from "@/modules/hr/lib/clock-state";
@@ -233,6 +234,9 @@ async function postForOrg(orgId: string): Promise<number> {
         });
         const [message] = await hydrateMessages(orgId, [row]);
         await broadcastToChannel(orgId, channelId, { type: "chat.message", channelId, message: message! }, [userId]);
+        // ลงกระดิ่งด้วย (+ เด้ง/Web Push ผ่าน notifyUser) — แชททั่วไปไม่ลงกระดิ่ง (chat/data/notify.ts)
+        // แต่เข้า/ออกงานเป็นเรื่องของเจ้าตัวโดยตรง ("ทำไมไม่ขึ้นแจ้งเตือนบอกด้วยว่ามีข้อความนี้เข้ามาในกระดิ่ง")
+        await notifyUser(orgId, userId, { title: CHANNEL_NAME, body, type: "hr_clock_event", referenceId: channelId });
         posted++;
       } catch (error) {
         // อีกรอบโพสต์ไปก่อนแล้ว — ปกติ ไม่ใช่ข้อผิดพลาด
