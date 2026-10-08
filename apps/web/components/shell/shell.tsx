@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Clock, LayoutGrid, MoreHorizontal, X } from "lucide-react";
+import { Clock, MoreHorizontal, X } from "lucide-react";
 import { cn } from "@smartboss/ui/cn";
 import { Avatar } from "@smartboss/ui/components/avatar";
 import {
@@ -42,7 +42,10 @@ import { useBackToClose, useBackToCloseOnTouch, whenHistorySettled } from "@/lib
 
 export type { ShellUser };
 
-/** จำนวนช่องบน bottom nav ก่อนยุบที่เหลือเข้า "เพิ่มเติม" (ตรงกับ maxTabs ของ ChangYai) */
+/**
+ * ช่องเมนูโมดูลบน bottom nav (ไม่นับช่อง "หน้าหลัก" ซ้ายสุด) — เกินนี้ใช้ช่องสุดท้ายเป็น
+ * "เพิ่มเติม" แทน แถบจึงมีไม่เกิน 5 ช่องเสมอ
+ */
 const MAX_TABS = 4;
 
 function findActiveModule(
@@ -232,8 +235,10 @@ function ModuleFrame({
   pathname: string;
   children: React.ReactNode;
 }) {
-  const primary = module.menus.slice(0, MAX_TABS);
-  const overflow = module.menus.slice(MAX_TABS);
+  // พอดีช่องก็โชว์ครบ ไม่ต้องมี "เพิ่มเติม" · เกินก็เก็บช่องสุดท้ายไว้ให้ "เพิ่มเติม"
+  const shown = module.menus.length <= MAX_TABS ? MAX_TABS : MAX_TABS - 1;
+  const primary = module.menus.slice(0, shown);
+  const overflow = module.menus.slice(shown);
 
   return (
     <div
@@ -369,6 +374,9 @@ function ModuleBottomNav({
   return (
     <>
       <BottomBar>
+        {/* ช่องซ้ายสุด = กลับหน้าหลัก ตำแหน่งเดียวกับ "หน้าหลัก" บนแถบของหน้าแรก — เดิมต้องกด
+            "เพิ่มเติม" แล้วหา "กลับหน้ารวมแอป" ("พอไปหน้าอื่นๆมันต้องกด…ไปยังหน้าแรก") */}
+        <BottomNavItem label="หน้าหลัก" icon="Home" href="/" active={false} home />
         {primary.map((menu) => (
           <BottomNavItem
             key={menu.path}
@@ -380,21 +388,16 @@ function ModuleBottomNav({
           />
         ))}
 
-        {/* Always shown, even with nothing to overflow into — the sheet this
-            opens is also the only place "กลับหน้ารวมแอป" lives on mobile
-            (ModuleRail's equivalent header link is lg-only). Gating this tab
-            on `overflow.length > 0` used to strand anyone whose visible menu
-            count fit within MAX_TABS (e.g. a report_task user without
-            settingManage/activityView — exactly 4 items, no overflow) with
-            no way back to the app launcher at all once inside a module. */}
-        <BottomNavItem
-          label="เพิ่มเติม"
-          active={overflowActive}
-          onClick={() => setSheetOpen(true)}
-        />
+        {overflow.length > 0 && (
+          <BottomNavItem
+            label="เพิ่มเติม"
+            active={overflowActive}
+            onClick={() => setSheetOpen(true)}
+          />
+        )}
       </BottomBar>
 
-      {sheetOpen && (
+      {sheetOpen && overflow.length > 0 && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div
             className="absolute inset-0 bg-black/30"
@@ -440,14 +443,6 @@ function ModuleBottomNav({
                   </Link>
                 );
               })}
-              <Link
-                href="/"
-                onClick={() => setSheetOpen(false)}
-                className="mt-1 flex items-center gap-3 border-t border-(--line) px-5 py-3.5 text-sm text-(--ink-soft)"
-              >
-                <LayoutGrid className="h-5 w-5 shrink-0" />
-                กลับหน้ารวมแอป
-              </Link>
             </div>
           </div>
         </div>
@@ -464,6 +459,7 @@ function BottomNavItem({
   onClick,
   badge,
   dot = false,
+  home = false,
 }: {
   label: string;
   icon?: string;
@@ -472,6 +468,8 @@ function BottomNavItem({
   onClick?: () => void;
   /** แถบของหน้าแรก: เมนูที่อยู่เป็นตัวน้ำเงินเข้ม + จุดเขียวข้างใต้ แทนพื้นสีอ่อน */
   dot?: boolean;
+  /** ช่อง "หน้าหลัก" บนแถบของโมดูล — สีเขียวแบรนด์ แยกจากเมนูของโมดูลว่าเป็นปุ่มออกจากโมดูล */
+  home?: boolean;
   /** Optional count/dot pill from the module manifest. Overlaid on the icon's
    * top-right corner (absolute) so it never widens the already-tight bottom
    * bar — see manifest.ts's ModuleMenuItem.badge. */
@@ -482,7 +480,8 @@ function BottomNavItem({
       <span
         className={cn(
           "relative flex h-7 w-14 items-center justify-center rounded-full transition-colors",
-          active && !dot && "bg-(--app-soft,#CCFBF1)"
+          active && !dot && "bg-(--app-soft,#CCFBF1)",
+          home && "bg-(--brand-green)/12"
         )}
       >
         {icon ? <Icon name={icon} className="h-5 w-5" /> : <MoreHorizontal className="h-5 w-5" />}
@@ -501,7 +500,9 @@ function BottomNavItem({
       ? dot
         ? "font-bold text-(--brand-navy)"
         : "font-bold text-(--app-strong,var(--ink))"
-      : "text-(--ink-soft)"
+      : home
+        ? "font-semibold text-[#3a9a2f]"
+        : "text-(--ink-soft)"
   );
 
   return href ? (
@@ -521,31 +522,15 @@ function BottomNavItem({
  * และปฏิทินคำนวณความสูงจาก 68 อยู่แล้ว เปลี่ยนตัวเลขนี้ต้องไล่แก้ที่พวกนั้นด้วย
  * ช่องว่างรอบแถบปล่อยให้กดทะลุถึงเนื้อหาข้างหลัง (pointer-events-none ที่กรอบนอก)
  */
-function BottomBar({ children, notch = false }: { children: React.ReactNode; notch?: boolean }) {
+function BottomBar({ children }: { children: React.ReactNode }) {
   return (
     <nav data-bottom-nav className="pointer-events-none fixed inset-x-0 bottom-0 z-40 h-[68px] lg:hidden">
-      {notch ? (
-        // แถบเว้าโค้งรับปุ่มกลาง: ตัดวงกลมออกจากพื้นขาวด้วย mask — เงาต้องใช้ drop-shadow ที่ชั้นนอก
-        // (box-shadow โดน mask ตัดไปด้วย)
-        <div className="pointer-events-auto relative flex h-full items-stretch [filter:drop-shadow(0_-4px_12px_rgba(27,37,55,0.10))_drop-shadow(0_-1px_1px_rgba(27,37,55,0.05))]">
-          <div
-            aria-hidden
-            className="absolute inset-0 rounded-t-[22px] bg-(--bg)"
-            style={{ maskImage: NOTCH_MASK, WebkitMaskImage: NOTCH_MASK }}
-          />
-          {children}
-        </div>
-      ) : (
-        <div className="pointer-events-auto flex h-full items-stretch rounded-t-[22px] bg-(--bg) shadow-[0_-4px_16px_rgba(15,30,60,0.10),0_-1px_2px_rgba(15,30,60,0.05)]">
-          {children}
-        </div>
-      )}
+      <div className="pointer-events-auto relative flex h-full items-stretch rounded-t-[22px] bg-(--bg) shadow-[0_-4px_16px_rgba(15,30,60,0.10),0_-1px_2px_rgba(15,30,60,0.05)]">
+        {children}
+      </div>
     </nav>
   );
 }
-
-/** วงที่เว้าออกจากขอบบนตรงกลางแถบ — ใหญ่กว่าปุ่ม (50px) นิดหน่อยให้เห็นขอบโค้งรอบปุ่ม */
-const NOTCH_MASK = "radial-gradient(circle 32px at 50% -4px, transparent 31px, #000 32px)";
 
 /** สีปุ่มลงเวลา — สีจากโลโก้เท่านั้น: เขียว "Smart" = เข้างาน · น้ำเงินเข้ม "Boss" = ออกงาน · เขียวอ่อน = ลงครบแล้ว */
 const CLOCK_LOOK = {
@@ -558,7 +543,7 @@ const CLOCK_LOOK = {
  * แถบเมนูล่างของหน้าแรก (มือถือ) — หน้าหลัก · แชท · [ลงเวลา] · แจ้งเตือน · บัญชี
  * ปุ่มกลาง "ลงเวลา" ยกขึ้นเป็นวงกลม มีเฉพาะคนที่ต้องลงเวลา (สถานะเดียวกับไอคอนลงเวลาในหน้าแรก)
  * สีบอกว่ากดเข้าไปจะได้ทำอะไร (CLOCK_LOOK): เขียว เข้างาน · น้ำเงินเข้ม ออกงาน · เขียวอ่อน ลงครบแล้ว
- * แถบเว้าโค้งรับปุ่มกลาง ใต้ปุ่มบอกเวลาเข้า (แทนไอคอนลงเวลาบนหน้าแรกที่ซ่อนไว้บนมือถือ)
+ * ปุ่มกลางมีวงขาวล้อม ใต้ปุ่มบอกเวลาเข้า (แทนไอคอนลงเวลาบนหน้าแรกที่ซ่อนไว้บนมือถือ)
  * หน้าในโมดูลไม่มีปุ่มกลาง ("หน้าอื่นๆไม่ต้องมีตัวกลาง") — ใช้ ModuleBottomNav
  */
 function HomeBottomNav({
@@ -615,27 +600,31 @@ function HomeBottomNav({
   if (!clockVisible) return <BottomBar>{left}{right}</BottomBar>;
 
   return (
-    <BottomBar notch>
-      {/* ซ้าย/ขวากว้างเท่ากันเสมอ ปุ่มกลางจะตรงกับรอยเว้าพอดี แม้ฝั่งซ้ายไม่มีแชท */}
+    <BottomBar>
+      {/* ซ้าย/ขวากว้างเท่ากันเสมอ ปุ่มกลางจะอยู่กึ่งกลางพอดี แม้ฝั่งซ้ายไม่มีแชท */}
       <div className="relative flex flex-1">{left}</div>
       <div className="w-[76px] shrink-0" />
       <div className="relative flex flex-1">{right}</div>
       <Link
         href="/clock"
         prefetch={false}
-        className="absolute left-1/2 top-[-25px] flex w-[76px] -translate-x-1/2 flex-col items-center"
+        className="group absolute left-1/2 top-[-24px] flex w-[76px] -translate-x-1/2 flex-col items-center"
       >
-        <span
-          className="flex h-[50px] w-[50px] items-center justify-center rounded-full transition-transform active:scale-95"
-          style={{ background: look.bg, color: look.icon, boxShadow: `0 8px 16px ${look.glow}, inset 0 1px 0 rgba(255,255,255,0.3)` }}
-        >
-          <Clock className="h-6 w-6" />
+        {/* วงขาวสีเดียวกับแถบล้อมปุ่ม — เดิมเป็นรอยเว้าโปร่ง เห็นไอคอนแอปข้างหลังโผล่รอบปุ่ม
+            ดูรก ("ปรับปรุงตรงนี้ให้มันสวยกว่านี้") วงทึบทำให้ปุ่มดูงอกขึ้นมาจากแถบเรียบ ๆ */}
+        <span className="rounded-full bg-(--bg) p-[5px] shadow-[0_-4px_10px_rgba(15,30,60,0.08)]">
+          <span
+            className="flex h-[50px] w-[50px] items-center justify-center rounded-full transition-transform group-active:scale-95"
+            style={{ background: look.bg, color: look.icon, boxShadow: `0 6px 14px ${look.glow}, inset 0 1px 0 rgba(255,255,255,0.3)` }}
+          >
+            <Clock className="h-6 w-6" strokeWidth={2.25} />
+          </span>
         </span>
-        <span className="mt-[3px] whitespace-nowrap text-[10px] font-bold leading-tight" style={{ color: look.text }}>
+        <span className="mt-0.5 whitespace-nowrap text-[11px] font-bold leading-tight" style={{ color: look.text }}>
           {clockLabel}
         </span>
         {clockSub && (
-          <span className="whitespace-nowrap text-[9px] leading-tight tabular-nums text-(--ink-soft)">{clockSub}</span>
+          <span className="whitespace-nowrap text-[10px] leading-tight tabular-nums text-(--ink-soft)">{clockSub}</span>
         )}
       </Link>
     </BottomBar>
