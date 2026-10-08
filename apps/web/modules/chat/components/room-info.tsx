@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Bell, BellOff, Crown, ExternalLink, Link2, LogOut, Pencil, Pin, UserMinus, UserPlus, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, Bell, BellOff, Camera, Crown, ExternalLink, ImagePlus, Link2, Loader2, LogOut, Pencil, Pin, Trash2, UserMinus, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
 
@@ -12,6 +12,7 @@ import { channelTitle, formatDayLabel, formatFileSize } from "../lib/format";
 import { loadChannels, loadDetail } from "../lib/chat-actions";
 import { ChatAvatar } from "./chat-avatar";
 import { ChannelAvatar } from "./channel-list";
+import { compressImage } from "../lib/image-compress";
 import { downloadUrl } from "./lightbox";
 import { ChatModal, MemberPicker } from "./new-chat-dialog";
 import { AlbumsTab } from "./albums-tab";
@@ -159,6 +160,9 @@ export function RoomInfo({
   const [toAdd, setToAdd] = useState<Set<string>>(new Set());
   const [memberMenu, setMemberMenu] = useState<string | null>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [avatarMenu, setAvatarMenu] = useState(false);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const avatarInput = useRef<HTMLInputElement>(null);
 
   const title = channelTitle(channel, meId, users);
   const canManage = detail?.canManage ?? false;
@@ -193,6 +197,21 @@ export function RoomInfo({
     });
   };
 
+  // รูปห้อง: กลุ่มที่สร้างเอง = เฉพาะคนสร้าง · ห้องที่ระบบสร้าง (ห้องรวม/กลุ่มแผนก) = แอดมินแชท (เซิร์ฟเวอร์ตัดสิน)
+  const canChangeAvatar = detail?.canChangeAvatar ?? false;
+  async function uploadAvatar(file: File) {
+    setAvatarBusy(true);
+    try {
+      // ย่อในเครื่องก่อน (รูปกล้องมือถือหลาย MB) — แสดงใหญ่สุด 80px รูปย่อพอ · GIF ส่งตัวเต็มให้ยังขยับได้
+      const { full, thumb } = await compressImage(file);
+      await run(() => api.setChannelAvatar(channel.id, file.type === "image/gif" ? full : (thumb ?? full)), "เปลี่ยนรูปแล้ว");
+    } catch {
+      toast.error("อัปโหลดรูปไม่สำเร็จ ลองใหม่อีกครั้ง");
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+
   const otherId = channel.type === "dm" ? channel.memberIds.find((id) => id !== meId) : undefined;
   const other = otherId ? users[otherId] : undefined;
 
@@ -219,7 +238,63 @@ export function RoomInfo({
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="flex flex-col items-center gap-2 px-4 pb-3 pt-5 text-center">
-          <ChannelAvatar channel={channel} meId={meId} users={users} online={Boolean(otherId && onlineIds[otherId])} size="h-20 w-20" />
+          <div className="relative">
+            <ChannelAvatar channel={channel} meId={meId} users={users} online={Boolean(otherId && onlineIds[otherId])} size="h-20 w-20" />
+            {canChangeAvatar && (
+              <>
+                <input
+                  ref={avatarInput}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  // ย่อรูปในเครื่องก่อนส่งอยู่แล้ว — ไม่ต้องให้ตัวกันไฟล์ใหญ่ของ Shell บล็อกรูปกล้องมือถือ
+                  data-file-guard="off"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (file) void uploadAvatar(file);
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={avatarBusy}
+                  onClick={() => (channel.avatarUrl ? setAvatarMenu((v) => !v) : avatarInput.current?.click())}
+                  className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border border-(--line) bg-(--bg) text-(--ink) shadow-sm hover:bg-(--bg-soft) disabled:opacity-60"
+                  aria-label="เปลี่ยนรูปกลุ่ม"
+                  title="เปลี่ยนรูปกลุ่ม"
+                >
+                  {avatarBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                </button>
+                {avatarMenu && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setAvatarMenu(false)} aria-hidden />
+                    <div className="absolute left-1/2 top-full z-20 mt-2 w-48 -translate-x-1/2 overflow-hidden rounded-xl border border-(--line) bg-(--bg) text-left shadow-lg">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAvatarMenu(false);
+                          avatarInput.current?.click();
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-(--ink) hover:bg-(--bg-soft)"
+                      >
+                        <ImagePlus className="h-4 w-4" /> เปลี่ยนรูป
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAvatarMenu(false);
+                          void run(() => api.removeChannelAvatar(channel.id), "ลบรูปแล้ว");
+                        }}
+                        className="flex w-full items-center gap-2 border-t border-(--line) px-3 py-2.5 text-sm text-red-600 hover:bg-(--bg-soft)"
+                      >
+                        <Trash2 className="h-4 w-4" /> ลบรูป กลับเป็นไอคอนเดิม
+                      </button>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </div>
           {renaming ? (
             <form
               className="flex w-full max-w-xs gap-2"

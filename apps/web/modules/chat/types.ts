@@ -158,6 +158,8 @@ export interface ChatChannelSummary {
   /** "dm" | "group" | "org" */
   type: string;
   name: string | null;
+  /** รูปกลุ่ม / รูปห้องรวม (แอดมินตั้งเอง) — null = ไอคอนเดิม */
+  avatarUrl: string | null;
   /** กลุ่มประจำแผนก (สมาชิกซิงก์อัตโนมัติ แก้สมาชิกเองไม่ได้) */
   departmentId: string | null;
   memberIds: string[];
@@ -188,6 +190,7 @@ export interface ChatChannelDetail {
   id: string;
   type: string;
   name: string | null;
+  avatarUrl: string | null;
   departmentId: string | null;
   /** ห้อง org ไม่มีรายชื่อสมาชิก (ทุกคนในบริษัท) — ฝั่ง client ใช้รายชื่อทั้งบริษัทแทน */
   members: ChatChannelMemberDTO[];
@@ -196,6 +199,8 @@ export interface ChatChannelDetail {
   announcement: ChatMessageDTO | null;
   /** ผู้ใช้คนนี้จัดการห้องได้ (เปลี่ยนชื่อ, สมาชิก, ปักประกาศ) */
   canManage: boolean;
+  /** เปลี่ยนรูปห้องได้ — กลุ่มที่สร้างเอง: เฉพาะคนสร้าง · ห้องรวม/กลุ่มแผนก: แอดมินแชท */
+  canChangeAvatar: boolean;
 }
 
 /** หยุดวันนี้แบบไหน (data/off-today.ts) — name = ชื่อประเภทจากโมดูลบุคคล ใช้เป็นคำอธิบายตอนชี้ */

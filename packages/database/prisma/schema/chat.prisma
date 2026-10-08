@@ -16,6 +16,8 @@ model ChatChannel {
   type        String
   /// ไม่มีค่าสำหรับ DM — ฝั่ง client ต่อชื่อจากสมาชิกเอง
   name        String?
+  /// รูปกลุ่ม / รูปห้องรวมทั้งบริษัท (แอดมินของห้องตั้งเอง) — null = ไอคอนเดิม · DM ใช้รูปของอีกฝั่ง
+  avatarUrl   String?  @map("avatar_url")
   createdById String   @map("created_by_id")
   archived    Boolean  @default(false)
   createdAt   DateTime @default(now()) @map("created_at")

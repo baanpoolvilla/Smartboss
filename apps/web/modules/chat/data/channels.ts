@@ -5,7 +5,7 @@ import { publishToOrg, publishToUsers } from "@/lib/realtime/server";
 import { sendWebPush } from "@/lib/web-push";
 import { notifyUsers } from "@/modules/maintenance/data/notify";
 import { CHAT_ORG_CHANNEL_NAME } from "../constants";
-import type { ChatChannelDetail, ChatChannelSummary, ChatRealtimeEvent } from "../types";
+import { CLOCK_CHANNEL_PREFIX, type ChatChannelDetail, type ChatChannelSummary, type ChatRealtimeEvent } from "../types";
 import { ChatError, firstAttachmentKind, hydrateMessages, type ChatActor } from "./serialize";
 import { CHAT_PAGE_PATH } from "../constants";
 
@@ -223,7 +223,7 @@ export async function listChannelsForUser(orgId: string, userId: string): Promis
   const [channels, allMembers, readStates] = await Promise.all([
     prisma.chatChannel.findMany({
       where: { orgId, id: { in: channelIds }, archived: false },
-      select: { id: true, type: true, name: true, departmentId: true, createdAt: true },
+      select: { id: true, type: true, name: true, avatarUrl: true, departmentId: true, createdAt: true },
     }),
     prisma.chatChannelMember.findMany({
       where: { orgId, channelId: { in: channelIds } },
@@ -286,6 +286,7 @@ export async function listChannelsForUser(orgId: string, userId: string): Promis
       id: c.id,
       type: c.type,
       name: c.name,
+      avatarUrl: c.avatarUrl,
       departmentId: c.departmentId,
       memberIds: membersByChannel.get(c.id) ?? [],
       unreadCount: Number(unread?.unread ?? 0),
@@ -319,7 +320,7 @@ export async function getChannelDetail(actor: ChatActor, channelId: string): Pro
   const [channel, members, reads] = await Promise.all([
     prisma.chatChannel.findFirst({
       where: { id: channelId, orgId: actor.orgId },
-      select: { id: true, type: true, name: true, departmentId: true, announcementId: true },
+      select: { id: true, type: true, name: true, avatarUrl: true, departmentId: true, announcementId: true, createdById: true },
     }),
     access.type === "org"
       ? Promise.resolve([])
@@ -348,11 +349,19 @@ export async function getChannelDetail(actor: ChatActor, channelId: string): Pro
     id: channel.id,
     type: channel.type,
     name: channel.name,
+    avatarUrl: channel.avatarUrl,
     departmentId: channel.departmentId,
     members: members.map((m) => ({ userId: m.userId, role: m.role === "admin" ? "admin" : "member" })),
     readSeqs: Object.fromEntries(reads.map((r) => [r.userId, r.lastReadSeq!.toString()])),
     announcement: announcement ?? null,
     canManage: access.canManage,
+    canChangeAvatar: canChangeAvatar(actor, {
+      id: channel.id,
+      type: access.type,
+      departmentId: channel.departmentId,
+      // ห้องรวมทั้งบริษัทผูกกับบริษัท ไม่มีคนสร้างจริง — สิทธิ์ดูจากแอดมินแชทอย่างเดียว
+      createdById: access.type === "org" ? null : channel.createdById,
+    }),
   };
 }
 
@@ -452,6 +461,44 @@ export async function renameChannel(actor: ChatActor, channelId: string, name: s
   const names = await userNames(actor.orgId, [actor.userId]);
   await postSystemMessage(actor.orgId, channelId, actor.userId, `${names.get(actor.userId) ?? "ผู้ใช้"} เปลี่ยนชื่อกลุ่มเป็น "${clean}"`);
   await broadcastToChannel(actor.orgId, channelId, { type: "chat.channel", channelId });
+}
+
+/**
+ * ใครเปลี่ยนรูปห้องนี้ได้ — กลุ่มที่คนสร้างเอง: เฉพาะคนสร้าง · ห้องที่ระบบสร้างให้ (ห้องรวมทั้งบริษัท,
+ * กลุ่มแผนก): แอดมินแชท ("เฉพาะคนสร้างเปลี่ยนได้ ถ้าเป็นที่ระบบสร้างให้ แอดมินเปลี่ยนได้")
+ * DM ใช้รูปของอีกฝั่ง · ห้อง "ระบบลงเวลา" ใช้รูปนาฬิกาของระบบเสมอ (channel-list.tsx) — ตั้งไม่ได้ทั้งคู่
+ */
+function canChangeAvatar(
+  actor: ChatActor,
+  channel: { id: string; type: string; departmentId: string | null; createdById: string | null }
+): boolean {
+  if (channel.type === "dm" || channel.id.startsWith(CLOCK_CHANNEL_PREFIX)) return false;
+  if (channel.type === "org" || channel.departmentId) return actor.isChatAdmin;
+  return channel.createdById === actor.userId;
+}
+
+/**
+ * ตั้ง/ลบรูปห้อง (ดู canChangeAvatar) — `url` = ไฟล์ที่อัปโหลดและตรวจแล้ว (route) · null = ลบรูป
+ * กลับเป็นไอคอนเดิม · คืน URL เก่าให้ผู้เรียกลบไฟล์
+ */
+export async function setChannelAvatar(actor: ChatActor, channelId: string, url: string | null): Promise<string | null> {
+  const access = await getChannelAccess(actor, channelId);
+  const before = await prisma.chatChannel.findFirst({
+    where: { id: channelId, orgId: actor.orgId },
+    select: { avatarUrl: true, createdById: true },
+  });
+  if (!canChangeAvatar(actor, { id: channelId, type: access.type, departmentId: access.departmentId, createdById: before?.createdById ?? null })) {
+    throw new ChatError(
+      access.type === "group" && !access.departmentId ? "เฉพาะคนสร้างกลุ่มเท่านั้นที่เปลี่ยนรูปได้" : "เฉพาะแอดมินแชทเท่านั้นที่เปลี่ยนรูปห้องนี้ได้",
+      403
+    );
+  }
+  await prisma.chatChannel.update({ where: { id: channelId }, data: { avatarUrl: url } });
+  const names = await userNames(actor.orgId, [actor.userId]);
+  const who = names.get(actor.userId) ?? "ผู้ใช้";
+  await postSystemMessage(actor.orgId, channelId, actor.userId, url ? `${who} เปลี่ยนรูปกลุ่ม` : `${who} ลบรูปกลุ่ม`);
+  await broadcastToChannel(actor.orgId, channelId, { type: "chat.channel", channelId });
+  return before?.avatarUrl ?? null;
 }
 
 export async function addMembers(actor: ChatActor, channelId: string, userIds: string[]): Promise<void> {

@@ -1,12 +1,12 @@
 "use client";
 
 import { memo, useMemo, useState } from "react";
-import { BellOff, Building2, MoreHorizontal, Pin, Search, Settings, SquarePen, Users } from "lucide-react";
+import { BellOff, Building2, Clock, MoreHorizontal, Pin, Search, Settings, SquarePen, Users } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
 
 import { useChatStore } from "../store/chat-store";
-import type { ChatChannelSummary, ChatUser } from "../types";
+import { CLOCK_CHANNEL_PREFIX, type ChatChannelSummary, type ChatUser } from "../types";
 import { channelPreview, channelTitle, formatListTime } from "../lib/format";
 import { updateChannel } from "../lib/api";
 import { ChatAvatar, OffBadge } from "./chat-avatar";
@@ -32,7 +32,7 @@ export function ChannelAvatar({
   online,
   size = "h-12 w-12",
 }: {
-  channel: Pick<ChatChannelSummary, "id" | "type" | "name" | "memberIds" | "departmentId">;
+  channel: Pick<ChatChannelSummary, "id" | "type" | "name" | "memberIds" | "departmentId"> & { avatarUrl?: string | null };
   meId: string;
   users: Record<string, ChatUser>;
   online?: boolean;
@@ -51,6 +51,22 @@ export function ChannelAvatar({
         <OffBadge userId={otherId} />
       </div>
     );
+  }
+  // ห้อง "ระบบลงเวลา" ของแต่ละคน — รูปนาฬิกาของระบบเสมอ (สีเดียวกับปุ่มลงเวลา) ให้รู้ว่าไม่ใช่กลุ่มคน
+  if (channel.id.startsWith(CLOCK_CHANNEL_PREFIX)) {
+    return (
+      <div
+        className={cn("flex shrink-0 items-center justify-center rounded-full text-white", size)}
+        style={{ background: "linear-gradient(155deg,#6fcf63,#3a9a2f)" }}
+        title="ระบบลงเวลา"
+      >
+        <Clock className="h-[50%] w-[50%]" />
+      </div>
+    );
+  }
+  // รูปที่คนสร้างกลุ่ม / แอดมินแชทตั้งไว้ (room-info.tsx)
+  if (channel.avatarUrl) {
+    return <ChatAvatar name={channel.name ?? "กลุ่ม"} src={channel.avatarUrl} colorKey={channel.id} className={size} />;
   }
   const Icon = channel.type === "org" ? Building2 : Users;
   const color = channel.type === "org" ? ORG_COLOR : undefined;

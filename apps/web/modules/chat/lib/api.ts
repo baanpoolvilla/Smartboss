@@ -66,6 +66,17 @@ export function updateChannel(
   return send(ch(id), "PATCH", patch);
 }
 
+/** ตั้งรูปห้อง (ย่อรูปในเครื่องมาก่อนแล้ว) — สิทธิ์: คนสร้างกลุ่ม / แอดมินแชทสำหรับห้องที่ระบบสร้าง */
+export function setChannelAvatar(id: string, file: Blob): Promise<{ ok: true }> {
+  const data = new FormData();
+  data.set("avatar", file, "avatar");
+  return fetch(`${ch(id)}/avatar`, { method: "POST", body: data }).then((r) => json<{ ok: true }>(r));
+}
+
+export function removeChannelAvatar(id: string): Promise<{ ok: true }> {
+  return send(`${ch(id)}/avatar`, "DELETE");
+}
+
 export function addChannelMembers(id: string, userIds: string[]): Promise<{ ok: true }> {
   return send(`${ch(id)}/members`, "POST", { userIds });
 }
