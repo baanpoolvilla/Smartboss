@@ -6,6 +6,7 @@ import { MapBoundary } from "./map-boundary";
 import { checkinFlagLabel } from "@/modules/hr/lib/checkin-flags";
 import { CLOCK_CHANGED_EVENT, clockState } from "@/modules/hr/lib/clock-state";
 import { DesktopQr, useIsDesktop } from "./desktop-qr";
+import { recentPosition } from "./last-position";
 /**
  * ต้องโหลดแบบ `ssr: false` เท่านั้น — ห้ามเปลี่ยนเป็น static import เด็ดขาด
  *
@@ -82,6 +83,9 @@ function readPosition(options: PositionOptions): Promise<GeolocationPosition> {
  */
 async function getPosition(): Promise<{ position: GeolocationPosition | null; denied: boolean }> {
   if (!navigator.geolocation) return { position: null, denied: false };
+  // แผนที่บนจอเพิ่งหาตำแหน่งได้ไม่เกิน 1 นาที — ใช้ตัวนั้น ไม่ขอ GPS ซ้ำ (iPhone ถามอนุญาตทุกครั้งที่ขอ)
+  const recent = recentPosition();
+  if (recent) return { position: recent, denied: false };
   try {
     return { position: await readPosition({ enableHighAccuracy: true, timeout: 12_000, maximumAge: 0 }), denied: false };
   } catch (error) {

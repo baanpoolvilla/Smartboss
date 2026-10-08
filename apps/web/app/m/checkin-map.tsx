@@ -4,6 +4,7 @@ import "leaflet/dist/leaflet.css";
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import { LocateFixed, MapPinOff, RefreshCw } from "lucide-react";
+import { rememberPosition } from "./last-position";
 
 /**
  * แผนที่ตัวเอง vs วงรัศมีที่เช็คอินได้ — โชว์ก่อนกดปุ่มลงเวลาจริง
@@ -109,6 +110,7 @@ export function CheckinMap() {
 
       navigator.geolocation.getCurrentPosition(
         (position) => {
+          rememberPosition(position); // ปุ่มลงเวลาใช้ต่อได้เลย ไม่ต้องขอ GPS ซ้ำ (last-position.ts)
           if (!cancelled) setState({ kind: "ready", sites, me: position.coords });
         },
         (error) => {
