@@ -12,6 +12,8 @@ import { addStickers, readRecentStickers, rememberSticker, stickersIn, useSticke
 const COLS = 4;
 const RECENT = "__recent__";
 const GENERAL = "__general__";
+/** แตะสติกเกอร์ซ้ำภายในเท่านี้ (ms) ไม่นับ — กันแตะเบิ้ลส่งสองครั้ง */
+const PICK_COOLDOWN_MS = 800;
 
 /**
  * สติกเกอร์ของบริษัท — แตะแล้วส่งทันที (แบบ LINE) · แถบหมวดด้านบนตามลำดับที่แอดมินจัด · ใช้ล่าสุดก่อน
@@ -46,7 +48,12 @@ export function StickerPanel({ onPick, className }: { onPick: (sticker: Sticker)
     return stickersIn(stickers, activeTab === GENERAL ? null : activeTab);
   }, [stickers, recent, activeTab, q]);
 
-  const pick = (s: Sticker) => {
+  // แตะเบิ้ล (มือถือแตะซ้ำก่อนกล่องปิดทัน) = ส่งสติกเกอร์สองครั้ง + แจ้งเตือนสองอัน
+  // ("ทำไมแจ้งเตือนมาเบิ้ล") — ทุกที่ที่ใช้แผงนี้ (แชท รีพอต ความคิดเห็นงาน) ส่งทันทีที่แตะ จึงกันที่นี่ที่เดียว
+  const lastPickRef = useRef(-Infinity);
+  const pick = (s: Sticker, at: number) => {
+    if (at - lastPickRef.current < PICK_COOLDOWN_MS) return;
+    lastPickRef.current = at;
     rememberSticker(s.id);
     onPick(s);
   };
@@ -143,7 +150,7 @@ export function StickerPanel({ onPick, className }: { onPick: (sticker: Sticker)
                 key={s.id}
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => pick(s)}
+                onClick={(e) => pick(s, e.timeStamp)}
                 title={s.name}
                 aria-label={`ส่งสติกเกอร์ ${s.name}`}
                 className="flex aspect-square w-full items-center justify-center rounded-lg p-1 hover:bg-(--bg-soft) focus-visible:bg-(--bg-soft) focus-visible:outline-none"
