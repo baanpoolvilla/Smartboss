@@ -4,7 +4,7 @@ import "leaflet/dist/leaflet.css";
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import { LocateFixed, MapPinOff, RefreshCw } from "lucide-react";
-import { onPosition, recentPosition, rememberPosition } from "./last-position";
+import { rememberPosition } from "./last-position";
 
 /**
  * แผนที่ตัวเอง vs วงรัศมีที่เช็คอินได้ — โชว์ก่อนกดปุ่มลงเวลาจริง
@@ -35,8 +35,6 @@ type LoadState =
   | { kind: "loading" }
   | { kind: "no_sites" }
   | { kind: "denied" }
-  /** ยังไม่ได้รับสิทธิ์ตำแหน่ง — ไม่ขอเองตอนเปิดหน้า รอให้กดลงเวลา/กดปุ่มแสดงตำแหน่ง */
-  | { kind: "ask"; sites: CheckinSite[] }
   | { kind: "error"; message: string }
   | { kind: "ready"; sites: CheckinSite[]; me: GeolocationCoordinates };
 
@@ -110,22 +108,6 @@ export function CheckinMap() {
         return;
       }
 
-      // เปิดหน้าเฉย ๆ ไม่ขอตำแหน่ง ถ้าเครื่องยังไม่ได้ให้สิทธิ์ไว้ — iPhone ที่เปิดจากไอคอนหน้าจอโฮมไม่จำสิทธิ์
-      // ข้ามรอบ เดิมแค่เข้าหน้านี้ก็เด้งถาม ("เปิดไว้แล้วในมือถือ แต่พอเข้าแอพให้กดยืนยันอีก") · ให้ไปถาม
-      // ครั้งเดียวตอนกดลงเวลาจริง (today.tsx) แล้วแผนที่วาดตาม · ให้สิทธิ์ไว้แล้ว (Android/Safari) = วาดเลยเหมือนเดิม
-      // กดรีเฟรชเอง (refreshKey > 0) = ผู้ใช้ขอเอง ถามได้
-      if (refreshKey === 0) {
-        const permission = await navigator.permissions
-          ?.query({ name: "geolocation" as PermissionName })
-          .then((s) => s.state)
-          .catch(() => "prompt" as const);
-        if (permission !== "granted") {
-          const recent = recentPosition();
-          if (!cancelled) setState(recent ? { kind: "ready", sites, me: recent.coords } : { kind: "ask", sites });
-          return;
-        }
-      }
-
       navigator.geolocation.getCurrentPosition(
         (position) => {
           rememberPosition(position); // ปุ่มลงเวลาใช้ต่อได้เลย ไม่ต้องขอ GPS ซ้ำ (last-position.ts)
@@ -147,15 +129,6 @@ export function CheckinMap() {
       cancelled = true;
     };
   }, [refreshKey]);
-
-  // ปุ่มลงเวลาเพิ่งได้ตำแหน่งมา (ถามสิทธิ์ตอนกด) — แผนที่ที่รออยู่วาดตามเลย ไม่ต้องขอเองอีก
-  useEffect(
-    () =>
-      onPosition((position) =>
-        setState((prev) => (prev.kind === "ask" ? { kind: "ready", sites: prev.sites, me: position.coords } : prev))
-      ),
-    []
-  );
 
   // วาดแผนที่จริงเมื่อมีทั้งพิกัดตัวเองและรายชื่อสถานที่แล้วเท่านั้น
   useEffect(() => {
@@ -270,22 +243,6 @@ export function CheckinMap() {
         {state.kind === "no_sites" && (
           <MapMessage icon={<MapPinOff className="h-6 w-6" />}>
             บริษัทยังไม่ได้ตั้งสถานที่ทำงานไว้ — แจ้งฝ่ายบุคคลให้ตั้งค่าก่อน
-          </MapMessage>
-        )}
-
-        {state.kind === "ask" && (
-          <MapMessage icon={<LocateFixed className="h-6 w-6" />}>
-            <span>ระบบจะขอตำแหน่งตอนกดลงเวลา</span>
-            <button
-              type="button"
-              onClick={() => {
-                setState({ kind: "loading" });
-                setRefreshKey((k) => k + 1);
-              }}
-              className="mt-1 rounded-full border border-(--line) bg-(--bg) px-3 py-1.5 text-xs font-medium text-(--ink) hover:bg-(--bg-soft)"
-            >
-              แสดงตำแหน่งของฉันบนแผนที่
-            </button>
           </MapMessage>
         )}
 
