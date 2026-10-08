@@ -7,20 +7,21 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canSeeTask } from "@/modules/report_task/lib/permissions";
 import { sortTasksForDisplay } from "@/modules/report_task/lib/task-flags";
 import { getDepartment, departments, users } from "@/modules/report_task/lib/directory";
-import { statusMeta, priorityMeta, priorityColorHex, taskPriorityOrder, statusIcon } from "@/modules/report_task/lib/task-meta";
+import { priorityMeta, priorityColorHex, taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
 import { matchesTaskFilters } from "@/modules/report_task/lib/task-filter";
 import { useTaskSheetParam } from "@/modules/report_task/hooks/use-task-sheet-param";
-import { statusColors, chartColors } from "@/modules/report_task/lib/chart-colors";
+import { chartColors } from "@/modules/report_task/lib/chart-colors";
 import { taskDepartmentIdsForBoard, OTHER_DEPARTMENT_ID } from "@/modules/report_task/lib/task-department";
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
 import { cn } from "@/modules/report_task/lib/utils";
 import { KanbanColumn, type BoardColumn } from "./kanban-column";
+import { buildStatusColumns } from "./status-columns";
 import { TaskDetailSheet } from "./task-detail-sheet";
 import { PersonTopicsBoard } from "./person-topics-board";
 import { DepartmentTopicsBoard } from "./department-topics-board";
 import { toast } from "sonner";
 import { useTaskBoardIntentStore } from "@/modules/report_task/store/task-board-intent-store";
-import { Info, SearchX, AlarmClockOff, Hourglass, ChevronLeft, ChevronRight } from "lucide-react";
+import { Info, SearchX, ChevronLeft, ChevronRight } from "lucide-react";
 import { EmptyState } from "@/modules/report_task/components/shared/empty-state";
 
 export type GroupBy = "status" | "priority" | "assignee" | "department";
@@ -32,7 +33,6 @@ export const groupByLabels: Record<GroupBy, string> = {
   department: "แผนก",
 };
 
-const statusAccent = statusColors;
 const priorityAccent = priorityColorHex;
 
 export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
@@ -116,6 +116,12 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   }
   function closeDepartmentBoard() {
     router.back();
+  }
+  // สลับแผนกจากหัวหน้าเจาะแผนก — replace (ไม่ push) ให้ closeDepartmentBoard's back() ยังถอยถึงบอร์ดทีเดียว
+  function switchDepartmentBoard(id: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("dept", id);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   }
 
   const pendingDepartmentId = useTaskBoardIntentStore((s) => s.departmentId);
@@ -204,64 +210,8 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   // its own card via DueDateBadge instead.
   const columns: BoardColumn[] = useMemo(() => {
     if (groupBy === "status") {
-      // "เลยกำหนดเท่านั้น" narrows `filtered` down to overdue-and-not-done
-      // tasks only — showing this against the normal 4-column split would
-      // leave "รอตรวจสอบ"/"เสร็จสิ้น" permanently empty (a done task is never
-      // "overdue" — see dueUrgency) and split the rest thin. Collapse to one
-      // flat list instead. Lateness itself still shows per-card (see
-      // DueDateBadge) regardless of which column a task sits in — this filter
-      // only decides which cards make the cut, not a 5th column of its own.
-      if (filters.penalty === "overdue") {
-        return [
-          {
-            id: "overdue",
-            label: "เลยกำหนด",
-            accent: chartColors.red,
-            icon: AlarmClockOff,
-            tasks: sortTasksForDisplay(filtered),
-            derived: true,
-            emptyMessage: "ไม่มีงานเลยกำหนด 🎉",
-          },
-        ];
-      }
-      // No dedicated "เลยกำหนด" column anymore — a late task just stays put
-      // in "รอดำเนินการ"/"กำลังทำ" (still flagged red on its own card via
-      // DueDateBadge). The 3rd column now tracks review instead: a "done"
-      // task waits here until the assigner/dept head/CEO signs off (see
-      // markReviewed/rejectReview in task-store.ts) — "เสร็จสิ้น" itself is
-      // reserved for work that's actually been checked, not just submitted.
-      return [
-        {
-          id: "todo" as const,
-          label: statusMeta.todo.label,
-          accent: chartColors.gray,
-          icon: statusIcon.todo,
-          tasks: sortTasksForDisplay(filtered.filter((t) => t.status === "todo")),
-        },
-        {
-          id: "in_progress" as const,
-          label: statusMeta.in_progress.label,
-          accent: statusAccent.in_progress,
-          icon: statusIcon.in_progress,
-          tasks: sortTasksForDisplay(filtered.filter((t) => t.status === "in_progress")),
-        },
-        {
-          id: "review",
-          label: "รอตรวจสอบ",
-          accent: chartColors.greenPale,
-          icon: Hourglass,
-          tasks: sortTasksForDisplay(filtered.filter((t) => t.status === "done" && !t.reviewedBy)),
-          derived: true,
-          emptyMessage: "ไม่มีงานรอตรวจสอบ 🎉",
-        },
-        {
-          id: "done" as const,
-          label: statusMeta.done.label,
-          accent: chartColors.greenDeep,
-          icon: statusIcon.done,
-          tasks: sortTasksForDisplay(filtered.filter((t) => t.status === "done" && !!t.reviewedBy)),
-        },
-      ];
+      // แบ่ง 4 คอลัมน์ / ยุบเหลือรายการเดียวตอน "เลยกำหนดเท่านั้น" — ดู status-columns.ts
+      return buildStatusColumns(filtered, filters.penalty === "overdue");
     }
     if (groupBy === "priority") {
       return taskPriorityOrder.map((p) => ({
@@ -516,7 +466,12 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
     return (
       <>
         <div className="flex min-h-0 flex-1 flex-col px-3 pt-3 sm:p-0">
-          <DepartmentTopicsBoard departmentId={departmentBoardId} onBack={closeDepartmentBoard} onOpenTask={setOpenTaskId} />
+          <DepartmentTopicsBoard
+            departmentId={departmentBoardId}
+            onBack={closeDepartmentBoard}
+            onChangeDepartment={switchDepartmentBoard}
+            onOpenTask={setOpenTaskId}
+          />
         </div>
         <TaskDetailSheet taskId={openTaskId} onOpenChange={(open) => !open && closeTaskSheet()} />
       </>
@@ -679,7 +634,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
                     groupBy === "assignee"
                       ? "ดูทุกงานของคนนี้แยกตามหัวข้อโปรเจค"
                       : groupBy === "department"
-                        ? "ดูงานของแผนกนี้แยกตามหัวข้อโปรเจค"
+                        ? "ดูงานของแผนกนี้ตามสถานะ"
                         : undefined
                   }
                   onBreakdownClick={
