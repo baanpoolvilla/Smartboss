@@ -668,7 +668,19 @@ export async function deleteReturnAction(formData: FormData) {
   }
   const id = String(formData.get("id") ?? "");
   if (!id) return;
+  const before = await getEquipmentReturn(s.orgId, id);
   await deleteEquipmentReturn(s.orgId, id);
+  // ลบเรื่องคืนของ = ผู้ซื้อ (อาจกำลังติดต่อร้าน/เคลมอยู่) กับคนแจ้งคืนต้องรู้ — เดิมลบเงียบ
+  if (before) {
+    const po = await getPurchaseOrder(s.orgId, before.purchaseOrderId);
+    if (po) {
+      await notifyPoParties(s.orgId, po, [before.createdBy, ...poBuyers(po)], s.userId, {
+        emoji: "🗑️",
+        text: "ลบเรื่องคืนของแล้ว",
+        body: [before.itemName, before.reason].filter(Boolean).join(" · ") || undefined,
+      });
+    }
+  }
   revalidatePath("/maintenance/purchase-orders");
   redirect("/maintenance/purchase-orders?tab=returns");
 }
