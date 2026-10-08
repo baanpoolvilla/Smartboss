@@ -15,7 +15,7 @@ import { relativeTime } from "@/modules/report_task/lib/format";
 import { metaForCategory, stripeColorFor, stripeLabelFor } from "@/modules/notifications/derive";
 import { useUnifiedNotifications } from "@/modules/notifications/use-unified-notifications";
 import type { UnifiedNotification } from "@/modules/notifications/types";
-import { ChatSettings } from "@/modules/chat/components/chat-settings";
+import { TooManyNotificationsBanner } from "@/modules/notifications/too-many-banner";
 
 /** Same key notifications-page-client.tsx's own "เฉพาะฉัน/ภาพรวมทั้งหมด"
  * toggle uses — deliberately shared, so switching it here or on the full
@@ -40,7 +40,7 @@ const MAX_ITEMS = 10;
 export function NotificationBellPopover() {
   const [open, setOpen] = useState(false);
   useBackToClose(open, () => setOpen(false));
-  const [soundSettings, setSoundSettings] = useState(false);
+  const router = useRouter();
   const employees = useEmployeeStore((s) => s.employees);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const owner = isOwner(viewingAsUserId);
@@ -111,6 +111,12 @@ export function NotificationBellPopover() {
   // กดแจ้งเตือนแล้วกำลังพาไปหน้าอื่น — กล่องปิดแล้วไม่ต้องคืนโฟกัสให้ปุ่มกระดิ่ง (โฟกัสที่คืนมาช้า
   // จะดึงออกจากหน้าต่างงานที่เพิ่งเปิด แล้วหน้าต่างนั้นปิดตัวเองทันที)
   const pickedRef = useRef(false);
+  // ปิดกล่องก่อน แล้วรอประวัติของกล่องถอยเสร็จค่อยเปลี่ยนหน้า (เหตุผลเดียวกับ NotificationRow)
+  function goToSettings() {
+    pickedRef.current = true;
+    setOpen(false);
+    setTimeout(() => whenHistorySettled(() => router.push("/notifications/settings")), NAVIGATE_AFTER_CLOSE_MS);
+  }
   function onPick(id: string) {
     pickedRef.current = true;
     markRead(id);
@@ -147,16 +153,13 @@ export function NotificationBellPopover() {
                   อ่านทั้งหมด
                 </button>
               )}
-              {/* เสียง/เด้งแจ้งเตือนของทุกระบบ — ทุกคนตั้งเองได้ต่อเครื่อง */}
+              {/* หน้าตั้งค่าแจ้งเตือน — เลือกระดับ / เปิด-ปิดรายโมดูลและหัวข้อ + เสียง (เดิมปุ่มนี้ตั้งได้แค่เสียง) */}
               <button
                 type="button"
-                onClick={() => {
-                  setOpen(false);
-                  setSoundSettings(true);
-                }}
+                onClick={goToSettings}
                 className="rounded-full p-1 text-(--ink-soft) hover:bg-(--bg-soft) hover:text-(--ink)"
-                aria-label="ตั้งค่าเสียงแจ้งเตือน"
-                title="ตั้งค่าเสียงแจ้งเตือน"
+                aria-label="ตั้งค่าการแจ้งเตือน"
+                title="ตั้งค่าการแจ้งเตือน"
               >
                 <Settings className="h-4 w-4" />
               </button>
@@ -185,6 +188,8 @@ export function NotificationBellPopover() {
             </div>
           )}
         </div>
+
+        <TooManyNotificationsBanner items={items} onGoToSettings={goToSettings} />
 
         {recent.length === 0 ? (
           <p className="px-4 py-10 text-center text-sm text-(--ink-soft)">ยังไม่มีการแจ้งเตือน</p>
@@ -278,7 +283,6 @@ export function NotificationBellPopover() {
           ดูทั้งหมด
         </Link>
       </PopoverContent>
-      {soundSettings && <ChatSettings scope="system" onClose={() => setSoundSettings(false)} />}
     </Popover>
   );
 }

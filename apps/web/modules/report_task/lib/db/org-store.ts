@@ -1,6 +1,8 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
 import { announceNotification } from "@/lib/notify-push";
+import { loadNotificationPrefs } from "@/lib/notification-prefs";
+import { isTopicOn, topicForReportNotification } from "@/modules/notifications/prefs";
 import { publishToOrg, publishToUsers } from "@/lib/realtime/server";
 
 import { fileForStoreKey, type StoreKey } from "./store-registry";
@@ -243,15 +245,23 @@ function announceNewNotifications(orgId: string, beforeData: unknown, afterData:
     )
     // กันก้อนแปลก ๆ (เช่น เครื่องเก่าบันทึกทับ) ยิงเป็นร้อย — ของจริงต่อครั้งมีไม่กี่แถว
     .slice(0, 100);
-  for (const n of fresh) {
-    const message = typeof n.message === "string" ? n.message : "มีแจ้งเตือนใหม่";
-    void announceNotification(orgId, [n.userId as string], {
-      title: typeof n.topicName === "string" && n.topicName ? n.topicName : "SmartBoss",
-      body: message.slice(0, 160),
-      url: typeof n.link === "string" && n.link.startsWith("/") ? n.link : "/notifications",
-      tag: `rn-${n.id as string}`,
-    });
-  }
+  if (fresh.length === 0) return;
+  void (async () => {
+    // ผู้รับปิดหัวข้อนั้นไว้ (หน้าตั้งค่าแจ้งเตือน) = ไม่เด้ง ไม่ส่งมือถือ — แถวยังอยู่ในกระดิ่ง (ซ่อนฝั่งจอ)
+    const prefs = await loadNotificationPrefs(orgId, fresh.map((n) => n.userId as string));
+    for (const n of fresh) {
+      const message = typeof n.message === "string" ? n.message : "มีแจ้งเตือนใหม่";
+      const userPrefs = prefs.get(n.userId as string);
+      const topic = topicForReportNotification({ message, kind: typeof n.kind === "string" ? n.kind : null });
+      if (userPrefs && !isTopicOn(userPrefs, topic)) continue;
+      void announceNotification(orgId, [n.userId as string], {
+        title: typeof n.topicName === "string" && n.topicName ? n.topicName : "SmartBoss",
+        body: message.slice(0, 160),
+        url: typeof n.link === "string" && n.link.startsWith("/") ? n.link : "/notifications",
+        tag: `rn-${n.id as string}`,
+      });
+    }
+  })();
 }
 
 async function writeStoreRaw(

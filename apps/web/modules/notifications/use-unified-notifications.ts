@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
@@ -9,6 +9,8 @@ import { canManage } from "@/modules/report_task/lib/directory";
 import { useMaintenanceNotifStore } from "@/modules/notifications/use-maintenance-notifications";
 import { isRoomPost, reportCategoryFor, maintenanceCategoryFor, maintenanceHrefFor, moduleForCategory, taskIdFromLink } from "@/modules/notifications/derive";
 import type { UnifiedNotification } from "@/modules/notifications/types";
+import { isNotificationVisible, topicForCoreType, topicForReportNotification } from "@/modules/notifications/prefs";
+import { useNotifPrefs } from "@/modules/notifications/use-notification-prefs";
 
 export interface UseUnifiedNotificationsOptions {
   /** รวมแจ้งเตือน "โพสต์ใหม่ในห้อง" (room_post) ด้วยไหม — โหมด "ทั้งหมด" ที่
@@ -51,6 +53,14 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
   // นอกหน้างาน (หน้าแรก, HR ฯลฯ) ยังไม่ได้โหลดรายการงาน — ห้ามใช้ taskIdSet ตัดสินว่างานถูกลบ
   // ไม่งั้นแจ้งเตือนงานทุกอันหายจากกระดิ่งนอกหน้างาน
   const tasksLoaded = useTaskStore((s) => s.loaded);
+
+  // หัวข้อที่ผู้ใช้ปิดไว้ในหน้าตั้งค่าแจ้งเตือน — ไม่ขึ้นในกระดิ่งและไม่นับเลข (ยังไม่โหลด = เห็นทั้งหมด)
+  const prefs = useNotifPrefs((s) => s.prefs);
+  const prefsLoaded = useNotifPrefs((s) => s.loaded);
+  const loadPrefs = useNotifPrefs((s) => s.load);
+  useEffect(() => {
+    if (!prefsLoaded) void loadPrefs();
+  }, [prefsLoaded, loadPrefs]);
 
   const maintenanceItems = useMaintenanceNotifStore((s) => s.items);
   const orgItems = useMaintenanceNotifStore((s) => s.orgItems);
@@ -109,6 +119,7 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
         const tid = n.taskId ?? taskIdFromLink(n.link);
         return !tid || !tasksLoaded || taskIdSet.has(tid);
       })
+      .filter((n) => isNotificationVisible(prefs, topicForReportNotification(n), n.createdAt))
       .map((n) => ({
         id: `rt:${n.id}`,
         module: "report" as const,
@@ -123,7 +134,9 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
         link: n.link ?? linkFromRoomAdd(n.message, n.topicName) ?? linkFromQuotedTaskTitle(n.message),
       }));
 
-    const fromMaintenance: UnifiedNotification[] = maintenanceItems.map((n) => {
+    const fromMaintenance: UnifiedNotification[] = maintenanceItems
+      .filter((n) => isNotificationVisible(prefs, topicForCoreType(n.type), n.createdAt))
+      .map((n) => {
       const category = maintenanceCategoryFor(n.type);
       return {
         id: `mt:${n.id}`,
@@ -169,7 +182,7 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
     return [...fromReport, ...fromMaintenance, ...fromOrgActivity].sort(
       (a, b) => Number(a.read) - Number(b.read) || b.createdAt.localeCompare(a.createdAt)
     );
-  }, [reportNotifications, maintenanceItems, orgItems, viewingAsUserId, includeRoomPosts, includeOrgActivity, taskIdSet, tasksLoaded, linkFromQuotedTaskTitle, linkFromRoomAdd]);
+  }, [prefs, reportNotifications, maintenanceItems, orgItems, viewingAsUserId, includeRoomPosts, includeOrgActivity, taskIdSet, tasksLoaded, linkFromQuotedTaskTitle, linkFromRoomAdd]);
 
   const unreadCount = items.filter((n) => !n.read).length;
 

@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { X } from "lucide-react";
+import { Settings, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { isOwner, canManage } from "@/modules/report_task/lib/directory";
@@ -13,6 +14,7 @@ import { useUnifiedNotifications } from "@/modules/notifications/use-unified-not
 import { metaForCategory, labelForCategory } from "@/modules/notifications/derive";
 import { matchesRange, RANGE_LABEL, type NotifRange } from "@/modules/notifications/date-range";
 import type { NotifCategory, NotifModule, UnifiedNotification } from "@/modules/notifications/types";
+import { TooManyNotificationsBanner } from "@/modules/notifications/too-many-banner";
 
 const SHOW_ALL_KEY = "sb.notif.showAll";
 
@@ -40,6 +42,7 @@ const MODULE_LABEL: Record<ModuleFilter, string> = {
  * room_post เข้ามาไหม ไม่ได้เลือกขอบเขต
  */
 export function NotificationsPageClient() {
+  const router = useRouter();
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const employees = useEmployeeStore((s) => s.employees);
   const owner = isOwner(viewingAsUserId);
@@ -230,8 +233,21 @@ export function NotificationsPageClient() {
               อ่านทั้งหมดแล้ว
             </button>
           )}
+          {/* หน้าตั้งค่าแจ้งเตือน — มือถือเข้าทางนี้ (แท็บ "แจ้งเตือน" ของแถบล่าง) */}
+          <Link
+            href="/notifications/settings"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-(--ink-soft) hover:bg-(--bg-soft) hover:text-(--ink)"
+            aria-label="ตั้งค่าการแจ้งเตือน"
+            title="ตั้งค่าการแจ้งเตือน"
+          >
+            <Settings className="h-5 w-5" />
+          </Link>
         </div>
       </header>
+
+      <div className="-mx-3 mb-2">
+        <TooManyNotificationsBanner items={items} onGoToSettings={() => router.push("/notifications/settings")} />
+      </div>
 
       {/* แถบฟิลเตอร์ — sticky บนสุด ไม่ต้องเลื่อนขึ้นไปหาเวลาสลับ */}
       <div className="sticky top-0 z-10 -mx-4 mb-4 flex flex-wrap items-center gap-2 border-b border-(--line) bg-(--bg)/95 px-4 py-2.5 backdrop-blur">

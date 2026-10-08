@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireAuth } from "@smartboss/auth";
 import { prisma } from "@smartboss/database";
 import { Card } from "@smartboss/ui/components/card";
@@ -57,6 +58,17 @@ export default async function AccountPage() {
           อีเมลใช้เป็นชื่อผู้ใช้สำหรับเข้าระบบ · ต้องการเปลี่ยนอีเมลหรือบทบาท
           ให้แจ้งผู้ดูแลของบริษัท
         </p>
+      </SectionCard>
+
+      {/* ทางเข้าหน้าตั้งค่าแจ้งเตือนอีกทาง (มือถือ: แท็บ "บัญชี") — ระดับปัจจุบันอยู่ในหน้านั้น */}
+      <SectionCard title="การแจ้งเตือน" description="เลือกว่าจะให้เตือนเรื่องอะไรบ้าง ทีละโมดูลหรือทีละหัวข้อ">
+        <Link
+          href="/notifications/settings"
+          className="flex items-center justify-between rounded-lg border border-(--line) px-3 py-2.5 text-sm font-medium text-(--ink) hover:bg-(--bg-soft)"
+        >
+          🔔 ตั้งค่าการแจ้งเตือน
+          <span className="text-(--ink-soft)">›</span>
+        </Link>
       </SectionCard>
 
       <SectionCard

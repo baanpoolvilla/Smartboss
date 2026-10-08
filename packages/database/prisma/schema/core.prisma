@@ -283,6 +283,22 @@ model Notification {
   @@schema("core")
 }
 
+/// ตั้งค่าแจ้งเตือนรายคน (หน้า /notifications/settings) — ไม่มีแถว = ค่าเริ่มต้น "เห็นทั้งหมด"
+/// รูปแบบ/ความหมายของ level, overrides, since อยู่ที่ apps/web/modules/notifications/prefs.ts
+model NotificationPreference {
+  userId            String    @id @map("user_id")
+  orgId             String    @map("org_id")
+  level             String    @default("all")
+  overrides         Json      @default("{}")
+  since             Json      @default("{}")
+  bannerDismissedAt DateTime? @map("banner_dismissed_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@index([orgId])
+  @@map("notification_preferences")
+  @@schema("core")
+}
+
 /// เบราว์เซอร์ที่ผู้ใช้กดอนุญาตแจ้งเตือน (Web Push) — หนึ่งคนมีได้หลายเครื่อง
 /// endpoint ที่ push แล้วได้ 404/410 = ถอนสิทธิ์แล้ว ลบทิ้ง (lib/web-push.ts)
 model WebPushSubscription {

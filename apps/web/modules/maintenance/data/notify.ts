@@ -4,6 +4,8 @@ import { crossOrg } from "@smartboss/database/cross-org";
 
 import { announceNotification } from "@/lib/notify-push";
 import { maintenanceHrefFor } from "@/modules/notifications/derive";
+import { topicForCoreType } from "@/modules/notifications/prefs";
+import { wantsTopic } from "@/lib/notification-prefs";
 
 // ─── In-app notifications (core.notifications) ───────────
 
@@ -64,6 +66,9 @@ export async function notifyUser(
   // เด้ง + เสียง ให้ผู้รับรู้ทันที (ทุกโมดูลที่แจ้งผ่านฟังก์ชันนี้) — ไม่รอ ไม่ให้ Web Push
   // ที่ช้าไปถ่วงงานหลัก · แชทแจ้งเด้งของตัวเองอยู่แล้ว (chat/data/notify.ts) จึงข้าม
   const type = input.type ?? "general";
+  // ผู้รับปิดหัวข้อนี้ไว้ (หน้าตั้งค่าแจ้งเตือน) — แถวยังเก็บตามปกติ (กระดิ่งซ่อนให้เอง, ตัวเลขงานค้าง
+  // บนไอคอนโมดูลยังนับ) แต่ไม่เด้ง ไม่ส่งมือถือ ไม่ส่ง LINE
+  if (!(await wantsTopic(orgId, userId, topicForCoreType(type)))) return;
   if (!type.startsWith("chat_")) {
     void announceNotification(orgId, [userId], {
       title: input.title,

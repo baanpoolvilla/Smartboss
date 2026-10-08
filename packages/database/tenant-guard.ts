@@ -28,7 +28,7 @@ export const TENANT_SCOPED_MODELS = new Set<string>([
   "User", "Role", "Department", "Notification", "OrgModule", "SecuritySetting",
   "PerformanceEvent", "PerformanceSetting", "DocumentCounter", "ExampleItem",
   "DayOffQuotaSetting", "EmployeeDayOffQuota", "EmployeeDayOffQuotaDefault",
-  "WebPushSubscription", "AppInstall",
+  "WebPushSubscription", "AppInstall", "NotificationPreference",
   // report_task
   "ReportTask", "ReportTaskCollection", "ReportTaskStore",
   // chat
