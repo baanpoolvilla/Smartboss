@@ -117,12 +117,6 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   function closeDepartmentBoard() {
     router.back();
   }
-  // สลับแผนกจากหัวหน้าเจาะแผนก — replace (ไม่ push) ให้ closeDepartmentBoard's back() ยังถอยถึงบอร์ดทีเดียว
-  function switchDepartmentBoard(id: string) {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("dept", id);
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  }
 
   const pendingDepartmentId = useTaskBoardIntentStore((s) => s.departmentId);
   const pendingScrollToStatus = useTaskBoardIntentStore((s) => s.scrollToStatus);
@@ -469,7 +463,6 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
           <DepartmentTopicsBoard
             departmentId={departmentBoardId}
             onBack={closeDepartmentBoard}
-            onChangeDepartment={switchDepartmentBoard}
             onOpenTask={setOpenTaskId}
           />
         </div>
