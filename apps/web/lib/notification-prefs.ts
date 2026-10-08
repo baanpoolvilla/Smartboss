@@ -50,7 +50,11 @@ export async function loadNotificationPrefs(orgId: string, userIds: string[]): P
     }
   } catch (err) {
     console.error("[notification-prefs] load failed — falling back to defaults", err);
-    for (const id of missing) out.set(id, DEFAULT_PREFS);
+    // จำค่าเริ่มต้นไว้ 60 วิเหมือนกัน — ตารางยังไม่มี (ลืมรัน migration) จะได้ไม่ยิงคิวรีพัง + log ทุกแจ้งเตือน
+    for (const id of missing) {
+      cache.set(id, { prefs: DEFAULT_PREFS, at: now });
+      out.set(id, DEFAULT_PREFS);
+    }
   }
   return out;
 }

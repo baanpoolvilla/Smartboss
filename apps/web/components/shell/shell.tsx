@@ -481,7 +481,8 @@ function BottomNavItem({
         className={cn(
           "relative flex h-7 w-14 items-center justify-center rounded-full transition-colors",
           active && !dot && "bg-(--app-soft,#CCFBF1)",
-          home && "bg-(--brand-green)/12"
+          // สีคงที่ ไม่ใช้ --brand-green — บางโมดูล (บุคคล) ตั้งตัวแปรนี้เป็นสีของโมดูลเอง ปุ่มหน้าหลักจะกลายเป็นสีฟ้า
+          home && "bg-[#e7f6e4]"
         )}
       >
         {icon ? <Icon name={icon} className="h-5 w-5" /> : <MoreHorizontal className="h-5 w-5" />}
