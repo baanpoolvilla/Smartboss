@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Table2 } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Table2 } from "lucide-react";
+import { useIsMobile } from "@/modules/report_task/hooks/use-is-mobile";
 import { getUser } from "@/modules/report_task/lib/directory";
 import { cn } from "@/modules/report_task/lib/utils";
 import type { CalendarEvent } from "@/modules/report_task/types";
@@ -94,6 +95,31 @@ export function TeamLeaveRoster({ events, range }: { events: CalendarEvent[]; ra
   const busy = Math.max(2, Math.ceil(rows.length / 2));
   const today = ymd(new Date());
 
+  // มือถือ: ทีละสัปดาห์ (อา–ส, 7 ช่องพอดีจอ) มีปุ่ม ‹ › แทนการปัดตารางทั้งเดือน · คอม: ทั้งเดือนเหมือนเดิม
+  const isMobile = useIsMobile();
+  const weeks = useMemo(() => {
+    const out: number[][] = [];
+    days.forEach((d, i) => {
+      if (i === 0 || d.getDay() === 0) out.push([]);
+      out[out.length - 1]!.push(i);
+    });
+    return out;
+  }, [days]);
+  const todayWeek = Math.max(0, weeks.findIndex((w) => w.some((i) => ymd(days[i]!) === today)));
+  // จำสัปดาห์ที่เลือกแยกตามเดือน — เปลี่ยนเดือนแล้วเริ่มที่สัปดาห์ของวันนี้ (หรือสัปดาห์แรก)
+  const monthKey = days[0] ? ymd(days[0]) : "";
+  const [picked, setPicked] = useState<{ key: string; week: number } | null>(null);
+  const week = picked?.key === monthKey ? Math.min(picked.week, weeks.length - 1) : todayWeek;
+  const visible = isMobile ? (weeks[week] ?? []) : days.map((_, i) => i);
+  const weekLabel = (() => {
+    const w = weeks[week];
+    if (!w?.length) return "";
+    const a = days[w[0]!]!;
+    const b = days[w[w.length - 1]!]!;
+    const month = b.toLocaleDateString("th-TH", { month: "short" });
+    return `${a.getDate()}–${b.getDate()} ${month}`;
+  })();
+
   // มือถือเห็นได้ไม่กี่วันต่อจอ — เปิดมาให้เลื่อนไปที่วันนี้เอง (เว้นวันก่อนหน้าไว้นิดหน่อย) ไม่ต้องปัดหา
   const scrollRef = useRef<HTMLDivElement>(null);
   const todayIndex = days.findIndex((d) => ymd(d) === today);
@@ -126,11 +152,40 @@ export function TeamLeaveRoster({ events, range }: { events: CalendarEvent[]; ra
             <span><b className="mr-1 inline-block h-3 w-3 rounded bg-[#22a06b] align-[-1px]" />D = Day-Off</span>
             <span><b className="mr-1 inline-block h-3 w-3 rounded bg-[#3b6fd8] align-[-1px]" />H = Holiday</span>
             <span><b className="mr-1 inline-block h-3 w-3 rounded bg-[#d97706] align-[-1px]" />ล = ลาอื่น ๆ</span>
-            <span>หัวคอลัมน์สีน้ำเงิน = วันหยุดตามปฏิทิน · ตัวเลขสีส้มแถวล่าง = วันที่หยุดตั้งแต่ครึ่งทีม</span>
+            <span className="hidden sm:inline">หัวคอลัมน์สีน้ำเงิน = วันหยุดตามปฏิทิน · ตัวเลขสีส้มแถวล่าง = วันที่หยุดตั้งแต่ครึ่งทีม</span>
           </div>
           {rows.length === 0 ? (
             <p className="py-6 text-center text-sm text-[var(--ink-soft)]">ช่วงนี้ไม่มีใครลงวันหยุดหรือลา</p>
           ) : (
+            <>
+            {isMobile && (
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPicked({ key: monthKey, week: Math.max(0, week - 1) })}
+                  disabled={week === 0}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--line)] disabled:opacity-30"
+                  aria-label="สัปดาห์ก่อน"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <span className="text-sm font-medium">
+                  {weekLabel}
+                  {week === todayWeek && todayWeek >= 0 && weeks[week]?.some((i) => ymd(days[i]!) === today) && (
+                    <span className="ml-1.5 rounded-full bg-[var(--brand-green)]/15 px-2 py-0.5 text-[10px] text-[var(--brand-green-dark)]">สัปดาห์นี้</span>
+                  )}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPicked({ key: monthKey, week: Math.min(weeks.length - 1, week + 1) })}
+                  disabled={week >= weeks.length - 1}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--line)] disabled:opacity-30"
+                  aria-label="สัปดาห์ถัดไป"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
             <div ref={scrollRef} className="overflow-x-auto overscroll-x-contain rounded-lg border border-[var(--line)]">
               <table className="w-full border-collapse text-[11px]">
                 <thead>
@@ -138,7 +193,8 @@ export function TeamLeaveRoster({ events, range }: { events: CalendarEvent[]; ra
                     <th className="sticky left-0 z-10 min-w-[92px] border-b border-r sm:min-w-[150px] border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-left font-medium text-[var(--ink-soft)]">
                       พนักงาน
                     </th>
-                    {days.map((d, i) => {
+                    {visible.map((i) => {
+                      const d = days[i]!;
                       const we = d.getDay() === 0 || d.getDay() === 6;
                       const ph = publicDays.get(i);
                       return (
@@ -159,7 +215,7 @@ export function TeamLeaveRoster({ events, range }: { events: CalendarEvent[]; ra
                         </th>
                       );
                     })}
-                    <th className="border-b border-l border-[var(--line)] px-2 py-1 text-center font-medium text-[var(--ink-soft)]">รวม</th>
+                    <th className="hidden border-b border-l border-[var(--line)] px-2 py-1 text-center font-medium text-[var(--ink-soft)] sm:table-cell">รวม</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -170,8 +226,11 @@ export function TeamLeaveRoster({ events, range }: { events: CalendarEvent[]; ra
                         title={r.user?.name}
                       >
                         {r.user?.name ?? "—"}
+                        {/* มือถือไม่มีคอลัมน์รวม — บอกยอดทั้งเดือนใต้ชื่อแทน */}
+                        <span className="block text-[10px] text-[var(--ink-soft)] sm:hidden">เดือนนี้ {r.cells.size} วัน</span>
                       </td>
-                      {days.map((d, i) => {
+                      {visible.map((i) => {
+                        const d = days[i]!;
                         const e = r.cells.get(i);
                         const we = d.getDay() === 0 || d.getDay() === 6;
                         return (
@@ -179,7 +238,7 @@ export function TeamLeaveRoster({ events, range }: { events: CalendarEvent[]; ra
                             {e && (
                               <span
                                 title={`${r.user?.name ?? ""} · ${e.typeName ?? e.title}`}
-                                className="mx-auto block h-[18px] w-[18px] rounded text-[9.5px] font-bold leading-[18px] text-white"
+                                className="mx-auto block h-6 w-6 rounded text-[11px] font-bold leading-6 text-white sm:h-[18px] sm:w-[18px] sm:text-[9.5px] sm:leading-[18px]"
                                 style={{ backgroundColor: e.colorHint ?? "#22a06b" }}
                               >
                                 {codeOf(e)}
@@ -188,7 +247,7 @@ export function TeamLeaveRoster({ events, range }: { events: CalendarEvent[]; ra
                           </td>
                         );
                       })}
-                      <td className="border-b border-l border-[var(--line)] px-2 text-center text-xs font-semibold tabular-nums">
+                      <td className="hidden border-b border-l border-[var(--line)] px-2 text-center text-xs font-semibold tabular-nums sm:table-cell">
                         {r.cells.size} วัน
                       </td>
                     </tr>
@@ -199,7 +258,7 @@ export function TeamLeaveRoster({ events, range }: { events: CalendarEvent[]; ra
                     <td className="sticky left-0 z-10 border-r border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-xs text-[var(--ink-soft)]">
                       หยุดกี่คน
                     </td>
-                    {perDay.map((n, i) => (
+                    {visible.map((i) => perDay[i]!).map((n, i) => (
                       <td
                         key={i}
                         className={cn(
@@ -210,11 +269,12 @@ export function TeamLeaveRoster({ events, range }: { events: CalendarEvent[]; ra
                         {n || ""}
                       </td>
                     ))}
-                    <td />
+                    <td className="hidden sm:table-cell" />
                   </tr>
                 </tfoot>
               </table>
             </div>
+            </>
           )}
         </div>
       )}
