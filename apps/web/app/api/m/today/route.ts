@@ -53,6 +53,53 @@ async function hasShift(orgId: string | null | undefined, employmentId: string, 
   }
 }
 
+export interface TodayShift {
+  name: string;
+  /** นาทีนับจากเที่ยงคืน (เวลาไทย) — end ≤ start = กะข้ามคืน เลิกวันถัดไป */
+  startMinutes: number;
+  endMinutes: number;
+  restDay: boolean;
+}
+
+/**
+ * กะของวันนี้ — กติกาเดียวกับระบบบุคคล (workforce-api attendance.repository.ts resolveShiftId):
+ * ตารางรายวันที่ประกาศแล้ว (PUBLISHED) ชนะตารางประจำสัปดาห์ · ไว้บอกบนหน้าลงเวลาว่าเข้า/เลิกกี่โมง
+ * ("อยากให้มีเวลาบอกด้วยว่ากี่โมง จะได้ไม่กดออกก่อน") · อ่านไม่ได้/ไม่มีกะ = null (หน้าจอแค่ไม่บอกเวลากะ)
+ */
+async function todayShift(orgId: string | null | undefined, employmentId: string, today: string): Promise<TodayShift | null> {
+  if (!orgId) return null;
+  try {
+    const rows = await withWorkforceTenant(orgId, (tx) =>
+      tx.$queryRaw<{ name: string; start_minutes: number; end_minutes: number; rest_day: boolean }[]>`
+        WITH picked AS (
+          SELECT COALESCE(
+            (SELECT a.shift_id FROM workforce.shift_assignments a
+              WHERE a.employment_id = ${employmentId}::uuid AND a.work_date = ${today}::date AND a.status = 'PUBLISHED'
+              LIMIT 1),
+            (SELECT CASE EXTRACT(DOW FROM ${today}::date)::int
+                      WHEN 0 THEN p.sunday_shift_id WHEN 1 THEN p.monday_shift_id WHEN 2 THEN p.tuesday_shift_id
+                      WHEN 3 THEN p.wednesday_shift_id WHEN 4 THEN p.thursday_shift_id WHEN 5 THEN p.friday_shift_id
+                      ELSE p.saturday_shift_id END
+               FROM workforce.recurring_work_patterns p
+              WHERE p.employment_id = ${employmentId}::uuid
+                AND p.effective_from <= ${today}::date
+                AND (p.effective_to IS NULL OR p.effective_to >= ${today}::date)
+              ORDER BY p.effective_from DESC
+              LIMIT 1)
+          ) AS shift_id
+        )
+        SELECT s.name, s.start_minutes, s.end_minutes, s.rest_day
+        FROM picked JOIN workforce.shift_definitions s ON s.id = picked.shift_id
+      `
+    );
+    const r = rows[0];
+    return r ? { name: r.name, startMinutes: Number(r.start_minutes), endMinutes: Number(r.end_minutes), restDay: r.rest_day } : null;
+  } catch (error) {
+    console.error("[m/today] todayShift lookup failed", error);
+    return null;
+  }
+}
+
 /**
  * สถานะการลงเวลาของ *ตัวเอง* วันนี้
  *
@@ -111,9 +158,11 @@ export async function GET() {
         ? prev.openedBy
         : null;
 
+    const shift = await todayShift(session.orgId, me.employment_id, date);
     return NextResponse.json({
       date,
       displayName: me.display_name,
+      shift,
       events: mine,
       carriedIn,
       // คนนี้ "ต้องลงเวลา" ไหม — ไอคอนลงเวลาบนหน้าแรกโชว์เฉพาะคนที่ต้องลง (components/home/clock-tile.tsx)

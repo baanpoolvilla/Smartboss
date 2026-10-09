@@ -47,6 +47,86 @@ interface TodayData {
   events: DayEvent[];
   /** กะข้ามคืน: เข้าไว้ตั้งแต่เมื่อวานแล้วยังไม่ออก (ดู /api/m/today) */
   carriedIn?: DayEvent | null;
+  /** กะของวันนี้ (ไม่มีกะ/อ่านไม่ได้ = null) */
+  shift?: { name: string; startMinutes: number; endMinutes: number; restDay: boolean } | null;
+}
+
+function hhmmOfMinutes(m: number): string {
+  const v = ((m % 1440) + 1440) % 1440;
+  return `${String(Math.floor(v / 60)).padStart(2, "0")}:${String(v % 60).padStart(2, "0")}`;
+}
+
+function durationLabel(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h > 0 ? `${h} ชม.${m > 0 ? ` ${m} นาที` : ""}` : `${m} นาที`;
+}
+
+/**
+ * นาฬิกาเดินบนหน้าลงเวลา + บอกเวลากะ — กดถูกจังหวะ ไม่เผลอกดออกก่อนเวลาเลิก
+ * ("อยากให้มีเวลาบอกด้วยว่ากี่โมง จะได้กดถูก เพื่อกดออกก่อน…")
+ * เวลาบนจอเป็นเวลาเครื่อง (เวลาที่ระบบบันทึกจริงเป็นของเซิร์ฟเวอร์ ต่างกันไม่กี่วินาที)
+ * เทียบกะเฉพาะกะของวันนี้ — ค้างจากกะข้ามคืนเมื่อวาน (carriedIn) ไม่บอกเวลากะ เดี๋ยวคิดผิดวัน
+ */
+function ShiftClock({ shift, open, overnight }: { shift: TodayData["shift"]; open: boolean; overnight: boolean }) {
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    const tick = () => setNow(new Date());
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const time = now
+    ? now.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })
+    : "--:--:--";
+
+  let hint: { text: string; tone: "ok" | "warn" | "soft" } | null = null;
+  if (now && shift && !shift.restDay && !overnight) {
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const start = shift.startMinutes;
+    const end = shift.endMinutes > start ? shift.endMinutes : shift.endMinutes + 1440; // ข้ามคืน = เลิกพรุ่งนี้
+    if (open) {
+      hint =
+        nowMin < end
+          ? { text: `ยังไม่ถึงเวลาเลิกงาน (${hhmmOfMinutes(end)}) · อีก ${durationLabel(end - nowMin)}`, tone: "warn" }
+          : { text: `ถึงเวลาเลิกงานแล้ว (${hhmmOfMinutes(end)}) · ออกงานได้`, tone: "ok" };
+    } else {
+      hint =
+        nowMin < start
+          ? { text: `เข้างาน ${hhmmOfMinutes(start)} · อีก ${durationLabel(start - nowMin)}`, tone: "soft" }
+          : nowMin < end
+            ? { text: `เลยเวลาเข้างาน (${hhmmOfMinutes(start)}) มา ${durationLabel(nowMin - start)}`, tone: "warn" }
+            : null;
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-1 rounded-2xl border border-(--line) bg-(--bg-soft) px-3 py-3 text-center">
+      <p className="text-xs text-(--ink-soft)">เวลาตอนนี้</p>
+      <p className="text-4xl font-bold tabular-nums tracking-tight">{time}</p>
+      {shift && !shift.restDay && (
+        <p className="text-xs text-(--ink-soft)">
+          กะ{shift.name ? ` ${shift.name}` : ""} · {hhmmOfMinutes(shift.startMinutes)}–{hhmmOfMinutes(shift.endMinutes)}
+        </p>
+      )}
+      {shift?.restDay && <p className="text-xs text-(--ink-soft)">วันนี้เป็นวันหยุดตามกะ</p>}
+      {hint && (
+        <p
+          className="mt-0.5 rounded-full px-3 py-1 text-xs font-semibold"
+          style={
+            hint.tone === "ok"
+              ? { background: "color-mix(in srgb, var(--tone-ok) 12%, transparent)", color: "var(--tone-ok)" }
+              : hint.tone === "warn"
+                ? { background: "color-mix(in srgb, var(--tone-warn) 14%, transparent)", color: "var(--tone-warn)" }
+                : { background: "var(--bg)", color: "var(--ink-soft)" }
+          }
+        >
+          {hint.text}
+        </p>
+      )}
+    </div>
+  );
 }
 
 type Submitting = "idle" | "locating" | "sending";
@@ -342,6 +422,10 @@ export function Today({
           </div>
         ))}
       </div>
+
+      {isDesktop === false && !noEmployment && (
+        <ShiftClock shift={data?.shift ?? null} open={open} overnight={!!data?.carriedIn && open} />
+      )}
 
       {isDesktop !== false ? null : needsPhoto && state === "idle" ? (
         // แตะปุ่มนี้ = เปิดกล้องจากการแตะโดยตรง (iPhone ยอม) แล้วส่งรูปพร้อมลงเวลาทั้งก้อน
