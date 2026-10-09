@@ -36,11 +36,23 @@ function shortName(name: string): string {
   return parts.length >= 2 ? parts.slice(0, -1).join("-") : name;
 }
 
-/** ตัวอักษรในช่อง — Day-Off = D · Holiday (สิทธิ์สะสม) = H · ลาอื่น ๆ = ล */
+/** ชื่อประเภทของรายการ (ใช้ทำป้ายอธิบาย + ตัวอักษรในช่อง) */
+function typeLabelOf(e: CalendarEvent): string {
+  if (e.type === "dayoff") return e.typeName ?? "Day-Off";
+  return e.typeName ?? e.leaveType ?? "ลา";
+}
+
+/**
+ * ตัวอักษรในช่อง — Day-Off = D · Holiday = H · ลาประเภทอื่นใช้ตัวแรกหลังคำว่า "ลา" (ลาป่วย → ป, ลากิจ → ก,
+ * ลาพักร้อน → พ) ให้แยกกันออก (เดิมทุกประเภทเป็น "ล" เหมือนกันหมด) · สีมาจากประเภทเหมือนบนปฏิทิน
+ */
 function codeOf(e: CalendarEvent): string {
   if (e.type === "dayoff") return "D";
-  const name = (e.typeName ?? e.leaveType ?? "").toLowerCase();
-  return name.includes("holiday") ? "H" : "ล";
+  const name = typeLabelOf(e).trim();
+  if (name.toLowerCase().includes("holiday")) return "H";
+  const rest = name.replace(/^ลา\s*/, "");
+  // ข้ามสระนำหน้า (เ แ โ ใ ไ) ใช้พยัญชนะตัวแรก — "ลาเพื่อ…" ได้ "พ" ไม่ใช่ "เ"
+  return (rest || name).replace(/^[เแโใไ]+/, "").charAt(0).toUpperCase() || "ล";
 }
 
 /**
@@ -71,7 +83,7 @@ export function TeamLeaveRoster({ events, range }: { events: CalendarEvent[]; ra
   }
 
   const days = useMemo(() => daysOf(range), [range]);
-  const { rows, publicDays, perDay, total } = useMemo(() => {
+  const { rows, publicDays, perDay, total, legend } = useMemo(() => {
     const keys = days.map(ymd);
     const index = new Map(keys.map((k, i) => [k, i]));
     const publicDays = new Map<number, string>();
@@ -109,7 +121,18 @@ export function TeamLeaveRoster({ events, range }: { events: CalendarEvent[]; ra
     });
     const perDay = keys.map((_, i) => rows.filter((r) => r.cells.has(i)).length);
     const total = rows.reduce((n, r) => n + r.cells.size, 0);
-    return { rows, publicDays, perDay, total };
+    // ป้ายอธิบาย: เฉพาะประเภทที่มีอยู่จริงในตารางนี้ เรียงจากเจอบ่อยไปน้อย
+    const legendMap = new Map<string, { label: string; code: string; color: string; count: number }>();
+    for (const r of rows) {
+      for (const e of r.cells.values()) {
+        const label = typeLabelOf(e);
+        const cur = legendMap.get(label) ?? { label, code: codeOf(e), color: e.colorHint ?? "#22a06b", count: 0 };
+        cur.count += 1;
+        legendMap.set(label, cur);
+      }
+    }
+    const legend = [...legendMap.values()].sort((a, b) => b.count - a.count);
+    return { rows, publicDays, perDay, total, legend };
   }, [events, days]);
 
   const busy = Math.max(2, Math.ceil(rows.length / 2));
@@ -168,11 +191,17 @@ export function TeamLeaveRoster({ events, range }: { events: CalendarEvent[]; ra
       </button>
       {open && (
         <div className="border-t border-[var(--line)] px-4 pb-4 pt-3">
-          <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[var(--ink-soft)]">
-            <span><b className="mr-1 inline-block h-3 w-3 rounded bg-[#22a06b] align-[-1px]" />D = Day-Off</span>
-            <span><b className="mr-1 inline-block h-3 w-3 rounded bg-[#3b6fd8] align-[-1px]" />H = Holiday</span>
-            <span><b className="mr-1 inline-block h-3 w-3 rounded bg-[#d97706] align-[-1px]" />ล = ลาอื่น ๆ</span>
-            <span className="hidden sm:inline">หัวคอลัมน์สีน้ำเงิน = วันหยุดตามปฏิทิน · ตัวเลขสีส้มแถวล่าง = วันที่หยุดตั้งแต่ครึ่งทีม</span>
+          {/* ป้ายอธิบายจากประเภทที่มีจริง — มือถือ: บรรทัดเดียว เลื่อนซ้าย-ขวาถ้าเยอะ · คอม: ขึ้นบรรทัดใหม่ได้ */}
+          <div className="mb-2 flex gap-x-3 gap-y-1 overflow-x-auto whitespace-nowrap pb-0.5 text-[11px] text-[var(--ink-soft)] [scrollbar-width:none] sm:flex-wrap sm:whitespace-normal">
+            {legend.map((l) => (
+              <span key={l.label} className="inline-flex shrink-0 items-center gap-1">
+                <b className="inline-block h-4 w-4 rounded text-center text-[9px] leading-4 text-white" style={{ backgroundColor: l.color }}>
+                  {l.code}
+                </b>
+                {l.label}
+              </span>
+            ))}
+            <span className="hidden shrink-0 sm:inline">· หัวคอลัมน์สีน้ำเงิน = วันหยุดตามปฏิทิน · ตัวเลขสีส้มแถวล่าง = วันที่หยุดตั้งแต่ครึ่งทีม</span>
           </div>
           {rows.length === 0 ? (
             <p className="py-6 text-center text-sm text-[var(--ink-soft)]">ช่วงนี้ไม่มีใครลงวันหยุดหรือลา</p>
