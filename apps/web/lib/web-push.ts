@@ -23,6 +23,11 @@ export interface WebPushPayload {
   url?: string;
   /** แจ้งเตือน tag เดียวกันแทนที่อันเดิม (เช่น ต่อห้องแชท) ไม่ซ้อนเป็นกอง */
   tag?: string;
+  /** "call" = สายเข้า (ค้างจนกด มีปุ่มรับ/ปฏิเสธ) · "call-end" = แทนแจ้งเตือนสายเข้าตอนสายจบ — ดู public/sw.js */
+  kind?: "call" | "call-end";
+  callId?: string;
+  /** วินาทีที่บริการ push ถือไว้ส่งให้เครื่องที่ออฟไลน์ (ค่าเดิม 1 วัน) — สายเข้าส่งช้าไปก็ไร้ประโยชน์ */
+  ttl?: number;
 }
 
 function b64url(buf: Buffer): string {
@@ -117,7 +122,8 @@ export async function sendWebPush(orgId: string, userIds: string[], payload: Web
   const viewing = await viewingEndpoints(userIds).catch(() => new Set<string>());
   subs = subs.filter((s) => !viewing.has(s.endpoint));
   if (subs.length === 0) return;
-  const data = Buffer.from(JSON.stringify(payload));
+  const { ttl, ...rest } = payload;
+  const data = Buffer.from(JSON.stringify(rest));
   const gone: string[] = [];
 
   await Promise.all(
@@ -129,7 +135,7 @@ export async function sendWebPush(orgId: string, userIds: string[], payload: Web
             Authorization: vapidAuthHeader(s.endpoint),
             "Content-Encoding": "aes128gcm",
             "Content-Type": "application/octet-stream",
-            TTL: "86400",
+            TTL: String(ttl ?? 86400),
             Urgency: "high",
           },
           body: new Uint8Array(encrypt(s.p256dh, s.auth, data)),

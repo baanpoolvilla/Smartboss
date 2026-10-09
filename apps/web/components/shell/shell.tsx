@@ -34,6 +34,7 @@ import { SessionRefresher } from "./session-refresher";
 import { FileSizeGuard } from "./file-size-guard";
 import { SystemNotify } from "./system-notify";
 import { ChatNotifyListener } from "@/modules/chat/components/chat-nav-badge";
+import { CallManager } from "@/modules/chat/components/call-manager";
 import { MarkReadOnRoute } from "@/modules/notifications/mark-read-on-route";
 import { ShellProvider, useShell, type ShellUser } from "./shell-context";
 import { useClockState } from "@/components/home/clock-tile";
@@ -109,6 +110,8 @@ export function Shell({
       <SystemNotify />
       {/* แชทเข้า → เสียง + เด้ง ทุกหน้า ทุกโมดูล (ไม่ใช่แค่ตอนเห็นเมนูแชท) */}
       {hasChat && <ChatNotifyListener />}
+      {/* โทรในแชท — จอสายเข้า/คุยอยู่ ขึ้นได้ทุกหน้า (modules/chat/lib/call-controller.ts) */}
+      {hasChat && <CallManager />}
       {/* หน้าจัดการสติกเกอร์บริษัท — เปิดจากตัวเลือกสติกเกอร์ในแชท/รายงาน (components/sticker-manager.tsx) */}
       {hasChat && <StickerManagerHost />}
       {/* ชวนติดตั้งเป็นแอป (มือถือ) + แจ้งเมื่อมีเวอร์ชันใหม่ — ทุกหน้า ทุกโมดูล */}

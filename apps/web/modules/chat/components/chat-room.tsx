@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ChevronDown, ChevronUp, Info, Loader2, Megaphone, Search, Upload, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, Info, Loader2, Megaphone, Phone, Search, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
 
@@ -20,6 +20,7 @@ import { ChatModal } from "./new-chat-dialog";
 import { RoomInfo } from "./room-info";
 import { NoteEditor, NoteViewer, useNoteParam } from "./notes";
 import { useBackToClose } from "@/lib/back-to-close";
+import { startCall, useCallStore } from "../lib/call-controller";
 
 function SearchBar({ channelId, onClose }: { channelId: string; onClose: () => void }) {
   const users = useChatStore((s) => s.users);
@@ -136,6 +137,8 @@ export function ChatRoom({ channel, initialUnread, onBack }: { channel: ChatChan
 
   const title = channelTitle(channel, meId, users);
   const otherId = channel.type === "dm" ? channel.memberIds.find((id) => id !== meId) : undefined;
+  const callsEnabled = useCallStore((s) => s.enabled);
+  const callBusy = useCallStore((s) => s.phase !== "idle" && s.phase !== "ended");
   const typingCount = Object.keys(typing ?? {}).length;
   const subtitle =
     channel.type === "dm"
@@ -210,6 +213,18 @@ export function ChatRoom({ channel, initialUnread, onBack }: { channel: ChatChan
               </span>
             </span>
           </button>
+          {callsEnabled && otherId && (
+            <button
+              type="button"
+              onClick={() => void startCall(channel.id, { id: otherId, name: title })}
+              disabled={callBusy}
+              className="rounded-full p-2 text-(--ink-soft) hover:bg-(--bg-soft) disabled:opacity-40"
+              aria-label="โทรด้วยเสียง"
+              title="โทรด้วยเสียง"
+            >
+              <Phone className="h-5 w-5" />
+            </button>
+          )}
           <button type="button" onClick={() => setSearching((v) => !v)} className="rounded-full p-2 text-(--ink-soft) hover:bg-(--bg-soft)" aria-label="ค้นหาข้อความ" title="ค้นหาข้อความ">
             <Search className="h-5 w-5" />
           </button>

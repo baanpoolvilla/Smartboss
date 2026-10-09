@@ -306,3 +306,29 @@ model ChatSticker {
   @@map("stickers")
   @@schema("chat")
 }
+
+/// โทรในแชท (เสียงผ่าน LiveKit) — หนึ่งแถวต่อหนึ่งสาย · ใช้ทั้งคุมสถานะสาย (เรียกเข้า/คุยอยู่/จบ) และนับนาทีที่แต่ละบริษัท
+/// ใช้ไว้คิดเงินลูกค้า (ระบบนี้ขายให้บริษัทอื่นด้วย) · ห้อง LiveKit = `call-<id>` ผูกบริษัทผ่าน orgId เท่านั้น
+model ChatCall {
+  id        String @id @default(uuid())
+  orgId     String @map("org_id")
+  channelId String @map("channel_id")
+  callerId  String @map("caller_id")
+  calleeId  String @map("callee_id")
+  /// "audio" (ตอนนี้) | "video" (ทีหลัง)
+  media     String @default("audio")
+  /// ringing → active → ended · หรือ ringing → missed (ไม่มีคนรับ) / declined (ปฏิเสธ) / cancelled (ผู้โทรวางก่อนรับ)
+  status    String @default("ringing")
+
+  createdAt  DateTime  @default(now()) @map("created_at")
+  answeredAt DateTime? @map("answered_at")
+  endedAt    DateTime? @map("ended_at")
+  /// ใครกดวาง / ปฏิเสธ (null = ระบบตัดเพราะหมดเวลา)
+  endedBy    String?   @map("ended_by")
+
+  @@index([orgId, createdAt])
+  @@index([calleeId, status])
+  @@index([callerId, status])
+  @@map("calls")
+  @@schema("chat")
+}

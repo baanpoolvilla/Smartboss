@@ -1,5 +1,5 @@
 /* Service worker ของ SmartBoss — ตอนนี้ทำหน้าที่เดียว: รับ Web Push แล้วเด้งแจ้งเตือน
- * (payload มาจาก apps/web/lib/web-push.ts: { title, body, url, tag })
+ * (payload มาจาก apps/web/lib/web-push.ts: { title, body, url, tag, kind?, callId? })
  * ไม่ cache หน้าเว็บ — ตั้งใจ ไม่อยากให้ผู้ใช้ติดเวอร์ชันเก่าหลัง deploy */
 
 self.addEventListener("install", () => self.skipWaiting());
@@ -36,6 +36,30 @@ self.addEventListener("push", (event) => {
     data = { title: "SmartBoss", body: event.data ? event.data.text() : "" };
   }
   const title = data.title || "SmartBoss";
+  // สายเข้า: ค้างจนกว่าจะกด (Android มีปุ่มรับ/ปฏิเสธ) · สายจบ: แทนที่อันเดิม (tag เดียวกัน) เป็น "สายที่ไม่ได้รับ"
+  if (data.kind === "call" || data.kind === "call-end") {
+    const ringing = data.kind === "call";
+    if (!ringing) event.waitUntil(bumpAppBadge());
+    event.waitUntil(
+      self.registration.showNotification(title, {
+        body: data.body || "",
+        tag: data.tag || undefined,
+        renotify: ringing,
+        requireInteraction: ringing,
+        icon: "/icon-v4.png",
+        badge: "/badge-v2.png",
+        vibrate: ringing ? [600, 300, 600, 300, 600, 300, 600] : [180],
+        actions: ringing
+          ? [
+              { action: "answer", title: "รับสาย" },
+              { action: "decline", title: "ปฏิเสธ" },
+            ]
+          : [],
+        data: { url: data.url || "/", kind: data.kind, callId: data.callId || null },
+      })
+    );
+    return;
+  }
   event.waitUntil(bumpAppBadge());
   event.waitUntil(
     self.registration.showNotification(title, {
@@ -54,7 +78,32 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = new URL((event.notification.data && event.notification.data.url) || "/", self.location.origin).href;
+  const nd = event.notification.data || {};
+  // สายเข้า: ปฏิเสธได้เลยไม่ต้องเปิดแอป · รับสาย/แตะ = เปิดแอปที่จอรับสาย (modules/chat/components/call-manager.tsx)
+  if (nd.kind === "call" && nd.callId) {
+    if (event.action === "decline") {
+      event.waitUntil(
+        fetch("/api/chat/calls/" + encodeURIComponent(nd.callId) + "/decline", { method: "POST", credentials: "include" }).catch(() => {})
+      );
+      return;
+    }
+    const answer = event.action === "answer";
+    const target = new URL(nd.url || "/", self.location.origin);
+    if (answer) target.searchParams.set("answer", "1");
+    event.waitUntil(
+      self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
+        const w = wins.find((x) => new URL(x.url).origin === self.location.origin && "focus" in x);
+        if (w) {
+          w.postMessage({ type: "sb-call", callId: nd.callId, answer });
+          return w.focus().catch(() => undefined);
+        }
+        target.searchParams.set("sb_from", "push");
+        return self.clients.openWindow(target.href);
+      })
+    );
+    return;
+  }
+  const url = new URL(nd.url || "/", self.location.origin).href;
   // หน้าต่างใหม่ที่เปิดจากแจ้งเตือน — ติดป้ายไว้ ให้หน้าเว็บรู้ว่าไม่ต้องขึ้นหน้าชวนติดตั้งแอปมาบัง
   // (Android: แจ้งเตือนของเบราว์เซอร์ เช่น Samsung Internet เปิดเป็นแท็บเบราว์เซอร์ ไม่ใช่ในแอป)
   const fresh = new URL(url);

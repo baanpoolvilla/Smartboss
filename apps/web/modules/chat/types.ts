@@ -236,4 +236,22 @@ export type ChatRealtimeEvent =
   /** โน้ตเปลี่ยน (แก้ไข / คอมเมนต์ / ถูกใจ) — preview ใหม่ไว้อัปเดตการ์ดในห้อง */
   | { type: "chat.note"; channelId: string; noteId: string; preview?: ChatNotePreview };
 
+/** สายโทรในแชท (data/calls.ts) — ringing → active → ended | missed | declined */
+export interface ChatCallDTO {
+  id: string;
+  channelId: string;
+  callerId: string;
+  calleeId: string;
+  callerName: string;
+  calleeName: string;
+  media: "audio" | "video";
+  status: "ringing" | "active" | "ended" | "missed" | "declined" | "cancelled";
+  createdAt: string;
+  answeredAt: string | null;
+  endedAt: string | null;
+}
+
+/** เหตุการณ์สายโทรทางท่อสด — call.ring ถึงผู้รับ · call.update ถึงทั้งสองฝั่ง (รับ/วาง/ปฏิเสธ) */
+export type ChatCallRealtimeEvent = { type: "call.ring"; call: ChatCallDTO } | { type: "call.update"; call: ChatCallDTO };
+
 export const CHAT_REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏", "✅", "🎉"] as const;
