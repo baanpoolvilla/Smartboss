@@ -47,6 +47,7 @@ import { toast } from "sonner";
 import { now } from "@/modules/report_task/lib/now";
 import type { CalendarEvent, CalendarEventType, TodoItem } from "@/modules/report_task/types";
 import { TeamLeaveRoster } from "./team-leave-roster";
+import { CalendarHolidaysCard } from "./calendar-holidays-card";
 
 /** จำว่าติ๊ก "วันหยุด · ลา" ไว้หรือไม่ — ต่อเครื่อง */
 const SHOW_SCHEDULE_KEY = "pm-calendar-show-schedule";
@@ -1464,7 +1465,13 @@ export function CalendarView() {
               hideScheduleList={scheduleSeeAll}
             />
             {/* โควตา/ยื่นลา/วันหยุดประจำของตัวเอง — มากับช่องติ๊กเดียวกัน */}
-            {showSchedule && <LeaveSidebar range={viewRange} holidays={holidays} personalOnly />}
+            {showSchedule && (
+              <div className="flex flex-col gap-4">
+                <LeaveSidebar range={viewRange} holidays={holidays} personalOnly />
+                {/* วันหยุดตามปฏิทิน — ใต้วันหยุดของฉัน ใช้ที่ว่างตรงนั้น ไม่นับรวมกับที่ลงเอง */}
+                <CalendarHolidaysCard events={visibleScheduleEvents} range={viewRange} />
+              </div>
+            )}
           </div>
         </div>
       </div>
