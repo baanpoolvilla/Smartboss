@@ -46,6 +46,7 @@ import { Bell, CalendarOff, ChevronDown, PanelLeftClose, PanelLeftOpen, Plus, Se
 import { toast } from "sonner";
 import { now } from "@/modules/report_task/lib/now";
 import type { CalendarEvent, CalendarEventType, TodoItem } from "@/modules/report_task/types";
+import { TeamLeaveRoster } from "./team-leave-roster";
 
 /** จำว่าติ๊ก "วันหยุด · ลา" ไว้หรือไม่ — ต่อเครื่อง */
 const SHOW_SCHEDULE_KEY = "pm-calendar-show-schedule";
@@ -1446,6 +1447,8 @@ export function CalendarView() {
             addHint="คลิกวันเพื่อดูรายการ · ลากคลุมหลายวันเพื่อดูสรุป"
             rail={railOpen ? <PeopleCalendarList singleColumn alwaysExpanded /> : undefined}
           />
+          {/* มุมมองทีม + ติ๊ก "วันหยุด · ลา" — ตารางคน × วัน แทนรายการยาวในการ์ดด้านล่าง */}
+          {showSchedule && scheduleSeeAll && <TeamLeaveRoster events={visibleScheduleEvents} range={viewRange} />}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
             {/* TodoSidebar (everyone else's to-dos, its own card) used to
                 render here too — now redundant since WorkSidebar's
@@ -1458,6 +1461,7 @@ export function CalendarView() {
               onAddTodo={() => openTodoDialog({})}
               scheduleEvents={showSchedule ? visibleScheduleEvents : undefined}
               scheduleSeeAll={scheduleSeeAll}
+              hideScheduleList={scheduleSeeAll}
             />
             {/* โควตา/ยื่นลา/วันหยุดประจำของตัวเอง — มากับช่องติ๊กเดียวกัน */}
             {showSchedule && <LeaveSidebar range={viewRange} holidays={holidays} personalOnly />}

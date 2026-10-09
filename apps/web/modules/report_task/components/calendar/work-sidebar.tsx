@@ -59,6 +59,7 @@ export function WorkSidebar({
   onAddTodo,
   scheduleEvents,
   scheduleSeeAll = false,
+  hideScheduleList = false,
 }: {
   range: ViewRange;
   /** วันหยุด · ลา ที่ปฏิทินกำลังแสดง (กรองสิทธิ์/ประเภท/คน และลงสีมาแล้ว) —
@@ -66,6 +67,8 @@ export function WorkSidebar({
   scheduleEvents?: CalendarEvent[];
   /** เห็นของคนอื่นด้วย (เจ้าของ/หัวหน้า) — ใช้แค่ตั้งหัวการ์ด */
   scheduleSeeAll?: boolean;
+  /** มุมมองทีมมีตารางคน × วัน (team-leave-roster.tsx) แทนแล้ว — ไม่ต้องมีรายการยาวซ้ำ */
+  hideScheduleList?: boolean;
   onOpenTask: (id: string) => void;
   /** สิ่งที่ต้องทำ now lives inside "งานที่ฉันรับ" (asked for explicitly:
    *  "สิ่งที่ต้องทำ จะเอาเข้ามาอยู่ด้วย ในงานที่ฉันรับ") instead of its own
@@ -363,7 +366,7 @@ export function WorkSidebar({
 
       {/* วันหยุด · ลา — มาพร้อมช่องติ๊กบนแถบกรอง: ติ๊กออกแล้วการ์ดนี้หายไปด้วย
           คนทั่วไปเห็นแค่ของตัวเอง เจ้าของ/หัวหน้าเห็นของคนที่ดูแล (calendar-view.tsx) */}
-      {scheduleEvents && (
+      {scheduleEvents && !hideScheduleList && (
         <Card className="border-[var(--line)] shadow-none">
           <CardHeader>
             <CardTitle className="text-base font-semibold flex items-center justify-between gap-2">
