@@ -27,6 +27,15 @@ function daysOf(range: { start: Date; end: Date }): Date[] {
   return out;
 }
 
+/**
+ * ชื่อย่อสำหรับมือถือ — ชื่อในระบบเป็นแบบ "ชื่อเล่น-แผนก-ชื่อจริง" ตัดส่วนสุดท้ายออก ("กาย-IT-Pacharapol" → "กาย-IT",
+ * "ko-Surin" → "ko") ให้คอลัมน์ชื่อไม่กินที่ ("ชื่อเอาให้ไม่กินสเกลมาก") · ชื่อไม่มีขีด = ใช้ทั้งชื่อ
+ */
+function shortName(name: string): string {
+  const parts = name.split("-").filter(Boolean);
+  return parts.length >= 2 ? parts.slice(0, -1).join("-") : name;
+}
+
 /** ตัวอักษรในช่อง — Day-Off = D · Holiday (สิทธิ์สะสม) = H · ลาอื่น ๆ = ล */
 function codeOf(e: CalendarEvent): string {
   if (e.type === "dayoff") return "D";
@@ -84,9 +93,20 @@ export function TeamLeaveRoster({ events, range }: { events: CalendarEvent[]; ra
       for (const i of cover) if (!m.has(i)) m.set(i, e);
       byUser.set(e.userId, m);
     }
-    const rows = [...byUser.entries()]
+    const sorted = [...byUser.entries()]
       .map(([userId, cells]) => ({ userId, user: getUser(userId), cells }))
       .sort((a, b) => (a.user?.name ?? "").localeCompare(b.user?.name ?? "", "th"));
+    // ชื่อย่อซ้ำกัน (สองคนชื่อเล่นเดียวกันแผนกเดียวกัน) = ใช้ชื่อเต็มของคนเหล่านั้น จะได้แยกออก
+    const shortCount = new Map<string, number>();
+    for (const r of sorted) {
+      const k = shortName(r.user?.name ?? "");
+      shortCount.set(k, (shortCount.get(k) ?? 0) + 1);
+    }
+    const rows = sorted.map((r) => {
+      const full = r.user?.name ?? "—";
+      const k = shortName(full);
+      return { ...r, short: (shortCount.get(k) ?? 0) > 1 ? full : k };
+    });
     const perDay = keys.map((_, i) => rows.filter((r) => r.cells.has(i)).length);
     const total = rows.reduce((n, r) => n + r.cells.size, 0);
     return { rows, publicDays, perDay, total };
@@ -195,7 +215,7 @@ export function TeamLeaveRoster({ events, range }: { events: CalendarEvent[]; ra
               <table className="w-full border-collapse text-[11px] max-sm:table-fixed">
                 <thead>
                   <tr>
-                    <th className="sticky left-0 top-0 z-20 min-w-[92px] border-b border-r max-sm:w-[92px] sm:min-w-[150px] border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-left font-medium text-[var(--ink-soft)]">
+                    <th className="sticky left-0 top-0 z-20 border-b border-r max-sm:w-[72px] sm:min-w-[150px] border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-left font-medium text-[var(--ink-soft)]">
                       พนักงาน
                     </th>
                     {visible.map((i) => {
@@ -227,13 +247,15 @@ export function TeamLeaveRoster({ events, range }: { events: CalendarEvent[]; ra
                   {rows.map((r) => (
                     <tr key={r.userId}>
                       <td
-                        className="sticky left-0 z-10 max-w-[92px] border-b border-r border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-xs sm:max-w-none sm:whitespace-nowrap"
+                        className="sticky left-0 z-10 max-w-[72px] whitespace-nowrap border-b border-r border-[var(--line)] bg-[var(--bg)] px-1.5 py-1 text-xs sm:max-w-none sm:px-2"
                         title={r.user?.name}
                       >
-                        {/* มือถือ: ชื่อยาวขึ้นบรรทัดใหม่ได้ 2 บรรทัด (เดิมตัดเป็น "…" มือถือไม่มีชี้เมาส์ดูชื่อเต็ม) */}
-                        <span className="block break-words leading-tight max-sm:line-clamp-2">{r.user?.name ?? "—"}</span>
-                        {/* มือถือไม่มีคอลัมน์รวม — บอกยอดทั้งเดือนใต้ชื่อแทน */}
-                        <span className="block text-[10px] text-[var(--ink-soft)] sm:hidden">เดือนนี้ {r.cells.size} วัน</span>
+                        {/* มือถือ: ชื่อย่อบรรทัดเดียว + ยอดทั้งเดือนเป็นเลขเล็กต่อท้าย (ไม่มีคอลัมน์รวม) · คอม: ชื่อเต็ม */}
+                        <span className="flex items-center gap-1 sm:hidden">
+                          <span className="min-w-0 truncate">{r.short}</span>
+                          <span className="shrink-0 text-[10px] tabular-nums text-[var(--ink-soft)]">{r.cells.size}</span>
+                        </span>
+                        <span className="hidden sm:inline">{r.user?.name ?? "—"}</span>
                       </td>
                       {visible.map((i) => {
                         const d = days[i]!;
@@ -261,8 +283,9 @@ export function TeamLeaveRoster({ events, range }: { events: CalendarEvent[]; ra
                 </tbody>
                 <tfoot>
                   <tr>
-                    <td className="sticky bottom-0 left-0 z-20 border-r border-t border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-xs text-[var(--ink-soft)]">
-                      หยุดกี่คน
+                    <td className="sticky bottom-0 left-0 z-20 border-r border-t border-[var(--line)] bg-[var(--bg)] px-1.5 py-1 text-xs text-[var(--ink-soft)] sm:px-2">
+                      <span className="sm:hidden">หยุด</span>
+                      <span className="hidden sm:inline">หยุดกี่คน</span>
                     </td>
                     {visible.map((i) => perDay[i]!).map((n, i) => (
                       <td
