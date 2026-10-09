@@ -38,6 +38,7 @@ import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachme
 import { useTaskReviewSettingsStore } from "@/modules/report_task/store/task-review-settings-store";
 import { useReminderSettingsStore, defaultReminderSettings } from "@/modules/report_task/store/reminder-settings-store";
 import { useAiInsightSettingsStore } from "@/modules/report_task/store/ai-insight-settings-store";
+import { ReportOutboxReconciler } from "@/modules/report_task/lib/report-outbox";
 
 /**
  * Two kinds of state get hydrated here:
@@ -243,6 +244,8 @@ export function StoreHydrator() {
         // render. See normalizeReportFeedSlice for the full reasoning.
         apply={(s, slice) => ({ ...s, ...normalizeReportFeedSlice(slice), loaded: true })}
       />
+      {/* โพสต์ที่กดส่งแล้วแต่หน้าโหลดใหม่ตัดกลางก่อนถึงเซิร์ฟเวอร์ — ใส่กลับแล้วบันทึกให้ (lib/report-outbox.ts) */}
+      <ReportOutboxReconciler />
       <ServerStoreSync
         apiKey="report-tags"
         pollMs={SLOW_POLL_MS}

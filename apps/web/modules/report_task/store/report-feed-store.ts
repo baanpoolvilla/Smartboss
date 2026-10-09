@@ -10,6 +10,7 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { uuid } from "@/modules/report_task/lib/uuid";
 import { legacyRoundsFromCutoffs } from "@/modules/report_task/lib/submission-rounds";
 import { submissionRoundChangeNotices } from "@/modules/report_task/lib/submission-round-notify";
+import { forgetUnsentPost, rememberUnsentPost } from "@/modules/report_task/lib/report-outbox-storage";
 
 /** Rooms created at/after this pick their `feedViewMode` once in the
  * create-room dialog and can't change it afterward (see that field's own
@@ -790,6 +791,8 @@ export const useReportFeedStore = create<ReportFeedStore>()(
             },
           ],
         }));
+        // เก็บไว้ในเครื่องจนกว่าจะถึงเซิร์ฟเวอร์ — หน้าโหลดใหม่ตัดกลาง (หลัง deploy) แล้วโพสต์หาย = ถูกหักว่าไม่ส่ง
+        rememberUnsentPost(get().posts.find((p) => p.id === postId));
         const actorName = getUser(authorId)?.name ?? "มีคน";
         if (mentionedUserIds.length > 0) {
           useNotificationStore.getState().notifyMany(mentionedUserIds, authorId, `${actorName} แท็กคุณในโพสต์ "${data.title}"`, undefined, link, topic?.name);
@@ -880,7 +883,10 @@ export const useReportFeedStore = create<ReportFeedStore>()(
             .notifyMany(everyoneRecipients, authorId, `${actorName} แท็ก @ทุกคน ในโพสต์ "${title}"`, undefined, link, topic?.name);
         }
       },
-      removePost: (id) => set((s) => ({ posts: s.posts.filter((p) => p.id !== id) })),
+      removePost: (id) => {
+        forgetUnsentPost(id); // ลบเอง = ไม่ต้องกู้กลับตอนโหลดหน้าใหม่
+        set((s) => ({ posts: s.posts.filter((p) => p.id !== id) }));
+      },
       setPostLinkedTask: (postId, taskId) =>
         set((s) => ({ posts: s.posts.map((p) => (p.id === postId ? { ...p, linkedTaskId: taskId } : p)) })),
       setImageAlbum: (postId, imageId, albumId) =>
