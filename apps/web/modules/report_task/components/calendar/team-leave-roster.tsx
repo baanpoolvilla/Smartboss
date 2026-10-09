@@ -187,10 +187,11 @@ export function TeamLeaveRoster({ events, range }: { events: CalendarEvent[]; ra
               </div>
             )}
             <div ref={scrollRef} className="overflow-x-auto overscroll-x-contain rounded-lg border border-[var(--line)]">
-              <table className="w-full border-collapse text-[11px]">
+              {/* มือถือ: table-fixed ให้ 7 วันกว้างเท่ากัน — ตารางแบบปกติให้ช่องที่มีของกว้างกว่า วันที่ไม่มีใครหยุดถูกบีบ */}
+              <table className="w-full border-collapse text-[11px] max-sm:table-fixed">
                 <thead>
                   <tr>
-                    <th className="sticky left-0 z-10 min-w-[92px] border-b border-r sm:min-w-[150px] border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-left font-medium text-[var(--ink-soft)]">
+                    <th className="sticky left-0 z-10 min-w-[92px] border-b border-r max-sm:w-[92px] sm:min-w-[150px] border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-left font-medium text-[var(--ink-soft)]">
                       พนักงาน
                     </th>
                     {visible.map((i) => {
