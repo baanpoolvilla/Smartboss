@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { schema, type Tx } from '@workforce/db';
 import { and, asc, desc, eq, gt, inArray, sql, type SQL } from 'drizzle-orm';
+import { capturedOnLocalDates } from '../attendance/local-date';
 
 export interface DeviceAuthLookup {
   tenantId: string;
@@ -34,8 +35,7 @@ export class DeviceRepository {
     query: { from: string; to: string; employmentId?: string; limit: number },
   ): Promise<Record<string, unknown>[]> {
     const filters: SQL[] = [
-      sql`${schema.rawTimeEvents.capturedAt} >= ${`${query.from}T00:00:00Z`}`,
-      sql`${schema.rawTimeEvents.capturedAt} <= ${`${query.to}T23:59:59Z`}`,
+      capturedOnLocalDates(query.from, query.to),
     ];
     if (query.employmentId !== undefined) {
       filters.push(eq(schema.rawTimeEvents.employmentId, query.employmentId));

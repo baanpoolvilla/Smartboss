@@ -483,6 +483,28 @@ describe('daily timeline', () => {
   });
 });
 
+describe('day boundary is the local date, not UTC', () => {
+  // เกิดจริง 2026-10-09: สแกนเข้า 06:43 น. (= 23:43Z ของวันก่อน) กระดาน "การลงเวลาวันนี้" ขึ้นขาดงาน
+  // เพราะกรองวันด้วยเวลา UTC สแกนนั้นไปโผล่ในกระดานของเมื่อวานแทน — รายงานรายเดือนขึ้นถูก สองหน้าไม่ตรงกัน
+  it('counts a 06:43 Bangkok scan on that day in the board and the timeline', async () => {
+    const employmentId = await createEmployment('สแกนเช้ามืด');
+    await assignPattern(employmentId, dayShiftId);
+    await addEvent(employmentId, '2026-08-06T23:43:00Z', 'AUTO'); // 7 ส.ค. 06:43 น.
+
+    const board = await call(harness, 'GET', '/time-event-board?date=2026-08-07', { token: hrToken });
+    const boardItems = board.body['items'] as { employment_id: string; status: string }[];
+    expect(boardItems.find((i) => i.employment_id === employmentId)?.status).toBe('ON_TIME');
+
+    const prevBoard = await call(harness, 'GET', '/time-event-board?date=2026-08-06', { token: hrToken });
+    const prevItems = prevBoard.body['items'] as { employment_id: string }[];
+    expect(prevItems.some((i) => i.employment_id === employmentId)).toBe(false);
+
+    const timeline = await call(harness, 'GET', '/time-events?date=2026-08-07', { token: hrToken });
+    const timelineItems = timeline.body['items'] as { employment_id: string }[];
+    expect(timelineItems.some((i) => i.employment_id === employmentId)).toBe(true);
+  });
+});
+
 describe('roster board', () => {
   it('does not apply a draft roster and applies it after publishing', async () => {
     const employmentId = await createEmployment('ตารางเวร');

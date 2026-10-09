@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { schema, type Tx } from '@workforce/db';
 import { and, asc, desc, eq, gte, inArray, isNull, lte, or, sql, type SQL } from 'drizzle-orm';
+import { capturedOnLocalDates } from './local-date';
 
 /**
  * ตัดการลงเวลาที่ HR กด "ไม่นับรายการนี้" (ผลตรวจ REJECTED ใน mobile_risk_assessments) ออกจากกระดาน/
@@ -62,8 +63,7 @@ export class AttendanceRepository {
       .innerJoin(schema.people, eq(schema.people.id, schema.employments.personId))
       .where(
         and(
-          sql`${schema.rawTimeEvents.capturedAt} >= ${`${workDate}T00:00:00Z`}`,
-          sql`${schema.rawTimeEvents.capturedAt} <= ${`${workDate}T23:59:59Z`}`,
+          capturedOnLocalDates(workDate, workDate),
           sql`${schema.rawTimeEvents.employmentId} is not null`,
           // แถวที่ถูกกักไว้ยังไม่ผ่านการตรวจ ไม่ควรโผล่บนกระดานที่ทุกคนเห็น
           eq(schema.rawTimeEvents.status, 'ACCEPTED'),
@@ -136,8 +136,7 @@ export class AttendanceRepository {
       .innerJoin(schema.people, eq(schema.people.id, schema.employments.personId))
       .where(
         and(
-          sql`${schema.rawTimeEvents.capturedAt} >= ${`${workDate}T00:00:00Z`}`,
-          sql`${schema.rawTimeEvents.capturedAt} <= ${`${workDate}T23:59:59Z`}`,
+          capturedOnLocalDates(workDate, workDate),
           sql`${schema.rawTimeEvents.employmentId} is not null`,
           notRejectedByHr(),
         ),
