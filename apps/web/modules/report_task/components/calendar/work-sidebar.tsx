@@ -19,10 +19,38 @@ import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import { canManage, canSeeTodoOf } from "@/modules/report_task/lib/directory";
 import { canSeeTask, canSeeTaskOnCalendar, canSeeMeetingOnCalendar } from "@/modules/report_task/lib/permissions";
 import { cn } from "@/modules/report_task/lib/utils";
-import { User, Check, Plus, CalendarOff } from "lucide-react";
+import { User, Check, Plus, CalendarOff, CalendarDays } from "lucide-react";
+import { useEffect, useState } from "react";
 import type { CalendarEvent, Task, TodoItem } from "@/modules/report_task/types";
 
 /** Right rail for the work calendar: the visible range's tasks (by due date) + meetings. */
+/**
+ * บริษัทใช้ "วันหยุดแบบสะสม" ไหม (มีประเภทลาที่ได้สิทธิ์จากวันหยุดบริษัท — ระบบบุคคล accrues_from_holidays)
+ * แบบสะสม: วันหยุดตามปฏิทินไม่ได้หยุดจริง วันนั้นทำงานปกติ แล้วได้สิทธิ์ Holiday ไปเลือกหยุดวันอื่น
+ * แบบหยุดตามวัน: ทุกคนหยุดวันนั้นเลย · null = ยังไม่รู้/อ่านไม่ได้ (ไม่ขึ้นคำอธิบาย)
+ * ดึงครั้งเดียวต่อการเปิดหน้า (ใช้ endpoint เดียวกับหน้าต่างยื่นลา)
+ */
+let accrualCache: Promise<boolean | null> | null = null;
+function useHolidayAccrual(): boolean | null {
+  const [value, setValue] = useState<boolean | null>(null);
+  useEffect(() => {
+    accrualCache ??= fetch("/api/report-task/hr/leave-context")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { leaveTypes?: { availableByMonth?: unknown }[] } | null) =>
+        d?.leaveTypes ? d.leaveTypes.some((t) => t.availableByMonth !== undefined) : null
+      )
+      .catch(() => null);
+    let alive = true;
+    void accrualCache.then((v) => {
+      if (alive) setValue(v);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return value;
+}
+
 export function WorkSidebar({
   range,
   onOpenTask,
@@ -295,6 +323,11 @@ export function WorkSidebar({
       return s0 < rangeEndYmd && (s0 >= rangeStartYmd || (e.end ?? "").slice(0, 10) > rangeStartYmd);
     })
     .sort((a, b) => a.start.localeCompare(b.start));
+  // แยกวันหยุดบริษัทตามปฏิทินออกจากวันหยุด/ลาที่ลงเอง — รวมกันแล้วงง ("ลงไว้แค่ 6 แต่ขึ้น 8")
+  // และสองอย่างมีผลต่างกัน (แบบสะสม วันหยุดปฏิทินไม่ได้หยุดจริง — ดู useHolidayAccrual)
+  const periodHolidays = periodSchedule.filter((e) => e.type === "holiday");
+  const periodLeave = periodSchedule.filter((e) => e.type !== "holiday");
+  const holidayAccrual = useHolidayAccrual();
   const scheduleHeading = `${scheduleSeeAll ? "วันหยุด · ลาของทีม" : "วันหยุด · ลาของฉัน"}${period}`;
 
   return (
@@ -336,9 +369,9 @@ export function WorkSidebar({
             <CardTitle className="text-base font-semibold flex items-center justify-between gap-2">
               <span className="flex items-center gap-1.5">
                 <CalendarOff className="h-3.5 w-3.5 text-[var(--ink-soft)]" /> {scheduleHeading}
-                {periodSchedule.length > 0 && (
+                {periodLeave.length > 0 && (
                   <span className="text-xs font-normal text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2 py-0.5">
-                    {periodSchedule.length} รายการ
+                    {periodLeave.length} รายการ
                   </span>
                 )}
               </span>
@@ -346,8 +379,8 @@ export function WorkSidebar({
             <p className="text-xs text-[var(--ink-soft)]">{rangeLabel(range)}</p>
           </CardHeader>
           <CardContent className="space-y-1.5 max-h-80 overflow-y-auto">
-            {periodSchedule.length === 0 && <p className="text-sm text-[var(--ink-soft)]">ไม่มีวันหยุดหรือวันลา{period}</p>}
-            {periodSchedule.map((e) => {
+            {periodLeave.length === 0 && <p className="text-sm text-[var(--ink-soft)]">ไม่มีวันหยุดหรือวันลา{period}</p>}
+            {periodLeave.map((e) => {
               const owner = scheduleSeeAll && e.userId ? getUser(e.userId) : undefined;
               return (
                 <div
@@ -368,6 +401,40 @@ export function WorkSidebar({
                 </div>
               );
             })}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* วันหยุดบริษัทตามปฏิทิน — แยกจากวันหยุด/ลาที่ลงเอง ไม่นับรวมกัน */}
+      {scheduleEvents && periodHolidays.length > 0 && (
+        <Card className="border-[var(--line)] shadow-none">
+          <CardHeader>
+            <CardTitle className="text-base font-semibold flex items-center gap-1.5">
+              <CalendarDays className="h-3.5 w-3.5 text-[var(--ink-soft)]" /> วันหยุดตามปฏิทิน{period}
+              <span className="text-xs font-normal text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2 py-0.5">
+                {periodHolidays.length} วัน
+              </span>
+            </CardTitle>
+            {holidayAccrual === true && (
+              <p className="text-xs text-[var(--ink-soft)]">
+                แสดงให้รู้เท่านั้น — บริษัทใช้แบบสะสม วันนี้ยังทำงานปกติ และได้สิทธิ์ Holiday ไว้เลือกหยุดวันอื่น
+              </p>
+            )}
+            {holidayAccrual === false && <p className="text-xs text-[var(--ink-soft)]">วันหยุดบริษัท — ทุกคนหยุดวันนี้ ไม่ต้องลงเอง</p>}
+          </CardHeader>
+          <CardContent className="space-y-1.5">
+            {periodHolidays.map((e) => (
+              <div
+                key={e.id}
+                className="flex items-center gap-2.5 rounded-md px-2 py-1.5"
+                style={{ borderLeft: `3px solid ${e.colorHint ?? "var(--line)"}`, backgroundColor: e.colorHint ? `${e.colorHint}14` : undefined }}
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{e.title}</p>
+                  <p className="text-xs text-[var(--ink-soft)]">{formatDate(e.start)}</p>
+                </div>
+              </div>
+            ))}
           </CardContent>
         </Card>
       )}
