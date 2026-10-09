@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Table2 } from "lucide-react";
 import { getUser } from "@/modules/report_task/lib/directory";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -94,6 +94,19 @@ export function TeamLeaveRoster({ events, range }: { events: CalendarEvent[]; ra
   const busy = Math.max(2, Math.ceil(rows.length / 2));
   const today = ymd(new Date());
 
+  // มือถือเห็นได้ไม่กี่วันต่อจอ — เปิดมาให้เลื่อนไปที่วันนี้เอง (เว้นวันก่อนหน้าไว้นิดหน่อย) ไม่ต้องปัดหา
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const todayIndex = days.findIndex((d) => ymd(d) === today);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!open || !el || todayIndex < 0) return;
+    const cell = el.querySelector<HTMLElement>(`[data-day="${todayIndex}"]`);
+    const nameCol = el.querySelector<HTMLElement>("th");
+    if (cell && cell.offsetLeft + cell.offsetWidth > el.clientWidth) {
+      el.scrollLeft = Math.max(0, cell.offsetLeft - (nameCol?.offsetWidth ?? 0) - cell.offsetWidth * 2);
+    }
+  }, [open, todayIndex, rows.length]);
+
   return (
     <section className="rounded-xl border border-[var(--line)] bg-[var(--bg)]">
       <button type="button" onClick={toggle} className="flex w-full items-center gap-2 px-4 py-3 text-left" aria-expanded={open}>
@@ -118,11 +131,11 @@ export function TeamLeaveRoster({ events, range }: { events: CalendarEvent[]; ra
           {rows.length === 0 ? (
             <p className="py-6 text-center text-sm text-[var(--ink-soft)]">ช่วงนี้ไม่มีใครลงวันหยุดหรือลา</p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-[var(--line)]">
+            <div ref={scrollRef} className="overflow-x-auto overscroll-x-contain rounded-lg border border-[var(--line)]">
               <table className="w-full border-collapse text-[11px]">
                 <thead>
                   <tr>
-                    <th className="sticky left-0 z-10 min-w-[150px] border-b border-r border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-left font-medium text-[var(--ink-soft)]">
+                    <th className="sticky left-0 z-10 min-w-[92px] border-b border-r sm:min-w-[150px] border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-left font-medium text-[var(--ink-soft)]">
                       พนักงาน
                     </th>
                     {days.map((d, i) => {
@@ -131,6 +144,7 @@ export function TeamLeaveRoster({ events, range }: { events: CalendarEvent[]; ra
                       return (
                         <th
                           key={i}
+                          data-day={i}
                           title={ph}
                           className={cn(
                             "min-w-[24px] border-b border-[var(--line)] px-0.5 py-1 text-center font-normal leading-tight",
@@ -151,7 +165,10 @@ export function TeamLeaveRoster({ events, range }: { events: CalendarEvent[]; ra
                 <tbody>
                   {rows.map((r) => (
                     <tr key={r.userId}>
-                      <td className="sticky left-0 z-10 whitespace-nowrap border-b border-r border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-xs">
+                      <td
+                        className="sticky left-0 z-10 max-w-[92px] truncate whitespace-nowrap border-b border-r border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-xs sm:max-w-none"
+                        title={r.user?.name}
+                      >
                         {r.user?.name ?? "—"}
                       </td>
                       {days.map((d, i) => {
