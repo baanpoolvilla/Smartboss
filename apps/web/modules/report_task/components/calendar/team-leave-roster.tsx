@@ -186,12 +186,16 @@ export function TeamLeaveRoster({ events, range }: { events: CalendarEvent[]; ra
                 </button>
               </div>
             )}
-            <div ref={scrollRef} className="overflow-x-auto overscroll-x-contain rounded-lg border border-[var(--line)]">
+            <div
+              ref={scrollRef}
+              // คนเยอะ: สูงคงที่ เลื่อนขึ้นลงในตาราง (หัววัน + แถว "หยุดกี่คน" ค้างไว้) ไม่ยืดยาวลงไปทั้งหน้า
+              className="max-h-[60vh] overflow-auto overscroll-contain rounded-lg border border-[var(--line)] sm:max-h-[440px]"
+            >
               {/* มือถือ: table-fixed ให้ 7 วันกว้างเท่ากัน — ตารางแบบปกติให้ช่องที่มีของกว้างกว่า วันที่ไม่มีใครหยุดถูกบีบ */}
               <table className="w-full border-collapse text-[11px] max-sm:table-fixed">
                 <thead>
                   <tr>
-                    <th className="sticky left-0 z-10 min-w-[92px] border-b border-r max-sm:w-[92px] sm:min-w-[150px] border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-left font-medium text-[var(--ink-soft)]">
+                    <th className="sticky left-0 top-0 z-20 min-w-[92px] border-b border-r max-sm:w-[92px] sm:min-w-[150px] border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-left font-medium text-[var(--ink-soft)]">
                       พนักงาน
                     </th>
                     {visible.map((i) => {
@@ -204,7 +208,7 @@ export function TeamLeaveRoster({ events, range }: { events: CalendarEvent[]; ra
                           data-day={i}
                           title={ph}
                           className={cn(
-                            "min-w-[24px] border-b border-[var(--line)] px-0.5 py-1 text-center font-normal leading-tight",
+                            "sticky top-0 z-[5] min-w-[24px] border-b border-[var(--line)] bg-[var(--bg)] px-0.5 py-1 text-center font-normal leading-tight",
                             we && "bg-[var(--bg-soft)]",
                             ph ? "font-bold text-[#3b6fd8]" : "text-[var(--ink-soft)]",
                             ymd(d) === today && "bg-[var(--brand-green)]/10"
@@ -216,17 +220,18 @@ export function TeamLeaveRoster({ events, range }: { events: CalendarEvent[]; ra
                         </th>
                       );
                     })}
-                    <th className="hidden border-b border-l border-[var(--line)] px-2 py-1 text-center font-medium text-[var(--ink-soft)] sm:table-cell">รวม</th>
+                    <th className="sticky top-0 z-[5] hidden border-b border-l border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-center font-medium text-[var(--ink-soft)] sm:table-cell">รวม</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((r) => (
                     <tr key={r.userId}>
                       <td
-                        className="sticky left-0 z-10 max-w-[92px] truncate whitespace-nowrap border-b border-r border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-xs sm:max-w-none"
+                        className="sticky left-0 z-10 max-w-[92px] border-b border-r border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-xs sm:max-w-none sm:whitespace-nowrap"
                         title={r.user?.name}
                       >
-                        {r.user?.name ?? "—"}
+                        {/* มือถือ: ชื่อยาวขึ้นบรรทัดใหม่ได้ 2 บรรทัด (เดิมตัดเป็น "…" มือถือไม่มีชี้เมาส์ดูชื่อเต็ม) */}
+                        <span className="block break-words leading-tight max-sm:line-clamp-2">{r.user?.name ?? "—"}</span>
                         {/* มือถือไม่มีคอลัมน์รวม — บอกยอดทั้งเดือนใต้ชื่อแทน */}
                         <span className="block text-[10px] text-[var(--ink-soft)] sm:hidden">เดือนนี้ {r.cells.size} วัน</span>
                       </td>
@@ -256,21 +261,21 @@ export function TeamLeaveRoster({ events, range }: { events: CalendarEvent[]; ra
                 </tbody>
                 <tfoot>
                   <tr>
-                    <td className="sticky left-0 z-10 border-r border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-xs text-[var(--ink-soft)]">
+                    <td className="sticky bottom-0 left-0 z-20 border-r border-t border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-xs text-[var(--ink-soft)]">
                       หยุดกี่คน
                     </td>
                     {visible.map((i) => perDay[i]!).map((n, i) => (
                       <td
                         key={i}
                         className={cn(
-                          "py-1 text-center tabular-nums",
+                          "sticky bottom-0 z-[5] border-t border-[var(--line)] bg-[var(--bg)] py-1 text-center tabular-nums",
                           n >= busy ? "bg-[#fff4e0] font-bold text-[#b45309]" : "text-[var(--ink-soft)]"
                         )}
                       >
                         {n || ""}
                       </td>
                     ))}
-                    <td className="hidden sm:table-cell" />
+                    <td className="sticky bottom-0 z-[5] hidden border-t border-[var(--line)] bg-[var(--bg)] sm:table-cell" />
                   </tr>
                 </tfoot>
               </table>
