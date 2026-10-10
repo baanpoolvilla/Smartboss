@@ -2,8 +2,9 @@
 
 import { SubmitButton } from "./submit-button";
 
-import { useState } from "react";
+import { useActionState, useState } from "react";
 import { Info, Receipt, MinusCircle } from "lucide-react";
+import type { ExpenseFormState } from "@/app/(shell)/maintenance/expenses/actions";
 import { Card } from "@smartboss/ui/components/card";
 import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 
@@ -17,14 +18,19 @@ export interface WoOption {
 }
 
 /** ฟอร์มค่าใช้จ่าย — port ตรงจาก expense_form_screen.dart */
+type ExpenseAction = (prev: ExpenseFormState, formData: FormData) => Promise<ExpenseFormState>;
+const EMPTY: ExpenseFormState = {};
+
 export function ExpenseForm({
-  action,
+  saveAction,
+  noExpenseAction,
   workOrders,
   pmSchedules,
   lockedWorkOrderId,
   lockedPmScheduleId,
 }: {
-  action: (formData: FormData) => void | Promise<void>;
+  saveAction: ExpenseAction;
+  noExpenseAction: ExpenseAction;
   workOrders: WoOption[];
   pmSchedules: { id: string; title: string }[];
   lockedWorkOrderId?: string;
@@ -36,6 +42,11 @@ export function ExpenseForm({
   );
   const [woId, setWoId] = useState(lockedWorkOrderId ?? "");
   const [receiptName, setReceiptName] = useState<string | null>(null);
+  // สองปุ่มเป็นคนละ action — ไม่ฝากค่าไว้กับตัวปุ่ม (formAction + name/value ค่าไม่ถูกส่งมา)
+  const [saveState, save] = useActionState(saveAction, EMPTY);
+  const [noExpState, saveNoExpense] = useActionState(noExpenseAction, EMPTY);
+  const [lastPressed, setLastPressed] = useState<"save" | "none">("save");
+  const error = lastPressed === "none" ? noExpState.error : saveState.error;
 
   const propertyCount =
     workOrders.find((w) => w.id === woId)?.propertyCount ?? 0;
@@ -43,7 +54,9 @@ export function ExpenseForm({
   return (
     <Card className="p-5">
       <PasteDropFiles label="ปล่อยเพื่อแนบรูปใบเสร็จ">
-      <form className="flex flex-col gap-4">
+      {/* action คืน { error } แบบไม่โยน (ตอบ 200 ทั้งที่ไม่สำเร็จ) — ปิด toast กลาง แสดงผลเองข้างล่าง
+          สำเร็จแล้วพาไปหน้ารายการค่าใช้จ่าย ซึ่งเห็นรายการที่เพิ่งบันทึก */}
+      <form className="flex flex-col gap-4" data-save-toast="off">
         {propertyCount > 1 && (
           <div
             className="flex items-start gap-2 rounded-[8px] p-3 text-[13px]"
@@ -169,17 +182,27 @@ export function ExpenseForm({
           </p>
         )}
 
+        {error && (
+          <p role="alert" className="rounded-(--radius) border border-(--danger) px-3 py-2 text-sm text-(--danger)">
+            ยังไม่ได้บันทึก — {error}
+          </p>
+        )}
+
         <div className="flex gap-3">
           <SubmitButton
             variant="outline"
-            formAction={action}
-            name="isNoExpense"
-            value="1"
+            formAction={saveNoExpense}
+            formNoValidate
+            onClick={() => setLastPressed("none")}
             className="flex-1"
           >
             <MinusCircle className="h-4 w-4" /> ไม่มีค่าใช้จ่าย
           </SubmitButton>
-          <SubmitButton formAction={action} className="flex-1">
+          <SubmitButton
+            formAction={save}
+            onClick={() => setLastPressed("save")}
+            className="flex-1"
+          >
             บันทึกค่าใช้จ่าย
           </SubmitButton>
         </div>

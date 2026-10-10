@@ -22,12 +22,45 @@ const schema = z.object({
   description: z.string().trim().max(1000).optional(),
 });
 
-export async function createExpenseAction(formData: FormData) {
+export type ExpenseFormState = { error?: string };
+
+/**
+ * ปุ่ม "บันทึกค่าใช้จ่าย" / "ไม่มีค่าใช้จ่าย" เป็นคนละ action กัน — เดิมใช้ action เดียว
+ * แล้วฝาก isNoExpense=1 ไว้กับตัวปุ่ม (formAction + name/value) ซึ่งค่าไม่ถูกส่งมา
+ * ปุ่ม "ไม่มีค่าใช้จ่าย" จึงถูกนับเป็นการบันทึกยอด 0 แล้วถูกทิ้ง
+ *
+ * ⚠ ห้าม `return` เงียบ ๆ เมื่อข้อมูลไม่ผ่าน — toast กลาง (components/shell/save-feedback.tsx)
+ * นับทุกคำตอบที่ไม่ error ว่า "บันทึกสำเร็จ" ผู้ใช้เลยเห็นว่าสำเร็จทั้งที่ไม่มีอะไรถูกบันทึก
+ * ต้องคืน { error } ให้ฟอร์มแสดงเสมอ (ฟอร์มปิด toast กลางไว้แล้ว)
+ */
+export async function createExpenseAction(
+  _prev: ExpenseFormState,
+  formData: FormData
+): Promise<ExpenseFormState> {
+  return saveExpense(formData, false);
+}
+
+export async function createNoExpenseAction(
+  _prev: ExpenseFormState,
+  formData: FormData
+): Promise<ExpenseFormState> {
+  return saveExpense(formData, true);
+}
+
+/** "1,500" / "฿ 1,500.50" → 1500.5 — เดิม Number("1,500") ได้ NaN แล้วถูกทิ้งเงียบ ๆ */
+function parseAmount(raw: string | undefined): number {
+  const clean = (raw ?? "").replace(/[\s,฿]/g, "");
+  return clean === "" ? NaN : Number(clean);
+}
+
+async function saveExpense(
+  formData: FormData,
+  isNoExpense: boolean
+): Promise<ExpenseFormState> {
   const s = await requireOrg();
   if (!hasPermission(s, MAINT_PERMS.expenseManage)) {
-    throw new Error("ไม่มีสิทธิ์บันทึกค่าใช้จ่าย");
+    return { error: "ไม่มีสิทธิ์บันทึกค่าใช้จ่าย" };
   }
-  const isNoExpense = formData.get("isNoExpense") === "1";
   const parsed = schema.safeParse({
     costType: formData.get("costType"),
     workOrderId: (formData.get("workOrderId") as string) || undefined,
@@ -36,7 +69,9 @@ export async function createExpenseAction(formData: FormData) {
     amount: (formData.get("amount") as string) || undefined,
     description: (formData.get("description") as string) || undefined,
   });
-  if (!parsed.success) return;
+  if (!parsed.success) {
+    return { error: "ข้อมูลไม่ครบ — ตรวจประเภทค่าใช้จ่ายและรายละเอียด (ไม่เกิน 1,000 ตัวอักษร)" };
+  }
   const d = parsed.data;
 
   let propertyIds: (string | null)[] = [null];
@@ -44,19 +79,27 @@ export async function createExpenseAction(formData: FormData) {
   let pmScheduleId: string | null = null;
 
   if (d.costType === "work_order") {
-    if (!d.workOrderId) return;
-    workOrderId = d.workOrderId;
+    if (!d.workOrderId) return { error: "กรุณาเลือกใบงาน" };
     const wo = await getWorkOrder(s.orgId, d.workOrderId);
-    if (wo) propertyIds = [wo.propertyId, ...wo.additionalPropertyIds];
+    if (!wo) return { error: "ไม่พบใบงานนี้ — อาจถูกลบไปแล้ว" };
+    workOrderId = wo.id;
+    propertyIds = [wo.propertyId, ...wo.additionalPropertyIds];
   } else {
-    if (!d.pmScheduleId) return;
-    pmScheduleId = d.pmScheduleId;
+    if (!d.pmScheduleId) return { error: "กรุณาเลือกรายการ PM" };
     const pm = await getPmSchedule(s.orgId, d.pmScheduleId);
-    propertyIds = [pm?.propertyId ?? null];
+    if (!pm) return { error: "ไม่พบรายการ PM นี้ — อาจถูกลบไปแล้ว" };
+    pmScheduleId = pm.id;
+    propertyIds = [pm.propertyId ?? null];
   }
 
-  const amount = isNoExpense ? 0 : Number(d.amount ?? "0");
-  if (!isNoExpense && (!Number.isFinite(amount) || amount <= 0)) return;
+  const amount = isNoExpense ? 0 : parseAmount(d.amount);
+  if (!isNoExpense && (!Number.isFinite(amount) || amount <= 0)) {
+    return {
+      error: d.amount
+        ? `จำนวนเงิน "${d.amount}" ไม่ถูกต้อง — ใส่เป็นตัวเลขมากกว่า 0`
+        : "กรุณาใส่จำนวนเงิน (ถ้าไม่มีค่าใช้จ่าย กดปุ่ม \"ไม่มีค่าใช้จ่าย\")",
+    };
+  }
 
   // แนบรูปใบเสร็จ (ข้ามเมื่อบันทึกว่า "ไม่มีค่าใช้จ่าย" เหมือนของเดิม)
   const file = formData.get("receipt");

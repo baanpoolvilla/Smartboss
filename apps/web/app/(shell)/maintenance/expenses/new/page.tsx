@@ -6,7 +6,7 @@ import { listWorkOrders } from "@/modules/maintenance/data/work-orders";
 import { listActivePmSchedules } from "@/modules/maintenance/data/pm";
 import { ExpenseForm } from "@/modules/maintenance/components/expense-form";
 import { AppScaffold } from "@/modules/maintenance/components/app-scaffold";
-import { createExpenseAction } from "../actions";
+import { createExpenseAction, createNoExpenseAction } from "../actions";
 
 export default async function NewExpensePage({
   searchParams,
@@ -43,7 +43,8 @@ export default async function NewExpensePage({
       backHref="/maintenance/expenses"
     >
       <ExpenseForm
-        action={createExpenseAction}
+        saveAction={createExpenseAction}
+        noExpenseAction={createNoExpenseAction}
         workOrders={orders.map((o) => ({
           id: o.id,
           title: o.title,
