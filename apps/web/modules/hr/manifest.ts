@@ -24,8 +24,12 @@ export const hrManifest: ModuleManifest = {
   basePath: "/hr",
   icon: "Users",
   menus: [
+    // เมนูแรก = หน้าที่เปิดมาเจอเมื่อกดเข้าระบบบุคคล (app/(shell)/page.tsx's REDIRECT_ONLY_BASES)
+    // ลงเวลาของตัวเองอยู่ที่นี่ที่เดียว — เอาออกจากหน้าแรกของแอปแล้ว ("ให้ไปอยู่ใน HR เป็นหัวข้อนึง")
+    { label: "ลงเวลา", path: "/hr/clock", permission: HR_PERMS.access, icon: "Clock" },
     {
-      label: "หน้าหลัก",
+      // เดิมชื่อ "หน้าหลัก" — ซ้ำกับปุ่ม "หน้าหลัก" (กลับหน้าแรกของแอป) ที่อยู่ข้างกันบนแถบล่าง
+      label: "ภาพรวม",
       path: "/hr",
       permission: HR_PERMS.access,
       icon: "CalendarClock",
@@ -38,8 +42,6 @@ export const hrManifest: ModuleManifest = {
           "ml-auto flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-(--danger) px-1 text-[10px] font-bold text-white",
       }),
     },
-    // ไม่มีเมนู "ลงเวลา" ที่นี่โดยตั้งใจ — เข้าจากหน้าแรกที่เดียว (ปุ่มกลางแถบล่าง / ไอคอนบนคอม)
-    // "มีแค่ที่เดียวพอ" — หน้าลงเวลาอยู่ที่ /clock (app/(shell)/clock/page.tsx)
     // ลงเวลาจากมือถือที่ GPS ผ่านแต่มีข้อสังเกต — นับเวลาแล้ว มีไว้ให้ HR เห็นแล้วไปถามเอง
     { label: "ลงเวลาผิดปกติ", path: "/hr/checkin-review", permission: HR_PERMS.employeeManage, icon: "ShieldCheck" },
     { label: "พนักงาน", path: "/hr/employees", permission: HR_PERMS.employeeView, icon: "Users" },

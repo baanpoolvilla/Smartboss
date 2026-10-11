@@ -7,16 +7,10 @@ import { renderTodayTab } from "./home-today";
 import { renderCorrectionsTab } from "./home-corrections";
 import { renderCalendarTab } from "./home-calendar";
 import { renderOvertimeTab } from "./home-overtime";
-import { prisma } from "@smartboss/database";
-import { APP_CLOCK_ENABLED } from "@/modules/hr/lib/app-clock";
-import { Today } from "@/app/m/today";
 
 /** notifTypes = แจ้งเตือนที่ลิงก์มาแท็บนี้ (ดู derive.ts) — ตัวเลขแดงบนแท็บบอกว่าเลข
  * บนเมนู "หน้าหลัก" มาจากแท็บไหน ("เปิดมาไม่รู้เลยมาจากอันไหน") */
 const TABS = [
-  // หน้าแรกของระบบบุคคล = ลงเวลาของตัวเอง ("หน้าลงเวลาให้ไปอยู่ที่หน้าแรกของ HR เลย ทั้งมือถือและคอม")
-  // กระดานลงเวลาของทั้งทีมย้ายไปแท็บ "วันนี้" (/hr?tab=today)
-  { id: "clock", label: "ลงเวลา", notifTypes: [] },
   { id: "today", label: "วันนี้", notifTypes: ["hr_leave_decided", "hr_attendance_correction_decided", "hr_overtime_decided"] },
   { id: "corrections", label: "คำขอแก้เวลา", notifTypes: ["hr_attendance_correction_submitted"] },
   { id: "overtime", label: "OT รออนุมัติ", notifTypes: ["hr_overtime_pending"] },
@@ -33,7 +27,6 @@ type TabId = (typeof TABS)[number]["id"];
 const MANAGE_TABS: readonly TabId[] = ["overtime"];
 
 const TAB_TITLE: Record<TabId, string> = {
-  clock: "ลงเวลา",
   today: "การลงเวลา",
   corrections: "คำขอแก้เวลา",
   overtime: "OT รออนุมัติ",
@@ -63,11 +56,8 @@ export default async function HrOverviewPage({
   const canManage = hasPermission(session, HR_PERMS.employeeManage);
 
   const sp = await searchParams;
-  // ไม่ระบุแท็บ = หน้าลงเวลา · ?date= (เลื่อนวันบนกระดานทีม/ลิงก์สายของลูกทีม) = แท็บ "วันนี้"
-  const fallback: TabId = sp.date || !APP_CLOCK_ENABLED ? "today" : "clock";
-  const requested = TABS.some((t) => t.id === sp.tab) ? (sp.tab as TabId) : fallback;
-  const tab: TabId =
-    MANAGE_TABS.includes(requested) && !canManage ? "today" : requested === "clock" && !APP_CLOCK_ENABLED ? "today" : requested;
+  const requested = TABS.some((t) => t.id === sp.tab) ? (sp.tab as TabId) : "today";
+  const tab: TabId = MANAGE_TABS.includes(requested) && !canManage ? "today" : requested;
 
   return (
     <HrPage
@@ -79,10 +69,10 @@ export default async function HrOverviewPage({
       load={async () => {
         const tabBar = (
           <div className={`${tab === "calendar" ? "mb-2" : "mb-4"} flex gap-1 border-b border-(--line)`}>
-            {TABS.filter((t) => (!MANAGE_TABS.includes(t.id) || canManage) && (t.id !== "clock" || APP_CLOCK_ENABLED)).map((t) => (
+            {TABS.filter((t) => !MANAGE_TABS.includes(t.id) || canManage).map((t) => (
               <Link
                 key={t.id}
-                href={t.id === "clock" ? "/hr" : `/hr?tab=${t.id}`}
+                href={t.id === "today" ? "/hr" : `/hr?tab=${t.id}`}
                 className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium ${
                   tab === t.id
                     ? "border-(--app-strong,var(--ink)) text-(--ink)"
@@ -101,15 +91,7 @@ export default async function HrOverviewPage({
         );
 
         let body: React.ReactNode;
-        if (tab === "clock") {
-          // หน้าเดียวกับ /clock และ LINE Mini App (app/m/today.tsx) — คอมเห็น QR ไปลงเวลาบนมือถือแทนปุ่ม
-          const me = await prisma.user.findUnique({ where: { id: session.userId }, select: { name: true } });
-          body = (
-            <div className="mx-auto w-full max-w-lg">
-              <Today userName={me?.name ?? ""} showFriendHint={false} />
-            </div>
-          );
-        } else if (tab === "corrections") {
+        if (tab === "corrections") {
           body = await renderCorrectionsTab(canManage);
         } else if (tab === "overtime") {
           body = await renderOvertimeTab();
