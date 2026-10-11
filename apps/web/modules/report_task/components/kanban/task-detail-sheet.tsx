@@ -2292,13 +2292,14 @@ export function TaskDetailSheet({
                   className="max-h-48 min-h-[2.5rem] md:min-h-[4.5rem] w-full resize-none border-0 bg-transparent px-3 pt-2.5 pb-1 text-base md:text-sm shadow-none [field-sizing:content] focus-visible:ring-0"
                 />
               </div>
-              <div className="flex items-center gap-0.5 px-1.5 pb-1.5">
+              {/* ปุ่มเล็ก 28px ไม่มีช่องไฟ — ไอคอนแนบ/อิโมจิชิดกัน ไม่เปลืองที่ ("ทำไมห่างกันจัง") */}
+              <div className="flex items-center px-1.5 pb-1.5">
               <AttachMenu
                 onFiles={(files) => void handleCommentFilesSelected(files)}
                 disabled={commentUploading}
                 trigger={commentUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
                 aria-label="แนบไฟล์/รูปภาพ"
-                className="shrink-0 inline-flex items-center justify-center size-8 rounded-lg text-[var(--ink-soft)] disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground"
+                className="shrink-0 inline-flex items-center justify-center size-7 rounded-lg text-[var(--ink-soft)] disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground"
               />
               <Popover open={commentEmojiOpen} onOpenChange={setCommentEmojiOpen}>
                 <PopoverTrigger
@@ -2307,7 +2308,7 @@ export function TaskDetailSheet({
                       type="button"
                       aria-label="อิโมจิและสติกเกอร์ (Ctrl+E)"
                       title="อิโมจิและสติกเกอร์ (Ctrl+E)"
-                      className="shrink-0 inline-flex items-center justify-center size-8 rounded-lg text-[var(--ink-soft)] hover:bg-accent hover:text-accent-foreground"
+                      className="shrink-0 inline-flex items-center justify-center size-7 rounded-lg text-[var(--ink-soft)] hover:bg-accent hover:text-accent-foreground"
                     >
                       <Smile className="h-4 w-4" />
                     </button>
