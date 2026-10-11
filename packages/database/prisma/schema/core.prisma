@@ -287,7 +287,9 @@ model Notification {
 /// รูปแบบ/ความหมายของ level, overrides, since อยู่ที่ apps/web/modules/notifications/prefs.ts
 model NotificationPreference {
   userId            String    @id @map("user_id")
-  orgId             String    @map("org_id")
+  /// บริษัทของผู้ใช้ตอนบันทึก (แค่ข้อมูลประกอบ) — ค่าตั้งเป็นของ "คน" ไม่ผูกบริษัท ·
+  /// null = บัญชีระดับระบบที่ไม่สังกัดบริษัท (ผู้ดูแลระบบสูงสุด)
+  orgId             String?   @map("org_id")
   level             String    @default("all")
   overrides         Json      @default("{}")
   since             Json      @default("{}")

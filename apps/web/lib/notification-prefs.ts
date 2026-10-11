@@ -26,8 +26,14 @@ function rowToPrefs(row: { level: string; overrides: unknown; since: unknown; ba
   });
 }
 
-/** ค่าตั้งของหลายคนพร้อมกัน — คนที่ไม่มีแถว/อ่านไม่ได้ = ค่าเริ่มต้น */
-export async function loadNotificationPrefs(orgId: string, userIds: string[]): Promise<Map<string, NotifPrefs>> {
+/**
+ * ค่าตั้งของหลายคนพร้อมกัน — คนที่ไม่มีแถว/อ่านไม่ได้ = ค่าเริ่มต้น
+ *
+ * หาจาก userId อย่างเดียว (ค่าตั้งเป็นของคน ไม่ใช่ของบริษัท) — เดิมกรองด้วย orgId ของ "แจ้งเตือน" ด้วย
+ * ⇒ แจ้งเตือนข้ามบริษัท (ตั๋วแจ้งบัคของลูกค้าบริษัทอื่นที่เด้งหาทีม IT ของเรา) หาค่าตั้งไม่เจอ
+ * กลายเป็น "เปิดหมด" ทั้งที่ทีมปิดหัวข้อนั้นไว้ · orgId เก็บไว้ในพารามิเตอร์เพื่อไม่ต้องแก้ผู้เรียก
+ */
+export async function loadNotificationPrefs(_orgId: string | null, userIds: string[]): Promise<Map<string, NotifPrefs>> {
   const out = new Map<string, NotifPrefs>();
   const now = Date.now();
   const missing: string[] = [];
@@ -39,7 +45,7 @@ export async function loadNotificationPrefs(orgId: string, userIds: string[]): P
   if (missing.length === 0) return out;
   try {
     const rows = await prisma.notificationPreference.findMany({
-      where: { orgId, userId: { in: missing } },
+      where: { userId: { in: missing } },
       select: { userId: true, level: true, overrides: true, since: true, bannerDismissedAt: true },
     });
     const byId = new Map(rows.map((r) => [r.userId, rowToPrefs(r)]));
@@ -59,7 +65,7 @@ export async function loadNotificationPrefs(orgId: string, userIds: string[]): P
   return out;
 }
 
-export async function getNotificationPrefs(orgId: string, userId: string): Promise<NotifPrefs> {
+export async function getNotificationPrefs(orgId: string | null, userId: string): Promise<NotifPrefs> {
   return (await loadNotificationPrefs(orgId, [userId])).get(userId) ?? DEFAULT_PREFS;
 }
 
@@ -72,7 +78,8 @@ export async function wantsTopic(orgId: string, userId: string, topicId: string)
   }
 }
 
-export async function saveNotificationPrefs(orgId: string, userId: string, raw: unknown): Promise<NotifPrefs> {
+/** orgId = null ได้ — บัญชีผู้ดูแลระบบสูงสุดที่ไม่สังกัดบริษัทก็ตั้งค่าแจ้งเตือนของตัวเองได้ */
+export async function saveNotificationPrefs(orgId: string | null, userId: string, raw: unknown): Promise<NotifPrefs> {
   const prefs = normalizePrefs(raw);
   const data = {
     level: prefs.level,

@@ -1,6 +1,5 @@
 import { requireAuth } from "@smartboss/auth";
 import { getNotificationPrefs, saveNotificationPrefs } from "@/lib/notification-prefs";
-import { DEFAULT_PREFS } from "@/modules/notifications/prefs";
 
 export const dynamic = "force-dynamic";
 
@@ -11,8 +10,8 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const session = await requireAuth();
-    if (!session.orgId) return Response.json({ prefs: DEFAULT_PREFS });
-    return Response.json({ prefs: await getNotificationPrefs(session.orgId, session.userId) });
+    // ไม่สังกัดบริษัท (ผู้ดูแลระบบสูงสุด) ก็มีค่าตั้งของตัวเองได้ — ค่าตั้งเป็นของคน
+    return Response.json({ prefs: await getNotificationPrefs(session.orgId ?? null, session.userId) });
   } catch (err) {
     const status = (err as Error & { status?: number })?.status ?? 500;
     return Response.json({ error: "โหลดตั้งค่าแจ้งเตือนไม่สำเร็จ" }, { status });
@@ -22,9 +21,8 @@ export async function GET() {
 export async function PUT(request: Request) {
   try {
     const session = await requireAuth();
-    if (!session.orgId) return Response.json({ error: "ยังไม่ได้อยู่ในบริษัท" }, { status: 400 });
     const body = (await request.json().catch(() => null)) as { prefs?: unknown } | null;
-    const prefs = await saveNotificationPrefs(session.orgId, session.userId, body?.prefs);
+    const prefs = await saveNotificationPrefs(session.orgId ?? null, session.userId, body?.prefs);
     return Response.json({ prefs });
   } catch (err) {
     console.error("[notification-prefs] save failed", err);
