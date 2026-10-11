@@ -12,6 +12,8 @@ export interface RoomState {
   hasMore: boolean;
   /** โหลดแบบ "รอบ ๆ ข้อความหนึ่ง" (กระโดดจากผลค้นหา) — ยังมีข้อความใหม่กว่าที่ยังไม่ได้โหลด */
   detached: boolean;
+  /** โหลดจากแชทที่จำไว้ในเครื่อง (lib/offline-cache.ts) — แสดงได้ แต่เปิดห้องเมื่อไหร่ต้องดึงทั้งหน้ามาแทน */
+  fromCache?: boolean;
 }
 
 const LOCAL_SEQ = BigInt(Number.MAX_SAFE_INTEGER);
@@ -50,6 +52,8 @@ interface ChatState {
   meId: string;
   channels: ChatChannelSummary[];
   channelsLoaded: boolean;
+  /** รายการห้องตอนนี้มาจากที่จำไว้ในเครื่อง ยังไม่ใช่ของจริงจากเซิร์ฟเวอร์ */
+  channelsFromCache: boolean;
   users: Record<string, ChatUser>;
   onlineIds: Record<string, true>;
   /** คนที่หยุดวันนี้ + หยุดแบบไหน (ใบลา/วันหยุดที่อนุมัติแล้ว) — ป้ายปฏิทินบนรูปโปรไฟล์ */
@@ -95,6 +99,7 @@ export const useChatStore = create<ChatState>((set) => ({
   meId: "",
   channels: [],
   channelsLoaded: false,
+  channelsFromCache: false,
   users: {},
   onlineIds: {},
   offIds: {},
@@ -113,7 +118,7 @@ export const useChatStore = create<ChatState>((set) => ({
       return { reactionUsage: { ...s.reactionUsage, [emoji]: next } };
     }),
   setMe: (id) => set({ meId: id }),
-  setChannels: (channels) => set({ channels: sortChannels(channels), channelsLoaded: true }),
+  setChannels: (channels) => set({ channels: sortChannels(channels), channelsLoaded: true, channelsFromCache: false }),
   setUsers: (users, onlineIds, off = {}) =>
     set({
       users: Object.fromEntries(users.map((u) => [u.id, u])),

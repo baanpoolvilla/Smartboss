@@ -7,6 +7,7 @@ import { onRealtimeStatus, subscribeRealtime, type RealtimeEventMessage } from "
 import { useChatStore, type RoomMessage } from "../store/chat-store";
 import { countsAsUnread, type ChatAttachment, type ChatRealtimeEvent } from "../types";
 import * as api from "./api";
+import { restoreChatCache, startChatCachePersist } from "./offline-cache";
 
 /*
  * ลอจิกของหน้าแชทรวมไว้ที่นี่ (ไม่ใช่ในคอมโพเนนต์) — คอมโพเนนต์แค่เรียกฟังก์ชันพวกนี้
@@ -87,7 +88,9 @@ export async function openChannel(channelId: string): Promise<void> {
   markReadSoon(channelId, 0);
   void loadDetail(channelId);
   const room = s.rooms[channelId];
-  if (room && !room.detached) {
+  // ห้องที่มาจากเครื่อง (fromCache) แสดงของเดิมไปก่อนแล้ว แต่ต้องดึงทั้งหน้ามาแทน — ดึงแค่ "ใหม่กว่า"
+  // จะไม่เห็นข้อความที่ถูกลบ/แก้/รีแอ็กชันระหว่างที่ไม่ได้เปิดแอป
+  if (room && !room.detached && !room.fromCache) {
     // เคยโหลดแล้ว — ดึงเฉพาะที่ใหม่กว่าที่มี (เผื่อพลาดระหว่างไม่ได้เปิด)
     void catchUp(channelId);
     return;
@@ -349,6 +352,9 @@ function handleEvent(raw: RealtimeEventMessage) {
 export function useChatSync(meId: string): void {
   useEffect(() => {
     get().setMe(meId);
+    // แสดงแชทที่จำไว้ในเครื่องก่อน แล้วค่อยดึงของจริงมาทับ (ดู offline-cache.ts)
+    restoreChatCache(meId);
+    const stopCache = startChatCachePersist(meId);
     void loadChannels();
     void loadUsers();
     void api
@@ -388,6 +394,7 @@ export function useChatSync(meId: string): void {
     document.addEventListener("visibilitychange", onVisible);
 
     return () => {
+      stopCache();
       offEvents();
       offStatus();
       if (fallback) clearInterval(fallback);

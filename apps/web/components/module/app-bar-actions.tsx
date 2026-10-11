@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { clearChatCache } from "@/modules/chat/lib/offline-cache";
 import { Loader2, LogOut } from "lucide-react";
 import { Button } from "@smartboss/ui/components/button";
 import { Modal } from "./dialog";
@@ -22,6 +23,8 @@ export function AppBarActions() {
   async function onLogout() {
     setLoading(true);
     try {
+      // แชทที่จำไว้ในเครื่อง — คนถัดไปที่ใช้เครื่องนี้ต้องไม่เห็น
+      clearChatCache();
       await fetch("/api/auth/logout", { method: "POST" });
     } finally {
       // โหลดหน้าใหม่ทั้งหน้า ไม่ใช่ router.replace — หน้าที่มีตัวซิงก์เบื้องหลัง

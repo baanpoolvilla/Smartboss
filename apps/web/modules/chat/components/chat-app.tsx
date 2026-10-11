@@ -89,6 +89,7 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
 
   const channels = useChatStore((s) => s.channels);
   const loaded = useChatStore((s) => s.channelsLoaded);
+  const channelsFromCache = useChatStore((s) => s.channelsFromCache);
   const activeChannelId = useChatStore((s) => s.activeChannelId);
   const setActive = useChatStore((s) => s.setActive);
   const users = useChatStore((s) => s.users);
@@ -186,8 +187,10 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
   const activeChannel = channels.find((c) => c.id === activeChannelId) ?? null;
   // ถูกนำออกจากห้อง/ห้องถูกลบระหว่างเปิดอยู่
   useEffect(() => {
+    // รายการจากเครื่องยังไม่มีห้องใหม่ ๆ (เปิดจากแจ้งเตือนห้องที่เพิ่งถูกเพิ่มเข้า) — รอรายการจริงก่อนตัดสิน
     if (
       loaded &&
+      !channelsFromCache &&
       activeChannelId &&
       !channels.some((c) => c.id === activeChannelId)
     ) {
@@ -203,7 +206,7 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
       }, 1500);
       return () => clearTimeout(t);
     }
-  }, [loaded, activeChannelId, channels, navigateTo]);
+  }, [loaded, channelsFromCache, activeChannelId, channels, navigateTo]);
 
   return (
     <div style={themeStyle} className="chat-ui flex h-full min-h-0 overflow-hidden bg-(--bg) md:rounded-2xl md:border md:border-(--line)">
