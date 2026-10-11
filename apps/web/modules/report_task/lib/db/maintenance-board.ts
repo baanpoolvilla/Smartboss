@@ -1,20 +1,21 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
-import { canViewAll, hasPermission, type OrgSession } from "@smartboss/auth";
+import { hasPermission, hasRole, isSuperAdmin, type OrgSession } from "@smartboss/auth";
 
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
-import { workOrderAccess, workOrderVisibilityWhere } from "@/modules/maintenance/data/work-order-access";
+import { workOrderAccess, workOrderVisibilityWhere, type WorkOrderAccess } from "@/modules/maintenance/data/work-order-access";
 import type { MaintenanceBoardItem, MaintenanceColumn } from "@/modules/report_task/lib/maintenance-board";
 import type { TaskPriority } from "@/modules/report_task/types";
 
 /**
  * ใบงานซ่อม + สั่งซื้ออุปกรณ์ สำหรับบอร์ดงาน (ดู lib/maintenance-board.ts) — แสดงอย่างเดียว
  *
- * ใบงาน: กติกาการมองเห็นเดียวกับโมดูลแจ้งซ่อม (workOrderVisibilityWhere — รับผิดชอบ/เปิดเอง/CC/ผู้ดูแลบ้าน
- *   หรือเห็นทั้งบริษัทถ้ามีสิทธิ์) ตัวกรองบนบอร์ดค่อยคัดต่อ
- * สั่งซื้อ: หน้ารายการ PR ให้ทุกคนที่มีสิทธิ์ดูเห็นทุกใบ — บนบอร์ดงานเอาเฉพาะใบที่เกี่ยวกับคนนั้น
- *   (เปิดเอง/ผู้ซื้อ/ผู้รับของ/คนกดสั่ง + ใบรออนุมัติสำหรับคนที่อนุมัติได้) ไม่งั้น PR ทั้งบริษัทท่วมบอร์ดทุกคน
- *   คนที่เห็นข้อมูลทั้งบริษัท (CEO/แอดมิน) เห็นทุกใบที่ยังไม่ปิด
+ * บนบอร์ดงานทุกคนเห็นเฉพาะใบที่ "เกี่ยวกับตัวเอง" — ดูทั้งหมดให้ไปที่โมดูลแจ้งซ่อม ("อยากเห็นแค่ของที่เกี่ยวกับผม
+ * ถ้าจะดูทั้งหมดให้ไปดูที่แจ้งซ่อม ... เห็นทั้งหมดมีแค่ CEO กับแอดมินสูงสุดพอ") ⇒ ไม่ใช้สิทธิ์ "เห็นข้อมูลทั้งบริษัท"
+ * (core.data.view_all) ของโมดูลแจ้งซ่อมที่นี่ — บทบาท ADMIN (IT) ถือสิทธิ์นั้นอยู่ เคยเห็นใบงานทั้งบริษัทเต็มบอร์ด
+ *   ใบงาน: รับผิดชอบ/เปิดเอง/CC/ผู้ดูแลบ้านหลังนั้น (เกณฑ์เดียวกับแจ้งซ่อมสำหรับคนที่ไม่เห็นทั้งบริษัท)
+ *   สั่งซื้อ: เปิดเอง/ผู้ซื้อ/ผู้รับของ/คนกดสั่ง + ใบรออนุมัติสำหรับคนที่อนุมัติได้
+ *   CEO และผู้ดูแลระบบสูงสุด: ทุกใบที่ยังไม่ปิด
  * ใบที่ปิดแล้ว (ซ่อมเสร็จ/รับของแล้ว) แสดง 7 วันล่าสุด · ใบที่ยกเลิกไม่แสดง
  */
 const DONE_DAYS = 7;
@@ -33,8 +34,24 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
   const today = bangkokDay(new Date());
   const items: MaintenanceBoardItem[] = [];
 
+  // เห็นทั้งหมดบนบอร์ด = CEO / ผู้ดูแลระบบสูงสุดเท่านั้น
+  const seeAll = isSuperAdmin(session) || hasRole(session, "CEO");
+
   if (hasPermission(session, MAINT_PERMS.workorderView)) {
-    const vis = workOrderVisibilityWhere(await workOrderAccess(session));
+    const full = await workOrderAccess(session);
+    // คนที่ไม่ใช่ CEO/ผู้ดูแลระบบสูงสุด ใช้เกณฑ์ "เกี่ยวกับตัวเอง" แม้จะมีสิทธิ์เห็นทั้งบริษัทในแจ้งซ่อม
+    const access: WorkOrderAccess = seeAll
+      ? { ...full, seeAll: true }
+      : full.seeAll
+        ? {
+            seeAll: false,
+            userId: session.userId,
+            caretakerPropertyIds: (
+              await prisma.property.findMany({ where: { orgId, caretakerId: session.userId }, select: { id: true } })
+            ).map((r) => r.id),
+          }
+        : full;
+    const vis = workOrderVisibilityWhere(access);
     const rows = await prisma.workOrder.findMany({
       where: {
         orgId,
@@ -83,7 +100,6 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
 
   if (hasPermission(session, MAINT_PERMS.poView)) {
     const me = session.userId;
-    const seeAll = canViewAll(session);
     const canApprove = hasPermission(session, MAINT_PERMS.poApprove);
     const rows = await prisma.purchaseOrder.findMany({
       where: {
