@@ -8,7 +8,6 @@ import { Icon } from "@/components/icon";
 import { cn } from "@smartboss/ui/cn";
 import { ChatSettings } from "@/modules/chat/components/chat-settings";
 import {
-  LEVELS,
   NOTIF_MODULES,
   applyLevel,
   isCustom,
@@ -60,51 +59,43 @@ export function NotificationSettingsClient() {
     else router.push(url, { scroll: false });
   }
 
+  // สองแบบ: "เห็นทั้งหมด" หรือ "เลือกเอง" (ปิดหัวข้อไหนก็กลายเป็นเลือกเองอัตโนมัติ) — ระดับ "สำคัญ/ปกติ" เอาออก
+  // เพราะเรื่องที่สำคัญของแต่ละคน/แผนกไม่เท่ากัน ชื่อระดับทำให้งง
   const custom = isCustom(prefs);
-  const levelCount = (id: (typeof LEVELS)[number]["id"]) =>
-    NOTIF_MODULES.filter((m) => !m.locked).reduce((n, m) => n + onCount(applyLevel(prefs, id), m), 0);
+  const onTotal = NOTIF_MODULES.filter((m) => !m.locked).reduce((n, m) => n + onCount(prefs, m), 0);
+  const choices = [
+    { id: "all", emoji: "👀", label: "เห็นทั้งหมด", hint: "ทุกเรื่องทุกโมดูล", on: !custom, count: TOTAL },
+    { id: "custom", emoji: "✏️", label: "เลือกเอง", hint: "เปิด/ปิดทีละโมดูลหรือทีละหัวข้อด้านล่าง", on: custom, count: onTotal },
+  ] as const;
 
   const levelPicker = (
-    <div className="flex flex-col gap-2" role="radiogroup" aria-label="ระดับการแจ้งเตือน">
-      {LEVELS.map((l) => {
-        const on = !custom && prefs.level === l.id;
-        return (
-          <button
-            key={l.id}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            disabled={!loaded}
-            onClick={() => void save(applyLevel(prefs, l.id))}
-            className={cn(
-              "flex items-center gap-3 rounded-xl border-[1.5px] bg-(--bg) px-3 py-2.5 text-left transition-colors disabled:opacity-60",
-              on ? "border-(--brand-green) bg-(--brand-green)/6" : "border-(--line) hover:border-(--ink-soft)/40"
-            )}
-          >
-            <span className={cn("h-4 w-4 shrink-0 rounded-full border-2", on ? "border-[5px] border-(--brand-green)" : "border-(--ink-soft)/50")} />
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold text-(--ink)">
-                {l.emoji} {l.label}
-              </span>
-              <span className="block text-xs text-(--ink-soft)">{l.hint}</span>
-            </span>
-            <span className="shrink-0 text-[11px] tabular-nums text-(--ink-soft)">
-              {levelCount(l.id)}/{TOTAL}
-            </span>
-          </button>
-        );
-      })}
-      {custom && (
-        <div className="flex items-center gap-3 rounded-xl border-[1.5px] border-(--brand-green) bg-(--brand-green)/6 px-3 py-2.5" role="radio" aria-checked>
-          <span className="h-4 w-4 shrink-0 rounded-full border-[5px] border-(--brand-green)" />
+    <div className="flex flex-col gap-2" role="radiogroup" aria-label="รูปแบบการแจ้งเตือน">
+      {choices.map((c) => (
+        <button
+          key={c.id}
+          type="button"
+          role="radio"
+          aria-checked={c.on}
+          disabled={!loaded}
+          // "เลือกเอง" เป็นสถานะ ไม่ใช่คำสั่ง — กดแล้วไม่เปลี่ยนอะไร แค่บอกให้ปิดหัวข้อด้านล่าง
+          onClick={() => c.id === "all" && custom && void save(applyLevel(prefs, "all"))}
+          className={cn(
+            "flex items-center gap-3 rounded-xl border-[1.5px] bg-(--bg) px-3 py-2.5 text-left transition-colors disabled:opacity-60",
+            c.on ? "border-(--brand-green) bg-(--brand-green)/6" : "border-(--line) hover:border-(--ink-soft)/40"
+          )}
+        >
+          <span className={cn("h-4 w-4 shrink-0 rounded-full border-2", c.on ? "border-[5px] border-(--brand-green)" : "border-(--ink-soft)/50")} />
           <span className="min-w-0 flex-1">
-            <span className="block text-sm font-semibold text-(--ink)">✏️ กำหนดเอง</span>
-            <span className="block text-xs text-(--ink-soft)">
-              ปรับเองจากระดับ “{LEVELS.find((l) => l.id === prefs.level)?.label}” · เลือกระดับด้านบนเพื่อเริ่มใหม่
+            <span className="block text-sm font-semibold text-(--ink)">
+              {c.emoji} {c.label}
             </span>
+            <span className="block text-xs text-(--ink-soft)">{c.hint}</span>
           </span>
-        </div>
-      )}
+          <span className="shrink-0 text-[11px] tabular-nums text-(--ink-soft)">
+            {c.count}/{TOTAL}
+          </span>
+        </button>
+      ))}
     </div>
   );
 
@@ -256,7 +247,7 @@ export function NotificationSettingsClient() {
           </header>
 
           <section className="flex flex-col gap-2">
-            <p className="px-1 text-[11px] font-medium tracking-wide text-(--ink-soft)">เลือกระดับ (กดครั้งเดียว)</p>
+            <p className="px-1 text-[11px] font-medium tracking-wide text-(--ink-soft)">รูปแบบการแจ้งเตือน</p>
             {levelPicker}
           </section>
 

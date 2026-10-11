@@ -19,9 +19,12 @@ export type NotifLevel = "important" | "normal" | "all";
 type Rank = 1 | 2 | 3;
 const LEVEL_RANK: Record<NotifLevel, Rank> = { important: 1, normal: 2, all: 3 };
 
+/**
+ * หน้าตั้งค่าเหลือสองแบบ: "เห็นทั้งหมด" กับ "เลือกเอง" (เปิด/ปิดทีละโมดูล/หัวข้อ) — ระดับ "เฉพาะที่สำคัญ"/"ปกติ"
+ * เอาออกแล้ว: ความสำคัญของแต่ละเรื่องไม่เท่ากันในแต่ละคน/แผนก ชื่อระดับทำให้งง ("บางคนบางแผนกไม่เท่ากัน")
+ * ค่าที่เคยเลือกระดับนั้นไว้ normalizePrefs แปลงเป็น "เลือกเอง" ที่เปิด/ปิดหัวข้อเหมือนเดิมทุกข้อ
+ */
 export const LEVELS: { id: NotifLevel; emoji: string; label: string; hint: string }[] = [
-  { id: "important", emoji: "🎯", label: "เฉพาะที่สำคัญ", hint: "เรื่องที่ส่งถึงฉันตรง ๆ หรือรอฉันทำ" },
-  { id: "normal", emoji: "⚖️", label: "ปกติ", hint: "เพิ่มความเคลื่อนไหวในงานของฉัน เตือนส่งรีพอต ลงเวลา ใบงานซ่อม" },
   { id: "all", emoji: "👀", label: "เห็นทั้งหมด", hint: "ทุกเรื่อง รวมโพสต์ใหม่ทุกห้องและรีแอ็กชัน" },
 ];
 
@@ -187,11 +190,20 @@ export function setTopics(prefs: NotifPrefs, topicIds: string[], on: boolean, no
 export function normalizePrefs(raw: unknown): NotifPrefs {
   if (!raw || typeof raw !== "object") return { ...DEFAULT_PREFS };
   const r = raw as Record<string, unknown>;
-  const level: NotifLevel = r.level === "important" || r.level === "normal" || r.level === "all" ? r.level : "all";
+  const oldLevel: NotifLevel = r.level === "important" || r.level === "normal" ? r.level : "all";
   const overrides: Record<string, boolean> = {};
   if (r.overrides && typeof r.overrides === "object") {
     for (const [k, v] of Object.entries(r.overrides as Record<string, unknown>)) {
       if (typeof v === "boolean" && TOPIC_BY_ID.has(k) && !TOPIC_BY_ID.get(k)!.module.locked) overrides[k] = v;
+    }
+  }
+  // ระดับ "เฉพาะที่สำคัญ"/"ปกติ" เลิกใช้ — แปลงเป็น "เห็นทั้งหมด" + ปิดหัวข้อที่ระดับเดิมปิดอยู่ (= เลือกเอง)
+  // ทุกหัวข้อเปิด/ปิดเหมือนเดิมเป๊ะ ไม่มีอะไรเด้งเพิ่มหรือเงียบลงเองหลัง deploy
+  const level: NotifLevel = "all";
+  if (oldLevel !== "all") {
+    for (const [id, info] of TOPIC_BY_ID) {
+      if (info.module.locked || id in overrides) continue;
+      if (info.topic.rank > LEVEL_RANK[oldLevel]) overrides[id] = false;
     }
   }
   const since: Record<string, string> = {};

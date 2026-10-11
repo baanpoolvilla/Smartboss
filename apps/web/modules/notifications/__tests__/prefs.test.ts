@@ -158,3 +158,20 @@ test("ค่าผิดรูปจาก client/ฐานข้อมูล = 
   assert.deepEqual(normalizePrefs(null), DEFAULT_PREFS);
   assert.deepEqual(normalizePrefs({ level: "loud", overrides: { "pm.x": true, "pm.assigned": "yes" } }), DEFAULT_PREFS);
 });
+
+test("ระดับ สำคัญ/ปกติ ที่เคยเลือกไว้ แปลงเป็น 'เลือกเอง' โดยทุกหัวข้อเปิด/ปิดเหมือนเดิม", () => {
+  for (const oldLevel of ["important", "normal"] as const) {
+    const before = applyLevel(DEFAULT_PREFS, oldLevel, "2026-10-01T00:00:00.000Z");
+    const after = normalizePrefs({ level: oldLevel, overrides: {}, since: {} });
+    assert.equal(after.level, "all");
+    assert.equal(isCustom(after), true);
+    for (const m of NOTIF_MODULES) {
+      for (const t of m.topics) assert.equal(isTopicOn(after, t.id), isTopicOn(before, t.id), `${oldLevel} ${t.id}`);
+    }
+  }
+  // หัวข้อที่เคยเปิดเองไว้ (override) ยังเปิดอยู่
+  // (pm.activity เป็นหัวข้อระดับ "ทั้งหมด" — ระดับ สำคัญ ปิดไว้ เว้นแต่ผู้ใช้เปิดเอง)
+  assert.equal(isTopicOn(normalizePrefs({ level: "important" }), "pm.activity"), false);
+  const kept = normalizePrefs({ level: "important", overrides: { "pm.activity": true } });
+  assert.equal(isTopicOn(kept, "pm.activity"), true);
+});
