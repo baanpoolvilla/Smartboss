@@ -134,6 +134,10 @@ export const Composer = forwardRef<
   // บนสุดทุกครั้งที่พิมพ์ แก้คำกลาง/ท้ายข้อความไม่ได้ และรายการแชทข้างบนกระตุกตาม
   // ตอนนี้: พิมพ์เพิ่ม = ขยายอย่างเดียวไม่ยุบ · ลบข้อความ/ส่งแล้ว = วัดใหม่โดยคืนตำแหน่งเลื่อนเดิม
   const prevTextLen = useRef(0);
+  // ข้อความยาวเกินบรรทัดเดียว → ช่องพิมพ์เต็มความกว้าง ปุ่มลงแถวล่าง (แบบช่องตอบรายงาน)
+  // เดิมปุ่ม + 🖼 😊 ➤ อยู่สองข้างตลอดความสูง ข้อความยาวถูกบีบเป็นคอลัมน์แคบตรงกลาง
+  // กลับเป็นแถวเดียวเมื่อช่องว่าง (ส่งแล้ว/ลบหมด) — ไม่สลับไปมาระหว่างพิมพ์ เพราะความกว้างที่เปลี่ยนทำให้บรรทัดเปลี่ยนตาม
+  const [stacked, setStacked] = useState(false);
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -142,13 +146,23 @@ export const Composer = forwardRef<
     prevTextLen.current = text.length;
     if (!shrinking) {
       if (el.scrollHeight > el.clientHeight && el.clientHeight < MAX) el.style.height = `${Math.min(el.scrollHeight, MAX)}px`;
-      return;
+    } else {
+      const top = el.scrollTop;
+      el.style.height = "0px";
+      el.style.height = `${Math.min(el.scrollHeight, MAX)}px`;
+      el.scrollTop = top;
     }
-    const top = el.scrollTop;
-    el.style.height = "0px";
-    el.style.height = `${Math.min(el.scrollHeight, MAX)}px`;
-    el.scrollTop = top;
+    // บรรทัดเดียว = 40px (min-h-10) — เกินราวครึ่งบรรทัดถือว่าขึ้นบรรทัดที่สองแล้ว
+    if (!text) setStacked(false);
+    else if (el.offsetHeight > 52) setStacked(true);
   }, [text]);
+  // สลับเป็นแบบเต็มกว้างแล้ว ข้อความใช้บรรทัดน้อยลง — วัดความสูงใหม่
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el || !stacked) return;
+    el.style.height = "0px";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [stacked]);
 
   useEffect(() => {
     if (replyTo) textareaRef.current?.focus();
@@ -552,7 +566,7 @@ export const Composer = forwardRef<
           </button>
         </div>
       ) : (
-        <div className="flex items-end gap-1">
+        <div className={cn("flex items-end gap-1", stacked && "flex-wrap items-center")}>
           <div className="relative">
             <button
               type="button"
@@ -604,7 +618,7 @@ export const Composer = forwardRef<
             )}
           </div>
           {/* ปุ่มกล้อง + รูป แบบ LINE — มือถือพับเก็บตอนกำลังพิมพ์ (กด ">" เพื่อกางกลับ) คอมแสดงตลอด */}
-          {text.trim() && !toolsOpen ? (
+          {text.trim() && !toolsOpen && !stacked ? (
             <button
               type="button"
               onClick={() => setToolsOpen(true)}
@@ -628,7 +642,7 @@ export const Composer = forwardRef<
             onClick={() => imageInputRef.current?.click()}
             className={cn(
               "h-10 w-10 items-center justify-center rounded-full text-(--ink-soft) hover:bg-(--bg-soft) sm:flex",
-              text.trim() && !toolsOpen ? "hidden" : "flex"
+              text.trim() && !toolsOpen && !stacked ? "hidden" : "flex"
             )}
             aria-label="ส่งรูป"
             title="ส่งรูป"
@@ -686,7 +700,10 @@ export const Composer = forwardRef<
                 submit();
               }
             }}
-            className="max-h-40 min-h-10 flex-1 resize-none rounded-[20px] border border-(--line) bg-(--bg-soft) px-4 py-2 text-base leading-6 sm:text-[15px] text-(--ink) placeholder:text-(--ink-soft) focus-visible:border-(--chat-accent) focus-visible:outline-none"
+            className={cn(
+              "max-h-40 min-h-10 flex-1 resize-none rounded-[20px] border border-(--line) bg-(--bg-soft) px-4 py-2 text-base leading-6 sm:text-[15px] text-(--ink) placeholder:text-(--ink-soft) focus-visible:border-(--chat-accent) focus-visible:outline-none",
+              stacked && "order-first basis-full rounded-2xl"
+            )}
           />
 
           <button
@@ -707,7 +724,10 @@ export const Composer = forwardRef<
               type="button"
               onClick={submit}
               disabled={!canSend}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-(--chat-accent) text-white transition-opacity disabled:opacity-40"
+              className={cn(
+                "flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-(--chat-accent) text-white transition-opacity disabled:opacity-40",
+                stacked && "ml-auto"
+              )}
               aria-label="ส่ง"
             >
               {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <SendHorizontal className="h-5 w-5" />}
