@@ -29,6 +29,9 @@ export interface ScoreWatch {
   overdueCount: number;
   dueSoon: ScoreWatchItem[];
   dueSoonCount: number;
+  /** ใบที่ยังไม่ปิด: ยังไม่ถึงกำหนด (เกิน 3 วันข้างหน้า) / ไม่ได้ตั้งวันครบกำหนด — ใช้กับกราฟโดนัท */
+  laterCount: number;
+  noDueCount: number;
   /** ผลรวมคะแนนที่โดนหักจากงานซ่อม (ใบงาน + PM) เดือนนี้ — ติดลบ */
   monthPoints: number;
   monthDocks: number;
@@ -70,7 +73,7 @@ export async function maintenanceScoreWatch(
     property: { select: { name: true, caretakerId: true } },
   } as const;
 
-  const [overdueRows, overdueCount, soonRows, dueSoonCount, month] = await Promise.all([
+  const [overdueRows, overdueCount, soonRows, dueSoonCount, month, laterCount, noDueCount] = await Promise.all([
     prisma.workOrder.findMany({
       where: { ...openVisible, dueDate: { lt: today } },
       select,
@@ -96,6 +99,8 @@ export async function maintenanceScoreWatch(
       _sum: { points: true },
       _count: true,
     }),
+    prisma.workOrder.count({ where: { ...openVisible, dueDate: { gte: soonEnd } } }),
+    prisma.workOrder.count({ where: { ...openVisible, dueDate: null } }),
   ]);
 
   const rows = [...overdueRows, ...soonRows];
@@ -139,6 +144,8 @@ export async function maintenanceScoreWatch(
     overdueCount,
     dueSoon: soonRows.map(toItem),
     dueSoonCount,
+    laterCount,
+    noDueCount,
     monthPoints: Number(month._sum.points ?? 0),
     monthDocks: month._count,
     orgWide,

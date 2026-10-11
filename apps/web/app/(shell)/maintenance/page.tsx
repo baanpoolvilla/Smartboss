@@ -183,9 +183,6 @@ export default async function MaintenanceDashboardPage() {
         />
       </div>
 
-      {/* ─── ใบงานที่มีผลกับคะแนน ─── */}
-      <ScoreWatchSection data={scoreWatch} />
-
       {/* ─── ค่าใช้จ่ายเดือนนี้ ─── */}
       <SectionHeader title="ค่าใช้จ่ายเดือนนี้" href="/maintenance/expenses" />
       <Card className="p-4">
@@ -197,6 +194,9 @@ export default async function MaintenanceDashboardPage() {
           <ExpenseDonut categories={categories} />
         )}
       </Card>
+
+      {/* ─── ใบงานที่มีผลกับคะแนน ─── */}
+      <ScoreWatchSection data={scoreWatch} />
 
       {/* ─── งานล่าสุด ─── */}
       <SectionHeader title="งานล่าสุด" href="/maintenance/work-orders" />
