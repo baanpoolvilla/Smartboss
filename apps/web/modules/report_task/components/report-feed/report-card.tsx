@@ -262,7 +262,6 @@ export function ReportCard({
   const authorDeptId = author?.departmentId;
   const showAuthorDept = !topic.visibility?.departmentIds || topic.visibility.departmentIds.length !== 1;
   const authorDept = showAuthorDept && authorDeptId ? departments.find((d) => d.id === authorDeptId) : undefined;
-  const viewer = getUser(viewingAsUserId);
   const isOwn = post.authorId === viewingAsUserId;
   const isSaved = post.savedBy.includes(viewingAsUserId);
   const isUnread = post.unreadFor.includes(viewingAsUserId);
@@ -1921,12 +1920,8 @@ export function ReportCard({
               )}
               style={replyHighlight ? { borderColor: replyHighlight } : { borderColor: "var(--line)" }}
             >
-              {/* จอสัมผัสตอนกำลังพิมพ์: ช่องพิมพ์ได้ทั้งบรรทัด (ไม่มีรูปโปรไฟล์ทางซ้าย ไม่มีคอลัมน์ปุ่มทางขวา)
-                  ปุ่มแนบ/ส่งลงไปอยู่บรรทัดล่างชิดขวา — เดิมปุ่มสองปุ่มกินคอลัมน์ทั้งความสูงของข้อความ */}
-              <Avatar className="h-6 w-6 shrink-0 [@media(pointer:coarse)]:hidden">
-                <AvatarImage src={viewer?.avatarUrl ?? undefined} alt={viewer?.name} />
-                <AvatarFallback className="text-[9px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{viewer?.avatar}</AvatarFallback>
-              </Avatar>
+              {/* แบบ Discord ทุกขนาดจอ: [+][😊] ช่องพิมพ์ [➤] — ตอนพิมพ์ ข้อความเต็มบรรทัดแรก ปุ่มทั้งหมดลงแถวเดียว
+                  ด้านล่าง (เดิมบนคอมปุ่ม 8 ปุ่มเป็นคอลัมน์ทางขวา บีบข้อความเหลือสองในสาม — "กิน space เยอะเกินไป") */}
               <div
                 ref={(el) => {
                   replyEditorRef.current = el;
@@ -1960,7 +1955,7 @@ export function ReportCard({
                   // ⇒ จอสัมผัสใช้ 16px พอดี จะไม่ซูม
                   "[@media(pointer:coarse)]:text-base",
                   // จอสัมผัสตอนพิมพ์: ข้อความขึ้นบรรทัดแรกเต็มกว้าง ปุ่ม + 😊 ➤ ลงไปบรรทัดล่าง
-                  replyExpanded && "[@media(pointer:coarse)]:basis-full [@media(pointer:coarse)]:px-1.5 [@media(pointer:coarse)]:order-[-3]"
+                  replyExpanded && "basis-full px-1.5 order-[-3]"
                 )}
                 onKeyDown={(e) => {
                   if (replyMentionMenu) {
@@ -2118,20 +2113,21 @@ export function ReportCard({
                       onMouseDown={(e) => e.preventDefault()}
                       disabled={replyUploading || replyImages.length >= maxImages}
                       aria-label="แนบรูป ถ่ายรูป หรือไฟล์"
-                      className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--bg-soft)] text-[var(--ink)] disabled:opacity-40 [@media(pointer:coarse)]:flex [@media(pointer:coarse)]:order-[-2]"
+                      className="order-[-2] flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--bg-soft)] text-[var(--ink)] hover:brightness-95 disabled:opacity-40 [@media(pointer:coarse)]:h-9 [@media(pointer:coarse)]:w-9"
                     >
-                      {replyUploading ? <ImagePlus className="h-5 w-5 animate-pulse" /> : <Plus className="h-5 w-5" />}
+                      {replyUploading ? <ImagePlus className="h-4.5 w-4.5 animate-pulse" /> : <Plus className="h-4.5 w-4.5 [@media(pointer:coarse)]:h-5 [@media(pointer:coarse)]:w-5" />}
                     </button>
                   }
                 />
                 <PopoverContent side="top" align="start" className="w-72 max-w-[calc(100vw-1.5rem)] p-2 flex flex-col gap-1.5">
                   {(
                     [
-                      { ref: replyPhotoInputRef, Icon: ImagePlus, label: "รูปภาพ / วิดีโอ", hint: "เลือกจากคลังรูปในมือถือ", main: true },
-                      { ref: replyCameraInputRef, Icon: Camera, label: "ถ่ายรูป", hint: "เปิดกล้อง ถ่ายหน้างานแล้วแนบเลย", main: false },
-                      { ref: replyFileInputRef, Icon: Paperclip, label: "ไฟล์", hint: "PDF, Word, Excel", main: false },
+                      { ref: replyPhotoInputRef, Icon: ImagePlus, label: "รูปภาพ / วิดีโอ", hint: "เลือกรูปจากเครื่อง", main: true, touchOnly: false },
+                      // คอมส่วนใหญ่ไม่มีกล้องหลัง — capture ถูกเมินแล้วเปิดหน้าต่างเลือกไฟล์เฉย ๆ ⇒ ซ่อนบนคอม
+                      { ref: replyCameraInputRef, Icon: Camera, label: "ถ่ายรูป", hint: "เปิดกล้อง ถ่ายหน้างานแล้วแนบเลย", main: false, touchOnly: true },
+                      { ref: replyFileInputRef, Icon: Paperclip, label: "ไฟล์", hint: "PDF, Word, Excel", main: false, touchOnly: false },
                     ] as const
-                  ).map(({ ref, Icon, label, hint, main }) => (
+                  ).map(({ ref, Icon, label, hint, main, touchOnly }) => (
                     <button
                       key={label}
                       onMouseDown={(e) => e.preventDefault()}
@@ -2140,8 +2136,9 @@ export function ReportCard({
                         ref.current?.click();
                       }}
                       className={cn(
-                        "flex items-center gap-3 rounded-xl border px-3 text-left active:bg-[var(--bg-soft)]",
-                        main ? "border-[var(--brand-green)] py-3.5" : "border-[var(--line)] py-2.5"
+                        "flex items-center gap-3 rounded-xl border px-3 text-left hover:bg-[var(--bg-soft)] active:bg-[var(--bg-soft)]",
+                        main ? "border-[var(--brand-green)] py-3.5" : "border-[var(--line)] py-2.5",
+                        touchOnly && "hidden [@media(pointer:coarse)]:flex"
                       )}
                     >
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--bg-soft)]">
@@ -2169,7 +2166,7 @@ export function ReportCard({
                       className={cn(
                         REPLY_FORMAT_BTN.replace(" [@media(pointer:coarse)]:hidden", ""),
                         REPLY_TOUCH_BTN,
-                        "[@media(pointer:coarse)]:order-[-1]"
+                        "order-[-1]"
                       )}
                     >
                       <Smile className="h-4 w-4 [@media(pointer:coarse)]:h-5 [@media(pointer:coarse)]:w-5" />
@@ -2180,28 +2177,6 @@ export function ReportCard({
                   <EmojiStickerPicker onPickEmoji={insertReplyEmoji} onPickSticker={sendReplySticker} />
                 </PopoverContent>
               </Popover>
-              <button
-                // ไม่ให้โฟกัสหลุดจากช่องพิมพ์ — หลุดแล้วเมนูล่างกลับมา หน้าขยับ แตะพลาดปุ่ม
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => replyPhotoInputRef.current?.click()}
-                disabled={replyUploading || replyImages.length >= maxImages}
-                aria-label="แนบรูปหรือวิดีโอ"
-                title="แนบรูปหรือวิดีโอ"
-                // มือถือใช้เมนู + แทน
-                className="h-7 w-7 shrink-0 flex items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] disabled:opacity-40 [@media(pointer:coarse)]:hidden"
-              >
-                <ImagePlus className={cn("h-4 w-4", replyUploading && "animate-pulse")} />
-              </button>
-              <button
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => replyFileInputRef.current?.click()}
-                disabled={replyUploading || replyImages.length >= maxImages}
-                aria-label="แนบไฟล์"
-                title="แนบไฟล์ (เอกสาร/รูป)"
-                className="h-7 w-7 shrink-0 flex items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] disabled:opacity-40 [@media(pointer:coarse)]:hidden"
-              >
-                <Paperclip className="h-4 w-4" />
-              </button>
               {(replyFocused || replyColorPickerOpen || replyHighlight) && (
                 <Popover open={replyColorPickerOpen} onOpenChange={setReplyColorPickerOpen}>
                   <PopoverTrigger
@@ -2251,10 +2226,10 @@ export function ReportCard({
                 aria-label="ส่งข้อความ"
                 className={cn(
                   "h-7 w-7 shrink-0 flex items-center justify-center rounded-full bg-[var(--brand-green)] text-[var(--ink)] disabled:bg-[var(--bg-soft)] disabled:text-[var(--ink-soft)] transition-colors",
-                  // จอสัมผัส: ปุ่มส่งใหญ่ (44px) อยู่ขวาสุดคนเดียว — + กับอีโมจิอยู่ซ้าย (แบบ Discord) ไม่ติดกันแล้ว
+                  // ปุ่มส่งอยู่ขวาสุดคนเดียว (จอสัมผัสใหญ่ 44px) — + กับอีโมจิอยู่ซ้าย (แบบ Discord) ไม่ติดกันแล้ว
                   // ("กดปุ่มส่งต้องระวัง โดนคลิปแนบไฟล์ ... เอาแบบ discord กดง่ายปุ่มใหญ่")
                   "[@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-11",
-                  replyExpanded && "[@media(pointer:coarse)]:ml-auto"
+                  replyExpanded && "ml-auto"
                 )}
               >
                 <Send className="h-3.5 w-3.5 [@media(pointer:coarse)]:h-5 [@media(pointer:coarse)]:w-5" />
