@@ -1,5 +1,6 @@
 "use client";
 
+import { useDismissKeyboardOnDrag } from "@/lib/dismiss-keyboard-on-drag";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ReportCard } from "@/modules/report_task/components/report-feed/report-card";
 import { DaySeparator } from "@/modules/report_task/components/report-feed/report-day-separator";
@@ -56,6 +57,8 @@ export function ReportFeed({
   onJumpToTopic?: (topicId: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  // เลื่อนฟีดแล้วคีย์บอร์ดหุบลง (แบบ Discord) — เหมือนห้องแชท/ความคิดเห็นในงาน
+  const dismissKeyboard = useDismissKeyboardOnDrag();
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
 
@@ -220,7 +223,7 @@ export function ReportFeed({
           undifferentiated column. A bordered card needs something to
           contrast against, which flattening this to plain white specifically
           removed. */}
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto bg-[var(--bg-soft)] py-3 scroll-pt-4">
+      <div ref={scrollRef} onScroll={handleScroll} {...dismissKeyboard} className="flex-1 overflow-y-auto bg-[var(--bg-soft)] py-3 scroll-pt-4">
         {topicPosts.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center gap-3 text-center px-6">
             <div
