@@ -1149,14 +1149,26 @@ export function ReportCard({
         // @mention ถึงเรา — แถบเหลืองเข้มซ้าย + พื้นเหลืองอ่อน แบบ Discord · เดิม 4px สี amber-400 บนพื้นเหลือง
         // แถมมุมโค้งของการ์ดกินหัวท้ายแถบ แทบมองไม่เห็น ("อยากได้แถบสีข้าง ๆ แบบดิสคอร์ดเข้ม ๆ")
         // มุมซ้ายโค้งน้อยลงให้แถบตรงเต็มความสูง
-        mentionsMe && "border-l-[5px] border-l-amber-500 rounded-l-md! bg-amber-50 hover:bg-amber-50 hover:border-l-amber-500",
+        mentionsMe && "bg-amber-50 hover:bg-amber-50",
         flashTargetId === post.id && "bg-[var(--accent)] border-[var(--brand-green)]/40",
         // เปิดมาจากแจ้งเตือน/ลิงก์ — สีฟ้าค้างไว้จนกว่าจะเปลี่ยนห้องหรือออกจากหน้า (ต่างจากเหลืองของ "แท็กถึงเรา")
-        highlighted && "border-l-[5px] border-l-sky-500 rounded-l-md! bg-sky-50 hover:bg-sky-50 hover:border-l-sky-500",
+        highlighted && "bg-sky-50 hover:bg-sky-50",
         // Unread keeps its own accent, now as a ring around the whole card
         // (a plain border-l reads oddly once the corners are rounded).
         isUnread && "ring-2 ring-[var(--chart-blue)]/70 ring-offset-0"
       )}
+      // แถบซ้าย (ฟ้า = เปิดมาจากแจ้งเตือน ชนะเหลือง = แท็กถึงเรา) ใส่เป็น inline style — ทำเป็นคลาส
+      // (border-l-[5px] / rounded-l-md!) แล้วบนเครื่องจริงสีขึ้นแต่ความหนา/มุมโดนคลาสพื้นฐาน (border,
+      // rounded-2xl) ที่ CSS อีกไฟล์โหลดทีหลังทับ แถบเลยบาง 1px มุมยังโค้ง — inline ชนะทุกคลาสแน่นอน
+      style={
+        highlighted || mentionsMe
+          ? {
+              borderLeft: `5px solid ${highlighted ? "#0ea5e9" : "#f59e0b"}`,
+              borderTopLeftRadius: 6,
+              borderBottomLeftRadius: 6,
+            }
+          : undefined
+      }
     >
       {/* Teams-style floating hover toolbar — anchored inside this post's own
           top edge (not offset above it) so it never reads as belonging to
