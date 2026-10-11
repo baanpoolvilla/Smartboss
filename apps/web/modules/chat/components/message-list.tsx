@@ -1,5 +1,6 @@
 "use client";
 
+import { useDismissKeyboardOnDrag } from "@/lib/dismiss-keyboard-on-drag";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, Loader2 } from "lucide-react";
 
@@ -54,6 +55,7 @@ export function MessageList({
   const typing = useChatStore((s) => s.typing[channelId]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const dismissKeyboard = useDismissKeyboardOnDrag();
   const topRef = useRef<HTMLDivElement>(null);
   const atBottomRef = useRef(true);
   const prevRef = useRef<{ first?: string; last?: string; height: number; top: number }>({ height: 0, top: 0 });
@@ -236,9 +238,13 @@ export function MessageList({
         onWheel={(e) => {
           if (e.deltaY < 0) atBottomRef.current = false;
         }}
-        onTouchMove={() => {
+        onTouchStart={dismissKeyboard.onTouchStart}
+        onTouchEnd={dismissKeyboard.onTouchEnd}
+        onTouchMove={(e) => {
           const el = scrollRef.current;
           if (el && el.scrollHeight - el.scrollTop - el.clientHeight > 4) atBottomRef.current = false;
+          // เลื่อนอ่านแล้วคีย์บอร์ดหุบลง (แบบ Discord) — จะพิมพ์ค่อยแตะช่องพิมพ์
+          dismissKeyboard.onTouchMove(e);
         }}
         className="h-full overflow-y-auto overscroll-contain"
         style={{ overflowAnchor: "none" }}

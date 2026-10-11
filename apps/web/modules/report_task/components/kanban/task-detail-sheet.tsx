@@ -1,5 +1,6 @@
 "use client";
 
+import { useDismissKeyboardOnDrag } from "@/lib/dismiss-keyboard-on-drag";
 import { ReactionPicker } from "@/components/emoji-picker";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -326,6 +327,7 @@ export function TaskDetailSheet({
   // the count next to "ความคิดเห็น" is still shown un-collapsed so there's a
   // visible cue a conversation exists without forcing it open.
   const [mobileCommentsOpen, setMobileCommentsOpen] = useState(false);
+  const dismissKeyboard = useDismissKeyboardOnDrag();
   // iPhone ไม่ย่อหน้าเว็บตามคีย์บอร์ด (interactive-widget ใช้ได้แค่ Android) — หน้าความคิดเห็นเต็มจอ
   // เลยสูงเท่าเดิม คีย์บอร์ดบังช่องพิมพ์ เลื่อนขึ้นไปหาข้อความ ช่องพิมพ์ก็เลื่อนหายตาม ("เลื่อนแล้วต้องเลื่อน
   // ลงมาพิมพ์อีก") ⇒ ระหว่างคีย์บอร์ดเปิด ให้กรอบพอดีพื้นที่ที่เห็นจริง (visualViewport): รายการเลื่อนในกรอบ
@@ -2096,7 +2098,11 @@ export function TaskDetailSheet({
               <ChevronDown className="h-4 w-4 text-[var(--ink-soft)] shrink-0 md:hidden" />
             )}
           </button>
-          <div className={cn("flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0", mobileCommentsOpen ? "block" : "hidden md:block")}>
+          <div
+            className={cn("flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0", mobileCommentsOpen ? "block" : "hidden md:block")}
+            // เลื่อนอ่านความคิดเห็นแล้วคีย์บอร์ดหุบลง (แบบ Discord) — ได้ที่อ่านเต็มจอ จะพิมพ์ค่อยแตะช่องพิมพ์
+            {...dismissKeyboard}
+          >
             {task.comments.map((c) => {
               const author = getUser(c.authorId);
               const mine = c.authorId === viewingAsUserId;
