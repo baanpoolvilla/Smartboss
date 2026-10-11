@@ -23,6 +23,8 @@ import { toast } from "sonner";
 import { useTaskBoardIntentStore } from "@/modules/report_task/store/task-board-intent-store";
 import { Info, SearchX, ChevronLeft, ChevronRight } from "lucide-react";
 import { EmptyState } from "@/modules/report_task/components/shared/empty-state";
+import { useMaintenanceBoardStore } from "@/modules/report_task/store/maintenance-board-store";
+import { matchesMaintenanceFilters, sortBoardEntries, type BoardEntry } from "@/modules/report_task/lib/maintenance-board";
 
 export type GroupBy = "status" | "priority" | "assignee" | "department";
 
@@ -195,6 +197,37 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
     [allTasks, filters]
   );
 
+  // ใบงานซ่อม/สั่งซื้ออุปกรณ์ที่เกี่ยวข้อง — แสดงอย่างเดียว ปนกับงานบนบอร์ด (lib/maintenance-board.ts)
+  // ดึงตอนเปิดบอร์ด + ทุก 2 นาที + ตอนสลับกลับมาที่แอป · ตัวกรองเดิมของบอร์ดคัดด้วย matchesMaintenanceFilters
+  const mxItems = useMaintenanceBoardStore((s) => s.items);
+  const boardKinds = useMaintenanceBoardStore((s) => s.kinds);
+  const loadMx = useMaintenanceBoardStore((s) => s.load);
+  const setKindCounts = useMaintenanceBoardStore((s) => s.setCounts);
+  useEffect(() => {
+    void loadMx();
+    const timer = setInterval(() => void loadMx(), 120_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void loadMx();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [loadMx]);
+  const mxFiltered = useMemo(() => mxItems.filter((i) => matchesMaintenanceFilters(i, filters)), [mxItems, filters]);
+  // จำนวนแต่ละประเภทที่ตรงกับตัวกรองอื่นอยู่ — ตัวเลขในเมนู "แสดงบนบอร์ด"
+  useEffect(() => {
+    setKindCounts({
+      task: filtered.length,
+      wo: mxFiltered.filter((i) => i.kind === "wo").length,
+      po: mxFiltered.filter((i) => i.kind === "po").length,
+    });
+  }, [filtered, mxFiltered, setKindCounts]);
+  // ติ๊กออกในเมนู "แสดงบนบอร์ด" = ซ่อนประเภทนั้นจากคอลัมน์ (ตัวเลขสรุปด้านบนของบอร์ดยังนับงานตามเดิม)
+  const shownTasks = useMemo(() => (boardKinds.task ? filtered : []), [boardKinds.task, filtered]);
+  const shownMx = useMemo(() => mxFiltered.filter((i) => boardKinds[i.kind]), [mxFiltered, boardKinds]);
+
   // Columns are generated from the chosen grouping — Planner's "Group by".
   // groupBy==="status" splits into 4 mutually-exclusive columns, not 3:
   // "รอตรวจสอบ" is derived (status==="done" && !reviewedBy), not a real
@@ -204,7 +237,8 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   // Lateness (formerly its own "เลยกำหนด" column) is no longer a column at
   // all — a late task just stays in "รอดำเนินการ"/"กำลังทำ", flagged red on
   // its own card via DueDateBadge instead.
-  const columns: BoardColumn[] = useMemo(() => {
+  const taskColumns: BoardColumn[] = useMemo(() => {
+    const filtered = shownTasks;
     if (groupBy === "status") {
       // แบ่ง 4 คอลัมน์ / ยุบเหลือรายการเดียวตอน "เลยกำหนดเท่านั้น" — ดู status-columns.ts
       return buildStatusColumns(filtered, filters.penalty === "overdue");
@@ -313,7 +347,26 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
         };
       })
       .filter((c) => c.tasks.length > 0);
-  }, [groupBy, filtered, filters.penalty, projectTopics]);
+  }, [groupBy, shownTasks, filters.penalty, projectTopics]);
+
+  // ใส่ใบงานซ่อม/สั่งซื้อลงคอลัมน์ (เฉพาะจัดกลุ่มตามสถานะ/ความสำคัญ — ตามคนเป็นการ์ดสรุป ไม่มีการ์ดรายใบ)
+  // เรียงรวมกับงานด้วยกติกาเดียวกัน (sortBoardEntries) · "เลยกำหนดเท่านั้น" ยุบเหลือคอลัมน์เดียว = ใส่ทุกใบที่ผ่านตัวกรอง
+  const columns: BoardColumn[] = useMemo(() => {
+    if (shownMx.length === 0 || (groupBy !== "status" && groupBy !== "priority")) return taskColumns;
+    return taskColumns.map((c) => {
+      const mine = shownMx.filter((i) =>
+        groupBy === "priority" ? i.priority === c.id : c.id === "overdue" ? true : i.column === c.id
+      );
+      if (mine.length === 0) return c;
+      const entries: BoardEntry[] = [
+        ...c.tasks.map((task) => ({ type: "task" as const, task })),
+        ...mine.map((item) => ({ type: "mx" as const, item })),
+      ];
+      return { ...c, entries: sortBoardEntries(entries) };
+    });
+  }, [taskColumns, shownMx, groupBy]);
+  const mxOnBoard = groupBy === "status" || groupBy === "priority" ? shownMx.length : 0;
+  const boardCount = shownTasks.length + mxOnBoard;
 
   // Columns can run wider than the viewport (grouping by assignee especially
   // — one column per employee) with nothing to hint that more sit off-screen
@@ -479,7 +532,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
           ที่ผูกกับตัวเลือกนั้นโดยตรง: หมายเหตุตอนจัดกลุ่มตามคน + ยอดรวม */}
       {/* <640px: แถบแท็บคอลัมน์ ชิดใต้แถบหัว — รวมหน้าที่ของชิปตัวเลข + การ์ดหัวคอลัมน์ + แถวคำใบ้เดิม
           ไว้ในแถวเดียว 44px เพื่อให้การ์ดงานได้พื้นที่ที่เหลือทั้งจอ */}
-      {filtered.length > 0 && columns.length > 0 && (
+      {boardCount > 0 && columns.length > 0 && (
         /*
           ชิปทรงเม็ดยาแบบแอปบอร์ดงานบนมือถือ (Trello / Jira / Linear / Asana) — ปุ่มสูง 36px กดง่าย
           ตัวที่เลือกถมสีของคอลัมน์ ตัวเลขเป็นป้ายกลม · ตัวที่เลือกเลื่อนเข้ากลางแถวเองเมื่อปัดบอร์ดไปคอลัมน์อื่น
@@ -520,7 +573,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
                       : { backgroundColor: "var(--bg-soft)", color: "var(--ink)" }
                   }
                 >
-                  {column.tasks.length}
+                  {column.entries?.length ?? column.tasks.length}
                 </span>
               </button>
             );
@@ -543,10 +596,13 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
             งานที่มีหลายแผนก ({sharedDeptCount} งาน) จะแสดงในคอลัมน์ของทุกแผนก
           </span>
         )}
-        <span className="ml-auto text-xs text-[var(--ink-soft)]">{filtered.length} งาน</span>
+        <span className="ml-auto text-xs text-[var(--ink-soft)]">
+          {shownTasks.length} งาน
+          {mxOnBoard > 0 ? ` · ใบงานซ่อม/สั่งซื้อ ${mxOnBoard}` : ""}
+        </span>
       </div>
 
-      {filtered.length === 0 ? (
+      {boardCount === 0 ? (
         <EmptyState
           icon={SearchX}
           title="ไม่พบงานตามตัวกรอง"
@@ -616,7 +672,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
                 <KanbanColumn
                   key={column.id}
                   column={column}
-                  boardTotal={filtered.length}
+                  boardTotal={shownTasks.length}
                   onOpen={setOpenTaskId}
                   onHeaderClick={
                     groupBy === "assignee"

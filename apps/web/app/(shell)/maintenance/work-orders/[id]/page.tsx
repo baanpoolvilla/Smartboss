@@ -88,10 +88,14 @@ const PRIORITY_COLOR: Record<string, string> = {
 
 export default async function WorkOrderDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string }>;
 }) {
   const { id } = await params;
+  // เปิดมาจากการ์ดบนบอร์ดงาน (?from=tasks — maintenance-card.tsx) = ปุ่มย้อนกลับพากลับบอร์ดงาน
+  const fromTasks = (await searchParams).from === "tasks";
   const session = await requireOrg();
   if (!hasPermission(session, MAINT_PERMS.workorderView)) redirect("/");
   const orgId = session.orgId;
@@ -170,7 +174,7 @@ export default async function WorkOrderDetailPage({
     <AppScaffold
       title="รายละเอียดใบงาน"
       width="max-w-3xl"
-      backHref="/maintenance/work-orders"
+      backHref={fromTasks ? "/report-task/tasks" : "/maintenance/work-orders"}
     >
       <MarkReadOnView referenceId={wo.id} />
 

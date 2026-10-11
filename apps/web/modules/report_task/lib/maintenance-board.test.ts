@@ -1,0 +1,88 @@
+import { beforeEach, describe, expect, it } from "vitest";
+
+import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
+import type { Task, User } from "@/modules/report_task/types";
+import { matchesMaintenanceFilters, sortBoardEntries, type MaintenanceBoardItem } from "./maintenance-board";
+import type { TaskFilterState } from "./task-filter";
+
+const ALL: TaskFilterState = {
+  assigneeId: "all",
+  assignedById: "all",
+  departmentId: "all",
+  priority: "all",
+  penalty: "all",
+  preset: "all",
+  customFrom: "",
+  customTo: "",
+  quickView: "all",
+};
+
+const people: User[] = [
+  { id: "a", name: "ช่าง A", email: "a@x", avatar: "A", role: "ช่าง", departmentId: "d-tech" },
+  { id: "b", name: "จัดซื้อ B", email: "b@x", avatar: "B", role: "จัดซื้อ", departmentId: "d-buy" },
+];
+
+function wo(over: Partial<MaintenanceBoardItem> = {}): MaintenanceBoardItem {
+  return {
+    kind: "wo",
+    id: "w1",
+    code: "WO-1",
+    title: "ปั๊มเสีย",
+    column: "todo",
+    statusLabel: "รอดำเนินการ",
+    priority: "medium",
+    dueDate: "2099-10-20T00:00:00.000Z",
+    createdAt: "2026-10-01T00:00:00.000Z",
+    overdue: false,
+    responsibleId: "a",
+    involvedIds: ["a", "b"],
+    place: "BS-HS1",
+    href: "/maintenance/work-orders/w1",
+    ...over,
+  };
+}
+
+const task = (over: Partial<Task>) =>
+  ({
+    id: "t",
+    status: "todo",
+    priority: "medium",
+    dueDate: "2099-10-25T00:00:00.000Z",
+    createdAt: "2026-10-01T00:00:00.000Z",
+    ...over,
+  }) as Task;
+
+beforeEach(() => useEmployeeStore.setState({ employees: people }));
+
+describe("ตัวกรองบอร์ด กับใบงานซ่อม/สั่งซื้อ", () => {
+  it("พนักงาน = คนที่เกี่ยวข้องกับใบ · แผนก = แผนกของผู้รับผิดชอบ", () => {
+    expect(matchesMaintenanceFilters(wo(), { ...ALL, assigneeId: "b" })).toBe(true);
+    expect(matchesMaintenanceFilters(wo(), { ...ALL, assigneeId: "zz" })).toBe(false);
+    expect(matchesMaintenanceFilters(wo(), { ...ALL, departmentId: "d-tech" })).toBe(true);
+    expect(matchesMaintenanceFilters(wo(), { ...ALL, departmentId: "d-buy" })).toBe(false);
+  });
+
+  it("เลยกำหนดเท่านั้น / หักคะแนน / กำลังติดตาม", () => {
+    expect(matchesMaintenanceFilters(wo({ overdue: true }), { ...ALL, penalty: "overdue" })).toBe(true);
+    expect(matchesMaintenanceFilters(wo(), { ...ALL, penalty: "overdue" })).toBe(false);
+    expect(matchesMaintenanceFilters(wo({ overdue: true }), { ...ALL, penalty: "docked" })).toBe(false);
+    expect(matchesMaintenanceFilters(wo(), { ...ALL, assignedById: "a" })).toBe(false);
+  });
+
+  it("ชิปสถานะด้านบนจับคอลัมน์ของใบ", () => {
+    expect(matchesMaintenanceFilters(wo({ column: "review" }), { ...ALL, quickView: "review" })).toBe(true);
+    expect(matchesMaintenanceFilters(wo({ column: "todo" }), { ...ALL, quickView: "done" })).toBe(false);
+  });
+});
+
+describe("เรียงงานกับใบซ่อมปนกัน", () => {
+  it("เลยกำหนดก่อน แล้วความสำคัญสูงก่อน แล้วกำหนดใกล้ก่อน", () => {
+    const sorted = sortBoardEntries([
+      { type: "task", task: task({ id: "t-low", priority: "low" }) },
+      { type: "mx", item: wo({ id: "w-late", overdue: true }) },
+      { type: "mx", item: wo({ id: "w-urgent", priority: "critical" }) },
+      { type: "task", task: task({ id: "t-med" }) },
+    ]);
+    expect(sorted.map((e) => (e.type === "task" ? e.task.id : e.item.id))).toEqual(["w-late", "w-urgent", "t-med", "t-low"]);
+  });
+});

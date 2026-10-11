@@ -83,10 +83,14 @@ function TimelineRow({
 
 export default async function PoDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string }>;
 }) {
   const { id } = await params;
+  // เปิดมาจากการ์ดบนบอร์ดงาน (?from=tasks — maintenance-card.tsx) = ปุ่มย้อนกลับพากลับบอร์ดงาน
+  const fromTasks = (await searchParams).from === "tasks";
   const session = await requireOrg();
   if (!hasPermission(session, MAINT_PERMS.poView)) redirect("/");
   const orgId = session.orgId;
@@ -141,7 +145,7 @@ export default async function PoDetailPage({
     <AppScaffold
       title="รายละเอียด PR/PO"
       width="max-w-3xl"
-      backHref="/maintenance/purchase-orders"
+      backHref={fromTasks ? "/report-task/tasks" : "/maintenance/purchase-orders"}
     >
       <MarkReadOnView referenceId={po.id} />
 

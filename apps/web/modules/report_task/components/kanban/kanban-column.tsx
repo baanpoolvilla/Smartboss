@@ -1,6 +1,8 @@
 "use client";
 
 import { TaskCard } from "./task-card";
+import { MaintenanceCard } from "./maintenance-card";
+import type { BoardEntry } from "@/modules/report_task/lib/maintenance-board";
 import { ShowMoreToggle } from "@/modules/report_task/components/shared/show-more-toggle";
 import { useShowMore } from "@/modules/report_task/hooks/use-show-more";
 import { useIsMobile } from "@/modules/report_task/hooks/use-is-mobile";
@@ -49,6 +51,9 @@ export interface BoardColumn {
    * here is the narrower, deliberate alternative ("ต้องเป็นแผนกด้วยสิ...
    * แสดงแค่ของใครของมันที่ได้รับมอบหมายในแผนกนั้นๆ"). */
   breakdown?: { id: string; label: string; accent: string; count: number }[];
+  /** การ์ดที่จะแสดงจริง เมื่อมีใบงานซ่อม/สั่งซื้อปนกับงาน (lib/maintenance-board.ts — เรียงรวมกันแล้ว)
+   * ไม่ใส่ = แสดง tasks ตามเดิม · แถบ %/เลยกำหนดในหัวคอลัมน์ยังนับเฉพาะงาน */
+  entries?: BoardEntry[];
 }
 
 const PAGE_SIZE = 6;
@@ -153,7 +158,8 @@ export function KanbanColumn({
   // (useShowMore/ShowMoreToggle), not a one-way "keep clicking to add more"
   // with no way back.
   const isMobile = useIsMobile();
-  const { visible: visibleTasks, remaining, expanded, toggle } = useShowMore(column.tasks, isMobile ? MOBILE_PAGE_SIZE : PAGE_SIZE);
+  const entries: BoardEntry[] = column.entries ?? column.tasks.map((task) => ({ type: "task", task }));
+  const { visible: visibleEntries, remaining, expanded, toggle } = useShowMore(entries, isMobile ? MOBILE_PAGE_SIZE : PAGE_SIZE);
 
   return (
     <div
@@ -199,7 +205,7 @@ export function KanbanColumn({
             className="ml-auto text-[11px] font-semibold rounded-full h-5 min-w-5 px-1.5 flex items-center justify-center tabular-nums shrink-0"
             style={{ backgroundColor: `color-mix(in srgb, ${accent} 12%, white)`, color: textAccent }}
           >
-            {column.tasks.length}
+            {entries.length}
           </span>
         </div>
 
@@ -351,10 +357,13 @@ export function KanbanColumn({
           </button>
         ) : (
           <>
-            {visibleTasks.map((t) => (
+            {visibleEntries.map((e) =>
+              e.type === "mx" ? (
+                <MaintenanceCard key={`mx-${e.item.kind}-${e.item.id}`} item={e.item} />
+              ) : (
               <TaskCard
-                key={t.id}
-                task={t}
+                key={e.task.id}
+                task={e.task}
                 onOpen={onOpen}
                 showOriginalStatus={column.derived}
                 groupedByPriority={groupedByPriority}
@@ -367,11 +376,12 @@ export function KanbanColumn({
                 // fix on the card would fight this opacity for nothing.
                 dimWhenDone={!groupedByStatus}
               />
-            ))}
+              )
+            )}
 
             <ShowMoreToggle expanded={expanded} remaining={remaining} onToggle={toggle} />
 
-            {column.tasks.length === 0 && (
+            {entries.length === 0 && (
               <div className="flex-1 flex items-center justify-center text-xs text-[var(--ink-soft)] border border-dashed border-[var(--line)] rounded-lg py-8 text-center px-3">
                 {column.emptyMessage ?? "ยังไม่มีงานในสถานะนี้"}
               </div>

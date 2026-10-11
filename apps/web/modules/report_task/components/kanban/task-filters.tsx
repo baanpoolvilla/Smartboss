@@ -36,10 +36,19 @@ import { cn } from "@/modules/report_task/lib/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NewTaskDialog } from "./new-task-dialog";
 import { groupByLabels, type GroupBy } from "./kanban-board";
+import { useMaintenanceBoardStore } from "@/modules/report_task/store/maintenance-board-store";
+import type { BoardKind } from "@/modules/report_task/lib/maintenance-board";
 
 /** ตัวเลือกจัดกลุ่มบนบอร์ด — "แผนก" ซ่อนไว้ก่อน จะทำเป็นมุมมองโปรเจค/แผนกแยกจากงาน
  * ("เอาแผนกออกก่อน เดี๋ยวงง") โค้ดบอร์ดแผนกใน kanban-board.tsx ยังอยู่ เปิดกลับได้ที่นี่ที่เดียว */
 const GROUP_BY_CHOICES: GroupBy[] = ["status", "priority", "assignee"];
+
+/** "แสดงบนบอร์ด" ในเมนูจัดกลุ่ม — ใบงานซ่อม/สั่งซื้อปนกับงานบนบอร์ด (lib/maintenance-board.ts) */
+const BOARD_KINDS: { id: BoardKind; icon: string; label: string }[] = [
+  { id: "task", icon: "📋", label: "งาน" },
+  { id: "wo", icon: "🔧", label: "ใบงานซ่อม" },
+  { id: "po", icon: "🛒", label: "สั่งซื้ออุปกรณ์" },
+];
 
 const groupByIcon: Record<GroupBy, typeof CircleDot> = {
   status: CircleDot,
@@ -148,6 +157,47 @@ export function TaskFilters({
   // ของฉัน" เองถึงจะกางออกมาเห็น 3 ตัวเลือก ("ต้องเลือกมุมมองของฉันก่อนนะ")
   // ปิดกลับทุกครั้งที่ดรอปดาวน์ปิด ไม่ค้างไว้ข้ามรอบเปิด
   const [personalViewOpen, setPersonalViewOpen] = useState(false);
+  const boardKinds = useMaintenanceBoardStore((s) => s.kinds);
+  const boardKindCounts = useMaintenanceBoardStore((s) => s.counts);
+  const toggleBoardKind = useMaintenanceBoardStore((s) => s.toggleKind);
+  const shownKindCount = BOARD_KINDS.filter((k) => boardKinds[k.id]).length;
+  const kindsFiltered = shownKindCount < BOARD_KINDS.length;
+  // ปุ่มธรรมดา (ไม่ใช่ SelectItem) — ติ๊กแล้วดรอปดาวน์ไม่ปิด เลือกได้หลายอย่างต่อกัน (แบบเดียวกับปุ่ม "มุมมองของฉัน")
+  const kindToggles = (
+    <SelectGroup>
+      <SelectLabel>แสดงบนบอร์ด</SelectLabel>
+      {BOARD_KINDS.map((k) => {
+        const on = boardKinds[k.id];
+        return (
+          <button
+            key={k.id}
+            type="button"
+            role="menuitemcheckbox"
+            aria-checked={on}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              toggleBoardKind(k.id);
+            }}
+            className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-sm hover:bg-[var(--bg-soft)]"
+          >
+            <span
+              className={cn(
+                "flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] font-bold",
+                on ? "border-[var(--brand-green)] bg-[var(--brand-green)] text-white" : "border-[var(--line)] bg-white"
+              )}
+              aria-hidden
+            >
+              {on ? "✓" : ""}
+            </span>
+            <span>{k.icon}</span>
+            <span className="flex-1 text-left">{k.label}</span>
+            <span className="text-[11px] tabular-nums text-[var(--ink-soft)]">{boardKindCounts[k.id]}</span>
+          </button>
+        );
+      })}
+    </SelectGroup>
+  );
   const quickTodayActive = filters.preset === "today";
   const quickOverdueActive = filters.penalty === "overdue";
   const quickCriticalActive = filters.priority === "critical";
@@ -354,11 +404,12 @@ export function TaskFilters({
                 same as every other field here, so it should highlight the
                 same way. Hardcoded `false` before meant this one never lit
                 up green no matter what was picked ("เลือกแล้วทำไมไม่เขียว"). */}
-            <SelectTrigger className={filterFieldTriggerClass(groupBy !== "status" || personalView !== "all", "min-w-[170px]")}>
+            <SelectTrigger className={filterFieldTriggerClass(groupBy !== "status" || personalView !== "all" || kindsFiltered, "min-w-[170px]")}>
               <Group className="h-4 w-4 shrink-0" />
               <SelectValue placeholder="จัดกลุ่มตาม">
                 {groupByLabels[groupBy]}
                 {personalView !== "all" ? ` · ${personalViewLabel}` : ""}
+                {kindsFiltered ? ` · ${shownKindCount} ประเภท` : ""}
               </SelectValue>
             </SelectTrigger>
             <SelectContent alignItemWithTrigger={false}>
@@ -376,6 +427,8 @@ export function TaskFilters({
                   );
                 })}
               </SelectGroup>
+              <SelectSeparator />
+              {kindToggles}
               <SelectSeparator />
               <SelectGroup>
                 {/* ปุ่มธรรมดา ไม่ใช่ SelectItem — กดแล้วแค่กาง/หุบตัวเลือกข้าง
@@ -574,10 +627,13 @@ export function TaskFilters({
 
       {groupBy && onGroupByChange && (
         <Select value={groupBy} onValueChange={(v) => v && onGroupByChange(v as GroupBy)}>
-          <SelectTrigger className={mobileFieldRowTriggerClass(groupBy !== "status")}>
-            <MobileFieldIcon icon={Group} active={groupBy !== "status"} />
+          <SelectTrigger className={mobileFieldRowTriggerClass(groupBy !== "status" || kindsFiltered)}>
+            <MobileFieldIcon icon={Group} active={groupBy !== "status" || kindsFiltered} />
             <span className="text-[13.5px] font-medium text-[var(--ink)]">จัดกลุ่มตาม</span>
-            <MobileFieldValue active={groupBy !== "status"}>{groupByLabels[groupBy]}</MobileFieldValue>
+            <MobileFieldValue active={groupBy !== "status" || kindsFiltered}>
+              {groupByLabels[groupBy]}
+              {kindsFiltered ? ` · ${shownKindCount} ประเภท` : ""}
+            </MobileFieldValue>
           </SelectTrigger>
           <SelectContent alignItemWithTrigger={false}>
             {(GROUP_BY_CHOICES).map((g) => {
@@ -591,6 +647,8 @@ export function TaskFilters({
                 </SelectItem>
               );
             })}
+            <SelectSeparator />
+            {kindToggles}
           </SelectContent>
         </Select>
       )}
