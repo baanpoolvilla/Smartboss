@@ -382,6 +382,10 @@ export function TaskDetailSheet({
   const [rejecting, setRejecting] = useState(false);
   const [rejectDate, setRejectDate] = useState("");
   const [rejectReason, setRejectReason] = useState("");
+  // งานกลุ่ม: ใครผ่านแล้วไม่ต้องส่งกลับ (ติ๊กออก) + กำหนดส่งแยกรายคน — ดู rejectGroupReview
+  const [rejectPassed, setRejectPassed] = useState<string[]>([]);
+  const [rejectSplit, setRejectSplit] = useState(false);
+  const [rejectPersonDates, setRejectPersonDates] = useState<Record<string, string>>({});
   // "แก้ไขทั้งหมด" — set every assignee's due date to the same new value in
   // one action, distinct from the per-row pickers below (see
   // reviseAllAssigneeDueDates).
@@ -414,6 +418,10 @@ export function TaskDetailSheet({
     setPerPersonDate("");
     setBulkRevising(false);
     setBulkDate("");
+    setRejecting(false);
+    setRejectPassed([]);
+    setRejectSplit(false);
+    setRejectPersonDates({});
   }
 
   if (!task) return null;
@@ -485,7 +493,24 @@ export function TaskDetailSheet({
     .map((uid) => toDateInput(task.assigneeDueDates?.[uid] ?? task.dueDate))
     .reduce((a, b) => (b > a ? b : a), minReviseDate);
   const minPerPersonDate = perPersonTargetId ? toDateInput(task.assigneeDueDates?.[perPersonTargetId] ?? task.dueDate) : minReviseDate;
-  const minRejectDate = todayIso() > minReviseDate ? todayIso() : minReviseDate;
+  // งานกลุ่ม: ขั้นต่ำรายคน = วันนี้ หรือกำหนดเดิมของคนนั้นถ้าช้ากว่า (วันรายคนอาจก่อน dueDate ของทั้งงาน)
+  const rejectAnyRule = task.completionRule === "any";
+  const rejectPersonMin = (uid: string) => {
+    const eff = toDateInput(task.assigneeDueDates?.[uid] ?? task.dueDate);
+    return todayIso() > eff ? todayIso() : eff;
+  };
+  const rejectTargets = isShared ? task.assigneeIds.filter((uid) => rejectAnyRule || !rejectPassed.includes(uid)) : [];
+  const minRejectDate = isShared
+    ? rejectTargets.map(rejectPersonMin).reduce((a, b) => (b > a ? b : a), todayIso())
+    : todayIso() > minReviseDate ? todayIso() : minReviseDate;
+  const rejectValid =
+    !!rejectReason.trim() &&
+    (isShared
+      ? rejectTargets.length > 0 &&
+        (rejectSplit
+          ? rejectTargets.every((uid) => !!rejectPersonDates[uid] && rejectPersonDates[uid]! >= rejectPersonMin(uid))
+          : !!rejectDate && rejectDate >= minRejectDate)
+      : !!rejectDate && rejectDate >= minRejectDate);
   const removingAssigneeWouldLockMeOut = (nextAssigneeIds: string[]) =>
     !owner && !canEditRecord(task.assignedById, departmentIdsOf(nextAssigneeIds), viewingAsUserId);
   // Only the owner (CEO) can hand out any sticker — the whole picker block
@@ -559,11 +584,37 @@ export function TaskDetailSheet({
 
   function submitReject() {
     // Same re-check-at-submit reasoning as submitRevision above.
-    if (!task || !canEditMain || !rejectDate || !rejectReason.trim()) return;
-    rejectReview(task.id, new Date(rejectDate).toISOString(), rejectReason.trim(), viewingAsUserId);
+    if (!task || !canEditMain || !rejectValid) return;
+    if (isShared) {
+      const dates = Object.fromEntries(rejectTargets.map((uid) => [uid, rejectSplit ? rejectPersonDates[uid]! : rejectDate]));
+      const latest = Object.values(dates).reduce((a, b) => (b > a ? b : a));
+      rejectReview(task.id, new Date(latest).toISOString(), rejectReason.trim(), viewingAsUserId, dates);
+    } else {
+      rejectReview(task.id, new Date(rejectDate).toISOString(), rejectReason.trim(), viewingAsUserId);
+    }
+    closeReject();
+  }
+
+  function closeReject() {
     setRejecting(false);
     setRejectDate("");
     setRejectReason("");
+    setRejectPassed([]);
+    setRejectSplit(false);
+    setRejectPersonDates({});
+  }
+
+  function toggleRejectSplit(on: boolean) {
+    if (!task) return;
+    setRejectSplit(on);
+    if (on) {
+      // เริ่มจากวันที่เลือกไว้ด้านบน (ถ้าเลือกแล้ว) ไม่งั้นวันขั้นต่ำของแต่ละคน
+      setRejectPersonDates(
+        Object.fromEntries(
+          task.assigneeIds.map((uid) => [uid, rejectDate && rejectDate >= rejectPersonMin(uid) ? rejectDate : rejectPersonMin(uid)])
+        )
+      );
+    }
   }
 
   function submitComment() {
@@ -886,10 +937,59 @@ export function TaskDetailSheet({
 
               {!task.reviewedBy && canReview && rejecting && (
                 <div className="rounded-lg border border-[var(--line)] p-2.5 space-y-2">
-                  <div className="space-y-1">
-                    <Label className="text-xs">กำหนดส่งใหม่</Label>
-                    <DatePickerField value={rejectDate} minDate={minRejectDate} onChange={setRejectDate} />
-                  </div>
+                  {isShared && (
+                    <div className="space-y-1">
+                      <Label className="text-xs">
+                        {rejectAnyRule ? "ส่งกลับทุกคน (งานนี้ปิดเมื่อคนใดคนหนึ่งเสร็จ)" : "ส่งกลับให้แก้ไข — ติ๊กออกคนที่ผ่านแล้ว"}
+                      </Label>
+                      <div className="space-y-1">
+                        {task.assigneeIds.map((uid) => {
+                          const picked = rejectAnyRule || !rejectPassed.includes(uid);
+                          return (
+                            <div key={uid} className="flex min-h-8 items-center gap-2">
+                              {!rejectAnyRule && (
+                                <input
+                                  type="checkbox"
+                                  checked={picked}
+                                  onChange={(e) =>
+                                    setRejectPassed((cur) => (e.target.checked ? cur.filter((id) => id !== uid) : [...cur, uid]))
+                                  }
+                                  aria-label={`ส่งงานของ ${displayName(uid)} กลับให้แก้ไข`}
+                                  className="accent-[var(--chart-red)]"
+                                />
+                              )}
+                              <span className={cn("flex-1 truncate text-xs", !picked && "text-[var(--ink-soft)]")}>{displayName(uid)}</span>
+                              {!picked ? (
+                                <span className="text-[11px] text-[var(--ink-soft)]">ผ่านแล้ว — ไม่ต้องแก้</span>
+                              ) : rejectSplit ? (
+                                <DatePickerField
+                                  className="w-[150px]"
+                                  value={rejectPersonDates[uid] ?? ""}
+                                  minDate={rejectPersonMin(uid)}
+                                  onChange={(v) => setRejectPersonDates((cur) => ({ ...cur, [uid]: v }))}
+                                />
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <label className="flex w-fit cursor-pointer select-none items-center gap-1.5 text-xs text-[var(--ink-soft)]">
+                        <input
+                          type="checkbox"
+                          checked={rejectSplit}
+                          onChange={(e) => toggleRejectSplit(e.target.checked)}
+                          className="accent-[var(--brand-green)]"
+                        />
+                        กำหนดส่งแยกรายคน
+                      </label>
+                    </div>
+                  )}
+                  {(!isShared || !rejectSplit) && (
+                    <div className="space-y-1">
+                      <Label className="text-xs">{isShared ? "กำหนดส่งใหม่ (ใช้กับทุกคนที่ส่งกลับ)" : "กำหนดส่งใหม่"}</Label>
+                      <DatePickerField value={rejectDate} minDate={minRejectDate} onChange={setRejectDate} />
+                    </div>
+                  )}
                   <div className="space-y-1">
                     <Label htmlFor="reject-reason" className="text-xs">เหตุผลที่ไม่ผ่าน</Label>
                     <Textarea
@@ -901,12 +1001,12 @@ export function TaskDetailSheet({
                     />
                   </div>
                   <div className="flex gap-2 justify-end">
-                    <Button size="sm" variant="ghost" onClick={() => { setRejecting(false); setRejectDate(""); setRejectReason(""); }}>ยกเลิก</Button>
+                    <Button size="sm" variant="ghost" onClick={closeReject}>ยกเลิก</Button>
                     <Button
                       size="sm"
                       className="bg-[var(--chart-red)] hover:bg-[var(--chart-red-dark)] text-white"
                       onClick={submitReject}
-                      disabled={!rejectDate || rejectDate < minRejectDate || !rejectReason.trim()}
+                      disabled={!rejectValid}
                     >
                       ยืนยันไม่ผ่าน
                     </Button>

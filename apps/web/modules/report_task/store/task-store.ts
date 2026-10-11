@@ -109,6 +109,84 @@ function sendBackPatch(t: Task, onlyAssigneeId?: string): Partial<Task> {
   return { ...reopen, checklist: clearedChecklist(t.checklist), completedAssigneeIds: [] };
 }
 
+/**
+ * "ไม่ผ่าน" ของงานกลุ่ม — sweep ตัดสินรายคนด้วย assigneeDueDates และหน้าประวัติของงานกลุ่ม
+ * แสดงแค่ assigneeDueDateRevisions · เดิม rejectReview เปลี่ยนแค่ dueDate ของทั้งงาน ⇒ คนที่มี
+ * วันรายคนค้างอยู่ (T-2569-0028: 02/10, 05/10) งานเปิดกลับมาแล้วโดนหักทันทีทั้งที่หัวหน้าเลื่อน
+ * เป็น 30/10 แล้ว และประวัติไม่ขึ้นรอบนั้น
+ *
+ * `assigneeDates` = คนที่ส่งกลับ → กำหนดส่งใหม่ของคนนั้น (YYYY-MM-DD) · ไม่ส่งมา = ทุกคนวันเดียวกัน
+ * ปิดเมื่อ "ครบทุกคน": ส่งกลับเฉพาะคนที่เลือก คนที่ผ่านแล้วยังนับว่าเสร็จ ไม่ต้องทำซ้ำ
+ * ปิดเมื่อ "คนใดคนหนึ่ง": งานชิ้นเดียวกัน ไม่ผ่าน = ทุกคนกลับไปทำ (วันแยกรายคนได้)
+ */
+function rejectGroupReview(t: Task, newDate: string, reason: string, actorId: string, assigneeDates?: Record<string, string>): Task {
+  const fallbackDay = newDate.slice(0, 10);
+  const sentBack =
+    (t.completionRule ?? "all") === "any" || !assigneeDates
+      ? t.assigneeIds
+      : t.assigneeIds.filter((uid) => uid in assigneeDates);
+  if (sentBack.length === 0) return t;
+  const now = new Date().toISOString();
+  const nextDates: Record<string, string> = { ...(t.assigneeDueDates ?? {}) };
+  const nextRevisions: NonNullable<Task["assigneeDueDateRevisions"]> = { ...(t.assigneeDueDateRevisions ?? {}) };
+  const dayOf: Record<string, string> = {};
+  for (const uid of sentBack) {
+    const previousEffective = t.assigneeDueDates?.[uid] ?? t.dueDate;
+    const day = (assigneeDates?.[uid] ?? fallbackDay).slice(0, 10);
+    // ไม่ร่นวันใครย้อนหลัง (หน้าจอกันไว้แล้ว — วันขั้นต่ำ = วันนี้หรือวันเดิมของคนนั้น)
+    if (!isLaterDay(day, previousEffective)) {
+      dayOf[uid] = previousEffective.slice(0, 10);
+      continue;
+    }
+    dayOf[uid] = day;
+    nextDates[uid] = day;
+    nextRevisions[uid] = {
+      originalDate: t.assigneeDueDateRevisions?.[uid]?.originalDate ?? previousEffective,
+      latestDate: day,
+      revisedBy: actorId,
+      revisedAt: now,
+    };
+  }
+  // กำหนดส่งของทั้งงาน = วันที่ช้าที่สุดที่ให้ไป (ไม่ร่นถอยหลัง)
+  const latestDay = Object.values(dayOf).reduce((a, b) => (b > a ? b : a), t.dueDate.slice(0, 10));
+  const dueDate = isLaterDay(latestDay, t.dueDate) ? new Date(latestDay).toISOString() : t.dueDate;
+  const sentBackSet = new Set(sentBack);
+  const names = sentBack.map((uid) => `${getUser(uid)?.name ?? "มีคน"} ${formatShortDate(dayOf[uid]!)}`).join(", ");
+  logActivity(actorId, "ตรวจสอบแล้วไม่ผ่าน", t.title, t.id, `ส่งกลับ ${names} · ${reason}`);
+  const actorName = getUser(actorId)?.name ?? "หัวหน้า";
+  for (const uid of sentBack) {
+    useNotificationStore
+      .getState()
+      .notifyMany(
+        [uid],
+        actorId,
+        `${actorName} ตรวจงาน "${t.title}" แล้วไม่ผ่าน — ${reason} (กำหนดส่งใหม่ของคุณ ${formatShortDate(dayOf[uid]!)})`,
+        undefined,
+        `/report-task/tasks?task=${t.id}`
+      );
+  }
+  return {
+    ...t,
+    status: "in_progress" as const,
+    completedAt: undefined,
+    reviewedBy: undefined,
+    reviewedAt: undefined,
+    // ล้างเช็คลิสต์เฉพาะส่วนของคนที่ส่งกลับ — คนที่ผ่านแล้วไม่ต้องติ๊กใหม่
+    checklist: t.checklist.map((c) => (c.ownerId && !sentBackSet.has(c.ownerId) ? c : { ...c, done: false })),
+    completedAssigneeIds: (t.completedAssigneeIds ?? []).filter((uid) => !sentBackSet.has(uid)),
+    assigneeDueDates: nextDates,
+    assigneeDueDateRevisions: nextRevisions,
+    dueDate,
+    // เหตุผลเดียวกับงานเดี่ยว (ดู rejectReview) — ส่งทันกำหนดเดิมแล้ว ไม่ให้ sweep ตัดสินด้วยวันเดิม
+    ...(t.missedDeadlineOnce ? {} : { originalDueDate: dueDate }),
+    revisions: [
+      ...t.revisions,
+      { revisionNumber: t.revisions.length + 1, previousDate: t.dueDate, newDate: dueDate, reason, revisedBy: actorId, revisedAt: now },
+    ],
+    updatedAt: now,
+  };
+}
+
 function notifyPenaltyChange(task: Task, byUserId: string, message: string) {
   const heads = departments.filter((d) => task.departmentIds.includes(d.id)).map((d) => d.headId);
   const recipients = Array.from(new Set([...task.assigneeIds, ...heads]));
@@ -264,7 +342,8 @@ interface TaskStore {
    * sticker/penalty already on the task is left untouched. No-op if the task
    * isn't currently done or is already reviewed (nothing to reject).
    */
-  rejectReview: (taskId: string, newDate: string, reason: string, actorId: string) => void;
+  /** งานกลุ่ม: `assigneeDates` = คนที่ส่งกลับ → กำหนดส่งใหม่ (YYYY-MM-DD) — ดู rejectGroupReview */
+  rejectReview: (taskId: string, newDate: string, reason: string, actorId: string, assigneeDates?: Record<string, string>) => void;
   /**
    * ผู้รับผิดชอบขอเลื่อนกำหนดส่ง (คนที่แก้เองไม่ได้) — แจ้ง CEO ทุกคน ยังไม่เปลี่ยนวันจนกว่าจะอนุมัติ
    * ขอซ้ำระหว่างรออยู่ = แทนคำขอเดิมของคนนั้น (ไม่กองหลายใบ) · newDate = YYYY-MM-DD
@@ -415,10 +494,11 @@ export const useTaskStore = create<TaskStore>((set) => ({
         return { ...t, reviewedBy: actorId, reviewedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
       }),
     })),
-  rejectReview: (taskId, newDate, reason, actorId) =>
+  rejectReview: (taskId, newDate, reason, actorId, assigneeDates) =>
     set((s) => ({
       tasks: s.tasks.map((t) => {
         if (t.id !== taskId || t.status !== "done" || t.reviewedBy) return t;
+        if (t.taskMode === "group") return rejectGroupReview(t, newDate, reason, actorId, assigneeDates);
         if (isEarlierDay(newDate, t.dueDate)) return t;
         const previousDate = t.dueDate;
         const revisionNumber = t.revisions.length + 1;
@@ -438,33 +518,8 @@ export const useTaskStore = create<TaskStore>((set) => ({
             undefined,
             `/report-task/tasks?task=${t.id}`
           );
-        // งานกลุ่ม: sweep ตัดสินรายคนด้วย assigneeDueDates และหน้าประวัติของงานกลุ่มก็แสดง
-        // แค่ assigneeDueDateRevisions — เดิมทางนี้เปลี่ยนแค่ dueDate ของทั้งงาน ⇒ คนที่มีวัน
-        // รายคนค้างอยู่ (T-2569-0028: 02/10, 05/10) งานเปิดกลับมาแล้วโดนหักทันทีทั้งที่หัวหน้า
-        // เลื่อนเป็น 30/10 แล้ว และประวัติไม่ขึ้นรอบนี้ — ยกวันใหม่ให้ทุกคนเหมือน "แก้ไขทั้งหมด"
-        let groupDates: Pick<Task, "assigneeDueDates" | "assigneeDueDateRevisions"> = {};
-        if (t.taskMode === "group") {
-          const now = new Date().toISOString();
-          const nextDates: Record<string, string> = { ...(t.assigneeDueDates ?? {}) };
-          const nextRevisions: NonNullable<Task["assigneeDueDateRevisions"]> = { ...(t.assigneeDueDateRevisions ?? {}) };
-          // assigneeDueDates เก็บเป็น YYYY-MM-DD (เหมือน "แก้ไขทั้งหมด") — newDate ที่นี่เป็น ISO
-          const day = newDate.slice(0, 10);
-          for (const uid of t.assigneeIds) {
-            const previousEffective = t.assigneeDueDates?.[uid] ?? t.dueDate;
-            if (previousEffective.slice(0, 10) === day || isEarlierDay(day, previousEffective)) continue;
-            nextDates[uid] = day;
-            nextRevisions[uid] = {
-              originalDate: t.assigneeDueDateRevisions?.[uid]?.originalDate ?? previousEffective,
-              latestDate: day,
-              revisedBy: actorId,
-              revisedAt: now,
-            };
-          }
-          groupDates = { assigneeDueDates: nextDates, assigneeDueDateRevisions: nextRevisions };
-        }
         return {
           ...t,
-          ...groupDates,
           status: "in_progress" as const,
           completedAt: undefined,
           // A rejected review means the work isn't actually acceptable —
