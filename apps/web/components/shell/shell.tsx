@@ -167,7 +167,7 @@ function LauncherFrame({
           แยกส่วนได้โดยไม่ต้องมีเส้นขีดเพิ่ม ให้ตรงกับหัวรางฝั่งซ้ายในโมดูล
           ที่เอาเส้นระหว่างโลโก้กับหัวข้อออกไปแล้วเหมือนกัน */}
       <header className="flex h-[60px] shrink-0 items-center justify-between bg-(--bg) px-4 sm:px-6">
-        <Link href="/" aria-label="หน้าหลัก">
+        <Link href="/" prefetch aria-label="หน้าหลัก">
           <Logo size="md" />
         </Link>
 
@@ -285,6 +285,7 @@ function ModuleRail({
           หายไปทันทีที่กดเข้าโมดูล เห็นแค่ตอนอยู่หน้ารวมแอป (LauncherFrame) */}
       <Link
         href="/"
+        prefetch
         aria-label="หน้าหลัก"
         // h-[60px] + px-4 sm:px-6 ตรงกับ header ของ LauncherFrame ทุกตัวเป๊ะ ๆ
         // (เดิม px-4 ตายตัว ทำให้โลโก้อยู่คนละตำแหน่งกับหน้าหลัก "ให้มันตรง
@@ -510,7 +511,10 @@ function BottomNavItem({
   );
 
   return href ? (
-    <Link href={href} prefetch={false} className={className}>
+    // ปุ่ม "หน้าหลัก" โหลดรอไว้ล่วงหน้า (เก็บไว้ 5 นาที) — เดิมปิดทุกลิงก์ (เซิร์ฟเวอร์ 2 core รับ
+    // prefetch ทั้งเมนูไม่ไหว) กดกลับหน้าหลักจากทุกโมดูลเลยต้องรอเซิร์ฟเวอร์ 1–2 วิ จอนิ่งจนคนกดซ้ำ
+    // ("กดกลับหน้าแรกช้ามาก ต้องกดหลายครั้ง") หน้าหลักเบา (query เล็ก ๆ ไม่กี่ตัว) เปิดลิงก์เดียวนี้พอ
+    <Link href={href} prefetch={href === "/"} className={className}>
       {body}
     </Link>
   ) : (
