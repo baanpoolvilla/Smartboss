@@ -395,6 +395,7 @@ export async function dockOverdueMaintenance(): Promise<{
       select: {
         id: true,
         orgId: true,
+        code: true,
         title: true,
         dueDate: true,
         assignedTo: true,
@@ -402,6 +403,7 @@ export async function dockOverdueMaintenance(): Promise<{
       },
     })
   );
+  const woCodes = new Map(overdue.map((w) => [w.id, w.code]));
 
   for (const wo of overdue) {
     const woSt = settingsByOrg.get(wo.orgId);
@@ -500,8 +502,60 @@ export async function dockOverdueMaintenance(): Promise<{
     });
   }
 
+  // แจ้งเฉพาะที่ "เพิ่งหักรอบนี้" — cron รันทุกนาทีและส่งเหตุการณ์เดิมซ้ำทุกรอบ (unique กันหักซ้ำ)
+  // ต้องเทียบกับแถวที่มีอยู่ก่อนบันทึก ไม่งั้นแจ้งซ้ำทุกนาที · ที่หักไปก่อนมีแจ้งเตือนก็ไม่แจ้งย้อนหลัง
+  const fresh = await newMaintenanceDocks(events);
   const recorded = await recordPerformanceEvents(events);
+  if (recorded > 0) await notifyMaintenanceDocks(fresh, settingsByOrg, woCodes);
   return { workOrders: overdue.length, pmSchedules: latePms.length, recorded, revoked };
+}
+
+/** ป้ายคะแนนในแจ้งเตือน — "−3" / "+3" */
+function fmtPoints(n: number): string {
+  return n < 0 ? `−${Math.abs(n)}` : `+${n}`;
+}
+
+/** เหตุการณ์ที่ยังไม่เคยบันทึก (คีย์เดียวกับ performance_event_dedupe) */
+async function newMaintenanceDocks(events: PerformanceEventInput[]): Promise<PerformanceEventInput[]> {
+  if (events.length === 0) return [];
+  const existing = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.performanceEvent.findMany({
+      where: {
+        source: "maintenance",
+        category: { in: ["workorder_overdue", "pm_missed"] },
+        refId: { in: events.map((e) => e.refId!).filter(Boolean) },
+      },
+      select: { orgId: true, category: true, refType: true, refId: true },
+    })
+  );
+  const key = (e: { orgId: string; category: string; refType?: string | null; refId?: string | null }) =>
+    `${e.orgId}|${e.category}|${e.refType ?? ""}|${e.refId ?? ""}`;
+  const seen = new Set(existing.map(key));
+  return events.filter((e) => !seen.has(key(e)));
+}
+
+/**
+ * แจ้งคนที่โดนหัก (ผู้รับผิดชอบใบงาน/PM) ทันทีที่ระบบหัก — เดิมหักเงียบ ๆ ไม่มีใครรู้จนไปเปิดหน้าคะแนนเอง
+ * ("ต้องแจ้งด้วยสิ ตามการได้รับมอบหมายของคนนั้นๆ") · กดแล้วเปิดใบงาน/หน้า PM
+ */
+async function notifyMaintenanceDocks(
+  fresh: PerformanceEventInput[],
+  settingsByOrg: Map<string, PerformanceSettings>,
+  woCodes: Map<string, string>,
+): Promise<void> {
+  for (const e of fresh) {
+    const pts = settingsByOrg.get(e.orgId)?.rulePoints[e.category];
+    if (!pts) continue; // บริษัทตั้งหมวดนี้เป็น 0 = ไม่ได้หักจริง
+    const isWo = e.category === "workorder_overdue";
+    await notifyUser(e.orgId, e.userId, {
+      title: isWo
+        ? `ระบบหักคะแนน ${fmtPoints(pts)} · ใบงาน ${woCodes.get(e.refId ?? "") ?? ""} เลยกำหนด`.replace("  ", " ")
+        : `ระบบหักคะแนน ${fmtPoints(pts)} · ไม่ทำบำรุงรักษาตามรอบ`,
+      body: e.note ?? null,
+      type: isWo ? "work_order" : "pm",
+      referenceId: isWo ? (e.refId ?? null) : (e.refId?.split(":")[0] ?? null),
+    });
+  }
 }
 
 /** ใบงานที่สร้างห่างกันไม่เกินนี้ โดยคนเดียวกัน บ้านเดียวกัน หัวข้อเดียวกัน = กดบันทึกซ้ำ */
@@ -588,7 +642,9 @@ async function revokeInvalidMaintenanceDocks(
         category: { in: ["workorder_overdue", "pm_missed"] },
         createdBy: null,
       },
-      select: { id: true, orgId: true, userId: true, category: true, refId: true, occurredAt: true },
+      select: {
+        id: true, orgId: true, userId: true, category: true, refId: true, occurredAt: true, points: true, note: true,
+      },
     }),
   );
   if (docks.length === 0) return 0;
@@ -627,6 +683,7 @@ async function revokeInvalidMaintenanceDocks(
   );
 
   const toRevoke: string[] = [];
+  const revokedDocks: { dock: (typeof docks)[number]; reason: string }[] = [];
   for (const d of docks) {
     const st = settingsByOrg.get(d.orgId);
     if (!st || !st.enabled || !d.refId) continue;
@@ -649,12 +706,30 @@ async function revokeInvalidMaintenanceDocks(
         st,
       );
     }
-    if (reason) toRevoke.push(d.id);
+    if (reason) {
+      toRevoke.push(d.id);
+      revokedDocks.push({ dock: d, reason });
+    }
   }
 
   if (toRevoke.length === 0) return 0;
   const result = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
     prisma.performanceEvent.deleteMany({ where: { id: { in: toRevoke }, createdBy: null } }),
   );
+
+  // แจ้งคนที่ได้คะแนนคืนด้วย — คู่กับแจ้งตอนโดนหัก ไม่งั้นคะแนนกลับมาเองแล้วงงว่ามาจากไหน
+  for (const { dock: d, reason } of revokedDocks) {
+    const pts = -Number(d.points);
+    if (!pts) continue;
+    const isWo = d.category === "workorder_overdue";
+    // ต้นเรื่องถูกลบไปแล้ว — ไม่ใส่ลิงก์ ไม่งั้นกดแล้วเจอหน้าไม่พบ
+    const gone = reason === "ใบงานถูกลบ" || reason === "แผน PM ถูกลบ";
+    await notifyUser(d.orgId, d.userId, {
+      title: `คืนคะแนน ${fmtPoints(pts)} · ${reason}`,
+      body: d.note ?? null,
+      type: isWo ? "work_order" : "pm",
+      referenceId: gone ? null : isWo ? d.refId : (d.refId?.split(":")[0] ?? null),
+    });
+  }
   return result.count;
 }

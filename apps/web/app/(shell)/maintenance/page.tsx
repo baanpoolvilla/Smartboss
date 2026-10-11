@@ -13,6 +13,7 @@ import {
 import { requireOrg, hasPermission } from "@smartboss/auth";
 import { Card } from "@smartboss/ui/components/card";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
+import { ADMIN_PERMS } from "@/modules/admin/permissions";
 import {
   dashboardStats,
   noExpenseWorkOrderCount,
@@ -29,6 +30,8 @@ import {
   type DonutCategory,
 } from "@/modules/maintenance/components/expense-donut";
 import { AppScaffold } from "@/modules/maintenance/components/app-scaffold";
+import { maintenanceScoreWatch } from "@/modules/maintenance/data/score-watch";
+import { ScoreWatchSection } from "@/modules/maintenance/components/score-watch-section";
 
 const STATUS_META: Record<
   string,
@@ -98,7 +101,7 @@ export default async function MaintenanceDashboardPage() {
   const now = new Date();
   // ใบงานบนแดชบอร์ดกรองด้วยกติกาเดียวกับหน้ารายการ (data/work-order-access.ts)
   const access = await workOrderAccess(session);
-  const [stats, noExpense, recent, properties, propCats, monthExpenses] =
+  const [stats, noExpense, recent, properties, propCats, monthExpenses, scoreWatch] =
     await Promise.all([
       dashboardStats(orgId, access),
       noExpenseWorkOrderCount(orgId, access),
@@ -106,6 +109,8 @@ export default async function MaintenanceDashboardPage() {
       listProperties(orgId),
       propertyCategoryMap(orgId),
       listExpensesForMonth(orgId, now.getFullYear(), now.getMonth() + 1),
+      // คะแนนรวมทั้งบริษัทเฉพาะคนที่ดูผลงานรายคนได้ — คนอื่นเห็นของตัวเอง
+      maintenanceScoreWatch(orgId, access, hasPermission(session, ADMIN_PERMS.performanceView)),
     ]);
 
   const propNames: Record<string, string> = Object.fromEntries(
@@ -177,6 +182,9 @@ export default async function MaintenanceDashboardPage() {
           Icon={ReceiptText}
         />
       </div>
+
+      {/* ─── ใบงานที่มีผลกับคะแนน ─── */}
+      <ScoreWatchSection data={scoreWatch} />
 
       {/* ─── ค่าใช้จ่ายเดือนนี้ ─── */}
       <SectionHeader title="ค่าใช้จ่ายเดือนนี้" href="/maintenance/expenses" />
