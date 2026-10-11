@@ -566,12 +566,12 @@ export const Composer = forwardRef<
           </button>
         </div>
       ) : (
-        <div className={cn("flex items-end gap-1", stacked && "flex-wrap items-center")}>
+        <div className={cn("flex items-end gap-0.5", stacked && "flex-wrap items-center")}>
           <div className="relative">
             <button
               type="button"
               onClick={() => setPlusOpen((v) => !v)}
-              className={cn("flex h-10 w-10 items-center justify-center rounded-full text-(--ink-soft) transition-transform hover:bg-(--bg-soft)", plusOpen && "rotate-45")}
+              className={cn("flex h-10 w-9 items-center justify-center rounded-full text-(--ink-soft) transition-transform hover:bg-(--bg-soft)", plusOpen && "rotate-45")}
               aria-label="แนบไฟล์"
               aria-expanded={plusOpen}
             >
@@ -631,7 +631,7 @@ export const Composer = forwardRef<
             <button
               type="button"
               onClick={() => cameraInputRef.current?.click()}
-              className="flex h-10 w-10 items-center justify-center rounded-full text-(--ink-soft) hover:bg-(--bg-soft) sm:hidden"
+              className="flex h-10 w-8 items-center justify-center rounded-full text-(--ink-soft) hover:bg-(--bg-soft) sm:hidden"
               aria-label="ถ่ายรูป"
             >
               <Camera className="h-5 w-5" />
@@ -641,7 +641,7 @@ export const Composer = forwardRef<
             type="button"
             onClick={() => imageInputRef.current?.click()}
             className={cn(
-              "h-10 w-10 items-center justify-center rounded-full text-(--ink-soft) hover:bg-(--bg-soft) sm:flex",
+              "h-10 w-8 items-center justify-center rounded-full text-(--ink-soft) hover:bg-(--bg-soft) sm:flex",
               text.trim() && !toolsOpen && !stacked ? "hidden" : "flex"
             )}
             aria-label="ส่งรูป"
@@ -711,7 +711,7 @@ export const Composer = forwardRef<
             // ไม่ดึงโฟกัส/เคอร์เซอร์ออกจากช่องพิมพ์ตอนกด
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => setEmojiOpen((v) => !v)}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-(--ink-soft) hover:bg-(--bg-soft)"
+            className="flex h-10 w-8 shrink-0 items-center justify-center rounded-full text-(--ink-soft) hover:bg-(--bg-soft)"
             aria-label="อิโมจิและสติกเกอร์ (Ctrl+E)"
             title="อิโมจิและสติกเกอร์ (Ctrl+E)"
             aria-expanded={emojiOpen}
@@ -736,7 +736,7 @@ export const Composer = forwardRef<
             <button
               type="button"
               onClick={startRecording}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-(--ink-soft) hover:bg-(--bg-soft)"
+              className="flex h-10 w-8 shrink-0 items-center justify-center rounded-full text-(--ink-soft) hover:bg-(--bg-soft)"
               aria-label="อัดข้อความเสียง"
               title="อัดข้อความเสียง"
             >
