@@ -14,6 +14,7 @@ export function FileDropZone({
   onFiles,
   label,
   className = "",
+  style,
   children,
 }: {
   enabled: boolean;
@@ -21,17 +22,19 @@ export function FileDropZone({
   /** ข้อความตอนลากค้างไว้ เช่น "ปล่อยเพื่อแนบเป็นไฟล์ส่งงาน" */
   label: string;
   className?: string;
+  style?: React.CSSProperties;
   children: React.ReactNode;
 }) {
   const [over, setOver] = useState(false);
   const depth = useRef(0);
   const hasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes("Files");
 
-  if (!enabled) return <div className={className}>{children}</div>;
+  if (!enabled) return <div className={className} style={style}>{children}</div>;
 
   return (
     <div
       className={`relative ${className}`}
+      style={style}
       onDragEnter={(e) => {
         if (!hasFiles(e)) return;
         e.preventDefault();

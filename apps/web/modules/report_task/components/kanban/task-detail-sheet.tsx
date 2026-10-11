@@ -326,6 +326,32 @@ export function TaskDetailSheet({
   // the count next to "ความคิดเห็น" is still shown un-collapsed so there's a
   // visible cue a conversation exists without forcing it open.
   const [mobileCommentsOpen, setMobileCommentsOpen] = useState(false);
+  // iPhone ไม่ย่อหน้าเว็บตามคีย์บอร์ด (interactive-widget ใช้ได้แค่ Android) — หน้าความคิดเห็นเต็มจอ
+  // เลยสูงเท่าเดิม คีย์บอร์ดบังช่องพิมพ์ เลื่อนขึ้นไปหาข้อความ ช่องพิมพ์ก็เลื่อนหายตาม ("เลื่อนแล้วต้องเลื่อน
+  // ลงมาพิมพ์อีก") ⇒ ระหว่างคีย์บอร์ดเปิด ให้กรอบพอดีพื้นที่ที่เห็นจริง (visualViewport): รายการเลื่อนในกรอบ
+  // ช่องพิมพ์ติดอยู่เหนือคีย์บอร์ดตลอด
+  // กรอบนี้อยู่ใน DialogContent ที่จัดกึ่งกลางด้วย transform ⇒ fixed อ้างกับกรอบหน้าต่าง ไม่ใช่จอ —
+  // วัดความสูงจากขอบบนของหน้าต่างถึงขอบบนของคีย์บอร์ด (ขอบล่างของส่วนที่มองเห็น)
+  const [keyboardFit, setKeyboardFit] = useState<{ height: number } | null>(null);
+  useEffect(() => {
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    if (!mobileCommentsOpen || !vv) return;
+    const update = () => {
+      const dialog = commentRef.current?.closest<HTMLElement>("[role=dialog]");
+      if (!dialog || vv.height >= window.innerHeight - 80) return setKeyboardFit(null);
+      const height = Math.round(vv.offsetTop + vv.height - dialog.getBoundingClientRect().top);
+      setKeyboardFit(height > 120 ? { height } : null);
+    };
+    const raf = requestAnimationFrame(update);
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => {
+      cancelAnimationFrame(raf);
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+      setKeyboardFit(null);
+    };
+  }, [mobileCommentsOpen]);
   // เปิดจากแจ้งเตือนคอมเมนต์ (?task=…&comment=<id>) — กางแผงคอมเมนต์ (มือถือพับไว้) เลื่อนไปหา แล้วกะพริบ
   // อ่านจาก URL ตรง ๆ (ไม่ใช้ useSearchParams — หน้าต่างนี้ถูกใช้หลายหน้า บางหน้าไม่มี Suspense ครอบ)
   const [flashCommentId, setFlashCommentId] = useState<string | null>(null);
@@ -2047,6 +2073,7 @@ export function TaskDetailSheet({
             // แถมช่องพิมพ์กินอีก 3 บรรทัด เหลือที่อ่านแชทนิดเดียว ("space ในการดูแชทน้อย ให้แสดงเต็มจอ")
             mobileCommentsOpen && "max-md:fixed max-md:inset-0 max-md:z-40 max-md:max-h-none max-md:border-t-0 max-md:bg-white"
           )}
+          style={mobileCommentsOpen && keyboardFit ? { height: keyboardFit.height, bottom: "auto" } : undefined}
         >
           <button
             type="button"
