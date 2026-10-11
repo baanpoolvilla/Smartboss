@@ -16,6 +16,7 @@ import {
 } from "@smartboss/ui/components/dropdown-menu";
 import { Logo } from "@/components/logo";
 import { NavigationProgress } from "@/components/shell/navigation-progress";
+import { NavSkeleton } from "@/components/shell/nav-skeleton";
 import { ImageAnnotatorHost } from "@/components/annotate/image-annotator-host";
 import { Icon } from "@/components/icon";
 import { IssueReportBarButton } from "@/modules/report_task/components/issue-report/issue-report-bar-button";
@@ -134,6 +135,8 @@ export function Shell({
           {children}
         </LauncherFrame>
       )}
+      {/* โครงหน้าระหว่างเปลี่ยนหน้า (ตัวเดียวทั้งแอป — จางออกได้แม้เปลี่ยนจากหน้าหลักเข้าโมดูล) */}
+      <NavSkeleton variant={activeModule ? "module" : "launcher"} />
     </ShellProvider>
   );
 }

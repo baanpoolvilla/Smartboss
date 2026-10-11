@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import { setNavPending } from "./nav-skeleton";
 
 /**
  * แถบโหลดบาง ๆ ด้านบนจอ — ขึ้นทันทีที่กดลิงก์ไปหน้าอื่น หายเมื่อหน้าใหม่ขึ้น
@@ -37,8 +38,13 @@ export function NavigationProgress() {
       if (hide.current) clearTimeout(hide.current);
       if (safety.current) clearTimeout(safety.current);
       setState("loading");
-      // หน้าไม่เปลี่ยนจริง (ถูกกันไว้ หรือ error) — อย่าค้างแถบไว้ตลอด
-      safety.current = setTimeout(() => setState("idle"), 15_000);
+      // โครงหน้าเฉพาะตอนไปคนละหน้า — สลับแท็บ/ตัวกรอง (เปลี่ยนแค่ ?query) ใช้แค่แถบบน ไม่งั้นทั้งจอกระพริบทุกครั้งที่กดกรอง
+      if (url.pathname !== window.location.pathname) setNavPending(true);
+      // หน้าไม่เปลี่ยนจริง (ถูกกันไว้ หรือ error) — อย่าค้างแถบ/โครงหน้าไว้ตลอด
+      safety.current = setTimeout(() => {
+        setState("idle");
+        setNavPending(false);
+      }, 10_000);
     }
     document.addEventListener("click", onClick, true);
     return () => document.removeEventListener("click", onClick, true);
@@ -47,6 +53,7 @@ export function NavigationProgress() {
   // หน้าใหม่ขึ้นแล้ว (path หรือ query เปลี่ยน) — วิ่งให้สุดแล้วจางหาย
   useEffect(() => {
     if (safety.current) clearTimeout(safety.current);
+    setNavPending(false);
     setState((s) => (s === "loading" ? "done" : s));
     hide.current = setTimeout(() => setState("idle"), 300);
     return () => {
