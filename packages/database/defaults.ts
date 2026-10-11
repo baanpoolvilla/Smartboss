@@ -107,7 +107,7 @@ export const REPORT_TASK_PERMS = [
 ];
 
 /** ต้องตรงกับ CHAT_PERMS ใน apps/web/modules/chat/permissions.ts */
-export const CHAT_PERMS = ["chat.access", "chat.manage"];
+export const CHAT_PERMS = ["chat.access", "chat.manage", "chat.sticker.manage"];
 
 /** ต้องตรงกับ COMPANY_FILES_PERMS ใน apps/web/modules/company-files/permissions.ts */
 export const COMPANY_FILES_PERMS = ["company_files.access", "company_files.upload", "company_files.manage"];
@@ -199,6 +199,8 @@ const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
     ...REPORT_TASK_PERMS,
     // ผู้บริหารดูรายงาน Google Ads (spec §7 หน้า 1–3)
     "ads.access",
+    // สติกเกอร์บริษัท: แอดมิน (IT) ได้ผ่าน CHAT_PERMS แล้ว + CEO + การตลาด
+    "chat.sticker.manage",
   ],
   // หัวหน้างานเข้าหลังบ้านได้ แต่ได้แค่ "ดูแลคน" ไม่ใช่ "ตั้งค่าระบบ" —
   // จัดการผู้ใช้และดูบทบาทได้ แต่แก้บทบาท/สิทธิ์ เปิดปิดโมดูล ตั้งค่าบริษัท
@@ -241,7 +243,7 @@ const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
   // SALE_ADMIN / STAFF ยังไม่มีโมดูลของตัวเอง — ได้ชุดพื้นฐานล้วน
   SALE_ADMIN: [],
   // ฝ่ายการตลาดดูรายงาน Google Ads (spec §7 หน้า 1–3)
-  MARKETING: ["ads.access"],
+  MARKETING: ["ads.access", "chat.sticker.manage"],
   STAFF: [],
 };
 

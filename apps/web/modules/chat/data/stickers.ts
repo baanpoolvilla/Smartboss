@@ -48,7 +48,7 @@ export async function listStickers(orgId: string): Promise<{ packs: ChatStickerP
 }
 
 function requireAdmin(actor: ChatActor): void {
-  if (!actor.isChatAdmin) throw new ChatError("เฉพาะแอดมินแชทจัดการสติกเกอร์ได้", 403);
+  if (!actor.canManageStickers) throw new ChatError("เพิ่ม/จัดการสติกเกอร์ได้เฉพาะแอดมิน CEO ฝ่าย IT และการตลาด", 403);
 }
 
 async function ownPackId(orgId: string, packId: string | null | undefined): Promise<string | null> {

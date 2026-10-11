@@ -8,7 +8,12 @@ import { ChatError, type ChatActor } from "./serialize";
 export async function chatActor(): Promise<ChatActor> {
   const session = await requireOrg();
   if (!hasPermission(session, CHAT_PERMS.access)) throw new ChatError("ไม่มีสิทธิ์ใช้งานแชท", 403);
-  return { orgId: session.orgId, userId: session.userId, isChatAdmin: hasPermission(session, CHAT_PERMS.manage) };
+  return {
+    orgId: session.orgId,
+    userId: session.userId,
+    isChatAdmin: hasPermission(session, CHAT_PERMS.manage),
+    canManageStickers: hasPermission(session, CHAT_PERMS.stickerManage),
+  };
 }
 
 /** แปลงข้อผิดพลาดเป็นคำตอบ JSON — ChatError ใช้สถานะของตัวเอง อย่างอื่น 500 */

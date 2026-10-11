@@ -7,6 +7,8 @@ export const CHAT_PERMS = {
   access: "chat.access",
   /** ตั้งค่าโมดูล (สงวนไว้ก่อน — ยังไม่มีหน้าตั้งค่าใน MVP นี้) */
   manage: "chat.manage",
+  /** เพิ่ม/แก้/ลบสติกเกอร์บริษัท — ตั้งต้นให้ ADMIN (ฝ่าย IT), CEO, MARKETING */
+  stickerManage: "chat.sticker.manage",
 } as const;
 
 export const ALL_CHAT_PERMS: string[] = Object.values(CHAT_PERMS);
@@ -14,4 +16,5 @@ export const ALL_CHAT_PERMS: string[] = Object.values(CHAT_PERMS);
 export const CHAT_PERM_LABELS: Record<string, string> = {
   [CHAT_PERMS.access]: "เข้าใช้โมดูลแชท",
   [CHAT_PERMS.manage]: "จัดการตั้งค่าโมดูลแชท",
+  [CHAT_PERMS.stickerManage]: "เพิ่ม/จัดการสติกเกอร์บริษัท",
 };

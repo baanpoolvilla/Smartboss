@@ -9,13 +9,13 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const actor = await chatActor();
-    return Response.json({ ...(await listStickers(actor.orgId)), canManage: actor.isChatAdmin });
+    return Response.json({ ...(await listStickers(actor.orgId)), canManage: Boolean(actor.canManageStickers) });
   } catch (err) {
     return chatErrorResponse(err, "stickers");
   }
 }
 
-/** เพิ่มสติกเกอร์ (แอดมินแชท) — multipart: file, packId?, name?, width?, height? */
+/** เพิ่มสติกเกอร์ (สิทธิ์ chat.sticker.manage) — multipart: file, packId?, name?, width?, height? */
 export async function POST(request: Request) {
   try {
     const actor = await chatActor();

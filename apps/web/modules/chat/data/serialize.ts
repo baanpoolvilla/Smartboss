@@ -19,6 +19,8 @@ export interface ChatActor {
   orgId: string;
   userId: string;
   isChatAdmin: boolean;
+  /** สิทธิ์ chat.sticker.manage — แยกจาก isChatAdmin: คนที่ดูแลสติกเกอร์ (IT/การตลาด) ไม่จำเป็นต้องคุมทุกห้อง */
+  canManageStickers?: boolean;
 }
 
 export interface MessageRow {
