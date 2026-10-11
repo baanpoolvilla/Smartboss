@@ -205,8 +205,9 @@ function detectMentionTrigger(el: HTMLElement): { query: string; rect: DOMRect; 
 // ของข้อความที่กำลังพิมพ์จนเหลือกว้างไม่กี่คำ และคีย์บอร์ดมือถือมีอิโมจิของตัวเองอยู่แล้ว
 const REPLY_FORMAT_BTN =
   "h-7 w-7 shrink-0 flex items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] [@media(pointer:coarse)]:hidden";
-/** ปุ่มรูป/ไฟล์/อีโมจิบนจอสัมผัส — เป้านิ้ว 40px (เดิม 28px ติดกับปุ่มส่ง แตะพลาดบ่อย) */
-const REPLY_TOUCH_BTN = "[@media(pointer:coarse)]:h-10 [@media(pointer:coarse)]:w-10";
+/** ปุ่มรูป/ไฟล์/อีโมจิบนจอสัมผัส — สูง 40px แต่กว้าง 32px ไอคอนไม่ห่างกันจนเปลืองที่ ("ระยะห่างไม่ต้องห่างมาก")
+ * ปุ่มส่งอยู่ขวาสุดแยกไปแล้ว สามปุ่มนี้ชิดกันได้โดยไม่แตะพลาดไปโดนปุ่มส่ง */
+const REPLY_TOUCH_BTN = "[@media(pointer:coarse)]:h-10 [@media(pointer:coarse)]:w-8";
 
 export function ReportCard({
   post,
