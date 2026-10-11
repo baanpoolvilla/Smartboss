@@ -1146,8 +1146,10 @@ export function ReportCard({
         // under the pointer gets a clearly darker border + tint, so it's
         // obvious which post you're in without a heavier frame at rest.
         "group/post relative rounded-xl sm:rounded-2xl border border-[var(--line)] bg-[var(--bg)] px-3.5 py-3 sm:px-4 sm:py-3.5 shadow-sm transition-colors duration-150 hover:border-[#b8c2d0] hover:bg-[#fafbfc]",
-        // @mention ถึงเรา — แถบเหลืองซ้าย + พื้นเหลืองอ่อน แบบ Discord
-        mentionsMe && "border-l-4 border-l-amber-400 bg-amber-50 hover:bg-amber-50 hover:border-l-amber-400",
+        // @mention ถึงเรา — แถบเหลืองเข้มซ้าย + พื้นเหลืองอ่อน แบบ Discord · เดิม 4px สี amber-400 บนพื้นเหลือง
+        // แถมมุมโค้งของการ์ดกินหัวท้ายแถบ แทบมองไม่เห็น ("อยากได้แถบสีข้าง ๆ แบบดิสคอร์ดเข้ม ๆ")
+        // มุมซ้ายโค้งน้อยลงให้แถบตรงเต็มความสูง
+        mentionsMe && "border-l-[5px] border-l-amber-500 rounded-l-md! bg-amber-50 hover:bg-amber-50 hover:border-l-amber-500",
         (highlighted || flashTargetId === post.id) && "bg-[var(--accent)] border-[var(--brand-green)]/40",
         // Unread keeps its own accent, now as a ring around the whole card
         // (a plain border-l reads oddly once the corners are rounded).
