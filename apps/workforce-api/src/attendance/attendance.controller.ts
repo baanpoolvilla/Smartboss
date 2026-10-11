@@ -82,9 +82,12 @@ export class SchedulingController {
   @Get('recurring-work-patterns')
   @RequirePermissions('workforce.scheduling.read')
   async listPatterns(
-    @Query('employment_id') employmentId: string,
+    @Query('employment_id') employmentId: string | undefined,
   ): Promise<{ items: Record<string, unknown>[] }> {
-    return this.service.listRecurringPatterns(requireUuid(employmentId, 'employment_id'));
+    // ไม่ส่ง employment_id = ตารางที่ใช้อยู่ของทุกคน (ดู listRecurringPatterns)
+    return this.service.listRecurringPatterns(
+      employmentId === undefined ? undefined : requireUuid(employmentId, 'employment_id'),
+    );
   }
 
   @Post('work-policies')

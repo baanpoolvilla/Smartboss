@@ -158,16 +158,28 @@ export async function renderTodayTab(
   const needsPatternLookup = missingPeople.filter(
     (e) => !todayAssignmentByEmployment.has(e.id),
   );
-  const patterns = await Promise.all(
-    needsPatternLookup.map((e) =>
-      wfTry<{ items: RecurringPattern[] }>(
-        `/recurring-work-patterns?employment_id=${e.id}`,
+  // ตารางประจำของทุกคนในครั้งเดียว — เดิมยิงทีละคน (คนที่ยังไม่สแกนทุกคน) เป็นสิบ ๆ request
+  // ต่อการเปิดหน้า วันหยุด/เช้า ๆ ที่ยังไม่มีใครสแกนช้าที่สุด ("ระบบบุคคลโหลดช้า")
+  // workforce-api รุ่นเก่า (ต้องมี employment_id) ตอบ null ⇒ ย้อนไปยิงทีละคนแบบเดิม
+  const allPatterns =
+    needsPatternLookup.length > 0
+      ? await wfTry<{ items: (RecurringPattern & { employment_id: string })[] }>("/recurring-work-patterns")
+      : null;
+  const patternByEmployment = new Map<string, { items: RecurringPattern[] } | null>();
+  if (allPatterns) {
+    for (const e of needsPatternLookup) {
+      patternByEmployment.set(e.id, { items: allPatterns.items.filter((p) => p.employment_id === e.id) });
+    }
+  } else {
+    const patterns = await Promise.all(
+      needsPatternLookup.map((e) =>
+        wfTry<{ items: RecurringPattern[] }>(
+          `/recurring-work-patterns?employment_id=${e.id}`,
+        ),
       ),
-    ),
-  );
-  const patternByEmployment = new Map(
-    needsPatternLookup.map((e, i) => [e.id, patterns[i]]),
-  );
+    );
+    needsPatternLookup.forEach((e, i) => patternByEmployment.set(e.id, patterns[i] ?? null));
+  }
 
   /*
    * คนที่ลาวันนี้ไม่ใช่คนขาดงาน — เดิมหน้านี้ดูแค่ตารางกะ ใครไม่มีสแกน

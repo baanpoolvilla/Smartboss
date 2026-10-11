@@ -170,14 +170,22 @@ export class SchedulingService {
    * คืนชื่อกะมาด้วย ไม่ใช่แค่ id — หน้าจอต้องแสดงว่าจันทร์คือกะอะไรโดยไม่ต้อง
    * ไปไล่จับคู่กับ /shifts เอง (และไม่พังเมื่อคนดูไม่มีสิทธิ์อ่านรายการกะ)
    */
+  /**
+   * ไม่ระบุ employmentId = ตารางที่ยังใช้อยู่ (effective_to ว่าง) ของทุกคนในครั้งเดียว — หน้า "วันนี้"
+   * ของโมดูลบุคคลเคยยิงทีละคน (คนที่ยังไม่สแกนทุกคน) เป็นสิบ ๆ request ทุกครั้งที่เปิดหน้า
+   */
   async listRecurringPatterns(
-    employmentId: string,
+    employmentId?: string,
   ): Promise<{ items: Record<string, unknown>[] }> {
     return this.uow.run(async (uow) => {
       const rows = await uow.tx
         .select()
         .from(schema.recurringWorkPatterns)
-        .where(eq(schema.recurringWorkPatterns.employmentId, employmentId))
+        .where(
+          employmentId === undefined
+            ? isNull(schema.recurringWorkPatterns.effectiveTo)
+            : eq(schema.recurringWorkPatterns.employmentId, employmentId),
+        )
         .orderBy(desc(schema.recurringWorkPatterns.effectiveFrom));
 
       const shifts = await uow.tx.select().from(schema.shiftDefinitions);
