@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarDays, MapPin, ArrowUpRight } from "lucide-react";
+import { CalendarDays, FilePlus2, MapPin, ArrowUpRight } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { getUser } from "@/modules/report_task/lib/directory";
 import { priorityMeta } from "@/modules/report_task/lib/task-meta";
@@ -47,18 +47,29 @@ export function MaintenanceCard({ item }: { item: MaintenanceBoardItem }) {
       <p className={cn("mt-1.5 text-sm font-semibold leading-snug text-[var(--ink)]", done && "text-[var(--ink-soft)]")}>
         {item.title}
       </p>
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--ink-soft)]">
-        {item.place && (
-          <span className="inline-flex items-center gap-1">
-            <MapPin className="h-3 w-3" />
-            {item.place}
-          </span>
-        )}
-        {item.dueDate && (
+      {item.place && (
+        <div className="mt-2 flex items-center gap-1 text-[11px] text-[var(--ink-soft)]">
+          <MapPin className="h-3 w-3" />
+          {item.place}
+        </div>
+      )}
+      {/* วันที่สร้าง + ครบกำหนด — สั่งซื้อไม่มีวันครบกำหนดในระบบ จึงมีแค่วันที่สร้าง */}
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--ink-soft)]">
+        <span className="inline-flex items-center gap-1">
+          <FilePlus2 className="h-3 w-3" />
+          สร้าง {formatDate(item.createdAt)}
+        </span>
+        {item.kind === "wo" && (
           <span className={cn("inline-flex items-center gap-1", item.overdue && "font-semibold text-[var(--chart-red)]")}>
             <CalendarDays className="h-3 w-3" />
-            {item.overdue ? "เลยกำหนด " : "กำหนด "}
-            {formatDate(item.dueDate)}
+            {item.dueDate ? (
+              <>
+                {item.overdue ? "เลยกำหนด " : "ครบกำหนด "}
+                {formatDate(item.dueDate)}
+              </>
+            ) : (
+              "ไม่ได้ตั้งวันครบกำหนด"
+            )}
           </span>
         )}
       </div>
