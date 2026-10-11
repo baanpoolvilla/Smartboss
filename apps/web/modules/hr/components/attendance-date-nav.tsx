@@ -23,7 +23,7 @@ export function AttendanceDateNav({ date, today }: { date: string; today: string
   const isToday = date === today;
 
   function go(iso: string) {
-    router.push(iso === today ? "/hr" : `/hr?date=${iso}`);
+    router.push(iso === today ? "/hr?tab=today" : `/hr?date=${iso}`);
   }
 
   return (
@@ -67,7 +67,7 @@ export function AttendanceDateNav({ date, today }: { date: string; today: string
       ) : (
         <Link
           href={
-            shiftDate(date, 1) === today ? "/hr" : `/hr?date=${shiftDate(date, 1)}`
+            shiftDate(date, 1) === today ? "/hr?tab=today" : `/hr?date=${shiftDate(date, 1)}`
           }
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-(--line) bg-(--bg) text-(--ink-soft) transition-colors hover:bg-(--bg-soft)"
           aria-label="วันถัดไป"
@@ -78,7 +78,7 @@ export function AttendanceDateNav({ date, today }: { date: string; today: string
 
       {!isToday && (
         <Link
-          href="/hr"
+          href="/hr?tab=today"
           className="shrink-0 rounded-(--radius) border border-(--line) bg-(--bg) px-3 py-2 text-xs font-medium text-(--ink-soft) transition-colors hover:bg-(--bg-soft)"
         >
           กลับวันนี้

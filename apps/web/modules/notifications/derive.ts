@@ -249,7 +249,8 @@ export function maintenanceHrefFor(type: string, referenceId: string | null): st
   if (type === "hr_attendance_correction_submitted") return "/hr?tab=corrections";
   if (type === "hr_overtime_pending") return "/hr?tab=overtime";
   // ผลคำขอของพนักงานเอง → หน้าแรกของบุคคล (มีรายการลา/แก้เวลา/OT ของตัวเอง)
-  if (type === "hr_leave_decided" || type === "hr_attendance_correction_decided" || type === "hr_overtime_decided") return "/hr";
+  // แท็บ "วันนี้" (ตัวเลขแจ้งเตือนสามชนิดนี้ขึ้นที่แท็บนั้น) — /hr เฉย ๆ เป็นหน้าลงเวลาแล้ว
+  if (type === "hr_leave_decided" || type === "hr_attendance_correction_decided" || type === "hr_overtime_decided") return "/hr?tab=today";
   // "issue_ticket_new" ไปทีมหลังบ้าน (Super Admin) เท่านั้น — referenceId
   // เก็บเป็น "orgId:ticketId" (ดู issue-notify.ts) เพราะคอนโซลข้ามบริษัทต้อง
   // รู้ทั้งสองอย่างถึงจะลิงก์ตรงตั๋วได้ ส่วน "..._reporter" กลับไปหน้าของผู้
