@@ -16,7 +16,7 @@ import type {
   IssueTicket,
 } from "@/modules/report_task/types/issue";
 import { listUsersAcrossOrgs } from "./users";
-import { notifyUser, deleteNotificationsByReference } from "@/modules/maintenance/data/notify";
+import { notifyUser, notifyActorName, deleteNotificationsByReference } from "@/modules/maintenance/data/notify";
 import { SYSTEM_USER_ID } from "@/modules/report_task/lib/task-penalty-sweep";
 import type { ActivityItem } from "@/modules/report_task/types";
 
@@ -115,8 +115,37 @@ export async function adminReplyToTicket(orgId: string, ticketId: string, body: 
       referenceId: ticketId,
     });
   }
+  // ทีมด้วยกันก็ต้องรู้ — เดิมแจ้งแค่ผู้แจ้ง โน้ตภายในเลยไม่มีใครได้แจ้งเตือนเลย และตอบผู้แจ้งไปแล้ว
+  // คนอื่นในทีมที่ดูตั๋วนี้อยู่ก็ไม่รู้
+  void notifyTicketTeam(orgId, updated, session.userId, audience);
 
   return updated;
+}
+
+/**
+ * ทีมรับเรื่องที่เกี่ยวกับตั๋วนี้ = ผู้รับผิดชอบ + ทีมที่เคยพิมพ์ในตั๋ว (ไม่รวมคนพิมพ์เอง/ผู้แจ้ง)
+ * ยังไม่มีใครเกี่ยวเลย (ไม่มีผู้รับผิดชอบ ไม่มีใครเคยตอบ) ⇒ แจ้งทั้งทีม แบบเดียวกับตอนแจ้งบัคใหม่
+ * ลิงก์ไปหน้าตั๋วในคอนโซล (issue_ticket_new + "orgId:ticketId")
+ */
+async function notifyTicketTeam(orgId: string, ticket: IssueTicket, actorId: string, audience: IssueAudience) {
+  try {
+    const [staff, actorName] = await Promise.all([listIssueStaff(), notifyActorName(actorId)]);
+    const staffIds = new Set(staff.map((u) => u.id));
+    const involved = new Set<string>();
+    if (ticket.assigneeId) involved.add(ticket.assigneeId);
+    for (const m of ticket.messages) if (m.kind === "message" && staffIds.has(m.authorId)) involved.add(m.authorId);
+    involved.delete(actorId);
+    involved.delete(ticket.reporterId);
+    const recipients = involved.size > 0 ? [...involved] : [...staffIds].filter((id) => id !== actorId && id !== ticket.reporterId);
+    const who = actorName ?? "ทีม Smartboss";
+    const title =
+      audience === "staff" ? `${who} เขียนโน้ตภายในในตั๋ว "${ticket.title}"` : `${who} ตอบผู้แจ้งในตั๋ว "${ticket.title}"`;
+    await Promise.all(
+      recipients.map((id) => notifyUser(orgId, id, { title, type: "issue_ticket_new", referenceId: `${orgId}:${ticket.id}` }))
+    );
+  } catch (err) {
+    console.error("[issue-ticket-actions] notify team failed", err);
+  }
 }
 
 /** ข้อความแจ้งผู้แจ้งเมื่อสถานะตั๋วเปลี่ยน (เฉพาะสถานะที่ผู้แจ้งควรรู้) */

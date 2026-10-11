@@ -186,7 +186,7 @@ export function IssueTicketDetailClient({
               .map((m) => {
                 const author = userMap[m.authorId];
                 return (
-                  <div key={m.id} className={cn("max-w-[85%] rounded-2xl px-3.5 py-2.5", m.kind === "event" ? "self-center bg-(--bg-soft) text-[11px] text-(--ink-soft) max-w-full text-center" : m.authorId === ticket.reporterId ? "self-start bg-(--bg-soft)" : "self-end bg-teal-50")}>
+                  <div key={m.id} className={cn("max-w-[85%] rounded-2xl px-3.5 py-2.5", m.kind === "event" ? "self-center bg-(--bg-soft) text-[11px] text-(--ink-soft) max-w-full text-center" : m.authorId === currentUserId ? "self-end bg-teal-50" : "self-start bg-(--bg-soft)")}>
                     {m.kind === "message" && (
                       <p className="text-[11px] font-medium text-(--ink-soft) mb-0.5">{author?.name ?? "ไม่ทราบชื่อ"}</p>
                     )}
