@@ -64,10 +64,9 @@ export function ReportTaskScaffold({
       // setState, not setEmployees — this is just a stopgap so getUser(me)
       // resolves before the real directory lands; it must not flip `loaded`,
       // or the demo seed would be treated as the real employee list.
-      // ไม่ติด isOwner จาก role มาด้วย — ระหว่างรอรายชื่อจริง ไม่งั้นคนที่ตั้งปิดเจ้าของไว้จะเห็นทุกอย่างแวบหนึ่ง
-      useEmployeeStore.setState((s) => ({ employees: [...s.employees, { ...currentUser, isOwner: undefined }] }));
+      useEmployeeStore.setState((s) => ({ employees: [...s.employees, currentUser] }));
     }
-    // ระดับเจ้าของบริษัทจาก role จริง — ไม่ต้องพึ่งว่าอยู่ในรายชื่อพนักงานไหม (ผู้ดูแลระบบสูงสุดไม่อยู่) ดู directory.ts
+    // ผู้ดูแลระบบสูงสุด (SUPER_ADMIN) เห็นทุกอย่างเสมอ ไม่ขึ้นกับรายชื่อพนักงาน — ดู directory.ts
     // ตั้งก่อนสลับตัวตน — การสลับทำให้บอร์ดคำนวณใหม่ ต้องเห็นค่านี้แล้ว
     setSessionOwner(currentUser.isOwner ? currentUser.id : null);
     useIdentityStore.getState().setViewingAs(currentUser.id);

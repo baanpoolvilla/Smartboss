@@ -42,9 +42,10 @@ export default async function ReportTaskLayout({
     },
   });
 
-  // ระดับเจ้าของบริษัทจาก role จริง (ชุดเดียวกับ OWNER_ROLE_CODES ใน lib/db/employee-directory.ts) —
-  // ส่งไปด้วยเพราะผู้ดูแลระบบสูงสุดไม่อยู่ในรายชื่อพนักงานของบริษัท หาจากรายชื่อไม่เจอ
-  const ownerRole = me.roles.some((r) => ["SUPER_ADMIN", "ADMIN", "CEO"].includes(r.role.code));
+  // ผู้ดูแลระบบสูงสุด (SUPER_ADMIN ระดับแพลตฟอร์ม) เห็นทุกอย่างเสมอ — อาจไม่อยู่ในรายชื่อพนักงานของบริษัทที่เปิดดูอยู่
+  // หรืออยู่แต่ช่อง "เจ้าของบริษัท" ถูกปิด ดู setSessionOwner ใน directory.ts
+  // ADMIN/CEO ไม่ใส่ตรงนี้ — ให้ช่อง "เจ้าของบริษัท" ในรายชื่อพนักงานตัดสิน (IT เป็น ADMIN แต่ตั้งให้เห็นแค่งานตัวเอง)
+  const ownerRole = me.roles.some((r) => r.role.code === "SUPER_ADMIN");
 
   const currentUser: User = {
     id: me.id,

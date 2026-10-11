@@ -47,21 +47,19 @@ export function isDepartmentHead(userId: string) {
   return departments.some((d) => d.headId === userId);
 }
 /**
- * คนที่ล็อกอินอยู่เป็นระดับเจ้าของบริษัทจาก role จริง (SUPER_ADMIN/ADMIN/CEO — ตั้งจาก report-task-scaffold)
- * ผู้ดูแลระบบสูงสุดเป็นบัญชีระดับระบบ ไม่อยู่ในรายชื่อพนักงานของบริษัท (listDirectory) ⇒ getUser หาไม่เจอ
- * isOwner เลยเป็น false บอร์ดงานไม่เห็นสักงาน ทั้งที่ใบงาน/สั่งซื้อเห็นครบ ("มันต้องเห็นหมดงานใบงานสั่งซื้อ")
+ * คนที่ล็อกอินอยู่เป็น "ผู้ดูแลระบบสูงสุด" (role SUPER_ADMIN — ตั้งจาก report-task-scaffold) ⇒ เห็นทุกอย่างเสมอ
+ * บัญชีนี้อาจไม่อยู่ในรายชื่อพนักงานของบริษัทที่เปิดดูอยู่ (listDirectory) หรืออยู่แต่ช่อง "เจ้าของบริษัท" ถูกปิด
+ * — เดิมบอร์ดงานไม่เห็นสักงาน ทั้งที่ใบงาน/สั่งซื้อเห็นครบ ("มันต้องเห็นหมดงานใบงานสั่งซื้อ")
  *
- * ใช้ค่านี้เฉพาะคนที่ "ไม่อยู่ในรายชื่อพนักงาน" — คนที่อยู่ในรายชื่อ ให้ช่อง "เจ้าของบริษัท" ในรายชื่อชนะเสมอ
- * (ตั้งปิดไว้ได้ เช่น IT ที่เป็น ADMIN แต่เห็นแค่งานตัวเอง) — เคยเอา role มา OR ทับ ทำให้ IT เห็นงานทุกคน
+ * ADMIN/CEO ไม่ผ่านทางนี้ — ใช้ช่อง "เจ้าของบริษัท" ในรายชื่อพนักงานตามเดิม (ค่าเริ่มต้นตาม role ปิดรายคนได้)
+ * เคยเอา ADMIN มารวมด้วย ทำให้ IT (ADMIN ที่ตั้งให้เห็นแค่งานตัวเอง) เห็นงานทุกคน
  */
 let sessionOwnerId: string | null = null;
 export function setSessionOwner(userId: string | null) {
   sessionOwnerId = userId;
 }
 export function isOwner(userId: string) {
-  const u = getUser(userId);
-  if (u) return u.isOwner === true;
-  return sessionOwnerId !== null && userId === sessionOwnerId;
+  return (sessionOwnerId !== null && userId === sessionOwnerId) || getUser(userId)?.isOwner === true;
 }
 /** Anyone with manager-level UI access — a department head or the company-wide owner. */
 export function canManage(userId: string) {
