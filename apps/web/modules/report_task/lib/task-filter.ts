@@ -1,6 +1,7 @@
 import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import { presetRange, type DatePreset } from "@/modules/report_task/lib/date-filter";
 import type { Task } from "@/modules/report_task/types";
+import { getUser } from "@/modules/report_task/lib/directory";
 import type { PenaltyFilter, QuickView } from "@/modules/report_task/store/task-store";
 
 export interface TaskFilterState {
@@ -31,7 +32,14 @@ export function matchesTaskFilters(task: Task, filters: TaskFilterState): boolea
     !task.watcherIds?.includes(filters.assignedById)
   )
     return false;
-  if (filters.departmentId !== "all" && !task.departmentIds.includes(filters.departmentId)) return false;
+  // แผนก = งานของคนที่อยู่ในแผนกนั้น "ตอนนี้" ("เลือกแผนกให้แสดงงานของคนที่อยู่ในแผนกนั้นทั้งหมด") —
+  // departmentIds ของงานจำแผนกตอนสร้างไว้ คนย้ายแผนกแล้วงานเก่าจะหลุดถ้าดูแค่ค่านั้น จึงดูแผนกปัจจุบันของผู้รับผิดชอบด้วย
+  if (
+    filters.departmentId !== "all" &&
+    !task.departmentIds.includes(filters.departmentId) &&
+    !task.assigneeIds.some((id) => getUser(id)?.departmentId === filters.departmentId)
+  )
+    return false;
   if (filters.priority !== "all" && task.priority !== filters.priority) return false;
   if (filters.penalty !== "all") {
     const overdue = dueUrgency(task) === "overdue";

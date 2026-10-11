@@ -108,7 +108,9 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   // unrelated to the person flow above, and to `?dept=` alongside
   // `?person=`) swaps the board out for DepartmentTopicsBoard
   // ("เลือกก่อนว่าแผนกไหน แล้วดูว่าแผนกนั้นมีโปรเจคอะไร").
-  const departmentBoardId = personBoardId ? null : searchParams.get("dept");
+  // ซ่อนไว้ก่อนพร้อมตัวเลือกจัดกลุ่ม "แผนก" (task-filters.tsx's GROUP_BY_CHOICES) — ลิงก์/ประวัติเก่าที่ยังมี ?dept=
+  // ค้างอยู่เคยพาไปบอร์ดแผนก (นับตามหัวข้อโปรเจค ขึ้น "0 งาน") แทนบอร์ดปกติที่กรองแผนกแล้ว
+  const departmentBoardId: string | null = null;
   function openDepartmentBoard(id: string) {
     const params = new URLSearchParams(searchParams.toString());
     params.set("dept", id);
