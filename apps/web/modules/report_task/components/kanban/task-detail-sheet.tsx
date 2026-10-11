@@ -2292,14 +2292,15 @@ export function TaskDetailSheet({
                   className="max-h-48 min-h-[2.5rem] md:min-h-[4.5rem] w-full resize-none border-0 bg-transparent px-3 pt-2.5 pb-1 text-base md:text-sm shadow-none [field-sizing:content] focus-visible:ring-0"
                 />
               </div>
-              {/* ปุ่มเล็ก 28px ไม่มีช่องไฟ — ไอคอนแนบ/อิโมจิชิดกัน ไม่เปลืองที่ ("ทำไมห่างกันจัง") */}
-              <div className="flex items-center px-1.5 pb-1.5">
+              {/* ขนาดเดียวกับช่องพิมพ์แชท (composer.tsx): ไอคอน 20px ในปุ่มกว้าง 32px ห่างกัน 2px — ชิดแบบ LINE
+                  ("ทำไมห่างกันจัง ... อยากให้ชิดแบบไลน์ คล้าย ๆ แชทของเรา") */}
+              <div className="flex items-center gap-0.5 px-1 pb-1">
               <AttachMenu
                 onFiles={(files) => void handleCommentFilesSelected(files)}
                 disabled={commentUploading}
-                trigger={commentUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+                trigger={commentUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Paperclip className="h-5 w-5" />}
                 aria-label="แนบไฟล์/รูปภาพ"
-                className="shrink-0 inline-flex items-center justify-center size-7 rounded-lg text-[var(--ink-soft)] disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground"
+                className="shrink-0 inline-flex h-9 w-8 items-center justify-center rounded-full text-[var(--ink-soft)] disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground"
               />
               <Popover open={commentEmojiOpen} onOpenChange={setCommentEmojiOpen}>
                 <PopoverTrigger
@@ -2308,9 +2309,9 @@ export function TaskDetailSheet({
                       type="button"
                       aria-label="อิโมจิและสติกเกอร์ (Ctrl+E)"
                       title="อิโมจิและสติกเกอร์ (Ctrl+E)"
-                      className="shrink-0 inline-flex items-center justify-center size-7 rounded-lg text-[var(--ink-soft)] hover:bg-accent hover:text-accent-foreground"
+                      className="shrink-0 inline-flex h-9 w-8 items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-accent hover:text-accent-foreground"
                     >
-                      <Smile className="h-4 w-4" />
+                      <Smile className="h-5 w-5" />
                     </button>
                   }
                 />
@@ -2320,7 +2321,7 @@ export function TaskDetailSheet({
               </Popover>
               <Button
                 size="icon"
-                className="ml-auto size-8 shrink-0 rounded-lg bg-[var(--brand-green)] text-[var(--ink)] hover:bg-[var(--brand-green-dark)] hover:text-white"
+                className="ml-auto size-9 shrink-0 rounded-full bg-[var(--brand-green)] text-[var(--ink)] hover:bg-[var(--brand-green-dark)] hover:text-white"
                 onClick={submitComment}
                 aria-label="ส่งความคิดเห็น"
               >
