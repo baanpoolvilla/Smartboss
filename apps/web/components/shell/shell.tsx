@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Clock, MoreHorizontal, X } from "lucide-react";
+import { MoreHorizontal, X } from "lucide-react";
 import { cn } from "@smartboss/ui/cn";
 import { Avatar } from "@smartboss/ui/components/avatar";
 import {
@@ -38,8 +38,6 @@ import { ChatNotifyListener } from "@/modules/chat/components/chat-nav-badge";
 import { CallManager } from "@/modules/chat/components/call-manager";
 import { MarkReadOnRoute } from "@/modules/notifications/mark-read-on-route";
 import { ShellProvider, useShell, type ShellUser } from "./shell-context";
-import { useClockState } from "@/components/home/clock-tile";
-import { APP_CLOCK_ENABLED } from "@/modules/hr/lib/app-clock";
 import { useBackToClose, useBackToCloseOnTouch, whenHistorySettled } from "@/lib/back-to-close";
 
 export type { ShellUser };
@@ -129,8 +127,6 @@ export function Shell({
           user={user}
           pathname={pathname}
           chatPath={modules.flatMap((m) => m.menus).find((i) => i.path.endsWith("/chat"))?.path ?? null}
-          // เงื่อนไขเดียวกับไอคอนลงเวลาในหน้าแรก (app/(shell)/page.tsx)
-          showClock={APP_CLOCK_ENABLED && modules.some((m) => m.id === "hr")}
         >
           {children}
         </LauncherFrame>
@@ -149,13 +145,11 @@ function LauncherFrame({
   user,
   pathname,
   chatPath,
-  showClock,
   children,
 }: {
   user: ShellUser;
   pathname: string;
   chatPath: string | null;
-  showClock: boolean;
   children: React.ReactNode;
 }) {
   const router = useRouter();
@@ -223,7 +217,7 @@ function LauncherFrame({
       {/* มือถือ: เว้นที่ด้านล่างให้แถบเมนูลอย (68px) + ระยะหายใจเดิม 24px */}
       <main data-bottom-nav-pad className="min-w-0 flex-1 p-6 pb-[92px] lg:pb-6">{children}</main>
 
-      <HomeBottomNav userId={user.id} pathname={pathname} chatPath={chatPath} showClock={showClock} />
+      <HomeBottomNav pathname={pathname} chatPath={chatPath} />
     </div>
   );
 }
@@ -543,44 +537,13 @@ function BottomBar({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** สีปุ่มลงเวลา — สีจากโลโก้เท่านั้น: เขียว "Smart" = เข้างาน · น้ำเงินเข้ม "Boss" = ออกงาน · เขียวอ่อน = ลงครบแล้ว */
-const CLOCK_LOOK = {
-  in: { bg: "linear-gradient(155deg,#6fcf63,#3a9a2f)", icon: "#fff", text: "#3a9a2f", glow: "rgba(76,185,63,0.35)" },
-  out: { bg: "linear-gradient(155deg,#34435e,var(--brand-navy))", icon: "#fff", text: "var(--brand-navy)", glow: "rgba(27,37,55,0.30)" },
-  done: { bg: "linear-gradient(155deg,#eaf7e7,#d6efd1)", icon: "#3a9a2f", text: "var(--ink-soft)", glow: "rgba(27,37,55,0.10)" },
-} as const;
-
 /**
- * แถบเมนูล่างของหน้าแรก (มือถือ) — หน้าหลัก · แชท · [ลงเวลา] · แจ้งเตือน · บัญชี
- * ปุ่มกลาง "ลงเวลา" ยกขึ้นเป็นวงกลม มีเฉพาะคนที่ต้องลงเวลา (สถานะเดียวกับไอคอนลงเวลาในหน้าแรก)
- * สีบอกว่ากดเข้าไปจะได้ทำอะไร (CLOCK_LOOK): เขียว เข้างาน · น้ำเงินเข้ม ออกงาน · เขียวอ่อน ลงครบแล้ว
- * ปุ่มกลางมีวงขาวล้อม ใต้ปุ่มบอกเวลาเข้า (แทนไอคอนลงเวลาบนหน้าแรกที่ซ่อนไว้บนมือถือ)
- * หน้าในโมดูลไม่มีปุ่มกลาง ("หน้าอื่นๆไม่ต้องมีตัวกลาง") — ใช้ ModuleBottomNav
+ * แถบเมนูล่างของหน้าแรก (มือถือ) — หน้าหลัก · แชท · แจ้งเตือน · บัญชี
+ * ปุ่มลงเวลาตรงกลาง (และไอคอนลงเวลาบนหน้าแรก) ย้ายเข้าไปเป็นหน้าแรกของระบบบุคคลแล้ว (/hr แท็บ "ลงเวลา")
+ * — "เอาออกจากหน้านี้ ให้ไปอยู่ใน HR เป็นหัวข้อนึง"
  */
-function HomeBottomNav({
-  userId,
-  pathname,
-  chatPath,
-  showClock,
-}: {
-  userId: string;
-  pathname: string;
-  chatPath: string | null;
-  showClock: boolean;
-}) {
+function HomeBottomNav({ pathname, chatPath }: { pathname: string; chatPath: string | null }) {
   const { unread } = useShell();
-  const clock = useClockState(userId);
-  const clockVisible = showClock && clock.kind !== "hidden" && clock.kind !== "loading";
-  const look = clock.kind === "in" ? CLOCK_LOOK.in : clock.kind === "out" ? CLOCK_LOOK.out : CLOCK_LOOK.done;
-  const clockLabel = clock.kind === "in" ? "เข้างาน" : clock.kind === "out" ? "ออกงาน" : clock.kind === "done" ? "ลงเวลาแล้ว" : "ลงเวลา";
-  const clockSub =
-    clock.kind === "out" && clock.since
-      ? `เข้า ${clock.since}`
-      : clock.kind === "done"
-        ? clock.since
-          ? `${clock.since}–${clock.at}`
-          : `ออก ${clock.at}`
-        : null;
 
   const left = (
     <>
@@ -608,36 +571,5 @@ function HomeBottomNav({
     </>
   );
 
-  if (!clockVisible) return <BottomBar>{left}{right}</BottomBar>;
-
-  return (
-    <BottomBar>
-      {/* ซ้าย/ขวากว้างเท่ากันเสมอ ปุ่มกลางจะอยู่กึ่งกลางพอดี แม้ฝั่งซ้ายไม่มีแชท */}
-      <div className="relative flex flex-1">{left}</div>
-      <div className="w-[76px] shrink-0" />
-      <div className="relative flex flex-1">{right}</div>
-      <Link
-        href="/clock"
-        prefetch={false}
-        className="group absolute left-1/2 top-[-24px] flex w-[76px] -translate-x-1/2 flex-col items-center"
-      >
-        {/* วงขาวสีเดียวกับแถบล้อมปุ่ม — เดิมเป็นรอยเว้าโปร่ง เห็นไอคอนแอปข้างหลังโผล่รอบปุ่ม
-            ดูรก ("ปรับปรุงตรงนี้ให้มันสวยกว่านี้") วงทึบทำให้ปุ่มดูงอกขึ้นมาจากแถบเรียบ ๆ */}
-        <span className="rounded-full bg-(--bg) p-[5px] shadow-[0_-4px_10px_rgba(15,30,60,0.08)]">
-          <span
-            className="flex h-[50px] w-[50px] items-center justify-center rounded-full transition-transform group-active:scale-95"
-            style={{ background: look.bg, color: look.icon, boxShadow: `0 6px 14px ${look.glow}, inset 0 1px 0 rgba(255,255,255,0.3)` }}
-          >
-            <Clock className="h-6 w-6" strokeWidth={2.25} />
-          </span>
-        </span>
-        <span className="mt-0.5 whitespace-nowrap text-[11px] font-bold leading-tight" style={{ color: look.text }}>
-          {clockLabel}
-        </span>
-        {clockSub && (
-          <span className="whitespace-nowrap text-[10px] leading-tight tabular-nums text-(--ink-soft)">{clockSub}</span>
-        )}
-      </Link>
-    </BottomBar>
-  );
+  return <BottomBar>{left}{right}</BottomBar>;
 }
