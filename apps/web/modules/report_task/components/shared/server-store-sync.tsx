@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { batchRead } from "@/modules/report_task/lib/store-batch";
 import { toast } from "sonner";
 import type { StoreApi, UseBoundStore } from "zustand";
 import type { StoreKey } from "@/modules/report_task/lib/db/store-registry";
@@ -120,7 +121,10 @@ export function ServerStoreSync<T, S>({
 
     async function load() {
       try {
-        const { slice, version } = await fetchServer();
+        // โหลดครั้งแรกรวมกับคีย์อื่นที่ mount พร้อมกันเป็นคำขอเดียว (lib/store-batch.ts) — ฟีดรายงาน
+        // ก้อนใหญ่หลาย MB แยกไปของมันเอง ไม่ให้คีย์เล็ก ๆ ทั้งหมดต้องรอมัน · ทางนี้พลาด = อ่านแบบเดิม
+        const batched = apiKey === "report-feed" ? null : await batchRead(apiKey);
+        const { slice, version } = batched ? { slice: batched.slice as S | null, version: batched.version } : await fetchServer();
         versionRef.current = version;
         // A brand-new store has nothing saved server-side yet (slice is null) —
         // still run `apply` (with the store's own current slice as a no-op

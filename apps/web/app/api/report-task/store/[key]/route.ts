@@ -2,30 +2,30 @@ import type { NextRequest } from "next/server";
 import { requireOrg } from "@smartboss/auth";
 
 import {
-  listDirectory,
   saveDirectoryProfiles,
   type DirectoryUser,
 } from "@/modules/report_task/lib/db/employee-directory";
 import {
-  listDepartmentsWithOverlay,
   saveDepartmentOverlay,
 } from "@/modules/report_task/lib/db/departments";
 import {
   isValidStoreKey,
-  ownNotifications,
   readStore,
   readStoreVersion,
   writeOwnNotifications,
   writeStore,
 } from "@/modules/report_task/lib/db/org-store";
 import { recordReportStickerEvents, refundDeletedReportRoundEvents } from "@/modules/report_task/lib/db/report-feed-performance";
-import {
-  listHolidayEvents,
-  listLeaveEvents,
-  listLeaveTypeCatalog,
-  listOvertimeEvents,
-} from "@/modules/report_task/lib/db/workforce-calendar";
 import type { Department } from "@/modules/report_task/types";
+import {
+  DEPARTMENTS_KEY,
+  DIRECTORY_KEY,
+  LEAVE_TYPE_CATALOG_KEY,
+  NOTIFICATIONS_KEY,
+  WORKFORCE_KEYS,
+  isFixedVersionKey,
+  readStorePayload,
+} from "@/modules/report_task/lib/db/store-read";
 
 /**
  * ที่เก็บสถานะที่แชร์กันทั้งทีมของโมดูลรายงานและงาน (ลา ประชุม วันหยุด ฟีดรายงาน
@@ -48,19 +48,6 @@ function notFound() {
   return Response.json({ error: "ไม่รู้จัก store นี้" }, { status: 404 });
 }
 
-/*
- * "employees" ไม่ได้เก็บเป็นก้อนเหมือนคีย์อื่น — สร้างจาก core.users ทุกครั้ง
- * เพื่อให้คนในโมดูลนี้เป็นคนเดียวกับที่ล็อกอิน (ดู employee-directory.ts)
- * version คงที่ 1 เพราะไม่มีการชนกันของสองแท็บ — ตัวจริงอยู่ที่ core.users
- */
-const DIRECTORY_KEY = "employees";
-
-/*
- * "departments" ก็เช่นกัน — ชื่อ/การมีอยู่จริงมาจาก core.departments (จัดการที่
- * /admin/departments) ส่วนสี/หัวหน้าแผนกยังเป็นของโมดูลนี้เอง (ดู lib/db/departments.ts)
- */
-const DEPARTMENTS_KEY = "departments";
-
 /**
  * ฟีดรายงาน — เขียนทั้งก้อนเหมือนคีย์ทั่วไป แต่ต้องอ่านก้อนเก่าไว้ก่อนทับ
  * เพื่อ diff หา sticker reaction ที่เพิ่งติดใหม่ (recordReportStickerEvents)
@@ -68,30 +55,6 @@ const DEPARTMENTS_KEY = "departments";
  * writeTasks ของ Kanban ทำกับ task.reactions อยู่แล้ว
  */
 const REPORT_FEED_KEY = "report-feed";
-
-/** แจ้งเตือน — ส่ง/รับเฉพาะของเจ้าของเครื่อง (ดู ownNotifications / writeOwnNotifications) */
-const NOTIFICATIONS_KEY = "notifications";
-
-/*
- * การลากับวันหยุดเป็นของโมดูลบุคคล (workforce) — อ่านอย่างเดียวที่นี่
- *
- * เดิมโมดูลนี้เก็บของตัวเอง ทำให้มีข้อมูลการลาสองชุด และเงินเดือนคำนวณจาก
- * ชุดของ workforce เท่านั้น ⇒ ปฏิทินกับสลิปไม่ตรงกันโดยไม่มีอะไรเตือน
- */
-const WORKFORCE_KEYS = new Set(["leaves", "holidays", "overtime"]);
-
-/** ชื่อประเภทลาทั้งหมด — ไม่ต้องใช้ช่วงวันที่เหมือนสองคีย์ข้างบน */
-const LEAVE_TYPE_CATALOG_KEY = "leave-type-catalog";
-
-/** ช่วงที่ปฏิทินขอมาโดยปริยาย — กว้างพอครอบคลุมมุมมองปีของ FullCalendar */
-function defaultRange(): { from: string; to: string } {
-  const now = new Date();
-  const from = new Date(now);
-  from.setMonth(from.getMonth() - 6);
-  const to = new Date(now);
-  to.setMonth(to.getMonth() + 12);
-  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
-}
 
 /**
  * ตอบ poll ที่ไม่มีอะไรใหม่ — ไม่มี body มีแต่เลข version
@@ -116,9 +79,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ key
   // (poll ไม่เคยเอาผลของคีย์พวกนี้ไปใช้อยู่แล้ว เพราะ version ไม่เคยเปลี่ยน)
   const known = request.headers.get("x-known-version");
   if (known !== null) {
-    const fixedVersionKey =
-      key === DIRECTORY_KEY || key === DEPARTMENTS_KEY || key === LEAVE_TYPE_CATALOG_KEY || WORKFORCE_KEYS.has(key);
-    if (fixedVersionKey) {
+    if (isFixedVersionKey(key)) {
       if (known === "1") return unchanged(1);
     } else {
       const current = await readStoreVersion(session.orgId, key);
@@ -126,39 +87,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ key
     }
   }
 
-  if (key === DIRECTORY_KEY) {
-    const users = await listDirectory(session.orgId);
-    return Response.json(users, { headers: { "Cache-Control": "no-store", "X-Data-Version": "1" } });
-  }
-
-  if (key === DEPARTMENTS_KEY) {
-    const departments = await listDepartmentsWithOverlay(session.orgId);
-    return Response.json(departments, { headers: { "Cache-Control": "no-store", "X-Data-Version": "1" } });
-  }
-
-  if (key === LEAVE_TYPE_CATALOG_KEY) {
-    const names = await listLeaveTypeCatalog(session.orgId);
-    return Response.json(names, { headers: { "Cache-Control": "no-store", "X-Data-Version": "1" } });
-  }
-
-  if (WORKFORCE_KEYS.has(key)) {
-    const { from, to } = defaultRange();
-    const events =
-      key === "leaves"
-        ? await listLeaveEvents(session.orgId, from, to)
-        : key === "overtime"
-          ? await listOvertimeEvents(session.orgId, from, to)
-          : await listHolidayEvents(session.orgId, from, to);
-    // holidays store เก็บเป็น { holidays, selectedByUser } ส่วน leaves/overtime เป็นอาร์เรย์ตรง ๆ
-    const payload =
-      key === "holidays" ? { holidays: events, selectedByUser: {} } : events;
-    return Response.json(payload, { headers: { "Cache-Control": "no-store", "X-Data-Version": "1" } });
-  }
-
-  const { data, version } = await readStore<unknown>(session.orgId, key);
-  // แจ้งเตือนเก็บรวมทั้งบริษัท แต่ส่งให้แต่ละคนเฉพาะของตัวเอง — เดิมทุกเครื่องได้ทั้งก้อน
-  // (ของคนอื่นถูกซ่อนแค่ที่หน้าจอ แต่เปิด DevTools ก็อ่านได้ และโหลด 1.6 MB ทุกครั้ง)
-  const payload = key === NOTIFICATIONS_KEY ? ownNotifications(data, session.userId) : data;
+  const { payload, version } = await readStorePayload(session.orgId, session.userId, key);
   return Response.json(payload, { headers: { "Cache-Control": "no-store", "X-Data-Version": String(version) } });
 }
 

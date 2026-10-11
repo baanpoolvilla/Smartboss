@@ -14,6 +14,27 @@ import type { Task } from "@/modules/report_task/types";
 import type { User, Department } from "@/modules/report_task/types";
 
 /**
+ * ของที่สอง tile (รายงานและงาน / Chat & Report) ต้องใช้ร่วมกัน — ดึงครั้งเดียวแล้วใช้ด้วยกัน และจำไว้
+ * SHARED_TTL_MS: เดิมทุกครั้งที่กลับหน้าหลัก สอง tile ยิงคนละ 6 คำขอ รวมฟีดรายงานทั้งก้อน (หลาย MB)
+ * สองรอบ ทั้งที่ tile งานไม่ได้ใช้ฟีดเลย (report-feed 284 ครั้งใน 3 ชม. — slow-pages.sh 2026-10-11)
+ */
+const SHARED_TTL_MS = 60_000;
+const shared = new Map<string, { at: number; value: Promise<unknown> }>();
+
+function fetchShared<T>(url: string): Promise<T> {
+  const hit = shared.get(url);
+  if (hit && Date.now() - hit.at < SHARED_TTL_MS) return hit.value as Promise<T>;
+  const value = fetch(url).then((r) => {
+    if (!r.ok) throw new Error(String(r.status));
+    return r.json();
+  });
+  // พังแล้วไม่จำ — รอบหน้าลองใหม่
+  value.catch(() => shared.delete(url));
+  shared.set(url, { at: Date.now(), value });
+  return value as Promise<T>;
+}
+
+/**
  * Combined "needs your attention in รายงานและงาน" count, rendered on the home
  * app-launcher tile — the sum of things the module already badges elsewhere,
  * added together since this is the one spot with only a single number to
@@ -45,21 +66,15 @@ export function AppTileReviewBadge({
 
     async function load() {
       try {
-        const [tasksRes, employeesRes, departmentsRes, reportFeedRes, reviewSettingsRes, notificationsRes] = await Promise.all([
-          fetch("/api/report-task/tasks"),
-          fetch("/api/report-task/store/employees"),
-          fetch("/api/report-task/store/departments"),
-          fetch("/api/report-task/store/report-feed"),
-          fetch("/api/report-task/store/task-review-settings"),
-          fetch("/api/report-task/store/notifications"),
-        ]);
+        // tile งานไม่ใช้ฟีดรายงาน · tile Chat & Report ไม่ใช้งาน/การตั้งค่าตรวจงาน — ดึงเฉพาะที่ใช้
+        const none = Promise.resolve(null);
         const [tasks, employees, departments, reportFeed, reviewSettings, notifications] = (await Promise.all([
-          tasksRes.json(),
-          employeesRes.json(),
-          departmentsRes.json(),
-          reportFeedRes.json(),
-          reviewSettingsRes.json(),
-          notificationsRes.json(),
+          part === "tasks" ? fetchShared("/api/report-task/tasks") : Promise.resolve([]),
+          fetchShared("/api/report-task/store/employees"),
+          fetchShared("/api/report-task/store/departments"),
+          part === "reports" ? fetchShared("/api/report-task/store/report-feed") : none,
+          part === "tasks" ? fetchShared("/api/report-task/store/task-review-settings") : none,
+          part === "tasks" ? fetchShared("/api/report-task/store/notifications") : none,
         ])) as [
           Task[],
           User[],
