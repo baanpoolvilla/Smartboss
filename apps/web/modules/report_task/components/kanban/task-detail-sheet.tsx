@@ -2041,7 +2041,12 @@ export function TaskDetailSheet({
           enabled
           onFiles={(files) => void handleCommentFilesSelected(files)}
           label="ปล่อยเพื่อแนบในความคิดเห็น"
-          className="w-full md:w-[320px] shrink-0 max-h-[55vh] md:max-h-none border-t md:border-t-0 md:border-l border-[var(--line)] flex flex-col overflow-hidden min-h-0 bg-[var(--bg-soft)]/30"
+          className={cn(
+            "w-full md:w-[320px] shrink-0 max-h-[55vh] md:max-h-none border-t md:border-t-0 md:border-l border-[var(--line)] flex flex-col overflow-hidden min-h-0 bg-[var(--bg-soft)]/30",
+            // มือถือ: เปิดความคิดเห็นแล้วเต็มจอทับรายละเอียดงาน แบบหน้าแชท — เดิมเป็นแผงล่างสูงไม่เกิน 55%
+            // แถมช่องพิมพ์กินอีก 3 บรรทัด เหลือที่อ่านแชทนิดเดียว ("space ในการดูแชทน้อย ให้แสดงเต็มจอ")
+            mobileCommentsOpen && "max-md:fixed max-md:inset-0 max-md:z-40 max-md:max-h-none max-md:border-t-0 max-md:bg-white"
+          )}
         >
           <button
             type="button"
@@ -2056,7 +2061,13 @@ export function TaskDetailSheet({
                 <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand-green)] md:hidden" />
               )}
             </span>
-            <ChevronDown className={cn("h-4 w-4 text-[var(--ink-soft)] shrink-0 transition-transform md:hidden", mobileCommentsOpen && "rotate-180")} />
+            {mobileCommentsOpen ? (
+              <span className="flex items-center gap-1 text-xs text-[var(--ink-soft)] md:hidden">
+                กลับไปที่งาน <X className="h-4 w-4" />
+              </span>
+            ) : (
+              <ChevronDown className="h-4 w-4 text-[var(--ink-soft)] shrink-0 md:hidden" />
+            )}
           </button>
           <div className={cn("flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0", mobileCommentsOpen ? "block" : "hidden md:block")}>
             {task.comments.map((c) => {
@@ -2128,7 +2139,7 @@ export function TaskDetailSheet({
           </div>
 
           <div
-            className={cn("border-t border-[var(--line)] p-3 flex-col gap-2 shrink-0 bg-white", mobileCommentsOpen ? "flex" : "hidden md:flex")}
+            className={cn("border-t border-[var(--line)] p-2 md:p-3 flex-col gap-2 shrink-0 bg-white", mobileCommentsOpen ? "flex" : "hidden md:flex")}
             // วางรูปที่แคป (Ctrl+V) / ลากไฟล์มาวาง ได้ทั้งกล่องคอมเมนต์
             onPaste={(e) => {
               if (hasClipboardText(e.clipboardData)) return; // ตารางจาก Excel ฯลฯ = วางเป็นข้อความ
@@ -2197,7 +2208,7 @@ export function TaskDetailSheet({
                 <Textarea
                   ref={commentRef}
                   placeholder="เขียนความคิดเห็น… พิมพ์ @ เพื่อแท็กคน"
-                  rows={3}
+                  rows={1}
                   value={comment}
                   onChange={(e) => {
                     setComment(e.target.value);
@@ -2243,8 +2254,9 @@ export function TaskDetailSheet({
                       submitComment();
                     }
                   }}
-                  // ช่องพิมพ์เต็มความกว้าง สูง 3 บรรทัด ขยายตามข้อความได้ถึงราว 8 บรรทัด — ไม่มีกรอบของตัวเอง ใช้กรอบของกล่องรวม
-                  className="max-h-48 min-h-[4.5rem] w-full resize-none border-0 bg-transparent px-3 pt-2.5 pb-1 text-sm shadow-none [field-sizing:content] focus-visible:ring-0"
+                  // ช่องพิมพ์เต็มความกว้าง ขยายตามข้อความได้ถึงราว 8 บรรทัด — ไม่มีกรอบของตัวเอง ใช้กรอบของกล่องรวม
+                  // คอมเริ่ม 3 บรรทัด · มือถือเริ่มบรรทัดเดียว ("พื้นที่พิมพ์ไม่กินเยอะเกินไป") และ 16px กัน iPhone ซูมหน้า
+                  className="max-h-48 min-h-[2.5rem] md:min-h-[4.5rem] w-full resize-none border-0 bg-transparent px-3 pt-2.5 pb-1 text-base md:text-sm shadow-none [field-sizing:content] focus-visible:ring-0"
                 />
               </div>
               <div className="flex items-center gap-0.5 px-1.5 pb-1.5">
