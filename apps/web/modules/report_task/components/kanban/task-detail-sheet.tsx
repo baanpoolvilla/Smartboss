@@ -2317,19 +2317,6 @@ export function TaskDetailSheet({
                   <EmojiStickerPicker onPickEmoji={insertCommentEmoji} onPickSticker={sendCommentSticker} />
                 </PopoverContent>
               </Popover>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <button type="button" className="shrink-0 text-[var(--ink-soft)] hover:text-[var(--ink)]" aria-label="เงื่อนไขการแนบไฟล์">
-                      <Info className="h-3.5 w-3.5" />
-                    </button>
-                  }
-                />
-                <TooltipContent>
-                  รูปภาพสูงสุด {attachmentSettings.maxImageMB}MB · เอกสารสูงสุด {attachmentSettings.maxFileMB}MB ·
-                  วิดีโอสูงสุด {attachmentSettings.maxVideoMB}MB · แนบได้สูงสุด {attachmentSettings.maxFilesPerComment} ไฟล์ต่อความคิดเห็น
-                </TooltipContent>
-              </Tooltip>
               <Button
                 size="icon"
                 className="ml-auto size-8 shrink-0 rounded-lg bg-[var(--brand-green)] text-[var(--ink)] hover:bg-[var(--brand-green-dark)] hover:text-white"
