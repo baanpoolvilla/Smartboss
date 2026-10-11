@@ -205,6 +205,8 @@ function detectMentionTrigger(el: HTMLElement): { query: string; rect: DOMRect; 
 // ของข้อความที่กำลังพิมพ์จนเหลือกว้างไม่กี่คำ และคีย์บอร์ดมือถือมีอิโมจิของตัวเองอยู่แล้ว
 const REPLY_FORMAT_BTN =
   "h-7 w-7 shrink-0 flex items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] [@media(pointer:coarse)]:hidden";
+/** ปุ่มรูป/ไฟล์/อีโมจิบนจอสัมผัส — เป้านิ้ว 40px (เดิม 28px ติดกับปุ่มส่ง แตะพลาดบ่อย) */
+const REPLY_TOUCH_BTN = "[@media(pointer:coarse)]:h-10 [@media(pointer:coarse)]:w-10";
 
 export function ReportCard({
   post,
@@ -477,6 +479,9 @@ export function ReportCard({
   const [replyEmojiOpen, setReplyEmojiOpen] = useState(false);
   const replySelRef = useRef<Range | null>(null);
   const replyFileInputRef = useRef<HTMLInputElement>(null);
+  // ปุ่มรูปแยกจาก 📎 — รับเฉพาะรูป/วิดีโอ มือถือจึงเปิดคลังรูปของเครื่อง (ตารางรูปเต็มจอ ปัดหาได้) ทันที
+  // แทนตัวจัดการไฟล์ที่ 📎 เปิด (รับเอกสารด้วย) — "กดรูปง่ายในทีเดียว มีแถบปัดรูดค้นหารูป มองเห็นเต็มจอ"
+  const replyPhotoInputRef = useRef<HTMLInputElement>(null);
   // รูปจากปุ่มดินสอ (หน้าดูรูป) เพิ่งเข้ามาในช่องตอบกลับ — เลื่อนไปให้เห็น + กะพริบกรอบ
   const [replyAttachFlash, setReplyAttachFlash] = useState(false);
   function revealReplyAttachment() {
@@ -2083,6 +2088,14 @@ export function ReportCard({
                 className="hidden"
                 onChange={(e) => handleReplyFiles(e.target.files)}
               />
+              <input
+                ref={replyPhotoInputRef}
+                type="file"
+                accept="image/*,video/*"
+                multiple
+                className="hidden"
+                onChange={(e) => handleReplyFiles(e.target.files)}
+              />
               <Popover open={replyEmojiOpen} onOpenChange={setReplyEmojiOpen}>
                 <PopoverTrigger
                   render={
@@ -2094,9 +2107,14 @@ export function ReportCard({
                       }}
                       aria-label="อิโมจิและสติกเกอร์ (Ctrl+E)"
                       title="อิโมจิและสติกเกอร์ (Ctrl+E)"
-                      className={REPLY_FORMAT_BTN.replace(" [@media(pointer:coarse)]:hidden", "")}
+                      className={cn(
+                        REPLY_FORMAT_BTN.replace(" [@media(pointer:coarse)]:hidden", ""),
+                        REPLY_TOUCH_BTN,
+                        // ยังไม่พิมพ์ = แถบแคปซูลแถวเดียว ปุ่มใหญ่ครบทุกปุ่มล้นจอแคบ — โชว์แค่รูป + ส่ง
+                        !replyExpanded && "[@media(pointer:coarse)]:hidden"
+                      )}
                     >
-                      <Smile className="h-4 w-4" />
+                      <Smile className="h-4 w-4 [@media(pointer:coarse)]:h-5 [@media(pointer:coarse)]:w-5" />
                     </button>
                   }
                 />
@@ -2107,15 +2125,30 @@ export function ReportCard({
               <button
                 // ไม่ให้โฟกัสหลุดจากช่องพิมพ์ — หลุดแล้วเมนูล่างกลับมา หน้าขยับ แตะพลาดปุ่ม
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => replyFileInputRef.current?.click()}
+                onClick={() => replyPhotoInputRef.current?.click()}
                 disabled={replyUploading || replyImages.length >= maxImages}
-                aria-label="แนบรูป"
+                aria-label="แนบรูปหรือวิดีโอ"
+                title="แนบรูปหรือวิดีโอ"
                 className={cn(
                   "h-7 w-7 shrink-0 flex items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] disabled:opacity-40",
-                  replyExpanded && "[@media(pointer:coarse)]:ml-auto"
+                  REPLY_TOUCH_BTN
                 )}
               >
-                {replyUploading ? <ImagePlus className="h-4 w-4 animate-pulse" /> : <Paperclip className="h-4 w-4" />}
+                <ImagePlus className={cn("h-4 w-4 [@media(pointer:coarse)]:h-5 [@media(pointer:coarse)]:w-5", replyUploading && "animate-pulse")} />
+              </button>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => replyFileInputRef.current?.click()}
+                disabled={replyUploading || replyImages.length >= maxImages}
+                aria-label="แนบไฟล์"
+                title="แนบไฟล์ (เอกสาร/รูป)"
+                className={cn(
+                  "h-7 w-7 shrink-0 flex items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] disabled:opacity-40",
+                  REPLY_TOUCH_BTN,
+                  !replyExpanded && "[@media(pointer:coarse)]:hidden"
+                )}
+              >
+                <Paperclip className="h-4 w-4 [@media(pointer:coarse)]:h-5 [@media(pointer:coarse)]:w-5" />
               </button>
               {(replyFocused || replyColorPickerOpen || replyHighlight) && (
                 <Popover open={replyColorPickerOpen} onOpenChange={setReplyColorPickerOpen}>
@@ -2164,9 +2197,15 @@ export function ReportCard({
                 onClick={submitReply}
                 disabled={replyUploading || (!replyText.trim() && replyImages.length === 0)}
                 aria-label="ส่งข้อความ"
-                className="h-7 w-7 shrink-0 flex items-center justify-center rounded-full bg-[var(--brand-green)] text-[var(--ink)] disabled:bg-[var(--bg-soft)] disabled:text-[var(--ink-soft)] transition-colors"
+                className={cn(
+                  "h-7 w-7 shrink-0 flex items-center justify-center rounded-full bg-[var(--brand-green)] text-[var(--ink)] disabled:bg-[var(--bg-soft)] disabled:text-[var(--ink-soft)] transition-colors",
+                  // จอสัมผัส: ปุ่มส่งใหญ่ (44px) อยู่ขวาสุดคนเดียว — ปุ่มรูป/ไฟล์/อีโมจิไปอยู่ซ้าย ไม่ติดกันแล้ว
+                  // ("กดปุ่มส่งต้องระวัง โดนคลิปแนบไฟล์ ... เอาแบบ discord กดง่ายปุ่มใหญ่")
+                  "[@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-11",
+                  replyExpanded && "[@media(pointer:coarse)]:ml-auto"
+                )}
               >
-                <Send className="h-3.5 w-3.5" />
+                <Send className="h-3.5 w-3.5 [@media(pointer:coarse)]:h-5 [@media(pointer:coarse)]:w-5" />
               </button>
             </div>
           </>
