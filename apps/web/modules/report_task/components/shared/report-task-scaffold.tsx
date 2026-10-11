@@ -11,6 +11,7 @@ import { chatReportManifest } from "../../chat-report-manifest";
 import { reportTaskManifest } from "../../manifest";
 import { useEmployeeStore } from "../../store/employee-store";
 import { useIdentityStore } from "../../store/identity-store";
+import { setSessionOwner } from "../../lib/directory";
 import type { User } from "../../types";
 import { AppBarLeadingProvider, useAppBarLeading } from "./app-bar-leading";
 import { StoreHydrator } from "./store-hydrator";
@@ -65,6 +66,9 @@ export function ReportTaskScaffold({
       // or the demo seed would be treated as the real employee list.
       useEmployeeStore.setState((s) => ({ employees: [...s.employees, currentUser] }));
     }
+    // ระดับเจ้าของบริษัทจาก role จริง — ไม่ต้องพึ่งว่าอยู่ในรายชื่อพนักงานไหม (ผู้ดูแลระบบสูงสุดไม่อยู่) ดู directory.ts
+    // ตั้งก่อนสลับตัวตน — การสลับทำให้บอร์ดคำนวณใหม่ ต้องเห็นค่านี้แล้ว
+    setSessionOwner(currentUser.isOwner ? currentUser.id : null);
     useIdentityStore.getState().setViewingAs(currentUser.id);
   }, [currentUser]);
 

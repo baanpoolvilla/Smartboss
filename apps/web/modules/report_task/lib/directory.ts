@@ -46,8 +46,17 @@ export function getDepartment(id: string) {
 export function isDepartmentHead(userId: string) {
   return departments.some((d) => d.headId === userId);
 }
+/**
+ * คนที่ล็อกอินอยู่เป็นระดับเจ้าของบริษัทจาก role จริง (SUPER_ADMIN/ADMIN/CEO — ตั้งจาก report-task-scaffold)
+ * ผู้ดูแลระบบสูงสุดเป็นบัญชีระดับระบบ ไม่อยู่ในรายชื่อพนักงานของบริษัท (listDirectory) ⇒ getUser หาไม่เจอ
+ * isOwner เลยเป็น false บอร์ดงานไม่เห็นสักงาน ทั้งที่ใบงาน/สั่งซื้อเห็นครบ ("มันต้องเห็นหมดงานใบงานสั่งซื้อ")
+ */
+let sessionOwnerId: string | null = null;
+export function setSessionOwner(userId: string | null) {
+  sessionOwnerId = userId;
+}
 export function isOwner(userId: string) {
-  return getUser(userId)?.isOwner === true;
+  return (sessionOwnerId !== null && userId === sessionOwnerId) || getUser(userId)?.isOwner === true;
 }
 /** Anyone with manager-level UI access — a department head or the company-wide owner. */
 export function canManage(userId: string) {

@@ -42,10 +42,15 @@ export default async function ReportTaskLayout({
     },
   });
 
+  // ระดับเจ้าของบริษัทจาก role จริง (ชุดเดียวกับ OWNER_ROLE_CODES ใน lib/db/employee-directory.ts) —
+  // ส่งไปด้วยเพราะผู้ดูแลระบบสูงสุดไม่อยู่ในรายชื่อพนักงานของบริษัท หาจากรายชื่อไม่เจอ
+  const ownerRole = me.roles.some((r) => ["SUPER_ADMIN", "ADMIN", "CEO"].includes(r.role.code));
+
   const currentUser: User = {
     id: me.id,
     name: me.name,
     email: me.email,
+    ...(ownerRole ? { isOwner: true } : {}),
     avatar: initialsOf(me.name),
     role: me.roles[0]?.role.name ?? "พนักงาน",
     // แผนกมาจาก employee-profiles ซึ่งโหลดทีหลังพร้อมรายชื่อจริง
