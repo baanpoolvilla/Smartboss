@@ -689,12 +689,28 @@ function ReportFeedPageInner() {
       const el = document.getElementById(`report-post-${highlightPostId}`);
       el?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-    const timer = setTimeout(() => {
+    // ไม่จางเองแล้ว — เดิมหายไปใน 2.5 วิ กดมาจากแจ้งเตือนยังไม่ทันรู้ว่าเข้ามาดูโพสต์ไหน
+    // ("อยากให้ขึ้นสีค้างไว้จนกว่าจะเปลี่ยนหน้า") ค้างจนกว่าจะเปลี่ยนห้อง/ออกจากหน้า/กดแจ้งเตือนอื่น
+  }, [highlightPostId, highlightReplyId, activeId]);
+
+  // เปลี่ยนห้องแล้ว ไฮไลต์ของห้องเดิมไม่มีความหมาย — ล้าง (จำห้องตอนที่ไฮไลต์ถูกตั้ง ไม่ใช่ทุกครั้งที่ห้องโหลด)
+  const highlightRoomRef = useRef<{ post: string; room: string | null } | null>(null);
+  useEffect(() => {
+    if (!highlightPostId) {
+      highlightRoomRef.current = null;
+      return;
+    }
+    const cur = highlightRoomRef.current;
+    if (!cur || cur.post !== highlightPostId || cur.room === null) {
+      highlightRoomRef.current = { post: highlightPostId, room: activeId ?? null };
+      return;
+    }
+    if (activeId && activeId !== cur.room) {
+      highlightRoomRef.current = null;
       setHighlightPostId(null);
       setHighlightReplyId(null);
-    }, 2500);
-    return () => clearTimeout(timer);
-  }, [highlightPostId, highlightReplyId, activeId]);
+    }
+  }, [highlightPostId, activeId]);
 
   const requirementParts = useMemo(() => {
     if (!activeTopic) return [];

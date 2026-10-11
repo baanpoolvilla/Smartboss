@@ -41,6 +41,7 @@ export function ReportReply({
   allReplies,
   postQuote,
   flashed,
+  targeted,
   isOwn,
   viewerId,
   onOpenLightbox,
@@ -58,6 +59,8 @@ export function ReportReply({
   postQuote: { id: string; authorId: string; body: string };
   /** True for a brief moment right after someone jumps here via a quote click — drives the highlight flash. */
   flashed?: boolean;
+  /** ความคิดเห็นที่แจ้งเตือน/ลิงก์พามา — สีฟ้าค้างไว้ (ไม่จางเหมือน flashed) */
+  targeted?: boolean;
   /** Only the reply's own author gets edit/delete — same "yours only" gate the post itself already applies. */
   isOwn?: boolean;
   /** คนที่ดูอยู่ — นับ "อิโมจิที่ฉันใช้บ่อย" เฉพาะตอนฉันกดเพิ่ม (ไม่ใช่ตอนกดเอาออก) */
@@ -117,7 +120,9 @@ export function ReportReply({
           // size applied everywhere meant a two-word reply ("test" / "11111")
           // still rendered as a tall, wide card ("ใหญ่มากกินไปแทบครึ่งหน้า").
           "min-w-0 flex-1 rounded-lg sm:rounded-xl px-2 py-1.5 sm:px-2.5 sm:py-2 border transition-colors duration-500",
-          flashed
+          targeted
+            ? "bg-sky-50 border-sky-400 shadow-[inset_4px_0_0_var(--color-sky-500)]"
+            : flashed
             ? "bg-[var(--accent)] border-[var(--brand-green)]/40"
             : isOwn
               ? "bg-[color-mix(in_srgb,var(--accent)_45%,white)] border-[var(--brand-green)]/15"

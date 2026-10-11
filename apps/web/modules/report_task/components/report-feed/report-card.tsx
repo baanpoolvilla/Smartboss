@@ -1150,7 +1150,9 @@ export function ReportCard({
         // แถมมุมโค้งของการ์ดกินหัวท้ายแถบ แทบมองไม่เห็น ("อยากได้แถบสีข้าง ๆ แบบดิสคอร์ดเข้ม ๆ")
         // มุมซ้ายโค้งน้อยลงให้แถบตรงเต็มความสูง
         mentionsMe && "border-l-[5px] border-l-amber-500 rounded-l-md! bg-amber-50 hover:bg-amber-50 hover:border-l-amber-500",
-        (highlighted || flashTargetId === post.id) && "bg-[var(--accent)] border-[var(--brand-green)]/40",
+        flashTargetId === post.id && "bg-[var(--accent)] border-[var(--brand-green)]/40",
+        // เปิดมาจากแจ้งเตือน/ลิงก์ — สีฟ้าค้างไว้จนกว่าจะเปลี่ยนห้องหรือออกจากหน้า (ต่างจากเหลืองของ "แท็กถึงเรา")
+        highlighted && "border-l-[5px] border-l-sky-500 rounded-l-md! bg-sky-50 hover:bg-sky-50 hover:border-l-sky-500",
         // Unread keeps its own accent, now as a ring around the whole card
         // (a plain border-l reads oddly once the corners are rounded).
         isUnread && "ring-2 ring-[var(--chart-blue)]/70 ring-offset-0"
@@ -1798,6 +1800,7 @@ export function ReportCard({
                           allReplies={post.replies}
                           postQuote={{ id: post.id, authorId: post.authorId, body: post.title }}
                           flashed={flashTargetId === r.id}
+                          targeted={highlightReplyId === r.id}
                           isOwn={r.authorId === viewingAsUserId}
                           viewerId={viewingAsUserId}
                           onOpenLightbox={openReplyLightbox}
