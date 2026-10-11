@@ -13,7 +13,7 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useCalendarVisibilityStore } from "@/modules/report_task/store/calendar-visibility-store";
 import { useGoogleCalendarStore } from "@/modules/report_task/store/google-calendar-store";
 import { useRoutineDayOffStore } from "@/modules/report_task/store/routine-dayoff-store";
-import { expandRule, quotaForDepartment, naturalOccurrenceFor } from "@/modules/report_task/lib/routine-dayoff";
+import { expandRule, quotaForDepartment, naturalOccurrenceFor, leaveDates } from "@/modules/report_task/lib/routine-dayoff";
 import { formatDate, formatDateTimeShort } from "@/modules/report_task/lib/format";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { Badge } from "@/modules/report_task/components/ui/badge";
@@ -612,11 +612,23 @@ export function CalendarView() {
     const months = monthKeysInRange(activeRange.start, activeRange.end);
     const monthSet = new Set(months);
     const items: CalendarEvent[] = [];
+    // วันที่คนนั้นมีใบจาก HR อยู่แล้ว (Day-Off/ลา) หรือวันประจำซ้ำกันเอง ไม่ต้องขึ้นซ้ำ — วันหยุดประจำ
+    // ของโมดูลนี้เลิกใช้แล้ว (ลงที่ HR) แต่รูทีนเก่ายังค้าง ⇒ ko-Surin เห็น "Day-Off 04/10" คู่กับ
+    // "วันหยุดประจำ 04/10" ทุกวันอาทิตย์ และนับวันหยุดเป็น 10 ทั้งที่ตารางกะ (HR) มี 8
+    const taken = new Set<string>();
+    for (const l of leaves) if (l.userId) for (const d of leaveDates(l)) taken.add(`${l.userId}|${d}`);
+    const claim = (userId: string, date: string) => {
+      const key = `${userId}|${date}`;
+      if (taken.has(key)) return false;
+      taken.add(key);
+      return true;
+    };
     for (const [userId, dates] of Object.entries(routinePickedDates)) {
       if (!canSeeScheduleOf(userId)) continue;
       const name = getUser(userId)?.name.split(" ")[0] ?? "";
       for (const date of dates) {
         if (!monthSet.has(date.slice(0, 7))) continue;
+        if (!claim(userId, date)) continue;
         items.push({
           id: `dayoff-${userId}-${date}`,
           title: `${name} - วันหยุดประจำ`,
@@ -637,6 +649,7 @@ export function CalendarView() {
       const name = getUser(rule.userId)?.name.split(" ")[0] ?? "";
       for (const month of months) {
         for (const date of expandRule(rule, routineRuleExceptions, month)) {
+          if (!claim(rule.userId, date)) continue;
           items.push({
             id: `dayoff-rule-${rule.id}-${date}`,
             title: `${name} - วันหยุดประจำ`,
@@ -654,7 +667,7 @@ export function CalendarView() {
     return items;
     // canSeeScheduleOf อ่านแค่ scheduleUserScope + hiddenUserIds ที่อยู่ใน deps แล้ว
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [routinePickedDates, routineRules, routineRuleExceptions, hiddenUserIds, scheduleUserScope, activeRange, viewingAsUserId, todayYmd]);
+  }, [routinePickedDates, routineRules, routineRuleExceptions, leaves, hiddenUserIds, scheduleUserScope, activeRange, viewingAsUserId, todayYmd]);
 
   // Each to-do renders as a checkable chip on its own date. "all" scope
   // prefixes someone else's item with their first name so it's still clear

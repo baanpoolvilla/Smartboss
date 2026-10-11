@@ -136,3 +136,21 @@ export const WEEKDAY_SHORT_TH = ["อา", "จ", "อ", "พ", "พฤ", "ศ",
 export function weekdayLabelTh(weekday: number): string {
   return WEEKDAY_LABELS_TH[weekday] ?? "";
 }
+
+/**
+ * วันที่ทุกวันที่ใบลา/Day-Off หนึ่งใบคลุม (YYYY-MM-DD) — `end` ไม่รวมวันนั้น ไม่มี/ไม่เกิน start = วันเดียว
+ * ใช้ตัดวันหยุดประจำของโมดูลนี้ (รูทีนเก่า) ที่ซ้ำกับใบจาก HR วันเดียวกัน ไม่ให้ขึ้น/นับซ้ำ
+ */
+export function leaveDates(e: { start: string; end?: string }): string[] {
+  const first = e.start.slice(0, 10);
+  const stop = (e.end ?? "").slice(0, 10);
+  const out = [first];
+  if (!stop || stop <= first) return out;
+  const cur = new Date(`${first}T00:00:00Z`);
+  for (;;) {
+    cur.setUTCDate(cur.getUTCDate() + 1);
+    const ymd = cur.toISOString().slice(0, 10);
+    if (ymd >= stop) return out;
+    out.push(ymd);
+  }
+}

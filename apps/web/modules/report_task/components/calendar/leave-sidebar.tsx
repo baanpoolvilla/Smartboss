@@ -20,6 +20,7 @@ import {
   projectedRoutineQuotaTotal,
   weekdayLabelTh,
   WEEKDAY_SHORT_TH,
+  leaveDates,
 } from "@/modules/report_task/lib/routine-dayoff";
 import { formatDate, addDays } from "@/modules/report_task/lib/format";
 import { todayIso } from "@/modules/report_task/lib/now";
@@ -363,7 +364,7 @@ export function LeaveSidebar({
   // Day-Off ของตัวเองจากฝ่ายบุคคลในช่วงที่ดูอยู่ (นับเป็นวัน — ใบหนึ่งอาจคลุมหลายวัน, `end` ไม่รวมวันนั้น)
   // ช่อง "วันหยุดประจำ" ของการ์ดนี้เดิมนับเฉพาะวันหยุดประจำที่ตั้งเองในโมดูลนี้ ซึ่งเลิกใช้แล้ว (ลง Day-Off ที่ HR)
   // เลยขึ้น 0/4 ทั้งที่ในปฏิทินมี Day-Off อยู่ ("มันต้องดึงมาจาก hr สิ")
-  const myHrDayOffDays = leaves
+  const myHrDayOffDates = leaves
     // ใบประเภท Holiday ก็เป็น "dayoff" (อนุมัติอัตโนมัติ) เหมือนกัน แต่มีช่อง "Holiday เหลือ" ของตัวเองข้าง ๆ
     // — ไม่นับปนใน Day-Off (เกณฑ์ชื่อเดียวกับป้ายบนรูปโปรไฟล์ในแชท modules/chat/data/off-today.ts)
     .filter(
@@ -373,11 +374,11 @@ export function LeaveSidebar({
         inRange(e.start, range) &&
         !/holiday|ฮอลิเดย์|นักขัตฤกษ์/i.test(`${e.typeName ?? ""} ${e.title}`)
     )
-    .reduce((sum, e) => {
-      const start = new Date(`${e.start.slice(0, 10)}T00:00:00`).getTime();
-      const end = e.end ? new Date(`${e.end.slice(0, 10)}T00:00:00`).getTime() : start + 86_400_000;
-      return sum + Math.max(1, Math.round((end - start) / 86_400_000));
-    }, 0);
+    .flatMap((e) => leaveDates(e));
+  // นับเป็น "วัน" ไม่ใช่ "รายการ" — วันหยุดประจำที่ตั้งเองในโมดูลนี้ (รูทีนเก่าที่ยังค้าง) มักตรงกับ Day-Off
+  // จาก HR วันเดียวกัน เดิมบวกกันตรง ๆ ⇒ ko-Surin เดือน 10/2026 ขึ้น 10 (Day-Off 6 + รูทีนวันอาทิตย์ 4
+  // ซึ่งซ้ำกับ Day-Off ทั้ง 4 วัน) ทั้งที่ตารางกะ (HR) มีแค่ 6
+  const myDayOffCount = new Set([...myHrDayOffDates, ...myEffectiveThisMonth.map((e) => e.date)]).size;
 
   const leaveHeading = range.viewType === "timeGridDay" ? "ทีมที่ลาวันนี้" : range.viewType === "timeGridWeek" ? "ทีมที่ลาสัปดาห์นี้" : "ทีมที่ลา";
   const holidayHeading = range.viewType === "timeGridDay" ? "วันหยุดนักขัตฤกษ์วันนี้" : range.viewType === "timeGridWeek" ? "วันหยุดนักขัตฤกษ์สัปดาห์นี้" : "วันหยุดนักขัตฤกษ์ในเดือนนี้";
@@ -567,7 +568,7 @@ export function LeaveSidebar({
             <div className="rounded-lg bg-[var(--bg-soft)] px-3 py-2 text-center">
               {/* Day-Off จาก HR + วันหยุดประจำที่ตั้งเองในโมดูลนี้ (ถ้ายังมีของเก่าค้าง) — ไม่มีตัวหาร:
                   โควตารายเดือนเดิมเป็นของระบบวันหยุดประจำในโมดูลนี้ ไม่ใช่สิทธิ์ Day-Off ของ HR */}
-              <p className="text-lg font-semibold tabular-nums">{myHrDayOffDays + usedThisMonth}</p>
+              <p className="text-lg font-semibold tabular-nums">{myDayOffCount}</p>
               <p className="text-[11px] text-[var(--ink-soft)]">วันหยุดประจำ (Day-Off)</p>
             </div>
             {/* Holiday แบบสะสม — ยอดของตัวเองจากฝ่ายบุคคล มีเฉพาะบริษัทที่เปิดใช้ */}
