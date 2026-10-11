@@ -1309,9 +1309,7 @@ export function NewTaskDialog({
 
               {/* แบบธรรมดา = ชื่อ · รายละเอียด · ผู้รับผิดชอบ · วันที่ · กดปุ่มนี้ถึงจะเห็นช่องขั้นสูง (เช็คลิสต์ · เดี่ยว/กลุ่ม · หัวข้อโปรเจค · ไฟล์แนบ) — ไม่กดก็สร้างแบบเรียบง่ายด้วยค่าเริ่มต้นได้เลย */}
               {(() => {
-                const topicName = selectedTopicId !== "none" ? projectTopics.find((t) => t.id === selectedTopicId)?.name : undefined;
                 const usedSummary = [
-                  topicName ?? "ไม่ระบุหัวข้อโปรเจค",
                   ...(taskMode === "group" && (mainAssigneeId || useAssigneeDueDates) ? ["ตั้งค่างานกลุ่มเพิ่มเติม"] : []),
                   ...(taskFiles.length > 0 ? [`ไฟล์แนบ ${taskFiles.length}`] : []),
                 ].join(" · ");
@@ -1337,97 +1335,8 @@ export function NewTaskDialog({
               {showAdvanced && (
                 <div className="space-y-3 border-t border-dashed border-[var(--line)] pt-3">
                   <p className="ml-[30px] text-[11px] font-semibold tracking-wide text-[var(--ink-soft)]">ตัวเลือกขั้นสูง</p>
-                  <Row icon={Building2}>
-                    <div className="space-y-1 flex-1">
-                      <Label className="text-xs text-[var(--ink-soft)]">แผนก (ดู/สร้างโปรเจคของแผนกไหน)</Label>
-                      <Select
-                        value={manualScopeDeptId ?? "auto"}
-                        onValueChange={(v) => {
-                          if (!v) return;
-                          setManualScopeDeptId(v === "auto" ? null : v);
-                        }}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="ตามผู้รับผิดชอบที่เลือก">
-                            {manualScopeDeptId
-                              ? (getDepartment(manualScopeDeptId)?.name ?? "ตามผู้รับผิดชอบที่เลือก")
-                              : derivedDepartmentIds.length > 0
-                                ? `ตามผู้รับผิดชอบ (${scopeDeptNamesJoined})`
-                                : "ทั้งบริษัท (ยังไม่เลือกแผนก)"}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="auto">ตามผู้รับผิดชอบที่เลือก</SelectItem>
-                          {departments.map((d) => (
-                            <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-[11px] text-[var(--ink-soft)]">
-                        เลือกไว้เพื่อกรอง/สร้างหัวข้อโปรเจคของแผนกนั้นด้านล่าง — ไม่เปลี่ยนแผนกจริงของงาน (ยึดตามผู้รับผิดชอบที่มอบหมายเสมอ) ไม่เจอแผนกที่ต้องการ? ให้แอดมินไปสร้างที่ตั้งค่า &gt; แผนก
-                      </p>
-                    </div>
-                  </Row>
-                  <Row icon={Tag}>
-                    <div className="space-y-1 flex-1">
-                      <Label className="text-xs text-[var(--ink-soft)]">หัวข้อโปรเจค</Label>
-                      {creatingTopic ? (
-                        <div className="flex items-center gap-2">
-                          <Input
-                            autoFocus
-                            value={newTopicName}
-                            onChange={(e) => setNewTopicName(e.target.value)}
-                            onKeyDown={(e) => e.key === "Enter" && confirmCreateProjectTopic()}
-                            placeholder="ชื่อหัวข้อโปรเจค"
-                            className="flex-1"
-                          />
-                          <Button type="button" size="sm" disabled={!newTopicName.trim()} onClick={confirmCreateProjectTopic}>
-                            ตกลง
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setCreatingTopic(false);
-                              setNewTopicName("");
-                            }}
-                          >
-                            ยกเลิก
-                          </Button>
-                        </div>
-                      ) : (
-                        <Select
-                          value={selectedTopicId}
-                          onValueChange={(v) => {
-                            if (!v) return;
-                            if (v === "__create__") setCreatingTopic(true);
-                            else setSelectedTopicId(v);
-                          }}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="ไม่ระบุหัวข้อโปรเจค">
-                              {selectedTopicId === "none"
-                                ? "ไม่ระบุหัวข้อโปรเจค"
-                                : (projectTopics.find((t) => t.id === selectedTopicId)?.name ?? "ไม่ระบุหัวข้อโปรเจค")}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">ไม่ระบุหัวข้อโปรเจค</SelectItem>
-                            {visibleProjectTopics.map((t) => (
-                              <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                            ))}
-                            <SelectItem value="__create__">+ สร้างหัวข้อใหม่...</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
-                      {departmentTopicIds && !creatingTopic && (
-                        <p className="text-[11px] text-[var(--ink-soft)]">
-                          แสดงเฉพาะหัวข้อที่{departmentNamesForTopicHint}เคยใช้ — ถ้ายังไม่มีที่ต้องการ กด &quot;+ สร้างหัวข้อใหม่&quot; ได้เลย
-                        </p>
-                      )}
-                    </div>
-                  </Row>
+                  {/* "แผนก" กับ "หัวข้อโปรเจค" เอาออกไปก่อน — จะทำโปรเจคเป็นอีกแบบแยกจากงาน ("ตอนสร้างก็ไม่ต้องมีให้เลือก
+                      เดี๋ยวงง") งานใหม่จึงไม่มีหัวข้อโปรเจค งานเดิมที่มีอยู่แล้วยังเก็บไว้เหมือนเดิม */}
                   {taskMode === "group" && renderGroupExtras()}
                   <Row icon={Paperclip}>
                     <div className="space-y-2">

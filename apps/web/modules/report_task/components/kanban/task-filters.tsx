@@ -37,6 +37,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { NewTaskDialog } from "./new-task-dialog";
 import { groupByLabels, type GroupBy } from "./kanban-board";
 
+/** ตัวเลือกจัดกลุ่มบนบอร์ด — "แผนก" ซ่อนไว้ก่อน จะทำเป็นมุมมองโปรเจค/แผนกแยกจากงาน
+ * ("เอาแผนกออกก่อน เดี๋ยวงง") โค้ดบอร์ดแผนกใน kanban-board.tsx ยังอยู่ เปิดกลับได้ที่นี่ที่เดียว */
+const GROUP_BY_CHOICES: GroupBy[] = ["status", "priority", "assignee"];
+
 const groupByIcon: Record<GroupBy, typeof CircleDot> = {
   status: CircleDot,
   priority: Flag,
@@ -360,7 +364,7 @@ export function TaskFilters({
             <SelectContent alignItemWithTrigger={false}>
               <SelectGroup>
                 <SelectLabel>จัดกลุ่มตาม</SelectLabel>
-                {(["status", "priority", "assignee", "department"] as GroupBy[]).map((g) => {
+                {(GROUP_BY_CHOICES).map((g) => {
                   const Icon = groupByIcon[g];
                   return (
                     <SelectItem key={g} value={g}>
@@ -576,7 +580,7 @@ export function TaskFilters({
             <MobileFieldValue active={groupBy !== "status"}>{groupByLabels[groupBy]}</MobileFieldValue>
           </SelectTrigger>
           <SelectContent alignItemWithTrigger={false}>
-            {(["status", "priority", "assignee", "department"] as GroupBy[]).map((g) => {
+            {(GROUP_BY_CHOICES).map((g) => {
               const Icon = groupByIcon[g];
               return (
                 <SelectItem key={g} value={g}>
