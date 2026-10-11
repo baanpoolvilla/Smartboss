@@ -438,8 +438,33 @@ export const useTaskStore = create<TaskStore>((set) => ({
             undefined,
             `/report-task/tasks?task=${t.id}`
           );
+        // งานกลุ่ม: sweep ตัดสินรายคนด้วย assigneeDueDates และหน้าประวัติของงานกลุ่มก็แสดง
+        // แค่ assigneeDueDateRevisions — เดิมทางนี้เปลี่ยนแค่ dueDate ของทั้งงาน ⇒ คนที่มีวัน
+        // รายคนค้างอยู่ (T-2569-0028: 02/10, 05/10) งานเปิดกลับมาแล้วโดนหักทันทีทั้งที่หัวหน้า
+        // เลื่อนเป็น 30/10 แล้ว และประวัติไม่ขึ้นรอบนี้ — ยกวันใหม่ให้ทุกคนเหมือน "แก้ไขทั้งหมด"
+        let groupDates: Pick<Task, "assigneeDueDates" | "assigneeDueDateRevisions"> = {};
+        if (t.taskMode === "group") {
+          const now = new Date().toISOString();
+          const nextDates: Record<string, string> = { ...(t.assigneeDueDates ?? {}) };
+          const nextRevisions: NonNullable<Task["assigneeDueDateRevisions"]> = { ...(t.assigneeDueDateRevisions ?? {}) };
+          // assigneeDueDates เก็บเป็น YYYY-MM-DD (เหมือน "แก้ไขทั้งหมด") — newDate ที่นี่เป็น ISO
+          const day = newDate.slice(0, 10);
+          for (const uid of t.assigneeIds) {
+            const previousEffective = t.assigneeDueDates?.[uid] ?? t.dueDate;
+            if (previousEffective.slice(0, 10) === day || isEarlierDay(day, previousEffective)) continue;
+            nextDates[uid] = day;
+            nextRevisions[uid] = {
+              originalDate: t.assigneeDueDateRevisions?.[uid]?.originalDate ?? previousEffective,
+              latestDate: day,
+              revisedBy: actorId,
+              revisedAt: now,
+            };
+          }
+          groupDates = { assigneeDueDates: nextDates, assigneeDueDateRevisions: nextRevisions };
+        }
         return {
           ...t,
+          ...groupDates,
           status: "in_progress" as const,
           completedAt: undefined,
           // A rejected review means the work isn't actually acceptable —
