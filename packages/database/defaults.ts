@@ -182,7 +182,9 @@ export const BASELINE_PERMS = [
  * (ประกอบร่างใน ROLE_GRANTS ข้างล่าง) บริษัทปรับเองได้ที่ /admin/roles
  */
 const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
-  ADMIN: [...CORE_PERMS, ...HR_PERMS, ...MAINT_PERMS, ...REPORT_TASK_PERMS, ...CHAT_PERMS, ...COMPANY_FILES_PERMS, ...ADS_PERMS],
+  // อนุมัติ PR/PO เป็นของ CEO คนเดียว (หน้า PR ขึ้น "รอ CEO อนุมัติ") — IT ดูแล/ลบ/ดำเนินการได้
+  // ผ่าน maintenance.admin แต่ไม่อนุมัติ และไม่ต้องได้แจ้งเตือน PR ใหม่ทุกใบ
+  ADMIN: [...CORE_PERMS, ...HR_PERMS, ...MAINT_PERMS.filter((p) => p !== "maintenance.po.approve"), ...REPORT_TASK_PERMS, ...CHAT_PERMS, ...COMPANY_FILES_PERMS, ...ADS_PERMS],
   CEO: [
     "core.admin", "core.user.view", "core.role.view", "core.audit.view",
     // ผู้บริหารเป็นคนกำหนดว่าบริษัทนี้ถือว่าอะไรคือ "ทำงานได้ดี"

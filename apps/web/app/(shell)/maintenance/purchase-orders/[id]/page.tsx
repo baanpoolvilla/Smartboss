@@ -116,6 +116,9 @@ export default async function PoDetailPage({
   ]);
 
   const isCeo = hasPermission(session, MAINT_PERMS.poApprove);
+  // ดำเนินการ/รับของ/คืนของ/ลบความเห็นของคนอื่น — CEO + ผู้ดูแลโมดูล (IT) · อนุมัติ/ปฏิเสธยังเป็นของ CEO
+  // คนเดียว (isCeo) — เดิมใช้ isCeo ทั้งหมด ⇒ ADMIN ต้องมีสิทธิ์อนุมัติถึงจะจัดการได้ เลยได้แจ้งเตือน PR ทุกใบ
+  const canManagePo = isCeo || hasPermission(session, MAINT_PERMS.admin);
   const isAdmin = isSuperAdmin(session);
   // ต้องรวมผู้รับของที่ถูกมอบหมายด้วย ไม่งั้นเขาจะไม่เห็นปุ่ม "รับของ"
   // (ฝั่ง action เช็คซ้ำด้วยเกณฑ์เดียวกัน — ดู assertCanProcess)
@@ -378,7 +381,7 @@ export default async function PoDetailPage({
 
         {po.status === "approved" &&
           !po.isSelfPurchase &&
-          (isCeo || isAssignedUser) && (
+          (canManagePo || isAssignedUser) && (
             <ConfirmOrderButton
               id={id}
               items={items}
@@ -394,7 +397,7 @@ export default async function PoDetailPage({
 
         {po.status === "ordered" &&
           !po.isSelfPurchase &&
-          (isCeo || isAssignedUser) && (
+          (canManagePo || isAssignedUser) && (
             <ReceiveButton
               id={id}
               action={receiveAction}
@@ -411,7 +414,7 @@ export default async function PoDetailPage({
         )}
 
         {(po.status === "ordered" || po.status === "received") &&
-          (isCeo || isAssignedUser) && <ReturnLinkButton poId={id} />}
+          (canManagePo || isAssignedUser) && <ReturnLinkButton poId={id} />}
       </div>
 
       {/* ─── ความเห็น ─── */}
@@ -440,7 +443,7 @@ export default async function PoDetailPage({
                       </span>
                       {/* เจ้าของความเห็นลบของตัวเองได้ ผู้อนุมัติลบของใครก็ได้
                           — ฝั่ง action เช็คซ้ำเสมอ ไม่เชื่อการซ่อนปุ่มอย่างเดียว */}
-                      {(c.userId === session.userId || isCeo) && (
+                      {(c.userId === session.userId || canManagePo) && (
                         <CommentDeleteButton
                           commentId={c.id}
                           action={deletePoCommentAction.bind(null, id)}

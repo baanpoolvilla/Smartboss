@@ -359,7 +359,8 @@ async function assertCanProcess(
     po.poAssignedTo === s.userId ||
     po.createdBy === s.userId ||
     po.receiverAssignedTo === s.userId;
-  if (!hasPermission(session, MAINT_PERMS.poApprove) && !assigned) {
+  // ดำเนินการ (สั่ง/รับของ) ไม่ใช่การอนุมัติ — ผู้ดูแลโมดูล (IT) ทำได้ด้วย
+  if (!hasPermission(session, MAINT_PERMS.poApprove) && !hasPermission(session, MAINT_PERMS.admin) && !assigned) {
     throw new Error("ไม่มีสิทธิ์ดำเนินการกับรายการนี้");
   }
 }
@@ -550,7 +551,7 @@ export async function deletePoCommentAction(poId: string, formData: FormData) {
     s.orgId,
     commentId,
     s.userId,
-    hasPermission(s, MAINT_PERMS.poApprove)
+    hasPermission(s, MAINT_PERMS.poApprove) || hasPermission(s, MAINT_PERMS.admin)
   );
   if (images.length > 0) await deleteFiles(images);
 
