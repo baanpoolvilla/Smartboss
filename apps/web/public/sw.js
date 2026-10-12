@@ -46,7 +46,7 @@ self.addEventListener("push", (event) => {
         tag: data.tag || undefined,
         renotify: ringing,
         requireInteraction: ringing,
-        icon: "/icon-v4.png",
+        icon: "/icon-v5.png",
         badge: "/badge-v2.png",
         vibrate: ringing ? [600, 300, 600, 300, 600, 300, 600] : [180],
         actions: ringing
@@ -66,7 +66,7 @@ self.addEventListener("push", (event) => {
       body: data.body || "",
       tag: data.tag || undefined,
       renotify: Boolean(data.tag),
-      icon: "/icon-v4.png",
+      icon: "/icon-v5.png",
       // Android: ไอคอนเล็กบนแถบสถานะต้องเป็นรูปขาวบนพื้นใส (ใช้รูปสีจะเห็นเป็นก้อนขาว)
       badge: "/badge-v2.png",
       // Android: สั่นสองจังหวะสั้น (iPhone/คอมไม่สนค่านี้)
