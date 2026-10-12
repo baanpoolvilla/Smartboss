@@ -43,6 +43,12 @@ interface CallState {
   remoteVideo: boolean;
   /** เพิ่มทุกครั้งที่ภาพวิดีโอ (เรา/ปลายสาย) เปลี่ยน — จอโทรใช้เป็นตัวบอกให้ผูก <video> ใหม่ */
   videoRev: number;
+  /** เครื่องนี้ไม่มีไมค์ — เข้าสายได้แต่ฟังอย่างเดียว (คอมตั้งโต๊ะหลายเครื่องไม่มีไมค์) */
+  noMic: boolean;
+  /** เรากำลังแชร์หน้าจอ (คอมเท่านั้น — มือถือเบราว์เซอร์ไม่รองรับ) */
+  sharingScreen: boolean;
+  /** ภาพที่ปลายสายส่งมาคือหน้าจอ (ไม่ใช่กล้อง) — แสดงแบบเต็มภาพไม่ครอป */
+  remoteIsScreen: boolean;
 }
 
 const VOLUME_KEY = "sb.call.volume";
@@ -70,6 +76,9 @@ export const useCallStore = create<CallState>(() => ({
   facing: "user",
   remoteVideo: false,
   videoRev: 0,
+  noMic: false,
+  sharingScreen: false,
+  remoteIsScreen: false,
 }));
 
 const RING_TIMEOUT_MS = 45_000;
@@ -82,8 +91,19 @@ let peerGoneTimer: ReturnType<typeof setTimeout> | null = null;
 let endedTimer: ReturnType<typeof setTimeout> | null = null;
 const audioEls = new Set<HTMLMediaElement>();
 /** ภาพวิดีโอปัจจุบัน — จอโทรผูกเข้ากับ <video> ของตัวเองผ่าน attachVideo() */
-let remoteVideoTrack: LkTrack | null = null;
+let remoteCamTrack: LkTrack | null = null;
+let remoteScreenTrack: LkTrack | null = null;
 let localVideoTrack: LkTrack | null = null;
+/** ภาพของปลายสายที่จะแสดง — แชร์หน้าจออยู่ = หน้าจอ ไม่งั้นกล้อง */
+function remoteShown(): LkTrack | null {
+  if (remoteScreenTrack && !remoteScreenTrack.isMuted) return remoteScreenTrack;
+  if (remoteCamTrack && !remoteCamTrack.isMuted) return remoteCamTrack;
+  return null;
+}
+function syncRemoteVideo() {
+  const shown = remoteShown();
+  bumpVideo({ remoteVideo: !!shown, remoteIsScreen: !!shown && shown === remoteScreenTrack });
+}
 
 function bumpVideo(patch: Partial<CallState> = {}) {
   useCallStore.setState((s) => ({ ...patch, videoRev: s.videoRev + 1 }));
@@ -91,7 +111,7 @@ function bumpVideo(patch: Partial<CallState> = {}) {
 
 /** ผูกภาพของเรา ("local") หรือปลายสาย ("remote") เข้ากับ <video> ของจอโทร — คืนฟังก์ชันถอด */
 export function attachVideo(which: "local" | "remote", el: HTMLVideoElement): () => void {
-  const track = which === "local" ? localVideoTrack : remoteVideoTrack;
+  const track = which === "local" ? localVideoTrack : remoteShown();
   if (!track) return () => undefined;
   track.attach(el);
   return () => {
@@ -186,8 +206,9 @@ async function connectRoom(url: string, token: string) {
   room = r;
   r.on(RoomEvent.TrackSubscribed, (track) => {
     if (track.kind === Track.Kind.Video) {
-      remoteVideoTrack = track;
-      bumpVideo({ remoteVideo: !track.isMuted });
+      if (track.source === Track.Source.ScreenShare) remoteScreenTrack = track;
+      else remoteCamTrack = track;
+      syncRemoteVideo();
       return;
     }
     if (track.kind !== Track.Kind.Audio) return;
@@ -199,8 +220,9 @@ async function connectRoom(url: string, token: string) {
   });
   r.on(RoomEvent.TrackUnsubscribed, (track) => {
     if (track.kind === Track.Kind.Video) {
-      if (remoteVideoTrack === track) remoteVideoTrack = null;
-      bumpVideo({ remoteVideo: false });
+      if (remoteScreenTrack === track) remoteScreenTrack = null;
+      if (remoteCamTrack === track) remoteCamTrack = null;
+      syncRemoteVideo();
       return;
     }
     for (const el of track.detach()) {
@@ -210,13 +232,14 @@ async function connectRoom(url: string, token: string) {
   });
   // ปลายสายปิด/เปิดกล้อง (LiveKit ปิดกล้อง = mute track ไม่ได้ถอดออก)
   r.on(RoomEvent.TrackMuted, (pub, participant) => {
-    if (participant !== r.localParticipant && pub.kind === Track.Kind.Video) bumpVideo({ remoteVideo: false });
+    if (participant !== r.localParticipant && pub.kind === Track.Kind.Video) syncRemoteVideo();
   });
   r.on(RoomEvent.TrackUnmuted, (pub, participant) => {
-    if (participant !== r.localParticipant && pub.kind === Track.Kind.Video) {
-      if (pub.track) remoteVideoTrack = pub.track;
-      bumpVideo({ remoteVideo: true });
-    }
+    if (participant !== r.localParticipant && pub.kind === Track.Kind.Video) syncRemoteVideo();
+  });
+  // กดหยุดแชร์จากแถบของเบราว์เซอร์เอง ("Stop sharing") — ปุ่มบนจอโทรต้องกลับเป็นไม่แชร์
+  r.on(RoomEvent.LocalTrackUnpublished, (pub) => {
+    if (pub.source === Track.Source.ScreenShare) useCallStore.setState({ sharingScreen: false });
   });
   r.on(RoomEvent.AudioPlaybackStatusChanged, () => {
     useCallStore.setState({ needsAudioTap: !r.canPlaybackAudio });
@@ -237,16 +260,24 @@ async function connectRoom(url: string, token: string) {
     if (phase === "active" || phase === "outgoing" || phase === "connecting") void hangUp();
   });
   await r.connect(url, token);
-  await r.localParticipant.setMicrophoneEnabled(true);
-  useCallStore.setState({ needsAudioTap: !r.canPlaybackAudio, muted: false });
+  // ไม่มีไมค์ (คอมตั้งโต๊ะ) = เข้าสายฟังอย่างเดียว แทนที่จะโทรไม่ได้เลย · ไม่อนุญาตไมค์ = ยังเป็น error ให้ไปเปิดสิทธิ์
+  let noMic = false;
+  try {
+    await r.localParticipant.setMicrophoneEnabled(true);
+  } catch (err) {
+    if (!isNoMic(err)) throw err;
+    noMic = true;
+  }
+  useCallStore.setState({ needsAudioTap: !r.canPlaybackAudio, muted: noMic, noMic });
 }
 
 function disconnectRoom() {
   const r = room;
   room = null;
-  remoteVideoTrack = null;
+  remoteCamTrack = null;
+  remoteScreenTrack = null;
   localVideoTrack = null;
-  useCallStore.setState({ cameraOn: false, remoteVideo: false, facing: "user" });
+  useCallStore.setState({ cameraOn: false, remoteVideo: false, facing: "user", noMic: false, sharingScreen: false, remoteIsScreen: false });
   if (r) void r.disconnect().catch(() => undefined);
   for (const el of audioEls) el.remove();
   audioEls.clear();
@@ -285,6 +316,12 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
 
 type Joined = { call: ChatCallDTO; url: string; token: string };
 
+/** เครื่องไม่มีไมค์เลย (ต่างจากไม่อนุญาต) */
+function isNoMic(err: unknown): boolean {
+  const name = err && typeof err === "object" && "name" in err ? String((err as { name: unknown }).name) : "";
+  return name === "NotFoundError" || name === "DevicesNotFoundError" || name === "OverconstrainedError";
+}
+
 function micError(err: unknown): string {
   const name = err && typeof err === "object" && "name" in err ? String((err as { name: unknown }).name) : "";
   if (name === "NotAllowedError" || name === "SecurityError") return "ไม่ได้รับอนุญาตให้ใช้ไมค์ — เปิดสิทธิ์ไมโครโฟนให้แอปก่อน";
@@ -312,14 +349,18 @@ export async function startCall(channelId: string, peer: { id: string; name: str
     endedAt: null,
   };
   useCallStore.setState({ phase: "outgoing", call: placeholder, muted: false, minimized: false });
-  // ขอไมค์ก่อนเรียกเข้า — ปฏิเสธสิทธิ์ไมค์ = ไม่ต้องให้อีกฝั่งดังฟรี
+  // ขอไมค์ก่อนเรียกเข้า — ปฏิเสธสิทธิ์ไมค์ = ไม่ต้องให้อีกฝั่งดังฟรี · ไม่มีไมค์ในเครื่อง = โทรได้ ฟังอย่างเดียว
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     for (const t of stream.getTracks()) t.stop();
   } catch (err) {
-    toast.error(micError(err));
-    teardown("");
-    return;
+    if (isNoMic(err)) {
+      toast.info("เครื่องนี้ไม่มีไมโครโฟน — โทรได้ แต่อีกฝั่งจะไม่ได้ยินเสียงคุณ");
+    } else {
+      toast.error(micError(err));
+      teardown("");
+      return;
+    }
   }
   let joined: Joined;
   try {
@@ -378,8 +419,32 @@ export async function hangUp(label = "วางสายแล้ว") {
   if (call?.id) await post(`/api/chat/calls/${call.id}/end`).catch(() => undefined);
 }
 
+/** แชร์หน้าจอ (แบบ Google Meet) — คอมเท่านั้น · อีกฝั่งเห็นหน้าจอเต็มจอแทนกล้อง */
+export function canShareScreen(): boolean {
+  if (typeof navigator === "undefined" || !navigator.mediaDevices) return false;
+  return "getDisplayMedia" in navigator.mediaDevices && !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+export async function toggleScreenShare() {
+  if (!room) return;
+  const on = !useCallStore.getState().sharingScreen;
+  try {
+    await room.localParticipant.setScreenShareEnabled(on, { audio: false, selfBrowserSurface: "exclude" });
+    useCallStore.setState({ sharingScreen: on });
+  } catch (err) {
+    const name = err && typeof err === "object" && "name" in err ? String((err as { name: unknown }).name) : "";
+    // กดยกเลิกในหน้าต่างเลือกจอ = ไม่ต้องเตือน
+    if (name !== "NotAllowedError" && name !== "AbortError") toast.error("แชร์หน้าจอไม่สำเร็จ");
+    useCallStore.setState({ sharingScreen: false });
+  }
+}
+
 export async function toggleMute() {
   if (!room) return;
+  if (useCallStore.getState().noMic) {
+    toast.info("เครื่องนี้ไม่มีไมโครโฟน — ต่อไมค์แล้วโทรใหม่");
+    return;
+  }
   const muted = !useCallStore.getState().muted;
   useCallStore.setState({ muted });
   await room.localParticipant.setMicrophoneEnabled(!muted).catch(() => useCallStore.setState({ muted: !muted }));

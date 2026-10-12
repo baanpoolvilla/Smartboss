@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Mic, MicOff, Phone, PhoneOff, SwitchCamera, Video, VideoOff, Volume1, Volume2 } from "lucide-react";
+import { ChevronDown, Mic, MicOff, MonitorUp, MonitorX, Phone, PhoneOff, SwitchCamera, Video, VideoOff, Volume1, Volume2 } from "lucide-react";
 import { cn } from "@smartboss/ui/cn";
 
 import { subscribeRealtime } from "@/lib/realtime-client";
 import { useChatStore } from "../store/chat-store";
 import type { ChatCallDTO } from "../types";
 import { ChatAvatar } from "./chat-avatar";
-import { answer, attachVideo, changeVolume, decline, enableAudio, flipCamera, hangUp, onIncoming, onUpdate, resumeFromServer, toggleCamera, toggleMute, useCallStore } from "../lib/call-controller";
+import { answer, attachVideo, canShareScreen, changeVolume, decline, enableAudio, flipCamera, hangUp, onIncoming, onUpdate, resumeFromServer, toggleCamera, toggleMute, toggleScreenShare, useCallStore } from "../lib/call-controller";
 
 /**
  * จอโทร (ทุกหน้า ทุกโมดูล — วางไว้ใน Shell คู่กับ ChatNotifyListener)
@@ -17,8 +17,10 @@ import { answer, attachVideo, changeVolume, decline, enableAudio, flipCamera, ha
  * - ระหว่างคุยย่อเป็นแถบเล็กด้านบนได้ แชทต่อได้
  */
 export function CallManager() {
-  const { phase, call, muted, needsAudioTap, endedLabel, minimized, meId, volume, volumeAdjustable, cameraOn, remoteVideo, facing } =
-    useCallStore();
+  const {
+    phase, call, muted, needsAudioTap, endedLabel, minimized, meId, volume, volumeAdjustable,
+    cameraOn, remoteVideo, facing, noMic, sharingScreen, remoteIsScreen,
+  } = useCallStore();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -86,7 +88,7 @@ export function CallManager() {
       {/* วิดีโอแบบ Discord: ปลายสายเปิดกล้อง = ภาพเต็มจอเป็นพื้นหลัง · กล้องเรา = ภาพเล็กมุมขวาบน */}
       {phase === "active" && remoteVideo && (
         <>
-          <CallVideo which="remote" className="absolute inset-0 h-full w-full bg-black object-contain" />
+          <CallVideo which="remote" className={cn("absolute inset-0 h-full w-full bg-black", remoteIsScreen ? "object-contain" : "object-cover sm:object-contain")} />
           <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-black/60 to-transparent" />
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-72 bg-gradient-to-t from-black/70 to-transparent" />
         </>
@@ -123,6 +125,16 @@ export function CallManager() {
           <div className="text-2xl font-semibold">{peerName}</div>
           <div className="mt-1 text-[15px] tabular-nums text-white/70">{status ?? <CallTimer since={call.answeredAt} />}</div>
         </div>
+        {noMic && phase !== "ended" && (
+          <div className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-xs text-white/80">
+            <MicOff className="h-3.5 w-3.5" /> เครื่องนี้ไม่มีไมค์ — ฟังได้อย่างเดียว
+          </div>
+        )}
+        {sharingScreen && phase === "active" && (
+          <div className="flex items-center gap-1.5 rounded-full bg-[#06c755]/90 px-3 py-1 text-xs font-medium text-white">
+            <MonitorUp className="h-3.5 w-3.5" /> กำลังแชร์หน้าจอของคุณ
+          </div>
+        )}
         {needsAudioTap && phase === "active" && (
           <button type="button" onClick={() => void enableAudio()} className="mt-2 flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-sm hover:bg-white/25">
             <Volume2 className="h-4 w-4" /> แตะเพื่อเปิดเสียง
@@ -167,7 +179,7 @@ export function CallManager() {
               <Volume1 className="h-7 w-7" />
             </RoundButton>
             <RoundButton
-              label={muted ? "เปิดไมค์" : "ปิดไมค์"}
+              label={noMic ? "ไม่มีไมค์" : muted ? "เปิดไมค์" : "ปิดไมค์"}
               className={muted ? "bg-white text-[#1f2a37] hover:bg-white/90" : "bg-white/15 hover:bg-white/25"}
               onClick={() => void toggleMute()}
               disabled={phase === "connecting"}
@@ -182,6 +194,16 @@ export function CallManager() {
             >
               {cameraOn ? <Video className="h-7 w-7" /> : <VideoOff className="h-7 w-7" />}
             </RoundButton>
+            {canShareScreen() && (
+              <RoundButton
+                label={sharingScreen ? "หยุดแชร์จอ" : "แชร์จอ"}
+                className={sharingScreen ? "bg-[#06c755] hover:bg-[#05b34c]" : "bg-white/15 hover:bg-white/25"}
+                onClick={() => void toggleScreenShare()}
+                disabled={phase !== "active"}
+              >
+                {sharingScreen ? <MonitorX className="h-7 w-7" /> : <MonitorUp className="h-7 w-7" />}
+              </RoundButton>
+            )}
             <RoundButton
               label="เพิ่มเสียง"
               className="bg-white/15 hover:bg-white/25"
