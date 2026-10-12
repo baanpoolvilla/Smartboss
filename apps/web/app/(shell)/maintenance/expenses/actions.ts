@@ -9,7 +9,7 @@ import {
   createExpensesForProperties,
   deleteExpense,
 } from "@/modules/maintenance/data/expenses";
-import { getWorkOrder } from "@/modules/maintenance/data/work-orders";
+import { findWorkOrderForPmExpense, getWorkOrder } from "@/modules/maintenance/data/work-orders";
 import { getPmSchedule } from "@/modules/maintenance/data/pm";
 import { putFile, deleteFiles } from "@/modules/maintenance/lib/storage";
 
@@ -100,6 +100,9 @@ async function saveExpense(
       if (!wo) return { error: "ไม่พบใบงานนี้ — อาจถูกลบไปแล้ว" };
       workOrderId = wo.id;
       propertyIds = [wo.propertyId, ...wo.additionalPropertyIds];
+    } else {
+      // บันทึก PM จากหน้าค่าใช้จ่ายเอง — ผูกใบงานที่มาจาก PM นี้ให้อัตโนมัติ (ดู findWorkOrderForPmExpense)
+      workOrderId = (await findWorkOrderForPmExpense(s.orgId, pm))?.id ?? null;
     }
   }
 
@@ -136,6 +139,11 @@ async function saveExpense(
   if (!saved && receiptUrl) await deleteFiles([receiptUrl]).catch(() => 0);
 
   revalidatePath("/maintenance/expenses");
+  // ใบงานที่เพิ่งผูกต้องย้ายออกจาก "ยังไม่บันทึกค่าใช้จ่าย" ทันทีที่กลับไปดู ไม่ค้างของเก่า
+  if (workOrderId) {
+    revalidatePath("/maintenance/work-orders");
+    revalidatePath(`/maintenance/work-orders/${workOrderId}`);
+  }
   redirect("/maintenance/expenses");
 }
 

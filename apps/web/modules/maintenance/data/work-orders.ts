@@ -91,6 +91,52 @@ export async function workOrderIdsWithExpenses(
   return new Set(rows.map((r) => r.workOrderId).filter((x): x is string => !!x));
 }
 
+/**
+ * ใบงานที่ค่าใช้จ่าย PM ก้อนนี้ควรผูกด้วย — บันทึกค่าใช้จ่ายแบบ "PM" จากหน้าค่าใช้จ่าย (ไม่ได้กดจากหน้าใบงาน)
+ * เดิมผูกแค่ PM ใบงานที่ระบบเปิดจาก PM นั้นเลยค้าง "ยังไม่บันทึกค่าใช้จ่าย" คนเห็นแล้วไปบันทึกซ้ำ
+ * ("รอบหน้าให้กดบันทึกแล้วลิ้งเลยนะ ไม่ต้องมาทำแบบนี้")
+ *
+ * หาใบในบ้านเดียวกันที่มาจาก PM นี้ (pmScheduleId / pmScheduleIds) หรือใช้อุปกรณ์เดียวกัน ยังไม่ยกเลิก
+ * ต้องกรอกค่าใช้จ่าย และยังไม่มีค่าใช้จ่ายผูกเลย — เอาใบที่ปิดแล้วล่าสุดก่อน ไม่มีค่อยเอาใบที่ยังเปิดล่าสุด
+ * ไม่เจอ = null (บันทึกเป็นค่าใช้จ่าย PM อย่างเดียวเหมือนเดิม)
+ */
+export async function findWorkOrderForPmExpense(
+  orgId: string,
+  pm: { id: string; propertyId: string; assetId: string | null }
+): Promise<{ id: string } | null> {
+  const candidates = await prisma.workOrder.findMany({
+    where: {
+      orgId,
+      status: { not: "cancelled" },
+      requiresExpense: true,
+      AND: [
+        { OR: [{ propertyId: pm.propertyId }, { additionalPropertyIds: { has: pm.propertyId } }] },
+        {
+          OR: [
+            { pmScheduleId: pm.id },
+            { pmScheduleIds: { has: pm.id } },
+            ...(pm.assetId ? [{ assetId: pm.assetId }] : []),
+          ],
+        },
+      ],
+    },
+    select: { id: true, status: true },
+    orderBy: [{ completedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+    take: 20,
+  });
+  if (candidates.length === 0) return null;
+  const withExpense = new Set(
+    (
+      await prisma.expense.findMany({
+        where: { orgId, workOrderId: { in: candidates.map((c) => c.id) } },
+        select: { workOrderId: true },
+      })
+    ).map((r) => r.workOrderId)
+  );
+  const open = candidates.filter((c) => !withExpense.has(c.id));
+  return open.find((c) => c.status === "completed") ?? open[0] ?? null;
+}
+
 export interface WorkOrderInput {
   propertyId: string;
   assetId?: string | null;
