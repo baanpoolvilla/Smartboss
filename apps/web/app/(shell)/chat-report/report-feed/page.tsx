@@ -381,6 +381,16 @@ function ReportFeedPageInner() {
     if (selectedId && visibleTopics.some((t) => t.id === selectedId) && !isParentId(selectedId)) {
       return selectedId;
     }
+    /*
+     * ลิงก์แจ้งเตือน "แท็กคุณ" ของห้องที่ตัวเองไม่ได้อยู่ (IS-0004: แท็กพี่อุ้ยในห้องแจ้งเช็คเอาท์ ได้แจ้งเตือน
+     * แต่กดแล้วไม่ขึ้น เพราะเปิดห้องนั้นไม่ได้ เด้งไปห้องแรกเฉย ๆ) ⇒ พาไป "กล่าวถึงฉัน" ซึ่งโชว์โพสต์ที่แท็กเรา
+     * ได้แม้ไม่ได้อยู่ในห้อง (ดู mentionPosts) — เห็นเฉพาะโพสต์นั้น ไม่ได้เปิดทั้งห้อง
+     */
+    if (selectedId && highlightPostId && !visibleTopics.some((t) => t.id === selectedId)) {
+      const linked = posts.find((p) => p.id === highlightPostId && p.topicId === selectedId);
+      const room = topics.find((t) => t.id === selectedId);
+      if (linked && room && postMentionsUser(linked, viewingAsUserId, room)) return MENTIONS_ID;
+    }
     if (selectedId && isParentId(selectedId)) {
       const firstChild = visibleTopics.find((t) => t.parentId === selectedId);
       if (firstChild) return firstChild.id;
@@ -455,11 +465,36 @@ function ReportFeedPageInner() {
   }, [showPending, visibleTopics, posts, exemptions, viewingAsUserId]);
   // "ที่กล่าวถึงฉัน" — every post anywhere this viewer is @mentioned, fed
   // into the same ReportAllPostsFeed the merged view already uses.
-  const mentionPosts = useMemo(() => {
-    if (!showMentions) return [];
+  /*
+   * โพสต์ที่แท็กเรา **รวมห้องที่เราไม่ได้อยู่** — คนโพสต์ตั้งใจแท็กให้เห็น (แจ้งเตือนก็ส่งไปแล้ว) เดิมกรองเฉพาะห้อง
+   * ที่เห็นได้ เลยได้แจ้งเตือนแต่หาโพสต์ไม่เจอ ("มีการแจ้งเตือนไป แต่ไม่ขึ้นหน้าระบบ") · ห้องที่มองไม่เห็นนับเฉพาะ
+   * แท็กตัวบุคคลตรง ๆ (แท็กแผนก/@ทุกคน ยังยึดตามคนที่เห็นห้อง — postMentionsUser กับ topic ของห้องนั้น)
+   * เห็นแค่โพสต์ที่แท็ก ไม่เห็นโพสต์อื่นในห้อง
+   */
+  const mentionPostsAll = useMemo(() => {
     const visibleTopicIds = new Set(visibleTopics.map((t) => t.id));
-    return posts.filter((p) => visibleTopicIds.has(p.topicId) && p.authorId !== viewingAsUserId && postMentionsUser(p, viewingAsUserId));
-  }, [showMentions, visibleTopics, posts, viewingAsUserId]);
+    const topicById = new Map(topics.map((t) => [t.id, t]));
+    return posts.filter((p) => {
+      if (p.authorId === viewingAsUserId) return false;
+      const room = topicById.get(p.topicId);
+      if (!room || room.archived) return false;
+      return visibleTopicIds.has(p.topicId)
+        ? postMentionsUser(p, viewingAsUserId)
+        : postMentionsUser(p, viewingAsUserId, room);
+    });
+  }, [visibleTopics, topics, posts, viewingAsUserId]);
+  const mentionPosts = useMemo(() => (showMentions ? mentionPostsAll : []), [showMentions, mentionPostsAll]);
+  // ห้องของโพสต์ที่แท็กเราแต่เราไม่ได้อยู่ — ส่งให้ฟีด "กล่าวถึงฉัน" ใช้แสดงชื่อห้องบนการ์ด (ไม่ได้เปิดห้องให้)
+  const mentionTopics = useMemo(() => {
+    const ids = new Set(visibleTopics.map((t) => t.id));
+    const extra = topics.filter((t) => !ids.has(t.id) && mentionPostsAll.some((p) => p.topicId === t.id));
+    return extra.length > 0 ? [...visibleTopics, ...extra] : visibleTopics;
+  }, [visibleTopics, topics, mentionPostsAll]);
+  // กดชื่อห้องบนการ์ด: ห้องที่ไม่ได้อยู่เปิดไม่ได้ — บอกตรง ๆ แทนการเด้งไปห้องแรกเงียบ ๆ
+  const jumpFromMention = (topicId: string) => {
+    if (visibleTopics.some((t) => t.id === topicId)) selectView(topicId);
+    else toast.info("คุณไม่ได้อยู่ในห้องนี้ — เห็นเฉพาะโพสต์ที่แท็กคุณ");
+  };
   // Badge counts for the "มุมมอง" switcher (ReportViewSwitcher) — same
   // formulas the old sidebar "ภาพรวม" block used, computed here now that the
   // switcher lives at page level instead of inside TopicSidebar.
@@ -467,12 +502,10 @@ function ReportFeedPageInner() {
     () => pendingToday(visibleTopics, posts, exemptions).filter((e) => e.userId === viewingAsUserId).length,
     [visibleTopics, posts, exemptions, viewingAsUserId]
   );
-  const viewMentionCount = useMemo(() => {
-    const ids = new Set(visibleTopics.map((t) => t.id));
-    return posts.filter(
-      (p) => ids.has(p.topicId) && p.unreadFor.includes(viewingAsUserId) && p.authorId !== viewingAsUserId && postMentionsUser(p, viewingAsUserId)
-    ).length;
-  }, [posts, visibleTopics, viewingAsUserId]);
+  const viewMentionCount = useMemo(
+    () => mentionPostsAll.filter((p) => p.unreadFor.includes(viewingAsUserId)).length,
+    [mentionPostsAll, viewingAsUserId]
+  );
   // ทุกรอบของฉันเองที่ "ปิดรอบไปแล้ว" (ไม่ใช่แค่ยังไม่ส่ง — pendingToday เอง
   // ไม่แยกว่ายังทันเวลาหรือสายไปแล้ว) คำนวณแบบไม่ผูกกับแท็บที่เปิดอยู่
   // ("มี showPending gate") ต่างจาก myPending ด้านบน เพราะต้องรู้ทันทีที่
@@ -1221,14 +1254,14 @@ function ReportFeedPageInner() {
           ) : showMentions ? (
             <div className="flex-1 min-h-0 bg-white overflow-hidden flex flex-col">
               <ReportAllPostsFeed
-                topics={visibleTopics}
+                topics={mentionTopics}
                 posts={mentionPosts}
                 title="กล่าวถึงฉัน"
                 description="ทุกโพสต์และความคิดเห็นที่มีคนแท็กคุณ เรียงตามเวลา ล่าสุดอยู่ล่างสุด"
                 icon={AtSign}
                 emptyTitle="ยังไม่มีใครกล่าวถึงคุณ"
                 emptyDescription="โพสต์หรือความคิดเห็นที่แท็กคุณด้วย @ จะขึ้นที่นี่"
-                onJumpToTopic={selectView}
+                onJumpToTopic={jumpFromMention}
                 onOpenTask={setOpenTaskId}
                 showFilters={false}
                 headerRight={viewSwitcherHeader}
