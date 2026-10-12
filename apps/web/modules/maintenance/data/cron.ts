@@ -36,6 +36,8 @@ export async function generateWorkOrdersForDuePms(): Promise<{
         awaitingSchedule: false,
         nextDueDate: { lte: today },
       },
+      // ผู้ดูแลบ้าน — ผู้รับผิดชอบสำรองเมื่อแผนไม่ได้ตั้งไว้และไม่รู้ว่าใครสร้าง (ดู assignedTo ข้างล่าง)
+      include: { property: { select: { caretakerId: true } } },
     })
   );
 
@@ -85,9 +87,10 @@ export async function generateWorkOrdersForDuePms(): Promise<{
           code,
           propertyId: pm.propertyId,
           assetId: pm.assetId,
-          // แผน PM ไม่ได้ตั้งผู้รับผิดชอบ → ให้คนสร้างแผนรับไป ("ออโต้มันต้องตามคนสร้างสิ") — เดิมว่าง
-          // ใบงานเลยไม่มีเจ้าของ ไม่มีใครเห็นบนบอร์ดงาน/ไม่ได้แจ้งเตือน และหักคะแนนตอนเลยกำหนดไม่ได้
-          assignedTo: pm.assignedTo ?? pm.createdBy,
+          // ผู้รับผิดชอบ: ตามแผน PM → คนสร้างแผน ("ออโต้มันต้องตามคนสร้างสิ") → ผู้ดูแลบ้านหลังนั้น
+          // เดิมใช้แค่ของแผน PM — แผนที่ไม่ได้ตั้ง (ส่วนใหญ่ย้ายมาจากระบบเก่า ไม่มีข้อมูลคนสร้างด้วย) ได้ใบงาน
+          // ไม่มีเจ้าของ ไม่มีใครเห็นบนบอร์ดงาน ไม่มีใครได้แจ้งเตือน และหักคะแนนตอนเลยกำหนดไม่ได้
+          assignedTo: pm.assignedTo ?? pm.createdBy ?? pm.property?.caretakerId ?? null,
           title: pm.title,
           description: `PM: ${pm.title}\nครบกำหนด ${fmtThaiDate(pm.nextDueDate)}`,
           status: "open",
