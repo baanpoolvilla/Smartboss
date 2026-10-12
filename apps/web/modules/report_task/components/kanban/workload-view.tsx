@@ -73,11 +73,16 @@ export function WorkloadView() {
       .map((u) => {
         const mine = shownTasks.filter((t) => t.assigneeIds.includes(u.id));
         const mx = shownMx.filter((i) => i.responsibleId === u.id);
+        // 4 กลุ่มไม่ซ้อนกัน (รวมกันได้เท่า total พอดี) — ที่เลยกำหนดไปอยู่ "เลยกำหนด" อย่างเดียว ไม่นับซ้ำใน
+        // รอดำเนินการ/กำลังทำ (เดิมงานรอดำเนินการที่เลยกำหนดถูกนับสองที่ แถบเกิน 100%)
+        const taskOverdue = (t: (typeof mine)[number]) => dueUrgency(t) === "overdue";
         const todo =
-          mine.filter((t) => t.status === "todo").length +
-          mx.filter((i) => i.column === "todo" || i.column === "review").length;
-        const inProgress = mine.filter((t) => t.status === "in_progress").length + mx.filter((i) => i.column === "in_progress").length;
-        const overdue = mine.filter((t) => dueUrgency(t) === "overdue").length + mx.filter((i) => i.overdue).length;
+          mine.filter((t) => t.status === "todo" && !taskOverdue(t)).length +
+          mx.filter((i) => (i.column === "todo" || i.column === "review") && !i.overdue).length;
+        const inProgress =
+          mine.filter((t) => t.status === "in_progress" && !taskOverdue(t)).length +
+          mx.filter((i) => i.column === "in_progress" && !i.overdue).length;
+        const overdue = mine.filter(taskOverdue).length + mx.filter((i) => i.overdue).length;
         const done = mine.filter((t) => t.status === "done").length + mx.filter((i) => i.column === "done").length;
         const total = mine.length + mx.length;
         const open = total - done;
@@ -108,7 +113,7 @@ export function WorkloadView() {
           // ones — a bar that only ever shows "open" work can never visibly
           // reach "done", which undersells how much has actually shipped.
           const seg = (n: number) => (r.total ? (n / r.total) * 100 : 0);
-          const inProgressNotOverdue = r.inProgress - r.overdue > 0 ? r.inProgress - r.overdue : 0;
+          const inProgressNotOverdue = r.inProgress;
           const overloaded = r.open >= 6;
           return (
             // <640px: stacks into 2 lines (avatar+name+total, then the bar +
