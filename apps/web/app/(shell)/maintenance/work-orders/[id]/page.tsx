@@ -421,7 +421,7 @@ export default async function WorkOrderDetailPage({
                     }
                   >
                     <Link
-                      href={`/maintenance/purchase-orders/${po.id}`}
+                      href={`/maintenance/purchase-orders/${po.id}?wo=${id}${fromTasks ? "&from=tasks" : ""}`}
                       className="-mx-2 flex items-start gap-2 rounded-(--radius) px-2 py-2.5 hover:bg-(--bg-soft)"
                     >
                       <div className="min-w-0 flex-1">
@@ -461,7 +461,7 @@ export default async function WorkOrderDetailPage({
               (h-11 พื้นทึบ) — ลิงก์ตัวเล็กบนหัวการ์ด คนมองไม่เห็นว่ากดได้ */}
           {canOpenPoHere && (
             <Link
-              href={`/maintenance/purchase-orders/new?workOrderId=${id}`}
+              href={`/maintenance/purchase-orders/new?workOrderId=${id}${fromTasks ? "&from=tasks" : ""}`}
               className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-(--radius) text-sm font-medium text-white hover:brightness-95"
               style={{ backgroundColor: "#0F766E" }}
             >
@@ -523,7 +523,7 @@ export default async function WorkOrderDetailPage({
           <Link
             href={`/maintenance/expenses/new?workOrderId=${id}${
               pmForExpense ? `&pmScheduleId=${pmForExpense}` : ""
-            }`}
+            }${fromTasks ? "&from=tasks" : ""}`}
             className="flex h-11 w-full items-center justify-center gap-2 rounded-(--radius) bg-[#2E7D32] text-sm font-medium text-white hover:brightness-95"
           >
             <ReceiptText className="h-4 w-4" /> เพิ่มค่าใช้จ่าย

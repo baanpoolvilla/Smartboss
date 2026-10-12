@@ -44,12 +44,15 @@ export function PoForm({
   users,
   canOpenPo,
   workOrder,
+  fromTasks = false,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   properties: PickOption[];
   users: PickOption[];
   canOpenPo: boolean;
   workOrder?: LinkedWorkOrder | null;
+  /** มาจากบอร์ดงาน → บันทึกแล้วกลับใบงานพร้อม ?from=tasks (ปุ่มย้อนกลับของใบงานยังพากลับบอร์ดได้) */
+  fromTasks?: boolean;
 }) {
   const [openAsPo, setOpenAsPo] = useState(canOpenPo);
   const [isEmergency, setEmergency] = useState(false);
@@ -75,6 +78,7 @@ export function PoForm({
           {workOrder && (
             <input type="hidden" name="workOrderId" value={workOrder.id} />
           )}
+          {fromTasks && <input type="hidden" name="from" value="tasks" />}
 
           {workOrder && (
             <div

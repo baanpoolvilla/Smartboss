@@ -12,18 +12,26 @@ import { createExpenseAction, createNoExpenseAction } from "../actions";
 export default async function NewExpensePage({
   searchParams,
 }: {
-  searchParams: Promise<{ workOrderId?: string; pmScheduleId?: string }>;
+  searchParams: Promise<{ workOrderId?: string; pmScheduleId?: string; from?: string }>;
 }) {
   const session = await requireOrg();
   if (!hasPermission(session, MAINT_PERMS.expenseView)) redirect("/");
-  const { workOrderId, pmScheduleId } = await searchParams;
+  const { workOrderId, pmScheduleId, from } = await searchParams;
+  /*
+   * เปิดมาจากปุ่ม "เพิ่มค่าใช้จ่าย" ในหน้าใบงาน = บันทึกเสร็จ/กดย้อนกลับ ต้องกลับไปใบงานนั้น ไม่ใช่หน้ารวม
+   * ค่าใช้จ่าย ("กดบันทึกแล้วต้องเด้งไปที่การ์ดงานที่เรากดเข้า ดูว่ามันขึ้น แล้วค่อยออกไปหน้าการ์ดรวม")
+   * ?from=tasks ติดไปด้วย ให้ปุ่มย้อนกลับของใบงานยังพากลับบอร์ดงานได้เหมือนเดิม
+   */
+  const returnTo = workOrderId
+    ? `/maintenance/work-orders/${encodeURIComponent(workOrderId)}${from === "tasks" ? "?from=tasks" : ""}`
+    : "/maintenance/expenses";
 
   if (!hasPermission(session, MAINT_PERMS.expenseManage)) {
     return (
       <AppScaffold
         title="เพิ่มค่าใช้จ่าย"
         width="max-w-2xl"
-        backHref="/maintenance/expenses"
+        backHref={returnTo}
       >
         <Card className="p-6 text-center text-sm text-(--ink-soft)">
           เฉพาะ Manager, CEO และ Super Admin เท่านั้นที่บันทึกค่าใช้จ่ายได้
@@ -59,7 +67,7 @@ export default async function NewExpensePage({
     <AppScaffold
       title="เพิ่มค่าใช้จ่าย"
       width="max-w-2xl"
-      backHref="/maintenance/expenses"
+      backHref={returnTo}
     >
       <ExpenseForm
         saveAction={createExpenseAction}
@@ -68,6 +76,7 @@ export default async function NewExpensePage({
         pmSchedules={pms.map((p) => ({ id: p.id, title: `${houseName.get(p.propertyId) ?? "-"} · ${p.title}` }))}
         lockedWorkOrderId={workOrderId}
         lockedPmScheduleId={pmScheduleId}
+        returnTo={workOrderId ? returnTo : undefined}
       />
     </AppScaffold>
   );

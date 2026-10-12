@@ -28,6 +28,7 @@ export function ExpenseForm({
   pmSchedules,
   lockedWorkOrderId,
   lockedPmScheduleId,
+  returnTo,
 }: {
   saveAction: ExpenseAction;
   noExpenseAction: ExpenseAction;
@@ -35,6 +36,8 @@ export function ExpenseForm({
   pmSchedules: { id: string; title: string }[];
   lockedWorkOrderId?: string;
   lockedPmScheduleId?: string;
+  /** บันทึกเสร็จแล้วกลับไปหน้านี้ (หน้าใบงานที่กดเข้ามา) — ไม่ส่ง = หน้ารวมค่าใช้จ่าย */
+  returnTo?: string;
 }) {
   const locked = Boolean(lockedWorkOrderId || lockedPmScheduleId);
   const [costType, setCostType] = useState(
@@ -90,6 +93,8 @@ export function ExpenseForm({
 
         {/* เปิดจากหน้าใบงานที่อุปกรณ์มี PM = ประเภทเป็น PM แต่ต้องส่งใบงานไปด้วย ให้ค่าใช้จ่ายผูกกับใบงานนั้น
             (ช่องเลือกใบงานข้างล่างไม่ได้แสดงตอนเป็น PM — เดิมเลยไม่ได้ส่ง ใบงานค้าง "ยังไม่บันทึกค่าใช้จ่าย") */}
+        {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
+
         {costType === "pm" && lockedWorkOrderId && (
           <input type="hidden" name="workOrderId" value={lockedWorkOrderId} />
         )}

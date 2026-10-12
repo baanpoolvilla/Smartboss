@@ -86,11 +86,19 @@ export default async function PoDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ from?: string }>;
+  searchParams: Promise<{ from?: string; wo?: string }>;
 }) {
   const { id } = await params;
   // เปิดมาจากการ์ดบนบอร์ดงาน (?from=tasks — maintenance-card.tsx) = ปุ่มย้อนกลับพากลับบอร์ดงาน
-  const fromTasks = (await searchParams).from === "tasks";
+  const sp = await searchParams;
+  const fromTasks = sp.from === "tasks";
+  // เปิดจากรายการ PR/PO ในหน้าใบงาน (?wo=) → ปุ่มย้อนกลับพากลับใบงานนั้น ไม่ใช่หน้ารวม PR/PO
+  const fromWo = sp.wo && /^[\w-]+$/.test(sp.wo) ? sp.wo : null;
+  const backHref = fromWo
+    ? `/maintenance/work-orders/${fromWo}${fromTasks ? "?from=tasks" : ""}`
+    : fromTasks
+      ? "/report-task/tasks"
+      : "/maintenance/purchase-orders";
   const session = await requireOrg();
   if (!hasPermission(session, MAINT_PERMS.poView)) redirect("/");
   const orgId = session.orgId;
@@ -145,7 +153,7 @@ export default async function PoDetailPage({
     <AppScaffold
       title="รายละเอียด PR/PO"
       width="max-w-3xl"
-      backHref={fromTasks ? "/report-task/tasks" : "/maintenance/purchase-orders"}
+      backHref={backHref}
     >
       <MarkReadOnView referenceId={po.id} />
 

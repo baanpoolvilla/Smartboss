@@ -171,7 +171,7 @@ export async function createPoAction(formData: FormData) {
   if (linkedWo) {
     // กลับไปที่ใบงานที่กดมา ไม่ใช่บอร์ด PR/PO — คนกดยังทำงานใบนั้นค้างอยู่
     revalidatePath(`/maintenance/work-orders/${linkedWo.id}`);
-    redirect(`/maintenance/work-orders/${linkedWo.id}`);
+    redirect(`/maintenance/work-orders/${linkedWo.id}${formData.get("from") === "tasks" ? "?from=tasks" : ""}`);
   }
   redirect("/maintenance/purchase-orders");
 }

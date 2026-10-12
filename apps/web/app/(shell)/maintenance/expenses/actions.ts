@@ -144,7 +144,9 @@ async function saveExpense(
     revalidatePath("/maintenance/work-orders");
     revalidatePath(`/maintenance/work-orders/${workOrderId}`);
   }
-  redirect("/maintenance/expenses");
+  // เปิดมาจากหน้าใบงาน → กลับไปใบงานนั้น ให้เห็นว่าบันทึกแล้ว · รับเฉพาะ path ใบงานของโมดูลนี้ (กันพาไปเว็บอื่น)
+  const returnTo = String(formData.get("returnTo") ?? "");
+  redirect(/^\/maintenance\/work-orders\/[\w-]+(\?from=tasks)?$/.test(returnTo) ? returnTo : "/maintenance/expenses");
 }
 
 export async function deleteExpenseAction(formData: FormData) {

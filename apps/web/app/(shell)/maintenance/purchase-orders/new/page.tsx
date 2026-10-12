@@ -19,7 +19,7 @@ import { AppScaffold } from "@/modules/maintenance/components/app-scaffold";
 export default async function NewPoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ workOrderId?: string }>;
+  searchParams: Promise<{ workOrderId?: string; from?: string }>;
 }) {
   const session = await requireOrg();
   if (!hasPermission(session, MAINT_PERMS.poCreate)) {
@@ -27,7 +27,8 @@ export default async function NewPoPage({
   }
   // role สูง (อนุมัติได้) เปิด PO ได้เลยโดยไม่ต้องรออนุมัติ
   const canOpenPo = hasPermission(session, MAINT_PERMS.poApprove);
-  const { workOrderId } = await searchParams;
+  const { workOrderId, from } = await searchParams;
+  const fromTasks = from === "tasks";
 
   const [properties, users, wo] = await Promise.all([
     listProperties(session.orgId),
@@ -64,7 +65,7 @@ export default async function NewPoPage({
       width="max-w-2xl"
       backHref={
         linked
-          ? `/maintenance/work-orders/${linked.id}`
+          ? `/maintenance/work-orders/${linked.id}${fromTasks ? "?from=tasks" : ""}`
           : "/maintenance/purchase-orders"
       }
     >
@@ -72,6 +73,7 @@ export default async function NewPoPage({
         action={createPoAction}
         canOpenPo={canOpenPo}
         workOrder={linked}
+        fromTasks={fromTasks}
         properties={properties.map((p) => ({ id: p.id, label: p.name }))}
         users={users.map((u) => ({
           id: u.id,
