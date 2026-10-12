@@ -211,7 +211,8 @@ export interface ReportPost extends ReportPostFields {
    * used). Points apply to `authorId` ("คนที่โพสต์รายงานนั้น"), not to
    * whoever reacted.
    */
-  stickerReactions: { id: string; stickerId: string; byUserId: string; createdAt: string }[];
+  /** targetUserId = คนที่ได้/โดนคะแนน (หัวหน้าเลือกตอนส่ง) · ไม่มี = เจ้าของโพสต์ (ของเก่าก่อนเลือกคนได้) */
+  stickerReactions: { id: string; stickerId: string; byUserId: string; createdAt: string; targetUserId?: string }[];
 }
 
 /** A daily submission window (e.g. "เช้า" due 09:00) a room can require reports by. */
@@ -573,7 +574,7 @@ interface ReportFeedStore {
    * sticker button uses (isOwner). Unlike toggleReaction this isn't a toggle:
    * every click is its own discrete "call it out" event, so the same sticker
    * can be handed out more than once (mirrors task-store's addReaction). */
-  addStickerReaction: (postId: string, stickerId: string, byUserId: string) => void;
+  addStickerReaction: (postId: string, stickerId: string, byUserId: string, targetUserId?: string) => void;
   removeStickerReaction: (postId: string, reactionId: string, byUserId: string) => void;
   addReply: (
     postId: string,
@@ -928,7 +929,7 @@ export const useReportFeedStore = create<ReportFeedStore>()(
           topicName: get().topics.find((t) => t.id === post.topicId)?.name,
         });
       },
-      addStickerReaction: (postId, stickerId, byUserId) => {
+      addStickerReaction: (postId, stickerId, byUserId, targetUserId) => {
         const sticker = useStickerStore.getState().stickers.find((s) => s.id === stickerId);
         set((s) => ({
           posts: s.posts.map((p) =>
@@ -938,7 +939,13 @@ export const useReportFeedStore = create<ReportFeedStore>()(
                   ...p,
                   stickerReactions: [
                     ...p.stickerReactions,
-                    { id: `${postId}-stk-${uuid()}`, stickerId, byUserId, createdAt: new Date().toISOString() },
+                    {
+                      id: `${postId}-stk-${uuid()}`,
+                      stickerId,
+                      byUserId,
+                      createdAt: new Date().toISOString(),
+                      ...(targetUserId ? { targetUserId } : {}),
+                    },
                   ],
                 }
           ),
@@ -947,12 +954,12 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         if (!post || !sticker) return;
         // ระบุ "ให้ใคร" ในบันทึกกิจกรรมด้วย ไม่ใช่แค่ชื่อสติกเกอร์ + โพสต์
         // ("มีให้บอกด้วยสิ...ใส่อิโมจิแบบมีผลต่อคะแนนให้ใคร") — เจ้าของโพสต์
-        // คือคนที่โดนหัก/ได้คะแนนเสมอ ไม่ใช่คนกด
+        // คือคนที่โดนหัก/ได้คะแนน ไม่ใช่คนกด — หรือคนที่หัวหน้าเลือก (คนที่ถูกแท็ก/ตอบในโพสต์)
         useActivityLogStore.getState().log({
           userId: byUserId,
           action: "ติดสติกเกอร์",
           target: post.title,
-          detail: `${sticker.label} ให้ ${getUser(post.authorId)?.name ?? "ไม่ทราบชื่อ"}`,
+          detail: `${sticker.label} ให้ ${getUser(targetUserId ?? post.authorId)?.name ?? "ไม่ทราบชื่อ"}`,
         });
       },
       removeStickerReaction: (postId, reactionId, byUserId) => {
@@ -969,7 +976,9 @@ export const useReportFeedStore = create<ReportFeedStore>()(
           userId: byUserId,
           action: "ลบสติกเกอร์",
           target: post.title,
-          detail: sticker ? `${sticker.label} ที่เคยให้ ${getUser(post.authorId)?.name ?? "ไม่ทราบชื่อ"}` : undefined,
+          detail: sticker
+            ? `${sticker.label} ที่เคยให้ ${getUser(removed?.targetUserId ?? post.authorId)?.name ?? "ไม่ทราบชื่อ"}`
+            : undefined,
         });
       },
       addReply: (postId, authorId, body, extra) => {

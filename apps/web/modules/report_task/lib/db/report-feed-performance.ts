@@ -12,6 +12,17 @@ interface PostStickerReaction {
   stickerId: string;
   byUserId: string;
   createdAt: string;
+  /** คนที่หัวหน้าเลือกให้ได้/โดนคะแนน — ไม่มี = เจ้าของโพสต์ (แบบเดิม) */
+  targetUserId?: string;
+}
+
+/**
+ * คนที่ได้/โดนคะแนนจากสติกเกอร์บนโพสต์ — หัวหน้าเลือกได้ว่าให้ใคร (เจ้าของโพสต์ / คนที่ถูกแท็ก /
+ * คนที่ตอบ) ("เปิดกระทู้แล้วหักให้คนอื่นด้วย") · client ส่ง targetUserId มาเอง ⇒ ต้องเป็นคนในบริษัทจริง
+ * ไม่งั้นตกกลับเป็นเจ้าของโพสต์
+ */
+function recipientOf(post: PostLike, reaction: PostStickerReaction, orgUserIds: Set<string>): string {
+  return reaction.targetUserId && orgUserIds.has(reaction.targetUserId) ? reaction.targetUserId : post.authorId;
 }
 interface PostLike {
   id: string;
@@ -73,7 +84,9 @@ export async function recordReportStickerEvents(
   // เช่นเดียวกับ writeTasks — client PUT ก้อนข้อมูลทั้งหมด ปลอม reaction
   // แทนใครก็ได้ถ้าไม่เช็คซ้ำฝั่งเซิร์ฟเวอร์ (ปุ่มถูกซ่อนไว้ที่ UI เฉยๆ ไม่ใช่
   // การกันจริง) ยอมรับเฉพาะ reaction ที่ byUserId เป็นเจ้าของบริษัทจริงเท่านั้น
-  const owners = new Set((await listDirectory(orgId)).filter((u) => u.isOwner).map((u) => u.id));
+  const directory = await listDirectory(orgId);
+  const owners = new Set(directory.filter((u) => u.isOwner).map((u) => u.id));
+  const orgUserIds = new Set(directory.map((u) => u.id));
 
   const custom = await readStore<Sticker[]>(orgId, "stickers");
   const stickers = custom.data ?? defaultStickers;
@@ -89,7 +102,7 @@ export async function recordReportStickerEvents(
     const occurredAt = new Date(reaction.createdAt);
     events.push({
       orgId,
-      userId: post.authorId,
+      userId: recipientOf(post, reaction, orgUserIds),
       source: "report_task",
       category: "task_manual_dock",
       occurredAt: Number.isNaN(occurredAt.getTime()) ? new Date() : occurredAt,
@@ -125,7 +138,7 @@ export async function recordReportStickerEvents(
       const label = labelById.get(reaction.stickerId) ?? reaction.stickerId;
       events.push({
         orgId,
-        userId: post.authorId,
+        userId: recipientOf(post, reaction, orgUserIds),
         source: "report_task",
         category: "task_manual_dock",
         occurredAt: originalAt.get(reaction.id) ?? new Date(),

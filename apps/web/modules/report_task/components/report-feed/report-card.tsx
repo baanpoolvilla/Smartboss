@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { textMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
+import { taggedUserIds, textMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
@@ -617,9 +617,28 @@ export function ReportCard({
   // same open/close state.
   const [touchMenuOpen, setTouchMenuOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
-  function confirmPostSticker() {
+  /*
+   * ส่งสติกเกอร์ให้ใคร — เดิมเข้าเจ้าของโพสต์เสมอ หัวหน้าที่เปิดกระทู้เองเลยหักได้แต่ตัวเอง
+   * ("เปิดกระทู้แล้วหักให้คนอื่นด้วย") ⇒ เลือกได้จากเจ้าของโพสต์ + คนที่ถูกแท็กในโพสต์/คำตอบ
+   * (แท็กแผนก = ทุกคนในแผนก) + คนที่ตอบ · ติ๊กเจ้าของโพสต์ไว้ก่อน ยกเว้นเจ้าของคือตัวเอง
+   * หลายคน = ติดให้ทีละคน (คะแนนเต็มต่อคน) เหมือนงานกลุ่ม
+   */
+  const stickerTargets = useMemo(() => {
+    const ids = new Set<string>([post.authorId]);
+    for (const s of post.sections) for (const b of s.bullets) for (const id of taggedUserIds(b, topic)) ids.add(id);
+    for (const r of post.replies) {
+      ids.add(r.authorId);
+      for (const id of taggedUserIds(r.body, topic)) ids.add(id);
+    }
+    return [...ids]
+      .map((id) => getUser(id))
+      .filter((u): u is NonNullable<typeof u> => !!u)
+      .map((u) => ({ id: u.id, name: u.id === viewingAsUserId ? `${u.name} (คุณ)` : u.name }));
+  }, [post.authorId, post.sections, post.replies, topic, viewingAsUserId]);
+  function confirmPostSticker(targetUserIds?: string[]) {
     if (!pendingSticker) return;
-    addStickerReaction(post.id, pendingSticker.id, viewingAsUserId);
+    const ids = targetUserIds && targetUserIds.length > 0 ? targetUserIds : [post.authorId];
+    for (const id of ids) addStickerReaction(post.id, pendingSticker.id, viewingAsUserId, id);
     showStickerToast(pendingSticker, post.title, "โพสต์");
     setPendingSticker(null);
   }
@@ -1651,13 +1670,21 @@ export function ReportCard({
             const latest = post.stickerReactions
               .filter((r) => r.stickerId === stickerId)
               .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+            // ให้ใครบ้าง — เลือกคนได้แล้ว (ไม่ใช่เจ้าของโพสต์เสมอไป) ต้องบอกบนป้ายด้วย
+            const recipients = [
+              ...new Set(
+                post.stickerReactions
+                  .filter((r) => r.stickerId === stickerId)
+                  .map((r) => getUser(r.targetUserId ?? post.authorId)?.name ?? "ไม่ทราบชื่อ")
+              ),
+            ].join(", ");
             return (
               <span
                 key={stickerId}
                 title={
                   canUndo
-                    ? `${sticker.label} (${sticker.points > 0 ? `+${sticker.points}` : sticker.points}) — คลิกเพื่อยกเลิกอันล่าสุด`
-                    : `${sticker.label} (${sticker.points > 0 ? `+${sticker.points}` : sticker.points})`
+                    ? `${sticker.label} (${sticker.points > 0 ? `+${sticker.points}` : sticker.points}) ให้ ${recipients} — คลิกเพื่อยกเลิกอันล่าสุด`
+                    : `${sticker.label} (${sticker.points > 0 ? `+${sticker.points}` : sticker.points}) ให้ ${recipients}`
                 }
                 className={cn(
                   REACTION_CHIP_CLASS,
@@ -2274,6 +2301,8 @@ export function ReportCard({
         recipientName={author?.name ?? "ผู้โพสต์"}
         taskTitle={post.title}
         itemLabel="โพสต์"
+        targets={stickerTargets}
+        pickPeople={{ defaultIds: post.authorId === viewingAsUserId ? [] : [post.authorId] }}
         onConfirm={confirmPostSticker}
       />
 

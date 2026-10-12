@@ -338,6 +338,8 @@ export function ReportTopicPanels({
         (p.stickerReactions ?? []).map((r) => ({
           ...r,
           post: p,
+          // คนที่ได้/โดนคะแนนจริง — หัวหน้าเลือกได้ตอนส่ง (ของเก่า = เจ้าของโพสต์)
+          recipientId: r.targetUserId ?? p.authorId,
         }))
       )
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -995,7 +997,7 @@ export function ReportTopicPanels({
         ) : (
           <div className="max-h-[19rem] overflow-y-auto pr-1">
             {stats.contributors.map(({ user, count }) => {
-              const userStickerCount = stickerEvents.filter((e) => e.post.authorId === user.id).length;
+              const userStickerCount = stickerEvents.filter((e) => e.recipientId === user.id).length;
               const selected = stickerFilterUserId === user.id;
               return (
                 <button
@@ -1046,7 +1048,7 @@ export function ReportTopicPanels({
               ประวัติสติกเกอร์ให้คะแนน
               <span className="text-xs font-normal text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2 py-0.5">
                 {stickerFilterUserId
-                  ? stickerEvents.filter((e) => e.post.authorId === stickerFilterUserId).length
+                  ? stickerEvents.filter((e) => e.recipientId === stickerFilterUserId).length
                   : stickerEvents.length}
               </span>
             </p>
@@ -1065,10 +1067,10 @@ export function ReportTopicPanels({
               ไม่จบ ("เปลืองพื้นที่ยาวไม่หยุดเลย") เหมือนตารางสมาชิกด้านบน */}
           <div className="max-h-[22rem] overflow-y-auto pr-1">
             {stickerEvents
-              .filter((e) => !stickerFilterUserId || e.post.authorId === stickerFilterUserId)
+              .filter((e) => !stickerFilterUserId || e.recipientId === stickerFilterUserId)
               .map((e) => {
               const sticker = stickers.find((s) => s.id === e.stickerId);
-              const author = getUser(e.post.authorId);
+              const author = getUser(e.recipientId);
               const actor = getUser(e.byUserId);
               return (
                 <div key={e.id} className="flex items-start justify-between gap-2 py-2 border-b last:border-0 border-[var(--line)]">

@@ -41,6 +41,7 @@ export function StickerConfirmDialog({
    * noun so the copy reads right for either sender). */
   itemLabel = "งาน",
   targets,
+  pickPeople,
   onConfirm,
 }: {
   open: boolean;
@@ -50,6 +51,8 @@ export function StickerConfirmDialog({
   taskTitle: string;
   itemLabel?: "งาน" | "โพสต์" | "ใบงาน";
   targets?: StickerTarget[];
+  /** เลือกคนอย่างเดียว ไม่มี "ทั้งกลุ่ม" (โพสต์ — เลือกจากเจ้าของโพสต์/คนที่ถูกแท็ก/คนที่ตอบ) · defaultIds = ติ๊กไว้ก่อน */
+  pickPeople?: { defaultIds: string[] };
   onConfirm: (targetUserIds?: string[]) => void;
 }) {
   return (
@@ -63,6 +66,7 @@ export function StickerConfirmDialog({
           taskTitle={taskTitle}
           itemLabel={itemLabel}
           targets={targets}
+          pickPeople={pickPeople}
           onConfirm={onConfirm}
         />
       </AlertDialogContent>
@@ -76,6 +80,7 @@ function StickerConfirmBody({
   taskTitle,
   itemLabel,
   targets,
+  pickPeople,
   onConfirm,
 }: {
   sticker: Sticker | null;
@@ -83,11 +88,12 @@ function StickerConfirmBody({
   taskTitle: string;
   itemLabel: "งาน" | "โพสต์" | "ใบงาน";
   targets?: StickerTarget[];
+  pickPeople?: { defaultIds: string[] };
   onConfirm: (targetUserIds?: string[]) => void;
 }) {
   const hasChoice = (targets?.length ?? 0) > 1;
-  const [mode, setMode] = useState<"all" | "one" | null>(null);
-  const [personIds, setPersonIds] = useState<string[]>([]);
+  const [mode, setMode] = useState<"all" | "one" | null>(pickPeople ? "one" : null);
+  const [personIds, setPersonIds] = useState<string[]>(pickPeople?.defaultIds ?? []);
 
   const picked = (targets ?? []).filter((t) => personIds.includes(t.id));
   // 1 คน = ชื่อ, 2-3 คน = ชื่อคั่นด้วยจุลภาค, มากกว่านั้น = ย่อ "และอีก N คน"
@@ -126,7 +132,10 @@ function StickerConfirmBody({
 
       {hasChoice && (
         <div className="space-y-2">
-          <p className="text-xs font-medium text-[var(--ink-soft)]">งานกลุ่ม — ส่งให้ใคร?</p>
+          <p className="text-xs font-medium text-[var(--ink-soft)]">
+            {pickPeople ? "ส่งให้ใคร? (เลือกได้หลายคน)" : "งานกลุ่ม — ส่งให้ใคร?"}
+          </p>
+          {!pickPeople && (
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <ChoiceButton
               selected={mode === "all"}
@@ -146,6 +155,7 @@ function StickerConfirmBody({
               sub={mode === "one" && picked.length > 0 ? `เลือกแล้ว ${picked.length} คน` : "เลือกได้หลายคน"}
             />
           </div>
+          )}
           {mode === "one" && (
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="เลือกคน (เลือกได้หลายคน)">
               {targets!.map((t) => {
