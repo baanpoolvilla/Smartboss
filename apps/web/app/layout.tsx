@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   // เว็บแอป: เพิ่มลงหน้าจอหลักบน iPhone แล้วเปิดเต็มจอ — manifest เป็น route แยกตามเครื่อง (app/manifest.webmanifest/route.ts)
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "SmartBoss", statusBarStyle: "default" },
-  icons: { icon: [{ url: "/favicon-64-v5.png", sizes: "64x64", type: "image/png" }, { url: "/icon-v5.png", sizes: "192x192", type: "image/png" }], apple: "/apple-touch-icon-v5.png" },
+  icons: { icon: [{ url: "/favicon-64-v6.png", sizes: "64x64", type: "image/png" }, { url: "/icon-v6.png", sizes: "192x192", type: "image/png" }], apple: "/apple-touch-icon-v6.png" },
 };
 
 // ไม่ใส่ viewport-fit=cover — เมนูล่างของ Shell ยังไม่ได้เว้นขอบ home indicator ของ iPhone

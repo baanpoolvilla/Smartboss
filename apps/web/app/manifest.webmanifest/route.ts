@@ -11,7 +11,7 @@ import type { MetadataRoute } from "next";
  *     ได้ไอคอนเหลี่ยม ("ในแอป pc เป็นเหลี่ยม แต่ในเว็บมน" · "เอาให้มนเต็มขนาด")
  *   มือถือ — ส่งครบ: Android ใช้ maskable (พื้นเขียวเต็มกรอบ ตัดเป็นวงกลม/มุมมนเอง ไม่มีขอบขาว)
  */
-// ⚠ เปลี่ยนรูปไอคอนเมื่อไหร่ ให้เปลี่ยนชื่อไฟล์ด้วย (-v5 → -v6) — แอปที่ติดตั้งไว้แล้ว (Chrome/Android)
+// ⚠ เปลี่ยนรูปไอคอนเมื่อไหร่ ให้เปลี่ยนชื่อไฟล์ด้วย (-v6 → -v7) — แอปที่ติดตั้งไว้แล้ว (Chrome/Android)
 // จำไอคอนตามชื่อไฟล์ ถ้าชื่อเดิม จะไม่รู้ว่ารูปเปลี่ยนและค้างไอคอนเก่าไปเรื่อย ๆ
 export const dynamic = "force-dynamic";
 
@@ -29,13 +29,13 @@ const BASE: Omit<MetadataRoute.Manifest, "icons"> = {
 
 // สี่เหลี่ยมมุมมนพื้นเขียว (มุมโปร่งใส) — คอม/แท็บ/Taskbar แสดงตามรูปนี้
 const ROUNDED: MetadataRoute.Manifest["icons"] = [
-  { src: "/icon-v5.png", sizes: "192x192", type: "image/png", purpose: "any" },
-  { src: "/icon-512-v5.png", sizes: "512x512", type: "image/png", purpose: "any" },
+  { src: "/icon-v6.png", sizes: "192x192", type: "image/png", purpose: "any" },
+  { src: "/icon-512-v6.png", sizes: "512x512", type: "image/png", purpose: "any" },
 ];
 // มือถือเท่านั้น — พื้นเขียวเต็มกรอบ (ไม่มีมุมโปร่งใส) เครื่องตัดมุมเอง
 const PHONE_ONLY: MetadataRoute.Manifest["icons"] = [
-  { src: "/icon-512-maskable-v5.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
-  { src: "/apple-touch-icon-v5.png", sizes: "180x180", type: "image/png" },
+  { src: "/icon-512-maskable-v6.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+  { src: "/apple-touch-icon-v6.png", sizes: "180x180", type: "image/png" },
 ];
 
 /** มือถือ/แท็บเล็ต — Android, iPhone/iPad (iPadOS ใหม่บอกตัวเป็น Mac แต่มีจอสัมผัส ซึ่ง UA ไม่บอก จึงนับเป็นคอม — iPad ใช้ apple-touch-icon จาก <head> อยู่แล้ว) */
