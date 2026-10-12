@@ -48,7 +48,7 @@ export function StickerConfirmDialog({
   sticker: Sticker | null;
   recipientName: string;
   taskTitle: string;
-  itemLabel?: "งาน" | "โพสต์";
+  itemLabel?: "งาน" | "โพสต์" | "ใบงาน";
   targets?: StickerTarget[];
   onConfirm: (targetUserIds?: string[]) => void;
 }) {
@@ -81,7 +81,7 @@ function StickerConfirmBody({
   sticker: Sticker | null;
   recipientName: string;
   taskTitle: string;
-  itemLabel: "งาน" | "โพสต์";
+  itemLabel: "งาน" | "โพสต์" | "ใบงาน";
   targets?: StickerTarget[];
   onConfirm: (targetUserIds?: string[]) => void;
 }) {

@@ -158,6 +158,10 @@ function MxGridRow({
   const person = item.responsibleId ? getUser(item.responsibleId) : undefined;
   const done = item.column === "done";
   const dash = <span className="text-xs text-[var(--line)]">—</span>;
+  // สติกเกอร์ที่หัวหน้าติดบนการ์ดใบงาน (ติด/ยกเลิกได้ที่การ์ดบนบอร์ด ตารางแสดงอย่างเดียว)
+  const stickers = useStickerStore((st) => st.stickers);
+  const reactionCounts = new Map<string, number>();
+  for (const r of item.reactions ?? []) reactionCounts.set(r.stickerId, (reactionCounts.get(r.stickerId) ?? 0) + 1);
   return (
     <React.Fragment>
       {groupHeader}
@@ -225,7 +229,28 @@ function MxGridRow({
             {priorityMeta[item.priority].label}
           </span>
         </TableCell>
-        <TableCell className="px-4 py-3 whitespace-nowrap">{dash}</TableCell>
+        <TableCell className="px-4 py-3 whitespace-nowrap">
+          {reactionCounts.size === 0 ? (
+            dash
+          ) : (
+            <div className="flex flex-wrap items-center gap-1">
+              {[...reactionCounts].map(([stickerId, count]) => {
+                const sticker = stickers.find((x) => x.id === stickerId);
+                if (!sticker) return null;
+                return (
+                  <span
+                    key={stickerId}
+                    title={`${sticker.label} (${sticker.points > 0 ? `+${sticker.points}` : sticker.points})`}
+                    className="inline-flex items-center gap-0.5 h-5 rounded-full bg-[var(--bg-soft)] px-1.5 text-[11px]"
+                  >
+                    <span>{sticker.emoji}</span>
+                    {count > 1 && <span className="text-[var(--ink-soft)] text-[10px]">{count}</span>}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+        </TableCell>
         <TableCell className="px-4 py-3 whitespace-nowrap">
           {item.place ? <span className="text-[11px] text-[var(--ink-soft)]">📍 {item.place}</span> : dash}
         </TableCell>

@@ -4,7 +4,8 @@ import { hasPermission, hasRole, isSuperAdmin, type OrgSession } from "@smartbos
 
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { workOrderAccess, workOrderVisibilityWhere, type WorkOrderAccess } from "@/modules/maintenance/data/work-order-access";
-import type { MaintenanceBoardItem, MaintenanceColumn } from "@/modules/report_task/lib/maintenance-board";
+import type { MaintenanceBoardItem, MaintenanceColumn, WorkOrderReaction } from "@/modules/report_task/lib/maintenance-board";
+import { listWorkOrderReactions } from "./work-order-reactions";
 import type { TaskPriority } from "@/modules/report_task/types";
 
 /**
@@ -32,6 +33,10 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
   const since = new Date(Date.now() - DONE_DAYS * 86_400_000);
   const today = bangkokDay(new Date());
   const items: MaintenanceBoardItem[] = [];
+  const reactionsByWo = new Map<string, WorkOrderReaction[]>();
+  for (const r of await listWorkOrderReactions(orgId)) {
+    reactionsByWo.set(r.workOrderId, [...(reactionsByWo.get(r.workOrderId) ?? []), r]);
+  }
 
   // เห็นทั้งหมดบนบอร์ด = CEO / ผู้ดูแลระบบสูงสุดเท่านั้น
   const seeAll = isSuperAdmin(session) || hasRole(session, "CEO");
@@ -90,9 +95,11 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
         createdAt: w.createdAt.toISOString(),
         overdue: !done && !!w.dueDate && bangkokDay(w.dueDate) < today,
         responsibleId: w.assignedTo ?? w.createdBy,
+        assigneeId: w.assignedTo,
         involvedIds: [...new Set([w.assignedTo, w.createdBy, ...w.ccUserIds].filter((x): x is string => !!x))],
         place: w.property?.name ?? null,
         href: `/maintenance/work-orders/${w.id}`,
+        reactions: reactionsByWo.get(w.id) ?? [],
       });
     }
   }

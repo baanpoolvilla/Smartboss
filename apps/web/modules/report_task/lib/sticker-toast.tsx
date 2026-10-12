@@ -6,7 +6,7 @@ import type { Sticker } from "@/modules/report_task/types";
  * is too quiet for a penalty/praise action. `itemLabel` lets a report-feed
  * post ("โพสต์") share this same toast with Kanban's tasks ("งาน", the
  * default) instead of always reading "งาน" for something that isn't one. */
-export function showStickerToast(sticker: Sticker, taskTitle: string, itemLabel: "งาน" | "โพสต์" = "งาน") {
+export function showStickerToast(sticker: Sticker, taskTitle: string, itemLabel: "งาน" | "โพสต์" | "ใบงาน" = "งาน") {
   const negative = sticker.points < 0;
   const positive = sticker.points > 0;
 

@@ -35,9 +35,11 @@ function wo(over: Partial<MaintenanceBoardItem> = {}): MaintenanceBoardItem {
     createdAt: "2026-10-01T00:00:00.000Z",
     overdue: false,
     responsibleId: "a",
+    assigneeId: "a",
     involvedIds: ["a", "b"],
     place: "BS-HS1",
     href: "/maintenance/work-orders/w1",
+    reactions: [],
     ...over,
   };
 }

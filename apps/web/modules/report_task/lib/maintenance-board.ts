@@ -37,12 +37,26 @@ export interface MaintenanceBoardItem {
   overdue: boolean;
   /** คนรับผิดชอบหลัก (ยังไม่มี = คนเปิดใบ) · ใช้กับตัวกรองแผนก/รูปบนการ์ด/แถบภาระงาน */
   responsibleId: string | null;
+  /** ผู้รับผิดชอบจริงของใบงาน (ยังไม่มอบหมาย = null) — คนที่ได้/โดนคะแนนจากสติกเกอร์ */
+  assigneeId: string | null;
   /** ทุกคนที่เกี่ยวกับใบนี้ — ตัวกรอง "พนักงาน" จับคนในนี้ */
   involvedIds: string[];
   /** ชื่อบ้าน */
   place: string | null;
   /** หน้าในแจ้งซ่อม */
   href: string;
+  /** สติกเกอร์ที่หัวหน้าติดบนการ์ด (มีผลกับคะแนนผู้รับผิดชอบ) — ดู lib/db/work-order-reactions.ts */
+  reactions: WorkOrderReaction[];
+}
+
+/** สติกเกอร์ 1 ครั้งบนใบงานซ่อม — ชุดสติกเกอร์เดียวกับงาน คะแนนเข้า targetUserId (ผู้รับผิดชอบตอนที่ติด) */
+export interface WorkOrderReaction {
+  id: string;
+  workOrderId: string;
+  stickerId: string;
+  byUserId: string;
+  targetUserId: string;
+  createdAt: string;
 }
 
 /** วันที่ใช้กับตัวกรองช่วงเวลาและการเรียง — กำหนดเสร็จ ถ้าไม่มีใช้วันที่เปิดใบ */
