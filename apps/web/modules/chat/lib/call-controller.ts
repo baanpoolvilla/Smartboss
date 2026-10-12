@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import type { Room } from "livekit-client";
+import type { Room, Track as LkTrack } from "livekit-client";
 import { toast } from "sonner";
 
 import type { ChatCallDTO } from "../types";
@@ -35,6 +35,14 @@ interface CallState {
    * ต้องใช้ปุ่มเสียงข้างเครื่อง · null = ยังไม่รู้ (ยังไม่มีเสียงปลายสาย)
    */
   volumeAdjustable: boolean | null;
+  /** กล้องของเราเปิดอยู่ (เปิด/ปิดระหว่างคุยได้ แบบ Discord — สายเริ่มเป็นเสียงอย่างเดียวเสมอ) */
+  cameraOn: boolean;
+  /** กล้องหน้า/หลัง (มือถือ) */
+  facing: "user" | "environment";
+  /** ปลายสายเปิดกล้องอยู่ — จอโทรเปลี่ยนเป็นภาพวิดีโอเต็มจอ */
+  remoteVideo: boolean;
+  /** เพิ่มทุกครั้งที่ภาพวิดีโอ (เรา/ปลายสาย) เปลี่ยน — จอโทรใช้เป็นตัวบอกให้ผูก <video> ใหม่ */
+  videoRev: number;
 }
 
 const VOLUME_KEY = "sb.call.volume";
@@ -58,6 +66,10 @@ export const useCallStore = create<CallState>(() => ({
   minimized: false,
   volume: typeof window === "undefined" ? 1 : savedVolume(),
   volumeAdjustable: null,
+  cameraOn: false,
+  facing: "user",
+  remoteVideo: false,
+  videoRev: 0,
 }));
 
 const RING_TIMEOUT_MS = 45_000;
@@ -69,6 +81,23 @@ let ringTimer: ReturnType<typeof setTimeout> | null = null;
 let peerGoneTimer: ReturnType<typeof setTimeout> | null = null;
 let endedTimer: ReturnType<typeof setTimeout> | null = null;
 const audioEls = new Set<HTMLMediaElement>();
+/** ภาพวิดีโอปัจจุบัน — จอโทรผูกเข้ากับ <video> ของตัวเองผ่าน attachVideo() */
+let remoteVideoTrack: LkTrack | null = null;
+let localVideoTrack: LkTrack | null = null;
+
+function bumpVideo(patch: Partial<CallState> = {}) {
+  useCallStore.setState((s) => ({ ...patch, videoRev: s.videoRev + 1 }));
+}
+
+/** ผูกภาพของเรา ("local") หรือปลายสาย ("remote") เข้ากับ <video> ของจอโทร — คืนฟังก์ชันถอด */
+export function attachVideo(which: "local" | "remote", el: HTMLVideoElement): () => void {
+  const track = which === "local" ? localVideoTrack : remoteVideoTrack;
+  if (!track) return () => undefined;
+  track.attach(el);
+  return () => {
+    track.detach(el);
+  };
+}
 
 // ─── เสียงเรียกเข้า / เสียงรอสาย (สร้างด้วย WebAudio ไม่ต้องมีไฟล์เสียง) ───
 let tone: { ctx: AudioContext; timer: ReturnType<typeof setInterval>; vibrate: boolean } | null = null;
@@ -156,6 +185,11 @@ async function connectRoom(url: string, token: string) {
   const r = new Room({ adaptiveStream: false, dynacast: false, audioCaptureDefaults: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
   room = r;
   r.on(RoomEvent.TrackSubscribed, (track) => {
+    if (track.kind === Track.Kind.Video) {
+      remoteVideoTrack = track;
+      bumpVideo({ remoteVideo: !track.isMuted });
+      return;
+    }
     if (track.kind !== Track.Kind.Audio) return;
     const el = track.attach();
     el.style.display = "none";
@@ -164,9 +198,24 @@ async function connectRoom(url: string, token: string) {
     applyVolume(el);
   });
   r.on(RoomEvent.TrackUnsubscribed, (track) => {
+    if (track.kind === Track.Kind.Video) {
+      if (remoteVideoTrack === track) remoteVideoTrack = null;
+      bumpVideo({ remoteVideo: false });
+      return;
+    }
     for (const el of track.detach()) {
       el.remove();
       audioEls.delete(el);
+    }
+  });
+  // ปลายสายปิด/เปิดกล้อง (LiveKit ปิดกล้อง = mute track ไม่ได้ถอดออก)
+  r.on(RoomEvent.TrackMuted, (pub, participant) => {
+    if (participant !== r.localParticipant && pub.kind === Track.Kind.Video) bumpVideo({ remoteVideo: false });
+  });
+  r.on(RoomEvent.TrackUnmuted, (pub, participant) => {
+    if (participant !== r.localParticipant && pub.kind === Track.Kind.Video) {
+      if (pub.track) remoteVideoTrack = pub.track;
+      bumpVideo({ remoteVideo: true });
     }
   });
   r.on(RoomEvent.AudioPlaybackStatusChanged, () => {
@@ -195,6 +244,9 @@ async function connectRoom(url: string, token: string) {
 function disconnectRoom() {
   const r = room;
   room = null;
+  remoteVideoTrack = null;
+  localVideoTrack = null;
+  useCallStore.setState({ cameraOn: false, remoteVideo: false, facing: "user" });
   if (r) void r.disconnect().catch(() => undefined);
   for (const el of audioEls) el.remove();
   audioEls.clear();
@@ -331,6 +383,54 @@ export async function toggleMute() {
   const muted = !useCallStore.getState().muted;
   useCallStore.setState({ muted });
   await room.localParticipant.setMicrophoneEnabled(!muted).catch(() => useCallStore.setState({ muted: !muted }));
+}
+
+function cameraError(err: unknown): string {
+  const name = err && typeof err === "object" && "name" in err ? String((err as { name: unknown }).name) : "";
+  if (name === "NotAllowedError" || name === "SecurityError") return "ไม่ได้รับอนุญาตให้ใช้กล้อง — เปิดสิทธิ์กล้องให้แอปก่อน";
+  if (name === "NotFoundError" || name === "OverconstrainedError") return "ไม่พบกล้องในเครื่องนี้";
+  if (name === "NotReadableError") return "กล้องถูกแอปอื่นใช้อยู่";
+  return "เปิดกล้องไม่สำเร็จ";
+}
+
+async function refreshLocalVideo() {
+  if (!room) return;
+  const { Track } = await import("livekit-client");
+  const pub = room.localParticipant.getTrackPublication(Track.Source.Camera);
+  localVideoTrack = pub?.videoTrack ?? null;
+}
+
+/**
+ * เปิด/ปิดกล้องระหว่างคุย แบบ Discord — สายเริ่มเป็นเสียง กดเปิดกล้องเมื่อไหร่ก็ได้ อีกฝั่งเห็นทันที
+ * ปิดกล้อง = กลับเป็นสายเสียงตามเดิม (ไม่ต้องวางสาย)
+ */
+export async function toggleCamera() {
+  if (!room) return;
+  const on = !useCallStore.getState().cameraOn;
+  try {
+    await room.localParticipant.setCameraEnabled(on, { facingMode: useCallStore.getState().facing, resolution: { width: 640, height: 480 } });
+    await refreshLocalVideo();
+    bumpVideo({ cameraOn: on });
+  } catch (err) {
+    toast.error(cameraError(err));
+    bumpVideo({ cameraOn: false });
+  }
+}
+
+/** สลับกล้องหน้า/หลัง (มือถือ) ระหว่างเปิดกล้องอยู่ */
+export async function flipCamera() {
+  if (!room || !useCallStore.getState().cameraOn) return;
+  const facing = useCallStore.getState().facing === "user" ? "environment" : "user";
+  try {
+    const { Track } = await import("livekit-client");
+    const pub = room.localParticipant.getTrackPublication(Track.Source.Camera);
+    const track = pub?.videoTrack as unknown as { restartTrack?: (o: { facingMode: string }) => Promise<void> } | undefined;
+    await track?.restartTrack?.({ facingMode: facing });
+    await refreshLocalVideo();
+    bumpVideo({ facing });
+  } catch (err) {
+    toast.error(cameraError(err));
+  }
 }
 
 export async function enableAudio() {

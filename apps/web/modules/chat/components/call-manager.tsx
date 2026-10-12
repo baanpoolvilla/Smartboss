@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ChevronDown, Mic, MicOff, Phone, PhoneOff, Volume1, Volume2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronDown, Mic, MicOff, Phone, PhoneOff, SwitchCamera, Video, VideoOff, Volume1, Volume2 } from "lucide-react";
 import { cn } from "@smartboss/ui/cn";
 
 import { subscribeRealtime } from "@/lib/realtime-client";
 import { useChatStore } from "../store/chat-store";
 import type { ChatCallDTO } from "../types";
 import { ChatAvatar } from "./chat-avatar";
-import { answer, changeVolume, decline, enableAudio, hangUp, onIncoming, onUpdate, resumeFromServer, toggleMute, useCallStore } from "../lib/call-controller";
+import { answer, attachVideo, changeVolume, decline, enableAudio, flipCamera, hangUp, onIncoming, onUpdate, resumeFromServer, toggleCamera, toggleMute, useCallStore } from "../lib/call-controller";
 
 /**
  * จอโทร (ทุกหน้า ทุกโมดูล — วางไว้ใน Shell คู่กับ ChatNotifyListener)
@@ -17,7 +17,8 @@ import { answer, changeVolume, decline, enableAudio, hangUp, onIncoming, onUpdat
  * - ระหว่างคุยย่อเป็นแถบเล็กด้านบนได้ แชทต่อได้
  */
 export function CallManager() {
-  const { phase, call, muted, needsAudioTap, endedLabel, minimized, meId, volume, volumeAdjustable } = useCallStore();
+  const { phase, call, muted, needsAudioTap, endedLabel, minimized, meId, volume, volumeAdjustable, cameraOn, remoteVideo, facing } =
+    useCallStore();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -64,6 +65,7 @@ export function CallManager() {
       >
         <Phone className="h-4 w-4" /> {peerName} · <CallTimer since={call.answeredAt} />
         {muted && <MicOff className="h-4 w-4" />}
+        {cameraOn && <Video className="h-4 w-4" />}
       </button>
     );
   }
@@ -81,7 +83,29 @@ export function CallManager() {
 
   return (
     <div className="fixed inset-0 z-[90] flex flex-col items-center bg-gradient-to-b from-[#1f2a37] to-[#0b1118] px-6 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] text-white">
-      <div className="flex w-full max-w-md justify-start">
+      {/* วิดีโอแบบ Discord: ปลายสายเปิดกล้อง = ภาพเต็มจอเป็นพื้นหลัง · กล้องเรา = ภาพเล็กมุมขวาบน */}
+      {phase === "active" && remoteVideo && (
+        <>
+          <CallVideo which="remote" className="absolute inset-0 h-full w-full bg-black object-contain" />
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-black/60 to-transparent" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-72 bg-gradient-to-t from-black/70 to-transparent" />
+        </>
+      )}
+      {phase === "active" && cameraOn && (
+        <div className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-10 overflow-hidden rounded-2xl shadow-lg ring-1 ring-white/20">
+          <CallVideo which="local" mirror={facing === "user"} muted className="h-40 w-28 bg-black object-cover sm:h-44 sm:w-32" />
+          <button
+            type="button"
+            onClick={() => void flipCamera()}
+            className="absolute bottom-1.5 right-1.5 rounded-full bg-black/50 p-1.5 text-white hover:bg-black/70 sm:hidden"
+            aria-label="สลับกล้องหน้า/หลัง"
+            title="สลับกล้องหน้า/หลัง"
+          >
+            <SwitchCamera className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+      <div className="relative flex w-full max-w-md justify-start">
         {phase === "active" && (
           <button type="button" onClick={() => useCallStore.setState({ minimized: true })} className="rounded-full p-2 text-white/80 hover:bg-white/10" aria-label="ย่อจอโทร" title="ย่อ — แชทต่อได้ระหว่างคุย">
             <ChevronDown className="h-6 w-6" />
@@ -89,10 +113,12 @@ export function CallManager() {
         )}
       </div>
 
-      <div className="mt-[12vh] flex flex-col items-center gap-4">
-        <div className={cn("rounded-full p-1.5", phase === "incoming" || phase === "outgoing" ? "animate-pulse bg-white/10" : "")}>
-          <PeerAvatar id={peerId} name={peerName} />
-        </div>
+      <div className={cn("relative flex flex-col items-center gap-4", phase === "active" && remoteVideo ? "mt-2" : "mt-[12vh]")}>
+        {!(phase === "active" && remoteVideo) && (
+          <div className={cn("rounded-full p-1.5", phase === "incoming" || phase === "outgoing" ? "animate-pulse bg-white/10" : "")}>
+            <PeerAvatar id={peerId} name={peerName} />
+          </div>
+        )}
         <div className="text-center">
           <div className="text-2xl font-semibold">{peerName}</div>
           <div className="mt-1 text-[15px] tabular-nums text-white/70">{status ?? <CallTimer since={call.answeredAt} />}</div>
@@ -118,7 +144,7 @@ export function CallManager() {
           </RoundButton>
         </div>
       ) : phase === "ended" ? null : (
-        <div className="mt-auto flex w-full max-w-sm flex-col items-center gap-8">
+        <div className="relative mt-auto flex w-full max-w-sm flex-col items-center gap-8">
           {/* ระดับเสียงปลายสาย — iPhone ปรับจากเว็บไม่ได้ (ข้อจำกัดของ Safari) บอกให้ใช้ปุ่มข้างเครื่อง */}
           {volumeAdjustable === false ? (
             <p className="text-center text-xs text-white/60">ปรับเสียงด้วยปุ่มเสียงข้างเครื่อง</p>
@@ -149,6 +175,14 @@ export function CallManager() {
               {muted ? <MicOff className="h-7 w-7" /> : <Mic className="h-7 w-7" />}
             </RoundButton>
             <RoundButton
+              label={cameraOn ? "ปิดกล้อง" : "เปิดกล้อง"}
+              className={cameraOn ? "bg-white text-[#1f2a37] hover:bg-white/90" : "bg-white/15 hover:bg-white/25"}
+              onClick={() => void toggleCamera()}
+              disabled={phase !== "active"}
+            >
+              {cameraOn ? <Video className="h-7 w-7" /> : <VideoOff className="h-7 w-7" />}
+            </RoundButton>
+            <RoundButton
               label="เพิ่มเสียง"
               className="bg-white/15 hover:bg-white/25"
               onClick={() => changeVolume(0.1)}
@@ -163,6 +197,27 @@ export function CallManager() {
         </div>
       )}
     </div>
+  );
+}
+
+/** ผูกภาพจาก LiveKit เข้ากับ <video> — ผูกใหม่ทุกครั้งที่ภาพเปลี่ยน (videoRev) */
+function CallVideo({ which, className, mirror, muted }: { which: "local" | "remote"; className: string; mirror?: boolean; muted?: boolean }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const rev = useCallStore((s) => s.videoRev);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    return attachVideo(which, el);
+  }, [which, rev]);
+  return (
+    <video
+      ref={ref}
+      autoPlay
+      playsInline
+      muted={muted}
+      className={className}
+      style={mirror ? { transform: "scaleX(-1)" } : undefined}
+    />
   );
 }
 
