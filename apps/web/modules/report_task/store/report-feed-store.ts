@@ -961,6 +961,21 @@ export const useReportFeedStore = create<ReportFeedStore>()(
           target: post.title,
           detail: `${sticker.label} ให้ ${getUser(targetUserId ?? post.authorId)?.name ?? "ไม่ทราบชื่อ"}`,
         });
+        // แจ้งคนที่โดนหัก/ได้คะแนน — เดิมสติกเกอร์บนโพสต์ไม่แจ้งใครเลย (งานแจ้งอยู่แล้ว ดู task-store addReaction)
+        const recipient = targetUserId ?? post.authorId;
+        if (recipient !== byUserId) {
+          const actorName = getUser(byUserId)?.name ?? "มีคน";
+          const pts = sticker.points;
+          useNotificationStore.getState().notify({
+            userId: recipient,
+            byUserId,
+            message: `${actorName} ติดสติกเกอร์ "${sticker.emoji} ${sticker.label}" ให้คุณ ในโพสต์ "${post.title}"${
+              pts !== 0 ? ` (${pts > 0 ? `+${pts}` : pts} คะแนน)` : ""
+            }`,
+            link: `/chat-report/report-feed?topic=${post.topicId}&post=${postId}`,
+            topicName: get().topics.find((t) => t.id === post.topicId)?.name,
+          });
+        }
       },
       removeStickerReaction: (postId, reactionId, byUserId) => {
         const post = get().posts.find((p) => p.id === postId);

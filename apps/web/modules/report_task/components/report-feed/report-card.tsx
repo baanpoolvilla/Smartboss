@@ -1679,14 +1679,18 @@ export function ReportCard({
             const latest = post.stickerReactions
               .filter((r) => r.stickerId === stickerId)
               .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-            // ให้ใครบ้าง — เลือกคนได้แล้ว (ไม่ใช่เจ้าของโพสต์เสมอไป) ต้องบอกบนป้ายด้วย
-            const recipients = [
+            // ให้ใครบ้าง — เลือกคนได้แล้ว (ไม่ใช่เจ้าของโพสต์เสมอไป) ต้องบอกบนป้ายเลย ไม่ใช่แค่ตอนชี้เมาส์
+            // (มือถือชี้ไม่ได้) ⇒ 1–2 คนโชว์ชื่อ · มากกว่านั้น "ชื่อแรก +N" · ชื่อเต็มอยู่ใน title
+            const recipientNames = [
               ...new Set(
                 post.stickerReactions
                   .filter((r) => r.stickerId === stickerId)
                   .map((r) => getUser(r.targetUserId ?? post.authorId)?.name ?? "ไม่ทราบชื่อ")
               ),
-            ].join(", ");
+            ];
+            const recipients = recipientNames.join(", ");
+            const recipientShort =
+              recipientNames.length <= 2 ? recipients : `${recipientNames[0]} +${recipientNames.length - 1}`;
             return (
               <span
                 key={stickerId}
@@ -1703,7 +1707,8 @@ export function ReportCard({
                 onClick={canUndo && latest ? () => removeStickerReaction(post.id, latest.id, viewingAsUserId) : undefined}
               >
                 <span className="text-[20px] leading-none">{sticker.emoji}</span>
-                {count > 1 && <span className="text-[var(--ink-soft)]">{count}</span>}
+                <span className="max-w-[14rem] truncate text-[12px] text-[var(--ink)]">{recipientShort}</span>
+                {count > recipientNames.length && <span className="text-[var(--ink-soft)]">×{count}</span>}
                 {canUndo && <X className="h-3 w-3 text-[var(--ink-faint)] group-hover/sticker:text-[var(--chart-red)]" />}
               </span>
             );

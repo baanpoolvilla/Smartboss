@@ -15,6 +15,7 @@ import { cn } from "@/modules/report_task/lib/utils";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useMaintenanceBoardStore } from "@/modules/report_task/store/maintenance-board-store";
+import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import type { MaintenanceBoardItem } from "@/modules/report_task/lib/maintenance-board";
 import type { Sticker } from "@/modules/report_task/types";
 
@@ -62,8 +63,24 @@ export function MaintenanceCard({ item }: { item: MaintenanceBoardItem }) {
     setBusy(true);
     const err = await react(item.id, sticker.id);
     setBusy(false);
-    if (err) toast.error(err);
-    else showStickerToast(sticker, `${item.code} ${item.title}`, "ใบงาน");
+    if (err) {
+      toast.error(err);
+      return;
+    }
+    showStickerToast(sticker, `${item.code} ${item.title}`, "ใบงาน");
+    // แจ้งผู้รับผิดชอบที่โดนหัก/ได้คะแนน — แบบเดียวกับสติกเกอร์บนงาน (task-store addReaction)
+    if (item.assigneeId && item.assigneeId !== viewingAsUserId) {
+      const actorName = getUser(viewingAsUserId)?.name ?? "มีคน";
+      const pts = sticker.points;
+      useNotificationStore.getState().notify({
+        userId: item.assigneeId,
+        byUserId: viewingAsUserId,
+        message: `${actorName} ติดสติกเกอร์ "${sticker.emoji} ${sticker.label}" ให้ใบงาน ${item.code} "${item.title}"${
+          pts !== 0 ? ` (${pts > 0 ? `+${pts}` : pts} คะแนน)` : ""
+        }`,
+        link: item.href,
+      });
+    }
   }
 
   async function undo(reactionId: string) {
