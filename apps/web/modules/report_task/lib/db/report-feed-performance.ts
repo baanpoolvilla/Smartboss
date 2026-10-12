@@ -138,6 +138,9 @@ export async function recordReportStickerEvents(
         : [];
     const originalAt = new Map(originals.map((o) => [o.refId, o.occurredAt] as const));
     for (const { post, reaction } of removals) {
+      // คืนเฉพาะที่เคยหัก/ให้จริง — เดิมคืนทุกอันที่ถูกลบ สติกเกอร์ที่ไม่เคยลงคะแนน (เลือก CEO,
+      // ติดก่อนวันเริ่มนับ, คนติดไม่ใช่หัวหน้า) พอกดยกเลิกเลยได้แต้มคืนฟรี · แบบเดียวกับงาน (task-repo.ts)
+      if (!originalAt.has(reaction.id)) continue;
       const points = pointsById.get(reaction.stickerId);
       if (points === undefined || points === 0) continue;
       const label = labelById.get(reaction.stickerId) ?? reaction.stickerId;
