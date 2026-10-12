@@ -43,11 +43,10 @@ import type { BoardKind } from "@/modules/report_task/lib/maintenance-board";
  * ("เอาแผนกออกก่อน เดี๋ยวงง") โค้ดบอร์ดแผนกใน kanban-board.tsx ยังอยู่ เปิดกลับได้ที่นี่ที่เดียว */
 const GROUP_BY_CHOICES: GroupBy[] = ["status", "priority", "assignee"];
 
-/** "แสดงบนบอร์ด" ในเมนูจัดกลุ่ม — ใบงานซ่อม/สั่งซื้อปนกับงานบนบอร์ด (lib/maintenance-board.ts) */
+/** "แสดงบนบอร์ด" ในเมนูจัดกลุ่ม — ใบงานซ่อมปนกับงานบนบอร์ด (lib/maintenance-board.ts) */
 const BOARD_KINDS: { id: BoardKind; icon: string; label: string }[] = [
   { id: "task", icon: "📋", label: "งาน" },
   { id: "wo", icon: "🔧", label: "ใบงานซ่อม" },
-  { id: "po", icon: "🛒", label: "สั่งซื้ออุปกรณ์" },
 ];
 
 const groupByIcon: Record<GroupBy, typeof CircleDot> = {
@@ -495,7 +494,7 @@ export function TaskFilters({
               <SelectItem value="all">ทั้งหมด</SelectItem>
               <SelectItem value="mine">งานของฉัน</SelectItem>
               <SelectItem value="tracking">งานที่กำลังติดตาม</SelectItem>
-              {/* ติ๊กประเภทชุดเดียวกับบอร์ด — สลับไปตาราง/ภาระงานแล้วยังเห็นใบงานซ่อม/สั่งซื้อเหมือนกัน */}
+              {/* ติ๊กประเภทชุดเดียวกับบอร์ด — สลับไปตาราง/ภาระงานแล้วยังเห็นใบงานซ่อมเหมือนกัน */}
               <SelectSeparator />
               {kindToggles}
             </SelectContent>

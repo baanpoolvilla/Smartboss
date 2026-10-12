@@ -13,7 +13,7 @@ import { TaskDetailSheet } from "./task-detail-sheet";
 /**
  * Self-contained Grid view — same filtered dataset as the Kanban board (no
  * re-entry, no separate data source), just rendered as a sortable table.
- * ใบงานซ่อม/สั่งซื้อชุดเดียวกับบอร์ด (useBoardMaintenance) ต่อท้ายตารางเป็นกลุ่มของตัวเอง
+ * ใบงานซ่อมชุดเดียวกับบอร์ด (useBoardMaintenance) ต่อท้ายตารางเป็นกลุ่มของตัวเอง
  */
 export function TaskGridView() {
   const storeTasks = useTaskStore((s) => s.tasks);

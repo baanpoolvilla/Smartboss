@@ -39,8 +39,8 @@ function BarBreakdownRow({ color, label, count, total }: { color: string; label:
  * respects the shared filter bar. Volume only (no score) — see the Reports page
  * for performance scoring; this view is purely "how much is on their plate."
  *
- * ใบงานซ่อม/สั่งซื้อ (ชุดเดียวกับบอร์ด/ตาราง — useBoardMaintenance) นับรวมในแถบของ "ผู้รับผิดชอบ" ของใบนั้น
- * (ใบงาน: ช่างที่รับ · สั่งซื้อ: ผู้ซื้อ) — รอดำเนินการ/รออนุมัติ = รอดำเนินการ · กำลังซ่อม/รอรับของ = กำลังทำ
+ * ใบงานซ่อม (ชุดเดียวกับบอร์ด/ตาราง — useBoardMaintenance) นับรวมในแถบของ "ผู้รับผิดชอบ" ของใบนั้น
+ * — รอดำเนินการ = รอดำเนินการ · กำลังซ่อม = กำลังทำ
  */
 export function WorkloadView() {
   const tasks = useVisibleTasks();
@@ -86,9 +86,7 @@ export function WorkloadView() {
         const done = mine.filter((t) => t.status === "done").length + mx.filter((i) => i.column === "done").length;
         const total = mine.length + mx.length;
         const open = total - done;
-        const wo = mx.filter((i) => i.kind === "wo").length;
-        const po = mx.length - wo;
-        return { user: u, total, todo, inProgress, overdue, done, open, wo, po };
+        return { user: u, total, todo, inProgress, overdue, done, open, wo: mx.length };
       })
       .filter((r) => r.total > 0)
       .sort((a, b) => b.total - a.total || b.open - a.open || b.overdue - a.overdue);
@@ -178,11 +176,7 @@ export function WorkloadView() {
                       <BarBreakdownRow color="var(--chart-red)" label="เลยกำหนด" count={r.overdue} total={r.total} />
                       <BarBreakdownRow color="var(--chart-green)" label="เสร็จ" count={r.done} total={r.total} />
                     </div>
-                    {(r.wo > 0 || r.po > 0) && (
-                      <p className="mt-2 text-[11px] text-[var(--ink-soft)]">
-                        รวม{r.wo > 0 ? ` ใบงานซ่อม ${r.wo}` : ""}{r.po > 0 ? ` สั่งซื้อ ${r.po}` : ""} แล้ว
-                      </p>
-                    )}
+                    {r.wo > 0 && <p className="mt-2 text-[11px] text-[var(--ink-soft)]">รวมใบงานซ่อม {r.wo} ใบแล้ว</p>}
                     <div className="mt-2 pt-2 border-t border-[var(--line)] flex items-center justify-between text-xs font-medium">
                       <span className="text-[var(--ink-soft)]">รวมทั้งหมด</span>
                       <span>{r.total} งาน</span>
@@ -217,11 +211,6 @@ export function WorkloadView() {
                   {r.wo > 0 && (
                     <span title="ใบงานซ่อมที่รับผิดชอบ (รวมอยู่ในแถบแล้ว)" style={{ color: MAINTENANCE_KIND.wo.color }}>
                       {MAINTENANCE_KIND.wo.icon} ใบงานซ่อม {r.wo}
-                    </span>
-                  )}
-                  {r.po > 0 && (
-                    <span title="ใบสั่งซื้อที่รับผิดชอบ (รวมอยู่ในแถบแล้ว)" style={{ color: MAINTENANCE_KIND.po.color }}>
-                      {MAINTENANCE_KIND.po.icon} สั่งซื้อ {r.po}
                     </span>
                   )}
                   {overloaded && <span className="text-[10px] rounded-full bg-amber-50 text-[var(--chart-amber)] px-1.5 py-0.5">งานเยอะ</span>}

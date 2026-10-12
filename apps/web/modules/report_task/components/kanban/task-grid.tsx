@@ -142,7 +142,7 @@ const GridRow = memo(
 );
 
 /**
- * แถวใบงานซ่อม/สั่งซื้อในตาราง — คอลัมน์เดียวกับแถวงาน (ชื่อ · ผู้รับผิดชอบ · เริ่ม=วันเปิดใบ · กำหนดส่ง · สถานะ
+ * แถวใบงานซ่อมในตาราง — คอลัมน์เดียวกับแถวงาน (ชื่อ · ผู้รับผิดชอบ · เริ่ม=วันเปิดใบ · กำหนดส่ง · สถานะ
  * · ความสำคัญ · สถานที่) แต่แสดงอย่างเดียว กดแล้วไปหน้านั้นในแจ้งซ่อม แบบเดียวกับการ์ดบนบอร์ด (maintenance-card.tsx)
  */
 function MxGridRow({
@@ -247,7 +247,7 @@ export function TaskGrid({
   onOpen,
 }: {
   tasks: Task[];
-  /** ใบงานซ่อม/สั่งซื้อที่ผ่านตัวกรองเดียวกัน — ต่อท้ายตารางเป็นกลุ่มของตัวเอง แสดงอย่างเดียว */
+  /** ใบงานซ่อมที่ผ่านตัวกรองเดียวกัน — ต่อท้ายตารางเป็นกลุ่มของตัวเอง แสดงอย่างเดียว */
   maintenance?: MaintenanceBoardItem[];
   onOpen: (id: string) => void;
 }) {
@@ -293,7 +293,7 @@ export function TaskGrid({
     const done = tasks.filter((t) => t.status === "done").length;
     const overdue = tasks.filter((t) => dueUrgency(t) === "overdue").length;
     const docked = tasks.filter((t) => t.penalty).length;
-    // ใบงานซ่อม/สั่งซื้อนับรวมด้วย — เป็นงานชุดเดียวกับที่เห็นในตาราง
+    // ใบงานซ่อมนับรวมด้วย — เป็นงานชุดเดียวกับที่เห็นในตาราง
     const mxDone = maintenance.filter((i) => i.column === "done").length;
     const mxOverdue = maintenance.filter((i) => i.overdue).length;
     return { total: tasks.length + maintenance.length, done: done + mxDone, overdue: overdue + mxOverdue, docked };
@@ -309,11 +309,6 @@ export function TaskGrid({
   );
   const { visible: pagedMx, remaining: mxRemaining, expanded: mxExpanded, toggle: toggleMxExpanded } = useShowMore(sortedMx, 10);
   const openMx = useCallback((item: MaintenanceBoardItem) => router.push(`${item.href}?from=tasks`), [router]);
-  const mxCountLabel = (["wo", "po"] as const)
-    .map((kind) => ({ kind, n: maintenance.filter((i) => i.kind === kind).length }))
-    .filter((x) => x.n > 0)
-    .map((x) => `${MAINTENANCE_KIND[x.kind].icon} ${MAINTENANCE_KIND[x.kind].label} ${x.n}`)
-    .join(" · ");
 
   const columns = useMemo<ColumnDef<Task>[]>(
     () => [
@@ -943,7 +938,7 @@ export function TaskGrid({
                   />
                 );
               })}
-              {/* "แสดงเพิ่มเติม" ของแถวงานอยู่ใต้แถวงานเลย — ไม่งั้นไปโผล่หลังกลุ่มใบงานซ่อม/สั่งซื้อ */}
+              {/* "แสดงเพิ่มเติม" ของแถวงานอยู่ใต้แถวงานเลย — ไม่งั้นไปโผล่หลังกลุ่มใบงานซ่อม */}
               {(gridExpanded || gridRemaining > 0) && (
                 <TableRow className="hover:bg-transparent">
                   <TableCell colSpan={colCount + 1} className="px-4 py-2.5">
@@ -961,11 +956,11 @@ export function TaskGrid({
                       <TableRow className="bg-[var(--bg-soft)] hover:bg-[var(--bg-soft)] border-b border-[var(--line)]">
                         <TableCell colSpan={colCount + 1} className="px-4 py-2.5">
                           <span className="flex items-center gap-2 text-sm font-semibold">
-                            ใบงานซ่อม / สั่งซื้ออุปกรณ์
+                            {MAINTENANCE_KIND.wo.icon} ใบงานซ่อม
                             <Badge variant="outline" className="text-[11px] text-[var(--ink-soft)] bg-white border-[var(--line)]">
                               {maintenance.length}
                             </Badge>
-                            <span className="text-[11px] font-normal text-[var(--ink-soft)]">{mxCountLabel} · กดเพื่อเปิดในแจ้งซ่อม</span>
+                            <span className="text-[11px] font-normal text-[var(--ink-soft)]">กดเพื่อเปิดในแจ้งซ่อม</span>
                           </span>
                         </TableCell>
                       </TableRow>
@@ -1116,7 +1111,7 @@ export function TaskGrid({
               {sortedMx.length > 0 && (
                 <div className={cn("flex flex-col gap-2", rows.length > 0 && "pt-3")}>
                   <div className="flex items-center gap-2 px-1 pb-1 text-sm font-semibold">
-                    ใบงานซ่อม / สั่งซื้ออุปกรณ์
+                    {MAINTENANCE_KIND.wo.icon} ใบงานซ่อม
                     <Badge variant="outline" className="text-[11px] text-[var(--ink-soft)] bg-white border-[var(--line)]">
                       {maintenance.length}
                     </Badge>

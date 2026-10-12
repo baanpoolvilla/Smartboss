@@ -197,7 +197,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
     [allTasks, filters]
   );
 
-  // ใบงานซ่อม/สั่งซื้ออุปกรณ์ที่เกี่ยวข้อง — แสดงอย่างเดียว ปนกับงานบนบอร์ด (lib/maintenance-board.ts)
+  // ใบงานซ่อมที่เกี่ยวข้อง — แสดงอย่างเดียว ปนกับงานบนบอร์ด (lib/maintenance-board.ts)
   // ดึง/คัด/ติ๊กประเภทร่วมกับมุมมองตาราง/ภาระงาน (hooks/use-board-maintenance.ts)
   // ติ๊กออกในเมนู "แสดงบนบอร์ด" = ซ่อนประเภทนั้นจากคอลัมน์ (ตัวเลขสรุปด้านบนของบอร์ดยังนับงานตามเดิม)
   const { shownTasks, shownMx } = useBoardMaintenance(filtered, filters);
@@ -323,7 +323,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
       .filter((c) => c.tasks.length > 0);
   }, [groupBy, shownTasks, filters.penalty, projectTopics]);
 
-  // ใส่ใบงานซ่อม/สั่งซื้อลงคอลัมน์ (เฉพาะจัดกลุ่มตามสถานะ/ความสำคัญ — ตามคนเป็นการ์ดสรุป ไม่มีการ์ดรายใบ)
+  // ใส่ใบงานซ่อมลงคอลัมน์ (เฉพาะจัดกลุ่มตามสถานะ/ความสำคัญ — ตามคนเป็นการ์ดสรุป ไม่มีการ์ดรายใบ)
   // เรียงรวมกับงานด้วยกติกาเดียวกัน (sortBoardEntries) · "เลยกำหนดเท่านั้น" ยุบเหลือคอลัมน์เดียว = ใส่ทุกใบที่ผ่านตัวกรอง
   const columns: BoardColumn[] = useMemo(() => {
     if (shownMx.length === 0 || (groupBy !== "status" && groupBy !== "priority")) return taskColumns;
@@ -572,7 +572,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
         )}
         <span className="ml-auto text-xs text-[var(--ink-soft)]">
           {shownTasks.length} งาน
-          {mxOnBoard > 0 ? ` · ใบงานซ่อม/สั่งซื้อ ${mxOnBoard}` : ""}
+          {mxOnBoard > 0 ? ` · ใบงานซ่อม ${mxOnBoard}` : ""}
         </span>
       </div>
 

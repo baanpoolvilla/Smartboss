@@ -5,7 +5,7 @@ import { persist } from "zustand/middleware";
 import type { BoardKind, MaintenanceBoardItem } from "@/modules/report_task/lib/maintenance-board";
 
 /**
- * ใบงานซ่อม/สั่งซื้อบนบอร์ดงาน (lib/maintenance-board.ts) + ตัวเลือก "แสดงบนบอร์ด" ในเมนูจัดกลุ่ม
+ * ใบงานซ่อมบนหน้างาน (lib/maintenance-board.ts) + ตัวเลือก "แสดงบนบอร์ด" ในเมนูจัดกลุ่ม
  * kinds จำไว้ในเครื่อง (เปิดครั้งหน้ายังเป็นแบบเดิม) · items/counts ไม่จำ — ดึงใหม่ทุกครั้งที่เปิดบอร์ด
  */
 interface MaintenanceBoardState {
@@ -27,8 +27,8 @@ export const useMaintenanceBoardStore = create<MaintenanceBoardState>()(
     (set) => ({
       items: [],
       loaded: false,
-      kinds: { task: true, wo: true, po: true },
-      counts: { task: 0, wo: 0, po: 0 },
+      kinds: { task: true, wo: true },
+      counts: { task: 0, wo: 0 },
       load: () => {
         if (inflight) return inflight;
         inflight = (async () => {
@@ -48,14 +48,23 @@ export const useMaintenanceBoardStore = create<MaintenanceBoardState>()(
         set((s) => {
           const next = { ...s.kinds, [kind]: !s.kinds[kind] };
           // เอาออกหมดไม่ได้ — บอร์ดว่างเปล่าแล้วงงว่าทำไม
-          if (!next.task && !next.wo && !next.po) return s;
+          if (!next.task && !next.wo) return s;
           return { kinds: next };
         }),
       setCounts: (counts) =>
         set((s) =>
-          s.counts.task === counts.task && s.counts.wo === counts.wo && s.counts.po === counts.po ? s : { counts }
+          s.counts.task === counts.task && s.counts.wo === counts.wo ? s : { counts }
         ),
     }),
-    { name: "sb-board-kinds", partialize: (s) => ({ kinds: s.kinds }) }
+    {
+      name: "sb-board-kinds",
+      partialize: (s) => ({ kinds: s.kinds }),
+      // ที่จำไว้ในเครื่องจากตอนยังมี "สั่งซื้อ" (po) — เอาแค่ task/wo ที่ยังมีอยู่ ไม่งั้น key เก่าค้างใน state
+      merge: (persisted, current) => {
+        const k = (persisted as { kinds?: Partial<Record<BoardKind, boolean>> } | undefined)?.kinds;
+        const kinds = { task: k?.task ?? true, wo: k?.wo ?? true };
+        return { ...current, kinds: kinds.task || kinds.wo ? kinds : current.kinds };
+      },
+    }
   )
 );

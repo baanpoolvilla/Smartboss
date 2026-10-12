@@ -51,7 +51,7 @@ export interface BoardColumn {
    * here is the narrower, deliberate alternative ("ต้องเป็นแผนกด้วยสิ...
    * แสดงแค่ของใครของมันที่ได้รับมอบหมายในแผนกนั้นๆ"). */
   breakdown?: { id: string; label: string; accent: string; count: number }[];
-  /** การ์ดที่จะแสดงจริง เมื่อมีใบงานซ่อม/สั่งซื้อปนกับงาน (lib/maintenance-board.ts — เรียงรวมกันแล้ว)
+  /** การ์ดที่จะแสดงจริง เมื่อมีใบงานซ่อมปนกับงาน (lib/maintenance-board.ts — เรียงรวมกันแล้ว)
    * ไม่ใส่ = แสดง tasks ตามเดิม · แถบ %/เลยกำหนดในหัวคอลัมน์ยังนับเฉพาะงาน */
   entries?: BoardEntry[];
 }

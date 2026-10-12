@@ -6,34 +6,36 @@ import type { TaskFilterState } from "@/modules/report_task/lib/task-filter";
 import type { Task, TaskPriority } from "@/modules/report_task/types";
 
 /**
- * ใบงานซ่อม / สั่งซื้ออุปกรณ์ บนบอร์ดงาน (Kanban) — แสดงอย่างเดียว กดแล้วไปหน้านั้นในแจ้งซ่อม
- * ("ให้งานแจ้งซ่อมมาแสดงใน task/kanban แค่ไปแสดงอย่างเดียว ให้รู้ว่ามีงานนี้วันนี้ ... รวมถึงสั่งซื้ออุปกรณ์")
+ * ใบงานซ่อม บนหน้างาน (บอร์ด/ตาราง/ภาระงาน) — แสดงอย่างเดียว กดแล้วไปหน้านั้นในแจ้งซ่อม
+ * ("ให้งานแจ้งซ่อมมาแสดงใน task/kanban แค่ไปแสดงอย่างเดียว ให้รู้ว่ามีงานนี้วันนี้")
+ * สั่งซื้ออุปกรณ์เคยแสดงด้วย เอาออกแล้ว — ไม่มีกำหนดส่ง ไม่หักคะแนน ให้ไปดูในโมดูลแจ้งซ่อมแบบเดิม
+ * ("สั่งซื้ออุปกรณ์ ไม่หักไม่ต้องเอามาแสดงใน task/kanban ... task แสดงแค่งานและก็ใบงานซ่อมก็พอ")
  *
  * ข้อมูลมาจาก GET /api/report-task/maintenance-board (lib/db/maintenance-board.ts) — การ์ดเหล่านี้ไม่ใช่ Task
  * ไม่นับในตัวเลขสรุปด้านบนของบอร์ด/คะแนน/สถิติงาน ตัวกรองเดิมของบอร์ดใช้กับมันผ่าน matchesMaintenanceFilters
  */
-export type MaintenanceKind = "wo" | "po";
+export type MaintenanceKind = "wo";
 export type BoardKind = "task" | MaintenanceKind;
 export type MaintenanceColumn = "todo" | "in_progress" | "review" | "done";
 
 export interface MaintenanceBoardItem {
   kind: MaintenanceKind;
   id: string;
-  /** WO-2569-0276 / PR-… */
+  /** WO-2569-0276 */
   code: string;
   title: string;
   /** คอลัมน์บนบอร์ดแบบจัดกลุ่มตามสถานะ */
   column: MaintenanceColumn;
-  /** สถานะจริงของใบ อ่านเป็นภาษาคน — "รอ CEO อนุมัติ", "กำลังซ่อม" */
+  /** สถานะจริงของใบ อ่านเป็นภาษาคน — "กำลังซ่อม" */
   statusLabel: string;
-  /** ใบงาน: ความสำคัญของใบ (ด่วน = ด่วนมาก) · ใบสั่งซื้อไม่มีความสำคัญ = ปานกลาง */
+  /** ความสำคัญของใบ (ด่วน = ด่วนมาก) */
   priority: TaskPriority;
-  /** ใบงาน: กำหนดเสร็จ (ISO) · ใบสั่งซื้อไม่มีกำหนด = null */
+  /** กำหนดเสร็จ (ISO) · ไม่ได้ตั้ง = null */
   dueDate: string | null;
   createdAt: string;
-  /** ใบงานที่เลยกำหนดเสร็จแล้วยังไม่ปิด (ใบสั่งซื้อไม่มีกำหนด เลยไม่เคยเลย) */
+  /** ใบงานที่เลยกำหนดเสร็จแล้วยังไม่ปิด */
   overdue: boolean;
-  /** คนรับผิดชอบหลัก — ใบงาน: ผู้รับผิดชอบ · สั่งซื้อ: ผู้ซื้อ (ยังไม่มี = คนเปิด PR) · ใช้กับตัวกรองแผนก/รูปบนการ์ด */
+  /** คนรับผิดชอบหลัก (ยังไม่มี = คนเปิดใบ) · ใช้กับตัวกรองแผนก/รูปบนการ์ด/แถบภาระงาน */
   responsibleId: string | null;
   /** ทุกคนที่เกี่ยวกับใบนี้ — ตัวกรอง "พนักงาน" จับคนในนี้ */
   involvedIds: string[];
@@ -48,7 +50,7 @@ export function maintenanceDate(item: MaintenanceBoardItem): string {
   return item.dueDate ?? item.createdAt;
 }
 
-/** ตัวกรองเดิมของบอร์ด แปลมาใช้กับใบงาน/สั่งซื้อ (ตารางที่ตกลงกันไว้) */
+/** ตัวกรองเดิมของบอร์ด แปลมาใช้กับใบงานซ่อม (ตารางที่ตกลงกันไว้) */
 export function matchesMaintenanceFilters(item: MaintenanceBoardItem, filters: TaskFilterState): boolean {
   if (filters.assigneeId !== "all" && !item.involvedIds.includes(filters.assigneeId)) return false;
   // "กำลังติดตาม" (คนมอบหมาย/คนกดติดตาม) เป็นแนวคิดของงานเท่านั้น

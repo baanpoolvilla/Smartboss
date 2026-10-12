@@ -9,14 +9,13 @@ import { formatDate } from "@/modules/report_task/lib/format";
 import { cn } from "@/modules/report_task/lib/utils";
 import type { MaintenanceBoardItem } from "@/modules/report_task/lib/maintenance-board";
 
-/** สีประจำประเภท — ใบงาน = เขียวอมฟ้า (สีโมดูลแจ้งซ่อม) · สั่งซื้อ = ส้ม */
+/** สีประจำประเภท — ใบงานซ่อม = เขียวอมฟ้า (สีโมดูลแจ้งซ่อม) */
 export const MAINTENANCE_KIND = {
   wo: { icon: "🔧", label: "ใบงานซ่อม", color: "#0d9488", bg: "#e6f6f4" },
-  po: { icon: "🛒", label: "สั่งซื้ออุปกรณ์", color: "#ea580c", bg: "#fff1e8" },
 } as const;
 
 /**
- * การ์ดใบงานซ่อม/สั่งซื้อบนบอร์ดงาน — หน้าตาเดียวกับการ์ดงาน มีป้ายประเภท + แถบสีซ้าย บอกว่าไม่ใช่งานปกติ
+ * การ์ดใบงานซ่อมบนบอร์ดงาน — หน้าตาเดียวกับการ์ดงาน มีป้ายประเภท + แถบสีซ้าย บอกว่าไม่ใช่งานปกติ
  * แสดงอย่างเดียว (ลากไม่ได้ ไม่มีเช็คลิสต์/คอมเมนต์) กดแล้วไปหน้านั้นในแจ้งซ่อม ?from=tasks = ปุ่มย้อนกลับพากลับบอร์ด
  */
 export function MaintenanceCard({ item }: { item: MaintenanceBoardItem }) {
@@ -38,7 +37,7 @@ export function MaintenanceCard({ item }: { item: MaintenanceBoardItem }) {
         >
           {k.icon} {k.label} · {item.code}
         </span>
-        {item.kind === "wo" && item.priority !== "medium" && (
+        {item.priority !== "medium" && (
           <span className="shrink-0 text-[10.5px] font-medium" style={{ color: priorityMeta[item.priority].accentColor }}>
             ● {priorityMeta[item.priority].label}
           </span>
@@ -53,25 +52,23 @@ export function MaintenanceCard({ item }: { item: MaintenanceBoardItem }) {
           {item.place}
         </div>
       )}
-      {/* วันที่สร้าง + ครบกำหนด — สั่งซื้อไม่มีวันครบกำหนดในระบบ จึงมีแค่วันที่สร้าง */}
+      {/* วันที่สร้าง + ครบกำหนด */}
       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--ink-soft)]">
         <span className="inline-flex items-center gap-1">
           <FilePlus2 className="h-3 w-3" />
           สร้าง {formatDate(item.createdAt)}
         </span>
-        {item.kind === "wo" && (
-          <span className={cn("inline-flex items-center gap-1", item.overdue && "font-semibold text-[var(--chart-red)]")}>
-            <CalendarDays className="h-3 w-3" />
-            {item.dueDate ? (
-              <>
-                {item.overdue ? "เลยกำหนด " : "ครบกำหนด "}
-                {formatDate(item.dueDate)}
-              </>
-            ) : (
-              "ไม่ได้ตั้งวันครบกำหนด"
-            )}
-          </span>
-        )}
+        <span className={cn("inline-flex items-center gap-1", item.overdue && "font-semibold text-[var(--chart-red)]")}>
+          <CalendarDays className="h-3 w-3" />
+          {item.dueDate ? (
+            <>
+              {item.overdue ? "เลยกำหนด " : "ครบกำหนด "}
+              {formatDate(item.dueDate)}
+            </>
+          ) : (
+            "ไม่ได้ตั้งวันครบกำหนด"
+          )}
+        </span>
       </div>
       <div className="mt-2 flex items-center justify-between gap-2 border-t border-[var(--line)] pt-2">
         <span className="inline-flex items-center gap-1 text-[11px] text-[var(--ink-soft)] group-hover:text-[var(--ink)]">

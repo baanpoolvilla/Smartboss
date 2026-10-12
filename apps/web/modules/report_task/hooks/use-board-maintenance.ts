@@ -7,7 +7,7 @@ import type { TaskFilterState } from "@/modules/report_task/lib/task-filter";
 import type { Task } from "@/modules/report_task/types";
 
 /**
- * ใบงานซ่อม/สั่งซื้ออุปกรณ์ของหน้างาน — ใช้ร่วมกันทั้ง 3 มุมมอง (บอร์ด/ตาราง/ภาระงาน) ให้ข้อมูล + ตัวกรอง
+ * ใบงานซ่อมของหน้างาน — ใช้ร่วมกันทั้ง 3 มุมมอง (บอร์ด/ตาราง/ภาระงาน) ให้ข้อมูล + ตัวกรอง
  * + ติ๊ก "แสดงบนบอร์ด" เป็นชุดเดียวกัน ("มันคืองานเดียวกัน ... ฟิลเตอร์อะไรให้มันลิ้งกันให้หมด")
  *
  * ดึงตอนเปิด + ทุก 2 นาที + ตอนสลับกลับมาที่แอป · คัดด้วยตัวกรองเดิมของบอร์ด (matchesMaintenanceFilters)
@@ -39,8 +39,7 @@ export function useBoardMaintenance(filteredTasks: Task[], filters: TaskFilterSt
   useEffect(() => {
     setCounts({
       task: filteredTasks.length,
-      wo: mxFiltered.filter((i) => i.kind === "wo").length,
-      po: mxFiltered.filter((i) => i.kind === "po").length,
+      wo: mxFiltered.length,
     });
   }, [filteredTasks, mxFiltered, setCounts]);
 
