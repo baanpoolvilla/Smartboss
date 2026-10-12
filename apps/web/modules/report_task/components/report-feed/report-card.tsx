@@ -619,25 +619,34 @@ export function ReportCard({
   const [shareOpen, setShareOpen] = useState(false);
   /*
    * ส่งสติกเกอร์ให้ใคร — เดิมเข้าเจ้าของโพสต์เสมอ หัวหน้าที่เปิดกระทู้เองเลยหักได้แต่ตัวเอง
-   * ("เปิดกระทู้แล้วหักให้คนอื่นด้วย") ⇒ เลือกได้จากเจ้าของโพสต์ + คนที่ถูกแท็กในโพสต์/คำตอบ
-   * (แท็กแผนก = ทุกคนในแผนก) + คนที่ตอบ · ติ๊กเจ้าของโพสต์ไว้ก่อน ยกเว้นเจ้าของคือตัวเอง
-   * หลายคน = ติดให้ทีละคน (คะแนนเต็มต่อคน) เหมือนงานกลุ่ม
+   * ("เปิดกระทู้แล้วหักให้คนอื่นด้วย") ⇒ เลือกได้ **ทุกคนที่เห็นห้องนี้ ยกเว้น CEO**
+   * ("น่าจะเลือกได้ทุกคนที่เห็นห้องนั้นยกเว้น ceo") · เรียงคนที่เกี่ยวกับโพสต์ขึ้นก่อน (เจ้าของ →
+   * คนที่ถูกแท็กในโพสต์/คำตอบ → คนที่ตอบ) แล้วค่อยคนอื่นในห้องตามชื่อ · ติ๊กเจ้าของโพสต์ไว้ก่อน
+   * ยกเว้นเจ้าของคือตัวเอง (หรือ CEO) · หลายคน = ติดให้ทีละคน (คะแนนเต็มต่อคน) เหมือนงานกลุ่ม
    */
   const stickerTargets = useMemo(() => {
-    const ids = new Set<string>([post.authorId]);
-    for (const s of post.sections) for (const b of s.bullets) for (const id of taggedUserIds(b, topic)) ids.add(id);
-    for (const r of post.replies) {
-      ids.add(r.authorId);
-      for (const id of taggedUserIds(r.body, topic)) ids.add(id);
-    }
-    return [...ids]
-      .map((id) => getUser(id))
-      .filter((u): u is NonNullable<typeof u> => !!u)
+    const involved: string[] = [post.authorId];
+    for (const s of post.sections) for (const b of s.bullets) involved.push(...taggedUserIds(b, topic));
+    for (const r of post.replies) involved.push(r.authorId, ...taggedUserIds(r.body, topic));
+    const rank = new Map<string, number>();
+    involved.forEach((id, i) => {
+      if (!rank.has(id)) rank.set(id, i);
+    });
+    return directoryUsers
+      .filter((u) => !u.isCeo && canSeeReportTopic(topic.visibility, u.id))
+      .sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity) || a.name.localeCompare(b.name, "th"))
       .map((u) => ({ id: u.id, name: u.id === viewingAsUserId ? `${u.name} (คุณ)` : u.name }));
   }, [post.authorId, post.sections, post.replies, topic, viewingAsUserId]);
   function confirmPostSticker(targetUserIds?: string[]) {
     if (!pendingSticker) return;
-    const ids = targetUserIds && targetUserIds.length > 0 ? targetUserIds : [post.authorId];
+    // ไม่มีตัวเลือก (คนในห้องเหลือคนเดียว) = คนนั้น · ไม่มีใครเลือกได้เลย (เช่นห้องมีแต่ CEO) = ไม่ส่ง
+    const ids =
+      targetUserIds && targetUserIds.length > 0 ? targetUserIds : stickerTargets.length === 1 ? [stickerTargets[0]!.id] : [];
+    if (ids.length === 0) {
+      toast.error("ไม่มีคนที่ให้สติกเกอร์ได้ในห้องนี้");
+      setPendingSticker(null);
+      return;
+    }
     for (const id of ids) addStickerReaction(post.id, pendingSticker.id, viewingAsUserId, id);
     showStickerToast(pendingSticker, post.title, "โพสต์");
     setPendingSticker(null);
@@ -2298,11 +2307,14 @@ export function ReportCard({
         open={!!pendingSticker}
         onOpenChange={(open) => !open && setPendingSticker(null)}
         sticker={pendingSticker}
-        recipientName={author?.name ?? "ผู้โพสต์"}
+        recipientName={stickerTargets.length === 1 ? stickerTargets[0]!.name : (author?.name ?? "ผู้โพสต์")}
         taskTitle={post.title}
         itemLabel="โพสต์"
         targets={stickerTargets}
-        pickPeople={{ defaultIds: post.authorId === viewingAsUserId ? [] : [post.authorId] }}
+        pickPeople={{
+          defaultIds:
+            post.authorId === viewingAsUserId || stickerTargets.every((t) => t.id !== post.authorId) ? [] : [post.authorId],
+        }}
         onConfirm={confirmPostSticker}
       />
 

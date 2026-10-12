@@ -33,6 +33,8 @@ export interface DirectoryUser {
   role: string;
   departmentId: string;
   isOwner?: boolean;
+  /** ถือ role CEO จริง (core) — สติกเกอร์บนโพสต์ไม่ให้เลือก CEO เป็นคนโดน/ได้คะแนน */
+  isCeo?: boolean;
 }
 
 /**
@@ -101,6 +103,7 @@ export async function listDirectory(orgId: string): Promise<DirectoryUser[]> {
       role: primaryRoleOf(u.roles)?.role.name || "พนักงาน",
       departmentId: u.departmentId ?? "",
       isOwner: (p.isOwnerOverride ?? roleDerived) || undefined,
+      isCeo: codes.includes("CEO") || undefined,
     };
   });
 }

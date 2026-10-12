@@ -24,6 +24,8 @@ interface PostStickerReaction {
 function recipientOf(post: PostLike, reaction: PostStickerReaction, orgUserIds: Set<string>): string {
   return reaction.targetUserId && orgUserIds.has(reaction.targetUserId) ? reaction.targetUserId : post.authorId;
 }
+// หมายเหตุ: CEO เลือกเป็นคนโดนไม่ได้ ("ทุกคนที่เห็นห้อง ยกเว้น CEO") — กันที่ recordReportStickerEvents
+// (ข้ามการให้คะแนนถ้าคนรับเป็น CEO) ไม่ใช่แค่ซ่อนชื่อในหน้าต่างเลือกคน
 interface PostLike {
   id: string;
   title: string;
@@ -87,6 +89,7 @@ export async function recordReportStickerEvents(
   const directory = await listDirectory(orgId);
   const owners = new Set(directory.filter((u) => u.isOwner).map((u) => u.id));
   const orgUserIds = new Set(directory.map((u) => u.id));
+  const ceoIds = new Set(directory.filter((u) => u.isCeo).map((u) => u.id));
 
   const custom = await readStore<Sticker[]>(orgId, "stickers");
   const stickers = custom.data ?? defaultStickers;
@@ -96,6 +99,8 @@ export async function recordReportStickerEvents(
   const events: PerformanceEventInput[] = [];
   for (const { post, reaction } of additions) {
     if (!owners.has(reaction.byUserId)) continue;
+    // เลือก CEO มาโดยตรงไม่ได้ (ของเก่าที่ตกเป็นของเจ้าของโพสต์ยังนับตามเดิม)
+    if (reaction.targetUserId && ceoIds.has(reaction.targetUserId)) continue;
     const points = pointsById.get(reaction.stickerId);
     if (points === undefined || points === 0) continue; // สติกเกอร์ 0 แต้ม ไม่มีผลกับเกรด
     const label = labelById.get(reaction.stickerId) ?? reaction.stickerId;

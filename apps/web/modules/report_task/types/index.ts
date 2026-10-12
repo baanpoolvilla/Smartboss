@@ -40,6 +40,8 @@ export interface User {
   departmentId: string;
   /** Sees/edits everything company-wide — not scoped to one department like a department head. */
   isOwner?: boolean;
+  /** Holds the real CEO role (core) — can't be picked as a sticker recipient on a report post. */
+  isCeo?: boolean;
 }
 
 /**
