@@ -85,7 +85,9 @@ export async function generateWorkOrdersForDuePms(): Promise<{
           code,
           propertyId: pm.propertyId,
           assetId: pm.assetId,
-          assignedTo: pm.assignedTo,
+          // แผน PM ไม่ได้ตั้งผู้รับผิดชอบ → ให้คนสร้างแผนรับไป ("ออโต้มันต้องตามคนสร้างสิ") — เดิมว่าง
+          // ใบงานเลยไม่มีเจ้าของ ไม่มีใครเห็นบนบอร์ดงาน/ไม่ได้แจ้งเตือน และหักคะแนนตอนเลยกำหนดไม่ได้
+          assignedTo: pm.assignedTo ?? pm.createdBy,
           title: pm.title,
           description: `PM: ${pm.title}\nครบกำหนด ${fmtThaiDate(pm.nextDueDate)}`,
           status: "open",
