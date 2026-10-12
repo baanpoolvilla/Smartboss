@@ -131,6 +131,9 @@ function ShiftClock({ shift, open, overnight }: { shift: TodayData["shift"]; ope
 
 type Submitting = "idle" | "locating" | "sending";
 
+/** แตะแรกของปุ่มลงเวลาค้างรอแตะยืนยันได้นานเท่านี้ — ดู `armed` ใน Today */
+const ARM_MS = 4000;
+
 const INTENT_LABEL: Record<string, string> = {
   CLOCK_IN: "เข้างาน",
   CLOCK_OUT: "ออกงาน",
@@ -258,6 +261,17 @@ export function Today({
    * หลังรอเซิร์ฟเวอร์ตอบ ซึ่ง iOS ไม่นับว่าเป็นการแตะแล้ว กล้องไม่เปิด ลงเวลาไม่ได้เลย
    */
   const [needsPhoto, setNeedsPhoto] = useState(false);
+  /**
+   * กดสองจังหวะ — แตะแรกแค่ "เตรียม" (ปุ่มเปลี่ยนเป็น "แตะอีกครั้งเพื่อยืนยัน…") แตะที่สองถึงลงเวลาจริง
+   * ปุ่มใหญ่เลื่อนไปชิดแถบเมนูล่าง นิ้วที่จะกดเมนูไปโดนปุ่มแล้วลงเวลา/ออกงานไปเลย ("ไปกดเมนูอื่นต้องมีคนกดโดน
+   * ลงเวลาเข้างานออกงานแน่ๆ") · ไม่แตะซ้ำภายใน ARM_MS = กลับเป็นปุ่มปกติเอง
+   */
+  const [armed, setArmed] = useState<"CLOCK_IN" | "CLOCK_OUT" | null>(null);
+  useEffect(() => {
+    if (!armed) return;
+    const timer = setTimeout(() => setArmed(null), ARM_MS);
+    return () => clearTimeout(timer);
+  }, [armed]);
 
   const reload = useCallback(async () => {
     try {
@@ -452,16 +466,36 @@ export function Today({
         <button
           type="button"
           disabled={busy}
-          onClick={() => void submit(nextIntent)}
-          className="h-32 w-full rounded-2xl bg-(--app) text-2xl font-bold text-white disabled:opacity-60"
+          onClick={() => {
+            // แตะแรก = เตรียม · แตะที่สอง (ภายใน ARM_MS) = ลงเวลาจริง
+            if (armed !== nextIntent) {
+              setArmed(nextIntent);
+              return;
+            }
+            setArmed(null);
+            void submit(nextIntent);
+          }}
+          className={`flex h-32 w-full touch-manipulation flex-col items-center justify-center gap-1 rounded-2xl text-2xl font-bold text-white transition-colors disabled:opacity-60 ${
+            armed === nextIntent && !busy ? "bg-(--app-strong) ring-4 ring-(--app)/30" : "bg-(--app)"
+          }`}
         >
-          {noEmployment
-            ? "ยังลงเวลาไม่ได้"
-            : state === "locating"
-              ? "กำลังหาตำแหน่ง…"
-              : state === "sending"
-                ? "กำลังบันทึก…"
-                : INTENT_LABEL[nextIntent]}
+          {noEmployment ? (
+            "ยังลงเวลาไม่ได้"
+          ) : state === "locating" ? (
+            "กำลังหาตำแหน่ง…"
+          ) : state === "sending" ? (
+            "กำลังบันทึก…"
+          ) : armed === nextIntent ? (
+            <>
+              <span>แตะอีกครั้งเพื่อยืนยัน{INTENT_LABEL[nextIntent]}</span>
+              <span className="text-sm font-normal opacity-90">ไม่แตะภายใน {ARM_MS / 1000} วินาที จะยกเลิกเอง</span>
+            </>
+          ) : (
+            <>
+              <span>{INTENT_LABEL[nextIntent]}</span>
+              <span className="text-sm font-normal opacity-80">แตะ 2 ครั้งเพื่อยืนยัน</span>
+            </>
+          )}
         </button>
       )}
 
