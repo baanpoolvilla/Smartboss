@@ -30,6 +30,7 @@ import { fmtThaiDate } from "@/modules/maintenance/lib/format";
 import { putFile, putFiles, deleteFiles } from "@/modules/maintenance/lib/storage";
 import { isPastDay } from "@/modules/maintenance/lib/no-past-date";
 import { createUploadLink } from "@/modules/maintenance/data/external-upload";
+import { createExpensesForProperties, listExpenses } from "@/modules/maintenance/data/expenses";
 import {
   closeAutoWorkOrdersOfPm,
   completePmSchedule,
@@ -336,8 +337,82 @@ export async function completeWorkOrderAction(formData: FormData) {
     await notifyStatusChanged(s.orgId, wo, "completed", s.userId);
   }
 
+  const recorded = await recordEstimateAsExpense(
+    s.orgId,
+    wo,
+    names.map((name, i) => ({ name: name.trim(), price: (prices[i] ?? "").trim() })),
+    s.userId
+  );
+
   revalidatePath(`/maintenance/work-orders/${id}`);
   revalidatePath("/maintenance/work-orders");
+  if (recorded) revalidatePath("/maintenance/expenses");
+}
+
+/** "1,500" / "฿ 1,500.50" → 1500.5 · ว่าง/อ่านไม่ได้ = NaN (เหมือน parseAmount ของหน้าค่าใช้จ่าย) */
+function parseBaht(raw: string): number {
+  const clean = raw.replace(/[\s,฿]/g, "");
+  return clean === "" ? NaN : Number(clean);
+}
+
+/**
+ * ประมาณการค่าใช้จ่ายตอนปิดงาน → รายการค่าใช้จ่ายจริงของใบงานทันที
+ *
+ * เดิมยอดที่ช่างกรอกตอนปิดงานเป็นแค่ข้อความใน completion_notes ต้องมีคนไปลงค่าใช้จ่ายซ้ำอีกรอบ
+ * ที่หน้าค่าใช้จ่าย — แทบไม่มีใครทำ ใบงานค้าง "ยังไม่บันทึกค่าใช้จ่าย" เป็นหลักร้อยใบ ทั้งที่ช่าง
+ * "ลงบิลไปแล้ว" (ยอดอยู่ในหมายเหตุจบงาน) ⇒ ("ยอดประมาณการที่ช่างกรอกตอนปิดงาน ให้กลายเป็นรายการ
+ * ค่าใช้จ่ายจริงทันที ใบจะไม่ค้างอีก") ผู้จัดการแก้/ลบทีหลังได้ที่หน้าค่าใช้จ่ายถ้ายอดจริงต่าง
+ *
+ *   มีราคา > 0       → 1 รายการค่าใช้จ่ายต่อบรรทัด (ชื่อบรรทัด = คำอธิบาย)
+ *   ใส่ 0 ทุกบรรทัด  → "ไม่มีค่าใช้จ่าย" 1 รายการ (ช่างยืนยันเองว่าไม่มี)
+ *   ไม่ใส่ราคาเลย    → ไม่สร้าง — ยังค้างให้ผู้จัดการลงยอดจริงเหมือนเดิม
+ *
+ * ข้ามถ้าใบนี้ไม่ต้องกรอกค่าใช้จ่าย หรือมีค่าใช้จ่ายผูกอยู่แล้ว (เช่นซื้อของผ่าน PR/PO ของใบนี้ —
+ * ยอดประมาณการมักรวมของชิ้นเดียวกัน ลงซ้ำแล้วต้นทุนเบิ้ล) · ใบหลายบ้าน = ทุกบ้านยอดเต็ม เหมือนฟอร์ม
+ * ค่าใช้จ่าย (createExpensesForProperties) · ใบจาก PM ผูก PM ด้วยให้ต้นทุน PM ครบ
+ */
+async function recordEstimateAsExpense(
+  orgId: string,
+  wo: NonNullable<Awaited<ReturnType<typeof getWorkOrder>>>,
+  items: { name: string; price: string }[],
+  userId: string
+): Promise<boolean> {
+  if (!wo.requiresExpense) return false;
+  const priced = items
+    .filter((x) => x.name !== "" && x.price !== "")
+    .map((x) => ({ name: x.name, amount: parseBaht(x.price) }))
+    .filter((x) => Number.isFinite(x.amount) && x.amount >= 0);
+  if (priced.length === 0) return false;
+  if ((await listExpenses(orgId, { workOrderId: wo.id })).length > 0) return false;
+
+  const pmScheduleId = wo.pmScheduleId ?? wo.pmScheduleIds[0] ?? null;
+  const base = {
+    workOrderId: wo.id,
+    pmScheduleId,
+    costType: pmScheduleId ? "pm" : "work_order",
+    paidBy: "company",
+    category: "other",
+    createdBy: userId,
+  };
+  const propertyIds = [wo.propertyId, ...wo.additionalPropertyIds];
+  const paid = priced.filter((x) => x.amount > 0);
+  if (paid.length === 0) {
+    await createExpensesForProperties(orgId, propertyIds, {
+      ...base,
+      amount: 0,
+      description: "ไม่มีค่าใช้จ่าย (ช่างระบุตอนปิดงาน)",
+      isNoExpense: true,
+    });
+    return true;
+  }
+  for (const x of paid) {
+    await createExpensesForProperties(orgId, propertyIds, {
+      ...base,
+      amount: x.amount,
+      description: `${x.name} (จากประมาณการตอนปิดงาน)`,
+    });
+  }
+  return true;
 }
 
 export async function addCommentAction(workOrderId: string, formData: FormData) {

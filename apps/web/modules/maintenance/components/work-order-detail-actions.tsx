@@ -132,9 +132,13 @@ export function CompleteJobButton({
                   : "กรุณากรอกประมาณการค่าใช้จ่ายและแนบรูปถ่ายก่อนกดยืนยัน"}
             </p>
             {requiresExpense && (
-              <p className="text-sm font-bold text-(--ink)">
-                ประมาณการค่าใช้จ่าย *
-              </p>
+              <div>
+                <p className="text-sm font-bold text-(--ink)">ค่าใช้จ่าย *</p>
+                {/* ราคาที่ใส่ตรงนี้ลงเป็นค่าใช้จ่ายของใบงานทันที (recordEstimateAsExpense) — บอกให้รู้ว่าไม่ต้องไปลงซ้ำ */}
+                <p className="text-xs text-(--ink-soft)">
+                  ใส่ราคา = บันทึกเป็นค่าใช้จ่ายของใบงานนี้ทันที ไม่ต้องไปลงซ้ำ · ไม่มีค่าใช้จ่ายใส่ 0 · ยังไม่รู้ราคาเว้นว่างไว้ให้ผู้จัดการลง
+                </p>
+              </div>
             )}
             {requiresExpense && items.map((item, i) => (
               <div key={i} className="flex items-start gap-2">
