@@ -4,7 +4,8 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Smartboss",
   description: "Smartboss — ระบบบริหารจัดการภายในองค์กร",
-  // เว็บแอป: เพิ่มลงหน้าจอหลักบน iPhone แล้วเปิดเต็มจอ (ดู app/manifest.ts)
+  // เว็บแอป: เพิ่มลงหน้าจอหลักบน iPhone แล้วเปิดเต็มจอ — manifest เป็น route แยกตามเครื่อง (app/manifest.webmanifest/route.ts)
+  manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "SmartBoss", statusBarStyle: "default" },
   icons: { icon: [{ url: "/favicon-64-v5.png", sizes: "64x64", type: "image/png" }, { url: "/icon-v5.png", sizes: "192x192", type: "image/png" }], apple: "/apple-touch-icon-v5.png" },
 };

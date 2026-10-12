@@ -13,7 +13,7 @@ import { useSyncExternalStore } from "react";
  * ทุกครั้งที่ deploy ไม่ต้องลงใหม่ ดู components/shell/app-update-notice.tsx)
  *
  * เพิ่มเลขนี้ **เฉพาะ** ตอนเปลี่ยนสิ่งที่ iPhone/iPad ไม่อัปเดตให้เองหลังติดตั้งไปแล้ว:
- * ชื่อแอป, ไอคอน, start_url/scope ใน app/manifest.ts — แอปบน iPhone ที่ติดตั้งก่อน
+ * ชื่อแอป, ไอคอน, start_url/scope ใน app/manifest.webmanifest/route.ts — แอปบน iPhone ที่ติดตั้งก่อน
  * เลขนี้จะขึ้นแถบบอกให้ลบแล้วติดตั้งใหม่ (Android/Chrome บนคอมอัปเดตเอง ไม่ต้องบอก)
  */
 export const APP_INSTALL_VERSION = 1;
