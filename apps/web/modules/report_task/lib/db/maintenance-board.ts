@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
-import { hasPermission, type OrgSession } from "@smartboss/auth";
+import { hasPermission, isSuperAdmin, type OrgSession } from "@smartboss/auth";
 
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { workOrderAccess, workOrderVisibilityWhere, type WorkOrderAccess } from "@/modules/maintenance/data/work-order-access";
@@ -11,10 +11,10 @@ import type { TaskPriority } from "@/modules/report_task/types";
 /**
  * ใบงานซ่อม สำหรับหน้างาน (ดู lib/maintenance-board.ts) — แสดงอย่างเดียว · สั่งซื้ออุปกรณ์ไม่มาที่นี่แล้ว
  *
- * บนบอร์ดงาน **ทุกคน (รวม CEO / ผู้ดูแลระบบสูงสุด)** เห็นเฉพาะใบที่ "เกี่ยวกับตัวเอง" — ดูทั้งหมดให้ไปที่โมดูล
- * แจ้งซ่อม ("ถ้ามีอะไรเกี่ยวกับเค้าค่อยมาแสดงในนี้ ง่ายดี") ⇒ ไม่ใช้สิทธิ์ "เห็นข้อมูลทั้งบริษัท" (core.data.view_all)
- * ของโมดูลแจ้งซ่อมที่นี่ · เดิม CEO/ผู้ดูแลระบบสูงสุดเห็นทุกใบที่ยังไม่ปิด — บริษัทมีคนถือ CEO หลายคน บอร์ดเลยเต็มไปด้วย
- * ใบที่ไม่เกี่ยว
+ * บนบอร์ดงานทุกคน **รวม CEO** เห็นเฉพาะใบที่ "เกี่ยวกับตัวเอง" — ดูทั้งหมดให้ไปที่โมดูลแจ้งซ่อม
+ * ("ถ้ามีอะไรเกี่ยวกับเค้าค่อยมาแสดงในนี้ ง่ายดี") ⇒ ไม่ใช้สิทธิ์ "เห็นข้อมูลทั้งบริษัท" (core.data.view_all) ของ
+ * โมดูลแจ้งซ่อมที่นี่ · บริษัทมีคนถือ CEO หลายคน เคยเห็นทุกใบเต็มบอร์ดทั้งที่ไม่เกี่ยว
+ * ยกเว้น **ผู้ดูแลระบบสูงสุด** คนเดียวที่เห็นทุกใบที่ยังไม่ปิด ("ผู้ดูแลสูงสุดคือคนดูระบบ มันต้องเห็นได้หมดอยู่แล้ว")
  *   ใบงาน: รับผิดชอบ/เปิดเอง/CC/ผู้ดูแลบ้านหลังนั้น (เกณฑ์เดียวกับแจ้งซ่อมสำหรับคนที่ไม่เห็นทั้งบริษัท)
  * ใบที่ซ่อมเสร็จแล้วแสดง 7 วันล่าสุด · ใบที่ยกเลิกไม่แสดง
  */
@@ -40,8 +40,10 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
 
   if (hasPermission(session, MAINT_PERMS.workorderView)) {
     const full = await workOrderAccess(session);
-    // ทุกคนใช้เกณฑ์ "เกี่ยวกับตัวเอง" แม้จะมีสิทธิ์เห็นทั้งบริษัทในแจ้งซ่อม
-    const access: WorkOrderAccess = full.seeAll
+    // ผู้ดูแลระบบสูงสุดเห็นทุกใบ · คนอื่นใช้เกณฑ์ "เกี่ยวกับตัวเอง" แม้จะมีสิทธิ์เห็นทั้งบริษัทในแจ้งซ่อม
+    const access: WorkOrderAccess = isSuperAdmin(session)
+      ? { ...full, seeAll: true }
+      : full.seeAll
         ? {
             seeAll: false,
             userId: session.userId,

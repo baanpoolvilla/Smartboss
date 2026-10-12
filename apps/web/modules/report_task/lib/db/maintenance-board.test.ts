@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * บอร์ดงานแสดงเฉพาะใบงานซ่อมที่ "เกี่ยวกับตัวเอง" — ทุกคน รวม CEO / ผู้ดูแลระบบสูงสุด / คนที่มีสิทธิ์เห็นทั้งบริษัท
+ * บอร์ดงานแสดงเฉพาะใบงานซ่อมที่ "เกี่ยวกับตัวเอง" — ทุกคน รวม CEO / คนที่มีสิทธิ์เห็นทั้งบริษัท
+ * ยกเว้นผู้ดูแลระบบสูงสุดคนเดียวที่เห็นทุกใบ ("ผู้ดูแลสูงสุดคือคนดูระบบ มันต้องเห็นได้หมด")
  * ("ถ้ามีอะไรเกี่ยวกับเค้าค่อยมาแสดงในนี้" · "ดูของคนอื่นๆด้วย ห้ามให้เกิดอีก") ใบอื่นไปดูที่โมดูลแจ้งซ่อม
  * และไม่มีใบสั่งซื้อ (PR/PO) บนบอร์ดเลย ไม่ว่าจะมีสิทธิ์อนุมัติหรือไม่
  */
@@ -77,8 +78,15 @@ describe("บอร์ดงาน — ใบงานซ่อมเฉพา�
     expectRelatedOnly();
   });
 
-  it("ผู้ดูแลระบบสูงสุด เห็นแค่ของตัวเอง", async () => {
+  it("ผู้ดูแลระบบสูงสุด เห็นทุกใบ (ไม่มีตัวกรองคน)", async () => {
     await listMaintenanceBoardItems(session(["SUPER_ADMIN"], ALL_MAINT, true));
+    const json = JSON.stringify(queries.find((q) => q.model === "workOrder")!.where);
+    expect(json).not.toContain('"assignedTo":"me"');
+    expect(json).not.toContain('"createdBy":"me"');
+  });
+
+  it("ADMIN (IT) ที่ไม่ใช่ผู้ดูแลระบบสูงสุด เห็นแค่ของตัวเอง", async () => {
+    await listMaintenanceBoardItems(session(["ADMIN"], ALL_MAINT));
     expectRelatedOnly();
   });
 
