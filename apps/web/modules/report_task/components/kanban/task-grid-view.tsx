@@ -6,12 +6,14 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { matchesTaskFilters } from "@/modules/report_task/lib/task-filter";
 import { canSeeTask } from "@/modules/report_task/lib/permissions";
 import { useTaskSheetParam } from "@/modules/report_task/hooks/use-task-sheet-param";
+import { useBoardMaintenance } from "@/modules/report_task/hooks/use-board-maintenance";
 import { TaskGrid } from "./task-grid";
 import { TaskDetailSheet } from "./task-detail-sheet";
 
 /**
  * Self-contained Grid view — same filtered dataset as the Kanban board (no
  * re-entry, no separate data source), just rendered as a sortable table.
+ * ใบงานซ่อม/สั่งซื้อชุดเดียวกับบอร์ด (useBoardMaintenance) ต่อท้ายตารางเป็นกลุ่มของตัวเอง
  */
 export function TaskGridView() {
   const storeTasks = useTaskStore((s) => s.tasks);
@@ -24,9 +26,11 @@ export function TaskGridView() {
     [storeTasks, viewingAsUserId, filters]
   );
 
+  const { shownTasks, shownMx } = useBoardMaintenance(filtered, filters);
+
   return (
     <>
-      <TaskGrid tasks={filtered} onOpen={setOpenTaskId} />
+      <TaskGrid tasks={shownTasks} maintenance={shownMx} onOpen={setOpenTaskId} />
       <TaskDetailSheet taskId={openTaskId} onOpenChange={(open) => !open && closeTaskSheet()} />
     </>
   );

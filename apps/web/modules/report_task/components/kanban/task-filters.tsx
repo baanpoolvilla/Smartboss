@@ -484,14 +484,20 @@ export function TaskFilters({
               else setFilters({ assigneeId: "all", assignedById: "all" });
             }}
           >
-            <SelectTrigger className={filterFieldTriggerClass(personalView !== "all", "min-w-[150px]")}>
+            <SelectTrigger className={filterFieldTriggerClass(personalView !== "all" || kindsFiltered, "min-w-[150px]")}>
               <Eye className="h-4 w-4 shrink-0" />
-              <SelectValue placeholder="มุมมองของฉัน">{personalViewLabel}</SelectValue>
+              <SelectValue placeholder="มุมมองของฉัน">
+                {personalViewLabel}
+                {kindsFiltered ? ` · ${shownKindCount} ประเภท` : ""}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent alignItemWithTrigger={false}>
               <SelectItem value="all">ทั้งหมด</SelectItem>
               <SelectItem value="mine">งานของฉัน</SelectItem>
               <SelectItem value="tracking">งานที่กำลังติดตาม</SelectItem>
+              {/* ติ๊กประเภทชุดเดียวกับบอร์ด — สลับไปตาราง/ภาระงานแล้วยังเห็นใบงานซ่อม/สั่งซื้อเหมือนกัน */}
+              <SelectSeparator />
+              {kindToggles}
             </SelectContent>
           </Select>
         </FilterField>
@@ -650,6 +656,20 @@ export function TaskFilters({
             <SelectSeparator />
             {kindToggles}
           </SelectContent>
+        </Select>
+      )}
+
+      {/* ไม่มี "จัดกลุ่มตาม" (ตาราง/ภาระงาน) — ติ๊กประเภทที่แสดงยังต้องอยู่ ชุดเดียวกับบอร์ด */}
+      {!groupBy && (
+        <Select value="kinds">
+          <SelectTrigger className={mobileFieldRowTriggerClass(kindsFiltered)}>
+            <MobileFieldIcon icon={Eye} active={kindsFiltered} />
+            <span className="text-[13.5px] font-medium text-[var(--ink)]">แสดง</span>
+            <MobileFieldValue active={kindsFiltered}>
+              {kindsFiltered ? `${shownKindCount} ประเภท` : "ทุกประเภท"}
+            </MobileFieldValue>
+          </SelectTrigger>
+          <SelectContent alignItemWithTrigger={false}>{kindToggles}</SelectContent>
         </Select>
       )}
 

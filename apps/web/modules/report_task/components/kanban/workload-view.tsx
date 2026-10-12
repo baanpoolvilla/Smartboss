@@ -16,6 +16,8 @@ import { useDepartmentStore } from "@/modules/report_task/store/department-store
 import { cn } from "@/modules/report_task/lib/utils";
 import { useShowMore } from "@/modules/report_task/hooks/use-show-more";
 import { ShowMoreToggle } from "@/modules/report_task/components/shared/show-more-toggle";
+import { useBoardMaintenance } from "@/modules/report_task/hooks/use-board-maintenance";
+import { MAINTENANCE_KIND } from "./maintenance-card";
 
 /** One legend/breakdown row shared between the bar's click-to-open popover and its color key. */
 function BarBreakdownRow({ color, label, count, total }: { color: string; label: string; count: number; total: number }) {
@@ -36,6 +38,9 @@ function BarBreakdownRow({ color, label, count, total }: { color: string; label:
  * overdue highlighted — so it's obvious who's overloaded or slipping. Read-only,
  * respects the shared filter bar. Volume only (no score) — see the Reports page
  * for performance scoring; this view is purely "how much is on their plate."
+ *
+ * ใบงานซ่อม/สั่งซื้อ (ชุดเดียวกับบอร์ด/ตาราง — useBoardMaintenance) นับรวมในแถบของ "ผู้รับผิดชอบ" ของใบนั้น
+ * (ใบงาน: ช่างที่รับ · สั่งซื้อ: ผู้ซื้อ) — รอดำเนินการ/รออนุมัติ = รอดำเนินการ · กำลังซ่อม/รอรับของ = กำลังทำ
  */
 export function WorkloadView() {
   const tasks = useVisibleTasks();
@@ -60,21 +65,29 @@ export function WorkloadView() {
     [viewingAsUserId, employeesForScope, departmentsForScope]
   );
 
+  const filtered = useMemo(() => tasks.filter((t) => matchesTaskFilters(t, filters)), [tasks, filters]);
+  const { shownTasks, shownMx } = useBoardMaintenance(filtered, filters);
+
   const rows = useMemo(() => {
-    const filtered = tasks.filter((t) => matchesTaskFilters(t, filters));
     return usersInScope
       .map((u) => {
-        const mine = filtered.filter((t) => t.assigneeIds.includes(u.id));
-        const todo = mine.filter((t) => t.status === "todo").length;
-        const inProgress = mine.filter((t) => t.status === "in_progress").length;
-        const overdue = mine.filter((t) => dueUrgency(t) === "overdue").length;
-        const done = mine.filter((t) => t.status === "done").length;
-        const open = mine.length - done;
-        return { user: u, total: mine.length, todo, inProgress, overdue, done, open };
+        const mine = shownTasks.filter((t) => t.assigneeIds.includes(u.id));
+        const mx = shownMx.filter((i) => i.responsibleId === u.id);
+        const todo =
+          mine.filter((t) => t.status === "todo").length +
+          mx.filter((i) => i.column === "todo" || i.column === "review").length;
+        const inProgress = mine.filter((t) => t.status === "in_progress").length + mx.filter((i) => i.column === "in_progress").length;
+        const overdue = mine.filter((t) => dueUrgency(t) === "overdue").length + mx.filter((i) => i.overdue).length;
+        const done = mine.filter((t) => t.status === "done").length + mx.filter((i) => i.column === "done").length;
+        const total = mine.length + mx.length;
+        const open = total - done;
+        const wo = mx.filter((i) => i.kind === "wo").length;
+        const po = mx.length - wo;
+        return { user: u, total, todo, inProgress, overdue, done, open, wo, po };
       })
       .filter((r) => r.total > 0)
       .sort((a, b) => b.total - a.total || b.open - a.open || b.overdue - a.overdue);
-  }, [tasks, filters, usersInScope]);
+  }, [shownTasks, shownMx, usersInScope]);
 
   const { visible: visibleRows, remaining, expanded, toggle } = useShowMore(rows, 10);
 
@@ -160,6 +173,11 @@ export function WorkloadView() {
                       <BarBreakdownRow color="var(--chart-red)" label="เลยกำหนด" count={r.overdue} total={r.total} />
                       <BarBreakdownRow color="var(--chart-green)" label="เสร็จ" count={r.done} total={r.total} />
                     </div>
+                    {(r.wo > 0 || r.po > 0) && (
+                      <p className="mt-2 text-[11px] text-[var(--ink-soft)]">
+                        รวม{r.wo > 0 ? ` ใบงานซ่อม ${r.wo}` : ""}{r.po > 0 ? ` สั่งซื้อ ${r.po}` : ""} แล้ว
+                      </p>
+                    )}
                     <div className="mt-2 pt-2 border-t border-[var(--line)] flex items-center justify-between text-xs font-medium">
                       <span className="text-[var(--ink-soft)]">รวมทั้งหมด</span>
                       <span>{r.total} งาน</span>
@@ -191,6 +209,16 @@ export function WorkloadView() {
                     <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: "var(--chart-green)" }} />
                     เสร็จ {r.done}
                   </span>
+                  {r.wo > 0 && (
+                    <span title="ใบงานซ่อมที่รับผิดชอบ (รวมอยู่ในแถบแล้ว)" style={{ color: MAINTENANCE_KIND.wo.color }}>
+                      {MAINTENANCE_KIND.wo.icon} ใบงานซ่อม {r.wo}
+                    </span>
+                  )}
+                  {r.po > 0 && (
+                    <span title="ใบสั่งซื้อที่รับผิดชอบ (รวมอยู่ในแถบแล้ว)" style={{ color: MAINTENANCE_KIND.po.color }}>
+                      {MAINTENANCE_KIND.po.icon} สั่งซื้อ {r.po}
+                    </span>
+                  )}
                   {overloaded && <span className="text-[10px] rounded-full bg-amber-50 text-[var(--chart-amber)] px-1.5 py-0.5">งานเยอะ</span>}
                 </div>
               </div>

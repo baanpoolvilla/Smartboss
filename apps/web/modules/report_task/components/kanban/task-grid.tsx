@@ -55,6 +55,9 @@ import { ArrowDown, ArrowUp, ArrowUpDown, MessageSquare, Paperclip, ListTodo, Ch
 import { EmptyState } from "@/modules/report_task/components/shared/empty-state";
 import type { Task, TaskStatus, TaskPriority } from "@/modules/report_task/types";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+import { MAINTENANCE_KIND, MaintenanceCard } from "./maintenance-card";
+import { sortBoardEntries, type MaintenanceBoardItem } from "@/modules/report_task/lib/maintenance-board";
 
 type GroupBy = "none" | "status" | "priority";
 
@@ -139,11 +142,116 @@ const GridRow = memo(
 );
 
 /**
+ * แถวใบงานซ่อม/สั่งซื้อในตาราง — คอลัมน์เดียวกับแถวงาน (ชื่อ · ผู้รับผิดชอบ · เริ่ม=วันเปิดใบ · กำหนดส่ง · สถานะ
+ * · ความสำคัญ · สถานที่) แต่แสดงอย่างเดียว กดแล้วไปหน้านั้นในแจ้งซ่อม แบบเดียวกับการ์ดบนบอร์ด (maintenance-card.tsx)
+ */
+function MxGridRow({
+  item,
+  groupHeader,
+  onOpen,
+}: {
+  item: MaintenanceBoardItem;
+  groupHeader: React.ReactNode;
+  onOpen: (item: MaintenanceBoardItem) => void;
+}) {
+  const k = MAINTENANCE_KIND[item.kind];
+  const person = item.responsibleId ? getUser(item.responsibleId) : undefined;
+  const done = item.column === "done";
+  const dash = <span className="text-xs text-[var(--line)]">—</span>;
+  return (
+    <React.Fragment>
+      {groupHeader}
+      <TableRow
+        className="group cursor-pointer border-b border-[var(--line)]/70 transition-colors hover:bg-[var(--accent)]/40"
+        onClick={() => onOpen(item)}
+        role="link"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onOpen(item);
+          }
+        }}
+      >
+        <TableCell className="pl-4 pr-0 w-10 sticky left-0 z-10 bg-white" style={{ boxShadow: `inset 3px 0 0 ${k.color}` }} />
+        <TableCell className="px-4 py-3 whitespace-nowrap sticky left-10 z-10 bg-white">
+          <div className="max-w-[280px]">
+            <span className="text-[10.5px] font-semibold" style={{ color: k.color }}>
+              {k.icon} {k.label} · {item.code}
+            </span>
+            <p className={cn("font-medium truncate", done && "line-through text-[var(--ink-soft)]")}>{item.title}</p>
+          </div>
+        </TableCell>
+        <TableCell className="px-4 py-3 whitespace-nowrap">
+          {person ? (
+            <Avatar className="h-6 w-6 ring-2 ring-white" title={person.name}>
+              <AvatarImage src={person.avatarUrl ?? undefined} alt={person.name} />
+              <AvatarFallback className="text-[9px] bg-[var(--accent)] text-[var(--brand-green-dark)]">{person.avatar}</AvatarFallback>
+            </Avatar>
+          ) : (
+            dash
+          )}
+        </TableCell>
+        <TableCell className="px-4 py-3 whitespace-nowrap">{dash}</TableCell>
+        <TableCell className="px-4 py-3 whitespace-nowrap">
+          <span className="text-xs text-[var(--ink-soft)] whitespace-nowrap">{formatShortDate(item.createdAt)}</span>
+        </TableCell>
+        <TableCell className="px-4 py-3 whitespace-nowrap">
+          {item.dueDate ? (
+            <span className={cn("text-xs whitespace-nowrap", item.overdue ? "font-semibold text-[var(--chart-red)]" : "text-[var(--ink-soft)]")}>
+              {item.overdue ? "เลยกำหนด " : ""}
+              {formatShortDate(item.dueDate)}
+            </span>
+          ) : (
+            dash
+          )}
+        </TableCell>
+        <TableCell className="px-4 py-3 whitespace-nowrap">
+          <span
+            className="inline-flex items-center rounded-md px-1.5 h-6 text-[10px] font-medium whitespace-nowrap"
+            style={{ background: k.bg, color: k.color }}
+          >
+            {item.statusLabel}
+          </span>
+        </TableCell>
+        <TableCell className="px-4 py-3 whitespace-nowrap">
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded-md border px-1.5 h-6 text-[10px] font-medium whitespace-nowrap",
+              priorityMeta[item.priority].badgeClass
+            )}
+          >
+            <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: priorityMeta[item.priority].accentColor }} />
+            {priorityMeta[item.priority].label}
+          </span>
+        </TableCell>
+        <TableCell className="px-4 py-3 whitespace-nowrap">{dash}</TableCell>
+        <TableCell className="px-4 py-3 whitespace-nowrap">
+          {item.place ? <span className="text-[11px] text-[var(--ink-soft)]">📍 {item.place}</span> : dash}
+        </TableCell>
+      </TableRow>
+    </React.Fragment>
+  );
+}
+
+const EMPTY_MX: MaintenanceBoardItem[] = [];
+
+/**
  * Grid (table) view of the same task data behind the Kanban board — the
  * "Planner Grid / ClickUp List" view: sortable, groupable, with a checklist
  * progress column and a summary footer for scanning many tasks at once.
  */
-export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string) => void }) {
+export function TaskGrid({
+  tasks,
+  maintenance = EMPTY_MX,
+  onOpen,
+}: {
+  tasks: Task[];
+  /** ใบงานซ่อม/สั่งซื้อที่ผ่านตัวกรองเดียวกัน — ต่อท้ายตารางเป็นกลุ่มของตัวเอง แสดงอย่างเดียว */
+  maintenance?: MaintenanceBoardItem[];
+  onOpen: (id: string) => void;
+}) {
+  const router = useRouter();
   // Empty — no single column is "actively sorted" by default, so the table
   // keeps `defaultOrderedTasks`'s own combined order (priority, then due
   // date within it) below instead of TanStack re-sorting by one lone column.
@@ -185,8 +293,27 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
     const done = tasks.filter((t) => t.status === "done").length;
     const overdue = tasks.filter((t) => dueUrgency(t) === "overdue").length;
     const docked = tasks.filter((t) => t.penalty).length;
-    return { total: tasks.length, done, overdue, docked };
-  }, [tasks]);
+    // ใบงานซ่อม/สั่งซื้อนับรวมด้วย — เป็นงานชุดเดียวกับที่เห็นในตาราง
+    const mxDone = maintenance.filter((i) => i.column === "done").length;
+    const mxOverdue = maintenance.filter((i) => i.overdue).length;
+    return { total: tasks.length + maintenance.length, done: done + mxDone, overdue: overdue + mxOverdue, docked };
+  }, [tasks, maintenance]);
+
+  // เรียงแบบเดียวกับการ์ดบนบอร์ด (sortBoardEntries) · "แสดงเพิ่มเติม" แยกจากแถวงาน
+  const sortedMx = useMemo(
+    () =>
+      sortBoardEntries(maintenance.map((item) => ({ type: "mx" as const, item }))).flatMap((e) =>
+        e.type === "mx" ? [e.item] : []
+      ),
+    [maintenance]
+  );
+  const { visible: pagedMx, remaining: mxRemaining, expanded: mxExpanded, toggle: toggleMxExpanded } = useShowMore(sortedMx, 10);
+  const openMx = useCallback((item: MaintenanceBoardItem) => router.push(`${item.href}?from=tasks`), [router]);
+  const mxCountLabel = (["wo", "po"] as const)
+    .map((kind) => ({ kind, n: maintenance.filter((i) => i.kind === kind).length }))
+    .filter((x) => x.n > 0)
+    .map((x) => `${MAINTENANCE_KIND[x.kind].icon} ${MAINTENANCE_KIND[x.kind].label} ${x.n}`)
+    .join(" · ");
 
   const columns = useMemo<ColumnDef<Task>[]>(
     () => [
@@ -816,7 +943,44 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
                   />
                 );
               })}
-              {rows.length === 0 && (
+              {/* "แสดงเพิ่มเติม" ของแถวงานอยู่ใต้แถวงานเลย — ไม่งั้นไปโผล่หลังกลุ่มใบงานซ่อม/สั่งซื้อ */}
+              {(gridExpanded || gridRemaining > 0) && (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={colCount + 1} className="px-4 py-2.5">
+                    <ShowMoreToggle expanded={gridExpanded} remaining={gridRemaining} onToggle={toggleGridExpanded} />
+                  </TableCell>
+                </TableRow>
+              )}
+              {pagedMx.map((item, i) => (
+                <MxGridRow
+                  key={`mx-${item.kind}-${item.id}`}
+                  item={item}
+                  onOpen={openMx}
+                  groupHeader={
+                    i === 0 ? (
+                      <TableRow className="bg-[var(--bg-soft)] hover:bg-[var(--bg-soft)] border-b border-[var(--line)]">
+                        <TableCell colSpan={colCount + 1} className="px-4 py-2.5">
+                          <span className="flex items-center gap-2 text-sm font-semibold">
+                            ใบงานซ่อม / สั่งซื้ออุปกรณ์
+                            <Badge variant="outline" className="text-[11px] text-[var(--ink-soft)] bg-white border-[var(--line)]">
+                              {maintenance.length}
+                            </Badge>
+                            <span className="text-[11px] font-normal text-[var(--ink-soft)]">{mxCountLabel} · กดเพื่อเปิดในแจ้งซ่อม</span>
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ) : null
+                  }
+                />
+              ))}
+              {(mxExpanded || mxRemaining > 0) && (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={colCount + 1} className="px-4 py-2.5">
+                    <ShowMoreToggle expanded={mxExpanded} remaining={mxRemaining} onToggle={toggleMxExpanded} />
+                  </TableCell>
+                </TableRow>
+              )}
+              {rows.length === 0 && maintenance.length === 0 && (
                 <TableRow className="hover:bg-transparent">
                   <TableCell colSpan={colCount + 1} className="p-4">
                     <EmptyState
@@ -836,11 +1000,6 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
             </TableBody>
           </Table>
         </div>
-        {(gridExpanded || gridRemaining > 0) && (
-          <div className="border-t border-[var(--line)] px-4 py-2.5">
-            <ShowMoreToggle expanded={gridExpanded} remaining={gridRemaining} onToggle={toggleGridExpanded} />
-          </div>
-        )}
       </div>
       )}
 
@@ -856,7 +1015,7 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
           isn't a phone-first action anyway. */}
       {isMobile && (
         <div>
-          {rows.length === 0 ? (
+          {rows.length === 0 && maintenance.length === 0 ? (
             <div className="rounded-xl border border-[var(--line)] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
               <EmptyState
                 icon={SearchX}
@@ -952,6 +1111,22 @@ export function TaskGrid({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string
                     แสดงเพิ่มเติม {rows.length - mobileShowCount} รายการ
                     <ChevronDown className="h-3.5 w-3.5" />
                   </button>
+                </div>
+              )}
+              {sortedMx.length > 0 && (
+                <div className={cn("flex flex-col gap-2", rows.length > 0 && "pt-3")}>
+                  <div className="flex items-center gap-2 px-1 pb-1 text-sm font-semibold">
+                    ใบงานซ่อม / สั่งซื้ออุปกรณ์
+                    <Badge variant="outline" className="text-[11px] text-[var(--ink-soft)] bg-white border-[var(--line)]">
+                      {maintenance.length}
+                    </Badge>
+                  </div>
+                  {pagedMx.map((item) => (
+                    <MaintenanceCard key={`mx-${item.kind}-${item.id}`} item={item} />
+                  ))}
+                  {(mxExpanded || mxRemaining > 0) && (
+                    <ShowMoreToggle expanded={mxExpanded} remaining={mxRemaining} onToggle={toggleMxExpanded} />
+                  )}
                 </div>
               )}
             </>

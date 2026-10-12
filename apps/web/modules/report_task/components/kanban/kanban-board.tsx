@@ -23,8 +23,8 @@ import { toast } from "sonner";
 import { useTaskBoardIntentStore } from "@/modules/report_task/store/task-board-intent-store";
 import { Info, SearchX, ChevronLeft, ChevronRight } from "lucide-react";
 import { EmptyState } from "@/modules/report_task/components/shared/empty-state";
-import { useMaintenanceBoardStore } from "@/modules/report_task/store/maintenance-board-store";
-import { matchesMaintenanceFilters, sortBoardEntries, type BoardEntry } from "@/modules/report_task/lib/maintenance-board";
+import { useBoardMaintenance } from "@/modules/report_task/hooks/use-board-maintenance";
+import { sortBoardEntries, type BoardEntry } from "@/modules/report_task/lib/maintenance-board";
 
 export type GroupBy = "status" | "priority" | "assignee" | "department";
 
@@ -198,35 +198,9 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   );
 
   // ใบงานซ่อม/สั่งซื้ออุปกรณ์ที่เกี่ยวข้อง — แสดงอย่างเดียว ปนกับงานบนบอร์ด (lib/maintenance-board.ts)
-  // ดึงตอนเปิดบอร์ด + ทุก 2 นาที + ตอนสลับกลับมาที่แอป · ตัวกรองเดิมของบอร์ดคัดด้วย matchesMaintenanceFilters
-  const mxItems = useMaintenanceBoardStore((s) => s.items);
-  const boardKinds = useMaintenanceBoardStore((s) => s.kinds);
-  const loadMx = useMaintenanceBoardStore((s) => s.load);
-  const setKindCounts = useMaintenanceBoardStore((s) => s.setCounts);
-  useEffect(() => {
-    void loadMx();
-    const timer = setInterval(() => void loadMx(), 120_000);
-    const onVisible = () => {
-      if (document.visibilityState === "visible") void loadMx();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, [loadMx]);
-  const mxFiltered = useMemo(() => mxItems.filter((i) => matchesMaintenanceFilters(i, filters)), [mxItems, filters]);
-  // จำนวนแต่ละประเภทที่ตรงกับตัวกรองอื่นอยู่ — ตัวเลขในเมนู "แสดงบนบอร์ด"
-  useEffect(() => {
-    setKindCounts({
-      task: filtered.length,
-      wo: mxFiltered.filter((i) => i.kind === "wo").length,
-      po: mxFiltered.filter((i) => i.kind === "po").length,
-    });
-  }, [filtered, mxFiltered, setKindCounts]);
+  // ดึง/คัด/ติ๊กประเภทร่วมกับมุมมองตาราง/ภาระงาน (hooks/use-board-maintenance.ts)
   // ติ๊กออกในเมนู "แสดงบนบอร์ด" = ซ่อนประเภทนั้นจากคอลัมน์ (ตัวเลขสรุปด้านบนของบอร์ดยังนับงานตามเดิม)
-  const shownTasks = useMemo(() => (boardKinds.task ? filtered : []), [boardKinds.task, filtered]);
-  const shownMx = useMemo(() => mxFiltered.filter((i) => boardKinds[i.kind]), [mxFiltered, boardKinds]);
+  const { shownTasks, shownMx } = useBoardMaintenance(filtered, filters);
 
   // Columns are generated from the chosen grouping — Planner's "Group by".
   // groupBy==="status" splits into 4 mutually-exclusive columns, not 3:
