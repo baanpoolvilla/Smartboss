@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
-import { hasPermission, hasRole, isSuperAdmin, type OrgSession } from "@smartboss/auth";
+import { hasPermission, type OrgSession } from "@smartboss/auth";
 
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { workOrderAccess, workOrderVisibilityWhere, type WorkOrderAccess } from "@/modules/maintenance/data/work-order-access";
@@ -11,11 +11,11 @@ import type { TaskPriority } from "@/modules/report_task/types";
 /**
  * ใบงานซ่อม สำหรับหน้างาน (ดู lib/maintenance-board.ts) — แสดงอย่างเดียว · สั่งซื้ออุปกรณ์ไม่มาที่นี่แล้ว
  *
- * บนบอร์ดงานทุกคนเห็นเฉพาะใบที่ "เกี่ยวกับตัวเอง" — ดูทั้งหมดให้ไปที่โมดูลแจ้งซ่อม ("อยากเห็นแค่ของที่เกี่ยวกับผม
- * ถ้าจะดูทั้งหมดให้ไปดูที่แจ้งซ่อม ... เห็นทั้งหมดมีแค่ CEO กับแอดมินสูงสุดพอ") ⇒ ไม่ใช้สิทธิ์ "เห็นข้อมูลทั้งบริษัท"
- * (core.data.view_all) ของโมดูลแจ้งซ่อมที่นี่ — บทบาท ADMIN (IT) ถือสิทธิ์นั้นอยู่ เคยเห็นใบงานทั้งบริษัทเต็มบอร์ด
+ * บนบอร์ดงาน **ทุกคน (รวม CEO / ผู้ดูแลระบบสูงสุด)** เห็นเฉพาะใบที่ "เกี่ยวกับตัวเอง" — ดูทั้งหมดให้ไปที่โมดูล
+ * แจ้งซ่อม ("ถ้ามีอะไรเกี่ยวกับเค้าค่อยมาแสดงในนี้ ง่ายดี") ⇒ ไม่ใช้สิทธิ์ "เห็นข้อมูลทั้งบริษัท" (core.data.view_all)
+ * ของโมดูลแจ้งซ่อมที่นี่ · เดิม CEO/ผู้ดูแลระบบสูงสุดเห็นทุกใบที่ยังไม่ปิด — บริษัทมีคนถือ CEO หลายคน บอร์ดเลยเต็มไปด้วย
+ * ใบที่ไม่เกี่ยว
  *   ใบงาน: รับผิดชอบ/เปิดเอง/CC/ผู้ดูแลบ้านหลังนั้น (เกณฑ์เดียวกับแจ้งซ่อมสำหรับคนที่ไม่เห็นทั้งบริษัท)
- *   CEO และผู้ดูแลระบบสูงสุด: ทุกใบที่ยังไม่ปิด
  * ใบที่ซ่อมเสร็จแล้วแสดง 7 วันล่าสุด · ใบที่ยกเลิกไม่แสดง
  */
 const DONE_DAYS = 7;
@@ -38,15 +38,10 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
     reactionsByWo.set(r.workOrderId, [...(reactionsByWo.get(r.workOrderId) ?? []), r]);
   }
 
-  // เห็นทั้งหมดบนบอร์ด = CEO / ผู้ดูแลระบบสูงสุดเท่านั้น
-  const seeAll = isSuperAdmin(session) || hasRole(session, "CEO");
-
   if (hasPermission(session, MAINT_PERMS.workorderView)) {
     const full = await workOrderAccess(session);
-    // คนที่ไม่ใช่ CEO/ผู้ดูแลระบบสูงสุด ใช้เกณฑ์ "เกี่ยวกับตัวเอง" แม้จะมีสิทธิ์เห็นทั้งบริษัทในแจ้งซ่อม
-    const access: WorkOrderAccess = seeAll
-      ? { ...full, seeAll: true }
-      : full.seeAll
+    // ทุกคนใช้เกณฑ์ "เกี่ยวกับตัวเอง" แม้จะมีสิทธิ์เห็นทั้งบริษัทในแจ้งซ่อม
+    const access: WorkOrderAccess = full.seeAll
         ? {
             seeAll: false,
             userId: session.userId,
