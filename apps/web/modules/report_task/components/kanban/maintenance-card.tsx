@@ -24,12 +24,6 @@ export const MAINTENANCE_KIND = {
   wo: { icon: "🔧", label: "ใบงานซ่อม", color: "#0d9488", bg: "#e6f6f4" },
 } as const;
 
-/** กดปุ่ม/เมนูบนการ์ดต้องไม่พาไปหน้าแจ้งซ่อม — การ์ดทั้งใบเป็นลิงก์ (Next Link ข้ามการนำทางเมื่อ defaultPrevented) */
-function stop(e: React.SyntheticEvent) {
-  e.preventDefault();
-  e.stopPropagation();
-}
-
 /**
  * การ์ดใบงานซ่อมบนบอร์ดงาน — หน้าตาเดียวกับการ์ดงาน มีป้ายประเภท + แถบสีซ้าย บอกว่าไม่ใช่งานปกติ
  * กดการ์ดแล้วไปหน้านั้นในแจ้งซ่อม ?from=tasks = ปุ่มย้อนกลับพากลับบอร์ด (คอมเมนต์/สถานะ/ปิดงานทำที่นั่นที่เดียว)
@@ -93,6 +87,7 @@ export function MaintenanceCard({ item }: { item: MaintenanceBoardItem }) {
 
   return (
     <>
+      <div className="relative">
       <Link
         href={`${item.href}?from=tasks`}
         prefetch={false}
@@ -163,74 +158,7 @@ export function MaintenanceCard({ item }: { item: MaintenanceBoardItem }) {
           <span className="inline-flex min-w-0 items-center gap-1 text-[11px] text-[var(--ink-soft)] group-hover:text-[var(--ink)]">
             <span className="truncate">{item.statusLabel} · เปิดในแจ้งซ่อม</span> <ArrowUpRight className="h-3 w-3 shrink-0" />
           </span>
-          <div className="flex shrink-0 items-center gap-1.5">
-            {canSticker && (
-              <Popover>
-                <PopoverTrigger
-                  render={
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onClick={stop}
-                      className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-[var(--ink-soft)] ring-1 ring-inset ring-[var(--line)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--brand-green-dark)] hover:ring-[var(--brand-green)] disabled:opacity-50 data-[popup-open]:bg-[var(--accent)]"
-                      title={assignee ? `ติดสติกเกอร์ / ให้คะแนน ${assignee.name}` : "ติดสติกเกอร์ / ให้คะแนน"}
-                      aria-label="ติดสติกเกอร์ / ให้คะแนน"
-                    >
-                      <SmilePlus className="h-3.5 w-3.5" />
-                    </button>
-                  }
-                />
-                <PopoverContent align="end" className="w-auto p-1.5" onClick={stop} onPointerDown={(e) => e.stopPropagation()}>
-                  {!assignee ? (
-                    <p className="max-w-56 px-1.5 py-1 text-xs text-[var(--ink-soft)]">
-                      ใบงานนี้ยังไม่มีผู้รับผิดชอบ — มอบหมายในแจ้งซ่อมก่อนถึงจะให้คะแนนได้
-                    </p>
-                  ) : (
-                    <>
-                      <div className="flex gap-1">
-                        {stickers.map((s) => (
-                          <button
-                            key={s.id}
-                            type="button"
-                            onClick={() => setPending(s)}
-                            className="flex h-8 w-8 items-center justify-center rounded-lg text-base transition-colors hover:bg-[var(--bg-soft)]"
-                            title={`${s.label} (${s.points > 0 ? `+${s.points}` : s.points})`}
-                          >
-                            {s.emoji}
-                          </button>
-                        ))}
-                      </div>
-                      {/* ยกเลิกของที่ตัวเองติดไว้ (กดผิด) — คืนคะแนนให้ */}
-                      {mine.length > 0 && (
-                        <div className="mt-1.5 flex flex-col gap-0.5 border-t border-[var(--line)] pt-1.5">
-                          <span className="px-1 text-[10.5px] text-[var(--ink-soft)]">ที่คุณติดไว้</span>
-                          {mine.map((r) => {
-                            const s = stickers.find((x) => x.id === r.stickerId);
-                            return (
-                              <button
-                                key={r.id}
-                                type="button"
-                                disabled={busy}
-                                onClick={() => void undo(r.id)}
-                                className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 text-xs hover:bg-[var(--bg-soft)] disabled:opacity-50"
-                              >
-                                <span>
-                                  {s?.emoji} {s?.label ?? r.stickerId}
-                                </span>
-                                <span className="inline-flex items-center gap-0.5 text-[var(--chart-red)]">
-                                  <X className="h-3 w-3" /> ยกเลิก
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </PopoverContent>
-              </Popover>
-            )}
+          <div className={cn("flex shrink-0 items-center gap-1.5", canSticker && "pl-7")}>
             {person && (
               <Avatar className="h-6 w-6 shrink-0" title={person.name}>
                 <AvatarImage src={person.avatarUrl ?? undefined} alt={person.name} />
@@ -240,6 +168,76 @@ export function MaintenanceCard({ item }: { item: MaintenanceBoardItem }) {
           </div>
         </div>
       </Link>
+      {canSticker && (
+        // นอก <Link> — เดิมวางในลิงก์ของการ์ด กดสติกเกอร์แล้วการกดทะลุไปเปิดหน้าใบงาน (กันด้วย preventDefault ไม่อยู่)
+        // วางทับมุมขวาล่างของการ์ด ข้างรูปผู้รับผิดชอบ
+        <div className="absolute bottom-3 right-11">
+          <Popover>
+            <PopoverTrigger
+              render={
+                <button
+                  type="button"
+                  disabled={busy}
+                  className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-[var(--ink-soft)] ring-1 ring-inset ring-[var(--line)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--brand-green-dark)] hover:ring-[var(--brand-green)] disabled:opacity-50 data-[popup-open]:bg-[var(--accent)]"
+                  title={assignee ? `ติดสติกเกอร์ / ให้คะแนน ${assignee.name}` : "ติดสติกเกอร์ / ให้คะแนน"}
+                  aria-label="ติดสติกเกอร์ / ให้คะแนน"
+                >
+                  <SmilePlus className="h-3.5 w-3.5" />
+                </button>
+              }
+            />
+            <PopoverContent align="end" className="w-auto p-1.5">
+              {!assignee ? (
+                <p className="max-w-56 px-1.5 py-1 text-xs text-[var(--ink-soft)]">
+                  ใบงานนี้ยังไม่มีผู้รับผิดชอบ — มอบหมายในแจ้งซ่อมก่อนถึงจะให้คะแนนได้
+                </p>
+              ) : (
+                <>
+                  <div className="flex gap-1">
+                    {stickers.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => setPending(s)}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-base transition-colors hover:bg-[var(--bg-soft)]"
+                        title={`${s.label} (${s.points > 0 ? `+${s.points}` : s.points})`}
+                      >
+                        {s.emoji}
+                      </button>
+                    ))}
+                  </div>
+                  {/* ยกเลิกของที่ตัวเองติดไว้ (กดผิด) — คืนคะแนนให้ */}
+                  {mine.length > 0 && (
+                    <div className="mt-1.5 flex flex-col gap-0.5 border-t border-[var(--line)] pt-1.5">
+                      <span className="px-1 text-[10.5px] text-[var(--ink-soft)]">ที่คุณติดไว้</span>
+                      {mine.map((r) => {
+                        const s = stickers.find((x) => x.id === r.stickerId);
+                        return (
+                          <button
+                            key={r.id}
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void undo(r.id)}
+                            className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 text-xs hover:bg-[var(--bg-soft)] disabled:opacity-50"
+                          >
+                            <span>
+                              {s?.emoji} {s?.label ?? r.stickerId}
+                            </span>
+                            <span className="inline-flex items-center gap-0.5 text-[var(--chart-red)]">
+                              <X className="h-3 w-3" /> ยกเลิก
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+            </PopoverContent>
+          </Popover>
+        </div>
+      )}
+      </div>
       {/* นอก <Link> — ปุ่มในหน้าต่างยืนยันต้องไม่ไปกดลิงก์การ์ดต่อ */}
       <StickerConfirmDialog
         open={!!pending}
