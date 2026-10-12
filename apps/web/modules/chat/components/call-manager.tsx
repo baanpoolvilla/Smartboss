@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronDown, Mic, MicOff, Phone, PhoneOff, Volume2 } from "lucide-react";
+import { ChevronDown, Mic, MicOff, Phone, PhoneOff, Volume1, Volume2 } from "lucide-react";
 import { cn } from "@smartboss/ui/cn";
 
 import { subscribeRealtime } from "@/lib/realtime-client";
 import { useChatStore } from "../store/chat-store";
 import type { ChatCallDTO } from "../types";
 import { ChatAvatar } from "./chat-avatar";
-import { answer, decline, enableAudio, hangUp, onIncoming, onUpdate, resumeFromServer, toggleMute, useCallStore } from "../lib/call-controller";
+import { answer, changeVolume, decline, enableAudio, hangUp, onIncoming, onUpdate, resumeFromServer, toggleMute, useCallStore } from "../lib/call-controller";
 
 /**
  * จอโทร (ทุกหน้า ทุกโมดูล — วางไว้ใน Shell คู่กับ ChatNotifyListener)
@@ -17,7 +17,7 @@ import { answer, decline, enableAudio, hangUp, onIncoming, onUpdate, resumeFromS
  * - ระหว่างคุยย่อเป็นแถบเล็กด้านบนได้ แชทต่อได้
  */
 export function CallManager() {
-  const { phase, call, muted, needsAudioTap, endedLabel, minimized, meId } = useCallStore();
+  const { phase, call, muted, needsAudioTap, endedLabel, minimized, meId, volume, volumeAdjustable } = useCallStore();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -104,18 +104,42 @@ export function CallManager() {
         )}
       </div>
 
-      <div className="mt-auto flex w-full max-w-xs items-end justify-around">
-        {phase === "incoming" ? (
-          <>
-            <RoundButton label="ปฏิเสธ" className="bg-[#e5484d] hover:bg-[#d13b40]" onClick={() => void decline()}>
-              <PhoneOff className="h-7 w-7" />
+      {/*
+        ปุ่มแบบ LINE: แถวบน = ลดเสียง · ปิดไมค์ · เพิ่มเสียง, ล่างกลาง = วางสาย (สีแดง)
+        ("ให้มีลดเสียง เพิ่มเสียง ปิดไมค์ แบบฟังก์ชันโทรของไลน์") · สายเข้า = ปฏิเสธ/รับสายเหมือนเดิม
+      */}
+      {phase === "incoming" ? (
+        <div className="mt-auto flex w-full max-w-xs items-end justify-around">
+          <RoundButton label="ปฏิเสธ" className="bg-[#e5484d] hover:bg-[#d13b40]" onClick={() => void decline()}>
+            <PhoneOff className="h-7 w-7" />
+          </RoundButton>
+          <RoundButton label="รับสาย" className="bg-[#06c755] hover:bg-[#05b34c]" onClick={() => void answer()}>
+            <Phone className="h-7 w-7" />
+          </RoundButton>
+        </div>
+      ) : phase === "ended" ? null : (
+        <div className="mt-auto flex w-full max-w-sm flex-col items-center gap-8">
+          {/* ระดับเสียงปลายสาย — iPhone ปรับจากเว็บไม่ได้ (ข้อจำกัดของ Safari) บอกให้ใช้ปุ่มข้างเครื่อง */}
+          {volumeAdjustable === false ? (
+            <p className="text-center text-xs text-white/60">ปรับเสียงด้วยปุ่มเสียงข้างเครื่อง</p>
+          ) : (
+            <div className="flex w-full max-w-[16rem] items-center gap-2" aria-label={`ระดับเสียง ${Math.round(volume * 100)}%`}>
+              <Volume1 className="h-4 w-4 shrink-0 text-white/60" />
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/15">
+                <div className="h-full rounded-full bg-white transition-all" style={{ width: `${volume * 100}%` }} />
+              </div>
+              <span className="w-9 shrink-0 text-right text-xs tabular-nums text-white/70">{Math.round(volume * 100)}%</span>
+            </div>
+          )}
+          <div className="flex w-full items-end justify-around">
+            <RoundButton
+              label="ลดเสียง"
+              className="bg-white/15 hover:bg-white/25"
+              onClick={() => changeVolume(-0.1)}
+              disabled={volumeAdjustable === false || volume <= 0.1}
+            >
+              <Volume1 className="h-7 w-7" />
             </RoundButton>
-            <RoundButton label="รับสาย" className="bg-[#06c755] hover:bg-[#05b34c]" onClick={() => void answer()}>
-              <Phone className="h-7 w-7" />
-            </RoundButton>
-          </>
-        ) : phase === "ended" ? null : (
-          <>
             <RoundButton
               label={muted ? "เปิดไมค์" : "ปิดไมค์"}
               className={muted ? "bg-white text-[#1f2a37] hover:bg-white/90" : "bg-white/15 hover:bg-white/25"}
@@ -124,12 +148,20 @@ export function CallManager() {
             >
               {muted ? <MicOff className="h-7 w-7" /> : <Mic className="h-7 w-7" />}
             </RoundButton>
-            <RoundButton label="วางสาย" className="bg-[#e5484d] hover:bg-[#d13b40]" onClick={() => void hangUp()}>
-              <PhoneOff className="h-7 w-7" />
+            <RoundButton
+              label="เพิ่มเสียง"
+              className="bg-white/15 hover:bg-white/25"
+              onClick={() => changeVolume(0.1)}
+              disabled={volumeAdjustable === false || volume >= 1}
+            >
+              <Volume2 className="h-7 w-7" />
             </RoundButton>
-          </>
-        )}
-      </div>
+          </div>
+          <RoundButton label="วางสาย" className="bg-[#e5484d] hover:bg-[#d13b40]" onClick={() => void hangUp()}>
+            <PhoneOff className="h-7 w-7" />
+          </RoundButton>
+        </div>
+      )}
     </div>
   );
 }

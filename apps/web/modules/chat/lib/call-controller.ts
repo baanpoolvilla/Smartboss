@@ -28,6 +28,23 @@ interface CallState {
   endedLabel: string;
   /** ย่อจอโทรเป็นแถบเล็ก แชทต่อได้ระหว่างคุย */
   minimized: boolean;
+  /** ความดังเสียงปลายสาย 0–1 (ปุ่มลด/เพิ่มเสียงบนจอโทร แบบ LINE) — จำไว้ในเครื่อง */
+  volume: number;
+  /**
+   * เครื่องนี้ให้เว็บปรับความดังเองได้ไหม — Safari บน iPhone/iPad ไม่ยอม (ตั้ง volume แล้วค่ากลับเป็น 1 เสมอ)
+   * ต้องใช้ปุ่มเสียงข้างเครื่อง · null = ยังไม่รู้ (ยังไม่มีเสียงปลายสาย)
+   */
+  volumeAdjustable: boolean | null;
+}
+
+const VOLUME_KEY = "sb.call.volume";
+function savedVolume(): number {
+  try {
+    const v = Number(localStorage.getItem(VOLUME_KEY));
+    return Number.isFinite(v) && v > 0 && v <= 1 ? v : 1;
+  } catch {
+    return 1;
+  }
 }
 
 export const useCallStore = create<CallState>(() => ({
@@ -39,6 +56,8 @@ export const useCallStore = create<CallState>(() => ({
   needsAudioTap: false,
   endedLabel: "",
   minimized: false,
+  volume: typeof window === "undefined" ? 1 : savedVolume(),
+  volumeAdjustable: null,
 }));
 
 const RING_TIMEOUT_MS = 45_000;
@@ -98,6 +117,38 @@ function stopTone() {
   tone = null;
 }
 
+// ─── ความดังเสียงปลายสาย ───
+
+/** ตั้งความดังให้ element เสียงของปลายสาย และเช็คว่าเครื่องยอมให้ปรับไหม (iOS ไม่ยอม ค่ากลับเป็น 1) */
+function applyVolume(el: HTMLMediaElement) {
+  const v = useCallStore.getState().volume;
+  el.volume = v;
+  if (useCallStore.getState().volumeAdjustable === null) {
+    // ลองตั้งค่าที่ไม่ใช่ 1 แล้วอ่านกลับ — iOS อ่านได้ 1 เสมอ
+    const probe = v === 1 ? 0.5 : v;
+    el.volume = probe;
+    const ok = Math.abs(el.volume - probe) < 0.01;
+    el.volume = v;
+    useCallStore.setState({ volumeAdjustable: ok });
+  }
+}
+
+/** ลด/เพิ่มเสียงปลายสาย ทีละ 10% (ต่ำสุด 10% — ปิดเสียงทั้งหมดไม่ได้ ไม่งั้นนึกว่าสายหลุด) */
+export function setVolume(next: number) {
+  const v = Math.round(Math.min(1, Math.max(0.1, next)) * 10) / 10;
+  useCallStore.setState({ volume: v });
+  for (const el of audioEls) el.volume = v;
+  try {
+    localStorage.setItem(VOLUME_KEY, String(v));
+  } catch {
+    /* โหมดส่วนตัว — แค่ไม่จำ */
+  }
+}
+
+export function changeVolume(delta: number) {
+  setVolume(useCallStore.getState().volume + delta);
+}
+
 // ─── ต่อ / ตัดห้องเสียง ───
 
 async function connectRoom(url: string, token: string) {
@@ -110,6 +161,7 @@ async function connectRoom(url: string, token: string) {
     el.style.display = "none";
     document.body.appendChild(el);
     audioEls.add(el);
+    applyVolume(el);
   });
   r.on(RoomEvent.TrackUnsubscribed, (track) => {
     for (const el of track.detach()) {
