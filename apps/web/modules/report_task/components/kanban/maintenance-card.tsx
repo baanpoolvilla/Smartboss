@@ -91,80 +91,104 @@ export function MaintenanceCard({ item }: { item: MaintenanceBoardItem }) {
       <Link
         href={`${item.href}?from=tasks`}
         prefetch={false}
-        className="group block rounded-xl border border-[var(--line)] bg-white p-3 shadow-sm transition-colors hover:border-[#b8c2d0]"
-        style={{ borderLeft: `4px solid ${k.color}` }}
+        // แบบ A ("แถบหัวสีเขียว") ที่เลือกจาก mockup — แถบหัวสีแจ้งซ่อมเต็มความกว้าง มองไกลก็รู้ว่าไม่ใช่การ์ดงาน
+        className="group block overflow-hidden rounded-xl border bg-white shadow-sm transition-shadow hover:shadow-md"
+        style={{ borderColor: "#b7e3dd" }}
         aria-label={`${k.label} ${item.code} ${item.title} — เปิดในแจ้งซ่อม`}
       >
-        <div className="flex items-center justify-between gap-2">
-          <span
-            className="inline-flex max-w-full items-center gap-1 truncate rounded-md px-1.5 py-0.5 text-[11px] font-semibold"
-            style={{ background: k.bg, color: k.color }}
-          >
-            {k.icon} {k.label} · {item.code}
-          </span>
-          {item.priority !== "medium" && (
-            <span className="shrink-0 text-[10.5px] font-medium" style={{ color: priorityMeta[item.priority].accentColor }}>
-              ● {priorityMeta[item.priority].label}
-            </span>
-          )}
-        </div>
-        <p className={cn("mt-1.5 text-sm font-semibold leading-snug text-[var(--ink)]", done && "text-[var(--ink-soft)]")}>
-          {item.title}
-        </p>
-        {item.place && (
-          <div className="mt-2 flex items-center gap-1 text-[11px] text-[var(--ink-soft)]">
-            <MapPin className="h-3 w-3" />
-            {item.place}
-          </div>
-        )}
-        {/* วันที่สร้าง + ครบกำหนด */}
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--ink-soft)]">
+        <div
+          className="flex items-center justify-between gap-2 px-2.5 py-1.5 text-[11.5px] font-semibold text-white"
+          style={{ background: k.color }}
+        >
           <span className="inline-flex items-center gap-1">
-            <FilePlus2 className="h-3 w-3" />
-            สร้าง {formatDate(item.createdAt)}
+            {k.icon} {k.label}
           </span>
-          <span className={cn("inline-flex items-center gap-1", item.overdue && "font-semibold text-[var(--chart-red)]")}>
-            <CalendarDays className="h-3 w-3" />
-            {item.dueDate ? (
-              <>
-                {item.overdue ? "เลยกำหนด " : "ครบกำหนด "}
-                {formatDate(item.dueDate)}
-              </>
-            ) : (
-              "ไม่ได้ตั้งวันครบกำหนด"
-            )}
-          </span>
+          <span className="truncate font-medium opacity-90">{item.code}</span>
         </div>
-        {/* สติกเกอร์ที่ติดแล้ว — แบบเดียวกับการ์ดงาน */}
-        {counts.size > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {[...counts].map(([stickerId, count]) => {
-              const sticker = stickers.find((s) => s.id === stickerId);
-              if (!sticker) return null;
-              return (
-                <span
-                  key={stickerId}
-                  title={`${sticker.label} (${sticker.points > 0 ? `+${sticker.points}` : sticker.points})`}
-                  className="flex items-center gap-0.5 rounded-full bg-[var(--bg-soft)] px-1.5 py-0.5 text-[10px]"
-                >
-                  <span>{sticker.emoji}</span>
-                  {count > 1 && <span className="text-[var(--ink-soft)]">{count}</span>}
-                </span>
-              );
-            })}
-          </div>
-        )}
-        <div className="mt-2 flex items-center justify-between gap-2 border-t border-[var(--line)] pt-2">
-          <span className="inline-flex min-w-0 items-center gap-1 text-[11px] text-[var(--ink-soft)] group-hover:text-[var(--ink)]">
-            <span className="truncate">{item.statusLabel} · เปิดในแจ้งซ่อม</span> <ArrowUpRight className="h-3 w-3 shrink-0" />
-          </span>
-          <div className={cn("flex shrink-0 items-center gap-1.5", canSticker && "pl-7")}>
-            {person && (
-              <Avatar className="h-6 w-6 shrink-0" title={person.name}>
-                <AvatarImage src={person.avatarUrl ?? undefined} alt={person.name} />
-                <AvatarFallback className="text-[9px] bg-[var(--bg-soft)]">{person.avatar}</AvatarFallback>
-              </Avatar>
+        <div className="flex flex-col gap-1.5 p-3">
+          <div className="flex items-center justify-between gap-2">
+            {item.place ? (
+              <span
+                className="inline-flex min-w-0 items-center gap-1 truncate rounded-md px-1.5 py-0.5 text-[11.5px] font-semibold"
+                style={{ background: k.bg, color: "#0f766e" }}
+              >
+                <MapPin className="h-3 w-3 shrink-0" />
+                {item.place}
+              </span>
+            ) : (
+              <span />
             )}
+            {item.priority !== "medium" && (
+              <span className="shrink-0 text-[10.5px] font-medium" style={{ color: priorityMeta[item.priority].accentColor }}>
+                ● {priorityMeta[item.priority].label}
+              </span>
+            )}
+          </div>
+          <p className={cn("text-sm font-semibold leading-snug text-[var(--ink)]", done && "text-[var(--ink-soft)]")}>
+            {item.title}
+          </p>
+          {/* วันที่สร้าง + ครบกำหนด */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--ink-soft)]">
+            <span className="inline-flex items-center gap-1">
+              <FilePlus2 className="h-3 w-3" />
+              สร้าง {formatDate(item.createdAt)}
+            </span>
+            <span className={cn("inline-flex items-center gap-1", item.overdue && "font-semibold text-[var(--chart-red)]")}>
+              <CalendarDays className="h-3 w-3" />
+              {item.dueDate ? (
+                <>
+                  {item.overdue ? "เลยกำหนด " : "ครบกำหนด "}
+                  {formatDate(item.dueDate)}
+                </>
+              ) : (
+                "ไม่ได้ตั้งวันครบกำหนด"
+              )}
+            </span>
+          </div>
+          {/* สติกเกอร์ที่ติดแล้ว — แบบเดียวกับการ์ดงาน */}
+          {counts.size > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {[...counts].map(([stickerId, count]) => {
+                const sticker = stickers.find((s) => s.id === stickerId);
+                if (!sticker) return null;
+                return (
+                  <span
+                    key={stickerId}
+                    title={`${sticker.label} (${sticker.points > 0 ? `+${sticker.points}` : sticker.points})`}
+                    className="flex items-center gap-0.5 rounded-full bg-[var(--bg-soft)] px-1.5 py-0.5 text-[10px]"
+                  >
+                    <span>{sticker.emoji}</span>
+                    {count > 1 && <span className="text-[var(--ink-soft)]">{count}</span>}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+          {/* สถานะแสดงอย่างเดียว — เปลี่ยนสถานะ/คอมเมนต์/ปิดงาน ทำในแจ้งซ่อม */}
+          <div className="mt-0.5 flex items-center justify-between gap-2 border-t border-[var(--line)] pt-2">
+            <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px] text-[var(--ink-soft)]">
+              <span
+                className={cn(
+                  "shrink-0 rounded-md border px-1.5 py-0.5 text-[10.5px] font-semibold",
+                  done ? "border-green-200 bg-green-50 text-green-700" : "bg-white"
+                )}
+                style={done ? undefined : { borderColor: "#b7e3dd", color: "#0f766e" }}
+              >
+                {done ? "✓ " : ""}
+                {item.statusLabel}
+              </span>
+              <span className="inline-flex min-w-0 items-center gap-0.5 truncate group-hover:text-[var(--ink)]">
+                เปิดในแจ้งซ่อม <ArrowUpRight className="h-3 w-3 shrink-0" />
+              </span>
+            </span>
+            <div className={cn("flex shrink-0 items-center gap-1.5", canSticker && "pl-8")}>
+              {person && (
+                <Avatar className="h-6 w-6 shrink-0" title={person.name}>
+                  <AvatarImage src={person.avatarUrl ?? undefined} alt={person.name} />
+                  <AvatarFallback className="text-[9px] bg-[var(--bg-soft)]">{person.avatar}</AvatarFallback>
+                </Avatar>
+              )}
+            </div>
           </div>
         </div>
       </Link>
