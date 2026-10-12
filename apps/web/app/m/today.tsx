@@ -134,6 +134,25 @@ type Submitting = "idle" | "locating" | "sending";
 /** แตะแรกของปุ่มลงเวลาค้างรอแตะยืนยันได้นานเท่านี้ — ดู `armed` ใน Today */
 const ARM_MS = 4000;
 
+/** วงกลม 2 วงบนปุ่มลงเวลา — บอกว่าต้องกด 2 ครั้ง และกดไปแล้วกี่ครั้ง */
+function TapSteps({ done }: { done: 0 | 1 }) {
+  return (
+    <span className="flex items-center gap-1.5 text-sm font-semibold" aria-hidden>
+      {[1, 2].map((n) => (
+        <span
+          key={n}
+          className={`flex h-6 w-6 items-center justify-center rounded-full border-2 border-white ${
+            n <= done ? "bg-white text-(--app-strong)" : "text-white"
+          }`}
+        >
+          {n <= done ? "✓" : n}
+        </span>
+      ))}
+      <style>{"@keyframes sb-arm-drain{from{transform:scaleX(1)}to{transform:scaleX(0)}}"}</style>
+    </span>
+  );
+}
+
 const INTENT_LABEL: Record<string, string> = {
   CLOCK_IN: "เข้างาน",
   CLOCK_OUT: "ออกงาน",
@@ -475,25 +494,38 @@ export function Today({
             setArmed(null);
             void submit(nextIntent);
           }}
-          className={`flex h-32 w-full touch-manipulation flex-col items-center justify-center gap-1 rounded-2xl text-2xl font-bold text-white transition-colors disabled:opacity-60 ${
+          // ปุ่มใหญ่ + บอกบนปุ่มเลยว่าต้องกด 2 ครั้ง และตอนนี้กดไปแล้วกี่ครั้ง ("ทำปุ่มใหญ่ๆ และบอกด้วยว่ากด 2 ที คนใช้จะได้ไม่งง")
+          className={`relative flex h-44 w-full touch-manipulation select-none flex-col items-center justify-center gap-2 overflow-hidden rounded-3xl font-bold text-white transition-colors disabled:opacity-60 ${
             armed === nextIntent && !busy ? "bg-(--app-strong) ring-4 ring-(--app)/30" : "bg-(--app)"
           }`}
         >
           {noEmployment ? (
-            "ยังลงเวลาไม่ได้"
+            <span className="text-2xl">ยังลงเวลาไม่ได้</span>
           ) : state === "locating" ? (
-            "กำลังหาตำแหน่ง…"
+            <span className="text-2xl">กำลังหาตำแหน่ง…</span>
           ) : state === "sending" ? (
-            "กำลังบันทึก…"
-          ) : armed === nextIntent ? (
-            <>
-              <span>แตะอีกครั้งเพื่อยืนยัน{INTENT_LABEL[nextIntent]}</span>
-              <span className="text-sm font-normal opacity-90">ไม่แตะภายใน {ARM_MS / 1000} วินาที จะยกเลิกเอง</span>
-            </>
+            <span className="text-2xl">กำลังบันทึก…</span>
           ) : (
             <>
-              <span>{INTENT_LABEL[nextIntent]}</span>
-              <span className="text-sm font-normal opacity-80">แตะ 2 ครั้งเพื่อยืนยัน</span>
+              <TapSteps done={armed === nextIntent ? 1 : 0} />
+              {armed === nextIntent ? (
+                <>
+                  <span className="text-3xl">กดอีก 1 ครั้ง</span>
+                  <span className="text-base font-medium">เพื่อยืนยัน{INTENT_LABEL[nextIntent]}</span>
+                  {/* แถบนับถอยหลัง — หมดแล้วปุ่มกลับเป็นแบบเดิม (ARM_MS) */}
+                  <span
+                    key={armed}
+                    aria-hidden
+                    className="absolute inset-x-0 bottom-0 h-1.5 origin-left bg-white/60 motion-reduce:hidden"
+                    style={{ animation: `sb-arm-drain ${ARM_MS}ms linear forwards` }}
+                  />
+                </>
+              ) : (
+                <>
+                  <span className="text-4xl">{INTENT_LABEL[nextIntent]}</span>
+                  <span className="rounded-full bg-white/20 px-3 py-0.5 text-base font-medium">กด 2 ครั้ง เพื่อ{INTENT_LABEL[nextIntent]}</span>
+                </>
+              )}
             </>
           )}
         </button>
