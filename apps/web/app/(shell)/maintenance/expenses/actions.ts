@@ -90,6 +90,17 @@ async function saveExpense(
     if (!pm) return { error: "ไม่พบรายการ PM นี้ — อาจถูกลบไปแล้ว" };
     pmScheduleId = pm.id;
     propertyIds = [pm.propertyId ?? null];
+    /*
+     * มาจากปุ่ม "เพิ่มค่าใช้จ่าย" บนหน้าใบงานที่อุปกรณ์มี PM (?workOrderId=…&pmScheduleId=…)
+     * ฟอร์มสลับเป็นประเภท PM ให้เอง — ต้องผูกใบงานด้วย ไม่งั้นค่าใช้จ่ายไปอยู่ที่ PM อย่างเดียว
+     * ใบงานค้างคอลัมน์ "ยังไม่บันทึกค่าใช้จ่าย" ทั้งที่บันทึกแล้ว (เจอจริง: WO-2569-0267 ล้างแอร์ ฿4,000)
+     */
+    if (d.workOrderId) {
+      const wo = await getWorkOrder(s.orgId, d.workOrderId);
+      if (!wo) return { error: "ไม่พบใบงานนี้ — อาจถูกลบไปแล้ว" };
+      workOrderId = wo.id;
+      propertyIds = [wo.propertyId, ...wo.additionalPropertyIds];
+    }
   }
 
   const amount = isNoExpense ? 0 : parseAmount(d.amount);

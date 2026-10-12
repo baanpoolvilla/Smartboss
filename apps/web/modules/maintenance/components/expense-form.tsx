@@ -88,6 +88,12 @@ export function ExpenseForm({
           {locked && <input type="hidden" name="costType" value={costType} />}
         </label>
 
+        {/* เปิดจากหน้าใบงานที่อุปกรณ์มี PM = ประเภทเป็น PM แต่ต้องส่งใบงานไปด้วย ให้ค่าใช้จ่ายผูกกับใบงานนั้น
+            (ช่องเลือกใบงานข้างล่างไม่ได้แสดงตอนเป็น PM — เดิมเลยไม่ได้ส่ง ใบงานค้าง "ยังไม่บันทึกค่าใช้จ่าย") */}
+        {costType === "pm" && lockedWorkOrderId && (
+          <input type="hidden" name="workOrderId" value={lockedWorkOrderId} />
+        )}
+
         {costType === "work_order" ? (
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-medium text-(--ink)">ใบงาน *</span>
