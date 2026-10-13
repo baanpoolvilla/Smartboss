@@ -616,6 +616,32 @@ export type TimeEventSource =
  * การตอกบัตรหนึ่งครั้ง — หน้า Timeline แสดงทีละแถวตามนี้
  * ต่างจาก AttendanceSummary ที่เป็นผลรวมของทั้งวันหลังคำนวณแล้ว
  */
+/** ที่มาของการลงเวลาหนึ่งครั้ง — GET /time-events/:id/origin (ต้องมีสิทธิ์ evidence.read) */
+export interface TimeEventOrigin {
+  id: string;
+  source_type: TimeEventSource;
+  event_intent: TimeEventIntent;
+  captured_at: string;
+  received_at: string;
+  /** พิกัดที่มือถือส่งมาตอนกดลงเวลา — null = ไม่ใช่มือถือ หรือไม่ได้แนบพิกัด */
+  location: { latitude: number; longitude: number; accuracy_m: number | null } | null;
+  distance_from_site_m: number | null;
+  /** มือถือ = จุดเช็คอินที่จับคู่ได้ · เครื่องสแกน = สถานที่ที่ผูกเครื่องไว้ */
+  site: {
+    id: string;
+    name: string;
+    latitude: number | null;
+    longitude: number | null;
+    radius_m: number | null;
+  } | null;
+  device: { name: string; device_code: string } | null;
+  platform: string | null;
+  app_version: string | null;
+  photo_evidence_id: string | null;
+  decision: string | null;
+  risk_flags: string[];
+}
+
 export interface TimeEvent {
   id: string;
   employment_id: string;

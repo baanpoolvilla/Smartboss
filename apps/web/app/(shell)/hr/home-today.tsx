@@ -20,6 +20,7 @@ import {
   inputClass,
 } from "@/modules/hr/components/ui";
 import { autoRecalculateAttendance } from "@/modules/hr/lib/auto-recalculate";
+import { getEvidencePhotoUrlAction, getTimeEventOriginAction } from "./actions";
 import { formatDate } from "@/modules/hr/lib/labels";
 
 /** ช่วงที่สั่งคำนวณย้อนหลัง — คงที่ทุกครั้ง ไม่ผูกกับวันที่กำลังดูอยู่ */
@@ -320,7 +321,7 @@ export async function renderTodayTab(
             <HelpPopover label="คำอธิบายรายชื่อวันนี้">
               อ่านจากการสแกนสด ๆ ไม่ต้องรอสั่งคำนวณ — ตัวเลขสรุปรายเดือนและ OT
               ยังต้องกดคำนวณตามเดิม ไอคอนท้ายแถวบอกช่องทางที่ใช้ลงเวลา
-              (เครื่องสแกนนิ้ว / แอปมือถือ / เว็บ / เจ้าหน้าที่บันทึกให้)
+              (เครื่องสแกนนิ้ว / แอปมือถือ / เว็บ / เจ้าหน้าที่บันทึกให้) กดไอคอนเพื่อดูว่าสแกนจากจุดไหน
             </HelpPopover>
           </>
         }
@@ -334,7 +335,13 @@ export async function renderTodayTab(
         className="mb-4"
       >
         {hasEmployees ? (
-          <AttendanceRoster rows={rosterRows} timelineEvents={timeline?.items ?? []} />
+          <AttendanceRoster
+            rows={rosterRows}
+            timelineEvents={timeline?.items ?? []}
+            // เฉพาะคนที่จัดการพนักงานได้ — พิกัดตอนลงเวลาเป็นข้อมูลส่วนบุคคล (workforce ตรวจสิทธิ์ซ้ำเอง)
+            loadOrigin={canExport ? getTimeEventOriginAction : undefined}
+            loadPhotoUrl={canExport ? getEvidencePhotoUrlAction : undefined}
+          />
         ) : (
           <p className="p-10 text-center text-sm text-(--ink-soft)">ยังไม่มีพนักงานในระบบ</p>
         )}

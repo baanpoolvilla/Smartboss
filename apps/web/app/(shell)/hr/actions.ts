@@ -12,6 +12,7 @@ import {
   type Me,
   type Paged,
   type Person,
+  type TimeEventOrigin,
 } from "@/modules/hr/lib/api";
 import { isDisplayNameFormat } from "@workforce/domain";
 import { todayIso } from "@/modules/hr/lib/date";
@@ -2121,6 +2122,39 @@ export async function decideOvertimeAction(formData: FormData) {
     { reason, approvedMinutes }
   );
   revalidatePath("/hr");
+}
+
+/**
+ * ลงเวลาครั้งนี้มาจากไหน (พิกัด/จุดเช็คอิน/เครื่องสแกน) — กดไอคอนช่องทางในรายชื่อวันนี้
+ * workforce ตรวจสิทธิ์ evidence.read + บันทึก audit เอง ชั้นนี้แค่ส่งต่อและแปล error
+ */
+export async function getTimeEventOriginAction(
+  eventId: string,
+): Promise<{ origin?: TimeEventOrigin; error?: string }> {
+  await requireOrg();
+  try {
+    return { origin: await wfFetch<TimeEventOrigin>(`/time-events/${encodeURIComponent(eventId)}/origin`) };
+  } catch (error) {
+    if (error instanceof WorkforceError && error.status === 403) {
+      return { error: "บัญชีนี้ไม่มีสิทธิ์ดูหลักฐานการลงเวลา" };
+    }
+    return { error: toMessage(error) };
+  }
+}
+
+/** URL รูปหลักฐานอายุสั้น — workforce บันทึก audit ทุกครั้งที่ขอ */
+export async function getEvidencePhotoUrlAction(
+  evidenceId: string,
+): Promise<{ url?: string; error?: string }> {
+  await requireOrg();
+  try {
+    const res = await wfFetch<{ url: string }>(
+      `/attendance-evidence/${encodeURIComponent(evidenceId)}/download-url`,
+    );
+    return { url: res.url };
+  } catch (error) {
+    return { error: toMessage(error) };
+  }
 }
 
 /* ═══════════════════ เครื่องสแกน ═══════════════════ */

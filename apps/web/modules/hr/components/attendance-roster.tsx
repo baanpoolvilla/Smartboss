@@ -6,6 +6,7 @@ import { Avatar } from "@smartboss/ui/components/avatar";
 import { Icon } from "@/components/icon";
 import { FilterChips, type FilterChipOption } from "./design-kit-client";
 import { AttendanceTimeline } from "./attendance-timeline";
+import { TimeEventOriginDialog, type LoadOrigin, type LoadPhotoUrl } from "./time-event-origin-dialog";
 import { eventSourceIcon, eventSourceLabel, formatTime } from "../lib/labels";
 import type { TimeEvent } from "../lib/api";
 
@@ -50,12 +51,18 @@ function fromMinutes(m: number): string {
 export function AttendanceRoster({
   rows,
   timelineEvents,
+  loadOrigin,
+  loadPhotoUrl,
 }: {
   rows: RosterRow[];
   timelineEvents: TimeEvent[];
+  /** server action ส่งมาจากหน้า — ไม่ส่ง = ไอคอนช่องทางเป็นแค่ไอคอน กดไม่ได้ */
+  loadOrigin?: LoadOrigin;
+  loadPhotoUrl?: LoadPhotoUrl;
 }) {
   const [active, setActive] = useState<Set<string>>(new Set());
   const [showTimeline, setShowTimeline] = useState(false);
+  const [originFor, setOriginFor] = useState<RosterRow | null>(null);
 
   const counts = useMemo(() => {
     const out: Record<RosterCategory, number> = { ok: 0, late: 0, absent: 0, off: 0, noshift: 0 };
@@ -159,15 +166,28 @@ export function AttendanceRoster({
                   )}
                 </div>
 
-                {row.sourceType && (
-                  <span
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-(--ink-soft)"
-                    style={{ backgroundColor: "var(--bg-soft)" }}
-                    title={eventSourceLabel(row.sourceType)}
-                  >
-                    <Icon name={eventSourceIcon(row.sourceType)} className="h-4 w-4" />
-                  </span>
-                )}
+                {row.sourceType &&
+                  (loadOrigin && loadPhotoUrl ? (
+                    // กดดูว่าสแกนจากไหน — พิกัด/จุดเช็คอิน (มือถือ) หรือเครื่องสแกนเครื่องไหน
+                    <button
+                      type="button"
+                      onClick={() => setOriginFor(row)}
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-(--ink-soft) transition-colors hover:text-(--ink) hover:ring-2 hover:ring-(--app)/30 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-(--app)/40"
+                      style={{ backgroundColor: "var(--bg-soft)" }}
+                      title={`${eventSourceLabel(row.sourceType)} — กดดูว่าสแกนจากไหน`}
+                      aria-label={`ดูที่มาการลงเวลาของ ${row.name}`}
+                    >
+                      <Icon name={eventSourceIcon(row.sourceType)} className="h-4 w-4" />
+                    </button>
+                  ) : (
+                    <span
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-(--ink-soft)"
+                      style={{ backgroundColor: "var(--bg-soft)" }}
+                      title={eventSourceLabel(row.sourceType)}
+                    >
+                      <Icon name={eventSourceIcon(row.sourceType)} className="h-4 w-4" />
+                    </span>
+                  ))}
               </div>
             );
           })
@@ -188,6 +208,16 @@ export function AttendanceRoster({
           </div>
         )}
       </div>
+
+      {originFor && loadOrigin && loadPhotoUrl && (
+        <TimeEventOriginDialog
+          name={originFor.name}
+          events={timelineEvents.filter((ev) => ev.employment_id === originFor.employmentId)}
+          loadOrigin={loadOrigin}
+          loadPhotoUrl={loadPhotoUrl}
+          onClose={() => setOriginFor(null)}
+        />
+      )}
     </div>
   );
 }

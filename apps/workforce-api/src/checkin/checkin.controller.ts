@@ -150,6 +150,13 @@ export class CheckinController {
     return this.service.createEvidenceDownloadUrl(requireUuid(evidenceId, 'evidenceId'));
   }
 
+  /** ที่มาของการลงเวลาหนึ่งครั้ง (พิกัด/จุดเช็คอิน/เครื่องสแกน) — audit ทุกครั้ง */
+  @Get('time-events/:eventId/origin')
+  @RequirePermissions('workforce.attendance.evidence.read')
+  async timeEventOrigin(@Param('eventId') eventId: string): Promise<Record<string, unknown>> {
+    return this.service.getTimeEventOrigin(requireUuid(eventId, 'eventId'));
+  }
+
   // --- policy groups ---
 
   @Post('attendance-policy-groups')

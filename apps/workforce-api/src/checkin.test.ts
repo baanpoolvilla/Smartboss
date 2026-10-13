@@ -685,6 +685,54 @@ describe('evidence storage and access', () => {
   });
 });
 
+describe('ที่มาของการลงเวลา (กดไอคอนช่องทางในรายชื่อวันนี้)', () => {
+  it('บอกพิกัดที่กด จุดเช็คอินที่ตรง และระยะห่าง — และบันทึก audit', async () => {
+    const employee = await createEmployee('ดูที่มา');
+    const fingerprint = `fp-${uuidv4()}`;
+    await call(harness, 'POST', '/mobile-devices/enroll', {
+      token: employee.token,
+      idempotencyKey: uuidv4(),
+      payload: { device_fingerprint: fingerprint, platform: 'android' },
+    });
+    await assignPolicy(await createPolicyGroup(), employee.employmentId);
+    const result = await checkin(employee, {
+      fingerprint,
+      location: { latitude: 12.9232, longitude: 100.8827, accuracy_m: 12 },
+    });
+    const eventId = result.body['event_id'] as string;
+
+    const origin = await call(harness, 'GET', `/time-events/${eventId}/origin`, { token: hrToken });
+
+    expect(origin.status).toBe(200);
+    expect(origin.body['source_type']).toBe('MOBILE_APP');
+    expect(origin.body['location']).toEqual({ latitude: 12.9232, longitude: 100.8827, accuracy_m: 12 });
+    expect(origin.body['site']).toMatchObject({ id: siteId, name: 'สำนักงานใหญ่', radius_m: 150 });
+    expect(origin.body['distance_from_site_m']).toBeGreaterThan(0);
+    expect(origin.body['platform']).toBe('android');
+    expect(origin.body['photo_evidence_id']).toBeTruthy();
+
+    const audits = await withTenant(harness.database.db, tenant.tenantId, async (tx) =>
+      tx.select().from(schema.auditEvents).where(eq(schema.auditEvents.resourceId, eventId)),
+    );
+    expect(audits.map((a) => a.action)).toContain('attendance.evidence.read');
+  });
+
+  it('พนักงานทั่วไปดูไม่ได้ — พิกัดตอนลงเวลาเป็นหลักฐานเหมือนรูป', async () => {
+    const employee = await createEmployee('ดูที่มาไม่ได้');
+    await assignPolicy(await createPolicyGroup(), employee.employmentId);
+    const result = await checkin(employee);
+    const eventId = result.body['event_id'] as string;
+
+    const denied = await call(harness, 'GET', `/time-events/${eventId}/origin`, { token: employee.token });
+    expect(denied.status).toBe(403);
+  });
+
+  it('ไม่พบ = 404', async () => {
+    const missing = await call(harness, 'GET', `/time-events/${uuidv4()}/origin`, { token: hrToken });
+    expect(missing.status).toBe(404);
+  });
+});
+
 describe('risk review queue', () => {
   it('lists unreviewed risks and records the reviewer decision with a reason', async () => {
     const employee = await createEmployee('เข้าคิวตรวจ');

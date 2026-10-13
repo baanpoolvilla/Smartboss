@@ -298,6 +298,14 @@ export const OPERATIONAL_ROUTES: readonly Omit<RouteDefinition, 'response'>[] = 
     permissions: ['workforce.settings.manage'] as Permission[],
   },
   {
+    operationId: 'timeEventOrigin_get',
+    method: 'get',
+    path: '/time-events/{eventId}/origin',
+    summary: 'GET /time-events/{eventId}/origin',
+    tag: 'checkin',
+    permissions: ['workforce.attendance.evidence.read'] as Permission[],
+  },
+  {
     operationId: 'listRiskAssessments_get',
     method: 'get',
     path: '/attendance-risk-assessments',

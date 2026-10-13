@@ -308,6 +308,73 @@ export class CheckinRepository {
     await tx.insert(schema.timeEventEvidence).values(values);
   }
 
+  /**
+   * ที่มาของการลงเวลาหนึ่งครั้ง — แถว raw + หลักฐานพิกัด (มือถือ) + เครื่องสแกน (นิ้ว)
+   * + จุดเช็คอินที่จับคู่ได้ ใช้ left join ทั้งหมดเพราะแต่ละช่องทางมีข้อมูลคนละชุด
+   */
+  async findTimeEventOrigin(
+    tx: Tx,
+    eventId: string,
+  ): Promise<
+    | {
+        event: typeof schema.rawTimeEvents.$inferSelect;
+        evidence: typeof schema.timeEventEvidence.$inferSelect | null;
+        device: { name: string; deviceCode: string; siteId: string | null } | null;
+        risk: { decision: string; riskFlags: string[] } | null;
+      }
+    | undefined
+  > {
+    const eventRows = await tx
+      .select()
+      .from(schema.rawTimeEvents)
+      .where(eq(schema.rawTimeEvents.id, eventId))
+      .limit(1);
+    const event = eventRows[0];
+    if (event === undefined) return undefined;
+
+    const evidenceRows = await tx
+      .select()
+      .from(schema.timeEventEvidence)
+      .where(eq(schema.timeEventEvidence.rawTimeEventId, eventId))
+      .limit(1);
+    // เครื่องสแกนนิ้วใส่ device id ไว้ที่ source_id (ingestion.service) — มือถือใส่ registration id
+    const deviceRows =
+      event.sourceType === 'FINGERPRINT_DEVICE' && event.sourceId !== null
+        ? await tx
+            .select({
+              name: schema.devices.name,
+              deviceCode: schema.devices.deviceCode,
+              siteId: schema.devices.siteId,
+            })
+            .from(schema.devices)
+            .where(eq(schema.devices.id, event.sourceId))
+            .limit(1)
+        : [];
+    const riskRows = await tx
+      .select({
+        decision: schema.mobileRiskAssessments.decision,
+        riskFlags: schema.mobileRiskAssessments.riskFlags,
+      })
+      .from(schema.mobileRiskAssessments)
+      .where(eq(schema.mobileRiskAssessments.rawTimeEventId, eventId))
+      .limit(1);
+
+    return {
+      event,
+      evidence: evidenceRows[0] ?? null,
+      device: deviceRows[0] ?? null,
+      risk: riskRows[0] ?? null,
+    };
+  }
+
+  async findSiteById(
+    tx: Tx,
+    id: string,
+  ): Promise<typeof schema.sites.$inferSelect | undefined> {
+    const rows = await tx.select().from(schema.sites).where(eq(schema.sites.id, id)).limit(1);
+    return rows[0];
+  }
+
   async insertRiskAssessment(
     tx: Tx,
     values: typeof schema.mobileRiskAssessments.$inferInsert,

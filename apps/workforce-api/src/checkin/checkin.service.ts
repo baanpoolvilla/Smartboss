@@ -544,6 +544,68 @@ export class CheckinService {
     });
   }
 
+  /**
+   * ลงเวลาครั้งนี้มาจากไหน — พิกัด/จุดเช็คอิน (มือถือ) หรือเครื่องสแกนเครื่องไหน (นิ้ว)
+   *
+   * กระดานกับ Timeline ที่ทุกคนเห็นตั้งใจไม่ส่งหลักฐานออกไป ข้อมูลชุดนี้จึงแยกเป็น
+   * endpoint ของคนที่มีสิทธิ์ evidence.read และบันทึก audit ทุกครั้งแบบเดียวกับการดูรูป
+   * — พิกัดที่พนักงานยืนอยู่ตอนลงเวลาเป็นข้อมูลส่วนบุคคลพอ ๆ กับรูป
+   */
+  async getTimeEventOrigin(eventId: string): Promise<Record<string, unknown>> {
+    return this.uow.run(async (uow) => {
+      const found = await this.repository.findTimeEventOrigin(uow.tx, eventId);
+      if (found === undefined) throw AppError.notFound('time event');
+      const { event, evidence, device, risk } = found;
+
+      // มือถือ: จุดที่ตัวตัดสินจับคู่ได้ · เครื่องสแกน: สถานที่ที่เครื่องผูกไว้
+      const siteId = evidence?.siteId ?? device?.siteId ?? null;
+      const site = siteId === null ? undefined : await this.repository.findSiteById(uow.tx, siteId);
+
+      await uow.audit({
+        action: 'attendance.evidence.read',
+        resourceType: 'raw_time_event',
+        resourceId: eventId,
+        outcome: 'SUCCESS',
+      });
+
+      const num = (v: string | null | undefined): number | null =>
+        v === null || v === undefined ? null : Number(v);
+
+      return {
+        id: event.id,
+        source_type: event.sourceType,
+        event_intent: event.eventIntent,
+        captured_at: event.capturedAt.toISOString(),
+        received_at: event.receivedAt.toISOString(),
+        location:
+          evidence === null || evidence.latitude === null || evidence.longitude === null
+            ? null
+            : {
+                latitude: Number(evidence.latitude),
+                longitude: Number(evidence.longitude),
+                accuracy_m: num(evidence.accuracyM),
+              },
+        distance_from_site_m: num(evidence?.distanceFromSiteM),
+        site:
+          site === undefined
+            ? null
+            : {
+                id: site.id,
+                name: site.name,
+                latitude: num(site.latitude),
+                longitude: num(site.longitude),
+                radius_m: site.radiusM,
+              },
+        device: device === null ? null : { name: device.name, device_code: device.deviceCode },
+        platform: evidence?.platform ?? null,
+        app_version: evidence?.appVersion ?? null,
+        photo_evidence_id: evidence?.photoEvidenceId ?? null,
+        decision: risk?.decision ?? null,
+        risk_flags: risk?.riskFlags ?? [],
+      };
+    });
+  }
+
   async listRiskAssessments(query: {
     cursor: string | null;
     limit: number;
