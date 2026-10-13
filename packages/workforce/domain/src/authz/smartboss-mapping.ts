@@ -22,6 +22,15 @@ export const SMARTBOSS_PERMISSION = {
   settingManage: 'hr.setting.manage',
 } as const;
 
+/** ตรงกับ SUPER_ADMIN_DENIED_PERMISSIONS ใน packages/auth/permissions.ts (แพ็กเกจนี้ import ข้ามไปไม่ได้) */
+const SUPER_ADMIN_DENIED: ReadonlySet<string> = new Set([
+  SMARTBOSS_PERMISSION.salaryView,
+  SMARTBOSS_PERMISSION.salaryManage,
+  SMARTBOSS_PERMISSION.payrollView,
+  SMARTBOSS_PERMISSION.payrollManage,
+  SMARTBOSS_PERMISSION.payrollApprove,
+]);
+
 export interface RoleMappingInput {
   /** role code ของ Smartboss เช่น SUPER_ADMIN, HR_OFFICER */
   roles: readonly string[];
@@ -41,7 +50,16 @@ export function mapSmartbossRoles(input: RoleMappingInput): SystemRole[] {
   const roleCodes = new Set(input.roles.map((code) => code.toUpperCase()));
   const granted = new Set<SystemRole>();
 
-  const has = (permission: string): boolean => perms.has(permission);
+  /*
+   * SUPER_ADMIN ของ Smartboss ผ่านทุกสิทธิ์โดยปริยาย ยกเว้นเงินเดือน/งวดเงินเดือน
+   * (resolvePermission + SUPER_ADMIN_DENIED_PERMISSIONS ใน packages/auth/permissions.ts)
+   * ฝั่งนี้ต้องตัดสินตรงกัน — เดิมเช็คแค่ permission ที่ถือจริง SUPER_ADMIN จึงได้แค่
+   * TENANT_ADMIN: เว็บโชว์ปุ่ม (เพราะผ่านโดยปริยาย) แต่กดแล้ว workforce ตอบ 403
+   * เจอจริง 2026-10-13: กดดู "สแกนจากไหน" แล้วขึ้น "ไม่มีสิทธิ์ดูหลักฐาน"
+   */
+  const superAdmin = roleCodes.has('SUPER_ADMIN');
+  const has = (permission: string): boolean =>
+    perms.has(permission) || (superAdmin && !SUPER_ADMIN_DENIED.has(permission));
 
   // ผู้ดูแลระบบ/ผู้ดูแลบริษัท → ผู้ดูแลองค์กรของ workforce
   if (roleCodes.has('SUPER_ADMIN') || roleCodes.has('ADMIN')) {

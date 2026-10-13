@@ -49,6 +49,21 @@ describe('mapSmartbossRoles', () => {
     expect(mapSmartbossRoles({ roles: ['ADMIN'], permissions: [] })).toContain('TENANT_ADMIN');
   });
 
+  it('SUPER_ADMIN ได้สิทธิ์บุคคลโดยปริยายเหมือนฝั่งเว็บ แต่ไม่ได้เงินเดือน', () => {
+    // เว็บให้ SUPER_ADMIN ผ่านทุกสิทธิ์ยกเว้นเงินเดือน — ถ้าฝั่งนี้ไม่ตรง ปุ่มโชว์แต่กดแล้ว 403
+    const result = mapSmartbossRoles({ roles: ['SUPER_ADMIN'], permissions: [] });
+    expect(result).toEqual(expect.arrayContaining(['HR_OFFICER', 'DEVICE_TECHNICIAN', 'TENANT_ADMIN']));
+    expect(result).not.toContain('PAYROLL_PREPARER');
+    expect(result).not.toContain('PAYROLL_APPROVER');
+    expect(result).not.toContain('COMPENSATION_MANAGER');
+  });
+
+  it('ADMIN ธรรมดาไม่ได้สิทธิ์โดยปริยาย — ต้องถือ permission จริง', () => {
+    const result = mapSmartbossRoles({ roles: ['ADMIN'], permissions: [] });
+    expect(result).toContain('TENANT_ADMIN');
+    expect(result).not.toContain('HR_OFFICER');
+  });
+
   it('MANAGER → หัวหน้างาน, สิทธิ์จัดการพนักงาน → เจ้าหน้าที่บุคคล', () => {
     const result = mapSmartbossRoles({
       roles: ['MANAGER'],
