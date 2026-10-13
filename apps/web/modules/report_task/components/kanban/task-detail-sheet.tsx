@@ -836,7 +836,7 @@ export function TaskDetailSheet({
           {/* A group task's completion is derived from each person's own
               checklist section below — no separate manual toggle here
               anymore, the checklist itself is the completion surface. */}
-          {isShared && iAmAssignee && (
+          {isShared && iAmAssignee && task.status !== "done" && (
             <div className="rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-3">
               <p className="text-xs font-medium text-[var(--ink-soft)]">
                 {completedCount}/{task.assigneeIds.length} คนเสร็จแล้ว — ติ๊กเช็คลิสต์ของคุณให้ครบด้านล่างเพื่อปิดส่วนของคุณ
