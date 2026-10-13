@@ -479,6 +479,9 @@ export const useTaskStore = create<TaskStore>((set) => ({
           // it back to unstarted so what's on screen matches where the task
           // actually landed.
           ...(status !== "done" && t.status === "done" ? { checklist: clearedChecklist(t.checklist), completedAssigneeIds: [] } : {}),
+          // ไม่มีเช็คลิสต์ = ปิดทั้งงานจาก dropdown/ลากการ์ด — บันทึกว่าทุกคนเสร็จด้วย
+          // ไม่งั้นสถานะ "เสร็จสิ้น" แต่รายชื่อผู้รับผิดชอบขึ้น "ยังไม่เสร็จ 0/N"
+          ...(status === "done" && t.checklist.length === 0 ? { completedAssigneeIds: t.assigneeIds } : {}),
           updatedAt: new Date().toISOString(),
         };
       }),

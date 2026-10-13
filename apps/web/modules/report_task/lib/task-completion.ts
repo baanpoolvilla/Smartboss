@@ -57,6 +57,21 @@ export function isTaskFullyDone(
   return isDoneByRule(assigneeIds, deriveCompletedAssigneeIds(assigneeIds, checklist, manuallyDone), rule);
 }
 
+/**
+ * ใครทำส่วนของตัวเองเสร็จแล้ว — สำหรับแสดงผล งานที่ไม่มีเช็คลิสต์ถูกปิดจาก dropdown/ลากการ์ด
+ * ได้ตรง ๆ (isTaskFullyDone) ซึ่งข้อมูลเก่าไม่ได้บันทึก completedAssigneeIds ไว้ ⇒ สถานะ "เสร็จสิ้น"
+ * แต่ทุกคนขึ้น "ยังไม่เสร็จ 0/2" (เจอจริง: T-2569-0108) — งานที่ปิดแล้วแบบนั้นถือว่าเสร็จทุกคน
+ */
+export function completedAssigneeIdsOf(task: {
+  status: string;
+  assigneeIds: string[];
+  checklist: ChecklistItem[];
+  completedAssigneeIds?: string[];
+}): string[] {
+  if (task.status === "done" && task.checklist.length === 0) return task.assigneeIds;
+  return task.completedAssigneeIds ?? [];
+}
+
 /** How many checklist items are still unchecked across every assignee — for
  * the "ยังติ๊กไม่ครบ N ข้อ" toast when a status-change shortcut is blocked. */
 export function remainingChecklistCount(checklist: ChecklistItem[]): number {

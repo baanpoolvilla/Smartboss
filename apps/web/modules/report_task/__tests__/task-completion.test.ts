@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { deriveCompletedAssigneeIds, isDoneByRule, isTaskFullyDone } from "../lib/task-completion";
+import { completedAssigneeIdsOf, deriveCompletedAssigneeIds, isDoneByRule, isTaskFullyDone } from "../lib/task-completion";
 import type { ChecklistItem } from "../types";
 
 const item = (ownerId: string, done: boolean): ChecklistItem => ({ id: `${ownerId}-${done}-${Math.random()}`, text: "x", done, ownerId }) as ChecklistItem;
@@ -40,4 +40,10 @@ test("isTaskFullyDone ตามกติกา any: มีคนเดียว�
   assert.equal(isTaskFullyDone(["u1", "u2"], checklist, "all"), false);
   assert.equal(isTaskFullyDone(["u1", "u2"], checklist), false);
   assert.equal(isTaskFullyDone(["u1", "u2"], [item("u1", false), item("u2", false)], "any"), false);
+});
+
+test("งานที่ไม่มีเช็คลิสต์ถูกปิดแล้ว = ทุกคนแสดงว่าเสร็จ (T-2569-0108 สถานะเสร็จสิ้นแต่ขึ้น 0/2)", () => {
+  assert.deepEqual(completedAssigneeIdsOf({ status: "done", assigneeIds: ["u1", "u2"], checklist: [] }), ["u1", "u2"]);
+  assert.deepEqual(completedAssigneeIdsOf({ status: "in_progress", assigneeIds: ["u1", "u2"], checklist: [], completedAssigneeIds: ["u1"] }), ["u1"]);
+  assert.deepEqual(completedAssigneeIdsOf({ status: "done", assigneeIds: ["u1", "u2"], checklist: [item("u1", true)], completedAssigneeIds: ["u1"] }), ["u1"]);
 });

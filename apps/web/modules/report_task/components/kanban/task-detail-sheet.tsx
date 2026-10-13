@@ -50,7 +50,7 @@ import { useNotificationStore } from "@/modules/report_task/store/notification-s
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
 import { getUser, displayName, getDepartment, users, isOwner, canManage, departmentIdsOf } from "@/modules/report_task/lib/directory";
 import { statusMeta, priorityMeta, taskStatusOrder, taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
-import { isTaskFullyDone, remainingChecklistCount } from "@/modules/report_task/lib/task-completion";
+import { completedAssigneeIdsOf, isTaskFullyDone, remainingChecklistCount } from "@/modules/report_task/lib/task-completion";
 import { formatDate, formatDateTime } from "@/modules/report_task/lib/format";
 import { AssigneeHistory } from "./assignee-history";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -473,7 +473,7 @@ export function TaskDetailSheet({
   // ["ทำให้มันยืดหยุ่นก็ได้"] แต่ภายหลังขอให้จำกัดสิทธิ์กลับ)
   const canWatch = canManage(viewingAsUserId);
   const isWatching = (task.watcherIds ?? []).includes(viewingAsUserId);
-  const completedCount = task.completedAssigneeIds?.length ?? 0;
+  const completedCount = completedAssigneeIdsOf(task).length;
   const assignedBy = getUser(task.assignedById);
   // "T-2569-0001 · เดี่ยว/กลุ่ม · <หัวข้อโปรเจค ถ้ามี>" instead of the raw uuid id —
   // code briefly missing right after creation (before task-sync.tsx's merge
@@ -1074,7 +1074,7 @@ export function TaskDetailSheet({
                 return (
                   <>
                     {visible.map((a) => {
-                      const done = isShared && (task.completedAssigneeIds ?? []).includes(a!.id);
+                      const done = isShared && completedAssigneeIdsOf(task).includes(a!.id);
                       const isMe = a!.id === viewingAsUserId;
                       return (
                         <span
@@ -1846,7 +1846,7 @@ export function TaskDetailSheet({
                           // No items of their own — they mark their part done
                           // by hand instead, otherwise a group task where only
                           // some people got items could never close.
-                          const manualDone = (task.completedAssigneeIds ?? []).includes(ownerId);
+                          const manualDone = completedAssigneeIdsOf(task).includes(ownerId);
                           const canToggleMine = ownerId === viewingAsUserId;
                           return (
                             <div className="flex items-center gap-2 rounded-md px-1 py-0.5">

@@ -11,7 +11,7 @@ import { getUser, getDepartment, isOwner } from "@/modules/report_task/lib/direc
 import { priorityMeta, statusMeta } from "@/modules/report_task/lib/task-meta";
 import { chartColors } from "@/modules/report_task/lib/chart-colors";
 import { isSuspiciousRevision, reactionCounts } from "@/modules/report_task/lib/task-flags";
-import { isTaskFullyDone, remainingChecklistCount } from "@/modules/report_task/lib/task-completion";
+import { completedAssigneeIdsOf, isTaskFullyDone, remainingChecklistCount } from "@/modules/report_task/lib/task-completion";
 import { toast } from "sonner";
 import { daysUntil } from "@/modules/report_task/lib/format";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -81,7 +81,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
   // then means "is MY part done" for whoever's viewing, not "is the whole
   // task done".
   const isShared = task.taskMode === "group";
-  const completedCount = task.completedAssigneeIds?.length ?? 0;
+  const completedCount = completedAssigneeIdsOf(task).length;
   const iAmAssignee = task.assigneeIds.includes(viewingAsUserId);
   // งานกลุ่มที่ไม่มีเช็คลิสต์เลยไม่มี "ส่วนของฉัน" ให้ติ๊ก — ปุ่มวงกลมปิด/เปิดทั้งงานเหมือนงานเดี่ยว
   const trackPerPerson = isShared && task.checklist.length > 0;
@@ -98,7 +98,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
   const pendingOverdueAssignees =
     showOriginalStatus && isShared
       ? task.assigneeIds
-          .filter((id) => !(task.completedAssigneeIds ?? []).includes(id))
+          .filter((id) => !completedAssigneeIdsOf(task).includes(id))
           .filter((id) => daysUntil(task.assigneeDueDates?.[id] ?? task.dueDate) < 0)
           .map(getUser)
           .filter(Boolean)
@@ -514,7 +514,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
                     .map((a) => {
                       const tags = [
                         task.mainAssigneeId === a!.id && "หัวหน้า",
-                        isShared && (task.completedAssigneeIds ?? []).includes(a!.id) && "เสร็จแล้ว",
+                        isShared && completedAssigneeIdsOf(task).includes(a!.id) && "เสร็จแล้ว",
                       ].filter(Boolean);
                       return tags.length > 0 ? `${a!.name} (${tags.join(", ")})` : a!.name;
                     })
@@ -526,7 +526,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
               // For a shared task, anyone glancing at the board — including
               // someone who isn't an assignee, like the CEO — should be able
               // to tell who's done and who isn't without opening the card.
-              const done = isShared && (task.completedAssigneeIds ?? []).includes(a!.id);
+              const done = isShared && completedAssigneeIdsOf(task).includes(a!.id);
               return (
                 <div key={a!.id} className="relative">
                   <Avatar className="h-6 w-6 ring-2 ring-white">
