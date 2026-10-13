@@ -46,6 +46,17 @@ export function mentionSymbolFor(type: MentionType): "@" | "#" {
   return type === "topic" ? "#" : "@";
 }
 
+/** Horizontal placement for the fixed-position @/# dropdown. It opens at the
+ * caret, but a caret near the right edge of a phone screen would push the
+ * 16rem menu off-screen — so shrink it to the viewport and slide it left. */
+export function mentionMenuHorizontal(caretLeft: number): { left: number; width: number } {
+  const gutter = 8;
+  const vw = window.innerWidth;
+  const width = Math.min(256, vw - gutter * 2);
+  const left = Math.max(gutter, Math.min(caretLeft, vw - width - gutter));
+  return { left, width };
+}
+
 /** Wrap/insert markers written by the composer's formatting buttons. */
 export const richTextMarkers = {
   bold: "**",

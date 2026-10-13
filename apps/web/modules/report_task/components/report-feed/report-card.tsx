@@ -59,6 +59,7 @@ import {
   renderSectionBullets,
   EVERYONE_MENTION_ID,
   type MentionType,
+  mentionMenuHorizontal,
 } from "@/modules/report_task/lib/report-feed-rich-text";
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
 import { dropZoneProps, hasClipboardText } from "@/lib/annotate/annotate";
@@ -2065,13 +2066,13 @@ export function ReportCard({
                     <div
                       style={{
                         position: "fixed",
-                        left: replyMentionMenu.rect.left,
+                        ...mentionMenuHorizontal(replyMentionMenu.rect.left),
                         maxHeight,
                         ...(openAbove
                           ? { bottom: window.innerHeight - replyMentionMenu.rect.top + 4 }
                           : { top: replyMentionMenu.rect.bottom + 4 }),
                       }}
-                      className="z-50 w-64 rounded-lg border border-[var(--line)] bg-white shadow-lg py-1 overflow-y-auto"
+                      className="z-50 rounded-lg border border-[var(--line)] bg-white shadow-lg py-1 overflow-y-auto"
                     >
                       {matches.length === 0 ? (
                         <p className="px-3 py-2 text-xs text-[var(--ink-soft)]">ไม่พบที่ตรงกับ &quot;{replyMentionMenu.query}&quot;</p>

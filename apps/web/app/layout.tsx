@@ -26,7 +26,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="th">
-      <body>{children}</body>
+      {/* spellcheck สืบทอดลงทุกช่องพิมพ์ — ปิดที่ body ที่เดียว ไม่มีเส้นแดงใต้คำไทย/ชื่อคนอีก */}
+      <body spellCheck={false}>{children}</body>
     </html>
   );
 }

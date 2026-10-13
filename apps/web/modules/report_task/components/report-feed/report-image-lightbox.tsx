@@ -11,6 +11,7 @@ import { formatDateTimeFull, formatDateTimeShort } from "@/modules/report_task/l
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Download, Link2, Loader2, Minus, MoreHorizontal, Pencil, Plus, X } from "lucide-react";
 import { downloadFile, fileForEditing, openAnnotator } from "@/lib/annotate/annotate";
+import { saveToPhotosOnClick } from "@/lib/save-to-photos";
 import { useBackToClose } from "@/lib/back-to-close";
 import { useBlackSystemBars } from "@/lib/black-system-bars";
 import { slideStyle, useSwipePager } from "@/lib/swipe-pager";
@@ -387,6 +388,7 @@ export function ReportImageLightbox({
             <a
               href={downloadHref}
               download={image.url ? undefined : image.name}
+              onClick={saveToPhotosOnClick(image)}
               className="h-10 w-10 rounded-full bg-black/65 ring-1 ring-white/25 hover:bg-black/75 backdrop-blur-sm text-white flex items-center justify-center cursor-pointer"
               aria-label="ดาวน์โหลด"
             >
@@ -435,7 +437,10 @@ export function ReportImageLightbox({
                     href={downloadHref}
                     download={image.url ? undefined : image.name}
                     className="flex w-full items-center gap-3 px-4 py-3 text-left text-[15px] active:bg-white/10 disabled:opacity-50"
-                    onClick={() => setMoreOpen(false)}
+                    onClick={(e) => {
+                      setMoreOpen(false);
+                      saveToPhotosOnClick(image)(e);
+                    }}
                   >
                     <Download className="h-5 w-5 shrink-0" /> ดาวน์โหลด
                   </a>

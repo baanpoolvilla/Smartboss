@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { BookImage, ChevronLeft, ChevronRight, Download, Loader2, Minus, MoreHorizontal, Pencil, Play, Plus, X } from "lucide-react";
 import { toast } from "sonner";
+import { saveToPhotosOnClick } from "@/lib/save-to-photos";
 import { fileForEditing, openAnnotator } from "@/lib/annotate/annotate";
 import type { ChatAttachment } from "../types";
 import { daysUntilExpiry } from "../lib/retention";
@@ -179,7 +180,7 @@ export function Lightbox({
               <BookImage className="h-5 w-5" />
             </button>
           )}
-          <a href={downloadUrl(item)} className="flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-2xl bg-black/65 px-2.5 text-sm text-white ring-1 ring-white/25 backdrop-blur-sm hover:bg-black/75 disabled:opacity-50" aria-label="ดาวน์โหลด" title="ดาวน์โหลด">
+          <a href={downloadUrl(item)} onClick={saveToPhotosOnClick(item)} className="flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-2xl bg-black/65 px-2.5 text-sm text-white ring-1 ring-white/25 backdrop-blur-sm hover:bg-black/75 disabled:opacity-50" aria-label="ดาวน์โหลด" title="ดาวน์โหลด">
             <Download className="h-5 w-5" />
           </a>
         </div>
@@ -208,7 +209,10 @@ export function Lightbox({
                   <BookImage className="h-5 w-5 shrink-0" /> บันทึกลงอัลบั้ม
                 </button>
               )}
-              <a role="menuitem" href={downloadUrl(item)} className="flex w-full items-center gap-3 px-4 py-3 text-left text-[15px] active:bg-white/10 disabled:opacity-50" onClick={() => setMoreOpen(false)}>
+              <a role="menuitem" href={downloadUrl(item)} className="flex w-full items-center gap-3 px-4 py-3 text-left text-[15px] active:bg-white/10 disabled:opacity-50" onClick={(e) => {
+                  setMoreOpen(false);
+                  saveToPhotosOnClick(item)(e);
+                }}>
                 <Download className="h-5 w-5 shrink-0" /> ดาวน์โหลด
               </a>
             </div>
