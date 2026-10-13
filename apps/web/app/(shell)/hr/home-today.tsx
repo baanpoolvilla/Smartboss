@@ -20,7 +20,7 @@ import {
   inputClass,
 } from "@/modules/hr/components/ui";
 import { autoRecalculateAttendance } from "@/modules/hr/lib/auto-recalculate";
-import { getEvidencePhotoUrlAction, getTimeEventOriginAction } from "./actions";
+import { getTimeEventOriginAction } from "./actions";
 import { formatDate } from "@/modules/hr/lib/labels";
 
 /** ช่วงที่สั่งคำนวณย้อนหลัง — คงที่ทุกครั้ง ไม่ผูกกับวันที่กำลังดูอยู่ */
@@ -340,7 +340,6 @@ export async function renderTodayTab(
             timelineEvents={timeline?.items ?? []}
             // เฉพาะคนที่จัดการพนักงานได้ — พิกัดตอนลงเวลาเป็นข้อมูลส่วนบุคคล (workforce ตรวจสิทธิ์ซ้ำเอง)
             loadOrigin={canExport ? getTimeEventOriginAction : undefined}
-            loadPhotoUrl={canExport ? getEvidencePhotoUrlAction : undefined}
           />
         ) : (
           <p className="p-10 text-center text-sm text-(--ink-soft)">ยังไม่มีพนักงานในระบบ</p>

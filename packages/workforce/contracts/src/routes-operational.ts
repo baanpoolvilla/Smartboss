@@ -303,7 +303,8 @@ export const OPERATIONAL_ROUTES: readonly Omit<RouteDefinition, 'response'>[] = 
     path: '/time-events/{eventId}/origin',
     summary: 'GET /time-events/{eventId}/origin',
     tag: 'checkin',
-    permissions: ['workforce.attendance.evidence.read'] as Permission[],
+    // ไม่ใช่ evidence.read เพราะตัวนั้นบังคับ MFA ที่ Smartboss ไม่มี (ดู checkin.controller)
+    permissions: ['workforce.attendance.read.all'] as Permission[],
   },
   {
     operationId: 'listRiskAssessments_get',

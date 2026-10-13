@@ -19,7 +19,6 @@ const OriginMap = dynamic(() => import("./origin-map").then((m) => m.OriginMap),
 });
 
 export type LoadOrigin = (eventId: string) => Promise<{ origin?: TimeEventOrigin; error?: string }>;
-export type LoadPhotoUrl = (evidenceId: string) => Promise<{ url?: string; error?: string }>;
 
 function metersLabel(m: number): string {
   return m >= 1000 ? `${(m / 1000).toFixed(1)} กม.` : `${Math.round(m)} ม.`;
@@ -36,13 +35,11 @@ export function TimeEventOriginDialog({
   name,
   events,
   loadOrigin,
-  loadPhotoUrl,
   onClose,
 }: {
   name: string;
   events: TimeEvent[];
   loadOrigin: LoadOrigin;
-  loadPhotoUrl: LoadPhotoUrl;
   onClose: () => void;
 }) {
   const sorted = useMemo(
@@ -105,7 +102,7 @@ export function TimeEventOriginDialog({
               {current.error ?? "ไม่พบข้อมูล"}
             </p>
           ) : (
-            <OriginDetail origin={current.origin} loadPhotoUrl={loadPhotoUrl} />
+            <OriginDetail origin={current.origin} />
           )}
         </div>
       )}
@@ -113,10 +110,11 @@ export function TimeEventOriginDialog({
   );
 }
 
-function OriginDetail({ origin, loadPhotoUrl }: { origin: TimeEventOrigin; loadPhotoUrl: LoadPhotoUrl }) {
-  const [photoError, setPhotoError] = useState<string | null>(null);
-  const [photoBusy, setPhotoBusy] = useState(false);
-
+/*
+ * ไม่มีปุ่มดูรูปถ่าย — รูปต้องผ่าน evidence.read ที่บังคับ MFA ซึ่ง Smartboss ยังไม่มี
+ * (เจ้าของงานตัดสิน 2026-10-13 เปิดเฉพาะพิกัด/เครื่อง) ทำ MFA เมื่อไหร่ค่อยเพิ่มกลับ
+ */
+function OriginDetail({ origin }: { origin: TimeEventOrigin }) {
   // อ้างอิงคงที่ต่อ origin หนึ่งตัว — OriginMap วาดแผนที่ใหม่ทุกครั้งที่ prop เปลี่ยนอ้างอิง
   const scan = useMemo(
     () =>
@@ -141,23 +139,6 @@ function OriginDetail({ origin, loadPhotoUrl }: { origin: TimeEventOrigin; loadP
           },
     [origin],
   );
-
-  async function openPhoto() {
-    if (!origin.photo_evidence_id) return;
-    // เปิดแท็บก่อน await — เบราว์เซอร์บล็อก window.open ที่ไม่ได้เกิดตรงจากการกด
-    const tab = window.open("", "_blank");
-    setPhotoBusy(true);
-    setPhotoError(null);
-    const res = await loadPhotoUrl(origin.photo_evidence_id).catch(() => ({ error: "เปิดรูปไม่สำเร็จ" }));
-    setPhotoBusy(false);
-    if ("url" in res && res.url) {
-      if (tab) tab.location.href = res.url;
-      else window.location.href = res.url;
-    } else {
-      tab?.close();
-      setPhotoError(res.error ?? "เปิดรูปไม่สำเร็จ");
-    }
-  }
 
   const rows: { label: string; value: React.ReactNode }[] = [
     {
@@ -246,20 +227,6 @@ function OriginDetail({ origin, loadPhotoUrl }: { origin: TimeEventOrigin; loadP
               {checkinFlagLabel(f)}
             </span>
           ))}
-        </div>
-      )}
-
-      {origin.photo_evidence_id && (
-        <div>
-          <button
-            type="button"
-            onClick={openPhoto}
-            disabled={photoBusy}
-            className="text-xs font-medium text-(--app-strong,var(--ink)) hover:underline disabled:opacity-50"
-          >
-            {photoBusy ? "กำลังเปิด…" : "ดูรูปที่ถ่ายตอนลงเวลา ↗"}
-          </button>
-          {photoError && <p className="mt-1 text-xs text-(--tone-danger)">{photoError}</p>}
         </div>
       )}
     </div>

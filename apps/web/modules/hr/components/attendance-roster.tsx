@@ -6,7 +6,7 @@ import { Avatar } from "@smartboss/ui/components/avatar";
 import { Icon } from "@/components/icon";
 import { FilterChips, type FilterChipOption } from "./design-kit-client";
 import { AttendanceTimeline } from "./attendance-timeline";
-import { TimeEventOriginDialog, type LoadOrigin, type LoadPhotoUrl } from "./time-event-origin-dialog";
+import { TimeEventOriginDialog, type LoadOrigin } from "./time-event-origin-dialog";
 import { eventSourceIcon, eventSourceLabel, formatTime } from "../lib/labels";
 import type { TimeEvent } from "../lib/api";
 
@@ -52,13 +52,11 @@ export function AttendanceRoster({
   rows,
   timelineEvents,
   loadOrigin,
-  loadPhotoUrl,
 }: {
   rows: RosterRow[];
   timelineEvents: TimeEvent[];
   /** server action ส่งมาจากหน้า — ไม่ส่ง = ไอคอนช่องทางเป็นแค่ไอคอน กดไม่ได้ */
   loadOrigin?: LoadOrigin;
-  loadPhotoUrl?: LoadPhotoUrl;
 }) {
   const [active, setActive] = useState<Set<string>>(new Set());
   const [showTimeline, setShowTimeline] = useState(false);
@@ -167,7 +165,7 @@ export function AttendanceRoster({
                 </div>
 
                 {row.sourceType &&
-                  (loadOrigin && loadPhotoUrl ? (
+                  (loadOrigin ? (
                     // กดดูว่าสแกนจากไหน — พิกัด/จุดเช็คอิน (มือถือ) หรือเครื่องสแกนเครื่องไหน
                     <button
                       type="button"
@@ -209,12 +207,11 @@ export function AttendanceRoster({
         )}
       </div>
 
-      {originFor && loadOrigin && loadPhotoUrl && (
+      {originFor && loadOrigin && (
         <TimeEventOriginDialog
           name={originFor.name}
           events={timelineEvents.filter((ev) => ev.employment_id === originFor.employmentId)}
           loadOrigin={loadOrigin}
-          loadPhotoUrl={loadPhotoUrl}
           onClose={() => setOriginFor(null)}
         />
       )}

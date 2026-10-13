@@ -150,9 +150,15 @@ export class CheckinController {
     return this.service.createEvidenceDownloadUrl(requireUuid(evidenceId, 'evidenceId'));
   }
 
-  /** ที่มาของการลงเวลาหนึ่งครั้ง (พิกัด/จุดเช็คอิน/เครื่องสแกน) — audit ทุกครั้ง */
+  /**
+   * ที่มาของการลงเวลาหนึ่งครั้ง (พิกัด/จุดเช็คอิน/เครื่องสแกน) — audit ทุกครั้ง
+   *
+   * ใช้ attendance.read.all ไม่ใช่ evidence.read: evidence.read บังคับ MFA (step-up)
+   * แต่ Smartboss ไม่มี MFA ⇒ ไม่มีใครผ่านได้เลย เจ้าของงานตัดสิน 2026-10-13 ให้เปิด
+   * เฉพาะพิกัด/เครื่องให้คนที่ดูการลงเวลาทั้งบริษัทได้ · รูปถ่ายยังต้องผ่าน evidence.read + MFA
+   */
   @Get('time-events/:eventId/origin')
-  @RequirePermissions('workforce.attendance.evidence.read')
+  @RequirePermissions('workforce.attendance.read.all')
   async timeEventOrigin(@Param('eventId') eventId: string): Promise<Record<string, unknown>> {
     return this.service.getTimeEventOrigin(requireUuid(eventId, 'eventId'));
   }

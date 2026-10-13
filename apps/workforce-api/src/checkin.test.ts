@@ -717,7 +717,19 @@ describe('ที่มาของการลงเวลา (กดไอค�
     expect(audits.map((a) => a.action)).toContain('attendance.evidence.read');
   });
 
-  it('พนักงานทั่วไปดูไม่ได้ — พิกัดตอนลงเวลาเป็นหลักฐานเหมือนรูป', async () => {
+  it('ไม่ต้อง MFA — Smartboss ไม่มี MFA ถ้าบังคับจะไม่มีใครเปิดได้เลย', async () => {
+    // token ของเว็บจริงมีแค่รหัสผ่าน ไม่มี amr=mfa (harness ใส่ mfa ให้เป็นค่าตั้งต้น ต้องปิดเอง)
+    const employee = await createEmployee('ไม่มี MFA');
+    await assignPolicy(await createPolicyGroup(), employee.employmentId);
+    const result = await checkin(employee);
+    const plain = await harness.token('k|hr', tenant.tenantId, { amr: ['pwd'] });
+    const origin = await call(harness, 'GET', `/time-events/${result.body['event_id'] as string}/origin`, {
+      token: plain,
+    });
+    expect(origin.status).toBe(200);
+  });
+
+  it('พนักงานทั่วไปดูไม่ได้ — พิกัดตอนลงเวลาเป็นข้อมูลส่วนบุคคล', async () => {
     const employee = await createEmployee('ดูที่มาไม่ได้');
     await assignPolicy(await createPolicyGroup(), employee.employmentId);
     const result = await checkin(employee);
