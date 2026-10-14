@@ -15,7 +15,7 @@ import { useReportPenaltySettingsStore } from "@/modules/report_task/store/repor
 import { photoCount } from "@/modules/report_task/lib/report-attachment-kind";
 import { lateCutoffFor } from "@/modules/report_task/lib/report-cutoff";
 import { localDateStr, now, todayIso } from "@/modules/report_task/lib/now";
-import { isExemptDate, type DateExemptions } from "@/modules/report_task/lib/report-feed-exemptions";
+import { isExemptDate, isLegacyHolidayOnly, type DateExemptions } from "@/modules/report_task/lib/report-feed-exemptions";
 import type { ReportPost, ReportTopic, SubmissionRound } from "@/modules/report_task/store/report-feed-store";
 
 /**
@@ -154,7 +154,8 @@ export function dayComplianceStatus(
 ): ComplianceStatus {
   const lastCutoff = userRequiredCutoffMinutes(topic, userId, day);
   if (lastCutoff === null) return "exempt";
-  if (exemptions && isExemptDate(exemptions, userId, day)) return "exempt";
+  const legacyOnly = !!exemptions && isLegacyHolidayOnly(exemptions, userId, day);
+  if (exemptions && !legacyOnly && isExemptDate(exemptions, userId, day)) return "exempt";
   const dayPosts = postsForDay(topic, userId, day, posts);
   if (dayPosts.length > 0) {
     // lateBadgeHidden (owner-only override, see its own doc comment on
@@ -165,6 +166,7 @@ export function dayComplianceStatus(
     const onTime = dayPosts.some((p) => minutesOfDay(p.createdAt) <= lastCutoff || p.lateBadgeHidden);
     return onTime ? "on-time" : "late";
   }
+  if (legacyOnly) return "exempt";
   const todayStr = todayIso();
   if (day < todayStr) return "missed";
   // day === today: only "missed" once the day's last cutoff has actually passed.
@@ -179,7 +181,7 @@ function dayHasAttachmentIssue(
   posts: ReportPost[],
   exemptions?: DateExemptions
 ): boolean {
-  if (exemptions && isExemptDate(exemptions, userId, day)) return false;
+  if (exemptions && isExemptDate(exemptions, userId, day, { ignoreLegacyHolidays: true })) return false;
   const dayPosts = postsForDay(topic, userId, day, posts);
   if (dayPosts.length === 0) return false;
   return !dayPosts.some((p) => photoCount(p.images) >= minImagesFor(topic, p.createdAt));
@@ -219,10 +221,13 @@ export function roundComplianceStatus(
   exemptions?: DateExemptions
 ): ComplianceStatus {
   if (!roundRunsOnDay(round, day)) return "exempt";
-  if (exemptions && !roundIgnoresDateExemptions(round) && isExemptDate(exemptions, userId, day)) return "exempt";
+  // วันหยุดเก่าก่อนเปลี่ยนกติกา: ส่งมาแล้วตัดสินตามปกติ ไม่ส่งไม่นับว่าขาด (isLegacyHolidayOnly)
+  const legacyOnly = !!exemptions && !roundIgnoresDateExemptions(round) && isLegacyHolidayOnly(exemptions, userId, day);
+  if (exemptions && !legacyOnly && !roundIgnoresDateExemptions(round) && isExemptDate(exemptions, userId, day)) return "exempt";
   if (!resolveRoundSubmitters(round, topic.visibility, groupsNow()).includes(userId)) return "exempt";
   const cutoff = roundMinutes(round);
   const roundPosts = postsForRound(topic, userId, round, day, posts);
+  if (legacyOnly && roundPosts.length === 0) return "exempt";
   if (roundPosts.length > 0) {
     // Same lateBadgeHidden allowance as dayComplianceStatus above — this is
     // the function that actually feeds the dashboard's late tally
@@ -274,7 +279,7 @@ function roundHasAttachmentIssue(
   posts: ReportPost[],
   exemptions?: DateExemptions
 ): boolean {
-  if (exemptions && !roundIgnoresDateExemptions(round) && isExemptDate(exemptions, userId, day)) return false;
+  if (exemptions && !roundIgnoresDateExemptions(round) && isExemptDate(exemptions, userId, day, { ignoreLegacyHolidays: true })) return false;
   const roundPosts = postsForRound(topic, userId, round, day, posts);
   if (roundPosts.length === 0) return false;
   const required = round.minImages ?? 0;

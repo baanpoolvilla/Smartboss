@@ -9,7 +9,7 @@ import {
   attributionRounds,
 } from "@/modules/report_task/lib/submission-rounds";
 import { trackedTopicsOf, iterationBounds, eachDay, type ComplianceStatus } from "@/modules/report_task/lib/report-feed-compliance";
-import { isExemptDate, type DateExemptions } from "@/modules/report_task/lib/report-feed-exemptions";
+import { isExemptDate, isLegacyHolidayOnly, type DateExemptions } from "@/modules/report_task/lib/report-feed-exemptions";
 import { effectiveHardCutoffTime, isPastHardCutoff } from "@/modules/report_task/lib/report-cutoff";
 import { localDateStr, now, todayIso } from "@/modules/report_task/lib/now";
 import type { DirectoryUser } from "@/modules/report_task/lib/db/employee-directory";
@@ -194,7 +194,9 @@ export function roundComplianceStatusServer(
   weeklyMonthlyGraceDays: number
 ): ComplianceStatus {
   if (!roundRunsOnDay(round, day)) return "exempt";
-  if (!roundIgnoresDateExemptions(round) && isExemptDate(exemptions, userId, day)) return "exempt";
+  // วันหยุดเก่าก่อนเปลี่ยนกติกา (เช่น 13/10/2569): ส่งช้า = −1 ตามปกติ · ไม่ส่ง = ไม่หัก (isLegacyHolidayOnly)
+  const legacyOnly = !roundIgnoresDateExemptions(round) && isLegacyHolidayOnly(exemptions, userId, day);
+  if (!legacyOnly && !roundIgnoresDateExemptions(round) && isExemptDate(exemptions, userId, day)) return "exempt";
   if (!resolveRoundSubmittersServer(round, topic.visibility, groups, users).includes(userId)) return "exempt";
 
   const rounds = effectiveRoundsOf(topic);
@@ -204,6 +206,7 @@ export function roundComplianceStatusServer(
     (r) => roundRunsOnDay(r, day) && resolveRoundSubmittersServer(r, topic.visibility, groups, users).includes(userId)
   );
   const roundPosts = postsForRoundServer(topic, userId, round, day, posts, attributionRounds(myRounds, rounds));
+  if (legacyOnly && roundPosts.length === 0) return "exempt";
   if (roundPosts.length > 0) {
     const onTime = roundPosts.some((p) => minutesOfDay(p.createdAt) <= cutoff || p.lateBadgeHidden);
     return onTime ? "on-time" : "late";

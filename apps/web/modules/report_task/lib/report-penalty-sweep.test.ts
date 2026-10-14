@@ -128,6 +128,19 @@ describe("roundComplianceStatusServer", () => {
     expect(roundComplianceStatusServer(topicHardCutoffPassed, userId, morning, today, [], [], users, exemptions, noGlobalLock, 0)).toBe("exempt");
   });
 
+  // วันหยุดเก่าก่อนเปลี่ยนกติกา (เช่น 13/10/2569 ของบริษัทที่ใช้ Holiday สะสม — legacyHolidayDates)
+  const yesterday = "2026-02-01";
+  const legacyHoliday: DateExemptions = { personalDates: new Map(), companyDates: new Set(), legacyHolidayDates: new Set([yesterday]) };
+
+  it("legacy holiday: a late post still counts as late (−1)", () => {
+    const posts = [postAt(new Date(2026, 1, 1, 9, 28), undefined, userId)];
+    expect(roundComplianceStatusServer(topicHardCutoffPassed, userId, morning, yesterday, posts, [], users, legacyHoliday, noGlobalLock, 0)).toBe("late");
+  });
+
+  it("legacy holiday: no post at all is not counted as missed", () => {
+    expect(roundComplianceStatusServer(topicHardCutoffPassed, userId, morning, yesterday, [], [], users, legacyHoliday, noGlobalLock, 0)).toBe("exempt");
+  });
+
   it("someone not in the round's submitters → exempt", () => {
     expect(roundComplianceStatusServer(topicHardCutoffPassed, otherUserId, morning, today, [], [], users, noExemptions, noGlobalLock, 0)).toBe("exempt");
   });

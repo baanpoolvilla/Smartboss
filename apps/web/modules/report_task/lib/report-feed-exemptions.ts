@@ -103,6 +103,14 @@ export function buildDateExemptions(
   return { personalDates, companyDates, legacyHolidayDates };
 }
 
+/**
+ * ยกเว้นเพราะเป็นวันหยุดเก่าก่อนเปลี่ยนกติกาอย่างเดียว (legacyHolidayDates) — ไม่ใช่ลา/Day-Off/วันหยุดบริษัทจริง
+ * วันแบบนี้: ส่งมาแล้ว = ตัดสินตรงเวลา/สายตามปกติ (สายโดน −1) · ไม่ส่ง = ไม่นับว่าขาด (ตอนนั้นระบบบอกว่าไม่ต้องส่ง)
+ */
+export function isLegacyHolidayOnly(exemptions: DateExemptions, userId: string, date: string): boolean {
+  return isExemptDate(exemptions, userId, date) && !isExemptDate(exemptions, userId, date, { ignoreLegacyHolidays: true });
+}
+
 export function isExemptDate(
   exemptions: DateExemptions,
   userId: string,
