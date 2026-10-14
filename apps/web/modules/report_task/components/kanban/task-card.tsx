@@ -21,7 +21,8 @@ import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { unreadTaskAttachmentCounts, unreadTaskCommentCounts } from "@/modules/report_task/lib/task-comment-activity";
-import { MessageSquare, Paperclip, History, SmilePlus, SearchCheck, Check, Circle, Star, Clock, Eye } from "lucide-react";
+import { MessageSquare, Paperclip, History, SmilePlus, SearchCheck, Check, Circle, Star, Clock, Eye, Lock } from "lucide-react";
+import { isPersonalTask } from "@/modules/report_task/lib/personal-task";
 import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
 import { StickerConfirmDialog } from "@/modules/report_task/components/shared/sticker-confirm-dialog";
 import type { Sticker } from "@/modules/report_task/types";
@@ -426,6 +427,16 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
             </span>
           )}
           <DueDateBadge task={task} />
+          {/* งานส่วนตัว (เปิดให้ตัวเอง) — เห็นเฉพาะเจ้าของ ไม่มีผลกับคะแนน (personal-task.ts) */}
+          {isPersonalTask(task) && (
+            <span
+              className="inline-flex items-center gap-0.5 h-5 rounded-md px-1.5 text-[10px] font-semibold bg-[var(--accent)] text-[var(--brand-green-dark)] whitespace-nowrap"
+              title="งานส่วนตัว · เห็นเฉพาะคุณ ไม่มีผลกับคะแนน"
+            >
+              <Lock className="h-2.5 w-2.5" />
+              ส่วนตัว
+            </span>
+          )}
           {isWatching && (
             <span
               className="flex items-center justify-center h-5 w-5 rounded-full bg-[var(--brand-green-dark)]/12 text-[var(--brand-green-dark)] shrink-0"

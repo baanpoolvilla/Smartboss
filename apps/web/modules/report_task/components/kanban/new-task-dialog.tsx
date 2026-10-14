@@ -352,6 +352,9 @@ export function NewTaskDialog({
   // assigneeIds.length later). Individual locks the assignee picker to one
   // person; group allows multi-select.
   const [taskMode, setTaskMode] = useState<"individual" | "group">("individual");
+  // ติ๊ก "งานส่วนตัว" = ผู้รับผิดชอบคือตัวเองคนเดียว ซ่อนช่องเลือกคน (personal-task.ts)
+  // เลือกตัวเองคนเดียวจากช่องเลือกคนเองก็เป็นงานส่วนตัวเหมือนกัน — ขึ้นข้อความบอกใต้ช่องนั้น
+  const [personalMode, setPersonalMode] = useState(false);
   // งานกลุ่ม: ปิดงานเมื่อครบทุกคน (ค่าเดิม) หรือคนใดคนหนึ่งเสร็จก็พอ
   const [completionRule, setCompletionRule] = useState<"all" | "any">("all");
   // ตัวเลือกขั้นสูง (เช็คลิสต์ · เดี่ยว/กลุ่ม · หัวข้อโปรเจค · ไฟล์แนบ) — เริ่มพับไว้ทุกครั้ง ไม่จำโหมดล่าสุด
@@ -553,6 +556,7 @@ export function NewTaskDialog({
     setTitle("");
     setDescription("");
     setAssigneeIds([]);
+    setPersonalMode(false);
     setPriority("medium");
     setStartDate(initialDate);
     setDueDate(initialDate);
@@ -1094,6 +1098,28 @@ export function NewTaskDialog({
             <>
               {/* เช็คลิสต์ (ไม่บังคับ) — อยู่ใต้รายละเอียดเสมอ (แบบธรรมดา) ไม่ย้ายไปมาตามโหมด */}
               {renderChecklistRow()}
+              <Row icon={Lock}>
+                <label className="flex w-fit cursor-pointer flex-wrap items-center gap-x-2 gap-y-0.5 py-1.5 text-sm">
+                  <Checkbox
+                    checked={personalMode}
+                    onCheckedChange={(v) => {
+                      setPersonalMode(!!v);
+                      if (v) {
+                        changeTaskMode("individual");
+                        setAssigneeIds([viewingAsUserId]);
+                      } else {
+                        setAssigneeIds([]);
+                      }
+                    }}
+                    aria-label="งานส่วนตัว"
+                  />
+                  <span className="font-medium">งานส่วนตัว</span>
+                  <span className={cn("text-xs", personalMode ? "text-[var(--brand-green-dark)]" : "text-[var(--ink-soft)]")}>
+                    {personalMode ? "เห็นเฉพาะคุณ · ไม่มีผลกับคะแนน · ยังเตือนตามกำหนดส่ง" : "เปิดไว้เตือนตัวเอง — ไม่มีผลกับคะแนน"}
+                  </span>
+                </label>
+              </Row>
+              {!personalMode && (
               <Row icon={User}>
                 <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
                 <div className="shrink-0 space-y-1">
@@ -1183,12 +1209,13 @@ export function NewTaskDialog({
                   </p>
                   {isPersonalTask({ assignedById: viewingAsUserId, assigneeIds }) && (
                     <p className="text-[11px] text-[var(--brand-green-dark)] flex items-center gap-1">
-                      <Lock className="h-3 w-3" /> งานส่วนตัว · เห็นเฉพาะคุณ ไม่มีผลกับคะแนน
+                      <Lock className="h-3 w-3" /> เลือกตัวเองคนเดียว = งานส่วนตัว · เห็นเฉพาะคุณ ไม่มีผลกับคะแนน
                     </p>
                   )}
                 </div>
                 </div>
               </Row>
+              )}
 
               {/* งานกลุ่ม: บรรทัดเดียว (ปิดงานเมื่อ ...) — หัวหน้าหลัก/วันครบกำหนดรายคนอยู่ในตัวเลือกขั้นสูง */}
               {taskMode === "group" && (() => {
