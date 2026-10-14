@@ -29,7 +29,7 @@ import {
   ORG_ROLES,
   ROLE_GRANTS,
 } from "@smartboss/database/defaults";
-import { scorePeriodOf, shiftPeriodMonth } from "@/lib/score-period";
+import { editableScorePeriodMonths } from "@/lib/score-period";
 import { loadScorePeriodConfig, saveScorePeriodConfig } from "@/lib/score-period-config";
 
 /** ทุก action ต้องผ่านด่านนี้ก่อน — คืน session ที่มี orgId แน่นอน */
@@ -798,7 +798,7 @@ export async function savePerformanceSettingsAction(formData: FormData) {
 }
 
 /**
- * วันตัดรอบเกรด (lib/score-period.ts) — วันปกติของทุกเดือน + เปลี่ยนเฉพาะเดือน (รอบปัจจุบันและ 2 รอบถัดไป)
+ * วันตัดรอบเกรด (lib/score-period.ts) — วันปกติของทุกเดือน + เปลี่ยนเฉพาะเดือน (รอบปัจจุบันและ 11 รอบถัดไป)
  * รอบที่ผ่านไปแล้วแก้ไม่ได้ (เก็บค่าที่ตั้งไว้เดิม) — ไม่งั้นเกรดย้อนหลังที่ใช้คิดเงินไปแล้วจะเปลี่ยน
  */
 export async function saveScorePeriodAction(formData: FormData) {
@@ -810,8 +810,9 @@ export async function saveScorePeriodAction(formData: FormData) {
     throw new Error("วันตัดรอบปกติต้องเป็นวันที่ 1–31");
   }
   const previous = await loadScorePeriodConfig(orgId);
-  const current = scorePeriodOf(previous, new Date());
-  const editable = new Set([current, shiftPeriodMonth(current, 1), shiftPeriodMonth(current, 2)]);
+  const editableMonths = editableScorePeriodMonths(previous);
+  const current = editableMonths[0]!;
+  const editable = new Set(editableMonths);
   // รอบที่ผ่านไปแล้ว: เก็บค่าเดิมไว้ตามเดิม
   const overrides: Record<string, number> = Object.fromEntries(
     Object.entries(previous.overrides).filter(([month]) => month < current)

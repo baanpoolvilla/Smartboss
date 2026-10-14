@@ -85,6 +85,14 @@ export function scorePeriodOf(config: ScorePeriodConfig, at: Date): string {
   return Number(day.slice(8, 10)) > cutoffDayOf(config, month) ? shiftPeriodMonth(month, 1) : month;
 }
 
+/** รอบที่ตั้งวันตัดเฉพาะเดือนได้ — รอบปัจจุบัน + 11 รอบข้างหน้า (ตั้งล่วงหน้าได้ 1 ปี เช่น ธ.ค. ที่ต้องปิดเร็วเพราะปีใหม่) */
+export const SCORE_PERIOD_EDITABLE_AHEAD = 11;
+
+export function editableScorePeriodMonths(config: ScorePeriodConfig, now: Date = new Date()): string[] {
+  const current = scorePeriodOf(config, now);
+  return Array.from({ length: SCORE_PERIOD_EDITABLE_AHEAD + 1 }, (_, i) => shiftPeriodMonth(current, i));
+}
+
 /** "26 ก.ย. – 25 ต.ค. 2569" */
 export function scorePeriodLabel(config: ScorePeriodConfig, month: string): string {
   const { from, to } = scorePeriodRange(config, month);

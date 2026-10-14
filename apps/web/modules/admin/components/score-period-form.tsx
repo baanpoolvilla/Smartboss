@@ -1,17 +1,17 @@
 import { Button } from "@smartboss/ui/components/button";
 import { Field, SectionCard, inputClass } from "@/modules/admin/components/ui";
-import { cutoffDayOf, scorePeriodLabel, scorePeriodOf, shiftPeriodMonth, type ScorePeriodConfig } from "@/lib/score-period";
+import { cutoffDayOf, editableScorePeriodMonths, scorePeriodLabel, type ScorePeriodConfig } from "@/lib/score-period";
 import { monthDisplay } from "@/lib/performance-month";
 import { saveScorePeriodAction } from "@/app/(shell)/admin/actions";
 
 /**
  * ตั้งวันตัดรอบเกรด (lib/score-period.ts) — วันปกติของทุกเดือน และเปลี่ยนเฉพาะเดือนได้
- * (รอบปัจจุบัน + 2 รอบถัดไป · รอบที่ผ่านไปแล้วแก้ไม่ได้ ดู saveScorePeriodAction)
+ * (รอบปัจจุบัน + 11 รอบถัดไป = ตั้งล่วงหน้าได้ 1 ปี · รอบที่ผ่านไปแล้วแก้ไม่ได้ ดู saveScorePeriodAction)
  * ใช้ในหน้าตั้งค่าเกณฑ์คะแนน ทั้ง /hr/settings/scoring และ /admin/performance/settings
  */
 export function ScorePeriodForm({ period, orgId }: { period: ScorePeriodConfig; orgId?: string }) {
-  const current = scorePeriodOf(period, new Date());
-  const months = [current, shiftPeriodMonth(current, 1), shiftPeriodMonth(current, 2)];
+  const months = editableScorePeriodMonths(period);
+  const current = months[0];
 
   return (
     <form action={saveScorePeriodAction}>
@@ -42,7 +42,7 @@ export function ScorePeriodForm({ period, orgId }: { period: ScorePeriodConfig; 
         <details className="mt-4" open={months.some((m) => period.overrides[m] !== undefined)}>
           <summary className="cursor-pointer text-xs font-medium text-(--ink)">เปลี่ยนวันตัดรอบเฉพาะบางเดือน (ไม่บังคับ)</summary>
         <p className="mt-2 mb-2 text-xs text-(--ink-soft)">
-          เช่น เดือนที่ต้องปิดเงินเดือนเร็วขึ้น · เว้นว่าง = ใช้วันปกติ · เปลี่ยนแล้วรอบถัดไปเริ่มวันถัดจากวันนั้น · รอบที่ผ่านไปแล้วแก้ไม่ได้
+          ตั้งล่วงหน้าได้ 12 เดือน · เช่น เดือนที่ต้องปิดเงินเดือนเร็วขึ้น · เว้นว่าง = ใช้วันปกติ · เปลี่ยนแล้วรอบถัดไปเริ่มวันถัดจากวันนั้น · รอบที่ผ่านไปแล้วแก้ไม่ได้
         </p>
         <div className="flex flex-col gap-2">
           {months.map((month) => (
