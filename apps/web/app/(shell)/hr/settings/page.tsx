@@ -155,10 +155,12 @@ export default async function HrSettingsPage() {
             >
               {/* สรุปให้ HR รู้ว่ากะของบริษัททำให้เกรดพร้อมใช้ตอนไหน */}
               <div className="mb-3 rounded-(--radius) border border-(--line) bg-(--bg-soft) px-3 py-2 text-sm text-(--ink)">
-                {latest && latest.end_minutes > 1440 ? (
+                {/* เลิกกะ + 2 ชม. เลยเที่ยงคืน (กะดึก หรือกะเลิกดึก) ⇒ เกรดพร้อมใช้หลังรอบที่หักกะนั้น */}
+                {latest && latest.end_minutes + 120 > 1440 ? (
                   <>
-                    <b>มีกะข้ามคืน</b> — กะที่เลิกช้าที่สุดคือ &quot;{latest.name}&quot; เลิก {minutesToClock(latest.end_minutes)}{" "}
-                    ระบบหักคะแนนกะนี้ตอน {dockTimeLabel(latest.end_minutes)} ⇒ เกรดของแต่ละรอบพร้อมใช้คิดเงินเดือนหลังจากนั้น
+                    <b>{latest.end_minutes > 1440 ? "มีกะข้ามคืน" : "มีกะเลิกดึก"}</b> — กะที่เลิกช้าที่สุดคือ &quot;{latest.name}&quot; เลิก{" "}
+                    {minutesToClock(latest.end_minutes)} ระบบหักคะแนนกะนี้ตอน {dockTimeLabel(latest.end_minutes)} ⇒
+                    เกรดของแต่ละรอบพร้อมใช้คิดเงินเดือนหลังจากนั้น
                   </>
                 ) : (
                   <>

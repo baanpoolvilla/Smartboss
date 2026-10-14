@@ -179,18 +179,20 @@ export const SHIFT_SETTLE_FOR_READY_MS = 2 * 60 * 60 * 1000;
  * เกรดของรอบ `month` พร้อมใช้ (นิ่ง เอาไปคิดเงินเดือนได้) ตอนไหน — หลังระบบหักคะแนนลงเวลาของวันตัดรอบครบ
  * `latestShiftEndMinutes` = เวลาเลิกกะที่ช้าที่สุดของบริษัท นับเป็นนาทีจากเที่ยงคืนของวันทำงาน
  * (shift_definitions.end_minutes · เกิน 1440 = เลิกวันถัดไป) · null = ไม่มีกะ/กะไม่ข้ามคืน
- *   - ไม่มีกะข้ามคืน: รอบ 23:59 ของวันตัดรอบหักครบ ⇒ พร้อมใช้ 00:00 วันถัดไป
- *   - มีกะข้ามคืน: เลิกกะ + 2 ชม. แล้วรอบ :59 ถัดไป ⇒ ชั่วโมงถัดไป (ไม่เกินเวลาเผื่อของระบบ)
+ *   - กะเลิกช้าสุด + 2 ชม. ยังไม่เลยเที่ยงคืน (หรือไม่มีกะ): รอบ 23:59 ของวันตัดรอบหักครบ ⇒ 00:00 วันถัดไป
+ *   - เลยเที่ยงคืน (กะดึก หรือกะเลิกดึกอย่าง 23:00): รอบ :59 แรกหลังเลิกกะ + 2 ชม. ⇒ ชั่วโมงถัดไป
+ *     (ไม่เกินเวลาเผื่อของระบบ)
  */
 export function scorePeriodReadyAt(config: ScorePeriodConfig, month: string, latestShiftEndMinutes: number | null): Date {
   const lockAt = scorePeriodCloseAt(config, month); // 00:00 วันถัดจากวันตัดรอบ (เวลาไทย)
-  if (latestShiftEndMinutes === null || latestShiftEndMinutes <= 1440) return lockAt;
+  if (latestShiftEndMinutes === null) return lockAt;
   const cutoffDayStart = lockAt.getTime() - 86_400_000;
   const settle = cutoffDayStart + latestShiftEndMinutes * 60_000 + SHIFT_SETTLE_FOR_READY_MS;
   // รอบ cron ที่นาที :59 แรกที่ไม่ก่อน settle แล้วบวก 1 นาทีให้รอบนั้นทำเสร็จ
   const hour = 3_600_000;
   const run = Math.ceil((settle - 59 * 60_000) / hour) * hour + 59 * 60_000;
-  return new Date(Math.min(run + 60_000, scorePeriodSystemCloseAt(config, month).getTime()));
+  const ready = Math.max(lockAt.getTime(), run + 60_000);
+  return new Date(Math.min(ready, scorePeriodSystemCloseAt(config, month).getTime()));
 }
 
 /** ถึงเวลานี้แล้วหรือยัง (ใช้ในหน้า server component — เลี่ยงเรียก Date.now() ตรงตอน render) */

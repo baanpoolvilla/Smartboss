@@ -81,6 +81,8 @@ describe("score period (cut off on the 25th)", () => {
     // ไม่มีกะข้ามคืน ⇒ 00:00 วันที่ 26
     expect(scorePeriodReadyAt(cfg, "2026-11", null)).toEqual(th("2026-11-26T00:00:00"));
     expect(scorePeriodReadyAt(cfg, "2026-11", 17 * 60)).toEqual(th("2026-11-26T00:00:00"));
+    // กะบ่าย 14:00–23:00 ⇒ หัก 01:59 ⇒ พร้อมใช้ 02:00 วันที่ 26
+    expect(scorePeriodReadyAt(cfg, "2026-11", 23 * 60)).toEqual(th("2026-11-26T02:00:00"));
     // กะ 22:00–08:00 (end 1920) ⇒ หัก 10:59 ⇒ พร้อมใช้ 11:00 วันที่ 26
     expect(scorePeriodReadyAt(cfg, "2026-11", 1440 + 8 * 60)).toEqual(th("2026-11-26T11:00:00"));
   });
