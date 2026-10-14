@@ -54,6 +54,17 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("แจ้งเตือนใกล้ถึงกำหนดส่ง", () => {
+  it("งานส่วนตัว (เปิดให้ตัวเอง) เตือนเจ้าของคนเดียวเสมอ แม้ปิดการเตือนผู้รับงาน", () => {
+    const personal = { ...task(), assigneeIds: ["u1"], assignedById: "u1" } as Task;
+    const result = run({
+      tasks: [personal],
+      settings: { task: { ...defaultReminderSettings.task, notifyAssignee: false, notifyAssigner: false, notifyDeptHead: true } },
+    });
+    const taskNotes = result.notifications.filter((n) => n.message.includes('งาน "test"'));
+    expect(taskNotes).toHaveLength(1);
+    expect(taskNotes[0]!.recipients).toEqual(["u1"]);
+  });
+
   it("อยู่ในหลายช่วงพร้อมกัน (3 วัน + 1 วัน) = เตือนครั้งเดียว", () => {
     const result = run();
     const taskNotes = result.notifications.filter((n) => n.message.includes('งาน "test"'));

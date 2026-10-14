@@ -6,6 +6,7 @@ import { SYSTEM_USER_ID } from "@/modules/report_task/lib/task-penalty-sweep";
 import type { ReminderSettings } from "@/modules/report_task/store/reminder-settings-store";
 import type { ReportPost, ReportTopic, SubmissionRound, SubmitterGroup } from "@/modules/report_task/store/report-feed-store";
 import type { CalendarEvent, Task, TodoItem } from "@/modules/report_task/types";
+import { isPersonalTask } from "@/modules/report_task/lib/personal-task";
 
 const DAY_MINUTES = 1440;
 
@@ -119,7 +120,12 @@ export function computeReminders(input: {
         const recipients = new Set<string>();
         if (settings.task.notifyAssignee) for (const id of t.assigneeIds) recipients.add(id);
         if (settings.task.notifyAssigner) recipients.add(t.assignedById);
-        if (settings.task.notifyDeptHead) {
+        // งานส่วนตัว (เปิดให้ตัวเอง): เตือนเจ้าของเสมอ ไม่ว่าตั้งค่าจะปิดการเตือนผู้รับงานไว้ไหม
+        // และไม่เตือนหัวหน้า — หัวหน้ามองไม่เห็นงานนี้ ชื่องานห้ามหลุดไปทางแจ้งเตือน (personal-task.ts)
+        if (isPersonalTask(t)) {
+          recipients.clear();
+          recipients.add(t.assignedById);
+        } else if (settings.task.notifyDeptHead) {
           for (const d of departments) {
             if (t.departmentIds.includes(d.id)) recipients.add(d.headId);
           }

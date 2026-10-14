@@ -12,6 +12,7 @@ import { deriveCompletedAssigneeIds, isDoneByRule, isTaskFullyDone } from "@/mod
 import { reactionRecipients } from "@/modules/report_task/lib/sticker-target";
 import type { Attachment, ChecklistItem, Task, TaskPriority, TaskStatus } from "@/modules/report_task/types";
 import { uuid } from "@/modules/report_task/lib/uuid";
+import { isPersonalTask } from "@/modules/report_task/lib/personal-task";
 
 /**
  * Single choke point for the audit trail — every meaningful task action logs
@@ -47,6 +48,8 @@ function priorityLabel(p: TaskPriority): string {
  * (ลาก, เลือกสถานะ, ติ๊กเช็คลิสต์ครบ) เลยแจ้งเหมือนกันหมด
  */
 function notifyReviewReady(task: Task) {
+  // งานส่วนตัว (เปิดให้ตัวเอง) ไม่มีใครต้องตรวจ — และชื่องานห้ามหลุดไปหา CEO/หัวหน้า (personal-task.ts)
+  if (isPersonalTask(task)) return;
   const days = daysUntil(task.dueDate);
   const actorId = useIdentityStore.getState().viewingAsUserId;
   const actorName = getUser(actorId)?.name ?? "มีคน";
@@ -617,7 +620,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
             ...(t.assignedById ? [t.assignedById] : []),
             ...departments.filter((d) => d.headId && t.departmentIds.includes(d.id)).map((d) => d.headId as string),
           ]),
-        ].filter((id) => id !== requesterId);
+        ].filter((id) => id !== requesterId && !isPersonalTask(t));
         useNotificationStore
           .getState()
           .notifyMany(
@@ -1024,7 +1027,8 @@ export const useTaskStore = create<TaskStore>((set) => ({
         // สร้าง id ก่อน — ลิงก์แจ้งเตือนชี้ตรงคอมเมนต์นี้ (?task=&comment=) หน้าต่างงานเลื่อนไปหา + กะพริบ
         const commentId = `${taskId}-cmt-${uuid()}`;
         const commentLink = `/report-task/tasks?task=${t.id}&comment=${encodeURIComponent(commentId)}`;
-        if (mentioned.size > 0) {
+        // งานส่วนตัว: คนที่ถูกแท็กเปิดงานนี้ไม่ได้ ไม่แจ้ง (ชื่องานห้ามหลุด — personal-task.ts)
+        if (mentioned.size > 0 && !isPersonalTask(t)) {
           useNotificationStore
             .getState()
             .notifyMany(
