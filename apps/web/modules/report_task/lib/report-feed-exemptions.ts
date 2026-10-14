@@ -8,7 +8,16 @@ export interface DateExemptions {
   personalDates: Map<string, Set<string>>;
   /** "YYYY-MM-DD" dates nobody is expected to post on (public holidays) — exempt for everyone regardless of their personal holiday-source selection, since that selection only controls what shows on their own calendar, not whether the company was actually open that day. */
   companyDates: Set<string>;
+  /**
+   * วันหยุดบริษัทที่ผ่านไปก่อน HOLIDAY_CREDIT_RULE_FROM ของบริษัทที่ใช้ Holiday สะสม — ตอนนั้นระบบบอกทุกคน
+   * ว่าไม่ต้องส่ง ⇒ ยังยกเว้นการนับ "ไม่ส่ง/เลยกำหนด" (แดชบอร์ด + หักคะแนน) แต่โพสต์ที่ส่งมาแล้ว
+   * ขึ้นป้ายรอบตามปกติ (isExemptDate ด้วย ignoreLegacyHolidays)
+   */
+  legacyHolidayDates?: Set<string>;
 }
+
+/** วันที่เริ่มใช้กติกา "Holiday สะสม = วันหยุดราชการไม่ยกเว้นการส่งรายงาน" — วันหยุดก่อนนี้ไม่ย้อนนับว่าไม่ส่ง */
+export const HOLIDAY_CREDIT_RULE_FROM = "2026-10-15";
 
 /** "YYYY-MM-DD" dates from `startIso` (inclusive) to `endIso` (exclusive) — matches CalendarEvent's own exclusive-end convention. */
 function eachDateExclusiveEnd(startIso: string, endIso: string): string[] {
@@ -37,7 +46,8 @@ function eachDateExclusiveEnd(startIso: string, endIso: string): string[] {
  * Holiday leave balance each person spends on a day of their own choosing
  * (HR leave type `accrues_from_holidays`). The holiday calendar then isn't a
  * day everyone is off, so it exempts nobody; only the Holiday leave someone
- * actually logs does (via `leaves`).
+ * actually logs does (via `leaves`). Holidays before HOLIDAY_CREDIT_RULE_FROM
+ * go to `legacyHolidayDates` instead (see that field).
  */
 export function buildDateExemptions(
   leaves: CalendarEvent[],
@@ -82,14 +92,24 @@ export function buildDateExemptions(
   }
 
   const companyDates = new Set<string>();
-  for (const holiday of holidaysAreLeaveCredit ? [] : holidays) {
-    for (const date of eachDateExclusiveEnd(holiday.start, holiday.end)) companyDates.add(date);
+  const legacyHolidayDates = new Set<string>();
+  for (const holiday of holidays) {
+    for (const date of eachDateExclusiveEnd(holiday.start, holiday.end)) {
+      if (!holidaysAreLeaveCredit) companyDates.add(date);
+      else if (date < HOLIDAY_CREDIT_RULE_FROM) legacyHolidayDates.add(date);
+    }
   }
 
-  return { personalDates, companyDates };
+  return { personalDates, companyDates, legacyHolidayDates };
 }
 
-export function isExemptDate(exemptions: DateExemptions, userId: string, date: string): boolean {
+export function isExemptDate(
+  exemptions: DateExemptions,
+  userId: string,
+  date: string,
+  options?: { ignoreLegacyHolidays?: boolean }
+): boolean {
   if (exemptions.companyDates.has(date)) return true;
+  if (!options?.ignoreLegacyHolidays && exemptions.legacyHolidayDates?.has(date)) return true;
   return exemptions.personalDates.get(userId)?.has(date) ?? false;
 }

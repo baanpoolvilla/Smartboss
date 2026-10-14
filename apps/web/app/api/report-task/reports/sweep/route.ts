@@ -42,9 +42,6 @@ export const dynamic = "force-dynamic";
 // เป็นสิบ ๆ วันตอนบริษัทเพิ่งเปิดสวิตช์นี้ครั้งแรก
 const REPORT_PENALTY_LOOKBACK_DAYS = 45;
 
-// วันที่เริ่มใช้กติกา "บริษัทที่มี Holiday สะสม วันหยุดราชการไม่ยกเว้นการส่งรายงาน" (report-feed-exemptions.ts)
-const HOLIDAY_CREDIT_RULE_FROM = "2026-10-15";
-
 interface RoutineDayOffSlice {
   pickedDates: Record<string, string[]>;
   rules: RoutineDayOffRule[];
@@ -164,15 +161,6 @@ async function sweep(request?: Request) {
     rules: routine?.rules ?? [],
     ruleExceptions: routine?.ruleExceptions ?? {},
   }, undefined, holidaysAreLeaveCredit);
-  // วันหยุดที่ผ่านไปแล้วก่อนเปลี่ยนกติกานี้ ตอนนั้นระบบบอกทุกคนว่า "ไม่ต้องส่ง" (หัวห้องขึ้น 0 ต้องส่ง)
-  // ห้ามย้อนไปหัก "ไม่ส่ง" ทีหลัง (เช่น 13/10/2569) — ยกเว้นต่อเฉพาะวันก่อน HOLIDAY_CREDIT_RULE_FROM
-  if (holidaysAreLeaveCredit) {
-    for (const holiday of mergedHolidays) {
-      const day = localDateStr(new Date(holiday.start));
-      if (day < HOLIDAY_CREDIT_RULE_FROM) exemptions.companyDates.add(day);
-    }
-  }
-
   const candidates = computeReportPenaltyCandidates(
     topics,
     posts,

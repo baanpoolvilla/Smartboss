@@ -312,7 +312,9 @@ export function ReportCard({
   // "✓ ตรงเวลา" read as the system having required it anyway — confusing
   // when the header right above already shows 0 ต้องส่ง for the day. Same
   // "no badge at all" treatment as excludeFromSubmission below.
-  const postDayExempt = isExemptDate(exemptions, post.authorId, postDay);
+  // ignoreLegacyHolidays: วันหยุดเก่าก่อนเปลี่ยนกติกา (เช่น 13/10/2569) โพสต์ที่ส่งมาขึ้นป้ายรอบตามปกติ
+  // แม้รอบที่ไม่ได้ส่งวันนั้นจะไม่ถูกนับว่าไม่ส่ง (ดู legacyHolidayDates)
+  const postDayExempt = isExemptDate(exemptions, post.authorId, postDay, { ignoreLegacyHolidays: true });
   // "ไม่นับเป็นการส่ง daily" (excludeFromSubmission) drops this post out of
   // round candidacy entirely — no ตรงเวลา/สาย badge, same as if it were
   // never posted for compliance purposes (see postsForDay in
