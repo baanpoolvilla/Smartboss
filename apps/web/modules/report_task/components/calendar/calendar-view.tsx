@@ -8,7 +8,7 @@ import { useLeaveStore } from "@/modules/report_task/store/leave-store";
 import { useOvertimeStore } from "@/modules/report_task/store/overtime-store";
 import { useLeaveTypeCatalogStore } from "@/modules/report_task/store/leave-type-catalog-store";
 import { useTodoStore } from "@/modules/report_task/store/todo-store";
-import { useHolidayStore, holidaySource, isSourceSelected } from "@/modules/report_task/store/holiday-store";
+import { useHolidayStore, holidaySource, isSourceSelected, THAI_SOURCE } from "@/modules/report_task/store/holiday-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useCalendarVisibilityStore } from "@/modules/report_task/store/calendar-visibility-store";
 import { useGoogleCalendarStore } from "@/modules/report_task/store/google-calendar-store";
@@ -241,11 +241,16 @@ export function CalendarView() {
     () => {
       // วันเดียวกัน ชื่อเดียวกัน = วันหยุดเดียวกัน แม้มาจากสองแหล่ง (ปฏิทินวันหยุดของประเทศ + วันหยุดที่ HR ตั้ง)
       // — ไม่ตัดซ้ำ รายการ "วันหยุด · ลา" ขึ้นวันเดียวกันสองบรรทัด (เจอจริง: วันคล้ายวันสวรรคต ร.9 13 ต.ค.)
+      // วันหยุดไทยในตัว (hol-*) กับของ HR (wf-holiday-*) ชื่อสะกดไม่ตรงกันได้ — HR ดึงจาก Google ทุกวัน
+      // (lib/public-holiday-sync.ts) ⇒ วันไหน HR มีแล้วใช้ของ HR วันเดียวต่อวัน ไม่เทียบชื่อ
       const seen = new Set<string>();
-      return allHolidays
+      const fromHr = (h: CalendarEvent) => h.id.startsWith("wf-holiday-");
+      return [...allHolidays]
+        .sort((a, b) => Number(fromHr(b)) - Number(fromHr(a)))
         .filter((h) => isSourceSelected(holidaySelections, viewingAsUserId, holidaySource(h)))
         .filter((h) => {
-          const key = `${h.start.slice(0, 10)}|${h.title.trim().toLowerCase()}`;
+          const day = h.start.slice(0, 10);
+          const key = holidaySource(h) === THAI_SOURCE ? day : `${day}|${h.title.trim().toLowerCase()}`;
           if (seen.has(key)) return false;
           seen.add(key);
           return true;

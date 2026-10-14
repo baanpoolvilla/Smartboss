@@ -10,6 +10,7 @@ import { purgeExpiredChatMedia } from "@/modules/chat/data/media-retention";
 import { notifyLateArrivals } from "@/lib/attendance-late-alerts";
 import { postAttendanceToChat } from "@/lib/attendance-chat";
 import { notifyPendingOvertime } from "@/modules/hr/lib/hr-notify";
+import { syncPublicHolidays } from "@/lib/public-holiday-sync";
 
 export const runtime = "nodejs";
 
@@ -24,6 +25,7 @@ export const runtime = "nodejs";
  *   - แจ้งผู้อนุมัติว่ามี OT ค้างรออนุมัติกี่รายการ (?task=ot-pending — วันละครั้ง อยู่ใน all ตอน 08:00)
  *   - เด้งเวลาเข้า/ออกงานเข้าห้องแชท "ระบบลงเวลา" ของแต่ละคน (?task=attendance-chat — crontab ทุกนาที
  *     แยกบรรทัด ดู docs/deploy.md · ไม่อยู่ใน all เพราะ all รันวันละครั้ง)
+ *   - ดึงวันหยุดนักขัตฤกษ์จาก Google เข้าปฏิทินวันหยุดบริษัทของทุกบริษัท (?task=holidays — อยู่ใน all)
  *   - ?task=all รันทั้งหมด
  * เรียกด้วย header `Authorization: Bearer $CRON_SECRET` หรือ `?key=$CRON_SECRET`
  * route นี้อยู่นอก auth ของ proxy จึงกันด้วย CRON_SECRET เท่านั้น →
@@ -77,6 +79,15 @@ export async function GET(req: NextRequest) {
   }
 
   // หลัง performance — ผลลงเวลาเพิ่งคำนวณใหม่ OT ของเมื่อวานเย็นจึงนับครบ
+  if (task === "holidays" || task === "all") {
+    // ล้มเองไม่ให้ลากงานอื่นล้มตาม — ดึงจาก Google ไม่ได้วันนี้ พรุ่งนี้ก็ลองใหม่
+    try {
+      Object.assign(result, { holidays: await syncPublicHolidays() });
+    } catch (error) {
+      console.error("[cron] holidays", error);
+      Object.assign(result, { holidays: { error: error instanceof Error ? error.message : String(error) } });
+    }
+  }
   if (task === "ot-pending" || task === "all") {
     Object.assign(result, { otPending: await notifyPendingOvertime() });
   }
