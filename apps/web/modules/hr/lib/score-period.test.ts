@@ -52,4 +52,12 @@ describe("score period (cut off on the 25th)", () => {
     expect(scorePeriodLabel(cfg, "2026-11")).toBe("26 ต.ค. – 25 พ.ย. 2569");
     expect(scorePeriodOf(cfg, th("2026-09-28T10:00:00"))).toBe("2026-09");
   });
+
+  it("attendance docks (dated UTC midnight of the work day, written 08:00 the next morning) stay in the work day's period", () => {
+    // ลงเวลาวันที่ 25 พ.ย. — หักตอน 08:00 ของวันที่ 26 แต่ occurredAt = วันทำงาน 25 พ.ย.
+    expect(scorePeriodOf(cfg, new Date("2026-11-25T00:00:00Z"))).toBe("2026-11");
+    expect(scorePeriodOf(cfg, new Date("2026-11-26T00:00:00Z"))).toBe("2026-12");
+    // ขอบปลายรอบ = 23:59:59.999 ของวันที่ 25 เวลาไทย
+    expect(scorePeriodOf(cfg, th("2026-11-25T23:59:59"))).toBe("2026-11");
+  });
 });
