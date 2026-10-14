@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { canEditRecord, canEditReportTopic, canSeeReportTopic, canToggleOwnChecklistItem } from "@/modules/report_task/lib/permissions";
+import { canEditRecord, canEditReportTopic, canSeeReportTopic, canSeeTask, canToggleOwnChecklistItem } from "@/modules/report_task/lib/permissions";
 import { useDepartmentStore } from "@/modules/report_task/store/department-store";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import type { Department, User } from "@/modules/report_task/types";
@@ -107,5 +107,17 @@ describe("canSeeReportTopic", () => {
 
   it("lets a department member see it regardless of extraUserIds", () => {
     expect(canSeeReportTopic({ departmentIds: ["dep-eng"], extraUserIds: [] }, OTHER_ENG)).toBe(true);
+  });
+});
+
+describe("canSeeTask — personal tasks", () => {
+  const personal = { assignedById: OTHER_ENG, assigneeIds: [OTHER_ENG], departmentIds: ["dep-eng"] };
+  it("only its creator sees a task they opened for themselves — not the owner or their department head", () => {
+    expect(canSeeTask(personal, OTHER_ENG)).toBe(true);
+    expect(canSeeTask(personal, OWNER)).toBe(false);
+    expect(canSeeTask(personal, ENG_HEAD)).toBe(false);
+  });
+  it("becomes a normal task as soon as someone else is added", () => {
+    expect(canSeeTask({ ...personal, assigneeIds: [OTHER_ENG, "usr-03"] }, OWNER)).toBe(true);
   });
 });

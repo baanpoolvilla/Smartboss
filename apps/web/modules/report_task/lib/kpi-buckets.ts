@@ -5,6 +5,7 @@ import { reportStatusCountsForScope } from "@/modules/report_task/lib/report-fee
 import type { DateExemptions } from "@/modules/report_task/lib/report-feed-exemptions";
 import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import type { Task } from "@/modules/report_task/types";
+import { isPersonalTask } from "@/modules/report_task/lib/personal-task";
 
 /**
  * The one shared status-bucket shape for both Task and Report (§0.1 of
@@ -115,6 +116,8 @@ export function taskKpiBuckets(tasks: Task[]): KpiBuckets {
   let pending = 0;
   let overdue = 0;
   for (const t of tasks) {
+    // งานส่วนตัว (เปิดให้ตัวเอง) ไม่นับในสถิติผลงาน (personal-task.ts)
+    if (isPersonalTask(t)) continue;
     const bucket = taskBucketOf(t);
     if (bucket === "onTime") onTime += 1;
     else if (bucket === "lateDone") lateDone += 1;
@@ -136,6 +139,7 @@ export function taskBucketsByAssignee(tasks: Task[]): Record<KpiBucketKey, Map<s
     overdue: new Map(),
   };
   for (const t of tasks) {
+    if (isPersonalTask(t)) continue;
     for (const assigneeId of t.assigneeIds) {
       const bucket = taskAssigneeBucketOf(t, assigneeId);
       out[bucket].set(assigneeId, (out[bucket].get(assigneeId) ?? 0) + 1);

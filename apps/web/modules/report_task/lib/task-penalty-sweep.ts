@@ -1,6 +1,7 @@
 import { departments, getUser } from "@/modules/report_task/lib/directory";
 import { daysUntil } from "@/modules/report_task/lib/format";
 import type { Task } from "@/modules/report_task/types";
+import { isPersonalTask } from "@/modules/report_task/lib/personal-task";
 
 /** Default dock for a task that blew its deadline. */
 export const LATE_PENALTY_POINTS = 3;
@@ -164,6 +165,8 @@ export function sweepAutoPenalties(
   }
 
   const next = tasks.map((t) => {
+    // งานส่วนตัว (เปิดให้ตัวเอง) ไม่มีผลกับคะแนน — ไม่หัก ไม่ตีตราเลยกำหนด (personal-task.ts)
+    if (isPersonalTask(t)) return t;
     // A finished task never re-enters the "still active and overdue" branch
     // below, so without this it could dodge ever being flagged just by being
     // marked done before a sweep caught it as overdue — judge it by when it

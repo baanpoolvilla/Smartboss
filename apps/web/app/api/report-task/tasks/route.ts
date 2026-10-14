@@ -3,6 +3,7 @@ import { z } from "zod";
 import { audit, hasPermission, requireOrg } from "@smartboss/auth";
 
 import { clearTasks, readTasks, writeTasks } from "@/modules/report_task/lib/db/task-repo";
+import { isOthersPersonalTask } from "@/modules/report_task/lib/personal-task";
 import { taskListSchema } from "@/modules/report_task/lib/db/task-schema";
 import { REPORT_TASK_PERMS } from "@/modules/report_task/permissions";
 import type { Task } from "@/modules/report_task/types";
@@ -68,7 +69,10 @@ async function putTasks(request: NextRequest) {
 
 export async function GET() {
   const session = await requireOrg();
-  const { tasks, version } = await readTasks(session.orgId);
+  const { tasks: all, version } = await readTasks(session.orgId);
+  // งานส่วนตัวของคนอื่นไม่ส่งออกไปเลย (personal-task.ts) — ซ่อนแค่ในหน้าจอยังเปิด DevTools อ่านได้
+  // ฝั่งบันทึก (writeTasks) รู้ว่าเครื่องนี้ไม่มีงานพวกนี้ จึงไม่ลบทิ้ง
+  const tasks = all.filter((t) => !isOthersPersonalTask(t, session.userId));
   // บริษัทที่ยังไม่เคยบันทึก = ยังไม่มีงาน — คืนอาร์เรย์ว่าง ไม่ใช่ข้อมูลตัวอย่าง
   // (ต้นฉบับ seed ข้อมูลสาธิตให้ ซึ่งใช้กับบริษัทลูกค้าจริงไม่ได้)
   return Response.json(tasks, { headers: { "Cache-Control": "no-store", "X-Data-Version": String(version) } });

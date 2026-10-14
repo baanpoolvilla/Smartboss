@@ -9,6 +9,7 @@ import { publishToOrg } from "@/lib/realtime/server";
 import { listDirectory } from "./employee-directory";
 import type { Sticker, Task, TaskReaction } from "../../types";
 import { reactionRecipients } from "@/modules/report_task/lib/sticker-target";
+import { isOthersPersonalTask, isPersonalTask } from "@/modules/report_task/lib/personal-task";
 
 /**
  * งานในบอร์ด Kanban — เก็บเป็นตารางจริง หนึ่งแถวต่อหนึ่งงาน
@@ -242,8 +243,16 @@ export async function writeTasks(
       select: { id: true, code: true, data: true },
     });
     const codeById = new Map(existing.map((r) => [r.id, r.code]));
+    // งานส่วนตัวของคนอื่น — เครื่องที่บันทึกไม่เคยได้รับ (GET กรองออก) ⇒ ไม่มีใน `tasks` ไม่ได้แปลว่าถูกลบ
+    // และถ้ามีส่งมา (แก้ request เอง) ก็ไม่รับ · userId null = งานของระบบ (sweep) ที่อ่านครบทุกงาน
+    const hiddenIds = new Set(
+      userId === null
+        ? []
+        : existing.filter((r) => isOthersPersonalTask(r.data as unknown as Task, userId)).map((r) => r.id)
+    );
+    tasks = tasks.filter((t) => !hiddenIds.has(t.id));
     const priorById = new Map(existing.map((r) => [r.id, r.data as unknown as Task]));
-    const incomingIds = new Set(tasks.map((t) => t.id));
+    const incomingIds = new Set([...tasks.map((t) => t.id), ...hiddenIds]);
 
     let created = 0;
     let updated = 0;
@@ -269,7 +278,8 @@ export async function writeTasks(
           newReactions = newReactions.filter((r) => !rejectedIds.has(r.id));
         }
       }
-      if (newReactions.length > 0) stickerChanges.push({ task, newReactions });
+      // งานส่วนตัวไม่มีผลกับคะแนน (personal-task.ts)
+      if (newReactions.length > 0 && !isPersonalTask(task)) stickerChanges.push({ task, newReactions });
 
       const keptReactionIds = new Set((task.reactions ?? []).map((r) => r.id));
       for (const gone of priorById.get(task.id)?.reactions ?? []) {

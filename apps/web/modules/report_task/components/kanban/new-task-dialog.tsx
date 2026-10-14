@@ -54,6 +54,7 @@ import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-
 import type { Attachment, CalendarEvent, ChecklistItem, LeaveType, Task, TaskPriority } from "@/modules/report_task/types";
 import { cn } from "@/modules/report_task/lib/utils";
 import { todayIso } from "@/modules/report_task/lib/now";
+import { isPersonalTask } from "@/modules/report_task/lib/personal-task";
 import { formatFileSize, formatDate } from "@/modules/report_task/lib/format";
 import { uploadTaskAttachment } from "@/modules/report_task/lib/task-attachment-upload";
 import {
@@ -83,6 +84,7 @@ import {
   Star,
   ChevronDown,
   SlidersHorizontal,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
@@ -1179,6 +1181,11 @@ export function NewTaskDialog({
                     </span>{" "}
                     (ตามผู้รับผิดชอบ)
                   </p>
+                  {isPersonalTask({ assignedById: viewingAsUserId, assigneeIds }) && (
+                    <p className="text-[11px] text-[var(--brand-green-dark)] flex items-center gap-1">
+                      <Lock className="h-3 w-3" /> งานส่วนตัว · เห็นเฉพาะคุณ ไม่มีผลกับคะแนน
+                    </p>
+                  )}
                 </div>
                 </div>
               </Row>

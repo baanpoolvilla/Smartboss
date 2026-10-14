@@ -3,6 +3,7 @@ import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import type { GrantableSection } from "@/modules/report_task/store/settings-access-store";
 import type { TaskReviewSettings } from "@/modules/report_task/store/task-review-settings-store";
 import type { ChecklistItem, Task } from "@/modules/report_task/types";
+import { isOthersPersonalTask } from "@/modules/report_task/lib/personal-task";
 
 /**
  * Who can edit a record's core/main data: whoever created it, the head of
@@ -119,6 +120,8 @@ export function canSeeTask(
   task: Pick<Task, "assigneeIds" | "assignedById" | "departmentIds">,
   viewingAsUserId: string
 ): boolean {
+  // งานส่วนตัวของคนอื่น — CEO/หัวหน้าก็ไม่เห็น (เซิร์ฟเวอร์กรองออกอยู่แล้ว กันซ้ำที่นี่)
+  if (isOthersPersonalTask(task, viewingAsUserId)) return false;
   if (isOwner(viewingAsUserId)) return true;
   if (task.assigneeIds.includes(viewingAsUserId) || task.assignedById === viewingAsUserId) return true;
   const deptIds = new Set(task.departmentIds.filter(Boolean));

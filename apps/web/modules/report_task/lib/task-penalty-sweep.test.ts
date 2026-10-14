@@ -36,6 +36,13 @@ function daysFromNow(days: number): string {
 }
 
 describe("sweepAutoPenalties", () => {
+  it("never docks a personal task (the creator is its only assignee)", () => {
+    const result = sweepAutoPenalties([makeTask({ assigneeIds: ["usr-01"], originalDueDate: daysFromNow(-3) })]);
+    expect(result.changed).toBe(false);
+    expect(result.tasks[0]!.penalty).toBeFalsy();
+    expect(result.notifications).toHaveLength(0);
+  });
+
   it("is a no-op for a task that isn't overdue", () => {
     const result = sweepAutoPenalties([makeTask({ originalDueDate: daysFromNow(5) })]);
     expect(result.changed).toBe(false);

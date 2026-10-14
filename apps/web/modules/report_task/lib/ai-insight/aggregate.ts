@@ -1,6 +1,7 @@
 import "server-only";
 
 import { readTasks } from "@/modules/report_task/lib/db/task-repo";
+import { isPersonalTask } from "@/modules/report_task/lib/personal-task";
 import { readStore } from "@/modules/report_task/lib/db/org-store";
 import { listDirectory, type DirectoryUser } from "@/modules/report_task/lib/db/employee-directory";
 import { listDepartmentsWithOverlay } from "@/modules/report_task/lib/db/departments";
@@ -424,13 +425,15 @@ export function metricValueOf(agg: AiInsightAggregate, subjectType: RecoSubjectT
  * cost roughly constant regardless of company size (see AI-Insight report).
  */
 export async function buildAiInsightAggregate(orgId: string): Promise<AiInsightAggregate> {
-  const [{ tasks }, reportFeed, directory, departmentRows] = await Promise.all([
+  const [{ tasks: allTasks }, reportFeed, directory, departmentRows] = await Promise.all([
     readTasks(orgId),
     readStore<{ topics?: ReportTopic[]; posts?: ReportPost[] }>(orgId, "report-feed"),
     listDirectory(orgId),
     listDepartmentsWithOverlay(orgId),
   ]);
 
+  // งานส่วนตัว (เปิดให้ตัวเอง) ไม่ใช่งานของบริษัท ไม่นับในสรุปภาพรวม (personal-task.ts)
+  const tasks = allTasks.filter((t) => !isPersonalTask(t));
   const topics = reportFeed.data?.topics ?? [];
   const posts = reportFeed.data?.posts ?? [];
   const nameOf = new Map(directory.map((u) => [u.id, u.name] as const));

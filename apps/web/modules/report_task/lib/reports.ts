@@ -4,6 +4,7 @@ import { daysUntil } from "@/modules/report_task/lib/format";
 import type { DepartmentReport, ScoreBreakdown, Sticker, Task, UserReport } from "@/modules/report_task/types";
 import { reactionCountsFor } from "@/modules/report_task/lib/sticker-target";
 import { effectiveDueDate } from "@/modules/report_task/lib/task-flags";
+import { isPersonalTask } from "@/modules/report_task/lib/personal-task";
 
 export function isLate(task: Task) {
   if (task.status === "done") return false;
@@ -62,7 +63,9 @@ function scoreFor(
 }
 
 /** The metrics shared by a per-user and a per-department report row. */
-function reportMetricsFor(scopedTasks: Task[], stickers: Sticker[], userId?: string) {
+function reportMetricsFor(allScopedTasks: Task[], stickers: Sticker[], userId?: string) {
+  // งานส่วนตัว (เปิดให้ตัวเอง) ไม่มีผลกับคะแนน (personal-task.ts)
+  const scopedTasks = allScopedTasks.filter((t) => !isPersonalTask(t));
   const completed = scopedTasks.filter((t) => t.status === "done");
   const late = scopedTasks.filter(isLate);
   const revisionCount = scopedTasks.reduce((sum, t) => sum + t.revisions.length, 0);
