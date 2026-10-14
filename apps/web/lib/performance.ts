@@ -1,6 +1,12 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
-import { scorePeriodOf, scorePeriodRange, type ScorePeriodConfig } from "@/lib/score-period";
+import {
+  effectiveScorePeriodOf,
+  scorePeriodCloseAt,
+  scorePeriodRange,
+  shiftPeriodMonth,
+  type ScorePeriodConfig,
+} from "@/lib/score-period";
 
 /**
  * คะแนนผลงานรายบุคคล — ชั้นกลางที่ทุกโมดูลส่งเหตุการณ์มารวมกัน
@@ -363,6 +369,37 @@ export function gradeColor(grade: string, order: string[]): string {
 }
 
 /**
+ * เงื่อนไขดึงรายการที่ "อาจ" นับในรอบ `month` — เกิดในรอบนี้ หรือบันทึกระหว่างรอบนี้เปิด (ปรับจากรอบก่อน)
+ * ผู้เรียกต้องกรองต่อด้วย effectiveScorePeriodOf (รายการที่เกิดในรอบนี้แต่บันทึกหลังปิดไปอยู่รอบถัดไป)
+ */
+function periodEventsWhere(config: ScorePeriodConfig, month: string, scoringStartDate: Date | null) {
+  const { from, to } = scorePeriodRange(config, month);
+  const openedAt = scorePeriodCloseAt(config, shiftPeriodMonth(month, -1));
+  const closesAt = scorePeriodCloseAt(config, month);
+  return {
+    ...(scoringStartDate ? { occurredAt: { gte: scoringStartDate } } : {}),
+    OR: [{ occurredAt: { gte: from, lte: to } }, { createdAt: { gte: openedAt, lt: closesAt }, occurredAt: { lt: from } }],
+  };
+}
+
+/** คะแนนทุกคนของรอบเกรด `month` (ล็อกหลังรอบปิด — ดู effectiveScorePeriodOf) */
+export function buildPeriodScorecards(orgId: string, config: ScorePeriodConfig, month: string) {
+  const { from, to } = scorePeriodRange(config, month);
+  return buildScorecards(orgId, from, to, { config, month });
+}
+
+/** รายการคะแนนของคนหนึ่งในรอบเกรด `month` — ชุดเดียวกับที่ buildPeriodScorecards นับ */
+export async function listUserPeriodEvents(orgId: string, userId: string, config: ScorePeriodConfig, month: string, limit = 1000) {
+  const settings = await loadPerformanceSettings(orgId);
+  const rows = await prisma.performanceEvent.findMany({
+    where: { orgId, userId, ...periodEventsWhere(config, month, settings.scoringStartDate) },
+    orderBy: { occurredAt: "desc" },
+    take: limit,
+  });
+  return rows.filter((e) => effectiveScorePeriodOf(config, e.occurredAt, e.createdAt) === month);
+}
+
+/**
  * สรุปคะแนนของทุกคนในบริษัทตามช่วงเวลา — ใช้ในหน้าภาพรวมของผู้บริหาร
  *
  * รวมคนที่ยังไม่มีเหตุการณ์เลยด้วย (คะแนนเต็ม) ไม่งั้นคนที่ทำงานเรียบร้อย
@@ -371,22 +408,30 @@ export function gradeColor(grade: string, order: string[]): string {
 export async function buildScorecards(
   orgId: string,
   from: Date,
-  to: Date
+  to: Date,
+  /** รอบเกรด (score-period.ts) — ใส่มา = นับตามรอบที่รายการลงจริง (บันทึกหลังรอบปิด ⇒ ไปรอบถัดไป) */
+  period?: { config: ScorePeriodConfig; month: string },
 ): Promise<{ settings: PerformanceSettings; cards: UserScorecard[] }> {
   const settings = await loadPerformanceSettings(orgId);
   const start =
     settings.scoringStartDate && settings.scoringStartDate > from ? settings.scoringStartDate : from;
-  const [users, events] = await Promise.all([
+  const select = {
+    id: true, userId: true, source: true, category: true, points: true, refType: true, refId: true, occurredAt: true, createdAt: true,
+  } as const;
+  const [users, rawEvents] = await Promise.all([
     prisma.user.findMany({
       where: { orgId, isActive: true },
       select: { id: true, name: true, email: true },
       orderBy: { name: "asc" },
     }),
     prisma.performanceEvent.findMany({
-      where: { orgId, occurredAt: { gte: start, lte: to } },
-      select: { id: true, userId: true, source: true, category: true, points: true, refType: true, refId: true },
+      where: period ? { orgId, ...periodEventsWhere(period.config, period.month, settings.scoringStartDate) } : { orgId, occurredAt: { gte: start, lte: to } },
+      select,
     }),
   ]);
+  const events = period
+    ? rawEvents.filter((e) => effectiveScorePeriodOf(period.config, e.occurredAt, e.createdAt) === period.month)
+    : rawEvents;
   const isReversed = reversedChecker(events);
 
   const byUser = new Map<string, UserScorecard>();
@@ -503,14 +548,25 @@ export async function buildUserMonthlyScores(
   const to = bounds(sorted[sorted.length - 1]!).to;
   const start = settings.scoringStartDate && settings.scoringStartDate > from ? settings.scoringStartDate : from;
   const events = await prisma.performanceEvent.findMany({
-    where: { orgId, userId, occurredAt: { gte: start, lte: to } },
-    select: { id: true, userId: true, category: true, occurredAt: true, points: true, refType: true, refId: true },
+    // รวมรายการที่บันทึกระหว่างช่วงนี้ด้วย (ปรับจากรอบก่อน — effectiveScorePeriodOf)
+    where: {
+      orgId,
+      userId,
+      OR: [
+        { occurredAt: { gte: start, lte: to } },
+        {
+          createdAt: { gte: scorePeriodCloseAt(period, shiftPeriodMonth(sorted[0]!, -1)), lt: scorePeriodCloseAt(period, sorted[sorted.length - 1]!) },
+          occurredAt: { lt: from, ...(settings.scoringStartDate ? { gte: settings.scoringStartDate } : {}) },
+        },
+      ],
+    },
+    select: { id: true, userId: true, category: true, occurredAt: true, createdAt: true, points: true, refType: true, refId: true },
   });
   const isReversed = reversedChecker(events);
 
   const sum = new Map<string, { points: number; count: number }>();
   for (const e of events) {
-    const key = scorePeriodOf(period, e.occurredAt);
+    const key = effectiveScorePeriodOf(period, e.occurredAt, e.createdAt);
     const cur = sum.get(key) ?? { points: 0, count: 0 };
     cur.points += Number(e.points);
     if (!isReversalEvent(e) && !isReversed(e)) cur.count += 1;

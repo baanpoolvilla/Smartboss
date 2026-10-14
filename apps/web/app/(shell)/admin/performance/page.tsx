@@ -7,9 +7,9 @@ import { AppScaffold } from "@/components/module/app-scaffold";
 import { ADMIN_PERMS } from "@/modules/admin/permissions";
 import { EmptyState } from "@/modules/admin/components/ui";
 import Link from "next/link";
-import { buildScorecards, gradeColor } from "@/lib/performance";
+import { gradeColor, buildPeriodScorecards } from "@/lib/performance";
 import { monthDisplay, shiftMonth } from "@/lib/performance-month";
-import { resolveScorePeriodParam, scorePeriodOf, scorePeriodRange } from "@/lib/score-period";
+import { resolveScorePeriodParam, scorePeriodOf } from "@/lib/score-period";
 import { loadScorePeriodConfig } from "@/lib/score-period-config";
 import { ScorePeriodNotice } from "@/components/score-period-notice";
 
@@ -64,10 +64,10 @@ export default async function PerformancePage({
   );
 
   const [current, previous, ...trend] = await Promise.all([
-    buildScorecards(session.orgId, scorePeriodRange(period, month).from, scorePeriodRange(period, month).to),
-    buildScorecards(session.orgId, scorePeriodRange(period, prevMonthKey).from, scorePeriodRange(period, prevMonthKey).to),
+    buildPeriodScorecards(session.orgId, period, month),
+    buildPeriodScorecards(session.orgId, period, prevMonthKey),
     ...trendMonths.map((m) =>
-      buildScorecards(session.orgId, scorePeriodRange(period, m).from, scorePeriodRange(period, m).to),
+      buildPeriodScorecards(session.orgId, period, m),
     ),
   ]);
 

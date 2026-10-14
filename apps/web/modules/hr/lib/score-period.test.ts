@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SCORE_PERIOD,
+  effectiveScorePeriodOf,
   daysUntilCutoff,
   resolveScorePeriodParam,
   scorePeriodLabel,
@@ -59,5 +60,15 @@ describe("score period (cut off on the 25th)", () => {
     expect(scorePeriodOf(cfg, new Date("2026-11-26T00:00:00Z"))).toBe("2026-12");
     // ขอบปลายรอบ = 23:59:59.999 ของวันที่ 25 เวลาไทย
     expect(scorePeriodOf(cfg, th("2026-11-25T23:59:59"))).toBe("2026-11");
+  });
+
+  it("a change recorded after the period closed goes to the open period, not back into the closed one", () => {
+    const day25 = new Date("2026-11-25T00:00:00Z"); // วันทำงาน 25 พ.ย.
+    // หัก/คืนตอน 08:00 วันที่ 26 — ก่อนรอบปิด 10:00 ⇒ ยังอยู่รอบ พ.ย.
+    expect(effectiveScorePeriodOf(cfg, day25, th("2026-11-26T08:00:00"))).toBe("2026-11");
+    // คืนคะแนนวันที่ 3 ธ.ค. (รอบ พ.ย. ปิดแล้ว) ⇒ ปรับในรอบ ธ.ค.
+    expect(effectiveScorePeriodOf(cfg, day25, th("2026-12-03T14:00:00"))).toBe("2026-12");
+    // คืนคะแนนตอน ม.ค. ⇒ รอบ ม.ค.
+    expect(effectiveScorePeriodOf(cfg, day25, th("2027-01-05T09:00:00"))).toBe("2027-01");
   });
 });

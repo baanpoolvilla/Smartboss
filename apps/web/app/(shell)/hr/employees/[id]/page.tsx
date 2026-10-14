@@ -45,13 +45,13 @@ import { AssignShiftForm, type CurrentPattern } from "../../settings/assign-shif
 import { EmployeeDayOffCalendar } from "./employee-day-off-calendar";
 import { EnrollFingerprintForm } from "../../settings/devices/enroll-fingerprint-form";
 import { DayOffQuotaForm, LegacyStandingNotice } from "./day-off-quota-form";
-import { buildScorecards, eventDay, listUserEvents, PERFORMANCE_CATEGORIES } from "@/lib/performance";
+import { eventDay, listUserEvents, PERFORMANCE_CATEGORIES, buildPeriodScorecards, listUserPeriodEvents } from "@/lib/performance";
 import { monthDisplay } from "@/lib/performance-month";
 import { formatSatang } from "@/modules/hr/lib/commission";
 import { loadCommissionMonth } from "@/modules/hr/lib/commission-data";
 import { loadDayOffOverrides, resolveDayOffDays } from "@/lib/day-off-quota";
 import { ScoreBreakdown } from "@/components/performance/score-breakdown";
-import { resolveScorePeriodParam, scorePeriodOf, scorePeriodRange } from "@/lib/score-period";
+import { resolveScorePeriodParam, scorePeriodOf } from "@/lib/score-period";
 import { loadScorePeriodConfig } from "@/lib/score-period-config";
 
 interface CompensationRate {
@@ -324,11 +324,10 @@ export default async function EmployeeDetailPage({
         const now = new Date();
         // รอบเกรดปัจจุบัน (ตัดวันที่ 25 — score-period.ts)
         const period = await loadScorePeriodConfig(session.orgId);
-        const scoreFrom = scorePeriodRange(period, scorePeriodOf(period, now)).from;
         const scorecard =
           email === undefined
             ? null
-            : await buildScorecards(session.orgId, scoreFrom, now)
+            : await buildPeriodScorecards(session.orgId, period, scorePeriodOf(period, now))
                 .then((r) => r.cards.find((c) => c.email.toLowerCase() === email) ?? null)
                 .catch(() => null);
 
@@ -346,7 +345,7 @@ export default async function EmployeeDetailPage({
         // ทุกเหตุการณ์ของเดือนนี้ — ให้กดขยายแต่ละหมวดใน "เสียคะแนนเพราะ" แล้วเห็นครบทุกวัน
         const monthEvents =
           tab === "score" && scorecard !== null
-            ? await listUserEvents(session.orgId, scorecard.userId, { from: scoreFrom, to: now, limit: 1000 })
+            ? await listUserPeriodEvents(session.orgId, scorecard.userId, period, scorePeriodOf(period, now))
             : [];
 
         // ค่าคอมเดือนนี้ของคนนี้ — คิดจากชุดเดียวกับแท็บค่าคอม ยอดจึงตรงกันเสมอ

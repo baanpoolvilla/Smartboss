@@ -12,8 +12,8 @@ import {
   Td,
 } from "@/modules/hr/components/ui";
 import { employmentTypeLabel, formatDate } from "@/modules/hr/lib/labels";
-import { buildScorecards } from "@/lib/performance";
-import { scorePeriodOf, scorePeriodRange } from "@/lib/score-period";
+import { buildPeriodScorecards } from "@/lib/performance";
+import { scorePeriodOf } from "@/lib/score-period";
 import { loadScorePeriodConfig } from "@/lib/score-period-config";
 
 /** แท็บ "ทะเบียน" ของหน้าพนักงาน — เดิมคือทั้งหน้า /hr/employees ก่อนมี tab คะแนน */
@@ -64,7 +64,7 @@ export async function renderRegistryTab(
   // รอบเกรดปัจจุบัน (ตัดวันที่ 25 — score-period.ts)
   const period = await loadScorePeriodConfig(session.orgId).catch(() => null);
   const cards = period
-    ? await buildScorecards(session.orgId, scorePeriodRange(period, scorePeriodOf(period, now)).from, now).catch(() => null)
+    ? await buildPeriodScorecards(session.orgId, period, scorePeriodOf(period, now)).catch(() => null)
     : null;
 
   const emailOfPerson = new Map(

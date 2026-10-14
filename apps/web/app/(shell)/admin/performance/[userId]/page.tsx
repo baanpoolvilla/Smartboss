@@ -6,7 +6,7 @@ import { Card } from "@smartboss/ui/components/card";
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { ADMIN_PERMS } from "@/modules/admin/permissions";
 import { EmptyState } from "@/modules/admin/components/ui";
-import { buildScorecards, eventDay, gradeColor, listUserEvents, PERFORMANCE_CATEGORIES } from "@/lib/performance";
+import { eventDay, gradeColor, PERFORMANCE_CATEGORIES, buildPeriodScorecards, listUserPeriodEvents } from "@/lib/performance";
 import { monthDisplay } from "@/lib/performance-month";
 import { resolveScorePeriodParam, scorePeriodOf, scorePeriodRange } from "@/lib/score-period";
 import { loadScorePeriodConfig } from "@/lib/score-period-config";
@@ -35,13 +35,12 @@ export default async function PerformanceUserDetailPage({
   const { month: monthParam } = await searchParams;
   const period = await loadScorePeriodConfig(session.orgId);
   const month = resolveScorePeriodParam(period, monthParam);
-  const { from, to } = scorePeriodRange(period, month);
 
-  const { settings, cards } = await buildScorecards(session.orgId, from, to);
+  const { settings, cards } = await buildPeriodScorecards(session.orgId, period, month);
   const card = cards.find((c) => c.userId === userId);
   if (!card) notFound();
 
-  const events = await listUserEvents(session.orgId, userId, { from, to, limit: 300 });
+  const events = await listUserPeriodEvents(session.orgId, userId, period, month, 300);
   const gradeOrder = settings.gradeThresholds.map(([g]) => g);
   const color = gradeColor(card.grade, gradeOrder);
 

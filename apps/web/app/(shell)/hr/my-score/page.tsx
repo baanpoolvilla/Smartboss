@@ -4,7 +4,7 @@ import { requireOrg } from "@smartboss/auth";
 import { HrPage } from "@/modules/hr/components/hr-page";
 import { HR_PERMS } from "@/modules/hr/permissions";
 import { EmptyState } from "@/modules/hr/components/ui";
-import { buildScorecards, buildUserMonthlyScores, gradeColor, listUserEvents } from "@/lib/performance";
+import { buildUserMonthlyScores, gradeColor, buildPeriodScorecards, listUserPeriodEvents } from "@/lib/performance";
 import { hasBreakdown, ScoreBreakdown } from "@/components/performance/score-breakdown";
 import { buildMyEventDetails } from "@/lib/performance-details";
 import { monthDisplay, shiftMonth } from "@/lib/performance-month";
@@ -45,11 +45,10 @@ export default async function MyScorePage({
         const period = await loadScorePeriodConfig(session.orgId);
         const thisMonth = scorePeriodOf(period, new Date());
         const month = resolveScorePeriodParam(period, sp.month);
-        const { from, to } = scorePeriodRange(period, month);
         const history = Array.from({ length: MONTHS_BACK }, (_, i) => shiftMonth(thisMonth, -i));
 
         const [{ settings, cards }, monthly] = await Promise.all([
-          buildScorecards(session.orgId, from, to),
+          buildPeriodScorecards(session.orgId, period, month),
           buildUserMonthlyScores(session.orgId, session.userId, history, period),
         ]);
         const card = cards.find((c) => c.userId === session.userId);
@@ -130,8 +129,8 @@ export default async function MyScorePage({
         }
         // ช่วงเดียวกับที่คิดคะแนนเดือนนี้ — จำนวนในแต่ละหมวดกับรายการข้างในจึงตรงกัน
         // ดึงเสมอ (ไม่ใช่แค่ตอนมีหมวดที่ติดลบ) — หมวดที่ได้คืนคะแนนหมดแล้วยังต้องเห็นว่า "คืนแล้ว"
-        const events = await listUserEvents(session.orgId, session.userId, { from, to, limit: 1000 });
-        const details = await buildMyEventDetails(session.orgId, events);
+        const events = await listUserPeriodEvents(session.orgId, session.userId, period, month);
+        const details = await buildMyEventDetails(session.orgId, events, period);
 
         return (
           <div className="flex flex-col gap-4">

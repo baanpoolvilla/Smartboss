@@ -128,3 +128,35 @@ export function normalizeScorePeriodConfig(raw: unknown): ScorePeriodConfig {
       : SCORE_PERIOD_STARTS_AFTER;
   return { cutoffDay, overrides, calendarMonthsUntil };
 }
+
+/**
+ * รอบปิด (ล็อก) ตอนไหน — 10:00 ของวันถัดจากวันตัดรอบ (เวลาไทย) เผื่อให้รอบ 08:00 หักคะแนนลงเวลา
+ * ของวันตัดรอบเข้าทันก่อน · ปิดแล้วเกรดของรอบนั้นนิ่ง ใช้คิดเงินเดือนได้
+ */
+export const PERIOD_CLOSE_GRACE_MS = 10 * 60 * 60 * 1000;
+
+export function scorePeriodCloseAt(config: ScorePeriodConfig, month: string): Date {
+  return new Date(scorePeriodRange(config, month).to.getTime() + 1 + PERIOD_CLOSE_GRACE_MS);
+}
+
+/**
+ * คะแนนรายการนี้นับในรอบไหน — ปกติคือรอบของวันที่เกิดเรื่อง (occurredAt)
+ * แต่ถ้าบันทึก (createdAt) หลังรอบนั้นปิดแล้ว (คืนคะแนน/อนุมัติคำร้อง/หักย้อนหลัง) ⇒ ไปลงรอบที่เปิดอยู่
+ * ตอนบันทึกแทน ("ปรับจากรอบก่อน") ไม่แก้เกรดของรอบที่ปิดไปแล้ว — แบบเดียวกับระบบเงินเดือนทั่วไป
+ * (ล็อกงวดแล้วปรับย้อนหลังในงวดถัดไป)
+ */
+export function effectiveScorePeriodOf(config: ScorePeriodConfig, occurredAt: Date, createdAt: Date | null | undefined): string {
+  const own = scorePeriodOf(config, occurredAt);
+  if (!createdAt || createdAt.getTime() < scorePeriodCloseAt(config, own).getTime()) return own;
+  // รอบที่เปิดอยู่ตอนบันทึก = รอบแรกที่ยังไม่ปิด ณ createdAt
+  let month = own;
+  for (let i = 0; i < 36 && createdAt.getTime() >= scorePeriodCloseAt(config, month).getTime(); i++) {
+    month = shiftPeriodMonth(month, 1);
+  }
+  return month;
+}
+
+/** รายการนี้เป็น "ปรับจากรอบก่อน" ไหม (นับในรอบหลังวันที่เกิดเรื่อง) */
+export function isCarriedOver(config: ScorePeriodConfig, occurredAt: Date, createdAt: Date | null | undefined): boolean {
+  return effectiveScorePeriodOf(config, occurredAt, createdAt) !== scorePeriodOf(config, occurredAt);
+}

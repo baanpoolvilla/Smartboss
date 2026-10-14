@@ -12,7 +12,7 @@ import {
   StatCard,
   Td,
 } from "@/modules/hr/components/ui";
-import { buildScorecards } from "@/lib/performance";
+import { buildPeriodScorecards } from "@/lib/performance";
 import { monthDisplay, shiftMonth } from "@/lib/performance-month";
 import { CategoryChipsRow } from "./category-chips-row";
 import { resolveScorePeriodParam, scorePeriodOf, scorePeriodRange } from "@/lib/score-period";
@@ -53,9 +53,8 @@ export async function renderScoreTab(
   const period = await loadScorePeriodConfig(session.orgId);
   const month = resolveScorePeriodParam(period, rangeParam);
   const thisMonth = scorePeriodOf(period, new Date());
-  const { from, to } = scorePeriodRange(period, month);
 
-  const { settings, cards } = await buildScorecards(session.orgId, from, to);
+  const { settings, cards } = await buildPeriodScorecards(session.orgId, period, month);
   const gradeOrder = settings.gradeThresholds.map(([g]) => g);
   const rankOf = (grade: string) => {
     const i = gradeOrder.indexOf(grade);

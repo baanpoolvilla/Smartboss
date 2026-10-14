@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
-import { buildScorecards } from "@/lib/performance";
+import { buildPeriodScorecards } from "@/lib/performance";
 import { monthRange } from "@/lib/performance-month";
 import { wfTry, type Employment, type Paged, type Person } from "@/modules/hr/lib/api";
 import {
@@ -11,7 +11,6 @@ import {
   splitCommissionPool,
   type CommissionSplit,
 } from "./commission";
-import { scorePeriodRange } from "@/lib/score-period";
 import { loadScorePeriodConfig } from "@/lib/score-period-config";
 
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -81,9 +80,9 @@ function toObject(value: unknown): Record<string, unknown> {
 
 export async function loadCommissionMonth(orgId: string, month: string): Promise<CommissionMonth> {
   // เกรดของค่าคอม = รอบเกรดเดียวกับหน้าคะแนน (ตัดวันที่ 25 — score-period.ts)
-  const { from, to } = scorePeriodRange(await loadScorePeriodConfig(orgId), month);
+  const period = await loadScorePeriodConfig(orgId);
   const [scores, setting, pool, emails] = await Promise.all([
-    buildScorecards(orgId, from, to),
+    buildPeriodScorecards(orgId, period, month),
     prisma.commissionSetting.findUnique({ where: { orgId } }),
     prisma.commissionPool.findUnique({ where: { orgId_month: { orgId, month } } }),
     employedEmails(month),
