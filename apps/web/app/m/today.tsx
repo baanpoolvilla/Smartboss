@@ -7,6 +7,7 @@ import { checkinFlagLabel } from "@/modules/hr/lib/checkin-flags";
 import { CLOCK_CHANGED_EVENT, clockState } from "@/modules/hr/lib/clock-state";
 import { DesktopQr, useIsDesktop } from "./desktop-qr";
 import { recentPosition, rememberPosition } from "./last-position";
+import { CheckinIssueReport } from "./checkin-issue-report";
 /**
  * ต้องโหลดแบบ `ssr: false` เท่านั้น — ห้ามเปลี่ยนเป็น static import เด็ดขาด
  *
@@ -286,6 +287,8 @@ export function Today({
    * ลงเวลาเข้างานออกงานแน่ๆ") · ไม่แตะซ้ำภายใน ARM_MS = กลับเป็นปุ่มปกติเอง
    */
   const [armed, setArmed] = useState<"CLOCK_IN" | "CLOCK_OUT" | null>(null);
+  /** ความแม่นของ GPS ตอนกดล่าสุด — แนบไปกับ "แจ้งไอที" (checkin-issue-report.tsx) */
+  const [lastAccuracyM, setLastAccuracyM] = useState<number | null>(null);
   useEffect(() => {
     if (!armed) return;
     const timer = setTimeout(() => setArmed(null), ARM_MS);
@@ -324,6 +327,7 @@ export function Today({
       // ไม่ได้พิกัดก็ยังส่งไป — เซิร์ฟเวอร์เป็นคนตัดสิน (api/m/checkin gpsGate: ไม่มีพิกัด/นอกเขต = ลงไม่ได้
       // พร้อมเหตุผล) หน้าจอไม่ตัดสินเอง · ถ้าโดนปฏิเสธสิทธิ์ตำแหน่ง ต่อท้ายข้อความด้วยวิธีเปิด
       const { position, denied } = await getPosition();
+      setLastAccuracyM(position?.coords.accuracy ?? null);
       const help = denied ? ` — ${locationHelp()}` : "";
 
       setState("sending");
@@ -560,6 +564,13 @@ export function Today({
         >
           {message.text}
         </p>
+      )}
+
+      {isDesktop === false && (
+        <CheckinIssueReport
+          lastMessage={message && message.tone !== "ok" ? message.text : loadError}
+          accuracyM={lastAccuracyM}
+        />
       )}
 
       {loadError && (
