@@ -76,4 +76,12 @@ describe("planCompanySync", () => {
     expect(plan.remove).toEqual(["2026-12-08"]);
     expect(plan.state.added).not.toContain("2026-12-08");
   });
+
+  it("holds back removals when Google drops too many dates at once (broken feed)", () => {
+    const added = ["2026-12-20", "2026-12-21", "2026-12-22", "2026-12-23"];
+    const plan = planCompanySync(google, new Set(added), { seen: added, added }, "2026-10-14");
+    expect(plan.remove).toEqual([]);
+    expect(plan.heldBack).toEqual(added);
+    expect(plan.state.added).toEqual(expect.arrayContaining(added));
+  });
 });

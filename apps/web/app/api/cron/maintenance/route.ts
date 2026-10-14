@@ -25,7 +25,7 @@ export const runtime = "nodejs";
  *   - แจ้งผู้อนุมัติว่ามี OT ค้างรออนุมัติกี่รายการ (?task=ot-pending — วันละครั้ง อยู่ใน all ตอน 08:00)
  *   - เด้งเวลาเข้า/ออกงานเข้าห้องแชท "ระบบลงเวลา" ของแต่ละคน (?task=attendance-chat — crontab ทุกนาที
  *     แยกบรรทัด ดู docs/deploy.md · ไม่อยู่ใน all เพราะ all รันวันละครั้ง)
- *   - ดึงวันหยุดนักขัตฤกษ์จาก Google เข้าปฏิทินวันหยุดบริษัทของทุกบริษัท (?task=holidays — อยู่ใน all)
+ *   - ดึงวันหยุดนักขัตฤกษ์จาก Google เข้าปฏิทินวันหยุดบริษัทของทุกบริษัท (?task=holidays — อยู่ใน all, &dryRun=1 ดูอย่างเดียว)
  *   - ?task=all รันทั้งหมด
  * เรียกด้วย header `Authorization: Bearer $CRON_SECRET` หรือ `?key=$CRON_SECRET`
  * route นี้อยู่นอก auth ของ proxy จึงกันด้วย CRON_SECRET เท่านั้น →
@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
   if (task === "holidays" || task === "all") {
     // ล้มเองไม่ให้ลากงานอื่นล้มตาม — ดึงจาก Google ไม่ได้วันนี้ พรุ่งนี้ก็ลองใหม่
     try {
-      Object.assign(result, { holidays: await syncPublicHolidays() });
+      Object.assign(result, { holidays: await syncPublicHolidays({ dryRun: url.searchParams.get("dryRun") === "1" }) });
     } catch (error) {
       console.error("[cron] holidays", error);
       Object.assign(result, { holidays: { error: error instanceof Error ? error.message : String(error) } });

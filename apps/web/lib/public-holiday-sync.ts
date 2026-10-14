@@ -62,14 +62,21 @@ async function fetchPublicHolidays(country: string): Promise<PublicHoliday[]> {
 }
 
 export interface PublicHolidaySyncResult {
+  dryRun: boolean;
   companies: number;
   added: number;
   removed: number;
+  /** วันที่เพิ่ม/ลบของแต่ละบริษัท (ชื่อบริษัท → รายการ) — ไว้ดูใน log ว่าระบบทำอะไรไป */
+  changes: Record<string, { added: string[]; removed: string[]; heldBack?: string[] }>;
   errors: string[];
 }
 
-export async function syncPublicHolidays(): Promise<PublicHolidaySyncResult> {
-  const result: PublicHolidaySyncResult = { companies: 0, added: 0, removed: 0, errors: [] };
+/**
+ * dryRun = คำนวณและรายงานว่าจะเพิ่ม/ลบวันไหน โดยไม่เขียนอะไรเลย — ใช้ดูก่อนรันจริงครั้งแรก
+ *   (curl ".../api/cron/maintenance?task=holidays&dryRun=1")
+ */
+export async function syncPublicHolidays({ dryRun = false }: { dryRun?: boolean } = {}): Promise<PublicHolidaySyncResult> {
+  const result: PublicHolidaySyncResult = { dryRun, companies: 0, added: 0, removed: 0, changes: {}, errors: [] };
   const google = await fetchPublicHolidays("TH");
   const today = todayInThailand();
   const orgs = await prisma.$queryRaw<{ id: string }[]>`SELECT id::text AS id FROM core.organizations`;
@@ -81,8 +88,8 @@ export async function syncPublicHolidays(): Promise<PublicHolidaySyncResult> {
       let changed = false;
 
       await withWorkforceTenant(org.id, async (tx) => {
-        const companies = await tx.$queryRaw<{ id: string }[]>`
-          SELECT id::text AS id FROM workforce.companies WHERE status = 'ACTIVE'
+        const companies = await tx.$queryRaw<{ id: string; name: string }[]>`
+          SELECT id::text AS id, display_name AS name FROM workforce.companies WHERE status = 'ACTIVE'
         `;
         for (const company of companies) {
           result.companies++;
@@ -93,6 +100,16 @@ export async function syncPublicHolidays(): Promise<PublicHolidaySyncResult> {
             WHERE hc.company_id = ${company.id}::uuid AND hd.holiday_date >= ${today}::date
           `;
           const plan = planCompanySync(google, new Set(existing.map((r) => r.holiday_date)), store[company.id], today);
+          if (plan.insert.length > 0 || plan.remove.length > 0 || plan.heldBack.length > 0) {
+            result.changes[company.name] = {
+              added: plan.insert.map((h) => `${h.date} ${h.name}`),
+              removed: plan.remove,
+              ...(plan.heldBack.length > 0 ? { heldBack: plan.heldBack } : {}),
+            };
+          }
+          result.added += plan.insert.length;
+          result.removed += plan.remove.length;
+          if (dryRun) continue;
 
           if (plan.insert.length > 0) {
             // ปฏิทินใบเดียวของบริษัท — ยังไม่มีก็สร้าง (เหมือน mainHolidayCalendarId ใน hr/actions.ts)
@@ -109,25 +126,27 @@ export async function syncPublicHolidays(): Promise<PublicHolidaySyncResult> {
                 VALUES (${calendarId}::uuid, ${org.id}::uuid, ${company.id}::uuid, 'MAIN', 'วันหยุดบริษัท')
               `;
             }
-            for (const h of plan.insert) {
-              await tx.$executeRaw`
-                INSERT INTO workforce.holiday_dates (id, tenant_id, calendar_id, holiday_date, name, paid)
-                VALUES (${uuidv7()}::uuid, ${org.id}::uuid, ${calendarId}::uuid, ${h.date}::date, ${h.name}, true)
-                ON CONFLICT (calendar_id, holiday_date) DO NOTHING
-              `;
-            }
-            result.added += plan.insert.length;
+            // คำสั่งเดียวทั้งชุด — transaction สั้นที่สุด ไม่ถือ lock นานระหว่างวนเพิ่มทีละวัน
+            await tx.$executeRaw`
+              INSERT INTO workforce.holiday_dates (id, tenant_id, calendar_id, holiday_date, name, paid)
+              SELECT id, ${org.id}::uuid, ${calendarId}::uuid, holiday_date, name, true
+              FROM unnest(
+                ${plan.insert.map(() => uuidv7())}::uuid[],
+                ${plan.insert.map((h) => h.date)}::date[],
+                ${plan.insert.map((h) => h.name)}::text[]
+              ) AS t(id, holiday_date, name)
+              ON CONFLICT (calendar_id, holiday_date) DO NOTHING
+            `;
           }
 
-          for (const date of plan.remove) {
+          if (plan.remove.length > 0) {
             await tx.$executeRaw`
               DELETE FROM workforce.holiday_dates hd
               USING workforce.holiday_calendars hc
               WHERE hc.id = hd.calendar_id AND hc.company_id = ${company.id}::uuid
-                AND hd.holiday_date = ${date}::date
+                AND hd.holiday_date = ANY(${plan.remove}::date[])
             `;
           }
-          result.removed += plan.remove.length;
 
           if (JSON.stringify(store[company.id]) !== JSON.stringify(plan.state)) {
             store[company.id] = plan.state;

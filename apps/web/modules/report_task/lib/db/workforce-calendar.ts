@@ -203,18 +203,21 @@ export async function listLeaveTypeCatalog(orgId: string): Promise<string[]> {
  *
  * ถ้าใช่ วันหยุดราชการไม่ใช่วันที่ทุกคนหยุดพร้อมกัน — แต่ละคนลง Holiday เองวันไหนก็ได้
  * ⇒ ห้ามยกเว้นการส่งรายงานให้ทุกคนตามวันในปฏิทินวันหยุด (ยกเว้นเฉพาะคนที่ลงลาจริง)
+ * กติกาเดียวกับ findHoliday ของระบบลงเวลา (apps/workforce-api attendance.repository.ts)
  */
-export async function orgHolidaysAreLeaveCredit(orgId: string): Promise<boolean> {
-  const rows = await withWorkforceTenant(orgId, (tx) =>
-    tx.$queryRaw<{ n: number }[]>`
-      SELECT 1 AS n
-      FROM workforce.leave_types
-      WHERE accrues_from_holidays IS TRUE
-        AND archived_at IS NULL
-      LIMIT 1
-    `
-  );
+async function holidaysAreLeaveCreditTx(tx: PrismaTx): Promise<boolean> {
+  const rows = await tx.$queryRaw<{ n: number }[]>`
+    SELECT 1 AS n
+    FROM workforce.leave_types
+    WHERE accrues_from_holidays IS TRUE
+      AND archived_at IS NULL
+    LIMIT 1
+  `;
   return rows.length > 0;
+}
+
+export async function orgHolidaysAreLeaveCredit(orgId: string): Promise<boolean> {
+  return withWorkforceTenant(orgId, holidaysAreLeaveCreditTx);
 }
 
 /** วันหยุดของบริษัทตามปฏิทินวันหยุดที่ตั้งไว้ในโมดูลบุคคล */
@@ -223,15 +226,32 @@ export async function listHolidayEvents(
   from: string,
   to: string
 ): Promise<CalendarEvent[]> {
-  const rows = await withWorkforceTenant(orgId, (tx) =>
-    tx.$queryRaw<HolidayRow[]>`
-      SELECT hd.id, hd.holiday_date, hd.name
-      FROM workforce.holiday_dates hd
-      WHERE hd.holiday_date BETWEEN ${from}::date AND ${to}::date
-      ORDER BY hd.holiday_date
-      LIMIT 1000
-    `
-  );
+  return withWorkforceTenant(orgId, (tx) => holidayEventsTx(tx, from, to));
+}
+
+/**
+ * วันหยุด + ธง holidaysAreLeaveCredit ใน transaction เดียว — store "holidays" ถูกดึงซ้ำทุกนาที
+ * จากทุกแท็บที่เปิดอยู่ แยกสองครั้งจะเปิด transaction เพิ่มเป็นเท่าตัวโดยไม่จำเป็น
+ */
+export async function listHolidayCalendar(
+  orgId: string,
+  from: string,
+  to: string
+): Promise<{ holidays: CalendarEvent[]; holidaysAreLeaveCredit: boolean }> {
+  return withWorkforceTenant(orgId, async (tx) => ({
+    holidays: await holidayEventsTx(tx, from, to),
+    holidaysAreLeaveCredit: await holidaysAreLeaveCreditTx(tx),
+  }));
+}
+
+async function holidayEventsTx(tx: PrismaTx, from: string, to: string): Promise<CalendarEvent[]> {
+  const rows = await tx.$queryRaw<HolidayRow[]>`
+    SELECT hd.id, hd.holiday_date, hd.name
+    FROM workforce.holiday_dates hd
+    WHERE hd.holiday_date BETWEEN ${from}::date AND ${to}::date
+    ORDER BY hd.holiday_date
+    LIMIT 1000
+  `;
 
   return rows.map((r) => ({
     id: `wf-holiday-${r.id}`,

@@ -4,11 +4,10 @@ import { listDirectory } from "@/modules/report_task/lib/db/employee-directory";
 import { listDepartmentsWithOverlay } from "@/modules/report_task/lib/db/departments";
 import { ownNotifications, readStore } from "@/modules/report_task/lib/db/org-store";
 import {
-  listHolidayEvents,
+  listHolidayCalendar,
   listLeaveEvents,
   listLeaveTypeCatalog,
   listOvertimeEvents,
-  orgHolidaysAreLeaveCredit,
 } from "@/modules/report_task/lib/db/workforce-calendar";
 
 /*
@@ -71,10 +70,7 @@ export async function readStorePayload(
   if (WORKFORCE_KEYS.has(key)) {
     const { from, to } = defaultRange();
     if (key === "holidays") {
-      const [holidays, holidaysAreLeaveCredit] = await Promise.all([
-        listHolidayEvents(orgId, from, to),
-        orgHolidaysAreLeaveCredit(orgId),
-      ]);
+      const { holidays, holidaysAreLeaveCredit } = await listHolidayCalendar(orgId, from, to);
       // holidays store เก็บเป็น { holidays, selectedByUser, ... } ส่วน leaves/overtime เป็นอาร์เรย์ตรง ๆ
       return { payload: { holidays, selectedByUser: {}, holidaysAreLeaveCredit }, version: 1 };
     }

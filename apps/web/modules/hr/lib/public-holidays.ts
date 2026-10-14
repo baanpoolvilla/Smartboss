@@ -57,9 +57,17 @@ export function todayInThailand(): string {
   return new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
+/**
+ * Google เอาวันหยุดออกพร้อมกันเกินนี้ในรอบเดียว = น่าจะเป็นไฟล์เพี้ยน ไม่ใช่การยกเลิกจริง
+ * (ปกติยกเลิก/ย้ายทีละวันสองวัน) ⇒ ไม่ลบ รอดูรอบถัดไป และรายงานไว้ใน heldBack
+ */
+export const MAX_REMOVALS_PER_RUN = 3;
+
 export interface CompanyPlan {
   insert: PublicHoliday[];
   remove: string[];
+  /** วันที่ควรลบแต่ถูกระงับไว้เพราะเกิน MAX_REMOVALS_PER_RUN */
+  heldBack: string[];
   state: CompanySyncState;
 }
 
@@ -77,7 +85,9 @@ export function planCompanySync(
   const added = new Set(previous?.added ?? []);
 
   const insert = inRange.filter((h) => !seen.has(h.date) && !existingDates.has(h.date));
-  const remove = [...added].filter((d) => d >= today && d <= until && !googleDates.has(d) && existingDates.has(d));
+  const dropped = [...added].filter((d) => d >= today && d <= until && !googleDates.has(d) && existingDates.has(d));
+  const remove = dropped.length > MAX_REMOVALS_PER_RUN ? [] : dropped;
+  const heldBack = remove.length === dropped.length ? [] : dropped;
 
   for (const h of inRange) seen.add(h.date);
   for (const h of insert) added.add(h.date);
@@ -87,6 +97,7 @@ export function planCompanySync(
   return {
     insert,
     remove,
+    heldBack,
     state: { seen: [...seen].filter(keep).sort(), added: [...added].filter(keep).sort() },
   };
 }
