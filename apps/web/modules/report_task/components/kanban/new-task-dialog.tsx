@@ -1068,12 +1068,13 @@ export function NewTaskDialog({
           {/* Title (task/meeting) */}
           {itemType !== "leave" && itemType !== "dayoff" && (
             <Row icon={Type}>
-              <div className="flex items-center gap-3">
+              {/* จอเล็ก: ช่องติ๊กลงบรรทัดใต้ชื่องาน (ชิดขวา) ให้ชื่องานได้เต็มความกว้าง · sm ขึ้นไปอยู่แถวเดียวกัน */}
+              <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 sm:flex-nowrap">
                 <Input
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder={itemType === "task" ? "เพิ่มชื่องาน" : "เพิ่มหัวข้อประชุม"}
-                  className="min-w-0 flex-1 text-base font-medium border-0 border-b border-[var(--line)] rounded-none px-0 shadow-none focus-visible:ring-0 focus-visible:border-[var(--brand-green)]"
+                  className="min-w-0 grow basis-full sm:basis-0 text-base font-medium border-0 border-b border-[var(--line)] rounded-none px-0 shadow-none focus-visible:ring-0 focus-visible:border-[var(--brand-green)]"
                 />
                 {itemType === "task" && (
                   <label
@@ -1090,6 +1091,8 @@ export function NewTaskDialog({
                         if (v) {
                           changeTaskMode("individual");
                           setAssigneeIds([viewingAsUserId]);
+                          // คำอธิบายใน title ไม่ขึ้นบนจอสัมผัส — บอกครั้งเดียวตอนติ๊ก
+                          toast("งานส่วนตัว · เห็นเฉพาะคุณ ไม่มีผลกับคะแนน", { description: "ยังเตือนตามกำหนดส่งเหมือนงานปกติ" });
                         } else {
                           setAssigneeIds([]);
                         }
