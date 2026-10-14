@@ -1037,11 +1037,41 @@ export function NewTaskDialog({
       <DialogContent className="sm:max-w-lg max-h-[92vh] overflow-y-auto overflow-x-hidden p-0 gap-0">
         <PasteDropFiles label="ปล่อยเพื่อแนบไฟล์/รูป">
         <DialogHeader className="px-5 pt-5 pb-3 space-y-3">
-          <DialogTitle>
-            {allowedTypes.length === 1
-              ? (itemType === "leave" ? "บันทึกวันลา" : `สร้าง${typeMeta[itemType].label}`)
-              : "สร้างรายการใหม่"}
-          </DialogTitle>
+          {/* ติ๊ก "ส่วนตัว" ข้างหัวกล่อง — ไม่กินที่แถวชื่องาน ทั้งคอมและมือถือ (pr-10 เว้นที่ปุ่มปิด) */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pr-10">
+            <DialogTitle>
+              {allowedTypes.length === 1
+                ? (itemType === "leave" ? "บันทึกวันลา" : `สร้าง${typeMeta[itemType].label}`)
+                : "สร้างรายการใหม่"}
+            </DialogTitle>
+            {itemType === "task" && (
+              <label
+                className={cn(
+                  "flex shrink-0 cursor-pointer items-center gap-1.5 text-xs font-medium",
+                  personalMode ? "text-[var(--brand-green-dark)]" : "text-[var(--ink-soft)]"
+                )}
+                title="งานส่วนตัว — เห็นเฉพาะคุณ ไม่มีผลกับคะแนน ยังเตือนตามกำหนดส่ง"
+              >
+                <Checkbox
+                  checked={personalMode}
+                  onCheckedChange={(v) => {
+                    setPersonalMode(!!v);
+                    if (v) {
+                      changeTaskMode("individual");
+                      setAssigneeIds([viewingAsUserId]);
+                      // คำอธิบายใน title ไม่ขึ้นบนจอสัมผัส — บอกครั้งเดียวตอนติ๊ก
+                      toast("งานส่วนตัว · เห็นเฉพาะคุณ ไม่มีผลกับคะแนน", { description: "ยังเตือนตามกำหนดส่งเหมือนงานปกติ" });
+                    } else {
+                      setAssigneeIds([]);
+                    }
+                  }}
+                  aria-label="งานส่วนตัว"
+                />
+                <Lock className="h-3 w-3" />
+                ส่วนตัว
+              </label>
+            )}
+          </div>
           {/* Outlook-style type toggle (only the allowed types) */}
           {allowedTypes.length > 1 && (
             <div className="inline-flex items-center gap-1 rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-1 w-fit">
@@ -1068,42 +1098,12 @@ export function NewTaskDialog({
           {/* Title (task/meeting) */}
           {itemType !== "leave" && itemType !== "dayoff" && (
             <Row icon={Type}>
-              {/* จอเล็ก: ช่องติ๊กลงบรรทัดใต้ชื่องาน (ชิดขวา) ให้ชื่องานได้เต็มความกว้าง · sm ขึ้นไปอยู่แถวเดียวกัน */}
-              <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 sm:flex-nowrap">
-                <Input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder={itemType === "task" ? "เพิ่มชื่องาน" : "เพิ่มหัวข้อประชุม"}
-                  className="min-w-0 grow basis-full sm:basis-0 text-base font-medium border-0 border-b border-[var(--line)] rounded-none px-0 shadow-none focus-visible:ring-0 focus-visible:border-[var(--brand-green)]"
-                />
-                {itemType === "task" && (
-                  <label
-                    className={cn(
-                      "flex shrink-0 cursor-pointer items-center gap-1.5 text-xs font-medium",
-                      personalMode ? "text-[var(--brand-green-dark)]" : "text-[var(--ink-soft)]"
-                    )}
-                    title="งานส่วนตัว — เห็นเฉพาะคุณ ไม่มีผลกับคะแนน ยังเตือนตามกำหนดส่ง"
-                  >
-                    <Checkbox
-                      checked={personalMode}
-                      onCheckedChange={(v) => {
-                        setPersonalMode(!!v);
-                        if (v) {
-                          changeTaskMode("individual");
-                          setAssigneeIds([viewingAsUserId]);
-                          // คำอธิบายใน title ไม่ขึ้นบนจอสัมผัส — บอกครั้งเดียวตอนติ๊ก
-                          toast("งานส่วนตัว · เห็นเฉพาะคุณ ไม่มีผลกับคะแนน", { description: "ยังเตือนตามกำหนดส่งเหมือนงานปกติ" });
-                        } else {
-                          setAssigneeIds([]);
-                        }
-                      }}
-                      aria-label="งานส่วนตัว"
-                    />
-                    <Lock className="h-3 w-3" />
-                    ส่วนตัว
-                  </label>
-                )}
-              </div>
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder={itemType === "task" ? "เพิ่มชื่องาน" : "เพิ่มหัวข้อประชุม"}
+                className="text-base font-medium border-0 border-b border-[var(--line)] rounded-none px-0 shadow-none focus-visible:ring-0 focus-visible:border-[var(--brand-green)]"
+              />
             </Row>
           )}
 
