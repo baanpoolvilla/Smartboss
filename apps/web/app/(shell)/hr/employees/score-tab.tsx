@@ -15,9 +15,10 @@ import {
 import { buildPeriodScorecards } from "@/lib/performance";
 import { monthDisplay, shiftMonth } from "@/lib/performance-month";
 import { CategoryChipsRow } from "./category-chips-row";
-import { resolveScorePeriodParam, scorePeriodOf, scorePeriodRange } from "@/lib/score-period";
+import { resolveScorePeriodParam, scorePeriodOf, scorePeriodRange, scorePeriodLabel } from "@/lib/score-period";
 import { loadScorePeriodConfig, loadScorePeriodReadyAt } from "@/lib/score-period-config";
 import { ScorePeriodNotice } from "@/components/score-period-notice";
+import { ScorePeriodStatus } from "@/components/score-period-status";
 
 /**
  * ดูเป็นเดือนปฏิทิน (1 ถึงสิ้นเดือน) ไม่ใช่ "30 วันล่าสุด" — เกรดและค่าคอมตัดรอบรายเดือน
@@ -74,6 +75,8 @@ export async function renderScoreTab(
   return (
     <div className="flex flex-col gap-4">
       <ScorePeriodNotice period={period} readyAt={await loadScorePeriodReadyAt(session.orgId, period, thisMonth)} />
+      {/* เดือนที่เลือกดู พร้อมเอาไปคิดเงินเดือนหรือยัง */}
+      <ScorePeriodStatus period={period} month={month} readyAt={await loadScorePeriodReadyAt(session.orgId, period, month)} />
       {criteriaLooksStrict && (
         <div className="flex flex-wrap items-start gap-3 rounded-(--radius-lg) border border-(--tone-warn)/35 bg-(--tone-warn)/10 p-4">
           <div className="min-w-0 flex-1">
@@ -108,7 +111,7 @@ export async function renderScoreTab(
 
       <SectionCard
         title="คะแนนและเกรด"
-        description={`${monthDisplay(month)} · คิดรวมจากงานซ่อมบำรุง งานในบอร์ด และการลงเวลา — ทุกคนเริ่มใหม่ที่คะแนนตั้งต้นทุกวันที่ 1 · เรียงจากคะแนนน้อยไปมาก`}
+        description={`${monthDisplay(month)} (${scorePeriodLabel(period, month)}) · คิดรวมจากงานซ่อมบำรุง งานในบอร์ด และการลงเวลา — ทุกคนเริ่มใหม่ที่คะแนนตั้งต้นทุกรอบ · เรียงจากคะแนนน้อยไปมาก`}
         action={
           <div className="flex flex-wrap items-center gap-2">
             <form method="GET" action="/hr/employees" className="flex items-center gap-2">

@@ -12,7 +12,10 @@ import {
   inputClass,
 } from "@/modules/hr/components/ui";
 import { gradeColor } from "@/lib/performance";
-import { monthDisplay, monthKey, shiftMonth } from "@/lib/performance-month";
+import { monthDisplay, shiftMonth } from "@/lib/performance-month";
+import { scorePeriodOf } from "@/lib/score-period";
+import { loadScorePeriodConfig, loadScorePeriodReadyAt } from "@/lib/score-period-config";
+import { ScorePeriodStatus } from "@/components/score-period-status";
 import { formatSatang } from "@/modules/hr/lib/commission";
 import { loadCommissionMonth } from "@/modules/hr/lib/commission-data";
 import { saveCommissionPoolAction, saveCommissionWeightsAction } from "../actions";
@@ -29,8 +32,11 @@ export async function renderCommissionTab(
   const data = await loadCommissionMonth(session.orgId, month);
   const { split, gradeOrder, weights, pool } = data;
 
-  const thisMonth = monthKey(new Date());
+  // รอบเกรด (ตัดวันที่ 25 — score-period.ts) ไม่ใช่เดือนปฏิทิน
+  const period = await loadScorePeriodConfig(session.orgId);
+  const thisMonth = scorePeriodOf(period, new Date());
   const isCurrent = month === thisMonth;
+  const readyAt = await loadScorePeriodReadyAt(session.orgId, period, month);
   const rankOrder = gradeOrder.filter((g) => g !== "F");
 
   const receiving = split.shares.filter((s) => s.amountSatang > 0).length;
@@ -75,11 +81,8 @@ export async function renderCommissionTab(
         )}
       </div>
 
-      {isCurrent && (
-        <p className="rounded-(--radius) border border-(--tone-warn)/35 bg-(--tone-warn)/10 px-3 py-2 text-xs text-(--ink)">
-          เดือนนี้ยังไม่จบ — เกรดยังเปลี่ยนได้จนสิ้นเดือน ยอดค่าคอมของแต่ละคนจึงยังไม่ใช่ยอดสุดท้าย
-        </p>
-      )}
+      {/* เกรดของเดือนนี้พร้อมใช้คำนวณเงินหรือยัง — ยอดค่าคอมเป็นยอดสุดท้ายเมื่อปิดรอบแล้ว */}
+      <ScorePeriodStatus period={period} month={month} readyAt={readyAt} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard

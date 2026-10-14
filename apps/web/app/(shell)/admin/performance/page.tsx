@@ -12,6 +12,7 @@ import { monthDisplay, shiftMonth } from "@/lib/performance-month";
 import { resolveScorePeriodParam, scorePeriodOf } from "@/lib/score-period";
 import { loadScorePeriodConfig, loadScorePeriodReadyAt } from "@/lib/score-period-config";
 import { ScorePeriodNotice } from "@/components/score-period-notice";
+import { ScorePeriodStatus } from "@/components/score-period-status";
 
 /**
  * สรุปผลงานรายคน — รวมคะแนนจากทุกโมดูลไว้ที่เดียว
@@ -93,6 +94,9 @@ export default async function PerformancePage({
           period={period}
           readyAt={await loadScorePeriodReadyAt(session.orgId, period, resolveScorePeriodParam(period, undefined))}
         />
+      </div>
+      <div className="mb-4">
+        <ScorePeriodStatus period={period} month={month} readyAt={await loadScorePeriodReadyAt(session.orgId, period, month)} />
       </div>
       <Card className="mb-4 p-4">
         <div className="flex flex-wrap items-center justify-center gap-3">
