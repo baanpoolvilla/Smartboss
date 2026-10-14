@@ -4,6 +4,8 @@ import { SettingsSubnav } from "@/modules/hr/components/design-kit";
 import { ADMIN_PERMS } from "@/modules/admin/permissions";
 import { PerformanceSettingsForm } from "@/modules/admin/components/performance-settings-form";
 import { loadPerformanceSettings } from "@/lib/performance";
+import { loadScorePeriodConfig } from "@/lib/score-period-config";
+import { ScorePeriodForm } from "@/modules/admin/components/score-period-form";
 
 /**
  * เกณฑ์คะแนนผลงาน ในหน้าตั้งค่าของระบบบุคคล — เดิมเมนูนี้ลิงก์ออกไปหลังบ้าน
@@ -22,12 +24,18 @@ export default async function HrScoringSettingsPage() {
       title="เกณฑ์คะแนน"
       permission={ADMIN_PERMS.performanceSettingManage}
       load={async () => {
-        const settings = await loadPerformanceSettings(session.orgId);
+        const [settings, period] = await Promise.all([
+          loadPerformanceSettings(session.orgId),
+          loadScorePeriodConfig(session.orgId),
+        ]);
         return (
           <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
             <SettingsSubnav active="/hr/settings/scoring" />
             <div className="min-w-0 max-w-3xl flex-1">
-              <PerformanceSettingsForm settings={settings} />
+              <div className="flex flex-col gap-4">
+                <ScorePeriodForm period={period} />
+                <PerformanceSettingsForm settings={settings} />
+              </div>
             </div>
           </div>
         );

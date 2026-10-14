@@ -5,6 +5,8 @@ import {
   workOrderVisibilityWhere,
   type WorkOrderAccess,
 } from "@/modules/maintenance/data/work-order-access";
+import { scorePeriodOf, scorePeriodRange } from "@/lib/score-period";
+import { loadScorePeriodConfig } from "@/lib/score-period-config";
 
 /**
  * "ใบงานที่มีผลกับคะแนน" บนแดชบอร์ดแจ้งซ่อม — ใบงานเลยกำหนดหักคะแนนผู้รับผิดชอบ (cron.ts
@@ -50,11 +52,6 @@ function bangkokMidnight(offsetDays = 0): Date {
   return d;
 }
 
-function bangkokMonthStart(): Date {
-  const day = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
-  return new Date(`${day.slice(0, 7)}-01T00:00:00+07:00`);
-}
-
 export async function maintenanceScoreWatch(
   orgId: string,
   access: WorkOrderAccess,
@@ -63,6 +60,7 @@ export async function maintenanceScoreWatch(
   const vis = workOrderVisibilityWhere(access);
   const today = bangkokMidnight();
   const soonEnd = bangkokMidnight(SOON_DAYS);
+  const period = await loadScorePeriodConfig(orgId);
   const openVisible = { orgId, status: { in: ["open", "in_progress"] }, AND: vis ? [vis] : [] };
   const select = {
     id: true,
@@ -93,7 +91,8 @@ export async function maintenanceScoreWatch(
         orgId,
         source: "maintenance",
         category: { in: ["workorder_overdue", "pm_missed"] },
-        occurredAt: { gte: bangkokMonthStart() },
+        // รอบเกรดปัจจุบัน (ตัดวันที่ 25 — score-period.ts) ไม่ใช่วันที่ 1
+        occurredAt: { gte: scorePeriodRange(period, scorePeriodOf(period, new Date())).from },
         ...(orgWide ? {} : { userId: access.userId }),
       },
       _sum: { points: true },

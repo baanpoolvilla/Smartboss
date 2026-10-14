@@ -11,6 +11,8 @@ import {
   splitCommissionPool,
   type CommissionSplit,
 } from "./commission";
+import { scorePeriodRange } from "@/lib/score-period";
+import { loadScorePeriodConfig } from "@/lib/score-period-config";
 
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 
@@ -78,7 +80,8 @@ function toObject(value: unknown): Record<string, unknown> {
 }
 
 export async function loadCommissionMonth(orgId: string, month: string): Promise<CommissionMonth> {
-  const { from, to } = monthRange(month);
+  // เกรดของค่าคอม = รอบเกรดเดียวกับหน้าคะแนน (ตัดวันที่ 25 — score-period.ts)
+  const { from, to } = scorePeriodRange(await loadScorePeriodConfig(orgId), month);
   const [scores, setting, pool, emails] = await Promise.all([
     buildScorecards(orgId, from, to),
     prisma.commissionSetting.findUnique({ where: { orgId } }),

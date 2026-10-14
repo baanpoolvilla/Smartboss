@@ -3,6 +3,8 @@ import { requireOrg, hasPermission } from "@smartboss/auth";
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { ADMIN_PERMS } from "@/modules/admin/permissions";
 import { PerformanceSettingsForm } from "@/modules/admin/components/performance-settings-form";
+import { ScorePeriodForm } from "@/modules/admin/components/score-period-form";
+import { loadScorePeriodConfig } from "@/lib/score-period-config";
 import { loadPerformanceSettings } from "@/lib/performance";
 
 /**
@@ -19,11 +21,17 @@ export default async function PerformanceSettingsPage() {
     redirect("/admin/performance");
   }
 
-  const settings = await loadPerformanceSettings(session.orgId);
+  const [settings, period] = await Promise.all([
+    loadPerformanceSettings(session.orgId),
+    loadScorePeriodConfig(session.orgId),
+  ]);
 
   return (
     <AppScaffold title="เกณฑ์คะแนนผลงาน" width="max-w-3xl" backHref="/admin/performance">
-      <PerformanceSettingsForm settings={settings} />
+      <div className="flex flex-col gap-4">
+        <ScorePeriodForm period={period} />
+        <PerformanceSettingsForm settings={settings} />
+      </div>
     </AppScaffold>
   );
 }

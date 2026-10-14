@@ -13,8 +13,11 @@ import {
   Td,
 } from "@/modules/hr/components/ui";
 import { buildScorecards } from "@/lib/performance";
-import { monthDisplay, monthKey, monthRange, resolveMonthParam, shiftMonth } from "@/lib/performance-month";
+import { monthDisplay, shiftMonth } from "@/lib/performance-month";
 import { CategoryChipsRow } from "./category-chips-row";
+import { resolveScorePeriodParam, scorePeriodOf, scorePeriodRange } from "@/lib/score-period";
+import { loadScorePeriodConfig } from "@/lib/score-period-config";
+import { ScorePeriodNotice } from "@/components/score-period-notice";
 
 /**
  * ดูเป็นเดือนปฏิทิน (1 ถึงสิ้นเดือน) ไม่ใช่ "30 วันล่าสุด" — เกรดและค่าคอมตัดรอบรายเดือน
@@ -47,9 +50,10 @@ export async function renderScoreTab(
     return <NoPermission what="คะแนน & เกรด" />;
   }
 
-  const month = resolveMonthParam(rangeParam);
-  const thisMonth = monthKey(new Date());
-  const { from, to } = monthRange(month);
+  const period = await loadScorePeriodConfig(session.orgId);
+  const month = resolveScorePeriodParam(period, rangeParam);
+  const thisMonth = scorePeriodOf(period, new Date());
+  const { from, to } = scorePeriodRange(period, month);
 
   const { settings, cards } = await buildScorecards(session.orgId, from, to);
   const gradeOrder = settings.gradeThresholds.map(([g]) => g);
@@ -70,6 +74,7 @@ export async function renderScoreTab(
 
   return (
     <div className="flex flex-col gap-4">
+      <ScorePeriodNotice period={period} />
       {criteriaLooksStrict && (
         <div className="flex flex-wrap items-start gap-3 rounded-(--radius-lg) border border-(--tone-warn)/35 bg-(--tone-warn)/10 p-4">
           <div className="min-w-0 flex-1">

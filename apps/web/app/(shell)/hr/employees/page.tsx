@@ -4,10 +4,11 @@ import { Fab } from "@/components/module/app-scaffold";
 import { HrPage } from "@/modules/hr/components/hr-page";
 import { HR_PERMS } from "@/modules/hr/permissions";
 import { ADMIN_PERMS } from "@/modules/admin/permissions";
-import { resolveMonthParam } from "@/lib/performance-month";
 import { renderRegistryTab } from "./registry-tab";
 import { renderScoreTab } from "./score-tab";
 import { renderCommissionTab } from "./commission-tab";
+import { resolveScorePeriodParam } from "@/lib/score-period";
+import { loadScorePeriodConfig } from "@/lib/score-period-config";
 
 const TAB_TITLE = { registry: "พนักงาน", score: "คะแนน & เกรด", commission: "ค่าคอม" } as const;
 type TabId = keyof typeof TAB_TITLE;
@@ -88,7 +89,7 @@ export default async function EmployeesPage({
           tab === "score"
             ? await renderScoreTab(session, sp.range)
             : tab === "commission"
-              ? await renderCommissionTab(session, resolveMonthParam(sp.month), canManageCommission)
+              ? await renderCommissionTab(session, resolveScorePeriodParam(await loadScorePeriodConfig(session.orgId), sp.month), canManageCommission)
               : await renderRegistryTab(session, canManage, sp.status, sp.imported);
 
         return (

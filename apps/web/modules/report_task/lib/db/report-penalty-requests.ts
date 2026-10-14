@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "@smartboss/database";
 import { readStore, writeStore } from "./org-store";
 import { penaltyRequestOpen } from "../penalty-request-window";
+import { loadScorePeriodConfig } from "@/lib/score-period-config";
 
 /**
  * คำร้องขอแก้ไข/ขอส่งย้อนหลังของ event หักคะแนนรายงาน (report_missed/report_late)
@@ -99,9 +100,9 @@ export async function createPenaltyRequest(
     select: { category: true, points: true, createdAt: true },
   });
   if (!event) return { error: "ไม่พบรายการหักคะแนนนี้" };
-  // เดือนต่อเดือน — ยื่นได้ถึงสิ้นเดือนที่โดนหัก (penalty-request-window.ts)
-  if (!penaltyRequestOpen(parsed.day, event.createdAt)) {
-    return { error: "ปิดรับคำร้องของเดือนนั้นแล้ว — ขอแก้คะแนนได้ถึงสิ้นเดือนที่โดนหักเท่านั้น" };
+  // รอบต่อรอบ — ยื่นได้ถึงวันตัดรอบเกรด (ปกติวันที่ 25) ของรอบที่โดนหัก (penalty-request-window.ts)
+  if (!penaltyRequestOpen(parsed.day, event.createdAt, await loadScorePeriodConfig(orgId))) {
+    return { error: "ปิดรับคำร้องของรอบนั้นแล้ว — ขอแก้คะแนนได้ถึงวันตัดรอบเกรดของรอบที่โดนหักเท่านั้น" };
   }
 
   const undone = await prisma.performanceEvent.findFirst({

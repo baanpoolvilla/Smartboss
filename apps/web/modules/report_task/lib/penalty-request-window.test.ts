@@ -1,20 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { penaltyRequestOpen } from "@/modules/report_task/lib/penalty-request-window";
+import { DEFAULT_SCORE_PERIOD } from "@/lib/score-period";
 
-const now = new Date("2026-11-03T04:00:00Z"); // 3 พ.ย. 11:00 เวลาไทย
+const th = (iso: string) => new Date(`${iso}+07:00`);
+const cfg = DEFAULT_SCORE_PERIOD; // ตัดรอบวันที่ 25
 
-describe("penaltyRequestOpen", () => {
-  it("open for a deduction in the current month", () => {
-    expect(penaltyRequestOpen("2026-11-02", "2026-11-02T03:00:00Z", now)).toBe(true);
+describe("penaltyRequestOpen (cut off on the 25th)", () => {
+  it("open for a deduction in the current period", () => {
+    expect(penaltyRequestOpen("2026-10-20", th("2026-10-21T08:00:00"), cfg, th("2026-10-24T10:00:00"))).toBe(true);
   });
-  it("closed once the month of the deduction is over", () => {
-    expect(penaltyRequestOpen("2026-10-13", "2026-10-14T03:00:00Z", now)).toBe(false);
+  it("closed once the period's cutoff (the 25th) has passed", () => {
+    expect(penaltyRequestOpen("2026-10-20", th("2026-10-21T08:00:00"), cfg, th("2026-10-26T09:00:00"))).toBe(false);
   });
-  it("open when a last-day miss was only recorded this month", () => {
-    expect(penaltyRequestOpen("2026-10-31", "2026-11-01T01:00:00Z", now)).toBe(true);
+  it("the 26th already belongs to the next period", () => {
+    expect(penaltyRequestOpen("2026-10-26", th("2026-10-27T08:00:00"), cfg, th("2026-11-20T09:00:00"))).toBe(true);
   });
-  it("uses Thai time at the month boundary", () => {
-    // 31 ต.ค. 23:30 UTC = 1 พ.ย. 06:30 เวลาไทย
-    expect(penaltyRequestOpen("2026-11-01", null, new Date("2026-10-31T23:30:00Z"))).toBe(true);
+  it("open when a cutoff-day miss was only recorded in the new period", () => {
+    expect(penaltyRequestOpen("2026-10-25", th("2026-10-26T01:00:00"), cfg, th("2026-11-10T09:00:00"))).toBe(true);
   });
 });

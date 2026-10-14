@@ -8,7 +8,10 @@ import { ADMIN_PERMS } from "@/modules/admin/permissions";
 import { EmptyState } from "@/modules/admin/components/ui";
 import Link from "next/link";
 import { buildScorecards, gradeColor } from "@/lib/performance";
-import { monthDisplay, monthRange, resolveMonthParam, shiftMonth } from "@/lib/performance-month";
+import { monthDisplay, shiftMonth } from "@/lib/performance-month";
+import { resolveScorePeriodParam, scorePeriodOf, scorePeriodRange } from "@/lib/score-period";
+import { loadScorePeriodConfig } from "@/lib/score-period-config";
+import { ScorePeriodNotice } from "@/components/score-period-notice";
 
 /**
  * สรุปผลงานรายคน — รวมคะแนนจากทุกโมดูลไว้ที่เดียว
@@ -49,8 +52,10 @@ export default async function PerformancePage({
   if (!hasPermission(session, ADMIN_PERMS.performanceView)) redirect("/admin");
 
   const { month: monthParam } = await searchParams;
-  const month = resolveMonthParam(monthParam);
-  const isCurrentMonth = month === resolveMonthParam(undefined);
+  // รอบเกรด = ตัดทุกวันที่ 25 (score-period.ts) ไม่ใช่เดือนปฏิทิน
+  const period = await loadScorePeriodConfig(session.orgId);
+  const month = resolveScorePeriodParam(period, monthParam);
+  const isCurrentMonth = month === resolveScorePeriodParam(period, undefined);
   const prevMonthKey = shiftMonth(month, -1);
 
   // แถบเทรนด์ — เดือนที่เลือกอยู่ขวาสุด ย้อนหลังไป TREND_MONTHS-1 เดือน
@@ -59,10 +64,10 @@ export default async function PerformancePage({
   );
 
   const [current, previous, ...trend] = await Promise.all([
-    buildScorecards(session.orgId, monthRange(month).from, monthRange(month).to),
-    buildScorecards(session.orgId, monthRange(prevMonthKey).from, monthRange(prevMonthKey).to),
+    buildScorecards(session.orgId, scorePeriodRange(period, month).from, scorePeriodRange(period, month).to),
+    buildScorecards(session.orgId, scorePeriodRange(period, prevMonthKey).from, scorePeriodRange(period, prevMonthKey).to),
     ...trendMonths.map((m) =>
-      buildScorecards(session.orgId, monthRange(m).from, monthRange(m).to),
+      buildScorecards(session.orgId, scorePeriodRange(period, m).from, scorePeriodRange(period, m).to),
     ),
   ]);
 
@@ -83,6 +88,9 @@ export default async function PerformancePage({
 
   return (
     <AppScaffold title="ผลงานรายคน" width="max-w-5xl" backHref="/admin">
+      <div className="mb-4">
+        <ScorePeriodNotice period={period} />
+      </div>
       <Card className="mb-4 p-4">
         <div className="flex flex-wrap items-center justify-center gap-3">
           <Link href={`/admin/performance?month=${shiftMonth(month, -1)}`}>

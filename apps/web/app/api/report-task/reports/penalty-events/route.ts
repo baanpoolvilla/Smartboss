@@ -8,6 +8,7 @@ import { PERFORMANCE_CATEGORIES, type PerformanceCategory } from "@/lib/performa
 import type { ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { effectiveRoundsOf } from "@/modules/report_task/lib/submission-rounds";
 import { penaltyRequestOpen } from "@/modules/report_task/lib/penalty-request-window";
+import { loadScorePeriodConfig } from "@/lib/score-period-config";
 
 /**
  * รายการ event หักคะแนนรายงาน (report_missed/report_late) ที่ยัง active อยู่
@@ -50,6 +51,7 @@ export async function GET(request: Request) {
     readStore<{ topics: ReportTopic[] }>(session.orgId, "report-feed"),
   ]);
 
+  const period = await loadScorePeriodConfig(session.orgId);
   const topics = reportFeed?.topics ?? [];
   const topicById = new Map(topics.map((t) => [t.id, t] as const));
   const pendingRefIds = new Set(requests.filter((r) => r.status === "pending").map((r) => r.refId));
@@ -77,8 +79,8 @@ export async function GET(request: Request) {
         hasPendingRequest: pendingRefIds.has(e.refId!),
         restored: undoRefIds.has(e.refId!),
         requestStatus: latestRequest.get(e.refId!)?.status ?? null,
-        // ยื่นคำร้องได้ถึงสิ้นเดือนที่โดนหัก (penalty-request-window.ts)
-        requestOpen: penaltyRequestOpen(day, e.createdAt),
+        // ยื่นคำร้องได้ถึงวันตัดรอบเกรดของรอบที่โดนหัก (penalty-request-window.ts)
+        requestOpen: penaltyRequestOpen(day, e.createdAt, period),
       };
     });
 

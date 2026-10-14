@@ -7,7 +7,9 @@ import { AppScaffold } from "@/components/module/app-scaffold";
 import { ADMIN_PERMS } from "@/modules/admin/permissions";
 import { EmptyState } from "@/modules/admin/components/ui";
 import { buildScorecards, eventDay, gradeColor, listUserEvents, PERFORMANCE_CATEGORIES } from "@/lib/performance";
-import { monthDisplay, monthRange, resolveMonthParam } from "@/lib/performance-month";
+import { monthDisplay } from "@/lib/performance-month";
+import { resolveScorePeriodParam, scorePeriodOf, scorePeriodRange } from "@/lib/score-period";
+import { loadScorePeriodConfig } from "@/lib/score-period-config";
 
 /**
  * ที่มาของคะแนนคนหนึ่งคนในเดือนหนึ่งเดือน — ทีละเหตุการณ์พร้อมวันที่
@@ -31,8 +33,9 @@ export default async function PerformanceUserDetailPage({
 
   const { userId } = await params;
   const { month: monthParam } = await searchParams;
-  const month = resolveMonthParam(monthParam);
-  const { from, to } = monthRange(month);
+  const period = await loadScorePeriodConfig(session.orgId);
+  const month = resolveScorePeriodParam(period, monthParam);
+  const { from, to } = scorePeriodRange(period, month);
 
   const { settings, cards } = await buildScorecards(session.orgId, from, to);
   const card = cards.find((c) => c.userId === userId);

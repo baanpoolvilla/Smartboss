@@ -81,9 +81,9 @@ export function MissedReportsList({ userId }: { userId: string }) {
           ) : row.hasPendingRequest ? (
             <span className="shrink-0 text-xs font-medium text-(--tone-warn)">รอ CEO พิจารณา</span>
           ) : row.requestOpen === false ? (
-            // เดือนต่อเดือน — ยื่นได้ถึงสิ้นเดือนที่โดนหัก (penalty-request-window.ts)
+            // รอบต่อรอบ — ยื่นได้ถึงวันตัดรอบเกรด (penalty-request-window.ts)
             <span className="shrink-0 text-xs text-(--ink-soft)">
-              {row.requestStatus === "rejected" ? "ไม่อนุมัติ · " : ""}ปิดรับคำร้องเดือนนี้แล้ว
+              {row.requestStatus === "rejected" ? "ไม่อนุมัติ · " : ""}ปิดรับคำร้องแล้ว (ตัดรอบเกรดไปแล้ว)
             </span>
           ) : row.requestStatus === "rejected" ? (
             <span className="flex shrink-0 items-center gap-2">

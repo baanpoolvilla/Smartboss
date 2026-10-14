@@ -46,11 +46,13 @@ import { EmployeeDayOffCalendar } from "./employee-day-off-calendar";
 import { EnrollFingerprintForm } from "../../settings/devices/enroll-fingerprint-form";
 import { DayOffQuotaForm, LegacyStandingNotice } from "./day-off-quota-form";
 import { buildScorecards, eventDay, listUserEvents, PERFORMANCE_CATEGORIES } from "@/lib/performance";
-import { monthDisplay, resolveMonthParam } from "@/lib/performance-month";
+import { monthDisplay } from "@/lib/performance-month";
 import { formatSatang } from "@/modules/hr/lib/commission";
 import { loadCommissionMonth } from "@/modules/hr/lib/commission-data";
 import { loadDayOffOverrides, resolveDayOffDays } from "@/lib/day-off-quota";
 import { ScoreBreakdown } from "@/components/performance/score-breakdown";
+import { resolveScorePeriodParam, scorePeriodOf, scorePeriodRange } from "@/lib/score-period";
+import { loadScorePeriodConfig } from "@/lib/score-period-config";
 
 interface CompensationRate {
   id: string;
@@ -320,7 +322,9 @@ export default async function EmployeeDetailPage({
          */
         const email = person?.email?.toLowerCase();
         const now = new Date();
-        const scoreFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+        // รอบเกรดปัจจุบัน (ตัดวันที่ 25 — score-period.ts)
+        const period = await loadScorePeriodConfig(session.orgId);
+        const scoreFrom = scorePeriodRange(period, scorePeriodOf(period, now)).from;
         const scorecard =
           email === undefined
             ? null
@@ -346,7 +350,7 @@ export default async function EmployeeDetailPage({
             : [];
 
         // ค่าคอมเดือนนี้ของคนนี้ — คิดจากชุดเดียวกับแท็บค่าคอม ยอดจึงตรงกันเสมอ
-        const commissionMonth = resolveMonthParam(undefined);
+        const commissionMonth = resolveScorePeriodParam(period, undefined);
         const commission =
           tab === "score" && canSeeCommission && scorecard !== null
             ? await loadCommissionMonth(session.orgId, commissionMonth).catch(() => null)

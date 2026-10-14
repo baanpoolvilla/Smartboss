@@ -63,7 +63,7 @@ export interface PenaltyEventItem {
   restored?: boolean;
   /** สถานะคำร้องล่าสุดของรอบนี้ */
   requestStatus?: "pending" | "approved" | "rejected" | null;
-  /** ยื่นคำร้องได้ไหม — ได้ถึงสิ้นเดือนที่โดนหักเท่านั้น (penalty-request-window.ts) · ไม่มีค่า = ถือว่าได้ */
+  /** ยื่นคำร้องได้ไหม — ได้ถึงวันตัดรอบเกรดของรอบที่โดนหัก (penalty-request-window.ts) · ไม่มีค่า = ถือว่าได้ */
   requestOpen?: boolean;
 }
 
@@ -180,7 +180,7 @@ export function PenaltyRequestDialog({
           <p className="text-sm text-(--ink-soft)">กำลังโหลด...</p>
         ) : selectable.length === 0 ? (
           <p className="text-sm text-(--ink-soft)">
-            ไม่มีรายการที่ยื่นคำร้องได้ — อาจถูกคืนคะแนนไปแล้ว มีคำร้องรออยู่แล้ว หรือเป็นของเดือนที่ปิดรับคำร้องไปแล้ว (ยื่นได้ถึงสิ้นเดือนที่โดนหัก)
+            ไม่มีรายการที่ยื่นคำร้องได้ — อาจถูกคืนคะแนนไปแล้ว มีคำร้องรออยู่แล้ว หรือตัดรอบเกรดของรอบนั้นไปแล้ว (ยื่นได้ถึงวันตัดรอบ)
           </p>
         ) : (
           <div>

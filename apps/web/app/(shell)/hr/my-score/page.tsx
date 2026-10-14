@@ -7,8 +7,11 @@ import { EmptyState } from "@/modules/hr/components/ui";
 import { buildScorecards, buildUserMonthlyScores, gradeColor, listUserEvents } from "@/lib/performance";
 import { hasBreakdown, ScoreBreakdown } from "@/components/performance/score-breakdown";
 import { buildMyEventDetails } from "@/lib/performance-details";
-import { monthDisplay, monthKey, monthRange, resolveMonthParam, shiftMonth } from "@/lib/performance-month";
+import { monthDisplay, shiftMonth } from "@/lib/performance-month";
 import { MissedReportsList } from "./missed-reports-list";
+import { resolveScorePeriodParam, scorePeriodLabel, scorePeriodOf, scorePeriodRange } from "@/lib/score-period";
+import { loadScorePeriodConfig } from "@/lib/score-period-config";
+import { ScorePeriodNotice } from "@/components/score-period-notice";
 
 /**
  * "คะแนนของฉัน" — ทุกคนเข้าได้ (HR_PERMS.access เดียวกับเมนู "ของฉัน")
@@ -38,18 +41,21 @@ export default async function MyScorePage({
         const session = await requireOrg();
         // เดือนนี้ (1 ถึงสิ้นเดือน) ตรงกับเกรด/ค่าคอมที่ตัดรอบรายเดือน — เดิม 30 วันล่าสุด วันที่ 1
         // คะแนนเลยไม่เริ่มใหม่ ยังเห็นที่โดนหักปลายเดือนก่อน
-        const thisMonth = monthKey(new Date());
-        const month = resolveMonthParam(sp.month);
-        const { from, to } = monthRange(month);
+        // รอบเกรดตัดทุกวันที่ 25 (score-period.ts) — 26 ต.ค. เป็นต้นไปคือเกรดเดือน พ.ย.
+        const period = await loadScorePeriodConfig(session.orgId);
+        const thisMonth = scorePeriodOf(period, new Date());
+        const month = resolveScorePeriodParam(period, sp.month);
+        const { from, to } = scorePeriodRange(period, month);
         const history = Array.from({ length: MONTHS_BACK }, (_, i) => shiftMonth(thisMonth, -i));
 
         const [{ settings, cards }, monthly] = await Promise.all([
           buildScorecards(session.orgId, from, to),
-          buildUserMonthlyScores(session.orgId, session.userId, history),
+          buildUserMonthlyScores(session.orgId, session.userId, history, period),
         ]);
         const card = cards.find((c) => c.userId === session.userId);
         const gradeOrder = settings.gradeThresholds.map(([g]) => g);
 
+        const notice = <ScorePeriodNotice period={period} />;
         const monthNav = (
           <div className="flex items-center justify-between gap-2">
             <Link
@@ -59,8 +65,10 @@ export default async function MyScorePage({
             >
               <ChevronLeft className="h-4 w-4" /> เดือนก่อน
             </Link>
-            <p className="text-sm font-semibold text-(--ink)">
+            <p className="text-center text-sm font-semibold text-(--ink)">
               {month === thisMonth ? `เดือนนี้ (${monthDisplay(month)})` : monthDisplay(month)}
+              {/* รอบเกรดไม่ใช่เดือนปฏิทิน — บอกช่วงวันที่นับจริง */}
+              <span className="block text-xs font-normal text-(--ink-soft)">{scorePeriodLabel(period, month)}</span>
             </p>
             {month < thisMonth ? (
               <Link
@@ -113,6 +121,7 @@ export default async function MyScorePage({
         if (!card) {
           return (
             <div className="flex flex-col gap-4">
+              {notice}
               {monthNav}
               <EmptyState>ยังไม่มีข้อมูลคะแนนผลงานของเดือน {monthDisplay(month)}</EmptyState>
               {historyCard}
@@ -126,6 +135,7 @@ export default async function MyScorePage({
 
         return (
           <div className="flex flex-col gap-4">
+            {notice}
             {monthNav}
             <div className="rounded-2xl border border-(--line) bg-white p-5">
               <div className="flex items-end justify-between">

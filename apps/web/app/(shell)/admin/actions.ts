@@ -29,6 +29,8 @@ import {
   ORG_ROLES,
   ROLE_GRANTS,
 } from "@smartboss/database/defaults";
+import { scorePeriodOf, shiftPeriodMonth } from "@/lib/score-period";
+import { loadScorePeriodConfig, saveScorePeriodConfig } from "@/lib/score-period-config";
 
 /** ทุก action ต้องผ่านด่านนี้ก่อน — คืน session ที่มี orgId แน่นอน */
 async function guard(permission: string) {
@@ -792,6 +794,43 @@ export async function savePerformanceSettingsAction(formData: FormData) {
   revalidatePath("/admin/performance");
   revalidatePath("/admin/performance/settings");
   revalidatePath("/hr/settings/scoring");
+  revalidatePath("/hr/employees");
+}
+
+/**
+ * วันตัดรอบเกรด (lib/score-period.ts) — วันปกติของทุกเดือน + เปลี่ยนเฉพาะเดือน (รอบปัจจุบันและ 2 รอบถัดไป)
+ * รอบที่ผ่านไปแล้วแก้ไม่ได้ (เก็บค่าที่ตั้งไว้เดิม) — ไม่งั้นเกรดย้อนหลังที่ใช้คิดเงินไปแล้วจะเปลี่ยน
+ */
+export async function saveScorePeriodAction(formData: FormData) {
+  const session = await guard(ADMIN_PERMS.performanceSettingManage);
+  const orgId = await resolveTargetOrgId(session, formData);
+
+  const cutoffDay = Number(formData.get("cutoffDay"));
+  if (!Number.isInteger(cutoffDay) || cutoffDay < 1 || cutoffDay > 28) {
+    throw new Error("วันตัดรอบปกติต้องเป็นวันที่ 1–28");
+  }
+  const previous = await loadScorePeriodConfig(orgId);
+  const current = scorePeriodOf(previous, new Date());
+  const editable = new Set([current, shiftPeriodMonth(current, 1), shiftPeriodMonth(current, 2)]);
+  // รอบที่ผ่านไปแล้ว: เก็บค่าเดิมไว้ตามเดิม
+  const overrides: Record<string, number> = Object.fromEntries(
+    Object.entries(previous.overrides).filter(([month]) => month < current)
+  );
+  for (const month of editable) {
+    const raw = String(formData.get(`override_${month}`) ?? "").trim();
+    if (!raw) continue;
+    const day = Number(raw);
+    if (!Number.isInteger(day) || day < 1 || day > 31) throw new Error(`วันตัดรอบของ ${month} ไม่ถูกต้อง`);
+    if (day !== cutoffDay) overrides[month] = day;
+  }
+
+  const config = { cutoffDay, overrides };
+  await saveScorePeriodConfig(orgId, config, session.userId);
+  await audit({ userId: session.userId, action: "SCORE_PERIOD_UPDATED", targetId: orgId, detail: config });
+  revalidatePath("/admin/performance");
+  revalidatePath("/admin/performance/settings");
+  revalidatePath("/hr/settings/scoring");
+  revalidatePath("/hr/my-score");
   revalidatePath("/hr/employees");
 }
 

@@ -1,20 +1,23 @@
+import { DEFAULT_SCORE_PERIOD, scorePeriodOf, type ScorePeriodConfig } from "@/lib/score-period";
+
 /**
- * คำร้องขอแก้คะแนนเป็น "เดือนต่อเดือน" — ยื่นได้ถึงสิ้นเดือนที่โดนหักเท่านั้น ขึ้นเดือนใหม่ยอดเดือนเก่านิ่ง
- * (คำร้องที่ยื่นทันแล้วยังอนุมัติทีหลังได้ คืนคะแนนเข้าเดือนเดิม — ดู decidePenaltyRequest)
+ * คำร้องขอแก้คะแนนเป็น "รอบต่อรอบ" — ยื่นได้ถึงวันตัดรอบของรอบเกรดที่โดนหัก (ปกติวันที่ 25 — score-period.ts)
+ * พ้นวันตัดรอบแล้วยอดรอบนั้นนิ่ง (คำร้องที่ยื่นทันแล้วยังอนุมัติทีหลังได้ คืนคะแนนเข้าวันเดิม — decidePenaltyRequest)
  *
- * ยกเว้น: รายการที่ระบบเพิ่งบันทึกในเดือนนี้ แม้เป็นของวันในเดือนก่อน (เช่น ไม่ส่งวันที่ 31 ซึ่งตัดสินได้
- * ตอนเช้าวันที่ 1) — ไม่งั้นคนนั้นไม่มีโอกาสยื่นเลย
+ * ยกเว้น: รายการที่ระบบเพิ่งบันทึกในรอบนี้ แม้เป็นของวันในรอบก่อน (เช่น ไม่ส่งวันที่ 25 ซึ่งตัดสินได้
+ * ตอนเช้าวันที่ 26) — ไม่งั้นคนนั้นไม่มีโอกาสยื่นเลย
  */
 
-/** "YYYY-MM" ของตอนนี้ ตามเวลาไทย */
-export function currentMonthBangkok(now: Date = new Date()): string {
-  return new Date(now.getTime() + 7 * 60 * 60 * 1000).toISOString().slice(0, 7);
-}
-
 /** `day` = "YYYY-MM-DD" ของวันที่โดนหัก · `recordedAt` = ตอนที่ระบบบันทึกการหัก */
-export function penaltyRequestOpen(day: string | null, recordedAt: Date | string | null, now: Date = new Date()): boolean {
-  const month = currentMonthBangkok(now);
-  if (day && day.slice(0, 7) === month) return true;
-  if (recordedAt && currentMonthBangkok(new Date(recordedAt)) === month) return true;
+export function penaltyRequestOpen(
+  day: string | null,
+  recordedAt: Date | string | null,
+  period: ScorePeriodConfig = DEFAULT_SCORE_PERIOD,
+  now: Date = new Date()
+): boolean {
+  const current = scorePeriodOf(period, now);
+  // วันที่โดนหัก (เที่ยงวันเวลาไทย กันขอบวัน)
+  if (day && scorePeriodOf(period, new Date(`${day}T12:00:00+07:00`)) === current) return true;
+  if (recordedAt && scorePeriodOf(period, new Date(recordedAt)) === current) return true;
   return false;
 }

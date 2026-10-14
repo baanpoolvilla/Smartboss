@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
+import { scorePeriodOf, scorePeriodRange, type ScorePeriodConfig } from "@/lib/score-period";
 
 /**
  * คะแนนผลงานรายบุคคล — ชั้นกลางที่ทุกโมดูลส่งเหตุการณ์มารวมกัน
@@ -485,20 +486,18 @@ export async function listUserEvents(
  * buildScorecards ทุกอย่าง (baseScore + ผลรวม points ของเดือนนั้น, ตัดที่ scoringStartDate)
  * แต่ดึงเหตุการณ์ของคนเดียวรวดเดียวทั้งช่วง ไม่ต้องคิดทั้งบริษัททีละเดือน
  *
- * `months` = รายการ YYYY-MM (ขอบเดือนแบบ UTC เดียวกับ monthRange) · เดือนที่จบก่อน
+ * `months` = รายการ YYYY-MM ของรอบเกรด (ตัดรอบวันที่ 25 — score-period.ts) · รอบที่จบก่อน
  * scoringStartDate ได้ score = null (ยังไม่เริ่มนับคะแนน — ไม่ใช่ "คะแนนเต็ม")
  */
 export async function buildUserMonthlyScores(
   orgId: string,
   userId: string,
   months: string[],
+  period: ScorePeriodConfig,
 ): Promise<{ month: string; score: number | null; grade: string | null; eventCount: number }[]> {
   if (months.length === 0) return [];
   const settings = await loadPerformanceSettings(orgId);
-  const bounds = (m: string) => {
-    const [y, mo] = m.split("-").map(Number);
-    return { from: new Date(Date.UTC(y!, mo! - 1, 1)), to: new Date(Date.UTC(y!, mo!, 1) - 1) };
-  };
+  const bounds = (m: string) => scorePeriodRange(period, m);
   const sorted = [...months].sort();
   const from = bounds(sorted[0]!).from;
   const to = bounds(sorted[sorted.length - 1]!).to;
@@ -511,8 +510,7 @@ export async function buildUserMonthlyScores(
 
   const sum = new Map<string, { points: number; count: number }>();
   for (const e of events) {
-    const d = e.occurredAt;
-    const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    const key = scorePeriodOf(period, e.occurredAt);
     const cur = sum.get(key) ?? { points: 0, count: 0 };
     cur.points += Number(e.points);
     if (!isReversalEvent(e) && !isReversed(e)) cur.count += 1;
