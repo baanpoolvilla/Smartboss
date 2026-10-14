@@ -10,6 +10,8 @@ import {
   type PerformanceEventInput,
 } from "@/lib/performance";
 import { recalculateAttendanceAllOrgs } from "@/lib/attendance-recalc";
+import { cutoffDayOf } from "@/lib/score-period";
+import { loadScorePeriodConfig } from "@/lib/score-period-config";
 
 /**
  * ดึงผลลงเวลาจาก workforce มาเป็นคะแนนผลงาน
@@ -50,7 +52,17 @@ interface AttendanceRow {
  * เส้นแบ่งขาดงาน (ABSENCE_THRESHOLD_MINUTES) กับช่วงย้อนดู
  * (ATTENDANCE_LOOKBACK_DAYS) ตรึงไว้ตายตัว ไม่ตั้งค่าต่อบริษัท
  */
-export async function dockAttendance(): Promise<{
+export async function dockAttendance(
+  options: {
+    /**
+     * วันตัดรอบเกรด (score-period.ts) — cron 23:59 ส่ง "วันนี้" (ตามเวลาไทย ณ ตอนเริ่มรัน) มา
+     * ⇒ หักคะแนนลงเวลาของวันนี้ทันที เฉพาะบริษัทที่วันนี้เป็นวันตัดรอบ คะแนนของรอบจะครบตั้งแต่สิ้นวันตัดรอบ
+     * ไม่ต้องรอ 08:00 พรุ่งนี้ · กะปกติจบแล้วตอนนั้น ส่วนกะดึกข้ามคืนที่ยังไม่ตอกบัตรออก รอบ 08:00
+     * พรุ่งนี้จะตรวจซ้ำ (refundNoLongerValidDocks + หักใหม่) คะแนนยังลงวันทำงานเดิม อยู่ในรอบเดิม
+     */
+    cutoffDay?: string;
+  } = {},
+): Promise<{
   scanned: number;
   recorded: number;
   refunded?: number;
@@ -105,9 +117,21 @@ export async function dockAttendance(): Promise<{
       ${from}::date, ${minLate}::int, ${ABSENCE_THRESHOLD_MINUTES}::int
     )
   `;
-  const rows = rawRows.filter(
-    (r) => new Date(r.work_date).toISOString().slice(0, 10) < todayInThailand,
-  );
+  // บริษัทที่วันนี้เป็นวันตัดรอบ (เฉพาะรอบ 23:59)
+  const cutoffOrgs = new Set<string>();
+  if (options.cutoffDay) {
+    const day = options.cutoffDay;
+    for (const [orgId, st] of settingsByOrg) {
+      if (!st.enabled) continue;
+      const period = await loadScorePeriodConfig(orgId).catch(() => null);
+      if (period && Number(day.slice(8, 10)) === cutoffDayOf(period, day.slice(0, 7))) cutoffOrgs.add(orgId);
+    }
+    if (cutoffOrgs.size === 0) return { scanned: 0, recorded: 0, recalculated };
+  }
+  const rows = rawRows.filter((r) => {
+    const day = new Date(r.work_date).toISOString().slice(0, 10);
+    return options.cutoffDay ? day === options.cutoffDay : day < todayInThailand;
+  });
 
   if (rows.length === 0) return { scanned: 0, recorded: 0, recalculated };
 
@@ -130,6 +154,7 @@ export async function dockAttendance(): Promise<{
     // กรองอีกชั้นด้วยเกณฑ์ของบริษัทคนนั้นจริง ๆ
     const st = settingsByOrg.get(orgId);
     if (!st || !st.enabled) continue;
+    if (options.cutoffDay && !cutoffOrgs.has(orgId)) continue;
 
     const day = new Date(r.work_date).toISOString().slice(0, 10);
 
