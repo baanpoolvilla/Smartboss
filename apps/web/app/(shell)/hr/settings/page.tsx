@@ -21,6 +21,8 @@ import {
   inputClass,
 } from "@/modules/hr/components/ui";
 import { createShiftAction, createWorkPolicyAction } from "../actions";
+import { requireOrg } from "@smartboss/auth";
+import { withWorkforceTenant } from "@/modules/report_task/lib/db/workforce-calendar";
 
 interface Shift {
   id: string;
@@ -50,6 +52,18 @@ interface WorkPolicy {
 }
 
 /** 480 → "08:00" · เกิน 1440 = ข้ามวัน แสดง +1 */
+/**
+ * ระบบหักคะแนนลงเวลาของกะนี้ตอนไหน — เลิกกะ + 2 ชม. แล้วรอบเช็ก :59 ถัดไป (dockFinishedShifts)
+ * ตรงกับ SHIFT_SETTLE_MS ใน lib/attendance-performance.ts
+ */
+function dockTimeLabel(endMinutes: number): string {
+  const settle = endMinutes + 120;
+  const runHour = Math.ceil((settle - 59) / 60); // ชั่วโมงของรอบ :59 แรกที่ไม่ก่อนเวลานิ่ง
+  const day = Math.floor(runHour / 24);
+  const hour = String(runHour % 24).padStart(2, "0");
+  return `${hour}:59${day > 0 ? " วันถัดไป" : ""}`;
+}
+
 function minutesToClock(minutes: number | null): string {
   if (minutes === null || minutes === undefined) return "—";
   const day = Math.floor(minutes / 1440);
@@ -108,10 +122,26 @@ export default async function HrSettingsPage() {
           return <NotProvisioned what="ตั้งค่าระบบบุคคล" />;
         }
 
-        const [shifts, policies] = await Promise.all([
+        const session = await requireOrg();
+        const [shifts, policies, usage] = await Promise.all([
           wfTry<Paged<Shift>>(`/shifts?company_id=${companyId}`),
           wfTry<Paged<WorkPolicy>>("/work-policies"),
+          // คนที่อยู่แต่ละกะใน 30 วันที่ผ่านมา (จากผลลงเวลา) — ให้เห็นว่ากะไหนใช้จริง · null = ไม่ได้ผูกกะ
+          withWorkforceTenant(session.orgId, (tx) =>
+            tx.$queryRaw<{ shift_id: string | null; people: number }[]>`
+              SELECT shift_id::text AS shift_id, count(DISTINCT employment_id)::int AS people
+              FROM workforce.attendance_results
+              WHERE is_current AND work_date >= current_date - 30
+              GROUP BY shift_id
+            `
+          ).catch(() => [] as { shift_id: string | null; people: number }[]),
         ]);
+        const peopleByShift = new Map(usage.map((u) => [u.shift_id, u.people] as const));
+        const noShiftPeople = peopleByShift.get(null) ?? 0;
+        // กะทำงาน (ไม่ใช่วันหยุด) ที่ยังเปิดใช้ เลิกช้าที่สุด — ตัวกำหนดว่าเกรดพร้อมใช้ตอนไหน (score-period.ts)
+        const latest = (shifts?.items ?? [])
+          .filter((sh) => sh.status === "ACTIVE" && !sh.rest_day)
+          .sort((a, b) => b.end_minutes - a.end_minutes)[0];
 
         const today = new Date().toISOString().slice(0, 10);
 
@@ -121,13 +151,30 @@ export default async function HrSettingsPage() {
           <div className="flex min-w-0 flex-1 flex-col gap-4">
             <SectionCard
               title="กะทำงาน"
-              description="เวลาเข้า-ออกและช่วงพัก ใช้เป็นเกณฑ์คิดสาย/ขาด/OT"
+              description="เวลาเข้า-ออกและช่วงพัก ใช้เป็นเกณฑ์คิดสาย/ขาด/OT · ระบบหักคะแนนลงเวลาของแต่ละคนหลังกะของเขาจบ 2 ชั่วโมง"
             >
+              {/* สรุปให้ HR รู้ว่ากะของบริษัททำให้เกรดพร้อมใช้ตอนไหน */}
+              <div className="mb-3 rounded-(--radius) border border-(--line) bg-(--bg-soft) px-3 py-2 text-sm text-(--ink)">
+                {latest && latest.end_minutes > 1440 ? (
+                  <>
+                    <b>มีกะข้ามคืน</b> — กะที่เลิกช้าที่สุดคือ &quot;{latest.name}&quot; เลิก {minutesToClock(latest.end_minutes)}{" "}
+                    ระบบหักคะแนนกะนี้ตอน {dockTimeLabel(latest.end_minutes)} ⇒ เกรดของแต่ละรอบพร้อมใช้คิดเงินเดือนหลังจากนั้น
+                  </>
+                ) : (
+                  <>
+                    <b>ไม่มีกะข้ามคืน</b>
+                    {latest ? ` — กะที่เลิกช้าที่สุดคือ "${latest.name}" เลิก ${minutesToClock(latest.end_minutes)}` : ""} ⇒ เกรดของแต่ละรอบพร้อมใช้คิดเงินเดือน 00:00 น. ของวันถัดจากวันตัดรอบ
+                  </>
+                )}
+                <span className="block text-xs text-(--ink-soft)">
+                  คนที่ไม่ได้ผูกกะ{noShiftPeople > 0 ? ` (${noShiftPeople} คนใน 30 วันที่ผ่านมา)` : ""} ระบบถือว่าวันจบ 23:59 แล้วหักคะแนนตอนนั้น
+                </span>
+              </div>
               {!shifts || shifts.items.length === 0 ? (
                 <EmptyState>ยังไม่มีกะทำงาน</EmptyState>
               ) : (
                 <DataTable
-                  head={["ชื่อกะ", "รหัส", "เข้า", "ออก", "พัก", "ประเภท", "สถานะ"]}
+                  head={["ชื่อกะ", "รหัส", "เข้า", "ออก", "พัก", "ประเภท", "คนในกะ (30 วัน)", "หักคะแนนตอน", "สถานะ"]}
                 >
                   {shifts.items.map((shift) => {
                     const breakMinutes = shift.breaks.reduce(
@@ -139,7 +186,12 @@ export default async function HrSettingsPage() {
                         <Td className="font-medium">{shift.name}</Td>
                         <Td className="font-mono text-xs text-(--ink-soft)">{shift.code}</Td>
                         <Td>{minutesToClock(shift.start_minutes)}</Td>
-                        <Td>{minutesToClock(shift.end_minutes)}</Td>
+                        <Td>
+                          {minutesToClock(shift.end_minutes)}{" "}
+                          {shift.end_minutes > 1440 && (
+                            <Pill tone="var(--tone-warn)">ข้ามคืน</Pill>
+                          )}
+                        </Td>
                         <Td>{breakMinutes > 0 ? `${breakMinutes} น.` : "—"}</Td>
                         <Td>
                           {shift.rest_day ? (
@@ -148,6 +200,8 @@ export default async function HrSettingsPage() {
                             <Pill tone="var(--tone-ok)">วันทำงาน</Pill>
                           )}
                         </Td>
+                        <Td numeric>{peopleByShift.get(shift.id) ?? 0}</Td>
+                        <Td>{shift.rest_day ? "—" : dockTimeLabel(shift.end_minutes)}</Td>
                         <Td>
                           <StatusBadge value={shift.status} />
                         </Td>
